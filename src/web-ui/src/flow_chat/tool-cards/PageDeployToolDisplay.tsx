@@ -12,9 +12,12 @@ import { pageAPI } from '@/infrastructure/api/service-api/PageAPI';
 import { systemAPI } from '@/infrastructure/api/service-api/SystemAPI';
 import { notificationService } from '@/shared/notification-system';
 
-async function openPage(slug: string) {
+async function openPage(slug: string, knownGeneration?: string) {
   if (!slug) return;
-  const link = await pageAPI.createOpenLink(slug);
+  const generation = knownGeneration || (await pageAPI.listPages())
+    .find((page) => page.slug === slug)?.generation;
+  if (generation == null) throw new Error('Page no longer exists');
+  const link = await pageAPI.createOpenLink(slug, generation);
   await systemAPI.openExternal(link.open_url);
 }
 
@@ -47,6 +50,7 @@ export const PageDeployDisplay: React.FC<ToolCardProps> = ({ toolItem }) => {
 
   const deployedVersion =
     (toolResult?.result?.deployed_version_id as string | undefined) || versionId;
+  const generation = toolResult?.result?.generation as string | undefined;
   const urlPath =
     (toolResult?.result?.url as string | undefined) ||
     (toolResult?.result?.url_path as string | undefined);
@@ -130,7 +134,7 @@ export const PageDeployDisplay: React.FC<ToolCardProps> = ({ toolItem }) => {
           <button
             type="button"
             data-testid="chat-page-deploy-open-btn"
-            onClick={() => void openPage(slug).catch(() => {
+            onClick={() => void openPage(slug, generation).catch(() => {
               notificationService.error(t('toolCards.pageDeploy.openFailed'));
             })}
           >

@@ -262,9 +262,16 @@ const PairingPage: React.FC<PairingPageProps> = ({ onPaired }) => {
         const homeDeviceId = client.homeDeviceId;
         if (delegated && homeDeviceId) {
           store.setControlTarget({ deviceId: homeDeviceId, deviceName: null, isHome: true });
+          const accountEpoch = client.delegatedAccountEpoch;
+          const target = client.getControlTargetSnapshot();
           void client
             .listDevices()
             .then((devices) => {
+              if (
+                client.delegatedAccountEpoch !== accountEpoch
+                || !client.isControlTargetCurrent(target)
+                || client.pairedDeviceId !== homeDeviceId
+              ) return;
               const home = devices.find((d) => d.device_id === homeDeviceId);
               if (home) {
                 useMobileStore.getState().setControlTarget({

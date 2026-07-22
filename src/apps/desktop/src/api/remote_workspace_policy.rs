@@ -121,6 +121,10 @@ pub const REMOTE_WORKSPACE_COMMAND_POLICIES: &[(&str, RemoteWorkspacePolicy)] = 
         "account_finalize_login",
         RemoteWorkspacePolicy::WorkspaceAgnostic,
     ),
+    (
+        "account_cancel_pending_login",
+        RemoteWorkspacePolicy::WorkspaceAgnostic,
+    ),
     ("account_logout", RemoteWorkspacePolicy::WorkspaceAgnostic),
     (
         "account_online_devices",
@@ -1084,11 +1088,8 @@ pub const REMOTE_WORKSPACE_COMMAND_POLICIES: &[(&str, RemoteWorkspacePolicy)] = 
         "page_list_versions",
         RemoteWorkspacePolicy::WorkspaceAgnostic,
     ),
-    ("page_publish", RemoteWorkspacePolicy::WorkspaceAgnostic),
-    (
-        "page_save_version",
-        RemoteWorkspacePolicy::WorkspaceAgnostic,
-    ),
+    ("page_publish", RemoteWorkspacePolicy::LocalOnly),
+    ("page_save_version", RemoteWorkspacePolicy::LocalOnly),
     ("page_unpublish", RemoteWorkspacePolicy::WorkspaceAgnostic),
     ("page_update", RemoteWorkspacePolicy::WorkspaceAgnostic),
     ("paste_files", RemoteWorkspacePolicy::LegacyUnaudited),

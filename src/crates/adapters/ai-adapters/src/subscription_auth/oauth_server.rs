@@ -9,8 +9,12 @@ use anyhow::{anyhow, Context, Result};
 use serde::Deserialize;
 use std::collections::HashMap;
 use std::sync::OnceLock;
+use std::time::Duration;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpListener;
+
+const CALLBACK_READ_TIMEOUT: Duration = Duration::from_secs(2);
+const MAX_CALLBACK_HEADER_BYTES: usize = 16 * 1024;
 
 /// IPv4 loopback address used for the TCP listener.
 pub(crate) const LOOPBACK_BIND_HOST: &str = "127.0.0.1";
@@ -82,16 +86,21 @@ pub(crate) async fn wait_for_callback(
 ) -> Result<HashMap<String, String>> {
     loop {
         let (mut stream, _) = listener.accept().await?;
-        let mut buf = vec![0u8; 8192];
-        let n = match stream.read(&mut buf).await {
-            Ok(0) => continue,
-            Ok(n) => n,
+        let request_bytes = match read_http_request(&mut stream, CALLBACK_READ_TIMEOUT).await {
+            Ok(Some(request)) => request,
+            Ok(None) => continue,
             Err(err) => {
                 log::debug!("subscription oauth callback read failed: {err}");
+                write_response(
+                    &mut stream,
+                    400,
+                    &error_page(&callback_messages("en").bad_request, "en"),
+                )
+                .await;
                 continue;
             }
         };
-        let request = String::from_utf8_lossy(&buf[..n]);
+        let request = String::from_utf8_lossy(&request_bytes);
         let locale = preferred_locale(&request);
         let Some(request_line) = request.lines().next() else {
             write_response(
@@ -152,6 +161,42 @@ pub(crate) async fn wait_for_callback(
         write_response(&mut stream, 200, &success_page(locale)).await;
         return Ok(params);
     }
+}
+
+/// Reads one complete HTTP header block. Browser/TCP writes may split the
+/// request line and headers across packets, while a local process can connect
+/// and never send data; cap both total bytes and wall-clock read time so such a
+/// connection cannot hold the callback listener indefinitely.
+async fn read_http_request<R>(stream: &mut R, timeout: Duration) -> Result<Option<Vec<u8>>>
+where
+    R: tokio::io::AsyncRead + Unpin,
+{
+    tokio::time::timeout(timeout, async {
+        let mut request = Vec::with_capacity(2048);
+        let mut chunk = [0u8; 2048];
+        loop {
+            let read = stream.read(&mut chunk).await?;
+            if read == 0 {
+                if request.is_empty() {
+                    return Ok(None);
+                }
+                return Err(anyhow!(
+                    "OAuth callback connection closed before headers completed"
+                ));
+            }
+            if request.len() + read > MAX_CALLBACK_HEADER_BYTES {
+                return Err(anyhow!(
+                    "OAuth callback headers exceed {MAX_CALLBACK_HEADER_BYTES} bytes"
+                ));
+            }
+            request.extend_from_slice(&chunk[..read]);
+            if request.windows(4).any(|window| window == b"\r\n\r\n") {
+                return Ok(Some(request));
+            }
+        }
+    })
+    .await
+    .map_err(|_| anyhow!("OAuth callback request read timed out"))?
 }
 
 fn parse_query(query: &str) -> HashMap<String, String> {
@@ -279,9 +324,10 @@ fn escape_html(text: &str) -> String {
 mod tests {
     use super::{
         bind_loopback_ports, callback_messages, escape_html, loopback_redirect_uri,
-        preferred_locale, success_page, wait_for_callback, LOOPBACK_BIND_HOST,
+        preferred_locale, read_http_request, success_page, wait_for_callback, LOOPBACK_BIND_HOST,
         LOOPBACK_REDIRECT_HOST,
     };
+    use std::time::Duration;
     use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
     #[test]
@@ -341,6 +387,44 @@ mod tests {
 
         let params = waiter.await.unwrap().unwrap();
         assert_eq!(params.get("code").map(String::as_str), Some("real-code"));
+    }
+
+    #[tokio::test]
+    async fn fragmented_callback_request_is_read_until_headers_complete() {
+        let (mut client, mut server) = tokio::io::duplex(4096);
+        let writer = tokio::spawn(async move {
+            client
+                .write_all(b"GET /auth/callback?code=fragmented")
+                .await
+                .unwrap();
+            tokio::task::yield_now().await;
+            client
+                .write_all(b"-code&state=expected-state HTTP/1.1\r\nHost: local")
+                .await
+                .unwrap();
+            tokio::task::yield_now().await;
+            client.write_all(b"host\r\n\r\n").await.unwrap();
+        });
+
+        let request = read_http_request(&mut server, Duration::from_secs(1))
+            .await
+            .unwrap()
+            .unwrap();
+        writer.await.unwrap();
+        assert_eq!(
+            String::from_utf8(request).unwrap(),
+            "GET /auth/callback?code=fragmented-code&state=expected-state HTTP/1.1\r\nHost: localhost\r\n\r\n"
+        );
+    }
+
+    #[tokio::test]
+    async fn stalled_callback_request_hits_read_timeout() {
+        let (_client, mut server) = tokio::io::duplex(64);
+
+        let error = read_http_request(&mut server, Duration::from_millis(25))
+            .await
+            .unwrap_err();
+        assert!(error.to_string().contains("timed out"));
     }
 
     #[test]

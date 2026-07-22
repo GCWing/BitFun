@@ -10,12 +10,15 @@ use bitfun_core::service::remote_connect::remote_server::RemoteCommand;
 use bitfun_events::{project_agentic_frontend_event, AgenticEvent, ToolEventData};
 use tokio::sync::{broadcast, mpsc};
 
+use crate::account::PeerFanoutOwner;
+
 use super::control::{attached_controllers, controller_delivery_lease};
 use super::state::{PeerHostState, PeerTurnKey};
 
 const PEER_EVENT_DELIVERY_CAPACITY: usize = 512;
 
 struct QueuedPeerDeviceEvent {
+    owner: PeerFanoutOwner,
     targets: Vec<String>,
     event: String,
     payload: serde_json::Value,
@@ -24,8 +27,14 @@ struct QueuedPeerDeviceEvent {
 }
 
 impl QueuedPeerDeviceEvent {
-    fn new(targets: Vec<String>, event: String, payload: serde_json::Value) -> Self {
+    fn new(
+        owner: PeerFanoutOwner,
+        targets: Vec<String>,
+        event: String,
+        payload: serde_json::Value,
+    ) -> Self {
         Self {
+            owner,
             targets,
             event,
             payload,
@@ -35,6 +44,7 @@ impl QueuedPeerDeviceEvent {
     }
 
     fn for_agent_event(
+        owner: PeerFanoutOwner,
         targets: Vec<String>,
         event: String,
         payload: serde_json::Value,
@@ -44,6 +54,7 @@ impl QueuedPeerDeviceEvent {
     ) -> Self {
         let terminal = terminal_turn.map(|turn| (turns.clone(), generation, turn));
         Self {
+            owner,
             targets,
             event,
             payload,
@@ -398,9 +409,13 @@ async fn handle_agentic_event(state: &PeerHostState, event: AgenticEvent) -> Res
         return Err("no attached Peer controller can receive Agent events".to_string());
     }
     let generation = state.turns.current_event_stream_generation()?;
+    let owner = crate::account::capture_peer_fanout_owner()
+        .await
+        .map_err(|error| format!("Peer event routing owner unavailable: {error}"))?;
     enqueue_peer_device_event(
         peer_event_sender(),
         QueuedPeerDeviceEvent::for_agent_event(
+            owner,
             targets,
             projected.event_name,
             projected.payload,
@@ -528,12 +543,59 @@ pub(crate) async fn fanout_peer_device_event(event: String, payload: serde_json:
     if targets.is_empty() {
         return;
     }
-    let queued = QueuedPeerDeviceEvent::new(targets, event, payload);
+    let inherited_owner = crate::account::inherited_peer_fanout_owner();
+    let inherits_routing_lease = inherited_owner.is_some();
+    let owner = match inherited_owner {
+        Some(owner) => owner,
+        None => match crate::account::capture_peer_fanout_owner().await {
+            Ok(owner) => owner,
+            Err(error) => {
+                tracing::debug!("Peer event fanout skipped before enqueue: {error}");
+                return;
+            }
+        },
+    };
+    let queued = QueuedPeerDeviceEvent::new(owner, targets, event, payload);
+    if inherits_routing_lease {
+        // HostInvoke already holds the lifecycle read lease. Never await queue
+        // capacity or acquire a nested read here: a queued transition writer
+        // would otherwise create a writer-priority self-deadlock. A detached
+        // task preserves backpressure and validates the captured owner later.
+        enqueue_inherited_peer_device_event(peer_event_sender().clone(), queued);
+        return;
+    }
     if let Err(queued) = enqueue_peer_device_event(peer_event_sender(), queued).await {
         tracing::warn!(
             "Peer event delivery queue closed before accepting command event; using direct delivery"
         );
         fanout_peer_device_event_once(queued).await;
+    }
+}
+
+fn enqueue_inherited_peer_device_event(
+    sender: mpsc::Sender<QueuedPeerDeviceEvent>,
+    queued: QueuedPeerDeviceEvent,
+) {
+    match sender.try_send(queued) {
+        Ok(()) => {}
+        Err(mpsc::error::TrySendError::Full(queued)) => {
+            tokio::spawn(async move {
+                if let Err(queued) = enqueue_peer_device_event(&sender, queued).await {
+                    tracing::warn!(
+                        "Peer event delivery queue closed while draining inherited routing event"
+                    );
+                    fanout_peer_device_event_once(queued).await;
+                }
+            });
+        }
+        Err(mpsc::error::TrySendError::Closed(queued)) => {
+            tokio::spawn(async move {
+                tracing::warn!(
+                    "Peer event delivery queue closed for inherited routing event; using direct delivery"
+                );
+                fanout_peer_device_event_once(queued).await;
+            });
+        }
     }
 }
 
@@ -546,6 +608,7 @@ async fn enqueue_peer_device_event(
 
 async fn fanout_peer_device_event_once(queued: QueuedPeerDeviceEvent) {
     let QueuedPeerDeviceEvent {
+        owner,
         targets,
         event,
         payload,
@@ -560,13 +623,15 @@ async fn fanout_peer_device_event_once(queued: QueuedPeerDeviceEvent) {
         return;
     }
 
-    let (session, relay_client) = match crate::account::peer_fanout_context().await {
-        Ok(ctx) => ctx,
+    let routing_lease = match crate::account::acquire_peer_fanout_lease(&owner).await {
+        Ok(lease) => lease,
         Err(error) => {
-            tracing::debug!("Peer event fanout skipped: {error}");
+            tracing::debug!("Queued Peer event dropped after owner change: {error}");
             return;
         }
     };
+    let session = &routing_lease.session;
+    let relay_client = &routing_lease.relay_client;
 
     let envelope = match serde_json::to_string(&RemoteCommand::DeviceEvent { event, payload }) {
         Ok(envelope) => envelope,
@@ -655,16 +720,21 @@ mod tests {
     use bitfun_events::{AgenticEvent, AgenticEventEnvelope, AgenticEventPriority};
 
     use super::{
-        continuity_is_current, drain_broadcast_receiver, enqueue_peer_device_event, event_turn_key,
-        interrupted_turn_failure_projection, retained_delivery_targets, QueuedPeerDeviceEvent,
-        TerminalDeliveryGuard,
+        continuity_is_current, drain_broadcast_receiver, enqueue_inherited_peer_device_event,
+        enqueue_peer_device_event, event_turn_key, interrupted_turn_failure_projection,
+        retained_delivery_targets, QueuedPeerDeviceEvent, TerminalDeliveryGuard,
     };
     use crate::peer_host::state::{PeerTurnKey, PeerTurnTracker};
+
+    fn test_owner(generation: u64) -> crate::account::PeerFanoutOwner {
+        crate::account::PeerFanoutOwner::for_test(generation, "test-token")
+    }
 
     #[test]
     fn queued_events_keep_the_target_snapshot_from_enqueue_time() {
         let mut current_targets = vec!["controller-1".to_string()];
         let queued = QueuedPeerDeviceEvent::new(
+            test_owner(7),
             current_targets.clone(),
             "dialog_turn_started".to_string(),
             serde_json::json!({}),
@@ -714,6 +784,7 @@ mod tests {
         let (tx, rx) = tokio::sync::mpsc::channel(1);
         drop(rx);
         let queued = QueuedPeerDeviceEvent::new(
+            test_owner(7),
             vec!["controller-1".to_string()],
             "agentic://dialog-turn-failed".to_string(),
             serde_json::json!({ "turnId": "turn-1" }),
@@ -723,6 +794,36 @@ mod tests {
             .await
             .expect_err("closed queue must return the undelivered event");
         assert_eq!(recovered.event, "agentic://dialog-turn-failed");
+    }
+
+    #[tokio::test]
+    async fn inherited_enqueue_does_not_wait_for_full_delivery_queue() {
+        let (tx, mut rx) = tokio::sync::mpsc::channel(1);
+        tx.send(QueuedPeerDeviceEvent::new(
+            test_owner(7),
+            vec!["controller-1".to_string()],
+            "first".to_string(),
+            serde_json::json!({}),
+        ))
+        .await
+        .expect("seed queue");
+
+        enqueue_inherited_peer_device_event(
+            tx,
+            QueuedPeerDeviceEvent::new(
+                test_owner(7),
+                vec!["controller-1".to_string()],
+                "second".to_string(),
+                serde_json::json!({}),
+            ),
+        );
+
+        assert_eq!(rx.recv().await.expect("first queued event").event, "first");
+        let second = tokio::time::timeout(std::time::Duration::from_secs(1), rx.recv())
+            .await
+            .expect("detached enqueue should complete after capacity is available")
+            .expect("second queued event");
+        assert_eq!(second.event, "second");
     }
 
     #[test]
@@ -780,6 +881,7 @@ mod tests {
             .current_event_stream_generation()
             .expect("ready generation");
         let queued = QueuedPeerDeviceEvent::for_agent_event(
+            test_owner(7),
             vec!["controller-1".to_string()],
             "dialog_turn_started".to_string(),
             serde_json::json!({}),
@@ -789,6 +891,7 @@ mod tests {
         );
 
         assert!(continuity_is_current(&queued.continuity));
+        assert_eq!(queued.owner.generation_for_test(), 7);
         turns.interrupt_event_stream(false);
         turns.mark_event_stream_ready();
         assert!(!continuity_is_current(&queued.continuity));

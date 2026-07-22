@@ -398,6 +398,21 @@ pub async fn logout(State(state): State<AppState>, headers: HeaderMap) -> Status
     };
     match AuthToken::find(db, &token).await {
         Ok(Some(auth)) => {
+            let _presence_projection_guard = state.device_manager.lock_presence_projection().await;
+            // The first lookup determines which lifecycle to serialize. Check
+            // the exact token again under that lifecycle boundary so a
+            // concurrent device deletion cannot leave this handler operating
+            // on stale authorization state.
+            let current = match AuthToken::find(db, &token).await {
+                Ok(Some(current))
+                    if current.user_id == auth.user_id
+                        && current.device_id == auth.device_id
+                        && current.token_kind == auth.token_kind =>
+                {
+                    current
+                }
+                _ => return StatusCode::UNAUTHORIZED,
+            };
             // Delete the token row
             if let Err(error) = sqlx::query("DELETE FROM auth_tokens WHERE token = ?")
                 .bind(&token)
@@ -410,30 +425,44 @@ pub async fn logout(State(state): State<AppState>, headers: HeaderMap) -> Status
             // A delegated control token borrows the desktop's device id but
             // does not own its live connection. Logging out that client must
             // never disconnect or mark the desktop offline.
-            if auth.is_device_token() {
-                let _ = crate::db::DeviceRow::set_online(db, &auth.user_id, &auth.device_id, false)
-                    .await;
+            if current.is_device_token() {
+                state.device_manager.disconnect_device_if_token(
+                    &auth.user_id,
+                    &auth.device_id,
+                    &token,
+                );
+                // A failed token match means another login currently owns the
+                // same machine's socket. Keep its durable presence online;
+                // otherwise a rejected candidate login could make the still-
+                // connected prior account appear offline.
+                if !state
+                    .device_manager
+                    .is_device_online(&auth.user_id, &auth.device_id)
+                {
+                    let _ =
+                        crate::db::DeviceRow::set_online(db, &auth.user_id, &auth.device_id, false)
+                            .await;
+                }
+                drop(_presence_projection_guard);
                 state
                     .device_manager
-                    .disconnect_device(&auth.user_id, &auth.device_id);
-                let devices = state
-                    .device_manager
-                    .online_devices(&auth.user_id)
-                    .into_iter()
-                    .map(
-                        |(device_id, device_name)| crate::routes::websocket::DevicePresenceEntry {
-                            device_id,
-                            device_name,
-                        },
-                    )
-                    .collect();
-                let presence =
-                    crate::routes::websocket::OutboundProtocol::DevicePresence { devices };
-                if let Ok(message) = serde_json::to_string(&presence) {
-                    state
-                        .device_manager
-                        .broadcast_except(&auth.user_id, &auth.device_id, &message);
-                }
+                    .broadcast_current_presence(&auth.user_id, |devices| {
+                        let devices = devices
+                            .iter()
+                            .map(|(device_id, device_name)| {
+                                crate::routes::websocket::DevicePresenceEntry {
+                                    device_id: device_id.clone(),
+                                    device_name: device_name.clone(),
+                                }
+                            })
+                            .collect();
+                        serde_json::to_string(
+                            &crate::routes::websocket::OutboundProtocol::DevicePresence { devices },
+                        )
+                        .ok()
+                    });
+            } else {
+                drop(_presence_projection_guard);
             }
             tracing::info!("Account token revoked for device_id={}", auth.device_id);
             StatusCode::NO_CONTENT

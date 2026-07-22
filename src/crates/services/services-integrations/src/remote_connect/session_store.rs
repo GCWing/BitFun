@@ -12,6 +12,7 @@
 //! payload `{ token, user_id, master_key_b64, relay_url }`.
 
 use std::path::PathBuf;
+use std::sync::{OnceLock, RwLock};
 use std::{fs::OpenOptions, io::Write};
 
 use aes_gcm::aead::{Aead, KeyInit, OsRng};
@@ -23,6 +24,33 @@ use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
 const NONCE_SIZE: usize = 12;
+
+fn session_store_directory_override() -> &'static RwLock<Option<PathBuf>> {
+    static OVERRIDE: OnceLock<RwLock<Option<PathBuf>>> = OnceLock::new();
+    OVERRIDE.get_or_init(|| RwLock::new(None))
+}
+
+/// Redirects session, local-key, and credential-hint files for integration
+/// tests. Tests must use this instead of changing HOME or touching real login
+/// state shared by Desktop and CLI.
+pub fn set_session_store_directory_for_test(path: PathBuf) {
+    let mut override_path = session_store_directory_override()
+        .write()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    *override_path = Some(path);
+}
+
+fn session_store_directory() -> Result<PathBuf> {
+    let override_path = session_store_directory_override()
+        .read()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    if let Some(path) = override_path.as_ref() {
+        return Ok(path.clone());
+    }
+    drop(override_path);
+    let home = dirs::home_dir().ok_or_else(|| anyhow!("cannot determine home directory"))?;
+    Ok(home.join(".bitfun"))
+}
 
 /// The on-disk JSON payload (plaintext before encryption).
 #[derive(Serialize, Deserialize)]
@@ -40,13 +68,11 @@ struct SessionPayload {
 
 /// Resolve the persistent session file path.
 fn session_file_path() -> Result<PathBuf> {
-    let home = dirs::home_dir().ok_or_else(|| anyhow!("cannot determine home directory"))?;
-    Ok(home.join(".bitfun").join("account_session.enc"))
+    Ok(session_store_directory()?.join("account_session.enc"))
 }
 
 fn session_key_file_path() -> Result<PathBuf> {
-    let home = dirs::home_dir().ok_or_else(|| anyhow!("cannot determine home directory"))?;
-    Ok(home.join(".bitfun").join("account_session.key"))
+    Ok(session_store_directory()?.join("account_session.key"))
 }
 
 /// Atomically replace a secret-bearing file and restrict it to the current
@@ -408,8 +434,7 @@ pub fn clear_session() {
 // Shared by Desktop and CLI so login forms pre-fill the same values.
 
 fn credential_hint_path() -> Result<PathBuf> {
-    let home = dirs::home_dir().ok_or_else(|| anyhow!("cannot determine home directory"))?;
-    Ok(home.join(".bitfun").join("account_hint.json"))
+    Ok(session_store_directory()?.join("account_hint.json"))
 }
 
 /// Non-secret login pre-fill (never stores password or master key).

@@ -59,6 +59,7 @@
     "loginSuccess": "登录成功",
     "loginFailed": "登录失败：{{error}}",
     "logoutSuccess": "已退出登录",
+    "logoutCleanupPending": "已退出登录，系统凭据清理仍在等待中，稍后会自动重试。",
     "logoutFailed": "退出登录失败：{{error}}",
     "userCodeHint": "请在浏览器中输入验证码：{{code}}",
     "openUrlManually": "无法自动打开浏览器，请手动访问：{{url}}",

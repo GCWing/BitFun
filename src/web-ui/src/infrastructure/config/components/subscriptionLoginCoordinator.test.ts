@@ -5,6 +5,17 @@ import {
 } from './subscriptionLoginCoordinator';
 
 describe('SubscriptionLoginCoordinator', () => {
+  it('assigns an immutable session id to each operation', () => {
+    const ids = ['11111111-1111-4111-8111-111111111111', '22222222-2222-4222-8222-222222222222'];
+    const coordinator = new SubscriptionLoginCoordinator(() => ids.shift()!);
+    const first = coordinator.begin('codex')!;
+    expect(first.sessionId).toBe('11111111-1111-4111-8111-111111111111');
+    coordinator.complete(first);
+    const second = coordinator.begin('codex')!;
+    expect(second.sessionId).toBe('22222222-2222-4222-8222-222222222222');
+    expect(first.sessionId).toBe('11111111-1111-4111-8111-111111111111');
+  });
+
   it('allows only one provider authorization at a time', () => {
     const coordinator = new SubscriptionLoginCoordinator();
     const codex = coordinator.begin('codex');

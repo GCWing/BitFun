@@ -76,7 +76,7 @@ enum Command {
 async fn main() -> Result<()> {
     let cli = Cli::parse();
 
-    let pool = bitfun_relay_service::db::connect(&cli.db).await?;
+    let pool = bitfun_relay_service::db::connect_for_admin(&cli.db).await?;
 
     match cli.command {
         Command::AddUser { username, password } => {

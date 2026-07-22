@@ -87,7 +87,7 @@ async fn list_devices(
     headers: HeaderMap,
 ) -> Result<Json<Vec<DeviceListEntry>>, StatusCode> {
     let auth = validate_user(&state, &headers).await?;
-    let user_id = auth.user_id;
+    let user_id = auth.user_id.clone();
 
     // Get online devices from DeviceManager (in-memory)
     let online = state.device_manager.online_devices(&user_id);
@@ -225,13 +225,24 @@ async fn delete_device(
     if !auth.is_device_token() {
         return Err(StatusCode::FORBIDDEN);
     }
-    let user_id = auth.user_id;
+    let user_id = auth.user_id.clone();
 
     if !is_valid_device_id(&target_device_id) {
         return Err(StatusCode::BAD_REQUEST);
     }
 
     let db = state.db.as_ref().ok_or(StatusCode::NOT_IMPLEMENTED)?;
+    let _presence_projection_guard = state.device_manager.lock_presence_projection().await;
+    let current_auth = crate::db::AuthToken::find(db, &auth.token)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+        .ok_or(StatusCode::UNAUTHORIZED)?;
+    if !current_auth.is_device_token()
+        || current_auth.user_id != user_id
+        || current_auth.device_id != auth.device_id
+    {
+        return Err(StatusCode::UNAUTHORIZED);
+    }
 
     // Revoke the target's auth tokens before removing its device row. The DB
     // helper also scopes the deletion to this account and performs both writes
@@ -255,23 +266,22 @@ async fn delete_device(
     state
         .device_manager
         .disconnect_device(&user_id, &target_device_id);
+    drop(_presence_projection_guard);
 
-    let online = state.device_manager.online_devices(&user_id);
-    let presence = online
-        .iter()
-        .map(
-            |(device_id, device_name)| crate::routes::websocket::DevicePresenceEntry {
-                device_id: device_id.clone(),
-                device_name: device_name.clone(),
-            },
-        )
-        .collect();
-    let presence_json =
-        serde_json::to_string(&OutboundProtocol::DevicePresence { devices: presence })
-            .unwrap_or_default();
     state
         .device_manager
-        .broadcast_except(&user_id, &target_device_id, &presence_json);
+        .broadcast_current_presence(&user_id, |devices| {
+            let devices = devices
+                .iter()
+                .map(
+                    |(device_id, device_name)| crate::routes::websocket::DevicePresenceEntry {
+                        device_id: device_id.clone(),
+                        device_name: device_name.clone(),
+                    },
+                )
+                .collect();
+            serde_json::to_string(&OutboundProtocol::DevicePresence { devices }).ok()
+        });
 
     tracing::info!("Device {target_device_id} removed from account {user_id}");
     Ok(StatusCode::NO_CONTENT)

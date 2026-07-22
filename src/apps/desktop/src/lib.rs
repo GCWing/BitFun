@@ -1326,6 +1326,7 @@ pub async fn run() {
             // Account API
             api::remote_connect_api::account_login,
             api::remote_connect_api::account_finalize_login,
+            api::remote_connect_api::account_cancel_pending_login,
             api::remote_connect_api::account_status,
             api::remote_connect_api::account_logout,
             api::remote_connect_api::account_connect_devices,

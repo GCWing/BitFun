@@ -8,11 +8,13 @@
  * query the API directly.
  */
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { api } from '@/infrastructure/api/service-api/ApiClient';
 import { remoteConnectAPI } from '@/infrastructure/api/service-api/RemoteConnectAPI';
+import { createLogger } from '@/shared/utils/logger';
 
 const STATUS_POLL_MS = 60_000;
+const log = createLogger('AccountLoginState');
 
 export interface AccountLoginState {
   loggedIn: boolean;
@@ -22,13 +24,27 @@ export interface AccountLoginState {
 
 export function useAccountLoginState(): AccountLoginState {
   const [state, setState] = useState<AccountLoginState>({ loggedIn: false, deviceName: null });
+  const refreshGenerationRef = useRef(0);
 
   useEffect(() => {
     let cancelled = false;
     const refresh = async () => {
-      const status = await remoteConnectAPI.accountStatus();
+      const generation = ++refreshGenerationRef.current;
+      const isCurrent = () => (
+        !cancelled && refreshGenerationRef.current === generation
+      );
+      let status;
+      try {
+        status = await remoteConnectAPI.accountStatus();
+      } catch (error) {
+        // Status transport failures are not logout evidence. Keep the last
+        // confirmed state until a later response or login-state event wins.
+        log.warn('Failed to refresh account login state', error);
+        return;
+      }
+      if (!isCurrent()) return;
       if (!status.logged_in) {
-        if (!cancelled) setState({ loggedIn: false, deviceName: null });
+        setState({ loggedIn: false, deviceName: null });
         return;
       }
       // accountStatus only exposes a UUID user_id; the menu label needs the
@@ -40,7 +56,7 @@ export function useAccountLoginState(): AccountLoginState {
       } catch {
         deviceName = null;
       }
-      if (!cancelled) {
+      if (isCurrent()) {
         setState({ loggedIn: true, deviceName });
       }
     };
@@ -58,6 +74,7 @@ export function useAccountLoginState(): AccountLoginState {
 
     return () => {
       cancelled = true;
+      refreshGenerationRef.current += 1;
       unlisten();
       clearInterval(poll);
     };

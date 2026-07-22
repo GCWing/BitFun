@@ -9,7 +9,8 @@
  * - When the relay already has cloud settings, `account_login` keeps the
  *   session memory-only until `account_finalize_login`. Canceling the
  *   overwrite view, switching away from this panel, or closing the dialog
- *   must logout so a killed process does not restore login.
+ *   must conditionally cancel its opaque owner so a killed process does not
+ *   restore login.
  * - One-click deploy opens `RelayDeployWizard` (same feature as the Network
  *   group), not an external README. See `src/features/relay-deploy/README.md`.
  */
@@ -60,6 +61,15 @@ function parseRelayServer(value: string): URL | null {
     return url;
   } catch {
     return null;
+  }
+}
+
+async function cancelPendingLoginWithRetry(pendingLoginId: string): Promise<boolean> {
+  try {
+    return await remoteConnectAPI.accountCancelPendingLogin(pendingLoginId);
+  } catch (firstError) {
+    log.warn('pending login cancel response was ambiguous; retrying', firstError);
+    return await remoteConnectAPI.accountCancelPendingLogin(pendingLoginId);
   }
 }
 
@@ -134,12 +144,31 @@ export const AccountPanel: React.FC<AccountPanelProps> = ({
   /** Relay URL of the current account session, shown in the devices view. */
   const [accountRelayUrl, setAccountRelayUrl] = useState('');
   const [copiedServerUrl, setCopiedServerUrl] = useState(false);
+  /** Account epoch whose presence events may update the device list. */
+  const [activeAccountEpoch, setActiveAccountEpoch] = useState<number | null>(null);
   const refreshTimer = useRef<ReturnType<typeof setInterval> | null>(null);
+  /** Reject late responses after unmount or an account login/logout transition. */
+  const mountedRef = useRef(false);
+  const accountEpochRef = useRef(0);
+  const refreshRequestRef = useRef(0);
   /** Prevent overlapping background syncs from rapid clicks. */
   const syncInFlightRef = useRef(false);
-  /** Track the overwrite view for the unmount logout invariant. */
+  /** Opaque backend owner ID for the memory-only overwrite decision. */
+  const pendingLoginIdRef = useRef<string | null>(null);
+  /** Track the overwrite view for conditional unmount cleanup. */
   const viewRef = useRef<View>(view);
   viewRef.current = view;
+
+  const invalidateAccountRequests = useCallback(() => {
+    accountEpochRef.current += 1;
+    refreshRequestRef.current += 1;
+    setActiveAccountEpoch(null);
+    return accountEpochRef.current;
+  }, []);
+
+  const isAccountEpochCurrent = useCallback((epoch: number) => (
+    mountedRef.current && accountEpochRef.current === epoch
+  ), []);
 
   const sortedDevices = useMemo(() => [...devices].sort((left, right) => {
     const leftLocal = left.device_id === localDeviceId;
@@ -150,6 +179,7 @@ export const AccountPanel: React.FC<AccountPanelProps> = ({
   }), [devices, localDeviceId]);
 
   const resetState = useCallback(() => {
+    setActiveAccountEpoch(null);
     setDevices([]);
     setLocalDeviceId(null);
     setDevicesReady(false);
@@ -170,19 +200,20 @@ export const AccountPanel: React.FC<AccountPanelProps> = ({
     }
   }, [accountRelayUrl, t, warning]);
 
-  const handleSessionExpired = useCallback(async (_error: unknown) => {
+  const handleSessionExpired = useCallback(async (_error: unknown, expectedEpoch: number) => {
+    if (!isAccountEpochCurrent(expectedEpoch)) return;
+    invalidateAccountRequests();
     // Invalidate detached retries before the logout request yields control.
     syncInFlightRef.current = false;
+    pendingLoginIdRef.current = null;
     clearSync();
-    try {
-      await remoteConnectAPI.accountLogout();
-    } catch (e) {
-      log.warn('logout after session expiry failed', e);
-    }
+    // Authenticated backend commands invalidate only the generation/token that
+    // produced their 401. Do not issue a second unconditional logout here: a
+    // late frontend response must never clear a newer login.
     resetState();
     setView('login');
     setError(t('accountLogin.sessionExpired'));
-  }, [clearSync, resetState, t]);
+  }, [clearSync, invalidateAccountRequests, isAccountEpochCurrent, resetState, t]);
 
   const markRelayUnreachable = useCallback(() => {
     setDevicesReady(false);
@@ -190,43 +221,55 @@ export const AccountPanel: React.FC<AccountPanelProps> = ({
   }, [t]);
 
   const refreshDevices = useCallback(async () => {
+    const epoch = accountEpochRef.current;
+    const requestId = ++refreshRequestRef.current;
+    const isCurrent = () => (
+      isAccountEpochCurrent(epoch) && refreshRequestRef.current === requestId
+    );
     try {
       let list = await remoteConnectAPI.accountListDevices();
+      if (!isCurrent()) return;
       const localOffline = list.some(d => d.device_id === localDeviceId && !d.online);
       if (localOffline && localDeviceId) {
         await new Promise(r => setTimeout(r, 1500));
+        if (!isCurrent()) return;
         list = await remoteConnectAPI.accountListDevices();
+        if (!isCurrent()) return;
       }
       setDevices(list);
       setDevicesReady(true);
       setRelayError(null);
     } catch (e) {
+      if (!isCurrent()) return;
       log.warn('refreshDevices failed', e);
       if (isAccountAuthFailure(e)) {
-        await handleSessionExpired(e);
+        await handleSessionExpired(e, epoch);
       } else {
         markRelayUnreachable();
       }
     }
-  }, [localDeviceId, handleSessionExpired, markRelayUnreachable]);
+  }, [localDeviceId, handleSessionExpired, isAccountEpochCurrent, markRelayUnreachable]);
 
   const handleRetryConnect = useCallback(async () => {
+    const epoch = accountEpochRef.current;
     setLoading(true);
     setRelayError(null);
     try {
       await remoteConnectAPI.accountConnectDevices();
+      if (!isAccountEpochCurrent(epoch)) return;
       await refreshDevices();
     } catch (err) {
       log.warn('retry connect failed', err);
+      if (!isAccountEpochCurrent(epoch)) return;
       if (isAccountAuthFailure(err)) {
-        await handleSessionExpired(err);
+        await handleSessionExpired(err, epoch);
         return;
       }
       markRelayUnreachable();
     } finally {
-      setLoading(false);
+      if (isAccountEpochCurrent(epoch)) setLoading(false);
     }
-  }, [handleSessionExpired, markRelayUnreachable, refreshDevices]);
+  }, [handleSessionExpired, isAccountEpochCurrent, markRelayUnreachable, refreshDevices]);
 
   const applyPresenceOnline = useCallback((onlineDevices: Array<{ device_id: string; device_name: string }>) => {
     const onlineIds = new Set(onlineDevices.map(d => d.device_id));
@@ -270,29 +313,40 @@ export const AccountPanel: React.FC<AccountPanelProps> = ({
 
   /** Connect presence + load the device list for an active account session. */
   const initializeDevices = useCallback(async () => {
+    const epoch = accountEpochRef.current;
     try {
       await remoteConnectAPI.accountConnectDevices();
+      if (!isAccountEpochCurrent(epoch)) return;
       // Re-read after AuthOk may have adopted the account-bound device_id.
       try {
         const info = await remoteConnectAPI.getDeviceInfo();
+        if (!isAccountEpochCurrent(epoch)) return;
         setLocalDeviceId(info.device_id);
       } catch (e) {
         log.warn('getDeviceInfo after connect failed', e);
       }
     } catch (err) {
+      if (!isAccountEpochCurrent(epoch)) return;
       log.warn('accountConnectDevices failed', err);
       if (isAccountAuthFailure(err)) {
-        await handleSessionExpired(err);
+        await handleSessionExpired(err, epoch);
         return;
       }
       markRelayUnreachable();
     }
+    if (!isAccountEpochCurrent(epoch)) return;
     void refreshDevices();
     startDevicePolling();
-  }, [handleSessionExpired, markRelayUnreachable, refreshDevices, startDevicePolling]);
+  }, [handleSessionExpired, isAccountEpochCurrent, markRelayUnreachable, refreshDevices, startDevicePolling]);
 
   useEffect(() => {
+    mountedRef.current = true;
     ensureAccountSyncProgressListener();
+    return () => {
+      mountedRef.current = false;
+      accountEpochRef.current += 1;
+      refreshRequestRef.current += 1;
+    };
   }, []);
 
   // Unmounting (dialog close or group switch) during the sync-choice step
@@ -304,44 +358,71 @@ export const AccountPanel: React.FC<AccountPanelProps> = ({
       if (viewRef.current === 'overwrite') {
         syncInFlightRef.current = false;
         clearSync();
-        void remoteConnectAPI.accountLogout().catch((e) => {
-          log.warn('logout on overwrite abandon failed', e);
-        });
+        const pendingLoginId = pendingLoginIdRef.current;
+        if (pendingLoginId) {
+          void cancelPendingLoginWithRetry(pendingLoginId)
+            .then(() => {
+              if (pendingLoginIdRef.current === pendingLoginId) {
+                pendingLoginIdRef.current = null;
+              }
+            })
+            .catch((e) => {
+              log.warn('pending login cancel on overwrite abandon failed', e);
+            });
+        }
       }
     };
   }, [clearSync]);
 
   useEffect(() => {
+    const epoch = accountEpochRef.current;
     remoteConnectAPI.getDeviceInfo().then((info) => {
-      setLocalDeviceId(info.device_id);
+      if (isAccountEpochCurrent(epoch)) setLocalDeviceId(info.device_id);
     }).catch((e) => { log.warn('getDeviceInfo failed', e); });
     remoteConnectAPI.accountGetCredentialHint().then((hint: AccountHint | null) => {
-      if (hint) { setUsername(hint.username); setAuthServer(hint.relay_url); setAccountRelayUrl(hint.relay_url); }
+      if (hint && isAccountEpochCurrent(epoch)) {
+        setUsername(hint.username);
+        setAuthServer(hint.relay_url);
+        setAccountRelayUrl(hint.relay_url);
+      }
     });
     remoteConnectAPI.accountStatus().then(async (status) => {
-      if (status.logged_in && status.user_id) {
+      if (isAccountEpochCurrent(epoch) && status.logged_in && status.user_id) {
+        setActiveAccountEpoch(epoch);
         setView('devices');
         await initializeDevices();
       }
+    }).catch((e) => {
+      // A failed status probe must not synthesize a logged-out transition.
+      log.warn('account status initialization failed', e);
     });
 
-    const unlistenPresence = api.listen<{ devices: Array<{ device_id: string; device_name: string }> }>(
+    return () => {
+      if (refreshTimer.current) { clearInterval(refreshTimer.current); refreshTimer.current = null; }
+    };
+  }, [
+    initializeDevices,
+    isAccountEpochCurrent,
+  ]);
+
+  // Subscribe only while a specific account epoch is active. The callback
+  // captures that epoch; invalidation flips the ref synchronously, so an old
+  // listener cannot update the next account before React runs its cleanup.
+  useEffect(() => {
+    if (activeAccountEpoch === null) return undefined;
+    const subscribedEpoch = activeAccountEpoch;
+    const unlistenPresence = api.listen<{
+      devices: Array<{ device_id: string; device_name: string }>;
+    }>(
       'account://device-presence',
       (payload) => {
-        if (payload?.devices) {
+        if (isAccountEpochCurrent(subscribedEpoch) && payload?.devices) {
           applyPresenceOnline(payload.devices);
         }
       },
     );
-
-    return () => {
-      if (refreshTimer.current) { clearInterval(refreshTimer.current); refreshTimer.current = null; }
-      unlistenPresence();
-    };
-  }, [
-    applyPresenceOnline,
-    initializeDevices,
-  ]);
+    return unlistenPresence;
+  }, [activeAccountEpoch, applyPresenceOnline, isAccountEpochCurrent]);
 
   const validate = useCallback(() => {
     if (!username.trim() || !password || !authServer.trim()) {
@@ -481,33 +562,65 @@ export const AccountPanel: React.FC<AccountPanelProps> = ({
   }, [lastSyncIsFirstLogin, startBackgroundSync, syncStatus]);
 
   /** Landing path after a completed login: devices view + background sync. */
-  const completeLogin = useCallback((relayUrl: string, isFirstLogin: boolean) => {
+  const completeLogin = useCallback((
+    relayUrl: string,
+    isFirstLogin: boolean,
+    accountEpoch: number,
+  ) => {
+    if (!isAccountEpochCurrent(accountEpoch)) return;
+    setActiveAccountEpoch(accountEpoch);
     setAccountRelayUrl(relayUrl);
     setView('devices');
     void initializeDevices();
     startBackgroundSync(isFirstLogin);
-  }, [initializeDevices, startBackgroundSync]);
+  }, [initializeDevices, isAccountEpochCurrent, startBackgroundSync]);
 
   const performLogin = useCallback(async (server: string, user: string, pass: string) => {
+    const epoch = invalidateAccountRequests();
+    // Invalidate detached sync retries before the backend begins replacing the
+    // account. The store operation id fences any completion from the old run.
+    syncInFlightRef.current = false;
+    clearSync();
     setLoading(true); setError(null);
     try {
+      const stalePendingLoginId = pendingLoginIdRef.current;
+      if (stalePendingLoginId) {
+        await cancelPendingLoginWithRetry(stalePendingLoginId);
+        if (pendingLoginIdRef.current === stalePendingLoginId) {
+          pendingLoginIdRef.current = null;
+        }
+        if (!isAccountEpochCurrent(epoch)) return;
+      }
       const result = await remoteConnectAPI.accountLogin(server, user, pass);
+      if (!isAccountEpochCurrent(epoch)) {
+        if (result.pending_login_id) {
+          await cancelPendingLoginWithRetry(result.pending_login_id);
+        }
+        return;
+      }
       if (result.has_cloud_settings) {
+        if (!result.pending_login_id) {
+          throw new Error(t('accountLogin.sessionExpired'));
+        }
+        pendingLoginIdRef.current = result.pending_login_id;
         setView('overwrite');
         setLoading(false);
         return;
       }
       success(t('accountLogin.loginSuccess', { user_id: result.user_id }));
-      completeLogin(server, true);
+      completeLogin(server, true, epoch);
     } catch (e: unknown) {
+      if (!isAccountEpochCurrent(epoch)) return;
       setError(e instanceof Error ? e.message : String(e));
     } finally {
       // The account session has its own token after this call; retaining the
       // password in React state while the device list is open is unnecessary.
-      setPassword('');
-      setLoading(false);
+      if (isAccountEpochCurrent(epoch)) {
+        setPassword('');
+        setLoading(false);
+      }
     }
-  }, [completeLogin, success, t]);
+  }, [clearSync, completeLogin, invalidateAccountRequests, isAccountEpochCurrent, success, t]);
 
   const handleLogin = useCallback(async () => {
     if (!validate()) return;
@@ -541,30 +654,60 @@ export const AccountPanel: React.FC<AccountPanelProps> = ({
   }, [performLogin]);
 
   const finalizeAndSync = useCallback(async (isFirstLogin: boolean) => {
+    const epoch = accountEpochRef.current;
+    const pendingLoginId = pendingLoginIdRef.current;
+    if (!pendingLoginId) {
+      setError(t('accountLogin.sessionExpired'));
+      return;
+    }
     setLoading(true);
     setError(null);
     try {
-      await remoteConnectAPI.accountFinalizeLogin();
+      try {
+        await remoteConnectAPI.accountFinalizeLogin(pendingLoginId);
+      } catch (firstError) {
+        if (!isAccountEpochCurrent(epoch)) return;
+        // The backend commit may have succeeded even when its transport
+        // response was lost. Retrying the same opaque owner is idempotent and
+        // cannot authorize a replacement account generation.
+        log.warn('pending login finalize response was ambiguous; retrying', firstError);
+        await remoteConnectAPI.accountFinalizeLogin(pendingLoginId);
+      }
+      if (!isAccountEpochCurrent(epoch)) return;
+      if (pendingLoginIdRef.current === pendingLoginId) {
+        pendingLoginIdRef.current = null;
+      }
       success(t('accountLogin.loginSuccess', { user_id: username }));
-      completeLogin(authServer.trim(), isFirstLogin);
+      completeLogin(authServer.trim(), isFirstLogin, epoch);
     } catch (e: unknown) {
+      if (!isAccountEpochCurrent(epoch)) return;
       if (isAccountAuthFailure(e)) {
-        await handleSessionExpired(e);
+        await handleSessionExpired(e, epoch);
         return;
       }
       setError(e instanceof Error ? e.message : String(e));
       // Stop any detached work before accountLogout can yield.
       syncInFlightRef.current = false;
       clearSync();
-      try { await remoteConnectAPI.accountLogout(); } catch (logoutErr) {
-        log.warn('logout after finalize failure failed', logoutErr);
+      const cleanupEpoch = invalidateAccountRequests();
+      try {
+        await cancelPendingLoginWithRetry(pendingLoginId);
+        if (pendingLoginIdRef.current === pendingLoginId) {
+          pendingLoginIdRef.current = null;
+        }
+      } catch (cancelErr) {
+        log.warn('pending login cancel after finalize failure failed', cancelErr);
+        if (isAccountEpochCurrent(cleanupEpoch)) setLoading(false);
+        return;
       }
+      if (!isAccountEpochCurrent(cleanupEpoch)) return;
       resetState();
       setView('login');
-    } finally {
       setLoading(false);
+    } finally {
+      if (isAccountEpochCurrent(epoch)) setLoading(false);
     }
-  }, [authServer, clearSync, completeLogin, handleSessionExpired, resetState, success, t, username]);
+  }, [authServer, clearSync, completeLogin, handleSessionExpired, invalidateAccountRequests, isAccountEpochCurrent, resetState, success, t, username]);
 
   const handleConfirmOverwrite = useCallback(() => {
     void finalizeAndSync(false);
@@ -575,25 +718,50 @@ export const AccountPanel: React.FC<AccountPanelProps> = ({
   }, [finalizeAndSync]);
 
   const handleCancelOverwrite = useCallback(async () => {
+    const epoch = invalidateAccountRequests();
     syncInFlightRef.current = false;
     clearSync();
-    try { await remoteConnectAPI.accountLogout(); } catch (e) { log.warn('logout failed', e); }
+    const pendingLoginId = pendingLoginIdRef.current;
+    if (pendingLoginId) {
+      try {
+        await cancelPendingLoginWithRetry(pendingLoginId);
+        if (pendingLoginIdRef.current === pendingLoginId) {
+          pendingLoginIdRef.current = null;
+        }
+      } catch (e) {
+        log.warn('pending login cancel failed', e);
+        if (isAccountEpochCurrent(epoch)) {
+          setError(e instanceof Error ? e.message : String(e));
+        }
+        return;
+      }
+    }
+    if (!isAccountEpochCurrent(epoch)) return;
     resetState();
     setView('login');
-  }, [clearSync, resetState]);
+  }, [clearSync, invalidateAccountRequests, isAccountEpochCurrent, resetState]);
 
   const handleLogout = useCallback(async () => {
+    const epoch = invalidateAccountRequests();
     setLoading(true);
     syncInFlightRef.current = false;
     clearSync();
+    pendingLoginIdRef.current = null;
     try {
       await remoteConnectAPI.accountLogout();
+      if (!isAccountEpochCurrent(epoch)) return;
       resetState();
       setView('login');
     } catch (e: unknown) {
+      if (!isAccountEpochCurrent(epoch)) return;
+      // Logout failed before the backend changed the account; resume presence
+      // delivery for the still-current frontend epoch.
+      setActiveAccountEpoch(epoch);
       setError(e instanceof Error ? e.message : String(e));
-    } finally { setLoading(false); }
-  }, [clearSync, resetState]);
+    } finally {
+      if (isAccountEpochCurrent(epoch)) setLoading(false);
+    }
+  }, [clearSync, invalidateAccountRequests, isAccountEpochCurrent, resetState]);
 
   const handleDeleteDevice = useCallback(async (deviceId: string, deviceName: string) => {
     const isLocal = localDeviceId === deviceId;
@@ -617,6 +785,7 @@ export const AccountPanel: React.FC<AccountPanelProps> = ({
     const previousSyncDirection = lastSyncIsFirstLogin;
     setLoading(true);
     setError(null);
+    const epoch = isLocal ? invalidateAccountRequests() : accountEpochRef.current;
     if (isLocal) {
       // A current-device removal is also a logout. Invalidate retries and
       // late progress before the backend request yields.
@@ -625,6 +794,7 @@ export const AccountPanel: React.FC<AccountPanelProps> = ({
     }
     try {
       await remoteConnectAPI.accountDeleteDevice(deviceId);
+      if (!isAccountEpochCurrent(epoch)) return;
       if (isLocal) {
         success(t('accountLogin.currentDeviceRemoved'));
         resetState();
@@ -634,10 +804,12 @@ export const AccountPanel: React.FC<AccountPanelProps> = ({
         void refreshDevices();
       }
     } catch (e: unknown) {
+      if (!isAccountEpochCurrent(epoch)) return;
       if (isAccountAuthFailure(e)) {
-        await handleSessionExpired(e);
+        await handleSessionExpired(e, epoch);
       } else {
         const message = e instanceof Error ? e.message : String(e);
+        if (isLocal) setActiveAccountEpoch(epoch);
         setError(message);
         if (
           isLocal
@@ -651,11 +823,13 @@ export const AccountPanel: React.FC<AccountPanelProps> = ({
         }
       }
     } finally {
-      setLoading(false);
+      if (isAccountEpochCurrent(epoch)) setLoading(false);
     }
   }, [
     clearSync,
     handleSessionExpired,
+    invalidateAccountRequests,
+    isAccountEpochCurrent,
     lastSyncIsFirstLogin,
     localDeviceId,
     refreshDevices,

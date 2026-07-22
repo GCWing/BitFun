@@ -32,6 +32,28 @@
     padding-bottom: $size-gap-6;
   }
 
+  &__refresh-error {
+    display: flex;
+    align-items: center;
+    gap: $size-gap-2;
+    margin-bottom: $size-gap-3;
+    padding: $size-gap-2 $size-gap-3;
+    border: 1px solid var(--color-error-border);
+    border-radius: var(--size-radius-base);
+    background: var(--color-error-bg);
+    color: var(--color-error);
+    font-size: var(--font-size-sm);
+
+    small {
+      min-width: 0;
+      flex: 1;
+      overflow: hidden;
+      color: var(--color-text-secondary);
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+  }
+
   &__card {
     min-width: 0;
     display: flex;

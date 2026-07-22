@@ -8,7 +8,23 @@
  *   - On tab activation: immediate poll to catch up on missed changes
  */
 
-import { RelayHttpClient } from './RelayHttpClient';
+import {
+  RelayHttpClient,
+  type ControlTargetSnapshot,
+} from './RelayHttpClient';
+
+export class RemoteControlTargetChangedError extends Error {
+  constructor() {
+    super('Remote control target changed');
+    this.name = 'RemoteControlTargetChangedError';
+  }
+}
+
+export function isRemoteControlTargetChangedError(
+  value: unknown,
+): value is RemoteControlTargetChangedError {
+  return value instanceof RemoteControlTargetChangedError;
+}
 
 export interface WorkspaceInfo {
   has_workspace: boolean;
@@ -158,28 +174,57 @@ export class RemoteSessionManager {
     this.client = client;
   }
 
-  private async request<T>(cmd: object): Promise<T> {
+  get controlTargetEpoch(): number {
+    return this.client.controlTargetEpoch;
+  }
+
+  onControlTargetChange(listener: () => void): () => void {
+    return this.client.onControlTargetChange(listener);
+  }
+
+  private ensureControlTargetCurrent(snapshot: ControlTargetSnapshot): void {
+    if (!this.client.isControlTargetCurrent(snapshot)) {
+      throw new RemoteControlTargetChangedError();
+    }
+  }
+
+  private async request<T>(
+    cmd: object,
+    target: ControlTargetSnapshot = this.client.getControlTargetSnapshot(),
+  ): Promise<T> {
+    // A caller may bind several transport requests into one logical operation
+    // (for example, a chunked file download). Fence before any transport call
+    // so a stale operation cannot send its next step to the replacement target.
+    this.ensureControlTargetCurrent(target);
     const requestId = `req_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
     const cmdWithId = { ...cmd, _request_id: requestId };
     // The QR-paired desktop keeps the proven room channel. Only a switched
     // control target (another same-account device) is reached through the
     // relay device RPC API using the delegated identity.
-    const targetDeviceId = this.client.pairedDeviceId;
+    const targetDeviceId = target.deviceId;
     const isRemoteTarget =
-      this.client.hasDelegatedIdentity
-      && !!targetDeviceId
-      && targetDeviceId !== this.client.homeDeviceId;
-    let resp: T;
-    if (isRemoteTarget && targetDeviceId) {
-      resp = await this.client.sendDeviceRpc<T>(targetDeviceId, cmdWithId);
-    } else {
-      resp = await this.client.sendCommand<T>(cmdWithId);
+      !!targetDeviceId
+      && targetDeviceId !== target.homeDeviceId;
+    try {
+      let resp: T;
+      if (isRemoteTarget && targetDeviceId) {
+        resp = await this.client.sendDeviceRpc<T>(targetDeviceId, cmdWithId);
+      } else {
+        resp = await this.client.sendCommand<T>(cmdWithId);
+      }
+      this.ensureControlTargetCurrent(target);
+      const respAny = resp as any;
+      if (respAny.resp === 'error') {
+        throw new Error(respAny.message || 'Unknown error');
+      }
+      return resp;
+    } catch (error: unknown) {
+      // Suppress both successful and failed completions after a target switch.
+      // The epoch check (rather than device id alone) also closes A -> B -> A
+      // ABA races.
+      this.ensureControlTargetCurrent(target);
+      throw error;
     }
-    const respAny = resp as any;
-    if (respAny.resp === 'error') {
-      throw new Error(respAny.message || 'Unknown error');
-    }
-    return resp;
   }
 
   async getWorkspaceInfo(): Promise<WorkspaceInfo> {
@@ -456,6 +501,7 @@ export class RemoteSessionManager {
     let fileName = '';
     let mimeType = '';
     let totalSize = 0;
+    const target = this.client.getControlTargetSnapshot();
 
     // eslint-disable-next-line no-constant-condition
     while (true) {
@@ -473,7 +519,8 @@ export class RemoteSessionManager {
         session_id: sessionId ?? undefined,
         offset,
         limit: CHUNK_SIZE,
-      });
+      }, target);
+      this.ensureControlTargetCurrent(target);
 
       chunks.push(resp.chunk_base64);
       fileName = resp.name;
@@ -485,6 +532,8 @@ export class RemoteSessionManager {
 
       if (offset >= totalSize || resp.chunk_size === 0) break;
     }
+
+    this.ensureControlTargetCurrent(target);
 
     return {
       name: fileName,

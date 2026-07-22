@@ -191,7 +191,7 @@ fn metadata_from(
     }
 }
 
-async fn persist_tokens(tokens: TokenResponse) -> Result<()> {
+async fn persist_tokens(tokens: TokenResponse, expected_revision: u64) -> Result<()> {
     let access = tokens
         .access_token
         .clone()
@@ -202,8 +202,9 @@ async fn persist_tokens(tokens: TokenResponse) -> Result<()> {
         .ok_or_else(|| anyhow!("antigravity token response missing refresh_token"))?;
     let expires = now_ms() + tokens.expires_in.unwrap_or(3600) * 1000;
     let metadata = metadata_from(&tokens, None);
-    store::upsert(
+    let outcome = store::upsert_if_revision(
         STORE_KEY,
+        expected_revision,
         StoredCredential::Oauth {
             refresh,
             access,
@@ -213,12 +214,16 @@ async fn persist_tokens(tokens: TokenResponse) -> Result<()> {
         },
     )
     .await?;
+    super::require_current_store_revision(super::SubscriptionProvider::Antigravity, outcome)?;
     log::info!("antigravity subscription tokens saved");
     Ok(())
 }
 
 /// Starts the browser PKCE login flow, binding the loopback callback server.
-pub(crate) async fn begin_login(cancel: CancellationToken) -> Result<StartedLogin> {
+pub(crate) async fn begin_login(
+    cancel: CancellationToken,
+    expected_revision: u64,
+) -> Result<StartedLogin> {
     let pkce = Pkce::generate();
     let state = pkce::random_state();
     let (listener, callback_port) = oauth_server::bind_loopback_ports(CALLBACK_PORTS).await?;
@@ -239,7 +244,7 @@ pub(crate) async fn begin_login(cancel: CancellationToken) -> Result<StartedLogi
                     .ok_or_else(|| anyhow!("antigravity callback missing code"))?;
                 exchange_code(&code, &verifier, &redirect_uri).await
             },
-            persist_tokens,
+            move |tokens| persist_tokens(tokens, expected_revision),
         )
         .await
     };
@@ -255,11 +260,9 @@ pub(crate) async fn begin_login(cancel: CancellationToken) -> Result<StartedLogi
 /// Ensures the stored access token is fresh, refreshing it when needed. Returns
 /// the current `(access, expires_ms)`.
 async fn ensure_fresh() -> Result<(String, i64)> {
-    let _guard = super::store_lock(super::SubscriptionProvider::Antigravity)
-        .lock()
-        .await;
-    let entry = store::load_entry(STORE_KEY)
-        .await?
+    let snapshot = store::load_entry_with_revision(STORE_KEY).await?;
+    let entry = snapshot
+        .credential
         .ok_or_else(|| anyhow!("Antigravity is not connected; sign in first"))?;
     let StoredCredential::Oauth {
         refresh: refresh_token,
@@ -284,8 +287,9 @@ async fn ensure_fresh() -> Result<(String, i64)> {
     let new_refresh = refreshed.refresh_token.clone().unwrap_or(refresh_token);
     let new_expires = now_ms() + refreshed.expires_in.unwrap_or(3600) * 1000;
     let new_metadata = metadata_from(&refreshed, metadata);
-    store::upsert(
+    let outcome = store::upsert_if_revision(
         STORE_KEY,
+        snapshot.revision,
         StoredCredential::Oauth {
             refresh: new_refresh,
             access: new_access.clone(),
@@ -295,6 +299,7 @@ async fn ensure_fresh() -> Result<(String, i64)> {
         },
     )
     .await?;
+    super::require_current_store_revision(super::SubscriptionProvider::Antigravity, outcome)?;
     log::info!("antigravity subscription tokens refreshed");
     Ok((new_access, new_expires))
 }

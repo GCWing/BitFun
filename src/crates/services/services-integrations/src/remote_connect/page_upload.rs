@@ -1,7 +1,7 @@
 //! BitFun Page incremental upload client (Save Version → Deploy).
 
 use anyhow::{anyhow, Result};
-use log::info;
+use log::{info, warn};
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use std::path::Path;
@@ -25,9 +25,67 @@ struct CollectedPageFile {
     hash: String,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum UploadSessionMode {
+    ManifestBound,
+    LegacyRelay,
+}
+
+fn validate_upload_session_echo(
+    response: &serde_json::Value,
+    expected_upload_id: &str,
+) -> Result<UploadSessionMode> {
+    match response
+        .get("upload_id")
+        .and_then(serde_json::Value::as_str)
+    {
+        Some(actual) if actual == expected_upload_id => Ok(UploadSessionMode::ManifestBound),
+        Some(_) => Err(anyhow!("check-files returned a mismatched upload session")),
+        // Relays predating manifest-bound upload sessions ignore the request's
+        // unknown `upload_id` field and omit it from the response. Their upload
+        // and freeze DTOs likewise ignore the extra field, so retaining the
+        // legacy flow preserves rolling-upgrade compatibility.
+        None => Ok(UploadSessionMode::LegacyRelay),
+    }
+}
+
+fn validate_generation_intent_echo(
+    response: &serde_json::Value,
+    expected_generation: Option<&str>,
+    create: bool,
+) -> Result<bool> {
+    match (response.get("expected_generation"), response.get("create")) {
+        // Relays with upload-id sessions but predating the Page generation
+        // protocol omit both fields. Their DTOs ignore the extra request
+        // fields throughout upload/freeze, so this remains a valid rolling
+        // upgrade path (without claiming generation protection).
+        (None, None) => Ok(false),
+        (Some(actual_generation), Some(actual_create)) => {
+            let expected_generation = expected_generation
+                .map_or(serde_json::Value::Null, |generation| {
+                    serde_json::Value::String(generation.to_string())
+                });
+            if actual_generation == &expected_generation && actual_create.as_bool() == Some(create)
+            {
+                Ok(true)
+            } else {
+                Err(anyhow!(
+                    "check-files returned a mismatched Page generation intent"
+                ))
+            }
+        }
+        // A partial echo is neither an old contract nor a trustworthy new one.
+        _ => Err(anyhow!(
+            "check-files returned an incomplete Page generation intent"
+        )),
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PageInfo {
     pub slug: String,
+    #[serde(default)]
+    pub generation: String,
     pub visibility: String,
     pub title: String,
     pub file_count: i64,
@@ -43,6 +101,8 @@ pub struct PageInfo {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PageVersionInfo {
+    #[serde(default)]
+    pub generation: String,
     pub version_id: String,
     pub title: String,
     pub file_count: i64,
@@ -69,6 +129,7 @@ struct PageOpenLinkRelayResponse {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PageSaveVersionResult {
     pub slug: String,
+    pub generation: String,
     pub visibility: String,
     pub title: String,
     pub version_id: String,
@@ -83,6 +144,7 @@ pub struct PageSaveVersionResult {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PageContentPublishResult {
     pub slug: String,
+    pub generation: String,
     pub visibility: String,
     pub title: String,
     pub version_id: String,
@@ -176,6 +238,7 @@ pub async fn publish_page_content_on_relay(
         let preview_url = join_relay_url(relay_url, &saved.preview_url_path);
         return Ok(PageContentPublishResult {
             slug: saved.slug,
+            generation: saved.generation,
             visibility: saved.visibility,
             title: saved.title,
             version_id: saved.version_id,
@@ -191,20 +254,27 @@ pub async fn publish_page_content_on_relay(
         });
     }
 
-    let info = deploy_page_version_on_relay(relay_url, token, &saved.slug, &saved.version_id)
-        .await
-        .map_err(|e| {
-            anyhow!(
-                "deploy failed: {e}. Version {} was saved on the relay but is not live; \
+    let info = deploy_page_version_on_relay(
+        relay_url,
+        token,
+        &saved.slug,
+        &saved.version_id,
+        &saved.generation,
+    )
+    .await
+    .map_err(|e| {
+        anyhow!(
+            "deploy failed: {e}. Version {} was saved on the relay but is not live; \
                  retry deploying version {} instead of re-publishing from scratch",
-                saved.version_id,
-                saved.version_id
-            )
-        })?;
+            saved.version_id,
+            saved.version_id
+        )
+    })?;
     let preview_url = join_relay_url(relay_url, &saved.preview_url_path);
     let url = join_relay_url(relay_url, &info.url_path);
     Ok(PageContentPublishResult {
         slug: saved.slug,
+        generation: info.generation,
         visibility: info.visibility,
         title: info.title,
         version_id: saved.version_id.clone(),
@@ -284,6 +354,16 @@ async fn save_page_version_from_collected_files(
         })
         .collect();
     let upload_id = uuid::Uuid::new_v4().simple().to_string();
+    let existing_page = list_pages_from_relay(relay_url, token)
+        .await?
+        .into_iter()
+        .find(|page| page.slug == slug);
+    let create = existing_page.is_none();
+    let expected_generation = existing_page
+        .as_ref()
+        .map(|page| page.generation.as_str())
+        .filter(|generation| !generation.is_empty())
+        .map(str::to_string);
 
     let check_url = format!("{relay_base}/api/pages/check-files");
     let check_resp = client
@@ -292,6 +372,8 @@ async fn save_page_version_from_collected_files(
         .json(&serde_json::json!({
             "slug": slug,
             "upload_id": upload_id,
+            "expected_generation": expected_generation,
+            "create": create,
             "files": manifest,
         }))
         .timeout(std::time::Duration::from_secs(30))
@@ -307,8 +389,16 @@ async fn save_page_version_from_collected_files(
         .json()
         .await
         .map_err(|e| anyhow!("parse check-files response: {e}"))?;
-    if check_body["upload_id"].as_str() != Some(upload_id.as_str()) {
-        return Err(anyhow!("check-files returned a mismatched upload session"));
+    let upload_mode = validate_upload_session_echo(&check_body, &upload_id)?;
+    if upload_mode == UploadSessionMode::LegacyRelay {
+        warn!(
+            "Page relay does not support manifest-bound upload sessions; using the legacy upload flow"
+        );
+    } else if !validate_generation_intent_echo(&check_body, expected_generation.as_deref(), create)?
+    {
+        warn!(
+            "Page relay does not support generation-bound uploads; using its legacy generation flow"
+        );
     }
     let needed: Vec<String> = check_body["needed"]
         .as_array()
@@ -322,7 +412,17 @@ async fn save_page_version_from_collected_files(
 
     if !needed.is_empty() {
         upload_needed_page_files(
-            &client, relay_base, &auth, slug, &upload_id, &title, visibility, &all_files, &needed,
+            &client,
+            relay_base,
+            &auth,
+            slug,
+            &upload_id,
+            expected_generation.as_deref(),
+            create,
+            &title,
+            visibility,
+            &all_files,
+            &needed,
         )
         .await?;
     } else {
@@ -333,6 +433,8 @@ async fn save_page_version_from_collected_files(
             &auth,
             slug,
             &upload_id,
+            expected_generation.as_deref(),
+            create,
             &title,
             visibility,
             &HashMap::new(),
@@ -348,6 +450,8 @@ async fn save_page_version_from_collected_files(
         .header("Authorization", &auth)
         .json(&serde_json::json!({
             "upload_id": upload_id,
+            "expected_generation": expected_generation,
+            "create": create,
             "title": title,
             "note": note.unwrap_or(""),
         }))
@@ -367,6 +471,7 @@ async fn save_page_version_from_collected_files(
 
     Ok(PageSaveVersionResult {
         slug: slug.to_string(),
+        generation: version.generation,
         visibility: visibility.to_string(),
         title,
         version_id: version.version_id,
@@ -415,13 +520,15 @@ pub async fn list_page_versions_from_relay(
     relay_url: &str,
     token: &str,
     slug: &str,
+    expected_generation: &str,
 ) -> Result<Vec<PageVersionInfo>> {
     validate_slug(slug)?;
     let client = reqwest::Client::new();
     let url = format!(
-        "{}/api/pages/{}/versions",
+        "{}/api/pages/{}/versions?expected_generation={}",
         relay_url.trim_end_matches('/'),
-        slug
+        slug,
+        expected_generation
     );
     let resp = client
         .get(&url)
@@ -449,6 +556,7 @@ pub async fn create_page_open_link_on_relay(
     token: &str,
     slug: &str,
     version_id: Option<&str>,
+    expected_generation: &str,
 ) -> Result<PageOpenLink> {
     validate_slug(slug)?;
     let client = reqwest::Client::new();
@@ -456,7 +564,10 @@ pub async fn create_page_open_link_on_relay(
     let resp = client
         .post(&url)
         .header("Authorization", format!("Bearer {token}"))
-        .json(&serde_json::json!({ "version_id": version_id }))
+        .json(&serde_json::json!({
+            "version_id": version_id,
+            "expected_generation": expected_generation,
+        }))
         .timeout(std::time::Duration::from_secs(15))
         .send()
         .await
@@ -483,6 +594,7 @@ pub async fn deploy_page_version_on_relay(
     token: &str,
     slug: &str,
     version_id: &str,
+    expected_generation: &str,
 ) -> Result<PageInfo> {
     validate_slug(slug)?;
     let client = reqwest::Client::new();
@@ -494,7 +606,10 @@ pub async fn deploy_page_version_on_relay(
     let resp = client
         .post(&url)
         .header("Authorization", format!("Bearer {token}"))
-        .json(&serde_json::json!({ "version_id": version_id }))
+        .json(&serde_json::json!({
+            "version_id": version_id,
+            "expected_generation": expected_generation,
+        }))
         .timeout(std::time::Duration::from_secs(15))
         .send()
         .await
@@ -515,14 +630,16 @@ pub async fn delete_page_version_on_relay(
     token: &str,
     slug: &str,
     version_id: &str,
+    expected_generation: &str,
 ) -> Result<()> {
     validate_slug(slug)?;
     let client = reqwest::Client::new();
     let url = format!(
-        "{}/api/pages/{}/versions/{}",
+        "{}/api/pages/{}/versions/{}?expected_generation={}",
         relay_url.trim_end_matches('/'),
         slug,
-        version_id
+        version_id,
+        expected_generation
     );
     let resp = client
         .delete(&url)
@@ -543,6 +660,7 @@ pub async fn update_page_on_relay(
     relay_url: &str,
     token: &str,
     slug: &str,
+    expected_generation: &str,
     visibility: Option<&str>,
     title: Option<&str>,
 ) -> Result<PageInfo> {
@@ -553,6 +671,10 @@ pub async fn update_page_on_relay(
     let client = reqwest::Client::new();
     let url = format!("{}/api/pages/{}", relay_url.trim_end_matches('/'), slug);
     let mut body = serde_json::Map::new();
+    body.insert(
+        "expected_generation".into(),
+        serde_json::json!(expected_generation),
+    );
     if let Some(v) = visibility {
         body.insert("visibility".into(), serde_json::json!(v));
     }
@@ -578,13 +700,19 @@ pub async fn update_page_on_relay(
         .map_err(|e| anyhow!("parse update page: {e}"))?)
 }
 
-pub async fn unpublish_page_from_relay(relay_url: &str, token: &str, slug: &str) -> Result<()> {
+pub async fn unpublish_page_from_relay(
+    relay_url: &str,
+    token: &str,
+    slug: &str,
+    expected_generation: &str,
+) -> Result<()> {
     validate_slug(slug)?;
     let client = reqwest::Client::new();
     let url = format!(
-        "{}/api/pages/{}/unpublish",
+        "{}/api/pages/{}/unpublish?expected_generation={}",
         relay_url.trim_end_matches('/'),
-        slug
+        slug,
+        expected_generation
     );
     let resp = client
         .post(&url)
@@ -601,10 +729,20 @@ pub async fn unpublish_page_from_relay(relay_url: &str, token: &str, slug: &str)
     Ok(())
 }
 
-pub async fn delete_page_from_relay(relay_url: &str, token: &str, slug: &str) -> Result<()> {
+pub async fn delete_page_from_relay(
+    relay_url: &str,
+    token: &str,
+    slug: &str,
+    expected_generation: &str,
+) -> Result<()> {
     validate_slug(slug)?;
     let client = reqwest::Client::new();
-    let url = format!("{}/api/pages/{}", relay_url.trim_end_matches('/'), slug);
+    let url = format!(
+        "{}/api/pages/{}?expected_generation={}",
+        relay_url.trim_end_matches('/'),
+        slug,
+        expected_generation
+    );
     let resp = client
         .delete(&url)
         .header("Authorization", format!("Bearer {token}"))
@@ -804,6 +942,8 @@ async fn upload_needed_page_files(
     auth: &str,
     slug: &str,
     upload_id: &str,
+    expected_generation: Option<&str>,
+    create: bool,
     title: &str,
     visibility: &str,
     all_files: &[CollectedPageFile],
@@ -838,6 +978,8 @@ async fn upload_needed_page_files(
                 auth,
                 slug,
                 upload_id,
+                expected_generation,
+                create,
                 title,
                 visibility,
                 &current_batch,
@@ -859,6 +1001,8 @@ async fn upload_needed_page_files(
             auth,
             slug,
             upload_id,
+            expected_generation,
+            create,
             title,
             visibility,
             &current_batch,
@@ -877,6 +1021,8 @@ async fn post_upload_batch(
     auth: &str,
     slug: &str,
     upload_id: &str,
+    expected_generation: Option<&str>,
+    create: bool,
     title: &str,
     visibility: &str,
     files: &HashMap<String, serde_json::Value>,
@@ -889,6 +1035,8 @@ async fn post_upload_batch(
         .json(&serde_json::json!({
             "slug": slug,
             "upload_id": upload_id,
+            "expected_generation": expected_generation,
+            "create": create,
             "title": title,
             "visibility": visibility,
             "files": files,
@@ -932,6 +1080,61 @@ mod tests {
             join_relay_url("https://x.test", "https://already.example/p"),
             "https://already.example/p"
         );
+    }
+
+    #[test]
+    fn upload_session_echo_accepts_legacy_relay_but_rejects_mismatch() {
+        let legacy = serde_json::json!({ "needed": ["index.html"] });
+        assert_eq!(
+            validate_upload_session_echo(&legacy, "abc").unwrap(),
+            UploadSessionMode::LegacyRelay
+        );
+
+        let current = serde_json::json!({ "upload_id": "abc", "needed": [] });
+        assert_eq!(
+            validate_upload_session_echo(&current, "abc").unwrap(),
+            UploadSessionMode::ManifestBound
+        );
+
+        let mismatch = serde_json::json!({ "upload_id": "other", "needed": [] });
+        assert!(validate_upload_session_echo(&mismatch, "abc").is_err());
+    }
+
+    #[test]
+    fn generation_intent_echo_accepts_old_relay_only_when_both_fields_are_absent() {
+        let old_relay = serde_json::json!({ "upload_id": "abc", "needed": [] });
+        assert!(!validate_generation_intent_echo(&old_relay, Some("generation-a"), false).unwrap());
+
+        let current = serde_json::json!({
+            "upload_id": "abc",
+            "expected_generation": "generation-a",
+            "create": false,
+            "needed": [],
+        });
+        assert!(validate_generation_intent_echo(&current, Some("generation-a"), false).unwrap());
+
+        let create = serde_json::json!({
+            "upload_id": "abc",
+            "expected_generation": null,
+            "create": true,
+            "needed": [],
+        });
+        assert!(validate_generation_intent_echo(&create, None, true).unwrap());
+
+        let partial = serde_json::json!({
+            "upload_id": "abc",
+            "expected_generation": "generation-a",
+            "needed": [],
+        });
+        assert!(validate_generation_intent_echo(&partial, Some("generation-a"), false).is_err());
+
+        let mismatch = serde_json::json!({
+            "upload_id": "abc",
+            "expected_generation": "generation-b",
+            "create": false,
+            "needed": [],
+        });
+        assert!(validate_generation_intent_echo(&mismatch, Some("generation-a"), false).is_err());
     }
 
     #[test]

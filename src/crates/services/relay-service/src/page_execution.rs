@@ -5,7 +5,9 @@ use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 use dashmap::DashMap;
-use tokio::sync::{OwnedSemaphorePermit, Semaphore};
+use tokio::sync::{
+    OwnedRwLockReadGuard, OwnedRwLockWriteGuard, OwnedSemaphorePermit, RwLock, Semaphore,
+};
 
 pub const MAX_PAGE_FUNCTION_REQUEST_BODY_BYTES: usize = 1024 * 1024;
 const GLOBAL_CONCURRENCY: usize = 64;
@@ -51,6 +53,7 @@ pub struct PageExecutionGuard {
     global: Arc<Semaphore>,
     users: DashMap<String, Arc<Semaphore>>,
     pages: DashMap<String, Arc<Semaphore>>,
+    page_lifecycles: DashMap<String, Arc<RwLock<()>>>,
     rate_windows: Mutex<HashMap<String, VecDeque<Instant>>>,
 }
 
@@ -70,6 +73,7 @@ impl PageExecutionGuard {
             global: Arc::new(Semaphore::new(limits.global_concurrency)),
             users: DashMap::new(),
             pages: DashMap::new(),
+            page_lifecycles: DashMap::new(),
             rate_windows: Mutex::new(HashMap::new()),
             limits,
         }
@@ -122,6 +126,30 @@ impl PageExecutionGuard {
         )
     }
 
+    fn page_lifecycle(&self, user_id: &str, slug: &str) -> Arc<RwLock<()>> {
+        self.prune_idle_semaphores();
+        let key = format!("{user_id}\0{slug}");
+        Arc::clone(
+            self.page_lifecycles
+                .entry(key)
+                .or_insert_with(|| Arc::new(RwLock::new(())))
+                .value(),
+        )
+    }
+
+    /// Hold while serving one Page request. Delete and other lifecycle writes
+    /// wait for all running workers, while unrelated Pages remain independent.
+    pub async fn acquire_page_read(&self, user_id: &str, slug: &str) -> OwnedRwLockReadGuard<()> {
+        self.page_lifecycle(user_id, slug).read_owned().await
+    }
+
+    /// Hold while deleting or atomically changing Page/version lifecycle
+    /// state. New workers wait until the mutation completes and then re-resolve
+    /// the Page row before execution.
+    pub async fn acquire_page_write(&self, user_id: &str, slug: &str) -> OwnedRwLockWriteGuard<()> {
+        self.page_lifecycle(user_id, slug).write_owned().await
+    }
+
     fn prune_idle_semaphores(&self) {
         if self.users.len() > MAX_TRACKED_IDENTITIES {
             self.users
@@ -130,6 +158,10 @@ impl PageExecutionGuard {
         if self.pages.len() > MAX_TRACKED_IDENTITIES {
             self.pages
                 .retain(|_, semaphore| Arc::strong_count(semaphore) > 1);
+        }
+        if self.page_lifecycles.len() > MAX_TRACKED_IDENTITIES {
+            self.page_lifecycles
+                .retain(|_, lifecycle| Arc::strong_count(lifecycle) > 1);
         }
     }
 
@@ -256,5 +288,23 @@ mod tests {
             PageExecutionRejection::RateLimited
         );
         assert!(guard.try_acquire("other", "one").is_ok());
+    }
+
+    #[tokio::test]
+    async fn page_lifecycle_write_waits_for_running_readers() {
+        let guard = Arc::new(test_guard());
+        let read = guard.acquire_page_read("user", "site").await;
+        let waiting_guard = Arc::clone(&guard);
+        let mut writer =
+            tokio::spawn(async move { waiting_guard.acquire_page_write("user", "site").await });
+        assert!(tokio::time::timeout(Duration::from_millis(20), &mut writer)
+            .await
+            .is_err());
+        drop(read);
+        let write = tokio::time::timeout(Duration::from_secs(1), writer)
+            .await
+            .unwrap()
+            .unwrap();
+        drop(write);
     }
 }

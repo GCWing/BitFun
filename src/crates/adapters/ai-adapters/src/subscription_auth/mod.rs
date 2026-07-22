@@ -102,6 +102,14 @@ pub struct SubscriptionAccount {
     pub suggested_model: String,
 }
 
+/// Structured sign-out result. Metadata removal determines connection state;
+/// native-vault deletion may be queued for a later retry.
+#[derive(Debug, Clone, Serialize)]
+pub struct SubscriptionLogoutResult {
+    pub cleanup_pending: bool,
+    pub warning: Option<String>,
+}
+
 /// Runtime-resolved credential that overrides fields in the AI client config.
 #[derive(Debug, Clone)]
 pub struct ResolvedCredential {
@@ -118,6 +126,7 @@ pub struct ResolvedCredential {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LoginStartResult {
     pub provider: SubscriptionProvider,
+    pub session_id: String,
     pub authorization_url: String,
     pub user_code: Option<String>,
     pub instructions: String,
@@ -137,6 +146,7 @@ pub enum LoginStatus {
 #[derive(Debug, Clone, Serialize)]
 pub struct LoginSessionSnapshot {
     pub provider: SubscriptionProvider,
+    pub session_id: String,
     pub status: LoginStatus,
     pub authorization_url: Option<String>,
     pub user_code: Option<String>,
@@ -154,6 +164,8 @@ pub(crate) struct StartedLogin {
 }
 
 struct SessionState {
+    /// Client-generated UUID used to correlate start/status/cancel commands.
+    session_id: String,
     status: LoginStatus,
     authorization_url: Option<String>,
     user_code: Option<String>,
@@ -169,6 +181,7 @@ impl SessionState {
     fn snapshot(&self, provider: SubscriptionProvider) -> LoginSessionSnapshot {
         LoginSessionSnapshot {
             provider,
+            session_id: self.session_id.clone(),
             status: self.status,
             authorization_url: self.authorization_url.clone(),
             user_code: self.user_code.clone(),
@@ -189,9 +202,15 @@ fn next_generation() -> u64 {
     GENERATION.fetch_add(1, Ordering::Relaxed)
 }
 
-/// Per-provider lock serializing credential-store read-modify-write cycles.
-/// Token refresh persists a rotated refresh token, so a concurrent refresh or
-/// logout must not interleave and overwrite the newer credentials.
+fn validate_session_id(session_id: &str) -> Result<()> {
+    uuid::Uuid::parse_str(session_id)
+        .map(|_| ())
+        .map_err(|_| anyhow!("subscription login session_id must be a valid UUID"))
+}
+
+/// Per-provider commit barrier for login cancellation/replacement and logout.
+/// Refresh deliberately does not hold this across an external request: its
+/// durable revision CAS lets logout commit immediately and reject stale tokens.
 pub(crate) fn store_lock(provider: SubscriptionProvider) -> &'static tokio::sync::Mutex<()> {
     static CODEX: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
     static ANTIGRAVITY: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
@@ -234,6 +253,19 @@ where
         return Err(anyhow!("login cancelled"));
     }
     persist(credential).await
+}
+
+pub(crate) fn require_current_store_revision(
+    provider: SubscriptionProvider,
+    outcome: store::ConditionalCommitOutcome,
+) -> Result<u64> {
+    match outcome {
+        store::ConditionalCommitOutcome::Committed { revision } => Ok(revision),
+        store::ConditionalCommitOutcome::Conflict { current_revision } => Err(anyhow!(
+            "{} credentials changed in another BitFun process (current revision {current_revision}); retry the operation",
+            provider.display_label()
+        )),
+    }
 }
 
 fn build_account(
@@ -282,6 +314,7 @@ async fn account_snapshot(provider: SubscriptionProvider) -> SubscriptionAccount
             credentials: store::Store::new(),
             requires_reauthentication: std::collections::HashSet::new(),
             vault_unavailable: std::collections::HashSet::new(),
+            provider_revisions: std::collections::HashMap::new(),
         }
     });
     build_account(
@@ -300,6 +333,7 @@ pub async fn list_accounts() -> Vec<SubscriptionAccount> {
             credentials: store::Store::new(),
             requires_reauthentication: std::collections::HashSet::new(),
             vault_unavailable: std::collections::HashSet::new(),
+            provider_revisions: std::collections::HashMap::new(),
         }
     });
     SubscriptionProvider::ALL
@@ -317,16 +351,27 @@ pub async fn list_accounts() -> Vec<SubscriptionAccount> {
 
 /// Starts a login session, cancelling any existing pending session for the
 /// same provider. Returns immediately with the authorization URL / user code.
-pub async fn start_login(provider: SubscriptionProvider) -> Result<LoginStartResult> {
+pub async fn start_login(
+    provider: SubscriptionProvider,
+    session_id: String,
+) -> Result<LoginStartResult> {
+    validate_session_id(&session_id)?;
     let cancel = CancellationToken::new();
     let generation = next_generation();
-    let previous = {
+    // Serialize the durable revision snapshot with any local refresh/commit and
+    // install the replacement session before releasing that boundary. A prior
+    // local login can then either finish before this snapshot or observe its
+    // cancellation; it cannot commit between the snapshot and replacement.
+    let provider_guard = store_lock(provider).lock().await;
+    let expected_revision = store::credential_revision(provider.key()).await?;
+    {
         let mut map = sessions()
             .lock()
             .map_err(|_| anyhow!("subscription login session lock poisoned"))?;
-        map.insert(
+        if let Some(previous) = map.insert(
             provider,
             SessionState {
+                session_id: session_id.clone(),
                 status: LoginStatus::Pending,
                 authorization_url: None,
                 user_code: None,
@@ -336,19 +381,25 @@ pub async fn start_login(provider: SubscriptionProvider) -> Result<LoginStartRes
                 cancel: cancel.clone(),
                 generation,
             },
-        )
-    };
-    if let Some(previous) = previous {
-        previous.cancel.cancel();
+        ) {
+            previous.cancel.cancel();
+        }
     }
+    drop(provider_guard);
 
     // The placeholder above makes cancellation visible even while a provider
     // is still binding its callback listener or requesting a device code.
     let begin = async {
         match provider {
-            SubscriptionProvider::Codex => codex::begin_login(cancel.clone()).await,
-            SubscriptionProvider::Antigravity => antigravity::begin_login(cancel.clone()).await,
-            SubscriptionProvider::Opencode => opencode::begin_login(cancel.clone()).await,
+            SubscriptionProvider::Codex => {
+                codex::begin_login(cancel.clone(), expected_revision).await
+            }
+            SubscriptionProvider::Antigravity => {
+                antigravity::begin_login(cancel.clone(), expected_revision).await
+            }
+            SubscriptionProvider::Opencode => {
+                opencode::begin_login(cancel.clone(), expected_revision).await
+            }
         }
     };
     let started_result = tokio::select! {
@@ -360,10 +411,9 @@ pub async fn start_login(provider: SubscriptionProvider) -> Result<LoginStartRes
         Ok(_) => return Err(anyhow!("login cancelled")),
         Err(error) => {
             if let Ok(mut map) = sessions().lock() {
-                if let Some(state) = map
-                    .get_mut(&provider)
-                    .filter(|state| state.generation == generation)
-                {
+                if let Some(state) = map.get_mut(&provider).filter(|state| {
+                    state.generation == generation && state.session_id == session_id
+                }) {
                     state.status = if cancel.is_cancelled() {
                         LoginStatus::Cancelled
                     } else {
@@ -384,7 +434,7 @@ pub async fn start_login(provider: SubscriptionProvider) -> Result<LoginStartRes
         if let Ok(mut map) = sessions().lock() {
             if let Some(state) = map
                 .get_mut(&provider)
-                .filter(|state| state.generation == generation)
+                .filter(|state| state.generation == generation && state.session_id == session_id)
             {
                 state.status = LoginStatus::Failed;
                 state.error = Some(
@@ -402,10 +452,11 @@ pub async fn start_login(provider: SubscriptionProvider) -> Result<LoginStartRes
         let mut map = sessions()
             .lock()
             .map_err(|_| anyhow!("subscription login session lock poisoned"))?;
-        let Some(state) = map
-            .get_mut(&provider)
-            .filter(|state| state.generation == generation && !state.cancel.is_cancelled())
-        else {
+        let Some(state) = map.get_mut(&provider).filter(|state| {
+            state.generation == generation
+                && state.session_id == session_id
+                && !state.cancel.is_cancelled()
+        }) else {
             cancel.cancel();
             return Err(anyhow!("login cancelled"));
         };
@@ -415,15 +466,17 @@ pub async fn start_login(provider: SubscriptionProvider) -> Result<LoginStartRes
     }
 
     let runner = started.runner;
+    let runner_session_id = session_id.clone();
     tokio::spawn(async move {
         // Authorization timeout lives inside `authorize_then_persist`; once
         // persistence begins it must not be dropped by a surrounding timeout.
         let outcome: Result<Result<()>, tokio::time::error::Elapsed> = Ok(runner.await);
-        finalize_session(provider, generation, &cancel, outcome).await;
+        finalize_session(provider, &runner_session_id, generation, &cancel, outcome).await;
     });
 
     Ok(LoginStartResult {
         provider,
+        session_id,
         authorization_url,
         user_code,
         instructions,
@@ -432,6 +485,7 @@ pub async fn start_login(provider: SubscriptionProvider) -> Result<LoginStartRes
 
 async fn finalize_session(
     provider: SubscriptionProvider,
+    session_id: &str,
     generation: u64,
     cancel: &CancellationToken,
     outcome: Result<Result<()>, tokio::time::error::Elapsed>,
@@ -441,8 +495,9 @@ async fn finalize_session(
     let is_current = sessions()
         .lock()
         .map(|map| {
-            map.get(&provider)
-                .is_some_and(|state| state.generation == generation)
+            map.get(&provider).is_some_and(|state| {
+                state.generation == generation && state.session_id == session_id
+            })
         })
         .unwrap_or(false);
     if !is_current {
@@ -472,11 +527,12 @@ async fn finalize_session(
         }
     };
 
-    update_session_if_current(provider, generation, status, error, account);
+    update_session_if_current(provider, session_id, generation, status, error, account);
 }
 
 fn update_session_if_current(
     provider: SubscriptionProvider,
+    session_id: &str,
     generation: u64,
     status: LoginStatus,
     error: Option<String>,
@@ -485,7 +541,7 @@ fn update_session_if_current(
     if let Ok(mut map) = sessions().lock() {
         if let Some(state) = map
             .get_mut(&provider)
-            .filter(|state| state.generation == generation)
+            .filter(|state| state.generation == generation && state.session_id == session_id)
         {
             state.status = status;
             state.error = error;
@@ -496,49 +552,68 @@ fn update_session_if_current(
     }
 }
 
-/// Returns the current login session snapshot for a provider.
-pub async fn login_status(provider: SubscriptionProvider) -> LoginSessionSnapshot {
-    if let Ok(map) = sessions().lock() {
-        if let Some(state) = map.get(&provider) {
-            return state.snapshot(provider);
-        }
-    }
-
-    let account = account_snapshot(provider).await;
-    let status = if account.connected {
-        LoginStatus::Authorized
-    } else {
-        LoginStatus::Failed
-    };
-    LoginSessionSnapshot {
-        provider,
-        status,
-        authorization_url: None,
-        user_code: None,
-        instructions: None,
-        error: None,
-        account: account.connected.then_some(account),
-    }
+/// Returns a login snapshot only when both provider and session id still refer
+/// to the same current operation.
+pub async fn login_status(
+    provider: SubscriptionProvider,
+    session_id: &str,
+) -> Result<LoginSessionSnapshot> {
+    validate_session_id(session_id)?;
+    let map = sessions()
+        .lock()
+        .map_err(|_| anyhow!("subscription login session lock poisoned"))?;
+    map.get(&provider)
+        .filter(|state| state.session_id == session_id)
+        .map(|state| state.snapshot(provider))
+        .ok_or_else(|| anyhow!("subscription login session is no longer current"))
 }
 
 /// Cancels an in-flight login session for a provider.
-pub async fn cancel_login(provider: SubscriptionProvider) {
-    if let Ok(mut map) = sessions().lock() {
-        if let Some(state) = map.get_mut(&provider) {
-            state.cancel.cancel();
-            state.status = LoginStatus::Cancelled;
-            state.error = Some("Login cancelled".to_string());
+pub async fn cancel_login(provider: SubscriptionProvider, session_id: &str) -> Result<()> {
+    validate_session_id(session_id)?;
+    let wait_for_commit_barrier = if let Ok(mut map) = sessions().lock() {
+        if let Some(state) = map
+            .get_mut(&provider)
+            .filter(|state| state.session_id == session_id)
+        {
+            match state.status {
+                LoginStatus::Pending => {
+                    state.cancel.cancel();
+                    state.status = LoginStatus::Cancelled;
+                    state.error = Some("Login cancelled".to_string());
+                    true
+                }
+                // A duplicate cancel can observe the state update performed by
+                // the first cancel before that call reaches the credential
+                // commit barrier. It must join the same barrier instead of
+                // reporting completion while persistence may still succeed.
+                LoginStatus::Cancelled => true,
+                // Authorization may have already committed and finalized.
+                // Never rewrite an Authorized terminal state to Cancelled;
+                // that would disagree with the connected credential.
+                LoginStatus::Authorized | LoginStatus::Failed => false,
+            }
+        } else {
+            false
         }
+    } else {
+        return Err(anyhow!("subscription login session lock poisoned"));
+    };
+    // A stale cancel from an older UI request is a no-op and must not wait on
+    // or interfere with the replacement session's commit.
+    if !wait_for_commit_barrier {
+        return Ok(());
     }
     // Act as a completion barrier for the commit phase. If cancellation wins
     // the provider lock, the runner observes the cancelled token and skips its
     // write. If persistence already owns the lock, let that atomic commit
     // finish before reporting cancellation back to the UI.
     let _guard = store_lock(provider).lock().await;
+    Ok(())
 }
 
 /// Removes the stored credential for a provider.
-pub async fn logout(provider: SubscriptionProvider) -> Result<()> {
+pub async fn logout(provider: SubscriptionProvider) -> Result<SubscriptionLogoutResult> {
     // Cancel any in-flight login first so its runner cannot persist fresh
     // tokens after the logout completes.
     if let Ok(mut map) = sessions().lock() {
@@ -547,10 +622,26 @@ pub async fn logout(provider: SubscriptionProvider) -> Result<()> {
         }
     }
     let _guard = store_lock(provider).lock().await;
-    store::remove(provider.key()).await?;
+    let outcome = store::remove(provider.key()).await?;
     drop(_guard);
     log::info!("subscription provider {} logged out", provider.key());
-    Ok(())
+    Ok(match outcome {
+        store::RemoveOutcome::Removed => SubscriptionLogoutResult {
+            cleanup_pending: false,
+            warning: None,
+        },
+        store::RemoveOutcome::CleanupPending(warning) => {
+            log::warn!(
+                "subscription provider {} logged out with native credential cleanup pending: {}",
+                provider.key(),
+                warning
+            );
+            SubscriptionLogoutResult {
+                cleanup_pending: true,
+                warning: Some(warning),
+            }
+        }
+    })
 }
 
 /// Resolves a runtime credential for a provider, refreshing tokens if needed.
@@ -573,6 +664,11 @@ mod tests {
     use super::store::{self, StoredCredential};
     use super::*;
 
+    const STALE_LOGIN_CHILD_METADATA_ENV: &str = "BITFUN_SUBAUTH_CAS_CHILD_METADATA";
+    const STALE_LOGIN_CHILD_LOADED_ENV: &str = "BITFUN_SUBAUTH_CAS_CHILD_LOADED";
+    const STALE_LOGIN_CHILD_RESUME_ENV: &str = "BITFUN_SUBAUTH_CAS_CHILD_RESUME";
+    const STALE_LOGIN_CHILD_OUTCOME_ENV: &str = "BITFUN_SUBAUTH_CAS_CHILD_OUTCOME";
+
     /// Serializes tests that rely on the process-global store path override.
     fn test_lock() -> &'static Mutex<()> {
         static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
@@ -583,6 +679,10 @@ mod tests {
         let dir = std::env::temp_dir().join(format!("bitfun-subauth-{}", uuid::Uuid::new_v4()));
         std::fs::create_dir_all(&dir).unwrap();
         dir.join("subscription_auth.json")
+    }
+
+    fn test_session_id() -> String {
+        uuid::Uuid::new_v4().to_string()
     }
 
     #[test]
@@ -685,6 +785,109 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn legacy_migration_retries_after_temporary_vault_unavailability() {
+        let _guard = test_lock()
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        let path = temp_store_path();
+        store::set_store_path_for_test(path.clone());
+        let legacy = serde_json::json!({
+            "opencode": {
+                "type": "oauth",
+                "refresh": "legacy-retry-refresh",
+                "access": "legacy-retry-access",
+                "expires": 1_900_000_000_000_i64
+            }
+        });
+        std::fs::write(&path, serde_json::to_vec_pretty(&legacy).unwrap()).unwrap();
+
+        store::set_test_vault_unavailable(true);
+        let deferred = store::load_with_state().await.unwrap();
+        assert!(deferred.credentials.is_empty());
+        assert!(deferred.vault_unavailable.contains("opencode"));
+        assert!(!deferred.requires_reauthentication.contains("opencode"));
+        let unchanged = std::fs::read_to_string(&path).unwrap();
+        assert!(unchanged.contains("legacy-retry-refresh"));
+        assert!(unchanged.contains("legacy-retry-access"));
+
+        store::set_test_vault_unavailable(false);
+        let migrated = store::load().await.unwrap();
+        assert!(migrated.contains_key("opencode"));
+        let scrubbed = std::fs::read_to_string(&path).unwrap();
+        assert!(scrubbed.contains("\"version\": 2"));
+        assert!(!scrubbed.contains("legacy-retry-refresh"));
+        assert!(!scrubbed.contains("legacy-retry-access"));
+        assert!(store::cleanup_journal_entries_for_assertion()
+            .await
+            .is_empty());
+    }
+
+    #[tokio::test]
+    async fn partial_chunk_write_is_durably_cleaned_after_retry() {
+        let _guard = test_lock()
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        store::set_store_path_for_test(temp_store_path());
+        store::set_test_vault_write_failure_after(Some(1));
+        store::set_test_vault_delete_failure(true);
+
+        let error = store::upsert(
+            "codex",
+            StoredCredential::Oauth {
+                refresh: "r".repeat(3_000),
+                access: "a".repeat(3_000),
+                expires: 1_900_000_000_000,
+                account_id: None,
+                metadata: None,
+            },
+        )
+        .await
+        .unwrap_err();
+        assert!(error.to_string().contains("vault write failure"));
+        assert!(!store::test_vault_entries_for_assertion().is_empty());
+        assert!(!store::cleanup_journal_entries_for_assertion()
+            .await
+            .is_empty());
+
+        store::set_test_vault_write_failure_after(None);
+        store::set_test_vault_delete_failure(false);
+        let loaded = store::load().await.unwrap();
+        assert!(loaded.is_empty());
+        assert!(store::test_vault_entries_for_assertion().is_empty());
+        assert!(store::cleanup_journal_entries_for_assertion()
+            .await
+            .is_empty());
+    }
+
+    #[tokio::test]
+    async fn windows_post_commit_backup_cleanup_failure_does_not_fail_commit() {
+        let _guard = test_lock()
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        let path = temp_store_path();
+        let tmp = path.with_extension("tmp-one");
+        let backup = path.with_extension("bak");
+        std::fs::write(&path, b"legacy-plaintext-secret").unwrap();
+        std::fs::write(&tmp, b"new-metadata").unwrap();
+
+        store::set_test_backup_cleanup_failure(&backup, true);
+        store::replace_metadata_file_windows(&tmp, &path)
+            .await
+            .unwrap();
+        assert_eq!(std::fs::read(&path).unwrap(), b"new-metadata");
+        assert_eq!(std::fs::read(&backup).unwrap(), b"legacy-plaintext-secret");
+
+        store::set_test_backup_cleanup_failure(&backup, false);
+        let next_tmp = path.with_extension("tmp-two");
+        std::fs::write(&next_tmp, b"newer-metadata").unwrap();
+        store::replace_metadata_file_windows(&next_tmp, &path)
+            .await
+            .unwrap();
+        assert_eq!(std::fs::read(&path).unwrap(), b"newer-metadata");
+        assert!(!backup.exists());
+    }
+
+    #[tokio::test]
     async fn concurrent_provider_upserts_preserve_both_metadata_entries() {
         let _guard = test_lock()
             .lock()
@@ -724,6 +927,208 @@ mod tests {
         assert!(metadata.contains("\"opencode\""));
         assert!(!metadata.contains("codex-access"));
         assert!(!metadata.contains("opencode-access"));
+    }
+
+    #[tokio::test]
+    async fn logout_tombstone_wins_over_a_refresh_paused_after_load() {
+        let _guard = test_lock()
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        let path = temp_store_path();
+        store::set_store_path_for_test(path.clone());
+        store::upsert(
+            "codex",
+            StoredCredential::Oauth {
+                refresh: "refresh-before-logout".to_string(),
+                access: "access-before-logout".to_string(),
+                expires: 1,
+                account_id: None,
+                metadata: None,
+            },
+        )
+        .await
+        .unwrap();
+
+        // Model a second process paused in the external refresh request after
+        // it has loaded the old credential and revision.
+        let (loaded_tx, loaded_rx) = tokio::sync::oneshot::channel();
+        let (resume_tx, resume_rx) = tokio::sync::oneshot::channel();
+        let stale_refresh = tokio::spawn(async move {
+            let snapshot = store::load_entry_with_revision("codex").await?;
+            loaded_tx
+                .send(snapshot.revision)
+                .map_err(|_| anyhow!("refresh load signal receiver dropped"))?;
+            resume_rx
+                .await
+                .map_err(|_| anyhow!("refresh resume signal sender dropped"))?;
+            store::upsert_if_revision(
+                "codex",
+                snapshot.revision,
+                StoredCredential::Oauth {
+                    refresh: "stale-rotated-refresh".to_string(),
+                    access: "stale-refreshed-access".to_string(),
+                    expires: 1_900_000_000_000,
+                    account_id: None,
+                    metadata: None,
+                },
+            )
+            .await
+        });
+
+        let loaded_revision = loaded_rx.await.unwrap();
+        let remove_outcome = store::remove("codex").await.unwrap();
+        assert!(matches!(remove_outcome, store::RemoveOutcome::Removed));
+        let logout_revision = store::credential_revision("codex").await.unwrap();
+        assert!(logout_revision > loaded_revision);
+        resume_tx.send(()).unwrap();
+
+        let refresh_outcome = stale_refresh.await.unwrap().unwrap();
+        assert_eq!(
+            refresh_outcome,
+            store::ConditionalCommitOutcome::Conflict {
+                current_revision: logout_revision,
+            }
+        );
+        assert!(store::load_entry("codex").await.unwrap().is_none());
+
+        let metadata: serde_json::Value =
+            serde_json::from_slice(&std::fs::read(path).unwrap()).unwrap();
+        assert!(metadata["accounts"].get("codex").is_none());
+        assert_eq!(
+            metadata["provider_revisions"]["codex"].as_u64(),
+            Some(logout_revision)
+        );
+    }
+
+    #[tokio::test]
+    async fn cross_process_stale_login_cas_child() {
+        let Some(path) =
+            std::env::var_os(STALE_LOGIN_CHILD_METADATA_ENV).map(std::path::PathBuf::from)
+        else {
+            return;
+        };
+        let loaded_path = std::path::PathBuf::from(
+            std::env::var_os(STALE_LOGIN_CHILD_LOADED_ENV).expect("child loaded marker path"),
+        );
+        let resume_path = std::path::PathBuf::from(
+            std::env::var_os(STALE_LOGIN_CHILD_RESUME_ENV).expect("child resume marker path"),
+        );
+        let outcome_path = std::path::PathBuf::from(
+            std::env::var_os(STALE_LOGIN_CHILD_OUTCOME_ENV).expect("child outcome marker path"),
+        );
+        store::set_store_path_for_test(path);
+
+        let login_revision = store::credential_revision("opencode").await.unwrap();
+        assert_eq!(login_revision, 0);
+        std::fs::write(&loaded_path, b"loaded").unwrap();
+        tokio::time::timeout(Duration::from_secs(5), async {
+            while !resume_path.exists() {
+                tokio::time::sleep(Duration::from_millis(10)).await;
+            }
+        })
+        .await
+        .expect("parent should release the stale login after logout");
+
+        let outcome = store::upsert_if_revision(
+            "opencode",
+            login_revision,
+            StoredCredential::Api {
+                key: "stale-login-key".to_string(),
+                metadata: None,
+            },
+        )
+        .await
+        .unwrap();
+        let store::ConditionalCommitOutcome::Conflict { current_revision } = outcome else {
+            panic!("stale cross-process login unexpectedly committed: {outcome:?}");
+        };
+        std::fs::write(outcome_path, current_revision.to_string()).unwrap();
+    }
+
+    #[tokio::test]
+    async fn logout_of_an_absent_provider_invalidates_a_cross_process_login() {
+        let _guard = test_lock()
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        let path = temp_store_path();
+        store::set_store_path_for_test(path.clone());
+        let parent = path.parent().unwrap();
+        let loaded_path = parent.join("child-loaded");
+        let resume_path = parent.join("child-resume");
+        let outcome_path = parent.join("child-outcome");
+        let mut child = std::process::Command::new(std::env::current_exe().unwrap())
+            .arg("--exact")
+            .arg("subscription_auth::tests::cross_process_stale_login_cas_child")
+            .arg("--nocapture")
+            .env(STALE_LOGIN_CHILD_METADATA_ENV, &path)
+            .env(STALE_LOGIN_CHILD_LOADED_ENV, &loaded_path)
+            .env(STALE_LOGIN_CHILD_RESUME_ENV, &resume_path)
+            .env(STALE_LOGIN_CHILD_OUTCOME_ENV, &outcome_path)
+            .spawn()
+            .expect("spawn stale-login child process");
+
+        tokio::time::timeout(Duration::from_secs(5), async {
+            while !loaded_path.exists() {
+                tokio::time::sleep(Duration::from_millis(10)).await;
+            }
+        })
+        .await
+        .expect("child should capture the pre-logout revision");
+        store::remove("opencode").await.unwrap();
+        let logout_revision = store::credential_revision("opencode").await.unwrap();
+        std::fs::write(&resume_path, b"resume").unwrap();
+
+        let status = tokio::time::timeout(Duration::from_secs(5), async {
+            loop {
+                if let Some(status) = child.try_wait().expect("poll stale-login child process") {
+                    break status;
+                }
+                tokio::time::sleep(Duration::from_millis(10)).await;
+            }
+        })
+        .await
+        .expect("stale-login child should finish after resume");
+        assert!(status.success(), "stale-login child failed: {status}");
+        assert_eq!(
+            std::fs::read_to_string(outcome_path).unwrap(),
+            logout_revision.to_string()
+        );
+        assert!(store::load_entry("opencode").await.unwrap().is_none());
+    }
+
+    #[tokio::test]
+    async fn v2_metadata_without_revision_map_remains_conditionally_writable() {
+        let _guard = test_lock()
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        let path = temp_store_path();
+        store::set_store_path_for_test(path.clone());
+        std::fs::write(
+            &path,
+            serde_json::to_vec_pretty(&serde_json::json!({
+                "version": 2,
+                "accounts": {}
+            }))
+            .unwrap(),
+        )
+        .unwrap();
+
+        assert_eq!(store::credential_revision("antigravity").await.unwrap(), 0);
+        let outcome = store::upsert_if_revision(
+            "antigravity",
+            0,
+            StoredCredential::Api {
+                key: "compatible-key".to_string(),
+                metadata: None,
+            },
+        )
+        .await
+        .unwrap();
+        assert_eq!(
+            outcome,
+            store::ConditionalCommitOutcome::Committed { revision: 1 }
+        );
+        assert!(store::load_entry("antigravity").await.unwrap().is_some());
     }
 
     #[tokio::test]
@@ -906,17 +1311,57 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn failed_logout_vault_delete_is_reported_and_retried() {
+        let _guard = test_lock()
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        store::set_store_path_for_test(temp_store_path());
+        store::upsert(
+            "opencode",
+            StoredCredential::Api {
+                key: "sk-pending-delete".to_string(),
+                metadata: None,
+            },
+        )
+        .await
+        .unwrap();
+
+        store::set_test_vault_delete_failure(true);
+        let outcome = logout(SubscriptionProvider::Opencode).await.unwrap();
+        assert!(outcome.cleanup_pending);
+        assert!(outcome
+            .warning
+            .as_deref()
+            .is_some_and(|warning| warning.contains("cleanup is pending")));
+        assert!(!store::test_vault_entries_for_assertion().is_empty());
+        assert!(!store::cleanup_journal_entries_for_assertion()
+            .await
+            .is_empty());
+        assert!(store::load_entry("opencode").await.unwrap().is_none());
+
+        store::set_test_vault_delete_failure(false);
+        assert!(store::load().await.unwrap().is_empty());
+        assert!(store::test_vault_entries_for_assertion().is_empty());
+        assert!(store::cleanup_journal_entries_for_assertion()
+            .await
+            .is_empty());
+    }
+
+    #[tokio::test]
     async fn finalize_ignores_superseded_session() {
         let _guard = test_lock()
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner());
         let provider = SubscriptionProvider::Codex;
         let stale_generation = next_generation();
+        let stale_session_id = test_session_id();
+        let current_session_id = test_session_id();
         {
             let mut map = sessions().lock().unwrap();
             map.insert(
                 provider,
                 SessionState {
+                    session_id: current_session_id,
                     status: LoginStatus::Pending,
                     authorization_url: None,
                     user_code: None,
@@ -933,6 +1378,7 @@ mod tests {
         // pending session when it finishes.
         finalize_session(
             provider,
+            &stale_session_id,
             stale_generation,
             &CancellationToken::new(),
             Ok(Err(anyhow!("stale runner failed"))),
@@ -1029,15 +1475,20 @@ mod tests {
 
     #[tokio::test]
     async fn cancel_command_waits_for_the_commit_boundary() {
+        let _guard = test_lock()
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
         let provider = SubscriptionProvider::Opencode;
         let store_guard = store_lock(provider).lock().await;
         let cancel = CancellationToken::new();
         let generation = next_generation();
+        let session_id = test_session_id();
         {
             let mut map = sessions().lock().unwrap();
             map.insert(
                 provider,
                 SessionState {
+                    session_id: session_id.clone(),
                     status: LoginStatus::Pending,
                     authorization_url: None,
                     user_code: None,
@@ -1050,7 +1501,9 @@ mod tests {
             );
         }
 
-        let task = tokio::spawn(cancel_login(provider));
+        let task_session_id = session_id.clone();
+        let task =
+            tokio::spawn(async move { cancel_login(provider, &task_session_id).await.unwrap() });
         tokio::task::yield_now().await;
         assert!(cancel.is_cancelled());
         assert!(!task.is_finished());
@@ -1065,6 +1518,125 @@ mod tests {
         assert_eq!(status, Some(LoginStatus::Cancelled));
     }
 
+    #[tokio::test]
+    async fn duplicate_cancel_waits_for_the_same_commit_boundary() {
+        let _guard = test_lock()
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        let provider = SubscriptionProvider::Antigravity;
+        let store_guard = store_lock(provider).lock().await;
+        let cancel = CancellationToken::new();
+        let session_id = test_session_id();
+        {
+            let mut map = sessions().lock().unwrap();
+            map.insert(
+                provider,
+                SessionState {
+                    session_id: session_id.clone(),
+                    status: LoginStatus::Pending,
+                    authorization_url: None,
+                    user_code: None,
+                    instructions: None,
+                    error: None,
+                    account: None,
+                    cancel: cancel.clone(),
+                    generation: next_generation(),
+                },
+            );
+        }
+
+        let first_session_id = session_id.clone();
+        let first_cancel =
+            tokio::spawn(async move { cancel_login(provider, &first_session_id).await.unwrap() });
+        tokio::task::yield_now().await;
+        assert!(cancel.is_cancelled());
+        assert!(!first_cancel.is_finished());
+
+        let second_session_id = session_id.clone();
+        let second_cancel =
+            tokio::spawn(async move { cancel_login(provider, &second_session_id).await.unwrap() });
+        tokio::task::yield_now().await;
+        assert!(!second_cancel.is_finished());
+
+        drop(store_guard);
+        first_cancel.await.unwrap();
+        second_cancel.await.unwrap();
+        let status = sessions()
+            .lock()
+            .unwrap()
+            .remove(&provider)
+            .map(|state| state.status);
+        assert_eq!(status, Some(LoginStatus::Cancelled));
+    }
+
+    #[tokio::test]
+    async fn stale_cancel_does_not_cancel_replacement_session() {
+        let _guard = test_lock()
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        let provider = SubscriptionProvider::Opencode;
+        let stale_session_id = test_session_id();
+        let current_session_id = test_session_id();
+        let current_cancel = CancellationToken::new();
+        {
+            let mut map = sessions().lock().unwrap();
+            map.insert(
+                provider,
+                SessionState {
+                    session_id: current_session_id.clone(),
+                    status: LoginStatus::Pending,
+                    authorization_url: None,
+                    user_code: None,
+                    instructions: None,
+                    error: None,
+                    account: None,
+                    cancel: current_cancel.clone(),
+                    generation: next_generation(),
+                },
+            );
+        }
+
+        cancel_login(provider, &stale_session_id).await.unwrap();
+        assert!(!current_cancel.is_cancelled());
+        let snapshot = login_status(provider, &current_session_id).await.unwrap();
+        assert_eq!(snapshot.session_id, current_session_id);
+        assert_eq!(snapshot.status, LoginStatus::Pending);
+        sessions().lock().unwrap().remove(&provider);
+    }
+
+    #[tokio::test]
+    async fn cancel_does_not_rewrite_authorized_terminal_state() {
+        let _guard = test_lock()
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        let provider = SubscriptionProvider::Codex;
+        let session_id = test_session_id();
+        let cancel = CancellationToken::new();
+        {
+            let mut map = sessions().lock().unwrap();
+            map.insert(
+                provider,
+                SessionState {
+                    session_id: session_id.clone(),
+                    status: LoginStatus::Authorized,
+                    authorization_url: None,
+                    user_code: None,
+                    instructions: None,
+                    error: None,
+                    account: None,
+                    cancel: cancel.clone(),
+                    generation: next_generation(),
+                },
+            );
+        }
+
+        cancel_login(provider, &session_id).await.unwrap();
+        assert!(!cancel.is_cancelled());
+        let snapshot = login_status(provider, &session_id).await.unwrap();
+        assert_eq!(snapshot.status, LoginStatus::Authorized);
+        sessions().lock().unwrap().remove(&provider);
+    }
+
     #[test]
     fn final_state_update_rechecks_generation_after_async_work() {
         let _guard = test_lock()
@@ -1073,11 +1645,14 @@ mod tests {
         let provider = SubscriptionProvider::Codex;
         let old_generation = next_generation();
         let new_generation = next_generation();
+        let old_session_id = test_session_id();
+        let new_session_id = test_session_id();
         {
             let mut map = sessions().lock().unwrap();
             map.insert(
                 provider,
                 SessionState {
+                    session_id: new_session_id,
                     status: LoginStatus::Pending,
                     authorization_url: None,
                     user_code: None,
@@ -1092,6 +1667,7 @@ mod tests {
 
         update_session_if_current(
             provider,
+            &old_session_id,
             old_generation,
             LoginStatus::Authorized,
             None,

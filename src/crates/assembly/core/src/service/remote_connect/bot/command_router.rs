@@ -840,9 +840,7 @@ async fn confirm_then_run(
 }
 
 async fn set_verbose(state: &mut BotChatState, on: bool, s: &'static BotStrings) -> HandleResult {
-    let mut data = super::load_bot_persistence();
-    data.verbose_mode = on;
-    super::save_bot_persistence(&data);
+    super::update_bot_persistence(|data| data.verbose_mode = on);
 
     let body = if on {
         s.verbose_enabled
@@ -2294,20 +2292,19 @@ async fn route_pending(
                     let (device_id, device_name) = options[n - 1].clone();
                     if device_id == "local" {
                         // Switch back to local
-                        state.active_remote_device = None;
-                        state.current_session_id = None;
+                        state.select_local_device();
                         let body = s.devices_switched_local.to_string();
                         let mut view = main_menu_view(state, s);
                         view = view.with_body(body);
                         result_from_menu(state, view)
                     } else {
                         // Switch to remote device
-                        state.active_remote_device =
-                            Some(crate::service::remote_connect::bot::RemoteDeviceTarget {
+                        state.select_remote_device(
+                            crate::service::remote_connect::bot::RemoteDeviceTarget {
                                 device_id: device_id.clone(),
                                 device_name: device_name.clone(),
-                            });
-                        state.current_session_id = None;
+                            },
+                        );
                         let body = format!("{}: {}", s.devices_switched_to, device_name);
                         let mut view = main_menu_view(state, s);
                         view = view.with_body(body);

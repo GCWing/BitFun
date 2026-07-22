@@ -43,6 +43,7 @@ static LOCAL_ONLY_COMMANDS: &[&str] = &[
     // Account identity / peer mode control (stay on controller)
     "account_login",
     "account_finalize_login",
+    "account_cancel_pending_login",
     "account_logout",
     "account_status",
     "account_get_credential_hint",

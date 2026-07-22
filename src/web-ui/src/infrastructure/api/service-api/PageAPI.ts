@@ -5,6 +5,7 @@ export type PageVisibility = 'private' | 'relay' | 'public';
 
 export interface PageInfo {
   slug: string;
+  generation: string;
   visibility: PageVisibility;
   title: string;
   file_count: number;
@@ -17,6 +18,7 @@ export interface PageInfo {
 }
 
 export interface PageVersionInfo {
+  generation: string;
   version_id: string;
   title: string;
   file_count: number;
@@ -42,16 +44,16 @@ class PageAPI {
     }
   }
 
-  async listVersions(slug: string): Promise<PageVersionInfo[]> {
+  async listVersions(slug: string, generation: string): Promise<PageVersionInfo[]> {
     try {
-      return await api.invoke<PageVersionInfo[]>('page_list_versions', { request: { slug } });
+      return await api.invoke<PageVersionInfo[]>('page_list_versions', { request: { slug, generation } });
     } catch (error) {
-      throw createTauriCommandError('page_list_versions', error, { slug });
+      throw createTauriCommandError('page_list_versions', error, { slug, generation });
     }
   }
 
-  async createOpenLink(slug: string, versionId?: string | null): Promise<PageOpenLink> {
-    const request = { slug, version_id: versionId || null };
+  async createOpenLink(slug: string, generation: string, versionId?: string | null): Promise<PageOpenLink> {
+    const request = { slug, generation, version_id: versionId || null };
     try {
       return await api.invoke<PageOpenLink>('page_create_open_link', { request });
     } catch (error) {
@@ -59,8 +61,8 @@ class PageAPI {
     }
   }
 
-  async deploy(slug: string, versionId: string): Promise<PageInfo> {
-    const request = { slug, version_id: versionId };
+  async deploy(slug: string, generation: string, versionId: string): Promise<PageInfo> {
+    const request = { slug, generation, version_id: versionId };
     try {
       return await api.invoke<PageInfo>('page_deploy', { request });
     } catch (error) {
@@ -68,8 +70,8 @@ class PageAPI {
     }
   }
 
-  async update(slug: string, changes: { visibility?: PageVisibility; title?: string }): Promise<PageInfo> {
-    const request = { slug, ...changes };
+  async update(slug: string, generation: string, changes: { visibility?: PageVisibility; title?: string }): Promise<PageInfo> {
+    const request = { slug, generation, ...changes };
     try {
       return await api.invoke<PageInfo>('page_update', { request });
     } catch (error) {
@@ -77,8 +79,8 @@ class PageAPI {
     }
   }
 
-  async deleteVersion(slug: string, versionId: string): Promise<void> {
-    const request = { slug, version_id: versionId };
+  async deleteVersion(slug: string, generation: string, versionId: string): Promise<void> {
+    const request = { slug, generation, version_id: versionId };
     try {
       await api.invoke<void>('page_delete_version', { request });
     } catch (error) {
@@ -86,19 +88,19 @@ class PageAPI {
     }
   }
 
-  async unpublish(slug: string): Promise<void> {
+  async unpublish(slug: string, generation: string): Promise<void> {
     try {
-      await api.invoke<void>('page_unpublish', { request: { slug } });
+      await api.invoke<void>('page_unpublish', { request: { slug, generation } });
     } catch (error) {
-      throw createTauriCommandError('page_unpublish', error, { slug });
+      throw createTauriCommandError('page_unpublish', error, { slug, generation });
     }
   }
 
-  async deletePage(slug: string): Promise<void> {
+  async deletePage(slug: string, generation: string): Promise<void> {
     try {
-      await api.invoke<void>('page_delete', { request: { slug } });
+      await api.invoke<void>('page_delete', { request: { slug, generation } });
     } catch (error) {
-      throw createTauriCommandError('page_delete', error, { slug });
+      throw createTauriCommandError('page_delete', error, { slug, generation });
     }
   }
 }

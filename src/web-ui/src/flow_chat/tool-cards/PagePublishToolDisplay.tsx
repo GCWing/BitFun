@@ -12,9 +12,12 @@ import { pageAPI } from '@/infrastructure/api/service-api/PageAPI';
 import { systemAPI } from '@/infrastructure/api/service-api/SystemAPI';
 import { notificationService } from '@/shared/notification-system';
 
-async function openPage(slug: string, versionId?: string) {
+async function openPage(slug: string, knownGeneration?: string, versionId?: string) {
   if (!slug) return;
-  const link = await pageAPI.createOpenLink(slug, versionId);
+  const generation = knownGeneration || (await pageAPI.listPages())
+    .find((page) => page.slug === slug)?.generation;
+  if (generation == null) throw new Error('Page no longer exists');
+  const link = await pageAPI.createOpenLink(slug, generation, versionId);
   await systemAPI.openExternal(link.open_url);
 }
 
@@ -40,6 +43,7 @@ export const PagePublishDisplay: React.FC<ToolCardProps> = ({ toolItem }) => {
     if (isParamsStreaming) return '';
     return (toolResult?.result?.version_id as string | undefined) || '';
   }, [isParamsStreaming, toolResult?.result]);
+  const generation = toolResult?.result?.generation as string | undefined;
 
   const urlPath =
     (toolResult?.result?.url as string | undefined) ||
@@ -133,7 +137,7 @@ export const PagePublishDisplay: React.FC<ToolCardProps> = ({ toolItem }) => {
           <button
             type="button"
             data-testid="chat-page-publish-open-prod-btn"
-            onClick={() => void openPage(slug).catch(() => {
+            onClick={() => void openPage(slug, generation).catch(() => {
               notificationService.error(t('toolCards.pagePublish.openFailed'));
             })}
           >
@@ -145,7 +149,7 @@ export const PagePublishDisplay: React.FC<ToolCardProps> = ({ toolItem }) => {
           <button
             type="button"
             data-testid="chat-page-publish-open-preview-btn"
-            onClick={() => void openPage(slug, versionId).catch(() => {
+            onClick={() => void openPage(slug, generation, versionId).catch(() => {
               notificationService.error(t('toolCards.pagePublish.openFailed'));
             })}
           >

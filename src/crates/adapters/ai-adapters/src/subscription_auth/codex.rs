@@ -138,7 +138,7 @@ fn metadata_from(tokens: &TokenResponse) -> Option<serde_json::Value> {
     Some(serde_json::json!({ "email": email }))
 }
 
-async fn persist_tokens(tokens: TokenResponse) -> Result<()> {
+async fn persist_tokens(tokens: TokenResponse, expected_revision: u64) -> Result<()> {
     let access = tokens
         .access_token
         .clone()
@@ -150,8 +150,9 @@ async fn persist_tokens(tokens: TokenResponse) -> Result<()> {
     let expires = now_ms() + tokens.expires_in.unwrap_or(3600) * 1000;
     let account_id = account_id_from(&tokens);
     let metadata = metadata_from(&tokens);
-    store::upsert(
+    let outcome = store::upsert_if_revision(
         STORE_KEY,
+        expected_revision,
         StoredCredential::Oauth {
             refresh,
             access,
@@ -161,12 +162,16 @@ async fn persist_tokens(tokens: TokenResponse) -> Result<()> {
         },
     )
     .await?;
+    super::require_current_store_revision(super::SubscriptionProvider::Codex, outcome)?;
     log::info!("codex subscription tokens saved");
     Ok(())
 }
 
 /// Starts the browser PKCE login flow, binding the loopback callback server.
-pub(crate) async fn begin_login(cancel: CancellationToken) -> Result<StartedLogin> {
+pub(crate) async fn begin_login(
+    cancel: CancellationToken,
+    expected_revision: u64,
+) -> Result<StartedLogin> {
     let pkce = Pkce::generate();
     let state = super::pkce::random_state();
     let (listener, callback_port) = oauth_server::bind_loopback_ports(CALLBACK_PORTS).await?;
@@ -187,7 +192,7 @@ pub(crate) async fn begin_login(cancel: CancellationToken) -> Result<StartedLogi
                     .ok_or_else(|| anyhow!("codex callback missing code"))?;
                 exchange_code(&code, &verifier, &redirect_uri).await
             },
-            persist_tokens,
+            move |tokens| persist_tokens(tokens, expected_revision),
         )
         .await
     };
@@ -203,11 +208,9 @@ pub(crate) async fn begin_login(cancel: CancellationToken) -> Result<StartedLogi
 /// Ensures the stored access token is fresh, refreshing it when needed. Returns
 /// the current `(access, account_id, expires_ms)`.
 async fn ensure_fresh() -> Result<(String, Option<String>, i64)> {
-    let _guard = super::store_lock(super::SubscriptionProvider::Codex)
-        .lock()
-        .await;
-    let entry = store::load_entry(STORE_KEY)
-        .await?
+    let snapshot = store::load_entry_with_revision(STORE_KEY).await?;
+    let entry = snapshot
+        .credential
         .ok_or_else(|| anyhow!("Codex is not connected; sign in first"))?;
     let StoredCredential::Oauth {
         refresh: refresh_token,
@@ -233,8 +236,9 @@ async fn ensure_fresh() -> Result<(String, Option<String>, i64)> {
     let new_expires = now_ms() + refreshed.expires_in.unwrap_or(3600) * 1000;
     let new_account_id = account_id_from(&refreshed).or(account_id);
     let new_metadata = metadata_from(&refreshed).or(metadata);
-    store::upsert(
+    let outcome = store::upsert_if_revision(
         STORE_KEY,
+        snapshot.revision,
         StoredCredential::Oauth {
             refresh: new_refresh,
             access: new_access.clone(),
@@ -244,6 +248,7 @@ async fn ensure_fresh() -> Result<(String, Option<String>, i64)> {
         },
     )
     .await?;
+    super::require_current_store_revision(super::SubscriptionProvider::Codex, outcome)?;
     log::info!("codex subscription tokens refreshed");
     Ok((new_access, new_account_id, new_expires))
 }

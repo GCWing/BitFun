@@ -60,7 +60,7 @@ interface SubscriptionLoginPanelState {
   provider: SubscriptionProvider;
   authorizationUrl: string;
   userCode?: string | null;
-  deadlineMs: number;
+  deadlineMs?: number;
   status: 'starting' | 'pending' | 'cancelling' | 'failed';
   error?: string;
 }
@@ -628,7 +628,7 @@ const AIModelConfig: React.FC = () => {
   }, [refreshSubscriptionAccounts]);
 
   useEffect(() => {
-    if (!subscriptionLoginPanel || subscriptionLoginPanel.status === 'failed') return;
+    if (!subscriptionLoginPanel || subscriptionLoginPanel.status !== 'pending') return;
     setSubscriptionLoginClock(Date.now());
     const timer = window.setInterval(() => setSubscriptionLoginClock(Date.now()), 1000);
     return () => window.clearInterval(timer);
@@ -999,7 +999,13 @@ const AIModelConfig: React.FC = () => {
       if (!loginCoordinatorRef.current.isCurrent(operation)) {
         throw subscriptionLoginCancelledError();
       }
-      const snapshot = await aiApi.getSubscriptionLoginStatus(operation.provider);
+      const snapshot = await aiApi.getSubscriptionLoginStatus(
+        operation.provider,
+        operation.sessionId,
+      );
+      if (snapshot.session_id !== operation.sessionId) {
+        throw new Error('Subscription login status returned a mismatched session');
+      }
       if (snapshot.status === 'authorized') {
         return snapshot;
       }
@@ -1024,7 +1030,7 @@ const AIModelConfig: React.FC = () => {
         // Cancel immediately when the backend placeholder already exists;
         // `settleSubscriptionLoginStart` retries after start returns to cover
         // the opposite command-order race.
-        void aiApi.cancelSubscriptionLogin(pending.provider).catch(() => {});
+        void aiApi.cancelSubscriptionLogin(pending.provider, pending.sessionId).catch(() => {});
       }
     };
   }, []);
@@ -1035,20 +1041,18 @@ const AIModelConfig: React.FC = () => {
     // newer provider's state or leaving an undiscoverable backend session.
     const operation = loginCoordinatorRef.current.begin(provider);
     if (!operation) return;
-    const deadlineMs = Date.now() + SUBSCRIPTION_LOGIN_TIMEOUT_MS;
     setLoggingInProvider(provider);
     setSubscriptionLoginPanel({
       provider,
       authorizationUrl: '',
-      deadlineMs,
       status: 'starting',
     });
     try {
-      const started = await aiApi.startSubscriptionLogin(provider);
+      const started = await aiApi.startSubscriptionLogin(provider, operation.sessionId);
       const settlement = await settleSubscriptionLoginStart(
         loginCoordinatorRef.current,
         operation,
-        () => aiApi.cancelSubscriptionLogin(provider),
+        () => aiApi.cancelSubscriptionLogin(provider, operation.sessionId),
       );
       if (settlement.cleanupError) {
         log.warn('Failed to cancel subscription login after start settled', {
@@ -1059,6 +1063,13 @@ const AIModelConfig: React.FC = () => {
       if (!settlement.shouldContinue) {
         throw subscriptionLoginCancelledError();
       }
+      if (started.session_id !== operation.sessionId) {
+        throw new Error('Subscription login start returned a mismatched session');
+      }
+      // Authorization time starts after the provider has returned its URL or
+      // device code; callback binding/device-code acquisition does not consume
+      // the user's five-minute completion window.
+      const deadlineMs = Date.now() + SUBSCRIPTION_LOGIN_TIMEOUT_MS;
       setSubscriptionLoginPanel({
         provider,
         authorizationUrl: started.authorization_url,
@@ -1109,7 +1120,7 @@ const AIModelConfig: React.FC = () => {
         }
         let authorizationAlreadyCompleted = false;
         try {
-          await aiApi.cancelSubscriptionLogin(provider);
+          await aiApi.cancelSubscriptionLogin(provider, operation.sessionId);
         } catch (cancelError) {
           log.warn('Failed to finish subscription login cancellation', {
             provider,
@@ -1145,18 +1156,32 @@ const AIModelConfig: React.FC = () => {
           ));
         }
       } else {
+        // Status/start failures can occur while the backend runner is still
+        // active. Await the session-scoped cancellation barrier before freeing
+        // the coordinator slot or presenting retry UI.
+        if (!operation.startSettled && loginCoordinatorRef.current.owns(operation)) {
+          loginCoordinatorRef.current.markStartSettled(operation);
+        }
+        try {
+          await aiApi.cancelSubscriptionLogin(provider, operation.sessionId);
+        } catch (cancelError) {
+          log.warn('Failed to stop subscription login after an operation error', {
+            provider,
+            sessionId: operation.sessionId,
+            error: String(cancelError),
+          });
+        }
         if (
           loginCoordinatorRef.current.isCurrent(operation)
           && subscriptionLoginMountedRef.current
         ) {
-          setSubscriptionLoginPanel((current) => ({
+          setSubscriptionLoginPanel({
             provider,
-            authorizationUrl: current?.provider === provider ? current.authorizationUrl : '',
-            userCode: current?.provider === provider ? current.userCode : undefined,
-            deadlineMs,
+            authorizationUrl: '',
+            userCode: undefined,
             status: 'failed',
             error: String(e),
-          }));
+          });
           notification.error(t('subscriptionAuth.loginFailed', { error: String(e) }));
         }
       }
@@ -1183,7 +1208,7 @@ const AIModelConfig: React.FC = () => {
     // installed its placeholder. The start-settlement path retries, because
     // desktop command scheduling can deliver this request first.
     try {
-      await aiApi.cancelSubscriptionLogin(provider);
+      await aiApi.cancelSubscriptionLogin(provider, operation.sessionId);
     } catch (e) {
       log.warn('cancel_subscription_login failed', { error: String(e) });
     }
@@ -1223,10 +1248,32 @@ const AIModelConfig: React.FC = () => {
     const request = subscriptionLogoutRequest;
     if (!request) return;
     try {
-      await aiApi.logoutSubscriptionAccount(request.account.provider);
+      const result = await aiApi.logoutSubscriptionAccount(request.account.provider);
+      // Metadata removal is the source of truth for connection state. Reflect
+      // it immediately, then refresh before presenting either outcome notice.
+      setSubscriptionAccounts((current) => current.map((account) => (
+        account.provider === request.account.provider
+          ? {
+              ...account,
+              connected: false,
+              account: null,
+              expires_at: null,
+              reauthentication_required: false,
+              vault_unavailable: false,
+            }
+          : account
+      )));
       await refreshSubscriptionAccounts();
       setSubscriptionLogoutRequest(null);
-      notification.success(t('subscriptionAuth.logoutSuccess'));
+      if (result.cleanup_pending) {
+        log.warn('Subscription logout completed with credential cleanup pending', {
+          provider: request.account.provider,
+          warning: result.warning,
+        });
+        notification.warning(t('subscriptionAuth.logoutCleanupPending'));
+      } else {
+        notification.success(t('subscriptionAuth.logoutSuccess'));
+      }
     } catch (e) {
       notification.error(t('subscriptionAuth.logoutFailed', { error: String(e) }));
     }
@@ -2973,7 +3020,7 @@ const AIModelConfig: React.FC = () => {
               const loginPanel = subscriptionLoginPanel?.provider === account.provider
                 ? subscriptionLoginPanel
                 : null;
-              const remainingSeconds = loginPanel
+              const remainingSeconds = loginPanel?.deadlineMs
                 ? Math.max(0, Math.ceil((loginPanel.deadlineMs - subscriptionLoginClock) / 1000))
                 : 0;
               const countdown = `${Math.floor(remainingSeconds / 60)}:${String(remainingSeconds % 60).padStart(2, '0')}`;
@@ -3066,7 +3113,7 @@ const AIModelConfig: React.FC = () => {
                               ? t('subscriptionAuth.loginCancelling')
                               : t('subscriptionAuth.loginPending')}
                         </strong>
-                        {loginPanel.status !== 'failed' && loginPanel.status !== 'cancelling' && (
+                        {loginPanel.status === 'pending' && (
                           <span>{t('subscriptionAuth.timeRemaining', { time: countdown })}</span>
                         )}
                         {loginPanel.status === 'failed' && loginPanel.error && (
@@ -3074,16 +3121,16 @@ const AIModelConfig: React.FC = () => {
                         )}
                       </div>
 
-                      {loginPanel.status !== 'cancelling' && loginPanel.userCode && (
+                      {loginPanel.status === 'pending' && loginPanel.userCode && (
                         <div className="bitfun-ai-model-config__subscription-code">
                           <span>{t('subscriptionAuth.verificationCode')}</span>
                           <code>{loginPanel.userCode}</code>
                         </div>
                       )}
 
-                      {loginPanel.status !== 'cancelling' && (
+                      {(loginPanel.status === 'pending' || loginPanel.status === 'failed') && (
                         <div className="bitfun-ai-model-config__subscription-login-actions">
-                          {loginPanel.userCode && (
+                          {loginPanel.status === 'pending' && loginPanel.userCode && (
                             <Button
                               size="small"
                               variant="secondary"
@@ -3092,7 +3139,7 @@ const AIModelConfig: React.FC = () => {
                               {t('subscriptionAuth.copyCode')}
                             </Button>
                           )}
-                          {loginPanel.authorizationUrl && (
+                          {loginPanel.status === 'pending' && loginPanel.authorizationUrl && (
                             <Button
                               size="small"
                               variant="secondary"

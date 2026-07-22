@@ -45,8 +45,14 @@ export interface SubscriptionAccount {
   suggested_model: string;
 }
 
+export interface SubscriptionLogoutResult {
+  cleanup_pending: boolean;
+  warning?: string | null;
+}
+
 export interface SubscriptionLoginStartResult {
   provider: SubscriptionProvider;
+  session_id: string;
   authorization_url: string;
   user_code?: string | null;
   instructions: string;
@@ -54,6 +60,7 @@ export interface SubscriptionLoginStartResult {
 
 export interface SubscriptionLoginSessionSnapshot {
   provider: SubscriptionProvider;
+  session_id: string;
   status: SubscriptionLoginStatus;
   authorization_url?: string | null;
   user_code?: string | null;
@@ -185,39 +192,43 @@ export class AIApi {
 
   async startSubscriptionLogin(
     provider: SubscriptionProvider,
+    sessionId: string,
   ): Promise<SubscriptionLoginStartResult> {
     try {
       return await api.invoke<SubscriptionLoginStartResult>('start_subscription_login', {
-        request: { provider },
+        request: { provider, sessionId },
       });
     } catch (error) {
-      throw createTauriCommandError('start_subscription_login', error, { provider });
+      throw createTauriCommandError('start_subscription_login', error, { provider, sessionId });
     }
   }
 
   async getSubscriptionLoginStatus(
     provider: SubscriptionProvider,
+    sessionId: string,
   ): Promise<SubscriptionLoginSessionSnapshot> {
     try {
       return await api.invoke<SubscriptionLoginSessionSnapshot>('get_subscription_login_status', {
-        request: { provider },
+        request: { provider, sessionId },
       });
     } catch (error) {
-      throw createTauriCommandError('get_subscription_login_status', error, { provider });
+      throw createTauriCommandError('get_subscription_login_status', error, { provider, sessionId });
     }
   }
 
-  async cancelSubscriptionLogin(provider: SubscriptionProvider): Promise<void> {
+  async cancelSubscriptionLogin(provider: SubscriptionProvider, sessionId: string): Promise<void> {
     try {
-      await api.invoke('cancel_subscription_login', { request: { provider } });
+      await api.invoke('cancel_subscription_login', { request: { provider, sessionId } });
     } catch (error) {
-      throw createTauriCommandError('cancel_subscription_login', error, { provider });
+      throw createTauriCommandError('cancel_subscription_login', error, { provider, sessionId });
     }
   }
 
-  async logoutSubscriptionAccount(provider: SubscriptionProvider): Promise<void> {
+  async logoutSubscriptionAccount(provider: SubscriptionProvider): Promise<SubscriptionLogoutResult> {
     try {
-      await api.invoke('logout_subscription_account', { request: { provider } });
+      return await api.invoke<SubscriptionLogoutResult>('logout_subscription_account', {
+        request: { provider },
+      });
     } catch (error) {
       throw createTauriCommandError('logout_subscription_account', error, { provider });
     }

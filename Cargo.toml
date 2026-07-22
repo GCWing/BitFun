@@ -122,7 +122,10 @@ glob = "0.3"
 ignore = "0.4"
 notify = "8.2"
 dirs = "6.0"
-keyring = "4.1.5"
+keyring-core = "1.0.0"
+apple-native-keyring-store = { version = "1.0.1", features = ["keychain"] }
+windows-native-keyring-store = "1.1.0"
+zbus-secret-service-keyring-store = { version = "1.0.0", features = ["crypto-rust"] }
 dark-light = "1.1"
 dunce = "1"
 filetime = "0.2"

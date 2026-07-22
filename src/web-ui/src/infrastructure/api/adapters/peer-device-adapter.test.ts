@@ -18,6 +18,7 @@ describe('peerInvokePriorityFor', () => {
 
   it('keeps account finalize and relay deploy on the controller', () => {
     expect(isPeerLocalOnlyCommand('account_finalize_login')).toBe(true);
+    expect(isPeerLocalOnlyCommand('account_cancel_pending_login')).toBe(true);
     expect(isPeerLocalOnlyCommand('account_fetch_session_turns')).toBe(true);
     expect(isPeerLocalOnlyCommand('relay_deploy_start')).toBe(true);
     expect(isPeerLocalOnlyCommand('relay_deploy_cancel')).toBe(true);

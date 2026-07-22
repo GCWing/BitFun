@@ -16,7 +16,8 @@ use bitfun_core::service::remote_connect::settings_sync;
 use bitfun_core::service::remote_connect::{sync_state, AccountClient};
 
 use crate::account::{
-    account_context_generation, account_context_is_current, lock_account_sync, read_account_context,
+    account_context_generation, account_context_is_current, automatic_account_sync_policy,
+    await_account_sync_current, lock_account_sync, read_account_context,
 };
 
 const UPLOAD_CONCURRENCY_CHUNK: usize = 5;
@@ -30,12 +31,17 @@ pub(crate) fn start_settings_sync_loop() {
     let hooks = settings_sync::SettingsSyncHooks {
         account_context: Some(Arc::new(|| {
             Box::pin(async {
+                if !automatic_account_sync_policy().background_engine {
+                    return Err(anyhow!("account login is awaiting a sync choice"));
+                }
                 let generation = account_context_generation();
                 if !account_context_is_current(generation) {
                     return Err(anyhow!("account context is transitioning"));
                 }
                 let (account, relay_url) = read_account_context().await?;
-                if !account_context_is_current(generation) {
+                if !automatic_account_sync_policy().background_engine
+                    || !account_context_is_current(generation)
+                {
                     return Err(anyhow!("account context changed while reading"));
                 }
                 Ok((account, relay_url, generation))
@@ -64,6 +70,9 @@ pub(crate) fn notify_local_settings_changed() {
 /// (e.g. `bitfun models set-default`) where the sync loop never starts.
 /// Silently no-ops when logged out; failures are logged, not fatal.
 pub(crate) async fn push_settings_after_local_change() {
+    if !automatic_account_sync_policy().management_push {
+        return;
+    }
     // Management commands never restore the persisted account session into
     // memory — do it on demand so the push can authenticate.
     if read_account_context().await.is_err() {
@@ -73,6 +82,9 @@ pub(crate) async fn push_settings_after_local_change() {
     let Ok(_sync_guard) = lock_account_sync(generation).await else {
         return;
     };
+    if !automatic_account_sync_policy().management_push {
+        return;
+    }
     let Ok((account, relay_url)) = read_account_context().await else {
         return;
     };
@@ -251,24 +263,32 @@ pub(crate) async fn run_auto_sync(
             .map_err(|e| anyhow!("export config: {e}"))?;
         let config_json =
             serde_json::to_string(&exported).map_err(|e| anyhow!("serialize config: {e}"))?;
-        settings_sync::upload_settings_payload(&acct_session, &relay_url, &config_json)
-            .await
-            .map_err(|e| anyhow!("upload settings: {e}"))?;
+        await_account_sync_current(
+            generation,
+            settings_sync::upload_settings_payload(&acct_session, &relay_url, &config_json),
+        )
+        .await?
+        .map_err(|e| anyhow!("upload settings: {e}"))?;
         emit_progress("settings_done", 15, None, None, None).await;
         true
     } else {
         emit_progress("downloading_settings", 5, None, None, None).await;
-        let cloud = client
-            .fetch_settings_with_version(&relay_url, &acct_session)
-            .await
-            .map_err(|e| anyhow!("fetch settings: {e}"))?;
+        let cloud = await_account_sync_current(
+            generation,
+            client.fetch_settings_with_version(&relay_url, &acct_session),
+        )
+        .await?
+        .map_err(|e| anyhow!("fetch settings: {e}"))?;
         if let Some(blob) = cloud {
             emit_progress("applying_settings", 10, None, None, None).await;
             // Explicit user choice ("use cloud") — always apply, even when the
             // cursor says this device already has this version.
-            settings_sync::apply_settings_blob(&acct_session, &blob, true)
-                .await
-                .map_err(|e| anyhow!("apply cloud config: {e}"))?;
+            await_account_sync_current(
+                generation,
+                settings_sync::apply_settings_blob(&acct_session, &blob, true),
+            )
+            .await?
+            .map_err(|e| anyhow!("apply cloud config: {e}"))?;
             emit_progress("settings_done", 15, None, None, None).await;
             true
         } else {
@@ -297,6 +317,9 @@ pub(crate) async fn run_auto_sync(
     let mut sync_state_local = sync_state::load(&acct_session.user_id);
     let mut pending_uploads: Vec<(String, String, String)> = Vec::new();
     for meta in local_sessions.iter() {
+        if !account_context_is_current(generation) {
+            return Err(anyhow!("account sync cancelled"));
+        }
         let turns = compatibility
             .load_persisted_session_turns(&storage_path, &meta.session_id, None)
             .await
@@ -337,16 +360,18 @@ pub(crate) async fn run_auto_sync(
             let bundle_json = bundle_json.clone();
             let hash = hash.clone();
             handles.push(tokio::spawn(async move {
-                let result = client
-                    .upload_session(&relay_url, &acct_session, &session_id, &bundle_json)
-                    .await;
+                let result = await_account_sync_current(
+                    generation,
+                    client.upload_session(&relay_url, &acct_session, &session_id, &bundle_json),
+                )
+                .await;
                 (session_id, hash, result)
             }));
         }
         for handle in handles {
             let done_base = chunk_idx * UPLOAD_CONCURRENCY_CHUNK;
             match handle.await {
-                Ok((session_id, hash, Ok(version))) => {
+                Ok((session_id, hash, Ok(Ok(version)))) => {
                     uploaded.push((session_id.clone(), hash, version));
                     let done = uploaded.len();
                     let percent = if upload_total == 0 {
@@ -363,14 +388,18 @@ pub(crate) async fn run_auto_sync(
                     )
                     .await;
                 }
-                Ok((session_id, _, Err(e))) => {
+                Ok((session_id, _, Ok(Err(e)))) => {
                     tracing::warn!("Auto-sync upload {session_id} failed: {e}");
                     let _ = done_base;
                 }
+                Ok((_, _, Err(e))) => return Err(e),
                 Err(e) => {
                     tracing::warn!("Auto-sync upload task join failed: {e}");
                 }
             }
+        }
+        if !account_context_is_current(generation) {
+            return Err(anyhow!("account sync cancelled"));
         }
     }
 

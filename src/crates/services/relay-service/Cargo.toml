@@ -34,7 +34,7 @@ libsqlite3-sys = { version = "0.30", features = ["bundled"] }
 argon2 = "0.5"
 aes-gcm = "0.10"
 bitfun-page-function-runtime = { path = "../page-function-runtime" }
-rusqlite = { version = "0.32", features = ["bundled", "extra_check", "hooks", "limits"] }
+rusqlite = { version = "0.32", features = ["bundled", "hooks", "limits"] }
 
 [dev-dependencies]
 tower = { version = "0.5", features = ["util"] }

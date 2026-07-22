@@ -25,6 +25,7 @@ const LOCAL_ONLY_COMMANDS = new Set([
   'install_update',
   'account_login',
   'account_finalize_login',
+  'account_cancel_pending_login',
   'account_logout',
   'account_status',
   'account_get_credential_hint',

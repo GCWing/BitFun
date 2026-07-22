@@ -26,6 +26,7 @@ import {
   type PageVersionInfo,
   type PageVisibility,
 } from '@/infrastructure/api/service-api/PageAPI';
+import { api } from '@/infrastructure/api/service-api/ApiClient';
 import { remoteConnectAPI } from '@/infrastructure/api/service-api/RemoteConnectAPI';
 import { systemAPI } from '@/infrastructure/api/service-api/SystemAPI';
 import { useI18n } from '@/infrastructure/i18n';
@@ -40,6 +41,19 @@ interface PagesSceneProps {
   isActive?: boolean;
 }
 
+interface PageOwner {
+  userId: string;
+  epoch: number;
+}
+
+interface PageActionLease {
+  slug: string;
+  key: string;
+  token: string;
+  userId: string;
+  ownerEpoch: number;
+}
+
 function errorText(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
@@ -52,6 +66,12 @@ const PagesScene: React.FC<PagesSceneProps> = ({ isActive = true }) => {
   const { t, formatDate, formatNumber } = useI18n('scenes/pages');
   const notification = useNotification();
   const attemptedLoadRef = useRef(false);
+  const pageLoadEpochRef = useRef(0);
+  const pageOwnerRef = useRef<PageOwner | null>(null);
+  const pageOwnerEpochCounterRef = useRef(0);
+  const nextActionTokenRef = useRef(0);
+  const [pageOwnerEpoch, setPageOwnerEpoch] = useState(0);
+  const pagesRef = useRef<PageInfo[]>([]);
   const [pages, setPages] = useState<PageInfo[]>([]);
   const [relayBaseUrl, setRelayBaseUrl] = useState('');
   const [versionsBySlug, setVersionsBySlug] = useState<Record<string, PageVersionInfo[]>>({});
@@ -61,25 +81,146 @@ const PagesScene: React.FC<PagesSceneProps> = ({ isActive = true }) => {
   const [loginRequired, setLoginRequired] = useState(false);
   const [showAccountDialog, setShowAccountDialog] = useState(false);
   const [pendingBySlug, setPendingBySlug] = useState<Record<string, string>>({});
-  const busySlugsRef = useRef<Set<string>>(new Set());
+  const busySlugsRef = useRef<Map<string, string>>(new Map());
   const [titleDrafts, setTitleDrafts] = useState<Record<string, string>>({});
 
-  const beginPageAction = useCallback((slug: string, key: string): boolean => {
-    if (busySlugsRef.current.has(slug)) return false;
-    busySlugsRef.current.add(slug);
-    setPendingBySlug((current) => ({ ...current, [slug]: key }));
-    return true;
+  const cancelPendingPageLoad = useCallback(() => {
+    pageLoadEpochRef.current += 1;
+    setLoading(false);
   }, []);
 
-  const endPageAction = useCallback((slug: string, key: string) => {
-    busySlugsRef.current.delete(slug);
+  const adoptPageOwner = useCallback((
+    userId: string | null,
+    cancelLoads: boolean,
+    forceNewEpoch = false,
+  ): number => {
+    const current = pageOwnerRef.current;
+    if (!forceNewEpoch && (current?.userId ?? null) === userId) {
+      return current?.epoch ?? pageOwnerEpochCounterRef.current;
+    }
+    const epoch = pageOwnerEpochCounterRef.current + 1;
+    pageOwnerEpochCounterRef.current = epoch;
+    pageOwnerRef.current = userId ? { userId, epoch } : null;
+    setPageOwnerEpoch(epoch);
+    if (cancelLoads) pageLoadEpochRef.current += 1;
+    busySlugsRef.current.clear();
+    pagesRef.current = [];
+    setPages([]);
+    setRelayBaseUrl('');
+    setVersionsBySlug({});
+    setExpandedSlugs(new Set());
+    setTitleDrafts({});
+    setPendingBySlug({});
+    setLoadError('');
+    setLoading(false);
+    setLoginRequired(userId === null);
+    return epoch;
+  }, []);
+
+  const updateOwnedPages = useCallback((
+    update: (current: PageInfo[]) => PageInfo[],
+  ) => {
+    const next = update(pagesRef.current);
+    pagesRef.current = next;
+    setPages(next);
+  }, []);
+
+  const commitLoadedPages = useCallback((nextPages: PageInfo[]) => {
+    const previousGenerationBySlug = new Map(
+      pagesRef.current.map((page) => [page.slug, page.generation]),
+    );
+    const nextGenerationBySlug = new Map(
+      nextPages.map((page) => [page.slug, page.generation]),
+    );
+    const canRetainSlugState = (slug: string) => {
+      const previousGeneration = previousGenerationBySlug.get(slug);
+      return previousGeneration !== undefined
+        && previousGeneration === nextGenerationBySlug.get(slug);
+    };
+
+    for (const slug of busySlugsRef.current.keys()) {
+      if (!canRetainSlugState(slug)) busySlugsRef.current.delete(slug);
+    }
+    setVersionsBySlug((current) => Object.fromEntries(
+      Object.entries(current).filter(([slug]) => canRetainSlugState(slug)),
+    ));
+    setExpandedSlugs((current) => new Set(
+      [...current].filter((slug) => canRetainSlugState(slug)),
+    ));
+    setTitleDrafts((current) => Object.fromEntries(
+      Object.entries(current).filter(([slug]) => canRetainSlugState(slug)),
+    ));
+    setPendingBySlug((current) => Object.fromEntries(
+      Object.entries(current).filter(([slug]) => canRetainSlugState(slug)),
+    ));
+    pagesRef.current = nextPages;
+    setPages(nextPages);
+  }, []);
+
+  const isPageActionCurrent = useCallback((lease: PageActionLease): boolean => {
+    const owner = pageOwnerRef.current;
+    return owner?.userId === lease.userId
+      && owner.epoch === lease.ownerEpoch
+      && busySlugsRef.current.get(lease.slug) === lease.token;
+  }, []);
+
+  const endPageAction = useCallback((lease: PageActionLease) => {
+    if (busySlugsRef.current.get(lease.slug) !== lease.token) return;
+    busySlugsRef.current.delete(lease.slug);
     setPendingBySlug((current) => {
-      if (current[slug] !== key) return current;
+      if (current[lease.slug] !== lease.key) return current;
       const next = { ...current };
-      delete next[slug];
+      delete next[lease.slug];
       return next;
     });
   }, []);
+
+  const beginPageAction = useCallback(async (
+    page: PageInfo,
+    key: string,
+    expectedOwnerEpoch: number,
+  ): Promise<PageActionLease | null> => {
+    const owner = pageOwnerRef.current;
+    if (!owner || owner.epoch !== expectedOwnerEpoch || busySlugsRef.current.has(page.slug)) {
+      return null;
+    }
+    const token = `${owner.epoch}:${nextActionTokenRef.current += 1}`;
+    const lease: PageActionLease = {
+      slug: page.slug,
+      key,
+      token,
+      userId: owner.userId,
+      ownerEpoch: owner.epoch,
+    };
+    // A list response captured before this mutation must never overwrite the
+    // operation's newer result when it eventually arrives.
+    cancelPendingPageLoad();
+    busySlugsRef.current.set(page.slug, token);
+    setPendingBySlug((current) => ({ ...current, [page.slug]: key }));
+    const status = await remoteConnectAPI.accountStatus().catch(() => null);
+    if (!status?.logged_in || status.user_id !== owner.userId || !isPageActionCurrent(lease)) {
+      if (status) {
+        adoptPageOwner(status.logged_in ? status.user_id : null, true);
+        attemptedLoadRef.current = !status.logged_in;
+      }
+      endPageAction(lease);
+      return null;
+    }
+    return lease;
+  }, [adoptPageOwner, cancelPendingPageLoad, endPageAction, isPageActionCurrent]);
+
+  const validatePageAction = useCallback(async (lease: PageActionLease): Promise<boolean> => {
+    if (!isPageActionCurrent(lease)) return false;
+    const status = await remoteConnectAPI.accountStatus().catch(() => null);
+    if (!status?.logged_in || status.user_id !== lease.userId || !isPageActionCurrent(lease)) {
+      if (status) {
+        adoptPageOwner(status.logged_in ? status.user_id : null, true);
+        attemptedLoadRef.current = !status.logged_in;
+      }
+      return false;
+    }
+    return true;
+  }, [adoptPageOwner, isPageActionCurrent]);
 
   const visibilityOptions = useMemo<SelectOption[]>(() => [
     { value: 'private', label: t('visibility.private') },
@@ -111,36 +252,65 @@ const PagesScene: React.FC<PagesSceneProps> = ({ isActive = true }) => {
   ), [formatDate]);
 
   const loadPages = useCallback(async () => {
+    if (busySlugsRef.current.size > 0) return;
+    const requestEpoch = pageLoadEpochRef.current + 1;
+    pageLoadEpochRef.current = requestEpoch;
     attemptedLoadRef.current = true;
     setLoading(true);
     setLoadError('');
     setLoginRequired(false);
+    let requestedUserId: string | null = null;
     try {
       const status = await remoteConnectAPI.accountStatus();
-      if (!status.logged_in) {
-        setPages([]);
+      if (pageLoadEpochRef.current !== requestEpoch) return;
+      requestedUserId = status.user_id;
+      if (!status.logged_in || !status.user_id) {
+        adoptPageOwner(null, false);
         setLoginRequired(true);
         return;
       }
+      const ownerEpoch = adoptPageOwner(status.user_id, false);
       const [nextPages, hint] = await Promise.all([
         pageAPI.listPages(),
         remoteConnectAPI.accountGetCredentialHint().catch(() => null),
       ]);
-      setPages(nextPages);
+      const latestStatus = await remoteConnectAPI.accountStatus().catch(() => null);
+      if (pageLoadEpochRef.current !== requestEpoch) return;
+      if (!latestStatus?.logged_in || latestStatus.user_id !== status.user_id) {
+        // The account changed while this relay request was in flight. Leave
+        // ownership of the UI to a fresh request for the new account.
+        adoptPageOwner(latestStatus?.logged_in ? latestStatus.user_id : null, true);
+        attemptedLoadRef.current = !latestStatus?.logged_in;
+        return;
+      }
+      const currentOwner = pageOwnerRef.current;
+      if (currentOwner?.userId !== status.user_id || currentOwner.epoch !== ownerEpoch) return;
+      commitLoadedPages(nextPages);
       setRelayBaseUrl(hint?.relay_url?.replace(/\/$/, '') ?? '');
     } catch (error) {
+      if (pageLoadEpochRef.current !== requestEpoch) return;
       log.error('Failed to load published Pages', { error });
       const latestStatus = await remoteConnectAPI.accountStatus().catch(() => null);
+      if (pageLoadEpochRef.current !== requestEpoch) return;
+      if (requestedUserId !== null
+        && latestStatus?.logged_in
+        && latestStatus.user_id !== requestedUserId) {
+        adoptPageOwner(latestStatus.user_id, true);
+        attemptedLoadRef.current = false;
+        return;
+      }
       if (latestStatus && !latestStatus.logged_in) {
-        setPages([]);
+        adoptPageOwner(null, true);
         setLoginRequired(true);
         return;
       }
       setLoadError(errorText(error));
     } finally {
-      setLoading(false);
+      if (pageLoadEpochRef.current === requestEpoch) {
+        setLoading(false);
+      }
     }
-  }, []);
+  }, [adoptPageOwner, commitLoadedPages]);
 
   useEffect(() => {
     if (isActive && !attemptedLoadRef.current && !loading) {
@@ -148,57 +318,93 @@ const PagesScene: React.FC<PagesSceneProps> = ({ isActive = true }) => {
     }
   }, [isActive, loadPages, loading]);
 
-  const loadVersions = useCallback(async (slug: string) => {
-    const key = `versions:${slug}`;
-    if (!beginPageAction(slug, key)) return;
+  useEffect(() => {
+    const unlisten = api.listen<{ logged_in: boolean }>(
+      'account://login-state',
+      (payload) => {
+        const loggedIn = payload?.logged_in === true;
+        // The event intentionally carries no user id. Treat every transition,
+        // including a same-user re-login, as a new ownership generation before
+        // doing any asynchronous status lookup. This immediately removes data
+        // and actions owned by the previous authenticated session.
+        adoptPageOwner(null, true, true);
+        attemptedLoadRef.current = !loggedIn;
+        if (loggedIn && isActive) {
+          void loadPages();
+        }
+      },
+    );
+    return unlisten;
+  }, [adoptPageOwner, isActive, loadPages]);
+
+  const loadVersions = useCallback(async (page: PageInfo, ownerEpoch: number) => {
+    const key = `versions:${page.slug}`;
+    const lease = await beginPageAction(page, key, ownerEpoch);
+    if (!lease) return;
     try {
-      const versions = await pageAPI.listVersions(slug);
-      setVersionsBySlug((current) => ({ ...current, [slug]: versions }));
+      const versions = await pageAPI.listVersions(page.slug, page.generation);
+      if (!await validatePageAction(lease)) return;
+      setVersionsBySlug((current) => ({ ...current, [page.slug]: versions }));
     } catch (error) {
-      log.error('Failed to load Page versions', { slug, error });
+      if (!await validatePageAction(lease)) return;
+      log.error('Failed to load Page versions', { slug: page.slug, error });
       notification.error(t('notifications.versionsLoadFailed', { error: errorText(error) }));
       throw error;
     } finally {
-      endPageAction(slug, key);
+      endPageAction(lease);
     }
-  }, [beginPageAction, endPageAction, notification, t]);
+  }, [beginPageAction, endPageAction, notification, t, validatePageAction]);
 
-  const toggleVersions = useCallback(async (slug: string) => {
-    if (expandedSlugs.has(slug)) {
+  const toggleVersions = useCallback(async (page: PageInfo, ownerEpoch: number) => {
+    if (expandedSlugs.has(page.slug)) {
       setExpandedSlugs((current) => {
         const next = new Set(current);
-        next.delete(slug);
+        next.delete(page.slug);
         return next;
       });
       return;
     }
-    if (!versionsBySlug[slug]) {
+    if (!versionsBySlug[page.slug]) {
       try {
-        await loadVersions(slug);
+        await loadVersions(page, ownerEpoch);
       } catch {
         return;
       }
     }
-    setExpandedSlugs((current) => new Set(current).add(slug));
+    if (pageOwnerRef.current?.epoch === ownerEpoch) {
+      setExpandedSlugs((current) => new Set(current).add(page.slug));
+    }
   }, [expandedSlugs, loadVersions, versionsBySlug]);
 
-  const openPage = useCallback(async (page: PageInfo, versionId?: string) => {
+  const openPage = useCallback(async (
+    page: PageInfo,
+    ownerEpoch: number,
+    versionId?: string,
+  ) => {
     const key = `open:${page.slug}:${versionId ?? 'production'}`;
-    if (!beginPageAction(page.slug, key)) return;
+    const lease = await beginPageAction(page, key, ownerEpoch);
+    if (!lease) return;
     try {
-      const link = await pageAPI.createOpenLink(page.slug, versionId);
+      const link = await pageAPI.createOpenLink(page.slug, page.generation, versionId);
+      if (!await validatePageAction(lease)) return;
       await systemAPI.openExternal(link.open_url);
     } catch (error) {
+      if (!await validatePageAction(lease)) return;
       log.error('Failed to open Page', { slug: page.slug, versionId, error });
       notification.error(t('notifications.openFailed', { error: errorText(error) }));
     } finally {
-      endPageAction(page.slug, key);
+      endPageAction(lease);
     }
-  }, [beginPageAction, endPageAction, notification, t]);
+  }, [beginPageAction, endPageAction, notification, t, validatePageAction]);
 
-  const copyPageLink = useCallback(async (page: PageInfo, version?: PageVersionInfo) => {
+  const copyPageLink = useCallback(async (
+    page: PageInfo,
+    ownerEpoch: number,
+    version?: PageVersionInfo,
+  ) => {
     const key = `copy:${page.slug}:${version?.version_id ?? 'production'}`;
-    if (!beginPageAction(page.slug, key)) return;
+    const lease = await beginPageAction(page, key, ownerEpoch);
+    if (!lease) return;
     try {
       let url = '';
       let temporary = false;
@@ -206,15 +412,21 @@ const PagesScene: React.FC<PagesSceneProps> = ({ isActive = true }) => {
       if (page.visibility === 'public' && relayBaseUrl && path) {
         url = `${relayBaseUrl}${path.startsWith('/') ? '' : '/'}${path}`;
       } else {
-        const link = await pageAPI.createOpenLink(page.slug, version?.version_id);
+        const link = await pageAPI.createOpenLink(
+          page.slug,
+          page.generation,
+          version?.version_id,
+        );
         url = link.open_url;
         temporary = true;
       }
+      if (!await validatePageAction(lease)) return;
       await systemAPI.setClipboard(url);
       notification.success(temporary
         ? t('notifications.temporaryLinkCopied')
         : t('notifications.linkCopied'));
     } catch (error) {
+      if (!await validatePageAction(lease)) return;
       log.error('Failed to copy Page link', {
         slug: page.slug,
         versionId: version?.version_id,
@@ -222,11 +434,15 @@ const PagesScene: React.FC<PagesSceneProps> = ({ isActive = true }) => {
       });
       notification.error(t('notifications.copyFailed', { error: errorText(error) }));
     } finally {
-      endPageAction(page.slug, key);
+      endPageAction(lease);
     }
-  }, [beginPageAction, endPageAction, notification, relayBaseUrl, t]);
+  }, [beginPageAction, endPageAction, notification, relayBaseUrl, t, validatePageAction]);
 
-  const changeVisibility = useCallback(async (page: PageInfo, visibility: PageVisibility) => {
+  const changeVisibility = useCallback(async (
+    page: PageInfo,
+    ownerEpoch: number,
+    visibility: PageVisibility,
+  ) => {
     if (visibility === page.visibility) return;
     const confirmed = await confirmWarning(
       t('confirm.visibilityTitle'),
@@ -239,40 +455,50 @@ const PagesScene: React.FC<PagesSceneProps> = ({ isActive = true }) => {
     );
     if (!confirmed) return;
     const key = `visibility:${page.slug}`;
-    if (!beginPageAction(page.slug, key)) return;
+    const lease = await beginPageAction(page, key, ownerEpoch);
+    if (!lease) return;
     try {
-      const updated = await pageAPI.update(page.slug, { visibility });
-      setPages((current) => replacePage(current, updated));
+      const updated = await pageAPI.update(page.slug, page.generation, { visibility });
+      if (!await validatePageAction(lease)) return;
+      updateOwnedPages((current) => replacePage(current, updated));
       notification.success(t('notifications.visibilityUpdated', {
         visibility: visibilityLabel(visibility),
       }));
     } catch (error) {
+      if (!await validatePageAction(lease)) return;
       log.error('Failed to update Page visibility', { slug: page.slug, visibility, error });
       notification.error(t('notifications.visibilityFailed', { error: errorText(error) }));
     } finally {
-      endPageAction(page.slug, key);
+      endPageAction(lease);
     }
-  }, [beginPageAction, endPageAction, notification, t, visibilityLabel]);
+  }, [beginPageAction, endPageAction, notification, t, updateOwnedPages, validatePageAction, visibilityLabel]);
 
-  const saveTitle = useCallback(async (page: PageInfo) => {
+  const saveTitle = useCallback(async (page: PageInfo, ownerEpoch: number) => {
     const title = (titleDrafts[page.slug] ?? page.title).trim();
     if (!title || title === page.title) return;
     const key = `title:${page.slug}`;
-    if (!beginPageAction(page.slug, key)) return;
+    const lease = await beginPageAction(page, key, ownerEpoch);
+    if (!lease) return;
     try {
-      const updated = await pageAPI.update(page.slug, { title });
-      setPages((current) => replacePage(current, updated));
+      const updated = await pageAPI.update(page.slug, page.generation, { title });
+      if (!await validatePageAction(lease)) return;
+      updateOwnedPages((current) => replacePage(current, updated));
       setTitleDrafts((current) => ({ ...current, [page.slug]: updated.title }));
       notification.success(t('notifications.titleUpdated'));
     } catch (error) {
+      if (!await validatePageAction(lease)) return;
       log.error('Failed to update Page title', { slug: page.slug, error });
       notification.error(t('notifications.titleFailed', { error: errorText(error) }));
     } finally {
-      endPageAction(page.slug, key);
+      endPageAction(lease);
     }
-  }, [beginPageAction, endPageAction, notification, t, titleDrafts]);
+  }, [beginPageAction, endPageAction, notification, t, titleDrafts, updateOwnedPages, validatePageAction]);
 
-  const deployVersion = useCallback(async (page: PageInfo, version: PageVersionInfo) => {
+  const deployVersion = useCallback(async (
+    page: PageInfo,
+    ownerEpoch: number,
+    version: PageVersionInfo,
+  ) => {
     if (version.deployed) return;
     const confirmed = await confirmWarning(
       t('confirm.deployTitle'),
@@ -285,10 +511,12 @@ const PagesScene: React.FC<PagesSceneProps> = ({ isActive = true }) => {
     );
     if (!confirmed) return;
     const key = `deploy:${page.slug}:${version.version_id}`;
-    if (!beginPageAction(page.slug, key)) return;
+    const lease = await beginPageAction(page, key, ownerEpoch);
+    if (!lease) return;
     try {
-      const updated = await pageAPI.deploy(page.slug, version.version_id);
-      setPages((current) => replacePage(current, updated));
+      const updated = await pageAPI.deploy(page.slug, page.generation, version.version_id);
+      if (!await validatePageAction(lease)) return;
+      updateOwnedPages((current) => replacePage(current, updated));
       setVersionsBySlug((current) => ({
         ...current,
         [page.slug]: (current[page.slug] ?? []).map((item) => ({
@@ -298,6 +526,7 @@ const PagesScene: React.FC<PagesSceneProps> = ({ isActive = true }) => {
       }));
       notification.success(t('notifications.deployed', { version: version.version_id }));
     } catch (error) {
+      if (!await validatePageAction(lease)) return;
       log.error('Failed to deploy Page version', {
         slug: page.slug,
         versionId: version.version_id,
@@ -305,11 +534,11 @@ const PagesScene: React.FC<PagesSceneProps> = ({ isActive = true }) => {
       });
       notification.error(t('notifications.deployFailed', { error: errorText(error) }));
     } finally {
-      endPageAction(page.slug, key);
+      endPageAction(lease);
     }
-  }, [beginPageAction, endPageAction, notification, t]);
+  }, [beginPageAction, endPageAction, notification, t, updateOwnedPages, validatePageAction]);
 
-  const unpublishPage = useCallback(async (page: PageInfo) => {
+  const unpublishPage = useCallback(async (page: PageInfo, ownerEpoch: number) => {
     if (!page.deployed_version_id) return;
     const confirmed = await confirmWarning(
       t('confirm.unpublishTitle'),
@@ -321,10 +550,12 @@ const PagesScene: React.FC<PagesSceneProps> = ({ isActive = true }) => {
     );
     if (!confirmed) return;
     const key = `unpublish:${page.slug}`;
-    if (!beginPageAction(page.slug, key)) return;
+    const lease = await beginPageAction(page, key, ownerEpoch);
+    if (!lease) return;
     try {
-      await pageAPI.unpublish(page.slug);
-      setPages((current) => current.map((item) => (
+      await pageAPI.unpublish(page.slug, page.generation);
+      if (!await validatePageAction(lease)) return;
+      updateOwnedPages((current) => current.map((item) => (
         item.slug === page.slug ? { ...item, deployed_version_id: null } : item
       )));
       setVersionsBySlug((current) => ({
@@ -333,14 +564,19 @@ const PagesScene: React.FC<PagesSceneProps> = ({ isActive = true }) => {
       }));
       notification.success(t('notifications.unpublished'));
     } catch (error) {
+      if (!await validatePageAction(lease)) return;
       log.error('Failed to unpublish Page', { slug: page.slug, error });
       notification.error(t('notifications.unpublishFailed', { error: errorText(error) }));
     } finally {
-      endPageAction(page.slug, key);
+      endPageAction(lease);
     }
-  }, [beginPageAction, endPageAction, notification, t]);
+  }, [beginPageAction, endPageAction, notification, t, updateOwnedPages, validatePageAction]);
 
-  const deleteVersion = useCallback(async (page: PageInfo, version: PageVersionInfo) => {
+  const deleteVersion = useCallback(async (
+    page: PageInfo,
+    ownerEpoch: number,
+    version: PageVersionInfo,
+  ) => {
     if (version.deployed) return;
     const confirmed = await confirmDanger(
       t('confirm.deleteVersionTitle'),
@@ -349,9 +585,11 @@ const PagesScene: React.FC<PagesSceneProps> = ({ isActive = true }) => {
     );
     if (!confirmed) return;
     const key = `delete-version:${page.slug}:${version.version_id}`;
-    if (!beginPageAction(page.slug, key)) return;
+    const lease = await beginPageAction(page, key, ownerEpoch);
+    if (!lease) return;
     try {
-      await pageAPI.deleteVersion(page.slug, version.version_id);
+      await pageAPI.deleteVersion(page.slug, page.generation, version.version_id);
+      if (!await validatePageAction(lease)) return;
       setVersionsBySlug((current) => ({
         ...current,
         [page.slug]: (current[page.slug] ?? [])
@@ -359,6 +597,7 @@ const PagesScene: React.FC<PagesSceneProps> = ({ isActive = true }) => {
       }));
       notification.success(t('notifications.versionDeleted'));
     } catch (error) {
+      if (!await validatePageAction(lease)) return;
       log.error('Failed to delete Page version', {
         slug: page.slug,
         versionId: version.version_id,
@@ -366,11 +605,11 @@ const PagesScene: React.FC<PagesSceneProps> = ({ isActive = true }) => {
       });
       notification.error(t('notifications.versionDeleteFailed', { error: errorText(error) }));
     } finally {
-      endPageAction(page.slug, key);
+      endPageAction(lease);
     }
-  }, [beginPageAction, endPageAction, notification, t]);
+  }, [beginPageAction, endPageAction, notification, t, validatePageAction]);
 
-  const deletePage = useCallback(async (page: PageInfo) => {
+  const deletePage = useCallback(async (page: PageInfo, ownerEpoch: number) => {
     const confirmed = await confirmDanger(
       t('confirm.deletePageTitle'),
       t('confirm.deletePageMessage', { title: page.title, slug: page.slug }),
@@ -378,10 +617,12 @@ const PagesScene: React.FC<PagesSceneProps> = ({ isActive = true }) => {
     );
     if (!confirmed) return;
     const key = `delete-page:${page.slug}`;
-    if (!beginPageAction(page.slug, key)) return;
+    const lease = await beginPageAction(page, key, ownerEpoch);
+    if (!lease) return;
     try {
-      await pageAPI.deletePage(page.slug);
-      setPages((current) => current.filter((item) => item.slug !== page.slug));
+      await pageAPI.deletePage(page.slug, page.generation);
+      if (!await validatePageAction(lease)) return;
+      updateOwnedPages((current) => current.filter((item) => item.slug !== page.slug));
       setVersionsBySlug((current) => {
         const next = { ...current };
         delete next[page.slug];
@@ -389,19 +630,20 @@ const PagesScene: React.FC<PagesSceneProps> = ({ isActive = true }) => {
       });
       notification.success(t('notifications.pageDeleted'));
     } catch (error) {
+      if (!await validatePageAction(lease)) return;
       log.error('Failed to delete Page', { slug: page.slug, error });
       notification.error(t('notifications.pageDeleteFailed', { error: errorText(error) }));
     } finally {
-      endPageAction(page.slug, key);
+      endPageAction(lease);
     }
-  }, [beginPageAction, endPageAction, notification, t]);
+  }, [beginPageAction, endPageAction, notification, t, updateOwnedPages, validatePageAction]);
 
   const refreshButton = (
     <Button
       variant="secondary"
       size="small"
       onClick={() => void loadPages()}
-      disabled={loading}
+      disabled={loading || Object.keys(pendingBySlug).length > 0}
     >
       <RefreshCw size={14} className={loading ? 'pages-scene__spinning' : undefined} />
       {t('actions.refresh')}
@@ -415,6 +657,16 @@ const PagesScene: React.FC<PagesSceneProps> = ({ isActive = true }) => {
         subtitle={t('subtitle')}
         actions={refreshButton}
       />
+
+      {loadError && pages.length > 0 && (
+        <div className="pages-scene__refresh-error" role="alert" data-testid="pages-refresh-error">
+          <span>{t('loadFailed')}</span>
+          <small>{loadError}</small>
+          <Button variant="secondary" size="small" onClick={() => void loadPages()}>
+            {t('actions.retry')}
+          </Button>
+        </div>
+      )}
 
       {loading && pages.length === 0 ? (
         <GalleryEmpty
@@ -482,12 +734,15 @@ const PagesScene: React.FC<PagesSceneProps> = ({ isActive = true }) => {
                       value={titleDraft}
                       maxLength={120}
                       disabled={pageBusy}
-                      onChange={(event) => setTitleDrafts((current) => ({
-                        ...current,
-                        [page.slug]: event.currentTarget.value,
-                      }))}
+                      onChange={(event) => {
+                        const value = event.currentTarget.value;
+                        setTitleDrafts((current) => ({
+                          ...current,
+                          [page.slug]: value,
+                        }));
+                      }}
                       onKeyDown={(event) => {
-                        if (event.key === 'Enter') void saveTitle(page);
+                        if (event.key === 'Enter') void saveTitle(page, pageOwnerEpoch);
                       }}
                       aria-label={t('titleField.inputAria', { slug: page.slug })}
                     />
@@ -496,7 +751,7 @@ const PagesScene: React.FC<PagesSceneProps> = ({ isActive = true }) => {
                       size="small"
                       disabled={pageBusy || !titleDraft.trim() || titleDraft.trim() === page.title}
                       isLoading={pendingAction === `title:${page.slug}`}
-                      onClick={() => void saveTitle(page)}
+                      onClick={() => void saveTitle(page, pageOwnerEpoch)}
                     >
                       <Save size={13} /> {t('actions.saveTitle')}
                     </Button>
@@ -510,7 +765,11 @@ const PagesScene: React.FC<PagesSceneProps> = ({ isActive = true }) => {
                     value={page.visibility}
                     options={visibilityOptions}
                     disabled={pageBusy}
-                    onChange={(value) => void changeVisibility(page, String(value) as PageVisibility)}
+                    onChange={(value) => void changeVisibility(
+                      page,
+                      pageOwnerEpoch,
+                      String(value) as PageVisibility,
+                    )}
                     triggerAriaLabel={t('visibility.changeAria', { title: page.title || page.slug })}
                   />
                 </div>
@@ -520,7 +779,7 @@ const PagesScene: React.FC<PagesSceneProps> = ({ isActive = true }) => {
                     <Button
                       variant="secondary"
                       size="small"
-                      onClick={() => void openPage(page)}
+                      onClick={() => void openPage(page, pageOwnerEpoch)}
                       disabled={pageBusy}
                       isLoading={pendingAction === `open:${page.slug}:production`}
                     >
@@ -531,7 +790,7 @@ const PagesScene: React.FC<PagesSceneProps> = ({ isActive = true }) => {
                     <Button
                       variant="ghost"
                       size="small"
-                      onClick={() => void unpublishPage(page)}
+                      onClick={() => void unpublishPage(page, pageOwnerEpoch)}
                       disabled={pageBusy}
                       isLoading={pendingAction === `unpublish:${page.slug}`}
                     >
@@ -542,7 +801,7 @@ const PagesScene: React.FC<PagesSceneProps> = ({ isActive = true }) => {
                     <Button
                       variant="ghost"
                       size="small"
-                      onClick={() => void copyPageLink(page)}
+                      onClick={() => void copyPageLink(page, pageOwnerEpoch)}
                       disabled={pageBusy}
                       isLoading={pendingAction === `copy:${page.slug}:production`}
                     >
@@ -552,7 +811,7 @@ const PagesScene: React.FC<PagesSceneProps> = ({ isActive = true }) => {
                   <Button
                     variant="ghost"
                     size="small"
-                    onClick={() => void toggleVersions(page.slug)}
+                    onClick={() => void toggleVersions(page, pageOwnerEpoch)}
                     disabled={pageBusy}
                     isLoading={pendingAction === `versions:${page.slug}`}
                     aria-expanded={expanded}
@@ -563,7 +822,7 @@ const PagesScene: React.FC<PagesSceneProps> = ({ isActive = true }) => {
                   <Button
                     variant="danger"
                     size="small"
-                    onClick={() => void deletePage(page)}
+                    onClick={() => void deletePage(page, pageOwnerEpoch)}
                     disabled={pageBusy}
                     isLoading={pendingAction === `delete-page:${page.slug}`}
                   >
@@ -579,7 +838,7 @@ const PagesScene: React.FC<PagesSceneProps> = ({ isActive = true }) => {
                         variant="ghost"
                         size="small"
                         disabled={pageBusy}
-                        onClick={() => void loadVersions(page.slug)}
+                        onClick={() => void loadVersions(page, pageOwnerEpoch)}
                       >
                         <RefreshCw size={12} /> {t('actions.refresh')}
                       </Button>
@@ -605,7 +864,7 @@ const PagesScene: React.FC<PagesSceneProps> = ({ isActive = true }) => {
                           <Button
                             variant="ghost"
                             size="small"
-                            onClick={() => void openPage(page, version.version_id)}
+                            onClick={() => void openPage(page, pageOwnerEpoch, version.version_id)}
                             disabled={pageBusy}
                             isLoading={pendingAction === `open:${page.slug}:${version.version_id}`}
                             aria-label={t('actions.openVersionAria', { version: version.version_id })}
@@ -615,7 +874,7 @@ const PagesScene: React.FC<PagesSceneProps> = ({ isActive = true }) => {
                           <Button
                             variant="ghost"
                             size="small"
-                            onClick={() => void copyPageLink(page, version)}
+                            onClick={() => void copyPageLink(page, pageOwnerEpoch, version)}
                             disabled={pageBusy}
                             isLoading={pendingAction === `copy:${page.slug}:${version.version_id}`}
                             aria-label={t('actions.copyVersionAria', { version: version.version_id })}
@@ -626,7 +885,7 @@ const PagesScene: React.FC<PagesSceneProps> = ({ isActive = true }) => {
                             <Button
                               variant="secondary"
                               size="small"
-                              onClick={() => void deployVersion(page, version)}
+                              onClick={() => void deployVersion(page, pageOwnerEpoch, version)}
                               disabled={pageBusy}
                               isLoading={pendingAction === `deploy:${page.slug}:${version.version_id}`}
                             >
@@ -637,7 +896,7 @@ const PagesScene: React.FC<PagesSceneProps> = ({ isActive = true }) => {
                             <Button
                               variant="danger"
                               size="small"
-                              onClick={() => void deleteVersion(page, version)}
+                              onClick={() => void deleteVersion(page, pageOwnerEpoch, version)}
                               disabled={pageBusy}
                               isLoading={pendingAction === `delete-version:${page.slug}:${version.version_id}`}
                               aria-label={t('actions.deleteVersionAria', { version: version.version_id })}

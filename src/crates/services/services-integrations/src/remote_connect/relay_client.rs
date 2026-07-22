@@ -35,6 +35,8 @@ pub fn ensure_rustls_crypto_provider() {
 type WsStream =
     tokio_tungstenite::WebSocketStream<tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>>;
 
+const RELAY_DIAL_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(15);
+
 /// Messages in the relay protocol (both directions).
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
@@ -566,38 +568,93 @@ async fn dial(ws_url: &str) -> Result<WsStream> {
 
     #[cfg(windows)]
     {
-        let request = ws_url
-            .into_client_request()
-            .map_err(|e| anyhow!("dial {ws_url}: build request failed: {e}"))?;
+        await_dial(ws_url, async move {
+            let request = ws_url
+                .into_client_request()
+                .map_err(|e| anyhow!("dial {ws_url}: build request failed: {e}"))?;
 
-        // Wrap TLS connector construction in catch_unwind so that a panic
-        // (e.g. duplicate CryptoProvider install) is converted to an error
-        // instead of unwinding the tokio task and potentially crashing the
-        // process.
-        let connector = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-            build_windows_rustls_connector()
-        }))
-        .map_err(|_| anyhow!("dial {ws_url}: TLS connector construction panicked"))??;
+            // Wrap TLS connector construction in catch_unwind so that a panic
+            // (e.g. duplicate CryptoProvider install) is converted to an error
+            // instead of unwinding the tokio task and potentially crashing the
+            // process.
+            let connector = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                build_windows_rustls_connector()
+            }))
+            .map_err(|_| anyhow!("dial {ws_url}: TLS connector construction panicked"))??;
 
-        let (stream, _) = tokio_tungstenite::connect_async_tls_with_config(
-            request,
-            Some(config),
-            false,
-            Some(connector),
-        )
+            let (stream, _) = tokio_tungstenite::connect_async_tls_with_config(
+                request,
+                Some(config),
+                false,
+                Some(connector),
+            )
+            .await
+            .map_err(|e| anyhow!("dial {ws_url}: {e}"))?;
+            Ok(stream)
+        })
         .await
-        .map_err(|e| anyhow!("dial {ws_url}: {e}"))?;
-        Ok(stream)
     }
 
     #[cfg(not(windows))]
     {
         // Non-Windows uses tokio-tungstenite's built-in rustls connector.
         // CryptoProvider must already be installed (see ensure_rustls_crypto_provider).
-        let (stream, _) = tokio_tungstenite::connect_async_with_config(ws_url, Some(config), false)
-            .await
-            .map_err(|e| anyhow!("dial {ws_url}: {e}"))?;
-        Ok(stream)
+        await_dial(ws_url, async move {
+            let (stream, _) =
+                tokio_tungstenite::connect_async_with_config(ws_url, Some(config), false)
+                    .await
+                    .map_err(|e| anyhow!("dial {ws_url}: {e}"))?;
+            Ok(stream)
+        })
+        .await
+    }
+}
+
+async fn await_dial<T, F>(ws_url: &str, dial_future: F) -> Result<T>
+where
+    F: std::future::Future<Output = Result<T>>,
+{
+    tokio::time::timeout(RELAY_DIAL_TIMEOUT, dial_future)
+        .await
+        .map_err(|_| {
+            anyhow!(
+                "dial {ws_url}: connection timed out after {} seconds",
+                RELAY_DIAL_TIMEOUT.as_secs()
+            )
+        })?
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test(start_paused = true)]
+    async fn dial_timeout_bounds_a_pending_connection_attempt() {
+        let result = await_dial(
+            "wss://relay.example.invalid/ws",
+            std::future::pending::<Result<()>>(),
+        )
+        .await;
+
+        let error = result.expect_err("pending dial must be bounded by the connection timeout");
+        assert_eq!(
+            error.to_string(),
+            "dial wss://relay.example.invalid/ws: connection timed out after 15 seconds"
+        );
+    }
+
+    #[tokio::test]
+    async fn dial_timeout_preserves_connection_errors() {
+        let result = await_dial::<(), _>(
+            "wss://relay.example.invalid/ws",
+            std::future::ready(Err(anyhow!("dial failed before timeout"))),
+        )
+        .await;
+
+        assert_eq!(
+            result.expect_err("dial error must be returned").to_string(),
+            "dial failed before timeout"
+        );
     }
 }
 

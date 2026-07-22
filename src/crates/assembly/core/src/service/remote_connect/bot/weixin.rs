@@ -24,7 +24,9 @@ use super::command_router::{
     parse_command, welcome_message, BotChatState, BotInteractionHandler, BotInteractiveRequest,
     BotMessageSender, HandleResult,
 };
-use super::{load_bot_persistence, save_bot_persistence, BotConfig, SavedBotConnection};
+use super::{
+    load_bot_persistence, update_bot_persistence, BotConfig, BotRuntimeFence, SavedBotConnection,
+};
 use crate::service::remote_connect::remote_server::ImageAttachment;
 
 const LONG_POLL_TIMEOUT_SECS: u64 = 36;
@@ -39,6 +41,7 @@ pub struct WeixinBot {
     pending_pairings: Arc<RwLock<HashMap<String, PendingPairing>>>,
     chat_states: Arc<RwLock<HashMap<String, BotChatState>>>,
     context_tokens: Arc<RwLock<HashMap<String, String>>>,
+    runtime_fence: BotRuntimeFence,
 }
 
 pub async fn weixin_qr_start(base_url_override: Option<String>) -> Result<WeixinQrStartResponse> {
@@ -54,19 +57,54 @@ pub async fn weixin_qr_poll(
 
 impl WeixinBot {
     pub fn new(config: WeixinConfig) -> Self {
+        Self::new_fenced(config, BotRuntimeFence::standalone())
+    }
+
+    pub(crate) fn new_fenced(config: WeixinConfig, runtime_fence: BotRuntimeFence) -> Self {
         Self {
             api: Arc::new(WeixinProviderClient::new(config)),
             pending_pairings: Arc::new(RwLock::new(HashMap::new())),
             chat_states: Arc::new(RwLock::new(HashMap::new())),
             context_tokens: Arc::new(RwLock::new(HashMap::new())),
+            runtime_fence,
         }
     }
 
-    pub async fn restore_chat_state(&self, peer_id: &str, state: BotChatState) {
-        self.chat_states
-            .write()
-            .await
-            .insert(peer_id.to_string(), state);
+    pub async fn restore_chat_state(&self, peer_id: &str, mut state: BotChatState) {
+        state.prepare_for_restore();
+        let mut states = self.chat_states.write().await;
+        self.runtime_fence.reconcile_states(&mut states);
+        states.insert(peer_id.to_string(), state);
+        let restored = states
+            .get(peer_id)
+            .cloned()
+            .expect("restored Weixin state should exist");
+        drop(states);
+        self.persist_chat_state(peer_id, &restored).await;
+    }
+
+    pub async fn clear_delegated_identities(&self) {
+        match tokio::time::timeout(
+            std::time::Duration::from_millis(100),
+            self.chat_states.write(),
+        )
+        .await
+        {
+            Ok(mut states) => {
+                self.runtime_fence.clear_states(&mut states);
+                let snapshots: Vec<_> = states
+                    .iter()
+                    .map(|(peer_id, state)| (peer_id.clone(), state.clone()))
+                    .collect();
+                drop(states);
+                for (peer_id, state) in snapshots {
+                    self.persist_chat_state(&peer_id, &state).await;
+                }
+            }
+            Err(_) => {
+                warn!("Weixin account identity clear deferred behind an in-flight command");
+            }
+        }
     }
 
     pub async fn register_pairing(&self, pairing_code: &str) -> Result<()> {
@@ -244,9 +282,9 @@ impl WeixinBot {
     }
 
     async fn persist_chat_state(&self, peer_id: &str, state: &BotChatState) {
-        let config = self.api.config();
-        let mut data = load_bot_persistence();
-        data.upsert(SavedBotConnection {
+        let config = self.api.config().clone();
+        let snapshot = self.runtime_fence.persistence_snapshot(state);
+        let connection = SavedBotConnection {
             bot_type: "weixin".to_string(),
             chat_id: peer_id.to_string(),
             config: BotConfig::Weixin {
@@ -254,10 +292,12 @@ impl WeixinBot {
                 base_url: config.base_url.clone(),
                 bot_account_id: config.bot_account_id.clone(),
             },
-            chat_state: state.clone(),
+            chat_state: snapshot,
             connected_at: chrono::Utc::now().timestamp(),
+        };
+        self.runtime_fence.commit_if_current(|| {
+            update_bot_persistence(|data| data.upsert(connection));
         });
-        save_bot_persistence(&data);
     }
 
     pub async fn wait_for_pairing(
@@ -339,11 +379,17 @@ impl WeixinBot {
                         if self.verify_pairing_code(&text).await {
                             info!("Weixin pairing successful peer={peer}");
                             let mut state = BotChatState::new(peer.clone());
+                            let identity_epoch = self.runtime_fence.identity_epoch();
                             let result = complete_im_bot_pairing(&mut state).await;
-                            self.chat_states
-                                .write()
-                                .await
-                                .insert(peer.clone(), state.clone());
+                            if *stop_rx.borrow() || !self.runtime_fence.is_lifecycle_current() {
+                                return Err(anyhow!("bot lifecycle replaced during pairing"));
+                            }
+                            let mut states = self.chat_states.write().await;
+                            self.runtime_fence.reconcile_states(&mut states);
+                            self.runtime_fence
+                                .sanitize_after_epoch(identity_epoch, &mut state);
+                            states.insert(peer.clone(), state.clone());
+                            drop(states);
                             self.persist_chat_state(&peer, &state).await;
 
                             self.send_handle_result(&peer, &result).await;
@@ -483,7 +529,11 @@ impl WeixinBot {
         text: &str,
         images: Vec<ImageAttachment>,
     ) {
+        if !self.runtime_fence.is_lifecycle_current() {
+            return;
+        }
         let mut states = self.chat_states.write().await;
+        self.runtime_fence.reconcile_states(&mut states);
         let state = states.entry(peer_id.clone()).or_insert_with(|| {
             let mut state = BotChatState::new(peer_id.clone());
             state.paired = true;
@@ -501,9 +551,15 @@ impl WeixinBot {
             }
             if trimmed.len() == 6 && trimmed.chars().all(|c| c.is_ascii_digit()) {
                 if self.verify_pairing_code(trimmed).await {
+                    let identity_epoch = self.runtime_fence.identity_epoch();
                     let result = complete_im_bot_pairing(state).await;
+                    self.runtime_fence
+                        .sanitize_after_epoch(identity_epoch, state);
                     self.persist_chat_state(&peer_id, state).await;
                     drop(states);
+                    if !self.runtime_fence.is_lifecycle_current() {
+                        return;
+                    }
                     self.send_handle_result(&peer_id, &result).await;
                     return;
                 }
@@ -528,8 +584,15 @@ impl WeixinBot {
 
         let command = parse_command(text);
         let result = handle_command(state, command, images).await;
-        self.persist_chat_state(&peer_id, state).await;
+        self.runtime_fence.reconcile_states(&mut states);
+        if let Some(state) = states.get(&peer_id) {
+            self.persist_chat_state(&peer_id, state).await;
+        }
         drop(states);
+
+        if !self.runtime_fence.is_lifecycle_current() {
+            return;
+        }
 
         self.send_handle_result(&peer_id, &result).await;
 
@@ -580,7 +643,11 @@ impl WeixinBot {
     }
 
     async fn deliver_interaction(&self, peer_id: String, interaction: BotInteractiveRequest) {
+        if !self.runtime_fence.is_lifecycle_current() {
+            return;
+        }
         let mut states = self.chat_states.write().await;
+        self.runtime_fence.reconcile_states(&mut states);
         let state = states.entry(peer_id.clone()).or_insert_with(|| {
             let mut state = BotChatState::new(peer_id.clone());
             state.paired = true;

@@ -8,7 +8,10 @@
  */
 
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import { RelayHttpClient } from '../services/RelayHttpClient';
+import {
+  RelayHttpClient,
+  isDelegatedIdentityChangedError,
+} from '../services/RelayHttpClient';
 import { useI18n } from '../i18n';
 import { useMobileStore } from '../services/store';
 
@@ -66,6 +69,9 @@ const DevicesPage: React.FC<Props> = ({ client, onBack }) => {
   const [switchingId, setSwitchingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const mountedRef = useRef(true);
+  const identityRequestRef = useRef(0);
+  const devicesRequestRef = useRef(0);
+  const switchRequestRef = useRef(0);
   const sortedDevices = useMemo(() => [...devices].sort((left, right) => {
     const leftCurrent = left.device_id === client.pairedDeviceId;
     const rightCurrent = right.device_id === client.pairedDeviceId;
@@ -90,19 +96,31 @@ const DevicesPage: React.FC<Props> = ({ client, onBack }) => {
     mountedRef.current = true;
     return () => {
       mountedRef.current = false;
+      identityRequestRef.current += 1;
+      devicesRequestRef.current += 1;
+      switchRequestRef.current += 1;
     };
   }, []);
 
   const refreshDevices = useCallback(async () => {
     if (!client.hasDelegatedIdentity) return;
+    const requestId = ++devicesRequestRef.current;
+    const isCurrent = () => (
+      mountedRef.current
+      && devicesRequestRef.current === requestId
+    );
     try {
       const list = await client.listDevices();
-      if (!mountedRef.current) return;
+      if (!isCurrent()) return;
       setDevices(list);
       setError(null);
       setIdentityReady(true);
     } catch (e: unknown) {
-      if (!mountedRef.current) return;
+      if (!isCurrent()) return;
+      // RelayHttpClient fences every response against its committed identity.
+      // A concurrent account refresh therefore makes this request stale rather
+      // than user-visible, while a successful 401 refresh + retry remains valid.
+      if (isDelegatedIdentityChangedError(e)) return;
       const message = String((e as { message?: string })?.message || e);
       if (message.includes('No delegated identity')) {
         setIdentityReady(false);
@@ -117,6 +135,7 @@ const DevicesPage: React.FC<Props> = ({ client, onBack }) => {
   // its account after this mobile session was paired. Force-refresh so a
   // desktop account switch is reflected without re-scanning.
   const ensureIdentity = useCallback(async (force = false) => {
+    const requestId = ++identityRequestRef.current;
     setIdentityChecking(true);
     setError(null);
     let granted = false;
@@ -124,13 +143,16 @@ const DevicesPage: React.FC<Props> = ({ client, onBack }) => {
       granted = await client.requestDelegatedIdentity({ force: force || !client.hasDelegatedIdentity });
     } catch (e: unknown) {
       granted = false;
-      if (mountedRef.current) setError(friendlyError(e, 'devices.identityFailed'));
+      if (mountedRef.current && identityRequestRef.current === requestId) {
+        setError(friendlyError(e, 'devices.identityFailed'));
+      }
     }
-    if (mountedRef.current) {
+    if (mountedRef.current && identityRequestRef.current === requestId) {
       setIdentityReady(granted);
       setIdentityChecking(false);
+      return granted;
     }
-    return granted;
+    return false;
   }, [client, friendlyError]);
 
   useEffect(() => {
@@ -162,6 +184,15 @@ const DevicesPage: React.FC<Props> = ({ client, onBack }) => {
   const selectDevice = useCallback(async (d: DeviceInfo) => {
     if (!d.online || switchingId) return;
     if (client.pairedDeviceId === d.device_id) return;
+    const requestId = ++switchRequestRef.current;
+    const accountEpoch = client.delegatedAccountEpoch;
+    let expectedTargetEpoch = client.controlTargetEpoch;
+    const isCurrent = () => (
+      mountedRef.current
+      && switchRequestRef.current === requestId
+      && client.delegatedAccountEpoch === accountEpoch
+      && client.controlTargetEpoch === expectedTargetEpoch
+    );
     setSwitchingId(d.device_id);
     setError(null);
     try {
@@ -171,10 +202,12 @@ const DevicesPage: React.FC<Props> = ({ client, onBack }) => {
         command: 'peer_mode_ping',
         args: {},
       });
+      if (!isCurrent()) return;
       if (ping.resp === 'host_invoke_result' && ping.ok === false) {
         throw new Error(ping.error || t('devices.switchFailed'));
       }
-      client.pairedDeviceId = d.device_id;
+      client.setPairedDeviceId(d.device_id);
+      expectedTargetEpoch = client.controlTargetEpoch;
       resetForDeviceSwitch();
       setControlTarget({
         deviceId: d.device_id,
@@ -183,7 +216,8 @@ const DevicesPage: React.FC<Props> = ({ client, onBack }) => {
       });
       onBack();
     } catch (e: unknown) {
-      if (!mountedRef.current) return;
+      if (!isCurrent()) return;
+      if (isDelegatedIdentityChangedError(e)) return;
       const message = String((e as { message?: string })?.message || e);
       if (message.includes('No delegated identity')) {
         setIdentityReady(false);
@@ -192,7 +226,9 @@ const DevicesPage: React.FC<Props> = ({ client, onBack }) => {
         setError(friendlyError(e, 'devices.switchFailed'));
       }
     } finally {
-      if (mountedRef.current) setSwitchingId(null);
+      if (mountedRef.current && switchRequestRef.current === requestId) {
+        setSwitchingId(null);
+      }
     }
   }, [client, friendlyError, onBack, resetForDeviceSwitch, setControlTarget, switchingId, t]);
 
@@ -305,7 +341,7 @@ const DevicesPage: React.FC<Props> = ({ client, onBack }) => {
           type="button"
           className={`devices-page__refresh-btn ${loading || identityChecking ? 'is-loading' : ''}`}
           onClick={handleManualRefresh}
-          disabled={loading || !!switchingId}
+          disabled={loading || identityChecking || !!switchingId}
           aria-label={t('devices.refresh')}
           title={t('devices.refresh')}
         >
