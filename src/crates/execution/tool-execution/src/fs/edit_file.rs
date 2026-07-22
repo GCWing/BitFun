@@ -232,16 +232,21 @@ fn edit_string_candidates(
     // Only the old/new string pair is transformed — file content is never
     // rewritten speculatively.  Each pair must pass exact match inside
     // apply_match_and_replace (after CRLF normalization) before any write.
+    //
+    // Per #1650: skip find_actual_string (full-file scan) for large files
+    // to avoid token amplification and hangs.
+    let line_count = content.lines().count();
+    let skip_full_scan = line_count > 500;
     for tab_width in [2, 4] {
         let tabs_to_spaces_old = convert_tabs_to_spaces(old_string, tab_width);
         if tabs_to_spaces_old != old_string {
             let tabs_to_spaces_new = convert_tabs_to_spaces(new_string, tab_width);
             push_candidate(tabs_to_spaces_old.clone(), tabs_to_spaces_new.clone());
 
-            // Also try quote-normalized variant (e.g. curly quotes in file
-            // after whitespace normalization).
-            if let Some(actual_old) = find_actual_string(content, &tabs_to_spaces_old) {
-                push_candidate(actual_old, tabs_to_spaces_new);
+            if !skip_full_scan {
+                if let Some(actual_old) = find_actual_string(content, &tabs_to_spaces_old) {
+                    push_candidate(actual_old, tabs_to_spaces_new);
+                }
             }
         }
 
@@ -250,8 +255,10 @@ fn edit_string_candidates(
             let spaces_to_tabs_new = convert_leading_spaces_to_tabs(new_string, tab_width);
             push_candidate(spaces_to_tabs_old.clone(), spaces_to_tabs_new.clone());
 
-            if let Some(actual_old) = find_actual_string(content, &spaces_to_tabs_old) {
-                push_candidate(actual_old, spaces_to_tabs_new);
+            if !skip_full_scan {
+                if let Some(actual_old) = find_actual_string(content, &spaces_to_tabs_old) {
+                    push_candidate(actual_old, spaces_to_tabs_new);
+                }
             }
         }
     }
