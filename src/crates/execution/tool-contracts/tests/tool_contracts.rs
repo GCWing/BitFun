@@ -38,8 +38,8 @@ use bitfun_agent_tools::{
     ToolWorkspaceKind, ValidationResult, CALL_DEFERRED_TOOL_NAME, GET_TOOL_SPEC_TOOL_NAME,
 };
 use bitfun_agent_tools::{
-    build_invalid_tool_call_error_message, build_permission_denied_tool_presentation,
-    build_tool_call_truncation_recovery_notice, build_tool_execution_error_presentation,
+    build_invalid_tool_call_error_message, build_normal_tool_json_repair_notice,
+    build_permission_denied_tool_presentation, build_tool_execution_error_presentation,
     build_user_rejected_tool_presentation, build_user_rejected_tool_presentation_with_instruction,
     build_user_steering_interrupted_presentation, is_write_like_tool_name,
     render_tool_result_for_assistant, truncate_raw_tool_arguments_preview_to,
@@ -603,27 +603,29 @@ fn invalid_tool_call_error_message_preserves_current_contract() {
 }
 
 #[test]
-fn truncation_recovery_notice_preserves_write_like_guidance() {
+fn write_tail_closure_notice_preserves_write_like_guidance() {
     assert!(is_write_like_tool_name("Write"));
     assert!(is_write_like_tool_name("file_write"));
     assert!(is_write_like_tool_name("write_notebook"));
     assert!(!is_write_like_tool_name("Read"));
 
-    let notice = build_tool_call_truncation_recovery_notice("Write");
+    let notice = bitfun_agent_tools::build_write_tail_closure_notice("Write");
 
     assert!(notice.contains("latest Read result"));
     assert!(notice.contains("use Edit to add only the missing continuation"));
     assert!(notice.contains("stop tool-calling and tell the user"));
+    assert!(!notice.contains("max_tokens"));
     assert!(!notice.contains("`mode`"));
     assert!(notice.ends_with("Original tool result follows.\n\n"));
 }
 
 #[test]
-fn truncation_recovery_notice_preserves_non_write_guidance() {
-    let notice = build_tool_call_truncation_recovery_notice("AskUserQuestion");
+fn normal_tool_json_repair_notice_identifies_the_opt_in_repair_policy() {
+    let notice = build_normal_tool_json_repair_notice("AskUserQuestion");
 
-    assert!(notice.contains("repaired, potentially incomplete arguments"));
+    assert!(notice.contains("provider completed tool use normally"));
     assert!(notice.contains("issue a fresh complete AskUserQuestion call"));
+    assert!(!notice.contains("max_tokens"));
     assert!(!notice.contains("ONE Edit call"));
 }
 

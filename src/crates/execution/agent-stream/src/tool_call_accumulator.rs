@@ -1,4 +1,5 @@
 use log::{error, warn};
+use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use std::collections::BTreeMap;
 
@@ -9,6 +10,59 @@ pub enum ToolCallBoundary {
     StreamEnd,
     GracefulShutdown,
     EndOfAggregation,
+}
+
+/// Provider-neutral classification of how a streamed model response ended.
+///
+/// The classification is deliberately conservative: only `NormalToolUse`
+/// permits the opt-in, non-Write JSON repair path. A parser EOF alone does not
+/// prove the response reached a normal model completion.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum ToolCallCompletion {
+    NormalToolUse,
+    NormalNoToolUse,
+    OutputLimit,
+    ContentFiltered,
+    Failed,
+    Interrupted,
+    #[default]
+    Unknown,
+}
+
+impl ToolCallCompletion {
+    pub fn permits_normal_tool_json_repair(self) -> bool {
+        matches!(self, Self::NormalToolUse)
+    }
+}
+
+/// How invalid raw tool arguments were repaired before schema validation.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum ToolArgumentRepairKind {
+    #[default]
+    None,
+    /// The Write-specific close-only repair preserved a completed payload prefix.
+    WriteTailClosure,
+    /// The user explicitly enabled best-effort repair after a normal tool-use
+    /// completion. This must never be presented as a max-token truncation.
+    PermissiveNormalToolJsonRepair,
+}
+
+impl ToolArgumentRepairKind {
+    pub fn is_none(value: &Self) -> bool {
+        matches!(value, Self::None)
+    }
+
+    pub fn is_write_tail_closure(self) -> bool {
+        matches!(self, Self::WriteTailClosure)
+    }
+}
+
+#[derive(Debug, Clone, Copy, Default)]
+pub struct ToolCallFinalizeOptions {
+    pub completion: ToolCallCompletion,
+    pub allow_normal_tool_json_repair: bool,
 }
 
 impl ToolCallBoundary {
@@ -53,6 +107,7 @@ pub struct FinalizedToolCall {
     pub raw_arguments: String,
     pub arguments: Value,
     pub is_error: bool,
+    pub repair_kind: ToolArgumentRepairKind,
     /// True when the raw stream produced unparseable JSON (e.g. truncated by
     /// `max_tokens`) and we successfully patched the trailing brackets/strings
     /// to make it parse. The recovered call still executes, but downstream
@@ -95,8 +150,11 @@ pub fn is_write_like_tool_name(tool_name: &str) -> bool {
     matches!(tool_name, "Write" | "file_write" | "write_notebook")
 }
 
-fn is_truncation_safe_to_recover(tool_name: &str) -> bool {
-    is_write_like_tool_name(tool_name) || matches!(tool_name, "AskUserQuestion" | "TodoWrite")
+#[derive(Debug)]
+struct ToolArgumentParseError {
+    message: String,
+    is_eof: bool,
+    category: &'static str,
 }
 
 /// Attempt to repair a JSON document that was truncated mid-stream (typically
@@ -243,7 +301,10 @@ impl PendingToolCall {
         arguments
     }
 
-    fn parse_arguments(tool_name: &str, raw_arguments: &str) -> Result<Value, String> {
+    fn parse_arguments(
+        tool_name: &str,
+        raw_arguments: &str,
+    ) -> Result<Value, ToolArgumentParseError> {
         match serde_json::from_str::<Value>(raw_arguments) {
             Ok(arguments) => {
                 if tool_name == "Git" {
@@ -259,7 +320,16 @@ impl PendingToolCall {
                         return Ok(arguments);
                     }
                 }
-                Err(primary_error.to_string())
+                Err(ToolArgumentParseError {
+                    message: primary_error.to_string(),
+                    is_eof: primary_error.is_eof(),
+                    category: match primary_error.classify() {
+                        serde_json::error::Category::Io => "io",
+                        serde_json::error::Category::Syntax => "syntax",
+                        serde_json::error::Category::Data => "data",
+                        serde_json::error::Category::Eof => "eof",
+                    },
+                })
             }
         }
     }
@@ -307,6 +377,14 @@ impl PendingToolCall {
     }
 
     pub fn finalize(&mut self, boundary: ToolCallBoundary) -> Option<FinalizedToolCall> {
+        self.finalize_with_options(boundary, ToolCallFinalizeOptions::default())
+    }
+
+    pub fn finalize_with_options(
+        &mut self,
+        boundary: ToolCallBoundary,
+        options: ToolCallFinalizeOptions,
+    ) -> Option<FinalizedToolCall> {
         if !self.has_pending() {
             return None;
         }
@@ -325,46 +403,78 @@ impl PendingToolCall {
         self.early_detected_emitted = false;
         let parsed_arguments = Self::parse_arguments(&tool_name, &raw_arguments);
 
-        let (arguments, is_error, recovered_from_truncation) = match parsed_arguments {
-            Ok(value) => (value, false, false),
+        let (arguments, is_error, repair_kind) = match parsed_arguments {
+            Ok(value) => (value, false, ToolArgumentRepairKind::None),
             Err(parse_err) => {
-                let repaired = repair_truncated_json(&raw_arguments)
+                let write_tail_repair = is_write_like_tool_name(&tool_name)
+                    .then(|| repair_truncated_json(&raw_arguments))
+                    .flatten()
                     .and_then(|candidate| Self::parse_arguments(&tool_name, &candidate).ok());
-                match repaired {
-                    Some(value) if is_truncation_safe_to_recover(&tool_name) => {
-                        warn!(
-                            "Tool call arguments recovered from truncation at boundary={}: tool_id={}, tool_name={}, raw_len={}",
-                            boundary.as_str(),
-                            tool_id,
-                            tool_name,
-                            raw_arguments.len()
-                        );
-                        (value, false, true)
+                if let Some(value) = write_tail_repair {
+                    warn!(
+                        "Write tool call arguments recovered with close-only repair at boundary={}: tool_id={}, tool_name={}, raw_len={}, parse_error_category={}, parse_error_is_eof={}, completion={:?}",
+                        boundary.as_str(),
+                        tool_id,
+                        tool_name,
+                        raw_arguments.len(),
+                        parse_err.category,
+                        parse_err.is_eof,
+                        options.completion
+                    );
+                    (value, false, ToolArgumentRepairKind::WriteTailClosure)
+                } else if options.allow_normal_tool_json_repair
+                    && options.completion.permits_normal_tool_json_repair()
+                {
+                    let repaired =
+                        bitfun_tool_call_jsonrepair::repair_tool_call_json(&raw_arguments)
+                            .ok()
+                            .and_then(|candidate| {
+                                Self::parse_arguments(&tool_name, &candidate).ok()
+                            });
+                    match repaired {
+                        Some(value) => {
+                            warn!(
+                                "Tool call arguments repaired after normal tool-use completion: boundary={}, tool_id={}, tool_name={}, raw_len={}, parse_error_category={}, parse_error_is_eof={}",
+                                boundary.as_str(),
+                                tool_id,
+                                tool_name,
+                                raw_arguments.len(),
+                                parse_err.category,
+                                parse_err.is_eof
+                            );
+                            (
+                                value,
+                                false,
+                                ToolArgumentRepairKind::PermissiveNormalToolJsonRepair,
+                            )
+                        }
+                        None => {
+                            error!(
+                                "Tool call arguments parsing failed after normal-completion JSON repair: boundary={}, tool_id={}, tool_name={}, raw_len={}, error={}, parse_error_category={}, parse_error_is_eof={}",
+                                boundary.as_str(),
+                                tool_id,
+                                tool_name,
+                                raw_arguments.len(),
+                                parse_err.message,
+                                parse_err.category,
+                                parse_err.is_eof
+                            );
+                            (json!({}), true, ToolArgumentRepairKind::None)
+                        }
                     }
-                    Some(_) => {
-                        // We *could* repair but the tool's semantics make
-                        // executing a partial call unsafe (Bash, Edit, ...).
-                        // Surface as an error so the user/model knows the
-                        // truncation happened and can retry sensibly.
-                        warn!(
-                            "Tool call arguments truncated at boundary={}: tool_id={}, tool_name={} — refusing to execute partial call (tool not in safe-recovery list)",
-                            boundary.as_str(),
-                            tool_id,
-                            tool_name
-                        );
-                        (json!({}), true, true)
-                    }
-                    None => {
-                        error!(
-                            "Tool call arguments parsing failed at boundary={}: tool_id={}, tool_name={}, error={}, raw_arguments={}",
-                            boundary.as_str(),
-                            tool_id,
-                            tool_name,
-                            parse_err,
-                            raw_arguments
-                        );
-                        (json!({}), true, false)
-                    }
+                } else {
+                    error!(
+                        "Tool call arguments parsing failed at boundary={}: tool_id={}, tool_name={}, raw_len={}, error={}, parse_error_category={}, parse_error_is_eof={}, completion={:?}",
+                        boundary.as_str(),
+                        tool_id,
+                        tool_name,
+                        raw_arguments.len(),
+                        parse_err.message,
+                        parse_err.category,
+                        parse_err.is_eof,
+                        options.completion
+                    );
+                    (json!({}), true, ToolArgumentRepairKind::None)
                 }
             }
         };
@@ -375,7 +485,8 @@ impl PendingToolCall {
             raw_arguments,
             arguments,
             is_error,
-            recovered_from_truncation,
+            repair_kind,
+            recovered_from_truncation: repair_kind.is_write_tail_closure(),
         })
     }
 }
@@ -467,10 +578,31 @@ impl PendingToolCalls {
         pending.finalize(boundary)
     }
 
+    pub fn finalize_key_with_options(
+        &mut self,
+        key: &ToolCallStreamKey,
+        boundary: ToolCallBoundary,
+        options: ToolCallFinalizeOptions,
+    ) -> Option<FinalizedToolCall> {
+        let mut pending = self.pending.remove(key)?;
+        pending.finalize_with_options(boundary, options)
+    }
+
     pub fn finalize_all(&mut self, boundary: ToolCallBoundary) -> Vec<FinalizedToolCall> {
         let keys: Vec<_> = self.pending.keys().cloned().collect();
         keys.into_iter()
             .filter_map(|key| self.finalize_key(&key, boundary))
+            .collect()
+    }
+
+    pub fn finalize_all_with_options(
+        &mut self,
+        boundary: ToolCallBoundary,
+        options: ToolCallFinalizeOptions,
+    ) -> Vec<FinalizedToolCall> {
+        let keys: Vec<_> = self.pending.keys().cloned().collect();
+        keys.into_iter()
+            .filter_map(|key| self.finalize_key_with_options(&key, boundary, options))
             .collect()
     }
 }
@@ -479,7 +611,8 @@ impl PendingToolCalls {
 mod tests {
     use super::{
         repair_truncated_json, EarlyDetectedToolCall, PendingToolCall, PendingToolCalls,
-        ToolCallBoundary, ToolCallParamsChunk, ToolCallStreamKey,
+        ToolArgumentRepairKind, ToolCallBoundary, ToolCallCompletion, ToolCallFinalizeOptions,
+        ToolCallParamsChunk, ToolCallStreamKey,
     };
     use serde_json::json;
 
@@ -948,6 +1081,10 @@ mod tests {
         assert!(!finalized.is_error, "Write recovery should succeed");
         assert!(finalized.recovered_from_truncation);
         assert_eq!(
+            finalized.repair_kind,
+            ToolArgumentRepairKind::WriteTailClosure
+        );
+        assert_eq!(
             finalized.arguments,
             json!({
                 "payload": "+++ /tmp/report.md\n# Report\n\nA long body that was cut"
@@ -994,7 +1131,7 @@ mod tests {
     }
 
     #[test]
-    fn bash_truncated_mid_command_still_errors_but_records_truncation() {
+    fn non_write_truncated_command_still_errors_without_repair_provenance() {
         let raw = r#"{"command": "git log --since=\"2026-05-02\" --on"#;
         let mut pending = PendingToolCall::default();
         pending.start_new("call_1".to_string(), Some("Bash".to_string()));
@@ -1007,10 +1144,8 @@ mod tests {
         // We never execute a partial shell command.
         assert!(finalized.is_error);
         assert_eq!(finalized.arguments, json!({}));
-        // But the truncation is recorded so the surface error message and
-        // diagnostic dump can distinguish "truncated" from "model emitted
-        // bad JSON".
-        assert!(finalized.recovered_from_truncation);
+        assert!(!finalized.recovered_from_truncation);
+        assert_eq!(finalized.repair_kind, ToolArgumentRepairKind::None);
     }
 
     #[test]
@@ -1052,7 +1187,7 @@ mod tests {
     }
 
     #[test]
-    fn ask_user_question_truncated_mid_chinese_string_is_recovered() {
+    fn ask_user_question_truncated_mid_chinese_string_is_not_recovered_by_default() {
         let raw = r#"{"questions": [{"header": "重试场景", "multiSelect": true, "options": [{"description": "当消息发送后后端返回失败（消息气泡显示为红色失败状态，有 model rounds 但 status='error'），在失败气泡旁增加重试按钮，点击后重新发送该消息", "label": "失败消息气泡上加重试按钮"}]}]}"#;
         // Truncate mid-Chinese-string, after a colon that opened the value
         let truncated = &raw[..raw.find("消息气泡显示为红色失败状态").unwrap()
@@ -1065,12 +1200,13 @@ mod tests {
             .finalize(ToolCallBoundary::FinishReason)
             .expect("finalized tool");
 
-        assert!(!finalized.is_error);
-        assert!(finalized.recovered_from_truncation);
+        assert!(finalized.is_error);
+        assert!(!finalized.recovered_from_truncation);
+        assert_eq!(finalized.repair_kind, ToolArgumentRepairKind::None);
     }
 
     #[test]
-    fn ask_user_question_truncated_mid_options_is_recovered() {
+    fn ask_user_question_truncated_mid_options_is_not_recovered_by_default() {
         // Truncation right after a completed description value's closing quote + comma
         let raw = r#"{"questions": [{"header": "场景", "multiSelect": true, "options": [{"description": "第一条描述", "label": "选项一"}, {"description": "第二条描"#;
         let mut pending = PendingToolCall::default();
@@ -1081,15 +1217,13 @@ mod tests {
             .finalize(ToolCallBoundary::FinishReason)
             .expect("finalized tool");
 
-        assert!(!finalized.is_error);
-        assert!(finalized.recovered_from_truncation);
-        let questions = finalized.arguments["questions"].as_array().unwrap();
-        assert_eq!(questions.len(), 1);
-        assert_eq!(questions[0]["options"].as_array().unwrap().len(), 2);
+        assert!(finalized.is_error);
+        assert!(!finalized.recovered_from_truncation);
+        assert_eq!(finalized.repair_kind, ToolArgumentRepairKind::None);
     }
 
     #[test]
-    fn todo_write_truncated_mid_content_is_recovered() {
+    fn todo_write_truncated_mid_content_is_not_recovered_by_default() {
         let raw = r#"{"todos": [{"id": "1", "content": "完成重构并优化性能", "status": "in_progress"}, {"id": "2", "content": "编写单元测"#;
         let mut pending = PendingToolCall::default();
         pending.start_new("call_1".to_string(), Some("TodoWrite".to_string()));
@@ -1099,9 +1233,153 @@ mod tests {
             .finalize(ToolCallBoundary::FinishReason)
             .expect("finalized tool");
 
+        assert!(finalized.is_error);
+        assert!(!finalized.recovered_from_truncation);
+        assert_eq!(finalized.repair_kind, ToolArgumentRepairKind::None);
+    }
+
+    #[test]
+    fn write_close_only_repair_does_not_depend_on_non_write_repair_setting() {
+        let raw = r#"{"payload":"+++ /tmp/report.md\npartial content"#;
+
+        for allow_normal_tool_json_repair in [false, true] {
+            let mut pending = PendingToolCall::default();
+            pending.start_new("call_1".to_string(), Some("Write".to_string()));
+            pending.append_arguments(raw);
+
+            let finalized = pending
+                .finalize_with_options(
+                    ToolCallBoundary::FinishReason,
+                    ToolCallFinalizeOptions {
+                        completion: ToolCallCompletion::OutputLimit,
+                        allow_normal_tool_json_repair,
+                    },
+                )
+                .expect("finalized tool");
+
+            assert!(!finalized.is_error);
+            assert_eq!(
+                finalized.repair_kind,
+                ToolArgumentRepairKind::WriteTailClosure
+            );
+        }
+    }
+
+    #[test]
+    fn non_write_repair_requires_enabled_normal_tool_use_completion() {
+        let mut pending = PendingToolCall::default();
+        pending.start_new("call_1".to_string(), Some("Read".to_string()));
+        pending.append_arguments(r#"{"path":"src/main.rs" "line_end":4}"#);
+
+        let finalized = pending
+            .finalize_with_options(
+                ToolCallBoundary::FinishReason,
+                ToolCallFinalizeOptions {
+                    completion: ToolCallCompletion::NormalToolUse,
+                    allow_normal_tool_json_repair: true,
+                },
+            )
+            .expect("finalized tool");
+
         assert!(!finalized.is_error);
-        assert!(finalized.recovered_from_truncation);
-        let todos = finalized.arguments["todos"].as_array().unwrap();
-        assert_eq!(todos.len(), 2);
+        assert_eq!(
+            finalized.repair_kind,
+            ToolArgumentRepairKind::PermissiveNormalToolJsonRepair
+        );
+        assert_eq!(
+            finalized.arguments,
+            json!({"path": "src/main.rs", "line_end": 4})
+        );
+    }
+
+    #[test]
+    fn repairs_create_plan_string_fields_without_opening_quotes() {
+        // `name`, `overview`, and Markdown `plan` have their closing quote
+        // but omit the opening quote after `:`. The plan begins with `#`, so
+        // it must not be interpreted as a JSON-like comment.
+        let raw_arguments = r##"{"name": CreatePlan JSON repair", "overview": Verify malformed plan arguments", "plan": # CreatePlan repair\n\n- Add a regression test"}"##;
+        let mut pending = PendingToolCall::default();
+        pending.start_new(
+            "call_create_plan".to_string(),
+            Some("CreatePlan".to_string()),
+        );
+        pending.append_arguments(raw_arguments);
+
+        let finalized = pending
+            .finalize_with_options(
+                ToolCallBoundary::FinishReason,
+                ToolCallFinalizeOptions {
+                    completion: ToolCallCompletion::NormalToolUse,
+                    allow_normal_tool_json_repair: true,
+                },
+            )
+            .expect("finalized CreatePlan call");
+
+        assert!(!finalized.is_error);
+        assert_eq!(
+            finalized.repair_kind,
+            ToolArgumentRepairKind::PermissiveNormalToolJsonRepair
+        );
+        assert_eq!(
+            finalized.arguments["name"].as_str(),
+            Some("CreatePlan JSON repair")
+        );
+        assert_eq!(
+            finalized.arguments["overview"].as_str(),
+            Some("Verify malformed plan arguments")
+        );
+        assert_eq!(
+            finalized.arguments["plan"].as_str(),
+            Some("# CreatePlan repair\n\n- Add a regression test")
+        );
+    }
+
+    #[test]
+    fn non_write_repair_is_disabled_by_default() {
+        let mut pending = PendingToolCall::default();
+        pending.start_new("call_1".to_string(), Some("Read".to_string()));
+        pending.append_arguments(r#"{"path":"src/main.rs" "line_end":4}"#);
+
+        let finalized = pending
+            .finalize_with_options(
+                ToolCallBoundary::FinishReason,
+                ToolCallFinalizeOptions {
+                    completion: ToolCallCompletion::NormalToolUse,
+                    allow_normal_tool_json_repair: false,
+                },
+            )
+            .expect("finalized tool");
+
+        assert!(finalized.is_error);
+        assert_eq!(finalized.repair_kind, ToolArgumentRepairKind::None);
+    }
+
+    #[test]
+    fn non_write_repair_never_runs_after_non_normal_completion() {
+        for completion in [
+            ToolCallCompletion::NormalNoToolUse,
+            ToolCallCompletion::OutputLimit,
+            ToolCallCompletion::ContentFiltered,
+            ToolCallCompletion::Failed,
+            ToolCallCompletion::Interrupted,
+            ToolCallCompletion::Unknown,
+        ] {
+            let mut pending = PendingToolCall::default();
+            pending.start_new("call_1".to_string(), Some("Read".to_string()));
+            pending.append_arguments(r#"{"path":"src/main.rs" "line_end":4}"#);
+
+            let finalized = pending
+                .finalize_with_options(
+                    ToolCallBoundary::FinishReason,
+                    ToolCallFinalizeOptions {
+                        completion,
+                        allow_normal_tool_json_repair: true,
+                    },
+                )
+                .expect("finalized tool");
+
+            assert!(finalized.is_error, "completion={completion:?}");
+            assert_eq!(finalized.repair_kind, ToolArgumentRepairKind::None);
+        }
     }
 }

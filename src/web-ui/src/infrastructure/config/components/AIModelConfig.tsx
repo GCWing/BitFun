@@ -437,6 +437,8 @@ const AIModelConfig: React.FC = () => {
   const [streamIdleTimeoutInput, setStreamIdleTimeoutInput] = useState('');
   const [streamTtftTimeoutInput, setStreamTtftTimeoutInput] = useState('');
   const [isStreamTimeoutSaving, setIsStreamTimeoutSaving] = useState(false);
+  const [allowNormalToolJsonRepair, setAllowNormalToolJsonRepair] = useState(true);
+  const [isToolJsonRepairSaving, setIsToolJsonRepairSaving] = useState(false);
   const [isProxySaving, setIsProxySaving] = useState(false);
   const [remoteModelOptions, setRemoteModelOptions] = useState<RemoteModelOption[]>([]);
   const [isFetchingRemoteModels, setIsFetchingRemoteModels] = useState(false);
@@ -586,11 +588,12 @@ const AIModelConfig: React.FC = () => {
   
   const loadConfig = useCallback(async () => {
     try {
-      const [models, proxy, streamIdleTimeoutSecs, streamTtftTimeoutSecs] = await Promise.all([
+      const [models, proxy, streamIdleTimeoutSecs, streamTtftTimeoutSecs, allowJsonRepair] = await Promise.all([
         configManager.getConfig<AIModelConfigType[]>('ai.models'),
         configManager.getConfig<ProxyConfig>('ai.proxy'),
         configManager.getConfig<number | null>('ai.stream_idle_timeout_secs'),
         configManager.getConfig<number | null>('ai.stream_ttft_timeout_secs'),
+        configManager.getConfig<boolean>('ai.allow_tool_json_repair'),
       ]);
       setAiModels(models);
       if (proxy) {
@@ -602,6 +605,7 @@ const AIModelConfig: React.FC = () => {
       setStreamTtftTimeoutInput(
         streamTtftTimeoutSecs != null ? String(streamTtftTimeoutSecs) : ''
       );
+      setAllowNormalToolJsonRepair(allowJsonRepair !== false);
     } catch (error) {
       log.error('Failed to load AI config', error);
     }
@@ -1780,6 +1784,24 @@ const AIModelConfig: React.FC = () => {
       notification.error(t('messages.saveFailed'));
     } finally {
       setIsStreamTimeoutSaving(false);
+    }
+  };
+
+  const handleToggleNormalToolJsonRepair = async (enabled: boolean) => {
+    setIsToolJsonRepairSaving(true);
+    try {
+      if (enabled) {
+        await configManager.resetConfig('ai.allow_tool_json_repair');
+      } else {
+        await configManager.setConfig('ai.allow_tool_json_repair', false);
+      }
+      setAllowNormalToolJsonRepair(enabled);
+      notification.success(t('toolArgumentJsonRepair.saveSuccess'));
+    } catch (error) {
+      log.error('Failed to save normal tool JSON repair setting', error);
+      notification.error(t('messages.saveFailed'));
+    } finally {
+      setIsToolJsonRepairSaving(false);
     }
   };
 
@@ -3262,6 +3284,24 @@ const AIModelConfig: React.FC = () => {
               onChange={(e) => setStreamIdleTimeoutInput(e.target.value)}
               placeholder={t('streamIdleTimeout.placeholder')}
               inputSize="small"
+            />
+          </ConfigPageRow>
+        </ConfigPageSection>
+
+        <ConfigPageSection
+          title={t('toolArgumentJsonRepair.title')}
+          description={t('toolArgumentJsonRepair.description')}
+        >
+          <ConfigPageRow
+            label={t('toolArgumentJsonRepair.label')}
+            description={t('toolArgumentJsonRepair.hint')}
+            align="center"
+          >
+            <Switch
+              checked={allowNormalToolJsonRepair}
+              onChange={(e) => void handleToggleNormalToolJsonRepair(e.target.checked)}
+              disabled={isToolJsonRepairSaving}
+              size="small"
             />
           </ConfigPageRow>
         </ConfigPageSection>

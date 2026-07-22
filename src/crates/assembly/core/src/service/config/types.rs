@@ -703,6 +703,11 @@ pub struct AIConfig {
     #[serde(default = "default_enable_deferred_tool_loading")]
     pub enable_deferred_tool_loading: bool,
 
+    /// Allows broad JSON repair for non-Write tool arguments only after a
+    /// provider confirms a normal tool-use completion.
+    #[serde(default = "default_true")]
+    pub allow_tool_json_repair: bool,
+
     /// Debug-mode configuration (log path, language templates, etc.).
     #[serde(default)]
     pub debug_mode_config: DebugModeConfig,
@@ -1750,6 +1755,7 @@ impl Default for AIConfig {
             stream_ttft_timeout_secs: default_stream_ttft_timeout(),
             tool_execution_timeout_secs: default_tool_execution_timeout(),
             enable_deferred_tool_loading: default_enable_deferred_tool_loading(),
+            allow_tool_json_repair: true,
             debug_mode_config: DebugModeConfig::default(),
             computer_use_enabled: false,
             browser_control_preferred_browser: String::new(),
@@ -2416,6 +2422,7 @@ mod tests {
         assert_eq!(config.stream_idle_timeout_secs, Some(600));
         assert_eq!(config.stream_ttft_timeout_secs, Some(600));
         assert!(config.enable_deferred_tool_loading);
+        assert!(config.allow_tool_json_repair);
         assert_eq!(config.subagent_max_concurrency, 5);
         assert_eq!(
             config.subagent_batch_execution_policy,
@@ -2587,12 +2594,31 @@ mod tests {
 
         assert_eq!(config.stream_idle_timeout_secs, Some(600));
         assert_eq!(config.stream_ttft_timeout_secs, Some(600));
+        assert!(config.allow_tool_json_repair);
         assert_eq!(config.subagent_max_concurrency, 5);
         assert_eq!(
             config.subagent_batch_execution_policy,
             SubagentBatchExecutionPolicy::ForceParallel
         );
         assert!(config.review_teams.contains_key("default"));
+    }
+
+    #[test]
+    fn preserves_explicit_disabled_tool_json_repair() {
+        let config: AIConfig = serde_json::from_value(serde_json::json!({
+            "models": [],
+            "func_agent_models": {},
+            "default_models": {},
+            "agent_profiles": {},
+            "allow_tool_json_repair": false,
+            "proxy": {
+                "enabled": false,
+                "url": ""
+            }
+        }))
+        .expect("config with an explicit JSON repair setting should deserialize");
+
+        assert!(!config.allow_tool_json_repair);
     }
 
     #[test]

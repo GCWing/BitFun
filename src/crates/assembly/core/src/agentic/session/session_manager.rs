@@ -6177,6 +6177,7 @@ mod tests {
                 raw_arguments: None,
                 is_error: false,
                 recovered_from_truncation: false,
+                repair_kind: Default::default(),
             }],
         )
         .with_turn_id("turn-1".to_string())

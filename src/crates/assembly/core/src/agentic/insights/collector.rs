@@ -659,6 +659,7 @@ fn rebuild_messages_from_turns(turns: &[DialogTurnData]) -> Vec<Message> {
                     raw_arguments: None,
                     is_error: false,
                     recovered_from_truncation: false,
+                    repair_kind: Default::default(),
                 })
                 .collect();
 

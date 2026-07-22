@@ -1442,6 +1442,7 @@ mod task_context_tests {
                 raw_arguments: None,
                 is_error: false,
                 recovered_from_truncation: false,
+                repair_kind: Default::default(),
             },
             ToolExecutionContext {
                 session_id: "session_1".to_string(),
