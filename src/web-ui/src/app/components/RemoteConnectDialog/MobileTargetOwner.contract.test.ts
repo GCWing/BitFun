@@ -94,4 +94,17 @@ describe('mobile control-target UI ownership contracts', () => {
     expect(pairingSource).toContain('!client.isControlTargetCurrent(target)');
     expect(pairingSource).toContain('client.pairedDeviceId !== homeDeviceId');
   });
+
+  it('bootstraps pairing auto-reconnect once without resetting to a stuck spinner', () => {
+    expect(pairingSource).toContain('attemptPairRef.current');
+    expect(pairingSource).toContain('pairAttemptGenerationRef');
+    expect(pairingSource).toContain('mount-once bootstrap');
+    expect(pairingSource).toContain('eslint-disable-next-line react-hooks/exhaustive-deps -- mount-once bootstrap');
+    // Regression: depending on attemptPair and unconditionally setting pairing
+    // after a failed reconnect left the page spinning with no retry form.
+    expect(pairingSource).not.toContain('autoReconnectAttemptedRef');
+    expect(pairingSource).not.toMatch(
+      /setConnectionStatus\(shouldAutoReconnect \? 'pairing' : 'idle'\)/,
+    );
+  });
 });
