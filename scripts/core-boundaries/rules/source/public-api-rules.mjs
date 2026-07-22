@@ -10,6 +10,7 @@ export const publicApiContractSlices = [
   'external-source-tool-contract',
   'external-source-subagent-contract',
   'external-source-mcp-contract',
+  'external-source-hook-contract',
   'external-integration-policy-contract',
 ];
 
@@ -23,6 +24,7 @@ const contractSlices = {
   externalSourceToolContract: 'external-source-tool-contract',
   externalSourceSubagentContract: 'external-source-subagent-contract',
   externalSourceMcpContract: 'external-source-mcp-contract',
+  externalSourceHookContract: 'external-source-hook-contract',
   externalIntegrationPolicyContract: 'external-integration-policy-contract',
 };
 
@@ -217,6 +219,37 @@ export const opencodeAdapterPublicApiEntries = [
     'OpenCode MCP adapter fixture tests and explicit environment injection',
   ),
 ];
+
+function externalHookContractEntry(symbol, owner, consumer, wireImpact = false) {
+  return {
+    symbol,
+    owner,
+    consumer,
+    verification:
+      'product-domain Hook contract tests, OpenCode mapping tests, managed-package read-projection tests, and core-boundary checks',
+    p0: 'runtime-free external Hook source-projection contract',
+    contractSlice: contractSlices.externalSourceHookContract,
+    wireImpact,
+    rationale:
+      'the production OpenCode managed-package read projection needs typed Hook identities and safety facts without runtime or ecosystem payload coupling',
+    exit:
+      'remove with the OpenCode static Hook projection or through a reviewed contract migration with equivalent fail-closed mapping tests',
+  };
+}
+
+export const externalHookContractPublicApiEntries = [
+  'ExternalHookContributionId',
+  'ExternalHookPoint',
+  'ExternalHookRiskCapability',
+  'ExternalHookSafetyDeclaration',
+  'ExternalHookContributionDeclaration',
+].map((symbol) =>
+  externalHookContractEntry(
+    symbol,
+    'product-domains external Hook contract owner',
+    'OpenCode managed-package read projection through source_adapter::read_diagnostics',
+  ),
+);
 
 function externalSourceEntry(symbol, owner, consumer, wireImpact = false) {
   return {
@@ -845,6 +878,12 @@ export const publicApiAllowlistRules = [
     reason:
       'external subagent contracts must stay ecosystem-neutral, fresh-only, and explicitly consumer-backed',
     allowedSymbolEntries: externalSubagentContractPublicApiEntries,
+  },
+  {
+    path: 'src/crates/contracts/product-domains/src/external_hook_contributions.rs',
+    reason:
+      'external Hook contracts must stay ecosystem-neutral, runtime-free, fail-closed, and explicitly consumer-backed',
+    allowedSymbolEntries: externalHookContractPublicApiEntries,
   },
   {
     path: 'src/crates/assembly/external-sources/src/lib.rs',

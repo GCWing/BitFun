@@ -873,6 +873,9 @@ export function runManifestParserSelfTest({
   const externalSubagentPublicApiRule = publicApiAllowlistRules.find(
     (rule) => rule.path === 'src/crates/contracts/product-domains/src/external_subagents.rs',
   );
+  const externalHookPublicApiRule = publicApiAllowlistRules.find(
+    (rule) => rule.path === 'src/crates/contracts/product-domains/src/external_hook_contributions.rs',
+  );
   const externalSourcePublicApiRule = publicApiAllowlistRules.find(
     (rule) => rule.path === 'src/crates/contracts/product-domains/src/external_sources.rs',
   );
@@ -1018,6 +1021,29 @@ export function runManifestParserSelfTest({
   }
   if (!externalSubagentPublicApiRule) {
     throw new Error('external subagent contracts must have an independent public API budget rule');
+  }
+  if (!externalHookPublicApiRule) {
+    throw new Error('external Hook contracts must have an independent public API budget rule');
+  }
+  if (!publicApiContractSlices.includes('external-source-hook-contract')) {
+    throw new Error('external Hook contracts must have an independent contract slice');
+  }
+  for (const requiredSymbol of [
+    'ExternalHookContributionId',
+    'ExternalHookPoint',
+    'ExternalHookRiskCapability',
+    'ExternalHookSafetyDeclaration',
+    'ExternalHookContributionDeclaration',
+  ]) {
+    if (!externalHookPublicApiRule.allowedSymbolEntries.some(
+      (entry) => entry.symbol === requiredSymbol
+        && entry.contractSlice === 'external-source-hook-contract'
+        && entry.wireImpact === false
+        && entry.consumer
+        && entry.verification,
+    )) {
+      throw new Error(`external Hook public API budget is missing a consumer-backed symbol: ${requiredSymbol}`);
+    }
   }
   if (!publicApiContractSlices.includes('external-source-subagent-contract')) {
     throw new Error('external subagent contracts must have an independent contract slice');

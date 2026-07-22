@@ -170,6 +170,7 @@ which = "8.0"
 similar = "2.5"
 urlencoding = "2.1"
 oxc = { version = "0.138.0", default-features = false, features = ["ast_visit", "codegen", "semantic", "transformer"] }
+oxc-parse = { package = "oxc", version = "0.138.0", default-features = false }
 rquickjs = { version = "0.9", default-features = false, features = ["classes", "properties", "macro"] }
 
 # Tauri (desktop only)
