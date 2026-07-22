@@ -1764,7 +1764,7 @@ fn setup_panic_hook() {
 
         // Known wry bug: WKWebView.URL() returns nil after navigating to an
         // invalid address, causing url_from_webview to panic on unwrap().
-        // This is non-fatal — the webview is still alive — so we log and
+        // This is non-fatal �?the webview is still alive �?so we log and
         // continue instead of killing the process.
         // See: https://github.com/tauri-apps/wry/pull/1554
         if location.contains("wry") && location.contains("wkwebview") {
@@ -1781,13 +1781,13 @@ fn setup_panic_hook() {
         }
 
         // ── Recovery strategy ──────────────────────────────────────────
-        // Main-thread panics are unrecoverable — the event loop is gone.
+        // Main-thread panics are unrecoverable �?the event loop is gone.
         // Spawned-thread panics only kill that thread; the rest of the
         // application can continue.  We log a clear message and skip the
         // hard exit so the user isn't forced to restart.
         if !is_main_thread {
             log::warn!(
-                "Non-main thread panicked — application will continue. \
+                "Non-main thread panicked �?application will continue. \
                  The affected feature may be degraded until the next restart."
             );
             return;

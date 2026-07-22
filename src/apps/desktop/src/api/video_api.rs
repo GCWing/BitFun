@@ -1,4 +1,4 @@
-//! FFmpeg/video processing API.
+//! Video processing API (gateway to external multimedia tools).
 //!
 //! All commands are gated behind `#[cfg(feature = "video")]`.
 //! When the feature is disabled, no-op stubs return an error so the
@@ -6,10 +6,8 @@
 //!
 //! ## 第三方依赖与许可
 //!
-//! - **FFmpeg** (LGPL 2.1+ / GPL 2+) — 通过外部命令调用，未捆绑分发。
-//!   项目地址: https://ffmpeg.org
-//! - **ffmpeg-sidecar** (MIT) — Rust 封装库。
-//!   项目地址: https://github.com/nathanbabcock/ffmpeg-sidecar (crates.io, 1.4M+ downloads)
+//! - **FFmpeg** (LGPL 2.1+) — 通过外部命令调用，未捆绑分发。https://ffmpeg.org
+//! - **ffmpeg-sidecar** (MIT) — Rust 封装。https://github.com/nathanbabcock/ffmpeg-sidecar (crates.io)
 
 #[cfg(feature = "video")]
 use std::path::Path;
@@ -49,7 +47,7 @@ fn validate_input_path(path_str: &str) -> Result<std::path::PathBuf, String> {
 
 #[tauri::command]
 #[cfg(feature = "video")]
-pub async fn ffmpeg_execute(args: Vec<String>) -> Result<String, String> {
+pub async fn video_execute(args: Vec<String>) -> Result<String, String> {
     use ffmpeg_sidecar::command::FfmpegCommand;
 
     let mut cmd = FfmpegCommand::new();
@@ -81,7 +79,7 @@ pub async fn ffmpeg_execute(args: Vec<String>) -> Result<String, String> {
 
 #[tauri::command]
 #[cfg(feature = "video")]
-pub async fn ffmpeg_get_metadata(input_path: String) -> Result<serde_json::Value, String> {
+pub async fn video_get_metadata(input_path: String) -> Result<serde_json::Value, String> {
     use ffmpeg_sidecar::{command::FfmpegCommand, event::FfmpegEvent};
 
     // Validate and canonicalize input path
@@ -141,12 +139,12 @@ pub async fn ffmpeg_get_metadata(input_path: String) -> Result<serde_json::Value
 
 #[tauri::command]
 #[cfg(not(feature = "video"))]
-pub async fn ffmpeg_execute(_args: Vec<String>) -> Result<String, String> {
+pub async fn video_execute(_args: Vec<String>) -> Result<String, String> {
     Err("video feature not enabled".to_string())
 }
 
 #[tauri::command]
 #[cfg(not(feature = "video"))]
-pub async fn ffmpeg_get_metadata(_input_path: String) -> Result<serde_json::Value, String> {
+pub async fn video_get_metadata(_input_path: String) -> Result<serde_json::Value, String> {
     Err("video feature not enabled".to_string())
 }
