@@ -38,6 +38,17 @@
     background: transparent;
   }
 
+  &__brainstorm-only {
+    width: 100%;
+    height: 100%;
+    overflow-y: auto;
+  }
+
+  &__brainstorm-groups {
+    display: grid;
+    gap: 18px;
+  }
+
   &__messages[data-history-state="ready"][data-is-partial="true"] {
     .user-message-item,
     .model-round-item {

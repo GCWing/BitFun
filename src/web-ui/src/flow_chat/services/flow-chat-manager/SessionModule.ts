@@ -16,11 +16,7 @@ import { isPeerDeviceModeActive } from '@/infrastructure/peer-device/peerModeFla
 import { normalizeRemoteWorkspacePath } from '@/shared/utils/pathUtils';
 import { WorkspaceKind, type WorkspaceInfo } from '@/shared/types';
 import type { AIModelConfig, AgentModelDefaultsConfig, DefaultModelsConfig } from '@/infrastructure/config/types';
-import type {
-  FlowChatContext,
-  SessionConfig,
-  SessionHistoryHydrationLocation,
-} from './types';
+import type { FlowChatContext, SessionConfig } from './types';
 import type { Session } from '../../types/flow-chat';
 import { touchSessionActivity, cleanupSaveState } from './PersistenceModule';
 import { cleanupSessionBuffers } from './TextChunkModule';
@@ -47,16 +43,6 @@ import {
 
 const log = createLogger('SessionModule');
 const pendingSessionCreations = new Map<string, Promise<string>>();
-
-const getHydrationLocationKey = (
-  location: SessionHistoryHydrationLocation | undefined,
-): string => location?.workspacePath
-  ? JSON.stringify([
-      location.workspacePath,
-      location.remoteConnectionId ?? '',
-      location.remoteSshHost ?? '',
-    ])
-  : '';
 export const SESSION_ACTIVITY_TOUCH_DELAY_MS = 350;
 let latestSwitchRequestId = 0;
 let pendingActivityTouchTimer: ReturnType<typeof setTimeout> | null = null;
@@ -157,47 +143,16 @@ async function hydrateHistoricalSession(
   options?: {
     isRetryStillRelevant?: () => boolean;
     retryActiveStaleReuse?: boolean;
-    allowNonHistorical?: boolean;
-    includeInternal?: boolean;
-    deferFullHistoryUntilActive?: boolean;
-    location?: SessionHistoryHydrationLocation;
   },
 ): Promise<void> {
   const existing = context.pendingHistoryLoads.get(sessionId);
   if (existing) {
-    const existingCapabilities = context.pendingHistoryLoadCapabilities?.get(sessionId);
-    const requestedLocationKey = getHydrationLocationKey(options?.location);
-    const requiresStrongerHydrate =
-      (options?.includeInternal === true && existingCapabilities?.includeInternal !== true) ||
-      (options?.deferFullHistoryUntilActive === false &&
-        existingCapabilities?.deferFullHistoryUntilActive !== false) ||
-      (Boolean(requestedLocationKey) && existingCapabilities?.locationKey !== requestedLocationKey);
     startupTrace.markPhase('historical_session_hydrate_reused');
     recordHistorySessionDiagnosticEvent(sessionId, 'hydrate_reused_pending', {
       notifyOnError,
       retryActiveStaleReuse: options?.retryActiveStaleReuse === true,
     });
-    let existingFailed = false;
-    let existingError: unknown;
-    try {
-      await existing;
-    } catch (error) {
-      existingFailed = true;
-      existingError = error;
-    }
-    if (requiresStrongerHydrate) {
-      if (context.pendingHistoryLoads.get(sessionId) === existing) {
-        context.pendingHistoryLoads.delete(sessionId);
-      }
-      if (context.pendingHistoryLoadCapabilities?.get(sessionId)?.promise === existing) {
-        context.pendingHistoryLoadCapabilities.delete(sessionId);
-      }
-      await hydrateHistoricalSession(context, sessionId, notifyOnError, options);
-      return;
-    }
-    if (existingFailed) {
-      throw existingError;
-    }
+    await existing;
     const retryStillRelevant = options?.isRetryStillRelevant?.() !== false;
     const shouldRetryActiveStale = shouldRetryActiveStaleHydrate(context, sessionId);
     recordHistorySessionDiagnosticEvent(sessionId, 'hydrate_reused_settled', {
@@ -229,25 +184,19 @@ async function hydrateHistoricalSession(
 
   const loadPromise = (async () => {
     const session = context.flowChatStore.getState().sessions.get(sessionId);
-    if (!session || (!session.isHistorical && options?.allowNonHistorical !== true)) {
+    if (!session?.isHistorical) {
       recordHistorySessionDiagnosticEvent(sessionId, 'hydrate_request_skipped', {
         reason: session ? 'not_historical' : 'missing_session',
       });
       return;
     }
 
-    const workspacePath = requireSessionWorkspacePath(
-      session.workspacePath || options?.location?.workspacePath,
-      sessionId,
-    );
-    const storedConnectionId = options?.location?.remoteConnectionId || session.remoteConnectionId;
-    const storedSshHost = options?.location?.remoteSshHost || session.remoteSshHost;
-    const remote = isRemoteTraceContext(storedConnectionId, storedSshHost);
-    const deferFullHistoryUntilActive = options?.deferFullHistoryUntilActive ?? true;
+    const workspacePath = requireSessionWorkspacePath(session.workspacePath, sessionId);
+    const remote = isRemoteTraceContext(session.remoteConnectionId, session.remoteSshHost);
     markHistorySessionHydratePending(sessionId, {
       notifyOnError,
       remote,
-      deferFullHistoryUntilActive,
+      deferFullHistoryUntilActive: true,
     });
     startupTrace.markPhase('historical_session_hydrate_request', { remote });
     recordHistorySessionDiagnosticEvent(sessionId, 'hydrate_request_started', {
@@ -261,13 +210,13 @@ async function hydrateHistoricalSession(
     // remoteConnectionId becomes stale; the active workspace always
     // carries the up-to-date connection_id.
     const effectiveConnectionId = resolveEffectiveConnectionId(
-      storedConnectionId,
-      storedSshHost,
+      session.remoteConnectionId,
+      session.remoteSshHost,
       workspacePath
     );
     const effectiveSshHost = resolveEffectiveSshHost(
-      storedSshHost,
-      storedConnectionId,
+      session.remoteSshHost,
+      session.remoteConnectionId,
       workspacePath
     );
 
@@ -277,22 +226,11 @@ async function hydrateHistoricalSession(
       undefined,
       effectiveConnectionId,
       effectiveSshHost,
-      {
-        includeInternal: options?.includeInternal,
-        deferFullHistoryUntilActive,
-      },
+      { deferFullHistoryUntilActive: true },
     );
   })();
 
   context.pendingHistoryLoads.set(sessionId, loadPromise);
-  const pendingHistoryLoadCapabilities =
-    context.pendingHistoryLoadCapabilities ??= new Map();
-  pendingHistoryLoadCapabilities.set(sessionId, {
-    promise: loadPromise,
-    includeInternal: options?.includeInternal === true,
-    deferFullHistoryUntilActive: options?.deferFullHistoryUntilActive ?? true,
-    locationKey: getHydrationLocationKey(options?.location),
-  });
 
   try {
     await loadPromise;
@@ -319,24 +257,7 @@ async function hydrateHistoricalSession(
     if (context.pendingHistoryLoads.get(sessionId) === loadPromise) {
       context.pendingHistoryLoads.delete(sessionId);
     }
-    if (context.pendingHistoryLoadCapabilities?.get(sessionId)?.promise === loadPromise) {
-      context.pendingHistoryLoadCapabilities.delete(sessionId);
-    }
   }
-}
-
-export async function hydrateSessionHistoryForDetail(
-  context: FlowChatContext,
-  sessionId: string,
-  location?: SessionHistoryHydrationLocation,
-): Promise<void> {
-  const session = context.flowChatStore.getState().sessions.get(sessionId);
-  await hydrateHistoricalSession(context, sessionId, false, {
-    allowNonHistorical: true,
-    includeInternal: session?.sessionKind === 'subagent',
-    deferFullHistoryUntilActive: false,
-    location,
-  });
 }
 
 function shouldHydrateHistoricalSessionBeforeSwitch(session: Session | undefined): session is Session {
@@ -631,7 +552,11 @@ async function resolveModelForSessionCreation(modelName?: string): Promise<strin
 export async function createChatSession(
   context: FlowChatContext,
   config: SessionConfig,
-  mode?: string
+  mode?: string,
+  options?: {
+    activate?: boolean;
+    title?: string;
+  }
 ): Promise<string> {
   try {
     const workspacePath = resolveSessionWorkspacePath(context, config);
@@ -654,7 +579,8 @@ export async function createChatSession(
         : remoteConnectionId != null && remoteConnectionId !== ''
           ? `${remoteConnectionId}\n${workspacePath}`
           : workspacePath;
-    const creationKey = JSON.stringify([workspaceCreationKey, agentType]);
+    const explicitModelCreationKey = config.modelName?.trim() || '';
+    const creationKey = JSON.stringify([workspaceCreationKey, agentType, explicitModelCreationKey]);
 
     const pendingCreation = pendingSessionCreations.get(creationKey);
     if (pendingCreation) {
@@ -674,11 +600,13 @@ export async function createChatSession(
           remoteSshHost,
         },
       );
-      const titleDescriptor = createDefaultSessionTitleDescriptor(
-        sessionMode,
-        sameModeCount,
-        (key, options) => i18nService.t(key, options),
-      );
+      const titleDescriptor = options?.title
+        ? createTextSessionTitleDescriptor(options.title)
+        : createDefaultSessionTitleDescriptor(
+          sessionMode,
+          sameModeCount,
+          (key, options) => i18nService.t(key, options),
+        );
       const sessionName = titleDescriptor.text;
 
       const sessionModelName = await resolveModelForSessionCreation(config.modelName);
@@ -720,6 +648,7 @@ export async function createChatSession(
         remoteConnectionId,
         remoteSshHost,
         titleDescriptor,
+        { activate: options?.activate },
       );
 
       return response.sessionId;
