@@ -241,6 +241,14 @@ pub enum AgenticEvent {
         effective_model_name: String,
     },
 
+    /// Emitted as soon as an automatic retry supersedes one model attempt.
+    ModelRoundAttemptSuperseded {
+        session_id: String,
+        turn_id: String,
+        round_id: String,
+        diagnostic: ModelRoundAttemptDiagnostic,
+    },
+
     ModelRoundCompleted {
         session_id: String,
         turn_id: String,
@@ -343,6 +351,34 @@ pub enum AgenticEvent {
         /// `"model_deleted"`.
         reason: String,
     },
+}
+
+/// Diagnostic evidence collected for an attempt that was superseded by an
+/// automatic retry. Raw provider/transport text is intentionally preserved so
+/// the desktop surface can expose it on demand without changing retry policy.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ModelRoundAttemptDiagnostic {
+    pub attempt_id: String,
+    pub attempt_index: u32,
+    pub category: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub raw_error: Option<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub tool_calls: Vec<ModelRoundAttemptToolDiagnostic>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ModelRoundAttemptToolDiagnostic {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tool_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tool_name: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub raw_arguments: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub validation_error: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -560,6 +596,7 @@ impl AgenticEvent {
             | Self::DialogTurnCancelled { session_id, .. }
             | Self::DialogTurnFailed { session_id, .. }
             | Self::ModelRoundStarted { session_id, .. }
+            | Self::ModelRoundAttemptSuperseded { session_id, .. }
             | Self::TextChunk { session_id, .. }
             | Self::ThinkingChunk { session_id, .. }
             | Self::ModelRoundCompleted { session_id, .. }
@@ -590,6 +627,7 @@ impl AgenticEvent {
             | Self::TextChunk { .. }
             | Self::ThinkingChunk { .. }
             | Self::ModelRoundStarted { .. }
+            | Self::ModelRoundAttemptSuperseded { .. }
             | Self::ModelRoundCompleted { .. }
             | Self::TokenUsageUpdated { .. }
             | Self::DialogTurnCompleted { .. }

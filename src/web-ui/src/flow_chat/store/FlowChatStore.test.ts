@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { flowChatStore } from './FlowChatStore';
+import { flowChatStore, mergeModelRoundAttemptDiagnostics } from './FlowChatStore';
 import type { FlowChatState, Session } from '../types/flow-chat';
 import { startupTrace } from '@/shared/utils/startupTrace';
 import { projectEffectiveToolItem } from '../utils/toolInvocationIdentity';
@@ -452,6 +452,71 @@ describe('FlowChatStore round attempts', () => {
     });
   });
 
+  it('immediately supersedes active items when retry diagnostics arrive before next attempt output', () => {
+    const session = createSession({
+      dialogTurns: [{
+        id: 'turn-1',
+        sessionId: 'session-1',
+        userMessage: {
+          id: 'user-1',
+          content: 'hello',
+          timestamp: 1000,
+        },
+        modelRounds: [{
+          id: 'round-1',
+          index: 0,
+          items: [{
+            id: 'tool-1',
+            type: 'tool',
+            toolName: 'FakeTool',
+            timestamp: 1100,
+            status: 'preparing',
+            attemptId: 'round-1:attempt:1',
+            attemptIndex: 1,
+            toolCall: {
+              id: 'tool-1',
+              input: {},
+            },
+            isParamsStreaming: true,
+            startTime: 1100,
+          }],
+          isStreaming: true,
+          isComplete: false,
+          status: 'streaming',
+          startTime: 1000,
+        }],
+        status: 'processing',
+        startTime: 1000,
+      }],
+    });
+
+    flowChatStore.setState(() => ({
+      sessions: new Map([[session.sessionId, session]]),
+      activeSessionId: session.sessionId,
+    }));
+
+    flowChatStore.updateModelRound(session.sessionId, 'turn-1', 'round-1', round =>
+      mergeModelRoundAttemptDiagnostics(round, [{
+        attemptId: 'round-1:attempt:1',
+        attemptIndex: 1,
+        category: 'invalid_tool_arguments',
+      }], { supersedeMatchingAttempts: true }),
+    );
+
+    const round = flowChatStore.getState().sessions.get(session.sessionId)?.dialogTurns[0]?.modelRounds[0];
+    expect(round).toMatchObject({ status: 'streaming', isStreaming: true });
+    expect(round?.attempts?.[0]).toMatchObject({
+      status: 'superseded',
+      diagnostic: { category: 'invalid_tool_arguments' },
+    });
+    expect(round?.attempts?.[0]?.items[0]).toMatchObject({
+      type: 'tool',
+      status: 'cancelled',
+      isParamsStreaming: false,
+      interruptionReason: 'retry_superseded',
+    });
+  });
+
   it('preserves retry superseded interruption details when restoring persisted turns', () => {
     const restoredTurn = (flowChatStore as any).convertToDialogTurns([{
       turnId: 'turn-1',
@@ -485,6 +550,17 @@ describe('FlowChatStore round attempts', () => {
           attemptId: 'round-1:attempt:1',
           attemptIndex: 1,
         }],
+        attemptDiagnostics: [{
+          attemptId: 'round-1:attempt:1',
+          attemptIndex: 1,
+          category: 'invalid_tool_arguments',
+          toolCalls: [{
+            toolId: 'ask-1',
+            toolName: 'AskUserQuestion',
+            rawArguments: '{"questions":',
+            validationError: 'EOF while parsing an object',
+          }],
+        }],
       }],
       status: 'completed',
       timestamp: 1000,
@@ -499,6 +575,116 @@ describe('FlowChatStore round attempts', () => {
       attemptId: 'round-1:attempt:1',
       attemptIndex: 1,
     });
+    expect(restoredRound.attempts?.[0]?.diagnostic?.toolCalls?.[0]).toMatchObject({
+      rawArguments: '{"questions":',
+      validationError: 'EOF while parsing an object',
+    });
+  });
+
+  it('adds a diagnostic-only retry attempt to the collapsed history', () => {
+    const round = mergeModelRoundAttemptDiagnostics({
+      id: 'round-1',
+      index: 0,
+      items: [],
+      isStreaming: false,
+      isComplete: true,
+      status: 'completed',
+      startTime: 1000,
+    }, [{
+      attemptId: 'round-1:attempt:1',
+      attemptIndex: 1,
+      category: 'invalid_tool_arguments',
+      toolCalls: [],
+    }]);
+
+    expect(round.attempts).toEqual([expect.objectContaining({
+      id: 'round-1:attempt:1',
+      index: 1,
+      status: 'superseded',
+      items: [],
+      diagnostic: expect.objectContaining({ category: 'invalid_tool_arguments' }),
+    })]);
+  });
+
+  it('attaches a diagnostic to the matching existing retry attempt', () => {
+    const round = mergeModelRoundAttemptDiagnostics({
+      id: 'round-1',
+      index: 0,
+      items: [],
+      isStreaming: false,
+      isComplete: true,
+      status: 'completed',
+      startTime: 1000,
+      attempts: [{
+        id: 'round-1:attempt:1',
+        index: 1,
+        status: 'superseded',
+        items: [],
+      }],
+    }, [{
+      attemptId: 'round-1:attempt:1',
+      attemptIndex: 1,
+      category: 'transient_request_error',
+      rawError: 'provider connection reset',
+    }]);
+
+    expect(round.attempts).toHaveLength(1);
+    expect(round.attempts?.[0]?.diagnostic).toMatchObject({
+      category: 'transient_request_error',
+      rawError: 'provider connection reset',
+    });
+  });
+
+  it('accumulates diagnostics emitted one retry attempt at a time', () => {
+    const afterFirstDiagnostic = mergeModelRoundAttemptDiagnostics({
+      id: 'round-1',
+      index: 0,
+      items: [],
+      isStreaming: true,
+      isComplete: false,
+      status: 'streaming',
+      startTime: 1000,
+    }, [{
+      attemptId: 'round-1:attempt:1',
+      attemptIndex: 1,
+      category: 'invalid_tool_arguments',
+    }]);
+
+    const afterSecondDiagnostic = mergeModelRoundAttemptDiagnostics(afterFirstDiagnostic, [{
+      attemptId: 'round-1:attempt:2',
+      attemptIndex: 2,
+      category: 'transient_stream_error',
+      rawError: 'connection reset',
+    }]);
+
+    expect(afterSecondDiagnostic.attemptDiagnostics?.map(diagnostic => diagnostic.attemptIndex)).toEqual([1, 2]);
+    expect(afterSecondDiagnostic.attempts?.map(attempt => attempt.diagnostic?.category)).toEqual([
+      'invalid_tool_arguments',
+      'transient_stream_error',
+    ]);
+  });
+
+  it('sorts retry diagnostics and the corresponding attempts by attempt index', () => {
+    const round = mergeModelRoundAttemptDiagnostics({
+      id: 'round-1',
+      index: 0,
+      items: [],
+      isStreaming: false,
+      isComplete: true,
+      status: 'completed',
+      startTime: 1000,
+    }, [{
+      attemptId: 'round-1:attempt:2',
+      attemptIndex: 2,
+      category: 'transient_stream_error',
+    }, {
+      attemptId: 'round-1:attempt:1',
+      attemptIndex: 1,
+      category: 'invalid_tool_arguments',
+    }]);
+
+    expect(round.attemptDiagnostics?.map(diagnostic => diagnostic.attemptIndex)).toEqual([1, 2]);
+    expect(round.attempts?.map(attempt => attempt.index)).toEqual([1, 2]);
   });
 
   it('restores a persisted deferred call as its canonical wire invocation', () => {

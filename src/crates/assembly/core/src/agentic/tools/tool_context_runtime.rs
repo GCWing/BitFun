@@ -1441,6 +1441,7 @@ mod task_context_tests {
                 arguments: json!({ "url": "https://example.com" }),
                 raw_arguments: None,
                 is_error: false,
+                parse_error: None,
                 recovered_from_truncation: false,
                 repair_kind: Default::default(),
             },

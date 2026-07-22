@@ -1256,6 +1256,26 @@
     "retryHistoryHide": "隱藏重試歷史",
     "attemptLabel": "第 {{index}} 次嘗試",
     "attemptSuperseded": "已被重試接替",
+    "attemptDiagnostics": {
+      "show": "顯示本次重試診斷詳情",
+      "hide": "隱藏本次重試診斷詳情",
+      "copy": "複製",
+      "copied": "已複製",
+      "providerError": "服務商錯誤",
+      "toolArguments": "工具參數：{{name}}",
+      "rawArguments": "原始參數",
+      "validationError": "解析或驗證錯誤",
+      "unknownTool": "未知工具",
+      "categories": {
+        "transientRequestError": "請求在服務商回應前失敗",
+        "interruptedToolArguments": "工具參數輸出被中斷",
+        "partialStreamError": "串流輸出以可復原錯誤結束",
+        "invalidToolArguments": "服務商回傳了不合法的工具參數",
+        "noEffectiveOutput": "服務商未回傳可用輸出",
+        "transientStreamError": "串流輸出在產生可用內容前失敗",
+        "unknown": "重試診斷：{{category}}"
+      }
+    },
     "meta": {
       "label": "回應中繼資料",
       "completed": "完成",

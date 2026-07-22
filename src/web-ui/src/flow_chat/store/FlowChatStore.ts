@@ -9,6 +9,7 @@ import {
   DialogTurn,
   ModelRound,
   ModelRoundAttempt,
+  ModelRoundAttemptDiagnostic,
   FlowItem,
   FlowToolItem,
   FlowImageAnalysisItem,
@@ -333,6 +334,66 @@ function synchronizeRoundAttempts(round: ModelRound): ModelRound {
           disableExploreGrouping: true,
         }
       : round.renderHints,
+  };
+}
+
+export function mergeModelRoundAttemptDiagnostics(
+  round: ModelRound,
+  diagnostics: ModelRoundAttemptDiagnostic[] | undefined,
+  options: { supersedeMatchingAttempts?: boolean } = {},
+): ModelRound {
+  if (!diagnostics || diagnostics.length === 0) {
+    return round;
+  }
+
+  const attempts = round.attempts ?? deriveRoundAttemptsFromItems(round.items) ?? [];
+  const diagnosticByKey = new Map<string, ModelRoundAttemptDiagnostic>();
+  for (const diagnostic of round.attemptDiagnostics ?? []) {
+    diagnosticByKey.set(`${diagnostic.attemptId}::${diagnostic.attemptIndex}`, diagnostic);
+  }
+  for (const attempt of attempts) {
+    if (attempt.diagnostic) {
+      diagnosticByKey.set(`${attempt.diagnostic.attemptId}::${attempt.diagnostic.attemptIndex}`, attempt.diagnostic);
+    }
+  }
+  for (const diagnostic of diagnostics) {
+    diagnosticByKey.set(`${diagnostic.attemptId}::${diagnostic.attemptIndex}`, diagnostic);
+  }
+
+  const sortedDiagnostics = [...diagnosticByKey.values()].sort((left, right) => (
+    left.attemptIndex - right.attemptIndex || left.attemptId.localeCompare(right.attemptId)
+  ));
+  const supersededKeys = new Set(
+    options.supersedeMatchingAttempts
+      ? diagnostics.map(diagnostic => `${diagnostic.attemptId}::${diagnostic.attemptIndex}`)
+      : [],
+  );
+  const nextAttempts = attempts.map(attempt => {
+    const key = `${attempt.id}::${attempt.index}`;
+    const diagnostic = diagnosticByKey.get(key) ?? attempt.diagnostic;
+    return supersededKeys.has(key)
+      ? { ...attempt, status: 'superseded' as const, diagnostic }
+      : diagnostic ? { ...attempt, diagnostic } : attempt;
+  });
+  const knownKeys = new Set(nextAttempts.map(attempt => `${attempt.id}::${attempt.index}`));
+
+  for (const diagnostic of sortedDiagnostics) {
+    const key = `${diagnostic.attemptId}::${diagnostic.attemptIndex}`;
+    if (!knownKeys.has(key)) {
+      nextAttempts.push({
+        id: diagnostic.attemptId,
+        index: diagnostic.attemptIndex,
+        status: 'superseded',
+        items: [],
+        diagnostic,
+      });
+    }
+  }
+
+  return {
+    ...round,
+    attemptDiagnostics: sortedDiagnostics,
+    attempts: sortAttemptEntries(nextAttempts),
   };
 }
 
@@ -3231,6 +3292,7 @@ export class FlowChatStore {
             firstVisibleOutputMs: round.firstVisibleOutputMs,
             streamDurationMs: round.streamDurationMs,
             attemptCount: round.attemptCount,
+            attemptDiagnostics: round.attemptDiagnostics,
             failureCategory: round.failureCategory,
             tokenDetails: round.tokenDetails,
             status: round.status
@@ -4529,7 +4591,7 @@ export class FlowChatStore {
           return aIndex - bIndex;
         });
 
-        const hydratedRound = synchronizeRoundAttempts({
+        const hydratedRound = mergeModelRoundAttemptDiagnostics(synchronizeRoundAttempts({
           id: round.id,
           index: round.roundIndex ?? 0,
           roundGroupId: round.roundGroupId,
@@ -4548,9 +4610,10 @@ export class FlowChatStore {
           firstVisibleOutputMs: round.firstVisibleOutputMs,
           streamDurationMs: round.streamDurationMs,
           attemptCount: round.attemptCount,
+          attemptDiagnostics: round.attemptDiagnostics,
           failureCategory: round.failureCategory,
           tokenDetails: round.tokenDetails,
-        });
+        }), round.attemptDiagnostics);
 
         return hydratedRound;
       }),

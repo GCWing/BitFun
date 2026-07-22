@@ -734,6 +734,7 @@ mod tests {
             arguments: json!({ "path": "src/main.rs" }),
             raw_arguments: Some(r#"{"path":"src/main.rs" "line_end":4}"#.to_string()),
             is_error: false,
+            parse_error: None,
             recovered_from_truncation: false,
             repair_kind: ToolArgumentRepairKind::PermissiveNormalToolJsonRepair,
         });
@@ -759,6 +760,9 @@ pub struct ToolCall {
     /// Record whether tool parameters are valid
     #[serde(default)]
     pub is_error: bool,
+    /// Original JSON parser error when the provider emitted invalid arguments.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub parse_error: Option<String>,
     /// True when the raw JSON arguments were truncated mid-stream and we
     /// successfully repaired them. Downstream consumers can flag this to the
     /// model so it understands the content may be incomplete.
@@ -786,6 +790,7 @@ impl From<bitfun_agent_stream::ToolCall> for ToolCall {
             arguments: tool_call.arguments,
             raw_arguments: tool_call.raw_arguments,
             is_error: tool_call.is_error,
+            parse_error: tool_call.parse_error,
             recovered_from_truncation: tool_call.recovered_from_truncation,
             repair_kind: tool_call.repair_kind,
         }

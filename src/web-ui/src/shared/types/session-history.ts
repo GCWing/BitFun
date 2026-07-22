@@ -205,9 +205,25 @@ export interface ModelRoundData {
   firstVisibleOutputMs?: number;
   streamDurationMs?: number;
   attemptCount?: number;
+  attemptDiagnostics?: ModelRoundAttemptDiagnostic[];
   failureCategory?: string;
   tokenDetails?: unknown;
   status: string;
+}
+
+export interface ModelRoundAttemptDiagnostic {
+  attemptId: string;
+  attemptIndex: number;
+  category: string;
+  rawError?: string;
+  toolCalls?: ModelRoundAttemptToolDiagnostic[];
+}
+
+export interface ModelRoundAttemptToolDiagnostic {
+  toolId?: string;
+  toolName?: string;
+  rawArguments?: string;
+  validationError?: string;
 }
 
 export interface ModelRoundRenderHints {

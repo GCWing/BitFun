@@ -36,6 +36,9 @@ pub struct ToolCall {
     pub raw_arguments: Option<String>,
     /// Record whether tool parameters are valid.
     pub is_error: bool,
+    /// Original JSON parser error when the provider emitted invalid arguments.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub parse_error: Option<String>,
     /// True when truncated raw JSON arguments were repaired into a partial tool call.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub recovered_from_truncation: bool,
@@ -426,6 +429,7 @@ impl StreamContext {
             raw_arguments: (!finalized.raw_arguments.is_empty())
                 .then_some(finalized.raw_arguments.clone()),
             is_error: finalized.is_error,
+            parse_error: finalized.parse_error.clone(),
             recovered_from_truncation: finalized.recovered_from_truncation,
             repair_kind: finalized.repair_kind,
         });
@@ -1267,6 +1271,7 @@ mod tests {
                     arguments: json!({}),
                     raw_arguments: None,
                     is_error: false,
+                    parse_error: None,
                     recovered_from_truncation: false,
                     repair_kind: Default::default(),
                 }],
