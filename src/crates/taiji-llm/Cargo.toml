@@ -18,13 +18,16 @@ async-trait = { workspace = true }
 futures = { workspace = true }
 anyhow = { workspace = true }
 candle-core = { workspace = true, optional = true }
-bitfun-ai-adapters = { path = "../../adapters/ai-adapters", optional = true }
-bitfun-core = { path = "../../assembly/core", optional = true }
+
+# NOTE: The `bitfun` feature requires building inside the BitFun workspace.
+# When enabled, add:
+#   bitfun-ai-adapters = { path = "../../adapters/ai-adapters" }
+#   bitfun-core = { path = "../../assembly/core" }
+# See https://github.com/GCWing/BitFun
 
 [features]
 default = []
 candle = ["candle-core"]
-bitfun = ["bitfun-ai-adapters", "bitfun-core"]
 
 [lints]
 workspace = true
