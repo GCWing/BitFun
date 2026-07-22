@@ -11,7 +11,7 @@ import {
   ExternalLink,
   BarChart3,
   ChevronUp,
-  LogIn,
+  // LogIn,
   MessageCircle,
 } from 'lucide-react';
 import { systemAPI } from '@/infrastructure/api';
@@ -24,7 +24,7 @@ import { useCanvasStore } from '@/app/components/panels/content-canvas/stores';
 import { useToolbarModeContext } from '@/flow_chat/components/toolbar-mode/ToolbarModeContext';
 import { useCurrentWorkspace } from '@/infrastructure/contexts/WorkspaceContext';
 import { useNotification } from '@/shared/notification-system';
-import { remoteConnectAPI } from '@/infrastructure/api/service-api/RemoteConnectAPI';
+// import { remoteConnectAPI } from '@/infrastructure/api/service-api/RemoteConnectAPI';
 import NotificationButton from '../../TitleBar/NotificationButton';
 import {
   RemoteConnectDisclaimerContent,
@@ -35,7 +35,8 @@ import {
 } from '../../RemoteConnectDialog/remoteConnectDisclaimerStorage';
 
 const RemoteConnectDialog = lazy(() => import('../../RemoteConnectDialog'));
-const AccountLoginDialog = lazy(() => import('../../AccountLoginDialog'));
+// BitFun account login is disabled while the product feature is being retired.
+// const AccountLoginDialog = lazy(() => import('../../AccountLoginDialog'));
 const AboutDialog = lazy(() =>
   import('../../AboutDialog').then(module => ({ default: module.AboutDialog }))
 );
@@ -75,23 +76,23 @@ const PersistentFooterActions: React.FC = () => {
   const [menuOpen, setMenuOpen] = useState(false);
   const [menuClosing, setMenuClosing] = useState(false);
   const [showAbout, setShowAbout] = useState(false);
-  const [showAccountLogin, setShowAccountLogin] = useState(false);
+  // const [showAccountLogin, setShowAccountLogin] = useState(false);
   const [showRemoteConnect, setShowRemoteConnect] = useState(false);
   const [showRemoteDisclaimer, setShowRemoteDisclaimer] = useState(false);
   const [hasAgreedRemoteDisclaimer, setHasAgreedRemoteDisclaimer] = useState<boolean>(() => getRemoteConnectDisclaimerAgreed());
 
-  // Periodic token-expiry check. Only auto-open the login dialog if the
-  // token has actually expired while the app is running — not on startup.
-  useEffect(() => {
-    const expiryCheck = setInterval(() => {
-      remoteConnectAPI.accountTokenExpired().then((expired) => {
-        if (expired) {
-          setShowAccountLogin(true);
-        }
-      });
-    }, 60000);
-    return () => clearInterval(expiryCheck);
-  }, []);
+  // Account login retirement: do not reopen the login dialog when a stored
+  // account token expires.
+  // useEffect(() => {
+  //   const expiryCheck = setInterval(() => {
+  //     remoteConnectAPI.accountTokenExpired().then((expired) => {
+  //       if (expired) {
+  //         setShowAccountLogin(true);
+  //       }
+  //     });
+  //   }, 60000);
+  //   return () => clearInterval(expiryCheck);
+  // }, []);
 
   const closeMenu = useCallback(() => {
     setMenuClosing(true);
@@ -159,10 +160,10 @@ const PersistentFooterActions: React.FC = () => {
     enableToolbarMode();
   };
 
-  const handleAccountLogin = () => {
-    closeMenu();
-    setShowAccountLogin(true);
-  };
+  // const handleAccountLogin = () => {
+  //   closeMenu();
+  //   setShowAccountLogin(true);
+  // };
 
   const handleRemoteConnect = useCallback(async () => {
     if (!hasWorkspace) {
@@ -229,17 +230,7 @@ const PersistentFooterActions: React.FC = () => {
                   role="menu"
                   data-testid="nav-footer-menu"
                 >
-                  <button
-                    type="button"
-                    className="bitfun-nav-panel__footer-menu-item"
-                    role="menuitem"
-                    onClick={handleAccountLogin}
-                    data-testid="nav-footer-account-login-item"
-                  >
-                    <LogIn size={14} />
-                    <span>{t('shared:features.accountLogin')}</span>
-                  </button>
-                  <div className="bitfun-nav-panel__footer-menu-divider" />
+                  {/* BitFun account login entry is intentionally disabled. */}
                   <Tooltip
                     content={t('header.remoteConnectRequiresWorkspace')}
                     placement="right"
@@ -354,11 +345,7 @@ const PersistentFooterActions: React.FC = () => {
           <AboutDialog isOpen={showAbout} onClose={() => setShowAbout(false)} />
         </Suspense>
       )}
-      {showAccountLogin && (
-        <Suspense fallback={null}>
-          <AccountLoginDialog isOpen={showAccountLogin} onClose={() => setShowAccountLogin(false)} />
-        </Suspense>
-      )}
+      {/* BitFun account login dialog is intentionally disabled. */}
       {showRemoteConnect && (
         <Suspense fallback={null}>
           <RemoteConnectDialog isOpen={showRemoteConnect} onClose={() => setShowRemoteConnect(false)} />
