@@ -87,16 +87,16 @@ const PRESETS: AcpClientPreset[] = [
   {
     id: 'claude-code',
     name: 'Claude Code',
-    description: 'Claude Code via the Zed ACP adapter.',
+    description: 'Claude Code via the official ACP adapter.',
     command: 'npx',
-    args: ['--yes', '@zed-industries/claude-code-acp@latest'],
+    args: ['--yes', '@agentclientprotocol/claude-agent-acp@latest'],
   },
   {
     id: 'codex',
     name: 'Codex',
-    description: 'OpenAI Codex via the Zed ACP adapter.',
+    description: 'OpenAI Codex via the official ACP adapter.',
     command: 'npx',
-    args: ['--yes', '@zed-industries/codex-acp@latest'],
+    args: ['--yes', '@agentclientprotocol/codex-acp@latest'],
   },
 ];
 

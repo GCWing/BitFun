@@ -91,11 +91,49 @@ export interface SetAcpSessionModelRequest {
   modelId: string;
 }
 
+export type AcpSessionConfigValue =
+  | { type: 'select'; value: string }
+  | { type: 'boolean'; value: boolean };
+
+export interface SetAcpSessionConfigOptionRequest {
+  sessionId: string;
+  clientId: string;
+  workspacePath?: string;
+  remoteConnectionId?: string;
+  remoteSshHost?: string;
+  configId: string;
+  value: AcpSessionConfigValue;
+}
+
 export interface AcpSessionModelOption {
   id: string;
   name: string;
   description?: string;
 }
+
+export interface AcpSessionConfigSelectOption {
+  value: string;
+  name: string;
+  description?: string;
+}
+
+interface AcpSessionConfigOptionBase {
+  id: string;
+  name: string;
+  description?: string;
+}
+
+export type AcpSessionConfigOption = AcpSessionConfigOptionBase & (
+  | {
+      type: 'select';
+      currentValue: string;
+      options: AcpSessionConfigSelectOption[];
+    }
+  | {
+      type: 'boolean';
+      currentValue: boolean;
+    }
+);
 
 export interface AcpContextUsage {
   used: number;
@@ -110,6 +148,7 @@ export interface AcpSessionOptions {
   currentModelId?: string;
   availableModels: AcpSessionModelOption[];
   modelConfigId?: string;
+  configOptions: AcpSessionConfigOption[];
   contextUsage?: AcpContextUsage;
 }
 
@@ -321,6 +360,12 @@ export class ACPClientAPI {
     request: SetAcpSessionModelRequest
   ): Promise<AcpSessionOptions> {
     return api.invoke('set_acp_session_model', { request });
+  }
+
+  static async setSessionConfigOption(
+    request: SetAcpSessionConfigOptionRequest
+  ): Promise<AcpSessionOptions> {
+    return api.invoke('set_acp_session_config_option', { request });
   }
 
   static onAvailableCommandsUpdated(

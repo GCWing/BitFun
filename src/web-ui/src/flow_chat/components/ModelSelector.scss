@@ -71,6 +71,11 @@
     color: var(--color-text-muted);
     flex-shrink: 0;
   }
+
+  &__fast-icon {
+    color: var(--color-warning);
+    flex-shrink: 0;
+  }
   
   &__badge {
     display: inline-flex;
@@ -179,6 +184,33 @@
     height: 1px;
     background: var(--border-subtle);
     margin: 4px 12px;
+  }
+
+  &__config-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 8px 12px 10px;
+  }
+
+  &__config-copy {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+  }
+
+  &__config-name {
+    color: var(--color-text-primary);
+    font-size: var(--flowchat-font-size-xs);
+    font-weight: 500;
+  }
+
+  &__config-description {
+    color: var(--color-text-muted);
+    font-size: var(--flowchat-font-size-2xs);
+    line-height: 1.35;
   }
   
   &__list {

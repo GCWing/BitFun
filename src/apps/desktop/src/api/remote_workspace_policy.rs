@@ -1445,6 +1445,10 @@ pub const REMOTE_WORKSPACE_COMMAND_POLICIES: &[(&str, RemoteWorkspacePolicy)] = 
     ),
     ("send_system_notification", RemoteWorkspacePolicy::LocalOnly),
     (
+        "set_acp_session_config_option",
+        RemoteWorkspacePolicy::RemoteRouted,
+    ),
+    (
         "set_acp_session_model",
         RemoteWorkspacePolicy::LegacyUnaudited,
     ),
