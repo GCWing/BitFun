@@ -4,7 +4,12 @@
 //! When the feature is disabled, no-op stubs return an error so the
 //! invoke_handler macro always sees valid symbols.
 //!
-//! Based on nathanbabcock/ffmpeg-sidecar v2.5.2 (MIT, crates.io 1.4M downloads).
+//! ## 第三方依赖与许可
+//!
+//! - **FFmpeg** (LGPL 2.1+ / GPL 2+) — 通过外部命令调用，未捆绑分发。
+//!   项目地址: https://ffmpeg.org
+//! - **ffmpeg-sidecar** (MIT) — Rust 封装库。
+//!   项目地址: https://github.com/nathanbabcock/ffmpeg-sidecar (crates.io, 1.4M+ downloads)
 
 #[cfg(feature = "video")]
 use std::path::Path;
