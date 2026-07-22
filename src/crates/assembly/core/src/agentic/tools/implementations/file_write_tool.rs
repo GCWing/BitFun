@@ -45,6 +45,7 @@ impl<'a> ParsedWritePayload<'a> {
 }
 
 const WRITE_PAYLOAD_PATH_PREFIX: &str = "+++ ";
+const WRITE_FALLBACK_DIRECTORY: &str = ".bitfun/tmp";
 const LARGE_WRITE_SOFT_LINE_LIMIT: usize = 200;
 const LARGE_WRITE_SOFT_BYTE_LIMIT: usize = 20 * 1024;
 
@@ -205,15 +206,19 @@ impl FileWriteTool {
             .as_deref()
             .unwrap_or("unknown")
             .chars()
+            .rev()
             .filter(|character| character.is_ascii_alphanumeric())
             .take(12)
+            .collect::<String>()
+            .chars()
+            .rev()
             .collect::<String>();
         let stable_id = if stable_id.is_empty() {
             "unknown"
         } else {
             stable_id.as_str()
         };
-        format!("write_{stable_id}.tmp")
+        format!("{WRITE_FALLBACK_DIRECTORY}/write_{stable_id}.tmp")
     }
 
     fn ignored_top_level_parameter_names(input: &Value) -> Vec<String> {
@@ -236,7 +241,7 @@ impl FileWriteTool {
     ) -> ToolResult {
         let mut assistant_message = if missing_path_fallback {
             format!(
-                "The Write payload did not start with the required '+++ {{file_path}}' marker. The entire payload was saved to {}. Rename this temporary file to the intended path before continuing; this way, you do not need to rewrite the entire content.",
+                "The Write payload did not start with the required '+++ {{file_path}}' marker. The entire payload was saved to {}. Use your shell tool to rename this file to the intended path instead of calling Write to resubmit the same content.",
                 logical_path
             )
         } else {
@@ -290,7 +295,7 @@ Parameter: `payload` (a single string)
 - Format: `+++ {file_path}\n{file_content}`
 - This is a path-first Write payload format: the first line uses Git's `+++` marker to specify the target file, but content lines do NOT need a leading `+`. Do not include `---`, `@@`, or other Git diff headers.
 - `{file_path}` must be an absolute path or an exact `bitfun://...` URI. Everything after the first newline is the complete content to write to that file.
-- The `+++ ` marker is required. If it is missing or has no file path, the tool saves the entire `payload` unchanged to `write_{random id}.tmp` in the workspace root.
+- The `+++ ` marker is required. If it is missing or has no file path, the tool saves the entire `payload` unchanged to `.bitfun/tmp/write_{suffix}.tmp` in the workspace.
 - Do NOT pass `path`, `file_path`, or `content`, etc. They are not valid parameters for this tool. Only `payload` is accepted.
 
 Usage:
@@ -843,6 +848,17 @@ mod tests {
         }
     }
 
+    #[test]
+    fn fallback_file_path_uses_workspace_tmp_directory_and_tool_call_id_suffix() {
+        let mut context = local_context(PathBuf::from("C:/workspace"));
+        context.tool_call_id = Some("toolcall-0123456789abcdef".to_string());
+
+        assert_eq!(
+            FileWriteTool::fallback_file_path(&context),
+            ".bitfun/tmp/write_456789abcdef.tmp"
+        );
+    }
+
     #[tokio::test]
     async fn call_impl_preserves_malformed_payload_in_workspace_temp_file() {
         let root = std::env::temp_dir().join(format!("bitfun-write-test-{}", uuid::Uuid::new_v4()));
@@ -856,8 +872,9 @@ mod tests {
             .await
             .expect("malformed payload should be preserved");
 
-        let entries = std::fs::read_dir(&root)
-            .expect("read workspace root")
+        let fallback_directory = root.join(".bitfun").join("tmp");
+        let entries = std::fs::read_dir(&fallback_directory)
+            .expect("read workspace fallback directory")
             .collect::<Result<Vec<_>, _>>()
             .expect("collect workspace entries");
         assert_eq!(entries.len(), 1);
@@ -888,7 +905,7 @@ mod tests {
         assert!(result_for_assistant
             .as_deref()
             .unwrap_or_default()
-            .contains("Rename this temporary file"));
+            .contains("Use your shell tool to rename this file"));
 
         let _ = std::fs::remove_dir_all(&root);
     }
