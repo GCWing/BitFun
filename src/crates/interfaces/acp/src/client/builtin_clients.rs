@@ -93,6 +93,8 @@ pub(crate) fn default_config_for_builtin_client(client_id: &str) -> Option<AcpCl
         enabled: true,
         readonly: false,
         permission_mode: AcpClientPermissionMode::Ask,
+        category: None,
+        description: None,
     })
 }
 

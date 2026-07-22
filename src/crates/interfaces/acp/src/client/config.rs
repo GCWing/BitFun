@@ -25,6 +25,10 @@ pub struct AcpClientConfig {
     pub readonly: bool,
     #[serde(default)]
     pub permission_mode: AcpClientPermissionMode,
+    #[serde(default)]
+    pub category: Option<String>,
+    #[serde(default)]
+    pub description: Option<String>,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
@@ -49,6 +53,8 @@ pub struct AcpClientInfo {
     pub status: AcpClientStatus,
     pub tool_name: String,
     pub session_count: usize,
+    pub category: Option<String>,
+    pub description: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
