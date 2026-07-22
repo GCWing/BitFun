@@ -142,6 +142,7 @@ pub async fn browser_webview_create(
     let window = app
         .get_window("main")
         .ok_or_else(|| "main window not found".to_string())?;
+    #[allow(unused_mut)]
     let mut builder =
         tauri::webview::WebviewBuilder::new(request.label, tauri::WebviewUrl::External(url))
             .initialization_script(video_decoder_compatibility_script())

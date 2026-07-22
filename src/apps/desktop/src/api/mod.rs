@@ -20,6 +20,7 @@ pub mod diff_api;
 pub mod dto;
 pub mod editor_ai_api;
 pub mod external_sources_api;
+pub mod video_api;
 pub mod git_agent_api;
 pub mod git_api;
 pub mod i18n_api;
