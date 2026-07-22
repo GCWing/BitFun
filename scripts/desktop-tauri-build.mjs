@@ -73,6 +73,20 @@ async function main() {
     patchDmgExtras(ROOT);
   }
 
+  // Keep only the latest useful Cargo caches for this build profile after tauri build ends.
+  try {
+    const { profileFromTauriBuildArgs, runGcBestEffort, targetFromTauriBuildArgs } = await import(
+      './cargo-target-gc.mjs'
+    );
+    runGcBestEffort({
+      rootDir: ROOT,
+      profile: profileFromTauriBuildArgs(forward),
+      triple: targetFromTauriBuildArgs(forward),
+    });
+  } catch (error) {
+    console.warn(`[target-gc] skipped: ${error.message || String(error)}`);
+  }
+
   process.exit(r.status ?? 1);
 }
 

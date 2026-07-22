@@ -53,6 +53,7 @@
     "desktop:dev": "node scripts/dev.cjs desktop",
     "desktop:preview:debug": "node scripts/dev.cjs desktop-preview",
     "desktop:dev:raw": "cross-env-shell CI=true \"cd src/apps/desktop && tauri dev\"",
+    "target:gc": "node scripts/cargo-target-gc.mjs",
     "desktop:build": "node scripts/desktop-tauri-build.mjs",
     "desktop:build:fast": "node scripts/desktop-tauri-build.mjs --debug --no-bundle",
     "desktop:build:release-fast": "node scripts/desktop-tauri-build.mjs --no-bundle -- --profile release-fast --features devtools",

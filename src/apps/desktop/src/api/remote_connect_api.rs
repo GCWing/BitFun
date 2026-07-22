@@ -3706,57 +3706,69 @@ async fn account_auto_sync_inner(
     );
 
     let completed = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
-    let uploaded: Vec<(String, String, i64)> = stream::iter(pending_uploads)
-        .map(|(session_id, bundle_json, hash)| {
-            let client = AccountClient::new();
-            let relay_url = relay_url.clone();
-            let acct_session = acct_session.clone();
-            let completed = completed.clone();
-            async move {
-                if ensure_account_auto_sync_current(sync_operation_id).is_err() {
-                    return None;
-                }
-                let result = match await_account_auto_sync(
-                    sync_operation_id,
-                    client.upload_session(&relay_url, &acct_session, &session_id, &bundle_json),
-                )
-                .await
-                {
-                    Ok(result) => result,
-                    Err(_) => return None,
-                };
-                let done = completed.fetch_add(1, std::sync::atomic::Ordering::Relaxed) + 1;
-                let percent = if upload_total == 0 {
-                    95u8
-                } else {
-                    20 + ((75 * done) / upload_total) as u8
-                };
-                if ensure_account_auto_sync_current(sync_operation_id).is_err() {
-                    return None;
-                }
-                emit_sync_progress(
-                    sync_operation_id,
-                    "exporting_sessions",
-                    percent.min(95),
-                    Some(done),
-                    Some(upload_total),
-                    Some(session_id.as_str()),
-                );
-                match result {
-                    Ok(version) => Some((session_id, hash, version)),
-                    Err(e) => {
-                        log::warn!("Auto-sync upload {session_id} failed: {e}");
-                        None
+    let upload_outcomes: Vec<Result<(String, String, i64), String>> =
+        stream::iter(pending_uploads)
+            .map(|(session_id, bundle_json, hash)| {
+                let client = AccountClient::new();
+                let relay_url = relay_url.clone();
+                let acct_session = acct_session.clone();
+                let completed = completed.clone();
+                async move {
+                    if ensure_account_auto_sync_current(sync_operation_id).is_err() {
+                        return Err("account sync cancelled".to_string());
+                    }
+                    let result = match await_account_auto_sync(
+                        sync_operation_id,
+                        client.upload_session(&relay_url, &acct_session, &session_id, &bundle_json),
+                    )
+                    .await
+                    {
+                        Ok(result) => result,
+                        Err(e) => return Err(e),
+                    };
+                    match result {
+                        Ok(version) => {
+                            let done =
+                                completed.fetch_add(1, std::sync::atomic::Ordering::Relaxed) + 1;
+                            let percent = if upload_total == 0 {
+                                95u8
+                            } else {
+                                20 + ((75 * done) / upload_total) as u8
+                            };
+                            if ensure_account_auto_sync_current(sync_operation_id).is_err() {
+                                return Err("account sync cancelled".to_string());
+                            }
+                            emit_sync_progress(
+                                sync_operation_id,
+                                "exporting_sessions",
+                                percent.min(95),
+                                Some(done),
+                                Some(upload_total),
+                                Some(session_id.as_str()),
+                            );
+                            Ok((session_id, hash, version))
+                        }
+                        Err(e) => {
+                            log::warn!("Auto-sync upload {session_id} failed: {e}");
+                            Err(format!("{session_id}: {e}"))
+                        }
                     }
                 }
-            }
-        })
-        .buffer_unordered(UPLOAD_CONCURRENCY)
-        .filter_map(|r| async move { r })
-        .collect()
-        .await;
+            })
+            .buffer_unordered(UPLOAD_CONCURRENCY)
+            .collect()
+            .await;
 
     ensure_account_auto_sync_current(sync_operation_id)?;
+
+    let mut uploaded = Vec::new();
+    let mut upload_errors = Vec::new();
+    for outcome in upload_outcomes {
+        match outcome {
+            Ok(item) => uploaded.push(item),
+            Err(err) => upload_errors.push(err),
+        }
+    }
 
     let exported = uploaded.len();
     let mut max_uploaded_version = sync_state_local.last_session_since;
@@ -3771,7 +3783,7 @@ async fn account_auto_sync_inner(
     }
     let _ = sync_state::save(&acct_session.user_id, &sync_state_local);
 
-    ensure_session_backup_complete(upload_total, exported)?;
+    ensure_session_backup_complete(upload_total, exported, &upload_errors)?;
 
     log::info!("Auto-sync: settings={settings_synced} exported={exported} imported=0");
     emit_sync_progress(
@@ -3789,12 +3801,20 @@ async fn account_auto_sync_inner(
     })
 }
 
-fn ensure_session_backup_complete(total: usize, uploaded: usize) -> Result<(), String> {
+fn ensure_session_backup_complete(
+    total: usize,
+    uploaded: usize,
+    upload_errors: &[String],
+) -> Result<(), String> {
     if uploaded == total {
         return Ok(());
     }
+    let detail = upload_errors
+        .first()
+        .map(|err| err.as_str())
+        .unwrap_or("retry will resume remaining sessions");
     Err(format!(
-        "session backup incomplete: uploaded {uploaded} of {total}; retry will resume remaining sessions"
+        "session backup incomplete: uploaded {uploaded} of {total}; {detail}"
     ))
 }
 
@@ -4582,9 +4602,15 @@ mod sync_state_tests {
 
     #[test]
     fn partial_session_backup_is_not_reported_as_success() {
-        assert!(ensure_session_backup_complete(3, 3).is_ok());
-        let error = ensure_session_backup_complete(3, 2).unwrap_err();
+        assert!(ensure_session_backup_complete(3, 3, &[]).is_ok());
+        let error = ensure_session_backup_complete(
+            3,
+            2,
+            &["s1: relay returned HTTP 507 Insufficient Storage".into()],
+        )
+        .unwrap_err();
         assert!(error.contains("uploaded 2 of 3"));
+        assert!(error.contains("HTTP 507"));
     }
 
     #[test]

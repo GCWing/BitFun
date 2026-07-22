@@ -36,6 +36,11 @@ memory VPS (common on arm64), use:
 RELAY_CARGO_BUILD_JOBS=1 bash deploy.sh
 ```
 
+`deploy.sh` enables Docker BuildKit so the Dockerfile can reuse Cargo
+registry/git/`target` cache mounts across redeploys. Keep BuildKit enabled
+(`DOCKER_BUILDKIT=1`, the deploy default) and avoid `docker builder prune`
+unless you intentionally want a cold rebuild.
+
 ## Two operating modes
 
 | Mode | When | What you get |

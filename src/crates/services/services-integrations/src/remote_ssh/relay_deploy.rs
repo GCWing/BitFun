@@ -919,23 +919,28 @@ bitfun_docker() {
 bitfun_run_deploy_sh() {
   local dir="$1"
   local port="${RELAY_PORT:-9700}"
+  # DOCKER_BUILDKIT is required for Dockerfile cargo registry/git/target mounts.
   case "${BITFUN_DOCKER_MODE:-direct}" in
     sudo)
       if sudo -n true >/dev/null 2>&1; then
         sudo -n -E env RELAY_PORT="$port" RELAY_CARGO_BUILD_JOBS="${RELAY_CARGO_BUILD_JOBS:-}" \
-          BUILDKIT_PROGRESS=plain DOCKER_CONFIG="${DOCKER_CONFIG:-}" \
+          DOCKER_BUILDKIT=1 COMPOSE_DOCKER_CLI_BUILD=1 BUILDKIT_PROGRESS=plain \
+          DOCKER_CONFIG="${DOCKER_CONFIG:-}" \
           bash "$dir/deploy.sh"
       else
         sudo -E env RELAY_PORT="$port" RELAY_CARGO_BUILD_JOBS="${RELAY_CARGO_BUILD_JOBS:-}" \
-          BUILDKIT_PROGRESS=plain DOCKER_CONFIG="${DOCKER_CONFIG:-}" \
+          DOCKER_BUILDKIT=1 COMPOSE_DOCKER_CLI_BUILD=1 BUILDKIT_PROGRESS=plain \
+          DOCKER_CONFIG="${DOCKER_CONFIG:-}" \
           bash "$dir/deploy.sh"
       fi
       ;;
     sg)
-      sg docker -c "env RELAY_PORT='$port' RELAY_CARGO_BUILD_JOBS='${RELAY_CARGO_BUILD_JOBS:-}' BUILDKIT_PROGRESS=plain DOCKER_CONFIG='${DOCKER_CONFIG:-}' bash '$dir/deploy.sh'"
+      sg docker -c "env RELAY_PORT='$port' RELAY_CARGO_BUILD_JOBS='${RELAY_CARGO_BUILD_JOBS:-}' DOCKER_BUILDKIT=1 COMPOSE_DOCKER_CLI_BUILD=1 BUILDKIT_PROGRESS=plain DOCKER_CONFIG='${DOCKER_CONFIG:-}' bash '$dir/deploy.sh'"
       ;;
     *)
-      env RELAY_PORT="$port" BUILDKIT_PROGRESS=plain bash "$dir/deploy.sh"
+      env RELAY_PORT="$port" RELAY_CARGO_BUILD_JOBS="${RELAY_CARGO_BUILD_JOBS:-}" \
+        DOCKER_BUILDKIT=1 COMPOSE_DOCKER_CLI_BUILD=1 BUILDKIT_PROGRESS=plain \
+        bash "$dir/deploy.sh"
       ;;
   esac
 }
@@ -1038,7 +1043,8 @@ fi
 if command -v stdbuf >/dev/null 2>&1; then RUNNER=(stdbuf -oL -eL bash); else RUNNER=(bash); fi
 echo ">>> Starting background task (log: $LOG)" | tee -a "$LOG"
 nohup env BITFUN_DOCKER_MODE="$BITFUN_DOCKER_MODE" DOCKER_CONFIG="$DOCKER_CONFIG" \
-  RELAY_CARGO_BUILD_JOBS="${{RELAY_CARGO_BUILD_JOBS:-}}" BUILDKIT_PROGRESS=plain \
+  RELAY_CARGO_BUILD_JOBS="${{RELAY_CARGO_BUILD_JOBS:-}}" \
+  DOCKER_BUILDKIT=1 COMPOSE_DOCKER_CLI_BUILD=1 BUILDKIT_PROGRESS=plain \
   "${{RUNNER[@]}}" "$BODY" >"$LOG" 2>&1 < /dev/null &
 echo $! >"$PIDF"
 rm -f "$PREPARE_FLAG"
@@ -1229,6 +1235,8 @@ set -euo pipefail
 {helpers}
 {sync}
 export DOCKER_CONFIG="${{DOCKER_CONFIG:-$HOME/.bitfun/docker-config}}"
+export DOCKER_BUILDKIT=1
+export COMPOSE_DOCKER_CLI_BUILD=1
 export BUILDKIT_PROGRESS=plain
 BITFUN_DOCKER_MODE="${{BITFUN_DOCKER_MODE:-direct}}"
 if [ "$BITFUN_DOCKER_MODE" = "direct" ] && ! docker info >/dev/null 2>&1; then

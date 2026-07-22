@@ -869,6 +869,10 @@ pub struct SyncSessionRow {
 
 impl SyncSessionRow {
     /// Upsert an encrypted session blob. Last-writer-wins via version.
+    ///
+    /// Enforces optional per-user active session count and total encrypted-byte
+    /// quotas. Product defaults are effectively unlimited (`i32::MAX`); pass
+    /// lower ceilings when an operator needs to bound account storage.
     pub async fn upsert_with_quota(
         pool: &DbPool,
         user_id: &str,
@@ -948,6 +952,54 @@ impl SyncSessionRow {
         .await
         .map_err(|e| anyhow!("delete sync session: {e}"))?;
         Ok(())
+    }
+
+    /// Soft-delete oldest active sessions (excluding `keep_session_id`) until
+    /// inserting/replacing a blob of `needed_bytes` would satisfy count/byte quotas.
+    ///
+    /// Used when a fresh upsert is rejected so recent backups can displace LRU
+    /// cloud sessions instead of failing the whole sync with HTTP 507.
+    pub async fn make_room_for_upsert(
+        pool: &DbPool,
+        user_id: &str,
+        keep_session_id: &str,
+        needed_bytes: i64,
+        max_sessions: i64,
+        max_total_bytes: i64,
+    ) -> Result<usize> {
+        if needed_bytes > max_total_bytes {
+            return Ok(0);
+        }
+        let candidates = sqlx::query_as::<_, SyncSessionRow>(
+            "SELECT session_id, encrypted_data, nonce, version, updated_at, deleted \
+             FROM sync_sessions \
+             WHERE user_id = ? AND deleted = 0 AND session_id <> ? \
+             ORDER BY updated_at ASC, version ASC, session_id ASC",
+        )
+        .bind(user_id)
+        .bind(keep_session_id)
+        .fetch_all(pool)
+        .await
+        .map_err(|e| anyhow!("list sync sessions for quota relief: {e}"))?;
+
+        let mut bytes: i64 = candidates
+            .iter()
+            .map(|row| row.encrypted_data.len() as i64)
+            .sum();
+        let mut count = candidates.len() as i64;
+        let mut evicted = 0usize;
+
+        for row in candidates {
+            if count < max_sessions && bytes.saturating_add(needed_bytes) <= max_total_bytes {
+                break;
+            }
+            Self::delete(pool, user_id, &row.session_id).await?;
+            bytes = bytes.saturating_sub(row.encrypted_data.len() as i64);
+            count = count.saturating_sub(1);
+            evicted += 1;
+        }
+
+        Ok(evicted)
     }
 
     /// Fetch one non-deleted session blob by id.
@@ -2238,22 +2290,22 @@ mod tests {
             .unwrap();
 
         assert!(
-            SyncSessionRow::upsert_with_quota(&pool, "u1", "s1", "1234", "n", 1, 1, 5,)
+            SyncSessionRow::upsert_with_quota(&pool, "u1", "s1", "1234", "n", 1, 1, 5)
                 .await
                 .unwrap()
         );
         assert!(
-            SyncSessionRow::upsert_with_quota(&pool, "u1", "s1", "12345", "n", 2, 1, 5,)
+            SyncSessionRow::upsert_with_quota(&pool, "u1", "s1", "12345", "n", 2, 1, 5)
                 .await
                 .unwrap()
         );
         assert!(
-            !SyncSessionRow::upsert_with_quota(&pool, "u1", "s2", "1", "n", 1, 1, 5,)
+            !SyncSessionRow::upsert_with_quota(&pool, "u1", "s2", "1", "n", 1, 1, 5)
                 .await
                 .unwrap()
         );
         assert!(
-            !SyncSessionRow::upsert_with_quota(&pool, "u1", "s1", "123456", "n", 3, 1, 5,)
+            !SyncSessionRow::upsert_with_quota(&pool, "u1", "s1", "123456", "n", 3, 1, 5)
                 .await
                 .unwrap()
         );
@@ -2263,6 +2315,48 @@ mod tests {
             .unwrap()
             .unwrap();
         assert_eq!(stored.encrypted_data, "12345");
+    }
+
+    #[tokio::test]
+    async fn sync_session_make_room_evicts_oldest_until_upsert_fits() {
+        let pool = setup().await;
+        UserRow::create(&pool, "u1", "alice", "s", "ks", "{}", "hash", "wmk")
+            .await
+            .unwrap();
+
+        assert!(
+            SyncSessionRow::upsert_with_quota(&pool, "u1", "old", "1234", "n", 1, 2, 8)
+                .await
+                .unwrap()
+        );
+        assert!(
+            SyncSessionRow::upsert_with_quota(&pool, "u1", "mid", "1234", "n", 2, 2, 8)
+                .await
+                .unwrap()
+        );
+        assert!(
+            !SyncSessionRow::upsert_with_quota(&pool, "u1", "new", "1234", "n", 3, 2, 8)
+                .await
+                .unwrap()
+        );
+
+        let evicted = SyncSessionRow::make_room_for_upsert(&pool, "u1", "new", 4, 2, 8)
+            .await
+            .unwrap();
+        assert!(evicted >= 1);
+        assert!(
+            SyncSessionRow::upsert_with_quota(&pool, "u1", "new", "1234", "n", 3, 2, 8)
+                .await
+                .unwrap()
+        );
+        assert!(SyncSessionRow::get(&pool, "u1", "old")
+            .await
+            .unwrap()
+            .is_none());
+        assert!(SyncSessionRow::get(&pool, "u1", "new")
+            .await
+            .unwrap()
+            .is_some());
     }
 
     #[tokio::test]

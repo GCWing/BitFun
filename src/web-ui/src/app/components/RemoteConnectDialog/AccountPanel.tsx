@@ -73,6 +73,36 @@ async function cancelPendingLoginWithRetry(pendingLoginId: string): Promise<bool
   }
 }
 
+/** Quota / payload-limit failures will not succeed on blind retry. */
+function isNonRetryableSyncError(error: unknown): boolean {
+  const msg = error instanceof Error ? error.message : String(error ?? '');
+  const lower = msg.toLowerCase();
+  return (
+    lower.includes('http 507')
+    || lower.includes('insufficient storage')
+    || lower.includes('quota is full')
+    || lower.includes('http 413')
+    || lower.includes('payload too large')
+  );
+}
+
+function syncFailureMessage(
+  t: (key: string, options?: Record<string, string | number>) => string,
+  error: unknown,
+): string {
+  if (isNonRetryableSyncError(error)) {
+    const msg = error instanceof Error ? error.message : String(error ?? '');
+    if (
+      msg.toLowerCase().includes('http 413')
+      || msg.toLowerCase().includes('payload too large')
+    ) {
+      return t('accountLogin.syncPayloadTooLarge');
+    }
+    return t('accountLogin.syncQuotaFull');
+  }
+  return t('accountLogin.syncFailed');
+}
+
 function syncPhaseLabel(
   t: (key: string, options?: Record<string, string | number>) => string,
   phase: AccountSyncPhase,
@@ -121,6 +151,7 @@ export const AccountPanel: React.FC<AccountPanelProps> = ({
   const { enterPeerMode } = usePeerDeviceMode();
   const syncStatus = useAccountSyncStore((s) => s.status);
   const syncProgress = useAccountSyncStore((s) => s.progress);
+  const lastSyncError = useAccountSyncStore((s) => s.lastError);
   const lastSyncIsFirstLogin = useAccountSyncStore((s) => s.lastSyncIsFirstLogin);
   const setSyncing = useAccountSyncStore((s) => s.setSyncing);
   const setSyncDone = useAccountSyncStore((s) => s.setDone);
@@ -502,6 +533,9 @@ export const AccountPanel: React.FC<AccountPanelProps> = ({
             if (!isCurrentOperation()) return;
             lastError = e;
             log.warn(`Auto-sync attempt ${attempt}/${maxAttempts} failed`, e);
+            if (isNonRetryableSyncError(e)) {
+              break;
+            }
             if (attempt < maxAttempts) {
               info(t('accountLogin.syncRetrying', { attempt, max: maxAttempts }));
               await new Promise((resolve) => setTimeout(resolve, 2000 * attempt));
@@ -538,7 +572,7 @@ export const AccountPanel: React.FC<AccountPanelProps> = ({
         if (!isCurrentOperation()) return;
         log.error('Auto-sync failed', e);
         setSyncFailed(e instanceof Error ? e.message : String(e));
-        warning(t('accountLogin.syncFailed'));
+        warning(syncFailureMessage(t, e));
       } finally {
         if (isCurrentOperation()) {
           syncInFlightRef.current = false;
@@ -1006,7 +1040,7 @@ export const AccountPanel: React.FC<AccountPanelProps> = ({
                       syncProgress.total,
                     )}
                     {syncStatus === 'done' && t('accountLogin.syncDoneShort')}
-                    {syncStatus === 'failed' && t('accountLogin.syncFailed')}
+                    {syncStatus === 'failed' && syncFailureMessage(t, lastSyncError)}
                   </span>
                   {syncStatus === 'failed' && (
                     <button

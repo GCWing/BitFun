@@ -23,7 +23,7 @@ path = "src/bin/relay_admin.rs"
 bitfun-relay-service = { path = "../../crates/services/relay-service" }
 axum = "0.8"
 tower-http = { version = "0.6.11", features = ["fs"] }
-tokio = { version = "1.52", features = ["full"] }
+tokio = { version = "1.52", default-features = false, features = ["rt-multi-thread", "macros", "net", "time", "sync"] }
 anyhow = "1.0"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }

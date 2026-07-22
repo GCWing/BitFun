@@ -350,6 +350,7 @@ pub(crate) async fn run_auto_sync(
     emit_progress("exporting_sessions", 20, Some(0), Some(upload_total), None).await;
 
     let mut uploaded: Vec<(String, String, i64)> = Vec::new();
+    let mut upload_errors: Vec<String> = Vec::new();
     for (chunk_idx, chunk) in pending_uploads.chunks(UPLOAD_CONCURRENCY_CHUNK).enumerate() {
         let mut handles = Vec::new();
         for (session_id, bundle_json, hash) in chunk {
@@ -390,11 +391,13 @@ pub(crate) async fn run_auto_sync(
                 }
                 Ok((session_id, _, Ok(Err(e)))) => {
                     tracing::warn!("Auto-sync upload {session_id} failed: {e}");
+                    upload_errors.push(format!("{session_id}: {e}"));
                     let _ = done_base;
                 }
                 Ok((_, _, Err(e))) => return Err(e),
                 Err(e) => {
                     tracing::warn!("Auto-sync upload task join failed: {e}");
+                    upload_errors.push(format!("upload task join failed: {e}"));
                 }
             }
         }
@@ -416,7 +419,7 @@ pub(crate) async fn run_auto_sync(
     }
     let _ = sync_state::save(&acct_session.user_id, &sync_state_local);
 
-    ensure_session_backup_complete(upload_total, exported)?;
+    ensure_session_backup_complete(upload_total, exported, &upload_errors)?;
 
     tracing::info!("Auto-sync: settings={settings_synced} exported={exported} imported=0");
     emit_progress("done", 100, Some(exported), Some(0), None).await;
@@ -428,12 +431,20 @@ pub(crate) async fn run_auto_sync(
     })
 }
 
-fn ensure_session_backup_complete(total: usize, uploaded: usize) -> Result<()> {
+fn ensure_session_backup_complete(
+    total: usize,
+    uploaded: usize,
+    upload_errors: &[String],
+) -> Result<()> {
     if uploaded == total {
         return Ok(());
     }
+    let detail = upload_errors
+        .first()
+        .map(|err| err.as_str())
+        .unwrap_or("retry will resume remaining sessions");
     Err(anyhow!(
-        "session backup incomplete: uploaded {uploaded} of {total}; retry will resume remaining sessions"
+        "session backup incomplete: uploaded {uploaded} of {total}; {detail}"
     ))
 }
 
@@ -464,10 +475,14 @@ mod tests {
 
     #[test]
     fn partial_session_backup_is_not_reported_as_success() {
-        assert!(ensure_session_backup_complete(4, 4).is_ok());
-        assert!(ensure_session_backup_complete(4, 1)
-            .unwrap_err()
-            .to_string()
-            .contains("uploaded 1 of 4"));
+        assert!(ensure_session_backup_complete(4, 4, &[]).is_ok());
+        assert!(ensure_session_backup_complete(
+            4,
+            1,
+            &["s1: relay returned HTTP 507 Insufficient Storage".into()]
+        )
+        .unwrap_err()
+        .to_string()
+        .contains("HTTP 507"));
     }
 }

@@ -20,7 +20,8 @@ Desktop Tauri surface: `src/apps/desktop/src/api/relay_deploy_api.rs`
    safe under `~/.bitfun/`.
 
 2. **Git first, tarball fallback.** When `.git` already exists, deploy must
-   `fetch` + checkout, not re-clone from scratch (preserves BuildKit layers).
+   `fetch` + checkout, not re-clone from scratch (preserves BuildKit layers
+   and Cargo cache mounts for registry/git/`target`).
 
 3. **Close wizard = cancel remote task.** Do not leave nohup builds running
    after the modal closes; cancel must kill the pid tree and best-effort stop

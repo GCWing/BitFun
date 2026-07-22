@@ -61,6 +61,10 @@ pnpm run desktop:build:fast
 | `pnpm run desktop:build:release-fast` | Release-like build with reduced LTO; use when you need release behavior but can't wait for full LTO |
 | `pnpm run desktop:build:nsis:fast` | Windows installer using `release-fast` profile; for quick installer validation |
 
+## Target cache GC
+
+`desktop:dev` (on exit), `desktop:preview:debug` (on shutdown), and `desktop:build*` run a latest-only prune of stale `target/<profile>/{incremental,.fingerprint,deps}` artifacts so caches do not accumulate across sessions. Manual: `pnpm run target:gc -- --profile debug`. Disable with `BITFUN_TARGET_GC=0`; dry-run with `BITFUN_TARGET_GC_DRY_RUN=1`.
+
 `release-fast` profile (`Cargo.toml`): inherits `release` but disables LTO, increases `codegen-units` to 16, enables incremental compilation. Significantly faster at the cost of binary size and marginal runtime performance.
 
 ## DevTools feature (model rule)

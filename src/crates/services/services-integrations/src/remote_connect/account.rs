@@ -426,7 +426,45 @@ impl AccountClient {
 
     /// Upload (or replace) a single encrypted session blob for this device.
     /// Returns the `version` written into the upsert body (client-generated LWW clock).
+    ///
+    /// When the relay reports HTTP 507 (account sync quota full), evict the
+    /// oldest remote session backup (excluding this id) and retry. This keeps
+    /// recent local backups flowing on relays that do not yet auto-evict.
     pub async fn upload_session(
+        &self,
+        relay_url: &str,
+        session: &AccountSession,
+        session_id: &str,
+        plaintext: &str,
+    ) -> Result<i64> {
+        const MAX_QUOTA_RELIEF_ATTEMPTS: usize = 32;
+        let mut last_quota_error: Option<anyhow::Error> = None;
+        for _ in 0..MAX_QUOTA_RELIEF_ATTEMPTS {
+            match self
+                .upload_session_once(relay_url, session, session_id, plaintext)
+                .await
+            {
+                Ok(version) => return Ok(version),
+                Err(err) if is_insufficient_storage_error(&err) => {
+                    last_quota_error = Some(err);
+                    if !self
+                        .evict_oldest_remote_session(relay_url, session, session_id)
+                        .await?
+                    {
+                        break;
+                    }
+                }
+                Err(err) => return Err(err),
+            }
+        }
+        Err(last_quota_error.unwrap_or_else(|| {
+            anyhow!(
+                "relay returned HTTP 507 Insufficient Storage (the configured account or asset quota is full)"
+            )
+        }))
+    }
+
+    async fn upload_session_once(
         &self,
         relay_url: &str,
         session: &AccountSession,
@@ -452,6 +490,34 @@ impl AccountClient {
             return Err(Self::into_error(resp).await);
         }
         Ok(version)
+    }
+
+    /// Soft-delete the oldest remote sync session other than `keep_session_id`.
+    /// Returns `true` when a session was removed.
+    async fn evict_oldest_remote_session(
+        &self,
+        relay_url: &str,
+        session: &AccountSession,
+        keep_session_id: &str,
+    ) -> Result<bool> {
+        let mut entries = self
+            .list_session_entries(relay_url, session, 0)
+            .await?
+            .into_iter()
+            .filter(|entry| entry.session_id != keep_session_id)
+            .collect::<Vec<_>>();
+        if entries.is_empty() {
+            return Ok(false);
+        }
+        entries.sort_by(|a, b| {
+            a.version
+                .cmp(&b.version)
+                .then_with(|| a.session_id.cmp(&b.session_id))
+        });
+        let victim = entries.remove(0);
+        self.delete_session(relay_url, session, &victim.session_id)
+            .await?;
+        Ok(true)
     }
 
     /// List encrypted session blobs updated after `since` without decrypting.
@@ -815,6 +881,13 @@ struct SessionEntry {
     version: i64,
 }
 
+fn is_insufficient_storage_error(err: &anyhow::Error) -> bool {
+    let msg = err.to_string();
+    msg.contains("HTTP 507")
+        || msg.contains("Insufficient Storage")
+        || msg.to_ascii_lowercase().contains("quota is full")
+}
+
 /// Decrypted session sync blob with relay version metadata.
 #[derive(Debug, Clone)]
 pub struct FetchedSession {
@@ -899,6 +972,16 @@ mod tests {
         }
         .build()
         .is_err());
+    }
+
+    #[test]
+    fn detects_insufficient_storage_errors_for_quota_relief() {
+        assert!(is_insufficient_storage_error(&anyhow!(
+            "relay returned HTTP 507 Insufficient Storage (the configured account or asset quota is full)"
+        )));
+        assert!(!is_insufficient_storage_error(&anyhow!(
+            "relay returned HTTP 413 Payload Too Large"
+        )));
     }
 
     #[test]
