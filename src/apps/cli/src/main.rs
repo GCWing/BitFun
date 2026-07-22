@@ -60,6 +60,13 @@ pub fn get_mcp_status_text() -> String {
     }
 }
 
+fn final_change_verification_enabled(
+    verify_final_changes: bool,
+    no_verify_final_changes: bool,
+) -> bool {
+    verify_final_changes && !no_verify_final_changes
+}
+
 /// Get the global MCP service instance (if initialized)
 pub fn get_mcp_service() -> Option<&'static std::sync::Arc<bitfun_core::service::mcp::MCPService>> {
     MCP_SERVICE.get()
@@ -129,6 +136,14 @@ enum Commands {
         /// Example: --output-patch or --output-patch ./result.patch
         #[arg(long, num_args = 0..=1, default_missing_value = "-")]
         output_patch: Option<String>,
+
+        /// Verify workspace changes before a successful headless exit (enabled by default)
+        #[arg(long, default_value_t = true, action = clap::ArgAction::SetTrue)]
+        verify_final_changes: bool,
+
+        /// Disable automatic final-change verification
+        #[arg(long, conflicts_with = "verify_final_changes")]
+        no_verify_final_changes: bool,
 
         /// Tool execution requires confirmation (default: no confirmation to avoid blocking non-interactive mode)
         #[arg(long)]
@@ -641,6 +656,8 @@ async fn run_cli() -> Result<()> {
             fork_session,
             output_format,
             output_patch,
+            verify_final_changes,
+            no_verify_final_changes,
             confirm,
             no_title,
             no_persist,
@@ -657,6 +674,10 @@ async fn run_cli() -> Result<()> {
                     fork_session,
                     output_format,
                     output_patch,
+                    verify_final_changes: final_change_verification_enabled(
+                        verify_final_changes,
+                        no_verify_final_changes,
+                    ),
                     confirm,
                     no_title,
                     no_persist,
@@ -840,5 +861,44 @@ fn main() {
             eprintln!("Error: bitfun-cli worker thread panicked");
             std::process::exit(1);
         }
+    }
+}
+
+#[cfg(test)]
+mod cli_tests {
+    use super::{final_change_verification_enabled, Cli, Commands};
+    use clap::Parser;
+
+    fn parse_exec_verification(args: &[&str]) -> (bool, bool) {
+        let cli = Cli::try_parse_from(args).expect("CLI arguments should parse");
+        let Some(Commands::Exec {
+            verify_final_changes,
+            no_verify_final_changes,
+            ..
+        }) = cli.command
+        else {
+            panic!("expected exec command");
+        };
+        (verify_final_changes, no_verify_final_changes)
+    }
+
+    #[test]
+    fn exec_verifies_final_changes_by_default() {
+        let (verify, no_verify) = parse_exec_verification(&["bitfun", "exec", "task"]);
+        assert!(final_change_verification_enabled(verify, no_verify));
+    }
+
+    #[test]
+    fn exec_can_explicitly_enable_final_change_verification() {
+        let (verify, no_verify) =
+            parse_exec_verification(&["bitfun", "exec", "--verify-final-changes", "task"]);
+        assert!(final_change_verification_enabled(verify, no_verify));
+    }
+
+    #[test]
+    fn exec_can_disable_final_change_verification() {
+        let (verify, no_verify) =
+            parse_exec_verification(&["bitfun", "exec", "--no-verify-final-changes", "task"]);
+        assert!(!final_change_verification_enabled(verify, no_verify));
     }
 }

@@ -1,6 +1,6 @@
 use super::{
     changed_files, collect_worktree_patch, detect_verify_command, git_diff_base,
-    write_patch_to_path, ExecMode, TOOL_START_INPUT_PREVIEW_CHARS,
+    needs_change_baseline, write_patch_to_path, ExecMode, TOOL_START_INPUT_PREVIEW_CHARS,
 };
 use serde_json::json;
 use std::collections::BTreeSet;
@@ -42,6 +42,13 @@ fn write_patch_to_path_creates_nested_parent_directories() {
 
     let written = std::fs::read_to_string(&patch_path).expect("read patch");
     assert_eq!(written, "diff content");
+}
+
+#[test]
+fn verification_captures_a_change_baseline_without_patch_output() {
+    assert!(needs_change_baseline(None, true));
+    assert!(needs_change_baseline(Some("result.patch"), false));
+    assert!(!needs_change_baseline(None, false));
 }
 
 #[test]
