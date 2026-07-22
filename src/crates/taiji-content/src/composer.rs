@@ -10,11 +10,11 @@ use std::process::Command;
 /// path handling and file operations. The FileSystemService abstraction lives in
 /// `src/crates/services` and provides canonicalize, read, write, and directory
 /// traversal primitives that work across desktop, remote, and WASM targets.
-pub struct FfmpegComposer {
+pub struct VideoComposer {
     config: ComposeConfig,
 }
 
-impl FfmpegComposer {
+impl VideoComposer {
     pub fn new(config: ComposeConfig) -> Self {
         Self { config }
     }
@@ -175,7 +175,7 @@ mod tests {
     fn test_build_video_filter_no_subtitle() {
         let config = make_config(false);
         let vf =
-            FfmpegComposer::build_video_filter(&config.encoding, config.subtitle_path.as_ref());
+            VideoComposer::build_video_filter(&config.encoding, config.subtitle_path.as_ref());
         assert_eq!(vf, "scale=1920:1080");
         // Verify no subtitles keyword present
         assert!(!vf.contains("subtitles"));
@@ -185,7 +185,7 @@ mod tests {
     fn test_build_video_filter_with_subtitle() {
         let config = make_config(true);
         let vf =
-            FfmpegComposer::build_video_filter(&config.encoding, config.subtitle_path.as_ref());
+            VideoComposer::build_video_filter(&config.encoding, config.subtitle_path.as_ref());
         assert!(vf.starts_with("scale=1920:1080,subtitles="));
         assert!(vf.contains("force_style='FontSize=24"));
     }
@@ -193,7 +193,7 @@ mod tests {
     #[test]
     fn test_escape_subtitle_path_windows() {
         let path = PathBuf::from("C:\\data\\projects\\taiji\\output\\narration.srt");
-        let escaped = FfmpegComposer::escape_subtitle_path(&path);
+        let escaped = VideoComposer::escape_subtitle_path(&path);
         // Colon is escaped to \:
         assert!(
             escaped.contains("\\:"),

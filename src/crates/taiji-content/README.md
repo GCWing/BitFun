@@ -49,7 +49,7 @@ let option = build_echarts_option(&pipeline_json, &config)?;
 | | `types/compose_config.rs` | `ComposeConfig` + `EncodingProfile` |
 | Candlestick rendering | `chart_option.rs` | `build_echarts_option()` — Pipeline JSON → ECharts option |
 | Annotation overlay | `annotation.rs` | `apply_annotations()` — 5 Taiji types → ECharts marks |
-| Video composition | `composer.rs` | `FfmpegComposer` Builder + `sync_test` A/V sync validation |
+| Video composition | `composer.rs` | `VideoComposer` Builder + `sync_test` A/V sync validation |
 | Cron scheduling | `cron_job.rs` | `VideoCronJob` + `VideoScheduler` |
 
 ## Data Flow
