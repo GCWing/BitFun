@@ -1,6 +1,10 @@
 # 致谢
 
-太极（Taiji）量化交易系统的诞生，离不开以下优秀开源项目的启发与支持。我们在此向所有项目维护者和贡献者致以诚挚的感谢。
+太极（Taiji）量化交易系统基于 [**BitFun 社区**](https://github.com/GCWing/BitFun) 构建。
+
+> BitFun 是一个围绕 Code Agent 构建的本地 AI 工作台。感谢 BitFun 团队（[@GCWing](https://github.com/GCWing)）和社区提供的优秀基础设施，使太极的 Ultra Mode 多智能体编排、DAG 管线引擎和自媒体视频工厂成为可能。
+
+同时，太极的诞生离不开以下优秀开源项目的启发与支持。我们在此向所有项目维护者和贡献者致以诚挚的感谢。
 
 ---
 
