@@ -11,7 +11,7 @@ import { window } from '@kit.ArkUI';
 import { RustAbility } from '@ohos-rs/ability';
 import { CommonEventListener } from '../utils/CommonEventListener';
 import { harmonyShare, systemShare } from '@kit.ShareKit';
-import { fileIo } from '@kit.CoreFileKit';
+import { fileIo, fileUri } from '@kit.CoreFileKit';
 import { uniformTypeDescriptor } from '@kit.ArkData';
 import { calendarManager } from '@kit.CalendarKit';
 import { BusinessError } from '@kit.BasicServicesKit';
@@ -180,18 +180,22 @@ export default class EntryAbility extends RustAbility {
       })
     }, 40)
     RustModule.registerArktsFunction('reveal_in_explorer', async (err: Error, arg: string): Promise<string> => {
-      if (!arg.startsWith('file://')) {
-        arg = 'file://' + arg;
+      const context = getContext(this) as common.UIAbilityContext;
+      let uri: string;
+      if (arg.startsWith('file://')) {
+        uri = arg;
+      } else if (arg.startsWith('/data/storage/')) {
+        uri = fileUri.getUriFromPath(arg);
+      } else {
+        uri = 'file://docs' + arg;
       }
-      const path = arg.replace('file://', 'file://docs');
       const want: Want = {
         bundleName: 'com.huawei.hmos.filemanager',
         abilityName: 'MainAbility',
         parameters: {
-          fileUri: path
+          fileUri: uri
         }
       };
-      const context = getContext(this) as common.UIAbilityContext;
       try {
         await context.startAbility(want)
       } catch (err) {
