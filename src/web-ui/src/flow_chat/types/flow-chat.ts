@@ -64,6 +64,10 @@ export interface FlowToolItem extends FlowItem {
     result: any;
     success: boolean;
     resultForAssistant?: string;
+    imageAttachments?: Array<{
+      mime_type: string;
+      data_base64: string;
+    }>;
     error?: string;
     duration_ms?: number;
   };

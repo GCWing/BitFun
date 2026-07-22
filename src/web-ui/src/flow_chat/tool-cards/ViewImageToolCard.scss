@@ -1,0 +1,72 @@
+.view-image-tool-card__content {
+  display: flex;
+  justify-content: flex-start;
+  min-width: 0;
+  margin: 8px 0 0 28px;
+}
+
+.view-image-tool-card__preview-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 160px;
+  max-width: calc(100vw - 76px);
+  aspect-ratio: 1;
+  padding: 0;
+  overflow: hidden;
+  appearance: none;
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--border-base);
+  border-radius: 8px;
+  cursor: zoom-in;
+
+  &:focus-visible {
+    outline: 2px solid var(--color-accent-600);
+    outline-offset: 2px;
+  }
+
+  img {
+    display: block;
+    max-width: 100%;
+    max-height: 100%;
+    object-fit: contain;
+  }
+}
+
+.view-image-tool-card__error {
+  width: 100%;
+  padding: 12px;
+  color: var(--color-error);
+  font-size: var(--flowchat-font-size-base);
+  text-align: center;
+}
+
+.view-image-tool-card__lightbox {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 240px;
+  max-height: 80vh;
+  overflow: auto;
+
+  img {
+    display: block;
+    max-width: 100%;
+    max-height: 76vh;
+    object-fit: contain;
+  }
+}
+
+@media (max-width: 640px) {
+  .view-image-tool-card__content {
+    margin-left: 24px;
+  }
+
+  .view-image-tool-card__preview-button {
+    width: 144px;
+  }
+
+  .view-image-tool-card__lightbox {
+    min-height: 160px;
+  }
+}

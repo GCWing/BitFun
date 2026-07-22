@@ -1561,6 +1561,10 @@
       "openSettings": "打开系统设置",
       "openSettingsFailed": "无法打开系统设置"
     },
+    "viewImage": {
+      "viewing": "正在查看图像...",
+      "viewedImages": "已查看 {{count}} 张图像"
+    },
     "webFetch": {
       "parsingUrl": "解析链接中...",
       "readLabel": "读取网页:",

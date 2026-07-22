@@ -539,6 +539,7 @@ function handleCompleted(
       result: toolEvent.result,
       success: true,
       resultForAssistant: toolEvent.result_for_assistant,
+      imageAttachments: toolEvent.image_attachments,
       duration_ms: toolEvent.duration_ms
     },
     status: 'completed' as const,

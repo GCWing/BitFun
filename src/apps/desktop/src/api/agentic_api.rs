@@ -3153,6 +3153,7 @@ mod tests {
                 result,
                 success: true,
                 result_for_assistant: assistant.map(str::to_string),
+                image_attachments: None,
                 error: None,
                 duration_ms: Some(1),
             }),

@@ -1,5 +1,6 @@
 //! Agentic Events Definition
 pub use bitfun_core_types::errors::{AiErrorDetail, ErrorCategory};
+use bitfun_core_types::ToolImageAttachment;
 use serde::{Deserialize, Serialize};
 use std::time::SystemTime;
 
@@ -452,6 +453,8 @@ pub enum ToolEventData {
         result: serde_json::Value,
         #[serde(skip_serializing_if = "Option::is_none")]
         result_for_assistant: Option<String>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        image_attachments: Option<Vec<ToolImageAttachment>>,
         duration_ms: u64,
         #[serde(default, skip_serializing_if = "Option::is_none")]
         queue_wait_ms: Option<u64>,
@@ -740,6 +743,7 @@ mod tests {
             identity: ToolEventIdentity::direct("tool-1", "write_file"),
             result: serde_json::json!({ "ok": true }),
             result_for_assistant: None,
+            image_attachments: None,
             duration_ms: 120,
             queue_wait_ms: Some(10),
             preflight_ms: Some(20),
@@ -775,6 +779,29 @@ mod tests {
             serde_json::from_value(json).expect("deserialize deferred event");
         assert_eq!(decoded.wire_tool_name(), "CallDeferredTool");
         assert_eq!(decoded.effective_tool_name(), "CreatePlan");
+    }
+
+    #[test]
+    fn completed_tool_serializes_image_attachments() {
+        let event = ToolEventData::Completed {
+            identity: ToolEventIdentity::direct("tool-image-1", "view_image"),
+            result: serde_json::json!({ "path": "preview.png" }),
+            result_for_assistant: Some("Image attached".to_string()),
+            image_attachments: Some(vec![bitfun_core_types::ToolImageAttachment {
+                mime_type: "image/png".to_string(),
+                data_base64: "AAAA".to_string(),
+            }]),
+            duration_ms: 12,
+            queue_wait_ms: None,
+            preflight_ms: None,
+            confirmation_wait_ms: None,
+            execution_ms: Some(12),
+        };
+
+        let json = serde_json::to_value(&event).expect("serialize tool event");
+
+        assert_eq!(json["image_attachments"][0]["mime_type"], "image/png");
+        assert_eq!(json["image_attachments"][0]["data_base64"], "AAAA");
     }
 
     #[test]

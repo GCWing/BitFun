@@ -1561,6 +1561,10 @@
       "openSettings": "打開系統設定",
       "openSettingsFailed": "無法打開系統設定"
     },
+    "viewImage": {
+      "viewing": "正在查看圖像...",
+      "viewedImages": "已查看 {{count}} 張圖像"
+    },
     "webFetch": {
       "parsingUrl": "解析連結中...",
       "readLabel": "讀取網頁:",

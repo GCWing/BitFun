@@ -1561,6 +1561,10 @@
       "openSettings": "Open System Settings",
       "openSettingsFailed": "Could not open System Settings"
     },
+    "viewImage": {
+      "viewing": "Viewing image...",
+      "viewedImages": "Viewed {{count}} image"
+    },
     "webFetch": {
       "parsingUrl": "Parsing URL...",
       "readLabel": "Read Webpage:",

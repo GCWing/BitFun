@@ -363,6 +363,17 @@ export const TOOL_CARD_CONFIGS: Record<string, ToolCardConfig> = {
     primaryColor: 'var(--color-accent-600)'
   },
 
+  'view_image': {
+    toolName: 'view_image',
+    displayName: 'view_image',
+    icon: 'IMG',
+    requiresConfirmation: false,
+    resultDisplayType: 'detailed',
+    description: '',
+    displayMode: 'compact',
+    primaryColor: 'var(--color-accent-600)'
+  },
+
   // BitFun Canvas tools
   'CreateCanvas': {
     toolName: 'CreateCanvas',

@@ -164,6 +164,13 @@ impl ToolStateManager {
                     } => result_for_assistant.clone(),
                     _ => None,
                 },
+                image_attachments: match result {
+                    crate::agentic::tools::framework::ToolResult::Result {
+                        image_attachments,
+                        ..
+                    } => image_attachments.clone(),
+                    _ => None,
+                },
                 duration_ms: *duration_ms,
                 queue_wait_ms: *queue_wait_ms,
                 preflight_ms: *preflight_ms,

@@ -427,6 +427,7 @@ mod tests {
                 result_for_assistant: Some(
                     "Fetched page with token=ghp_abcdefghijklmnopqrstuvwxyz".to_string(),
                 ),
+                image_attachments: None,
                 error: None,
                 duration_ms: Some(1),
             }),
@@ -499,6 +500,7 @@ mod tests {
                     r#"{"description":"full schema definition","input_schema":{"type":"object"}}"#
                         .to_string(),
                 ),
+                image_attachments: None,
                 error: None,
                 duration_ms: Some(1),
             }),
@@ -558,6 +560,7 @@ mod tests {
                 result_for_assistant: Some(
                     "external page content that should not enter memory extraction".to_string(),
                 ),
+                image_attachments: None,
                 error: None,
                 duration_ms: Some(1),
             }),
@@ -617,6 +620,7 @@ mod tests {
                 result: json!({"content": "r".repeat(TOOL_RESULT_TOKEN_LIMIT * 5)}),
                 success: true,
                 result_for_assistant: None,
+                image_attachments: None,
                 error: Some("e".repeat(TOOL_ERROR_TOKEN_LIMIT * 5)),
                 duration_ms: Some(1),
             }),

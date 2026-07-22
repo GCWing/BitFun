@@ -5218,6 +5218,7 @@ impl SessionManager {
                         tool_id,
                         result,
                         result_for_assistant,
+                        image_attachments,
                         is_error,
                         ..
                     } = &msg.content
@@ -5232,6 +5233,7 @@ impl SessionManager {
                                         result: result.clone(),
                                         success: !is_error,
                                         result_for_assistant: assistant_text,
+                                        image_attachments: image_attachments.clone(),
                                         error: if *is_error {
                                             serde_json::to_string(result).ok()
                                         } else {
@@ -8336,6 +8338,7 @@ mod tests {
                     }),
                     success: true,
                     result_for_assistant: Some(assistant_output.clone()),
+                    image_attachments: None,
                     error: None,
                     duration_ms: Some(1),
                 }),
