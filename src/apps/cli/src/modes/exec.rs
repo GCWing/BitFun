@@ -22,10 +22,10 @@ use crate::diagnostics::{emit_exit_diagnostic, ExitContext, ExitKind};
 
 const TOOL_START_INPUT_PREVIEW_CHARS: usize = 4_000;
 
-/// Patch verification gate. Activates when `--output-patch` is set and the
-/// detector finds verifiers scoped to the changed files (Go, Cargo, TypeScript,
-/// or a parse-only fallback). On verification failure, the agent is re-prompted
-/// with the captured output and given another chance to finalize.
+/// Final-change verification gate. Enabled by default for headless `exec`; it
+/// can be disabled with `--no-verify-final-changes`. When the detector finds
+/// verifiers scoped to the changed files (Go, Cargo, TypeScript, or a parse-only
+/// fallback), failures are fed back to the agent for another finalization turn.
 ///
 /// Tuning knobs come from env vars:
 /// - `BITFUN_PATCH_VERIFY_TIMEOUT_SEC` — default 900s. Should be wide enough to
@@ -102,6 +102,7 @@ pub struct ExecMode {
     initial_untracked_files: std::collections::BTreeSet<String>,
     /// None: no patch output, Some("-"): output to stdout, Some(path): save to file
     output_patch: Option<String>,
+    verify_final_changes: bool,
     output_format: ExecOutputFormat,
     session_options: ExecSessionOptions,
 }
@@ -114,10 +115,13 @@ impl ExecMode {
         agentic_system: &AgenticSystem,
         workspace_path: Option<PathBuf>,
         output_patch: Option<String>,
+        verify_final_changes: bool,
         output_format: ExecOutputFormat,
         session_options: ExecSessionOptions,
     ) -> Self {
-        let (initial_diff_base, initial_untracked_files) = if output_patch.is_some() {
+        let needs_change_baseline =
+            needs_change_baseline(output_patch.as_deref(), verify_final_changes);
+        let (initial_diff_base, initial_untracked_files) = if needs_change_baseline {
             workspace_path
                 .as_deref()
                 .map(|workspace| (git_diff_base(workspace), untracked_files(workspace)))
@@ -140,6 +144,7 @@ impl ExecMode {
             initial_diff_base,
             initial_untracked_files,
             output_patch,
+            verify_final_changes,
             output_format,
             session_options,
         }
@@ -266,63 +271,185 @@ impl ExecMode {
             .clone()
             .or_else(|| std::env::current_dir().ok())
             .unwrap_or_else(|| PathBuf::from("."));
-        let verify_enabled = self.output_patch.is_some();
         let mut current_message = self.message.clone();
         let mut retries_used: u32 = 0;
         let mut total_tool_calls = 0usize;
         let mut subagent_parent_sessions: HashMap<String, String> = HashMap::new();
 
         let final_outcome: Result<()> = 'retry: loop {
-        let turn_id = self
-            .agent
-            .send_message(current_message.clone(), &self.agent_type)
-            .await
-            .map_err(|e| {
-                emit_exit_diagnostic(
-                    ExitKind::SendMessageFailed,
-                    &e.to_string(),
-                    &self.exit_context(Some(&session_id), None),
-                );
-                e
-            })?;
-        tracing::info!(session_id = %session_id, turn_id = %turn_id, "Message sent");
+            let turn_id = self
+                .agent
+                .send_message(current_message.clone(), &self.agent_type)
+                .await
+                .map_err(|e| {
+                    emit_exit_diagnostic(
+                        ExitKind::SendMessageFailed,
+                        &e.to_string(),
+                        &self.exit_context(Some(&session_id), None),
+                    );
+                    e
+                })?;
+            tracing::info!(session_id = %session_id, turn_id = %turn_id, "Message sent");
 
-        // Per-turn loop state.
-        let mut terminal_outcome: Option<Result<()>> = None;
-        let mut observed_turn_activity = false;
+            // Per-turn loop state.
+            let mut terminal_outcome: Option<Result<()>> = None;
+            let mut observed_turn_activity = false;
 
-        loop {
-            // Wait for events, but wake periodically so exec mode cannot hang
-            // forever if a terminal event is missed after core has gone idle.
-            tokio::select! {
-                _ = event_queue.wait_for_events() => {}
-                _ = sleep(Duration::from_secs(1)) => {}
-            }
-
-            let events = event_queue.dequeue_batch(20).await;
-
-            for envelope in events {
-                let event = &envelope.event;
-
-                if let AgenticEvent::SubagentSessionLinked {
-                    session_id: subagent_session_id,
-                    parent_session_id,
-                    ..
-                } = event
-                {
-                    subagent_parent_sessions
-                        .insert(subagent_session_id.clone(), parent_session_id.clone());
-                    continue;
+            loop {
+                // Wait for events, but wake periodically so exec mode cannot hang
+                // forever if a terminal event is missed after core has gone idle.
+                tokio::select! {
+                    _ = event_queue.wait_for_events() => {}
+                    _ = sleep(Duration::from_secs(1)) => {}
                 }
 
-                // Only process events for our session
-                if event.session_id() != Some(&session_id) {
-                    // Check if this is a subagent event whose parent is in our session
-                    if let AgenticEvent::ToolEvent { tool_event, .. } = event {
-                        let parent_session_id = event.session_id().and_then(|event_session_id| {
-                            subagent_parent_sessions.get(event_session_id)
-                        });
-                        if parent_session_id.map(String::as_str) == Some(session_id.as_str()) {
+                let events = event_queue.dequeue_batch(20).await;
+
+                for envelope in events {
+                    let event = &envelope.event;
+
+                    if let AgenticEvent::SubagentSessionLinked {
+                        session_id: subagent_session_id,
+                        parent_session_id,
+                        ..
+                    } = event
+                    {
+                        subagent_parent_sessions
+                            .insert(subagent_session_id.clone(), parent_session_id.clone());
+                        continue;
+                    }
+
+                    // Only process events for our session
+                    if event.session_id() != Some(&session_id) {
+                        // Check if this is a subagent event whose parent is in our session
+                        if let AgenticEvent::ToolEvent { tool_event, .. } = event {
+                            let parent_session_id =
+                                event.session_id().and_then(|event_session_id| {
+                                    subagent_parent_sessions.get(event_session_id)
+                                });
+                            if parent_session_id.map(String::as_str) == Some(session_id.as_str()) {
+                                use bitfun_events::ToolEventData;
+                                match tool_event {
+                                    ToolEventData::Started {
+                                        tool_name,
+                                        tool_id,
+                                        params,
+                                        ..
+                                    } => {
+                                        self.emit(json!({
+                                            "type": "subagent_tool_start",
+                                            "session_id": session_id,
+                                            "tool_id": tool_id,
+                                            "tool_name": tool_name,
+                                            "input": params,
+                                        }))?;
+                                        self.print_text(|| {
+                                            let started_at = chrono::Utc::now().to_rfc3339();
+                                            let input_preview = Self::tool_input_preview(params);
+                                            println!("   [subagent] {}", tool_name);
+                                            println!("      Started at: {}", started_at);
+                                            println!("      Tool ID: {}", tool_id);
+                                            println!("      CWD: {}", self.workspace_display());
+                                            println!("      Input: {}", input_preview);
+                                            std::io::stdout().flush().ok();
+                                        });
+                                    }
+                                    ToolEventData::Completed {
+                                        tool_name,
+                                        tool_id,
+                                        result_for_assistant,
+                                        result,
+                                        duration_ms,
+                                        ..
+                                    } => {
+                                        let summary = result_for_assistant
+                                            .clone()
+                                            .unwrap_or_else(|| result.to_string());
+                                        self.emit(json!({
+                                            "type": "subagent_tool_result",
+                                            "session_id": session_id,
+                                            "tool_id": tool_id,
+                                            "tool_name": tool_name,
+                                            "duration_ms": duration_ms,
+                                            "result": result,
+                                            "summary": summary,
+                                        }))?;
+                                        self.print_text(|| {
+                                            println!(
+                                                "   [subagent] {} completed: {}",
+                                                tool_name, summary
+                                            )
+                                        });
+                                    }
+                                    ToolEventData::Failed {
+                                        tool_name,
+                                        tool_id,
+                                        error,
+                                        ..
+                                    } => {
+                                        self.emit(json!({
+                                            "type": "subagent_tool_error",
+                                            "session_id": session_id,
+                                            "tool_id": tool_id,
+                                            "tool_name": tool_name,
+                                            "error": error,
+                                        }))?;
+                                        self.print_text(|| {
+                                            println!(
+                                                "   [subagent] {} failed: {}",
+                                                tool_name, error
+                                            )
+                                        });
+                                    }
+                                    _ => {}
+                                }
+                            }
+                        }
+                        continue;
+                    }
+
+                    observed_turn_activity = true;
+
+                    match event {
+                        AgenticEvent::ModelRoundStarted {
+                            model_id: Some(model_id),
+                            ..
+                        }
+                        | AgenticEvent::ModelRoundCompleted {
+                            model_id: Some(model_id),
+                            ..
+                        }
+                        | AgenticEvent::TokenUsageUpdated { model_id, .. } => {
+                            self.record_resolved_model_id(&session_id, model_id).await;
+                        }
+
+                        AgenticEvent::TextChunk { text, .. } => {
+                            self.emit(json!({
+                                "type": "text",
+                                "session_id": session_id,
+                                "text": text,
+                            }))?;
+                            self.print_text(|| {
+                                print!("{}", text);
+                                use std::io::Write;
+                                std::io::stdout().flush().ok();
+                            });
+                        }
+
+                        AgenticEvent::ThinkingChunk { content, .. } => {
+                            self.emit(json!({
+                                "type": "thinking",
+                                "session_id": session_id,
+                                "text": content,
+                            }))?;
+                            self.print_text(|| {
+                                print!("\x1b[2m{}\x1b[0m", content);
+                                use std::io::Write;
+                                std::io::stdout().flush().ok();
+                            });
+                        }
+
+                        AgenticEvent::ToolEvent { tool_event, .. } => {
                             use bitfun_events::ToolEventData;
                             match tool_event {
                                 ToolEventData::Started {
@@ -332,22 +459,30 @@ impl ExecMode {
                                     ..
                                 } => {
                                     self.emit(json!({
-                                        "type": "subagent_tool_start",
+                                        "type": "tool_start",
                                         "session_id": session_id,
                                         "tool_id": tool_id,
                                         "tool_name": tool_name,
                                         "input": params,
                                     }))?;
-                                    self.print_text(|| {
-                                        let started_at = chrono::Utc::now().to_rfc3339();
-                                        let input_preview = Self::tool_input_preview(params);
-                                        println!("   [subagent] {}", tool_name);
-                                        println!("      Started at: {}", started_at);
-                                        println!("      Tool ID: {}", tool_id);
-                                        println!("      CWD: {}", self.workspace_display());
-                                        println!("      Input: {}", input_preview);
-                                        std::io::stdout().flush().ok();
-                                    });
+                                    self.print_tool_start_details(tool_name, tool_id, params);
+                                    total_tool_calls += 1;
+                                }
+                                ToolEventData::Progress {
+                                    tool_name,
+                                    tool_id,
+                                    message,
+                                    percentage,
+                                } => {
+                                    self.emit(json!({
+                                        "type": "tool_progress",
+                                        "session_id": session_id,
+                                        "tool_id": tool_id,
+                                        "tool_name": tool_name,
+                                        "message": message,
+                                        "percentage": percentage,
+                                    }))?;
+                                    self.print_text(|| println!("   In progress: {}", message));
                                 }
                                 ToolEventData::Completed {
                                     tool_name,
@@ -361,7 +496,7 @@ impl ExecMode {
                                         .clone()
                                         .unwrap_or_else(|| result.to_string());
                                     self.emit(json!({
-                                        "type": "subagent_tool_result",
+                                        "type": "tool_result",
                                         "session_id": session_id,
                                         "tool_id": tool_id,
                                         "tool_name": tool_name,
@@ -371,8 +506,8 @@ impl ExecMode {
                                     }))?;
                                     self.print_text(|| {
                                         println!(
-                                            "   [subagent] {} completed: {}",
-                                            tool_name, summary
+                                            "   [+] {} ({}ms): {}",
+                                            tool_name, duration_ms, summary
                                         )
                                     });
                                 }
@@ -383,153 +518,109 @@ impl ExecMode {
                                     ..
                                 } => {
                                     self.emit(json!({
-                                        "type": "subagent_tool_error",
+                                        "type": "tool_error",
                                         "session_id": session_id,
                                         "tool_id": tool_id,
                                         "tool_name": tool_name,
                                         "error": error,
                                     }))?;
-                                    self.print_text(|| {
-                                        println!("   [subagent] {} failed: {}", tool_name, error)
-                                    });
+                                    self.print_text(|| println!("   [x] {}: {}", tool_name, error));
                                 }
                                 _ => {}
                             }
                         }
+
+                        AgenticEvent::DialogTurnCompleted { .. } => {
+                            self.emit(json!({
+                                "type": "done",
+                                "session_id": session_id,
+                                "status": "completed",
+                                "tool_calls": total_tool_calls,
+                            }))?;
+                            self.print_text(|| {
+                                println!("\n");
+                                println!("Execution complete");
+                                if total_tool_calls > 0 {
+                                    println!(
+                                        "\nTool call statistics: {} tools invoked",
+                                        total_tool_calls
+                                    );
+                                }
+                            });
+                            terminal_outcome = Some(Ok(()));
+                            break;
+                        }
+
+                        AgenticEvent::DialogTurnFailed { error, .. } => {
+                            self.emit(json!({
+                                "type": "error",
+                                "session_id": session_id,
+                                "message": error,
+                            }))?;
+                            self.print_text(|| eprintln!("\nExecution failed: {}", error));
+                            emit_exit_diagnostic(
+                                ExitKind::DialogTurnFailed,
+                                error,
+                                &self.exit_context(Some(&session_id), Some(&turn_id)),
+                            );
+                            terminal_outcome =
+                                Some(Err(anyhow::anyhow!("Execution failed: {}", error)));
+                            break;
+                        }
+
+                        AgenticEvent::DialogTurnCancelled { .. } => {
+                            self.emit(json!({
+                                "type": "done",
+                                "session_id": session_id,
+                                "status": "cancelled",
+                                "tool_calls": total_tool_calls,
+                            }))?;
+                            self.print_text(|| println!("\nExecution cancelled"));
+                            terminal_outcome = Some(Ok(()));
+                            break;
+                        }
+
+                        AgenticEvent::SystemError { error, .. } => {
+                            self.emit(json!({
+                                "type": "error",
+                                "session_id": session_id,
+                                "message": error,
+                            }))?;
+                            self.print_text(|| eprintln!("\nSystem error: {}", error));
+                            emit_exit_diagnostic(
+                                ExitKind::SystemError,
+                                error,
+                                &self.exit_context(Some(&session_id), Some(&turn_id)),
+                            );
+                            terminal_outcome =
+                                Some(Err(anyhow::anyhow!("System error: {}", error)));
+                            break;
+                        }
+
+                        _ => {}
                     }
-                    continue;
                 }
 
-                observed_turn_activity = true;
+                if terminal_outcome.is_some() {
+                    break;
+                }
 
-                match event {
-                    AgenticEvent::ModelRoundStarted {
-                        model_id: Some(model_id),
-                        ..
-                    }
-                    | AgenticEvent::ModelRoundCompleted {
-                        model_id: Some(model_id),
-                        ..
-                    }
-                    | AgenticEvent::TokenUsageUpdated { model_id, .. } => {
-                        self.record_resolved_model_id(&session_id, model_id).await;
-                    }
-
-                    AgenticEvent::TextChunk { text, .. } => {
-                        self.emit(json!({
-                            "type": "text",
-                            "session_id": session_id,
-                            "text": text,
-                        }))?;
-                        self.print_text(|| {
-                            print!("{}", text);
-                            use std::io::Write;
-                            std::io::stdout().flush().ok();
-                        });
-                    }
-
-                    AgenticEvent::ThinkingChunk { content, .. } => {
-                        self.emit(json!({
-                            "type": "thinking",
-                            "session_id": session_id,
-                            "text": content,
-                        }))?;
-                        self.print_text(|| {
-                            print!("\x1b[2m{}\x1b[0m", content);
-                            use std::io::Write;
-                            std::io::stdout().flush().ok();
-                        });
-                    }
-
-                    AgenticEvent::ToolEvent { tool_event, .. } => {
-                        use bitfun_events::ToolEventData;
-                        match tool_event {
-                            ToolEventData::Started {
-                                tool_name,
-                                tool_id,
-                                params,
-                                ..
-                            } => {
-                                self.emit(json!({
-                                    "type": "tool_start",
-                                    "session_id": session_id,
-                                    "tool_id": tool_id,
-                                    "tool_name": tool_name,
-                                    "input": params,
-                                }))?;
-                                self.print_tool_start_details(tool_name, tool_id, params);
-                                total_tool_calls += 1;
-                            }
-                            ToolEventData::Progress {
-                                tool_name,
-                                tool_id,
-                                message,
-                                percentage,
-                            } => {
-                                self.emit(json!({
-                                    "type": "tool_progress",
-                                    "session_id": session_id,
-                                    "tool_id": tool_id,
-                                    "tool_name": tool_name,
-                                    "message": message,
-                                    "percentage": percentage,
-                                }))?;
-                                self.print_text(|| println!("   In progress: {}", message));
-                            }
-                            ToolEventData::Completed {
-                                tool_name,
-                                tool_id,
-                                result_for_assistant,
-                                result,
-                                duration_ms,
-                                ..
-                            } => {
-                                let summary = result_for_assistant
-                                    .clone()
-                                    .unwrap_or_else(|| result.to_string());
-                                self.emit(json!({
-                                    "type": "tool_result",
-                                    "session_id": session_id,
-                                    "tool_id": tool_id,
-                                    "tool_name": tool_name,
-                                    "duration_ms": duration_ms,
-                                    "result": result,
-                                    "summary": summary,
-                                }))?;
-                                self.print_text(|| {
-                                    println!(
-                                        "   [+] {} ({}ms): {}",
-                                        tool_name, duration_ms, summary
-                                    )
-                                });
-                            }
-                            ToolEventData::Failed {
-                                tool_name,
-                                tool_id,
-                                error,
-                                ..
-                            } => {
-                                self.emit(json!({
-                                    "type": "tool_error",
-                                    "session_id": session_id,
-                                    "tool_id": tool_id,
-                                    "tool_name": tool_name,
-                                    "error": error,
-                                }))?;
-                                self.print_text(|| println!("   [x] {}: {}", tool_name, error));
-                            }
-                            _ => {}
-                        }
-                    }
-
-                    AgenticEvent::DialogTurnCompleted { .. } => {
-                        self.emit(json!({
-                            "type": "done",
-                            "session_id": session_id,
-                            "status": "completed",
-                            "tool_calls": total_tool_calls,
-                        }))?;
-                        self.print_text(|| {
+                if observed_turn_activity {
+                    match self
+                        .agent
+                        .coordinator()
+                        .get_session_manager()
+                        .get_session(&session_id)
+                        .map(|session| session.state)
+                    {
+                        Some(SessionState::Idle)
+                            if !self.agent.coordinator().has_active_turn(&turn_id) =>
+                        {
+                            tracing::warn!(
+                            "Exec observed idle session without terminal turn event; treating turn as settled: session_id={}, turn_id={}",
+                            session_id,
+                            turn_id
+                        );
                             println!("\n");
                             println!("Execution complete");
                             if total_tool_calls > 0 {
@@ -538,140 +629,67 @@ impl ExecMode {
                                     total_tool_calls
                                 );
                             }
-                        });
-                        terminal_outcome = Some(Ok(()));
-                        break;
-                    }
-
-                    AgenticEvent::DialogTurnFailed { error, .. } => {
-                        self.emit(json!({
-                            "type": "error",
-                            "session_id": session_id,
-                            "message": error,
-                        }))?;
-                        self.print_text(|| eprintln!("\nExecution failed: {}", error));
-                        emit_exit_diagnostic(
-                            ExitKind::DialogTurnFailed,
-                            error,
-                            &self.exit_context(Some(&session_id), Some(&turn_id)),
-                        );
-                        terminal_outcome =
-                            Some(Err(anyhow::anyhow!("Execution failed: {}", error)));
-                        break;
-                    }
-
-                    AgenticEvent::DialogTurnCancelled { .. } => {
-                        self.emit(json!({
-                            "type": "done",
-                            "session_id": session_id,
-                            "status": "cancelled",
-                            "tool_calls": total_tool_calls,
-                        }))?;
-                        self.print_text(|| println!("\nExecution cancelled"));
-                        terminal_outcome = Some(Ok(()));
-                        break;
-                    }
-
-                    AgenticEvent::SystemError { error, .. } => {
-                        self.emit(json!({
-                            "type": "error",
-                            "session_id": session_id,
-                            "message": error,
-                        }))?;
-                        self.print_text(|| eprintln!("\nSystem error: {}", error));
-                        emit_exit_diagnostic(
-                            ExitKind::SystemError,
-                            error,
-                            &self.exit_context(Some(&session_id), Some(&turn_id)),
-                        );
-                        terminal_outcome = Some(Err(anyhow::anyhow!("System error: {}", error)));
-                        break;
-                    }
-
-                    _ => {}
-                }
-            }
-
-            if terminal_outcome.is_some() {
-                break;
-            }
-
-            if observed_turn_activity {
-                match self
-                    .agent
-                    .coordinator()
-                    .get_session_manager()
-                    .get_session(&session_id)
-                    .map(|session| session.state)
-                {
-                    Some(SessionState::Idle)
-                        if !self.agent.coordinator().has_active_turn(&turn_id) =>
-                    {
-                        tracing::warn!(
-                            "Exec observed idle session without terminal turn event; treating turn as settled: session_id={}, turn_id={}",
-                            session_id,
-                            turn_id
-                        );
-                        println!("\n");
-                        println!("Execution complete");
-                        if total_tool_calls > 0 {
-                            println!("\nTool call statistics: {} tools invoked", total_tool_calls);
+                            terminal_outcome = Some(Ok(()));
+                            break;
                         }
-                        terminal_outcome = Some(Ok(()));
-                        break;
+                        Some(SessionState::Idle) => {}
+                        Some(SessionState::Error { error, .. }) => {
+                            eprintln!("\nExecution failed: {}", error);
+                            emit_exit_diagnostic(
+                                ExitKind::DialogTurnFailed,
+                                &error,
+                                &self.exit_context(Some(&session_id), Some(&turn_id)),
+                            );
+                            terminal_outcome =
+                                Some(Err(anyhow::anyhow!("Execution failed: {}", error)));
+                            break;
+                        }
+                        _ => {}
                     }
-                    Some(SessionState::Idle) => {}
-                    Some(SessionState::Error { error, .. }) => {
-                        eprintln!("\nExecution failed: {}", error);
-                        emit_exit_diagnostic(
-                            ExitKind::DialogTurnFailed,
-                            &error,
-                            &self.exit_context(Some(&session_id), Some(&turn_id)),
-                        );
-                        terminal_outcome =
-                            Some(Err(anyhow::anyhow!("Execution failed: {}", error)));
-                        break;
-                    }
-                    _ => {}
                 }
             }
-        }
 
-        self.wait_for_turn_settlement(&session_id, &turn_id).await;
+            self.wait_for_turn_settlement(&session_id, &turn_id).await;
 
-        let outcome = terminal_outcome.unwrap_or(Ok(()));
+            let outcome = terminal_outcome.unwrap_or(Ok(()));
 
-        // Patch verification gate. Only runs when --output-patch is set,
-        // the agent's turn settled cleanly, and the workspace exposes a
-        // verifier we can detect. Failure to verify triggers up to
-        // verify_cfg.max_retries additional turns, each fed the verifier's
-        // output (or a scope-narrowing hint, for timeouts) as a system
-        // reminder. Passes / skips fall straight through to emit the patch.
-        if verify_enabled && outcome.is_ok() {
-            if let Some(command) =
-                detect_verify_command(
+            // Final-change verification gate. Runs independently of patch output
+            // when enabled, after the agent's turn settles cleanly and the workspace
+            // exposes a verifier we can detect. Failure triggers up to
+            // verify_cfg.max_retries additional turns, each fed the verifier's
+            // output (or a scope-narrowing hint, for timeouts) as a system
+            // reminder. Passes / skips fall straight through to emit the patch.
+            if self.verify_final_changes && outcome.is_ok() {
+                if let Some(command) = detect_verify_command(
                     &verify_workspace,
                     self.initial_diff_base.as_deref(),
                     &self.initial_untracked_files,
-                )
-            {
-                let result = self
-                    .verify_patch(&command, &verify_cfg, retries_used)
-                    .await;
-                let passed = result.status == VerifyStatus::Passed;
-                if !passed {
+                ) {
+                    let result = self.verify_patch(&command, &verify_cfg, retries_used).await;
                     self.emit(json!({
-                        "type": "verify_failed",
+                        "type": "verify_result",
                         "session_id": session_id,
                         "attempt": retries_used + 1,
                         "command": &result.command,
                         "status": result.status,
                         "exit_code": result.exit_code,
                         "duration_ms": result.duration_ms,
-                        "stderr_tail": result.stderr_tail,
+                        "output_tail": result.stderr_tail,
                     }))?;
-                    if retries_used < verify_cfg.max_retries {
-                        self.print_text(|| {
+                    let passed = result.status == VerifyStatus::Passed;
+                    if !passed {
+                        self.emit(json!({
+                            "type": "verify_failed",
+                            "session_id": session_id,
+                            "attempt": retries_used + 1,
+                            "command": &result.command,
+                            "status": result.status,
+                            "exit_code": result.exit_code,
+                            "duration_ms": result.duration_ms,
+                            "stderr_tail": result.stderr_tail,
+                        }))?;
+                        if retries_used < verify_cfg.max_retries {
+                            self.print_text(|| {
                             eprintln!(
                                 "\nVerification failed (attempt {}, exit {:?}): {} — asking the agent to fix and retry",
                                 retries_used + 1,
@@ -679,22 +697,28 @@ impl ExecMode {
                                 result.command,
                             );
                         });
-                        current_message = build_retry_message(&result);
-                        retries_used += 1;
-                        continue 'retry;
-                    }
-                    self.print_text(|| {
+                            current_message = build_retry_message(&result);
+                            retries_used += 1;
+                            continue 'retry;
+                        }
+                        self.print_text(|| {
                         eprintln!(
-                            "\nVerification still failing after {} attempt(s); emitting patch unverified ({})",
+                            "\nVerification still failing after {} attempt(s); finishing with unverified changes ({})",
                             retries_used + 1,
                             result.command,
                         );
                     });
+                    }
+                } else {
+                    self.emit(json!({
+                        "type": "verify_skipped",
+                        "session_id": session_id,
+                        "reason": "no_applicable_changed_files",
+                    }))?;
                 }
             }
-        }
 
-        break outcome;
+            break outcome;
         };
 
         self.output_patch_if_needed();
@@ -988,6 +1012,10 @@ impl ExecMode {
             sleep(Duration::from_millis(50)).await;
         }
     }
+}
+
+fn needs_change_baseline(output_patch: Option<&str>, verify_final_changes: bool) -> bool {
+    output_patch.is_some() || verify_final_changes
 }
 
 fn tail_chars(s: &str, max: usize) -> String {
@@ -1360,13 +1388,7 @@ fn changed_files(
     let mut files = BTreeSet::new();
     if let Some(diff_base) = diff_base {
         let diff = bitfun_core::util::process_manager::create_command("git")
-            .args([
-                "diff",
-                diff_base,
-                "--name-only",
-                "--find-renames",
-                "-z",
-            ])
+            .args(["diff", diff_base, "--name-only", "--find-renames", "-z"])
             .current_dir(workspace)
             .output();
         if let Ok(output) = diff {
@@ -1438,7 +1460,9 @@ fn git_diff_base(workspace: &std::path::Path) -> Option<String> {
     if !empty_tree.status.success() {
         return None;
     }
-    let oid = String::from_utf8_lossy(&empty_tree.stdout).trim().to_string();
+    let oid = String::from_utf8_lossy(&empty_tree.stdout)
+        .trim()
+        .to_string();
     (!oid.is_empty()).then_some(oid)
 }
 
