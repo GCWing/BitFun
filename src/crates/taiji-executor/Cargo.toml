@@ -1,0 +1,22 @@
+[package]
+name = "taiji-executor"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+description = "Taiji execution bridge — order placement, position tracking, and CTP integration"
+
+[lib]
+name = "taiji_executor"
+crate-type = ["rlib"]
+
+[dependencies]
+serde = { workspace = true }
+serde_json = { workspace = true }
+tokio = { workspace = true }
+async-trait = { workspace = true }
+dashmap = { workspace = true }
+
+
+[lints]
+workspace = true

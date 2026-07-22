@@ -1,0 +1,55 @@
+{
+  "version": 1,
+  "description": "No-growth baseline for i18n governance candidates. Lower counts when shared-term or l10n debt is removed; do not raise without review.",
+  "budgets": {
+    "confirmedUnusedKeys": {
+      "maxTotal": 0
+    },
+    "sharedTermDuplicates": {
+      "maxTotal": 176,
+      "bySurface": {
+        "core": 15,
+        "installer": 0,
+        "mobile-web": 0,
+        "relay-static-homepage": 0,
+        "web-ui": 161
+      },
+      "bySharedKey": {
+        "agents.claw": 3,
+        "agents.code": 0,
+        "agents.cowork": 0,
+        "agents.default": 2,
+        "connectionMethods.bitfunServer": 0,
+        "connectionMethods.lan": 0,
+        "features.codeAgent": 1,
+        "features.deepReview": 0,
+        "features.remoteControl": 0,
+        "features.settings": 1,
+        "features.workspace": 2,
+        "modes.assistant": 1,
+        "modes.expert": 2,
+        "modes.review": 0,
+        "product.name": 0,
+        "statuses.cancelled": 27,
+        "statuses.done": 24,
+        "statuses.failed": 42,
+        "statuses.loading": 5,
+        "statuses.running": 12,
+        "tools.edit": 33,
+        "tools.explore": 2,
+        "tools.search": 12,
+        "tools.shell": 7
+      }
+    },
+    "l10nQualityCandidates": {
+      "maxTotal": 0,
+      "bySurface": {
+        "core": 0,
+        "installer": 0,
+        "mobile-web": 0,
+        "relay-static-homepage": 0,
+        "web-ui": 0
+      }
+    }
+  }
+}

@@ -1,0 +1,71 @@
+# BitFun Core 拆解已完成内容归档
+
+本文件记录已完成事实摘要。后续执行路径以
+[`core-decomposition-plan.md`](core-decomposition-plan.md) 为准；稳定架构目标以
+[`product-architecture.md`](../architecture/product-architecture.md) 和
+[`agent-runtime-services-design.md`](../architecture/agent-runtime-services-design.md)
+为准。
+
+本文件保留完成当时的代码名和迁移术语，仅用于说明历史实现，不能作为当前扩展架构的需求或命名依据。历史的
+“受管包”“projection-only”“幂等代次”等路径只描述 BitFun 原生包的当时状态；OpenCode 的目标来源、执行、
+权限和更新语义以 [`opencode-extension-compatibility.md`](../architecture/extensions/opencode-extension-compatibility.md)
+及其细分架构设计为准，交付顺序与退出条件见
+[`opencode-extension-compatibility-plan.md`](opencode-extension-compatibility-plan.md)。
+
+## 1. 基础边界
+
+- 已建立 `product-full` 作为兼容入口的完整产品能力保护开关，产品入口显式启用当前兼容能力集合；它不是未来按产品形态拆分能力的唯一事实源。
+- 已抽取 `bitfun-core-types`、`bitfun-events`、`bitfun-runtime-ports`、`bitfun-agent-stream` 等基础契约；LSP protocol DTO 和 plugin manifest DTO 已进入 `bitfun-core-types`。
+- 已建立 `bitfun-services-core`、`bitfun-services-integrations`、`bitfun-agent-tools`、`tool-runtime`、`bitfun-tool-packs`、`bitfun-agent-runtime`、`bitfun-runtime-services`、`bitfun-harness`、`bitfun-product-domains`、`bitfun-product-capabilities` 等归属 crate。
+- `src/crates` 已按 `interfaces / assembly / adapters / services / execution / contracts` 六层布局整理，DeepReview path classifier、边界规则、Cargo workspace 路径和根/层级 AGENTS 已同步。
+- Cargo metadata 实际解析图检查已覆盖 workspace 与独立 manifest 的 normal、build、dev 依赖及 optional/target 变体；未知 crate 层级与反向依赖会直接失败。
+
+## 2. 已迁移归属
+
+- `services-core` 已承接 session layout、metadata store CRUD / index rebuild、metadata pagination、metadata construction / mutation、lineage / branch shaping、JSON file store、generic JSON persistence、storage cleanup、front-matter markdown、workspace instruction file IO/order、filesystem primitives、managed runtime command resolution / PATH merge、LSP plugin registry / extension matching / command-target mapping、diagnostic redaction、session usage/token usage 持久化与查询服务。
+- `services-core` 已承接 workspace-runtime legacy session-store merge、metadata 冲突选择、index rebuild 和 legacy path copy/move fallback；core workspace-runtime 只保留路径计算、runtime layout ensure 和错误兼容映射。
+- `services-core` 已承接 LocalSystemAction 的稳定错误码投射；core Computer Use 系统动作路径只把这些 stable code 适配到既有 ControlHub 工具 envelope。
+- `services-core` 已承接 memory workspace Git baseline、diff collection 和 diff file rendering；core memory workspace 只保留业务文件生成、Phase2 diff 清理、兼容 API 路径和错误类别映射。
+- `runtime-services` 已承接 typed runtime service assembly、capability availability、provider registry、capability validation、无副作用 capability marker ports 和 backend event delivery；core backend event system 只保留兼容 re-export。
+- `bitfun-events` 已承接 backend event DTO、agentic event DTO、framework-neutral Agentic frontend event projection 和 platform-neutral `EventEmitter` trait；当前 Tauri transport 只负责 delivery。
+- `services-integrations` 已承接 remote-connect primitives、wire command routing / response assembly、remote chat image metadata / display helper projection、remote image lifecycle attachment mapping、LAN IP/URL 探测、ngrok 进程/tunnel lifecycle、mobile-web relay upload manifest / incremental upload / fallback upload、IM bot provider-neutral config / persistence / file auto-push / locale / menu / state / command parsing、Weixin provider client、workspace search concrete owner、remote SSH/SFTP/PTY owner、Remote SSH disabled runtime surface、Remote SSH workspace/session identity helper、remote workspace-search disabled surface、DeepResearch report IO / display-map sidecar、MiniApp host dispatch / storage / worker / import IO、announcement remote fetch/cache、browser CDP endpoint HTTP probing / page creation、WebFetch / WebSearch concrete HTTP provider、debug-log 文件追加 / 脱敏 / HTTP dispatch、review-platform provider service / token store / HTTP transport / Git provider integration，以及 MCP server registry、connection pool、catalog cache、reconnect retry state、runtime-only config overlay、local command resolution helper、lifecycle status policy 和 MCP OAuth credential vault / store / authorization bootstrap；core 仍保留 debug-log HTTP ingest server、persisted turn adapter 和 MCP auth 的产品 data-dir 注入、授权入口、错误映射与 deprecated 兼容 wrapper。
+- `relay-service` 已承接 room/device 状态、account/sync 存储、asset store 和 HTTP/WebSocket router；standalone app 保留 bind、环境配置、静态 fallback、进程生命周期和管理 CLI，embedded 入口复用同一 router。embedded 的 bind、静态 fallback 和任务生命周期已由窄 `EmbeddedRelayHost` 端口迁至 Desktop，assembly 只保留产品启停顺序和失败补偿。
+- `tool-contracts` 已承接 provider-neutral tool DTO、manifest/catalog/admission/result presentation、Computer Use DTO/input parser/screenshot payload、confirmation facts、truncation recovery presentation、runtime restriction policy、provider-entry materialization、materialized tool snapshot、provider identity、permission/effect filter、cancellation contract 和 stale-call guard；core 只保留 Computer Use 旧 public path re-export / compatibility shim、产品 Tool trait 适配与产品执行入口。
+- `tool-execution` 已承接 local / remote IO helper、Bash shell helper、batching plan、retry policy、state counting、tool state event payload shaping / result redaction、cancellation-state/token-store policy、background exec output capture、ExecCommand provider-neutral 呈现 / 输入默认值 / 结果 shape / shell metadata / shell argv / remote shell probe / remote env snapshot 解析、cache 与 capture policy / lifecycle facts / control facts / completion shape、prompt-safe tool context facts / custom-data materialization、Computer Use loop detection / screenshot hash / verification / retry policy、WebFetch readable extraction / fallback / title / format facts、WebSearch Exa text result parsing，以及 File tool 的 provider-neutral 结果展示、写入 mode/status/line-count 规则、Edit guardrail 分类和 Delete success 文本；core 只保留 ToolResult 包装、权限、checkpoint、runtime handles、host adapter 调用、read-state adapter、remote FS 调用、Web tool network provider 调用和旧工具入口。
+- `runtime-ports` / `terminal-core` / `services-integrations` 已承接 ExecCommand 会话执行端口和 concrete provider：`TerminalPort` 暴露本地命令执行、stdin 写入、会话控制和生命周期事件边界，`RemoteExecPort` 暴露远端 SSH 命令执行、bounded one-shot command、stdin、会话控制和生命周期事件边界；`TerminalRuntimePort` 复用原本地 `ExecProcessManager` 行为，`RemoteExecRuntimePort` 复用原 remote exec manager 与旧 SSH one-shot 行为，当前 desktop / CLI 产品入口和保留 server bootstrap 初始化路径通过 `CoreRuntimeServicesProvider` 构造 provider 并显式注入 `ConversationCoordinator` / 执行上下文 / `ToolRuntimeHandles`；core `ExecCommand` / `WriteStdin` / `ExecControl` 只消费端口，不再直接调用全局本地或远端进程 manager。
+- `agent-runtime` 已承接 scheduler/background delivery 纯决策、dialog lifecycle port contracts、runtime event queue/router、session management/cancellation port contracts、session/config/summary facts、persisted session state sidecar / processing-state sanitization、session state facts / event-label projection、session state manager / event emission owner、dialog-turn id / stats facts、side-question runtime-only tracking、thread-goal facts、context profile / model capability policy、prompt markup / prompt / prompt-cache facts 与持久化写入决策、remote file delivery prompt facts、turn skill/agent snapshot DTO/diff/render/store、file-read session state / prior-read guardrail / freshness 决策、session evidence ledger 与 compression-contract projection、dialog-turn cancellation token store、tool confirmation gate / wait channel state、user-question wait channel state、custom agent / mode / subagent schema、默认值、discovery/loading、markdown IO、validation、review 工具过滤、skill catalog/root specs、mode policy、selection/shadow/mode-info 规则、assistant payload rendering、post-call hook routing、DeepReview provider-neutral policy/queue/retry/diagnostics shaping 与 queue event payload shaping、DeepResearch citation renumber 与 report post-process gate，并建立不暴露 `bitfun-core` / `product-full` / concrete manager 的内部 SDK facade。SDK facade 已支持注入 fake runtime services、tool registry、harness registry、hook registry 和 agent registry。
+- `harness` 已建立 descriptor、route plan 和 legacy provider registry。
+- `product-domains` 已承接 MiniApp state/workflow planning、built-in seed orchestration / host adapter contract、compile / permission adaptation、import lifecycle、AI / Agent permission、rate-limit、model/message/session/workspace/turn-text bridge rules、AI / Agent 请求计划、stream / runtime event payload、worker restart / draft key / workspace input 规则、function-agent prompt/parser/response policy 和部分 Git snapshot/fallback 逻辑。
+- `bitfun-core` 的 function-agent AI concrete acquisition 已从旧 `runtime_services` 路径收拢到明确的 core port adapter；Git / AI compatibility re-export 仍保留旧 public path。
+- 产品组装已承接 `DeliveryProfile`、当前交付形态入口矩阵、`CapabilitySet`、feature group matrix、profile-scoped capability plan、product-full provider plan、service availability report、profile-scoped harness registry 入口与 legacy-route 行为保护，以及 `ProductAssembler` 对 explicit profile input、runtime services、harness registry 和 service requirement 的验证；core 只保留兼容 re-export。ProductFull / Desktop / CLI / ACP 保留完整能力；Server / Remote / Web / MobileWeb 不再 materialize product-full capability packs、feature groups、runtime services、tool groups 或 harness routes。
+- 插件运行时边界基础已建立：`runtime-ports` 持有 `PluginRuntimeClient`、binding、availability、dispatch / response envelope、disabled stub 和 projection-only stub；产品组装输出扩展可用性事实与插件运行时绑定，并通过 Agent Runtime 内部 builder 注入该 binding；Agent Runtime SDK 门面不导出插件运行时主机 ABI。默认产品启动不运行 JS/TS、工作进程或子进程。
+- OpenCode-compatible P0-C.1/P0-C.2 已建立受管包发现、完整性校验、工作区来源审核、精确内容哈希激活、CLI 管理与诊断，以及按需创建 OpenCode 适配器、插件运行时主机和 `PluginRuntimeBinding` 的唯一生产组装点。当前组装只返回需要权限的 custom tool 静态候选，不注册工具或执行插件代码。
+- 插件停用已支持按工作区和包清理缺失或损坏包的残留激活记录；停用状态在扫描前提交，后续受限发现负责结果分类，并在稳定发现同 ID 不同来源时协调旧审核记录。包暂时缺失或损坏时保留来源审核记录，重复操作和旧激活代次请求保持幂等，持久化结果不确定时不报告成功。
+- LSP plugin runtime target 和命令占位符解析已从 `services-core` 收口到 `core-types`；`services-core` 保留兼容 re-export、registry、current-target detection 和 filesystem / runtime service 逻辑。
+
+- Agent session/workspace owner routing 已继续收敛：`AgentRuntime` 提供 port-backed session workspace resolution entrypoint；Cron、SessionControl、SessionMessage 和 SessionHistory 不再在工具实现中直接解析目标 session workspace，Cron 保留 target session 可见性验证，workspace identity 中的 `workspace_id` / remote connection / remote host 通过 runtime contract 传递。
+- `/goal` model tool management 已继续收敛：`AgentRuntime` 提供 thread-goal management port，`get_goal` / `create_goal` / `update_goal` 经 `CoreServiceAgentRuntime` 路由到 core concrete adapter；goal lifecycle、metadata、tool response wire shape 和错误类别保持等价。
+- `services-integrations` workspace search result mapping 已承接 flashgrep hit conversion 与 preview split owner，保持缺失 `line_text` 时的既有输出语义，并由 focused tests 覆盖有无 preview 两种路径。
+
+## 3. 已建立保护
+
+- 归属 crate 不得依赖回 `bitfun-core`。
+- `product-full` 保持兼容入口的完整产品能力集合，产品形态差异仍以产品组装的 capability plan 表达。
+- 边界检查覆盖归属 crate 禁止依赖、旧路径仅门面约束、特性开关、六层路径解析、产品组装收口、session/config/context fact 归属、tool confirmation gate 归属和高风险归属回流。
+- focused tests 覆盖当前 delivery profile 能力裁剪、ProductAssembler 缺失 service 报告、无直接 core 入口的空 capability plan、SDK fake provider / services / tool / harness / hook / workspace-scoped agent registry 闭环，以及 runtime hook 顺序、timeout、错误策略和重复 id 拦截。
+- focused baseline 覆盖 tool manifest、GetToolSpec、execution admission、workspace search、remote workspace fallback、MCP config/catalog、prompt cache、custom agent / mode / subagent、thread-goal tools、AskUserQuestion、DeepReview policy、tool confirmation、session restore、MiniApp storage/builtin/import、function-agent Git、scheduled-job state 等路径。
+- H4 已完成 Agent Runtime SDK 发布准备的 workspace 内收口：`sdk` facade 暴露 v1 preview 兼容元数据、空默认 feature、稳定注入 registry/service 类型、最小外部 embedder 示例，以及 boundary required rules / self-test 保护。
+- Public API / Tool ABI / event projection 基础闭环已建立：Agent Runtime SDK 继续只暴露 preview facade；`bitfun-agent-tools` 暴露 materialized snapshot / default effect facts / stale-call guard；`bitfun-events` 暴露当前 Desktop 和 peer host 实际消费的 framework-neutral projection；core compatibility path 不再拥有重复字段映射，当前 Tauri adapter 只负责交付。
+
+## 4. 适配器边界与后续专项
+
+- `bitfun-core` 仍承载兼容门面 / `product-full` 组装和少量迁移期适配器；不应继续新增归属逻辑。
+- 产品入口的能力裁剪已由产品组装 profile plan 表达；后续新增入口必须先明确 `ProductCoreDependencyMode`、unsupported / temporarily-unavailable 语义和兼容性测试；内部 `NotAvailable` 类错误进入 Server/API 前必须投影为稳定状态词。
+- H1 剩余 owner 决策已迁出：dialog start route / outcome lifecycle 继续由 `agent-runtime` 给出可测试决策，tool pipeline 的 Task batch 策略由 `tool-execution` 持有，prompt runtime / workspace / user-context 组合由 `agent-runtime` 持有，AI model selector / cache-key 解析由 `bitfun-ai-adapters` 持有。`bitfun-core` 仍只保留 coordinator 调用、config IO、credential overlay、prompt 事实收集和 prompt-cache persistence IO 等 concrete adapter。
+- DeepReview concrete Task launch 和 session metadata cache persistence 仍是 core adapter，因为它们依赖 coordinator、session manager、subagent runtime 和产品事件；provider-neutral policy / queue / retry / report shaping 与 queue event payload shaping 已在 `agent-runtime`，core 只负责事件发送。
+- H2 已完成：MiniApp AI / Agent 请求计划、stream payload、runtime event payload、worker restart / draft key / workspace input 规则已迁入 `product-domains`，desktop 命令只保留 AI factory、scheduler、worker pool、目录创建和事件发送等 concrete host 调用。
+- MiniApp larger workflow 的 UI asset / desktop scheduler / AI factory 调用仍属于产品 host adapter；可复用规则不得回流到 desktop 命令内重复实现。
+- Agent Runtime SDK 已具备 v1 preview workspace 内公开边界、最小 fake-provider 闭环、runtime services / tool / harness / hook / workspace-scoped agent registry 注入基线、最小 feature 证明和外部 embedder 示例。若后续要独立发布为外部包，需要单独评审发布流程、crate packaging、semver 承诺和长期兼容策略。
+- Skill registry 主体 owner 已收口到 `agent-runtime`：`bitfun-core` 保留本地/远端扫描、config/registry IO、缓存和加载错误映射；内置 skill 分组、root/slot/key 事实、mode default/override、visible resolution、shadow 标记、mode skill info 和加载后 assistant payload 由 runtime 统一给出。
+- Workspace runtime provider owner 已继续外移：本地 workspace FS/shell 实现由 `bitfun-services-core` 的 `workspace-runtime` feature 持有，远端 SSH workspace FS/shell adapter 由 `bitfun-services-integrations::remote_ssh` 持有；`bitfun-core::agentic::workspace` 保留 binding、session storage 解析和旧路径 re-export。
+- Review-platform 主体 owner 已从 `bitfun-core` 外移到 `services-integrations`：provider detection、remote discovery、token store、provider DTO mapping、pagination、CI log extraction 和 GitHub / GitLab / GitCode HTTP/Git 集成由 `review-platform` feature 持有；core 只保留旧 public path、产品 data-dir 注入和 remote SSH unsupported 分类。

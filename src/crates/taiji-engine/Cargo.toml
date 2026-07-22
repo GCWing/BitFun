@@ -1,0 +1,49 @@
+[package]
+name = "taiji-engine"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+description = "Taiji trading engine — DAG-based compute pipeline"
+autobenches = false
+
+[lib]
+name = "taiji_engine"
+crate-type = ["rlib"]
+
+[dependencies]
+# serde: needs "rc" feature (not in workspace), cannot use workspace = true
+serde = { version = "1", features = ["derive", "rc"] }
+serde_json = { workspace = true }
+serde_yaml = { workspace = true }
+# chrono: workspace has serde+clock features
+chrono = { workspace = true }
+thiserror = { workspace = true }
+parking_lot = { workspace = true }
+tracing = { workspace = true }
+dashmap = { workspace = true }
+csv = "1"
+# TODO(P0-1): Upgrade to unleash-client = "0.4" when network is available.
+# Current 0.1.3 is extremely outdated and may contain known CVEs.
+# Note: unleash-client is currently unused in source code — no API migration needed.
+unleash-client = "0.1.3"
+anyhow = { workspace = true }
+uuid = { workspace = true }
+rand = { workspace = true }
+taiji-llm = { path = "../taiji-llm" }
+async-trait = { workspace = true }
+tokio = { workspace = true }
+petgraph = { workspace = true }
+
+[dev-dependencies]
+taiji-backtest = { path = "../taiji-backtest" }
+taiji-bar = { path = "../taiji-bar" }
+taiji-example = { path = "../taiji-example" }
+taiji-executor = { path = "../taiji-executor" }
+
+[[test]]
+name = "pipeline_bench"
+path = "benches/pipeline_bench.rs"
+
+[lints]
+workspace = true

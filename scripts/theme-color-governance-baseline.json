@@ -1,0 +1,342 @@
+{
+  "version": 1,
+  "description": "Baseline for Web UI theme color governance. Lower values when debt is removed; do not raise without a documented review reason.",
+  "budgets": {
+    "fallbackOccurrences": {
+      "max": 0
+    },
+    "fallbackUniqueTokens": {
+      "max": 0
+    },
+    "fallbackContracts.uncontractedUnique": {
+      "max": 0
+    },
+    "fallbackContracts.staleRegisteredUnique": {
+      "max": 0
+    },
+    "compatibilityAliases.registeredUnique": {
+      "max": 0
+    },
+    "compatibilityAliases.usedUnique": {
+      "max": 0
+    },
+    "compatibilityAliases.occurrences": {
+      "max": 0
+    },
+    "compatibilityAliases.staleRegisteredUnique": {
+      "max": 0
+    },
+    "compatibilityAliases.familyRegisteredUnique": {
+      "max": 2
+    },
+    "compatibilityAliases.familyUsedUnique": {
+      "max": 0
+    },
+    "compatibilityAliases.familyOccurrences": {
+      "max": 0
+    },
+    "compatibilityAliases.staleRegisteredFamilyUnique": {
+      "max": 0
+    },
+    "compatibilityAliases.missingCanonicalUnique": {
+      "max": 0
+    },
+    "surfaceTokenRenames.registeredUnique": {
+      "max": 8
+    },
+    "surfaceTokenRenames.activeUnique": {
+      "max": 0
+    },
+    "surfaceTokenRenames.activeOccurrences": {
+      "max": 0
+    },
+    "surfaceTokenRenames.missingCanonicalUnique": {
+      "max": 0
+    },
+    "generatedWidgetPayload.varUnique": {
+      "max": 56
+    },
+    "generatedWidgetPayload.occurrences": {
+      "max": 56
+    },
+    "generatedWidgetPayload.undefinedUnique": {
+      "max": 0
+    },
+    "generatedWidgetPayload.compatibilityAliasUnique": {
+      "max": 0
+    },
+    "generatedWidgetPayload.compatibilityAliasOccurrences": {
+      "max": 0
+    },
+    "generatedWidgetPayload.compatibilityAliasFamilyUnique": {
+      "max": 0
+    },
+    "generatedWidgetPayload.compatibilityAliasFamilyOccurrences": {
+      "max": 0
+    },
+    "generatedWidgetPayload.externalOnlyCompatibilityUnique": {
+      "max": 0
+    },
+    "generatedWidgetPayload.externalOnlyCompatibilityOccurrences": {
+      "max": 0
+    },
+    "generatedWidgetPayload.missingCompatibilityCanonicalUnique": {
+      "max": 0
+    },
+    "generatedWidgetPayload.unexportedCompatibilityCanonicalUnique": {
+      "max": 0
+    },
+    "colorDomainContracts.registeredUnique": {
+      "max": 14
+    },
+    "colorDomainContracts.missingRegisteredUnique": {
+      "max": 0
+    },
+    "colorDomainContracts.staleRegisteredUnique": {
+      "max": 0
+    },
+    "colorDomainContracts.activeUncontractedUnique": {
+      "max": 0
+    },
+    "colorScopes.appUi.uniqueColors": {
+      "max": 0
+    },
+    "colorScopes.appUi.occurrences": {
+      "max": 0
+    },
+    "colorScopes.token.occurrences": {
+      "max": 266
+    },
+    "colorScopes.token.uniqueColors": {
+      "max": 168
+    },
+    "colorScopes.exception.uniqueColors": {
+      "max": 162
+    },
+    "cssVarDefinitions.unresolvedUnique": {
+      "max": 0
+    },
+    "cssVarDefinitions.unresolvedRequiredUnique": {
+      "max": 0
+    },
+    "cssVarDefinitions.runtimeOnlyRequiredContractUnique": {
+      "max": 0
+    },
+    "cssVarDefinitions.fallbackOnlyUnique": {
+      "max": 0
+    },
+    "cssVarDefinitions.nonContractCrossFileUnique": {
+      "max": 0
+    },
+    "cssVarDefinitions.nonContractDynamicInputUnique": {
+      "max": 0
+    },
+    "cssVarDefinitions.nonContractCssPrivateUnique": {
+      "max": 0
+    },
+    "cssVarDefinitions.unregisteredDynamicFamilyUnique": {
+      "max": 0
+    },
+    "cssVarDefinitions.dynamicFamilyUnexportedUnique": {
+      "max": 0
+    },
+    "cssVarDefinitions.staleRegisteredDynamicFamilyUnique": {
+      "max": 0
+    },
+    "cssVarDefinitions.staticContractDefinedUnique": {
+      "max": 193
+    },
+    "cssVarDefinitions.staticContractExternalUsageUnique": {
+      "max": 193
+    },
+    "cssVarDefinitions.staticContractInternalOnlyUnique": {
+      "max": 0
+    },
+    "cssVarDefinitions.staticContractLowExternalUsageUnique": {
+      "max": 12
+    },
+    "tokenAliasLiterals.occurrences": {
+      "max": 0
+    },
+    "tokenAliasLiterals.uniqueColors": {
+      "max": 0
+    },
+    "nearPairs.indistinguishableTotal": {
+      "max": 0
+    },
+    "nearPairs.nearTotal": {
+      "max": 0
+    },
+    "colorDomainNearPairs.indistinguishableTotal": {
+      "max": 0
+    },
+    "colorDomainNearPairs.nearTotal": {
+      "max": 9
+    },
+    "colorDomainNearPairs.themePreset.indistinguishableTotal": {
+      "max": 0
+    },
+    "colorDomainNearPairs.themePreset.nearTotal": {
+      "max": 5
+    },
+    "colorDomainNearPairs.themeRuntime.indistinguishableTotal": {
+      "max": 0
+    },
+    "colorDomainNearPairs.themeRuntime.nearTotal": {
+      "max": 2
+    },
+    "colorDomainNearPairs.tokenContract.indistinguishableTotal": {
+      "max": 0
+    },
+    "colorDomainNearPairs.tokenContract.nearTotal": {
+      "max": 2
+    },
+    "colorDomainNearPairs.generatedWidget.indistinguishableTotal": {
+      "max": 0
+    },
+    "colorDomainNearPairs.generatedWidget.nearTotal": {
+      "max": 0
+    },
+    "colorDomainNearPairs.bitfunCanvas.indistinguishableTotal": {
+      "max": 0
+    },
+    "colorDomainNearPairs.bitfunCanvas.nearTotal": {
+      "max": 0
+    },
+    "colorDomainNearPairs.boundaryFallback.indistinguishableTotal": {
+      "max": 0
+    },
+    "colorDomainNearPairs.boundaryFallback.nearTotal": {
+      "max": 0
+    },
+    "colorDomainNearPairs.mermaid.indistinguishableTotal": {
+      "max": 0
+    },
+    "colorDomainNearPairs.mermaid.nearTotal": {
+      "max": 0
+    },
+    "colorDomainNearPairs.editor.indistinguishableTotal": {
+      "max": 0
+    },
+    "colorDomainNearPairs.editor.nearTotal": {
+      "max": 0
+    },
+    "colorDomainNearPairs.syntax.indistinguishableTotal": {
+      "max": 0
+    },
+    "colorDomainNearPairs.syntax.nearTotal": {
+      "max": 0
+    },
+    "colorDomainNearPairs.terminal.indistinguishableTotal": {
+      "max": 0
+    },
+    "colorDomainNearPairs.terminal.nearTotal": {
+      "max": 0
+    },
+    "colorDomainNearPairs.debugOverlay.indistinguishableTotal": {
+      "max": 0
+    },
+    "colorDomainNearPairs.debugOverlay.nearTotal": {
+      "max": 0
+    },
+    "colorDomainNearPairs.uiException.indistinguishableTotal": {
+      "max": 0
+    },
+    "colorDomainNearPairs.uiException.nearTotal": {
+      "max": 0
+    },
+    "colorDomainNearPairs.languageIdentity.indistinguishableTotal": {
+      "max": 0
+    },
+    "colorDomainNearPairs.languageIdentity.nearTotal": {
+      "max": 0
+    },
+    "colorDomainNearPairs.visualEffect.indistinguishableTotal": {
+      "max": 0
+    },
+    "colorDomainNearPairs.visualEffect.nearTotal": {
+      "max": 0
+    },
+    "colorDomainNearPairs.appUi.indistinguishableTotal": {
+      "max": 0
+    },
+    "colorDomainNearPairs.appUi.nearTotal": {
+      "max": 0
+    },
+    "colorDomainScopes.themePreset.occurrences": {
+      "max": 159
+    },
+    "colorDomainScopes.themePreset.uniqueColors": {
+      "max": 112
+    },
+    "colorDomainScopes.themeRuntime.occurrences": {
+      "max": 21
+    },
+    "colorDomainScopes.tokenContract.occurrences": {
+      "max": 80
+    },
+    "colorDomainScopes.tokenContract.uniqueColors": {
+      "max": 72
+    },
+    "colorDomainScopes.generatedWidget.occurrences": {
+      "max": 0
+    },
+    "colorDomainScopes.generatedWidget.uniqueColors": {
+      "max": 0
+    },
+    "colorDomainScopes.bitfunCanvas.occurrences": {
+      "max": 0
+    },
+    "colorDomainScopes.bitfunCanvas.uniqueColors": {
+      "max": 0
+    },
+    "colorDomainScopes.boundaryFallback.occurrences": {
+      "max": 18
+    },
+    "colorDomainScopes.boundaryFallback.uniqueColors": {
+      "max": 18
+    },
+    "colorDomainScopes.editor.occurrences": {
+      "max": 52
+    },
+    "colorDomainScopes.syntax.occurrences": {
+      "max": 16
+    },
+    "colorDomainScopes.terminal.occurrences": {
+      "max": 37
+    },
+    "colorDomainScopes.debugOverlay.occurrences": {
+      "max": 0
+    },
+    "colorDomainScopes.uiException.occurrences": {
+      "max": 17
+    },
+    "colorDomainScopes.uiException.uniqueColors": {
+      "max": 17
+    },
+    "colorDomainScopes.languageIdentity.occurrences": {
+      "max": 8
+    },
+    "colorDomainScopes.languageIdentity.uniqueColors": {
+      "max": 8
+    },
+    "colorDomainScopes.visualEffect.occurrences": {
+      "max": 0
+    },
+    "colorDomainScopes.appUi.occurrences": {
+      "max": 0
+    },
+    "colorDomainScopes.appUi.uniqueColors": {
+      "max": 0
+    },
+    "colorDomainScopes.mermaid.occurrences": {
+      "max": 53
+    },
+    "colorDomainScopes.mermaid.uniqueColors": {
+      "max": 48
+    }
+  },
+  "allowlists": {
+    "runtimeOnlyRequiredContract": []
+  }
+}

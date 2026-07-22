@@ -1,0 +1,21 @@
+[package]
+name = "taiji-engine-py"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+description = "Python bindings for taiji-engine via PyO3"
+
+[lib]
+name = "_native"
+crate-type = ["cdylib"]
+
+[dependencies]
+taiji-engine = { path = "../taiji-engine" }
+pyo3 = { version = "0.24", features = ["extension-module"] }
+parking_lot = { workspace = true }
+chrono = { workspace = true }
+serde_yaml = { workspace = true }
+
+[lints]
+workspace = true

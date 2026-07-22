@@ -1,0 +1,64 @@
+# 太极 策略→教学→视频 全自动流水线
+# 用法: taiji run --config examples/strategy-to-video-pipeline.yaml --csv data.csv
+
+pipeline:
+  name: "strategy-to-video"
+  data_source:
+    type: csv_replay
+    path: "data.csv"
+
+nodes:
+  # Layer 1: Tick → K线
+  - id: bar_gen
+    type: BarNode
+    subscribe: ["tick"]
+
+  # Layer 2: 你的策略（替换 type/config 为你自己的策略）
+  - id: dual_1
+    type: dual_thrust
+    config:
+      lookback: 20
+      k1: 0.7
+      k2: 0.7
+    subscribe: ["bars:1m"]
+
+  # Layer 3: 告警
+  - id: alert
+    type: alert_manager
+    config:
+      feishu_webhook: "${FEISHU_WEBHOOK_URL}"
+    subscribe: ["signal:dual_1"]
+
+  # Layer 4: 日报
+  - id: report
+    type: report_generator
+    config:
+      template: daily_report
+      output_dir: "./output/reports"
+    subscribe: ["bars:1m", "signal:*"]
+
+  # Layer 5: K线渲染
+  - id: chart
+    type: kline_renderer
+    config:
+      width: 1920
+      height: 1080
+      show_signals: true
+      output_dir: "./output/frames"
+    subscribe: ["bars:1m", "signal:*"]
+
+  # Layer 6: 视频合成
+  - id: video
+    type: video_composer
+    config:
+      fps: 30
+      voiceover: true
+      output_dir: "./output/videos"
+    subscribe: ["bars:1m", "signal:*"]
+
+  # Layer 7: 多平台发布
+  - id: publish
+    type: multi_publisher
+    config:
+      bilibili: true
+    subscribe: ["video:*", "report:*"]

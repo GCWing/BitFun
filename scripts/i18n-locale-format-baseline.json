@@ -1,0 +1,5 @@
+{
+  "version": 1,
+  "description": "Temporary no-growth baseline for direct locale formatting calls outside the shared i18n formatting APIs. Lower this file when callers move to i18n-owned format helpers.",
+  "budgets": []
+}

@@ -1,0 +1,24 @@
+[package]
+name = "taiji-abnormal"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+description = "Abnormal flow detection scoring card (5 indicators + fusion)"
+
+[lib]
+name = "taiji_abnormal"
+crate-type = ["rlib"]
+
+[dependencies]
+taiji-engine = { path = "../taiji-engine" }
+serde = { workspace = true }
+serde_json = { workspace = true }
+chrono = { workspace = true }
+statrs = { workspace = true }
+
+[dev-dependencies]
+serde_json = { workspace = true }
+
+[lints]
+workspace = true

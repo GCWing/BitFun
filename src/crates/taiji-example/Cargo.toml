@@ -1,0 +1,21 @@
+[package]
+name = "taiji-example"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+description = "Taiji example strategies — reference ComputeNode patterns"
+
+[lib]
+name = "taiji_example"
+crate-type = ["rlib"]
+
+[dependencies]
+taiji-engine = { path = "../taiji-engine" }
+chrono = { workspace = true }
+
+[dev-dependencies]
+serde_json = "1"
+
+[lints]
+workspace = true

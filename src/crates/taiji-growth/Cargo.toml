@@ -1,0 +1,30 @@
+[package]
+name = "taiji-growth"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+description = "Taiji growth engine — user behavior analytics, A/B testing, and email dispatch"
+
+[lib]
+name = "taiji_growth"
+crate-type = ["rlib"]
+
+[dependencies]
+serde = { workspace = true }
+serde_json = { workspace = true }
+chrono = { workspace = true }
+tera = { workspace = true }
+tokio = { workspace = true }
+reqwest = { workspace = true }
+lettre = { workspace = true }
+thiserror = { workspace = true }
+async-trait = { workspace = true }
+taiji-content = { path = "../taiji-content" }
+taiji-engine = { path = "../taiji-engine" }
+
+[dev-dependencies]
+tempfile = { workspace = true }
+
+[lints]
+workspace = true

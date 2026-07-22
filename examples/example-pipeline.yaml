@@ -1,0 +1,16 @@
+name: "example-ma-cross"
+version: "1.0"
+bar_gen:
+  modes: ["time"]
+  time_freqs: ["1m"]
+data_source:
+  type: "none"
+  config: {}
+nodes:
+  - id: "ma_cross"
+    type: "ma_cross"
+    config:
+      fast_period: 5
+      slow_period: 20
+    input_keys: []
+    output_keys: []

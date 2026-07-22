@@ -1,0 +1,101 @@
+---
+title: "{{ instrument }} 每日复盘 — {{ generated_at | truncate(length=10, end="") }}"
+date: {{ generated_at | replace(from="T", to=" ") | truncate(length=19, end="") }}
+tags: [{% for tag in tags %}"{{ tag | trim_start_matches(pat="#") }}"{% if not loop.last %}, {% endif %}{% endfor %}]
+categories: ["每日复盘"]
+draft: false
+---
+
+# {{ instrument }} 每日复盘
+
+**日期**：{{ generated_at | truncate(length=10, end="") }} | **周期**：{{ freq }} | **品种**：{{ instrument }}
+
+---
+
+## 市场结构
+
+{% if structure is object %}
+- **趋势方向**：{{ structure.trend_direction | default(value="未知") }}
+- **趋势强度**：{{ structure.trend_strength | default(value="—") }}
+- **拐点结构**：{{ structure.pivot_structure | default(value="—") }}
+- **关键支撑**：{{ structure.key_support | default(value="—") }}
+- **关键阻力**：{{ structure.key_resistance | default(value="—") }}
+- **通道状态**：{{ structure.channel_state | default(value="—") }}
+
+> 结构置信度：{{ structure_confidence }}
+{% if structure.notes %}
+{{ structure.notes }}
+{% endif %}
+{% else %}
+_本期无结构分析数据。_
+{% endif %}
+
+## 资金流向
+
+{% if delta is object %}
+- **净持仓方向**：{{ delta.net_position | default(value="—") }}
+- **成交量趋势**：{{ delta.volume_trend | default(value="—") }}
+- **主动买卖方向**：{{ delta.delta_direction | default(value="—") }}
+
+> 资金置信度：{{ delta_confidence }}
+{% else %}
+_本期无资金流向数据。_
+{% endif %}
+
+## 磁体定位
+
+{% if magnet is object %}
+- **磁体有效性**：{% if magnet.magnet_valid %}有效{% else %}无效/无磁体{% endif %}
+- **位置**：{{ magnet.magnet_position | default(value="—") }}
+{% if magnet.mm1_target %}- **MM1 目标**：{{ magnet.mm1_target }}{% endif %}
+{% if magnet.mm2_target %}- **MM2 目标**：{{ magnet.mm2_target }}{% endif %}
+
+> 磁体置信度：{{ magnet_confidence }}
+{% else %}
+_本期无磁体分析数据。_
+{% endif %}
+
+## 三推形态
+
+{% if thrust is object %}
+- **三推是否成立**：{% if thrust.triple_push_found %}是（{{ thrust.push_count | default(value=0) }} 推）{% else %}否{% endif %}
+{% if thrust.exhaustion %}- **力竭**：是（趋势衰竭警告）{% endif %}
+{% if thrust.overshoot %}- **过冲**：是{% endif %}
+{% if thrust.bos_detected %}- **BOS**：结构破坏已确认{% endif %}
+{% if thrust.choch_detected %}- **CHoCH**：趋势特征已改变{% endif %}
+
+> 三推置信度：{{ thrust_confidence }}
+{% else %}
+_本期无三推分析数据。_
+{% endif %}
+
+## 四维共振
+
+{% if resonance is object %}
+- **共振判定**：{% if resonance.resonance %}{{ resonance.resonance_type | default(value="未知") }}共振{% else %}无共振{% endif %}
+- **对齐维度**：{{ resonance.aligned_agents | default(value=[]) }}
+- **冲突维度**：{{ resonance.conflicting_agents | default(value=[]) }}
+
+> 共振置信度：{{ resonance_confidence }}
+{% else %}
+_本期无共振分析数据。_
+{% endif %}
+
+## 交易决策
+
+{% if decision is object %}
+- **动作**：{{ decision.action | default(value="Hold") }}
+{% if decision.entry %}- **入场**：{{ decision.entry }}{% endif %}
+{% if decision.stop_loss %}- **止损**：{{ decision.stop_loss }}{% endif %}
+{% if decision.take_profit %}- **止盈**：{{ decision.take_profit }}{% endif %}
+{% if decision.size_pct %}- **仓位比例**：{{ decision.size_pct }}{% endif %}
+{% if decision.reasoning %}- **理由**：{{ decision.reasoning }}{% endif %}
+
+> 决策置信度：{{ decision_confidence }}
+{% else %}
+_本期无交易决策数据。_
+{% endif %}
+
+---
+
+*本报告由太极量化系统自动生成，仅供参考，不构成投资建议。*

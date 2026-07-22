@@ -1,0 +1,27 @@
+{
+  "source": "README.zh-CN.md (GCWing/BitFun main branch)",
+  "captured_at": "2026-07-22",
+  "key_claims": {
+    "L4_源码级改造": {
+      "原文": "L4 | 源码级改造 | 修改工具、适配器、UI、Runtime 或产品形态。",
+      "来源": "README.zh-CN.md 第114行，'定制你的 BitFun' 章节",
+      "url": "https://github.com/GCWing/BitFun/blob/main/README.zh-CN.md",
+      "意义": "官方明确支持用户进行源码级改造——这正是本贡献者所做的全部工作。包括修改工具(LegionControl)、适配器(ACP)、UI(BeeColony)、Runtime(scheduler修复)。"
+    },
+    "可定制化扩展": {
+      "原文": "可定制化扩展：MCP、Skills、Agent 自定义、Mini App 和源码级扩展，让 BitFun 可以按你的工具链、角色和界面继续生长。",
+      "来源": "README.zh-CN.md 第75行",
+      "意义": "官方鼓励源码级扩展，允许产品'继续生长'——本PR正是这一理念的实践。"
+    },
+    "MIT许可证": {
+      "原文": "MIT License. Copyright (c) 2026 CWing",
+      "来源": "仓库根目录 LICENSE 文件",
+      "url": "https://github.com/GCWing/BitFun/blob/main/LICENSE"
+    },
+    "Vibe_Coding": {
+      "原文": "本项目 97%+ 由 Vibe Coding 完成",
+      "来源": "README.zh-CN.md 第148行",
+      "意义": "官方自认项目主要由Vibe Coding构建——本贡献者同样是全Vibe Coding，方法论一致。"
+    }
+  }
+}

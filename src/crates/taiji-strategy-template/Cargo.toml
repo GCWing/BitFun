@@ -1,0 +1,20 @@
+[package]
+name = "taiji-strategy-template"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+description = "Taiji strategy template — 复制此 crate 创建你自己的闭源策略"
+
+[lib]
+name = "taiji_strategy_template"
+crate-type = ["rlib"]
+
+[dependencies]
+taiji-engine = { path = "../taiji-engine" }
+chrono = { workspace = true }
+serde_json = "1"
+serde = { version = "1", features = ["derive"] }
+
+[lints]
+workspace = true

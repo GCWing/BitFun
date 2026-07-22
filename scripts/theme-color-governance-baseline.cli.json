@@ -1,0 +1,48 @@
+{
+  "version": 1,
+  "description": "Baseline for CLI/TUI theme color governance. CLI is an independent terminal surface; lower values when preset or fallback palette debt is removed.",
+  "budgets": {
+    "presetColorOccurrences": {
+      "max": 306
+    },
+    "presetUniqueColors": {
+      "max": 114
+    },
+    "runtimePresetColorOccurrences": {
+      "max": 114
+    },
+    "runtimePresetUniqueColors": {
+      "max": 75
+    },
+    "compatibilityPresetColorOccurrences": {
+      "max": 192
+    },
+    "compatibilityPresetUniqueColors": {
+      "max": 87
+    },
+    "rustFallbackColorOccurrences": {
+      "max": 0
+    },
+    "rustFallbackUniqueColors": {
+      "max": 0
+    },
+    "totalUniqueColors": {
+      "max": 114
+    },
+    "runtimeTotalUniqueColors": {
+      "max": 75
+    },
+    "presetNearPairs.nearTotal": {
+      "max": 0
+    },
+    "runtimePresetNearPairs.nearTotal": {
+      "max": 0
+    },
+    "compatibilityPresetNearPairs.nearTotal": {
+      "max": 0
+    },
+    "rustFallbackNearPairs.nearTotal": {
+      "max": 0
+    }
+  }
+}
