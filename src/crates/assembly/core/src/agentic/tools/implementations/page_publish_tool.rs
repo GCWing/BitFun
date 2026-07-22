@@ -358,10 +358,9 @@ fn parse_files_map(value: Option<&Value>) -> BitFunResult<Option<HashMap<String,
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::agentic::tools::account_login_capability::set_account_login_available;
-    use std::sync::Mutex;
-
-    static LOGIN_GATE: Mutex<()> = Mutex::new(());
+    use crate::agentic::tools::account_login_capability::{
+        lock_account_login_for_test, set_account_login_available,
+    };
 
     fn empty_context() -> ToolUseContext {
         ToolUseContext {
@@ -381,7 +380,7 @@ mod tests {
 
     #[tokio::test]
     async fn login_gate_controls_availability_and_execution() {
-        let _guard = LOGIN_GATE.lock().unwrap();
+        let _guard = lock_account_login_for_test();
         let tool = PagePublishTool::new();
 
         set_account_login_available(false);
@@ -406,7 +405,7 @@ mod tests {
 
     #[tokio::test]
     async fn rejects_missing_source_when_logged_in() {
-        let _guard = LOGIN_GATE.lock().unwrap();
+        let _guard = lock_account_login_for_test();
         let tool = PagePublishTool::new();
         set_account_login_available(true);
         let err = tool
@@ -473,7 +472,7 @@ mod tests {
 
     #[tokio::test]
     async fn directory_source_requires_a_local_workspace() {
-        let _guard = LOGIN_GATE.lock().unwrap();
+        let _guard = lock_account_login_for_test();
         let tool = PagePublishTool::new();
         set_account_login_available(true);
 

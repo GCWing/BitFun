@@ -188,11 +188,10 @@ fn deploy_result_for_assistant(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::agentic::tools::account_login_capability::set_account_login_available;
+    use crate::agentic::tools::account_login_capability::{
+        lock_account_login_for_test, set_account_login_available,
+    };
     use std::collections::HashMap;
-    use std::sync::Mutex;
-
-    static LOGIN_GATE: Mutex<()> = Mutex::new(());
 
     fn empty_context() -> ToolUseContext {
         ToolUseContext {
@@ -212,7 +211,7 @@ mod tests {
 
     #[tokio::test]
     async fn login_gate_controls_availability_and_execution() {
-        let _guard = LOGIN_GATE.lock().unwrap();
+        let _guard = lock_account_login_for_test();
         let tool = PageDeployTool::new();
 
         set_account_login_available(false);
