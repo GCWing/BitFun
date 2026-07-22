@@ -42,6 +42,7 @@ use super::config::{
     AcpClientConfig, AcpClientConfigFile, AcpClientInfo, AcpClientPermissionMode,
     AcpClientRequirementProbe, AcpClientStatus, RemoteAcpClientRequirementSnapshot,
 };
+use super::probe::{TryConnectResult, ACP_HANDSHAKE_TIMEOUT_SECS, CLI_DETECT_TIMEOUT_SECS};
 use super::remote_capability_store::RemoteAcpCapabilityStore;
 use super::remote_session::{preferred_resume_strategies, AcpRemoteSessionStrategy};
 use super::remote_shell::{remote_user_shell_command, render_remote_env_assignments, shell_escape};
@@ -300,6 +301,8 @@ impl AcpClientService {
                 id,
                 status,
                 session_count,
+                category: config.category.clone(),
+                description: config.description.clone(),
             });
         }
         infos.sort_by(|a, b| a.id.cmp(&b.id));
@@ -1855,6 +1858,200 @@ impl AcpClientService {
             config,
         })
     }
+
+    pub async fn detect_client_cli(
+        self: &Arc<Self>,
+        client_id: &str,
+    ) -> BitFunResult<Option<String>> {
+        let config_file = self.load_config_file().await?;
+        let config = resolve_config_for_client(&config_file, client_id, None)
+            .ok_or_else(|| BitFunError::NotFound(format!("ACP client not found: {}", client_id)))?;
+        Ok(super::cli_detect::detect_cli(&config.command).await)
+    }
+
+    pub async fn try_connect_client(
+        self: &Arc<Self>,
+        client_id: &str,
+    ) -> BitFunResult<TryConnectResult> {
+        let cli_result = tokio::time::timeout(
+            Duration::from_secs(CLI_DETECT_TIMEOUT_SECS),
+            self.detect_client_cli(client_id),
+        )
+        .await;
+
+        match cli_result {
+            Ok(Ok(Some(_path))) => {}
+            Ok(Ok(None)) => {
+                let config_file = self.load_config_file().await?;
+                let config =
+                    resolve_config_for_client(&config_file, client_id, None).ok_or_else(|| {
+                        BitFunError::NotFound(format!("ACP client not found: {}", client_id))
+                    })?;
+                return Ok(TryConnectResult::FailCli {
+                    error: format!("{} is not available on PATH", config.command),
+                });
+            }
+            Ok(Err(error)) => {
+                return Ok(TryConnectResult::FailCli {
+                    error: error.to_string(),
+                });
+            }
+            Err(_) => {
+                let config_file = self.load_config_file().await?;
+                let config =
+                    resolve_config_for_client(&config_file, client_id, None).ok_or_else(|| {
+                        BitFunError::NotFound(format!("ACP client not found: {}", client_id))
+                    })?;
+                return Ok(TryConnectResult::FailCli {
+                    error: format!(
+                        "CLI detection timed out after {}s for {}",
+                        CLI_DETECT_TIMEOUT_SECS, config.command,
+                    ),
+                });
+            }
+        }
+
+        match tokio::time::timeout(
+            Duration::from_secs(ACP_HANDSHAKE_TIMEOUT_SECS),
+            self.run_probe_handshake(client_id),
+        )
+        .await
+        {
+            Ok(result) => result,
+            Err(_) => Ok(TryConnectResult::FailAcp {
+                error: format!(
+                    "ACP handshake timed out after {}s",
+                    ACP_HANDSHAKE_TIMEOUT_SECS,
+                ),
+            }),
+        }
+    }
+
+    async fn run_probe_handshake(
+        self: &Arc<Self>,
+        client_id: &str,
+    ) -> BitFunResult<TryConnectResult> {
+        let config_file = self.load_config_file().await?;
+        let config = resolve_config_for_client(&config_file, client_id, None)
+            .ok_or_else(|| BitFunError::NotFound(format!("ACP client not found: {}", client_id)))?;
+
+        let program = resolve_configured_command(&config.command, &config.env);
+        let mut command = bitfun_core::util::process_manager::create_tokio_command(&program);
+        command
+            .args(&config.args)
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::inherit());
+        apply_command_environment(&mut command, Some(&config.env));
+        configure_process_group(&mut command);
+
+        let mut child = command.spawn().map_err(|error| {
+            BitFunError::service(format!(
+                "Failed to spawn ACP client '{}': {}",
+                client_id, error
+            ))
+        })?;
+
+        let stdout = match child.stdout.take() {
+            Some(stdout) => stdout,
+            None => {
+                terminate_child_process_tree("probe", child).await;
+                return Err(BitFunError::service(format!(
+                    "ACP client '{}' stdout is unavailable",
+                    client_id
+                )));
+            }
+        };
+        let stdin = match child.stdin.take() {
+            Some(stdin) => stdin,
+            None => {
+                terminate_child_process_tree("probe", child).await;
+                return Err(BitFunError::service(format!(
+                    "ACP client '{}' stdin is unavailable",
+                    client_id
+                )));
+            }
+        };
+
+        let transport = ByteStreams::new(Box::pin(stdin.compat_write()), Box::pin(stdout.compat()));
+
+        let (result_tx, mut result_rx) =
+            oneshot::channel::<Result<(), agent_client_protocol::Error>>();
+
+        let probe_task = tokio::spawn(async move {
+            let connect_result = Client
+                .builder()
+                .name("bitfun-acp-probe")
+                .on_receive_request(
+                    async move |_request: RequestPermissionRequest, responder, _cx| {
+                        responder.respond_with_result(Ok(RequestPermissionResponse::new(
+                            RequestPermissionOutcome::Cancelled,
+                        )))
+                    },
+                    agent_client_protocol::on_receive_request!(),
+                )
+                .connect_with(transport, async move |cx| {
+                    let init = InitializeRequest::new(ProtocolVersion::V1)
+                        .client_capabilities(ClientCapabilities::new())
+                        .client_info(Implementation::new(
+                            "bitfun-desktop",
+                            env!("CARGO_PKG_VERSION"),
+                        ));
+                    let _init_response = cx.send_request(init).block_task().await?;
+
+                    let cwd = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
+                    let _session_response = cx
+                        .send_request(NewSessionRequest::new(&cwd))
+                        .block_task()
+                        .await?;
+
+                    Ok(())
+                })
+                .await;
+
+            match connect_result {
+                Ok(()) => {
+                    let _ = result_tx.send(Ok(()));
+                }
+                Err(error) => {
+                    let _ = result_tx.send(Err(error));
+                }
+            }
+        });
+
+        let handshake_result = tokio::time::timeout(
+            Duration::from_secs(ACP_HANDSHAKE_TIMEOUT_SECS),
+            &mut result_rx,
+        )
+        .await;
+
+        probe_task.abort();
+        terminate_child_process_tree("probe", child).await;
+
+        match handshake_result {
+            Ok(Ok(Ok(()))) => Ok(TryConnectResult::Success),
+            Ok(Ok(Err(error))) => {
+                if is_auth_error(&error) {
+                    Ok(TryConnectResult::FailAuth {
+                        error: error.to_string(),
+                    })
+                } else {
+                    Ok(TryConnectResult::FailAcp {
+                        error: error.to_string(),
+                    })
+                }
+            }
+            Ok(Err(_)) => Ok(TryConnectResult::FailAcp {
+                error: "ACP client exited before handshake completed".to_string(),
+            }),
+            Err(_) => Ok(TryConnectResult::FailAcp {
+                error: format!(
+                    "ACP handshake timed out after {}s",
+                    ACP_HANDSHAKE_TIMEOUT_SECS,
+                ),
+            }),
+        }
+    }
 }
 
 fn resolve_config_for_client(
@@ -2523,6 +2720,16 @@ fn startup_timeout_error_message(client_id: &str, phase: &str) -> String {
 
 fn is_startup_timeout_error(error: &BitFunError) -> bool {
     error.to_string().contains(STARTUP_TIMEOUT_ERROR_PREFIX)
+}
+
+fn is_auth_error(error: &agent_client_protocol::Error) -> bool {
+    let msg = error.to_string().to_lowercase();
+    msg.contains("auth")
+        || msg.contains("unauthorized")
+        || msg.contains("401")
+        || msg.contains("403")
+        || msg.contains("api key")
+        || msg.contains("apikey")
 }
 
 fn select_permission_by_kind(
