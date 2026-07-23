@@ -56,6 +56,7 @@ const log = createLogger('AccountPanel');
 
 const DEVICE_POLL_FALLBACK_MS = 30_000;
 const DEVICE_CONNECT_MAX_ATTEMPTS = 5;
+const DEVICE_CONNECT_RECOVERY_INTERVAL_MS = 30_000;
 const DEVICE_LIST_FAILURE_THRESHOLD = 3;
 const ACCOUNT_TRANSITION_MAX_ATTEMPTS = 4;
 
@@ -256,6 +257,8 @@ export const AccountPanel: React.FC<AccountPanelProps> = ({
   /** A working device-routing WS is independent evidence that Relay is reachable. */
   const deviceRoutingReadyRef = useRef(false);
   const deviceListFailureCountRef = useRef(0);
+  /** Coalesce manual and background recovery so they never replace each other's WS. */
+  const deviceReconnectInFlightRef = useRef(false);
   /** Prevent overlapping background syncs from rapid clicks. */
   const syncInFlightRef = useRef(false);
   /** Opaque backend owner ID for the memory-only overwrite decision. */
@@ -405,39 +408,6 @@ export const AccountPanel: React.FC<AccountPanelProps> = ({
     });
   }, []);
 
-  const handleRetryConnect = useCallback(async () => {
-    const epoch = accountEpochRef.current;
-    setLoading(true);
-    setRelayError(null);
-    try {
-      const onlineDevices = await connectDevicesWithRetry(
-        () => isAccountEpochCurrent(epoch),
-      );
-      if (!isAccountEpochCurrent(epoch)) return;
-      deviceRoutingReadyRef.current = true;
-      deviceListFailureCountRef.current = 0;
-      applyPresenceOnline(onlineDevices);
-      setDevicesReady(true);
-      await refreshDevices();
-    } catch (err) {
-      log.warn('retry connect failed', err);
-      if (!isAccountEpochCurrent(epoch)) return;
-      if (isAccountAuthFailure(err)) {
-        await handleSessionExpired(err, epoch);
-        return;
-      }
-      markRelayUnreachable();
-    } finally {
-      if (isAccountEpochCurrent(epoch)) setLoading(false);
-    }
-  }, [
-    applyPresenceOnline,
-    handleSessionExpired,
-    isAccountEpochCurrent,
-    markRelayUnreachable,
-    refreshDevices,
-  ]);
-
   /** Latest refreshDevices for the polling interval (avoids stale closures). */
   const refreshDevicesRef = useRef(refreshDevices);
   refreshDevicesRef.current = refreshDevices;
@@ -451,6 +421,77 @@ export const AccountPanel: React.FC<AccountPanelProps> = ({
       DEVICE_POLL_FALLBACK_MS,
     );
   }, []);
+
+  const attemptDeviceReconnect = useCallback(async (showLoading: boolean) => {
+    if (deviceReconnectInFlightRef.current) {
+      log.debug('Device routing recovery already in flight; coalescing duplicate request');
+      return;
+    }
+    const epoch = accountEpochRef.current;
+    deviceReconnectInFlightRef.current = true;
+    if (showLoading) {
+      setLoading(true);
+      setRelayError(null);
+    }
+    try {
+      const onlineDevices = await connectDevicesWithRetry(
+        () => isAccountEpochCurrent(epoch),
+      );
+      if (!isAccountEpochCurrent(epoch)) return;
+      deviceRoutingReadyRef.current = true;
+      deviceListFailureCountRef.current = 0;
+      applyPresenceOnline(onlineDevices);
+      setDevicesReady(true);
+      setRelayError(null);
+      try {
+        const info = await remoteConnectAPI.getDeviceInfo();
+        if (!isAccountEpochCurrent(epoch)) return;
+        setLocalDeviceId(info.device_id);
+      } catch (error) {
+        log.warn('getDeviceInfo after reconnect failed', error);
+      }
+      if (!isAccountEpochCurrent(epoch)) return;
+      await refreshDevices();
+      startDevicePolling();
+    } catch (err) {
+      log.warn(
+        showLoading ? 'manual device reconnect failed' : 'background device reconnect failed',
+        err,
+      );
+      if (!isAccountEpochCurrent(epoch)) return;
+      if (isAccountAuthFailure(err)) {
+        await handleSessionExpired(err, epoch);
+        return;
+      }
+      markRelayUnreachable();
+    } finally {
+      deviceReconnectInFlightRef.current = false;
+      if (showLoading && isAccountEpochCurrent(epoch)) setLoading(false);
+    }
+  }, [
+    applyPresenceOnline,
+    handleSessionExpired,
+    isAccountEpochCurrent,
+    markRelayUnreachable,
+    refreshDevices,
+    startDevicePolling,
+  ]);
+
+  const handleRetryConnect = useCallback(() => {
+    void attemptDeviceReconnect(true);
+  }, [attemptDeviceReconnect]);
+
+  // Initial dial failures have no RelayClient instance to run its built-in
+  // reconnect loop. Keep recovering in the background while this account view
+  // is active; once a socket succeeds, RelayClient owns subsequent reconnects.
+  useEffect(() => {
+    if (activeAccountEpoch === null || !relayError) return undefined;
+    const timer = setInterval(
+      () => { void attemptDeviceReconnect(false); },
+      DEVICE_CONNECT_RECOVERY_INTERVAL_MS,
+    );
+    return () => clearInterval(timer);
+  }, [activeAccountEpoch, attemptDeviceReconnect, relayError]);
 
   /** Connect presence + load the device list for an active account session. */
   const initializeDevices = useCallback(async () => {

@@ -22,6 +22,15 @@ describe('isRelayUnreachable', () => {
     expect(isRelayUnreachable(new Error('failed to connect to relay'))).toBe(true);
   });
 
+  it('detects transient WebSocket upgrade and handshake failures', () => {
+    expect(isRelayUnreachable(new Error('dial wss://relay/ws: HTTP error: 502 Bad Gateway')))
+      .toBe(true);
+    expect(isRelayUnreachable(new Error('HTTP 503 Service Unavailable'))).toBe(true);
+    expect(isRelayUnreachable(new Error('WebSocket protocol error: Handshake not finished')))
+      .toBe(true);
+    expect(isRelayUnreachable(new Error('TLS stream ended with unexpected EOF'))).toBe(true);
+  });
+
   it('does not treat auth failures as unreachable', () => {
     expect(isRelayUnreachable(new Error('HTTP 401 Unauthorized'))).toBe(false);
     expect(isRelayUnreachable(new Error('invalid or expired token'))).toBe(false);
@@ -30,5 +39,8 @@ describe('isRelayUnreachable', () => {
   it('does not treat unrelated application errors as unreachable', () => {
     expect(isRelayUnreachable(new Error('not logged in'))).toBe(false);
     expect(isRelayUnreachable(new Error('remote connect service not initialized'))).toBe(false);
+    expect(isRelayUnreachable(new Error('dial wss://relay/ws: HTTP error: 404 Not Found')))
+      .toBe(false);
+    expect(isRelayUnreachable(new Error('invalid certificate: UnknownIssuer'))).toBe(false);
   });
 });

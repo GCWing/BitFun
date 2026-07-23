@@ -23,8 +23,13 @@ export function isRelayUnreachable(error: unknown): boolean {
     return false;
   }
   const msg = errorMessage(error);
+  // WebSocket upgrades surface proxy/node instability as an HTTP handshake
+  // status rather than a generic network error. Retry only transient statuses;
+  // persistent 4xx responses (for example a missing /ws route) stay terminal.
+  const hasTransientHttpStatus = /\b(?:408|425|429|500|502|503|504)\b/.test(msg);
   return (
-    msg.includes('connection refused')
+    hasTransientHttpStatus
+    || msg.includes('connection refused')
     || msg.includes('connect error')
     || msg.includes('connection reset')
     || msg.includes('timed out')
@@ -40,5 +45,15 @@ export function isRelayUnreachable(error: unknown): boolean {
     || msg.includes('failed to connect')
     || msg.includes('empty reply')
     || msg.includes('connection closed')
+    || msg.includes('bad gateway')
+    || msg.includes('service unavailable')
+    || msg.includes('gateway timeout')
+    || msg.includes('temporarily unavailable')
+    || msg.includes('unexpected eof')
+    || msg.includes('unexpected end of file')
+    || msg.includes('handshake not finished')
+    || msg.includes('handshake incomplete')
+    || msg.includes('broken pipe')
+    || msg.includes('socket hang up')
   );
 }

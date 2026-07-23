@@ -48,8 +48,8 @@ pub mod sync_state {
 }
 
 pub use account::{
-    validate_relay_base_url, AccountClient, AccountSession, DelegateToken, DelegatedIdentity,
-    FetchedSession, KdfParams, ListedSessionEntry, SettingsBlob,
+    build_relay_websocket_url, validate_relay_base_url, AccountClient, AccountSession,
+    DelegateToken, DelegatedIdentity, FetchedSession, KdfParams, ListedSessionEntry, SettingsBlob,
 };
 pub use device::DeviceIdentity;
 pub use encryption::{decrypt_from_base64, encrypt_to_base64, KeyPair};
@@ -734,14 +734,7 @@ impl RemoteConnectService {
             ConnectionMethod::Lan { .. } | ConnectionMethod::Ngrok => {
                 format!("ws://127.0.0.1:{}/ws", self.config.lan_port)
             }
-            _ => {
-                format!(
-                    "{}/ws",
-                    relay_url
-                        .replace("https://", "wss://")
-                        .replace("http://", "ws://")
-                )
-            }
+            _ => build_relay_websocket_url(&relay_url)?,
         };
 
         let (client, mut event_rx) = RelayClient::new();
@@ -1704,12 +1697,7 @@ impl RemoteConnectService {
         // Disconnect previous device connection if any.
         self.stop_device_connection_inner().await;
 
-        let ws_url = format!(
-            "{}/ws",
-            relay_url
-                .replace("https://", "wss://")
-                .replace("http://", "ws://")
-        );
+        let ws_url = build_relay_websocket_url(relay_url)?;
 
         let (client, mut event_rx) = RelayClient::new();
         client.connect(&ws_url).await?;

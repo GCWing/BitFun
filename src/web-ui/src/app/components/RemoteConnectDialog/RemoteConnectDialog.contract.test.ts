@@ -85,6 +85,18 @@ describe('Remote Connect safety contracts', () => {
     expect(backgroundSync).not.toContain('accountConnectDevices');
   });
 
+  it('keeps recovering an initial device-routing failure without overlapping attempts', () => {
+    const recoveryFlow = accountPanelSource.slice(
+      accountPanelSource.indexOf('const attemptDeviceReconnect'),
+      accountPanelSource.indexOf('/** Connect presence + load the device list'),
+    );
+
+    expect(recoveryFlow).toContain('deviceReconnectInFlightRef.current');
+    expect(recoveryFlow).toContain('DEVICE_CONNECT_RECOVERY_INTERVAL_MS');
+    expect(recoveryFlow).toContain('attemptDeviceReconnect(false)');
+    expect(recoveryFlow).toContain('startDevicePolling()');
+  });
+
   it('delegates transient retries without replaying the complete account sync workflow', () => {
     const backgroundSync = accountPanelSource.slice(
       accountPanelSource.indexOf('const startBackgroundSync'),

@@ -230,6 +230,23 @@ pub fn validate_relay_base_url(relay_url: &str) -> Result<reqwest::Url> {
     Ok(url)
 }
 
+/// Build the Relay WebSocket endpoint from the same validated base URL used by
+/// account HTTP requests. This preserves reverse-proxy prefixes while avoiding
+/// `//ws` when a user- or config-supplied base URL has a trailing slash.
+pub fn build_relay_websocket_url(relay_url: &str) -> Result<String> {
+    let mut url = validate_relay_base_url(relay_url)?;
+    let websocket_scheme = match url.scheme() {
+        "https" => "wss",
+        "http" => "ws",
+        _ => unreachable!("validate_relay_base_url accepts only http(s) schemes"),
+    };
+    url.set_scheme(websocket_scheme)
+        .map_err(|_| anyhow!("failed to convert relay URL to WebSocket scheme"))?;
+    let base_path = url.path().trim_end_matches('/').to_string();
+    url.set_path(&format!("{base_path}/ws"));
+    Ok(url.to_string())
+}
+
 impl Default for AccountClient {
     fn default() -> Self {
         Self::new()
@@ -1052,5 +1069,21 @@ mod tests {
         ] {
             assert!(AccountClient::endpoint(invalid, "/api/devices").is_err());
         }
+    }
+
+    #[test]
+    fn relay_websocket_endpoint_normalizes_root_and_prefixed_urls() {
+        assert_eq!(
+            build_relay_websocket_url("https://relay.example.com/").unwrap(),
+            "wss://relay.example.com/ws"
+        );
+        assert_eq!(
+            build_relay_websocket_url("https://relay.example.com/prefix/").unwrap(),
+            "wss://relay.example.com/prefix/ws"
+        );
+        assert_eq!(
+            build_relay_websocket_url("http://127.0.0.1:3000/relay").unwrap(),
+            "ws://127.0.0.1:3000/relay/ws"
+        );
     }
 }
