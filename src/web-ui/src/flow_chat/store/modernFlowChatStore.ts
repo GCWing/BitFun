@@ -81,6 +81,14 @@ export type VirtualItem =
     }
   | { type: 'explore-group'; data: ExploreGroupData; turnId: string }
   | { type: 'turn-completion-notice'; data: TurnCompletionNotice; turnId: string }
+  | {
+      type: 'turn-failure-notice';
+      data: {
+        error: string;
+        errorDetail?: DialogTurn['errorDetail'];
+      };
+      turnId: string;
+    }
   | { type: 'image-analyzing'; turnId: string };
 
 /**
@@ -603,6 +611,17 @@ export function sessionToVirtualItems(session: Session | null): VirtualItem[] {
         type: 'turn-completion-notice',
         turnId: turn.id,
         data: completionNotice,
+      });
+    }
+
+    if (turn.status === 'error' && (turn.error || turn.errorDetail)) {
+      items.push({
+        type: 'turn-failure-notice',
+        turnId: turn.id,
+        data: {
+          error: turn.error ?? turn.errorDetail?.providerMessage ?? '',
+          errorDetail: turn.errorDetail,
+        },
       });
     }
 

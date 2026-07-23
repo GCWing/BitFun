@@ -1236,6 +1236,17 @@
     "exporting": "正在導出...",
     "exportToImage": "導出為圖片"
   },
+  "turnFailure": {
+    "showDetails": "顯示技術詳情",
+    "hideDetails": "隱藏技術詳情",
+    "provider": "服務商",
+    "errorCode": "錯誤碼",
+    "httpStatus": "HTTP 狀態",
+    "requestId": "請求 ID",
+    "providerError": "服務商錯誤",
+    "copy": "複製",
+    "copied": "已複製"
+  },
   "modelRound": {
     "copyDialog": "複製對話",
     "copiedDialog": "已複製!",

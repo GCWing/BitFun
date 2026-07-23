@@ -5062,6 +5062,8 @@ export class FlowChatStore {
           : typeof turn.has_final_response === 'boolean'
             ? turn.has_final_response
             : undefined,
+      error: typeof turn.error === 'string' ? turn.error : undefined,
+      errorDetail: turn.errorDetail ?? turn.error_detail,
       startTime: turn.startTime,
       endTime: turn.endTime,
       tokenUsage: rawTokenUsage

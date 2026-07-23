@@ -51,6 +51,15 @@ function getVirtualItemSearchText(item: VirtualItem): string {
   if (item.type === 'turn-completion-notice') {
     return item.data.reasonCode;
   }
+  if (item.type === 'turn-failure-notice') {
+    return [
+      item.data.error,
+      item.data.errorDetail?.provider,
+      item.data.errorDetail?.providerCode,
+      item.data.errorDetail?.providerMessage,
+      item.data.errorDetail?.requestId,
+    ].filter(Boolean).join(' ');
+  }
   return '';
 }
 

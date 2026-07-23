@@ -496,6 +496,8 @@ export function convertDialogTurnToBackendFormat(dialogTurn: DialogTurn, turnInd
       : undefined,
     finishReason: dialogTurn.finishReason,
     hasFinalResponse: dialogTurn.hasFinalResponse,
+    error: dialogTurn.error,
+    errorDetail: dialogTurn.errorDetail,
     status: dialogTurn.status === 'completed' ? 'completed' : 
             dialogTurn.status === 'error' ? 'error' : 
             dialogTurn.status === 'cancelled' ? 'cancelled' : 'inprogress',

@@ -1236,6 +1236,17 @@
     "exporting": "正在导出...",
     "exportToImage": "导出为图片"
   },
+  "turnFailure": {
+    "showDetails": "显示技术详情",
+    "hideDetails": "隐藏技术详情",
+    "provider": "服务商",
+    "errorCode": "错误码",
+    "httpStatus": "HTTP 状态",
+    "requestId": "请求 ID",
+    "providerError": "服务商错误",
+    "copy": "复制",
+    "copied": "已复制"
+  },
   "modelRound": {
     "copyDialog": "复制对话",
     "copiedDialog": "已复制!",

@@ -155,6 +155,28 @@ describe('PersistenceModule', () => {
     expect(persisted.hasFinalResponse).toBe(false);
   });
 
+  it('persists terminal error diagnostics for failed turns', () => {
+    const turn = createDialogTurn('error');
+    turn.error = 'OpenAI Streaming API failed after 10 attempts: connection refused';
+    turn.errorDetail = {
+      category: 'network',
+      provider: 'openai',
+      requestId: 'req-1',
+    };
+
+    const persisted = convertDialogTurnToBackendFormat(turn, 0);
+
+    expect(persisted).toMatchObject({
+      error: 'OpenAI Streaming API failed after 10 attempts: connection refused',
+      errorDetail: {
+        category: 'network',
+        provider: 'openai',
+        requestId: 'req-1',
+      },
+      status: 'error',
+    });
+  });
+
   it('persists ACP permission metadata for pending confirmation tools', () => {
     const turn = createDialogTurn('processing');
     turn.modelRounds[0].items = [

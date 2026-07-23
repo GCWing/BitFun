@@ -331,6 +331,43 @@ describe('sessionToVirtualItems explore grouping', () => {
     expect(items.map(item => item.type)).toEqual(['user-message', 'explore-group']);
   });
 
+  it('appends a terminal failure notice even when no model round was created', () => {
+    const session = makeSession({
+      dialogTurns: [{
+        id: 'turn-1',
+        sessionId: 'session-1',
+        userMessage: {
+          id: 'user-1',
+          content: 'Help',
+          timestamp: 900,
+        },
+        modelRounds: [],
+        status: 'error',
+        error: 'OpenAI Streaming API failed after 10 attempts: connection refused',
+        errorDetail: {
+          category: 'network',
+          provider: 'openai',
+        },
+        startTime: 900,
+        endTime: 1200,
+      }],
+    });
+
+    const items = sessionToVirtualItems(session);
+
+    expect(items.map(item => item.type)).toEqual(['user-message', 'turn-failure-notice']);
+    expect(items[1]).toMatchObject({
+      type: 'turn-failure-notice',
+      data: {
+        error: 'OpenAI Streaming API failed after 10 attempts: connection refused',
+        errorDetail: {
+          category: 'network',
+          provider: 'openai',
+        },
+      },
+    });
+  });
+
   it('keeps trailing explore groups expanded while the turn is still processing', () => {
     const session = makeSession({
       dialogTurns: [{

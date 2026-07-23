@@ -363,6 +363,8 @@ mod tests {
             token_usage: None,
             finish_reason: None,
             has_final_response: Some(true),
+            error: None,
+            error_detail: None,
             status: TurnStatus::Completed,
         }
     }

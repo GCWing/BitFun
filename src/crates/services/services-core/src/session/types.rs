@@ -1,7 +1,7 @@
 //! Types for session persistence
 
 use bitfun_core_types::ToolImageAttachment;
-use bitfun_core_types::{SessionContinuationPolicy, SessionKind};
+use bitfun_core_types::{AiErrorDetail, SessionContinuationPolicy, SessionKind};
 use bitfun_events::ModelRoundAttemptDiagnostic;
 use serde::{Deserialize, Serialize};
 
@@ -419,6 +419,18 @@ pub struct DialogTurnData {
         alias = "has_final_response"
     )]
     pub has_final_response: Option<bool>,
+
+    /// Terminal error message when the turn failed.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub error: Option<String>,
+
+    /// Structured provider diagnostics for a failed turn.
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        alias = "error_detail"
+    )]
+    pub error_detail: Option<AiErrorDetail>,
 
     /// Turn status
     pub status: TurnStatus,
@@ -1003,6 +1015,8 @@ impl DialogTurnData {
             token_usage: None,
             finish_reason: None,
             has_final_response: None,
+            error: None,
+            error_detail: None,
             status: TurnStatus::InProgress,
         }
     }

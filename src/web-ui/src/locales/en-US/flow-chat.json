@@ -1236,6 +1236,17 @@
     "exporting": "Exporting...",
     "exportToImage": "Export as Image"
   },
+  "turnFailure": {
+    "showDetails": "Show technical details",
+    "hideDetails": "Hide technical details",
+    "provider": "Provider",
+    "errorCode": "Error code",
+    "httpStatus": "HTTP status",
+    "requestId": "Request ID",
+    "providerError": "Provider error",
+    "copy": "Copy",
+    "copied": "Copied"
+  },
   "modelRound": {
     "copyDialog": "Copy dialog",
     "copiedDialog": "Copied!",

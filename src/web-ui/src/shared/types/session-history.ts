@@ -5,6 +5,7 @@
  */
 
 import type { ReviewTargetEvidence, ReviewTeamRunManifest } from '@/shared/services/reviewTeamService';
+import type { AiErrorDetail } from '@/shared/ai-errors/aiErrorPresenter';
 
 export type SessionKind = 'normal' | 'btw' | 'review' | 'deep_review' | 'miniapp' | 'subagent';
 export type PersistedSessionKind = 'standard' | 'subagent';
@@ -169,6 +170,8 @@ export interface DialogTurnData {
   status: TurnStatus;
   finishReason?: string;
   hasFinalResponse?: boolean;
+  error?: string;
+  errorDetail?: AiErrorDetail;
 }
 
 export interface DialogTurnTokenUsageData {

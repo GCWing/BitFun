@@ -8,6 +8,7 @@ import type {
   SessionKind,
   SessionTitleSource,
 } from '@/shared/types/session-history';
+import type { AiErrorDetail } from '@/shared/ai-errors/aiErrorPresenter';
 import type { ReviewTargetEvidence, ReviewTeamRunManifest } from '@/shared/services/reviewTeamService';
 
 export type ModelRoundAttemptDiagnostic = import('@/shared/types/session-history').ModelRoundAttemptDiagnostic;
@@ -258,6 +259,7 @@ export interface DialogTurn {
   startTime: number;
   endTime?: number;
   error?: string;
+  errorDetail?: AiErrorDetail;
   tokenUsage?: TokenUsage;
   todos?: TodoItem[];
   backendTurnIndex?: number;

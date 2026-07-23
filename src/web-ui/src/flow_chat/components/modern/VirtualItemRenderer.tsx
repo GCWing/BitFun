@@ -12,6 +12,7 @@ import { ExploreGroupRenderer } from './ExploreGroupRenderer';
 import { CompactToolCard, CompactToolCardHeader } from '../../tool-cards/CompactToolCard';
 import { useFlowChatContext } from './FlowChatContext';
 import { TurnCompletionNoticeItem } from './TurnCompletionNoticeItem';
+import { TurnFailureNoticeItem } from './TurnFailureNoticeItem';
 import './VirtualItemRenderer.scss';
 
 interface VirtualItemRendererProps {
@@ -67,6 +68,9 @@ export const VirtualItemRenderer = React.memo<VirtualItemRendererProps>(
 
         case 'turn-completion-notice':
           return <TurnCompletionNoticeItem notice={item.data} />;
+
+        case 'turn-failure-notice':
+          return <TurnFailureNoticeItem error={item.data.error} errorDetail={item.data.errorDetail} />;
 
         case 'image-analyzing':
           return (

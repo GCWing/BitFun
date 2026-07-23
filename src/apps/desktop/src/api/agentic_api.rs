@@ -3227,6 +3227,8 @@ mod tests {
             token_usage: None,
             finish_reason: None,
             has_final_response: None,
+            error: None,
+            error_detail: None,
             status: TurnStatus::Completed,
         };
 
@@ -3309,6 +3311,8 @@ mod tests {
             token_usage: None,
             finish_reason: None,
             has_final_response: None,
+            error: None,
+            error_detail: None,
             status: TurnStatus::Completed,
         }];
 
@@ -3372,6 +3376,8 @@ mod tests {
             token_usage: None,
             finish_reason: None,
             has_final_response: None,
+            error: None,
+            error_detail: None,
             status: TurnStatus::Completed,
         }];
 
