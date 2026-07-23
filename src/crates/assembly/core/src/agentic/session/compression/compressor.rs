@@ -66,6 +66,9 @@ pub struct ContextCompressor {
 }
 
 impl ContextCompressor {
+    const AUTO_COMPRESSION_CONTINUATION_REMINDER: &'static str =
+        "The conversation context above was automatically compacted while work was still in progress. Re-establish the current working state from this summary and the latest available evidence, then continue working on the user's most recent request. Do not stop merely because compaction occurred, and do not ask the user to repeat information already captured here. If a required detail is missing and a pre-compaction transcript is available above, inspect the relevant part of that transcript before proceeding.";
+
     pub fn new(config: CompressionConfig) -> Self {
         Self { config }
     }
@@ -211,8 +214,7 @@ impl ContextCompressor {
         }
         trace!("Compression summary artifact generated");
         let has_model_summary = summary_artifact.used_model_summary;
-        let (boundary_message, summary_message) = self.create_summary_turn(summary_artifact);
-        let compressed_messages = vec![boundary_message, summary_message];
+        let compressed_messages = self.create_summary_messages(summary_artifact, mode);
 
         debug!(
             "Compression completed: session_id={}, compressed_messages={}",
@@ -233,38 +235,69 @@ impl ContextCompressor {
         transcript_index_range: &TranscriptLineRange,
     ) -> bool {
         let has_model_summary = result.has_model_summary;
+        let summary_is_inline = result.messages.len() == 1
+            && result.messages[0].role == MessageRole::User
+            && result.messages[0].metadata.semantic_kind
+                == Some(MessageSemanticKind::CompressionSummary);
+        let old_boundary = render_system_reminder(&Self::render_boundary_marker_text(
+            has_model_summary,
+            summary_is_inline,
+            None,
+        ));
+        let new_boundary = render_system_reminder(&Self::render_boundary_marker_text(
+            has_model_summary,
+            summary_is_inline,
+            Some((transcript_uri, transcript_index_range)),
+        ));
+
         let Some(boundary) = result.messages.iter_mut().find(|message| {
-            message.metadata.semantic_kind == Some(MessageSemanticKind::CompressionBoundaryMarker)
+            matches!(
+                message.metadata.semantic_kind,
+                Some(MessageSemanticKind::CompressionBoundaryMarker)
+                    | Some(MessageSemanticKind::CompressionSummary)
+            ) && matches!(&message.content, MessageContent::Text(text) if text.starts_with(&old_boundary))
         }) else {
             return false;
         };
-        if !matches!(&boundary.content, MessageContent::Text(_)) {
+        let MessageContent::Text(text) = &mut boundary.content else {
             return false;
-        }
-        boundary.content =
-            MessageContent::Text(render_system_reminder(&Self::render_boundary_marker_text(
-                has_model_summary,
-                Some((transcript_uri, transcript_index_range)),
-            )));
+        };
+        text.replace_range(..old_boundary.len(), &new_boundary);
         boundary.metadata.tokens = None;
         true
     }
 
-    fn create_summary_turn(
+    fn create_summary_messages(
         &self,
         summary_artifact: CompressionSummaryArtifact,
-    ) -> (Message, Message) {
-        let boundary = Message::user(render_system_reminder(&Self::render_boundary_marker_text(
+        mode: CompressionMode,
+    ) -> Vec<Message> {
+        let boundary_text = render_system_reminder(&Self::render_boundary_marker_text(
             summary_artifact.used_model_summary,
+            matches!(mode, CompressionMode::Auto),
             None,
-        )))
-        .with_semantic_kind(MessageSemanticKind::CompressionBoundaryMarker);
+        ));
 
-        let summary = Message::assistant(summary_artifact.summary_text)
-            .with_semantic_kind(MessageSemanticKind::CompressionSummary)
-            .with_compression_payload(summary_artifact.payload);
-
-        (boundary, summary)
+        match mode {
+            CompressionMode::Manual => vec![
+                Message::user(boundary_text)
+                    .with_semantic_kind(MessageSemanticKind::CompressionBoundaryMarker),
+                Message::assistant(summary_artifact.summary_text)
+                    .with_semantic_kind(MessageSemanticKind::CompressionSummary)
+                    .with_compression_payload(summary_artifact.payload),
+            ],
+            CompressionMode::Auto => {
+                let continuation_reminder =
+                    render_system_reminder(Self::AUTO_COMPRESSION_CONTINUATION_REMINDER);
+                let content = format!(
+                    "{}\n\n{}\n\n{}",
+                    boundary_text, summary_artifact.summary_text, continuation_reminder
+                );
+                vec![Message::user(content)
+                    .with_semantic_kind(MessageSemanticKind::CompressionSummary)
+                    .with_compression_payload(summary_artifact.payload)]
+            }
+        }
     }
 
     fn append_live_boundary_context(
@@ -351,9 +384,16 @@ impl ContextCompressor {
 
     fn render_boundary_marker_text(
         used_model_summary: bool,
+        summary_is_inline: bool,
         transcript: Option<(&str, &TranscriptLineRange)>,
     ) -> String {
-        let mut msg = "The earlier conversation is summarized in the next assistant message. Use it as prior context.".to_string();
+        let mut msg = if summary_is_inline {
+            "The earlier conversation has been summarized below. Use the summary as prior context."
+                .to_string()
+        } else {
+            "The earlier conversation is summarized in the next assistant message. Use it as prior context."
+                .to_string()
+        };
         if !used_model_summary {
             msg.push_str(" This is a partial reconstructed record. Message text, tool arguments, task lists, and tool results may be truncated or omitted.");
         }
@@ -657,7 +697,7 @@ mod tests {
     }
 
     #[test]
-    fn auto_compression_appends_latest_user_and_todo_into_summary_turn() {
+    fn auto_compression_merges_summary_and_continuation_into_one_user_message() {
         let compressor = ContextCompressor::new(Default::default());
         let result = compressor
             .compress_turns(
@@ -669,15 +709,58 @@ mod tests {
             )
             .expect("compression succeeds");
 
-        assert_eq!(result.messages.len(), 2);
-        let summary_text = match &result.messages[1].content {
+        assert_eq!(result.messages.len(), 1);
+        assert_eq!(
+            result.messages[0].role,
+            crate::agentic::core::MessageRole::User
+        );
+        assert_eq!(
+            result.messages[0].metadata.semantic_kind,
+            Some(MessageSemanticKind::CompressionSummary)
+        );
+        let summary_text = match &result.messages[0].content {
             crate::agentic::core::MessageContent::Text(text) => text,
-            _ => panic!("expected assistant text summary"),
+            _ => panic!("expected merged user text summary"),
         };
+        assert!(summary_text.contains("earlier conversation has been summarized below"));
         assert!(summary_text.contains("Model summary"));
         assert!(summary_text.contains("Most recent user message before this summary"));
         assert!(summary_text.contains("Continue the refactor"));
         assert!(summary_text.contains("Most recent task list snapshot before this summary"));
+        assert!(summary_text.ends_with(&render_system_reminder(
+            ContextCompressor::AUTO_COMPRESSION_CONTINUATION_REMINDER
+        )));
+        assert!(summary_text.contains("continue working on the user's most recent request"));
+    }
+
+    #[test]
+    fn auto_compression_transcript_reference_preserves_final_continuation_reminder() {
+        let compressor = ContextCompressor::new(Default::default());
+        let mut result = compressor
+            .compress_turns(
+                "session",
+                8000,
+                vec![todo_turn()],
+                CompressionMode::Auto,
+                Some("Model summary".to_string()),
+            )
+            .expect("compression succeeds");
+        let uri = "bitfun://current-session/artifacts/compression-transcripts/12-a3f9.txt";
+        let index_range = TranscriptLineRange {
+            start_line: 1,
+            end_line: 14,
+        };
+
+        assert!(compressor.append_transcript_reference(&mut result, uri, &index_range));
+        let summary_text = match &result.messages[0].content {
+            crate::agentic::core::MessageContent::Text(text) => text,
+            _ => panic!("expected merged user text summary"),
+        };
+        assert!(summary_text.contains(uri));
+        assert!(summary_text.contains("Model summary"));
+        assert!(summary_text.ends_with(&render_system_reminder(
+            ContextCompressor::AUTO_COMPRESSION_CONTINUATION_REMINDER
+        )));
     }
 
     #[test]
@@ -706,6 +789,43 @@ mod tests {
             &summary_artifact.payload.entries[0],
             CompressionEntry::ModelSummary { text } if text == "Summary text"
         ));
+    }
+
+    #[test]
+    fn merged_auto_compression_payload_remains_atomic_on_recompression() {
+        let compressor = ContextCompressor::new(Default::default());
+        let compressed = compressor
+            .compress_turns(
+                "session",
+                8000,
+                vec![todo_turn()],
+                CompressionMode::Auto,
+                Some("Model summary".to_string()),
+            )
+            .expect("compression succeeds");
+
+        let summary_artifact =
+            crate::agentic::session::compression::fallback::build_structured_compression_summary(
+                vec![compressed.messages],
+                &crate::agentic::session::compression::fallback::CompressionFallbackOptions {
+                    max_tokens: 10_000,
+                    user_chars: 120,
+                    assistant_chars: 120,
+                    tool_arg_chars: 80,
+                    tool_command_chars: 80,
+                },
+            );
+
+        assert!(matches!(
+            &summary_artifact.payload.entries[0],
+            CompressionEntry::ModelSummary { text } if text == "Model summary"
+        ));
+        assert!(summary_artifact.payload.entries.iter().any(|entry| matches!(
+            entry,
+            CompressionEntry::Turn { messages, todo, .. }
+                if messages.iter().any(|message| message.text.as_deref() == Some("Continue the refactor"))
+                    && todo.is_some()
+        )));
     }
 
     #[test]
