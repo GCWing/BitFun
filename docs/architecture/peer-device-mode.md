@@ -49,12 +49,13 @@ FS) and must not be mixed with Peer Device Mode.
 
 - Controller: `PeerDeviceTransportAdapter` wraps product `invoke` as
   `RemoteCommand::HostInvoke` over `account_device_rpc`.
-- HostInvoke on the controller is **priority-queued** (max 2 in flight). Session
-  restore / session-list / dialog / workspace-startup commands outrank background
-  `git_*` / `ssh_*` / `lsp_*` / `search_*` / FS / canvas / editor RPCs so hydrate
-  is not starved into relay HTTP 504s. Terminal commands are always interactive
-  priority, and one slot is kept free from low-priority background work so input
-  cannot be trapped behind two slow polling requests.
+- HostInvoke on the controller is **priority-queued** (effectively unbounded
+  concurrency, `i32::MAX` in flight). Session restore / session-list / dialog /
+  workspace-startup commands outrank background `git_*` / `ssh_*` / `lsp_*` /
+  `search_*` / FS / canvas / editor RPCs so hydrate is not starved into relay
+  HTTP 504s. Terminal commands are always interactive priority, and one slot is
+  kept free from low-priority background work so input cannot be trapped behind
+  slow polling requests.
 - While Peer Mode is active, background noise is reduced further:
   - controller-local SSH heartbeats and remote-workspace auto-reconnect pause
   - Git / FilesPanel window-focus refresh pauses

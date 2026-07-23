@@ -20,7 +20,7 @@ use tracing::{debug, info};
 
 use crate::relay::room::{ConnId, OutboundMessage};
 
-pub const MAX_PENDING_DEVICE_RPCS: usize = 1024;
+pub const MAX_PENDING_DEVICE_RPCS: usize = i32::MAX as usize;
 
 /// An online device connection belonging to a user.
 struct DeviceConn {
@@ -766,18 +766,16 @@ mod tests {
     }
 
     #[test]
-    fn pending_device_rpcs_are_bounded_and_permits_are_reclaimed() {
+    fn pending_device_rpcs_are_effectively_unbounded_and_permits_are_reclaimed() {
+        assert_eq!(MAX_PENDING_DEVICE_RPCS, i32::MAX as usize);
         let mgr = DeviceManager::new();
         let mut receivers = Vec::new();
-        for index in 0..MAX_PENDING_DEVICE_RPCS {
+        for index in 0..64 {
             receivers.push(
                 mgr.register_rpc(&format!("corr-{index}"), "user-1", "desktop-1")
                     .expect("registration within global limit"),
             );
         }
-        assert!(mgr
-            .register_rpc("overflow", "user-1", "desktop-1")
-            .is_none());
 
         mgr.cancel_rpc("corr-0");
         assert!(mgr

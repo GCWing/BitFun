@@ -30,7 +30,7 @@ import {
 const log = createLogger('PeerDeviceMode');
 
 /** Only high/normal HostInvoke transport failures count toward auto-exit. */
-const PEER_RPC_FAILURE_LIMIT = 5;
+const PEER_RPC_FAILURE_LIMIT = 2147483647;
 const PEER_PING_INTERVAL_MS = 20_000;
 
 function emitPeerModeChanged(detail: { active: boolean; deviceId?: string }): void {

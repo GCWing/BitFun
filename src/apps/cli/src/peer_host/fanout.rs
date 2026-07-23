@@ -15,7 +15,7 @@ use crate::account::PeerFanoutOwner;
 use super::control::{attached_controllers, controller_delivery_lease};
 use super::state::{PeerHostState, PeerTurnKey};
 
-const PEER_EVENT_DELIVERY_CAPACITY: usize = 512;
+const PEER_EVENT_DELIVERY_CAPACITY: usize = i32::MAX as usize;
 
 struct QueuedPeerDeviceEvent {
     owner: PeerFanoutOwner,

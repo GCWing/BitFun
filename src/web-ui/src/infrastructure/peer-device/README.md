@@ -33,8 +33,8 @@ Controller-side React/transport layer for Peer Device Mode. Architecture:
 
 6. **Config / mode HostInvokes are high priority** during peer hydrate
    (`get_config`, `get_configs`, `get_available_modes`,
-   `get_agent_profile_config`). Keeping them `low` starves hydrate under the
-   concurrency limit of 2.
+   `get_agent_profile_config`). Keeping them `low` can still delay hydrate
+   behind a burst of background RPCs.
 
 7. **Account identity commands are LOCAL_ONLY** and must stay denied on the
    peer host (`account_login`, `account_finalize_login`, logout, device RPC,

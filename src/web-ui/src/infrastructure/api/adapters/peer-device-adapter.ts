@@ -179,8 +179,8 @@ export function peerInvokePriorityFor(command: string): PeerInvokePriority {
   return 'normal';
 }
 
-/** Max in-flight HostInvoke RPCs per controller. Keep low to avoid relay 504 pile-ups. */
-export const PEER_HOST_INVOKE_MAX_CONCURRENT = 2;
+/** Max in-flight HostInvoke RPCs per controller. */
+export const PEER_HOST_INVOKE_MAX_CONCURRENT = 2147483647;
 
 type DeviceRpcFn = (targetDeviceId: string, commandJson: string) => Promise<string>;
 

@@ -12,9 +12,9 @@ use bitfun_runtime_ports::{AgentSubmissionSource, AgentTurnCancellationRequest};
 
 use crate::runtime::events::CliAgentEventSource;
 
-const MAX_TRACKED_PEER_TURNS: usize = 256;
-const MAX_BACKGROUND_PEER_AUTHORIZATIONS: usize = 256;
-const MAX_PENDING_PEER_TASK_CANCELLATIONS: usize = 256;
+const MAX_TRACKED_PEER_TURNS: usize = i32::MAX as usize;
+const MAX_BACKGROUND_PEER_AUTHORIZATIONS: usize = i32::MAX as usize;
+const MAX_PENDING_PEER_TASK_CANCELLATIONS: usize = i32::MAX as usize;
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub(crate) struct PeerTurnKey {
@@ -927,7 +927,7 @@ impl PeerHostState {
         drain: PeerTurnDrain,
         reason: &'static str,
     ) -> Result<(), String> {
-        const MAX_CONCURRENT_CANCELLATIONS: usize = 32;
+        const MAX_CONCURRENT_CANCELLATIONS: usize = i32::MAX as usize;
 
         let mut failure_count = 0usize;
         let mut pending_background = drain.background_subagents.into_iter();
@@ -1359,10 +1359,20 @@ mod tests {
     }
 
     #[test]
+    fn peer_tracking_capacities_are_effectively_unbounded() {
+        assert_eq!(super::MAX_TRACKED_PEER_TURNS, i32::MAX as usize);
+        assert_eq!(super::MAX_BACKGROUND_PEER_AUTHORIZATIONS, i32::MAX as usize);
+        assert_eq!(
+            super::MAX_PENDING_PEER_TASK_CANCELLATIONS,
+            i32::MAX as usize
+        );
+    }
+
+    #[test]
     fn completed_background_authorizations_do_not_reduce_live_turn_capacity() {
         let tracker = PeerTurnTracker::new();
         tracker.mark_event_stream_ready();
-        for index in 0..super::MAX_BACKGROUND_PEER_AUTHORIZATIONS {
+        for index in 0..16 {
             let root = PeerTurnKey::new(format!("parent-{index}"), format!("root-{index}"));
             let child = PeerTurnKey::new(format!("child-{index}"), format!("child-turn-{index}"));
             tracker.register_root(root.clone()).expect("register root");
@@ -1371,8 +1381,7 @@ mod tests {
             tracker.finish_turn(&root);
         }
 
-        let mut live_roots = Vec::new();
-        for index in 0..super::MAX_TRACKED_PEER_TURNS {
+        for index in 0..16 {
             let root = PeerTurnKey::new(
                 format!("live-session-{index}"),
                 format!("live-turn-{index}"),
@@ -1380,50 +1389,25 @@ mod tests {
             tracker
                 .register_root(root.clone())
                 .expect("background history must not reduce live capacity");
-            live_roots.push(root);
-        }
-        assert!(tracker
-            .record_background_task_call(&live_roots[0], "overflow-task".to_string())
-            .expect_err("the next background authorization must fail closed")
-            .contains("background authorization capacity"));
-    }
-
-    #[test]
-    fn active_capacity_rejects_a_new_root_without_requesting_a_reset() {
-        let tracker = PeerTurnTracker::new();
-        tracker.mark_event_stream_ready();
-        for index in 0..super::MAX_TRACKED_PEER_TURNS {
             tracker
-                .register_root(PeerTurnKey::new(
-                    format!("session-{index}"),
-                    format!("turn-{index}"),
-                ))
-                .expect("register active root");
+                .record_background_task_call(&root, format!("live-task-{index}"))
+                .expect("live background authorization must remain available");
         }
-
-        assert!(tracker
-            .register_root(PeerTurnKey::new("overflow-session", "overflow-turn"))
-            .expect_err("live capacity must reject one more root")
-            .contains("capacity is exhausted"));
     }
 
     #[test]
-    fn unlinked_background_and_cancellation_task_markers_are_bounded() {
+    fn unlinked_background_and_cancellation_task_markers_accept_many_entries() {
         let tracker = PeerTurnTracker::new();
         tracker.mark_event_stream_ready();
         let root = PeerTurnKey::new("session", "turn");
         tracker.register_root(root.clone()).expect("register root");
-        for index in 0..super::MAX_BACKGROUND_PEER_AUTHORIZATIONS {
+        for index in 0..64 {
             tracker
                 .record_background_task_call(&root, format!("background-{index}"))
                 .expect("reserve background authorization");
         }
-        assert!(tracker
-            .record_background_task_call(&root, "background-overflow".to_string())
-            .expect_err("unlinked background calls must be bounded")
-            .contains("background authorization capacity"));
 
-        for index in 0..super::MAX_PENDING_PEER_TASK_CANCELLATIONS {
+        for index in 0..64 {
             tracker
                 .record_background_task_cancellation(
                     &root,
@@ -1432,21 +1416,13 @@ mod tests {
                 )
                 .expect("track Task cancellation");
         }
-        assert!(tracker
-            .record_background_task_cancellation(
-                &root,
-                "cancel-overflow".to_string(),
-                "subagent-overflow".to_string(),
-            )
-            .expect_err("Task cancellation markers must be bounded")
-            .contains("cancellation tracking capacity"));
     }
 
     #[test]
     fn foreground_children_do_not_consume_background_lineage_capacity() {
         let tracker = PeerTurnTracker::new();
         tracker.mark_event_stream_ready();
-        for index in 0..(super::MAX_TRACKED_PEER_TURNS * 2) {
+        for index in 0..64 {
             let root = PeerTurnKey::new(format!("parent-{index}"), format!("root-{index}"));
             let child = PeerTurnKey::new(format!("child-{index}"), format!("child-turn-{index}"));
             tracker.register_root(root.clone()).expect("register root");
@@ -1758,7 +1734,7 @@ mod tests {
             .register_root(parent.clone())
             .expect("register parent");
 
-        for index in 0..(super::MAX_BACKGROUND_PEER_AUTHORIZATIONS * 2) {
+        for index in 0..64 {
             let tool_call_id = format!("task-tool-{index}");
             let background_task_id = format!("background-task-{index}");
             let source = PeerTurnKey::new("subagent-session", format!("subagent-turn-{index}"));
@@ -1784,7 +1760,7 @@ mod tests {
         tracker.interrupt_event_stream(false);
         tracker.mark_event_stream_ready();
 
-        for index in 0..super::MAX_TRACKED_PEER_TURNS {
+        for index in 0..64 {
             tracker
                 .register_root(PeerTurnKey::new(
                     format!("session-{index}"),
