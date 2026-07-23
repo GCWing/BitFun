@@ -265,6 +265,7 @@ Usage:
 - This tool can only read files, not directories.
 - You can call multiple tools in a single response. It is always better to speculatively read multiple potentially useful files in parallel.
 - Avoid tiny repeated slices (e.g. 30-100 line chunks). If you need more context, read a larger window that covers the whole block you will edit.
+- Do not use `limit` with a small value (e.g. < 50) to probe file type or structure. Source files typically begin with copyright headers — a probe read returns no useful code.
 "#,
             self.default_max_lines_to_read, self.max_line_chars, self.max_total_chars
         ))

@@ -52,7 +52,13 @@ const WorkspaceSessionBatchModal = lazy(() => import('./WorkspaceSessionBatchMod
 const ScheduledJobsModal = lazy(() => import('@/app/components/scheduled-jobs/ScheduledJobsModal'));
 
 const MAX_WORKSPACE_NAME_CHARS = 80;
-const WORKSPACE_NAME_CONTROL_CHARACTERS = /[\u0000-\u001f\u007f]/;
+
+function containsWorkspaceNameControlCharacter(value: string): boolean {
+  return Array.from(value).some((character) => {
+    const codePoint = character.codePointAt(0);
+    return codePoint !== undefined && (codePoint <= 0x1f || codePoint === 0x7f);
+  });
+}
 
 interface WorkspaceItemProps {
   workspace: WorkspaceInfo;
@@ -507,7 +513,7 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
     if (!normalizedName) {
       return t('nav.workspaces.renameDialog.validation.required');
     }
-    if (WORKSPACE_NAME_CONTROL_CHARACTERS.test(normalizedName)) {
+    if (containsWorkspaceNameControlCharacter(normalizedName)) {
       return t('nav.workspaces.renameDialog.validation.invalidCharacters');
     }
     if (Array.from(normalizedName).length > MAX_WORKSPACE_NAME_CHARS) {

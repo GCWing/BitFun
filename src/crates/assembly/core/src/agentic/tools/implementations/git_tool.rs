@@ -1250,7 +1250,7 @@ When creating commits, use this format for the commit message:
     async fn validate_input(
         &self,
         input: &Value,
-        _context: Option<&ToolUseContext>,
+        context: Option<&ToolUseContext>,
     ) -> ValidationResult {
         let input = &Self::normalize_git_input(input.clone());
 
@@ -1286,6 +1286,16 @@ When creating commits, use this format for the commit message:
 
         // Get arguments (if any)
         let args = input.get("args").and_then(|v| v.as_str()).unwrap_or("");
+
+        if let Some(context) = context {
+            if let Some(rejection) =
+                crate::agentic::execution::edit_constraint_guard::check_git_command(
+                    context, operation, args,
+                )
+            {
+                return rejection;
+            }
+        }
 
         // Security check: prohibit interactive operations. Match whole tokens
         // only so text like "fix-ui" or a quoted message cannot false-trip.

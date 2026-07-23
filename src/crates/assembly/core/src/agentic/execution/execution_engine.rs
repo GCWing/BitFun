@@ -2615,6 +2615,46 @@ impl ExecutionEngine {
             .get("original_user_input")
             .cloned()
             .unwrap_or_default();
+
+        // Edit constraint guard: process each distinct user instruction once.
+        // The fast extractor receives the active state so explicit additions
+        // and revocations form an auditable session-persistent state machine.
+        if !original_user_input.trim().is_empty() {
+            let revocation_authorized = context
+                .context
+                .get("edit_constraint_revocation_authorized")
+                .is_some_and(|value| value == "true");
+            let message_sha256 = crate::agentic::execution::edit_constraint_guard::message_sha256(
+                &original_user_input,
+            );
+            let already_processed = self
+                .session_manager
+                .edit_constraint_state(&context.session_id)
+                .is_some_and(|state| {
+                    state.message_processed(&context.dialog_turn_id, &message_sha256)
+                });
+            if !already_processed {
+                let active_constraints = self
+                    .session_manager
+                    .edit_constraints(&context.session_id)
+                    .unwrap_or_default();
+                let mut extraction = crate::agentic::execution::edit_constraint_guard::extract_constraints_with_active_and_revocation_authorization(
+                    &original_user_input,
+                    &active_constraints,
+                    revocation_authorized,
+                )
+                .await;
+                extraction.dialog_turn_id = Some(context.dialog_turn_id.clone());
+                if crate::agentic::execution::edit_constraint_guard::extraction_requires_session_state(
+                    &extraction,
+                ) {
+                    self.session_manager
+                        .remember_edit_constraint_extraction(&context.session_id, extraction)
+                        .await;
+                }
+            }
+        }
+
         let model_id = self
             .resolve_model_id_for_turn(
                 &session,

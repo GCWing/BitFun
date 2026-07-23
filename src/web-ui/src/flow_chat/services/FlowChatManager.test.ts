@@ -60,6 +60,10 @@ vi.mock('./EventBatcher', () => ({
   },
 }));
 
+vi.mock('./flow-chat-manager/PeerSessionRefreshModule', () => ({
+  installPeerSessionRefresh: vi.fn(() => () => {}),
+}));
+
 vi.mock('./flow-chat-manager', () => ({
   saveAllInProgressTurns: vi.fn(),
   immediateSaveDialogTurn: vi.fn(),

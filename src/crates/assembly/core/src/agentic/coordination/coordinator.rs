@@ -3692,6 +3692,18 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             "original_user_input".to_string(),
             original_user_input.clone(),
         );
+        // Constraint revocation changes a user-authored safety boundary. Only
+        // submissions from an external user surface can authorize that change;
+        // agent-session follow-ups and scheduled/background work cannot speak
+        // for the user even though they also flow through a dialog turn.
+        let revocation_authorized = !matches!(
+            submission_policy.trigger_source,
+            DialogTriggerSource::AgentSession | DialogTriggerSource::ScheduledJob
+        );
+        context_vars.insert(
+            "edit_constraint_revocation_authorized".to_string(),
+            revocation_authorized.to_string(),
+        );
 
         // Pass model_id for token usage tracking
         if let Some(model_id) = &session.config.model_id {
@@ -5285,6 +5297,11 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             .await;
             return Err(error);
         }
+        if let Some(source_session_id) = prompt_cache_source_session_id.as_deref() {
+            self.session_manager
+                .seed_forked_edit_constraints(source_session_id, &session_id)
+                .await;
+        }
         drop(session_name);
         drop(session_config);
         drop(created_by);
@@ -6122,6 +6139,9 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
         );
         self.session_manager
             .seed_forked_skill_agent_listing_baselines(parent_session_id, &child_session.session_id)
+            .await;
+        self.session_manager
+            .seed_forked_edit_constraints(parent_session_id, &child_session.session_id)
             .await;
 
         self.session_manager

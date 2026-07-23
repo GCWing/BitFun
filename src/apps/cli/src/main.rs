@@ -61,6 +61,13 @@ pub fn get_mcp_status_text() -> String {
     }
 }
 
+fn final_change_verification_enabled(
+    verify_final_changes: bool,
+    no_verify_final_changes: bool,
+) -> bool {
+    verify_final_changes && !no_verify_final_changes
+}
+
 /// Get the global MCP service instance (if initialized)
 pub fn get_mcp_service() -> Option<&'static std::sync::Arc<bitfun_core::service::mcp::MCPService>> {
     MCP_SERVICE.get()
@@ -128,6 +135,14 @@ enum Commands {
         /// Example: --output-patch or --output-patch ./result.patch
         #[arg(long, num_args = 0..=1, default_missing_value = "-")]
         output_patch: Option<String>,
+
+        /// Verify workspace changes before a successful headless exit (enabled by default)
+        #[arg(long, default_value_t = true, action = clap::ArgAction::SetTrue)]
+        verify_final_changes: bool,
+
+        /// Disable automatic final-change verification
+        #[arg(long, conflicts_with = "verify_final_changes")]
+        no_verify_final_changes: bool,
 
         /// Auto-approve tool permissions that are not explicitly denied
         #[arg(long, conflicts_with = "confirm")]
@@ -835,6 +850,8 @@ async fn run_cli() -> Result<()> {
             fork_session,
             output_format,
             output_patch,
+            verify_final_changes,
+            no_verify_final_changes,
             auto,
             confirm,
         }) => {
@@ -860,6 +877,10 @@ async fn run_cli() -> Result<()> {
                     fork_session,
                     output_format,
                     output_patch,
+                    verify_final_changes: final_change_verification_enabled(
+                        verify_final_changes,
+                        no_verify_final_changes,
+                    ),
                     approval_mode,
                 },
             )
@@ -1359,5 +1380,34 @@ mod bootstrap_profile_tests {
         .map(std::ffi::OsString::from);
 
         assert!(exec_requests_json_output(&args));
+    }
+}
+
+#[cfg(test)]
+mod final_change_verification_cli_tests {
+    use super::{final_change_verification_enabled, Cli, Commands};
+    use clap::Parser;
+
+    fn parse_flags(args: &[&str]) -> (bool, bool) {
+        let cli = Cli::try_parse_from(args).expect("exec args");
+        let Some(Commands::Exec {
+            verify_final_changes,
+            no_verify_final_changes,
+            ..
+        }) = cli.command
+        else {
+            panic!("expected exec command");
+        };
+        (verify_final_changes, no_verify_final_changes)
+    }
+
+    #[test]
+    fn verification_is_enabled_by_default_and_can_be_disabled() {
+        let (verify, disable) = parse_flags(&["bitfun", "exec", "task"]);
+        assert!(final_change_verification_enabled(verify, disable));
+
+        let (verify, disable) =
+            parse_flags(&["bitfun", "exec", "--no-verify-final-changes", "task"]);
+        assert!(!final_change_verification_enabled(verify, disable));
     }
 }

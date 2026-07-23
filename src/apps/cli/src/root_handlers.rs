@@ -37,6 +37,7 @@ pub(crate) struct ExecCommandArgs {
     pub fork_session: bool,
     pub output_format: ExecOutputFormat,
     pub output_patch: Option<String>,
+    pub verify_final_changes: bool,
     pub approval_mode: ExecApprovalMode,
 }
 
@@ -137,6 +138,7 @@ pub(crate) async fn handle_exec_command(config: CliConfig, args: ExecCommandArgs
         runtime.clone(),
         workspace_path_resolved,
         args.output_patch,
+        args.verify_final_changes,
         args.output_format,
         ExecSessionOptions {
             resume,
