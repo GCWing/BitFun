@@ -1,5 +1,7 @@
 <div align="center">
 
+![taiji-quant](./png/taiji-icon-128.png)
+
 # taiji-quant
 
 **太极量化交易 + 自媒体工厂开源基座**
