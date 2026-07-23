@@ -1,7 +1,11 @@
 #!/usr/bin/env node
 /**
- * Prune Cargo target caches so each crate/package keeps only the latest useful
- * artifacts for a profile. Used after desktop:dev exits and desktop:build ends.
+ * Prune Cargo target caches after desktop:dev exits and desktop:build ends.
+ *
+ * Safe policy:
+ * - incremental: keep latest crate root (+ latest session)
+ * - .fingerprint: never mtime-prune (Cargo needs multiple concurrent units)
+ * - deps: delete only hashes with no remaining fingerprint directory
  *
  * Env:
  *   BITFUN_TARGET_GC=0          disable
@@ -49,14 +53,6 @@ export function splitFingerprintDir(name) {
 export function extractDepsArtifactHash(filename) {
   const match = DEPS_HASH_RE.exec(filename);
   return match ? match[1] : null;
-}
-
-export function fingerprintKeepCount(stem) {
-  if (stem.startsWith('bitfun-') || stem.startsWith('bitfun_')) {
-    return 1;
-  }
-  // Third-party crates may need lib + build-dep units with different hashes.
-  return 2;
 }
 
 function safeStatMtimeMs(path) {
@@ -153,39 +149,24 @@ export function planIncrementalPrune(incrementalDir, { keepSessions = 1 } = {}) 
   return toDelete;
 }
 
+/**
+ * Collect fingerprint metadata hashes that still exist on disk.
+ *
+ * Important: do NOT delete fingerprint directories by "keep newest N per stem".
+ * Cargo routinely keeps multiple concurrent units for one package (lib,
+ * build-script, feature variants). mtime is not a valid liveness signal, and
+ * deleting a still-referenced fingerprint + its deps forces a cold rebuild of
+ * that crate (and often a large share of the graph) on the next desktop:dev.
+ */
 export function planFingerprintPrune(fingerprintDir) {
-  const toDelete = [];
-  const groups = new Map();
-
+  const keptHashes = new Set();
   for (const name of listDirs(fingerprintDir)) {
     const split = splitFingerprintDir(name);
-    if (!split) {
-      continue;
-    }
-    const path = join(fingerprintDir, name);
-    const list = groups.get(split.stem) || [];
-    list.push({
-      path,
-      mtimeMs: safeStatMtimeMs(path),
-      hash: split.hash,
-      stem: split.stem,
-    });
-    groups.set(split.stem, list);
-  }
-
-  const keptHashes = new Set();
-  for (const [stem, entries] of groups.entries()) {
-    const keep = fingerprintKeepCount(stem);
-    const sorted = [...entries].sort((a, b) => b.mtimeMs - a.mtimeMs);
-    for (const entry of sorted.slice(0, keep)) {
-      keptHashes.add(entry.hash);
-    }
-    for (const entry of sorted.slice(keep)) {
-      toDelete.push(entry.path);
+    if (split) {
+      keptHashes.add(split.hash);
     }
   }
-
-  return { toDelete, keptHashes };
+  return { toDelete: [], keptHashes };
 }
 
 export function planDepsOrphanPrune(depsDir, keptHashes) {

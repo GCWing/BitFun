@@ -6,7 +6,6 @@ import test from 'node:test';
 import {
   collectGcPlan,
   extractDepsArtifactHash,
-  fingerprintKeepCount,
   profileFromTauriBuildArgs,
   runCargoTargetGc,
   selectStaleByMtime,
@@ -51,8 +50,6 @@ test('split helpers parse cargo cache names', () => {
     extractDepsArtifactHash('bitfun_core-023db5b6b08d0150.02dradpmwvb53dgn1eck0186y.rcgu.o'),
     '023db5b6b08d0150'
   );
-  assert.equal(fingerprintKeepCount('bitfun-core'), 1);
-  assert.equal(fingerprintKeepCount('syn'), 2);
 });
 
 test('selectStaleByMtime keeps newest entries', () => {
@@ -67,7 +64,7 @@ test('selectStaleByMtime keeps newest entries', () => {
   assert.deepEqual(new Set(stale), new Set(['a', 'c']));
 });
 
-test('collectGcPlan keeps latest incremental and fingerprint caches', () => {
+test('collectGcPlan prunes incremental only and never drops live fingerprints', () => {
   const { root, cleanup } = fixtureRoot();
   try {
     const profileDir = join(root, 'debug');
@@ -84,6 +81,8 @@ test('collectGcPlan keeps latest incremental and fingerprint caches', () => {
       now
     );
 
+    // Multiple fingerprint units for the same stem can all be live for Cargo
+    // (lib / build-script / feature variants). GC must not mtime-prune them.
     touchDir(join(profileDir, '.fingerprint', 'bitfun-core-aaaaaaaaaaaaaaaa'), now - 3_000);
     touchDir(join(profileDir, '.fingerprint', 'bitfun-core-bbbbbbbbbbbbbbbb'), now);
     touchDir(join(profileDir, '.fingerprint', 'syn-1111111111111111'), now - 4_000);
@@ -95,28 +94,31 @@ test('collectGcPlan keeps latest incremental and fingerprint caches', () => {
     touchFile(join(profileDir, 'deps', 'libsyn-1111111111111111.rlib'), now - 4_000);
     touchFile(join(profileDir, 'deps', 'libsyn-2222222222222222.rlib'), now - 2_000);
     touchFile(join(profileDir, 'deps', 'libsyn-3333333333333333.rlib'), now);
+    // True orphan: no matching fingerprint directory remains.
+    touchFile(join(profileDir, 'deps', 'liborphan-ffffffffffffffff.rlib'), now - 5_000);
 
     const plan = collectGcPlan(profileDir);
 
     assert.ok(plan.incremental.some((path) => path.endsWith('bitfun_core-oldhash1')));
-    assert.ok(plan.incremental.some((path) => path.includes(`${join('bitfun_core-newhash2', 's-old-session')}`)));
     assert.ok(
-      plan.fingerprint.some((path) => path.endsWith('bitfun-core-aaaaaaaaaaaaaaaa'))
+      plan.incremental.some((path) =>
+        path.includes(`${join('bitfun_core-newhash2', 's-old-session')}`)
+      )
     );
-    assert.ok(plan.fingerprint.some((path) => path.endsWith('syn-1111111111111111')));
-    assert.ok(!plan.fingerprint.some((path) => path.endsWith('syn-2222222222222222')));
-    assert.ok(!plan.fingerprint.some((path) => path.endsWith('syn-3333333333333333')));
-
-    assert.ok(plan.deps.some((path) => path.endsWith('libbitfun_core-aaaaaaaaaaaaaaaa.rlib')));
-    assert.ok(plan.deps.some((path) => path.endsWith('libsyn-1111111111111111.rlib')));
+    assert.equal(plan.fingerprint.length, 0);
+    assert.ok(
+      !plan.deps.some((path) => path.endsWith('libbitfun_core-aaaaaaaaaaaaaaaa.rlib'))
+    );
+    assert.ok(!plan.deps.some((path) => path.endsWith('libsyn-1111111111111111.rlib')));
     assert.ok(!plan.deps.some((path) => path.endsWith('libsyn-2222222222222222.rlib')));
-    assert.ok(!plan.deps.some((path) => path.endsWith('libbitfun_core-bbbbbbbbbbbbbbbb.rlib')));
+    assert.ok(!plan.deps.some((path) => path.endsWith('libsyn-3333333333333333.rlib')));
+    assert.ok(plan.deps.some((path) => path.endsWith('liborphan-ffffffffffffffff.rlib')));
   } finally {
     cleanup();
   }
 });
 
-test('runCargoTargetGc removes planned paths and respects dry-run', () => {
+test('runCargoTargetGc keeps fingerprint-backed deps so next cargo can reuse them', () => {
   const { root, cleanup } = fixtureRoot();
   try {
     const targetDir = join(root, 'target');
@@ -128,6 +130,7 @@ test('runCargoTargetGc removes planned paths and respects dry-run', () => {
     touchDir(join(profileDir, '.fingerprint', 'bitfun-demo-bbbbbbbbbbbbbbbb'), now);
     touchFile(join(profileDir, 'deps', 'libbitfun_demo-aaaaaaaaaaaaaaaa.rlib'), now - 1_000);
     touchFile(join(profileDir, 'deps', 'libbitfun_demo-bbbbbbbbbbbbbbbb.rlib'), now);
+    touchFile(join(profileDir, 'deps', 'libghost-cccccccccccccccc.rlib'), now - 2_000);
 
     const dry = runCargoTargetGc({
       rootDir: root,
@@ -153,13 +156,18 @@ test('runCargoTargetGc removes planned paths and respects dry-run', () => {
     assert.equal(existsSync(join(profileDir, 'incremental', 'bitfun_demo-old')), false);
     assert.equal(existsSync(join(profileDir, 'incremental', 'bitfun_demo-new')), true);
     assert.equal(
+      existsSync(join(profileDir, '.fingerprint', 'bitfun-demo-aaaaaaaaaaaaaaaa')),
+      true
+    );
+    assert.equal(
       existsSync(join(profileDir, 'deps', 'libbitfun_demo-aaaaaaaaaaaaaaaa.rlib')),
-      false
+      true
     );
     assert.equal(
       existsSync(join(profileDir, 'deps', 'libbitfun_demo-bbbbbbbbbbbbbbbb.rlib')),
       true
     );
+    assert.equal(existsSync(join(profileDir, 'deps', 'libghost-cccccccccccccccc.rlib')), false);
   } finally {
     cleanup();
   }

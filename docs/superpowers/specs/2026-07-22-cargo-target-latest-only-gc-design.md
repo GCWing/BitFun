@@ -18,7 +18,7 @@ After a desktop dev session exits or a desktop build finishes, keep only the lat
 
 - Changing default `profile.dev` debuginfo (optional later).
 - GC on every incremental rebuild during a live `tauri dev` session.
-- Guaranteeing a single hash per third-party crate when Cargo legitimately needs two units (lib vs build-dep).
+- Pruning `.fingerprint` directories by keep-newest-N (unsafe; caused full cold rebuilds).
 
 ## Design
 
@@ -40,8 +40,8 @@ Skip when another `cargo` / `rustc` process still appears active (avoid deleting
 For `target/<triple?>/<profile>/` (default host triple omitted; profile `debug` for dev, build profile from argv):
 
 1. **incremental** — group directories by crate prefix (name before final `-`); keep the newest mtime; delete older roots. Inside a kept root, keep the newest finalized `s-*` session when multiple remain.
-2. **.fingerprint** — group by package stem; keep newest **1** for `bitfun_*` / workspace-app stems, newest **2** for other packages (build-dep dual units). Delete older groups.
-3. **deps** — delete artifacts whose trailing hash no longer appears in any remaining fingerprint directory name. Do not delete by “crate name latest only” (unsafe for dual feature units).
+2. **.fingerprint** — **do not mtime-prune**. Cargo may keep multiple concurrent units per package (lib / build-script / feature variants). Deleting a still-referenced fingerprint forces a cold rebuild on the next `desktop:dev`.
+3. **deps** — delete artifacts whose trailing hash no longer appears in **any existing** fingerprint directory name (true orphans only). Never delete deps solely because another fingerprint for the same stem is newer.
 
 ### Safety
 
