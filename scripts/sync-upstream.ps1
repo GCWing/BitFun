@@ -164,4 +164,21 @@ if (-not $SkipBuild -and -not $DryRun) {
     Write-Host "  [DRY RUN] 跳过编译"
 }
 
+# ── Step 7: Git commit + push ─────────────────────────────────────────
+if (-not $DryRun) {
+    Write-Step "提交并推送"
+    Push-Location $TaijiQuantWorkspace
+    try {
+        $commitMsg = "sync: upstream $(Get-Date -Format 'yyyy-MM-dd') — $($newCommits.Count) commits from GCWing/BitFun main"
+        git add -A
+        git commit -m $commitMsg 2>&1 | Out-Null
+        git push origin master 2>&1 | Out-Null
+        Write-Host "  已推送到 origin/master"
+    } finally {
+        Pop-Location
+    }
+} elseif ($DryRun) {
+    Write-Host "  [DRY RUN] git commit + push origin"
+}
+
 Write-Host "`n=== 同步完成 ===" -ForegroundColor Green
