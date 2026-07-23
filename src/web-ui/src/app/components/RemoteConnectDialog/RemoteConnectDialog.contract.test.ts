@@ -196,4 +196,22 @@ describe('Remote Connect safety contracts', () => {
     expect(restoreFlow).toContain('qr_url: null');
     expect(restoreFlow).toContain("startPolling('relay')");
   });
+
+  it('restores relay and bot subtabs together before the bot-first early return', () => {
+    const applyStatus = dialogSource.slice(
+      dialogSource.indexOf('const applyStatus'),
+      dialogSource.indexOf('const startPolling'),
+    );
+    const restoreFlow = dialogSource.slice(
+      dialogSource.indexOf('const checkExisting'),
+      dialogSource.indexOf("activeGroup !== 'network'"),
+    );
+
+    expect(applyStatus).toContain("nextStatus.pairing_state === 'connected'");
+    expect(applyStatus).toContain('setNetworkTab(connectedTab)');
+    expect(applyStatus).toContain('setBotTab(connectedBot)');
+    expect(restoreFlow.indexOf('applyStatus(s)')).toBeLessThan(
+      restoreFlow.indexOf('if (s.bot_connected)'),
+    );
+  });
 });

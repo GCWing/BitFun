@@ -293,6 +293,20 @@ export const RemoteConnectDialog: React.FC<RemoteConnectDialogProps> = ({
 
   // ── Polling ──────────────────────────────────────────────────────
 
+  const applyStatus = useCallback((nextStatus: RemoteConnectStatus) => {
+    setStatus(nextStatus);
+
+    // Relay and bot connections can coexist. Restore both selected subtabs
+    // before choosing which group to show, otherwise the bot-first open path
+    // can leave a connected BitFun Server relay rendering the default LAN UI.
+    if (nextStatus.pairing_state === 'connected') {
+      const connectedTab = methodToNetworkTab(nextStatus.active_method);
+      if (connectedTab) setNetworkTab(connectedTab);
+    }
+    const connectedBot = botInfoToBotTab(nextStatus.bot_connected);
+    if (connectedBot) setBotTab(connectedBot);
+  }, []);
+
   const startPolling = useCallback((target: 'relay' | 'bot') => {
     const pollGeneration = ++pollGenerationRef.current;
     if (pollRef.current) clearInterval(pollRef.current);
@@ -300,7 +314,7 @@ export const RemoteConnectDialog: React.FC<RemoteConnectDialogProps> = ({
       try {
         const s = await remoteConnectAPI.getStatus();
         if (!isOpenRef.current || pollGenerationRef.current !== pollGeneration) return;
-        setStatus(s);
+        applyStatus(s);
         const done = target === 'relay'
           ? s.pairing_state === 'connected'
           : !!s.bot_connected;
@@ -314,7 +328,7 @@ export const RemoteConnectDialog: React.FC<RemoteConnectDialogProps> = ({
         }
       } catch { /* ignore */ }
     }, 2000);
-  }, []);
+  }, [applyStatus]);
 
   // On dialog open: check if a connection (restored bot / ongoing relay) is active.
   useEffect(() => {
@@ -334,19 +348,15 @@ export const RemoteConnectDialog: React.FC<RemoteConnectDialogProps> = ({
         try {
           const s = await remoteConnectAPI.getStatus();
           if (cancelled) return;
-          setStatus(s);
+          applyStatus(s);
           setBotVerboseMode(s.bot_verbose_mode);
 
           if (s.bot_connected) {
-            const tab = botInfoToBotTab(s.bot_connected);
             setActiveGroup('bot');
-            if (tab) setBotTab(tab);
             return;
           }
           if (s.pairing_state === 'connected') {
-            const tab = methodToNetworkTab(s.active_method);
             setActiveGroup('network');
-            if (tab) setNetworkTab(tab);
             return;
           }
           if (['waiting_for_scan', 'verifying', 'handshaking'].includes(s.pairing_state)) {
@@ -384,7 +394,7 @@ export const RemoteConnectDialog: React.FC<RemoteConnectDialogProps> = ({
       if (pollRef.current) clearInterval(pollRef.current);
       pollGenerationRef.current += 1;
     };
-  }, [isOpen, hasAgreedDisclaimer, startPolling]);
+  }, [applyStatus, isOpen, hasAgreedDisclaimer, startPolling]);
 
   useEffect(() => {
     if (!isOpen || !hasAgreedDisclaimer || activeGroup !== 'network' || networkTab !== 'lan') return;
@@ -764,9 +774,9 @@ export const RemoteConnectDialog: React.FC<RemoteConnectDialogProps> = ({
       setConnectionOwner(null);
       setConnectionResult(null);
       const s = await remoteConnectAPI.getStatus();
-      setStatus(s);
+      applyStatus(s);
     } catch { /* best effort */ }
-  }, []);
+  }, [applyStatus]);
 
   const handleDisconnectBot = useCallback(async () => {
     try {
@@ -776,9 +786,9 @@ export const RemoteConnectDialog: React.FC<RemoteConnectDialogProps> = ({
       setConnectionOwner(null);
       setConnectionResult(null);
       const s = await remoteConnectAPI.getStatus();
-      setStatus(s);
+      applyStatus(s);
     } catch { /* best effort */ }
-  }, []);
+  }, [applyStatus]);
 
   const handleToggleBotVerboseMode = async () => {
     const newMode = !botVerboseMode;
@@ -791,9 +801,9 @@ export const RemoteConnectDialog: React.FC<RemoteConnectDialogProps> = ({
     if (!isOpenRef.current) return;
     try {
       const s = await remoteConnectAPI.getStatus();
-      if (isOpenRef.current) setStatus(s);
+      if (isOpenRef.current) applyStatus(s);
     } catch { /* best effort */ }
-  }, [cancelPendingWork]);
+  }, [applyStatus, cancelPendingWork]);
 
   const handleOpenNgrokSetup = useCallback(() => {
     void systemAPI.openExternal(NGROK_SETUP_URL);
