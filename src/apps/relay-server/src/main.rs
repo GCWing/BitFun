@@ -61,9 +61,30 @@ async fn main() -> anyhow::Result<()> {
             "RELAY_CORS_ALLOW_ORIGINS=* is not allowed when RELAY_DB_PATH enables account APIs"
         );
     }
+    let page_browser_auth = match (
+        cfg.page_public_base_url.as_deref(),
+        cfg.page_auth_base_url.as_deref(),
+    ) {
+        (Some(public_base_url), Some(auth_base_url)) => Some(
+            bitfun_relay_service::PageBrowserAuthConfig::new(public_base_url, auth_base_url)
+                .map_err(anyhow::Error::msg)?,
+        ),
+        (None, None) => {
+            if db.is_some() {
+                tracing::warn!(
+                    "RELAY_PAGE_PUBLIC_BASE_URL and RELAY_PAGE_AUTH_BASE_URL are not set; \
+                     protected Page login uses same-origin compatibility mode"
+                );
+            }
+            None
+        }
+        _ => anyhow::bail!(
+            "RELAY_PAGE_PUBLIC_BASE_URL and RELAY_PAGE_AUTH_BASE_URL must be configured together"
+        ),
+    };
 
     let page_data_dir = std::path::PathBuf::from(&cfg.room_web_dir).join("page-data");
-    let mut app = bitfun_relay_service::build_relay_router_with_page_data_and_origins(
+    let mut app = bitfun_relay_service::build_relay_router_with_page_data_origins_and_page_auth(
         room_manager,
         asset_store,
         start_time,
@@ -71,6 +92,7 @@ async fn main() -> anyhow::Result<()> {
         env!("CARGO_PKG_VERSION"),
         Some(page_data_dir),
         cfg.cors_allow_origins.clone(),
+        page_browser_auth,
     );
 
     if let Some(static_dir) = &cfg.static_dir {

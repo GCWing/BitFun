@@ -205,6 +205,16 @@ impl Tool for FileEditTool {
             };
         }
 
+        let force = input
+            .get("force")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false);
+        if let Some(rejection) = crate::agentic::execution::edit_constraint_guard::check_edit(
+            context, "Edit", "edit", file_path, force,
+        ) {
+            return rejection;
+        }
+
         let old_string = input
             .get("old_string")
             .and_then(|v| v.as_str())
@@ -361,6 +371,12 @@ impl Tool for FileEditTool {
                 &edit_result.new_content,
                 timestamp_ms,
             );
+            crate::agentic::execution::edit_constraint_guard::record_mutation_applied(
+                context,
+                "Edit",
+                "edit",
+                &resolved.logical_path,
+            );
 
             let result = ToolResult::Result {
                 data: json!({
@@ -409,6 +425,12 @@ impl Tool for FileEditTool {
             &resolved,
             &edit_result.new_content,
             timestamp_ms,
+        );
+        crate::agentic::execution::edit_constraint_guard::record_mutation_applied(
+            context,
+            "Edit",
+            "edit",
+            &resolved.logical_path,
         );
 
         let result = ToolResult::Result {
@@ -489,6 +511,7 @@ mod tests {
             .get("old_string")
             .and_then(|value| value.get("minLength"))
             .is_none());
+        assert!(properties.get("force").is_none());
     }
 
     #[test]

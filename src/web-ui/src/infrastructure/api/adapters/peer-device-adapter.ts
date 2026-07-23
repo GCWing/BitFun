@@ -25,6 +25,7 @@ const LOCAL_ONLY_COMMANDS = new Set([
   'install_update',
   'account_login',
   'account_finalize_login',
+  'account_cancel_pending_login',
   'account_logout',
   'account_status',
   'account_get_credential_hint',
@@ -132,8 +133,73 @@ const HIGH_PRIORITY_COMMANDS = new Set([
   'get_system_info',
 ]);
 
+const RETRYABLE_READ_COMMANDS = new Set([
+  'initialize_workspace_startup_state',
+  'restore_session_view',
+  'restore_session_with_turns',
+  'load_session_turns',
+  'list_persisted_sessions',
+  'list_persisted_sessions_page',
+  'list_persisted_sessions_count',
+  'get_session_thread_goal',
+  'get_opened_workspaces',
+  'get_recent_workspaces',
+  'get_current_workspace',
+  'get_workspace_info',
+  'get_config',
+  'get_configs',
+  'get_available_modes',
+  'get_agent_profile_config',
+  'list_pending_permission_requests',
+  'list_project_permission_grants',
+  'list_project_permission_audit',
+  'get_project_permission_rules',
+  'get_directory_children',
+  'get_directory_children_paginated',
+  'list_files',
+  'check_path_exists',
+  'get_system_info',
+]);
+
+const RETRYABLE_IDEMPOTENT_MUTATION_COMMANDS = new Set([
+  'start_dialog_turn',
+  'start_acp_dialog_turn',
+]);
+
 export function isPeerLocalOnlyCommand(command: string): boolean {
   return LOCAL_ONLY_COMMANDS.has(command);
+}
+
+export function isPeerRetryableReadCommand(command: string): boolean {
+  return RETRYABLE_READ_COMMANDS.has(command) ||
+    command.startsWith('read_') ||
+    command.startsWith('list_') ||
+    command.startsWith('get_');
+}
+
+function asRecord(value: unknown): Record<string, unknown> | null {
+  return typeof value === 'object' && value !== null
+    ? value as Record<string, unknown>
+    : null;
+}
+
+/**
+ * Mutations are retryable only when the peer can deduplicate the same logical
+ * submission. Dialog turns carry a controller-generated turnId, which the
+ * Peer Host bridge uses as an idempotency key.
+ */
+export function isPeerRetryableIdempotentMutation(
+  command: string,
+  params: unknown,
+): boolean {
+  if (!RETRYABLE_IDEMPOTENT_MUTATION_COMMANDS.has(command)) {
+    return false;
+  }
+  const request = asRecord(asRecord(params)?.request);
+  return typeof request?.sessionId === 'string' &&
+    request.sessionId.trim().length > 0 &&
+    typeof request.turnId === 'string' &&
+    request.turnId.trim().length > 0;
 }
 
 export type PeerInvokePriority = 'high' | 'normal' | 'low';
@@ -178,15 +244,53 @@ export function peerInvokePriorityFor(command: string): PeerInvokePriority {
   return 'normal';
 }
 
-/** Max in-flight HostInvoke RPCs per controller. Keep low to avoid relay 504 pile-ups. */
-export const PEER_HOST_INVOKE_MAX_CONCURRENT = 2;
+/** Max in-flight HostInvoke RPCs per controller. */
+export const PEER_HOST_INVOKE_MAX_CONCURRENT = 4;
+export const PEER_READ_REQUEST_TIMEOUT_MS = 10_000;
+export const PEER_MUTATION_REQUEST_TIMEOUT_MS = 30_000;
+export const PEER_READ_MAX_RETRIES = 2;
+export const PEER_IDEMPOTENT_MUTATION_MAX_RETRIES = 2;
+export const PEER_RETRY_BASE_DELAY_MS = 500;
 
-type DeviceRpcFn = (targetDeviceId: string, commandJson: string) => Promise<string>;
+interface PeerRpcPolicy {
+  timeoutMs: number;
+  maxRetries: number;
+  retryKind: 'read' | 'idempotent-mutation' | 'none';
+}
+
+const READ_RPC_POLICY: PeerRpcPolicy = {
+  timeoutMs: PEER_READ_REQUEST_TIMEOUT_MS,
+  maxRetries: PEER_READ_MAX_RETRIES,
+  retryKind: 'read',
+};
+
+const MUTATION_RPC_POLICY: PeerRpcPolicy = {
+  timeoutMs: PEER_MUTATION_REQUEST_TIMEOUT_MS,
+  maxRetries: 0,
+  retryKind: 'none',
+};
+
+const IDEMPOTENT_MUTATION_RPC_POLICY: PeerRpcPolicy = {
+  timeoutMs: PEER_MUTATION_REQUEST_TIMEOUT_MS,
+  maxRetries: PEER_IDEMPOTENT_MUTATION_MAX_RETRIES,
+  retryKind: 'idempotent-mutation',
+};
+
+type DeviceRpcFn = (
+  targetDeviceId: string,
+  commandJson: string,
+  timeoutMs?: number,
+) => Promise<string>;
 
 export interface PeerDeviceTransportHooks {
   /** Fired only for transport/RPC layer failures, not product command errors. */
   onHostInvokeTransportFailure?: (error: unknown, meta?: { action: string; priority: PeerInvokePriority }) => void;
   onHostInvokeSuccess?: () => void;
+  /**
+   * Enables replay of stable dialog submissions only when the target host
+   * advertises matching execution-side deduplication.
+   */
+  supportsIdempotentDialogSubmit?: boolean;
 }
 
 interface HostInvokeResultEnvelope {
@@ -209,6 +313,13 @@ export class PeerProductCommandError extends Error {
   constructor(message: string) {
     super(message);
     this.name = 'PeerProductCommandError';
+  }
+}
+
+class PeerRpcTimeoutError extends Error {
+  constructor(action: string, timeoutMs: number) {
+    super(`Peer request '${action}' timed out after ${timeoutMs}ms`);
+    this.name = 'PeerRpcTimeoutError';
   }
 }
 
@@ -360,7 +471,13 @@ export class PeerDeviceTransportAdapter implements ITransportAdapter {
     if (this.queues.high.length > 0) {
       return this.queues.high.shift();
     }
-    if (this.queues.normal.length > 0) {
+    const nonHighConcurrencyLimit =
+      this.maxConcurrent > 1 ? this.maxConcurrent - 1 : 1;
+    const activeNonHigh = this.activeByPriority.normal + this.activeByPriority.low;
+    if (
+      this.queues.normal.length > 0 &&
+      activeNonHigh < nonHighConcurrencyLimit
+    ) {
       return this.queues.normal.shift();
     }
     // Keep one transport slot available for future interactive work. Without
@@ -381,7 +498,17 @@ export class PeerDeviceTransportAdapter implements ITransportAdapter {
   ): Promise<T> {
     const action = typeof command.cmd === 'string' ? command.cmd : 'unknown';
     try {
-      const raw = await this.deviceRpc(this.targetDeviceId, JSON.stringify(command));
+      const retryable =
+        action === 'get_file_info' ||
+        action === 'read_file_chunk' ||
+        action.startsWith('get_') ||
+        action.startsWith('read_') ||
+        action.startsWith('list_');
+      const raw = await this.invokeDeviceRpc(
+        action,
+        JSON.stringify(command),
+        retryable ? READ_RPC_POLICY : MUTATION_RPC_POLICY,
+      );
       const envelope = JSON.parse(raw) as T;
       if (envelope.resp === 'error') {
         throw new PeerProductCommandError(
@@ -417,9 +544,19 @@ export class PeerDeviceTransportAdapter implements ITransportAdapter {
       command: action,
       args: params === undefined ? {} : params,
     });
+    const rpcPolicy = isPeerRetryableReadCommand(action)
+      ? READ_RPC_POLICY
+      : this.hooks.supportsIdempotentDialogSubmit === true &&
+          isPeerRetryableIdempotentMutation(action, params)
+        ? IDEMPOTENT_MUTATION_RPC_POLICY
+        : MUTATION_RPC_POLICY;
 
     try {
-      const raw = await this.deviceRpc(this.targetDeviceId, commandJson);
+      const raw = await this.invokeDeviceRpc(
+        action,
+        commandJson,
+        rpcPolicy,
+      );
       const envelope = JSON.parse(raw) as HostInvokeResultEnvelope;
       if (timing) {
         timing.invokeDurationMs = elapsedMs(invokeStartedAt);
@@ -450,6 +587,58 @@ export class PeerDeviceTransportAdapter implements ITransportAdapter {
       log.error('Peer HostInvoke transport failed', { action, error });
       this.hooks.onHostInvokeTransportFailure?.(error, { action, priority });
       throw error;
+    }
+  }
+
+  private async invokeDeviceRpc(
+    action: string,
+    commandJson: string,
+    policy: PeerRpcPolicy,
+  ): Promise<string> {
+    for (let attempt = 0; ; attempt += 1) {
+      try {
+        return await this.withTimeout(
+          this.deviceRpc(this.targetDeviceId, commandJson, policy.timeoutMs),
+          action,
+          policy.timeoutMs,
+        );
+      } catch (error) {
+        if (attempt >= policy.maxRetries) {
+          throw error;
+        }
+        const delayMs = PEER_RETRY_BASE_DELAY_MS * (2 ** attempt);
+        log.warn('Retrying recoverable Peer request', {
+          action,
+          retryKind: policy.retryKind,
+          attempt: attempt + 1,
+          maxRetries: policy.maxRetries,
+          delayMs,
+          error,
+        });
+        await new Promise(resolve => setTimeout(resolve, delayMs));
+      }
+    }
+  }
+
+  private async withTimeout<T>(
+    request: Promise<T>,
+    action: string,
+    timeoutMs: number,
+  ): Promise<T> {
+    let timeout: ReturnType<typeof setTimeout> | undefined;
+    try {
+      return await Promise.race([
+        request,
+        new Promise<T>((_resolve, reject) => {
+          timeout = setTimeout(() => {
+            reject(new PeerRpcTimeoutError(action, timeoutMs));
+          }, timeoutMs);
+        }),
+      ]);
+    } finally {
+      if (timeout !== undefined) {
+        clearTimeout(timeout);
+      }
     }
   }
 }

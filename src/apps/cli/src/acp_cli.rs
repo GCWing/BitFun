@@ -52,9 +52,12 @@ impl ExternalAcpClient {
             Self::Opencode => ("opencode", vec!["acp"]),
             Self::ClaudeCode => (
                 "npx",
-                vec!["--yes", "@zed-industries/claude-code-acp@latest"],
+                vec!["--yes", "@agentclientprotocol/claude-agent-acp@latest"],
             ),
-            Self::Codex => ("npx", vec!["--yes", "@zed-industries/codex-acp@latest"]),
+            Self::Codex => (
+                "npx",
+                vec!["--yes", "@agentclientprotocol/codex-acp@latest"],
+            ),
         };
         AcpClientConfig {
             name: Some(self.display_name().to_string()),

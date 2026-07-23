@@ -593,6 +593,11 @@ class WorkspaceManager {
     this.clearForPeerModeSwitch();
     this.emit({ type: 'workspace:loading', loading: true });
     await this.initialize();
+    if (!this.isInitialized) {
+      throw new Error(
+        this.state.error || 'Workspace state could not be loaded from the Peer host',
+      );
+    }
   }
 
   public async openWorkspace(path: string): Promise<WorkspaceInfo> {

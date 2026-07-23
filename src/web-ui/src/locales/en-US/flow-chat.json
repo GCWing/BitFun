@@ -10,8 +10,20 @@
     "allowAlwaysTooltip": "Always allow saves matching access for {{projectPath}}.",
     "allowAlwaysTooltipCurrentProject": "Always allow saves matching access for the current project.",
     "allowAlwaysTooltipNoGrant": "This request has no savable access scope; always allow applies only to this request.",
+    "risks": {
+      "pageSave": "Save a new immutable version of “{{slug}}” with {{visibility}} visibility without changing production.",
+      "pagePublish": "Save “{{slug}}” with {{visibility}} visibility and switch its production version.",
+      "pageDeploy": "Switch production traffic for “{{slug}}” to immutable version “{{version}}”."
+    },
+    "visibility": {
+      "private": "private",
+      "relay": "signed-in users",
+      "public": "public"
+    },
     "reject": "Reject",
     "batchCount": "{{count}} permission requests",
+    "collapsePanel": "Collapse permission requests",
+    "expandPanel": "Expand {{count}} pending permission requests",
     "current": "Current",
     "pending": "Pending",
     "actions": {
@@ -25,6 +37,8 @@
       "mcp": "MCP tool",
       "task": "Run task",
       "skill": "Run skill",
+      "pagePublish": "Save page version",
+      "pageDeploy": "Deploy page version",
       "customTool": "External tool",
       "externalDirectory": "Access external directory",
       "other": "Other action"
@@ -1246,6 +1260,26 @@
     "retryHistoryHide": "Hide retry history",
     "attemptLabel": "Attempt {{index}}",
     "attemptSuperseded": "superseded",
+    "attemptDiagnostics": {
+      "show": "Show retry diagnostic details",
+      "hide": "Hide retry diagnostic details",
+      "copy": "Copy",
+      "copied": "Copied",
+      "providerError": "Provider error",
+      "toolArguments": "Tool arguments: {{name}}",
+      "rawArguments": "Raw arguments",
+      "validationError": "Parser or validation error",
+      "unknownTool": "Unknown tool",
+      "categories": {
+        "transientRequestError": "Request failed before the provider responded",
+        "interruptedToolArguments": "Tool arguments were interrupted",
+        "partialStreamError": "Stream ended with a recoverable error",
+        "invalidToolArguments": "Provider returned invalid tool arguments",
+        "noEffectiveOutput": "Provider returned no usable output",
+        "transientStreamError": "Stream failed before usable output",
+        "unknown": "Retry diagnostic: {{category}}"
+      }
+    },
     "meta": {
       "label": "Response metadata",
       "completed": "Completed",
@@ -1395,6 +1429,7 @@
       "deployingShort": "…",
       "untitled": "(unnamed)",
       "deployFailed": "Could not deploy BitFun Page version",
+      "openFailed": "Could not create a secure link for this Page.",
       "labelSlug": "slug",
       "labelVersion": "version",
       "labelPath": "url_path",
@@ -1405,6 +1440,7 @@
       "publishingShort": "…",
       "untitled": "(unnamed)",
       "publishFailed": "Could not publish BitFun Page",
+      "openFailed": "Could not create a secure link for this Page.",
       "labelSlug": "slug",
       "labelVersion": "version",
       "labelPath": "url_path",
@@ -1564,6 +1600,10 @@
       "permissionDeniedHint": "BitFun needs macOS Accessibility and Screen Recording permissions before it can control other apps. Open System Settings, grant access to BitFun, then retry.",
       "openSettings": "Open System Settings",
       "openSettingsFailed": "Could not open System Settings"
+    },
+    "viewImage": {
+      "viewing": "Viewing image...",
+      "viewedImages": "Viewed {{count}} image"
     },
     "webFetch": {
       "parsingUrl": "Parsing URL...",
@@ -2159,6 +2199,8 @@
     "autoModelDesc": "Automatically Routing",
     "primaryModel": "Primary Model",
     "fastModel": "Fast Model",
+    "fastMode": "Fast mode",
+    "fastModeDescription": "1.5x speed with higher credit usage",
     "modelNotConfigured": "Not Configured",
     "contextUsage": {
       "agentPrompt": "Last request prompt: {{usage}}",

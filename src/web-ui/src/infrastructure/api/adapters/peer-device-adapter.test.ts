@@ -1,7 +1,11 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
+  PEER_MUTATION_REQUEST_TIMEOUT_MS,
+  PEER_READ_REQUEST_TIMEOUT_MS,
   PeerDeviceTransportAdapter,
   isPeerLocalOnlyCommand,
+  isPeerRetryableIdempotentMutation,
+  isPeerRetryableReadCommand,
   peerInvokePriorityFor,
 } from './peer-device-adapter';
 
@@ -18,6 +22,7 @@ describe('peerInvokePriorityFor', () => {
 
   it('keeps account finalize and relay deploy on the controller', () => {
     expect(isPeerLocalOnlyCommand('account_finalize_login')).toBe(true);
+    expect(isPeerLocalOnlyCommand('account_cancel_pending_login')).toBe(true);
     expect(isPeerLocalOnlyCommand('account_fetch_session_turns')).toBe(true);
     expect(isPeerLocalOnlyCommand('relay_deploy_start')).toBe(true);
     expect(isPeerLocalOnlyCommand('relay_deploy_cancel')).toBe(true);
@@ -55,6 +60,30 @@ describe('peerInvokePriorityFor', () => {
     expect(peerInvokePriorityFor('terminal_write')).toBe('high');
     expect(peerInvokePriorityFor('terminal_resize')).toBe('high');
     expect(peerInvokePriorityFor('terminal_signal')).toBe('high');
+  });
+
+  it('retries only idempotent Peer reads', () => {
+    expect(isPeerRetryableReadCommand('list_persisted_sessions_page')).toBe(true);
+    expect(isPeerRetryableReadCommand('get_opened_workspaces')).toBe(true);
+    expect(isPeerRetryableReadCommand('restore_session_view')).toBe(true);
+    expect(isPeerRetryableReadCommand('start_dialog_turn')).toBe(false);
+    expect(isPeerRetryableReadCommand('delete_session')).toBe(false);
+    expect(isPeerRetryableReadCommand('respond_permission')).toBe(false);
+  });
+
+  it('retries only mutations with an explicit host idempotency identity', () => {
+    expect(isPeerRetryableIdempotentMutation('start_dialog_turn', {
+      request: { sessionId: 'session-1', turnId: 'turn-1' },
+    })).toBe(true);
+    expect(isPeerRetryableIdempotentMutation('start_acp_dialog_turn', {
+      request: { sessionId: 'session-1', turnId: 'turn-1' },
+    })).toBe(true);
+    expect(isPeerRetryableIdempotentMutation('start_dialog_turn', {
+      request: { sessionId: 'session-1' },
+    })).toBe(false);
+    expect(isPeerRetryableIdempotentMutation('delete_session', {
+      request: { sessionId: 'session-1', turnId: 'turn-1' },
+    })).toBe(false);
   });
 
   it('ranks git/ssh/editor/fs/search noise low', () => {
@@ -182,6 +211,119 @@ describe('PeerDeviceTransportAdapter queue', () => {
 
     expect(response.resp).toBe('file_info');
     expect(deviceRpc).toHaveBeenCalledTimes(1);
+  });
+
+  it('retries transient failures for read-only HostInvoke requests', async () => {
+    vi.useFakeTimers();
+    try {
+      const deviceRpc = vi.fn()
+        .mockRejectedValueOnce(new Error('relay unavailable'))
+        .mockRejectedValueOnce(new Error('gateway timeout'))
+        .mockResolvedValueOnce(JSON.stringify({
+          resp: 'host_invoke_result',
+          ok: true,
+          value: [{ id: 'workspace-1' }],
+        }));
+      const adapter = new PeerDeviceTransportAdapter('peer-1', deviceRpc);
+
+      const request = adapter.request('get_opened_workspaces', { request: {} });
+      await vi.advanceTimersByTimeAsync(1500);
+
+      await expect(request).resolves.toEqual([{ id: 'workspace-1' }]);
+      expect(deviceRpc).toHaveBeenCalledTimes(3);
+      expect(deviceRpc).toHaveBeenCalledWith(
+        'peer-1',
+        expect.any(String),
+        PEER_READ_REQUEST_TIMEOUT_MS,
+      );
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('does not replay mutations when the host has not advertised deduplication', async () => {
+    const deviceRpc = vi.fn().mockRejectedValue(new Error('outcome unknown'));
+    const adapter = new PeerDeviceTransportAdapter('peer-1', deviceRpc);
+
+    await expect(
+      adapter.request('start_dialog_turn', {
+        request: { sessionId: 's1', turnId: 'turn-1' },
+      }),
+    ).rejects.toThrow('outcome unknown');
+    expect(deviceRpc).toHaveBeenCalledTimes(1);
+    expect(deviceRpc).toHaveBeenCalledWith(
+      'peer-1',
+      expect.any(String),
+      PEER_MUTATION_REQUEST_TIMEOUT_MS,
+    );
+  });
+
+  it('recovers an idempotent dialog submission after a transient Relay failure', async () => {
+    vi.useFakeTimers();
+    try {
+      const deviceRpc = vi.fn()
+        .mockRejectedValueOnce(new Error('error sending request for url'))
+        .mockResolvedValueOnce(JSON.stringify({
+          resp: 'host_invoke_result',
+          ok: true,
+          value: { success: true, message: 'Dialog turn started' },
+        }));
+      const adapter = new PeerDeviceTransportAdapter('peer-1', deviceRpc, {
+        supportsIdempotentDialogSubmit: true,
+      });
+      const params = {
+        request: {
+          sessionId: 'session-1',
+          turnId: 'turn-1',
+          userInput: 'hello',
+        },
+      };
+
+      const request = adapter.request('start_dialog_turn', params);
+      await vi.advanceTimersByTimeAsync(500);
+
+      await expect(request).resolves.toEqual({
+        success: true,
+        message: 'Dialog turn started',
+      });
+      expect(deviceRpc).toHaveBeenCalledTimes(2);
+      expect(deviceRpc).toHaveBeenNthCalledWith(
+        1,
+        'peer-1',
+        expect.any(String),
+        PEER_MUTATION_REQUEST_TIMEOUT_MS,
+      );
+      expect(deviceRpc.mock.calls[1][1]).toBe(deviceRpc.mock.calls[0][1]);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('bounds a hung read and rejects after its retry budget', async () => {
+    vi.useFakeTimers();
+    try {
+      const deviceRpc = vi.fn(
+        () => new Promise<string>(() => {
+          // Simulate a Tauri/relay request that never settles.
+        }),
+      );
+      const adapter = new PeerDeviceTransportAdapter('peer-1', deviceRpc);
+
+      const request = adapter.request('list_persisted_sessions_page', {
+        request: { workspacePath: '/repo' },
+      });
+      const rejection = expect(request).rejects.toThrow(
+        "Peer request 'list_persisted_sessions_page' timed out",
+      );
+
+      await vi.advanceTimersByTimeAsync(
+        (PEER_READ_REQUEST_TIMEOUT_MS * 3) + 1500,
+      );
+      await rejection;
+      expect(deviceRpc).toHaveBeenCalledTimes(3);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
 

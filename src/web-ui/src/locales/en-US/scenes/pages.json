@@ -1,0 +1,106 @@
+{
+  "navLabel": "Pages",
+  "title": "Published Pages",
+  "subtitle": "Open, share, secure, roll back, and remove Pages published through your account relay.",
+  "loading": "Loading your Pages...",
+  "loadFailed": "Pages could not be loaded. Check your account connection and try again.",
+  "signInRequired": "Sign in to manage your published Pages.",
+  "signInHint": "Pages are stored on your account relay and are available after account sign-in.",
+  "empty": "No Pages have been published yet.",
+  "emptyHint": "Ask the Agent to create a Page, then review every saved version here.",
+  "status": {
+    "deployed": "Production",
+    "savedOnly": "Saved only",
+    "notDeployed": "not deployed"
+  },
+  "summary": {
+    "total": "{{count}} Pages",
+    "deployed": "{{count}} in production"
+  },
+  "visibility": {
+    "label": "Visibility",
+    "private": "Private",
+    "relay": "Signed-in relay users",
+    "public": "Public",
+    "privateHint": "Sign in as the Page owner to open it",
+    "relayHint": "Sign in with any account on this relay to open it",
+    "publicHint": "Anyone with the link can open it",
+    "changeAria": "Change visibility for {{title}}"
+  },
+  "titleField": {
+    "label": "Title",
+    "inputAria": "Edit title for /{{slug}}"
+  },
+  "meta": {
+    "updated": "Updated {{date}}",
+    "size": "{{size}}",
+    "files": "{{count}} files"
+  },
+  "bytes": {
+    "b": "{{value}} B",
+    "kb": "{{value}} KB",
+    "mb": "{{value}} MB"
+  },
+  "actions": {
+    "refresh": "Refresh",
+    "retry": "Try again",
+    "signIn": "Open account sign-in",
+    "openProduction": "Open",
+    "copyLink": "Copy link",
+    "versions": "Versions",
+    "manage": "Manage",
+    "deploy": "Deploy",
+    "unpublish": "Stop production",
+    "changeVisibility": "Change visibility",
+    "saveTitle": "Save title",
+    "deletePage": "Delete Page",
+    "deleteVersion": "Delete version",
+    "openVersionAria": "Open version {{version}}",
+    "copyVersionAria": "Copy link for version {{version}}",
+    "deleteVersionAria": "Delete version {{version}}"
+  },
+  "manage": {
+    "title": "Page details and access",
+    "description": "Change the Page name and sign-in requirement.",
+    "lifecycleTitle": "Production and data",
+    "lifecycleDescription": "Stopping production keeps saved versions. Deleting the Page permanently removes every version and its Page Function data."
+  },
+  "versions": {
+    "title": "Immutable versions",
+    "empty": "No saved versions were returned.",
+    "current": "Current production",
+    "worker": "Page Function",
+    "meta": "{{date}} · {{size}} · {{count}} files"
+  },
+  "confirm": {
+    "visibilityTitle": "Change Page visibility?",
+    "visibilityMessage": "/{{slug}} will change from {{current}} to {{target}}. Every option except Public requires sign-in.",
+    "deployTitle": "Switch the production version?",
+    "deployMessage": "/{{slug}} will switch production from {{current}} to {{target}}. The previous version remains available for rollback.",
+    "unpublishTitle": "Stop serving this Page in production?",
+    "unpublishMessage": "/{{slug}} currently serves version {{current}}. Production will stop, while all immutable versions remain available here.",
+    "deleteVersionTitle": "Delete this saved version?",
+    "deleteVersionMessage": "Version {{version}} of {{title}} will be permanently removed. Production versions cannot be deleted.",
+    "deletePageTitle": "Delete this Page and all versions?",
+    "deletePageMessage": "{{title}} (/{{slug}}), every saved version, and its Page Function data will be permanently removed."
+  },
+  "notifications": {
+    "versionsLoadFailed": "Could not load versions: {{error}}",
+    "openFailed": "Could not open the Page: {{error}}",
+    "linkCopied": "Page URL copied.",
+    "protectedLinkCopied": "Protected Page URL copied. Visitors must sign in first.",
+    "copyFailed": "Could not copy the Page link: {{error}}",
+    "visibilityUpdated": "Visibility changed to {{visibility}}.",
+    "visibilityFailed": "Could not change visibility: {{error}}",
+    "titleUpdated": "Page title updated.",
+    "titleFailed": "Could not update the title: {{error}}",
+    "deployed": "Version {{version}} is now serving production traffic.",
+    "deployFailed": "Could not deploy the version: {{error}}",
+    "unpublished": "Production stopped. Saved versions were kept.",
+    "unpublishFailed": "Could not stop production: {{error}}",
+    "versionDeleted": "Saved version deleted.",
+    "versionDeleteFailed": "Could not delete the version: {{error}}",
+    "pageDeleted": "Page and all saved versions deleted.",
+    "pageDeleteFailed": "Could not delete the Page: {{error}}"
+  }
+}

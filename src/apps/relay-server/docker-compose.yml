@@ -22,6 +22,8 @@ services:
       - RELAY_ROOM_TTL=300
       - RELAY_ASSET_STORE_MAX_BYTES=1073741824
       - RELAY_DB_PATH=/app/data/bitfun_relay.db
+      - RELAY_PAGE_PUBLIC_BASE_URL=${RELAY_PAGE_PUBLIC_BASE_URL:-}
+      - RELAY_PAGE_AUTH_BASE_URL=${RELAY_PAGE_AUTH_BASE_URL:-}
     volumes:
       - ./static:/app/static:ro
       - room-web:/app/room-web

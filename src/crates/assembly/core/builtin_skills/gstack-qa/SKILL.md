@@ -21,7 +21,7 @@ You are a QA engineer AND a bug-fix engineer. Test web applications like a real 
 When this skill is invoked by BitFun Team Mode, this skill supplies the QA methodology. Use existing Task sub-agents for independent testing tracks, then keep triage and fix ownership explicit in the main Team session.
 
 - Do not assume a QA Lead sub-agent exists. Choose only from the Task tool's available agents.
-- Prefer a matching custom QA/browser sub-agent if available; otherwise use `ComputerUse` for browser/desktop testing when available, and `Explore` for diff-aware test-scope mapping.
+- Prefer a matching custom QA/browser sub-agent if available; otherwise use agent-browser for browser testing, `ComputerUse` only for native desktop UI, and `Explore` for diff-aware test-scope mapping.
 - Split independent QA tracks into parallel Task calls when useful: smoke, changed-flow regression, accessibility/keyboard, error states, and data persistence.
 - Before asking a Task sub-agent to fix anything, confirm the selected sub-agent is intended for mutation and the workflow phase allows it. Otherwise request report-only output.
 - The main Team orchestrator owns bug prioritization, regression-test decisions, fixes, and re-review triggers.
@@ -46,8 +46,9 @@ When this skill is invoked by BitFun Team Mode, this skill supplies the QA metho
 
 **If no URL is given and you're on a feature branch:** Automatically enter **diff-aware mode** (see Modes below). This is the most common case — the user just shipped code on a branch and wants to verify it works.
 
-**Browser session detection:** Use BitFun browser/computer-use state to detect whether an existing user browser session is available.
-If `CDP_MODE=true`: skip cookie import prompts (the real browser already has cookies), skip user-agent overrides (real browser has real user-agent), and skip headless detection workarounds. The user's real auth sessions are already available.
+**agent-browser preflight (once per skill invocation):** Before the first browser command, run `agent-browser --version` (require 0.32.3 or newer) and load `agent-browser skills get core`. Reuse that guidance for the rest of this invocation. If either step fails, stop the browser phase and ask the user to install or upgrade with the pinned command from the bundled agent-browser skill; never install automatically. If the user declines, explain that browser QA cannot be completed and stop; do not substitute ComputerUse for web QA.
+
+**Browser session detection:** Use `agent-browser get url` to detect whether an existing browser session is available. Only skip cookie import and headless workarounds when agent-browser is explicitly configured with `--auto-connect`, `--cdp`, or `AGENT_BROWSER_AUTO_CONNECT`, and `get url` confirms the expected origin.
 
 **Check for clean working tree:**
 
@@ -67,7 +68,7 @@ RECOMMENDATION: Choose A because uncommitted work should be preserved as a commi
 
 After the user chooses, execute their choice (commit or stash), then continue with setup.
 
-**Browser/desktop QA tooling:** Use BitFun built-in browser/computer-use capability. Do not install, build, or call any external browse binary. Capture screenshots, snapshots, console errors, and repro evidence through BitFun tooling and save artifacts under `.bitfun/team/qa-reports/`.
+**Browser/desktop QA tooling:** Use agent-browser for browser QA and BitFun ComputerUse only for native desktop surfaces it cannot reach. Save QA artifacts under `.bitfun/team/qa-reports/`.
 
 **Check test framework (bootstrap if needed):**
 
@@ -271,16 +272,16 @@ This is the **primary mode** for developers verifying their work. When the user 
    - View/template/component files → which pages render them
    - Model/service files → which pages use those models (check controllers that reference them)
    - CSS/style files → which pages include those stylesheets
-   - API endpoints → test them directly with `BitFun browser/computer-use js "await fetch('/api/...')"`
+   - API endpoints → test them directly with `agent-browser eval "await fetch('/api/...')"`
    - Static pages (markdown, HTML) → navigate to them directly
 
    **If no obvious pages/routes are identified from the diff:** Do not skip browser testing. The user invoked /qa because they want browser-based verification. Fall back to Quick mode — navigate to the homepage, follow the top 5 navigation targets, check console for errors, and test any interactive elements found. Backend, config, and infrastructure changes affect app behavior — always verify the app still works.
 
 3. **Detect the running app** — check common local dev ports:
    ```bash
-   BitFun browser/computer-use goto http://localhost:3000 2>/dev/null && echo "Found app on :3000" || \
-   BitFun browser/computer-use goto http://localhost:4000 2>/dev/null && echo "Found app on :4000" || \
-   BitFun browser/computer-use goto http://localhost:8080 2>/dev/null && echo "Found app on :8080"
+   agent-browser open http://localhost:3000 2>/dev/null && echo "Found app on :3000" || \
+   agent-browser open http://localhost:4000 2>/dev/null && echo "Found app on :4000" || \
+   agent-browser open http://localhost:8080 2>/dev/null && echo "Found app on :8080"
    ```
    If no local app is found, check for a staging/preview URL in the PR or environment. If nothing works, ask the user for the URL.
 
@@ -289,7 +290,7 @@ This is the **primary mode** for developers verifying their work. When the user 
    - Take a screenshot
    - Check console for errors
    - If the change was interactive (forms, buttons, flows), test the interaction end-to-end
-   - Use `snapshot -D` before and after actions to verify the change had the expected effect
+   - Use `agent-browser diff snapshot` after actions to verify the change had the expected effect
 
 5. **Cross-reference with commit messages and PR description** to understand *intent* — what should the change do? Verify it actually does that.
 
@@ -317,29 +318,33 @@ Run full mode, then load `baseline.json` from a previous run. Diff: which issues
 
 ### Phase 1: Initialize
 
-1. Find BitFun browser/computer-use tooling (see Setup above)
+1. Find the agent-browser CLI (see Setup above)
 2. Create output directories
-3. Copy report template from `qa/templates/qa-report-template.md` to output dir
+3. Create a new report file in the output directory
 4. Start timer for duration tracking
 
 ### Phase 2: Authenticate (if needed)
 
-**If the user specified auth credentials:**
+**If authentication needs credentials:** Never put a password in command arguments. Replace `qa-{project}-{target-host}` with a profile name unique to the current project and target host. Ask the user to run this in their own interactive terminal and confirm when the profile is saved:
 
 ```bash
-BitFun browser/computer-use goto <login-url>
-BitFun browser/computer-use snapshot -i                    # find the login form
-BitFun browser/computer-use fill @e3 "user@example.com"
-BitFun browser/computer-use fill @e4 "[REDACTED]"         # NEVER include real passwords in report
-BitFun browser/computer-use click @e5                      # submit
-BitFun browser/computer-use snapshot -D                    # verify login succeeded
+agent-browser auth save "qa-{project}-{target-host}" --url <login-url> --username user@example.com --password-stdin
 ```
 
-**If the user provided a cookie file:**
+After confirmation, run:
 
 ```bash
-BitFun browser/computer-use cookie-import cookies.json
-BitFun browser/computer-use goto <target-url>
+agent-browser auth login "qa-{project}-{target-host}"
+agent-browser get url
+agent-browser snapshot -i                    # verify the expected signed-in page or account marker
+```
+
+**If the user provided a cookie file or Copy-as-cURL export:**
+
+```bash
+agent-browser open
+agent-browser cookies set --curl cookies.json
+agent-browser open <target-url>
 ```
 
 **If 2FA/OTP is required:** Ask the user for the code and wait.
@@ -351,10 +356,10 @@ BitFun browser/computer-use goto <target-url>
 Get a map of the application:
 
 ```bash
-BitFun browser/computer-use goto <target-url>
-BitFun browser/computer-use snapshot -i -a -o "$REPORT_DIR/screenshots/initial.png"
-BitFun browser/computer-use links                          # map navigation structure
-BitFun browser/computer-use console --errors               # any errors on landing?
+agent-browser open <target-url>
+agent-browser screenshot --annotate "$REPORT_DIR/screenshots/initial.png"
+agent-browser snapshot -i -u                          # map navigation structure
+agent-browser errors               # any errors on landing?
 ```
 
 **Detect framework** (note in report metadata):
@@ -370,12 +375,12 @@ BitFun browser/computer-use console --errors               # any errors on landi
 Visit pages systematically. At each page:
 
 ```bash
-BitFun browser/computer-use goto <page-url>
-BitFun browser/computer-use snapshot -i -a -o "$REPORT_DIR/screenshots/page-name.png"
-BitFun browser/computer-use console --errors
+agent-browser open <page-url>
+agent-browser screenshot --annotate "$REPORT_DIR/screenshots/page-name.png"
+agent-browser errors
 ```
 
-Then follow the **per-page exploration checklist** (see `qa/references/issue-taxonomy.md`):
+Then follow the **per-page exploration checklist** below:
 
 1. **Visual scan** — Look at the annotated screenshot for layout issues
 2. **Interactive elements** — Click buttons, links, controls. Do they work?
@@ -385,9 +390,9 @@ Then follow the **per-page exploration checklist** (see `qa/references/issue-tax
 6. **Console** — Any new JS errors after interactions?
 7. **Responsiveness** — Check mobile viewport if relevant:
    ```bash
-   BitFun browser/computer-use viewport 375x812
-   BitFun browser/computer-use screenshot "$REPORT_DIR/screenshots/page-mobile.png"
-   BitFun browser/computer-use viewport 1280x720
+   agent-browser set viewport 375 812
+   agent-browser screenshot "$REPORT_DIR/screenshots/page-mobile.png"
+   agent-browser set viewport 1280 720
    ```
 
 **Depth judgment:** Spend more time on core features (homepage, dashboard, checkout, search) and less on secondary pages (about, terms, privacy).
@@ -404,14 +409,14 @@ Document each issue **immediately when found** — don't batch them.
 1. Take a screenshot before the action
 2. Perform the action
 3. Take a screenshot showing the result
-4. Use `snapshot -D` to show what changed
+4. Use `agent-browser diff snapshot` after the action to show what changed
 5. Write repro steps referencing screenshots
 
 ```bash
-BitFun browser/computer-use screenshot "$REPORT_DIR/screenshots/issue-001-step-1.png"
-BitFun browser/computer-use click @e5
-BitFun browser/computer-use screenshot "$REPORT_DIR/screenshots/issue-001-result.png"
-BitFun browser/computer-use snapshot -D
+agent-browser screenshot "$REPORT_DIR/screenshots/issue-001-step-1.png"
+agent-browser click @e5
+agent-browser screenshot "$REPORT_DIR/screenshots/issue-001-result.png"
+agent-browser diff snapshot
 ```
 
 **Static bugs** (typos, layout issues, missing images):
@@ -419,10 +424,10 @@ BitFun browser/computer-use snapshot -D
 2. Describe what's wrong
 
 ```bash
-BitFun browser/computer-use snapshot -i -a -o "$REPORT_DIR/screenshots/issue-002.png"
+agent-browser screenshot --annotate "$REPORT_DIR/screenshots/issue-002.png"
 ```
 
-**Write each issue to the report immediately** using the template format from `qa/templates/qa-report-template.md`.
+**Write each issue to the report immediately** using the issue format defined below.
 
 ### Phase 6: Wrap Up
 
@@ -528,8 +533,8 @@ Minimum 0 per category.
 7. **Test like a user.** Use realistic data. Walk through complete workflows end-to-end.
 8. **Depth over breadth.** 5-10 well-documented issues with evidence > 20 vague descriptions.
 9. **Never delete output files.** Screenshots and reports accumulate — that's intentional.
-10. **Use `snapshot -C` for tricky UIs.** Finds clickable divs that the accessibility tree misses.
-11. **Show screenshots to the user.** After every `BitFun browser/computer-use screenshot`, `BitFun browser/computer-use snapshot -a -o`, or `BitFun browser/computer-use responsive` command, use the Read tool on the output file(s) so the user can see them inline. For `responsive` (3 files), Read all three. This is critical — without it, screenshots are invisible to the user.
+10. **Use `screenshot --annotate` for tricky UIs.** It labels interactive targets that need visual inspection.
+11. **Show screenshots to the user.** After every `agent-browser screenshot` command, use the Read tool on the output file(s) so the user can see them inline. Read every viewport capture. This is critical — without it, screenshots are invisible to the user.
 12. **Never refuse to use the browser.** When the user invokes /qa or /qa-only, they are requesting browser-based testing. Never suggest evals, unit tests, or other alternatives as a substitute. Even if the diff appears to have no UI changes, backend changes affect app behavior — always open the browser and test.
 
 Record baseline health score at end of Phase 6.
@@ -602,13 +607,13 @@ git commit -m "fix(qa): ISSUE-NNN — short description"
 - Navigate back to the affected page
 - Take **before/after screenshot pair**
 - Check console for errors
-- Use `snapshot -D` to verify the change had the expected effect
+- Use `agent-browser diff snapshot` after the action to verify the change had the expected effect
 
 ```bash
-BitFun browser/computer-use goto <affected-url>
-BitFun browser/computer-use screenshot "$REPORT_DIR/screenshots/issue-NNN-after.png"
-BitFun browser/computer-use console --errors
-BitFun browser/computer-use snapshot -D
+agent-browser open <affected-url>
+agent-browser screenshot "$REPORT_DIR/screenshots/issue-NNN-after.png"
+agent-browser errors
+agent-browser diff snapshot
 ```
 
 ### 8e. Classify

@@ -10,7 +10,7 @@
 
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { createPortal } from 'react-dom';
-import { Brain, ChevronDown, Check } from 'lucide-react';
+import { Brain, ChevronDown, Check, Zap } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { configManager } from '@/infrastructure/config/services/ConfigManager';
 import { agentAPI } from '@/infrastructure/api/service-api/AgentAPI';
@@ -19,15 +19,17 @@ import { getProviderDisplayName } from '@/infrastructure/config/services/modelCo
 import { getEffectiveReasoningMode, isReasoningVisiblyEnabled } from '@/infrastructure/config/utils/reasoning';
 import { globalEventBus } from '@/infrastructure/event-bus';
 import type { AIModelConfig, AgentModelDefaultsConfig, DefaultModelsConfig } from '@/infrastructure/config/types';
-import { Tooltip } from '@/component-library';
+import { Switch, Tooltip } from '@/component-library';
 import { FlowChatStore } from '../store/FlowChatStore';
 import { getModelMaxTokens } from '../services/flow-chat-manager/SessionModule';
 import { acpClientIdFromAgentType } from '../utils/acpSession';
+import { buildAcpFastModeValue, resolveAcpFastModeState } from '../utils/acpSessionConfig';
 import {
   buildContextUsageTooltip,
   type ContextUsageSource,
 } from '../utils/tokenUsageDisplay';
 import { createLogger } from '@/shared/utils/logger';
+import { getModelSelectorDropdownStyle } from './modelSelectorDropdownPosition';
 import './ModelSelector.scss';
 
 const log = createLogger('ModelSelector');
@@ -350,27 +352,29 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
     if (!dropdownOpen || !dropdownRef.current) return;
 
     const updatePosition = () => {
-      if (!dropdownRef.current) return;
-      const rect = dropdownRef.current.getBoundingClientRect();
-      const placementStyle = dropdownPlacement === 'bottom'
-        ? { top: `${rect.bottom + 6}px`, bottom: 'auto' }
-        : { top: 'auto', bottom: `${window.innerHeight - rect.top + 6}px` };
-      setDropdownStyle({
-        position: 'fixed',
-        visibility: 'visible',
-        left: `${rect.left}px`,
-        minWidth: '220px',
-        maxWidth: '280px',
-        ...placementStyle,
-      });
+      if (!dropdownRef.current || !portalDropdownRef.current) return;
+      const anchorRect = dropdownRef.current.getBoundingClientRect();
+      const dropdownRect = portalDropdownRef.current.getBoundingClientRect();
+      setDropdownStyle(getModelSelectorDropdownStyle(
+        anchorRect,
+        dropdownRect,
+        dropdownPlacement,
+        { width: window.innerWidth, height: window.innerHeight },
+      ));
     };
 
     updatePosition();
+
+    const resizeObserver = new ResizeObserver(updatePosition);
+    if (portalDropdownRef.current) {
+      resizeObserver.observe(portalDropdownRef.current);
+    }
 
     window.addEventListener('scroll', updatePosition, true);
     window.addEventListener('resize', updatePosition);
 
     return () => {
+      resizeObserver.disconnect();
       window.removeEventListener('scroll', updatePosition, true);
       window.removeEventListener('resize', updatePosition);
     };
@@ -397,6 +401,11 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
       provider: 'acp',
     };
   }, [acpAvailableModels, acpClientId, acpOptions?.currentModelId, isAcpSession]);
+
+  const acpFastMode = useMemo(
+    () => resolveAcpFastModeState(acpOptions?.configOptions ?? []),
+    [acpOptions?.configOptions],
+  );
   
   const getCurrentModelId = useCallback((): string => {
     // Session-owned model takes priority so that each session remembers
@@ -566,6 +575,41 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
     sessionId,
     targetIsSubagent,
   ]);
+
+  const handleSetAcpFastMode = useCallback(async (enabled: boolean) => {
+    if (loading || !acpFastMode || !acpClientId || !sessionId) return;
+    const value = buildAcpFastModeValue(acpFastMode.option, enabled);
+    if (!value) return;
+
+    setLoading(true);
+    try {
+      const options = await ACPClientAPI.setSessionConfigOption({
+        sessionId,
+        clientId: acpClientId,
+        workspacePath: activeSession?.workspacePath || activeSession?.config.workspacePath,
+        remoteConnectionId: activeSession?.remoteConnectionId,
+        remoteSshHost: activeSession?.remoteSshHost,
+        configId: acpFastMode.option.id,
+        value,
+      });
+      setAcpOptions(options);
+      syncAcpContextUsageToStore(sessionId, options);
+      log.info('ACP Fast mode updated', { sessionId, acpClientId, enabled });
+    } catch (error) {
+      log.error('Failed to update ACP Fast mode', error);
+    } finally {
+      setLoading(false);
+    }
+  }, [
+    activeSession?.config.workspacePath,
+    activeSession?.remoteConnectionId,
+    activeSession?.remoteSshHost,
+    activeSession?.workspacePath,
+    acpClientId,
+    acpFastMode,
+    loading,
+    sessionId,
+  ]);
   
   const tokenPercentage = useMemo(() => {
     if (!maxTokens || maxTokens <= 0 || !currentTokens) return 0;
@@ -619,6 +663,9 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
             <span className="bitfun-model-selector__name">
               {getModelDisplayLabel(acpCurrentModel, currentAcpModelId)}
             </span>
+            {acpFastMode?.enabled && (
+              <Zap size={9} className="bitfun-model-selector__fast-icon" />
+            )}
             {tokenPercentage > 0 && (
               <span className={`bitfun-model-selector__ctx-usage${tokenStatusClass ? ` bitfun-model-selector__ctx-usage--${tokenStatusClass}` : ''}`}>
                 · {tokenPercentage}%
@@ -669,6 +716,28 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
                 );
               })}
             </div>
+            {acpFastMode && (
+              <>
+                <div className="bitfun-model-selector__divider" />
+                <div className="bitfun-model-selector__config-row">
+                  <div className="bitfun-model-selector__config-copy">
+                    <span className="bitfun-model-selector__config-name">
+                      {t('modelSelector.fastMode')}
+                    </span>
+                    <span className="bitfun-model-selector__config-description">
+                      {t('modelSelector.fastModeDescription')}
+                    </span>
+                  </div>
+                  <Switch
+                    size="small"
+                    checked={acpFastMode.enabled}
+                    loading={loading}
+                    aria-label={t('modelSelector.fastMode')}
+                    onChange={event => { void handleSetAcpFastMode(event.target.checked); }}
+                  />
+                </div>
+              </>
+            )}
           </div>,
           document.body
         )}

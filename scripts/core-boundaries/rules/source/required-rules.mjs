@@ -3347,19 +3347,23 @@ export const requiredContentRules = [
   {
     path: 'src/crates/assembly/core/src/agentic/tools/pipeline/tool_pipeline.rs',
     reason:
-      'core tool pipeline must preserve latest-main truncation behavior through agent-tools delegation and keep per-tool denial behavior until tool runtime ownership migrates',
+      'core tool pipeline must preserve explicit Write-tail and opt-in normal-completion JSON-repair behavior through agent-tools delegation and keep per-tool denial behavior until tool runtime ownership migrates',
     patterns: [
       {
-        regex: /\bbuild_tool_call_truncation_recovery_notice\b/,
-        message: 'missing tool-call truncation recovery notice owner delegation',
+        regex: /\bbuild_normal_tool_json_repair_notice\b/,
+        message: 'missing normal-completion JSON repair notice owner delegation',
       },
       {
-        regex: /\btruncation_notice_for_interactive_tools_does_not_claim_file_write\b/,
-        message: 'missing interactive-tool truncation recovery regression',
+        regex: /\bbuild_write_tail_closure_notice\b/,
+        message: 'missing Write-tail closure notice owner delegation',
       },
       {
-        regex: /\btruncation_notice_for_write_tools_keeps_write_continuation_guidance\b/,
-        message: 'missing write-tool truncation recovery regression',
+        regex: /\bnormal_json_repair_notice_for_interactive_tools_does_not_claim_file_write\b/,
+        message: 'missing normal-completion JSON repair regression',
+      },
+      {
+        regex: /\bwrite_tail_closure_notice_keeps_write_continuation_guidance\b/,
+        message: 'missing Write-tail closure recovery regression',
       },
       {
         regex: /\bdenied_tool_messages\b/,
@@ -5625,8 +5629,12 @@ export const requiredContentRules = [
         message: 'missing write-like tool classification helper',
       },
       {
-        regex: /\bpub fn build_tool_call_truncation_recovery_notice\b/,
-        message: 'missing truncation recovery notice helper',
+        regex: /\bpub fn build_normal_tool_json_repair_notice\b/,
+        message: 'missing normal-completion JSON repair notice helper',
+      },
+      {
+        regex: /\bpub fn build_write_tail_closure_notice\b/,
+        message: 'missing Write-tail closure notice helper',
       },
     ],
   },
@@ -7556,8 +7564,8 @@ export const requiredContentRules = [
         message: 'missing invalid tool call presentation owner delegation',
       },
       {
-        regex: /\bbuild_tool_call_truncation_recovery_notice\b/,
-        message: 'missing truncation recovery notice owner delegation',
+        regex: /\bbuild_normal_tool_json_repair_notice\b/,
+        message: 'missing normal-completion JSON repair notice owner delegation',
       },
     ],
   },

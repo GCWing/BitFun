@@ -35,7 +35,9 @@ use tokio::process::{Child, Command};
 use tokio::sync::{oneshot, Mutex, RwLock};
 use tokio_util::compat::{TokioAsyncReadCompatExt, TokioAsyncWriteCompatExt};
 
-use super::builtin_clients::{builtin_client_ids, default_config_for_builtin_client};
+use super::builtin_clients::{
+    builtin_client_ids, default_config_for_builtin_client, migrate_legacy_builtin_client_configs,
+};
 use super::config::{
     AcpClientConfig, AcpClientConfigFile, AcpClientInfo, AcpClientPermissionMode,
     AcpClientRequirementProbe, AcpClientStatus, RemoteAcpClientRequirementSnapshot,
@@ -103,6 +105,41 @@ pub struct SetAcpSessionModelRequest {
     #[serde(default)]
     pub remote_ssh_host: Option<String>,
     pub model_id: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SetAcpSessionConfigOptionRequest {
+    pub client_id: String,
+    pub session_id: String,
+    #[serde(default)]
+    pub workspace_path: Option<String>,
+    #[serde(default)]
+    pub remote_connection_id: Option<String>,
+    #[serde(default)]
+    pub remote_ssh_host: Option<String>,
+    pub config_id: String,
+    pub value: AcpSessionConfigValue,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(
+    tag = "type",
+    rename_all = "snake_case",
+    rename_all_fields = "camelCase"
+)]
+pub enum AcpSessionConfigValue {
+    Select { value: String },
+    Boolean { value: bool },
+}
+
+impl AcpSessionConfigValue {
+    fn into_protocol_value(self) -> SessionConfigOptionValue {
+        match self {
+            Self::Select { value } => SessionConfigOptionValue::value_id(value),
+            Self::Boolean { value } => SessionConfigOptionValue::boolean(value),
+        }
+    }
 }
 
 pub struct AcpClientService {
@@ -1041,6 +1078,66 @@ impl AcpClientService {
         ))
     }
 
+    pub async fn set_session_config_option(
+        self: &Arc<Self>,
+        request: SetAcpSessionConfigOptionRequest,
+        session_storage_path: Option<PathBuf>,
+    ) -> BitFunResult<AcpSessionOptions> {
+        let resolved = self
+            .resolve_or_create_client_session(
+                &request.client_id,
+                request.workspace_path,
+                request.remote_connection_id.as_deref(),
+                &request.session_id,
+            )
+            .await?;
+
+        let mut session = resolved.session.lock().await;
+        self.ensure_remote_session(
+            &resolved.client,
+            &resolved.session_key,
+            &resolved.cwd,
+            &request.session_id,
+            session_storage_path.as_deref(),
+            &mut session,
+        )
+        .await?;
+        let active = session
+            .active
+            .as_ref()
+            .ok_or_else(|| BitFunError::service("ACP session was not initialized"))?;
+        let remote_session_id = active.session_id().to_string();
+        let connection = active.connection();
+
+        if !session
+            .config_options
+            .iter()
+            .any(|option| option.id.to_string() == request.config_id)
+        {
+            return Err(BitFunError::NotFound(format!(
+                "ACP session config option not found: {}",
+                request.config_id
+            )));
+        }
+
+        let response = connection
+            .send_request(SetSessionConfigOptionRequest::new(
+                remote_session_id,
+                request.config_id,
+                request.value.into_protocol_value(),
+            ))
+            .block_task()
+            .await
+            .map_err(protocol_error)?;
+        session.config_options = response.config_options;
+
+        Ok(session_options_from_state(
+            session.models.as_ref(),
+            &session.config_options,
+            session.context_usage.as_ref(),
+        ))
+    }
+
     pub async fn prompt_agent(
         self: &Arc<Self>,
         client_id: &str,
@@ -1898,7 +1995,7 @@ async fn wait_for_client_connection(
 }
 
 fn parse_config_value(value: serde_json::Value) -> BitFunResult<AcpClientConfigFile> {
-    if value.get("acpClients").is_some() {
+    let mut config = if value.get("acpClients").is_some() {
         serde_json::from_value(value)
             .map_err(|error| BitFunError::config(format!("Invalid ACP client config: {}", error)))
     } else if value.is_object() {
@@ -1909,7 +2006,9 @@ fn parse_config_value(value: serde_json::Value) -> BitFunResult<AcpClientConfigF
         Err(BitFunError::config(
             "ACP client config must be an object".to_string(),
         ))
-    }
+    }?;
+    migrate_legacy_builtin_client_configs(&mut config);
+    Ok(config)
 }
 
 fn build_session_key(bitfun_session_id: &str, client_id: &str, cwd: &Path) -> String {
@@ -2551,6 +2650,21 @@ mod tests {
     }
 
     #[test]
+    fn maps_session_config_values_to_acp_protocol_values() {
+        let select = AcpSessionConfigValue::Select {
+            value: "on".to_string(),
+        }
+        .into_protocol_value();
+        assert_eq!(
+            select.as_value_id().map(ToString::to_string).as_deref(),
+            Some("on")
+        );
+
+        let boolean = AcpSessionConfigValue::Boolean { value: true }.into_protocol_value();
+        assert_eq!(boolean.as_bool(), Some(true));
+    }
+
+    #[test]
     fn renders_remote_client_command_from_config() {
         let config = AcpClientConfig {
             name: Some("Custom".to_string()),
@@ -2583,7 +2697,7 @@ mod tests {
                     command: "npx".to_string(),
                     args: vec![
                         "--yes".to_string(),
-                        "@zed-industries/codex-acp@latest".to_string(),
+                        "@agentclientprotocol/codex-acp@latest".to_string(),
                     ],
                     env: HashMap::from([("BASE".to_string(), "1".to_string())]),
                     enabled: true,
@@ -2599,7 +2713,7 @@ mod tests {
         assert_eq!(resolved.command, "npx");
         assert_eq!(
             resolved.args,
-            vec!["--yes", "@zed-industries/codex-acp@latest"]
+            vec!["--yes", "@agentclientprotocol/codex-acp@latest"]
         );
         assert_eq!(resolved.env.get("BASE").map(String::as_str), Some("1"));
         assert!(resolved.enabled);

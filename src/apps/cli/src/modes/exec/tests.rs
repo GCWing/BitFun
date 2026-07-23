@@ -8,6 +8,8 @@ use super::lifecycle::{
     ExecApprovalMode, ExecJsonResult, ExecMode, ExecTokenUsage, TOOL_START_INPUT_PREVIEW_CHARS,
 };
 use super::patch::write_patch_to_path;
+use super::patch::{git_diff_base, untracked_files};
+use super::verification::{changed_files, detect_verify_command, needs_change_baseline};
 use crate::diagnostics::ExitKind;
 use bitfun_agent_runtime::sdk::{
     PermissionDelegationContext, PermissionRequest, PermissionRequestSource,
@@ -15,6 +17,7 @@ use bitfun_agent_runtime::sdk::{
 };
 use bitfun_events::{AgenticEvent, AgenticEventEnvelope, AgenticEventPriority, ToolEventIdentity};
 use serde_json::json;
+use std::collections::BTreeSet;
 
 fn delegated_permission_request() -> PermissionRequest {
     PermissionRequest {
@@ -671,4 +674,136 @@ fn deferred_exec_event_projects_effective_name_and_input() {
     assert_eq!(tool_name, "CreatePlan");
     assert_eq!(input, &json!({ "title": "Ship deferred tools" }));
     assert_eq!(wire_input["tool_name"], "CreatePlan");
+}
+
+fn run_git(workspace: &std::path::Path, args: &[&str]) {
+    let output = Command::new("git")
+        .args(args)
+        .current_dir(workspace)
+        .output()
+        .expect("run git");
+    assert!(
+        output.status.success(),
+        "git {args:?} failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+}
+
+fn commit_verification_fixture(workspace: &std::path::Path) {
+    run_git(workspace, &["init", "--quiet"]);
+    run_git(workspace, &["add", "."]);
+    run_git(
+        workspace,
+        &[
+            "-c",
+            "user.name=BitFun Test",
+            "-c",
+            "user.email=bitfun-test@example.invalid",
+            "commit",
+            "--quiet",
+            "-m",
+            "fixture",
+        ],
+    );
+}
+
+#[test]
+fn final_verification_captures_a_baseline_without_patch_output() {
+    assert!(needs_change_baseline(None, true));
+    assert!(needs_change_baseline(Some("result.patch"), false));
+    assert!(!needs_change_baseline(None, false));
+}
+
+#[test]
+fn patch_and_verifier_keep_agent_commits_and_exclude_preexisting_untracked_files() {
+    let temp = tempfile::tempdir().expect("tempdir");
+    let workspace = temp.path();
+    std::fs::write(workspace.join("tracked.py"), "value = 1\n").expect("tracked file");
+    commit_verification_fixture(workspace);
+    std::fs::write(workspace.join("private.py"), "private = True\n")
+        .expect("preexisting untracked");
+
+    let base = git_diff_base(workspace).expect("execution base");
+    let initial_untracked = untracked_files(workspace);
+    std::fs::write(workspace.join("tracked.py"), "value = 2\n").expect("agent edit");
+    std::fs::write(workspace.join("created.py"), "created = True\n").expect("agent file");
+    run_git(workspace, &["add", "tracked.py"]);
+    run_git(
+        workspace,
+        &[
+            "-c",
+            "user.name=BitFun Test",
+            "-c",
+            "user.email=bitfun-test@example.invalid",
+            "commit",
+            "--quiet",
+            "-m",
+            "agent commit",
+        ],
+    );
+
+    let changed = changed_files(workspace, Some(&base), &initial_untracked);
+    let patch =
+        ExecMode::get_git_diff_from_baseline(workspace, Some(&base), &initial_untracked, None)
+            .expect("patch");
+
+    assert_eq!(
+        changed,
+        vec!["created.py".to_string(), "tracked.py".to_string()]
+    );
+    assert!(patch.contains("value = 2"), "{patch}");
+    assert!(patch.contains("created = True"), "{patch}");
+    assert!(!patch.contains("private = True"), "{patch}");
+}
+
+#[test]
+fn automatic_verifier_composes_scoped_go_and_typescript_checks() {
+    let temp = tempfile::tempdir().expect("tempdir");
+    let workspace = temp.path();
+    std::fs::write(workspace.join("go.mod"), "module example.com/fixture\n").expect("go.mod");
+    std::fs::write(
+        workspace.join("tsconfig.json"),
+        r#"{"compilerOptions":{"noEmit":true},"include":["web"]}"#,
+    )
+    .expect("tsconfig");
+    std::fs::create_dir_all(workspace.join("pkg")).expect("go package");
+    std::fs::create_dir_all(workspace.join("web")).expect("web package");
+    let go_source = workspace.join("pkg/example.go");
+    let ts_source = workspace.join("web/example.ts");
+    std::fs::write(&go_source, "package pkg\n\nconst Value = 1\n").expect("go source");
+    std::fs::write(&ts_source, "export const value: number = 1;\n").expect("ts source");
+    commit_verification_fixture(workspace);
+    std::fs::write(&go_source, "package pkg\n\nconst Value = 2\n").expect("modify go");
+    std::fs::write(&ts_source, "export const value: number = 2;\n").expect("modify ts");
+
+    let command =
+        detect_verify_command(workspace, Some("HEAD"), &BTreeSet::new()).expect("verifier");
+    assert!(command.contains("go vet -printf=false -composites=false -stdmethods=false './pkg'"));
+    assert!(command.contains("npx --no-install tsc --noEmit -p 'tsconfig.json'"));
+}
+
+#[test]
+fn automatic_verifier_checks_the_nearest_cargo_package_and_test_target() {
+    let temp = tempfile::tempdir().expect("tempdir");
+    let workspace = temp.path();
+    std::fs::write(
+        workspace.join("Cargo.toml"),
+        "[package]\nname = \"fixture\"\nversion = \"0.1.0\"\nedition = \"2021\"\n",
+    )
+    .expect("Cargo.toml");
+    std::fs::create_dir_all(workspace.join("src")).expect("src");
+    std::fs::create_dir_all(workspace.join("tests")).expect("tests");
+    std::fs::write(workspace.join("src/lib.rs"), "pub fn value() {}\n").expect("lib");
+    let test = workspace.join("tests/integration.rs");
+    std::fs::write(&test, "#[test]\nfn works() {}\n").expect("test");
+    commit_verification_fixture(workspace);
+    std::fs::write(&test, "#[test]\nfn still_works() {}\n").expect("modify test");
+
+    let command =
+        detect_verify_command(workspace, Some("HEAD"), &BTreeSet::new()).expect("verifier");
+    assert!(command
+        .contains("cargo check --manifest-path 'Cargo.toml' -p 'fixture' --message-format=short"));
+    assert!(command.contains(
+        "cargo check --manifest-path 'Cargo.toml' -p 'fixture' --test 'integration' --message-format=short"
+    ));
 }

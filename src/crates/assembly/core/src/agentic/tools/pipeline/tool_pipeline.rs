@@ -18,16 +18,17 @@ use crate::util::errors::{BitFunError, BitFunResult};
 use bitfun_agent_runtime::permission::{
     PendingPermissionReceiver, PermissionRequestManager, PermissionWaitOutcome,
 };
+use bitfun_agent_stream::ToolArgumentRepairKind;
 use bitfun_agent_tools::{
-    build_invalid_tool_call_error_message, build_permission_denied_tool_presentation,
-    build_tool_call_truncation_recovery_notice, build_tool_execution_error_presentation,
+    build_invalid_tool_call_error_message, build_normal_tool_json_repair_notice,
+    build_permission_denied_tool_presentation, build_tool_execution_error_presentation,
     build_tool_execution_timeout_presentation,
     build_user_rejected_tool_presentation_with_instruction,
-    build_user_steering_interrupted_presentation, render_tool_result_for_assistant,
-    truncate_raw_tool_arguments_preview, truncate_tool_arguments_preview,
-    validate_tool_execution_admission, PermissionIntent, ResolvedToolInvocation,
-    ToolExecutionAdmissionRejection, ToolExecutionAdmissionRequest, ToolExecutionErrorPresentation,
-    GET_TOOL_SPEC_TOOL_NAME, USER_STEERING_INTERRUPTED_MESSAGE,
+    build_user_steering_interrupted_presentation, build_write_tail_closure_notice,
+    render_tool_result_for_assistant, truncate_raw_tool_arguments_preview,
+    truncate_tool_arguments_preview, validate_tool_execution_admission, PermissionIntent,
+    ResolvedToolInvocation, ToolExecutionAdmissionRejection, ToolExecutionAdmissionRequest,
+    ToolExecutionErrorPresentation, GET_TOOL_SPEC_TOOL_NAME, USER_STEERING_INTERRUPTED_MESSAGE,
 };
 use bitfun_runtime_ports::{
     wildcard_matches, PermissionEffect, PermissionGrant, PermissionReply, PermissionRequest,
@@ -410,9 +411,10 @@ fn map_tool_execution_admission_rejection(error: ToolExecutionAdmissionRejection
 fn recovered_write_has_potentially_truncated_marked_path(
     tool_name: &str,
     arguments: &serde_json::Value,
+    repair_kind: ToolArgumentRepairKind,
     recovered_from_truncation: bool,
 ) -> bool {
-    recovered_from_truncation
+    (repair_kind.is_write_tail_closure() || recovered_from_truncation)
         && tool_name == "Write"
         && arguments
             .get("payload")
@@ -500,6 +502,40 @@ fn permission_project_path(context: &ToolUseContext) -> BitFunResult<String> {
         .to_string())
 }
 
+const ACCOUNT_PERMISSION_SCOPE: &str = "account";
+const ACCOUNT_PERMISSION_PROJECT_ID: &str = "__bitfun_account_actions__";
+const ACCOUNT_PERMISSION_PROJECT_PATH: &str = "BitFun account";
+
+fn permission_scope(
+    context: &ToolUseContext,
+    intents: &[PermissionIntent],
+) -> BitFunResult<(String, String)> {
+    if context.workspace.is_some() {
+        return Ok((
+            permission_project_id(context)?,
+            permission_project_path(context)?,
+        ));
+    }
+
+    let account_scoped = intents.iter().all(|intent| {
+        intent
+            .display_metadata
+            .get("permissionScope")
+            .and_then(serde_json::Value::as_str)
+            == Some(ACCOUNT_PERMISSION_SCOPE)
+    });
+    if account_scoped {
+        return Ok((
+            ACCOUNT_PERMISSION_PROJECT_ID.to_string(),
+            ACCOUNT_PERMISSION_PROJECT_PATH.to_string(),
+        ));
+    }
+
+    Err(BitFunError::validation(
+        "A workspace is required for file permissions".to_string(),
+    ))
+}
+
 fn permission_resource_case_sensitivity(
     context: &ToolUseContext,
 ) -> PermissionResourceCaseSensitivity {
@@ -564,10 +600,21 @@ fn permission_intent_effect(
         }
     }
 
-    if intent.resources.is_empty() {
+    let effect = if intent.resources.is_empty() {
         PermissionEffect::Ask
     } else {
         aggregate
+    };
+    if effect != PermissionEffect::Deny
+        && intent
+            .display_metadata
+            .get("requiresFreshApproval")
+            .and_then(serde_json::Value::as_bool)
+            .unwrap_or(false)
+    {
+        PermissionEffect::Ask
+    } else {
+        effect
     }
 }
 
@@ -623,8 +670,7 @@ impl ToolPipeline {
             return Ok(PermissionPlanDraft::Allowed);
         }
 
-        let project_id = permission_project_id(&context)?;
-        let project_path = permission_project_path(&context)?;
+        let (project_id, project_path) = permission_scope(&context, &intents)?;
         let permission_rules = task.options.permission_rules.clone();
         let case_sensitivity = permission_resource_case_sensitivity(&context);
         let round_id = task.context.round_id.clone();
@@ -760,6 +806,7 @@ impl ToolPipeline {
                 || recovered_write_has_potentially_truncated_marked_path(
                     &tool_name,
                     &task.invocation.effective_arguments,
+                    task.tool_call.repair_kind,
                     task.tool_call.recovered_from_truncation,
                 )
             {
@@ -1375,7 +1422,9 @@ impl ToolPipeline {
         let tool_name = task.invocation.effective_tool_name.clone();
         let tool_args = task.invocation.effective_arguments.clone();
         let tool_is_error = task.tool_call.is_error;
-        let recovered_from_truncation = task.tool_call.recovered_from_truncation;
+        let repair_kind = task.tool_call.repair_kind;
+        let recovered_from_truncation =
+            repair_kind.is_write_tail_closure() || task.tool_call.recovered_from_truncation;
         let queue_wait_ms = elapsed_ms_since(task.created_at);
         let confirmation_wait_ms = 0;
 
@@ -1401,6 +1450,7 @@ impl ToolPipeline {
         } else if recovered_write_has_potentially_truncated_marked_path(
             &tool_name,
             &tool_args,
+            repair_kind,
             recovered_from_truncation,
         ) {
             Some(
@@ -1430,11 +1480,20 @@ impl ToolPipeline {
             return Err(BitFunError::Validation(error_msg));
         }
 
-        if recovered_from_truncation {
-            warn!(
-                "Tool '{}' arguments were recovered from a truncated stream (tool_id={}, session_id={}). Executing with patched arguments — content may be incomplete.",
+        match repair_kind {
+            ToolArgumentRepairKind::WriteTailClosure => warn!(
+                "Tool arguments recovered with Write close-only repair: tool_name={}, tool_id={}, session_id={}",
                 tool_name, tool_id, task.context.session_id
-            );
+            ),
+            ToolArgumentRepairKind::PermissiveNormalToolJsonRepair => warn!(
+                "Tool arguments repaired after normal tool-use completion: tool_name={}, tool_id={}, session_id={}",
+                tool_name, tool_id, task.context.session_id
+            ),
+            ToolArgumentRepairKind::None if recovered_from_truncation => warn!(
+                "Executing legacy recovered Write tool call without repair provenance: tool_name={}, tool_id={}, session_id={}",
+                tool_name, tool_id, task.context.session_id
+            ),
+            ToolArgumentRepairKind::None => {}
         }
 
         // Repetition alone is not execution failure: polling and status checks
@@ -1657,13 +1716,19 @@ impl ToolPipeline {
                     .await;
                 tool_result.duration_ms = Some(duration_ms);
 
-                // The tool call succeeded with arguments that we patched
-                // because the model's output was truncated mid-stream. Tell
-                // the model so it can decide whether the partial call needs
-                // to be continued or regenerated.
-                if recovered_from_truncation {
+                if !matches!(repair_kind, ToolArgumentRepairKind::None) || recovered_from_truncation
+                {
                     let original = tool_result.result_for_assistant.unwrap_or_default();
-                    let notice = build_tool_call_truncation_recovery_notice(&tool_name);
+                    let notice = match repair_kind {
+                        ToolArgumentRepairKind::WriteTailClosure => {
+                            build_write_tail_closure_notice(&tool_name)
+                        }
+                        ToolArgumentRepairKind::PermissiveNormalToolJsonRepair => {
+                            build_normal_tool_json_repair_notice(&tool_name)
+                        }
+                        // Old persisted calls carry only the legacy boolean.
+                        ToolArgumentRepairKind::None => build_write_tail_closure_notice(&tool_name),
+                    };
                     tool_result.result_for_assistant = Some(if original.is_empty() {
                         notice.trim_end().to_string()
                     } else {
@@ -2132,6 +2197,7 @@ mod tests {
         assert!(recovered_write_has_potentially_truncated_marked_path(
             "Write",
             &json!({ "payload": "+++ C:/workspace/truncated" }),
+            Default::default(),
             true,
         ));
     }
@@ -2141,11 +2207,13 @@ mod tests {
         assert!(!recovered_write_has_potentially_truncated_marked_path(
             "Write",
             &json!({ "payload": "+++ C:/workspace/empty.txt" }),
+            Default::default(),
             false,
         ));
         assert!(!recovered_write_has_potentially_truncated_marked_path(
             "Write",
             &json!({ "payload": "+++ C:/workspace/empty.txt\n" }),
+            Default::default(),
             true,
         ));
     }
@@ -2155,11 +2223,13 @@ mod tests {
         assert!(!recovered_write_has_potentially_truncated_marked_path(
             "Write",
             &json!({ "payload": "partial content without a path" }),
+            Default::default(),
             true,
         ));
         assert!(!recovered_write_has_potentially_truncated_marked_path(
             "Write",
             &json!({ "payload": "+++ C:/workspace/main.rs\npartial content" }),
+            Default::default(),
             true,
         ));
     }
@@ -2207,6 +2277,65 @@ mod tests {
             ),
             PermissionEffect::Deny
         );
+    }
+
+    #[test]
+    fn account_scoped_fresh_approval_works_without_a_workspace_and_ignores_allow_rules() {
+        let mut intent = PermissionIntent::new(
+            "page_publish",
+            vec!["page:demo; visibility=private; deploy=saved-version-only".to_string()],
+        );
+        intent.display_metadata.insert(
+            "permissionScope".to_string(),
+            json!(ACCOUNT_PERMISSION_SCOPE),
+        );
+        intent
+            .display_metadata
+            .insert("requiresFreshApproval".to_string(), json!(true));
+        let context = ToolUseContext::for_tool_listing(None, None);
+        assert_eq!(
+            permission_scope(&context, &[intent.clone()]).expect("account scope"),
+            (
+                ACCOUNT_PERMISSION_PROJECT_ID.to_string(),
+                ACCOUNT_PERMISSION_PROJECT_PATH.to_string(),
+            )
+        );
+
+        let allow = vec![PermissionRule::new(
+            "page_publish",
+            "*",
+            PermissionEffect::Allow,
+        )];
+        assert_eq!(
+            permission_intent_effect(
+                &intent,
+                &allow,
+                &[],
+                PermissionResourceCaseSensitivity::Sensitive,
+            ),
+            PermissionEffect::Ask
+        );
+        let deny = vec![PermissionRule::new(
+            "page_publish",
+            "*",
+            PermissionEffect::Deny,
+        )];
+        assert_eq!(
+            permission_intent_effect(
+                &intent,
+                &deny,
+                &[],
+                PermissionResourceCaseSensitivity::Sensitive,
+            ),
+            PermissionEffect::Deny
+        );
+    }
+
+    #[test]
+    fn ordinary_permission_intents_still_require_a_workspace() {
+        let context = ToolUseContext::for_tool_listing(None, None);
+        let intent = PermissionIntent::new("edit", vec!["src/main.rs".to_string()]);
+        assert!(permission_scope(&context, &[intent]).is_err());
     }
 
     struct StaticTestTool {
@@ -2510,7 +2639,9 @@ mod tests {
             arguments: json!({ "path": "src/main.rs" }),
             raw_arguments: None,
             is_error: false,
+            parse_error: None,
             recovered_from_truncation: false,
+            repair_kind: Default::default(),
         }
     }
 
@@ -3882,22 +4013,23 @@ mod tests {
     }
 
     #[test]
-    fn truncation_notice_for_interactive_tools_does_not_claim_file_write() {
-        let notice = build_tool_call_truncation_recovery_notice("AskUserQuestion");
+    fn normal_json_repair_notice_for_interactive_tools_does_not_claim_file_write() {
+        let notice = build_normal_tool_json_repair_notice("AskUserQuestion");
 
-        assert!(notice.contains("AskUserQuestion call was truncated"));
+        assert!(notice.contains("AskUserQuestion call contained malformed JSON"));
         assert!(notice.contains("fresh complete AskUserQuestion call"));
         assert!(!notice.contains("file was written"));
-        assert!(!notice.contains("issue ONE Edit call"));
+        assert!(!notice.contains("max_tokens"));
     }
 
     #[test]
-    fn truncation_notice_for_write_tools_keeps_write_continuation_guidance() {
-        let notice = build_tool_call_truncation_recovery_notice("Write");
+    fn write_tail_closure_notice_keeps_write_continuation_guidance() {
+        let notice = build_write_tail_closure_notice("Write");
 
         assert!(notice.contains("file may have been written with partial content"));
         assert!(notice.contains("latest Read result"));
         assert!(notice.contains("use Edit to add only the missing continuation"));
+        assert!(!notice.contains("max_tokens"));
     }
 
     #[test]

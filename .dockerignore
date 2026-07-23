@@ -12,3 +12,7 @@
 !src/crates/services/relay-service/Cargo.toml
 !src/crates/services/relay-service/src/
 !src/crates/services/relay-service/src/**
+!src/crates/services/page-function-runtime/
+!src/crates/services/page-function-runtime/Cargo.toml
+!src/crates/services/page-function-runtime/src/
+!src/crates/services/page-function-runtime/src/**

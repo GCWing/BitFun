@@ -19,6 +19,7 @@ export type AccountSyncPhase =
   | 'failed';
 
 export interface AccountSyncProgress {
+  operation_id: number;
   phase: AccountSyncPhase;
   percent: number;
   current: number | null;
@@ -27,24 +28,31 @@ export interface AccountSyncProgress {
 }
 
 interface AccountSyncState {
+  /** Monotonic generation used to ignore stale detached sync completions. */
+  operationId: number;
   status: AccountSyncStatus;
   progress: AccountSyncProgress;
   lastResult: AutoSyncResult | null;
   lastError: string | null;
-  setSyncing: () => void;
-  applyProgress: (progress: Partial<AccountSyncProgress> & { phase: string }) => void;
+  /** Last sync direction; true uploads local settings, false downloads cloud settings. */
+  lastSyncIsFirstLogin: boolean | null;
+  setSyncing: (isFirstLogin: boolean) => void;
+  applyProgress: (
+    progress: Partial<AccountSyncProgress> & Pick<AccountSyncProgress, 'operation_id'> & { phase: string }
+  ) => void;
   setDone: (result: AutoSyncResult) => void;
   setFailed: (error: string) => void;
   clear: () => void;
 }
 
-const INITIAL_PROGRESS: AccountSyncProgress = {
+const createInitialProgress = (operationId = 0): AccountSyncProgress => ({
+  operation_id: operationId,
   phase: 'starting',
   percent: 0,
   current: null,
   total: null,
   detail: null,
-};
+});
 
 function normalizePhase(phase: string): AccountSyncPhase {
   switch (phase) {
@@ -68,46 +76,60 @@ function normalizePhase(phase: string): AccountSyncPhase {
 }
 
 /**
- * Survives Remote Connect dialog close/reopen so users can reopen My Devices
+ * Survives Remote Connect dialog close/reopen so users can reopen My BitFun
  * and still see in-progress cloud sync after choosing local/cloud overwrite.
  */
 export const useAccountSyncStore = create<AccountSyncState>((set) => ({
+  operationId: 0,
   status: 'idle',
-  progress: INITIAL_PROGRESS,
+  progress: createInitialProgress(),
   lastResult: null,
   lastError: null,
-  setSyncing: () =>
-    set({
-      status: 'syncing',
-      lastError: null,
-      progress: { ...INITIAL_PROGRESS, phase: 'starting', percent: 0 },
+  lastSyncIsFirstLogin: null,
+  setSyncing: (isFirstLogin) =>
+    set((state) => {
+      const operationId = state.operationId + 1;
+      return {
+        operationId,
+        status: 'syncing',
+        lastError: null,
+        lastSyncIsFirstLogin: isFirstLogin,
+        progress: createInitialProgress(operationId),
+      };
     }),
   applyProgress: (progress) =>
-    set((state) => ({
-      status: progress.phase === 'failed' ? 'failed' : state.status === 'done' ? 'done' : 'syncing',
-      progress: {
-        phase: normalizePhase(progress.phase),
-        percent: typeof progress.percent === 'number'
-          ? Math.max(0, Math.min(100, progress.percent))
-          : state.progress.percent,
-        current: progress.current ?? null,
-        total: progress.total ?? null,
-        detail: progress.detail ?? null,
-      },
-    })),
+    set((state) => {
+      if (progress.operation_id !== state.operationId) {
+        return state;
+      }
+      return {
+        status: progress.phase === 'failed' ? 'failed' : state.status === 'done' ? 'done' : 'syncing',
+        progress: {
+          operation_id: state.operationId,
+          phase: normalizePhase(progress.phase),
+          percent: typeof progress.percent === 'number'
+            ? Math.max(0, Math.min(100, progress.percent))
+            : state.progress.percent,
+          current: progress.current ?? null,
+          total: progress.total ?? null,
+          detail: progress.detail ?? null,
+        },
+      };
+    }),
   setDone: (result) =>
-    set({
+    set((state) => ({
       status: 'done',
       lastResult: result,
       lastError: null,
       progress: {
+        operation_id: state.operationId,
         phase: 'done',
         percent: 100,
         current: result.sessions_exported,
         total: result.sessions_exported,
         detail: null,
       },
-    }),
+    })),
   setFailed: (error) =>
     set((state) => ({
       status: 'failed',
@@ -115,11 +137,16 @@ export const useAccountSyncStore = create<AccountSyncState>((set) => ({
       progress: { ...state.progress, phase: 'failed' },
     })),
   clear: () =>
-    set({
-      status: 'idle',
-      lastResult: null,
-      lastError: null,
-      progress: INITIAL_PROGRESS,
+    set((state) => {
+      const operationId = state.operationId + 1;
+      return {
+        operationId,
+        status: 'idle',
+        lastResult: null,
+        lastError: null,
+        lastSyncIsFirstLogin: null,
+        progress: createInitialProgress(operationId),
+      };
     }),
 }));
 
@@ -135,7 +162,13 @@ export function ensureAccountSyncProgressListener(): void {
       if (!payload?.phase) {
         return;
       }
-      useAccountSyncStore.getState().applyProgress(payload);
+      const state = useAccountSyncStore.getState();
+      // Logout/device removal invalidates the active operation by returning the
+      // store to idle. Ignore late backend progress from the detached request.
+      if (state.status === 'idle' || payload.operation_id !== state.operationId) {
+        return;
+      }
+      state.applyProgress(payload);
     });
   } catch (error) {
     log.warn('Failed to register account sync progress listener', error);

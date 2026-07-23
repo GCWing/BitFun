@@ -1,9 +1,14 @@
 import { useEffect, useRef } from 'react';
-import { RemoteSessionManager } from '../services/RemoteSessionManager';
+import { isDelegatedIdentityChangedError } from '../services/RelayHttpClient';
+import {
+  isRemoteControlTargetChangedError,
+  RemoteSessionManager,
+} from '../services/RemoteSessionManager';
 import { useMobileStore } from '../services/store';
 
 const PING_INTERVAL = 15000;
 const PING_TIMEOUT = 10000;
+const OWNERSHIP_RETRY_DELAY = 250;
 
 function pingWithTimeout(mgr: RemoteSessionManager, ms: number): Promise<void> {
   let timeoutId: ReturnType<typeof setTimeout> | undefined;
@@ -23,31 +28,57 @@ export function useConnectionHealth(sessionMgr: RemoteSessionManager | null) {
 
   useEffect(() => {
     let cancelled = false;
+    let loopGeneration = 0;
 
     if (!sessionMgr) {
       setConnectionHealth('unpaired');
       return;
     }
 
-    setConnectionHealth('checking');
+    const schedule = (generation: number, delay: number) => {
+      if (cancelled || generation !== loopGeneration) return;
+      if (timerRef.current) clearTimeout(timerRef.current);
+      timerRef.current = setTimeout(() => {
+        void loop(generation);
+      }, delay);
+    };
 
-    const loop = async () => {
+    const loop = async (generation: number) => {
+      if (cancelled || generation !== loopGeneration) return;
       try {
         await pingWithTimeout(sessionMgr, PING_TIMEOUT);
-        if (!cancelled) setConnectionHealth('connected');
-      } catch {
-        if (!cancelled) setConnectionHealth('unreachable');
-      }
-
-      if (!cancelled) {
-        timerRef.current = setTimeout(loop, PING_INTERVAL);
+        if (cancelled || generation !== loopGeneration) return;
+        setConnectionHealth('connected');
+        schedule(generation, PING_INTERVAL);
+      } catch (error: unknown) {
+        if (cancelled || generation !== loopGeneration) return;
+        if (
+          isRemoteControlTargetChangedError(error)
+          || isDelegatedIdentityChangedError(error)
+        ) {
+          setConnectionHealth('checking');
+          schedule(generation, OWNERSHIP_RETRY_DELAY);
+          return;
+        }
+        setConnectionHealth('unreachable');
+        schedule(generation, PING_INTERVAL);
       }
     };
 
-    loop();
+    const restart = () => {
+      loopGeneration += 1;
+      if (timerRef.current) clearTimeout(timerRef.current);
+      setConnectionHealth('checking');
+      void loop(loopGeneration);
+    };
+
+    const unlisten = sessionMgr.onControlTargetChange(restart);
+    restart();
 
     return () => {
       cancelled = true;
+      loopGeneration += 1;
+      unlisten();
       if (timerRef.current) clearTimeout(timerRef.current);
     };
   }, [sessionMgr, setConnectionHealth]);

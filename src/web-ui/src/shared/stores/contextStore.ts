@@ -23,6 +23,7 @@ interface ContextState {
   addContext: (item: ContextItem) => void;
   removeContext: (id: string) => void;
   clearContexts: () => void;
+  replaceContexts: (contexts: ContextItem[]) => void;
   updateValidation: (id: string, result: ValidationResult) => void;
   setValidating: (id: string, validating: boolean) => void;
   reorderContexts: (startIndex: number, endIndex: number) => void;
@@ -79,6 +80,14 @@ export const useContextStore = create<ContextState>()(
             validationStates: new Map(),
             validatingIds: new Set()
           }, false, 'clearContexts');
+        },
+
+        replaceContexts: (contexts: ContextItem[]) => {
+          set({
+            contexts: [...contexts],
+            validationStates: new Map(),
+            validatingIds: new Set(),
+          }, false, 'replaceContexts');
         },
         
         

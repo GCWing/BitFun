@@ -13,9 +13,9 @@ use tokio::sync::{mpsc, oneshot, OwnedSemaphorePermit, Semaphore};
 use tracing::{debug, info, warn};
 
 pub type ConnId = u64;
-pub const MAX_PENDING_REQUESTS: usize = 1024;
-pub const MAX_PENDING_REQUESTS_PER_ROOM: usize = 128;
-pub const MAX_ACTIVE_ROOMS: usize = 10_000;
+pub const MAX_PENDING_REQUESTS: usize = i32::MAX as usize;
+pub const MAX_PENDING_REQUESTS_PER_ROOM: usize = i32::MAX as usize;
+pub const MAX_ACTIVE_ROOMS: usize = i32::MAX as usize;
 
 /// Room IDs cross an untrusted WebSocket boundary and later become asset
 /// namespace names. Keep them to one portable path segment so they can never
@@ -464,42 +464,31 @@ mod tests {
     }
 
     #[test]
-    fn pending_registration_is_bounded() {
+    fn pending_registration_capacity_is_effectively_unbounded() {
+        assert_eq!(MAX_PENDING_REQUESTS, i32::MAX as usize);
+        assert_eq!(MAX_PENDING_REQUESTS_PER_ROOM, i32::MAX as usize);
+        assert_eq!(MAX_ACTIVE_ROOMS, i32::MAX as usize);
+
         let manager = RoomManager::new();
         let mut guards = Vec::new();
-
-        for index in 0..MAX_PENDING_REQUESTS {
+        for index in 0..64 {
             let room_id = format!("room-{index}");
             let (guard, _rx) = manager
                 .try_register_pending(&room_id, format!("pending-{index}"))
                 .expect("pending registration within limit");
             guards.push(guard);
         }
-
-        assert!(manager
-            .try_register_pending("overflow-room", "overflow".to_string())
-            .is_none());
         drop(guards.pop());
         assert!(manager
             .try_register_pending("after-cancel-room", "after-cancel".to_string())
             .is_some());
-    }
 
-    #[test]
-    fn pending_registration_is_bounded_per_room_without_starving_other_rooms() {
-        let manager = RoomManager::new();
-        let mut guards = Vec::new();
-
-        for index in 0..MAX_PENDING_REQUESTS_PER_ROOM {
+        for index in 0..64 {
             let (guard, _rx) = manager
                 .try_register_pending("room-a", format!("room-a-{index}"))
                 .expect("room-a pending registration within per-room limit");
             guards.push(guard);
         }
-
-        assert!(manager
-            .try_register_pending("room-a", "room-a-overflow".to_string())
-            .is_none());
         assert!(manager
             .try_register_pending("room-b", "room-b-still-healthy".to_string())
             .is_some());

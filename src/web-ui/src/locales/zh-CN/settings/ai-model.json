@@ -59,6 +59,7 @@
     "loginSuccess": "登录成功",
     "loginFailed": "登录失败：{{error}}",
     "logoutSuccess": "已退出登录",
+    "logoutCleanupPending": "已退出登录，系统凭据清理仍在等待中，稍后会自动重试。",
     "logoutFailed": "退出登录失败：{{error}}",
     "userCodeHint": "请在浏览器中输入验证码：{{code}}",
     "openUrlManually": "无法自动打开浏览器，请手动访问：{{url}}",
@@ -74,7 +75,29 @@
     },
     "detected": "将使用 {{label}}（账号 {{account}}）",
     "notConnected": "尚未登录 {{kind}}，请先在上方完成登录",
-    "unknownAccount": "当前登录账号"
+    "unknownAccount": "当前登录账号",
+    "secureStoreMigrationNotice": "订阅凭据现已由系统安全凭据库保存。旧版从第三方 CLI 自动导入的凭据不会被读取；如果你曾使用该方式，请在此重新登录一次。",
+    "dismissMigrationNotice": "知道了",
+    "reauthenticationRequired": "系统凭据库中未找到可用凭据，请重新登录一次",
+    "vaultUnavailable": "系统凭据库已锁定或暂时不可用。请解锁后重试，你的登录信息并未被移除",
+    "retryVault": "重试凭据库",
+    "loginPending": "正在等待浏览器完成授权",
+    "loginCancelling": "正在取消登录并关闭授权会话",
+    "loginCompletedBeforeCancel": "授权已在取消前完成，因此该账号仍保持登录状态",
+    "timeRemaining": "剩余时间 {{time}}",
+    "verificationCode": "验证码",
+    "copyCode": "复制验证码",
+    "codeCopied": "验证码已复制",
+    "copyCodeFailed": "复制验证码失败",
+    "openAuthorization": "打开授权页面",
+    "retryLogin": "重新登录",
+    "loginNeedsRetry": "本次登录未完成",
+    "loginFailedInline": "{{error}}",
+    "logoutConfirmTitle": "确认退出订阅账号",
+    "logoutAffectedModels": "退出后，当前使用该账号的 {{count}} 个模型配置将无法请求模型：",
+    "logoutNoAffectedModels": "当前没有模型配置使用此订阅账号。",
+    "logoutConsequence": "模型配置不会被删除；重新登录同一订阅账号后可以继续使用。",
+    "confirmLogout": "确认退出"
   },
   "providerSelection": {
     "title": "选择模型提供商",
@@ -281,6 +304,13 @@
     "invalid": "请输入正整数秒数，或留空。",
     "save": "保存首 Token 超时",
     "saveSuccess": "首 Token 超时已保存"
+  },
+  "toolArgumentJsonRepair": {
+    "title": "工具参数 JSON 修复",
+    "description": "修改将在下一轮模型调用生效。",
+    "label": "修复非法 JSON 工具参数",
+    "hint": "仅在供应商确认工具调用正常完成后尝试。修复可能在常规工具校验前改写非法 JSON。",
+    "saveSuccess": "工具参数 JSON 修复设置已保存"
   },
   "capabilities": {
     "text_chat": "对话",

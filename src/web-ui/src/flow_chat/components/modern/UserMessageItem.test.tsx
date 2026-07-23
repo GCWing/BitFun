@@ -34,6 +34,10 @@ vi.mock('../../store/modernFlowChatStore', () => ({
   useActiveSession: () => activeSessionRef.current,
 }));
 
+vi.mock('../../services/flow-chat-manager/PeerSessionRefreshModule', () => ({
+  installPeerSessionRefresh: vi.fn(() => () => {}),
+}));
+
 const flowChatStoreMock = vi.hoisted(() => ({
   getState: vi.fn(() => ({
     sessions: new Map(),

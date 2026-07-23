@@ -25,6 +25,7 @@ const preloadTaskDetailPanel = () => import('@/flow_chat/components/TaskDetailPa
 interface ChatPaneProps {
   width: number;
   isFullscreen: boolean;
+  isSceneActive?: boolean;
   workspacePath?: string;
   isDragging?: boolean;
   showChatInput?: boolean;
@@ -33,6 +34,7 @@ interface ChatPaneProps {
 const ChatPaneInner: React.FC<ChatPaneProps> = ({
   width: _width,
   isFullscreen,
+  isSceneActive = true,
   workspacePath,
   isDragging: _isDragging = false,
   showChatInput = false,
@@ -160,7 +162,12 @@ const ChatPaneInner: React.FC<ChatPaneProps> = ({
           theme: 'auto'
         }}
       />
-      {showChatInput && <ChatInput onSendMessage={(_message: string) => {}} />}
+      {showChatInput && (
+        <ChatInput
+          isSceneActive={isSceneActive}
+          onSendMessage={(_message: string) => {}}
+        />
+      )}
     </div>
   );
 };

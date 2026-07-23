@@ -586,20 +586,24 @@ Generate a single-page HTML file with these constraints:
   matches the actual use case)
 - Add HTML comments explaining design decisions
 
-Write to a temp file:
+Create a cross-platform temp file:
 ```bash
-SKETCH_FILE="/tmp/gstack-sketch-$(date +%s).html"
+SKETCH_FILE=$(python -c "import os,tempfile; fd,path=tempfile.mkstemp(prefix='gstack-sketch-',suffix='.html'); os.close(fd); print(path)")
 ```
 
 **Step 3: Render and capture**
 
+Once per skill invocation, before the first browser command used for rendering, run `agent-browser --version` (require 0.32.3 or newer) and load `agent-browser skills get core`; reuse that guidance for the rest of this invocation. If either step fails, do not install automatically; keep the HTML artifact and use the fallback below.
+
 ```bash
-BitFun browser/computer-use goto "file://$SKETCH_FILE"
-BitFun browser/computer-use screenshot /tmp/gstack-sketch.png
+SKETCH_URI=$(python -c "import sys; from pathlib import Path; print(Path(sys.argv[1]).resolve().as_uri())" "$SKETCH_FILE")
+SKETCH_SCREENSHOT="${SKETCH_FILE%.html}.png"
+agent-browser --allow-file-access open "$SKETCH_URI"
+agent-browser screenshot "$SKETCH_SCREENSHOT"
 ```
 
-If `BitFun browser/computer-use` is not available (BitFun browser/computer-use tooling not set up), skip the render step. Tell the
-user: "Use BitFun browser/computer-use tooling for the visual sketch when it is available. If unavailable, skip the render step and keep the HTML sketch artifact."
+If `agent-browser` is not available (agent-browser CLI not set up), skip the render step. Tell the
+user: "Use the agent-browser CLI for the visual sketch when it is available. If unavailable, skip the render step and keep the HTML sketch artifact."
 
 **Step 4: Present and iterate**
 
@@ -611,7 +615,7 @@ If they approve or say "good enough," proceed.
 **Step 5: Include in design doc**
 
 Reference the wireframe screenshot in the design doc's "Recommended Approach" section.
-The screenshot file at `/tmp/gstack-sketch.png` can be referenced by downstream skills
+The generated `$SKETCH_SCREENSHOT` path can be referenced by downstream skills
 (`/plan-design-review`, `/design-review`) to see what was originally envisioned.
 
 **Step 6: Outside design voices** (optional)

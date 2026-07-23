@@ -7,11 +7,18 @@
 use anyhow::{anyhow, Result};
 use chrono::Utc;
 use sqlx::sqlite::{SqliteConnectOptions, SqliteJournalMode, SqlitePoolOptions, SqliteSynchronous};
-use sqlx::{Pool, Sqlite};
+use sqlx::{Pool, QueryBuilder, Sqlite};
 use std::str::FromStr;
 use std::time::Duration;
 
 pub type DbPool = Pool<Sqlite>;
+
+pub const MAX_PAGE_KV_KEY_BYTES: usize = 256;
+pub const MAX_PAGE_KV_VALUE_BYTES: usize = 64 * 1024;
+pub const MAX_PAGE_KV_ENTRIES: i64 = 1_024;
+pub const MAX_USER_KV_ENTRIES: i64 = 10_000;
+pub const MAX_PAGE_KV_BYTES: i64 = 5 * 1024 * 1024;
+pub const MAX_USER_KV_BYTES: i64 = 25 * 1024 * 1024;
 
 const SCHEMA: &str = r#"
 CREATE TABLE IF NOT EXISTS users (
@@ -68,6 +75,7 @@ CREATE TABLE IF NOT EXISTS sync_settings (
 CREATE TABLE IF NOT EXISTS pages (
   user_id     TEXT NOT NULL REFERENCES users(user_id),
   slug        TEXT NOT NULL,
+  generation  TEXT NOT NULL DEFAULT '',
   visibility  TEXT NOT NULL DEFAULT 'private',
   title       TEXT NOT NULL DEFAULT '',
   file_count  INTEGER NOT NULL DEFAULT 0,
@@ -115,12 +123,28 @@ const MIGRATE_PAGES_DEPLOYED_VERSION: &str = r#"
 ALTER TABLE pages ADD COLUMN deployed_version_id TEXT;
 "#;
 
+const MIGRATE_PAGES_GENERATION: &str = r#"
+ALTER TABLE pages ADD COLUMN generation TEXT NOT NULL DEFAULT '';
+"#;
+
 const MIGRATE_AUTH_TOKEN_KIND: &str = r#"
 ALTER TABLE auth_tokens ADD COLUMN token_kind TEXT NOT NULL DEFAULT 'device';
 "#;
 
 /// Open (or create) the SQLite database and ensure the schema exists.
 pub async fn connect(db_path: &str) -> Result<DbPool> {
+    connect_with_presence_reset(db_path, true).await
+}
+
+/// Open the shared database for the out-of-process administration CLI.
+/// Unlike a server-process startup, an admin connection must preserve the
+/// live relay's durable presence projection: even `list-users` may run via
+/// `docker exec` while authenticated WebSockets remain active.
+pub async fn connect_for_admin(db_path: &str) -> Result<DbPool> {
+    connect_with_presence_reset(db_path, false).await
+}
+
+async fn connect_with_presence_reset(db_path: &str, reset_presence: bool) -> Result<DbPool> {
     let options = SqliteConnectOptions::from_str(&format!("sqlite://{db_path}"))?
         .create_if_missing(true)
         .foreign_keys(true)
@@ -136,6 +160,21 @@ pub async fn connect(db_path: &str) -> Result<DbPool> {
     let _ = sqlx::query(MIGRATE_PAGES_DEPLOYED_VERSION)
         .execute(&pool)
         .await;
+    if let Err(error) = sqlx::query(MIGRATE_PAGES_GENERATION).execute(&pool).await {
+        if !error.to_string().contains("duplicate column name") {
+            return Err(anyhow!("migrate page generations: {error}"));
+        }
+    }
+    // A Page generation is an authorization boundary. It must change when a
+    // `(user_id, slug)` row is deleted and later recreated, so legacy rows get
+    // a random value once instead of sharing a constant migration default.
+    sqlx::query(
+        "UPDATE pages SET generation = lower(hex(randomblob(16))) \
+         WHERE generation = ''",
+    )
+    .execute(&pool)
+    .await
+    .map_err(|e| anyhow!("initialize page generations: {e}"))?;
     // Existing tokens predate delegation scopes and are full device tokens.
     if let Err(error) = sqlx::query(MIGRATE_AUTH_TOKEN_KIND).execute(&pool).await {
         if !error.to_string().contains("duplicate column name") {
@@ -149,13 +188,16 @@ pub async fn connect(db_path: &str) -> Result<DbPool> {
         .execute(&pool)
         .await
         .map_err(|e| anyhow!("clean expired auth tokens: {e}"))?;
-    // Online presence is owned by the in-memory connection registry. A fresh
-    // process has no live sockets, so never carry stale online flags across a
-    // restart or crash.
-    sqlx::query("UPDATE devices SET online = 0")
-        .execute(&pool)
-        .await
-        .map_err(|e| anyhow!("reset stale device presence: {e}"))?;
+    if reset_presence {
+        // Online presence is owned by the in-memory connection registry. A
+        // fresh *server* process has no live sockets, so never carry stale
+        // online flags across a restart or crash. Administration processes
+        // intentionally skip this reset because the server may still run.
+        sqlx::query("UPDATE devices SET online = 0")
+            .execute(&pool)
+            .await
+            .map_err(|e| anyhow!("reset stale device presence: {e}"))?;
+    }
     tracing::info!("Account database initialized at {db_path}");
     Ok(pool)
 }
@@ -552,12 +594,11 @@ impl DeviceRow {
         let now = Utc::now().timestamp();
         sqlx::query(
             "INSERT INTO devices (device_id, user_id, device_name, public_key, last_seen_at, online) \
-             VALUES (?, ?, ?, ?, ?, 1) \
+             VALUES (?, ?, ?, ?, ?, 0) \
              ON CONFLICT(user_id, device_id) DO UPDATE SET \
                device_name = excluded.device_name, \
                public_key = excluded.public_key, \
-               last_seen_at = excluded.last_seen_at, \
-               online = 1",
+               last_seen_at = excluded.last_seen_at",
         )
         .bind(device_id)
         .bind(user_id)
@@ -754,6 +795,39 @@ impl AuthToken {
         Ok(Some(auth_token))
     }
 
+    /// Batch-load active device tokens for the server-side revocation reaper.
+    /// Chunking keeps the query below SQLite's bind-variable limit even when a
+    /// relay has many connected devices.
+    pub async fn find_valid_device_tokens(
+        pool: &DbPool,
+        tokens: &[String],
+    ) -> Result<Vec<AuthToken>> {
+        const TOKEN_QUERY_CHUNK_SIZE: usize = 200;
+        let now = Utc::now().timestamp();
+        let mut valid = Vec::new();
+        for chunk in tokens.chunks(TOKEN_QUERY_CHUNK_SIZE) {
+            let mut query = QueryBuilder::<Sqlite>::new(
+                "SELECT token, user_id, device_id, token_kind, created_at, expires_at \
+                 FROM auth_tokens WHERE token_kind = 'device' AND expires_at > ",
+            );
+            query.push_bind(now);
+            query.push(" AND token IN (");
+            let mut separated = query.separated(", ");
+            for token in chunk {
+                separated.push_bind(token);
+            }
+            separated.push_unseparated(")");
+            valid.extend(
+                query
+                    .build_query_as::<AuthToken>()
+                    .fetch_all(pool)
+                    .await
+                    .map_err(|e| anyhow!("batch find active device tokens: {e}"))?,
+            );
+        }
+        Ok(valid)
+    }
+
     /// Revoke (delete) all tokens belonging to a specific device.
     pub async fn revoke_by_device(pool: &DbPool, user_id: &str, device_id: &str) -> Result<()> {
         sqlx::query("DELETE FROM auth_tokens WHERE user_id = ? AND device_id = ?")
@@ -795,6 +869,10 @@ pub struct SyncSessionRow {
 
 impl SyncSessionRow {
     /// Upsert an encrypted session blob. Last-writer-wins via version.
+    ///
+    /// Enforces optional per-user active session count and total encrypted-byte
+    /// quotas. Product defaults are effectively unlimited (`i32::MAX`); pass
+    /// lower ceilings when an operator needs to bound account storage.
     pub async fn upsert_with_quota(
         pool: &DbPool,
         user_id: &str,
@@ -874,6 +952,54 @@ impl SyncSessionRow {
         .await
         .map_err(|e| anyhow!("delete sync session: {e}"))?;
         Ok(())
+    }
+
+    /// Soft-delete oldest active sessions (excluding `keep_session_id`) until
+    /// inserting/replacing a blob of `needed_bytes` would satisfy count/byte quotas.
+    ///
+    /// Used when a fresh upsert is rejected so recent backups can displace LRU
+    /// cloud sessions instead of failing the whole sync with HTTP 507.
+    pub async fn make_room_for_upsert(
+        pool: &DbPool,
+        user_id: &str,
+        keep_session_id: &str,
+        needed_bytes: i64,
+        max_sessions: i64,
+        max_total_bytes: i64,
+    ) -> Result<usize> {
+        if needed_bytes > max_total_bytes {
+            return Ok(0);
+        }
+        let candidates = sqlx::query_as::<_, SyncSessionRow>(
+            "SELECT session_id, encrypted_data, nonce, version, updated_at, deleted \
+             FROM sync_sessions \
+             WHERE user_id = ? AND deleted = 0 AND session_id <> ? \
+             ORDER BY updated_at ASC, version ASC, session_id ASC",
+        )
+        .bind(user_id)
+        .bind(keep_session_id)
+        .fetch_all(pool)
+        .await
+        .map_err(|e| anyhow!("list sync sessions for quota relief: {e}"))?;
+
+        let mut bytes: i64 = candidates
+            .iter()
+            .map(|row| row.encrypted_data.len() as i64)
+            .sum();
+        let mut count = candidates.len() as i64;
+        let mut evicted = 0usize;
+
+        for row in candidates {
+            if count < max_sessions && bytes.saturating_add(needed_bytes) <= max_total_bytes {
+                break;
+            }
+            Self::delete(pool, user_id, &row.session_id).await?;
+            bytes = bytes.saturating_sub(row.encrypted_data.len() as i64);
+            count = count.saturating_sub(1);
+            evicted += 1;
+        }
+
+        Ok(evicted)
     }
 
     /// Fetch one non-deleted session blob by id.
@@ -983,6 +1109,7 @@ impl PageVisibility {
 pub struct PageRow {
     pub user_id: String,
     pub slug: String,
+    pub generation: String,
     pub visibility: String,
     pub title: String,
     pub file_count: i64,
@@ -998,6 +1125,7 @@ pub struct PageWithUsername {
     pub user_id: String,
     pub username: String,
     pub slug: String,
+    pub generation: String,
     pub visibility: String,
     pub title: String,
     pub file_count: i64,
@@ -1020,12 +1148,36 @@ pub struct PageVersionRow {
     pub created_at: i64,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SavePageVersionOutcome {
+    Saved,
+    PageLimitReached,
+    VersionLimitReached,
+    GenerationMismatch,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DeletePageVersionOutcome {
+    Deleted,
+    Deployed,
+    NotFound,
+    GenerationMismatch,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum PageMutationOutcome<T> {
+    Applied(T),
+    NotFound,
+    GenerationMismatch,
+}
+
 impl PageRow {
     pub fn visibility_enum(&self) -> Option<PageVisibility> {
         PageVisibility::parse(&self.visibility)
     }
 
-    const SELECT_COLS: &'static str = "user_id, slug, visibility, title, file_count, total_bytes, \
+    const SELECT_COLS: &'static str =
+        "user_id, slug, generation, visibility, title, file_count, total_bytes, \
              deployed_version_id, created_at, updated_at";
 
     /// Ensure a page metadata row exists (draft upload / first save).
@@ -1037,11 +1189,12 @@ impl PageRow {
         title: &str,
     ) -> Result<()> {
         let now = Utc::now().timestamp();
+        let generation = new_page_generation();
         sqlx::query(
             "INSERT INTO pages \
-             (user_id, slug, visibility, title, file_count, total_bytes, deployed_version_id, \
+             (user_id, slug, generation, visibility, title, file_count, total_bytes, deployed_version_id, \
               created_at, updated_at) \
-             VALUES (?, ?, ?, ?, 0, 0, NULL, ?, ?) \
+             VALUES (?, ?, ?, ?, ?, 0, 0, NULL, ?, ?) \
              ON CONFLICT(user_id, slug) DO UPDATE SET \
                visibility = excluded.visibility, \
                title = CASE WHEN excluded.title = '' THEN pages.title ELSE excluded.title END, \
@@ -1049,6 +1202,7 @@ impl PageRow {
         )
         .bind(user_id)
         .bind(slug)
+        .bind(generation)
         .bind(visibility.as_str())
         .bind(title)
         .bind(now)
@@ -1093,17 +1247,155 @@ impl PageRow {
         Ok(row.0)
     }
 
+    /// Atomically create/update Page metadata and insert its immutable version.
+    /// A failed version insert or quota check must never leak title/visibility
+    /// changes onto the previously deployed Page.
+    #[allow(clippy::too_many_arguments)]
+    pub async fn save_version_with_meta(
+        pool: &DbPool,
+        user_id: &str,
+        slug: &str,
+        visibility: PageVisibility,
+        title: &str,
+        version_id: &str,
+        file_count: i64,
+        total_bytes: i64,
+        has_worker: bool,
+        note: &str,
+        max_pages_per_user: i64,
+        max_versions_per_page: i64,
+        expected_generation: Option<&str>,
+        create: bool,
+    ) -> Result<SavePageVersionOutcome> {
+        let mut tx = pool
+            .begin()
+            .await
+            .map_err(|e| anyhow!("begin save page version transaction: {e}"))?;
+
+        let page_exists: Option<(String,)> =
+            sqlx::query_as("SELECT generation FROM pages WHERE user_id = ? AND slug = ?")
+                .bind(user_id)
+                .bind(slug)
+                .fetch_optional(&mut *tx)
+                .await
+                .map_err(|e| anyhow!("read page before saving version: {e}"))?;
+        let version_count: (i64,) =
+            sqlx::query_as("SELECT COUNT(*) FROM page_versions WHERE user_id = ? AND slug = ?")
+                .bind(user_id)
+                .bind(slug)
+                .fetch_one(&mut *tx)
+                .await
+                .map_err(|e| anyhow!("count page versions before save: {e}"))?;
+        if version_count.0 >= max_versions_per_page {
+            return Ok(SavePageVersionOutcome::VersionLimitReached);
+        }
+
+        let now = Utc::now().timestamp();
+        if let Some((generation,)) = page_exists {
+            if create || expected_generation != Some(generation.as_str()) {
+                return Ok(SavePageVersionOutcome::GenerationMismatch);
+            }
+            let result = sqlx::query(
+                "UPDATE pages SET visibility = ?, title = ?, updated_at = ? \
+                 WHERE user_id = ? AND slug = ? AND generation = ?",
+            )
+            .bind(visibility.as_str())
+            .bind(title)
+            .bind(now)
+            .bind(user_id)
+            .bind(slug)
+            .bind(&generation)
+            .execute(&mut *tx)
+            .await
+            .map_err(|e| anyhow!("update page metadata while saving version: {e}"))?;
+            if result.rows_affected() == 0 {
+                return Err(anyhow!("page disappeared while saving version"));
+            }
+        } else {
+            if !create || expected_generation.is_some() {
+                return Ok(SavePageVersionOutcome::GenerationMismatch);
+            }
+            let page_count: (i64,) = sqlx::query_as("SELECT COUNT(*) FROM pages WHERE user_id = ?")
+                .bind(user_id)
+                .fetch_one(&mut *tx)
+                .await
+                .map_err(|e| anyhow!("count pages before save: {e}"))?;
+            if page_count.0 >= max_pages_per_user {
+                return Ok(SavePageVersionOutcome::PageLimitReached);
+            }
+            let inserted = sqlx::query(
+                "INSERT INTO pages \
+                 (user_id, slug, generation, visibility, title, file_count, total_bytes, \
+                  deployed_version_id, created_at, updated_at) \
+                 VALUES (?, ?, ?, ?, ?, 0, 0, NULL, ?, ?) \
+                 ON CONFLICT(user_id, slug) DO NOTHING",
+            )
+            .bind(user_id)
+            .bind(slug)
+            .bind(new_page_generation())
+            .bind(visibility.as_str())
+            .bind(title)
+            .bind(now)
+            .bind(now)
+            .execute(&mut *tx)
+            .await
+            .map_err(|e| anyhow!("create page while saving version: {e}"))?;
+            if inserted.rows_affected() == 0 {
+                return Ok(SavePageVersionOutcome::GenerationMismatch);
+            }
+        }
+
+        sqlx::query(
+            "INSERT INTO page_versions \
+             (user_id, slug, version_id, title, file_count, total_bytes, has_worker, note, created_at) \
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        )
+        .bind(user_id)
+        .bind(slug)
+        .bind(version_id)
+        .bind(title)
+        .bind(file_count)
+        .bind(total_bytes)
+        .bind(has_worker as i64)
+        .bind(note)
+        .bind(now)
+        .execute(&mut *tx)
+        .await
+        .map_err(|e| anyhow!("insert page version with metadata: {e}"))?;
+
+        tx.commit()
+            .await
+            .map_err(|e| anyhow!("commit saved page version: {e}"))?;
+        Ok(SavePageVersionOutcome::Saved)
+    }
+
     pub async fn update_meta(
         pool: &DbPool,
         user_id: &str,
         slug: &str,
+        expected_generation: &str,
         visibility: Option<PageVisibility>,
         title: Option<&str>,
-    ) -> Result<bool> {
-        let existing = Self::get(pool, user_id, slug).await?;
+    ) -> Result<PageMutationOutcome<PageRow>> {
+        let mut tx = pool
+            .begin()
+            .await
+            .map_err(|e| anyhow!("begin update page transaction: {e}"))?;
+        let existing = sqlx::query_as::<_, PageRow>(&format!(
+            "SELECT {} FROM pages WHERE user_id = ? AND slug = ?",
+            Self::SELECT_COLS
+        ))
+        .bind(user_id)
+        .bind(slug)
+        .fetch_optional(&mut *tx)
+        .await
+        .map_err(|e| anyhow!("read page before metadata update: {e}"))?;
         let Some(page) = existing else {
-            return Ok(false);
+            return Ok(PageMutationOutcome::NotFound);
         };
+        if page.generation != expected_generation {
+            return Ok(PageMutationOutcome::GenerationMismatch);
+        }
         let now = Utc::now().timestamp();
         let new_vis = visibility
             .map(|v| v.as_str().to_string())
@@ -1111,17 +1403,34 @@ impl PageRow {
         let new_title = title.map(|t| t.to_string()).unwrap_or(page.title);
         let result = sqlx::query(
             "UPDATE pages SET visibility = ?, title = ?, updated_at = ? \
-             WHERE user_id = ? AND slug = ?",
+             WHERE user_id = ? AND slug = ? AND generation = ?",
         )
         .bind(&new_vis)
         .bind(&new_title)
         .bind(now)
         .bind(user_id)
         .bind(slug)
-        .execute(pool)
+        .bind(expected_generation)
+        .execute(&mut *tx)
         .await
         .map_err(|e| anyhow!("update page meta: {e}"))?;
-        Ok(result.rows_affected() > 0)
+        if result.rows_affected() == 0 {
+            return Ok(PageMutationOutcome::GenerationMismatch);
+        }
+        let updated = sqlx::query_as::<_, PageRow>(&format!(
+            "SELECT {} FROM pages WHERE user_id = ? AND slug = ? AND generation = ?",
+            Self::SELECT_COLS
+        ))
+        .bind(user_id)
+        .bind(slug)
+        .bind(expected_generation)
+        .fetch_one(&mut *tx)
+        .await
+        .map_err(|e| anyhow!("read updated page metadata: {e}"))?;
+        tx.commit()
+            .await
+            .map_err(|e| anyhow!("commit update page transaction: {e}"))?;
+        Ok(PageMutationOutcome::Applied(updated))
     }
 
     pub async fn set_deployed_version(
@@ -1153,32 +1462,268 @@ impl PageRow {
         Ok(())
     }
 
-    pub async fn delete(pool: &DbPool, user_id: &str, slug: &str) -> Result<bool> {
+    /// Atomically attach the synthetic `v1` record used by the pre-versioned
+    /// asset-layout migration. The generation fence prevents a stale migration
+    /// from inserting an orphan version or updating a delete/recreated Page.
+    #[allow(clippy::too_many_arguments)]
+    pub async fn migrate_legacy_version(
+        pool: &DbPool,
+        user_id: &str,
+        slug: &str,
+        expected_generation: &str,
+        version_id: &str,
+        title: &str,
+        file_count: i64,
+        total_bytes: i64,
+        has_worker: bool,
+    ) -> Result<PageMutationOutcome<bool>> {
+        let mut tx = pool
+            .begin()
+            .await
+            .map_err(|e| anyhow!("begin legacy page migration transaction: {e}"))?;
+        let page: Option<(String, Option<String>)> = sqlx::query_as(
+            "SELECT generation, deployed_version_id FROM pages WHERE user_id = ? AND slug = ?",
+        )
+        .bind(user_id)
+        .bind(slug)
+        .fetch_optional(&mut *tx)
+        .await
+        .map_err(|e| anyhow!("read page before legacy migration: {e}"))?;
+        let Some((generation, deployed_version_id)) = page else {
+            return Ok(PageMutationOutcome::NotFound);
+        };
+        if generation != expected_generation {
+            return Ok(PageMutationOutcome::GenerationMismatch);
+        }
+        let version_count: (i64,) =
+            sqlx::query_as("SELECT COUNT(*) FROM page_versions WHERE user_id = ? AND slug = ?")
+                .bind(user_id)
+                .bind(slug)
+                .fetch_one(&mut *tx)
+                .await
+                .map_err(|e| anyhow!("count versions before legacy migration: {e}"))?;
+        if deployed_version_id.is_some() || version_count.0 > 0 {
+            return Ok(PageMutationOutcome::Applied(false));
+        }
+
+        let now = Utc::now().timestamp();
+        let inserted = sqlx::query(
+            "INSERT OR IGNORE INTO page_versions \
+             (user_id, slug, version_id, title, file_count, total_bytes, has_worker, note, created_at) \
+             VALUES (?, ?, ?, ?, ?, ?, ?, 'migrated', ?)",
+        )
+        .bind(user_id)
+        .bind(slug)
+        .bind(version_id)
+        .bind(title)
+        .bind(file_count)
+        .bind(total_bytes)
+        .bind(has_worker as i64)
+        .bind(now)
+        .execute(&mut *tx)
+        .await
+        .map_err(|e| anyhow!("insert migrated legacy page version: {e}"))?;
+        if inserted.rows_affected() == 0 {
+            return Ok(PageMutationOutcome::Applied(false));
+        }
+        let updated = sqlx::query(
+            "UPDATE pages SET deployed_version_id = ?, updated_at = ? \
+             WHERE user_id = ? AND slug = ? AND generation = ? AND deployed_version_id IS NULL",
+        )
+        .bind(version_id)
+        .bind(now)
+        .bind(user_id)
+        .bind(slug)
+        .bind(expected_generation)
+        .execute(&mut *tx)
+        .await
+        .map_err(|e| anyhow!("deploy migrated legacy page version: {e}"))?;
+        if updated.rows_affected() == 0 {
+            return Ok(PageMutationOutcome::GenerationMismatch);
+        }
+        tx.commit()
+            .await
+            .map_err(|e| anyhow!("commit legacy page migration: {e}"))?;
+        Ok(PageMutationOutcome::Applied(true))
+    }
+
+    /// Deploy a version and return the resulting Page from one transaction.
+    /// The version lookup and production-pointer update cannot race a version
+    /// deletion performed through the paired transactional API below.
+    pub async fn deploy_version(
+        pool: &DbPool,
+        user_id: &str,
+        slug: &str,
+        version_id: &str,
+        expected_generation: &str,
+    ) -> Result<PageMutationOutcome<PageRow>> {
+        let mut tx = pool
+            .begin()
+            .await
+            .map_err(|e| anyhow!("begin deploy page version transaction: {e}"))?;
+        let page_generation: Option<(String,)> =
+            sqlx::query_as("SELECT generation FROM pages WHERE user_id = ? AND slug = ?")
+                .bind(user_id)
+                .bind(slug)
+                .fetch_optional(&mut *tx)
+                .await
+                .map_err(|e| anyhow!("read page before deploy: {e}"))?;
+        let Some((page_generation,)) = page_generation else {
+            return Ok(PageMutationOutcome::NotFound);
+        };
+        if page_generation != expected_generation {
+            return Ok(PageMutationOutcome::GenerationMismatch);
+        }
+
+        let version = sqlx::query_as::<_, PageVersionRow>(
+            "SELECT user_id, slug, version_id, title, file_count, total_bytes, has_worker, note, created_at \
+             FROM page_versions WHERE user_id = ? AND slug = ? AND version_id = ?",
+        )
+        .bind(user_id)
+        .bind(slug)
+        .bind(version_id)
+        .fetch_optional(&mut *tx)
+        .await
+        .map_err(|e| anyhow!("get page version for deploy: {e}"))?;
+        let Some(version) = version else {
+            return Ok(PageMutationOutcome::NotFound);
+        };
+
+        let now = Utc::now().timestamp();
+        let updated = sqlx::query(
+            "UPDATE pages SET deployed_version_id = ?, file_count = ?, total_bytes = ?, \
+             title = CASE WHEN ? = '' THEN title ELSE ? END, updated_at = ? \
+             WHERE user_id = ? AND slug = ? AND generation = ?",
+        )
+        .bind(&version.version_id)
+        .bind(version.file_count)
+        .bind(version.total_bytes)
+        .bind(&version.title)
+        .bind(&version.title)
+        .bind(now)
+        .bind(user_id)
+        .bind(slug)
+        .bind(expected_generation)
+        .execute(&mut *tx)
+        .await
+        .map_err(|e| anyhow!("deploy page version: {e}"))?;
+        if updated.rows_affected() == 0 {
+            return Ok(PageMutationOutcome::GenerationMismatch);
+        }
+        let page = sqlx::query_as::<_, PageRow>(&format!(
+            "SELECT {} FROM pages WHERE user_id = ? AND slug = ? AND generation = ?",
+            Self::SELECT_COLS
+        ))
+        .bind(user_id)
+        .bind(slug)
+        .bind(expected_generation)
+        .fetch_one(&mut *tx)
+        .await
+        .map_err(|e| anyhow!("read deployed page: {e}"))?;
+        tx.commit()
+            .await
+            .map_err(|e| anyhow!("commit deployed page version: {e}"))?;
+        Ok(PageMutationOutcome::Applied(page))
+    }
+
+    pub async fn clear_deployed_version(
+        pool: &DbPool,
+        user_id: &str,
+        slug: &str,
+        expected_generation: &str,
+    ) -> Result<PageMutationOutcome<()>> {
+        let mut tx = pool
+            .begin()
+            .await
+            .map_err(|e| anyhow!("begin unpublish page transaction: {e}"))?;
+        let now = Utc::now().timestamp();
+        let result = sqlx::query(
+            "UPDATE pages SET deployed_version_id = NULL, updated_at = ? \
+             WHERE user_id = ? AND slug = ? AND generation = ?",
+        )
+        .bind(now)
+        .bind(user_id)
+        .bind(slug)
+        .bind(expected_generation)
+        .execute(&mut *tx)
+        .await
+        .map_err(|e| anyhow!("clear deployed version: {e}"))?;
+        if result.rows_affected() == 0 {
+            let exists: Option<(String,)> =
+                sqlx::query_as("SELECT generation FROM pages WHERE user_id = ? AND slug = ?")
+                    .bind(user_id)
+                    .bind(slug)
+                    .fetch_optional(&mut *tx)
+                    .await
+                    .map_err(|e| anyhow!("read page after failed unpublish: {e}"))?;
+            return Ok(if exists.is_some() {
+                PageMutationOutcome::GenerationMismatch
+            } else {
+                PageMutationOutcome::NotFound
+            });
+        }
+        tx.commit()
+            .await
+            .map_err(|e| anyhow!("commit unpublish page transaction: {e}"))?;
+        Ok(PageMutationOutcome::Applied(()))
+    }
+
+    pub async fn delete(
+        pool: &DbPool,
+        user_id: &str,
+        slug: &str,
+        expected_generation: &str,
+    ) -> Result<PageMutationOutcome<()>> {
+        let mut tx = pool
+            .begin()
+            .await
+            .map_err(|e| anyhow!("begin page delete transaction: {e}"))?;
+        let existing: Option<(String,)> =
+            sqlx::query_as("SELECT generation FROM pages WHERE user_id = ? AND slug = ?")
+                .bind(user_id)
+                .bind(slug)
+                .fetch_optional(&mut *tx)
+                .await
+                .map_err(|e| anyhow!("read page before delete: {e}"))?;
+        let Some((generation,)) = existing else {
+            return Ok(PageMutationOutcome::NotFound);
+        };
+        if generation != expected_generation {
+            return Ok(PageMutationOutcome::GenerationMismatch);
+        }
         sqlx::query("DELETE FROM page_kv WHERE user_id = ? AND slug = ?")
             .bind(user_id)
             .bind(slug)
-            .execute(pool)
+            .execute(&mut *tx)
             .await
             .map_err(|e| anyhow!("delete page_kv: {e}"))?;
         sqlx::query("DELETE FROM page_blobs WHERE user_id = ? AND slug = ?")
             .bind(user_id)
             .bind(slug)
-            .execute(pool)
+            .execute(&mut *tx)
             .await
             .map_err(|e| anyhow!("delete page_blobs: {e}"))?;
         sqlx::query("DELETE FROM page_versions WHERE user_id = ? AND slug = ?")
             .bind(user_id)
             .bind(slug)
-            .execute(pool)
+            .execute(&mut *tx)
             .await
             .map_err(|e| anyhow!("delete page_versions: {e}"))?;
-        let result = sqlx::query("DELETE FROM pages WHERE user_id = ? AND slug = ?")
-            .bind(user_id)
-            .bind(slug)
-            .execute(pool)
+        let result =
+            sqlx::query("DELETE FROM pages WHERE user_id = ? AND slug = ? AND generation = ?")
+                .bind(user_id)
+                .bind(slug)
+                .bind(expected_generation)
+                .execute(&mut *tx)
+                .await
+                .map_err(|e| anyhow!("delete page: {e}"))?;
+        if result.rows_affected() == 0 {
+            return Ok(PageMutationOutcome::GenerationMismatch);
+        }
+        tx.commit()
             .await
-            .map_err(|e| anyhow!("delete page: {e}"))?;
-        Ok(result.rows_affected() > 0)
+            .map_err(|e| anyhow!("commit page delete transaction: {e}"))?;
+        Ok(PageMutationOutcome::Applied(()))
     }
 
     /// Resolve a page by public URL components `(username, slug)`.
@@ -1188,7 +1733,7 @@ impl PageRow {
         slug: &str,
     ) -> Result<Option<PageWithUsername>> {
         let row = sqlx::query_as::<_, PageWithUsername>(
-            "SELECT p.user_id, u.username, p.slug, p.visibility, p.title, \
+            "SELECT p.user_id, u.username, p.slug, p.generation, p.visibility, p.title, \
              p.file_count, p.total_bytes, p.deployed_version_id, p.created_at, p.updated_at \
              FROM pages p JOIN users u ON u.user_id = p.user_id \
              WHERE u.username = ? AND p.slug = ?",
@@ -1305,11 +1850,72 @@ impl PageVersionRow {
         .map_err(|e| anyhow!("delete page version: {e}"))?;
         Ok(result.rows_affected() > 0)
     }
+
+    pub async fn delete_if_not_deployed(
+        pool: &DbPool,
+        user_id: &str,
+        slug: &str,
+        version_id: &str,
+        expected_generation: &str,
+    ) -> Result<DeletePageVersionOutcome> {
+        let mut tx = pool
+            .begin()
+            .await
+            .map_err(|e| anyhow!("begin delete page version transaction: {e}"))?;
+        let page: Option<(String, Option<String>)> = sqlx::query_as(
+            "SELECT generation, deployed_version_id FROM pages WHERE user_id = ? AND slug = ?",
+        )
+        .bind(user_id)
+        .bind(slug)
+        .fetch_optional(&mut *tx)
+        .await
+        .map_err(|e| anyhow!("read page before version delete: {e}"))?;
+        let Some((generation, deployed_version_id)) = page else {
+            return Ok(DeletePageVersionOutcome::NotFound);
+        };
+        if generation != expected_generation {
+            return Ok(DeletePageVersionOutcome::GenerationMismatch);
+        }
+        if deployed_version_id.as_deref() == Some(version_id) {
+            return Ok(DeletePageVersionOutcome::Deployed);
+        }
+        let result = sqlx::query(
+            "DELETE FROM page_versions WHERE user_id = ? AND slug = ? AND version_id = ? \
+             AND EXISTS (SELECT 1 FROM pages WHERE user_id = ? AND slug = ? AND generation = ?)",
+        )
+        .bind(user_id)
+        .bind(slug)
+        .bind(version_id)
+        .bind(user_id)
+        .bind(slug)
+        .bind(expected_generation)
+        .execute(&mut *tx)
+        .await
+        .map_err(|e| anyhow!("delete undeployed page version: {e}"))?;
+        if result.rows_affected() == 0 {
+            return Ok(DeletePageVersionOutcome::NotFound);
+        }
+        tx.commit()
+            .await
+            .map_err(|e| anyhow!("commit page version delete: {e}"))?;
+        Ok(DeletePageVersionOutcome::Deleted)
+    }
 }
 
 /// Page KV helpers (mutable runtime data, keyed by page not version).
 pub mod page_kv {
     use super::*;
+
+    fn validate_key(key: &str) -> Result<()> {
+        if key.is_empty() || key.len() > MAX_PAGE_KV_KEY_BYTES || key.chars().any(char::is_control)
+        {
+            return Err(anyhow!(
+                "page KV key must be non-empty, control-free, and at most {} bytes",
+                MAX_PAGE_KV_KEY_BYTES
+            ));
+        }
+        Ok(())
+    }
 
     pub async fn get(
         pool: &DbPool,
@@ -1317,6 +1923,7 @@ pub mod page_kv {
         slug: &str,
         key: &str,
     ) -> Result<Option<String>> {
+        validate_key(key)?;
         let row: Option<(String,)> =
             sqlx::query_as("SELECT value FROM page_kv WHERE user_id = ? AND slug = ? AND key = ?")
                 .bind(user_id)
@@ -1335,6 +1942,63 @@ pub mod page_kv {
         key: &str,
         value: &str,
     ) -> Result<()> {
+        validate_key(key)?;
+        if value.len() > MAX_PAGE_KV_VALUE_BYTES {
+            return Err(anyhow!(
+                "page KV value exceeds the {} byte operation limit",
+                MAX_PAGE_KV_VALUE_BYTES
+            ));
+        }
+
+        let mut tx = pool
+            .begin()
+            .await
+            .map_err(|e| anyhow!("page_kv begin quota transaction: {e}"))?;
+        let page_exists: Option<(i64,)> =
+            sqlx::query_as("SELECT 1 FROM pages WHERE user_id = ? AND slug = ?")
+                .bind(user_id)
+                .bind(slug)
+                .fetch_optional(&mut *tx)
+                .await
+                .map_err(|e| anyhow!("page_kv verify page exists: {e}"))?;
+        if page_exists.is_none() {
+            return Err(anyhow!("page no longer exists"));
+        }
+        let old_bytes: Option<(i64,)> = sqlx::query_as(
+            "SELECT length(CAST(key AS BLOB)) + length(CAST(value AS BLOB)) \
+             FROM page_kv WHERE user_id = ? AND slug = ? AND key = ?",
+        )
+        .bind(user_id)
+        .bind(slug)
+        .bind(key)
+        .fetch_optional(&mut *tx)
+        .await
+        .map_err(|e| anyhow!("page_kv read existing size: {e}"))?;
+        let page_usage: (i64, i64) = sqlx::query_as(
+            "SELECT COUNT(*), COALESCE(SUM(length(CAST(key AS BLOB)) + \
+             length(CAST(value AS BLOB))), 0) FROM page_kv WHERE user_id = ? AND slug = ?",
+        )
+        .bind(user_id)
+        .bind(slug)
+        .fetch_one(&mut *tx)
+        .await
+        .map_err(|e| anyhow!("page_kv read page quota: {e}"))?;
+        let user_usage: (i64, i64) = sqlx::query_as(
+            "SELECT COUNT(*), COALESCE(SUM(length(CAST(key AS BLOB)) + \
+             length(CAST(value AS BLOB))), 0) FROM page_kv WHERE user_id = ?",
+        )
+        .bind(user_id)
+        .fetch_one(&mut *tx)
+        .await
+        .map_err(|e| anyhow!("page_kv read account quota: {e}"))?;
+        enforce_quota(
+            page_usage,
+            user_usage,
+            old_bytes.map_or(0, |row| row.0),
+            key.len().saturating_add(value.len()) as i64,
+            old_bytes.is_none(),
+        )?;
+
         let now = Utc::now().timestamp();
         sqlx::query(
             "INSERT INTO page_kv (user_id, slug, key, value, updated_at) VALUES (?, ?, ?, ?, ?) \
@@ -1345,13 +2009,17 @@ pub mod page_kv {
         .bind(key)
         .bind(value)
         .bind(now)
-        .execute(pool)
+        .execute(&mut *tx)
         .await
         .map_err(|e| anyhow!("page_kv put: {e}"))?;
+        tx.commit()
+            .await
+            .map_err(|e| anyhow!("page_kv commit: {e}"))?;
         Ok(())
     }
 
     pub async fn delete(pool: &DbPool, user_id: &str, slug: &str, key: &str) -> Result<bool> {
+        validate_key(key)?;
         let result = sqlx::query("DELETE FROM page_kv WHERE user_id = ? AND slug = ? AND key = ?")
             .bind(user_id)
             .bind(slug)
@@ -1372,6 +2040,78 @@ pub mod page_kv {
                 .map_err(|e| anyhow!("page_kv list: {e}"))?;
         Ok(rows.into_iter().map(|r| r.0).collect())
     }
+
+    fn enforce_quota(
+        page_usage: (i64, i64),
+        user_usage: (i64, i64),
+        replaced_bytes: i64,
+        added_bytes: i64,
+        is_new: bool,
+    ) -> Result<()> {
+        let added_entries = i64::from(is_new);
+        if page_usage.0.saturating_add(added_entries) > MAX_PAGE_KV_ENTRIES {
+            return Err(anyhow!("page KV entry quota exceeded"));
+        }
+        if user_usage.0.saturating_add(added_entries) > MAX_USER_KV_ENTRIES {
+            return Err(anyhow!("account KV entry quota exceeded"));
+        }
+        if page_usage
+            .1
+            .saturating_sub(replaced_bytes)
+            .saturating_add(added_bytes)
+            > MAX_PAGE_KV_BYTES
+        {
+            return Err(anyhow!("page KV byte quota exceeded"));
+        }
+        if user_usage
+            .1
+            .saturating_sub(replaced_bytes)
+            .saturating_add(added_bytes)
+            > MAX_USER_KV_BYTES
+        {
+            return Err(anyhow!("account KV byte quota exceeded"));
+        }
+        Ok(())
+    }
+
+    #[cfg(test)]
+    mod quota_tests {
+        use super::*;
+
+        #[test]
+        fn quota_projection_handles_insert_and_overwrite() {
+            assert!(enforce_quota(
+                (MAX_PAGE_KV_ENTRIES, 100),
+                (MAX_PAGE_KV_ENTRIES, 100),
+                10,
+                10,
+                false,
+            )
+            .is_ok());
+            assert!(enforce_quota(
+                (MAX_PAGE_KV_ENTRIES, 100),
+                (MAX_PAGE_KV_ENTRIES, 100),
+                0,
+                1,
+                true,
+            )
+            .is_err());
+            assert!(
+                enforce_quota((1, MAX_PAGE_KV_BYTES), (1, MAX_PAGE_KV_BYTES), 1, 2, false,)
+                    .is_err()
+            );
+            assert!(enforce_quota((1, 1), (1, MAX_USER_KV_BYTES), 0, 1, false,).is_err());
+        }
+
+        #[tokio::test]
+        async fn put_rejects_oversized_single_values_before_writing() {
+            let pool = connect(":memory:").await.unwrap();
+            let value = "x".repeat(MAX_PAGE_KV_VALUE_BYTES + 1);
+            let err = put(&pool, "u1", "site", "key", &value).await.unwrap_err();
+            assert!(err.to_string().contains("operation limit"));
+            assert!(get(&pool, "u1", "site", "key").await.unwrap().is_none());
+        }
+    }
 }
 
 /// Legacy single-room asset key (pre-versioning). Used only for one-time migration.
@@ -1387,6 +2127,11 @@ pub fn page_draft_asset_key(user_id: &str, slug: &str) -> String {
 /// Immutable version namespace.
 pub fn page_version_asset_key(user_id: &str, slug: &str, version_id: &str) -> String {
     format!("pages/{user_id}/{slug}/v/{version_id}")
+}
+
+fn new_page_generation() -> String {
+    let bytes: [u8; 16] = rand::random();
+    bytes.iter().map(|byte| format!("{byte:02x}")).collect()
 }
 
 /// Generate a new version id (`v` + 12 hex chars).
@@ -1406,6 +2151,28 @@ mod tests {
         let pool = connect(":memory:").await.unwrap();
         // sqlx in-memory needs a single connection to share state
         pool
+    }
+
+    #[tokio::test]
+    async fn admin_connection_preserves_live_server_presence_projection() {
+        let temp = tempfile::tempdir().unwrap();
+        let db_path = temp.path().join("relay.db");
+        let db_path = db_path.to_str().unwrap();
+        let runtime_pool = connect(db_path).await.unwrap();
+        UserRow::create(&runtime_pool, "u1", "alice", "s", "ks", "{}", "hash", "wmk")
+            .await
+            .unwrap();
+        DeviceRow::upsert(&runtime_pool, "d1", "u1", "Laptop", None)
+            .await
+            .unwrap();
+        DeviceRow::set_online(&runtime_pool, "u1", "d1", true)
+            .await
+            .unwrap();
+
+        let admin_pool = connect_for_admin(db_path).await.unwrap();
+        let rows = DeviceRow::list_by_user(&admin_pool, "u1").await.unwrap();
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].online, 1);
     }
 
     #[test]
@@ -1523,22 +2290,22 @@ mod tests {
             .unwrap();
 
         assert!(
-            SyncSessionRow::upsert_with_quota(&pool, "u1", "s1", "1234", "n", 1, 1, 5,)
+            SyncSessionRow::upsert_with_quota(&pool, "u1", "s1", "1234", "n", 1, 1, 5)
                 .await
                 .unwrap()
         );
         assert!(
-            SyncSessionRow::upsert_with_quota(&pool, "u1", "s1", "12345", "n", 2, 1, 5,)
+            SyncSessionRow::upsert_with_quota(&pool, "u1", "s1", "12345", "n", 2, 1, 5)
                 .await
                 .unwrap()
         );
         assert!(
-            !SyncSessionRow::upsert_with_quota(&pool, "u1", "s2", "1", "n", 1, 1, 5,)
+            !SyncSessionRow::upsert_with_quota(&pool, "u1", "s2", "1", "n", 1, 1, 5)
                 .await
                 .unwrap()
         );
         assert!(
-            !SyncSessionRow::upsert_with_quota(&pool, "u1", "s1", "123456", "n", 3, 1, 5,)
+            !SyncSessionRow::upsert_with_quota(&pool, "u1", "s1", "123456", "n", 3, 1, 5)
                 .await
                 .unwrap()
         );
@@ -1548,6 +2315,48 @@ mod tests {
             .unwrap()
             .unwrap();
         assert_eq!(stored.encrypted_data, "12345");
+    }
+
+    #[tokio::test]
+    async fn sync_session_make_room_evicts_oldest_until_upsert_fits() {
+        let pool = setup().await;
+        UserRow::create(&pool, "u1", "alice", "s", "ks", "{}", "hash", "wmk")
+            .await
+            .unwrap();
+
+        assert!(
+            SyncSessionRow::upsert_with_quota(&pool, "u1", "old", "1234", "n", 1, 2, 8)
+                .await
+                .unwrap()
+        );
+        assert!(
+            SyncSessionRow::upsert_with_quota(&pool, "u1", "mid", "1234", "n", 2, 2, 8)
+                .await
+                .unwrap()
+        );
+        assert!(
+            !SyncSessionRow::upsert_with_quota(&pool, "u1", "new", "1234", "n", 3, 2, 8)
+                .await
+                .unwrap()
+        );
+
+        let evicted = SyncSessionRow::make_room_for_upsert(&pool, "u1", "new", 4, 2, 8)
+            .await
+            .unwrap();
+        assert!(evicted >= 1);
+        assert!(
+            SyncSessionRow::upsert_with_quota(&pool, "u1", "new", "1234", "n", 3, 2, 8)
+                .await
+                .unwrap()
+        );
+        assert!(SyncSessionRow::get(&pool, "u1", "old")
+            .await
+            .unwrap()
+            .is_none());
+        assert!(SyncSessionRow::get(&pool, "u1", "new")
+            .await
+            .unwrap()
+            .is_some());
     }
 
     #[tokio::test]
@@ -1666,6 +2475,77 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn legacy_pages_receive_nonempty_authorization_generations() {
+        let db_path = std::env::temp_dir().join(format!(
+            "bitfun-relay-page-generation-migration-{}-{}.db",
+            std::process::id(),
+            rand::random::<u64>()
+        ));
+        let db_path_text = db_path.to_string_lossy().to_string();
+        let legacy_options = SqliteConnectOptions::from_str(&format!("sqlite://{db_path_text}"))
+            .unwrap()
+            .create_if_missing(true)
+            .foreign_keys(false);
+        let legacy = SqlitePoolOptions::new()
+            .max_connections(1)
+            .connect_with(legacy_options)
+            .await
+            .unwrap();
+        sqlx::query(
+            "CREATE TABLE users (\
+               user_id TEXT PRIMARY KEY, username TEXT UNIQUE NOT NULL,\
+               salt TEXT NOT NULL, kdf_salt TEXT NOT NULL, argon2_params TEXT NOT NULL,\
+               password_hash TEXT NOT NULL, wrapped_master_key TEXT NOT NULL,\
+               failed_attempts INTEGER NOT NULL DEFAULT 0, locked_until INTEGER NOT NULL DEFAULT 0,\
+               created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL\
+             )",
+        )
+        .execute(&legacy)
+        .await
+        .unwrap();
+        sqlx::query(
+            "CREATE TABLE pages (\
+               user_id TEXT NOT NULL REFERENCES users(user_id), slug TEXT NOT NULL,\
+               visibility TEXT NOT NULL DEFAULT 'private', title TEXT NOT NULL DEFAULT '',\
+               file_count INTEGER NOT NULL DEFAULT 0, total_bytes INTEGER NOT NULL DEFAULT 0,\
+               created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL,\
+               PRIMARY KEY (user_id, slug)\
+             )",
+        )
+        .execute(&legacy)
+        .await
+        .unwrap();
+        sqlx::query(
+            "INSERT INTO users \
+             (user_id, username, salt, kdf_salt, argon2_params, password_hash, \
+              wrapped_master_key, created_at, updated_at) \
+             VALUES ('u1', 'alice', 's', 'ks', '{}', 'hash', 'wmk', 1, 1)",
+        )
+        .execute(&legacy)
+        .await
+        .unwrap();
+        sqlx::query(
+            "INSERT INTO pages \
+             (user_id, slug, visibility, title, file_count, total_bytes, created_at, updated_at) \
+             VALUES ('u1', 'legacy', 'private', 'Legacy', 0, 0, 1, 1)",
+        )
+        .execute(&legacy)
+        .await
+        .unwrap();
+        legacy.close().await;
+
+        let migrated = connect(&db_path_text).await.unwrap();
+        let page = PageRow::get(&migrated, "u1", "legacy")
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(page.generation.len(), 32);
+        assert!(page.generation.bytes().all(|byte| byte.is_ascii_hexdigit()));
+        migrated.close().await;
+        let _ = std::fs::remove_file(db_path);
+    }
+
+    #[tokio::test]
     async fn page_ensure_version_deploy_and_resolve() {
         let pool = setup().await;
         UserRow::create(&pool, "u1", "alice", "s", "ks", "{}", "hash", "wmk")
@@ -1710,10 +2590,210 @@ mod tests {
             Some("v")
         );
 
-        assert!(PageRow::delete(&pool, "u1", "my-site").await.unwrap());
+        assert_eq!(
+            PageRow::delete(&pool, "u1", "my-site", &listed[0].generation)
+                .await
+                .unwrap(),
+            PageMutationOutcome::Applied(())
+        );
         assert!(PageRow::get(&pool, "u1", "my-site")
             .await
             .unwrap()
             .is_none());
+    }
+
+    #[tokio::test]
+    async fn page_version_metadata_and_lifecycle_mutations_are_atomic() {
+        let pool = setup().await;
+        UserRow::create(&pool, "u1", "alice", "s", "ks", "{}", "hash", "wmk")
+            .await
+            .unwrap();
+        PageRow::ensure(
+            &pool,
+            "u1",
+            "atomic-site",
+            PageVisibility::Private,
+            "Old title",
+        )
+        .await
+        .unwrap();
+        let original = PageRow::get(&pool, "u1", "atomic-site")
+            .await
+            .unwrap()
+            .unwrap();
+        PageVersionRow::insert(
+            &pool,
+            "u1",
+            "atomic-site",
+            "vold",
+            "Old title",
+            1,
+            10,
+            false,
+            "",
+        )
+        .await
+        .unwrap();
+
+        let limited = PageRow::save_version_with_meta(
+            &pool,
+            "u1",
+            "atomic-site",
+            PageVisibility::Public,
+            "New title",
+            "vnew",
+            2,
+            20,
+            false,
+            "new",
+            50,
+            1,
+            Some(&original.generation),
+            false,
+        )
+        .await
+        .unwrap();
+        assert_eq!(limited, SavePageVersionOutcome::VersionLimitReached);
+        let unchanged = PageRow::get(&pool, "u1", "atomic-site")
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(unchanged.visibility, "private");
+        assert_eq!(unchanged.title, "Old title");
+        assert_eq!(unchanged.generation, original.generation);
+        assert!(PageVersionRow::get(&pool, "u1", "atomic-site", "vnew")
+            .await
+            .unwrap()
+            .is_none());
+
+        assert_eq!(
+            PageRow::save_version_with_meta(
+                &pool,
+                "u1",
+                "atomic-site",
+                PageVisibility::Public,
+                "New title",
+                "vnew",
+                2,
+                20,
+                false,
+                "new",
+                50,
+                2,
+                Some(&original.generation),
+                false,
+            )
+            .await
+            .unwrap(),
+            SavePageVersionOutcome::Saved
+        );
+        let updated = PageRow::get(&pool, "u1", "atomic-site")
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(updated.visibility, "public");
+        assert_eq!(updated.title, "New title");
+        assert_eq!(updated.generation, original.generation);
+
+        let deployed =
+            match PageRow::deploy_version(&pool, "u1", "atomic-site", "vnew", &original.generation)
+                .await
+                .unwrap()
+            {
+                PageMutationOutcome::Applied(page) => page,
+                outcome => panic!("unexpected deploy outcome: {outcome:?}"),
+            };
+        assert_eq!(deployed.deployed_version_id.as_deref(), Some("vnew"));
+        assert_eq!(
+            PageVersionRow::delete_if_not_deployed(
+                &pool,
+                "u1",
+                "atomic-site",
+                "vnew",
+                &original.generation,
+            )
+            .await
+            .unwrap(),
+            DeletePageVersionOutcome::Deployed
+        );
+        assert_eq!(
+            PageVersionRow::delete_if_not_deployed(
+                &pool,
+                "u1",
+                "atomic-site",
+                "vold",
+                &original.generation,
+            )
+            .await
+            .unwrap(),
+            DeletePageVersionOutcome::Deleted
+        );
+
+        assert_eq!(
+            PageRow::delete(&pool, "u1", "atomic-site", &original.generation)
+                .await
+                .unwrap(),
+            PageMutationOutcome::Applied(())
+        );
+        PageRow::ensure(
+            &pool,
+            "u1",
+            "atomic-site",
+            PageVisibility::Private,
+            "Recreated",
+        )
+        .await
+        .unwrap();
+        let recreated = PageRow::get(&pool, "u1", "atomic-site")
+            .await
+            .unwrap()
+            .unwrap();
+        assert_ne!(recreated.generation, original.generation);
+
+        assert_eq!(
+            PageRow::migrate_legacy_version(
+                &pool,
+                "u1",
+                "atomic-site",
+                &original.generation,
+                "v1",
+                "Old title",
+                1,
+                10,
+                false,
+            )
+            .await
+            .unwrap(),
+            PageMutationOutcome::GenerationMismatch
+        );
+        assert!(PageVersionRow::list_for_page(&pool, "u1", "atomic-site")
+            .await
+            .unwrap()
+            .is_empty());
+        let after_stale_migration = PageRow::get(&pool, "u1", "atomic-site")
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(after_stale_migration.title, "Recreated");
+        assert!(after_stale_migration.deployed_version_id.is_none());
+        assert!(matches!(
+            PageRow::update_meta(
+                &pool,
+                "u1",
+                "atomic-site",
+                &original.generation,
+                Some(PageVisibility::Public),
+                Some("stale"),
+            )
+            .await
+            .unwrap(),
+            PageMutationOutcome::GenerationMismatch
+        ));
+        assert_eq!(
+            PageRow::delete(&pool, "u1", "atomic-site", &original.generation)
+                .await
+                .unwrap(),
+            PageMutationOutcome::GenerationMismatch
+        );
     }
 }

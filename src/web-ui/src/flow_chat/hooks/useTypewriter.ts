@@ -13,6 +13,72 @@
 
 import { useState, useEffect, useRef } from 'react';
 
+interface GraphemeSegment {
+  index: number;
+  segment: string;
+}
+
+interface GraphemeSegmenter {
+  segment: (text: string) => Iterable<GraphemeSegment>;
+}
+
+type GraphemeSegmenterConstructor = new (
+  locale?: string | string[],
+  options?: { granularity: 'grapheme' },
+) => GraphemeSegmenter;
+
+let cachedGraphemeSegmenter: GraphemeSegmenter | null | undefined;
+
+function getGraphemeSegmenter(): GraphemeSegmenter | null {
+  if (cachedGraphemeSegmenter !== undefined) return cachedGraphemeSegmenter;
+  const Segmenter = (Intl as typeof Intl & {
+    Segmenter?: GraphemeSegmenterConstructor;
+  }).Segmenter;
+  cachedGraphemeSegmenter = Segmenter
+    ? new Segmenter(undefined, { granularity: 'grapheme' })
+    : null;
+  return cachedGraphemeSegmenter;
+}
+
+/**
+ * Move a requested UTF-16 offset to the end of its grapheme. This prevents a
+ * paint from exposing half an emoji, combining sequence, or ZWJ family.
+ */
+export function safeGraphemeRevealEnd(
+  text: string,
+  requestedEnd: number,
+  knownBoundary = 0,
+): number {
+  const clampedEnd = Math.max(0, Math.min(text.length, Math.floor(requestedEnd)));
+  if (clampedEnd === 0 || clampedEnd === text.length) return clampedEnd;
+  const segmentStart = Math.max(0, Math.min(clampedEnd, Math.floor(knownBoundary)));
+  const remaining = text.slice(segmentStart);
+
+  const segmenter = getGraphemeSegmenter();
+  if (segmenter) {
+    for (const part of segmenter.segment(remaining)) {
+      const segmentEnd = segmentStart + part.index + part.segment.length;
+      if (segmentEnd >= clampedEnd) return segmentEnd;
+    }
+    return text.length;
+  }
+
+  // Older WebViews without Intl.Segmenter still must not split surrogate
+  // pairs. Array.from iterates Unicode code points rather than UTF-16 units.
+  let codePointEnd = segmentStart;
+  for (const codePoint of Array.from(remaining)) {
+    codePointEnd += codePoint.length;
+    if (codePointEnd >= clampedEnd) return codePointEnd;
+  }
+  return text.length;
+}
+
+function getPrefersReducedMotion(): boolean {
+  return typeof window !== 'undefined'
+    && typeof window.matchMedia === 'function'
+    && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+}
+
 /** Steady reveal rate while backlog is small (live streaming). */
 export const TYPEWRITER_BASE_CHARS_PER_SEC = 90;
 
@@ -139,7 +205,8 @@ export function useTypewriter(
   options: TypewriterOptions = {}
 ): TypewriterResult {
   const replayOnMount = options.replayOnMount ?? true;
-  const shouldReplayInitialText = animate && replayOnMount;
+  const [prefersReducedMotion, setPrefersReducedMotion] = useState(getPrefersReducedMotion);
+  const shouldReplayInitialText = animate && replayOnMount && !prefersReducedMotion;
   const [displayText, setDisplayText] = useState(shouldReplayInitialText ? '' : targetText);
   const revealedRef = useRef(shouldReplayInitialText ? 0 : targetText.length);
   const targetRef = useRef(targetText);
@@ -149,11 +216,27 @@ export function useTypewriter(
   const lastPaintMsRef = useRef(0);
   const fractionalCarryRef = useRef(0);
 
-  const isRevealing = animate || displayText.length < targetText.length;
+  const isRevealing = !prefersReducedMotion
+    && (animate || displayText.length < targetText.length);
 
   useEffect(() => {
     animateRef.current = animate;
     targetRef.current = targetText;
+
+    const pageIsHidden = typeof document !== 'undefined'
+      && document.visibilityState === 'hidden';
+    if (prefersReducedMotion || pageIsHidden) {
+      if (rafRef.current !== null) {
+        cancelAnimationFrame(rafRef.current);
+        rafRef.current = null;
+      }
+      lastTickMsRef.current = null;
+      lastPaintMsRef.current = 0;
+      fractionalCarryRef.current = 0;
+      revealedRef.current = targetText.length;
+      setDisplayText(targetText);
+      return;
+    }
 
     // Reset when target shrinks (e.g. new round).
     if (targetText.length < revealedRef.current) {
@@ -234,7 +317,11 @@ export function useTypewriter(
         fractionalCarryRef.current = committed.fractionalCarry;
 
         if (committed.chars > 0) {
-          const next = revealed + committed.chars;
+          const next = safeGraphemeRevealEnd(
+            target,
+            revealed + committed.chars,
+            revealed,
+          );
           revealedRef.current = next;
           lastPaintMsRef.current = nowMs;
           setDisplayText(target.slice(0, next));
@@ -251,7 +338,34 @@ export function useTypewriter(
     if (rafRef.current === null && targetText.length > revealedRef.current) {
       rafRef.current = requestAnimationFrame(tick);
     }
-  }, [targetText, animate]);
+  }, [targetText, animate, prefersReducedMotion]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return;
+    const media = window.matchMedia('(prefers-reduced-motion: reduce)');
+    const handleChange = (event: MediaQueryListEvent) => setPrefersReducedMotion(event.matches);
+    setPrefersReducedMotion(media.matches);
+    media.addEventListener?.('change', handleChange);
+    return () => media.removeEventListener?.('change', handleChange);
+  }, []);
+
+  useEffect(() => {
+    if (typeof document === 'undefined') return;
+    const revealLatestImmediately = () => {
+      if (rafRef.current !== null) {
+        cancelAnimationFrame(rafRef.current);
+        rafRef.current = null;
+      }
+      const target = targetRef.current;
+      lastTickMsRef.current = null;
+      lastPaintMsRef.current = 0;
+      fractionalCarryRef.current = 0;
+      revealedRef.current = target.length;
+      setDisplayText(target);
+    };
+    document.addEventListener('visibilitychange', revealLatestImmediately);
+    return () => document.removeEventListener('visibilitychange', revealLatestImmediately);
+  }, []);
 
   useEffect(() => {
     return () => {

@@ -3,7 +3,7 @@
  * Initializes event listeners and handles various Agentic events
  */
 
-import { FlowChatStore } from '../../store/FlowChatStore';
+import { FlowChatStore, mergeModelRoundAttemptDiagnostics } from '../../store/FlowChatStore';
 import { stateMachineManager } from '../../state-machine';
 import { SessionExecutionEvent, SessionExecutionState } from '../../state-machine/types';
 import { agenticEventListener, type AgenticEventCallbacks } from '../AgenticEventListener';
@@ -30,6 +30,7 @@ import type {
   ImageAnalysisEvent,
   ModelRoundStartedEvent,
   ModelRoundCompletedEvent,
+  ModelRoundAttemptSupersededEvent,
   OpenBuiltInBrowserEvent,
   AcpContextUsageUpdatedEvent,
   SessionModelAutoMigratedEvent,
@@ -80,6 +81,8 @@ import {
   clearRuntimeStatus,
   scheduleModelResponseStatus,
 } from './RuntimeStatusModule';
+import { requestPeerSessionRefresh } from './PeerSessionRefreshModule';
+import { isPeerDeviceModeActive } from '@/infrastructure/peer-device/peerModeFlag';
 
 const log = createLogger('EventHandlerModule');
 const TURN_COMPLETION_QUIET_WINDOW_MS = 500;
@@ -167,6 +170,7 @@ function logDroppedDataEvent(
   turnId: string | null,
   details: Record<string, unknown>
 ): void {
+  requestPeerSessionRefresh(sessionId);
   log.debug('Dropped agentic data event', {
     eventName,
     sessionId,
@@ -750,6 +754,9 @@ export async function initializeEventListeners(
     },
     onModelRoundCompleted: (event) => {
       handleModelRoundComplete(context, event);
+    },
+    onModelRoundAttemptSuperseded: (event) => {
+      handleModelRoundAttemptSuperseded(context, event);
     },
     onDialogTurnCompleted: (event) => {
       handleDialogTurnComplete(context, event, onTodoWriteResult);
@@ -1623,6 +1630,7 @@ function handleTextChunk(context: FlowChatContext, event: any): void {
 
   const dialogTurn = session.dialogTurns.find((turn: DialogTurn) => turn.id === turnId);
   if (!dialogTurn) {
+    requestPeerSessionRefresh(sessionId);
     log.debug('Dialog turn not found', { turnId });
     return;
   }
@@ -1691,7 +1699,12 @@ export function processBatchedEvents(
           processNormalTextChunkInternal(context, sessionId, turnId, roundId, text, attemptId, attemptIndex);
         }
         
-        debouncedSaveDialogTurn(context, sessionId, turnId, 2000);
+        // The executing host owns turn persistence. A Peer controller receives
+        // the same chunks for rendering and must not echo a save RPC for every
+        // checkpoint, especially on a weak link.
+        if (!isPeerDeviceModeActive()) {
+          debouncedSaveDialogTurn(context, sessionId, turnId, 2000);
+        }
       } else if (eventType === 'tool:params') {
         const { sessionId, turnId, toolEvent } = payload;
         processToolParamsPartialInternal(sessionId, turnId, toolEvent);
@@ -1795,6 +1808,7 @@ function handleModelRoundStart(context: FlowChatContext, event: ModelRoundStarte
 
   const dialogTurn = session.dialogTurns.find((turn: DialogTurn) => turn.id === turnId);
   if (!dialogTurn) {
+    requestPeerSessionRefresh(sessionId);
     log.debug('Dialog turn not found (model round start)', { turnId });
     return;
   }
@@ -1855,6 +1869,52 @@ function handleModelRoundStart(context: FlowChatContext, event: ModelRoundStarte
 
 function optionalNumber(value: unknown): number | undefined {
   return typeof value === 'number' && Number.isFinite(value) ? value : undefined;
+}
+
+function handleModelRoundAttemptSuperseded(
+  context: FlowChatContext,
+  event: ModelRoundAttemptSupersededEvent,
+): void {
+  const sessionId = event?.sessionId ?? (event as any)?.session_id;
+  const turnId = event?.turnId ?? (event as any)?.turn_id;
+  const roundId = event?.roundId ?? (event as any)?.round_id;
+  const diagnostic = event?.diagnostic;
+
+  if (!sessionId || !turnId || !roundId) {
+    log.warn('ModelRoundAttemptSuperseded missing identity fields', { event });
+    return;
+  }
+
+  if (
+    !diagnostic ||
+    typeof diagnostic.attemptId !== 'string' ||
+    typeof diagnostic.attemptIndex !== 'number' ||
+    typeof diagnostic.category !== 'string'
+  ) {
+    log.warn('ModelRoundAttemptSuperseded has an invalid diagnostic', { sessionId, turnId, roundId });
+    return;
+  }
+
+  if (!shouldProcessEvent(sessionId, turnId, 'data', 'ModelRoundAttemptSuperseded')) {
+    return;
+  }
+
+  const round = context.flowChatStore.getState().sessions.get(sessionId)
+    ?.dialogTurns.find(dialogTurn => dialogTurn.id === turnId)
+    ?.modelRounds.find(modelRound => modelRound.id === roundId);
+  if (!round) {
+    log.debug('Model round not found (attempt superseded)', { sessionId, turnId, roundId });
+    return;
+  }
+
+  context.flowChatStore.updateModelRound(
+    sessionId,
+    turnId,
+    roundId,
+    current => mergeModelRoundAttemptDiagnostics(current, [diagnostic], {
+      supersedeMatchingAttempts: true,
+    }),
+  );
 }
 
 /**

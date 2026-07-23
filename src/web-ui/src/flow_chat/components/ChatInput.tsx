@@ -36,12 +36,16 @@ import {
   type SlashActionId,
 } from '../utils/slashActionSelection';
 import { notificationService } from '@/shared/notification-system';
-import { inputReducer, initialInputState } from '../reducers/inputReducer';
+import { inputReducer, initialInputState, type InputAction } from '../reducers/inputReducer';
 import { modeReducer, initialModeState } from '../reducers/modeReducer';
 import { CHAT_INPUT_CONFIG } from '../constants/chatInputConfig';
 import { useMessageSender } from '../hooks/useMessageSender';
 import { useChatInputState } from '../store/chatInputStateStore';
 import { useInputHistoryStore } from '../store/inputHistoryStore';
+import {
+  sessionComposerStore,
+  type PendingLargePasteMap,
+} from '../store/sessionComposerStore';
 import { startBtwThread } from '../services/BtwThreadService';
 import { runUsageReportCommand } from '../services/usageReportService';
 import { buildImagePayload } from '../utils/imagePayload';
@@ -51,6 +55,7 @@ import {
   subscribeHistorySessionOpenTransition,
 } from '../services/sessionOpenIntent';
 import { useThreadGoalController } from '../hooks/useThreadGoalController';
+import { useComposerDefaultFocus } from '../hooks/useComposerDefaultFocus';
 import { ThreadGoalDialogs } from './thread-goal/ThreadGoalDialogs';
 import { FlowChatManager } from '@/flow_chat/services/FlowChatManager';
 import {
@@ -125,6 +130,7 @@ const log = createLogger('ChatInput');
 export interface ChatInputProps {
   className?: string;
   onSendMessage?: (message: string) => void;
+  isSceneActive?: boolean;
 }
 
 type SlashActionItem = {
@@ -178,7 +184,6 @@ type SlashPickerItem =
   | SlashAcpCommandItem
   | SlashSkillItem;
 type ChatInputTarget = 'main' | 'btw';
-type PendingLargePasteMap = Record<string, string>;
 
 function getCharacterCount(text: string): number {
   return Array.from(text).length;
@@ -274,12 +279,13 @@ function renderMcpPromptMessages(messages: MCPPromptMessage[]): string {
 
 export const ChatInput: React.FC<ChatInputProps> = ({
   className = '',
-  onSendMessage
+  onSendMessage,
+  isSceneActive = true,
 }) => {
   const { t } = useTranslation('flow-chat');
   const canLaunchReview = isTauriRuntime();
   
-  const [inputState, dispatchInput] = useReducer(inputReducer, initialInputState);
+  const [inputState, dispatchLocalInput] = useReducer(inputReducer, initialInputState);
   const [modeState, dispatchMode] = useReducer(modeReducer, initialModeState);
   
   const richTextInputRef = useRef<HTMLDivElement>(null);
@@ -307,6 +313,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   const addContext = useContextStore(state => state.addContext);
   const removeContext = useContextStore(state => state.removeContext);
   const clearContexts = useContextStore(state => state.clearContexts);
+  const replaceContexts = useContextStore(state => state.replaceContexts);
 
   const contextsRef = useRef(contexts);
   contextsRef.current = contexts;
@@ -330,6 +337,31 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     : undefined;
   const effectiveTargetSessionId =
     inputTarget === 'btw' && activeBtwSessionId ? activeBtwSessionId : currentSessionId;
+  const effectiveTargetSessionIdRef = useRef<string | null>(effectiveTargetSessionId);
+  effectiveTargetSessionIdRef.current = effectiveTargetSessionId;
+
+  useComposerDefaultFocus({
+    editorRef: richTextInputRef,
+    sessionId: effectiveTargetSessionId,
+    isSceneActive,
+  });
+
+  const dispatchInput = useCallback((action: InputAction) => {
+    dispatchLocalInput(action);
+
+    const sessionId = effectiveTargetSessionIdRef.current;
+    if (!sessionId) {
+      return;
+    }
+
+    if (action.type === 'SET_VALUE') {
+      inputValueRef.current = action.payload;
+      sessionComposerStore.getState().setValue(sessionId, action.payload);
+    } else if (action.type === 'CLEAR_VALUE') {
+      inputValueRef.current = '';
+      sessionComposerStore.getState().setValue(sessionId, '');
+    }
+  }, []);
   const effectiveTargetSession = effectiveTargetSessionId
     ? flowChatState.sessions.get(effectiveTargetSessionId)
     : undefined;
@@ -1227,9 +1259,75 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     }
   }, [canUseSkillsForTarget, derivedState?.isProcessing, inlineTriggerState, isAcpInputSession, slashCommandState.isActive, slashCommandState.kind]);
 
-  const clearPendingLargePastes = useCallback(() => {
-    pendingLargePastesRef.current = {};
+  const previousComposerSessionIdRef = useRef<string | null>(null);
+
+  React.useLayoutEffect(() => {
+    const previousSessionId = previousComposerSessionIdRef.current;
+    const draft = sessionComposerStore.getState().activateDraft(
+      previousSessionId,
+      effectiveTargetSessionId,
+      useContextStore.getState().contexts,
+    );
+    previousComposerSessionIdRef.current = effectiveTargetSessionId;
+
+    const nextValue = draft.value;
+    const nextContexts = draft.contexts;
+    const nextPendingLargePastes = draft.pendingLargePastes;
+
+    dispatchLocalInput({ type: 'SET_VALUE', payload: nextValue });
+    inputValueRef.current = nextValue;
+    pendingLargePastesRef.current = { ...nextPendingLargePastes };
+    replaceContexts(nextContexts);
+    setHistoryIndex(-1);
+    setSavedDraft('');
+    setMentionState({ isActive: false, query: '', startOffset: 0 });
+    setInlineTriggerState({
+      isActive: false,
+      trigger: null,
+      query: '',
+      startOffset: 0,
+    });
+    setSlashCommandState({
+      isActive: false,
+      kind: 'modes',
+      query: '',
+      selectedIndex: 0,
+    });
+  }, [effectiveTargetSessionId, replaceContexts]);
+
+  useEffect(() => {
+    const unsubscribe = useContextStore.subscribe((state) => {
+      const sessionId = effectiveTargetSessionIdRef.current;
+      if (sessionId) {
+        sessionComposerStore.getState().setContexts(sessionId, state.contexts);
+      }
+    });
+
+    return () => {
+      const sessionId = effectiveTargetSessionIdRef.current;
+      if (sessionId) {
+        sessionComposerStore.getState().setContexts(
+          sessionId,
+          useContextStore.getState().contexts,
+        );
+      }
+      unsubscribe();
+    };
   }, []);
+
+  const replacePendingLargePastes = useCallback((pendingLargePastes: PendingLargePasteMap) => {
+    const nextPendingLargePastes = { ...pendingLargePastes };
+    pendingLargePastesRef.current = nextPendingLargePastes;
+
+    const sessionId = effectiveTargetSessionIdRef.current;
+    if (sessionId) {
+      sessionComposerStore.getState().setPendingLargePastes(sessionId, nextPendingLargePastes);
+    }
+  }, []);
+
+  const clearPendingLargePastes = useCallback(() => {
+    replacePendingLargePastes({});
+  }, [replacePendingLargePastes]);
 
   const createLargePastePlaceholder = useCallback((text: string): string | null => {
     const charCount = getCharacterCount(text);
@@ -1246,13 +1344,13 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     });
     const placeholder = nextSuffix === 1 ? base : `${base} #${nextSuffix}`;
 
-    pendingLargePastesRef.current = {
+    replacePendingLargePastes({
       ...pendingLargePastesRef.current,
       [placeholder]: text,
-    };
+    });
 
     return placeholder;
-  }, [t]);
+  }, [replacePendingLargePastes, t]);
 
   const prunePendingLargePastes = useCallback((text: string) => {
     const entries = Object.entries(pendingLargePastesRef.current);
@@ -1260,10 +1358,10 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       return;
     }
 
-    pendingLargePastesRef.current = Object.fromEntries(
+    replacePendingLargePastes(Object.fromEntries(
       entries.filter(([placeholder]) => text.includes(placeholder))
-    );
-  }, []);
+    ));
+  }, [replacePendingLargePastes]);
 
   const expandPendingLargePastes = useCallback((text: string) => {
     let expanded = text;
@@ -1306,7 +1404,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     return () => {
       window.removeEventListener('fill-chat-input', handleFillInput);
     };
-  }, [clearPendingLargePastes]);
+  }, [clearPendingLargePastes, dispatchInput]);
 
   React.useEffect(() => {
     const handleFillChatInput = (data: {
@@ -1365,7 +1463,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     return () => {
       globalEventBus.off('fill-chat-input', handleFillChatInput);
     };
-  }, [addContext, clearPendingLargePastes]);
+  }, [addContext, clearPendingLargePastes, dispatchInput]);
 
   // Expose current input value for external queries (e.g. deep review fill-back confirmation)
   React.useEffect(() => {
@@ -1540,7 +1638,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     return () => {
       globalEventBus.off('mcp-app:message', handleMcpAppMessage);
     };
-  }, [addContext, clearPendingLargePastes, currentImageCount]);
+  }, [addContext, clearPendingLargePastes, currentImageCount, dispatchInput]);
 
   React.useEffect(() => {
     const handleInsertContextTag = (event: Event) => {
@@ -1575,7 +1673,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     return () => {
       window.removeEventListener('insert-context-tag', handleInsertContextTag);
     };
-  }, [inputState.isActive]);
+  }, [dispatchInput, inputState.isActive]);
 
   React.useEffect(() => {
     const fetchAvailableModes = async () => {
@@ -1738,6 +1836,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     derivedState?.queuedInput,
     effectiveTargetSessionId,
     clearPendingLargePastes,
+    dispatchInput,
   ]);
 
   React.useEffect(() => {
@@ -1860,7 +1959,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
         inputElement.removeEventListener('imagePaste', handleImagePaste);
       }
     };
-  }, [addContext, currentImageCount, inputState.isActive, t]);
+  }, [addContext, currentImageCount, dispatchInput, inputState.isActive, t]);
 
   React.useEffect(() => {
     if (!effectiveTargetSessionId || !workspacePath) {
@@ -2190,7 +2289,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
         selectedIndex: 0,
       });
     }
-  }, [contexts, derivedState, inputState.isActive, isAcpInputSession, prunePendingLargePastes, removeContext, resolveTypedMcpPromptCommand, setQueuedInput, slashCommandState.isActive, slashCommandState.kind]);
+  }, [contexts, derivedState, dispatchInput, inputState.isActive, isAcpInputSession, prunePendingLargePastes, removeContext, resolveTypedMcpPromptCommand, setQueuedInput, slashCommandState.isActive, slashCommandState.kind]);
 
   const submitBtwFromInput = useCallback(async () => {
     if (!derivedState) return;
@@ -2229,7 +2328,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
         }),
         { duration: 4000 }
       );
-      pendingLargePastesRef.current = originalPendingLargePastes;
+      replacePendingLargePastes(originalPendingLargePastes);
       dispatchInput({ type: 'ACTIVATE' });
       dispatchInput({ type: 'SET_VALUE', payload: originalMessage });
       return;
@@ -2266,10 +2365,10 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     } catch (e) {
       log.error('Failed to start /btw thread', { e });
       dispatchInput({ type: 'ACTIVATE' });
-      pendingLargePastesRef.current = originalPendingLargePastes;
+      replacePendingLargePastes(originalPendingLargePastes);
       dispatchInput({ type: 'SET_VALUE', payload: originalMessage });
     }
-  }, [clearPendingLargePastes, currentSessionId, derivedState, expandComposerSpecialTokens, imageContexts, inputState.value, isBtwSession, removeContext, setQueuedInput, t, workspacePath]);
+  }, [clearPendingLargePastes, currentSessionId, derivedState, dispatchInput, expandComposerSpecialTokens, imageContexts, inputState.value, isBtwSession, removeContext, replacePendingLargePastes, setQueuedInput, t, workspacePath]);
 
   const submitCompactFromInput = useCallback(async () => {
     if (!effectiveTargetSessionId || !effectiveTargetSession) {
@@ -2322,6 +2421,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     }
   }, [
     derivedState?.isProcessing,
+    dispatchInput,
     effectiveTargetSession,
     effectiveTargetSessionId,
     inputState.value,
@@ -2360,6 +2460,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     }
   }, [
     derivedState?.isProcessing,
+    dispatchInput,
     effectiveTargetSession,
     effectiveTargetSessionId,
     t,
@@ -2392,6 +2493,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       dispatchInput({ type: 'SET_VALUE', payload: message });
     }
   }, [
+    dispatchInput,
     effectiveTargetSession,
     effectiveTargetSessionId,
     inputState.value,
@@ -2465,6 +2567,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     }
   }, [
     derivedState?.isProcessing,
+    dispatchInput,
     effectiveTargetSession,
     effectiveTargetSessionId,
     inputState.value,
@@ -2512,6 +2615,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
 
     dispatchInput({ type: 'DEACTIVATE' });
   }, [
+    dispatchInput,
     effectiveTargetSession,
     effectiveTargetSessionId,
     inputState.value,
@@ -2560,7 +2664,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
         }
       );
     }
-  }, [inputState.value, setQueuedInput, t, workspacePath]);
+  }, [dispatchInput, inputState.value, setQueuedInput, t, workspacePath]);
 
   const submitReviewFromInput = useCallback(async () => {
     if (!canLaunchReview) {
@@ -2650,7 +2754,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
         error,
         sessionId: effectiveTargetSessionId,
       });
-      pendingLargePastesRef.current = originalPendingLargePastes;
+      replacePendingLargePastes(originalPendingLargePastes);
       dispatchInput({ type: 'ACTIVATE' });
       dispatchInput({ type: 'SET_VALUE', payload: message });
       notificationService.error(
@@ -2669,11 +2773,13 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     clearPendingLargePastes,
     confirmDeepReviewLaunch,
     currentReviewActivity,
+    dispatchInput,
     effectiveTargetSession,
     effectiveTargetSessionId,
     flowChatState,
     inputState.value,
     isBtwSession,
+    replacePendingLargePastes,
     setQueuedInput,
     t,
   ]);
@@ -2755,7 +2861,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
         command: originalMessage,
         error,
       });
-      pendingLargePastesRef.current = originalPendingLargePastes;
+      replacePendingLargePastes(originalPendingLargePastes);
       dispatchInput({ type: 'ACTIVATE' });
       dispatchInput({ type: 'SET_VALUE', payload: originalMessage });
       notificationService.error(
@@ -2770,10 +2876,12 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     clearPendingLargePastes,
     addToHistory,
     confirmPromptCacheGuardIfNeeded,
+    dispatchInput,
     effectiveTargetSessionId,
     inputState.value,
     loadMcpPromptCommands,
     resolveTypedMcpPromptCommand,
+    replacePendingLargePastes,
     sendMessage,
     setQueuedInput,
     t,
@@ -2895,7 +3003,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
         }),
         { duration: 4000 }
       );
-      pendingLargePastesRef.current = originalPendingLargePastes;
+      replacePendingLargePastes(originalPendingLargePastes);
       dispatchInput({ type: 'ACTIVATE' });
       dispatchInput({ type: 'SET_VALUE', payload: originalMessage });
       return;
@@ -2927,7 +3035,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       dispatchInput({ type: 'DEACTIVATE' });
     } catch (error) {
       log.error('Failed to send message', { error });
-      pendingLargePastesRef.current = originalPendingLargePastes;
+      replacePendingLargePastes(originalPendingLargePastes);
       dispatchInput({ type: 'ACTIVATE' });
       dispatchInput({ type: 'SET_VALUE', payload: originalMessage });
       if (derivedState?.isProcessing) {
@@ -2938,6 +3046,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     isModelSwitching,
     inputState.value,
     derivedState,
+    dispatchInput,
     handleCancelCurrentTask,
     transition,
     sendMessage,
@@ -2946,6 +3055,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     clearPendingLargePastes,
     expandComposerSpecialTokens,
     isAcpInputSession,
+    replacePendingLargePastes,
     setQueuedInput,
     submitBtwFromInput,
     submitGoalFromInput,
@@ -3063,7 +3173,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       query: '',
       selectedIndex: 0,
     });
-  }, [inlineTriggerState, requestModeChange]);
+  }, [dispatchInput, inlineTriggerState, requestModeChange]);
 
   const selectSlashCommandAction = useCallback((actionId: SlashActionId) => {
     const raw = inputState.value || '';
@@ -3089,7 +3199,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     setQueuedInput(null);
     setSlashCommandState({ isActive: false, kind: 'modes', query: '', selectedIndex: 0 });
     window.setTimeout(() => richTextInputRef.current?.focus(), 0);
-  }, [inlineTriggerState, inputState.value, isBtwSession, setQueuedInput]);
+  }, [dispatchInput, inlineTriggerState, inputState.value, isBtwSession, setQueuedInput]);
 
   const selectSlashPromptCommand = useCallback((item: SlashMcpPromptItem) => {
     if (getInlineSlashCommandPickerQuery(inlineTriggerState) !== null) {
@@ -3109,7 +3219,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     setQueuedInput(null);
     setSlashCommandState({ isActive: false, kind: 'modes', query: '', selectedIndex: 0 });
     window.setTimeout(() => richTextInputRef.current?.focus(), 0);
-  }, [inlineTriggerState, setQueuedInput]);
+  }, [dispatchInput, inlineTriggerState, setQueuedInput]);
 
   const selectSlashAcpCommand = useCallback((item: SlashAcpCommandItem) => {
     if (getInlineSlashCommandPickerQuery(inlineTriggerState) !== null) {
@@ -3125,7 +3235,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     setQueuedInput(null);
     setSlashCommandState({ isActive: false, kind: 'modes', query: '', selectedIndex: 0 });
     window.setTimeout(() => richTextInputRef.current?.focus(), 0);
-  }, [inlineTriggerState, setQueuedInput]);
+  }, [dispatchInput, inlineTriggerState, setQueuedInput]);
 
   const getRichTextInlineTriggerController = useCallback(() => {
     return richTextInputRef.current as (HTMLDivElement & {
@@ -3152,7 +3262,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     setQueuedInput(null);
     setSlashCommandState({ isActive: false, kind: 'modes', query: '', selectedIndex: 0 });
     window.setTimeout(() => richTextInputRef.current?.focus(), 0);
-  }, [getRichTextInlineTriggerController, inlineTriggerState.isActive, inputState.value, setQueuedInput]);
+  }, [dispatchInput, getRichTextInlineTriggerController, inlineTriggerState.isActive, inputState.value, setQueuedInput]);
 
   const handleBoostStartBtw = useCallback(
     (e: React.SyntheticEvent) => {
@@ -3488,7 +3598,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       e.preventDefault();
       void handleCancelCurrentTask();
     }
-  }, [handleSendOrCancel, submitBtwFromInput, submitGoalFromInput, derivedState, handleCancelCurrentTask, slashCommandState, getFilteredIncrementalModes, getActiveSlashPickerItems, selectSlashCommandMode, selectSlashCommandAction, selectSlashPromptCommand, selectSlashAcpCommand, selectSlashSkill, canSwitchModes, getRichTextInlineTriggerController, historyIndex, inputHistory, savedDraft, inputState.value, currentSessionId, isBtwSession, showTargetSwitcher, setInputTarget, removeContext, t]);
+  }, [handleSendOrCancel, submitBtwFromInput, submitGoalFromInput, derivedState, dispatchInput, handleCancelCurrentTask, slashCommandState, getFilteredIncrementalModes, getActiveSlashPickerItems, selectSlashCommandMode, selectSlashCommandAction, selectSlashPromptCommand, selectSlashAcpCommand, selectSlashSkill, canSwitchModes, getRichTextInlineTriggerController, historyIndex, inputHistory, savedDraft, inputState.value, currentSessionId, isBtwSession, showTargetSwitcher, setInputTarget, removeContext, t]);
 
   const handleImeCompositionStart = useCallback(() => {
     isImeComposingRef.current = true;
@@ -3578,7 +3688,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       dispatchMode({ type: 'CLOSE_DROPDOWN' });
       focusRichTextInputSoon();
     },
-    [clearSkillsTimer, focusRichTextInputSoon, getRichTextInlineTriggerController, inputState.value]
+    [clearSkillsTimer, dispatchInput, focusRichTextInputSoon, getRichTextInlineTriggerController, inputState.value]
   );
 
   const handleBoostPickImage = useCallback(
@@ -3602,7 +3712,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
         }
       });
     });
-  }, []);
+  }, [dispatchInput]);
 
   const handleOpenSkillsLibrary = useCallback(
     (e: React.MouseEvent) => {

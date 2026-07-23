@@ -15,7 +15,10 @@ use bitfun_core::service::config::get_global_config_service;
 use bitfun_core::service::remote_connect::settings_sync;
 use bitfun_core::service::remote_connect::{sync_state, AccountClient};
 
-use crate::account::read_account_context;
+use crate::account::{
+    account_context_generation, account_context_is_current, automatic_account_sync_policy,
+    await_account_sync_current, lock_account_sync, read_account_context,
+};
 
 const UPLOAD_CONCURRENCY_CHUNK: usize = 5;
 
@@ -27,8 +30,24 @@ const UPLOAD_CONCURRENCY_CHUNK: usize = 5;
 pub(crate) fn start_settings_sync_loop() {
     let hooks = settings_sync::SettingsSyncHooks {
         account_context: Some(Arc::new(|| {
-            Box::pin(async { read_account_context().await })
+            Box::pin(async {
+                if !automatic_account_sync_policy().background_engine {
+                    return Err(anyhow!("account login is awaiting a sync choice"));
+                }
+                let generation = account_context_generation();
+                if !account_context_is_current(generation) {
+                    return Err(anyhow!("account context is transitioning"));
+                }
+                let (account, relay_url) = read_account_context().await?;
+                if !automatic_account_sync_policy().background_engine
+                    || !account_context_is_current(generation)
+                {
+                    return Err(anyhow!("account context changed while reading"));
+                }
+                Ok((account, relay_url, generation))
+            })
         })),
+        is_account_context_current: Some(Arc::new(account_context_is_current)),
         on_settings_applied: Some(Arc::new(|| {
             crate::peer_host::notify_controllers_settings_changed();
         })),
@@ -51,10 +70,20 @@ pub(crate) fn notify_local_settings_changed() {
 /// (e.g. `bitfun models set-default`) where the sync loop never starts.
 /// Silently no-ops when logged out; failures are logged, not fatal.
 pub(crate) async fn push_settings_after_local_change() {
+    if !automatic_account_sync_policy().management_push {
+        return;
+    }
     // Management commands never restore the persisted account session into
     // memory — do it on demand so the push can authenticate.
     if read_account_context().await.is_err() {
         crate::account::try_restore_session().await;
+    }
+    let generation = account_context_generation();
+    let Ok(_sync_guard) = lock_account_sync(generation).await else {
+        return;
+    };
+    if !automatic_account_sync_policy().management_push {
+        return;
     }
     let Ok((account, relay_url)) = read_account_context().await else {
         return;
@@ -208,6 +237,8 @@ pub(crate) async fn run_auto_sync(
     is_first_login: bool,
     workspace_path: &Path,
 ) -> Result<AutoSyncResult> {
+    let generation = account_context_generation();
+    let _sync_guard = lock_account_sync(generation).await?;
     set_progress(|p| {
         *p = SyncProgress {
             status: SyncStatus::Syncing,
@@ -232,24 +263,32 @@ pub(crate) async fn run_auto_sync(
             .map_err(|e| anyhow!("export config: {e}"))?;
         let config_json =
             serde_json::to_string(&exported).map_err(|e| anyhow!("serialize config: {e}"))?;
-        settings_sync::upload_settings_payload(&acct_session, &relay_url, &config_json)
-            .await
-            .map_err(|e| anyhow!("upload settings: {e}"))?;
+        await_account_sync_current(
+            generation,
+            settings_sync::upload_settings_payload(&acct_session, &relay_url, &config_json),
+        )
+        .await?
+        .map_err(|e| anyhow!("upload settings: {e}"))?;
         emit_progress("settings_done", 15, None, None, None).await;
         true
     } else {
         emit_progress("downloading_settings", 5, None, None, None).await;
-        let cloud = client
-            .fetch_settings_with_version(&relay_url, &acct_session)
-            .await
-            .map_err(|e| anyhow!("fetch settings: {e}"))?;
+        let cloud = await_account_sync_current(
+            generation,
+            client.fetch_settings_with_version(&relay_url, &acct_session),
+        )
+        .await?
+        .map_err(|e| anyhow!("fetch settings: {e}"))?;
         if let Some(blob) = cloud {
             emit_progress("applying_settings", 10, None, None, None).await;
             // Explicit user choice ("use cloud") — always apply, even when the
             // cursor says this device already has this version.
-            settings_sync::apply_settings_blob(&acct_session, &blob, true)
-                .await
-                .map_err(|e| anyhow!("apply cloud config: {e}"))?;
+            await_account_sync_current(
+                generation,
+                settings_sync::apply_settings_blob(&acct_session, &blob, true),
+            )
+            .await?
+            .map_err(|e| anyhow!("apply cloud config: {e}"))?;
             emit_progress("settings_done", 15, None, None, None).await;
             true
         } else {
@@ -278,6 +317,9 @@ pub(crate) async fn run_auto_sync(
     let mut sync_state_local = sync_state::load(&acct_session.user_id);
     let mut pending_uploads: Vec<(String, String, String)> = Vec::new();
     for meta in local_sessions.iter() {
+        if !account_context_is_current(generation) {
+            return Err(anyhow!("account sync cancelled"));
+        }
         let turns = compatibility
             .load_persisted_session_turns(&storage_path, &meta.session_id, None)
             .await
@@ -308,6 +350,7 @@ pub(crate) async fn run_auto_sync(
     emit_progress("exporting_sessions", 20, Some(0), Some(upload_total), None).await;
 
     let mut uploaded: Vec<(String, String, i64)> = Vec::new();
+    let mut upload_errors: Vec<String> = Vec::new();
     for (chunk_idx, chunk) in pending_uploads.chunks(UPLOAD_CONCURRENCY_CHUNK).enumerate() {
         let mut handles = Vec::new();
         for (session_id, bundle_json, hash) in chunk {
@@ -318,16 +361,18 @@ pub(crate) async fn run_auto_sync(
             let bundle_json = bundle_json.clone();
             let hash = hash.clone();
             handles.push(tokio::spawn(async move {
-                let result = client
-                    .upload_session(&relay_url, &acct_session, &session_id, &bundle_json)
-                    .await;
+                let result = await_account_sync_current(
+                    generation,
+                    client.upload_session(&relay_url, &acct_session, &session_id, &bundle_json),
+                )
+                .await;
                 (session_id, hash, result)
             }));
         }
         for handle in handles {
             let done_base = chunk_idx * UPLOAD_CONCURRENCY_CHUNK;
             match handle.await {
-                Ok((session_id, hash, Ok(version))) => {
+                Ok((session_id, hash, Ok(Ok(version)))) => {
                     uploaded.push((session_id.clone(), hash, version));
                     let done = uploaded.len();
                     let percent = if upload_total == 0 {
@@ -344,14 +389,20 @@ pub(crate) async fn run_auto_sync(
                     )
                     .await;
                 }
-                Ok((session_id, _, Err(e))) => {
+                Ok((session_id, _, Ok(Err(e)))) => {
                     tracing::warn!("Auto-sync upload {session_id} failed: {e}");
+                    upload_errors.push(format!("{session_id}: {e}"));
                     let _ = done_base;
                 }
+                Ok((_, _, Err(e))) => return Err(e),
                 Err(e) => {
                     tracing::warn!("Auto-sync upload task join failed: {e}");
+                    upload_errors.push(format!("upload task join failed: {e}"));
                 }
             }
+        }
+        if !account_context_is_current(generation) {
+            return Err(anyhow!("account sync cancelled"));
         }
     }
 
@@ -368,6 +419,8 @@ pub(crate) async fn run_auto_sync(
     }
     let _ = sync_state::save(&acct_session.user_id, &sync_state_local);
 
+    ensure_session_backup_complete(upload_total, exported, &upload_errors)?;
+
     tracing::info!("Auto-sync: settings={settings_synced} exported={exported} imported=0");
     emit_progress("done", 100, Some(exported), Some(0), None).await;
 
@@ -376,6 +429,23 @@ pub(crate) async fn run_auto_sync(
         sessions_exported: exported,
         sessions_imported: 0,
     })
+}
+
+fn ensure_session_backup_complete(
+    total: usize,
+    uploaded: usize,
+    upload_errors: &[String],
+) -> Result<()> {
+    if uploaded == total {
+        return Ok(());
+    }
+    let detail = upload_errors
+        .first()
+        .map(|err| err.as_str())
+        .unwrap_or("retry will resume remaining sessions");
+    Err(anyhow!(
+        "session backup incomplete: uploaded {uploaded} of {total}; {detail}"
+    ))
 }
 
 pub(crate) fn sync_phase_label(progress: &SyncProgress) -> String {
@@ -396,5 +466,23 @@ pub(crate) fn sync_phase_label(progress: &SyncProgress) -> String {
         "starting" => "Starting sync…".into(),
         other if other.is_empty() => "Sync".into(),
         other => other.to_string(),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::ensure_session_backup_complete;
+
+    #[test]
+    fn partial_session_backup_is_not_reported_as_success() {
+        assert!(ensure_session_backup_complete(4, 4, &[]).is_ok());
+        assert!(ensure_session_backup_complete(
+            4,
+            1,
+            &["s1: relay returned HTTP 507 Insufficient Storage".into()]
+        )
+        .unwrap_err()
+        .to_string()
+        .contains("HTTP 507"));
     }
 }

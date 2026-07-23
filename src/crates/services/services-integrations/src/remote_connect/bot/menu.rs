@@ -69,8 +69,7 @@ pub struct MenuView {
     /// Optional secondary body text.
     pub body: Option<String>,
     pub items: Vec<MenuItem>,
-    /// Optional footer hint shown below items (telegram/feishu silently
-    /// drop this; weixin shows it as the last text line).
+    /// Optional footer hint shown below the body/items.
     pub footer_hint: Option<String>,
     /// Whether text-only renderers should append `items` as numbered lines.
     /// Some selection prompts include richer numbered lines in `body` while
@@ -92,6 +91,16 @@ impl MenuView {
 
     pub fn with_body(mut self, body: impl Into<String>) -> Self {
         self.body = Some(body.into());
+        self
+    }
+
+    /// Set a body that already contains the user-visible numbered choices.
+    ///
+    /// Native-button adapters still receive `items`, while plain-text
+    /// adapters must not append those same choices a second time.
+    pub fn with_numbered_body(mut self, body: impl Into<String>) -> Self {
+        self.body = Some(body.into());
+        self.render_items_in_plain_text = false;
         self
     }
 
@@ -143,11 +152,7 @@ impl MenuView {
                 if i > 0 {
                     out.push('\n');
                 }
-                if item.command.starts_with('/') {
-                    out.push_str(&format!("{}. {}  {}", i + 1, item.label, item.command));
-                } else {
-                    out.push_str(&format!("{}. {}", i + 1, item.label));
-                }
+                out.push_str(&format!("{}. {}", i + 1, item.label));
             }
         }
         let hint = self
@@ -220,5 +225,33 @@ mod tests {
     #[test]
     fn text_block_never_returns_empty_message() {
         assert_eq!(MenuView::plain("").render_text_block(), " ");
+    }
+
+    #[test]
+    fn numbered_body_is_not_duplicated_in_plain_text() {
+        let view = MenuView::plain("Sessions")
+            .with_numbered_body("1. Alpha\n2. Beta")
+            .with_items(vec![
+                MenuItem::default("Alpha", "1"),
+                MenuItem::default("Beta", "2"),
+            ]);
+
+        let text = view.render_plain_text(BotLanguage::EnUS);
+        assert_eq!(text.matches("Alpha").count(), 1);
+        assert_eq!(text.matches("Beta").count(), 1);
+    }
+
+    #[test]
+    fn plain_text_options_do_not_expose_internal_commands() {
+        let view = MenuView::plain("Menu").with_items(vec![
+            MenuItem::primary("New", "/new"),
+            MenuItem::default("Resume", "/resume"),
+        ]);
+
+        let text = view.render_plain_text(BotLanguage::EnUS);
+        assert!(text.contains("1. New"));
+        assert!(text.contains("2. Resume"));
+        assert!(!text.contains("/new"));
+        assert!(!text.contains("/resume"));
     }
 }

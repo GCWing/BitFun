@@ -17,6 +17,7 @@ interface I18nContextValue {
   toggleLanguage: () => void;
   t: (key: string, params?: TranslateParams) => string;
   formatDate: (date: Date | number, options?: Intl.DateTimeFormatOptions) => string;
+  formatRelativeTime: (date: Date | number) => string;
 }
 
 const STORAGE_KEY = 'bitfun-mobile-language';
@@ -99,7 +100,21 @@ export const I18nContext = createContext<I18nContextValue>({
   toggleLanguage: () => {},
   t: (key) => key,
   formatDate: (date, options) => new Intl.DateTimeFormat(DEFAULT_LANGUAGE, options).format(date),
+  formatRelativeTime: (date) => formatRelativeTime(DEFAULT_LANGUAGE, date),
 });
+
+function formatRelativeTime(language: MobileLanguage, date: Date | number): string {
+  const timestamp = date instanceof Date ? date.getTime() : date;
+  const diffSeconds = (timestamp - Date.now()) / 1000;
+  const absoluteSeconds = Math.abs(diffSeconds);
+  const formatter = new Intl.RelativeTimeFormat(language, { numeric: 'auto' });
+
+  if (absoluteSeconds < 60) return formatter.format(Math.round(diffSeconds), 'second');
+  if (absoluteSeconds < 3600) return formatter.format(Math.round(diffSeconds / 60), 'minute');
+  if (absoluteSeconds < 86_400) return formatter.format(Math.round(diffSeconds / 3600), 'hour');
+  if (absoluteSeconds < 2_592_000) return formatter.format(Math.round(diffSeconds / 86_400), 'day');
+  return new Intl.DateTimeFormat(language, { dateStyle: 'medium', timeStyle: 'short' }).format(timestamp);
+}
 
 export const I18nProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [language, setLanguageState] = useState<MobileLanguage>(detectInitialLanguage);
@@ -127,6 +142,7 @@ export const I18nProvider: React.FC<{ children: React.ReactNode }> = ({ children
     toggleLanguage,
     t: (key, params) => translate(language, key, params),
     formatDate: (date, options) => new Intl.DateTimeFormat(language, options).format(date),
+    formatRelativeTime: (date) => formatRelativeTime(language, date),
   }), [language, setLanguage, toggleLanguage]);
 
   return (
@@ -137,4 +153,3 @@ export const I18nProvider: React.FC<{ children: React.ReactNode }> = ({ children
 };
 
 export type { MobileLanguage, TranslateParams };
-

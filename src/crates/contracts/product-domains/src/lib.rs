@@ -10,6 +10,9 @@ pub mod tool_permissions;
 pub mod external_integration_policy;
 
 #[cfg(feature = "external-sources")]
+pub mod external_hook_contributions;
+
+#[cfg(feature = "external-sources")]
 pub mod external_source_control;
 
 #[cfg(feature = "external-sources")]

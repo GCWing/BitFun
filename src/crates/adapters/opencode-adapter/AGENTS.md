@@ -3,8 +3,9 @@
 # OpenCode Adapter
 
 The current crate owns the static OpenCode source preview used by the existing
-managed-package path and the OpenCode-specific implementations of command,
-standalone-tool, and subagent provider contracts. It preserves OpenCode source
+managed-package path, the OpenCode-specific implementations of command,
+standalone-tool, subagent, and MCP provider contracts, and runtime-free mapping
+of caller-normalized tool Hook descriptors. It preserves OpenCode source
 discovery, precedence, formats, argument expansion, and versioned compatibility semantics.
 Shared source catalog, lifecycle coordination, file-watch implementation,
 product policy, UI, credentials, worker supervision, and final effect writes
@@ -63,15 +64,23 @@ Product-source boundary:
   expansion inside this crate. Cross-crate outputs use typed source snapshots,
   adapter bindings, and Plugin Runtime Host DTOs; do not expose raw OpenCode JSON
   or source syntax as product contracts.
-- Current source inspection recognizes only the tested declarative subset. It is
-  not a general JavaScript or TypeScript parser. Packages with no recognized
-  entry and recognized unsupported hooks must produce diagnostics; other syntax
-  is outside the current compatibility claim.
+- Current source inspection recognizes only the tested declarative subset. The
+  adapter may reuse the workspace-pinned parse-only OXC profile for syntax-safe static
+  projection, but it is not a general JavaScript/TypeScript semantic analyzer or
+  runtime. Packages with no recognized entry and recognized unsupported hooks
+  must produce diagnostics; other syntax is outside the compatibility claim.
 - Unsupported OpenCode capabilities must be explicit diagnostics or typed
   unsupported candidates. Do not silently ignore them.
 - Public APIs require a current Product Assembly consumer, a capability-specific
   provider contract, boundary updates, and focused tests. Do not expose generic
   OpenCode JSON access or add APIs only for target-design completeness.
+- Runtime-free Hook mapping accepts only the `opencode.plugins` provider and is
+  consumed by the existing managed-package `.js` / `.ts` read projection. OXC may
+  extract static top-level property names from the exported plugin return object;
+  the adapter owns their OpenCode meaning. Mapping may emit static declarations
+  and diagnostics with incomplete safety. Parse failures must remain explicit
+  diagnostics, while event payload types must not be treated as Hook properties.
+  The adapter must not load handlers, dispatch Hooks, or imply executable support.
 - The reviewed product composition root selects and constructs the compiled
   OpenCode adapter/provider and injects it into Plugin Runtime Host. It does not
   discover dynamic sources, prepare dependencies, or import plugin modules.

@@ -28,7 +28,10 @@ import typescript from 'react-syntax-highlighter/dist/esm/languages/prism/typesc
 import yaml from 'react-syntax-highlighter/dist/esm/languages/prism/yaml';
 import { useI18n } from '../i18n';
 import { messages } from '../i18n/messages';
+import { useControlTargetEpoch } from '../hooks/useControlTargetEpoch';
 import {
+  isRemoteControlTargetChangedError,
+  RemoteControlTargetChangedError,
   RemoteSessionManager,
   SessionPoller,
   type PollResponse,
@@ -41,6 +44,14 @@ import {
 } from '../services/RemoteSessionManager';
 import { useMobileStore } from '../services/store';
 import { useTheme } from '../theme';
+
+function reportRemoteSessionError(
+  error: unknown,
+  setError: (message: string) => void,
+): void {
+  if (isRemoteControlTargetChangedError(error)) return;
+  setError(error instanceof Error ? error.message : String(error));
+}
 
 const SYNTAX_LANGUAGES = {
   bash,
@@ -1653,6 +1664,7 @@ function renderActiveTurnItems(
   now: number,
   sessionMgr: RemoteSessionManager,
   setError: (e: string) => void,
+  isTargetCurrent: () => boolean,
   onAnswer: (toolId: string, answers: any) => Promise<void>,
   onFileDownload?: (path: string, onProgress?: (downloaded: number, total: number) => void) => Promise<void>,
   onGetFileInfo?: (path: string) => Promise<{ name: string; size: number; mimeType: string }>,
@@ -1660,7 +1672,10 @@ function renderActiveTurnItems(
   const items = filterSubagentItems(rawItems);
   const askEntries = items.filter(item => isPendingAskUserQuestion(item.tool));
   const onCancel = (toolId: string) => {
-    sessionMgr.cancelTool(toolId, 'User cancelled').catch(err => { setError(String(err)); });
+    if (!isTargetCurrent()) return;
+    sessionMgr.cancelTool(toolId, 'User cancelled').catch((error) => {
+      reportRemoteSessionError(error, setError);
+    });
   };
 
   if (askEntries.length === 0) {
@@ -2086,12 +2101,56 @@ const ChatPage: React.FC<ChatPageProps> = ({ sessionMgr, sessionId, sessionName,
   const fileInputRef = useRef<HTMLInputElement>(null);
   const inputBarRef = useRef<HTMLDivElement>(null);
   const pollerRef = useRef<SessionPoller | null>(null);
-
+  const messagesRequestSeqRef = useRef(0);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [hasMore, setHasMore] = useState(true);
   const isLoadingMoreRef = useRef(false);
   const hasMoreRef = useRef(true);
+  const controlTargetEpoch = useControlTargetEpoch(sessionMgr);
+  const chatTargetOwnerRef = useRef({
+    sessionMgr,
+    sessionId,
+    epoch: controlTargetEpoch,
+    active: true,
+  });
+  if (
+    chatTargetOwnerRef.current.sessionMgr !== sessionMgr
+    || chatTargetOwnerRef.current.sessionId !== sessionId
+    || chatTargetOwnerRef.current.epoch !== controlTargetEpoch
+  ) {
+    chatTargetOwnerRef.current = {
+      sessionMgr,
+      sessionId,
+      epoch: controlTargetEpoch,
+      active: true,
+    };
+  }
+
+  const captureChatTargetEpoch = useCallback((): number | null => {
+    const owner = chatTargetOwnerRef.current;
+    if (
+      !owner.active
+      || owner.sessionMgr !== sessionMgr
+      || owner.sessionId !== sessionId
+      || owner.epoch !== sessionMgr.controlTargetEpoch
+    ) {
+      return null;
+    }
+    return owner.epoch;
+  }, [controlTargetEpoch, sessionId, sessionMgr]);
+
+  const isChatTargetCurrent = useCallback((epoch: number | null): boolean => {
+    const owner = chatTargetOwnerRef.current;
+    return epoch !== null
+      && owner.active
+      && owner.sessionMgr === sessionMgr
+      && owner.sessionId === sessionId
+      && owner.epoch === epoch
+      && sessionMgr.controlTargetEpoch === epoch;
+  }, [controlTargetEpoch, sessionId, sessionMgr]);
+
   const modelSelectionInitializedRef = useRef(false);
+  const modelCatalogRequestSeqRef = useRef(0);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
   const [expandedMsgIds, setExpandedMsgIds] = useState<Set<string>>(new Set());
@@ -2103,23 +2162,84 @@ const ChatPage: React.FC<ChatPageProps> = ({ sessionMgr, sessionId, sessionName,
   const msgLongPressTimerRef = useRef<ReturnType<typeof setTimeout>>();
   const msgLongPressPosRef = useRef({ x: 0, y: 0 });
   const msgToastTimerRef = useRef<ReturnType<typeof setTimeout>>();
+  const committedChatTargetRef = useRef({ sessionMgr, sessionId, epoch: controlTargetEpoch });
+
+  useLayoutEffect(() => {
+    const previous = committedChatTargetRef.current;
+    const targetChanged = previous.sessionMgr !== sessionMgr
+      || previous.sessionId !== sessionId
+      || previous.epoch !== controlTargetEpoch;
+    const owner = chatTargetOwnerRef.current;
+    owner.active = owner.sessionMgr === sessionMgr
+      && owner.sessionId === sessionId
+      && owner.epoch === controlTargetEpoch
+      && sessionMgr.controlTargetEpoch === controlTargetEpoch;
+    if (targetChanged) {
+      messagesRequestSeqRef.current += 1;
+      modelCatalogRequestSeqRef.current += 1;
+      isLoadingMoreRef.current = false;
+      hasMoreRef.current = true;
+      setIsLoadingMore(false);
+      setHasMore(true);
+      setModelUpdating(false);
+      setImageAnalyzing(false);
+      setOptimisticMsg(null);
+      modelSelectionInitializedRef.current = false;
+      setModelCatalog(null);
+      setSelectedModelId('auto');
+      setMessages(sessionId, []);
+      setMenuMessage(null);
+      setDeletingMsg(false);
+      setActionToast(null);
+      setInfoToast(null);
+      setExpandedMsgIds(new Set());
+      setShowScrollToBottom(false);
+      setActiveTurn(null);
+      if (msgLongPressTimerRef.current) {
+        clearTimeout(msgLongPressTimerRef.current);
+        msgLongPressTimerRef.current = undefined;
+      }
+      if (msgToastTimerRef.current) {
+        clearTimeout(msgToastTimerRef.current);
+        msgToastTimerRef.current = undefined;
+      }
+      pollerRef.current?.stop();
+      pollerRef.current = null;
+    }
+    committedChatTargetRef.current = { sessionMgr, sessionId, epoch: controlTargetEpoch };
+    return () => {
+      owner.active = false;
+      messagesRequestSeqRef.current += 1;
+      modelCatalogRequestSeqRef.current += 1;
+      pollerRef.current?.stop();
+    };
+  }, [controlTargetEpoch, sessionId, sessionMgr, setActiveTurn, setMessages]);
 
   const isStreaming = activeTurn != null && activeTurn.status === 'active';
 
   const [now, setNow] = useState(() => Date.now());
   const handleAnswerQuestion = useCallback(async (toolId: string, answers: any) => {
+    const targetEpoch = captureChatTargetEpoch();
+    if (targetEpoch === null) throw new RemoteControlTargetChangedError();
     try {
       await sessionMgr.answerQuestion(toolId, answers);
+      if (!isChatTargetCurrent(targetEpoch)) throw new RemoteControlTargetChangedError();
     } catch (err) {
-      setError(String(err));
+      reportRemoteSessionError(err, setError);
       throw err;
     }
-  }, [sessionMgr, setError]);
+  }, [captureChatTargetEpoch, isChatTargetCurrent, sessionMgr, setError]);
 
   /** Fetch metadata for a workspace file before the user confirms the download. */
   const handleGetFileInfo = useCallback(
-    (filePath: string) => sessionMgr.getFileInfo(filePath, sessionId),
-    [sessionId, sessionMgr],
+    async (filePath: string) => {
+      const targetEpoch = captureChatTargetEpoch();
+      if (targetEpoch === null) throw new RemoteControlTargetChangedError();
+      const info = await sessionMgr.getFileInfo(filePath, sessionId);
+      if (!isChatTargetCurrent(targetEpoch)) throw new RemoteControlTargetChangedError();
+      return info;
+    },
+    [captureChatTargetEpoch, isChatTargetCurrent, sessionId, sessionMgr],
   );
 
   /** Download a workspace file referenced by a `computer://` link. */
@@ -2127,12 +2247,17 @@ const ChatPage: React.FC<ChatPageProps> = ({ sessionMgr, sessionId, sessionName,
     filePath: string,
     onProgress?: (downloaded: number, total: number) => void,
   ) => {
+    const targetEpoch = captureChatTargetEpoch();
+    if (targetEpoch === null) return;
     try {
       const { name, contentBase64, mimeType } = await sessionMgr.readFile(
         filePath,
         sessionId,
-        onProgress,
+        (downloaded, total) => {
+          if (isChatTargetCurrent(targetEpoch)) onProgress?.(downloaded, total);
+        },
       );
+      if (!isChatTargetCurrent(targetEpoch)) return;
       const byteCharacters = atob(contentBase64);
       const byteNumbers = new Uint8Array(byteCharacters.length);
       for (let i = 0; i < byteCharacters.length; i++) {
@@ -2149,14 +2274,21 @@ const ChatPage: React.FC<ChatPageProps> = ({ sessionMgr, sessionId, sessionName,
       URL.revokeObjectURL(url);
     } catch (err) {
       // Use the backend's message directly; it's already user-readable.
-      const msg = err instanceof Error ? err.message : String(err);
-      setError(msg);
+      reportRemoteSessionError(err, setError);
+      throw err;
     }
-  }, [sessionId, sessionMgr, setError]);
+  }, [captureChatTargetEpoch, isChatTargetCurrent, sessionId, sessionMgr, setError]);
 
   const loadModelCatalog = useCallback(async () => {
+    const targetEpoch = captureChatTargetEpoch();
+    if (targetEpoch === null) return null;
+    const requestSeq = ++modelCatalogRequestSeqRef.current;
     try {
       const catalog = await sessionMgr.getModelCatalog(sessionId);
+      if (
+        requestSeq !== modelCatalogRequestSeqRef.current
+        || !isChatTargetCurrent(targetEpoch)
+      ) return null;
       setModelCatalog(catalog);
       if (!modelSelectionInitializedRef.current) {
         const preferredSelection = resolvePreferredModelSelection(loadLastSelectedModelId(), catalog);
@@ -2165,6 +2297,10 @@ const ChatPage: React.FC<ChatPageProps> = ({ sessionMgr, sessionId, sessionName,
 
         if (preferredSelection.modelId && preferredSelection.modelId !== sessionModelId) {
           const normalizedModelId = await sessionMgr.setSessionModel(sessionId, preferredSelection.modelId);
+          if (
+            requestSeq !== modelCatalogRequestSeqRef.current
+            || !isChatTargetCurrent(targetEpoch)
+          ) return null;
           setSelectedModelId(normalizedModelId || 'auto');
           if (preferredSelection.fellBackToAuto && (!normalizedModelId || normalizedModelId === 'auto')) {
             persistLastSelectedModelId('auto');
@@ -2179,24 +2315,30 @@ const ChatPage: React.FC<ChatPageProps> = ({ sessionMgr, sessionId, sessionName,
       }
       return catalog;
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+      if (
+        requestSeq === modelCatalogRequestSeqRef.current
+        && isChatTargetCurrent(targetEpoch)
+      ) reportRemoteSessionError(err, setError);
       return null;
     }
-  }, [sessionId, sessionMgr, setError]);
+  }, [captureChatTargetEpoch, isChatTargetCurrent, sessionId, sessionMgr, setError]);
 
   const handleSelectModel = useCallback(async (modelId: string) => {
     if (modelUpdating || isStreaming || imageAnalyzing) return;
+    const targetEpoch = captureChatTargetEpoch();
+    if (targetEpoch === null) return;
     setModelUpdating(true);
     try {
       const normalizedModelId = await sessionMgr.setSessionModel(sessionId, modelId);
+      if (!isChatTargetCurrent(targetEpoch)) return;
       setSelectedModelId(normalizedModelId || 'auto');
       persistLastSelectedModelId(normalizedModelId || 'auto');
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+      reportRemoteSessionError(err, setError);
     } finally {
-      setModelUpdating(false);
+      if (isChatTargetCurrent(targetEpoch)) setModelUpdating(false);
     }
-  }, [imageAnalyzing, isStreaming, modelUpdating, sessionId, sessionMgr, setError]);
+  }, [captureChatTargetEpoch, imageAnalyzing, isChatTargetCurrent, isStreaming, modelUpdating, sessionId, sessionMgr, setError]);
 
   useEffect(() => {
     if (!isStreaming) return;
@@ -2217,11 +2359,18 @@ const ChatPage: React.FC<ChatPageProps> = ({ sessionMgr, sessionId, sessionName,
   }, [infoToast]);
 
   const loadMessages = useCallback(async (beforeId?: string) => {
-    if (isLoadingMoreRef.current || (!hasMoreRef.current && beforeId)) return;
+    if (beforeId && (isLoadingMoreRef.current || !hasMoreRef.current)) return;
+    const targetEpoch = captureChatTargetEpoch();
+    if (targetEpoch === null) return;
+    const requestSeq = ++messagesRequestSeqRef.current;
     try {
       isLoadingMoreRef.current = true;
       setIsLoadingMore(true);
       const resp = await sessionMgr.getSessionMessages(sessionId, 50, beforeId);
+      if (
+        requestSeq !== messagesRequestSeqRef.current
+        || !isChatTargetCurrent(targetEpoch)
+      ) return;
       if (beforeId) {
         const currentMsgs = getMessages(sessionId);
         setMessages(sessionId, [...resp.messages, ...currentMsgs]);
@@ -2231,12 +2380,20 @@ const ChatPage: React.FC<ChatPageProps> = ({ sessionMgr, sessionId, sessionName,
       setHasMore(resp.has_more);
       hasMoreRef.current = resp.has_more;
     } catch (e: any) {
-      setError(e.message);
+      if (
+        requestSeq === messagesRequestSeqRef.current
+        && isChatTargetCurrent(targetEpoch)
+      ) reportRemoteSessionError(e, setError);
     } finally {
-      isLoadingMoreRef.current = false;
-      setIsLoadingMore(false);
+      if (
+        requestSeq === messagesRequestSeqRef.current
+        && isChatTargetCurrent(targetEpoch)
+      ) {
+        isLoadingMoreRef.current = false;
+        setIsLoadingMore(false);
+      }
     }
-  }, [sessionMgr, sessionId, setMessages, setError, getMessages]);
+  }, [captureChatTargetEpoch, getMessages, isChatTargetCurrent, sessionId, sessionMgr, setError, setMessages]);
 
   // ── Message long-press context menu ──────────────────────────────
   const clearMsgLongPressTimer = () => {
@@ -2286,6 +2443,8 @@ const ChatPage: React.FC<ChatPageProps> = ({ sessionMgr, sessionId, sessionName,
 
   const handleResendMessage = useCallback(async () => {
     if (!menuMessage || menuMessage.role !== 'user') return;
+    const targetEpoch = captureChatTargetEpoch();
+    if (targetEpoch === null) return;
     const text = sanitizeMessageText(menuMessage.content);
     if (!text) return;
     setMenuMessage(null);
@@ -2302,11 +2461,12 @@ const ChatPage: React.FC<ChatPageProps> = ({ sessionMgr, sessionId, sessionName,
       : undefined;
     try {
       await sessionMgr.sendMessage(sessionId, text, agentMode, imageContexts);
+      if (!isChatTargetCurrent(targetEpoch)) return;
       pollerRef.current?.nudge();
     } catch (e: any) {
-      setError(e.message);
+      reportRemoteSessionError(e, setError);
     }
-  }, [menuMessage, sessionMgr, sessionId, agentMode, setError]);
+  }, [agentMode, captureChatTargetEpoch, isChatTargetCurrent, menuMessage, sessionId, sessionMgr, setError]);
 
   const handleDeleteMessage = useCallback(async () => {
     if (!menuMessage) return;
@@ -2368,6 +2528,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ sessionMgr, sessionId, sessionName,
   // Initial load + start poller
   const initialScrollDone = useRef(false);
   const pendingInitialScroll = useRef(false);
+  const chatInitSeqRef = useRef(0);
   useEffect(() => {
     modelSelectionInitializedRef.current = false;
     hasMoreRef.current = true;
@@ -2381,11 +2542,22 @@ const ChatPage: React.FC<ChatPageProps> = ({ sessionMgr, sessionId, sessionName,
   useEffect(() => {
     initialScrollDone.current = false;
     pendingInitialScroll.current = false;
+    const initSeq = ++chatInitSeqRef.current;
+    let cancelled = false;
+    const targetEpoch = captureChatTargetEpoch();
+    if (targetEpoch === null) return;
+    const isInitCurrent = () => (
+      !cancelled
+      && chatInitSeqRef.current === initSeq
+      && isChatTargetCurrent(targetEpoch)
+    );
     Promise.all([loadMessages(), loadModelCatalog()]).then(([_, initialCatalog]) => {
+      if (!isInitCurrent()) return;
       const initialMsgCount = useMobileStore.getState().getMessages(sessionId).length;
       pendingInitialScroll.current = true;
 
       const poller = new SessionPoller(sessionMgr, sessionId, (resp: PollResponse) => {
+        if (!isInitCurrent()) return;
         if (resp.new_messages && resp.new_messages.length > 0) {
           appendNewMessages(sessionId, resp.new_messages);
         }
@@ -2397,6 +2569,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ sessionMgr, sessionId, sessionName,
           const localCount = useMobileStore.getState().getMessages(sessionId).length;
           if (localCount !== resp.total_msg_count) {
             sessionMgr.getSessionMessages(sessionId, 200).then(fresh => {
+              if (!isInitCurrent()) return;
               useMobileStore.getState().setMessages(sessionId, fresh.messages);
             }).catch(() => {});
           }
@@ -2417,11 +2590,23 @@ const ChatPage: React.FC<ChatPageProps> = ({ sessionMgr, sessionId, sessionName,
     });
 
     return () => {
+      cancelled = true;
+      if (chatInitSeqRef.current === initSeq) chatInitSeqRef.current += 1;
       pollerRef.current?.stop();
       pollerRef.current = null;
       setActiveTurn(null);
     };
-  }, [sessionId, sessionMgr, loadMessages, loadModelCatalog, appendNewMessages, setActiveTurn, updateSessionName]);
+  }, [
+    appendNewMessages,
+    captureChatTargetEpoch,
+    isChatTargetCurrent,
+    loadMessages,
+    loadModelCatalog,
+    sessionId,
+    sessionMgr,
+    setActiveTurn,
+    updateSessionName,
+  ]);
 
   const prevMsgCountRef = useRef(0);
 
@@ -2484,6 +2669,8 @@ const ChatPage: React.FC<ChatPageProps> = ({ sessionMgr, sessionId, sessionName,
     const text = input.trim();
     const imgs = pendingImages;
     if ((!text && imgs.length === 0) || imageAnalyzing) return;
+    const targetEpoch = captureChatTargetEpoch();
+    if (targetEpoch === null) return;
     const wasStreaming = isStreaming;
     setInput('');
     setPendingImages([]);
@@ -2520,17 +2707,20 @@ const ChatPage: React.FC<ChatPageProps> = ({ sessionMgr, sessionId, sessionName,
         agentMode,
         imageContexts,
       );
+      if (!isChatTargetCurrent(targetEpoch)) return;
       pollerRef.current?.nudge();
       if (wasStreaming) {
         setInfoToast(t('chat.messageQueued'));
       }
     } catch (e: any) {
-      setError(e.message);
+      reportRemoteSessionError(e, setError);
     } finally {
-      setImageAnalyzing(false);
-      setOptimisticMsg(null);
+      if (isChatTargetCurrent(targetEpoch)) {
+        setImageAnalyzing(false);
+        setOptimisticMsg(null);
+      }
     }
-  }, [agentMode, imageAnalyzing, input, isStreaming, pendingImages, sessionId, sessionMgr, setError, t]);
+  }, [agentMode, captureChatTargetEpoch, imageAnalyzing, input, isChatTargetCurrent, isStreaming, pendingImages, sessionId, sessionMgr, setError, t]);
 
   const handleImageSelect = useCallback(() => {
     fileInputRef.current?.click();
@@ -2623,6 +2813,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ sessionMgr, sessionId, sessionName,
   };
 
   const handleCancel = async () => {
+    if (captureChatTargetEpoch() === null) return;
     try {
       await sessionMgr.cancelTask(sessionId, activeTurn?.turn_id);
     } catch {
@@ -2825,7 +3016,16 @@ const ChatPage: React.FC<ChatPageProps> = ({ sessionMgr, sessionId, sessionName,
             return (
               <div className="chat-msg chat-msg--assistant">
                 {turnIsActive
-                  ? renderActiveTurnItems(turn.items, now, sessionMgr, setError, handleAnswerQuestion, handleFileDownload, handleGetFileInfo)
+                  ? renderActiveTurnItems(
+                      turn.items,
+                      now,
+                      sessionMgr,
+                      setError,
+                      () => captureChatTargetEpoch() !== null,
+                      handleAnswerQuestion,
+                      handleFileDownload,
+                      handleGetFileInfo,
+                    )
                   : renderOrderedItems(turn.items, now, undefined, undefined, handleFileDownload, handleGetFileInfo)}
                 {turnIsActive && !turn.thinking && !turn.text && turn.tools.length === 0 && (
                   <div className="chat-msg__assistant-content"><TypingDots /></div>
@@ -2848,7 +3048,10 @@ const ChatPage: React.FC<ChatPageProps> = ({ sessionMgr, sessionId, sessionName,
               ]
             : [];
           const onCancel = (toolId: string) => {
-            sessionMgr.cancelTool(toolId, t('common.cancel')).catch(err => { setError(String(err)); });
+            if (captureChatTargetEpoch() === null) return;
+            sessionMgr.cancelTool(toolId, t('common.cancel')).catch((error) => {
+              reportRemoteSessionError(error, setError);
+            });
           };
 
           return (

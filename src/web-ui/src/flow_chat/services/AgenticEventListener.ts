@@ -18,6 +18,7 @@ import type {
   ImageAnalysisEvent,
   ModelRoundStartedEvent,
   ModelRoundCompletedEvent,
+  ModelRoundAttemptSupersededEvent,
   UserSteeringInjectedEvent,
   DeepReviewQueueStateChangedEvent,
   AcpContextUsageUpdatedEvent,
@@ -38,6 +39,7 @@ export interface AgenticEventCallbacks {
   onDialogTurnStarted?: (event: AgenticEvent) => void;
   onModelRoundStarted?: (event: ModelRoundStartedEvent) => void;
   onModelRoundCompleted?: (event: ModelRoundCompletedEvent) => void;
+  onModelRoundAttemptSuperseded?: (event: ModelRoundAttemptSupersededEvent) => void;
   onTextChunk?: (event: TextChunkEvent) => void;
   onToolEvent?: (event: ToolEvent) => void;
   onSubagentSessionLinked?: (event: SubagentSessionLinkedEvent) => void;
@@ -130,6 +132,14 @@ export class AgenticEventListener {
         const unlisten = agentAPI.onModelRoundCompleted((event) => {
           logger.debug('Model round completed:', event);
           callbacks.onModelRoundCompleted?.(event);
+        });
+        this.unlistenFunctions.push(unlisten);
+      }
+
+      if (callbacks.onModelRoundAttemptSuperseded) {
+        const unlisten = agentAPI.onModelRoundAttemptSuperseded((event) => {
+          logger.debug('Model round attempt superseded:', event);
+          callbacks.onModelRoundAttemptSuperseded?.(event);
         });
         this.unlistenFunctions.push(unlisten);
       }

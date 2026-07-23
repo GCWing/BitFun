@@ -8,11 +8,12 @@ interface LanguageToggleButtonProps {
 
 const LanguageToggleButton: React.FC<LanguageToggleButtonProps> = ({ className }) => {
   const { language, toggleLanguage, t } = useI18n();
+  const buttonClassName = ['mobile-lang-btn', className].filter(Boolean).join(' ');
 
   return (
     <button
       type="button"
-      className={className || 'mobile-lang-btn'}
+      className={buttonClassName}
       onClick={toggleLanguage}
       aria-label={t('common.switchLanguage')}
       title={t('common.switchLanguage')}
@@ -23,4 +24,3 @@ const LanguageToggleButton: React.FC<LanguageToggleButtonProps> = ({ className }
 };
 
 export default LanguageToggleButton;
-

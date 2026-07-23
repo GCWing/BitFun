@@ -1,5 +1,6 @@
 //! Agentic Events Definition
 pub use bitfun_core_types::errors::{AiErrorDetail, ErrorCategory};
+use bitfun_core_types::ToolImageAttachment;
 use serde::{Deserialize, Serialize};
 use std::time::SystemTime;
 
@@ -240,6 +241,14 @@ pub enum AgenticEvent {
         effective_model_name: String,
     },
 
+    /// Emitted as soon as an automatic retry supersedes one model attempt.
+    ModelRoundAttemptSuperseded {
+        session_id: String,
+        turn_id: String,
+        round_id: String,
+        diagnostic: ModelRoundAttemptDiagnostic,
+    },
+
     ModelRoundCompleted {
         session_id: String,
         turn_id: String,
@@ -342,6 +351,34 @@ pub enum AgenticEvent {
         /// `"model_deleted"`.
         reason: String,
     },
+}
+
+/// Diagnostic evidence collected for an attempt that was superseded by an
+/// automatic retry. Raw provider/transport text is intentionally preserved so
+/// the desktop surface can expose it on demand without changing retry policy.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ModelRoundAttemptDiagnostic {
+    pub attempt_id: String,
+    pub attempt_index: u32,
+    pub category: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub raw_error: Option<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub tool_calls: Vec<ModelRoundAttemptToolDiagnostic>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ModelRoundAttemptToolDiagnostic {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tool_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tool_name: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub raw_arguments: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub validation_error: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -452,6 +489,8 @@ pub enum ToolEventData {
         result: serde_json::Value,
         #[serde(skip_serializing_if = "Option::is_none")]
         result_for_assistant: Option<String>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        image_attachments: Option<Vec<ToolImageAttachment>>,
         duration_ms: u64,
         #[serde(default, skip_serializing_if = "Option::is_none")]
         queue_wait_ms: Option<u64>,
@@ -557,6 +596,7 @@ impl AgenticEvent {
             | Self::DialogTurnCancelled { session_id, .. }
             | Self::DialogTurnFailed { session_id, .. }
             | Self::ModelRoundStarted { session_id, .. }
+            | Self::ModelRoundAttemptSuperseded { session_id, .. }
             | Self::TextChunk { session_id, .. }
             | Self::ThinkingChunk { session_id, .. }
             | Self::ModelRoundCompleted { session_id, .. }
@@ -587,6 +627,7 @@ impl AgenticEvent {
             | Self::TextChunk { .. }
             | Self::ThinkingChunk { .. }
             | Self::ModelRoundStarted { .. }
+            | Self::ModelRoundAttemptSuperseded { .. }
             | Self::ModelRoundCompleted { .. }
             | Self::TokenUsageUpdated { .. }
             | Self::DialogTurnCompleted { .. }
@@ -740,6 +781,7 @@ mod tests {
             identity: ToolEventIdentity::direct("tool-1", "write_file"),
             result: serde_json::json!({ "ok": true }),
             result_for_assistant: None,
+            image_attachments: None,
             duration_ms: 120,
             queue_wait_ms: Some(10),
             preflight_ms: Some(20),
@@ -775,6 +817,29 @@ mod tests {
             serde_json::from_value(json).expect("deserialize deferred event");
         assert_eq!(decoded.wire_tool_name(), "CallDeferredTool");
         assert_eq!(decoded.effective_tool_name(), "CreatePlan");
+    }
+
+    #[test]
+    fn completed_tool_serializes_image_attachments() {
+        let event = ToolEventData::Completed {
+            identity: ToolEventIdentity::direct("tool-image-1", "view_image"),
+            result: serde_json::json!({ "path": "preview.png" }),
+            result_for_assistant: Some("Image attached".to_string()),
+            image_attachments: Some(vec![bitfun_core_types::ToolImageAttachment {
+                mime_type: "image/png".to_string(),
+                data_base64: "AAAA".to_string(),
+            }]),
+            duration_ms: 12,
+            queue_wait_ms: None,
+            preflight_ms: None,
+            confirmation_wait_ms: None,
+            execution_ms: Some(12),
+        };
+
+        let json = serde_json::to_value(&event).expect("serialize tool event");
+
+        assert_eq!(json["image_attachments"][0]["mime_type"], "image/png");
+        assert_eq!(json["image_attachments"][0]["data_base64"], "AAAA");
     }
 
     #[test]

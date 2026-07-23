@@ -8,21 +8,17 @@ import { CubeLoading } from '../../component-library';
 import type { ToolCardProps } from '../types/flow-chat';
 import { BaseToolCard, ToolCardHeader } from './BaseToolCard';
 import { useToolCardHeightContract } from './useToolCardHeightContract';
-import { remoteConnectAPI } from '@/infrastructure/api/service-api/RemoteConnectAPI';
+import { pageAPI } from '@/infrastructure/api/service-api/PageAPI';
 import { systemAPI } from '@/infrastructure/api/service-api/SystemAPI';
+import { notificationService } from '@/shared/notification-system';
 
-async function openPagePath(path: string | undefined) {
-  if (!path) return;
-  const hint = await remoteConnectAPI.accountGetCredentialHint();
-  const relay = hint?.relay_url?.replace(/\/$/, '') ?? '';
-  const href = path.startsWith('http')
-    ? path
-    : relay
-      ? `${relay}${path.startsWith('/') ? '' : '/'}${path}`
-      : path;
-  if (href.startsWith('http')) {
-    await systemAPI.openExternal(href);
-  }
+async function openPage(slug: string, knownGeneration?: string, versionId?: string) {
+  if (!slug) return;
+  const generation = knownGeneration || (await pageAPI.listPages())
+    .find((page) => page.slug === slug)?.generation;
+  if (generation == null) throw new Error('Page no longer exists');
+  const link = await pageAPI.createOpenLink(slug, generation, versionId);
+  await systemAPI.openExternal(link.open_url);
 }
 
 export const PagePublishDisplay: React.FC<ToolCardProps> = ({ toolItem }) => {
@@ -47,6 +43,7 @@ export const PagePublishDisplay: React.FC<ToolCardProps> = ({ toolItem }) => {
     if (isParamsStreaming) return '';
     return (toolResult?.result?.version_id as string | undefined) || '';
   }, [isParamsStreaming, toolResult?.result]);
+  const generation = toolResult?.result?.generation as string | undefined;
 
   const urlPath =
     (toolResult?.result?.url as string | undefined) ||
@@ -140,7 +137,9 @@ export const PagePublishDisplay: React.FC<ToolCardProps> = ({ toolItem }) => {
           <button
             type="button"
             data-testid="chat-page-publish-open-prod-btn"
-            onClick={() => void openPagePath(urlPath)}
+            onClick={() => void openPage(slug, generation).catch(() => {
+              notificationService.error(t('toolCards.pagePublish.openFailed'));
+            })}
           >
             <ExternalLink size={12} />
             <span>{t('toolCards.pagePublish.openProduction')}</span>
@@ -150,7 +149,9 @@ export const PagePublishDisplay: React.FC<ToolCardProps> = ({ toolItem }) => {
           <button
             type="button"
             data-testid="chat-page-publish-open-preview-btn"
-            onClick={() => void openPagePath(previewPath)}
+            onClick={() => void openPage(slug, generation, versionId).catch(() => {
+              notificationService.error(t('toolCards.pagePublish.openFailed'));
+            })}
           >
             <ExternalLink size={12} />
             <span>{t('toolCards.pagePublish.openPreview')}</span>

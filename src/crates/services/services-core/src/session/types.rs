@@ -1,6 +1,8 @@
 //! Types for session persistence
 
+use bitfun_core_types::ToolImageAttachment;
 use bitfun_core_types::{SessionContinuationPolicy, SessionKind};
+use bitfun_events::ModelRoundAttemptDiagnostic;
 use serde::{Deserialize, Serialize};
 
 pub const SESSION_STORAGE_SCHEMA_VERSION: u32 = 2;
@@ -549,6 +551,12 @@ pub struct ModelRoundData {
     pub attempt_count: Option<u32>,
     #[serde(
         default,
+        skip_serializing_if = "Vec::is_empty",
+        alias = "attempt_diagnostics"
+    )]
+    pub attempt_diagnostics: Vec<ModelRoundAttemptDiagnostic>,
+    #[serde(
+        default,
         skip_serializing_if = "Option::is_none",
         alias = "failure_category"
     )]
@@ -757,6 +765,12 @@ pub struct ToolResultData {
         alias = "result_for_assistant"
     )]
     pub result_for_assistant: Option<String>,
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        alias = "image_attachments"
+    )]
+    pub image_attachments: Option<Vec<ToolImageAttachment>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub error: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none", alias = "duration_ms")]

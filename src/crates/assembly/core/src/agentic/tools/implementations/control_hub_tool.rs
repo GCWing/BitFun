@@ -127,13 +127,16 @@ Use this tool via `{ domain, action, params }` for browser automation, terminal 
 ## Domains
 
 ### domain: "browser"  (DOM/CDP browser control)
-- Browser modes:
-  * `connect { mode: "default" }` (default) — start or attach the stable managed browser profile with CDP enabled.
-  * `connect { mode: "headless" }` — start or attach the stable managed headless browser profile for project Web UI testing that does not depend on user login state.
+- Default URL-opening policy:
+  * For requests that only open, show, preview, or view a URL, use `open_builtin`. This is the default browser-opening action and keeps the page inside BitFun.
+  * Do not call `connect`, `tab_new`, or `navigate` merely to display a URL. Use the CDP workflow only when the agent must read page content or interact with the DOM.
 - UI action:
   * `open_builtin { url, title?, replace_existing? }` — open an http(s) URL in BitFun's built-in right-side browser panel. This changes the BitFun UI only; it does not fetch page text for reasoning.
+- Automation modes (external managed browser):
+  * `connect { mode: "default" }` (default) — start or attach the stable managed browser profile with CDP enabled.
+  * `connect { mode: "headless" }` — start or attach the stable managed headless browser profile for project Web UI testing that does not depend on user login state.
 - Actions: open_builtin, connect, tab_new, navigate, back, forward, reload, snapshot, click, hover, fill, type, check, uncheck, select, press_key, scroll, auto_scroll, wait, get, get_text, get_url, get_title, get_html, screenshot, evaluate, fetch, cookies, set_cookies, set_file_input_files, cdp, network, console, errors, trace, dialog, frame, frame_main, read_article, close, list_pages, tab_query, switch_page, list_sessions.
-- Workflow: connect -> navigate -> snapshot (returns @e1, @e2 ... refs) -> click/fill using refs.
+- Automation workflow: connect -> navigate -> snapshot (returns @e1, @e2 ... refs) -> click/fill using refs.
 - Take a fresh snapshot after any DOM mutation; stale refs return `error.code = STALE_REF`.
 
 ### domain: "terminal"
@@ -366,7 +369,7 @@ Branch on `ok` and `error.code`, not on English messages.
                             &mut suggestions,
                             "browser",
                             85,
-                            "Matches browser/URL keywords; use browser.open_builtin for built-in/side browser requests",
+                            "Matches browser/URL keywords; default to browser.open_builtin for opening or showing URLs, and use browser.connect only when DOM reading or interaction is required",
                         );
                         break;
                     }
@@ -1903,7 +1906,7 @@ impl Tool for ControlHubTool {
                 },
                 "action": {
                     "type": "string",
-                    "description": "The atomic action to perform within the domain."
+                    "description": "The atomic action to perform within the domain. For browser URL-opening or display requests, default to open_builtin; use connect and other CDP actions only for DOM reading or interaction."
                 },
                 "params": {
                     "type": "object",
@@ -2210,6 +2213,10 @@ mod control_hub_tests {
             payload.get("suggested_domain").and_then(|v| v.as_str()),
             Some("browser")
         );
+        assert!(
+            payload.to_string().contains("open_builtin"),
+            "route hint should default URL-opening intents to browser.open_builtin: {payload}"
+        );
     }
 
     #[tokio::test]
@@ -2380,11 +2387,13 @@ mod control_hub_tests {
     }
 
     #[tokio::test]
-    async fn description_documents_two_browser_modes() {
+    async fn description_defaults_url_opening_to_builtin_browser() {
         let desc = ControlHubTool::new().description().await.unwrap();
         assert!(
-            desc.contains("Browser modes"),
-            "description must describe the browser control modes"
+            desc.contains("Default URL-opening policy")
+                && desc.contains("use `open_builtin`")
+                && desc.contains("Do not call `connect`"),
+            "description must default display-only URL requests to the built-in browser"
         );
         assert!(
             desc.contains("mode: \"headless\"") && desc.contains("mode: \"default\""),

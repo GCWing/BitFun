@@ -9,6 +9,7 @@ import {
   DialogTurn,
   ModelRound,
   ModelRoundAttempt,
+  ModelRoundAttemptDiagnostic,
   FlowItem,
   FlowToolItem,
   FlowImageAnalysisItem,
@@ -62,6 +63,7 @@ import { sessionBelongsToWorkspaceNavRow } from '../utils/sessionOrdering';
 import { sessionMatchesWorkspace } from '../utils/workspaceScope';
 import { resolveThreadGoalUserMessageDisplay } from '../utils/threadGoalDisplay';
 import { useBackgroundSubagentActivityStore } from './backgroundSubagentActivityStore';
+import { sessionComposerStore } from './sessionComposerStore';
 import { recordHistorySessionDiagnosticEvent } from '../services/historySessionDiagnostics';
 
 const log = createLogger('FlowChatStore');
@@ -80,12 +82,269 @@ const HISTORICAL_SESSION_INITIAL_REMOTE_TAIL_TURN_COUNT = 3;
 const HISTORICAL_SESSION_INITIAL_LOCAL_TAIL_TURN_COUNT = 3;
 const HISTORICAL_SESSION_FULL_HISTORY_IDLE_TIMEOUT_MS = 1500;
 const HISTORICAL_SESSION_PREVIOUS_WINDOW_TURN_COUNT = 12;
+const PEER_SESSION_REFRESH_TAIL_TURN_COUNT = 3;
 
 type RemoveSessionOptions = {
   nextActiveSessionId?: string | null;
 };
 const HISTORICAL_SESSION_FULL_HISTORY_FIRST_PAINT_TIMEOUT_MS = 2500;
 const MAX_DEFERRED_FULL_HISTORY_PROJECTIONS = 3;
+
+export interface PeerSessionSnapshotRefreshResult {
+  applied: boolean;
+  backendState: string;
+  latestTurnId?: string;
+  latestTurnStatus?: DialogTurn['status'];
+}
+
+export function isBackendSessionActivelyProcessing(state: unknown): boolean {
+  if (typeof state !== 'string') {
+    return false;
+  }
+
+  const normalized = state.trim().toLowerCase();
+  return normalized === 'processing' ||
+    normalized.startsWith('processing ') ||
+    normalized.startsWith('processing {') ||
+    normalized === 'waitingfortoolresponse' ||
+    normalized === 'paused';
+}
+
+function normalizeLiveTurnStatus(status: unknown): DialogTurn['status'] {
+  const normalized = typeof status === 'string' ? status.trim().toLowerCase() : '';
+  switch (normalized) {
+    case 'pending':
+      return 'pending';
+    case 'image_analyzing':
+      return 'image_analyzing';
+    case 'finishing':
+      return 'finishing';
+    case 'cancelling':
+      return 'cancelling';
+    case 'completed':
+      return 'completed';
+    case 'cancelled':
+      return 'cancelled';
+    case 'error':
+      return 'error';
+    case 'inprogress':
+    case 'processing':
+    default:
+      return 'processing';
+  }
+}
+
+function normalizeLiveRoundStatus(
+  status: unknown,
+  parentTurnStatus: DialogTurn['status'],
+): ModelRound['status'] {
+  const normalized = typeof status === 'string' ? status.trim().toLowerCase() : '';
+  switch (normalized) {
+    case 'pending':
+      return 'pending';
+    case 'streaming':
+    case 'inprogress':
+    case 'running':
+      return 'streaming';
+    case 'pending_confirmation':
+      return 'pending_confirmation';
+    case 'completed':
+      return 'completed';
+    case 'cancelled':
+      return 'cancelled';
+    case 'rejected':
+      return 'rejected';
+    case 'error':
+      return 'error';
+    default:
+      return parentTurnStatus === 'processing' || parentTurnStatus === 'pending'
+        ? 'streaming'
+        : normalizeRecoveredRoundStatus(status, parentTurnStatus);
+  }
+}
+
+function normalizeLiveItemStatus(
+  status: unknown,
+  fallback: AnyFlowItem['status'],
+): AnyFlowItem['status'] {
+  const normalized = typeof status === 'string' ? status.trim().toLowerCase() : '';
+  switch (normalized) {
+    case 'pending':
+    case 'queued':
+    case 'waiting':
+    case 'preparing':
+    case 'running':
+    case 'streaming':
+    case 'receiving':
+    case 'completed':
+    case 'cancelled':
+    case 'rejected':
+    case 'error':
+    case 'analyzing':
+    case 'pending_confirmation':
+    case 'confirmed':
+      return normalized;
+    case 'starting':
+      return 'preparing';
+    default:
+      return fallback;
+  }
+}
+
+function compareDialogTurnOrder(left: DialogTurn, right: DialogTurn): number {
+  if (
+    typeof left.backendTurnIndex === 'number' &&
+    typeof right.backendTurnIndex === 'number' &&
+    left.backendTurnIndex !== right.backendTurnIndex
+  ) {
+    return left.backendTurnIndex - right.backendTurnIndex;
+  }
+  return left.startTime - right.startTime;
+}
+
+function runningStatusRank(status: string | undefined): number {
+  switch (status) {
+    case 'pending':
+    case 'queued':
+    case 'waiting':
+    case 'preparing':
+      return 0;
+    case 'processing':
+    case 'running':
+    case 'streaming':
+    case 'receiving':
+    case 'analyzing':
+      return 1;
+    case 'pending_confirmation':
+    case 'confirmed':
+    case 'finishing':
+    case 'cancelling':
+      return 2;
+    case 'completed':
+    case 'cancelled':
+    case 'rejected':
+    case 'error':
+      return 3;
+    default:
+      return 0;
+  }
+}
+
+function substantiveRoundItems(round: ModelRound): AnyFlowItem[] {
+  return round.items.filter(item => (
+    item.type !== 'text' ||
+    !(item as AnyFlowItem & { runtimeStatus?: unknown }).runtimeStatus
+  ));
+}
+
+type RunningStreamItem = AnyFlowItem & {
+  type: 'text' | 'thinking';
+  content: string;
+};
+
+function streamProgressEntries(round: ModelRound): Map<string, RunningStreamItem> {
+  const entries = new Map<string, RunningStreamItem>();
+  const ordinals: Record<'text' | 'thinking', number> = {
+    text: 0,
+    thinking: 0,
+  };
+
+  for (const item of substantiveRoundItems(round)) {
+    if (item.type !== 'text' && item.type !== 'thinking') {
+      continue;
+    }
+    const ordinal = ordinals[item.type]++;
+    const attempt =
+      item.attemptId ||
+      (typeof item.attemptIndex === 'number' ? `index:${item.attemptIndex}` : 'default');
+    entries.set(`${item.type}:${attempt}:${ordinal}`, item as RunningStreamItem);
+  }
+
+  return entries;
+}
+
+function toolProgressEntries(round: ModelRound): Map<string, FlowToolItem> {
+  const entries = new Map<string, FlowToolItem>();
+  for (const item of substantiveRoundItems(round)) {
+    if (item.type !== 'tool') {
+      continue;
+    }
+    const tool = item as FlowToolItem;
+    entries.set(tool.toolCall?.id || tool.id, tool);
+  }
+  return entries;
+}
+
+/**
+ * Accept an active persisted snapshot only when it is provably ahead of the
+ * controller projection. Peer text-item ids are generated independently on
+ * each device, so progress is compared by round/type/attempt/ordinal and
+ * content prefix instead of item id.
+ */
+function isRunningSnapshotForwardProgress(
+  current: DialogTurn,
+  snapshot: DialogTurn,
+): boolean {
+  if (current.id !== snapshot.id) {
+    return false;
+  }
+
+  let advanced =
+    runningStatusRank(snapshot.status) > runningStatusRank(current.status) ||
+    snapshot.modelRounds.length > current.modelRounds.length;
+
+  for (const currentRound of current.modelRounds) {
+    const snapshotRound = snapshot.modelRounds.find(round => round.id === currentRound.id);
+    if (!snapshotRound) {
+      return false;
+    }
+    if (runningStatusRank(snapshotRound.status) < runningStatusRank(currentRound.status)) {
+      return false;
+    }
+    if (runningStatusRank(snapshotRound.status) > runningStatusRank(currentRound.status)) {
+      advanced = true;
+    }
+
+    const currentStreams = streamProgressEntries(currentRound);
+    const snapshotStreams = streamProgressEntries(snapshotRound);
+    for (const [key, currentItem] of currentStreams) {
+      const snapshotItem = snapshotStreams.get(key);
+      if (!snapshotItem || !snapshotItem.content.startsWith(currentItem.content)) {
+        return false;
+      }
+      if (snapshotItem.content.length > currentItem.content.length) {
+        advanced = true;
+      }
+    }
+    if (snapshotStreams.size > currentStreams.size) {
+      advanced = true;
+    }
+
+    const currentTools = toolProgressEntries(currentRound);
+    const snapshotTools = toolProgressEntries(snapshotRound);
+    for (const [key, currentTool] of currentTools) {
+      const snapshotTool = snapshotTools.get(key);
+      if (
+        !snapshotTool ||
+        runningStatusRank(snapshotTool.status) < runningStatusRank(currentTool.status) ||
+        (currentTool.toolResult && !snapshotTool.toolResult)
+      ) {
+        return false;
+      }
+      if (
+        runningStatusRank(snapshotTool.status) > runningStatusRank(currentTool.status) ||
+        (!currentTool.toolResult && Boolean(snapshotTool.toolResult))
+      ) {
+        advanced = true;
+      }
+    }
+    if (snapshotTools.size > currentTools.size) {
+      advanced = true;
+    }
+  }
+
+  return advanced;
+}
 
 function itemMatchesIdentity(item: AnyFlowItem, itemId: string): boolean {
   if (item.id === itemId) {
@@ -332,6 +591,66 @@ function synchronizeRoundAttempts(round: ModelRound): ModelRound {
           disableExploreGrouping: true,
         }
       : round.renderHints,
+  };
+}
+
+export function mergeModelRoundAttemptDiagnostics(
+  round: ModelRound,
+  diagnostics: ModelRoundAttemptDiagnostic[] | undefined,
+  options: { supersedeMatchingAttempts?: boolean } = {},
+): ModelRound {
+  if (!diagnostics || diagnostics.length === 0) {
+    return round;
+  }
+
+  const attempts = round.attempts ?? deriveRoundAttemptsFromItems(round.items) ?? [];
+  const diagnosticByKey = new Map<string, ModelRoundAttemptDiagnostic>();
+  for (const diagnostic of round.attemptDiagnostics ?? []) {
+    diagnosticByKey.set(`${diagnostic.attemptId}::${diagnostic.attemptIndex}`, diagnostic);
+  }
+  for (const attempt of attempts) {
+    if (attempt.diagnostic) {
+      diagnosticByKey.set(`${attempt.diagnostic.attemptId}::${attempt.diagnostic.attemptIndex}`, attempt.diagnostic);
+    }
+  }
+  for (const diagnostic of diagnostics) {
+    diagnosticByKey.set(`${diagnostic.attemptId}::${diagnostic.attemptIndex}`, diagnostic);
+  }
+
+  const sortedDiagnostics = [...diagnosticByKey.values()].sort((left, right) => (
+    left.attemptIndex - right.attemptIndex || left.attemptId.localeCompare(right.attemptId)
+  ));
+  const supersededKeys = new Set(
+    options.supersedeMatchingAttempts
+      ? diagnostics.map(diagnostic => `${diagnostic.attemptId}::${diagnostic.attemptIndex}`)
+      : [],
+  );
+  const nextAttempts = attempts.map(attempt => {
+    const key = `${attempt.id}::${attempt.index}`;
+    const diagnostic = diagnosticByKey.get(key) ?? attempt.diagnostic;
+    return supersededKeys.has(key)
+      ? { ...attempt, status: 'superseded' as const, diagnostic }
+      : diagnostic ? { ...attempt, diagnostic } : attempt;
+  });
+  const knownKeys = new Set(nextAttempts.map(attempt => `${attempt.id}::${attempt.index}`));
+
+  for (const diagnostic of sortedDiagnostics) {
+    const key = `${diagnostic.attemptId}::${diagnostic.attemptIndex}`;
+    if (!knownKeys.has(key)) {
+      nextAttempts.push({
+        id: diagnostic.attemptId,
+        index: diagnostic.attemptIndex,
+        status: 'superseded',
+        items: [],
+        diagnostic,
+      });
+    }
+  }
+
+  return {
+    ...round,
+    attemptDiagnostics: sortedDiagnostics,
+    attempts: sortAttemptEntries(nextAttempts),
   };
 }
 
@@ -1199,7 +1518,10 @@ export class FlowChatStore {
     }
 
     const convertStartedAt = nowMs();
-    const dialogTurns = this.convertToDialogTurns(restored.turns);
+    const activeTurnId = isBackendSessionActivelyProcessing(restored.session.state)
+      ? restored.turns[restored.turns.length - 1]?.turnId
+      : undefined;
+    const dialogTurns = this.convertToDialogTurns(restored.turns, { activeTurnId });
     const restoredLastUserDialogMode =
       restored.session.lastUserDialogAgentType || this.deriveLastUserDialogMode(dialogTurns);
     const contextRestoreState: SessionContextRestoreState =
@@ -1990,7 +2312,8 @@ export class FlowChatStore {
       log.error('Failed to delete session on backend', { sessionId, error });
     }
 
-    this.removeSession(sessionId, options);
+    const removedSessionIds = this.removeSession(sessionId, options);
+    sessionComposerStore.getState().removeDrafts(removedSessionIds);
     this.pendingRemoveSessionOptions.delete(sessionId);
   }
 
@@ -3229,6 +3552,7 @@ export class FlowChatStore {
             firstVisibleOutputMs: round.firstVisibleOutputMs,
             streamDurationMs: round.streamDurationMs,
             attemptCount: round.attemptCount,
+            attemptDiagnostics: round.attemptDiagnostics,
             failureCategory: round.failureCategory,
             tokenDetails: round.tokenDetails,
             status: round.status
@@ -3934,6 +4258,134 @@ export class FlowChatStore {
   }
 
   /**
+   * Reconcile the active Peer Device session with a small authoritative
+   * snapshot from the host.
+   *
+   * Peer agentic events remain the primary low-latency path. This snapshot is
+   * the recovery path for a controller that attached after lifecycle events,
+   * or for a DeviceEvent gap (the relay stream has no ACK/replay contract).
+   */
+  public async refreshPeerSessionSnapshot(
+    sessionId: string,
+    workspacePath: string,
+    options?: {
+      replaceRunningSnapshot?: boolean;
+      requireActiveSession?: boolean;
+      shouldApply?: () => boolean;
+    },
+  ): Promise<PeerSessionSnapshotRefreshResult> {
+    const initialSession = this.state.sessions.get(sessionId);
+    if (!initialSession) {
+      return {
+        applied: false,
+        backendState: 'Unknown',
+      };
+    }
+
+    const restored = await agentAPI.restoreSessionView(
+      sessionId,
+      workspacePath,
+      initialSession.remoteConnectionId,
+      initialSession.remoteSshHost,
+      `peer-refresh-${sessionId.slice(0, 8)}`,
+      undefined,
+      PEER_SESSION_REFRESH_TAIL_TURN_COUNT,
+    );
+    const backendActive = isBackendSessionActivelyProcessing(restored.session.state);
+    const activeTurnId = backendActive
+      ? restored.turns[restored.turns.length - 1]?.turnId
+      : undefined;
+    const snapshotTurns = this.convertToDialogTurns(restored.turns, { activeTurnId });
+    const replaceExistingTurns =
+      !backendActive || options?.replaceRunningSnapshot === true;
+    let applied = false;
+
+    this.setState(prev => {
+      if (
+        options?.shouldApply?.() === false ||
+        (
+          options?.requireActiveSession !== false &&
+          prev.activeSessionId !== sessionId
+        )
+      ) {
+        return prev;
+      }
+
+      const session = prev.sessions.get(sessionId);
+      // A live event or another refresh won the race while HostInvoke was in
+      // flight. Do not overwrite that newer local projection.
+      if (!session || session !== initialSession) {
+        return prev;
+      }
+
+      const mergedTurns = [...session.dialogTurns];
+      let turnsChanged = false;
+      for (const snapshotTurn of snapshotTurns) {
+        const existingIndex = mergedTurns.findIndex(turn => turn.id === snapshotTurn.id);
+        if (existingIndex === -1) {
+          mergedTurns.push(snapshotTurn);
+          turnsChanged = true;
+        } else if (
+          replaceExistingTurns ||
+          isRunningSnapshotForwardProgress(mergedTurns[existingIndex], snapshotTurn)
+        ) {
+          mergedTurns[existingIndex] = snapshotTurn;
+          turnsChanged = true;
+        }
+      }
+
+      if (!turnsChanged) {
+        return prev;
+      }
+
+      mergedTurns.sort(compareDialogTurnOrder);
+      const newSessions = new Map(prev.sessions);
+      newSessions.set(sessionId, {
+        ...session,
+        dialogTurns: mergedTurns,
+        isHistorical: false,
+        historyState: 'ready',
+        contextRestoreState:
+          session.contextRestoreState === 'ready'
+            ? 'ready'
+            : restored.contextRestoreState,
+        isPartial: session.isPartial === true,
+        loadedTurnCount: Math.max(session.loadedTurnCount ?? 0, mergedTurns.length),
+        totalTurnCount: Math.max(
+          session.totalTurnCount ?? 0,
+          restored.totalTurnCount ?? restored.session.turnCount,
+          mergedTurns.length,
+        ),
+        config: {
+          ...session.config,
+          ...(restored.session.modelName
+            ? { modelName: restored.session.modelName }
+            : {}),
+        },
+        mode: restored.session.agentType || session.mode,
+        lastUserDialogMode:
+          restored.session.lastUserDialogAgentType || session.lastUserDialogMode,
+        lastSubmittedMode:
+          restored.session.lastSubmittedAgentType ?? session.lastSubmittedMode,
+      });
+      applied = true;
+
+      return {
+        ...prev,
+        sessions: newSessions,
+      };
+    });
+
+    const latestTurn = snapshotTurns[snapshotTurns.length - 1];
+    return {
+      applied,
+      backendState: restored.session.state,
+      latestTurnId: latestTurn?.id,
+      latestTurnStatus: latestTurn?.status,
+    };
+  }
+
+  /**
    * Lazy load session history (convert historical data to FlowChat format)
    */
   public async loadSessionHistory(
@@ -4191,7 +4643,7 @@ export class FlowChatStore {
           durationMs: elapsedMs(turnsLoadStartedAt),
         });
       }
-      const { stateMachineManager } = await stateMachineManagerPromise;
+      const { stateMachineManager, SessionExecutionEvent } = await stateMachineManagerPromise;
       stateMachineManager.getOrCreate(sessionId);
       startupTrace.markPhase('historical_session_turns_loaded', {
         remote,
@@ -4252,7 +4704,10 @@ export class FlowChatStore {
       }
       
       const convertStartedAt = nowMs();
-      const dialogTurns = this.convertToDialogTurns(turns);
+      const activeTurnId = isBackendSessionActivelyProcessing(restoredSessionInfo?.state)
+        ? turns[turns.length - 1]?.turnId
+        : undefined;
+      const dialogTurns = this.convertToDialogTurns(turns, { activeTurnId });
       const restoredLastUserDialogMode =
         restoredSessionInfo?.lastUserDialogAgentType || this.deriveLastUserDialogMode(dialogTurns);
       startupTrace.markPhase('historical_session_convert_end', {
@@ -4325,9 +4780,17 @@ export class FlowChatStore {
         frameCount: 2,
       });
       
-      // Reset state machine to IDLE after loading history
-      // This handles the case where restoreSession triggered events that left the state machine in PROCESSING
+      // Historical views normally settle to IDLE. When the same process still
+      // owns a live turn (notably a Peer Host), keep the controller state
+      // machine aligned so subsequent streamed chunks are accepted even though
+      // their DialogTurnStarted event happened before the controller attached.
       stateMachineManager.reset(sessionId);
+      if (activeTurnId) {
+        await stateMachineManager.transition(sessionId, SessionExecutionEvent.START, {
+          taskId: sessionId,
+          dialogTurnId: activeTurnId,
+        });
+      }
       startupTrace.markPhase('historical_session_hydrate_end', {
         remote,
         sessionId,
@@ -4413,8 +4876,12 @@ export class FlowChatStore {
   /**
    * Convert DialogTurnData to FlowChat DialogTurn format
    */
-  private convertToDialogTurns(turns: any[]): DialogTurn[] {
+  private convertToDialogTurns(
+    turns: any[],
+    options?: { activeTurnId?: string },
+  ): DialogTurn[] {
     return turns.map(turn => {
+      const isLiveTurn = options?.activeTurnId === turn.turnId;
       const metadata = turn.userMessage.metadata;
       const metaImages = metadata?.images;
       const hasImages = Array.isArray(metaImages) && metaImages.length > 0;
@@ -4439,7 +4906,9 @@ export class FlowChatStore {
         rawDisplay,
         metadata as Record<string, unknown> | undefined
       );
-      const normalizedTurnStatus = normalizeRecoveredTurnStatus(turn.status, { error: undefined });
+      const normalizedTurnStatus = isLiveTurn
+        ? normalizeLiveTurnStatus(turn.status)
+        : normalizeRecoveredTurnStatus(turn.status, { error: undefined });
       const rawTokenUsage = turn.tokenUsage ?? turn.token_usage;
 
       return {
@@ -4457,16 +4926,23 @@ export class FlowChatStore {
         images,
       },
       modelRounds: turn.modelRounds.map((round: any) => {
-        const normalizedRoundStatus = normalizeRecoveredRoundStatus(round.status, normalizedTurnStatus);
+        const normalizedRoundStatus = isLiveTurn
+          ? normalizeLiveRoundStatus(round.status, normalizedTurnStatus)
+          : normalizeRecoveredRoundStatus(round.status, normalizedTurnStatus);
         const flatItems = [
           ...round.textItems.map((text: any) => ({
             id: text.id,
             type: 'text' as const,
             content: text.content,
-            isStreaming: false,
+            isStreaming: isLiveTurn ? text.isStreaming === true : false,
             isMarkdown: text.isMarkdown !== undefined ? text.isMarkdown : true,
             timestamp: text.timestamp,
-            status: normalizeRecoveredTextStatus(text.status, normalizedTurnStatus),
+            status: isLiveTurn
+              ? normalizeLiveItemStatus(
+                  text.status,
+                  text.isStreaming === true ? 'streaming' : 'completed',
+                )
+              : normalizeRecoveredTextStatus(text.status, normalizedTurnStatus),
             orderIndex: text.orderIndex,
             subagentSessionId: text.subagentSessionId,
             attemptId: text.attemptId,
@@ -4494,11 +4970,16 @@ export class FlowChatStore {
               confirmationWaitMs: tool.confirmationWaitMs,
               executionMs: tool.executionMs,
               timestamp: tool.startTime,
-              status: normalizeRecoveredToolStatus(
-                tool.status,
-                normalizedTurnStatus,
-                tool.toolResult,
-              ),
+              status: isLiveTurn
+                ? normalizeLiveItemStatus(
+                    tool.status,
+                    tool.toolResult ? (tool.toolResult.success ? 'completed' : 'error') : 'running',
+                  )
+                : normalizeRecoveredToolStatus(
+                    tool.status,
+                    normalizedTurnStatus,
+                    tool.toolResult,
+                  ),
               orderIndex: tool.orderIndex,
               subagentSessionId: tool.subagentSessionId,
               subagentDialogTurnId: tool.subagentDialogTurnId,
@@ -4511,10 +4992,17 @@ export class FlowChatStore {
             id: thinking.id,
             type: 'thinking' as const,
             content: thinking.content,
-            isStreaming: false,
-            isCollapsed: thinking.isCollapsed ?? true,
+            isStreaming: isLiveTurn ? thinking.isStreaming === true : false,
+            isCollapsed: isLiveTurn
+              ? (thinking.isCollapsed ?? thinking.isStreaming !== true)
+              : (thinking.isCollapsed ?? true),
             timestamp: thinking.timestamp,
-            status: normalizeRecoveredThinkingStatus(thinking.status, normalizedTurnStatus),
+            status: isLiveTurn
+              ? normalizeLiveItemStatus(
+                  thinking.status,
+                  thinking.isStreaming === true ? 'streaming' : 'completed',
+                )
+              : normalizeRecoveredThinkingStatus(thinking.status, normalizedTurnStatus),
             orderIndex: thinking.orderIndex,
             subagentSessionId: thinking.subagentSessionId,
             attemptId: thinking.attemptId,
@@ -4527,14 +5015,21 @@ export class FlowChatStore {
           return aIndex - bIndex;
         });
 
-        const hydratedRound = synchronizeRoundAttempts({
+        const hydratedRound = mergeModelRoundAttemptDiagnostics(synchronizeRoundAttempts({
           id: round.id,
           index: round.roundIndex ?? 0,
           roundGroupId: round.roundGroupId,
           renderHints: round.renderHints,
           items: flatItems,
-          isStreaming: false,
-          isComplete: normalizedRoundStatus !== 'pending' && normalizedRoundStatus !== 'streaming',
+          isStreaming:
+            isLiveTurn &&
+            (normalizedRoundStatus === 'pending' ||
+              normalizedRoundStatus === 'streaming' ||
+              normalizedRoundStatus === 'pending_confirmation'),
+          isComplete:
+            normalizedRoundStatus !== 'pending' &&
+            normalizedRoundStatus !== 'streaming' &&
+            normalizedRoundStatus !== 'pending_confirmation',
           status: normalizedRoundStatus,
           startTime: round.startTime ?? round.timestamp,
           endTime: round.endTime,
@@ -4546,9 +5041,10 @@ export class FlowChatStore {
           firstVisibleOutputMs: round.firstVisibleOutputMs,
           streamDurationMs: round.streamDurationMs,
           attemptCount: round.attemptCount,
+          attemptDiagnostics: round.attemptDiagnostics,
           failureCategory: round.failureCategory,
           tokenDetails: round.tokenDetails,
-        });
+        }), round.attemptDiagnostics);
 
         return hydratedRound;
       }),

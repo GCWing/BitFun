@@ -28,6 +28,7 @@ use std::sync::{
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use tauri::Emitter;
 use tauri::Manager;
+use tauri_plugin_window_state::{AppHandleExt, StateFlags};
 
 // Re-export API
 pub use api::*;
@@ -250,6 +251,16 @@ fn handle_secondary_launch(app: &tauri::AppHandle) {
     }
 }
 
+fn main_window_state_flags() -> StateFlags {
+    StateFlags::SIZE | StateFlags::POSITION | StateFlags::MAXIMIZED | StateFlags::FULLSCREEN
+}
+
+pub(crate) fn save_main_window_state(app: &tauri::AppHandle) {
+    if let Err(error) = app.save_window_state(main_window_state_flags()) {
+        log::warn!("Failed to save main window state: {}", error);
+    }
+}
+
 #[tauri::command]
 async fn webdriver_bridge_result(request: WebdriverBridgeResultRequest) -> Result<(), String> {
     log::debug!("webdriver_bridge_result command invoked");
@@ -446,6 +457,12 @@ pub async fn run() {
         )
         .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
+        .plugin(
+            tauri_plugin_window_state::Builder::default()
+                .with_state_flags(main_window_state_flags())
+                .with_filter(|label| label == "main")
+                .build(),
+        )
         .manage(app_state)
         .manage(desktop_runtime)
         .manage(coordinator_state)
@@ -836,6 +853,12 @@ pub async fn run() {
         })
         .on_window_event({
             move |window, event| {
+                if window.label() == "main"
+                    && matches!(event, tauri::WindowEvent::CloseRequested { .. })
+                {
+                    save_main_window_state(window.app_handle());
+                }
+
                 if let tauri::WindowEvent::CloseRequested { api: _api, .. } = event {
                     if window.label() == "main" {
                         #[cfg(target_os = "macos")]
@@ -1204,6 +1227,7 @@ pub async fn run() {
             get_acp_session_options,
             get_acp_session_commands,
             set_acp_session_model,
+            set_acp_session_config_option,
             lsp_initialize,
             lsp_start_server_for_file,
             lsp_stop_server,
@@ -1326,6 +1350,7 @@ pub async fn run() {
             // Account API
             api::remote_connect_api::account_login,
             api::remote_connect_api::account_finalize_login,
+            api::remote_connect_api::account_cancel_pending_login,
             api::remote_connect_api::account_status,
             api::remote_connect_api::account_logout,
             api::remote_connect_api::account_connect_devices,
@@ -1353,10 +1378,12 @@ pub async fn run() {
             api::pages_api::page_save_version,
             api::pages_api::page_list,
             api::pages_api::page_list_versions,
+            api::pages_api::page_create_open_link,
             api::pages_api::page_deploy,
             api::pages_api::page_delete_version,
             api::pages_api::page_update,
             api::pages_api::page_unpublish,
+            api::pages_api::page_delete,
             api::peer_host_invoke::peer_host_invoke_complete,
             api::peer_host_invoke::peer_control_attach,
             api::peer_host_invoke::peer_control_detach,

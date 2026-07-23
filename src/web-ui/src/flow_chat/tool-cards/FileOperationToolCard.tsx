@@ -460,8 +460,8 @@ export const FileOperationToolCard: React.FC<FileOperationToolCardProps> = ({
 
     (async () => {
       try {
-        // TODO: Persist diff stats with the tool result so historical cards can
-        // read a static value instead of recomputing on every remount.
+        // The snapshot service persists this summary with the operation. Keep
+        // the chat-history payload small and resolve that static value lazily.
         const { snapshotAPI } = await import('../../infrastructure/api');
         const summary = await snapshotAPI.getOperationSummary(sessionId, toolCall.id);
         if (cancelled) return;

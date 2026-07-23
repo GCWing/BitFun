@@ -85,8 +85,8 @@ export interface WeixinQrPollResponse {
 }
 
 export interface AccountLoginResult {
-  token: string;
   user_id: string;
+  pending_login_id: string | null;
   has_cloud_settings: boolean;
 }
 
@@ -302,11 +302,27 @@ class RemoteConnectAPIService {
    * choice. Without this, a process kill during the choice dialog must not
    * restore a logged-in session.
    */
-  async accountFinalizeLogin(): Promise<void> {
+  async accountFinalizeLogin(pendingLoginId: string): Promise<void> {
     try {
-      await this.adapter.request<void>('account_finalize_login');
+      await this.adapter.request<void>('account_finalize_login', {
+        request: { pending_login_id: pendingLoginId },
+      });
     } catch (e) {
       log.error('accountFinalizeLogin failed', e);
+      throw e;
+    }
+  }
+
+  async accountCancelPendingLogin(pendingLoginId: string): Promise<boolean> {
+    try {
+      return await this.adapter.request<boolean>('account_cancel_pending_login', {
+        request: { pending_login_id: pendingLoginId },
+      });
+    } catch (e) {
+      log.warn('accountCancelPendingLogin failed', e);
+      // `false` is reserved for a successful backend compare-and-act that
+      // found a stale owner. Transport failures must stay observable so the
+      // caller does not discard the only cleanup owner.
       throw e;
     }
   }
@@ -316,7 +332,10 @@ class RemoteConnectAPIService {
       return await this.adapter.request<AccountStatus>('account_status');
     } catch (e) {
       log.warn('accountStatus failed', e);
-      return { logged_in: false, user_id: null };
+      // A transport failure says nothing about authentication state. Keep it
+      // observable so callers can preserve their last confirmed account owner
+      // instead of turning a transient IPC failure into a synthetic logout.
+      throw e;
     }
   }
 
@@ -515,12 +534,14 @@ class RemoteConnectAPIService {
     isFirstLogin: boolean,
     workspacePath: string,
     configJson: string,
+    syncOperationId: number,
   ): Promise<AutoSyncResult> {
     try {
       return await this.adapter.request<AutoSyncResult>('account_auto_sync', {
         isFirstLogin,
         workspacePath,
         configJson,
+        syncOperationId,
       });
     } catch (e) {
       log.error('accountAutoSync failed', e);
@@ -549,11 +570,13 @@ class RemoteConnectAPIService {
   async accountDeviceRpc(
     targetDeviceId: string,
     commandJson: string,
+    timeoutMs?: number,
   ): Promise<string> {
     try {
       return await this.adapter.request<string>('account_device_rpc', {
         targetDeviceId,
         commandJson,
+        timeoutMs: timeoutMs ?? null,
       });
     } catch (e) {
       log.error('accountDeviceRpc failed', e);

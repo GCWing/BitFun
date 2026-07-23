@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { DialogTurn, FlowTextItem, ModelRound } from '../../types/flow-chat';
 import {
   convertDialogTurnToBackendFormat,
+  debouncedSaveDialogTurn,
   immediateSaveDialogTurn,
   saveDialogTurnToDisk,
 } from './PersistenceModule';
@@ -289,6 +290,26 @@ describe('PersistenceModule', () => {
     await vi.advanceTimersByTimeAsync(1);
     await flushMicrotasks();
     expect(saveSessionTurn).toHaveBeenCalledTimes(1);
+  });
+
+  it('checkpoints continuous streamed output without waiting for a quiet period', async () => {
+    const turn = createDialogTurn('processing');
+    const context = createContext(turn);
+
+    debouncedSaveDialogTurn(context, SESSION_ID, TURN_ID, 2000);
+    await vi.advanceTimersByTimeAsync(1000);
+    debouncedSaveDialogTurn(context, SESSION_ID, TURN_ID, 2000);
+    await vi.advanceTimersByTimeAsync(999);
+    expect(saveSessionTurn).not.toHaveBeenCalled();
+
+    await vi.advanceTimersByTimeAsync(1);
+    await flushMicrotasks();
+    expect(saveSessionTurn).toHaveBeenCalledTimes(1);
+
+    debouncedSaveDialogTurn(context, SESSION_ID, TURN_ID, 2000);
+    await vi.advanceTimersByTimeAsync(2000);
+    await flushMicrotasks();
+    expect(saveSessionTurn).toHaveBeenCalledTimes(2);
   });
 
   it('flushes terminal turn saves immediately', async () => {

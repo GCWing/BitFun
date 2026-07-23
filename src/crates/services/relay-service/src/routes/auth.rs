@@ -207,6 +207,94 @@ fn err(error: &str, status: StatusCode) -> (StatusCode, Json<ErrorResponse>) {
     )
 }
 
+pub(crate) async fn verify_password_hash_credentials(
+    state: &AppState,
+    peer_addr: Option<SocketAddr>,
+    headers: &HeaderMap,
+    username: &str,
+    password_hash: &str,
+) -> Result<UserRow, (StatusCode, Json<ErrorResponse>)> {
+    let Some(db) = state.db.as_ref() else {
+        return Err(err(
+            "account features disabled",
+            StatusCode::NOT_IMPLEMENTED,
+        ));
+    };
+
+    let ip = client_ip(headers, peer_addr);
+    if !state
+        .login_rate_limiter
+        .check_and_record(&ip, MAX_LOGIN_ATTEMPTS_PER_MIN)
+    {
+        return Err(err(
+            "too many login attempts from this IP",
+            StatusCode::TOO_MANY_REQUESTS,
+        ));
+    }
+
+    if !valid_bounded_text(username, MAX_USERNAME_BYTES) || !valid_password_hash(password_hash) {
+        return Err(err("invalid login parameters", StatusCode::BAD_REQUEST));
+    }
+
+    let user = UserRow::find_by_username(db, username.trim())
+        .await
+        .map_err(|error| {
+            tracing::error!("login: db error: {error}");
+            err("internal error", StatusCode::INTERNAL_SERVER_ERROR)
+        })?
+        .ok_or_else(|| err("invalid username or password", StatusCode::UNAUTHORIZED))?;
+
+    if user.is_locked() {
+        let retry = user.locked_until - Utc::now().timestamp();
+        return Err((
+            StatusCode::TOO_MANY_REQUESTS,
+            Json(ErrorResponse {
+                error: "account temporarily locked, try later".to_string(),
+                retry_after_secs: Some(retry.max(0)),
+            }),
+        ));
+    }
+
+    // The browser or native client already paid the Argon2id cost. Compare
+    // the fixed secret without a data-dependent early exit.
+    let password_matches = user.password_hash.len() == password_hash.len()
+        && bool::from(
+            user.password_hash
+                .as_bytes()
+                .ct_eq(password_hash.as_bytes()),
+        );
+    if !password_matches {
+        let locked_until = UserRow::record_failed_attempt(db, &user.user_id)
+            .await
+            .map_err(|error| {
+                tracing::error!("login: failed to record attempt: {error}");
+                err("internal error", StatusCode::INTERNAL_SERVER_ERROR)
+            })?;
+        let now = Utc::now().timestamp();
+        if locked_until > now {
+            return Err((
+                StatusCode::TOO_MANY_REQUESTS,
+                Json(ErrorResponse {
+                    error: "too many failed attempts, account locked".to_string(),
+                    retry_after_secs: Some(locked_until - now),
+                }),
+            ));
+        }
+        return Err(err(
+            "invalid username or password",
+            StatusCode::UNAUTHORIZED,
+        ));
+    }
+
+    UserRow::reset_failed_attempts(db, &user.user_id)
+        .await
+        .map_err(|error| {
+            tracing::error!("login: failed to reset attempts: {error}");
+            err("internal error", StatusCode::INTERNAL_SERVER_ERROR)
+        })?;
+    Ok(user)
+}
+
 // ── Handlers ────────────────────────────────────────────────────────────
 
 /// `POST /api/auth/login/challenge` — fetch KDF params + wrapped master key
@@ -271,94 +359,23 @@ pub async fn login(
     headers: HeaderMap,
     Json(body): Json<LoginRequest>,
 ) -> Result<Json<AuthResponse>, (StatusCode, Json<ErrorResponse>)> {
-    let Some(db) = state.db.as_ref() else {
-        return Err(err(
-            "account features disabled",
-            StatusCode::NOT_IMPLEMENTED,
-        ));
-    };
-
-    let ip = client_ip(
-        &headers,
-        connect_info.map(|Extension(ConnectInfo(addr))| addr),
-    );
-    if !state
-        .login_rate_limiter
-        .check_and_record(&ip, MAX_LOGIN_ATTEMPTS_PER_MIN)
-    {
-        return Err(err(
-            "too many login attempts from this IP",
-            StatusCode::TOO_MANY_REQUESTS,
-        ));
-    }
-
-    if !valid_bounded_text(&body.username, MAX_USERNAME_BYTES)
-        || !valid_password_hash(&body.password_hash)
-        || !valid_device_id(&body.device_id)
+    if !valid_device_id(&body.device_id)
         || !valid_bounded_text(&body.device_name, MAX_DEVICE_NAME_BYTES)
     {
         return Err(err("invalid login parameters", StatusCode::BAD_REQUEST));
     }
-
-    let user = UserRow::find_by_username(db, body.username.trim())
-        .await
-        .map_err(|e| {
-            tracing::error!("login: db error: {e}");
-            err("internal error", StatusCode::INTERNAL_SERVER_ERROR)
-        })?
-        .ok_or_else(|| err("invalid username or password", StatusCode::UNAUTHORIZED))?;
-
-    // Account-level lockout (durable backstop).
-    if user.is_locked() {
-        let retry = user.locked_until - Utc::now().timestamp();
-        return Err((
-            StatusCode::TOO_MANY_REQUESTS,
-            Json(ErrorResponse {
-                error: "account temporarily locked, try later".to_string(),
-                retry_after_secs: Some(retry.max(0)),
-            }),
-        ));
-    }
-
-    // The client already paid the Argon2id cost. Compare the resulting fixed
-    // secret without data-dependent early exit so the relay does not expose a
-    // prefix timing oracle.
-    let password_matches = user.password_hash.len() == body.password_hash.len()
-        && bool::from(
-            user.password_hash
-                .as_bytes()
-                .ct_eq(body.password_hash.as_bytes()),
-        );
-    if !password_matches {
-        let locked_until = UserRow::record_failed_attempt(db, &user.user_id)
-            .await
-            .map_err(|e| {
-                tracing::error!("login: failed to record attempt: {e}");
-                err("internal error", StatusCode::INTERNAL_SERVER_ERROR)
-            })?;
-        let now = Utc::now().timestamp();
-        if locked_until > now {
-            return Err((
-                StatusCode::TOO_MANY_REQUESTS,
-                Json(ErrorResponse {
-                    error: "too many failed attempts, account locked".to_string(),
-                    retry_after_secs: Some(locked_until - now),
-                }),
-            ));
-        }
-        return Err(err(
-            "invalid username or password",
-            StatusCode::UNAUTHORIZED,
-        ));
-    }
-
-    // Success: reset failure counter and issue a token.
-    UserRow::reset_failed_attempts(db, &user.user_id)
-        .await
-        .map_err(|e| {
-            tracing::error!("login: failed to reset attempts: {e}");
-            err("internal error", StatusCode::INTERNAL_SERVER_ERROR)
-        })?;
+    let db = state
+        .db
+        .as_ref()
+        .ok_or_else(|| err("account features disabled", StatusCode::NOT_IMPLEMENTED))?;
+    let user = verify_password_hash_credentials(
+        &state,
+        connect_info.map(|Extension(ConnectInfo(addr))| addr),
+        &headers,
+        &body.username,
+        &body.password_hash,
+    )
+    .await?;
 
     DeviceRow::upsert(db, &body.device_id, &user.user_id, &body.device_name, None)
         .await
@@ -398,6 +415,21 @@ pub async fn logout(State(state): State<AppState>, headers: HeaderMap) -> Status
     };
     match AuthToken::find(db, &token).await {
         Ok(Some(auth)) => {
+            let _presence_projection_guard = state.device_manager.lock_presence_projection().await;
+            // The first lookup determines which lifecycle to serialize. Check
+            // the exact token again under that lifecycle boundary so a
+            // concurrent device deletion cannot leave this handler operating
+            // on stale authorization state.
+            let current = match AuthToken::find(db, &token).await {
+                Ok(Some(current))
+                    if current.user_id == auth.user_id
+                        && current.device_id == auth.device_id
+                        && current.token_kind == auth.token_kind =>
+                {
+                    current
+                }
+                _ => return StatusCode::UNAUTHORIZED,
+            };
             // Delete the token row
             if let Err(error) = sqlx::query("DELETE FROM auth_tokens WHERE token = ?")
                 .bind(&token)
@@ -410,30 +442,44 @@ pub async fn logout(State(state): State<AppState>, headers: HeaderMap) -> Status
             // A delegated control token borrows the desktop's device id but
             // does not own its live connection. Logging out that client must
             // never disconnect or mark the desktop offline.
-            if auth.is_device_token() {
-                let _ = crate::db::DeviceRow::set_online(db, &auth.user_id, &auth.device_id, false)
-                    .await;
+            if current.is_device_token() {
+                state.device_manager.disconnect_device_if_token(
+                    &auth.user_id,
+                    &auth.device_id,
+                    &token,
+                );
+                // A failed token match means another login currently owns the
+                // same machine's socket. Keep its durable presence online;
+                // otherwise a rejected candidate login could make the still-
+                // connected prior account appear offline.
+                if !state
+                    .device_manager
+                    .is_device_online(&auth.user_id, &auth.device_id)
+                {
+                    let _ =
+                        crate::db::DeviceRow::set_online(db, &auth.user_id, &auth.device_id, false)
+                            .await;
+                }
+                drop(_presence_projection_guard);
                 state
                     .device_manager
-                    .disconnect_device(&auth.user_id, &auth.device_id);
-                let devices = state
-                    .device_manager
-                    .online_devices(&auth.user_id)
-                    .into_iter()
-                    .map(
-                        |(device_id, device_name)| crate::routes::websocket::DevicePresenceEntry {
-                            device_id,
-                            device_name,
-                        },
-                    )
-                    .collect();
-                let presence =
-                    crate::routes::websocket::OutboundProtocol::DevicePresence { devices };
-                if let Ok(message) = serde_json::to_string(&presence) {
-                    state
-                        .device_manager
-                        .broadcast_except(&auth.user_id, &auth.device_id, &message);
-                }
+                    .broadcast_current_presence(&auth.user_id, |devices| {
+                        let devices = devices
+                            .iter()
+                            .map(|(device_id, device_name)| {
+                                crate::routes::websocket::DevicePresenceEntry {
+                                    device_id: device_id.clone(),
+                                    device_name: device_name.clone(),
+                                }
+                            })
+                            .collect();
+                        serde_json::to_string(
+                            &crate::routes::websocket::OutboundProtocol::DevicePresence { devices },
+                        )
+                        .ok()
+                    });
+            } else {
+                drop(_presence_projection_guard);
             }
             tracing::info!("Account token revoked for device_id={}", auth.device_id);
             StatusCode::NO_CONTENT

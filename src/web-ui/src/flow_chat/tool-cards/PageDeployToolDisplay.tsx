@@ -8,21 +8,17 @@ import { CubeLoading } from '../../component-library';
 import type { ToolCardProps } from '../types/flow-chat';
 import { BaseToolCard, ToolCardHeader } from './BaseToolCard';
 import { useToolCardHeightContract } from './useToolCardHeightContract';
-import { remoteConnectAPI } from '@/infrastructure/api/service-api/RemoteConnectAPI';
+import { pageAPI } from '@/infrastructure/api/service-api/PageAPI';
 import { systemAPI } from '@/infrastructure/api/service-api/SystemAPI';
+import { notificationService } from '@/shared/notification-system';
 
-async function openPagePath(path: string | undefined) {
-  if (!path) return;
-  const hint = await remoteConnectAPI.accountGetCredentialHint();
-  const relay = hint?.relay_url?.replace(/\/$/, '') ?? '';
-  const href = path.startsWith('http')
-    ? path
-    : relay
-      ? `${relay}${path.startsWith('/') ? '' : '/'}${path}`
-      : path;
-  if (href.startsWith('http')) {
-    await systemAPI.openExternal(href);
-  }
+async function openPage(slug: string, knownGeneration?: string) {
+  if (!slug) return;
+  const generation = knownGeneration || (await pageAPI.listPages())
+    .find((page) => page.slug === slug)?.generation;
+  if (generation == null) throw new Error('Page no longer exists');
+  const link = await pageAPI.createOpenLink(slug, generation);
+  await systemAPI.openExternal(link.open_url);
 }
 
 export const PageDeployDisplay: React.FC<ToolCardProps> = ({ toolItem }) => {
@@ -54,6 +50,7 @@ export const PageDeployDisplay: React.FC<ToolCardProps> = ({ toolItem }) => {
 
   const deployedVersion =
     (toolResult?.result?.deployed_version_id as string | undefined) || versionId;
+  const generation = toolResult?.result?.generation as string | undefined;
   const urlPath =
     (toolResult?.result?.url as string | undefined) ||
     (toolResult?.result?.url_path as string | undefined);
@@ -137,7 +134,9 @@ export const PageDeployDisplay: React.FC<ToolCardProps> = ({ toolItem }) => {
           <button
             type="button"
             data-testid="chat-page-deploy-open-btn"
-            onClick={() => void openPagePath(urlPath)}
+            onClick={() => void openPage(slug, generation).catch(() => {
+              notificationService.error(t('toolCards.pageDeploy.openFailed'));
+            })}
           >
             <ExternalLink size={12} />
             <span>{t('toolCards.pageDeploy.openProduction')}</span>

@@ -30,6 +30,7 @@ pub(crate) async fn aggregate_stream_response(
                     thinking_signature: _,
                     tool_call,
                     usage: chunk_usage,
+                    tool_call_completion: _,
                     finish_reason: chunk_finish_reason,
                     provider_metadata: chunk_provider_metadata,
                 } = chunk;

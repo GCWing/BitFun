@@ -1,8 +1,6 @@
 //! Theme System
 
 use std::sync::{OnceLock, RwLock};
-#[cfg(target_os = "windows")]
-use std::time::Duration;
 use std::time::Instant;
 
 use bitfun_core::infrastructure::try_get_path_manager_arc;
@@ -20,108 +18,12 @@ const AGENT_COMPANION_WINDOW_MAX_WIDTH: f64 = 360.0;
 const AGENT_COMPANION_WINDOW_MAX_HEIGHT: f64 = 240.0;
 const AGENT_COMPANION_WINDOW_MARGIN: i32 = 64;
 const AGENT_COMPANION_WINDOW_EDGE_MARGIN: f64 = 8.0;
-#[cfg(target_os = "windows")]
-const WINDOWS_STARTUP_MAXIMIZE_SHOW_WAIT_MAX: Duration = Duration::from_millis(150);
-#[cfg(target_os = "windows")]
-const WINDOWS_STARTUP_MAXIMIZE_SHOW_WAIT_MIN: Duration = Duration::from_millis(16);
-#[cfg(target_os = "windows")]
-const WINDOWS_STARTUP_MAXIMIZE_SHOW_WAIT_POLL: Duration = Duration::from_millis(8);
-
 static AGENT_COMPANION_WINDOW_OPS: OnceLock<tokio::sync::Mutex<()>> = OnceLock::new();
 static AGENT_COMPANION_WINDOW_LAST_POSITION: OnceLock<RwLock<Option<tauri::LogicalPosition<f64>>>> =
     OnceLock::new();
 static STARTUP_THEME_BOOTSTRAP_MANIFEST: OnceLock<StartupThemeBootstrapManifest> = OnceLock::new();
 
 const STARTUP_THEME_BOOTSTRAP_JSON: &str = include_str!("generated/startup_theme_bootstrap.json");
-
-#[cfg(target_os = "windows")]
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum WindowsMaximizeShowWaitAction {
-    Ready,
-    Sleep(Duration),
-    TimedOut,
-}
-
-#[cfg(target_os = "windows")]
-fn windows_maximize_show_wait_action(
-    is_maximized: Option<bool>,
-    elapsed: Duration,
-) -> WindowsMaximizeShowWaitAction {
-    if is_maximized == Some(true) && elapsed >= WINDOWS_STARTUP_MAXIMIZE_SHOW_WAIT_MIN {
-        return WindowsMaximizeShowWaitAction::Ready;
-    }
-
-    if elapsed >= WINDOWS_STARTUP_MAXIMIZE_SHOW_WAIT_MAX {
-        return WindowsMaximizeShowWaitAction::TimedOut;
-    }
-
-    let target_wait = if is_maximized == Some(true) {
-        WINDOWS_STARTUP_MAXIMIZE_SHOW_WAIT_MIN
-    } else {
-        WINDOWS_STARTUP_MAXIMIZE_SHOW_WAIT_MAX
-    };
-    WindowsMaximizeShowWaitAction::Sleep(
-        target_wait
-            .saturating_sub(elapsed)
-            .min(WINDOWS_STARTUP_MAXIMIZE_SHOW_WAIT_POLL),
-    )
-}
-
-#[cfg(target_os = "windows")]
-fn read_windows_maximize_state(
-    window: &tauri::WebviewWindow,
-    logged_error: &mut bool,
-) -> Option<bool> {
-    match window.is_maximized() {
-        Ok(is_maximized) => Some(is_maximized),
-        Err(error) => {
-            if !*logged_error {
-                warn!(
-                    "Failed to read main window maximize state during startup show wait: {}",
-                    error
-                );
-                *logged_error = true;
-            }
-            None
-        }
-    }
-}
-
-#[cfg(target_os = "windows")]
-fn wait_for_windows_maximize_before_show(window: &tauri::WebviewWindow) -> &'static str {
-    let started_at = Instant::now();
-    let mut logged_error = false;
-
-    loop {
-        match windows_maximize_show_wait_action(
-            read_windows_maximize_state(window, &mut logged_error),
-            started_at.elapsed(),
-        ) {
-            WindowsMaximizeShowWaitAction::Ready => return "ready",
-            WindowsMaximizeShowWaitAction::TimedOut => return "timeout",
-            WindowsMaximizeShowWaitAction::Sleep(duration) => std::thread::sleep(duration),
-        }
-    }
-}
-
-#[cfg(target_os = "windows")]
-async fn wait_for_windows_maximize_before_show_async(
-    window: &tauri::WebviewWindow,
-) -> &'static str {
-    let started_at = Instant::now();
-    let mut logged_error = false;
-
-    loop {
-        match windows_maximize_show_wait_action(
-            read_windows_maximize_state(window, &mut logged_error),
-            started_at.elapsed(),
-        ) {
-            WindowsMaximizeShowWaitAction::Ready => return "ready",
-            WindowsMaximizeShowWaitAction::TimedOut => return "timeout",
-            WindowsMaximizeShowWaitAction::Sleep(duration) => tokio::time::sleep(duration).await,
-        }
-    }
-}
 
 fn agent_companion_window_ops() -> &'static tokio::sync::Mutex<()> {
     AGENT_COMPANION_WINDOW_OPS.get_or_init(|| tokio::sync::Mutex::new(()))
@@ -575,6 +477,7 @@ pub fn create_main_window(
     let mut builder = tauri::WebviewWindowBuilder::new(app_handle, "main", main_url)
         .title("BitFun")
         .inner_size(1200.0, 800.0)
+        .center()
         .resizable(true)
         .fullscreen(false)
         .visible(false)
@@ -660,34 +563,6 @@ fn show_main_window_for_startup(
     total_started_at: Instant,
     startup_trace: &DesktopStartupTrace,
 ) {
-    #[cfg(target_os = "windows")]
-    {
-        let step_started_at = Instant::now();
-        if let Err(error) = window.maximize() {
-            warn!("Failed to maximize main window during startup: {}", error);
-        } else {
-            startup_trace.record_elapsed_step("native_window", "windows_maximize", step_started_at);
-            debug!(
-                "Main window startup show step completed: step=maximize duration_ms={} since_create_start_ms={}",
-                step_started_at.elapsed().as_millis(),
-                total_started_at.elapsed().as_millis()
-            );
-        }
-        let show_delay_started_at = Instant::now();
-        let show_wait_outcome = wait_for_windows_maximize_before_show(window);
-        startup_trace.record_elapsed_step(
-            "native_window",
-            "windows_show_after_maximize_wait",
-            show_delay_started_at,
-        );
-        debug!(
-            "Main window startup show step completed: step=wait_for_maximize_state outcome={} duration_ms={} since_create_start_ms={}",
-            show_wait_outcome,
-            show_delay_started_at.elapsed().as_millis(),
-            total_started_at.elapsed().as_millis()
-        );
-    }
-
     let show_started_at = Instant::now();
     if let Err(error) = window.show() {
         warn!("Failed to show main window during startup: {}", error);
@@ -1012,29 +887,6 @@ pub async fn hide_agent_companion_desktop_pet(app: tauri::AppHandle) -> Result<(
 pub async fn show_main_window(app: tauri::AppHandle) -> Result<(), String> {
     let total_started_at = Instant::now();
     if let Some(main_window) = app.get_webview_window("main") {
-        #[cfg(target_os = "windows")]
-        {
-            // Work around Windows startup flicker: avoid creating the native window
-            // in maximized mode, and maximize it right before showing instead.
-            let step_started_at = Instant::now();
-            main_window.maximize().map_err(|e| {
-                error!("Failed to maximize main window: {}", e);
-                format!("Failed to maximize main window: {}", e)
-            })?;
-            debug!(
-                "Main window show step completed: step=maximize duration_ms={}",
-                step_started_at.elapsed().as_millis()
-            );
-
-            let wait_started_at = Instant::now();
-            let show_wait_outcome = wait_for_windows_maximize_before_show_async(&main_window).await;
-            debug!(
-                "Main window show step completed: step=wait_for_maximize_state outcome={} duration_ms={}",
-                show_wait_outcome,
-                wait_started_at.elapsed().as_millis()
-            );
-        }
-
         let step_started_at = Instant::now();
         main_window.show().map_err(|e| {
             error!("Failed to show main window: {}", e);
@@ -1070,45 +922,4 @@ pub async fn show_main_window(app: tauri::AppHandle) -> Result<(), String> {
         total_started_at.elapsed().as_millis()
     );
     Ok(())
-}
-
-#[cfg(test)]
-mod tests {
-    #[cfg(target_os = "windows")]
-    use super::*;
-
-    #[cfg(target_os = "windows")]
-    #[test]
-    fn windows_maximize_show_wait_releases_when_maximized() {
-        assert_eq!(
-            windows_maximize_show_wait_action(Some(true), Duration::ZERO),
-            WindowsMaximizeShowWaitAction::Sleep(WINDOWS_STARTUP_MAXIMIZE_SHOW_WAIT_POLL)
-        );
-        assert_eq!(
-            windows_maximize_show_wait_action(Some(true), WINDOWS_STARTUP_MAXIMIZE_SHOW_WAIT_MIN),
-            WindowsMaximizeShowWaitAction::Ready
-        );
-    }
-
-    #[cfg(target_os = "windows")]
-    #[test]
-    fn windows_maximize_show_wait_polls_until_max_wait() {
-        assert_eq!(
-            windows_maximize_show_wait_action(Some(false), Duration::from_millis(20)),
-            WindowsMaximizeShowWaitAction::Sleep(WINDOWS_STARTUP_MAXIMIZE_SHOW_WAIT_POLL)
-        );
-        assert_eq!(
-            windows_maximize_show_wait_action(None, Duration::from_millis(148)),
-            WindowsMaximizeShowWaitAction::Sleep(Duration::from_millis(2))
-        );
-    }
-
-    #[cfg(target_os = "windows")]
-    #[test]
-    fn windows_maximize_show_wait_times_out_at_original_bound() {
-        assert_eq!(
-            windows_maximize_show_wait_action(Some(false), WINDOWS_STARTUP_MAXIMIZE_SHOW_WAIT_MAX),
-            WindowsMaximizeShowWaitAction::TimedOut
-        );
-    }
 }

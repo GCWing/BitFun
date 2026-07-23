@@ -23,8 +23,15 @@ pub const SYNC_BODY_LIMIT: usize = 64 * 1024 * 1024;
 const MAX_ENCRYPTED_BLOB_BYTES: usize = 48 * 1024 * 1024;
 const MAX_SESSION_ID_BYTES: usize = 256;
 const MAX_NONCE_BYTES: usize = 256;
-const MAX_SYNC_SESSIONS_PER_USER: i64 = 2048;
-const MAX_SYNC_SESSION_BYTES_PER_USER: i64 = 128 * 1024 * 1024;
+
+// Per-account sync-session quotas.
+//
+// Defaults use i32::MAX so BitFun's own deployments do not hit artificial
+// product caps. Keep these knobs (and the upsert/make-room enforcement paths)
+// so self-hosted / open-source operators can lower them to bound each user's
+// cloud session backup footprint.
+const MAX_SYNC_SESSIONS_PER_USER: i64 = i32::MAX as i64;
+const MAX_SYNC_SESSION_BYTES_PER_USER: i64 = i32::MAX as i64;
 
 fn valid_session_id(value: &str) -> bool {
     !value.trim().is_empty()
@@ -136,7 +143,7 @@ async fn sessions_upsert(
         return Err(StatusCode::BAD_REQUEST);
     }
     let db = state.db.as_ref().ok_or(StatusCode::NOT_IMPLEMENTED)?;
-    let stored = SyncSessionRow::upsert_with_quota(
+    let mut stored = SyncSessionRow::upsert_with_quota(
         db,
         &auth.user_id,
         &body.session_id,
@@ -148,6 +155,34 @@ async fn sessions_upsert(
     )
     .await
     .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    if !stored {
+        // Prefer keeping the session being uploaded: evict LRU cloud backups
+        // until this blob fits the configured per-user quotas, then retry once.
+        let evicted = SyncSessionRow::make_room_for_upsert(
+            db,
+            &auth.user_id,
+            &body.session_id,
+            body.encrypted_data.len() as i64,
+            MAX_SYNC_SESSIONS_PER_USER,
+            MAX_SYNC_SESSION_BYTES_PER_USER,
+        )
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+        if evicted > 0 {
+            stored = SyncSessionRow::upsert_with_quota(
+                db,
+                &auth.user_id,
+                &body.session_id,
+                &body.encrypted_data,
+                &body.nonce,
+                body.version,
+                MAX_SYNC_SESSIONS_PER_USER,
+                MAX_SYNC_SESSION_BYTES_PER_USER,
+            )
+            .await
+            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+        }
+    }
     if !stored {
         return Err(StatusCode::INSUFFICIENT_STORAGE);
     }

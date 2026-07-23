@@ -1503,7 +1503,9 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
 
         {activePermissionBatch && (
           <PermissionRequestPanel
+            key={`${activePermissionBatch.sessionId}:${activePermissionBatch.roundId}`}
             requests={activePermissionBatch.requests}
+            totalPendingCount={permissionRequests.length}
             aboveChatInput={permissionPanelAboveChatInput}
             onRespond={respondPermission}
             onRespondBatch={respondPermissionBatch}

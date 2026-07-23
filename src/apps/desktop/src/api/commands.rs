@@ -4367,6 +4367,13 @@ pub struct SubscriptionProviderRequest {
     pub provider: bitfun_core::infrastructure::subscription_auth::SubscriptionProvider,
 }
 
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SubscriptionLoginRequest {
+    pub provider: bitfun_core::infrastructure::subscription_auth::SubscriptionProvider,
+    pub session_id: String,
+}
+
 #[tauri::command]
 pub async fn list_subscription_accounts(
 ) -> Result<Vec<bitfun_core::infrastructure::subscription_auth::SubscriptionAccount>, String> {
@@ -4375,30 +4382,42 @@ pub async fn list_subscription_accounts(
 
 #[tauri::command]
 pub async fn start_subscription_login(
-    request: SubscriptionProviderRequest,
+    request: SubscriptionLoginRequest,
 ) -> Result<bitfun_core::infrastructure::subscription_auth::LoginStartResult, String> {
-    bitfun_core::infrastructure::subscription_auth::start_login(request.provider)
-        .await
-        .map_err(|e| format!("Failed to start subscription login: {e:#}"))
+    bitfun_core::infrastructure::subscription_auth::start_login(
+        request.provider,
+        request.session_id,
+    )
+    .await
+    .map_err(|e| format!("Failed to start subscription login: {e:#}"))
 }
 
 #[tauri::command]
 pub async fn get_subscription_login_status(
-    request: SubscriptionProviderRequest,
+    request: SubscriptionLoginRequest,
 ) -> Result<bitfun_core::infrastructure::subscription_auth::LoginSessionSnapshot, String> {
-    Ok(bitfun_core::infrastructure::subscription_auth::login_status(request.provider).await)
+    bitfun_core::infrastructure::subscription_auth::login_status(
+        request.provider,
+        &request.session_id,
+    )
+    .await
+    .map_err(|e| format!("Failed to get subscription login status: {e:#}"))
 }
 
 #[tauri::command]
-pub async fn cancel_subscription_login(request: SubscriptionProviderRequest) -> Result<(), String> {
-    bitfun_core::infrastructure::subscription_auth::cancel_login(request.provider).await;
-    Ok(())
+pub async fn cancel_subscription_login(request: SubscriptionLoginRequest) -> Result<(), String> {
+    bitfun_core::infrastructure::subscription_auth::cancel_login(
+        request.provider,
+        &request.session_id,
+    )
+    .await
+    .map_err(|e| format!("Failed to cancel subscription login: {e:#}"))
 }
 
 #[tauri::command]
 pub async fn logout_subscription_account(
     request: SubscriptionProviderRequest,
-) -> Result<(), String> {
+) -> Result<bitfun_core::infrastructure::subscription_auth::SubscriptionLogoutResult, String> {
     bitfun_core::infrastructure::subscription_auth::logout(request.provider)
         .await
         .map_err(|e| format!("Failed to logout subscription account: {e:#}"))

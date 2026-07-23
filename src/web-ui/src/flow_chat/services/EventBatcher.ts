@@ -360,6 +360,10 @@ export type RejectedToolEvent = BaseToolEvent<'Rejected'>;
 export interface CompletedToolEvent extends BaseToolEvent<'Completed'> {
   result: unknown;
   result_for_assistant?: string;
+  image_attachments?: Array<{
+    mime_type: string;
+    data_base64: string;
+  }>;
   duration_ms: number;
   queue_wait_ms?: number;
   preflight_ms?: number;

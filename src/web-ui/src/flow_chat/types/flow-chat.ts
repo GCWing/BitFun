@@ -10,6 +10,8 @@ import type {
 } from '@/shared/types/session-history';
 import type { ReviewTargetEvidence, ReviewTeamRunManifest } from '@/shared/services/reviewTeamService';
 
+export type ModelRoundAttemptDiagnostic = import('@/shared/types/session-history').ModelRoundAttemptDiagnostic;
+
 // Base type for streaming items.
 export interface FlowItem {
   id: string;
@@ -64,6 +66,10 @@ export interface FlowToolItem extends FlowItem {
     result: any;
     success: boolean;
     resultForAssistant?: string;
+    imageAttachments?: Array<{
+      mime_type: string;
+      data_base64: string;
+    }>;
     error?: string;
     duration_ms?: number;
   };
@@ -163,6 +169,7 @@ export interface ModelRoundAttempt {
   index: number;
   status: 'streaming' | 'completed' | 'superseded' | 'failed' | 'cancelled';
   items: AnyFlowItem[];
+  diagnostic?: ModelRoundAttemptDiagnostic;
 }
 
 // Model round: output from a single model call.
@@ -186,6 +193,7 @@ export interface ModelRound {
   firstVisibleOutputMs?: number;
   streamDurationMs?: number;
   attemptCount?: number;
+  attemptDiagnostics?: ModelRoundAttemptDiagnostic[];
   failureCategory?: string;
   tokenDetails?: unknown;
   error?: string;

@@ -50,11 +50,12 @@ pub use ngrok::{
     cleanup_all_ngrok, detect_running_ngrok, is_ngrok_available, start_ngrok_tunnel, NgrokTunnel,
 };
 pub use page_upload::{
-    delete_page_version_on_relay, deploy_page_version_on_relay, join_relay_url,
-    list_page_versions_from_relay, list_pages_from_relay, publish_page_content_on_relay,
-    publish_page_to_relay, save_page_version_from_inline_files, save_page_version_to_relay,
-    unpublish_page_from_relay, update_page_on_relay, PageContentPublishResult, PageInfo,
-    PagePublishResult, PageSaveVersionResult, PageVersionInfo,
+    create_page_open_link_on_relay, delete_page_from_relay, delete_page_version_on_relay,
+    deploy_page_version_on_relay, join_relay_url, list_page_versions_from_relay,
+    list_pages_from_relay, publish_page_content_on_relay, publish_page_to_relay,
+    save_page_version_from_inline_files, save_page_version_to_relay, unpublish_page_from_relay,
+    update_page_on_relay, PageContentPublishResult, PageInfo, PageOpenLink, PagePublishResult,
+    PageSaveVersionResult, PageVersionInfo,
 };
 pub use pairing::{PairingChallenge, PairingProtocol, PairingResponse, PairingState, QrPayload};
 pub use qr_generator::QrGenerator;

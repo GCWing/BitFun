@@ -15,6 +15,7 @@ const {
   printSuccess,
   printInfo,
   printError,
+  printWarning,
   printStep,
   printComplete,
   printBlank,
@@ -283,6 +284,44 @@ async function waitForPort(port, hosts = DEV_SERVER_HOSTS, timeoutMs = 30000) {
   throw new Error(`Port ${port} did not become ready within ${timeoutMs}ms`);
 }
 
+async function runDesktopTargetGcBestEffort(profile = 'debug') {
+  try {
+    const { runGcBestEffort } = await import(
+      pathToFileURL(path.join(__dirname, 'cargo-target-gc.mjs')).href
+    );
+    printInfo('Pruning stale Cargo target caches (keep latest only)');
+    runGcBestEffort({
+      rootDir: ROOT_DIR,
+      profile,
+      logger: {
+        info: (message) => printInfo(message),
+        warn: (message) => printError(message),
+      },
+    });
+  } catch (error) {
+    printError(`Target GC skipped: ${error.message || String(error)}`);
+  }
+}
+
+async function runDesktopTargetGc(profile = 'debug') {
+  try {
+    const { runGcBestEffort } = await import(
+      pathToFileURL(path.join(__dirname, 'cargo-target-gc.mjs')).href
+    );
+    printInfo('Pruning stale Cargo target caches (keep latest only)...');
+    runGcBestEffort({
+      rootDir: ROOT_DIR,
+      profile,
+      logger: {
+        info: (message) => printInfo(message),
+        warn: (message) => printWarning(message),
+      },
+    });
+  } catch (error) {
+    printWarning(`target-gc skipped: ${error.message || String(error)}`);
+  }
+}
+
 async function ensureDesktopOpenSslIfNeeded() {
   if (process.platform !== 'win32') {
     return;
@@ -452,23 +491,24 @@ async function startDesktopPreview() {
     }
   };
 
-  const shutdown = (exitCode = 0) => {
+  const shutdown = async (exitCode = 0) => {
     if (shuttingDown) {
       return;
     }
 
     shuttingDown = true;
     cleanup();
+    await runDesktopTargetGc('debug');
     process.exit(exitCode);
   };
 
   process.on('SIGINT', () => {
     printInfo('Stopping desktop preview...');
-    shutdown(0);
+    void shutdown(0);
   });
   process.on('SIGTERM', () => {
     printInfo('Stopping desktop preview...');
-    shutdown(0);
+    void shutdown(0);
   });
 
   if (await isPortOpen(DEV_SERVER_PORT)) {
@@ -509,7 +549,7 @@ async function startDesktopPreview() {
       await waitForPort(DEV_SERVER_PORT);
     } catch (error) {
       printError(error.message || String(error));
-      shutdown(1);
+      await shutdown(1);
     }
 
     printSuccess(`Web UI dev server is ready on http://localhost:${DEV_SERVER_PORT}`);
@@ -523,14 +563,14 @@ async function startDesktopPreview() {
 
   appProcess.on('error', (error) => {
     printError(`Desktop preview failed to start: ${error.message || String(error)}`);
-    shutdown(1);
+    void shutdown(1);
   });
 
   appProcess.on('exit', (code, signal) => {
     if (!shuttingDown) {
       printInfo(`Desktop preview exited (code=${code ?? 'null'}, signal=${signal ?? 'null'})`);
     }
-    shutdown(code ?? 0);
+    void shutdown(code ?? 0);
   });
 
   printSuccess('Desktop preview is running');
@@ -710,15 +750,20 @@ async function main() {
       await ensureDesktopOpenSslIfNeeded();
       const desktopDir = path.join(ROOT_DIR, 'src/apps/desktop');
       const tauriConfig = path.join(desktopDir, 'tauri.dev.conf.json');
-      if (process.platform === 'win32') {
-        // Running the generated .cmd shim directly via spawn is flaky on Windows.
-        // Use cmd.exe with an explicit args array so the desktop app directory
-        // stays the Tauri project root without pnpm workspace path rewriting.
-        const tauriBin = path.join(ROOT_DIR, 'node_modules', '.bin', 'tauri.cmd');
-        await runWindowsCommandArgs(tauriBin, ['dev', '--config', tauriConfig], desktopDir, process.env);
-      } else {
-        const tauriBin = path.join(ROOT_DIR, 'node_modules', '.bin', 'tauri');
-        await spawnCommand(tauriBin, ['dev', '--config', tauriConfig], desktopDir);
+      try {
+        if (process.platform === 'win32') {
+          // Running the generated .cmd shim directly via spawn is flaky on Windows.
+          // Use cmd.exe with an explicit args array so the desktop app directory
+          // stays the Tauri project root without pnpm workspace path rewriting.
+          const tauriBin = path.join(ROOT_DIR, 'node_modules', '.bin', 'tauri.cmd');
+          await runWindowsCommandArgs(tauriBin, ['dev', '--config', tauriConfig], desktopDir, process.env);
+        } else {
+          const tauriBin = path.join(ROOT_DIR, 'node_modules', '.bin', 'tauri');
+          await spawnCommand(tauriBin, ['dev', '--config', tauriConfig], desktopDir);
+        }
+      } finally {
+        // Option B: prune only when the desktop:dev session ends, not on each rebuild.
+        await runDesktopTargetGc('debug');
       }
     } else if (mode === 'desktop-preview') {
       await ensureDesktopDebugBinaryForPreview(forceDesktopPreviewRebuild);

@@ -196,6 +196,7 @@ pub struct RestartAppRequest {}
 pub async fn restart_app(app: AppHandle, request: RestartAppRequest) -> Result<(), String> {
     let _ = request;
     crate::crash_diagnostics::mark_clean_shutdown("restart_app");
+    crate::save_main_window_state(&app);
     crate::perform_process_exit_cleanup();
     app.restart();
     Ok(())

@@ -227,6 +227,8 @@ mod tests {
         let fallback = FileWriteTool::new()
             .permission_intents(&json!({ "payload": "new file" }), &context)
             .expect("fallback write intent");
-        assert!(fallback[0].resources[0].ends_with("write_toolcall123.tmp"));
+        assert!(fallback[0].resources[0]
+            .replace('\\', "/")
+            .ends_with("/.bitfun/tmp/write_toolcall123.tmp"));
     }
 }

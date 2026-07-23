@@ -5,7 +5,7 @@ Desktop wizard that SSHes to a user-owned Linux host and deploys
 
 Entry points:
 
-- Remote Connect → My Devices → login form → “一键部署到自己的服务器”
+- Remote Connect → My BitFun → login form → “一键部署到自己的服务器”
 - Remote Connect → Network Relay → Self-Hosted → same action (must open this
   wizard, not an external README)
 
@@ -20,7 +20,8 @@ Desktop Tauri surface: `src/apps/desktop/src/api/relay_deploy_api.rs`
    safe under `~/.bitfun/`.
 
 2. **Git first, tarball fallback.** When `.git` already exists, deploy must
-   `fetch` + checkout, not re-clone from scratch (preserves BuildKit layers).
+   `fetch` + checkout, not re-clone from scratch (preserves BuildKit layers
+   and Cargo cache mounts for registry/git/`target`).
 
 3. **Close wizard = cancel remote task.** Do not leave nohup builds running
    after the modal closes; cancel must kill the pid tree and best-effort stop

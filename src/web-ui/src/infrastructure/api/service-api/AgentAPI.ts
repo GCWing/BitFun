@@ -2,7 +2,11 @@
 
 import { api } from './ApiClient';
 import { createTauriCommandError } from '../errors/TauriCommandError';
-import type { DialogTurnData, SessionRelationship } from '@/shared/types/session-history';
+import type {
+  DialogTurnData,
+  ModelRoundAttemptDiagnostic,
+  SessionRelationship,
+} from '@/shared/types/session-history';
 import type { ImageContextData as ImageInputContextData } from './ImageContextTypes';
 import type { AgentSource } from './CustomAgentAPI';
 import type {
@@ -456,6 +460,12 @@ export interface ModelRoundCompletedEvent extends AgenticEvent {
   attemptCount?: number;
   failureCategory?: string;
   tokenDetails?: unknown;
+}
+
+export interface ModelRoundAttemptSupersededEvent extends AgenticEvent {
+  turnId: string;
+  roundId: string;
+  diagnostic: ModelRoundAttemptDiagnostic;
 }
 
 export interface ModelRoundStartedEvent extends AgenticEvent {
@@ -966,7 +976,10 @@ export class AgentAPI {
     return api.listen<ModelRoundCompletedEvent>('agentic://model-round-completed', callback);
   }
 
-   
+  onModelRoundAttemptSuperseded(callback: (event: ModelRoundAttemptSupersededEvent) => void): () => void {
+    return api.listen<ModelRoundAttemptSupersededEvent>('agentic://model-round-attempt-superseded', callback);
+  }
+
   onTextChunk(callback: (event: TextChunkEvent) => void): () => void {
     return api.listen<TextChunkEvent>('agentic://text-chunk', callback);
   }

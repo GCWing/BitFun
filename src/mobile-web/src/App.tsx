@@ -7,6 +7,7 @@ import { ErrorBoundary } from './components/ErrorBoundary';
 import { I18nProvider, useI18n } from './i18n';
 import { RelayHttpClient } from './services/RelayHttpClient';
 import { RemoteSessionManager } from './services/RemoteSessionManager';
+import { reconcileDelegatedAccountOwner } from './services/delegatedAccountOwner';
 import { ThemeProvider } from './theme';
 import { useConnectionHealth } from './hooks/useConnectionHealth';
 import { useMobileStore } from './services/store';
@@ -40,6 +41,7 @@ const AppContent: React.FC = () => {
   const [chatAutoFocus, setChatAutoFocus] = useState(false);
   const connectionHealth = useMobileStore((state) => state.connectionHealth);
   const clientRef = useRef<RelayHttpClient | null>(null);
+  const delegatedOwnerUnlistenRef = useRef<(() => void) | null>(null);
   const sessionMgrRef = useRef<RemoteSessionManager | null>(null);
   const [sessionMgr, setSessionMgr] = useState<RemoteSessionManager | null>(null);
 
@@ -109,7 +111,26 @@ const AppContent: React.FC = () => {
 
   const handlePaired = useCallback(
     (client: RelayHttpClient, sessionMgr: RemoteSessionManager) => {
+      delegatedOwnerUnlistenRef.current?.();
       clientRef.current = client;
+      delegatedOwnerUnlistenRef.current = client.onDelegatedAccountOwnerChange((change) => {
+        if (clientRef.current !== client) return;
+        const ownerScopedStateWasReset = reconcileDelegatedAccountOwner(change);
+        if (!ownerScopedStateWasReset) return;
+
+        // A detail page can retain local IDs in addition to Zustand state.
+        // Return to the session root before any stale completion can render
+        // data from the replacement account.
+        clearTimeout(timerRef.current);
+        setActiveSessionId(null);
+        setActiveSessionName('Session');
+        setChatAutoFocus(false);
+        setPrevPage(null);
+        setNavDir(null);
+        pageStackRef.current = ['pairing', 'sessions'];
+        history.replaceState({ page: 'sessions' }, '');
+        setPage('sessions');
+      }, { emitCurrent: true });
       sessionMgrRef.current = sessionMgr;
       setSessionMgr(sessionMgr);
       pageStackRef.current = ['pairing', 'sessions'];
@@ -184,6 +205,9 @@ const AppContent: React.FC = () => {
   }, [navigateTo]);
 
   const handleDisconnect = useCallback(() => {
+    delegatedOwnerUnlistenRef.current?.();
+    delegatedOwnerUnlistenRef.current = null;
+    clientRef.current?.resetConnectionIdentity();
     clientRef.current = null;
     sessionMgrRef.current = null;
     setSessionMgr(null);
@@ -197,6 +221,11 @@ const AppContent: React.FC = () => {
     useMobileStore.getState().resetConnectionState();
     pageStackRef.current = ['pairing'];
     setPage('pairing');
+  }, []);
+
+  useEffect(() => () => {
+    delegatedOwnerUnlistenRef.current?.();
+    delegatedOwnerUnlistenRef.current = null;
   }, []);
 
   const isAnimating = navDir !== null;

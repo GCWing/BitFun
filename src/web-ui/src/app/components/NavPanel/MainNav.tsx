@@ -14,6 +14,7 @@
 import React, { useCallback, useState, useMemo, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { Plus, FolderOpen, FolderPlus, History, Check, User, Users, Puzzle, Blocks, ChevronDown, Search } from 'lucide-react';
+// import { PanelsTopLeft } from 'lucide-react'; // temporarily hidden: Pages nav entry
 import { Tooltip } from '@/component-library';
 import { useApp } from '../../hooks/useApp';
 import { useSceneManager } from '../../hooks/useSceneManager';
@@ -75,6 +76,7 @@ const MainNav: React.FC<MainNavProps> = ({
   const activeTabId = useSceneStore(s => s.activeTabId);
   const setSelectedAssistantWorkspaceId = useMyAgentStore((s) => s.setSelectedAssistantWorkspaceId);
   const { t } = useI18n('common');
+  // const { t: tPages } = useI18n('scenes/pages'); // temporarily hidden: Pages nav entry
   const {
     currentWorkspace,
     loading: workspaceLoading,
@@ -680,6 +682,18 @@ const MainNav: React.FC<MainNavProps> = ({
 
       {/* ── Bottom: MiniApp ───────────────────────── */}
       <div className="bitfun-nav-panel__bottom-bar" data-testid="nav-bottom-bar">
+        {/* Temporarily hide Pages entry
+        <button
+          type="button"
+          className={`bitfun-nav-panel__pages-entry${activeTabId === 'pages' ? ' is-active' : ''}`}
+          onClick={() => openScene('pages')}
+          aria-label={tPages('navLabel')}
+          data-testid="nav-pages-entry"
+        >
+          <PanelsTopLeft size={15} aria-hidden="true" />
+          <span>{tPages('navLabel')}</span>
+        </button>
+        */}
         <div className="bitfun-nav-panel__miniapp-footer">
           <MiniAppEntry
             isActive={activeTabId === 'miniapps' || !!activeMiniAppId}

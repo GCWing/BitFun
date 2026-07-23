@@ -637,12 +637,12 @@ mod tests {
     #[test]
     fn npm_adapter_argument_builders_preserve_cli_order() {
         assert_eq!(
-            npm_offline_probe_args("@zed-industries/codex-acp", "codex-acp"),
+            npm_offline_probe_args("@agentclientprotocol/codex-acp", "codex-acp"),
             [
                 "exec",
                 "--offline",
                 "--yes",
-                "--package=@zed-industries/codex-acp",
+                "--package=@agentclientprotocol/codex-acp",
                 "--",
                 "codex-acp",
                 "--help",
@@ -650,17 +650,32 @@ mod tests {
             .map(str::to_string)
         );
         assert_eq!(
-            npm_predownload_args("@zed-industries/codex-acp", "codex-acp"),
+            npm_predownload_args("@agentclientprotocol/codex-acp", "codex-acp"),
             [
                 "exec",
                 "--yes",
-                "--package=@zed-industries/codex-acp",
+                "--package=@agentclientprotocol/codex-acp",
                 "--",
                 "codex-acp",
                 "--help",
             ]
             .map(str::to_string)
         );
+    }
+
+    #[test]
+    fn builtin_adapter_specs_use_maintained_agent_client_protocol_packages() {
+        let claude = acp_requirement_spec("claude-code", None)
+            .adapter
+            .expect("Claude adapter");
+        assert_eq!(claude.package, "@agentclientprotocol/claude-agent-acp");
+        assert_eq!(claude.bin, "claude-agent-acp");
+
+        let codex = acp_requirement_spec("codex", None)
+            .adapter
+            .expect("Codex adapter");
+        assert_eq!(codex.package, "@agentclientprotocol/codex-acp");
+        assert_eq!(codex.bin, "codex-acp");
     }
 
     #[test]
@@ -698,9 +713,9 @@ mod tests {
 
     #[test]
     fn npx_adapter_probe_item_marks_auto_install_available() {
-        let item = npx_adapter_probe_item("@zed-industries/codex-acp");
+        let item = npx_adapter_probe_item("@agentclientprotocol/codex-acp");
 
-        assert_eq!(item.name, "@zed-industries/codex-acp");
+        assert_eq!(item.name, "@agentclientprotocol/codex-acp");
         assert!(item.installed);
         assert_eq!(item.path.as_deref(), Some("npx auto-install"));
         assert!(item.error.is_none());
@@ -717,7 +732,7 @@ mod tests {
 
         let runtime = tokio::runtime::Runtime::new().expect("tokio runtime should be created");
         let item = runtime.block_on(probe_npm_adapter_with_path(
-            "@zed-industries/codex-acp",
+            "@agentclientprotocol/codex-acp",
             "codex-acp",
             Some(test_dir.as_os_str()),
         ));

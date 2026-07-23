@@ -21,7 +21,9 @@ use super::command_router::{
     parse_command, welcome_message, BotAction, BotChatState, BotInteractionHandler,
     BotInteractiveRequest, BotLanguage, BotMessageSender, HandleResult,
 };
-use super::{load_bot_persistence, save_bot_persistence, BotConfig, SavedBotConnection};
+use super::{
+    load_bot_persistence, update_bot_persistence, BotConfig, BotRuntimeFence, SavedBotConnection,
+};
 use crate::service::remote_connect::remote_server::ImageAttachment;
 
 #[derive(Debug, Clone)]
@@ -33,6 +35,7 @@ pub struct FeishuBot {
     api: FeishuBotApi,
     pending_pairings: Arc<RwLock<HashMap<String, PendingPairing>>>,
     chat_states: Arc<RwLock<HashMap<String, BotChatState>>>,
+    runtime_fence: BotRuntimeFence,
 }
 
 impl FeishuBot {
@@ -85,18 +88,53 @@ impl FeishuBot {
     }
 
     pub fn new(config: FeishuConfig) -> Self {
+        Self::new_fenced(config, BotRuntimeFence::standalone())
+    }
+
+    pub(crate) fn new_fenced(config: FeishuConfig, runtime_fence: BotRuntimeFence) -> Self {
         Self {
             api: FeishuBotApi::new(config),
             pending_pairings: Arc::new(RwLock::new(HashMap::new())),
             chat_states: Arc::new(RwLock::new(HashMap::new())),
+            runtime_fence,
         }
     }
 
-    pub async fn restore_chat_state(&self, chat_id: &str, state: BotChatState) {
-        self.chat_states
-            .write()
-            .await
-            .insert(chat_id.to_string(), state);
+    pub async fn restore_chat_state(&self, chat_id: &str, mut state: BotChatState) {
+        state.prepare_for_restore();
+        let mut states = self.chat_states.write().await;
+        self.runtime_fence.reconcile_states(&mut states);
+        states.insert(chat_id.to_string(), state);
+        let restored = states
+            .get(chat_id)
+            .cloned()
+            .expect("restored Feishu state should exist");
+        drop(states);
+        self.persist_chat_state(chat_id, &restored).await;
+    }
+
+    pub async fn clear_delegated_identities(&self) {
+        match tokio::time::timeout(
+            std::time::Duration::from_millis(100),
+            self.chat_states.write(),
+        )
+        .await
+        {
+            Ok(mut states) => {
+                self.runtime_fence.clear_states(&mut states);
+                let snapshots: Vec<_> = states
+                    .iter()
+                    .map(|(chat_id, state)| (chat_id.clone(), state.clone()))
+                    .collect();
+                drop(states);
+                for (chat_id, state) in snapshots {
+                    self.persist_chat_state(&chat_id, &state).await;
+                }
+            }
+            Err(_) => {
+                warn!("Feishu account identity clear deferred behind an in-flight command");
+            }
+        }
     }
 
     pub async fn send_message(&self, chat_id: &str, content: &str) -> Result<()> {
@@ -277,13 +315,19 @@ impl FeishuBot {
                 if self.verify_pairing_code(trimmed).await {
                     info!("Feishu pairing successful, chat_id={chat_id}");
                     let mut state = BotChatState::new(chat_id.clone());
+                    let identity_epoch = self.runtime_fence.identity_epoch();
                     let result = complete_im_bot_pairing(&mut state).await;
-                    self.send_handle_result(&chat_id, &result).await.ok();
-                    self.chat_states
-                        .write()
-                        .await
-                        .insert(chat_id.clone(), state.clone());
+                    if !self.runtime_fence.is_lifecycle_current() {
+                        return None;
+                    }
+                    let mut states = self.chat_states.write().await;
+                    self.runtime_fence.reconcile_states(&mut states);
+                    self.runtime_fence
+                        .sanitize_after_epoch(identity_epoch, &mut state);
+                    states.insert(chat_id.clone(), state.clone());
+                    drop(states);
                     self.persist_chat_state(&chat_id, &state).await;
+                    self.send_handle_result(&chat_id, &result).await.ok();
 
                     return Some(chat_id);
                 } else {
@@ -488,7 +532,11 @@ impl FeishuBot {
         text: &str,
         images: Vec<ImageAttachment>,
     ) {
+        if !self.runtime_fence.is_lifecycle_current() {
+            return;
+        }
         let mut states = self.chat_states.write().await;
+        self.runtime_fence.reconcile_states(&mut states);
         let state = states.entry(chat_id.to_string()).or_insert_with(|| {
             let mut s = BotChatState::new(chat_id.to_string());
             s.paired = true;
@@ -506,7 +554,13 @@ impl FeishuBot {
             }
             if trimmed.len() == 6 && trimmed.chars().all(|c| c.is_ascii_digit()) {
                 if self.verify_pairing_code(trimmed).await {
+                    let identity_epoch = self.runtime_fence.identity_epoch();
                     let result = complete_im_bot_pairing(state).await;
+                    self.runtime_fence
+                        .sanitize_after_epoch(identity_epoch, state);
+                    if !self.runtime_fence.is_lifecycle_current() {
+                        return;
+                    }
                     self.send_handle_result(chat_id, &result).await.ok();
                     self.persist_chat_state(chat_id, state).await;
                     return;
@@ -526,8 +580,15 @@ impl FeishuBot {
         let cmd = parse_command(text);
         let result = handle_command(state, cmd, images).await;
 
-        self.persist_chat_state(chat_id, state).await;
+        self.runtime_fence.reconcile_states(&mut states);
+        if let Some(state) = states.get(chat_id) {
+            self.persist_chat_state(chat_id, state).await;
+        }
         drop(states);
+
+        if !self.runtime_fence.is_lifecycle_current() {
+            return;
+        }
 
         self.send_handle_result(chat_id, &result).await.ok();
 
@@ -573,7 +634,11 @@ impl FeishuBot {
     }
 
     async fn deliver_interaction(&self, chat_id: &str, interaction: BotInteractiveRequest) {
+        if !self.runtime_fence.is_lifecycle_current() {
+            return;
+        }
         let mut states = self.chat_states.write().await;
+        self.runtime_fence.reconcile_states(&mut states);
         let state = states.entry(chat_id.to_string()).or_insert_with(|| {
             let mut s = BotChatState::new(chat_id.to_string());
             s.paired = true;
@@ -593,18 +658,20 @@ impl FeishuBot {
     }
 
     async fn persist_chat_state(&self, chat_id: &str, state: &BotChatState) {
-        let mut data = load_bot_persistence();
-        data.upsert(SavedBotConnection {
+        let snapshot = self.runtime_fence.persistence_snapshot(state);
+        let connection = SavedBotConnection {
             bot_type: "feishu".to_string(),
             chat_id: chat_id.to_string(),
             config: BotConfig::Feishu {
                 app_id: self.api.config().app_id.clone(),
                 app_secret: self.api.config().app_secret.clone(),
             },
-            chat_state: state.clone(),
+            chat_state: snapshot,
             connected_at: chrono::Utc::now().timestamp(),
+        };
+        self.runtime_fence.commit_if_current(|| {
+            update_bot_persistence(|data| data.upsert(connection));
         });
-        save_bot_persistence(&data);
     }
 }
 

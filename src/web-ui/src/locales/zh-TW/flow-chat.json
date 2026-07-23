@@ -10,8 +10,20 @@
     "allowAlwaysTooltip": "始終允許會為 {{projectPath}} 儲存相符的存取權限。",
     "allowAlwaysTooltipCurrentProject": "始終允許會為目前項目儲存相符的存取權限。",
     "allowAlwaysTooltipNoGrant": "此請求沒有可儲存的存取範圍；始終允許僅套用於這次請求。",
+    "risks": {
+      "pageSave": "以{{visibility}}可見性儲存「{{slug}}」的新不可變版本，不變更目前正式版本。",
+      "pagePublish": "以{{visibility}}可見性儲存「{{slug}}」，並切換其正式版本。",
+      "pageDeploy": "將「{{slug}}」的正式流量切換到不可變版本「{{version}}」。"
+    },
+    "visibility": {
+      "private": "僅自己可見",
+      "relay": "登入使用者可見",
+      "public": "公開"
+    },
     "reject": "拒絕",
     "batchCount": "{{count}} 個授權請求",
+    "collapsePanel": "收起授權請求",
+    "expandPanel": "展開 {{count}} 個待處理的授權請求",
     "current": "目前",
     "pending": "等待中",
     "actions": {
@@ -25,6 +37,8 @@
       "mcp": "MCP 呼叫",
       "task": "執行任務",
       "skill": "執行技能",
+      "pagePublish": "儲存頁面版本",
+      "pageDeploy": "部署頁面版本",
       "customTool": "外部工具",
       "externalDirectory": "存取外部目錄",
       "other": "其他操作"
@@ -1246,6 +1260,26 @@
     "retryHistoryHide": "隱藏重試歷史",
     "attemptLabel": "第 {{index}} 次嘗試",
     "attemptSuperseded": "已被重試接替",
+    "attemptDiagnostics": {
+      "show": "顯示本次重試診斷詳情",
+      "hide": "隱藏本次重試診斷詳情",
+      "copy": "複製",
+      "copied": "已複製",
+      "providerError": "服務商錯誤",
+      "toolArguments": "工具參數：{{name}}",
+      "rawArguments": "原始參數",
+      "validationError": "解析或驗證錯誤",
+      "unknownTool": "未知工具",
+      "categories": {
+        "transientRequestError": "請求在服務商回應前失敗",
+        "interruptedToolArguments": "工具參數輸出被中斷",
+        "partialStreamError": "串流輸出以可復原錯誤結束",
+        "invalidToolArguments": "服務商回傳了不合法的工具參數",
+        "noEffectiveOutput": "服務商未回傳可用輸出",
+        "transientStreamError": "串流輸出在產生可用內容前失敗",
+        "unknown": "重試診斷：{{category}}"
+      }
+    },
     "meta": {
       "label": "回應中繼資料",
       "completed": "完成",
@@ -1395,6 +1429,7 @@
       "deployingShort": "…",
       "untitled": "（未命名）",
       "deployFailed": "無法部署 BitFun Page 版本",
+      "openFailed": "無法為該頁面建立安全存取連結。",
       "labelSlug": "slug",
       "labelVersion": "version",
       "labelPath": "url_path",
@@ -1405,6 +1440,7 @@
       "publishingShort": "…",
       "untitled": "（未命名）",
       "publishFailed": "無法發佈 BitFun Page",
+      "openFailed": "無法為該頁面建立安全存取連結。",
       "labelSlug": "slug",
       "labelVersion": "version",
       "labelPath": "url_path",
@@ -1564,6 +1600,10 @@
       "permissionDeniedHint": "BitFun 需要 macOS「輔助使用」和「螢幕錄製」權限才能控制其他應用。請打開系統設定，為 BitFun 授權後重試。",
       "openSettings": "打開系統設定",
       "openSettingsFailed": "無法打開系統設定"
+    },
+    "viewImage": {
+      "viewing": "正在查看圖像...",
+      "viewedImages": "已查看 {{count}} 張圖像"
     },
     "webFetch": {
       "parsingUrl": "解析連結中...",
@@ -2159,6 +2199,8 @@
     "autoModelDesc": "自動路由最優模型",
     "primaryModel": "Primary 模型",
     "fastModel": "Fast 模型",
+    "fastMode": "Fast 模式",
+    "fastModeDescription": "1.5 倍速度，消耗更多額度",
     "modelNotConfigured": "未設定",
     "contextUsage": {
       "agentPrompt": "上次請求輸入上下文: {{usage}}",

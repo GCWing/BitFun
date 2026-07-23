@@ -168,18 +168,21 @@ describe('startup performance contract', () => {
     );
   });
 
-  it('keeps Windows startup show wait state-driven instead of fixed-delay only', () => {
+  it('centers the first main window and persists geometry before close handling', () => {
     const desktopThemeSource = readSource('../../../../apps/desktop/src/theme.rs');
+    const desktopLibSource = readSource('../../../../apps/desktop/src/lib.rs');
+    const windowEventStart = desktopLibSource.indexOf('.on_window_event({');
+    const invokeHandlerStart = desktopLibSource.indexOf('.invoke_handler(', windowEventStart);
+    const windowEventSource = desktopLibSource.slice(windowEventStart, invokeHandlerStart);
 
-    expect(desktopThemeSource).toContain('WINDOWS_STARTUP_MAXIMIZE_SHOW_WAIT_MAX');
-    expect(desktopThemeSource).toContain('WINDOWS_STARTUP_MAXIMIZE_SHOW_WAIT_MIN');
-    expect(desktopThemeSource).toContain('WINDOWS_STARTUP_MAXIMIZE_SHOW_WAIT_POLL');
-    expect(desktopThemeSource).toContain('windows_maximize_show_wait_action');
-    expect(desktopThemeSource).toContain('window.is_maximized()');
-    expect(desktopThemeSource).toContain('windows_show_after_maximize_wait');
-    expect(desktopThemeSource).not.toContain(
-      'std::thread::sleep(std::time::Duration::from_millis(150))'
-    );
+    expect(desktopThemeSource).toContain('.inner_size(1200.0, 800.0)\n        .center()');
+    expect(desktopThemeSource).not.toContain('windows_maximize_show_wait_action');
+    expect(desktopLibSource).toContain('tauri_plugin_window_state::Builder::default()');
+    expect(desktopLibSource).toContain('.with_filter(|label| label == "main")');
+    expect(windowEventStart).toBeGreaterThan(-1);
+    expect(invokeHandlerStart).toBeGreaterThan(windowEventStart);
+    expect(windowEventSource).toContain('matches!(event, tauri::WindowEvent::CloseRequested { .. })');
+    expect(windowEventSource).toContain('save_main_window_state(window.app_handle())');
   });
 
   it('keeps system tray creation out of the synchronous Tauri setup path', () => {

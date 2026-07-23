@@ -516,6 +516,7 @@ const SessionScene: React.FC<SessionSceneProps> = ({
             <ChatPane
               width={0}
               isFullscreen={false}
+              isSceneActive={isActive}
               isDragging={false}
               workspacePath={workspacePath}
               showChatInput

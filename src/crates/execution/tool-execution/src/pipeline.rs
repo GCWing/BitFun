@@ -1,6 +1,6 @@
 //! Provider-neutral tool pipeline planning helpers.
 
-use bitfun_events::{ToolEventData, ToolEventIdentity};
+use bitfun_events::{ToolEventData, ToolEventIdentity, ToolImageAttachment};
 use dashmap::DashMap;
 use std::sync::Arc;
 use tokio_util::sync::CancellationToken;
@@ -102,6 +102,7 @@ pub enum ToolStateEventKind {
     Completed {
         result: serde_json::Value,
         result_for_assistant: Option<String>,
+        image_attachments: Option<Vec<ToolImageAttachment>>,
         duration_ms: u64,
         queue_wait_ms: Option<u64>,
         preflight_ms: Option<u64>,
@@ -288,6 +289,7 @@ pub fn tool_state_event_data(facts: ToolStateEventFacts) -> ToolEventData {
         ToolStateEventKind::Completed {
             result,
             result_for_assistant,
+            image_attachments,
             duration_ms,
             queue_wait_ms,
             preflight_ms,
@@ -297,6 +299,7 @@ pub fn tool_state_event_data(facts: ToolStateEventFacts) -> ToolEventData {
             identity,
             result: sanitize_tool_result_for_event(&result),
             result_for_assistant,
+            image_attachments,
             duration_ms,
             queue_wait_ms,
             preflight_ms,
@@ -367,6 +370,36 @@ mod tests {
     use serde_json::json;
 
     #[test]
+    fn completed_event_preserves_image_attachments() {
+        let data = tool_state_event_data(ToolStateEventFacts {
+            identity: ToolEventIdentity::direct("tool-image-1", "view_image"),
+            state: ToolStateEventKind::Completed {
+                result: json!({ "path": "preview.png" }),
+                result_for_assistant: Some("Image attached".to_string()),
+                image_attachments: Some(vec![bitfun_events::ToolImageAttachment {
+                    mime_type: "image/png".to_string(),
+                    data_base64: "AAAA".to_string(),
+                }]),
+                duration_ms: 10,
+                queue_wait_ms: None,
+                preflight_ms: None,
+                confirmation_wait_ms: None,
+                execution_ms: Some(10),
+            },
+        });
+
+        let ToolEventData::Completed {
+            image_attachments, ..
+        } = data
+        else {
+            panic!("expected completed event");
+        };
+        let attachments = image_attachments.expect("image attachments");
+        assert_eq!(attachments[0].mime_type, "image/png");
+        assert_eq!(attachments[0].data_base64, "AAAA");
+    }
+
+    #[test]
     fn completed_event_redacts_data_urls_recursively() {
         let data = tool_state_event_data(ToolStateEventFacts {
             identity: ToolEventIdentity::direct("tool-1", "Screenshot"),
@@ -376,6 +409,7 @@ mod tests {
                     "nested": [{ "data_url": "data:image/png;base64,BBBB" }]
                 }),
                 result_for_assistant: Some("done".to_string()),
+                image_attachments: None,
                 duration_ms: 10,
                 queue_wait_ms: Some(1),
                 preflight_ms: None,

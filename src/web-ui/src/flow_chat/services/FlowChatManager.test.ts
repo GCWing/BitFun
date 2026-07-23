@@ -15,6 +15,10 @@ vi.mock('./ProcessingStatusManager', () => ({
   processingStatusManager: {},
 }));
 
+vi.mock('./flow-chat-manager/PeerSessionRefreshModule', () => ({
+  installPeerSessionRefresh: vi.fn(() => () => {}),
+}));
+
 vi.mock('../store/FlowChatStore', () => ({
   FlowChatStore: {
     getInstance: () => storeMocks.store,
@@ -54,6 +58,10 @@ vi.mock('./EventBatcher', () => ({
       this.options.onFlush(events);
     }
   },
+}));
+
+vi.mock('./flow-chat-manager/PeerSessionRefreshModule', () => ({
+  installPeerSessionRefresh: vi.fn(() => () => {}),
 }));
 
 vi.mock('./flow-chat-manager', () => ({

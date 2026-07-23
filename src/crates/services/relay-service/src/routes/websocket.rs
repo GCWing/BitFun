@@ -14,7 +14,11 @@ use axum::{
 };
 use futures_util::{SinkExt, StreamExt};
 use serde::{Deserialize, Serialize};
-use std::time::{Duration, Instant};
+use std::{
+    collections::HashSet,
+    sync::Arc,
+    time::{Duration, Instant},
+};
 use tokio::sync::{
     mpsc::{self, error::TrySendError},
     watch,
@@ -24,7 +28,7 @@ use tracing::{debug, error, info, warn};
 use crate::relay::room::{send_outbound_message, ConnId, OutboundMessage, ResponsePayload};
 use crate::routes::api::AppState;
 
-const OUTBOUND_QUEUE_CAPACITY: usize = 256;
+const OUTBOUND_QUEUE_CAPACITY: usize = i32::MAX as usize;
 const MAX_WS_MESSAGE_BYTES: usize = 64 * 1024 * 1024;
 const MAX_ENCRYPTED_PAYLOAD_BYTES: usize = 48 * 1024 * 1024;
 const MAX_IDENTIFIER_BYTES: usize = 128;
@@ -32,7 +36,8 @@ const MAX_DEVICE_NAME_BYTES: usize = 256;
 const MAX_PUBLIC_KEY_BYTES: usize = 512;
 const MAX_NONCE_BYTES: usize = 256;
 const RATE_LIMIT_WINDOW: Duration = Duration::from_secs(60);
-const MAX_MESSAGES_PER_WINDOW: u32 = 600;
+const MAX_MESSAGES_PER_WINDOW: u32 = i32::MAX as u32;
+const DEVICE_TOKEN_REVALIDATION_INTERVAL: Duration = Duration::from_secs(5);
 
 struct ConnectionRateLimiter {
     window_started: Instant,
@@ -197,6 +202,7 @@ fn is_websocket_origin_allowed(headers: &HeaderMap, allowed_origins: &[String]) 
 }
 
 async fn handle_socket(socket: WebSocket, state: AppState) {
+    ensure_device_token_revalidator(&state);
     let (mut ws_sender, mut ws_receiver) = socket.split();
     let (out_tx, mut out_rx) = mpsc::channel::<OutboundMessage>(OUTBOUND_QUEUE_CAPACITY);
     let (force_close_tx, mut force_close_rx) = watch::channel(false);
@@ -207,6 +213,7 @@ async fn handle_socket(socket: WebSocket, state: AppState) {
     info!("WebSocket connected: conn_id={conn_id}");
 
     let mut writer_force_close_rx = force_close_rx.clone();
+    let writer_failure_close_tx = force_close_tx.clone();
     let write_task = tokio::spawn(async move {
         loop {
             tokio::select! {
@@ -225,6 +232,11 @@ async fn handle_socket(socket: WebSocket, state: AppState) {
                             .await
                             .is_err()
                     {
+                        // The read half can remain open after a write-half
+                        // failure. Wake the owner loop so it promptly removes
+                        // routing/presence instead of leaving a half-open
+                        // device online until token expiry.
+                        let _ = writer_failure_close_tx.send(true);
                         break;
                     }
                 }
@@ -234,6 +246,7 @@ async fn handle_socket(socket: WebSocket, state: AppState) {
 
     loop {
         let msg_result = tokio::select! {
+            biased;
             changed = force_close_rx.changed() => {
                 if changed.is_ok() && *force_close_rx.borrow() {
                     info!("Revoked WebSocket connection: conn_id={conn_id}");
@@ -298,23 +311,114 @@ async fn handle_socket(socket: WebSocket, state: AppState) {
     }
 
     state.room_manager.on_disconnect(conn_id);
+    let _presence_projection_guard = state.device_manager.lock_presence_projection().await;
     if let Some((user_id, device_id)) = state.device_manager.unregister(conn_id) {
         // Best-effort: mark the device offline in the DB and notify peers.
-        if let Some(db) = state.db.as_ref() {
-            let _ = crate::db::DeviceRow::set_online(db, &user_id, &device_id, false).await;
+        if !state.device_manager.is_device_online(&user_id, &device_id) {
+            if let Some(db) = state.db.as_ref() {
+                let _ = crate::db::DeviceRow::set_online(db, &user_id, &device_id, false).await;
+            }
         }
-        let remaining = state.device_manager.online_devices(&user_id);
-        let presence = build_presence(&remaining);
-        state.device_manager.broadcast_except(
-            &user_id,
-            &device_id,
-            &serde_json::to_string(&OutboundProtocol::DevicePresence { devices: presence })
-                .unwrap_or_default(),
-        );
+        state
+            .device_manager
+            .broadcast_current_presence(&user_id, |devices| {
+                serde_json::to_string(&OutboundProtocol::DevicePresence {
+                    devices: build_presence(devices),
+                })
+                .ok()
+            });
     }
+    drop(_presence_projection_guard);
     drop(out_tx);
     let _ = write_task.await;
     info!("WebSocket disconnected: conn_id={conn_id}");
+}
+
+fn ensure_device_token_revalidator(state: &AppState) {
+    let Some(db) = state.db.clone() else {
+        return;
+    };
+    if !state.device_manager.claim_token_revalidator_start() {
+        return;
+    }
+    let device_manager = Arc::clone(&state.device_manager);
+    tokio::spawn(async move {
+        let mut interval = tokio::time::interval(DEVICE_TOKEN_REVALIDATION_INTERVAL);
+        interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+        // Consume the immediate first tick. AuthConnect performs its own two
+        // checks; this worker is for later out-of-process revocation.
+        interval.tick().await;
+        loop {
+            interval.tick().await;
+            if let Err(error) = revalidate_active_device_tokens_once(&db, &device_manager).await {
+                warn!(%error, "Failed to revalidate active device tokens");
+            }
+        }
+    });
+}
+
+async fn revalidate_active_device_tokens_once(
+    db: &crate::db::DbPool,
+    device_manager: &crate::relay::DeviceManager,
+) -> anyhow::Result<usize> {
+    let active = device_manager.active_device_credentials();
+    if active.is_empty() {
+        return Ok(0);
+    }
+    let tokens = active
+        .iter()
+        .map(|(_, _, _, token)| token.clone())
+        .collect::<Vec<_>>();
+    let valid = crate::db::AuthToken::find_valid_device_tokens(db, &tokens)
+        .await?
+        .into_iter()
+        .map(|token| (token.user_id, token.device_id, token.token))
+        .collect::<HashSet<_>>();
+    let revoked = active
+        .into_iter()
+        .filter(|(_, user_id, device_id, token)| {
+            !valid.contains(&(user_id.clone(), device_id.clone(), token.clone()))
+        })
+        .collect::<Vec<_>>();
+    if revoked.is_empty() {
+        return Ok(0);
+    }
+
+    // A batch snapshot can race a same-process login/logout. Re-check each
+    // missing exact token under the lifecycle gate before removing its socket.
+    let _presence_projection_guard = device_manager.lock_presence_projection().await;
+    let mut affected_users = HashSet::new();
+    let mut disconnected = 0;
+    for (_conn_id, user_id, device_id, token) in revoked {
+        match registered_device_token_is_current(db, &token, &user_id, &device_id).await {
+            Ok(true) => continue,
+            Err(error) => {
+                warn!(%error, %user_id, %device_id, "Failed exact token revalidation");
+                continue;
+            }
+            Ok(false) => {}
+        }
+        if device_manager.disconnect_device_if_token(&user_id, &device_id, &token) {
+            disconnected += 1;
+            affected_users.insert(user_id.clone());
+            if !device_manager.is_device_online(&user_id, &device_id) {
+                if let Err(error) =
+                    crate::db::DeviceRow::set_online(db, &user_id, &device_id, false).await
+                {
+                    warn!(%error, %user_id, %device_id, "Failed to project revoked device offline");
+                }
+            }
+        }
+    }
+    for user_id in affected_users {
+        device_manager.broadcast_current_presence(&user_id, |devices| {
+            serde_json::to_string(&OutboundProtocol::DevicePresence {
+                devices: build_presence(devices),
+            })
+            .ok()
+        });
+    }
+    Ok(disconnected)
 }
 
 async fn handle_text_message(
@@ -438,7 +542,7 @@ async fn handle_text_message(
 
         InboundMessage::AuthConnect { token, device_name } => {
             if state.room_manager.has_connection(conn_id)
-                || state.device_manager.conn_mapping(conn_id).is_some()
+                || state.device_manager.has_connection(conn_id)
             {
                 return reject_protocol(out_tx, "connection is already authenticated");
             }
@@ -474,25 +578,39 @@ async fn handle_text_message(
                     },
                 );
             }
-            // Mark the device online in the DB and the in-memory registry.
-            let _ = crate::db::DeviceRow::upsert(
-                db,
-                &auth.device_id,
-                &auth.user_id,
-                &device_name,
-                None,
-            )
-            .await;
-            let _ =
-                crate::db::DeviceRow::set_online(db, &auth.user_id, &auth.device_id, true).await;
-            let _others = state.device_manager.register(
+            // Make the candidate visible to token-scoped logout without
+            // exposing it to presence/routing or replacing the current active
+            // socket until the mandatory final token check succeeds.
+            state.device_manager.register_pending(
                 &auth.user_id,
                 &auth.device_id,
+                &token,
                 &device_name,
                 conn_id,
                 out_tx.clone(),
                 force_close_tx.clone(),
             );
+
+            let activated = match activate_pending_device_if_authorized(
+                db,
+                &state.device_manager,
+                &token,
+                &auth.user_id,
+                &auth.device_id,
+                &device_name,
+                conn_id,
+            )
+            .await
+            {
+                Ok(activated) => activated,
+                Err(error) => {
+                    warn!(%error, "Failed to activate authenticated device");
+                    false
+                }
+            };
+            if !activated {
+                return false;
+            }
             let expires_in = auth
                 .expires_at
                 .saturating_sub(chrono::Utc::now().timestamp())
@@ -502,30 +620,17 @@ async fn handle_text_message(
                 tokio::time::sleep(Duration::from_secs(expires_in)).await;
                 let _ = expiry_close_tx.send(true);
             }));
-            send_json(
-                out_tx,
-                &OutboundProtocol::AuthOk {
-                    user_id: auth.user_id.clone(),
-                    device_id: auth.device_id.clone(),
-                },
-            )
-            .await;
             // Full presence (including self) so clients can treat the snapshot
-            // as authoritative rather than an incremental patch.
-            let all_online = state.device_manager.online_devices(&auth.user_id);
-            let presence = build_presence(&all_online);
-            send_json_best_effort(
-                out_tx,
-                &OutboundProtocol::DevicePresence {
-                    devices: presence.clone(),
-                },
-            );
-            state.device_manager.broadcast_except(
-                &auth.user_id,
-                &auth.device_id,
-                &serde_json::to_string(&OutboundProtocol::DevicePresence { devices: presence })
-                    .unwrap_or_default(),
-            );
+            // as authoritative rather than an incremental patch. Snapshot and
+            // enqueue are serialized with membership mutations.
+            state
+                .device_manager
+                .broadcast_current_presence(&auth.user_id, |devices| {
+                    serde_json::to_string(&OutboundProtocol::DevicePresence {
+                        devices: build_presence(devices),
+                    })
+                    .ok()
+                });
             true
         }
 
@@ -632,6 +737,165 @@ fn build_presence(devices: &[(String, String)]) -> Vec<DevicePresenceEntry> {
         .collect()
 }
 
+async fn registered_device_token_is_current(
+    db: &crate::db::DbPool,
+    token: &str,
+    expected_user_id: &str,
+    expected_device_id: &str,
+) -> anyhow::Result<bool> {
+    Ok(crate::db::AuthToken::find(db, token)
+        .await?
+        .is_some_and(|current| {
+            current.is_device_token()
+                && current.user_id == expected_user_id
+                && current.device_id == expected_device_id
+        }))
+}
+
+async fn project_device_offline_if_unowned(
+    db: &crate::db::DbPool,
+    device_manager: &crate::relay::DeviceManager,
+    user_id: &str,
+    device_id: &str,
+) -> anyhow::Result<()> {
+    if !device_manager.is_device_online(user_id, device_id) {
+        crate::db::DeviceRow::set_online(db, user_id, device_id, false).await?;
+    }
+    Ok(())
+}
+
+async fn reconcile_device_after_token_disconnect(
+    db: &crate::db::DbPool,
+    device_manager: &crate::relay::DeviceManager,
+    user_id: &str,
+    device_id: &str,
+) -> anyhow::Result<()> {
+    let projection_result =
+        project_device_offline_if_unowned(db, device_manager, user_id, device_id).await;
+    device_manager.broadcast_current_presence(user_id, |devices| {
+        serde_json::to_string(&OutboundProtocol::DevicePresence {
+            devices: build_presence(devices),
+        })
+        .ok()
+    });
+    projection_result
+}
+
+/// Complete the activation after the durable device projection has been
+/// written. The caller must hold `presence_projection_gate`, keeping the
+/// second token check, in-memory promotion, and any rollback atomic with
+/// logout, device deletion, and socket cleanup.
+async fn complete_pending_device_activation_if_authorized(
+    db: &crate::db::DbPool,
+    device_manager: &crate::relay::DeviceManager,
+    token: &str,
+    expected_user_id: &str,
+    expected_device_id: &str,
+    conn_id: ConnId,
+) -> anyhow::Result<bool> {
+    // The durable writes can wait on SQLite. Re-check wall-clock expiry
+    // immediately before the synchronous promotion so a token that expired
+    // during that wait never becomes routable or receives AuthOk.
+    let still_current =
+        match registered_device_token_is_current(db, token, expected_user_id, expected_device_id)
+            .await
+        {
+            Ok(current) => current,
+            Err(error) => {
+                device_manager.disconnect_pending(conn_id);
+                let _ = project_device_offline_if_unowned(
+                    db,
+                    device_manager,
+                    expected_user_id,
+                    expected_device_id,
+                )
+                .await;
+                return Err(error);
+            }
+        };
+    if !still_current {
+        device_manager.disconnect_device_if_token(expected_user_id, expected_device_id, token);
+        reconcile_device_after_token_disconnect(
+            db,
+            device_manager,
+            expected_user_id,
+            expected_device_id,
+        )
+        .await?;
+        return Ok(false);
+    }
+
+    // Pending remains invisible until every durable write succeeds. Promotion
+    // is synchronous under the same lifecycle gate, so clients never route to
+    // a socket whose AuthConnect may still fail on database projection.
+    let auth_ok = serde_json::to_string(&OutboundProtocol::AuthOk {
+        user_id: expected_user_id.to_string(),
+        device_id: expected_device_id.to_string(),
+    })?;
+    if !device_manager.activate_pending_with_initial_message(
+        expected_user_id,
+        expected_device_id,
+        token,
+        conn_id,
+        &auth_ok,
+    ) {
+        project_device_offline_if_unowned(db, device_manager, expected_user_id, expected_device_id)
+            .await?;
+        return Ok(false);
+    }
+    Ok(true)
+}
+
+async fn activate_pending_device_if_authorized(
+    db: &crate::db::DbPool,
+    device_manager: &crate::relay::DeviceManager,
+    token: &str,
+    expected_user_id: &str,
+    expected_device_id: &str,
+    device_name: &str,
+    conn_id: ConnId,
+) -> anyhow::Result<bool> {
+    // Serialize the final token lookup, durable device update, activation, and
+    // online projection with logout/delete/socket cleanup. No persistent side
+    // effect occurs before this lookup, so a deleted device cannot be revived
+    // by an AuthConnect request that passed only the earlier lookup.
+    let _presence_projection_guard = device_manager.lock_presence_projection().await;
+    if !registered_device_token_is_current(db, token, expected_user_id, expected_device_id).await? {
+        device_manager.disconnect_device_if_token(expected_user_id, expected_device_id, token);
+        reconcile_device_after_token_disconnect(
+            db,
+            device_manager,
+            expected_user_id,
+            expected_device_id,
+        )
+        .await?;
+        return Ok(false);
+    }
+
+    if let Err(error) =
+        crate::db::DeviceRow::upsert(db, expected_device_id, expected_user_id, device_name, None)
+            .await
+    {
+        device_manager.disconnect_pending(conn_id);
+        return Err(error);
+    }
+    if let Err(error) =
+        crate::db::DeviceRow::set_online(db, expected_user_id, expected_device_id, true).await
+    {
+        device_manager.disconnect_pending(conn_id);
+        return Err(error);
+    }
+    complete_pending_device_activation_if_authorized(
+        db,
+        device_manager,
+        token,
+        expected_user_id,
+        expected_device_id,
+        conn_id,
+    )
+    .await
+}
+
 async fn send_json<T: Serialize>(tx: &mpsc::Sender<OutboundMessage>, msg: &T) -> bool {
     match serde_json::to_string(msg) {
         Ok(json) => send_outbound_message(tx, OutboundMessage::text(json)).await,
@@ -667,12 +931,16 @@ fn generate_room_id() -> String {
 #[cfg(test)]
 mod tests {
     use super::{
+        activate_pending_device_if_authorized, complete_pending_device_activation_if_authorized,
         is_valid_display_text, is_valid_encrypted_payload, is_valid_identifier,
-        is_websocket_origin_allowed, send_json_best_effort, ConnectionRateLimiter,
+        is_websocket_origin_allowed, registered_device_token_is_current,
+        revalidate_active_device_tokens_once, send_json_best_effort, ConnectionRateLimiter,
         OutboundProtocol, MAX_MESSAGES_PER_WINDOW,
     };
+    use crate::db::{connect, AuthToken, DeviceRow, UserRow};
+    use crate::relay::DeviceManager;
     use axum::http::{header, HeaderMap};
-    use tokio::sync::mpsc;
+    use tokio::sync::{mpsc, watch};
 
     #[test]
     fn best_effort_control_response_does_not_block_on_full_queue() {
@@ -697,12 +965,12 @@ mod tests {
     }
 
     #[test]
-    fn websocket_message_rate_is_bounded() {
+    fn websocket_message_rate_is_effectively_unbounded() {
+        assert_eq!(MAX_MESSAGES_PER_WINDOW, i32::MAX as u32);
         let mut limiter = ConnectionRateLimiter::new();
-        for _ in 0..MAX_MESSAGES_PER_WINDOW {
+        for _ in 0..64 {
             assert!(limiter.allow());
         }
-        assert!(!limiter.allow());
     }
 
     #[test]
@@ -730,5 +998,365 @@ mod tests {
             headers.insert(header::ORIGIN, invalid.parse().unwrap());
             assert!(!is_websocket_origin_allowed(&headers, &[]));
         }
+    }
+
+    #[tokio::test]
+    async fn token_revoked_between_initial_validation_and_activation_is_rejected() {
+        let db = connect(":memory:").await.unwrap();
+        UserRow::create(&db, "owner", "alice", "s", "ks", "{}", "hash", "wmk")
+            .await
+            .unwrap();
+        DeviceRow::upsert(&db, "device-a", "owner", "Device A", None)
+            .await
+            .unwrap();
+        let token = AuthToken::create(&db, "owner", "device-a")
+            .await
+            .unwrap()
+            .token;
+
+        // This is the first AuthConnect lookup. Pause the conceptual request
+        // after it, then let logout delete the row before registration's
+        // mandatory second lookup.
+        assert!(AuthToken::find(&db, &token).await.unwrap().is_some());
+        sqlx::query("DELETE FROM auth_tokens WHERE token = ?")
+            .bind(&token)
+            .execute(&db)
+            .await
+            .unwrap();
+
+        let manager = DeviceManager::new();
+        let (tx, _rx) = mpsc::channel(4);
+        let (close_tx, mut close_rx) = watch::channel(false);
+        manager.register_pending("owner", "device-a", &token, "Device A", 1, tx, close_tx);
+        assert!(manager.online_devices("owner").is_empty());
+        assert!(manager.conn_mapping(1).is_none());
+
+        assert!(
+            !registered_device_token_is_current(&db, &token, "owner", "device-a")
+                .await
+                .unwrap()
+        );
+        assert!(!activate_pending_device_if_authorized(
+            &db, &manager, &token, "owner", "device-a", "Device A", 1,
+        )
+        .await
+        .unwrap());
+        close_rx.changed().await.unwrap();
+        assert!(*close_rx.borrow());
+        assert!(manager.conn_mapping(1).is_none());
+    }
+
+    #[tokio::test]
+    async fn expired_token_disconnects_active_and_pending_without_ghost_online_projection() {
+        let db = connect(":memory:").await.unwrap();
+        UserRow::create(&db, "owner", "alice", "s", "ks", "{}", "hash", "wmk")
+            .await
+            .unwrap();
+        DeviceRow::upsert(&db, "device-a", "owner", "Device A", None)
+            .await
+            .unwrap();
+        DeviceRow::set_online(&db, "owner", "device-a", true)
+            .await
+            .unwrap();
+        let token = AuthToken::create(&db, "owner", "device-a")
+            .await
+            .unwrap()
+            .token;
+
+        let manager = DeviceManager::new();
+        let (active_tx, _active_rx) = mpsc::channel(4);
+        let (active_close_tx, mut active_close_rx) = watch::channel(false);
+        manager.register(
+            "owner",
+            "device-a",
+            &token,
+            "Device A",
+            1,
+            active_tx,
+            active_close_tx,
+        );
+        let (pending_tx, _pending_rx) = mpsc::channel(4);
+        let (pending_close_tx, mut pending_close_rx) = watch::channel(false);
+        manager.register_pending(
+            "owner",
+            "device-a",
+            &token,
+            "Device A",
+            2,
+            pending_tx,
+            pending_close_tx,
+        );
+        let (peer_tx, mut peer_rx) = mpsc::channel(4);
+        let (peer_close_tx, _peer_close_rx) = watch::channel(false);
+        manager.register(
+            "owner",
+            "device-c",
+            "independent-token",
+            "Device C",
+            3,
+            peer_tx,
+            peer_close_tx,
+        );
+
+        sqlx::query("UPDATE auth_tokens SET expires_at = ? WHERE token = ?")
+            .bind(chrono::Utc::now().timestamp())
+            .bind(&token)
+            .execute(&db)
+            .await
+            .unwrap();
+        assert!(!activate_pending_device_if_authorized(
+            &db, &manager, &token, "owner", "device-a", "Device A", 2,
+        )
+        .await
+        .unwrap());
+
+        active_close_rx.changed().await.unwrap();
+        pending_close_rx.changed().await.unwrap();
+        assert!(*active_close_rx.borrow());
+        assert!(*pending_close_rx.borrow());
+        assert!(manager.conn_mapping(1).is_none());
+        assert!(manager.conn_mapping(2).is_none());
+        assert_eq!(
+            manager.conn_mapping(3),
+            Some(("owner".into(), "device-c".into()))
+        );
+        assert!(!manager.route_message("owner", "device-a", "opaque"));
+        let presence: serde_json::Value =
+            serde_json::from_str(&peer_rx.recv().await.unwrap().text).unwrap();
+        assert_eq!(presence["type"], "device_presence");
+        assert_eq!(presence["devices"].as_array().unwrap().len(), 1);
+        assert_eq!(presence["devices"][0]["device_id"], "device-c");
+        let rows = DeviceRow::list_by_user(&db, "owner").await.unwrap();
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].online, 0);
+    }
+
+    #[tokio::test]
+    async fn external_token_revocation_reaper_disconnects_idle_device_and_updates_presence() {
+        let db = connect(":memory:").await.unwrap();
+        UserRow::create(&db, "owner", "alice", "s", "ks", "{}", "hash", "wmk")
+            .await
+            .unwrap();
+        DeviceRow::upsert(&db, "device-a", "owner", "Device A", None)
+            .await
+            .unwrap();
+        DeviceRow::upsert(&db, "device-c", "owner", "Device C", None)
+            .await
+            .unwrap();
+        DeviceRow::set_online(&db, "owner", "device-a", true)
+            .await
+            .unwrap();
+        DeviceRow::set_online(&db, "owner", "device-c", true)
+            .await
+            .unwrap();
+        let revoked_token = AuthToken::create(&db, "owner", "device-a")
+            .await
+            .unwrap()
+            .token;
+        let peer_token = AuthToken::create(&db, "owner", "device-c")
+            .await
+            .unwrap()
+            .token;
+
+        let manager = DeviceManager::new();
+        let (revoked_tx, _revoked_rx) = mpsc::channel(4);
+        let (revoked_close_tx, mut revoked_close_rx) = watch::channel(false);
+        manager.register(
+            "owner",
+            "device-a",
+            &revoked_token,
+            "Device A",
+            1,
+            revoked_tx,
+            revoked_close_tx,
+        );
+        let (peer_tx, mut peer_rx) = mpsc::channel(4);
+        let (peer_close_tx, _peer_close_rx) = watch::channel(false);
+        manager.register(
+            "owner",
+            "device-c",
+            &peer_token,
+            "Device C",
+            2,
+            peer_tx,
+            peer_close_tx,
+        );
+
+        // Simulate reset-password/delete-user tooling mutating the shared DB
+        // from outside the running relay process while both sockets are idle.
+        sqlx::query("DELETE FROM auth_tokens WHERE token = ?")
+            .bind(&revoked_token)
+            .execute(&db)
+            .await
+            .unwrap();
+        assert_eq!(
+            revalidate_active_device_tokens_once(&db, &manager)
+                .await
+                .unwrap(),
+            1
+        );
+
+        revoked_close_rx.changed().await.unwrap();
+        assert!(*revoked_close_rx.borrow());
+        assert!(manager.conn_mapping(1).is_none());
+        assert_eq!(
+            manager.conn_mapping(2),
+            Some(("owner".into(), "device-c".into()))
+        );
+        let presence: serde_json::Value =
+            serde_json::from_str(&peer_rx.recv().await.unwrap().text).unwrap();
+        assert_eq!(presence["devices"].as_array().unwrap().len(), 1);
+        assert_eq!(presence["devices"][0]["device_id"], "device-c");
+        let rows = DeviceRow::list_by_user(&db, "owner").await.unwrap();
+        assert_eq!(
+            rows.iter()
+                .find(|row| row.device_id == "device-a")
+                .unwrap()
+                .online,
+            0
+        );
+        assert_eq!(
+            rows.iter()
+                .find(|row| row.device_id == "device-c")
+                .unwrap()
+                .online,
+            1
+        );
+    }
+
+    #[tokio::test]
+    async fn token_expiring_during_durable_projection_never_receives_auth_ok() {
+        let db = connect(":memory:").await.unwrap();
+        UserRow::create(&db, "owner", "alice", "s", "ks", "{}", "hash", "wmk")
+            .await
+            .unwrap();
+        DeviceRow::upsert(&db, "device-a", "owner", "Device A", None)
+            .await
+            .unwrap();
+        let token = AuthToken::create(&db, "owner", "device-a")
+            .await
+            .unwrap()
+            .token;
+        let manager = DeviceManager::new();
+        let (tx, mut rx) = mpsc::channel(4);
+        let (close_tx, mut close_rx) = watch::channel(false);
+        manager.register_pending("owner", "device-a", &token, "Device A", 1, tx, close_tx);
+
+        let _projection_guard = manager.lock_presence_projection().await;
+        assert!(
+            registered_device_token_is_current(&db, &token, "owner", "device-a")
+                .await
+                .unwrap()
+        );
+        DeviceRow::upsert(&db, "device-a", "owner", "Device A", None)
+            .await
+            .unwrap();
+        DeviceRow::set_online(&db, "owner", "device-a", true)
+            .await
+            .unwrap();
+        sqlx::query("UPDATE auth_tokens SET expires_at = ? WHERE token = ?")
+            .bind(chrono::Utc::now().timestamp())
+            .bind(&token)
+            .execute(&db)
+            .await
+            .unwrap();
+
+        assert!(!complete_pending_device_activation_if_authorized(
+            &db, &manager, &token, "owner", "device-a", 1,
+        )
+        .await
+        .unwrap());
+        close_rx.changed().await.unwrap();
+        assert!(*close_rx.borrow());
+        assert!(rx.try_recv().is_err(), "AuthOk must not be queued");
+        assert!(manager.conn_mapping(1).is_none());
+        let rows = DeviceRow::list_by_user(&db, "owner").await.unwrap();
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].online, 0);
+    }
+
+    #[tokio::test]
+    async fn stale_auth_connect_cannot_recreate_a_deleted_device() {
+        let db = connect(":memory:").await.unwrap();
+        UserRow::create(&db, "owner", "alice", "s", "ks", "{}", "hash", "wmk")
+            .await
+            .unwrap();
+        DeviceRow::upsert(&db, "device-a", "owner", "Device A", None)
+            .await
+            .unwrap();
+        let token = AuthToken::create(&db, "owner", "device-a")
+            .await
+            .unwrap()
+            .token;
+        assert!(AuthToken::find(&db, &token).await.unwrap().is_some());
+
+        assert!(DeviceRow::delete_for_user(&db, "owner", "device-a")
+            .await
+            .unwrap());
+        let manager = DeviceManager::new();
+        let (tx, _rx) = mpsc::channel(4);
+        let (close_tx, mut close_rx) = watch::channel(false);
+        manager.register_pending("owner", "device-a", &token, "Device A", 1, tx, close_tx);
+
+        assert!(!activate_pending_device_if_authorized(
+            &db, &manager, &token, "owner", "device-a", "Device A", 1,
+        )
+        .await
+        .unwrap());
+        close_rx.changed().await.unwrap();
+        assert!(*close_rx.borrow());
+        assert!(DeviceRow::list_by_user(&db, "owner")
+            .await
+            .unwrap()
+            .is_empty());
+    }
+
+    #[tokio::test]
+    async fn pending_device_becomes_routable_only_after_durable_projection() {
+        let db = connect(":memory:").await.unwrap();
+        UserRow::create(&db, "owner", "alice", "s", "ks", "{}", "hash", "wmk")
+            .await
+            .unwrap();
+        DeviceRow::upsert(&db, "device-a", "owner", "Device A", None)
+            .await
+            .unwrap();
+        let token = AuthToken::create(&db, "owner", "device-a")
+            .await
+            .unwrap()
+            .token;
+        let manager = DeviceManager::new();
+        let (tx, mut rx) = mpsc::channel(4);
+        let (close_tx, _close_rx) = watch::channel(false);
+        manager.register_pending("owner", "device-a", &token, "Device A", 1, tx, close_tx);
+
+        assert!(manager.online_devices("owner").is_empty());
+        assert!(!manager.route_message("owner", "device-a", "opaque"));
+        assert!(activate_pending_device_if_authorized(
+            &db, &manager, &token, "owner", "device-a", "Device A", 1,
+        )
+        .await
+        .unwrap());
+
+        assert_eq!(
+            manager.conn_mapping(1),
+            Some(("owner".into(), "device-a".into()))
+        );
+        assert_eq!(manager.online_devices("owner").len(), 1);
+        let rows = DeviceRow::list_by_user(&db, "owner").await.unwrap();
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].online, 1);
+
+        manager.broadcast_current_presence("owner", |devices| {
+            serde_json::to_string(&OutboundProtocol::DevicePresence {
+                devices: super::build_presence(devices),
+            })
+            .ok()
+        });
+        let auth_ok: serde_json::Value =
+            serde_json::from_str(&rx.recv().await.unwrap().text).unwrap();
+        let presence: serde_json::Value =
+            serde_json::from_str(&rx.recv().await.unwrap().text).unwrap();
+        assert_eq!(auth_ok["type"], "auth_ok");
+        assert_eq!(presence["type"], "device_presence");
     }
 }

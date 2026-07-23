@@ -2065,6 +2065,100 @@
     }
   }
 
+  &__subscription-migration-notice {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    align-items: center;
+    gap: $size-gap-2;
+    padding: var(--size-gap-3);
+    border: 1px solid var(--color-accent-200);
+    border-radius: var(--size-radius-base);
+    background: var(--color-overlay-white-04);
+    color: var(--color-text-secondary);
+    font-size: var(--font-size-sm);
+    line-height: 1.5;
+
+    svg {
+      color: var(--color-info);
+    }
+  }
+
+  &__subscription-login-panel {
+    display: grid;
+    gap: $size-gap-3;
+    margin: 0 var(--size-gap-3) var(--size-gap-2);
+    padding: var(--size-gap-3);
+    border: 1px solid var(--color-accent-200);
+    border-radius: var(--size-radius-base);
+    background: var(--color-overlay-white-04);
+
+    &--failed {
+      border-color: var(--color-error);
+    }
+  }
+
+  &__subscription-login-summary {
+    display: flex;
+    flex-direction: column;
+    gap: $size-gap-1;
+    color: var(--color-text-secondary);
+    font-size: var(--font-size-sm);
+    line-height: 1.5;
+
+    strong {
+      color: var(--color-text-primary);
+      font-weight: 600;
+    }
+  }
+
+  &__subscription-code {
+    display: flex;
+    align-items: center;
+    gap: $size-gap-2;
+    color: var(--color-text-secondary);
+    font-size: var(--font-size-sm);
+
+    code {
+      color: var(--color-text-primary);
+      font-size: var(--font-size-base);
+      font-weight: 600;
+      letter-spacing: 0.08em;
+      user-select: all;
+    }
+  }
+
+  &__subscription-login-actions,
+  &__subscription-logout-actions {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    flex-wrap: wrap;
+    gap: $size-gap-2;
+  }
+
+  &__subscription-logout-confirm {
+    display: grid;
+    gap: var(--size-gap-3);
+    padding: var(--size-gap-4);
+
+    p {
+      margin: 0;
+      color: var(--color-text-secondary);
+      font-size: var(--font-size-sm);
+      line-height: 1.6;
+    }
+
+    ul {
+      max-height: 160px;
+      margin: 0;
+      padding-left: var(--size-gap-5);
+      overflow: auto;
+      color: var(--color-text-primary);
+      font-size: var(--font-size-sm);
+      line-height: 1.7;
+    }
+  }
+
   @container config-panel (max-width: 760px) {
     &__cli-account {
       grid-template-columns: minmax(0, 1fr);
@@ -2079,6 +2173,18 @@
       justify-content: flex-start;
       flex-wrap: wrap;
     }
+
+    &__subscription-migration-notice {
+      grid-template-columns: auto minmax(0, 1fr);
+
+      button {
+        grid-column: 2;
+        justify-self: flex-start;
+      }
+    }
+
+    &__subscription-login-actions {
+      justify-content: flex-start;
+    }
   }
 }
-

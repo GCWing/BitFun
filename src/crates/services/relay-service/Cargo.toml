@@ -14,7 +14,9 @@ path = "src/lib.rs"
 # relay application without copying the root workspace manifest into Docker.
 axum = { version = "0.8", features = ["json", "ws"] }
 tower-http = { version = "0.6.11", features = ["cors"] }
-tokio = { version = "1.52", features = ["full"] }
+# Keep the runtime surface explicit: relay needs multi-thread RT, timers,
+# channels/semaphores, and TCP — not tokio's full feature set.
+tokio = { version = "1.52", default-features = false, features = ["rt-multi-thread", "macros", "net", "time", "sync"] }
 futures-util = "0.3.31"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
@@ -34,7 +36,7 @@ libsqlite3-sys = { version = "0.30", features = ["bundled"] }
 argon2 = "0.5"
 aes-gcm = "0.10"
 bitfun-page-function-runtime = { path = "../page-function-runtime" }
-rusqlite = { version = "0.32", features = ["bundled"] }
+rusqlite = { version = "0.32", features = ["bundled", "hooks", "limits"] }
 
 [dev-dependencies]
 tower = { version = "0.5", features = ["util"] }

@@ -5,14 +5,113 @@
 
 export const DEFAULT_POPOVER_VIEWPORT_PADDING = 8;
 
+export type FixedPopoverPlacement = 'top' | 'bottom';
+
+export interface FixedPopoverViewport {
+  width: number;
+  height: number;
+}
+
+export interface FixedPopoverPositionOptions {
+  gap?: number;
+  padding?: number;
+  preferredPlacement?: FixedPopoverPlacement;
+}
+
+interface FixedPopoverAnchorRect {
+  left: number;
+  top: number;
+  bottom: number;
+}
+
+const clamp = (value: number, min: number, max: number): number => {
+  return Math.min(Math.max(value, min), Math.max(min, max));
+};
+
+const clampFixedPopoverLeftInViewport = (
+  preferredLeft: number,
+  menuWidth: number,
+  viewportWidth: number,
+  padding: number,
+): number => {
+  return clamp(preferredLeft, padding, viewportWidth - menuWidth - padding);
+};
+
+const fixedPopoverFitsVertically = (
+  top: number,
+  menuHeight: number,
+  viewportHeight: number,
+  padding: number,
+): boolean => {
+  return top >= padding && top + menuHeight <= viewportHeight - padding;
+};
+
+const clampFixedPopoverTopInViewport = (
+  anchorRect: FixedPopoverAnchorRect,
+  menuHeight: number,
+  viewportHeight: number,
+  preferredPlacement: FixedPopoverPlacement,
+  gap: number,
+  padding: number,
+): number => {
+  const belowTop = anchorRect.bottom + gap;
+  const aboveTop = anchorRect.top - gap - menuHeight;
+  const preferredTop = preferredPlacement === 'bottom' ? belowTop : aboveTop;
+  const alternateTop = preferredPlacement === 'bottom' ? aboveTop : belowTop;
+
+  if (fixedPopoverFitsVertically(preferredTop, menuHeight, viewportHeight, padding)) {
+    return preferredTop;
+  }
+
+  if (fixedPopoverFitsVertically(alternateTop, menuHeight, viewportHeight, padding)) {
+    return alternateTop;
+  }
+
+  return clamp(preferredTop, padding, viewportHeight - padding - menuHeight);
+};
+
+export function computeFixedPopoverPositionInViewport(
+  anchorRect: FixedPopoverAnchorRect,
+  menuWidth: number,
+  menuHeight: number,
+  viewport: FixedPopoverViewport,
+  options: FixedPopoverPositionOptions = {},
+): { top: number; left: number } {
+  const {
+    gap = 6,
+    padding = DEFAULT_POPOVER_VIEWPORT_PADDING,
+    preferredPlacement = 'bottom',
+  } = options;
+
+  return {
+    top: clampFixedPopoverTopInViewport(
+      anchorRect,
+      menuHeight,
+      viewport.height,
+      preferredPlacement,
+      gap,
+      padding,
+    ),
+    left: clampFixedPopoverLeftInViewport(
+      anchorRect.left,
+      menuWidth,
+      viewport.width,
+      padding,
+    ),
+  };
+}
+
 export function clampFixedPopoverLeft(
   preferredLeft: number,
   menuWidth: number,
   padding = DEFAULT_POPOVER_VIEWPORT_PADDING,
 ): number {
-  const vw = window.innerWidth;
-  const maxLeft = vw - menuWidth - padding;
-  return Math.max(padding, Math.min(preferredLeft, maxLeft));
+  return clampFixedPopoverLeftInViewport(
+    preferredLeft,
+    menuWidth,
+    window.innerWidth,
+    padding,
+  );
 }
 
 /**
@@ -25,20 +124,14 @@ export function clampFixedPopoverTop(
   gap = 6,
   padding = DEFAULT_POPOVER_VIEWPORT_PADDING,
 ): number {
-  const vh = window.innerHeight;
-  const maxTop = vh - padding - menuHeight;
-  const top = anchorRect.bottom + gap;
-
-  if (top <= maxTop) {
-    return Math.max(padding, top);
-  }
-
-  const aboveTop = anchorRect.top - gap - menuHeight;
-  if (aboveTop >= padding) {
-    return aboveTop;
-  }
-
-  return Math.max(padding, Math.min(top, maxTop));
+  return clampFixedPopoverTopInViewport(
+    anchorRect,
+    menuHeight,
+    window.innerHeight,
+    'bottom',
+    gap,
+    padding,
+  );
 }
 
 export function computeFixedPopoverPosition(
@@ -48,8 +141,11 @@ export function computeFixedPopoverPosition(
   gap = 6,
   padding = DEFAULT_POPOVER_VIEWPORT_PADDING,
 ): { top: number; left: number } {
-  return {
-    top: clampFixedPopoverTop(anchorRect, menuHeight, gap, padding),
-    left: clampFixedPopoverLeft(anchorRect.left, menuWidth, padding),
-  };
+  return computeFixedPopoverPositionInViewport(
+    anchorRect,
+    menuWidth,
+    menuHeight,
+    { width: window.innerWidth, height: window.innerHeight },
+    { gap, padding },
+  );
 }

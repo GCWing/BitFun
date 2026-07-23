@@ -82,10 +82,17 @@ tracing-subscriber = { workspace = true }
 tempfile = "3"
 sha2 = { workspace = true }
 hex = { workspace = true }
-portable-pty = { workspace = true }
 
 [target.'cfg(windows)'.dependencies]
 windows = { workspace = true, features = ["Win32_Foundation", "Win32_System_Console"] }
+
+# portable-pty: ohos requires 0.9 (nix 0.25 is incompatible); all other
+# platforms use 0.8 to avoid the PSEUDOCONSOLE_INHERIT_CURSOR ConPTY bug.
+[target.'cfg(not(target_env = "ohos"))'.dev-dependencies]
+portable-pty = { workspace = true }
+
+[target.'cfg(target_env = "ohos")'.dev-dependencies]
+portable-pty = "0.9"
 
 [features]
 default = []

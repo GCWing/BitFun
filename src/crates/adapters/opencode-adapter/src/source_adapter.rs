@@ -4,8 +4,15 @@
 //! entries and project-local `.opencode/plugins/*.ts` source files. It does not
 //! execute JavaScript, install packages, or become the runtime host.
 
+use crate::hook_contributions::{
+    map_hook_contributions, OpenCodeHookDescriptor, OPENCODE_PLUGIN_PROVIDER_ID,
+};
 use async_trait::async_trait;
 use bitfun_plugin_runtime_host::PluginHostAdapter;
+use bitfun_product_domains::external_hook_contributions::{
+    ExternalHookContributionDeclaration, ExternalHookPoint, ExternalHookRiskCapability,
+};
+use bitfun_product_domains::external_sources::SourceKey;
 use bitfun_product_domains::plugin_source::{PluginActivationAuthority, PluginPackageInput};
 use bitfun_runtime_ports::{
     PermissionPromptDenyState, PermissionPromptDescriptor, PermissionPromptEffectKind,
@@ -21,6 +28,15 @@ use bitfun_runtime_ports::{
     PluginRuntimeReadRequest, PluginRuntimeReadResponse, PluginRuntimeUnavailableReason,
     PluginSourceKind, PluginSourceRef, PluginStatusKind, PluginStatusSnapshot, PluginTrustLevel,
     PortError, PortErrorKind, PortResult,
+};
+use oxc_parse::{
+    allocator::Allocator,
+    ast::ast::{
+        ArrowFunctionExpression, Declaration, Expression, ObjectExpression, ObjectPropertyKind,
+        Statement,
+    },
+    parser::Parser,
+    span::SourceType,
 };
 use serde::Deserialize;
 use sha2::{Digest, Sha256};
@@ -42,15 +58,30 @@ const MAX_NPM_PLUGINS: usize = 128;
 const MAX_NPM_PLUGIN_NAME_BYTES: usize = 256;
 const MAX_NPM_PLUGIN_METADATA_BYTES: usize = 16 * 1024;
 
-const UNSUPPORTED_HOOK_EVENTS: &[&str] = &[
-    "command.executed",
-    "permission.asked",
-    "permission.replied",
-    "session.compacted",
+// Frozen from the @opencode-ai/plugin Hooks interface. `tool` is handled by
+// the existing custom-tool projection and event-bus event types belong under
+// the top-level `event` Hook rather than in this property set.
+const DISCOVERABLE_HOOK_PROPERTIES: &[&str] = &[
+    "auth",
+    "chat.headers",
+    "chat.message",
+    "chat.params",
+    "command.execute.before",
+    "config",
+    "dispose",
+    "event",
+    "experimental.chat.messages.transform",
+    "experimental.chat.system.transform",
+    "experimental.compaction.autocontinue",
+    "experimental.provider.small_model",
+    "experimental.session.compacting",
+    "experimental.text.complete",
+    "permission.ask",
+    "provider",
     "shell.env",
     "tool.execute.after",
     "tool.execute.before",
-    "tui.toast.show",
+    "tool.definition",
 ];
 
 #[derive(Debug, thiserror::Error)]
@@ -1083,6 +1114,7 @@ impl OpenCodeAdapterSource {
 struct OpenCodeSourceProjection {
     config: OpenCodeConfig,
     local_plugin: OpenCodeLocalPlugin,
+    hook_contributions: Vec<ExternalHookContributionDeclaration>,
     source: PluginSourceRef,
     observed_at_ms: u64,
 }
@@ -1112,10 +1144,30 @@ impl OpenCodeSourceProjection {
                 path: Some(source.local_plugin_path.clone()),
             }),
         };
+        let source_key =
+            SourceKey::new(OPENCODE_PLUGIN_PROVIDER_ID, local_plugin.plugin_id.clone()).map_err(
+                |error| OpenCodeAdapterError::InvalidPluginSource {
+                    field: "plugin.hooks",
+                    message: format!("invalid Hook source identity: {error}"),
+                },
+            )?;
+        let descriptors = local_plugin
+            .statically_mapped_hooks
+            .iter()
+            .filter_map(|event| OpenCodeHookDescriptor::from_static_projection_event(event))
+            .collect();
+        let hook_contributions =
+            map_hook_contributions(source_key, descriptors).map_err(|error| {
+                OpenCodeAdapterError::InvalidPluginSource {
+                    field: "plugin.hooks",
+                    message: format!("Hook mapping failed: {}", error.as_str()),
+                }
+            })?;
 
         Ok(Self {
             config,
             local_plugin,
+            hook_contributions,
             source: source_ref,
             observed_at_ms: source.observed_at_ms,
         })
@@ -1260,10 +1312,22 @@ impl OpenCodeSourceProjection {
                 .map(|package| self.npm_package_diagnostic(package, source.clone())),
         );
         diagnostics.extend(
-            self.local_plugin
-                .unsupported_hooks
+            self.hook_contributions
                 .iter()
+                .map(|hook| self.mapped_hook_diagnostic(hook, source.clone())),
+        );
+        diagnostics.extend(
+            self.local_plugin
+                .discovered_hooks
+                .iter()
+                .filter(|hook| !self.local_plugin.statically_mapped_hooks.contains(hook))
                 .map(|hook| self.unsupported_hook_diagnostic(hook, source.clone())),
+        );
+        diagnostics.extend(
+            self.local_plugin
+                .hook_projection_error
+                .as_ref()
+                .map(|error| self.hook_projection_error_diagnostic(*error, source.clone())),
         );
         diagnostics
     }
@@ -1473,6 +1537,78 @@ impl OpenCodeSourceProjection {
         }
     }
 
+    fn mapped_hook_diagnostic(
+        &self,
+        hook: &ExternalHookContributionDeclaration,
+        source: PluginSourceRef,
+    ) -> PluginDiagnostic {
+        let event_name = match hook.hook_point {
+            ExternalHookPoint::ToolBefore => "tool.execute.before",
+            ExternalHookPoint::ToolAfter => "tool.execute.after",
+        };
+        let declared_risks = format_natural_list(
+            hook.safety
+                .declared_risks
+                .iter()
+                .map(|risk| match risk {
+                    ExternalHookRiskCapability::ReadToolArguments => "read tool arguments",
+                    ExternalHookRiskCapability::ModifyToolArguments => "modify tool arguments",
+                    ExternalHookRiskCapability::ReadToolResult => "read tool results",
+                    ExternalHookRiskCapability::ModifyToolResult => "modify tool results",
+                })
+                .collect(),
+        );
+        let safety_statement = if hook.safety.complete {
+            "its declared safety facts are complete"
+        } else {
+            "its safety declaration is incomplete"
+        };
+        PluginDiagnostic {
+            diagnostic_id: format!("diag:{}:hook:{}", self.source.plugin_id, hook.contribution_id),
+            severity: PluginDiagnosticSeverity::Warning,
+            source,
+            code: "opencode.hook_mapped_runtime_unavailable".to_string(),
+            message: format!(
+                "OpenCode Hook {event_name} was recognized from the plugin return object. It may {declared_risks}, but {safety_statement} and Hook execution is unavailable in this BitFun version"
+            ),
+            detail: PluginDiagnosticDetail::Adapter {
+                adapter_id: OPENCODE_ADAPTER_ID.to_string(),
+            },
+            audit: PluginAuditRef {
+                correlation_id: hook.contribution_id.to_string(),
+                event_id: None,
+            },
+            retryable: false,
+        }
+    }
+
+    fn hook_projection_error_diagnostic(
+        &self,
+        error: OpenCodeHookProjectionError,
+        source: PluginSourceRef,
+    ) -> PluginDiagnostic {
+        PluginDiagnostic {
+            diagnostic_id: format!("diag:{}:hook-projection", self.source.plugin_id),
+            severity: PluginDiagnosticSeverity::Warning,
+            source,
+            code: "opencode.hook_projection_parse_failed".to_string(),
+            message: "OpenCode Hook projection could not parse the plugin as JavaScript or TypeScript; Hook declarations are unavailable"
+                .to_string(),
+            detail: PluginDiagnosticDetail::Adapter {
+                adapter_id: OPENCODE_ADAPTER_ID.to_string(),
+            },
+            audit: PluginAuditRef {
+                correlation_id: format!(
+                    "plugin-source:{}:hook-projection:{}",
+                    self.source.plugin_id,
+                    error.as_str()
+                ),
+                event_id: None,
+            },
+            retryable: false,
+        }
+    }
+
     fn unsupported_hook_dispatch_diagnostic(
         &self,
         envelope: &PluginDispatchEnvelope,
@@ -1643,7 +1779,22 @@ struct OpenCodeLocalPlugin {
     plugin_id: String,
     export_name: String,
     custom_tools: Vec<OpenCodeCustomTool>,
-    unsupported_hooks: Vec<String>,
+    discovered_hooks: Vec<String>,
+    statically_mapped_hooks: Vec<String>,
+    hook_projection_error: Option<OpenCodeHookProjectionError>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum OpenCodeHookProjectionError {
+    ParseFailed,
+}
+
+impl OpenCodeHookProjectionError {
+    fn as_str(self) -> &'static str {
+        match self {
+            Self::ParseFailed => "parse_failed",
+        }
+    }
 }
 
 impl OpenCodeLocalPlugin {
@@ -1655,8 +1806,18 @@ impl OpenCodeLocalPlugin {
                 message: "expected an exported OpenCode plugin function".to_string(),
             })?;
         let custom_tools = discover_custom_tools(&source)?;
-        let unsupported_hooks = discover_unsupported_hooks(&source);
-        if custom_tools.is_empty() && unsupported_hooks.is_empty() {
+        let (discovered_hooks, hook_projection_error) =
+            match discover_exported_hooks(&source, path, &export_name) {
+                Ok(hooks) => (hooks, None),
+                Err(error) => (Vec::new(), Some(error)),
+            };
+        let statically_mapped_hooks = discovered_hooks
+            .iter()
+            .filter(|event| OpenCodeHookDescriptor::from_static_projection_event(event).is_some())
+            .cloned()
+            .collect();
+        if custom_tools.is_empty() && discovered_hooks.is_empty() && hook_projection_error.is_none()
+        {
             return Err(OpenCodeAdapterError::InvalidPluginSource {
                 field: "plugin.contributions",
                 message: "expected a custom tool or hook contribution".to_string(),
@@ -1667,7 +1828,9 @@ impl OpenCodeLocalPlugin {
             plugin_id: local_plugin_id(path),
             export_name,
             custom_tools,
-            unsupported_hooks,
+            discovered_hooks,
+            statically_mapped_hooks,
+            hook_projection_error,
         })
     }
 }
@@ -1828,25 +1991,98 @@ fn strip_js_comments(source: &str) -> Result<String, OpenCodeAdapterError> {
     Ok(output)
 }
 
-fn discover_unsupported_hooks(source: &str) -> Vec<String> {
-    let mut hooks = UNSUPPORTED_HOOK_EVENTS
-        .iter()
-        .filter(|event| {
-            source.contains(&format!("\"{event}\"")) || source.contains(&format!("'{event}'"))
-        })
-        .map(|event| (*event).to_string())
-        .collect::<Vec<_>>();
-    if has_event_hook(source) && !hooks.iter().any(|hook| hook == "event") {
-        hooks.push("event".to_string());
+fn discover_exported_hooks(
+    source: &str,
+    path: &str,
+    export_name: &str,
+) -> Result<Vec<String>, OpenCodeHookProjectionError> {
+    let allocator = Allocator::default();
+    let source_type = SourceType::from_path(Path::new(path)).unwrap_or(SourceType::ts());
+    let parsed = Parser::new(&allocator, source, source_type).parse();
+    if !parsed.diagnostics.is_empty() {
+        return Err(OpenCodeHookProjectionError::ParseFailed);
     }
-    hooks
+
+    Ok(parsed
+        .program
+        .body
+        .iter()
+        .find_map(|statement| exported_hook_object(statement, export_name))
+        .map(|object| {
+            let mut seen = HashSet::new();
+            object
+                .properties
+                .iter()
+                .filter_map(|property| match property {
+                    ObjectPropertyKind::ObjectProperty(property) => property.key.static_name(),
+                    ObjectPropertyKind::SpreadProperty(_) => None,
+                })
+                .filter(|name| DISCOVERABLE_HOOK_PROPERTIES.contains(&name.as_ref()))
+                .filter(|name| seen.insert(name.to_string()))
+                .map(|name| name.into_owned())
+                .collect()
+        })
+        .unwrap_or_default())
 }
 
-fn has_event_hook(source: &str) -> bool {
-    source.lines().any(|line| {
-        let line = line.trim_start();
-        line.starts_with("event:") || line.contains(" event:")
-    })
+fn exported_hook_object<'a>(
+    statement: &'a Statement<'a>,
+    export_name: &str,
+) -> Option<&'a ObjectExpression<'a>> {
+    let Statement::ExportNamedDeclaration(export) = statement else {
+        return None;
+    };
+    let Some(Declaration::VariableDeclaration(declaration)) = &export.declaration else {
+        return None;
+    };
+    let declarator = declaration
+        .declarations
+        .iter()
+        .find(|declarator| declarator.id.get_identifier_name().as_deref() == Some(export_name))?;
+    let Expression::ArrowFunctionExpression(arrow) =
+        declarator.init.as_ref()?.get_inner_expression()
+    else {
+        return None;
+    };
+    arrow_return_object(arrow)
+}
+
+fn arrow_return_object<'a>(
+    arrow: &'a ArrowFunctionExpression<'a>,
+) -> Option<&'a ObjectExpression<'a>> {
+    let expression = if arrow.expression {
+        let Statement::ExpressionStatement(statement) = arrow.body.statements.first()? else {
+            return None;
+        };
+        &statement.expression
+    } else {
+        let return_statement =
+            arrow
+                .body
+                .statements
+                .iter()
+                .find_map(|statement| match statement {
+                    Statement::ReturnStatement(statement) => Some(statement),
+                    _ => None,
+                })?;
+        return_statement.argument.as_ref()?
+    };
+    match expression.get_inner_expression() {
+        Expression::ObjectExpression(object) => Some(object),
+        _ => None,
+    }
+}
+
+fn format_natural_list(items: Vec<&str>) -> String {
+    match items.as_slice() {
+        [] => "use no declared data".to_string(),
+        [item] => (*item).to_string(),
+        [first, second] => format!("{first} and {second}"),
+        _ => {
+            let (last, preceding) = items.split_last().expect("non-empty risk list");
+            format!("{}, and {last}", preceding.join(", "))
+        }
+    }
 }
 
 fn is_identifier(value: &str) -> bool {
@@ -2134,7 +2370,7 @@ export const DemoPlugin = async () => ({
         assert_eq!(adapter.local_plugin.export_name, "WorkspaceToolsPlugin");
         assert_eq!(adapter.local_plugin.custom_tools[0].id, "workspaceSummary");
         assert_eq!(
-            adapter.local_plugin.unsupported_hooks,
+            adapter.local_plugin.discovered_hooks,
             ["tool.execute.before"]
         );
 
@@ -2177,10 +2413,10 @@ export const DemoPlugin = async () => ({
             .diagnostics
             .iter()
             .any(|diagnostic| diagnostic.code == "opencode.npm_plugin_projection_only"));
-        assert!(response
-            .diagnostics
-            .iter()
-            .any(|diagnostic| diagnostic.code == "opencode.hook_projection_only"));
+        assert!(response.diagnostics.iter().any(|diagnostic| {
+            diagnostic.code == "opencode.hook_mapped_runtime_unavailable"
+                && diagnostic.message.contains("tool.execute.before")
+        }));
     }
 
     #[test]

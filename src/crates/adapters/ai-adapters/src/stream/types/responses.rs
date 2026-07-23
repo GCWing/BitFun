@@ -95,6 +95,7 @@ pub fn parse_responses_output_item(
                 arguments_is_snapshot: false,
             }),
             usage: None,
+            tool_call_completion: None,
             finish_reason: None,
             provider_metadata: None,
         }),
@@ -119,6 +120,7 @@ pub fn parse_responses_output_item(
                 thinking_signature: None,
                 tool_call: None,
                 usage: None,
+                tool_call_completion: None,
                 finish_reason: None,
                 provider_metadata: None,
             })

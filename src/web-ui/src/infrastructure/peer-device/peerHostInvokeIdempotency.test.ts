@@ -1,0 +1,103 @@
+import { describe, expect, it, vi } from 'vitest';
+import {
+  PeerHostInvokeIdempotencyCache,
+  peerHostInvokeIdempotencyKey,
+  type PeerHostInvokeExecutionResult,
+} from './peerHostInvokeIdempotency';
+
+function startTurnArgs(sessionId = 'session-1', turnId = 'turn-1') {
+  return {
+    request: {
+      sessionId,
+      turnId,
+      userInput: 'hello',
+    },
+  };
+}
+
+function successResult(): PeerHostInvokeExecutionResult {
+  return {
+    ok: true,
+    value: { success: true },
+    error: null,
+  };
+}
+
+describe('PeerHostInvokeIdempotencyCache', () => {
+  it('keys only dialog submissions with stable session and turn ids', () => {
+    expect(peerHostInvokeIdempotencyKey(
+      'start_dialog_turn',
+      startTurnArgs(),
+    )).toBe('start_dialog_turn:session-1:turn-1');
+    expect(peerHostInvokeIdempotencyKey(
+      'start_acp_dialog_turn',
+      startTurnArgs(),
+    )).toBe('start_acp_dialog_turn:session-1:turn-1');
+    expect(peerHostInvokeIdempotencyKey(
+      'start_dialog_turn',
+      { request: { sessionId: 'session-1' } },
+    )).toBeNull();
+    expect(peerHostInvokeIdempotencyKey(
+      'delete_session',
+      startTurnArgs(),
+    )).toBeNull();
+  });
+
+  it('coalesces concurrent retries and reuses the completed result', async () => {
+    let resolveExecution!: (result: PeerHostInvokeExecutionResult) => void;
+    const execution = new Promise<PeerHostInvokeExecutionResult>((resolve) => {
+      resolveExecution = resolve;
+    });
+    const operation = vi.fn(() => execution);
+    const duplicateOperation = vi.fn(async () => ({
+      ok: false,
+      value: null,
+      error: 'must not execute',
+    }));
+    const cache = new PeerHostInvokeIdempotencyCache();
+
+    const first = cache.execute('start_dialog_turn', startTurnArgs(), operation);
+    const concurrent = cache.execute(
+      'start_dialog_turn',
+      startTurnArgs(),
+      duplicateOperation,
+    );
+    expect(first).toBe(concurrent);
+    await Promise.resolve();
+    expect(operation).toHaveBeenCalledTimes(1);
+    expect(duplicateOperation).not.toHaveBeenCalled();
+
+    const result = successResult();
+    resolveExecution(result);
+    await expect(first).resolves.toEqual(result);
+    await expect(cache.execute(
+      'start_dialog_turn',
+      startTurnArgs(),
+      duplicateOperation,
+    )).resolves.toEqual(result);
+    expect(duplicateOperation).not.toHaveBeenCalled();
+  });
+
+  it('executes a new submission after the cache window expires', async () => {
+    let now = 100;
+    const cache = new PeerHostInvokeIdempotencyCache(1_000, 128, () => now);
+    const firstOperation = vi.fn(async () => successResult());
+    const secondResult: PeerHostInvokeExecutionResult = {
+      ok: false,
+      value: null,
+      error: 'new execution',
+    };
+    const secondOperation = vi.fn(async () => secondResult);
+
+    await cache.execute('start_dialog_turn', startTurnArgs(), firstOperation);
+    now += 1_001;
+
+    await expect(cache.execute(
+      'start_dialog_turn',
+      startTurnArgs(),
+      secondOperation,
+    )).resolves.toEqual(secondResult);
+    expect(firstOperation).toHaveBeenCalledTimes(1);
+    expect(secondOperation).toHaveBeenCalledTimes(1);
+  });
+});

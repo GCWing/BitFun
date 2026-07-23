@@ -1,4 +1,5 @@
 use std::path::PathBuf;
+use std::{collections::BTreeSet, path::Path};
 
 use crate::diagnostics::ExitKind;
 
@@ -7,11 +8,35 @@ use super::lifecycle::{ExecMode, ExecOutputFormat, ExecPatchOutput};
 impl ExecMode {
     fn get_git_diff(&self) -> Option<String> {
         let workspace = self.workspace_path.as_ref()?;
-        Self::get_git_diff_for_workspace(workspace, self.output_patch.as_deref())
+        Self::get_git_diff_from_baseline(
+            workspace,
+            self.initial_diff_base.as_deref(),
+            &self.initial_untracked_files,
+            self.output_patch.as_deref(),
+        )
     }
 
+    #[cfg(test)]
     pub(super) fn get_git_diff_for_workspace(
         workspace: &std::path::Path,
+        output_target: Option<&str>,
+    ) -> Option<String> {
+        let diff_base = git_diff_base(workspace);
+        // This helper is also used after fixture changes in unit tests, where
+        // existing untracked files are intentionally part of the requested
+        // snapshot. Runtime callers use the execution-start snapshot above.
+        Self::get_git_diff_from_baseline(
+            workspace,
+            diff_base.as_deref(),
+            &BTreeSet::new(),
+            output_target,
+        )
+    }
+
+    pub(super) fn get_git_diff_from_baseline(
+        workspace: &Path,
+        diff_base: Option<&str>,
+        initial_untracked_files: &BTreeSet<String>,
         output_target: Option<&str>,
     ) -> Option<String> {
         let repo_root_output = bitfun_core::util::process_manager::create_command("git")
@@ -40,9 +65,10 @@ impl ExecMode {
                     .then(|| relative.to_string_lossy().replace('\\', "/"))
             });
 
+        let diff_base = diff_base?;
         let mut tracked_command = bitfun_core::util::process_manager::create_command("git");
         tracked_command
-            .args(["diff", "--binary", "--no-color", "HEAD", "--", "."])
+            .args(["diff", "--binary", "--no-color", diff_base, "--", "."])
             .current_dir(&repo_root);
         if let Some(relative_path) = excluded_output.as_ref() {
             tracked_command.arg(format!(":(exclude,top,literal){relative_path}"));
@@ -69,6 +95,9 @@ impl ExecMode {
                 continue;
             }
             let relative_path = String::from_utf8_lossy(relative_path).to_string();
+            if initial_untracked_files.contains(&relative_path) {
+                continue;
+            }
             if excluded_output.as_deref() == Some(relative_path.as_str()) {
                 continue;
             }
@@ -191,6 +220,74 @@ impl ExecMode {
             None,
         )
     }
+}
+
+pub(super) fn capture_change_baseline(workspace: &Path) -> (Option<String>, BTreeSet<String>) {
+    let root = repository_root(workspace).unwrap_or_else(|| workspace.to_path_buf());
+    (git_diff_base(&root), untracked_files(&root))
+}
+
+pub(super) fn repository_root(workspace: &Path) -> Option<PathBuf> {
+    let output = bitfun_core::util::process_manager::create_command("git")
+        .args(["rev-parse", "--show-toplevel"])
+        .current_dir(workspace)
+        .output()
+        .ok()?;
+    if !output.status.success() {
+        return None;
+    }
+    let root = String::from_utf8_lossy(&output.stdout).trim().to_string();
+    (!root.is_empty()).then(|| PathBuf::from(root))
+}
+
+pub(super) fn git_diff_base(workspace: &Path) -> Option<String> {
+    let head = bitfun_core::util::process_manager::create_command("git")
+        .args(["rev-parse", "--verify", "HEAD"])
+        .current_dir(workspace)
+        .output()
+        .ok();
+    if let Some(output) = head.filter(|output| output.status.success()) {
+        let head = String::from_utf8_lossy(&output.stdout).trim().to_string();
+        if !head.is_empty() {
+            return Some(head);
+        }
+    }
+
+    // Repositories without an initial commit still need a stable base if the
+    // agent creates its first commit.
+    let empty_tree = bitfun_core::util::process_manager::create_command("git")
+        .args(["hash-object", "-t", "tree", "--stdin"])
+        .current_dir(workspace)
+        .output()
+        .ok()?;
+    if !empty_tree.status.success() {
+        return None;
+    }
+    let oid = String::from_utf8_lossy(&empty_tree.stdout)
+        .trim()
+        .to_string();
+    (!oid.is_empty()).then_some(oid)
+}
+
+pub(super) fn untracked_files(workspace: &Path) -> BTreeSet<String> {
+    let output = bitfun_core::util::process_manager::create_command("git")
+        .args(["ls-files", "--others", "--exclude-standard", "-z"])
+        .current_dir(workspace)
+        .output();
+    match output {
+        Ok(output) if output.status.success() => {
+            nul_separated_paths(&output.stdout).into_iter().collect()
+        }
+        _ => BTreeSet::new(),
+    }
+}
+
+pub(super) fn nul_separated_paths(output: &[u8]) -> Vec<String> {
+    output
+        .split(|byte| *byte == 0)
+        .filter(|path| !path.is_empty())
+        .map(|path| String::from_utf8_lossy(path).to_string())
+        .collect()
 }
 
 pub(super) fn write_patch_to_path(output_target: &str, patch: &str) -> std::io::Result<()> {

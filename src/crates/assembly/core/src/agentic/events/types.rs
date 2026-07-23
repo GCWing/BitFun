@@ -10,7 +10,8 @@ pub use bitfun_events::agentic::ErrorCategory;
 pub use bitfun_events::{
     AgenticEvent as BaseAgenticEvent, AgenticEventEnvelope as EventEnvelope,
     AgenticEventPriority as EventPriority, DeepReviewQueueReason, DeepReviewQueueState,
-    DeepReviewQueueStatus, SubagentParentInfo, ToolEventData,
+    DeepReviewQueueStatus, ModelRoundAttemptDiagnostic, ModelRoundAttemptToolDiagnostic,
+    SubagentParentInfo, ToolEventData,
 };
 
 // ============ Core layer AgenticEvent extension ============

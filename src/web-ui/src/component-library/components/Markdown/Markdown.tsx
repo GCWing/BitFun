@@ -20,6 +20,7 @@ import { getPrismLanguageFromAlias } from '@/infrastructure/language-detection';
 import { useTheme } from '@/infrastructure/theme';
 import { contextMenuController } from '@/shared/context-menu-system/core/ContextMenuController';
 import { ContextType, type CustomContext, type MenuItem } from '@/shared/context-menu-system/types';
+import { createTab } from '@/shared/utils/tabUtils';
 import { createLogger } from '@/shared/utils/logger';
 import {
   isStartupRenderTraceEnabled,
@@ -979,19 +980,17 @@ export const Markdown = React.memo<MarkdownProps>(({
       return;
     }
 
-    window.dispatchEvent(new CustomEvent('agent-create-tab', {
-      detail: {
-        type: 'browser',
-        title: translateMarkdownLabel('markdown.openInBuiltInBrowser'),
-        data: { url },
-        metadata: {
-          duplicateCheckKey: `browser-panel:${url}`,
-        },
-        checkDuplicate: true,
-        duplicateCheckKey: `browser-panel:${url}`,
-        replaceExisting: false,
-      },
-    }));
+    const duplicateCheckKey = `browser-panel:${url}`;
+    createTab({
+      type: 'browser',
+      title: translateMarkdownLabel('markdown.openInBuiltInBrowser'),
+      data: { url },
+      metadata: { duplicateCheckKey },
+      checkDuplicate: true,
+      duplicateCheckKey,
+      replaceExisting: false,
+      mode: 'agent',
+    });
   }, []);
 
   const handleLocalFileContextMenu = useCallback((
@@ -1022,7 +1021,18 @@ export const Markdown = React.memo<MarkdownProps>(({
 
   const handleWebLinkContextMenu = useCallback((event: React.MouseEvent<HTMLElement>, url: string) => {
     const targetElement = event.currentTarget;
-    const items: MenuItem[] = [
+    const items: MenuItem[] = [];
+
+    if (canOpenInBuiltInBrowser(targetElement)) {
+      items.push({
+        id: 'markdown-open-in-built-in-browser',
+        label: translateMarkdownLabel('markdown.openInBuiltInBrowser'),
+        icon: 'PanelRightOpen',
+        onClick: () => handleOpenBuiltInBrowserLink(url),
+      });
+    }
+
+    items.push(
       {
         id: 'markdown-open-in-browser',
         label: translateMarkdownLabel('markdown.openInBrowser'),
@@ -1035,16 +1045,7 @@ export const Markdown = React.memo<MarkdownProps>(({
         icon: 'Copy',
         onClick: () => void handleCopyLink(url),
       },
-    ];
-
-    if (canOpenInBuiltInBrowser(targetElement)) {
-      items.splice(1, 0, {
-        id: 'markdown-open-in-built-in-browser',
-        label: translateMarkdownLabel('markdown.openInBuiltInBrowser'),
-        icon: 'PanelRightOpen',
-        onClick: () => handleOpenBuiltInBrowserLink(url),
-      });
-    }
+    );
 
     showLinkContextMenu(event, items, 'markdown-web-link', { url });
   }, [
@@ -1291,6 +1292,11 @@ export const Markdown = React.memo<MarkdownProps>(({
               if (onHttpLinkClick?.(hrefValue, e)) {
                 return;
               }
+              const hasExternalOpenModifier = e.metaKey || e.ctrlKey || e.shiftKey || e.altKey;
+              if (canOpenInBuiltInBrowser(e.currentTarget) && !hasExternalOpenModifier) {
+                handleOpenBuiltInBrowserLink(hrefValue);
+                return;
+              }
               try {
                 await systemAPI.openExternal(hrefValue);
               } catch (error) {
@@ -1388,6 +1394,8 @@ export const Markdown = React.memo<MarkdownProps>(({
     handleRevealInExplorer,
     handleLocalFileContextMenu,
     handleWebLinkContextMenu,
+    canOpenInBuiltInBrowser,
+    handleOpenBuiltInBrowserLink,
     handleOpenVisualization,
     handleTabOpen,
     onHttpLinkClick,

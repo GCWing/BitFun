@@ -17,11 +17,12 @@ pub use config::{
     RemoteAcpClientRequirementSnapshot,
 };
 pub use manager::{
-    AcpClientPermissionResponse, AcpClientService, CreateAcpFlowSessionRecordResponse,
+    AcpClientPermissionResponse, AcpClientService, AcpSessionConfigValue,
+    CreateAcpFlowSessionRecordResponse, SetAcpSessionConfigOptionRequest,
     SetAcpSessionModelRequest, SubmitAcpPermissionResponseRequest,
 };
 pub use session_options::{
-    AcpAvailableCommand, AcpPlanEntry, AcpSessionContextUsage, AcpSessionModelOption,
-    AcpSessionOptions,
+    AcpAvailableCommand, AcpPlanEntry, AcpSessionConfigKind, AcpSessionConfigOption,
+    AcpSessionConfigSelectOption, AcpSessionContextUsage, AcpSessionModelOption, AcpSessionOptions,
 };
 pub use stream::AcpClientStreamEvent;

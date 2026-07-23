@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { flowChatStore } from './FlowChatStore';
+import { flowChatStore, mergeModelRoundAttemptDiagnostics } from './FlowChatStore';
 import type { FlowChatState, Session } from '../types/flow-chat';
 import { startupTrace } from '@/shared/utils/startupTrace';
 import { projectEffectiveToolItem } from '../utils/toolInvocationIdentity';
@@ -40,6 +40,7 @@ const stateMachineManagerMock = vi.hoisted(() => ({
   delete: vi.fn(),
   getOrCreate: vi.fn(),
   reset: vi.fn(),
+  transition: vi.fn(async () => true),
 }));
 
 vi.mock('@/infrastructure/api', () => ({
@@ -87,6 +88,9 @@ vi.mock('@/infrastructure/config/services/ConfigManager', () => ({
 
 vi.mock('../state-machine', () => ({
   stateMachineManager: stateMachineManagerMock,
+  SessionExecutionEvent: {
+    START: 'start',
+  },
 }));
 
 const resetStore = () => {
@@ -452,6 +456,71 @@ describe('FlowChatStore round attempts', () => {
     });
   });
 
+  it('immediately supersedes active items when retry diagnostics arrive before next attempt output', () => {
+    const session = createSession({
+      dialogTurns: [{
+        id: 'turn-1',
+        sessionId: 'session-1',
+        userMessage: {
+          id: 'user-1',
+          content: 'hello',
+          timestamp: 1000,
+        },
+        modelRounds: [{
+          id: 'round-1',
+          index: 0,
+          items: [{
+            id: 'tool-1',
+            type: 'tool',
+            toolName: 'FakeTool',
+            timestamp: 1100,
+            status: 'preparing',
+            attemptId: 'round-1:attempt:1',
+            attemptIndex: 1,
+            toolCall: {
+              id: 'tool-1',
+              input: {},
+            },
+            isParamsStreaming: true,
+            startTime: 1100,
+          }],
+          isStreaming: true,
+          isComplete: false,
+          status: 'streaming',
+          startTime: 1000,
+        }],
+        status: 'processing',
+        startTime: 1000,
+      }],
+    });
+
+    flowChatStore.setState(() => ({
+      sessions: new Map([[session.sessionId, session]]),
+      activeSessionId: session.sessionId,
+    }));
+
+    flowChatStore.updateModelRound(session.sessionId, 'turn-1', 'round-1', round =>
+      mergeModelRoundAttemptDiagnostics(round, [{
+        attemptId: 'round-1:attempt:1',
+        attemptIndex: 1,
+        category: 'invalid_tool_arguments',
+      }], { supersedeMatchingAttempts: true }),
+    );
+
+    const round = flowChatStore.getState().sessions.get(session.sessionId)?.dialogTurns[0]?.modelRounds[0];
+    expect(round).toMatchObject({ status: 'streaming', isStreaming: true });
+    expect(round?.attempts?.[0]).toMatchObject({
+      status: 'superseded',
+      diagnostic: { category: 'invalid_tool_arguments' },
+    });
+    expect(round?.attempts?.[0]?.items[0]).toMatchObject({
+      type: 'tool',
+      status: 'cancelled',
+      isParamsStreaming: false,
+      interruptionReason: 'retry_superseded',
+    });
+  });
+
   it('preserves retry superseded interruption details when restoring persisted turns', () => {
     const restoredTurn = (flowChatStore as any).convertToDialogTurns([{
       turnId: 'turn-1',
@@ -485,6 +554,17 @@ describe('FlowChatStore round attempts', () => {
           attemptId: 'round-1:attempt:1',
           attemptIndex: 1,
         }],
+        attemptDiagnostics: [{
+          attemptId: 'round-1:attempt:1',
+          attemptIndex: 1,
+          category: 'invalid_tool_arguments',
+          toolCalls: [{
+            toolId: 'ask-1',
+            toolName: 'AskUserQuestion',
+            rawArguments: '{"questions":',
+            validationError: 'EOF while parsing an object',
+          }],
+        }],
       }],
       status: 'completed',
       timestamp: 1000,
@@ -499,6 +579,116 @@ describe('FlowChatStore round attempts', () => {
       attemptId: 'round-1:attempt:1',
       attemptIndex: 1,
     });
+    expect(restoredRound.attempts?.[0]?.diagnostic?.toolCalls?.[0]).toMatchObject({
+      rawArguments: '{"questions":',
+      validationError: 'EOF while parsing an object',
+    });
+  });
+
+  it('adds a diagnostic-only retry attempt to the collapsed history', () => {
+    const round = mergeModelRoundAttemptDiagnostics({
+      id: 'round-1',
+      index: 0,
+      items: [],
+      isStreaming: false,
+      isComplete: true,
+      status: 'completed',
+      startTime: 1000,
+    }, [{
+      attemptId: 'round-1:attempt:1',
+      attemptIndex: 1,
+      category: 'invalid_tool_arguments',
+      toolCalls: [],
+    }]);
+
+    expect(round.attempts).toEqual([expect.objectContaining({
+      id: 'round-1:attempt:1',
+      index: 1,
+      status: 'superseded',
+      items: [],
+      diagnostic: expect.objectContaining({ category: 'invalid_tool_arguments' }),
+    })]);
+  });
+
+  it('attaches a diagnostic to the matching existing retry attempt', () => {
+    const round = mergeModelRoundAttemptDiagnostics({
+      id: 'round-1',
+      index: 0,
+      items: [],
+      isStreaming: false,
+      isComplete: true,
+      status: 'completed',
+      startTime: 1000,
+      attempts: [{
+        id: 'round-1:attempt:1',
+        index: 1,
+        status: 'superseded',
+        items: [],
+      }],
+    }, [{
+      attemptId: 'round-1:attempt:1',
+      attemptIndex: 1,
+      category: 'transient_request_error',
+      rawError: 'provider connection reset',
+    }]);
+
+    expect(round.attempts).toHaveLength(1);
+    expect(round.attempts?.[0]?.diagnostic).toMatchObject({
+      category: 'transient_request_error',
+      rawError: 'provider connection reset',
+    });
+  });
+
+  it('accumulates diagnostics emitted one retry attempt at a time', () => {
+    const afterFirstDiagnostic = mergeModelRoundAttemptDiagnostics({
+      id: 'round-1',
+      index: 0,
+      items: [],
+      isStreaming: true,
+      isComplete: false,
+      status: 'streaming',
+      startTime: 1000,
+    }, [{
+      attemptId: 'round-1:attempt:1',
+      attemptIndex: 1,
+      category: 'invalid_tool_arguments',
+    }]);
+
+    const afterSecondDiagnostic = mergeModelRoundAttemptDiagnostics(afterFirstDiagnostic, [{
+      attemptId: 'round-1:attempt:2',
+      attemptIndex: 2,
+      category: 'transient_stream_error',
+      rawError: 'connection reset',
+    }]);
+
+    expect(afterSecondDiagnostic.attemptDiagnostics?.map(diagnostic => diagnostic.attemptIndex)).toEqual([1, 2]);
+    expect(afterSecondDiagnostic.attempts?.map(attempt => attempt.diagnostic?.category)).toEqual([
+      'invalid_tool_arguments',
+      'transient_stream_error',
+    ]);
+  });
+
+  it('sorts retry diagnostics and the corresponding attempts by attempt index', () => {
+    const round = mergeModelRoundAttemptDiagnostics({
+      id: 'round-1',
+      index: 0,
+      items: [],
+      isStreaming: false,
+      isComplete: true,
+      status: 'completed',
+      startTime: 1000,
+    }, [{
+      attemptId: 'round-1:attempt:2',
+      attemptIndex: 2,
+      category: 'transient_stream_error',
+    }, {
+      attemptId: 'round-1:attempt:1',
+      attemptIndex: 1,
+      category: 'invalid_tool_arguments',
+    }]);
+
+    expect(round.attemptDiagnostics?.map(diagnostic => diagnostic.attemptIndex)).toEqual([1, 2]);
+    expect(round.attempts?.map(attempt => attempt.index)).toEqual([1, 2]);
   });
 
   it('restores a persisted deferred call as its canonical wire invocation', () => {
@@ -843,6 +1033,419 @@ describe('FlowChatStore historical session hydration state', () => {
     expect(apiMocks.accountFetchSessionTurns).not.toHaveBeenCalled();
     expect(apiMocks.restoreSessionView).toHaveBeenCalled();
     expect(flowChatStore.getState().sessions.get('history-1')?.historyState).not.toBe('failed');
+  });
+
+  it('keeps an in-memory Peer Host turn live when opening mid-execution', async () => {
+    peerModeFlagMock.active = true;
+    apiMocks.restoreSessionView.mockResolvedValueOnce({
+      session: {
+        sessionId: 'history-1',
+        sessionName: 'History 1',
+        agentType: 'agentic',
+        state: 'Processing { current_turn_id: "turn-live", phase: Streaming }',
+        turnCount: 1,
+        createdAt: 1,
+      },
+      turns: [{
+        turnId: 'turn-live',
+        turnIndex: 0,
+        sessionId: 'history-1',
+        timestamp: 1,
+        userMessage: { id: 'user-live', content: 'keep going', timestamp: 1 },
+        modelRounds: [{
+          id: 'round-live',
+          turnId: 'turn-live',
+          roundIndex: 0,
+          timestamp: 1,
+          textItems: [{
+            id: 'text-live',
+            content: 'partial',
+            isStreaming: true,
+            timestamp: 2,
+            status: 'streaming',
+          }],
+          toolItems: [],
+          thinkingItems: [],
+          startTime: 1,
+          status: 'streaming',
+        }],
+        startTime: 1,
+        status: 'inprogress',
+      }],
+      contextRestoreState: 'pending',
+    });
+    flowChatStore.setState(() => ({
+      sessions: new Map([
+        ['history-1', createSession({
+          sessionId: 'history-1',
+          isHistorical: true,
+          historyState: 'metadata-only',
+        })],
+      ]),
+      activeSessionId: 'history-1',
+    }));
+
+    await flowChatStore.loadSessionHistory('history-1', '/Users/host/project');
+
+    const turn = flowChatStore.getState().sessions.get('history-1')?.dialogTurns[0];
+    expect(turn).toMatchObject({
+      id: 'turn-live',
+      status: 'processing',
+      modelRounds: [{
+        id: 'round-live',
+        status: 'streaming',
+        isStreaming: true,
+        items: [{
+          id: 'text-live',
+          status: 'streaming',
+          isStreaming: true,
+          content: 'partial',
+        }],
+      }],
+    });
+    expect(stateMachineManagerMock.reset).toHaveBeenCalledWith('history-1');
+    expect(stateMachineManagerMock.transition).toHaveBeenCalledWith(
+      'history-1',
+      'start',
+      {
+        taskId: 'history-1',
+        dialogTurnId: 'turn-live',
+      },
+    );
+  });
+
+  it('reconciles a newly persisted active Peer turn without replacing older history', async () => {
+    peerModeFlagMock.active = true;
+    apiMocks.restoreSessionView.mockResolvedValueOnce({
+      session: {
+        sessionId: 'history-1',
+        sessionName: 'History 1',
+        agentType: 'agentic',
+        state: 'Processing { current_turn_id: "turn-live", phase: Streaming }',
+        turnCount: 2,
+        createdAt: 1,
+      },
+      turns: [{
+        turnId: 'turn-live',
+        turnIndex: 1,
+        sessionId: 'history-1',
+        timestamp: 2,
+        userMessage: { id: 'user-live', content: 'new prompt', timestamp: 2 },
+        modelRounds: [],
+        startTime: 2,
+        status: 'inprogress',
+      }],
+      contextRestoreState: 'pending',
+      isPartial: true,
+      loadedTurnCount: 1,
+      totalTurnCount: 2,
+    });
+    const oldTurn = {
+      id: 'turn-old',
+      sessionId: 'history-1',
+      userMessage: { id: 'user-old', content: 'old prompt', timestamp: 1 },
+      modelRounds: [],
+      status: 'completed' as const,
+      startTime: 1,
+      backendTurnIndex: 0,
+    };
+    flowChatStore.setState(() => ({
+      sessions: new Map([
+        ['history-1', createSession({
+          sessionId: 'history-1',
+          historyState: 'ready',
+          dialogTurns: [oldTurn],
+        })],
+      ]),
+      activeSessionId: 'history-1',
+    }));
+
+    const result = await flowChatStore.refreshPeerSessionSnapshot(
+      'history-1',
+      '/Users/host/project',
+      { replaceRunningSnapshot: false },
+    );
+
+    expect(result).toMatchObject({
+      applied: true,
+      latestTurnId: 'turn-live',
+      latestTurnStatus: 'processing',
+    });
+    expect(
+      flowChatStore.getState().sessions.get('history-1')?.dialogTurns.map(turn => turn.id),
+    ).toEqual(['turn-old', 'turn-live']);
+  });
+
+  it('advances a running Peer turn from a newer persisted checkpoint', async () => {
+    peerModeFlagMock.active = true;
+    apiMocks.restoreSessionView.mockResolvedValueOnce({
+      session: {
+        sessionId: 'history-1',
+        sessionName: 'History 1',
+        agentType: 'agentic',
+        state: 'Processing { current_turn_id: "turn-live", phase: Streaming }',
+        turnCount: 1,
+        createdAt: 1,
+      },
+      turns: [{
+        turnId: 'turn-live',
+        turnIndex: 0,
+        sessionId: 'history-1',
+        timestamp: 1,
+        userMessage: { id: 'user-live', content: 'continue', timestamp: 1 },
+        modelRounds: [{
+          id: 'round-live',
+          turnId: 'turn-live',
+          roundIndex: 0,
+          timestamp: 1,
+          textItems: [{
+            id: 'host-text-id',
+            content: 'partial answer plus checkpoint',
+            isStreaming: true,
+            timestamp: 3,
+            status: 'streaming',
+          }],
+          toolItems: [],
+          thinkingItems: [],
+          startTime: 1,
+          status: 'streaming',
+        }],
+        startTime: 1,
+        status: 'inprogress',
+      }],
+      contextRestoreState: 'pending',
+      isPartial: false,
+      loadedTurnCount: 1,
+      totalTurnCount: 1,
+    });
+    const localTurn = {
+      id: 'turn-live',
+      sessionId: 'history-1',
+      userMessage: { id: 'user-live', content: 'continue', timestamp: 1 },
+      modelRounds: [{
+        id: 'round-live',
+        index: 0,
+        items: [{
+          id: 'controller-text-id',
+          type: 'text' as const,
+          content: 'partial answer',
+          isStreaming: true,
+          isMarkdown: true,
+          timestamp: 2,
+          status: 'streaming' as const,
+        }],
+        isStreaming: true,
+        isComplete: false,
+        status: 'streaming' as const,
+        startTime: 1,
+      }],
+      status: 'processing' as const,
+      startTime: 1,
+      backendTurnIndex: 0,
+    };
+    flowChatStore.setState(() => ({
+      sessions: new Map([
+        ['history-1', createSession({
+          sessionId: 'history-1',
+          historyState: 'ready',
+          dialogTurns: [localTurn],
+        })],
+      ]),
+      activeSessionId: 'history-1',
+    }));
+
+    const result = await flowChatStore.refreshPeerSessionSnapshot(
+      'history-1',
+      '/Users/host/project',
+      { replaceRunningSnapshot: false },
+    );
+
+    expect(result.applied).toBe(true);
+    expect(
+      flowChatStore.getState().sessions.get('history-1')
+        ?.dialogTurns[0].modelRounds[0].items[0],
+    ).toMatchObject({
+      id: 'host-text-id',
+      content: 'partial answer plus checkpoint',
+    });
+  });
+
+  it('does not regress a running Peer turn to an older persisted checkpoint', async () => {
+    peerModeFlagMock.active = true;
+    apiMocks.restoreSessionView.mockResolvedValueOnce({
+      session: {
+        sessionId: 'history-1',
+        sessionName: 'History 1',
+        agentType: 'agentic',
+        state: 'Processing { current_turn_id: "turn-live", phase: Streaming }',
+        turnCount: 1,
+        createdAt: 1,
+      },
+      turns: [{
+        turnId: 'turn-live',
+        turnIndex: 0,
+        sessionId: 'history-1',
+        timestamp: 1,
+        userMessage: { id: 'user-live', content: 'continue', timestamp: 1 },
+        modelRounds: [{
+          id: 'round-live',
+          turnId: 'turn-live',
+          roundIndex: 0,
+          timestamp: 1,
+          textItems: [{
+            id: 'host-text-id',
+            content: 'partial answer',
+            isStreaming: true,
+            timestamp: 2,
+            status: 'streaming',
+          }],
+          toolItems: [],
+          thinkingItems: [],
+          startTime: 1,
+          status: 'streaming',
+        }],
+        startTime: 1,
+        status: 'inprogress',
+      }],
+      contextRestoreState: 'pending',
+      isPartial: false,
+      loadedTurnCount: 1,
+      totalTurnCount: 1,
+    });
+    const localTurn = {
+      id: 'turn-live',
+      sessionId: 'history-1',
+      userMessage: { id: 'user-live', content: 'continue', timestamp: 1 },
+      modelRounds: [{
+        id: 'round-live',
+        index: 0,
+        items: [{
+          id: 'controller-text-id',
+          type: 'text' as const,
+          content: 'partial answer plus live data',
+          isStreaming: true,
+          isMarkdown: true,
+          timestamp: 3,
+          status: 'streaming' as const,
+        }],
+        isStreaming: true,
+        isComplete: false,
+        status: 'streaming' as const,
+        startTime: 1,
+      }],
+      status: 'processing' as const,
+      startTime: 1,
+      backendTurnIndex: 0,
+    };
+    flowChatStore.setState(() => ({
+      sessions: new Map([
+        ['history-1', createSession({
+          sessionId: 'history-1',
+          historyState: 'ready',
+          dialogTurns: [localTurn],
+        })],
+      ]),
+      activeSessionId: 'history-1',
+    }));
+
+    const result = await flowChatStore.refreshPeerSessionSnapshot(
+      'history-1',
+      '/Users/host/project',
+      { replaceRunningSnapshot: false },
+    );
+
+    expect(result.applied).toBe(false);
+    expect(
+      flowChatStore.getState().sessions.get('history-1')
+        ?.dialogTurns[0].modelRounds[0].items[0],
+    ).toMatchObject({
+      id: 'controller-text-id',
+      content: 'partial answer plus live data',
+    });
+  });
+
+  it('replaces a stale running projection after the Peer Host has completed', async () => {
+    peerModeFlagMock.active = true;
+    apiMocks.restoreSessionView.mockResolvedValueOnce({
+      session: {
+        sessionId: 'history-1',
+        sessionName: 'History 1',
+        agentType: 'agentic',
+        state: 'Idle',
+        turnCount: 1,
+        createdAt: 1,
+      },
+      turns: [{
+        turnId: 'turn-live',
+        turnIndex: 0,
+        sessionId: 'history-1',
+        timestamp: 1,
+        userMessage: { id: 'user-live', content: 'finish this', timestamp: 1 },
+        modelRounds: [{
+          id: 'round-live',
+          turnId: 'turn-live',
+          roundIndex: 0,
+          timestamp: 1,
+          textItems: [{
+            id: 'text-live',
+            content: 'complete answer',
+            isStreaming: false,
+            timestamp: 2,
+            status: 'completed',
+          }],
+          toolItems: [],
+          thinkingItems: [],
+          startTime: 1,
+          endTime: 3,
+          status: 'completed',
+        }],
+        startTime: 1,
+        endTime: 3,
+        status: 'completed',
+      }],
+      contextRestoreState: 'pending',
+      isPartial: false,
+      loadedTurnCount: 1,
+      totalTurnCount: 1,
+    });
+    const staleTurn = {
+      id: 'turn-live',
+      sessionId: 'history-1',
+      userMessage: { id: 'user-live', content: 'finish this', timestamp: 1 },
+      modelRounds: [],
+      status: 'processing' as const,
+      startTime: 1,
+      backendTurnIndex: 0,
+    };
+    flowChatStore.setState(() => ({
+      sessions: new Map([
+        ['history-1', createSession({
+          sessionId: 'history-1',
+          historyState: 'ready',
+          dialogTurns: [staleTurn],
+        })],
+      ]),
+      activeSessionId: 'history-1',
+    }));
+
+    const result = await flowChatStore.refreshPeerSessionSnapshot(
+      'history-1',
+      '/Users/host/project',
+      { replaceRunningSnapshot: false },
+    );
+
+    expect(result.applied).toBe(true);
+    expect(flowChatStore.getState().sessions.get('history-1')?.dialogTurns[0])
+      .toMatchObject({
+        status: 'completed',
+        modelRounds: [{
+          status: 'completed',
+          items: [{
+            type: 'text',
+            content: 'complete answer',
+          }],
+        }],
+      });
   });
 
   it('loads model config once while processing multiple persisted sessions', async () => {

@@ -12,6 +12,7 @@
 pub mod admin;
 pub mod db;
 pub mod page_data;
+pub mod page_execution;
 pub mod relay;
 pub mod routes;
 
@@ -146,6 +147,94 @@ pub(crate) fn normalized_browser_origin(raw: &str) -> Option<String> {
         return None;
     }
     Some(format!("{scheme}://{authority}"))
+}
+
+/// Trusted public/authentication URL pair for browser-hosted BitFun Pages.
+///
+/// User-authored Page documents can execute arbitrary JavaScript, so the
+/// account login UI must use a different browser origin from Page content.
+/// Both URLs may include the same reverse-proxy path prefix used externally.
+#[derive(Clone, Debug)]
+pub struct PageBrowserAuthConfig {
+    pub(crate) public_base_url: String,
+    pub(crate) public_origin: String,
+    pub(crate) public_path_prefix: String,
+    pub(crate) auth_base_url: String,
+    pub(crate) auth_origin: String,
+}
+
+impl PageBrowserAuthConfig {
+    pub fn new(public_base_url: &str, auth_base_url: &str) -> Result<Self, String> {
+        let (public_base_url, public_origin, public_path_prefix) =
+            normalized_browser_base_url(public_base_url)
+                .ok_or_else(|| "invalid Page public base URL".to_string())?;
+        let (auth_base_url, auth_origin, _) = normalized_browser_base_url(auth_base_url)
+            .ok_or_else(|| "invalid Page authentication base URL".to_string())?;
+        if !browser_base_url_uses_secure_transport(&public_base_url)
+            || !browser_base_url_uses_secure_transport(&auth_base_url)
+        {
+            return Err(
+                "Page browser URLs must use HTTPS except on loopback development hosts".to_string(),
+            );
+        }
+        if public_origin.eq_ignore_ascii_case(&auth_origin) {
+            return Err(
+                "Page public and authentication URLs must use different browser origins"
+                    .to_string(),
+            );
+        }
+        Ok(Self {
+            public_base_url,
+            public_origin,
+            public_path_prefix,
+            auth_base_url,
+            auth_origin,
+        })
+    }
+}
+
+fn normalized_browser_base_url(raw: &str) -> Option<(String, String, String)> {
+    let value = raw.trim().trim_end_matches('/');
+    let uri = value.parse::<axum::http::Uri>().ok()?;
+    let scheme = uri.scheme_str()?;
+    if !matches!(scheme, "http" | "https") || uri.query().is_some() {
+        return None;
+    }
+    let authority = uri.authority()?.as_str();
+    let path = uri.path().trim_end_matches('/');
+    if authority.contains('@')
+        || path.chars().any(char::is_control)
+        || !path.bytes().all(|byte| {
+            byte.is_ascii_alphanumeric() || matches!(byte, b'/' | b'-' | b'.' | b'_' | b'~' | b'%')
+        })
+        || path.split('/').any(|segment| matches!(segment, "." | ".."))
+    {
+        return None;
+    }
+    let origin = format!("{scheme}://{authority}");
+    let path_prefix = if matches!(path, "" | "/") {
+        String::new()
+    } else {
+        path.to_string()
+    };
+    Some((format!("{origin}{path_prefix}"), origin, path_prefix))
+}
+
+fn browser_base_url_uses_secure_transport(base_url: &str) -> bool {
+    let Ok(uri) = base_url.parse::<axum::http::Uri>() else {
+        return false;
+    };
+    if uri.scheme_str() == Some("https") {
+        return true;
+    }
+    uri.scheme_str() == Some("http")
+        && uri.host().is_some_and(|host| {
+            host.eq_ignore_ascii_case("localhost")
+                || host == "127.0.0.1"
+                || host == "::1"
+                || host == "[::1]"
+                || host.ends_with(".localhost")
+        })
 }
 
 fn content_matches_hash(hash: &str, data: &[u8]) -> bool {
@@ -1033,6 +1122,30 @@ pub fn build_relay_router_with_page_data_and_origins(
     page_data_dir: Option<std::path::PathBuf>,
     cors_allow_origins: Vec<String>,
 ) -> Router {
+    build_relay_router_with_page_data_origins_and_page_auth(
+        room_manager,
+        asset_store,
+        start_time,
+        db,
+        host_version,
+        page_data_dir,
+        cors_allow_origins,
+        None,
+    )
+}
+
+/// Build a relay with browser CORS policy and an isolated Page login origin.
+#[allow(clippy::too_many_arguments)]
+pub fn build_relay_router_with_page_data_origins_and_page_auth(
+    room_manager: Arc<RoomManager>,
+    asset_store: Arc<dyn WebAssetStore>,
+    start_time: std::time::Instant,
+    db: Option<std::sync::Arc<crate::db::DbPool>>,
+    host_version: &'static str,
+    page_data_dir: Option<std::path::PathBuf>,
+    cors_allow_origins: Vec<String>,
+    page_browser_auth: Option<PageBrowserAuthConfig>,
+) -> Router {
     let page_data = page_data_dir.map(crate::page_data::PageDataStore::new);
     let cors_allow_origins = cors_allow_origins
         .into_iter()
@@ -1050,9 +1163,13 @@ pub fn build_relay_router_with_page_data_and_origins(
         asset_store,
         db,
         page_data,
+        page_access_manager: Arc::new(routes::pages::PageAccessManager::new()),
+        page_upload_manager: Arc::new(routes::pages::PageUploadManager::new()),
+        page_execution_guard: Arc::new(crate::page_execution::PageExecutionGuard::new()),
         login_rate_limiter: std::sync::Arc::new(crate::routes::auth::LoginRateLimiter::new()),
         device_manager: crate::relay::DeviceManager::new(),
         cors_allow_origins: Arc::new(cors_allow_origins.clone()),
+        page_browser_auth: page_browser_auth.map(Arc::new),
     };
 
     let router = Router::new()
@@ -1190,5 +1307,32 @@ mod tests {
         assert_eq!(info["name"], "BitFun Relay Server");
         assert_eq!(info["version"], "test-host-version");
         assert_eq!(info["protocol_version"], 2);
+    }
+
+    #[test]
+    fn page_browser_auth_requires_distinct_valid_origins() {
+        let config = PageBrowserAuthConfig::new(
+            "https://pages.example.com/bitfun/",
+            "https://relay.example.com/relay/",
+        )
+        .unwrap();
+        assert_eq!(config.public_base_url, "https://pages.example.com/bitfun");
+        assert_eq!(config.public_path_prefix, "/bitfun");
+        assert_eq!(config.auth_base_url, "https://relay.example.com/relay");
+        assert!(PageBrowserAuthConfig::new(
+            "https://relay.example.com/pages",
+            "https://relay.example.com/auth",
+        )
+        .is_err());
+        assert!(
+            PageBrowserAuthConfig::new("javascript:alert(1)", "https://relay.example.com").is_err()
+        );
+        assert!(
+            PageBrowserAuthConfig::new("http://pages.example.com", "http://relay.example.com",)
+                .is_err()
+        );
+        assert!(
+            PageBrowserAuthConfig::new("http://localhost:9701", "http://localhost:9700").is_ok()
+        );
     }
 }

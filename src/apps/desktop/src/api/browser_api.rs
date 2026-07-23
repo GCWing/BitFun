@@ -153,14 +153,17 @@ pub async fn browser_webview_create(
         builder = builder.devtools(true);
     }
 
-    window
+    let webview = window
         .add_child(
             builder,
             tauri::LogicalPosition::new(request.x, request.y),
             tauri::LogicalSize::new(request.width, request.height),
         )
-        .map(|_| ())
-        .map_err(|e| format!("failed to create browser webview: {e}"))
+        .map_err(|e| format!("failed to create browser webview: {e}"))?;
+
+    webview
+        .hide()
+        .map_err(|e| format!("failed to hide browser webview before positioning: {e}"))
 }
 
 #[tauri::command]

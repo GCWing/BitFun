@@ -6,7 +6,10 @@ use super::model_exchange_trace::prepare_model_exchange_trace;
 use super::stream_processor::{StreamProcessOptions, StreamProcessor, StreamResult};
 use super::types::{FinishReason, RoundContext, RoundResult};
 use crate::agentic::core::{Message, ToolCall};
-use crate::agentic::events::{AgenticEvent, EventPriority, EventQueue, ToolEventData};
+use crate::agentic::events::{
+    AgenticEvent, EventPriority, EventQueue, ModelRoundAttemptDiagnostic,
+    ModelRoundAttemptToolDiagnostic, ToolEventData,
+};
 use crate::agentic::memories::{
     parse_bitfun_memory_citation, parse_bitfun_memory_citation_payloads,
     strip_bitfun_memory_citations,
@@ -60,6 +63,56 @@ impl RoundExecutor {
 
     fn has_user_visible_assistant_text(text: &str) -> bool {
         !text.trim().is_empty()
+    }
+
+    fn retry_diagnostic(
+        attempt_id: String,
+        attempt_index: u32,
+        category: &str,
+        raw_error: Option<String>,
+        tool_calls: &[ToolCall],
+    ) -> ModelRoundAttemptDiagnostic {
+        ModelRoundAttemptDiagnostic {
+            attempt_id,
+            attempt_index,
+            category: category.to_string(),
+            raw_error,
+            tool_calls: tool_calls
+                .iter()
+                .filter(|tool_call| !tool_call.is_valid())
+                .map(|tool_call| ModelRoundAttemptToolDiagnostic {
+                    tool_id: (!tool_call.tool_id.is_empty()).then(|| tool_call.tool_id.clone()),
+                    tool_name: (!tool_call.tool_name.is_empty())
+                        .then(|| tool_call.tool_name.clone()),
+                    raw_arguments: tool_call.raw_arguments.clone(),
+                    validation_error: tool_call.parse_error.clone(),
+                })
+                .collect(),
+        }
+    }
+
+    async fn record_retry_diagnostic(
+        &self,
+        context: &RoundContext,
+        round_id: &str,
+        attempt_id: String,
+        attempt_index: u32,
+        category: &str,
+        raw_error: Option<String>,
+        tool_calls: &[ToolCall],
+    ) {
+        let diagnostic =
+            Self::retry_diagnostic(attempt_id, attempt_index, category, raw_error, tool_calls);
+        self.emit_event(
+            AgenticEvent::ModelRoundAttemptSuperseded {
+                session_id: context.session_id.clone(),
+                turn_id: context.dialog_turn_id.clone(),
+                round_id: round_id.to_string(),
+                diagnostic: diagnostic.clone(),
+            },
+            EventPriority::High,
+        )
+        .await;
     }
 
     fn parsed_memory_citation_from_stream_result(
@@ -184,6 +237,15 @@ impl RoundExecutor {
 
         let trace_config =
             prepare_model_exchange_trace(&context, &round_id, ai_client.as_ref()).await;
+        // Resolve this user policy once for the entire round, before the
+        // stream begins. The stream crate receives only this immutable fact;
+        // it never reads product configuration directly.
+        let global_config: crate::service::config::types::GlobalConfig =
+            match GlobalConfigManager::get_service().await {
+                Ok(service) => service.get_config(None).await.unwrap_or_default(),
+                Err(_) => Default::default(),
+            };
+        let allow_normal_tool_json_repair = global_config.ai.allow_tool_json_repair;
         let max_attempts = Self::MAX_STREAM_ATTEMPTS;
         let mut attempt_index = 0usize;
         let (stream_result, send_to_stream_ms, stream_processing_ms, final_trace_handle) = loop {
@@ -239,6 +301,16 @@ impl RoundExecutor {
                     if Self::is_transient_network_error(&err_msg)
                         && attempt_index < max_attempts - 1
                     {
+                        self.record_retry_diagnostic(
+                            &context,
+                            &round_id,
+                            attempt_id.clone(),
+                            attempt_number,
+                            "transient_request_error",
+                            Some(err_msg.clone()),
+                            &[],
+                        )
+                        .await;
                         let delay_ms = Self::retry_delay_ms_for_error(attempt_index, &err_msg);
                         warn!(
                             "Retrying AI request after connection failure: session_id={}, round_id={}, attempt={}/{}, delay_ms={}, error={}",
@@ -321,6 +393,7 @@ impl RoundExecutor {
                     &cancel_token,
                     StreamProcessOptions {
                         recover_partial_on_cancel: context.recover_partial_on_cancel,
+                        allow_normal_tool_json_repair,
                         ..Default::default()
                     },
                 )
@@ -337,6 +410,16 @@ impl RoundExecutor {
                             && attempt_index < max_attempts - 1
                             && Self::is_transient_network_error(&err_msg)
                         {
+                            self.record_retry_diagnostic(
+                                &context,
+                                &round_id,
+                                attempt_id.clone(),
+                                attempt_number,
+                                "interrupted_tool_arguments",
+                                Some(err_msg.clone()),
+                                &result.tool_calls,
+                            )
+                            .await;
                             Self::complete_model_exchange_trace(
                                 trace_config.as_ref(),
                                 trace_handle.as_ref(),
@@ -428,6 +511,16 @@ impl RoundExecutor {
                         && Self::is_transient_network_error(partial_recovery_reason)
                         && attempt_index < max_attempts - 1
                     {
+                        self.record_retry_diagnostic(
+                            &context,
+                            &round_id,
+                            attempt_id.clone(),
+                            attempt_number,
+                            "partial_stream_error",
+                            Some(partial_recovery_reason.to_string()),
+                            &result.tool_calls,
+                        )
+                        .await;
                         Self::complete_model_exchange_trace(
                             trace_config.as_ref(),
                             trace_handle.as_ref(),
@@ -454,6 +547,16 @@ impl RoundExecutor {
                     if Self::is_invalid_tool_only_without_text(&result) {
                         let err_msg = "Provider returned only invalid tool arguments".to_string();
                         if attempt_index < max_attempts - 1 {
+                            self.record_retry_diagnostic(
+                                &context,
+                                &round_id,
+                                attempt_id.clone(),
+                                attempt_number,
+                                "invalid_tool_arguments",
+                                None,
+                                &result.tool_calls,
+                            )
+                            .await;
                             Self::complete_model_exchange_trace(
                                 trace_config.as_ref(),
                                 trace_handle.as_ref(),
@@ -503,6 +606,16 @@ impl RoundExecutor {
                     }
 
                     if no_effective_output && attempt_index < max_attempts - 1 {
+                        self.record_retry_diagnostic(
+                            &context,
+                            &round_id,
+                            attempt_id.clone(),
+                            attempt_number,
+                            "no_effective_output",
+                            None,
+                            &[],
+                        )
+                        .await;
                         Self::complete_model_exchange_trace(
                             trace_config.as_ref(),
                             trace_handle.as_ref(),
@@ -559,6 +672,16 @@ impl RoundExecutor {
                     )
                     .await;
                     if can_retry {
+                        self.record_retry_diagnostic(
+                            &context,
+                            &round_id,
+                            attempt_id.clone(),
+                            attempt_number,
+                            "transient_stream_error",
+                            Some(err_msg.clone()),
+                            &[],
+                        )
+                        .await;
                         let delay_ms = Self::retry_delay_ms_for_error(attempt_index, &err_msg);
                         warn!(
                             "Retrying stream after transient error with no effective output: session_id={}, round_id={}, attempt={}/{}, delay_ms={}, error={}",
@@ -775,12 +898,8 @@ impl RoundExecutor {
                 remote_exec_port: context.remote_exec_port.clone(),
             };
 
-            // Read tool execution related configuration from global config.
-            let global_config: crate::service::config::types::GlobalConfig =
-                match GlobalConfigManager::get_service().await {
-                    Ok(service) => service.get_config(None).await.unwrap_or_default(),
-                    Err(_) => Default::default(),
-                };
+            // Use the round-start configuration so stream repair and tool
+            // execution policy stay stable throughout this model round.
             let tool_execution_timeout = global_config.ai.tool_execution_timeout_secs;
             let subagent_batch_execution_policy = Self::map_subagent_batch_execution_policy(
                 global_config.ai.subagent_batch_execution_policy,
@@ -1674,7 +1793,9 @@ mod tests {
                 arguments: json!({}),
                 raw_arguments: Some("{\"command\":".to_string()),
                 is_error: true,
+                parse_error: Some("EOF while parsing an object".to_string()),
                 recovered_from_truncation: false,
+                repair_kind: Default::default(),
             }],
             usage: Some(GeminiUsage {
                 prompt_token_count: 100,
@@ -1729,8 +1850,40 @@ mod tests {
                 "tool_name": "Bash",
                 "arguments": {},
                 "raw_arguments": "{\"command\":",
-                "is_error": true
+                "is_error": true,
+                "parse_error": "EOF while parsing an object"
             }]))
+        );
+    }
+
+    #[test]
+    fn retry_diagnostic_preserves_invalid_tool_arguments_and_parser_error() {
+        let diagnostic = RoundExecutor::retry_diagnostic(
+            "round-1:attempt:1".to_string(),
+            1,
+            "invalid_tool_arguments",
+            None,
+            &[ToolCall {
+                tool_id: "tool-1".to_string(),
+                tool_name: "Bash".to_string(),
+                arguments: json!({}),
+                raw_arguments: Some("{\"command\":".to_string()),
+                is_error: true,
+                parse_error: Some("EOF while parsing an object".to_string()),
+                recovered_from_truncation: false,
+                repair_kind: Default::default(),
+            }],
+        );
+
+        assert_eq!(diagnostic.category, "invalid_tool_arguments");
+        assert_eq!(diagnostic.tool_calls.len(), 1);
+        assert_eq!(
+            diagnostic.tool_calls[0].raw_arguments.as_deref(),
+            Some("{\"command\":")
+        );
+        assert_eq!(
+            diagnostic.tool_calls[0].validation_error.as_deref(),
+            Some("EOF while parsing an object")
         );
     }
 

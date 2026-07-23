@@ -154,6 +154,28 @@ Important notes:
             };
         }
 
+        let force = input
+            .get("force")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false);
+        let recursive = input
+            .get("recursive")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false);
+        let rejection = if recursive {
+            crate::agentic::execution::edit_constraint_guard::check_recursive_delete(
+                context, path_str, force,
+            )
+            .await
+        } else {
+            crate::agentic::execution::edit_constraint_guard::check_delete(
+                context, "Delete", "delete", path_str, force,
+            )
+        };
+        if let Some(rejection) = rejection {
+            return rejection;
+        }
+
         let resolved = match context.map(|ctx| ctx.resolve_tool_path(path_str)) {
             Some(Ok(value)) => value,
             Some(Err(err)) => {
@@ -337,6 +359,21 @@ Important notes:
                     stderr
                 )));
             }
+            crate::agentic::execution::edit_constraint_guard::record_mutation_applied(
+                context,
+                "Delete",
+                if recursive {
+                    "recursive_delete"
+                } else {
+                    "delete"
+                },
+                &resolved.logical_path,
+            );
+            crate::agentic::execution::edit_constraint_guard::forget_agent_created_file(
+                context,
+                &resolved.logical_path,
+            )
+            .await;
 
             let result_data = json!({
                 "success": true,
@@ -371,11 +408,38 @@ Important notes:
         });
 
         let result_text = self.render_result_for_assistant(&result_data);
+        crate::agentic::execution::edit_constraint_guard::record_mutation_applied(
+            context,
+            "Delete",
+            if recursive {
+                "recursive_delete"
+            } else {
+                "delete"
+            },
+            &resolved.logical_path,
+        );
+        crate::agentic::execution::edit_constraint_guard::forget_agent_created_file(
+            context,
+            &resolved.logical_path,
+        )
+        .await;
 
         Ok(vec![ToolResult::Result {
             data: result_data,
             result_for_assistant: Some(result_text),
             image_attachments: None,
         }])
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::DeleteFileTool;
+    use crate::agentic::tools::framework::Tool;
+
+    #[test]
+    fn schema_does_not_expose_force_override() {
+        let schema = DeleteFileTool::new().input_schema();
+        assert!(schema["properties"].get("force").is_none());
     }
 }

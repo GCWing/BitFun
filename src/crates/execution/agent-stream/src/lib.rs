@@ -6,8 +6,11 @@ mod hidden_text;
 pub mod tool_call_accumulator;
 mod unified;
 
+pub use tool_call_accumulator::{ToolArgumentRepairKind, ToolCallCompletion};
+
 use crate::tool_call_accumulator::{
-    FinalizedToolCall, PendingToolCalls, ToolCallBoundary, ToolCallStreamKey,
+    FinalizedToolCall, PendingToolCalls, ToolCallBoundary, ToolCallFinalizeOptions,
+    ToolCallStreamKey,
 };
 use bitfun_events::{AgenticEvent, AgenticEventPriority as EventPriority, ToolEventData};
 use futures::{Stream, StreamExt};
@@ -33,9 +36,15 @@ pub struct ToolCall {
     pub raw_arguments: Option<String>,
     /// Record whether tool parameters are valid.
     pub is_error: bool,
+    /// Original JSON parser error when the provider emitted invalid arguments.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub parse_error: Option<String>,
     /// True when truncated raw JSON arguments were repaired into a partial tool call.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub recovered_from_truncation: bool,
+    /// How malformed raw JSON was repaired before ordinary tool validation.
+    #[serde(default, skip_serializing_if = "ToolArgumentRepairKind::is_none")]
+    pub repair_kind: ToolArgumentRepairKind,
 }
 
 impl ToolCall {
@@ -71,11 +80,18 @@ pub trait StreamEventSink: Send + Sync {
 
 /// Whether a provider finish_reason means the response was cut by the model's
 /// output token limit rather than completed naturally.
-/// Covers OpenAI-compatible "length", Anthropic "max_tokens", and Gemini
-/// "MAX_TOKENS".
+/// Covers OpenAI-compatible "length", Anthropic "max_tokens", Gemini
+/// "MAX_TOKENS", and the Responses API's `incomplete:max_output_tokens`.
 fn is_token_limit_finish_reason(reason: &str) -> bool {
     let normalized = reason.trim().to_ascii_lowercase();
-    normalized == "length" || normalized == "max_tokens"
+    matches!(
+        normalized.as_str(),
+        "length"
+            | "max_tokens"
+            | "max_output_tokens"
+            | "incomplete:max_tokens"
+            | "incomplete:max_output_tokens"
+    )
 }
 
 fn elapsed_ms_u64(started_at: Instant) -> u64 {
@@ -271,6 +287,9 @@ impl StreamProcessError {
 #[derive(Debug, Clone, Default)]
 pub struct StreamProcessOptions {
     pub recover_partial_on_cancel: bool,
+    /// Allow broad JSON repair for non-Write tools, but only after a provider
+    /// confirms a normal tool-use completion.
+    pub allow_normal_tool_json_repair: bool,
     pub hidden_text_tags: Vec<HiddenTextTag>,
 }
 
@@ -310,6 +329,7 @@ struct StreamContext {
     /// Provider finish_reason indicating the response was cut by the model's
     /// output token limit (e.g. "length", "max_tokens", "MAX_TOKENS").
     token_limit_finish_reason: Option<String>,
+    allow_normal_tool_json_repair: bool,
 }
 
 impl StreamContext {
@@ -347,6 +367,7 @@ impl StreamContext {
             has_effective_output: false,
             partial_recovery_reason: None,
             token_limit_finish_reason: None,
+            allow_normal_tool_json_repair: options.allow_normal_tool_json_repair,
         }
     }
 
@@ -408,15 +429,24 @@ impl StreamContext {
             raw_arguments: (!finalized.raw_arguments.is_empty())
                 .then_some(finalized.raw_arguments.clone()),
             is_error: finalized.is_error,
+            parse_error: finalized.parse_error.clone(),
             recovered_from_truncation: finalized.recovered_from_truncation,
+            repair_kind: finalized.repair_kind,
         });
     }
 
     fn finalize_all_pending_tool_calls(
         &mut self,
         boundary: ToolCallBoundary,
+        completion: ToolCallCompletion,
     ) -> Vec<FinalizedToolCall> {
-        let finalized = self.pending_tool_calls.finalize_all(boundary);
+        let finalized = self.pending_tool_calls.finalize_all_with_options(
+            boundary,
+            ToolCallFinalizeOptions {
+                completion,
+                allow_normal_tool_json_repair: self.allow_normal_tool_json_repair,
+            },
+        );
         for tool_call in &finalized {
             self.record_finalized_tool_call(tool_call);
         }
@@ -425,7 +455,10 @@ impl StreamContext {
 
     /// Force finish pending tool calls, used when the stream is shutting down before a natural tool boundary.
     fn force_finish_pending_tool_calls(&mut self) {
-        for finalized in self.finalize_all_pending_tool_calls(ToolCallBoundary::GracefulShutdown) {
+        for finalized in self.finalize_all_pending_tool_calls(
+            ToolCallBoundary::GracefulShutdown,
+            ToolCallCompletion::Interrupted,
+        ) {
             error!(
                 "force finish pending tool call: tool_id={}, tool_name={}, raw_len={}, is_error={}",
                 finalized.tool_id,
@@ -1072,6 +1105,7 @@ impl StreamProcessor {
                         thinking_signature,
                         tool_call,
                         usage,
+                        tool_call_completion,
                         finish_reason,
                         provider_metadata,
                     } = response;
@@ -1129,7 +1163,11 @@ impl StreamProcessor {
                     }
 
                     if let Some(reason) = finish_reason {
-                        let _ = ctx.finalize_all_pending_tool_calls(ToolCallBoundary::FinishReason);
+                        let completion = tool_call_completion.unwrap_or(ToolCallCompletion::Unknown);
+                        let _ = ctx.finalize_all_pending_tool_calls(
+                            ToolCallBoundary::FinishReason,
+                            completion,
+                        );
                         if is_token_limit_finish_reason(&reason) {
                             ctx.token_limit_finish_reason = Some(reason);
                         }
@@ -1142,7 +1180,10 @@ impl StreamProcessor {
         self.send_thinking_end_if_needed(&mut ctx).await;
         self.flush_hidden_text_tail(&mut ctx).await;
 
-        let _ = ctx.finalize_all_pending_tool_calls(ToolCallBoundary::StreamEnd);
+        let _ = ctx.finalize_all_pending_tool_calls(
+            ToolCallBoundary::StreamEnd,
+            ToolCallCompletion::Unknown,
+        );
 
         // A token-limit finish_reason means the provider ended the stream
         // gracefully but the answer is silently truncated. Surface it as a
@@ -1176,8 +1217,9 @@ impl StreamProcessor {
 #[cfg(test)]
 mod tests {
     use super::{
-        GracefulShutdownInput, HiddenTextTag, SseLogCollector, SseLogConfig, StreamEventSink,
-        StreamProcessOptions, StreamProcessor, ToolCall,
+        is_token_limit_finish_reason, GracefulShutdownInput, HiddenTextTag, SseLogCollector,
+        SseLogConfig, StreamEventSink, StreamProcessOptions, StreamProcessor,
+        ToolArgumentRepairKind, ToolCall, ToolCallCompletion,
     };
     use super::{UnifiedResponse, UnifiedTokenUsage, UnifiedToolCall};
     use bitfun_events::{AgenticEvent, AgenticEventPriority as EventPriority, ToolEventData};
@@ -1229,7 +1271,9 @@ mod tests {
                     arguments: json!({}),
                     raw_arguments: None,
                     is_error: false,
+                    parse_error: None,
                     recovered_from_truncation: false,
+                    repair_kind: Default::default(),
                 }],
                 reason: "User cancelled stream processing".to_string(),
             })
@@ -1258,6 +1302,13 @@ mod tests {
             StreamProcessor::derive_watchdog_timeout(Some(Duration::from_secs(10))),
             Some(Duration::from_secs(12))
         );
+    }
+
+    #[test]
+    fn recognizes_responses_api_output_limit_finish_reasons() {
+        assert!(is_token_limit_finish_reason("incomplete:max_output_tokens"));
+        assert!(is_token_limit_finish_reason("incomplete:max_tokens"));
+        assert!(!is_token_limit_finish_reason("incomplete:content_filter"));
     }
 
     #[test]
@@ -1770,6 +1821,98 @@ mod tests {
             Some("{\"a\":1}}")
         );
         assert!(result.tool_calls[0].is_error);
+    }
+
+    #[tokio::test]
+    async fn repairs_non_write_arguments_only_for_typed_normal_tool_use_completion() {
+        let processor = build_processor();
+        let stream = iter(vec![Ok(UnifiedResponse {
+            tool_call: Some(UnifiedToolCall {
+                tool_call_index: None,
+                id: Some("call_1".to_string()),
+                name: Some("Read".to_string()),
+                arguments: Some(r#"{"path":"src/main.rs" "line_end":4}"#.to_string()),
+                arguments_is_snapshot: false,
+            }),
+            tool_call_completion: Some(ToolCallCompletion::NormalToolUse),
+            finish_reason: Some("tool_calls".to_string()),
+            ..Default::default()
+        })])
+        .boxed();
+
+        let result = processor
+            .process_stream_with_options(
+                stream,
+                None,
+                None,
+                "session_1".to_string(),
+                "turn_1".to_string(),
+                "round_1".to_string(),
+                "round_1:attempt:1".to_string(),
+                1,
+                &CancellationToken::new(),
+                StreamProcessOptions {
+                    allow_normal_tool_json_repair: true,
+                    ..Default::default()
+                },
+            )
+            .await
+            .expect("stream result");
+
+        assert_eq!(result.tool_calls.len(), 1);
+        assert!(!result.tool_calls[0].is_error);
+        assert_eq!(
+            result.tool_calls[0].repair_kind,
+            ToolArgumentRepairKind::PermissiveNormalToolJsonRepair
+        );
+        assert_eq!(
+            result.tool_calls[0].arguments,
+            json!({"path": "src/main.rs", "line_end": 4})
+        );
+    }
+
+    #[tokio::test]
+    async fn does_not_repair_non_write_arguments_after_output_limit() {
+        let processor = build_processor();
+        let stream = iter(vec![Ok(UnifiedResponse {
+            tool_call: Some(UnifiedToolCall {
+                tool_call_index: None,
+                id: Some("call_1".to_string()),
+                name: Some("Read".to_string()),
+                arguments: Some(r#"{"path":"src/main.rs" "line_end":4}"#.to_string()),
+                arguments_is_snapshot: false,
+            }),
+            tool_call_completion: Some(ToolCallCompletion::OutputLimit),
+            finish_reason: Some("length".to_string()),
+            ..Default::default()
+        })])
+        .boxed();
+
+        let result = processor
+            .process_stream_with_options(
+                stream,
+                None,
+                None,
+                "session_1".to_string(),
+                "turn_1".to_string(),
+                "round_1".to_string(),
+                "round_1:attempt:1".to_string(),
+                1,
+                &CancellationToken::new(),
+                StreamProcessOptions {
+                    allow_normal_tool_json_repair: true,
+                    ..Default::default()
+                },
+            )
+            .await
+            .expect("stream result");
+
+        assert_eq!(result.tool_calls.len(), 1);
+        assert!(result.tool_calls[0].is_error);
+        assert_eq!(
+            result.tool_calls[0].repair_kind,
+            ToolArgumentRepairKind::None
+        );
     }
 
     #[tokio::test]

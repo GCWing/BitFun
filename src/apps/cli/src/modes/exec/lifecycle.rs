@@ -125,6 +125,8 @@ pub(super) struct ExecJsonResult {
     usage: Option<ExecTokenUsage>,
     #[serde(skip_serializing_if = "Option::is_none")]
     patch: Option<ExecPatchOutput>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    verification: Option<super::verification::VerifyOutcome>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
@@ -400,11 +402,20 @@ impl ExecJsonResult {
             turn_id,
             usage,
             patch: None,
+            verification: None,
         }
     }
 
     fn with_patch(mut self, patch: Option<ExecPatchOutput>) -> Self {
         self.patch = patch;
+        self
+    }
+
+    fn with_verification(
+        mut self,
+        verification: Option<super::verification::VerifyOutcome>,
+    ) -> Self {
+        self.verification = verification;
         self
     }
 }
@@ -442,8 +453,17 @@ pub(crate) struct ExecMode {
     agent: Arc<CliAgentRuntimeClient>,
     runtime: Arc<CliRuntimeContext>,
     pub(super) workspace_path: Option<PathBuf>,
+    /// Git tree captured before execution so committed agent changes remain
+    /// visible to patch export and final verification.
+    pub(super) initial_diff_base: Option<String>,
+    /// Untracked files that predate execution belong to the caller, not the
+    /// agent, and must not leak into its patch or verification scope.
+    pub(super) initial_untracked_files: std::collections::BTreeSet<String>,
     /// None: no patch output, Some("-"): output to stdout, Some(path): save to file
     pub(super) output_patch: Option<String>,
+    pub(super) verify_final_changes: bool,
+    pub(super) verification_retries_used: u32,
+    pub(super) latest_verification: Option<super::verification::VerifyOutcome>,
     pub(super) output_format: ExecOutputFormat,
     approval_mode: ExecApprovalMode,
     session_options: ExecSessionOptions,
@@ -457,6 +477,7 @@ impl ExecMode {
         runtime: Arc<CliRuntimeContext>,
         workspace_path: Option<PathBuf>,
         output_patch: Option<String>,
+        verify_final_changes: bool,
         output_format: ExecOutputFormat,
         session_options: ExecSessionOptions,
     ) -> Self {
@@ -470,6 +491,18 @@ impl ExecMode {
             runtime.as_ref(),
             workspace_path.clone(),
         ));
+        let (initial_diff_base, initial_untracked_files) =
+            if super::verification::needs_change_baseline(
+                output_patch.as_deref(),
+                verify_final_changes,
+            ) {
+                workspace_path
+                    .as_deref()
+                    .map(super::patch::capture_change_baseline)
+                    .unwrap_or_default()
+            } else {
+                Default::default()
+            };
 
         Self {
             config,
@@ -478,7 +511,12 @@ impl ExecMode {
             agent,
             runtime,
             workspace_path,
+            initial_diff_base,
+            initial_untracked_files,
             output_patch,
+            verify_final_changes,
+            verification_retries_used: 0,
+            latest_verification: None,
             output_format,
             approval_mode,
             session_options,
@@ -1003,6 +1041,109 @@ impl ExecMode {
                 }
             }
         };
+
+        if turn_settled
+            && terminal_outcome
+                .as_ref()
+                .is_some_and(|outcome| outcome.is_ok())
+            && self.verify_final_changes
+        {
+            let workspace = self
+                .workspace_path
+                .clone()
+                .or_else(|| std::env::current_dir().ok())
+                .unwrap_or_else(|| PathBuf::from("."));
+            let verification_workspace =
+                super::patch::repository_root(&workspace).unwrap_or(workspace);
+            if let Some(command) = super::verification::detect_verify_command(
+                &verification_workspace,
+                self.initial_diff_base.as_deref(),
+                &self.initial_untracked_files,
+            ) {
+                let config = super::verification::VerifyConfig::from_env();
+                let verification = super::verification::run_verifier(
+                    &verification_workspace,
+                    &command,
+                    &config,
+                    self.verification_retries_used,
+                )
+                .await;
+                self.latest_verification = Some(verification.clone());
+
+                if self.output_format == ExecOutputFormat::StreamJson {
+                    println!(
+                        "{}",
+                        serde_json::to_string(&serde_json::json!({
+                            "type": "verify_result",
+                            "session_id": &session_id,
+                            "attempt": self.verification_retries_used + 1,
+                            "status": verification.status,
+                            "command": &verification.command,
+                            "exit_code": verification.exit_code,
+                            "duration_ms": verification.duration_ms,
+                            "output_tail": &verification.output_tail,
+                        }))?
+                    );
+                }
+
+                if verification.status == super::verification::VerifyStatus::Passed {
+                    self.print_text(|| {
+                        eprintln!(
+                            "\nFinal-change verification passed: {}",
+                            verification.command
+                        )
+                    });
+                } else if self.verification_retries_used < config.max_retries {
+                    self.print_text(|| {
+                        eprintln!(
+                            "\nFinal-change verification failed (attempt {}, exit {:?}): {}",
+                            self.verification_retries_used + 1,
+                            verification.exit_code,
+                            verification.command
+                        );
+                        eprintln!("Asking the agent to repair the verified changes.");
+                    });
+
+                    let mut retry = ExecMode::new(
+                        self.config.clone(),
+                        super::verification::build_retry_message(&verification),
+                        self.agent_type.clone(),
+                        self.runtime.clone(),
+                        self.workspace_path.clone(),
+                        self.output_patch.clone(),
+                        self.verify_final_changes,
+                        self.output_format,
+                        ExecSessionOptions {
+                            resume: Some(session_id.clone()),
+                            ..Default::default()
+                        },
+                    );
+                    retry.initial_diff_base = self.initial_diff_base.clone();
+                    retry.initial_untracked_files = self.initial_untracked_files.clone();
+                    retry.verification_retries_used = self.verification_retries_used + 1;
+                    return Box::pin(retry.run()).await;
+                } else {
+                    self.print_text(|| {
+                        eprintln!(
+                            "\nFinal-change verification is still failing after {} attempt(s); \
+                             finishing with unverified changes: {}",
+                            self.verification_retries_used + 1,
+                            verification.command
+                        )
+                    });
+                }
+            } else if self.output_format == ExecOutputFormat::StreamJson {
+                println!(
+                    "{}",
+                    serde_json::to_string(&serde_json::json!({
+                        "type": "verify_skipped",
+                        "session_id": &session_id,
+                        "reason": "no_applicable_changed_files",
+                    }))?
+                );
+            }
+        }
+
         let (patch, patch_error) = if turn_settled {
             self.output_patch_if_needed()
         } else {
@@ -1054,6 +1195,7 @@ impl ExecMode {
                 }
             }
             .with_patch(patch);
+            let result = result.with_verification(self.latest_verification.clone());
             println!("{}", serde_json::to_string_pretty(&result)?);
         }
         terminal_outcome

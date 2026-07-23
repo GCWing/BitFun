@@ -20,6 +20,7 @@ members = [
     "src/crates/contracts/product-domains",
     "src/crates/execution/agent-runtime",
     "src/crates/execution/agent-stream",
+    "src/crates/execution/tool-call-jsonrepair",
     "src/crates/execution/tool-contracts",
     "src/crates/execution/harness",
     "src/crates/execution/plugin-runtime-host",
@@ -122,6 +123,10 @@ glob = "0.3"
 ignore = "0.4"
 notify = "8.2"
 dirs = "6.0"
+keyring-core = "1.0.0"
+apple-native-keyring-store = { version = "1.0.1", features = ["keychain"] }
+windows-native-keyring-store = "1.1.0"
+zbus-secret-service-keyring-store = { version = "1.0.0", features = ["crypto-rust"] }
 dark-light = "1.1"
 dunce = "1"
 filetime = "0.2"
@@ -165,6 +170,7 @@ which = "8.0"
 similar = "2.5"
 urlencoding = "2.1"
 oxc = { version = "0.138.0", default-features = false, features = ["ast_visit", "codegen", "semantic", "transformer"] }
+oxc-parse = { package = "oxc", version = "0.138.0", default-features = false }
 rquickjs = { version = "0.9", default-features = false, features = ["classes", "properties", "macro"] }
 
 # Tauri (desktop only)
@@ -178,6 +184,7 @@ tauri-plugin-notification = "2.3"
 tauri-plugin-updater = "2.10"
 tauri-plugin-global-shortcut = "2.3"
 tauri-plugin-single-instance = "2.4"
+tauri-plugin-window-state = "2.4"
 tauri-build = { version = "2.6", features = [] }
 
 # Desktop support
@@ -253,6 +260,11 @@ rustls = { version = "0.23", default-features = false, features = ["ring", "std"
 # tao 0.35.3 can re-enter its Windows window callback while holding input locks.
 # Use the upstream fix until it is included in a crates.io release.
 tao = { git = "https://github.com/tauri-apps/tao.git", rev = "c704261c519c58cfdd0bc2d58ba24e06a0b71c92" }
+# Tauri 2.11 loses keyboard focus for child webviews after Windows reactivates
+# an `unstable` multi-webview window. Use the upstream 2.12 fix until released.
+tauri-runtime = { git = "https://github.com/tauri-apps/tauri.git", rev = "ce3860e84b79af0d5ee628b304399499a87328b1" }
+tauri-runtime-wry = { git = "https://github.com/tauri-apps/tauri.git", rev = "ce3860e84b79af0d5ee628b304399499a87328b1" }
+tauri-utils = { git = "https://github.com/tauri-apps/tauri.git", rev = "ce3860e84b79af0d5ee628b304399499a87328b1" }
 
 [profile.dev]
 incremental = true

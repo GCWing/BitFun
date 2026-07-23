@@ -109,13 +109,14 @@ export function processNormalTextChunkInternal(
 
   let textItemId = sessionActiveTextItems.get(streamKey);
   let recoveredExistingContent = '';
-  if (!textItemId && isRoundClosed(round)) {
+  if (!textItemId) {
     const reusableTextItem = [...(round?.items ?? [])]
       .reverse()
       .find((item): item is FlowTextItem =>
         item.type === 'text' &&
         item.attemptId === attemptId &&
-        item.attemptIndex === attemptIndex
+        item.attemptIndex === attemptIndex &&
+        (item.isStreaming || isRoundClosed(round))
       );
 
     if (reusableTextItem) {
@@ -195,13 +196,14 @@ export function processThinkingChunkInternal(
 
   let thinkingItemId = sessionActiveTextItems.get(thinkingKey);
   let recoveredExistingContent = '';
-  if (!thinkingItemId && isRoundClosed(round)) {
+  if (!thinkingItemId) {
     const reusableThinkingItem = [...(round?.items ?? [])]
       .reverse()
       .find((item): item is import('../../types/flow-chat').FlowThinkingItem =>
         item.type === 'thinking' &&
         item.attemptId === attemptId &&
-        item.attemptIndex === attemptIndex
+        item.attemptIndex === attemptIndex &&
+        (item.isStreaming || isRoundClosed(round))
       );
 
     if (reusableThinkingItem) {

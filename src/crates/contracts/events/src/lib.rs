@@ -12,13 +12,14 @@ pub mod types;
 
 pub use agentic::{
     AgenticEvent, AgenticEventEnvelope, AgenticEventPriority, DeepReviewQueueReason,
-    DeepReviewQueueState, DeepReviewQueueStatus, SubagentParentInfo, ToolEventData,
-    ToolEventIdentity,
+    DeepReviewQueueState, DeepReviewQueueStatus, ModelRoundAttemptDiagnostic,
+    ModelRoundAttemptToolDiagnostic, SubagentParentInfo, ToolEventData, ToolEventIdentity,
 };
 pub use backend::{
     BackgroundCommandLifecycleInfo, ToolExecutionCompletedInfo, ToolExecutionErrorInfo,
     ToolExecutionProgressInfo, ToolExecutionStartedInfo, ToolTerminalReadyInfo,
 };
+pub use bitfun_core_types::ToolImageAttachment;
 pub use emitter::EventEmitter;
 pub use frontend_projection::{project_agentic_frontend_event, AgenticFrontendEvent};
 pub use types::*;

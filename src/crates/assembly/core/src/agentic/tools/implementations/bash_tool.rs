@@ -497,6 +497,15 @@ Usage notes:
             };
         }
 
+        if let Some(rejection) =
+            crate::agentic::execution::edit_constraint_guard::check_bash_command(
+                context,
+                command.unwrap_or_default(),
+            )
+        {
+            return rejection;
+        }
+
         match Self::resolve_working_directory(input, context) {
             Ok(Some(resolved_dir)) => {
                 match Self::is_existing_workspace_directory(context, &resolved_dir).await {

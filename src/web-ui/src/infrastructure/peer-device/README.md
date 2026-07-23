@@ -33,8 +33,8 @@ Controller-side React/transport layer for Peer Device Mode. Architecture:
 
 6. **Config / mode HostInvokes are high priority** during peer hydrate
    (`get_config`, `get_configs`, `get_available_modes`,
-   `get_agent_profile_config`). Keeping them `low` starves hydrate under the
-   concurrency limit of 2.
+   `get_agent_profile_config`). Keeping them `low` can still delay hydrate
+   behind a burst of background RPCs.
 
 7. **Account identity commands are LOCAL_ONLY** and must stay denied on the
    peer host (`account_login`, `account_finalize_login`, logout, device RPC,
@@ -61,6 +61,29 @@ Controller-side React/transport layer for Peer Device Mode. Architecture:
     available, and both local and SSH-backed PTY events on B must fan out to A.
     Remote `SIGINT` / `SIGTSTP` map to PTY control bytes instead of silently
     succeeding without affecting the process.
+
+12. **Active chat has snapshot self-healing.** DeviceEvent has no ACK/replay, so
+    FlowChat reconciles the active Peer session from `restore_session_view`
+    every 3s and immediately after a detected event gap. The Peer Host must
+    overlay its live in-memory session state on the persisted view; otherwise
+    an in-progress turn is normalized as interrupted history and later chunks
+    are dropped by the controller state machine. Reconciliation must not
+    overwrite a local projection that changed while HostInvoke was in flight.
+    Continuous host output must create a persisted checkpoint within each 2s
+    coalescing window, and active snapshots may replace a running projection
+    early only when stream/tool content proves forward progress.
+
+13. **Weak links use bounded, idempotency-aware recovery.** Default Peer
+    HostInvoke concurrency is four with one slot reserved from normal/low
+    traffic. Read-only commands have a real 10s deadline and two
+    exponential-backoff retries. Mutations have a 30s deadline and are never
+    replayed automatically without an idempotency contract. Dialog submission
+    is the explicit exception: `start_dialog_turn` and
+    `start_acp_dialog_turn` reuse `(sessionId, turnId)`, and the host
+    coalesces/caches duplicate execution attempts. The controller must observe
+    the matching `idempotent_dialog_submit` capability in `peer_mode_ping`
+    before replaying either command; an older host stays single-shot. A failed
+    session list must leave its loading state and offer an explicit retry.
 
 ## Related account-login guards
 

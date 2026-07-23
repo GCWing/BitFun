@@ -87,18 +87,23 @@ else
     BUILD_ARGS+=(--build-arg "CARGO_BUILD_JOBS=${RELAY_CARGO_BUILD_JOBS}")
     echo "  Using CARGO_BUILD_JOBS=${RELAY_CARGO_BUILD_JOBS}"
   fi
+  # BuildKit is required for Dockerfile cargo registry/git/target cache mounts.
   # Plain progress so nohup/file-redirected deploys still stream build lines.
+  export DOCKER_BUILDKIT=1
+  export COMPOSE_DOCKER_CLI_BUILD=1
   export BUILDKIT_PROGRESS="${BUILDKIT_PROGRESS:-plain}"
+  echo "  Using Docker BuildKit (cargo cache mounts enabled)"
   # Do not pass --platform unless the user explicitly set DOCKER_DEFAULT_PLATFORM;
   # native builds on amd64/arm64 servers are the supported path.
   # Compose V2 wants --progress as a global flag; honor BITFUN_DOCKER_MODE from common.sh.
   case "${BITFUN_DOCKER_MODE:-direct}" in
     sudo)
-      sudo docker compose --progress=plain build "${BUILD_ARGS[@]}"
+      sudo env DOCKER_BUILDKIT=1 COMPOSE_DOCKER_CLI_BUILD=1 BUILDKIT_PROGRESS="${BUILDKIT_PROGRESS}" \
+        docker compose --progress=plain build "${BUILD_ARGS[@]}"
       ;;
     sg)
       # shellcheck disable=SC2086
-      sg docker -c "docker compose --progress=plain build ${BUILD_ARGS[*]}"
+      sg docker -c "env DOCKER_BUILDKIT=1 COMPOSE_DOCKER_CLI_BUILD=1 BUILDKIT_PROGRESS='${BUILDKIT_PROGRESS}' docker compose --progress=plain build ${BUILD_ARGS[*]}"
       ;;
     *)
       if [ "${#COMPOSE[@]}" -ge 2 ] && [ "${COMPOSE[0]}" = "docker" ] && [ "${COMPOSE[1]}" = "compose" ]; then

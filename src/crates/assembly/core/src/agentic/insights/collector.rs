@@ -658,7 +658,9 @@ fn rebuild_messages_from_turns(turns: &[DialogTurnData]) -> Vec<Message> {
                     arguments: ti.tool_call.input.clone(),
                     raw_arguments: None,
                     is_error: false,
+                    parse_error: None,
                     recovered_from_truncation: false,
+                    repair_kind: Default::default(),
                 })
                 .collect();
 
@@ -1128,6 +1130,7 @@ mod tests {
             first_visible_output_ms: None,
             stream_duration_ms: None,
             attempt_count: None,
+            attempt_diagnostics: vec![],
             failure_category: None,
             token_details: None,
             status: "completed".to_string(),
