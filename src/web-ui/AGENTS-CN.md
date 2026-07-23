@@ -25,9 +25,9 @@
 
 Peer Device Mode（同账号远程完整客户端）的边界见 `docs/architecture/peer-device-mode.md`。
 前端不变量见 `src/infrastructure/peer-device/README.md`。不要重新引入内嵌会话/聊天壳；
-应从设备列表（Remote Connect 的「我的设备」组）进入 peer mode。
+应从设备列表（Remote Connect 的「我的 BitFun」组）进入 peer mode。
 
-一键部署 Relay：`src/features/relay-deploy/`（见其 README）。Remote Connect「我的设备」
+一键部署 Relay：`src/features/relay-deploy/`（见其 README）。Remote Connect「我的 BitFun」
 登录表单与 Self-Hosted 入口必须打开 `RelayDeployWizard`，不要改成外链 README。
 
 ## 本模块规则

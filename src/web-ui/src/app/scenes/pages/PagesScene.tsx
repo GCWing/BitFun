@@ -2,14 +2,22 @@ import React, { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useStat
 import {
   ChevronDown,
   ChevronUp,
+  CircleStop,
+  Clock3,
   Copy,
   ExternalLink,
   FileClock,
+  Files,
+  Globe,
+  HardDrive,
+  Lock,
   PanelsTopLeft,
   RefreshCw,
   Rocket,
   Save,
   Trash2,
+  Users,
+  type LucideIcon,
 } from 'lucide-react';
 import {
   Button,
@@ -61,6 +69,12 @@ function errorText(error: unknown): string {
 function replacePage(pages: PageInfo[], updated: PageInfo): PageInfo[] {
   return pages.map((page) => (page.slug === updated.slug ? updated : page));
 }
+
+const VISIBILITY_ICONS: Record<PageVisibility, LucideIcon> = {
+  private: Lock,
+  relay: Users,
+  public: Globe,
+};
 
 const PagesScene: React.FC<PagesSceneProps> = ({ isActive = true }) => {
   const { t, formatDate, formatNumber } = useI18n('scenes/pages');
@@ -235,6 +249,19 @@ const PagesScene: React.FC<PagesSceneProps> = ({ isActive = true }) => {
       case 'public': return t('visibility.public');
     }
   }, [t]);
+
+  const visibilityHint = useCallback((visibility: PageVisibility): string => {
+    switch (visibility) {
+      case 'private': return t('visibility.privateHint');
+      case 'relay': return t('visibility.relayHint');
+      case 'public': return t('visibility.publicHint');
+    }
+  }, [t]);
+
+  const deployedCount = useMemo(
+    () => pages.filter((page) => Boolean(page.deployed_version_id)).length,
+    [pages],
+  );
 
   const formatBytes = useCallback((bytes: number): string => {
     if (bytes < 1024) return t('bytes.b', { value: formatNumber(bytes) });
@@ -656,6 +683,20 @@ const PagesScene: React.FC<PagesSceneProps> = ({ isActive = true }) => {
         title={t('title')}
         subtitle={t('subtitle')}
         actions={refreshButton}
+        extraContent={!loading && pages.length > 0 ? (
+          <div className="pages-scene__summary">
+            <span className="pages-scene__summary-chip">
+              <PanelsTopLeft size={12} aria-hidden="true" />
+              {t('summary.total', { count: formatNumber(pages.length) })}
+            </span>
+            {deployedCount > 0 && (
+              <span className="pages-scene__summary-chip is-live">
+                <span className="pages-scene__live-dot" aria-hidden="true" />
+                {t('summary.deployed', { count: formatNumber(deployedCount) })}
+              </span>
+            )}
+          </div>
+        ) : null}
       />
 
       {loadError && pages.length > 0 && (
@@ -669,11 +710,28 @@ const PagesScene: React.FC<PagesSceneProps> = ({ isActive = true }) => {
       )}
 
       {loading && pages.length === 0 ? (
-        <GalleryEmpty
-          icon={<PanelsTopLeft size={36} />}
-          message={t('loading')}
-          testId="pages-loading"
-        />
+        <div
+          className="pages-scene__grid"
+          data-testid="pages-loading"
+          role="status"
+          aria-busy="true"
+          aria-label={t('loading')}
+        >
+          {[0, 1, 2].map((index) => (
+            <div className="pages-scene__card pages-scene__card--skeleton" key={index}>
+              <div className="pages-scene__skeleton-head">
+                <span className="pages-scene__skeleton-block" />
+                <span className="pages-scene__skeleton-lines">
+                  <span className="pages-scene__skeleton-line is-w-55" />
+                  <span className="pages-scene__skeleton-line is-w-35" />
+                </span>
+              </div>
+              <span className="pages-scene__skeleton-line is-w-80" />
+              <span className="pages-scene__skeleton-line is-w-65" />
+              <span className="pages-scene__skeleton-line is-w-45" />
+            </div>
+          ))}
+        </div>
       ) : loginRequired ? (
         <GalleryEmpty
           icon={<PanelsTopLeft size={36} />}
@@ -708,93 +766,108 @@ const PagesScene: React.FC<PagesSceneProps> = ({ isActive = true }) => {
             const pendingAction = pendingBySlug[page.slug];
             const pageBusy = Boolean(pendingAction);
             const titleDraft = titleDrafts[page.slug] ?? page.title;
+            const titleDirty = titleDraft.trim().length > 0 && titleDraft.trim() !== page.title;
+            const titleSaving = pendingAction === `title:${page.slug}`;
+            const VisibilityIcon = VISIBILITY_ICONS[page.visibility];
             return (
               <article className="pages-scene__card" key={page.slug} role="listitem">
-                <div className="pages-scene__card-heading">
+                <header className="pages-scene__card-head">
+                  <span className="pages-scene__card-icon" aria-hidden="true">
+                    <PanelsTopLeft size={16} />
+                  </span>
                   <div className="pages-scene__identity">
-                    <h3>{page.title || page.slug}</h3>
-                    <code>/{page.slug}</code>
+                    <h3 title={page.title || page.slug}>{page.title || page.slug}</h3>
+                    <code className="pages-scene__slug">/{page.slug}</code>
                   </div>
                   <span className={`pages-scene__status${deployed ? ' is-deployed' : ''}`}>
+                    <span className="pages-scene__status-dot" aria-hidden="true" />
                     {deployed ? t('status.deployed') : t('status.savedOnly')}
+                  </span>
+                </header>
+
+                <div className="pages-scene__meta">
+                  <span className="pages-scene__meta-item">
+                    <Clock3 size={12} aria-hidden="true" />
+                    {t('meta.updated', { date: formatTimestamp(page.updated_at) })}
+                  </span>
+                  <span className="pages-scene__meta-item">
+                    <HardDrive size={12} aria-hidden="true" />
+                    {t('meta.size', { size: formatBytes(page.total_bytes) })}
+                  </span>
+                  <span className="pages-scene__meta-item">
+                    <Files size={12} aria-hidden="true" />
+                    {t('meta.files', { count: page.file_count })}
                   </span>
                 </div>
 
-                <div className="pages-scene__meta">
-                  <span>{t('meta.updated', { date: formatTimestamp(page.updated_at) })}</span>
-                  <span>{t('meta.size', { size: formatBytes(page.total_bytes) })}</span>
-                  <span>{t('meta.files', { count: page.file_count })}</span>
-                </div>
+                <div className="pages-scene__settings">
+                  <div className="pages-scene__setting-row">
+                    <span className="pages-scene__setting-label">{t('titleField.label')}</span>
+                    <div className="pages-scene__title-control">
+                      <Input
+                        size="small"
+                        value={titleDraft}
+                        maxLength={120}
+                        disabled={pageBusy}
+                        onChange={(event) => {
+                          const value = event.currentTarget.value;
+                          setTitleDrafts((current) => ({
+                            ...current,
+                            [page.slug]: value,
+                          }));
+                        }}
+                        onKeyDown={(event) => {
+                          if (event.key === 'Enter') void saveTitle(page, pageOwnerEpoch);
+                        }}
+                        aria-label={t('titleField.inputAria', { slug: page.slug })}
+                      />
+                      {(titleDirty || titleSaving) && (
+                        <Button
+                          variant="secondary"
+                          size="small"
+                          disabled={pageBusy || !titleDirty}
+                          isLoading={titleSaving}
+                          onClick={() => void saveTitle(page, pageOwnerEpoch)}
+                        >
+                          <Save size={13} /> {t('actions.saveTitle')}
+                        </Button>
+                      )}
+                    </div>
+                  </div>
 
-                <div className="pages-scene__title-row">
-                  <span>{t('titleField.label')}</span>
-                  <div className="pages-scene__title-control">
-                    <Input
-                      size="small"
-                      value={titleDraft}
-                      maxLength={120}
-                      disabled={pageBusy}
-                      onChange={(event) => {
-                        const value = event.currentTarget.value;
-                        setTitleDrafts((current) => ({
-                          ...current,
-                          [page.slug]: value,
-                        }));
-                      }}
-                      onKeyDown={(event) => {
-                        if (event.key === 'Enter') void saveTitle(page, pageOwnerEpoch);
-                      }}
-                      aria-label={t('titleField.inputAria', { slug: page.slug })}
-                    />
-                    <Button
-                      variant="secondary"
-                      size="small"
-                      disabled={pageBusy || !titleDraft.trim() || titleDraft.trim() === page.title}
-                      isLoading={pendingAction === `title:${page.slug}`}
-                      onClick={() => void saveTitle(page, pageOwnerEpoch)}
-                    >
-                      <Save size={13} /> {t('actions.saveTitle')}
-                    </Button>
+                  <div className="pages-scene__setting-row">
+                    <span className="pages-scene__setting-label">{t('visibility.label')}</span>
+                    <div className="pages-scene__visibility-control">
+                      <Select
+                        size="small"
+                        value={page.visibility}
+                        options={visibilityOptions}
+                        disabled={pageBusy}
+                        onChange={(value) => void changeVisibility(
+                          page,
+                          pageOwnerEpoch,
+                          String(value) as PageVisibility,
+                        )}
+                        triggerAriaLabel={t('visibility.changeAria', { title: page.title || page.slug })}
+                      />
+                      <span className="pages-scene__visibility-hint">
+                        <VisibilityIcon size={12} aria-hidden="true" />
+                        {visibilityHint(page.visibility)}
+                      </span>
+                    </div>
                   </div>
                 </div>
 
-                <div className="pages-scene__visibility-row">
-                  <span>{t('visibility.label')}</span>
-                  <Select
-                    size="small"
-                    value={page.visibility}
-                    options={visibilityOptions}
-                    disabled={pageBusy}
-                    onChange={(value) => void changeVisibility(
-                      page,
-                      pageOwnerEpoch,
-                      String(value) as PageVisibility,
-                    )}
-                    triggerAriaLabel={t('visibility.changeAria', { title: page.title || page.slug })}
-                  />
-                </div>
-
-                <div className="pages-scene__actions">
+                <footer className="pages-scene__actions">
                   {deployed && (
                     <Button
-                      variant="secondary"
+                      variant="primary"
                       size="small"
                       onClick={() => void openPage(page, pageOwnerEpoch)}
                       disabled={pageBusy}
                       isLoading={pendingAction === `open:${page.slug}:production`}
                     >
                       <ExternalLink size={13} /> {t('actions.openProduction')}
-                    </Button>
-                  )}
-                  {deployed && (
-                    <Button
-                      variant="ghost"
-                      size="small"
-                      onClick={() => void unpublishPage(page, pageOwnerEpoch)}
-                      disabled={pageBusy}
-                      isLoading={pendingAction === `unpublish:${page.slug}`}
-                    >
-                      {t('actions.unpublish')}
                     </Button>
                   )}
                   {deployed && (
@@ -817,8 +890,23 @@ const PagesScene: React.FC<PagesSceneProps> = ({ isActive = true }) => {
                     aria-expanded={expanded}
                   >
                     <FileClock size={13} /> {t('actions.versions')}
+                    {versions.length > 0 && (
+                      <span className="pages-scene__count-badge">{formatNumber(versions.length)}</span>
+                    )}
                     {expanded ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
                   </Button>
+                  <span className="pages-scene__actions-spacer" />
+                  {deployed && (
+                    <Button
+                      variant="ghost"
+                      size="small"
+                      onClick={() => void unpublishPage(page, pageOwnerEpoch)}
+                      disabled={pageBusy}
+                      isLoading={pendingAction === `unpublish:${page.slug}`}
+                    >
+                      <CircleStop size={13} /> {t('actions.unpublish')}
+                    </Button>
+                  )}
                   <Button
                     variant="danger"
                     size="small"
@@ -828,12 +916,15 @@ const PagesScene: React.FC<PagesSceneProps> = ({ isActive = true }) => {
                   >
                     <Trash2 size={13} /> {t('actions.deletePage')}
                   </Button>
-                </div>
+                </footer>
 
                 {expanded && (
                   <div className="pages-scene__versions" data-testid={`page-versions-${page.slug}`}>
                     <div className="pages-scene__versions-heading">
-                      <span>{t('versions.title')}</span>
+                      <span>
+                        <FileClock size={13} aria-hidden="true" />
+                        {t('versions.title')}
+                      </span>
                       <Button
                         variant="ghost"
                         size="small"
@@ -845,68 +936,75 @@ const PagesScene: React.FC<PagesSceneProps> = ({ isActive = true }) => {
                     </div>
                     {versions.length === 0 ? (
                       <p className="pages-scene__versions-empty">{t('versions.empty')}</p>
-                    ) : versions.map((version) => (
-                      <div className="pages-scene__version" key={version.version_id}>
-                        <div className="pages-scene__version-copy">
-                          <div>
-                            <code>{version.version_id}</code>
-                            {version.deployed && <span className="pages-scene__current-badge">{t('versions.current')}</span>}
-                            {version.has_worker && <span className="pages-scene__worker-badge">{t('versions.worker')}</span>}
-                          </div>
-                          <span>{t('versions.meta', {
-                            date: formatTimestamp(version.created_at),
-                            size: formatBytes(version.total_bytes),
-                            count: version.file_count,
-                          })}</span>
-                          {version.note && <p>{version.note}</p>}
-                        </div>
-                        <div className="pages-scene__version-actions">
-                          <Button
-                            variant="ghost"
-                            size="small"
-                            onClick={() => void openPage(page, pageOwnerEpoch, version.version_id)}
-                            disabled={pageBusy}
-                            isLoading={pendingAction === `open:${page.slug}:${version.version_id}`}
-                            aria-label={t('actions.openVersionAria', { version: version.version_id })}
+                    ) : (
+                      <ol className="pages-scene__version-list">
+                        {versions.map((version) => (
+                          <li
+                            className={`pages-scene__version${version.deployed ? ' is-current' : ''}`}
+                            key={version.version_id}
                           >
-                            <ExternalLink size={13} />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="small"
-                            onClick={() => void copyPageLink(page, pageOwnerEpoch, version)}
-                            disabled={pageBusy}
-                            isLoading={pendingAction === `copy:${page.slug}:${version.version_id}`}
-                            aria-label={t('actions.copyVersionAria', { version: version.version_id })}
-                          >
-                            <Copy size={13} />
-                          </Button>
-                          {!version.deployed && (
-                            <Button
-                              variant="secondary"
-                              size="small"
-                              onClick={() => void deployVersion(page, pageOwnerEpoch, version)}
-                              disabled={pageBusy}
-                              isLoading={pendingAction === `deploy:${page.slug}:${version.version_id}`}
-                            >
-                              <Rocket size={13} /> {t('actions.deploy')}
-                            </Button>
-                          )}
-                          {!version.deployed && (
-                            <Button
-                              variant="danger"
-                              size="small"
-                              onClick={() => void deleteVersion(page, pageOwnerEpoch, version)}
-                              disabled={pageBusy}
-                              isLoading={pendingAction === `delete-version:${page.slug}:${version.version_id}`}
-                              aria-label={t('actions.deleteVersionAria', { version: version.version_id })}
-                            >
-                              <Trash2 size={13} />
-                            </Button>
-                          )}
-                        </div>
-                      </div>
-                    ))}
+                            <div className="pages-scene__version-copy">
+                              <div className="pages-scene__version-title-row">
+                                <code>{version.version_id}</code>
+                                {version.deployed && <span className="pages-scene__current-badge">{t('versions.current')}</span>}
+                                {version.has_worker && <span className="pages-scene__worker-badge">{t('versions.worker')}</span>}
+                              </div>
+                              <span>{t('versions.meta', {
+                                date: formatTimestamp(version.created_at),
+                                size: formatBytes(version.total_bytes),
+                                count: version.file_count,
+                              })}</span>
+                              {version.note && <p>{version.note}</p>}
+                            </div>
+                            <div className="pages-scene__version-actions">
+                              <Button
+                                variant="ghost"
+                                size="small"
+                                onClick={() => void openPage(page, pageOwnerEpoch, version.version_id)}
+                                disabled={pageBusy}
+                                isLoading={pendingAction === `open:${page.slug}:${version.version_id}`}
+                                aria-label={t('actions.openVersionAria', { version: version.version_id })}
+                              >
+                                <ExternalLink size={13} />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="small"
+                                onClick={() => void copyPageLink(page, pageOwnerEpoch, version)}
+                                disabled={pageBusy}
+                                isLoading={pendingAction === `copy:${page.slug}:${version.version_id}`}
+                                aria-label={t('actions.copyVersionAria', { version: version.version_id })}
+                              >
+                                <Copy size={13} />
+                              </Button>
+                              {!version.deployed && (
+                                <Button
+                                  variant="secondary"
+                                  size="small"
+                                  onClick={() => void deployVersion(page, pageOwnerEpoch, version)}
+                                  disabled={pageBusy}
+                                  isLoading={pendingAction === `deploy:${page.slug}:${version.version_id}`}
+                                >
+                                  <Rocket size={13} /> {t('actions.deploy')}
+                                </Button>
+                              )}
+                              {!version.deployed && (
+                                <Button
+                                  variant="danger"
+                                  size="small"
+                                  onClick={() => void deleteVersion(page, pageOwnerEpoch, version)}
+                                  disabled={pageBusy}
+                                  isLoading={pendingAction === `delete-version:${page.slug}:${version.version_id}`}
+                                  aria-label={t('actions.deleteVersionAria', { version: version.version_id })}
+                                >
+                                  <Trash2 size={13} />
+                                </Button>
+                              )}
+                            </div>
+                          </li>
+                        ))}
+                      </ol>
+                    )}
                   </div>
                 )}
               </article>

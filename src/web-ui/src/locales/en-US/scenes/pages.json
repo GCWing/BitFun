@@ -13,11 +13,18 @@
     "savedOnly": "Saved only",
     "notDeployed": "not deployed"
   },
+  "summary": {
+    "total": "{{count}} Pages",
+    "deployed": "{{count}} in production"
+  },
   "visibility": {
     "label": "Visibility",
     "private": "Private",
     "relay": "Signed-in relay users",
     "public": "Public",
+    "privateHint": "Only you can open this Page",
+    "relayHint": "Signed-in users on this relay can open it",
+    "publicHint": "Anyone with the link can open it",
     "changeAria": "Change visibility for {{title}}"
   },
   "titleField": {

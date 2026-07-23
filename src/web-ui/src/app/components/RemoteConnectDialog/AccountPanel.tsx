@@ -1,5 +1,5 @@
 /**
- * Account ("My Devices") panel inside the Remote Connect dialog.
+ * Account ("My BitFun") panel inside the Remote Connect dialog.
  *
  * Views: login → overwrite (optional) → devices
  * Unlike the old standalone dialog, a successful login keeps the panel open
@@ -26,7 +26,9 @@ import {
 import {
   User, Lock, Server, LogIn, Monitor, CloudDownload, Upload,
   ChevronRight, RefreshCw, Eye, EyeOff, X, Rocket, Copy, Check,
+  PanelsTopLeft,
 } from 'lucide-react';
+import { useSceneStore } from '@/app/stores/sceneStore';
 import { remoteConnectAPI } from '@/infrastructure/api/service-api/RemoteConnectAPI';
 import type { AccountHint, AccountDeviceInfo } from '@/infrastructure/api/service-api/RemoteConnectAPI';
 import { RelayDeployWizard } from '@/features/relay-deploy';
@@ -149,6 +151,7 @@ export const AccountPanel: React.FC<AccountPanelProps> = ({
   const { success, info, warning } = useNotification();
   const { workspacePath } = useCurrentWorkspace();
   const { enterPeerMode } = usePeerDeviceMode();
+  const openScene = useSceneStore((s) => s.openScene);
   const syncStatus = useAccountSyncStore((s) => s.status);
   const syncProgress = useAccountSyncStore((s) => s.progress);
   const lastSyncError = useAccountSyncStore((s) => s.lastError);
@@ -875,6 +878,11 @@ export const AccountPanel: React.FC<AccountPanelProps> = ({
     t,
   ]);
 
+  const handleOpenPages = useCallback(() => {
+    onCloseDialog();
+    openScene('pages');
+  }, [onCloseDialog, openScene]);
+
   const selectDevice = useCallback(async (device: AccountDeviceInfo) => {
     if (!device.online) return;
     if (localDeviceId && device.device_id === localDeviceId) return;
@@ -1154,6 +1162,31 @@ export const AccountPanel: React.FC<AccountPanelProps> = ({
                 </div>
                 );
               })}
+            </div>
+            <div className="account-panel__pages-section">
+              <span className="account-panel__pages-section-title">
+                {t('accountLogin.pagesSectionTitle')}
+              </span>
+              <button
+                type="button"
+                className="account-panel__pages-entry"
+                onClick={handleOpenPages}
+                aria-label={t('accountLogin.pagesEntryAria')}
+                disabled={loading}
+              >
+                <span className="account-panel__pages-entry-icon" aria-hidden="true">
+                  <PanelsTopLeft size={16} />
+                </span>
+                <span className="account-panel__pages-entry-text">
+                  <span className="account-panel__pages-entry-title">
+                    {t('accountLogin.pagesEntryTitle')}
+                  </span>
+                  <span className="account-panel__pages-entry-desc">
+                    {t('accountLogin.pagesEntryDesc')}
+                  </span>
+                </span>
+                <ChevronRight size={14} aria-hidden="true" />
+              </button>
             </div>
             <div className="account-panel__actions">
               {relayError && (

@@ -13,11 +13,18 @@
     "savedOnly": "仅保存",
     "notDeployed": "尚未部署"
   },
+  "summary": {
+    "total": "{{count}} 个页面",
+    "deployed": "{{count}} 个生产运行中"
+  },
   "visibility": {
     "label": "可见范围",
     "private": "仅自己",
     "relay": "已登录中继用户",
     "public": "公开",
+    "privateHint": "仅你自己可以访问",
+    "relayHint": "登录该中继的账号均可访问",
+    "publicHint": "任何获得链接的人都可以访问",
     "changeAria": "修改 {{title}} 的可见范围"
   },
   "titleField": {

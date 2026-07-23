@@ -2,7 +2,7 @@
  * Remote Connect dialog with three groups:
  *   - Network (LAN / Ngrok / BitFun Server / Custom Server) – mutually exclusive
  *   - IM Bot (Telegram / Feishu / WeChat) – mutually exclusive
- *   - Account / My Devices (login, cloud sync, peer device control)
+ *   - Account / My BitFun (login, cloud sync, peer device control, Pages entry)
  * Network and Bot require an open workspace and can be active simultaneously;
  * the Account group works without a workspace.
  */
