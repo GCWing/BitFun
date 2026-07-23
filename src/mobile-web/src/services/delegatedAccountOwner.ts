@@ -20,6 +20,10 @@ export function reconcileDelegatedAccountOwner(
 
   if (ownerWasReplaced) {
     store.resetForDeviceSwitch();
+    // A canonical account id is not user-facing, and the previous username no
+    // longer describes the active owner. Wait for a new authenticated pairing
+    // before showing an account label again.
+    store.setAuthenticatedUserLabel(null);
   }
 
   if (change.kind === 'unavailable') {

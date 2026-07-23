@@ -131,6 +131,7 @@ const PairingPage: React.FC<PairingPageProps> = ({ onPaired }) => {
     setError,
     error,
     setAuthenticatedUserId,
+    setAuthenticatedUserLabel,
   } = useMobileStore();
   const [userId, setUserId] = useState('');
   const [password, setPassword] = useState('');
@@ -237,7 +238,14 @@ const PairingPage: React.FC<PairingPageProps> = ({ onPaired }) => {
       setFailureCount(0);
       setLockUntil(null);
       setPassword('');
-      setAuthenticatedUserId(initialSync.authenticated_user_id ?? userIdValue);
+      // `authenticated_user_id` is the canonical account UUID used for
+      // ownership checks. The submitted value is the verified username in
+      // account mode and is the appropriate user-facing label.
+      setAuthenticatedUserId(
+        initialSync.authenticated_user_id
+        ?? (requiresAccountAuth ? null : userIdValue),
+      );
+      setAuthenticatedUserLabel(userIdValue);
 
       const sessionMgr = new RemoteSessionManager(client);
       const store = useMobileStore.getState();
@@ -359,6 +367,7 @@ const PairingPage: React.FC<PairingPageProps> = ({ onPaired }) => {
     pairingTarget.room,
     requiresAccountAuth,
     setAuthenticatedUserId,
+    setAuthenticatedUserLabel,
     setConnectionStatus,
     setError,
     t,

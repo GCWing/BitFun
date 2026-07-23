@@ -171,6 +171,7 @@ export const RemoteConnectDialog: React.FC<RemoteConnectDialogProps> = ({
   const [hasAgreedDisclaimer, setHasAgreedDisclaimer] = useState<boolean>(() => getRemoteConnectDisclaimerAgreed());
   const [botVerboseMode, setBotVerboseMode] = useState<boolean>(false);
   const [showRelayDeploy, setShowRelayDeploy] = useState(false);
+  const [accountUsername, setAccountUsername] = useState<string | null>(null);
 
   const [qrCopied, setQrCopied] = useState(false);
   const [customUrl, setCustomUrl] = useState('');
@@ -453,6 +454,25 @@ export const RemoteConnectDialog: React.FC<RemoteConnectDialogProps> = ({
       unlisten();
     };
   }, []);
+
+  // The account status and pairing status intentionally expose opaque UUIDs
+  // for identity checks. Resolve the persisted, non-secret login hint for the
+  // user-facing connected state instead.
+  useEffect(() => {
+    if (!isOpen || !accountLoggedIn) {
+      setAccountUsername(null);
+      return;
+    }
+    let cancelled = false;
+    void remoteConnectAPI.accountGetCredentialHint().then((hint) => {
+      if (!cancelled) {
+        setAccountUsername(hint?.username.trim() || null);
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [accountLoggedIn, isOpen]);
 
   useEffect(() => {
     formSnapshotRef.current = {
@@ -833,14 +853,14 @@ export const RemoteConnectDialog: React.FC<RemoteConnectDialogProps> = ({
 
   const renderConnectedView = (
     onDisconnect: () => void,
-    userId?: string | null,
+    username?: string | null,
   ) => (
     <div className="bitfun-remote-connect__connected">
       <div className="bitfun-remote-connect__status">
         <Badge variant="success">{t('remoteConnect.stateConnected')}</Badge>
-        {userId && (
-          <span className="bitfun-remote-connect__peer-user-id">
-            {t('remoteConnect.connectedUserId')}: {userId}
+        {username && (
+          <span className="bitfun-remote-connect__peer-username">
+            {t('accountLogin.username')}: {username}
           </span>
         )}
       </div>
@@ -930,7 +950,7 @@ export const RemoteConnectDialog: React.FC<RemoteConnectDialogProps> = ({
           )}
           {renderConnectedView(
             handleDisconnectRelay,
-            status?.peer_user_id,
+            accountUsername,
           )}
         </>
       );

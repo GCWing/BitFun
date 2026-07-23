@@ -80,6 +80,25 @@ describe('Remote Connect safety contracts', () => {
     expect(loginResult).not.toContain('token:');
   });
 
+  it('uses verified usernames instead of opaque account ids in user-facing login states', () => {
+    const connectedView = dialogSource.slice(
+      dialogSource.indexOf('const renderConnectedView'),
+      dialogSource.indexOf('const handleCopyPairingUrl'),
+    );
+    const performLogin = accountPanelSource.slice(
+      accountPanelSource.indexOf('const performLogin'),
+      accountPanelSource.indexOf('const handleLogin'),
+    );
+
+    expect(dialogSource).toContain('remoteConnectAPI.accountGetCredentialHint()');
+    expect(dialogSource).toContain('setAccountUsername(hint?.username.trim() || null)');
+    expect(connectedView).toContain("t('accountLogin.username')");
+    expect(connectedView).not.toContain('connectedUserId');
+    expect(dialogSource).toContain('handleDisconnectRelay,\n            accountUsername,');
+    expect(performLogin).toContain("loginSuccess', { user_id: user }");
+    expect(performLogin).not.toContain("loginSuccess', { user_id: result.user_id }");
+  });
+
   it('keeps transport failures distinct from a stale pending-owner response', () => {
     const cancelMethod = remoteConnectApiSource.slice(
       remoteConnectApiSource.indexOf('async accountCancelPendingLogin'),

@@ -644,7 +644,7 @@ export const AccountPanel: React.FC<AccountPanelProps> = ({
         setLoading(false);
         return;
       }
-      success(t('accountLogin.loginSuccess', { user_id: result.user_id }));
+      success(t('accountLogin.loginSuccess', { user_id: user }));
       completeLogin(server, true, epoch);
     } catch (e: unknown) {
       if (!isAccountEpochCurrent(epoch)) return;

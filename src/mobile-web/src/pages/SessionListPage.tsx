@@ -186,7 +186,7 @@ const SessionListPage: React.FC<SessionListPageProps> = ({ sessionMgr, onSelectS
     currentAssistant,
     setCurrentAssistant,
     setPairedDisplayMode,
-    authenticatedUserId,
+    authenticatedUserLabel,
     connectionHealth,
     controlTarget,
   } = useMobileStore();
@@ -945,10 +945,10 @@ const SessionListPage: React.FC<SessionListPageProps> = ({ sessionMgr, onSelectS
           <img src={logoIcon} alt="BitFun" className="session-list__logo" />
           <div className="session-list__header-copy">
             <h1>{t('shared.product.remote')}</h1>
-            {authenticatedUserId && (
-              <span className="session-list__header-user-id">
+            {authenticatedUserLabel && (
+              <span className="session-list__header-account-name">
                 <span className={`session-list__health-dot session-list__health-dot--${connectionHealth}`} title={(() => { switch (connectionHealth) { case 'connected': return t('sessions.connectionConnected'); case 'checking': return t('sessions.connectionChecking'); case 'unreachable': return t('sessions.connectionUnreachable'); default: return t('sessions.connectionUnpaired'); } })()} />
-                {authenticatedUserId}
+                {authenticatedUserLabel}
                 {controlTarget && !controlTarget.isHome && controlTarget.deviceName && (
                   <span className="session-list__header-target" title={t('devices.controllingDevice', { name: controlTarget.deviceName })}>
                     {controlTarget.deviceName}
@@ -971,7 +971,7 @@ const SessionListPage: React.FC<SessionListPageProps> = ({ sessionMgr, onSelectS
               </svg>
             </button>
           )}
-          <LanguageToggleButton />
+          <LanguageToggleButton className="session-list__language-btn" />
           <button className="session-list__theme-btn" onClick={toggleTheme} aria-label={t('common.toggleTheme')}>
             <ThemeToggleIcon isDark={isDark} />
           </button>
