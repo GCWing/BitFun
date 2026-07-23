@@ -40,6 +40,7 @@ import {
 } from '../services/general-chat/GeneralChatPort';
 import { MobileIdentitySnapshot, MobileIdentityStore } from '../services/MobileIdentityStore';
 import { RemoteDescriptorParser } from '../services/RemoteDescriptorParser';
+import { AppRootRouteState } from '../services/AppRootRouteState';
 import { RemoteActivityLifecycleController } from '../services/RemoteActivityLifecycleController';
 import { RemoteChatCommandController } from '../services/RemoteChatCommandController';
 import {
@@ -454,70 +455,48 @@ struct AppRoot {
   }
 
   private isGeneralComposerRoute(route: AppRoute): boolean {
-    return AppRouteContract.isGeneralComposerRoute(route);
+    return AppRootRouteState.isGeneralComposerRoute(route);
   }
 
   private visibleChatInput(): string {
-    return this.isGeneralComposerRoute(this.currentRoute()) ?
-      this.generalChatPageState.chatInput : this.remotePageState.chatInput;
+    return AppRootRouteState.chatInput(this.currentRoute(), this.generalChatPageState, this.remotePageState);
   }
 
   private visibleSelectedImages(): SelectedImageAttachment[] {
-    return this.isGeneralComposerRoute(this.currentRoute()) ?
-      this.generalChatPageState.selectedImages : this.remotePageState.selectedImages;
+    return AppRootRouteState.selectedImages(this.currentRoute(), this.generalChatPageState, this.remotePageState);
   }
 
   private visibleVoiceListening(): boolean {
-    return this.isGeneralComposerRoute(this.currentRoute()) ?
-      this.generalChatPageState.isVoiceListening : this.remotePageState.isVoiceListening;
+    return AppRootRouteState.voiceListening(this.currentRoute(), this.generalChatPageState, this.remotePageState);
   }
 
   private setChatInputForRoute(route: AppRoute, value: string): void {
-    if (this.isGeneralComposerRoute(route)) {
-      this.generalChatPageState.setChatInput(value);
-      return;
-    }
-    this.remotePageState.setChatInput(value);
+    AppRootRouteState.setChatInput(route, value, this.generalChatPageState, this.remotePageState);
   }
 
   private setSelectedImagesForRoute(route: AppRoute, images: SelectedImageAttachment[]): void {
-    if (this.isGeneralComposerRoute(route)) {
-      this.generalChatPageState.setSelectedImages(images);
-      return;
-    }
-    this.remotePageState.setSelectedImages(images);
+    AppRootRouteState.setSelectedImages(route, images, this.generalChatPageState, this.remotePageState);
   }
 
   private addSelectedImagesForRoute(route: AppRoute, images: SelectedImageAttachment[]): void {
-    if (this.isGeneralComposerRoute(route)) {
-      this.generalChatPageState.addSelectedImages(images);
-      return;
-    }
-    this.remotePageState.addSelectedImages(images);
+    AppRootRouteState.addSelectedImages(route, images, this.generalChatPageState, this.remotePageState);
   }
 
   private removeSelectedImageForRoute(route: AppRoute, imageId: string): void {
-    if (this.isGeneralComposerRoute(route)) {
-      this.generalChatPageState.removeSelectedImage(imageId);
-      return;
-    }
-    this.remotePageState.removeSelectedImage(imageId);
+    AppRootRouteState.removeSelectedImage(route, imageId, this.generalChatPageState, this.remotePageState);
   }
 
   private clearComposerForRoute(route: AppRoute): void {
-    if (this.isGeneralComposerRoute(route)) {
-      this.generalChatPageState.clearComposer();
-      return;
-    }
-    this.remotePageState.clearComposer();
+    AppRootRouteState.clearComposer(route, this.generalChatPageState, this.remotePageState);
   }
 
   private setVoiceListeningForRoute(route: AppRoute, isVoiceListening: boolean): void {
-    if (this.isGeneralComposerRoute(route)) {
-      this.generalChatPageState.setVoiceListening(isVoiceListening);
-      return;
-    }
-    this.remotePageState.setVoiceListening(isVoiceListening);
+    AppRootRouteState.setVoiceListening(
+      route,
+      isVoiceListening,
+      this.generalChatPageState,
+      this.remotePageState
+    );
   }
 
   private setAllVoiceListening(isVoiceListening: boolean): void {
@@ -526,13 +505,12 @@ struct AppRoot {
   }
 
   private voiceInputSnapshot(route: AppRoute = this.currentRoute()): VoiceInputRouteSnapshot {
-    return {
-      routeId: `${route}`,
-      isListening: this.visibleVoiceListening(),
-      isBusy: this.visibleChatBusy(),
-      inputText: this.visibleChatInput(),
-      selectedImageCount: this.visibleSelectedImages().length
-    };
+    return AppRootRouteState.snapshot(
+      route,
+      this.visibleChatBusy(),
+      this.generalChatPageState,
+      this.remotePageState
+    );
   }
 
   private isRoute(route: AppRoute): boolean {
