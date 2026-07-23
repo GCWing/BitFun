@@ -7,6 +7,7 @@ use super::local_shell::{resolve_local_exec_shell, ResolvedLocalExecShell};
 use super::progress::ExecOutputProgressBridge;
 use super::rendering::render_exec_response_for_assistant_with_notes;
 use crate::agentic::tools::framework::{Tool, ToolResult, ToolUseContext, ValidationResult};
+use crate::agentic::tools::implementations::shell_command_safety;
 use crate::infrastructure::events::event_system::{
     get_global_event_system, BackendEvent::BackgroundCommandLifecycle,
 };
@@ -176,7 +177,16 @@ impl ExecCommandTool {
             | ShellType::Sh
             | ShellType::Ksh
             | ShellType::Csh
-            | ShellType::Custom(_) => vec![shell, "-lc".to_string(), cmd.to_string()],
+            | ShellType::Custom(_) => {
+                let mut argv = vec![shell];
+                argv.extend(
+                    posix_shell_login_args(shell_type)
+                        .iter()
+                        .map(|arg| (*arg).to_string()),
+                );
+                argv.push(cmd.to_string());
+                argv
+            }
             ShellType::PowerShell | ShellType::PowerShellCore => {
                 vec![
                     shell,
@@ -240,7 +250,7 @@ impl ExecCommandTool {
         env_snapshot: Option<&RemoteEnvSnapshot>,
     ) -> String {
         let env_words = remote_command_env_words(Self::merged_remote_env(env_snapshot));
-        let shell_args = remote_shell_login_args().join(" ");
+        let shell_args = posix_shell_login_args(&shell.shell_type).join(" ");
 
         format!(
             "cd {} && env {} {} {} {}",
@@ -252,16 +262,21 @@ impl ExecCommandTool {
         )
     }
 
-    fn remote_non_tty_control_wrapper(cmd: &str, shell_path: &str) -> String {
+    fn remote_non_tty_control_wrapper(
+        cmd: &str,
+        shell_path: &str,
+        shell_type: &ShellType,
+    ) -> String {
         let escaped_shell = shell_escape(shell_path);
         let escaped_cmd = shell_escape(cmd);
+        let shell_args = posix_shell_login_args(shell_type).join(" ");
         format!(
             r#"__bitfun_shell={escaped_shell}
 __bitfun_cmd={escaped_cmd}
 if command -v setsid >/dev/null 2>&1; then
-  setsid "$__bitfun_shell" -lc "$__bitfun_cmd" &
+  setsid "$__bitfun_shell" {shell_args} "$__bitfun_cmd" &
 else
-  "$__bitfun_shell" -lc "$__bitfun_cmd" &
+  "$__bitfun_shell" {shell_args} "$__bitfun_cmd" &
 fi
 __bitfun_child=$!
 __bitfun_pgid=$__bitfun_child
@@ -308,8 +323,9 @@ exit "$__bitfun_status""#
                 "`cd {} && env ... {} {} <cmd>`",
                 shell_escape(workdir),
                 shell_escape(&shell.path),
-                remote_shell_login_args().join(" ")
+                posix_shell_login_args(&shell.shell_type).join(" ")
             ),
+            "pipeline_failure_policy": pipeline_failure_policy(&shell.shell_type),
             "remote_env_snapshot_applied": env_snapshot_applied,
         })
     }
@@ -323,7 +339,10 @@ exit "$__bitfun_status""#
             | ShellType::Sh
             | ShellType::Ksh
             | ShellType::Csh
-            | ShellType::Custom(_) => format!("`{shell} -lc <cmd>`"),
+            | ShellType::Custom(_) => format!(
+                "`{shell} {} <cmd>`",
+                posix_shell_login_args(shell_type).join(" ")
+            ),
             ShellType::PowerShell | ShellType::PowerShellCore => {
                 format!("`{shell} -Command <cmd>`")
             }
@@ -337,6 +356,7 @@ exit "$__bitfun_status""#
             "type": shell.shell_type.to_string(),
             "path": shell.path.to_string_lossy(),
             "invocation": Self::shell_invocation_for_model(&shell.path, &shell.shell_type),
+            "pipeline_failure_policy": pipeline_failure_policy(&shell.shell_type),
         })
     }
 
@@ -643,7 +663,7 @@ exit "$__bitfun_status""#
         let command_body = if tty {
             cmd.to_string()
         } else {
-            Self::remote_non_tty_control_wrapper(cmd, &shell.path)
+            Self::remote_non_tty_control_wrapper(cmd, &shell.path, &shell.shell_type)
         };
         let command = Self::remote_login_shell_command(
             &workdir,
@@ -772,8 +792,18 @@ fn remote_command_env_words(env: HashMap<String, String>) -> String {
         .join(" ")
 }
 
-fn remote_shell_login_args() -> &'static [&'static str] {
-    &["-lc"]
+fn posix_shell_login_args(shell_type: &ShellType) -> &'static [&'static str] {
+    match shell_type {
+        ShellType::Bash | ShellType::Zsh | ShellType::Ksh => &["-o", "pipefail", "-lc"],
+        _ => &["-lc"],
+    }
+}
+
+fn pipeline_failure_policy(shell_type: &ShellType) -> &'static str {
+    match shell_type {
+        ShellType::Bash | ShellType::Zsh | ShellType::Ksh => "pipefail",
+        _ => "last_command",
+    }
 }
 
 #[async_trait]
@@ -799,6 +829,7 @@ Waiting and continuation:
 
 Output:
 - Output is only what was produced during this tool call's wait window.
+- Bash, Zsh, and Ksh run with `pipefail`, so a pipeline reports a non-zero exit code when any stage fails unless the command explicitly handles that failure.
 - In non-TTY mode, stdout and stderr ordering is not guaranteed; use tty=true or redirect stderr with 2>&1 when terminal ordering matters."#
             .to_string())
     }
@@ -859,7 +890,7 @@ Output:
     async fn validate_input(
         &self,
         input: &Value,
-        _context: Option<&ToolUseContext>,
+        context: Option<&ToolUseContext>,
     ) -> ValidationResult {
         let cmd = input.get("cmd").and_then(Value::as_str).unwrap_or_default();
         if cmd.trim().is_empty() {
@@ -869,6 +900,21 @@ Output:
                 error_code: Some(400),
                 meta: None,
             };
+        }
+        if let Some(message) = shell_command_safety::denial_for_command(cmd) {
+            return ValidationResult {
+                result: false,
+                message: Some(message),
+                error_code: Some(403),
+                meta: None,
+            };
+        }
+        if let Some(context) = context {
+            if let Some(rejection) =
+                crate::agentic::execution::edit_constraint_guard::check_bash_command(context, cmd)
+            {
+                return rejection;
+            }
         }
         ValidationResult {
             result: true,
@@ -1003,6 +1049,24 @@ mod tests {
     use std::path::PathBuf;
     use terminal_core::ShellType;
 
+    #[tokio::test]
+    async fn validation_allows_normal_web_and_git_commands() {
+        let tool = ExecCommandTool::new();
+
+        for command in [
+            "curl https://github.com/owner/repo",
+            "curl https://sourcegraph.com/github.com/owner/repo",
+            "git fetch origin",
+            "git show origin/main",
+            "git show 878c25b",
+            "git status --short",
+            "git diff HEAD",
+        ] {
+            let validation = tool.validate_input(&json!({"cmd": command}), None).await;
+            assert!(validation.result, "should allow: {command}");
+        }
+    }
+
     #[test]
     fn powershell_commands_force_utf8_output() {
         let argv = ExecCommandTool::argv_for_shell(
@@ -1023,6 +1087,58 @@ mod tests {
             ExecCommandTool::argv_for_shell(Path::new("pwsh"), &ShellType::PowerShellCore, &script);
 
         assert_eq!(argv[2], script);
+    }
+
+    #[test]
+    fn bash_commands_enable_pipefail() {
+        let argv = ExecCommandTool::argv_for_shell(
+            Path::new("/bin/bash"),
+            &ShellType::Bash,
+            "false | tail -n 1",
+        );
+
+        assert_eq!(
+            argv,
+            ["/bin/bash", "-o", "pipefail", "-lc", "false | tail -n 1"]
+        );
+    }
+
+    #[test]
+    fn unsupported_posix_shells_keep_default_pipeline_status() {
+        let argv = ExecCommandTool::argv_for_shell(
+            Path::new("/bin/sh"),
+            &ShellType::Sh,
+            "false | tail -n 1",
+        );
+
+        assert_eq!(argv, ["/bin/sh", "-lc", "false | tail -n 1"]);
+        assert_eq!(
+            super::pipeline_failure_policy(&ShellType::Sh),
+            "last_command"
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn bash_pipefail_preserves_pipeline_success_and_failure() {
+        for (command, expected_success) in [
+            ("printf 'ok\\n' | tail -n 1", true),
+            ("false | tail -n 1", false),
+            ("true | false | tail -n 1", false),
+        ] {
+            let argv =
+                ExecCommandTool::argv_for_shell(Path::new("/bin/bash"), &ShellType::Bash, command);
+            let status = std::process::Command::new(&argv[0])
+                .args(&argv[1..])
+                .status()
+                .expect("bash pipeline should execute");
+
+            assert_eq!(
+                status.success(),
+                expected_success,
+                "unexpected status for {command:?}: {status:?}"
+            );
+        }
     }
 
     #[test]
@@ -1071,7 +1187,7 @@ mod tests {
 
         assert!(command.starts_with("cd '/home/me/project' && env "));
         assert!(command.contains("'BITFUN_NONINTERACTIVE=1'"));
-        assert!(command.ends_with(" '/bin/bash' -lc 'printf '\\''hi'\\'''"));
+        assert!(command.ends_with(" '/bin/bash' -o pipefail -lc 'printf '\\''hi'\\'''"));
     }
 
     #[test]
@@ -1115,16 +1231,20 @@ mod tests {
         );
 
         assert!(command.contains("'PATH=/home/me/.nvm/bin:/usr/bin'"));
-        assert!(command.ends_with(" '/bin/bash' -lc 'node --version'"));
+        assert!(command.ends_with(" '/bin/bash' -o pipefail -lc 'node --version'"));
         assert!(!command.contains(" -lic "));
     }
 
     #[test]
     fn remote_non_tty_control_wrapper_cleans_process_group_after_interrupt_grace() {
-        let wrapper =
-            ExecCommandTool::remote_non_tty_control_wrapper("python3 -c 'print(1)'", "/bin/bash");
+        let wrapper = ExecCommandTool::remote_non_tty_control_wrapper(
+            "python3 -c 'print(1)'",
+            "/bin/bash",
+            &ShellType::Bash,
+        );
 
-        assert!(wrapper.contains("setsid \"$__bitfun_shell\" -lc \"$__bitfun_cmd\" &"));
+        assert!(wrapper.contains("setsid \"$__bitfun_shell\" -o pipefail -lc \"$__bitfun_cmd\" &"));
+        assert!(wrapper.contains("\"$__bitfun_shell\" -o pipefail -lc \"$__bitfun_cmd\" &"));
         assert!(wrapper.contains("trap '__bitfun_stop INT 130 2' INT"));
         assert!(wrapper.contains("trap '__bitfun_stop KILL 137 0' TERM"));
         assert!(wrapper.contains("__bitfun_grace=${3:-2}"));
@@ -1143,8 +1263,34 @@ mod tests {
     }
 
     #[test]
-    fn remote_shell_login_args_use_login_without_interactive_startup() {
-        assert_eq!(super::remote_shell_login_args(), &["-lc"]);
+    fn remote_shell_args_use_pipefail_without_interactive_startup() {
+        assert_eq!(
+            super::posix_shell_login_args(&ShellType::Bash),
+            &["-o", "pipefail", "-lc"]
+        );
+        assert_eq!(super::posix_shell_login_args(&ShellType::Sh), &["-lc"]);
+    }
+
+    #[test]
+    fn remote_shell_metadata_records_pipeline_failure_policy() {
+        let bash = RemoteShell {
+            path: "/bin/bash".to_string(),
+            shell_type: ShellType::Bash,
+        };
+        let sh = RemoteShell {
+            path: "/bin/sh".to_string(),
+            shell_type: ShellType::Sh,
+        };
+
+        assert_eq!(
+            ExecCommandTool::remote_shell_metadata("/repo", &bash, false)
+                ["pipeline_failure_policy"],
+            "pipefail"
+        );
+        assert_eq!(
+            ExecCommandTool::remote_shell_metadata("/repo", &sh, false)["pipeline_failure_policy"],
+            "last_command"
+        );
     }
 
     #[tokio::test]

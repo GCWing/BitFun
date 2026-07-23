@@ -30,6 +30,14 @@ pub(crate) fn build_request_body(
 
     common::apply_reasoning_fields(&mut request_body, client, url);
 
+    if let Some(temperature) = client.config.temperature {
+        request_body["temperature"] = serde_json::json!(temperature);
+    }
+
+    if let Some(top_p) = client.config.top_p {
+        request_body["top_p"] = serde_json::json!(top_p);
+    }
+
     if let Some(max_tokens) = client.config.max_tokens {
         request_body["max_tokens"] = serde_json::json!(max_tokens);
     }
@@ -37,7 +45,15 @@ pub(crate) fn build_request_body(
     let protected_body = shared::protect_request_body(
         client,
         &mut request_body,
-        &["model", "messages", "stream", "max_tokens", "tool_stream"],
+        &[
+            "model",
+            "messages",
+            "stream",
+            "max_tokens",
+            "tool_stream",
+            "temperature",
+            "top_p",
+        ],
         &[],
     );
 
