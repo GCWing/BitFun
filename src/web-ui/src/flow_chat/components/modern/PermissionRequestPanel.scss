@@ -1,4 +1,4 @@
-.permission-request-panel {
+.permission-request-anchor {
   --permission-request-panel-bottom: 20px;
 
   position: absolute;
@@ -6,6 +6,22 @@
   bottom: var(--permission-request-panel-bottom);
   z-index: 25;
   width: min(460px, calc(100% - 40px));
+  display: flex;
+  justify-content: flex-end;
+}
+
+.permission-request-anchor--above-chat-input {
+  // Match the visible ChatInput card: its 900px drop zone has 8px horizontal
+  // insets on both sides before the card itself begins.
+  right: auto;
+  left: 50%;
+  width: min(884px, calc(100% - 16px));
+  transform: translateX(-50%);
+}
+
+.permission-request-panel {
+  width: 100%;
+  box-sizing: border-box;
   display: grid;
   gap: 10px;
   padding: 14px;
@@ -14,15 +30,6 @@
   background: var(--color-bg-secondary);
   box-shadow: var(--shadow-lg);
   color: var(--color-text-primary);
-}
-
-.permission-request-panel--above-chat-input {
-  // Match the visible ChatInput card: its 900px drop zone has 8px horizontal
-  // insets on both sides before the card itself begins.
-  right: auto;
-  left: 50%;
-  width: min(884px, calc(100% - 16px));
-  transform: translateX(-50%);
 }
 
 .permission-request-panel__heading {
@@ -44,6 +51,13 @@
   gap: 9px;
 }
 
+.permission-request-panel__heading-actions {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 6px;
+}
+
 .permission-request-panel__heading h2 {
   font-size: var(--flowchat-font-size-base);
 }
@@ -57,6 +71,61 @@
 .permission-request-panel__count {
   margin: 0;
   flex: none;
+}
+
+.permission-request-panel__collapse,
+.permission-request-panel__collapsed-trigger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--color-warning);
+  color: var(--color-warning);
+  background: var(--color-bg-primary);
+  cursor: pointer;
+}
+
+.permission-request-panel__collapse {
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border-radius: 5px;
+}
+
+.permission-request-panel__collapse:hover,
+.permission-request-panel__collapsed-trigger:hover {
+  background: color-mix(in srgb, var(--color-warning) 14%, var(--color-bg-primary));
+}
+
+.permission-request-panel__collapse:focus-visible,
+.permission-request-panel__collapsed-trigger:focus-visible {
+  outline: 2px solid var(--color-warning);
+  outline-offset: 2px;
+}
+
+.permission-request-panel__collapsed-trigger {
+  position: relative;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border-radius: 50%;
+  box-shadow: var(--shadow-lg);
+}
+
+.permission-request-panel__collapsed-badge {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  min-width: 18px;
+  box-sizing: border-box;
+  padding: 2px 5px;
+  border: 1px solid var(--color-bg-secondary);
+  border-radius: 10px;
+  color: var(--color-static-white);
+  background: var(--color-error);
+  font-size: var(--flowchat-font-size-xs);
+  font-weight: 700;
+  line-height: 1.15;
+  text-align: center;
 }
 
 .permission-request-panel__requests {

@@ -22,6 +22,8 @@
     },
     "reject": "拒绝",
     "batchCount": "{{count}} 个权限请求",
+    "collapsePanel": "收起权限请求",
+    "expandPanel": "展开 {{count}} 个待处理的权限请求",
     "current": "当前",
     "pending": "等待中",
     "actions": {

@@ -38,6 +38,12 @@ vi.mock('react-i18next', () => ({
       if (key === 'permission.risks.pageSave') {
         return `Save ${values?.slug} as ${values?.visibility} without deploying.`;
       }
+      if (key === 'permission.collapsePanel') {
+        return 'Collapse permission requests';
+      }
+      if (key === 'permission.expandPanel') {
+        return `Expand ${values?.count} pending permission requests`;
+      }
       return TRANSLATIONS[key] ?? key;
     },
   }),
@@ -245,5 +251,72 @@ describe('PermissionRequestPanel', () => {
 
     expect(onRespondBatch).toHaveBeenCalledWith(first.requestId, 'once', undefined);
     expect(container.querySelectorAll('[role="listitem"]')).toHaveLength(2);
+  });
+
+  it('collapses to an anchored permission indicator and reopens it with the session pending count', () => {
+    act(() => {
+      root.render(
+        <PermissionRequestPanel
+          requests={[request(false)]}
+          totalPendingCount={3}
+          onRespond={vi.fn()}
+          onRespondBatch={vi.fn()}
+        />,
+      );
+    });
+
+    const collapseButton = container.querySelector<HTMLButtonElement>(
+      '[data-testid="permission-request-panel-collapse"]',
+    );
+    expect(collapseButton?.getAttribute('aria-expanded')).toBe('true');
+
+    act(() => collapseButton?.click());
+
+    expect(container.querySelector('.permission-request-panel')).toBeNull();
+    const expandButton = container.querySelector<HTMLButtonElement>(
+      '[data-testid="permission-request-panel-expand"]',
+    );
+    expect(expandButton?.textContent).toContain('3');
+    expect(expandButton?.getAttribute('aria-label')).toBe('Expand 3 pending permission requests');
+    expect(expandButton?.getAttribute('aria-expanded')).toBe('false');
+
+    act(() => expandButton?.click());
+
+    expect(container.querySelector('.permission-request-panel')).not.toBeNull();
+  });
+
+  it('expands again when a newly active permission batch replaces a collapsed one', () => {
+    const first = request(false);
+    const nextBatch = { ...first, requestId: 'next-request', roundId: 'next-round' };
+    act(() => {
+      root.render(
+        <PermissionRequestPanel
+          key={`${first.sessionId}:${first.roundId}`}
+          requests={[first]}
+          onRespond={vi.fn()}
+          onRespondBatch={vi.fn()}
+        />,
+      );
+    });
+
+    act(() => {
+      container.querySelector<HTMLButtonElement>(
+        '[data-testid="permission-request-panel-collapse"]',
+      )?.click();
+    });
+    expect(container.querySelector('[data-testid="permission-request-panel-expand"]')).not.toBeNull();
+
+    act(() => {
+      root.render(
+        <PermissionRequestPanel
+          key={`${nextBatch.sessionId}:${nextBatch.roundId}`}
+          requests={[nextBatch]}
+          onRespond={vi.fn()}
+          onRespondBatch={vi.fn()}
+        />,
+      );
+    });
+
+    expect(container.querySelector('.permission-request-panel')).not.toBeNull();
   });
 });

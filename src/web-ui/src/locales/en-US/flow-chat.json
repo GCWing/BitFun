@@ -22,6 +22,8 @@
     },
     "reject": "Reject",
     "batchCount": "{{count}} permission requests",
+    "collapsePanel": "Collapse permission requests",
+    "expandPanel": "Expand {{count}} pending permission requests",
     "current": "Current",
     "pending": "Pending",
     "actions": {
