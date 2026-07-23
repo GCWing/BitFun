@@ -148,17 +148,20 @@ impl ProductToolCatalogProvider {
         exposure_overrides: &AgentToolPolicyOverrides,
         context: &ToolUseContext,
     ) -> (Vec<String>, AgentToolPolicyOverrides) {
+        let allowed_tools = allowed_tools
+            .iter()
+            .filter(|tool_name| context.runtime_tool_restrictions.is_tool_allowed(tool_name))
+            .cloned()
+            .collect::<Vec<_>>();
         if Self::deferred_tool_loading_enabled(context) {
-            return (allowed_tools.to_vec(), exposure_overrides.clone());
+            return (allowed_tools, exposure_overrides.clone());
         }
 
         let allowed_tools = allowed_tools
-            .iter()
+            .into_iter()
             .filter(|tool_name| {
-                tool_name.as_str() != GET_TOOL_SPEC_TOOL_NAME
-                    && tool_name.as_str() != CALL_DEFERRED_TOOL_NAME
+                tool_name != GET_TOOL_SPEC_TOOL_NAME && tool_name != CALL_DEFERRED_TOOL_NAME
             })
-            .cloned()
             .collect::<Vec<_>>();
         let exposure_overrides = allowed_tools
             .iter()
@@ -558,6 +561,48 @@ mod tests {
             vec!["Read", "GetToolSpec", "CallDeferredTool"],
             "product manifest facade must preserve prompt-visible definition order"
         );
+    }
+
+    #[tokio::test]
+    async fn runtime_restrictions_hide_tools_from_manifest_and_get_tool_spec() {
+        let allowed_tools = vec!["Read".to_string(), "WebFetch".to_string()];
+        let mut context = tool_context(Some("agentic"));
+        context
+            .runtime_tool_restrictions
+            .denied_tool_names
+            .extend(["Read".to_string(), "WebFetch".to_string()]);
+
+        let manifest = resolve_product_tool_manifest(
+            &allowed_tools,
+            &AgentToolPolicyOverrides::default(),
+            &context,
+        )
+        .await;
+        assert!(!manifest
+            .allowed_tool_names
+            .iter()
+            .any(|name| name == "Read"));
+        assert!(!manifest
+            .allowed_tool_names
+            .iter()
+            .any(|name| name == "WebFetch"));
+        assert!(!manifest
+            .deferred_tool_names
+            .iter()
+            .any(|name| name == "WebFetch"));
+        assert!(!manifest
+            .tool_definitions
+            .iter()
+            .any(|definition| definition.name == "Read"));
+
+        let deferred_names = ProductToolCatalogProvider
+            .deferred_tools_for_get_tool_spec(Some(&context))
+            .await
+            .expect("contextual GetToolSpec catalog")
+            .into_iter()
+            .map(|tool| tool.name().to_string())
+            .collect::<Vec<_>>();
+        assert!(!deferred_names.iter().any(|name| name == "WebFetch"));
     }
 
     #[tokio::test]

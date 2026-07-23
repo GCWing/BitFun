@@ -53,8 +53,8 @@ jobs:
           cache-bin: false
           save-if: ${{ github.event_name != 'pull_request' }}
 
-      - name: Run CLI, ACP, and agent runtime tests
-        run: cargo test --locked -p bitfun-cli -p bitfun-acp -p bitfun-agent-runtime
+      - name: Run CLI, ACP, SDK Host, and agent runtime tests
+        run: cargo test --locked -p bitfun-cli -p bitfun-acp -p bitfun-sdk-host -p bitfun-sdk-host-app -p bitfun-agent-runtime
 
   # ── Rust: build check ─────────────────────────────────────────────
   rust-build-check:
@@ -136,6 +136,18 @@ jobs:
 
       - name: Check compilation
         run: cargo check --locked --workspace
+
+      - name: Run SDK Host terminal cleanup regressions
+        # This PR changes only the PTY/session shutdown path required by
+        # connection-scoped Session cleanup. Keep the gate scoped to those
+        # regressions instead of adopting unrelated terminal command tests.
+        run: |
+          cargo test --locked -p terminal-core shutdown_returns_only_after_process_exit_is_confirmed -- --test-threads=1
+          cargo test --locked -p terminal-core shutdown_evicts_a_process_whose_controller_already_confirmed_exit -- --test-threads=1
+          cargo test --locked -p terminal-core background_only_binding_is_owned_by_the_session -- --test-threads=1
+
+      - name: Run standalone SDK Host process smokes
+        run: cargo test --locked -p bitfun-sdk-host-app --test process_initialization --test stdio_process
 
       - name: Run Windows ConPTY CLI smoke test
         if: runner.os == 'Windows'

@@ -13,21 +13,21 @@ use bitfun_runtime_ports::{
     AgentBackgroundResultRequest, AgentDialogTurnPort, AgentDialogTurnRequest,
     AgentInputAttachment, AgentLifecycleDeliveryPort, AgentLocalCommandTurnPort,
     AgentLocalCommandTurnRecordRequest, AgentSessionArchiveRequest,
-    AgentSessionArchiveStateRequest, AgentSessionCreateRequest, AgentSessionCreateResult,
-    AgentSessionDeleteRequest, AgentSessionForkAtTurnRequest, AgentSessionForkPort,
-    AgentSessionForkRequest, AgentSessionForkResult, AgentSessionListRequest,
+    AgentSessionArchiveStateRequest, AgentSessionClosePort, AgentSessionCreateRequest,
+    AgentSessionCreateResult, AgentSessionDeleteRequest, AgentSessionForkAtTurnRequest,
+    AgentSessionForkPort, AgentSessionForkRequest, AgentSessionForkResult, AgentSessionListRequest,
     AgentSessionManagementPort, AgentSessionModePort, AgentSessionModeUpdateRequest,
     AgentSessionModelPort, AgentSessionModelUpdateRequest, AgentSessionRenameRequest,
     AgentSessionSummary, AgentSessionUsagePort, AgentSessionUsageRequest,
     AgentSessionWorkspaceBinding, AgentSessionWorkspaceRequest, AgentSubmissionPort,
     AgentSubmissionRequest, AgentSubmissionResult, AgentSubmissionSource,
     AgentThreadGoalCreateRequest, AgentThreadGoalDeliveryRequest, AgentThreadGoalGetRequest,
-    AgentThreadGoalManagementPort, AgentThreadGoalUpdateStatusRequest, AgentTurnCancellationPort,
-    AgentTurnCancellationRequest, AgentTurnCancellationResult, AgentTurnSettlementPort,
-    AgentTurnSettlementRequest, DialogSubmitOutcome, PermissionAuditRecord, PermissionGrant,
-    PermissionGrantKey, PluginRuntimeBinding, PortError, PortErrorKind, PortResult,
-    RuntimeEventEnvelope, SessionTranscript, SessionTranscriptReader, SessionTranscriptRequest,
-    ThreadGoal,
+    AgentThreadGoalManagementPort, AgentThreadGoalUpdateStatusRequest,
+    AgentTransientSessionDiscardRequest, AgentTurnCancellationPort, AgentTurnCancellationRequest,
+    AgentTurnCancellationResult, AgentTurnSettlementPort, AgentTurnSettlementRequest,
+    DialogSubmitOutcome, PermissionAuditRecord, PermissionGrant, PermissionGrantKey,
+    PluginRuntimeBinding, PortError, PortErrorKind, PortResult, RuntimeEventEnvelope,
+    SessionTranscript, SessionTranscriptReader, SessionTranscriptRequest, ThreadGoal,
 };
 use bitfun_runtime_services::RuntimeServices;
 
@@ -184,6 +184,7 @@ pub trait RuntimeAgentRegistry: Send + Sync {
 pub struct AgentRuntime {
     submission: Arc<dyn AgentSubmissionPort>,
     session_management: Option<Arc<dyn AgentSessionManagementPort>>,
+    session_close: Option<Arc<dyn AgentSessionClosePort>>,
     session_mode: Option<Arc<dyn AgentSessionModePort>>,
     session_model: Option<Arc<dyn AgentSessionModelPort>>,
     session_fork: Option<Arc<dyn AgentSessionForkPort>>,
@@ -218,6 +219,13 @@ impl std::fmt::Debug for AgentRuntime {
                     .session_management
                     .as_ref()
                     .map(|_| "<dyn AgentSessionManagementPort>"),
+            )
+            .field(
+                "session_close",
+                &self
+                    .session_close
+                    .as_ref()
+                    .map(|_| "<dyn AgentSessionClosePort>"),
             )
             .field(
                 "session_mode",
@@ -360,6 +368,7 @@ where
 pub struct AgentRuntimeBuilder {
     submission: Option<Arc<dyn AgentSubmissionPort>>,
     session_management: Option<Arc<dyn AgentSessionManagementPort>>,
+    session_close: Option<Arc<dyn AgentSessionClosePort>>,
     session_mode: Option<Arc<dyn AgentSessionModePort>>,
     session_model: Option<Arc<dyn AgentSessionModelPort>>,
     session_fork: Option<Arc<dyn AgentSessionForkPort>>,
@@ -399,6 +408,11 @@ impl AgentRuntimeBuilder {
         port: Arc<dyn AgentSessionManagementPort>,
     ) -> Self {
         self.session_management = Some(port);
+        self
+    }
+
+    pub fn with_session_close_port(mut self, port: Arc<dyn AgentSessionClosePort>) -> Self {
+        self.session_close = Some(port);
         self
     }
 
@@ -534,6 +548,7 @@ impl AgentRuntimeBuilder {
         let Self {
             submission,
             session_management,
+            session_close,
             session_mode,
             session_model,
             session_fork,
@@ -565,6 +580,7 @@ impl AgentRuntimeBuilder {
         Ok(AgentRuntime {
             submission: submission.ok_or(RuntimeBuildError::MissingSubmissionPort)?,
             session_management,
+            session_close,
             session_mode,
             session_model,
             session_fork,
@@ -709,6 +725,16 @@ impl AgentRuntime {
         self.permission_requests
             .as_ref()
             .map(|manager| manager.interactive_pending_requests())
+            .ok_or(RuntimeError::MissingPermissionRequestManager)
+    }
+
+    pub fn permission_request_dialog_turn_id(
+        &self,
+        request_id: &str,
+    ) -> Result<Option<String>, RuntimeError> {
+        self.permission_requests
+            .as_ref()
+            .map(|manager| manager.pending_request_dialog_turn_id(request_id))
             .ok_or(RuntimeError::MissingPermissionRequestManager)
     }
 
@@ -875,6 +901,46 @@ impl AgentRuntime {
             .into());
         }
         Ok(result)
+    }
+
+    pub async fn create_transient_session_with_id(
+        &self,
+        session_id: String,
+        request: AgentSessionCreateRequest,
+    ) -> Result<AgentSessionCreateResult, RuntimeError> {
+        let result = self
+            .submission
+            .create_transient_session_with_id(session_id.clone(), request)
+            .await
+            .map_err(RuntimeError::from)?;
+        if result.session_id != session_id {
+            return Err(PortError::new(
+                PortErrorKind::Backend,
+                format!(
+                    "agent submission provider returned session_id '{}' for requested transient session_id '{}'",
+                    result.session_id, session_id
+                ),
+            )
+            .into());
+        }
+        Ok(result)
+    }
+
+    pub async fn discard_transient_session(
+        &self,
+        request: AgentTransientSessionDiscardRequest,
+    ) -> Result<bool, RuntimeError> {
+        self.session_close
+            .as_ref()
+            .ok_or_else(|| {
+                RuntimeError::Port(PortError::new(
+                    PortErrorKind::NotAvailable,
+                    "agent session close port is not registered",
+                ))
+            })?
+            .discard_transient_session(request)
+            .await
+            .map_err(RuntimeError::from)
     }
 
     pub async fn list_sessions(
@@ -1106,14 +1172,30 @@ impl AgentRuntime {
         &self,
         request: AgentDialogTurnRequest,
     ) -> Result<DialogSubmitOutcome, RuntimeError> {
+        let requested_session_id = request.session_id.clone();
         let dialog_turn = self
             .dialog_turn
             .as_ref()
             .ok_or(RuntimeError::MissingDialogTurnPort)?;
-        dialog_turn
+        let outcome = dialog_turn
             .submit_dialog_turn(request)
             .await
-            .map_err(RuntimeError::from)
+            .map_err(RuntimeError::from)?;
+        let returned_session_id = match &outcome {
+            DialogSubmitOutcome::Started { session_id, .. }
+            | DialogSubmitOutcome::Queued { session_id, .. } => session_id,
+        };
+        if returned_session_id != &requested_session_id {
+            return Err(PortError::new(
+                PortErrorKind::Backend,
+                format!(
+                    "agent dialog provider returned session_id '{}' for requested session_id '{}'",
+                    returned_session_id, requested_session_id
+                ),
+            )
+            .into());
+        }
+        Ok(outcome)
     }
 
     pub async fn deliver_background_result(
@@ -2440,6 +2522,59 @@ mod tests {
             dialog_turns.requests.lock().unwrap()[0].attachments[0].kind,
             "remote_image"
         );
+    }
+
+    #[tokio::test]
+    async fn submit_dialog_turn_rejects_provider_session_identity_mismatch() {
+        #[derive(Debug)]
+        struct MismatchedDialogTurnPort;
+
+        #[async_trait::async_trait]
+        impl bitfun_runtime_ports::AgentDialogTurnPort for MismatchedDialogTurnPort {
+            async fn submit_dialog_turn(
+                &self,
+                request: AgentDialogTurnRequest,
+            ) -> PortResult<DialogSubmitOutcome> {
+                Ok(DialogSubmitOutcome::Started {
+                    session_id: "different-session".to_string(),
+                    turn_id: request.turn_id.unwrap_or_else(|| "generated".to_string()),
+                })
+            }
+        }
+
+        let runtime = AgentRuntimeBuilder::new()
+            .with_submission_port(Arc::new(FakeAgentRuntimePorts::default()))
+            .with_dialog_turn_port(Arc::new(MismatchedDialogTurnPort))
+            .build()
+            .expect("runtime");
+
+        let error = runtime
+            .submit_dialog_turn(AgentDialogTurnRequest {
+                session_id: "requested-session".to_string(),
+                message: "hello".to_string(),
+                original_message: None,
+                turn_id: Some("turn-1".to_string()),
+                agent_type: "agentic".to_string(),
+                workspace_path: Some("/workspace/project".to_string()),
+                remote_connection_id: None,
+                remote_ssh_host: None,
+                policy: DialogSubmissionPolicy::for_source(AgentSubmissionSource::SdkHost),
+                reply_route: None,
+                prepended_reminders: Vec::new(),
+                attachments: Vec::new(),
+                metadata: serde_json::Map::new(),
+            })
+            .await
+            .expect_err("provider session mismatch must fail closed");
+
+        assert!(matches!(
+            error,
+            RuntimeError::Port(PortError {
+                kind: PortErrorKind::Backend,
+                ..
+            })
+        ));
+        assert!(error.into_message().contains("requested-session"));
     }
 
     #[tokio::test]

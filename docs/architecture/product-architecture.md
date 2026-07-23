@@ -363,7 +363,7 @@ flowchart LR
 | ACP | CLI 托管的服务端仍以 `bitfun-core/product-full` 作为兼容执行层 | 入口已选择 `DeliveryProfile::Acp` 并消费 Runtime Parts；组装层在入队前原子拒绝忙碌会话，不改变其他产品入口的排队行为；活动会话模型与模式写入走 Agent Runtime API。`session/load` 先校验和建立临时 MCP，再恢复 Core，在历史回放成功后才发布活动状态；失败会卸载本次内存状态而不删除历史。同 ID 的重叠打开/关闭被明确拒绝。成功的 `session/close` 阻止新轮次、排空队列和后台子会话，再卸载临时 Core 状态并回收 MCP 与连接；失败保留会话所有权和历史，返回可重试阶段。持久化历史仍可重新加载。完整历史、模型/模式目录与配置读取仍留在现有 Core/ACP 归属，不据此宣称完整解耦 |
 | Server / Remote | Server 可返回共享 v1 control/catalog 快照，`hostCapabilities` 明确为只读，并在解析 mutation payload 前 fail closed；Peer Host 代理同一读写控制动作与既有能力专属操作，连接旧 Peer 时读路径降级到 legacy catalog、来源启停降级到既有 mutation，Safe Mode 明确要求升级 Host；SSH Remote 工作区的外部来源发现与执行仍未实现 | 控制端用 Host 身份与工作区共同隔离异步结果。Peer Host 只处理 Host 上的真实工作区，不在控制端替远端发现；SSH Remote 未接入时返回明确不支持且不回退本机来源 |
 | Web / Mobile Web | 依赖现有后端入口，不持有插件执行单元 | 对应 profile 当前为空计划或未接入生产，不能据枚举值宣称独立产品能力 |
-| Public Agent SDK | 尚未交付；当前 Rust Runtime SDK 的成熟度为 preview，另有 SDK profile 计划和测试替身 | 目标为 Python/TypeScript `query()`、client/session 和 callback；未建立 SDK Host、仓库外消费者与 Claude 等价矩阵前不得宣称 preview 或可发布 |
+| Public Agent SDK | Python/TypeScript 产品尚未交付；Rust Runtime SDK 是内部 preview。本地 SDK Host 协议与独立 `bitfun-sdk-host` 进程只有实现候选，在跨内部调用、Headless CLI 与 Host 的同一 Query golden fixture 通过前不称为已交付 preview | SDK Host 独立选择 SDK profile/source；能力集合从共享产品事实生成，不依赖或冒充 CLI。目标为 Python/TypeScript `query()`、client/session 和 callback；未建立语言包、仓库外消费者与 Claude 等价矩阵前不得宣称公开 SDK preview 或可发布 |
 
 对外一级状态统一使用[外部 AI 工作内容设计](extensions/external-ai-work-sources-design.md#7-状态与提示规则)定义的
 已发现、已应用、可用、需确认、更新中、沿用上一版本、部分受限、暂时过期、已移除/已停用和不可用，并附带

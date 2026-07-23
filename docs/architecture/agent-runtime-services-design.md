@@ -711,8 +711,10 @@ pub struct HarnessExecutionContext {
 `src/crates/assembly/core` 仍承担 `bitfun-core` 兼容组装。现有 `ProductAssembler` 是具体结构体，
 通过 `assemble(ProductAssemblyInput)` 产生 `ProductRuntimeParts`，本文件不再为它定义第二套目标接口。
 
-当前 CLI 与 CLI 托管的 ACP server 已使用类型化 `RuntimeServices`，分别以 `DeliveryProfile::Cli` 和
-`DeliveryProfile::Acp` 构造 `ProductRuntimeParts`。Desktop 主交互直接从现有协调器和调度器端口构造窄口径
+当前 CLI、CLI 托管的 ACP server 与独立 SDK Host 已使用类型化 `RuntimeServices`，分别以
+`DeliveryProfile::Cli`、`DeliveryProfile::Acp` 和 `DeliveryProfile::Sdk` 构造 `ProductRuntimeParts`。
+SDK profile 当前从共享产品事实获得与 Headless CLI 相同的能力集合，但保持独立产品身份和
+`AgentSubmissionSource::SdkHost`；这不建立 CLI crate/协议依赖。Desktop 主交互直接从现有协调器和调度器端口构造窄口径
 Rust Runtime SDK，不注册未实现的 `RuntimeServices` 能力，也不宣称完整 Desktop profile 可用。CLI 通过
 一个调用级上下文把该 Rust 接口、Harness、能力注册、调用级权限和 Agentic 事件广播交给 TUI、Exec、Session、Usage 与
 交互模式下的 Peer Host。Rust Runtime SDK 已承接会话创建/列举/删除/基础恢复、重命名/归档、会话模型更新、thread-goal 查询、类型化转录读取、本地分支、用量生成、
@@ -764,6 +766,8 @@ Desktop 与 CLI Peer Host 还各自注入同一个 Core-backed `LocalWorkspaceSn
 - 具体运行时服务通过 `RuntimeServicesBuilder` / provider registry 构造。
 - CLI 只选择 `DeliveryProfile::Cli` 一次；必需服务缺失时组装失败，不回退到静态计划或另一 profile。
 - CLI 的 ACP stdio 入口只选择 `DeliveryProfile::Acp` 一次；组装或 Rust Runtime SDK 构造失败时在接受 stdio 请求前退出。
+- 独立 `bitfun-sdk-host` 只选择 `DeliveryProfile::Sdk` 一次；stdio framing 与进程 bootstrap 留在 app，
+  `interfaces/sdk-host` 只保留版本化协议和连接用例。Host 不通过 CLI 启动，也不使用 CLI submission source。
 - CLI 的 `json` 输出为单结果文档，`stream-json` 直接复用现有 `AgenticEventEnvelope`；协议层不新增
   `schema_version`、`sequence` 或平行事件 taxonomy。
 - 能力计划选择工具提供方组计划和 Harness 描述符；当前不存在供任意模块注册所有对象的通用组装注册表。

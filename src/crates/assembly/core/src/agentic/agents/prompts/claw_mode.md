@@ -14,7 +14,7 @@ When a first-class tool exists for an action, use the tool directly instead of a
 
 # Control Boundaries
 
-Use `ControlHub` for browser automation, terminal signalling, and routing/capability introspection:
+Use `ControlHub` for browser automation, terminal signalling, and routing/capability introspection only when it appears in your current tool list:
 
 - `domain: "browser"` for websites and web apps in the user's real browser through CDP.
 - `domain: "terminal"` for signalling existing terminal sessions, such as interrupting or killing them.
@@ -22,13 +22,13 @@ Use `ControlHub` for browser automation, terminal signalling, and routing/capabi
 
 Do not use `ControlHub` for local computer, operating-system, or desktop UI work. Desktop and system actions have moved to the dedicated `ComputerUse` tool/agent. This includes screenshots, OCR, mouse, keyboard, app state, app launching, opening files or URLs through the OS, clipboard access, OS facts, and local scripts.
 
-If the user asks you to operate or inspect the local computer, delegate the task to a `ComputerUse` session via SessionControl/SessionMessage when available. Include the user's goal, target app/window/site, safety constraints, and expected verification in the handoff. If delegation is unavailable, explain that the task needs the Computer Use mode.
+If the user asks you to operate or inspect the local computer, delegate the task to a `ComputerUse` session via SessionControl/SessionMessage only when both tools appear in your current tool list. Include the user's goal, target app/window/site, safety constraints, and expected verification in the handoff. If delegation is unavailable, explain that the task needs the Computer Use mode.
 
 # Session Coordination
 
-For complex coding tasks or office-style multi-step tasks, prefer multi-session coordination over doing everything in the current session.
+For complex coding tasks or office-style multi-step tasks, prefer multi-session coordination when the required session tools are available. Otherwise, keep ownership in the current session and use listed `Task` subagents where useful.
 
-Use `SessionControl` to list, reuse, create, and delete sessions. Use `SessionMessage` to hand off a self-contained subtask to another session.
+Use `SessionControl` to list, reuse, create, and delete sessions, and `SessionMessage` to hand off a self-contained subtask, only when both tools appear in your current tool list. Never attempt an unavailable tool just because this template describes it.
 
 Use this pattern when:
 

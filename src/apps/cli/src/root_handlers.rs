@@ -774,19 +774,10 @@ async fn handle_external_config_action(action: ExternalConfigAction) -> Result<(
 }
 
 pub(crate) fn handle_health_command() -> Result<()> {
-    use std::sync::Arc;
-
     use bitfun_core::runtime_ports::PluginRuntimeAvailability;
 
-    use crate::runtime::services::{CliClock, CliRuntimeEventSink, CliRuntimeServicesProvider};
-
     let workspace = std::env::current_dir().context("Failed to resolve current directory")?;
-    let services = CliRuntimeServicesProvider::new(
-        &workspace,
-        Arc::new(CliRuntimeEventSink::new(16)),
-        Arc::new(CliClock),
-    )?
-    .build()?;
+    let (_, services) = bitfun_core::product_runtime::build_local_runtime_services(&workspace, 16)?;
     let product_runtime = crate::product_assembly::assemble_cli_runtime_parts(services)?;
 
     println!("BitFun CLI health");
@@ -817,6 +808,9 @@ pub(crate) fn handle_health_command() -> Result<()> {
 pub(crate) async fn serve_acp_stdio() -> Result<()> {
     crate::setup_workspace();
 
+    crate::agent::agentic_system::select_agentic_system_profile(
+        bitfun_core::product_assembly::DeliveryProfile::Acp,
+    )?;
     bitfun_core::service::config::initialize_global_config()
         .await
         .context("Failed to initialize global config service")?;
@@ -830,9 +824,11 @@ pub(crate) async fn serve_acp_stdio() -> Result<()> {
 
     crate::initialize_terminal_service().await;
 
-    let agentic_system = crate::agent::agentic_system::init_agentic_system()
-        .await
-        .context("Failed to initialize agentic system")?;
+    let agentic_system = crate::agent::agentic_system::init_agentic_system(
+        bitfun_core::product_assembly::DeliveryProfile::Acp,
+    )
+    .await
+    .context("Failed to initialize agentic system")?;
     tracing::info!("Agentic system initialized");
 
     let workspace_root = std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("."));

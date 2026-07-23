@@ -13,8 +13,8 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use bitfun_agent_runtime::permission::PermissionRequestManager;
 use bitfun_agent_runtime::sdk::{
-    AgentEventSource, AgentRuntime, AgentSessionForkAtTurnRequest, AgentSessionForkPort,
-    AgentSessionForkRequest, AgentSessionForkResult, AgentSessionUsagePort,
+    AgentEventReceiver, AgentEventSource, AgentRuntime, AgentSessionForkAtTurnRequest,
+    AgentSessionForkPort, AgentSessionForkRequest, AgentSessionForkResult, AgentSessionUsagePort,
     AgentSessionUsageRequest, AgentTurnSettlementPort, AgentTurnSettlementRequest,
 };
 use bitfun_harness::HarnessRegistry;
@@ -31,6 +31,7 @@ use crate::agentic::coordination::{
     ConversationCoordinator, DialogScheduler, SessionMaintenancePermit,
 };
 use crate::agentic::core::Session;
+use crate::agentic::events::EventQueue;
 use crate::agentic::keyed_lock::KeyedAsyncLockGuard;
 use crate::agentic::persistence::session_branch::SessionBranchRequest;
 use crate::agentic::persistence::{PersistenceManager, SessionMetadataPage};
@@ -46,7 +47,73 @@ use crate::service_agent_runtime::CoreServiceAgentRuntime;
 use crate::util::errors::{BitFunError, BitFunResult};
 
 pub use bitfun_product_capabilities::ProductRuntimeAssembly as CoreProductRuntimeAssembly;
-pub use runtime_services::CoreRuntimeServicesProvider;
+pub use runtime_services::{build_local_runtime_services, CoreRuntimeServicesProvider};
+
+struct ProductEventQueueDrain {
+    task: tokio::task::JoinHandle<()>,
+}
+
+impl ProductEventQueueDrain {
+    fn start(queue: Arc<EventQueue>) -> Self {
+        let task = tokio::spawn(async move {
+            loop {
+                queue.wait_for_events().await;
+                while !queue.dequeue_configured_batch().await.is_empty() {}
+            }
+        });
+        Self { task }
+    }
+}
+
+impl Drop for ProductEventQueueDrain {
+    fn drop(&mut self) {
+        self.task.abort();
+    }
+}
+
+/// Shared product-host event source that keeps the legacy queue bounded.
+#[derive(Clone)]
+pub struct CoreProductAgentEventSource {
+    source: AgentEventSource,
+    _drain: Arc<ProductEventQueueDrain>,
+}
+
+impl CoreProductAgentEventSource {
+    pub fn new(queue: Arc<EventQueue>) -> Self {
+        Self {
+            source: AgentEventSource::new(queue.clone()),
+            _drain: Arc::new(ProductEventQueueDrain::start(queue)),
+        }
+    }
+
+    pub fn subscribe(&self) -> AgentEventReceiver {
+        self.source.subscribe()
+    }
+
+    pub fn runtime_source(&self) -> AgentEventSource {
+        self.source.clone()
+    }
+}
+
+/// Returns the process-shared dialog scheduler used by sibling product hosts.
+pub fn ensure_product_dialog_scheduler(
+    agentic_system: &crate::agentic::system::AgenticSystem,
+) -> Arc<DialogScheduler> {
+    if let Some(scheduler) = crate::agentic::coordination::get_global_scheduler() {
+        return scheduler;
+    }
+
+    let session_manager = agentic_system.coordinator.get_session_manager().clone();
+    let scheduler = DialogScheduler::new(agentic_system.coordinator.clone(), session_manager);
+    agentic_system
+        .coordinator
+        .set_scheduler_notifier(scheduler.outcome_sender());
+    agentic_system
+        .coordinator
+        .set_round_injection_source(scheduler.round_injection_monitor());
+    crate::agentic::coordination::set_global_scheduler(scheduler.clone());
+    scheduler
+}
 
 #[derive(Debug, Clone, Copy, Default)]
 struct SystemPermissionClock;
@@ -312,6 +379,35 @@ impl CoreProductAgentRuntime {
             coordinator,
             scheduler,
             event_source,
+            services,
+            harness_registry,
+        )
+    }
+
+    /// Build the standalone Agent SDK Host implementation candidate.
+    ///
+    /// The Host receives the same Core-owned session, query, event, cancellation,
+    /// and settlement capabilities as the CLI product runtime. It does not own
+    /// a second agent loop or protocol-specific execution services.
+    pub fn build_sdk_host(
+        coordinator: Arc<ConversationCoordinator>,
+        scheduler: Arc<DialogScheduler>,
+        token_usage_service: Arc<TokenUsageService>,
+        event_source: AgentEventSource,
+        services: RuntimeServices,
+        harness_registry: HarnessRegistry,
+    ) -> Result<AgentRuntime, String> {
+        let session_operations = Arc::new(CoreSessionOperationsPort::new(
+            coordinator.clone(),
+            token_usage_service,
+        ));
+        CoreServiceAgentRuntime::sdk_host_product_agent_runtime(
+            coordinator,
+            scheduler,
+            event_source,
+            session_operations.clone(),
+            session_operations.clone(),
+            session_operations,
             services,
             harness_registry,
         )
@@ -963,8 +1059,8 @@ mod tests {
     use super::{
         generate_core_session_usage_report, latest_persisted_turn_id, runtime_port_error,
         validate_latest_turn_fork_scope, validate_persisted_session_id,
-        CoreAgentRuntimeCompatibility, CoreLocalWorkspaceSnapshot, CoreProductAgentRuntime,
-        CoreSessionOperationsPort,
+        CoreAgentRuntimeCompatibility, CoreLocalWorkspaceSnapshot, CoreProductAgentEventSource,
+        CoreProductAgentRuntime, CoreSessionOperationsPort,
     };
     use crate::agentic::coordination::{ConversationCoordinator, DialogScheduler};
     use crate::agentic::events::{EventQueue, EventQueueConfig, EventRouter};
@@ -990,6 +1086,7 @@ mod tests {
     use bitfun_agent_runtime::sdk::{
         AgentSessionForkPort, AgentSessionForkRequest, AgentSessionUsageRequest, PortErrorKind,
     };
+    use bitfun_events::AgenticEvent;
     use tokio::sync::RwLock as TokioRwLock;
 
     struct TestWorkspace {
@@ -1024,6 +1121,62 @@ mod tests {
         }
     }
 
+    #[tokio::test]
+    async fn product_event_source_broadcasts_while_draining_the_legacy_queue() {
+        let queue = Arc::new(EventQueue::new(EventQueueConfig {
+            max_queue_size: 4,
+            batch_size: 2,
+        }));
+        let source = CoreProductAgentEventSource::new(queue.clone());
+        let mut first = source.subscribe();
+        let mut second = source.subscribe();
+
+        for index in 0..32 {
+            queue
+                .enqueue(
+                    AgenticEvent::SessionStateChanged {
+                        session_id: "session-1".to_string(),
+                        new_state: format!("state-{index}"),
+                    },
+                    None,
+                )
+                .await
+                .expect("enqueue event");
+        }
+
+        let mut last_first = None;
+        let mut last_second = None;
+        for _ in 0..32 {
+            last_first = Some(
+                tokio::time::timeout(Duration::from_secs(1), first.recv())
+                    .await
+                    .expect("first subscriber must not stall")
+                    .expect("first subscriber event"),
+            );
+            last_second = Some(
+                tokio::time::timeout(Duration::from_secs(1), second.recv())
+                    .await
+                    .expect("second subscriber must not stall")
+                    .expect("second subscriber event"),
+            );
+        }
+
+        let last_first = last_first.expect("last first event");
+        let last_second = last_second.expect("last second event");
+        assert_eq!(last_first.id, last_second.id);
+        assert!(matches!(
+            last_first.event,
+            AgenticEvent::SessionStateChanged { ref new_state, .. } if new_state == "state-31"
+        ));
+        tokio::time::timeout(Duration::from_secs(1), async {
+            while !queue.is_empty().await {
+                tokio::task::yield_now().await;
+            }
+        })
+        .await
+        .expect("queue drainer must keep the legacy queue bounded");
+    }
+
     #[test]
     fn product_agent_runtime_exposes_reviewed_full_and_narrow_builders() {
         fn build(
@@ -1045,6 +1198,7 @@ mod tests {
         let _ = build;
         let _ = CoreProductAgentRuntime::build_session_surface;
         let _ = CoreProductAgentRuntime::build_acp;
+        let _ = CoreProductAgentRuntime::build_sdk_host;
     }
 
     #[test]

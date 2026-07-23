@@ -91,7 +91,7 @@ impl Agent for ClawMode {
 #[cfg(test)]
 mod tests {
     use super::ClawMode;
-    use crate::agentic::agents::Agent;
+    use crate::agentic::agents::{Agent, PromptBuilderContext};
     use bitfun_agent_runtime::prompt::UserContextSection;
 
     #[test]
@@ -106,5 +106,16 @@ mod tests {
         assert!(ClawMode::new()
             .user_context_policy()
             .includes(UserContextSection::MemorySummary));
+    }
+
+    #[tokio::test]
+    async fn claw_prompt_conditions_optional_control_and_session_tools() {
+        let prompt = ClawMode::new()
+            .get_system_prompt(Some(&PromptBuilderContext::new("/workspace", None, None)))
+            .await
+            .expect("Claw prompt");
+
+        assert!(prompt.contains("only when it appears in your current tool list"));
+        assert!(prompt.contains("only when both tools appear in your current tool list"));
     }
 }

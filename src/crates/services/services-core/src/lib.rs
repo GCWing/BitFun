@@ -7,6 +7,8 @@ pub mod diagnostics;
 pub mod diff;
 pub mod filesystem;
 pub mod json_store;
+#[cfg(feature = "workspace-runtime")]
+pub mod local_runtime_ports;
 #[cfg(feature = "lsp")]
 pub mod lsp;
 pub mod managed_runtime;

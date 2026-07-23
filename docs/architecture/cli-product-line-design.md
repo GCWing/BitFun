@@ -242,6 +242,8 @@ CLI 不提供 `--output-schema v1`。Codex/Claude 同类参数表达的是调用
 Headless CLI 和公开 Agent SDK 都调用同一 Agent Runtime API，但交付形态不同。本文件只保留 CLI 约束：
 
 - `bitfun exec` 面向 shell、CI 和一次性任务，使用 stdin/stdout/stderr、退出码与 `text/json/stream-json`。
+- `bitfun` 不承载隐藏 SDK Host 子命令，也不依赖 SDK Host 协议；独立 `bitfun-sdk-host` app 与 CLI
+  分别选择 SDK/CLI profile 和 submission source，只复用同一 Runtime owner，以及由共享产品事实生成的等价能力集合。
 - CLI 不在进程内执行 Python/TypeScript Tool、Permission 或 Hook callback。
 - 公开 SDK 不解析 `stream-json` 作为正式双向协议；它通过版本化 SDK Host 获得 callback 与连接生命周期。
 - 两者的能力对照、共同 fixture 和等价门槛以

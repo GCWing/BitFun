@@ -21,6 +21,7 @@ serde_json = { workspace = true }
 serde_yaml = { workspace = true, optional = true }
 base64 = { workspace = true }
 chrono = { workspace = true }
+dunce = { workspace = true, optional = true }
 zip = { workspace = true, optional = true }
 thiserror = { workspace = true }
 log = { workspace = true }
@@ -49,7 +50,7 @@ libc = { workspace = true }
 default = ["lsp"]
 lsp = ["dep:anyhow", "dep:notify", "dep:zip"]
 markdown = ["dep:serde_yaml"]
-workspace-runtime = ["dep:anyhow", "dep:async-trait", "dep:bitfun-runtime-ports"]
+workspace-runtime = ["dep:anyhow", "dep:async-trait", "dep:bitfun-runtime-ports", "dep:dunce"]
 permission = ["dep:async-trait", "dep:bitfun-runtime-ports", "dep:rusqlite", "bitfun-runtime-ports/permission"]
 
 [dev-dependencies]

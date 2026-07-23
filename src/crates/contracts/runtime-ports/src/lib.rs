@@ -1271,6 +1271,7 @@ pub enum AgentSubmissionSource {
     RemoteRelay,
     Bot,
     Cli,
+    SdkHost,
 }
 
 pub type DialogTriggerSource = AgentSubmissionSource;
@@ -1307,7 +1308,8 @@ impl DialogSubmissionPolicy {
             DialogTriggerSource::ScheduledJob => DialogQueuePriority::Low,
             DialogTriggerSource::DesktopUi
             | DialogTriggerSource::DesktopApi
-            | DialogTriggerSource::Cli => DialogQueuePriority::Normal,
+            | DialogTriggerSource::Cli
+            | DialogTriggerSource::SdkHost => DialogQueuePriority::Normal,
             DialogTriggerSource::RemoteRelay | DialogTriggerSource::Bot => {
                 DialogQueuePriority::Normal
             }
@@ -1796,6 +1798,24 @@ pub trait AgentSubmissionPort: Send + Sync {
         ))
     }
 
+    /// Creates one caller-identified connection-scoped Session.
+    ///
+    /// The Session uses the normal Runtime owners but must not become durable
+    /// product state. This narrow operation lets process adapters provide
+    /// bounded cleanup without pretending that crash-safe durable creation has
+    /// already been specified.
+    async fn create_transient_session_with_id(
+        &self,
+        session_id: String,
+        request: AgentSessionCreateRequest,
+    ) -> PortResult<AgentSessionCreateResult> {
+        let _ = (session_id, request);
+        Err(PortError::new(
+            PortErrorKind::NotAvailable,
+            "transient exact session creation is not supported by this provider",
+        ))
+    }
+
     async fn submit_message(
         &self,
         request: AgentSubmissionRequest,
@@ -1853,6 +1873,36 @@ pub trait AgentSessionManagementPort: Send + Sync {
         &self,
         request: AgentSessionWorkspaceRequest,
     ) -> PortResult<Option<AgentSessionWorkspaceBinding>>;
+}
+
+/// Deadline-bearing request for discarding a connection-scoped transient
+/// Session. This is separate from [`AgentSessionDeleteRequest`] so adding Host
+/// cleanup policy cannot break the established Rust Session-management API.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AgentTransientSessionDiscardRequest {
+    pub workspace_path: String,
+    pub session_id: String,
+    pub remote_connection_id: Option<String>,
+    pub remote_ssh_host: Option<String>,
+    pub wait_timeout_ms: u64,
+}
+
+/// Runtime lifecycle owner for connection-scoped Session cleanup.
+#[async_trait::async_trait]
+pub trait AgentSessionClosePort: Send + Sync {
+    /// Quiesces and discards only a loaded transient Session owned by the
+    /// caller. Implementations must reject durable Sessions and must never
+    /// remove persisted Session storage through this operation.
+    async fn discard_transient_session(
+        &self,
+        request: AgentTransientSessionDiscardRequest,
+    ) -> PortResult<bool> {
+        let _ = request;
+        Err(PortError::new(
+            PortErrorKind::NotAvailable,
+            "transient session discard is not supported by this provider",
+        ))
+    }
 }
 
 #[async_trait::async_trait]
@@ -2378,6 +2428,10 @@ mod tests {
             .expect("serialize dialog trigger source");
 
         assert_eq!(json, serde_json::json!("cli"));
+
+        let sdk_host = serde_json::to_value(DialogTriggerSource::SdkHost)
+            .expect("serialize SDK Host trigger source");
+        assert_eq!(sdk_host, serde_json::json!("sdk_host"));
     }
 
     #[test]
@@ -2393,6 +2447,9 @@ mod tests {
 
         let cli = DialogSubmissionPolicy::for_source(DialogTriggerSource::Cli);
         assert_eq!(cli.queue_priority, DialogQueuePriority::Normal);
+
+        let sdk_host = DialogSubmissionPolicy::for_source(DialogTriggerSource::SdkHost);
+        assert_eq!(sdk_host.queue_priority, DialogQueuePriority::Normal);
     }
 
     #[test]

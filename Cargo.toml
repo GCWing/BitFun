@@ -1,10 +1,12 @@
 [workspace]
 members = [
     "src/apps/cli",
+    "src/apps/sdk-host",
     "src/apps/desktop",
     "src/apps/server",
     "src/apps/relay-server",
     "src/crates/interfaces/acp",
+    "src/crates/interfaces/sdk-host",
     "src/crates/assembly/core",
     "src/crates/assembly/external-sources",
     "src/crates/adapters/ai-adapters",

@@ -200,6 +200,44 @@ fn metadata_bool(metadata: Option<&serde_json::Value>, key: &str) -> Option<bool
         .and_then(serde_json::Value::as_bool)
 }
 
+fn runtime_tool_restrictions_for_session_lifetime(
+    mut restrictions: ToolRuntimeRestrictions,
+    transient: bool,
+) -> ToolRuntimeRestrictions {
+    if !transient {
+        return restrictions;
+    }
+
+    for (tool_name, message) in [
+        (
+            "SessionControl",
+            "SessionControl is unavailable in connection-scoped transient Sessions.",
+        ),
+        (
+            "SessionMessage",
+            "SessionMessage is unavailable in connection-scoped transient Sessions.",
+        ),
+        (
+            "SessionHistory",
+            "SessionHistory is unavailable in connection-scoped transient Sessions.",
+        ),
+        (
+            "Cron",
+            "Cron is unavailable in connection-scoped transient Sessions.",
+        ),
+        (
+            "ControlHub",
+            "ControlHub is unavailable in connection-scoped transient Sessions.",
+        ),
+    ] {
+        restrictions.denied_tool_names.insert(tool_name.to_string());
+        restrictions
+            .denied_tool_messages
+            .insert(tool_name.to_string(), message.to_string());
+    }
+    restrictions
+}
+
 /// Subagent execution result
 ///
 /// Contains the text response after subagent execution
@@ -455,8 +493,12 @@ pub(crate) struct HiddenSubagentExecutionRequest {
     runtime_tool_restrictions: ToolRuntimeRestrictions,
     prompt_cache_source_session_id: Option<String>,
     session_kind: SessionKind,
+    transient: bool,
     emit_lifecycle_events: bool,
     prepared_session_created: bool,
+    /// Keeps scheduler maintenance fenced from the moment a hidden Session is
+    /// prepared until the final execution/cleanup owner releases every clone.
+    execution_lease: Option<Arc<SessionExecutionLease>>,
     external_generation_lease: Option<crate::agentic::agents::ExternalSubagentGenerationLease>,
 }
 
@@ -535,6 +577,17 @@ const ASSISTANT_BOOTSTRAP_AGENT_TYPE: &str = "Claw";
 struct CancelTokenGuard {
     execution_engine: Arc<ExecutionEngine>,
     dialog_turn_id: String,
+}
+
+#[derive(Debug)]
+struct SessionExecutionLease {
+    active_counter: Arc<AtomicUsize>,
+}
+
+impl Drop for SessionExecutionLease {
+    fn drop(&mut self) {
+        self.active_counter.fetch_sub(1, Ordering::SeqCst);
+    }
 }
 
 impl Drop for CancelTokenGuard {
@@ -1653,9 +1706,31 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
         session_id: Option<String>,
         session_name: String,
         agent_type: String,
+        config: SessionConfig,
+        workspace_path: String,
+        created_by: Option<String>,
+    ) -> BitFunResult<Session> {
+        self.create_session_with_workspace_and_creator_internal(
+            session_id,
+            session_name,
+            agent_type,
+            config,
+            workspace_path,
+            created_by,
+            false,
+        )
+        .await
+    }
+
+    async fn create_session_with_workspace_and_creator_internal(
+        &self,
+        session_id: Option<String>,
+        session_name: String,
+        agent_type: String,
         mut config: SessionConfig,
         workspace_path: String,
         created_by: Option<String>,
+        transient: bool,
     ) -> BitFunResult<Session> {
         // Persist the workspace binding inside the session config so execution can
         // consistently restore the correct workspace regardless of the entry point.
@@ -1664,19 +1739,33 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
         let defaults = Self::agent_model_defaults().await;
         snapshot_normal_session_model(&mut config, &defaults);
         let agent_type = Self::normalize_agent_type(&agent_type);
-        let session = self
-            .session_manager
-            .create_session_with_id_and_creator(
-                session_id,
-                session_name,
-                agent_type,
-                config,
-                created_by,
-            )
-            .await?;
+        let session = if transient {
+            self.session_manager
+                .create_transient_session_with_id_and_details(
+                    session_id,
+                    session_name,
+                    agent_type,
+                    config,
+                    created_by,
+                    SessionKind::Standard,
+                )
+                .await?
+        } else {
+            self.session_manager
+                .create_session_with_id_and_creator(
+                    session_id,
+                    session_name,
+                    agent_type,
+                    config,
+                    created_by,
+                )
+                .await?
+        };
 
-        Self::track_session_workspace_activity_best_effort(&session.config, "session_created")
-            .await;
+        if !transient {
+            Self::track_session_workspace_activity_best_effort(&session.config, "session_created")
+                .await;
+        }
 
         // SessionManager::create_session_with_id_and_creator already persists the
         // session into the effective workspace session storage path. Avoid writing
@@ -2172,16 +2261,51 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
         created_by: Option<String>,
         kind: SessionKind,
     ) -> BitFunResult<Session> {
-        self.session_manager
-            .create_session_with_id_and_details(
-                session_id,
-                session_name,
-                agent_type,
-                config,
-                created_by,
-                kind,
-            )
-            .await
+        self.create_hidden_agent_session_with_durability(
+            session_id,
+            session_name,
+            agent_type,
+            config,
+            created_by,
+            kind,
+            false,
+        )
+        .await
+    }
+
+    async fn create_hidden_agent_session_with_durability(
+        &self,
+        session_id: Option<String>,
+        session_name: String,
+        agent_type: String,
+        config: SessionConfig,
+        created_by: Option<String>,
+        kind: SessionKind,
+        transient: bool,
+    ) -> BitFunResult<Session> {
+        if transient {
+            self.session_manager
+                .create_transient_session_with_id_and_details(
+                    session_id,
+                    session_name,
+                    agent_type,
+                    config,
+                    created_by,
+                    kind,
+                )
+                .await
+        } else {
+            self.session_manager
+                .create_session_with_id_and_details(
+                    session_id,
+                    session_name,
+                    agent_type,
+                    config,
+                    created_by,
+                    kind,
+                )
+                .await
+        }
     }
 
     async fn load_session_context_messages(&self, session: &Session) -> BitFunResult<Vec<Message>> {
@@ -2236,6 +2360,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
         workspace_services: Option<&WorkspaceServices>,
         enable_tools: bool,
         skill_agent_context_vars: &HashMap<String, String>,
+        runtime_tool_restrictions: &ToolRuntimeRestrictions,
     ) -> BitFunResult<WrappedUserInputPayload> {
         let agent_registry = get_agent_registry();
         agent_registry
@@ -2259,6 +2384,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             workspace_services,
             enable_tools,
             skill_agent_context_vars,
+            runtime_tool_restrictions,
         )
         .await;
 
@@ -3647,6 +3773,18 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
         {
             skill_agent_context_vars.insert("acp_transport".to_string(), "true".to_string());
         }
+        let runtime_tool_restrictions = if is_miniapp_headless_agent_run(
+            user_message_metadata.as_ref(),
+            session.created_by.as_deref(),
+        ) {
+            miniapp_headless_agent_tool_restrictions()
+        } else {
+            ToolRuntimeRestrictions::default()
+        };
+        let runtime_tool_restrictions = runtime_tool_restrictions_for_session_lifetime(
+            runtime_tool_restrictions,
+            self.session_manager.is_transient_session(&session_id),
+        );
 
         // Materialize references only when a queued turn is actually being
         // dispatched. The agent receives local artifact URIs, never a path to
@@ -3673,6 +3811,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                 workspace_services.as_ref(),
                 session.config.enable_tools,
                 &skill_agent_context_vars,
+                &runtime_tool_restrictions,
             )
             .await?;
         let effective_user_input = wrapped_user_input_payload.content.clone();
@@ -3925,14 +4064,6 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             .as_ref()
             .map(|workspace| workspace.session_storage_dir().to_path_buf());
 
-        let runtime_tool_restrictions = if is_miniapp_headless_agent_run(
-            user_message_metadata.as_ref(),
-            session.created_by.as_deref(),
-        ) {
-            miniapp_headless_agent_tool_restrictions()
-        } else {
-            ToolRuntimeRestrictions::default()
-        };
         let persisted_subagent_context = self
             .load_persisted_subagent_continuation_context(&session)
             .await;
@@ -4184,6 +4315,16 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             }
             sleep(Duration::from_millis(20)).await;
         }
+    }
+
+    fn register_session_execution(&self, session_id: &str) -> Arc<SessionExecutionLease> {
+        let active_counter = self
+            .active_turns_per_session
+            .entry(session_id.to_string())
+            .or_insert_with(|| Arc::new(AtomicUsize::new(0)))
+            .clone();
+        active_counter.fetch_add(1, Ordering::SeqCst);
+        Arc::new(SessionExecutionLease { active_counter })
     }
 
     pub(crate) async fn wait_for_turn_settlement(
@@ -4512,6 +4653,41 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
         })
         .await;
         Ok(())
+    }
+
+    /// Releases one connection-scoped Session family through the same
+    /// coordination owner used by durable Session deletion. Coordination rows
+    /// and live background outcomes are removed before runtime state so a
+    /// failed cleanup can be retried without losing the family identity.
+    pub(crate) async fn discard_transient_session(
+        &self,
+        workspace_path: &Path,
+        remote_connection_id: Option<&str>,
+        remote_ssh_host: Option<&str>,
+        session_id: &str,
+    ) -> BitFunResult<bool> {
+        let family = self.session_manager.transient_session_family_postorder(
+            workspace_path,
+            remote_connection_id,
+            remote_ssh_host,
+            session_id,
+        )?;
+        if family.is_empty() {
+            return Ok(false);
+        }
+        for related_session_id in &family {
+            self.background_subagent_outcomes
+                .delete_session_references(related_session_id)
+                .await?;
+        }
+        self.session_manager
+            .discard_transient_session(
+                workspace_path,
+                remote_connection_id,
+                remote_ssh_host,
+                session_id,
+            )
+            .await
     }
 
     pub async fn delete_hidden_subagent_sessions_for_parent_turns(
@@ -5215,8 +5391,10 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             runtime_tool_restrictions,
             prompt_cache_source_session_id,
             session_kind,
+            transient,
             emit_lifecycle_events,
             prepared_session_created,
+            execution_lease,
             external_generation_lease: _external_generation_lease,
         } = request;
         let prepared_target_session_id = target_session_id.clone();
@@ -5390,13 +5568,14 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             },
             None => {
                 let session = self
-                    .create_hidden_agent_session(
+                    .create_hidden_agent_session_with_durability(
                         None,
                         session_name.clone(),
                         logical_agent_type.clone(),
                         session_config.clone(),
                         created_by.clone(),
                         session_kind,
+                        transient,
                     )
                     .await?;
                 let session_id = session.session_id.clone();
@@ -5420,6 +5599,8 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             }
         };
         let session_id = session.session_id.clone();
+        let _execution_lease =
+            execution_lease.unwrap_or_else(|| self.register_session_execution(&session_id));
         // Sync context window from AI config so subagents with large-context
         // models are not prematurely capped at SessionConfig::default()'s 128128.
         if let Err(error) = self
@@ -6677,6 +6858,17 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             "session-{}",
             request.subagent_parent_info.session_id
         ));
+        self.session_manager
+            .get_session(&request.subagent_parent_info.session_id)
+            .ok_or_else(|| {
+                BitFunError::NotFound(format!(
+                    "Parent session not found: {}",
+                    request.subagent_parent_info.session_id
+                ))
+            })?;
+        let parent_transient = self
+            .session_manager
+            .is_transient_session(&request.subagent_parent_info.session_id);
         let approved_model_binding = request
             .external_generation_lease
             .as_ref()
@@ -6738,6 +6930,9 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                         .await?;
                     initial_messages.push(Message::user(task_description.clone()));
 
+                    let transient = self
+                        .session_manager
+                        .is_transient_session(&session.session_id);
                     return Ok(HiddenSubagentExecutionRequest {
                         target_session_id: Some(session.session_id.clone()),
                         dialog_turn_id: None,
@@ -6752,13 +6947,18 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                         context: request.context,
                         permission_runtime_ceiling: Some(request.permission_runtime_ceiling),
                         delegation_policy: request.delegation_policy,
-                        runtime_tool_restrictions: runtime_tool_restrictions_for_delegation_policy(
-                            request.delegation_policy,
+                        runtime_tool_restrictions: runtime_tool_restrictions_for_session_lifetime(
+                            runtime_tool_restrictions_for_delegation_policy(
+                                request.delegation_policy,
+                            ),
+                            transient,
                         ),
                         prompt_cache_source_session_id: None,
                         session_kind: SessionKind::Subagent,
+                        transient,
                         emit_lifecycle_events: true,
                         prepared_session_created: false,
+                        execution_lease: None,
                         external_generation_lease: request.external_generation_lease,
                     });
                 }
@@ -6831,13 +7031,16 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                     context: request.context,
                     permission_runtime_ceiling: Some(request.permission_runtime_ceiling),
                     delegation_policy: request.delegation_policy,
-                    runtime_tool_restrictions: runtime_tool_restrictions_for_delegation_policy(
-                        request.delegation_policy,
+                    runtime_tool_restrictions: runtime_tool_restrictions_for_session_lifetime(
+                        runtime_tool_restrictions_for_delegation_policy(request.delegation_policy),
+                        parent_transient,
                     ),
                     prompt_cache_source_session_id: None,
                     session_kind: SessionKind::Subagent,
+                    transient: parent_transient,
                     emit_lifecycle_events: true,
                     prepared_session_created: false,
+                    execution_lease: None,
                     external_generation_lease: request.external_generation_lease,
                 })
             }
@@ -6915,13 +7118,16 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                     context: request.context,
                     permission_runtime_ceiling: Some(request.permission_runtime_ceiling),
                     delegation_policy: request.delegation_policy,
-                    runtime_tool_restrictions: runtime_tool_restrictions_for_delegation_policy(
-                        request.delegation_policy,
+                    runtime_tool_restrictions: runtime_tool_restrictions_for_session_lifetime(
+                        runtime_tool_restrictions_for_delegation_policy(request.delegation_policy),
+                        parent_transient,
                     ),
                     prompt_cache_source_session_id: Some(snapshot.parent_session_id),
                     session_kind: SessionKind::Subagent,
+                    transient: parent_transient,
                     emit_lifecycle_events: true,
                     prepared_session_created: false,
+                    execution_lease: None,
                     external_generation_lease: request.external_generation_lease,
                 })
             }
@@ -6948,17 +7154,21 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                     target_session_id
                 )));
             }
+            if request.execution_lease.is_none() {
+                request.execution_lease = Some(self.register_session_execution(target_session_id));
+            }
             return Ok(request);
         }
 
         let session = self
-            .create_hidden_agent_session(
+            .create_hidden_agent_session_with_durability(
                 None,
                 request.session_name.clone(),
                 request.logical_agent_type.clone(),
                 request.session_config.clone(),
                 request.created_by.clone(),
                 request.session_kind,
+                request.transient,
             )
             .await?;
         let session_id = session.session_id.clone();
@@ -6982,6 +7192,10 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
 
         request.target_session_id = Some(session_id);
         request.prepared_session_created = true;
+        request.execution_lease = request
+            .target_session_id
+            .as_deref()
+            .map(|session_id| self.register_session_execution(session_id));
         Ok(request)
     }
 
@@ -7318,8 +7532,10 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             runtime_tool_restrictions: request.runtime_tool_restrictions,
             prompt_cache_source_session_id: None,
             session_kind: request.session_kind,
+            transient: false,
             emit_lifecycle_events: request.emit_lifecycle_events,
             prepared_session_created: false,
+            execution_lease: None,
             external_generation_lease: None,
         };
 
@@ -7543,9 +7759,9 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
 
     /// Clean up runtime-only subagent resources.
     ///
-    /// Subagent sessions are now persisted so users can reopen them from the UI.
-    /// This cleanup path must only release ephemeral runtime resources such as
-    /// snapshot bookkeeping; it must not delete the persisted session itself.
+    /// Durable and reusable Subagent sessions remain available for follow-up.
+    /// A transient fresh-only child has no supported continuation path, so its
+    /// existing lifecycle owner releases the Session after terminal cleanup.
     async fn cleanup_subagent_resources(&self, session_id: &str) -> BitFunResult<()> {
         let cleanup_started_at = Instant::now();
         debug!(
@@ -7554,10 +7770,11 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
         );
 
         // Clean up snapshot system resources
-        if let Some(workspace_path) = self
-            .session_manager
-            .get_session(session_id)
-            .and_then(|session| session.config.workspace_path.map(std::path::PathBuf::from))
+        let session = self.session_manager.get_session(session_id);
+        if let Some(workspace_path) = session
+            .as_ref()
+            .and_then(|session| session.config.workspace_path.as_deref())
+            .map(std::path::PathBuf::from)
         {
             debug!(
                 "Subagent cleanup stage starting: session_id={}, stage=snapshot_cleanup, workspace_path={}",
@@ -7587,6 +7804,30 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                 session_id,
                 stage_started_at.elapsed().as_millis()
             );
+        }
+
+        if let Some(session) = session.filter(|session| {
+            self.session_manager.is_transient_session(session_id)
+                && session.config.continuation_policy == SessionContinuationPolicy::FreshOnly
+        }) {
+            let workspace_path = session
+                .config
+                .workspace_path
+                .as_deref()
+                .map(Path::new)
+                .ok_or_else(|| {
+                    BitFunError::Validation(format!(
+                        "Transient subagent workspace binding is missing: {session_id}"
+                    ))
+                })?;
+            self.session_manager
+                .discard_transient_session(
+                    workspace_path,
+                    session.config.remote_connection_id.as_deref(),
+                    session.config.remote_ssh_host.as_deref(),
+                    session_id,
+                )
+                .await?;
         }
 
         debug!(
@@ -7844,6 +8085,7 @@ async fn create_agent_session_from_runtime_request(
     coordinator: &ConversationCoordinator,
     session_id: Option<String>,
     request: bitfun_runtime_ports::AgentSessionCreateRequest,
+    transient: bool,
     map_core_error: fn(BitFunError) -> bitfun_runtime_ports::PortError,
 ) -> bitfun_runtime_ports::PortResult<bitfun_runtime_ports::AgentSessionCreateResult> {
     let workspace_path = request.workspace_path.clone().ok_or_else(|| {
@@ -7854,7 +8096,7 @@ async fn create_agent_session_from_runtime_request(
     })?;
     let created_by = resolve_agent_session_create_created_by(&request.metadata);
     let session = coordinator
-        .create_session_with_workspace_and_creator(
+        .create_session_with_workspace_and_creator_internal(
             session_id,
             request.session_name,
             request.agent_type,
@@ -7868,6 +8110,7 @@ async fn create_agent_session_from_runtime_request(
             },
             workspace_path,
             created_by,
+            transient,
         )
         .await
         .map_err(map_core_error)?;
@@ -7885,8 +8128,14 @@ impl bitfun_runtime_ports::AgentSubmissionPort for ConversationCoordinator {
         &self,
         request: bitfun_runtime_ports::AgentSessionCreateRequest,
     ) -> bitfun_runtime_ports::PortResult<bitfun_runtime_ports::AgentSessionCreateResult> {
-        create_agent_session_from_runtime_request(self, None, request, runtime_port_backend_error)
-            .await
+        create_agent_session_from_runtime_request(
+            self,
+            None,
+            request,
+            false,
+            runtime_port_backend_error,
+        )
+        .await
     }
 
     async fn create_session_with_id(
@@ -7901,6 +8150,25 @@ impl bitfun_runtime_ports::AgentSubmissionPort for ConversationCoordinator {
             self,
             Some(session_id),
             request,
+            false,
+            runtime_port_error_preserving_message,
+        )
+        .await
+    }
+
+    async fn create_transient_session_with_id(
+        &self,
+        session_id: String,
+        request: bitfun_runtime_ports::AgentSessionCreateRequest,
+    ) -> bitfun_runtime_ports::PortResult<bitfun_runtime_ports::AgentSessionCreateResult> {
+        bitfun_core_types::validate_session_id(&session_id).map_err(|message| {
+            runtime_port_error_preserving_message(BitFunError::Validation(message))
+        })?;
+        create_agent_session_from_runtime_request(
+            self,
+            Some(session_id),
+            request,
+            true,
             runtime_port_error_preserving_message,
         )
         .await
@@ -8672,8 +8940,9 @@ mod tests {
         merge_prepended_messages_for_turn, normalize_subagent_max_concurrency,
         resolve_agent_session_create_created_by, resolve_agent_submission_turn_id,
         resolve_subagent_model_selection, runtime_port_error_preserving_message,
-        turn_review_manifest_for_agent, BackgroundSubagentWaitMode, ConversationCoordinator,
-        SessionReferenceLocator, SubagentExecutionRequest, TEST_AGENT_MODEL_DEFAULTS,
+        runtime_tool_restrictions_for_session_lifetime, turn_review_manifest_for_agent,
+        BackgroundSubagentWaitMode, ConversationCoordinator, SessionReferenceLocator,
+        SubagentExecutionRequest, TEST_AGENT_MODEL_DEFAULTS,
     };
     use crate::agentic::coordination::coordination_store::{
         BackgroundTaskRegistration, RegisteredBackgroundTask,
@@ -8745,6 +9014,40 @@ mod tests {
                 "12345678".to_string(),
             ]
         );
+    }
+
+    #[test]
+    fn transient_session_runtime_restrictions_deny_out_of_band_session_tools() {
+        let mut base = crate::agentic::tools::ToolRuntimeRestrictions::default();
+        base.denied_tool_names.insert("Bash".to_string());
+
+        let transient = runtime_tool_restrictions_for_session_lifetime(base.clone(), true);
+        for tool_name in [
+            "SessionControl",
+            "SessionMessage",
+            "SessionHistory",
+            "Cron",
+            "ControlHub",
+        ] {
+            assert!(
+                !transient.is_tool_allowed(tool_name),
+                "{tool_name} must not cross a connection-scoped Session boundary"
+            );
+        }
+        assert!(!transient.is_tool_allowed("Bash"));
+        assert!(transient.is_tool_allowed("Read"));
+
+        let durable = runtime_tool_restrictions_for_session_lifetime(base, false);
+        for tool_name in [
+            "SessionControl",
+            "SessionMessage",
+            "SessionHistory",
+            "Cron",
+            "ControlHub",
+        ] {
+            assert!(durable.is_tool_allowed(tool_name));
+        }
+        assert!(!durable.is_tool_allowed("Bash"));
     }
 
     #[test]
@@ -9039,8 +9342,9 @@ mod tests {
     }
     use tokio::sync::RwLock as TokioRwLock;
 
-    fn test_coordinator_with_max_active_sessions(
+    fn test_coordinator_with_config(
         max_active_sessions: usize,
+        enable_persistence: bool,
     ) -> (ConversationCoordinator, Arc<SessionManager>) {
         let event_queue = Arc::new(EventQueue::new(EventQueueConfig::default()));
         let coordination_database_file = std::env::temp_dir()
@@ -9056,7 +9360,7 @@ mod tests {
                 max_active_sessions,
                 session_idle_timeout: Duration::from_secs(3600),
                 auto_save_interval: Duration::from_secs(300),
-                enable_persistence: false,
+                enable_persistence,
                 prompt_cache_policy: PromptCachePolicy::default(),
             },
         ));
@@ -9092,6 +9396,12 @@ mod tests {
         );
 
         (coordinator, session_manager)
+    }
+
+    fn test_coordinator_with_max_active_sessions(
+        max_active_sessions: usize,
+    ) -> (ConversationCoordinator, Arc<SessionManager>) {
+        test_coordinator_with_config(max_active_sessions, false)
     }
 
     fn test_coordinator() -> (ConversationCoordinator, Arc<SessionManager>) {
@@ -10238,6 +10548,140 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn transient_session_port_never_persists_or_discards_a_durable_identity() {
+        let (coordinator, session_manager) = test_coordinator_with_config(100, true);
+        let workspace_path = std::env::temp_dir().join(format!(
+            "bitfun-agent-transient-session-port-test-{}",
+            uuid::Uuid::new_v4()
+        ));
+        std::fs::create_dir_all(&workspace_path).expect("workspace dir should exist");
+        let workspace = workspace_path.to_string_lossy().into_owned();
+        let request = |name: &str| AgentSessionCreateRequest {
+            session_name: name.to_string(),
+            agent_type: "agentic".to_string(),
+            workspace_path: Some(workspace.clone()),
+            workspace_id: None,
+            remote_connection_id: None,
+            remote_ssh_host: None,
+            model_id: None,
+            metadata: serde_json::Map::new(),
+        };
+
+        let transient = AgentSubmissionPort::create_transient_session_with_id(
+            &coordinator,
+            "transient-session".to_string(),
+            request("Transient"),
+        )
+        .await
+        .expect("transient Session creation should succeed");
+        let loaded = session_manager
+            .get_session(&transient.session_id)
+            .expect("transient Session should be loaded");
+        assert!(session_manager.is_transient_session(&loaded.session_id));
+        let storage_path = session_manager
+            .resolve_session_workspace_binding(&transient.session_id)
+            .await
+            .expect("transient Session should retain its workspace binding")
+            .session_storage_dir();
+        assert!(!session_manager
+            .persistence_manager()
+            .session_storage_exists(&storage_path, &transient.session_id)
+            .expect("persistence probe should succeed"));
+
+        let transient_child = session_manager
+            .create_transient_session_with_id_and_details(
+                None,
+                "Transient child".to_string(),
+                "Explore".to_string(),
+                SessionConfig {
+                    workspace_path: Some(workspace.clone()),
+                    ..Default::default()
+                },
+                Some(format!("session-{}", transient.session_id)),
+                SessionKind::Subagent,
+            )
+            .await
+            .expect("transient child Session should be created");
+        let transient_grandchild = session_manager
+            .create_transient_session_with_id_and_details(
+                None,
+                "Transient grandchild".to_string(),
+                "Explore".to_string(),
+                SessionConfig {
+                    workspace_path: Some(workspace.clone()),
+                    ..Default::default()
+                },
+                Some(format!("session-{}", transient_child.session_id)),
+                SessionKind::Subagent,
+            )
+            .await
+            .expect("nested transient child Session should be created");
+        let background_task = register_test_background_task(
+            &coordinator,
+            &transient.session_id,
+            "transient-parent-turn",
+            &transient_child.session_id,
+        )
+        .await;
+
+        let discarded = coordinator
+            .discard_transient_session(&workspace_path, None, None, &transient.session_id)
+            .await
+            .expect("owned transient Session discard should succeed");
+        assert!(discarded);
+        assert!(session_manager.get_session(&transient.session_id).is_none());
+        assert!(
+            session_manager
+                .get_session(&transient_child.session_id)
+                .is_none(),
+            "discarding a transient parent must release its transient descendants"
+        );
+        assert!(session_manager
+            .get_session(&transient_grandchild.session_id)
+            .is_none());
+        assert!(session_manager
+            .resolve_session_workspace_binding(&transient.session_id)
+            .await
+            .is_none());
+        assert!(coordinator
+            .background_subagent_outcomes
+            .resolve_agent_id(&transient.session_id, &background_task.agent_id)
+            .await
+            .is_err());
+
+        let durable = AgentSubmissionPort::create_session_with_id(
+            &coordinator,
+            "durable-session".to_string(),
+            request("Durable"),
+        )
+        .await
+        .expect("durable Session creation should succeed");
+        let discard_error = session_manager
+            .discard_transient_session(&workspace_path, None, None, &durable.session_id)
+            .await
+            .expect_err("transient discard must reject durable Session ownership");
+        assert!(matches!(
+            discard_error,
+            crate::util::errors::BitFunError::Validation(_)
+        ));
+        session_manager.evict_loaded_session_for_test(&durable.session_id);
+        let collision = AgentSubmissionPort::create_transient_session_with_id(
+            &coordinator,
+            durable.session_id.clone(),
+            request("Collision"),
+        )
+        .await
+        .expect_err("transient Session must not shadow persisted durable identity");
+        assert_eq!(
+            collision.kind,
+            bitfun_runtime_ports::PortErrorKind::InvalidRequest
+        );
+
+        let _ = std::fs::remove_dir_all(storage_path);
+        let _ = std::fs::remove_dir_all(workspace_path);
+    }
+
+    #[tokio::test]
     async fn agent_submission_create_session_rejects_invalid_requested_session_id() {
         let (coordinator, _) = test_coordinator();
         let error = AgentSubmissionPort::create_session_with_id(
@@ -10339,6 +10783,146 @@ mod tests {
             .expect("fresh subagent request should inherit the parent model");
 
         assert_eq!(model_id, "primary");
+    }
+
+    #[tokio::test]
+    async fn fresh_subagent_inherits_transient_parent_persistence_boundary() {
+        let (coordinator, session_manager) = test_coordinator();
+        let workspace_path = std::env::temp_dir().join(format!(
+            "bitfun-fresh-subagent-transient-test-{}",
+            uuid::Uuid::new_v4()
+        ));
+        std::fs::create_dir_all(&workspace_path).expect("workspace dir should exist");
+        struct TempWorkspaceGuard(std::path::PathBuf);
+        impl Drop for TempWorkspaceGuard {
+            fn drop(&mut self) {
+                let _ = std::fs::remove_dir_all(&self.0);
+            }
+        }
+        let _workspace_guard = TempWorkspaceGuard(workspace_path.clone());
+        let workspace = workspace_path.to_string_lossy().into_owned();
+        let parent_session = session_manager
+            .create_transient_session_with_id_and_details(
+                None,
+                "Transient parent".to_string(),
+                "agentic".to_string(),
+                SessionConfig {
+                    model_id: Some("primary".to_string()),
+                    workspace_path: Some(workspace.clone()),
+                    ..Default::default()
+                },
+                None,
+                SessionKind::Standard,
+            )
+            .await
+            .expect("transient parent should be created");
+
+        let resolved = coordinator
+            .resolve_hidden_subagent_execution_request(SubagentExecutionRequest {
+                task_description: "Inspect the workspace".to_string(),
+                context_mode: SubagentContextMode::Fresh,
+                target_session_id: None,
+                subagent_type: Some("Explore".to_string()),
+                logical_subagent_type: None,
+                continuation_policy: SessionContinuationPolicy::Reusable,
+                model_binding_policy: SessionModelBindingPolicy::Mutable,
+                workspace_path: Some(workspace.clone()),
+                model_id: Some("primary".to_string()),
+                inherit_parent_model: false,
+                subagent_parent_info: SubagentParentInfo {
+                    session_id: parent_session.session_id.clone(),
+                    dialog_turn_id: "parent-turn".to_string(),
+                    tool_call_id: "task-tool".to_string(),
+                },
+                context: HashMap::new(),
+                permission_runtime_ceiling: PermissionRuntimeCeiling::default(),
+                delegation_policy: DelegationPolicy::top_level().spawn_child(),
+                external_generation_lease: None,
+            })
+            .await
+            .expect("fresh subagent request should resolve");
+
+        assert!(resolved.transient);
+        assert!(!resolved
+            .runtime_tool_restrictions
+            .is_tool_allowed("SessionControl"));
+        assert!(!resolved
+            .runtime_tool_restrictions
+            .is_tool_allowed("SessionMessage"));
+
+        let prepared = coordinator
+            .prepare_hidden_subagent_execution_request(resolved)
+            .await
+            .expect("transient child should prepare");
+        let child_session_id = prepared
+            .target_session_id()
+            .expect("prepared child Session id")
+            .to_string();
+        assert!(
+            coordinator
+                .ensure_session_execution_drained(&child_session_id, Duration::from_millis(10))
+                .await
+                .is_err(),
+            "a prepared hidden execution must fence Session maintenance"
+        );
+        drop(prepared);
+        coordinator
+            .ensure_session_execution_drained(&child_session_id, Duration::from_millis(50))
+            .await
+            .expect("dropping the final hidden execution lease should release maintenance");
+
+        coordinator
+            .cleanup_subagent_resources(&child_session_id)
+            .await
+            .expect("transient child cleanup should succeed");
+        assert!(
+            session_manager.get_session(&child_session_id).is_some(),
+            "a reusable transient Subagent must remain available for send_input until its parent is discarded"
+        );
+
+        let fresh_only = coordinator
+            .resolve_hidden_subagent_execution_request(SubagentExecutionRequest {
+                task_description: "Run once".to_string(),
+                context_mode: SubagentContextMode::Fresh,
+                target_session_id: None,
+                subagent_type: Some("Explore".to_string()),
+                logical_subagent_type: None,
+                continuation_policy: SessionContinuationPolicy::FreshOnly,
+                model_binding_policy: SessionModelBindingPolicy::Mutable,
+                workspace_path: Some(workspace),
+                model_id: Some("primary".to_string()),
+                inherit_parent_model: false,
+                subagent_parent_info: SubagentParentInfo {
+                    session_id: parent_session.session_id,
+                    dialog_turn_id: "parent-turn-2".to_string(),
+                    tool_call_id: "task-tool-2".to_string(),
+                },
+                context: HashMap::new(),
+                permission_runtime_ceiling: PermissionRuntimeCeiling::default(),
+                delegation_policy: DelegationPolicy::top_level().spawn_child(),
+                external_generation_lease: None,
+            })
+            .await
+            .expect("fresh-only transient child should resolve");
+        let fresh_only = coordinator
+            .prepare_hidden_subagent_execution_request(fresh_only)
+            .await
+            .expect("fresh-only transient child should prepare");
+        let fresh_only_session_id = fresh_only
+            .target_session_id()
+            .expect("fresh-only prepared child Session id")
+            .to_string();
+        drop(fresh_only);
+        coordinator
+            .cleanup_subagent_resources(&fresh_only_session_id)
+            .await
+            .expect("fresh-only transient child cleanup should succeed");
+        assert!(
+            session_manager
+                .get_session(&fresh_only_session_id)
+                .is_none(),
+            "a fresh-only transient Subagent should be released after terminal cleanup"
+        );
     }
 
     #[tokio::test]

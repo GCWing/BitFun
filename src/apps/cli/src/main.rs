@@ -565,6 +565,9 @@ async fn initialize_core_services(
 ) -> Result<std::sync::Arc<runtime::CliRuntimeContext>> {
     use bitfun_core::infrastructure::ai::AIClientFactory;
 
+    agent::agentic_system::select_agentic_system_profile(
+        bitfun_core::product_assembly::DeliveryProfile::Cli,
+    )?;
     bitfun_core::service::config::initialize_global_config()
         .await
         .map_err(|error| anyhow!("Failed to initialize global config service: {error}"))?;
@@ -581,9 +584,11 @@ async fn initialize_core_services(
 
     initialize_terminal_service().await;
 
-    let agentic_system = agent::agentic_system::init_agentic_system()
-        .await
-        .map_err(|error| anyhow!("Failed to initialize agentic system: {error}"))?;
+    let agentic_system = agent::agentic_system::init_agentic_system(
+        bitfun_core::product_assembly::DeliveryProfile::Cli,
+    )
+    .await
+    .map_err(|error| anyhow!("Failed to initialize agentic system: {error}"))?;
     tracing::info!("Agentic system initialized");
 
     let runtime = std::sync::Arc::new(runtime::CliRuntimeContext::build(
@@ -960,17 +965,9 @@ async fn run_cli() -> Result<()> {
         }
 
         Some(Commands::Doctor) => {
-            use std::sync::Arc;
-
-            use runtime::services::{CliClock, CliRuntimeEventSink, CliRuntimeServicesProvider};
-
             let workspace = std::env::current_dir()?;
-            let services = CliRuntimeServicesProvider::new(
-                &workspace,
-                Arc::new(CliRuntimeEventSink::new(16)),
-                Arc::new(CliClock),
-            )?
-            .build()?;
+            let (_, services) =
+                bitfun_core::product_runtime::build_local_runtime_services(&workspace, 16)?;
             let product_runtime = product_assembly::assemble_cli_runtime_parts(services)?;
             if !management::print_doctor(&product_runtime).await? {
                 std::process::exit(1);
@@ -1409,5 +1406,23 @@ mod final_change_verification_cli_tests {
         let (verify, disable) =
             parse_flags(&["bitfun", "exec", "--no-verify-final-changes", "task"]);
         assert!(!final_change_verification_enabled(verify, disable));
+    }
+}
+
+#[cfg(test)]
+mod sdk_host_command_tests {
+    use super::Cli;
+    use clap::{CommandFactory, Parser};
+
+    #[test]
+    fn sdk_host_is_not_a_cli_command() {
+        let error = match Cli::try_parse_from(["bitfun", "sdk-host"]) {
+            Ok(_) => panic!("SDK Host must be a sibling application, not a CLI subcommand"),
+            Err(error) => error,
+        };
+        assert_eq!(error.kind(), clap::error::ErrorKind::InvalidSubcommand);
+        let help = Cli::command().render_long_help().to_string();
+        assert!(!help.contains("sdk-host"));
+        assert!(!include_str!("../Cargo.toml").contains("bitfun-sdk-host"));
     }
 }

@@ -257,7 +257,7 @@ const PRODUCT_DELIVERY_PROFILE_ENTRIES: &[ProductDeliveryProfileEntry] = &[
     ),
     ProductDeliveryProfileEntry::new(
         DeliveryProfile::Sdk,
-        ProductCoreDependencyMode::NoDirectCoreDependency,
+        ProductCoreDependencyMode::ProductFullCompatibility,
     ),
 ];
 
@@ -1081,11 +1081,13 @@ fn product_capability_registry_for_profile(profile: DeliveryProfile) -> ProductC
         DeliveryProfile::ProductFull
         | DeliveryProfile::Desktop
         | DeliveryProfile::Cli
-        | DeliveryProfile::Acp => default_product_capability_registry(),
+        | DeliveryProfile::Acp
+        | DeliveryProfile::Sdk => default_product_capability_registry(),
         DeliveryProfile::Server
         | DeliveryProfile::Remote
         | DeliveryProfile::Web
-        | DeliveryProfile::MobileWeb
-        | DeliveryProfile::Sdk => ProductCapabilityRegistry::new(EMPTY_PRODUCT_CAPABILITY_PACKS),
+        | DeliveryProfile::MobileWeb => {
+            ProductCapabilityRegistry::new(EMPTY_PRODUCT_CAPABILITY_PACKS)
+        }
     }
 }

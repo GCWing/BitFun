@@ -23,8 +23,8 @@ use std::thread;
 #[cfg(windows)]
 use log::debug;
 use log::{error, warn};
-use portable_pty::{native_pty_system, CommandBuilder, PtySize};
-use tokio::sync::mpsc;
+use portable_pty::{native_pty_system, Child, CommandBuilder, PtySize};
+use tokio::sync::{mpsc, oneshot};
 
 use crate::config::ShellConfig;
 use crate::shell::ShellType;
@@ -36,6 +36,10 @@ use super::flow_control::{HIGH_WATER_MARK, LOW_WATER_MARK};
 mod shutdown {
     /// Time to wait for data flush after exit is queued
     pub(super) const DATA_FLUSH_TIMEOUT_MS: u64 = 250;
+    /// Maximum time to wait for the managed child to report termination.
+    pub(super) const EXIT_CONFIRM_TIMEOUT_MS: u64 = 5_000;
+    /// Poll interval while confirming termination after a kill request.
+    pub(super) const EXIT_CONFIRM_POLL_MS: u64 = 10;
 }
 
 /// Resize constants for Windows ConPTY
@@ -74,7 +78,10 @@ enum InternalCommand {
     /// Send a signal to the process
     Signal(String),
     /// Shutdown the process
-    Shutdown { immediate: bool },
+    Shutdown {
+        immediate: bool,
+        completion: oneshot::Sender<TerminalResult<()>>,
+    },
 }
 
 /// Events emitted by the PTY process
@@ -193,10 +200,17 @@ impl PtyController {
 
     /// Shutdown the process
     pub async fn shutdown(&self, immediate: bool) -> TerminalResult<()> {
+        let (completion, completed) = oneshot::channel();
         self.command_tx
-            .send(InternalCommand::Shutdown { immediate })
+            .send(InternalCommand::Shutdown {
+                immediate,
+                completion,
+            })
             .await
-            .map_err(|_| TerminalError::ProcessNotRunning)
+            .map_err(|_| TerminalError::ProcessNotRunning)?;
+        completed
+            .await
+            .map_err(|_| TerminalError::ProcessNotRunning)?
     }
 
     /// Check if process is still running
@@ -570,29 +584,20 @@ pub fn spawn_pty(
                         }
                     }
                 }
-                InternalCommand::Shutdown { immediate } => {
-                    has_exited_cmd.store(true, Ordering::Relaxed);
-
-                    if !immediate {
-                        // Wait for data flush
-                        tokio::time::sleep(tokio::time::Duration::from_millis(
-                            shutdown::DATA_FLUSH_TIMEOUT_MS,
-                        ))
-                        .await;
+                InternalCommand::Shutdown {
+                    immediate,
+                    completion,
+                } => match confirm_child_shutdown(child.as_mut(), immediate).await {
+                    Ok(exit_code) => {
+                        has_exited_cmd.store(true, Ordering::Relaxed);
+                        let _ = event_tx.try_send(PtyEvent::Exit { exit_code });
+                        let _ = completion.send(Ok(()));
+                        break;
                     }
-
-                    // Kill the process
-                    let code = match child.try_wait() {
-                        Ok(Some(status)) => Some(status.exit_code()),
-                        _ => {
-                            let _ = child.kill();
-                            child.try_wait().ok().flatten().map(|s| s.exit_code())
-                        }
-                    };
-
-                    let _ = event_tx.send(PtyEvent::Exit { exit_code: code }).await;
-                    break;
-                }
+                    Err(error) => {
+                        let _ = completion.send(Err(error));
+                    }
+                },
             }
         }
     });
@@ -655,6 +660,49 @@ fn is_tauri_host_env(key: &OsStr) -> bool {
         || key.starts_with("TAURI_ANDROID_PACKAGE_NAME_")
 }
 
+async fn confirm_child_shutdown(
+    child: &mut (dyn Child + Send),
+    immediate: bool,
+) -> TerminalResult<Option<u32>> {
+    if !immediate {
+        tokio::time::sleep(tokio::time::Duration::from_millis(
+            shutdown::DATA_FLUSH_TIMEOUT_MS,
+        ))
+        .await;
+    }
+
+    match child.try_wait() {
+        Ok(Some(status)) => return Ok(Some(status.exit_code())),
+        Ok(None) => {}
+        Err(error) => return Err(TerminalError::Io(error)),
+    }
+
+    let kill_error = child.kill().err().map(|error| error.to_string());
+    let deadline = tokio::time::Instant::now()
+        + tokio::time::Duration::from_millis(shutdown::EXIT_CONFIRM_TIMEOUT_MS);
+    loop {
+        match child.try_wait() {
+            Ok(Some(status)) => return Ok(Some(status.exit_code())),
+            Ok(None) if tokio::time::Instant::now() < deadline => {
+                tokio::time::sleep(tokio::time::Duration::from_millis(
+                    shutdown::EXIT_CONFIRM_POLL_MS,
+                ))
+                .await;
+            }
+            Ok(None) => {
+                let detail = kill_error
+                    .as_deref()
+                    .map(|error| format!("; kill request failed: {error}"))
+                    .unwrap_or_default();
+                return Err(TerminalError::Timeout(format!(
+                    "PTY process did not exit after shutdown request{detail}"
+                )));
+            }
+            Err(error) => return Err(TerminalError::Io(error)),
+        }
+    }
+}
+
 // ============================================================================
 // Legacy compatibility - PtyCommand enum (for external use if needed)
 // ============================================================================
@@ -674,7 +722,9 @@ pub enum PtyCommand {
 
 #[cfg(test)]
 mod tests {
-    use super::is_tauri_host_env;
+    use super::{is_tauri_host_env, spawn_pty, PtyEvent};
+    use crate::config::ShellConfig;
+    use crate::shell::ShellType;
 
     #[test]
     fn strips_tauri_host_configuration_from_parent_env() {
@@ -690,5 +740,35 @@ mod tests {
         assert!(!is_tauri_host_env("TAURI_PRIVATE_KEY".as_ref()));
         assert!(!is_tauri_host_env("PATH".as_ref()));
         assert!(!is_tauri_host_env("TERMINAL_NONCE".as_ref()));
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn shutdown_returns_only_after_process_exit_is_confirmed() {
+        let shell = if cfg!(windows) {
+            ("cmd.exe", ShellType::Cmd)
+        } else {
+            ("/bin/sh", ShellType::Sh)
+        };
+        let mut spawned = spawn_pty(
+            1,
+            &ShellConfig {
+                executable: shell.0.to_string(),
+                ..ShellConfig::default()
+            },
+            shell.1,
+            80,
+            24,
+        )
+        .expect("spawn test PTY");
+
+        spawned
+            .controller
+            .shutdown(true)
+            .await
+            .expect("shutdown test PTY");
+
+        assert!(!spawned.controller.is_running());
+        assert!(std::iter::from_fn(|| spawned.events.try_recv())
+            .any(|event| matches!(event, PtyEvent::Exit { .. })));
     }
 }

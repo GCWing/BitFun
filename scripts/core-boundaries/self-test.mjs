@@ -657,6 +657,15 @@ export function runManifestParserSelfTest({
   const servicesOptionalOwnerRule = optionalDependencyFeatureOwnerRules.find(
     (rule) => rule.crateName === 'services-integrations',
   );
+  const servicesCoreOptionalOwnerRule = optionalDependencyFeatureOwnerRules.find(
+    (rule) => rule.crateName === 'services-core',
+  );
+  const servicesCoreDunceOwner = servicesCoreOptionalOwnerRule?.dependencies.find(
+    (dependency) => dependency.depName === 'dunce',
+  );
+  if (!servicesCoreDunceOwner?.ownerFeatures.includes('workspace-runtime')) {
+    throw new Error('services-core workspace-runtime must own optional dependency dunce');
+  }
   const servicesOptionalOwnerDeps = new Set(
     servicesOptionalOwnerRule?.dependencies.map((dependency) => dependency.depName) ?? [],
   );
@@ -1375,6 +1384,22 @@ export function runManifestParserSelfTest({
   }
   if (!agentRuntimeProfile?.forbiddenNonOptionalDeps.includes('tool-runtime')) {
     throw new Error('agent-runtime dependency profile must forbid concrete tool runtime');
+  }
+  if (!noCoreDependencyCrates.includes('sdk-host')) {
+    throw new Error('SDK Host protocol crate must be covered by the no-core dependency guard');
+  }
+  const sdkHostRule = lightweightBoundaryRules.find((rule) => rule.crateName === 'sdk-host');
+  for (const dependency of [
+    'bitfun-core',
+    'terminal-core',
+    'bitfun-services-core',
+    'bitfun-services-integrations',
+    'tool-runtime',
+    'bitfun-cli',
+  ]) {
+    if (!sdkHostRule?.forbiddenDeps.includes(dependency)) {
+      throw new Error(`SDK Host protocol boundary must forbid concrete dependency: ${dependency}`);
+    }
   }
   const productCapabilitiesRule = lightweightBoundaryRules.find(
     (rule) => rule.crateName === 'product-capabilities',
@@ -2694,7 +2719,7 @@ export function runManifestParserSelfTest({
       path: 'src/crates/assembly/product-capabilities/tests/product_sdk_assembly.rs',
       contracts: [
         'product_runtime_parts_can_build_agent_runtime_sdk_without_core',
-        'sdk_delivery_profile_builds_minimal_agent_runtime_without_product_full_capabilities',
+        'sdk_delivery_profile_builds_shared_runtime_owner_ceiling_without_bitfun_core',
         'DeliveryProfile::Cli',
         'DeliveryProfile::Sdk',
       ],

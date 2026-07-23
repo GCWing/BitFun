@@ -13,11 +13,12 @@ use bitfun_agent_runtime::sdk::{
 };
 use bitfun_runtime_ports::{
     AgentDialogTurnPort, AgentDialogTurnRequest, AgentInputAttachment, AgentLifecycleDeliveryPort,
-    AgentLocalCommandTurnPort, AgentSessionCreateRequest, AgentSessionManagementPort,
-    AgentSubmissionPort, AgentSubmissionSource, AgentThreadGoalManagementPort,
-    AgentTurnCancellationPort, AgentTurnCancellationRequest, RemoteControlStatePort,
-    RemoteControlStateRequest, RemoteControlStateSnapshot, RemoteSessionWorkspaceIdentity,
-    RuntimeServiceCapability, RuntimeServicePort, SessionStoragePathRequest, SessionStorePort,
+    AgentLocalCommandTurnPort, AgentSessionClosePort, AgentSessionCreateRequest,
+    AgentSessionManagementPort, AgentSubmissionPort, AgentSubmissionSource,
+    AgentThreadGoalManagementPort, AgentTurnCancellationPort, AgentTurnCancellationRequest,
+    RemoteControlStatePort, RemoteControlStateRequest, RemoteControlStateSnapshot,
+    RemoteSessionWorkspaceIdentity, RuntimeServiceCapability, RuntimeServicePort,
+    SessionStoragePathRequest, SessionStorePort,
 };
 use bitfun_services_integrations::remote_connect::{
     agent_input_attachment_from_remote_image_context, build_remote_chat_messages,
@@ -497,7 +498,11 @@ impl AgentSessionManagementPort for ScheduledSessionManagementPort {
             })?;
         let _maintenance = self
             .scheduler
-            .begin_session_deletion(&request.session_id, &storage_path, Duration::from_secs(2))
+            .begin_session_deletion(
+                &request.session_id,
+                &storage_path,
+                Duration::from_millis(2_000),
+            )
             .await
             .map_err(|error| {
                 let kind = match error {
@@ -554,10 +559,100 @@ impl AgentSessionManagementPort for ScheduledSessionManagementPort {
     }
 }
 
+#[async_trait::async_trait]
+impl AgentSessionClosePort for ScheduledSessionManagementPort {
+    async fn discard_transient_session(
+        &self,
+        request: bitfun_runtime_ports::AgentTransientSessionDiscardRequest,
+    ) -> bitfun_runtime_ports::PortResult<bool> {
+        bitfun_core_types::validate_session_id(&request.session_id).map_err(|message| {
+            bitfun_runtime_ports::PortError::new(
+                bitfun_runtime_ports::PortErrorKind::InvalidRequest,
+                message,
+            )
+        })?;
+        let storage_path = CoreSessionStorePort::default()
+            .resolve_session_storage_path(SessionStoragePathRequest {
+                workspace_path: std::path::PathBuf::from(&request.workspace_path),
+                remote_connection_id: request.remote_connection_id.clone(),
+                remote_ssh_host: request.remote_ssh_host.clone(),
+            })
+            .await?
+            .effective_storage_path;
+        let session_manager = self.coordinator.get_session_manager();
+        session_manager
+            .validate_session_storage_path_binding(&request.session_id, &storage_path)
+            .map_err(map_session_close_error)?;
+        let close_deadline =
+            tokio::time::Instant::now() + Duration::from_millis(request.wait_timeout_ms.max(1));
+        let _maintenance = self
+            .scheduler
+            .begin_session_maintenance(
+                &request.session_id,
+                &storage_path,
+                close_deadline.saturating_duration_since(tokio::time::Instant::now()),
+            )
+            .await
+            .map_err(map_session_close_error)?;
+        let cleanup_budget = close_deadline.saturating_duration_since(tokio::time::Instant::now());
+        if cleanup_budget.is_zero() {
+            return Err(bitfun_runtime_ports::PortError::new(
+                bitfun_runtime_ports::PortErrorKind::Timeout,
+                "Session close deadline was exhausted before transient resource cleanup",
+            ));
+        }
+        tokio::time::timeout(
+            cleanup_budget,
+            self.coordinator.discard_transient_session(
+                std::path::Path::new(&request.workspace_path),
+                request.remote_connection_id.as_deref(),
+                request.remote_ssh_host.as_deref(),
+                &request.session_id,
+            ),
+        )
+        .await
+        .map_err(|_| {
+            bitfun_runtime_ports::PortError::new(
+                bitfun_runtime_ports::PortErrorKind::Timeout,
+                "Transient Session resource cleanup exceeded the Session close deadline",
+            )
+        })?
+        .map_err(map_session_close_error)
+    }
+}
+
+fn map_session_close_error(
+    error: crate::util::errors::BitFunError,
+) -> bitfun_runtime_ports::PortError {
+    let kind = match &error {
+        crate::util::errors::BitFunError::Validation(_) => {
+            bitfun_runtime_ports::PortErrorKind::InvalidRequest
+        }
+        crate::util::errors::BitFunError::NotFound(_) => {
+            bitfun_runtime_ports::PortErrorKind::NotFound
+        }
+        crate::util::errors::BitFunError::Timeout(_) => {
+            bitfun_runtime_ports::PortErrorKind::Timeout
+        }
+        crate::util::errors::BitFunError::Cancelled(_) => {
+            bitfun_runtime_ports::PortErrorKind::Cancelled
+        }
+        _ => bitfun_runtime_ports::PortErrorKind::Backend,
+    };
+    bitfun_runtime_ports::PortError::new(kind, error.to_string())
+}
+
 fn scheduled_session_management_port(
     coordinator: Arc<ConversationCoordinator>,
     scheduler: Arc<DialogScheduler>,
 ) -> Arc<dyn AgentSessionManagementPort> {
+    Arc::new(ScheduledSessionManagementPort::new(coordinator, scheduler))
+}
+
+fn scheduled_session_close_port(
+    coordinator: Arc<ConversationCoordinator>,
+    scheduler: Arc<DialogScheduler>,
+) -> Arc<dyn AgentSessionClosePort> {
     Arc::new(ScheduledSessionManagementPort::new(coordinator, scheduler))
 }
 
@@ -846,6 +941,7 @@ impl CoreServiceAgentRuntime {
         let submission: Arc<dyn AgentSubmissionPort> = coordinator.clone();
         let session_management =
             scheduled_session_management_port(coordinator.clone(), scheduler.clone());
+        let session_close = scheduled_session_close_port(coordinator.clone(), scheduler.clone());
         let session_mode: Arc<dyn AgentSessionModePort> = coordinator.clone();
         let session_model: Arc<dyn AgentSessionModelPort> = coordinator.clone();
         let session_restore: Arc<dyn AgentSessionRestorePort> = coordinator.clone();
@@ -869,6 +965,7 @@ impl CoreServiceAgentRuntime {
             cancellation,
             interaction_response,
         )?
+        .with_session_close_port(session_close)
         .with_dialog_turn_port(dialog_turn)
         .with_lifecycle_delivery_port(lifecycle_delivery)
         .build()
@@ -1022,6 +1119,30 @@ impl CoreServiceAgentRuntime {
         )
     }
 
+    pub(crate) fn sdk_host_product_agent_runtime(
+        coordinator: Arc<ConversationCoordinator>,
+        scheduler: Arc<DialogScheduler>,
+        event_source: AgentEventSource,
+        session_fork: Arc<dyn AgentSessionForkPort>,
+        session_usage: Arc<dyn AgentSessionUsagePort>,
+        turn_settlement: Arc<dyn AgentTurnSettlementPort>,
+        services: bitfun_runtime_services::RuntimeServices,
+        harness_registry: bitfun_harness::HarnessRegistry,
+    ) -> Result<AgentRuntime, String> {
+        let dialog_turn: Arc<dyn AgentDialogTurnPort> = scheduler.clone();
+        Self::product_agent_runtime_with_dialog_turn(
+            coordinator,
+            scheduler,
+            dialog_turn,
+            Some(event_source),
+            Some(session_fork),
+            Some(session_usage),
+            Some(turn_settlement),
+            services,
+            harness_registry,
+        )
+    }
+
     fn product_agent_runtime_with_dialog_turn(
         coordinator: Arc<ConversationCoordinator>,
         scheduler: Arc<DialogScheduler>,
@@ -1036,6 +1157,7 @@ impl CoreServiceAgentRuntime {
         let submission: Arc<dyn AgentSubmissionPort> = coordinator.clone();
         let session_management =
             scheduled_session_management_port(coordinator.clone(), scheduler.clone());
+        let session_close = scheduled_session_close_port(coordinator.clone(), scheduler.clone());
         let session_mode: Arc<dyn AgentSessionModePort> = coordinator.clone();
         let session_model: Arc<dyn AgentSessionModelPort> = coordinator.clone();
         let session_restore: Arc<dyn AgentSessionRestorePort> = coordinator.clone();
@@ -1059,6 +1181,7 @@ impl CoreServiceAgentRuntime {
             cancellation,
             interaction_response,
         )?
+        .with_session_close_port(session_close)
         .with_dialog_turn_port(dialog_turn)
         .with_lifecycle_delivery_port(lifecycle_delivery);
         let builder = match event_source {
@@ -1772,7 +1895,10 @@ mod tests {
         {
         }
 
+        fn assert_session_lifecycle_port<T: AgentSessionClosePort>() {}
+
         assert_scheduler_ports::<DialogScheduler>();
+        assert_session_lifecycle_port::<ScheduledSessionManagementPort>();
     }
 
     #[test]

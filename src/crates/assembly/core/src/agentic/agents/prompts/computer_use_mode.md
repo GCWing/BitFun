@@ -18,10 +18,10 @@ Work in a tight observe -> act -> verify loop. Before acting on a desktop UI, ob
 
 Prefer the smallest reliable control surface:
 
-1. Use `ControlHub` with `domain: "browser"` for websites and web apps in the user's real browser.
+1. When `ControlHub` appears in your current tool list, use it with `domain: "browser"` for websites and web apps in the user's real browser.
 2. Use `ComputerUse` for third-party desktop apps, OS dialogs, system-wide keyboard and mouse, accessibility, OCR, screenshots, app state, app/file/url opening, clipboard access, OS facts, and local scripts.
 3. Use `ExecCommand` for local shell commands when that is the clearest path and does not bypass desktop safety expectations.
-4. Use `ControlHub` with `domain: "meta"` to inspect non-desktop control capabilities before long or uncertain automation flows.
+4. When available, use `ControlHub` with `domain: "meta"` to inspect non-desktop control capabilities before long or uncertain automation flows.
 
 Prefer script or command-line automation when it is clearly safer and reversible, but run it step by step. Do not hide a whole GUI workflow in one large script. For GUI work, prefer keyboard shortcuts and accessibility-backed targets before mouse coordinates.
 
@@ -67,7 +67,7 @@ When Runtime Context indicates the primary model does not support image understa
 
 # Browser Work
 
-For websites and web apps, prefer `ControlHub` with `domain: "browser"` so cookies, login state, and extensions are preserved. Do not drive browser content through desktop screenshots when browser-domain controls are available.
+For websites and web apps, prefer `ControlHub` with `domain: "browser"` when it is available so cookies, login state, and extensions are preserved. If `ControlHub` is unavailable, do not claim browser-domain automation; use `ComputerUse` only for browser chrome or OS-level interaction that it can actually observe and verify.
 
 Use desktop-domain controls only for browser chrome, OS dialogs, permission prompts, file pickers, or when browser-domain capabilities are unavailable.
 

@@ -158,10 +158,21 @@ fn current_unix_secs() -> i64 {
         .unwrap_or_default()
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum SessionResourceCleanupPolicy {
+    BestEffort,
+    Required,
+}
+
 /// Session manager
 pub struct SessionManager {
     /// Active sessions in memory
     sessions: Arc<DashMap<String, Session>>,
+
+    /// Process-local durability classification owned by the Session lifecycle.
+    /// Entries are installed before a transient Session becomes visible and are
+    /// removed with that Session; they are never serialized into public config.
+    transient_session_ids: Arc<DashMap<String, ()>>,
 
     /// Exact admission accounting for loaded sessions. A permit is acquired
     /// before create/restore publishes runtime state and released on unload/delete/eviction.
@@ -280,8 +291,9 @@ impl SessionManager {
     }
 
     #[cfg(test)]
-    fn evict_loaded_session_for_test(&self, session_id: &str) {
+    pub(crate) fn evict_loaded_session_for_test(&self, session_id: &str) {
         self.sessions.remove(session_id);
+        self.transient_session_ids.remove(session_id);
         self.release_active_session_reservation(session_id);
     }
 
@@ -612,8 +624,16 @@ impl SessionManager {
         }
     }
 
-    fn should_persist_session(session: &Session) -> bool {
-        Self::should_persist_session_kind(session.kind)
+    fn should_persist_session_with_transient_ids(
+        session: &Session,
+        transient_session_ids: &DashMap<String, ()>,
+    ) -> bool {
+        !transient_session_ids.contains_key(&session.session_id)
+            && Self::should_persist_session_kind(session.kind)
+    }
+
+    fn should_persist_session(&self, session: &Session) -> bool {
+        Self::should_persist_session_with_transient_ids(session, &self.transient_session_ids)
     }
 
     fn same_session_version(
@@ -626,12 +646,14 @@ impl SessionManager {
 
     fn collect_auto_save_snapshots(
         sessions: &DashMap<String, Session>,
+        transient_session_ids: &DashMap<String, ()>,
     ) -> Vec<SessionAutoSaveSnapshot> {
         sessions
             .iter()
             .filter_map(|entry| {
                 let session = entry.value();
-                if !Self::should_persist_session(session) {
+                if !Self::should_persist_session_with_transient_ids(session, transient_session_ids)
+                {
                     return None;
                 }
                 Some(SessionAutoSaveSnapshot {
@@ -668,6 +690,7 @@ impl SessionManager {
 
     fn collect_expired_session_candidates(
         sessions: &DashMap<String, Session>,
+        transient_session_ids: &DashMap<String, ()>,
         now: SystemTime,
         timeout: Duration,
     ) -> Vec<SessionCleanupCandidate> {
@@ -675,7 +698,12 @@ impl SessionManager {
             .iter()
             .filter_map(|entry| {
                 let session = entry.value();
-                if !Self::is_session_expired(session, now, timeout) {
+                // Idle eviction is a restore optimization for durable Sessions.
+                // Non-persistent Sessions have an explicit lifecycle owner and
+                // no on-disk state from which they could be restored.
+                if !Self::should_persist_session_with_transient_ids(session, transient_session_ids)
+                    || !Self::is_session_expired(session, now, timeout)
+                {
                     return None;
                 }
                 Some(SessionCleanupCandidate {
@@ -711,11 +739,16 @@ impl SessionManager {
 
     pub fn should_persist_session_id(&self, session_id: &str) -> bool {
         self.config.enable_persistence
+            && !self.transient_session_ids.contains_key(session_id)
             && self
                 .sessions
                 .get(session_id)
-                .map(|session| Self::should_persist_session(&session))
+                .map(|session| self.should_persist_session(&session))
                 .unwrap_or(true)
+    }
+
+    pub(crate) fn is_transient_session(&self, session_id: &str) -> bool {
+        self.transient_session_ids.contains_key(session_id)
     }
 
     async fn effective_storage_path_for_config_with_persistence(
@@ -1684,6 +1717,7 @@ impl SessionManager {
 
         let manager = Self {
             sessions: Arc::new(DashMap::new()),
+            transient_session_ids: Arc::new(DashMap::new()),
             active_session_capacity: Arc::new(Semaphore::new(config.max_active_sessions)),
             active_session_permits: Arc::new(DashMap::new()),
             session_storage_path_index: Arc::new(DashMap::new()),
@@ -1890,6 +1924,7 @@ impl SessionManager {
 
     fn spawn_model_reconciliation_listener(&self) {
         let sessions = self.sessions.clone();
+        let transient_session_ids = self.transient_session_ids.clone();
         let active_session_capacity = self.active_session_capacity.clone();
         let active_session_permits = self.active_session_permits.clone();
         let session_storage_path_index = self.session_storage_path_index.clone();
@@ -1920,6 +1955,7 @@ impl SessionManager {
             // surface area we need from the cloned shared fields above.
             let manager = Self {
                 sessions,
+                transient_session_ids,
                 active_session_capacity,
                 active_session_permits,
                 session_storage_path_index,
@@ -2036,6 +2072,49 @@ impl SessionManager {
         created_by: Option<String>,
         kind: SessionKind,
     ) -> BitFunResult<Session> {
+        self.create_session_with_id_and_details_internal(
+            session_id,
+            session_name,
+            agent_type,
+            config,
+            created_by,
+            kind,
+            false,
+        )
+        .await
+    }
+
+    pub(crate) async fn create_transient_session_with_id_and_details(
+        &self,
+        session_id: Option<String>,
+        session_name: String,
+        agent_type: String,
+        config: SessionConfig,
+        created_by: Option<String>,
+        kind: SessionKind,
+    ) -> BitFunResult<Session> {
+        self.create_session_with_id_and_details_internal(
+            session_id,
+            session_name,
+            agent_type,
+            config,
+            created_by,
+            kind,
+            true,
+        )
+        .await
+    }
+
+    async fn create_session_with_id_and_details_internal(
+        &self,
+        session_id: Option<String>,
+        session_name: String,
+        agent_type: String,
+        config: SessionConfig,
+        created_by: Option<String>,
+        kind: SessionKind,
+        transient: bool,
+    ) -> BitFunResult<Session> {
         let _workspace_path = Self::session_workspace_from_config(&config).ok_or_else(|| {
             BitFunError::Validation("Session workspace_path is required".to_string())
         })?;
@@ -2066,7 +2145,6 @@ impl SessionManager {
             )));
         }
         if self.config.enable_persistence
-            && Self::should_persist_session(&session)
             && self
                 .persistence_manager
                 .session_storage_exists(&session_storage_path, &session_id)?
@@ -2078,6 +2156,9 @@ impl SessionManager {
         let active_session_permit = self.reserve_active_session()?;
         let storage_claim =
             self.claim_session_storage_path(&session_id, &session_storage_path, true)?;
+        if transient {
+            self.transient_session_ids.insert(session_id.clone(), ());
+        }
 
         // 1. Add to memory
         match self.sessions.entry(session_id.clone()) {
@@ -2086,6 +2167,9 @@ impl SessionManager {
             }
             Entry::Occupied(entry) => {
                 drop(entry);
+                if transient {
+                    self.transient_session_ids.remove(&session_id);
+                }
                 self.release_failed_session_storage_path_claim(
                     &session_id,
                     &session_storage_path,
@@ -2106,7 +2190,7 @@ impl SessionManager {
         // 3. Persist to local path (handles remote workspaces correctly)
         // Use the local `session` directly -- no need to re-fetch from DashMap,
         // which would hold a Ref guard across the async save_session call.
-        if self.config.enable_persistence && Self::should_persist_session(&session) {
+        if self.config.enable_persistence && self.should_persist_session(&session) {
             if let Err(error) = self
                 .persistence_manager
                 .create_session_if_absent(&session_storage_path, &session)
@@ -2119,6 +2203,9 @@ impl SessionManager {
                     .delete_session(&session_id);
                 self.file_read_state_store.delete_session(&session_id);
                 self.evidence_ledger.delete_session(&session_id);
+                if transient {
+                    self.transient_session_ids.remove(&session_id);
+                }
                 self.release_failed_session_storage_path_claim(
                     &session_id,
                     &session_storage_path,
@@ -2984,7 +3071,7 @@ impl SessionManager {
             session.updated_at = SystemTime::now();
             session.last_activity_at = SystemTime::now();
 
-            self.config.enable_persistence && Self::should_persist_session(&session)
+            self.config.enable_persistence && self.should_persist_session(&session)
         } else {
             return Err(BitFunError::NotFound(format!(
                 "Session not found: {}",
@@ -3041,7 +3128,7 @@ impl SessionManager {
             session.updated_at = SystemTime::now();
             session.last_activity_at = SystemTime::now();
 
-            self.config.enable_persistence && Self::should_persist_session(&session)
+            self.config.enable_persistence && self.should_persist_session(&session)
         } else {
             return Err(BitFunError::NotFound(format!(
                 "Session not found: {}",
@@ -3514,6 +3601,199 @@ impl SessionManager {
         .await
     }
 
+    /// Discards one loaded non-durable Session without touching persisted
+    /// Session storage. Missing Sessions are an idempotent success.
+    pub(crate) async fn discard_transient_session(
+        &self,
+        workspace_path: &Path,
+        remote_connection_id: Option<&str>,
+        remote_ssh_host: Option<&str>,
+        session_id: &str,
+    ) -> BitFunResult<bool> {
+        bitfun_core_types::validate_session_id(session_id).map_err(BitFunError::Validation)?;
+        let Some(root) = self.get_session(session_id) else {
+            return Ok(false);
+        };
+        self.validate_transient_session_binding(
+            &root,
+            workspace_path,
+            remote_connection_id,
+            remote_ssh_host,
+        )?;
+
+        for descendant in self.transient_descendants_postorder(session_id) {
+            let workspace_path = descendant
+                .config
+                .workspace_path
+                .as_deref()
+                .map(Path::new)
+                .ok_or_else(|| {
+                    BitFunError::Validation(format!(
+                        "Transient session workspace binding is missing: {}",
+                        descendant.session_id
+                    ))
+                })?;
+            self.discard_one_transient_session(
+                workspace_path,
+                descendant.config.remote_connection_id.as_deref(),
+                descendant.config.remote_ssh_host.as_deref(),
+                &descendant.session_id,
+            )
+            .await?;
+        }
+
+        self.discard_one_transient_session(
+            workspace_path,
+            remote_connection_id,
+            remote_ssh_host,
+            session_id,
+        )
+        .await
+    }
+
+    pub(crate) fn transient_session_family_postorder(
+        &self,
+        workspace_path: &Path,
+        remote_connection_id: Option<&str>,
+        remote_ssh_host: Option<&str>,
+        session_id: &str,
+    ) -> BitFunResult<Vec<String>> {
+        bitfun_core_types::validate_session_id(session_id).map_err(BitFunError::Validation)?;
+        let Some(root) = self.get_session(session_id) else {
+            return Ok(Vec::new());
+        };
+        self.validate_transient_session_binding(
+            &root,
+            workspace_path,
+            remote_connection_id,
+            remote_ssh_host,
+        )?;
+        let mut family = self
+            .transient_descendants_postorder(session_id)
+            .into_iter()
+            .map(|session| session.session_id)
+            .collect::<Vec<_>>();
+        family.push(session_id.to_string());
+        Ok(family)
+    }
+
+    fn transient_descendants_postorder(&self, root_session_id: &str) -> Vec<Session> {
+        fn visit(
+            parent_session_id: &str,
+            sessions: &[Session],
+            transient_session_ids: &DashMap<String, ()>,
+            visited: &mut HashSet<String>,
+            ordered: &mut Vec<Session>,
+        ) {
+            let marker = format!("session-{parent_session_id}");
+            for child in sessions.iter().filter(|session| {
+                transient_session_ids.contains_key(&session.session_id)
+                    && session.created_by.as_deref() == Some(marker.as_str())
+            }) {
+                if !visited.insert(child.session_id.clone()) {
+                    continue;
+                }
+                visit(
+                    &child.session_id,
+                    sessions,
+                    transient_session_ids,
+                    visited,
+                    ordered,
+                );
+                ordered.push(child.clone());
+            }
+        }
+
+        let sessions = self
+            .sessions
+            .iter()
+            .map(|entry| entry.value().clone())
+            .collect::<Vec<_>>();
+        let mut ordered = Vec::new();
+        let mut visited = HashSet::from([root_session_id.to_string()]);
+        visit(
+            root_session_id,
+            &sessions,
+            &self.transient_session_ids,
+            &mut visited,
+            &mut ordered,
+        );
+        ordered
+    }
+
+    fn validate_transient_session_binding(
+        &self,
+        session: &Session,
+        workspace_path: &Path,
+        remote_connection_id: Option<&str>,
+        remote_ssh_host: Option<&str>,
+    ) -> BitFunResult<()> {
+        if !self.is_transient_session(&session.session_id) {
+            return Err(BitFunError::Validation(format!(
+                "Cannot discard a durable session as transient: {}",
+                session.session_id
+            )));
+        }
+        let expected_workspace = Self::normalize_session_storage_path(workspace_path);
+        let actual_workspace = session
+            .config
+            .workspace_path
+            .as_deref()
+            .map(Path::new)
+            .map(Self::normalize_session_storage_path)
+            .ok_or_else(|| {
+                BitFunError::Validation(format!(
+                    "Transient session workspace binding is missing: {}",
+                    session.session_id
+                ))
+            })?;
+        if actual_workspace != expected_workspace
+            || session.config.remote_connection_id.as_deref() != remote_connection_id
+            || session.config.remote_ssh_host.as_deref() != remote_ssh_host
+        {
+            return Err(BitFunError::Validation(format!(
+                "Transient session ownership binding does not match: {}",
+                session.session_id
+            )));
+        }
+        Ok(())
+    }
+
+    async fn discard_one_transient_session(
+        &self,
+        workspace_path: &Path,
+        remote_connection_id: Option<&str>,
+        remote_ssh_host: Option<&str>,
+        session_id: &str,
+    ) -> BitFunResult<bool> {
+        let _mutation_guard = self.lock_session_mutation(session_id).await;
+        let Some(session) = self.get_session(session_id) else {
+            return Ok(false);
+        };
+        self.validate_transient_session_binding(
+            &session,
+            workspace_path,
+            remote_connection_id,
+            remote_ssh_host,
+        )?;
+        if matches!(session.state, SessionState::Processing { .. }) {
+            return Err(BitFunError::Validation(format!(
+                "Cannot discard a processing transient session: {session_id}"
+            )));
+        }
+        self.cleanup_session_owned_resources(
+            workspace_path,
+            session_id,
+            SessionResourceCleanupPolicy::Required,
+        )
+        .await?;
+        self.sessions.remove(session_id);
+        self.transient_session_ids.remove(session_id);
+        self.release_active_session_reservation(session_id);
+        self.session_storage_path_index.remove(session_id);
+        Ok(true)
+    }
+
     /// Release one loaded session and its transient runtime stores while keeping
     /// persisted history and the storage-path binding available for a later restore.
     ///
@@ -3525,13 +3805,18 @@ impl SessionManager {
         let Some(session) = self.get_session(session_id) else {
             return Ok(false);
         };
+        if self.is_transient_session(session_id) {
+            return Err(BitFunError::Validation(format!(
+                "Cannot unload a transient session; use the owned discard path: {session_id}"
+            )));
+        }
         if matches!(session.state, SessionState::Processing { .. }) {
             return Err(BitFunError::Validation(format!(
                 "Cannot unload a processing session: {session_id}"
             )));
         }
 
-        if self.config.enable_persistence && Self::should_persist_session(&session) {
+        if self.config.enable_persistence && self.should_persist_session(&session) {
             let storage_path = self
                 .effective_session_storage_path(session_id)
                 .await
@@ -3560,6 +3845,70 @@ impl SessionManager {
             self.evidence_ledger.as_ref(),
         );
         Ok(true)
+    }
+
+    async fn cleanup_session_owned_resources(
+        &self,
+        cleanup_workspace_path: &Path,
+        session_id: &str,
+        policy: SessionResourceCleanupPolicy,
+    ) -> BitFunResult<()> {
+        let mut required_error = None;
+        let mut record_error = |stage: &'static str, error: String| {
+            warn!(
+                "Session resource cleanup failed: session_id={}, stage={}, error={}",
+                session_id, stage, error
+            );
+            if policy == SessionResourceCleanupPolicy::Required && required_error.is_none() {
+                required_error = Some(BitFunError::Session(format!(
+                    "Session resource cleanup is incomplete: session_id={session_id}, stage={stage}, error={error}"
+                )));
+            }
+        };
+
+        if let Ok(snapshot_manager) = ensure_snapshot_manager_for_workspace(cleanup_workspace_path)
+        {
+            let snapshot_service = snapshot_manager.get_snapshot_service();
+            let snapshot_service = snapshot_service.read().await;
+            if let Err(error) = snapshot_service.accept_session(session_id).await {
+                record_error("snapshot", error.to_string());
+            }
+        }
+
+        clear_session_runtime_stores(
+            session_id,
+            self.context_store.as_ref(),
+            self.prompt_cache_store.as_ref(),
+            self.token_anchor_store.as_ref(),
+            self.turn_skill_agent_snapshot_store.as_ref(),
+            self.skill_agent_baseline_override_snapshot_store.as_ref(),
+            self.file_read_state_store.as_ref(),
+            self.evidence_ledger.as_ref(),
+        );
+
+        if let Some(cron) = crate::service::cron::get_global_cron_service() {
+            match cron.delete_jobs_for_session(session_id).await {
+                Ok(removed) if removed > 0 => info!(
+                    "Removed {} scheduled job(s) for session_id={}",
+                    removed, session_id
+                ),
+                Ok(_) => {}
+                Err(error) => record_error("cron", error.to_string()),
+            }
+        }
+
+        use crate::service::terminal::TerminalApi;
+        if let Ok(terminal_api) = TerminalApi::from_singleton() {
+            let binding = terminal_api.session_manager().binding();
+            if let Err(error) = binding.remove(session_id).await {
+                record_error("terminal", error.to_string());
+            }
+        }
+
+        if let Some(error) = required_error {
+            return Err(error);
+        }
+        Ok(())
     }
 
     async fn delete_session_from_paths_locked(
@@ -3596,106 +3945,12 @@ impl SessionManager {
             );
         }
 
-        // 1. Clean up snapshot system resources (including physical snapshot files)
-        let snapshot_stage_started_at = Instant::now();
-        debug!(
-            "Session deletion stage starting: session_id={}, stage=snapshot_cleanup",
-            session_id
-        );
-        if let Ok(snapshot_manager) = ensure_snapshot_manager_for_workspace(cleanup_workspace_path)
-        {
-            let snapshot_service = snapshot_manager.get_snapshot_service();
-            let snapshot_service = snapshot_service.read().await;
-            if let Err(e) = snapshot_service.accept_session(session_id).await {
-                warn!("Failed to cleanup snapshot system resources: {}", e);
-            } else {
-                debug!(
-                    "Snapshot system resources cleaned up: session_id={}",
-                    session_id
-                );
-            }
-        }
-        debug!(
-            "Session deletion stage completed: session_id={}, stage=snapshot_cleanup, duration_ms={}",
+        self.cleanup_session_owned_resources(
+            cleanup_workspace_path,
             session_id,
-            elapsed_ms_u64(snapshot_stage_started_at)
-        );
-
-        let context_stage_started_at = Instant::now();
-        debug!(
-            "Session deletion stage starting: session_id={}, stage=context_store_delete",
-            session_id
-        );
-        clear_session_runtime_stores(
-            session_id,
-            self.context_store.as_ref(),
-            self.prompt_cache_store.as_ref(),
-            self.token_anchor_store.as_ref(),
-            self.turn_skill_agent_snapshot_store.as_ref(),
-            self.skill_agent_baseline_override_snapshot_store.as_ref(),
-            self.file_read_state_store.as_ref(),
-            self.evidence_ledger.as_ref(),
-        );
-        debug!(
-            "Session deletion stage completed: session_id={}, stage=context_store_delete, duration_ms={}",
-            session_id,
-            elapsed_ms_u64(context_stage_started_at)
-        );
-
-        if let Some(cron) = crate::service::cron::get_global_cron_service() {
-            let cron_stage_started_at = Instant::now();
-            debug!(
-                "Session deletion stage starting: session_id={}, stage=cron_cleanup",
-                session_id
-            );
-            match cron.delete_jobs_for_session(session_id).await {
-                Ok(removed) if removed > 0 => {
-                    info!(
-                        "Removed {} scheduled job(s) for deleted session_id={}",
-                        removed, session_id
-                    );
-                }
-                Ok(_) => {}
-                Err(e) => {
-                    warn!(
-                        "Failed to remove scheduled jobs for session_id={}: {}",
-                        session_id, e
-                    );
-                }
-            }
-            debug!(
-                "Session deletion stage completed: session_id={}, stage=cron_cleanup, duration_ms={}",
-                session_id,
-                elapsed_ms_u64(cron_stage_started_at)
-            );
-        }
-
-        // 3. Clean up associated Terminal session
-        use crate::service::terminal::TerminalApi;
-        if let Ok(terminal_api) = TerminalApi::from_singleton() {
-            let binding = terminal_api.session_manager().binding();
-            let terminal_stage_started_at = Instant::now();
-            debug!(
-                "Session deletion stage starting: session_id={}, stage=terminal_binding_cleanup, has_binding={}",
-                session_id,
-                binding.has(session_id)
-            );
-            if binding.has(session_id) {
-                if let Err(e) = binding.remove(session_id).await {
-                    warn!("Failed to cleanup associated Terminal session: {}", e);
-                } else {
-                    debug!(
-                        "Associated Terminal session cleaned up: session_id={}",
-                        session_id
-                    );
-                }
-            }
-            debug!(
-                "Session deletion stage completed: session_id={}, stage=terminal_binding_cleanup, duration_ms={}",
-                session_id,
-                elapsed_ms_u64(terminal_stage_started_at)
-            );
-        }
+            SessionResourceCleanupPolicy::BestEffort,
+        )
+        .await?;
 
         // 4. Remove from memory
         let memory_stage_started_at = Instant::now();
@@ -3704,6 +3959,7 @@ impl SessionManager {
             session_id
         );
         self.sessions.remove(session_id);
+        self.transient_session_ids.remove(session_id);
         self.release_active_session_reservation(session_id);
         debug!(
             "Session deletion stage completed: session_id={}, stage=in_memory_remove, duration_ms={}",
@@ -4737,7 +4993,7 @@ impl SessionManager {
             session.last_activity_at = SystemTime::now();
 
             let should_persist =
-                Self::should_persist_session(&session) && self.config.enable_persistence;
+                self.should_persist_session(&session) && self.config.enable_persistence;
             if should_persist {
                 Some(session.clone())
             } else {
@@ -5362,7 +5618,7 @@ impl SessionManager {
         turn.duration_ms = Some(0);
         turn.status = TurnStatus::Completed;
 
-        if self.config.enable_persistence && Self::should_persist_session(&session) {
+        if self.config.enable_persistence && self.should_persist_session(&session) {
             self.persistence_manager
                 .save_dialog_turn(&workspace_path, &turn)
                 .await?;
@@ -5380,7 +5636,7 @@ impl SessionManager {
             session.updated_at = SystemTime::now();
             session.last_activity_at = SystemTime::now();
 
-            if self.config.enable_persistence && Self::should_persist_session(&session) {
+            if self.config.enable_persistence && self.should_persist_session(&session) {
                 Some(session.clone())
             } else {
                 None
@@ -6159,7 +6415,7 @@ impl SessionManager {
             session.compression_state = compression_state;
             session.updated_at = SystemTime::now();
             session.last_activity_at = SystemTime::now();
-            if self.config.enable_persistence && Self::should_persist_session(&session) {
+            if self.config.enable_persistence && self.should_persist_session(&session) {
                 Some(session.clone())
             } else {
                 None
@@ -6322,6 +6578,7 @@ impl SessionManager {
     /// Start auto-save task
     fn spawn_auto_save_task(&self) {
         let sessions = self.sessions.clone();
+        let transient_session_ids = self.transient_session_ids.clone();
         let persistence = self.persistence_manager.clone();
         let session_mutation_locks = self.session_mutation_locks.clone();
         let interval = self.config.auto_save_interval;
@@ -6332,7 +6589,8 @@ impl SessionManager {
             loop {
                 ticker.tick().await;
 
-                for snapshot in Self::collect_auto_save_snapshots(&sessions) {
+                for snapshot in Self::collect_auto_save_snapshots(&sessions, &transient_session_ids)
+                {
                     let _mutation_guard = session_mutation_locks.lock(&snapshot.session_id).await;
                     if !Self::auto_save_snapshot_is_current(&sessions, &snapshot) {
                         continue;
@@ -6367,6 +6625,7 @@ impl SessionManager {
     /// Start cleanup task for expired sessions
     fn spawn_cleanup_task(&self) {
         let sessions = self.sessions.clone();
+        let transient_session_ids = self.transient_session_ids.clone();
         let active_session_permits = self.active_session_permits.clone();
         let timeout = self.config.session_idle_timeout;
         let persistence = self.persistence_manager.clone();
@@ -6389,7 +6648,12 @@ impl SessionManager {
                 ticker.tick().await;
 
                 let now = SystemTime::now();
-                let candidates = Self::collect_expired_session_candidates(&sessions, now, timeout);
+                let candidates = Self::collect_expired_session_candidates(
+                    &sessions,
+                    &transient_session_ids,
+                    now,
+                    timeout,
+                );
 
                 for candidate in candidates {
                     let _mutation_guard = session_mutation_locks.lock(&candidate.session_id).await;
@@ -6408,7 +6672,12 @@ impl SessionManager {
                         continue;
                     };
 
-                    if enable_persistence && Self::should_persist_session(&session) {
+                    if enable_persistence
+                        && Self::should_persist_session_with_transient_ids(
+                            &session,
+                            &transient_session_ids,
+                        )
+                    {
                         if let Some(workspace_path) =
                             Self::effective_storage_path_for_config_with_persistence(
                                 persistence.as_ref(),
@@ -6488,12 +6757,12 @@ mod tests {
         TurnStatus, UserMessageData,
     };
     use bitfun_runtime_ports::SessionStoragePathRequest;
-    use dashmap::try_result::TryResult;
+    use dashmap::{try_result::TryResult, DashMap};
     use serde_json::json;
     use std::collections::HashSet;
     use std::path::{Path, PathBuf};
     use std::sync::Arc;
-    use std::time::Duration;
+    use std::time::{Duration, SystemTime};
     use uuid::Uuid;
 
     struct TestWorkspace {
@@ -6538,6 +6807,47 @@ mod tests {
             "active-model",
             &invalidated,
         ));
+    }
+
+    #[test]
+    fn idle_eviction_only_selects_sessions_that_can_be_restored() {
+        let now = SystemTime::now();
+        let expired_at = now - Duration::from_secs(120);
+        let mut durable = Session::new(
+            "Durable".to_string(),
+            "agentic".to_string(),
+            SessionConfig::default(),
+        );
+        durable.last_activity_at = expired_at;
+        let mut transient = Session::new(
+            "Connection scoped".to_string(),
+            "agentic".to_string(),
+            SessionConfig::default(),
+        );
+        transient.last_activity_at = expired_at;
+        let durable_id = durable.session_id.clone();
+        let transient_id = transient.session_id.clone();
+        let sessions = DashMap::new();
+        sessions.insert(durable_id.clone(), durable);
+        sessions.insert(transient_id.clone(), transient);
+        let transient_session_ids = DashMap::new();
+        transient_session_ids.insert(transient_id.clone(), ());
+
+        let candidates = SessionManager::collect_expired_session_candidates(
+            &sessions,
+            &transient_session_ids,
+            now,
+            Duration::from_secs(60),
+        );
+
+        assert_eq!(
+            candidates
+                .iter()
+                .map(|candidate| candidate.session_id.as_str())
+                .collect::<Vec<_>>(),
+            [durable_id.as_str()]
+        );
+        assert!(sessions.contains_key(&transient_id));
     }
 
     #[test]
@@ -6710,6 +7020,62 @@ mod tests {
             .await
             .expect("unload should release the active-session slot");
         assert_ne!(first.session_id, second.session_id);
+    }
+
+    #[tokio::test]
+    async fn transient_session_cannot_bypass_owned_discard_through_unload() {
+        let workspace = TestWorkspace::new();
+        let manager = in_memory_test_manager();
+        let session = manager
+            .create_transient_session_with_id_and_details(
+                None,
+                "Connection Session".to_string(),
+                "agentic".to_string(),
+                SessionConfig {
+                    workspace_path: Some(workspace.path().to_string_lossy().to_string()),
+                    ..Default::default()
+                },
+                None,
+                SessionKind::Standard,
+            )
+            .await
+            .expect("transient session should create");
+
+        let error = manager
+            .unload_session_from_memory(&session.session_id)
+            .await
+            .expect_err("transient session must use owned discard");
+        assert!(error.to_string().contains("transient session"));
+        assert!(manager.get_session(&session.session_id).is_some());
+        assert!(manager.is_transient_session(&session.session_id));
+    }
+
+    #[tokio::test]
+    async fn internal_delete_compensation_clears_transient_identity() {
+        let workspace = TestWorkspace::new();
+        let manager = in_memory_test_manager();
+        let session = manager
+            .create_transient_session_with_id_and_details(
+                None,
+                "Prepared Subagent".to_string(),
+                "agentic".to_string(),
+                SessionConfig {
+                    workspace_path: Some(workspace.path().to_string_lossy().to_string()),
+                    ..Default::default()
+                },
+                None,
+                SessionKind::Subagent,
+            )
+            .await
+            .expect("transient subagent should create");
+
+        manager
+            .delete_session_by_id(&session.session_id)
+            .await
+            .expect("internal compensation should delete prepared subagent");
+
+        assert!(manager.get_session(&session.session_id).is_none());
+        assert!(!manager.is_transient_session(&session.session_id));
     }
 
     #[tokio::test]
@@ -7741,7 +8107,10 @@ mod tests {
             .await
             .expect("session should create");
 
-        let snapshots = SessionManager::collect_auto_save_snapshots(&manager.sessions);
+        let snapshots = SessionManager::collect_auto_save_snapshots(
+            &manager.sessions,
+            &manager.transient_session_ids,
+        );
         assert!(snapshots
             .iter()
             .any(|snapshot| snapshot.session_id == session.session_id));

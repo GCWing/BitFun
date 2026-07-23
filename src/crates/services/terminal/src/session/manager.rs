@@ -1488,13 +1488,11 @@ impl SessionManager {
 
         // Shutdown PTY if exists
         if let Some(pty_id) = pty_id {
-            // Remove mapping
-            {
-                let mut mapping = self.pty_to_session.write().await;
-                mapping.remove(&pty_id);
-            }
-
             self.pty_service.shutdown(pty_id, immediate).await?;
+
+            // Keep the mapping available for retry until shutdown is confirmed.
+            let mut mapping = self.pty_to_session.write().await;
+            mapping.remove(&pty_id);
         }
 
         if is_manual_session {

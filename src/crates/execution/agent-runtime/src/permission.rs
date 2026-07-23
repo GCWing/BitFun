@@ -76,6 +76,7 @@ pub enum PermissionRequestManagerError {
 #[derive(Debug)]
 struct PendingPermission {
     request: PermissionRequest,
+    dialog_turn_id: Option<String>,
     sender: oneshot::Sender<PermissionWaitOutcome>,
     interactive: bool,
     registration_sequence: u64,
@@ -205,19 +206,43 @@ impl PermissionRequestManager {
         &self,
         requests: Vec<PermissionRequest>,
     ) -> Result<Vec<PendingPermissionReceiver>, PermissionRequestManagerError> {
-        self.register_batch_with_visibility(requests, true).await
+        self.register_batch_with_visibility(requests, None, true)
+            .await
+    }
+
+    /// Registers a batch with the exact owning Dialog Turn kept as internal
+    /// coordination state. The public permission DTO remains stable because
+    /// turn routing is a runtime concern, not an authorization fact.
+    pub async fn register_batch_for_turn(
+        &self,
+        requests: Vec<PermissionRequest>,
+        dialog_turn_id: impl Into<String>,
+    ) -> Result<Vec<PendingPermissionReceiver>, PermissionRequestManagerError> {
+        self.register_batch_with_visibility(requests, Some(dialog_turn_id.into()), true)
+            .await
     }
 
     pub async fn register_batch_non_interactive(
         &self,
         requests: Vec<PermissionRequest>,
     ) -> Result<Vec<PendingPermissionReceiver>, PermissionRequestManagerError> {
-        self.register_batch_with_visibility(requests, false).await
+        self.register_batch_with_visibility(requests, None, false)
+            .await
+    }
+
+    pub async fn register_batch_non_interactive_for_turn(
+        &self,
+        requests: Vec<PermissionRequest>,
+        dialog_turn_id: impl Into<String>,
+    ) -> Result<Vec<PendingPermissionReceiver>, PermissionRequestManagerError> {
+        self.register_batch_with_visibility(requests, Some(dialog_turn_id.into()), false)
+            .await
     }
 
     async fn register_batch_with_visibility(
         &self,
         requests: Vec<PermissionRequest>,
+        dialog_turn_id: Option<String>,
         interactive: bool,
     ) -> Result<Vec<PendingPermissionReceiver>, PermissionRequestManagerError> {
         if requests.is_empty() {
@@ -250,6 +275,7 @@ impl PermissionRequestManager {
                 request.request_id.clone(),
                 PendingPermission {
                     request: request.clone(),
+                    dialog_turn_id: dialog_turn_id.clone(),
                     sender,
                     interactive,
                     registration_sequence,
@@ -294,6 +320,14 @@ impl PermissionRequestManager {
 
     pub fn interactive_pending_requests(&self) -> Vec<PermissionRequest> {
         self.ordered_pending_requests(|pending| pending.interactive)
+    }
+
+    /// Returns the process-local owning Dialog Turn for exact event routing.
+    /// This fact is intentionally absent from the persisted/public request DTO.
+    pub fn pending_request_dialog_turn_id(&self, request_id: &str) -> Option<String> {
+        self.pending
+            .get(request_id)
+            .and_then(|pending| pending.dialog_turn_id.clone())
     }
 
     fn ordered_pending_requests(

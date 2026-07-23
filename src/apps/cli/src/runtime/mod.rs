@@ -3,11 +3,11 @@ use std::sync::Arc;
 
 use anyhow::{Context, Result};
 use bitfun_agent_runtime::sdk::AgentRuntime;
-use bitfun_core::agentic::coordination::{self, DialogScheduler};
 use bitfun_core::agentic::system::AgenticSystem;
 use bitfun_core::product_assembly::{ProductAssemblyPlan, ProductServiceCapabilityAvailability};
 use bitfun_core::product_runtime::{
-    CoreAgentRuntimeCompatibility, CoreLocalWorkspaceSnapshot, CoreProductAgentRuntime,
+    build_local_runtime_services, ensure_product_dialog_scheduler, CoreAgentRuntimeCompatibility,
+    CoreLocalWorkspaceSnapshot, CoreProductAgentRuntime,
 };
 use bitfun_core::runtime_ports::PluginRuntimeAvailability;
 use bitfun_runtime_ports::LocalWorkspaceSnapshotPort;
@@ -17,11 +17,9 @@ use crate::product_assembly::{assemble_acp_runtime_parts, assemble_cli_runtime_p
 
 pub(crate) mod approval;
 pub(crate) mod events;
-pub(crate) mod services;
 
 use approval::CliApprovalPolicy;
 use events::CliAgentEventSource;
-use services::{CliClock, CliRuntimeEventSink, CliRuntimeServicesProvider};
 
 const RUNTIME_EVENT_BUFFER: usize = 256;
 
@@ -69,15 +67,10 @@ impl CliRuntimeContext {
         workspace_root: impl AsRef<Path>,
         approval_policy: CliApprovalPolicy,
     ) -> Result<Self> {
-        let scheduler = ensure_dialog_scheduler(&agentic_system);
-        let runtime_events = Arc::new(CliRuntimeEventSink::new(RUNTIME_EVENT_BUFFER));
-        let provider = CliRuntimeServicesProvider::new(
-            workspace_root,
-            runtime_events.clone(),
-            Arc::new(CliClock),
-        )?;
-        let workspace_root = provider.workspace_root().to_path_buf();
-        let parts = assemble_cli_runtime_parts(provider.build()?)
+        let scheduler = ensure_product_dialog_scheduler(&agentic_system);
+        let (workspace_root, services) =
+            build_local_runtime_services(workspace_root, RUNTIME_EVENT_BUFFER)?;
+        let parts = assemble_cli_runtime_parts(services)
             .context("Failed to assemble CLI product runtime")?;
 
         let product = CliProductRuntimeState {
@@ -172,11 +165,9 @@ impl AcpRuntimeContext {
         agentic_system: AgenticSystem,
         workspace_root: impl AsRef<Path>,
     ) -> Result<Self> {
-        let scheduler = ensure_dialog_scheduler(&agentic_system);
-        let runtime_events = Arc::new(CliRuntimeEventSink::new(RUNTIME_EVENT_BUFFER));
-        let provider =
-            CliRuntimeServicesProvider::new(workspace_root, runtime_events, Arc::new(CliClock))?;
-        let parts = assemble_acp_runtime_parts(provider.build()?)
+        let scheduler = ensure_product_dialog_scheduler(&agentic_system);
+        let (_, services) = build_local_runtime_services(workspace_root, RUNTIME_EVENT_BUFFER)?;
+        let parts = assemble_acp_runtime_parts(services)
             .context("Failed to assemble ACP product runtime")?;
         let (services, harness_registry, _disabled_plugin_runtime) = parts.into_runtime_parts();
         let agent_events = CliAgentEventSource::new(agentic_system.event_queue.clone());
@@ -202,21 +193,4 @@ impl AcpRuntimeContext {
     pub(crate) fn parts(&self) -> (AgentRuntime, CoreAgentRuntimeCompatibility) {
         (self.agent_runtime.clone(), self.compatibility.clone())
     }
-}
-
-fn ensure_dialog_scheduler(agentic_system: &AgenticSystem) -> Arc<DialogScheduler> {
-    if let Some(scheduler) = coordination::get_global_scheduler() {
-        return scheduler;
-    }
-
-    let session_manager = agentic_system.coordinator.get_session_manager().clone();
-    let scheduler = DialogScheduler::new(agentic_system.coordinator.clone(), session_manager);
-    agentic_system
-        .coordinator
-        .set_scheduler_notifier(scheduler.outcome_sender());
-    agentic_system
-        .coordinator
-        .set_round_injection_source(scheduler.round_injection_monitor());
-    coordination::set_global_scheduler(scheduler.clone());
-    scheduler
 }

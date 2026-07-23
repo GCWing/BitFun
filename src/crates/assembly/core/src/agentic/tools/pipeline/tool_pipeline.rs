@@ -748,6 +748,7 @@ impl ToolPipeline {
     async fn register_permission_requests(
         &self,
         requests: Vec<PermissionRequest>,
+        dialog_turn_id: &str,
         auto_approve: bool,
     ) -> BitFunResult<Vec<PendingPermissionReceiver>> {
         let manager = self.permission_request_manager.as_ref().ok_or_else(|| {
@@ -758,10 +759,15 @@ impl ToolPipeline {
 
         let receivers = if auto_approve {
             manager
-                .register_batch_non_interactive(requests.clone())
+                .register_batch_non_interactive_for_turn(
+                    requests.clone(),
+                    dialog_turn_id.to_string(),
+                )
                 .await
         } else {
-            manager.register_batch(requests.clone()).await
+            manager
+                .register_batch_for_turn(requests.clone(), dialog_turn_id.to_string())
+                .await
         }
         .map_err(|error| BitFunError::service(error.to_string()))?;
 
@@ -870,8 +876,15 @@ impl ToolPipeline {
                 .first()
                 .and_then(|task_id| self.state_manager.get_task(task_id))
                 .is_some_and(|task| task.options.auto_approve_ask);
+            let dialog_turn_id = task_ids
+                .first()
+                .and_then(|task_id| self.state_manager.get_task(task_id))
+                .map(|task| task.context.dialog_turn_id)
+                .ok_or_else(|| {
+                    BitFunError::service("Permission batch lost its owning Dialog Turn".to_string())
+                })?;
             let receivers = self
-                .register_permission_requests(batch_requests, auto_approve)
+                .register_permission_requests(batch_requests, &dialog_turn_id, auto_approve)
                 .await?;
 
             let mut receivers_by_task = HashMap::<String, Vec<PendingPermissionReceiver>>::new();
@@ -1058,8 +1071,12 @@ impl ToolPipeline {
                 PermissionExecutionPlan::Rejected { reason }
             }
             PermissionPlanDraft::Requests(requests) => PermissionExecutionPlan::Awaiting(
-                self.register_permission_requests(requests, task.options.auto_approve_ask)
-                    .await?,
+                self.register_permission_requests(
+                    requests,
+                    &task.context.dialog_turn_id,
+                    task.options.auto_approve_ask,
+                )
+                .await?,
             ),
         };
 

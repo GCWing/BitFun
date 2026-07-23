@@ -13,6 +13,7 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
+use dashmap::mapref::entry::Entry;
 use dashmap::DashMap;
 use log::warn;
 
@@ -222,38 +223,55 @@ impl TerminalSessionBinding {
     pub async fn remove(&self, owner_id: &str) -> TerminalResult<()> {
         let session_manager = get_session_manager()
             .ok_or_else(|| TerminalError::Session("SessionManager not initialized".to_string()))?;
+        let mut first_error = None;
 
         // Close primary session
-        if let Some(terminal_session_id) = self.unbind(owner_id) {
-            if let Err(e) = session_manager
+        if let Some(terminal_session_id) = self.get(owner_id) {
+            if let Err(error) = session_manager
                 .close_session(&terminal_session_id, false)
                 .await
             {
                 warn!(
                     "Failed to close terminal session {}: {}",
-                    terminal_session_id, e
+                    terminal_session_id, error
                 );
-            }
-        }
-
-        // Close all background sessions
-        if let Some((_, bg_sessions)) = self.background_bindings.remove(owner_id) {
-            for bg_session_id in bg_sessions {
-                if let Err(e) = session_manager.close_session(&bg_session_id, false).await {
-                    warn!(
-                        "Failed to close background terminal session {}: {}",
-                        bg_session_id, e
-                    );
+                first_error = Some(error);
+            } else if let Entry::Occupied(entry) = self.bindings.entry(owner_id.to_string()) {
+                if entry.get() == &terminal_session_id {
+                    entry.remove();
                 }
             }
         }
 
-        Ok(())
+        // Close all background sessions
+        for bg_session_id in self.list_background_sessions(owner_id) {
+            if let Err(error) = session_manager.close_session(&bg_session_id, false).await {
+                warn!(
+                    "Failed to close background terminal session {}: {}",
+                    bg_session_id, error
+                );
+                if first_error.is_none() {
+                    first_error = Some(error);
+                }
+            } else if let Entry::Occupied(mut entry) =
+                self.background_bindings.entry(owner_id.to_string())
+            {
+                entry.get_mut().retain(|current| current != &bg_session_id);
+                if entry.get().is_empty() {
+                    entry.remove();
+                }
+            }
+        }
+
+        match first_error {
+            Some(error) => Err(error),
+            None => Ok(()),
+        }
     }
 
     /// Check if a binding exists for the given owner
     pub fn has(&self, owner_id: &str) -> bool {
-        self.bindings.contains_key(owner_id)
+        self.bindings.contains_key(owner_id) || self.background_bindings.contains_key(owner_id)
     }
 
     /// List all current bindings
@@ -337,5 +355,15 @@ mod tests {
         // Test clear
         binding.clear();
         assert_eq!(binding.count(), 0);
+    }
+
+    #[test]
+    fn background_only_binding_is_owned_by_the_session() {
+        let binding = TerminalSessionBinding::new();
+        binding
+            .background_bindings
+            .insert("owner1".to_string(), vec!["background-session".to_string()]);
+
+        assert!(binding.has("owner1"));
     }
 }

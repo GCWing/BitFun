@@ -52,12 +52,6 @@ impl AgentSubmissionPort for ProductSdkAgentProvider {
     }
 }
 
-fn baseline_sdk_services() -> RuntimeServices {
-    FakeRuntimeServicesProvider::with_all_required()
-        .build_services()
-        .expect("baseline SDK services should build")
-}
-
 fn product_full_compatible_services() -> RuntimeServices {
     FakeRuntimeServicesProvider::with_all_required()
         .register(RuntimeServicesBuilder::new())
@@ -69,28 +63,34 @@ fn product_full_compatible_services() -> RuntimeServices {
 }
 
 #[tokio::test]
-async fn sdk_delivery_profile_builds_minimal_agent_runtime_without_product_full_capabilities() {
+async fn sdk_delivery_profile_builds_shared_runtime_owner_ceiling_without_bitfun_core() {
     let parts = ProductAssembler::new()
         .assemble(ProductAssemblyInput::new(
             DeliveryProfile::Sdk,
-            baseline_sdk_services(),
+            product_full_compatible_services(),
         ))
-        .expect("SDK delivery profile should assemble without product-full services");
+        .expect("SDK delivery profile should assemble with its shared runtime services");
+    let cli_plan =
+        bitfun_product_capabilities::product_assembly_plan_for_profile(DeliveryProfile::Cli);
 
     assert_eq!(parts.plan().profile(), DeliveryProfile::Sdk);
-    assert!(parts.plan().capability_set().ids().is_empty());
-    assert!(parts.service_availability().is_empty());
+    assert_eq!(
+        parts.plan().capability_set().ids(),
+        cli_plan.capability_set().ids(),
+        "SDK and Headless CLI currently select the same assembly-plan ceiling without sharing product identity"
+    );
     assert!(parts.missing_service_requirements().is_empty());
-    assert!(parts.harness_registry().provider_ids().is_empty());
-    assert!(!parts
-        .services()
-        .has_capability(RuntimeServiceCapability::Terminal));
-    assert!(!parts
-        .services()
-        .has_capability(RuntimeServiceCapability::Git));
-    assert!(!parts
-        .services()
-        .has_capability(RuntimeServiceCapability::Network));
+    assert_eq!(
+        parts.harness_registry().provider_ids(),
+        vec!["core.deep_review", "core.deep_research", "core.miniapp"]
+    );
+    for capability in [
+        RuntimeServiceCapability::Terminal,
+        RuntimeServiceCapability::Git,
+        RuntimeServiceCapability::Network,
+    ] {
+        assert!(parts.services().has_capability(capability));
+    }
 
     let (services, harness_registry, plugin_runtime) = parts.into_runtime_parts();
     let provider = Arc::new(ProductSdkAgentProvider::default());
@@ -100,7 +100,7 @@ async fn sdk_delivery_profile_builds_minimal_agent_runtime_without_product_full_
         .with_harness_registry(Arc::new(harness_registry))
         .with_plugin_runtime(plugin_runtime)
         .build()
-        .expect("SDK profile parts should build a minimal runtime");
+        .expect("SDK profile parts should build a runtime from the shared owner contracts");
 
     let handle = runtime
         .run(AgentRunRequest::new(
@@ -108,12 +108,15 @@ async fn sdk_delivery_profile_builds_minimal_agent_runtime_without_product_full_
             "hello from sdk profile",
         ))
         .await
-        .expect("SDK delivery profile runtime should accept a minimal run");
+        .expect("SDK delivery profile runtime should accept a run");
 
     assert_eq!(handle.session_id, "product-sdk-session");
     assert_eq!(handle.turn_id, "product-sdk-turn");
     assert!(handle.accepted);
-    assert!(runtime.harness_provider_ids().is_empty());
+    assert_eq!(
+        runtime.harness_provider_ids(),
+        vec!["core.deep_review", "core.deep_research", "core.miniapp"]
+    );
 }
 
 #[tokio::test]
@@ -162,7 +165,7 @@ async fn product_runtime_parts_can_build_agent_runtime_sdk_without_core() {
                 "hello from product assembly",
             )
             .with_turn_id("product-sdk-turn")
-            .with_source(AgentSubmissionSource::Cli),
+            .with_source(AgentSubmissionSource::SdkHost),
         )
         .await
         .expect("product assembly runtime should accept an SDK run");

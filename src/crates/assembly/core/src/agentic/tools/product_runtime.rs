@@ -141,13 +141,21 @@ mod tests {
     }
 
     #[test]
+    fn sdk_and_cli_profiles_current_tool_plan_ceilings_match_without_sharing_identity() {
+        let sdk = ProductToolRuntime::for_profile(DeliveryProfile::Sdk).create_registry();
+        let cli = ProductToolRuntime::for_profile(DeliveryProfile::Cli).create_registry();
+
+        assert_eq!(sdk.get_tool_names(), cli.get_tool_names());
+        assert_eq!(sdk.get_deferred_tool_names(), cli.get_deferred_tool_names());
+    }
+
+    #[test]
     fn product_tool_runtime_keeps_no_direct_core_profiles_empty() {
         for profile in [
             DeliveryProfile::Server,
             DeliveryProfile::Remote,
             DeliveryProfile::Web,
             DeliveryProfile::MobileWeb,
-            DeliveryProfile::Sdk,
         ] {
             let runtime = ProductToolRuntime::for_profile(profile);
             let registry = runtime.create_registry();

@@ -35,7 +35,9 @@ use bitfun_agent_runtime::checkpoint::{
     build_light_checkpoint as build_runtime_light_checkpoint, GitStatusCheckpointFacts,
     LightCheckpointWorkspaceFacts,
 };
+use bitfun_agent_runtime::permission::AUTO_APPROVE_ASK_CONTEXT_KEY;
 use bitfun_agent_runtime::remote_file_delivery::TOOL_CONTEXT_REMOTE_FILE_DELIVERY_KEY;
+use bitfun_agent_runtime::user_questions::USER_INPUT_AVAILABLE_CONTEXT_KEY;
 use bitfun_agent_tools::{
     LoadedDeferredToolSpec, PortableToolContextProvider, ToolContextFacts, ToolWorkspaceKind,
 };
@@ -267,6 +269,7 @@ pub(crate) fn build_tool_description_context(
     workspace_services: Option<&WorkspaceServices>,
     primary_model_facts: Option<&PrimaryModelFacts>,
     context_vars: &HashMap<String, String>,
+    runtime_tool_restrictions: &ToolRuntimeRestrictions,
 ) -> ToolUseContext {
     let mut custom_data = HashMap::new();
     let primary_model_facts = primary_model_facts.cloned().unwrap_or_default();
@@ -284,7 +287,7 @@ pub(crate) fn build_tool_description_context(
         primary_model_facts,
         custom_data,
         computer_use_host: None,
-        runtime_tool_restrictions: ToolRuntimeRestrictions::default(),
+        runtime_tool_restrictions: runtime_tool_restrictions.clone(),
         runtime_handles: core_tool_runtime_handles(workspace_services.cloned(), None, None, None),
     }
 }
@@ -322,6 +325,19 @@ fn build_tool_context_custom_data(context: &ToolExecutionContext) -> HashMap<Str
         deep_review_parent,
         &mut extension_custom_data,
     );
+    for key in [
+        USER_INPUT_AVAILABLE_CONTEXT_KEY,
+        AUTO_APPROVE_ASK_CONTEXT_KEY,
+    ] {
+        let value = match context.context_vars.get(key).map(String::as_str) {
+            Some("true") => Some(true),
+            Some("false") => Some(false),
+            _ => None,
+        };
+        if let Some(value) = value {
+            extension_custom_data.insert(key.to_string(), Value::Bool(value));
+        }
+    }
     build_tool_runtime_custom_data(ToolRuntimeCustomDataInput {
         context_vars: &context.context_vars,
         delegation_policy: context.delegation_policy,
@@ -1353,12 +1369,17 @@ mod call_runtime_tests {
 #[cfg(test)]
 mod context_builder_tests {
     use super::build_tool_description_context;
+    use crate::agentic::tools::ToolRuntimeRestrictions;
     use std::collections::HashMap;
     use tool_runtime::context::PrimaryModelFacts;
 
     #[test]
     fn tool_description_context_preserves_manifest_custom_data_shape() {
         let context_vars = HashMap::new();
+        let mut runtime_tool_restrictions = ToolRuntimeRestrictions::default();
+        runtime_tool_restrictions
+            .denied_tool_names
+            .insert("Write".to_string());
 
         let context = build_tool_description_context(
             "coding",
@@ -1371,6 +1392,7 @@ mod context_builder_tests {
                 true,
             )),
             &context_vars,
+            &runtime_tool_restrictions,
         );
 
         assert_eq!(context.agent_type.as_deref(), Some("coding"));
@@ -1381,7 +1403,7 @@ mod context_builder_tests {
         assert!(context.loaded_deferred_tool_specs.is_empty());
         assert!(context.cancellation_token().is_none());
         assert!(context.workspace_services().is_none());
-        assert!(context.runtime_tool_restrictions.is_tool_allowed("Write"));
+        assert!(!context.runtime_tool_restrictions.is_tool_allowed("Write"));
         assert!(context.primary_model_supports_image_understanding());
         assert_eq!(context.primary_model_facts().model_id, "model_1");
         assert_eq!(context.primary_model_facts().model_name, "vision-model");
@@ -1403,6 +1425,8 @@ mod task_context_tests {
         SubagentParentInfo, ToolExecutionContext, ToolExecutionOptions, ToolTask,
     };
     use crate::agentic::tools::ToolRuntimeRestrictions;
+    use bitfun_agent_runtime::permission::AUTO_APPROVE_ASK_CONTEXT_KEY;
+    use bitfun_agent_runtime::user_questions::USER_INPUT_AVAILABLE_CONTEXT_KEY;
     use bitfun_agent_tools::LoadedDeferredToolSpec;
     use bitfun_runtime_ports::DelegationPolicy;
     use serde_json::json;
@@ -1421,6 +1445,14 @@ mod task_context_tests {
         let mut context_vars = HashMap::new();
         context_vars.insert("turn_index".to_string(), "7".to_string());
         context_vars.insert("acp_transport".to_string(), "true".to_string());
+        context_vars.insert(
+            USER_INPUT_AVAILABLE_CONTEXT_KEY.to_string(),
+            "false".to_string(),
+        );
+        context_vars.insert(
+            AUTO_APPROVE_ASK_CONTEXT_KEY.to_string(),
+            "false".to_string(),
+        );
         context_vars.insert(
             "deep_review_run_manifest".to_string(),
             r#"{"run_id":"run-1"}"#.to_string(),
@@ -1513,6 +1545,14 @@ mod task_context_tests {
             .custom_data
             .contains_key("primary_model_supports_image_understanding"));
         assert_eq!(context.custom_data["acp_transport"], json!(true));
+        assert_eq!(
+            context.custom_data[USER_INPUT_AVAILABLE_CONTEXT_KEY],
+            json!(false)
+        );
+        assert_eq!(
+            context.custom_data[AUTO_APPROVE_ASK_CONTEXT_KEY],
+            json!(false)
+        );
         assert_eq!(
             context.custom_data["deep_review_run_manifest"],
             json!({ "run_id": "run-1" })

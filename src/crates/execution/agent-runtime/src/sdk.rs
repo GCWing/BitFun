@@ -61,24 +61,24 @@ pub use bitfun_runtime_ports::{
     AgentBackgroundResultRequest, AgentDialogTurnPort, AgentDialogTurnRequest,
     AgentInputAttachment, AgentLifecycleDeliveryPort, AgentLocalCommandTurnPort,
     AgentLocalCommandTurnRecordRequest, AgentSessionArchiveRequest,
-    AgentSessionArchiveStateRequest, AgentSessionCreateRequest, AgentSessionCreateResult,
-    AgentSessionDeleteRequest, AgentSessionForkAtTurnRequest, AgentSessionForkPort,
-    AgentSessionForkRequest, AgentSessionForkResult, AgentSessionListRequest,
+    AgentSessionArchiveStateRequest, AgentSessionClosePort, AgentSessionCreateRequest,
+    AgentSessionCreateResult, AgentSessionDeleteRequest, AgentSessionForkAtTurnRequest,
+    AgentSessionForkPort, AgentSessionForkRequest, AgentSessionForkResult, AgentSessionListRequest,
     AgentSessionManagementPort, AgentSessionModePort, AgentSessionModeUpdateRequest,
     AgentSessionModelPort, AgentSessionModelUpdateRequest, AgentSessionRenameRequest,
     AgentSessionSummary, AgentSessionUsagePort, AgentSessionUsageRequest,
     AgentSessionWorkspaceBinding, AgentSessionWorkspaceRequest, AgentSubmissionPort,
     AgentSubmissionRequest, AgentSubmissionResult, AgentSubmissionSource,
     AgentThreadGoalCreateRequest, AgentThreadGoalDeliveryRequest, AgentThreadGoalGetRequest,
-    AgentThreadGoalManagementPort, AgentThreadGoalUpdateStatusRequest, AgentTurnCancellationPort,
-    AgentTurnCancellationRequest, AgentTurnCancellationResult, AgentTurnSettlementPort,
-    AgentTurnSettlementRequest, ClockPort, DialogSubmissionPolicy, DialogSubmitOutcome,
-    FileSystemPort, GitPort, McpCatalogPort, NetworkPort, PermissionAuditRecord,
-    PermissionDelegationContext, PermissionGrant, PermissionGrantKey, PermissionReply,
-    PermissionReplySource, PermissionRequest, PermissionRequestEvent, PermissionRequestSource,
-    PermissionRequestSourceKind, PortError, PortErrorKind, PortResult,
-    RemoteAssistantWorkspaceFacts, RemoteCapabilityPort, RemoteConnectionPort,
-    RemoteProjectionPort, RemoteRecentWorkspaceFacts, RemoteWorkspaceFacts,
+    AgentThreadGoalManagementPort, AgentThreadGoalUpdateStatusRequest,
+    AgentTransientSessionDiscardRequest, AgentTurnCancellationPort, AgentTurnCancellationRequest,
+    AgentTurnCancellationResult, AgentTurnSettlementPort, AgentTurnSettlementRequest, ClockPort,
+    DialogSubmissionPolicy, DialogSubmitOutcome, FileSystemPort, GitPort, McpCatalogPort,
+    NetworkPort, PermissionAuditRecord, PermissionDelegationContext, PermissionGrant,
+    PermissionGrantKey, PermissionReply, PermissionReplySource, PermissionRequest,
+    PermissionRequestEvent, PermissionRequestSource, PermissionRequestSourceKind, PortError,
+    PortErrorKind, PortResult, RemoteAssistantWorkspaceFacts, RemoteCapabilityPort,
+    RemoteConnectionPort, RemoteProjectionPort, RemoteRecentWorkspaceFacts, RemoteWorkspaceFacts,
     RemoteWorkspaceFileRuntimeHost, RemoteWorkspaceKind, RemoteWorkspacePort,
     RemoteWorkspaceRuntimeHost, RemoteWorkspaceUpdate, RuntimeEventEnvelope, RuntimeEventSink,
     RuntimeEventType, RuntimeServiceCapability, RuntimeServicePort, SessionStorageKind,
@@ -124,6 +124,11 @@ impl AgentRuntimeBuilder {
         port: Arc<dyn AgentSessionManagementPort>,
     ) -> Self {
         self.inner = self.inner.with_session_management_port(port);
+        self
+    }
+
+    pub fn with_session_close_port(mut self, port: Arc<dyn AgentSessionClosePort>) -> Self {
+        self.inner = self.inner.with_session_close_port(port);
         self
     }
 
@@ -271,6 +276,13 @@ impl AgentRuntime {
         self.inner.pending_permission_requests()
     }
 
+    pub fn permission_request_dialog_turn_id(
+        &self,
+        request_id: &str,
+    ) -> Result<Option<String>, RuntimeError> {
+        self.inner.permission_request_dialog_turn_id(request_id)
+    }
+
     pub fn subscribe_permission_requests(
         &self,
     ) -> Result<PermissionRequestEventReceiver, RuntimeError> {
@@ -369,6 +381,26 @@ impl AgentRuntime {
         request: AgentSessionCreateRequest,
     ) -> Result<AgentSessionCreateResult, RuntimeError> {
         self.inner.create_session_with_id(session_id, request).await
+    }
+
+    /// Creates one connection-scoped Session through the same Runtime owners.
+    /// It is intentionally separate from durable Session creation so process
+    /// adapters cannot silently weaken persistence semantics.
+    pub async fn create_transient_session_with_id(
+        &self,
+        session_id: String,
+        request: AgentSessionCreateRequest,
+    ) -> Result<AgentSessionCreateResult, RuntimeError> {
+        self.inner
+            .create_transient_session_with_id(session_id, request)
+            .await
+    }
+
+    pub async fn discard_transient_session(
+        &self,
+        request: AgentTransientSessionDiscardRequest,
+    ) -> Result<bool, RuntimeError> {
+        self.inner.discard_transient_session(request).await
     }
 
     pub async fn list_sessions(

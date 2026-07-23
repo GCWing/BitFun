@@ -705,6 +705,37 @@ async fn pending_requests_are_process_local_and_not_restored_by_a_new_manager() 
 }
 
 #[tokio::test]
+async fn exact_turn_routing_stays_runtime_local_and_is_removed_with_the_request() {
+    let (manager, _) = manager();
+    let request_id = "request-turn-owned";
+    let receiver = manager
+        .register_batch_for_turn(
+            vec![request(request_id, "session-turn-owned")],
+            "turn-owned",
+        )
+        .await
+        .expect("register turn-owned permission")
+        .pop()
+        .expect("permission receiver");
+
+    assert_eq!(
+        manager
+            .pending_request_dialog_turn_id(request_id)
+            .as_deref(),
+        Some("turn-owned")
+    );
+    manager
+        .cancel_request(request_id, "test cleanup")
+        .await
+        .expect("cancel request");
+    assert!(matches!(
+        receiver.wait().await,
+        PermissionWaitOutcome::Cancelled { .. }
+    ));
+    assert_eq!(manager.pending_request_dialog_turn_id(request_id), None);
+}
+
+#[tokio::test]
 async fn grant_management_is_project_scoped_and_audit_remains_append_only() {
     let (manager, store) = manager();
     store

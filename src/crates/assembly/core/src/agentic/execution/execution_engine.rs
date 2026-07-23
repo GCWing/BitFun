@@ -1900,6 +1900,7 @@ impl ExecutionEngine {
             context.workspace_services.as_ref(),
             Some(&primary_model_facts),
             &tool_manifest_context_vars,
+            &context.runtime_tool_restrictions,
         );
         let tool_manifest = if enable_tools {
             Some(
@@ -2782,6 +2783,7 @@ impl ExecutionEngine {
             context.workspace_services.as_ref(),
             Some(&primary_model_facts),
             &tool_manifest_context_vars,
+            &context.runtime_tool_restrictions,
         );
 
         let tool_manifest = if enable_tools {

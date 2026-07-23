@@ -2,6 +2,12 @@
 
 export const optionalDependencyFeatureOwnerRules = [
   {
+    crateName: 'services-core',
+    reason:
+      'services-core workspace runtime dependencies must stay behind the explicit workspace-runtime feature',
+    dependencies: [{ depName: 'dunce', ownerFeatures: ['workspace-runtime'] }],
+  },
+  {
     crateName: 'runtime-ports',
     reason:
       'runtime-ports may expose product-domain permission ports only through the explicit permission contract slice',
@@ -134,6 +140,12 @@ export const productCoreFeatureAssemblyRules = [
     dependencyName: 'bitfun-core',
     requiredFeatures: ['product-full'],
     reason: 'CLI must explicitly assemble the full bitfun-core product runtime',
+  },
+  {
+    manifestPath: 'src/apps/sdk-host/Cargo.toml',
+    dependencyName: 'bitfun-core',
+    requiredFeatures: ['product-full'],
+    reason: 'SDK Host must explicitly assemble the full bitfun-core product runtime',
   },
   {
     manifestPath: 'src/apps/server/Cargo.toml',

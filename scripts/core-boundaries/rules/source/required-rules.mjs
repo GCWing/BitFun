@@ -1451,8 +1451,8 @@ export const requiredContentRules = [
       },
       {
         regex:
-          /\bsdk_delivery_profile_builds_minimal_agent_runtime_without_product_full_capabilities\b/,
-        message: 'missing SDK delivery profile minimal runtime smoke',
+          /\bsdk_delivery_profile_builds_shared_runtime_owner_ceiling_without_bitfun_core\b/,
+        message: 'missing SDK delivery profile identity and shared runtime-owner ceiling smoke',
       },
       {
         regex: /\bProductAssembler::new\(\)/,
@@ -1472,7 +1472,38 @@ export const requiredContentRules = [
       },
       {
         regex: /\bDeliveryProfile::Sdk\b/,
-        message: 'product SDK smoke must cover the no-direct-core SDK delivery profile',
+        message: 'product SDK smoke must cover the distinct SDK delivery profile',
+      },
+    ],
+  },
+  {
+    path: 'src/apps/sdk-host/src/runtime.rs',
+    reason:
+      'the standalone SDK Host must inject its selected delivery profile into the Core tool owner before agentic system construction',
+    patterns: [
+      {
+        regex: /\binit_agentic_system_for_profile\b/,
+        message: 'SDK Host runtime must initialize Core with its selected delivery profile',
+      },
+      {
+        regex: /\bselect_agentic_system_profile\b/,
+        message:
+          'SDK Host runtime must select its profile before configuration can read the global tool owner',
+      },
+      {
+        regex: /\bDeliveryProfile::Sdk\b/,
+        message: 'SDK Host runtime must retain a distinct SDK delivery profile',
+      },
+    ],
+  },
+  {
+    path: 'src/apps/sdk-host/src/main.rs',
+    reason:
+      'the SDK Host composition root must select its delivery profile before global configuration canonicalization',
+    patterns: [
+      {
+        regex: /\bselect_process_profile\b/,
+        message: 'SDK Host process startup must select its delivery profile first',
       },
     ],
   },
@@ -6970,7 +7001,7 @@ export const requiredContentRules = [
       },
       {
         regex: /\bDeliveryProfile::Sdk\b/,
-        message: 'product tool runtime no-direct-core regression must cover SDK profile',
+        message: 'product tool runtime explicit profile regression must cover SDK profile',
       },
     ],
   },

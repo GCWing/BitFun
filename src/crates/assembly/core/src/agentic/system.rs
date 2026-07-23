@@ -15,6 +15,7 @@ use crate::agentic::tools;
 use crate::infrastructure::ai::AIClientFactory;
 use crate::infrastructure::try_get_path_manager_arc;
 use crate::service::token_usage::{TokenUsageService, TokenUsageSubscriber};
+use bitfun_product_capabilities::DeliveryProfile;
 
 /// Agentic runtime state shared by host adapters.
 #[derive(Clone)]
@@ -26,7 +27,27 @@ pub struct AgenticSystem {
 
 /// Initialize the agentic runtime and register the global coordinator.
 pub async fn init_agentic_system() -> Result<AgenticSystem> {
-    info!("Initializing agentic system");
+    init_agentic_system_for_profile(DeliveryProfile::ProductFull).await
+}
+
+/// Select the process-wide Agent delivery profile before any service reads the
+/// global tool registry.
+///
+/// Product composition roots call this before configuration canonicalization;
+/// later initialization verifies the same profile and rejects replacement.
+pub fn select_agentic_system_profile(delivery_profile: DeliveryProfile) -> Result<()> {
+    tools::registry::initialize_global_tool_registry_for_profile(delivery_profile)
+        .map(|_| ())
+        .map_err(anyhow::Error::msg)
+}
+
+/// Initialize the single process-wide agentic runtime for one product profile.
+pub async fn init_agentic_system_for_profile(
+    delivery_profile: DeliveryProfile,
+) -> Result<AgenticSystem> {
+    info!("Initializing agentic system for profile {delivery_profile}");
+
+    select_agentic_system_profile(delivery_profile)?;
 
     let _ai_client_factory = AIClientFactory::get_global().await?;
 

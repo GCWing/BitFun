@@ -84,6 +84,7 @@ impl Agent for ComputerUseMode {
 #[cfg(test)]
 mod tests {
     use super::{Agent, ComputerUseMode};
+    use crate::agentic::agents::PromptBuilderContext;
 
     #[test]
     fn computer_use_mode_basics() {
@@ -95,5 +96,16 @@ mod tests {
         assert!(agent.default_tools().contains(&"ComputerUse".to_string()));
         assert!(!agent.default_tools().contains(&"Write".to_string()));
         assert!(!agent.is_readonly());
+    }
+
+    #[tokio::test]
+    async fn computer_use_prompt_conditions_optional_browser_control() {
+        let prompt = ComputerUseMode::new()
+            .get_system_prompt(Some(&PromptBuilderContext::new("/workspace", None, None)))
+            .await
+            .expect("ComputerUse prompt");
+
+        assert!(prompt.contains("When `ControlHub` appears in your current tool list"));
+        assert!(prompt.contains("If `ControlHub` is unavailable"));
     }
 }
