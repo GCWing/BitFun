@@ -172,6 +172,7 @@
       "confirmEdit": "确认",
       "cancelEdit": "取消",
       "loading": "加载中...",
+      "loadFailedRetry": "会话加载失败 — 重试",
       "showMore": "还有 {{count}} 个会话",
       "showAll": "还有 {{count}} 个（展开全部）",
       "showLess": "收起",

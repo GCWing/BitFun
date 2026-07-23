@@ -3405,18 +3405,35 @@ pub async fn account_delete_device(targetDeviceId: String) -> Result<(), String>
 /// which routes it to the target device's WS. The target executes it
 /// and the response is returned (decrypted).
 /// Returns the decrypted response JSON.
+const ACCOUNT_DEVICE_RPC_DEFAULT_TIMEOUT_MS: u64 = 120_000;
+const ACCOUNT_DEVICE_RPC_MIN_TIMEOUT_MS: u64 = 1_000;
+
+fn account_device_rpc_timeout_ms(requested: Option<u64>) -> u64 {
+    requested
+        .unwrap_or(ACCOUNT_DEVICE_RPC_DEFAULT_TIMEOUT_MS)
+        .clamp(
+            ACCOUNT_DEVICE_RPC_MIN_TIMEOUT_MS,
+            ACCOUNT_DEVICE_RPC_DEFAULT_TIMEOUT_MS,
+        )
+}
+
 #[tauri::command]
 pub async fn account_device_rpc(
     target_device_id: String,
     command_json: String,
+    timeout_ms: Option<u64>,
 ) -> Result<String, String> {
     let account_generation = account_context_generation();
     let (session, relay_url) = read_account_context_for_generation(account_generation).await?;
     let client = AccountClient::new();
-    let response = client
-        .device_rpc(&relay_url, &session, &target_device_id, &command_json)
-        .await
-        .map_err(|e| format!("{e}"))?;
+    let timeout_ms = account_device_rpc_timeout_ms(timeout_ms);
+    let response = tokio::time::timeout(
+        std::time::Duration::from_millis(timeout_ms),
+        client.device_rpc(&relay_url, &session, &target_device_id, &command_json),
+    )
+    .await
+    .map_err(|_| format!("device RPC timed out after {timeout_ms}ms"))?
+    .map_err(|e| format!("{e}"))?;
     if !account_context_matches(account_generation, &session.token).await {
         return Err("account context changed".to_string());
     }
@@ -3706,58 +3723,56 @@ async fn account_auto_sync_inner(
     );
 
     let completed = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
-    let upload_outcomes: Vec<Result<(String, String, i64), String>> =
-        stream::iter(pending_uploads)
-            .map(|(session_id, bundle_json, hash)| {
-                let client = AccountClient::new();
-                let relay_url = relay_url.clone();
-                let acct_session = acct_session.clone();
-                let completed = completed.clone();
-                async move {
-                    if ensure_account_auto_sync_current(sync_operation_id).is_err() {
-                        return Err("account sync cancelled".to_string());
+    let upload_outcomes: Vec<Result<(String, String, i64), String>> = stream::iter(pending_uploads)
+        .map(|(session_id, bundle_json, hash)| {
+            let client = AccountClient::new();
+            let relay_url = relay_url.clone();
+            let acct_session = acct_session.clone();
+            let completed = completed.clone();
+            async move {
+                if ensure_account_auto_sync_current(sync_operation_id).is_err() {
+                    return Err("account sync cancelled".to_string());
+                }
+                let result = match await_account_auto_sync(
+                    sync_operation_id,
+                    client.upload_session(&relay_url, &acct_session, &session_id, &bundle_json),
+                )
+                .await
+                {
+                    Ok(result) => result,
+                    Err(e) => return Err(e),
+                };
+                match result {
+                    Ok(version) => {
+                        let done = completed.fetch_add(1, std::sync::atomic::Ordering::Relaxed) + 1;
+                        let percent = if upload_total == 0 {
+                            95u8
+                        } else {
+                            20 + ((75 * done) / upload_total) as u8
+                        };
+                        if ensure_account_auto_sync_current(sync_operation_id).is_err() {
+                            return Err("account sync cancelled".to_string());
+                        }
+                        emit_sync_progress(
+                            sync_operation_id,
+                            "exporting_sessions",
+                            percent.min(95),
+                            Some(done),
+                            Some(upload_total),
+                            Some(session_id.as_str()),
+                        );
+                        Ok((session_id, hash, version))
                     }
-                    let result = match await_account_auto_sync(
-                        sync_operation_id,
-                        client.upload_session(&relay_url, &acct_session, &session_id, &bundle_json),
-                    )
-                    .await
-                    {
-                        Ok(result) => result,
-                        Err(e) => return Err(e),
-                    };
-                    match result {
-                        Ok(version) => {
-                            let done =
-                                completed.fetch_add(1, std::sync::atomic::Ordering::Relaxed) + 1;
-                            let percent = if upload_total == 0 {
-                                95u8
-                            } else {
-                                20 + ((75 * done) / upload_total) as u8
-                            };
-                            if ensure_account_auto_sync_current(sync_operation_id).is_err() {
-                                return Err("account sync cancelled".to_string());
-                            }
-                            emit_sync_progress(
-                                sync_operation_id,
-                                "exporting_sessions",
-                                percent.min(95),
-                                Some(done),
-                                Some(upload_total),
-                                Some(session_id.as_str()),
-                            );
-                            Ok((session_id, hash, version))
-                        }
-                        Err(e) => {
-                            log::warn!("Auto-sync upload {session_id} failed: {e}");
-                            Err(format!("{session_id}: {e}"))
-                        }
+                    Err(e) => {
+                        log::warn!("Auto-sync upload {session_id} failed: {e}");
+                        Err(format!("{session_id}: {e}"))
                     }
                 }
-            })
-            .buffer_unordered(UPLOAD_CONCURRENCY)
-            .collect()
-            .await;
+            }
+        })
+        .buffer_unordered(UPLOAD_CONCURRENCY)
+        .collect()
+        .await;
 
     ensure_account_auto_sync_current(sync_operation_id)?;
 
@@ -4343,6 +4358,23 @@ mod sync_state_tests {
         assert_eq!(
             cloud_settings_exist_from_probe::<u8, &str>(Err("relay unavailable")),
             Err("relay unavailable")
+        );
+    }
+
+    #[test]
+    fn device_rpc_timeout_is_bounded_for_peer_requests() {
+        assert_eq!(
+            account_device_rpc_timeout_ms(None),
+            ACCOUNT_DEVICE_RPC_DEFAULT_TIMEOUT_MS
+        );
+        assert_eq!(account_device_rpc_timeout_ms(Some(10_000)), 10_000);
+        assert_eq!(
+            account_device_rpc_timeout_ms(Some(100)),
+            ACCOUNT_DEVICE_RPC_MIN_TIMEOUT_MS
+        );
+        assert_eq!(
+            account_device_rpc_timeout_ms(Some(u64::MAX)),
+            ACCOUNT_DEVICE_RPC_DEFAULT_TIMEOUT_MS
         );
     }
 

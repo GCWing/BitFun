@@ -570,11 +570,13 @@ class RemoteConnectAPIService {
   async accountDeviceRpc(
     targetDeviceId: string,
     commandJson: string,
+    timeoutMs?: number,
   ): Promise<string> {
     try {
       return await this.adapter.request<string>('account_device_rpc', {
         targetDeviceId,
         commandJson,
+        timeoutMs: timeoutMs ?? null,
       });
     } catch (e) {
       log.error('accountDeviceRpc failed', e);

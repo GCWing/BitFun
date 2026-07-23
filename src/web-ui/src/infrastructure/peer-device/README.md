@@ -69,6 +69,16 @@ Controller-side React/transport layer for Peer Device Mode. Architecture:
     an in-progress turn is normalized as interrupted history and later chunks
     are dropped by the controller state machine. Reconciliation must not
     overwrite a local projection that changed while HostInvoke was in flight.
+    Continuous host output must create a persisted checkpoint within each 2s
+    coalescing window, and active snapshots may replace a running projection
+    early only when stream/tool content proves forward progress.
+
+13. **Weak links use bounded, idempotency-aware recovery.** Default Peer
+    HostInvoke concurrency is four with one slot reserved from normal/low
+    traffic. Read-only commands have a real 10s deadline and two
+    exponential-backoff retries. Mutations have a 30s deadline and are never
+    replayed automatically without an idempotency contract. A failed session
+    list must leave its loading state and offer an explicit retry.
 
 ## Related account-login guards
 

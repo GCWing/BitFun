@@ -49,13 +49,19 @@ FS) and must not be mixed with Peer Device Mode.
 
 - Controller: `PeerDeviceTransportAdapter` wraps product `invoke` as
   `RemoteCommand::HostInvoke` over `account_device_rpc`.
-- HostInvoke on the controller is **priority-queued** (effectively unbounded
-  concurrency, `i32::MAX` in flight). Session restore / session-list / dialog /
-  workspace-startup commands outrank background `git_*` / `ssh_*` / `lsp_*` /
-  `search_*` / FS / canvas / editor RPCs so hydrate is not starved into relay
-  HTTP 504s. Terminal commands are always interactive priority, and one slot is
-  kept free from low-priority background work so input cannot be trapped behind
-  slow polling requests.
+- HostInvoke on the controller is **priority-queued** with four requests in
+  flight. Session restore / session-list / dialog / workspace-startup commands
+  outrank background `git_*` / `ssh_*` / `lsp_*` / `search_*` / FS / canvas /
+  editor RPCs so hydrate is not starved into relay HTTP 504s. Terminal commands
+  are always interactive priority, and one slot is kept free from normal and
+  low-priority work so input cannot be trapped behind slow polling requests.
+- Idempotent read HostInvokes use a 10s per-attempt deadline and at most two
+  exponential-backoff retries. Mutating commands use a 30s deadline without
+  automatic replay because a timed-out mutation has an unknown outcome. The
+  desktop `account_device_rpc` command enforces the requested deadline around
+  the native HTTP future; the controller's Promise deadline is not merely a UI
+  timer. Failed session-list loads leave the spinner and expose an explicit
+  retry action.
 - While Peer Mode is active, background noise is reduced further:
   - controller-local SSH heartbeats and remote-workspace auto-reconnect pause
   - Git / FilesPanel window-focus refresh pauses
@@ -82,7 +88,10 @@ FS) and must not be mixed with Peer Device Mode.
   controller that attached after turn/round lifecycle events or crossed a
   transient relay gap. The host overlays its authoritative in-memory session
   state onto the persisted view so an executing turn is not misclassified as
-  interrupted history.
+  interrupted history. Continuous host output is checkpointed at least once
+  per 2s coalescing window. A controller accepts an active snapshot before the
+  stale-stream deadline only when its rounds, streams, and tools provably move
+  forward; an older persisted snapshot cannot overwrite newer DeviceEvents.
 - CLI Peer Host forwards only turns submitted through Peer Host and linked
   child turns. A background-result follow-up inherits ownership only when its
   Core-internal metadata identifies the exact tracked parent and source child
@@ -105,9 +114,10 @@ FS) and must not be mixed with Peer Device Mode.
   enqueue attempt. An explicit disconnect still restores the local controller
   UI, but reports a warning when host cancellation was not confirmed. This
   boundary does not change the Relay envelope or add ACK or replay.
-- Relay `POST /api/devices/:id/rpc` waits up to **120s** for the peer response;
-  reverse proxies in front of the relay must use a matching (or higher) read
-  timeout or they will return 504 first.
+- Relay `POST /api/devices/:id/rpc` still permits up to **120s** for generic
+  callers. Peer controllers normally cancel earlier through their per-command
+  10s/30s deadlines; reverse proxies must still accommodate any other caller
+  that relies on the Relay maximum.
 
 ## Workspace directory picking
 

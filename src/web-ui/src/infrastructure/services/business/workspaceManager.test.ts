@@ -287,6 +287,23 @@ describe('WorkspaceManager startup initialization', () => {
     expect(manager.getState().error).toBeNull();
   });
 
+  it('fails a Peer-mode rebootstrap instead of leaving workspace loading unresolved', async () => {
+    globalStateMocks.initializeWorkspaceStartupState.mockRejectedValue(
+      new Error('peer request timed out'),
+    );
+    listenMock.mockResolvedValue(() => undefined);
+    const manager = await getFreshWorkspaceManager();
+
+    await expect(manager.reinitializeForPeerModeSwitch()).rejects.toThrow(
+      'peer request timed out',
+    );
+
+    expect(manager.getState()).toMatchObject({
+      loading: false,
+      error: 'peer request timed out',
+    });
+  });
+
   it('stores the startup legacy remote workspace snapshot for one reconnect pass', async () => {
     const legacyRemoteWorkspace = {
       connectionId: 'conn-1',

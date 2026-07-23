@@ -105,8 +105,11 @@ export function calculateTurnHash(dialogTurn: DialogTurn): string {
 }
 
 /**
- * Debounced save dialog turn
- * Only executes the last call when called multiple times in a short period
+ * Coalesce frequent dialog-turn updates into periodic latest-state saves.
+ *
+ * This intentionally behaves like a trailing throttle, not a pure debounce:
+ * continuous model output must still reach persistence so Peer Device
+ * snapshot recovery can advance while a turn is running.
  */
 export function debouncedSaveDialogTurn(
   context: FlowChatContext,
@@ -118,14 +121,14 @@ export function debouncedSaveDialogTurn(
   
   const existingTimer = context.saveDebouncers.get(key);
   if (existingTimer) {
-    clearTimeout(existingTimer);
+    return;
   }
   
   const timer = setTimeout(() => {
-    saveDialogTurnToDisk(context, sessionId, turnId).catch(error => {
-      log.warn('Debounced save failed', { sessionId, turnId, error });
-    });
     context.saveDebouncers.delete(key);
+    saveDialogTurnToDisk(context, sessionId, turnId).catch(error => {
+      log.warn('Coalesced checkpoint save failed', { sessionId, turnId, error });
+    });
   }, delay);
   
   context.saveDebouncers.set(key, timer);

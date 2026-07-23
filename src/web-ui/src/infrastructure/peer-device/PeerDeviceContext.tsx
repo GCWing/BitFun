@@ -32,6 +32,7 @@ const log = createLogger('PeerDeviceMode');
 /** Only high/normal HostInvoke transport failures count toward auto-exit. */
 const PEER_RPC_FAILURE_LIMIT = 2147483647;
 const PEER_PING_INTERVAL_MS = 20_000;
+const PEER_CONTROL_RPC_TIMEOUT_MS = 15_000;
 
 function emitPeerModeChanged(detail: { active: boolean; deviceId?: string }): void {
   setPeerDeviceModeActiveFlag(detail.active);
@@ -132,6 +133,7 @@ async function detachPeerControl(deviceId: string, controllerDeviceId: string): 
         command: 'peer_control_detach',
         args: { controller_device_id: controllerDeviceId },
       }),
+      PEER_CONTROL_RPC_TIMEOUT_MS,
     ),
   );
 }
@@ -250,6 +252,7 @@ export const PeerDeviceProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       await remoteConnectAPI.accountDeviceRpc(
         deviceId,
         JSON.stringify({ cmd: 'host_invoke', command: 'peer_mode_ping', args: {} }),
+        PEER_CONTROL_RPC_TIMEOUT_MS,
       ),
     );
 
@@ -265,7 +268,8 @@ export const PeerDeviceProvider: React.FC<{ children: React.ReactNode }> = ({ ch
 
       const peerTransport = new PeerDeviceTransportAdapter(
         deviceId,
-        (target, commandJson) => remoteConnectAPI.accountDeviceRpc(target, commandJson),
+        (target, commandJson, timeoutMs) =>
+          remoteConnectAPI.accountDeviceRpc(target, commandJson, timeoutMs),
         {
           onHostInvokeSuccess: notePeerRpcSuccess,
           onHostInvokeTransportFailure: notePeerTransportFailure,
@@ -284,6 +288,7 @@ export const PeerDeviceProvider: React.FC<{ children: React.ReactNode }> = ({ ch
             command: 'peer_control_attach',
             args: { controller_device_id: controllerDeviceId },
           }),
+          PEER_CONTROL_RPC_TIMEOUT_MS,
         ),
       );
       attached = true;
@@ -341,6 +346,7 @@ export const PeerDeviceProvider: React.FC<{ children: React.ReactNode }> = ({ ch
             await remoteConnectAPI.accountDeviceRpc(
               deviceId,
               JSON.stringify({ cmd: 'host_invoke', command: 'peer_mode_ping', args: {} }),
+              PEER_CONTROL_RPC_TIMEOUT_MS,
             ),
           );
           notePeerRpcSuccess();

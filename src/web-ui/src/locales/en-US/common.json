@@ -172,6 +172,7 @@
       "confirmEdit": "Confirm",
       "cancelEdit": "Cancel",
       "loading": "Loading...",
+      "loadFailedRetry": "Couldn't load sessions — retry",
       "showMore": "{{count}} more sessions",
       "showAll": "{{count}} more (show all)",
       "showLess": "Show less",

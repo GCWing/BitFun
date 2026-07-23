@@ -172,6 +172,7 @@
       "confirmEdit": "確認",
       "cancelEdit": "取消",
       "loading": "載入中...",
+      "loadFailedRetry": "會話載入失敗 — 重試",
       "showMore": "還有 {{count}} 個會話",
       "showAll": "還有 {{count}} 個（展開全部）",
       "showLess": "收起",

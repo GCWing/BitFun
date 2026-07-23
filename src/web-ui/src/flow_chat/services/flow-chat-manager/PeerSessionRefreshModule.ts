@@ -120,6 +120,7 @@ export function installPeerSessionRefresh(context: FlowChatContext): () => void 
   let inFlight = false;
   let queued = false;
   let immediateTimer: ReturnType<typeof setTimeout> | null = null;
+  let scheduleRefresh: RefreshRequester = () => {};
 
   const runRefresh = async (requestedSessionId?: string): Promise<void> => {
     if (disposed || inFlight || !isPeerDeviceModeActive()) {
@@ -207,7 +208,7 @@ export function installPeerSessionRefresh(context: FlowChatContext): () => void 
     }
   };
 
-  const scheduleRefresh: RefreshRequester = (sessionId) => {
+  scheduleRefresh = (sessionId) => {
     if (disposed) {
       return;
     }

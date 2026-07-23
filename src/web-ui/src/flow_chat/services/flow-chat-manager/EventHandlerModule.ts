@@ -82,6 +82,7 @@ import {
   scheduleModelResponseStatus,
 } from './RuntimeStatusModule';
 import { requestPeerSessionRefresh } from './PeerSessionRefreshModule';
+import { isPeerDeviceModeActive } from '@/infrastructure/peer-device/peerModeFlag';
 
 const log = createLogger('EventHandlerModule');
 const TURN_COMPLETION_QUIET_WINDOW_MS = 500;
@@ -1698,7 +1699,12 @@ export function processBatchedEvents(
           processNormalTextChunkInternal(context, sessionId, turnId, roundId, text, attemptId, attemptIndex);
         }
         
-        debouncedSaveDialogTurn(context, sessionId, turnId, 2000);
+        // The executing host owns turn persistence. A Peer controller receives
+        // the same chunks for rendering and must not echo a save RPC for every
+        // checkpoint, especially on a weak link.
+        if (!isPeerDeviceModeActive()) {
+          debouncedSaveDialogTurn(context, sessionId, turnId, 2000);
+        }
       } else if (eventType === 'tool:params') {
         const { sessionId, turnId, toolEvent } = payload;
         processToolParamsPartialInternal(sessionId, turnId, toolEvent);

@@ -133,8 +133,43 @@ const HIGH_PRIORITY_COMMANDS = new Set([
   'get_system_info',
 ]);
 
+const RETRYABLE_READ_COMMANDS = new Set([
+  'initialize_workspace_startup_state',
+  'restore_session_view',
+  'restore_session_with_turns',
+  'load_session_turns',
+  'list_persisted_sessions',
+  'list_persisted_sessions_page',
+  'list_persisted_sessions_count',
+  'get_session_thread_goal',
+  'get_opened_workspaces',
+  'get_recent_workspaces',
+  'get_current_workspace',
+  'get_workspace_info',
+  'get_config',
+  'get_configs',
+  'get_available_modes',
+  'get_agent_profile_config',
+  'list_pending_permission_requests',
+  'list_project_permission_grants',
+  'list_project_permission_audit',
+  'get_project_permission_rules',
+  'get_directory_children',
+  'get_directory_children_paginated',
+  'list_files',
+  'check_path_exists',
+  'get_system_info',
+]);
+
 export function isPeerLocalOnlyCommand(command: string): boolean {
   return LOCAL_ONLY_COMMANDS.has(command);
+}
+
+export function isPeerRetryableReadCommand(command: string): boolean {
+  return RETRYABLE_READ_COMMANDS.has(command) ||
+    command.startsWith('read_') ||
+    command.startsWith('list_') ||
+    command.startsWith('get_');
 }
 
 export type PeerInvokePriority = 'high' | 'normal' | 'low';
@@ -180,9 +215,17 @@ export function peerInvokePriorityFor(command: string): PeerInvokePriority {
 }
 
 /** Max in-flight HostInvoke RPCs per controller. */
-export const PEER_HOST_INVOKE_MAX_CONCURRENT = 2147483647;
+export const PEER_HOST_INVOKE_MAX_CONCURRENT = 4;
+export const PEER_READ_REQUEST_TIMEOUT_MS = 10_000;
+export const PEER_MUTATION_REQUEST_TIMEOUT_MS = 30_000;
+export const PEER_READ_MAX_RETRIES = 2;
+export const PEER_RETRY_BASE_DELAY_MS = 500;
 
-type DeviceRpcFn = (targetDeviceId: string, commandJson: string) => Promise<string>;
+type DeviceRpcFn = (
+  targetDeviceId: string,
+  commandJson: string,
+  timeoutMs?: number,
+) => Promise<string>;
 
 export interface PeerDeviceTransportHooks {
   /** Fired only for transport/RPC layer failures, not product command errors. */
@@ -210,6 +253,13 @@ export class PeerProductCommandError extends Error {
   constructor(message: string) {
     super(message);
     this.name = 'PeerProductCommandError';
+  }
+}
+
+class PeerRpcTimeoutError extends Error {
+  constructor(action: string, timeoutMs: number) {
+    super(`Peer request '${action}' timed out after ${timeoutMs}ms`);
+    this.name = 'PeerRpcTimeoutError';
   }
 }
 
@@ -361,7 +411,13 @@ export class PeerDeviceTransportAdapter implements ITransportAdapter {
     if (this.queues.high.length > 0) {
       return this.queues.high.shift();
     }
-    if (this.queues.normal.length > 0) {
+    const nonHighConcurrencyLimit =
+      this.maxConcurrent > 1 ? this.maxConcurrent - 1 : 1;
+    const activeNonHigh = this.activeByPriority.normal + this.activeByPriority.low;
+    if (
+      this.queues.normal.length > 0 &&
+      activeNonHigh < nonHighConcurrencyLimit
+    ) {
       return this.queues.normal.shift();
     }
     // Keep one transport slot available for future interactive work. Without
@@ -382,7 +438,17 @@ export class PeerDeviceTransportAdapter implements ITransportAdapter {
   ): Promise<T> {
     const action = typeof command.cmd === 'string' ? command.cmd : 'unknown';
     try {
-      const raw = await this.deviceRpc(this.targetDeviceId, JSON.stringify(command));
+      const retryable =
+        action === 'get_file_info' ||
+        action === 'read_file_chunk' ||
+        action.startsWith('get_') ||
+        action.startsWith('read_') ||
+        action.startsWith('list_');
+      const raw = await this.invokeDeviceRpc(
+        action,
+        JSON.stringify(command),
+        retryable,
+      );
       const envelope = JSON.parse(raw) as T;
       if (envelope.resp === 'error') {
         throw new PeerProductCommandError(
@@ -420,7 +486,11 @@ export class PeerDeviceTransportAdapter implements ITransportAdapter {
     });
 
     try {
-      const raw = await this.deviceRpc(this.targetDeviceId, commandJson);
+      const raw = await this.invokeDeviceRpc(
+        action,
+        commandJson,
+        isPeerRetryableReadCommand(action),
+      );
       const envelope = JSON.parse(raw) as HostInvokeResultEnvelope;
       if (timing) {
         timing.invokeDurationMs = elapsedMs(invokeStartedAt);
@@ -451,6 +521,62 @@ export class PeerDeviceTransportAdapter implements ITransportAdapter {
       log.error('Peer HostInvoke transport failed', { action, error });
       this.hooks.onHostInvokeTransportFailure?.(error, { action, priority });
       throw error;
+    }
+  }
+
+  private async invokeDeviceRpc(
+    action: string,
+    commandJson: string,
+    retryable: boolean,
+  ): Promise<string> {
+    const timeoutMs = retryable
+      ? PEER_READ_REQUEST_TIMEOUT_MS
+      : PEER_MUTATION_REQUEST_TIMEOUT_MS;
+    const maxRetries = retryable ? PEER_READ_MAX_RETRIES : 0;
+
+    for (let attempt = 0; ; attempt += 1) {
+      try {
+        return await this.withTimeout(
+          this.deviceRpc(this.targetDeviceId, commandJson, timeoutMs),
+          action,
+          timeoutMs,
+        );
+      } catch (error) {
+        if (attempt >= maxRetries) {
+          throw error;
+        }
+        const delayMs = PEER_RETRY_BASE_DELAY_MS * (2 ** attempt);
+        log.warn('Retrying read-only Peer request', {
+          action,
+          attempt: attempt + 1,
+          maxRetries,
+          delayMs,
+          error,
+        });
+        await new Promise(resolve => setTimeout(resolve, delayMs));
+      }
+    }
+  }
+
+  private async withTimeout<T>(
+    request: Promise<T>,
+    action: string,
+    timeoutMs: number,
+  ): Promise<T> {
+    let timeout: ReturnType<typeof setTimeout> | undefined;
+    try {
+      return await Promise.race([
+        request,
+        new Promise<T>((_resolve, reject) => {
+          timeout = setTimeout(() => {
+            reject(new PeerRpcTimeoutError(action, timeoutMs));
+          }, timeoutMs);
+        }),
+      ]);
+    } finally {
+      if (timeout !== undefined) {
+        clearTimeout(timeout);
+      }
     }
   }
 }

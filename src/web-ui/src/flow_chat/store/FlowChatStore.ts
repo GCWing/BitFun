@@ -202,6 +202,150 @@ function compareDialogTurnOrder(left: DialogTurn, right: DialogTurn): number {
   return left.startTime - right.startTime;
 }
 
+function runningStatusRank(status: string | undefined): number {
+  switch (status) {
+    case 'pending':
+    case 'queued':
+    case 'waiting':
+    case 'preparing':
+      return 0;
+    case 'processing':
+    case 'running':
+    case 'streaming':
+    case 'receiving':
+    case 'analyzing':
+      return 1;
+    case 'pending_confirmation':
+    case 'confirmed':
+    case 'finishing':
+    case 'cancelling':
+      return 2;
+    case 'completed':
+    case 'cancelled':
+    case 'rejected':
+    case 'error':
+      return 3;
+    default:
+      return 0;
+  }
+}
+
+function substantiveRoundItems(round: ModelRound): AnyFlowItem[] {
+  return round.items.filter(item => (
+    item.type !== 'text' ||
+    !(item as AnyFlowItem & { runtimeStatus?: unknown }).runtimeStatus
+  ));
+}
+
+type RunningStreamItem = AnyFlowItem & {
+  type: 'text' | 'thinking';
+  content: string;
+};
+
+function streamProgressEntries(round: ModelRound): Map<string, RunningStreamItem> {
+  const entries = new Map<string, RunningStreamItem>();
+  const ordinals: Record<'text' | 'thinking', number> = {
+    text: 0,
+    thinking: 0,
+  };
+
+  for (const item of substantiveRoundItems(round)) {
+    if (item.type !== 'text' && item.type !== 'thinking') {
+      continue;
+    }
+    const ordinal = ordinals[item.type]++;
+    const attempt =
+      item.attemptId ||
+      (typeof item.attemptIndex === 'number' ? `index:${item.attemptIndex}` : 'default');
+    entries.set(`${item.type}:${attempt}:${ordinal}`, item as RunningStreamItem);
+  }
+
+  return entries;
+}
+
+function toolProgressEntries(round: ModelRound): Map<string, FlowToolItem> {
+  const entries = new Map<string, FlowToolItem>();
+  for (const item of substantiveRoundItems(round)) {
+    if (item.type !== 'tool') {
+      continue;
+    }
+    const tool = item as FlowToolItem;
+    entries.set(tool.toolCall?.id || tool.id, tool);
+  }
+  return entries;
+}
+
+/**
+ * Accept an active persisted snapshot only when it is provably ahead of the
+ * controller projection. Peer text-item ids are generated independently on
+ * each device, so progress is compared by round/type/attempt/ordinal and
+ * content prefix instead of item id.
+ */
+function isRunningSnapshotForwardProgress(
+  current: DialogTurn,
+  snapshot: DialogTurn,
+): boolean {
+  if (current.id !== snapshot.id) {
+    return false;
+  }
+
+  let advanced =
+    runningStatusRank(snapshot.status) > runningStatusRank(current.status) ||
+    snapshot.modelRounds.length > current.modelRounds.length;
+
+  for (const currentRound of current.modelRounds) {
+    const snapshotRound = snapshot.modelRounds.find(round => round.id === currentRound.id);
+    if (!snapshotRound) {
+      return false;
+    }
+    if (runningStatusRank(snapshotRound.status) < runningStatusRank(currentRound.status)) {
+      return false;
+    }
+    if (runningStatusRank(snapshotRound.status) > runningStatusRank(currentRound.status)) {
+      advanced = true;
+    }
+
+    const currentStreams = streamProgressEntries(currentRound);
+    const snapshotStreams = streamProgressEntries(snapshotRound);
+    for (const [key, currentItem] of currentStreams) {
+      const snapshotItem = snapshotStreams.get(key);
+      if (!snapshotItem || !snapshotItem.content.startsWith(currentItem.content)) {
+        return false;
+      }
+      if (snapshotItem.content.length > currentItem.content.length) {
+        advanced = true;
+      }
+    }
+    if (snapshotStreams.size > currentStreams.size) {
+      advanced = true;
+    }
+
+    const currentTools = toolProgressEntries(currentRound);
+    const snapshotTools = toolProgressEntries(snapshotRound);
+    for (const [key, currentTool] of currentTools) {
+      const snapshotTool = snapshotTools.get(key);
+      if (
+        !snapshotTool ||
+        runningStatusRank(snapshotTool.status) < runningStatusRank(currentTool.status) ||
+        (currentTool.toolResult && !snapshotTool.toolResult)
+      ) {
+        return false;
+      }
+      if (
+        runningStatusRank(snapshotTool.status) > runningStatusRank(currentTool.status) ||
+        (!currentTool.toolResult && Boolean(snapshotTool.toolResult))
+      ) {
+        advanced = true;
+      }
+    }
+    if (snapshotTools.size > currentTools.size) {
+      advanced = true;
+    }
+  }
+
+  return advanced;
+}
+
 function itemMatchesIdentity(item: AnyFlowItem, itemId: string): boolean {
   if (item.id === itemId) {
     return true;
@@ -4181,7 +4325,10 @@ export class FlowChatStore {
         if (existingIndex === -1) {
           mergedTurns.push(snapshotTurn);
           turnsChanged = true;
-        } else if (replaceExistingTurns) {
+        } else if (
+          replaceExistingTurns ||
+          isRunningSnapshotForwardProgress(mergedTurns[existingIndex], snapshotTurn)
+        ) {
           mergedTurns[existingIndex] = snapshotTurn;
           turnsChanged = true;
         }
