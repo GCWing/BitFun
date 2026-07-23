@@ -16,6 +16,7 @@ impl ExecMode {
         )
     }
 
+    #[cfg(test)]
     pub(super) fn get_git_diff_for_workspace(
         workspace: &std::path::Path,
         output_target: Option<&str>,
