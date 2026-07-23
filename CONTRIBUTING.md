@@ -1,8 +1,8 @@
 # Contributing
 
-[中文版](./CONTRIBUTING_CN.md)
+[涓枃鐗圿(./CONTRIBUTING_CN.md)
 
-Thanks for your interest in BitFun! BitFun is a multi-platform AI programming environment powered by Rust and TypeScript, with shared core logic across Desktop/CLI/Server. This guide explains how to contribute effectively.
+Thanks for your interest in taiji-quant! taiji-quant is a multi-platform AI programming environment powered by Rust and TypeScript, with shared core logic across Desktop/CLI/Server. This guide explains how to contribute effectively.
 
 ## Code of Conduct
 
@@ -17,7 +17,7 @@ Be respectful, kind, and constructive. We welcome contributors of all background
 - Rust toolchain (install via [rustup](https://rustup.rs/))
 - [Tauri prerequisites](https://v2.tauri.app/start/prerequisites/) for desktop development
 
-BitFun standardizes local JavaScript builds and CI on Node.js 22.12+. The GitHub
+taiji-quant standardizes local JavaScript builds and CI on Node.js 22.12+. The GitHub
 Actions upgrades in this repository use Node.js 24-compatible action runtimes,
 but project scripts should run on Node.js 22.12+ unless a narrower local guide
 says otherwise. After switching from an older Node.js version, rerun
@@ -56,14 +56,14 @@ pnpm run desktop:build
 pnpm run e2e:test
 ```
 
-> **`desktop:dev` vs `desktop:preview:debug`**: `desktop:dev` runs `tauri dev`, which provides **full hot-reload** — frontend changes apply instantly via Vite HMR, and Rust/backend changes trigger an incremental rebuild followed by an automatic app restart. This is the recommended workflow for active development. `desktop:preview:debug` launches a pre-built debug binary alongside a Vite dev server; frontend edits still get HMR, but **Rust-side changes are not auto-rebuilt** — you must stop and re-run the command (or use `--force-rebuild`). Use `desktop:preview:debug` when you only need to iterate on frontend code or want a faster cold-start without waiting for `tauri dev` initialization.
+> **`desktop:dev` vs `desktop:preview:debug`**: `desktop:dev` runs `tauri dev`, which provides **full hot-reload** 鈥?frontend changes apply instantly via Vite HMR, and Rust/backend changes trigger an incremental rebuild followed by an automatic app restart. This is the recommended workflow for active development. `desktop:preview:debug` launches a pre-built debug binary alongside a Vite dev server; frontend edits still get HMR, but **Rust-side changes are not auto-rebuilt** 鈥?you must stop and re-run the command (or use `--force-rebuild`). Use `desktop:preview:debug` when you only need to iterate on frontend code or want a faster cold-start without waiting for `tauri dev` initialization.
 
 > For the full script list, see [`package.json`](package.json). For agent-specific commands, verification, and architecture rules, see [`AGENTS.md`](AGENTS.md).
 
 ### Desktop debugging tools
 
 Desktop dev builds enable the `devtools` Cargo feature. Use `F12` for native
-webview DevTools. `Cmd/Ctrl + Shift + I` toggles the BitFun element inspector,
+webview DevTools. `Cmd/Ctrl + Shift + I` toggles the taiji-quant element inspector,
 and `Cmd/Ctrl + Shift + J` also opens native DevTools. These tools are disabled
 in end-user `release` builds.
 
@@ -153,7 +153,7 @@ Common local checks:
 | Frontend runtime or UI | `pnpm run type-check:web`, plus the nearest focused test when behavior changed |
 | Mobile web | `pnpm --dir src/mobile-web run type-check` |
 | Rust shared runtime or services | `cargo check --workspace`, plus a focused `cargo test` when behavior changed |
-| Desktop/Tauri integration | `cargo check -p bitfun-desktop` |
+| Desktop/Tauri integration | `cargo check -p taiji-quant-desktop` |
 | i18n resources or contract | use the matching i18n row in `AGENTS.md` |
 
 For UI changes, include screenshots or a short recording when helpful. If you
@@ -187,7 +187,7 @@ The 4 closed-source crates listed above are **commented out** in `Cargo.toml` wo
 ### Before you start
 
 - Read `docs/architecture/product-architecture.md` for architecture-sensitive rules and module boundaries.
-- Familiarize yourself with the taiji crate dependency matrix: see `.bitfun/team/type-contract-phase8-10.md` for inter-crate dependencies and merge rules.
+- Familiarize yourself with the taiji crate dependency matrix: see `.taiji-quant/team/type-contract-phase8-10.md` for inter-crate dependencies and merge rules.
 
 ### Verification
 

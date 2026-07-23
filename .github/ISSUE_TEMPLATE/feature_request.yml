@@ -14,7 +14,7 @@ body:
     id: proposal
     attributes:
       label: Proposed behavior
-      description: What should BitFun do differently?
+      description: What should taiji-quant do differently?
       placeholder: Describe the desired behavior or workflow.
     validations:
       required: true

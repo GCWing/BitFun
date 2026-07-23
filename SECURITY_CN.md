@@ -2,18 +2,18 @@
 
 [English](./SECURITY.md)
 
-BitFun 是一个运行在你本机的桌面级 Agent 运行时（Rust 内核 + Tauri 外壳），具备文件系统、终端、Git、MCP/LSP 以及远程控制等广泛能力。正因为权限范围较大，我们非常重视安全问题，并感谢社区帮助我们保护用户安全。
+taiji-quant 是基于 BitFun 生态构建的量化交易与自媒体平台，包含完整的桌面 Agent 运行时（Rust 内核 + Tauri 外壳）、交易引擎和自动化内容生成管线。正因为权限范围较大，我们非常重视安全问题。
 
 ## 受支持的版本
 
-BitFun 目前处于 `0.x` 活跃开发阶段，采用滚动发布。安全修复只会合入最新发布版本，旧版本不会单独打补丁。
+taiji-quant 目前处于活跃开发阶段，采用滚动发布。安全修复只会合入最新发布版本。
 
 | 版本 | 是否支持 |
 | ---- | -------- |
 | 最新发布版（`main`） | ✅ |
 | 较旧的发布版 | ❌ |
 
-在上报问题前，请先升级到最新[发布版](https://github.com/GCWing/BitFun/releases)，确认问题仍可复现。
+在上报问题前，请先升级到最新[发布版](https://github.com/1688mengdie/taiji-quant/releases)，确认问题仍可复现。
 
 ## 如何上报漏洞
 
@@ -21,7 +21,7 @@ BitFun 目前处于 `0.x` 活跃开发阶段，采用滚动发布。安全修复
 
 请通过 GitHub Security Advisories 私密上报：
 
-➡️ **[上报漏洞](https://github.com/GCWing/BitFun/security/advisories/new)**
+➡️ **[上报漏洞](https://github.com/1688mengdie/taiji-quant/security/advisories/new)**
 
 该入口会开启一个仅维护者可见的私密渠道。如果你无法使用 GitHub Security Advisories，可以新建一个极简的公开 Issue，仅写明「我想私下上报一个安全问题」——不要附带任何细节——维护者会与你建立私密沟通渠道。
 
@@ -44,7 +44,7 @@ BitFun 目前处于 `0.x` 活跃开发阶段，采用滚动发布。安全修复
 
 适用范围内：
 
-- 本仓库中的 BitFun 运行时、官方 Agent、桌面端/CLI/服务端应用、Web UI，以及移动端配对/远程控制流程。
+- 本仓库中的 taiji-quant 运行时、交易引擎、桌面端/CLI 应用、Web UI，以及移动端配对/远程控制流程。
 
 不在适用范围内：
 
@@ -56,7 +56,7 @@ BitFun 目前处于 `0.x` 活跃开发阶段，采用滚动发布。安全修复
 
 对于善意发现并按照本策略上报漏洞，且在测试过程中避免侵犯隐私、破坏数据与中断服务的研究者，我们不会对其采取或支持任何法律行动。
 
-感谢你帮助保障 BitFun 及其用户的安全。
+感谢你帮助保障 taiji-quant 及其用户的安全。
 
 ## Taiji 模块安全
 

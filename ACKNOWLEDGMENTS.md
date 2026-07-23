@@ -4,6 +4,17 @@
 
 ---
 
+## BitFun 社区
+
+taiji-quant 是基于 [BitFun](https://github.com/GCWing/BitFun) 社区构建的独立发行版。
+
+- 项目地址：[https://github.com/GCWing/BitFun](https://github.com/GCWing/BitFun)
+- 许可证：MIT License
+- 授权：已获得 BitFun 社区官方授权（详见 [docs/legal/upstream-authorization.md](docs/legal/upstream-authorization.md)）
+- 关系：BitFun 提供通用 Agent 运行时底座，taiji-quant 在其上构建量化交易与自媒体垂域应用
+
+---
+
 ## 代码级参考（算法移植与适配）
 
 以下项目的代码被阅读、理解后以 Rust 重新实现。我们保留了原项目的设计精髓，同时适配了太极的 DAG 管线架构。
@@ -124,5 +135,5 @@
 
 ---
 
-*最后更新：2026-07-22*
-*致谢人：量价仓交易狮（B站）*
+*最后更新：2026-07-23*
+*致谢人：Taiji Quant Team*

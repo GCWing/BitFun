@@ -1,194 +1,194 @@
-# 贡献指南
+# 璐＄尞鎸囧崡
 
 [English](./CONTRIBUTING.md)
 
-感谢你对 BitFun 的兴趣！BitFun 是一个由 Rust 与 TypeScript 驱动的多端 AI 编程环境，桌面端/CLI/Server 共享核心逻辑。本指南说明如何高效参与贡献。
+鎰熻阿浣犲 taiji-quant 鐨勫叴瓒ｏ紒taiji-quant 鏄竴涓敱 Rust 涓?TypeScript 椹卞姩鐨勫绔?AI 缂栫▼鐜锛屾闈㈢/CLI/Server 鍏变韩鏍稿績閫昏緫銆傛湰鎸囧崡璇存槑濡備綍楂樻晥鍙備笌璐＄尞銆?
 
-## 行为准则
+## 琛屼负鍑嗗垯
 
-请保持尊重、友善与建设性沟通。我们欢迎不同背景与经验的贡献者。
+璇蜂繚鎸佸皧閲嶃€佸弸鍠勪笌寤鸿鎬ф矡閫氥€傛垜浠杩庝笉鍚岃儗鏅笌缁忛獙鐨勮础鐚€呫€?
 
-## 快速开始
+## 蹇€熷紑濮?
 
-### 环境准备
+### 鐜鍑嗗
 
-- Node.js 22.12+（建议 LTS 版本）
-- pnpm 10.15.0（建议通过 Corepack 使用）
-- Rust toolchain（通过 rustup 安装）
-- 桌面端开发需准备 Tauri 依赖
+- Node.js 22.12+锛堝缓璁?LTS 鐗堟湰锛?
+- pnpm 10.15.0锛堝缓璁€氳繃 Corepack 浣跨敤锛?
+- Rust toolchain锛堥€氳繃 rustup 瀹夎锛?
+- 妗岄潰绔紑鍙戦渶鍑嗗 Tauri 渚濊禆
 
-BitFun 将本地 JavaScript 构建和 CI 统一到 Node.js 22.12+。仓库里的
-GitHub Actions 升级使用的是兼容 Node.js 24 的 action runtime，但项目脚本
-默认仍以 Node.js 22.12+ 为基线，除非局部指南另有说明。从旧 Node.js 版本切换
-后，请重新运行 `pnpm install`。
+taiji-quant 灏嗘湰鍦?JavaScript 鏋勫缓鍜?CI 缁熶竴鍒?Node.js 22.12+銆備粨搴撻噷鐨?
+GitHub Actions 鍗囩骇浣跨敤鐨勬槸鍏煎 Node.js 24 鐨?action runtime锛屼絾椤圭洰鑴氭湰
+榛樿浠嶄互 Node.js 22.12+ 涓哄熀绾匡紝闄ら潪灞€閮ㄦ寚鍗楀彟鏈夎鏄庛€備粠鏃?Node.js 鐗堟湰鍒囨崲
+鍚庯紝璇烽噸鏂拌繍琛?`pnpm install`銆?
 
-#### Windows：OpenSSL 配置
+#### Windows锛歄penSSL 閰嶇疆
 
-大多数 Windows 贡献者不需要手动配置 OpenSSL。使用 `pnpm run desktop:dev`
-或常规 `desktop:build*` 脚本即可；脚本会在需要时自动引导预编译的 OpenSSL 包。
+澶у鏁?Windows 璐＄尞鑰呬笉闇€瑕佹墜鍔ㄩ厤缃?OpenSSL銆備娇鐢?`pnpm run desktop:dev`
+鎴栧父瑙?`desktop:build*` 鑴氭湰鍗冲彲锛涜剼鏈細鍦ㄩ渶瑕佹椂鑷姩寮曞棰勭紪璇戠殑 OpenSSL 鍖呫€?
 
-只有在自动引导失败、准备 CI 环境，或你明确使用 `pnpm run desktop:dev:raw`
-时才需要手动处理。此时运行 `scripts/ci/setup-openssl-windows.ps1`，或将
-`OPENSSL_DIR` 指向预编译的 x64 OpenSSL 目录，并设置 `OPENSSL_STATIC=1`。
+鍙湁鍦ㄨ嚜鍔ㄥ紩瀵煎け璐ャ€佸噯澶?CI 鐜锛屾垨浣犳槑纭娇鐢?`pnpm run desktop:dev:raw`
+鏃舵墠闇€瑕佹墜鍔ㄥ鐞嗐€傛鏃惰繍琛?`scripts/ci/setup-openssl-windows.ps1`锛屾垨灏?
+`OPENSSL_DIR` 鎸囧悜棰勭紪璇戠殑 x64 OpenSSL 鐩綍锛屽苟璁剧疆 `OPENSSL_STATIC=1`銆?
 
-### 安装依赖
+### 瀹夎渚濊禆
 
 ```bash
 pnpm install
 ```
 
-### 常用命令
+### 甯哥敤鍛戒护
 
 ```bash
-# Desktop（日常开发推荐）
-pnpm run desktop:dev                # 完整热更新：Vite HMR + Rust 自动重编译并重启
+# Desktop锛堟棩甯稿紑鍙戞帹鑽愶級
+pnpm run desktop:dev                # 瀹屾暣鐑洿鏂帮細Vite HMR + Rust 鑷姩閲嶇紪璇戝苟閲嶅惎
 
-# Desktop（轻量预览，无 Rust 自动重编译）
-pnpm run desktop:preview:debug      # 复用预构建二进制 + Vite HMR；Rust 改动需手动重启
+# Desktop锛堣交閲忛瑙堬紝鏃?Rust 鑷姩閲嶇紪璇戯級
+pnpm run desktop:preview:debug      # 澶嶇敤棰勬瀯寤轰簩杩涘埗 + Vite HMR锛汻ust 鏀瑰姩闇€鎵嬪姩閲嶅惎
 
-# Desktop（生产构建）
+# Desktop锛堢敓浜ф瀯寤猴級
 pnpm run desktop:build
 
 # E2E
 pnpm run e2e:test
 ```
 
-> **`desktop:dev` 与 `desktop:preview:debug` 的区别**：`desktop:dev` 运行 `tauri dev`，提供**完整热更新** — 前端改动通过 Vite HMR 即时生效，Rust/后端改动会触发增量重编译并自动重启应用，是日常开发的首选方式。`desktop:preview:debug` 启动预构建的 debug 二进制和 Vite dev server；前端编辑仍可 HMR，但 **Rust 侧改动不会自动重编译** — 需要手动停止并重新运行命令（或使用 `--force-rebuild`）。适合仅需迭代前端代码、或希望跳过 `tauri dev` 初始化以更快冷启动的场景。
+> **`desktop:dev` 涓?`desktop:preview:debug` 鐨勫尯鍒?*锛歚desktop:dev` 杩愯 `tauri dev`锛屾彁渚?*瀹屾暣鐑洿鏂?* 鈥?鍓嶇鏀瑰姩閫氳繃 Vite HMR 鍗虫椂鐢熸晥锛孯ust/鍚庣鏀瑰姩浼氳Е鍙戝閲忛噸缂栬瘧骞惰嚜鍔ㄩ噸鍚簲鐢紝鏄棩甯稿紑鍙戠殑棣栭€夋柟寮忋€俙desktop:preview:debug` 鍚姩棰勬瀯寤虹殑 debug 浜岃繘鍒跺拰 Vite dev server锛涘墠绔紪杈戜粛鍙?HMR锛屼絾 **Rust 渚ф敼鍔ㄤ笉浼氳嚜鍔ㄩ噸缂栬瘧** 鈥?闇€瑕佹墜鍔ㄥ仠姝㈠苟閲嶆柊杩愯鍛戒护锛堟垨浣跨敤 `--force-rebuild`锛夈€傞€傚悎浠呴渶杩唬鍓嶇浠ｇ爜銆佹垨甯屾湜璺宠繃 `tauri dev` 鍒濆鍖栦互鏇村揩鍐峰惎鍔ㄧ殑鍦烘櫙銆?
 
-> 完整脚本列表见 [`package.json`](package.json)。agent 专用命令、验证与架构规则见 [`AGENTS.md`](AGENTS.md)。
+> 瀹屾暣鑴氭湰鍒楄〃瑙?[`package.json`](package.json)銆俛gent 涓撶敤鍛戒护銆侀獙璇佷笌鏋舵瀯瑙勫垯瑙?[`AGENTS.md`](AGENTS.md)銆?
 
-### 桌面端调试工具
+### 妗岄潰绔皟璇曞伐鍏?
 
-桌面端 dev 构建会启用 `devtools` Cargo feature。`F12` 打开原生 webview
-DevTools；`Cmd/Ctrl + Shift + I` 切换 BitFun 元素检查器，`Cmd/Ctrl + Shift + J`
-也可以打开原生 DevTools。面向最终用户的 `release` 构建不会启用这些工具。
+妗岄潰绔?dev 鏋勫缓浼氬惎鐢?`devtools` Cargo feature銆俙F12` 鎵撳紑鍘熺敓 webview
+DevTools锛沗Cmd/Ctrl + Shift + I` 鍒囨崲 taiji-quant 鍏冪礌妫€鏌ュ櫒锛宍Cmd/Ctrl + Shift + J`
+涔熷彲浠ユ墦寮€鍘熺敓 DevTools銆傞潰鍚戞渶缁堢敤鎴风殑 `release` 鏋勫缓涓嶄細鍚敤杩欎簺宸ュ叿銆?
 
-## 代码规范与架构约束
+## 浠ｇ爜瑙勮寖涓庢灦鏋勭害鏉?
 
-架构敏感规则、模块边界和验证矩阵以 [`AGENTS.md`](AGENTS.md) 为准。面向贡献者只需把握：
+鏋舵瀯鏁忔劅瑙勫垯銆佹ā鍧楄竟鐣屽拰楠岃瘉鐭╅樀浠?[`AGENTS.md`](AGENTS.md) 涓哄噯銆傞潰鍚戣础鐚€呭彧闇€鎶婃彙锛?
 
-- 日志只使用英文，并保持必要、可读。
-- 用户可见文案走项目 i18n 流程；不要把 Web UI locale catalog 共享给较小产品形态。
-- shared core 必须保持平台无关；Desktop/Tauri 细节属于 app adapter，并通过类型化能力接口回流；需要事件投递时使用已有生产 transport adapter。
-- Tauri command 使用 `snake_case` 命令名和结构化 `request` 参数。
-- core 拆解、feature 边界、依赖边界和构建提速重构必须遵循
-  `docs/architecture/product-architecture.md`。
-- 功能级规则应放在离代码最近的模块 `AGENTS.md` 中。
+- 鏃ュ織鍙娇鐢ㄨ嫳鏂囷紝骞朵繚鎸佸繀瑕併€佸彲璇汇€?
+- 鐢ㄦ埛鍙鏂囨璧伴」鐩?i18n 娴佺▼锛涗笉瑕佹妸 Web UI locale catalog 鍏变韩缁欒緝灏忎骇鍝佸舰鎬併€?
+- shared core 蹇呴』淇濇寔骞冲彴鏃犲叧锛汥esktop/Tauri 缁嗚妭灞炰簬 app adapter锛屽苟閫氳繃绫诲瀷鍖栬兘鍔涙帴鍙ｅ洖娴侊紱闇€瑕佷簨浠舵姇閫掓椂浣跨敤宸叉湁鐢熶骇 transport adapter銆?
+- Tauri command 浣跨敤 `snake_case` 鍛戒护鍚嶅拰缁撴瀯鍖?`request` 鍙傛暟銆?
+- core 鎷嗚В銆乫eature 杈圭晫銆佷緷璧栬竟鐣屽拰鏋勫缓鎻愰€熼噸鏋勫繀椤婚伒寰?
+  `docs/architecture/product-architecture.md`銆?
+- 鍔熻兘绾ц鍒欏簲鏀惧湪绂讳唬鐮佹渶杩戠殑妯″潡 `AGENTS.md` 涓€?
 
-## 重点关注的贡献方向
+## 閲嶇偣鍏虫敞鐨勮础鐚柟鍚?
 
-1. 贡献好的想法/创意（功能、交互、视觉等），提交 Issue
-   > 欢迎产品经理、UI 设计师通过 PI 快速提交创意，我们会帮助完善开发
-2. 优化 Agent 系统和效果
-3. 对提升系统稳定性和完善基础能力
-4. 扩展生态（Skills、MCP、LSP 插件，或者对某些垂域开发场景的更好支持）
+1. 璐＄尞濂界殑鎯虫硶/鍒涙剰锛堝姛鑳姐€佷氦浜掋€佽瑙夌瓑锛夛紝鎻愪氦 Issue
+   > 娆㈣繋浜у搧缁忕悊銆乁I 璁捐甯堥€氳繃 PI 蹇€熸彁浜ゅ垱鎰忥紝鎴戜滑浼氬府鍔╁畬鍠勫紑鍙?
+2. 浼樺寲 Agent 绯荤粺鍜屾晥鏋?
+3. 瀵规彁鍗囩郴缁熺ǔ瀹氭€у拰瀹屽杽鍩虹鑳藉姏
+4. 鎵╁睍鐢熸€侊紙Skills銆丮CP銆丩SP 鎻掍欢锛屾垨鑰呭鏌愪簺鍨傚煙寮€鍙戝満鏅殑鏇村ソ鏀寔锛?
 
-## 贡献流程与 PR 约定
+## 璐＄尞娴佺▼涓?PR 绾﹀畾
 
-### 除功能/修复外的贡献方向
+### 闄ゅ姛鑳?淇澶栫殑璐＄尞鏂瑰悜
 
-我们欢迎不仅限于功能或修复的 PR。示例包括：
+鎴戜滑娆㈣繋涓嶄粎闄愪簬鍔熻兘鎴栦慨澶嶇殑 PR銆傜ず渚嬪寘鎷細
 
-| 贡献方向 | 位置/文件 | 示例说明 |
+| 璐＄尞鏂瑰悜 | 浣嶇疆/鏂囦欢 | 绀轰緥璇存槑 |
 | --- | --- | --- |
-| Prompts | `src/crates/assembly/core/src/agentic/agents/prompts/` | 新增或优化提示词，并按需更新相关逻辑 |
-| Tools | `src/crates/assembly/core/src/agentic/tools/implementations/`、`src/crates/assembly/core/src/agentic/tools/registry.rs` | 新增工具实现，并在工具注册表中注册 |
-| Subagents | `src/crates/assembly/core/src/agentic/agents/custom_subagents/`、`src/crates/assembly/core/src/agentic/agents/registry.rs` | 新增子代理实现，并在子代理注册表中注册 |
-| 模式贡献 | `src/crates/assembly/core/src/agentic/agents/*_mode.rs`、`src/crates/assembly/core/src/agentic/agents/prompts/*_mode.md`、`src/web-ui/src/locales/*/settings/modes.json` | 新增/优化 Agent 模式（例如 Plan/Debug/Agentic 或自定义模式）的逻辑与提示词，并同步前端模式文案 |
-| Code Agent 与 AIIde 场景指南 | `website/src/docs/` | 补充流程、playbook 与真实场景说明（或从 `README.md` 链接） |
+| Prompts | `src/crates/assembly/core/src/agentic/agents/prompts/` | 鏂板鎴栦紭鍖栨彁绀鸿瘝锛屽苟鎸夐渶鏇存柊鐩稿叧閫昏緫 |
+| Tools | `src/crates/assembly/core/src/agentic/tools/implementations/`銆乣src/crates/assembly/core/src/agentic/tools/registry.rs` | 鏂板宸ュ叿瀹炵幇锛屽苟鍦ㄥ伐鍏锋敞鍐岃〃涓敞鍐?|
+| Subagents | `src/crates/assembly/core/src/agentic/agents/custom_subagents/`銆乣src/crates/assembly/core/src/agentic/agents/registry.rs` | 鏂板瀛愪唬鐞嗗疄鐜帮紝骞跺湪瀛愪唬鐞嗘敞鍐岃〃涓敞鍐?|
+| 妯″紡璐＄尞 | `src/crates/assembly/core/src/agentic/agents/*_mode.rs`銆乣src/crates/assembly/core/src/agentic/agents/prompts/*_mode.md`銆乣src/web-ui/src/locales/*/settings/modes.json` | 鏂板/浼樺寲 Agent 妯″紡锛堜緥濡?Plan/Debug/Agentic 鎴栬嚜瀹氫箟妯″紡锛夌殑閫昏緫涓庢彁绀鸿瘝锛屽苟鍚屾鍓嶇妯″紡鏂囨 |
+| Code Agent 涓?AIIde 鍦烘櫙鎸囧崡 | `website/src/docs/` | 琛ュ厖娴佺▼銆乸laybook 涓庣湡瀹炲満鏅鏄庯紙鎴栦粠 `README.md` 閾炬帴锛?|
 
-### 开始前
+### 寮€濮嬪墠
 
-- 先开 Issue 说明问题或方案，尤其是较大改动，以避免重复与设计冲突
-- 新功能或 UI 变更建议先讨论设计方向，确保符合产品体验
-- 将 Issue 和 PR 模板作为填写指引；保持 PR 聚焦，必要时说明跳过了哪些验证以及原因。
+- 鍏堝紑 Issue 璇存槑闂鎴栨柟妗堬紝灏ゅ叾鏄緝澶ф敼鍔紝浠ラ伩鍏嶉噸澶嶄笌璁捐鍐茬獊
+- 鏂板姛鑳芥垨 UI 鍙樻洿寤鸿鍏堣璁鸿璁℃柟鍚戯紝纭繚绗﹀悎浜у搧浣撻獙
+- 灏?Issue 鍜?PR 妯℃澘浣滀负濉啓鎸囧紩锛涗繚鎸?PR 鑱氱劍锛屽繀瑕佹椂璇存槑璺宠繃浜嗗摢浜涢獙璇佷互鍙婂師鍥犮€?
 
-### PR 标题与描述
+### PR 鏍囬涓庢弿杩?
 
-建议使用 Conventional Commits 风格，便于维护版本记录与自动化流程：
+寤鸿浣跨敤 Conventional Commits 椋庢牸锛屼究浜庣淮鎶ょ増鏈褰曚笌鑷姩鍖栨祦绋嬶細
 
-- `feat:` 新功能
-- `fix:` 修复问题
-- `docs:` 文档变更
-- `chore:` 维护/依赖
-- `refactor:` 重构且不改行为
-- `test:` 测试相关
+- `feat:` 鏂板姛鑳?
+- `fix:` 淇闂
+- `docs:` 鏂囨。鍙樻洿
+- `chore:` 缁存姢/渚濊禆
+- `refactor:` 閲嶆瀯涓斾笉鏀硅涓?
+- `test:` 娴嬭瘯鐩稿叧
 
-UI 改动请附前后对比截图或短录屏，方便快速评审。
+UI 鏀瑰姩璇烽檮鍓嶅悗瀵规瘮鎴浘鎴栫煭褰曞睆锛屾柟渚垮揩閫熻瘎瀹°€?
 
-如为 AI 辅助产出，请在 PR 中注明并说明测试程度（未测/轻测/已测），便于评审风险。
+濡備负 AI 杈呭姪浜у嚭锛岃鍦?PR 涓敞鏄庡苟璇存槑娴嬭瘯绋嬪害锛堟湭娴?杞绘祴/宸叉祴锛夛紝渚夸簬璇勫椋庨櫓銆?
 
-不要提交临时 AI prompt、本地绝对路径、生成的草稿文件、配对密钥、token、证书或无关产物。PR 应聚焦于本次产品或维护改动。
+涓嶈鎻愪氦涓存椂 AI prompt銆佹湰鍦扮粷瀵硅矾寰勩€佺敓鎴愮殑鑽夌鏂囦欢銆侀厤瀵瑰瘑閽ャ€乼oken銆佽瘉涔︽垨鏃犲叧浜х墿銆侾R 搴旇仛鐒︿簬鏈浜у搧鎴栫淮鎶ゆ敼鍔ㄣ€?
 
-### 分支管理
+### 鍒嗘敮绠＄悊
 
-**`main` 分支为默认协作分支，并接受特性 PR。** 本仓库欢迎产品经理、开发者使用 AI 生成代码进行快速验证或提交想法，因此 **所有 PR 请直接提交到 `main` 分支**。
+**`main` 鍒嗘敮涓洪粯璁ゅ崗浣滃垎鏀紝骞舵帴鍙楃壒鎬?PR銆?* 鏈粨搴撴杩庝骇鍝佺粡鐞嗐€佸紑鍙戣€呬娇鐢?AI 鐢熸垚浠ｇ爜杩涜蹇€熼獙璇佹垨鎻愪氦鎯虫硶锛屽洜姝?**鎵€鏈?PR 璇风洿鎺ユ彁浜ゅ埌 `main` 鍒嗘敮**銆?
 
-### 变更范围
+### 鍙樻洿鑼冨洿
 
-保持 PR 小而聚焦，避免混杂无关改动。
+淇濇寔 PR 灏忚€岃仛鐒︼紝閬垮厤娣锋潅鏃犲叧鏀瑰姩銆?
 
-## 测试与验证
+## 娴嬭瘯涓庨獙璇?
 
-按改动文件和行为选择最小检查。完整构建和大范围测试由 CI 保护；只有改动影响构建、打包、发布行为，
-或 CI 无法覆盖对应路径时，才在本地运行更重命令。
+鎸夋敼鍔ㄦ枃浠跺拰琛屼负閫夋嫨鏈€灏忔鏌ャ€傚畬鏁存瀯寤哄拰澶ц寖鍥存祴璇曠敱 CI 淇濇姢锛涘彧鏈夋敼鍔ㄥ奖鍝嶆瀯寤恒€佹墦鍖呫€佸彂甯冭涓猴紝
+鎴?CI 鏃犳硶瑕嗙洊瀵瑰簲璺緞鏃讹紝鎵嶅湪鏈湴杩愯鏇撮噸鍛戒护銆?
 
-常见本地检查：
+甯歌鏈湴妫€鏌ワ細
 
-| 改动类型 | 常用验证 |
+| 鏀瑰姩绫诲瀷 | 甯哥敤楠岃瘉 |
 | --- | --- |
-| 仓库元信息或 GitHub 配置 | `pnpm run check:repo-hygiene && pnpm run check:github-config && git diff --check` |
-| 前端运行时或 UI | `pnpm run type-check:web`；行为变化时再加最近的 focused test |
+| 浠撳簱鍏冧俊鎭垨 GitHub 閰嶇疆 | `pnpm run check:repo-hygiene && pnpm run check:github-config && git diff --check` |
+| 鍓嶇杩愯鏃舵垨 UI | `pnpm run type-check:web`锛涜涓哄彉鍖栨椂鍐嶅姞鏈€杩戠殑 focused test |
 | Mobile web | `pnpm --dir src/mobile-web run type-check` |
-| Rust 共享 runtime 或 services | `cargo check --workspace`；行为变化时再加 focused `cargo test` |
-| Desktop/Tauri 集成 | `cargo check -p bitfun-desktop` |
-| i18n 资源或契约 | 使用 `AGENTS.md` 中匹配的 i18n 验证行 |
+| Rust 鍏变韩 runtime 鎴?services | `cargo check --workspace`锛涜涓哄彉鍖栨椂鍐嶅姞 focused `cargo test` |
+| Desktop/Tauri 闆嗘垚 | `cargo check -p taiji-quant-desktop` |
+| i18n 璧勬簮鎴栧绾?| 浣跨敤 `AGENTS.md` 涓尮閰嶇殑 i18n 楠岃瘉琛?|
 
-UI 改动在有帮助时附截图或短录屏。无法运行相关检查时，在 PR 中说明原因，并提供风险更低的手动验证路径。
+UI 鏀瑰姩鍦ㄦ湁甯姪鏃堕檮鎴浘鎴栫煭褰曞睆銆傛棤娉曡繍琛岀浉鍏虫鏌ユ椂锛屽湪 PR 涓鏄庡師鍥狅紝骞舵彁渚涢闄╂洿浣庣殑鎵嬪姩楠岃瘉璺緞銆?
 
-## 安全与合规
+## 瀹夊叏涓庡悎瑙?
 
-- 不要提交密钥、Token、证书或任何敏感信息
-- 新增依赖请确认许可证兼容并说明用途
+- 涓嶈鎻愪氦瀵嗛挜銆乀oken銆佽瘉涔︽垨浠讳綍鏁忔劅淇℃伅
+- 鏂板渚濊禆璇风‘璁よ鍙瘉鍏煎骞惰鏄庣敤閫?
 
-## 感谢
+## 鎰熻阿
 
-每一份贡献都很重要，欢迎提交 Issue、PR 或建议！
+姣忎竴浠借础鐚兘寰堥噸瑕侊紝娆㈣繋鎻愪氦 Issue銆丳R 鎴栧缓璁紒
 
-## Taiji 模块
+## Taiji 妯″潡
 
-本仓库同时托管 **太极（Taiji）** 多智能体量化系统，代码位于 `src/crates/taiji/`。
+鏈粨搴撳悓鏃舵墭绠?**澶瀬锛圱aiji锛?* 澶氭櫤鑳戒綋閲忓寲绯荤粺锛屼唬鐮佷綅浜?`src/crates/taiji/`銆?
 
-### Crate 布局
+### Crate 甯冨眬
 
-| 类别 | 数量 | Crate |
+| 绫诲埆 | 鏁伴噺 | Crate |
 | --- | --- | --- |
-| 活跃 | 20 | `taiji-bar`、`taiji-cli`、`taiji-engine`、`taiji-engine-py`、`taiji-content`、`taiji-publisher`、`taiji-growth`、`taiji-alert`、`taiji-knowledge-graph`、`taiji-blog-gen`、`taiji-example`、`taiji-llm`、`taiji-backtest`、`taiji-executor`、`taiji-realtime`、`taiji-pattern`、`taiji-abnormal`、`taiji-sentiment`、`taiji-orderflow`、`taiji-strategen` |
-| 闭源（已注释） | 4 | `taiji-dvmi`、`taiji-magnet`、`taiji-thrust`、`taiji-risk` |
+| 娲昏穬 | 20 | `taiji-bar`銆乣taiji-cli`銆乣taiji-engine`銆乣taiji-engine-py`銆乣taiji-content`銆乣taiji-publisher`銆乣taiji-growth`銆乣taiji-alert`銆乣taiji-knowledge-graph`銆乣taiji-blog-gen`銆乣taiji-example`銆乣taiji-llm`銆乣taiji-backtest`銆乣taiji-executor`銆乣taiji-realtime`銆乣taiji-pattern`銆乣taiji-abnormal`銆乣taiji-sentiment`銆乣taiji-orderflow`銆乣taiji-strategen` |
+| 闂簮锛堝凡娉ㄩ噴锛?| 4 | `taiji-dvmi`銆乣taiji-magnet`銆乣taiji-thrust`銆乣taiji-risk` |
 
-### 闭源策略
+### 闂簮绛栫暐
 
-上述 4 个闭源 crate 在 `Cargo.toml` 的 workspace members 中已**注释掉**。**不得取消注释或将闭源代码提交到公开仓库。** CI 测试 job 同样排除这些 crate。
+涓婅堪 4 涓棴婧?crate 鍦?`Cargo.toml` 鐨?workspace members 涓凡**娉ㄩ噴鎺?*銆?*涓嶅緱鍙栨秷娉ㄩ噴鎴栧皢闂簮浠ｇ爜鎻愪氦鍒板叕寮€浠撳簱銆?* CI 娴嬭瘯 job 鍚屾牱鎺掗櫎杩欎簺 crate銆?
 
-### 开始前
+### 寮€濮嬪墠
 
-- 务必先阅读 `docs/architecture/product-architecture.md`，了解架构敏感规则与模块边界。
-- 熟悉 taiji crate 之间的依赖关系：参见 `.bitfun/team/type-contract-phase8-10.md` 中的跨 crate 依赖矩阵与 merge 规则。
+- 鍔″繀鍏堥槄璇?`docs/architecture/product-architecture.md`锛屼簡瑙ｆ灦鏋勬晱鎰熻鍒欎笌妯″潡杈圭晫銆?
+- 鐔熸倝 taiji crate 涔嬮棿鐨勪緷璧栧叧绯伙細鍙傝 `.taiji-quant/team/type-contract-phase8-10.md` 涓殑璺?crate 渚濊禆鐭╅樀涓?merge 瑙勫垯銆?
 
-### 验证
+### 楠岃瘉
 
-提交 taiji 改动前，按 crate 级验证：
+鎻愪氦 taiji 鏀瑰姩鍓嶏紝鎸?crate 绾ч獙璇侊細
 
 ```bash
 cargo check -p <crate>
 cargo test -p <crate>
 ```
 
-workspace 级 taiji 验证：
+workspace 绾?taiji 楠岃瘉锛?
 
 ```bash
 cargo check --workspace
 cargo test --workspace
 ```
 
-PR 应聚焦单一功能领域，如有跳过的验证请注明原因。
+PR 搴旇仛鐒﹀崟涓€鍔熻兘棰嗗煙锛屽鏈夎烦杩囩殑楠岃瘉璇锋敞鏄庡師鍥犮€?
