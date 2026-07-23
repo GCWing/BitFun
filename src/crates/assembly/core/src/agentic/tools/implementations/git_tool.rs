@@ -79,6 +79,40 @@ struct ParsedDiffArgs {
     files: Option<Vec<String>>,
 }
 
+/// Parsed result of a `git commit` args string.
+#[derive(Debug, PartialEq, Default)]
+struct ParsedCommitArgs {
+    message_parts: Vec<String>,
+    amend: bool,
+    all: bool,
+    no_verify: bool,
+}
+
+/// Parsed result of a `git log` args string.
+#[derive(Debug, PartialEq)]
+struct ParsedLogArgs {
+    max_count: i32,
+    oneline: bool,
+    stat: bool,
+    since: Option<String>,
+    until: Option<String>,
+}
+
+/// Execution plan for checkout/switch derived from the raw args.
+#[derive(Debug, PartialEq)]
+enum CheckoutPlan {
+    /// Switch to an existing branch through GitService.
+    Checkout { branch: String },
+    /// Create a branch (optionally from a start point) and switch to it.
+    Create {
+        branch: String,
+        start_point: Option<String>,
+    },
+    /// Run the original command through the real git CLI so less common
+    /// shapes (detach, orphan, track, force-create, `-`) stay faithful.
+    Passthrough,
+}
+
 /// Git tool
 pub struct GitTool;
 
@@ -261,6 +295,211 @@ impl GitTool {
         format!("'{}'", s.replace('\'', "'\\''"))
     }
 
+    /// Split an args string into shell-like tokens, honoring single and double
+    /// quotes so quoted values (commit messages, paths with spaces) survive.
+    fn tokenize_args(args: &str) -> Vec<String> {
+        let mut tokens = Vec::new();
+        let mut current = String::new();
+        let mut quote: Option<char> = None;
+        let mut token_started = false;
+        for ch in args.chars() {
+            match quote {
+                Some(active) => {
+                    if ch == active {
+                        quote = None;
+                    } else {
+                        current.push(ch);
+                    }
+                }
+                None => {
+                    if ch == '\'' || ch == '"' {
+                        quote = Some(ch);
+                        token_started = true;
+                    } else if ch.is_whitespace() {
+                        if token_started {
+                            tokens.push(std::mem::take(&mut current));
+                            token_started = false;
+                        }
+                    } else {
+                        current.push(ch);
+                        token_started = true;
+                    }
+                }
+            }
+        }
+        if token_started {
+            tokens.push(current);
+        }
+        tokens
+    }
+
+    /// True when a token exactly matches a flag. Long flags also match their
+    /// `--flag=value` form. Substrings inside other words never count, so
+    /// `-b` no longer fires on branch names like `feat/my-bitfun-x`.
+    fn token_matches_flag(token: &str, short: Option<&str>, long: Option<&str>) -> bool {
+        if let Some(long_flag) = long {
+            if token == long_flag || token.starts_with(&format!("{}=", long_flag)) {
+                return true;
+            }
+        }
+        if let Some(short_flag) = short {
+            if token == short_flag {
+                return true;
+            }
+        }
+        false
+    }
+
+    fn tokens_contain_flag(tokens: &[String], short: Option<&str>, long: Option<&str>) -> bool {
+        tokens
+            .iter()
+            .any(|token| Self::token_matches_flag(token, short, long))
+    }
+
+    /// Positional tokens (non-flag arguments) in original order.
+    fn positional_tokens(tokens: &[String]) -> Vec<&str> {
+        tokens
+            .iter()
+            .filter(|token| !token.starts_with(SHORT_FLAG_PREFIX))
+            .map(String::as_str)
+            .collect()
+    }
+
+    /// Decide how a checkout/switch invocation should be executed.
+    ///
+    /// Only the plain shapes are mapped onto GitService; anything else falls
+    /// through to the real git CLI so behavior stays faithful.
+    fn plan_checkout(operation: &str, args: &str) -> CheckoutPlan {
+        let tokens = Self::tokenize_args(args);
+        let is_switch = operation == "switch";
+        let create = if is_switch {
+            Self::tokens_contain_flag(&tokens, Some("-c"), Some("--create"))
+        } else {
+            Self::tokens_contain_flag(&tokens, Some("-b"), None)
+        };
+        let force_create = if is_switch {
+            Self::tokens_contain_flag(&tokens, Some("-C"), Some("--force-create"))
+        } else {
+            Self::tokens_contain_flag(&tokens, Some("-B"), None)
+        };
+        let is_handled_flag = |token: &str| {
+            if is_switch {
+                token == "-c" || token == "--create"
+            } else {
+                token == "-b"
+            }
+        };
+        let has_other_flags = tokens
+            .iter()
+            .any(|token| token.starts_with(SHORT_FLAG_PREFIX) && !is_handled_flag(token));
+        if force_create || has_other_flags {
+            return CheckoutPlan::Passthrough;
+        }
+
+        let positionals = Self::positional_tokens(&tokens);
+        let Some(branch) = positionals.first() else {
+            return CheckoutPlan::Passthrough;
+        };
+        if create {
+            CheckoutPlan::Create {
+                branch: branch.to_string(),
+                start_point: positionals.get(1).map(|value| value.to_string()),
+            }
+        } else {
+            CheckoutPlan::Checkout {
+                branch: branch.to_string(),
+            }
+        }
+    }
+
+    /// Parse a `git commit` args string.
+    ///
+    /// Multiple `-m`/`--message` parts are kept in order (git joins them with
+    /// blank lines); `-a`/`--amend`/`--no-verify` only match whole tokens, so
+    /// message text like "handle -a flag" no longer flips behavior.
+    fn parse_commit_args(args: &str) -> ParsedCommitArgs {
+        let tokens = Self::tokenize_args(args);
+        let mut message_parts: Vec<String> = Vec::new();
+        let mut index = 0;
+        while index < tokens.len() {
+            let token = &tokens[index];
+            if token == "-m" || token == "--message" {
+                if let Some(value) = tokens.get(index + 1) {
+                    message_parts.push(value.clone());
+                    index += 2;
+                    continue;
+                }
+            } else if let Some(value) = token.strip_prefix("--message=") {
+                message_parts.push(value.to_string());
+            }
+            index += 1;
+        }
+
+        ParsedCommitArgs {
+            message_parts,
+            amend: Self::tokens_contain_flag(&tokens, None, Some("--amend")),
+            all: Self::tokens_contain_flag(&tokens, Some("-a"), Some("--all")),
+            no_verify: Self::tokens_contain_flag(&tokens, Some("-n"), Some("--no-verify")),
+        }
+    }
+
+    /// Parse a `git log` args string.
+    ///
+    /// Supports `-n <num>`, `-n<num>`, `-<num>`, `--max-count[=<num>]`, and
+    /// `--since/--until` in both `=` and separated forms.
+    fn parse_log_args(args: &str) -> ParsedLogArgs {
+        const DEFAULT_MAX_COUNT: i32 = 50;
+        let tokens = Self::tokenize_args(args);
+        let mut parsed = ParsedLogArgs {
+            max_count: DEFAULT_MAX_COUNT,
+            oneline: Self::tokens_contain_flag(&tokens, None, Some("--oneline")),
+            stat: Self::tokens_contain_flag(&tokens, None, Some("--stat")),
+            since: None,
+            until: None,
+        };
+
+        let mut index = 0;
+        while index < tokens.len() {
+            let token = &tokens[index];
+            if token == "-n" || token == "--max-count" || token == "--since" || token == "--until" {
+                if let Some(value) = tokens.get(index + 1) {
+                    if token == "--since" {
+                        parsed.since = Some(value.clone());
+                    } else if token == "--until" {
+                        parsed.until = Some(value.clone());
+                    } else if let Ok(count) = value.parse::<i32>() {
+                        parsed.max_count = count;
+                    }
+                    index += 2;
+                    continue;
+                }
+            } else if let Some(value) = token.strip_prefix("--max-count=") {
+                if let Ok(count) = value.parse::<i32>() {
+                    parsed.max_count = count;
+                }
+            } else if let Some(value) = token.strip_prefix("--since=") {
+                parsed.since = Some(value.to_string());
+            } else if let Some(value) = token.strip_prefix("--until=") {
+                parsed.until = Some(value.to_string());
+            } else if let Some(value) = token.strip_prefix("-n") {
+                if let Ok(count) = value.parse::<i32>() {
+                    parsed.max_count = count;
+                }
+            } else if token.len() > 1
+                && token.starts_with(SHORT_FLAG_PREFIX)
+                && !token.starts_with("--")
+                && token[1..].chars().all(|ch| ch.is_ascii_digit())
+            {
+                if let Ok(count) = token[1..].parse::<i32>() {
+                    parsed.max_count = count;
+                }
+            }
+            index += 1;
+        }
+
+        parsed
+    }
+
     /// Resolve repository root: workspace root or a path resolved with the same rules as file tools
     /// (POSIX on remote SSH).
     fn get_repo_path(
@@ -387,9 +626,11 @@ impl GitTool {
     /// - `--staged` → staged=true
     /// - `origin/main...HEAD` → source=origin/main, target=HEAD (three-dot)
     fn parse_diff_args(args_str: &str) -> ParsedDiffArgs {
+        let flag_tokens = Self::tokenize_args(args_str);
         let mut result = ParsedDiffArgs {
-            staged: args_str.contains("--staged") || args_str.contains("--cached"),
-            stat: args_str.contains("--stat"),
+            staged: Self::tokens_contain_flag(&flag_tokens, None, Some("--staged"))
+                || Self::tokens_contain_flag(&flag_tokens, None, Some("--cached")),
+            stat: Self::tokens_contain_flag(&flag_tokens, None, Some("--stat")),
             ..Default::default()
         };
 
@@ -499,56 +740,13 @@ impl GitTool {
 
     /// Execute log operation using GitService
     async fn execute_log(repo_path: &str, args: Option<&str>) -> BitFunResult<Value> {
-        let args_str = args.unwrap_or("");
-
-        // Parse parameters
-        let mut max_count = 50;
-        let oneline = args_str.contains("--oneline");
-        let stat = args_str.contains("--stat");
-        let mut since: Option<String> = None;
-        let mut until: Option<String> = None;
-
-        // Parse --since=<ref> and --until=<ref>
-        for prefix in &["--since=", "--until="] {
-            if let Some(pos) = args_str.find(prefix) {
-                let val = args_str[pos + prefix.len()..]
-                    .split_whitespace()
-                    .next()
-                    .map(|s| s.trim_matches('"').trim_matches('\'').to_string());
-                if *prefix == "--since=" {
-                    since = val;
-                } else {
-                    until = val;
-                }
-            }
-        }
-
-        // Parse -n or -number
-        if let Some(pos) = args_str.find("-n") {
-            if let Some(num_str) = args_str
-                .get(pos + 2..)
-                .and_then(|s| s.split_whitespace().next())
-            {
-                if let Ok(n) = num_str.trim().parse::<i32>() {
-                    max_count = n;
-                }
-            }
-        } else if let Some(pos) = args_str.find('-') {
-            if let Some(num_str) = args_str
-                .get(pos + 1..)
-                .and_then(|s| s.split_whitespace().next())
-            {
-                if let Ok(n) = num_str.parse::<i32>() {
-                    max_count = n;
-                }
-            }
-        }
+        let parsed = Self::parse_log_args(args.unwrap_or(""));
 
         let params = GitLogParams {
-            max_count: Some(max_count),
-            stat: Some(stat),
-            since,
-            until,
+            max_count: Some(parsed.max_count),
+            stat: Some(parsed.stat),
+            since: parsed.since,
+            until: parsed.until,
             ..Default::default()
         };
 
@@ -560,7 +758,7 @@ impl GitTool {
         let output_lines: Vec<String> = commits
             .iter()
             .map(|c| {
-                if oneline {
+                if parsed.oneline {
                     format!(
                         "{} {}",
                         c.short_hash,
@@ -578,7 +776,7 @@ impl GitTool {
         Ok(json!({
             "success": true,
             "exit_code": 0,
-            "stdout": output_lines.join(if oneline { "\n" } else { "" }),
+            "stdout": output_lines.join(if parsed.oneline { "\n" } else { "" }),
             "stderr": "",
             "data": commits
         }))
@@ -587,16 +785,16 @@ impl GitTool {
     /// Execute add operation using GitService
     async fn execute_add(repo_path: &str, args: Option<&str>) -> BitFunResult<Value> {
         let args_str = args.unwrap_or(".");
-        let all = args_str.contains("-A") || args_str.contains("--all");
-        let update = args_str.contains("-u") || args_str.contains("--update");
+        let tokens = Self::tokenize_args(args_str);
+        let all = Self::tokens_contain_flag(&tokens, Some("-A"), Some("--all"));
+        let update = Self::tokens_contain_flag(&tokens, Some("-u"), Some("--update"));
 
         let files: Vec<String> = if all || update {
             vec![]
         } else {
-            args_str
-                .split_whitespace()
-                .filter(|s| !s.starts_with('-'))
-                .map(|s| s.to_string())
+            Self::positional_tokens(&tokens)
+                .iter()
+                .map(|value| value.to_string())
                 .collect()
         };
 
@@ -621,38 +819,19 @@ impl GitTool {
 
     /// Execute commit operation using GitService
     async fn execute_commit(repo_path: &str, args: Option<&str>) -> BitFunResult<Value> {
-        let args_str = args.unwrap_or("");
+        let parsed = Self::parse_commit_args(args.unwrap_or(""));
 
-        // Parse commit message
-        let message = if let Some(pos) = args_str.find("-m") {
-            // Try to parse -m "message" or -m 'message'
-            let rest = &args_str[pos + 2..].trim_start();
-            if rest.starts_with('"') {
-                rest.trim_start_matches('"')
-                    .split('"')
-                    .next()
-                    .unwrap_or("")
-                    .to_string()
-            } else if rest.starts_with('\'') {
-                rest.trim_start_matches('\'')
-                    .split('\'')
-                    .next()
-                    .unwrap_or("")
-                    .to_string()
-            } else {
-                rest.split_whitespace().next().unwrap_or("").to_string()
-            }
-        } else {
+        if parsed.message_parts.is_empty() {
             return Err(BitFunError::tool(
                 "Commit message is required (-m \"message\")".to_string(),
             ));
-        };
+        }
 
         let params = GitCommitParams {
-            message,
-            amend: Some(args_str.contains("--amend")),
-            all: Some(args_str.contains("-a")),
-            no_verify: Some(args_str.contains("--no-verify")),
+            message: parsed.message_parts.join("\n\n"),
+            amend: Some(parsed.amend),
+            all: Some(parsed.all),
+            no_verify: Some(parsed.no_verify),
             author: None,
         };
 
@@ -671,17 +850,22 @@ impl GitTool {
 
     /// Execute push operation using GitService
     async fn execute_push(repo_path: &str, args: Option<&str>) -> BitFunResult<Value> {
-        let args_str = args.unwrap_or("");
-        let parts: Vec<&str> = args_str
-            .split_whitespace()
-            .filter(|s| !s.starts_with('-'))
-            .collect();
+        let tokens = Self::tokenize_args(args.unwrap_or(""));
+        let parts = Self::positional_tokens(&tokens);
 
         let params = GitPushParams {
             remote: parts.first().map(|s| s.to_string()),
             branch: parts.get(1).map(|s| s.to_string()),
-            force: Some(args_str.contains("--force") || args_str.contains("-f")),
-            set_upstream: Some(args_str.contains("-u") || args_str.contains("--set-upstream")),
+            force: Some(Self::tokens_contain_flag(
+                &tokens,
+                Some("-f"),
+                Some("--force"),
+            )),
+            set_upstream: Some(Self::tokens_contain_flag(
+                &tokens,
+                Some("-u"),
+                Some("--set-upstream"),
+            )),
         };
 
         let result = GitService::push(repo_path, params)
@@ -699,16 +883,13 @@ impl GitTool {
 
     /// Execute pull operation using GitService
     async fn execute_pull(repo_path: &str, args: Option<&str>) -> BitFunResult<Value> {
-        let args_str = args.unwrap_or("");
-        let parts: Vec<&str> = args_str
-            .split_whitespace()
-            .filter(|s| !s.starts_with('-'))
-            .collect();
+        let tokens = Self::tokenize_args(args.unwrap_or(""));
+        let parts = Self::positional_tokens(&tokens);
 
         let params = GitPullParams {
             remote: parts.first().map(|s| s.to_string()),
             branch: parts.get(1).map(|s| s.to_string()),
-            rebase: Some(args_str.contains("--rebase")),
+            rebase: Some(Self::tokens_contain_flag(&tokens, None, Some("--rebase"))),
         };
 
         let result = GitService::pull(repo_path, params)
@@ -725,25 +906,27 @@ impl GitTool {
     }
 
     /// Execute checkout/switch operation using GitService
-    async fn execute_checkout(repo_path: &str, args: Option<&str>) -> BitFunResult<Value> {
-        let args_str = args.unwrap_or("");
-        let create_branch = args_str.contains("-b");
+    async fn execute_checkout(
+        repo_path: &str,
+        operation: &str,
+        args: Option<&str>,
+    ) -> BitFunResult<Value> {
+        let args_str = args.unwrap_or("").trim();
 
-        // Extract branch name
-        let branch_name = args_str
-            .split_whitespace()
-            .rfind(|s| !s.starts_with('-'))
-            .ok_or_else(|| BitFunError::tool("Branch name is required".to_string()))?;
+        let plan = Self::plan_checkout(operation, args_str);
+        if plan == CheckoutPlan::Passthrough {
+            return Self::execute_generic(repo_path, operation, Some(args_str)).await;
+        }
 
-        let result = if create_branch {
-            // Create and switch to new branch
-            let start_point = args_str
-                .split_whitespace()
-                .rfind(|s| !s.starts_with('-') && *s != branch_name);
-            GitService::create_branch(repo_path, branch_name, start_point).await
-        } else {
-            // Switch to existing branch
-            GitService::checkout_branch(repo_path, branch_name).await
+        let result = match &plan {
+            CheckoutPlan::Checkout { branch } => {
+                GitService::checkout_branch(repo_path, branch).await
+            }
+            CheckoutPlan::Create {
+                branch,
+                start_point,
+            } => GitService::create_branch(repo_path, branch, start_point.as_deref()).await,
+            CheckoutPlan::Passthrough => unreachable!("passthrough returned above"),
         }
         .map_err(|e| BitFunError::tool(format!("Git checkout failed: {}", e)))?;
 
@@ -759,16 +942,17 @@ impl GitTool {
     /// Execute branch operation using GitService
     async fn execute_branch(repo_path: &str, args: Option<&str>) -> BitFunResult<Value> {
         let args_str = args.unwrap_or("");
+        let tokens = Self::tokenize_args(args_str);
 
         // Check if it's a list branches operation
-        let is_list = args_str.is_empty()
-            || args_str.contains("-l")
-            || args_str.contains("--list")
-            || args_str.contains("-a")
-            || args_str.contains("-r");
+        let is_list = args_str.trim().is_empty()
+            || Self::tokens_contain_flag(&tokens, Some("-l"), Some("--list"))
+            || Self::tokens_contain_flag(&tokens, Some("-a"), Some("--all"))
+            || Self::tokens_contain_flag(&tokens, Some("-r"), Some("--remotes"));
 
         if is_list {
-            let include_remote = args_str.contains("-a") || args_str.contains("-r");
+            let include_remote = Self::tokens_contain_flag(&tokens, Some("-a"), Some("--all"))
+                || Self::tokens_contain_flag(&tokens, Some("-r"), Some("--remotes"));
             let branches = GitService::get_branches(repo_path, include_remote)
                 .await
                 .map_err(|e| BitFunError::tool(format!("Git branch failed: {}", e)))?;
@@ -791,12 +975,15 @@ impl GitTool {
                 "stderr": "",
                 "data": branches
             }))
-        } else if args_str.contains("-d") || args_str.contains("-D") {
+        } else if Self::tokens_contain_flag(&tokens, Some("-d"), Some("--delete"))
+            || Self::tokens_contain_flag(&tokens, Some("-D"), None)
+        {
             // Delete branch
-            let force = args_str.contains("-D");
-            let branch_name = args_str
-                .split_whitespace()
-                .find(|s| !s.starts_with('-'))
+            let force = Self::tokens_contain_flag(&tokens, Some("-D"), None)
+                || Self::tokens_contain_flag(&tokens, None, Some("--force"));
+            let branch_name = Self::positional_tokens(&tokens)
+                .first()
+                .copied()
                 .ok_or_else(|| {
                     BitFunError::tool("Branch name is required for deletion".to_string())
                 })?;
@@ -814,8 +1001,8 @@ impl GitTool {
         } else {
             // Create new branch (without switching) - use original command
             let mut cmd_args: Vec<&str> = vec!["branch"];
-            for arg in args_str.split_whitespace() {
-                cmd_args.push(arg);
+            for token in &tokens {
+                cmd_args.push(token.as_str());
             }
 
             let output = execute_git_command(repo_path, &cmd_args)
@@ -837,12 +1024,10 @@ impl GitTool {
         operation: &str,
         args: Option<&str>,
     ) -> BitFunResult<Value> {
+        let tokens = Self::tokenize_args(args.unwrap_or(""));
         let mut cmd_args: Vec<&str> = vec![operation];
-
-        if let Some(args_str) = args {
-            for arg in args_str.split_whitespace() {
-                cmd_args.push(arg);
-            }
+        for token in &tokens {
+            cmd_args.push(token.as_str());
         }
 
         let start_time = std::time::Instant::now();
@@ -1102,8 +1287,10 @@ When creating commits, use this format for the commit message:
         // Get arguments (if any)
         let args = input.get("args").and_then(|v| v.as_str()).unwrap_or("");
 
-        // Security check: prohibit interactive operations
-        if args.contains("-i") || args.contains("--interactive") {
+        // Security check: prohibit interactive operations. Match whole tokens
+        // only so text like "fix-ui" or a quoted message cannot false-trip.
+        let arg_tokens = Self::tokenize_args(args);
+        if Self::tokens_contain_flag(&arg_tokens, Some("-i"), Some("--interactive")) {
             return ValidationResult {
                 result: false,
                 message: Some("Interactive mode (-i) is not supported".to_string()),
@@ -1257,7 +1444,9 @@ When creating commits, use this format for the commit message:
                 "commit" => Self::execute_commit(&repo_path, args).await?,
                 "push" => Self::execute_push(&repo_path, args).await?,
                 "pull" => Self::execute_pull(&repo_path, args).await?,
-                "checkout" | "switch" => Self::execute_checkout(&repo_path, args).await?,
+                "checkout" | "switch" => {
+                    Self::execute_checkout(&repo_path, operation, args).await?
+                }
                 "branch" => Self::execute_branch(&repo_path, args).await?,
                 _ => Self::execute_generic(&repo_path, operation, args).await?,
             }
@@ -1317,8 +1506,160 @@ impl Default for GitTool {
 mod tests {
     use crate::agentic::tools::framework::Tool;
 
-    use super::{git_operation_needs_light_checkpoint, GitTool, ParsedDiffArgs};
+    use super::{git_operation_needs_light_checkpoint, CheckoutPlan, GitTool, ParsedDiffArgs};
     use serde_json::json;
+
+    #[test]
+    fn tokenize_args_respects_quotes() {
+        assert_eq!(
+            GitTool::tokenize_args("-m \"hello world\" -m 'second line' plain"),
+            vec!["-m", "hello world", "-m", "second line", "plain"]
+        );
+        assert_eq!(
+            GitTool::tokenize_args("-m \"multi\nline message\""),
+            vec!["-m", "multi\nline message"]
+        );
+        assert!(GitTool::tokenize_args("").is_empty());
+    }
+
+    #[test]
+    fn flag_matching_ignores_substrings_inside_words() {
+        let tokens = GitTool::tokenize_args("-c feat/my-bitfun-pages-manager upstream/main");
+        assert!(!GitTool::tokens_contain_flag(&tokens, Some("-b"), None));
+        assert!(GitTool::tokens_contain_flag(&tokens, Some("-c"), None));
+
+        let tokens = GitTool::tokenize_args("--force-with-lease origin feat/x-f-y");
+        assert!(!GitTool::tokens_contain_flag(
+            &tokens,
+            Some("-f"),
+            Some("--force")
+        ));
+    }
+
+    #[test]
+    fn plan_checkout_switch_create_with_start_point() {
+        assert_eq!(
+            GitTool::plan_checkout("switch", "-c feat/my-bitfun-pages-manager upstream/main"),
+            CheckoutPlan::Create {
+                branch: "feat/my-bitfun-pages-manager".to_string(),
+                start_point: Some("upstream/main".to_string()),
+            }
+        );
+    }
+
+    #[test]
+    fn plan_checkout_checkout_create_and_plain_switch() {
+        assert_eq!(
+            GitTool::plan_checkout("checkout", "-b feature/new upstream/main"),
+            CheckoutPlan::Create {
+                branch: "feature/new".to_string(),
+                start_point: Some("upstream/main".to_string()),
+            }
+        );
+        assert_eq!(
+            GitTool::plan_checkout("checkout", "main"),
+            CheckoutPlan::Checkout {
+                branch: "main".to_string()
+            }
+        );
+        assert_eq!(
+            GitTool::plan_checkout("switch", "main"),
+            CheckoutPlan::Checkout {
+                branch: "main".to_string()
+            }
+        );
+    }
+
+    #[test]
+    fn plan_checkout_passthrough_for_less_common_shapes() {
+        assert_eq!(
+            GitTool::plan_checkout("switch", "--detach HEAD~1"),
+            CheckoutPlan::Passthrough
+        );
+        assert_eq!(
+            GitTool::plan_checkout("switch", "-C rebuilt"),
+            CheckoutPlan::Passthrough
+        );
+        assert_eq!(
+            GitTool::plan_checkout("checkout", "-B rebuilt HEAD"),
+            CheckoutPlan::Passthrough
+        );
+        assert_eq!(
+            GitTool::plan_checkout("checkout", "-"),
+            CheckoutPlan::Passthrough
+        );
+        assert_eq!(
+            GitTool::plan_checkout("checkout", "--orphan fresh"),
+            CheckoutPlan::Passthrough
+        );
+        assert_eq!(
+            GitTool::plan_checkout("switch", ""),
+            CheckoutPlan::Passthrough
+        );
+    }
+
+    #[test]
+    fn parse_commit_args_collects_messages_and_flags() {
+        let parsed = GitTool::parse_commit_args("-m \"fix: handle -a flag\" --amend");
+        assert_eq!(
+            parsed.message_parts,
+            vec!["fix: handle -a flag".to_string()]
+        );
+        assert!(parsed.amend);
+        assert!(!parsed.all);
+
+        let parsed = GitTool::parse_commit_args("-m \"first\" -m 'second' -a");
+        assert_eq!(
+            parsed.message_parts,
+            vec!["first".to_string(), "second".to_string()]
+        );
+        assert!(parsed.all);
+
+        let parsed = GitTool::parse_commit_args("--message=title --no-verify");
+        assert_eq!(parsed.message_parts, vec!["title".to_string()]);
+        assert!(parsed.no_verify);
+
+        let parsed = GitTool::parse_commit_args("--amend");
+        assert!(parsed.message_parts.is_empty());
+    }
+
+    #[test]
+    fn parse_log_args_counts_and_filters() {
+        let parsed = GitTool::parse_log_args("--oneline -10");
+        assert_eq!(parsed.max_count, 10);
+        assert!(parsed.oneline);
+
+        let parsed = GitTool::parse_log_args("-n 25 --since=2026-05-02");
+        assert_eq!(parsed.max_count, 25);
+        assert_eq!(parsed.since, Some("2026-05-02".to_string()));
+
+        let parsed = GitTool::parse_log_args("--max-count=7 --until \"2026-06-01\"");
+        assert_eq!(parsed.max_count, 7);
+        assert_eq!(parsed.until, Some("2026-06-01".to_string()));
+
+        let parsed = GitTool::parse_log_args("--oneline");
+        assert_eq!(parsed.max_count, 50);
+
+        let parsed = GitTool::parse_log_args("-n5");
+        assert_eq!(parsed.max_count, 5);
+    }
+
+    #[tokio::test]
+    async fn validate_input_flags_interactive_only_as_whole_token() {
+        let tool = GitTool::new();
+        let allowed = tool
+            .validate_input(
+                &json!({"operation": "commit", "args": "-m \"fix-ui: adjust spacing\""}),
+                None,
+            )
+            .await;
+        assert!(allowed.result);
+
+        let blocked = tool
+            .validate_input(&json!({"operation": "rebase", "args": "-i HEAD~3"}), None)
+            .await;
+        assert!(!blocked.result);
+    }
 
     #[test]
     fn parsed_diff_args_default_is_empty_and_unset() {
