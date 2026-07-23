@@ -1276,10 +1276,10 @@ pub fn init_on_startup() {
                 // Re-establish device routing WebSocket in the background.
                 // Uses the same Tauri command logic — fire and forget.
                 tokio::spawn(async {
-                    if let Err(e) = account_connect_devices().await {
-                        log::warn!("Startup device connect failed: {e}");
+                    match account_connect_devices_with_retry().await {
+                        Ok(_) => log::info!("Device routing restored on startup"),
+                        Err(e) => log::warn!("Startup device connect failed: {e}"),
                     }
-                    log::info!("Device routing restored on startup");
                 });
             }
             Ok(None) => {
@@ -2370,6 +2370,35 @@ fn set_self_hosted_form_url(url: Option<&str>) {
 pub struct OnlineDeviceInfo {
     pub device_id: String,
     pub device_name: String,
+}
+
+const STARTUP_DEVICE_CONNECT_MAX_ATTEMPTS: usize = 5;
+
+async fn account_connect_devices_with_retry() -> Result<Vec<OnlineDeviceInfo>, String> {
+    let expected_generation = account_context_generation();
+    for attempt in 1..=STARTUP_DEVICE_CONNECT_MAX_ATTEMPTS {
+        if !account_context_is_current(expected_generation) {
+            return Err("account context changed".to_string());
+        }
+        match account_connect_devices().await {
+            Ok(devices) => return Ok(devices),
+            Err(error) => {
+                if error_indicates_expired_token(&error)
+                    || error.contains("account context changed")
+                    || attempt == STARTUP_DEVICE_CONNECT_MAX_ATTEMPTS
+                {
+                    return Err(error);
+                }
+                let delay_ms = 500_u64.saturating_mul(2_u64.pow((attempt - 1) as u32));
+                log::warn!(
+                    "Startup device connection attempt {attempt}/{STARTUP_DEVICE_CONNECT_MAX_ATTEMPTS} \
+                     failed; retrying in {delay_ms}ms: {error}"
+                );
+                tokio::time::sleep(std::time::Duration::from_millis(delay_ms)).await;
+            }
+        }
+    }
+    Err("device connection failed".to_string())
 }
 
 /// Connect to the account relay for device-to-device routing. Must be called

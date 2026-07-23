@@ -248,8 +248,8 @@ export function peerInvokePriorityFor(command: string): PeerInvokePriority {
 export const PEER_HOST_INVOKE_MAX_CONCURRENT = 4;
 export const PEER_READ_REQUEST_TIMEOUT_MS = 10_000;
 export const PEER_MUTATION_REQUEST_TIMEOUT_MS = 30_000;
-export const PEER_READ_MAX_RETRIES = 2;
-export const PEER_IDEMPOTENT_MUTATION_MAX_RETRIES = 2;
+export const PEER_READ_MAX_RETRIES = 4;
+export const PEER_IDEMPOTENT_MUTATION_MAX_RETRIES = 4;
 export const PEER_RETRY_BASE_DELAY_MS = 500;
 
 interface PeerRpcPolicy {

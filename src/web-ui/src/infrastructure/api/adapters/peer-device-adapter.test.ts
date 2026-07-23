@@ -1,7 +1,9 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
   PEER_MUTATION_REQUEST_TIMEOUT_MS,
+  PEER_READ_MAX_RETRIES,
   PEER_READ_REQUEST_TIMEOUT_MS,
+  PEER_RETRY_BASE_DELAY_MS,
   PeerDeviceTransportAdapter,
   isPeerLocalOnlyCommand,
   isPeerRetryableIdempotentMutation,
@@ -317,10 +319,11 @@ describe('PeerDeviceTransportAdapter queue', () => {
       );
 
       await vi.advanceTimersByTimeAsync(
-        (PEER_READ_REQUEST_TIMEOUT_MS * 3) + 1500,
+        (PEER_READ_REQUEST_TIMEOUT_MS * (PEER_READ_MAX_RETRIES + 1))
+          + (PEER_RETRY_BASE_DELAY_MS * ((2 ** PEER_READ_MAX_RETRIES) - 1)),
       );
       await rejection;
-      expect(deviceRpc).toHaveBeenCalledTimes(3);
+      expect(deviceRpc).toHaveBeenCalledTimes(PEER_READ_MAX_RETRIES + 1);
     } finally {
       vi.useRealTimers();
     }

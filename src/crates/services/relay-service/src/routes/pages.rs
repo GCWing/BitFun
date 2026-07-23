@@ -621,6 +621,7 @@ pub struct CheckPageFilesResponse {
     pub needed: Vec<String>,
     pub existing_count: usize,
     pub total_count: usize,
+    pub freeze_idempotency_supported: bool,
 }
 
 #[derive(Deserialize)]
@@ -1839,6 +1840,41 @@ async fn freeze_version(
 
     let page_key = page_upload_session_key(&auth.user_id, &slug);
     let _page_guard = state.page_upload_manager.lock_for(&page_key).lock().await;
+    // A completed freeze consumes its in-memory upload session. Persisting the
+    // source upload id with the immutable version lets the exact same request
+    // recover its original response after a lost HTTP response or relay restart.
+    if let Some(upload_id) = body.upload_id.as_deref() {
+        if let Some(version) =
+            PageVersionRow::get_by_source_upload_id(db, &auth.user_id, &slug, upload_id)
+                .await
+                .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+        {
+            let page = PageRow::get(db, &auth.user_id, &slug)
+                .await
+                .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+                .ok_or(StatusCode::CONFLICT)?;
+            let username = UserRow::find_by_username_for_user_id(db, &auth.user_id)
+                .await
+                .ok()
+                .flatten()
+                .unwrap_or_default();
+            return Ok(Json(VersionInfo {
+                generation: page.generation,
+                version_id: version.version_id.clone(),
+                title: version.title,
+                file_count: version.file_count,
+                total_bytes: version.total_bytes,
+                has_worker: version.has_worker != 0,
+                note: version.note,
+                created_at: version.created_at,
+                deployed: page.deployed_version_id.as_deref() == Some(version.version_id.as_str()),
+                preview_url_path: external_page_url(
+                    &state,
+                    &format!("/p/{username}/{slug}/@v/{}", version.version_id),
+                ),
+            }));
+        }
+    }
     let session = state
         .page_upload_manager
         .sessions
@@ -1939,6 +1975,7 @@ async fn freeze_version(
         total_bytes,
         has_worker,
         &body.note,
+        body.upload_id.as_deref(),
         MAX_PAGES_PER_USER,
         MAX_VERSIONS_PER_PAGE,
         session.expected_generation.as_deref(),
@@ -2907,6 +2944,7 @@ fn process_check_page_files(
         needed,
         existing_count,
         total_count,
+        freeze_idempotency_supported: true,
     })
 }
 
@@ -3214,6 +3252,66 @@ mod tests {
         let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
         let version: serde_json::Value = serde_json::from_slice(&body).unwrap();
         version["version_id"].as_str().unwrap().to_string()
+    }
+
+    #[tokio::test]
+    async fn completed_freeze_replays_the_original_version() {
+        let (app, alice, _) = setup_app().await;
+        let files = [("index.html", b"<h1>retry</h1>".as_slice())];
+        let (upload_id, upload_files) =
+            begin_test_upload(&app, &alice, "freeze-retry", &files).await;
+        let first_version = finish_test_upload(
+            &app,
+            &alice,
+            "freeze-retry",
+            "private",
+            &upload_id,
+            upload_files,
+        )
+        .await;
+        let replay = serde_json::json!({
+            "upload_id": upload_id,
+            "expected_generation": null,
+            "create": true,
+            "title": "freeze-retry",
+        });
+        let response = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/api/pages/freeze-retry/versions")
+                    .header("Authorization", format!("Bearer {alice}"))
+                    .header("content-type", "application/json")
+                    .body(axum::body::Body::from(replay.to_string()))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+        let replayed: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        assert_eq!(
+            replayed["version_id"].as_str(),
+            Some(first_version.as_str())
+        );
+
+        let versions = app
+            .oneshot(
+                Request::builder()
+                    .uri(format!(
+                        "/api/pages/freeze-retry/versions?expected_generation={}",
+                        replayed["generation"].as_str().unwrap()
+                    ))
+                    .header("Authorization", format!("Bearer {alice}"))
+                    .body(axum::body::Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        let body = to_bytes(versions.into_body(), usize::MAX).await.unwrap();
+        let versions: Vec<serde_json::Value> = serde_json::from_slice(&body).unwrap();
+        assert_eq!(versions.len(), 1);
     }
 
     async fn save_version_with_legacy_generation_intent(

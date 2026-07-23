@@ -178,12 +178,13 @@ describe('Remote Connect safety contracts', () => {
   });
 
   it('retries an ambiguous finalize response with the same opaque owner', () => {
-    const finalizeFlow = accountPanelSource.slice(
-      accountPanelSource.indexOf('const finalizeAndSync'),
-      accountPanelSource.indexOf('const handleConfirmOverwrite'),
+    const retryHelper = accountPanelSource.slice(
+      accountPanelSource.indexOf('async function finalizePendingLoginWithRetry'),
+      accountPanelSource.indexOf('/** Quota / payload-limit failures'),
     );
-    expect(finalizeFlow.match(/accountFinalizeLogin\(pendingLoginId\)/g)).toHaveLength(2);
-    expect(finalizeFlow).toContain('pending login finalize response was ambiguous; retrying');
+    expect(retryHelper).toContain('ACCOUNT_TRANSITION_MAX_ATTEMPTS');
+    expect(retryHelper).toContain('accountFinalizeLogin(pendingLoginId)');
+    expect(retryHelper).toContain('was ambiguous; retrying');
   });
 
   it('invalidates the prior background sync before starting a replacement login', () => {

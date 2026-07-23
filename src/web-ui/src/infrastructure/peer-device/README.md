@@ -75,7 +75,7 @@ Controller-side React/transport layer for Peer Device Mode. Architecture:
 
 13. **Weak links use bounded, idempotency-aware recovery.** Default Peer
     HostInvoke concurrency is four with one slot reserved from normal/low
-    traffic. Read-only commands have a real 10s deadline and two
+    traffic. Read-only commands have a real 10s deadline and four
     exponential-backoff retries. Mutations have a 30s deadline and are never
     replayed automatically without an idempotency contract. Dialog submission
     is the explicit exception: `start_dialog_turn` and

@@ -14,7 +14,9 @@ use serde::{Deserialize, Serialize};
 
 use crate::remote_connect::device::DeviceIdentity;
 use crate::remote_connect::encryption::{decrypt, encrypt};
-use crate::remote_connect::relay_http::{relay_http_client, send_with_retry, RelayHttpRetry};
+use crate::remote_connect::relay_http::{
+    relay_http_client, send_with_retry, BufferedRelayResponse, RelayHttpRetry,
+};
 
 /// Salt length for provisioning (client-side account-blob export). Only used
 /// by tests until that tooling lands.
@@ -181,6 +183,8 @@ struct ChallengeResponse {
     kdf_salt: String,
     argon2_params: String,
     wrapped_master_key: String,
+    #[serde(default)]
+    login_idempotency_supported: bool,
 }
 
 #[derive(Deserialize)]
@@ -249,6 +253,16 @@ impl AccountClient {
     /// Map a non-2xx relay response into a human-readable error.
     async fn into_error(resp: reqwest::Response) -> anyhow::Error {
         let status = resp.status();
+        let body = resp.bytes().await.unwrap_or_default();
+        Self::error_from_response_parts(status, &body)
+    }
+
+    fn into_buffered_error(resp: BufferedRelayResponse) -> anyhow::Error {
+        let (status, body) = resp.into_parts();
+        Self::error_from_response_parts(status, &body)
+    }
+
+    fn error_from_response_parts(status: reqwest::StatusCode, body: &[u8]) -> anyhow::Error {
         if status == reqwest::StatusCode::PAYLOAD_TOO_LARGE {
             return anyhow!(
                 "relay returned HTTP 413 Payload Too Large \
@@ -262,7 +276,7 @@ impl AccountClient {
                 "relay returned HTTP 507 Insufficient Storage (the configured account or asset quota is full)"
             );
         }
-        match resp.json::<ErrorBody>().await {
+        match serde_json::from_slice::<ErrorBody>(body) {
             Ok(body) => {
                 let msg = body.error;
                 if let Some(retry) = body.retry_after_secs {
@@ -300,7 +314,7 @@ impl AccountClient {
         )
         .await?;
         if !resp.status().is_success() {
-            return Err(Self::into_error(resp).await);
+            return Err(Self::into_buffered_error(resp));
         }
         let challenge: ChallengeResponse = resp.json().await?;
 
@@ -369,15 +383,22 @@ impl AccountClient {
             "password_hash": password_hash,
             "device_id": device.device_id,
             "device_name": device.device_name,
+            "request_id": uuid::Uuid::new_v4().to_string(),
         });
-        let resp = self
+        let request = self
             .http
             .post(Self::endpoint(relay_url, "/api/auth/login")?)
-            .json(&login_req)
-            .send()
-            .await?;
+            .json(&login_req);
+        // New relays persist request_id with the issued token, making an
+        // ambiguous response safe to replay. Older relays omit the challenge
+        // capability flag, so retain one-shot login behavior with them.
+        let resp = if challenge.login_idempotency_supported {
+            send_with_retry("account login", request, RelayHttpRetry::IdempotentWrite).await?
+        } else {
+            send_with_retry("account login", request, RelayHttpRetry::SingleAttempt).await?
+        };
         if !resp.status().is_success() {
-            return Err(Self::into_error(resp).await);
+            return Err(Self::into_buffered_error(resp));
         }
         let auth: AuthResponse = resp.json().await?;
         Ok(AccountSession {
@@ -487,7 +508,7 @@ impl AccountClient {
         )
         .await?;
         if !resp.status().is_success() {
-            return Err(Self::into_error(resp).await);
+            return Err(Self::into_buffered_error(resp));
         }
         Ok(version)
     }
@@ -540,7 +561,7 @@ impl AccountClient {
         )
         .await?;
         if !resp.status().is_success() {
-            return Err(Self::into_error(resp).await);
+            return Err(Self::into_buffered_error(resp));
         }
         let bytes = resp.bytes().await?;
         let payload: SessionsListResponse = serde_json::from_slice(&bytes)
@@ -607,7 +628,7 @@ impl AccountClient {
             return Ok(None);
         }
         if !resp.status().is_success() {
-            return Err(Self::into_error(resp).await);
+            return Err(Self::into_buffered_error(resp));
         }
         let entry: SessionEntry = resp.json().await?;
         let plaintext = Self::open(session, &entry.encrypted_data, &entry.nonce)?;
@@ -625,17 +646,19 @@ impl AccountClient {
         session: &AccountSession,
         session_id: &str,
     ) -> Result<()> {
-        let resp = self
-            .http
-            .delete(Self::endpoint(
-                relay_url,
-                &format!("/api/sync/sessions/{}", urlencoding::encode(session_id)),
-            )?)
-            .header("Authorization", Self::auth_header(session))
-            .send()
-            .await?;
+        let resp = send_with_retry(
+            "delete session",
+            self.http
+                .delete(Self::endpoint(
+                    relay_url,
+                    &format!("/api/sync/sessions/{}", urlencoding::encode(session_id)),
+                )?)
+                .header("Authorization", Self::auth_header(session)),
+            RelayHttpRetry::IdempotentWrite,
+        )
+        .await?;
         if !resp.status().is_success() {
-            return Err(Self::into_error(resp).await);
+            return Err(Self::into_buffered_error(resp));
         }
         Ok(())
     }
@@ -666,7 +689,7 @@ impl AccountClient {
         )
         .await?;
         if !resp.status().is_success() {
-            return Err(Self::into_error(resp).await);
+            return Err(Self::into_buffered_error(resp));
         }
         Ok(version)
     }
@@ -703,7 +726,7 @@ impl AccountClient {
             return Ok(None);
         }
         if !resp.status().is_success() {
-            return Err(Self::into_error(resp).await);
+            return Err(Self::into_buffered_error(resp));
         }
         let opt: Option<SettingsEntry> = resp.json().await?;
         match opt {
@@ -728,14 +751,16 @@ impl AccountClient {
         relay_url: &str,
         session: &AccountSession,
     ) -> Result<DelegateToken> {
-        let resp = self
-            .http
-            .post(Self::endpoint(relay_url, "/api/auth/delegate")?)
-            .header("Authorization", Self::auth_header(session))
-            .send()
-            .await?;
+        let resp = send_with_retry(
+            "delegate account token",
+            self.http
+                .post(Self::endpoint(relay_url, "/api/auth/delegate")?)
+                .header("Authorization", Self::auth_header(session)),
+            RelayHttpRetry::IdempotentWrite,
+        )
+        .await?;
         if !resp.status().is_success() {
-            return Err(Self::into_error(resp).await);
+            return Err(Self::into_buffered_error(resp));
         }
         let auth: AuthResponse = resp.json().await?;
         Ok(DelegateToken {
@@ -746,12 +771,14 @@ impl AccountClient {
 
     /// Revoke the account token on the relay (server-side logout).
     pub async fn revoke_token(&self, relay_url: &str, session: &AccountSession) -> Result<()> {
-        let resp = self
-            .http
-            .post(Self::endpoint(relay_url, "/api/auth/logout")?)
-            .header("Authorization", Self::auth_header(session))
-            .send()
-            .await?;
+        let resp = send_with_retry(
+            "revoke account token",
+            self.http
+                .post(Self::endpoint(relay_url, "/api/auth/logout")?)
+                .header("Authorization", Self::auth_header(session)),
+            RelayHttpRetry::IdempotentWrite,
+        )
+        .await?;
         if !resp.status().is_success() {
             // Non-fatal — best-effort revocation
             log::warn!("revoke_token: relay returned {}", resp.status());
@@ -775,7 +802,7 @@ impl AccountClient {
         )
         .await?;
         if !resp.status().is_success() {
-            return Err(Self::into_error(resp).await);
+            return Err(Self::into_buffered_error(resp));
         }
         let entries: Vec<DeviceListEntry> = resp.json().await?;
         Ok(entries

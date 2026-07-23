@@ -26,6 +26,19 @@ export function isRemoteControlTargetChangedError(
   return value instanceof RemoteControlTargetChangedError;
 }
 
+const RETRYABLE_REMOTE_READ_COMMANDS = new Set([
+  'get_workspace_info',
+  'list_recent_workspaces',
+  'list_assistants',
+  'list_sessions',
+  'get_session_messages',
+  'get_model_catalog',
+  'poll_session',
+  'ping',
+  'get_file_info',
+  'read_file_chunk',
+]);
+
 export interface WorkspaceInfo {
   has_workspace: boolean;
   path?: string;
@@ -198,6 +211,9 @@ export class RemoteSessionManager {
     this.ensureControlTargetCurrent(target);
     const requestId = `req_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
     const cmdWithId = { ...cmd, _request_id: requestId };
+    const commandName = (cmd as { cmd?: unknown }).cmd;
+    const retryable = typeof commandName === 'string'
+      && RETRYABLE_REMOTE_READ_COMMANDS.has(commandName);
     // The QR-paired desktop keeps the proven room channel. Only a switched
     // control target (another same-account device) is reached through the
     // relay device RPC API using the delegated identity.
@@ -208,9 +224,13 @@ export class RemoteSessionManager {
     try {
       let resp: T;
       if (isRemoteTarget && targetDeviceId) {
-        resp = await this.client.sendDeviceRpc<T>(targetDeviceId, cmdWithId);
+        resp = await this.client.sendDeviceRpc<T>(
+          targetDeviceId,
+          cmdWithId,
+          { retryable },
+        );
       } else {
-        resp = await this.client.sendCommand<T>(cmdWithId);
+        resp = await this.client.sendCommand<T>(cmdWithId, { retryable });
       }
       this.ensureControlTargetCurrent(target);
       const respAny = resp as any;

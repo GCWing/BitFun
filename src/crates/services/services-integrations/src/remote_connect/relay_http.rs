@@ -2,8 +2,9 @@ use anyhow::{anyhow, Result};
 use log::warn;
 use reqwest::{
     header::{HeaderMap, RETRY_AFTER},
-    RequestBuilder, Response, StatusCode,
+    RequestBuilder, StatusCode,
 };
+use serde::de::DeserializeOwned;
 use std::{
     error::Error as StdError,
     sync::OnceLock,
@@ -20,18 +21,49 @@ static RELAY_HTTP_CLIENT: OnceLock<reqwest::Client> = OnceLock::new();
 /// same request can be replayed without duplicating a user-visible action.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum RelayHttpRetry {
+    /// Compatibility path for an operation that an older relay cannot dedupe.
+    SingleAttempt,
     /// GET-like reads and challenge probes that do not mutate relay state.
     SafeRead,
-    /// Upserts whose body carries a stable key/version across every attempt.
+    /// Writes with a stable final state or a relay-persisted idempotency key.
     IdempotentWrite,
 }
 
 impl RelayHttpRetry {
     const fn max_attempts(self) -> usize {
         match self {
-            Self::SafeRead => 3,
-            Self::IdempotentWrite => 2,
+            Self::SingleAttempt => 1,
+            Self::SafeRead => 5,
+            Self::IdempotentWrite => 5,
         }
+    }
+}
+
+pub(crate) struct BufferedRelayResponse {
+    status: StatusCode,
+    body: Vec<u8>,
+}
+
+impl BufferedRelayResponse {
+    pub(crate) fn status(&self) -> StatusCode {
+        self.status
+    }
+
+    pub(crate) async fn json<T: DeserializeOwned>(self) -> Result<T> {
+        serde_json::from_slice(&self.body)
+            .map_err(|error| anyhow!("decode relay JSON response: {error}"))
+    }
+
+    pub(crate) async fn bytes(self) -> Result<Vec<u8>> {
+        Ok(self.body)
+    }
+
+    pub(crate) async fn text(self) -> Result<String> {
+        Ok(String::from_utf8_lossy(&self.body).into_owned())
+    }
+
+    pub(crate) fn into_parts(self) -> (StatusCode, Vec<u8>) {
+        (self.status, self.body)
     }
 }
 
@@ -60,7 +92,7 @@ pub(crate) async fn send_with_retry(
     operation: &'static str,
     request: RequestBuilder,
     policy: RelayHttpRetry,
-) -> Result<Response> {
+) -> Result<BufferedRelayResponse> {
     let max_attempts = policy.max_attempts();
     for attempt in 1..=max_attempts {
         let request = request.try_clone().ok_or_else(|| {
@@ -79,7 +111,35 @@ pub(crate) async fn send_with_retry(
                 drop(response);
                 tokio::time::sleep(delay).await;
             }
-            Ok(response) => return Ok(response),
+            Ok(response) => {
+                let status = response.status();
+                match response.bytes().await {
+                    Ok(body) => {
+                        return Ok(BufferedRelayResponse {
+                            status,
+                            body: body.to_vec(),
+                        });
+                    }
+                    Err(error)
+                        if is_retryable_transport_error(&error) && attempt < max_attempts =>
+                    {
+                        let delay = retry_delay(attempt, None);
+                        warn!(
+                            "Relay HTTP response body will retry: operation={operation} \
+                             attempt={attempt}/{max_attempts} delay_ms={} error={}",
+                            delay.as_millis(),
+                            reqwest_error_summary(&error)
+                        );
+                        tokio::time::sleep(delay).await;
+                    }
+                    Err(error) => {
+                        return Err(anyhow!(
+                            "relay HTTP {operation} response body failed after {attempt} attempt(s): {}",
+                            reqwest_error_summary(&error)
+                        ));
+                    }
+                }
+            }
             Err(error) if is_retryable_transport_error(&error) && attempt < max_attempts => {
                 let delay = retry_delay(attempt, None);
                 warn!(
@@ -116,7 +176,7 @@ fn is_transient_status(status: StatusCode) -> bool {
 }
 
 fn is_retryable_transport_error(error: &reqwest::Error) -> bool {
-    error.is_connect() || error.is_timeout() || error.is_body()
+    error.is_connect() || error.is_timeout() || error.is_body() || error.is_decode()
 }
 
 fn retry_delay(attempt: usize, headers: Option<&HeaderMap>) -> Duration {
@@ -142,11 +202,12 @@ fn retry_delay(attempt: usize, headers: Option<&HeaderMap>) -> Duration {
 
 fn reqwest_error_summary(error: &reqwest::Error) -> String {
     let mut details = vec![format!(
-        "{} [connect={}, timeout={}, body={}]",
+        "{} [connect={}, timeout={}, body={}, decode={}]",
         error,
         error.is_connect(),
         error.is_timeout(),
-        error.is_body()
+        error.is_body(),
+        error.is_decode()
     )];
     let mut source = error.source();
     for _ in 0..4 {
@@ -176,6 +237,9 @@ mod tests {
 
     #[test]
     fn retries_only_transient_http_statuses() {
+        assert_eq!(RelayHttpRetry::SingleAttempt.max_attempts(), 1);
+        assert_eq!(RelayHttpRetry::SafeRead.max_attempts(), 5);
+        assert_eq!(RelayHttpRetry::IdempotentWrite.max_attempts(), 5);
         for status in [
             StatusCode::REQUEST_TIMEOUT,
             StatusCode::TOO_EARLY,
@@ -236,6 +300,41 @@ mod tests {
         .unwrap();
 
         assert_eq!(response.status(), StatusCode::OK);
+        assert_eq!(attempts.load(Ordering::SeqCst), 2);
+        server.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn safe_read_retries_a_truncated_response_body() {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let address = listener.local_addr().unwrap();
+        let attempts = Arc::new(AtomicUsize::new(0));
+        let server_attempts = attempts.clone();
+        let server = tokio::spawn(async move {
+            for _ in 0..2 {
+                let (mut stream, _) = listener.accept().await.unwrap();
+                let mut request = vec![0u8; 2048];
+                let _ = stream.read(&mut request).await.unwrap();
+                let attempt = server_attempts.fetch_add(1, Ordering::SeqCst);
+                let response = if attempt == 0 {
+                    "HTTP/1.1 200 OK\r\nContent-Length: 10\r\nConnection: close\r\n\r\nshort"
+                } else {
+                    "HTTP/1.1 200 OK\r\nContent-Length: 2\r\nConnection: close\r\n\r\nok"
+                };
+                stream.write_all(response.as_bytes()).await.unwrap();
+            }
+        });
+        let client = reqwest::Client::builder().no_proxy().build().unwrap();
+
+        let response = send_with_retry(
+            "test-truncated-body",
+            client.get(format!("http://{address}/health")),
+            RelayHttpRetry::SafeRead,
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(response.text().await.unwrap(), "ok");
         assert_eq!(attempts.load(Ordering::SeqCst), 2);
         server.await.unwrap();
     }

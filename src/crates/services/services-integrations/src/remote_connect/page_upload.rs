@@ -371,20 +371,23 @@ async fn save_page_version_from_collected_files(
         .map(str::to_string);
 
     let check_url = format!("{relay_base}/api/pages/check-files");
-    let check_resp = client
-        .post(&check_url)
-        .header("Authorization", &auth)
-        .json(&serde_json::json!({
-            "slug": slug,
-            "upload_id": upload_id,
-            "expected_generation": expected_generation,
-            "create": create,
-            "files": manifest,
-        }))
-        .timeout(std::time::Duration::from_secs(30))
-        .send()
-        .await
-        .map_err(|e| anyhow!("check-files request failed: {e}"))?;
+    let check_resp = send_with_retry(
+        "check page files",
+        client
+            .post(&check_url)
+            .header("Authorization", &auth)
+            .json(&serde_json::json!({
+                "slug": slug,
+                "upload_id": upload_id,
+                "expected_generation": expected_generation,
+                "create": create,
+                "files": manifest,
+            }))
+            .timeout(std::time::Duration::from_secs(30)),
+        RelayHttpRetry::IdempotentWrite,
+    )
+    .await
+    .map_err(|e| anyhow!("check-files request failed: {e}"))?;
     if !check_resp.status().is_success() {
         let status = check_resp.status();
         let body = check_resp.text().await.unwrap_or_default();
@@ -394,6 +397,9 @@ async fn save_page_version_from_collected_files(
         .json()
         .await
         .map_err(|e| anyhow!("parse check-files response: {e}"))?;
+    let freeze_idempotency_supported = check_body["freeze_idempotency_supported"]
+        .as_bool()
+        .unwrap_or(false);
     let upload_mode = validate_upload_session_echo(&check_body, &upload_id)?;
     if upload_mode == UploadSessionMode::LegacyRelay {
         warn!(
@@ -450,7 +456,7 @@ async fn save_page_version_from_collected_files(
     }
 
     let freeze_url = format!("{relay_base}/api/pages/{slug}/versions");
-    let freeze_resp = client
+    let freeze_request = client
         .post(&freeze_url)
         .header("Authorization", &auth)
         .json(&serde_json::json!({
@@ -460,8 +466,13 @@ async fn save_page_version_from_collected_files(
             "title": title,
             "note": note.unwrap_or(""),
         }))
-        .timeout(std::time::Duration::from_secs(30))
-        .send()
+        .timeout(std::time::Duration::from_secs(30));
+    let freeze_policy = if freeze_idempotency_supported {
+        RelayHttpRetry::IdempotentWrite
+    } else {
+        RelayHttpRetry::SingleAttempt
+    };
+    let freeze_resp = send_with_retry("freeze page version", freeze_request, freeze_policy)
         .await
         .map_err(|e| anyhow!("freeze version failed: {e}"))?;
     if !freeze_resp.status().is_success() {
@@ -572,17 +583,20 @@ pub async fn create_page_open_link_on_relay(
     validate_slug(slug)?;
     let client = relay_http_client();
     let url = format!("{}/api/pages/{}", relay_url.trim_end_matches('/'), slug);
-    let resp = client
-        .post(&url)
-        .header("Authorization", format!("Bearer {token}"))
-        .json(&serde_json::json!({
-            "version_id": version_id,
-            "expected_generation": expected_generation,
-        }))
-        .timeout(std::time::Duration::from_secs(15))
-        .send()
-        .await
-        .map_err(|e| anyhow!("create page open link failed: {e}"))?;
+    let resp = send_with_retry(
+        "create page open link",
+        client
+            .post(&url)
+            .header("Authorization", format!("Bearer {token}"))
+            .json(&serde_json::json!({
+                "version_id": version_id,
+                "expected_generation": expected_generation,
+            }))
+            .timeout(std::time::Duration::from_secs(15)),
+        RelayHttpRetry::SafeRead,
+    )
+    .await
+    .map_err(|e| anyhow!("create page open link failed: {e}"))?;
     if !resp.status().is_success() {
         let status = resp.status();
         let body = resp.text().await.unwrap_or_default();
@@ -620,17 +634,20 @@ pub async fn deploy_page_version_on_relay(
         relay_url.trim_end_matches('/'),
         slug
     );
-    let resp = client
-        .post(&url)
-        .header("Authorization", format!("Bearer {token}"))
-        .json(&serde_json::json!({
-            "version_id": version_id,
-            "expected_generation": expected_generation,
-        }))
-        .timeout(std::time::Duration::from_secs(15))
-        .send()
-        .await
-        .map_err(|e| anyhow!("deploy failed: {e}"))?;
+    let resp = send_with_retry(
+        "deploy page version",
+        client
+            .post(&url)
+            .header("Authorization", format!("Bearer {token}"))
+            .json(&serde_json::json!({
+                "version_id": version_id,
+                "expected_generation": expected_generation,
+            }))
+            .timeout(std::time::Duration::from_secs(15)),
+        RelayHttpRetry::IdempotentWrite,
+    )
+    .await
+    .map_err(|e| anyhow!("deploy failed: {e}"))?;
     if !resp.status().is_success() {
         let status = resp.status();
         let body = resp.text().await.unwrap_or_default();
@@ -698,14 +715,17 @@ pub async fn update_page_on_relay(
     if let Some(t) = title {
         body.insert("title".into(), serde_json::json!(t));
     }
-    let resp = client
-        .patch(&url)
-        .header("Authorization", format!("Bearer {token}"))
-        .json(&body)
-        .timeout(std::time::Duration::from_secs(15))
-        .send()
-        .await
-        .map_err(|e| anyhow!("update page failed: {e}"))?;
+    let resp = send_with_retry(
+        "update page",
+        client
+            .patch(&url)
+            .header("Authorization", format!("Bearer {token}"))
+            .json(&body)
+            .timeout(std::time::Duration::from_secs(15)),
+        RelayHttpRetry::IdempotentWrite,
+    )
+    .await
+    .map_err(|e| anyhow!("update page failed: {e}"))?;
     if !resp.status().is_success() {
         let status = resp.status();
         let body = resp.text().await.unwrap_or_default();
@@ -731,13 +751,16 @@ pub async fn unpublish_page_from_relay(
         slug,
         expected_generation
     );
-    let resp = client
-        .post(&url)
-        .header("Authorization", format!("Bearer {token}"))
-        .timeout(std::time::Duration::from_secs(15))
-        .send()
-        .await
-        .map_err(|e| anyhow!("unpublish page failed: {e}"))?;
+    let resp = send_with_retry(
+        "unpublish page",
+        client
+            .post(&url)
+            .header("Authorization", format!("Bearer {token}"))
+            .timeout(std::time::Duration::from_secs(15)),
+        RelayHttpRetry::IdempotentWrite,
+    )
+    .await
+    .map_err(|e| anyhow!("unpublish page failed: {e}"))?;
     if !resp.status().is_success() {
         let status = resp.status();
         let body = resp.text().await.unwrap_or_default();
@@ -1046,23 +1069,26 @@ async fn post_upload_batch(
     batch_index: usize,
     finalize: bool,
 ) -> Result<()> {
-    let resp = client
-        .post(url)
-        .header("Authorization", auth)
-        .json(&serde_json::json!({
-            "slug": slug,
-            "upload_id": upload_id,
-            "expected_generation": expected_generation,
-            "create": create,
-            "title": title,
-            "visibility": visibility,
-            "files": files,
-            "finalize": finalize,
-        }))
-        .timeout(std::time::Duration::from_secs(60))
-        .send()
-        .await
-        .map_err(|e| anyhow!("upload-files batch {batch_index}: {e}"))?;
+    let resp = send_with_retry(
+        "upload page files",
+        client
+            .post(url)
+            .header("Authorization", auth)
+            .json(&serde_json::json!({
+                "slug": slug,
+                "upload_id": upload_id,
+                "expected_generation": expected_generation,
+                "create": create,
+                "title": title,
+                "visibility": visibility,
+                "files": files,
+                "finalize": finalize,
+            }))
+            .timeout(std::time::Duration::from_secs(60)),
+        RelayHttpRetry::IdempotentWrite,
+    )
+    .await
+    .map_err(|e| anyhow!("upload-files batch {batch_index}: {e}"))?;
     if !resp.status().is_success() {
         let status = resp.status();
         let body = resp.text().await.unwrap_or_default();

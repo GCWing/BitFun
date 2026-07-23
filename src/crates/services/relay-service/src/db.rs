@@ -48,6 +48,7 @@ CREATE TABLE IF NOT EXISTS auth_tokens (
   user_id     TEXT NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
   device_id   TEXT NOT NULL,
   token_kind  TEXT NOT NULL DEFAULT 'device',
+  request_id  TEXT,
   created_at  INTEGER NOT NULL,
   expires_at  INTEGER NOT NULL,
   FOREIGN KEY (user_id, device_id) REFERENCES devices(user_id, device_id) ON DELETE CASCADE
@@ -90,6 +91,7 @@ CREATE TABLE IF NOT EXISTS page_versions (
   user_id     TEXT NOT NULL,
   slug        TEXT NOT NULL,
   version_id  TEXT NOT NULL,
+  source_upload_id TEXT,
   title       TEXT NOT NULL DEFAULT '',
   file_count  INTEGER NOT NULL DEFAULT 0,
   total_bytes INTEGER NOT NULL DEFAULT 0,
@@ -127,8 +129,16 @@ const MIGRATE_PAGES_GENERATION: &str = r#"
 ALTER TABLE pages ADD COLUMN generation TEXT NOT NULL DEFAULT '';
 "#;
 
+const MIGRATE_PAGE_VERSION_SOURCE_UPLOAD_ID: &str = r#"
+ALTER TABLE page_versions ADD COLUMN source_upload_id TEXT;
+"#;
+
 const MIGRATE_AUTH_TOKEN_KIND: &str = r#"
 ALTER TABLE auth_tokens ADD COLUMN token_kind TEXT NOT NULL DEFAULT 'device';
+"#;
+
+const MIGRATE_AUTH_TOKEN_REQUEST_ID: &str = r#"
+ALTER TABLE auth_tokens ADD COLUMN request_id TEXT;
 "#;
 
 /// Open (or create) the SQLite database and ensure the schema exists.
@@ -175,13 +185,44 @@ async fn connect_with_presence_reset(db_path: &str, reset_presence: bool) -> Res
     .execute(&pool)
     .await
     .map_err(|e| anyhow!("initialize page generations: {e}"))?;
+    if let Err(error) = sqlx::query(MIGRATE_PAGE_VERSION_SOURCE_UPLOAD_ID)
+        .execute(&pool)
+        .await
+    {
+        if !error.to_string().contains("duplicate column name") {
+            return Err(anyhow!("migrate page version upload ids: {error}"));
+        }
+    }
+    sqlx::query(
+        "CREATE UNIQUE INDEX IF NOT EXISTS idx_page_versions_source_upload \
+         ON page_versions(user_id, slug, source_upload_id) \
+         WHERE source_upload_id IS NOT NULL",
+    )
+    .execute(&pool)
+    .await
+    .map_err(|e| anyhow!("index page version upload ids: {e}"))?;
     // Existing tokens predate delegation scopes and are full device tokens.
     if let Err(error) = sqlx::query(MIGRATE_AUTH_TOKEN_KIND).execute(&pool).await {
         if !error.to_string().contains("duplicate column name") {
             return Err(anyhow!("migrate auth token capabilities: {error}"));
         }
     }
+    if let Err(error) = sqlx::query(MIGRATE_AUTH_TOKEN_REQUEST_ID)
+        .execute(&pool)
+        .await
+    {
+        if !error.to_string().contains("duplicate column name") {
+            return Err(anyhow!("migrate auth token request ids: {error}"));
+        }
+    }
     migrate_account_scoped_devices(&pool).await?;
+    sqlx::query(
+        "CREATE UNIQUE INDEX IF NOT EXISTS idx_auth_tokens_request_id \
+         ON auth_tokens(request_id) WHERE request_id IS NOT NULL",
+    )
+    .execute(&pool)
+    .await
+    .map_err(|e| anyhow!("index auth token request ids: {e}"))?;
     let now = Utc::now().timestamp();
     sqlx::query("DELETE FROM auth_tokens WHERE expires_at <= ?")
         .bind(now)
@@ -256,6 +297,7 @@ async fn migrate_account_scoped_devices(pool: &DbPool) -> Result<()> {
            user_id TEXT NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,\
            device_id TEXT NOT NULL,\
            token_kind TEXT NOT NULL DEFAULT 'device',\
+           request_id TEXT,\
            created_at INTEGER NOT NULL, expires_at INTEGER NOT NULL,\
            FOREIGN KEY (user_id, device_id)\
              REFERENCES devices(user_id, device_id) ON DELETE CASCADE\
@@ -278,8 +320,8 @@ async fn migrate_account_scoped_devices(pool: &DbPool) -> Result<()> {
     // upsert behavior and must not survive the ownership migration.
     sqlx::query(
         "INSERT INTO auth_tokens \
-         (token, user_id, device_id, token_kind, created_at, expires_at) \
-         SELECT a.token, a.user_id, a.device_id, a.token_kind, a.created_at, a.expires_at \
+         (token, user_id, device_id, token_kind, request_id, created_at, expires_at) \
+         SELECT a.token, a.user_id, a.device_id, a.token_kind, a.request_id, a.created_at, a.expires_at \
          FROM auth_tokens_legacy a \
          INNER JOIN devices_legacy d \
            ON d.user_id = a.user_id AND d.device_id = a.device_id",
@@ -686,13 +728,23 @@ pub struct AuthToken {
     pub user_id: String,
     pub device_id: String,
     pub token_kind: String,
+    pub request_id: Option<String>,
     pub created_at: i64,
     pub expires_at: i64,
 }
 
 impl AuthToken {
     pub async fn create(pool: &DbPool, user_id: &str, device_id: &str) -> Result<AuthToken> {
-        Self::create_with_kind(pool, user_id, device_id, "device").await
+        Self::create_with_kind(pool, user_id, device_id, "device", None).await
+    }
+
+    pub async fn create_idempotent(
+        pool: &DbPool,
+        user_id: &str,
+        device_id: &str,
+        request_id: &str,
+    ) -> Result<AuthToken> {
+        Self::create_with_kind(pool, user_id, device_id, "device", Some(request_id)).await
     }
 
     pub async fn create_delegated(
@@ -702,7 +754,7 @@ impl AuthToken {
     ) -> Result<AuthToken> {
         let now = Utc::now().timestamp();
         if let Some(existing) = sqlx::query_as::<_, AuthToken>(
-            "SELECT token, user_id, device_id, token_kind, created_at, expires_at \
+            "SELECT token, user_id, device_id, token_kind, request_id, created_at, expires_at \
              FROM auth_tokens \
              WHERE user_id = ? AND device_id = ? \
                AND token_kind = 'delegated_control' AND expires_at > ? \
@@ -717,7 +769,7 @@ impl AuthToken {
         {
             return Ok(existing);
         }
-        Self::create_with_kind(pool, user_id, device_id, "delegated_control").await
+        Self::create_with_kind(pool, user_id, device_id, "delegated_control", None).await
     }
 
     async fn create_with_kind(
@@ -725,6 +777,7 @@ impl AuthToken {
         user_id: &str,
         device_id: &str,
         token_kind: &str,
+        request_id: Option<&str>,
     ) -> Result<AuthToken> {
         let token = generate_token();
         let now = Utc::now().timestamp();
@@ -734,25 +787,50 @@ impl AuthToken {
             DEVICE_TOKEN_TTL_SECS
         };
         let expires_at = now + ttl;
-        sqlx::query(
-            "INSERT INTO auth_tokens \
-             (token, user_id, device_id, token_kind, created_at, expires_at) \
-             VALUES (?, ?, ?, ?, ?, ?)",
+        let result = sqlx::query(
+            "INSERT OR IGNORE INTO auth_tokens \
+             (token, user_id, device_id, token_kind, request_id, created_at, expires_at) \
+             VALUES (?, ?, ?, ?, ?, ?, ?)",
         )
         .bind(&token)
         .bind(user_id)
         .bind(device_id)
         .bind(token_kind)
+        .bind(request_id)
         .bind(now)
         .bind(expires_at)
         .execute(pool)
         .await
         .map_err(|e| anyhow!("create token: {e}"))?;
+        if result.rows_affected() == 0 {
+            let request_id =
+                request_id.ok_or_else(|| anyhow!("unexpected auth token collision"))?;
+            let existing = sqlx::query_as::<_, AuthToken>(
+                "SELECT token, user_id, device_id, token_kind, request_id, created_at, expires_at \
+                 FROM auth_tokens WHERE request_id = ?",
+            )
+            .bind(request_id)
+            .fetch_optional(pool)
+            .await
+            .map_err(|e| anyhow!("find idempotent token: {e}"))?
+            .ok_or_else(|| anyhow!("idempotent auth token disappeared"))?;
+            if existing.user_id != user_id
+                || existing.device_id != device_id
+                || existing.token_kind != token_kind
+                || existing.expires_at <= now
+            {
+                return Err(anyhow!(
+                    "auth token request id conflicts with another request"
+                ));
+            }
+            return Ok(existing);
+        }
         Ok(AuthToken {
             token,
             user_id: user_id.to_string(),
             device_id: device_id.to_string(),
             token_kind: token_kind.to_string(),
+            request_id: request_id.map(str::to_string),
             created_at: now,
             expires_at,
         })
@@ -773,7 +851,7 @@ impl AuthToken {
             return Ok(None);
         }
         let row = sqlx::query_as::<_, AuthToken>(
-            "SELECT token, user_id, device_id, token_kind, created_at, expires_at \
+            "SELECT token, user_id, device_id, token_kind, request_id, created_at, expires_at \
              FROM auth_tokens WHERE token = ?",
         )
         .bind(token)
@@ -807,7 +885,7 @@ impl AuthToken {
         let mut valid = Vec::new();
         for chunk in tokens.chunks(TOKEN_QUERY_CHUNK_SIZE) {
             let mut query = QueryBuilder::<Sqlite>::new(
-                "SELECT token, user_id, device_id, token_kind, created_at, expires_at \
+                "SELECT token, user_id, device_id, token_kind, request_id, created_at, expires_at \
                  FROM auth_tokens WHERE token_kind = 'device' AND expires_at > ",
             );
             query.push_bind(now);
@@ -1262,6 +1340,7 @@ impl PageRow {
         total_bytes: i64,
         has_worker: bool,
         note: &str,
+        source_upload_id: Option<&str>,
         max_pages_per_user: i64,
         max_versions_per_page: i64,
         expected_generation: Option<&str>,
@@ -1347,12 +1426,13 @@ impl PageRow {
 
         sqlx::query(
             "INSERT INTO page_versions \
-             (user_id, slug, version_id, title, file_count, total_bytes, has_worker, note, created_at) \
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+             (user_id, slug, version_id, source_upload_id, title, file_count, total_bytes, has_worker, note, created_at) \
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
         )
         .bind(user_id)
         .bind(slug)
         .bind(version_id)
+        .bind(source_upload_id)
         .bind(title)
         .bind(file_count)
         .bind(total_bytes)
@@ -1802,6 +1882,26 @@ impl PageVersionRow {
         .fetch_optional(pool)
         .await
         .map_err(|e| anyhow!("get page version: {e}"))?;
+        Ok(row)
+    }
+
+    pub async fn get_by_source_upload_id(
+        pool: &DbPool,
+        user_id: &str,
+        slug: &str,
+        source_upload_id: &str,
+    ) -> Result<Option<PageVersionRow>> {
+        let row = sqlx::query_as::<_, PageVersionRow>(
+            "SELECT user_id, slug, version_id, title, file_count, total_bytes, has_worker, note, created_at \
+             FROM page_versions \
+             WHERE user_id = ? AND slug = ? AND source_upload_id = ?",
+        )
+        .bind(user_id)
+        .bind(slug)
+        .bind(source_upload_id)
+        .fetch_optional(pool)
+        .await
+        .map_err(|e| anyhow!("get page version by upload id: {e}"))?;
         Ok(row)
     }
 
@@ -2646,6 +2746,7 @@ mod tests {
             20,
             false,
             "new",
+            None,
             50,
             1,
             Some(&original.generation),
@@ -2678,6 +2779,7 @@ mod tests {
                 20,
                 false,
                 "new",
+                None,
                 50,
                 2,
                 Some(&original.generation),

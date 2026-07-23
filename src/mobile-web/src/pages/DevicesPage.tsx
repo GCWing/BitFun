@@ -201,7 +201,7 @@ const DevicesPage: React.FC<Props> = ({ client, onBack }) => {
         cmd: 'host_invoke',
         command: 'peer_mode_ping',
         args: {},
-      });
+      }, { retryable: true });
       if (!isCurrent()) return;
       if (ping.resp === 'host_invoke_result' && ping.ok === false) {
         throw new Error(ping.error || t('devices.switchFailed'));

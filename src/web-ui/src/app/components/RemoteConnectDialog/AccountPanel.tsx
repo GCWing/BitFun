@@ -55,8 +55,9 @@ import './AccountPanel.scss';
 const log = createLogger('AccountPanel');
 
 const DEVICE_POLL_FALLBACK_MS = 30_000;
-const DEVICE_CONNECT_MAX_ATTEMPTS = 3;
-const DEVICE_LIST_FAILURE_THRESHOLD = 2;
+const DEVICE_CONNECT_MAX_ATTEMPTS = 5;
+const DEVICE_LIST_FAILURE_THRESHOLD = 3;
+const ACCOUNT_TRANSITION_MAX_ATTEMPTS = 4;
 
 async function connectDevicesWithRetry(
   isCurrent: () => boolean,
@@ -104,12 +105,40 @@ function parseRelayServer(value: string): URL | null {
 }
 
 async function cancelPendingLoginWithRetry(pendingLoginId: string): Promise<boolean> {
-  try {
-    return await remoteConnectAPI.accountCancelPendingLogin(pendingLoginId);
-  } catch (firstError) {
-    log.warn('pending login cancel response was ambiguous; retrying', firstError);
-    return await remoteConnectAPI.accountCancelPendingLogin(pendingLoginId);
+  let lastError: unknown = null;
+  for (let attempt = 1; attempt <= ACCOUNT_TRANSITION_MAX_ATTEMPTS; attempt += 1) {
+    try {
+      return await remoteConnectAPI.accountCancelPendingLogin(pendingLoginId);
+    } catch (error) {
+      lastError = error;
+      if (attempt === ACCOUNT_TRANSITION_MAX_ATTEMPTS) break;
+      log.warn(
+        `Pending login cancel attempt ${attempt}/${ACCOUNT_TRANSITION_MAX_ATTEMPTS} was ambiguous; retrying`,
+        error,
+      );
+      await new Promise(resolve => setTimeout(resolve, 250 * (2 ** (attempt - 1))));
+    }
   }
+  throw lastError;
+}
+
+async function finalizePendingLoginWithRetry(pendingLoginId: string): Promise<void> {
+  let lastError: unknown = null;
+  for (let attempt = 1; attempt <= ACCOUNT_TRANSITION_MAX_ATTEMPTS; attempt += 1) {
+    try {
+      await remoteConnectAPI.accountFinalizeLogin(pendingLoginId);
+      return;
+    } catch (error) {
+      lastError = error;
+      if (attempt === ACCOUNT_TRANSITION_MAX_ATTEMPTS) break;
+      log.warn(
+        `Pending login finalize attempt ${attempt}/${ACCOUNT_TRANSITION_MAX_ATTEMPTS} was ambiguous; retrying`,
+        error,
+      );
+      await new Promise(resolve => setTimeout(resolve, 250 * (2 ** (attempt - 1))));
+    }
+  }
+  throw lastError;
 }
 
 /** Quota / payload-limit failures will not succeed on blind retry. */
@@ -614,7 +643,7 @@ export const AccountPanel: React.FC<AccountPanelProps> = ({
           if (!isCurrentOperation()) return;
         }
         const wp = workspacePath || '/';
-        const maxAttempts = 3;
+        const maxAttempts = 5;
         let result: Awaited<ReturnType<typeof remoteConnectAPI.accountAutoSync>> | null = null;
         let lastError: unknown = null;
         for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
@@ -797,16 +826,9 @@ export const AccountPanel: React.FC<AccountPanelProps> = ({
     setLoading(true);
     setError(null);
     try {
-      try {
-        await remoteConnectAPI.accountFinalizeLogin(pendingLoginId);
-      } catch (firstError) {
-        if (!isAccountEpochCurrent(epoch)) return;
-        // The backend commit may have succeeded even when its transport
-        // response was lost. Retrying the same opaque owner is idempotent and
-        // cannot authorize a replacement account generation.
-        log.warn('pending login finalize response was ambiguous; retrying', firstError);
-        await remoteConnectAPI.accountFinalizeLogin(pendingLoginId);
-      }
+      // The backend records the exact pending owner after commit, so retrying
+      // the same opaque owner remains fenced from a replacement account.
+      await finalizePendingLoginWithRetry(pendingLoginId);
       if (!isAccountEpochCurrent(epoch)) return;
       if (pendingLoginIdRef.current === pendingLoginId) {
         pendingLoginIdRef.current = null;
