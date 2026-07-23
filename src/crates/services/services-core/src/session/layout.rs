@@ -64,6 +64,22 @@ impl SessionStorageLayout {
         self.session_dir(session_id).join("artifacts")
     }
 
+    /// Generated, read-only copies of referenced sessions. These artifacts
+    /// deliberately live with the consuming session rather than exposing the
+    /// referenced session's storage root to agent tools.
+    pub fn session_references_dir(&self, session_id: &str) -> PathBuf {
+        self.artifacts_dir(session_id).join("session-references")
+    }
+
+    pub fn session_reference_transcript_path(
+        &self,
+        session_id: &str,
+        reference_artifact_stem: &str,
+    ) -> PathBuf {
+        self.session_references_dir(session_id)
+            .join(format!("{reference_artifact_stem}.txt"))
+    }
+
     pub fn turn_path(&self, session_id: &str, turn_index: usize) -> PathBuf {
         self.turns_dir(session_id)
             .join(format!("turn-{:04}.json", turn_index))
@@ -127,6 +143,11 @@ impl SessionStorageLayout {
 
     pub async fn ensure_artifacts_dir(&self, session_id: &str) -> io::Result<PathBuf> {
         self.ensure_dir(self.artifacts_dir(session_id)).await
+    }
+
+    pub async fn ensure_session_references_dir(&self, session_id: &str) -> io::Result<PathBuf> {
+        self.ensure_dir(self.session_references_dir(session_id))
+            .await
     }
 
     pub async fn ensure_compression_transcripts_dir(

@@ -12,7 +12,11 @@ import { useCallback } from 'react';
 import { FlowChatManager } from '../services/FlowChatManager';
 import { flowChatSessionConfigForCurrentWorkspace } from '@/app/utils/projectSessionWorkspace';
 import { notificationService } from '@/shared/notification-system';
-import type { ContextItem, ImageContext } from '@/shared/types/context';
+import type {
+  ContextItem,
+  ImageContext,
+  SessionReferenceContext,
+} from '@/shared/types/context';
 import { createLogger } from '@/shared/utils/logger';
 import { formatContextForPrompt } from '@/shared/utils/contextPrompt';
 import { buildImagePayload } from '../utils/imagePayload';
@@ -108,6 +112,14 @@ export function useMessageSender(props: UseMessageSenderProps): UseMessageSender
       }
 
       const imageContexts = contexts.filter(ctx => ctx.type === 'image') as ImageContext[];
+      const sessionReferences = contexts
+        .filter((context): context is SessionReferenceContext => context.type === 'session-reference')
+        .map((context) => ({
+          sessionId: context.sessionId,
+          workspacePath: context.workspacePath,
+          remoteConnectionId: context.remoteConnectionId,
+          remoteSshHost: context.remoteSshHost,
+        }));
       let imagePayload: Awaited<ReturnType<typeof buildImagePayload>>;
       try {
         imagePayload = await buildImagePayload(imageContexts);
@@ -129,9 +141,15 @@ export function useMessageSender(props: UseMessageSenderProps): UseMessageSender
       const displayMessage = options?.displayMessage?.trim() || trimmedMessage;
 
       if (contexts.length > 0) {
-        const fullContextSection = contexts.map(formatContextForPrompt).filter(Boolean).join('\n');
+        const fullContextSection = contexts
+          .filter(context => context.type !== 'session-reference')
+          .map(formatContextForPrompt)
+          .filter(Boolean)
+          .join('\n');
 
-        fullMessage = `${fullContextSection}\n\n${aiTrimmedMessage}`;
+        fullMessage = fullContextSection
+          ? `${fullContextSection}\n\n${aiTrimmedMessage}`
+          : aiTrimmedMessage;
       }
 
       // Always pass imageContexts to the backend; the coordinator decides
@@ -142,7 +160,12 @@ export function useMessageSender(props: UseMessageSenderProps): UseMessageSender
         displayMessage,
         agentTypeForSend,
         undefined,
-        imagePayload
+        {
+          ...(imagePayload ?? {}),
+          ...(sessionReferences.length > 0
+            ? { userMessageMetadata: { sessionReferences } }
+            : {}),
+        }
       );
 
       onClearContexts();

@@ -5,7 +5,7 @@
 
 import React, { useRef, useEffect, useCallback, useState } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { Puzzle } from 'lucide-react';
+import { MessageCircle, Puzzle } from 'lucide-react';
 import type { ContextItem } from '../../shared/types/context';
 import { getRichTextExternalSyncAction } from './richTextInputSync';
 import {
@@ -20,6 +20,9 @@ import './RichTextInput.scss';
 
 const SKILL_REFERENCE_BADGE_ICON = renderToStaticMarkup(
   <Puzzle size={12} strokeWidth={2.2} aria-hidden="true" />,
+);
+const SESSION_REFERENCE_BADGE_ICON = renderToStaticMarkup(
+  <MessageCircle size={12} strokeWidth={2.2} aria-hidden="true" />,
 );
 
 /** @ mention state */
@@ -72,6 +75,7 @@ function getContextDisplayName(context: ContextItem): string {
   switch (context.type) {
     case 'file': return context.fileName;
     case 'directory': return context.directoryName;
+    case 'session-reference': return context.sessionName;
     case 'code-snippet': return `${context.fileName}:${context.startLine}-${context.endLine}`;
     case 'pull-request': return context.label;
     case 'image': return context.imageName;
@@ -95,6 +99,7 @@ function getContextTagFormat(context: ContextItem): string {
   switch (context.type) {
     case 'file': return `#file:${context.fileName}`;
     case 'directory': return `#dir:${context.directoryName}`;
+    case 'session-reference': return `[session: ${context.sessionName}]`;
     case 'code-snippet': return `#code:${context.fileName}:${context.startLine}-${context.endLine}`;
     case 'pull-request': return `#pr:${context.label.replace(/\s+/g, '_')}`;
     case 'image': return `#img:${context.imageName}`;
@@ -120,6 +125,8 @@ function getContextFullPath(context: ContextItem): string {
       return context.filePath;
     case 'directory':
       return context.directoryPath + (context.recursive ? ' (recursive)' : '');
+    case 'session-reference':
+      return `${context.workspaceLabel} · ${context.workspacePath}`;
     case 'code-snippet':
       return `${context.filePath} (lines ${context.startLine}-${context.endLine})`;
     case 'pull-request':
@@ -221,6 +228,14 @@ export const RichTextInput = React.forwardRef<HTMLDivElement, RichTextInputProps
     // Store full tag format for text extraction
     tag.dataset.tagFormat = getContextTagFormat(context);
     tag.title = getContextFullPath(context);
+
+    if (context.type === 'session-reference') {
+      tag.classList.add('rich-text-tag-pill--session-reference');
+      const badge = document.createElement('span');
+      badge.className = 'rich-text-tag-pill__badge rich-text-tag-pill__badge--icon';
+      badge.innerHTML = SESSION_REFERENCE_BADGE_ICON;
+      tag.appendChild(badge);
+    }
     
     const text = document.createElement('span');
     text.className = 'rich-text-tag-pill__text';

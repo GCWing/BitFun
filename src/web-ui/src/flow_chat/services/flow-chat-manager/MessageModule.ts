@@ -165,6 +165,7 @@ export async function sendMessage(
           agentType,
           imageContexts: options?.imageContexts,
           imageDisplayData: options?.imageDisplayData,
+          userMessageMetadata: options?.userMessageMetadata,
         });
         log.info('Message enqueued: session busy or queue non-empty', {
           sessionId,
@@ -525,6 +526,7 @@ export async function drainPendingQueue(
               mimeType?: string;
             }>
           | undefined,
+        userMessageMetadata: next.userMessageMetadata,
         bypassPendingQueue: true,
       },
     );

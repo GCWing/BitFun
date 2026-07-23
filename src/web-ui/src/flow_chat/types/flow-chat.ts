@@ -525,6 +525,8 @@ export interface QueuedMessage {
   /** Image / attachment payloads forwarded to `start_dialog_turn` when drained. */
   imageContexts?: unknown[];
   imageDisplayData?: unknown[];
+  /** Structured metadata forwarded to `start_dialog_turn` when drained. */
+  userMessageMetadata?: Record<string, unknown>;
   localDialogTurnId?: string;
 }
 

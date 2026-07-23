@@ -26,6 +26,7 @@ export interface EnqueueInput {
   agentType?: string;
   imageContexts?: unknown[];
   imageDisplayData?: unknown[];
+  userMessageMetadata?: Record<string, unknown>;
   /**
    * How many times this content has already been auto-restored from a failed
    * dialog turn. Items with `retryCount > 0` are treated as "failed-recovery"
@@ -125,6 +126,7 @@ class PendingQueueManager {
       agentType: input.agentType,
       imageContexts: input.imageContexts,
       imageDisplayData: input.imageDisplayData,
+      userMessageMetadata: input.userMessageMetadata,
     };
     items.push(item);
     this.queues.set(input.sessionId, items);

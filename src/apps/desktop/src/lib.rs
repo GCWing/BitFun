@@ -1176,6 +1176,7 @@ pub async fn run() {
             initialize_project_storage,
             // Session persistence API
             list_persisted_sessions,
+            search_referenceable_sessions,
             list_persisted_sessions_page,
             load_session_turns,
             get_session_usage_report,

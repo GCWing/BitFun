@@ -208,6 +208,31 @@ impl JsonFileStore {
         value: &T,
         strict: bool,
     ) -> Result<(), JsonFileStoreError> {
+        let json = serde_json::to_string_pretty(value)
+            .map_err(|source| JsonFileStoreError::Serialize { source })?;
+        self.write_bytes_atomic_with_policy(path, json.into_bytes(), strict)
+            .await
+    }
+
+    /// Atomically replace a plain UTF-8 text file using the same locking and
+    /// retry policy as JSON persistence. Session transcript artifacts use this
+    /// instead of open-coded `fs::write` so readers never observe a partial
+    /// generated reference.
+    pub async fn write_text_atomic(
+        &self,
+        path: &Path,
+        text: &str,
+    ) -> Result<(), JsonFileStoreError> {
+        self.write_bytes_atomic_with_policy(path, text.as_bytes().to_vec(), false)
+            .await
+    }
+
+    async fn write_bytes_atomic_with_policy(
+        &self,
+        path: &Path,
+        bytes: Vec<u8>,
+        strict: bool,
+    ) -> Result<(), JsonFileStoreError> {
         let parent = path
             .parent()
             .ok_or_else(|| JsonFileStoreError::NoParentDirectory {
@@ -218,17 +243,14 @@ impl JsonFileStore {
             .await
             .map_err(|source| JsonFileStoreError::CreateParent { source })?;
 
-        let json = serde_json::to_string_pretty(value)
-            .map_err(|source| JsonFileStoreError::Serialize { source })?;
         let lock = Self::get_file_write_lock(path).await;
         let _lock_guard = lock.lock().await;
 
-        let json_bytes = json.into_bytes();
         let mut last_replace_error: Option<std::io::Error> = None;
 
         for attempt in 0..=JSON_WRITE_MAX_RETRIES {
             let tmp_path = Self::build_temp_json_path(path, attempt)?;
-            if let Err(source) = fs::write(&tmp_path, &json_bytes).await {
+            if let Err(source) = fs::write(&tmp_path, &bytes).await {
                 return Err(JsonFileStoreError::WriteTemp { source });
             }
 
@@ -265,7 +287,7 @@ impl JsonFileStore {
                     "Atomic JSON replace permission denied for {}, fallback to direct overwrite",
                     path.display()
                 );
-                fs::write(path, &json_bytes).await.map_err(|source| {
+                fs::write(path, &bytes).await.map_err(|source| {
                     JsonFileStoreError::FallbackOverwrite {
                         path: path.to_path_buf(),
                         source,

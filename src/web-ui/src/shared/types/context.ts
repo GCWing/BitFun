@@ -18,6 +18,7 @@ export interface BaseContext {
 export type ContextItem =
   | FileContext
   | DirectoryContext
+  | SessionReferenceContext
   | CodeSnippetContext
   | PullRequestContext
   | MermaidNodeContext
@@ -43,6 +44,17 @@ export interface DirectoryContext extends BaseContext {
   directoryName: string;
   recursive: boolean;
   itemCount?: number;
+}
+
+/** A selected idle session whose transcript is materialized on turn dispatch. */
+export interface SessionReferenceContext extends BaseContext {
+  type: 'session-reference';
+  sessionId: string;
+  sessionName: string;
+  workspacePath: string;
+  remoteConnectionId?: string;
+  remoteSshHost?: string;
+  workspaceLabel: string;
 }
 
 export interface CodeSnippetContext extends BaseContext {

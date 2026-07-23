@@ -11,7 +11,7 @@ use crate::agentic::core::{
 use crate::agentic::image_analysis::ImageContextData;
 use crate::agentic::keyed_lock::{KeyedAsyncLock, KeyedAsyncLockGuard};
 use crate::agentic::memories::db::{MemoryDatabase, MEMORY_PHASE2_GLOBAL_JOB_KEY};
-use crate::agentic::persistence::PersistenceManager;
+use crate::agentic::persistence::{MaterializedSessionReferenceTranscript, PersistenceManager};
 use crate::agentic::session::session_store_port::CoreSessionStorePort;
 use crate::agentic::session::{
     prompt_cache_persist_action, reconcile_prompt_cache_restore, CachedSystemPrompt,
@@ -33,7 +33,7 @@ use crate::service::config::{
 use crate::service::remote_ssh::workspace_state::LOCAL_WORKSPACE_SSH_HOST;
 use crate::service::session::{
     DialogTurnData, DialogTurnKind, ModelRoundData, SessionMemoryMode, SessionMetadata,
-    SessionRelationship, TextItemData, ThinkingItemData, ToolCallData, ToolItemData,
+    SessionRelationship, SessionStatus, TextItemData, ThinkingItemData, ToolCallData, ToolItemData,
     ToolResultData, TranscriptLineRange, TurnStatus, UserMessageData,
 };
 use crate::service::snapshot::ensure_snapshot_manager_for_workspace;
@@ -51,6 +51,7 @@ use bitfun_services_core::session::{
 };
 use dashmap::{mapref::entry::Entry, DashMap};
 use log::{debug, error, info, warn};
+use serde::{Deserialize, Serialize};
 use serde_json::json;
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
@@ -68,6 +69,27 @@ pub struct SessionManagerConfig {
     pub auto_save_interval: Duration,
     pub enable_persistence: bool,
     pub prompt_cache_policy: PromptCachePolicy,
+}
+
+/// Stable locator supplied by the UI for a session reference. The workspace
+/// identity is required because session IDs are normally UUIDs but are not a
+/// globally unique contract across all persisted workspaces.
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct SessionReferenceLocator {
+    pub session_id: String,
+    pub workspace_path: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub remote_connection_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub remote_ssh_host: Option<String>,
+}
+
+#[derive(Debug, Clone)]
+pub struct MaterializedSessionReference {
+    pub session_id: String,
+    pub session_name: String,
+    pub transcript: MaterializedSessionReferenceTranscript,
 }
 
 impl Default for SessionManagerConfig {
@@ -915,6 +937,108 @@ impl SessionManager {
             })?;
 
         Some(SessionStorageLayout::new(storage_path).request_traces_dir(session_id))
+    }
+
+    /// Materialize a bounded transcript copy for a user-selected reference.
+    /// The referenced session is only read by the backend; the generated file
+    /// is written beneath the current session's artifacts so normal Read/Grep
+    /// tools cannot traverse into another session's storage.
+    pub async fn materialize_session_reference_transcript(
+        &self,
+        source_session_id: &str,
+        reference: &SessionReferenceLocator,
+        reference_artifact_stem: &str,
+    ) -> BitFunResult<MaterializedSessionReference> {
+        bitfun_core_types::validate_session_id(source_session_id)
+            .map_err(BitFunError::Validation)?;
+        bitfun_core_types::validate_session_id(&reference.session_id)
+            .map_err(BitFunError::Validation)?;
+        bitfun_core_types::validate_session_id(reference_artifact_stem)
+            .map_err(BitFunError::Validation)?;
+        let workspace_path = reference.workspace_path.trim();
+        if workspace_path.is_empty() {
+            return Err(BitFunError::Validation(
+                "Referenced session workspace_path is required".to_string(),
+            ));
+        }
+
+        let source_storage_path = self
+            .effective_session_storage_path(source_session_id)
+            .await
+            .or_else(|| {
+                self.session_storage_path_index
+                    .get(source_session_id)
+                    .map(|entry| entry.value().path.clone())
+            })
+            .ok_or_else(|| {
+                BitFunError::NotFound(format!(
+                    "Current session storage path is unavailable: {}",
+                    source_session_id
+                ))
+            })?;
+        let reference_storage_path = self
+            .resolve_storage_path_for_request(SessionStoragePathRequest {
+                workspace_path: PathBuf::from(workspace_path),
+                remote_connection_id: reference.remote_connection_id.clone(),
+                remote_ssh_host: reference.remote_ssh_host.clone(),
+            })
+            .await?;
+
+        if source_session_id == reference.session_id
+            && source_storage_path == reference_storage_path
+        {
+            return Err(BitFunError::Validation(
+                "A session cannot reference itself".to_string(),
+            ));
+        }
+
+        let metadata = self
+            .persistence_manager
+            .load_session_metadata(&reference_storage_path, &reference.session_id)
+            .await?
+            .ok_or_else(|| {
+                BitFunError::NotFound(format!(
+                    "Referenced session not found: {}",
+                    reference.session_id
+                ))
+            })?;
+        if metadata.status == SessionStatus::Archived {
+            return Err(BitFunError::Validation(format!(
+                "Referenced session is archived: {}",
+                reference.session_id
+            )));
+        }
+        if !matches!(metadata.session_kind, SessionKind::Standard) {
+            return Err(BitFunError::Validation(format!(
+                "Referenced session is not a visible top-level session: {}",
+                reference.session_id
+            )));
+        }
+        if self
+            .get_session(&reference.session_id)
+            .is_some_and(|session| matches!(session.state, SessionState::Processing { .. }))
+        {
+            return Err(BitFunError::Validation(format!(
+                "Referenced session is busy: {}",
+                reference.session_id
+            )));
+        }
+
+        let transcript = self
+            .persistence_manager
+            .materialize_session_reference_transcript(
+                &source_storage_path,
+                source_session_id,
+                &reference_storage_path,
+                &reference.session_id,
+                reference_artifact_stem,
+            )
+            .await?;
+        Ok(MaterializedSessionReference {
+            session_id: reference.session_id.clone(),
+            session_name: metadata.session_name,
+            transcript,
+        })
     }
 
     pub async fn resolve_session_workspace_binding(

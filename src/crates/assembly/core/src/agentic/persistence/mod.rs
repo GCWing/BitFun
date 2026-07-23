@@ -9,4 +9,4 @@ pub use bitfun_runtime_ports::SessionTurnLoadTiming;
 pub use bitfun_services_core::session::{
     SessionBranchRequest, SessionBranchResult, SessionMetadataPage,
 };
-pub use manager::PersistenceManager;
+pub use manager::{MaterializedSessionReferenceTranscript, PersistenceManager};

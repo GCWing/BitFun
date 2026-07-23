@@ -9,7 +9,9 @@ use crate::agentic::core::{
 };
 use crate::agentic::memories::db::{MemoryDatabase, MEMORY_PHASE2_GLOBAL_JOB_KEY};
 use crate::agentic::memories::external_context::dialog_turn_uses_external_context;
-use crate::agentic::session::transcript_render::{render_transcript, transcript_fingerprint};
+use crate::agentic::session::transcript_render::{
+    render_transcript, rendered_turn_char_count, transcript_fingerprint,
+};
 use crate::agentic::session::{
     CoreSessionStorePort, SessionPromptCache, TokenAnchor, PROMPT_CACHE_SCHEMA_VERSION,
 };
@@ -56,6 +58,7 @@ const COMPRESSION_TRANSCRIPT_SCHEMA_VERSION: u32 = 1;
 const COMPRESSION_TRANSCRIPT_CREATE_ATTEMPTS: usize = 32;
 const TOKEN_ANCHOR_SCHEMA_VERSION: u32 = 1;
 const SESSION_TURN_READ_CONCURRENCY: usize = 4;
+pub const SESSION_REFERENCE_TRANSCRIPT_CHAR_LIMIT: usize = 60_000;
 
 static SESSION_PERSISTENCE_LOCKS: OnceLock<Mutex<HashMap<PathBuf, Weak<Mutex<()>>>>> =
     OnceLock::new();
@@ -234,6 +237,18 @@ struct StoredSessionTranscriptFile {
     schema_version: u32,
     #[serde(flatten)]
     transcript: SessionTranscriptExport,
+}
+
+/// A generated local artifact that exposes a bounded read-only copy of a
+/// referenced session to the consuming session's agent tools.
+#[derive(Debug, Clone)]
+pub struct MaterializedSessionReferenceTranscript {
+    pub uri: String,
+    pub turn_count: usize,
+    pub char_count: usize,
+    pub index_range: TranscriptLineRange,
+    pub latest_turn_range: Option<TranscriptLineRange>,
+    pub line_count: usize,
 }
 
 #[derive(Debug, Clone)]
@@ -418,6 +433,16 @@ impl PersistenceManager {
             .transcript_meta_path(session_id)
     }
 
+    fn session_reference_transcript_path(
+        &self,
+        workspace_path: &Path,
+        session_id: &str,
+        reference_artifact_stem: &str,
+    ) -> PathBuf {
+        self.session_layout(workspace_path)
+            .session_reference_transcript_path(session_id, reference_artifact_stem)
+    }
+
     pub(crate) fn compression_transcripts_dir(
         &self,
         workspace_path: &Path,
@@ -512,6 +537,22 @@ impl PersistenceManager {
             .map_err(|e| BitFunError::io(format!("Failed to create artifacts directory: {}", e)))
     }
 
+    async fn ensure_session_references_dir(
+        &self,
+        workspace_path: &Path,
+        session_id: &str,
+    ) -> BitFunResult<PathBuf> {
+        self.session_layout(workspace_path)
+            .ensure_session_references_dir(session_id)
+            .await
+            .map_err(|e| {
+                BitFunError::io(format!(
+                    "Failed to create session reference directory: {}",
+                    e
+                ))
+            })
+    }
+
     async fn read_json_optional<T: DeserializeOwned>(
         &self,
         path: &Path,
@@ -525,6 +566,13 @@ impl PersistenceManager {
     async fn write_json_atomic<T: Serialize>(&self, path: &Path, value: &T) -> BitFunResult<()> {
         JsonFileStore
             .write_atomic(path, value)
+            .await
+            .map_err(Self::json_store_error)
+    }
+
+    async fn write_text_atomic(&self, path: &Path, text: &str) -> BitFunResult<()> {
+        JsonFileStore
+            .write_text_atomic(path, text)
             .await
             .map_err(Self::json_store_error)
     }
@@ -2799,6 +2847,82 @@ impl PersistenceManager {
         Ok(transcript)
     }
 
+    /// Render the newest complete persisted turns from `reference_session_id`
+    /// into an artifact owned by `source_session_id`. The source artifact is
+    /// overwritten on each use so agent tools only ever read the current
+    /// reference copy, never another session's storage directory.
+    pub async fn materialize_session_reference_transcript(
+        &self,
+        source_workspace_path: &Path,
+        source_session_id: &str,
+        reference_workspace_path: &Path,
+        reference_session_id: &str,
+        reference_artifact_stem: &str,
+    ) -> BitFunResult<MaterializedSessionReferenceTranscript> {
+        Self::validate_session_id(source_session_id)?;
+        Self::validate_session_id(reference_session_id)?;
+        Self::validate_session_id(reference_artifact_stem)?;
+
+        if self
+            .load_session_metadata(reference_workspace_path, reference_session_id)
+            .await?
+            .is_none()
+        {
+            return Err(BitFunError::NotFound(format!(
+                "Referenced session metadata not found: {}",
+                reference_session_id
+            )));
+        }
+
+        let options = SessionTranscriptExportOptions {
+            tools: true,
+            tool_inputs: true,
+            thinking: false,
+            turns: None,
+        };
+        let all_turns = self
+            .load_session_turns(reference_workspace_path, reference_session_id)
+            .await?;
+
+        // Pick complete turns backwards from the newest one. The first turn
+        // is admitted whenever the current total is below the limit, even if
+        // that individual turn crosses it; this keeps references coherent.
+        let mut selected_indices_reversed = Vec::new();
+        let mut selected_turn_chars = 0usize;
+        for index in (0..all_turns.len()).rev() {
+            if selected_turn_chars >= SESSION_REFERENCE_TRANSCRIPT_CHAR_LIMIT {
+                break;
+            }
+            selected_turn_chars += rendered_turn_char_count(&all_turns[index], &options);
+            selected_indices_reversed.push(index);
+        }
+        selected_indices_reversed.reverse();
+
+        let rendered = render_transcript(&all_turns, &selected_indices_reversed, &options);
+        let content = rendered.lines.join("\n");
+        let char_count = content.chars().count();
+        self.ensure_session_references_dir(source_workspace_path, source_session_id)
+            .await?;
+        let artifact_path = self.session_reference_transcript_path(
+            source_workspace_path,
+            source_session_id,
+            reference_artifact_stem,
+        );
+        self.write_text_atomic(&artifact_path, &content).await?;
+
+        Ok(MaterializedSessionReferenceTranscript {
+            uri: format!(
+                "bitfun://current-session/artifacts/session-references/{}.txt",
+                reference_artifact_stem
+            ),
+            turn_count: selected_indices_reversed.len(),
+            char_count,
+            index_range: rendered.index_range,
+            latest_turn_range: rendered.index.last().map(|entry| entry.turn_range.clone()),
+            line_count: rendered.lines.len(),
+        })
+    }
+
     pub async fn delete_turns_after(
         &self,
         workspace_path: &Path,
@@ -2918,7 +3042,8 @@ impl PersistenceManager {
 #[cfg(test)]
 mod tests {
     use super::{
-        context_snapshot_payload_stats, current_unix_secs, PersistenceManager, StoredDialogTurnFile,
+        context_snapshot_payload_stats, current_unix_secs, PersistenceManager,
+        StoredDialogTurnFile, SESSION_REFERENCE_TRANSCRIPT_CHAR_LIMIT,
     };
     use crate::agentic::core::{Message, Session, SessionConfig, SessionKind, ToolResult};
     use crate::agentic::memories::db::{MemoryDatabase, MemoryRow, MEMORY_PHASE2_GLOBAL_JOB_KEY};
@@ -3192,6 +3317,115 @@ mod tests {
             .expect("transcript file should be readable");
         assert!(transcript.contains("## Turn 0"));
         assert!(transcript.contains("hello transcript"));
+    }
+
+    #[tokio::test]
+    async fn materialized_session_reference_keeps_newest_complete_turn_and_overwrites_artifact() {
+        let workspace = TestWorkspace::new();
+        let manager =
+            PersistenceManager::new(workspace.path_manager()).expect("persistence manager");
+        let source_session_id = Uuid::new_v4().to_string();
+        let reference_session_id = Uuid::new_v4().to_string();
+        let reference_artifact_stem = reference_session_id.chars().take(8).collect::<String>();
+        let metadata = SessionMetadata::new(
+            reference_session_id.clone(),
+            "Referenced transcript".to_string(),
+            "agent".to_string(),
+            "model".to_string(),
+        );
+        manager
+            .save_session_metadata(workspace.path(), &metadata)
+            .await
+            .expect("reference metadata should save");
+
+        let mut older_turn = DialogTurnData::new(
+            "turn-0".to_string(),
+            0,
+            reference_session_id.clone(),
+            user_message("older prompt"),
+        );
+        older_turn.model_rounds.push(round_with_text(
+            "turn-0",
+            vec![text_item("text-0", "older response")],
+        ));
+        older_turn.mark_completed();
+        manager
+            .save_dialog_turn(workspace.path(), &older_turn)
+            .await
+            .expect("older turn should save");
+
+        let mut newest_turn = DialogTurnData::new(
+            "turn-1".to_string(),
+            1,
+            reference_session_id.clone(),
+            user_message("newest prompt"),
+        );
+        newest_turn.model_rounds.push(round_with_text(
+            "turn-1",
+            vec![text_item(
+                "text-1",
+                &"x".repeat(SESSION_REFERENCE_TRANSCRIPT_CHAR_LIMIT + 1),
+            )],
+        ));
+        newest_turn.mark_completed();
+        manager
+            .save_dialog_turn(workspace.path(), &newest_turn)
+            .await
+            .expect("newest turn should save");
+
+        let first = manager
+            .materialize_session_reference_transcript(
+                workspace.path(),
+                &source_session_id,
+                workspace.path(),
+                &reference_session_id,
+                &reference_artifact_stem,
+            )
+            .await
+            .expect("reference should materialize");
+        assert_eq!(first.turn_count, 1);
+        assert!(first.char_count > SESSION_REFERENCE_TRANSCRIPT_CHAR_LIMIT);
+        assert!(first.latest_turn_range.is_some());
+        assert_eq!(
+            first.line_count,
+            first.latest_turn_range.as_ref().unwrap().end_line
+        );
+        assert_eq!(
+            first.uri,
+            format!(
+                "bitfun://current-session/artifacts/session-references/{}.txt",
+                reference_artifact_stem
+            )
+        );
+        let artifact_path = manager.session_reference_transcript_path(
+            workspace.path(),
+            &source_session_id,
+            &reference_artifact_stem,
+        );
+        let first_content =
+            std::fs::read_to_string(&artifact_path).expect("reference artifact should be readable");
+        assert!(first_content.contains("## Turn 1"));
+        assert!(!first_content.contains("## Turn 0"));
+
+        manager
+            .delete_turns_after(workspace.path(), &reference_session_id, 0)
+            .await
+            .expect("newest reference turn should delete");
+        let second = manager
+            .materialize_session_reference_transcript(
+                workspace.path(),
+                &source_session_id,
+                workspace.path(),
+                &reference_session_id,
+                &reference_artifact_stem,
+            )
+            .await
+            .expect("reference should overwrite");
+        assert_eq!(second.turn_count, 1);
+        let second_content = std::fs::read_to_string(&artifact_path)
+            .expect("overwritten reference artifact should be readable");
+        assert!(second_content.contains("## Turn 0"));
+        assert!(!second_content.contains("## Turn 1"));
     }
 
     #[tokio::test]

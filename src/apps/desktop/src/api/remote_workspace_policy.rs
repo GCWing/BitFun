@@ -1437,6 +1437,10 @@ pub const REMOTE_WORKSPACE_COMMAND_POLICIES: &[(&str, RemoteWorkspacePolicy)] = 
     ("search_filenames", RemoteWorkspacePolicy::LegacyUnaudited),
     ("search_files", RemoteWorkspacePolicy::LegacyUnaudited),
     (
+        "search_referenceable_sessions",
+        RemoteWorkspacePolicy::WorkspaceAgnostic,
+    ),
+    (
         "search_get_repo_status",
         RemoteWorkspacePolicy::RemoteRouted,
     ),
@@ -2122,6 +2126,7 @@ mod tests {
         "search_file_contents",
         "search_filenames",
         "search_files",
+        "search_referenceable_sessions",
         "search_skill_market",
         "send_background_command_input",
         "send_mcp_app_message",

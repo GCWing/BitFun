@@ -1,17 +1,30 @@
 /**
- * File mention picker.
- * Shown when the user types @ to select files or folders.
+ * File and session mention picker.
+ * Shown when the user types @ to select files, folders, or idle sessions.
  */
 
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import { File, Folder, Loader2, Search, ChevronRight, ChevronLeft } from 'lucide-react';
-import { workspaceAPI } from '@/infrastructure/api';
+import {
+  File,
+  Folder,
+  Loader2,
+  MessageCircle,
+  Search,
+  ChevronRight,
+  ChevronLeft,
+} from 'lucide-react';
+import { sessionAPI, workspaceAPI } from '@/infrastructure/api';
 import type {
   ExplorerNodeDto,
   FileSearchResult,
 } from '@/infrastructure/api/service-api/tauri-commands';
-import type { FileContext, DirectoryContext } from '@/shared/types/context';
+import type { SessionReferenceCandidate } from '@/infrastructure/api/service-api/SessionAPI';
+import type {
+  DirectoryContext,
+  FileContext,
+  SessionReferenceContext,
+} from '@/shared/types/context';
 import { Tooltip } from '@/component-library';
 import { createLogger } from '@/shared/utils/logger';
 import './FileMentionPicker.scss';
@@ -21,19 +34,14 @@ const FILE_MENTION_SEARCH_DEBOUNCE_MS = 300;
 const FILE_MENTION_MAX_RESULTS = 30;
 
 export interface FileMentionPickerProps {
-  /** Whether the picker is open. */
   isOpen: boolean;
-  /** Search keyword. */
   searchQuery: string;
-  /** Workspace path. */
   workspacePath?: string;
-  /** Selection callback. */
-  onSelect: (context: FileContext | DirectoryContext) => void;
-  /** Close callback. */
+  /** The composing session itself must not appear as a reference candidate. */
+  excludeSessionId?: string;
+  onSelect: (context: FileContext | DirectoryContext | SessionReferenceContext) => void;
   onClose: () => void;
-  /** Position info. */
   position?: { top: number; left: number };
-  /** Keyboard navigation callback. */
   onNavigate?: (direction: 'up' | 'down' | 'enter' | 'escape') => void;
 }
 
@@ -44,28 +52,37 @@ interface FileItem {
   relativePath: string;
 }
 
+type MentionItem =
+  | { kind: 'file'; item: FileItem }
+  | { kind: 'session'; item: SessionReferenceCandidate };
+
 export const FileMentionPicker: React.FC<FileMentionPickerProps> = ({
   isOpen,
   searchQuery,
   workspacePath,
+  excludeSessionId,
   onSelect,
   onClose,
   position,
 }) => {
   const { t } = useTranslation('flow-chat');
   const [results, setResults] = useState<FileItem[]>([]);
+  const [sessionResults, setSessionResults] = useState<SessionReferenceCandidate[]>([]);
   const [currentFiles, setCurrentFiles] = useState<FileItem[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
+  const [isFileLoading, setIsFileLoading] = useState(false);
+  const [isSessionLoading, setIsSessionLoading] = useState(false);
   const [selectedIndex, setSelectedIndex] = useState(0);
-  const [currentPath, setCurrentPath] = useState<string>(''); // Current directory
-  const [pathHistory, setPathHistory] = useState<string[]>([]); // Back navigation stack
+  const [currentPath, setCurrentPath] = useState<string>('');
+  const [pathHistory, setPathHistory] = useState<string[]>([]);
   const containerRef = useRef<HTMLDivElement>(null);
-  const abortControllerRef = useRef<AbortController | null>(null);
-  const searchDebounceTimerRef = useRef<number | null>(null);
-  const selectedItemHistoryRef = useRef<string[]>([]); // Selected path when entering a directory
-  const targetSelectedPathRef = useRef<string | null>(null); // Target selection when returning
+  const fileAbortControllerRef = useRef<AbortController | null>(null);
+  const fileSearchDebounceTimerRef = useRef<number | null>(null);
+  const sessionSearchDebounceTimerRef = useRef<number | null>(null);
+  const selectedItemHistoryRef = useRef<string[]>([]);
+  const targetSelectedPathRef = useRef<string | null>(null);
   const directoryLoadRequestIdRef = useRef(0);
-  const searchRequestIdRef = useRef(0);
+  const fileSearchRequestIdRef = useRef(0);
+  const sessionSearchRequestIdRef = useRef(0);
   const skipNextPathLoadRef = useRef(false);
 
   const getRelativePath = useCallback((fullPath: string): string => {
@@ -85,17 +102,14 @@ export const FileMentionPicker: React.FC<FileMentionPickerProps> = ({
     }
 
     const requestId = ++directoryLoadRequestIdRef.current;
-    setIsLoading(true);
-
+    setIsFileLoading(true);
     try {
-      const targetPath = dirPath || workspacePath;
-      const children = await workspaceAPI.getDirectoryChildren(targetPath);
-      
+      const children = await workspaceAPI.getDirectoryChildren(dirPath || workspacePath);
       const items: FileItem[] = children
         .filter((entry: ExplorerNodeDto) => {
           const name = entry.name || '';
-          return !name.startsWith('.') && 
-                 !['node_modules', 'target', 'dist', 'build', '__pycache__'].includes(name);
+          return !name.startsWith('.') &&
+            !['node_modules', 'target', 'dist', 'build', '__pycache__'].includes(name);
         })
         .map((entry: ExplorerNodeDto) => ({
           path: entry.path,
@@ -103,80 +117,62 @@ export const FileMentionPicker: React.FC<FileMentionPickerProps> = ({
           isDirectory: entry.isDirectory || false,
           relativePath: getRelativePath(entry.path),
         }));
-
       items.sort((a, b) => {
-        if (a.isDirectory && !b.isDirectory) return -1;
-        if (!a.isDirectory && b.isDirectory) return 1;
+        if (a.isDirectory !== b.isDirectory) return a.isDirectory ? -1 : 1;
         return a.name.localeCompare(b.name);
       });
-
-      if (requestId !== directoryLoadRequestIdRef.current) {
-        return;
-      }
-
+      if (requestId !== directoryLoadRequestIdRef.current) return;
       setCurrentFiles(items);
-      
-      if (targetSelectedPath) {
-        const targetIndex = items.findIndex(item => item.path === targetSelectedPath);
-        setSelectedIndex(targetIndex >= 0 ? targetIndex : 0);
-      } else {
-        setSelectedIndex(0);
-      }
-    } catch (err) {
-      log.error('Failed to load directory', err);
-      if (requestId === directoryLoadRequestIdRef.current) {
-        setCurrentFiles([]);
-      }
+      const targetIndex = targetSelectedPath
+        ? items.findIndex(item => item.path === targetSelectedPath)
+        : 0;
+      setSelectedIndex(targetIndex >= 0 ? targetIndex : 0);
+    } catch (error) {
+      log.error('Failed to load directory', error);
+      if (requestId === directoryLoadRequestIdRef.current) setCurrentFiles([]);
     } finally {
-      if (requestId === directoryLoadRequestIdRef.current) {
-        setIsLoading(false);
-      }
+      if (requestId === directoryLoadRequestIdRef.current) setIsFileLoading(false);
     }
   }, [workspacePath, getRelativePath]);
 
   const enterDirectory = useCallback((item: FileItem) => {
     if (!item.isDirectory) return;
     selectedItemHistoryRef.current = [...selectedItemHistoryRef.current, item.path];
-    setPathHistory(prev => [...prev, currentPath]);
+    setPathHistory(previous => [...previous, currentPath]);
     setCurrentPath(item.path);
   }, [currentPath]);
 
   const goBack = useCallback(() => {
     if (pathHistory.length === 0) return;
     const previousPath = pathHistory[pathHistory.length - 1];
-    const targetPath = selectedItemHistoryRef.current.length > 0 
+    targetSelectedPathRef.current = selectedItemHistoryRef.current.length > 0
       ? selectedItemHistoryRef.current[selectedItemHistoryRef.current.length - 1]
       : null;
     selectedItemHistoryRef.current = selectedItemHistoryRef.current.slice(0, -1);
-    setPathHistory(prev => prev.slice(0, -1));
-    targetSelectedPathRef.current = targetPath;
+    setPathHistory(previous => previous.slice(0, -1));
     setCurrentPath(previousPath);
   }, [pathHistory]);
 
   useEffect(() => {
-    if (isOpen && workspacePath) {
-      skipNextPathLoadRef.current = true;
-      setCurrentPath('');
-      setPathHistory([]);
-      setCurrentFiles([]);
-      setResults([]);
-      setSelectedIndex(0);
-      selectedItemHistoryRef.current = [];
-      targetSelectedPathRef.current = null;
-      loadDirectory('', null);
-    }
+    if (!isOpen || !workspacePath) return;
+    skipNextPathLoadRef.current = true;
+    setCurrentPath('');
+    setPathHistory([]);
+    setCurrentFiles([]);
+    setResults([]);
+    setSessionResults([]);
+    setSelectedIndex(0);
+    selectedItemHistoryRef.current = [];
+    targetSelectedPathRef.current = null;
+    loadDirectory('', null);
   }, [isOpen, workspacePath, loadDirectory]);
 
   useEffect(() => {
-    if (!isOpen || searchQuery.trim()) {
-      return;
-    }
-
+    if (!isOpen || searchQuery.trim()) return;
     if (skipNextPathLoadRef.current) {
       skipNextPathLoadRef.current = false;
       return;
     }
-
     const targetPath = targetSelectedPathRef.current;
     targetSelectedPathRef.current = null;
     loadDirectory(currentPath, targetPath);
@@ -191,330 +187,293 @@ export const FileMentionPicker: React.FC<FileMentionPickerProps> = ({
       setResults([]);
       return;
     }
-
     try {
       const searchResults = await workspaceAPI.searchFilenamesOnly(
-        workspacePath,
-        query,
-        false, // caseSensitive
-        false, // useRegex
-        false, // wholeWord
-        controller.signal
+        workspacePath, query, false, false, false, controller.signal,
       );
-
-      if (requestId !== searchRequestIdRef.current || controller.signal.aborted) {
-        return;
-      }
-
-      const items: FileItem[] = searchResults.map((result: FileSearchResult) => ({
+      if (requestId !== fileSearchRequestIdRef.current || controller.signal.aborted) return;
+      const items = searchResults.map((result: FileSearchResult) => ({
         path: result.path,
         name: result.name,
         isDirectory: result.isDirectory || false,
         relativePath: getRelativePath(result.path),
       }));
-
       items.sort((a, b) => {
-        if (a.isDirectory && !b.isDirectory) return -1;
-        if (!a.isDirectory && b.isDirectory) return 1;
+        if (a.isDirectory !== b.isDirectory) return a.isDirectory ? -1 : 1;
         return a.name.localeCompare(b.name);
       });
-
       setResults(items.slice(0, FILE_MENTION_MAX_RESULTS));
       setSelectedIndex(0);
-    } catch (err) {
-      if (err instanceof DOMException && err.name === 'AbortError') {
-        return;
+    } catch (error) {
+      if (!(error instanceof DOMException && error.name === 'AbortError')) {
+        log.error('File mention search failed', error);
       }
-      log.error('Search failed', err);
-      if (requestId === searchRequestIdRef.current) {
-        setResults([]);
-      }
+      if (requestId === fileSearchRequestIdRef.current) setResults([]);
     } finally {
-      if (requestId === searchRequestIdRef.current && abortControllerRef.current === controller) {
-        abortControllerRef.current = null;
-        setIsLoading(false);
+      if (requestId === fileSearchRequestIdRef.current && fileAbortControllerRef.current === controller) {
+        fileAbortControllerRef.current = null;
+        setIsFileLoading(false);
       }
     }
   }, [workspacePath, getRelativePath]);
 
   useEffect(() => {
-    if (!isOpen) {
-      return;
+    if (!isOpen) return;
+    if (fileSearchDebounceTimerRef.current !== null) {
+      window.clearTimeout(fileSearchDebounceTimerRef.current);
+      fileSearchDebounceTimerRef.current = null;
     }
+    fileAbortControllerRef.current?.abort();
+    fileAbortControllerRef.current = null;
 
-    if (searchDebounceTimerRef.current !== null) {
-      window.clearTimeout(searchDebounceTimerRef.current);
-      searchDebounceTimerRef.current = null;
-    }
-
-    abortControllerRef.current?.abort();
-    abortControllerRef.current = null;
-
-    const trimmedQuery = searchQuery.trim();
-    if (!trimmedQuery) {
-      searchRequestIdRef.current += 1;
+    const query = searchQuery.trim();
+    if (!query) {
+      fileSearchRequestIdRef.current += 1;
       setResults([]);
       setSelectedIndex(0);
-      setIsLoading(false);
+      setIsFileLoading(false);
       return;
     }
 
-    const requestId = ++searchRequestIdRef.current;
+    const requestId = ++fileSearchRequestIdRef.current;
     const controller = new AbortController();
-    abortControllerRef.current = controller;
-    setIsLoading(true);
-
-    searchDebounceTimerRef.current = window.setTimeout(() => {
-      searchDebounceTimerRef.current = null;
-      void searchFiles(trimmedQuery, controller, requestId);
+    fileAbortControllerRef.current = controller;
+    setIsFileLoading(true);
+    fileSearchDebounceTimerRef.current = window.setTimeout(() => {
+      fileSearchDebounceTimerRef.current = null;
+      void searchFiles(query, controller, requestId);
     }, FILE_MENTION_SEARCH_DEBOUNCE_MS);
-
     return () => {
-      if (searchDebounceTimerRef.current !== null) {
-        window.clearTimeout(searchDebounceTimerRef.current);
-        searchDebounceTimerRef.current = null;
+      if (fileSearchDebounceTimerRef.current !== null) {
+        window.clearTimeout(fileSearchDebounceTimerRef.current);
+        fileSearchDebounceTimerRef.current = null;
       }
       controller.abort();
-      if (abortControllerRef.current === controller) {
-        abortControllerRef.current = null;
-      }
     };
   }, [isOpen, searchQuery, searchFiles]);
 
+  useEffect(() => {
+    if (sessionSearchDebounceTimerRef.current !== null) {
+      window.clearTimeout(sessionSearchDebounceTimerRef.current);
+      sessionSearchDebounceTimerRef.current = null;
+    }
+    const query = searchQuery.trim();
+    if (!isOpen || !query) {
+      sessionSearchRequestIdRef.current += 1;
+      setSessionResults([]);
+      setIsSessionLoading(false);
+      return;
+    }
+
+    const requestId = ++sessionSearchRequestIdRef.current;
+    setIsSessionLoading(true);
+    sessionSearchDebounceTimerRef.current = window.setTimeout(() => {
+      sessionSearchDebounceTimerRef.current = null;
+      void sessionAPI.searchReferenceableSessions(query, FILE_MENTION_MAX_RESULTS)
+        .then((items) => {
+          if (requestId === sessionSearchRequestIdRef.current) {
+            setSessionResults(items.filter(item => item.sessionId !== excludeSessionId));
+          }
+        })
+        .catch((error) => {
+          log.error('Session mention search failed', error);
+          if (requestId === sessionSearchRequestIdRef.current) setSessionResults([]);
+        })
+        .finally(() => {
+          if (requestId === sessionSearchRequestIdRef.current) setIsSessionLoading(false);
+        });
+    }, FILE_MENTION_SEARCH_DEBOUNCE_MS);
+    return () => {
+      if (sessionSearchDebounceTimerRef.current !== null) {
+        window.clearTimeout(sessionSearchDebounceTimerRef.current);
+        sessionSearchDebounceTimerRef.current = null;
+      }
+    };
+  }, [excludeSessionId, isOpen, searchQuery]);
+
   const isSearchMode = searchQuery.trim().length > 0;
-  
-  const displayItems = isSearchMode ? results : currentFiles;
-  
-  const currentDirName = currentPath 
+  const displayItems = useMemo<MentionItem[]>(() => (
+    isSearchMode
+      ? [
+          ...results.map(item => ({ kind: 'file' as const, item })),
+          ...sessionResults.map(item => ({ kind: 'session' as const, item })),
+        ]
+      : currentFiles.map(item => ({ kind: 'file' as const, item }))
+  ), [currentFiles, isSearchMode, results, sessionResults]);
+  const currentDirName = currentPath
     ? currentPath.replace(/\\/g, '/').split('/').pop() || ''
     : workspacePath?.replace(/\\/g, '/').split('/').pop() || t('fileMention.rootDirectory');
 
-  useEffect(() => {
-    return () => {
-      if (searchDebounceTimerRef.current !== null) {
-        window.clearTimeout(searchDebounceTimerRef.current);
-      }
-      abortControllerRef.current?.abort();
-    };
+  useEffect(() => () => {
+    if (fileSearchDebounceTimerRef.current !== null) window.clearTimeout(fileSearchDebounceTimerRef.current);
+    if (sessionSearchDebounceTimerRef.current !== null) window.clearTimeout(sessionSearchDebounceTimerRef.current);
+    fileAbortControllerRef.current?.abort();
   }, []);
 
-  const handleSelect = useCallback((item: FileItem) => {
+  const handleSelect = useCallback((mention: MentionItem) => {
     const timestamp = Date.now();
-    
-    if (item.isDirectory) {
-      const dirContext: DirectoryContext = {
-        id: `dir-${timestamp}-${Math.random().toString(36).slice(2, 9)}`,
-        type: 'directory',
-        directoryPath: item.path,
-        directoryName: item.name,
-        recursive: true,
+    if (mention.kind === 'session') {
+      const session = mention.item;
+      onSelect({
+        id: `session-reference-${timestamp}-${Math.random().toString(36).slice(2, 9)}`,
+        type: 'session-reference',
+        sessionId: session.sessionId,
+        sessionName: session.sessionName,
+        workspacePath: session.workspacePath,
+        remoteConnectionId: session.remoteConnectionId,
+        remoteSshHost: session.remoteSshHost,
+        workspaceLabel: session.workspaceLabel,
         timestamp,
-      };
-      onSelect(dirContext);
-    } else {
-      const fileContext: FileContext = {
-        id: `file-${timestamp}-${Math.random().toString(36).slice(2, 9)}`,
-        type: 'file',
-        filePath: item.path,
-        fileName: item.name,
-        relativePath: item.relativePath,
-        timestamp,
-      };
-      onSelect(fileContext);
+      });
+      onClose();
+      return;
     }
-    
-    onClose();
-  }, [onSelect, onClose]);
 
-  const handleItemClick = useCallback((item: FileItem) => {
-    if (item.isDirectory && !isSearchMode) {
-      enterDirectory(item);
-    } else {
-      handleSelect(item);
+    const item = mention.item;
+    onSelect(item.isDirectory ? {
+      id: `dir-${timestamp}-${Math.random().toString(36).slice(2, 9)}`,
+      type: 'directory',
+      directoryPath: item.path,
+      directoryName: item.name,
+      recursive: true,
+      timestamp,
+    } : {
+      id: `file-${timestamp}-${Math.random().toString(36).slice(2, 9)}`,
+      type: 'file',
+      filePath: item.path,
+      fileName: item.name,
+      relativePath: item.relativePath,
+      timestamp,
+    });
+    onClose();
+  }, [onClose, onSelect]);
+
+  const handleItemClick = useCallback((mention: MentionItem) => {
+    if (mention.kind === 'file' && mention.item.isDirectory && !isSearchMode) {
+      enterDirectory(mention.item);
+      return;
     }
+    handleSelect(mention);
   }, [enterDirectory, handleSelect, isSearchMode]);
 
-  const handleKeyDown = useCallback((e: KeyboardEvent) => {
+  const handleKeyDown = useCallback((event: KeyboardEvent) => {
     if (!isOpen) return;
-
-    switch (e.key) {
+    switch (event.key) {
       case 'ArrowUp':
-        e.preventDefault();
-        e.stopPropagation();
+      case 'ArrowDown': {
+        event.preventDefault();
+        event.stopPropagation();
         if (displayItems.length > 0) {
-          setSelectedIndex(prev => (prev > 0 ? prev - 1 : displayItems.length - 1));
+          setSelectedIndex(previous => event.key === 'ArrowUp'
+            ? (previous > 0 ? previous - 1 : displayItems.length - 1)
+            : (previous < displayItems.length - 1 ? previous + 1 : 0));
         }
         break;
-      case 'ArrowDown':
-        e.preventDefault();
-        e.stopPropagation();
-        if (displayItems.length > 0) {
-          setSelectedIndex(prev => (prev < displayItems.length - 1 ? prev + 1 : 0));
+      }
+      case 'ArrowRight': {
+        event.preventDefault();
+        event.stopPropagation();
+        const selected = displayItems[selectedIndex];
+        if (!isSearchMode && selected?.kind === 'file' && selected.item.isDirectory) {
+          enterDirectory(selected.item);
         }
         break;
-      case 'ArrowRight':
-        e.preventDefault();
-        e.stopPropagation();
-        if (!isSearchMode && displayItems.length > 0 && displayItems[selectedIndex]?.isDirectory) {
-          enterDirectory(displayItems[selectedIndex]);
-        }
-        break;
+      }
       case 'ArrowLeft':
-        e.preventDefault();
-        e.stopPropagation();
-        if (!isSearchMode && pathHistory.length > 0) {
-          goBack();
-        }
+        event.preventDefault();
+        event.stopPropagation();
+        if (!isSearchMode && pathHistory.length > 0) goBack();
         break;
       case 'Enter':
-        e.preventDefault();
-        e.stopPropagation();
-        if (displayItems.length > 0 && displayItems[selectedIndex]) {
-          handleItemClick(displayItems[selectedIndex]);
+      case 'Tab': {
+        event.preventDefault();
+        event.stopPropagation();
+        const selected = displayItems[selectedIndex];
+        if (selected) {
+          if (event.key === 'Tab') handleSelect(selected);
+          else handleItemClick(selected);
         }
         break;
+      }
       case 'Escape':
-        e.preventDefault();
-        e.stopPropagation();
+        event.preventDefault();
+        event.stopPropagation();
         onClose();
         break;
-      case 'Tab':
-        e.preventDefault();
-        e.stopPropagation();
-        if (displayItems.length > 0 && displayItems[selectedIndex]) {
-          handleSelect(displayItems[selectedIndex]);
-        }
-        break;
     }
-  }, [displayItems, handleSelect, handleItemClick, enterDirectory, goBack, isSearchMode, isOpen, onClose, selectedIndex, pathHistory.length]);
+  }, [displayItems, enterDirectory, goBack, handleItemClick, handleSelect, isOpen, isSearchMode, onClose, pathHistory.length, selectedIndex]);
 
-  useEffect(() => {
-    if (isOpen) {
-      document.addEventListener('keydown', handleKeyDown, true);
-      return () => {
-        document.removeEventListener('keydown', handleKeyDown, true);
-      };
-    }
-  }, [isOpen, handleKeyDown]);
-
-  // Close picker when clicking outside
   useEffect(() => {
     if (!isOpen) return;
+    document.addEventListener('keydown', handleKeyDown, true);
+    return () => document.removeEventListener('keydown', handleKeyDown, true);
+  }, [handleKeyDown, isOpen]);
 
-    const handleClickOutside = (e: MouseEvent) => {
-      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
-        onClose();
-      }
+  useEffect(() => {
+    if (!isOpen) return;
+    const handleClickOutside = (event: MouseEvent) => {
+      if (containerRef.current && !containerRef.current.contains(event.target as Node)) onClose();
     };
-
-    // Use mousedown to capture clicks before they trigger other effects (e.g. blur on editor)
     document.addEventListener('mousedown', handleClickOutside, true);
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside, true);
-    };
+    return () => document.removeEventListener('mousedown', handleClickOutside, true);
   }, [isOpen, onClose]);
 
   useEffect(() => {
-    if (containerRef.current && displayItems.length > 0) {
-      const container = containerRef.current;
-      const selectedElement = container.querySelector(`[data-index="${selectedIndex}"]`);
-      if (selectedElement) {
-        selectedElement.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
-      }
-    }
-  }, [selectedIndex, displayItems.length]);
-
-  const getIcon = (item: FileItem) => {
-    if (item.isDirectory) {
-      return <Folder size={13} className="file-mention-picker__icon file-mention-picker__icon--folder" />;
-    }
-    return <File size={13} className="file-mention-picker__icon file-mention-picker__icon--file" />;
-  };
-
-  // Right-click to enter a folder (must be defined before early returns).
-  const handleContextMenu = useCallback((e: React.MouseEvent, item: FileItem) => {
-    e.preventDefault();
-    if (item.isDirectory) {
-      enterDirectory(item);
-    }
-  }, [enterDirectory]);
-
-  const handleMouseDown = useCallback((e: React.MouseEvent) => {
-    e.preventDefault();
-  }, []);
+    if (!containerRef.current || displayItems.length === 0) return;
+    containerRef.current.querySelector(`[data-index="${selectedIndex}"]`)
+      ?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+  }, [displayItems.length, selectedIndex]);
 
   if (!isOpen) return null;
-
-  const style: React.CSSProperties = position ? {
-    position: 'absolute',
-    top: position.top,
-    left: position.left,
-  } : {};
+  const style: React.CSSProperties = position ? { position: 'absolute', top: position.top, left: position.left } : {};
+  const isLoading = isFileLoading || isSessionLoading;
 
   return (
-    <div 
-      ref={containerRef}
-      className="file-mention-picker"
-      style={style}
-      onMouseDown={handleMouseDown}
-    >
+    <div ref={containerRef} className="file-mention-picker" style={style} onMouseDown={event => event.preventDefault()}>
       <div className="file-mention-picker__header">
         {!isSearchMode && pathHistory.length > 0 && (
           <Tooltip content={t('fileMention.goBack')}>
-            <button 
-              className="file-mention-picker__back-btn"
-              onClick={goBack}
-            >
-              <ChevronLeft size={12} />
-            </button>
+            <button className="file-mention-picker__back-btn" onClick={goBack}><ChevronLeft size={12} /></button>
           </Tooltip>
         )}
-        {isSearchMode ? (
-          <>
-            <Search size={11} />
-            <span>{t('fileMention.searchResults')}</span>
-          </>
-        ) : (
+        {isSearchMode ? <><Search size={11} /><span>{t('fileMention.searchResults')}</span></> : (
           <span className="file-mention-picker__dir-name">{currentDirName}</span>
         )}
       </div>
-      
       <div className="file-mention-picker__content">
-        {isLoading ? (
-          <div className="file-mention-picker__loading">
-            <Loader2 size={14} className="file-mention-picker__spinner" />
-            <span>{t('fileMention.loading')}</span>
-          </div>
+        {displayItems.length === 0 && isLoading ? (
+          <div className="file-mention-picker__loading"><Loader2 size={14} className="file-mention-picker__spinner" /><span>{t('fileMention.loading')}</span></div>
         ) : displayItems.length === 0 ? (
-          <div className="file-mention-picker__empty">
-            {isSearchMode ? (
-              <span>{t('fileMention.noMatchingFiles')}</span>
-            ) : (
-              <span>{t('fileMention.emptyDirectory')}</span>
-            )}
-          </div>
+          <div className="file-mention-picker__empty"><span>{isSearchMode ? t('fileMention.noMatchingFiles') : t('fileMention.emptyDirectory')}</span></div>
         ) : (
           <div className="file-mention-picker__list">
-            {displayItems.map((item, index) => (
-              <div
-                key={item.path}
-                data-index={index}
-                className={`file-mention-picker__item ${index === selectedIndex ? 'file-mention-picker__item--selected' : ''}`}
-                onClick={() => handleItemClick(item)}
-                onContextMenu={(e) => handleContextMenu(e, item)}
-                onMouseEnter={() => setSelectedIndex(index)}
-              >
-                {getIcon(item)}
-                <span className="file-mention-picker__item-name">{item.name}</span>
-                {item.isDirectory && !isSearchMode && (
-                  <ChevronRight size={12} className="file-mention-picker__expand-icon" />
-                )}
-              </div>
-            ))}
+            {displayItems.map((mention, index) => {
+              const isSession = mention.kind === 'session';
+              const file = mention.kind === 'file' ? mention.item : null;
+              const session = mention.kind === 'session' ? mention.item : null;
+              const key = isSession ? `session-${session?.sessionId}-${session?.workspacePath}` : `file-${file?.path}`;
+              return (
+                <div
+                  key={key}
+                  data-index={index}
+                  className={`file-mention-picker__item ${index === selectedIndex ? 'file-mention-picker__item--selected' : ''}`}
+                  onClick={() => handleItemClick(mention)}
+                  onContextMenu={(event) => {
+                    event.preventDefault();
+                    if (file?.isDirectory) enterDirectory(file);
+                  }}
+                  onMouseEnter={() => setSelectedIndex(index)}
+                >
+                  {isSession ? <MessageCircle size={13} className="file-mention-picker__icon file-mention-picker__icon--session" /> : file?.isDirectory ? <Folder size={13} className="file-mention-picker__icon file-mention-picker__icon--folder" /> : <File size={13} className="file-mention-picker__icon file-mention-picker__icon--file" />}
+                  <span className="file-mention-picker__item-name">{session?.sessionName ?? file?.name}</span>
+                  {session && <span className="file-mention-picker__item-detail">{session.workspaceLabel}</span>}
+                  {file?.isDirectory && !isSearchMode && <ChevronRight size={12} className="file-mention-picker__expand-icon" />}
+                </div>
+              );
+            })}
           </div>
         )}
       </div>
-      
       <div className="file-mention-picker__footer">
         <span><kbd>↑</kbd><kbd>↓</kbd> {t('fileMention.navHint')}</span>
         <span><kbd>→</kbd> {t('fileMention.enterHint')}</span>
@@ -526,4 +485,3 @@ export const FileMentionPicker: React.FC<FileMentionPickerProps> = ({
 };
 
 export default FileMentionPicker;
-
