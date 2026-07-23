@@ -14,6 +14,7 @@ pub(super) mod visibility;
 use self::types::AgentEntry;
 use self::types::{AgentCategory, SubAgentSource};
 use super::Agent;
+use crate::agentic::deep_review_policy::canonical_review_worker_agent_type;
 use log::{debug, warn};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -121,10 +122,20 @@ impl AgentRegistry {
             return Some(entry);
         }
 
-        let workspace_root = workspace_root?;
-        self.read_project_subagents()
-            .get(workspace_root)
-            .and_then(|entries| entries.get(agent_type).cloned())
+        if let Some(root) = workspace_root {
+            let project_subagents = self.read_project_subagents();
+            if let Some(entry) = project_subagents
+                .get(root)
+                .and_then(|entries| entries.get(agent_type).cloned())
+            {
+                return Some(entry);
+            }
+        }
+
+        let canonical = canonical_review_worker_agent_type(agent_type);
+        (canonical != agent_type)
+            .then(|| self.read_agents().get(canonical).cloned())
+            .flatten()
     }
 
     /// Get a agent by ID (searches all categories including hidden)
@@ -145,6 +156,10 @@ impl AgentRegistry {
                 .read_project_subagents()
                 .values()
                 .any(|entries| entries.contains_key(agent_type))
+            || {
+                let canonical = canonical_review_worker_agent_type(agent_type);
+                canonical != agent_type && self.read_agents().contains_key(canonical)
+            }
     }
 
     /// Get a mode by ID

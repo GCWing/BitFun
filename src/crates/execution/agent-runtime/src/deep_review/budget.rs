@@ -46,6 +46,8 @@ struct DeepReviewTurnBudget {
     retries_used_by_subagent: HashMap<String, usize>,
     active_reviewers: usize,
     active_reviewer_launch_batches: BTreeMap<u64, usize>,
+    active_reviewer_packet_ids: HashSet<String>,
+    initial_reviewer_packet_ids: HashSet<String>,
     concurrency_cap_rejections: usize,
     capacity_skips: usize,
     shared_context_uses: HashMap<DeepReviewSharedContextKey, DeepReviewSharedContextUseRecord>,
@@ -70,6 +72,8 @@ impl DeepReviewTurnBudget {
             retries_used_by_subagent: HashMap::new(),
             active_reviewers: 0,
             active_reviewer_launch_batches: BTreeMap::new(),
+            active_reviewer_packet_ids: HashSet::new(),
+            initial_reviewer_packet_ids: HashSet::new(),
             concurrency_cap_rejections: 0,
             capacity_skips: 0,
             shared_context_uses: HashMap::new(),
@@ -102,14 +106,18 @@ pub struct DeepReviewActiveReviewerGuard<'a> {
     tracker: &'a DeepReviewBudgetTracker,
     parent_dialog_turn_id: String,
     launch_batch: Option<u64>,
+    packet_id: Option<String>,
     released: bool,
 }
 
 impl Drop for DeepReviewActiveReviewerGuard<'_> {
     fn drop(&mut self) {
         if !self.released {
-            self.tracker
-                .finish_active_reviewer(&self.parent_dialog_turn_id, self.launch_batch);
+            self.tracker.finish_active_reviewer(
+                &self.parent_dialog_turn_id,
+                self.launch_batch,
+                self.packet_id.as_deref(),
+            );
             self.released = true;
         }
     }
@@ -496,6 +504,25 @@ impl DeepReviewBudgetTracker {
         subagent_type: &str,
         is_retry: bool,
     ) -> Result<(), DeepReviewPolicyViolation> {
+        self.record_task_for_packet(
+            parent_dialog_turn_id,
+            policy,
+            role,
+            subagent_type,
+            is_retry,
+            None,
+        )
+    }
+
+    pub fn record_task_for_packet(
+        &self,
+        parent_dialog_turn_id: &str,
+        policy: &DeepReviewExecutionPolicy,
+        role: DeepReviewSubagentRole,
+        subagent_type: &str,
+        is_retry: bool,
+        packet_id: Option<&str>,
+    ) -> Result<(), DeepReviewPolicyViolation> {
         let now = Instant::now();
         if let Ok(last_pruned) = self.last_pruned_at.lock() {
             if now.saturating_duration_since(*last_pruned) >= PRUNE_INTERVAL {
@@ -552,6 +579,19 @@ impl DeepReviewBudgetTracker {
                     return Ok(());
                 }
 
+                let packet_id = packet_id.map(str::trim).filter(|id| !id.is_empty());
+                if let Some(packet_id) = packet_id {
+                    if budget.initial_reviewer_packet_ids.contains(packet_id) {
+                        return Err(DeepReviewPolicyViolation::new(
+                            "deep_review_packet_already_launched",
+                            format!(
+                                "DeepReview managed packet '{}' already used its initial attempt in this turn; use retry=true only for an admitted retry",
+                                packet_id
+                            ),
+                        ));
+                    }
+                }
+
                 let max_reviewer_calls = policy.max_reviewer_calls;
                 if budget.reviewer_calls >= max_reviewer_calls {
                     return Err(DeepReviewPolicyViolation::new(
@@ -561,6 +601,11 @@ impl DeepReviewBudgetTracker {
                             max_reviewer_calls
                         ),
                     ));
+                }
+                if let Some(packet_id) = packet_id {
+                    budget
+                        .initial_reviewer_packet_ids
+                        .insert(packet_id.to_string());
                 }
                 budget.reviewer_calls += 1;
                 *budget
@@ -678,6 +723,7 @@ impl DeepReviewBudgetTracker {
             tracker: self,
             parent_dialog_turn_id: parent_dialog_turn_id.to_string(),
             launch_batch: None,
+            packet_id: None,
             released: false,
         }
     }
@@ -702,6 +748,7 @@ impl DeepReviewBudgetTracker {
             tracker: self,
             parent_dialog_turn_id: parent_dialog_turn_id.to_string(),
             launch_batch: None,
+            packet_id: None,
             released: false,
         })
     }
@@ -711,13 +758,26 @@ impl DeepReviewBudgetTracker {
         parent_dialog_turn_id: &str,
         max_active_reviewers: usize,
         launch_batch: u64,
-        _packet_id: Option<&str>,
+        packet_id: Option<&str>,
     ) -> Result<Option<DeepReviewActiveReviewerGuard<'a>>, DeepReviewPolicyViolation> {
         let now = Instant::now();
         let mut budget = self
             .turns
             .entry(parent_dialog_turn_id.to_string())
             .or_insert_with(|| DeepReviewTurnBudget::new(now));
+
+        let packet_id = packet_id.map(str::trim).filter(|value| !value.is_empty());
+        if let Some(packet_id) = packet_id {
+            if budget.active_reviewer_packet_ids.contains(packet_id) {
+                return Err(DeepReviewPolicyViolation::new(
+                    "deep_review_packet_already_active",
+                    format!(
+                        "DeepReview managed packet '{}' is already active in this turn",
+                        packet_id
+                    ),
+                ));
+            }
+        }
 
         if budget.active_reviewers >= max_active_reviewers {
             return Ok(None);
@@ -728,16 +788,27 @@ impl DeepReviewBudgetTracker {
             .active_reviewer_launch_batches
             .entry(launch_batch)
             .or_insert(0) += 1;
+        if let Some(packet_id) = packet_id {
+            budget
+                .active_reviewer_packet_ids
+                .insert(packet_id.to_string());
+        }
         budget.updated_at = now;
         Ok(Some(DeepReviewActiveReviewerGuard {
             tracker: self,
             parent_dialog_turn_id: parent_dialog_turn_id.to_string(),
             launch_batch: Some(launch_batch),
+            packet_id: packet_id.map(str::to_string),
             released: false,
         }))
     }
 
-    fn finish_active_reviewer(&self, parent_dialog_turn_id: &str, launch_batch: Option<u64>) {
+    fn finish_active_reviewer(
+        &self,
+        parent_dialog_turn_id: &str,
+        launch_batch: Option<u64>,
+        packet_id: Option<&str>,
+    ) {
         if let Some(mut budget) = self.turns.get_mut(parent_dialog_turn_id) {
             budget.active_reviewers = budget.active_reviewers.saturating_sub(1);
             if let Some(launch_batch) = launch_batch {
@@ -752,6 +823,9 @@ impl DeepReviewBudgetTracker {
                 if should_remove_batch {
                     budget.active_reviewer_launch_batches.remove(&launch_batch);
                 }
+            }
+            if let Some(packet_id) = packet_id {
+                budget.active_reviewer_packet_ids.remove(packet_id);
             }
             budget.updated_at = Instant::now();
         }
@@ -1093,6 +1167,78 @@ mod tests {
         assert!(
             second_batch.is_some(),
             "later batch should fill a freed reviewer slot instead of waiting for the earlier batch to drain"
+        );
+    }
+
+    #[test]
+    fn launch_batch_admission_rejects_the_same_packet_while_it_is_active() {
+        let tracker = DeepReviewBudgetTracker::default();
+        let turn_id = "turn-duplicate-managed-packet";
+        let first = tracker
+            .try_begin_active_reviewer_for_launch_batch(turn_id, 2, 1, Some("packet-a"))
+            .expect("first packet admission should not fail")
+            .expect("first packet should start");
+
+        let Err(duplicate) =
+            tracker.try_begin_active_reviewer_for_launch_batch(turn_id, 2, 1, Some("packet-a"))
+        else {
+            panic!("an active packet must not launch twice");
+        };
+        assert_eq!(duplicate.code, "deep_review_packet_already_active");
+
+        drop(first);
+        assert!(tracker
+            .try_begin_active_reviewer_for_launch_batch(turn_id, 2, 1, Some("packet-a"))
+            .expect("the packet may be admitted again after the active attempt ends")
+            .is_some());
+    }
+
+    #[test]
+    fn managed_packet_initial_attempt_is_charged_only_once_per_turn() {
+        let tracker = DeepReviewBudgetTracker::default();
+        let policy = DeepReviewExecutionPolicy {
+            max_reviewer_calls: 2,
+            ..DeepReviewExecutionPolicy::default()
+        };
+
+        tracker
+            .record_task_for_packet(
+                "turn-managed-once",
+                &policy,
+                DeepReviewSubagentRole::Reviewer,
+                "ReviewWorker",
+                false,
+                Some("packet-a"),
+            )
+            .expect("the first packet should be charged");
+        let duplicate = tracker
+            .record_task_for_packet(
+                "turn-managed-once",
+                &policy,
+                DeepReviewSubagentRole::Reviewer,
+                "ReviewWorker",
+                false,
+                Some("packet-a"),
+            )
+            .expect_err("the completed packet must not be charged as another initial attempt");
+        assert_eq!(duplicate.code, "deep_review_packet_already_launched");
+        tracker
+            .record_task_for_packet(
+                "turn-managed-once",
+                &policy,
+                DeepReviewSubagentRole::Reviewer,
+                "ReviewWorker",
+                false,
+                Some("packet-b"),
+            )
+            .expect("a different packet should retain its reviewer budget");
+        assert_eq!(
+            tracker
+                .turns
+                .get("turn-managed-once")
+                .expect("the turn budget should exist")
+                .reviewer_calls,
+            2
         );
     }
 

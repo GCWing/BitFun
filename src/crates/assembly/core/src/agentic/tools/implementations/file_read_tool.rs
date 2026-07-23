@@ -1,6 +1,7 @@
 use crate::agentic::tools::file_permissions::file_permission_intents;
 use crate::agentic::tools::file_read_state_runtime::{
-    local_file_modification_time_ms, record_file_read_state,
+    get_review_read_coverage, local_file_modification_time_ms, local_file_revision,
+    record_file_read_state, record_review_read_receipt, review_read_receipts_enabled,
 };
 use crate::agentic::tools::framework::{
     PermissionIntent, Tool, ToolRenderOptions, ToolResult, ToolUseContext, ValidationResult,
@@ -52,6 +53,26 @@ impl FileReadTool {
             default_max_lines_to_read,
             max_line_chars,
             max_total_chars,
+        }
+    }
+
+    fn already_served_result(
+        logical_path: &str,
+        coverage: crate::agentic::session::ReviewReadCoverage,
+    ) -> ToolResult {
+        ToolResult::Result {
+            data: json!({
+                "file_path": logical_path,
+                "status": "already_served",
+                "start_line": coverage.start_line,
+                "end_line": coverage.end_line,
+                "total_lines": coverage.total_lines,
+            }),
+            result_for_assistant: Some(format!(
+                "{} lines {}-{} were already returned earlier in this review and the file revision is unchanged. Reuse the prior Read output; request only an unread range if more context is needed.",
+                logical_path, coverage.start_line, coverage.end_line
+            )),
+            image_attachments: None,
         }
     }
 
@@ -465,6 +486,22 @@ Usage:
             .unwrap_or(self.default_max_lines_to_read as u64) as usize;
 
         let resolved = context.resolve_tool_path(file_path)?;
+        let revision_before_read = if resolved.uses_remote_workspace_backend()
+            || tail
+            || !review_read_receipts_enabled(context)
+        {
+            None
+        } else {
+            local_file_revision(Path::new(&resolved.resolved_path))
+        };
+        if let Some(coverage) = revision_before_read.and_then(|revision| {
+            get_review_read_coverage(context, &resolved, revision, start_line, limit)
+        }) {
+            return Ok(vec![Self::already_served_result(
+                &resolved.logical_path,
+                coverage,
+            )]);
+        }
 
         let read_file_result = if resolved.uses_remote_workspace_backend() {
             if tail {
@@ -502,6 +539,16 @@ Usage:
             local_file_modification_time_ms(Path::new(&resolved.resolved_path))
         };
         record_file_read_state(context, &resolved, &read_file_result, timestamp_ms);
+        if let (Some(revision_before), Some(revision_after)) = (
+            revision_before_read,
+            (!resolved.uses_remote_workspace_backend() && !tail)
+                .then(|| local_file_revision(Path::new(&resolved.resolved_path)))
+                .flatten(),
+        ) {
+            if revision_before == revision_after {
+                record_review_read_receipt(context, &resolved, revision_after, &read_file_result);
+            }
+        }
 
         let presentation = build_read_file_presentation(&resolved.logical_path, &read_file_result);
 

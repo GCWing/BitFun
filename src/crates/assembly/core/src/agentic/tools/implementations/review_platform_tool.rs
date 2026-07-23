@@ -16,6 +16,7 @@ use crate::service::review_platform::{
 use crate::util::errors::{BitFunError, BitFunResult};
 use async_trait::async_trait;
 use serde_json::{json, Value};
+use std::collections::BTreeMap;
 
 const ACTION_WORKSPACE_SNAPSHOT: &str = "get_workspace_snapshot";
 const ACTION_LIST_REMOTES: &str = "list_remotes";
@@ -137,25 +138,8 @@ impl ReviewPlatformTool {
         }
     }
 
-    async fn resolve_remote_id(repository_path: &str, input: &Value) -> BitFunResult<String> {
-        if let Some(remote_id) = Self::optional_string_field(input, "remote_id") {
-            return Ok(remote_id);
-        }
-
-        let remotes = ReviewPlatformService::discover_remotes(repository_path)
-            .await
-            .map_err(|error| BitFunError::tool(error.to_string()))?;
-        let supported = supported_remotes(&remotes);
-        match supported.as_slice() {
-            [] => Err(BitFunError::tool(
-                "No supported review platform remote found".to_string(),
-            )),
-            [remote] => Ok(remote.id.clone()),
-            _ => Err(BitFunError::tool(remote_ambiguity_message(&supported))),
-        }
-    }
-
-    async fn resolve_remote_id_for_list(
+    async fn resolve_remote_id(
+        action: &str,
         repository_path: &str,
         input: &Value,
     ) -> BitFunResult<Result<String, Value>> {
@@ -166,19 +150,17 @@ impl ReviewPlatformTool {
         let remotes = ReviewPlatformService::discover_remotes(repository_path)
             .await
             .map_err(|error| BitFunError::tool(error.to_string()))?;
-        let supported = supported_remotes(&remotes);
+        let supported = canonical_supported_remotes(&remotes);
         match supported.as_slice() {
             [] => Err(BitFunError::tool(
                 "No supported review platform remote found".to_string(),
             )),
             [remote] => Ok(Ok(remote.id.clone())),
-            _ => Ok(Err(json!({
-                "action": ACTION_LIST,
-                "repositoryPath": repository_path,
-                "status": "needs_remote_selection",
-                "message": "Multiple supported review platform remotes were found. Provide remote_id explicitly.",
-                "candidateRemotes": supported,
-            }))),
+            _ => Ok(Err(remote_selection_result(
+                action,
+                repository_path,
+                &supported,
+            ))),
         }
     }
 
@@ -305,7 +287,7 @@ When returning pull request results to the user, include the provider web URL so
                 },
                 "remote_id": {
                     "type": "string",
-                    "description": "Review platform remote id. Omit to use the only supported remote; provide it explicitly when the repository has multiple supported review-platform remotes."
+                    "description": "Review platform remote id. Omit to use the only distinct supported provider repository. Equivalent local aliases such as origin/upstream are collapsed; when multiple provider repositories remain, select a candidate remote_id from the structured result."
                 },
                 "pull_request_id": {
                     "type": "string",
@@ -475,6 +457,36 @@ When returning pull request results to the user, include the provider web URL so
         if output
             .get("status")
             .and_then(Value::as_str)
+            .is_some_and(|status| status == "needs_remote_selection")
+        {
+            let remotes = output
+                .get("candidateRemotes")
+                .and_then(Value::as_array)
+                .map(|items| items.as_slice())
+                .unwrap_or(&[]);
+            let mut lines = vec![
+                "Multiple distinct review platform repositories were found. Ask the user which remote to use, then retry with remote_id.".to_string(),
+                "Candidate remotes:".to_string(),
+            ];
+            lines.extend(remotes.iter().map(|remote| {
+                let id = remote.get("id").and_then(Value::as_str).unwrap_or("");
+                let name = remote.get("name").and_then(Value::as_str).unwrap_or("");
+                let platform = remote.get("platform").and_then(Value::as_str).unwrap_or("");
+                let project = remote
+                    .get("projectPath")
+                    .and_then(Value::as_str)
+                    .unwrap_or("");
+                let url = remote.get("webUrl").and_then(Value::as_str).unwrap_or("");
+                format!(
+                    "- remote_id: {} | name: {} | platform: {} | project: {} | url: {}",
+                    id, name, platform, project, url
+                )
+            }));
+            return lines.join("\n");
+        }
+        if output
+            .get("status")
+            .and_then(Value::as_str)
             .is_some_and(|status| status == "needs_auth")
         {
             let message = output
@@ -543,37 +555,6 @@ When returning pull request results to the user, include the provider web URL so
                 }
             }
             ACTION_COUNT => {
-                if output
-                    .get("status")
-                    .and_then(Value::as_str)
-                    .is_some_and(|status| status == "needs_remote_selection")
-                {
-                    let remotes = output
-                        .get("candidateRemotes")
-                        .and_then(Value::as_array)
-                        .map(|items| items.as_slice())
-                        .unwrap_or(&[]);
-                    let mut lines = vec![
-                        "Multiple review platform remotes were found. Ask the user which remote to use, then retry with remote_id.".to_string(),
-                        "Candidate remotes:".to_string(),
-                    ];
-                    lines.extend(remotes.iter().map(|remote| {
-                        let id = remote.get("id").and_then(Value::as_str).unwrap_or("");
-                        let name = remote.get("name").and_then(Value::as_str).unwrap_or("");
-                        let platform = remote.get("platform").and_then(Value::as_str).unwrap_or("");
-                        let project = remote
-                            .get("projectPath")
-                            .and_then(Value::as_str)
-                            .unwrap_or("");
-                        let url = remote.get("webUrl").and_then(Value::as_str).unwrap_or("");
-                        format!(
-                            "- remote_id: {} | name: {} | platform: {} | project: {} | url: {}",
-                            id, name, platform, project, url
-                        )
-                    }));
-                    return lines.join("\n");
-                }
-
                 let remote_id = output.get("remoteId").and_then(Value::as_str).unwrap_or("");
                 let total = output.get("total").and_then(Value::as_u64);
                 match total {
@@ -585,37 +566,6 @@ When returning pull request results to the user, include the provider web URL so
                 }
             }
             ACTION_LIST => {
-                if output
-                    .get("status")
-                    .and_then(Value::as_str)
-                    .is_some_and(|status| status == "needs_remote_selection")
-                {
-                    let remotes = output
-                        .get("candidateRemotes")
-                        .and_then(Value::as_array)
-                        .map(|items| items.as_slice())
-                        .unwrap_or(&[]);
-                    let mut lines = vec![
-                        "Multiple review platform remotes were found. Ask the user which remote to use, then retry with remote_id.".to_string(),
-                        "Candidate remotes:".to_string(),
-                    ];
-                    lines.extend(remotes.iter().map(|remote| {
-                        let id = remote.get("id").and_then(Value::as_str).unwrap_or("");
-                        let name = remote.get("name").and_then(Value::as_str).unwrap_or("");
-                        let platform = remote.get("platform").and_then(Value::as_str).unwrap_or("");
-                        let project = remote
-                            .get("projectPath")
-                            .and_then(Value::as_str)
-                            .unwrap_or("");
-                        let url = remote.get("webUrl").and_then(Value::as_str).unwrap_or("");
-                        format!(
-                            "- remote_id: {} | name: {} | platform: {} | project: {} | url: {}",
-                            id, name, platform, project, url
-                        )
-                    }));
-                    return lines.join("\n");
-                }
-
                 let prs = output
                     .pointer("/snapshot/pullRequests")
                     .and_then(Value::as_array)
@@ -795,6 +745,21 @@ When returning pull request results to the user, include the provider web URL so
             }
             _ => Self::repository_path(input, context)?,
         };
+        let resolved_remote_id = if action_requires_remote(&action) {
+            match Self::resolve_remote_id(&action, &repository_path, input).await? {
+                Ok(remote_id) => Some(remote_id),
+                Err(selection_result) => {
+                    let result_for_assistant = self.render_result_for_assistant(&selection_result);
+                    return Ok(vec![ToolResult::Result {
+                        data: selection_result,
+                        result_for_assistant: Some(result_for_assistant),
+                        image_attachments: None,
+                    }]);
+                }
+            }
+        } else {
+            None
+        };
 
         let data = match action.as_str() {
             ACTION_LIST_REMOTES => {
@@ -852,22 +817,9 @@ When returning pull request results to the user, include the provider web URL so
                 })
             }
             ACTION_COUNT => {
-                let remote_id =
-                    match Self::resolve_remote_id_for_list(&repository_path, input).await? {
-                        Ok(remote_id) => remote_id,
-                        Err(mut selection_result) => {
-                            if let Some(obj) = selection_result.as_object_mut() {
-                                obj.insert("action".to_string(), json!(ACTION_COUNT));
-                            }
-                            let result_for_assistant =
-                                self.render_result_for_assistant(&selection_result);
-                            return Ok(vec![ToolResult::Result {
-                                data: selection_result,
-                                result_for_assistant: Some(result_for_assistant),
-                                image_attachments: None,
-                            }]);
-                        }
-                    };
+                let remote_id = resolved_remote_id
+                    .clone()
+                    .expect("remote-bound action should resolve a remote");
                 let snapshot = ReviewPlatformService::workspace_snapshot(
                     &repository_path,
                     Some(remote_id.as_str()),
@@ -909,19 +861,9 @@ When returning pull request results to the user, include the provider web URL so
                     .get("per_page")
                     .and_then(Value::as_u64)
                     .map(|value| value as u32);
-                let remote_id =
-                    match Self::resolve_remote_id_for_list(&repository_path, input).await? {
-                        Ok(remote_id) => remote_id,
-                        Err(selection_result) => {
-                            let result_for_assistant =
-                                self.render_result_for_assistant(&selection_result);
-                            return Ok(vec![ToolResult::Result {
-                                data: selection_result,
-                                result_for_assistant: Some(result_for_assistant),
-                                image_attachments: None,
-                            }]);
-                        }
-                    };
+                let remote_id = resolved_remote_id
+                    .clone()
+                    .expect("remote-bound action should resolve a remote");
                 let snapshot = ReviewPlatformService::workspace_snapshot(
                     &repository_path,
                     Some(remote_id.as_str()),
@@ -955,7 +897,9 @@ When returning pull request results to the user, include the provider web URL so
             }
             ACTION_GET => {
                 let pull_request_id = Self::string_field(input, "pull_request_id")?;
-                let remote_id = Self::resolve_remote_id(&repository_path, input).await?;
+                let remote_id = resolved_remote_id
+                    .clone()
+                    .expect("remote-bound action should resolve a remote");
                 match ReviewPlatformService::pull_request_detail(
                     &repository_path,
                     &remote_id,
@@ -990,7 +934,9 @@ When returning pull request results to the user, include the provider web URL so
             }
             ACTION_GET_DETAIL_PAGE => {
                 let pull_request_id = Self::string_field(input, "pull_request_id")?;
-                let remote_id = Self::resolve_remote_id(&repository_path, input).await?;
+                let remote_id = resolved_remote_id
+                    .clone()
+                    .expect("remote-bound action should resolve a remote");
                 let section = Self::detail_section(input)?;
                 let page = input
                     .get("page")
@@ -1046,7 +992,9 @@ When returning pull request results to the user, include the provider web URL so
             }
             ACTION_GET_CI_LOG => {
                 let pull_request_id = Self::string_field(input, "pull_request_id")?;
-                let remote_id = Self::resolve_remote_id(&repository_path, input).await?;
+                let remote_id = resolved_remote_id
+                    .clone()
+                    .expect("remote-bound action should resolve a remote");
                 let ci_item_id = Self::string_field(input, "ci_item_id")?;
                 let ci_item_name = Self::string_field(input, "ci_item_name")?;
                 match ReviewPlatformService::pull_request_ci_log(
@@ -1083,7 +1031,9 @@ When returning pull request results to the user, include the provider web URL so
                 }
             }
             ACTION_CREATE => {
-                let remote_id = Self::resolve_remote_id(&repository_path, input).await?;
+                let remote_id = resolved_remote_id
+                    .clone()
+                    .expect("remote-bound action should resolve a remote");
                 let request = ReviewPlatformCreatePullRequestRequest {
                     repository_path: repository_path.clone(),
                     remote_id: Some(remote_id),
@@ -1099,7 +1049,9 @@ When returning pull request results to the user, include the provider web URL so
                 json!({ "action": action, "result": result })
             }
             ACTION_REPLY => {
-                let remote_id = Self::resolve_remote_id(&repository_path, input).await?;
+                let remote_id = resolved_remote_id
+                    .clone()
+                    .expect("remote-bound action should resolve a remote");
                 let request = ReviewPlatformReplyToThreadRequest {
                     repository_path: repository_path.clone(),
                     remote_id,
@@ -1113,7 +1065,9 @@ When returning pull request results to the user, include the provider web URL so
                 json!({ "action": action, "result": result })
             }
             ACTION_SUBMIT_REVIEW => {
-                let remote_id = Self::resolve_remote_id(&repository_path, input).await?;
+                let remote_id = resolved_remote_id
+                    .clone()
+                    .expect("remote-bound action should resolve a remote");
                 let request = ReviewPlatformSubmitReviewRequest {
                     repository_path: repository_path.clone(),
                     remote_id,
@@ -1127,7 +1081,9 @@ When returning pull request results to the user, include the provider web URL so
                 json!({ "action": action, "result": result })
             }
             ACTION_APPROVE => {
-                let remote_id = Self::resolve_remote_id(&repository_path, input).await?;
+                let remote_id = resolved_remote_id
+                    .clone()
+                    .expect("remote-bound action should resolve a remote");
                 let request = ReviewPlatformApprovalRequest {
                     repository_path: repository_path.clone(),
                     remote_id,
@@ -1140,7 +1096,9 @@ When returning pull request results to the user, include the provider web URL so
                 json!({ "action": action, "result": result })
             }
             ACTION_REVOKE_APPROVAL => {
-                let remote_id = Self::resolve_remote_id(&repository_path, input).await?;
+                let remote_id = resolved_remote_id
+                    .clone()
+                    .expect("remote-bound action should resolve a remote");
                 let request = ReviewPlatformApprovalRequest {
                     repository_path: repository_path.clone(),
                     remote_id,
@@ -1153,7 +1111,9 @@ When returning pull request results to the user, include the provider web URL so
                 json!({ "action": action, "result": result })
             }
             ACTION_REQUEST_CHANGES => {
-                let remote_id = Self::resolve_remote_id(&repository_path, input).await?;
+                let remote_id = resolved_remote_id
+                    .clone()
+                    .expect("remote-bound action should resolve a remote");
                 let request = ReviewPlatformRequestChangesRequest {
                     repository_path: repository_path.clone(),
                     remote_id,
@@ -1166,7 +1126,9 @@ When returning pull request results to the user, include the provider web URL so
                 json!({ "action": action, "result": result })
             }
             ACTION_RESOLVE => {
-                let remote_id = Self::resolve_remote_id(&repository_path, input).await?;
+                let remote_id = resolved_remote_id
+                    .clone()
+                    .expect("remote-bound action should resolve a remote");
                 let request = ReviewPlatformResolveThreadRequest {
                     repository_path: repository_path.clone(),
                     remote_id,
@@ -1229,21 +1191,125 @@ impl Default for ReviewPlatformTool {
     }
 }
 
-fn supported_remotes(remotes: &[ReviewPlatformRemote]) -> Vec<&ReviewPlatformRemote> {
-    remotes.iter().filter(|remote| remote.supported).collect()
+fn action_requires_remote(action: &str) -> bool {
+    matches!(
+        action,
+        ACTION_LIST
+            | ACTION_COUNT
+            | ACTION_GET
+            | ACTION_GET_DETAIL_PAGE
+            | ACTION_GET_CI_LOG
+            | ACTION_CREATE
+            | ACTION_REPLY
+            | ACTION_SUBMIT_REVIEW
+            | ACTION_APPROVE
+            | ACTION_REVOKE_APPROVAL
+            | ACTION_REQUEST_CHANGES
+            | ACTION_RESOLVE
+    )
 }
 
-fn remote_ambiguity_message(remotes: &[&ReviewPlatformRemote]) -> String {
-    let mut lines = vec![
-        "Multiple supported review platform remotes were found. Provide remote_id explicitly."
-            .to_string(),
-        "Candidate remotes:".to_string(),
-    ];
-    lines.extend(remotes.iter().map(|remote| {
-        format!(
-            "- remote_id: {} | name: {} | platform: {:?} | project: {} | url: {}",
-            remote.id, remote.name, remote.platform, remote.project_path, remote.web_url
-        )
-    }));
-    lines.join("\n")
+fn canonical_supported_remotes(remotes: &[ReviewPlatformRemote]) -> Vec<&ReviewPlatformRemote> {
+    let mut canonical = BTreeMap::<(u8, String, String), &ReviewPlatformRemote>::new();
+    for remote in remotes.iter().filter(|remote| remote.supported) {
+        let platform = match remote.platform {
+            ReviewPlatformKind::Github => 0,
+            ReviewPlatformKind::Gitlab => 1,
+            ReviewPlatformKind::Gitcode => 2,
+            ReviewPlatformKind::Unknown => 3,
+        };
+        let normalized_host = remote.host.trim().to_ascii_lowercase();
+        let normalized_project = remote.project_path.trim_matches('/').to_ascii_lowercase();
+        let repository_identity = if normalized_host.is_empty() || normalized_project.is_empty() {
+            format!("remote-id:{}", remote.id.to_ascii_lowercase())
+        } else {
+            normalized_project
+        };
+        let key = (platform, normalized_host, repository_identity);
+        canonical
+            .entry(key)
+            .and_modify(|selected| {
+                if remote_preference_key(remote) < remote_preference_key(selected) {
+                    *selected = remote;
+                }
+            })
+            .or_insert(remote);
+    }
+    canonical.into_values().collect()
+}
+
+fn remote_preference_key(remote: &ReviewPlatformRemote) -> (u8, String, String) {
+    let name = remote.name.trim().to_ascii_lowercase();
+    let priority = match name.as_str() {
+        "origin" => 0,
+        "upstream" => 1,
+        _ => 2,
+    };
+    (priority, name, remote.id.to_ascii_lowercase())
+}
+
+fn remote_selection_result(
+    action: &str,
+    repository_path: &str,
+    remotes: &[&ReviewPlatformRemote],
+) -> Value {
+    json!({
+        "action": action,
+        "repositoryPath": repository_path,
+        "status": "needs_remote_selection",
+        "message": "Multiple distinct review platform repositories were found. Select remote_id from candidateRemotes.",
+        "candidateRemotes": remotes,
+    })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn github_remote(id: &str, name: &str, project_path: &str) -> ReviewPlatformRemote {
+        serde_json::from_value(json!({
+            "id": id,
+            "name": name,
+            "url": format!("git@github.com:{project_path}.git"),
+            "platform": "github",
+            "host": "github.com",
+            "owner": project_path.split('/').next().unwrap_or_default(),
+            "repositoryName": project_path.split('/').next_back().unwrap_or_default(),
+            "projectPath": project_path,
+            "webUrl": format!("https://github.com/{project_path}"),
+            "supported": true,
+            "authState": "connected",
+            "authSource": "gh_cli",
+            "message": null
+        }))
+        .expect("remote fixture should deserialize")
+    }
+
+    #[test]
+    fn canonical_remotes_collapse_origin_and_upstream_aliases_for_the_same_repository() {
+        let remotes = vec![
+            github_remote("upstream-id", "upstream", "GCWing/BitFun"),
+            github_remote("origin-id", "origin", "gcwing/bitfun"),
+        ];
+
+        let supported = canonical_supported_remotes(&remotes);
+
+        assert_eq!(supported.len(), 1);
+        assert_eq!(supported[0].id, "origin-id");
+    }
+
+    #[test]
+    fn different_provider_repositories_return_typed_remote_selection() {
+        let remotes = vec![
+            github_remote("origin-id", "origin", "limityan/BitFun"),
+            github_remote("upstream-id", "upstream", "GCWing/BitFun"),
+        ];
+        let supported = canonical_supported_remotes(&remotes);
+
+        let selection = remote_selection_result(ACTION_GET, "D:/workspace/BitFun", &supported);
+
+        assert_eq!(selection["status"], "needs_remote_selection");
+        assert_eq!(selection["action"], ACTION_GET);
+        assert_eq!(selection["candidateRemotes"].as_array().unwrap().len(), 2);
+    }
 }

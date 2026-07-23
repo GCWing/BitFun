@@ -9,6 +9,7 @@ use crate::agentic::agents::{
     mode_presentation_rank, resolve_mode_config_profile_id, AgentCategory, AgentInfo,
     AgentToolPolicy, SubagentListScope, SubagentQueryContext,
 };
+use crate::agentic::deep_review_policy::canonical_review_worker_agent_type;
 use crate::agentic::tools::get_all_registered_tool_names;
 use crate::service::config::mode_config_canonicalizer::resolve_effective_tools;
 use bitfun_agent_runtime::agents::subagent_source_presentation_rank;
@@ -181,6 +182,15 @@ impl AgentRegistry {
             }
         }
 
+        let canonical = canonical_review_worker_agent_type(id);
+        if canonical != id {
+            return self
+                .read_agents()
+                .get(canonical)
+                .filter(|entry| entry.category == AgentCategory::SubAgent)
+                .map(|entry| entry.agent.is_readonly());
+        }
+
         None
     }
 
@@ -197,6 +207,15 @@ impl AgentRegistry {
                     return Some(is_review_agent_entry(entry));
                 }
             }
+        }
+
+        let canonical = canonical_review_worker_agent_type(id);
+        if canonical != id {
+            return self
+                .read_agents()
+                .get(canonical)
+                .filter(|entry| entry.category == AgentCategory::SubAgent)
+                .map(is_review_agent_entry);
         }
 
         None

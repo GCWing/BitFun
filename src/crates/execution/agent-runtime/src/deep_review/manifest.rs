@@ -6,9 +6,9 @@
 //! reduced coverage, omitted files, or stale evidence hints.
 
 use super::constants::{
-    MANAGED_REVIEW_MAX_BATCHES, MANAGED_REVIEW_MAX_FILES_PER_BATCH,
-    MANAGED_REVIEW_MAX_PARALLEL_INSTANCES, MANAGED_REVIEW_MAX_WORKER_TIMEOUT_SECONDS,
-    REVIEWER_GENERAL_AGENT_TYPE,
+    canonical_review_worker_agent_type, MANAGED_REVIEW_MAX_BATCHES,
+    MANAGED_REVIEW_MAX_FILES_PER_BATCH, MANAGED_REVIEW_MAX_PARALLEL_INSTANCES,
+    MANAGED_REVIEW_MAX_WORKER_TIMEOUT_SECONDS, REVIEW_WORKER_AGENT_TYPE,
 };
 use super::execution_policy::DeepReviewPolicyViolation;
 use super::target_evidence::ReviewTargetEvidence;
@@ -676,6 +676,13 @@ impl DeepReviewRunManifestGate {
         if self.active_subagent_ids.contains(subagent_type) {
             return Ok(());
         }
+        if subagent_type == REVIEW_WORKER_AGENT_TYPE
+            && self.active_subagent_ids.iter().any(|active| {
+                canonical_review_worker_agent_type(active) == REVIEW_WORKER_AGENT_TYPE
+            })
+        {
+            return Ok(());
+        }
 
         let reason = self
             .skipped_subagent_reasons
@@ -698,9 +705,11 @@ fn validate_managed_review_plan(manifest: &serde_json::Map<String, Value>) -> Op
         .get("workPackets")
         .or_else(|| manifest.get("work_packets"))
         .and_then(Value::as_array);
-    let has_general_packet = packets.is_some_and(|packets| {
+    let has_worker_packet = packets.is_some_and(|packets| {
         packets.iter().any(|packet| {
-            manifest_member_subagent_id(packet).as_deref() == Some(REVIEWER_GENERAL_AGENT_TYPE)
+            manifest_member_subagent_id(packet)
+                .as_deref()
+                .is_some_and(is_managed_review_worker_agent_type)
         })
     });
     let Some(plan) = manifest
@@ -708,8 +717,8 @@ fn validate_managed_review_plan(manifest: &serde_json::Map<String, Value>) -> Op
         .or_else(|| manifest.get("managed_review_plan"))
         .and_then(Value::as_object)
     else {
-        return has_general_packet
-            .then(|| "ReviewGeneral packets require managedReviewPlan runtime bounds".to_string());
+        return has_worker_packet
+            .then(|| "ReviewWorker packets require managedReviewPlan runtime bounds".to_string());
     };
 
     let usize_field = |camel: &str, snake: &str| {
@@ -768,11 +777,13 @@ fn validate_managed_review_plan(manifest: &serde_json::Map<String, Value>) -> Op
     let mut launch_batch_counts = HashMap::<u64, usize>::new();
     let mut packet_file_count = 0usize;
     for packet in packets {
-        if manifest_member_subagent_id(packet).as_deref() != Some(REVIEWER_GENERAL_AGENT_TYPE)
+        if !manifest_member_subagent_id(packet)
+            .as_deref()
+            .is_some_and(is_managed_review_worker_agent_type)
             || packet.get("phase").and_then(Value::as_str) != Some("reviewer")
         {
             return Some(
-                "managed Review packets must use ReviewGeneral reviewer workers".to_string(),
+                "managed Review packets must use ReviewWorker reviewer workers".to_string(),
             );
         }
         let packet_id = packet
@@ -860,6 +871,10 @@ fn validate_managed_review_plan(manifest: &serde_json::Map<String, Value>) -> Op
     }
 
     None
+}
+
+fn is_managed_review_worker_agent_type(agent_type: &str) -> bool {
+    agent_type == REVIEW_WORKER_AGENT_TYPE || agent_type == "ReviewGeneral"
 }
 
 fn validate_quality_decision(
@@ -1089,6 +1104,25 @@ mod tests {
             .ensure_active("ReviewGeneral")
             .expect_err("ReviewGeneral must not enter a strict or legacy plan");
         assert_eq!(error.code, "deep_review_managed_plan_invalid");
+    }
+
+    #[test]
+    fn historical_fixed_reviewer_packets_remain_restorable_without_a_managed_plan() {
+        let manifest = json!({
+            "reviewMode": "deep",
+            "workPackets": [{
+                "packetId": "reviewer:ReviewSecurity:group-1-of-1",
+                "phase": "reviewer",
+                "subagentId": "ReviewSecurity",
+                "assignedScope": { "files": ["src/auth.rs"] }
+            }]
+        });
+        let gate = DeepReviewRunManifestGate::from_value(&manifest).expect("gate should parse");
+
+        gate.ensure_active("ReviewSecurity")
+            .expect("the historical identity must remain valid");
+        gate.ensure_active("ReviewWorker")
+            .expect("the current worker must be able to resume the historical packet");
     }
 
     #[test]

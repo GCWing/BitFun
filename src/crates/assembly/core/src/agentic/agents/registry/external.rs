@@ -306,7 +306,7 @@ impl AgentRegistry {
                     return match route {
                         ExternalSubagentRoute::Local => self
                             .find_agent_entry(logical_id, Some(workspace_root))
-                            .map(|_| local_binding(logical_id)),
+                            .map(|entry| local_binding(logical_id, entry.agent.id())),
                         ExternalSubagentRoute::External(runtime_key) => {
                             self.external_subagents.acquire(&runtime_key)
                         }
@@ -316,7 +316,7 @@ impl AgentRegistry {
             }
         }
         self.find_agent_entry(logical_id, workspace_root)
-            .map(|_| local_binding(logical_id))
+            .map(|entry| local_binding(logical_id, entry.agent.id()))
     }
 
     pub(super) fn apply_external_routes_to_query(
@@ -357,9 +357,9 @@ fn normalize_external_logical_id(logical_id: &str) -> String {
     logical_id.to_ascii_lowercase()
 }
 
-fn local_binding(logical_id: &str) -> ExternalSubagentInvocationBinding {
+fn local_binding(logical_id: &str, runtime_agent_key: &str) -> ExternalSubagentInvocationBinding {
     ExternalSubagentInvocationBinding {
-        runtime_agent_key: logical_id.to_string(),
+        runtime_agent_key: runtime_agent_key.to_string(),
         logical_id: logical_id.to_string(),
         supports_follow_up: true,
         continuation_policy: SessionContinuationPolicy::Reusable,

@@ -123,37 +123,7 @@ pub fn builtin_agent_definition_specs() -> Vec<BuiltinAgentDefinitionSpec> {
             SubagentVisibilityPolicy::public(),
         ),
         builtin_agent_spec(
-            "ReviewGeneral",
-            SubAgent,
-            "fast",
-            SubagentVisibilityPolicy::restricted(["DeepReview"]),
-        ),
-        builtin_agent_spec(
-            "ReviewBusinessLogic",
-            SubAgent,
-            "fast",
-            SubagentVisibilityPolicy::restricted(["DeepReview"]),
-        ),
-        builtin_agent_spec(
-            "ReviewPerformance",
-            SubAgent,
-            "fast",
-            SubagentVisibilityPolicy::restricted(["DeepReview"]),
-        ),
-        builtin_agent_spec(
-            "ReviewSecurity",
-            SubAgent,
-            "fast",
-            SubagentVisibilityPolicy::restricted(["DeepReview"]),
-        ),
-        builtin_agent_spec(
-            "ReviewArchitecture",
-            SubAgent,
-            "fast",
-            SubagentVisibilityPolicy::restricted(["DeepReview"]),
-        ),
-        builtin_agent_spec(
-            "ReviewFrontend",
+            "ReviewWorker",
             SubAgent,
             "fast",
             SubagentVisibilityPolicy::restricted(["DeepReview"]),
@@ -212,6 +182,7 @@ pub fn default_model_id_for_builtin_agent(agent_type: &str) -> &'static str {
         "GenerateDoc"
         | "ResearchSpecialist"
         | "DeepReview"
+        | "ReviewWorker"
         | "ReviewBusinessLogic"
         | "ReviewGeneral"
         | "ReviewPerformance"

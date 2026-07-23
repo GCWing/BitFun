@@ -171,6 +171,9 @@ impl Tool for TaskTool {
         let subagent_type = input
             .and_then(|v| v.get("subagent_type"))
             .and_then(|v| v.as_str());
+        if subagent_type == Some("CodeReview") {
+            return false;
+        }
         match subagent_type {
             Some(id) => get_agent_registry()
                 .get_subagent_is_readonly(id)

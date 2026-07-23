@@ -17,10 +17,11 @@ use crate::agentic::session::{
     prompt_cache_persist_action, reconcile_prompt_cache_restore, CachedSystemPrompt,
     CachedUserContext, EvidenceLedgerCheckpoint, EvidenceLedgerEvent, EvidenceLedgerEventStatus,
     EvidenceLedgerSummary, EvidenceLedgerTargetKind, FileReadState, FileReadStateStore,
-    PromptCacheLookup, PromptCachePersistenceWriteAction, PromptCachePolicy,
-    PromptCacheRestoreDecision, PromptCacheScope, SessionContextStore, SessionEvidenceLedger,
-    SessionPromptCache, SessionPromptCacheStore, SystemPromptCacheIdentity, TokenAnchor,
-    TokenAnchorSelection, TokenAnchorStore, TurnSkillAgentSnapshotStore, UserContextCacheIdentity,
+    FileRevision, PromptCacheLookup, PromptCachePersistenceWriteAction, PromptCachePolicy,
+    PromptCacheRestoreDecision, PromptCacheScope, ReviewReadCoverage, SessionContextStore,
+    SessionEvidenceLedger, SessionPromptCache, SessionPromptCacheStore, SystemPromptCacheIdentity,
+    TokenAnchor, TokenAnchorSelection, TokenAnchorStore, TurnSkillAgentSnapshotStore,
+    UserContextCacheIdentity,
 };
 use crate::agentic::skill_agent_snapshot::TurnSkillAgentSnapshot;
 use crate::agentic::workspace::WorkspaceBinding;
@@ -4698,6 +4699,7 @@ impl SessionManager {
         // 2) Restore the in-memory context cache.
         self.context_store
             .replace_context(session_id, messages.clone());
+        self.file_read_state_store.clear_session(session_id);
         self.prune_token_anchors_to_messages(session_id, &messages)
             .await;
 
@@ -6090,6 +6092,42 @@ impl SessionManager {
         logical_path: &str,
     ) -> Option<FileReadState> {
         self.file_read_state_store.get(session_id, logical_path)
+    }
+
+    pub fn record_review_read(
+        &self,
+        session_id: &str,
+        logical_path: &str,
+        revision: FileRevision,
+        start_line: usize,
+        end_line: usize,
+        total_lines: usize,
+    ) {
+        self.file_read_state_store.record_review_read(
+            session_id,
+            logical_path,
+            revision,
+            start_line,
+            end_line,
+            total_lines,
+        );
+    }
+
+    pub fn review_read_coverage(
+        &self,
+        session_id: &str,
+        logical_path: &str,
+        revision: FileRevision,
+        start_line: usize,
+        limit: usize,
+    ) -> Option<ReviewReadCoverage> {
+        self.file_read_state_store.review_read_coverage(
+            session_id,
+            logical_path,
+            revision,
+            start_line,
+            limit,
+        )
     }
 
     /// Get dialog turn count
@@ -8910,10 +8948,24 @@ mod tests {
             .await
             .expect("snapshot 1 should save");
 
+        let revision = crate::agentic::session::FileRevision {
+            modified_ns: 7,
+            byte_len: 42,
+            content_sha256: [7; 32],
+        };
+        manager.record_review_read(&session.session_id, "src/auth.rs", revision, 1, 20, 20);
+        assert!(manager
+            .review_read_coverage(&session.session_id, "src/auth.rs", revision, 1, 20)
+            .is_some());
+
         manager
             .rollback_context_to_turn_start(workspace.path(), &session.session_id, 1)
             .await
             .expect("rollback should succeed");
+
+        assert!(manager
+            .review_read_coverage(&session.session_id, "src/auth.rs", revision, 1, 20)
+            .is_none());
 
         let turns = persistence_manager
             .load_session_turns(workspace.path(), &session.session_id)

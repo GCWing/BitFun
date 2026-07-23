@@ -6,10 +6,12 @@
 //! approves backend-owned strategy selection.
 
 use super::constants::{
+    canonical_review_worker_agent_type, is_review_worker_agent_type,
     CONDITIONAL_REVIEWER_AGENT_TYPES, CORE_REVIEWER_AGENT_TYPES, DEEP_REVIEW_AGENT_TYPE,
     DEFAULT_MAX_RETRIES_PER_ROLE, DEFAULT_MAX_SAME_ROLE_INSTANCES,
-    DEFAULT_REVIEWER_FILE_SPLIT_THRESHOLD, MANAGED_REVIEW_MAX_BATCHES, REVIEWER_GENERAL_AGENT_TYPE,
-    REVIEW_FIXER_AGENT_TYPE, REVIEW_JUDGE_AGENT_TYPE,
+    DEFAULT_REVIEWER_FILE_SPLIT_THRESHOLD, LEGACY_REVIEW_WORKER_AGENT_TYPES,
+    MANAGED_REVIEW_MAX_BATCHES, REVIEW_FIXER_AGENT_TYPE, REVIEW_JUDGE_AGENT_TYPE,
+    REVIEW_WORKER_AGENT_TYPE,
 };
 use serde_json::{json, Value};
 use std::collections::{HashMap, HashSet};
@@ -36,7 +38,7 @@ pub enum DeepReviewSubagentRole {
     Judge,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Default)]
 pub enum DeepReviewStrategyLevel {
     Quick,
     #[default]
@@ -188,9 +190,8 @@ impl DeepReviewExecutionPolicy {
         &self,
         subagent_type: &str,
     ) -> Result<DeepReviewSubagentRole, DeepReviewPolicyViolation> {
-        if CORE_REVIEWER_AGENT_TYPES.contains(&subagent_type)
+        if is_review_worker_agent_type(subagent_type)
             || CONDITIONAL_REVIEWER_AGENT_TYPES.contains(&subagent_type)
-            || subagent_type == REVIEWER_GENERAL_AGENT_TYPE
             || self
                 .extra_subagent_ids
                 .iter()
@@ -518,14 +519,28 @@ fn normalize_member_strategy_overrides(
     };
 
     let mut normalized = HashMap::new();
+    let mut legacy_worker_strategy: Option<DeepReviewStrategyLevel> = None;
     for (subagent_id, value) in values {
         let id = subagent_id.trim();
         let Some(strategy_level) = DeepReviewStrategyLevel::from_value(Some(value)) else {
             continue;
         };
         if !id.is_empty() {
-            normalized.insert(id.to_string(), strategy_level);
+            let canonical_id = canonical_review_worker_agent_type(id);
+            if canonical_id == id {
+                normalized.insert(canonical_id.to_string(), strategy_level);
+            } else {
+                legacy_worker_strategy = Some(
+                    legacy_worker_strategy
+                        .map_or(strategy_level, |current| current.max(strategy_level)),
+                );
+            }
         }
+    }
+    if let Some(strategy_level) = legacy_worker_strategy {
+        normalized
+            .entry(REVIEW_WORKER_AGENT_TYPE.to_string())
+            .or_insert(strategy_level);
     }
 
     normalized
@@ -535,6 +550,7 @@ fn disallowed_extra_subagent_ids() -> HashSet<&'static str> {
     CORE_REVIEWER_AGENT_TYPES
         .into_iter()
         .chain(CONDITIONAL_REVIEWER_AGENT_TYPES)
+        .chain(LEGACY_REVIEW_WORKER_AGENT_TYPES)
         .chain([
             REVIEW_JUDGE_AGENT_TYPE,
             DEEP_REVIEW_AGENT_TYPE,
@@ -618,6 +634,31 @@ mod tests {
         assert_eq!(
             policy.max_reviewer_calls,
             2 * (reviewer_agent_type_count() + 2)
+        );
+    }
+
+    #[test]
+    fn legacy_worker_strategy_overrides_prefer_deeper_coverage_unless_current_id_is_explicit() {
+        let legacy = DeepReviewExecutionPolicy::from_config_value(Some(&json!({
+            "member_strategy_overrides": {
+                "ReviewSecurity": "quick",
+                "ReviewArchitecture": "deep"
+            }
+        })));
+        assert_eq!(
+            legacy.member_strategy_overrides.get("ReviewWorker"),
+            Some(&DeepReviewStrategyLevel::Deep)
+        );
+
+        let explicit = DeepReviewExecutionPolicy::from_config_value(Some(&json!({
+            "member_strategy_overrides": {
+                "ReviewWorker": "normal",
+                "ReviewArchitecture": "deep"
+            }
+        })));
+        assert_eq!(
+            explicit.member_strategy_overrides.get("ReviewWorker"),
+            Some(&DeepReviewStrategyLevel::Normal)
         );
     }
 

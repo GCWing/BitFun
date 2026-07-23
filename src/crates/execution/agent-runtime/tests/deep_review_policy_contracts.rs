@@ -20,7 +20,7 @@ use bitfun_agent_runtime::deep_review::{
     DeepReviewCapacityQueueReason, DeepReviewConcurrencyPolicy, DeepReviewExecutionPolicy,
     DeepReviewQueueControlAction, DeepReviewQueueControlSnapshot, DeepReviewQueueWaitSkipReason,
     DeepReviewRunManifestGate, DeepReviewStrategyLevel, DeepReviewSubagentRole,
-    DeepReviewToolParentContext, REVIEWER_SECURITY_AGENT_TYPE,
+    DeepReviewToolParentContext, REVIEW_WORKER_AGENT_TYPE,
 };
 use bitfun_events::{DeepReviewQueueReason, DeepReviewQueueStatus};
 use serde_json::{json, Value};
@@ -39,7 +39,7 @@ fn deep_review_policy_owner_exposes_execution_policy_and_manifest_gate() {
     assert_eq!(
         policy
             .member_strategy_overrides
-            .get(REVIEWER_SECURITY_AGENT_TYPE),
+            .get(REVIEW_WORKER_AGENT_TYPE),
         Some(&DeepReviewStrategyLevel::Quick)
     );
 
@@ -56,10 +56,10 @@ fn deep_review_policy_owner_exposes_execution_policy_and_manifest_gate() {
 
     let gate = DeepReviewRunManifestGate::from_value(&json!({
         "reviewMode": "deep",
-        "workPackets": [{ "subagentId": "ReviewSecurity" }]
+        "coreReviewers": [{ "subagentId": "ReviewWorker" }]
     }))
     .expect("deep manifest gate");
-    assert!(gate.ensure_active("ReviewSecurity").is_ok());
+    assert!(gate.ensure_active(REVIEW_WORKER_AGENT_TYPE).is_ok());
 }
 
 #[test]
@@ -72,12 +72,12 @@ fn deep_review_runtime_owner_tracks_budget_queue_and_shared_context() {
             "turn-runtime-owner",
             &policy,
             DeepReviewSubagentRole::Reviewer,
-            REVIEWER_SECURITY_AGENT_TYPE,
+            REVIEW_WORKER_AGENT_TYPE,
             false,
         )
         .expect("reviewer budget");
     assert_eq!(
-        tracker.retries_used("turn-runtime-owner", REVIEWER_SECURITY_AGENT_TYPE),
+        tracker.retries_used("turn-runtime-owner", REVIEW_WORKER_AGENT_TYPE),
         0
     );
 
@@ -94,7 +94,7 @@ fn deep_review_runtime_owner_tracks_budget_queue_and_shared_context() {
 
     let measurement = record_deep_review_shared_context_tool_use(
         "turn-runtime-owner",
-        REVIEWER_SECURITY_AGENT_TYPE,
+        REVIEW_WORKER_AGENT_TYPE,
         "Read",
         "src/lib.rs",
     );
@@ -258,6 +258,15 @@ fn deep_review_task_execution_owner_preserves_packet_retry_and_queue_contracts()
             Some(&manifest)
         ),
         Some("security-a".to_string())
+    );
+    assert_eq!(
+        deep_review_packet_id_for_cache(
+            "ReviewSecurity",
+            Some("Review [packet architecture-a]"),
+            Some(&manifest)
+        ),
+        None,
+        "one historical reviewer id must not claim another historical reviewer's packet"
     );
     assert_eq!(
         deep_review_launch_batch_for_task("ReviewSecurity", None, Some(&manifest))
