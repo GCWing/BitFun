@@ -1,0 +1,217 @@
+/**
+ * Terminal edit modal styles
+ * Simple and understated style
+ */
+
+@use '../../../component-library/styles/tokens' as *;
+
+// ==================== Overlay ====================
+
+.terminal-edit-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: $z-modal;
+  background: rgba(var(--color-static-black-rgb), 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  animation: terminal-edit-overlay-fade 0.2s ease;
+}
+
+@keyframes terminal-edit-overlay-fade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+// ==================== Dialog Body ====================
+
+.terminal-edit-dialog {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  background: var(--color-bg-primary);
+  border: 1px solid var(--border-subtle);
+  border-radius: 12px;
+  box-shadow: 0 16px 48px var(--color-overlay-black-40);
+  width: 380px;
+  max-width: calc(100vw - 48px);
+  overflow: hidden;
+  animation: terminal-edit-dialog-enter 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes terminal-edit-dialog-enter {
+  from {
+    opacity: 0;
+    transform: translateY(16px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+// ==================== Close Button ====================
+
+.terminal-edit-dialog__close {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  z-index: 10;
+  background: transparent;
+  border: 1px solid transparent;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  padding: 5px;
+  border-radius: 5px;
+  transition: all 0.15s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  
+  &:hover {
+    background: var(--element-bg-subtle);
+    color: var(--color-text-primary);
+  }
+  
+  &:active {
+    transform: scale(0.92);
+  }
+}
+
+// ==================== Header Section ====================
+
+.terminal-edit-dialog__header {
+  flex-shrink: 0;
+  padding: 16px 20px 12px;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.terminal-edit-dialog__title {
+  font-size: 14px;
+  font-weight: 500;
+  margin: 0;
+  color: var(--color-text-primary);
+  line-height: 1.3;
+}
+
+// ==================== Content Section ====================
+
+.terminal-edit-dialog__content {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 16px 20px;
+}
+
+// ==================== Form Fields ====================
+
+.terminal-edit-dialog__field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.terminal-edit-dialog__label {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--color-text-secondary);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.terminal-edit-dialog__required {
+  color: #f44336;
+}
+
+.terminal-edit-dialog__optional {
+  font-weight: 400;
+  color: var(--color-text-muted);
+}
+
+.terminal-edit-dialog__input {
+  width: 100%;
+  padding: 8px 12px;
+  font-size: 13px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 6px;
+  background: var(--color-bg-secondary);
+  color: var(--color-text-primary);
+  outline: none !important;
+  transition: border-color 0.15s ease, background 0.15s ease;
+
+  &:focus,
+  &:focus-visible,
+  &:focus-within,
+  &:active {
+    border-color: var(--color-accent-500);
+    outline: none !important;
+    box-shadow: none;
+  }
+
+  &::placeholder {
+    color: var(--color-text-muted);
+  }
+}
+
+.terminal-edit-dialog__hint {
+  font-size: 11px;
+  color: var(--color-text-muted);
+  margin-top: 2px;
+}
+
+// ==================== Footer Buttons ====================
+
+.terminal-edit-dialog__footer {
+  flex-shrink: 0;
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 12px 20px 16px;
+  border-top: 1px solid var(--border-subtle);
+}
+
+.terminal-edit-dialog__btn {
+  padding: 7px 14px;
+  font-size: 12px;
+  font-weight: 500;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+
+  &--cancel {
+    background: var(--element-bg-base);
+    color: var(--color-text-secondary);
+
+    &:hover {
+      background: var(--element-bg-soft);
+    }
+    
+    &:active {
+      transform: scale(0.97);
+    }
+  }
+
+  &--confirm {
+    background: var(--color-accent-500);
+    color: white;
+
+    &:hover:not(:disabled) {
+      background: var(--color-accent-600);
+    }
+    
+    &:active:not(:disabled) {
+      transform: scale(0.97);
+    }
+
+    &:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+  }
+}

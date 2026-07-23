@@ -1,0 +1,21 @@
+// Surfaces that must match theme `components.button.primary`.
+// ThemeService sets --btn-primary-* on :root when the theme includes components.button.
+// ThemeService also provides accent-tint defaults when those vars are absent.
+
+@mixin btn-primary-surface-default {
+  background: var(--btn-primary-bg);
+  color: var(--btn-primary-color);
+  box-shadow: var(--btn-primary-shadow);
+}
+
+@mixin btn-primary-surface-hover {
+  background: var(--btn-primary-hover-bg);
+  color: var(--btn-primary-hover-color);
+  box-shadow: var(--btn-primary-hover-shadow);
+}
+
+@mixin btn-primary-surface-active {
+  background: var(--btn-primary-active-bg);
+  color: var(--btn-primary-active-color);
+  box-shadow: var(--btn-primary-active-shadow);
+}

@@ -1,0 +1,689 @@
+{
+  "version": "1.0",
+  "id": "ai-models",
+  "title": "AI 模型配置",
+  "icon": "brain",
+  "description": "管理和配置各种 AI 模型提供商",
+  "order": 1,
+  "sections": [
+    {
+      "id": "model-list",
+      "title": "模型管理",
+      "description": "添加、编辑和管理 AI 模型配置",
+      "fields": [
+        {
+          "type": "list",
+          "dataType": "array",
+          "key": "models",
+          "title": "已配置模型",
+          "description": "当前系统中配置的所有 AI 模型",
+          "default": [],
+          "ui": {
+            "addText": "添加新模型",
+            "removeText": "删除模型",
+            "reorderable": true,
+            "minItems": 0,
+            "maxItems": 20,
+            "emptyText": "尚未配置任何模型，点击添加按钮开始配置",
+            "itemActions": ["edit", "delete", "duplicate", "test"],
+            "listView": {
+              "columns": [
+                {
+                  "key": "name",
+                  "title": "模型名称",
+                  "width": "200px",
+                  "sortable": true
+                },
+                {
+                  "key": "provider",
+                  "title": "提供商",
+                  "width": "120px",
+                  "render": "badge"
+                },
+                {
+                  "key": "model",
+                  "title": "模型ID",
+                  "width": "180px"
+                },
+                {
+                  "key": "status",
+                  "title": "状态",
+                  "width": "100px",
+                  "render": "status"
+                },
+                {
+                  "key": "actions",
+                  "title": "操作",
+                  "width": "120px",
+                  "render": "actions"
+                }
+              ]
+            }
+          },
+          "itemSchema": {
+            "type": "modal",
+            "title": "模型配置",
+            "ui": {
+              "trigger": {
+                "text": "配置模型",
+                "variant": "primary",
+                "icon": "settings"
+              },
+              "modal": {
+                "title": "AI 模型详细配置",
+                "size": "large",
+                "closable": true,
+                "maskClosable": false,
+                "centered": true,
+                "actions": ["save", "cancel", "test", "reset"],
+                "tabs": [
+                  {
+                    "id": "basic",
+                    "title": "基础配置",
+                    "icon": "info",
+                    "fields": [
+                      {
+                        "type": "input",
+                        "dataType": "string",
+                        "key": "name",
+                        "title": "模型名称",
+                        "description": "为此模型配置设置一个易识别的名称",
+                        "required": true,
+                        "ui": {
+                          "placeholder": "例如：GPT-4 主力模型",
+                          "maxLength": 50
+                        },
+                        "validation": {
+                          "required": true,
+                          "minLength": 2,
+                          "maxLength": 50,
+                          "pattern": "^[\\u4e00-\\u9fa5a-zA-Z0-9\\s\\-_]+$"
+                        }
+                      },
+                      {
+                        "type": "select",
+                        "dataType": "string",
+                        "key": "provider",
+                        "title": "AI 提供商",
+                        "description": "选择 AI 模型的提供商",
+                        "required": true,
+                        "ui": {
+                          "placeholder": "请选择提供商",
+                          "options": [
+                            {
+                              "value": "openai",
+                              "label": "OpenAI",
+                              "description": "GPT-3.5, GPT-4 等模型"
+                            },
+                            {
+                              "value": "responses",
+                              "label": "OpenAI Responses",
+                              "description": "OpenAI Responses API /responses 兼容模型"
+                            },
+                            {
+                              "value": "anthropic",
+                              "label": "Anthropic",
+                              "description": "Claude 系列模型"
+                            },
+                            {
+                              "value": "google",
+                              "label": "Google",
+                              "description": "Gemini, PaLM 等模型"
+                            },
+                            {
+                              "value": "azure",
+                              "label": "Azure OpenAI",
+                              "description": "Microsoft Azure 托管的 OpenAI 模型"
+                            },
+                            {
+                              "value": "huggingface",
+                              "label": "Hugging Face",
+                              "description": "开源和商业模型"
+                            },
+                            {
+                              "value": "custom",
+                              "label": "自定义",
+                              "description": "自定义 API 端点"
+                            }
+                          ]
+                        }
+                      },
+                      {
+                        "type": "select",
+                        "dataType": "string",
+                        "key": "model",
+                        "title": "模型ID",
+                        "description": "具体的模型标识符",
+                        "required": true,
+                        "ui": {
+                          "placeholder": "选择或输入模型ID",
+                          "searchable": true,
+                          "optionsApi": {
+                            "url": "/api/models",
+                            "method": "GET",
+                            "params": {
+                              "provider": "{{provider}}"
+                            }
+                          }
+                        },
+                        "conditional": {
+                          "when": "provider",
+                          "operator": "not-equals",
+                          "value": "",
+                          "show": true
+                        }
+                      },
+                      {
+                        "type": "input",
+                        "dataType": "string",
+                        "key": "description",
+                        "title": "模型描述",
+                        "description": "可选的模型描述信息",
+                        "ui": {
+                          "placeholder": "描述此模型的用途和特点",
+                          "maxLength": 200
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "id": "connection",
+                    "title": "连接配置",
+                    "icon": "link",
+                    "fields": [
+                      {
+                        "type": "input",
+                        "dataType": "string",
+                        "key": "apiKey",
+                        "title": "API 密钥",
+                        "description": "访问 AI 服务所需的 API 密钥",
+                        "required": true,
+                        "ui": {
+                          "placeholder": "输入 API 密钥",
+                          "password": true,
+                          "suffix": "key"
+                        },
+                        "validation": {
+                          "required": true,
+                          "minLength": 10,
+                          "async": {
+                            "validator": "validateApiKey",
+                            "debounce": 1000
+                          }
+                        },
+                        "conditional": {
+                          "when": "provider",
+                          "operator": "not-equals",
+                          "value": "custom",
+                          "show": true
+                        }
+                      },
+                      {
+                        "type": "input",
+                        "dataType": "string",
+                        "key": "baseUrl",
+                        "title": "API 基础URL",
+                        "description": "自定义 API 端点的基础 URL",
+                        "ui": {
+                          "placeholder": "https://api.example.com/v1",
+                          "prefix": "https://"
+                        },
+                        "validation": {
+                          "url": true
+                        },
+                        "conditional": {
+                          "when": "provider",
+                          "operator": "in",
+                          "value": ["custom", "azure"],
+                          "show": true
+                        }
+                      },
+                      {
+                        "type": "group",
+                        "title": "代理设置",
+                        "ui": {
+                          "collapsible": true,
+                          "collapsed": true,
+                          "border": true
+                        },
+                        "fields": [
+                          {
+                            "type": "switch",
+                            "dataType": "boolean",
+                            "key": "enableProxy",
+                            "title": "启用代理",
+                            "description": "通过代理服务器访问 AI 服务",
+                            "default": false
+                          },
+                          {
+                            "type": "input",
+                            "dataType": "string",
+                            "key": "proxyUrl",
+                            "title": "代理地址",
+                            "ui": {
+                              "placeholder": "http://proxy.example.com:8080"
+                            },
+                            "conditional": {
+                              "when": "enableProxy",
+                              "value": true,
+                              "show": true,
+                              "require": true
+                            }
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "id": "parameters",
+                    "title": "模型参数",
+                    "icon": "sliders",
+                    "fields": [
+                      {
+                        "type": "range",
+                        "dataType": "number",
+                        "key": "temperature",
+                        "title": "Temperature",
+                        "description": "控制输出的随机性，值越高越随机",
+                        "default": 0.7,
+                        "ui": {
+                          "min": 0,
+                          "max": 2,
+                          "step": 0.1,
+                          "marks": {
+                            "0": "保守",
+                            "1": "平衡",
+                            "2": "创新"
+                          },
+                          "showValue": true
+                        },
+                        "validation": {
+                          "min": 0,
+                          "max": 2
+                        }
+                      },
+                      {
+                        "type": "number",
+                        "dataType": "number",
+                        "key": "maxTokens",
+                        "title": "最大Token数",
+                        "description": "单次响应的最大 token 数量",
+                        "default": 2048,
+                        "ui": {
+                          "min": 1,
+                          "max": 8192,
+                          "step": 1,
+                          "formatter": "{{value}} tokens"
+                        },
+                        "validation": {
+                          "min": 1,
+                          "max": 8192
+                        }
+                      },
+                      {
+                        "type": "select",
+                        "dataType": "string",
+                        "key": "reasoning_mode",
+                        "title": "推理模式 (Reasoning Mode)",
+                        "description": "控制是否省略、显式启用、显式禁用或使用 provider 原生自适应推理",
+                        "default": "default",
+                        "ui": {
+                          "options": [
+                            {
+                              "value": "default",
+                              "label": "API Default - 不传推理字段"
+                            },
+                            {
+                              "value": "enabled",
+                              "label": "Enabled - 显式开启"
+                            },
+                            {
+                              "value": "disabled",
+                              "label": "Disabled - 显式关闭"
+                            },
+                            {
+                              "value": "adaptive",
+                              "label": "Adaptive - 使用 provider 自适应推理"
+                            }
+                          ]
+                        }
+                      },
+                      {
+                        "type": "select",
+                        "dataType": "string",
+                        "key": "reasoning_effort",
+                        "title": "推理深度 (Reasoning Effort)",
+                        "description": "控制 provider 支持的推理强度，适用于 DeepSeek、Responses API 与支持自适应推理的 Claude 模型",
+                        "ui": {
+                          "placeholder": "使用 API 默认值",
+                          "allowClear": true,
+                          "options": [
+                            {
+                              "value": "none",
+                              "label": "None - 不使用额外推理"
+                            },
+                            {
+                              "value": "minimal",
+                              "label": "Minimal - 最轻量推理"
+                            },
+                            {
+                              "value": "low",
+                              "label": "Low - 快速响应，轻度推理"
+                            },
+                            {
+                              "value": "medium",
+                              "label": "Medium - 平衡速度与推理深度"
+                            },
+                            {
+                              "value": "high",
+                              "label": "High - 深度推理"
+                            },
+                            {
+                              "value": "xhigh",
+                              "label": "Extra High - 最大推理深度"
+                            },
+                            {
+                              "value": "max",
+                              "label": "Max - Claude 自适应推理最大强度"
+                            }
+                          ]
+                        }
+                      },
+                      {
+                        "type": "number",
+                        "dataType": "number",
+                        "key": "thinking_budget_tokens",
+                        "title": "思考预算 Tokens",
+                        "description": "Anthropic 手动思考模式下的可选预算；留空时使用默认预算",
+                        "ui": {
+                          "min": 1024,
+                          "max": 50000,
+                          "step": 1024
+                        }
+                      },
+                      {
+                        "type": "range",
+                        "dataType": "number",
+                        "key": "topP",
+                        "title": "Top P",
+                        "description": "核采样参数，控制输出的多样性",
+                        "default": 0.9,
+                        "ui": {
+                          "min": 0.1,
+                          "max": 1.0,
+                          "step": 0.1,
+                          "showValue": true
+                        }
+                      },
+                      {
+                        "type": "key-value",
+                        "dataType": "object",
+                        "key": "customParams",
+                        "title": "自定义参数",
+                        "description": "额外的模型参数设置",
+                        "default": {},
+                        "ui": {
+                          "keyPlaceholder": "参数名",
+                          "valuePlaceholder": "参数值",
+                          "addText": "添加参数",
+                          "keyType": "string",
+                          "valueType": "auto"
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "id": "advanced",
+                    "title": "高级设置",
+                    "icon": "cog",
+                    "fields": [
+                      {
+                        "type": "switch",
+                        "dataType": "boolean",
+                        "key": "inline_think_in_text",
+                        "title": "解析文本中的 <think> 标签",
+                        "description": "将文本流中的 <think>...</think> 实时拆分为 reasoning 内容",
+                        "default": true,
+                        "conditional": {
+                          "when": "provider",
+                          "operator": "in",
+                          "value": ["openai", "anthropic"],
+                          "show": true
+                        }
+                      },
+                      {
+                        "type": "number",
+                        "dataType": "number",
+                        "key": "timeout",
+                        "title": "请求超时",
+                        "description": "API 请求的超时时间（秒）",
+                        "default": 30,
+                        "ui": {
+                          "min": 5,
+                          "max": 300,
+                          "suffix": "秒"
+                        },
+                        "validation": {
+                          "min": 5,
+                          "max": 300
+                        }
+                      },
+                      {
+                        "type": "number",
+                        "dataType": "number",
+                        "key": "maxRetries",
+                        "title": "最大重试次数",
+                        "description": "请求失败时的最大重试次数",
+                        "default": 3,
+                        "ui": {
+                          "min": 0,
+                          "max": 10
+                        }
+                      },
+                      {
+                        "type": "select",
+                        "dataType": "string",
+                        "key": "retryStrategy",
+                        "title": "重试策略",
+                        "description": "失败重试的策略",
+                        "default": "exponential",
+                        "ui": {
+                          "options": [
+                            {
+                              "value": "linear",
+                              "label": "线性退避",
+                              "description": "固定间隔重试"
+                            },
+                            {
+                              "value": "exponential",
+                              "label": "指数退避",
+                              "description": "逐渐增加重试间隔"
+                            },
+                            {
+                              "value": "immediate",
+                              "label": "立即重试",
+                              "description": "不等待直接重试"
+                            }
+                          ]
+                        }
+                      },
+                      {
+                        "type": "switch",
+                        "dataType": "boolean",
+                        "key": "enableLogging",
+                        "title": "启用日志记录",
+                        "description": "记录 API 请求和响应的详细日志",
+                        "default": false
+                      },
+                      {
+                        "type": "switch",
+                        "dataType": "boolean",
+                        "key": "enableCaching",
+                        "title": "启用响应缓存",
+                        "description": "缓存相同请求的响应结果",
+                        "default": true
+                      }
+                    ]
+                  }
+                ]
+              }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "global-settings",
+      "title": "全局设置",
+      "description": "影响所有模型的全局配置选项",
+      "collapsible": true,
+      "collapsed": false,
+      "fields": [
+        {
+          "type": "select",
+          "dataType": "string",
+          "key": "defaultModel",
+          "title": "默认模型",
+          "description": "新建对话时默认使用的模型",
+          "ui": {
+            "placeholder": "选择默认模型",
+            "optionsApi": {
+              "url": "/api/configured-models",
+              "method": "GET"
+            }
+          }
+        },
+        {
+          "type": "switch",
+          "dataType": "boolean",
+          "key": "autoSwitchModel",
+          "title": "智能模型切换",
+          "description": "根据任务类型自动选择合适的模型",
+          "default": false
+        },
+        {
+          "type": "switch",
+          "dataType": "boolean",
+          "key": "enableModelFallback",
+          "title": "启用模型降级",
+          "description": "当主模型不可用时自动切换到备用模型",
+          "default": true
+        },
+        {
+          "type": "list",
+          "dataType": "array",
+          "key": "fallbackOrder",
+          "title": "降级顺序",
+          "description": "模型不可用时的降级优先级",
+          "ui": {
+            "addText": "添加备用模型",
+            "reorderable": true,
+            "emptyText": "请添加备用模型"
+          },
+          "itemSchema": {
+            "type": "select",
+            "dataType": "string",
+            "key": "modelId",
+            "title": "备用模型",
+            "ui": {
+              "optionsApi": {
+                "url": "/api/configured-models",
+                "method": "GET"
+              }
+            }
+          },
+          "conditional": {
+            "when": "enableModelFallback",
+            "value": true,
+            "show": true
+          }
+        }
+      ]
+    },
+    {
+      "id": "usage-monitoring",
+      "title": "使用监控",
+      "description": "监控和限制 AI 模型的使用情况",
+      "collapsible": true,
+      "collapsed": true,
+      "fields": [
+        {
+          "type": "switch",
+          "dataType": "boolean",
+          "key": "enableUsageTracking",
+          "title": "启用使用统计",
+          "description": "跟踪和记录模型使用情况",
+          "default": true
+        },
+        {
+          "type": "group",
+          "title": "使用限制",
+          "ui": {
+            "collapsible": true,
+            "collapsed": false,
+            "border": true
+          },
+          "conditional": {
+            "when": "enableUsageTracking",
+            "value": true,
+            "show": true
+          },
+          "fields": [
+            {
+              "type": "number",
+              "dataType": "number",
+              "key": "dailyTokenLimit",
+              "title": "每日Token限制",
+              "description": "每日最大 token 使用量（0表示无限制）",
+              "default": 0,
+              "ui": {
+                "min": 0,
+                "max": 1000000,
+                "formatter": "{{value}} tokens"
+              }
+            },
+            {
+              "type": "number",
+              "dataType": "number",
+              "key": "dailyRequestLimit",
+              "title": "每日请求限制",
+              "description": "每日最大请求次数（0表示无限制）",
+              "default": 0,
+              "ui": {
+                "min": 0,
+                "max": 10000
+              }
+            },
+            {
+              "type": "select",
+              "dataType": "string",
+              "key": "limitExceededAction",
+              "title": "超限处理",
+              "description": "达到使用限制时的处理方式",
+              "default": "warn",
+              "ui": {
+                "options": [
+                  {
+                    "value": "block",
+                    "label": "阻止请求",
+                    "description": "完全阻止新的 API 请求"
+                  },
+                  {
+                    "value": "warn",
+                    "label": "警告提示",
+                    "description": "显示警告但允许继续使用"
+                  },
+                  {
+                    "value": "fallback",
+                    "label": "切换备用",
+                    "description": "自动切换到备用模型"
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,428 @@
+{
+  "title": "Git",
+  "init": {
+    "title": "Initialize Git",
+    "notRepository": "Current directory is not a Git repository",
+    "initButton": "Initialize Repository",
+    "hint": "Click the button to initialize with AI assistant",
+    "chatPrompt": "Please help me initialize a Git repository in the current workspace."
+  },
+  "loading": {
+    "text": "Loading Git info...",
+    "hint": "Click refresh if loading takes too long"
+  },
+  "common": {
+    "loading": "Loading...",
+    "retry": "Retry",
+    "refresh": "Refresh",
+    "saving": "Saving...",
+    "processing": "Processing...",
+    "unknown": "Unknown",
+    "unknownError": "Unknown error"
+  },
+  "actions": {
+    "refresh": "Refresh Git Status",
+    "forceRefresh": "Force Refresh",
+    "push": "Push",
+    "forcePush": "Force Push",
+    "pull": "Pull",
+    "stageAll": "Stage All",
+    "stageSelected": "Stage {{count}} selected files",
+    "selectFilesToStage": "Please select files to stage first",
+    "commit": "Commit",
+    "commitWithCount": "Commit ({{count}})",
+    "aiGenerateCommit": "AI Generate Commit Message",
+    "cancelGenerate": "Cancel Generation",
+    "aiCodeReview": "AI Code Review",
+    "viewAllDiff": "View All Diff",
+    "discardFile": "Discard this file",
+    "deleteFile": "Delete this file",
+    "discardAllChanges": "Discard All Changes",
+    "copyCommitHash": "Copy Commit Hash",
+    "resetToCommit": "Reset to this Commit",
+    "createBranchFromCommit": "Create Branch from Commit",
+    "switchBranch": "Switch to this Branch",
+    "createBranchFrom": "Create Branch from this",
+    "deleteBranch": "Delete Branch",
+    "viewBranchHistory": "Click to view commit history",
+    "viewBranchGraph": "View Branch Graph"
+  },
+  "tabs": {
+    "changes": "Changed Files",
+    "commits": "Commit History",
+    "branches": "Branches",
+    "changeDiff": "Change Diff",
+    "branchGraph": "Git Branch Graph",
+    "branchCommitHistory": "{{branch}} Commit History"
+  },
+  "search": {
+    "files": "Search files...",
+    "commits": "Search commits...",
+    "branches": "Search branches...",
+    "clear": "Clear Search"
+  },
+  "branchHistory": {
+    "loading": "Loading commit history for {{branch}}...",
+    "loadFailed": "Failed to load commit history",
+    "loadFailedWithMessage": "Load failed: {{error}}",
+    "retry": "Retry",
+    "selection": {
+      "selectAll": "Select all",
+      "deselectAll": "Deselect all"
+    },
+    "allAuthors": "All authors",
+    "authorPlaceholder": "Author",
+    "cherryPick": "Cherry-pick",
+    "cherryPickRunning": "Running...",
+    "cherryPickFailed": "Cherry-pick failed",
+    "cherryPickOperationFailed": "Cherry-pick operation failed",
+    "copied": "Copied",
+    "copy": "Click to copy",
+    "refresh": "Refresh",
+    "details": {
+      "fullHash": "Full hash:",
+      "commitTime": "Commit time:"
+    },
+    "notifications": {
+      "cherryPickSuccess": "Cherry-picked {{count}} commits into {{branch}}",
+      "cherryPickPartial": "Cherry-picked {{count}} commits, but commit {{hash}} failed: {{error}}",
+      "cherryPickFailedWithError": "Cherry-pick commit {{hash}} failed: {{error}}"
+    }
+  },
+  "graph": {
+    "loading": "Loading commit history...",
+    "loadFailedWithMessage": "Load failed: {{error}}",
+    "empty": "No commit history",
+    "title": "Commit History",
+    "searchPlaceholder": "Search commit message, author, or hash...",
+    "searchPrevious": "Previous result (Shift+Enter)",
+    "searchNext": "Next result (Enter)",
+    "noResults": "No results",
+    "tooltip": {
+      "author": "Author",
+      "hash": "Hash",
+      "time": "Time",
+      "refs": "Refs:",
+      "currentRefSuffix": "(current)"
+    }
+  },
+  "diffView": {
+    "errors": {
+      "repositoryPathEmpty": "Repository path cannot be empty",
+      "loadFailed": "Failed to load diff"
+    },
+    "loading": "Loading diff...",
+    "loadFailedTitle": "Failed to load diff",
+    "workingTree": "Working Tree",
+    "staged": "Staged",
+    "collapseAll": "Collapse All",
+    "expandAll": "Expand All",
+    "loadingData": "Loading diff data...",
+    "empty": {
+      "title": "No diff found",
+      "workingTreeClean": "Working tree has no changes",
+      "noDiffBetweenCommits": "No diff between the selected commits",
+      "selectRepository": "Select a Git repository to view diff"
+    }
+  },
+  "diffEditor": {
+    "saveFailedWithMessage": "Failed to save file: {{error}}",
+    "confirmAcceptAll": "Are you sure you want to accept all changes and stage this file?\n\nFile: {{filePath}}\n+{{additions}} lines, -{{deletions}} lines",
+    "acceptFailedWithMessage": "Failed to accept changes: {{error}}",
+    "confirmRejectAll": "Are you sure you want to discard all changes? This action cannot be undone.\n\nFile: {{filePath}}\nWill discard {{changes}} changes",
+    "rejectFailedWithMessage": "Failed to reject changes: {{error}}",
+    "completed": {
+      "acceptedTitle": "All changes accepted",
+      "rejectedTitle": "All changes rejected",
+      "stagedHint": "File staged and ready to commit",
+      "rejectedHint": "All changes discarded and file restored"
+    }
+  },
+  "review": {
+    "noFilesToReview": "No file changes available for code review",
+    "displayMessage": "Review Git changed files:\n{{files}}",
+    "requestMessage": "Please review the following Git changed files:\n\n{{files}}",
+    "sendFailed": "Failed to send code review request"
+  },
+  "relativeTime": {
+    "justNow": "just now",
+    "minutesAgo": "{{count}} minutes ago",
+    "hoursAgo": "{{count}} hours ago",
+    "daysAgo": "{{count}} days ago",
+    "weeksAgo": "{{count}} weeks ago",
+    "monthsAgo": "{{count}} months ago",
+    "yearsAgo": "{{count}} years ago"
+  },
+  "status": {
+    "staged": "Staged",
+    "unstaged": "Unstaged",
+    "untracked": "Untracked",
+    "ahead": "Ahead of Remote",
+    "behind": "Behind Remote",
+    "modified": "M",
+    "added": "A",
+    "deleted": "D",
+    "renamed": "R",
+    "untrackedBadge": "U"
+  },
+  "fileGroups": {
+    "unstaged": "Unstaged",
+    "untracked": "Untracked",
+    "staged": "Staged",
+    "unstagedWithCount": "Unstaged ({{count}})",
+    "untrackedWithCount": "Untracked ({{count}})",
+    "stagedWithCount": "Staged ({{count}})",
+    "unstagedWithFilter": "Unstaged ({{filtered}} / {{total}})",
+    "untrackedWithFilter": "Untracked ({{filtered}} / {{total}})",
+    "stagedWithFilter": "Staged ({{filtered}} / {{total}})",
+    "moreFiles": "{{count}} more files not shown..."
+  },
+  "commit": {
+    "inputPlaceholder": "Enter commit message...",
+    "inputPlaceholderNoStaged": "Stage files to enter commit message...",
+    "changedFiles": "Changed Files ({{count}})",
+    "author": "Author",
+    "unknown": "Unknown"
+  },
+  "branch": {
+    "current": "Current"
+  },
+  "quickSwitch": {
+    "searchPlaceholder": "Search branches...",
+    "loading": "Loading...",
+    "notifications": {
+      "switchSuccess": "Switched to branch {{branch}}"
+    },
+    "errors": {
+      "title": "Branch switch failed",
+      "switchFailed": "Failed to switch branch",
+      "switchFailedWithMessage": "Failed to switch branch: {{error}}",
+      "localChanges": "Please commit or stash local changes first",
+      "indexConflict": "Please resolve the current index conflicts first",
+      "unexpected": "Unexpected error while switching branches"
+    }
+  },
+  "branchSelect": {
+    "title": "Select or Create Branch",
+    "inputPlaceholder": "Enter new branch name...",
+    "loading": "Loading...",
+    "createNewLabel": "Create new branch:",
+    "openAfterCreate": {
+      "label": "Open after create",
+      "description": "Open the new worktree as a workspace immediately after it is created."
+    },
+    "badges": {
+      "inUse": "In Use"
+    },
+    "errors": {
+      "loadFailed": "Failed to load branch list"
+    }
+  },
+  "selection": {
+    "selectAll": "Select all unstaged files",
+    "deselectAll": "Deselect all",
+    "selectFolder": "Select all files in this folder",
+    "deselectFolder": "Deselect this folder",
+    "selectFile": "Select this file",
+    "deselectFile": "Deselect"
+  },
+  "empty": {
+    "noChanges": "No file changes",
+    "noMatchingFiles": "No matching files",
+    "noCommits": "No commits",
+    "noMatchingCommits": "No matching commits",
+    "noBranches": "No branches",
+    "noMatchingBranches": "No matching branches"
+  },
+  "tooltips": {
+    "viewDiff": "Click to view diff",
+    "expandDetails": "Expand details",
+    "collapseDetails": "Collapse details",
+    "resizeFileList": "Drag to resize file list and diff area"
+  },
+  "dialog": {
+    "createBranch": {
+      "title": "Create Branch from Commit",
+      "description": "Will create new branch from commit {{hash}}",
+      "placeholder": "Enter branch name",
+      "confirm": "Create",
+      "cancel": "Cancel"
+    },
+    "createNewBranch": {
+      "title": "Create New Branch",
+      "baseBranch": "Based on branch",
+      "nameLabel": "New branch name",
+      "namePlaceholder": "e.g. feature/new-feature or bugfix/issue-123",
+      "namingHintTitle": "Branch naming suggestions:",
+      "namingHints": {
+        "featureLabel": "Feature branch:",
+        "featureExample": "feature/feature-name",
+        "bugfixLabel": "Bugfix branch:",
+        "bugfixExample": "bugfix/issue-description",
+        "hotfixLabel": "Hotfix branch:",
+        "hotfixExample": "hotfix/fix-description",
+        "releaseLabel": "Release branch:",
+        "releaseExample": "release/version"
+      },
+      "confirm": "Create Branch",
+      "cancel": "Cancel"
+    }
+  },
+  "validation": {
+    "branchNameInvalid": "Branch name can only contain letters, numbers, dots, underscores, hyphens and slashes",
+    "branchNameExists": "Branch name already exists",
+    "branchNameEmpty": "Branch name cannot be empty",
+    "branchNameContainsDoubleDot": "Branch name cannot contain \"..\"",
+    "branchNameContainsDoubleSlash": "Branch name cannot contain \"//\"",
+    "branchNameDotEdge": "Branch name cannot start or end with \".\"",
+    "branchNameSlashEdge": "Branch name cannot start or end with \"/\"",
+    "branchNameSpaces": "Branch name cannot contain spaces",
+    "branchNameSpecialChars": "Branch name cannot contain special characters: ^ ~ : ? * [ \\",
+    "branchNameAtBrace": "Branch name cannot contain \"@{\"",
+    "branchNameExistsWithName": "Branch \"{{name}}\" already exists"
+  },
+  "operations": {
+    "addFilesTitle": "Add files",
+    "commitChangesTitle": "Commit changes",
+    "pushTitle": "Push changes",
+    "pushTitleForce": "Push changes (force)",
+    "pushProgress": "Pushing to remote repository...",
+    "pullTitle": "Pull changes",
+    "pullProgress": "Pulling from remote repository...",
+    "checkoutTitle": "Switch to branch {{branch}}",
+    "createBranchTitle": "Create branch {{branch}}",
+    "deleteBranchTitle": "Delete branch {{branch}}",
+    "resetFilesTitle": "Reset files"
+  },
+  "advancedOperations": {
+    "merge": "Merge branch",
+    "rebase": "Rebase branch",
+    "stash": "Stash changes",
+    "applyStash": "Apply stash",
+    "popStash": "Pop stash",
+    "dropStash": "Drop stash",
+    "cherryPick": "Cherry-pick commit",
+    "revert": "Revert commit",
+    "resetCommit": "Reset commit"
+  },
+  "settingsView": {
+    "title": "Git Settings",
+    "loading": "Loading Git settings...",
+    "loadFailedTitle": "Failed to load settings",
+    "retry": "Retry",
+    "refresh": "Refresh settings",
+    "saving": "Saving...",
+    "save": "Save settings",
+    "success": {
+      "saveConfig": "Settings saved successfully"
+    },
+    "errors": {
+      "loadConfigFailed": "Failed to load configuration",
+      "saveConfigFailed": "Failed to save configuration"
+    },
+    "tabs": {
+      "user": "User",
+      "repository": "Repository",
+      "advanced": "Advanced"
+    },
+    "sections": {
+      "user": {
+        "title": "User information",
+        "description": "These details are used as the Git commit author identity",
+        "nameLabel": "Name",
+        "namePlaceholder": "Enter your name",
+        "emailLabel": "Email address",
+        "emailPlaceholder": "Enter your email"
+      },
+      "editor": {
+        "title": "Editor settings",
+        "defaultEditorLabel": "Default editor"
+      },
+      "lineEndings": {
+        "title": "Line endings",
+        "autocrlfLabel": "Auto CRLF",
+        "options": {
+          "auto": "Auto (recommended for Windows)",
+          "input": "Input (recommended for macOS/Linux)",
+          "disabled": "Do not convert"
+        }
+      },
+      "remotes": {
+        "title": "Remotes",
+        "urlLabel": "URL",
+        "urlPlaceholder": "Remote URL"
+      },
+      "core": {
+        "title": "Core settings",
+        "ignoreCaseLabel": "Ignore file name case",
+        "ignoreCaseDescription": "Enable on case-insensitive file systems"
+      },
+      "branch": {
+        "title": "Branch settings",
+        "branchLabel": "Branch: {{branch}}",
+        "remoteLabel": "Remote",
+        "mergeLabel": "Merge branch"
+      }
+    }
+  },
+  "errors": {
+    "addFailed": "Failed to add files",
+    "commitFailed": "Failed to commit",
+    "pushFailed": "Push failed",
+    "pushFailedWithCheck": "Push failed. Please check your network connection and permissions.",
+    "pullFailed": "Pull failed",
+    "pullFailedWithCheck": "Pull failed. Please check your network connection and permissions.",
+    "checkoutFailed": "Failed to switch branch",
+    "createBranchFailed": "Failed to create branch",
+    "deleteBranchFailed": "Failed to delete branch",
+    "resetFilesFailed": "Failed to reset files",
+    "resetCommitFailed": "Failed to reset to commit",
+    "cherryPickFailed": "Cherry-pick failed",
+    "cherryPickAbortFailed": "Failed to abort cherry-pick",
+    "cherryPickContinueFailed": "Failed to continue cherry-pick",
+    "refreshFailed": "Refresh failed",
+    "checkoutFailedTitle": "Failed to switch branch",
+    "createBranchFailedTitle": "Failed to create branch",
+    "deleteBranchFailedTitle": "Failed to delete branch",
+    "checkoutLocalChanges": "Please commit or stash local changes first",
+    "checkoutIndexConflict": "Please resolve the current index conflicts first (unfinished merge or rebase may exist)",
+    "branchNotFound": "Branch {{branch}} not found",
+    "branchAlreadyExists": "Branch {{branch}} already exists",
+    "branchNotMerged": "Branch {{branch}} is not fully merged. Use force delete if needed.",
+    "cannotDeleteCurrentBranch": "Cannot delete the currently checked out branch {{branch}}"
+  },
+  "notifications": {
+    "stageSuccess": "Staged {{count}} files",
+    "stageFailed": "Failed to stage: {{error}}",
+    "commitSuccess": "Committed successfully",
+    "commitFailed": "Failed to commit: {{error}}",
+    "fileRestored": "File restored",
+    "fileRestoreFailed": "Failed to restore file: {{error}}",
+    "allChangesRestored": "All changes restored successfully",
+    "restoreFailed": "Failed to restore changes: {{error}}",
+    "resetSuccess": "Reset to commit {{hash}}",
+    "resetFailed": "Failed to reset: {{error}}",
+    "aiGenerateFailed": "AI failed to generate commit message: {{error}}",
+    "noFilesToGenerate": "No file changes to generate commit message",
+    "noStagedFiles": "No staged files to commit",
+    "enterCommitMessage": "Please enter commit message",
+    "selectFilesToStage": "Please select files to stage first",
+    "cannotDeleteCurrentBranch": "Cannot delete current branch",
+    "openDiffFailed": "Failed to open file diff: {{error}}",
+    "openDiffFailedWithPath": "Failed to open file diff: {{error}}\nFile: {{file}}",
+    "pushUpstreamSuccess": "Set upstream and pushed to remote",
+    "pushSuccess": "Pushed to remote",
+    "pushForceSuccess": "Force pushed to remote",
+    "pullSuccess": "Pulled latest changes from remote",
+    "checkoutSuccess": "Switched to branch {{branch}}",
+    "createBranchSuccess": "Created branch {{branch}}",
+    "deleteBranchSuccess": "Deleted branch {{branch}}"
+  },
+  "confirm": {
+    "discardFile": "Warning: Are you sure you want to discard \"{{file}}\"?\n\nThis action cannot be undone!",
+    "deleteFile": "Warning: Are you sure you want to delete \"{{file}}\"?\n\nThis action cannot be undone!",
+    "discardAllChanges": "Warning: This will:\n\n1. Discard all staged changes\n2. Discard all unstaged changes\n3. Delete all untracked files\n\nThis action cannot be undone! Are you sure?",
+    "resetToCommit": "Are you sure you want to reset to commit {{hash}}?\n\nThis will move the current branch pointer to this commit.",
+    "deleteBranch": "Are you sure you want to delete branch \"{{branch}}\"?"
+  }
+}

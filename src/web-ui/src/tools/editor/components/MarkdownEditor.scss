@@ -1,0 +1,655 @@
+@use '../../../component-library/styles/tokens.scss' as *;
+@use '../../../component-library/styles/flowchat-markdown-code-vars' as markdownCode;
+@use '../../../component-library/styles/flowchat-markdown-table-vars' as markdownTable;
+@use '../styles/markdown-editor-layout' as markdownLayout;
+
+.bitfun-markdown-editor {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+  background: var(--color-bg-scene);
+  color: var(--color-text-primary);
+  overflow: hidden;
+}
+
+.bitfun-markdown-editor__notice-bar {
+  display: flex;
+  align-items: flex-start;
+  gap: $size-gap-3;
+  padding: $size-gap-3 $size-gap-4;
+  border-bottom: 1px solid color-mix(in srgb, var(--color-warning) 22%, transparent);
+  background: color-mix(in srgb, var(--color-warning) 8%, var(--color-bg-scene));
+  color: var(--color-text-secondary);
+  flex-shrink: 0;
+}
+
+.bitfun-markdown-editor__notice-icon {
+  width: 16px;
+  height: 16px;
+  margin-top: 2px;
+  color: var(--color-warning);
+  flex-shrink: 0;
+}
+
+.bitfun-markdown-editor__notice-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+
+  p {
+    margin: 0;
+    font-size: var(--font-size-xs);
+    line-height: $line-height-relaxed;
+  }
+}
+
+.bitfun-markdown-editor__mode-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: $size-gap-3;
+  min-height: 34px;
+  padding: 4px $size-gap-3;
+  border-bottom: 1px solid var(--border-subtle);
+  background: color-mix(in srgb, var(--color-bg-scene) 92%, var(--color-bg-elevated));
+  flex-shrink: 0;
+}
+
+.bitfun-markdown-editor__mode-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.bitfun-markdown-editor__toolbar-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: auto;
+}
+
+.bitfun-markdown-editor__toolbar-button.btn-sm,
+.bitfun-markdown-editor__toolbar-button {
+  min-height: 26px;
+  height: 26px;
+  padding: 0 8px;
+  border-radius: 5px;
+  font-size: var(--font-size-xs);
+  line-height: 1;
+}
+
+.bitfun-markdown-editor__copy-button.btn-icon-only,
+.bitfun-markdown-editor__copy-button {
+  width: 26px;
+  padding: 0;
+}
+
+.bitfun-markdown-editor__unsafe-body {
+  min-height: 0;
+  flex: 1;
+}
+
+.bitfun-markdown-editor-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  background: var(--color-bg-scene);
+  color: var(--color-text-primary);
+}
+
+.bitfun-markdown-editor-error {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  background: var(--color-bg-scene);
+  color: var(--color-text-primary);
+
+  .error-content {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: $size-gap-4;
+    padding: $size-gap-8;
+    text-align: center;
+    background: var(--element-bg-base);
+    border-radius: $size-radius-lg;
+    border: 1px solid var(--border-base);
+    backdrop-filter: blur(8px);
+
+    .error-icon {
+      width: 48px;
+      height: 48px;
+      color: var(--color-error);
+    }
+
+    p {
+      margin: 0;
+      font-size: var(--font-size-sm);
+      color: var(--color-text-secondary);
+    }
+
+    .retry-button {
+      padding: $size-gap-2 $size-gap-4;
+      background: var(--element-bg-subtle);
+      color: var(--color-text-secondary);
+      border: 1px solid var(--border-subtle);
+      border-radius: $size-radius-base;
+      cursor: pointer;
+      font-size: var(--font-size-sm);
+      font-weight: $font-weight-medium;
+      transition: all $motion-base $easing-standard;
+      backdrop-filter: blur(8px);
+
+      &:hover {
+        background: $button-bg-hover;
+        border-color: var(--border-accent);
+        color: var(--color-text-primary);
+        transform: translateY(-1px);
+        box-shadow: $shadow-sm;
+      }
+
+      &:active {
+        transform: translateY(0);
+      }
+    }
+  }
+}
+
+// Markdown preview inside m-editor only (align with flow-chat markdown chrome via shared Sass values).
+.m-editor .markdown-body {
+  color: var(--color-text-secondary);
+  font-family: $font-family-sans;
+  font-size: var(--font-size-sm);
+  line-height: $line-height-relaxed;
+
+  h1, h2, h3, h4, h5, h6 {
+    margin-top: $size-gap-6;
+    margin-bottom: $size-gap-4;
+    font-weight: $font-weight-semibold;
+    line-height: $line-height-tight;
+    color: var(--color-text-primary);
+  }
+
+  strong, b {
+    font-weight: $font-weight-bold;
+    color: var(--color-warning);
+  }
+
+  h1 {
+    font-size: var(--font-size-3xl);
+    color: var(--color-text-primary);
+    border-bottom: 1px solid var(--border-subtle);
+    padding-bottom: $size-gap-3;
+    text-align: center;
+    letter-spacing: 0.5px;
+  }
+
+  h2 {
+    font-size: var(--font-size-2xl);
+    border-bottom: 1px solid var(--border-subtle);
+    padding-bottom: $size-gap-2;
+  }
+
+  h3 { font-size: var(--font-size-xl); }
+  h4 { font-size: var(--font-size-lg); }
+  h5 { font-size: var(--font-size-base); }
+  h6 { font-size: var(--font-size-sm); }
+
+  p {
+    margin-top: 0;
+    margin-bottom: $size-gap-4;
+  }
+
+  a {
+    color: var(--color-accent-500);
+    text-decoration: none;
+    transition: all $motion-fast $easing-standard;
+
+    &:hover {
+      color: var(--color-accent-600);
+      text-decoration: underline;
+    }
+  }
+
+  code {
+    padding: 0.1em 0.4em;
+    margin: 0 0.05em;
+    font-size: 0.9em;
+    font-weight: 500;
+    line-height: 1.4;
+    vertical-align: baseline;
+    white-space: nowrap;
+    font-family: var(--font-family-mono);
+    color: markdownCode.$inline-code-fg;
+    background: markdownCode.$inline-code-bg;
+    border: 1px solid markdownCode.$inline-code-border;
+    border-radius: 4px;
+    transition:
+      background-color 0.15s ease,
+      border-color 0.15s ease,
+      color 0.15s ease;
+    box-decoration-break: clone;
+    -webkit-box-decoration-break: clone;
+
+    &:hover {
+      background: markdownCode.$inline-code-hover-bg;
+      border-color: markdownCode.$inline-code-hover-border;
+      color: markdownCode.$inline-code-hover-fg;
+    }
+  }
+
+  pre {
+    margin: 0.25rem 0.3rem $size-gap-4;
+    padding: markdownCode.$pre-padding;
+    overflow: auto;
+    font-size: var(--flowchat-code-font-size);
+    line-height: 1.5;
+    position: relative;
+    font-family: var(--font-family-mono);
+    color: markdownCode.$pre-code-fg;
+    background: markdownCode.$pre-bg;
+    border: 1px dashed markdownCode.$pre-border;
+    border-radius: var(--flowchat-card-radius);
+    box-shadow: markdownCode.$pre-shadow;
+    transition:
+      border-color 0.3s ease,
+      box-shadow 0.3s ease;
+
+    &:hover {
+      border-style: solid;
+      border-color: markdownCode.$pre-hover-border;
+      box-shadow: markdownCode.$pre-hover-shadow;
+    }
+
+    code {
+      display: block;
+      padding: 0;
+      margin: 0;
+      overflow: visible;
+      white-space: pre;
+      font-family: var(--font-family-mono);
+      font-size: var(--flowchat-code-font-size);
+      font-weight: inherit;
+      line-height: inherit;
+      word-wrap: normal;
+      color: inherit;
+      background: transparent;
+      border: 0;
+      border-radius: 0;
+      box-shadow: none;
+
+      &:hover {
+        background: transparent !important;
+        border: none !important;
+        color: inherit !important;
+      }
+    }
+  }
+
+  blockquote {
+    margin: markdownCode.$bq-margin;
+    padding: markdownCode.$bq-padding;
+    font-style: italic;
+    position: relative;
+    color: markdownCode.$bq-fg;
+    background: markdownCode.$bq-bg;
+    border-left: 3px solid markdownCode.$bq-border;
+    border-radius: markdownCode.$bq-radius;
+
+    > :first-child {
+      margin-top: 0;
+    }
+
+    > :last-child {
+      margin-bottom: 0;
+    }
+
+    p {
+      margin: 0.5rem 0;
+    }
+  }
+
+  > ul:not(.contains-task-list),
+  > ol {
+    padding-left: 0;
+    margin-top: 0;
+    margin-bottom: $size-gap-4;
+  }
+
+  > ul:not(.contains-task-list) > li,
+  > ol > li {
+    list-style: none;
+    position: relative;
+    margin-bottom: $size-gap-1;
+    padding-left: calc(#{markdownLayout.$list-marker-width} + #{markdownLayout.$list-gap});
+  }
+
+  > ul:not(.contains-task-list) > li::before,
+  > ol > li::before {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: markdownLayout.$list-marker-width;
+    color: var(--color-text-primary);
+    font-weight: $font-weight-medium;
+  }
+
+  > ul:not(.contains-task-list) > li::before {
+    content: '•';
+    text-align: center;
+  }
+
+  > ol {
+    counter-reset: m-editor-ordered-list;
+  }
+
+  > ol > li {
+    counter-increment: m-editor-ordered-list;
+  }
+
+  > ol > li::before {
+    content: counter(m-editor-ordered-list) '.';
+    text-align: left;
+  }
+
+  li > ul:not(.contains-task-list),
+  li > ol {
+    margin-top: $size-gap-1;
+    margin-bottom: 0;
+    padding-left: markdownLayout.$list-indent;
+  }
+
+  li {
+    margin-bottom: $size-gap-1;
+
+    > p {
+      margin: 0;
+      display: block;
+    }
+
+    > p + p {
+      margin-top: $size-gap-2;
+    }
+  }
+
+  /* Same palette as flow chat `.table-wrapper` (flowchat-markdown-table-vars.scss) */
+  table {
+    border-spacing: 0;
+    border-collapse: collapse;
+    width: max-content;
+    max-width: 100%;
+    margin-bottom: $size-gap-4;
+    font-size: 0.85rem;
+    border: 1px solid markdownTable.$border;
+    border-radius: var(--flowchat-card-radius);
+    background: markdownTable.$surface;
+    box-shadow: markdownTable.$shadow;
+    overflow: hidden;
+  }
+
+  table th,
+  table td {
+    padding: $size-gap-3 $size-gap-4;
+    border: none;
+    border-bottom: 1px solid markdownTable.$cell-border;
+    text-align: left;
+    vertical-align: top;
+    background: transparent;
+    word-break: break-word;
+    overflow-wrap: anywhere;
+    transition: background-color $motion-fast $easing-standard;
+  }
+
+  table th {
+    font-weight: $font-weight-semibold;
+    background: markdownTable.$th-bg;
+    color: markdownTable.$th-fg;
+  }
+
+  table td {
+    color: var(--color-text-primary);
+  }
+
+  table th + th,
+  table td + td,
+  table th + td {
+    border-left: 1px solid markdownTable.$col-divider;
+  }
+
+  table tbody tr:last-child td,
+  table tbody tr:last-child th {
+    border-bottom: none;
+  }
+
+  table tbody tr {
+    background: markdownTable.$row-base;
+  }
+
+  table tbody tr:nth-child(2n) {
+    background: markdownTable.$row-stripe;
+  }
+
+  table tbody tr:hover {
+    background: markdownTable.$hover;
+  }
+
+  table thead tr:hover {
+    background: markdownTable.$hover;
+  }
+
+  table thead tr:hover th,
+  table tbody tr:hover th,
+  table tbody tr:hover td {
+    background: transparent;
+  }
+
+  table tbody tr:first-child th:first-child,
+  table thead th:first-child {
+    border-top-left-radius: var(--flowchat-card-radius);
+  }
+
+  table tbody tr:first-child th:last-child,
+  table thead th:last-child {
+    border-top-right-radius: var(--flowchat-card-radius);
+  }
+
+  table tbody tr:last-child td:first-child,
+  table tbody tr:last-child th:first-child {
+    border-bottom-left-radius: var(--flowchat-card-radius);
+  }
+
+  table tbody tr:last-child td:last-child,
+  table tbody tr:last-child th:last-child {
+    border-bottom-right-radius: var(--flowchat-card-radius);
+  }
+
+  table tbody tr:first-child th:only-child {
+    border-radius: var(--flowchat-card-radius) var(--flowchat-card-radius) 0 0;
+  }
+
+  table tbody tr:last-child td:only-child {
+    border-radius: 0 0 var(--flowchat-card-radius) var(--flowchat-card-radius);
+  }
+
+  table th code,
+  table td code {
+    white-space: normal;
+    word-break: break-word;
+    overflow-wrap: anywhere;
+    max-width: 100%;
+  }
+
+  table th pre code,
+  table td pre code {
+    white-space: pre-wrap;
+    word-break: break-word;
+    max-width: 100%;
+  }
+
+  img {
+    max-width: 100%;
+    box-sizing: content-box;
+    background-color: transparent;
+    border-radius: $size-radius-base;
+  }
+
+  details {
+    margin: 0 0 $size-gap-4;
+    padding: $size-gap-3 $size-gap-4;
+    background: color-mix(in srgb, var(--color-bg-secondary) 86%, transparent);
+    border: 1px solid var(--border-subtle);
+    border-radius: $size-radius-lg;
+
+    > :last-child {
+      margin-bottom: 0;
+    }
+  }
+
+  summary {
+    cursor: pointer;
+    font-weight: $font-weight-semibold;
+    color: var(--color-text-primary);
+    list-style-position: outside;
+
+    &::marker {
+      color: var(--color-text-secondary);
+    }
+  }
+
+  details[open] > summary {
+    margin-bottom: $size-gap-3;
+  }
+
+  hr {
+    height: 0;
+    padding: 0;
+    margin: $size-gap-5 0;
+    border: 0;
+    border-top: 1px solid var(--border-subtle);
+    background: none;
+    overflow: visible;
+  }
+
+  // Task list
+  > ul.contains-task-list {
+    margin-top: 0;
+    margin-bottom: $size-gap-4;
+    padding-left: 0;
+    list-style: none;
+  }
+
+  > ul.contains-task-list > .task-list-item {
+    list-style: none;
+    position: relative;
+    padding-left: calc(#{markdownLayout.$list-marker-width} + #{markdownLayout.$list-gap});
+    margin-bottom: $size-gap-1;
+  }
+
+  > ul.contains-task-list > .task-list-item > input[type="checkbox"] {
+    position: absolute;
+    left: calc((#{markdownLayout.$list-marker-width} - #{markdownLayout.$task-checkbox-size}) / 2);
+    top: 0.15rem;
+    margin: 0;
+    width: markdownLayout.$task-checkbox-size;
+    height: markdownLayout.$task-checkbox-size;
+  }
+
+  .task-list-item > ul,
+  .task-list-item > ol {
+    margin-top: $size-gap-1;
+    margin-bottom: 0;
+    padding-left: markdownLayout.$list-indent;
+  }
+
+  // KaTeX math formula styles
+  .katex {
+    font-size: 1.1em;
+  }
+
+  .katex-display {
+    margin: 1em 0;
+  }
+
+}
+
+:root[data-theme="light"] .m-editor .markdown-body,
+:root[data-theme-type="light"] .m-editor .markdown-body,
+[data-theme-type="light"] .m-editor .markdown-body,
+.light .m-editor .markdown-body {
+  code {
+    color: markdownCode.$inline-code-fg-light;
+    background: markdownCode.$inline-code-bg-light;
+    border-color: markdownCode.$inline-code-border-light;
+
+    &:hover {
+      background: markdownCode.$inline-code-hover-bg-light;
+      border-color: markdownCode.$inline-code-hover-border-light;
+      color: markdownCode.$inline-code-hover-fg-light;
+    }
+  }
+
+  pre {
+    color: markdownCode.$pre-code-fg-light;
+    background: markdownCode.$pre-bg-light;
+    border-color: markdownCode.$pre-border-light;
+    box-shadow: markdownCode.$pre-shadow-light;
+
+    &:hover {
+      border-color: markdownCode.$pre-hover-border-light;
+      box-shadow: markdownCode.$pre-hover-shadow-light;
+    }
+
+    code,
+    code:hover {
+      color: inherit !important;
+      background: transparent !important;
+      border: none !important;
+    }
+  }
+
+  blockquote {
+    color: markdownCode.$bq-fg-light;
+    background: markdownCode.$bq-bg-light;
+    border-left-color: markdownCode.$bq-border-light;
+  }
+
+  table {
+    border-color: markdownTable.$border-light;
+    background: markdownTable.$surface-light;
+    box-shadow: markdownTable.$shadow-light;
+  }
+
+  table th,
+  table td {
+    border-bottom-color: markdownTable.$cell-border-light;
+  }
+
+  table th {
+    background: markdownTable.$th-bg-light;
+    color: markdownTable.$th-fg-light;
+  }
+
+  table th + th,
+  table td + td,
+  table th + td {
+    border-left-color: markdownTable.$col-divider-light;
+  }
+
+  table tbody tr {
+    background: markdownTable.$row-base-light;
+  }
+
+  table tbody tr:nth-child(2n) {
+    background: markdownTable.$row-stripe-light;
+  }
+
+  table tbody tr:hover,
+  table thead tr:hover {
+    background: markdownTable.$hover-light;
+  }
+}

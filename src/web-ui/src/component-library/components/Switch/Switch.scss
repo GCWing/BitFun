@@ -1,0 +1,251 @@
+/**
+ * Switch component styles
+ */
+@use '../../styles/tokens.scss' as tokens;
+
+.bitfun-switch {
+  display: inline-flex;
+  align-items: flex-start;
+  gap: tokens.$size-gap-3;
+  cursor: pointer;
+  user-select: none;
+
+  &--disabled {
+    opacity: tokens.$opacity-disabled;
+    cursor: default;
+  }
+
+  &--loading {
+    cursor: wait;
+  }
+
+  &__wrapper {
+    position: relative;
+    display: flex;
+    align-items: center;
+    flex-shrink: 0;
+    margin-top: 2px;
+  }
+
+  &__input {
+    position: absolute;
+    width: 100%;
+    height: 100%;
+    margin: 0;
+    padding: 0;
+    appearance: none;
+    opacity: 0;
+    cursor: pointer;
+    z-index: 1;
+
+    &:focus {
+      outline: none;
+    }
+
+    &:disabled {
+      cursor: default;
+    }
+  }
+
+  &__track {
+    position: relative;
+    display: flex;
+    align-items: center;
+    width: 36px;
+    height: 20px;
+    padding: 2px;
+    background: transparent;
+    border: 1px solid var(--border-subtle);
+    border-radius: 10px;
+    transition: all 0.2s ease;
+    pointer-events: none;
+
+    &--checked {
+      background: var(--color-accent-200);
+      border-color: var(--color-accent-400);
+    }
+  }
+
+  &__text {
+    position: absolute;
+    font-size: 9px;
+    font-weight: tokens.$font-weight-semibold;
+    color: var(--color-text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    transition: opacity 0.2s ease;
+  }
+
+  &__thumb {
+    position: absolute;
+    left: 2px;
+    width: 16px;
+    height: 16px;
+    background: var(--element-bg-subtle);
+    border: 1px solid var(--border-base);
+    border-radius: 50%;
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 2;
+  }
+
+  &__loading {
+    width: 10px;
+    height: 10px;
+    color: var(--color-accent-500);
+    animation: bitfun-switch-spin 1s linear infinite;
+  }
+
+  &__input:checked + &__track &__thumb {
+    left: calc(100% - 18px);
+    background: var(--btn-primary-bg);
+    border-color: var(--btn-primary-bg);
+  }
+
+  :root[data-theme-type='dark'] &__input:checked + &__track &__thumb {
+    background: var(--color-accent-500);
+    border-color: var(--color-accent-600);
+  }
+
+  &__input:focus-visible + &__track {
+    outline: 2px solid var(--color-accent-400);
+    outline-offset: 2px;
+  }
+
+  &__input:not(:focus-visible) + &__track {
+    outline: none;
+  }
+
+  &:hover:not(&--disabled):not(&--loading) &__track {
+    border-color: var(--border-base);
+  }
+
+  &:hover:not(&--disabled):not(&--loading) &__thumb {
+    background: var(--element-bg-base);
+    border-color: var(--border-base);
+  }
+
+  &:hover:not(&--disabled):not(&--loading) &__input:checked + &__track {
+    background: var(--color-accent-300);
+    border-color: var(--color-accent-500);
+  }
+
+  &:hover:not(&--disabled):not(&--loading) &__input:checked + &__track &__thumb {
+    background: var(--btn-primary-hover-bg);
+    border-color: var(--btn-primary-hover-bg);
+  }
+
+  :root[data-theme-type='dark'] &:hover:not(&--disabled):not(&--loading) &__input:checked + &__track &__thumb {
+    background: color-mix(in srgb, var(--color-accent-500) 88%, white);
+    border-color: var(--color-accent-500);
+  }
+
+  &__input:checked + &__track &__loading {
+    color: var(--color-overlay-white-95);
+  }
+
+  &__input:active:not(:disabled) + &__track {
+    transform: scale(0.98);
+  }
+
+  &__content {
+    display: flex;
+    flex-direction: column;
+    gap: tokens.$size-gap-1;
+  }
+
+  &__label {
+    font-size: var(--font-size-sm);
+    font-weight: tokens.$font-weight-medium;
+    color: var(--color-text-primary);
+    line-height: tokens.$line-height-base;
+  }
+
+  &__description {
+    font-size: var(--font-size-xs);
+    color: var(--color-text-muted);
+    line-height: tokens.$line-height-base;
+  }
+
+  &--small {
+    gap: tokens.$size-gap-2;
+
+    .bitfun-switch__track {
+      width: 32px;
+      height: 18px;
+      border-radius: 9px;
+      padding: 2px;
+    }
+
+    .bitfun-switch__thumb {
+      width: 14px;
+      height: 14px;
+      left: 2px;
+    }
+
+    .bitfun-switch__input:checked + .bitfun-switch__track .bitfun-switch__thumb {
+      left: calc(100% - 16px);
+    }
+
+    .bitfun-switch__loading {
+      width: 8px;
+      height: 8px;
+    }
+
+    .bitfun-switch__label {
+      font-size: var(--font-size-xs);
+    }
+
+    .bitfun-switch__description {
+      font-size: 11px;
+    }
+  }
+
+  &--large {
+    gap: tokens.$size-gap-4;
+
+    .bitfun-switch__wrapper {
+      margin-top: 2px;
+    }
+
+    .bitfun-switch__track {
+      width: 44px;
+      height: 24px;
+      border-radius: 12px;
+      padding: 2px;
+    }
+
+    .bitfun-switch__thumb {
+      width: 20px;
+      height: 20px;
+    }
+
+    .bitfun-switch__input:checked + .bitfun-switch__track .bitfun-switch__thumb {
+      left: calc(100% - 22px);
+    }
+
+    .bitfun-switch__loading {
+      width: 12px;
+      height: 12px;
+    }
+
+    .bitfun-switch__label {
+      font-size: var(--font-size-base);
+    }
+
+    .bitfun-switch__description {
+      font-size: var(--font-size-xs);
+    }
+  }
+}
+
+@keyframes bitfun-switch-spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}

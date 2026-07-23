@@ -1,0 +1,55 @@
+{
+  "page": {
+    "title": "快捷动作",
+    "subtitle": "代码完成后的一键 AI 动作，从聊天窗口左上角的闪电图标触发，AI 自主端到端完成。"
+  },
+  "loading": "加载中...",
+  "quickActions": {
+    "defaults": {
+      "commit": {
+        "label": "提交",
+        "prompt": "提交当前所有代码变更"
+      },
+      "createPr": {
+        "label": "创建 PR",
+        "prompt": "为当前分支创建 Pull Request"
+      }
+    }
+  },
+  "sections": {
+    "builtin": {
+      "title": "内置动作",
+      "description": "开箱即用的 Git 工作流动作，可编辑指令、可启用或禁用。"
+    },
+    "custom": {
+      "title": "自定义动作",
+      "description": "添加你自己的快捷指令，点击后直接发给 AI 执行。",
+      "empty": "还没有自定义动作，在下方添加第一个吧。"
+    }
+  },
+  "edit": {
+    "button": "编辑"
+  },
+  "delete": {
+    "button": "删除"
+  },
+  "add": {
+    "button": "添加动作"
+  },
+  "modal": {
+    "addTitle": "新建快捷动作",
+    "editTitle": "编辑快捷动作",
+    "labelField": "动作名称",
+    "labelPlaceholder": "例：生成单元测试",
+    "promptField": "触发指令",
+    "promptPlaceholder": "例：请为当前代码变更生成单元测试",
+    "promptHint": "点击菜单项时，此指令将直接发送给 AI，由 AI 自主完成。",
+    "cancel": "取消",
+    "saveEdit": "保存",
+    "confirmAdd": "添加"
+  },
+  "messages": {
+    "saved": "已保存",
+    "saveFailed": "保存失败"
+  }
+}

@@ -1,0 +1,421 @@
+{
+  "title": "Agents",
+  "desc": "Sub-agents collaborating on specialized tasks — {{total}} total, {{enabled}} enabled",
+  "manage": "Manage",
+  "builtin": "Built-in",
+  "custom": "Custom",
+  "empty": "No sub-agents available",
+  "goManage": "Go to Manage",
+  "loading": "Loading…",
+  "page": {
+    "title": "Agents",
+    "subtitle": "Review and manage core modes, agents, and sub-agents, including tools and skills.",
+    "searchPlaceholder": "Search agents by name or description…",
+    "newAgent": "New Agent"
+  },
+  "nav": {
+    "coreAgents": "Core Agents",
+    "agents": "Agent"
+  },
+  "filters": {
+    "source": "Source",
+    "kind": "Type",
+    "builtin": "Built-in",
+    "user": "User",
+    "project": "Project",
+    "external": "External",
+    "mode": "Agent",
+    "subagent": "Sub-Agent"
+  },
+  "coreAgentsZone": {
+    "title": "Core Agents",
+    "subtitle": "Built-in core agents covering mainstream AI workflows, ready to use out of the box.",
+    "empty": "No core agents detected",
+    "roleLabel": "Primary Use · ",
+    "computerUseDisabledBadge": "Disabled in Settings",
+    "modes": {
+      "agentic": {
+        "role": "Coding specialist agent"
+      },
+      "cowork": {
+        "role": "Office & collaboration agent"
+      },
+      "computerUse": {
+        "role": "Desktop automation agent"
+      },
+      "acpExternal": {
+        "role": "ACP Agent"
+      }
+    }
+  },
+  "agentsZone": {
+    "title": "Agents Overview",
+    "subtitle": "Browse all agents and sub-agents, then manage tools and skills directly.",
+    "empty": {
+      "noAgents": "No agents are available right now",
+      "noMatch": "No matching agents"
+    }
+  },
+  "agentCard": {
+    "badges": {
+      "agent": "Agent",
+      "userMode": "User Agent",
+      "projectMode": "Project Agent",
+      "subagent": "Sub-Agent",
+      "userSubagent": "User Sub-Agent",
+      "projectSubagent": "Project Sub-Agent",
+      "externalSubagent": "External Sub-Agent",
+      "disabled": "Disabled"
+    },
+    "actions": {
+      "expand": "Expand details"
+    },
+    "meta": {
+      "tools": "{{count}} tools",
+      "skills": "{{count}} skills",
+      "subagents": "{{count}} sub-agents",
+      "externalProvider": "External · {{provider}}",
+      "singleRun": "One run only · No follow-up"
+    },
+    "modelSelector": {
+      "label": "Model",
+      "default": "Use default Sub-Agent model",
+      "inherit": "Inherit parent session",
+      "fast": "Fast model",
+      "primary": "Primary model",
+      "auto": "Automatic selection",
+      "updateFailed": "Failed to update the Sub-Agent model"
+    }
+  },
+  "capabilityCategories": {
+    "coding": "Coding",
+    "docs": "Docs",
+    "analysis": "Analysis",
+    "testing": "Testing",
+    "creative": "Creative",
+    "ops": "Ops"
+  },
+  "agentsOverview": {
+    "filterUser": "User",
+    "filterProject": "Project",
+    "backToOverview": "Back to Overview",
+    "capabilities": "Capability configuration",
+    "tools": "Tools",
+    "toolsReset": "Reset default",
+    "toolsCancel": "Cancel editing",
+    "toolsSave": "Save",
+    "toolsEdit": "Manage tools",
+    "toolsResetSuccess": "Reset to default tools",
+    "toolsResetFailed": "Failed to reset tools",
+    "toolToggleFailed": "Failed to toggle tool",
+    "skills": "Skills",
+    "subagents": "Sub-Agents",
+    "skillsCancel": "Cancel editing",
+    "skillsSave": "Save",
+    "skillsEdit": "Manage skills",
+    "subagentsEdit": "Manage sub-agents",
+    "subagentsDone": "Done",
+    "noSubagents": "No manageable sub-agents available",
+    "enableGroup": "Enable group",
+    "disableGroup": "Disable group",
+    "clearGroup": "Clear",
+    "reset": "Reset",
+    "cancel": "Cancel",
+    "save": "Save",
+    "skillToggleFailed": "Failed to toggle skill",
+    "subagentToggleFailed": "Failed to toggle sub-agent",
+    "sharedProfileLabel": "Shared profile",
+    "sharedProfileDefaultLabel": "Shared coding profile",
+    "sharedProfileDescription": "Changes here apply to: {{modes}}.",
+    "unknownSkillSource": "Other source",
+    "skillScopeUser": "User",
+    "skillScopeProject": "Project",
+    "skillScopeLocalUser": "This device · User",
+    "skillScopeRemoteProject": "Remote workspace · Project",
+    "skillRuntimeSelected": "Used at runtime",
+    "skillRuntimeCovered": "Enabled, covered by {{source}}",
+    "skillRuntimeEnabled": "Enabled, not currently selected",
+    "skillShadowed": "shadowed by a higher-priority skill with the same name",
+    "noSkills": "No skills enabled",
+    "capabilityTooltip": {
+      "executionPermission": "Execution permission",
+      "standardPermission": "Standard",
+      "provider": "Provider",
+      "mcpServer": "MCP server",
+      "skillKey": "Key",
+      "sourceLevel": "Source / level",
+      "status": "Status",
+      "subagentId": "ID",
+      "source": "Source",
+      "toolCount": "Tool count",
+      "externalManaged": "Managed by the external provider"
+    },
+    "skillGroups": {
+      "computerUse": "Computer Use",
+      "office": "Office",
+      "meta": "Meta",
+      "miniapp": "MiniApp",
+      "canvas": "Canvas",
+      "gstack": "gstack",
+      "other": "Other"
+    },
+    "skillGroupPicker": {
+      "builtin": "Built-in groups",
+      "myGroups": "My groups",
+      "otherSkills": "Other skills",
+      "selectedCount": "{{count}} skills selected",
+      "manageGroups": "Manage groups",
+      "manageTitle": "Manage my Skill groups",
+      "manageSubtitle": "Organize reusable personal Skill selections.",
+      "createGroup": "New group",
+      "saveGroup": "Save group",
+      "editGroup": "Edit group",
+      "deleteGroup": "Delete group",
+      "moveUp": "Move up",
+      "moveDown": "Move down",
+      "groupName": "Group name",
+      "groupNamePlaceholder": "For example, Daily development",
+      "groupSkills": "Skills",
+      "groupCount": "{{count}} skills",
+      "unavailableCount": "{{count}} unavailable",
+      "noUserGroups": "No personal Skill groups yet.",
+      "enableGroupSkills": "Enable all Skills in {{name}}",
+      "clearGroupSkills": "Clear Skills in {{name}}",
+      "deleteTitle": "Delete Skill group",
+      "deleteMessage": "Delete \"{{name}}\"? This does not change any Agent Skill selection.",
+      "deleteConfirm": "Delete",
+      "saveFailed": "Failed to save Skill groups",
+      "validation": {
+        "nameRequired": "Enter a group name",
+        "nameDuplicate": "A group with this name already exists",
+        "skillsRequired": "Select at least one Skill"
+      }
+    },
+    "toolGroups": {
+      "builtin": "Built-in groups",
+      "myGroups": "My groups",
+      "extensions": "Extensions",
+      "otherTools": "Other tools",
+      "filesSearch": "Inspect and search",
+      "fileEditing": "File editing",
+      "commands": "Command execution",
+      "delegation": "Agents and skills",
+      "web": "Web access",
+      "imageUnderstanding": "Image understanding",
+      "interactionCanvas": "Interaction and canvas",
+      "computerAutomation": "Computer use and automation",
+      "extension": "Extension · {{provider}}",
+      "other": "Other",
+      "selectedCount": "{{count}} tools selected",
+      "manageGroups": "Manage groups",
+      "manageTitle": "Manage my tool groups",
+      "manageSubtitle": "Organize reusable personal tool selections.",
+      "createGroup": "New group",
+      "saveGroup": "Save group",
+      "editGroup": "Edit group",
+      "deleteGroup": "Delete group",
+      "moveUp": "Move up",
+      "moveDown": "Move down",
+      "groupName": "Group name",
+      "groupNamePlaceholder": "For example, Daily code changes",
+      "groupTools": "Tools",
+      "groupCount": "{{count}} tools",
+      "unavailableCount": "{{count}} unavailable",
+      "noUserGroups": "No personal tool groups yet.",
+      "noEnabledTools": "No tools enabled",
+      "readonly": "Read-only",
+      "permissionRequired": "Permission required",
+      "enableGroupTools": "Enable all tools in {{name}}",
+      "clearGroupTools": "Clear tools in {{name}}",
+      "deleteTitle": "Delete tool group",
+      "deleteMessage": "Delete \"{{name}}\"? This does not change any Agent tool selection.",
+      "deleteConfirm": "Delete",
+      "saveFailed": "Failed to save tool groups",
+      "validation": {
+        "nameRequired": "Enter a group name",
+        "nameDuplicate": "A group with this name already exists",
+        "toolsRequired": "Select at least one tool"
+      }
+    },
+    "customActions": "Custom agent",
+    "editAgent": "Edit",
+    "deleteAgent": "Delete",
+    "externalActions": "External agent",
+    "manageExternalAgent": "Manage in External AI applications",
+    "deleteConfirm": "Delete custom agent \"{{name}}\"? This cannot be undone.",
+    "deleteSuccess": "Deleted \"{{name}}\"",
+    "deleteFailed": "Delete failed: ",
+    "form": {
+      "title": "Create Custom Agent",
+      "subtitle": "Create a custom mode or sub-agent with its own prompt, tools, and runtime context policy.",
+      "titleEdit": "Edit Custom Agent",
+      "subtitleEdit": "Change display name, description, system prompt, tools, and runtime context policy.",
+      "subtitleEditMode": "Change display name, description, system prompt, tools, and runtime context policy. Choose this agent's model from ChatInput.",
+      "subtitleEditSubagent": "Change display name, description, system prompt, tools, model, and runtime context policy.",
+      "loadingDetail": "Loading…",
+      "save": "Save",
+      "updateSuccess": "Saved \"{{name}}\"",
+      "updateFailed": "Save failed: ",
+      "kind": "Kind",
+      "kindAgentTooltip": "After creating it, you can select it directly as a standalone mode from the conversation input's mode picker.",
+      "kindSubagentTooltip": "After creating it, a primary agent can delegate subtasks to it. It is not available as a directly selectable mode.",
+      "id": "ID",
+      "idPlaceholder": "Stable identifier used in config and routing",
+      "idRequired": "ID is required",
+      "idFormat": "Must start with a letter and contain only letters, numbers, underscores, or hyphens",
+      "name": "Name",
+      "namePlaceholder": "Human-readable display name",
+      "nameRequired": "Name is required",
+      "level": "Level",
+      "modeUserOnly": "Custom modes are always user-level in the current release.",
+      "description": "Description",
+      "descPlaceholder": "Briefly describe what this agent does",
+      "descRequired": "Description is required",
+      "prompt": "System Prompt",
+      "promptPlaceholder": "Enter the system prompt that defines this agent's behavior...\n\nSupported placeholders\n{PERSONA}: SOUL.md/USER.md/IDENTITY.md\n{LANGUAGE_PREFERENCE}: Language preference",
+      "promptRequired": "System prompt is required",
+      "readonly": "Readonly mode",
+      "model": "Model",
+      "modelPlaceholder": "Use inherit, auto, fast, or a concrete model ID",
+      "modelRequired": "Model is required",
+      "tools": "Tools",
+      "toolsOptional": "optional",
+      "toolsHint": "({{optionalLabel}}, uses default when none selected)",
+      "contextPolicy": "Runtime context",
+      "contextPolicyHint": "(select which workspace sections are added to the prompt)",
+      "contextWorkspaceContext": "Workspace context",
+      "contextWorkspaceContextTooltip": "Adds the current workspace identity and high-level session context, helping the agent understand where it is working.",
+      "contextWorkspaceInstructions": "Workspace instructions",
+      "contextWorkspaceInstructionsTooltip": "Adds project guidance such as AGENTS.md instructions, so the agent follows repository conventions and local rules.",
+      "contextProjectLayout": "Project layout",
+      "contextProjectLayoutTooltip": "Adds a compact project structure summary, helping the agent choose relevant files and directories faster.",
+      "noWorkspace": "Open a workspace first",
+      "cancel": "Cancel",
+      "submit": "Create",
+      "createSuccess": "Created agent \"{{name}}\"",
+      "createFailed": "Create failed: ",
+      "review": "Review",
+      "reviewToolsHint": "Review checks can only use read-only tools."
+    }
+  },
+  "reviewTeams": {
+    "members": {
+      "businessLogic": {
+        "funName": "Logic Reviewer",
+        "role": "Business Logic Reviewer",
+        "description": "A workflow sleuth that inspects business rules, state transitions, recovery paths, and real-user correctness.",
+        "responsibilities": [
+          "Verify workflows, state transitions, and domain rules still behave correctly.",
+          "Check boundary cases, rollback paths, and data integrity assumptions.",
+          "Focus on issues that can break user outcomes or product intent."
+        ]
+      },
+      "performance": {
+        "funName": "Performance Reviewer",
+        "role": "Performance Reviewer",
+        "description": "A speed-focused profiler that hunts hot paths, unnecessary work, blocking calls, and scale-sensitive regressions.",
+        "responsibilities": [
+          "Inspect hot paths, large loops, and unnecessary allocations or recomputation.",
+          "Flag blocking work, N+1 patterns, and wasteful data movement.",
+          "Keep performance advice practical and aligned with the existing architecture."
+        ]
+      },
+      "security": {
+        "funName": "Security Reviewer",
+        "role": "Security Reviewer",
+        "description": "A boundary guardian that scans for injection risks, trust leaks, privilege mistakes, and unsafe file or command handling.",
+        "responsibilities": [
+          "Review trust boundaries, auth assumptions, and sensitive data handling.",
+          "Look for injection, unsafe command execution, and exposure risks.",
+          "Highlight concrete fixes that reduce risk without broad rewrites."
+        ]
+      },
+      "judge": {
+        "funName": "Review Arbiter",
+        "role": "Review Quality Inspector",
+        "description": "An independent third-party arbiter that validates reviewer reports for logical consistency and evidence quality. It spot-checks specific code locations only when a claim needs verification, rather than re-reviewing the codebase from scratch.",
+        "responsibilities": [
+          "Validate, merge, reprioritize, or reject reviewer findings based on logical consistency and evidence quality.",
+          "Filter out false positives and directionally-wrong optimization advice by examining reviewer reasoning.",
+          "Spot-check specific code locations only when a reviewer's claim needs verification.",
+          "Ensure every surviving issue has an actionable fix or follow-up plan."
+        ]
+      },
+      "architecture": {
+        "funName": "Architecture Reviewer",
+        "role": "Architecture Reviewer",
+        "description": "A structural watchdog that checks module boundaries, dependency direction, API contract design, and abstraction integrity.",
+        "responsibilities": [
+          "Detect layer boundary violations and wrong-direction imports.",
+          "Verify API contracts, tool schemas, and transport messages stay consistent.",
+          "Ensure platform-agnostic code does not leak platform-specific details."
+        ]
+      },
+      "frontend": {
+        "funName": "Frontend Reviewer",
+        "role": "Frontend Reviewer",
+        "description": "A UI specialist that checks i18n synchronization, frontend performance patterns, accessibility, and frontend-backend contract alignment.",
+        "responsibilities": [
+          "Verify i18n key completeness across all locales.",
+          "Check frontend performance patterns (memoization, virtualization, effect/reactivity dependencies).",
+          "Flag accessibility violations and frontend-backend API contract drift."
+        ]
+      }
+    },
+    "extraReviewer": {
+      "role": "Additional Specialist Reviewer",
+      "description": "Optional specialist coverage for strict Review with its own instructions, tools, and perspective.",
+      "responsibilities": [
+        "Bring an extra independent review perspective into the same target scope.",
+        "Stay tightly focused on the requested diff, commit, or workspace changes.",
+        "Return concrete findings with clear fix suggestions or follow-up steps."
+      ]
+    }
+  },
+  "agentDescriptions": {
+    "Agentic": "Autonomous execution mode: automatically analyze requirements, plan tasks, and execute code changes",
+    "Cowork": "Cowork mode: work alongside you, asking for confirmation at key steps",
+    "ComputerUse": "Computer use mode: capable of operating browsers, desktop apps, and file systems",
+    "DeepResearch": "Deep research agent: conduct systematic investigation and analysis on complex topics",
+    "Explore": "Explore agent: quickly browse the codebase to understand project structure and key files",
+    "FileFinder": "File finder agent: locate relevant files and code snippets based on requirements",
+    "CodeReview": "Code review agent: perform quality checks and provide improvement suggestions",
+    "DeepReview": "Strict Review compatibility agent: runs the highest-strength Review path when historical sessions or commands need it",
+    "GenerateDoc": "Documentation agent: automatically generate code documentation and explanations",
+    "Init": "Init agent: help set up project structure and initial configuration",
+    "ReviewFixer": "Review fixer agent: automatically fix code issues based on review results",
+    "Multitask": "Multitask mode: decompose work into orthogonal branches and use subagents in parallel when beneficial",
+    "Plan": "Plan mode: create detailed task plans and execution steps",
+    "Debug": "Debug mode: systematically diagnose and fix errors in code",
+    "Claw": "Claw mode: extract and integrate information from external sources",
+    "Team": "Team mode: coordinate multiple agents to collaboratively complete complex tasks"
+  },
+  "legionPattern": {
+    "back": "Back",
+    "choosePattern": "Choose a Pattern",
+    "orchestrationPatterns": "Orchestration Patterns",
+    "overview": "Overview",
+    "complexity": "Complexity: L{{level}}",
+    "nodesCount": "{{count}} nodes",
+    "edgesCount": "{{count}} edges",
+    "noEdges": "No edges (self-contained agent)",
+    "usePattern": "Use Pattern",
+    "gate": "GATE",
+    "nodes": "Nodes ({{count}})",
+    "edges": "Edges ({{count}})",
+    "meta": {
+      "nodes": "nodes",
+      "edges": "edges",
+      "gate": "gate"
+    },
+    "complexityLabel": {
+      "l1": "L1",
+      "l2l3": "L2-L3",
+      "l3": "L3",
+      "l4": "L4",
+      "l5l6": "L5-L6",
+      "l6": "L6",
+      "l7": "L7"
+    }
+  }
+}

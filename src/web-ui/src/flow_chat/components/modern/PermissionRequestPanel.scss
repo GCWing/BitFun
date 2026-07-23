@@ -1,0 +1,215 @@
+.permission-request-panel {
+  --permission-request-panel-bottom: 20px;
+
+  position: absolute;
+  right: 20px;
+  bottom: var(--permission-request-panel-bottom);
+  z-index: 25;
+  width: min(460px, calc(100% - 40px));
+  display: grid;
+  gap: 10px;
+  padding: 14px;
+  border: 1px solid var(--color-warning);
+  border-radius: 8px;
+  background: var(--color-bg-secondary);
+  box-shadow: var(--shadow-lg);
+  color: var(--color-text-primary);
+}
+
+.permission-request-panel--above-chat-input {
+  // Match the visible ChatInput card: its 900px drop zone has 8px horizontal
+  // insets on both sides before the card itself begins.
+  right: auto;
+  left: 50%;
+  width: min(884px, calc(100% - 16px));
+  transform: translateX(-50%);
+}
+
+.permission-request-panel__heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  color: var(--color-warning);
+}
+
+.permission-request-panel__heading h2 {
+  margin: 0;
+}
+
+.permission-request-panel__heading-title {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  gap: 9px;
+}
+
+.permission-request-panel__heading h2 {
+  font-size: var(--flowchat-font-size-base);
+}
+
+.permission-request-panel__count,
+.permission-request-panel__risk {
+  color: var(--color-text-secondary);
+  font-size: var(--flowchat-font-size-sm);
+}
+
+.permission-request-panel__count {
+  margin: 0;
+  flex: none;
+}
+
+.permission-request-panel__requests {
+  display: grid;
+  gap: 6px;
+  max-height: 180px;
+  overflow: auto;
+}
+
+.permission-request-panel__request {
+  display: grid;
+  gap: 3px;
+  padding: 7px 9px;
+  border: 1px solid var(--border-base);
+  border-radius: 5px;
+  color: var(--color-text-secondary);
+  font-size: var(--flowchat-font-size-sm);
+}
+
+.permission-request-panel__request--active {
+  border-color: var(--color-warning);
+  color: var(--color-text-primary);
+}
+
+.permission-request-panel__request-heading {
+  display: flex;
+  min-width: 0;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.permission-request-panel__request-heading span {
+  flex: none;
+  color: var(--color-text-secondary);
+  font-size: var(--flowchat-font-size-xs);
+}
+
+.permission-request-panel__tool-identity {
+  display: flex;
+  min-width: 0;
+  align-items: baseline;
+  gap: 6px;
+}
+
+.permission-request-panel__tool-identity strong,
+.permission-request-panel__subagent {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--color-text-secondary);
+}
+
+.permission-request-panel__tool-identity strong {
+  color: inherit;
+}
+
+.permission-request-panel__request-details {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 4px;
+}
+
+.permission-request-panel__action,
+.permission-request-panel__detail-separator {
+  flex: none;
+}
+
+.permission-request-panel__detail-separator {
+  color: var(--color-text-secondary);
+}
+
+.permission-request-panel__resource-summary {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.permission-request-panel__risk {
+  margin: 0;
+  color: var(--color-warning);
+}
+
+.permission-request-panel textarea {
+  width: 100%;
+  resize: vertical;
+  border: 1px solid var(--border-base);
+  border-radius: 4px;
+  padding: 7px;
+  color: var(--color-text-primary);
+  background: var(--color-bg-primary);
+}
+
+.permission-request-panel textarea:focus {
+  outline: none;
+  border-color: var(--color-warning);
+}
+
+.permission-request-panel__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 7px;
+}
+
+.permission-request-panel__single-actions,
+.permission-request-panel__batch-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+
+.permission-request-panel__batch-actions {
+  margin-left: auto;
+}
+
+.permission-request-panel__batch-actions button {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 30px;
+  padding: 5px 9px;
+  border: 1px solid var(--color-warning);
+  border-radius: 5px;
+  color: var(--color-text-primary);
+  background: var(--color-bg-primary);
+  cursor: pointer;
+}
+
+.permission-request-panel__single-actions button {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 30px;
+  padding: 5px 9px;
+  border: 1px solid var(--border-base);
+  border-radius: 5px;
+  color: var(--color-text-primary);
+  background: var(--color-bg-primary);
+  cursor: pointer;
+}
+
+.permission-request-panel__actions button:disabled {
+  cursor: wait;
+  opacity: 0.6;
+}
+
+.permission-request-panel__batch-actions button:disabled {
+  cursor: wait;
+  opacity: 0.6;
+}
+
+.permission-request-panel .permission-request-panel__reject {
+  color: var(--color-error);
+}

@@ -1,0 +1,281 @@
+@use '../../../component-library/styles/tokens' as *;
+
+$toast-width: 320px;
+
+// ─── Container (fixed bottom-left) ───────────────────────────────────────────
+// Left offset accounts for the fan-out spread (ghost cards translate ±38px).
+.announcement-toast-stack {
+  position: fixed;
+  bottom: 64px;
+  left: 58px; // 20px margin + ~38px fan-out buffer
+  z-index: calc(#{$z-notification} + 1);
+  pointer-events: none;
+  // Clip nothing — overflow visible so rotated ghosts are always fully shown
+  overflow: visible;
+
+  > * {
+    pointer-events: auto;
+  }
+}
+
+// ─── Deck wrapper: holds active card + rotated ghost layers ───────────────────
+// Ghost cards sit at the same position as the active card, rotated slightly.
+// On hover the deck fans open: ghosts spread outward while the front card lifts.
+.announcement-toast-deck {
+  position: relative;
+  overflow: visible;
+
+  // Active (front) card
+  > .announcement-toast {
+    position: relative;
+    z-index: 3;
+    transition: transform 0.4s ease, box-shadow 0.4s ease;
+  }
+
+  // Ghost layers ─────────────────────────────────────────────────────────────
+  .announcement-toast-ghost {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    border-radius: $size-radius-lg;
+    pointer-events: none;
+    transition: transform 0.4s ease;
+
+    // Ghost 1: tilted left  →  fans left on hover
+    &--1 {
+      z-index: 2;
+      transform: rotate(-8deg);
+      background: var(--color-bg-secondary);
+      border: 1px solid var(--border-base);
+      box-shadow: 0 8px 20px var(--color-overlay-black-12);
+    }
+
+    // Ghost 2: tilted right  →  fans right on hover
+    &--2 {
+      z-index: 1;
+      transform: rotate(8deg);
+      background: var(--color-bg-tertiary);
+      border: 1px solid var(--border-subtle);
+      box-shadow: 0 6px 16px rgba(var(--color-static-black-rgb), 0.09);
+    }
+  }
+
+  // Hover: fan the deck open + lift + slight scale ──────────────────────────
+  &:hover {
+    > .announcement-toast {
+      transform: translateY(-10px) scale(1.025);
+      box-shadow: 0 16px 40px var(--color-overlay-black-20);
+    }
+
+    .announcement-toast-ghost--1 {
+      transform: translateX(-38px) rotate(-15deg);
+    }
+
+    .announcement-toast-ghost--2 {
+      transform: translateX(38px) rotate(15deg);
+    }
+  }
+}
+
+// ─── Single toast card ────────────────────────────────────────────────────────
+.announcement-toast {
+  width: $toast-width;
+  min-width: $toast-width;
+  max-width: $toast-width;
+  display: flex;
+  flex-direction: column;
+  background: var(--color-bg-primary);
+  border: 1px solid var(--border-base);
+  border-radius: $size-radius-lg;
+  box-shadow: 0 6px 24px rgba(var(--color-static-black-rgb), 0.14);
+  overflow: hidden;
+
+  &--entering {
+    animation: toastSlideIn 0.3s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+    // Disable hover transition while entering so the two don't fight
+    transition: none !important;
+  }
+
+  &--exiting {
+    animation: toastSlideOut 0.25s ease-in both;
+    transition: none !important;
+  }
+
+  // ── Header: title + close ────────────────────────────────────────────────
+  &__header {
+    display: flex;
+    flex-direction: row;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: $size-gap-2;
+    padding: 16px 16px 0;
+  }
+
+  &__title {
+    flex: 1;
+    min-width: 0;
+    margin: 0;
+    font-size: var(--font-size-sm);
+    font-weight: $font-weight-semibold;
+    color: var(--color-text-primary);
+    line-height: 1.45;
+    letter-spacing: -0.01em;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+
+  // ── Close button + countdown ring ────────────────────────────────────────
+  &__close-wrap {
+    position: relative;
+    flex-shrink: 0;
+    width: 28px;
+    height: 28px;
+    margin: -2px -4px 0 0;
+  }
+
+  &__ring {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    // Start arc from 12 o'clock
+    transform: rotate(-90deg);
+    pointer-events: none;
+  }
+
+  // Circumference = 2π × 11.5 ≈ 72.26
+  $ring-circumference: 72.26px;
+
+  &__ring-track {
+    fill: none;
+    stroke: var(--border-base);
+    stroke-width: 1.5;
+  }
+
+  &__ring-fill {
+    fill: none;
+    stroke: var(--color-accent-500);
+    stroke-width: 1.5;
+    stroke-linecap: round;
+    stroke-dasharray: $ring-circumference;
+    stroke-dashoffset: 0;
+    animation: ringCountdown linear both;
+    // Smooth opacity fade at the very end
+    transition: opacity 0.3s ease;
+  }
+
+  &__close {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: transparent;
+    border: none;
+    border-radius: 50%;
+    color: var(--color-text-muted);
+    cursor: pointer;
+    transition: background $motion-base $easing-standard, color $motion-base $easing-standard;
+
+    svg {
+      width: 13px;
+      height: 13px;
+    }
+
+    &:hover {
+      background: var(--color-bg-secondary);
+      color: var(--color-text-primary);
+    }
+  }
+
+  // ── Description ──────────────────────────────────────────────────────────
+  &__desc {
+    margin: 0;
+    padding: 8px 16px 0;
+    font-size: var(--font-size-xs);
+    color: var(--color-text-secondary);
+    line-height: 1.55;
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    word-break: break-word;
+  }
+
+  // ── Action buttons ────────────────────────────────────────────────────────
+  &__actions {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    justify-content: flex-end;
+    gap: $size-gap-2;
+    padding: 12px 16px 14px;
+  }
+
+  &__btn {
+    padding: 5px 14px;
+    border-radius: $size-radius-sm;
+    font-size: var(--font-size-xs);
+    font-weight: $font-weight-medium;
+    border: none;
+    cursor: pointer;
+    transition: all $motion-base $easing-standard;
+    white-space: nowrap;
+
+    &--primary {
+      background: var(--color-accent-500);
+      color: var(--color-static-white);
+
+      &:hover { opacity: 0.9; }
+      &:active { transform: scale(0.98); }
+    }
+
+    &--secondary {
+      background: transparent;
+      color: var(--color-text-secondary);
+      border: 1px solid var(--border-base);
+
+      &:hover {
+        background: var(--color-bg-secondary);
+        color: var(--color-text-primary);
+      }
+    }
+  }
+
+}
+
+@keyframes toastSlideIn {
+  from {
+    opacity: 0;
+    transform: translateX(-110%) scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0) scale(1);
+  }
+}
+
+@keyframes toastSlideOut {
+  from {
+    opacity: 1;
+    transform: translateX(0);
+    max-height: 260px;
+  }
+  to {
+    opacity: 0;
+    transform: translateX(-110%);
+    max-height: 0;
+    margin-bottom: -12px;
+  }
+}
+
+@keyframes ringCountdown {
+  from { stroke-dashoffset: 0; }
+  to   { stroke-dashoffset: 72.26px; }
+}

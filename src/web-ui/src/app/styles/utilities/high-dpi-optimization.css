@@ -1,0 +1,135 @@
+/**
+ * High-DPI optimization styles.
+ * Reduces text/input blurriness on high-DPI screens.
+ */
+
+/* Global high-DPI optimization */
+@media (-webkit-min-device-pixel-ratio: 2), (min-resolution: 192dpi), (min-resolution: 2dppx) {
+  
+  /* Global font rendering optimization */
+  * {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+  }
+  
+  /* Input and text area optimization */
+  input, textarea {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+    font-feature-settings: "liga", "kern";
+    /* Ensure pixel alignment */
+    transform: translateZ(0);
+    backface-visibility: hidden;
+    -webkit-backface-visibility: hidden;
+    /* Avoid subpixel rendering issues */
+    will-change: auto;
+  }
+
+  /* Keep contenteditable surfaces out of forced compositing.
+     WKWebView on macOS is sensitive to 3D transforms here and can lose
+     stable focus/selection behavior on chat/editor inputs. */
+  [contenteditable] {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+    font-feature-settings: "liga", "kern";
+  }
+  
+  /* Avoid blurry transforms */
+  .no-blur-transform {
+    transform: translate3d(0, 0, 0);
+    backface-visibility: hidden;
+    -webkit-backface-visibility: hidden;
+  }
+  
+  /* Border optimization on high-DPI */
+  .crisp-border {
+    border-width: 1px; /* Ensure integer-pixel borders */
+  }
+  
+  /* Shadow optimization on high-DPI */
+  .crisp-shadow {
+    box-shadow: 0 1px 3px var(--color-overlay-black-12), 0 1px 2px rgba(var(--color-static-black-rgb), 0.24);
+  }
+}
+
+/* Ultra high-DPI optimization (3x and above) */
+@media (-webkit-min-device-pixel-ratio: 3), (min-resolution: 288dpi), (min-resolution: 3dppx) {
+  
+  /* Finer font rendering */
+  input, textarea, [contenteditable] {
+    font-weight: 400; /* Avoid overly thin fonts */
+    letter-spacing: 0.01em; /* Slightly increase spacing */
+  }
+  
+  /* More precise pixel alignment */
+  .pixel-perfect {
+    transform: translate3d(0, 0, 0);
+    image-rendering: -webkit-optimize-contrast;
+    image-rendering: crisp-edges;
+  }
+}
+
+/* Browser-specific optimizations */
+
+/* Chrome/Safari */
+@media screen and (-webkit-min-device-pixel-ratio: 2) {
+  input:not([type="radio"]):not([type="checkbox"]), textarea {
+    -webkit-appearance: none;
+    -webkit-font-smoothing: antialiased;
+  }
+}
+
+/* Firefox */
+@-moz-document url-prefix() {
+  @media (min-resolution: 192dpi) {
+    input, textarea {
+      -moz-osx-font-smoothing: grayscale;
+    }
+  }
+}
+
+/* Utility classes */
+
+/* General anti-blur class */
+.anti-blur {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+  transform: translateZ(0);
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+}
+
+/* Crisp text class */
+.crisp-text {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+  font-feature-settings: "liga", "kern";
+}
+
+/* Crisp input class */
+.crisp-input {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+  font-feature-settings: "liga", "kern";
+  transform: translateZ(0);
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+  border-width: 1px;
+}
+
+/* Avoid scale blur */
+.no-scale-blur {
+  transform: translate3d(0, 0, 0) !important;
+}
+
+/* Pixel-perfect positioning */
+.pixel-perfect-position {
+  transform: translate3d(0, 0, 0);
+  position: relative;
+}

@@ -1,20 +1,113 @@
-# Rust
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# Dependencies
+node_modules
+**/node_modules
+
+# Build outputs - Frontend
+dist
+dist-ssr
+*.local
+**/dist
+**/dist-ssr
+!src/crates/contracts/product-domains/src/miniapp/builtin/assets/ppt-live/dist/
+!src/crates/contracts/product-domains/src/miniapp/builtin/assets/ppt-live/dist/ui.bundle.js
+
+# Build outputs - Rust/Tauri
 target/
+**/target/
 Cargo.lock
 
-# IDE
-.idea/
-.vscode/
-*.swp
-*.swo
-*~
+# Monaco Editor - copied from node_modules
+public/monaco-editor/
+src/web-ui/public/monaco-editor/
 
-# OS
+# Vditor - copied from node_modules
+public/vditor/
+src/web-ui/public/vditor/
+
+# Generated version files
+src/generated/version.ts
+src/generated/version-injection.html
+public/version.json
+src/web-ui/src/generated/version.ts
+src/web-ui/src/generated/version-injection.html
+src/web-ui/public/version.json
+
+# Tauri generated files
+apps/desktop/gen/
+src/apps/desktop/gen/
+src-tauri/gen/
+
+# Updater signing private key (never commit; pubkey is in tauri.conf.json)
+src/apps/desktop/.tauri/*.key
+
+# Editor directories and files
+.vscode/*
+!.vscode/extensions.json
+.idea
+.claude
+.codebuddy
 .DS_Store
-Thumbs.db
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
 
-# Python
-__pycache__/
-*.py[cod]
-*.egg-info/
-dist/
+# E2E test reports and screenshots
+tests/e2e/reports/
+
+# Eval job artifacts
+.eval/
+.tmp/
+tmp/
+Cross.toml
+
+# BitFun sandbox data - auto managed
+.bitfun/
+.cursor
+.cursor/rules/no-cargo.mdc
+.sisyphus/
+.worktrees/
+
+ASSETS_LICENSES.md
+
+external/
+/.bitfun/search/flashgrep-index/
+.agents/
+/target/debug/.bitfun/search/flashgrep-index/
+/src/apps/desktop/.bitfun/search/flashgrep-index/
+
+# Taiji generated outputs
+/output/
+/data/pipeline/
+/taiji-website/
+
+# Taiji legal evidence (private, do NOT commit)
+/docs/legal/evidence/official-reply-20260722.json
+/docs/legal/screenshots/official-reply.png
+/scripts/__pycache__/
+/scripts/build_website.cjs
+/scripts/compose/
+/scripts/create-files.cjs
+/scripts/fetch_real_data.py
+/scripts/generate_ag_report.py
+/scripts/generate_daily_report.py
+/scripts/generate_daily_video.py
+/scripts/generate_tech_analysis_video.py
+/scripts/generate_video_from_pipeline.py
+/scripts/render/
+/scripts/tts/
+/scripts/video-render-template/
+/reports/RB0-*.md
+/reports/ai-llm-api-reference.md
+/reports/daily_report_*.md
+/reports/taiji-cli-duplication-audit.md

@@ -1,0 +1,1025 @@
+import React, { useCallback, memo } from 'react';
+import { Download, Copy, X, AlertCircle } from 'lucide-react';
+import { IconButton } from '@/component-library';
+import { Markdown as MarkdownRenderer } from '@/component-library/components/Markdown/Markdown';
+import { useI18n } from '@/infrastructure/i18n';
+import { createLogger } from '@/shared/utils/logger';
+import { globalEventBus } from '@/infrastructure/event-bus';
+
+const log = createLogger('FlexiblePanel');
+
+function updateGenerativeWidgetResultCode(result: unknown, widgetCode: string): unknown {
+  if (!result) {
+    return result;
+  }
+
+  if (typeof result === 'string') {
+    try {
+      const parsed = JSON.parse(result);
+      if (parsed && typeof parsed === 'object') {
+        return JSON.stringify({
+          ...(parsed as Record<string, unknown>),
+          widget_code: widgetCode,
+        });
+      }
+    } catch {
+      return result;
+    }
+  }
+
+  if (typeof result === 'object') {
+    return {
+      ...(result as Record<string, unknown>),
+      widget_code: widgetCode,
+    };
+  }
+
+  return result;
+}
+
+// Stable lazy components at module level to avoid re-creation on each render
+const GitDiffView = React.lazy(() =>
+  import('@/tools/git/components/GitDiffView/GitDiffView')
+);
+
+const GitSettingsView = React.lazy(() => 
+  import('@/tools/git/components/GitSettingsView/GitSettingsView')
+);
+
+const CodeEditor = React.lazy(() =>
+  import('@/tools/editor/components/CodeEditor').then(module => ({
+    default: module.default,
+  }))
+);
+
+const MarkdownEditor = React.lazy(() =>
+  import('@/tools/editor/components/MarkdownEditor').then(module => ({
+    default: module.default,
+  }))
+);
+
+const ImageViewer = React.lazy(() =>
+  import('@/tools/editor/components/ImageViewer').then(module => ({
+    default: module.default,
+  }))
+);
+
+const DiffEditor = React.lazy(() =>
+  import('@/tools/editor/components/DiffEditor').then(module => ({
+    default: module.default,
+  }))
+);
+
+const GitDiffEditor = React.lazy(() =>
+  import('@/tools/git/components/GitDiffEditor/GitDiffEditor').then(module => ({
+    default: module.default,
+  }))
+);
+
+const GitGraphView = React.lazy(() => 
+  import('@/tools/git/components/GitGraphView/GitGraphView').then(module => ({ 
+    default: module.GitGraphView 
+  }))
+);
+
+const GitBranchHistoryView = React.lazy(() =>
+  import('@/tools/git/components/GitBranchHistoryView/GitBranchHistoryView').then(module => ({
+    default: module.GitBranchHistoryView
+  }))
+);
+
+// Plan viewer component
+const PlanViewer = React.lazy(() => 
+  import('@/tools/editor/components/PlanViewer').then(module => ({ 
+    default: module.default 
+  }))
+);
+
+// Uses ConnectedTerminal to auto-connect backend
+const TerminalTabPanel = React.lazy(() => 
+  import('@/tools/terminal/components/ConnectedTerminal')
+);
+
+const BrowserPanel = React.lazy(() =>
+  import('@/app/scenes/browser/BrowserPanel')
+);
+
+const GenerativeWidgetPanel = React.lazy(() =>
+  import('@/tools/generative-widget/GenerativeWidgetPanel')
+);
+
+const BitfunCanvasPanel = React.lazy(() =>
+  import('@/tools/bitfun-canvas/BitfunCanvasPanel')
+);
+
+const TaskDetailPanel = React.lazy(() => 
+  import('@/flow_chat/components/TaskDetailPanel').then(module => ({ 
+    default: module.TaskDetailPanel 
+  }))
+);
+
+const BtwSessionPanel = React.lazy(() =>
+  import('@/flow_chat/components/btw/BtwSessionPanel').then(module => ({
+    default: module.BtwSessionPanel
+  }))
+);
+
+const SessionUsagePanel = React.lazy(() =>
+  import('@/flow_chat/components/usage/SessionUsagePanel').then(module => ({
+    default: module.SessionUsagePanel
+  }))
+);
+
+const BackgroundCommandOutputPanel = React.lazy(() =>
+  import('@/flow_chat/components/background-command/BackgroundCommandOutputPanel').then(module => ({
+    default: module.BackgroundCommandOutputPanel
+  }))
+);
+
+const ReviewPlatformPanel = React.lazy(() =>
+  import('@/app/components/panels/review-platform/ReviewPlatformPanel')
+);
+
+// CodePreview, ChartRenderer and CodeNode removed - visualization features disabled
+import { 
+  FlexiblePanelProps
+} from './types';
+import { 
+  getContentIcon, 
+  getContentTypeName, 
+  shouldShowHeader,
+  generateFileName
+} from './utils';
+import './FlexiblePanel.scss';
+
+interface ExtendedFlexiblePanelProps extends FlexiblePanelProps {
+  onDirtyStateChange?: (isDirty: boolean) => void;
+  /** Whether this panel is the active/visible tab in its EditorGroup */
+  isActive?: boolean;
+  /** File no longer exists on disk (from editor); drives tab "deleted" label */
+  onFileMissingFromDiskChange?: (missing: boolean) => void;
+}
+
+const FlexiblePanel: React.FC<ExtendedFlexiblePanelProps> = memo(({
+  content,
+  onContentChange,
+  className = '',
+  onInteraction,
+  workspacePath,
+  onBeforeClose,
+  onDirtyStateChange,
+  isActive = true,
+  onFileMissingFromDiskChange,
+  terminalResizeSuspended = false,
+}) => {
+  const { t, formatDate } = useI18n('components');
+
+  // Use ref to save latest content, avoiding it in callback dependencies
+  const contentRef = React.useRef(content);
+  React.useEffect(() => {
+    contentRef.current = content;
+  }, [content, onInteraction]);
+
+  // Sync dirty state from MonacoModelManager on component mount
+  React.useEffect(() => {
+    if (content?.type !== 'code-editor') {
+      return;
+    }
+    
+    const filePath = content?.data?.filePath;
+    if (!filePath || !onDirtyStateChange) return;
+    
+    import('@/tools/editor/services/MonacoModelManager').then(({ monacoModelManager }) => {
+      const metadata = monacoModelManager.getModelMetadata(filePath);
+      if (metadata !== undefined) {
+        onDirtyStateChange(metadata.isDirty);
+      }
+    }).catch(() => {});
+  }, [content?.type, content?.data?.filePath, onDirtyStateChange]);
+
+  const handleClose = useCallback(async () => {
+    if (onBeforeClose) {
+      const canClose = await onBeforeClose(content);
+      if (!canClose) {
+        return;
+      }
+    }
+    
+    onContentChange?.(null);
+  }, [onContentChange, onBeforeClose, content]);
+
+  const handleCopy = useCallback(() => {
+    if (!content?.data) return;
+    
+    let textToCopy = '';
+    if (typeof content.data === 'string') {
+      textToCopy = content.data;
+    } else if (content.data.content) {
+      textToCopy = content.data.content;
+    }
+    
+    navigator.clipboard.writeText(textToCopy).then(() => {
+      // User feedback for successful copy can be implemented via global notification system
+      if (onInteraction) {
+        onInteraction('copy', 'success');
+      }
+    }).catch(() => {
+      if (onInteraction) {
+        onInteraction('copy', 'failed');
+      }
+    });
+  }, [content, onInteraction]);
+
+  const handleDownload = useCallback(() => {
+    if (!content?.data) return;
+    
+    let textToDownload = '';
+    if (typeof content.data === 'string') {
+      textToDownload = content.data;
+    } else if (content.data.content) {
+      textToDownload = content.data.content;
+    }
+    
+    const filename = generateFileName(content.type, content.title);
+    const blob = new Blob([textToDownload], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }, [content]);
+
+  const renderEditorLoading = () => (
+    <div className="bitfun-flexible-panel__loading">
+      {t('select.loading')}
+    </div>
+  );
+
+  const renderLazyEditor = (node: React.ReactNode) => (
+    <React.Suspense fallback={renderEditorLoading()}>
+      {node}
+    </React.Suspense>
+  );
+
+  const renderContent = () => {
+    if (!content || content.type === 'empty') {
+      return (
+        <div className="bitfun-flexible-panel__empty-content">
+          <div className="bitfun-flexible-panel__empty-icon">
+            {getContentIcon('empty')}
+          </div>
+          <h3>{t('flexiblePanel.empty.title')}</h3>
+          <p>{t('flexiblePanel.empty.description')}</p>
+        </div>
+      );
+    }
+
+    switch (content.type) {
+      case 'code-preview': {
+        const previewData = content.data || {};
+        const hasFixNeeded = previewData.migrationContext?.hasUpgradePoints || previewData.needsFix || false;
+        
+        return (
+          <div className={`bitfun-flexible-panel__code-content ${hasFixNeeded ? 'needs-fix' : ''}`}>
+            <pre><code>{typeof content.data === 'string' ? content.data : t('flexiblePanel.fallback.noCodeContent')}</code></pre>
+          </div>
+        );
+      }
+
+      case 'markdown-viewer':
+        return (
+          <div className="bitfun-flexible-panel__markdown-content">
+            <MarkdownRenderer content={typeof content.data === 'string' ? content.data : ''} />
+          </div>
+        );
+
+      case 'markdown-editor': {
+        const markdownEditorData = content.data || {};
+        const markdownFilePath = markdownEditorData.filePath;
+        const markdownInitialContent = markdownEditorData.initialContent;
+        const markdownFileName = markdownEditorData.fileName || content.title;
+        const markdownWorkspacePath = markdownEditorData.workspacePath || workspacePath;
+        const markdownJumpToLine = markdownEditorData.jumpToLine;
+        const markdownJumpToColumn = markdownEditorData.jumpToColumn;
+
+        return (
+          <div className="bitfun-flexible-panel__markdown-editor">
+            {markdownFilePath || markdownInitialContent !== undefined ? (
+              renderLazyEditor(
+                <MarkdownEditor
+                  filePath={markdownFilePath}
+                  initialContent={markdownInitialContent}
+                  fileName={markdownFileName}
+                  workspacePath={markdownWorkspacePath}
+                  readOnly={markdownEditorData.readOnly || false}
+                  jumpToLine={markdownJumpToLine}
+                  jumpToColumn={markdownJumpToColumn}
+                  isActiveTab={isActive}
+                  onFileMissingFromDiskChange={onFileMissingFromDiskChange}
+                  onContentChange={(_newContent, hasChanges) => {
+                    if (onDirtyStateChange) {
+                      onDirtyStateChange(hasChanges);
+                    }
+                  }}
+                  onSave={(_savedContent) => {
+                    if (onDirtyStateChange) {
+                      onDirtyStateChange(false);
+                    }
+                  }}
+                />
+              )
+            ) : (
+              <div className="bitfun-flexible-panel__error-message">
+                <AlertCircle size={20} />
+                <p>{t('flexiblePanel.errors.markdownEditorMissingPath')}</p>
+              </div>
+            )}
+          </div>
+        );
+      }
+
+
+      case 'text-viewer':
+        return (
+          <div className="bitfun-flexible-panel__text-content">
+            <pre>{typeof content.data === 'string' ? content.data : 'No text content available'}</pre>
+          </div>
+        );
+
+      case 'file-viewer': {
+        const fileViewerData = content.data || {};
+        const fileNeedsFix = fileViewerData.migrationContext?.hasUpgradePoints || fileViewerData.needsFix || false;
+        const fileViewerClass = `bitfun-flexible-panel__panel-code-viewer ${fileNeedsFix ? 'needs-fix' : ''}`;
+        
+        return (
+          <div className="bitfun-flexible-panel__code-viewer-container">
+            {renderLazyEditor(
+              <CodeEditor
+                filePath={fileViewerData.filePath || ''}
+                fileName={content.title}
+                readOnly={true}
+                showLineNumbers={true}
+                showMinimap={true}
+                theme="vs-dark"
+                className={fileViewerClass}
+                isActiveTab={isActive}
+                onFileMissingFromDiskChange={onFileMissingFromDiskChange}
+              />
+            )}
+          </div>
+        );
+      }
+
+      case 'image-viewer': {
+        const imageViewerData = content.data || {};
+        
+        return (
+          <div className="bitfun-flexible-panel__image-viewer-container">
+            {renderLazyEditor(
+              <ImageViewer
+                filePath={imageViewerData.filePath || ''}
+                fileName={content.title}
+                workspacePath={workspacePath}
+                className="bitfun-flexible-panel__image-viewer"
+              />
+            )}
+          </div>
+        );
+      }
+
+      case 'code-viewer': {
+        const codeData = content.data || {};
+        const migrationContext = codeData.migrationContext || {};
+        const needsFix = migrationContext.hasUpgradePoints || codeData.needsFix || false;
+        
+        return (
+          <div className="bitfun-flexible-panel__code-viewer-container">
+            <div className={`bitfun-flexible-panel__code-content ${needsFix ? 'needs-fix' : ''}`}>
+              {renderLazyEditor(
+                <CodeEditor
+                  filePath={codeData.filePath || ''}
+                  fileName={codeData.fileName}
+                  language={codeData.language || 'typescript'}
+                  readOnly={codeData.readOnly !== false}
+                  showLineNumbers={true}
+                  showMinimap={true}
+                  theme="vs-dark"
+                  onContentChange={codeData.onContentChange}
+                  isActiveTab={isActive}
+                  onFileMissingFromDiskChange={onFileMissingFromDiskChange}
+                />
+              )}
+            </div>
+          </div>
+        );
+      }
+
+      case 'code-editor': {
+        const editorData = content.data || {};
+        const filePath = editorData.filePath || '';
+        const fileName = editorData.fileName || content.title;
+        const editorLanguage = editorData.language;
+        const editorWorkspacePath = editorData.workspacePath || workspacePath;
+        const syncGenerativeWidgetToolResult = async (nextWidgetCode: string, persistToSession: boolean) => {
+          const source = editorData._source;
+          if (
+            source?.type !== 'tool-call' ||
+            source.toolName !== 'GenerativeUI' ||
+            (!source.toolCallId && !source.toolItemId)
+          ) {
+            return;
+          }
+
+          const { flowChatStore } = await import('@/flow_chat/store/FlowChatStore');
+          const state = flowChatStore.getState();
+          const activeSessionId = source.sessionId || state.activeSessionId;
+          if (!activeSessionId) {
+            return;
+          }
+
+          const session = state.sessions.get(activeSessionId);
+          if (!session) {
+            return;
+          }
+
+          for (const turn of session.dialogTurns) {
+            for (const round of turn.modelRounds) {
+              const item = round.items.find(
+                (it: any) =>
+                  it.type === 'tool' &&
+                  (
+                    (source.toolCallId && it.toolCall?.id === source.toolCallId) ||
+                    (source.toolItemId && it.id === source.toolItemId)
+                  )
+              );
+
+              if (!item) {
+                continue;
+              }
+
+              const toolItem = item as any;
+              flowChatStore.updateModelRoundItem(activeSessionId, turn.id, toolItem.id, {
+                toolCall: {
+                  ...toolItem.toolCall,
+                  input: {
+                    ...toolItem.toolCall?.input,
+                    widget_code: nextWidgetCode,
+                  },
+                },
+                toolResult: toolItem.toolResult
+                  ? {
+                      ...toolItem.toolResult,
+                      result: updateGenerativeWidgetResultCode(toolItem.toolResult.result, nextWidgetCode),
+                    }
+                  : toolItem.toolResult,
+              } as any);
+
+              if (persistToSession) {
+                const { flowChatManager } = await import('@/flow_chat/services/FlowChatManager');
+                await flowChatManager.saveDialogTurn(activeSessionId, turn.id);
+              }
+              return;
+            }
+          }
+        };
+
+        return renderLazyEditor(
+          <CodeEditor
+            filePath={filePath}
+            workspacePath={editorWorkspacePath}
+            fileName={fileName}
+            language={editorLanguage}
+            readOnly={editorData.readOnly || false}
+            autoSave={editorData.autoSave === true}
+            autoSaveDelayMs={typeof editorData.autoSaveDelayMs === 'number' ? editorData.autoSaveDelayMs : undefined}
+            showLineNumbers={editorData.showLineNumbers !== false}
+            showMinimap={editorData.showMinimap !== false}
+            theme={editorData.theme || 'vs-dark'}
+            jumpToLine={editorData.jumpToLine}
+            jumpToColumn={editorData.jumpToColumn}
+            jumpToRange={editorData.jumpToRange}
+            navigationToken={editorData.navigationToken}
+            isActiveTab={isActive}
+            onFileMissingFromDiskChange={onFileMissingFromDiskChange}
+            onContentChange={(newContent, hasChanges) => {
+              if (onContentChange) {
+                onContentChange({
+                  ...content,
+                  data: {
+                    ...editorData,
+                    content: newContent,
+                    hasChanges
+                  }
+                });
+              }
+
+              if (onDirtyStateChange) {
+                onDirtyStateChange(hasChanges);
+              }
+
+              void syncGenerativeWidgetToolResult(newContent, false);
+            }}
+            onSave={(content) => {
+              if (onInteraction) {
+                onInteraction('save', JSON.stringify({ filePath, content }));
+              }
+
+              if (onDirtyStateChange) {
+                onDirtyStateChange(false);
+              }
+
+              void syncGenerativeWidgetToolResult(content, true);
+            }}
+          />
+        );
+      }
+
+      case 'diff-code-editor': {
+        const diffData = content.data || {};
+        const originalCode = diffData.originalCode || '';
+        const modifiedCode = diffData.modifiedCode || originalCode;
+        const diffFilePath = diffData.filePath;
+        const diffMigrationContext = diffData.migrationContext;
+        const diffRepositoryPath = diffData.repositoryPath;
+        
+        const diffViewerKey = `diff-${diffFilePath || 'unknown'}-${originalCode.length}-${modifiedCode.length}`;
+        
+        if (diffRepositoryPath && diffFilePath) {
+          return renderLazyEditor(
+            <GitDiffEditor
+              key={diffViewerKey}
+              originalContent={originalCode}
+              modifiedContent={modifiedCode}
+              filePath={diffFilePath}
+              repositoryPath={diffRepositoryPath}
+              onAcceptAll={() => {
+                diffMigrationContext?.onAcceptAll?.();
+                window.dispatchEvent(new CustomEvent('git-status-changed', {
+                  detail: { repositoryPath: diffRepositoryPath }
+                }));
+              }}
+              onRejectAll={() => {
+                diffMigrationContext?.onRejectAll?.();
+                window.dispatchEvent(new CustomEvent('git-status-changed', {
+                  detail: { repositoryPath: diffRepositoryPath }
+                }));
+              }}
+              onClose={() => {}}
+              onContentChange={(_newContent, hasChanges) => {
+                if (onDirtyStateChange) {
+                  onDirtyStateChange(hasChanges);
+                }
+              }}
+              onSave={() => {
+                if (onDirtyStateChange) {
+                  onDirtyStateChange(false);
+                }
+              }}
+            />
+          );
+        }
+        
+        return renderLazyEditor(
+          <DiffEditor
+            key={diffViewerKey}
+            originalContent={originalCode}
+            modifiedContent={modifiedCode}
+            filePath={diffFilePath}
+            workspacePath={workspacePath || diffMigrationContext?.workspacePath}
+            revealLine={diffData.revealLine}
+            readOnly={false}
+            renderSideBySide={true}
+            enableLsp={true}
+            onSave={async (content) => {
+              try {
+                const targetWorkspacePath = workspacePath || diffMigrationContext?.workspacePath;
+                if (!targetWorkspacePath || !diffFilePath) {
+                  log.warn('DiffEditor save failed: missing workspacePath or filePath');
+                  return;
+                }
+
+                const { workspaceAPI } = await import('@/infrastructure/api');
+                await workspaceAPI.writeFileContent(targetWorkspacePath, diffFilePath, content);
+
+                globalEventBus.emit('file-tree:refresh');
+
+                if (onDirtyStateChange) {
+                  onDirtyStateChange(false);
+                }
+              } catch (error) {
+                log.error('DiffEditor save failed', error);
+                throw error;
+              }
+            }}
+          />
+        );
+      }
+
+      case 'git-diff':
+        return (
+          <React.Suspense fallback={<div>{t('flexiblePanel.loading.gitDiff')}</div>}>
+            <GitDiffView 
+              repositoryPath={content.data?.repositoryPath || workspacePath || ''}
+              sourceCommit={content.data?.sourceCommit}
+              targetCommit={content.data?.targetCommit}
+              filePath={content.data?.filePath}
+            />
+          </React.Suspense>
+        );
+
+      case 'git-graph':
+        return (
+          <React.Suspense fallback={<div>{t('flexiblePanel.loading.gitGraph')}</div>}>
+            <GitGraphView 
+              repositoryPath={content.data?.repositoryPath || workspacePath || ''}
+              maxCount={content.data?.maxCount}
+            />
+          </React.Suspense>
+        );
+
+      case 'git-branch-history':
+        return (
+          <React.Suspense fallback={<div>{t('flexiblePanel.loading.gitBranchHistory')}</div>}>
+            <GitBranchHistoryView 
+              repositoryPath={content.data?.repositoryPath || workspacePath || ''}
+              branchName={content.data?.branchName || 'main'}
+              currentBranch={content.data?.currentBranch}
+              maxCount={content.data?.maxCount || 100}
+            />
+          </React.Suspense>
+        );
+
+      case 'ai-session':
+        return (
+          <div className="ai-session-content">
+            <div className="session-header">
+              <h3>{t('flexiblePanel.aiSession.title', { sessionId: content.data?.sessionId?.slice(0, 8) || t('flexiblePanel.aiSession.unknown') })}</h3>
+              <div className="session-info">
+                <span className="agent-type">{content.data?.agent_info?.agent_type || t('flexiblePanel.aiSession.unknown')}</span>
+                <span className="model-name">({content.data?.agent_info?.model_name || t('flexiblePanel.aiSession.unknown')})</span>
+              </div>
+            </div>
+            <div className="session-details">
+              <div className="detail-item">
+                <span className="label">{t('flexiblePanel.aiSession.sessionStatus')}</span>
+                <span className={`status status-${content.data?.status?.toLowerCase() || 'unknown'}`}>
+                  {content.data?.status || t('flexiblePanel.aiSession.unknown')}
+                </span>
+              </div>
+              <div className="detail-item">
+                <span className="label">{t('flexiblePanel.aiSession.operationsCount')}</span>
+                <span className="value">{t('flexiblePanel.aiSession.operationsValue', { count: content.data?.operations?.length || 0 })}</span>
+              </div>
+              <div className="detail-item">
+                <span className="label">{t('flexiblePanel.aiSession.startTime')}</span>
+                <span className="value">
+                  {content.data?.start_time
+                    ? formatDate(new Date(content.data.start_time), {
+                      dateStyle: 'medium',
+                      timeStyle: 'short',
+                    })
+                    : t('flexiblePanel.aiSession.unknownTime')}
+                </span>
+              </div>
+            </div>
+            {content.data?.operations && content.data.operations.length > 0 && (
+              <div className="operations-list">
+                <h4>{t('flexiblePanel.aiSession.fileOperations')}</h4>
+                {content.data.operations.map((operation: any, index: number) => (
+                  <div key={operation.operation_id || index} className="operation-item">
+                    <div className="operation-header">
+                      <span className={`operation-type type-${operation.operation_type?.toLowerCase() || 'unknown'}`}>
+                        {operation.operation_type || t('flexiblePanel.aiSession.unknown')}
+                      </span>
+                      <span className="file-path">{operation.file_path || t('flexiblePanel.aiSession.unknown')}</span>
+                    </div>
+                    <div className="operation-status">
+                      <span className={`status status-${operation.status?.toLowerCase() || 'unknown'}`}>
+                        {operation.status || t('flexiblePanel.aiSession.unknown')}
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        );
+
+      case 'git-settings':
+        return (
+          <React.Suspense fallback={<div>{t('flexiblePanel.loading.gitSettings')}</div>}>
+            <GitSettingsView 
+              repositoryPath={content.data?.repositoryPath || workspacePath || ''}
+            />
+          </React.Suspense>
+        );
+
+
+      case 'task-detail': {
+        const taskDetailData = content.data || {};
+        return (
+          <React.Suspense fallback={<div className="bitfun-flexible-panel__loading">{t('flexiblePanel.loading.taskDetail')}</div>}>
+            <TaskDetailPanel data={taskDetailData} />
+          </React.Suspense>
+        );
+      }
+
+      case 'plan-viewer': {
+        const planViewerData = content.data || {};
+        const planFilePath = planViewerData.filePath || '';
+        const planFileName = planViewerData.fileName || content.title;
+        const planWorkspacePath = planViewerData.workspacePath || workspacePath;
+        const planJumpToLine = planViewerData.jumpToLine;
+        const planJumpToColumn = planViewerData.jumpToColumn;
+        
+        if (!planFilePath) {
+          return (
+            <div className="bitfun-flexible-panel__error-message">
+              <AlertCircle size={20} />
+              <p>{t('flexiblePanel.errors.planViewerMissingPath')}</p>
+            </div>
+          );
+        }
+        
+        return (
+          <React.Suspense fallback={<div className="bitfun-flexible-panel__loading">{t('flexiblePanel.loading.planViewer')}</div>}>
+            <PlanViewer
+              filePath={planFilePath}
+              fileName={planFileName}
+              workspacePath={planWorkspacePath}
+              jumpToLine={planJumpToLine}
+              jumpToColumn={planJumpToColumn}
+            />
+          </React.Suspense>
+        );
+      }
+
+      case 'terminal': {
+        // Terminal panel
+        const terminalData = content.data || {};
+        const sessionId = terminalData.sessionId;
+        
+        if (!sessionId) {
+          return (
+            <div className="bitfun-flexible-panel__error-message">
+              <AlertCircle size={20} />
+              <p>{t('flexiblePanel.errors.terminalMissingSessionId')}</p>
+            </div>
+          );
+        }
+        
+        return (
+          <React.Suspense fallback={<div className="bitfun-flexible-panel__loading">{t('flexiblePanel.loading.terminal')}</div>}>
+            <div className="bitfun-flexible-panel__terminal-container">
+              <TerminalTabPanel
+                key={sessionId}
+                sessionId={sessionId}
+                autoFocus={true}
+                resizeSuspended={terminalResizeSuspended}
+              />
+            </div>
+          </React.Suspense>
+        );
+      }
+
+      case 'btw-session':
+        return (
+          <React.Suspense fallback={<div className="bitfun-flexible-panel__loading">{t('flexiblePanel.loading.taskDetail')}</div>}>
+            <BtwSessionPanel
+              childSessionId={content.data?.childSessionId}
+              parentSessionId={content.data?.parentSessionId}
+              workspacePath={content.data?.workspacePath || workspacePath}
+            />
+          </React.Suspense>
+        );
+
+      case 'session-usage':
+        return (
+          <React.Suspense fallback={<div className="bitfun-flexible-panel__loading">{t('flexiblePanel.loading.taskDetail')}</div>}>
+            <SessionUsagePanel
+              report={content.data?.report}
+              markdown={content.data?.markdown}
+              sessionId={content.data?.sessionId}
+              workspacePath={content.data?.workspacePath || workspacePath}
+              initialTab={content.data?.initialTab}
+            />
+          </React.Suspense>
+        );
+
+      case 'background-command-output':
+        return (
+          <React.Suspense fallback={<div className="bitfun-flexible-panel__loading">{t('flexiblePanel.loading.terminal')}</div>}>
+            <BackgroundCommandOutputPanel data={content.data} />
+          </React.Suspense>
+        );
+
+      case 'review-platform':
+        return (
+          <React.Suspense fallback={<div className="bitfun-flexible-panel__loading">Loading pull requests...</div>}>
+            <ReviewPlatformPanel workspacePath={content.data?.workspacePath || workspacePath} />
+          </React.Suspense>
+        );
+
+      case 'review-platform-pr-detail':
+        return (
+          <React.Suspense fallback={<div className="bitfun-flexible-panel__loading">Loading pull request...</div>}>
+            <ReviewPlatformPanel
+              workspacePath={content.data?.workspacePath || workspacePath}
+              initialRemoteId={content.data?.remoteId}
+              initialPullRequestId={content.data?.pullRequestId}
+              initialPullRequestUrl={content.data?.pullRequestUrl}
+              detailOnly
+            />
+          </React.Suspense>
+        );
+
+      case 'browser':
+        return (
+          <React.Suspense fallback={<div className="bitfun-flexible-panel__loading">{t('flexiblePanel.loading.terminal')}</div>}>
+            <BrowserPanel
+              isActive={isActive}
+              initialUrl={content.data?.url}
+            />
+          </React.Suspense>
+        );
+
+      case 'generative-widget':
+        return (
+          <React.Suspense fallback={<div className="bitfun-flexible-panel__loading">Loading widget preview...</div>}>
+            <GenerativeWidgetPanel
+              title={content.title}
+              widgetId={content.data?.widgetId}
+              widgetCode={content.data?.widgetCode}
+              onWidgetCodePersist={async (nextWidgetCode) => {
+                if (onContentChange) {
+                  onContentChange({
+                    ...content,
+                    data: {
+                      ...content.data,
+                      widgetCode: nextWidgetCode,
+                    },
+                  });
+                }
+
+                const source = content.data?._source;
+                if (
+                  source?.type !== 'tool-call' ||
+                  source.toolName !== 'GenerativeUI' ||
+                  (!source.toolCallId && !source.toolItemId)
+                ) {
+                  return;
+                }
+
+                const { flowChatStore } = await import('@/flow_chat/store/FlowChatStore');
+                const { flowChatManager } = await import('@/flow_chat/services/FlowChatManager');
+                const state = flowChatStore.getState();
+                const sessionId = source.sessionId || state.activeSessionId;
+                if (!sessionId) {
+                  return;
+                }
+
+                const session = state.sessions.get(sessionId);
+                if (!session) {
+                  return;
+                }
+
+                for (const turn of session.dialogTurns) {
+                  for (const round of turn.modelRounds) {
+                    const item = round.items.find(
+                      (it: any) =>
+                        it.type === 'tool' &&
+                        (
+                          (source.toolCallId && it.toolCall?.id === source.toolCallId) ||
+                          (source.toolItemId && it.id === source.toolItemId)
+                        )
+                    );
+
+                    if (!item) {
+                      continue;
+                    }
+
+                    const toolItem = item as any;
+                    flowChatStore.updateModelRoundItem(sessionId, turn.id, toolItem.id, {
+                      toolCall: {
+                        ...toolItem.toolCall,
+                        input: {
+                          ...toolItem.toolCall?.input,
+                          widget_code: nextWidgetCode,
+                        },
+                      },
+                      toolResult: toolItem.toolResult
+                        ? {
+                            ...toolItem.toolResult,
+                            result: updateGenerativeWidgetResultCode(toolItem.toolResult.result, nextWidgetCode),
+                          }
+                        : toolItem.toolResult,
+                    } as any);
+
+                    await flowChatManager.saveDialogTurn(sessionId, turn.id);
+                    return;
+                  }
+                }
+              }}
+            />
+          </React.Suspense>
+        );
+
+      case 'bitfun-canvas':
+        return (
+          <React.Suspense fallback={<div className="bitfun-flexible-panel__loading">Loading Canvas preview...</div>}>
+            <BitfunCanvasPanel
+              title={content.title}
+              artifactReference={content.data?.artifactReference}
+              html={content.data?.html}
+              source={content.data?.source}
+              status={content.data?.status}
+              diagnostics={content.data?.diagnostics}
+              workspacePath={content.data?.workspacePath}
+              remoteConnectionId={content.data?.remoteConnectionId}
+              remoteSshHost={content.data?.remoteSshHost}
+            />
+          </React.Suspense>
+        );
+
+      default:
+        return (
+          <div className="bitfun-flexible-panel__unknown-content">
+            <div className="bitfun-flexible-panel__unknown-icon">
+              <AlertCircle size={48} />
+            </div>
+            <h3>{t('flexiblePanel.unknownContent.title')}</h3>
+            <p>{t('flexiblePanel.unknownContent.description')}</p>
+            <div className="bitfun-flexible-panel__unknown-meta">
+              <code>{t('flexiblePanel.unknownContent.contentType', { type: content.type })}</code>
+            </div>
+          </div>
+        );
+    }
+  };
+
+  const showHeader = content && shouldShowHeader(content.type);
+
+  return (
+    <div className={`bitfun-flexible-panel ${className}`}>
+      {showHeader && (
+        <div className="bitfun-flexible-panel__header">
+          <div className="bitfun-flexible-panel__header-left">
+            <div className="bitfun-flexible-panel__content-icon">
+              {getContentIcon(content.type)}
+            </div>
+            <div className="bitfun-flexible-panel__content-info">
+              <span className="bitfun-flexible-panel__content-title">
+                {content.title || getContentTypeName(content.type)}
+              </span>
+              <span className="bitfun-flexible-panel__content-type">
+                {getContentTypeName(content.type)}
+              </span>
+            </div>
+          </div>
+
+          <div className="bitfun-flexible-panel__header-right">
+            {content && content.type !== 'empty' && (
+              <>
+                <IconButton
+                  size="xs"
+                  onClick={handleCopy}
+                  tooltip={t('flexiblePanel.actions.copyContent')}
+                >
+                  <Copy size={14} />
+                </IconButton>
+
+                <IconButton
+                  size="xs"
+                  onClick={handleDownload}
+                  tooltip={t('flexiblePanel.actions.downloadContent')}
+                >
+                  <Download size={14} />
+                </IconButton>
+              </>
+            )}
+            
+            <IconButton
+              size="xs"
+              variant="danger"
+              onClick={handleClose}
+              tooltip={t('flexiblePanel.actions.close')}
+            >
+              <X size={14} />
+            </IconButton>
+          </div>
+        </div>
+      )}
+
+      <div className="bitfun-flexible-panel__content">
+        {renderContent()}
+      </div>
+    </div>
+  );
+});
+
+FlexiblePanel.displayName = 'FlexiblePanel';
+
+export default FlexiblePanel;

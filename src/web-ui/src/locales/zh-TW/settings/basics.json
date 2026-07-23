@@ -1,0 +1,232 @@
+{
+  "title": "基礎",
+  "subtitle": "日誌、終端、通知與登入時啟動",
+  "appearance": {
+    "title": "外觀",
+    "hint": "界面語言與視覺主題",
+    "language": "語言",
+    "themes": "主題",
+    "builtIn": "內置",
+    "custom": "自定義",
+    "export": "導出",
+    "delete": "刪除",
+    "confirmDelete": "確定刪除主題 \"{{name}}\" 嗎？",
+    "languageRowHint": "選擇一個語言包作為目前界面語言。",
+    "themeRowHint": "選擇界面配色主題。",
+    "systemTheme": "跟隨系統",
+    "systemThemeDescription": "根據系統淺色/深色外觀自動在亮暗主題間切換，並隨系統切換而更新。",
+    "presets": {
+      "bitfun-dark": {
+        "name": "暗色",
+        "description": "默認暗色主題"
+      },
+      "bitfun-light": {
+        "name": "亮色",
+        "description": "亮色主題 - 素雅高級，淡藍灰調"
+      },
+      "bitfun-midnight": {
+        "name": "午夜",
+        "description": "午夜灰暗色主題 - 專業優雅，靈感來自 JetBrains IDE"
+      },
+      "bitfun-china-style": {
+        "name": "墨韻",
+        "description": "中國風主題 - 宣紙墨香，青花硃砂，溫潤典雅"
+      },
+      "bitfun-china-night": {
+        "name": "墨夜",
+        "description": "中國風暗色主題 - 墨夜星辰，月華如水，沉靜典雅"
+      },
+      "bitfun-cyber": {
+        "name": "賽博",
+        "description": "科技感主題 - 深邃黑洞，霓虹未來，極致科技美學"
+      },
+      "bitfun-slate": {
+        "name": "石板灰",
+        "description": "石板灰幾何主題 - 極深沉浸，高對比度灰度美學"
+      },
+      "bitfun-tokyo-night": {
+        "name": "東京夜",
+        "description": "Tokyo Night 經典配色 - 靛藍夜色，藍紫高光"
+      }
+    },
+    "fontSize": {
+      "title": "字體大小",
+      "hint": "調整界面與對話區域的字體大小（編輯器字號在編輯器設置中設定）。",
+      "uiSizeLabel": "界面字體",
+      "uiSizeHint": "調整導航、面板、設置等所有界面元素的字體大小。",
+      "levels": {
+        "compact": "緊湊",
+        "small": "小",
+        "default": "默認",
+        "medium": "中等",
+        "large": "大",
+        "custom": "自定義"
+      },
+      "customPxLabel": "自定義大小（12–20 px）",
+      "customPxPlaceholder": "14",
+      "customPxOutOfRange": "請輸入 12–20 之間的整數",
+      "resetButton": "恢復默認",
+      "previewText": "BitFun 是一個由 AI 驅動的編程環境。The quick brown fox jumps over the lazy dog.",
+      "flowChatLabel": "對話區域",
+      "flowChatHint": "關閉時對話區域比界面大 1 px，並隨界面檔位變化。開啟後在下方從列表中選擇 12–20 px。",
+      "flowChatCustomToggle": "自定義對話字號",
+      "flowChatPxOption": "{{n}} px"
+    }
+  },
+  "launchAtLogin": {
+    "sections": {
+      "title": "登錄時啟動",
+      "hint": "登錄本用戶後是否自動運行 BitFun"
+    },
+    "toggleLabel": "開機自動啟動",
+    "toggleDescription": "登錄系統後自動啟動 BitFun；具體表現因操作系統而異。",
+    "messages": {
+      "loading": "載入中…",
+      "loadFailed": "無法讀取開機啟動設置",
+      "saveFailed": "無法更新開機啟動設置"
+    }
+  },
+  "logging": {
+    "sections": {
+      "logging": "日誌",
+      "loggingHint": "日誌級別與本次啟動日誌目錄",
+      "level": "日誌級別",
+      "path": "本次啟動日誌路徑"
+    },
+    "level": {
+      "description": "實時控制日誌輸出級別，修改後立即生效。"
+    },
+    "sensitiveDiagnostics": {
+      "label": "包含敏感除錯資訊",
+      "description": "開啟後，本機日誌可能包含使用者 Prompt、模型請求與回應 payload、工具參數、檔案路徑以及 Webview 事件 payload，用於問題排查。BitFun 不會自動上傳這些日誌檔案。"
+    },
+    "path": {
+      "description": "本次啟動寫入日誌檔案所在的目錄。"
+    },
+    "diagnostics": {
+      "label": "診斷包",
+      "description": "將最近的本機日誌、崩潰報告與運行時元資料匯出為 zip 檔案。BitFun 不會自動上傳。"
+    },
+    "previousCrash": {
+      "title": "上次會話異常結束",
+      "description": "上次會話日誌位於 {{path}}。"
+    },
+    "previousUncleanShutdown": {
+      "title": "上次會話未記錄到正常關閉",
+      "description": "上次會話日誌位於 {{path}}。重新啟動、系統關機或開發熱重載後也可能出現這種記錄。"
+    },
+    "startupRecovery": {
+      "title": "上次會話異常結束",
+      "message": "BitFun 發現上次會話留下了崩潰報告。如需回報問題，可以匯出診斷包。"
+    },
+    "levels": {
+      "trace": "Trace",
+      "debug": "Debug",
+      "info": "Info",
+      "warn": "Warn",
+      "error": "Error",
+      "off": "Off"
+    },
+    "actions": {
+      "refreshTooltip": "重新整理運行時狀態",
+      "openFolder": "開啟資料夾",
+      "openFolderTooltip": "在檔案管理器中開啟日誌資料夾",
+      "exportDiagnostics": "匯出診斷包",
+      "openLoggingSettings": "開啟日誌設置"
+    },
+    "messages": {
+      "loading": "載入中...",
+      "loadFailed": "載入日誌設定失敗",
+      "saveFailed": "儲存日誌級別失敗",
+      "levelUpdated": "日誌級別已更新",
+      "sensitiveDiagnosticsUpdated": "敏感除錯資訊日誌偏好已更新",
+      "refreshed": "運行時狀態已重新整理",
+      "openedFolder": "日誌資料夾已開啟",
+      "openFailed": "開啟日誌資料夾失敗",
+      "pathUnavailable": "日誌資料夾路徑不可用",
+      "diagnosticsExported": "診斷包已匯出",
+      "diagnosticsExportFailed": "匯出診斷包失敗"
+    }
+  },
+  "terminal": {
+    "sections": {
+      "terminal": "終端",
+      "terminalHint": "默認 Shell 與新增終端行為",
+      "defaultTerminal": "默認終端"
+    },
+    "controls": {
+      "refreshTooltip": "重新整理可用終端列表",
+      "autoDetect": "自動檢測 (推薦)",
+      "description": "新增終端以及本地工作區中 agent 執行命令時使用的默認 Shell 類型。",
+      "cmdFallbackMessage": "Agent 執行命令時實際使用 PowerShell。",
+      "placeholder": "選擇默認終端",
+      "noShells": "未檢測到可用的終端"
+    },
+    "panelPosition": {
+      "label": "終端開啟位置",
+      "description": "在會話中從 Shell 導航開啟終端時顯示的位置",
+      "placeholder": "選擇終端顯示位置",
+      "options": {
+        "right": "右側面板",
+        "bottom": "底部面板"
+      }
+    },
+    "messages": {
+      "loading": "載入中...",
+      "loadFailed": "載入設定失敗",
+      "updated": "默認終端已更新",
+      "panelPositionUpdated": "終端顯示位置已更新",
+      "saveFailed": "儲存設定失敗",
+      "refreshed": "已重新整理可用終端列表"
+    }
+  },
+  "windowBehavior": {
+    "sections": {
+      "title": "視窗行為",
+      "hint": "點擊關閉按鈕時的操作"
+    },
+    "closeButtonLabel": "關閉按鈕行為",
+    "closeButtonDescription": "點擊視窗關閉按鈕（×）時的預設操作。",
+    "options": {
+      "quit": "退出程式",
+      "minimizeToTray": "最小化到系統托盤",
+      "ask": "每次詢問"
+    },
+    "messages": {
+      "loading": "載入中…",
+      "loadFailed": "無法讀取視窗行為設置",
+      "saveFailed": "無法儲存視窗行為設置",
+      "saved": "視窗行為設置已儲存"
+    }
+  },
+  "notifications": {
+    "title": "通知",
+    "hint": "Toast 彈窗通知偏好設置",
+    "dialogCompletion": {
+      "label": "任務完成通知",
+      "description": "當 AI 任務完成且視窗不在焦點時，彈出 Toast 通知"
+    },
+    "startupTips": {
+      "label": "啟動時顯示使用技巧",
+      "description": "每次啟動時隨機展示一條使用技巧卡片，幫助發現更多功能"
+    },
+    "messages": {
+      "saveSuccess": "通知設置已儲存",
+      "saveFailed": "儲存通知設置失敗"
+    }
+  },
+  "autoUpdate": {
+    "sections": {
+      "title": "更新",
+      "hint": "啟動後是否自動檢查新版本"
+    },
+    "toggleLabel": "自動檢查更新",
+    "toggleDescription": "開啟後，啟動片刻若發現新版本可能會提示。關閉後仍可在「關於」中手動檢查更新。",
+    "messages": {
+      "loading": "載入中…",
+      "loadFailed": "無法讀取更新相關設定",
+      "saveFailed": "無法儲存更新相關設定",
+      "saved": "已儲存更新偏好"
+    }
+  }
+}

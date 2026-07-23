@@ -1,0 +1,95 @@
+/**
+ * Avatar component styles
+ * Based on the BitFun glassmorphism design system
+ */
+.bitfun-avatar {
+  --bitfun-avatar-rest-start-rgb: 30, 41, 59;
+  --bitfun-avatar-rest-end-rgb: 51, 65, 85;
+
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  background: linear-gradient(135deg,
+    color-mix(in srgb, var(--color-accent-500) 20%, transparent) 0%,
+    color-mix(in srgb, var(--color-accent-600) 20%, transparent) 100%);
+  border: 2px solid color-mix(in srgb, var(--color-accent-500) 30%, transparent);
+  color: var(--color-overlay-white-90);
+  font-weight: 500;
+  vertical-align: middle;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+
+  img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
+  &__icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 60%;
+    height: 60%;
+
+    svg {
+      width: 100%;
+      height: 100%;
+    }
+  }
+
+  &__text {
+    font-size: 14px;
+    line-height: 1;
+    transform: scale(0.8);
+  }
+
+  &--circle {
+    border-radius: 50%;
+  }
+
+  &--square {
+    border-radius: 8px;
+  }
+
+  &--small {
+    font-size: 12px;
+  }
+
+  &--medium {
+    font-size: 14px;
+  }
+
+  &--large {
+    font-size: 16px;
+  }
+}
+
+.bitfun-avatar-group {
+  display: inline-flex;
+  align-items: center;
+
+  .bitfun-avatar {
+    margin-left: -8px;
+    border: 2px solid rgba(var(--color-overlay-slate-rgb), 0.8);
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+
+    &:first-child {
+      margin-left: 0;
+    }
+
+    &:hover {
+      transform: translateY(-2px);
+      z-index: 1;
+      box-shadow: 0 4px 12px color-mix(in srgb, var(--color-accent-500) 30%, transparent);
+    }
+  }
+
+  &__rest {
+    background: linear-gradient(135deg,
+      rgba(var(--bitfun-avatar-rest-start-rgb), 0.9) 0%,
+      rgba(var(--bitfun-avatar-rest-end-rgb), 0.9) 100%);
+    font-size: 12px;
+  }
+}

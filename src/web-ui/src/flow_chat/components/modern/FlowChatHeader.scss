@@ -1,0 +1,653 @@
+/* FlowChat header styling aligned with side panel headers. */
+
+@use '../../../component-library/styles/tokens' as *;
+
+.flowchat-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: $size-gap-1;
+  padding: 0 $size-gap-3;
+  border-bottom: 1px dashed var(--border-base);
+
+  // Frosted glass effect.
+  background: color-mix(in srgb, var(--color-bg-elevated) 45%, transparent);
+  backdrop-filter: blur(20px) saturate(1.3);
+  -webkit-backdrop-filter: blur(20px) saturate(1.3);
+  
+  height: 36px;
+  min-height: 36px;
+  flex-shrink: 0;
+  transition: all $motion-base $easing-standard;
+  position: relative;
+  z-index: 10;
+  
+  // ==================== Bottom gradient blur ====================
+  &::after {
+    content: '';
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 100%;
+    height: 16px;
+    pointer-events: none;
+    
+    background: linear-gradient(
+      to bottom,
+      color-mix(in srgb, var(--color-bg-elevated) 35%, transparent) 0%,
+      color-mix(in srgb, var(--color-bg-elevated) 20%, transparent) 35%,
+      color-mix(in srgb, var(--color-bg-elevated) 8%, transparent) 65%,
+      transparent 100%
+    );
+
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+
+    mask-image: linear-gradient(to bottom, black 0%, transparent 100%);
+    -webkit-mask-image: linear-gradient(to bottom, black 0%, transparent 100%);
+  }
+
+  &__btw-back {
+    flex: 0 0 auto;
+
+    &:not(:disabled):hover {
+      background: color-mix(in srgb, var(--element-bg-soft) 82%, transparent);
+    }
+  }
+
+  &__turn-nav {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 0;
+  }
+
+  &__background-activity-nav {
+    position: relative;
+    display: flex;
+    align-items: center;
+  }
+
+  &__turn-nav-button {
+    flex: 0 0 auto;
+
+    &:not(:disabled):hover,
+    &--active {
+      background: color-mix(in srgb, var(--element-bg-soft) 82%, transparent);
+    }
+  }
+
+  &__background-activity-nav-button {
+    flex: 0 0 auto;
+
+    &:not(:disabled):hover,
+    &--active {
+      background: color-mix(in srgb, var(--element-bg-soft) 82%, transparent);
+    }
+
+    &--has-activity {
+      color: color-mix(in srgb, var(--color-success) 86%, var(--color-text-primary));
+
+      &:not(:disabled):hover,
+      &.flowchat-header__background-activity-nav-button--active {
+        color: var(--color-success);
+        background: color-mix(in srgb, var(--color-success) 12%, transparent);
+      }
+    }
+  }
+
+  &__background-activity-nav-button-inner {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  &__background-activity-status-dot {
+    position: absolute;
+    right: -2px;
+    bottom: -1px;
+    width: 4px;
+    height: 4px;
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--color-success) 92%, white 8%);
+    box-shadow:
+      0 0 0 1px var(--color-bg-elevated),
+      0 0 0 0 color-mix(in srgb, var(--color-success) 42%, transparent);
+    animation: flowchat-header-background-activity-pulse 1.45s ease-out infinite;
+  }
+
+  @keyframes flowchat-header-background-activity-pulse {
+    0%,
+    100% {
+      transform: scale(1);
+      opacity: 0.9;
+      box-shadow:
+        0 0 0 1px var(--color-bg-elevated),
+        0 0 0 0 color-mix(in srgb, var(--color-success) 40%, transparent);
+    }
+
+    50% {
+      transform: scale(1.22);
+      opacity: 1;
+      box-shadow:
+        0 0 0 1px var(--color-bg-elevated),
+        0 0 0 5px color-mix(in srgb, var(--color-success) 0%, transparent);
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    &__background-activity-status-dot {
+      animation: none;
+    }
+  }
+
+  &__search-btn,
+  &__review-platform-btn,
+  &__search-close {
+    flex: 0 0 auto;
+
+    &:not(:disabled):hover {
+      background: color-mix(in srgb, var(--element-bg-soft) 82%, transparent);
+    }
+  }
+
+  &__search {
+    display: flex;
+    align-items: center;
+    gap: $size-gap-1;
+    min-width: min(320px, 38vw);
+    max-width: min(420px, 42vw);
+  }
+
+  &__search-field {
+    flex: 1;
+    min-width: 0;
+
+    &.bitfun-input-wrapper {
+      gap: 0;
+    }
+
+    .bitfun-input-container {
+      padding-right: 2px;
+    }
+
+    .bitfun-input-suffix {
+      display: flex;
+      align-items: center;
+      padding: 0;
+    }
+  }
+
+  &__search-prefix-icon {
+    flex-shrink: 0;
+    color: var(--color-text-secondary);
+    opacity: 0.75;
+  }
+
+  &__search-inline-controls {
+    display: flex;
+    align-items: center;
+    gap: 0;
+    padding-left: 2px;
+    margin-left: 2px;
+    border-left: 1px solid var(--border-subtle);
+  }
+
+  &__search-count {
+    flex-shrink: 0;
+    padding: 0 3px;
+    color: var(--color-text-secondary);
+    font-size: var(--flowchat-font-size-xs);
+    white-space: nowrap;
+
+    &:empty {
+      display: none;
+    }
+  }
+
+  &__search-nav {
+    display: flex;
+    flex-direction: column;
+    flex-shrink: 0;
+    overflow: hidden;
+    border-radius: 3px;
+  }
+
+  &__search-nav-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 14px;
+    height: 10px;
+    padding: 0;
+    border: none;
+    background: transparent;
+    color: var(--color-text-secondary);
+    cursor: pointer;
+    opacity: 0.8;
+    transition: opacity $motion-base $easing-standard, background $motion-base $easing-standard;
+    line-height: 0;
+
+    &:hover:not(:disabled) {
+      opacity: 1;
+      background: var(--element-bg-soft);
+    }
+
+    &:disabled {
+      opacity: 0.25;
+      cursor: default;
+    }
+  }
+
+  &__turn-list-panel {
+    position: absolute;
+    top: calc(100% + 8px);
+    right: 0;
+    width: min(360px, calc(100vw - 32px));
+    max-height: min(420px, calc(100vh - 96px));
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    border: 1px solid var(--border-base);
+    border-radius: $size-radius-lg;
+    background: color-mix(in srgb, var(--color-bg-elevated) 94%, transparent);
+    box-shadow: var(--shadow-lg);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    z-index: 30;
+  }
+
+  &__background-activity-panel {
+    position: absolute;
+    top: calc(100% + 8px);
+    right: 0;
+    width: min(340px, calc(100vw - 32px));
+    max-height: min(360px, calc(100vh - 96px));
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    border: 1px solid var(--border-base);
+    border-radius: $size-radius-lg;
+    background: color-mix(in srgb, var(--color-bg-elevated) 94%, transparent);
+    box-shadow: var(--shadow-lg);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    z-index: 30;
+  }
+
+  &__turn-list-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: $size-gap-2;
+    padding: $size-gap-2 $size-gap-3;
+    border-bottom: 1px solid var(--border-base);
+    font-size: var(--flowchat-font-size-xs);
+    color: var(--color-text-secondary);
+  }
+
+  &__background-activity-panel-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: $size-gap-2;
+    padding: $size-gap-2 $size-gap-3;
+    border-bottom: 1px solid var(--border-base);
+    font-size: var(--flowchat-font-size-xs);
+    color: var(--color-text-secondary);
+  }
+
+  &__turn-list {
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto;
+    padding: $size-gap-1;
+    max-height: calc(7 * 40px);
+    scrollbar-gutter: stable;
+  }
+
+  &__background-activity-list {
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto;
+    padding: $size-gap-1;
+    max-height: calc(6 * 48px);
+    scrollbar-gutter: stable;
+  }
+
+  &__background-section {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+
+    & + & {
+      margin-top: $size-gap-1;
+      padding-top: $size-gap-1;
+      border-top: 1px solid var(--border-base);
+    }
+  }
+
+  &__background-section-title {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: $size-gap-1;
+    padding: 2px 2px 2px $size-gap-2;
+      color: var(--color-text-muted);
+    font-size: var(--flowchat-font-size-xs);
+  }
+
+  &__background-section-title-label {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  &__background-section-actions {
+    position: relative;
+    flex: 0 0 auto;
+  }
+
+  &__background-section-action {
+    flex: 0 0 auto;
+    color: var(--color-text-secondary);
+
+    &:not(:disabled):hover {
+      color: var(--color-text-primary);
+      background: color-mix(in srgb, var(--element-bg-soft) 88%, transparent);
+    }
+
+    &--danger:not(:disabled):hover {
+      color: var(--color-error);
+      background: color-mix(in srgb, var(--color-error) 12%, transparent);
+
+      svg {
+        color: var(--color-error);
+      }
+    }
+  }
+
+  &__turn-list-item {
+    display: flex;
+    align-items: center;
+    gap: $size-gap-2;
+    width: 100%;
+    padding: $size-gap-2;
+    border: 0;
+    border-radius: $size-radius-base;
+    background: transparent;
+    color: var(--color-text-primary);
+    min-height: 40px;
+    text-align: left;
+    cursor: pointer;
+    transition: background $motion-base $easing-standard;
+
+    &:hover {
+      background: color-mix(in srgb, var(--element-bg-soft) 88%, transparent);
+    }
+
+    &--active {
+      background: color-mix(in srgb, var(--color-accent-500) 12%, var(--element-bg-soft));
+    }
+  }
+
+  &__turn-list-badge {
+    flex: 0 0 auto;
+    padding: 2px 8px;
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--element-bg-soft) 82%, transparent);
+    color: var(--color-text-secondary);
+    font-size: var(--flowchat-font-size-xs);
+    line-height: 1;
+    white-space: nowrap;
+  }
+
+  &__turn-list-title {
+    min-width: 0;
+    flex: 1;
+    font-size: var(--flowchat-font-size-sm);
+    color: inherit;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  &__background-activity-list-item {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 2px;
+    width: 100%;
+    padding: $size-gap-2;
+    border: 0;
+    border-radius: $size-radius-base;
+    background: transparent;
+    color: var(--color-text-primary);
+    text-align: left;
+    cursor: pointer;
+    transition: background $motion-base $easing-standard;
+
+    &:hover {
+      background: color-mix(in srgb, var(--element-bg-soft) 88%, transparent);
+    }
+  }
+
+  &__background-command-list-item {
+    display: flex;
+    align-items: stretch;
+    gap: 2px;
+    width: 100%;
+    border-radius: $size-radius-base;
+    transition: background $motion-base $easing-standard;
+
+    &:hover {
+      background: color-mix(in srgb, var(--element-bg-soft) 88%, transparent);
+    }
+  }
+
+  &__background-command-list-item &__background-activity-list-item {
+    &:hover {
+      background: transparent;
+    }
+  }
+
+  &__background-command-open-button {
+    min-width: 0;
+    flex: 1 1 auto;
+  }
+
+  &__background-command-actions {
+    position: relative;
+    flex: 0 0 auto;
+    align-self: center;
+    margin-right: 2px;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity $motion-base $easing-standard;
+  }
+
+  &__background-command-list-item:hover &__background-command-actions,
+  &__background-command-list-item:focus-within &__background-command-actions,
+  &__background-command-actions:has([aria-expanded='true']) {
+    opacity: 1;
+    pointer-events: auto;
+  }
+
+  &__background-command-menu-button {
+    flex: 0 0 auto;
+    color: var(--color-text-secondary);
+
+    &:not(:disabled):hover {
+      color: var(--color-text-primary);
+      background: color-mix(in srgb, var(--element-bg-soft) 88%, transparent);
+    }
+  }
+
+  &__background-command-menu {
+    position: absolute;
+    top: calc(100% + 4px);
+    right: 0;
+    width: max-content;
+    min-width: 0;
+    max-width: min(200px, calc(100vw - 48px));
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: 4px;
+    border: 1px solid var(--border-base);
+    border-radius: $size-radius-base;
+    background: color-mix(in srgb, var(--color-bg-elevated) 98%, transparent);
+    box-shadow: var(--shadow-base);
+    z-index: 40;
+
+    &--compact {
+      min-width: 0;
+    }
+  }
+
+  &__background-command-menu-item {
+    display: flex;
+    align-items: center;
+    gap: $size-gap-2;
+    width: 100%;
+    padding: 6px 8px;
+    border: 0;
+    border-radius: calc($size-radius-base - 2px);
+    background: transparent;
+    color: var(--color-text-primary);
+    font-size: var(--flowchat-font-size-xs);
+    text-align: left;
+    white-space: nowrap;
+    cursor: pointer;
+
+    svg {
+      flex: 0 0 auto;
+      color: var(--color-text-secondary);
+    }
+
+    &:hover:not(:disabled) {
+      background: color-mix(in srgb, var(--element-bg-soft) 88%, transparent);
+    }
+
+    &:disabled {
+      opacity: 0.45;
+      cursor: default;
+    }
+
+    &--danger:hover:not(:disabled) {
+      color: var(--color-error);
+      background: color-mix(in srgb, var(--color-error) 12%, transparent);
+
+      svg {
+        color: var(--color-error);
+      }
+    }
+  }
+
+  &__background-activity-list-title {
+    display: flex;
+    align-items: center;
+    gap: $size-gap-1;
+    width: 100%;
+    font-size: var(--flowchat-font-size-sm);
+    color: inherit;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+
+    svg {
+      flex: 0 0 auto;
+      color: var(--color-text-secondary);
+      opacity: 0.82;
+    }
+
+    span {
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+  }
+
+  &__background-activity-list-meta {
+    width: 100%;
+    font-size: var(--flowchat-font-size-xs);
+    color: var(--color-text-secondary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  // ==================== Center message ====================
+  &__message {
+    flex: 1;
+    min-width: 0;
+    padding: 0 $size-gap-3;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: $size-gap-2;
+    overflow: hidden;
+    cursor: pointer;
+    border-radius: $size-radius-base;
+    transition: background $motion-base $easing-standard;
+
+    &:hover {
+      background: color-mix(in srgb, var(--element-bg-soft) 70%, transparent);
+    }
+
+    &:focus-visible {
+      outline: none;
+      background: color-mix(in srgb, var(--element-bg-soft) 82%, transparent);
+      box-shadow: 0 0 0 1.5px var(--border-strong);
+    }
+  }
+
+  &__turn-badge {
+    display: inline-flex;
+    align-items: center;
+    flex: 0 0 auto;
+    max-width: 100%;
+    padding: 2px 8px;
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--element-bg-soft) 82%, transparent);
+    color: var(--color-text-secondary);
+    font-size: var(--flowchat-font-size-xs);
+    line-height: 1;
+    white-space: nowrap;
+  }
+
+  &__message-text {
+    min-width: 0;
+    font-size: var(--flowchat-font-size-sm);
+    color: var(--color-text-primary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    text-align: center;
+  }
+
+  // ==================== Actions ====================
+  &__actions {
+    display: flex;
+    align-items: center;
+    gap: $size-gap-1;
+    flex-shrink: 0;
+
+    &--left {
+      position: relative;
+      z-index: 2;
+      margin-right: $size-gap-2;
+      overflow: visible;
+    }
+  }
+
+  @media (max-width: 900px) {
+    &__search {
+      min-width: min(220px, 52vw);
+      max-width: min(300px, 56vw);
+    }
+  }
+}
+

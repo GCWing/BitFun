@@ -1,0 +1,102 @@
+ 
+
+@use '../../../component-library/styles/tokens.scss' as *;
+
+
+
+.bitfun-context-drop-zone {
+  position: relative;
+  width: 100%;
+  
+  transition: all $motion-base $easing-standard;
+  
+  
+  pointer-events: auto !important;
+  
+  
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  
+  
+  
+  &__overlay {
+    position: absolute;
+    inset: 0;
+    z-index: $z-floating;
+    
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    
+    background: var(--color-overlay-black-80);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    
+    border: 3px dashed var(--border-accent);
+    border-radius: $size-radius-lg;
+    
+    pointer-events: none;
+    
+    animation: bitfun-drop-zone-pulse 1.5s ease-in-out infinite;
+  }
+  
+  &__indicator {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: $size-gap-2;
+    padding: 0;
+  }
+  
+  &__icon {
+    color: var(--color-accent-500);
+    filter: drop-shadow(0 0 12px color-mix(in srgb, var(--color-accent-500) 60%, transparent));
+    animation: bitfun-drop-zone-scale 1.5s ease-in-out infinite;
+    
+    &--disabled {
+      color: var(--color-text-disabled);
+      filter: none;
+      animation: none;
+    }
+  }
+  
+  &__text {
+    font-size: var(--font-size-lg);
+    font-weight: $font-weight-semibold;
+    color: var(--color-accent-500);
+    text-align: center;
+    text-shadow: 0 2px 8px var(--color-accent-400);
+    
+    &--disabled {
+      color: var(--color-text-disabled);
+      text-shadow: none;
+    }
+  }
+  
+  
+  
+}
+
+
+
+@keyframes bitfun-drop-zone-pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.85;
+  }
+}
+
+@keyframes bitfun-drop-zone-scale {
+  0%, 100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.15);
+  }
+}
+
+

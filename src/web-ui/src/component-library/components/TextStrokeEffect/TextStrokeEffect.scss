@@ -1,0 +1,57 @@
+.text-stroke-effect {
+  display: inline-block;
+  user-select: none;
+  overflow: visible;
+
+  &__outline {
+    fill: transparent;
+    stroke: var(--color-overlay-white-20);
+    stroke-width: 1;
+    font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+    font-size: 72px;
+    font-weight: 700;
+  }
+
+  &__animated {
+    fill: transparent;
+    stroke: rgba(var(--color-static-white-rgb), 0.5);
+    stroke-width: 1.5;
+    font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+    font-size: 72px;
+    font-weight: 700;
+    stroke-dasharray: 500;
+    stroke-dashoffset: 500;
+    animation: text-stroke-draw 4s ease-in-out infinite;
+  }
+
+  &__gradient {
+    fill: transparent;
+    stroke-width: 2;
+    font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+    font-size: 72px;
+    font-weight: 700;
+    stroke-dasharray: 15 8;
+    animation: text-stroke-dash 1.5s linear infinite;
+  }
+}
+
+@keyframes text-stroke-draw {
+  0% {
+    stroke-dashoffset: 500;
+  }
+  50% {
+    stroke-dashoffset: 0;
+  }
+  100% {
+    stroke-dashoffset: -500;
+  }
+}
+
+@keyframes text-stroke-dash {
+  0% {
+    stroke-dashoffset: 0;
+  }
+  100% {
+    stroke-dashoffset: -46;
+  }
+}

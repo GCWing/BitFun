@@ -1,0 +1,402 @@
+{
+  "title": "Model Configuration",
+  "subtitle": "Configure and manage AI model providers",
+  "editProvider": "Edit Provider Configuration",
+  "newProvider": "New Provider Configuration",
+  "editModel": "Edit Model Configuration",
+  "newModel": "New Model Configuration",
+  "editProviderSubtitle": "Basic Provider Parameters",
+  "editSubtitle": "Basic Model Parameters",
+  "confirmDelete": "Are you sure you want to delete this configuration?",
+  "subagentModels": {
+    "title": "Subagent Models",
+    "default": {
+      "label": "Default Subagent Model",
+      "description": "Default model used by subagents when none is set individually",
+      "configureTooltip": "Sets the default model for subagents. Open Customize > Agents to configure each subagent separately",
+      "updateFailed": "Failed to update the default Subagent model"
+    },
+    "options": {
+      "inherit": "Inherit parent session",
+      "fast": "Fast model",
+      "primary": "Primary model",
+      "auto": "Automatic selection"
+    },
+    "loadFailed": "Failed to load Subagent model settings"
+  },
+  "sessionTitle": {
+    "title": "Auto Session Title",
+    "subtitle": "AI automatically generates concise titles for new conversations",
+    "enable": "Enable",
+    "loadFailed": "Failed to load session title settings",
+    "model": {
+      "label": "Model",
+      "primary": "Primary Model",
+      "fast": "Fast Model"
+    },
+    "models": {
+      "empty": "No available models. Please add models in \"Models\" first.",
+      "updateSuccess": "{{agentName}} will use {{modelName}}"
+    },
+    "messages": {
+      "saveSuccess": "Settings saved",
+      "saveFailed": "Save failed",
+      "updateFailed": "Update failed"
+    }
+  },
+  "subscriptionAuth": {
+    "sectionTitle": "Subscription accounts",
+    "sectionDescription": "Sign in to Codex, Antigravity, or OpenCode subscriptions and use them as model APIs",
+    "rescan": "Refresh status",
+    "import": "Use as model",
+    "login": "Sign in",
+    "cancel": "Cancel",
+    "loginCancelled": "Sign-in cancelled",
+    "logout": "Sign out",
+    "refresh": "Refresh token",
+    "refreshSuccess": "Token refreshed",
+    "refreshFailed": "Refresh failed: {{error}}",
+    "loginSuccess": "Signed in",
+    "loginFailed": "Sign-in failed: {{error}}",
+    "logoutSuccess": "Signed out",
+    "logoutCleanupPending": "Signed out. Native credential cleanup is pending and will retry automatically.",
+    "logoutFailed": "Sign-out failed: {{error}}",
+    "userCodeHint": "Enter this code in the browser: {{code}}",
+    "openUrlManually": "Could not open the browser automatically. Open this URL manually: {{url}}",
+    "expiresAt": "Token valid until {{time}}",
+    "tokenValid": "Token ready",
+    "notSignedIn": "Not signed in",
+    "label": "Authentication",
+    "options": {
+      "apiKey": "API Key",
+      "codex": "Codex (ChatGPT subscription)",
+      "antigravity": "Antigravity (Google subscription)",
+      "opencode": "OpenCode Zen subscription"
+    },
+    "detected": "Will use {{label}} ({{account}})",
+    "notConnected": "{{kind}} is not signed in; sign in above first",
+    "unknownAccount": "current account",
+    "secureStoreMigrationNotice": "Subscription credentials are now protected by your system credential vault. Credentials previously imported from third-party CLIs are not read; if you used that flow, sign in here once.",
+    "dismissMigrationNotice": "Got it",
+    "reauthenticationRequired": "No usable credential was found in the system vault. Sign in again once.",
+    "vaultUnavailable": "The system credential vault is locked or unavailable. Unlock it, then try again; your sign-in has not been removed.",
+    "retryVault": "Try vault again",
+    "loginPending": "Waiting for authorization in your browser",
+    "loginCancelling": "Cancelling sign-in and closing the authorization session",
+    "loginCompletedBeforeCancel": "Authorization had already completed, so this account remains signed in.",
+    "timeRemaining": "{{time}} remaining",
+    "verificationCode": "Verification code",
+    "copyCode": "Copy code",
+    "codeCopied": "Verification code copied",
+    "copyCodeFailed": "Could not copy the verification code",
+    "openAuthorization": "Open authorization page",
+    "retryLogin": "Try again",
+    "loginNeedsRetry": "This sign-in did not complete",
+    "loginFailedInline": "{{error}}",
+    "logoutConfirmTitle": "Sign out of subscription account?",
+    "logoutAffectedModels": "After signing out, {{count}} model configurations using this account cannot make model requests:",
+    "logoutNoAffectedModels": "No model configuration currently uses this subscription account.",
+    "logoutConsequence": "Model configurations will not be deleted. Sign in to the same subscription account again to resume using them.",
+    "confirmLogout": "Sign out"
+  },
+  "providerSelection": {
+    "title": "Select Model Provider",
+    "subtitle": "Choose a preset provider for quick setup, or select custom for full manual configuration",
+    "or": "or",
+    "orSelectProvider": "or select a preset provider",
+    "customTitle": "Custom Configuration",
+    "customDescription": "Manually configure all parameters, suitable for private deployments or other unlisted providers",
+    "getApiKey": "Get API Key",
+    "fetchModels": "Fetch Models",
+    "fetchHint": "Fetch the model list from the current provider; if it fails, fall back to common preset models",
+    "fetchingModels": "Fetching model list...",
+    "fetchSuccessCount": "Fetched {{count}} models from the provider",
+    "fetchFailedFallback": "Failed to fetch model list, fell back to common preset models",
+    "fetchEmptyFallback": "Provider returned no models, fell back to common preset models",
+    "fillApiKeyBeforeFetch": "Enter the API key before fetching models",
+    "usingPresetModels": "Currently showing common preset models",
+    "noPresetModels": "No models available. Fetch the model list or enter a model name manually",
+    "backToSelection": "Back to provider selection",
+    "selectModel": "Select model",
+    "multiSelectHint": "Supports multi-select. After selection, configure context window, max output tokens, and reasoning per model.",
+    "searchOrInputModel": "Search or enter model name...",
+    "inputModelName": "Enter model name...",
+    "useCustomModel": "Press Enter to use",
+    "addCustomModel": "Add Custom Model",
+    "addSearchedModel": "Add this model",
+    "modelAlreadyInList": "This model is already in the list",
+    "noModelsSelected": "Select a model first",
+    "removeModel": "Remove model",
+    "expandModelSettings": "Expand settings for {{name}}",
+    "collapseModelSettings": "Collapse settings for {{name}}",
+    "urlHint": "Official API URL pre-filled, modify if using proxy or private deployment",
+    "formatHint": "Automatically selected based on provider, usually no need to change"
+  },
+  "providers": {
+    "openbitfun": {
+      "name": "OpenBitFun",
+      "description": "OpenBitFun Model Platform"
+    },
+    "gemini": {
+      "name": "Google Gemini",
+      "description": "Google Gemini series models"
+    },
+    "anthropic": {
+      "name": "Anthropic Claude",
+      "description": "Anthropic Claude series models"
+    },
+    "minimax": {
+      "name": "MiniMax",
+      "description": "MiniMax series models"
+    },
+    "moonshot": {
+      "name": "Moonshot AI",
+      "description": "Moonshot Kimi series models"
+    },
+    "deepseek": {
+      "name": "DeepSeek",
+      "description": "DeepSeek series models"
+    },
+    "zhipu": {
+      "name": "Zhipu AI",
+      "description": "Zhipu AI GLM series models",
+      "urlOptions": {
+        "default": "OpenAI Format - Default",
+        "anthropic": "Anthropic Format",
+        "codingPlan": "OpenAI Format - CodingPlan"
+      }
+    },
+    "qwen": {
+      "name": "Qwen",
+      "description": "Alibaba Cloud Bailian Model Platform"
+    },
+    "volcengine": {
+      "name": "Volcano Engine",
+      "description": "ByteDance Volcano Engine Model Platform"
+    },
+    "siliconflow": {
+      "name": "SiliconFlow",
+      "description": "SiliconFlow Model Platform",
+      "urlOptions": {
+        "default": "OpenAI Format - Default",
+        "anthropic": "Anthropic Format"
+      }
+    },
+    "nvidia": {
+      "name": "NVIDIA",
+      "description": "NVIDIA NIM Model Platform"
+    },
+    "openrouter": {
+      "name": "OpenRouter",
+      "description": "OpenRouter Model Platform"
+    }
+  },
+  "tabs": {
+    "api": "API Configuration",
+    "proxy": "Proxy Configuration"
+  },
+  "categories": {
+    "all": "All",
+    "text": "Text",
+    "multimodal": "Image",
+    "other": "Utility"
+  },
+  "category": {
+    "label": "Model Category",
+    "placeholder": "Select model category",
+    "general_chat": "Text Generation",
+    "multimodal": "Image Understanding",
+    "image_generation": "Image Generation",
+    "speech_recognition": "Speech Recognition"
+  },
+  "categoryIcons": {
+    "general_chat": "Text",
+    "multimodal": "Vision",
+    "image_generation": "Image",
+    "speech_recognition": "Speech"
+  },
+  "categoryHints": {
+    "general_chat": "Text Generation: Generate text responses, code, etc. for most conversation scenarios",
+    "multimodal": "Image Understanding: Understand image content and have mixed text-image conversations",
+    "image_generation": "Image Generation: Generate images from text descriptions",
+    "speech_recognition": "Speech Recognition: Convert speech to text (e.g., GLM-ASR)"
+  },
+  "form": {
+    "configName": "Provider Name",
+    "configNamePlaceholder": "Enter provider name",
+    "modelName": "Model Name",
+    "modelSelection": "Select Models",
+    "modelNameHint": "GLM-ASR uses glm-asr, other speech models use their corresponding model names",
+    "baseUrl": "API URL",
+    "resolvedUrlLabel": "Request URL: ",
+    "forceUrlHint": "Append # to force use the exact URL you entered",
+    "apiKey": "API Key",
+    "apiKeyPlaceholder": "Enter your API Key",
+    "provider": "Request Format",
+    "providerPlaceholder": "Select request format",
+    "contextWindow": "Context Window Size",
+    "contextWindowHint": "Maximum context window size supported by the model (for calculating token usage percentage)",
+    "maxTokens": "Max Output Tokens",
+    "maxTokensHint": "Maximum tokens for model output per request (affects response length)",
+    "description": "Description",
+    "descriptionPlaceholder": "Configuration description (optional)"
+  },
+  "thinking": {
+    "enable": "Enable Thinking",
+    "mode": "Reasoning Mode",
+    "enableHint": "Requires model to support thinking mode",
+    "summaryOn": "thinking on",
+    "summaryOff": "thinking off",
+    "summaryDefault": "API default",
+    "summaryEnabled": "explicit enable",
+    "summaryDisabled": "explicit disable",
+    "summaryAdaptive": "adaptive",
+    "budgetTokens": "Claude Thinking Budget",
+    "optionDefault": "API Default",
+    "optionEnabled": "Enabled",
+    "optionDisabled": "Disabled",
+    "optionAdaptive": "Adaptive"
+  },
+  "reasoningEffort": {
+    "label": "Reasoning Effort",
+    "hint": "Controls provider-specific reasoning depth for DeepSeek, the Responses API, and supported Claude adaptive reasoning models",
+    "placeholder": "Use API default"
+  },
+  "details": {
+    "basicInfo": "Basic Information",
+    "modelName": "Model Name",
+    "provider": "Request Format",
+    "apiUrl": "API URL",
+    "contextWindow": "Context Window",
+    "maxOutput": "Max Output",
+    "description": "Description",
+    "capabilities": "Capabilities",
+    "tokens": "tokens"
+  },
+  "proxy": {
+    "enable": "Enable Proxy",
+    "enableHint": "When enabled, all AI requests will be sent through proxy (requires IDE restart)",
+    "url": "Proxy URL",
+    "urlPlaceholder": "http://127.0.0.1:7890 or socks5://127.0.0.1:1080",
+    "urlHint": "Supports HTTP/HTTPS/SOCKS5 proxy, format: protocol://address:port",
+    "username": "Username (optional)",
+    "usernamePlaceholder": "Proxy authentication username",
+    "password": "Password (optional)",
+    "passwordPlaceholder": "Proxy authentication password",
+    "save": "Save Proxy Configuration",
+    "saveSuccess": "Proxy configuration saved, restart IDE to take effect"
+  },
+  "streamIdleTimeout": {
+    "title": "Streaming Timeout",
+    "effectiveNextRound": "Changes take effect next turn.",
+    "label": "Idle Timeout (seconds)",
+    "hint": "Global idle timeout between streamed chunks after the stream starts. Leave empty to wait indefinitely.",
+    "placeholder": "Leave empty for no timeout",
+    "invalid": "Enter a positive integer in seconds, or leave this field empty.",
+    "save": "Save Streaming Timeout",
+    "saveSuccess": "Streaming timeout saved"
+  },
+  "streamTtftTimeout": {
+    "title": "First Token Timeout",
+    "label": "TTFT Timeout (seconds)",
+    "hint": "Maximum wait time after a request is sent for the first effective streamed output. Leave empty to wait indefinitely.",
+    "placeholder": "Leave empty for no timeout",
+    "invalid": "Enter a positive integer in seconds, or leave this field empty.",
+    "save": "Save First Token Timeout",
+    "saveSuccess": "First token timeout saved"
+  },
+  "capabilities": {
+    "text_chat": "Chat",
+    "image_understanding": "Vision",
+    "image_generation": "Image",
+    "function_calling": "Tools",
+    "speech_recognition": "Speech"
+  },
+  "formats": {
+    "openaiCompatible": "OpenAI Compatible",
+    "responsesApi": "OpenAI Responses API",
+    "claudeApi": "Claude API",
+    "geminiApi": "Gemini GenerateContent API"
+  },
+  "actions": {
+    "save": "Save",
+    "cancel": "Cancel",
+    "edit": "Edit",
+    "delete": "Delete",
+    "test": "Test Connection",
+    "newConfig": "New Configuration",
+    "addModel": "Add Model",
+    "addProvider": "Add Provider",
+    "createFirst": "Create First Configuration"
+  },
+  "empty": {
+    "noModels": "No model configurations",
+    "noMatchingModels": "No matching models found"
+  },
+  "search": {
+    "placeholder": "Search model name, provider..."
+  },
+  "messages": {
+    "fillRequired": "Please fill in required fields",
+    "fillModelName": "Please fill in model name",
+    "duplicateModelNameUnderProvider": "This provider already has a model with this name. Use a different name or edit the existing entry.",
+    "invalidBaseUrlScheme": "API URL must start with http:// or https://",
+    "contextWindowTooSmall": "Context window must be at least 32K tokens",
+    "saveFailed": "Save failed",
+    "deleteFailed": "Failed to delete configuration",
+    "loadFailed": "Failed to load AI configuration",
+    "testSuccess": "Test successful",
+    "testFailed": "Test failed",
+    "errorDetails": "Error details",
+    "connectionTestMessages": {
+      "toolCallsNotDetected": "This test did not detect any tool calls, so tool calling could not be verified this time.",
+      "imageInputCheckFailed": "The connection succeeded, but the image input check failed.",
+      "tlsOrCertificateIssue": "The connection failure may be related to SSL/TLS certificate verification. Check corporate proxies, self-signed certificates, system root certificates, or network interception. If you trust this network environment, you can enable \"Skip SSL Certificate Verification\" in this model's Advanced Settings, but it reduces HTTPS security.",
+      "proxyIssue": "The connection failure may be related to proxy or tunnel configuration. Check global proxy settings, proxy authentication, HTTPS CONNECT support, and whether the current network can reach this model API endpoint.",
+      "networkIssue": "The request failed while being sent, before any HTTP response was received. Check network connectivity, DNS, proxy, firewall, and certificate settings. In corporate proxy or self-signed certificate environments, you may also need to review \"Skip SSL Certificate Verification\" in Advanced Settings."
+    },
+    "autoSetPrimary": "Automatically set as primary model",
+    "defaultDescription": "{{name}} model configuration",
+    "cloneName": "{{name}} - Copy",
+    "templateName": "{{provider}} - {{modelName}}",
+    "templateDescription": "{{description}} - {{modelName}}"
+  },
+  "advancedSettings": {
+    "title": "Advanced Settings",
+    "inlineThinkInText": {
+      "label": "Parse <think> Tags In Text",
+      "hint": "Split text streams containing <think>...</think> into live reasoning content."
+    },
+    "skipSslVerify": {
+      "label": "Skip SSL Certificate Verification",
+      "warning": "Skipping SSL verification is a security risk, use only in test or internal network environments!"
+    },
+    "customHeaders": {
+      "label": "Custom Headers",
+      "hint": "Add or modify HTTP request headers",
+      "modeLabel": "Apply Mode",
+      "modeReplace": "Replace",
+      "modeMerge": "Merge",
+      "modeReplaceHint": "Custom headers will completely replace default headers (you need to add Content-Type, Authorization, etc.)",
+      "modeMergeHint": "Apply default headers first, then apply custom headers (can override existing values, add new values)",
+      "addHeader": "Add Field",
+      "keyPlaceholder": "key",
+      "valuePlaceholder": "value"
+    },
+    "customRequestBody": {
+      "label": "Custom Request Body",
+      "hint": "Enter request body fields in JSON format to override default request parameters",
+      "modeMerge": "Merge",
+      "modeTrim": "Trim",
+      "modeMergeHint": "Merge custom fields into the default request body and allow overriding existing fields.",
+      "trimHintOpenAI": "Keep only model, messages, max_tokens, and runtime-critical stream / tool fields before applying the custom request body.",
+      "trimHintResponses": "Keep only model, input, instructions, max_output_tokens, and runtime-critical stream / tool fields before applying the custom request body.",
+      "trimHintAnthropic": "Keep only model, messages, system, max_tokens, and runtime-critical stream / tool fields before applying the custom request body.",
+      "trimHintGemini": "Keep only contents, systemInstruction, generationConfig.maxOutputTokens, and tools / toolConfig before applying the custom request body. Gemini model selection comes from the request URL.",
+      "placeholder": "Example:\n{\n  \"temperature\": 0.8,\n  \"top_p\": 0.9\n}",
+      "invalidJson": "Invalid JSON format, please check syntax",
+      "validJson": "JSON format is valid",
+      "mergeHint": "Custom fields will override corresponding fields in the default request body"
+    }
+  }
+}

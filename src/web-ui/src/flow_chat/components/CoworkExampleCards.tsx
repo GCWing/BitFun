@@ -1,0 +1,170 @@
+/**
+ * Cowork example cards shown in empty sessions.
+ */
+
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
+import {
+  type LucideIcon,
+  Image,
+  Plane,
+  Presentation,
+  ListTodo,
+  CalendarDays,
+  ClipboardList,
+  Mail,
+  FileSpreadsheet,
+  HandCoins,
+  TrendingUp,
+  FileText,
+  X,
+  RotateCcw,
+  Plus,
+} from 'lucide-react';
+import { Card, IconButton, Tooltip } from '@/component-library';
+import './CoworkExampleCards.scss';
+
+type ExampleId =
+  | 'desktop_cleanup'
+  | 'vacation_plan'
+  | 'make_ppt'
+  | 'todo_breakdown'
+  | 'optimize_week'
+  | 'weekly_plan'
+  | 'meeting_minutes'
+  | 'reply_email'
+  | 'make_docx'
+  | 'make_spreadsheet'
+  | 'budget_plan';
+
+interface ExampleItem {
+  id: ExampleId;
+  icon: LucideIcon;
+}
+
+const EXAMPLES: ExampleItem[] = [
+  { id: 'desktop_cleanup', icon: Image },
+  { id: 'vacation_plan', icon: Plane },
+  { id: 'make_ppt', icon: Presentation },
+  { id: 'todo_breakdown', icon: ListTodo },
+  { id: 'optimize_week', icon: TrendingUp },
+  { id: 'weekly_plan', icon: CalendarDays },
+  { id: 'meeting_minutes', icon: ClipboardList },
+  { id: 'reply_email', icon: Mail },
+  { id: 'make_docx', icon: FileText },
+  { id: 'make_spreadsheet', icon: FileSpreadsheet },
+  { id: 'budget_plan', icon: HandCoins },
+];
+
+function pickRandomUnique<T>(items: readonly T[], count: number): T[] {
+  if (count <= 0) return [];
+  if (items.length <= count) return [...items];
+
+  const copy = [...items];
+  for (let i = copy.length - 1; i > 0; i -= 1) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [copy[i], copy[j]] = [copy[j], copy[i]];
+  }
+  return copy.slice(0, count);
+}
+
+export interface CoworkExampleCardsProps {
+  resetKey: number;
+  onClose?: () => void;
+  onSelectPrompt: (prompt: string) => void;
+  onAddPlugin?: () => void;
+}
+
+export const CoworkExampleCards: React.FC<CoworkExampleCardsProps> = ({
+  resetKey,
+  onClose,
+  onSelectPrompt,
+  onAddPlugin,
+}) => {
+  const { t } = useTranslation('flow-chat');
+  const [selected, setSelected] = useState<ExampleItem[]>(() => pickRandomUnique(EXAMPLES, 3));
+
+  useEffect(() => {
+    setSelected(pickRandomUnique(EXAMPLES, 3));
+  }, [resetKey]);
+
+  const handleRefresh = useCallback(() => {
+    setSelected(pickRandomUnique(EXAMPLES, 3));
+  }, []);
+
+  const cards = useMemo(() => {
+    return selected.map((example) => {
+      const Icon = example.icon;
+      const title = t(`coworkExamples.items.${example.id}.title`);
+      const description = t(`coworkExamples.items.${example.id}.description`);
+      const prompt = t(`coworkExamples.items.${example.id}.prompt`);
+
+      return (
+        <Card
+          key={example.id}
+          className="bitfun-cowork-example-cards__card"
+          variant="subtle"
+          interactive
+          onClick={() => onSelectPrompt(prompt)}
+        >
+          <div className="bitfun-cowork-example-cards__card-header">
+            <div className="bitfun-cowork-example-cards__card-icon">
+              <Icon size={18} />
+            </div>
+            <div className="bitfun-cowork-example-cards__card-title">{title}</div>
+          </div>
+          <div className="bitfun-cowork-example-cards__card-desc">{description}</div>
+        </Card>
+      );
+    });
+  }, [onSelectPrompt, selected, t]);
+
+  return (
+    <div className="bitfun-cowork-example-cards">
+      <div className="bitfun-cowork-example-cards__header">
+        <div className="bitfun-cowork-example-cards__title">{t('coworkExamples.title')}</div>
+        <div className="bitfun-cowork-example-cards__header-actions">
+          {onAddPlugin && (
+            <Tooltip content={t('coworkExamples.addPlugin')}>
+              <IconButton
+                variant="ghost"
+                size="xs"
+                onClick={onAddPlugin}
+                aria-label={t('coworkExamples.addPlugin')}
+              >
+                <Plus size={14} />
+              </IconButton>
+            </Tooltip>
+          )}
+          <Tooltip content={t('coworkExamples.refresh')}>
+            <IconButton
+              variant="ghost"
+              size="xs"
+              onClick={handleRefresh}
+              aria-label={t('coworkExamples.refresh')}
+            >
+              <RotateCcw size={14} />
+            </IconButton>
+          </Tooltip>
+          {onClose && (
+            <Tooltip content={t('coworkExamples.close')}>
+              <IconButton
+                variant="ghost"
+                size="xs"
+                onClick={onClose}
+                aria-label={t('coworkExamples.close')}
+              >
+                <X size={14} />
+              </IconButton>
+            </Tooltip>
+          )}
+        </div>
+      </div>
+      <div className="bitfun-cowork-example-cards__grid">
+        {cards}
+      </div>
+    </div>
+  );
+};
+
+export default CoworkExampleCards;

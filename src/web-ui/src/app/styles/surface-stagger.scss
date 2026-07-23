@@ -1,0 +1,11 @@
+@function delay($step, $offset: 0ms) {
+  @if $offset == 0ms {
+    @return calc(var(--surface-stagger-index) * #{$step});
+  }
+
+  @return calc(var(--surface-stagger-index) * #{$step} + #{$offset});
+}
+
+@mixin animation-delay($step, $offset: 0ms) {
+  animation-delay: delay($step, $offset);
+}

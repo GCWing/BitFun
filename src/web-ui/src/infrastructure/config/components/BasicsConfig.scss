@@ -1,0 +1,132 @@
+﻿@use '../../../component-library/styles/tokens.scss' as *;
+
+.bitfun-basics-config__content {
+  display: flex;
+  flex-direction: column;
+  gap: $size-gap-6;
+  padding: 0;
+}
+
+.bitfun-logging-config {
+  &__content {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  &__select-wrapper {
+    width: 100%;
+  }
+
+  &__path-row {
+    display: flex;
+    align-items: stretch;
+    gap: 8px;
+    width: 100%;
+
+    .bitfun-logging-config__path-box {
+      flex: 1;
+      min-width: 0;
+    }
+  }
+
+  &__open-btn {
+    flex-shrink: 0;
+    align-self: stretch;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    min-width: 36px;
+    padding: 0;
+    border: 1px solid transparent;
+    border-radius: 6px;
+    background: transparent;
+    color: var(--color-text-secondary);
+    cursor: pointer;
+    transition: background 0.15s, color 0.15s, border-color 0.15s;
+
+    &:hover:not(:disabled) {
+      background: var(--element-bg-base);
+      border-color: var(--border-subtle);
+      color: var(--color-text-primary);
+    }
+
+    &:active:not(:disabled) {
+      background: var(--element-bg-medium);
+    }
+
+    &:disabled {
+      opacity: 0.4;
+      cursor: not-allowed;
+    }
+  }
+
+  &__path-box {
+    width: 100%;
+    padding: 10px 12px;
+    border-radius: 6px;
+    background: transparent;
+    border: 1px dashed var(--border-base);
+    color: var(--color-text-primary);
+    font-family: var(--font-family-mono);
+    font-size: 12px;
+    word-break: break-all;
+    overflow-wrap: anywhere;
+    line-height: 1.6;
+    user-select: text;
+  }
+}
+
+
+.bitfun-terminal-config {
+  &__content {
+    display: flex;
+    flex-direction: column;
+    gap: $size-gap-6;
+  }
+
+  &__select-wrapper {
+    width: 100%;
+  }
+
+  &__shell-option,
+  &__shell-value {
+    display: flex;
+    flex: 1;
+    min-width: 0;
+  }
+
+  &__shell-option-name,
+  &__shell-value-name {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  &__shell-value {
+    width: 100%;
+  }
+
+  &__shell-tooltip {
+    max-width: min(480px, calc(100vw - 32px));
+  }
+
+  &__shell-tooltip-name {
+    font-weight: var(--font-weight-medium);
+  }
+
+  &__shell-tooltip-path {
+    margin-top: 4px;
+    overflow-wrap: anywhere;
+    font-family: var(--font-family-mono);
+  }
+
+  &__no-shells {
+    padding: 12px 16px;
+    border: 1px dashed var(--border-base);
+    border-radius: $size-radius-sm;
+    color: var(--color-text-muted);
+    font-size: var(--font-size-sm);
+  }
+}

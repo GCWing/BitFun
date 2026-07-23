@@ -1,0 +1,454 @@
+/**
+ * Compact tool card styles
+ * Simple gray transparent background style
+ */
+
+@use './_tool-card-common.scss';
+@use '../../component-library/styles/_extended-mixins' as mixins;
+
+/* ========== Card wrapper ========== */
+.compact-tool-card-wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  width: 100%;
+  box-sizing: border-box;
+  font-size: var(--flowchat-font-size-base);
+  line-height: var(--flowchat-support-line-height);
+}
+
+.compact-tool-card-wrapper--dense-command {
+  width: 100%;
+
+  .compact-tool-card {
+    width: 100%;
+    align-items: center;
+    gap: 4px;
+  }
+
+  /* Spacing-only overrides — icon size & text styling are inherited from shared variables */
+  .tool-card-icon-slot {
+    align-self: center;
+    width: 20px;
+    margin-right: 1px;
+  }
+
+  .tool-card-icon-marks {
+    width: 20px;
+    height: 20px;
+  }
+
+  .compact-card-right-status-icon {
+    min-height: 24px;
+    justify-content: flex-start;
+  }
+
+  .tool-card-header-actions {
+    gap: 1px;
+  }
+
+  .tool-card-header-action.icon-btn--xs {
+    width: 16px;
+    height: 16px;
+
+    svg {
+      width: 11px;
+      height: 11px;
+    }
+  }
+}
+
+/* Tool item wrapper around .compact-tool-card-wrapper (see ModelRoundItem / FlowItemRenderer).
+ * Compact tool rows are slightly tighter than text and thinking blocks, keeping
+ * repeated tool runs scannable without taking over the chat stream.
+ * The explicit `line-height` pins the wrapper's strut so WebKit (Tauri/macOS) doesn't
+ * inherit a different line-height from ancestors. */
+.flowchat-flow-item,
+.flowchat-tool-wrapper {
+  margin: 0 0 0.35rem 0;
+  font-size: var(--flowchat-font-size-base);
+  line-height: var(--flowchat-support-line-height);
+}
+
+.flow-tool-card-wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: var(--flowchat-inline-gap);
+}
+
+.flow-tool-card-note {
+  margin-left: 1.5rem;
+  color: var(--color-text-secondary);
+  font-size: 0.82em;
+  line-height: var(--flowchat-support-line-height);
+  opacity: 0.84;
+}
+
+/* ========== Loading state: A (border via text fade) + E (text fade) ========== */
+
+/* Hide left spinner/cube when it is the ONLY child (legacy: status icon used as left icon) */
+.compact-tool-card-wrapper--loading-shimmer .tool-card-icon-marks:has(.cube-loading),
+.compact-tool-card-wrapper--loading-shimmer .tool-card-icon-marks:has(svg.animate-spin) {
+  display: none !important;
+}
+
+/* E — action + content breathe; keep tool-identifier-icon steady */
+.compact-tool-card-wrapper--loading-shimmer .compact-card-action,
+.compact-tool-card-wrapper--loading-shimmer .compact-card-content {
+  animation: tool-card-text-fade 1.6s ease-in-out infinite;
+}
+
+/* Legacy compact cards that still use status icon as left icon (no .tool-identifier-icon child):
+   fade the icon-marks too for the original shimmer effect. */
+.compact-tool-card-wrapper--loading-shimmer .tool-card-icon-marks:not(:has(.tool-identifier-icon)) {
+  animation: tool-card-text-fade 1.6s ease-in-out infinite;
+}
+
+/* ========== Card body - transparent, no border ========== */
+.compact-tool-card {
+  background: transparent !important;
+  border: none !important;
+  padding: 0 8px 0 1px !important;
+  margin: 0 !important;
+  box-shadow: none !important;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  box-sizing: border-box;
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  position: relative;
+
+  &.clickable:hover {
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+
+    .tool-card-icon-marks {
+      color: var(--color-success);
+      transform: scale(1.05);
+    }
+
+    .compact-card-action,
+    .compact-card-content,
+    .compact-card-extra {
+      color: var(--color-text-primary);
+    }
+
+    .compact-card-right-status-icon {
+      color: var(--color-success);
+      transform: scale(1.05);
+    }
+  }
+
+  &.clickable:active {
+    background: transparent !important;
+
+    .tool-card-icon-marks {
+      transform: scale(1.0);
+    }
+  }
+
+  &:not(.clickable):hover {
+    .compact-card-action,
+    .compact-card-content {
+      color: var(--color-text-primary);
+    }
+
+    .tool-card-icon-marks {
+      opacity: 0.95;
+    }
+  }
+}
+
+/* ========== Header element styles ========== */
+
+/*
+ * WebKit (Tauri on macOS) baseline quirk fix:
+ * — Use `display: flex` (not `inline-flex`) so children don't carry an inline
+ *   baseline that WebKit aligns to their bottom margin edge (which forces the
+ *   row line-box to grow to fit the SVG's full height ABOVE its baseline).
+ * — Force inner SVGs to `display: block` to drop the inline descender slot.
+ * — Pin icon wrappers to `line-height: 1` so the wrapper height === SVG height,
+ *   then let the parent flex `align-items: center` vertically center them inside
+ *   the 23px text rhythm. This way the row height is driven solely by the text
+ *   spans (line-height 1.65 × 14px = 23.1px), not by icon wrappers.
+ */
+.compact-card-action {
+  font-size: var(--tool-card-action-font-size);
+  line-height: var(--tool-card-action-line-height);
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text-muted);
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  flex-shrink: 0;
+}
+
+.compact-card-content {
+  flex: 1;
+  font-size: var(--tool-card-action-font-size);
+  line-height: var(--tool-card-action-line-height);
+  color: var(--color-text-muted);
+  min-width: 0;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+
+  .read-file-meta {
+    color: inherit;
+    opacity: 0.85;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+}
+
+.compact-card-extra {
+  font-size: var(--tool-card-action-font-size);
+  line-height: var(--tool-card-action-line-height);
+  color: var(--color-text-muted);
+  display: flex;
+  align-items: center;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  flex-shrink: 0;
+
+  > svg {
+    display: block;
+  }
+}
+
+// Utility: child elements hidden by default, revealed on card hover.
+// Uses max-width + overflow to collapse layout space when hidden so no gap
+// appears before the hover target is revealed.
+.compact-tool-card .compact-extra-on-hover {
+  max-width: 0;
+  overflow: hidden;
+  opacity: 0;
+  pointer-events: none;
+  flex-shrink: 0;
+  transition: max-width 0.18s ease, opacity 0.15s ease;
+}
+
+.compact-tool-card:hover .compact-extra-on-hover {
+  max-width: 240px;
+  opacity: 1;
+  pointer-events: auto;
+  border-left: 1px solid var(--border-base);
+  padding-left: 6px;
+  margin-left: 6px;
+}
+
+/* ========== Expanded compact tools use the shared BaseToolCard shell ========== */
+.base-tool-card-wrapper.compact-tool-card-wrapper--expanded-card {
+  width: 100%;
+  box-sizing: border-box;
+
+  .base-tool-card {
+    cursor: pointer;
+  }
+
+  .base-tool-card-header {
+    gap: 8px;
+  }
+
+  .compact-card-content {
+    display: block;
+  }
+
+  .tool-card-icon-marks,
+  .compact-card-right-status-icon {
+    color: var(--color-text-secondary);
+  }
+
+  .compact-card-action,
+  .compact-card-content,
+  .compact-card-extra {
+    color: var(--color-text-primary);
+  }
+}
+
+/* ========== Status-specific styles ========== */
+
+.compact-tool-card.status-completed {
+  .tool-card-icon-marks {
+    color: var(--color-text-muted);
+
+    .icon-check-done {
+      color: var(--color-success);
+    }
+  }
+}
+
+.compact-tool-card.status-running,
+.compact-tool-card.status-streaming {
+  .tool-card-icon-marks {
+    color: var(--color-accent-600);
+  }
+}
+
+.compact-tool-card.status-error {
+  .tool-card-icon-marks {
+    color: var(--color-error);
+  }
+}
+
+.compact-card-right-status-icon {
+  margin-left: auto;
+}
+
+/* ========== Expanded content area ========== */
+.compact-tool-card-expanded {
+  position: relative;
+  margin-top: 8px;
+  margin-left: 1rem;
+  padding: 12px;
+  background: var(--color-bg-primary);
+  border: 1px solid var(--border-base);
+  border-radius: 6px;
+  opacity: 1;
+  transform: none;
+  box-shadow: 
+    0 2px 8px var(--color-overlay-black-15),
+    inset 0 1px 0 var(--color-overlay-white-04);
+  backdrop-filter: blur(8px);
+  
+}
+
+/* ========== Common expanded content styles ========== */
+
+.compact-detail-info-inline {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+  margin-bottom: 12px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--border-subtle);
+  font-size: var(--flowchat-font-size-xs);
+}
+
+.compact-detail-inline-item {
+  display: flex;
+  align-items: center;
+    gap: var(--flowchat-inline-gap);
+  white-space: nowrap;
+}
+
+.compact-detail-inline-label {
+  color: var(--color-text-muted);
+  font-weight: 500;
+}
+
+.compact-detail-inline-value {
+  color: var(--color-text-secondary);
+  font-family: var(--tool-card-font-mono);
+}
+
+.compact-detail-inline-separator {
+  color: var(--border-base);
+}
+
+.compact-expanded-results-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-height: 400px;
+  overflow-y: auto;
+
+}
+
+.compact-expanded-result-item {
+  padding: 8px;
+  border-radius: 4px;
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+
+  &:hover {
+    background: var(--element-bg-soft);
+  }
+}
+
+.compact-expanded-result-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--color-text-secondary);
+  font-size: var(--tool-card-action-font-size);
+  font-weight: 600;
+  cursor: pointer;
+  margin-bottom: 4px;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+
+  &:hover {
+    color: var(--color-text-primary);
+    text-decoration: underline;
+    
+    .inline-icon {
+      color: var(--color-success);
+      transform: translateX(2px);
+    }
+  }
+
+  .inline-icon {
+    flex-shrink: 0;
+    color: var(--color-text-muted);
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+}
+
+.compact-expanded-result-snippet {
+  color: var(--color-text-muted);
+  font-size: var(--tool-card-action-font-size);
+  line-height: var(--flowchat-text-line-height);
+  margin-bottom: 4px;
+  padding-left: 18px;
+}
+
+.compact-expanded-result-url {
+  color: var(--color-text-muted);
+  font-size: var(--flowchat-font-size-xs);
+  font-family: var(--tool-card-font-mono);
+  padding-left: 18px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.compact-result-content {
+  margin-top: 0;
+  
+  pre {
+    background: var(--color-bg-secondary);
+    border: 1px solid var(--border-subtle);
+    border-radius: 4px;
+    padding: 10px;
+    color: var(--color-text-primary);
+    font-family: var(--tool-card-font-mono);
+    font-size: var(--flowchat-font-size-xs);
+    line-height: var(--flowchat-text-line-height);
+    white-space: pre-wrap;
+    word-break: break-word;
+    overflow-x: auto;
+    max-height: 400px;
+    overflow-y: auto;
+
+  }
+}
+
+/* ========== Expand animation ========== */
+@keyframes expandDown {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes tool-card-text-fade {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.25;
+  }
+}

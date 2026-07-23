@@ -1,0 +1,19 @@
+{
+  "title": "终端",
+  "emptyState": "从 Shell 导航中打开终端",
+  "dialog": {
+    "editTerminal": {
+      "title": "编辑终端",
+      "nameLabel": "名称",
+      "namePlaceholder": "终端名称",
+      "workingDirectoryLabel": "启动路径",
+      "workingDirectoryPlaceholder": "终端启动时打开的路径",
+      "workingDirectoryHint": "重新打开已保存的终端时会使用这个路径",
+      "startupCommandLabel": "启动命令（可选）",
+      "startupCommandPlaceholder": "终端启动后自动执行的命令",
+      "startupCommandHint": "终端启动后将自动执行此命令",
+      "cancel": "取消",
+      "save": "保存"
+    }
+  }
+}

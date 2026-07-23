@@ -1,0 +1,126 @@
+/**
+ * Subagent items styles.
+ * When expanded, the subagent container merges with the task tool card header
+ * to form a single unified card with squared top corners.
+ */
+
+.subagent-items-wrapper {
+  position: relative;
+  contain: layout paint style;
+}
+
+.subagent-items-wrapper--collapsed {
+  pointer-events: none;
+}
+
+.subagent-items-wrapper--expanded {
+  display: block;
+}
+
+.subagent-items-collapse {
+  overflow: hidden;
+}
+
+.subagent-items-collapse.smooth-height-collapse--open {
+  overflow: visible;
+}
+
+// Subagent container for items under the same parent task.
+.subagent-items-container {
+  // Match header right padding (10px). Left padding aligns subagent content
+  // with the header content column (past the icon rail).
+  padding: 10px 10px 10px var(--tool-card-header-icon-slot);
+
+  // Continue the task card border on left/right/bottom; top border is hidden.
+  background: var(--color-bg-scene);
+  border: 1px solid var(--border-base);
+  border-top: none;
+  // Top corners are square to merge with the header card above.
+  border-radius: 0 0 8px 8px;
+  // Match the BaseToolCard backdrop-filter for seamless visual merge.
+  backdrop-filter: blur(10px);
+
+  // Keep concurrent subagents scannable; overflow keeps details reachable.
+  // The detail panel remains the place for reading long subagent output.
+  max-height: clamp(78px, 12vh, 118px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  contain: layout paint style;
+
+  .flow-text-block--subagent-compact {
+    margin-bottom: 0.15rem;
+    line-height: var(--flowchat-support-line-height);
+
+    .markdown-renderer,
+    .text-content {
+      line-height: var(--flowchat-support-line-height);
+    }
+
+    .markdown-renderer {
+      --markdown-block-gap: 0.15em;
+    }
+  }
+}
+
+// When expanded, keep a reasonable max-height so the card does not grow
+// unbounded during streaming; users can scroll to see all content.
+.subagent-items-container--expanded {
+  max-height: clamp(120px, 28vh, 320px);
+}
+
+.subagent-items-container--collapsed {
+  overflow: hidden;
+}
+
+// Truncated subagent text block styles.
+.subagent-text-block--truncated {
+  .subagent-text-block__truncation-hint {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 0;
+    font-size: var(--flowchat-font-size-sm);
+    color: var(--color-text-muted);
+  }
+
+  .subagent-text-block__expand-btn {
+    background: none;
+    border: none;
+    color: var(--flowchat-link-color);
+    cursor: pointer;
+    font-size: var(--flowchat-font-size-sm);
+    padding: 0;
+
+    &:hover {
+      text-decoration: underline;
+    }
+  }
+}
+
+// Keep the legacy subagent-item class for compatibility.
+.subagent-item {
+  display: block;
+
+  &.subagent-item--collapsed {
+    max-height: 0;
+    opacity: 0;
+    overflow: hidden;
+    transform: translateY(-2px);
+    transition:
+      max-height 0.26s cubic-bezier(0.4, 0, 0.2, 1),
+      opacity 0.18s ease,
+      transform 0.26s cubic-bezier(0.4, 0, 0.2, 1);
+    pointer-events: none;
+  }
+
+  &.subagent-item--expanded {
+    max-height: 520px;
+    opacity: 1;
+    overflow: visible;
+    transform: translateY(0);
+    transition:
+      max-height 0.26s cubic-bezier(0.4, 0, 0.2, 1),
+      opacity 0.18s ease,
+      transform 0.26s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+}

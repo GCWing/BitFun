@@ -1,0 +1,227 @@
+/**
+ * ChatEmptyState component styles
+ */
+
+@use '../../component-library/styles/tokens.scss' as *;
+
+.fc-chat-empty {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  min-height: 60vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--color-bg-primary);
+  padding: 0;
+  margin: 0;
+  
+  &::before {
+    content: '';
+    position: absolute;
+    top: 20%;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 500px;
+    height: 300px;
+    background: radial-gradient(
+      ellipse at center,
+      var(--color-accent-50) 0%,
+      color-mix(in srgb, var(--color-purple-500) 4%, transparent) 40%,
+      transparent 70%
+    );
+    filter: blur(60px);
+    z-index: $z-base;
+    pointer-events: none;
+  }
+  
+  &__container {
+    position: relative;
+    z-index: $z-content;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    justify-content: center;
+    gap: $size-gap-8;
+    max-width: 800px;
+    width: 100%;
+    padding: $size-gap-10 $size-gap-8;
+    margin: 0 auto;
+    animation: fc-chat-empty-fade-in $motion-slow $easing-decelerate;
+  }
+
+  &__greeting {
+    text-align: left;
+    display: flex;
+    flex-direction: column;
+    gap: $size-gap-4;
+    width: 100%;
+    
+    p {
+      margin: 0;
+      font-size: var(--flowchat-font-size-2xl);
+      color: var(--color-text-secondary);
+      font-weight: $font-weight-normal;
+      line-height: $line-height-relaxed;
+      
+      &:first-child {
+        font-size: var(--flowchat-font-size-3xl);
+        font-weight: $font-weight-semibold;
+        color: var(--color-text-primary);
+        letter-spacing: -0.02em;
+      }
+    }
+  }
+  
+  &__workspace-name {
+    display: inline-flex;
+    align-items: center;
+    padding: 2px $size-gap-2;
+    font-family: $font-family-mono;
+    font-weight: $font-weight-medium;
+    font-size: inherit;
+    color: var(--color-text-primary);
+    background: var(--element-bg-soft);
+    border: 1px solid var(--border-medium);
+    border-radius: $size-radius-sm;
+    line-height: var(--flowchat-support-line-height);
+    transition: all $motion-base $easing-standard;
+    
+    &:hover {
+      background: var(--element-bg-hover);
+      border-color: var(--border-strong);
+    }
+  }
+  
+  &__branch-name {
+    display: inline-flex;
+    align-items: center;
+    padding: 2px $size-gap-2;
+    font-family: $font-family-mono;
+    font-weight: $font-weight-medium;
+    font-size: inherit;
+    color: var(--color-text-primary);
+    background: var(--element-bg-soft);
+    border: 1px solid var(--border-medium);
+    border-radius: $size-radius-sm;
+    line-height: var(--flowchat-support-line-height);
+    transition: all $motion-base $easing-standard;
+    
+    &:hover {
+      background: var(--element-bg-hover);
+      border-color: var(--border-strong);
+    }
+  }
+  
+  &__divider {
+    width: 100%;
+    height: 1px;
+    position: relative;
+    margin: $size-gap-2 0;
+    background: linear-gradient(
+      90deg,
+      var(--border-strong) 0%,
+      var(--border-medium) 40%,
+      var(--border-base) 70%,
+      transparent 100%
+    );
+  }
+  
+  &__no-workspace {
+    text-align: left;
+    padding: $size-gap-6 0;
+    width: 100%;
+    
+    p {
+      margin: 0 0 $size-gap-3;
+      font-size: var(--flowchat-font-size-2xl);
+      color: var(--color-text-secondary);
+      line-height: $line-height-relaxed;
+      font-weight: $font-weight-normal;
+      
+      &:last-child {
+        margin: 0;
+      }
+    }
+  }
+  
+  &__hint {
+    font-size: var(--flowchat-font-size-xl);
+    color: var(--color-text-muted);
+    font-style: italic;
+  }
+  
+  &__prompt {
+    text-align: left;
+    display: flex;
+    flex-direction: column;
+    gap: $size-gap-3;
+    width: 100%;
+    
+    p {
+      margin: 0;
+      font-size: var(--flowchat-font-size-xl);
+      color: var(--color-text-secondary);
+      line-height: var(--flowchat-text-line-height);
+      font-weight: $font-weight-normal;
+    }
+    
+    &-hint {
+      margin-top: $size-gap-4;
+      padding: $size-gap-3 $size-gap-4;
+      font-size: var(--flowchat-font-size-lg);
+      color: var(--color-text-muted);
+      font-style: italic;
+      background: var(--element-bg-subtle);
+      border-left: 2px solid var(--border-strong);
+      border-radius: 0 $size-radius-sm $size-radius-sm 0;
+      transition: all $motion-base $easing-standard;
+      
+      &:hover {
+        background: var(--element-bg-soft);
+        border-left-color: var(--color-text-muted);
+      }
+    }
+  }
+}
+
+@keyframes fc-chat-empty-fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (max-width: 768px) {
+  .fc-chat-empty {
+    &__container {
+      padding: $size-gap-6 $size-gap-4;
+      max-width: 100%;
+    }
+    
+    &__workspace-info {
+      padding: $size-gap-4;
+    }
+    
+    &__info-row {
+      flex-direction: column;
+      align-items: flex-start;
+      gap: $size-gap-2;
+    }
+    
+    &__info-label {
+      min-width: auto;
+    }
+    
+    &__info-value {
+      text-align: left;
+      width: 100%;
+    }
+  }
+}
+
+

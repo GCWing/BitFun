@@ -1,0 +1,120 @@
+/**
+ * Turn snapshot rollback button styles.
+ */
+
+.snapshot-rollback-button {
+  --snapshot-rollback-error-color: var(--color-error);
+  --snapshot-rollback-error-bg: var(--color-error-bg);
+
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 12px;
+  font-size: var(--tool-card-action-font-size);
+  font-weight: 500;
+  line-height: var(--flowchat-support-line-height);
+  border-radius: 6px;
+  border: 1px solid var(--border-base);
+  background: var(--color-bg-elevated);
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+  
+  svg {
+    flex-shrink: 0;
+  }
+  
+  &:hover:not(:disabled) {
+    border-color: var(--color-accent-500);
+    background: var(--color-accent-100);
+    color: var(--color-accent-500);
+    transform: translateY(-1px);
+    box-shadow: 0 2px 4px var(--color-overlay-black-12);
+  }
+  
+  &:active:not(:disabled) {
+    transform: translateY(0);
+    box-shadow: 0 1px 2px var(--color-overlay-black-12);
+  }
+  
+  &:disabled {
+    opacity: 0.5;
+    cursor: default;
+  }
+  
+  // Loading state
+  &--loading {
+    border-color: var(--color-accent-500);
+    background: var(--color-accent-100);
+    color: var(--color-accent-500);
+    cursor: wait;
+  }
+  
+  // Success state
+  &--success {
+    border-color: var(--color-success);
+    background: var(--color-success-bg);
+    color: var(--color-success);
+    cursor: default;
+    
+    &:hover {
+      transform: none;
+      box-shadow: none;
+    }
+  }
+  
+  // Error state
+  &--error {
+    border-color: var(--snapshot-rollback-error-color);
+    background: var(--snapshot-rollback-error-bg);
+    color: var(--snapshot-rollback-error-color);
+    cursor: default;
+    
+    &:hover {
+      transform: none;
+      box-shadow: none;
+    }
+  }
+  
+  // Current turn marker
+  &--current {
+    border-color: var(--color-success);
+    background: var(--color-success-bg);
+    color: var(--color-success);
+    cursor: default;
+    font-weight: 600;
+    
+    &:hover {
+      transform: none;
+      box-shadow: none;
+    }
+  }
+  
+  // Spinner animation
+  &__spinner {
+    animation: spin 1s linear infinite;
+  }
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+// Dark theme
+@media (prefers-color-scheme: dark) {
+  .snapshot-rollback-button {
+    --snapshot-rollback-dark-secondary-rgb: 156, 163, 175;
+    --border-base: color-mix(in srgb, rgb(var(--color-overlay-slate-rgb)) 82%, var(--color-static-white));
+    --color-bg-elevated: color-mix(in srgb, rgb(var(--color-overlay-slate-rgb)) 94%, var(--color-static-white));
+    --color-text-secondary: rgb(var(--snapshot-rollback-dark-secondary-rgb));
+    --color-accent-100: var(--element-bg-soft);
+    --snapshot-rollback-error-color: color-mix(in srgb, var(--color-error) 72%, var(--color-static-white));
+    --snapshot-rollback-error-bg: color-mix(in srgb, var(--snapshot-rollback-error-color) 10%, transparent);
+  }
+}

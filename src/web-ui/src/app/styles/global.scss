@@ -1,0 +1,323 @@
+/**
+ * BitFun global styles entry point.
+ * Uses component library design tokens.
+ */
+
+/* ========== Import design tokens ========== */
+@use '../../component-library/styles/tokens.scss' as *;
+
+/* ========== Global CSS variables ========== */
+:root {
+  @include apply-design-tokens;
+}
+
+/* ========== Global reset and base styles ========== */
+
+/* Ensure a unified box model for all elements */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+/* Root element styles */
+html {
+  font-size: 16px;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
+body {
+  font-family: var(--font-family-sans);
+  font-size: var(--font-size-base);
+  line-height: $line-height-base;
+  color: var(--color-text-primary);
+  background: var(--color-bg-primary);
+  overflow: hidden;
+}
+
+/* Link styles */
+a {
+  color: var(--color-accent-500);
+  text-decoration: none;
+  transition: color $motion-fast $easing-standard;
+}
+
+a:hover {
+  color: var(--color-accent-400);
+  text-decoration: underline;
+}
+
+/* Text selection styles */
+::selection {
+  background: var(--color-accent-300);
+  color: var(--color-text-primary);
+}
+
+::-moz-selection {
+  background: var(--color-accent-300);
+  color: var(--color-text-primary);
+}
+
+/* Focus styles */
+:focus-visible {
+  outline: 2px solid var(--color-accent-400);
+  outline-offset: 2px;
+  border-radius: $size-radius-sm;
+}
+
+/* Font preference: compact number stepper — avoid stacking global accent ring on the input */
+.font-pref-panel__number-input:focus,
+.font-pref-panel__number-input:focus-visible {
+  outline: none;
+  outline-offset: 0;
+}
+
+.font-pref-panel__flow-select:focus,
+.font-pref-panel__flow-select:focus-visible {
+  outline: none;
+  outline-offset: 0;
+}
+
+/* Disabled state */
+:disabled {
+  opacity: $opacity-disabled;
+  cursor: default;
+}
+
+/* Image optimization */
+img {
+  max-width: 100%;
+  height: auto;
+  border-radius: $size-radius-sm;
+}
+
+/* Table styles */
+table {
+  border-collapse: collapse;
+  width: 100%;
+}
+
+th,
+td {
+  text-align: left;
+  padding: $size-gap-2 $size-gap-3;
+  border-bottom: 1px solid var(--border-base);
+}
+
+th {
+  font-weight: $font-weight-semibold;
+  color: var(--color-text-primary);
+  background: var(--element-bg-base);
+}
+
+/* Code styles */
+code,
+pre {
+  font-family: $font-family-mono;
+  font-size: 0.9em;
+  background: var(--element-bg-base);
+  border: 1px solid var(--border-base);
+  border-radius: $size-radius-sm;
+}
+
+code {
+  padding: 2px 4px;
+}
+
+pre {
+  padding: $size-gap-3;
+  overflow-x: auto;
+  line-height: $line-height-relaxed;
+}
+
+pre code {
+  background: none;
+  border: none;
+  padding: 0;
+}
+
+/* Blockquote styles */
+blockquote {
+  margin: $size-gap-4 0;
+  padding: $size-gap-3 $size-gap-4;
+  border-left: 3px solid var(--color-accent-500);
+  background: var(--element-bg-base);
+  border-radius: 0 $size-radius-base $size-radius-base 0;
+  font-style: italic;
+}
+
+/* Divider (skip m-editor: ProseMirror uses border-top hairline; global height+background stacks visually) */
+hr:not(:is(.m-editor hr)) {
+  border: none;
+  height: 1px;
+  background: var(--border-base);
+  margin: $size-gap-5 0;
+}
+
+/* List styles */
+ul,
+ol {
+  padding-left: $size-gap-5;
+}
+
+li {
+  margin-bottom: $size-gap-1;
+}
+
+/* Hide scrollbar while keeping functionality */
+.hide-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.hide-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+/* Loading state */
+.loading {
+  pointer-events: none;
+  opacity: $opacity-hover;
+}
+
+/* Error state */
+.error {
+  color: var(--color-error);
+  border-color: var(--color-error);
+}
+
+/* Success state */
+.success {
+  color: var(--color-success);
+  border-color: var(--color-success);
+}
+
+/* Warning state */
+.warning {
+  color: var(--color-warning);
+  border-color: var(--color-warning);
+}
+
+/* Accessibility helpers */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* High-contrast mode */
+@media (prefers-contrast: high) {
+  :root {
+    --glass-border-base: rgba(var(--color-static-white-rgb), 0.3);
+    --glass-border-hover: rgba(var(--color-static-white-rgb), 0.5);
+  }
+}
+
+/* Reduced motion mode */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* Dark theme */
+@media (prefers-color-scheme: dark) {
+  html {
+    color-scheme: dark;
+  }
+}
+
+/* Hide window size debug overlays */
+body::after,
+body::before,
+html::after,
+html::before {
+  display: none !important;
+  content: none !important;
+}
+
+/* Hide possible window size indicators */
+.resize-indicator,
+.window-size-display,
+.screen-size-indicator,
+.breakpoint-indicator,
+.viewport-indicator,
+[data-window-size],
+[data-screen-size],
+[data-viewport],
+[data-breakpoint] {
+  display: none !important;
+  visibility: hidden !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+}
+
+/* Hide top-right floating debug info */
+div[style*="position: fixed"][style*="top"][style*="right"],
+div[style*="position:fixed"][style*="top"][style*="right"] {
+  &:not(.bitfun-notification-container):not(.bitfun-notification-center):not([class*="bitfun"]) {
+    display: none !important;
+  }
+}
+
+/* Hide high z-index floating debug elements */
+body > div[style*="z-index: 9999"],
+body > div[style*="z-index:9999"],
+body > div[style*="z-index: 999999"],
+body > div[style*="z-index:999999"] {
+  &:not([class]):not([id]) {
+    display: none !important;
+  }
+}
+
+/* Print styles */
+@media print {
+  :root {
+    --print-border-rgb: 153, 153, 153;
+  }
+
+  * {
+    background: transparent !important;
+    color: black !important;
+    box-shadow: none !important;
+    text-shadow: none !important;
+  }
+  
+  a,
+  a:visited {
+    text-decoration: underline;
+  }
+  
+  a[href]::after {
+    content: " (" attr(href) ")";
+  }
+  
+  pre,
+  blockquote {
+    border: 1px solid rgb(var(--print-border-rgb));
+    page-break-inside: avoid;
+  }
+  
+  img {
+    page-break-inside: avoid;
+  }
+  
+  h2,
+  h3 {
+    page-break-after: avoid;
+  }
+}

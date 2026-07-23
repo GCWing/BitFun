@@ -1,0 +1,312 @@
+/**
+ * ModelThinking tool styles.
+ * Shows internal model reasoning.
+ *
+ * Single DOM structure for both streaming and completed states.
+ * Expanded: max-height with scroll; streaming uses slightly brighter muted text.
+ * Completed: auto-collapses via CSS grid-template-rows animation.
+ */
+
+@use './_tool-card-common.scss';
+@use '../../component-library/styles/markdown-layout' as markdown;
+
+/* Minimal, borderless layout.
+ * WebKit (Tauri/macOS) baseline-quirk fix:
+ * — Collapsed summary uses `--flowchat-font-size-sm` + shared support line-height to match
+ *   `.explore-region--collapsible` (e.g. “执行了 N 个命令”).
+ * — Make the chevron SVG `display: block` and the label simple `inline` flow
+ *   so flex `align-items: center` stays stable. */
+.flow-thinking-item {
+  padding: 0;
+  /* Match `.flow-text-block` and the tool wrappers so flow items share one visual gap. */
+  margin: 0 0 var(--flowchat-flow-item-gap) 0;
+  background: transparent;
+  /* Transparent border to match the box-sizing of bordered cards so that thinking
+   * items and card content share the same left edge. */
+  border: 1px solid transparent;
+  box-sizing: border-box;
+  /* Collapsed summary line: match `.explore-region--collapsible` (e.g. command count). */
+  font-size: var(--flowchat-font-size-sm);
+  line-height: var(--flowchat-support-line-height);
+  transition: padding 0.2s ease;
+}
+
+.thinking-collapsed-header {
+  display: flex;
+  align-items: center;
+  gap: var(--flowchat-inline-gap);
+  padding: 0;
+  border-radius: 4px;
+  cursor: pointer;
+  background: transparent;
+  font-size: var(--flowchat-font-size-sm);
+  line-height: var(--flowchat-support-line-height);
+
+  &:hover {
+    .thinking-label {
+      color: var(--color-text-secondary);
+      opacity: 1;
+    }
+
+    .thinking-chevron {
+      opacity: 1;
+    }
+  }
+
+  .thinking-chevron {
+    flex-shrink: 0;
+    color: var(--color-text-muted);
+    opacity: 0.6;
+    display: block;
+    transition: transform 0.28s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.15s ease;
+    transform: rotate(0deg);
+  }
+
+  .thinking-label {
+    font-size: var(--flowchat-font-size-sm);
+    font-weight: normal;
+    color: var(--color-text-muted);
+    opacity: 0.8;
+    line-height: var(--flowchat-support-line-height);
+  }
+}
+
+/* Rotate chevron when expanded */
+.flow-thinking-item.expanded .thinking-chevron {
+  transform: rotate(90deg);
+}
+
+/* Expand container with animation */
+.thinking-expand-container {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows 0.25s ease-out;
+
+  &--open {
+    grid-template-rows: 1fr;
+  }
+
+  > .thinking-content-wrapper {
+    overflow: hidden;
+  }
+}
+
+.thinking-content {
+  font-size: var(--flowchat-font-size-base);
+  line-height: var(--flowchat-text-line-height);
+  /* Match FlowChat body text (sans); mono stack + generic monospace yields Songti-like CJK on Windows. */
+  font-family: var(--font-family-sans);
+  word-break: break-word;
+  color: var(--color-text-muted);
+  padding: var(--flowchat-card-expanded-pad-y) var(--flowchat-card-expanded-pad-x);
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+  margin-top: 0;
+  /* Cap height when expanded so long thinking stays compact; scroll inside */
+  max-height: 300px;
+  overflow-y: auto;
+  min-height: 0;
+  cursor: text;
+  user-select: text;
+}
+
+.flow-thinking-item.streaming .thinking-content {
+  --model-thinking-streaming-text-rgb: 156, 163, 175;
+
+  color: rgb(var(--model-thinking-streaming-text-rgb));
+}
+
+/* Content wrapper with fade gradients */
+.thinking-content-wrapper {
+  position: relative;
+  min-height: 0; /* Required for the 0fr grid trick */
+  /*
+   * Match FlowChat list surface, not app chrome primary.
+   * Use a solid fill + mask fade so we never interpolate theme colors with `transparent` in sRGB
+   * (that pulls toward black and looks wrong on near-black themes).
+   */
+  --thinking-scroll-fade-base: var(--color-bg-scene);
+
+  /* Top fade */
+  &::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 24px;
+    pointer-events: none;
+    z-index: 1;
+    opacity: 0;
+    transition: opacity 0.2s ease;
+
+    background: var(--thinking-scroll-fade-base);
+    -webkit-mask-image: linear-gradient(to bottom, var(--color-static-black) 0%, var(--color-static-black) 22%, transparent 100%);
+    mask-image: linear-gradient(to bottom, var(--color-static-black) 0%, var(--color-static-black) 22%, transparent 100%);
+    -webkit-mask-repeat: no-repeat;
+    mask-repeat: no-repeat;
+    -webkit-mask-size: 100% 100%;
+    mask-size: 100% 100%;
+  }
+
+  /* Bottom fade */
+  &::after {
+    content: '';
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 24px;
+    pointer-events: none;
+    z-index: 1;
+    opacity: 0;
+    transition: opacity 0.2s ease;
+
+    background: var(--thinking-scroll-fade-base);
+    -webkit-mask-image: linear-gradient(to top, var(--color-static-black) 0%, var(--color-static-black) 22%, transparent 100%);
+    mask-image: linear-gradient(to top, var(--color-static-black) 0%, var(--color-static-black) 22%, transparent 100%);
+    -webkit-mask-repeat: no-repeat;
+    mask-repeat: no-repeat;
+    -webkit-mask-size: 100% 100%;
+    mask-size: 100% 100%;
+  }
+
+  /* Show gradients when content scrolls */
+  &.has-scroll {
+    &::before,
+    &::after {
+      opacity: 1;
+    }
+  }
+
+  /* Hide top fade at the top */
+  &.at-top::before {
+    opacity: 0;
+  }
+
+  /* Hide bottom fade at the bottom */
+  &.at-bottom::after {
+    opacity: 0;
+  }
+}
+
+/* Markdown body: same sans as rest of chat; code stays mono via the tool-card font token. */
+.thinking-content .markdown-renderer.thinking-markdown {
+  --font-family-mono: var(--tool-card-font-mono);
+  --markdown-font-heading: var(--font-family-sans);
+  --markdown-font-size: var(--flowchat-font-size-base);
+  --markdown-font-size-sm: var(--flowchat-font-size-sm);
+  --markdown-code-font-size: var(--flowchat-font-size-xs);
+  --markdown-line-height: var(--flowchat-text-line-height);
+  --markdown-block-gap: #{markdown.$block-gap};
+  --markdown-paragraph-gap: #{markdown.$paragraph-gap};
+
+  font-family: var(--font-family-sans);
+  font-size: var(--flowchat-font-size-base);
+  line-height: var(--flowchat-text-line-height);
+  color: var(--color-text-muted);
+  animation: none;
+
+  h1, h2, h3, h4, h5, h6,
+  strong {
+    color: var(--color-text-secondary);
+  }
+
+  p,
+  ol,
+  ul,
+  li,
+  blockquote,
+  .custom-blockquote {
+    color: var(--color-text-muted);
+  }
+
+  em {
+    color: var(--color-text-muted);
+  }
+
+  hr {
+    background: color-mix(in srgb, var(--color-text-muted) 25%, transparent);
+  }
+
+  blockquote,
+  .custom-blockquote {
+    border-left: 2px solid color-mix(in srgb, var(--color-text-muted) 35%, transparent);
+    background: transparent;
+  }
+
+  .inline-code {
+    font-family: var(--tool-card-font-mono);
+    border-radius: 0;
+    background: transparent;
+    border: none;
+    color: var(--color-text-secondary);
+  }
+
+  .code-block-wrapper {
+    border-radius: 6px;
+    border: 1px solid color-mix(in srgb, var(--color-text-muted) 18%, transparent);
+    background: color-mix(in srgb, var(--color-text-muted) 8%, transparent);
+  }
+
+  .code-block-toolbar {
+    min-height: 1.5rem;
+    padding: 0.15rem 0.4rem 0.15rem 0.5rem;
+  }
+
+  .code-block-lang {
+    font-size: 0.6rem;
+    line-height: var(--flowchat-compact-line-height);
+  }
+
+  .code-block-wrapper pre[class*='language-'],
+  .code-block-wrapper pre[style] {
+    font-size: var(--flowchat-font-size-xs) !important;
+    line-height: var(--flowchat-support-line-height) !important;
+    border-radius: 6px !important;
+  }
+
+  .code-block-wrapper .copy-button {
+    transform: scale(0.85);
+    transform-origin: top right;
+    transition:
+      transform 0.15s ease,
+      opacity 0.2s ease;
+  }
+
+  .code-block-wrapper .copy-button:hover {
+    background: transparent !important;
+    color: var(--color-text-muted);
+    transform: scale(0.93);
+  }
+
+  .code-block-wrapper .copy-button:active {
+    background: transparent !important;
+    transform: scale(0.88);
+  }
+
+  .code-block-wrapper .copy-button.copy-success:hover {
+    color: var(--color-success);
+    transform: scale(0.93);
+  }
+
+  .table-wrapper {
+    font-size: var(--flowchat-font-size-base);
+  }
+
+  .table-wrapper th,
+  .table-wrapper td {
+    color: var(--color-text-muted);
+    border-color: color-mix(in srgb, var(--color-text-muted) 22%, transparent);
+  }
+
+  .table-wrapper th {
+    color: var(--color-text-secondary);
+    background: color-mix(in srgb, var(--color-text-muted) 6%, transparent);
+  }
+
+  .table-wrapper tbody tr:nth-child(2n) {
+    background: color-mix(in srgb, var(--color-text-muted) 5%, transparent);
+  }
+}

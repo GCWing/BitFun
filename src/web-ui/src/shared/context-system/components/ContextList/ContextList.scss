@@ -1,0 +1,123 @@
+ 
+
+@use '../../../../component-library/styles/tokens.scss' as *;
+
+
+
+.bitfun-context-list {
+  display: flex;
+  flex-direction: column;
+  gap: $size-gap-2;
+  width: 100%;
+  
+  
+  
+  &__header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 $size-gap-2;
+  }
+  
+  &__title {
+    display: flex;
+    align-items: center;
+    gap: $size-gap-2;
+    font-size: var(--font-size-sm);
+    font-weight: $font-weight-medium;
+    color: var(--color-text-secondary);
+  }
+  
+  &__count {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 20px;
+    height: 18px;
+    padding: 0 6px;
+    font-size: 11px;
+    font-weight: $font-weight-semibold;
+    color: var(--color-text-primary);
+    background: var(--element-bg-medium);
+    border: 1px solid var(--border-subtle);
+    border-radius: $size-radius-full;
+  }
+  
+  &__clear-btn {
+    display: flex;
+    align-items: center;
+    gap: $size-gap-1;
+    padding: 4px 8px;
+    font-size: var(--font-size-xs);
+    font-weight: $font-weight-medium;
+    color: var(--color-text-muted);
+    background: transparent;
+    border: 1px solid var(--border-subtle);
+    border-radius: $size-radius-sm;
+    cursor: pointer;
+    transition: all $motion-fast $easing-standard;
+    
+    &:hover {
+      background: var(--color-error-bg);
+      border-color: var(--color-error-border);
+      color: var(--color-error);
+    }
+    
+    &:active {
+      transform: scale(0.98);
+    }
+  }
+  
+  
+  
+  &__items {
+    display: flex;
+    flex-direction: column;
+    gap: $size-gap-2;
+    overflow-y: auto;
+    overflow-x: hidden;
+    padding: 0 $size-gap-2;
+    
+  }
+  
+  &__item {
+    
+    width: 100%;
+  }
+  
+  
+  
+  &--empty {
+    min-height: 120px;
+  }
+  
+  &__empty-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: $size-gap-8;
+    text-align: center;
+  }
+  
+  &__empty-icon {
+    color: var(--color-text-disabled);
+    margin-bottom: $size-gap-3;
+  }
+  
+  &__empty-text {
+    font-size: var(--font-size-base);
+    font-weight: $font-weight-medium;
+    color: var(--color-text-muted);
+    margin: 0 0 $size-gap-1;
+  }
+  
+  &__empty-hint {
+    font-size: var(--font-size-xs);
+    color: var(--color-text-disabled);
+    margin: 0;
+    max-width: 300px;
+    line-height: 1.5;
+  }
+}
+

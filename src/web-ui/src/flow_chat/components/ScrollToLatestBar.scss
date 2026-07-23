@@ -1,0 +1,127 @@
+/**
+ * Scroll-to-latest bar - minimal divider style.
+ * Fixed at the bottom of flowchat with height tied to ChatInput state.
+ */
+
+.scroll-to-latest-bar {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 10;
+  cursor: pointer;
+  pointer-events: none;
+  
+  // Default height fallback (overridden by inline style when inputHeight is measured).
+  // Active non-expanded: ~80px input + 4px gap + 6px clearance + 24px gradient ≈ 114px.
+  height: 114px;
+  
+  transition: height 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+  
+  // ========== ChatInput collapsed ==========
+  &--input-collapsed {
+    // Pill ~42px + 4px gap + 6px clearance + 24px gradient ≈ 76px (fallback only)
+    height: 76px;
+  }
+  
+  // ========== Gradient background layer ==========
+  &__gradient {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background: var(--color-bg-scene);
+
+    mask-image: linear-gradient(
+      to bottom,
+      transparent 0%,
+      var(--color-overlay-black-20) 20%,
+      var(--color-overlay-black-50) 40%,
+      var(--color-overlay-black-80) 60%,
+      black 85%
+    );
+    -webkit-mask-image: linear-gradient(
+      to bottom,
+      transparent 0%,
+      var(--color-overlay-black-20) 20%,
+      var(--color-overlay-black-50) 40%,
+      var(--color-overlay-black-80) 60%,
+      black 85%
+    );
+  }
+  
+  // ========== Divider content layer ==========
+  // bottom is driven by inline style (inputHeight + 4 + 6); CSS value is fallback only.
+  &__content {
+    position: absolute;
+    bottom: 90px;
+    left: 0;
+    right: 0;
+    pointer-events: auto;
+    
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    
+    transition: bottom 0.35s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.2s ease;
+  }
+  
+  // ========== Circle arrow button ==========
+  &__btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    border: 1.5px solid var(--border-base);
+    background: var(--color-bg-scene);
+    color: var(--color-text-muted);
+    cursor: pointer;
+    pointer-events: none;
+    padding: 0;
+    
+    transition: border-color 0.2s ease, color 0.2s ease, transform 0.15s ease;
+  }
+  
+  // ========== Hover state ==========
+  &:hover {
+    .scroll-to-latest-bar__btn {
+      border-color: var(--border-medium);
+      color: var(--color-text-primary);
+      transform: translateY(1px);
+    }
+  }
+  
+  // ========== Active state ==========
+  &:active {
+    .scroll-to-latest-bar__btn {
+      transform: translateY(2px);
+    }
+  }
+  
+  // ========== Focus state ==========
+  &:focus-visible {
+    outline: none;
+    
+    .scroll-to-latest-bar__btn {
+      border-color: var(--border-strong);
+      color: var(--color-text-primary);
+    }
+  }
+}
+
+// ========== Responsive tweaks ==========
+@media (max-width: 768px) {
+  .scroll-to-latest-bar {
+    height: 123px;
+    
+    &--input-collapsed {
+      height: 58px;
+    }
+    
+    &__btn {
+      width: 26px;
+      height: 26px;
+    }
+  }
+}

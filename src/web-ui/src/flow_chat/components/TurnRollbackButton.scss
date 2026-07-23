@@ -1,0 +1,40 @@
+.turn-rollback-button {
+  padding: 4px 12px;
+  font-size: var(--tool-card-action-font-size);
+  font-weight: 500;
+  background: var(--color-accent-600);
+  color: var(--color-static-white);
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+
+  &:hover {
+    background: var(--color-accent-700);
+    transform: translateY(-1px);
+    box-shadow: 0 2px 4px color-mix(in srgb, var(--color-accent-600) 30%, transparent);
+  }
+
+  &:active {
+    transform: translateY(0);
+  }
+
+  &:disabled {
+    opacity: var(--opacity-disabled);
+    cursor: default;
+    transform: none;
+    box-shadow: none;
+  }
+}
+
+.turn-rollback-button-current {
+  padding: 4px 12px;
+  font-size: var(--tool-card-action-font-size);
+  font-weight: 500;
+  background: var(--color-success);
+  color: var(--color-static-white);
+  border-radius: 4px;
+  display: inline-block;
+  white-space: nowrap;
+}

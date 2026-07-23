@@ -1,0 +1,319 @@
+{
+  "title": "MCP",
+  "subtitle": "Manage MCP server connections",
+  "subtitleReadOnly": "View MCP connections",
+  "section": {
+    "serverList": {
+      "title": "MCP Server List",
+      "description": "MCP servers and JSON configuration",
+      "desktopUnavailable": "Manage BitFun MCP in Desktop.",
+      "remoteUnavailable": "BitFun MCP management is unavailable during a remote connection.",
+      "loadFailed": "MCP servers could not be loaded."
+    }
+  },
+  "external": {
+    "title": "External MCP servers",
+    "description": "From other AI applications",
+    "manage": "Manage external integrations",
+    "retry": "Retry external MCP sources",
+    "loading": "Checking external MCP sources...",
+    "unavailable": "External MCP is temporarily unavailable.",
+    "empty": "No external MCP found.",
+    "unknown": "Unknown",
+    "scope": {
+      "userGlobal": "Global",
+      "project": "Project",
+      "remoteUser": "Remote global",
+      "remoteProject": "Remote project"
+    },
+    "status": {
+      "checking": "Checking",
+      "stale": "Last valid",
+      "degraded": "Source issue",
+      "readOnly": "Read-only",
+      "approvalRequired": "Approval required",
+      "starting": "Starting",
+      "active": "Active",
+      "declined": "Declined",
+      "conflict": "Conflict",
+      "covered": "Covered",
+      "sourceDisabled": "Source disabled",
+      "configurationChanged": "Changed",
+      "unsupported": "Unsupported",
+      "runtimeUnavailable": "Unavailable",
+      "removed": "Removed"
+    },
+    "details": {
+      "source": "Source",
+      "scope": "Scope",
+      "location": "Configuration",
+      "transport": "Transport"
+    },
+    "transport": {
+      "localStdio": "Local process",
+      "streamableHttp": "Streamable HTTP"
+    }
+  },
+  "tabs": {
+    "servers": "Servers",
+    "add": "Add Server"
+  },
+  "server": {
+    "id": "Server ID",
+    "idPlaceholder": "github-mcp",
+    "idHint": "Server ID is a unique identifier and cannot be duplicated",
+    "name": "Server Name",
+    "namePlaceholder": "GitHub MCP Server",
+    "type": "Server Type",
+    "typeLocal": "Local Process",
+    "typeRemote": "Remote Service",
+    "typeContainer": "Container Service",
+    "command": "Start Command",
+    "commandPlaceholder": "node",
+    "commandHint": "e.g.: node, python, npx",
+    "args": "Command Arguments (one per line)",
+    "argsPlaceholder": "server.js\n--port\n3000",
+    "argsHint": "One argument per line",
+    "env": "Environment Variables",
+    "envPlaceholder": "JSON format, e.g.: {\"KEY\": \"value\"}",
+    "url": "Server URL",
+    "urlPlaceholder": "http://localhost:3000",
+    "enabled": "Enable this server",
+    "autoStart": "Auto start on application launch",
+    "transport": "Transport",
+    "statusDetail": "Status Detail",
+    "remoteUrl": "Remote URL",
+    "remoteAuth": "Authentication",
+    "remoteAuthConfigured": "configured",
+    "remoteAuthConfiguredWithSource": "configured via {{source}}",
+    "remoteAuthMissing": "not configured",
+    "remoteOAuthReady": "OAuth configured, authorization required",
+    "remoteAuthMethod": "Auth Method",
+    "remoteAuthMethodOAuthXaa": "OAuth configured, XAA reserved",
+    "remoteAuthMethodOAuth": "OAuth",
+    "remoteAuthMethodXaa": "XAA",
+    "remoteOAuthIdle": "Not started yet",
+    "remoteOAuthAwaitingBrowser": "Waiting to open browser",
+    "remoteOAuthAwaitingCallback": "Waiting for provider callback",
+    "remoteOAuthExchangingToken": "Exchanging authorization code",
+    "remoteOAuthAuthorized": "Authorized",
+    "remoteOAuthFailed": "Failed",
+    "remoteOAuthCancelled": "Cancelled",
+    "runtime": {
+      "source": "Source",
+      "path": "Resolved Path",
+      "available": "command available",
+      "unavailable": "command unavailable",
+      "managed": "managed",
+      "system": "system",
+      "unknown": "unknown",
+      "unsupportedReason": "Unavailable Reason",
+      "unsupportedRemoteSse": "Remote MCP SSE transport is not yet supported"
+    },
+    "authSource": {
+      "headers": "headers",
+      "env": "env",
+      "oauth": "OAuth"
+    }
+  },
+  "status": {
+    "uninitialized": "Uninitialized",
+    "starting": "Starting",
+    "connected": "Connected",
+    "healthy": "Healthy",
+    "needsAuth": "Needs Auth",
+    "reconnecting": "Reconnecting",
+    "failed": "Failed",
+    "stopping": "Stopping",
+    "stopped": "Stopped",
+    "disconnected": "Disconnected",
+    "connecting": "Connecting",
+    "error": "Error"
+  },
+  "actions": {
+    "add": "Add Server",
+    "addFirst": "Add First Server",
+    "edit": "Edit",
+    "editServer": "Edit Server",
+    "addServer": "Add Server",
+    "delete": "Delete",
+    "start": "Start",
+    "stop": "Stop",
+    "restart": "Restart",
+    "refresh": "Refresh",
+    "save": "Save",
+    "saveConfig": "Save Config",
+    "cancel": "Cancel",
+    "cancelAdd": "Cancel Add",
+    "close": "Close",
+    "backToList": "Back to List",
+    "jsonConfig": "JSON Config",
+    "remoteAuth": "Remote Auth",
+    "startRemoteOAuth": "Connect with OAuth",
+    "restartRemoteOAuth": "Restart OAuth",
+    "reconnectRemoteOAuth": "Reconnect with OAuth",
+    "cancelRemoteOAuth": "Cancel OAuth",
+    "saveRemoteAuth": "Save and Reconnect"
+  },
+  "search": {
+    "placeholder": "Search servers..."
+  },
+  "empty": {
+    "noServers": "No MCP servers configured",
+    "noServersHint": "Add MCP servers to extend functionality",
+    "noMatchingServers": "No matching servers found"
+  },
+  "loading": "Loading...",
+  "labels": {
+    "type": "Type",
+    "enabled": "Enabled",
+    "autoStart": "Auto Start",
+    "status": "Status",
+    "yes": "Yes",
+    "no": "No"
+  },
+  "modal": {
+    "remoteAuthTitle": "Remote auth: {{serverName}}",
+    "remoteOAuthHint": "Use OAuth to connect this remote MCP server. BitFun will listen on a local callback URL and reconnect the server after authorization.",
+    "remoteOAuthCurrentStatus": "OAuth state: {{status}}",
+    "remoteOAuthRedirectUri": "Callback URL: {{redirectUri}}",
+    "remoteOAuthStatus": "OAuth status: {{status}} - {{message}}",
+    "remoteAuthHint": "Paste a Bearer token or a full Authorization header value. Saving will restart the remote MCP server.",
+    "remoteAuthServerUrl": "Server URL: {{url}}",
+    "remoteAuthPlaceholder": "Bearer eyJ... or eyJ..."
+  },
+  "jsonEditor": {
+    "title": "MCP JSON Config",
+    "loadFailed": "MCP configuration could not be loaded.",
+    "hint1": "Use standard Cursor format for MCP configuration. Config will be saved to app.json in user directory.",
+    "hint2": "Format: the \"type\" field is optional. If you provide \"command\" it will be parsed as stdio (local process); if you provide \"url\" it will be parsed as sse (remote service). You can also set type=\"stdio\"/\"sse\" explicitly for compatibility.",
+    "lintLocation": " (line {{line}}, col {{column}})",
+    "lintError": "JSON syntax error{{location}}: {{message}}",
+    "exampleTitle": "Configuration Examples:",
+    "localProcess": "Local Process (stdio):",
+    "remoteService": "Remote Service (sse):"
+  },
+  "resourceBrowser": {
+    "title": "MCP Resources",
+    "actions": {
+      "refresh": "Refresh",
+      "close": "Close"
+    },
+    "search": {
+      "placeholder": "Search resources..."
+    },
+    "loading": {
+      "resources": "Loading resources...",
+      "content": "Loading content..."
+    },
+    "empty": {
+      "noMatch": "No resources found",
+      "noResources": "No resources available",
+      "selectToView": "Select a resource to view its content"
+    },
+    "errors": {
+      "loadContentFailed": "Failed to load resource content",
+      "binaryContent": "Binary resource content cannot be previewed here"
+    },
+    "mockContent": "# {{name}}\n\nThis is the content of {{uri}}\n\nLorem ipsum dolor sit amet..."
+  },
+  "messages": {
+    "addSuccess": "Server added successfully",
+    "addFailed": "Failed to add server",
+    "deleteSuccess": "Server deleted",
+    "deleteFailed": "Failed to delete server",
+    "deleteConfirm": "Are you sure you want to delete this MCP server?\n\nNote: This action cannot be undone.",
+    "startSuccess": "Server \"{{serverId}}\" started",
+    "startFailed": "Failed to start server \"{{serverId}}\"",
+    "stopSuccess": "Server \"{{serverId}}\" stopped",
+    "stopFailed": "Failed to stop server \"{{serverId}}\"",
+    "restartSuccess": "Server \"{{serverId}}\" restarted",
+    "restartFailed": "Failed to restart server \"{{serverId}}\"",
+    "saveSuccess": "MCP config saved and applied",
+    "saveFailed": "Failed to save config",
+    "partialStartFailed": "Config saved, but some servers failed to start. Please check server configuration.",
+    "serverSaved": "Server \"{{name}}\" saved",
+    "jsonError": "JSON format error",
+    "nameRequired": "Please enter server name",
+    "idRequired": "Please enter server ID",
+    "commandRequired": "Local process type requires a start command",
+    "urlRequired": "Remote service type requires a server URL",
+    "validationFailed": "Validation Failed",
+    "commandUnavailable": "Server \"{{serverId}}\" command is unavailable. Check runtime installation or command configuration.",
+    "remoteOAuthAuthorized": "OAuth connected for \"{{serverId}}\".",
+    "remoteOAuthFailed": "OAuth failed for \"{{serverId}}\".",
+    "remoteAuthRequired": "Please provide a Bearer token or full Authorization header value.",
+    "remoteAuthUpdated": "Updated remote auth for \"{{serverId}}\".",
+    "remoteOAuthStarted": "Opened OAuth sign-in for \"{{serverId}}\"."
+  },
+  "errors": {
+    "unknownError": "Unknown error",
+    "jsonFormatError": "JSON Format Error",
+    "configStructureError": "Config Structure Error",
+    "serverConfigError": "Server Config Error",
+    "permissionError": "File Permission Error",
+    "fileOperationError": "File Operation Failed",
+    "resourceNotFound": "Resource Not Found",
+    "serverStartError": "Server Start Failed",
+    "operationFailed": "{{context}} Failed",
+    "suggestions": {
+      "jsonFormat": [
+        "Use online JSON validator to check format",
+        "Ensure all strings use double quotes",
+        "Check for extra commas",
+        "Verify all brackets are properly closed"
+      ],
+      "configStructure": [
+        "Check if config contains \"mcpServers\" field",
+        "Ensure \"mcpServers\" is an object type",
+        "Refer to the configuration examples"
+      ],
+      "serverConfig": [
+        "Provide either command (stdio) or url (sse)",
+        "args must be an array format",
+        "env must be an object format"
+      ],
+      "permission": [
+        "Run application as administrator",
+        "Check config file access permissions",
+        "Verify antivirus is not blocking file writes"
+      ],
+      "fileOperation": [
+        "Check if disk space is sufficient",
+        "Verify config directory exists and is accessible",
+        "Try restarting the application"
+      ],
+      "serverStart": [
+        "Check if command path is correct",
+        "Verify required runtime is installed (e.g., Node.js)",
+        "Check environment variable configuration",
+        "Verify port is not in use"
+      ],
+      "default": [
+        "Check network connection",
+        "Try the operation again",
+        "Check logs for more information",
+        "Contact technical support if issue persists"
+      ]
+    },
+    "jsonParseError": "JSON format error: {{message}}\n\nPlease check:\n• All key names and string values use double quotes\n• No extra commas\n• All brackets are properly closed",
+    "mcpServersRequired": "Config must contain \"mcpServers\" field\n\nCorrect format:\n{\n  \"mcpServers\": {\n    \"server-name\": { ... }\n  }\n}",
+    "mcpServersMustBeObject": "\"mcpServers\" must be an object (not an array or other type)\n\nCorrect format:\n\"mcpServers\": {\n  \"server-id\": {...}\n}",
+    "deleteServerFailed": "Failed to delete server \"{{serverId}}\": {{message}}"
+  },
+  "notifications": {
+    "startSuccess": "Start Success",
+    "startFailed": "Start Failed",
+    "stopSuccess": "Stop Success",
+    "stopFailed": "Stop Failed",
+    "restartSuccess": "Restart Success",
+    "restartFailed": "Restart Failed",
+    "saveSuccess": "Save Success",
+    "saveFailed": "Save Failed",
+    "deleteSuccess": "Delete Success",
+    "deleteFailed": "Delete Failed",
+    "operationFailed": "Operation Failed",
+    "partialStartFailed": "Partial Server Start Failed",
+    "suggestionPrefix": "Suggestions:"
+  }
+}

@@ -1,0 +1,29 @@
+.tool-command-preview {
+  flex: 1;
+  min-width: 0;
+  font-family: var(--tool-card-font-mono);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tool-command-preview--compact {
+  font-size: var(--flowchat-font-size-xs);
+  line-height: var(--flowchat-support-line-height);
+  font-weight: normal;
+  color: var(--color-text-muted);
+}
+
+.tool-command-preview__empty {
+  color: color-mix(in srgb, var(--color-error) 72%, var(--color-static-white));
+  font-style: italic;
+}
+
+.tool-command-preview-tooltip-content {
+  max-width: min(70vw, 720px);
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-family: var(--tool-card-font-mono);
+  font-size: var(--flowchat-font-size-sm);
+  line-height: var(--flowchat-support-line-height);
+}

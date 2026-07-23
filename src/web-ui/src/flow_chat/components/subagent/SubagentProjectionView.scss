@@ -1,0 +1,59 @@
+.subagent-projection-wrapper {
+  width: 100%;
+}
+
+.subagent-projection-container {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  box-sizing: border-box;
+}
+
+.subagent-projection-container--expanded {
+  max-height: min(48vh, 640px);
+  padding: 8px 0 10px;
+}
+
+.subagent-projection-container--collapsed {
+  max-height: 0;
+}
+
+.subagent-projection-text--truncated {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.subagent-projection-content {
+  min-width: 0;
+
+  .flow-thinking-item .thinking-content {
+    padding-left: 0;
+    padding-right: 0;
+  }
+}
+
+.subagent-projection-text__hint {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 12px;
+  color: var(--color-text-secondary);
+}
+
+.subagent-projection-text__message {
+  min-width: 0;
+}
+
+.subagent-projection-text__expand-btn {
+  border: 0;
+  background: transparent;
+  color: var(--color-accent-500);
+  cursor: pointer;
+  padding: 0;
+  font: inherit;
+  white-space: nowrap;
+}

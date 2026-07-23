@@ -1,0 +1,117 @@
+.canvas-drop-zone-container {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+
+  &__content {
+    width: 100%;
+    height: 100%;
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    position: relative;
+  }
+
+  &.is-dragging {
+    &::after {
+      content: '';
+      position: absolute;
+      inset: 2px;
+      border: 1px dashed var(--color-accent-400);
+      border-radius: 4px;
+      pointer-events: none;
+      z-index: 5;
+    }
+  }
+}
+
+.canvas-drop-zone-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 100;
+  pointer-events: none;
+
+  > * {
+    pointer-events: auto;
+  }
+}
+
+.canvas-drop-zone {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s ease;
+  cursor: pointer;
+
+  &::before {
+    content: '';
+    position: absolute;
+    inset: 4px;
+    border: 1px dashed var(--color-accent-500);
+    border-radius: 4px;
+    opacity: 0.4;
+    transition: all 0.15s ease;
+  }
+
+  &:hover::before {
+    opacity: 0.8;
+    border-width: 2px;
+  }
+
+  &.is-active {
+    &::before {
+      opacity: 1;
+      border-style: solid;
+      border-width: 2px;
+      border-color: var(--color-accent-500);
+      background: var(--color-accent-100);
+    }
+  }
+
+  &__indicator {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 6px 14px;
+    background: var(--color-accent-500);
+    border: none;
+    border-radius: 4px;
+    box-shadow: 0 2px 8px var(--color-accent-400);
+    opacity: 0.85;
+    transform: scale(1);
+    transition: all 0.15s ease;
+    pointer-events: none;
+
+    span {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--color-static-white);
+      white-space: nowrap;
+      text-shadow: 0 1px 2px var(--color-overlay-black-20);
+    }
+  }
+
+  &:hover &__indicator {
+    opacity: 1;
+    transform: scale(1.05);
+    box-shadow: 0 4px 12px color-mix(in srgb, var(--color-accent-500) 50%, transparent);
+  }
+
+  &.is-active &__indicator {
+    opacity: 1;
+    transform: scale(1.1);
+    box-shadow: 0 4px 16px color-mix(in srgb, var(--color-accent-500) 60%, transparent);
+  }
+
+  &--center {
+    &::before {
+      inset: 15%;
+    }
+  }
+}

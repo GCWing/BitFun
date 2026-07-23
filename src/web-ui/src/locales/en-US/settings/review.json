@@ -1,0 +1,30 @@
+{
+  "title": "Review",
+  "subtitle": "Control the cost and capacity limits used when Review needs broader coverage.",
+  "loading": "Loading review settings...",
+  "desktopOnly": {
+    "title": "Desktop only",
+    "description": "Review capacity settings are available in the BitFun desktop app. Review is not available on this surface."
+  },
+  "error": {
+    "title": "Review settings unavailable",
+    "retry": "Retry"
+  },
+  "capacity": {
+    "title": "Capacity",
+    "description": "Limit parallel Review work and how long it may wait for provider capacity.",
+    "maxParallelReviewers": {
+      "label": "Max parallel review work",
+      "description": "Maximum strict Review work to run at the same time. Higher values may start more model requests in parallel, hit provider rate limits sooner, and increase token spend."
+    },
+    "maxQueueWaitSeconds": {
+      "label": "Capacity wait window",
+      "description": "How long optional work may wait for provider capacity. Already running checks can make the total review take longer."
+    }
+  },
+  "messages": {
+    "loadFailed": "Failed to load review settings.",
+    "saveFailed": "Failed to save review settings.",
+    "saved": "Review settings saved."
+  }
+}

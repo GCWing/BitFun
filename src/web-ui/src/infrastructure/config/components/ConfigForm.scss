@@ -1,0 +1,587 @@
+ 
+
+@use '../../../component-library/styles/tokens.scss' as *;
+
+
+
+$config-form-gap: 16px;
+$config-section-gap: 16px;
+$config-input-height: 32px;
+
+
+
+.bitfun-config-form {
+  display: flex;
+  flex-direction: column;
+  gap: $config-section-gap;
+  flex: 1;
+  min-height: 0;
+  overflow: visible;
+  position: relative;
+}
+
+
+
+.bitfun-config-form__group {
+  display: flex;
+  flex-direction: column;
+  gap: $config-form-gap;
+  list-style: none;
+  
+  &::before,
+  &::after {
+    display: none;
+  }
+}
+
+.bitfun-config-form__row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: $config-form-gap;
+}
+
+
+
+.bitfun-config-form__label {
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text-secondary);
+  display: flex;
+  align-items: center;
+  gap: var(--size-gap-2);
+  margin-bottom: var(--size-gap-1);
+  user-select: none;
+  list-style: none;
+  
+  &::before,
+  &::after {
+    display: none !important;
+    content: none !important;
+  }
+
+  &--required::after {
+    display: inline-block !important;
+    content: " *" !important;
+    color: var(--color-error);
+    font-weight: var(--font-weight-semibold);
+  }
+}
+
+.bitfun-config-form__hint {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-muted);
+  margin-top: var(--size-gap-1);
+  line-height: var(--line-height-base);
+}
+
+
+
+.bitfun-config-form__input,
+.bitfun-config-form__select,
+.bitfun-config-form__textarea {
+  width: 100%;
+  padding: 0 12px !important;
+  font-size: 13px !important;
+  line-height: $config-input-height !important;
+  color: var(--color-text-primary) !important;
+  background: transparent !important;
+  border: 1px solid var(--border-base) !important;
+  border-radius: var(--size-radius-sm) !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  transition: border-color var(--motion-fast) var(--easing-standard), 
+              background-color var(--motion-fast) var(--easing-standard) !important;
+  outline: none !important;
+  font-family: var(--font-family-sans) !important;
+  transform: none !important;
+  box-shadow: none !important;
+
+  &:focus {
+    border-color: var(--color-accent-500) !important;
+    background: transparent !important;
+    box-shadow: none !important;
+    transform: none !important;
+  }
+
+  &:hover:not(:focus):not(:disabled) {
+    border-color: var(--border-medium) !important;
+    background: transparent !important;
+    transform: none !important;
+  }
+
+  &:disabled {
+    opacity: var(--opacity-disabled) !important;
+    cursor: default !important;
+    background: var(--color-overlay-white-04) !important;
+    border-color: var(--border-subtle) !important;
+  }
+}
+
+
+
+.bitfun-config-form__input {
+  height: $config-input-height;
+
+  &::placeholder {
+    color: var(--color-text-muted);
+    opacity: 0.6;
+    font-style: italic;
+  }
+
+  
+  &[type="password"] {
+    font-family: var(--font-family-mono);
+    letter-spacing: 0.1em;
+  }
+
+  
+  &[type="number"] {
+    text-align: left;
+    padding-right: 8px !important;
+    
+    
+    &::-webkit-outer-spin-button,
+    &::-webkit-inner-spin-button {
+      -webkit-appearance: none;
+      margin: 0;
+    }
+    
+    // Firefox
+    -moz-appearance: textfield;
+    
+    &:focus {
+      text-align: left;
+    }
+  }
+}
+
+
+
+.bitfun-config-form__select {
+  --bitfun-config-select-chevron-rgb: 150, 163, 180;
+
+  height: $config-input-height !important;
+  line-height: $config-input-height !important;
+  cursor: pointer !important;
+  background-image:
+    linear-gradient(45deg, transparent 50%, rgba(var(--bitfun-config-select-chevron-rgb), 0.8) 50%),
+    linear-gradient(135deg, rgba(var(--bitfun-config-select-chevron-rgb), 0.8) 50%, transparent 50%) !important;
+  background-position:
+    calc(100% - 16px) 50%,
+    calc(100% - 11px) 50% !important;
+  background-repeat: no-repeat !important;
+  background-size:
+    5px 5px,
+    5px 5px !important;
+  padding: 0 32px 0 12px !important;
+  -webkit-appearance: none !important;
+  -moz-appearance: none !important;
+  appearance: none !important;
+  vertical-align: middle !important;
+
+  option {
+    background: var(--color-bg-secondary) !important;
+    color: var(--color-text-primary) !important;
+    padding: 6px 10px !important;
+    font-size: 13px !important;
+    line-height: 1.5 !important;
+  }
+}
+
+
+
+.bitfun-config-form__textarea {
+  min-height: 80px;
+  resize: vertical;
+  font-family: var(--font-family-sans);
+
+  &::placeholder {
+    color: var(--color-text-muted);
+    opacity: 0.8;
+  }
+}
+
+
+
+.bitfun-config-form__checkbox {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  cursor: pointer;
+  user-select: none;
+  padding: 8px 0;
+}
+
+
+.bitfun-config-form__checkbox-wrapper {
+  position: relative;
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+
+.bitfun-config-form__checkbox-input {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  cursor: pointer;
+  opacity: 0;
+  z-index: 1;
+}
+
+.bitfun-config-form__checkbox-mark {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 16px;
+  height: 16px;
+  background: transparent;
+  border: 1.5px solid var(--border-medium);
+  border-radius: 3px;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  transition: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  box-shadow: none;
+
+  &::after {
+    content: '';
+    width: 4px;
+    height: 8px;
+    border: solid white;
+    border-width: 0 1.5px 1.5px 0;
+    transform: rotate(45deg) scale(0.8);
+    opacity: 0;
+    transition: all 0.12s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+}
+
+.bitfun-config-form__checkbox-input:checked + .bitfun-config-form__checkbox-mark {
+  background: var(--color-accent-500);
+  border-color: var(--color-accent-500);
+  box-shadow: none;
+
+  &::after {
+    opacity: 1;
+    transform: rotate(45deg) scale(1);
+  }
+}
+
+.bitfun-config-form__checkbox-input:focus + .bitfun-config-form__checkbox-mark {
+  border-color: var(--color-accent-500);
+  box-shadow: none;
+}
+
+.bitfun-config-form__checkbox:hover .bitfun-config-form__checkbox-mark {
+  border-color: var(--border-strong);
+}
+
+.bitfun-config-form__checkbox:hover .bitfun-config-form__checkbox-input:checked + .bitfun-config-form__checkbox-mark {
+  background: var(--color-accent-600);
+  border-color: var(--color-accent-600);
+  box-shadow: none;
+}
+
+.bitfun-config-form__checkbox-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.bitfun-config-form__checkbox-title {
+  font-size: 13px;
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text-primary);
+  line-height: 1.4;
+}
+
+.bitfun-config-form__checkbox-description {
+  font-size: 12px;
+  color: var(--color-text-muted);
+  line-height: 1.5;
+}
+
+
+
+.bitfun-config-form__actions {
+  display: flex;
+  gap: var(--size-gap-3);
+  justify-content: flex-end;
+  margin-top: var(--size-gap-5);
+  padding-top: var(--size-gap-4);
+  border-top: 1px solid var(--border-accent-soft);
+
+  &--start {
+    justify-content: flex-start;
+  }
+
+  &--center {
+    justify-content: center;
+  }
+
+  &--between {
+    justify-content: space-between;
+  }
+}
+
+
+
+.bitfun-config-form__status {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--size-gap-3);
+  padding: var(--size-gap-3) var(--size-gap-4);
+  border-radius: var(--size-radius-base);
+  font-size: var(--font-size-sm);
+  line-height: var(--line-height-base);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  margin-top: var(--size-gap-4);
+
+  &--success {
+    background: var(--color-success-bg);
+    border: 1px solid var(--color-success-border);
+    color: var(--color-success);
+  }
+
+  &--error {
+    background: var(--color-error-bg);
+    border: 1px solid var(--color-error-border);
+    color: var(--color-error);
+  }
+
+  &--warning {
+    background: var(--color-warning-bg);
+    border: 1px solid var(--color-warning-border);
+    color: var(--color-warning);
+  }
+
+  &--info {
+    background: var(--color-info-bg);
+    border: 1px solid var(--color-info-border);
+    color: var(--color-info);
+  }
+}
+
+
+
+.bitfun-config-form__section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--size-gap-5);
+  padding: 0;
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  flex: 1;
+  min-height: 0;
+  overflow: visible;
+}
+
+.bitfun-config-form__section-content {
+  display: flex;
+  flex-direction: column;
+  gap: var(--size-gap-4);
+}
+
+.bitfun-config-form__section-title {
+  font-size: var(--font-size-lg);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-primary);
+  margin: 0 0 var(--size-gap-3) 0;
+  display: flex;
+  align-items: center;
+  gap: var(--size-gap-2);
+}
+
+.bitfun-config-form__section-description {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-muted);
+  margin: 0 0 var(--size-gap-5) 0;
+  line-height: var(--line-height-base);
+}
+
+
+
+@media (max-width: 768px) {
+  .bitfun-config-form__row {
+    grid-template-columns: 1fr;
+    gap: var(--size-gap-3);
+  }
+  
+  .bitfun-config-form__actions {
+    flex-direction: column;
+    align-items: stretch;
+
+    &--between {
+      flex-direction: column;
+      justify-content: stretch;
+    }
+  }
+}
+
+
+
+@media (prefers-reduced-motion: reduce) {
+  .bitfun-config-form__input,
+  .bitfun-config-form__select,
+  .bitfun-config-form__textarea,
+  .bitfun-config-form__checkbox-mark {
+    transition: none;
+  }
+  
+  .bitfun-config-form__group {
+    animation: none;
+  }
+}
+
+
+.bitfun-config-form__input:focus-visible,
+.bitfun-config-form__select:focus-visible,
+.bitfun-config-form__textarea:focus-visible {
+  outline: 2px solid var(--color-accent-500);
+  outline-offset: 2px;
+}
+
+.bitfun-config-form__checkbox-input:focus-visible + .bitfun-config-form__checkbox-mark {
+  outline: 2px solid var(--color-accent-500);
+  outline-offset: 2px;
+}
+
+
+
+
+.config-form {
+  @extend .bitfun-config-form;
+}
+
+.config-form-group {
+  @extend .bitfun-config-form__group;
+}
+
+.config-form-row {
+  @extend .bitfun-config-form__row;
+}
+
+.config-form-label {
+  @extend .bitfun-config-form__label;
+  list-style: none !important;
+  
+  &::before,
+  &::after {
+    display: none !important;
+    content: none !important;
+  }
+  
+  &.required {
+    @extend .bitfun-config-form__label--required;
+  }
+}
+
+.config-form-hint {
+  @extend .bitfun-config-form__hint;
+}
+
+.config-form-input {
+  @extend .bitfun-config-form__input;
+}
+
+.config-form-select {
+  @extend .bitfun-config-form__select;
+}
+
+.config-form-textarea {
+  @extend .bitfun-config-form__textarea;
+}
+
+.config-form-checkbox {
+  @extend .bitfun-config-form__checkbox;
+}
+
+.config-form-checkbox-wrapper {
+  @extend .bitfun-config-form__checkbox-wrapper;
+}
+
+.config-form-checkbox-input {
+  @extend .bitfun-config-form__checkbox-input;
+}
+
+.config-form-checkbox-mark {
+  @extend .bitfun-config-form__checkbox-mark;
+}
+
+.config-form-checkbox-content {
+  @extend .bitfun-config-form__checkbox-content;
+}
+
+.config-form-checkbox-title {
+  @extend .bitfun-config-form__checkbox-title;
+}
+
+.config-form-checkbox-description {
+  @extend .bitfun-config-form__checkbox-description;
+}
+
+.config-form-actions {
+  @extend .bitfun-config-form__actions;
+  
+  &.start {
+    @extend .bitfun-config-form__actions--start;
+  }
+  
+  &.center {
+    @extend .bitfun-config-form__actions--center;
+  }
+  
+  &.between {
+    @extend .bitfun-config-form__actions--between;
+  }
+}
+
+.config-form-status {
+  @extend .bitfun-config-form__status;
+  
+  &.success {
+    @extend .bitfun-config-form__status--success;
+  }
+  
+  &.error {
+    @extend .bitfun-config-form__status--error;
+  }
+  
+  &.warning {
+    @extend .bitfun-config-form__status--warning;
+  }
+  
+  &.info {
+    @extend .bitfun-config-form__status--info;
+  }
+}
+
+.config-form-section {
+  @extend .bitfun-config-form__section;
+}
+
+.config-section-content {
+  @extend .bitfun-config-form__section-content;
+}
+
+.config-form-section-title {
+  @extend .bitfun-config-form__section-title;
+}
+
+.config-form-section-description {
+  @extend .bitfun-config-form__section-description;
+}
+
+

@@ -1,0 +1,79 @@
+/* Large card layout styles */
+
+.large-card-layout {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.large-card {
+  background: var(--color-bg-secondary);
+  border-radius: 12px;
+  border: 1px solid var(--border-subtle);
+  overflow: hidden;
+  transition: all 0.3s ease;
+}
+
+.large-card:hover {
+  border-color: var(--border-accent-subtle);
+  box-shadow: var(--shadow-base), var(--glow-shadow-blue);
+}
+
+.large-card-header {
+  padding: 20px 24px;
+  border-bottom: 1px solid var(--border-subtle);
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+}
+
+.large-card-info {
+  flex: 1;
+}
+
+.large-card-title {
+  margin: 0 0 8px 0;
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.large-card-description {
+  margin: 0;
+  font-size: 14px;
+  color: var(--color-text-muted);
+  line-height: 1.5;
+}
+
+.expand-button {
+  padding: 8px 16px;
+  background: var(--element-bg-base);
+  border: 1px solid var(--border-base);
+  border-radius: 6px;
+  color: var(--color-accent-400);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+  white-space: nowrap;
+}
+
+.expand-button:hover {
+  background: var(--element-bg-medium);
+  border-color: var(--border-accent-subtle);
+  color: var(--color-accent-300);
+}
+
+.large-card-preview {
+  padding: 24px;
+  background: var(--color-bg-primary);
+  min-height: 400px;
+  max-height: 500px;
+  overflow: auto;
+  transition: max-height 0.3s ease;
+}
+
+.large-card.expanded .large-card-preview {
+  max-height: 800px;
+}

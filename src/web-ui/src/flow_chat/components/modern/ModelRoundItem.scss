@@ -1,0 +1,319 @@
+/* Model round item styles (BEM). */
+
+.model-round-item {
+  /*
+   * No bottom margin — the inter-round gap is covered by the same line-height rhythm
+   * as inter-item gaps inside a round, so flow text → tool / tool → thinking / cross-
+   * round transitions all read as one continuous, evenly-spaced text column.
+   *
+   * Enter animation must NOT live on the base selector alone: rounds toggle
+   * `--streaming` → `--complete` when the typewriter finishes, and re-applying
+   * `animation: fadeIn` would replay opacity 0→1 (looks like the whole chat
+   * refreshed). Play fadeIn only for freshly mounted complete rounds via
+   * `--enter`; streaming/complete modifiers keep animation off.
+   */
+  margin-bottom: 0;
+  padding: 0 var(--flowchat-content-inline-pad);
+  position: relative;
+  opacity: 1;
+
+  /*
+   * Freshly mounted history/complete rounds may opt into `--enter`.
+   * Rounds that began as `--streaming` omit `--enter`, so flipping to
+   * `--complete` later cannot replay fadeIn.
+   */
+  &--enter {
+    animation: fadeIn 0.4s ease;
+  }
+
+  // Streaming state
+  &--streaming {
+    opacity: 1;
+    margin-bottom: 0;
+    animation: none;
+
+    .flowchat-flow-item--tool-transition:not(.flowchat-flow-item--tool-completed),
+    .flowchat-flow-item--tool-active {
+      animation: none;
+      will-change: auto;
+    }
+  }
+
+  // Complete state — keep opacity stable; do not attach an animation here.
+  &--complete {
+    opacity: 1;
+  }
+
+  @media (max-width: 768px) {
+    padding: 0 var(--flowchat-content-inline-pad-mobile);
+  }
+}
+
+.model-round-item__header {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: var(--flowchat-inline-gap);
+  padding: 0 var(--flowchat-control-gap);
+}
+
+// Action button container (bottom-right of last round).
+.model-round-item__footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: var(--flowchat-inline-gap);
+  padding: var(--flowchat-inline-gap) 0;
+  margin-top: var(--flowchat-inline-gap);
+
+  // Reserve layout while typewriter catch-up finishes; reveal without resize.
+  &--pending {
+    visibility: hidden;
+    pointer-events: none;
+  }
+}
+
+.model-round-item__meta {
+  display: flex;
+  flex: 1 1 18rem;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem 0.6rem;
+  min-width: 0;
+  margin-right: auto;
+  color: color-mix(
+    in srgb,
+    var(--color-text-secondary) 50%,
+    var(--color-text-muted)
+  );
+  font-size: 11px;
+  line-height: 16px;
+}
+
+.model-round-item__meta-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  min-width: 0;
+  max-width: 100%;
+  white-space: nowrap;
+
+  &:last-child {
+    white-space: normal;
+  }
+}
+
+.model-round-item__meta-label {
+  color: color-mix(
+    in srgb,
+    var(--color-text-secondary) 38%,
+    var(--color-text-muted)
+  );
+}
+
+.model-round-item__meta-value {
+  min-width: 0;
+  color: color-mix(
+    in srgb,
+    var(--color-text-secondary) 68%,
+    var(--color-text-muted)
+  );
+  overflow: hidden;
+  overflow-wrap: anywhere;
+  text-overflow: ellipsis;
+}
+
+.model-round-item__history-loader {
+  color: var(--color-text-muted);
+  font-size: 12px;
+  line-height: 18px;
+  padding: var(--flowchat-inline-gap) 0;
+}
+
+.model-round-item__retry-history {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.model-round-item__retry-toggle {
+  align-self: flex-start;
+  padding: 0;
+  background: transparent;
+  border: none;
+  color: var(--color-text-secondary);
+  font-size: 12px;
+  line-height: 18px;
+  cursor: pointer;
+
+  &:hover {
+    color: var(--color-text-primary);
+  }
+}
+
+.model-round-item__retry-attempt {
+  padding: 0.35rem 0 0.15rem;
+  border-top: 1px solid color-mix(in srgb, var(--border-base) 62%, transparent);
+}
+
+.model-round-item__retry-attempt-label {
+  margin-bottom: 0.35rem;
+  color: var(--color-text-muted);
+  font-size: 11px;
+  line-height: 16px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.model-round-item__action-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  background: transparent;
+  border: none;
+  border-radius: 4px;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  opacity: 1;
+  
+  &:hover {
+    background: var(--color-overlay-white-08);
+    color: var(--color-text-primary);
+  }
+
+  &:active {
+    transform: scale(0.95);
+  }
+
+  svg {
+    width: 14px;
+    height: 14px;
+    flex-shrink: 0;
+  }
+
+  &:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
+}
+
+// Copy button
+.model-round-item__copy-btn {
+  &.copied {
+    color: var(--color-success);
+    background: var(--color-success-bg);
+  }
+}
+
+.model-round-item__fork-btn {
+  .spinning {
+    animation: spin 1s linear infinite;
+  }
+}
+
+// Export image button
+.model-round-item__export-btn {
+  .spinning {
+    animation: spin 1s linear infinite;
+  }
+
+  &:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+// ==================== Explore region adjustments ====================
+
+.flowchat-flow-item--tool-transition {
+  overflow: hidden;
+  will-change: opacity, transform, max-height;
+}
+
+.flowchat-flow-item--tool-active {
+  animation: flow-tool-active-enter 180ms ease-out both;
+}
+
+.flowchat-flow-item--tool-completed {
+  animation: flow-tool-completed-exit 1000ms ease-in-out both;
+}
+
+.flowchat-flow-item--tool-settled {
+  opacity: 0;
+  transform: translateY(-4px);
+  max-height: 0;
+  margin-bottom: 0;
+  pointer-events: none;
+}
+
+@keyframes flow-tool-active-enter {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes flow-tool-completed-exit {
+  0% {
+    opacity: 1;
+    transform: translateY(0);
+    max-height: 96px;
+    margin-bottom: var(--flowchat-flow-item-gap);
+  }
+  55% {
+    opacity: 0.72;
+    transform: translateY(-1px);
+    max-height: 96px;
+    margin-bottom: var(--flowchat-flow-item-gap);
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-4px);
+    max-height: 0;
+    margin-bottom: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .flowchat-flow-item--tool-active,
+  .flowchat-flow-item--tool-completed {
+    animation: none;
+  }
+}
+
+/* Focus highlight for programmatic "jump to marker" navigation. */
+.flowchat-flow-item.flowchat-flow-item--focused {
+  outline: 2px solid var(--border-accent);
+  outline-offset: 2px;
+  border-radius: var(--flowchat-card-radius);
+  box-shadow: var(--glow-shadow-blue);
+}

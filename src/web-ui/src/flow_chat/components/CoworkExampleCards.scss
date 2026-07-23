@@ -1,0 +1,90 @@
+/**
+ * Cowork example cards styles
+ */
+
+.bitfun-cowork-example-cards {
+  border: 1px solid var(--border-base);
+  border-radius: calc(var(--flowchat-card-radius) + 2px);
+  padding: var(--flowchat-card-expanded-pad-x) var(--flowchat-card-expanded-pad-x) var(--flowchat-card-expanded-pad-x) 0;
+  margin-bottom: var(--flowchat-card-gap);
+
+  &__header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--flowchat-control-gap);
+    margin-bottom: var(--flowchat-card-gap);
+  }
+
+  &__title {
+    font-size: var(--flowchat-font-size-sm);
+    font-weight: 600;
+    color: var(--color-text-primary);
+  }
+
+  &__header-actions {
+    display: flex;
+    align-items: center;
+    gap: var(--flowchat-inline-gap);
+  }
+
+  &__grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: var(--flowchat-control-gap);
+  }
+
+  &__card {
+    cursor: pointer;
+    user-select: none;
+    min-height: 86px;
+    display: flex;
+    flex-direction: column;
+    gap: var(--flowchat-inline-gap);
+    padding: var(--flowchat-card-expanded-pad-x);
+  }
+
+  &__card-header {
+    display: flex;
+    align-items: center;
+    gap: var(--flowchat-control-gap);
+  }
+
+  &__card-icon {
+    width: 28px;
+    height: 28px;
+    border-radius: 8px;
+    background: var(--color-bg-primary);
+    border: 1px solid var(--border-base);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--color-text-primary);
+    flex-shrink: 0;
+  }
+
+  &__card-title {
+    font-size: var(--flowchat-font-size-sm);
+    font-weight: 600;
+    color: var(--color-text-primary);
+    line-height: var(--flowchat-compact-line-height);
+  }
+
+  &__card-desc {
+    font-size: var(--flowchat-font-size-xs);
+    color: var(--color-text-secondary);
+    line-height: var(--flowchat-support-line-height);
+    overflow: hidden;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+  }
+}
+
+@media (max-width: 720px) {
+  .bitfun-cowork-example-cards {
+    &__grid {
+      grid-template-columns: 1fr;
+    }
+  }
+}

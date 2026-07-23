@@ -1,0 +1,151 @@
+{
+  "title": "File Explorer",
+  "search": {
+    "placeholder": "Search workspace...",
+    "noResults": "No matching results found",
+    "enterKeyword": "Enter a keyword to start searching",
+    "modeFiles": "Files",
+    "modeContent": "Text",
+    "limitReachedFiles": "Showing the first {{count}} file matches. Refine the query to narrow the result set.",
+    "limitReachedContent": "Showing the first {{count}} content matches. Refine the query to narrow the result set.",
+    "backendSummary": "{{candidateDocs}} candidate docs, {{matchedLines}} matched lines, {{matchedOccurrences}} matched occurrences.",
+    "backend": {
+      "indexed": "Indexed",
+      "indexed_workspace": "Indexed Workspace",
+      "text_fallback": "Text Fallback",
+      "scan_fallback": "Scan Fallback"
+    },
+    "index": {
+      "actions": {
+        "build": "Build Index",
+        "rebuild": "Rebuild Index",
+        "refresh": "Refresh index status",
+        "running": "Indexing..."
+      },
+      "badges": {
+        "rebuildRecommended": "Rebuild Recommended"
+      },
+      "phase": {
+        "preparing": "Preparing",
+        "needs_index": "Needs Index",
+        "building": "Building",
+        "ready": "Ready",
+        "tracking_changes": "Tracking Changes",
+        "refreshing": "Refreshing",
+        "limited": "Limited",
+        "unknown": "Unknown"
+      },
+      "summary": {
+        "preparing": "Preparing the managed search workspace.",
+        "needs_index": "Search works with fallback now. Build the index for faster content search.",
+        "building": "Building the workspace index.",
+        "ready": "Managed index is ready. Content search can use the indexed backend.",
+        "tracking_changes": "Managed index is usable and workspace changes are being tracked. Rebuild is only needed when one is recommended.",
+        "refreshing": "Refreshing the workspace index with the latest file changes.",
+        "limited": "Managed index is limited. Search can still fall back, but rebuild is recommended.",
+        "unavailable": "Search index status is unavailable right now."
+      },
+      "indicator": {
+        "label": "Workspace index status",
+        "checking": "Checking index status...",
+        "tones": {
+          "green": "Index ready",
+          "yellow": "Index needs attention",
+          "gray": "Index not built",
+          "red": "Index rebuild required"
+        },
+        "progressKnown": "{{processed}} / {{total}}",
+        "progressUnknown": "{{processed}} items processed",
+        "dirtyFiles": "Pending changes: {{modified}} modified, {{deleted}} deleted, {{new}} new",
+        "rebuildRecommended": "A rebuild is recommended.",
+        "probeDegraded": "Workspace probe is degraded and the indexed workspace view may stop tracking changes.",
+        "hoverTooltip": "Flashgrep index: {{status}}"
+      },
+      "taskState": {
+        "queued": "Queued",
+        "running": "Running",
+        "completed": "Completed",
+        "failed": "Failed",
+        "cancelled": "Cancelled"
+      }
+    }
+  },
+  "options": {
+    "caseSensitive": "Case Sensitive (Aa)",
+    "wholeWord": "Whole Word (Ab)",
+    "useRegex": "Use Regular Expression (.*)"
+  },
+  "actions": {
+    "switchToSearch": "Switch to Search",
+    "switchToTree": "Switch to File Tree",
+    "retry": "Retry"
+  },
+  "status": {
+    "searchingFilename": "Searching file names...",
+    "searchingContent": "Searching content...",
+    "loadingFileTree": "Loading file tree..."
+  },
+  "empty": {
+    "selectWorkspace": "File tree will be displayed after selecting a workspace"
+  },
+  "dialog": {
+    "newFile": {
+      "title": "New File",
+      "placeholder": "Enter file name",
+      "confirm": "Create",
+      "cancel": "Cancel"
+    },
+    "newFolder": {
+      "title": "New Folder",
+      "placeholder": "Enter folder name",
+      "confirm": "Create",
+      "cancel": "Cancel"
+    },
+    "largeFile": {
+      "title": "Large File",
+      "message": "The file is {{size}}, which exceeds 2 MB. Opening large files may cause the interface to freeze. Do you want to continue?",
+      "confirm": "Open Anyway",
+      "cancel": "Cancel"
+    }
+  },
+  "validation": {
+    "invalidFilename": "File name contains invalid characters"
+  },
+  "transfer": {
+    "downloading": "Downloading",
+    "uploading": "Uploading",
+    "missingConnection": "Remote workspace has no SSH connection id.",
+    "failed": "File transfer failed: {{error}}",
+    "dropHint": "Drop files here to upload",
+    "stop": "Stop"
+  },
+  "archive": {
+    "compress": "Compress",
+    "decompress": "Extract",
+    "compressSuccess": "Compressed \"{{name}}\" successfully",
+    "compressFailed": "Compression failed.\n{{error}}",
+    "decompressSuccess": "Extracted \"{{name}}\" successfully",
+    "decompressFailed": "Extraction failed.\n{{error}}"
+  },
+  "notifications": {
+    "createFileSuccess": "File created successfully",
+    "createFileFailed": "Failed to create file: {{error}}",
+    "createFolderSuccess": "Folder created successfully",
+    "createFolderFailed": "Failed to create folder: {{error}}",
+    "renameSuccess": "Renamed successfully",
+    "renameFailed": "Failed to rename: {{error}}",
+    "deleteSuccess": "Deleted successfully",
+    "deleteFailed": "Failed to delete: {{error}}",
+    "pasteSuccess": "Successfully pasted {{count}} files",
+    "pasteSuccessFiles": "Successfully pasted {{count}} files",
+    "pasteSuccessFolders": "Successfully pasted {{count}} folders",
+    "pasteSuccessItems": "Successfully pasted {{count}} items",
+    "pasteFailed": "{{count}} files failed to paste",
+    "pasteNoFiles": "No files in clipboard",
+    "pastingFiles": "Pasting {{count}} files to {{target}}...",
+    "openExplorerFailed": "Failed to open file explorer: {{error}}",
+    "selectWorkspaceFirst": "Please open a workspace first",
+    "searchIndexBuildStarted": "Workspace index build started.",
+    "searchIndexRebuildStarted": "Workspace index rebuild started."
+  }
+}

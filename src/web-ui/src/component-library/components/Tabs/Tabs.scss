@@ -1,0 +1,274 @@
+/**
+ * Tabs component styles
+ */
+@use '../../styles/tokens.scss' as tokens;
+
+.bitfun-tabs {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+
+  &__nav {
+    position: relative;
+    display: flex;
+    align-items: center;
+    flex-shrink: 0;
+  }
+
+  &__nav-list {
+    display: flex;
+    gap: 4px;
+    flex: 1;
+  }
+
+  &__tab {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: tokens.$size-gap-2 tokens.$size-gap-3;
+    font-size: var(--font-size-sm);
+    font-weight: tokens.$font-weight-medium;
+    color: var(--color-text-secondary);
+    cursor: pointer;
+    transition: all tokens.$motion-base tokens.$easing-standard;
+    user-select: none;
+    position: relative;
+    background: transparent;
+    border: none;
+    white-space: nowrap;
+
+    &:hover:not(&--disabled):not(&--active) {
+      color: var(--color-text-primary);
+      background: var(--element-bg-subtle);
+    }
+
+    &--active {
+      color: var(--color-accent-500);
+    }
+
+    &--disabled {
+      opacity: tokens.$opacity-disabled;
+      cursor: default;
+    }
+
+    &-icon {
+      display: flex;
+      align-items: center;
+      flex-shrink: 0;
+
+      svg {
+        width: 16px;
+        height: 16px;
+      }
+    }
+
+    &-label {
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    &-close {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 16px;
+      height: 16px;
+      margin-left: 4px;
+      border-radius: 3px;
+      font-size: 18px;
+      line-height: 1;
+      transition: all 0.2s;
+      opacity: 1;
+
+      &:hover {
+        background: color-mix(in srgb, var(--color-error) 20%, transparent);
+        color: var(--color-error);
+      }
+    }
+  }
+
+  &__content {
+    width: 100%;
+  }
+
+  &--stretch {
+    .bitfun-tabs__tab {
+      flex: 1;
+    }
+  }
+
+  &--line {
+    .bitfun-tabs__nav {
+      border-bottom: 1px solid var(--border-base);
+    }
+
+    .bitfun-tabs__tab {
+      border-bottom: 2px solid transparent;
+      margin-bottom: -1px;
+      border-radius: 0;
+
+      &--active {
+        color: var(--color-accent-500);
+        border-bottom-color: var(--color-accent-500);
+      }
+
+      .bitfun-tabs__tab-close {
+        opacity: 0;
+        width: 0;
+        margin-left: 0;
+        overflow: hidden;
+      }
+
+      &:hover .bitfun-tabs__tab-close {
+        opacity: 1;
+        width: 16px;
+        margin-left: 4px;
+      }
+    }
+  }
+
+  &--card {
+    .bitfun-tabs__nav {
+      background: linear-gradient(135deg,
+        var(--element-bg-base) 0%,
+        var(--element-bg-soft) 100%);
+      border: 1px solid var(--border-base);
+      border-radius: tokens.$size-radius-base;
+      padding: tokens.$size-gap-1;
+      backdrop-filter: tokens.$blur-base;
+      -webkit-backdrop-filter: tokens.$blur-base;
+    }
+
+    .bitfun-tabs__tab {
+      border-radius: tokens.$size-radius-sm;
+
+      &--active {
+        background: linear-gradient(135deg,
+          var(--element-bg-soft) 0%,
+          var(--element-bg-soft) 50%,
+          var(--element-bg-base) 100%);
+        border: 1px solid var(--color-overlay-white-08);
+        backdrop-filter: tokens.$blur-base;
+        -webkit-backdrop-filter: tokens.$blur-base;
+        box-shadow:
+          0 2px 4px var(--color-overlay-black-12),
+          inset 0 1px 0 var(--color-overlay-white-08);
+        color: var(--color-text-primary);
+        overflow: hidden;
+      }
+
+      &:hover:not(&--disabled):not(&--active) {
+        background: var(--element-bg-medium);
+      }
+    }
+  }
+
+  &--pill {
+    .bitfun-tabs__tab {
+      border-radius: 20px;
+      padding: 6px 16px;
+
+      &--active {
+        background: linear-gradient(135deg,
+          color-mix(in srgb, var(--color-accent-500) 90%, transparent) 0%,
+          color-mix(in srgb, var(--color-accent-600) 92%, var(--color-static-black)) 100%);
+        color: var(--color-static-white);
+        box-shadow: 0 4px 12px color-mix(in srgb, var(--color-accent-500) 30%, transparent);
+      }
+    }
+  }
+
+  &--small {
+    .bitfun-tabs__tab {
+      padding: 6px 12px;
+      font-size: 12px;
+    }
+  }
+
+  &--large {
+    .bitfun-tabs__tab {
+      padding: 10px 20px;
+      font-size: 16px;
+    }
+  }
+
+  &--variant-purple {
+    &.bitfun-tabs--line {
+      .bitfun-tabs__nav {
+        border-bottom-color: var(--color-purple-200);
+      }
+
+      .bitfun-tabs__tab--active {
+        color: var(--color-purple-500);
+        border-bottom-color: var(--color-purple-500);
+      }
+    }
+
+    &.bitfun-tabs--card {
+      .bitfun-tabs__tab--active {
+        background: linear-gradient(135deg,
+          var(--color-purple-200) 0%,
+          color-mix(in srgb, var(--color-purple-500) 40%, transparent) 100%);
+        box-shadow: 0 2px 8px color-mix(in srgb, var(--color-purple-500) 20%, transparent);
+      }
+    }
+
+    &.bitfun-tabs--pill {
+      .bitfun-tabs__tab--active {
+        background: linear-gradient(135deg,
+          color-mix(in srgb, var(--color-purple-500) 90%, transparent) 0%,
+          color-mix(in srgb, var(--color-purple-600) 90%, transparent) 100%);
+        box-shadow: 0 4px 12px color-mix(in srgb, var(--color-purple-500) 30%, transparent);
+      }
+    }
+  }
+
+  &--variant-mixed {
+    &.bitfun-tabs--line {
+      .bitfun-tabs__nav {
+        border-bottom: 1px solid transparent;
+        background: linear-gradient(90deg,
+          var(--color-accent-200) 0%,
+          var(--color-purple-200) 100%);
+      }
+
+      .bitfun-tabs__tab--active {
+        background: linear-gradient(135deg,
+          var(--color-accent-200) 0%,
+          var(--color-purple-200) 100%);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
+        border-bottom-color: color-mix(in srgb, var(--color-purple-500) 40%, transparent);
+      }
+    }
+
+    &.bitfun-tabs--card {
+      .bitfun-tabs__tab--active {
+        background: linear-gradient(135deg,
+          var(--color-accent-200) 0%,
+          var(--color-purple-200) 100%);
+        box-shadow:
+          0 2px 8px var(--color-accent-200),
+          0 2px 8px var(--color-purple-200);
+      }
+    }
+
+    &.bitfun-tabs--pill {
+      .bitfun-tabs__tab--active {
+        background: linear-gradient(135deg,
+          var(--color-accent-600) 0%,
+          var(--color-purple-600) 100%);
+        box-shadow:
+          0 4px 12px color-mix(in srgb, var(--color-accent-500) 20%, transparent),
+          0 4px 12px color-mix(in srgb, var(--color-purple-500) 20%, transparent);
+      }
+    }
+  }
+}
+
+.bitfun-tab-pane {
+  width: 100%;
+}

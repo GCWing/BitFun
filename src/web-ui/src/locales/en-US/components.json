@@ -1,0 +1,641 @@
+{
+  "button": {
+    "primary": "Primary",
+    "secondary": "Secondary",
+    "danger": "Danger",
+    "ghost": "Ghost"
+  },
+  "input": {
+    "placeholder": "Enter...",
+    "clear": "Clear",
+    "show": "Show",
+    "hide": "Hide"
+  },
+  "select": {
+    "placeholder": "Select",
+    "noOptions": "No options",
+    "loading": "Loading...",
+    "search": "Search...",
+    "emptyText": "No data",
+    "selectAll": "Select All",
+    "customValueHint": "Press Enter to use custom value",
+    "useCustomValue": "Use \"{{value}}\""
+  },
+  "numberInput": {
+    "decrease": "Decrease",
+    "increase": "Increase"
+  },
+  "codeEditor": {
+    "exitFullscreen": "Exit fullscreen",
+    "exitFullscreenHint": "Exit fullscreen (ESC)",
+    "enterFullscreen": "Fullscreen preview"
+  },
+  "diffFullscreen": {
+    "acceptFile": "Accept File",
+    "rejectFile": "Reject File",
+    "acceptFileTooltip": "Accept all changes in this file",
+    "rejectFileTooltip": "Reject all changes in this file",
+    "processing": "Processing..."
+  },
+  "inputDialog": {
+    "emptyError": "This field cannot be empty"
+  },
+  "markdown": {
+    "copySuccess": "Copied",
+    "copyCode": "Copy code",
+    "openInExplorer": "Open in Explorer",
+    "openInBrowser": "Open in browser",
+    "openInBuiltInBrowser": "Open in built-in browser",
+    "copyLink": "Copy link",
+    "copyFilePath": "Copy file path"
+  },
+  "mermaidBlock": {
+    "renderFailed": "Diagram render failed",
+    "codeIncomplete": "Code incomplete, waiting for more content...",
+    "rendering": "Rendering diagram...",
+    "showCode": "Show source",
+    "hideCode": "Hide source",
+    "copyCode": "Copy code"
+  },
+  "reproductionSteps": {
+    "completedTitle": "Reproduction steps completed",
+    "instructionTitle": "Follow these steps to reproduce the issue",
+    "continueButton": "Continue",
+    "processing": "Processing...",
+    "notified": "AI has been notified to analyze logs, please wait...",
+    "instruction": "After completing the above steps, click the button below to let AI continue analyzing logs",
+    "userCompleted": "[User completed reproduction] Please collect and analyze logs immediately.",
+    "userCompletedShort": "User completed reproduction",
+    "operationFailed": "Operation failed, please retry"
+  },
+  "flowChatCards": {
+    "todoCard": {
+      "title": "Task Management",
+      "description": "Manage task list",
+      "total": "Total",
+      "inProgress": "In Progress",
+      "completed": "Completed",
+      "noTasks": "No tasks",
+      "taskCount": "{{total}} tasks / {{completed}} completed"
+    },
+    "webSearchCard": {
+      "searchTitle": "Web Search",
+      "fetchTitle": "Fetch URL",
+      "searchQuery": "Search Query",
+      "url": "URL",
+      "results": "Search Results",
+      "resultsCount": "{{count}} results",
+      "resultCount": "Results",
+      "noResults": "No results found",
+      "searching": "Searching...",
+      "searchDesc": "Search web content",
+      "fetchDesc": "Fetch web URL content",
+      "unspecifiedQuery": "Unspecified query"
+    },
+    "snapshotCard": {
+      "writeFile": "Write File",
+      "editFile": "Edit File",
+      "deleteFile": "Delete File",
+      "multiEdit": "Multi Edit",
+      "accept": "Accept changes",
+      "reject": "Reject changes",
+      "viewDetails": "View details",
+      "viewFullDiff": "View full diff",
+      "processing": "Processing file...",
+      "linesAdded": "lines added",
+      "linesDeleted": "lines deleted",
+      "filesCount": "{{count}} files",
+      "filePath": "File path",
+      "unspecifiedFile": "Unspecified file",
+      "file": "File"
+    },
+    "taskCard": {
+      "title": "Execute Task",
+      "description": "Execute specialized AI task",
+      "taskType": "Task Type",
+      "taskDesc": "Task Description",
+      "result": "Task Result",
+      "processing": "AI is processing task...",
+      "defaultType": "AI Task",
+      "unspecifiedTask": "Unspecified task",
+      "taskResult": "Task Result"
+    },
+    "searchCard": {
+      "grepTitle": "Text Search",
+      "globTitle": "File Search",
+      "grepDesc": "Search text in files",
+      "globDesc": "Search files by pattern",
+      "pattern": "Search Pattern",
+      "path": "Search Path",
+      "matches": "matches",
+      "files": "files",
+      "matchingFiles": "Matching Files",
+      "noTextMatch": "No matching text found",
+      "noFileMatch": "No matching files found",
+      "unspecifiedPattern": "Unspecified pattern",
+      "currentDir": "Current directory",
+      "matchCount": "{{count}} occurrences"
+    },
+    "contextCompressionCard": {
+      "title": "Context Compression",
+      "description": "Optimize conversation context to save tokens",
+      "compressing": "Compressing context...",
+      "analyzing": "Analyzing and compressing context...",
+      "triggerBeforeUserMessage": "Before user message",
+      "triggerAfterToolBatch": "After tool batch",
+      "triggerAfterAiResponse": "After AI response",
+      "triggerManual": "Manual trigger",
+      "triggerAuto": "Auto trigger",
+      "triggerTime": "Trigger: {{trigger}} · #{{count}}",
+      "duration": "Duration",
+      "savedTokens": "Saved {{count}} tokens · Ratio {{ratio}}%"
+    },
+    "toolConfig": {
+      "read": {
+        "displayName": "Read File",
+        "description": "Read the content of a specified file"
+      },
+      "write": {
+        "displayName": "Write File",
+        "description": "Write or create a file"
+      },
+      "edit": {
+        "displayName": "Edit File",
+        "description": "Edit file content"
+      },
+      "delete": {
+        "displayName": "Delete File",
+        "description": "Delete a specified file"
+      },
+      "grep": {
+        "displayName": "Text Search",
+        "description": "Search text in files"
+      },
+      "glob": {
+        "displayName": "File Search",
+        "description": "Search files by pattern"
+      },
+      "webSearch": {
+        "displayName": "Web Search",
+        "description": "Search web content"
+      },
+      "webFetch": {
+        "displayName": "Fetch URL",
+        "description": "Fetch content from URL"
+      },
+      "task": {
+        "displayName": "Execute Task",
+        "description": "Execute specialized AI tasks"
+      },
+      "todoWrite": {
+        "displayName": "Task Management",
+        "description": "Manage task list"
+      },
+      "contextCompression": {
+        "displayName": "Context Compression",
+        "description": "Intelligently compress conversation context"
+      },
+      "default": {
+        "description": "Execute {{toolName}} tool"
+      }
+    },
+    "baseToolCard": {
+      "awaitingConfirmation": "Awaiting confirmation",
+      "analyzing": "Analyzing parameters...",
+      "running": "Running...",
+      "completed": "Completed",
+      "cancelled": "Cancelled",
+      "failed": "Execution failed",
+      "preparing": "Preparing",
+      "inputParams": "Input parameters:",
+      "confirm": "Confirm",
+      "cancel": "Cancel",
+      "result": "Result:",
+      "viewDetails": "View details"
+    }
+  },
+  "componentLibrary": {
+    "alertDemo": {
+      "title": "Alert Messages",
+      "subtitle": "Minimal alert component",
+      "sections": {
+        "basic": "Basic Types",
+        "withTitle": "With Title",
+        "withDescription": "With Description",
+        "closable": "Closable",
+        "noIcon": "No Icon"
+      },
+      "messages": {
+        "operationSuccess": "Operation completed successfully",
+        "operationFailed": "Operation failed. Please try again.",
+        "operationRisk": "This operation carries risk.",
+        "infoMessage": "This is an informational message.",
+        "deploySuccessTitle": "Deployment succeeded",
+        "deploySuccessMessage": "The application was deployed to production.",
+        "deployFailedTitle": "Deployment failed",
+        "deployFailedMessage": "An error occurred during deployment.",
+        "expiringTitle": "Expiring soon",
+        "expiringMessage": "Your subscription expires in 7 days.",
+        "expiringDescription": "Renew in time to avoid service interruption.",
+        "updateTitle": "Version update",
+        "updateMessage": "A new version v3.0.0 is available.",
+        "updateDescription": "Includes performance improvements and new features.",
+        "closableMessage": "Click the button on the right to close this alert.",
+        "closableInfoTitle": "Notice",
+        "closableInfoMessage": "This alert can also be closed.",
+        "noIconMessage": "This is an alert without an icon."
+      }
+    },
+    "iconButtonExample": {
+      "title": "IconButton Examples",
+      "sections": {
+        "basic": "Basic style (Default) - transparent background, shows a fill on hover",
+        "ghost": "Ghost style - same as Default",
+        "primary": "Primary emphasis button - uses CSS variables",
+        "shape": "Shape variants - circle",
+        "other": "Other variants",
+        "usage": "Usage notes"
+      },
+      "usage": {
+        "defaultGhost": {
+          "label": "default/ghost: ",
+          "text": "transparent background, shows a fill on hover; suitable for low-priority actions"
+        },
+        "primary": {
+          "label": "primary: ",
+          "text": "emphasis button using the same CSS variables as text buttons; suitable for high-priority actions"
+        },
+        "disabled": {
+          "label": "disabled: ",
+          "text": "use the disabled attribute; opacity is reduced to 0.5"
+        },
+        "theme": {
+          "label": "theme support: ",
+          "text": "the primary variant supports theming via CSS variables"
+        }
+      }
+    },
+    "previewApp": {
+      "title": "BitFun Component Library",
+      "themeLabel": "Theme",
+      "themeTypeLight": "Light",
+      "themeTypeDark": "Dark",
+      "themeDescriptionLight": "Light theme",
+      "themeDescriptionDark": "Dark theme",
+      "sidebarTitle": "Component Navigation",
+      "expandSidebar": "Expand navigation",
+      "collapseSidebar": "Collapse navigation",
+      "emptyState": "Select a category on the left to view components"
+    },
+    "layouts": {
+      "quickJump": "Quick Jump",
+      "previewLabel": "Preview",
+      "idLabel": "ID:"
+    },
+    "markdownPreview": {
+      "title": "Markdown Preview",
+      "badge": "Content Component",
+      "backToLibrary": "← Back to component library",
+      "controls": {
+        "variantLabel": "Style variant:",
+        "modeLabel": "Mode:",
+        "preview": "Preview",
+        "edit": "Edit",
+        "reset": "Reset content"
+      },
+      "variants": {
+        "default": "Default",
+        "bordered": "Bordered",
+        "minimal": "Minimal"
+      },
+      "editorPlaceholder": "Enter Markdown content here...",
+      "sample": "# Markdown Component Full Preview\n\nWelcome to the BitFun Markdown component preview page!\n\n## Basic Syntax\n\n### Text Styles\n\nThis is **bold text**, this is *italic text*, and this is ~~strikethrough~~.\n\nYou can also combine styles, like ***bold italic***.\n\n### Lists\n\n#### Unordered list\n\n- Item 1\n- Item 2\n  - Subitem 2.1\n  - Subitem 2.2\n- Item 3\n\n#### Ordered list\n\n1. Step one\n2. Step two\n3. Step three\n\n#### Task list\n\n- [x] Completed task\n- [ ] Pending task\n- [ ] Another task\n\n## Code Examples\n\n### Inline code\n\nRun `npm install` to install dependencies, then run `npm run dev` to start the dev server.\n\n### Code blocks\n\n```typescript\ninterface User {\n  id: string;\n  name: string;\n  email: string;\n}\n\nfunction greetUser(user: User): string {\n  return `Hello, ${user.name}!`;\n}\n\nconst user: User = {\n  id: '1',\n  name: 'Alice',\n  email: 'alice@example.com'\n};\n\nconsole.log(greetUser(user));\n```\n\n```javascript\n// JavaScript example\nconst fetchData = async () => {\n  try {\n    const response = await fetch('https://api.example.com/data');\n    const data = await response.json();\n    return data;\n  } catch (error) {\n    console.error('Error:', error);\n  }\n};\n```\n\n```python\n# Python example\ndef fibonacci(n):\n    if n <= 1:\n        return n\n    return fibonacci(n-1) + fibonacci(n-2)\n\nfor i in range(10):\n    print(f\"F({i}) = {fibonacci(i)}\")\n```\n\n## Tables\n\n| Feature | Description | Supported |\n|------|------|---------|\n| Headings | H1-H6 headings | Yes |\n| Lists | Ordered/unordered lists | Yes |\n| Code blocks | Syntax highlighting | Yes |\n| Tables | Markdown tables | Yes |\n| Links | Hyperlinks | Yes |\n| Images | Image rendering | Yes |\n| Blockquotes | Blockquotes | Yes |\n\n## Blockquotes\n\n> This is a blockquote.\n> \n> It can be used to emphasize important information or quote someone.\n> \n> — BitFun Team\n\n> **Note:** Blockquotes can include other Markdown elements, including **bold**, *italic*, and `code`.\n\n## Links\n\nVisit the [BitFun website](https://bitfun.dev) for more information.\n\nSee the [GitHub repository](https://github.com/bitfun) for the source code.\n\nAuto link: https://example.com\n\n## Images\n\n![Sample image](https://via.placeholder.com/600x300/667eea/ffffff?text=BitFun+Markdown)\n\n## Horizontal Rule\n\n---\n\n## Nested Content\n\n### Code inside lists\n\n1. First install dependencies:\n   ```bash\n   npm install react-markdown\n   ```\n\n2. Then use it in code:\n   ```jsx\n   import ReactMarkdown from 'react-markdown';\n   \n   <ReactMarkdown>{content}</ReactMarkdown>\n   ```\n\n### List inside blockquote\n\n> #### Notes\n> \n> - Make sure to properly escape special characters\n> - Use appropriate syntax highlighting\n> - Keep the document structure clear\n\n## Special Formats\n\n<details>\n<summary>Click to expand details</summary>\n\nThis content is collapsed; click the title to expand.\n\n- Supports HTML tags\n- Can include Markdown content\n\n</details>\n\n## Summary\n\nThe BitFun Markdown component supports:\n\n1. Full Markdown syntax\n2. GitHub Flavored Markdown (GFM)\n3. A polished dark theme\n4. Code syntax highlighting\n5. Responsive tables\n6. Custom style variants\n\n**Get started now!**"
+    }
+  },
+  "modal": {
+    "close": "Close",
+    "confirm": "Confirm",
+    "cancel": "Cancel"
+  },
+  "dialog": {
+    "alert": {
+      "title": "Alert",
+      "ok": "OK"
+    },
+    "confirm": {
+      "title": "Confirm",
+      "ok": "OK",
+      "cancel": "Cancel"
+    },
+    "prompt": {
+      "title": "Prompt",
+      "placeholder": "Enter...",
+      "ok": "OK",
+      "cancel": "Cancel"
+    }
+  },
+  "tooltip": {
+    "copy": "Copy",
+    "copied": "Copied",
+    "close": "Close",
+    "expand": "Expand",
+    "collapse": "Collapse"
+  },
+  "tabs": {
+    "close": "Close",
+    "popOut": "Pop out as scene",
+    "closeOthers": "Close Others",
+    "closeAll": "Close All",
+    "closeRight": "Close Tabs to the Right",
+    "pin": "Pin",
+    "unpin": "Unpin Tab",
+    "unsaved": "Unsaved",
+    "fileDeleted": "Deleted",
+    "missionControl": "Mission Control",
+    "hiddenTabsCount": "{{count}} hidden tabs",
+    "confirmCloseWithDirty": "File \"{{title}}\" has unsaved changes.\n\nDiscard changes and close?",
+    "confirmCloseAllWithDirty": "{{count}} files have unsaved changes:\n\n{{fileList}}\n\nDiscard all changes and close?"
+  },
+  "tree": {
+    "expand": "Expand",
+    "collapse": "Collapse",
+    "loading": "Loading..."
+  },
+  "table": {
+    "empty": "No Data",
+    "loading": "Loading...",
+    "rowsPerPage": "Rows per page",
+    "totalRows": "{{total}} rows total",
+    "page": "Page {{page}}",
+    "of": "of {{total}}"
+  },
+  "pagination": {
+    "first": "First Page",
+    "last": "Last Page",
+    "previous": "Previous Page",
+    "next": "Next Page",
+    "page": "Page {{page}}",
+    "of": "of {{total}}"
+  },
+  "dropdown": {
+    "noItems": "No items"
+  },
+  "contextMenu": {
+    "cut": "Cut",
+    "copy": "Copy",
+    "paste": "Paste",
+    "delete": "Delete",
+    "selectAll": "Select All"
+  },
+  "contextSystem": {
+    "contextList": {
+      "emptyTitle": "No context",
+      "emptyHint": "Drag content from the file tree, code editor, or Mermaid diagram here",
+      "title": "Context",
+      "clearAll": "Clear",
+      "clearAllTitle": "Clear all context",
+      "clearAllConfirm": "Clear all {{count}} contexts?"
+    },
+    "contextCard": {
+      "unknownType": "Unknown type: {{type}}",
+      "removeContext": "Remove this context",
+      "viewFullCode": "View full code",
+      "viewLargeImage": "View full image"
+    },
+    "contextTypes": {
+      "selection": "Text selection",
+      "file": "File",
+      "folder": "Folder",
+      "editor": "Editor",
+      "flowChat": "FlowChat",
+      "flowChatToolCard": "FlowChat tool card",
+      "flowChatTextBlock": "FlowChat text block",
+      "tab": "Tab",
+      "panelHeader": "Panel header",
+      "emptySpace": "Empty space",
+      "custom": "Custom",
+      "unknown": "Unknown"
+    },
+    "contextRegistry": {
+      "file": {
+        "name": "File",
+        "description": "File in the file system"
+      },
+      "directory": {
+        "name": "Directory",
+        "description": "Directory in the file system"
+      },
+      "codeSnippet": {
+        "name": "Code snippet",
+        "description": "Selected code snippet"
+      },
+      "mermaidDiagram": {
+        "name": "Mermaid diagram",
+        "description": "Full Mermaid diagram code"
+      },
+      "image": {
+        "name": "Image",
+        "description": "Image file (for multimodal understanding)"
+      },
+      "webElement": {
+        "name": "Web element",
+        "description": "DOM element captured from the browser"
+      }
+    },
+    "webElement": {
+      "from": "from"
+    },
+    "diagram": {
+      "defaultTitle": "Mermaid diagram",
+      "types": {
+        "flowchart": "Flowchart",
+        "sequence": "Sequence diagram",
+        "class": "Class diagram",
+        "state": "State diagram",
+        "er": "ER diagram",
+        "gantt": "Gantt chart",
+        "other": "Diagram"
+      },
+      "codeSize": {
+        "chars": "{{count}} chars",
+        "kChars": "{{count}}K chars"
+      }
+    },
+    "validation": {
+      "warnings": {
+        "codeLinesLarge": "Selected code has many lines (>{{max}}). Consider reducing.",
+        "codeContentLarge": "Selected code is large (>{{maxChars}} characters). Processing may be slower.",
+        "fileLarge": "File is large (>{{size}}MB). Processing may be slower.",
+        "mermaidCodeLong": "Mermaid code is long (>{{maxChars}} characters). Processing may be slower.",
+        "mermaidCodeInvalid": "Mermaid syntax might be invalid."
+      }
+    }
+  },
+  "notification": {
+    "close": "Close",
+    "closeAll": "Close All"
+  },
+  "notificationCenter": {
+    "title": "Notification Center",
+    "actions": {
+      "markAllRead": "Mark All as Read",
+      "clearAll": "Clear All"
+    },
+    "searchPlaceholder": "Search notifications...",
+    "filters": {
+      "all": "All ({{count}})"
+    },
+    "activeTasks": {
+      "title": "Active tasks ({{count}})"
+    },
+    "empty": {
+      "noMatches": "No matching notifications",
+      "noNotifications": "No notifications"
+    },
+    "groups": {
+      "earlier": "Earlier"
+    }
+  },
+  "loading": {
+    "text": "Loading...",
+    "retry": "Retry"
+  },
+  "empty": {
+    "title": "No Data",
+    "description": "No content found"
+  },
+  "error": {
+    "title": "Error",
+    "description": "An unexpected error occurred",
+    "retry": "Retry"
+  },
+  "search": {
+    "placeholder": "Search...",
+    "noResults": "No results",
+    "clear": "Clear search"
+  },
+  "form": {
+    "required": "Required",
+    "optional": "Optional",
+    "submit": "Submit",
+    "reset": "Reset",
+    "cancel": "Cancel"
+  },
+  "windowControls": {
+    "minimize": "Minimize",
+    "maximize": "Maximize",
+    "restore": "Restore",
+    "close": "Close"
+  },
+  "appLayout": {
+    "workspaceOpenFailed": "Failed to open workspace",
+    "projectRequestMessage": "I want to create a new project:\n\n{{description}}\n\nPlease design the project structure and start implementing it.",
+    "projectRequestSent": "Project requirements sent to Xiaofang. Collaboration started.",
+    "projectRequestSendFailed": "Failed to send project description. Please enter it manually.",
+    "flowChatInitFailed": "Initialization failed. Please refresh the page.",
+    "windowFullscreenEntered": "Entered window fullscreen",
+    "windowFullscreenExited": "Exited window fullscreen",
+    "windowFullscreenExitHint": "Press {{shortcut}} to exit.",
+    "windowFullscreenEnterHint": "Press {{shortcut}} to enter again."
+  },
+  "bottomBar": {
+    "sessions": "Workbench",
+    "files": "Files",
+    "terminal": "Terminal",
+    "git": "Git",
+    "capabilities": "Capabilities",
+    "clickToSelectBranch": "Click to select branch",
+    "aiWingExpand": "Expand AI tools",
+    "devWingExpand": "Expand dev tools"
+  },
+  "canvas": {
+    "noContentOpen": "No content open",
+    "filesCount": "{{count}} files",
+    "searchPlaceholder": "Search file name or path...",
+    "noPreview": "No preview available",
+    "groupPrimary": "Primary",
+    "groupSecondary": "Secondary",
+    "groupTertiary": "Tertiary",
+    "groupPrimaryFull": "Primary Group",
+    "groupSecondaryFull": "Secondary Group",
+    "groupTertiaryFull": "Tertiary Group",
+    "mergeAllGroups": "Merge all groups",
+    "mergeAll": "Merge All",
+    "noMatchingFiles": "No matching files",
+    "noOpenFiles": "No open files",
+    "clickToSwitch": "Click card to switch file",
+    "exit": "Exit",
+    "openFileLocation": "Open file location",
+    "pinAsTab": "Pin as tab (Enter)",
+    "closeEsc": "Close (Esc)",
+    "enterToPin": "Enter to pin as tab",
+    "escToClose": "Esc to close",
+    "dragTabHere": "Drag tab here",
+    "dragToResize": "Drag to resize | Double-click to reset",
+    "terminal": "Terminal",
+    "dropLeft": "Left",
+    "dropRight": "Right",
+    "dropTop": "Top",
+    "dropBottom": "Bottom",
+    "dropCenter": "Drop"
+  },
+  "flexiblePanel": {
+    "empty": {
+      "title": "No Content",
+      "description": "Select a file or node to preview content"
+    },
+    "unknownContent": {
+      "title": "Unsupported Content Type",
+      "description": "Cannot preview this type of content",
+      "contentType": "Content type: {{type}}"
+    },
+    "visualizationDisabled": {
+      "title": "Visualization Features Disabled",
+      "description": "Project reading mode focuses on file browsing and preview"
+    },
+    "errors": {
+      "markdownEditorMissingPath": "Cannot load Markdown editor: missing file path or initial content",
+      "planViewerMissingPath": "Cannot load Plan viewer: missing file path",
+      "terminalMissingSessionId": "Cannot load terminal: missing session ID"
+    },
+    "placeholder": {
+      "architectureLayerViewer": "Architecture layer viewer is under development...",
+      "noDiffResult": "No diff result to display",
+      "noModuleChanges": "No module changes"
+    },
+    "actions": {
+      "copyContent": "Copy content",
+      "downloadContent": "Download content",
+      "close": "Close"
+    },
+    "loading": {
+      "gitDiff": "Loading Git diff...",
+      "gitGraph": "Loading Git graph...",
+      "gitBranchHistory": "Loading branch commit history...",
+      "gitSettings": "Loading Git settings...",
+      "diffView": "Loading Diff view...",
+      "taskDetail": "Loading task detail...",
+      "dependencyGraph": "Loading dependency graph...",
+      "planViewer": "Loading plan...",
+      "terminal": "Loading terminal..."
+    },
+    "aiSession": {
+      "title": "AI Session: {{sessionId}}",
+      "unknown": "Unknown",
+      "sessionStatus": "Session Status:",
+      "operationsCount": "Operations Count:",
+      "operationsValue": "{{count}} operations",
+      "startTime": "Start Time:",
+      "unknownTime": "Unknown",
+      "fileOperations": "File Operations"
+    },
+    "fallback": {
+      "noCodeContent": "No code content available"
+    }
+  },
+  "header": {
+    "selectProjectDirectory": "Select a project directory to open"
+  },
+  "hide": "Hide",
+  "show": "Show"
+}

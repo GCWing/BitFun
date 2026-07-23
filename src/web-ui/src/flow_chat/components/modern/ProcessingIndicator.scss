@@ -1,0 +1,75 @@
+/**
+ * Processing indicator layout + fun hint text (dot matrix lives in DotMatrixLoader).
+ */
+
+.processing-indicator {
+  width: 100%;
+  max-width: 1200px; /* Relaxed max width for larger screens */
+  /* Keep below the Virtuoso footer spacer; tight margin avoids a tall “dead” band above the input. */
+  margin: 0 auto 0.35rem auto;
+  padding: 0 3rem;
+  box-sizing: border-box;
+
+  // Responsive: large screens
+  @media (max-width: 1400px) {
+    max-width: 1000px;
+  }
+
+  // Responsive: medium screens
+  @media (max-width: 1200px) {
+    max-width: 900px;
+  }
+
+  // Responsive: small screens
+  @media (max-width: 768px) {
+    max-width: 100%;
+    padding: 0 1.5rem;
+  }
+}
+
+.processing-indicator__content {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 0.75rem;
+  padding: 0.5rem 0;
+}
+
+// Hint text — same breathe rhythm as tool cards (tool-card-text-fade: 1.6s 0%→25%→0%)
+.processing-indicator__hint {
+  font-size: 0.8125rem;
+  color: var(--color-text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 320px;
+  // fade-in entry (0.4s) then breathe loop identical to card shimmer
+  animation:
+    hint-fade-in 0.4s ease forwards,
+    hint-breathe 1.6s ease-in-out 0.4s infinite;
+
+  @media (max-width: 768px) {
+    max-width: 200px;
+  }
+}
+
+@keyframes hint-fade-in {
+  from {
+    opacity: 0;
+    transform: translateX(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+// Mirrors BaseToolCard's tool-card-text-fade exactly (1→0.25→1)
+@keyframes hint-breathe {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.25;
+  }
+}

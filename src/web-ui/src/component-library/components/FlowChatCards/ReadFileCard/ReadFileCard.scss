@@ -1,0 +1,83 @@
+/**
+ * ReadFileCard styles
+ */
+@use '../shared-styles' as shared;
+@use '../../../styles/tokens.scss' as tokens;
+
+.read-file-card {
+  @include shared.liquid-card-base;
+  @include shared.card-light-flow;
+
+  &--compact {
+    @include shared.compact-hover;
+  }
+
+
+  &__icon {
+    @include shared.premium-icon;
+    flex-shrink: 0;
+  }
+
+
+  &__info {
+    margin-top: 12px;
+  }
+
+  &__info-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 0;
+    border-bottom: 1px solid var(--border-subtle);
+
+    &:last-child {
+      border-bottom: none;
+    }
+  }
+
+  &__label {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--color-text-muted);
+    min-width: 80px;
+  }
+
+  &__value {
+    font-size: 13px;
+    color: var(--color-text-primary);
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+
+  &__preview {
+    margin-top: 12px;
+    padding: 12px;
+    background: var(--color-bg-primary);
+    border: 1px solid var(--border-subtle);
+    border-radius: 4px;
+  }
+
+  &__preview-label {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--color-text-muted);
+    margin-bottom: 8px;
+
+    svg {
+      color: var(--color-accent-600);
+    }
+  }
+
+  &__preview-content {
+    font-size: 13px;
+    color: var(--color-text-primary);
+  }
+
+
+}

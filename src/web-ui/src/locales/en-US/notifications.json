@@ -1,0 +1,81 @@
+{
+  "success": {
+    "fileSaved": "File saved",
+    "fileCreated": "File created",
+    "fileDeleted": "File deleted",
+    "fileRenamed": "File renamed",
+    "folderCreated": "Folder created",
+    "folderDeleted": "Folder deleted",
+    "copied": "Copied to clipboard",
+    "settingsSaved": "Settings saved",
+    "configImported": "Configuration imported",
+    "configExported": "Configuration exported",
+    "gitCommit": "Commit successful",
+    "gitPush": "Push successful",
+    "gitPull": "Pull successful",
+    "gitStash": "Changes stashed",
+    "gitStashApply": "Stash applied",
+    "snapshotCreated": "Snapshot created",
+    "snapshotRestored": "Snapshot restored",
+    "languageChanged": "Language changed",
+    "themeChanged": "Theme changed",
+    "connectionEstablished": "Connection established"
+  },
+  "error": {
+    "fileSaveFailed": "Failed to save file",
+    "fileCreateFailed": "Failed to create file",
+    "fileDeleteFailed": "Failed to delete file",
+    "operationFailed": "Operation failed",
+    "networkError": "Network error",
+    "unexpectedError": "An unexpected error occurred"
+  },
+  "warning": {
+    "unsavedChanges": "You have unsaved changes",
+    "largeFile": "Large file, loading may be slow",
+    "deprecatedFeature": "This feature is deprecated",
+    "experimentalFeature": "This is an experimental feature",
+    "lowMemory": "Low memory",
+    "diskSpace": "Low disk space"
+  },
+  "info": {
+    "loading": "Loading...",
+    "processing": "Processing...",
+    "downloading": "Downloading...",
+    "uploading": "Uploading...",
+    "indexing": "Indexing files...",
+    "searching": "Searching...",
+    "updating": "Updating...",
+    "installing": "Installing...",
+    "connecting": "Connecting...",
+    "syncing": "Syncing...",
+    "assistantBootstrapWaitingForModelConfiguration": "Assistant bootstrap is waiting for AI model configuration."
+  },
+  "announcements": {
+    "common": {
+      "learn_more": "Learn more",
+      "got_it": "Got it",
+      "later": "Later",
+      "close": "Close",
+      "prev": "Prev",
+      "next": "Next page",
+      "done": "Done",
+      "never_show_again": "Don't show again",
+      "page": "Page",
+      "more_count": "{{count}} more"
+    },
+    "welcome": {
+      "toast_title": "Welcome to BitFun",
+      "toast_desc": "Your AI-powered programming environment",
+      "modal_title": "Welcome to BitFun",
+      "modal_body": "BitFun is an AI-driven programming environment.\n\nThrough multi-turn conversations and tool collaboration, development becomes more efficient."
+    }
+  },
+  "confirm": {
+    "deleteFile": "Are you sure you want to delete this file?",
+    "deleteFolder": "Are you sure you want to delete this folder and all its contents?",
+    "discardChanges": "Are you sure you want to discard all changes?",
+    "resetSettings": "Are you sure you want to reset all settings?",
+    "closeUnsaved": "You have unsaved changes. Are you sure you want to close?",
+    "exitApp": "Are you sure you want to exit?"
+  }
+}

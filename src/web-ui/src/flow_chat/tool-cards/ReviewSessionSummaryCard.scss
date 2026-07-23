@@ -1,0 +1,75 @@
+.review-session-summary-card {
+  /* Header has global pad-x 0; keep left alignment and give the file count + chevron room from the card edge. */
+  .base-tool-card-header {
+    gap: 8px;
+    padding-right: 10px;
+  }
+
+  .review-session-summary-card__icon {
+    color: color-mix(in srgb, var(--color-accent-400) 76%, var(--color-text-primary));
+  }
+
+  .review-session-summary-card__file-count {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    margin-right: 2px;
+    color: var(--color-text-muted);
+    font-size: var(--flowchat-font-size-sm);
+  }
+}
+
+.review-session-summary-card__details {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--color-bg-elevated) 82%, transparent);
+}
+
+.review-session-summary-card__summary {
+  margin: 0;
+  color: var(--color-text-secondary);
+  font-size: var(--tool-card-action-font-size);
+  line-height: var(--flowchat-text-line-height);
+}
+
+.review-session-summary-card__section-label {
+  display: inline-flex;
+  margin-bottom: 6px;
+  color: var(--color-text-muted);
+  font-size: var(--flowchat-font-size-xs);
+  font-weight: 650;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.review-session-summary-card__files {
+  ul {
+    display: grid;
+    gap: 5px;
+    margin: 0;
+    padding-left: 16px;
+    color: var(--color-text-secondary);
+    font-size: var(--tool-card-action-font-size);
+    line-height: var(--flowchat-support-line-height);
+  }
+}
+
+.review-session-summary-card__open {
+  align-self: flex-start;
+  padding: 5px 10px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  background: var(--element-bg-soft);
+  color: var(--color-text-primary);
+  font-size: var(--tool-card-action-font-size);
+  cursor: pointer;
+
+  &:hover {
+    border-color: var(--border-medium);
+    background: var(--element-bg-base);
+  }
+}

@@ -1,0 +1,204 @@
+/**
+ * Default tool card styles
+ * Used for tool types without specific customization
+ */
+
+@use './_tool-card-common.scss';
+
+@keyframes defaultToolConfirmationPulse {
+  0%, 100% {
+    box-shadow:
+      0 0 0 1px color-mix(in srgb, var(--color-warning) 14%, transparent),
+      0 0 12px color-mix(in srgb, var(--color-warning) 16%, transparent);
+  }
+  50% {
+    box-shadow:
+      0 0 0 2px color-mix(in srgb, var(--color-warning) 20%, transparent),
+      0 0 16px color-mix(in srgb, var(--color-warning) 22%, transparent);
+  }
+}
+
+.default-tool-card {
+  --default-tool-card-confirm-text-rgb: 134, 239, 172;
+
+  .compact-tool-card {
+    min-height: 0;
+    padding: 0 !important;
+    line-height: var(--flowchat-support-line-height);
+  }
+
+  .compact-card-action {
+    max-width: 220px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: var(--color-text-secondary);
+    font-weight: 600;
+  }
+
+  .compact-card-content {
+    color: var(--color-text-muted);
+  }
+
+  .compact-card-extra {
+    flex-shrink: 0;
+    min-width: 0;
+  }
+
+  .compact-card-right-icon {
+    color: var(--color-text-muted);
+  }
+
+  .default-tool-card__icon-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 0;
+    height: auto;
+    padding: 0 6px;
+    border: 1px solid var(--border-subtle);
+    border-radius: 4px;
+    background: transparent;
+    color: var(--color-text-muted);
+    font-size: var(--flowchat-font-size-xxs);
+    line-height: var(--flowchat-compact-line-height);
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+  }
+
+  .default-tool-card__expanded {
+    display: flex;
+    flex-direction: column;
+    gap: var(--flowchat-card-gap);
+  }
+
+  .default-tool-card__meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--flowchat-inline-gap);
+    align-items: center;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--border-subtle);
+  }
+
+  .default-tool-card__meta-label {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.125rem var(--flowchat-control-pad-x);
+    border-radius: 999px;
+    background: var(--color-overlay-white-04);
+    border: 1px solid var(--border-subtle);
+    color: var(--color-text-secondary);
+    font-size: var(--flowchat-font-size-xs);
+    font-weight: 600;
+    font-family: var(--tool-card-font-mono);
+  }
+
+  .default-tool-card__meta-description {
+    color: var(--color-text-muted);
+    font-size: var(--tool-card-action-font-size);
+    line-height: var(--flowchat-support-line-height);
+  }
+
+  .default-tool-card__section {
+    display: flex;
+    flex-direction: column;
+    gap: var(--flowchat-inline-gap);
+  }
+
+  .default-tool-card__section-label {
+    color: var(--color-text-secondary);
+    font-size: var(--flowchat-font-size-xs);
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+
+  .default-tool-card__code-block {
+    margin: 0;
+    padding: var(--flowchat-code-block-pad-y) var(--flowchat-code-block-pad-x);
+    border: 1px solid var(--border-subtle);
+    border-radius: 8px;
+    background: var(--color-bg-secondary);
+    color: var(--color-text-primary);
+    font-family: var(--tool-card-font-mono);
+    font-size: var(--flowchat-code-font-size);
+    line-height: var(--flowchat-code-line-height);
+    white-space: pre-wrap;
+    word-break: break-word;
+    overflow: auto;
+    max-height: 320px;
+  }
+
+  .default-tool-card__error-message {
+    padding: var(--flowchat-card-pad-y) var(--flowchat-card-pad-x);
+    border: 1px solid color-mix(in srgb, var(--color-error) 24%, transparent);
+    border-radius: 8px;
+    background: var(--glass-red-base);
+    color: var(--color-error);
+    font-size: var(--tool-card-action-font-size);
+    line-height: var(--flowchat-support-line-height);
+    white-space: pre-wrap;
+    word-break: break-word;
+  }
+
+  .default-tool-card__actions {
+    display: flex;
+    gap: var(--flowchat-inline-gap);
+    flex-wrap: wrap;
+  }
+
+  .default-tool-card__button {
+    appearance: none;
+    border: 1px solid var(--border-base);
+    border-radius: 8px;
+    padding: var(--flowchat-control-pad-y) var(--flowchat-control-pad-x);
+    font-size: var(--tool-card-action-font-size);
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+  }
+
+  .default-tool-card__button:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+  }
+
+  .default-tool-card__button--confirm {
+    background: color-mix(in srgb, var(--color-success) 12%, transparent);
+    border-color: color-mix(in srgb, var(--color-success) 26%, transparent);
+    color: rgb(var(--default-tool-card-confirm-text-rgb));
+  }
+
+  .default-tool-card__button--confirm:hover:not(:disabled) {
+    background: color-mix(in srgb, var(--color-success) 18%, transparent);
+    border-color: color-mix(in srgb, var(--color-success) 40%, transparent);
+  }
+
+  .default-tool-card__button--reject {
+    background: var(--color-overlay-white-04);
+    color: var(--color-text-secondary);
+  }
+
+  .default-tool-card__button--reject:hover:not(:disabled) {
+    background: var(--color-overlay-white-08);
+    color: var(--color-text-primary);
+  }
+
+  &.requires-confirmation {
+    .compact-tool-card {
+      border-radius: 8px;
+      background: color-mix(in srgb, var(--color-warning) 5%, transparent) !important;
+      box-shadow:
+        inset 0 0 0 1px color-mix(in srgb, var(--color-warning) 18%, transparent),
+        0 0 0 1px var(--color-warning-bg);
+      animation: defaultToolConfirmationPulse 2s ease-in-out infinite;
+    }
+
+    .compact-card-status-icon,
+    .compact-card-right-icon {
+      color: var(--color-warning);
+    }
+  }
+}

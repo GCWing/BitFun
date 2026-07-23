@@ -1,0 +1,152 @@
+{
+  "version": 1,
+  "defaultLocale": "zh-CN",
+  "fallbackLocale": "en-US",
+  "unknownLocaleFallbackChain": [
+    "en-US",
+    "zh-CN"
+  ],
+  "surfaceDefaults": {
+    "web-ui": "zh-CN",
+    "mobile-web": "en-US",
+    "installer": "en-US",
+    "core": "zh-CN"
+  },
+  "surfaceOrders": {
+    "web-ui": [
+      "zh-CN",
+      "en-US",
+      "zh-TW"
+    ],
+    "mobile-web": [
+      "zh-CN",
+      "zh-TW",
+      "en-US"
+    ],
+    "installer": [
+      "en-US",
+      "zh-CN",
+      "zh-TW"
+    ],
+    "core": [
+      "zh-CN",
+      "zh-TW",
+      "en-US"
+    ]
+  },
+  "surfaces": {
+    "web-ui": {
+      "resourceRoot": "src/web-ui/src/locales",
+      "loading": "eager-namespaces"
+    },
+    "mobile-web": {
+      "resourceRoot": "src/mobile-web/src/i18n",
+      "loading": "surface-minimal"
+    },
+    "installer": {
+      "resourceRoot": "BitFun-Installer/src/i18n/locales",
+      "loading": "surface-minimal"
+    },
+    "core": {
+      "resourceRoot": "src/crates/assembly/core/locales",
+      "loading": "backend-service"
+    },
+    "relay-static-homepage": {
+      "resourceRoot": "src/apps/relay-server/static/homepage",
+      "loading": "self-contained-static"
+    }
+  },
+  "locales": [
+    {
+      "id": "zh-CN",
+      "rustVariant": "ZhCN",
+      "name": "简体中文",
+      "englishName": "Simplified Chinese",
+      "nativeName": "简体中文",
+      "shortName": "中",
+      "rtl": false,
+      "dateFormat": "YYYY年MM月DD日",
+      "numberFormat": {
+        "decimal": ".",
+        "thousands": ","
+      },
+      "aliases": [
+        "zh",
+        "zh-Hans",
+        "zh-CN"
+      ],
+      "contentFallbacks": [
+        "en-US"
+      ],
+      "modelLanguageName": "Simplified Chinese",
+      "shortModelInstruction": "使用简体中文",
+      "installer": {
+        "uiCode": "zh",
+        "label": "Chinese",
+        "nativeName": "简体中文",
+        "continueLabel": "继续"
+      }
+    },
+    {
+      "id": "en-US",
+      "rustVariant": "EnUS",
+      "name": "English",
+      "englishName": "English (US)",
+      "nativeName": "English",
+      "shortName": "EN",
+      "rtl": false,
+      "dateFormat": "MM/DD/YYYY",
+      "numberFormat": {
+        "decimal": ".",
+        "thousands": ","
+      },
+      "aliases": [
+        "en",
+        "en-US"
+      ],
+      "contentFallbacks": [
+        "zh-CN"
+      ],
+      "modelLanguageName": "English",
+      "shortModelInstruction": "Use English",
+      "installer": {
+        "uiCode": "en",
+        "label": "English",
+        "nativeName": "English",
+        "continueLabel": "Continue"
+      }
+    },
+    {
+      "id": "zh-TW",
+      "rustVariant": "ZhTW",
+      "name": "繁體中文",
+      "englishName": "Traditional Chinese",
+      "nativeName": "繁體中文",
+      "shortName": "繁",
+      "rtl": false,
+      "dateFormat": "YYYY年MM月DD日",
+      "numberFormat": {
+        "decimal": ".",
+        "thousands": ","
+      },
+      "aliases": [
+        "zh-TW",
+        "zh-Hant",
+        "zh-HK",
+        "zh-MO"
+      ],
+      "contentFallbacks": [
+        "zh-CN",
+        "en-US"
+      ],
+      "modelLanguageName": "Traditional Chinese",
+      "shortModelInstruction": "使用繁體中文",
+      "installer": {
+        "uiCode": "zh-TW",
+        "label": "Traditional Chinese",
+        "nativeName": "繁體中文",
+        "continueLabel": "繼續"
+      }
+    }
+  ]
+}

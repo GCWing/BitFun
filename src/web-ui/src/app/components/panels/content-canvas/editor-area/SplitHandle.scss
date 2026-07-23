@@ -1,0 +1,110 @@
+/**
+ * SplitHandle component styles.
+ */
+
+.canvas-split-handle {
+  position: relative;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  transition: background-color 0.15s ease;
+  z-index: 5;
+
+  &:focus {
+    outline: none;
+  }
+
+  // Horizontal divider (left/right)
+  &--horizontal {
+    width: 4px;
+    cursor: col-resize;
+
+    &:hover,
+    &.is-dragging {
+      background: var(--color-accent-100);
+    }
+
+    .canvas-split-handle__line {
+      width: 1px;
+      height: 100%;
+    }
+
+    .canvas-split-handle__grip {
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      transform: translate(-50%, -50%);
+    }
+  }
+
+  // Vertical divider (top/bottom)
+  &--vertical {
+    height: 4px;
+    cursor: row-resize;
+
+    &:hover,
+    &.is-dragging {
+      background: var(--color-accent-100);
+    }
+
+    .canvas-split-handle__line {
+      width: 100%;
+      height: 1px;
+    }
+
+    .canvas-split-handle__grip {
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      transform: translate(-50%, -50%);
+    }
+  }
+
+  // Divider line
+  &__line {
+    background: var(--border-base);
+    transition: background-color 0.15s ease;
+  }
+
+  &:hover &__line,
+  &.is-dragging &__line {
+    background: var(--color-accent-500);
+  }
+
+  // Grip handle
+  &__grip {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 4px;
+    background: var(--color-bg-secondary);
+    border: 1px solid var(--border-base);
+    border-radius: 4px;
+    color: var(--color-text-muted);
+    opacity: 0;
+    transition: opacity 0.15s ease, color 0.15s ease;
+  }
+
+  &:hover &__grip,
+  &.is-dragging &__grip {
+    opacity: 1;
+  }
+
+  &:hover &__grip,
+  &.is-dragging &__grip {
+    color: var(--color-accent-500);
+    border-color: var(--color-accent-500);
+  }
+}
+
+// Disable global selection while dragging
+body.is-resizing-split {
+  user-select: none;
+  cursor: col-resize;
+}
+
+body.is-resizing-split-vertical {
+  cursor: row-resize;
+}

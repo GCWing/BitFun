@@ -1,0 +1,443 @@
+{
+  "title": "External AI applications",
+  "subtitle": "Use commands, tools, agents, and MCP from other AI applications.",
+  "legacyHostNotice": "This execution Host uses the legacy external-source protocol. Safe Mode requires a Host upgrade.",
+  "loading": "Checking external sources…",
+  "checkingNonBlocking": "Checking for updates…",
+  "common": {
+    "details": "Details",
+    "hideDetails": "Hide details",
+    "close": "Close",
+    "unknown": "Unknown",
+    "technicalDetails": "Technical details",
+    "selected": "Currently used",
+    "selectedUnavailable": "Selected, currently unavailable",
+    "notSelected": "Not used",
+    "availableChoice": "Available choice",
+    "openInExplorer": "Open in file explorer",
+    "openInExplorerRemote": "Remote workspace paths cannot be opened in the local file manager",
+    "openInExplorerUnavailable": "This Host cannot open source locations"
+  },
+  "actions": {
+    "refresh": "Refresh",
+    "refreshing": "Refreshing…",
+    "updated": "Saved.",
+    "waitForUpdate": "Another change is still being saved. Wait for it to finish before making another choice.",
+    "agentUpdated": "Saved changes to {{name}} and refreshed its status.",
+    "mcpUpdated": "Saved the MCP server choice and refreshed its status."
+  },
+  "recoveryActions": {
+    "refresh": "Refresh status",
+    "retry": "Retry",
+    "review": "Review items",
+    "resolve_conflict": "Resolve conflict",
+    "install_runtime": "Install or repair the required runtime, then refresh.",
+    "reconnect_host": "Reconnect or upgrade the execution Host, then retry.",
+    "exit_safe_mode": "Exit Safe Mode"
+  },
+  "safeMode": {
+    "title": "External Safe Mode",
+    "description": "Block new external tool, agent, and MCP calls while keeping discovered commands and diagnostics visible. Calls already in progress are not cancelled.",
+    "activeDescription": "New executable external calls are blocked. Calls already in progress may finish; commands and diagnostics remain available for recovery.",
+    "activeNotice": "Safe Mode applies only to this Host process and execution domain. Restarting or switching the execution Host turns it off.",
+    "toggleLabel": "Use External Safe Mode",
+    "entered": "External Safe Mode is active.",
+    "exited": "External Safe Mode is off and eligible integrations were reconciled."
+  },
+  "unavailable": {
+    "hostTitle": "Unavailable here",
+    "hostDescription": "View or manage external settings in Desktop.",
+    "remoteDescription": "External settings are unavailable for this remote project. Switch to a local project.",
+    "remoteConnectionDescription": "Remote connection unavailable. Retry or disconnect."
+  },
+  "policy": {
+    "title": "Integration settings",
+    "externalBadge": "External",
+    "readySummary": "{{count}} items found",
+    "attentionSummary": "{{count}} items need attention",
+    "enabledLabel": "Allow external compatibility",
+    "updated": "Saved.",
+    "recoveryRequired": "These settings are newer, so external access is off.",
+    "unknownStatus": "This settings state is unsupported, so external access is off.",
+    "hostReadOnlyHint": "View only. Manage this in Desktop.",
+    "remoteReadOnlyHint": "This remote project is view only. Switch to a local project to manage it.",
+    "backupAndReset": "Back up and reset",
+    "resetConfirmTitle": "Back up and reset policy?",
+    "resetConfirmMessage": "BitFun will preserve the newer policy in a local backup, replace it with safe defaults, and keep external execution off until you enable it.",
+    "recoveryResetComplete": "The incompatible policy was backed up and reset to safe defaults.",
+    "inherited": "Inherited",
+    "projectOverride": "Project override",
+    "resetWorkspace": "Use global settings",
+    "adapterRevision": "Adapter {{revision}}",
+    "sourceCount": "{{count}} source locations",
+    "capabilities": "Customize capabilities",
+    "capabilitiesFor": "Customize {{ecosystem}} capabilities",
+    "modeLabel": "{{ecosystem}} compatibility mode",
+    "capabilityAccessLabel": "{{ecosystem}} {{capability}} access",
+    "unsupportedSafelyOff": "Unsupported by this version (safely off)",
+    "capabilitiesHint": "Choose how each kind of external content is discovered and used.",
+    "safetyLimited": "Safety limit",
+    "scope": {
+      "user": "Global",
+      "workspace": "This project",
+      "workspaceHint": "Affects this project only.",
+      "workspaceUnavailable": "Open a project to configure it separately."
+    },
+    "mode": {
+      "recommended": "Recommended",
+      "discoverOnly": "Discover only",
+      "disabled": "Off",
+      "custom": "Custom"
+    },
+    "access": {
+      "disabled": "Off",
+      "discoverOnly": "Discover",
+      "askBeforeUse": "Ask before use",
+      "auto": "Use automatically"
+    },
+    "capability": {
+      "command": "Commands",
+      "tool": "Tools",
+      "subagent": "Agents",
+      "mcp": "MCP servers"
+    },
+    "health": {
+      "available": "Adapter available",
+      "partial": "Adapter partially available",
+      "degraded": "Adapter degraded",
+      "unavailable": "Adapter unavailable"
+    },
+    "state": {
+      "checking": "Checking",
+      "attention": "Needs attention",
+      "ready": "Ready",
+      "noConfig": "No configuration"
+    }
+  },
+  "errors": {
+    "loadFailed": "External settings could not be read. Refresh to retry.",
+    "refreshFailed": "The check failed. Enabled items are unchanged.",
+    "mutationUnknown": "Save status is unknown. Refresh to confirm."
+  },
+  "operationErrors": {
+    "rejected": "The current settings do not allow this change.",
+    "refreshRequired": "The catalog changed before this action completed. Refresh, review the current state, and try again.",
+    "policyIncompatible": "External settings were written by a newer BitFun version. Back up and reset them before making changes.",
+    "unavailableRetry": "Temporarily unavailable. Try again later.",
+    "internal": "The action failed. Refresh to retry.",
+    "referenceId": "Reference: {{id}}",
+    "stage": "Stage: {{stage}}",
+    "causationId": "Related operation: {{id}}"
+  },
+  "diagnostics": {
+    "summary": "{{count}} items need attention. Review the details to see what is affected.",
+    "sourceSummary": "{{name}} has {{count}} issues",
+    "category": {
+      "confirmationStateUnavailable": "BitFun could not verify saved tool confirmations, so affected tools remain disabled. Check BitFun settings storage, then refresh.",
+      "conflictHistoryUnavailable": "BitFun could not save conflict information, so affected names remain unavailable. Check BitFun settings storage, then refresh.",
+      "checkInProgress": "One source is still being checked. Existing content remains available.",
+      "checkTimedOut": "Checking one source took too long. Other content remains available; refresh to try again.",
+      "confirmationRequired": "A source needs your confirmation before BitFun can use it.",
+      "sourceTooLarge": "Some files were skipped because the source is too large. Reduce its size, then refresh.",
+      "invalidSettings": "Some settings could not be read and were skipped. Fix the source, then refresh.",
+      "unreadableSource": "BitFun could not read part of a source. Check file access, then refresh.",
+      "notSupported": "This type of external content is not supported yet, so BitFun did not load or run it.",
+      "checkFailed": "BitFun could not check one source. Other sources remain available; refresh to retry.",
+      "sourceIssue": "BitFun found an issue in one source. The affected content was not enabled; review the technical details."
+    }
+  },
+  "sources": {
+    "title": "Configuration sources",
+    "description": "Settings stay in their original locations. Open this page to check for changes automatically.",
+    "globalOnly": "Showing sources available to all workspaces. Open a workspace to also show sources from that project.",
+    "empty": "No configuration found.",
+    "commandCount": "{{count}} commands",
+    "toolCount": "{{count}} tools",
+    "agentCount": "{{count}} agents",
+    "mcpCount": "{{count}} MCP servers",
+    "toggleLabel": "Enable {{name}}"
+  },
+  "agents": {
+    "title": "Found agents",
+    "description": "Agents stay in their original application. Before enabling one, review its model, tools, and where it runs. BitFun asks again if its instructions or these settings change.",
+    "disable": "Disable",
+    "enable": "Enable agent",
+    "reviewTitle": "Review how {{name}} runs",
+    "approvalWarning": "Once enabled, this agent can instruct the selected model to use the tools shown above. BitFun asks again if its instructions, model, tools, or configuration sources change.",
+    "singleRun": "One run only; no follow-up",
+    "modelUnavailable": "Unavailable",
+    "model": "Model: {{model}}",
+    "tools": "Tools: {{tools}}",
+    "executionDomain": "Runs in: this computer and current workspace",
+    "compatibility": "Status: {{state}}",
+    "noDescription": "No description provided",
+    "noTools": "No tools",
+    "sourceLocations": "Configuration sources ({{count}})"
+  },
+  "agentState": {
+    "approval_required": "Confirmation required",
+    "declined": "Kept disabled",
+    "disabled": "Disabled",
+    "active": "Enabled",
+    "conflict": "Choice required",
+    "blocked": "Not supported yet",
+    "unavailable": "Temporarily unavailable"
+  },
+  "agentChanges": {
+    "unavailable": "{{name}} is no longer available for new tasks ({{state}}). Review its current model, tools, source, or name conflict below.",
+    "unavailableMany": "{{count}} enabled agents are no longer available for new tasks. Review their current settings below.",
+    "removedState": "Source removed"
+  },
+  "agentCompatibility": {
+    "ready": "Supported",
+    "ready_with_degradation": "Supported, but some settings will not apply",
+    "blocked": "Not supported",
+    "invalid": "Configuration error"
+  },
+  "agentDiagnostics": {
+    "activationBlocked": "This agent cannot be enabled yet.",
+    "degradedOnly": "Some settings will not apply in BitFun. Review the details to confirm the resulting behavior is acceptable.",
+    "configurationUnavailable": {
+      "reason": "BitFun could not read its model settings.",
+      "impact": "{{impact}}",
+      "nextStep": "Open BitFun model settings, check that BitFun can read and save its settings, then refresh."
+    },
+    "modelUnavailable": {
+      "reason": "The requested model is not available in BitFun.",
+      "impact": "{{impact}}",
+      "nextStep": "Choose an available model in the source application, or set an available fixed Sub-Agent model in BitFun, then refresh."
+    },
+    "toolUnavailable": {
+      "reason": "One or more requested tools are not available in BitFun.",
+      "impact": "{{impact}}",
+      "nextStep": "Remove or replace the unsupported tools in the source application, then refresh."
+    },
+    "invalidDefinition": {
+      "reason": "The agent settings have an invalid or missing required value.",
+      "impact": "{{impact}}",
+      "nextStep": "Correct the agent settings in the source application, then refresh."
+    },
+    "unsupportedBehavior": {
+      "reason": "This agent requires behavior or settings that BitFun does not support.",
+      "impact": "{{impact}}",
+      "nextStep": "Update the agent in the source application to use supported settings and include all required content, then refresh."
+    },
+    "ignoredOption": {
+      "reason": "BitFun does not apply this setting.",
+      "impact": "{{impact}}",
+      "nextStep": "Before enabling, review the model and tools that will actually be used, and confirm that the result still meets your expectations."
+    }
+  },
+  "agentConflicts": {
+    "title": "Agents with the same name",
+    "description": "BitFun does not choose silently. Pending and current choices stay visible, and a choice is remembered until one of these agents changes.",
+    "agentName": "Multiple agents are named {{name}}",
+    "disableAll": "Do not use any of these",
+    "pending": "Choose which agent to use for future tasks. Choosing an external agent also confirms the model, tools, and where it runs as shown below.",
+    "currentSelection": "The current choice is used for new tasks. Choose another option above to change it.",
+    "currentSelectionUnavailable": "This source is still selected, but it is currently disabled or unavailable for new tasks. Enable or repair it, choose another option, or keep this name unavailable.",
+    "keptUnavailable": "This agent name is kept unavailable. Choose an option above when you want to use one.",
+    "selectionApproves": "This choice confirms the model, tools, run location, and configuration sources shown below."
+  },
+  "mcp": {
+    "title": "Found MCP servers",
+    "description": "MCP settings stay in the source application. External servers are read-only here; disable one or change it in its original application.",
+    "externalSource": "External AI application",
+    "source": "Source: {{source}}",
+    "sourceLocation": "Configuration: {{location}}",
+    "scope": "Applies to: {{scope}}",
+    "command": "Command: {{command}}",
+    "url": "Address: {{url}}",
+    "workingDirectory": "Starts in: {{location}}",
+    "environmentCount": "{{count}} environment variables configured",
+    "environmentNames": "Environment variables: {{names}}",
+    "environmentReads": "Reads from the BitFun environment: {{names}}",
+    "argumentCount": "Command arguments: {{count}}",
+    "headerCount": "{{count}} HTTP headers configured",
+    "headerNames": "HTTP headers: {{names}}",
+    "changePolicy": "BitFun asks again before loading a changed server configuration.",
+    "runtimeUnavailableGuidance": "Disable this server, fix the source configuration or authentication, then enable it again. Restarting BitFun is usually not required.",
+    "unsupportedGuidance": "Change this setting in the source application, then refresh.",
+    "enable": "Enable server",
+    "disable": "Disable",
+    "empty": "No MCP servers found.",
+    "emptyGuidance": "BitFun discovers MCP servers from OpenCode-compatible configurations. Supported locations:",
+    "emptyLocation": {
+      "userGlobal": "User global: ~/.config/opencode/opencode.json",
+      "project": "Project: .opencode/opencode.json",
+      "envConfig": "File pointed to by OPENCODE_CONFIG environment variable"
+    },
+    "emptyExample": "Add an \"mcp\" field to the config file, e.g.: { \"mcp\": { \"server-name\": { ... } } }",
+    "transport": {
+      "local_stdio": "Local process",
+      "streamable_http": "Remote connection"
+    }
+  },
+  "mcpApprovals": {
+    "title": "MCP servers to review",
+    "description": "BitFun found executable or network configuration from another AI application. It is not started or contacted until you confirm it.",
+    "warning": "Enabling can start a local process with your user permissions or connect to the shown remote service. The server can provide tools to the agent and can receive arguments sent to those tools.",
+    "keepDisabled": "Keep disabled",
+    "enable": "Enable server"
+  },
+  "mcpState": {
+    "approval_required": "Confirmation required",
+    "starting": "Starting",
+    "active": "Enabled",
+    "declined": "Kept disabled",
+    "conflict": "Choice required",
+    "covered": "Not selected",
+    "source_disabled": "Source disabled",
+    "configuration_changed": "Changed; confirm again",
+    "unsupported": "Not supported",
+    "runtime_unavailable": "Temporarily unavailable",
+    "removed": "Removed"
+  },
+  "mcpConflicts": {
+    "title": "MCP servers with the same name",
+    "description": "BitFun does not choose silently. Choose the BitFun or external server to use; the choice is remembered until one of these configurations changes.",
+    "serverName": "Multiple MCP servers are named {{name}}",
+    "pending": "Choose one server. Choosing an external server also confirms that configuration.",
+    "currentSelection": "The current choice is used. Choose another available option to change it.",
+    "unavailable": "Currently unavailable",
+    "nativeDisabled": "Enable this BitFun server before selecting it",
+    "review": "Review {{name}}",
+    "approveAndUse": "Approve and use {{name}}"
+  },
+  "tools": {
+    "title": "Found tools",
+    "description": "Tool code stays in its original location. BitFun does not run it while checking the source.",
+    "review": "Review settings",
+    "disable": "Disable these tools",
+    "reviewTitle": "Review {{name}} from {{source}}",
+    "reason": "Reason: {{reason}}",
+    "nextStep": "Next step: {{nextStep}}",
+    "targetScope": "This action applies to every tool provided by this source."
+  },
+  "toolApprovals": {
+    "title": "Tools to review",
+    "description": "Before enabling tool code from another application, review where the code comes from and what it can access.",
+    "source": "Source: {{location}}",
+    "sourceRoot": "Source folder: {{location}}",
+    "modulePath": "Code file: {{location}}",
+    "scope": "Applies to: {{scope}}",
+    "executionDomain": "Runs in: {{domain}}",
+    "runtime": "Run with: {{runtime}}",
+    "workingDirectory": "Starts in folder: {{location}}",
+    "capabilities": "Can directly access: {{capabilities}}",
+    "warning": "Tool code runs with your user permissions and inherits your environment variables. It is not isolated by an operating-system sandbox. Processes it starts may keep running after you cancel.",
+    "keepDisabled": "Keep disabled",
+    "enable": "Enable tools"
+  },
+  "capability": {
+    "file_system": "files",
+    "network": "network",
+    "process": "processes",
+    "environment": "environment variables"
+  },
+  "toolState": {
+    "approval_required": "Confirmation required",
+    "declined": "Kept disabled",
+    "disabled": "Disabled",
+    "active": "Enabled",
+    "conflict": "Choice required",
+    "unsupported": "Not supported yet",
+    "runtime_unavailable": "Run environment unavailable",
+    "load_failed": "Could not load"
+  },
+  "toolReason": {
+    "approval_required": "Review this tool file's access before enabling it.",
+    "declined": "You chose to keep these tools disabled.",
+    "disabled": "The source or its tool capability is disabled by policy.",
+    "active": "The tool code is loaded and ready to use.",
+    "conflict": "Another tool has the same name.",
+    "unsupported": "This tool file contains code or operations that BitFun does not support.",
+    "runtime_unavailable": "The required JavaScript run environment is unavailable.",
+    "load_failed": "BitFun could not load this tool file."
+  },
+  "toolNextStep": {
+    "approval_required": "Review the source and access above, then enable or keep these tools disabled.",
+    "declined": "Review the source and access above before enabling these tools.",
+    "disabled": "Enable this source or its tool capability before using these tools.",
+    "active": "No action needed. Disable these tools to stop using this source's tools.",
+    "conflict": "Choose which tool to use below, or leave them disabled.",
+    "unsupported": "Change the source to a single JavaScript file supported by BitFun, then refresh.",
+    "runtime_unavailable": "Install or repair Node.js, then refresh. You can continue without these external JavaScript tools while the run environment is unavailable.",
+    "load_failed": "Fix the source and refresh, or keep these tools disabled."
+  },
+  "toolConflicts": {
+    "title": "Tools with the same name",
+    "description": "Pending and current choices stay visible. Until you choose, BitFun keeps using an available local or MCP tool; if none is available, this name stays disabled. Choices are remembered until the available tools change.",
+    "toolName": "Multiple tools are named {{name}}",
+    "pending": "Choose which tool to use when this name is called.",
+    "currentSelection": "The current choice is used for this tool name. Choose another option above to change it.",
+    "currentSelectionUnavailable": "This tool source is still selected, but it is currently disabled or unavailable. Enable or repair it, or choose another tool."
+  },
+  "toolCandidateKind": {
+    "built_in": "Built in",
+    "mcp": "MCP",
+    "external": "External"
+  },
+  "scope": {
+    "user_global": "All workspaces",
+    "project": "Current workspace",
+    "remote_user": "All remote workspaces",
+    "remote_project": "Current remote workspace"
+  },
+  "executionLocation": {
+    "local": "This computer",
+    "remote": "Current remote environment",
+    "unknown": "Unknown"
+  },
+  "runtime": {
+    "java_script": "JavaScript",
+    "type_script": "TypeScript"
+  },
+  "lifecycle": {
+    "available": "Available",
+    "restricted": "Not supported in this version",
+    "degraded": "Some content unavailable",
+    "unavailable": "Temporarily unavailable",
+    "removed": "Source removed",
+    "suppressed": "Disabled",
+    "using_last_valid_version": "Using the last working version"
+  },
+  "conflicts": {
+    "title": "Commands with the same name",
+    "description": "BitFun does not choose silently. Pending and current choices stay visible, and a choice is remembered until one of the sources changes.",
+    "commandName": "More than one source provides /{{name}}",
+    "pending": "Choose an available source to use this command.",
+    "currentSelection": "The current source is used for this command. Choose another available source above to change it.",
+    "currentSelectionUnavailable": "This command source is still selected, but it cannot run in its current state. Choose an available source or fix this source first.",
+    "restricted": "Not supported in this version"
+  },
+  "opencode": {
+    "title": "OpenCode extensions",
+    "description": "External capabilities discovered from OpenCode-compatible configurations.",
+    "summary": "Found {{agents}} agents · {{commands}} commands · {{tools}} tools · {{mcps}} MCP",
+    "configLocations": "Configuration locations",
+    "inherited": "Inherited from overall mode",
+    "capability": {
+      "subagent": {
+        "description": "{{count}} agents found · from {{scope}}",
+        "effect": "Allows calling agents defined in OpenCode.",
+        "risk": "Agents can make model calls; confirm the source is trusted."
+      },
+      "command": {
+        "description": "{{count}} commands found · from {{scope}}",
+        "effect": "Allows calling OpenCode commands in BitFun.",
+        "risk": ""
+      },
+      "mcp": {
+        "description": "{{count}} MCP servers found",
+        "effect": "Allows connecting to MCP servers configured in OpenCode.",
+        "risk": "MCP servers can start local processes or connect to remote addresses."
+      },
+      "tool": {
+        "description": "{{count}} tools found · from {{scope}}",
+        "effect": "Allows using tools defined in OpenCode.",
+        "risk": "Tool code runs with your user permissions, not in a sandbox."
+      }
+    }
+  }
+}

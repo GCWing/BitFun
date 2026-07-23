@@ -1,0 +1,149 @@
+/**
+ * QuickLook component styles.
+ */
+
+.canvas-quick-look {
+  position: fixed;
+  z-index: 1100;
+  width: 500px;
+  max-width: calc(100vw - 32px);
+  max-height: 400px;
+  background: var(--color-bg-elevated);
+  border: 1px solid var(--border-base);
+  border-radius: 8px;
+  box-shadow: 0 8px 32px var(--color-overlay-black-50);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  animation: quickLookFadeIn 0.15s ease-out;
+
+  @keyframes quickLookFadeIn {
+    from {
+      opacity: 0;
+      transform: translateY(-4px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  // Header
+  &__header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 12px;
+    background: var(--color-bg-secondary);
+    border-bottom: 1px solid var(--border-base);
+  }
+
+  &__title {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex: 1;
+    min-width: 0;
+
+    span {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--color-text-primary);
+    }
+  }
+
+  &__open-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    height: 20px;
+    padding: 0;
+    background: none;
+    border: none;
+    color: var(--color-text-secondary);
+    cursor: pointer;
+    border-radius: 3px;
+    flex-shrink: 0;
+
+    &:hover {
+      background: var(--element-bg-hover);
+      color: var(--color-text-primary);
+    }
+  }
+
+  &__actions {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    flex-shrink: 0;
+  }
+
+  &__action-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    padding: 0;
+    background: none;
+    border: none;
+    color: var(--color-text-secondary);
+    cursor: pointer;
+    border-radius: 4px;
+    transition: background-color 0.15s ease, color 0.15s ease;
+
+    &:hover {
+      background: var(--element-bg-hover);
+      color: var(--color-text-primary);
+    }
+  }
+
+  &__pin-btn:hover {
+    color: var(--color-accent-500);
+  }
+
+  &__close-btn:hover {
+    color: var(--color-error);
+  }
+
+  // Content area
+  &__content {
+    flex: 1;
+    min-height: 0;
+    overflow: auto;
+
+    // FlexiblePanel overrides
+    .bitfun-flexible-panel {
+      height: 100%;
+
+      &__header {
+        display: none; // Hide inner header; use QuickLook header
+      }
+
+      &__content {
+        height: 100%;
+      }
+    }
+  }
+
+  // Footer hint
+  &__footer {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    padding: 6px 12px;
+    font-size: 11px;
+    color: var(--color-text-muted);
+    background: var(--color-bg-secondary);
+    border-top: 1px solid var(--border-subtle);
+  }
+
+  &__separator {
+    opacity: 0.5;
+  }
+}

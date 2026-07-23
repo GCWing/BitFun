@@ -1,0 +1,46 @@
+ 
+
+@use '../../../component-library/styles/tokens' as *;
+
+.notification-container {
+  position: fixed;
+  bottom: 60px;
+  left: 16px;
+  right: auto;
+  z-index: $z-notification;
+  display: flex;
+  flex-direction: column-reverse;
+  gap: 8px;
+  pointer-events: none;
+
+  > * {
+    pointer-events: auto;
+  }
+
+  
+  max-height: calc(100vh - 120px); 
+  overflow-y: auto;
+  
+  
+  scrollbar-width: none;
+  &::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+
+@media (max-width: 768px) {
+  .notification-container {
+    left: 12px;
+    right: auto;
+    max-width: calc(100vw - 24px);
+    bottom: 64px; 
+
+    .notification-item,
+    .progress-notification {
+      min-width: unset;
+      max-width: unset;
+    }
+  }
+}
+

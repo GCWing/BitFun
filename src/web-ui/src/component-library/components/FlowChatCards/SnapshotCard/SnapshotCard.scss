@@ -1,0 +1,372 @@
+/**
+ * SnapshotCard styles
+ */
+@use '../../../styles/tokens.scss' as tokens;
+@use '../_shared-styles.scss' as shared;
+
+
+.snapshot-card {
+  --snapshot-card-operation-color: var(--color-accent-500);
+  --private-snapshot-card-neutral-rgb: 107, 114, 128;
+
+  @include shared.liquid-card-base;
+  font-family: tokens.$font-family-mono;
+  transition: all tokens.$motion-base tokens.$easing-standard;
+}
+
+
+.snapshot-card--compact {
+  display: flex;
+  align-items: center;
+  gap: tokens.$size-gap-2;
+  padding: tokens.$size-gap-2 tokens.$size-gap-3;
+  margin: 4px 2rem;
+  cursor: pointer;
+  max-width: calc(100% - 4rem);
+  @include shared.compact-hover;
+
+  &:hover {
+    transform: translateY(-1px);
+  }
+}
+
+.snapshot-card--compact.snapshot-card--pending {
+  border-color: color-mix(in srgb, var(--git-color-changes) 50%, transparent);
+  background: linear-gradient(135deg, color-mix(in srgb, var(--git-color-changes) 2%, transparent), color-mix(in srgb, var(--git-color-changes) 1%, transparent));
+
+  &:hover {
+    border-color: color-mix(in srgb, var(--git-color-changes) 70%, transparent);
+  }
+}
+
+.snapshot-card--compact.snapshot-card--accepted {
+  border-color: color-mix(in srgb, var(--git-color-staged) 50%, transparent);
+  background: linear-gradient(135deg, color-mix(in srgb, var(--git-color-staged) 2%, transparent), color-mix(in srgb, var(--git-color-staged) 1%, transparent));
+
+  &:hover {
+    border-color: color-mix(in srgb, var(--git-color-staged) 70%, transparent);
+  }
+}
+
+.snapshot-card--compact.snapshot-card--rejected {
+  border-color: rgba(var(--private-snapshot-card-neutral-rgb), 0.5);
+  background: linear-gradient(
+    135deg,
+    rgba(var(--private-snapshot-card-neutral-rgb), 0.02),
+    rgba(var(--private-snapshot-card-neutral-rgb), 0.01)
+  );
+  opacity: 0.7;
+
+  &:hover {
+    border-color: rgba(var(--private-snapshot-card-neutral-rgb), 0.7);
+  }
+}
+
+.snapshot-card--compact.snapshot-card--conflict {
+  border-color: color-mix(in srgb, var(--git-color-deleted) 60%, transparent);
+  background: linear-gradient(135deg, color-mix(in srgb, var(--git-color-deleted) 2%, transparent), color-mix(in srgb, var(--git-color-deleted) 1%, transparent));
+  animation: pulse-warning 2s infinite;
+
+  &:hover {
+    border-color: color-mix(in srgb, var(--git-color-deleted) 80%, transparent);
+  }
+}
+
+@keyframes pulse-warning {
+  0%, 100% {
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--git-color-deleted) 40%, transparent);
+  }
+  50% {
+    box-shadow: 0 0 0 8px color-mix(in srgb, var(--git-color-deleted) 0%, transparent);
+  }
+}
+
+
+.snapshot-card__icon {
+  flex-shrink: 0;
+  color: var(--snapshot-card-operation-color);
+  transition: all tokens.$motion-base;
+}
+
+.snapshot-card__action {
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-xs);
+  font-weight: tokens.$font-weight-medium;
+  flex-shrink: 0;
+}
+
+.snapshot-card__filename {
+  color: var(--color-text-primary);
+  font-size: var(--font-size-xs);
+  font-weight: tokens.$font-weight-medium;
+  flex-shrink: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.snapshot-card__stats {
+  display: flex;
+  align-items: center;
+  gap: tokens.$size-gap-2;
+  font-size: 10px;
+  font-weight: tokens.$font-weight-semibold;
+  flex-shrink: 0;
+  margin-left: auto;
+
+  .file-count {
+    background: color-mix(in srgb, var(--color-accent-600) 10%, transparent);
+    color: var(--color-info);
+    padding: 2px 6px;
+    border-radius: 10px;
+    border: 1px solid var(--border-accent-soft);
+  }
+
+  .additions {
+    color: var(--color-success);
+  }
+
+  .deletions {
+    color: var(--color-error);
+  }
+}
+
+.snapshot-card__status {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+  margin-left: tokens.$size-gap-2;
+  color: var(--color-text-muted);
+}
+
+.snapshot-card__status-spinner {
+  animation: spin 1s linear infinite;
+  color: var(--color-info);
+}
+
+.snapshot-card__status-success {
+  color: var(--color-success);
+}
+
+.snapshot-card__status-error {
+  color: var(--color-error);
+}
+
+.snapshot-card__status-pending {
+  color: var(--color-warning);
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+
+.snapshot-card__actions {
+  display: flex;
+  gap: 4px;
+  margin-left: tokens.$size-gap-2;
+  flex-shrink: 0;
+}
+
+.snapshot-card__action-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border: none;
+  border-radius: tokens.$size-radius-sm;
+  background: transparent;
+  cursor: pointer;
+  transition: all tokens.$motion-base tokens.$easing-standard;
+  padding: 0;
+
+  svg {
+    stroke: currentColor;
+    fill: none;
+    stroke-width: 2;
+  }
+
+  &:disabled {
+    opacity: tokens.$opacity-disabled;
+    cursor: default;
+  }
+
+  &:hover:not(:disabled) {
+    background: var(--color-overlay-white-12);
+  }
+}
+
+.snapshot-card__action-btn--accept {
+  color: var(--color-success);
+  border: 1px solid color-mix(in srgb, var(--git-color-staged) 30%, transparent);
+
+  &:hover:not(:disabled) {
+    background: color-mix(in srgb, var(--git-color-staged) 15%, transparent);
+    border-color: color-mix(in srgb, var(--git-color-staged) 50%, transparent);
+  }
+}
+
+.snapshot-card__action-btn--reject {
+  color: var(--color-error);
+  border: 1px solid var(--color-error-border);
+
+  &:hover:not(:disabled) {
+    background: color-mix(in srgb, var(--git-color-deleted) 15%, transparent);
+    border-color: color-mix(in srgb, var(--git-color-deleted) 50%, transparent);
+  }
+}
+
+.snapshot-card__action-btn--fullscreen {
+  color: var(--color-text-secondary);
+  border: 1px solid rgba(var(--private-snapshot-card-neutral-rgb), 0.3);
+
+  &:hover:not(:disabled) {
+    background: rgba(var(--private-snapshot-card-neutral-rgb), 0.15);
+    border-color: rgba(var(--private-snapshot-card-neutral-rgb), 0.5);
+    color: var(--color-text-primary);
+  }
+}
+
+
+.snapshot-card--standard,
+.snapshot-card--detailed {
+  padding: tokens.$size-gap-4;
+  @include shared.standard-hover;
+}
+
+.snapshot-card__file-info {
+  display: flex;
+  flex-direction: column;
+  gap: tokens.$size-gap-3;
+  margin-bottom: tokens.$size-gap-4;
+}
+
+.snapshot-card__info-row {
+  display: flex;
+  align-items: center;
+  gap: tokens.$size-gap-2;
+  font-size: var(--font-size-sm);
+}
+
+.snapshot-card__label {
+  color: var(--color-text-secondary);
+  font-weight: tokens.$font-weight-medium;
+  flex-shrink: 0;
+}
+
+.snapshot-card__value {
+  color: var(--color-text-primary);
+  font-family: tokens.$font-family-mono;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.snapshot-card__diff-stats {
+  display: flex;
+  gap: tokens.$size-gap-4;
+  padding: tokens.$size-gap-3;
+  background: var(--element-bg-soft);
+  border: 1px solid var(--border-base);
+  border-radius: tokens.$size-radius-base;
+}
+
+.snapshot-card__stat-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: tokens.$size-gap-1;
+}
+
+.snapshot-card__stat-value {
+  font-size: var(--font-size-lg);
+  font-weight: tokens.$font-weight-bold;
+  font-family: tokens.$font-family-mono;
+}
+
+.snapshot-card__stat-label {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-muted);
+}
+
+.snapshot-card__stat-item--add .snapshot-card__stat-value {
+  color: var(--color-success);
+}
+
+.snapshot-card__stat-item--del .snapshot-card__stat-value {
+  color: var(--color-error);
+}
+
+.snapshot-card__button-group {
+  display: flex;
+  gap: tokens.$size-gap-2;
+  margin-top: tokens.$size-gap-4;
+}
+
+.snapshot-card__button {
+  @include shared.liquid-button('default');
+  display: inline-flex;
+  align-items: center;
+  gap: tokens.$size-gap-2;
+  flex: 1;
+  justify-content: center;
+
+  &:disabled {
+    opacity: tokens.$opacity-disabled;
+    cursor: default;
+  }
+}
+
+.snapshot-card__button--accept {
+  @include shared.liquid-button('success');
+}
+
+.snapshot-card__button--reject {
+  @include shared.liquid-button('error');
+}
+
+.snapshot-card__button--view {
+  @include shared.liquid-button('primary');
+}
+
+.snapshot-card__processing {
+  display: flex;
+  align-items: center;
+  gap: tokens.$size-gap-2;
+  padding: tokens.$size-gap-3;
+  background: color-mix(in srgb, var(--color-accent-600) 10%, transparent);
+  border: 1px solid var(--border-accent-soft);
+  border-radius: tokens.$size-radius-base;
+  color: var(--color-info);
+  font-size: var(--font-size-sm);
+}
+
+.snapshot-card__processing-icon {
+  animation: spin 1s linear infinite;
+}
+
+.snapshot-card__error {
+  display: flex;
+  align-items: center;
+  gap: tokens.$size-gap-2;
+  padding: tokens.$size-gap-3;
+  background: var(--color-error-bg);
+  border: 1px solid var(--color-error-border);
+  border-radius: tokens.$size-radius-base;
+  color: var(--color-error);
+  font-size: var(--font-size-sm);
+}
+
+
+@media (max-width: 768px) {
+  .snapshot-card__button-group {
+    flex-direction: column;
+  }
+
+  .snapshot-card__button {
+    width: 100%;
+  }
+}

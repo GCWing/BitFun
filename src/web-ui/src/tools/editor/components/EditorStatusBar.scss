@@ -1,0 +1,153 @@
+/**
+ * EditorStatusBar Styles
+ * Modern design following VS Code style
+ */
+
+@use '@/component-library/styles/tokens' as *;
+
+// Variables
+$_statusbar-height: 22px;
+$_statusbar-font-size: 11px;
+$_statusbar-padding: 0 12px;
+$_item-gap: 4px;
+$_section-gap: 12px;
+
+// Main Component
+.editor-status-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: $_statusbar-height;
+  padding: $_statusbar-padding;
+  background: var(--color-bg-scene);
+  border-top: 1px solid var(--border-subtle);
+  font-size: $_statusbar-font-size;
+  font-family: $font-family-mono;
+  color: var(--color-text-muted);
+  user-select: none;
+  flex-shrink: 0;
+  
+  // Left/Right Sections
+  &__left,
+  &__right {
+    display: flex;
+    align-items: center;
+    gap: $_section-gap;
+  }
+
+  // Items
+  &__item {
+    display: flex;
+    align-items: center;
+    gap: $_item-gap;
+    padding: 2px 6px;
+    border-radius: 3px;
+    transition: all 0.15s ease;
+    white-space: nowrap;
+    
+    &--clickable {
+      cursor: pointer;
+      
+      &:hover {
+        background: var(--element-bg-subtle);
+        color: var(--color-text-secondary);
+      }
+      
+      &:active {
+        background: var(--element-bg-medium);
+      }
+    }
+  }
+
+  // Separator
+  &__separator {
+    width: 1px;
+    height: 12px;
+    background: var(--border-subtle);
+    flex-shrink: 0;
+  }
+
+  // Selection Info
+  &__selection {
+    color: var(--color-text-muted);
+    opacity: 0.7;
+    margin-left: 4px;
+  }
+
+  // Read-only Badge
+  &__readonly {
+    background: color-mix(in srgb, var(--color-warning) 15%, transparent);
+    color: var(--color-warning);
+    padding: 1px 6px;
+    border-radius: 3px;
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+
+  // LSP Status
+  &__lsp {
+    padding: 2px 4px;
+    
+    &--connected {
+      color: var(--color-success);
+    }
+    
+    &--connecting {
+      color: var(--color-warning);
+    }
+    
+    &--disconnected {
+      color: var(--color-text-muted);
+      opacity: 0.6;
+    }
+  }
+
+  &__lsp-spinner {
+    animation: status-spin 1s linear infinite;
+  }
+}
+
+// Animations
+@keyframes status-spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+// Responsive
+@media (max-width: 640px) {
+  .editor-status-bar {
+    &__selection {
+      display: none;
+    }
+    
+    &__item {
+      padding: 2px 4px;
+    }
+    
+    &__separator {
+      margin: 0 4px;
+    }
+  }
+}
+
+// High Contrast Mode
+@media (prefers-contrast: high) {
+  .editor-status-bar {
+    border-top-width: 2px;
+    
+    &__indicator--modified {
+      fill: var(--color-warning);
+      color: var(--color-warning);
+    }
+    
+    &__indicator--saved {
+      color: var(--color-success);
+    }
+  }
+}

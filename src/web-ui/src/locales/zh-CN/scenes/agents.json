@@ -1,0 +1,421 @@
+{
+  "title": "智能体",
+  "desc": "协作执行专项任务的子智能体 — 共 {{total}} 个，{{enabled}} 个启用",
+  "manage": "管理",
+  "builtin": "内置",
+  "custom": "自定义",
+  "empty": "暂无子智能体",
+  "goManage": "前往管理",
+  "loading": "加载中…",
+  "page": {
+    "title": "专业智能体",
+    "subtitle": "查看与管理核心模式、Agent 与 Sub-Agent，配置工具与 Skills。",
+    "searchPlaceholder": "搜索 Agent 名称或描述…",
+    "newAgent": "新建 Agent"
+  },
+  "nav": {
+    "coreAgents": "核心智能体",
+    "agents": "Agent"
+  },
+  "filters": {
+    "source": "来源",
+    "kind": "类型",
+    "builtin": "内置",
+    "user": "用户",
+    "project": "项目",
+    "external": "外部",
+    "mode": "Agent",
+    "subagent": "Sub-Agent"
+  },
+  "coreAgentsZone": {
+    "title": "核心智能体",
+    "subtitle": "平台内置的核心 Agent，覆盖主流 AI 工作流，开箱即用。",
+    "empty": "暂未检测到核心智能体",
+    "roleLabel": "主要应用 · ",
+    "computerUseDisabledBadge": "已在设置中禁用",
+    "modes": {
+      "agentic": {
+        "role": "编码专业智能体"
+      },
+      "cowork": {
+        "role": "办公智能体"
+      },
+      "computerUse": {
+        "role": "电脑操作智能体"
+      },
+      "acpExternal": {
+        "role": "ACP智能体"
+      }
+    }
+  },
+  "agentsZone": {
+    "title": "Agent 总览",
+    "subtitle": "查看所有 Agent / Sub-Agent，并直接管理工具与 Skills。",
+    "empty": {
+      "noAgents": "当前没有可用的 Agent",
+      "noMatch": "没有匹配的 Agent"
+    }
+  },
+  "agentCard": {
+    "badges": {
+      "agent": "Agent",
+      "userMode": "用户 Agent",
+      "projectMode": "项目 Agent",
+      "subagent": "Sub-Agent",
+      "userSubagent": "用户 Sub-Agent",
+      "projectSubagent": "项目 Sub-Agent",
+      "externalSubagent": "外部 Sub-Agent",
+      "disabled": "已禁用"
+    },
+    "actions": {
+      "expand": "展开详情"
+    },
+    "meta": {
+      "tools": "{{count}} 个工具",
+      "skills": "{{count}} 个 Skills",
+      "subagents": "{{count}} 个 Sub-Agent",
+      "externalProvider": "外部 · {{provider}}",
+      "singleRun": "单次运行 · 不支持续问"
+    },
+    "modelSelector": {
+      "label": "模型",
+      "default": "使用默认 Sub-Agent 模型",
+      "inherit": "继承父会话",
+      "fast": "快速模型",
+      "primary": "主力模型",
+      "auto": "自动选择",
+      "updateFailed": "更新 Sub-Agent 模型失败"
+    }
+  },
+  "capabilityCategories": {
+    "coding": "编码",
+    "docs": "文档",
+    "analysis": "分析",
+    "testing": "测试",
+    "creative": "创意",
+    "ops": "运维"
+  },
+  "agentsOverview": {
+    "filterUser": "用户级",
+    "filterProject": "项目级",
+    "backToOverview": "返回总览",
+    "capabilities": "能力配置",
+    "tools": "工具",
+    "toolsReset": "重置默认",
+    "toolsCancel": "取消编辑",
+    "toolsSave": "保存",
+    "toolsEdit": "管理工具",
+    "toolsResetSuccess": "已重置为默认工具",
+    "toolsResetFailed": "重置工具失败",
+    "toolToggleFailed": "工具切换失败",
+    "skills": "Skills",
+    "subagents": "Sub-Agents",
+    "skillsCancel": "取消编辑",
+    "skillsSave": "保存",
+    "skillsEdit": "管理 Skills",
+    "subagentsEdit": "管理 Sub-Agents",
+    "subagentsDone": "完成",
+    "noSubagents": "当前没有可管理的 Sub-Agent",
+    "enableGroup": "启用分组",
+    "disableGroup": "禁用分组",
+    "clearGroup": "清空",
+    "reset": "重置",
+    "cancel": "取消",
+    "save": "保存",
+    "skillToggleFailed": "Skill 切换失败",
+    "subagentToggleFailed": "Sub-Agent 切换失败",
+    "sharedProfileLabel": "共享配置",
+    "sharedProfileDefaultLabel": "共享编码配置",
+    "sharedProfileDescription": "这里的改动会同时应用到：{{modes}}。",
+    "unknownSkillSource": "其他来源",
+    "skillScopeUser": "用户",
+    "skillScopeProject": "项目",
+    "skillScopeLocalUser": "本机 · 用户",
+    "skillScopeRemoteProject": "远程工作区 · 项目",
+    "skillRuntimeSelected": "运行时采用",
+    "skillRuntimeCovered": "已启用，被 {{source}} 覆盖",
+    "skillRuntimeEnabled": "已启用，当前未采用",
+    "skillShadowed": "该 Skill 被同名且优先级更高的 Skill 遮蔽，运行时不会生效",
+    "noSkills": "未启用任何 Skill",
+    "capabilityTooltip": {
+      "executionPermission": "执行权限",
+      "standardPermission": "常规",
+      "provider": "提供方",
+      "mcpServer": "MCP 服务器",
+      "skillKey": "Key",
+      "sourceLevel": "来源/层级",
+      "status": "状态",
+      "subagentId": "ID",
+      "source": "来源",
+      "toolCount": "工具数",
+      "externalManaged": "由外部提供方管理"
+    },
+    "skillGroups": {
+      "computerUse": "Computer Use",
+      "office": "Office",
+      "meta": "Meta",
+      "miniapp": "MiniApp",
+      "canvas": "画布",
+      "gstack": "gstack",
+      "other": "其他"
+    },
+    "skillGroupPicker": {
+      "builtin": "内置分组",
+      "myGroups": "我的分组",
+      "otherSkills": "其他 Skill",
+      "selectedCount": "已启用 {{count}} 个 Skill",
+      "manageGroups": "管理分组",
+      "manageTitle": "管理我的 Skill 分组",
+      "manageSubtitle": "整理可复用的个人 Skill 选择。",
+      "createGroup": "新建分组",
+      "saveGroup": "保存分组",
+      "editGroup": "编辑分组",
+      "deleteGroup": "删除分组",
+      "moveUp": "上移",
+      "moveDown": "下移",
+      "groupName": "分组名称",
+      "groupNamePlaceholder": "例如：日常开发",
+      "groupSkills": "Skill",
+      "groupCount": "{{count}} 个 Skill",
+      "unavailableCount": "{{count}} 个不可用",
+      "noUserGroups": "还没有个人 Skill 分组。",
+      "enableGroupSkills": "启用 {{name}} 中的所有 Skill",
+      "clearGroupSkills": "清空 {{name}} 中的 Skill",
+      "deleteTitle": "删除 Skill 分组",
+      "deleteMessage": "删除 \"{{name}}\"？这不会更改任何 Agent 的 Skill 选择。",
+      "deleteConfirm": "删除",
+      "saveFailed": "保存 Skill 分组失败",
+      "validation": {
+        "nameRequired": "请输入分组名称",
+        "nameDuplicate": "已存在同名分组",
+        "skillsRequired": "请至少选择一个 Skill"
+      }
+    },
+    "toolGroups": {
+      "builtin": "内置分组",
+      "myGroups": "我的分组",
+      "extensions": "扩展工具",
+      "otherTools": "其他工具",
+      "filesSearch": "查看与检索",
+      "fileEditing": "文件编辑",
+      "commands": "命令执行",
+      "delegation": "代理与技能",
+      "web": "网络访问",
+      "imageUnderstanding": "图像理解",
+      "interactionCanvas": "交互与画布",
+      "computerAutomation": "计算机与自动化",
+      "extension": "扩展 · {{provider}}",
+      "other": "其他",
+      "selectedCount": "已启用 {{count}} 个工具",
+      "manageGroups": "管理分组",
+      "manageTitle": "管理我的工具分组",
+      "manageSubtitle": "整理可复用的个人工具选择。",
+      "createGroup": "新建分组",
+      "saveGroup": "保存分组",
+      "editGroup": "编辑分组",
+      "deleteGroup": "删除分组",
+      "moveUp": "上移",
+      "moveDown": "下移",
+      "groupName": "分组名称",
+      "groupNamePlaceholder": "例如：日常代码修改",
+      "groupTools": "工具",
+      "groupCount": "{{count}} 个工具",
+      "unavailableCount": "{{count}} 个不可用",
+      "noUserGroups": "还没有个人工具分组。",
+      "noEnabledTools": "未启用任何工具",
+      "readonly": "只读",
+      "permissionRequired": "需要权限",
+      "enableGroupTools": "启用 {{name}} 中的全部工具",
+      "clearGroupTools": "清空 {{name}} 中的工具",
+      "deleteTitle": "删除工具分组",
+      "deleteMessage": "确定删除「{{name}}」？不会影响任何 Agent 的工具选择。",
+      "deleteConfirm": "删除",
+      "saveFailed": "保存工具分组失败",
+      "validation": {
+        "nameRequired": "请输入分组名称",
+        "nameDuplicate": "已存在同名分组",
+        "toolsRequired": "请至少选择一个工具"
+      }
+    },
+    "customActions": "自定义 Agent",
+    "editAgent": "编辑",
+    "deleteAgent": "删除",
+    "externalActions": "外部 Agent",
+    "manageExternalAgent": "前往外部 AI 应用管理",
+    "deleteConfirm": "确定删除自定义 Agent「{{name}}」？此操作不可恢复。",
+    "deleteSuccess": "已删除「{{name}}」",
+    "deleteFailed": "删除失败：",
+    "form": {
+      "title": "新建自定义 Agent",
+      "subtitle": "创建自定义 mode 或 sub-agent，分别定义它的提示词、工具和运行时上下文策略。",
+      "titleEdit": "编辑自定义 Agent",
+      "subtitleEdit": "可修改显示名称、描述、系统提示词、工具和运行时上下文策略。",
+      "subtitleEditMode": "可修改显示名称、描述、系统提示词、工具和运行时上下文策略。模型请在 ChatInput 中为该 Agent 选择。",
+      "subtitleEditSubagent": "可修改显示名称、描述、系统提示词、工具、模型和运行时上下文策略。",
+      "loadingDetail": "加载中…",
+      "save": "保存",
+      "updateSuccess": "已保存「{{name}}」",
+      "updateFailed": "保存失败：",
+      "kind": "类型",
+      "kindAgentTooltip": "创建后可在对话输入框的模式选择器中作为独立模式直接选择。",
+      "kindSubagentTooltip": "创建后主 Agent 可通过委派它完成子任务；不会作为可直接选择的模式。",
+      "id": "ID",
+      "idPlaceholder": "用于配置和路由的稳定标识符",
+      "idRequired": "ID 不能为空",
+      "idFormat": "只能以字母开头，包含字母/数字/下划线/连字符",
+      "name": "名称",
+      "namePlaceholder": "界面展示名称",
+      "nameRequired": "名称不能为空",
+      "level": "级别",
+      "modeUserOnly": "当前版本中，自定义 mode 仅支持用户级。",
+      "description": "描述",
+      "descPlaceholder": "简要描述该 Agent 的用途",
+      "descRequired": "描述不能为空",
+      "prompt": "系统提示词",
+      "promptPlaceholder": "输入系统提示词，定义 Agent 的行为...\n\n支持以下占位符\n{PERSONA}: SOUL.md/USER.md/IDENTITY.md\n{LANGUAGE_PREFERENCE}: 语言偏好",
+      "promptRequired": "系统提示词不能为空",
+      "readonly": "只读模式",
+      "model": "模型",
+      "modelPlaceholder": "可填写 inherit、auto、fast 或具体模型 ID",
+      "modelRequired": "模型不能为空",
+      "tools": "工具",
+      "toolsOptional": "可选",
+      "toolsHint": "（{{optionalLabel}}，不选则使用默认）",
+      "contextPolicy": "运行时上下文",
+      "contextPolicyHint": "（选择注入到提示词中的工作区上下文片段）",
+      "contextWorkspaceContext": "工作区上下文",
+      "contextWorkspaceContextTooltip": "加入当前工作区身份和会话级概况，帮助 Agent 知道自己正在处理哪个项目。",
+      "contextWorkspaceInstructions": "工作区说明",
+      "contextWorkspaceInstructionsTooltip": "加入 AGENTS.md 等项目指导，让 Agent 遵循仓库约定和本地规则。",
+      "contextProjectLayout": "项目结构",
+      "contextProjectLayoutTooltip": "加入精简的项目结构摘要，帮助 Agent 更快判断相关文件和目录。",
+      "noWorkspace": "需要先打开项目",
+      "cancel": "取消",
+      "submit": "创建",
+      "createSuccess": "已创建 Agent「{{name}}」",
+      "createFailed": "创建失败：",
+      "review": "评审",
+      "reviewToolsHint": "Review 检查只能使用只读工具。"
+    }
+  },
+  "reviewTeams": {
+    "members": {
+      "businessLogic": {
+        "funName": "逻辑审核员",
+        "role": "业务逻辑审核员",
+        "description": "专门追踪业务规则、状态流转、回滚路径和真实用户正确性的流程侦探。",
+        "responsibilities": [
+          "验证业务流程、状态切换和领域规则是否仍然正确。",
+          "检查边界条件、回滚路径以及数据一致性假设。",
+          "优先指出会直接影响用户结果或产品意图的问题。"
+        ]
+      },
+      "performance": {
+        "funName": "性能审核员",
+        "role": "性能审核员",
+        "description": "专盯热点路径、无效工作、阻塞调用和规模化回退问题的速度分析员。",
+        "responsibilities": [
+          "检查热点路径、大循环以及不必要的分配或重复计算。",
+          "识别阻塞调用、N+1 模式和低效的数据搬运。",
+          "给出贴合现有架构、可落地的性能优化建议。"
+        ]
+      },
+      "security": {
+        "funName": "安全审核员",
+        "role": "安全审核员",
+        "description": "专门盯住注入风险、信任边界、权限错误以及危险文件或命令处理的边界守卫。",
+        "responsibilities": [
+          "审核信任边界、鉴权假设和敏感数据处理方式。",
+          "寻找注入、危险命令执行与数据暴露风险。",
+          "优先给出不依赖大改造的具体修复方案。"
+        ]
+      },
+      "judge": {
+        "funName": "审核仲裁员",
+        "role": "审核质检员",
+        "description": "独立的第三方仲裁者，从逻辑一致性和证据质量角度校验审核员报告。仅在特定声明需要验证时才抽查代码位置，而非从头重新审核代码库。",
+        "responsibilities": [
+          "基于逻辑一致性和证据质量，对各审核员的发现进行验证、合并、重新定级或驳回。",
+          "通过审核审核员的推理过程，过滤误报以及方向错误的优化建议。",
+          "仅在审核员的声明需要验证时，对特定代码位置进行抽查。",
+          "确保每条保留的问题都带有明确修复方案或后续计划。"
+        ]
+      },
+      "architecture": {
+        "funName": "架构审核员",
+        "role": "架构审核员",
+        "description": "负责检查模块边界、依赖方向、API 契约设计和抽象完整性的结构守护者。",
+        "responsibilities": [
+          "检测层级边界违规和方向错误的导入。",
+          "验证 API 契约、工具模式和传输消息的一致性。",
+          "确保平台无关代码不会泄露平台特定细节。"
+        ]
+      },
+      "frontend": {
+        "funName": "前端审核员",
+        "role": "前端审核员",
+        "description": "检查国际化同步、前端性能模式、无障碍访问和前后端契约一致性的 UI 专家。",
+        "responsibilities": [
+          "验证所有语言区域的国际化键完整性。",
+          "检查前端性能模式（记忆化、虚拟化、effect/reactivity 依赖）。",
+          "标记无障碍访问违规和前后端 API 契约偏差。"
+        ]
+      }
+    },
+    "extraReviewer": {
+      "role": "额外专项审核员",
+      "description": "严格 Review 的可选专项覆盖，会带着自己的系统提示、工具和视角参与审核。",
+      "responsibilities": [
+        "从额外的独立视角补充本次审核目标中的问题发现。",
+        "保持 scope 严格聚焦在本次 diff、commit 或工作区改动上。",
+        "输出清晰、可执行的修复建议或后续计划。"
+      ]
+    }
+  },
+  "agentDescriptions": {
+    "Agentic": "自主执行模式：自动分析需求、规划任务并执行代码修改",
+    "Cowork": "协作模式：与您并肩工作，在关键步骤征求您的确认",
+    "ComputerUse": "计算机使用模式：能够操作浏览器、桌面应用和文件系统",
+    "DeepResearch": "深度研究智能体：对复杂主题进行系统性调研和分析",
+    "Explore": "探索智能体：快速浏览代码库，理解项目结构和关键文件",
+    "FileFinder": "文件查找智能体：根据需求定位相关文件和代码片段",
+    "CodeReview": "代码审查智能体：对代码进行质量检查和改进建议",
+    "DeepReview": "严格 Review 兼容智能体：在历史会话或命令需要时执行最高强度 Review 路径",
+    "GenerateDoc": "文档生成智能体：自动生成代码文档和说明",
+    "Init": "初始化智能体：帮助设置项目结构和初始配置",
+    "ReviewFixer": "审查修复智能体：根据审查结果自动修复代码问题",
+    "Multitask": "多任务模式：将工作拆为正交分支，并在合适时并行使用子智能体推进",
+    "Plan": "规划模式：制定详细的任务计划和执行步骤",
+    "Debug": "调试模式：系统性地诊断和修复代码中的错误",
+    "Claw": "抓取模式：从外部源提取和整合信息",
+    "Team": "团队模式：协调多个智能体协同完成复杂任务"
+  },
+  "legionPattern": {
+    "back": "返回",
+    "choosePattern": "选择模式",
+    "orchestrationPatterns": "编排模式",
+    "overview": "概览",
+    "complexity": "复杂度：L{{level}}",
+    "nodesCount": "{{count}} 个节点",
+    "edgesCount": "{{count}} 条边",
+    "noEdges": "无边关系（独立智能体）",
+    "usePattern": "使用此模式",
+    "gate": "关卡",
+    "nodes": "节点（{{count}}）",
+    "edges": "边（{{count}}）",
+    "meta": {
+      "nodes": "节点",
+      "edges": "边",
+      "gate": "关卡"
+    },
+    "complexityLabel": {
+      "l1": "L1",
+      "l2l3": "L2-L3",
+      "l3": "L3",
+      "l4": "L4",
+      "l5l6": "L5-L6",
+      "l6": "L6",
+      "l7": "L7"
+    }
+  }
+}

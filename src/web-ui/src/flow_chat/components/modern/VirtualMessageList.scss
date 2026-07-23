@@ -1,0 +1,136 @@
+/**
+ * Virtualized message list styles.
+ */
+
+@use '../../../component-library/styles/_extended-mixins' as mixins;
+
+.virtual-message-list {
+  width: 100%;
+  height: 100%;
+  position: relative;
+  background: transparent; // Transparent background for glass effect.
+  overflow: hidden; /* Prevent overflow. */
+  overflow-x: hidden; /* Explicitly disable horizontal scrolling. */
+  
+  
+  // Ensure the Virtuoso container has correct sizing.
+  > div:first-child {
+    width: 100%;
+    height: 100%;
+    position: relative;
+    z-index: 1; // Keep scroll content below overlays.
+    overflow-x: hidden; // Disable horizontal scrolling.
+    
+    // Show scrollbar thumb when the anchor track is hovered.
+    &.anchor-hovering {
+      &::-webkit-scrollbar-thumb {
+        background: var(--scrollbar-thumb) !important;
+      }
+    }
+  }
+
+  // Ensure the real scroller always spans the full panel width,
+  // even when inner message content is max-width constrained.
+  [data-virtuoso-scroller='true'],
+  [data-virtuoso-scroller] {
+    width: 100% !important;
+    max-width: none !important;
+    margin: 0 !important;
+    overflow-anchor: none;
+    scrollbar-gutter: stable;
+  }
+  
+  &--empty {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--color-bg-scene); /* FlowChat background. */
+  }
+  
+  .empty-state {
+    text-align: center;
+    color: var(--color-text-muted);
+    padding: 2rem;
+  }
+  
+  // Reserve space for the floating FlowChatHeader.
+  // Header height (36px) + border (1px) + blur area (16px) + extra gap (4px) = 57px.
+  .message-list-header {
+    height: 57px;
+    min-height: 57px;
+    flex-shrink: 0;
+  }
+
+  &__history-boundary-status {
+    width: fit-content;
+    max-width: calc(100% - 32px);
+    margin: 0 auto 8px;
+    padding: 4px 10px;
+    border: 1px solid var(--border-subtle);
+    border-radius: 6px;
+    background: var(--element-bg-subtle);
+    color: var(--color-text-muted);
+    font-size: 12px;
+    line-height: 18px;
+    text-align: center;
+    overflow-wrap: anywhere;
+    pointer-events: none;
+  }
+  
+  .message-list-footer {
+    /* Inline height from VirtualMessageList (measured drop-zone + bottom inset + tail clearance). */
+    height: 120px;
+    min-height: 72px;
+    overflow-anchor: none;
+  }
+
+  &__static-scroller {
+    width: 100%;
+    height: 100%;
+    position: relative;
+    z-index: 1;
+    overflow-y: auto;
+    overflow-x: hidden;
+    overflow-anchor: none;
+    scrollbar-gutter: stable;
+  }
+
+  &__static-items {
+    width: 100%;
+  }
+
+  &__initial-history-spacer {
+    width: 100%;
+    flex: 0 0 auto;
+    pointer-events: none;
+    overflow-anchor: none;
+  }
+
+  &__projection-handoff-overlay {
+    position: absolute;
+    inset: 0;
+    z-index: 2;
+    overflow: hidden;
+    pointer-events: none;
+    background: var(--color-bg-scene);
+    contain: paint;
+  }
+
+  &__projection-handoff-content {
+    width: 100%;
+    will-change: transform;
+
+    &--bottom {
+      position: absolute;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      min-height: 100%;
+      display: flex;
+      flex-direction: column;
+      justify-content: flex-end;
+      transform: none;
+    }
+  }
+
+}

@@ -1,0 +1,89 @@
+/**
+ * Read-only Code Block Styles
+ */
+
+.readonly-code-block {
+  --readonly-code-selection-rgb: 30, 136, 229;
+  --readonly-code-selection-bg: rgba(var(--readonly-code-selection-rgb), 0.3);
+
+  position: relative;
+  width: 100%;
+  overflow: hidden;
+  border-radius: 6px;
+  background: var(--color-bg-secondary);
+  
+  // Monaco editor container
+  .monaco-editor-core {
+    width: 100%;
+    height: 100%;
+  }
+  
+  // Disable some editor visual effects
+  .monaco-editor {
+    // Hide cursor
+    .cursor {
+      display: none !important;
+    }
+    
+    // Adjust line highlight
+    .current-line {
+      background: transparent !important;
+      border: none !important;
+    }
+    
+    // Adjust selection style
+    .selected-text {
+      background: var(--readonly-code-selection-bg) !important;
+    }
+  }
+  
+  // Keep editor elements always fully visible so the horizontal scrollbar
+  // remains interactive even when the mouse moves to the bottom edge.
+  .monaco-editor {
+    .margin,
+    .monaco-scrollable-element {
+      opacity: 1;
+    }
+  }
+  
+  // Click effect
+  &[role="button"] {
+    cursor: pointer;
+    
+    &:active {
+      transform: scale(0.995);
+    }
+  }
+}
+
+// Compact mode
+.readonly-code-block--compact {
+  .monaco-editor {
+    .view-lines {
+      padding: 4px 0;
+    }
+    
+    .margin {
+      padding-left: 4px;
+    }
+  }
+}
+
+// Bordered mode
+.readonly-code-block--bordered {
+  border: 1px solid var(--border-base);
+}
+
+// Inline mode (for inline code)
+.readonly-code-block--inline {
+  display: inline-block;
+  vertical-align: middle;
+  border-radius: 4px;
+  padding: 2px 4px;
+  
+  .monaco-editor {
+    .view-lines {
+      padding: 0;
+    }
+  }
+}

@@ -1,0 +1,120 @@
+/**
+ * Status bar popover styles (Cursor/VS Code style).
+ * Small popover, fade-in + subtle scale animation.
+ */
+
+ @use '@/component-library/styles/tokens' as *;
+
+ $popover-z: 360;
+ $popover-gap: 4px;
+ $popover-radius: 6px;
+ $popover-shadow: 0 4px 16px rgba(var(--color-static-black-rgb), 0.35);
+
+ .status-bar-popover {
+   position: fixed;
+   z-index: $popover-z;
+   min-width: 200px;
+   max-width: 320px;
+   background: var(--color-bg-elevated);
+   border: 1px solid var(--border-subtle);
+   border-radius: $popover-radius;
+   box-shadow: $popover-shadow;
+   font-size: 12px;
+   font-family: $font-family-sans;
+   color: var(--color-text-primary);
+   transform: translateY(-100%);
+   animation: status-bar-popover-enter 0.15s $easing-decelerate forwards;
+
+   &__input-wrap {
+     padding: 8px 10px;
+   }
+
+   &__input {
+    width: 100%;
+
+    .bitfun-input-container {
+      height: 28px;
+      padding: 0 8px;
+      border-radius: 4px;
+    }
+
+    .bitfun-input {
+      font-size: 12px;
+      font-family: $font-family-mono;
+    }
+   }
+
+   &__list {
+     max-height: 280px;
+     overflow-y: auto;
+     padding: 4px 0;
+   }
+
+   &__item {
+    display: flex;
+     align-items: center;
+    justify-content: flex-start;
+    width: 100%;
+    height: auto;
+    min-height: 30px;
+    border-radius: 0;
+    border: none;
+    box-shadow: none;
+     padding: 6px 12px;
+     cursor: pointer;
+     white-space: nowrap;
+     transition: background 0.1s ease;
+    font-size: 12px;
+    font-weight: 400;
+    color: var(--color-text-primary);
+
+     &:hover {
+       background: var(--color-overlay-white-08);
+     }
+
+    &:focus-visible {
+      outline: none;
+      background: var(--color-overlay-white-12);
+    }
+
+     &--active {
+       background: var(--color-overlay-white-12);
+       color: var(--color-accent-400);
+     }
+   }
+
+   &__item-icon {
+     display: inline-flex;
+     align-items: center;
+     justify-content: center;
+     width: 18px;
+     height: 18px;
+     margin-right: 8px;
+     flex-shrink: 0;
+     color: var(--color-text-muted);
+     opacity: 0.9;
+   }
+
+   .status-bar-popover__item--active &__item-icon {
+     color: var(--color-accent-400);
+   }
+
+   &__hint {
+     padding: 6px 12px;
+     font-size: 11px;
+     color: var(--color-text-muted);
+     border-bottom: 1px solid var(--border-subtle);
+   }
+ }
+
+ @keyframes status-bar-popover-enter {
+   from {
+     opacity: 0;
+     transform: translateY(-100%) scale(0.96);
+   }
+   to {
+     opacity: 1;
+     transform: translateY(-100%) scale(1);
+   }
+ }
+

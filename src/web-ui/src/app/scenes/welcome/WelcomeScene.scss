@@ -1,0 +1,320 @@
+/**
+ * WelcomeScene styles.
+ * Session card hover effects mirror btn-action / btn-action-ai from component library.
+ */
+
+@use '../../../component-library/styles/tokens.scss' as *;
+
+.welcome-scene {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  width: 100%;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: $size-gap-8 $size-gap-6;
+  animation: welcome-fade-in 0.35s $easing-decelerate;
+
+  &__content {
+    display: flex;
+    flex-direction: column;
+    gap: $size-gap-8;
+    max-width: 560px;
+    width: 100%;
+  }
+
+  &__greeting {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    gap: $size-gap-3;
+  }
+
+  &__title {
+    margin: 0;
+    font-size: var(--font-size-2xl);
+    line-height: $line-height-tight;
+    letter-spacing: -0.02em;
+    color: var(--color-text-primary);
+    font-weight: $font-weight-semibold;
+  }
+
+  &__greeting-label {
+    font-size: var(--font-size-lg);
+    line-height: 1.5;
+    color: var(--color-text-primary);
+    margin: 0;
+    max-width: 420px;
+  }
+
+  // ── Divider ──────────────────────────────────────────
+
+  &__divider {
+    height: 1px;
+    background: var(--border-subtle);
+  }
+
+  // ── Switch workspace section ─────────────────────────
+
+  &__switch {
+    display: flex;
+    flex-direction: column;
+    gap: $size-gap-3;
+  }
+
+  &__switch-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: $size-gap-3;
+  }
+
+  &__section-label {
+    display: flex;
+    align-items: center;
+    gap: $size-gap-1;
+    font-size: var(--font-size-sm);
+    color: var(--color-text-muted);
+    font-weight: $font-weight-medium;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+
+  &__switch-actions {
+    display: flex;
+    align-items: center;
+    gap: $size-gap-1;
+  }
+
+  &__link-btn {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px $size-gap-2;
+    border: none;
+    border-radius: $size-radius-sm;
+    background: transparent;
+    color: var(--color-text-muted);
+    font-size: var(--font-size-sm);
+    cursor: pointer;
+    transition: background $motion-fast $easing-standard,
+                color $motion-fast $easing-standard;
+
+    &:hover:not(:disabled) {
+      background: var(--element-bg-soft);
+      color: var(--color-text-secondary);
+    }
+
+    &:disabled {
+      opacity: $opacity-disabled;
+      cursor: default;
+    }
+
+    svg { flex-shrink: 0; }
+  }
+
+  // ── Recent list ──────────────────────────────────────
+
+  &__recent-list {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+  }
+
+  &__recent-row {
+    display: flex;
+    align-items: stretch;
+    border-radius: $size-radius-sm;
+    overflow: hidden;
+    transition: background $motion-fast $easing-standard;
+
+    &:hover {
+      background: var(--element-bg-soft);
+
+      .welcome-scene__recent-item {
+        color: var(--color-text-primary);
+
+        svg { color: var(--color-text-secondary); }
+      }
+
+      .welcome-scene__recent-time-btn__label {
+        opacity: 0;
+      }
+
+      .welcome-scene__recent-time-btn__icon {
+        opacity: 1;
+        color: var(--color-text-secondary);
+      }
+    }
+
+    &:hover .welcome-scene__recent-time-btn:hover {
+      background: var(--element-bg-subtle);
+
+      .welcome-scene__recent-time-btn__icon svg {
+        transform: scale(1.12);
+      }
+    }
+  }
+
+  &__recent-item {
+    display: flex;
+    align-items: center;
+    gap: $size-gap-2;
+    flex: 1;
+    min-width: 0;
+    padding: $size-gap-1 + 2px $size-gap-2;
+    border: none;
+    background: transparent;
+    color: var(--color-text-secondary);
+    font-size: var(--font-size-base);
+    cursor: pointer;
+    text-align: left;
+    transition: color $motion-fast $easing-standard;
+
+    svg {
+      flex-shrink: 0;
+      color: var(--color-text-muted);
+      transition: color $motion-fast $easing-standard;
+    }
+  }
+
+  &__recent-time-btn {
+    position: relative;
+    flex-shrink: 0;
+    align-self: stretch;
+    min-width: 5.25rem;
+    margin: 0;
+    padding: 0 $size-gap-2 0 $size-gap-1;
+    border: none;
+    background: transparent;
+    color: var(--color-text-muted);
+    font-size: var(--font-size-sm);
+    cursor: pointer;
+    transition: color $motion-fast $easing-standard,
+                background $motion-fast $easing-standard;
+
+    &__label {
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      min-height: 100%;
+      padding-right: 1px;
+      transition: opacity $motion-fast $easing-standard;
+    }
+
+    &__icon {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      padding-right: $size-gap-2;
+      opacity: 0;
+      color: var(--color-text-muted);
+      pointer-events: none;
+      transition: opacity $motion-fast $easing-standard,
+                  color $motion-fast $easing-standard;
+
+      svg {
+        display: block;
+        transform-origin: center right;
+        transition: transform $motion-fast $easing-standard;
+      }
+    }
+
+    &:focus-visible {
+      color: var(--color-text-primary);
+      outline: 2px solid var(--color-accent-500);
+      outline-offset: -2px;
+      z-index: 1;
+    }
+
+    &:focus-visible &__label {
+      opacity: 0;
+    }
+
+    &:focus-visible &__icon {
+      opacity: 1;
+      color: var(--color-text-secondary);
+    }
+  }
+
+  &__recent-name {
+    flex: 1;
+    display: inline-flex;
+    align-items: baseline;
+    gap: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    min-width: 0;
+  }
+
+  &__recent-host {
+    flex-shrink: 0;
+    max-width: 40%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    color: var(--color-text-muted);
+    font-size: var(--font-size-sm);
+  }
+
+  &__recent-host-sep {
+    flex-shrink: 0;
+    color: var(--color-text-muted);
+    opacity: 0.6;
+    font-size: var(--font-size-sm);
+  }
+
+  &__no-recent {
+    font-size: var(--font-size-xs);
+    color: var(--color-text-muted);
+    margin: 0;
+    padding: $size-gap-1 $size-gap-2;
+  }
+
+}
+
+// ── Animations ────────────────────────────────────────
+
+@keyframes welcome-fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+// ── Responsive ────────────────────────────────────────
+
+@media (max-width: 480px) {
+  .welcome-scene {
+    padding: $size-gap-5 $size-gap-4;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .welcome-scene {
+    animation: none;
+
+    &__recent-item,
+    &__recent-time-btn,
+    &__link-btn {
+      transition: none;
+    }
+
+    &__recent-time-btn__icon svg {
+      transition: none;
+    }
+  }
+
+  .welcome-scene__recent-row:hover .welcome-scene__recent-time-btn:hover .welcome-scene__recent-time-btn__icon svg {
+    transform: none;
+  }
+}

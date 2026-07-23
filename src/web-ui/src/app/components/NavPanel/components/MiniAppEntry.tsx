@@ -1,0 +1,128 @@
+import React, { useMemo } from 'react';
+import { Badge, Tooltip } from '@/component-library';
+import { useI18n } from '@/infrastructure/i18n/hooks/useI18n';
+import { useMiniAppStore } from '@/app/scenes/miniapps/miniAppStore';
+import { renderMiniAppIcon, getMiniAppIconGradient } from '@/app/scenes/miniapps/utils/miniAppIcons';
+
+const MAX_VISIBLE_RUNNING_APPS = 3;
+
+interface MiniAppEntryProps {
+  isActive: boolean;
+  activeMiniAppId?: string | null;
+  onOpenMiniApps: () => void;
+  onOpenMiniApp: (appId: string) => void;
+}
+
+const MiniAppEntry: React.FC<MiniAppEntryProps> = ({
+  isActive,
+  activeMiniAppId = null,
+  onOpenMiniApps,
+  onOpenMiniApp,
+}) => {
+  const { t } = useI18n('common');
+  const apps = useMiniAppStore((state) => state.apps);
+  const runningWorkerIds = useMiniAppStore((state) => state.runningWorkerIds);
+  const customizingAppIds = useMiniAppStore((state) => state.customizingAppIds);
+  const customizingIdSet = useMemo(() => new Set(customizingAppIds), [customizingAppIds]);
+  const hasCustomizingApps = customizingAppIds.length > 0;
+
+  const runningApps = useMemo(() => {
+    const appMap = new Map(apps.map((app) => [app.id, app]));
+    const list = runningWorkerIds
+      .map((id) => appMap.get(id))
+      .filter((app): app is NonNullable<typeof app> => !!app);
+
+    if (!activeMiniAppId) {
+      return list;
+    }
+
+    return [...list].sort((a, b) => {
+      if (a.id === activeMiniAppId) return -1;
+      if (b.id === activeMiniAppId) return 1;
+      return 0;
+    });
+  }, [activeMiniAppId, apps, runningWorkerIds]);
+
+  const visibleApps = runningApps.slice(0, MAX_VISIBLE_RUNNING_APPS);
+  const overflowCount = Math.max(0, runningApps.length - visibleApps.length);
+
+  return (
+    <div className="bitfun-nav-panel__miniapp-entry-wrap">
+      <div
+        className={[
+          'bitfun-nav-panel__miniapp-entry',
+          isActive && 'is-active',
+          runningApps.length > 0 && 'has-running-apps',
+          hasCustomizingApps && 'has-customizing-apps',
+        ].filter(Boolean).join(' ')}
+        onClick={onOpenMiniApps}
+        onKeyDown={(event) => {
+          if (event.currentTarget !== event.target) return;
+          if (event.key === 'Enter' || event.key === ' ') {
+            event.preventDefault();
+            onOpenMiniApps();
+          }
+        }}
+        role="button"
+        tabIndex={0}
+        aria-label={t('scenes.miniApps')}
+      >
+        <span className="bitfun-nav-panel__miniapp-entry-main">
+          <span className="bitfun-nav-panel__miniapp-entry-copy">
+            <span className="bitfun-nav-panel__miniapp-entry-title">{t('scenes.miniApps')}</span>
+            <Badge variant="neutral" className="bitfun-nav-panel__miniapp-badge">Beta</Badge>
+          </span>
+        </span>
+
+        <span className="bitfun-nav-panel__miniapp-entry-apps">
+          {visibleApps.length > 0 ? (
+            <>
+              {visibleApps.map((app) => {
+                const isAppActive = app.id === activeMiniAppId;
+                return (
+                  <Tooltip key={app.id} content={app.name} placement="right">
+                    <span
+                      className={[
+                        'bitfun-nav-panel__miniapp-bubble',
+                        isAppActive && 'is-active',
+                        customizingIdSet.has(app.id) && 'is-customizing',
+                      ].filter(Boolean).join(' ')}
+                      style={{ background: getMiniAppIconGradient(app.icon || 'box') }}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        onOpenMiniApp(app.id);
+                      }}
+                      onMouseDown={(event) => event.stopPropagation()}
+                      role="button"
+                      tabIndex={0}
+                      aria-label={app.name}
+                      onKeyDown={(event) => {
+                        if (event.key === 'Enter' || event.key === ' ') {
+                          event.preventDefault();
+                          event.stopPropagation();
+                          onOpenMiniApp(app.id);
+                        }
+                      }}
+                    >
+                      {renderMiniAppIcon(app.icon || 'box', 14)}
+                      {customizingIdSet.has(app.id) && (
+                        <span className="bitfun-nav-panel__miniapp-bubble-customize-dot" aria-hidden="true" />
+                      )}
+                    </span>
+                  </Tooltip>
+                );
+              })}
+              {overflowCount > 0 ? (
+                <span className="bitfun-nav-panel__miniapp-bubble bitfun-nav-panel__miniapp-bubble--more">
+                  +{overflowCount}
+                </span>
+              ) : null}
+            </>
+          ) : null}
+        </span>
+      </div>
+    </div>
+  );
+};
+
+export default MiniAppEntry;

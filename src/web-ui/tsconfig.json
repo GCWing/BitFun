@@ -1,0 +1,55 @@
+{
+  "compilerOptions": {
+    "target": "ES2020",
+    "useDefineForClassFields": true,
+    "lib": ["ES2020", "DOM", "DOM.Iterable"],
+    "module": "ESNext",
+    "skipLibCheck": true,
+
+    /* Bundler mode */
+    "moduleResolution": "bundler",
+    "allowImportingTsExtensions": true,
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "noEmit": true,
+    "jsx": "react-jsx",
+
+    /* Linting */
+    "strict": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noFallthroughCasesInSwitch": true,
+
+    /* Path mapping */
+    "baseUrl": ".",
+    "ignoreDeprecations": "5.0",
+    "paths": {
+      "@/*": ["src/*"],
+      "@/shared/*": ["src/shared/*"],
+      "@/core/*": ["src/core/*"],
+      "@/tools/*": ["src/tools/*"],
+      "@/hooks/*": ["src/hooks/*"],
+      "@/styles/*": ["src/component-library/styles/*"],
+      "@/types/*": ["src/shared/types/*"],
+      "@/utils/*": ["src/shared/utils/*"],
+      "@components/*": ["src/component-library/components/*"]
+    }
+  },
+  "include": ["src"],
+  "exclude": [
+    "src/**/*.test.ts",
+    "src/**/*.test.tsx",
+    "src/**/*.spec.ts",
+    "src/**/*.spec.tsx",
+    "src/**/*.example.tsx",
+    "src/component-library/preview/**",
+    "src/component-library/components/registry.tsx",
+    "src/shared/context-system/core/types/**",
+    "src/shared/crypto/**",
+    "src/shared/context-menu-system/examples/**",
+    "src/infrastructure/services/api/index.ts",
+    "src/infrastructure/services/infra/index.ts",
+    "src/flow_chat/components/ImageAnalysisCard.tsx"
+  ],
+  "references": [{ "path": "./tsconfig.node.json" }]
+}

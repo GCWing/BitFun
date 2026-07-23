@@ -1,0 +1,199 @@
+/**
+ * Input component styles
+ */
+@use '../../styles/tokens.scss' as tokens;
+
+.bitfun-input-wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+
+  &--small {
+    .bitfun-input-container {
+      height: 28px;
+      font-size: 13px;
+    }
+
+    .bitfun-input-prefix,
+    .bitfun-input-suffix {
+      font-size: 13px;
+    }
+  }
+
+  &--medium {
+    .bitfun-input-container {
+      height: 36px;
+      font-size: 14px;
+    }
+  }
+
+  &--large {
+    .bitfun-input-container {
+      height: 44px;
+      font-size: 15px;
+    }
+  }
+
+  &--default {
+    .bitfun-input-container {
+      background: transparent;
+      border: 1px solid var(--border-base);
+    }
+  }
+
+  &--filled {
+    .bitfun-input-container {
+      background: var(--element-bg-subtle);
+      border: 1px solid transparent;
+
+      &:hover:not(.bitfun-input-wrapper--disabled &) {
+        background: var(--element-bg-soft);
+        border-color: var(--border-base);
+      }
+
+      &:focus-within {
+        background: var(--element-bg-soft);
+        border-color: transparent;
+      }
+
+      &:hover:focus-within {
+        border-color: var(--color-accent-500);
+      }
+    }
+  }
+
+  &--outlined {
+    .bitfun-input-container {
+      background: transparent;
+      border: 1px solid var(--border-medium);
+    }
+  }
+
+  &--error {
+    .bitfun-input-container {
+      border-color: var(--color-error-border) !important;
+
+      &:hover:not(.bitfun-input-wrapper--disabled &) {
+        border-color: var(--color-error) !important;
+      }
+
+      &:focus-within {
+        border-color: var(--color-error) !important;
+      }
+    }
+  }
+
+  &--disabled {
+    opacity: var(--opacity-disabled);
+    cursor: default;
+
+    .bitfun-input-container {
+      background: transparent;
+    }
+  }
+}
+
+.bitfun-input-label {
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text-secondary);
+  letter-spacing: 0.2px;
+}
+
+.bitfun-input-container {
+  display: flex;
+  align-items: center;
+  gap: var(--size-gap-2);
+  padding: 0 var(--size-gap-3);
+  border-radius: 4px;
+  transition: all var(--motion-base) var(--easing-standard);
+  position: relative;
+  min-width: 0;
+  overflow: hidden;
+
+  &:hover:not(.bitfun-input-wrapper--disabled &) {
+    background: var(--element-bg-subtle);
+    border-color: var(--border-strong);
+  }
+
+  &:focus-within {
+    background: transparent;
+    border-color: var(--color-accent-500);
+    outline: none;
+  }
+}
+
+.bitfun-input {
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  background: transparent;
+  border: none !important;
+  outline: none !important;
+  box-shadow: none !important;
+  color: var(--color-text-primary);
+  font-family: inherit;
+  position: relative;
+  z-index: 1;
+
+  // Blend muted text toward page background so placeholders read as hints, not as user input
+  // (same token pair is set for light/dark in ThemeService).
+  &::placeholder {
+    color: color-mix(
+      in srgb,
+      var(--color-text-muted) 40%,
+      var(--color-bg-primary)
+    );
+  }
+
+  &::selection {
+    border-radius: 2px;
+    background: var(--color-accent-300);
+  }
+
+  &:focus,
+  &:focus-visible {
+    border: none !important;
+    outline: none !important;
+    outline-offset: 0 !important;
+    box-shadow: none !important;
+  }
+
+  &:disabled {
+    cursor: default;
+  }
+}
+
+.bitfun-input-prefix,
+.bitfun-input-suffix {
+  color: var(--color-text-muted);
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+  position: relative;
+  z-index: 1;
+}
+
+.bitfun-input-toggle {
+  background: none;
+  border: none;
+  padding: 2px;
+  cursor: pointer;
+  color: var(--color-text-muted);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  transition: color 0.15s;
+
+  &:hover {
+    color: var(--color-text-secondary);
+  }
+}
+
+.bitfun-input-error-message {
+  font-size: var(--font-size-xs);
+  color: var(--color-error);
+  margin-top: -2px;
+}

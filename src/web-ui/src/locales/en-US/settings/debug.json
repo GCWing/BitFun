@@ -1,0 +1,97 @@
+{
+  "title": "Debug Config",
+  "subtitle": "Log and language debug template configuration",
+  "sections": {
+    "combined": "Debug Mode Settings",
+    "combinedDescription": "Configure the debug agent's log path, ingest server port, and language-specific code instrumentation templates.",
+    "settings": "Debug Settings",
+    "templates": "Language Debug Templates"
+  },
+  "languageLabels": {
+    "javascript": "JavaScript / TypeScript",
+    "python": "Python",
+    "rust": "Rust",
+    "go": "Go",
+    "java": "Java"
+  },
+  "settings": {
+    "logPath": {
+      "label": "Log File Path",
+      "description": "Debug log save path (relative to workspace root), defaults to .bitfun/debug.log",
+      "placeholder": ".bitfun/debug.log",
+      "browse": "Browse"
+    },
+    "ingestPort": {
+      "label": "Ingest Server Port",
+      "description": "HTTP server port for receiving web application logs"
+    }
+  },
+  "templates": {
+    "description": "When enabled, custom templates will override built-in logic. When disabled, system default templates are used.",
+    "enableTooltip": "Click to enable custom template",
+    "disableTooltip": "Click to disable custom template",
+    "instrumentation": {
+      "label": "Instrumentation Code Template",
+      "placeholder": "Enter instrumentation code template...",
+      "placeholders": "Available placeholders"
+    },
+    "region": {
+      "label": "Region Markers",
+      "startPlaceholder": "Start marker",
+      "endPlaceholder": "End marker"
+    },
+    "notes": "Notes",
+    "configure": "Configure",
+    "reset": "Reset to Default Templates",
+    "noteItems": {
+      "javascript": {
+        "postToIngest": "Send logs to the ingest server via HTTP POST.",
+        "replaceData": "Replace {DATA} with a JavaScript object expression."
+      },
+      "python": {
+        "appendNdjson": "Append NDJSON logs directly to LOG_PATH in the workspace.",
+        "ensureAscii": "Use ensure_ascii=False to preserve non-ASCII characters.",
+        "replaceData": "Replace {DATA} with a Python expression (e.g., {\"var\": var} or locals()).",
+        "importOnce": "Add the import statement once at the top of the file."
+      },
+      "rust": {
+        "appendNdjson": "Append NDJSON logs directly to LOG_PATH.",
+        "requireSerdeJson": "Requires serde_json: cargo add serde_json.",
+        "replaceData": "Replace {DATA} with a Rust expression (e.g., {\"var\": var}).",
+        "syncOnly": "Use in synchronous code; for async code use tokio::fs."
+      },
+      "go": {
+        "iife": "Use an immediately-invoked function so it can be inserted anywhere.",
+        "appendNdjson": "Append NDJSON logs directly to LOG_PATH.",
+        "imports": "Requires imports: \"os\", \"encoding/json\", \"time\".",
+        "replaceData": "Replace {DATA} with a Go expression (e.g., map[string]interface{}{\"var\": var})."
+      },
+      "java": {
+        "appendNdjson": "Append NDJSON logs directly to LOG_PATH.",
+        "requireGson": "Requires Gson (or Jackson as an alternative).",
+        "replaceData": "Replace {DATA} with a Java object (e.g., Map.of(\"var\", var)).",
+        "writeString": "Java 11+ can use Files.writeString; older versions use Files.write + getBytes()."
+      }
+    }
+  },
+  "actions": {
+    "save": "Save Config",
+    "saving": "Saving...",
+    "cancel": "Cancel"
+  },
+  "fileDialog": {
+    "logFile": "Log File"
+  },
+  "messages": {
+    "loading": "Loading...",
+    "loadFailed": "Failed to load configuration",
+    "saveSuccess": "Configuration saved",
+    "saveFailed": "Failed to save configuration",
+    "resetSuccess": "Restored to default configuration",
+    "resetFailed": "Failed to reset configuration",
+    "logPathUpdated": "Log file path updated",
+    "selectFileFailed": "Failed to select file",
+    "templateEnabled": "Enabled {{name}} template",
+    "templateDisabled": "Disabled {{name}} template"
+  }
+}

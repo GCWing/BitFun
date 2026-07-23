@@ -1,0 +1,1229 @@
+/**
+ * File operation tool card - refactored based on BaseToolCard
+ * Supports Write/Edit/Delete file operations
+ *
+ * Height-stability contract:
+ * - Any state-driven height change must go through
+ *   `useToolCardHeightContract.applyExpandedState(...)`.
+ * - Any status/render-path change that removes expanded content without
+ *   toggling local expand state must dispatch
+ *   `flowchat:tool-card-collapse-intent` before the shrink happens.
+ * - If preview/result variants stop sharing roughly the same visual height in
+ *   the future, treat that as another shrink path and protect it explicitly
+ *   instead of relying on `VirtualMessageList` fallback compensation.
+ */
+
+import React, { useEffect, useCallback, useMemo, useState, useRef, useLayoutEffect, useSyncExternalStore } from 'react';
+import { useTranslation } from 'react-i18next';
+import path from 'path-browserify';
+import {
+  XCircle,
+  Info,
+  GitBranch,
+  FileText,
+  FileEdit,
+  FilePlus,
+  FileX2,
+  ChevronRight,
+  Loader2,
+  Check,
+} from 'lucide-react';
+import { CubeLoading, ToolProcessingDots } from '../../component-library';
+import type { ToolCardProps } from '../types/flow-chat';
+import { BaseToolCard, ToolCardHeader } from './BaseToolCard';
+import { useSnapshotState } from '../../tools/snapshot_system/hooks/useSnapshotState';
+import { SnapshotEventBus, SNAPSHOT_EVENTS } from '../../tools/snapshot_system/core/SnapshotEventBus';
+import { useOptionalCurrentWorkspace } from '../../infrastructure/contexts/WorkspaceContext';
+import { createDiffEditorTab } from '../../shared/utils/tabUtils';
+import { fileTabManager } from '../../shared/services/FileTabManager';
+import { CodePreview } from '../components/CodePreview';
+import { InlineDiffPreview } from '../components/InlineDiffPreview';
+import { Tooltip } from '@/component-library';
+import { diffLines } from 'diff';
+import { createLogger } from '@/shared/utils/logger';
+import { CompactToolCard, CompactToolCardHeader } from './CompactToolCard';
+import { useToolCardHeightContract } from './useToolCardHeightContract';
+import { useTypewriter } from '../hooks/useTypewriter';
+import { useReportTypewriterReveal } from '../hooks/typewriterRevealGateContext';
+import { hasNonFileUriScheme } from '@/shared/utils/pathUtils';
+import { notificationService } from '@/shared/notification-system';
+import { useGitState } from '@/tools/git/hooks/useGitState';
+import { ToolCardHeaderActions } from './ToolCardHeaderActions';
+import {
+  displayFileToolGuidanceMessage,
+  isFileToolGuidanceMessage,
+} from './fileToolGuidance';
+import { extractFilePathFromJsonBuffer, splitFilePathAndContent } from '@/shared/utils/partialJsonParser';
+import { i18nService } from '@/infrastructure/i18n';
+import { useFlowChatContext } from '../components/modern/FlowChatContext';
+import {
+  getHistorySessionOpenTransitionSnapshot,
+  subscribeHistorySessionOpenTransition,
+} from '../services/sessionOpenIntent';
+import './FileOperationToolCard.scss';
+
+const log = createLogger('FileOperationToolCard');
+const FILE_OPERATION_STREAMING_MAX_HEIGHT = 4 * 22; // 88px – compact while streaming
+const FILE_OPERATION_DIFF_MAX_HEIGHT = 15 * 22;     // 330px – comfortable diff reading when expanded
+
+function stringPath(value: unknown): string {
+  return typeof value === 'string' && value.trim().length > 0 ? value : '';
+}
+
+function objectValue(value: unknown): Record<string, unknown> | null {
+  return typeof value === 'object' && value !== null ? value as Record<string, unknown> : null;
+}
+
+function firstStringValue(source: Record<string, unknown> | null | undefined, keys: string[]): string {
+  if (!source) return '';
+  for (const key of keys) {
+    const value = stringPath(source[key]);
+    if (value) return value;
+  }
+  return '';
+}
+
+function pathFromAcpLocations(locations: unknown): string {
+  if (!Array.isArray(locations)) return '';
+  for (const location of locations) {
+    const object = objectValue(location);
+    const filePath = firstStringValue(object, ['path', 'file_path', 'filePath', 'uri']);
+    if (filePath) return filePath;
+  }
+  return '';
+}
+
+function isWindowsAbsolutePath(filePath: string): boolean {
+  return /^[A-Za-z]:[\\/]/.test(filePath);
+}
+
+function resolveOpenFilePath(filePath: string, workspacePath?: string): string {
+  if (!filePath || hasNonFileUriScheme(filePath) || isWindowsAbsolutePath(filePath) || path.isAbsolute(filePath)) {
+    return filePath;
+  }
+
+  return workspacePath ? path.join(workspacePath, filePath) : filePath;
+}
+
+interface FileOperationToolCardProps extends ToolCardProps {
+  sessionId?: string;
+}
+
+export const FileOperationToolCard: React.FC<FileOperationToolCardProps> = ({
+  toolItem,
+  config,
+  sessionId,
+  onOpenInEditor,
+  displayContext,
+}) => {
+  const { t } = useTranslation('flow-chat');
+  const {
+    toolCall,
+    toolResult,
+    status,
+    isParamsStreaming,
+    partialParams,
+    requiresConfirmation,
+    userConfirmed,
+  } = toolItem;
+  const toolId = toolItem.id ?? toolCall?.id;
+  
+  const [isErrorExpanded, setIsErrorExpanded] = useState(false);
+  const [isContentExpanded, setIsContentExpanded] = useState(status !== 'completed');
+  const [operationDiffStats, setOperationDiffStats] = useState<{ additions: number; deletions: number } | null>(null);
+  
+  const hasInitializedCompletionEffectRef = useRef(false);
+  const previousCompletionEndTimeRef = useRef<number | null>(toolItem.endTime ?? null);
+  const previousStatusRef = useRef(status);
+  const lastStableExpandedHeightRef = useRef<number>(0);
+  const {
+    cardRootRef,
+    applyExpandedState: applyHeightContractExpandedState,
+  } = useToolCardHeightContract({
+    toolId,
+    toolName: toolItem.toolName,
+  });
+  
+  const {
+    files,
+    error,
+    clearError
+  } = useSnapshotState(sessionId);
+  const eventBus = SnapshotEventBus.getInstance();
+  const { workspace: currentWorkspace } = useOptionalCurrentWorkspace();
+  const { activeSessionOverride } = useFlowChatContext();
+  const historySessionOpenTransition = useSyncExternalStore(
+    subscribeHistorySessionOpenTransition,
+    getHistorySessionOpenTransitionSnapshot,
+    getHistorySessionOpenTransitionSnapshot,
+  );
+  const isHistoricalRestorePending =
+    activeSessionOverride?.sessionId === sessionId &&
+    activeSessionOverride?.isHistorical === true &&
+    activeSessionOverride?.contextRestoreState === 'pending';
+  const allowPassiveGitRefresh =
+    historySessionOpenTransition === null &&
+    displayContext !== 'subagent-projection' &&
+    !isHistoricalRestorePending;
+  const { isRepository: workspaceIsGitRepo } = useGitState({
+    repositoryPath: currentWorkspace?.rootPath ?? '',
+    isActive: allowPassiveGitRefresh,
+    layers: ['basic'],
+    refreshOnMount: allowPassiveGitRefresh,
+    refreshOnActive: false,
+    participateInWindowFocusRefresh: false,
+    debugSource: 'file_operation_tool_card',
+  });
+
+  const getFilePath = useCallback((): string => {
+    const result = toolResult?.result;
+    const resultPath = stringPath(result?.file_path) || stringPath(result?.filePath);
+    if (resultPath) {
+      return resultPath;
+    }
+    const resultLocationPath = pathFromAcpLocations(result?.locations);
+    if (resultLocationPath) {
+      return resultLocationPath;
+    }
+
+    const params = objectValue(partialParams || toolCall?.input);
+    if (!params) return '';
+    
+    if (Object.keys(params).length === 0) return '';
+    
+    const combinedParts = splitFilePathAndContent(params.payload);
+    return combinedParts?.filePath || firstStringValue(params, [
+      'file_path',
+      'filePath',
+      'filepath',
+      'target_file',
+      'targetFile',
+      'path',
+      'filename',
+    ]) || extractFilePathFromJsonBuffer(toolItem._paramsBuffer || '');
+  }, [toolCall, partialParams, toolResult, toolItem._paramsBuffer]);
+
+  const currentFilePath = getFilePath();
+  const openFilePath = useMemo(
+    () => resolveOpenFilePath(currentFilePath, currentWorkspace?.rootPath),
+    [currentFilePath, currentWorkspace?.rootPath],
+  );
+
+  const getOldString = useCallback((): string => {
+    const params = partialParams || toolCall?.input;
+    if (!params) return '';
+    return params.old_string || '';
+  }, [toolCall, partialParams]);
+
+  const getNewString = useCallback((): string => {
+    const params = partialParams || toolCall?.input;
+    if (!params) return '';
+    return params.new_string || '';
+  }, [toolCall, partialParams]);
+
+  const getContent = useCallback((): string => {
+    const params = partialParams || toolCall?.input;
+    if (!params) return '';
+    const combinedParts = splitFilePathAndContent(params.payload);
+    if (combinedParts) return combinedParts.content;
+    if (typeof params.payload === 'string') return params.payload;
+    return params.content || params.contents || '';
+  }, [toolCall, partialParams]);
+
+  const oldStringContent = getOldString();
+  const newStringContent = getNewString();
+  const contentPreview = getContent();
+
+  const isWriteContentAnimating =
+    toolItem.toolName === 'Write'
+    && Boolean(isParamsStreaming)
+    && status !== 'completed'
+    && status !== 'error'
+    && status !== 'cancelled'
+    && status !== 'rejected';
+  const isEditContentAnimating =
+    toolItem.toolName === 'Edit'
+    && Boolean(isParamsStreaming)
+    && status !== 'completed'
+    && status !== 'error'
+    && status !== 'cancelled'
+    && status !== 'rejected';
+
+  const writeTypewriter = useTypewriter(
+    toolItem.toolName === 'Write' ? contentPreview : '',
+    isWriteContentAnimating,
+  );
+  const editTypewriter = useTypewriter(
+    toolItem.toolName === 'Edit' ? newStringContent : '',
+    isEditContentAnimating,
+  );
+  useReportTypewriterReveal(`${toolId ?? 'file-op'}:write`, writeTypewriter.isRevealing);
+  useReportTypewriterReveal(`${toolId ?? 'file-op'}:edit`, editTypewriter.isRevealing);
+
+  const writeDisplayContent = (isWriteContentAnimating || writeTypewriter.isRevealing)
+    ? writeTypewriter.displayText
+    : contentPreview;
+  const editDisplayContent = (isEditContentAnimating || editTypewriter.isRevealing)
+    ? editTypewriter.displayText
+    : newStringContent;
+  const writeVisuallyStreaming = isWriteContentAnimating || writeTypewriter.isRevealing;
+  const editVisuallyStreaming = isEditContentAnimating || editTypewriter.isRevealing;
+
+  const writeContentCharCount = toolItem.toolName === 'Write' ? contentPreview.length : 0;
+  const writeContentStatusText = useMemo(() => {
+    if (toolItem.toolName !== 'Write' || writeContentCharCount <= 0) return null;
+
+    const formattedCount = i18nService.formatNumber(writeContentCharCount);
+    if (status === 'completed') {
+      return `${formattedCount} chars written`;
+    }
+    return `${formattedCount} chars received`;
+  }, [status, toolItem.toolName, writeContentCharCount]);
+  
+  const isFailed = status === 'error' || (toolResult && 'success' in toolResult && !toolResult.success);
+  const rawErrorMessage = (() => {
+    if (toolResult && 'error' in toolResult) {
+      return toolResult.error;
+    }
+    if (error) {
+      return error;
+    }
+    return undefined;
+  })();
+  const isFileGuidanceBlocked =
+    (toolItem.toolName === 'Write' || toolItem.toolName === 'Edit')
+    && isFileToolGuidanceMessage(rawErrorMessage);
+  const showConfirmationActions = Boolean(
+    requiresConfirmation &&
+    !userConfirmed &&
+    status !== 'completed' &&
+    status !== 'cancelled' &&
+    status !== 'rejected' &&
+    status !== 'error'
+  );
+  
+  const isWriteStreamingWithoutPath =
+    toolItem.toolName === 'Write'
+    && !currentFilePath
+    && Boolean(isParamsStreaming)
+    && (writeContentCharCount > 0 || status === 'receiving');
+
+  const fileName = currentFilePath ?
+    (currentFilePath.split(/[/\\]/).pop() || t('context.file')) :
+    (isFailed ? t('toolCards.file.unknownFile') :
+      (isWriteStreamingWithoutPath
+        ? t('toolCards.file.receivingContent')
+        : t('toolCards.file.parsingPath')));
+  
+  const currentFile = files.find(f => f.filePath === currentFilePath);
+
+  useEffect(() => {
+    const completionEndTime = toolItem.endTime ?? null;
+    const isCompletedSuccess = status === 'completed' && Boolean(toolResult?.success);
+
+    if (!hasInitializedCompletionEffectRef.current) {
+      hasInitializedCompletionEffectRef.current = true;
+      previousCompletionEndTimeRef.current = completionEndTime;
+      return;
+    }
+
+    const shouldEmitCompletionEvent =
+      isCompletedSuccess &&
+      completionEndTime !== null &&
+      previousCompletionEndTimeRef.current !== completionEndTime &&
+      Boolean(sessionId) &&
+      Boolean(currentFilePath);
+
+    previousCompletionEndTimeRef.current = completionEndTime;
+
+    if (!shouldEmitCompletionEvent || !sessionId || !currentFilePath) {
+      return;
+    }
+
+    eventBus.emit(SNAPSHOT_EVENTS.FILE_OPERATION_COMPLETED, {
+      toolName: toolItem.toolName,
+      toolResult
+    }, sessionId, currentFilePath);
+  }, [status, toolResult, sessionId, currentFilePath, toolItem.toolName, toolItem.endTime, eventBus]);
+
+  const getToolDisplayInfo = () => {
+    const toolMap: Record<string, { icon: string; name: string }> = {
+      'Write': { icon: '', name: t('toolCards.file.write') },
+      'Edit': { icon: '', name: t('toolCards.file.edit') },
+      'Delete': { icon: '', name: t('toolCards.file.delete') }
+    };
+    
+    return toolMap[toolItem.toolName] || { icon: config.icon, name: config.displayName };
+  };
+
+  const toolDisplayInfo = getToolDisplayInfo();
+
+  const applyContentExpandedState = useCallback((
+    nextExpanded: boolean,
+    reason: 'manual' | 'auto',
+  ) => {
+    applyHeightContractExpandedState(
+      isContentExpanded,
+      nextExpanded,
+      setIsContentExpanded,
+      { reason },
+    );
+  }, [applyHeightContractExpandedState, isContentExpanded]);
+
+  const applyErrorExpandedState = useCallback((
+    nextExpanded: boolean,
+    reason: 'manual' | 'auto',
+  ) => {
+    applyHeightContractExpandedState(
+      isErrorExpanded,
+      nextExpanded,
+      setIsErrorExpanded,
+      { reason },
+    );
+  }, [applyHeightContractExpandedState, isErrorExpanded]);
+
+  useEffect(() => {
+    if (error) {
+      log.error('File operation error', { filePath: currentFilePath, error });
+      setTimeout(clearError, 3000);
+    }
+  }, [error, clearError, currentFilePath]);
+
+  useEffect(() => {
+    if (previousStatusRef.current !== status) {
+      if (status === 'completed' && !isFailed) {
+        applyContentExpandedState(false, 'auto');
+      } else if (status !== 'completed') {
+        applyContentExpandedState(true, 'auto');
+      }
+      previousStatusRef.current = status;
+    }
+  }, [
+    applyContentExpandedState,
+    cardRootRef,
+    contentPreview,
+    currentFilePath,
+    isContentExpanded,
+    isFailed,
+    oldStringContent,
+    status,
+    toolId,
+    toolItem.toolName,
+  ]);
+
+  const localDiffStats = useMemo(() => {
+    if (status !== 'completed' || isFailed) return null;
+    if (toolItem.toolName === 'Write' && contentPreview) {
+      const lines = contentPreview.split('\n');
+      const count = lines[lines.length - 1] === '' ? lines.length - 1 : lines.length;
+      return { additions: count, deletions: 0 };
+    }
+    if (toolItem.toolName === 'Edit' && (oldStringContent || newStringContent)) {
+      const changes = diffLines(oldStringContent, newStringContent);
+      let additions = 0;
+      let deletions = 0;
+      for (const change of changes) {
+        const lineCount = change.count ?? 0;
+        if (change.added) additions += lineCount;
+        else if (change.removed) deletions += lineCount;
+      }
+      return { additions, deletions };
+    }
+    return null;
+  }, [toolItem.toolName, contentPreview, oldStringContent, newStringContent, status, isFailed]);
+
+  const currentFileDiffStats = useMemo(() => {
+    return operationDiffStats ?? localDiffStats ?? { additions: 0, deletions: 0 };
+  }, [operationDiffStats, localDiffStats]);
+
+  const localDiffContent = useMemo(() => {
+    if (toolItem.toolName === 'Edit' && (oldStringContent || newStringContent)) {
+      return {
+        originalContent: oldStringContent,
+        modifiedContent: newStringContent,
+      };
+    }
+
+    if (toolItem.toolName === 'Write' && contentPreview) {
+      return {
+        originalContent: '',
+        modifiedContent: contentPreview,
+      };
+    }
+
+    return null;
+  }, [contentPreview, newStringContent, oldStringContent, toolItem.toolName]);
+
+  useEffect(() => {
+    if (!sessionId || !toolCall?.id || status !== 'completed' || isFailed) return;
+    let cancelled = false;
+
+    (async () => {
+      try {
+        // The snapshot service persists this summary with the operation. Keep
+        // the chat-history payload small and resolve that static value lazily.
+        const { snapshotAPI } = await import('../../infrastructure/api');
+        const summary = await snapshotAPI.getOperationSummary(sessionId, toolCall.id);
+        if (cancelled) return;
+        setOperationDiffStats({
+          additions: summary.linesAdded ? Number(summary.linesAdded) : 0,
+          deletions: summary.linesRemoved ? Number(summary.linesRemoved) : 0
+        });
+      } catch (error) {
+        log.warn('Failed to load operation summary', { sessionId, toolCallId: toolCall.id, error });
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [sessionId, toolCall?.id, status, isFailed]);
+
+  const isLoading = status === 'preparing' || status === 'streaming' || status === 'running';
+  const shouldUseExpandedDiffPreviewHeight =
+    status === 'completed' &&
+    isContentExpanded &&
+    previousStatusRef.current === status;
+  const previewVariant = useMemo(() => {
+    if (toolItem.toolName === 'Edit') {
+      // Keep streaming-code until typewriter drains so completion does not snap
+      // the remaining characters into the diff view.
+      if ((status !== 'completed' || editTypewriter.isRevealing) && newStringContent) {
+        return 'streaming-code';
+      }
+      if (
+        status === 'completed'
+        && !isParamsStreaming
+        && !editTypewriter.isRevealing
+        && (oldStringContent || newStringContent)
+      ) {
+        return 'completed-diff';
+      }
+    }
+
+    if (toolItem.toolName === 'Write') {
+      if ((status !== 'completed' || writeTypewriter.isRevealing) && contentPreview) {
+        return 'streaming-code';
+      }
+      if (
+        status === 'completed'
+        && !isParamsStreaming
+        && !writeTypewriter.isRevealing
+        && contentPreview
+      ) {
+        return 'completed-diff';
+      }
+    }
+
+    return 'none';
+  }, [
+    contentPreview,
+    editTypewriter.isRevealing,
+    isParamsStreaming,
+    newStringContent,
+    oldStringContent,
+    status,
+    toolItem.toolName,
+    writeTypewriter.isRevealing,
+  ]);
+
+  useLayoutEffect(() => {
+    const measuredHeight = cardRootRef.current?.getBoundingClientRect().height ?? 0;
+    if (!isFailed && isContentExpanded && measuredHeight > 0) {
+      lastStableExpandedHeightRef.current = measuredHeight;
+    }
+  }, [cardRootRef, isContentExpanded, isFailed, previewVariant, status]);
+
+  useLayoutEffect(() => {
+    const previousStatus = previousStatusRef.current;
+    const isNewFailure = previousStatus !== status && status === 'error';
+    if (!isNewFailure || !isContentExpanded) {
+      return;
+    }
+
+    const currentMeasuredHeight = cardRootRef.current?.getBoundingClientRect().height ?? 0;
+    const lastStableExpandedHeight = lastStableExpandedHeightRef.current;
+    const estimatedShrinkHeight = Math.max(lastStableExpandedHeight, currentMeasuredHeight);
+
+    if (estimatedShrinkHeight <= currentMeasuredHeight + 0.5) {
+      return;
+    }
+
+    window.dispatchEvent(new CustomEvent('flowchat:tool-card-collapse-intent', {
+      detail: {
+        toolId: toolId ?? null,
+        toolName: toolItem.toolName,
+        cardHeight: estimatedShrinkHeight,
+        filePath: currentFilePath || null,
+        reason: 'auto',
+      },
+    }));
+    window.dispatchEvent(new CustomEvent('tool-card-toggle'));
+  }, [
+    cardRootRef,
+    currentFilePath,
+    isContentExpanded,
+    previewVariant,
+    status,
+    toolId,
+    toolItem.toolName,
+  ]);
+
+  const getErrorMessage = () => {
+    if (rawErrorMessage !== undefined) {
+      return rawErrorMessage;
+    }
+    return t('error.unknown');
+  };
+
+  const getDisplayMessage = () => {
+    const message = getErrorMessage();
+    if (isFileGuidanceBlocked) {
+      return displayFileToolGuidanceMessage(message);
+    }
+    return message;
+  };
+
+  const getSingleLineErrorMessage = () => {
+    return String(getDisplayMessage()).replace(/\s+/g, ' ').trim();
+  };
+
+  const handleOpenInCodeEditor = useCallback(async () => {
+    if (!currentFilePath) return;
+
+    if (!sessionId || !openFilePath || hasNonFileUriScheme(openFilePath)) {
+      fileTabManager.openFile({
+        filePath: openFilePath,
+        fileName,
+        mode: 'agent',
+      });
+      return;
+    }
+
+    try {
+      const { snapshotAPI } = await import('../../infrastructure/api');
+      const diffData = await snapshotAPI.getOperationDiff(sessionId, openFilePath, toolCall?.id);
+      const jumpToLine = diffData.anchorLine ? Number(diffData.anchorLine) : undefined;
+
+      if (toolItem.toolName === 'Delete') {
+        window.dispatchEvent(new CustomEvent('expand-right-panel'));
+        setTimeout(() => {
+          createDiffEditorTab(
+            openFilePath,
+            fileName,
+            diffData.originalContent || '',
+            diffData.modifiedContent || '',
+            true,
+            'agent',
+            undefined,
+            jumpToLine
+          );
+        }, 250);
+        return;
+      }
+
+      fileTabManager.openFile({
+        filePath: openFilePath,
+        fileName,
+        jumpToLine,
+        mode: 'agent',
+      });
+    } catch (error) {
+      log.error('Failed to open in CodeEditor', { sessionId, filePath: openFilePath, error });
+      if (toolItem.toolName === 'Delete') {
+        window.dispatchEvent(new CustomEvent('expand-right-panel'));
+        setTimeout(() => {
+          createDiffEditorTab(
+            openFilePath,
+            fileName,
+            '',
+            '',
+            true,
+            'agent'
+          );
+        }, 250);
+        return;
+      }
+
+      fileTabManager.openFile({
+        filePath: openFilePath,
+        fileName,
+        mode: 'agent',
+      });
+    }
+  }, [sessionId, currentFilePath, openFilePath, toolCall?.id, fileName, toolItem.toolName]);
+
+  const canOpenFullCode =
+    !isFailed &&
+    toolItem.toolName !== 'Delete' &&
+    status === 'completed' &&
+    Boolean(currentFilePath) &&
+    Boolean(sessionId || onOpenInEditor);
+
+  const handleCardClick = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+
+    if (
+      (e.target as HTMLElement).closest(
+        '.file-op-diff-pill, .file-op-open-full-button, .tool-card-header-actions',
+      )
+    ) {
+      return;
+    }
+    
+    if (isFailed) {
+      applyErrorExpandedState(!isErrorExpanded, 'manual');
+      return;
+    }
+
+    if (toolItem.toolName === 'Delete') {
+      return;
+    }
+
+    applyContentExpandedState(!isContentExpanded, 'manual');
+  }, [
+    applyContentExpandedState,
+    applyErrorExpandedState,
+    isContentExpanded,
+    isErrorExpanded,
+    isFailed,
+    toolItem.toolName,
+  ]);
+
+  const handleOpenFullCodeClick = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+
+    if (!canOpenFullCode || !currentFilePath) {
+      return;
+    }
+
+    if (sessionId) {
+      handleOpenInCodeEditor();
+      return;
+    }
+
+    onOpenInEditor?.(currentFilePath);
+  }, [
+    canOpenFullCode,
+    currentFilePath,
+    handleOpenInCodeEditor,
+    onOpenInEditor,
+    sessionId,
+  ]);
+
+  const handleOpenBaselineDiff = useCallback(async () => {
+    if (!currentFilePath) {
+      log.warn('Cannot open diff: missing required info', {
+        hasFilePath: !!currentFilePath,
+        hasWorkspace: !!currentWorkspace,
+        hasSessionId: !!sessionId
+      });
+      return;
+    }
+
+    const diffFilePath = currentFile?.filePath || currentFilePath;
+    const fileName = diffFilePath.split(/[/\\]/).pop() || diffFilePath;
+
+    const openLocalDiff = () => {
+      if (!localDiffContent) return false;
+
+      if (localDiffContent.originalContent === localDiffContent.modifiedContent) {
+        notificationService.info(
+          `No changes to display for ${fileName}: original and modified content are identical.`
+        );
+        return true;
+      }
+
+      window.dispatchEvent(new CustomEvent('expand-right-panel'));
+
+      setTimeout(() => {
+        createDiffEditorTab(
+          diffFilePath,
+          fileName,
+          localDiffContent.originalContent,
+          localDiffContent.modifiedContent,
+          false,
+          'agent',
+          currentWorkspace?.rootPath,
+          undefined,
+          false,
+          {
+            titleKind: 'diff',
+            duplicateKeyPrefix: 'diff'
+          }
+        );
+      }, 250);
+
+      return true;
+    };
+
+    if (!currentWorkspace || !sessionId) {
+      if (openLocalDiff()) return;
+
+      log.warn('Cannot open diff: no snapshot context and no local diff content', {
+        filePath: currentFilePath,
+        hasWorkspace: !!currentWorkspace,
+        hasSessionId: !!sessionId,
+      });
+      return;
+    }
+
+    try {
+      const { snapshotAPI } = await import('../../infrastructure/api');
+      
+      const diffData = await snapshotAPI.getOperationDiff(
+        sessionId,
+        diffFilePath,
+        toolCall?.id,
+        currentWorkspace.rootPath
+      );
+
+      const originalContent = diffData.originalContent || '';
+      const modifiedContent = diffData.modifiedContent || '';
+
+      if (originalContent === modifiedContent) {
+        if (
+          localDiffContent &&
+          localDiffContent.originalContent !== localDiffContent.modifiedContent
+        ) {
+          openLocalDiff();
+          return;
+        }
+
+        log.info('Baseline diff has no changes, skipping diff editor', {
+          filePath: diffFilePath,
+          originalLength: originalContent.length,
+          modifiedLength: modifiedContent.length,
+          operationId: toolCall?.id,
+          anchorLine: diffData.anchorLine,
+        });
+        notificationService.info(
+          `No changes to display for ${fileName}: baseline and current content are identical.`
+        );
+        return;
+      }
+
+      window.dispatchEvent(new CustomEvent('expand-right-panel'));
+
+      setTimeout(() => {
+        createDiffEditorTab(
+          diffFilePath,
+          fileName,
+          diffData.originalContent || '',
+          diffData.modifiedContent || '',
+          false,
+          'agent',
+          currentWorkspace.rootPath,
+          undefined,
+          false,
+          {
+            titleKind: 'diff',
+            duplicateKeyPrefix: 'diff'
+          }
+        );
+      }, 250);
+    } catch (error) {
+      if (openLocalDiff()) {
+        log.warn('Snapshot diff unavailable, opened local tool diff instead', {
+          filePath: currentFilePath,
+          error,
+        });
+        return;
+      }
+
+      log.error('Failed to open Baseline Diff', { filePath: currentFilePath, error });
+    }
+  }, [currentFile, currentFilePath, currentWorkspace, localDiffContent, sessionId, toolCall?.id]);
+
+  const getToolIconInfo = () => {
+    const iconMap: Record<string, { icon: React.ReactNode; className: string }> = {
+      'Write': { icon: <FilePlus size={16} />, className: 'write-icon' },
+      'Edit': { icon: <FileEdit size={16} />, className: 'edit-icon' },
+      'Delete': { icon: <FileX2 size={16} />, className: 'delete-icon' }
+    };
+    
+    return iconMap[toolItem.toolName] || { icon: <FileText size={16} />, className: 'file-icon' };
+  };
+
+  const renderToolIcon = () => {
+    const { icon } = getToolIconInfo();
+    return icon;
+  };
+
+  const renderStatusIcon = () => {
+    const shouldShowStatusIcon = (
+      status === 'preparing' ||
+      status === 'streaming' ||
+      (status === 'running' && previewVariant === 'none')
+    );
+
+    if (shouldShowStatusIcon) {
+      return <CubeLoading size="small" />;
+    }
+    return null;
+  };
+
+  const handleCodeLineClick = useCallback(async (lineNumber: number, filePath?: string) => {
+    if (!filePath) return;
+    
+    try {
+      const { editorJumpService } = await import('../../shared/services/EditorJumpService');
+      await editorJumpService.jumpToFile(filePath, lineNumber, 1);
+    } catch (error) {
+      log.error('Failed to jump to line', { filePath, lineNumber, error });
+    }
+  }, []);
+
+  const renderExpandedContent = () => {
+    if (isFailed) return null;
+
+    const previewMaxHeight = shouldUseExpandedDiffPreviewHeight
+      ? FILE_OPERATION_DIFF_MAX_HEIGHT
+      : FILE_OPERATION_STREAMING_MAX_HEIGHT;
+
+    if (toolItem.toolName === 'Edit') {
+      if ((status !== 'completed' || editTypewriter.isRevealing) && newStringContent) {
+        return (
+          <div className="streaming-content-preview" data-testid="chat-file-change-preview">
+            <div className="preview-text">
+              <CodePreview
+                content={editDisplayContent}
+                filePath={currentFilePath}
+                isStreaming={editVisuallyStreaming}
+                showLineNumbers={isContentExpanded}
+                maxHeight={previewMaxHeight}
+                autoScrollToBottom={false}
+                onLineClick={handleCodeLineClick}
+              />
+            </div>
+          </div>
+        );
+      }
+      
+      if (
+        status === 'completed'
+        && !isParamsStreaming
+        && !editTypewriter.isRevealing
+        && (oldStringContent || newStringContent)
+      ) {
+        return (
+          <div className="streaming-content-preview" data-testid="chat-file-change-preview">
+            <div className="preview-text">
+              <InlineDiffPreview
+                originalContent={oldStringContent}
+                modifiedContent={newStringContent}
+                filePath={currentFilePath}
+                maxHeight={previewMaxHeight}
+                showLineNumbers={isContentExpanded}
+                lineNumberMode="dual"
+                showPrefix={false}
+                contextLines={-1}
+              />
+            </div>
+          </div>
+        );
+      }
+    }
+
+    if (toolItem.toolName === 'Write') {
+      if ((status !== 'completed' || writeTypewriter.isRevealing) && contentPreview) {
+        return (
+          <div className="streaming-content-preview" data-testid="chat-file-change-preview">
+            <div className="preview-text">
+              <CodePreview
+                content={writeDisplayContent}
+                filePath={currentFilePath}
+                isStreaming={writeVisuallyStreaming}
+                showLineNumbers={isContentExpanded}
+                maxHeight={previewMaxHeight}
+                autoScrollToBottom={false}
+                onLineClick={handleCodeLineClick}
+              />
+            </div>
+          </div>
+        );
+      }
+      
+      if (
+        status === 'completed'
+        && !isParamsStreaming
+        && !writeTypewriter.isRevealing
+        && contentPreview
+      ) {
+        return (
+          <div className="streaming-content-preview" data-testid="chat-file-change-preview">
+            <div className="preview-text">
+              <InlineDiffPreview
+                originalContent=""
+                modifiedContent={contentPreview}
+                filePath={currentFilePath}
+                maxHeight={previewMaxHeight}
+                showLineNumbers={isContentExpanded}
+                lineNumberMode="single"
+                showPrefix={true}
+                contextLines={-1}
+              />
+            </div>
+          </div>
+        );
+      }
+    }
+
+    return null;
+  };
+
+  const renderGuidanceContent = () => (
+    <div className="guidance-content">
+      <div className="guidance-title">
+        <Info size={14} />
+        <span>{t('toolCards.file.guidanceTitle')}</span>
+      </div>
+      <div className="guidance-message">{getDisplayMessage()}</div>
+    </div>
+  );
+
+  const renderErrorContent = () => (
+    <div className="error-content">
+      <div className="error-title">
+        <XCircle size={14} />
+        <span>{toolDisplayInfo.name}{t('toolCards.file.failed')}</span>
+      </div>
+      <div className="error-message">{getDisplayMessage()}</div>
+    </div>
+  );
+
+  const isDeleteTool = toolItem.toolName === 'Delete';
+  const fileChangeAction =
+    toolItem.toolName === 'Write'
+      ? 'create'
+      : toolItem.toolName === 'Edit'
+        ? 'modify'
+        : toolItem.toolName === 'Delete'
+          ? 'delete'
+          : toolItem.toolName.toLowerCase();
+
+  const getDeleteStatusIcon = () => {
+    switch (status) {
+      case 'running':
+      case 'streaming':
+      case 'preparing':
+        return <Loader2 className="animate-spin" size={16} />;
+      case 'completed':
+        return <Check size={16} className="icon-check-done" />;
+      case 'pending':
+      case 'confirmed':
+      case 'pending_confirmation':
+      case 'analyzing':
+      default:
+        return <ToolProcessingDots size={16} />;
+    }
+  };
+
+  const renderDeleteContent = () => {
+    if (status === 'error') {
+      return (
+        <>
+          <span data-testid="chat-file-change-action" data-action={fileChangeAction}>
+            {t('toolCards.file.delete')}{t('toolCards.file.failed')}
+          </span>
+          {': '}
+          <span className="delete-file-name" data-testid="chat-file-change-path" data-path={currentFilePath}>
+            {fileName}
+          </span>
+        </>
+      );
+    }
+    return (
+      <>
+        <span data-testid="chat-file-change-action" data-action={fileChangeAction}>
+          {t('toolCards.file.delete')}
+        </span>
+        {': '}
+        <span className="delete-file-name" data-testid="chat-file-change-path" data-path={currentFilePath}>
+          {fileName}
+        </span>
+      </>
+    );
+  };
+
+  const expandedContent = renderExpandedContent();
+  const hasExpandableContent =
+    !isFailed &&
+    Boolean(expandedContent);
+
+  const isCardContentExpanded =
+    !isFailed &&
+    !isDeleteTool &&
+    isContentExpanded;
+
+  const renderHeader = () => {
+    const { className: iconClassName } = getToolIconInfo();
+    const gitDiffDisabled =
+      !currentFilePath || (!localDiffContent && (!currentWorkspace || !sessionId));
+    const hasDiffStats =
+      currentFileDiffStats.additions > 0 || currentFileDiffStats.deletions > 0;
+
+    const actionText = isDeleteTool
+      ? ''
+      : (isFailed
+        ? (isFileGuidanceBlocked
+          ? `${toolDisplayInfo.name}${t('toolCards.file.guidanceHint')}`
+          : `${toolDisplayInfo.name}${t('toolCards.file.failed')}`)
+        : `${toolDisplayInfo.name}:`);
+
+    return (
+      <ToolCardHeader
+        icon={renderToolIcon()}
+        iconClassName={iconClassName}
+        headerExpanded={hasExpandableContent ? isContentExpanded : undefined}
+        onAffordanceClick={
+          hasExpandableContent
+            ? () => applyContentExpandedState(!isContentExpanded, 'manual')
+            : undefined
+        }
+        action={actionText}
+        actionTestId="chat-file-change-action"
+        actionDataAttributes={{ 'data-action': fileChangeAction }}
+      content={
+        isFailed ? (
+          <span
+            className={
+              isFileGuidanceBlocked
+                ? 'file-guidance-message-inline'
+                : 'file-error-message-inline'
+            }
+          >
+            {getSingleLineErrorMessage()}
+          </span>
+        ) : (
+          <>
+            <Tooltip content={currentFilePath || fileName} placement="top">
+              <span
+                className={`file-name ${isDeleteTool ? 'file-name--muted' : ''}`}
+                data-testid="chat-file-change-path"
+                data-path={currentFilePath}
+              >
+                {fileName}
+              </span>
+            </Tooltip>
+            {!isDeleteTool && !isParamsStreaming && !isLoading && hasDiffStats && (
+              <Tooltip content={t('toolCards.file.viewGitDiff')} placement="top">
+                <button
+                  type="button"
+                  className={`file-op-diff-pill${gitDiffDisabled ? ' file-op-diff-pill--disabled' : ''}`}
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    if (!gitDiffDisabled) {
+                      handleOpenBaselineDiff();
+                    }
+                  }}
+                  aria-label={t('toolCards.file.viewGitDiff')}
+                  title={t('toolCards.file.viewGitDiff')}
+                >
+                {currentFileDiffStats.additions > 0 && (
+                  <span className="additions">+{currentFileDiffStats.additions}</span>
+                )}
+                {currentFileDiffStats.deletions > 0 && (
+                  <span className="deletions">-{currentFileDiffStats.deletions}</span>
+                )}
+                  {workspaceIsGitRepo ? (
+                    <GitBranch size={12} strokeWidth={2} aria-hidden />
+                  ) : null}
+                </button>
+              </Tooltip>
+            )}
+          </>
+        )
+      }
+      extra={
+        <ToolCardHeaderActions className="file-op-header-actions">
+          {writeContentStatusText && (
+            <span className="params-streaming-indicator">
+              {writeContentStatusText}
+            </span>
+          )}
+          {isParamsStreaming && (status === 'preparing' || status === 'streaming') && !writeContentStatusText && (
+            <span className="params-streaming-indicator">
+              {currentFilePath ? t('toolCards.file.receivingParams') : t('toolCards.file.analyzing')}
+            </span>
+          )}
+          {canOpenFullCode && (
+            <Tooltip content={t('toolCards.file.openFullCodeHint')} placement="top">
+              <button
+                type="button"
+                className="file-op-open-full-button"
+                onClick={handleOpenFullCodeClick}
+                aria-label={t('toolCards.file.openFullCodeHint')}
+              >
+                <ChevronRight size={14} strokeWidth={2} absoluteStrokeWidth />
+              </button>
+            </Tooltip>
+          )}
+        </ToolCardHeaderActions>
+      }
+      statusIcon={isDeleteTool ? null : renderStatusIcon()}
+    />
+    );
+  };
+
+  if (isDeleteTool) {
+    return (
+      <div
+        ref={cardRootRef}
+        data-testid="chat-file-change-card"
+        data-tool-card-id={toolId ?? ''}
+        data-status={status}
+        data-action={fileChangeAction}
+        data-path={currentFilePath}
+        data-expanded="false"
+      >
+        <CompactToolCard
+          status={status}
+          isExpanded={false}
+          className="read-file-card delete-file-card"
+          clickable={false}
+          header={
+            <CompactToolCardHeader
+              icon={getDeleteStatusIcon()}
+              content={renderDeleteContent()}
+            />
+          }
+        />
+      </div>
+    );
+  }
+
+  return (
+    <div
+      ref={cardRootRef}
+      data-testid="chat-file-change-card"
+      data-tool-card-id={toolId ?? ''}
+      data-status={status}
+      data-action={fileChangeAction}
+      data-path={currentFilePath}
+      data-expanded={isCardContentExpanded ? 'true' : 'false'}
+    >
+      <BaseToolCard
+        status={status}
+        isExpanded={isCardContentExpanded}
+        onClick={handleCardClick}
+        className={`file-operation-card ${isDeleteTool ? 'non-clickable' : ''} ${isFileGuidanceBlocked ? 'file-operation-card--guidance' : ''}`.trim()}
+        header={renderHeader()}
+        expandedContent={expandedContent}
+        errorContent={
+          isFailed && isErrorExpanded
+            ? (isFileGuidanceBlocked ? renderGuidanceContent() : renderErrorContent())
+            : null
+        }
+        isFailed={isFailed}
+        requiresConfirmation={showConfirmationActions}
+        toggleTestId="chat-file-change-toggle"
+        headerExpandAffordance={hasExpandableContent}
+        headerAffordanceKind="expand"
+      />
+    </div>
+  );
+};

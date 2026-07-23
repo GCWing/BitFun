@@ -1,0 +1,38 @@
+/**
+ * Virtual item renderer wrapper styles.
+ * A4-like reading width with centered content.
+ */
+
+.virtual-item-wrapper {
+  width: 100%;
+  max-width: 1200px;
+  margin: 0 auto;
+  box-sizing: border-box;
+  min-height: 1px;
+  padding: 0;
+
+  @media (max-width: 1400px) {
+    max-width: 1000px;
+  }
+
+  @media (max-width: 1200px) {
+    max-width: 900px;
+  }
+
+  @media (max-width: 768px) {
+    max-width: 100%;
+  }
+
+  &--search-match {
+    outline: 1px solid color-mix(in srgb, var(--color-accent-500) 35%, transparent);
+    outline-offset: -1px;
+    border-radius: 6px;
+  }
+
+  &--search-current {
+    outline: 2px solid color-mix(in srgb, var(--color-accent-500) 75%, transparent);
+    outline-offset: -1px;
+    border-radius: 6px;
+    background: color-mix(in srgb, var(--color-accent-500) 8%, transparent);
+  }
+}

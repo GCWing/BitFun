@@ -1,0 +1,201 @@
+/**
+ * Scroll anchor styles aligned with the scrollbar.
+ */
+
+.scroll-anchor {
+  --flowchat-scroll-anchor-delay: 0s;
+
+  position: absolute;
+  right: 0;
+  top: 44px;
+  bottom: 64px;
+  width: 22px;
+  pointer-events: none;
+  z-index: 100;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+
+  // Hover detection area without intercepting wheel events.
+  &::before {
+    content: '';
+    position: absolute;
+    right: 0;
+    top: 0;
+    bottom: 0;
+    width: 30px;
+    pointer-events: none;
+  }
+
+  &:hover,
+  &.scrolling,
+  &.hovering {
+    opacity: 1;
+  }
+
+  &__track {
+    position: absolute;
+    right: 0;
+    top: 0;
+    bottom: 0;
+    width: 10px;
+    pointer-events: none;
+  }
+
+  &__point {
+    position: absolute;
+    right: 0;
+    width: 10px;
+    height: 22px;
+    cursor: pointer;
+    transform: translateY(-50%);
+    pointer-events: auto;
+    z-index: 2;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.15s ease;
+
+    animation: anchorFade 0.3s ease backwards;
+    animation-delay: var(--flowchat-scroll-anchor-delay);
+
+    &::before {
+      content: '';
+      position: absolute;
+      right: 0;
+      width: 13px;
+      height: 7px;
+      border-radius: 3px;
+      background: var(--color-accent-500);
+      transition: all 0.15s ease;
+      box-shadow: 0 0 4px var(--color-accent-300);
+    }
+
+    &:hover,
+    &.active {
+      z-index: 10;
+      
+      &::before {
+        width: 19px;
+        right: -5px;
+        height: 8px;
+        background: var(--color-accent-600);
+        box-shadow: 
+          0 0 12px var(--color-accent-400),
+          0 0 6px var(--color-accent-400);
+      }
+    }
+
+    &:active::before {
+      transform: scaleX(0.9);
+    }
+  }
+
+  // Preview card
+  &__preview {
+    position: fixed;
+    width: 280px;
+    background: var(--color-bg-elevated);
+    backdrop-filter: blur(16px);
+    border: 1px solid var(--border-base);
+    border-radius: 8px;
+    box-shadow: 0 4px 20px var(--color-overlay-black-30);
+    pointer-events: none;
+    z-index: 10000;
+    transform: translateX(-100%) translateY(-50%);
+    overflow: hidden;
+    margin-left: -16px;
+
+    &::after {
+      content: '';
+      position: absolute;
+      right: -4px;
+      top: 50%;
+      transform: translateY(-50%) rotate(45deg);
+      width: 8px;
+      height: 8px;
+      background: var(--color-bg-elevated);
+      border-right: 1px solid var(--border-base);
+      border-top: 1px solid var(--border-base);
+    }
+  }
+
+  &__preview-indicator {
+    padding: var(--flowchat-card-expanded-pad-y) var(--flowchat-card-expanded-pad-x);
+    background: var(--color-accent-50);
+    border-bottom: 1px solid var(--border-base);
+    text-align: center;
+  }
+
+  &__preview-turn {
+    font-size: var(--flowchat-font-size-xs);
+    font-weight: 600;
+    color: var(--color-accent-500);
+    font-variant-numeric: tabular-nums;
+    
+    &::before {
+      content: 'Turn ';
+      font-weight: 400;
+      color: var(--color-text-muted);
+    }
+  }
+
+  &__preview-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding:
+      var(--flowchat-card-expanded-pad-y)
+      var(--flowchat-card-expanded-pad-x)
+      var(--flowchat-inline-gap);
+  }
+
+  &__preview-label {
+    font-size: var(--flowchat-font-size-xxs);
+    font-weight: 500;
+    color: var(--color-accent-500);
+    letter-spacing: 0.3px;
+    text-transform: uppercase;
+    display: flex;
+    align-items: center;
+    gap: var(--flowchat-inline-gap);
+
+    &::before {
+      content: '';
+      width: 4px;
+      height: 4px;
+      border-radius: 50%;
+      background: var(--color-accent-500);
+    }
+  }
+
+  &__preview-time {
+    font-size: var(--flowchat-font-size-xxs);
+    color: var(--color-text-muted);
+  }
+
+  &__preview-content {
+    padding:
+      var(--flowchat-inline-gap)
+      var(--flowchat-card-expanded-pad-x)
+      var(--flowchat-card-expanded-pad-y);
+    font-size: var(--flowchat-font-size-sm);
+    line-height: var(--flowchat-support-line-height);
+    color: var(--color-text-primary);
+    max-height: 60px;
+    overflow: hidden;
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+  }
+}
+
+@keyframes anchorFade {
+  from {
+    opacity: 0;
+    transform: translateY(-50%) scale(0.8);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(-50%) scale(1);
+  }
+}

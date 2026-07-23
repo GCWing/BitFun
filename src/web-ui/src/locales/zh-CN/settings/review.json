@@ -1,0 +1,30 @@
+{
+  "title": "审核",
+  "subtitle": "控制 Review 需要扩展覆盖时使用的成本和容量上限。",
+  "loading": "正在加载审核设置...",
+  "desktopOnly": {
+    "title": "仅桌面端可用",
+    "description": "Review 容量设置仅在 BitFun 桌面应用中可用；当前界面不支持启动 Review。"
+  },
+  "error": {
+    "title": "审核设置暂不可用",
+    "retry": "重试"
+  },
+  "capacity": {
+    "title": "容量",
+    "description": "限制 Review 的并行工作数量以及等待供应商容量的时长。",
+    "maxParallelReviewers": {
+      "label": "最大并行审核工作",
+      "description": "严格 Review 同时运行的审核工作上限。调高后可能并行启动更多模型请求，更早触发供应商限流，并增加 Token 消耗。"
+    },
+    "maxQueueWaitSeconds": {
+      "label": "容量等待窗口",
+      "description": "可选审核工作等待供应商容量的时长；已经运行的检查可能让审核总耗时更长。"
+    }
+  },
+  "messages": {
+    "loadFailed": "加载审核设置失败。",
+    "saveFailed": "保存审核设置失败。",
+    "saved": "审核设置已保存。"
+  }
+}

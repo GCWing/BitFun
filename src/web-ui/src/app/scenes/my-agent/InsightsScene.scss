@@ -1,0 +1,1763 @@
+@use '../../../component-library/styles/tokens.scss' as *;
+
+// ============================================================
+// Design tokens
+// ============================================================
+
+// Accent / semantic colors (theme-aware via tokens; fallback values keep
+// dark-only consumers happy if tokens are missing).
+$ins-blue:   var(--color-accent-500);
+$ins-green:  var(--color-success);
+$ins-red:    var(--color-error);
+$ins-orange: var(--color-warning);
+
+$ins-blue-bg:  var(--color-accent-100);
+$ins-green-bg: var(--color-success-bg);
+$ins-red-bg:   var(--color-error-bg);
+
+// Surfaces & borders - local card layer, not a public theme contract.
+// The text mix preserves resting-card separation in light themes where
+// scene and elevated surfaces are intentionally both white.
+$ins-surface:       color-mix(in srgb, var(--color-bg-elevated) 94%, var(--color-text-primary) 6%);
+$ins-surface-soft:  var(--element-bg-subtle);
+$ins-surface-hover: var(--element-bg-soft);
+$ins-border:        var(--border-base);
+$ins-border-hover:  var(--border-medium);
+
+// Hover tint that flips with theme: blends toward primary text color
+// (dark on light theme, light on dark theme), so it always reads correctly.
+$ins-tint-1: color-mix(in srgb, var(--color-bg-elevated) 88%, var(--color-text-primary) 12%);
+$ins-tint-2: color-mix(in srgb, var(--color-bg-elevated) 82%, var(--color-text-primary) 18%);
+
+// Spacing: 4 / 8 / 14 / 22 / 40
+$ins-xs: 4px;
+$ins-sm: 8px;
+$ins-md: 14px;
+$ins-lg: 22px;
+$ins-xl: 40px;
+
+// Radius
+$ins-r:    8px;
+$ins-r-sm: 5px;
+$ins-r-lg: 12px;
+
+// Type scale
+$ins-title:   20px;
+$ins-section: 12px;   // section headings (small caps style)
+$ins-body:    14px;
+$ins-small:   13px;
+$ins-label:   12px;
+
+// ============================================================
+// Keyframes
+// ============================================================
+
+@keyframes ins-fade-in {
+  from { opacity: 0; transform: translateY(3px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes ins-spin {
+  to { transform: rotate(360deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .insights-scene, .insights-scene * { animation: none !important; }
+}
+
+// ============================================================
+// Scene base - shared between list and report views
+// ============================================================
+
+.insights-scene {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+  animation: ins-fade-in 0.18s ease-out both;
+  font-family: $font-family-sans;
+  font-size: $ins-body;
+  line-height: 1.6;
+  color: var(--color-text-primary);
+  -webkit-font-smoothing: antialiased;
+}
+
+// ============================================================
+// List view - constrained width, centered
+// ============================================================
+
+.insights-scene:not(.insights-scene--report) {
+  max-width: 1080px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+// List header
+
+.insights-scene__header {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: $ins-lg;
+  padding: $ins-lg $ins-lg $ins-md;
+}
+
+.insights-scene__header-identity {
+  min-width: 0;
+}
+
+.insights-scene__header-title {
+  font-size: $ins-title;
+  font-weight: 600;
+  color: var(--color-text-primary);
+  margin: 0 0 2px;
+  letter-spacing: 0;
+}
+
+.insights-scene__header-subtitle {
+  font-size: $ins-small;
+  color: var(--color-text-muted);
+  margin: 0;
+}
+
+.insights-scene__header-actions {
+  display: flex;
+  align-items: center;
+  gap: $size-gap-3;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.insights-scene__model-control,
+.insights-scene__day-filter-group {
+  display: flex;
+  align-items: center;
+  gap: $size-gap-2;
+}
+
+.insights-scene__model-select {
+  width: 260px;
+  min-width: 0;
+
+  .select__trigger {
+    min-height: 42px;
+    padding-top: 5px;
+    padding-bottom: 5px;
+  }
+
+  .select__dropdown {
+    width: 340px;
+    right: auto;
+  }
+}
+
+.insights-model-select {
+  &__value {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 1px;
+    min-width: 0;
+    white-space: normal;
+  }
+
+  &__value-name {
+    display: -webkit-box;
+    width: 100%;
+    overflow: hidden;
+    color: var(--color-text-primary);
+    font-size: 11px;
+    font-weight: 500;
+    line-height: 1.25;
+    overflow-wrap: anywhere;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+  }
+
+  &__value-meta {
+    display: block;
+    width: 100%;
+    overflow: hidden;
+    color: var(--color-text-muted);
+    font-size: 9px;
+    line-height: 1.2;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  &__option {
+    min-width: 0;
+    width: 100%;
+  }
+
+  &__option-name {
+    color: var(--color-text-primary);
+    font-size: 12px;
+    font-weight: 500;
+    line-height: 1.35;
+    overflow-wrap: anywhere;
+    white-space: normal;
+  }
+
+  &__option-meta {
+    margin-top: 2px;
+    color: var(--color-text-muted);
+    font-size: 10px;
+    line-height: 1.3;
+    overflow-wrap: anywhere;
+    white-space: normal;
+  }
+}
+
+// Day range — same row layout as Agents zone tools (`bitfun-agents-scene__agent-filters`)
+.insights-scene__day-filters {
+  display: flex;
+  align-items: center;
+  gap: $size-gap-3;
+  flex-wrap: wrap;
+}
+
+.insights-scene__day-filter-group {
+  flex-wrap: wrap;
+}
+
+.insights-scene__control-label {
+  font-size: 11px;
+  font-weight: $font-weight-medium;
+  color: var(--color-text-muted);
+  white-space: nowrap;
+}
+
+// Shared button base
+%ins-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: $ins-xs;
+  padding: 4px 11px;
+  border: none;
+  border-radius: $ins-r-sm;
+  font-size: $ins-small;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.12s, opacity 0.12s;
+  &:disabled { opacity: 0.4; cursor: not-allowed; }
+}
+
+.insights-scene__generate-btn {
+  @extend %ins-btn;
+  background: $ins-blue-bg;
+  color: $ins-blue;
+  &:hover { background: var(--color-accent-200); }
+}
+
+.insights-scene__cancel-btn {
+  @extend %ins-btn;
+  background: $ins-red-bg;
+  color: $ins-red;
+  &:hover { background: var(--color-error-border); }
+}
+
+// Error / progress
+.insights-scene__error {
+  display: flex;
+  align-items: center;
+  gap: $ins-sm;
+  margin: $ins-sm $ins-lg 0;
+  padding: 5px $ins-md;
+  background: $ins-red-bg;
+  border-radius: $ins-r-sm;
+  font-size: $ins-small;
+  color: $ins-red;
+
+  span { flex: 1; }
+  button {
+    background: none; border: none; color: inherit;
+    cursor: pointer; font-size: 14px; padding: 0; opacity: 0.6;
+    &:hover { opacity: 1; }
+  }
+}
+
+.insights-generation {
+  margin: 0 $ins-lg $ins-md;
+  padding: $ins-md;
+  border: 1px solid $ins-border;
+  border-radius: $ins-r;
+  background: $ins-surface;
+  box-shadow: var(--shadow-xs);
+
+  &__status {
+    display: grid;
+    grid-template-columns: 36px minmax(0, 1fr) auto;
+    align-items: center;
+    gap: $ins-md;
+  }
+
+  &__status-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 36px;
+    border-radius: $ins-r-sm;
+    background: $ins-blue-bg;
+    color: $ins-blue;
+  }
+
+  &__status-copy { min-width: 0; }
+
+  &__eyebrow {
+    margin-bottom: 1px;
+    font-size: 10px;
+    font-weight: 600;
+    color: $ins-blue;
+    letter-spacing: 0;
+  }
+
+  &__title {
+    font-size: 15px;
+    font-weight: 600;
+    line-height: 1.35;
+    color: var(--color-text-primary);
+  }
+
+  &__detail {
+    margin-top: 2px;
+    overflow: hidden;
+    color: var(--color-text-muted);
+    font-size: $ins-label;
+    line-height: 1.4;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  &__elapsed {
+    display: flex;
+    align-items: center;
+    gap: $ins-xs;
+    color: var(--color-text-muted);
+    font-size: 11px;
+    white-space: nowrap;
+
+    strong {
+      min-width: 36px;
+      color: var(--color-text-secondary);
+      font-variant-numeric: tabular-nums;
+      font-weight: 600;
+    }
+  }
+
+  &__bar {
+    height: 4px;
+    margin-top: $ins-md;
+    overflow: hidden;
+    border-radius: 2px;
+    background: $ins-surface-soft;
+
+    span {
+      display: block;
+      height: 100%;
+      border-radius: inherit;
+      background: $ins-blue;
+      transition: width 0.3s ease;
+    }
+  }
+
+  &__steps {
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: $ins-sm;
+    margin-top: $ins-md;
+  }
+
+  &__step {
+    display: flex;
+    align-items: center;
+    min-width: 0;
+    gap: 6px;
+    color: var(--color-text-muted);
+
+    &--active { color: $ins-blue; }
+    &--complete { color: $ins-green; }
+  }
+
+  &__step-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 22px;
+    height: 22px;
+    flex: 0 0 22px;
+    border: 1px solid $ins-border;
+    border-radius: 50%;
+    background: $ins-surface-soft;
+
+    .insights-generation__step--active & {
+      border-color: color-mix(in srgb, $ins-blue 40%, $ins-border);
+      background: $ins-blue-bg;
+    }
+
+    .insights-generation__step--complete & {
+      border-color: color-mix(in srgb, $ins-green 40%, $ins-border);
+      background: $ins-green-bg;
+    }
+  }
+
+  &__step-label {
+    overflow: hidden;
+    font-size: 10px;
+    font-weight: 500;
+    line-height: 1.25;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+}
+
+// History list
+
+.insights-scene__history {
+  padding: $ins-xs $ins-lg $ins-lg;
+  flex: 1;
+  overflow-y: auto;
+  min-height: 0;
+}
+
+.insights-scene__history-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: $ins-md;
+  margin-bottom: $ins-sm;
+}
+
+.insights-scene__history-label {
+  font-size: $ins-label;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0;
+  color: var(--color-text-muted);
+}
+
+.insights-scene__history-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  margin-left: 6px;
+  padding: 0 5px;
+  border-radius: 9px;
+  background: $ins-surface-soft;
+  color: var(--color-text-secondary);
+  font-size: 10px;
+  font-weight: 600;
+}
+
+.insights-scene__history-hint {
+  font-weight: 400;
+  text-transform: none;
+  font-size: 10px;
+  opacity: 0.55;
+  letter-spacing: 0;
+  text-align: right;
+}
+
+.insights-scene__loading {
+  display: flex;
+  justify-content: center;
+  padding: $ins-xl;
+  color: var(--color-text-muted);
+}
+
+.insights-scene__spinner { animation: ins-spin 0.9s linear infinite; }
+
+.insights-scene__empty {
+  text-align: center;
+  padding: $ins-xl;
+  color: var(--color-text-muted);
+  font-size: $ins-small;
+}
+
+.insights-scene__report-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: $ins-sm;
+}
+
+// Meta cards (report list items)
+
+.insights-meta-card {
+  background: $ins-surface;
+  border-radius: $ins-r;
+  padding: $ins-md;
+  cursor: pointer;
+  text-align: left;
+  width: 100%;
+  border: 1px solid $ins-border;
+  transition:
+    background 0.2s cubic-bezier(0.25, 1, 0.5, 1),
+    border-color 0.2s cubic-bezier(0.25, 1, 0.5, 1),
+    box-shadow 0.2s cubic-bezier(0.25, 1, 0.5, 1),
+    transform 0.2s cubic-bezier(0.25, 1, 0.5, 1);
+  will-change: transform, box-shadow;
+
+  &:hover {
+    background: $ins-tint-1;
+    border-color: $ins-border-hover;
+    box-shadow: var(--shadow-sm);
+    transform: translateY(-1px);
+  }
+
+  &:active {
+    transform: translateY(0);
+    box-shadow: 0 1px 4px var(--color-overlay-black-12);
+    transition-duration: 0.08s;
+  }
+
+  &:hover &__date {
+    color: var(--color-text-primary);
+  }
+
+  &:hover &__metric {
+    color: var(--color-text-secondary);
+  }
+
+  &__top {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    margin-bottom: $ins-md;
+    gap: $ins-sm;
+  }
+
+  &__date {
+    font-size: $ins-body;
+    font-weight: 500;
+    color: var(--color-text-primary);
+    transition: color 0.2s;
+  }
+
+  &__range {
+    font-size: $ins-small;
+    color: var(--color-text-muted);
+    flex-shrink: 0;
+  }
+
+  &__metrics {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(92px, 1fr));
+    gap: $ins-sm;
+    margin-bottom: $ins-md;
+  }
+
+  &__metric {
+    display: flex;
+    align-items: center;
+    min-width: 0;
+    gap: 7px;
+    color: var(--color-text-muted);
+    transition: color 0.2s;
+
+    > span {
+      display: flex;
+      min-width: 0;
+      flex-direction: column;
+      font-size: 10px;
+      line-height: 1.25;
+    }
+
+    strong {
+      overflow: hidden;
+      color: var(--color-text-primary);
+      font-size: $ins-small;
+      font-weight: 600;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    &--session-tokens { color: $ins-blue; }
+    &--partial { color: $ins-orange; }
+  }
+
+  &__details {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 5px $ins-md;
+    margin-top: -$ins-xs;
+
+    > span {
+      display: inline-flex;
+      align-items: center;
+      gap: 3px;
+      color: var(--color-text-muted);
+      font-size: 10px;
+      line-height: 1.3;
+    }
+
+  }
+
+  &__tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: $ins-xs;
+    margin-top: $ins-sm;
+  }
+
+  &__tag {
+    font-size: 10px;
+    padding: 1px 6px;
+    border-radius: 3px;
+    background: $ins-blue-bg;
+    color: $ins-blue;
+    transition: background 0.2s, opacity 0.2s;
+
+    .insights-meta-card:hover & { opacity: 0.9; }
+
+    &--lang {
+      background: $ins-green-bg;
+      color: $ins-green;
+    }
+  }
+
+  &__generation-meta {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 4px $ins-md;
+    margin-top: $ins-sm;
+    padding-top: $ins-sm;
+    border-top: 1px solid $ins-border;
+    color: var(--color-text-muted);
+    font-size: 9px;
+    line-height: 1.3;
+    opacity: 0.72;
+
+    > span {
+      display: inline-flex;
+      align-items: center;
+      min-width: 0;
+      max-width: 100%;
+      gap: 3px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    &--partial { color: $ins-orange; }
+
+    .insights-meta-card:hover & { opacity: 0.9; }
+  }
+}
+
+@media (max-width: 760px) {
+  .insights-scene__header {
+    align-items: stretch;
+    flex-direction: column;
+    gap: $ins-md;
+  }
+
+  .insights-scene__header-actions { justify-content: space-between; }
+  .insights-scene__report-list { grid-template-columns: minmax(0, 1fr); }
+}
+
+@media (max-width: 520px) {
+  .insights-scene__header,
+  .insights-scene__history {
+    padding-left: $ins-md;
+    padding-right: $ins-md;
+  }
+
+  .insights-generation {
+    margin-left: $ins-md;
+    margin-right: $ins-md;
+
+    &__status { grid-template-columns: 32px minmax(0, 1fr); }
+    &__status-icon { width: 32px; height: 32px; }
+    &__elapsed { grid-column: 2; }
+    &__steps { gap: $ins-xs; }
+    &__step { justify-content: center; }
+    &__step-label { display: none; }
+  }
+
+  .insights-scene__header-actions { align-items: stretch; }
+  .insights-scene__model-control { width: 100%; flex-wrap: wrap; }
+  .insights-scene__model-select {
+    width: 100%;
+    flex: 0 0 100%;
+
+    .select__dropdown { width: 100%; right: 0; }
+  }
+  .insights-scene__control-label { width: 100%; }
+  .insights-meta-card__top { align-items: flex-start; flex-direction: column; }
+  .insights-meta-card__range { flex-shrink: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .insights-meta-card {
+    transition: background 0.01ms, border-color 0.01ms !important;
+    transform: none !important;
+  }
+}
+
+// ============================================================
+// Report view - layout shell
+// ============================================================
+
+.insights-scene--report {
+  overflow: hidden;
+  max-width: none;
+  margin: 0;
+  width: 100%;
+}
+
+// ── Top bar: back + meta + actions (title lives in body hero)
+
+.insights-report-header {
+  display: flex;
+  align-items: center;
+  gap: $ins-md;
+  padding: 0 $ins-lg;
+  height: 40px;
+  border-bottom: 1px solid $ins-border;
+  flex-shrink: 0;
+
+  &__back {
+    display: inline-flex;
+    align-items: center;
+    gap: $ins-xs;
+    padding: 3px $ins-sm;
+    border: none;
+    border-radius: $ins-r-sm;
+    background: transparent;
+    color: var(--color-text-muted);
+    font-size: $ins-small;
+    cursor: pointer;
+    transition: background 0.12s, color 0.12s;
+    flex-shrink: 0;
+    white-space: nowrap;
+
+    &:hover { background: $ins-surface-hover; color: var(--color-text-primary); }
+  }
+
+  // Thin vertical separator after back button
+  &__back::after {
+    content: '';
+    display: block;
+    width: 1px;
+    height: 14px;
+    background: $ins-border;
+    margin-left: $ins-md;
+    flex-shrink: 0;
+  }
+
+  &__meta {
+    display: flex;
+    align-items: center;
+    gap: $ins-lg;
+    margin-left: auto;
+    font-size: $ins-small;
+    color: var(--color-text-muted);
+    flex-shrink: 0;
+
+    span {
+      display: inline-flex;
+      align-items: center;
+      gap: 3px;
+    }
+  }
+
+  &__actions { flex-shrink: 0; }
+
+  &__html-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: $ins-xs;
+    padding: 3px 10px;
+    border: none;
+    border-radius: $ins-r-sm;
+    background: $ins-surface;
+    color: var(--color-text-muted);
+    font-size: $ins-small;
+    cursor: pointer;
+    transition: background 0.12s, color 0.12s;
+
+    &:hover:not(:disabled) { background: $ins-surface-hover; color: var(--color-text-primary); }
+    &:disabled { opacity: 0.35; cursor: not-allowed; }
+  }
+}
+
+// Legacy title/subtitle - hidden (merged into header chrome)
+.insights-report-title,
+.insights-report-subtitle { display: none; }
+
+// Scroll root - single overflow container; scrollbar at the right edge
+
+.insights-report-content {
+  flex: 1;
+  display: flex;
+  flex-direction: row;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+
+  &::-webkit-scrollbar { width: 6px; }
+  &::-webkit-scrollbar-track { background: transparent; }
+  &::-webkit-scrollbar-thumb {
+    background: var(--border-base);
+    border-radius: 3px;
+  }
+  &::-webkit-scrollbar-thumb:hover { background: var(--border-medium); }
+}
+
+// Report body column
+
+.insights-report-body {
+  flex: 1;
+  min-width: 0;
+  padding: $ins-lg $ins-xl $ins-md;
+}
+
+.insights-report-body-inner {
+  max-width: 840px;
+  margin: 0 auto;
+  // Bottom space must live on the inner wrapper so scroll height includes it
+  // (flex-stretched body alone can make bottom padding feel “eaten”).
+  padding-bottom: $ins-xl * 2 + $ins-lg;
+}
+
+// Report title — centered in body, larger than header chrome
+.insights-report-hero {
+  text-align: center;
+  padding: $ins-md 0 $ins-xl;
+
+  &__title {
+    margin: 0;
+    font-size: 28px;
+    font-weight: 700;
+    letter-spacing: -0.035em;
+    line-height: 1.2;
+    background: linear-gradient(
+      135deg,
+      var(--color-text-primary) 0%,
+      color-mix(in srgb, var(--color-text-primary) 70%, $ins-blue 30%) 100%
+    );
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    color: var(--color-text-primary);
+  }
+}
+
+// ============================================================
+// TOC navigation - right sidebar
+// ============================================================
+// Clean vertical list with active dot indicator, no icons by default
+
+.insights-report-nav {
+  position: sticky;
+  top: 0;
+  align-self: flex-start;
+  width: 184px;
+  flex-shrink: 0;
+  padding: $ins-lg $ins-md $ins-lg 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  box-sizing: border-box;
+  border-left: 1px solid $ins-border;
+  margin-left: $ins-lg;
+  padding-left: $ins-md;
+
+  // Section group label (reserved) - keeps structure flexible
+  &__group-label {
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+    color: var(--color-text-muted);
+    opacity: 0.5;
+    padding: $ins-sm $ins-sm $ins-xs;
+  }
+
+  &__item {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: $ins-sm;
+    padding: 6px $ins-sm 6px $ins-md;
+    border: none;
+    background: transparent;
+    color: var(--color-text-muted);
+    font-size: $ins-small;
+    text-align: left;
+    cursor: pointer;
+    transition: color 0.15s, background 0.15s;
+    border-radius: $ins-r-sm;
+    line-height: 1.35;
+
+    // Active indicator pill on left edge
+    &::before {
+      content: '';
+      position: absolute;
+      left: 0;
+      top: 8px;
+      bottom: 8px;
+      width: 2px;
+      border-radius: 2px;
+      background: $ins-blue;
+      transform: scaleY(0);
+      transform-origin: center;
+      transition: transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.15s;
+      opacity: 0;
+    }
+
+    svg { display: none; }
+
+    &:hover {
+      color: var(--color-text-secondary);
+      background: $ins-surface-soft;
+    }
+
+    &.is-active {
+      color: var(--color-text-primary);
+      font-weight: 600;
+      background: $ins-blue-bg;
+
+      &::before {
+        transform: scaleY(1);
+        opacity: 1;
+      }
+    }
+  }
+
+  &__label {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    font-size: $ins-small;
+  }
+}
+
+// ============================================================
+// Section heading system - clear hierarchy, minimal chrome
+// ============================================================
+
+.insights-section {
+  margin-bottom: 0;
+  padding: $ins-xl 0 0;
+}
+
+%ins-section-heading {
+  display: flex;
+  align-items: center;
+  gap: $ins-sm;
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: -0.025em;
+  color: var(--color-text-primary);
+  margin: 0 0 $ins-lg;
+  padding: 0;
+
+  // Small accent bar on the left of every section heading
+  &::before {
+    content: '';
+    display: inline-block;
+    width: 3px;
+    height: 16px;
+    border-radius: 2px;
+    background: $ins-blue;
+    flex-shrink: 0;
+    opacity: 0.85;
+  }
+}
+
+.insights-section h3 { @extend %ins-section-heading; }
+.insights-section h4 {
+  font-size: $ins-body;
+  font-weight: 600;
+  color: var(--color-text-secondary);
+  margin: $ins-lg 0 $ins-sm;
+  letter-spacing: -0.01em;
+}
+
+.insights-section-intro {
+  font-size: $ins-body;
+  color: var(--color-text-muted);
+  margin: -$ins-sm 0 $ins-lg;
+  line-height: 1.7;
+}
+
+// ============================================================
+// At a Glance
+// ============================================================
+
+.insights-glance {
+  box-sizing: border-box;
+  border-radius: $ins-r-lg;
+  // Whole block reads as one framed panel (theme border, stronger than $ins-border)
+  border: 1px solid var(--border-base);
+  background: transparent;
+  padding: $ins-lg;
+  margin-bottom: $ins-xl;
+  overflow: hidden;
+  transition: border-color 0.15s ease;
+
+  &:hover { border-color: var(--border-medium); }
+
+  &__title {
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+    color: $ins-blue;
+    margin: 0 0 $ins-md;
+  }
+
+  &__sections {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+  }
+
+  &__item {
+    font-size: $ins-body;
+    color: var(--color-text-secondary);
+    line-height: 1.7;
+    padding: $ins-md 0;
+    border-bottom: 1px solid $ins-border;
+
+    &:first-child { padding-top: 0; }
+    &:last-child  { border-bottom: none; padding-bottom: 0; }
+
+    strong {
+      color: var(--color-text-primary);
+      font-weight: 600;
+      letter-spacing: -0.01em;
+    }
+  }
+}
+
+// ============================================================
+// Stats row - number grid
+// ============================================================
+
+.insights-stats {
+  display: flex;
+  flex-direction: column;
+  gap: $ins-sm;
+  margin-bottom: $ins-xl;
+  // outer frame + inner gaps so each cell reads as its own tile
+  padding: $ins-sm;
+  border-radius: $ins-r-lg;
+  border: 1px solid $ins-border;
+  background: var(--element-bg-subtle);
+  transition: border-color 0.15s ease;
+
+  &:hover { border-color: $ins-border-hover; }
+
+  &__row {
+    display: flex;
+    flex-direction: row;
+    width: 100%;
+    align-items: stretch;
+    gap: $ins-sm;
+  }
+}
+
+.insights-stat {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: $ins-md $ins-sm;
+  flex: 1 1 0;
+  min-width: 0;
+  text-align: center;
+  border-radius: $ins-r;
+  border: 1px solid $ins-border;
+  background: $ins-surface;
+  transition: border-color 0.15s ease, background 0.15s ease;
+
+  &:hover {
+    border-color: $ins-border-hover;
+    background: $ins-tint-1;
+  }
+
+  &__value {
+    font-size: 20px;
+    font-weight: 600;
+    color: var(--color-text-primary);
+    letter-spacing: -0.03em;
+    line-height: 1.2;
+  }
+
+  &__label {
+    font-size: 11px;
+    color: var(--color-text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+    margin-top: 4px;
+  }
+}
+
+// ============================================================
+// Charts: no card wrapper, bare flow
+// ============================================================
+
+.insights-charts-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: $ins-xl;
+  margin-bottom: $ins-lg;
+
+  &--full { grid-template-columns: 1fr; }
+}
+
+// No background or border - chart sits in document flow
+.insights-chart-card {
+  background: none;
+  border: none;
+  padding: 0;
+
+  &__title {
+    font-size: 11px;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+    color: var(--color-text-muted);
+    margin-bottom: $ins-md;
+    opacity: 0.6;
+  }
+}
+
+.insights-bar-row {
+  display: flex;
+  align-items: center;
+  margin-bottom: 10px;
+
+  &:last-child { margin-bottom: 0; }
+
+  &__label {
+    width: 88px;
+    font-size: $ins-small;
+    color: var(--color-text-muted);
+    flex-shrink: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  &__track {
+    flex: 1;
+    height: 8px;
+    background: $ins-surface-soft;
+    border-radius: 4px;
+    margin: 0 $ins-sm;
+    overflow: hidden;
+  }
+
+  &__fill {
+    height: 100%;
+    border-radius: 4px;
+    transition: width 0.4s cubic-bezier(0.22, 1, 0.36, 1);
+    opacity: 0.85;
+  }
+
+  &__value {
+    width: 30px;
+    font-size: $ins-small;
+    font-weight: 500;
+    color: var(--color-text-muted);
+    text-align: right;
+  }
+}
+
+// ============================================================
+// Content cards - shared shape
+// ============================================================
+
+%ins-card {
+  border-radius: $ins-r-lg;
+  padding: $ins-lg;
+  border: 1px solid $ins-border;
+  background: $ins-surface;
+  transition: border-color 0.15s ease, background 0.15s ease;
+
+  &:hover {
+    border-color: $ins-border-hover;
+    background: $ins-tint-1;
+  }
+}
+
+// Interaction style - no card, plain text blocks
+
+.insights-interaction {
+  margin-bottom: $ins-lg;
+
+  &__narrative {
+    font-size: $ins-body;
+    color: var(--color-text-secondary);
+    line-height: 1.7;
+    margin: 0 0 $ins-md;
+  }
+
+  &__patterns {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+  }
+
+  &__pattern {
+    font-size: $ins-small;
+    color: var(--color-text-secondary);
+    line-height: 1.6;
+    padding: $ins-sm 0;
+    border-bottom: 1px solid $ins-border;
+
+    &:first-child { border-top: 1px solid $ins-border; }
+
+    // "· " bullet prefix via pseudo
+    &::before {
+      content: '·  ';
+      color: var(--color-text-muted);
+    }
+  }
+}
+
+// Project areas - row list, no card background
+
+.insights-areas {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.insights-area-card {
+  padding: $ins-md 0;
+  border-bottom: 1px solid $ins-border;
+
+  &:first-child { border-top: 1px solid $ins-border; }
+
+  &__header {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    margin-bottom: 4px;
+    gap: $ins-sm;
+  }
+
+  &__name {
+    font-weight: 600;
+    font-size: $ins-body;
+    color: var(--color-text-primary);
+    letter-spacing: -0.01em;
+  }
+
+  &__count {
+    font-size: $ins-small;
+    color: var(--color-text-muted);
+    flex-shrink: 0;
+  }
+
+  &__desc {
+    font-size: $ins-small;
+    color: var(--color-text-muted);
+    line-height: 1.6;
+    margin: 0;
+  }
+}
+
+// Big wins - row list, no card background
+
+.insights-wins { display: flex; flex-direction: column; gap: 0; }
+
+.insights-win-card {
+  padding: $ins-md 0;
+  border-bottom: 1px solid $ins-border;
+
+  &:first-child { border-top: 1px solid $ins-border; }
+
+  &__title {
+    font-weight: 600;
+    font-size: $ins-body;
+    color: var(--color-text-primary);
+    letter-spacing: -0.01em;
+    margin: 0 0 4px;
+  }
+
+  &__desc {
+    font-size: $ins-small;
+    color: var(--color-text-secondary);
+    line-height: 1.65;
+    margin: 0;
+  }
+
+  // "→ impact" — action-oriented, stands out
+  &__impact {
+    display: flex;
+    gap: 6px;
+    font-size: $ins-small;
+    font-weight: 500;
+    color: var(--color-text-primary);
+    margin: $ins-sm 0 0;
+    line-height: 1.5;
+
+    &::before {
+      content: '→';
+      color: $ins-blue;
+      flex-shrink: 0;
+      font-weight: 400;
+    }
+  }
+}
+
+// Friction - row list, no card background
+
+.insights-friction { display: flex; flex-direction: column; gap: 0; }
+
+.insights-friction-card {
+  padding: $ins-md 0;
+  border-bottom: 1px solid $ins-border;
+
+  &:first-child { border-top: 1px solid $ins-border; }
+
+  &__title {
+    font-weight: 600;
+    font-size: $ins-body;
+    color: var(--color-text-primary);
+    letter-spacing: -0.01em;
+    margin: 0 0 4px;
+  }
+
+  &__desc {
+    font-size: $ins-small;
+    color: var(--color-text-secondary);
+    line-height: 1.65;
+    margin: 0;
+  }
+
+  &__examples {
+    margin: $ins-xs 0 0 $ins-md;
+    font-size: $ins-small;
+    color: var(--color-text-muted);
+    list-style: none;
+    padding: 0;
+
+    li {
+      margin-bottom: 2px;
+      &::before { content: '·  '; color: var(--color-text-muted); }
+    }
+  }
+
+  // "→ suggestion" — actionable advice
+  &__suggestion {
+    display: flex;
+    gap: 6px;
+    margin-top: $ins-sm;
+    font-size: $ins-small;
+    font-weight: 500;
+    color: var(--color-text-primary);
+    line-height: 1.55;
+
+    &::before {
+      content: '→';
+      color: $ins-blue;
+      flex-shrink: 0;
+      font-weight: 400;
+    }
+  }
+}
+
+// ============================================================
+// Emphasis system - by importance, not content type
+// ============================================================
+
+// Highlight block: must-read conclusions, key findings
+// Use sparingly - 1-2 per report maximum
+.insights-highlight-block {
+  background: $ins-surface-soft;
+  border-radius: $ins-r;
+  padding: $ins-md $ins-lg;
+  margin-bottom: $ins-md;
+  font-size: $ins-small;
+  color: var(--color-text-primary);
+  line-height: 1.7;
+}
+
+// Conclusion line: single-sentence summary at end of each section
+.insights-conclusion-line {
+  font-size: $ins-small;
+  font-weight: 500;
+  color: var(--color-text-primary);
+  padding-top: $ins-sm;
+  border-top: 1px solid $ins-border;
+  margin-top: $ins-md;
+  line-height: 1.6;
+}
+
+// Key metric inline: used inside paragraphs, not standalone
+// Apply to <span> wrapping a number + unit
+.insights-key-metric {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 3px;
+
+  &__value {
+    font-size: 17px;
+    font-weight: 600;
+    letter-spacing: -0.03em;
+    color: $ins-blue;
+    line-height: 1;
+  }
+
+  &__unit {
+    font-size: $ins-label;
+    color: var(--color-text-muted);
+  }
+}
+
+// ============================================================
+// MarkdownInline - report-wide typography
+// ============================================================
+
+.insights-report-body {
+  strong {
+    font-weight: 500;
+    color: var(--color-text-primary);
+  }
+
+  em {
+    font-style: italic;
+    color: var(--color-text-muted);
+  }
+}
+
+// ── Suggestions: md additions ────────────────────────────────
+
+.insights-md-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  margin-bottom: $ins-md;
+}
+
+.insights-md-row {
+  padding: $ins-md 0;
+  border-bottom: 1px solid $ins-border;
+
+  &:first-of-type { border-top: 1px solid $ins-border; }
+
+  &__header {
+    display: flex;
+    align-items: center;
+    gap: $ins-sm;
+    margin-bottom: $ins-xs;
+    min-height: $ins-md; // reserve space even when no badge
+  }
+
+  &__badge {
+    display: inline-block;
+    font-size: 11px;
+    font-weight: 500;
+    color: var(--color-text-muted);
+    background: $ins-surface-soft;
+    border: 1px solid $ins-border;
+    border-radius: $ins-r-sm;
+    padding: 2px 7px;
+    letter-spacing: 0.02em;
+  }
+
+  &__rationale {
+    font-size: $ins-small;
+    color: var(--color-text-muted);
+    line-height: 1.6;
+    margin: $ins-xs 0 0;
+    font-style: italic;
+  }
+}
+
+// ── Suggestions: features to try ─────────────────────────────
+
+.insights-feature-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  margin-bottom: $ins-md;
+}
+
+.insights-feature-row {
+  display: flex;
+  gap: $ins-md;
+  padding: $ins-md 0;
+  border-bottom: 1px solid $ins-border;
+
+  &:first-of-type { border-top: 1px solid $ins-border; }
+
+  &__index {
+    font-size: 13px;
+    font-weight: 600;
+    color: $ins-blue;
+    line-height: 1.5;
+    min-width: 18px;
+    flex-shrink: 0;
+    opacity: 0.7;
+    padding-top: 1px;
+  }
+
+  &__body {
+    flex: 1;
+    min-width: 0;
+  }
+
+  &__title {
+    font-weight: 600;
+    font-size: $ins-body;
+    color: var(--color-text-primary);
+    letter-spacing: -0.01em;
+    margin: 0 0 3px;
+  }
+
+  &__desc {
+    font-size: $ins-small;
+    color: var(--color-text-secondary);
+    line-height: 1.65;
+    margin: 0;
+  }
+
+  &__benefit {
+    font-size: $ins-small;
+    color: var(--color-text-muted);
+    line-height: 1.55;
+    margin: 4px 0 0;
+    font-style: italic;
+  }
+}
+
+// ── Suggestions: usage patterns ──────────────────────────────
+
+.insights-pattern-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.insights-pattern-row {
+  padding: $ins-md 0;
+  border-bottom: 1px solid $ins-border;
+
+  &:first-of-type { border-top: 1px solid $ins-border; }
+
+  &__title {
+    font-weight: 600;
+    font-size: $ins-body;
+    color: var(--color-text-primary);
+    letter-spacing: -0.01em;
+    margin: 0 0 3px;
+  }
+
+  &__desc {
+    font-size: $ins-small;
+    color: var(--color-text-secondary);
+    line-height: 1.65;
+    margin: 0;
+  }
+}
+
+// Copyable code block
+
+.insights-copyable {
+  margin-top: $ins-sm;
+
+  &__label {
+    font-size: $ins-label;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--color-text-muted);
+    margin-bottom: $ins-xs;
+    opacity: 0.7;
+  }
+
+  // row wraps code + button as a single unit
+  &__row {
+    position: relative;
+    display: block;
+
+    // show button on hover of the whole row
+    &:hover .insights-copyable__btn { opacity: 1; }
+  }
+
+  &__code {
+    display: block;
+    width: 100%;
+    box-sizing: border-box;
+    background: $ins-surface;
+    border: 1px solid $ins-border;
+    // right padding reserves space for the button
+    padding: $ins-sm 40px $ins-sm $ins-md;
+    border-radius: $ins-r-sm;
+    font-size: $ins-small;
+    font-family: $font-family-mono;
+    color: var(--color-text-primary);
+    white-space: pre-wrap;
+    word-break: break-word;
+    line-height: 1.6;
+    transition: border-color 0.15s;
+
+    .insights-copyable__row:hover & { border-color: $ins-border-hover; }
+  }
+
+  // button floats inside the code block, top-right
+  &__btn {
+    position: absolute;
+    top: 6px;
+    right: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    border: 1px solid $ins-border;
+    border-radius: $ins-r-sm;
+    background: $ins-surface;
+    color: var(--color-text-muted);
+    cursor: pointer;
+    opacity: 0;   // hidden until row hover
+    transition: opacity 0.15s, background 0.15s, color 0.15s, border-color 0.15s;
+
+    &:hover {
+      background: $ins-surface-hover;
+      border-color: $ins-border-hover;
+      color: var(--color-text-primary);
+    }
+  }
+}
+
+// ── Horizon — numbered cards with action block ────────────────
+
+.insights-horizon {
+  display: flex;
+  flex-direction: column;
+  gap: $ins-sm;
+}
+
+.insights-horizon-card {
+  display: flex;
+  gap: $ins-md;
+  padding: $ins-lg;
+  border-radius: $ins-r-lg;
+  border: 1px solid $ins-border;
+  background: $ins-surface;
+  transition: border-color 0.15s ease;
+
+  &:hover { border-color: $ins-border-hover; }
+
+  // left: large index number — distinct accent so it actually reads as a number
+  &__index {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: 0;
+    color: $ins-blue;
+    line-height: 1;
+    flex-shrink: 0;
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    background: $ins-blue-bg;
+    border: 1px solid color-mix(in srgb, $ins-blue 25%, transparent);
+  }
+
+  &__body {
+    flex: 1;
+    min-width: 0;
+  }
+
+  &__title {
+    font-weight: 600;
+    font-size: $ins-body;
+    color: var(--color-text-primary);
+    letter-spacing: -0.01em;
+    margin: 0 0 5px;
+  }
+
+  &__desc {
+    font-size: $ins-small;
+    color: var(--color-text-secondary);
+    line-height: 1.65;
+    margin: 0;
+  }
+
+  // how-to-try: inline label + text, visually separated
+  &__how {
+    display: flex;
+    align-items: baseline;
+    gap: $ins-sm;
+    margin-top: $ins-md;
+    padding-top: $ins-md;
+    border-top: 1px solid $ins-border;
+    font-size: $ins-small;
+    color: var(--color-text-secondary);
+    line-height: 1.55;
+  }
+
+  &__how-label {
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: $ins-blue;
+    flex-shrink: 0;
+    opacity: 0.8;
+  }
+}
+
+// ── Fun ending — left-aligned card ───────────────────────────
+
+.insights-fun-ending {
+  margin-top: $ins-xl + $ins-md;
+  margin-bottom: $ins-xl;
+  padding-top: $ins-xl + $ins-sm;
+  // Clear divider from section above (stronger than $ins-border)
+  border-top: 1px solid var(--border-base);
+  text-align: left;
+
+  &__blob, &__blob-2 { display: none; }
+
+  &__bg {
+    display: block;
+    width: 100%;
+    box-sizing: border-box;
+    padding: $ins-lg $ins-xl;
+    border-radius: $ins-r-lg;
+    border: 1px solid color-mix(in srgb, $ins-blue 28%, transparent);
+    background: $ins-blue-bg;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
+    box-shadow: var(--shadow-xs);
+
+    &:hover {
+      border-color: color-mix(in srgb, $ins-blue 45%, transparent);
+      background: var(--color-accent-200);
+      box-shadow: var(--shadow-sm);
+    }
+  }
+
+  &__headline {
+    font-size: 18px;
+    font-weight: 600;
+    color: var(--color-text-primary);
+    margin: 0 0 $ins-sm;
+    letter-spacing: -0.02em;
+    line-height: 1.25;
+  }
+
+  &__message {
+    font-size: $ins-body;
+    color: var(--color-text-secondary);
+    line-height: 1.7;
+    margin: 0;
+    max-width: none;
+    text-align: left;
+  }
+}

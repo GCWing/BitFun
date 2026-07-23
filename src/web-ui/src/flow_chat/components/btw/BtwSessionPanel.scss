@@ -1,0 +1,237 @@
+/**
+ * BTW session panel styles.
+ * Align the shell with TaskDetailPanel while reusing FlowChat message renderers.
+ */
+
+.btw-session-panel {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background: var(--color-bg-scene);
+  color: var(--color-text-primary);
+
+  &--empty {
+    align-items: center;
+    justify-content: center;
+
+    .btw-session-panel__empty-state {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0 16px;
+      color: var(--color-text-muted);
+      font-size: var(--tool-card-action-font-size);
+      text-align: center;
+    }
+  }
+
+  &__header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 12px;
+    background: var(--color-bg-secondary);
+    border-bottom: 1px dashed var(--border-base);
+    flex-shrink: 0;
+    min-height: 36px;
+    min-width: 0;
+  }
+
+  &__header-left {
+    flex: 0 0 auto;
+    display: flex;
+    align-items: center;
+  }
+
+  &__header-title-wrap {
+    flex: 1 1 0;
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  &__header-right {
+    flex: 0 1 auto;
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 6px;
+  }
+
+  &__badge {
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: var(--flowchat-font-size-xxs);
+    font-weight: 500;
+    color: var(--color-text-secondary);
+    background: var(--color-overlay-white-08);
+    flex-shrink: 0;
+  }
+
+  &__title {
+    font-size: var(--tool-card-action-font-size);
+    font-weight: 500;
+    color: var(--color-text-primary);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 100%;
+    text-align: center;
+  }
+
+  &__meta {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    min-width: 0;
+    max-width: 100%;
+    font-size: var(--flowchat-font-size-xs);
+    color: var(--color-text-muted);
+    white-space: nowrap;
+    overflow: hidden;
+  }
+
+  &__meta-label {
+    flex-shrink: 0;
+    color: var(--color-text-muted);
+  }
+
+  &__meta svg {
+    flex-shrink: 0;
+  }
+
+  &__meta-title {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  &__origin-button,
+  &__stop-button {
+    flex-shrink: 0;
+    color: var(--color-text-secondary);
+
+    &:not(:disabled):hover {
+      background: color-mix(in srgb, var(--element-bg-soft) 82%, transparent);
+      color: var(--color-text-primary);
+    }
+  }
+
+  &__stop-button:not(:disabled) {
+    color: color-mix(in srgb, var(--color-error) 84%, var(--color-text-primary));
+
+    &:hover {
+      background: color-mix(in srgb, var(--color-error) 12%, transparent);
+    }
+  }
+
+  &__body {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    padding: 12px 16px;
+    display: block;
+
+    .virtual-item-wrapper {
+      width: 100%;
+      display: block;
+    }
+  }
+
+  &__action-bar-wrapper {
+    position: absolute;
+    inset: 0;
+    z-index: 13;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+    min-height: 0;
+    padding: 56px 14px 14px;
+    box-sizing: border-box;
+    overflow: hidden;
+    pointer-events: none;
+  }
+
+  &__action-bar-wrapper > .deep-review-action-bar {
+    width: 100%;
+    max-height: 100%;
+    pointer-events: auto;
+  }
+
+  &__empty-state {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 120px;
+    color: var(--color-text-muted);
+    font-size: var(--tool-card-action-font-size);
+    text-align: center;
+  }
+
+  &__scroll-to-bottom {
+    bottom: 18px;
+    right: 18px;
+    width: 34px;
+    height: 34px;
+    border-width: 1px;
+    z-index: 12;
+  }
+
+  // The body owns bottom breathing room so the floating card does not cover the final lines.
+  &--has-action-bar &__scroll-to-bottom {
+    bottom: 140px;
+  }
+
+  /* Minimized review action bar indicator */
+  &__minimized-indicator {
+    position: absolute;
+    bottom: 14px;
+    left: 14px;
+    z-index: 11;
+    pointer-events: auto;
+  }
+
+  &__minimized-button {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 14px;
+    border-radius: 20px;
+    background: var(--color-bg-secondary);
+    border: 1px solid var(--border-base);
+    color: var(--color-text-primary);
+    font-size: var(--tool-card-action-font-size);
+    font-weight: 500;
+    cursor: pointer;
+    box-shadow: 0 2px 12px var(--color-overlay-black-12);
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+
+    &:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 4px 16px var(--color-overlay-black-15);
+    }
+
+    svg {
+      flex-shrink: 0;
+      color: var(--color-accent-500);
+    }
+  }
+
+  &__minimized-text {
+    white-space: nowrap;
+  }
+
+  &__minimized-count {
+    padding: 2px 8px;
+    border-radius: 10px;
+    background: var(--element-bg-soft);
+    font-size: var(--flowchat-font-size-xs);
+    color: var(--color-text-secondary);
+    font-variant-numeric: tabular-nums;
+    flex-shrink: 0;
+  }
+}

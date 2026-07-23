@@ -1,0 +1,76 @@
+@use '../../../../component-library/styles/tokens.scss' as *;
+
+.m-editor {
+  display: flex;
+  flex-direction: column;
+  border-radius: 0;
+  overflow: hidden;
+  
+  &-toolbar {
+    padding: $size-gap-2;
+    border-bottom: 1px solid var(--border-base);
+    background: var(--element-bg-soft);
+    backdrop-filter: blur(8px);
+  }
+  
+  &-content {
+    flex: 1;
+    display: flex;
+    overflow: hidden;
+    border-radius: 0;
+  }
+  
+  &-edit-panel,
+  &-preview-panel,
+  &-ir-panel {
+    flex: 1;
+    overflow: hidden;
+    border-radius: 0;
+  }
+  
+  &-mode-split {
+    .m-editor-content {
+      > .m-editor-edit-panel {
+        border-right: 1px solid var(--border-base);
+      }
+    }
+  }
+  
+  &-dark {
+    background: var(--color-bg-scene);
+    color: var(--color-text-primary);
+    
+    .m-editor-textarea {
+      color: var(--color-text-secondary);
+    }
+    
+    .m-editor-toolbar {
+      background: var(--element-bg-soft);
+      border-bottom-color: var(--border-base);
+    }
+    
+    .m-editor-edit-panel {
+      border-right-color: var(--border-base) !important;
+    }
+  }
+  
+  &-light {
+    background: var(--color-bg-scene);
+    color: var(--color-text-primary);
+    border: 1px solid var(--border-base);
+    
+    .m-editor-textarea {
+      color: var(--color-text-secondary);
+    }
+    
+    .m-editor-toolbar {
+      background: var(--element-bg-soft);
+      border-bottom-color: var(--border-base);
+    }
+    
+    .m-editor-edit-panel {
+      border-right-color: var(--border-base) !important;
+    }
+
+  }
+}

@@ -1,0 +1,543 @@
+/**
+ * Component library design tokens (SCSS)
+ */
+// ==================== Primitive color literals ====================
+$color-static-white: #ffffff;
+$color-static-black: #000000;
+
+$overlay-white-04: rgba(255, 255, 255, 0.04);
+$overlay-white-08: rgba(255, 255, 255, 0.08);
+$overlay-white-12: rgba(255, 255, 255, 0.12);
+$overlay-white-15: rgba(255, 255, 255, 0.15);
+$overlay-white-20: rgba(255, 255, 255, 0.2);
+$overlay-white-24: rgba(255, 255, 255, 0.24);
+$overlay-white-25: $overlay-white-24;
+$overlay-white-30: rgba(255, 255, 255, 0.3);
+$overlay-white-32: $overlay-white-30;
+$overlay-white-40: rgba(255, 255, 255, 0.4);
+$overlay-white-60: rgba(255, 255, 255, 0.6);
+
+$overlay-black-08: rgba(0, 0, 0, 0.08);
+$overlay-black-12: rgba(0, 0, 0, 0.12);
+$overlay-black-15: rgba(0, 0, 0, 0.15);
+$overlay-black-20: rgba(0, 0, 0, 0.2);
+$overlay-black-30: rgba(0, 0, 0, 0.3);
+$overlay-black-40: rgba(0, 0, 0, 0.4);
+$overlay-black-50: rgba(0, 0, 0, 0.5);
+$overlay-black-60: rgba(0, 0, 0, 0.6);
+$overlay-black-70: rgba(0, 0, 0, 0.7);
+$overlay-black-80: rgba(0, 0, 0, 0.8);
+$overlay-black-90: $overlay-black-80;
+
+$color-blue-500-a08: rgba(96, 165, 250, 0.08);
+$color-blue-500-a06: $color-blue-500-a08;
+$color-blue-500-a15: rgba(96, 165, 250, 0.15);
+$color-blue-500-a12: $color-blue-500-a15;
+$color-blue-500-a18: $color-blue-500-a15;
+$color-blue-600-a08: rgba(59, 130, 246, 0.08);
+$color-blue-600-a15: rgba(59, 130, 246, 0.15);
+$color-blue-600-a12: $color-blue-600-a15;
+$color-blue-600-a18: $color-blue-600-a15;
+$color-blue-600-a30: rgba(59, 130, 246, 0.3);
+$color-blue-600-a25: $color-blue-600-a30;
+$color-blue-600-a40: rgba(59, 130, 246, 0.4);
+
+$color-purple-500-a08: rgba(139, 92, 246, 0.08);
+$color-purple-500-a05: $color-purple-500-a08;
+$color-purple-500-a10: $color-purple-500-a08;
+$color-purple-500-a15: rgba(139, 92, 246, 0.15);
+$color-purple-500-a12: $color-purple-500-a15;
+$color-purple-500-a25: rgba(139, 92, 246, 0.25);
+$color-purple-500-a40: rgba(139, 92, 246, 0.4);
+
+// ==================== Base color system ====================
+
+$color-bg-primary: #0e0e10;
+$color-bg-secondary: #1c1c1f;
+$color-bg-tertiary: $color-bg-primary;
+$color-bg-elevated: $color-bg-secondary;
+$color-bg-workbench: $color-bg-primary;
+$color-bg-scene: $color-bg-secondary;
+
+$color-text-primary: #e8e8e8;
+$color-text-secondary: #b0b0b0;
+$color-text-muted: #858585;
+$color-text-disabled: #555555;
+
+// ==================== Neutral surface system ====================
+$element-bg-subtle: $overlay-white-08;
+$element-bg-soft: $overlay-white-08;
+$element-bg-base: $overlay-white-12;
+$element-bg-medium: $overlay-white-12;
+$element-bg-strong: $overlay-white-15;
+
+// ==================== Blue system ====================
+$color-accent-50: $color-blue-500-a06;
+$color-accent-100: $color-blue-500-a08;
+$color-accent-200: $color-blue-500-a15;
+$color-accent-300: rgba(96, 165, 250, 0.25);
+$color-accent-400: rgba(96, 165, 250, 0.4);
+$color-accent-500: #60a5fa;
+$color-accent-600: #3b82f6;
+$color-accent-700: rgba(59, 130, 246, 0.8);
+
+// ==================== Purple system ====================
+$color-purple-100: $color-purple-500-a08;
+$color-purple-200: $color-purple-500-a15;
+$color-purple-500: #8b5cf6;
+$color-purple-600: #7c3aed;
+
+// ==================== Semantic colors ====================
+$color-success: #34d399;
+$color-success-bg: rgba(52, 211, 153, 0.1);
+$color-success-border: rgba(52, 211, 153, 0.3);
+
+$color-warning: #f59e0b;
+$color-warning-bg: rgba(245, 158, 11, 0.1);
+$color-warning-border: rgba(245, 158, 11, 0.3);
+
+$color-error: #ef4444;
+$color-error-bg: rgba(239, 68, 68, 0.1);
+$color-error-border: rgba(239, 68, 68, 0.3);
+
+$color-info: #a1a1aa;
+$color-info-bg: $overlay-white-08;
+$color-info-border: $overlay-white-24;
+
+// ==================== Git-specific color system ====================
+$git-color-branch: #a1a1aa;
+$git-color-branch-bg: $overlay-white-08;
+$git-color-branch-bg-hover: $overlay-white-12;
+
+$git-color-changes: $color-warning;
+
+$git-color-staged: rgb(34, 197, 94);
+
+$git-color-added: $git-color-staged;
+
+$git-color-deleted: $color-error;
+
+// ==================== Border system ====================
+$border-subtle: $overlay-white-12;
+$border-base: $overlay-white-20;
+$border-medium: $overlay-white-24;
+$border-strong: $overlay-white-32;
+$border-prominent: $overlay-white-40;
+
+$border-accent-soft: $color-blue-600-a30;
+$border-accent-subtle: $color-blue-600-a15;
+$border-accent: $color-blue-600-a40;
+$border-accent-strong: rgba(59, 130, 246, 0.6);
+
+// ==================== Shadow system ====================
+$shadow-xs: 0 1px 2px $overlay-black-90;
+$shadow-sm: 0 2px 4px $overlay-black-80;
+$shadow-base: 0 4px 8px $overlay-black-70;
+$shadow-lg: 0 8px 16px $overlay-black-60;
+$shadow-xl: 0 12px 24px $overlay-black-50;
+
+$glow-shadow-blue:
+  0 12px 32px $color-blue-600-a25,
+  0 6px 16px $color-blue-500-a18,
+  0 3px 8px $overlay-black-12;
+
+$glow-shadow-purple:
+  0 12px 32px $color-purple-500-a25,
+  0 6px 16px $color-purple-500-a15,
+  0 3px 8px $overlay-black-12;
+
+$glow-shadow-mixed:
+  0 12px 32px rgba(96, 165, 250, 0.2),
+  0 6px 16px $color-purple-500-a15,
+  0 3px 8px $overlay-black-12;
+
+$inner-glow-top: inset 0 1px 0 $overlay-white-08;
+$inner-glow-top-hover: inset 0 1px 0 $overlay-white-25;
+$inner-glow-bottom-blue: inset 0 -1px 0 $color-blue-600-a12;
+
+// ==================== Blur system ====================
+
+$blur-subtle: blur(4px) saturate(1.05);
+$blur-base: blur(8px) saturate(1.1);
+$blur-medium: blur(12px) saturate(1.2);
+$blur-strong: blur(16px) saturate(1.3) brightness(1.1);
+
+// ==================== Glass background system ====================
+$glass-base: linear-gradient(135deg,
+  $overlay-white-04 0%,
+  $overlay-white-04 50%,
+  $overlay-white-04 100%);
+
+$glass-blue-subtle: $color-blue-600-a08;
+
+$glass-red-subtle: rgba(239, 68, 68, 0.05);
+$glass-red-base: $color-error-bg;
+$glass-red-hover: rgba(239, 68, 68, 0.15);
+
+// ==================== Sizing system ====================
+
+$size-radius-sm: 6px;
+$size-radius-base: 8px;
+$size-radius-lg: 12px;
+$size-radius-xl: 16px;
+$size-radius-2xl: 20px;
+$size-radius-full: 9999px;
+
+$size-gap-1: 4px;
+$size-gap-2: 8px;
+$size-gap-3: 12px;
+$size-gap-4: 16px;
+$size-gap-5: 20px;
+$size-gap-6: 24px;
+$size-gap-8: 32px;
+$size-gap-10: 40px;
+$size-gap-12: 48px;
+$size-gap-16: 64px;
+
+// ==================== Motion system ====================
+
+$motion-instant: 0.1s;
+$motion-fast: 0.15s;
+$motion-base: 0.3s;
+$motion-slow: 0.6s;
+$motion-lazy: 1s;
+
+$easing-standard: cubic-bezier(0.4, 0, 0.2, 1);
+$easing-decelerate: cubic-bezier(0, 0, 0.2, 1);
+$easing-accelerate: cubic-bezier(0.4, 0, 1, 1);
+$easing-smooth: cubic-bezier(0.4, 0, 0.2, 1);
+
+// ==================== Z-index layers ====================
+// Unified z-index scale to avoid ad-hoc hardcoded values
+// Layer plan:
+// 0-50: base and fixed elements
+// 50-100: floating elements (dropdowns, etc.)
+// 100-200: overlays and drawers
+// 200-300: modals
+// 300-400: tooltips and popovers
+// 400-500: notifications and special floating panels
+// 500+: context menus and highest-priority elements
+
+$z-base: 0;
+$z-decoration: 1;
+$z-content: 2;
+$z-header: 10;
+$z-sticky: 15;
+
+$z-floating: 50;
+$z-dropdown: 60;
+
+$z-overlay: 100;
+
+$z-modal: 200;
+$z-modal-active: 250;
+$z-fullscreen: 280;
+
+$z-tooltip: 350;
+$z-popover: 360;
+
+$z-notification: 400;
+
+$z-context-menu: 500;
+
+// ==================== Typography system ====================
+
+$font-family-sans: 'Noto Sans SC', 'PingFang SC', 'Microsoft YaHei', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'SF Pro Display', Roboto, sans-serif;
+
+$font-family-mono: 'Fira Code', 'JetBrains Mono', 'SF Mono', 'Consolas', 'Noto Sans SC', 'Microsoft YaHei', 'Liberation Mono', monospace;
+
+$font-weight-normal: 400;
+$font-weight-medium: 500;
+$font-weight-semibold: 600;
+$font-weight-bold: 600; // Optimized: use 600 instead of 700; Bold font removed
+
+$font-size-xxs: 10px;
+$font-size-2xs: 11px;
+$font-size-xs: 12px;
+$font-size-sm: 13px;
+$font-size-base: 14px;
+$font-size-lg: 15px;
+$font-size-xl: 16px;
+$font-size-2xl: 18px;
+$font-size-3xl: 22px;
+$font-size-4xl: 26px;
+
+$line-height-tight: 1.2;
+$line-height-base: 1.5;
+$line-height-relaxed: 1.6;
+
+// ==================== Component-specific sizes ====================
+
+// ==================== Opacity levels ====================
+
+$opacity-disabled: 0.6;
+$opacity-hover: 0.8;
+$opacity-focus: 0.9;
+
+// ==================== Component-specific tokens ====================
+
+$button-bg-hover: linear-gradient(135deg,
+  $color-blue-600-a15 0%,
+  $color-blue-500-a12 30%,
+  $color-blue-600-a08 60%,
+  $color-blue-600-a18 100%
+);
+$button-text-hover: $color-static-white;
+
+
+// ==================== Badge/label tokens ====================
+// Badges/labels are borderless by default and use background color to differentiate
+$badge-border-radius: $size-radius-sm;
+$badge-padding-x: $size-gap-2;
+$badge-padding-y: 2px;
+$badge-font-weight: $font-weight-medium;
+
+$badge-neutral-bg: $element-bg-base;
+$badge-neutral-text: $color-text-secondary;
+
+$badge-accent-bg: $color-accent-200;
+$badge-accent-text: $color-accent-500;
+
+$badge-purple-bg: $color-purple-200;
+$badge-purple-text: $color-purple-500;
+
+$badge-success-bg: $color-success-bg;
+$badge-success-text: $color-success;
+
+$badge-warning-bg: $color-warning-bg;
+$badge-warning-text: $color-warning;
+
+$badge-error-bg: $color-error-bg;
+$badge-error-text: $color-error;
+
+$badge-info-bg: $color-info-bg;
+$badge-info-text: $color-info;
+
+// ==================== Mixin for CSS variable export ====================
+
+@mixin apply-design-tokens {
+  --color-bg-primary: #{$color-bg-primary};
+  --color-static-white: #{$color-static-white};
+  --color-static-black: #{$color-static-black};
+  --color-static-white-rgb: 255, 255, 255;
+  --color-static-black-rgb: 0, 0, 0;
+  --color-overlay-white-04: #{$overlay-white-04};
+  --color-overlay-white-08: #{$overlay-white-08};
+  --color-overlay-white-12: #{$overlay-white-12};
+  --color-overlay-white-15: #{$overlay-white-15};
+  --color-overlay-white-20: #{$overlay-white-20};
+  --color-overlay-white-60: #{$overlay-white-60};
+  --color-overlay-white-70: color-mix(in srgb, var(--color-static-white) 70%, transparent);
+  --color-overlay-white-80: color-mix(in srgb, var(--color-static-white) 80%, transparent);
+  --color-overlay-white-90: color-mix(in srgb, var(--color-static-white) 90%, transparent);
+  --color-overlay-white-95: color-mix(in srgb, var(--color-static-white) 95%, transparent);
+  --color-overlay-black-08: #{$overlay-black-08};
+  --color-overlay-black-12: #{$overlay-black-12};
+  --color-overlay-black-15: #{$overlay-black-15};
+  --color-overlay-black-20: #{$overlay-black-20};
+  --color-overlay-black-30: #{$overlay-black-30};
+  --color-overlay-black-40: #{$overlay-black-40};
+  --color-overlay-black-50: #{$overlay-black-50};
+  --color-overlay-black-80: #{$overlay-black-80};
+  --color-overlay-slate-rgb: 15, 23, 42;
+  --color-overlay-slate-04: rgba(var(--color-overlay-slate-rgb), 0.04);
+  --color-overlay-slate-08: rgba(var(--color-overlay-slate-rgb), 0.08);
+  --color-overlay-slate-12: rgba(var(--color-overlay-slate-rgb), 0.12);
+  --color-bg-secondary: #{$color-bg-secondary};
+  --color-bg-tertiary: #{$color-bg-tertiary};
+  --color-bg-elevated: #{$color-bg-elevated};
+  --color-bg-workbench: #{$color-bg-workbench};
+  --color-bg-scene: #{$color-bg-scene};
+
+  --color-text-primary: #{$color-text-primary};
+  --color-text-secondary: #{$color-text-secondary};
+  --color-text-muted: #{$color-text-muted};
+  --color-text-disabled: #{$color-text-disabled};
+
+  --element-bg-subtle: #{$element-bg-subtle};
+  --element-bg-soft: #{$element-bg-soft};
+  --element-bg-base: #{$element-bg-base};
+  --element-bg-medium: #{$element-bg-medium};
+  --element-bg-strong: #{$element-bg-strong};
+  --element-bg-hover: var(--element-bg-medium);
+
+  --color-accent-50: #{$color-accent-50};
+  --color-accent-100: #{$color-accent-100};
+  --color-accent-200: #{$color-accent-200};
+  --color-accent-300: #{$color-accent-300};
+  --color-accent-400: #{$color-accent-400};
+  --color-accent-500: #{$color-accent-500};
+  --color-accent-500-rgb: 96 165 250;
+  --color-accent-600: #{$color-accent-600};
+  --color-accent-700: #{$color-accent-700};
+
+  --color-purple-100: #{$color-purple-100};
+  --color-purple-200: #{$color-purple-200};
+  --color-purple-500: #{$color-purple-500};
+  --color-purple-600: #{$color-purple-600};
+  --color-indigo-500: #6366f1;
+  --color-cyan-500: #06b6d4;
+
+  --color-success: #{$color-success};
+  --color-success-bg: #{$color-success-bg};
+  --color-success-border: #{$color-success-border};
+  --color-warning: #{$color-warning};
+  --color-warning-bg: #{$color-warning-bg};
+  --color-warning-border: #{$color-warning-border};
+  --color-error: #{$color-error};
+  --color-error-bg: #{$color-error-bg};
+  --color-error-border: #{$color-error-border};
+  --color-info: #{$color-info};
+  --color-info-bg: #{$color-info-bg};
+  --color-info-border: #{$color-info-border};
+
+  --git-color-branch: #{$git-color-branch};
+  --git-color-branch-bg: #{$git-color-branch-bg};
+  --git-color-branch-bg-hover: #{$git-color-branch-bg-hover};
+  --git-color-changes: #{$git-color-changes};
+  --git-color-staged: #{$git-color-staged};
+  --git-color-added: #{$git-color-added};
+  --git-color-deleted: #{$git-color-deleted};
+
+  --border-subtle: #{$border-subtle};
+  --border-base: #{$border-base};
+  --border-medium: #{$border-medium};
+  --border-strong: #{$border-strong};
+  --border-prominent: #{$border-prominent};
+  --border-accent-soft: #{$border-accent-soft};
+  --border-accent-subtle: #{$border-accent-subtle};
+  --border-accent: #{$border-accent};
+  --border-accent-strong: #{$border-accent-strong};
+
+  --shadow-xs: #{$shadow-xs};
+  --shadow-sm: #{$shadow-sm};
+  --shadow-base: #{$shadow-base};
+  --shadow-lg: #{$shadow-lg};
+  --shadow-xl: #{$shadow-xl};
+  --scrollbar-thumb: var(--color-overlay-white-12);
+  --scrollbar-thumb-hover: #{$overlay-white-24};
+  --btn-primary-bg: var(--color-accent-200);
+  --btn-primary-color: var(--color-accent-600);
+  --btn-primary-border: transparent;
+  --btn-primary-shadow: none;
+  --btn-primary-hover-bg: var(--color-accent-300);
+  --btn-primary-hover-color: var(--color-text-primary);
+  --btn-primary-hover-border: transparent;
+  --btn-primary-hover-shadow: none;
+  --btn-primary-hover-transform: none;
+  --btn-primary-active-bg: var(--color-accent-200);
+  --btn-primary-active-color: var(--color-text-primary);
+  --btn-primary-active-border: transparent;
+  --btn-primary-active-shadow: none;
+  --btn-primary-active-transform: none;
+  --btn-ghost-color: var(--color-text-muted);
+  --btn-ghost-hover-bg: var(--color-overlay-white-08);
+  --btn-ghost-hover-color: #b8b8b8;
+  --btn-ghost-hover-border: transparent;
+  --scene-viewport-border-width: 1px;
+
+  --glow-shadow-blue: #{$glow-shadow-blue};
+
+  --glass-blue-subtle: #{$glass-blue-subtle};
+  --glass-red-subtle: #{$glass-red-subtle};
+  --glass-red-base: #{$glass-red-base};
+  --glass-red-hover: #{$glass-red-hover};
+  --glass-bg-base: #{$glass-base};
+  --glass-bg-hover: var(--element-bg-medium);
+  --glass-bg-active: var(--element-bg-strong);
+  --glass-border-base: var(--border-base);
+  --glass-border-hover: var(--border-medium);
+  --blur-subtle: #{$blur-subtle};
+
+  --size-radius-sm: #{$size-radius-sm};
+  --size-radius-base: #{$size-radius-base};
+  --size-radius-md: var(--size-radius-base);
+  --size-radius-lg: #{$size-radius-lg};
+
+  --size-gap-1: #{$size-gap-1};
+  --size-gap-2: #{$size-gap-2};
+  --size-gap-3: #{$size-gap-3};
+  --size-gap-4: #{$size-gap-4};
+  --size-gap-5: #{$size-gap-5};
+  --size-gap-6: #{$size-gap-6};
+  --size-gap-8: #{$size-gap-8};
+
+  --motion-fast: #{$motion-fast};
+  --motion-base: #{$motion-base};
+
+  --easing-standard: #{$easing-standard};
+
+  --font-family-sans: #{$font-family-sans};
+  --font-family-mono: #{$font-family-mono};
+  --tool-card-font-mono:
+    'SF Mono', 'Monaco', 'Cascadia Code', 'Cascadia Mono', Consolas, 'Inconsolata', 'Fira Code', 'Fira Mono',
+    'Droid Sans Mono', 'Source Code Pro', 'Lucida Console', 'Courier New', monospace;
+
+  --font-weight-normal: #{$font-weight-normal};
+  --font-weight-medium: #{$font-weight-medium};
+  --font-weight-semibold: #{$font-weight-semibold};
+
+  --font-size-xxs: #{$font-size-xxs};
+  --font-size-2xs: #{$font-size-2xs};
+  --font-size-xs: #{$font-size-xs};
+  --font-size-sm: #{$font-size-sm};
+  --font-size-base: #{$font-size-base};
+  --font-size-lg: #{$font-size-lg};
+  --font-size-xl: #{$font-size-xl};
+  --font-size-2xl: #{$font-size-2xl};
+  --font-size-3xl: #{$font-size-3xl};
+
+  /* Flow chat: mirrors UI scale until font preference overwrites (independent mode). */
+  --flowchat-font-size-xxs: var(--font-size-xxs);
+  --flowchat-font-size-2xs: var(--font-size-2xs);
+  --flowchat-font-size-xs: var(--font-size-xs);
+  --flowchat-font-size-sm: var(--font-size-sm);
+  --flowchat-font-size-base: var(--font-size-base);
+  --flowchat-font-size-lg: var(--font-size-lg);
+  --flowchat-font-size-xl: var(--font-size-xl);
+  --flowchat-font-size-2xl: var(--font-size-2xl);
+  --flowchat-font-size-3xl: var(--font-size-3xl);
+  --flowchat-text-line-height: 1.58;
+  --flowchat-support-line-height: 1.45;
+  --flowchat-compact-line-height: 1.32;
+  --flowchat-flow-item-gap: 0.42rem;
+  --flowchat-turn-gap: 0.46rem;
+  --flowchat-inline-gap: 0.35rem;
+  --flowchat-control-gap: 0.5rem;
+  --flowchat-control-pad-y: 0.35rem;
+  --flowchat-control-pad-x: 0.75rem;
+  --flowchat-content-inline-pad: 3rem;
+  --flowchat-content-inline-pad-mobile: 1.5rem;
+  --flowchat-card-gap: 0.42rem;
+  --flowchat-card-radius: 8px;
+  --flowchat-card-pad-y: 0.625rem;
+  --flowchat-card-pad-x: 0.75rem;
+  --flowchat-card-expanded-pad-y: 0.5rem;
+  --flowchat-card-expanded-pad-x: 0.625rem;
+  --tool-card-header-pad-y: 0.44rem;
+  --tool-card-header-pad-right: 0.625rem;
+  --tool-card-header-icon-slot: 34px;
+  --tool-card-expanded-pad-x: var(--flowchat-card-expanded-pad-x);
+  --tool-card-action-font-size: var(--flowchat-font-size-sm);
+  --tool-card-action-line-height: var(--flowchat-support-line-height);
+  --flowchat-code-font-size: var(--flowchat-font-size-sm);
+  --flowchat-code-line-height: 1.52;
+  --flowchat-code-block-pad-y: 0.55rem;
+  --flowchat-code-block-pad-x: 0.75rem;
+  --flowchat-link-color: #60a5fa;
+  --flowchat-link-hover-color: #93c5fd;
+
+  --line-height-tight: #{$line-height-tight};
+  --line-height-base: #{$line-height-base};
+  --line-height-relaxed: #{$line-height-relaxed};
+
+  --opacity-disabled: #{$opacity-disabled};
+
+}
+
+:root[data-theme="light"],
+:root[data-theme-type="light"],
+[data-theme-type="light"] {
+  --flowchat-link-color: #0969da;
+  --flowchat-link-hover-color: #0550ae;
+}

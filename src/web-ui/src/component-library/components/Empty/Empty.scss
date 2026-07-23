@@ -1,0 +1,44 @@
+/**
+ * Empty component styles
+ * Based on the BitFun glassmorphism design system
+ */
+.bitfun-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 40px 20px;
+  text-align: center;
+
+  &__image {
+    margin-bottom: 16px;
+    opacity: 0.8;
+    animation: bitfun-empty-fade-in 0.5s ease-out;
+
+    svg {
+      display: block;
+    }
+  }
+
+  &__description {
+    font-size: 14px;
+    color: var(--color-overlay-white-60);
+    margin-bottom: 16px;
+    animation: bitfun-empty-fade-in 0.5s ease-out 0.1s both;
+  }
+
+  &__footer {
+    animation: bitfun-empty-fade-in 0.5s ease-out 0.2s both;
+  }
+}
+
+@keyframes bitfun-empty-fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}

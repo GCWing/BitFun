@@ -1,0 +1,634 @@
+/**
+ * Terminal tool card styles
+ * Specific styles based on BaseToolCard
+ */
+
+@use './BaseToolCard.scss';
+@use '../../component-library/styles/_extended-mixins' as mixins;
+
+/* ========== Terminal card specific styles ========== */
+
+.terminal-tool-card {
+  .terminal-card-icon {
+    color: var(--color-text-secondary);
+    flex-shrink: 0;
+  }
+}
+
+.compact-tool-card-wrapper.terminal-tool-card--compact-collapsed {
+  /*
+   * Match collapsed thinking summary (`.thinking-label`, `ModelThinkingDisplay.scss`):
+   * sans + `sm` + line-height 1.5 + normal — not monospace (mono reads “thinner” vs “思考了 N 字”).
+   */
+  .compact-card-action,
+  .compact-card-content .tool-command-preview.tool-command-preview--compact {
+    font-family: var(--font-family-sans);
+    font-size: var(--flowchat-font-size-sm);
+    line-height: var(--flowchat-support-line-height);
+    font-weight: normal;
+    color: var(--color-text-muted);
+  }
+
+  .terminal-header-extra {
+    gap: var(--flowchat-inline-gap);
+  }
+
+  .terminal-header-duration .duration-text {
+    gap: 0.18rem;
+    font-family: var(--font-family-sans);
+    font-size: var(--flowchat-font-size-sm);
+    line-height: var(--flowchat-support-line-height);
+    font-weight: normal;
+  }
+
+  .terminal-header-duration .duration-text svg {
+    width: 11px;
+    height: 11px;
+  }
+}
+
+/* Entire base card shows pointer (card toggles expand); children must not force default cursor. */
+.base-tool-card-wrapper.terminal-tool-card .base-tool-card {
+  cursor: pointer;
+}
+
+.base-tool-card-wrapper.terminal-tool-card {
+  .tool-card-action {
+    display: inline-flex;
+    align-items: center;
+    height: 1.45em;
+    line-height: var(--flowchat-compact-line-height);
+    margin-right: 2px;
+    transform: translateY(-0.5px);
+  }
+
+  .tool-card-content {
+    min-height: 1.45em;
+  }
+}
+
+/* Footer bar: full width + background to bottom inner edge of expanded content (matches .base-tool-card-expanded padding). */
+.base-tool-card-wrapper.terminal-tool-card .terminal-result-footer {
+  margin-left: calc(-1 * var(--flowchat-card-expanded-pad-x));
+  margin-right: calc(-1 * var(--flowchat-card-expanded-pad-x));
+  margin-bottom: calc(-1 * var(--flowchat-card-expanded-pad-y));
+  padding: var(--flowchat-inline-gap) var(--flowchat-card-expanded-pad-x);
+  border-radius: 0 0 var(--flowchat-card-radius) var(--flowchat-card-radius);
+}
+
+/* ========== Fix scrollbar visibility on card hover ========== */
+.base-tool-card-wrapper.terminal-tool-card:hover {
+  .terminal-execution-output,
+  .terminal-result-output {
+    &::-webkit-scrollbar-thumb {
+      background: var(--scrollbar-thumb);
+    }
+
+    &::-webkit-scrollbar-thumb:hover {
+      background: var(--scrollbar-thumb-hover);
+    }
+
+    /* Firefox */
+    scrollbar-color: var(--scrollbar-thumb) transparent;
+  }
+}
+
+/* ========== Command display styles ========== */
+.terminal-command {
+  flex: 1;
+  min-width: 0;
+  font-family: var(--tool-card-font-mono);
+  font-size: var(--flowchat-font-size-sm);
+  font-weight: 500;
+  color: var(--color-text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: inherit;
+  transition: none;
+  /* inline-flex + align-items center makes the glyph optically share the same
+   * vertical center as the sibling `.tool-card-action` ("执行命令"), regardless of
+   * the monospace font's intrinsic baseline metrics. */
+  display: inline-flex;
+  align-items: center;
+  line-height: var(--flowchat-support-line-height);
+  height: 1.45em;
+  background: none !important;
+  border: none !important;
+  outline: none !important;
+  box-shadow: none !important;
+  padding: 0;
+  animation: none !important;
+
+  &:not(.editable) {
+    &:hover,
+    &:focus,
+    &:focus-visible {
+      background: none !important;
+      border: none !important;
+      outline: none !important;
+      box-shadow: none !important;
+      color: var(--color-text-secondary);
+    }
+  }
+
+  &.editable {
+    cursor: pointer;
+    transition: all 0.2s ease;
+    
+    &:hover {
+      color: var(--color-accent-500);
+    }
+  }
+  
+  .command-empty {
+    color: color-mix(in srgb, var(--color-error) 72%, var(--color-static-white));
+    font-style: italic;
+  }
+}
+
+.terminal-command-input {
+  flex: 1;
+  min-width: 0;
+  cursor: text;
+  background: transparent;
+  padding: 0;
+  font-family: var(--tool-card-font-mono);
+  font-size: var(--flowchat-font-size-sm);
+  font-weight: 500;
+  color: var(--color-text-primary);
+  border: none !important;
+  outline: none !important;
+  box-shadow: none !important;
+  transition: all 0.2s ease;
+  line-height: var(--flowchat-compact-line-height);
+  box-sizing: border-box;
+
+  &:focus {
+    background: transparent;
+    border: none !important;
+    outline: none !important;
+    box-shadow: none !important;
+  }
+
+  &::placeholder {
+    color: var(--color-text-muted);
+    font-style: italic;
+  }
+}
+
+:root[data-theme="light"] .terminal-command-input,
+:root[data-theme-type="light"] .terminal-command-input,
+.light .terminal-command-input {
+  color: var(--color-text-secondary);
+}
+
+/* ========== Status text styles ========== */
+.terminal-status-text {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.12rem 0.38rem;
+  border-radius: 3px;
+  font-size: var(--flowchat-font-size-xxs);
+  font-weight: 600;
+  flex-shrink: 0;
+  margin-right: 4px;
+
+  &.status-cancelled {
+    background: var(--color-warning-bg);
+    color: var(--color-warning);
+  }
+
+  &.status-rejected {
+    background: var(--color-error-bg);
+    color: var(--color-error);
+  }
+
+  &.status-error {
+    background: var(--color-error-bg);
+    color: var(--color-error);
+  }
+}
+
+.terminal-header-extra {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--flowchat-inline-gap);
+  min-width: 0;
+  line-height: 1;
+}
+
+.terminal-header-duration {
+  display: inline-flex;
+  align-items: center;
+  min-width: 0;
+  color: var(--color-text-muted);
+
+  &:empty {
+    display: none;
+  }
+
+  .duration-text {
+    font-size: var(--flowchat-font-size-xs);
+    line-height: var(--flowchat-compact-line-height);
+    font-weight: 500;
+  }
+
+  .duration-text svg {
+    width: 12px;
+    height: 12px;
+  }
+}
+
+.terminal-header-actions {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.125rem;
+  flex-shrink: 0;
+
+  &:empty {
+    display: none;
+  }
+}
+
+.terminal-header-extra > .terminal-status-text {
+  margin-right: 0;
+}
+
+/* ========== Compact content row (command + inline hover actions) ========== */
+.terminal-compact-content {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  flex: 1;
+  gap: 0;
+
+  .tool-command-preview {
+    flex: 0 1 auto;
+    max-width: 60%;
+  }
+}
+
+/* ========== Hover-only actions wrapper (compact collapsed state) ========== */
+.terminal-hover-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--flowchat-inline-gap);
+}
+
+/* ========== Always-visible critical actions (compact collapsed state) ========== */
+.terminal-critical-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--flowchat-inline-gap);
+  flex-shrink: 0;
+}
+
+/* ========== Common action button styles ========== */
+.terminal-action-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 4px;
+  border: none !important;
+  background: transparent;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  font-size: var(--flowchat-font-size-sm);
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  padding: 0;
+  position: relative;
+  overflow: hidden;
+  outline: none;
+  flex-shrink: 0;
+
+  svg {
+    position: relative;
+    z-index: 1;
+    flex-shrink: 0;
+  }
+
+  &::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: linear-gradient(135deg, var(--color-overlay-white-12), transparent);
+    opacity: 0;
+    transition: opacity 0.2s ease;
+    z-index: 0;
+  }
+
+  &:hover:not(:disabled) {
+    background: var(--color-overlay-white-12);
+    transform: scale(1.05);
+  }
+
+  &:hover:not(:disabled)::before {
+    opacity: 1;
+  }
+
+  &:active:not(:disabled) {
+    transform: scale(0.95);
+  }
+
+  &:disabled {
+    opacity: 0.3;
+    cursor: default;
+    transform: none;
+  }
+}
+
+.execute-btn {
+  color: var(--color-success);
+
+  &:hover:not(:disabled) {
+    background: var(--color-success-bg);
+    color: var(--color-success);
+    box-shadow: 0 2px 8px var(--color-success-bg);
+  }
+}
+
+.cancel-btn {
+  color: var(--color-error);
+
+  &:hover:not(:disabled) {
+    background: var(--color-error-bg);
+    color: var(--color-error);
+    box-shadow: 0 2px 8px var(--color-error-bg);
+  }
+}
+
+.interrupt-btn {
+  color: var(--color-warning);
+
+  &:hover:not(:disabled) {
+    background: var(--color-warning-bg);
+    color: var(--color-warning);
+    box-shadow: 0 2px 8px var(--color-warning-bg);
+  }
+}
+
+.external-btn {
+  color: var(--color-text-muted);
+
+  &:hover:not(:disabled) {
+    background: var(--color-overlay-white-12);
+    color: var(--color-text-secondary);
+    box-shadow: none;
+  }
+}
+
+.copy-command-btn {
+  color: var(--color-text-muted);
+
+  &.copied {
+    color: var(--color-success);
+  }
+}
+
+/* ========== Execution output container (streaming) ========== */
+.terminal-execution-output,
+.terminal-result-output {
+  margin-bottom: 0;
+  background: transparent;
+  border: none;
+  overflow: hidden;
+
+  &.terminal-waiting {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 60px;
+
+    .waiting-text {
+      color: var(--color-text-muted);
+      font-size: var(--flowchat-font-size-sm);
+      font-style: italic;
+    }
+  }
+}
+
+.terminal-output-pre {
+  padding: 0 !important;
+  margin: 0 !important;
+  background: transparent !important;
+  border: none !important;
+  outline: none !important;
+  box-shadow: none !important;
+  font-family: var(--tool-card-font-mono);
+  font-size: var(--flowchat-font-size-sm);
+  line-height: var(--flowchat-code-line-height);
+  white-space: pre-wrap;
+  word-break: break-word;
+  color: var(--color-text-secondary);
+}
+
+/* ========== Static result container (after command completion) ========== */
+.terminal-result-container {
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  
+  &.cancelled {
+    .terminal-cancelled-text {
+      color: var(--color-warning);
+      font-size: var(--flowchat-font-size-xs);
+      font-weight: 500;
+      line-height: var(--flowchat-compact-line-height);
+    }
+  }
+}
+
+.terminal-result-footer {
+  display: flex;
+  align-items: center;
+  align-content: center;
+  gap: var(--flowchat-inline-gap);
+  flex-wrap: wrap;
+  line-height: var(--flowchat-compact-line-height);
+  background: var(--element-bg-subtle);
+  box-sizing: border-box;
+}
+
+.terminal-result-output + .terminal-result-footer {
+  margin-top: var(--flowchat-inline-gap);
+  border-top: 1px solid var(--border-subtle);
+}
+
+.terminal-result-label {
+  font-size: var(--flowchat-font-size-xxs);
+  font-weight: 600;
+  color: var(--color-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.terminal-result-value {
+  font-family: var(--tool-card-font-mono);
+  font-size: var(--flowchat-font-size-xs);
+  color: var(--color-text-primary);
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  line-height: var(--flowchat-compact-line-height);
+}
+
+.terminal-exit-code {
+  display: inline-flex;
+  align-items: center;
+  padding: 0;
+  font-size: var(--flowchat-font-size-xxs);
+  font-weight: 600;
+  font-family: var(--tool-card-font-mono);
+  line-height: var(--flowchat-compact-line-height);
+  margin-left: auto;
+  background: transparent;
+
+  &.success {
+    color: var(--color-text-muted);
+  }
+
+  &.error {
+    color: var(--color-error);
+  }
+}
+
+.terminal-execution-time {
+  font-size: var(--flowchat-font-size-xxs);
+  color: var(--color-text-muted);
+  font-family: var(--tool-card-font-mono);
+  line-height: var(--flowchat-compact-line-height);
+}
+
+/* ========== xterm output renderer styles ========== */
+.terminal-xterm-output {
+  width: 100%;
+  
+  .xterm {
+    padding: 0;
+
+    .xterm-viewport {
+      overflow: hidden !important;
+    }
+
+    &:not(.allow-transparency) {
+      .xterm-viewport {
+        background-color: var(--color-bg-scene);
+      }
+    }
+
+    .xterm-screen {
+      width: 100%;
+      height: 100%;
+    }
+  }
+}
+.terminal-output-renderer {
+  background: var(--color-bg-scene);
+  border-radius: 4px;
+  overflow: hidden;
+  
+  .xterm {
+    height: 100%;
+  }
+
+  &.terminal-output-renderer--no-scroll {
+    .xterm .scrollbar.vertical {
+      display: none !important;
+      pointer-events: none !important;
+    }
+  }
+}
+
+.terminal-command-tooltip {
+  .bitfun-tooltip__content {
+    max-width: min(640px, calc(100vw - 32px));
+    cursor: text;
+  }
+}
+
+.terminal-command-tooltip-content {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  user-select: text;
+}
+
+
+/* ========== Error content styles ========== */
+.error-content {
+  display: flex;
+  flex-direction: column;
+  gap: var(--flowchat-inline-gap);
+  background: none !important;
+  border: none !important;
+  padding: 0 !important;
+}
+
+.error-message {
+  font-size: var(--flowchat-font-size-sm) !important;
+  line-height: var(--flowchat-support-line-height) !important;
+  color: var(--color-text-muted) !important;
+  white-space: pre-wrap !important;
+  word-break: break-word !important;
+  text-align: left !important;
+  width: auto !important;
+  background: none !important;
+  border: none !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  box-shadow: none !important;
+}
+
+/* ========== Narrow width adaptation (Toolbar mode) ========== */
+.bitfun-toolbar-mode__flowchat-container {
+  .terminal-tool-card {
+    .tool-card-action {
+      display: none;
+    }
+
+    .base-tool-card-header {
+      padding: 0.125rem 0.25rem;
+      gap: 0.125rem;
+    }
+
+    .terminal-action-btn {
+      width: 16px;
+      height: 16px;
+    }
+
+    .terminal-command,
+    .terminal-command-input {
+      font-size: var(--flowchat-font-size-xs);
+    }
+
+    .compact-card-action,
+    .compact-card-content .tool-command-preview--compact {
+      font-size: var(--flowchat-font-size-xs);
+      line-height: var(--flowchat-support-line-height);
+      font-weight: normal;
+      font-family: var(--font-family-sans);
+    }
+
+    .terminal-header-duration .duration-text {
+      font-size: var(--flowchat-font-size-xs);
+      line-height: var(--flowchat-support-line-height);
+      font-weight: normal;
+      font-family: var(--font-family-sans);
+    }
+  }
+}
+
+/* ========== Accessibility ========== */
+.terminal-action-btn:focus-visible {
+  outline: 2px solid var(--color-accent-500);
+  outline-offset: 2px;
+}

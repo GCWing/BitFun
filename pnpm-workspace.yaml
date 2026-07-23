@@ -1,0 +1,5 @@
+packages:
+  - "src/web-ui"
+  - "src/mobile-web"
+  - "BitFun-Installer"
+  - "tests/e2e"

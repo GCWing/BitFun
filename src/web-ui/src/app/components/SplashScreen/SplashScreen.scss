@@ -1,0 +1,125 @@
+/**
+ * SplashScreen styles.
+ *
+ * Full-screen opaque overlay. No rings.
+ * Exit: logo scales up and fades, backdrop dissolves.
+ */
+
+@use '../../../component-library/styles/tokens.scss' as *;
+
+// ── Container ────────────────────────────────────────────────────────────────
+
+.splash-screen {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--color-bg-primary);
+  pointer-events: none;
+
+  // ── Exit state ─────────────────────────────────────────────────────────────
+  // Whole container fades together — logo and backdrop in sync.
+
+  &--exiting {
+    animation: splash-bg-exit 0.5s ease-in-out both;
+
+    .splash-screen__logo-wrap {
+      animation: none; // Stop idle pulse; let container opacity drive the fade
+    }
+  }
+}
+
+// ── Center cluster ────────────────────────────────────────────────────────────
+
+.splash-screen__center {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+// ── Logo ──────────────────────────────────────────────────────────────────────
+
+.splash-screen__logo-wrap {
+  animation: splash-logo-idle 3.2s ease-in-out infinite;
+  // WebKit prefix for Linux WebKitGTK compatibility
+  -webkit-animation: splash-logo-idle 3.2s ease-in-out infinite;
+}
+
+.splash-screen__logo {
+  display: block;
+  width: 96px;
+  height: 96px;
+  border-radius: $size-radius-lg;
+  user-select: none;
+  // Ensure proper rendering on Linux
+  -webkit-user-select: none;
+}
+
+.splash-screen__message {
+  position: absolute;
+  top: calc(100% + #{$size-gap-4});
+  left: 50%;
+  min-width: 220px;
+  max-width: min(360px, calc(100vw - 48px));
+  color: var(--color-text-muted);
+  font-size: var(--font-size-xs);
+  line-height: 1.4;
+  text-align: center;
+  opacity: 0;
+  transform: translate(-50%, -2px);
+  transition:
+    opacity $motion-base $easing-decelerate,
+    transform $motion-base $easing-decelerate;
+  pointer-events: none;
+}
+
+.splash-screen__message--visible {
+  opacity: 0.62;
+  transform: translate(-50%, 0);
+}
+
+// ── Keyframes ─────────────────────────────────────────────────────────────────
+
+// Idle logo: soft opacity pulse with a slight breathing scale
+@keyframes splash-logo-idle {
+  0%,
+  100% {
+    opacity: 0.42;
+    transform: scale(0.985);
+  }
+
+  50% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+// Exit: whole container fades to transparent
+@keyframes splash-bg-exit {
+  0%   { opacity: 1; }
+  100% { opacity: 0; }
+}
+
+// ── Reduced motion ────────────────────────────────────────────────────────────
+
+@media (prefers-reduced-motion: reduce) {
+  .splash-screen__logo-wrap {
+    animation: none;
+  }
+
+  .splash-screen__logo {
+    filter: none;
+  }
+
+  .splash-screen__message {
+    transition: none;
+  }
+
+  .splash-screen--exiting {
+    animation: splash-bg-exit 0.15s ease-out both;
+  }
+}

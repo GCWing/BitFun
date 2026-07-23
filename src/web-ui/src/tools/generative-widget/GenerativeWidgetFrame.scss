@@ -1,0 +1,16 @@
+.bitfun-generative-widget-frame {
+  width: 100%;
+  min-height: 120px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  border-radius: 10px;
+  background: var(--color-overlay-white-04);
+  border: 1px solid var(--color-overlay-white-08);
+}
+
+.bitfun-generative-widget-frame__iframe {
+  height: 100%;
+  border: 0;
+  background: transparent;
+  display: block;
+}

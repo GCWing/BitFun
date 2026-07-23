@@ -1,0 +1,122 @@
+{
+  "title": "编辑器",
+  "subtitle": "编辑器外观和行为设置",
+  "sections": {
+    "appearance": {
+      "title": "外观设置",
+      "description": "编辑器的视觉外观配置"
+    },
+    "behavior": {
+      "title": "编辑行为",
+      "description": "编辑器的交互行为设置"
+    },
+    "display": {
+      "title": "显示设置",
+      "description": "编辑器的视觉辅助功能"
+    },
+    "advanced": {
+      "title": "高级功能",
+      "description": "编辑器增强功能开关"
+    }
+  },
+  "appearance": {
+    "font": "字体",
+    "fontWeight": "字体粗细",
+    "fontWeightNormal": "正常",
+    "fontWeightBold": "粗体",
+    "fontSize": "字体大小",
+    "lineHeight": "行高",
+    "cursorStyle": "光标样式",
+    "cursorBlinking": "光标闪烁",
+    "cursorStyles": {
+      "line": "竖线",
+      "lineThin": "细竖线",
+      "block": "方块",
+      "blockOutline": "方块边框",
+      "underline": "下划线",
+      "underlineThin": "细下划线"
+    },
+    "cursorBlinkings": {
+      "blink": "闪烁",
+      "smooth": "平滑",
+      "phase": "相位",
+      "expand": "扩展",
+      "solid": "常亮"
+    }
+  },
+  "behavior": {
+    "tabSize": "Tab 大小",
+    "insertSpaces": "使用空格缩进",
+    "insertSpacesDesc": "Tab 键插入空格而非制表符",
+    "wordWrap": "自动换行",
+    "wordWrapOptions": {
+      "off": "禁用",
+      "on": "启用",
+      "wordWrapColumn": "在列数处换行",
+      "bounded": "在视口和列数处换行"
+    },
+    "lineNumbers": "行号显示",
+    "lineNumberOptions": {
+      "on": "显示",
+      "off": "隐藏",
+      "relative": "相对行号",
+      "interval": "间隔显示"
+    },
+    "smoothScrolling": "平滑滚动",
+    "smoothScrollingDesc": "启用平滑滚动动画",
+    "scrollBeyondLastLine": "允许滚动超过最后一行",
+    "scrollBeyondLastLineDesc": "可以将文件末尾滚动到屏幕中央"
+  },
+  "display": {
+    "minimap": "显示缩略图",
+    "minimapDesc": "在编辑器侧边显示代码缩略图",
+    "minimapPosition": "缩略图位置",
+    "minimapPositionLeft": "左侧",
+    "minimapPositionRight": "右侧",
+    "minimapSize": "缩略图大小",
+    "minimapSizeAuto": "自动",
+    "minimapSizeFill": "填充",
+    "minimapSizeFit": "适应",
+    "whitespace": "空白字符显示",
+    "whitespaceOptions": {
+      "none": "不显示",
+      "boundary": "边界",
+      "selection": "选中时",
+      "trailing": "行尾",
+      "all": "全部"
+    },
+    "lineHighlight": "当前行高亮",
+    "lineHighlightOptions": {
+      "none": "不高亮",
+      "gutter": "仅行号",
+      "line": "仅行",
+      "all": "全部"
+    }
+  },
+  "advanced": {
+    "semanticHighlighting": "语义高亮",
+    "semanticHighlightingDesc": "基于语义分析的代码高亮（需要 LSP 支持）",
+    "bracketPairColorization": "括号对着色",
+    "bracketPairColorizationDesc": "用不同颜色区分嵌套的括号对",
+    "formatOnSave": "保存时格式化",
+    "formatOnSaveDesc": "保存文件时自动格式化代码",
+    "formatOnPaste": "粘贴时格式化",
+    "formatOnPasteDesc": "粘贴代码时自动格式化",
+    "trimAutoWhitespace": "自动删除行尾空格",
+    "trimAutoWhitespaceDesc": "保存时移除行尾多余的空格"
+  },
+  "actions": {
+    "reset": "重置为默认",
+    "save": "保存设置",
+    "saveDesc": "重置编辑器配置为默认值"
+  },
+  "messages": {
+    "loading": "加载中...",
+    "loadFailed": "加载配置失败，使用默认配置",
+    "saving": "保存中...",
+    "saveSuccess": "配置已保存，已打开的编辑器会自动更新",
+    "saveFailed": "保存配置失败",
+    "confirmReset": "确定要重置编辑器配置为默认值吗？",
+    "resetDone": "已重置为默认值"
+  }
+}

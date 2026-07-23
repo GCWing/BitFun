@@ -1,0 +1,26 @@
+/**
+ * Shared markdown table values for MarkdownRenderer and m-editor tables.
+ * These are Sass-only to avoid turning editor table internals into theme keys.
+ */
+
+$border: var(--color-overlay-white-12);
+$shadow: none;
+$surface: transparent;
+$cell-border: var(--color-overlay-white-12);
+$col-divider: transparent;
+$th-bg: var(--color-overlay-white-04);
+$th-fg: var(--color-text-primary);
+$row-base: transparent;
+$row-stripe: var(--color-overlay-white-04);
+$hover: var(--color-overlay-white-08);
+
+$border-light: var(--color-overlay-slate-12);
+$shadow-light: 0 4px 14px var(--color-overlay-slate-08);
+$surface-light: var(--color-static-white);
+$cell-border-light: var(--color-overlay-slate-12);
+$col-divider-light: var(--color-overlay-slate-08);
+$th-bg-light: #f6f8fa;
+$th-fg-light: #0f172a;
+$row-base-light: var(--color-static-white);
+$row-stripe-light: var(--color-overlay-slate-04);
+$hover-light: #eef4ff;

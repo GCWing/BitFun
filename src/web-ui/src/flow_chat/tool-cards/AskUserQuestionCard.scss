@@ -1,0 +1,608 @@
+/**
+ * AskUserQuestion tool card styles
+ * Based on BaseToolCard common style specifications
+ * Uses CSS variables to support theme switching
+ */
+
+@use './_tool-card-common.scss';
+
+/* ========== Card wrapper ========== */
+.ask-user-question-card {
+  display: flex;
+  flex-direction: column;
+  margin: 6px 0;
+  border-radius: var(--size-radius-md);
+  border: 1px solid var(--border-base);
+  background: var(--color-bg-scene);
+  backdrop-filter: blur(10px);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  overflow: hidden;
+  position: relative;
+
+  &::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 1px;
+    background: linear-gradient(
+      90deg,
+      transparent 0%,
+      var(--border-subtle) 50%,
+      transparent 100%
+    );
+    pointer-events: none;
+    z-index: 1;
+  }
+
+  &:hover {
+    border-color: var(--border-medium);
+    box-shadow: var(--shadow-lg);
+  }
+}
+
+/* ========== Card header row ========== */
+.card-header-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border-base);
+  background: transparent;
+}
+
+.card-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.questions-count {
+  font-size: var(--tool-card-action-font-size);
+  font-weight: 600;
+  color: var(--color-text-secondary);
+  letter-spacing: -0.01em;
+}
+
+.footer-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+}
+
+.card-footer-row {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  border-top: 1px solid var(--border-base);
+  background: transparent;
+}
+
+/* ========== Status indicator ========== */
+.tool-status {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--flowchat-font-size-xs);
+  color: var(--color-text-muted);
+  white-space: nowrap;
+  padding-left: 10px;
+  border-left: 1px solid var(--border-base);
+}
+
+.status-text {
+  font-weight: 500;
+}
+
+.status-icon-completed {
+  color: var(--color-success);
+}
+
+.status-icon-loading {
+  color: var(--color-info);
+}
+
+.status-icon-waiting {
+  color: var(--color-warning);
+}
+
+.params-loading-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 14px;
+  font-size: var(--tool-card-action-font-size);
+  color: var(--color-text-secondary);
+}
+
+.params-loading-text {
+  font-weight: 500;
+}
+
+/* ========== Question container ========== */
+.questions-container {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 12px 14px;
+}
+
+.ask-question-item {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding-bottom: 14px;
+  border-bottom: 1px dashed var(--border-subtle);
+
+  &:last-child {
+    padding-bottom: 0;
+    border-bottom: none;
+  }
+}
+
+/* ========== Question header ========== */
+.question-item-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.question-header-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 8px;
+  background: var(--element-bg-soft);
+  color: var(--color-text-secondary);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--size-radius-sm);
+  font-size: var(--flowchat-font-size-xxs);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
+.question-text {
+  font-size: var(--tool-card-action-font-size);
+  font-weight: 500;
+  color: var(--color-text-primary);
+  flex: 1;
+  line-height: var(--flowchat-support-line-height);
+  min-width: 0;
+}
+
+/* ========== Option list ========== */
+.question-options {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding-left: 2px;
+}
+
+.option-label {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 8px 12px;
+  background: transparent;
+  border: 1px solid var(--border-base);
+  border-radius: var(--size-radius-md);
+  cursor: pointer;
+  transition: all 0.15s ease;
+
+  &:hover:not(:has(input:disabled)) {
+    background: var(--element-bg-subtle);
+    border-color: var(--border-medium);
+
+    .custom-radio::before,
+    .custom-checkbox::before {
+      border-color: var(--border-strong);
+    }
+  }
+
+  &:has(input:checked) {
+    background: var(--element-bg-subtle);
+    border-color: var(--border-medium);
+  }
+
+  &:has(input:disabled) {
+    opacity: var(--opacity-disabled);
+    cursor: default;
+  }
+
+  input[type="radio"],
+  input[type="checkbox"] {
+    position: absolute;
+    opacity: 0;
+    width: 0;
+    height: 0;
+    pointer-events: none;
+  }
+}
+
+/* ========== Custom radio button ========== */
+.custom-radio {
+  position: relative;
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+  margin-top: 2px;
+
+  &::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 14px;
+    height: 14px;
+    border: 1.5px solid var(--border-base);
+    border-radius: 50%;
+    background: transparent;
+    transition: all 0.15s ease;
+  }
+
+  &::after {
+    content: '';
+    position: absolute;
+    top: 4px;
+    left: 4px;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: transparent;
+    transition: all 0.15s ease;
+    transform: scale(0);
+  }
+
+  input:checked + &::before {
+    border-color: var(--border-strong);
+  }
+
+  input:checked + &::after {
+    background: var(--color-text-primary);
+    transform: scale(1);
+  }
+
+  input:disabled + &::before {
+    border-color: var(--border-subtle);
+  }
+
+  input:disabled:checked + &::after {
+    background: var(--color-text-disabled);
+  }
+}
+
+/* ========== Custom checkbox ========== */
+.custom-checkbox {
+  position: relative;
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+  margin-top: 2px;
+
+  &::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 14px;
+    height: 14px;
+    border: 1.5px solid var(--border-base);
+    border-radius: 3px;
+    background: transparent;
+    transition: all 0.15s ease;
+  }
+
+  &::after {
+    content: '';
+    position: absolute;
+    top: 2px;
+    left: 5px;
+    width: 4px;
+    height: 8px;
+    border: solid transparent;
+    border-width: 0 1.5px 1.5px 0;
+    transform: rotate(45deg) scale(0);
+    transition: all 0.15s ease;
+  }
+
+  input:checked + &::before {
+    border-color: var(--border-strong);
+    background: var(--element-bg-subtle);
+  }
+
+  input:checked + &::after {
+    border-color: var(--color-text-primary);
+    transform: rotate(45deg) scale(1);
+  }
+
+  input:disabled + &::before {
+    border-color: var(--border-subtle);
+  }
+
+  input:disabled:checked + &::before {
+    background: var(--element-bg-subtle);
+  }
+
+  input:disabled:checked + &::after {
+    border-color: var(--color-text-disabled);
+  }
+}
+
+.option-content {
+  flex: 1;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.option-label-text {
+  font-size: var(--tool-card-action-font-size);
+  font-weight: 500;
+  color: var(--color-text-primary);
+  line-height: var(--flowchat-support-line-height);
+  flex-shrink: 0;
+}
+
+.option-description {
+  font-size: var(--flowchat-font-size-xs);
+  color: var(--color-text-muted);
+  line-height: var(--flowchat-support-line-height);
+  flex: 1;
+  text-align: right;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: default;
+}
+
+/* ========== Other option ========== */
+.option-other {
+  border-style: dashed;
+  border-color: var(--border-subtle);
+}
+
+.option-other-input {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  background: var(--element-bg-subtle);
+  border: 1px solid var(--border-medium);
+  border-radius: var(--size-radius-md);
+
+  input[type="radio"],
+  input[type="checkbox"] {
+    position: absolute;
+    opacity: 0;
+    width: 0;
+    height: 0;
+    pointer-events: none;
+  }
+
+  .custom-radio,
+  .custom-checkbox {
+    margin-top: 0;
+  }
+
+  .custom-radio::before,
+  .custom-checkbox::before {
+    border-color: var(--border-strong);
+    background: var(--element-bg-subtle);
+  }
+
+  .custom-radio::after {
+    background: var(--color-text-primary);
+    transform: scale(1);
+  }
+
+  .custom-checkbox::after {
+    border-color: var(--color-text-primary);
+    transform: rotate(45deg) scale(1);
+  }
+}
+
+.other-input-inline {
+  flex: 1;
+  padding: 6px 10px;
+  border: 1px solid var(--border-base);
+  border-radius: var(--size-radius-sm);
+  font-size: var(--tool-card-action-font-size);
+  color: var(--color-text-primary);
+  background: var(--color-bg-tertiary);
+  transition: all 0.15s ease;
+  min-width: 0;
+
+  &:focus {
+    outline: none;
+    border-color: var(--border-medium);
+    background: var(--color-bg-secondary);
+  }
+
+  &:disabled {
+    opacity: var(--opacity-disabled);
+    cursor: default;
+    background: var(--color-bg-tertiary);
+  }
+
+  &::placeholder {
+    color: var(--color-text-muted);
+  }
+}
+
+/* ========== Submit button ========== */
+.submit-button {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 12px;
+  background: var(--element-bg-base);
+  color: var(--color-text-primary);
+  border: 1px solid var(--border-base);
+  border-radius: var(--size-radius-sm);
+  font-size: var(--tool-card-action-font-size);
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+
+  &:hover:not(:disabled) {
+    background: var(--element-bg-medium);
+    border-color: var(--border-medium);
+  }
+
+  &:active:not(:disabled) {
+    background: var(--element-bg-strong);
+  }
+
+  &:disabled {
+    opacity: var(--opacity-disabled);
+    cursor: default;
+  }
+
+  svg {
+    width: 13px;
+    height: 13px;
+    opacity: 0.8;
+  }
+}
+
+/* ========== Completed state - collapsed summary ========== */
+.completed-summary {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  cursor: pointer;
+  padding: 10px 14px;
+  transition: all 0.15s ease;
+
+  &:hover {
+    background: var(--element-bg-subtle);
+  }
+
+  /* Collapsed (only child): match all card corners. */
+  &:last-child {
+    border-radius: var(--size-radius-md);
+  }
+
+  /* Expanded (has sibling below): match only top card corners. */
+  &:not(:last-child) {
+    border-radius: var(--size-radius-md) var(--size-radius-md) 0 0;
+  }
+}
+
+.summary-content {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  min-width: 0;
+
+  svg {
+    flex-shrink: 0;
+    color: var(--color-text-muted);
+    width: 14px;
+    height: 14px;
+  }
+}
+
+.summary-questions-count {
+  font-size: var(--tool-card-action-font-size);
+  font-weight: 600;
+  color: var(--color-text-secondary);
+  flex-shrink: 0;
+}
+
+.summary-arrow {
+  font-size: var(--tool-card-action-font-size);
+  color: var(--color-text-muted);
+  flex-shrink: 0;
+}
+
+.summary-answer {
+  font-size: var(--tool-card-action-font-size);
+  font-weight: 500;
+  color: var(--color-text-primary);
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ========== Expanded state ========== */
+.questions-container.expanded {
+  margin-top: 0;
+  padding-top: 12px;
+  border-top: 1px solid var(--border-base);
+  animation: expandDown 0.2s ease-out;
+
+  .option-label {
+    pointer-events: none;
+    opacity: 0.7;
+  }
+}
+
+/* ========== Result display ========== */
+.result-timeout {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-radius: var(--size-radius-md);
+  font-size: var(--flowchat-font-size-xs);
+  font-weight: 500;
+  margin: 0 14px 12px;
+  background: var(--color-warning-bg);
+  color: var(--color-warning);
+  border: 1px solid var(--color-warning-border);
+
+  svg {
+    width: 14px;
+    height: 14px;
+    flex-shrink: 0;
+  }
+}
+
+/* ========== Error message ========== */
+.error-message {
+  font-size: var(--tool-card-action-font-size);
+  color: var(--color-error);
+  text-align: center;
+  padding: 12px;
+}
+
+/* ========== Animation ========== */
+@keyframes expandDown {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-spin {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}

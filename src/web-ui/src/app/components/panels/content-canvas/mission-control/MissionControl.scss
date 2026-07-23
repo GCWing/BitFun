@@ -1,0 +1,272 @@
+/**
+ * MissionControl component styles.
+ * Mission control overlay in the right panel area.
+ */
+
+.canvas-mission-control {
+  position: absolute;
+  inset: 0;
+  z-index: 200;
+  display: flex;
+  flex-direction: column;
+  // Use same background variable as left panel
+  background: var(--color-bg-workbench);
+  backdrop-filter: blur(20px);
+  animation: missionControlFadeIn 0.15s ease-out;
+
+  @keyframes missionControlFadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+
+  &__content {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+  }
+
+  // Header - match TabBar height (36px)
+  &__header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    height: 36px;
+    padding: 0 16px;
+    flex-shrink: 0;
+    border-bottom: 1px dashed var(--border-base);
+  }
+
+  &__title {
+    margin: 0;
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--color-text-secondary);
+  }
+
+  &__header-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  &__merge-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    height: 22px;
+    padding: 0 8px;
+    background: var(--element-bg-soft);
+    border: 1px solid var(--border-base);
+    color: var(--color-text-secondary);
+    cursor: pointer;
+    border-radius: 3px;
+    font-size: 11px;
+    transition: all 0.15s ease;
+
+    &:hover {
+      background: var(--element-bg-base);
+      border-color: var(--border-base);
+      color: var(--color-text-primary);
+    }
+
+    &:active {
+      background: var(--element-bg-soft);
+    }
+
+    span {
+      line-height: 1;
+    }
+  }
+
+  &__close-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 22px;
+    height: 22px;
+    padding: 0;
+    background: none;
+    border: none;
+    color: var(--color-text-muted);
+    cursor: pointer;
+    border-radius: 3px;
+    transition: all 0.15s ease;
+
+    &:hover {
+      background: var(--element-bg-soft);
+      color: var(--color-text-primary);
+    }
+  }
+
+  // Search and filter area
+  &__filters {
+    padding: 8px 16px;
+    flex-shrink: 0;
+    border-bottom: 1px dashed var(--border-base);
+  }
+
+  &__filters-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  &__search-wrapper {
+    flex: 1;
+    min-width: 0;
+  }
+
+  // Group filters - compact icon buttons
+  &__group-filters {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    flex-shrink: 0;
+    padding: 2px;
+    background: var(--element-bg-subtle);
+    border: 1px solid var(--border-base);
+    border-radius: 4px;
+  }
+
+  &__group-filter {
+    --private-mission-control-filter-color: var(--color-accent-600);
+
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    padding: 0;
+    background: transparent;
+    border: none;
+    color: var(--color-text-muted);
+    cursor: pointer;
+    border-radius: 3px;
+    font-size: 11px;
+    font-weight: 500;
+    transition: all 0.15s ease;
+
+    &:hover {
+      background: var(--element-bg-soft);
+      color: var(--color-text-secondary);
+    }
+
+    &.is-active {
+      background: color-mix(in srgb, var(--element-bg-soft) 84%, var(--private-mission-control-filter-color) 16%);
+      color: var(--color-text-primary);
+      box-shadow:
+        inset 0 0 0 1px var(--private-mission-control-filter-color),
+        0 1px 3px var(--color-overlay-black-20);
+
+      .canvas-mission-control__group-filter-indicator {
+        opacity: 1;
+      }
+    }
+
+    &--secondary {
+      --private-mission-control-filter-color: var(--color-success);
+    }
+
+    &--tertiary {
+      --private-mission-control-filter-color: var(--color-warning);
+    }
+
+    &-indicator {
+      position: absolute;
+      top: 2px;
+      right: 2px;
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--private-mission-control-filter-color);
+      opacity: 0.6;
+      transition: opacity 0.15s ease;
+    }
+
+    &-text {
+      position: relative;
+      z-index: 1;
+      line-height: 1;
+    }
+  }
+
+  // Thumbnail grid
+  &__grid {
+    flex: 1;
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 10px;
+    padding: 8px 16px 16px;
+    overflow-y: auto;
+    align-content: start;
+    
+    &::-webkit-scrollbar {
+      width: 6px;
+    }
+
+    &::-webkit-scrollbar-track {
+      background: transparent;
+    }
+
+    &::-webkit-scrollbar-thumb {
+      background: var(--scrollbar-thumb);
+      border-radius: 3px;
+      
+      &:hover {
+        background: var(--element-bg-strong);
+      }
+    }
+  }
+
+  // Empty state
+  &__empty {
+    grid-column: 1 / -1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 40px 30px;
+    color: var(--color-text-muted);
+    font-size: 12px;
+    border: 1px dashed var(--border-base);
+    border-radius: 6px;
+  }
+
+  // Footer hint
+  &__footer {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    padding: 6px 16px;
+    font-size: 10px;
+    color: var(--color-text-muted);
+    border-top: 1px dashed var(--border-base);
+    flex-shrink: 0;
+
+    kbd {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 16px;
+      height: 14px;
+      padding: 0 4px;
+      font-size: 9px;
+      font-family: inherit;
+      background: var(--element-bg-soft);
+      border: 1px solid var(--border-base);
+      border-radius: 2px;
+      color: var(--color-text-secondary);
+    }
+  }
+
+  &__separator {
+    width: 1px;
+    height: 10px;
+    background: var(--border-base);
+  }
+}

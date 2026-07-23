@@ -1,0 +1,44 @@
+.acp-permission-actions {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.125rem;
+  flex-shrink: 0;
+}
+
+.acp-permission-actions--text {
+  flex-wrap: wrap;
+  gap: var(--flowchat-inline-gap);
+}
+
+.acp-permission-actions__text-button {
+  min-height: 26px;
+  padding: 0 var(--flowchat-card-expanded-pad-x);
+  border: 1px solid var(--border-base);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--color-text-primary);
+  font-size: var(--flowchat-font-size-sm);
+  line-height: var(--flowchat-compact-line-height);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.acp-permission-actions__text-button:hover:not(:disabled) {
+  background: var(--color-bg-tertiary);
+}
+
+.acp-permission-actions__text-button--allow {
+  border-color: color-mix(in srgb, var(--color-success) 55%, var(--border-base));
+  color: var(--color-success);
+}
+
+.acp-permission-actions__text-button--reject {
+  border-color: color-mix(in srgb, var(--color-error) 55%, var(--border-base));
+  color: var(--color-error);
+}
+
+.acp-permission-actions__text-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}

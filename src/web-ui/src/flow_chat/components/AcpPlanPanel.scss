@@ -1,0 +1,92 @@
+.bitfun-acp-plan {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0 0 8px;
+  padding: 8px 10px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  background: var(--element-bg-medium);
+  font-size: var(--flowchat-font-size-xs);
+
+  &__header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  &__title {
+    color: var(--color-text-secondary);
+    font-size: var(--flowchat-font-size-2xs);
+    font-weight: 600;
+    letter-spacing: 0.4px;
+    text-transform: uppercase;
+  }
+
+  &__progress {
+    color: var(--color-text-muted);
+    font-variant-numeric: tabular-nums;
+  }
+
+  &__list {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  &__item {
+    display: flex;
+    align-items: flex-start;
+    gap: 6px;
+    padding: 2px 0;
+    color: var(--color-text-primary);
+
+    &--completed {
+      color: var(--color-text-muted);
+
+      .bitfun-acp-plan__content {
+        text-decoration: line-through;
+      }
+    }
+
+    &--pending {
+      color: var(--color-text-secondary);
+    }
+  }
+
+  &__icon {
+    flex-shrink: 0;
+    margin-top: 2px;
+
+    &--done {
+      color: var(--color-success);
+    }
+
+    &--active {
+      color: var(--color-accent-500);
+      animation: bitfun-acp-plan-spin 1.2s linear infinite;
+    }
+
+    &--pending {
+      opacity: 0.5;
+    }
+  }
+
+  &__content {
+    line-height: 1.4;
+    word-break: break-word;
+  }
+}
+
+@keyframes bitfun-acp-plan-spin {
+  from {
+    transform: rotate(0deg);
+  }
+
+  to {
+    transform: rotate(360deg);
+  }
+}

@@ -1,0 +1,91 @@
+/* GetFileDiff card styles. */
+.get-file-diff-card {
+  .diff-icon {
+    color: var(--color-accent-500);
+  }
+
+  .diff-tool-info {
+    display: flex;
+    align-items: center;
+    gap: var(--flowchat-control-gap);
+    overflow: hidden;
+  }
+
+  .diff-file-name {
+    color: var(--color-text-primary);
+    font-family: var(--font-family-mono);
+    font-size: var(--tool-card-action-font-size);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .diff-type-tag {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.06rem 0.38rem;
+    font-size: var(--flowchat-font-size-xxs);
+    font-weight: 500;
+    border-radius: 4px;
+    background: var(--color-bg-secondary);
+    color: var(--color-text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    flex-shrink: 0;
+  }
+
+  .diff-stats {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--flowchat-inline-gap);
+    margin-right: var(--flowchat-control-gap);
+    font-size: var(--flowchat-font-size-xs);
+    font-family: var(--font-family-mono);
+    flex-shrink: 0;
+
+    .additions {
+      color: var(--color-success);
+    }
+
+    .deletions {
+      color: var(--color-error);
+    }
+  }
+}
+
+.diff-expanded-content {
+  .diff-message {
+    font-size: var(--flowchat-font-size-xs);
+    color: var(--color-text-muted);
+    margin-bottom: var(--flowchat-card-gap);
+    padding-bottom: var(--flowchat-card-gap);
+    border-bottom: 1px solid var(--border-subtle);
+  }
+
+  .diff-content-preview {
+    margin: 0;
+    padding: var(--flowchat-card-expanded-pad-y) var(--flowchat-card-expanded-pad-x);
+    background: var(--color-bg-secondary);
+    border: 1px solid var(--border-subtle);
+    border-radius: 4px;
+    font-family: var(--font-family-mono);
+    font-size: var(--flowchat-font-size-sm);
+    line-height: var(--flowchat-support-line-height);
+    color: var(--color-text-primary);
+    overflow-x: auto;
+    max-height: 400px;
+    overflow-y: auto;
+    white-space: pre-wrap;
+    word-break: break-all;
+
+    .diff-add {
+      background: color-mix(in srgb, var(--git-color-added) 15%, transparent);
+      color: var(--git-color-added);
+    }
+
+    .diff-del {
+      background: color-mix(in srgb, var(--git-color-deleted) 15%, transparent);
+      color: var(--git-color-deleted);
+    }
+  }
+}

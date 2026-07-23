@@ -1,0 +1,182 @@
+@use '../../styles/tokens.scss' as tokens;
+
+.icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: none;
+  border-radius: var(--size-radius-sm);
+  cursor: pointer;
+  position: relative;
+  outline: none;
+  user-select: none;
+  flex-shrink: 0;
+  transform: scale(1);
+  transform-origin: center;
+  transition:
+    transform var(--motion-fast) var(--easing-standard),
+    background var(--motion-fast) var(--easing-standard),
+    color var(--motion-fast) var(--easing-standard);
+
+  background: transparent;
+  color: var(--color-text-secondary);
+
+  &:hover:not(:disabled) {
+    transform: scale(1.06);
+    background: var(--color-overlay-white-08);
+    color: var(--color-accent-500);
+  }
+
+  &:active:not(:disabled) {
+    transform: scale(1.02);
+    background: var(--color-overlay-white-08);
+  }
+
+  svg {
+    display: block;
+    flex-shrink: 0;
+    transition: color var(--motion-fast) var(--easing-standard);
+  }
+
+  &--xs {
+    width: 24px;
+    height: 24px;
+
+    svg {
+      width: 14px;
+      height: 14px;
+    }
+  }
+
+  &--small {
+    width: 28px;
+    height: 28px;
+
+    svg {
+      width: 16px;
+      height: 16px;
+    }
+  }
+
+  &--medium {
+    width: 32px;
+    height: 32px;
+
+    svg {
+      width: 16px;
+      height: 16px;
+    }
+  }
+
+  &--large {
+    width: 40px;
+    height: 40px;
+
+    svg {
+      width: 20px;
+      height: 20px;
+    }
+  }
+
+  &--circle {
+    border-radius: 50%;
+  }
+
+
+  &--primary {
+    background: color-mix(in srgb, var(--color-accent-500) 20%, transparent);
+    color: var(--color-static-white);
+
+    &:hover:not(:disabled) {
+      background: color-mix(in srgb, var(--color-accent-500) 30%, transparent);
+    }
+
+    &:active:not(:disabled) {
+      background: color-mix(in srgb, var(--color-accent-500) 24%, transparent);
+    }
+  }
+
+  &--danger {
+    background: transparent;
+    color: var(--color-text-secondary);
+
+    &:hover:not(:disabled) {
+      background: color-mix(in srgb, var(--color-error) 28%, transparent);
+      color: var(--color-error);
+    }
+
+    &:active:not(:disabled) {
+      background: color-mix(in srgb, var(--color-error) 22%, transparent);
+      color: var(--color-error);
+    }
+  }
+
+  &--success {
+    background: color-mix(in srgb, var(--color-success) 18%, transparent);
+    color: var(--color-success);
+
+    &:hover:not(:disabled) {
+      background: color-mix(in srgb, var(--color-success) 28%, transparent);
+      color: var(--color-static-white);
+    }
+
+    &:active:not(:disabled) {
+      background: color-mix(in srgb, var(--color-success) 22%, transparent);
+    }
+  }
+
+  &--warning {
+    background: color-mix(in srgb, var(--color-warning) 18%, transparent);
+    color: var(--color-warning);
+
+    &:hover:not(:disabled) {
+      background: color-mix(in srgb, var(--color-warning) 28%, transparent);
+      color: var(--color-static-white);
+    }
+
+    &:active:not(:disabled) {
+      background: color-mix(in srgb, var(--color-warning) 22%, transparent);
+    }
+  }
+
+  &--ai {
+    background: color-mix(in srgb, var(--color-purple-500) 18%, transparent);
+    color: var(--color-purple-500);
+
+    &:hover:not(:disabled) {
+      background: color-mix(in srgb, var(--color-purple-500) 28%, transparent);
+      color: var(--color-static-white);
+    }
+
+    &:active:not(:disabled) {
+      background: color-mix(in srgb, var(--color-purple-500) 22%, transparent);
+    }
+  }
+
+  &:focus-visible {
+    outline: 2px solid color-mix(in srgb, var(--color-accent-500) 50%, transparent);
+    outline-offset: 1px;
+  }
+
+  &:disabled {
+    opacity: 0.45;
+    cursor: default;
+    pointer-events: none;
+  }
+
+  &--loading {
+    cursor: wait;
+    pointer-events: none;
+
+    svg {
+      animation: icon-btn-spin 1s linear infinite;
+    }
+  }
+}
+
+@keyframes icon-btn-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}

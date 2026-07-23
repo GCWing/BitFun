@@ -1,0 +1,141 @@
+.bitfun-generative-widget-panel {
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 12px;
+}
+
+.bitfun-generative-widget-panel--empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.bitfun-generative-widget-panel__empty-copy {
+  color: var(--color-text-secondary);
+  font-size: 13px;
+}
+
+.bitfun-generative-widget-panel__toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--color-overlay-white-12);
+  border-radius: 10px;
+  background: var(--color-bg-secondary);
+}
+
+.bitfun-generative-widget-panel__toolbar-meta,
+.bitfun-generative-widget-panel__toolbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.bitfun-generative-widget-panel__save-state {
+  font-size: 12px;
+  color: var(--color-text-secondary);
+}
+
+.bitfun-generative-widget-panel__save-state--saved {
+  color: var(--color-success);
+}
+
+.bitfun-generative-widget-panel__save-state--saving,
+.bitfun-generative-widget-panel__save-state--unsaved {
+  color: var(--color-warning);
+}
+
+.bitfun-generative-widget-panel__save-state--error {
+  color: var(--color-error);
+}
+
+.bitfun-generative-widget-panel__button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 30px;
+  padding: 0 10px;
+  border: 1px solid var(--color-overlay-white-12);
+  border-radius: 8px;
+  background: var(--color-bg-secondary);
+  color: var(--color-text-primary);
+  cursor: pointer;
+}
+
+.bitfun-generative-widget-panel__button:hover:not(:disabled) {
+  background: var(--color-bg-tertiary);
+}
+
+.bitfun-generative-widget-panel__button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.bitfun-generative-widget-panel__button--primary {
+  border-color: var(--color-accent-500);
+  background: color-mix(in srgb, var(--color-accent-500) 18%, transparent);
+}
+
+.bitfun-generative-widget-panel__workspace {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+}
+
+.bitfun-generative-widget-panel__pane {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--color-overlay-white-12);
+  border-radius: 12px;
+  overflow: hidden;
+  background: var(--color-bg-secondary);
+}
+
+.bitfun-generative-widget-panel__pane-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--color-overlay-white-08);
+}
+
+.bitfun-generative-widget-panel__pane-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.bitfun-generative-widget-panel__editor {
+  flex: 1;
+  width: 100%;
+  min-height: 0;
+  resize: none;
+  border: 0;
+  outline: none;
+  padding: 14px 16px;
+  background: transparent;
+  color: var(--color-text-primary);
+  font: 13px/1.6 var(--font-family-mono);
+}
+
+.bitfun-generative-widget-panel__error {
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid color-mix(in srgb, var(--color-error) 50%, transparent);
+  background: color-mix(in srgb, var(--color-error) 10%, transparent);
+  color: var(--color-error);
+  font-size: 12px;
+}

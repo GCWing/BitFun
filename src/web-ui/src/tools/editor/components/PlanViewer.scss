@@ -1,0 +1,492 @@
+/**
+ * PlanViewer Component Styles
+ * Optimized display for .plan.md files
+ */
+
+.bitfun-plan-viewer {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background: var(--color-bg-primary);
+  color: var(--color-text-primary);
+  overflow: hidden;
+
+  // Loading and error states
+  &--loading,
+  &--error {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+  }
+
+  &--error {
+    .error-content {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 12px;
+      text-align: center;
+
+      .error-icon {
+        width: 48px;
+        height: 48px;
+        color: var(--color-error);
+      }
+
+      p {
+        color: var(--color-text-secondary);
+        font-size: 14px;
+        margin: 0;
+      }
+
+      .retry-button {
+        padding: 8px 16px;
+        font-size: 13px;
+        color: var(--color-text-primary);
+        background: var(--color-bg-tertiary);
+        border: 1px solid var(--border-base);
+        border-radius: 6px;
+        cursor: pointer;
+        transition: all 0.15s ease;
+
+        &:hover {
+          background: var(--element-bg-hover);
+          border-color: var(--border-medium);
+        }
+      }
+    }
+  }
+
+  // Header section
+  .plan-viewer-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 12px;
+    background: var(--color-bg-secondary);
+    border-bottom: 1px solid var(--border-base);
+    flex-shrink: 0;
+
+    &--collapsible {
+      cursor: pointer;
+
+      &:hover {
+        background: var(--color-bg-tertiary);
+
+        .header-expand-indicator {
+          color: var(--color-text-primary);
+          background: var(--color-overlay-white-08);
+        }
+      }
+    }
+
+    .header-left {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      min-width: 0;
+
+      .header-expand-indicator {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 18px;
+        height: 18px;
+        color: var(--color-text-muted);
+        border-radius: 4px;
+        background: var(--color-overlay-white-04);
+        transition: all 0.15s ease;
+
+        svg {
+          transition: transform 0.15s ease;
+        }
+
+        &--expanded svg {
+          transform: rotate(180deg);
+        }
+
+        &--disabled {
+          opacity: 0.5;
+        }
+      }
+
+      .file-icon {
+        flex-shrink: 0;
+        color: var(--color-text-muted);
+      }
+
+      .file-name {
+        font-size: 14px;
+        font-weight: 500;
+        color: var(--color-text-primary);
+        font-family: var(--font-family-mono);
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .unsaved-indicator {
+        font-size: 11px;
+        color: var(--color-warning);
+        padding: 2px 6px;
+        background: var(--color-warning-bg);
+        border-radius: 4px;
+        margin-left: 4px;
+      }
+    }
+
+    .header-right {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-shrink: 0;
+
+      .todos-count {
+        font-size: 11px;
+        font-weight: 500;
+        color: var(--color-text-muted);
+        padding: 2px 8px;
+        border-radius: 999px;
+        border: 1px solid var(--border-base);
+        background: var(--color-bg-primary);
+        letter-spacing: 0.2px;
+      }
+
+      .edit-btn {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 20px;
+        height: 20px;
+        padding: 0;
+        color: var(--color-text-muted);
+        background: transparent;
+        border: 1px solid transparent;
+        border-radius: 4px;
+        cursor: pointer;
+        transition: all 0.15s ease;
+
+        &:hover {
+          color: var(--color-text-primary);
+          background: var(--color-bg-tertiary);
+          border-color: var(--border-medium);
+        }
+
+        &--active {
+          color: var(--color-info);
+          background: color-mix(in srgb, var(--color-accent-600) 10%, transparent);
+          border-color: var(--color-info);
+
+          &:hover {
+            color: var(--color-info);
+            background: var(--border-accent-subtle);
+          }
+        }
+      }
+    }
+  }
+
+  // Build button styles (for header)
+  .build-btn {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 12px;
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--color-static-white);
+    background: linear-gradient(135deg, var(--color-warning) 0%, var(--color-warning) 100%);
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    box-shadow: 0 1px 2px var(--color-overlay-black-12);
+
+    &:hover:not(:disabled) {
+      background: linear-gradient(135deg, var(--color-warning) 0%, var(--color-warning) 100%);
+      box-shadow: 0 2px 4px var(--color-warning-border);
+    }
+
+    &:active:not(:disabled) {
+      transform: translateY(1px);
+    }
+
+    &:disabled {
+      opacity: 0.7;
+      cursor: not-allowed;
+    }
+
+    svg {
+      width: 14px;
+      height: 14px;
+    }
+
+    &--building {
+      background: linear-gradient(135deg, var(--color-warning) 0%, var(--color-warning) 100%);
+      cursor: wait;
+    }
+
+    &--built {
+      background: linear-gradient(135deg, var(--color-success) 0%, var(--color-success) 100%);
+      cursor: default;
+
+      &:hover {
+        background: linear-gradient(135deg, var(--color-success) 0%, var(--color-success) 100%);
+        box-shadow: 0 1px 2px var(--color-overlay-black-12);
+      }
+    }
+  }
+
+  // Todo Section
+  .plan-viewer-todos {
+    padding: 8px 12px;
+    background: var(--color-bg-secondary);
+    border-bottom: 1px solid var(--border-base);
+    flex-shrink: 0;
+
+    .todo-inline-toolbar,
+    .trailing-todo-toolbar {
+      display: flex;
+      justify-content: flex-end;
+      gap: 6px;
+      margin-bottom: 6px;
+
+      &.todo-toolbar--yaml {
+        margin-bottom: 0;
+      }
+
+      .edit-btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 22px;
+        height: 22px;
+        padding: 0;
+        color: var(--color-text-muted);
+        background: transparent;
+        border: 1px solid transparent;
+        border-radius: 4px;
+        cursor: pointer;
+        transition: all 0.15s ease;
+
+        &:hover {
+          color: var(--color-text-primary);
+          background: var(--color-bg-tertiary);
+          border-color: var(--border-base);
+        }
+
+        &--confirm {
+          color: var(--color-success);
+        }
+      }
+    }
+
+    // YAML editor section
+    .yaml-editor-section {
+      border-radius: 6px;
+      overflow: hidden;
+
+      .yaml-editor-content {
+        min-height: 150px;
+        max-height: 300px;
+        overflow: hidden;
+
+        > div {
+          height: 100%;
+        }
+
+        .m-editor-textarea {
+          padding-top: 4px;
+        }
+      }
+    }
+
+    .todos-list {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      max-height: 160px;
+      overflow-x: hidden;
+      overflow-y: auto;
+
+    }
+
+    &--trailing {
+      border: none;
+      border-top: 1px dashed var(--border-base);
+      background: transparent;
+      padding: 6px 16px 10px;
+
+      .todos-list {
+        max-height: none;
+        overflow: visible;
+      }
+
+      .todo-item {
+        padding: 3px 4px;
+      }
+    }
+
+    .todo-item {
+      display: flex;
+      align-items: flex-start;
+      gap: 8px;
+      padding: 4px 8px;
+      border-radius: 4px;
+      transition: background 0.15s ease;
+
+      .todo-icon {
+        flex-shrink: 0;
+        margin-top: 2px;
+
+        &--pending {
+          color: var(--color-text-muted);
+          opacity: 0.5;
+        }
+
+        &--in-progress {
+          color: var(--color-info);
+        }
+
+        &--completed {
+          color: var(--color-success);
+        }
+
+        &--cancelled {
+          color: var(--color-error);
+          opacity: 0.6;
+        }
+      }
+
+      .todo-content {
+        font-size: 13px;
+        line-height: 1.5;
+        color: var(--color-text-secondary);
+        flex: 1;
+        min-width: 0;
+      }
+
+      .todo-content-input {
+        flex: 1;
+        min-width: 0;
+        font-size: 13px;
+        line-height: 1.5;
+        color: var(--color-text-primary);
+        background: var(--color-bg-primary);
+        border: 1px solid var(--border-base);
+        border-radius: 4px;
+        padding: 4px 8px;
+        outline: none;
+
+        &:focus {
+          border-color: var(--color-info);
+        }
+      }
+
+      .todo-delete-btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 22px;
+        height: 22px;
+        border: 1px solid transparent;
+        border-radius: 4px;
+        background: transparent;
+        color: var(--color-text-muted);
+        cursor: pointer;
+        transition: all 0.15s ease;
+
+        &:hover {
+          color: var(--color-error);
+          background: var(--color-error-bg);
+          border-color: var(--color-error-border);
+        }
+      }
+
+      // Status styles
+      &.status-pending {
+        .todo-content {
+          color: var(--color-text-secondary);
+        }
+      }
+
+      &.status-in_progress {
+        background: var(--glass-blue-subtle);
+
+        .todo-content {
+          color: var(--color-text-primary);
+          font-weight: 500;
+        }
+      }
+
+      &.status-completed {
+        .todo-content {
+          text-decoration: line-through;
+          color: var(--color-text-muted);
+          opacity: 0.6;
+        }
+      }
+
+      &.status-cancelled {
+        opacity: 0.5;
+
+        .todo-content {
+          text-decoration: line-through;
+          color: var(--color-text-muted);
+        }
+      }
+    }
+  }
+
+  // Plan main content area
+  .plan-viewer-content {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto;
+    overflow-x: hidden;
+    min-width: 0;
+
+    .plan-markdown {
+      flex: none;
+      overflow-x: hidden;
+      overflow-y: visible;
+      width: 100%;
+      min-width: 0;
+      
+      // Let markdown and trailing todos share one parent scroller.
+      > div {
+        height: auto;
+        width: 100%;
+        min-width: 0;
+      }
+
+      .m-editor,
+      .m-editor-content,
+      .m-editor-ir-panel,
+      .m-editor-ir {
+        height: auto;
+        width: 100%;
+        min-width: 0;
+        overflow-x: hidden;
+        overflow-y: visible;
+      }
+    }
+  }
+}
+
+// Spin animation
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.animate-spin {
+  animation: spin 1s linear infinite;
+}
+

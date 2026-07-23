@@ -1,0 +1,163 @@
+/**
+ * Token usage indicator styles.
+ */
+
+@use '../../component-library/styles/tokens' as *;
+
+.bitfun-token-usage {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border-radius: 8px;
+  font-size: var(--flowchat-font-size-xxs);
+  font-weight: 600;
+  transition: all 0.25s ease;
+  cursor: default;
+  white-space: nowrap;
+  overflow: hidden;
+  min-width: 48px;
+  height: 6px;
+  opacity: 0;
+  pointer-events: none;
+  
+  // Show on input focus
+  .bitfun-chat-input__box:focus-within & {
+    opacity: 1;
+    pointer-events: auto;
+  }
+  
+  // Progress track (background)
+  &__progress-track {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: var(--color-overlay-white-08);
+    border-radius: 8px;
+    overflow: hidden;
+  }
+  
+  // Progress fill
+  &__progress-fill {
+    position: absolute;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    transition: width 0.3s ease, background 0.2s ease;
+    border-radius: 8px 0 0 8px;
+    
+    // When nearly full, round the right edge
+    &[style*="100%"] {
+      border-radius: 8px;
+    }
+  }
+  
+  // Hover content
+  &__hover-content {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    z-index: 2;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.2s ease;
+    white-space: nowrap;
+  }
+  
+  &__percentage {
+    line-height: var(--flowchat-compact-line-height);
+    font-weight: 600;
+    font-size: var(--flowchat-font-size-xxs);
+  }
+  
+  // Hover behavior
+  &:hover {
+    height: 18px;
+    
+    .bitfun-token-usage__hover-content {
+      opacity: 1;
+    }
+  }
+  
+  // Normal state (0-69%)
+  &--normal {
+    background: var(--glass-blue-subtle);
+    color: var(--color-accent-500);
+    border: 1px solid color-mix(in srgb, var(--color-accent-600) 25%, transparent);
+    
+    .bitfun-token-usage__progress-fill {
+      background: linear-gradient(
+        90deg,
+        var(--border-accent-soft),
+        color-mix(in srgb, var(--color-accent-500) 50%, transparent)
+      );
+    }
+    
+    &:hover {
+      background: color-mix(in srgb, var(--color-accent-600) 12%, transparent);
+      border-color: var(--color-accent-400);
+      
+      .bitfun-token-usage__progress-fill {
+        background: linear-gradient(
+          90deg,
+          var(--border-accent),
+          color-mix(in srgb, var(--color-accent-500) 60%, transparent)
+        );
+      }
+    }
+  }
+  
+  // Warning state (80%+)
+  &--warning {
+    background: color-mix(in srgb, var(--color-warning) 8%, transparent);
+    color: var(--color-warning);
+    border: 1px solid color-mix(in srgb, var(--color-warning) 25%, transparent);
+    animation: pulse-warning 2s ease-in-out infinite;
+    
+    .bitfun-token-usage__progress-fill {
+      background: linear-gradient(
+        90deg,
+        color-mix(in srgb, var(--color-warning) 30%, transparent),
+        color-mix(in srgb, var(--color-warning) 50%, transparent)
+      );
+      animation: progress-pulse 2s ease-in-out infinite;
+    }
+    
+    &:hover {
+      background: color-mix(in srgb, var(--color-warning) 12%, transparent);
+      border-color: color-mix(in srgb, var(--color-warning) 40%, transparent);
+      
+      .bitfun-token-usage__progress-fill {
+        background: linear-gradient(
+          90deg,
+          color-mix(in srgb, var(--color-warning) 40%, transparent),
+          color-mix(in srgb, var(--color-warning) 60%, transparent)
+        );
+      }
+    }
+  }
+}
+
+// Warning pulse animation
+@keyframes pulse-warning {
+  0%, 100% {
+    box-shadow: 0 0 0 color-mix(in srgb, var(--color-warning) 0%, transparent);
+  }
+  50% {
+    box-shadow: 0 0 8px color-mix(in srgb, var(--color-warning) 40%, transparent);
+  }
+}
+
+// Progress pulse animation (warning state)
+@keyframes progress-pulse {
+  0%, 100% {
+    opacity: 0.8;
+  }
+  50% {
+    opacity: 1;
+  }
+}

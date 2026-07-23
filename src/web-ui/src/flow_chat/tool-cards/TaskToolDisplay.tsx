@@ -1,0 +1,819 @@
+/**
+ * TaskTool card display component.
+ */
+
+import React, {
+  useState,
+  useEffect,
+  useLayoutEffect,
+  useCallback,
+  useRef,
+  useMemo,
+  useSyncExternalStore,
+} from 'react';
+import {
+  AlertTriangle,
+  Split,
+  ChevronRight,
+  Loader2,
+  Square,
+} from 'lucide-react';
+
+import { useTranslation } from 'react-i18next';
+import { CubeLoading } from '../../component-library';
+import { Markdown } from '@/component-library/components/Markdown/Markdown';
+import type { FlowToolItem, ToolCardProps } from '../types/flow-chat';
+import { BaseToolCard } from './BaseToolCard';
+import { CompactToolCard, CompactToolCardHeader } from './CompactToolCard';
+import { ToolCardIconSlot } from './ToolCardIconSlot';
+import { ToolCardStatusIcon } from './ToolCardStatusIcon';
+import { ToolCardStatusSlot } from './ToolCardStatusSlot';
+import { taskCollapseStateManager } from '../store/TaskCollapseStateManager';
+import { useToolCardHeightContract } from './useToolCardHeightContract';
+import { ToolTimeoutIndicator } from './ToolTimeoutIndicator';
+import { getReviewerContextBySubagentId } from '@/shared/services/reviewTeamService';
+import type { ReviewerContext } from '@/shared/services/reviewTeamService';
+import { openBtwSessionInAuxPane } from '../services/btwSessionPane';
+import { flowChatStore } from '../store/FlowChatStore';
+import { useSessionGoalModeActive } from '../hooks/useSessionGoalModeActive';
+import { deriveSubagentExecutionStatus } from '../utils/subagentProjection';
+import { agentAPI } from '@/infrastructure/api/service-api/AgentAPI';
+import { notificationService } from '@/shared/notification-system/services/NotificationService';
+import './TaskToolDisplay.scss';
+import './ModelThinkingDisplay.scss';
+
+function readTaskDurationMs(toolResult: FlowToolItem['toolResult'] | undefined): number | undefined {
+  const resultDuration = toolResult?.result?.duration;
+  if (typeof resultDuration === 'number') {
+    return resultDuration;
+  }
+  if (typeof toolResult?.duration_ms === 'number') {
+    return toolResult.duration_ms;
+  }
+  return undefined;
+}
+
+function readTaskErrorMessage(toolResult: FlowToolItem['toolResult'] | undefined): string | null {
+  if (typeof toolResult?.error === 'string' && toolResult.error.trim()) {
+    return toolResult.error.trim();
+  }
+  const result = toolResult?.result;
+  if (result && typeof result === 'object' && 'error' in result) {
+    const message = String((result as { error?: unknown }).error ?? '').trim();
+    return message || null;
+  }
+  return null;
+}
+
+function readStringValue(value: unknown): string {
+  return typeof value === 'string' ? value.trim() : '';
+}
+
+function readTaskAction(input: unknown, toolResult: FlowToolItem['toolResult'] | undefined): string {
+  if (input && typeof input === 'object') {
+    const action = readStringValue((input as Record<string, unknown>).action);
+    if (action) {
+      return action.toLowerCase();
+    }
+  }
+
+  const result = toolResult?.result;
+  if (result && typeof result === 'object') {
+    const action = readStringValue((result as Record<string, unknown>).action);
+    if (action) {
+      return action.toLowerCase();
+    }
+  }
+
+  return '';
+}
+
+function readTaskSessionId(input: unknown, toolResult: FlowToolItem['toolResult'] | undefined): string {
+  if (input && typeof input === 'object') {
+    const sessionId = readStringValue((input as Record<string, unknown>).session_id)
+      || readStringValue((input as Record<string, unknown>).sessionId);
+    if (sessionId) {
+      return sessionId;
+    }
+  }
+
+  const result = toolResult?.result;
+  if (result && typeof result === 'object') {
+    return readStringValue((result as Record<string, unknown>).session_id)
+      || readStringValue((result as Record<string, unknown>).sessionId);
+  }
+
+  return '';
+}
+
+function readTaskSubagentType(input: unknown): string {
+  if (!input || typeof input !== 'object') {
+    return '';
+  }
+  const data = input as Record<string, unknown>;
+  return (
+    readStringValue(data.subagent_type) ||
+    readStringValue(data.subagentType) ||
+    readStringValue(data.agent_type) ||
+    readStringValue(data.agentType)
+  );
+}
+
+function readTaskRunInBackground(input: unknown, toolResult: FlowToolItem['toolResult'] | undefined): boolean {
+  if (input && typeof input === 'object') {
+    const value = (input as Record<string, unknown>).run_in_background;
+    if (typeof value === 'boolean') {
+      return value;
+    }
+  }
+
+  const result = toolResult?.result;
+  if (result && typeof result === 'object') {
+    const value = (result as Record<string, unknown>).run_in_background;
+    if (typeof value === 'boolean') {
+      return value;
+    }
+  }
+
+  return false;
+}
+
+const INTERNAL_READONLY_REVIEW_AGENT_IDS = new Set([
+  'CodeReview',
+  'ReviewBusinessLogic',
+  'ReviewPerformance',
+  'ReviewSecurity',
+  'ReviewArchitecture',
+  'ReviewFrontend',
+  'ReviewJudge',
+  'ReviewGeneral',
+]);
+
+function isInternalReadonlyReviewAgent(subagentType: string): boolean {
+  return INTERNAL_READONLY_REVIEW_AGENT_IDS.has(subagentType);
+}
+
+function readTaskWasCancelled(
+  status: FlowToolItem['status'],
+  toolResult: FlowToolItem['toolResult'] | undefined,
+): boolean {
+  if (status === 'cancelled' || status === 'rejected') {
+    return true;
+  }
+
+  const result = toolResult?.result;
+  if (result && typeof result === 'object') {
+    const resultStatus = readStringValue((result as Record<string, unknown>).status).toLowerCase();
+    if (resultStatus === 'cancelled' || resultStatus === 'canceled') {
+      return true;
+    }
+  }
+
+  const error = readStringValue(toolResult?.error).toLowerCase();
+  return Boolean(error && /\bcancell?ed\b/.test(error));
+}
+
+function subscribeToFlowChatStore(listener: () => void): () => void {
+  return flowChatStore.subscribe(() => listener());
+}
+
+function readLinkedSubagentSnapshot(sessionId: string): string {
+  if (!sessionId) {
+    return '';
+  }
+  const session = flowChatStore.getState().sessions.get(sessionId);
+  const turn = session?.dialogTurns?.[session.dialogTurns.length - 1];
+  return JSON.stringify([
+    session?.mode ?? '',
+    session?.config?.agentType ?? '',
+    session?.config?.modelName ?? '',
+    turn?.id ?? '',
+    turn?.status ?? '',
+    turn?.startTime ?? null,
+    turn?.endTime ?? null,
+    turn?.error ?? '',
+    turn?.modelRounds?.some((round) => round.isStreaming) ?? false,
+  ]);
+}
+
+function isDeepReviewReviewerTask(toolItem: FlowToolItem): boolean {
+  if (!['task', 'launchreviewagent'].includes(toolItem.toolName?.toLowerCase() ?? '')) {
+    return false;
+  }
+
+  const input = toolItem.toolCall?.input;
+  const subagentType = readTaskSubagentType(input);
+  if (!subagentType) {
+    return false;
+  }
+
+  if (getReviewerContextBySubagentId(subagentType) || isInternalReadonlyReviewAgent(subagentType)) {
+    return true;
+  }
+
+  if (!input || typeof input !== 'object') {
+    return false;
+  }
+
+  const description = readStringValue((input as Record<string, unknown>).description);
+  return /\bpacket\s+(reviewer|judge):/i.test(description);
+}
+
+export const TaskToolDisplay: React.FC<ToolCardProps> = ({
+  toolItem,
+  interruptionNote,
+  onOpenInPanel,
+  sessionId,
+}) => {
+  const { t } = useTranslation('flow-chat');
+  const defaultTimeoutDisabled = useSessionGoalModeActive(sessionId);
+  const { t: tAgents } = useTranslation('scenes/agents');
+  const { toolCall, toolResult, status, requiresConfirmation, userConfirmed } = toolItem;
+  const toolId = toolItem.id ?? toolCall?.id;
+  const rawTaskAction = readTaskAction(toolCall?.input, toolResult);
+  const isCancelAction = rawTaskAction === 'cancel';
+  const isBackgroundTask = readTaskRunInBackground(toolCall?.input, toolResult);
+  const isReviewCoverageTask = isDeepReviewReviewerTask(toolItem);
+  const [isStoppingSubagent, setIsStoppingSubagent] = useState(false);
+  
+  // Restore collapse state; default to collapsed.
+  const [isExpanded, setIsExpanded] = useState(() => {
+    const savedState = taskCollapseStateManager.getCollapsedOrUndefined(toolItem.id);
+    if (savedState !== undefined) {
+      return !savedState;
+    }
+    return false;
+  });
+  
+  const isRunning = status === 'preparing' || status === 'streaming' || status === 'running';
+  const keepCollapsedWhileRunning = isCancelAction || isReviewCoverageTask;
+  
+  const { cardRootRef, applyExpandedState } = useToolCardHeightContract({
+    toolId,
+    toolName: toolItem.toolName,
+  });
+  
+  const prevStatusRef = useRef(status);
+
+  const updateCardExpandedState = useCallback((
+    nextExpanded: boolean,
+    reason: 'manual' | 'auto' = 'manual',
+  ) => {
+    if (nextExpanded !== isExpanded) {
+      /* Sync before the next commit paints so subagent wrapper + task card merge in one frame. */
+      taskCollapseStateManager.setCollapsed(toolItem.id, !nextExpanded);
+    }
+    applyExpandedState(isExpanded, nextExpanded, setIsExpanded, { reason });
+  }, [applyExpandedState, isExpanded, toolItem.id]);
+
+  useLayoutEffect(() => {
+    const prevStatus = prevStatusRef.current;
+
+    if (isCancelAction) {
+      if (isExpanded) {
+        updateCardExpandedState(false, 'auto');
+      }
+      prevStatusRef.current = status;
+      return;
+    }
+    
+    if (prevStatus !== status) {
+      prevStatusRef.current = status;
+      
+      if (status === 'completed') {
+        updateCardExpandedState(false, 'auto');
+      } else if (isRunning && !keepCollapsedWhileRunning) {
+        updateCardExpandedState(true, 'auto');
+      }
+    }
+  }, [isCancelAction, isExpanded, isRunning, keepCollapsedWhileRunning, status, updateCardExpandedState]);
+  
+  useLayoutEffect(() => {
+    taskCollapseStateManager.setCollapsed(toolItem.id, isCancelAction ? true : !isExpanded);
+  }, [isCancelAction, isExpanded, toolItem.id]);
+
+  // Detect full-width characters for visual width estimation.
+  const isFullWidth = (char: string) => {
+    const code = char.charCodeAt(0);
+    return (
+      (code >= 0x4E00 && code <= 0x9FFF) ||
+      (code >= 0x3400 && code <= 0x4DBF) ||
+      (code >= 0xAC00 && code <= 0xD7AF) ||
+      (code >= 0x3040 && code <= 0x309F) ||
+      (code >= 0x30A0 && code <= 0x30FF) ||
+      (code >= 0xFF00 && code <= 0xFFEF)
+    );
+  };
+
+  // Truncate by visual width (full-width counts as 2).
+  const truncateByVisualWidth = (str: string, maxWidth: number) => {
+    let width = 0;
+    let result = '';
+    
+    for (const char of str) {
+      const charWidth = isFullWidth(char) ? 2 : 1;
+      
+      if (width + charWidth > maxWidth) {
+        return result + '...';
+      }
+      
+      width += charWidth;
+      result += char;
+    }
+    
+    return result;
+  };
+
+  const taskSessionId = readTaskSessionId(toolCall?.input, toolResult);
+  const linkedSubagentSessionId = toolItem.subagentSessionId || taskSessionId;
+  const readSubagentSnapshot = useCallback(
+    () => readLinkedSubagentSnapshot(linkedSubagentSessionId),
+    [linkedSubagentSessionId],
+  );
+  useSyncExternalStore(
+    subscribeToFlowChatStore,
+    readSubagentSnapshot,
+    readSubagentSnapshot,
+  );
+  const linkedSubagentSession = linkedSubagentSessionId
+    ? flowChatStore.getState().sessions.get(linkedSubagentSessionId)
+    : undefined;
+
+  const getTaskInput = () => {
+    if (!toolCall?.input) return null;
+
+    const isEarlyDetection = toolCall.input._early_detection === true;
+    const isPartialParams = toolCall.input._partial_params === true;
+
+    if (isEarlyDetection || isPartialParams) {
+      return null;
+    }
+
+    const inputKeys = Object.keys(toolCall.input).filter(key => !key.startsWith('_'));
+    if (inputKeys.length === 0) return null;
+
+    const { description, prompt } = toolCall.input;
+    const inputSubagentType = readTaskSubagentType(toolCall.input);
+    const agentType =
+      readStringValue(linkedSubagentSession?.mode) ||
+      readStringValue(linkedSubagentSession?.config?.agentType) ||
+      inputSubagentType ||
+      'Not provided';
+    const modelName =
+      readStringValue(toolItem.subagentModelDisplayName) ||
+      readStringValue(toolItem.subagentModelId) ||
+      readStringValue(linkedSubagentSession?.config?.modelName) ||
+      readStringValue(toolCall.input.model_id) ||
+      readStringValue(toolCall.input.modelId);
+
+    if (isReviewCoverageTask) {
+      const reviewDescription = readStringValue(description)
+        .replace(/^\[packet\s+[^\]]+\]\s*/i, '');
+      return {
+        description: reviewDescription || t('toolCards.taskTool.reviewCoverageDescription'),
+        prompt: 'Not provided',
+        agentType: t('toolCards.taskTool.reviewCoverageLabel'),
+        modelName,
+        reviewerContext: null,
+        isReviewCoverageTask: true,
+      };
+    }
+
+    // For built-in review-team reviewers outside the unified Review flow,
+    // surface role context instead of the raw prompt so internal directives stay private.
+    const reviewerContext: ReviewerContext | null =
+      agentType !== 'Not provided'
+        ? getReviewerContextBySubagentId(agentType)
+        : null;
+
+    return {
+      description: description || (prompt ? truncateByVisualWidth(prompt, 70) : 'Not provided'),
+      prompt: prompt || 'Not provided',
+      agentType,
+      modelName,
+      reviewerContext,
+      isReviewCoverageTask: false,
+    };
+  };
+
+  const taskInput = getTaskInput();
+  const displayIsExpanded = isCancelAction ? false : isExpanded;
+  const hasRealPrompt = Boolean(
+    taskInput && taskInput.prompt && taskInput.prompt !== 'Not provided',
+  );
+  const hasInterruptionNote = Boolean(interruptionNote);
+  const needsConfirmation =
+    requiresConfirmation && !userConfirmed && status !== 'completed' && status !== 'cancelled' && status !== 'rejected' && status !== 'error';
+
+  /* Prompt body: same scroll + Markdown shell as ModelThinkingDisplay. */
+  const promptContentRef = useRef<HTMLDivElement>(null);
+  const [promptScrollState, setPromptScrollState] = useState({
+    hasScroll: false,
+    atTop: true,
+    atBottom: true,
+  });
+
+  const checkPromptScrollState = useCallback(() => {
+    const el = promptContentRef.current;
+    if (!el) return;
+    setPromptScrollState({
+      hasScroll: el.scrollHeight > el.clientHeight,
+      atTop: el.scrollTop <= 5,
+      atBottom: el.scrollTop + el.clientHeight >= el.scrollHeight - 5,
+    });
+  }, []);
+
+  useEffect(() => {
+    if (!displayIsExpanded || !hasRealPrompt) return;
+    const timer = setTimeout(checkPromptScrollState, 50);
+    return () => clearTimeout(timer);
+  }, [displayIsExpanded, hasRealPrompt, taskInput?.prompt, checkPromptScrollState]);
+
+  const linkedSubagentTurn = linkedSubagentSession?.dialogTurns?.[
+    linkedSubagentSession.dialogTurns.length - 1
+  ];
+  const backgroundSubagentStatus = isBackgroundTask
+    ? deriveSubagentExecutionStatus(linkedSubagentTurn)
+    : null;
+  const backgroundSubagentIsRunning = backgroundSubagentStatus === 'running';
+  const isCancelledResult = readTaskWasCancelled(status, toolResult);
+  const displayStatus = isCancelledResult
+    ? 'cancelled'
+    : backgroundSubagentStatus ?? status;
+  const isFailed =
+    displayStatus === 'error' || (
+    !isCancelledResult &&
+    (status === 'error' ||
+    (toolResult != null &&
+      'success' in toolResult &&
+      toolResult.success === false)));
+  const backgroundSubagentDurationMs = isBackgroundTask &&
+    linkedSubagentTurn?.endTime != null &&
+    linkedSubagentTurn.startTime != null
+    ? Math.max(0, linkedSubagentTurn.endTime - linkedSubagentTurn.startTime)
+    : undefined;
+  const taskDurationMs = isBackgroundTask
+    ? backgroundSubagentDurationMs
+    : readTaskDurationMs(toolResult);
+  const taskErrorMessage = displayStatus === 'error'
+    ? linkedSubagentTurn?.error || readTaskErrorMessage(toolResult)
+    : readTaskErrorMessage(toolResult);
+  const completedDurationStatus = isCancelledResult || displayStatus === 'cancelled'
+    ? 'cancelled'
+    : isFailed
+      ? 'error'
+      : status === 'cancelled' || status === 'rejected'
+      ? 'cancelled'
+      : displayStatus === 'completed' && taskDurationMs != null
+        ? 'success'
+        : undefined;
+
+  const isTaskTool = toolItem.toolName?.toLowerCase() === 'task';
+  const resolvedSubagentModel = (
+    taskInput?.modelName?.trim()
+    || ''
+  );
+  const showSubagentExecModel =
+    isTaskTool &&
+    !isReviewCoverageTask &&
+    (
+      Boolean(linkedSubagentSessionId)
+      || Boolean(resolvedSubagentModel)
+      || isRunning
+    );
+  const canStopSyncSubagent =
+    isTaskTool &&
+    isRunning &&
+    !isCancelAction &&
+    !isBackgroundTask &&
+    Boolean(linkedSubagentSessionId);
+
+  useEffect(() => {
+    if (!isRunning || !linkedSubagentSessionId) {
+      setIsStoppingSubagent(false);
+    }
+  }, [isRunning, linkedSubagentSessionId]);
+
+  const handleStopSyncSubagent = useCallback(async (event: React.MouseEvent<HTMLButtonElement>) => {
+    event.stopPropagation();
+    if (!linkedSubagentSessionId || isStoppingSubagent) {
+      return;
+    }
+
+    setIsStoppingSubagent(true);
+    try {
+      await agentAPI.cancelSession(linkedSubagentSessionId);
+    } catch (_error) {
+      setIsStoppingSubagent(false);
+      notificationService.error(t('toolCards.taskDetailPanel.stopSubagentFailed'), {
+        duration: 5000,
+      });
+    }
+  }, [isStoppingSubagent, linkedSubagentSessionId, t]);
+
+  const handleCardClick = useCallback((e: React.MouseEvent) => {
+    const target = e.target as HTMLElement;
+    if (
+      target.closest('.preview-toggle-btn') ||
+      target.closest('.tool-actions') ||
+      target.closest('.result-expand-toggle') ||
+      target.closest('.task-subagent-stop-button') ||
+      target.closest('.task-header-rail__hit')
+    ) {
+      return;
+    }
+
+    // Pause auto-scroll while the user toggles the card.
+    updateCardExpandedState(!isExpanded);
+  }, [isExpanded, updateCardExpandedState]);
+
+  const showHeaderExpandHint = !isCancelAction && (
+    isFailed ||
+    hasInterruptionNote ||
+    hasRealPrompt ||
+    needsConfirmation ||
+    (Boolean(taskInput?.reviewerContext) && !taskInput?.isReviewCoverageTask)
+  );
+
+  const { taskHeaderLine, taskAgentTypeLabel, taskDesc } = useMemo(() => {
+    const desc =
+      (taskInput?.description || '').trim() || t('toolCards.taskDetailPanel.untitled');
+    const raw = taskInput?.agentType;
+    let agentTypeLabel: string;
+    if (raw && raw !== 'Not provided') {
+      const rc = taskInput?.isReviewCoverageTask ? null : taskInput?.reviewerContext;
+      agentTypeLabel = taskInput?.isReviewCoverageTask
+        ? t('toolCards.taskTool.reviewCoverageLabel')
+        : rc
+        ? tAgents(`reviewTeams.members.${rc.definitionKey}.funName`, {
+            defaultValue: rc.roleName,
+          })
+        : raw;
+    } else {
+      agentTypeLabel = t('toolCards.taskTool.defaultAgentKind');
+    }
+    return {
+      taskHeaderLine: t('toolCards.taskTool.headerLine', {
+        agentType: agentTypeLabel,
+        description: desc,
+      }),
+      taskAgentTypeLabel: agentTypeLabel,
+      taskDesc: desc,
+    };
+  }, [taskInput, t, tAgents]);
+
+  const openTaskDetailPanel = useCallback(
+    (e: React.MouseEvent) => {
+      e.stopPropagation();
+      if (isCancelAction) {
+        return;
+      }
+
+      if (linkedSubagentSessionId && sessionId && !isReviewCoverageTask) {
+        const parentSession = flowChatStore.getState().sessions.get(sessionId);
+        openBtwSessionInAuxPane({
+          childSessionId: linkedSubagentSessionId,
+          parentSessionId: sessionId,
+          workspacePath: parentSession?.workspacePath,
+          sessionKind: 'subagent',
+          sessionTitle: taskHeaderLine,
+          agentType: taskInput?.agentType,
+          parentToolCallId: toolCall?.id || toolItem.id,
+          subagentType: taskInput?.agentType,
+          remoteConnectionId: parentSession?.remoteConnectionId,
+          remoteSshHost: parentSession?.remoteSshHost,
+          includeInternal: true,
+        });
+        return;
+      }
+
+      const panelData = { toolItem, taskInput, sessionId };
+      const tabInfo = {
+        type: 'task-detail',
+        title: taskHeaderLine,
+        data: panelData,
+        metadata: { taskId: toolItem.id },
+      };
+      if (onOpenInPanel) {
+        onOpenInPanel(tabInfo.type, tabInfo);
+      } else {
+        window.dispatchEvent(new CustomEvent('agent-create-tab', { detail: tabInfo }));
+      }
+    },
+    [isCancelAction, isReviewCoverageTask, linkedSubagentSessionId, onOpenInPanel, sessionId, taskInput, toolCall?.id, toolItem, taskHeaderLine],
+  );
+
+  const renderToolIcon = () => {
+    return <Split size={16} />;
+  };
+
+  const renderHeader = () => (
+    <div className="task-header-wrapper">
+      <ToolCardIconSlot
+        icon={renderToolIcon()}
+        iconClassName={`task-icon ${isRunning ? 'is-running' : ''}`}
+        expandable={showHeaderExpandHint}
+        affordanceKind="expand"
+        isExpanded={displayIsExpanded}
+        onAffordanceClick={handleCardClick}
+      />
+
+      <div className="task-content-wrapper">
+        <div className="task-body-columns">
+          <div className="task-body-main">
+            <div className={`task-header-main ${isFailed ? 'task-header-main--failed' : ''}`}>
+              <span className="task-action">
+                {showSubagentExecModel && resolvedSubagentModel ? (
+                  <>
+                    {t('toolCards.taskTool.headerLinePrefix', { agentType: taskAgentTypeLabel })}
+                    <span className="task-action__model-tag">（{resolvedSubagentModel}）</span>
+                    {t('toolCards.taskTool.headerLineSuffix', { description: taskDesc })}
+                  </>
+                ) : taskHeaderLine}
+              </span>
+              <div className="task-header-meta">
+                <ToolTimeoutIndicator
+                  startTime={toolItem.startTime}
+                  isRunning={isRunning || backgroundSubagentIsRunning}
+                  timeoutMs={
+                    typeof toolCall?.timeout_seconds === 'number' && toolCall.timeout_seconds > 0
+                      ? toolCall.timeout_seconds * 1000
+                      : typeof toolCall?.input?.timeout_seconds === 'number' && toolCall.input.timeout_seconds > 0
+                      ? toolCall.input.timeout_seconds * 1000
+                      : undefined
+                  }
+                  showControls={true}
+                  subagentSessionId={toolItem.subagentSessionId}
+                  defaultTimeoutDisabled={defaultTimeoutDisabled}
+                  completedDurationMs={taskDurationMs}
+                  completedStatus={completedDurationStatus}
+                  completedFailureReason={isFailed ? taskErrorMessage ?? undefined : undefined}
+                />
+                {isFailed && (
+                  <span className="task-failed-badge">{t('toolCards.taskTool.failed')}</span>
+                )}
+                {canStopSyncSubagent && (
+                  <button
+                    type="button"
+                    className="task-subagent-stop-button"
+                    onClick={handleStopSyncSubagent}
+                    disabled={isStoppingSubagent}
+                    aria-label={
+                      isStoppingSubagent
+                        ? t('toolCards.taskDetailPanel.stoppingSubagent')
+                        : isReviewCoverageTask
+                          ? t('toolCards.taskDetailPanel.stopReviewWork')
+                          : t('toolCards.taskDetailPanel.stopSubagent')
+                    }
+                    title={
+                      isStoppingSubagent
+                        ? t('toolCards.taskDetailPanel.stoppingSubagent')
+                        : isReviewCoverageTask
+                          ? t('toolCards.taskDetailPanel.stopReviewWork')
+                          : t('toolCards.taskDetailPanel.stopSubagent')
+                    }
+                  >
+                    {isStoppingSubagent ? (
+                      <Loader2 size={13} strokeWidth={2} aria-hidden />
+                    ) : (
+                      <Square size={13} strokeWidth={2} aria-hidden />
+                    )}
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+          {!isCancelAction && (
+            <div className="task-header-rail">
+              <button
+                type="button"
+                className="task-header-rail__hit"
+                onClick={openTaskDetailPanel}
+                aria-label={t('toolCards.taskTool.openInPanel')}
+                title={t('toolCards.taskTool.openInPanel')}
+              />
+              <div className="task-header-rail__visual" aria-hidden>
+                <ChevronRight size={16} strokeWidth={2} absoluteStrokeWidth />{isRunning || backgroundSubagentIsRunning ? (
+                  <ToolCardStatusIcon
+                    icon={<CubeLoading size="small" />}
+                    className="task-status-icon--rail"
+                  />
+                ) : null}
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+
+  const renderExpandedContent = () => {
+    /* Failure only in header badge; do not keep prompt/confirm in expanded body. */
+    if (isFailed) {
+      return null;
+    }
+
+    const rc = taskInput?.isReviewCoverageTask ? null : taskInput?.reviewerContext;
+
+    if (
+      !hasInterruptionNote &&
+      !hasRealPrompt &&
+      !needsConfirmation &&
+      !rc
+    ) {
+      return null;
+    }
+
+    return (
+      <div className="task-expanded-content">
+        {interruptionNote && (
+          <>
+            <div className="task-interruption-note" role="note">
+              <AlertTriangle size={14} strokeWidth={2} aria-hidden />
+              <span>{interruptionNote}</span>
+            </div>
+            {(hasRealPrompt || needsConfirmation || rc) && (
+              <div className="task-interruption-divider" aria-hidden />
+            )}
+          </>
+        )}
+        {rc ? (
+          <div className="task-reviewer-context">
+            <div className="task-reviewer-context__role" style={{ color: rc.accentColor }}>
+              {tAgents(`reviewTeams.members.${rc.definitionKey}.role`, {
+                defaultValue: rc.roleName,
+              })}
+            </div>
+            <div className="task-reviewer-context__description">
+              {tAgents(`reviewTeams.members.${rc.definitionKey}.description`, {
+                defaultValue: rc.description,
+              })}
+            </div>
+            <ul className="task-reviewer-context__responsibilities">
+              {rc.responsibilities.map((resp, idx) => (
+                <li key={idx}>
+                  {tAgents(`reviewTeams.members.${rc.definitionKey}.responsibilities.${idx}`, {
+                    defaultValue: resp,
+                  })}
+                </li>
+              ))}
+            </ul>
+          </div>
+        ) : (
+          hasRealPrompt && (
+          <div
+            className={`thinking-content-wrapper task-prompt-wrapper${promptScrollState.hasScroll ? ' has-scroll' : ''}${
+              promptScrollState.atTop ? ' at-top' : ''
+            }${promptScrollState.atBottom ? ' at-bottom' : ''}`}
+          >
+            <div
+              ref={promptContentRef}
+              className="thinking-content task-prompt-content expanded"
+              onScroll={checkPromptScrollState}
+            >
+              <Markdown
+                content={taskInput!.prompt}
+                isStreaming={false}
+                className="thinking-markdown task-prompt-markdown"
+              />
+            </div>
+          </div>
+          )
+        )}
+      </div>
+    );
+  };
+
+  if (isCancelAction) {
+    const cancelSessionId = linkedSubagentSessionId || 'Not provided';
+    return (
+      <CompactToolCard
+        status={status}
+        isExpanded={false}
+        className="task-cancel-card"
+        header={
+          <CompactToolCardHeader
+            icon={<ToolCardStatusSlot status={status} toolIcon={<Split size={16} />} />}
+            content={t('toolCards.taskTool.cancelSession', { sessionId: cancelSessionId })}
+          />
+        }
+      />
+    );
+  }
+
+  return (
+    <div ref={cardRootRef} data-tool-card-id={toolId ?? ''}>
+      <BaseToolCard
+        status={displayStatus}
+        isExpanded={displayIsExpanded}
+        onClick={isCancelAction ? undefined : handleCardClick}
+        className="task-tool-display"
+        header={renderHeader()}
+        expandedContent={isCancelAction ? null : renderExpandedContent()}
+        headerExpandAffordance={showHeaderExpandHint}
+        isFailed={isFailed}
+        requiresConfirmation={needsConfirmation}
+      />
+    </div>
+  );
+};

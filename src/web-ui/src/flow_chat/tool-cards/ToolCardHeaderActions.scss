@@ -1,0 +1,31 @@
+.tool-card-header-actions {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 2px;
+  flex-shrink: 0;
+
+  &:empty {
+    display: none;
+  }
+}
+
+.tool-card-header-action.icon-btn--xs {
+  width: 18px;
+  height: 18px;
+  border-radius: 4px;
+  color: var(--color-text-muted);
+
+  svg {
+    width: 12px;
+    height: 12px;
+  }
+}
+
+.tool-card-copy-action {
+  color: var(--color-text-muted);
+
+  &.copied {
+    color: var(--color-success);
+  }
+}

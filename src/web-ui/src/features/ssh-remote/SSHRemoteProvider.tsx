@@ -1,0 +1,912 @@
+/**
+ * SSH Remote Feature - React Context Provider
+ */
+import React, { useState, useCallback, useEffect, useRef } from 'react';
+import { createLogger } from '@/shared/utils/logger';
+import { workspaceManager } from '@/infrastructure/services/business/workspaceManager';
+import { WorkspaceKind } from '@/shared/types/global-state';
+import type { SSHConnectionConfig, RemoteWorkspace } from './types';
+import { sshApi } from './sshApi';
+import { flowChatStore } from '@/flow_chat/store/FlowChatStore';
+import { ACPClientAPI } from '@/infrastructure/api/service-api/ACPClientAPI';
+import { normalizeRemoteWorkspacePath } from '@/shared/utils/pathUtils';
+import { notificationService } from '@/shared/notification-system';
+import { isPeerDeviceModeActive } from '@/infrastructure/peer-device/peerModeFlag';
+import {
+  SSHContext,
+  type ConnectionStatus,
+  type SSHContextValue,
+} from './SSHRemoteContext';
+import {
+  REMOTE_WORKSPACE_RECONNECT_TIMEOUT_MS,
+  reconnectUntilDeadline,
+  remoteReconnectTimeoutSeconds,
+} from './remoteWorkspaceReconnect';
+
+const log = createLogger('SSHRemoteProvider');
+const pendingAcpCapabilityRefreshes = new Set<string>();
+const RECONNECT_TIMEOUT_SECONDS = remoteReconnectTimeoutSeconds();
+
+function refreshRemoteAcpCapabilities(connectionId: string): void {
+  const normalized = connectionId.trim();
+  if (!normalized || pendingAcpCapabilityRefreshes.has(normalized)) {
+    return;
+  }
+
+  pendingAcpCapabilityRefreshes.add(normalized);
+  void ACPClientAPI.probeClientRequirements({
+    force: true,
+    remoteConnectionId: normalized,
+  })
+    .catch(error => {
+      log.warn('Failed to refresh remote ACP capabilities', { connectionId: normalized, error });
+    })
+    .finally(() => {
+      pendingAcpCapabilityRefreshes.delete(normalized);
+    });
+}
+
+function getActiveRemoteWorkspaceForConnection(connectionId: string): RemoteWorkspace | null {
+  const normalizedConnectionId = connectionId.trim();
+  if (!normalizedConnectionId) {
+    return null;
+  }
+
+  const state = workspaceManager.getState();
+  const activeWorkspace = state.activeWorkspaceId
+    ? state.openedWorkspaces.get(state.activeWorkspaceId)
+    : null;
+
+  if (
+    !activeWorkspace ||
+    activeWorkspace.workspaceKind !== WorkspaceKind.Remote ||
+    (activeWorkspace.connectionId ?? '').trim() !== normalizedConnectionId
+  ) {
+    return null;
+  }
+
+  return {
+    connectionId: normalizedConnectionId,
+    connectionName: activeWorkspace.connectionName?.trim() || 'Remote',
+    remotePath: normalizeRemoteWorkspacePath(activeWorkspace.rootPath),
+    sshHost: activeWorkspace.sshHost?.trim() || undefined,
+  };
+}
+
+/** Match opened `WorkspaceInfo` so list_sessions maps to ~/.bitfun/remote_ssh/... */
+function sshHostForRemoteWorkspace(connectionId: string, remotePath: string): string | undefined {
+  const norm = normalizeRemoteWorkspacePath(remotePath);
+  const cid = connectionId.trim();
+  for (const w of workspaceManager.getState().openedWorkspaces.values()) {
+    if (w.workspaceKind !== WorkspaceKind.Remote) continue;
+    if ((w.connectionId ?? '').trim() !== cid) continue;
+    if (normalizeRemoteWorkspacePath(w.rootPath) === norm) {
+      const h = w.sshHost?.trim();
+      if (h) return h;
+    }
+  }
+  return undefined;
+}
+
+/** After parallel reconnects: prefer the user's active remote workspace, else last in sidebar order (matches legacy serial last-write). */
+function pickGlobalRemoteAfterReconnect(
+  connected: Array<{ workspace: RemoteWorkspace; connectionId: string }>,
+  orderedList: RemoteWorkspace[]
+): { workspace: RemoteWorkspace; connectionId: string } | null {
+  if (connected.length === 0) return null;
+  const st = workspaceManager.getState();
+  const aid = st.activeWorkspaceId;
+  if (aid) {
+    const aw = st.openedWorkspaces.get(aid);
+    if (aw && aw.workspaceKind === WorkspaceKind.Remote && aw.connectionId) {
+      const arp = normalizeRemoteWorkspacePath(aw.rootPath);
+      const hit = connected.find(
+        c =>
+          c.connectionId === aw.connectionId &&
+          normalizeRemoteWorkspacePath(c.workspace.remotePath) === arp
+      );
+      if (hit) return hit;
+    }
+  }
+  for (let i = orderedList.length - 1; i >= 0; i--) {
+    const ws = orderedList[i];
+    const hit = connected.find(
+      c =>
+        c.connectionId === ws.connectionId &&
+        normalizeRemoteWorkspacePath(c.workspace.remotePath) ===
+          normalizeRemoteWorkspacePath(ws.remotePath)
+    );
+    if (hit) return hit;
+  }
+  return connected[connected.length - 1] ?? null;
+}
+
+interface SSHRemoteProviderProps {
+  children: React.ReactNode;
+}
+
+export const SSHRemoteProvider: React.FC<SSHRemoteProviderProps> = ({ children }) => {
+  const [status, setStatus] = useState<ConnectionStatus>('disconnected');
+  const [isConnected, setIsConnected] = useState(false);
+  const [isConnecting, setIsConnecting] = useState(false);
+  const [connectionId, setConnectionId] = useState<string | null>(null);
+  const [connectionConfig, setConnectionConfig] = useState<SSHConnectionConfig | null>(null);
+  const [remoteWorkspace, setRemoteWorkspace] = useState<RemoteWorkspace | null>(null);
+  const [showConnectionDialog, setShowConnectionDialog] = useState(false);
+  const [showFileBrowser, setShowFileBrowser] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [connectionError, setConnectionError] = useState<string | null>(null);
+  /** Fallback only when home cannot be resolved (never use literal `~` for SFTP). */
+  const [remoteFileBrowserInitialPath, setRemoteFileBrowserInitialPath] = useState('/tmp');
+  // Per-workspace connection statuses (keyed by connectionId)
+  const [workspaceStatuses, setWorkspaceStatuses] = useState<Record<string, ConnectionStatus>>({});
+  const heartbeatInterval = useRef<number | null>(null);
+  const workspaceStatusTimeouts = useRef<Map<string, number>>(new Map());
+  const workspaceStatusesRef = useRef<Record<string, ConnectionStatus>>({});
+  const remoteWorkspaceRef = useRef<RemoteWorkspace | null>(null);
+  const startHeartbeatRef = useRef<(connId: string) => void>(() => {});
+  const checkRemoteWorkspaceRef = useRef<() => Promise<void>>(async () => {});
+
+  workspaceStatusesRef.current = workspaceStatuses;
+  remoteWorkspaceRef.current = remoteWorkspace;
+
+  const setWorkspaceStatus = useCallback((connId: string, st: ConnectionStatus) => {
+    const existingTimeout = workspaceStatusTimeouts.current.get(connId);
+    if (existingTimeout !== undefined) {
+      window.clearTimeout(existingTimeout);
+      workspaceStatusTimeouts.current.delete(connId);
+    }
+
+    if (st === 'connecting') {
+      const timeoutId = window.setTimeout(() => {
+        workspaceStatusTimeouts.current.delete(connId);
+
+        // Peer Device Mode: the peer owns SSH connections. Never run the
+        // controller-side timeout removal — it would route removal invokes to
+        // the peer and delete its workspaces.
+        if (isPeerDeviceModeActive()) {
+          setWorkspaceStatuses(prev =>
+            prev[connId] === 'connecting' ? { ...prev, [connId]: 'connected' } : prev
+          );
+          return;
+        }
+
+        if (workspaceStatusesRef.current[connId] !== 'connecting') {
+          return;
+        }
+
+        setWorkspaceStatuses(prev => {
+          if (prev[connId] !== 'connecting') {
+            return prev;
+          }
+          return { ...prev, [connId]: 'error' };
+        });
+
+        const openedRemoteWorkspaces: RemoteWorkspace[] = Array.from(workspaceManager.getState().openedWorkspaces.values())
+          .filter(workspace =>
+            workspace.workspaceKind === WorkspaceKind.Remote &&
+            (workspace.connectionId ?? '').trim() === connId
+          )
+          .map(workspace => ({
+            connectionId: connId,
+            connectionName: workspace.connectionName?.trim() || 'Remote',
+            remotePath: normalizeRemoteWorkspacePath(workspace.rootPath),
+            sshHost: workspace.sshHost?.trim() || undefined,
+          }));
+
+        const activeRemoteWorkspace = remoteWorkspaceRef.current;
+        if (
+          activeRemoteWorkspace &&
+          activeRemoteWorkspace.connectionId === connId &&
+          !openedRemoteWorkspaces.some(
+            workspace =>
+              normalizeRemoteWorkspacePath(workspace.remotePath) ===
+              normalizeRemoteWorkspacePath(activeRemoteWorkspace.remotePath)
+          )
+        ) {
+          openedRemoteWorkspaces.push(activeRemoteWorkspace);
+        }
+
+        const pathList = openedRemoteWorkspaces
+          .map(workspace => normalizeRemoteWorkspacePath(workspace.remotePath))
+          .filter(Boolean)
+          .join(', ');
+
+        notificationService.error(
+          pathList
+            ? `Remote workspace connection timed out after ${RECONNECT_TIMEOUT_SECONDS} seconds and was removed: ${pathList}`
+            : `Remote workspace connection timed out after ${RECONNECT_TIMEOUT_SECONDS} seconds.`,
+          { duration: 8000 }
+        );
+
+        void Promise.allSettled(
+          openedRemoteWorkspaces.map(workspace =>
+            Promise.allSettled([
+              workspaceManager.removeRemoteWorkspace(workspace.connectionId, workspace.remotePath),
+              sshApi.removeWorkspace(workspace.connectionId, workspace.remotePath),
+            ])
+          )
+        );
+      }, REMOTE_WORKSPACE_RECONNECT_TIMEOUT_MS);
+
+      workspaceStatusTimeouts.current.set(connId, timeoutId);
+    }
+
+    setWorkspaceStatuses(prev => ({ ...prev, [connId]: st }));
+  }, []);
+
+  const clearWorkspaceStatus = useCallback((connId: string) => {
+    const existingTimeout = workspaceStatusTimeouts.current.get(connId);
+    if (existingTimeout !== undefined) {
+      window.clearTimeout(existingTimeout);
+      workspaceStatusTimeouts.current.delete(connId);
+    }
+    setWorkspaceStatuses(prev => {
+      if (!(connId in prev)) return prev;
+      const next = { ...prev };
+      delete next[connId];
+      return next;
+    });
+  }, []);
+
+  const forgetRemoteWorkspace = useCallback(async (workspace: RemoteWorkspace) => {
+    if (isPeerDeviceModeActive()) {
+      // Removal invokes route to the peer while controlling it; the peer owns
+      // its remote workspaces, so the controller must never delete them.
+      log.info('Skipping remote workspace removal while peer device mode is active', {
+        connectionId: workspace.connectionId,
+        remotePath: workspace.remotePath,
+      });
+      return;
+    }
+    log.info('Forgetting remote workspace restore entry', {
+      connectionId: workspace.connectionId,
+      remotePath: workspace.remotePath,
+    });
+    clearWorkspaceStatus(workspace.connectionId);
+    await Promise.allSettled([
+      workspaceManager.removeRemoteWorkspace(workspace.connectionId, workspace.remotePath),
+      sshApi.removeWorkspace(workspace.connectionId, workspace.remotePath),
+    ]);
+  }, [clearWorkspaceStatus]);
+
+  const reportRemoteWorkspaceReconnectFailure = useCallback((workspace: RemoteWorkspace) => {
+    if (isPeerDeviceModeActive()) {
+      return;
+    }
+    const path = normalizeRemoteWorkspacePath(workspace.remotePath);
+    notificationService.error(
+      `Remote workspace could not reconnect within ${RECONNECT_TIMEOUT_SECONDS} seconds and was removed: ${path}`,
+      { duration: 8000 }
+    );
+  }, []);
+
+  // Cleanup heartbeat on unmount
+  useEffect(() => {
+    const statusTimeouts = workspaceStatusTimeouts.current;
+    return () => {
+      if (heartbeatInterval.current) {
+        clearInterval(heartbeatInterval.current);
+      }
+      for (const timeoutId of statusTimeouts.values()) {
+        window.clearTimeout(timeoutId);
+      }
+      statusTimeouts.clear();
+    };
+  }, []);
+
+  // Try to reconnect a single remote workspace until the reconnect budget expires.
+  // Fast connection failures must keep retrying inside the budget; only then remove.
+  const tryReconnectWithRetry = useCallback(async (
+    workspace: RemoteWorkspace,
+    timeoutMs: number = REMOTE_WORKSPACE_RECONNECT_TIMEOUT_MS
+  ): Promise<false | { workspace: RemoteWorkspace; connectionId: string }> => {
+    log.info('tryReconnectWithRetry: starting', { workspace, timeoutMs });
+
+    const savedConnections = await sshApi.listSavedConnections();
+    const savedConn = savedConnections.find(c => c.id === workspace.connectionId);
+
+    if (!savedConn) {
+      log.warn('No saved connection found for workspace', { connectionId: workspace.connectionId });
+      return false;
+    }
+
+    // Determine auth method from tagged enum (password uses empty string; backend fills from vault)
+    let authMethod: SSHConnectionConfig['auth'] | null = null;
+    if (savedConn.authType.type === 'PrivateKey') {
+      authMethod = { type: 'PrivateKey', keyPath: savedConn.authType.keyPath };
+    } else {
+      // Caller must only invoke password reconnect when vault has a password (see checkRemoteWorkspace).
+      authMethod = { type: 'Password', password: '' };
+    }
+
+    const reconnectConfig: SSHConnectionConfig = {
+      id: savedConn.id,
+      name: savedConn.name,
+      host: savedConn.host,
+      port: savedConn.port,
+      username: savedConn.username,
+      auth: authMethod,
+    };
+
+    return reconnectUntilDeadline({
+      totalTimeoutMs: timeoutMs,
+      attempt: async (attemptTimeoutMs, attempt) => {
+        if (isPeerDeviceModeActive()) {
+          // Abort controller-side reconnects: connecting now would open an SSH
+          // session on the peer with controller-local credentials.
+          throw new Error('Peer device mode activated');
+        }
+        log.info(`Attempting to reconnect (attempt ${attempt})`, {
+          connectionId: workspace.connectionId,
+          host: reconnectConfig.host,
+          attemptTimeoutMs,
+        });
+
+        const connectWithTimeout = async (): Promise<{ connectionId: string }> => {
+          const result = await sshApi.connect(reconnectConfig);
+          if (!result.success || !result.connectionId) {
+            throw new Error(result.error || 'Connection failed');
+          }
+          return { connectionId: result.connectionId };
+        };
+
+        let timeoutId: number | undefined;
+        try {
+          const timeoutPromise = new Promise<never>((_, reject) => {
+            timeoutId = window.setTimeout(
+              () => reject(new Error('Connection timeout')),
+              attemptTimeoutMs
+            );
+          });
+
+          const result = await Promise.race([connectWithTimeout(), timeoutPromise]);
+
+          // Successfully connected — open the workspace in SSH state manager
+          await sshApi.openWorkspace(result.connectionId, workspace.remotePath);
+          const reconnectedWorkspace: RemoteWorkspace = {
+            connectionId: result.connectionId,
+            connectionName: savedConn.name,
+            remotePath: workspace.remotePath,
+            sshHost: reconnectConfig.host?.trim() || workspace.sshHost?.trim() || undefined,
+          };
+
+          log.info('Successfully reconnected to remote workspace', {
+            originalConnectionId: workspace.connectionId,
+            newConnectionId: result.connectionId,
+          });
+          return { workspace: reconnectedWorkspace, connectionId: result.connectionId };
+        } catch (err) {
+          log.warn(`Reconnect attempt ${attempt} failed`, {
+            connectionId: workspace.connectionId,
+            error: err,
+          });
+          throw err;
+        } finally {
+          if (timeoutId !== undefined) {
+            window.clearTimeout(timeoutId);
+          }
+        }
+      },
+    });
+  }, []);
+
+  const statusRef = useRef<ConnectionStatus>(status);
+  statusRef.current = status;
+
+  const handleConnectionLost = useCallback((connId: string) => {
+    log.warn('Remote connection lost, attempting auto-reconnect...');
+    setStatus('error');
+    setWorkspaceStatus(connId, 'error');
+    setConnectionError('Connection lost. Attempting to reconnect...');
+    setIsConnected(false);
+    if (heartbeatInterval.current) {
+      clearInterval(heartbeatInterval.current);
+      heartbeatInterval.current = null;
+    }
+    // Attempt auto-reconnect in background
+    void checkRemoteWorkspaceRef.current();
+  }, [setWorkspaceStatus]);
+
+  const startHeartbeat = useCallback((connId: string) => {
+    if (heartbeatInterval.current) {
+      clearInterval(heartbeatInterval.current);
+    }
+
+    // Peer Device Mode routes product invokes to the peer; controller-local SSH
+    // heartbeats must not flood HostInvoke with unrelated connection checks.
+    if (isPeerDeviceModeActive()) {
+      heartbeatInterval.current = null;
+      return;
+    }
+
+    heartbeatInterval.current = window.setInterval(async () => {
+      try {
+        const connected = await sshApi.isConnected(connId);
+        if (!connected && statusRef.current === 'connected') {
+          handleConnectionLost(connId);
+        }
+      } catch {
+        // Ignore heartbeat errors
+      }
+    }, 30000);
+  }, [handleConnectionLost]);
+  startHeartbeatRef.current = startHeartbeat;
+
+  const checkRemoteWorkspace = useCallback(async () => {
+    if (isPeerDeviceModeActive()) {
+      log.info('checkRemoteWorkspace: skipped while peer device mode is active');
+      return;
+    }
+    try {
+      // ── Collect all remote workspaces to reconnect ──────────────────────
+      const wmState0 = workspaceManager.getState();
+      const allWorkspaces = Array.from(wmState0.openedWorkspaces.values());
+      const openedRemote = allWorkspaces.filter(
+        ws => ws.workspaceKind === WorkspaceKind.Remote && ws.connectionId
+      );
+
+      // Also check legacy single-workspace persisted in app_state.
+      // Startup normally receives this in the workspace snapshot, so avoid a
+      // second early invoke unless the snapshot was unavailable.
+      let legacyWorkspace: RemoteWorkspace | null = null;
+      const startupLegacyWorkspace = workspaceManager.consumeStartupLegacyRemoteWorkspaceSnapshot();
+      if (startupLegacyWorkspace.available) {
+        legacyWorkspace = startupLegacyWorkspace.workspace;
+      } else {
+        try {
+          legacyWorkspace = await sshApi.getWorkspaceInfo();
+        } catch {
+          // Ignore
+        }
+      }
+
+      // Key by connection + path so two servers at the same remote path stay distinct.
+      const remoteWorkspaceDedupKey = (cid: string, rp: string) => `${cid}\n${rp}`;
+      const toReconnect = new Map<string, RemoteWorkspace>();
+
+      for (const ws of openedRemote) {
+        if (!ws.connectionId) continue;
+        const rp = normalizeRemoteWorkspacePath(ws.rootPath);
+        toReconnect.set(remoteWorkspaceDedupKey(ws.connectionId, rp), {
+          connectionId: ws.connectionId,
+          connectionName: ws.connectionName || 'Remote',
+          remotePath: rp,
+          sshHost: ws.sshHost?.trim() || undefined,
+        });
+      }
+
+      // Add legacy workspace if it isn't already covered
+      if (legacyWorkspace?.connectionId) {
+        const leg = normalizeRemoteWorkspacePath(legacyWorkspace.remotePath);
+        const k = remoteWorkspaceDedupKey(legacyWorkspace.connectionId, leg);
+        if (!toReconnect.has(k)) {
+          toReconnect.set(k, { ...legacyWorkspace, remotePath: leg });
+        }
+      }
+
+      if (toReconnect.size === 0) {
+        log.info('checkRemoteWorkspace: no remote workspaces to reconnect');
+        return;
+      }
+
+      log.info(`checkRemoteWorkspace: found ${toReconnect.size} remote workspace(s)`);
+
+      const reconnectList = Array.from(toReconnect.values());
+      const savedConnectionsList = await sshApi.listSavedConnections();
+
+      const skipPasswordAutoReconnect = new Set<string>();
+      const missingSavedConnections = new Set<string>();
+      for (const ws of reconnectList) {
+        const sc = savedConnectionsList.find(c => c.id === ws.connectionId);
+        if (!sc) {
+          missingSavedConnections.add(ws.connectionId);
+          continue;
+        }
+        if (sc?.authType.type === 'Password') {
+          let hasVault = false;
+          try {
+            hasVault = await sshApi.hasStoredPassword(sc.id);
+          } catch {
+            hasVault = false;
+          }
+          if (!hasVault) {
+            skipPasswordAutoReconnect.add(ws.connectionId);
+          }
+        }
+      }
+
+      const initialStatuses: Record<string, ConnectionStatus> = {};
+      for (const [, ws] of toReconnect) {
+        initialStatuses[ws.connectionId] =
+          skipPasswordAutoReconnect.has(ws.connectionId) ||
+          missingSavedConnections.has(ws.connectionId)
+          ? 'error'
+          : 'connecting';
+      }
+      setWorkspaceStatuses(prev => ({ ...prev, ...initialStatuses }));
+
+      type ConnectedEntry = { workspace: RemoteWorkspace; connectionId: string };
+      const results = await Promise.all(
+        reconnectList.map(async workspace => {
+          const isAlreadyOpened = openedRemote.some(
+            ws =>
+              ws.connectionId === workspace.connectionId &&
+              normalizeRemoteWorkspacePath(ws.rootPath) ===
+                normalizeRemoteWorkspacePath(workspace.remotePath)
+          );
+
+          const alreadyConnected = await sshApi.isConnected(workspace.connectionId).catch(() => false);
+
+          if (alreadyConnected) {
+            log.info('Remote workspace already connected', { connectionId: workspace.connectionId });
+            await sshApi.openWorkspace(workspace.connectionId, workspace.remotePath).catch(() => {});
+            setWorkspaceStatus(workspace.connectionId, 'connected');
+            refreshRemoteAcpCapabilities(workspace.connectionId);
+
+            if (!isAlreadyOpened) {
+              await workspaceManager.openRemoteWorkspace(workspace).catch(() => {});
+            }
+            void flowChatStore
+              .initializeFromDisk(
+                workspace.remotePath,
+                workspace.connectionId,
+                workspace.sshHost?.trim() ||
+                  sshHostForRemoteWorkspace(workspace.connectionId, workspace.remotePath),
+                'ssh_remote_auto_restore_existing'
+              )
+              .catch(() => {});
+
+            return { ok: true as const, connected: { workspace, connectionId: workspace.connectionId } };
+          }
+
+          if (missingSavedConnections.has(workspace.connectionId)) {
+            log.info('Skipping remote workspace restore because its saved connection is gone', {
+              connectionId: workspace.connectionId,
+              remotePath: workspace.remotePath,
+            });
+            await forgetRemoteWorkspace(workspace);
+            return { ok: false as const };
+          }
+
+          if (skipPasswordAutoReconnect.has(workspace.connectionId)) {
+            log.info('Skipping auto-reconnect: password auth but no stored password', {
+              connectionId: workspace.connectionId,
+            });
+            await forgetRemoteWorkspace(workspace);
+            return { ok: false as const };
+          }
+
+          log.info('Remote workspace disconnected, attempting auto-reconnect', {
+            connectionId: workspace.connectionId,
+            remotePath: workspace.remotePath,
+          });
+          const result = await tryReconnectWithRetry(workspace);
+
+          if (result !== false) {
+            log.info('Reconnection successful', { newConnectionId: result.connectionId });
+            setWorkspaceStatus(result.workspace.connectionId, 'connected');
+            refreshRemoteAcpCapabilities(result.connectionId);
+
+            if (!isAlreadyOpened) {
+              await workspaceManager.openRemoteWorkspace(result.workspace).catch(() => {});
+            }
+            void flowChatStore
+              .initializeFromDisk(
+                result.workspace.remotePath,
+                result.workspace.connectionId,
+                result.workspace.sshHost?.trim() ||
+                  sshHostForRemoteWorkspace(
+                    result.workspace.connectionId,
+                    result.workspace.remotePath
+                  ),
+                'ssh_remote_auto_restore_reconnected'
+              )
+              .catch(() => {});
+
+            return {
+              ok: true as const,
+              connected: { workspace: result.workspace, connectionId: result.connectionId },
+            };
+          }
+
+          const savedConn = savedConnectionsList.find(c => c.id === workspace.connectionId);
+          log.warn('Auto-reconnect failed', {
+            connectionId: workspace.connectionId,
+            auth: savedConn?.authType.type,
+          });
+          reportRemoteWorkspaceReconnectFailure(workspace);
+          await forgetRemoteWorkspace(workspace);
+          return { ok: false as const };
+        })
+      );
+
+      const connectedEntries: ConnectedEntry[] = results
+        .filter((r): r is { ok: true; connected: ConnectedEntry } => r.ok)
+        .map(r => r.connected);
+
+      const chosen = pickGlobalRemoteAfterReconnect(connectedEntries, reconnectList);
+      if (chosen) {
+        setIsConnected(true);
+        setConnectionId(chosen.connectionId);
+        setRemoteWorkspace(chosen.workspace);
+        startHeartbeatRef.current(chosen.connectionId);
+      }
+    } catch (e) {
+      log.error('checkRemoteWorkspace failed', e);
+    }
+  }, [
+    forgetRemoteWorkspace,
+    reportRemoteWorkspaceReconnectFailure,
+    setWorkspaceStatus,
+    tryReconnectWithRetry,
+  ]);
+  checkRemoteWorkspaceRef.current = checkRemoteWorkspace;
+
+  // Wait for workspace manager to finish loading, then check remote workspaces
+  useEffect(() => {
+    const state = workspaceManager.getState();
+    if (!state.loading) {
+      void checkRemoteWorkspace();
+      return;
+    }
+
+    const unsubscribe = workspaceManager.addEventListener(event => {
+      if (event.type === 'workspace:loading' && !event.loading) {
+        unsubscribe();
+        void checkRemoteWorkspace();
+      }
+    });
+
+    return unsubscribe;
+  }, [checkRemoteWorkspace]);
+
+  // Pause controller SSH heartbeats / reconnect while Peer Device Mode is active.
+  useEffect(() => {
+    const onPeerModeChanged = (event: Event) => {
+      const detail = (event as CustomEvent<{ active?: boolean }>).detail;
+      if (detail?.active === true) {
+        if (heartbeatInterval.current) {
+          clearInterval(heartbeatInterval.current);
+          heartbeatInterval.current = null;
+        }
+        // Cancel pending controller-side reconnect timeouts; the peer owns the
+        // SSH lifecycle now, so these must never fire their removal path.
+        for (const timeoutId of workspaceStatusTimeouts.current.values()) {
+          window.clearTimeout(timeoutId);
+        }
+        workspaceStatusTimeouts.current.clear();
+        log.info('Paused SSH heartbeat while peer device mode is active');
+      }
+    };
+    window.addEventListener('peer-mode:changed', onPeerModeChanged);
+    return () => window.removeEventListener('peer-mode:changed', onPeerModeChanged);
+  }, []);
+
+  useEffect(() => {
+    return workspaceManager.addEventListener(event => {
+      const workspace =
+        'workspace' in event && event.workspace?.workspaceKind === WorkspaceKind.Remote
+          ? event.workspace
+          : null;
+      if (!workspace) {
+        return;
+      }
+      const connId = workspace.connectionId?.trim();
+      if (!connId) {
+        return;
+      }
+      if (isPeerDeviceModeActive()) {
+        // Peer Device Mode: the peer owns the SSH connection lifecycle. Mirror
+        // its opened remote workspaces as connected and never run the
+        // controller-side reconnect/timeout removal path — those invokes route
+        // to the peer and would delete the peer's workspace.
+        if (workspaceStatusesRef.current[connId] !== 'connected') {
+          setWorkspaceStatus(connId, 'connected');
+        }
+        return;
+      }
+      if (!workspaceStatusesRef.current[connId]) {
+        setWorkspaceStatus(connId, 'connecting');
+      }
+      void checkRemoteWorkspaceRef.current();
+    });
+  }, [setWorkspaceStatus]);
+
+  const connect = useCallback(async (
+    _connId: string,
+    config: SSHConnectionConfig,
+    options?: { browseAfterConnect?: boolean }
+  ) => {
+    log.debug('SSH connect called', { host: config.host });
+    setStatus('connecting');
+    setIsConnecting(true);
+    setConnectionError(null);
+    setError(null);
+
+    try {
+      const result = await sshApi.connect(config);
+      log.debug('SSH connect result', { success: result.success, connectionId: result.connectionId, error: result.error });
+
+      if (result.success && result.connectionId) {
+        log.info('SSH connection successful', { connectionId: result.connectionId });
+        refreshRemoteAcpCapabilities(result.connectionId);
+        let home = result.serverInfo?.homeDir?.trim();
+        if (!home && result.connectionId) {
+          try {
+            const info = await sshApi.getServerInfo(result.connectionId);
+            home = info?.homeDir?.trim();
+          } catch {
+            /* non-desktop or probe skipped */
+          }
+        }
+        const activeRemoteWorkspace = getActiveRemoteWorkspaceForConnection(result.connectionId);
+        const homePath =
+          home && home.length > 0 ? normalizeRemoteWorkspacePath(home) : '/tmp';
+
+        if (options?.browseAfterConnect) {
+          if (activeRemoteWorkspace) {
+            setRemoteWorkspace(activeRemoteWorkspace);
+            setWorkspaceStatus(result.connectionId, 'connected');
+          } else {
+            setRemoteWorkspace(null);
+          }
+          setRemoteFileBrowserInitialPath(homePath);
+          setShowFileBrowser(true);
+        } else if (activeRemoteWorkspace) {
+          try {
+            await sshApi.openWorkspace(result.connectionId, activeRemoteWorkspace.remotePath);
+            setRemoteWorkspace(activeRemoteWorkspace);
+            setRemoteFileBrowserInitialPath(activeRemoteWorkspace.remotePath);
+            setWorkspaceStatus(result.connectionId, 'connected');
+            setShowFileBrowser(false);
+          } catch (error) {
+            log.warn('Failed to reactivate active remote workspace after connect', {
+              connectionId: result.connectionId,
+              remotePath: activeRemoteWorkspace.remotePath,
+              error,
+            });
+            setRemoteWorkspace(null);
+            setRemoteFileBrowserInitialPath(homePath);
+            setShowFileBrowser(true);
+          }
+        } else {
+          setRemoteWorkspace(null);
+          setRemoteFileBrowserInitialPath(homePath);
+          setShowFileBrowser(true);
+        }
+        setStatus('connected');
+        setIsConnected(true);
+        setConnectionId(result.connectionId);
+        setConnectionConfig(config);
+        setShowConnectionDialog(false);
+        startHeartbeat(result.connectionId);
+      } else {
+        log.warn('SSH connection failed', { error: result.error });
+        setStatus('error');
+        const errorMsg = result.error || 'Connection failed';
+        setConnectionError(errorMsg);
+        throw new Error(errorMsg);
+      }
+    } catch (e) {
+      log.error('SSH connection exception', e);
+      if (e instanceof Error) {
+        setStatus('error');
+        setConnectionError(e.message);
+        throw e;
+      }
+      const errorMsg = e instanceof Error ? e.message : 'Connection failed';
+      setStatus('error');
+      setConnectionError(errorMsg);
+      throw new Error(errorMsg);
+    } finally {
+      setIsConnecting(false);
+    }
+  }, [setWorkspaceStatus, startHeartbeat]);
+
+  const disconnect = useCallback(async () => {
+    const currentRemoteWorkspace = remoteWorkspace;
+    const currentConnectionId = connectionId;
+
+    if (heartbeatInterval.current) {
+      clearInterval(heartbeatInterval.current);
+      heartbeatInterval.current = null;
+    }
+
+    if (currentConnectionId) {
+      try {
+        await sshApi.disconnect(currentConnectionId);
+      } catch {
+        // Ignore disconnect errors
+      }
+    }
+    setStatus('disconnected');
+    setConnectionId(null);
+    setConnectionConfig(null);
+    setRemoteWorkspace(null);
+    setIsConnected(false);
+    setShowFileBrowser(false);
+    setRemoteFileBrowserInitialPath('/tmp');
+
+    if (currentRemoteWorkspace) {
+      setWorkspaceStatus(currentRemoteWorkspace.connectionId, 'disconnected');
+      try {
+        await workspaceManager.removeRemoteWorkspace(currentRemoteWorkspace.connectionId);
+      } catch {
+        // Ignore errors
+      }
+    }
+  }, [connectionId, remoteWorkspace, setWorkspaceStatus]);
+
+  const openWorkspace = useCallback(async (pingPath: string) => {
+    if (!connectionId) {
+      throw new Error('Not connected');
+    }
+    const connName = connectionConfig?.name || 'Remote';
+    const remotePath = normalizeRemoteWorkspacePath(pingPath);
+    await sshApi.openWorkspace(connectionId, remotePath);
+    const remoteWs = {
+      connectionId,
+      connectionName: connName,
+      remotePath,
+      sshHost: connectionConfig?.host?.trim() || undefined,
+    };
+    setRemoteWorkspace(remoteWs);
+    setShowFileBrowser(false);
+    setWorkspaceStatus(connectionId, 'connected');
+
+    await workspaceManager.openRemoteWorkspace(remoteWs);
+  }, [connectionId, connectionConfig, setWorkspaceStatus]);
+
+  const closeWorkspace = useCallback(async () => {
+    const currentRemoteWorkspace = remoteWorkspace;
+
+    try {
+      await sshApi.closeWorkspace();
+    } catch {
+      // Ignore errors
+    }
+    setRemoteWorkspace(null);
+    setShowFileBrowser(true);
+
+    if (currentRemoteWorkspace) {
+      setWorkspaceStatus(currentRemoteWorkspace.connectionId, 'disconnected');
+      try {
+        await workspaceManager.removeRemoteWorkspace(currentRemoteWorkspace.connectionId);
+      } catch {
+        // Ignore errors
+      }
+    }
+  }, [remoteWorkspace, setWorkspaceStatus]);
+
+  const clearError = useCallback(() => {
+    setError(null);
+    setConnectionError(null);
+  }, []);
+
+  const value: SSHContextValue = {
+    status,
+    isConnected,
+    isConnecting,
+    connectionId,
+    connectionConfig,
+    remoteWorkspace,
+    connectionError,
+    workspaceStatuses,
+    showConnectionDialog,
+    showFileBrowser,
+    error,
+    remoteFileBrowserInitialPath,
+    connect,
+    disconnect,
+    openWorkspace,
+    closeWorkspace,
+    setShowConnectionDialog,
+    setShowFileBrowser,
+    clearError,
+  };
+
+  return <SSHContext.Provider value={value}>{children}</SSHContext.Provider>;
+};
+
+export default SSHRemoteProvider;

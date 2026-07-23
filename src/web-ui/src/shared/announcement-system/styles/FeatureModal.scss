@@ -1,0 +1,375 @@
+@use '../../../component-library/styles/tokens' as *;
+
+// ─── Overlay backdrop ─────────────────────────────────────────────────────────
+.feature-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(var(--color-static-black-rgb), 0.55);
+  z-index: calc(#{$z-modal} + 10);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  animation: backdropIn 0.2s ease both;
+
+  &--exiting {
+    animation: backdropOut 0.2s ease both;
+  }
+}
+
+// ─── Modal shell ──────────────────────────────────────────────────────────────
+.feature-modal {
+  position: relative;
+  background: var(--color-bg-primary);
+  border-radius: $size-radius-lg;
+  border: 1px solid var(--border-base);
+  box-shadow: 0 24px 64px rgba(var(--color-static-black-rgb), 0.28);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  animation: modalIn 0.32s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+
+  &--exiting {
+    animation: modalOut 0.22s ease-in both;
+  }
+
+  // Fixed portrait sizes
+  &--sm  { width: min(380px, 90vw); height: min(520px, 90vh); }
+  &--md  { width: min(440px, 90vw); height: min(580px, 90vh); }
+  &--lg  { width: min(480px, 90vw); height: min(640px, 90vh); }
+  &--xl  { width: min(540px, 90vw); height: min(700px, 90vh); }
+
+  // ─── Close button ──────────────────────────────────────────────────────────
+  &__close {
+    position: absolute;
+    top: 14px;
+    right: 14px;
+    width: 28px;
+    height: 28px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    line-height: 0;
+    background: var(--color-bg-secondary);
+    border: 1px solid var(--border-base);
+    border-radius: 50%;
+    color: var(--color-text-muted);
+    cursor: pointer;
+    z-index: 1;
+    transition: all $motion-base $easing-standard;
+
+    svg { flex-shrink: 0; }
+
+    &:hover {
+      background: var(--color-bg-tertiary);
+      color: var(--color-text-primary);
+    }
+  }
+
+  // ─── Page viewport ─────────────────────────────────────────────────────────
+  &__pages {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    position: relative;
+
+    // Thin scrollbar
+    scrollbar-width: thin;
+    scrollbar-color: var(--border-base) transparent;
+    &::-webkit-scrollbar { width: 4px; }
+    &::-webkit-scrollbar-track { background: transparent; }
+    &::-webkit-scrollbar-thumb {
+      background: var(--border-base);
+      border-radius: 2px;
+    }
+  }
+
+  // ─── Footer navigation ─────────────────────────────────────────────────────
+  &__footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 24px 14px;
+    border-top: 1px solid var(--border-base);
+    background: var(--color-bg-primary);
+    flex-shrink: 0;
+  }
+
+  &__dots {
+    display: flex;
+    gap: 7px;
+    align-items: center;
+  }
+
+  &__dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--color-bg-tertiary);
+    border: 1px solid var(--border-base);
+    cursor: pointer;
+    transition: all $motion-base $easing-standard;
+
+    &--active {
+      width: 18px;
+      border-radius: 3px;
+      background: var(--color-accent-500);
+      border-color: var(--color-accent-500);
+    }
+
+    &:hover:not(&--active) {
+      background: var(--color-text-muted);
+    }
+  }
+
+  &__nav {
+    display: flex;
+    align-items: center;
+    gap: $size-gap-2;
+  }
+
+  &__nav-btn {
+    padding: 6px 18px;
+    border-radius: $size-radius-sm;
+    font-size: var(--font-size-xs);
+    font-weight: $font-weight-medium;
+    border: none;
+    cursor: pointer;
+    transition: all $motion-base $easing-standard;
+
+    &--prev {
+      background: transparent;
+      color: var(--color-text-secondary);
+      border: 1px solid var(--border-base);
+
+      &:hover {
+        background: var(--color-bg-secondary);
+        color: var(--color-text-primary);
+      }
+    }
+
+    &--next,
+    &--done {
+      background: var(--color-accent-500);
+      color: var(--color-static-white);
+      padding: 6px 22px;
+
+      &:hover { opacity: 0.9; }
+      &:active { transform: scale(0.97); }
+    }
+  }
+
+  // ─── "Don't show again" subtle link ────────────────────────────────────────
+  &__never {
+    font-size: 11px;
+    color: var(--color-text-muted);
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 0;
+    letter-spacing: 0.01em;
+    text-decoration: underline;
+    text-underline-offset: 2px;
+
+    &:hover { color: var(--color-text-secondary); }
+  }
+}
+
+// ─── Single page: news/editorial typography ───────────────────────────────────
+.feature-modal-page {
+  display: flex;
+  flex-direction: column;
+  padding: 0;
+
+  // Layout variants
+  &--text_only   { flex-direction: column; }
+  &--media_top   { flex-direction: column; }
+  &--media_left  { flex-direction: row; }
+  &--media_right { flex-direction: row-reverse; }
+
+  &--media_top .feature-modal-page__media {
+    width: 100%;
+    max-height: 220px;
+    overflow: hidden;
+    background: var(--color-bg-secondary);
+    flex-shrink: 0;
+
+    img, video { width: 100%; height: 100%; object-fit: cover; display: block; }
+  }
+
+  &--media_left .feature-modal-page__media,
+  &--media_right .feature-modal-page__media {
+    flex-shrink: 0;
+    width: 180px;
+    overflow: hidden;
+    background: var(--color-bg-secondary);
+  }
+
+  &--fullscreen_media {
+    .feature-modal-page__media {
+      width: 100%;
+      min-height: 300px;
+      flex-shrink: 0;
+    }
+    .feature-modal-page__text {
+      padding: 28px 32px 24px;
+    }
+  }
+
+  // ─── Text area: editorial layout ─────────────────────────────────────────
+  &__text {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-width: 0;
+    padding: 36px 32px 28px;
+  }
+
+  // Eyebrow label above the title — a short accent line + optional tag
+  &__eyebrow {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 14px;
+
+    &::before {
+      content: '';
+      display: block;
+      width: 28px;
+      height: 3px;
+      border-radius: 2px;
+      background: var(--color-accent-500);
+      flex-shrink: 0;
+    }
+  }
+
+  // Large display title
+  &__title {
+    margin: 0;
+    font-size: 22px;
+    font-weight: $font-weight-bold;
+    color: var(--color-text-primary);
+    line-height: 1.25;
+    letter-spacing: -0.03em;
+    // Tight, impactful — like a magazine headline
+  }
+
+  // Decorative rule between title and body
+  &__rule {
+    width: 100%;
+    height: 1px;
+    background: var(--border-base);
+    margin: 20px 0;
+    flex-shrink: 0;
+  }
+
+  // Body text: comfortable reading
+  &__body {
+    font-size: 13px;
+    color: var(--color-text-secondary);
+    line-height: 1.72;
+    flex: 1;
+
+    // First paragraph lead: slightly larger
+    p:first-child {
+      font-size: 13.5px;
+      color: var(--color-text-primary);
+      line-height: 1.65;
+      margin: 0 0 1em;
+    }
+
+    p {
+      margin: 0 0 0.85em;
+
+      &:last-child { margin-bottom: 0; }
+    }
+
+    // Inline code
+    code {
+      background: var(--color-bg-secondary);
+      border: 1px solid var(--border-base);
+      border-radius: $size-radius-sm;
+      padding: 1px 5px;
+      font-size: 0.87em;
+      font-family: $font-family-mono;
+      color: var(--color-text-primary);
+      white-space: nowrap;
+    }
+
+    strong {
+      color: var(--color-text-primary);
+      font-weight: $font-weight-semibold;
+    }
+
+    // Bullet lists (rendered as <p> with leading dash from markdown)
+    // Keyboard shortcut cheat-sheet tables
+    .md-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 0.5em 0 1em;
+      font-size: 12px;
+
+      th, td {
+        padding: 6px 12px;
+        text-align: left;
+        border: 1px solid var(--border-base);
+        line-height: 1.5;
+        vertical-align: middle;
+      }
+
+      thead th {
+        background: var(--color-bg-secondary);
+        font-weight: $font-weight-semibold;
+        color: var(--color-text-primary);
+        font-size: 11px;
+        letter-spacing: 0.03em;
+        text-transform: uppercase;
+      }
+
+      tbody tr:nth-child(even) {
+        background: color-mix(in srgb, var(--color-bg-secondary) 50%, transparent);
+      }
+    }
+  }
+}
+
+// ─── Media renderer ───────────────────────────────────────────────────────────
+.announcement-media {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+
+  video, img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+  }
+
+  &__placeholder {
+    width: 100%;
+    height: 100%;
+    min-height: 120px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--color-text-muted);
+    font-size: 13px;
+  }
+}
+
+// ─── Keyframes ────────────────────────────────────────────────────────────────
+@keyframes backdropIn  { from { opacity: 0; } to { opacity: 1; } }
+@keyframes backdropOut { from { opacity: 1; } to { opacity: 0; } }
+
+@keyframes modalIn {
+  from { opacity: 0; transform: scale(0.9) translateY(16px); }
+  to   { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+@keyframes modalOut {
+  from { opacity: 1; transform: scale(1); }
+  to   { opacity: 0; transform: scale(0.93); }
+}

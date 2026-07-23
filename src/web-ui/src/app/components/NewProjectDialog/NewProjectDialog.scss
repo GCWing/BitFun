@@ -1,0 +1,434 @@
+/**
+ * New Project Dialog Styles
+ */
+@use '../../../component-library/styles/tokens.scss' as *;
+@use '../../../component-library/styles/btn-primary-tokens.scss' as btn-primary;
+
+// ==================== Dialog Container ====================
+
+.new-project-dialog {
+  display: flex;
+  flex-direction: column;
+  width: 460px;
+  max-width: 100%;
+
+  // ==================== Hero Section ====================
+  
+  &__hero {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 8px 24px 24px;
+    text-align: center;
+    position: relative;
+    overflow: hidden;
+  }
+
+  &__icon-wrapper {
+    position: relative;
+    z-index: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 10px;
+    animation: new-project-icon-enter 0.4s ease-out;
+
+    svg {
+      color: var(--color-accent-500);
+    }
+  }
+
+  @keyframes new-project-icon-enter {
+    from {
+      opacity: 0;
+      transform: scale(0.8);
+    }
+    to {
+      opacity: 1;
+      transform: scale(1);
+    }
+  }
+
+  &__title {
+    font-size: 18px;
+    font-weight: 600;
+    color: var(--color-text-primary);
+    margin: 0 0 6px 0;
+    position: relative;
+    z-index: 1;
+  }
+
+  &__subtitle {
+    font-size: 12px;
+    color: var(--color-text-muted);
+    margin: 0;
+    position: relative;
+    z-index: 1;
+  }
+
+  // ==================== Content Area ====================
+
+  &__content {
+    padding: 0 24px 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  // ==================== Form Fields ====================
+
+  &__field {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    animation: new-project-field-enter 0.35s ease-out both;
+    
+    &:nth-child(1) { animation-delay: 0.05s; }
+    &:nth-child(2) { animation-delay: 0.1s; }
+  }
+
+  @keyframes new-project-field-enter {
+    from {
+      opacity: 0;
+      transform: translateY(8px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  &__label {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--color-text-secondary);
+    margin: 0;
+    
+    svg {
+      width: 14px;
+      height: 14px;
+      color: var(--color-text-muted);
+    }
+  }
+
+  // ==================== Parent Directory Selector ====================
+
+  &__path-selector {
+    display: flex;
+    gap: 4px;
+    align-items: stretch;
+  }
+
+  &__path-input {
+    flex: 1;
+    min-width: 0;
+    
+    input {
+      width: 100%;
+      cursor: default;
+      user-select: none;
+      font-size: 12px;
+      padding: 10px 12px;
+      background: var(--color-overlay-white-04);
+      border: 1px dashed var(--border-subtle);
+      border-radius: 8px;
+      color: var(--color-text-primary);
+      
+      &::placeholder {
+        color: var(--color-text-muted);
+        font-size: 12px;
+      }
+      
+      &:focus {
+        border-style: solid;
+        border-color: var(--border-base);
+        outline: none;
+      }
+    }
+  }
+
+  &__select-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 0 14px;
+    min-width: 80px;
+    white-space: nowrap;
+    flex-shrink: 0;
+    background: transparent;
+    border: 1px dashed var(--border-subtle);
+    border-radius: 8px;
+    color: var(--color-text-secondary);
+    font-size: 12px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    
+    svg {
+      width: 14px;
+      height: 14px;
+      color: var(--color-text-muted);
+      transition: color 0.2s ease;
+    }
+    
+    &:hover {
+      background: var(--element-bg-subtle);
+      border-style: solid;
+      border-color: var(--border-base);
+      color: var(--color-text-primary);
+      
+      svg {
+        color: var(--color-accent-500);
+      }
+    }
+    
+    &:active {
+      transform: scale(0.98);
+    }
+  }
+
+  // ==================== Project Name Input ====================
+
+  &__name-input {
+    input {
+      width: 100%;
+      font-size: 12px;
+      padding: 10px 12px;
+      background: var(--color-overlay-white-04);
+      border: 1px solid var(--border-subtle);
+      border-radius: 8px;
+      color: var(--color-text-primary);
+      transition: all 0.2s ease;
+      
+      &::placeholder {
+        color: var(--color-text-muted);
+        font-size: 12px;
+      }
+      
+      &:focus {
+        border-color: color-mix(in srgb, var(--color-accent-500) 45%, transparent);
+        box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-accent-500) 10%, transparent);
+        outline: none;
+      }
+      
+      &:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+      }
+    }
+  }
+
+  // ==================== Full Path Display ====================
+
+  &__preview {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 12px;
+    background: color-mix(in srgb, var(--color-accent-500) 8%, transparent);
+    border: 1px solid color-mix(in srgb, var(--color-accent-500) 16%, transparent);
+    border-radius: 8px;
+    animation: new-project-preview-enter 0.3s ease-out;
+  }
+
+  @keyframes new-project-preview-enter {
+    from {
+      opacity: 0;
+      transform: translateY(-4px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  &__preview-icon {
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    svg {
+      width: 14px;
+      height: 14px;
+      color: var(--color-accent-500);
+    }
+  }
+
+  &__preview-content {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  &__preview-label {
+    font-size: 10px;
+    color: var(--color-text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+
+  &__preview-path {
+    font-size: 11px;
+    font-family: 'Consolas', 'Monaco', monospace;
+    color: var(--color-text-secondary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  // ==================== Error Message ====================
+
+  &__error {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 12px;
+    background: var(--glass-red-base);
+    border: 1px solid color-mix(in srgb, var(--color-error) 20%, transparent);
+    border-radius: 8px;
+    animation: new-project-error-shake 0.4s ease-out;
+    
+    svg {
+      flex-shrink: 0;
+      width: 14px;
+      height: 14px;
+      color: var(--color-error);
+    }
+    
+    span {
+      font-size: 12px;
+      color: var(--color-error);
+    }
+  }
+
+  @keyframes new-project-error-shake {
+    0%, 100% { transform: translateX(0); }
+    20% { transform: translateX(-4px); }
+    40% { transform: translateX(4px); }
+    60% { transform: translateX(-4px); }
+    80% { transform: translateX(2px); }
+  }
+
+  // ==================== Footer Buttons ====================
+
+  &__footer {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    padding: 8px 16px;
+    border-top: 1px solid var(--border-subtle);
+    background: transparent;
+
+    .btn.btn-sm {
+      height: 28px;
+      min-height: 28px;
+      padding: 0 10px;
+      font-size: 11px;
+    }
+
+    .btn-loading-icon {
+      width: 13px;
+      height: 13px;
+    }
+  }
+
+  &__btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    font-weight: 500;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    
+    &--cancel {
+      background: transparent;
+      border: 1px solid var(--border-subtle);
+      color: var(--color-text-secondary);
+      
+      &:hover:not(:disabled) {
+        background: var(--element-bg-subtle);
+        border-color: var(--border-base);
+        color: var(--color-text-primary);
+      }
+    }
+    
+    &--confirm {
+      @include btn-primary.btn-primary-surface-default;
+      border: 1px solid color-mix(in srgb, var(--color-accent-500) 32%, transparent);
+
+      &:hover:not(:disabled) {
+        @include btn-primary.btn-primary-surface-hover;
+        border-color: color-mix(in srgb, var(--color-accent-500) 42%, transparent);
+      }
+
+      &:active:not(:disabled) {
+        @include btn-primary.btn-primary-surface-active;
+      }
+    }
+    
+    &:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+    
+    &:active:not(:disabled) {
+      transform: scale(0.98);
+    }
+    
+    svg {
+      width: 12px;
+      height: 12px;
+    }
+  }
+
+  &__btn-spinner {
+    width: 12px;
+    height: 12px;
+    border: 2px solid color-mix(in srgb, var(--color-accent-500) 28%, transparent);
+    border-top-color: var(--color-accent-500);
+    border-radius: 50%;
+    animation: new-project-spin 0.8s linear infinite;
+  }
+
+  @keyframes new-project-spin {
+    to { transform: rotate(360deg); }
+  }
+}
+
+// ==================== Responsive Design ====================
+
+@media (max-width: 520px) {
+  .new-project-dialog {
+    width: 100%;
+    
+    &__hero {
+      padding: 8px 16px 20px;
+    }
+    
+    &__content {
+      padding: 0 16px 16px;
+    }
+    
+    &__footer {
+      padding: 10px 16px;
+    }
+    
+    &__path-selector {
+      flex-direction: column;
+    }
+    
+    &__select-btn {
+      width: 100%;
+      padding: 10px;
+    }
+  }
+}

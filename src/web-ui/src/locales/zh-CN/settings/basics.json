@@ -1,0 +1,231 @@
+{
+  "title": "基础",
+  "subtitle": "日志、终端、通知与登录时启动",
+  "appearance": {
+    "title": "外观",
+    "hint": "界面语言与视觉主题",
+    "language": "语言",
+    "themes": "主题",
+    "builtIn": "内置",
+    "custom": "自定义",
+    "export": "导出",
+    "delete": "删除",
+    "confirmDelete": "确定删除主题 \"{{name}}\" 吗？",
+    "languageRowHint": "选择一个语言包作为当前界面语言。",
+    "themeRowHint": "选择界面配色主题。",
+    "systemTheme": "跟随系统",
+    "systemThemeDescription": "根据系统浅色/深色外观自动在亮暗主题间切换，并随系统切换而更新。",
+    "presets": {
+      "bitfun-dark": {
+        "name": "暗色",
+        "description": "默认暗色主题"
+      },
+      "bitfun-light": {
+        "name": "亮色",
+        "description": "亮色主题 - 素雅高级，淡蓝灰调"
+      },
+      "bitfun-midnight": {
+        "name": "午夜",
+        "description": "午夜灰暗色主题 - 专业优雅，灵感来自 JetBrains IDE"
+      },
+      "bitfun-china-style": {
+        "name": "墨韵",
+        "description": "中国风主题 - 宣纸墨香，青花朱砂，温润典雅"
+      },
+      "bitfun-china-night": {
+        "name": "墨夜",
+        "description": "中国风暗色主题 - 墨夜星辰，月华如水，沉静典雅"
+      },
+      "bitfun-cyber": {
+        "name": "赛博",
+        "description": "科技感主题 - 深邃黑洞，霓虹未来，极致科技美学"
+      },
+      "bitfun-slate": {
+        "name": "石板灰",
+        "description": "石板灰几何主题 - 极深沉浸，高对比度灰度美学"
+      },
+      "bitfun-tokyo-night": {
+        "name": "东京夜",
+        "description": "Tokyo Night 经典配色 - 靛蓝夜色，蓝紫高光"
+      }
+    },
+    "fontSize": {
+      "title": "字体大小",
+      "hint": "调整界面与对话区域的字体大小（编辑器字号在编辑器设置中配置）。",
+      "uiSizeLabel": "界面字体",
+      "uiSizeHint": "调整导航、面板、设置等所有界面元素的字体大小。",
+      "levels": {
+        "compact": "紧凑",
+        "small": "小",
+        "default": "默认",
+        "medium": "中等",
+        "large": "大",
+        "custom": "自定义"
+      },
+      "customPxLabel": "自定义大小（12–20 px）",
+      "customPxPlaceholder": "14",
+      "customPxOutOfRange": "请输入 12–20 之间的整数",
+      "resetButton": "恢复默认",
+      "previewText": "BitFun 是一个由 AI 驱动的编程环境。The quick brown fox jumps over the lazy dog.",
+      "flowChatLabel": "对话区域",
+      "flowChatHint": "关闭时对话区域比界面大 1 px，并随界面档位变化。开启后在下方从列表中选择 12–20 px。",
+      "flowChatCustomToggle": "自定义对话字号",
+      "flowChatPxOption": "{{n}} px"
+    }
+  },
+  "autoUpdate": {
+    "sections": {
+      "title": "更新",
+      "hint": "启动后是否自动检查新版本"
+    },
+    "toggleLabel": "自动检查更新",
+    "toggleDescription": "开启后，启动片刻若发现新版本可能会提示。关闭后仍可在「关于」中手动检查更新。",
+    "messages": {
+      "loading": "加载中…",
+      "loadFailed": "无法读取更新相关设置",
+      "saveFailed": "无法保存更新相关设置",
+      "saved": "已保存更新偏好"
+    }
+  },
+  "launchAtLogin": {
+    "sections": {
+      "title": "登录时启动",
+      "hint": "登录本用户后是否自动运行 BitFun"
+    },
+    "toggleLabel": "开机自动启动",
+    "toggleDescription": "登录系统后自动启动 BitFun；具体表现因操作系统而异。",
+    "messages": {
+      "loading": "加载中…",
+      "loadFailed": "无法读取开机启动设置",
+      "saveFailed": "无法更新开机启动设置"
+    }
+  },
+  "logging": {
+    "sections": {
+      "logging": "日志",
+      "loggingHint": "日志级别与本次启动日志目录",
+      "level": "日志级别",
+      "path": "本次启动日志路径"
+    },
+    "level": {
+      "description": "实时控制日志输出级别，修改后立即生效。"
+    },
+    "sensitiveDiagnostics": {
+      "label": "包含敏感调试信息",
+      "description": "开启后，本地日志可能包含用户 Prompt、模型请求和响应 payload、工具参数、文件路径以及 Webview 事件 payload，用于问题排查。BitFun 不会自动上传这些日志文件。"
+    },
+    "path": {
+      "description": "本次启动写入日志文件所在的目录。"
+    },
+    "diagnostics": {
+      "label": "诊断包",
+      "description": "将最近的本地日志、崩溃报告与运行时元数据导出为 zip 文件。BitFun 不会自动上传。"
+    },
+    "previousCrash": {
+      "title": "上次会话异常结束",
+      "description": "上次会话日志位于 {{path}}。"
+    },
+    "previousUncleanShutdown": {
+      "title": "上次会话未记录到正常关闭",
+      "description": "上次会话日志位于 {{path}}。重启、系统关机或开发热重载后也可能出现这种记录。"
+    },
+    "startupRecovery": {
+      "title": "上次会话异常结束",
+      "message": "BitFun 发现上次会话留下了崩溃报告。如需反馈问题，可以导出诊断包。"
+    },
+    "levels": {
+      "trace": "Trace",
+      "debug": "Debug",
+      "info": "Info",
+      "warn": "Warn",
+      "error": "Error",
+      "off": "Off"
+    },
+    "actions": {
+      "refreshTooltip": "刷新运行时状态",
+      "openFolder": "打开文件夹",
+      "openFolderTooltip": "在文件管理器中打开日志文件夹",
+      "exportDiagnostics": "导出诊断包",
+      "openLoggingSettings": "打开日志设置"
+    },
+    "messages": {
+      "loading": "加载中...",
+      "loadFailed": "加载日志配置失败",
+      "saveFailed": "保存日志级别失败",
+      "levelUpdated": "日志级别已更新",
+      "sensitiveDiagnosticsUpdated": "敏感调试信息日志偏好已更新",
+      "refreshed": "运行时状态已刷新",
+      "openedFolder": "日志文件夹已打开",
+      "openFailed": "打开日志文件夹失败",
+      "pathUnavailable": "日志文件夹路径不可用",
+      "diagnosticsExported": "诊断包已导出",
+      "diagnosticsExportFailed": "导出诊断包失败"
+    }
+  },
+  "terminal": {
+    "sections": {
+      "terminal": "终端",
+      "terminalHint": "默认 Shell 与新建终端行为",
+      "defaultTerminal": "默认终端"
+    },
+    "controls": {
+      "refreshTooltip": "刷新可用终端列表",
+      "autoDetect": "自动检测 (推荐)",
+      "description": "新建终端以及本地工作区中 agent 执行命令时使用的默认 Shell 类型。",
+      "cmdFallbackMessage": "Agent 执行命令时实际使用 PowerShell。",
+      "placeholder": "选择默认终端",
+      "noShells": "未检测到可用的终端"
+    },
+    "panelPosition": {
+      "label": "终端打开位置",
+      "description": "在会话中从 Shell 导航打开终端时显示的位置",
+      "placeholder": "选择终端显示位置",
+      "options": {
+        "right": "右侧面板",
+        "bottom": "底部面板"
+      }
+    },
+    "messages": {
+      "loading": "加载中...",
+      "loadFailed": "加载配置失败",
+      "updated": "默认终端已更新",
+      "panelPositionUpdated": "终端显示位置已更新",
+      "saveFailed": "保存配置失败",
+      "refreshed": "已刷新可用终端列表"
+    }
+  },
+  "windowBehavior": {
+    "sections": {
+      "title": "窗口行为",
+      "hint": "点击关闭按钮时的操作"
+    },
+    "closeButtonLabel": "关闭按钮行为",
+    "closeButtonDescription": "点击窗口关闭按钮（×）时的默认操作。",
+    "options": {
+      "quit": "退出程序",
+      "minimizeToTray": "最小化到系统托盘",
+      "ask": "每次询问"
+    },
+    "messages": {
+      "loading": "加载中…",
+      "loadFailed": "无法读取窗口行为设置",
+      "saveFailed": "无法保存窗口行为设置",
+      "saved": "窗口行为设置已保存"
+    }
+  },
+  "notifications": {    "title": "通知",
+    "hint": "Toast 弹窗通知偏好设置",
+    "dialogCompletion": {
+      "label": "任务完成通知",
+      "description": "当 AI 任务完成且窗口不在焦点时，弹出 Toast 通知"
+    },
+    "startupTips": {
+      "label": "启动时显示使用技巧",
+      "description": "每次启动时随机展示一条使用技巧卡片，帮助发现更多功能"
+    },
+    "messages": {
+      "saveSuccess": "通知设置已保存",
+      "saveFailed": "保存通知设置失败"
+    }
+  }
+}

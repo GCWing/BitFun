@@ -1,0 +1,141 @@
+@use '../../styles/tokens.scss' as tokens;
+@use '../../styles/_extended-mixins.scss' as mixins;
+
+.window-controls {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex-shrink: 0;
+
+  &__btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    padding: 0;
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: var(--size-radius-sm);
+    color: var(--btn-ghost-color);
+    cursor: pointer;
+    transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+    position: relative;
+    overflow: visible;
+    outline: none;
+    user-select: none;
+
+    @include mixins.icon-hover-bold();
+
+    &::after {
+      display: none;
+    }
+
+    svg {
+      display: block;
+      flex-shrink: 0;
+      position: relative;
+      opacity: 1;
+      z-index: 2;
+    }
+
+    &::before {
+      display: none;
+    }
+
+    &:hover {
+      background: var(--btn-ghost-hover-bg);
+      color: var(--btn-ghost-hover-color);
+      border-color: var(--btn-ghost-hover-border);
+    }
+
+    &:active {
+      opacity: 0.8;
+    }
+
+    &:focus-visible {
+      outline: 2px solid var(--color-accent-400);
+      outline-offset: 2px;
+    }
+
+    &--minimize {
+      &:hover {
+        background: var(--btn-ghost-hover-bg);
+        color: var(--btn-ghost-hover-color);
+        border-color: var(--btn-ghost-hover-border);
+      }
+
+      &:focus-visible {
+        outline-color: var(--color-accent-400);
+      }
+    }
+
+    &--maximize {
+      &:hover {
+        background: var(--btn-ghost-hover-bg);
+        color: var(--btn-ghost-hover-color);
+        border-color: var(--btn-ghost-hover-border);
+      }
+
+      &:focus-visible {
+        outline-color: var(--color-accent-400);
+      }
+    }
+
+    &--close {
+      &:hover {
+        background: var(--btn-ghost-hover-bg);
+        color: var(--color-error);
+        border-color: var(--btn-ghost-hover-border);
+
+      }
+
+      &:focus-visible {
+        outline-color: var(--color-error);
+      }
+    }
+
+    &:disabled {
+      opacity: var(--opacity-disabled);
+      cursor: default;
+      pointer-events: none;
+
+      &:hover {
+        background: transparent;
+        color: var(--btn-ghost-color);
+        border-color: transparent;
+      }
+    }
+  }
+}
+
+@media (max-width: 768px) {
+  .window-controls {
+    gap: 4px;
+
+    &__btn {
+      width: 28px;
+      height: 28px;
+      border-radius: var(--size-radius-sm);
+
+      svg {
+        width: 12px;
+        height: 12px;
+      }
+    }
+  }
+}
+
+@media (prefers-contrast: high) {
+  .window-controls__btn {
+    &:hover {
+      border-width: 2px;
+    }
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .window-controls__btn {
+    transition: none;
+  }
+}

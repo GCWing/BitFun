@@ -1,0 +1,272 @@
+/**
+ * InlineDiffPreview styles.
+ * Lightweight inline diff preview, similar to GitHub unified diff.
+ */
+
+.inline-diff-preview {
+  position: relative;
+  width: 100%;
+  background: transparent;
+  font-family: var(--font-family-mono);
+  font-size: var(--flowchat-font-size-sm);
+  font-weight: 400;
+  
+  &__content {
+    overflow-y: auto;
+    overflow-x: hidden;
+    
+    // Custom scrollbar
+    &::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    
+    &::-webkit-scrollbar-track {
+      background: transparent;
+    }
+    
+    &::-webkit-scrollbar-thumb {
+      background: var(--scrollbar-thumb);
+      border-radius: 3px;
+
+      &:hover {
+        background: var(--scrollbar-thumb-hover);
+      }
+    }
+  }
+  
+  &--empty {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 60px;
+    color: var(--color-text-muted);
+    font-size: var(--flowchat-font-size-sm);
+    font-style: italic;
+  }
+  
+  &__placeholder {
+    color: var(--color-text-muted);
+    font-style: italic;
+  }
+
+  &__truncation-notice {
+    padding: 0.25rem 0.625rem;
+    font-size: var(--flowchat-font-size-xs);
+    color: var(--color-text-muted);
+    background: var(--color-bg-tertiary);
+    border-bottom: 1px solid var(--border-subtle);
+    font-style: italic;
+  }
+}
+
+.diff-line {
+  display: flex;
+  align-items: stretch;
+  min-height: 22px;
+  line-height: var(--flowchat-code-line-height);
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+  
+  &:hover {
+    filter: brightness(1.05);
+  }
+  
+  &--unchanged {
+    background: transparent;
+    
+    .diff-line__prefix {
+      color: var(--color-text-muted);
+    }
+  }
+  
+  &--added {
+    background: color-mix(in srgb, var(--git-color-added) 10%, transparent);
+
+    .diff-line__gutter {
+      background: color-mix(in srgb, var(--git-color-added) 15%, transparent);
+    }
+
+    .diff-line__prefix {
+      color: var(--git-color-added);
+      font-weight: 500;
+    }
+  }
+
+  &--removed {
+    background: color-mix(in srgb, var(--git-color-deleted) 10%, transparent);
+
+    .diff-line__gutter {
+      background: color-mix(in srgb, var(--git-color-deleted) 15%, transparent);
+    }
+
+    .diff-line__prefix {
+      color: var(--git-color-deleted);
+      font-weight: 500;
+    }
+    
+    .diff-line__content {
+      opacity: 0.85;
+    }
+  }
+  
+  // Highlighted row (selected).
+  &--highlighted {
+    background: var(--color-accent-200) !important;
+
+    .diff-line__gutter {
+      background: var(--color-accent-300) !important;
+    }
+  }
+  
+  &--separator {
+    background: var(--color-bg-tertiary);
+    justify-content: center;
+    padding: var(--flowchat-inline-gap) 0;
+    cursor: default;
+    
+    &:hover {
+      filter: none;
+    }
+    
+    .diff-line__gutter--separator {
+      display: none;
+    }
+    
+    .diff-line__content--separator {
+      color: var(--color-text-muted);
+      font-size: var(--flowchat-font-size-xs);
+      font-style: italic;
+      text-align: center;
+    }
+  }
+  
+  &__gutter {
+    display: flex;
+    align-items: center;
+    flex-shrink: 0;
+    padding: 0 8px;
+    gap: 0.125rem;
+    background: var(--color-bg-secondary);
+    user-select: none;
+    border-right: 1px solid var(--border-subtle);
+
+    &--single {
+      padding: 0 4px;
+      gap: 0;
+
+      .diff-line__num {
+        min-width: 24px;
+        padding: 0 4px;
+      }
+    }
+  }
+
+  &__num {
+    min-width: 32px;
+    padding: 0 6px;
+    text-align: right;
+    color: var(--color-text-muted);
+    opacity: 0.6;
+    font-size: var(--flowchat-font-size-xs);
+
+    &--original {
+      border-right: 1px solid var(--border-subtle);
+      padding-right: 8px;
+    }
+
+    &--modified {
+      padding-left: 8px;
+    }
+  }
+
+  &__prefix {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 18px;
+    flex-shrink: 0;
+    font-weight: 500;
+    user-select: none;
+  }
+  
+  &__content {
+    flex: 1;
+    min-width: 0;
+    padding: 0 8px;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+    overflow: hidden;
+    
+    // Strip global and SyntaxHighlighter borders/backgrounds.
+    pre, code, span {
+      margin: 0 !important;
+      padding: 0 !important;
+      background: none !important;
+      background-color: transparent !important;
+      border: none !important;
+      border-width: 0 !important;
+      border-radius: 0 !important;
+      box-shadow: none !important;
+      display: inline !important;
+      font-size: inherit !important;
+    }
+
+    code span[style] {
+      font-weight: 400 !important;
+    }
+  }
+}
+
+// Light theme: softer, lower-saturation palette.
+:root[data-theme="light"] .inline-diff-preview,
+:root[data-theme-type="light"] .inline-diff-preview,
+.light .inline-diff-preview {
+  .diff-line {
+    &--added {
+      background: color-mix(in srgb, var(--git-color-added) 10%, transparent);
+
+      .diff-line__gutter {
+        background: color-mix(in srgb, var(--git-color-added) 18%, transparent);
+      }
+
+      .diff-line__prefix {
+        color: var(--git-color-added);
+      }
+    }
+
+    &--removed {
+      background: color-mix(in srgb, var(--git-color-deleted) 10%, transparent);
+
+      .diff-line__gutter {
+        background: color-mix(in srgb, var(--git-color-deleted) 18%, transparent);
+      }
+
+      .diff-line__prefix {
+        color: var(--git-color-deleted);
+      }
+    }
+
+    &--highlighted {
+      background: var(--color-accent-200) !important;
+
+      .diff-line__gutter {
+        background: var(--color-accent-300) !important;
+      }
+    }
+  }
+
+  .diff-line__gutter {
+    background: var(--element-bg-subtle);
+    border-right-color: var(--border-subtle);
+  }
+
+  .diff-line__num {
+    color: var(--color-text-muted);
+
+    &--original {
+      border-right-color: var(--border-subtle);
+    }
+  }
+}

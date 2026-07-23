@@ -1,0 +1,435 @@
+@use '../../../component-library/styles/tokens' as *;
+@use '../../../component-library/styles/_extended-mixins' as mixins;
+
+$_node-height: 24px;
+$_node-padding-y: 3px;
+$_node-padding-x: 8px;
+$_icon-size: 16px;
+$_indent-width: 8px;
+
+.bitfun-file-explorer {
+  height: 100%;
+  overflow: hidden;
+  @include mixins.flex-layout(column, stretch, start, 0);
+  background: var(--color-bg-secondary);
+  border-radius: $size-radius-sm;
+  position: relative;
+
+  &--empty {
+    justify-content: center;
+    align-items: center;
+  }
+}
+
+.bitfun-file-explorer__toolbar {
+  position: absolute;
+  top: $size-gap-2;
+  right: $size-gap-1;
+  @include mixins.flex-layout(row, center, center, 2px);
+  z-index: 10;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity $motion-base $easing-standard;
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  padding: 0;
+  box-shadow: none;
+  
+  &--visible {
+    opacity: 1;
+    pointer-events: auto;
+  }
+  
+  .icon-btn {
+    flex-shrink: 0;
+    width: 24px;
+    height: 24px;
+    color: var(--color-text-muted);
+    
+    &:hover {
+      color: var(--color-text-primary);
+      background: var(--color-overlay-white-08);
+    }
+    
+    svg {
+      width: 14px;
+      height: 14px;
+    }
+  }
+}
+
+.bitfun-file-explorer__empty {
+  text-align: center;
+  color: var(--color-text-muted);
+  padding: $size-gap-8;
+}
+
+.bitfun-file-explorer__empty-icon {
+  margin-bottom: $size-gap-4;
+  opacity: $opacity-disabled;
+}
+
+.bitfun-file-explorer__breadcrumb {
+  display: flex;
+  align-items: center;
+  gap: 1px;
+  padding: 4px 8px;
+  height: 24px;
+  font-size: 11px;
+  color: var(--color-text-muted);
+  background: linear-gradient(
+    180deg,
+    rgba(var(--color-static-white-rgb), 0.025) 0%,
+    rgba(var(--color-static-white-rgb), 0.015) 100%
+  );
+  overflow: hidden;
+  
+  transition: all 0.15s ease-out;
+}
+
+.bitfun-file-explorer__breadcrumb-separator {
+  color: var(--color-text-disabled);
+  flex-shrink: 0;
+  opacity: 0.4;
+  margin: 0 1px;
+}
+
+.bitfun-file-explorer__breadcrumb-item {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100px;
+  padding: 2px 2px 3px;
+  border-radius: 3px;
+  transition: all $motion-fast $easing-standard;
+  
+  &--clickable {
+    cursor: pointer;
+    
+    &:hover {
+      color: var(--color-text-primary);
+      background: var(--color-overlay-white-08);
+    }
+  }
+  
+  &:last-child {
+    color: var(--color-text-secondary);
+    background: var(--color-overlay-white-04);
+  }
+}
+
+.bitfun-file-explorer__tree {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: $size-gap-2 0;
+  -webkit-overflow-scrolling: touch;
+  scroll-behavior: smooth;
+
+}
+
+.bitfun-file-explorer__node {
+  user-select: none;
+}
+
+.bitfun-file-explorer__node-content {
+  @include mixins.flex-layout(row, center, start, $size-gap-1);
+  padding: $_node-padding-y $_node-padding-x;
+  cursor: pointer;
+  min-height: $_node-height;
+  border-radius: $size-radius-sm;
+  margin: 0 $size-gap-1;
+  position: relative;
+  
+  background: transparent;
+  transition: all $motion-base $easing-standard;
+  color: var(--color-text-secondary);
+  
+  &:focus {
+    outline: none;
+    background: var(--element-bg-base);
+    color: var(--color-text-primary);
+  }
+  
+  &:focus-visible {
+    outline: 1px solid var(--color-accent-500);
+    outline-offset: -1px;
+  }
+
+  &:hover {
+    background: var(--element-bg-base);
+    color: var(--color-text-primary);
+  }
+
+  &--selected {
+    background: var(--git-color-branch-bg);
+    color: var(--git-color-branch);
+
+    .bitfun-file-explorer__node-name {
+      color: var(--git-color-branch);
+      font-weight: $font-weight-medium;
+    }
+
+    &:hover {
+      background: var(--git-color-branch-bg-hover);
+      color: var(--git-color-branch);
+    }
+  }
+
+  &--compressed {
+    font-style: italic;
+
+    &:hover {
+      background: var(--element-bg-base);
+    }
+  }
+
+  &--highlighted {
+    background: var(--git-color-branch-bg) !important;
+    animation: file-node-highlight-fade 2s ease-out forwards;
+    
+    .bitfun-file-explorer__node-name {
+      color: var(--git-color-branch);
+      font-weight: $font-weight-medium;
+    }
+  }
+}
+
+@keyframes file-node-highlight-fade {
+  0% {
+    background: rgba(var(--color-accent-500-rgb) / 0.2);
+  }
+  30% {
+    background: var(--git-color-branch-bg);
+  }
+  100% {
+    background: transparent;
+  }
+}
+
+.bitfun-file-explorer__expand-icon {
+  @include mixins.flex-layout(row, center, center, 0);
+  @include mixins.size($_icon-size);
+  transition: transform $motion-fast $easing-standard;
+  color: var(--color-text-muted);
+  flex-shrink: 0;
+  min-width: $_icon-size;
+}
+
+.bitfun-file-explorer__icon {
+  @include mixins.flex-layout(row, center, center, 0);
+  flex-shrink: 0;
+  transition: all $motion-fast $easing-standard;
+  min-width: $_icon-size;
+
+  &--folder {
+    color: var(--git-color-branch);
+  }
+
+  &--folder-open {
+    color: var(--color-accent-500);
+  }
+
+  &--file {
+    color: var(--color-text-muted);
+  }
+
+  &--code,
+  &--javascript,
+  &--typescript,
+  &--react,
+  &--vue,
+  &--python,
+  &--rust,
+  &--go,
+  &--java,
+  &--c-cpp,
+  &--font {
+    color: var(--color-accent-500);
+  }
+
+  &--html,
+  &--css,
+  &--sass,
+  &--markdown {
+    color: var(--color-purple-500);
+  }
+
+  &--image,
+  &--audio,
+  &--video {
+    color: var(--color-success);
+  }
+
+  &--config,
+  &--json,
+  &--database,
+  &--archive {
+    color: var(--color-warning);
+  }
+
+  &--text,
+  &--binary {
+    color: var(--color-text-muted);
+  }
+}
+
+.bitfun-file-explorer__node-wrapper {
+  @include mixins.flex-layout(row, center, start, $size-gap-2);
+  flex: 1;
+  min-width: 0;
+}
+
+.bitfun-file-explorer__node-name {
+  flex: 1;
+  font-size: var(--font-size-sm);
+  font-weight: $font-weight-normal;
+  @include mixins.text-ellipsis;
+  position: relative;
+  z-index: 2;
+  color: inherit;
+}
+
+.bitfun-file-explorer__rename-input-wrapper {
+  flex: 1;
+  min-width: 0;
+  z-index: 10;
+  
+  .bitfun-input-wrapper {
+    gap: 0;
+    border: none;
+    
+    .bitfun-input-container {
+      height: 26px;
+      padding: 0 8px;
+      background: var(--color-bg-elevated);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border: none !important;
+      box-shadow:
+        0 0 0 1px color-mix(in srgb, var(--color-accent-500) 80%, transparent),
+        0 2px 8px color-mix(in srgb, var(--color-text-primary) 10%, transparent);
+
+      &:hover {
+        background: var(--element-bg-soft);
+        box-shadow:
+          0 0 0 1px color-mix(in srgb, var(--color-accent-500) 90%, transparent),
+          0 2px 8px color-mix(in srgb, var(--color-text-primary) 12%, transparent);
+      }
+
+      &:focus-within {
+        background: var(--color-bg-elevated);
+        box-shadow:
+          0 0 0 1px var(--color-accent-500),
+          0 4px 12px color-mix(in srgb, var(--color-text-primary) 16%, transparent);
+      }
+    }
+    
+    .bitfun-input {
+      font-size: var(--font-size-sm);
+      color: var(--color-text-primary);
+      font-weight: $font-weight-medium;
+      border: none !important;
+      outline: none !important;
+    }
+    
+    .bitfun-input-prefix {
+      color: color-mix(in srgb, var(--color-accent-500) 85%, transparent);
+    }
+  }
+}
+
+.bitfun-file-explorer__compressed-path {
+  font-style: italic;
+  opacity: 0.85;
+  color: var(--color-text-muted);
+}
+
+.bitfun-file-explorer__node-size {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-muted);
+  opacity: 0.7;
+  flex-shrink: 0;
+  position: relative;
+  z-index: 2;
+}
+
+.bitfun-file-explorer__node-modified {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-muted);
+  opacity: 0.7;
+  flex-shrink: 0;
+  position: relative;
+  z-index: 2;
+}
+
+.bitfun-file-explorer__node-actions {
+  @include mixins.flex-layout(row, center, start, $size-gap-1);
+  opacity: 0;
+  transition: opacity $motion-fast $easing-standard;
+  position: relative;
+  z-index: 2;
+
+  .bitfun-file-explorer__node-content:hover & {
+    opacity: 1;
+  }
+}
+
+.bitfun-file-explorer__node-children {
+  // Indentation is computed in JS via paddingLeft; avoid additional spacing here.
+  position: relative;
+}
+
+.bitfun-file-explorer__load-more {
+  @include mixins.flex-layout(row, center, start, $size-gap-2);
+  width: calc(100% - #{$size-gap-2});
+  margin: 0 $size-gap-1;
+  min-height: $_node-height;
+  padding: $_node-padding-y $_node-padding-x;
+  border: none;
+  border-radius: $size-radius-sm;
+  background: transparent;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  text-align: left;
+  transition: all $motion-base $easing-standard;
+
+  &:hover:not(:disabled) {
+    background: var(--element-bg-base);
+    color: var(--color-text-primary);
+  }
+
+  &:disabled {
+    cursor: progress;
+    opacity: 0.8;
+  }
+}
+
+.bitfun-file-explorer__empty-message {
+  @include mixins.flex-layout(row, center, center, 0);
+  padding: $size-gap-8;
+  color: var(--color-text-muted);
+  font-style: italic;
+}
+
+@include mixins.respond-to('mobile') {
+  .bitfun-file-explorer__node-content {
+    padding: 6px $_node-padding-x;
+    min-height: 32px;
+  }
+
+  .bitfun-file-explorer__node-name {
+    font-size: var(--font-size-base);
+  }
+
+  .bitfun-file-explorer__node-size,
+  .bitfun-file-explorer__node-modified {
+    display: none;
+  }
+}
+
+// .file-explorer { @extend .bitfun-file-explorer; }
+// .file-tree { @extend .bitfun-file-explorer__tree; }
+// .file-tree-node { @extend .bitfun-file-explorer__node; }
+// .node-content { @extend .bitfun-file-explorer__node-content; }

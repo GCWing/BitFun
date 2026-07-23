@@ -1,0 +1,292 @@
+@use '../../../component-library/styles/tokens' as *;
+
+.pages-scene {
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+
+  .gallery-empty {
+    min-height: 280px;
+
+    > span {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: $size-gap-2;
+    }
+
+    small {
+      max-width: 560px;
+      color: var(--color-text-muted);
+      text-align: center;
+      overflow-wrap: anywhere;
+    }
+  }
+
+  &__grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
+    align-items: start;
+    gap: $size-gap-4;
+    padding-bottom: $size-gap-6;
+  }
+
+  &__refresh-error {
+    display: flex;
+    align-items: center;
+    gap: $size-gap-2;
+    margin-bottom: $size-gap-3;
+    padding: $size-gap-2 $size-gap-3;
+    border: 1px solid var(--color-error-border);
+    border-radius: var(--size-radius-base);
+    background: var(--color-error-bg);
+    color: var(--color-error);
+    font-size: var(--font-size-sm);
+
+    small {
+      min-width: 0;
+      flex: 1;
+      overflow: hidden;
+      color: var(--color-text-secondary);
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+  }
+
+  &__card {
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: $size-gap-3;
+    padding: $size-gap-4;
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--size-radius-lg);
+    background: var(--color-bg-secondary);
+    box-shadow: 0 8px 22px var(--color-overlay-black-08);
+  }
+
+  &__card-heading,
+  &__versions-heading,
+  &__title-row,
+  &__visibility-row,
+  &__version {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: $size-gap-3;
+  }
+
+  &__identity {
+    min-width: 0;
+
+    h3 {
+      margin: 0 0 $size-gap-1;
+      overflow: hidden;
+      color: var(--color-text-primary);
+      font-size: var(--font-size-lg);
+      font-weight: 600;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    code {
+      color: var(--color-text-muted);
+      font-size: var(--font-size-xs);
+    }
+  }
+
+  &__status,
+  &__current-badge,
+  &__worker-badge {
+    flex-shrink: 0;
+    display: inline-flex;
+    align-items: center;
+    min-height: 22px;
+    padding: 0 $size-gap-2;
+    border: 1px solid var(--border-subtle);
+    border-radius: 999px;
+    background: var(--element-bg-soft);
+    color: var(--color-text-secondary);
+    font-size: var(--font-size-2xs);
+    font-weight: 600;
+  }
+
+  &__status.is-deployed,
+  &__current-badge {
+    border-color: color-mix(in srgb, var(--color-success) 36%, var(--border-subtle));
+    background: color-mix(in srgb, var(--color-success) 12%, transparent);
+    color: var(--color-success);
+  }
+
+  &__worker-badge {
+    border-color: color-mix(in srgb, var(--color-accent-500) 32%, var(--border-subtle));
+    background: color-mix(in srgb, var(--color-accent-500) 10%, transparent);
+    color: var(--color-accent-500);
+  }
+
+  &__meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: $size-gap-2 $size-gap-4;
+    color: var(--color-text-muted);
+    font-size: var(--font-size-xs);
+  }
+
+  &__title-row,
+  &__visibility-row {
+    min-height: 38px;
+    padding: $size-gap-2 $size-gap-3;
+    border-radius: var(--size-radius-base);
+    background: var(--element-bg-soft);
+    color: var(--color-text-secondary);
+    font-size: var(--font-size-sm);
+
+    .select {
+      width: 150px;
+    }
+  }
+
+  &__title-control {
+    min-width: 0;
+    display: flex;
+    flex: 1;
+    justify-content: flex-end;
+    gap: $size-gap-2;
+
+    .bitfun-input-wrapper {
+      width: min(260px, 100%);
+    }
+  }
+
+  &__actions,
+  &__version-actions {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: $size-gap-2;
+  }
+
+  &__actions {
+    padding-top: $size-gap-1;
+
+    .btn-action-danger {
+      margin-left: auto;
+    }
+  }
+
+  &__versions {
+    display: flex;
+    flex-direction: column;
+    gap: $size-gap-2;
+    margin-top: $size-gap-1;
+    padding-top: $size-gap-3;
+    border-top: 1px solid var(--border-subtle);
+  }
+
+  &__versions-heading {
+    color: var(--color-text-secondary);
+    font-size: var(--font-size-sm);
+    font-weight: 600;
+  }
+
+  &__versions-empty {
+    margin: 0;
+    padding: $size-gap-4;
+    color: var(--color-text-muted);
+    font-size: var(--font-size-sm);
+    text-align: center;
+  }
+
+  &__version {
+    align-items: flex-start;
+    padding: $size-gap-3;
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--size-radius-base);
+    background: var(--color-bg-primary);
+  }
+
+  &__version-copy {
+    min-width: 0;
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    gap: $size-gap-1;
+
+    > div {
+      display: flex;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: $size-gap-2;
+    }
+
+    code {
+      color: var(--color-text-primary);
+      font-size: var(--font-size-xs);
+    }
+
+    > span,
+    p {
+      margin: 0;
+      color: var(--color-text-muted);
+      font-size: var(--font-size-2xs);
+      overflow-wrap: anywhere;
+    }
+  }
+
+  &__version-actions {
+    flex-shrink: 0;
+    justify-content: flex-end;
+  }
+
+  &__spinning {
+    animation: pages-scene-spin 0.8s linear infinite;
+  }
+}
+
+@keyframes pages-scene-spin {
+  to { transform: rotate(360deg); }
+}
+
+@media (max-width: 760px) {
+  .pages-scene {
+    &__grid {
+      grid-template-columns: minmax(0, 1fr);
+    }
+
+    &__card-heading,
+    &__title-row,
+    &__visibility-row,
+    &__version {
+      align-items: stretch;
+      flex-direction: column;
+    }
+
+    &__visibility-row .select {
+      width: 100%;
+    }
+
+    &__title-control {
+      width: 100%;
+      flex-direction: column;
+
+      .bitfun-input-wrapper {
+        width: 100%;
+      }
+    }
+
+    &__actions .btn-action-danger {
+      margin-left: 0;
+    }
+
+    &__version-actions {
+      justify-content: flex-start;
+    }
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pages-scene__spinning {
+    animation: none;
+  }
+}

@@ -1,0 +1,19 @@
+{
+  "title": "Terminal",
+  "emptyState": "Open a terminal from the Shell navigation",
+  "dialog": {
+    "editTerminal": {
+      "title": "Edit Terminal",
+      "nameLabel": "Name",
+      "namePlaceholder": "Terminal name",
+      "workingDirectoryLabel": "Startup Path",
+      "workingDirectoryPlaceholder": "Path to open when the terminal starts",
+      "workingDirectoryHint": "Used when reopening a saved terminal",
+      "startupCommandLabel": "Startup Command (Optional)",
+      "startupCommandPlaceholder": "Command to run after the terminal starts",
+      "startupCommandHint": "This command runs automatically after the terminal starts",
+      "cancel": "Cancel",
+      "save": "Save"
+    }
+  }
+}

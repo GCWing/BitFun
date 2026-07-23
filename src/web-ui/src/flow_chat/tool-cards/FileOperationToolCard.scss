@@ -1,0 +1,433 @@
+/**
+ * File operation tool card styles
+ * Specific styles based on BaseToolCard
+ */
+
+@use './BaseToolCard.scss';
+
+.file-operation-card {
+  cursor: pointer;
+
+  /* .status-error sets cursor:default on the card; header remains clickable (toggle error / open editor) */
+  .base-tool-card.status-error {
+    cursor: pointer;
+  }
+
+  /* Ensure header row shows hand; inner triggers (e.g. Tooltip) can otherwise show I-beam/default */
+  .base-tool-card-header {
+    cursor: pointer;
+  }
+
+  &.non-clickable {
+    cursor: default;
+    border-color: var(--color-overlay-white-08);
+    opacity: 0.85;
+
+    &:hover {
+      border-color: var(--border-medium);
+      opacity: 1;
+
+      .tool-identifier-icon.delete-icon {
+        opacity: 1;
+      }
+
+      .file-name--muted {
+        color: var(--color-text-primary);
+        font-weight: 500;
+      }
+
+      .delete-file-name {
+        text-decoration: line-through;
+        color: var(--color-text-muted);
+      }
+    }
+
+    .base-tool-card {
+      cursor: default;
+    }
+
+    .base-tool-card-header {
+      cursor: default;
+    }
+  }
+
+  .tool-identifier-icon {
+    &.write-icon {
+      color: var(--color-text-secondary);
+    }
+
+    &.edit-icon {
+      color: var(--color-text-secondary);
+    }
+
+    &.delete-icon {
+      color: var(--color-text-muted);
+      opacity: 0.6;
+    }
+
+    &.file-icon {
+      color: var(--color-text-secondary);
+    }
+  }
+
+  .base-tool-card-header .tool-card-extra:has(.file-op-open-full-button) {
+    align-self: stretch;
+    display: flex;
+    flex-direction: row;
+    align-items: stretch;
+    gap: 0.125rem;
+    min-height: 0;
+  }
+
+  /* Extra rail fills header height so .file-op-open-full-button stretch + hover::before bleed match the full row */
+  .file-op-header-actions {
+    align-self: stretch;
+    display: flex;
+    align-items: center;
+    min-height: 0;
+  }
+}
+
+.file-name {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 500;
+  color: var(--color-text-primary);
+
+  &--muted {
+    color: var(--color-text-muted);
+    font-weight: 400;
+  }
+}
+
+.file-error-message-inline,
+.file-guidance-message-inline {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--color-text-muted);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.params-streaming-indicator {
+  font-size: var(--flowchat-font-size-xxs);
+  color: color-mix(in srgb, var(--color-purple-500) 75%, transparent);
+  background: var(--color-purple-100);
+  padding: 0.125rem var(--flowchat-inline-gap);
+  border-radius: 3px;
+  animation: pulse-subtle 2s ease-in-out infinite;
+  flex-shrink: 0;
+  line-height: var(--flowchat-compact-line-height);
+}
+
+@keyframes pulse-subtle {
+
+  0%,
+  100% {
+    opacity: 1;
+  }
+
+  50% {
+    opacity: 0.7;
+  }
+}
+
+.delete-file-name {
+  text-decoration: line-through;
+  color: var(--color-text-muted);
+}
+
+.file-op-diff-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--flowchat-inline-gap);
+  flex-shrink: 0;
+  margin-left: 2px;
+  padding: 0.125rem var(--flowchat-inline-gap);
+  border: none;
+  border-radius: 999px;
+  background: transparent;
+  font-family: var(--tool-card-font-mono);
+  font-size: var(--flowchat-font-size-xxs);
+  font-weight: 600;
+  color: var(--color-text-muted);
+  line-height: var(--flowchat-compact-line-height);
+  cursor: pointer;
+  transition:
+    background-color 0.15s ease,
+    color 0.15s ease;
+
+  &:hover:not(.file-op-diff-pill--disabled) {
+    background-color: var(--element-bg-hover);
+    color: var(--color-text-primary);
+  }
+
+  &--disabled {
+    cursor: default;
+    opacity: 0.45;
+  }
+
+  svg {
+    width: 12px;
+    height: 12px;
+    flex-shrink: 0;
+    stroke: currentColor;
+  }
+
+  .additions {
+    color: var(--color-success);
+  }
+
+  .deletions {
+    color: var(--color-error);
+  }
+}
+
+.file-op-open-full-button {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  align-self: stretch;
+  flex-shrink: 0;
+  width: var(--tool-card-header-icon-slot);
+  padding: 0;
+  margin-left: 4px;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  appearance: none;
+  font: inherit;
+  transition: color 0.15s ease;
+
+  &::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    right: calc(-1 * var(--tool-card-header-pad-right));
+    top: calc(-1 * var(--tool-card-header-pad-y));
+    bottom: calc(-1 * var(--tool-card-header-pad-y));
+    background-color: transparent;
+    border-radius: 0;
+    transition: background-color 0.15s ease;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  &:hover::before {
+    background-color: var(--element-bg-hover);
+  }
+
+  &:hover {
+    color: var(--color-text-primary);
+  }
+
+  &::after {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: calc(-1 * var(--tool-card-header-pad-y));
+    bottom: calc(-1 * var(--tool-card-header-pad-y));
+    width: 0;
+    border-left: 1px solid var(--border-base);
+    pointer-events: none;
+    z-index: 1;
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--color-accent-500);
+    outline-offset: -2px;
+  }
+
+  svg {
+    position: relative;
+    z-index: 1;
+    width: 16px;
+    height: 16px;
+    flex-shrink: 0;
+    stroke: currentColor;
+    /*
+     * The hover/hit area (::before) extends right: -10px into the card's right padding,
+     * making the perceived button zone 34 + 10 = 44px wide.
+     * The icon is flex-centered in 34px → geometric center at 17px.
+     * Hover-zone center = 44/2 = 22px.  Delta = 5px = pad-right/2.
+     * Shift the icon by half the right padding to align with the hover-zone center.
+     */
+    transform: translateX(calc(var(--tool-card-header-pad-right) / 2));
+  }
+}
+
+.baseline-diff-btn {
+  svg {
+    stroke: currentColor;
+  }
+}
+
+.error-expand-indicator {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--color-text-muted);
+  transition: all 0.2s ease;
+  flex-shrink: 0;
+  cursor: pointer;
+
+  &:hover {
+    color: var(--color-accent-500);
+  }
+}
+
+.streaming-content-preview {
+  width: 100%;
+  margin-top: 0;
+
+  .preview-text {
+    position: relative;
+    width: 100%;
+    background: none !important;
+    border-radius: 0;
+    padding: 0;
+    border: none !important;
+
+    .code-preview {
+      overflow: hidden;
+
+      pre {
+        margin: 0 !important;
+        padding: 0 !important;
+        background: transparent !important;
+      }
+    }
+
+    .inline-diff-preview {
+      .diff-line__content {
+
+        pre,
+        code,
+        span {
+          border: none !important;
+          border-radius: 0 !important;
+          box-shadow: none !important;
+          background: transparent !important;
+        }
+      }
+    }
+
+    &.diff-loading {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      padding: 16px;
+      color: var(--color-text-muted);
+      font-size: var(--tool-card-action-font-size);
+    }
+
+    >pre {
+      margin: 0;
+      padding: 0;
+      font-family: 'JetBrains Mono', 'Fira Code', 'SF Mono', 'Consolas', 'Monaco', 'Courier New', monospace;
+      font-size: var(--tool-card-action-font-size);
+      line-height: var(--flowchat-text-line-height);
+      color: var(--color-text-primary);
+      white-space: pre-wrap;
+      word-break: break-word;
+      background: none !important;
+      border: none !important;
+      box-shadow: none !important;
+    }
+  }
+}
+
+.error-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--color-error);
+  font-size: var(--tool-card-action-font-size);
+  font-weight: 600;
+  margin-bottom: 6px;
+
+  svg {
+    flex-shrink: 0;
+  }
+}
+
+.error-message {
+  font-size: var(--tool-card-action-font-size);
+  line-height: var(--flowchat-support-line-height);
+  color: var(--color-text-muted);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.file-operation-card--guidance {
+  .base-tool-card.status-error {
+    border-color: var(--border-medium);
+    background: color-mix(in srgb, var(--color-bg-elevated) 92%, var(--color-error-bg));
+    /* Match wrapper's top corners so the elevated background fills to the rounded border,
+       even when backdrop-filter interferes with overflow:hidden clipping. */
+    border-radius: var(--flowchat-card-radius) var(--flowchat-card-radius) 0 0;
+  }
+}
+
+.guidance-content {
+  padding: 8px 12px 10px;
+}
+
+.guidance-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--color-text-secondary);
+  font-size: var(--tool-card-action-font-size);
+  font-weight: 600;
+  margin-bottom: 6px;
+
+  svg {
+    flex-shrink: 0;
+    color: var(--color-text-secondary);
+  }
+}
+
+.guidance-message {
+  font-size: var(--tool-card-action-font-size);
+  line-height: var(--flowchat-support-line-height);
+  color: var(--color-text-muted);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.file-op-header-actions {
+  gap: 4px;
+}
+
+.file-op-header-action.icon-btn--xs {
+  width: 18px;
+  height: 18px;
+}
+
+.file-op-confirm-btn {
+  color: var(--color-success);
+
+  &:hover:not(:disabled) {
+    background: var(--color-success-bg);
+    color: var(--color-success);
+    box-shadow: 0 2px 8px var(--color-success-bg);
+  }
+}
+
+.file-op-reject-btn {
+  color: var(--color-error);
+
+  &:hover:not(:disabled) {
+    background: var(--color-error-bg);
+    color: var(--color-error);
+    box-shadow: 0 2px 8px var(--color-error-bg);
+  }
+}

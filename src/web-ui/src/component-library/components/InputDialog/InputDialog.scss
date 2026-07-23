@@ -1,0 +1,50 @@
+/**
+ * InputDialog styles
+ */
+.input-dialog {
+  display: flex;
+  flex-direction: column;
+
+  &__body {
+    padding: 20px 20px 16px;
+  }
+
+  &__description {
+    margin: 0 0 12px 0;
+    font-size: 12px;
+    line-height: 1.5;
+    color: var(--color-text-muted);
+  }
+
+  &__actions {
+    display: flex;
+    justify-content: flex-end;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 20px 12px;
+    border-top: 1px solid var(--border-subtle);
+
+    // Give buttons explicit borders for visual consistency with the input field
+    .btn {
+      min-width: 68px;
+      border: 1px solid var(--border-base);
+
+      &-primary {
+        border-color: var(--color-accent-400);
+      }
+    }
+  }
+}
+
+.modal--small {
+  max-width: 360px;
+
+  .modal__content {
+    min-width: 0;
+  }
+}
+
+.modal-overlay:has(.input-dialog) {
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}

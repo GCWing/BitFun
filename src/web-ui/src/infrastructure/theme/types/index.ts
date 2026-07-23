@@ -1,0 +1,450 @@
+ 
+
+
+
+ 
+export type ThemeType = 'dark' | 'light';
+
+ 
+export type ColorValue = string; // hex, rgb, rgba, hsl, hsla
+
+ 
+export type ThemeId = string;
+
+/** Reserved config value: follow OS light/dark (maps to bitfun-light / bitfun-dark). */
+export const SYSTEM_THEME_ID = 'system' as const;
+export type ThemeSelectionId = ThemeId | typeof SYSTEM_THEME_ID;
+
+
+
+ 
+export interface BackgroundColors {
+  primary: ColorValue;
+  secondary: ColorValue;
+  tertiary: ColorValue;
+  elevated: ColorValue;
+  workbench: ColorValue;
+  /** Scene panel background — used by SceneViewport, FlowChat, and all scene content areas. */
+  scene: ColorValue;
+}
+
+ 
+export interface TextColors {
+  primary: ColorValue;
+  secondary: ColorValue;
+  muted: ColorValue;
+  disabled: ColorValue;
+}
+
+ 
+export interface AccentColors {
+  50: ColorValue;
+  100: ColorValue;
+  200: ColorValue;
+  300: ColorValue;
+  400: ColorValue;
+  500: ColorValue;
+  600: ColorValue;
+  700: ColorValue;
+}
+
+export type SecondaryAccentStop = 100 | 200 | 500 | 600;
+export type SecondaryAccentColors = Pick<AccentColors, SecondaryAccentStop>;
+
+
+export interface SemanticColors {
+  success: ColorValue;
+  successBg: ColorValue;
+  successBorder: ColorValue;
+  
+  warning: ColorValue;
+  warningBg: ColorValue;
+  warningBorder: ColorValue;
+  
+  error: ColorValue;
+  errorBg: ColorValue;
+  errorBorder: ColorValue;
+  
+  info: ColorValue;
+  infoBg: ColorValue;
+  infoBorder: ColorValue;
+}
+
+ 
+export interface BorderColors {
+  subtle: ColorValue;
+  base: ColorValue;
+  medium: ColorValue;
+  strong: ColorValue;
+  prominent: ColorValue;
+}
+
+ 
+export interface ElementBackgrounds {
+  subtle: ColorValue;
+  soft: ColorValue;
+  base: ColorValue;
+  medium: ColorValue;
+  strong: ColorValue;
+}
+
+ 
+export interface GitColors {
+  branch: ColorValue;
+  branchBg: ColorValue;
+  changes: ColorValue;
+  added: ColorValue;
+  deleted: ColorValue;
+  staged: ColorValue;
+}
+
+ 
+export interface ScrollbarColors {
+  thumb: ColorValue;       
+  thumbHover: ColorValue;  
+}
+
+
+
+ 
+export interface ShadowConfig {
+  xs: string;
+  sm: string;
+  base: string;
+  lg: string;
+  xl: string;
+}
+
+ 
+export interface BlurConfig {
+  subtle: string;
+  base: string;
+}
+
+ 
+export interface RadiusConfig {
+  sm: string;
+  base: string;
+  lg: string;
+  xl: string;
+  '2xl': string;
+  full: string;
+}
+
+ 
+export interface SpacingConfig {
+  1: string;
+  2: string;
+  3: string;
+  4: string;
+  5: string;
+  6: string;
+  8: string;
+  10: string;
+  12: string;
+  16: string;
+}
+
+ 
+export interface OpacityConfig {
+  disabled: number;
+  hover: number;
+  focus: number;
+}
+
+
+
+ 
+export interface ButtonConfig {
+  primary: {
+    default: {
+      background: ColorValue;
+      color: ColorValue;
+      border: ColorValue;
+      shadow?: string;
+    };
+    hover: {
+      background: ColorValue;
+      color: ColorValue;
+      border: ColorValue;
+      shadow?: string;
+      transform?: string;
+    };
+    active: {
+      background: ColorValue;
+      color: ColorValue;
+      border: ColorValue;
+      shadow?: string;
+      transform?: string;
+    };
+  };
+  
+  
+  ghost: {
+    default: {
+      color: ColorValue;
+    };
+    hover: {
+      background: ColorValue;
+      color: ColorValue;
+      border: ColorValue;
+    };
+  };
+}
+
+export interface MotionConfig {
+  instant: string;
+  fast: string;
+  base: string;
+  slow: string;
+}
+
+ 
+export interface EasingConfig {
+  standard: string;
+  decelerate: string;
+  smooth: string;
+}
+
+
+
+ 
+export interface FontConfig {
+  sans: string;
+  mono: string;
+}
+
+ 
+export interface FontWeightConfig {
+  normal: number;
+  medium: number;
+  semibold: number;
+}
+
+ 
+export interface FontSizeConfig {
+  xs: string;
+  sm: string;
+  base: string;
+  lg: string;
+  xl: string;
+  '2xl': string;
+  '3xl': string;
+  '4xl': string;
+}
+
+ 
+export interface LineHeightConfig {
+  tight: number;
+  base: number;
+  relaxed: number;
+}
+
+
+
+ 
+export interface MonacoEditorColors {
+  background: ColorValue;
+  foreground: ColorValue;
+  lineHighlight: ColorValue;
+  selection: ColorValue;
+  cursor: ColorValue;
+  [key: string]: ColorValue;
+}
+
+ 
+export interface MonacoTokenRule {
+  token: string;
+  foreground?: string;
+  background?: string;
+  fontStyle?: string;
+}
+
+ 
+export interface MonacoThemeConfig {
+  base: 'vs' | 'vs-dark' | 'hc-black' | 'hc-light';
+  inherit: boolean;
+  rules: MonacoTokenRule[];
+  colors: MonacoEditorColors;
+}
+
+
+
+ 
+export interface ThemeConfig {
+  
+  id: ThemeId;
+  name: string;
+  type: ThemeType;
+  description?: string;
+  author?: string;
+  version?: string;
+  
+  
+  colors: {
+    background: BackgroundColors;
+    text: TextColors;
+    accent: AccentColors;
+    purple?: SecondaryAccentColors;
+    semantic: SemanticColors;
+    border: BorderColors;
+    element: ElementBackgrounds;
+    git: GitColors;
+    scrollbar?: ScrollbarColors; 
+  };
+  
+  
+  effects: {
+    shadow: ShadowConfig;
+    blur: BlurConfig;
+    radius: RadiusConfig;
+    spacing: SpacingConfig;
+    opacity: OpacityConfig;
+  };
+  
+  
+  motion: {
+    duration: MotionConfig;
+    easing: EasingConfig;
+  };
+  
+  
+  typography: {
+    font: FontConfig;
+    weight: FontWeightConfig;
+    size: FontSizeConfig;
+    lineHeight: LineHeightConfig;
+  };
+  
+  
+  components?: {
+    button?: ButtonConfig;
+  };
+  
+  // Monaco Editor
+  monaco?: MonacoThemeConfig;
+
+  /**
+   * Workbench chrome (nav + scene). Per-theme toggles; omitted keys use product defaults.
+   */
+  layout?: {
+    /** Outer border around the main scene viewport (right panel). Default true. */
+    sceneViewportBorder?: boolean;
+  };
+}
+
+
+
+ 
+export interface ThemeMetadata {
+  id: ThemeId;
+  name: string;
+  type: ThemeType;
+  description?: string;
+  author?: string;
+  version?: string;
+  builtin: boolean; 
+  createdAt?: string;
+  updatedAt?: string;
+  thumbnail?: string; 
+}
+
+
+
+ 
+export interface ThemeExport {
+  schema: string; 
+  theme: ThemeConfig;
+  metadata: ThemeMetadata;
+  exportedAt: string;
+}
+
+ 
+export interface VSCodeThemeImport {
+  name: string;
+  type: ThemeType;
+  colors: Record<string, string>;
+  tokenColors: Array<{
+    scope: string | string[];
+    settings: {
+      foreground?: string;
+      background?: string;
+      fontStyle?: string;
+    };
+  }>;
+}
+
+
+
+ 
+export interface ThemeValidationResult {
+  valid: boolean;
+  errors: Array<{
+    path: string;
+    message: string;
+    code: string;
+  }>;
+  warnings: Array<{
+    path: string;
+    message: string;
+    code: string;
+  }>;
+}
+
+
+
+ 
+export type ThemeEventType = 
+  | 'theme:before-change'
+  | 'theme:after-change'
+  | 'theme:load'
+  | 'theme:unload'
+  | 'theme:register'
+  | 'theme:unregister';
+
+ 
+export interface ThemeEvent {
+  type: ThemeEventType;
+  themeId: ThemeId;
+  theme?: ThemeConfig;
+  previousTheme?: ThemeConfig;
+  timestamp: number;
+}
+
+ 
+export type ThemeEventListener = (event: ThemeEvent) => void | Promise<void>;
+
+
+
+ 
+export interface ThemeHooks {
+  beforeChange?: (newTheme: ThemeConfig, oldTheme?: ThemeConfig) => void | Promise<void>;
+  afterChange?: (theme: ThemeConfig, oldTheme?: ThemeConfig) => void | Promise<void>;
+  onLoad?: (theme: ThemeConfig) => void | Promise<void>;
+  onUnload?: (theme: ThemeConfig) => void | Promise<void>;
+}
+
+
+
+ 
+export interface ThemeAdapter {
+  name: string;
+  supports: (data: any) => boolean;
+  convert: (data: any) => ThemeConfig;
+}
+
+
+
+ 
+export interface ColorPreset {
+  id: string;
+  name: string;
+  colors: Partial<ThemeConfig['colors']>;
+}
+
+ 
+export interface EffectPreset {
+  id: string;
+  name: string;
+  effects: Partial<ThemeConfig['effects']>;
+}

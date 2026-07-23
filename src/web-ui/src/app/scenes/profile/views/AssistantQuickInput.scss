@@ -1,0 +1,131 @@
+@use '../../../../component-library/styles/tokens' as *;
+
+.aqi {
+  // Horizontal inset: shadow fade + align with .acp-sessions-area
+  padding: $size-gap-4 $size-gap-6 $size-gap-5;
+
+  &__box {
+    display: flex;
+    flex-direction: column;
+    border: 1px solid var(--border-medium);
+    border-radius: $size-radius-xl;
+    background: color-mix(in srgb, var(--element-bg-subtle) 94%, transparent);
+    // Large blur + negative spread: diffuse “pool” under the card, softer at side clips
+    box-shadow: 0 2px 16px -6px color-mix(in srgb, var(--color-text-primary) 8%, transparent);
+    transition: border-color $motion-fast $easing-standard,
+      background $motion-fast $easing-standard,
+      box-shadow $motion-fast $easing-standard,
+      transform $motion-fast $easing-standard;
+
+    &:hover:not(:has(.bitfun-textarea__field:disabled)) {
+      transform: translateY(-2px);
+      border-color: var(--border-strong);
+      background: color-mix(in srgb, var(--element-bg-base) 90%, transparent);
+      box-shadow:
+        0 20px 48px -14px color-mix(in srgb, var(--color-text-primary) 14%, transparent),
+        0 10px 28px -10px color-mix(in srgb, var(--color-text-primary) 9%, transparent);
+    }
+
+    &:focus-within {
+      transform: translateY(-2px);
+      border-color: var(--border-strong);
+      background: var(--element-bg-soft);
+      box-shadow:
+        0 22px 52px -12px color-mix(in srgb, var(--color-accent-500) 18%, transparent),
+        0 12px 32px -10px color-mix(in srgb, var(--color-text-primary) 10%, transparent);
+    }
+  }
+
+  // Textarea from component library — borderless inside composite box
+  &__embed.bitfun-textarea {
+    gap: 0;
+    width: 100%;
+
+    .bitfun-textarea__wrapper {
+      width: 100%;
+    }
+
+    .bitfun-textarea__field {
+      width: 100%;
+      min-height: 72px;
+      max-height: 220px;
+      padding: $size-gap-4 $size-gap-4 $size-gap-2;
+      border: none !important;
+      border-radius: #{$size-radius-xl} #{$size-radius-xl} 0 0;
+      background: transparent !important;
+      color: var(--color-text-primary);
+      font-family: $font-family-sans;
+      font-size: var(--font-size-base);
+      line-height: $line-height-relaxed;
+      resize: none;
+      box-sizing: border-box;
+      overflow-y: auto;
+      box-shadow: none !important;
+
+      &::placeholder {
+        color: var(--color-text-muted);
+      }
+
+      &:hover:not(:disabled),
+      &:focus:not(:disabled) {
+        border: none !important;
+        background: transparent !important;
+        box-shadow: none !important;
+      }
+
+      &::-webkit-scrollbar {
+        width: 4px;
+      }
+
+      &::-webkit-scrollbar-thumb {
+        background: var(--border-subtle);
+        border-radius: 2px;
+      }
+    }
+  }
+
+  &__footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: $size-gap-2 $size-gap-3 $size-gap-3 $size-gap-4;
+    gap: $size-gap-3;
+  }
+
+  &__footer-left {
+    display: flex;
+    align-items: center;
+    gap: $size-gap-3;
+    min-width: 0;
+    flex: 1 1 auto;
+  }
+
+  &__model {
+    flex-shrink: 0;
+  }
+
+  &__hint {
+    font-size: var(--font-size-2xs);
+    color: var(--color-text-muted);
+    opacity: 0.72;
+    user-select: none;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  &__send {
+    flex-shrink: 0;
+    border-radius: 7px !important;
+
+    &.icon-btn--success:not(:disabled) {
+      background: var(--color-accent-500);
+      color: var(--color-static-white);
+
+      &:hover {
+        background: var(--color-accent-600);
+        color: var(--color-static-white);
+      }
+    }
+  }
+}

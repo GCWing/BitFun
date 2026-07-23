@@ -1,0 +1,203 @@
+@use '../../../component-library/styles/tokens' as *;
+
+.bitfun-debug-config {
+  &__content {
+    display: flex;
+    flex-direction: column;
+    gap: $size-gap-6;
+  }
+
+  &__input-group {
+    display: flex;
+    align-items: center;
+    gap: $size-gap-2;
+    width: 100%;
+    min-width: 0;
+
+    .bitfun-input-wrapper {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .bitfun-input-container {
+      min-width: 0;
+    }
+
+    .bitfun-icon-button {
+      flex-shrink: 0;
+    }
+  }
+
+  &__settings-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: $size-gap-2;
+    width: 100%;
+  }
+
+  /** Modal header reset: match `.modal__close` size + hover/active */
+  &__modal-reset-icon.icon-btn {
+    width: 22px !important;
+    height: 22px !important;
+    min-width: 22px;
+    min-height: 22px;
+    padding: 0 !important;
+    border: 1px solid transparent;
+    border-radius: 6px;
+    box-shadow: none;
+    background: transparent;
+    color: var(--color-text-muted);
+    transition: all 0.2s ease;
+
+    svg {
+      width: 12px !important;
+      height: 12px !important;
+    }
+
+    &:hover:not(:disabled) {
+      background: var(--element-bg-subtle);
+      border-color: var(--border-subtle);
+      color: var(--color-text-primary);
+    }
+
+    &:active:not(:disabled) {
+      transform: scale(0.92);
+    }
+
+    &:focus-visible {
+      outline: 2px solid var(--color-accent-500);
+      outline-offset: 2px;
+    }
+  }
+
+  &__modal-body {
+    padding: $size-gap-4;
+    display: flex;
+    flex-direction: column;
+    gap: $size-gap-2;
+  }
+
+  &__modal-footer {
+    position: sticky;
+    bottom: 0;
+    display: flex;
+    justify-content: flex-end;
+    gap: $size-gap-2;
+    padding: $size-gap-3 $size-gap-4;
+    border-top: 1px solid var(--border-subtle);
+    background: var(--color-bg-primary);
+  }
+
+  &__template-card {
+    overflow: hidden;
+
+    &.is-expanded {
+      background: var(--element-bg-subtle) !important;
+    }
+  }
+
+  &__template-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: $size-gap-3 $size-gap-4;
+    cursor: pointer;
+    transition: background $motion-base $easing-standard;
+
+    &:hover {
+      background: var(--element-bg-subtle);
+    }
+  }
+
+  &__template-info {
+    display: flex;
+    align-items: center;
+    gap: $size-gap-3;
+    min-width: 0;
+  }
+
+  &__template-name {
+    font-size: var(--font-size-sm);
+    font-weight: $font-weight-medium;
+    color: var(--color-text-primary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  &__template-arrow {
+    color: var(--color-text-muted);
+    transition: transform $motion-base $easing-standard;
+
+    &.is-expanded {
+      transform: rotate(180deg);
+    }
+  }
+
+  &__template-content {
+    padding: $size-gap-4;
+    border-top: 1px solid var(--border-subtle);
+    display: flex;
+    flex-direction: column;
+    gap: $size-gap-4;
+  }
+
+  &__template-field {
+    display: flex;
+    flex-direction: column;
+    gap: $size-gap-2;
+  }
+
+  &__template-label {
+    font-size: var(--font-size-sm);
+    font-weight: $font-weight-medium;
+    color: var(--color-text-secondary);
+  }
+
+  &__region-inputs {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: $size-gap-2;
+  }
+
+  &__template-notes {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 10px 12px;
+    border: 1px solid var(--border-base);
+    border-radius: $size-radius-sm;
+    background: transparent;
+  }
+
+  &__template-note {
+    font-size: var(--font-size-xs);
+    color: var(--color-text-muted);
+    line-height: $line-height-relaxed;
+  }
+}
+
+@container config-panel (max-width: 520px) {
+  .bitfun-debug-config {
+    &__settings-actions {
+      justify-content: flex-start;
+      flex-wrap: wrap;
+    }
+  }
+}
+
+@media (max-width: 520px) {
+  .bitfun-debug-config {
+    &__template-content {
+      padding: $size-gap-3;
+    }
+
+    &__region-inputs {
+      grid-template-columns: 1fr;
+    }
+
+    &__modal-body {
+      padding: $size-gap-2 $size-gap-3;
+    }
+  }
+}

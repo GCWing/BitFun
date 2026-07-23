@@ -1,0 +1,182 @@
+ 
+
+.language-selector {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  
+  
+  &--dropdown {
+    .language-selector__select {
+      appearance: none;
+      background: var(--element-bg-base);
+      border: 1px solid var(--border-base);
+      border-radius: var(--size-radius-sm);
+      padding: 6px 28px 6px 10px;
+      font-size: 13px;
+      color: var(--color-text-primary);
+      cursor: pointer;
+      transition: all 0.2s ease;
+      
+      
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23999' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+      background-repeat: no-repeat;
+      background-position: right 8px center;
+      
+      &:hover:not(:disabled) {
+        border-color: var(--border-medium);
+        background-color: var(--element-bg-medium);
+      }
+      
+      &:focus {
+        outline: none;
+        border-color: var(--color-accent-400);
+        box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-accent-400) 20%, transparent);
+      }
+      
+      &:disabled {
+        opacity: 0.6;
+        cursor: not-allowed;
+      }
+    }
+    
+    .language-selector__loading {
+      margin-left: 8px;
+      color: var(--color-text-muted);
+      font-size: 12px;
+    }
+  }
+  
+  
+  &--inline {
+    gap: 4px;
+    
+    .language-selector__inline-button {
+      padding: 4px 10px;
+      border: 1px solid transparent;
+      border-radius: var(--size-radius-sm);
+      background: transparent;
+      color: var(--color-text-secondary);
+      font-size: 13px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      
+      &:hover:not(:disabled) {
+        background: var(--element-bg-base);
+        color: var(--color-text-primary);
+      }
+      
+      &--active {
+        background: var(--element-bg-medium);
+        color: var(--color-accent-500);
+        border-color: var(--color-accent-200);
+        
+        &:hover:not(:disabled) {
+          background: var(--element-bg-medium);
+        }
+      }
+      
+      &:disabled {
+        opacity: 0.6;
+        cursor: not-allowed;
+      }
+    }
+  }
+  
+  
+  &--icon-only {
+    .language-selector__button {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      padding: 6px 10px;
+      border: 1px solid transparent;
+      border-radius: var(--size-radius-sm);
+      background: transparent;
+      color: var(--color-text-secondary);
+      font-size: 13px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      
+      &:hover:not(:disabled) {
+        background: var(--element-bg-base);
+        color: var(--color-text-primary);
+      }
+      
+      &:disabled {
+        opacity: 0.6;
+        cursor: not-allowed;
+      }
+    }
+    
+    .language-selector__icon {
+      font-size: 16px;
+    }
+    
+    .language-selector__code {
+      font-size: 11px;
+      font-weight: 500;
+    }
+    
+    .language-selector__dropdown {
+      position: absolute;
+      top: 100%;
+      right: 0;
+      margin-top: 4px;
+      min-width: 150px;
+      padding: 4px;
+      background: var(--color-bg-elevated);
+      border: 1px solid var(--border-base);
+      border-radius: var(--size-radius-md);
+      box-shadow: var(--shadow-lg);
+      opacity: 0;
+      visibility: hidden;
+      transform: translateY(-4px);
+      transition: all 0.2s ease;
+      z-index: 1000;
+    }
+    
+    &:hover .language-selector__dropdown,
+    &:focus-within .language-selector__dropdown {
+      opacity: 1;
+      visibility: visible;
+      transform: translateY(0);
+    }
+    
+    .language-selector__option {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      width: 100%;
+      padding: 8px 12px;
+      border: none;
+      border-radius: var(--size-radius-sm);
+      background: transparent;
+      color: var(--color-text-secondary);
+      font-size: 13px;
+      text-align: left;
+      cursor: pointer;
+      transition: all 0.15s ease;
+      
+      &:hover:not(:disabled) {
+        background: var(--element-bg-base);
+        color: var(--color-text-primary);
+      }
+      
+      &--active {
+        color: var(--color-accent-500);
+        font-weight: 500;
+      }
+      
+      &:disabled {
+        opacity: 0.6;
+        cursor: not-allowed;
+      }
+    }
+    
+    .language-selector__check {
+      color: var(--color-accent-500);
+      font-size: 14px;
+    }
+  }
+}

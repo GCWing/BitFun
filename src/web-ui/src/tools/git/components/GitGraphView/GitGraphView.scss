@@ -1,0 +1,388 @@
+.git-graph-view {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  width: 100%;
+  background: var(--color-bg-primary);
+  color: var(--color-text-primary);
+
+  &--loading,
+  &--error,
+  &--empty {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  &__loading,
+  &__error,
+  &__empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 16px;
+
+    p {
+      margin: 0;
+      color: var(--color-text-secondary);
+    }
+
+    button {
+      padding: 8px 16px;
+      background: var(--color-accent-500);
+      color: var(--color-static-white);
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 14px;
+
+      &:hover {
+        opacity: 0.9;
+      }
+    }
+  }
+
+  &__spinner {
+    width: 32px;
+    height: 32px;
+    border: 3px solid var(--color-overlay-white-12);
+    border-top-color: var(--color-accent-500);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+  }
+
+  &__header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--border-base);
+    background: var(--color-bg-secondary);
+    flex-shrink: 0;
+  }
+
+  &__header-left {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+
+    h3 {
+      margin: 0;
+      font-size: 14px;
+      font-weight: 600;
+    }
+  }
+
+  &__current-branch {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 8px;
+    background: var(--color-accent-500);
+    color: var(--color-static-white);
+    border-radius: 4px;
+    font-size: 12px;
+    font-weight: 500;
+  }
+
+  &__search {
+    max-width: 450px;
+    flex: 1;
+  }
+
+  &__search-navigation {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 0 4px;
+  }
+
+  &__search-count {
+    font-size: 12px;
+    color: var(--color-text-secondary);
+    white-space: nowrap;
+    padding: 0 8px;
+    font-family: 'SF Mono', 'Monaco', 'Courier New', monospace;
+
+    &--no-results {
+      color: var(--color-text-muted);
+    }
+  }
+
+  &__search-nav-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    padding: 0;
+    background: transparent;
+    border: none;
+    border-radius: 4px;
+    color: var(--color-text-secondary);
+    cursor: pointer;
+    transition: all 0.15s ease;
+
+    &:hover:not(:disabled) {
+      background: var(--element-bg-hover);
+      color: var(--color-text-primary);
+    }
+
+    &:active:not(:disabled) {
+      transform: scale(0.95);
+    }
+
+    &:disabled {
+      opacity: 0.3;
+      cursor: default;
+    }
+  }
+
+  &__content {
+    flex: 1;
+    overflow-y: auto;
+    overflow-x: auto;
+    position: relative;
+    display: flex;
+    min-height: 0;
+    
+  }
+
+  &__canvas-full {
+    display: block;
+    z-index: 0;
+  }
+
+  &__hit-area {
+    transition: background 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
+    
+    &:hover {
+      background: var(--color-overlay-white-04);
+    }
+
+    &--selected {
+      background: var(--color-accent-100);
+      border-left: 2px solid var(--color-accent-500);
+      z-index: 2;
+
+      &:hover {
+        background: var(--color-accent-200);
+      }
+    }
+
+    &--search-match {
+      background: color-mix(in srgb, var(--color-warning) 6%, transparent);
+      border-left: 2px solid color-mix(in srgb, var(--color-warning) 40%, transparent);
+
+      &:hover {
+        background: color-mix(in srgb, var(--color-warning) 10%, transparent);
+      }
+    }
+
+    &--current-search-match {
+      background: color-mix(in srgb, var(--color-warning) 15%, transparent);
+      border-left: 3px solid var(--color-warning);
+      box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-warning) 30%, transparent);
+      animation: search-highlight 0.4s ease-out;
+      z-index: 3;
+
+      &:hover {
+        background: color-mix(in srgb, var(--color-warning) 20%, transparent);
+      }
+
+      &.git-graph-view__hit-area--selected {
+        background: linear-gradient(
+          90deg,
+          color-mix(in srgb, var(--color-warning) 20%, transparent),
+          var(--color-accent-200)
+        );
+        border-left: 3px solid var(--color-warning);
+        box-shadow:
+          inset 0 0 0 1px color-mix(in srgb, var(--color-warning) 30%, transparent),
+          inset 3px 0 0 0 var(--color-accent-500);
+
+        &:hover {
+          background: linear-gradient(
+            90deg,
+            color-mix(in srgb, var(--color-warning) 25%, transparent),
+            var(--color-accent-200)
+          );
+        }
+      }
+    }
+  }
+
+  &__commit {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 0 16px;
+    cursor: pointer;
+    border-bottom: 1px solid var(--border-base);
+    transition: background 0.15s, box-shadow 0.15s;
+    background: var(--color-bg-primary);
+
+    &:hover {
+      background: var(--element-bg-hover);
+      box-shadow: 0 1px 3px var(--color-overlay-black-12);
+      z-index: 1;
+    }
+
+    &--selected {
+      background: var(--color-accent-100) !important;
+      box-shadow: 0 2px 4px var(--color-overlay-black-15);
+      z-index: 2;
+    }
+
+    &--dimmed {
+      opacity: 0.4;
+    }
+  }
+
+  &__refs {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-shrink: 0;
+    max-width: 300px;
+    overflow-x: auto;
+    overflow-y: hidden;
+    scrollbar-width: thin;
+    
+  }
+
+  &__ref {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 8px;
+    border-radius: 12px;
+    font-size: 11px;
+    font-weight: 500;
+    white-space: nowrap;
+    cursor: help;
+    transition: transform 0.15s, box-shadow 0.15s;
+
+    &:hover {
+      transform: scale(1.05);
+      box-shadow: 0 2px 4px var(--color-overlay-black-20);
+    }
+
+    &--branch {
+      background: var(--color-accent-600);
+      color: var(--color-static-white);
+    }
+
+    &--remote {
+      background: var(--color-purple-600);
+      color: var(--color-static-white);
+    }
+
+    &--tag {
+      background: var(--git-color-changes);
+      color: var(--color-static-white);
+    }
+
+    &--current {
+      box-shadow: 0 0 0 2px var(--color-bg-primary),
+                  0 0 0 4px currentColor;
+      animation: pulse 2s ease-in-out infinite;
+    }
+  }
+
+  &__commit-message {
+    flex: 1;
+    font-size: 13px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    min-width: 0;
+
+    .git-graph-view__commit:hover & {
+      font-weight: 500;
+    }
+  }
+
+  &__commit-meta {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    font-size: 12px;
+    color: var(--color-text-secondary);
+    flex-shrink: 0;
+  }
+
+  &__commit-author {
+    max-width: 120px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  &__commit-time {
+    white-space: nowrap;
+  }
+
+  &__commit-hash {
+    font-family: 'Courier New', monospace;
+    padding: 2px 6px;
+    background: var(--color-bg-tertiary);
+    border-radius: 4px;
+    white-space: nowrap;
+  }
+
+  &__commit-actions {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    opacity: 0;
+    transition: opacity 0.15s;
+
+    .git-graph-view__commit:hover & {
+      opacity: 1;
+    }
+
+    button {
+      padding: 4px;
+      background: transparent;
+      border: none;
+      color: var(--color-text-secondary);
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      border-radius: 4px;
+
+      &:hover {
+        background: var(--element-bg-hover);
+        color: var(--color-text-primary);
+      }
+    }
+  }
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.8;
+  }
+}
+
+@keyframes search-highlight {
+  0% {
+    background: color-mix(in srgb, var(--color-warning) 40%, transparent);
+    transform: scaleY(1.05);
+  }
+  100% {
+    background: color-mix(in srgb, var(--color-warning) 15%, transparent);
+    transform: scaleY(1);
+  }
+}
+

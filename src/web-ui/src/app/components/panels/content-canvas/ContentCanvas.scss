@@ -1,0 +1,43 @@
+/**
+ * ContentCanvas main container styles.
+ */
+
+.canvas-content-canvas {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+  background: var(--color-bg-primary);
+  overflow: hidden;
+  // Create isolated stacking context to prevent high z-index elements
+  // from covering external floating UI (ChatInput, popovers, etc.)
+  isolation: isolate;
+
+  // Maximized state
+  &.is-maximized {
+    position: fixed;
+    inset: 0;
+    z-index: 1000;
+  }
+
+  // Main content area
+  &__main {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-height: 0;
+  }
+
+  // Editor area
+  &__editor {
+    flex: 1;
+    min-height: 0;
+  }
+
+  // Anchor content
+  &__anchor-content {
+    width: 100%;
+    height: 100%;
+  }
+}

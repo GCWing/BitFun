@@ -1,0 +1,161 @@
+/**
+ * SCSS utility functions
+ */
+@use 'sass:math';
+@use 'sass:color';
+@use 'sass:string';
+@use 'sass:list';
+@use 'sass:map';
+
+// ==================== Color functions ====================
+
+@function alpha($color, $opacity) {
+  @return rgba($color, $opacity);
+}
+
+@function blend($color1, $color2, $weight: 50%) {
+  @return color.mix($color1, $color2, $weight);
+}
+
+@function lighten-color($color, $amount: 10%) {
+  @return color.adjust($color, $lightness: $amount);
+}
+
+@function darken-color($color, $amount: 10%) {
+  @return color.adjust($color, $lightness: -$amount);
+}
+
+// ==================== Size functions ====================
+
+@function strip-unit($value) {
+  @return math.div($value, ($value * 0 + 1));
+}
+
+@function px-to-rem($px, $base: 16px) {
+  @if math.unit($px) != 'px' {
+    @error '#{$px} must be in px';
+  }
+  @return math.div(strip-unit($px), strip-unit($base)) * 1rem;
+}
+
+@function rem-to-px($rem, $base: 16px) {
+  @if math.unit($rem) != 'rem' {
+    @error '#{$rem} must be in rem';
+  }
+  @return strip-unit($rem) * strip-unit($base) * 1px;
+}
+
+@function scale-size($base, $ratio: 1.5) {
+  @return $base * $ratio;
+}
+
+// ==================== Spacing functions ====================
+
+@function spacing($multiplier, $base: 4px) {
+  @return $base * $multiplier;
+}
+
+// ==================== Shadow functions ====================
+
+@function elevation-shadow($depth) {
+  @if $depth == 1 {
+    @return 0 1px 3px var(--color-overlay-black-12), 0 1px 2px var(--color-overlay-black-30);
+  } @else if $depth == 2 {
+    @return 0 3px 6px var(--color-overlay-black-15), 0 2px 4px var(--color-overlay-black-12);
+  } @else if $depth == 3 {
+    @return 0 10px 20px var(--color-overlay-black-15), 0 3px 6px var(--color-overlay-black-12);
+  } @else if $depth == 4 {
+    @return 0 15px 25px var(--color-overlay-black-15), 0 5px 10px var(--color-overlay-black-08);
+  } @else if $depth == 5 {
+    @return 0 20px 40px var(--color-overlay-black-20);
+  }
+  @return none;
+}
+
+@function glow-shadow($color, $opacity: 0.25) {
+  @return 
+    0 12px 32px rgba($color, $opacity),
+    0 6px 16px rgba($color, $opacity * 0.7),
+    0 3px 8px var(--color-overlay-black-12);
+}
+
+// ==================== String functions ====================
+
+@function str-replace($string, $search, $replace: '') {
+  $index: string.index($string, $search);
+  
+  @if $index {
+    @return string.slice($string, 1, $index - 1) + $replace + 
+            str-replace(string.slice($string, $index + string.length($search)), $search, $replace);
+  }
+  
+  @return $string;
+}
+
+// ==================== Map helpers ====================
+
+@function map-deep-get($map, $keys...) {
+  @each $key in $keys {
+    $map: map.get($map, $key);
+    @if $map == null {
+      @return null;
+    }
+  }
+  @return $map;
+}
+
+@function map-collect($maps...) {
+  $result: ();
+  @each $map in $maps {
+    $result: map.merge($result, $map);
+  }
+  @return $result;
+}
+
+// ==================== Utility functions ====================
+
+@function clamp-value($value, $min, $max) {
+  @return math.max($min, math.min($value, $max));
+}
+
+@function z-index($layer) {
+  $z-layers: (
+    'base': 0,
+    'decoration': 1,
+    'content': 2,
+    'header': 10,
+    'sticky': 15,
+    'floating': 50,
+    'overlay': 100,
+    'modal': 200,
+    'toast': 300,
+    'tooltip': 400
+  );
+  
+  @return map.get($z-layers, $layer) or 0;
+}
+
+@function contrast-color($color) {
+  $lightness: color.lightness($color);
+  
+  @if $lightness > 50% {
+    @return #000000;
+  } @else {
+    @return #ffffff;
+  }
+}
+
+@function gradient-angle($direction) {
+  $angles: (
+    'top': 0deg,
+    'top-right': 45deg,
+    'right': 90deg,
+    'bottom-right': 135deg,
+    'bottom': 180deg,
+    'bottom-left': 225deg,
+    'left': 270deg,
+    'top-left': 315deg
+  );
+  
+  @return map.get($angles, $direction) or 135deg;
+}

@@ -1,0 +1,171 @@
+/**
+ * ConfirmDialog styles
+ * Icon top-centered; content uses full width of a wide (landscape) modal.
+ */
+@use '../../styles/tokens' as *;
+
+.confirm-dialog {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  width: 100%;
+  max-width: 560px;
+  box-sizing: border-box;
+  padding-top: $size-gap-16;
+
+  &__icon {
+    flex-shrink: 0;
+    width: 48px;
+    height: 48px;
+    margin: 0 auto $size-gap-4;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+
+    svg {
+      flex-shrink: 0;
+    }
+  }
+
+  &--info &__icon {
+    background: color-mix(in srgb, var(--color-info) 15%, transparent);
+    color: var(--color-info);
+  }
+
+  &--warning &__icon {
+    background: color-mix(in srgb, var(--color-warning) 15%, transparent);
+    color: var(--color-warning);
+  }
+
+  &--error &__icon {
+    background: color-mix(in srgb, var(--color-error) 15%, transparent);
+    color: var(--color-error);
+  }
+
+  &--success &__icon {
+    background: color-mix(in srgb, var(--color-success) 15%, transparent);
+    color: var(--color-success);
+  }
+
+  &__content {
+    flex: 1;
+    min-width: 0;
+    margin: 0;
+    padding: 0 $size-gap-6 $size-gap-4;
+  }
+
+  &__title {
+    font-size: var(--font-size-lg);
+    font-weight: $font-weight-semibold;
+    line-height: 1.35;
+    letter-spacing: 0;
+    color: var(--color-text-primary);
+    margin: 0 0 $size-gap-3;
+    text-align: center;
+  }
+
+  &__title--compact {
+    margin-bottom: 0;
+  }
+
+  &__message {
+    font-size: var(--font-size-sm);
+    line-height: 1.55;
+    color: var(--color-text-secondary);
+    text-align: left;
+
+    > *:first-child {
+      margin-top: 0;
+    }
+
+    > *:last-child {
+      margin-bottom: 0;
+    }
+  }
+
+  /** Lead line before bullet list (e.g. “This will:”) */
+  &__message-intro {
+    margin: 0 0 $size-gap-3;
+    font-size: var(--font-size-sm);
+    font-weight: $font-weight-medium;
+    line-height: 1.5;
+    color: var(--color-text-primary);
+  }
+
+  /** Structured bullet list inside confirm body */
+  &__bullet-list {
+    list-style: none;
+    margin: 0;
+    padding: $size-gap-3 $size-gap-5;
+    border-radius: $size-radius-base;
+    background: var(--element-bg-subtle);
+    border: 1px solid var(--border-base);
+  }
+
+  &__bullet-list li {
+    position: relative;
+    margin: 0;
+    padding-left: $size-gap-5;
+    font-size: var(--font-size-sm);
+    line-height: 1.55;
+    color: var(--color-text-secondary);
+
+    &::before {
+      content: '';
+      position: absolute;
+      left: 2px;
+      top: 0.55em;
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: color-mix(in srgb, var(--color-text-secondary) 45%, transparent);
+    }
+  }
+
+  &__bullet-list li + li {
+    margin-top: $size-gap-2;
+  }
+
+  &__preview {
+    margin-top: $size-gap-3;
+    padding: $size-gap-3 $size-gap-4;
+    background: var(--element-bg-subtle);
+    border: 1px solid var(--border-base);
+    border-radius: $size-radius-base;
+    text-align: left;
+    overflow: auto;
+
+    pre {
+      display: block;
+      box-sizing: border-box;
+      width: 100%;
+      margin: 0;
+      padding: 0;
+      border: 0;
+      border-radius: 0;
+      background: transparent;
+      box-shadow: none;
+      font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+      font-size: var(--font-size-xs);
+      color: var(--color-text-primary);
+      white-space: pre-wrap;
+      word-break: break-all;
+      line-height: 1.5;
+    }
+  }
+
+  &__actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: $size-gap-2;
+    justify-content: flex-end;
+    align-items: center;
+    padding: $size-gap-4 $size-gap-6 $size-gap-5;
+    border-top: 1px solid var(--border-base);
+
+    .btn {
+      min-width: 88px;
+    }
+  }
+}

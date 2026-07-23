@@ -1,0 +1,604 @@
+@use '@/component-library/styles/tokens' as *;
+@use '@/component-library/styles/_extended-mixins' as mixins;
+
+// ==================== Panel Root Container ====================
+
+.bitfun-flexible-panel {
+  @include mixins.flex-layout(column, stretch, start);
+  height: 100%;
+  background: var(--color-bg-workbench);
+  border: none !important;
+  border-radius: 0;
+  backdrop-filter: $blur-base;
+  -webkit-backdrop-filter: $blur-base;
+  box-shadow: none;
+  overflow: hidden;
+  transition: all $motion-base $easing-standard;
+  font-family: $font-family-sans;
+  position: relative;
+
+  &.is-collapsed {
+    height: auto;
+    min-height: 36px;
+  }
+}
+
+// ==================== Panel Header ====================
+
+.bitfun-flexible-panel__header {
+  @include mixins.flex-layout(row, center, between);
+  padding: 0 $size-gap-3;
+  background: var(--color-bg-elevated);
+  border-bottom: none;
+  backdrop-filter: $blur-subtle;
+  -webkit-backdrop-filter: $blur-subtle;
+  height: 36px;
+  min-height: 36px;
+  user-select: none;
+  position: relative;
+}
+
+// Header left area
+.bitfun-flexible-panel__header-left {
+  @include mixins.flex-layout(row, center, start, $size-gap-2);
+  flex: 1;
+  min-width: 0;
+}
+
+// Header right area
+.bitfun-flexible-panel__header-right {
+  @include mixins.flex-layout(row, center, start, $size-gap-1);
+}
+
+// ==================== Header Elements ====================
+
+.bitfun-flexible-panel__collapse-btn {
+  @include mixins.flex-layout(row, center, center);
+  @include mixins.size(24px);
+  padding: 0;
+  background: none;
+  border: none;
+  border-radius: 0;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  transition: all $motion-fast $easing-standard;
+
+  &:hover {
+    background: var(--element-bg-base);
+    color: var(--color-text-primary);
+  }
+}
+
+// Content icon
+.bitfun-flexible-panel__content-icon {
+  @include mixins.flex-layout(row, center, center);
+  @include mixins.size(20px);
+  color: var(--color-accent-500);
+}
+
+// Content info
+.bitfun-flexible-panel__content-info {
+  @include mixins.flex-layout(column, start, start, 2px);
+  flex: 1;
+  min-width: 0;
+}
+
+.bitfun-flexible-panel__content-title {
+  @include mixins.text-ellipsis;
+  font-size: var(--font-size-base);
+  font-weight: $font-weight-semibold;
+  color: var(--color-text-primary);
+}
+
+.bitfun-flexible-panel__content-type {
+  @include mixins.text-ellipsis;
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+}
+
+// ==================== Panel Content ====================
+
+.bitfun-flexible-panel__content {
+  @include mixins.flex-layout(column, stretch, start);
+  flex: 1;
+  overflow: hidden;
+  background: var(--color-bg-primary);
+  min-height: 0;
+}
+
+
+.bitfun-flexible-panel__markdown-editor {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  min-height: 0;
+  height: 100%;
+}
+
+// ==================== Loading State ====================
+
+.bitfun-flexible-panel__loading {
+  @include mixins.flex-layout(column, center, center);
+  height: 100%;
+  padding: 40px 20px;
+  text-align: center;
+  color: var(--color-text-secondary);
+  gap: $size-gap-3;
+
+  &::before {
+    content: '';
+    width: 24px;
+    height: 24px;
+    border: 2px solid var(--border-base);
+    border-top-color: var(--color-accent-500);
+    border-radius: $size-radius-full;
+    animation: bitfun-flexible-panel-spin 0.8s linear infinite;
+  }
+
+  p {
+    margin: 0;
+    font-size: var(--font-size-sm);
+    color: var(--color-text-secondary);
+  }
+}
+
+@keyframes bitfun-flexible-panel-spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+// ==================== Empty State ====================
+
+.bitfun-flexible-panel__empty-content {
+  @include mixins.flex-layout(column, center, center);
+  height: 100%;
+  padding: 40px 20px;
+  text-align: center;
+  color: var(--color-text-secondary);
+
+  h3 {
+    margin: 0 0 $size-gap-2 0;
+    font-size: var(--font-size-xl);
+    font-weight: $font-weight-semibold;
+    color: var(--color-text-primary);
+  }
+
+  p {
+    margin: 0;
+    font-size: var(--font-size-base);
+    color: var(--color-text-secondary);
+  }
+}
+
+.bitfun-flexible-panel__empty-icon {
+  margin-bottom: $size-gap-4;
+  opacity: 0.5;
+}
+
+// ==================== Code Content ====================
+
+.bitfun-flexible-panel__code-content {
+  flex: 1;
+  overflow: auto;
+  padding: 0;
+  background: var(--color-bg-primary);
+  transition: box-shadow $motion-base $easing-standard;
+
+  pre {
+    margin: 0;
+    padding: $size-gap-4;
+    background: var(--color-bg-secondary);
+    border: none;
+    border-radius: 0;
+    font-family: $font-family-mono;
+    font-size: var(--font-size-sm);
+    line-height: $line-height-relaxed;
+    overflow: auto;
+  }
+
+  code {
+    color: var(--color-text-primary);
+  }
+
+  &.needs-fix {
+    box-shadow: 
+      0 0 4px color-mix(in srgb, var(--color-warning) 25%, transparent),
+      0 0 8px color-mix(in srgb, var(--color-warning) 20%, transparent),
+      inset 0 0 12px color-mix(in srgb, var(--color-warning) 20%, transparent),
+      inset 0 0 20px color-mix(in srgb, var(--color-warning) 15%, transparent),
+      inset 0 0 30px color-mix(in srgb, var(--color-warning) 8%, transparent),
+      inset 0 0 40px color-mix(in srgb, var(--color-warning) 3%, transparent);
+    border: none;
+    animation: bitfun-flexible-panel-yellow-glow-pulse 3s ease-in-out infinite alternate;
+  }
+}
+
+@keyframes bitfun-flexible-panel-yellow-glow-pulse {
+  from {
+    box-shadow: 
+      0 0 4px color-mix(in srgb, var(--color-warning) 25%, transparent),
+      0 0 8px color-mix(in srgb, var(--color-warning) 20%, transparent),
+      inset 0 0 12px color-mix(in srgb, var(--color-warning) 20%, transparent),
+      inset 0 0 20px color-mix(in srgb, var(--color-warning) 15%, transparent),
+      inset 0 0 30px color-mix(in srgb, var(--color-warning) 8%, transparent),
+      inset 0 0 40px color-mix(in srgb, var(--color-warning) 3%, transparent);
+    border: none;
+  }
+  to {
+    box-shadow: 
+      0 0 6px color-mix(in srgb, var(--color-warning) 35%, transparent),
+      0 0 12px color-mix(in srgb, var(--color-warning) 25%, transparent),
+      inset 0 0 16px color-mix(in srgb, var(--color-warning) 30%, transparent),
+      inset 0 0 25px color-mix(in srgb, var(--color-warning) 20%, transparent),
+      inset 0 0 35px color-mix(in srgb, var(--color-warning) 12%, transparent),
+      inset 0 0 45px color-mix(in srgb, var(--color-warning) 6%, transparent);
+    border: none;
+  }
+}
+
+// ==================== Markdown Content ====================
+
+.bitfun-flexible-panel__markdown-content {
+  flex: 1;
+  overflow: auto;
+  padding: $size-gap-4;
+}
+
+// Editor container without padding (let editor control spacing)
+.bitfun-flexible-panel__markdown-editor {
+  @include mixins.flex-layout(column, stretch, start);
+  flex: 1;
+  padding: 0;
+  margin: 0;
+}
+
+.bitfun-flexible-panel__markdown-textarea {
+  flex: 1;
+  width: 100%;
+  min-height: 300px;
+  padding: $size-gap-3;
+  border: 1px solid var(--border-base);
+  border-radius: $size-radius-base;
+  background: var(--color-bg-secondary);
+  color: var(--color-text-primary);
+  font-family: $font-family-mono;
+  font-size: var(--font-size-base);
+  line-height: $line-height-relaxed;
+  resize: vertical;
+  outline: none;
+  transition: border-color $motion-fast $easing-standard;
+
+  &:focus {
+    border-color: var(--border-accent);
+  }
+
+  &::placeholder {
+    color: var(--color-text-muted);
+  }
+}
+
+
+.bitfun-flexible-panel__text-content {
+  flex: 1;
+  overflow: auto;
+  padding: $size-gap-4;
+
+  pre {
+    margin: 0;
+    padding: $size-gap-4;
+    background: var(--color-bg-secondary);
+    border: 1px solid var(--border-base);
+    border-radius: $size-radius-base;
+    font-family: $font-family-mono;
+    font-size: var(--font-size-base);
+    line-height: $line-height-relaxed;
+    white-space: pre-wrap;
+    word-break: break-word;
+    overflow: auto;
+  }
+}
+
+// ==================== Unknown Content ====================
+
+.bitfun-flexible-panel__unknown-content {
+  @include mixins.flex-layout(column, center, center);
+  height: 100%;
+  padding: $size-gap-5;
+  text-align: center;
+  color: var(--color-text-secondary);
+  gap: $size-gap-3;
+
+  .bitfun-flexible-panel__unknown-icon {
+    @include mixins.flex-layout(row, center, center);
+    @include mixins.size(64px);
+    margin-bottom: $size-gap-2;
+    color: var(--color-warning);
+    opacity: 0.6;
+  }
+
+  h3 {
+    margin: 0;
+    font-size: var(--font-size-xl);
+    font-weight: $font-weight-semibold;
+    color: var(--color-text-primary);
+  }
+
+  p {
+    margin: 0;
+    font-size: var(--font-size-base);
+    color: var(--color-text-secondary);
+    max-width: 400px;
+  }
+
+  .bitfun-flexible-panel__unknown-meta {
+    margin-top: $size-gap-2;
+    padding: $size-gap-2 $size-gap-3;
+    background: var(--color-bg-secondary);
+    border: 1px solid var(--border-base);
+    border-radius: $size-radius-base;
+    font-family: $font-family-mono;
+
+    code {
+      font-size: var(--font-size-sm);
+      color: var(--color-text-primary);
+      background: transparent;
+      padding: 0;
+    }
+  }
+}
+
+// ==================== Error Message ====================
+
+.bitfun-flexible-panel__error-message {
+  @include mixins.flex-layout(row, center, center);
+  gap: $size-gap-2;
+  padding: $size-gap-4;
+  margin: $size-gap-4;
+  background: var(--color-error-bg);
+  border: 1px solid var(--color-error-border);
+  border-radius: $size-radius-base;
+  color: var(--color-error);
+
+  svg {
+    flex-shrink: 0;
+    color: var(--color-error);
+  }
+
+  p {
+    margin: 0;
+    font-size: var(--font-size-base);
+    color: var(--color-error);
+  }
+}
+
+// ==================== Placeholder ====================
+
+.bitfun-flexible-panel__placeholder {
+  @include mixins.flex-layout(column, center, center);
+  height: 100%;
+  padding: $size-gap-5;
+  text-align: center;
+  color: var(--color-text-secondary);
+
+  p {
+    margin: 0;
+    font-size: var(--font-size-base);
+    color: var(--color-text-muted);
+    font-style: italic;
+  }
+}
+
+// Special placeholder style
+.requirement-clarification-placeholder {
+  @include mixins.flex-layout(column, start, start);
+  padding: $size-gap-4;
+  gap: $size-gap-3;
+
+  p {
+    margin: 0;
+    font-size: var(--font-size-base);
+    color: var(--color-text-secondary);
+  }
+
+  pre {
+    margin: 0;
+    padding: $size-gap-3;
+    background: var(--color-bg-secondary);
+    border: 1px solid var(--border-base);
+    border-radius: $size-radius-base;
+    font-family: $font-family-mono;
+    font-size: var(--font-size-sm);
+    line-height: $line-height-relaxed;
+    overflow: auto;
+    max-width: 100%;
+  }
+}
+
+// ==================== File Viewer ====================
+
+.bitfun-flexible-panel__file-viewer-content {
+  @include mixins.flex-layout(column, stretch, start);
+  height: 100%;
+  overflow: hidden;
+}
+
+.bitfun-flexible-panel__file-viewer-header {
+  padding: $size-gap-3 $size-gap-4;
+  border-bottom: 1px solid var(--border-base);
+  background: var(--color-bg-secondary);
+
+  h4 {
+    margin: 0 0 4px 0;
+    font-size: var(--font-size-base);
+    font-weight: $font-weight-semibold;
+    color: var(--color-text-primary);
+  }
+}
+
+.bitfun-flexible-panel__file-path {
+  margin: 0;
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
+  font-family: $font-family-mono;
+}
+
+.bitfun-flexible-panel__file-content {
+  flex: 1;
+  overflow: auto;
+  padding: $size-gap-4;
+
+  pre {
+    margin: 0;
+    font-family: $font-family-mono;
+    font-size: var(--font-size-sm);
+    line-height: $line-height-relaxed;
+    color: var(--color-text-primary);
+    white-space: pre-wrap;
+    word-wrap: break-word;
+  }
+}
+
+// ==================== Code Viewer Container ====================
+
+.bitfun-flexible-panel__code-viewer-container {
+  @include mixins.flex-layout(column, stretch, start);
+  height: 100%;
+  background: var(--color-bg-tertiary);
+  margin: 0 !important;
+  padding: 0 !important;
+  border: none !important;
+
+  .bitfun-flexible-panel__code-content {
+    flex: 1;
+    overflow: hidden;
+    background: var(--color-bg-primary);
+    transition: box-shadow $motion-base $easing-standard;
+    margin: 0 !important;
+    padding: 0 !important;
+    border: none !important;
+
+    &.needs-fix {
+      box-shadow: 
+        0 0 4px color-mix(in srgb, var(--color-warning) 25%, transparent),
+        0 0 8px color-mix(in srgb, var(--color-warning) 20%, transparent),
+        inset 0 0 12px color-mix(in srgb, var(--color-warning) 20%, transparent),
+        inset 0 0 20px color-mix(in srgb, var(--color-warning) 15%, transparent),
+        inset 0 0 30px color-mix(in srgb, var(--color-warning) 8%, transparent),
+        inset 0 0 40px color-mix(in srgb, var(--color-warning) 3%, transparent);
+      border: 1px solid color-mix(in srgb, var(--color-warning) 40%, transparent);
+      animation: bitfun-flexible-panel-yellow-glow-pulse 3s ease-in-out infinite alternate;
+    }
+  }
+}
+
+// ==================== Image Viewer Container ====================
+
+.bitfun-flexible-panel__image-viewer-container {
+  @include mixins.flex-layout(column, stretch, start);
+  height: 100%;
+  background: var(--color-bg-tertiary);
+  margin: 0 !important;
+  padding: 0 !important;
+  border: none !important;
+
+  .bitfun-flexible-panel__image-viewer {
+    flex: 1;
+    overflow: hidden;
+    margin: 0 !important;
+    padding: 0 !important;
+    border: none !important;
+  }
+}
+
+// ==================== Panel CodeViewer Style ====================
+
+.bitfun-flexible-panel__panel-code-viewer {
+  border: none !important;
+  border-radius: 0 !important;
+  height: 100%;
+  margin: 0 !important;
+  padding: 0 !important;
+
+  .bitfun-flexible-panel__code-viewer-header {
+    background: var(--color-bg-primary);
+    border-bottom: none;
+  }
+
+  .bitfun-flexible-panel__file-name {
+    color: var(--color-text-secondary);
+  }
+
+  .bitfun-flexible-panel__file-path {
+    color: var(--color-text-muted);
+  }
+
+  .bitfun-flexible-panel__action-btn {
+    color: var(--color-text-muted);
+
+    &:hover {
+      color: var(--color-text-primary);
+      background: var(--element-bg-base);
+    }
+  }
+
+  &.needs-fix {
+    box-shadow: 
+      0 0 4px color-mix(in srgb, var(--color-warning) 25%, transparent),
+      0 0 8px color-mix(in srgb, var(--color-warning) 20%, transparent),
+      inset 0 0 12px color-mix(in srgb, var(--color-warning) 20%, transparent),
+      inset 0 0 20px color-mix(in srgb, var(--color-warning) 15%, transparent),
+      inset 0 0 30px color-mix(in srgb, var(--color-warning) 8%, transparent),
+      inset 0 0 40px color-mix(in srgb, var(--color-warning) 3%, transparent);
+    border: 1px solid color-mix(in srgb, var(--color-warning) 40%, transparent);
+    animation: bitfun-flexible-panel-yellow-glow-pulse 3s ease-in-out infinite alternate;
+    transition: box-shadow $motion-base $easing-standard;
+  }
+}
+
+// ==================== Responsive Design ====================
+
+@media (max-width: 768px) {
+  .bitfun-flexible-panel__header {
+    padding: $size-gap-2 $size-gap-3;
+  }
+  
+  .bitfun-flexible-panel__content-title {
+    font-size: var(--font-size-sm);
+  }
+  
+  .bitfun-flexible-panel__content-type {
+    font-size: var(--font-size-xs);
+  }
+  
+  .bitfun-flexible-panel__code-content,
+  .bitfun-flexible-panel__markdown-content,
+  .bitfun-flexible-panel__text-content {
+    padding: $size-gap-3;
+  }
+}
+
+// ==================== Terminal Panel Container ====================
+
+.bitfun-flexible-panel__terminal-container {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  background: var(--color-bg-workbench);
+  overflow: hidden;
+
+  > div {
+    flex: 1;
+    height: 100%;
+  }
+
+  // Ensure xterm elements fill container height
+  .xterm {
+    height: 100%;
+  }
+}

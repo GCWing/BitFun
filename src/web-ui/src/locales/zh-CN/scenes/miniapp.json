@@ -1,0 +1,80 @@
+{
+  "title": "小应用",
+  "subtitle": "即时生成的小应用，打开就能用，也能继续迭代。",
+  "searchPlaceholder": "搜索小应用...",
+  "importFromFolder": "从文件夹导入",
+  "running": "已启动",
+  "allApps": "全部应用",
+  "noRunningApps": "暂无运行中的应用",
+  "all": "全部",
+  "count": "{{count}} 个",
+  "empty": {
+    "generate": "边聊边生成，马上可用。和 AI 对话生成第一个小应用吧。",
+    "noMatch": "没有匹配的应用。"
+  },
+  "selectFolderTitle": "选择小应用目录（需包含 meta.json 与 source/）",
+  "card": {
+    "start": "启动",
+    "stop": "停止",
+    "delete": "删除"
+  },
+  "detail": {
+    "stop": "停止",
+    "delete": "删除",
+    "open": "打开"
+  },
+  "confirmDelete": {
+    "title": "删除 \"{{name}}\"？",
+    "message": "此操作不可撤销，应用及其所有数据将被永久删除。",
+    "confirm": "删除",
+    "cancel": "取消"
+  },
+  "scene": {
+    "loading": "加载中…",
+    "loadFailed": "加载失败：{{error}}",
+    "retry": "重试",
+    "reload": "重新加载"
+  },
+  "customize": {
+    "trigger": "定制小应用",
+    "title": "定制小应用",
+    "close": "关闭定制",
+    "riskTitle": "变更会先预览，确认后才替换应用",
+    "riskBody": "点击应用前，当前小应用不会变化。替换前会保存当前版本；新增权限需要单独确认。",
+    "requestLabel": "想修改什么？",
+    "requestPlaceholder": "例如：把界面颜色调浅一点，或优化操作反馈和布局细节",
+    "start": "开始修改",
+    "retryEditor": "重新发送",
+    "refreshPreview": "刷新预览",
+    "openPreview": "打开预览",
+    "hidePreview": "关闭预览",
+    "previewTitle": "预览",
+    "previewHint": "编辑完成后刷新查看",
+    "editorOpened": "小应用编辑会话正在此处运行",
+    "sessionName": "定制小应用：{{name}}",
+    "workspaceRequired": "需要先打开一个工作区，才能启动小应用编辑会话。",
+    "builtinUpdateTitle": "检测到内置版本 v{{version}} 可更新",
+    "builtinUpdateBody": "这个小应用已有本地修改。更新到内置版本可能覆盖这些修改，建议在明确确认前继续保留本地版本。",
+    "dismissBuiltinUpdate": "不再提醒此版本",
+    "launchFailed": "预览副本已准备好，但编辑会话启动失败：{{error}}",
+    "refreshFailed": "预览刷新失败：{{error}}",
+    "dismissBuiltinUpdateFailed": "忽略此更新失败：{{error}}",
+    "permissionCheckFailed": "权限检查失败：{{error}}",
+    "applyFailed": "应用变更失败：{{error}}",
+    "discardFailed": "取消变更失败：{{error}}",
+    "discard": "取消变更",
+    "apply": "应用变更",
+    "applying": "正在应用变更...",
+    "applySaved": "已应用。旧版本已保存，可通过小应用版本回滚。",
+    "permissionDialog": {
+      "title": "新权限需要确认",
+      "body": "这次变更新增或扩大了权限。应用到当前小应用前，请先确认这些变更。",
+      "added": "新增",
+      "expanded": "扩大",
+      "removed": "移除",
+      "cancel": "返回预览",
+      "confirm": "应用并授予权限"
+    },
+    "chatLoading": "正在打开编辑会话..."
+  }
+}

@@ -1,0 +1,279 @@
+/**
+ * SettingsNav styles — scene-specific left sidebar for Settings.
+ *
+ * Reuses the same design language as NavPanel (tokens, spacing, BEM).
+ */
+
+@use '../../../component-library/styles/tokens.scss' as *;
+
+.bitfun-settings-nav {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+
+  // ── Header: title (back/forward lives in NavBar) ──────
+
+  &__header {
+    display: flex;
+    align-items: center;
+    flex-shrink: 0;
+    padding: 0 $size-gap-3;
+    height: 40px;
+  }
+
+  &__title {
+    font-size: var(--font-size-sm);
+    font-weight: 600;
+    color: var(--color-text-primary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  // ── Search ───────────────────────────────────────────────
+
+  &__search {
+    flex-shrink: 0;
+    padding: 0 $size-gap-3 $size-gap-2;
+  }
+
+  /** Component-library `Search` — same capsule as MainNav (.bitfun-nav-search-dialog__search) */
+  &__search-field.search {
+    width: 100%;
+
+    .search__wrapper {
+      height: 32px;
+      min-height: 32px;
+      padding: 0 $size-gap-2;
+      gap: $size-gap-2;
+      border: none;
+      border-radius: $size-radius-full;
+      background: var(--color-bg-scene);
+      box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--border-subtle) 65%, transparent);
+      transition:
+        background 0.2s ease,
+        box-shadow 0.2s ease;
+    }
+
+    .search__wrapper:hover {
+      background: color-mix(in srgb, var(--color-bg-scene) 88%, var(--element-bg-medium));
+      box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--border-medium) 55%, transparent);
+    }
+
+    .search__wrapper:focus-within {
+      background: color-mix(in srgb, var(--color-bg-scene) 82%, var(--element-bg-medium));
+      box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--border-medium) 68%, transparent);
+    }
+
+    &.search .search__input {
+      font-size: var(--font-size-sm);
+
+      &::placeholder {
+        color: var(--color-text-disabled);
+      }
+
+      &:focus::placeholder {
+        color: color-mix(in srgb, var(--color-text-disabled) 72%, transparent);
+      }
+    }
+  }
+
+  &__search-results {
+    display: flex;
+    flex-direction: column;
+    padding: 2px $size-gap-2;
+    gap: 2px;
+  }
+
+  &__search-result-item {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 2px;
+    min-height: auto;
+    padding: $size-gap-2 $size-gap-2 $size-gap-2 $size-gap-3;
+    border: none;
+    border-radius: $size-radius-base;
+    background: transparent;
+    color: var(--color-text-secondary);
+    cursor: pointer;
+    text-align: left;
+    font-size: var(--font-size-sm);
+    font-weight: 400;
+    width: 100%;
+    position: relative;
+    transition: color $motion-fast $easing-standard,
+                background $motion-fast $easing-standard;
+
+    &:hover {
+      color: var(--color-text-primary);
+      background: var(--element-bg-soft);
+    }
+
+    &.is-highlighted {
+      color: var(--color-text-primary);
+      background: var(--element-bg-soft);
+    }
+
+    &.is-active {
+      color: var(--color-text-primary);
+      background: var(--element-bg-soft);
+      font-weight: 500;
+    }
+
+    &:focus-visible {
+      outline: 2px solid var(--color-accent-500);
+      outline-offset: -1px;
+    }
+  }
+
+  &__search-result-line {
+    width: 100%;
+    line-height: 1.35;
+    font-weight: 500;
+  }
+
+  &__search-result-desc {
+    width: 100%;
+    font-size: var(--font-size-2xs);
+    line-height: 1.35;
+    color: var(--color-text-muted);
+    font-weight: 400;
+  }
+
+  &__search-empty {
+    padding: $size-gap-3 $size-gap-3;
+    font-size: var(--font-size-sm);
+    color: var(--color-text-muted);
+    text-align: center;
+  }
+
+  &__search-highlight {
+    padding: 0;
+    margin: 0;
+    background: color-mix(in srgb, var(--color-accent-500) 28%, transparent);
+    color: inherit;
+    font-weight: inherit;
+    border-radius: 2px;
+  }
+
+  // ── Scrollable sections ────────────────────────────────
+
+  &__sections {
+    flex: 1 1 auto;
+    overflow-y: auto;
+    overflow-x: hidden;
+    padding: $size-gap-2 0;
+
+    &::-webkit-scrollbar { width: 3px; }
+    &::-webkit-scrollbar-track { background: transparent; }
+    &::-webkit-scrollbar-thumb {
+      background: var(--border-subtle);
+      border-radius: 2px;
+    }
+  }
+
+  // ── Category group ─────────────────────────────────────
+
+  &__category:not(:last-child) {
+    margin-bottom: $size-gap-6;
+  }
+
+  &__category-header {
+    display: flex;
+    align-items: center;
+    width: 100%;
+    height: 24px;
+    padding: 0 $size-gap-3;
+  }
+
+  &__category-label {
+    font-size: var(--font-size-2xs);
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--color-text-muted);
+    transition: color $motion-fast $easing-standard;
+  }
+
+  // ── Tab items ──────────────────────────────────────────
+
+  &__items {
+    display: flex;
+    flex-direction: column;
+    padding: 2px $size-gap-2;
+    gap: 2px;
+  }
+
+  &__item-label {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    text-align: left;
+  }
+
+  &__item-beta {
+    flex-shrink: 0;
+    margin-left: $size-gap-2;
+    font-size: var(--font-size-xxs);
+    font-weight: 600;
+    line-height: 1;
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
+  }
+
+  &__item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: $size-gap-2;
+    height: 32px;
+    padding: 0 $size-gap-2 0 $size-gap-3;
+    border: none;
+    border-radius: $size-radius-base;
+    background: transparent;
+    color: var(--color-text-secondary);
+    cursor: pointer;
+    text-align: left;
+    font-size: var(--font-size-sm);
+    font-weight: 400;
+    width: 100%;
+    position: relative;
+    transition: color $motion-fast $easing-standard,
+                background $motion-fast $easing-standard;
+
+    &:hover {
+      color: var(--color-text-primary);
+      background: var(--element-bg-soft);
+    }
+
+    &:active {
+      background: var(--element-bg-medium);
+    }
+
+    &.is-active {
+      color: var(--color-text-primary);
+      background: var(--element-bg-soft);
+      font-weight: 500;
+    }
+
+    &:focus-visible {
+      outline: 2px solid var(--color-accent-500);
+      outline-offset: -1px;
+    }
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bitfun-settings-nav {
+    &__item { transition: none; }
+    &__search-field.search .search__wrapper {
+      transition: none;
+    }
+    &__search-result-item { transition: none; }
+  }
+}

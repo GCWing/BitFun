@@ -1,0 +1,7 @@
+/* Z-index utilities are local layout helpers, not theme extension keys. */
+
+.u-z-base { z-index: 0; }
+.u-z-header { z-index: 10; }
+.u-z-floating { z-index: 50; }
+.u-z-overlay { z-index: 100; }
+

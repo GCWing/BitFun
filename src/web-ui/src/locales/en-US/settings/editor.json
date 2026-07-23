@@ -1,0 +1,122 @@
+{
+  "title": "Editor",
+  "subtitle": "Editor appearance and behavior settings",
+  "sections": {
+    "appearance": {
+      "title": "Appearance",
+      "description": "Visual appearance configuration"
+    },
+    "behavior": {
+      "title": "Editing Behavior",
+      "description": "Interaction behavior settings"
+    },
+    "display": {
+      "title": "Display Settings",
+      "description": "Visual assistance features"
+    },
+    "advanced": {
+      "title": "Advanced Features",
+      "description": "Enhanced feature toggles"
+    }
+  },
+  "appearance": {
+    "font": "Font",
+    "fontWeight": "Font Weight",
+    "fontWeightNormal": "Normal",
+    "fontWeightBold": "Bold",
+    "fontSize": "Font Size",
+    "lineHeight": "Line Height",
+    "cursorStyle": "Cursor Style",
+    "cursorBlinking": "Cursor Blinking",
+    "cursorStyles": {
+      "line": "Line",
+      "lineThin": "Thin Line",
+      "block": "Block",
+      "blockOutline": "Block Outline",
+      "underline": "Underline",
+      "underlineThin": "Thin Underline"
+    },
+    "cursorBlinkings": {
+      "blink": "Blink",
+      "smooth": "Smooth",
+      "phase": "Phase",
+      "expand": "Expand",
+      "solid": "Solid"
+    }
+  },
+  "behavior": {
+    "tabSize": "Tab Size",
+    "insertSpaces": "Insert Spaces",
+    "insertSpacesDesc": "Insert spaces instead of tabs",
+    "wordWrap": "Word Wrap",
+    "wordWrapOptions": {
+      "off": "Off",
+      "on": "On",
+      "wordWrapColumn": "At Column",
+      "bounded": "At Viewport and Column"
+    },
+    "lineNumbers": "Line Numbers",
+    "lineNumberOptions": {
+      "on": "On",
+      "off": "Off",
+      "relative": "Relative",
+      "interval": "Interval"
+    },
+    "smoothScrolling": "Smooth Scrolling",
+    "smoothScrollingDesc": "Enable smooth scrolling animation",
+    "scrollBeyondLastLine": "Scroll Beyond Last Line",
+    "scrollBeyondLastLineDesc": "Scroll past the end of file to center content"
+  },
+  "display": {
+    "minimap": "Show Minimap",
+    "minimapDesc": "Display code minimap on editor side",
+    "minimapPosition": "Minimap Position",
+    "minimapPositionLeft": "Left",
+    "minimapPositionRight": "Right",
+    "minimapSize": "Minimap Size",
+    "minimapSizeAuto": "Auto",
+    "minimapSizeFill": "Fill",
+    "minimapSizeFit": "Fit",
+    "whitespace": "Render Whitespace",
+    "whitespaceOptions": {
+      "none": "None",
+      "boundary": "Boundary",
+      "selection": "Selection",
+      "trailing": "Trailing",
+      "all": "All"
+    },
+    "lineHighlight": "Current Line Highlight",
+    "lineHighlightOptions": {
+      "none": "None",
+      "gutter": "Gutter Only",
+      "line": "Line Only",
+      "all": "All"
+    }
+  },
+  "advanced": {
+    "semanticHighlighting": "Semantic Highlighting",
+    "semanticHighlightingDesc": "Semantic-based code highlighting (requires LSP)",
+    "bracketPairColorization": "Bracket Pair Colorization",
+    "bracketPairColorizationDesc": "Use different colors for nested bracket pairs",
+    "formatOnSave": "Format on Save",
+    "formatOnSaveDesc": "Auto format code when saving",
+    "formatOnPaste": "Format on Paste",
+    "formatOnPasteDesc": "Auto format when pasting code",
+    "trimAutoWhitespace": "Trim Trailing Whitespace",
+    "trimAutoWhitespaceDesc": "Remove trailing whitespace on save"
+  },
+  "actions": {
+    "reset": "Reset to Default",
+    "save": "Save Settings",
+    "saveDesc": "Reset editor config to default values"
+  },
+  "messages": {
+    "loading": "Loading...",
+    "loadFailed": "Failed to load config, using defaults",
+    "saving": "Saving...",
+    "saveSuccess": "Config saved, open editors will update",
+    "saveFailed": "Failed to save configuration",
+    "confirmReset": "Are you sure you want to reset editor config to defaults?",
+    "resetDone": "Reset to defaults"
+  }
+}

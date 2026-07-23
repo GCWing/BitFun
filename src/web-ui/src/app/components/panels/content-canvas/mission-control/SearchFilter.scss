@@ -1,0 +1,36 @@
+/**
+ * SearchFilter component styles.
+ */
+
+.canvas-search-filter {
+  padding: 8px 16px;
+  flex-shrink: 0;
+
+  &__search {
+    width: 100%;
+
+    .search__wrapper {
+      background: transparent;
+      // Use the same border variable as the left file tree search
+      border: 1px solid var(--border-base);
+      
+      &:hover {
+        border-color: var(--border-medium);
+        border-style: solid;
+      }
+    }
+
+    &.search--focused .search__wrapper {
+      border-style: solid;
+      border-color: var(--color-accent-500);
+      background: var(--color-accent-50);
+    }
+  }
+
+  &__count {
+    font-size: 11px;
+    color: var(--color-text-muted);
+    white-space: nowrap;
+    padding: 0 8px;
+  }
+}

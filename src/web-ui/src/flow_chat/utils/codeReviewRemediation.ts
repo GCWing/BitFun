@@ -1,0 +1,332 @@
+import type {
+  CodeReviewReportSectionsData,
+  DecisionContext,
+  RemediationGroupId,
+  ReviewMode,
+} from './codeReviewReport';
+import { normalizeDecisionEntry } from './codeReviewReport';
+
+export interface CodeReviewRemediationSummary {
+  overall_assessment?: string;
+  risk_level?: 'low' | 'medium' | 'high' | 'critical';
+  recommended_action?: 'approve' | 'approve_with_suggestions' | 'request_changes' | 'block';
+}
+
+export interface CodeReviewRemediationIssue {
+  severity?: 'critical' | 'high' | 'medium' | 'low' | 'info';
+  certainty?: 'confirmed' | 'likely' | 'possible';
+  category?: string;
+  file?: string;
+  line?: number | null;
+  title?: string;
+  description?: string;
+  suggestion?: string | null;
+  source_reviewer?: string;
+  validation_note?: string;
+}
+
+export interface CodeReviewRemediationData {
+  summary?: CodeReviewRemediationSummary;
+  issues?: CodeReviewRemediationIssue[];
+  remediation_plan?: string[];
+  review_mode?: ReviewMode;
+  report_sections?: CodeReviewReportSectionsData;
+}
+
+export interface ReviewRemediationItem {
+  id: string;
+  index: number;
+  groupIndex: number;
+  plan: string;
+  issue?: CodeReviewRemediationIssue;
+  /** Index of the best-matching issue in the report's `issues` array, or -1. */
+  issueIndex: number;
+  groupId?: RemediationGroupId;
+  requiresDecision?: boolean;
+  decisionContext?: DecisionContext;
+  defaultSelected: boolean;
+}
+
+const DEFAULT_SELECTED_SEVERITIES = new Set(['critical', 'high', 'medium']);
+export const REMEDIATION_GROUP_ORDER: RemediationGroupId[] = [
+  'must_fix',
+  'should_improve',
+  'needs_decision',
+  'verification',
+];
+
+/**
+ * Find the best-matching issue index for a remediation plan text.
+ * Matches by extracting file paths from the plan and checking issue.file.
+ * Falls back to category matching, then to overall position order.
+ */
+function findMatchingIssueIndex(
+  plan: string,
+  issues: CodeReviewRemediationIssue[] | undefined,
+  positionHint: number,
+): number {
+  if (!issues || issues.length === 0) return -1;
+
+  const planLower = plan.toLowerCase();
+
+  // Strategy 1: match by file path mentioned in plan
+  for (let i = 0; i < issues.length; i++) {
+    const issue = issues[i];
+    if (issue.file && planLower.includes(issue.file.toLowerCase())) {
+      return i;
+    }
+  }
+
+  // Strategy 2: match by category keyword in plan
+  for (let i = 0; i < issues.length; i++) {
+    const issue = issues[i];
+    if (issue.category && planLower.includes(issue.category.toLowerCase())) {
+      return i;
+    }
+  }
+
+  // Strategy 3: match by issue title keywords (significant words)
+  for (let i = 0; i < issues.length; i++) {
+    const issue = issues[i];
+    if (issue.title) {
+      const titleWords = issue.title.toLowerCase().split(/\s+/).filter(w => w.length > 3);
+      const matchCount = titleWords.filter(w => planLower.includes(w)).length;
+      if (matchCount >= Math.ceil(titleWords.length * 0.5) && matchCount >= 2) {
+        return i;
+      }
+    }
+  }
+
+  // Strategy 4: positional hint (for legacy data where plans and issues are 1:1 ordered)
+  if (positionHint < issues.length) {
+    return positionHint;
+  }
+
+  return -1;
+}
+
+function hasConcreteFixSignal(issue?: CodeReviewRemediationIssue): boolean {
+  return Boolean(issue?.suggestion?.trim()) && issue?.certainty === 'confirmed';
+}
+
+function shouldSelectByDefault(
+  reviewData: CodeReviewRemediationData,
+  issue?: CodeReviewRemediationIssue,
+): boolean {
+  if (issue?.severity && DEFAULT_SELECTED_SEVERITIES.has(issue.severity)) {
+    return true;
+  }
+
+  if (hasConcreteFixSignal(issue)) {
+    return true;
+  }
+
+  return !issue && (
+    reviewData.summary?.recommended_action === 'request_changes' ||
+    reviewData.summary?.recommended_action === 'block'
+  );
+}
+
+function buildStructuredRemediationItems(
+  reviewData: CodeReviewRemediationData,
+): ReviewRemediationItem[] {
+  const remediationGroups = reviewData.report_sections?.remediation_groups;
+  if (!remediationGroups) {
+    return [];
+  }
+
+  const issues = reviewData.issues;
+  const items: ReviewRemediationItem[] = [];
+  let globalIssueOffset = 0;
+
+  for (const groupId of REMEDIATION_GROUP_ORDER) {
+    const rawEntries = remediationGroups[groupId];
+    if (!rawEntries || !Array.isArray(rawEntries) || rawEntries.length === 0) {
+      continue;
+    }
+
+    let groupIndex = 0;
+    for (const raw of rawEntries) {
+      // Normalize: needs_decision entries may be structured objects or plain strings
+      const isDecision = groupId === 'needs_decision';
+      const normalized = isDecision ? normalizeDecisionEntry(raw as string | DecisionContext) : null;
+      const plan = isDecision && normalized ? normalized.plan : String(raw).trim();
+      if (!plan) {
+        continue;
+      }
+
+      const index = items.length;
+      const issueIndex = findMatchingIssueIndex(plan, issues, globalIssueOffset);
+      items.push({
+        id: `remediation-${groupId}-${index}`,
+        index,
+        groupIndex,
+        plan,
+        issueIndex,
+        groupId,
+        requiresDecision: isDecision,
+        decisionContext: isDecision ? normalized ?? undefined : undefined,
+        defaultSelected: groupId === 'must_fix',
+      });
+      groupIndex++;
+      globalIssueOffset++;
+    }
+  }
+
+  return items;
+}
+
+export function buildReviewRemediationItems(
+  reviewData: CodeReviewRemediationData,
+): ReviewRemediationItem[] {
+  const structuredItems = buildStructuredRemediationItems(reviewData);
+  if (structuredItems.length > 0) {
+    return structuredItems;
+  }
+
+  const items: ReviewRemediationItem[] = [];
+
+  (reviewData.remediation_plan ?? []).forEach((plan, index) => {
+    const trimmedPlan = plan.trim();
+    if (!trimmedPlan) {
+      return;
+    }
+
+    const issue = reviewData.issues?.[index];
+    const issueIndex = issue ? index : findMatchingIssueIndex(trimmedPlan, reviewData.issues, index);
+    items.push({
+      id: `remediation-${index}`,
+      index,
+      groupIndex: index,
+      plan: trimmedPlan,
+      issueIndex,
+      ...(issue ? { issue } : {}),
+      defaultSelected: shouldSelectByDefault(reviewData, issue),
+    });
+  });
+
+  return items;
+}
+
+export function getDefaultSelectedRemediationIds(items: ReviewRemediationItem[]): string[] {
+  return items
+    .filter((item) => item.defaultSelected)
+    .map((item) => item.id);
+}
+
+function formatIssueLocation(issue: CodeReviewRemediationIssue): string {
+  if (!issue.file) {
+    return 'Unknown location';
+  }
+
+  return issue.line ? `${issue.file}:${issue.line}` : issue.file;
+}
+
+function formatIssueForPrompt(item: ReviewRemediationItem, decisionSelection?: number): string {
+  const issue = item.issue;
+  const decisionCtx = item.decisionContext;
+
+  // Build decision context line if available
+  const decisionLines: string[] = [];
+  if (decisionCtx) {
+    decisionLines.push(`   Decision: ${decisionCtx.question}`);
+    if (decisionCtx.options && decisionCtx.options.length > 0) {
+      if (decisionSelection != null) {
+        decisionLines.push(`   User chose option ${decisionSelection + 1}: ${decisionCtx.options[decisionSelection]}`);
+      } else if (decisionCtx.recommendation != null) {
+        decisionLines.push(`   Recommended option ${decisionCtx.recommendation + 1}: ${decisionCtx.options[decisionCtx.recommendation]}`);
+      }
+    }
+  }
+
+  if (!issue) {
+    const groupLabel = item.groupId ? ` [${item.groupId}]` : '';
+    return [
+      `${item.index + 1}.${groupLabel} No directly-linked issue. Plan: ${item.plan}`,
+      ...decisionLines,
+    ].filter(Boolean).join('\n');
+  }
+
+  return [
+    `${item.index + 1}. [${issue.severity ?? 'unknown'}/${issue.certainty ?? 'unknown'}] ${issue.title ?? 'Untitled issue'} (${formatIssueLocation(issue)})`,
+    `   Description: ${issue.description ?? 'N/A'}`,
+    `   Suggestion: ${issue.suggestion ?? item.plan}`,
+    issue.validation_note ? `   Validation: ${issue.validation_note}` : undefined,
+    ...decisionLines,
+  ].filter(Boolean).join('\n');
+}
+
+export function buildSelectedRemediationPrompt(params: {
+  reviewData: CodeReviewRemediationData;
+  selectedIds: Set<string>;
+  decisionSelections?: Record<string, number>;
+}): string {
+  return buildSelectedReviewRemediationPrompt({
+    ...params,
+    reviewMode: 'deep',
+  });
+}
+
+export function buildSelectedReviewRemediationPrompt(params: {
+  reviewData: CodeReviewRemediationData;
+  selectedIds: Set<string>;
+  reviewMode: ReviewMode;
+  completedItems?: string[];
+  decisionSelections?: Record<string, number>;
+}): string {
+  if (params.selectedIds.size === 0) {
+    return '';
+  }
+
+  const selectedItems = buildReviewRemediationItems(params.reviewData)
+    .filter((item) => params.selectedIds.has(item.id));
+
+  if (selectedItems.length === 0) {
+    return '';
+  }
+
+  const planBlock = selectedItems
+    .map((item, index) => `${index + 1}. ${item.plan}`)
+    .join('\n');
+  const issuesBlock = selectedItems
+    .map((item) => formatIssueForPrompt(item, params.decisionSelections?.[item.id]))
+    .join('\n\n');
+  const isDeepReview = params.reviewMode === 'deep';
+  const reviewLabel = isDeepReview ? 'Review: Strict' : 'Review';
+  const lines: string[] = [
+    `The user approved remediation for selected ${reviewLabel} findings only.`,
+    '',
+    'Please implement only the selected remediation items below. Do not broaden scope beyond these selected findings unless required for correctness.',
+    'Before editing, inspect the current diff and skip any selected item that is already resolved. After implementing fixes, summarize what changed and what verification was run.',
+  ];
+
+  // Append continuation context if there are completed items
+  if (params.completedItems && params.completedItems.length > 0) {
+    const allItems = buildReviewRemediationItems(params.reviewData);
+    const completedItemPlans = allItems
+      .filter((item) => params.completedItems!.includes(item.id))
+      .map((item) => item.plan);
+
+    if (completedItemPlans.length > 0) {
+      lines.push('');
+      lines.push('---');
+      lines.push('## Continuation Context');
+      lines.push('');
+      lines.push('This is a continuation of a previous fix attempt that was interrupted.');
+      lines.push('');
+      lines.push('### Already completed items (DO NOT re-fix):');
+      completedItemPlans.forEach((plan, i) => lines.push(`${i + 1}. ${plan}`));
+      lines.push('');
+      lines.push('Please focus only on the remaining items. Do not modify code related to already completed items unless necessary for correctness.');
+    }
+  }
+
+  lines.push('');
+  lines.push('## Selected Remediation Plan');
+  lines.push(planBlock);
+  lines.push('');
+  lines.push('## Selected Review Findings');
+  lines.push(issuesBlock);
+
+  return lines.join('\n');
+}

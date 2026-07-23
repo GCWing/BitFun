@@ -1,0 +1,236 @@
+/**
+ * TabOverflowMenu component styles.
+ * Combines mission control entry and overflow menu.
+ */
+
+// Button wrapper
+.canvas-tab-panorama-wrapper {
+  display: flex;
+  align-items: center;
+}
+
+// Mission control button (with overflow)
+.canvas-tab-panorama-btn {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  background: transparent;
+  border: 1px dashed transparent;
+  border-radius: 4px;
+  // Use text-secondary to ensure visibility in light/dark themes
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  transition: all 0.15s ease;
+
+  &:hover {
+    border-color: var(--border-base);
+    color: var(--color-text-primary);
+  }
+
+  &.is-open {
+    border-style: solid;
+    border-color: var(--color-accent-500);
+    color: var(--color-accent-500);
+  }
+
+  // Styles when overflow exists
+  &.has-overflow {
+    width: auto;
+    padding: 0 6px;
+    gap: 2px;
+  }
+
+  // Overflow-only mode (no mission control)
+  &.overflow-only {
+    // Ensure button visibility
+    opacity: 1;
+    
+    // When overflow exists, match mission control button styles
+    &.has-overflow {
+      // Keep consistent styling with mission control button
+    }
+  }
+
+  // Overflow count badge
+  &__badge {
+    font-size: 10px;
+    font-weight: 600;
+    color: var(--color-accent-500);
+    margin-left: 2px;
+    transition: color 0.15s ease;
+  }
+
+  // Keep badge color on hover
+  &:hover &__badge {
+    color: var(--color-accent-500);
+  }
+
+  // Badge color when open
+  &.is-open &__badge {
+    color: var(--color-accent-500);
+  }
+}
+
+// Overflow menu
+.canvas-tab-overflow-menu {
+  background: var(--color-bg-elevated);
+  border: 1px solid var(--border-base);
+  border-radius: 6px;
+  box-shadow: 0 8px 24px var(--color-overlay-black-50);
+  min-width: 200px;
+  max-width: 280px;
+  max-height: 360px;
+  overflow: hidden;
+  z-index: 99999;
+  animation: menuSlideIn 0.12s ease-out;
+
+  @keyframes menuSlideIn {
+    from {
+      opacity: 0;
+      transform: translateY(-4px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  // Mission control entry (fixed first item)
+  &__mission-control {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    cursor: pointer;
+    color: var(--color-text-primary);
+    transition: background-color 0.15s ease;
+
+    &:hover {
+      // Use accent-200 for clear hover in light/dark themes
+      background: var(--color-accent-200);
+    }
+
+    span {
+      flex: 1;
+      font-size: 12px;
+      font-weight: 500;
+    }
+
+    kbd {
+      font-size: 10px;
+      padding: 2px 5px;
+      background: var(--color-bg-secondary);
+      border: 1px solid var(--border-base);
+      border-radius: 3px;
+      color: var(--color-text-muted);
+      font-family: inherit;
+    }
+
+    svg {
+      color: var(--color-accent-500);
+    }
+  }
+
+  // Divider
+  &__divider {
+    height: 1px;
+    margin: 4px 12px;
+    background: var(--border-base);
+  }
+
+  // Tab list
+  &__list {
+    padding: 4px 0;
+    max-height: 280px;
+    overflow-y: auto;
+
+    &::-webkit-scrollbar {
+      width: 5px;
+    }
+
+    &::-webkit-scrollbar-track {
+      background: transparent;
+    }
+
+    &::-webkit-scrollbar-thumb {
+      background: var(--scrollbar-thumb);
+      border-radius: 3px;
+    }
+  }
+
+  // Tab item
+  &__item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 12px;
+    cursor: pointer;
+    transition: background-color 0.1s ease;
+
+    &:hover {
+      // Use element-bg-medium for clear hover in light/dark themes
+      // Light theme: blue-gray tint; dark theme: translucent white
+      background: var(--element-bg-medium);
+
+      .canvas-tab-overflow-menu__item-close {
+        opacity: 1;
+      }
+    }
+
+    &.is-active {
+      // Use accent-100 as active background
+      background: var(--color-accent-100);
+
+      .canvas-tab-overflow-menu__item-title {
+        color: var(--color-accent-500);
+      }
+    }
+
+    &-title {
+      flex: 1;
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      font-size: 12px;
+      color: var(--color-text-primary);
+
+      em {
+        font-style: italic;
+        opacity: 0.7;
+      }
+    }
+
+    &-dirty {
+      flex-shrink: 0;
+      font-size: 8px;
+      color: var(--color-warning);
+    }
+
+    &-close {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 16px;
+      height: 16px;
+      padding: 0;
+      background: none;
+      border: none;
+      color: var(--color-text-muted);
+      cursor: pointer;
+      border-radius: 3px;
+      flex-shrink: 0;
+      opacity: 0;
+      transition: all 0.1s ease;
+
+      &:hover {
+        background: var(--color-error-bg);
+        color: var(--color-error);
+      }
+    }
+  }
+}

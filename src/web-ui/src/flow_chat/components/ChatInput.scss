@@ -1,0 +1,1873 @@
+/**
+ * Standalone chat input styles
+ */
+
+@use '../../component-library/styles/tokens' as *;
+@use '../../component-library/styles/_extended-mixins' as mixins;
+
+.bitfun-context-drop-zone.bitfun-chat-input-drop-zone {
+  position: absolute;
+  flex: 0 0 auto;
+  bottom: 4px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 100%;
+  height: auto;
+  min-height: 0;
+  max-width: 900px;
+  z-index: $z-overlay;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  padding: 0 $size-gap-2;
+  pointer-events: auto !important;
+
+  /* Reserve the band between the input card bottom edge and workspace strip (larger = more gap above strip text). */
+  &:has(.bitfun-chat-input-workspace-strip) {
+    padding-bottom: 32px;
+  }
+  
+  &.bitfun-context-drop-zone--can-accept {
+    .bitfun-chat-input__box {
+      border-color: var(--border-medium);
+      box-shadow: 
+        0 12px 32px rgba(var(--color-static-black-rgb), 0.45),
+        inset 0 1px 0 var(--color-overlay-white-12);
+      background: var(--color-bg-scene);
+    }
+  }
+  
+  &.bitfun-context-drop-zone--cannot-accept {
+    .bitfun-chat-input__box {
+      border-color: var(--color-error-border);
+      box-shadow: 
+        0 8px 24px var(--color-overlay-black-40),
+        0 0 20px var(--color-error);
+    }
+  }
+}
+
+.bitfun-chat-input {
+  --private-chat-input-capsule-bg-rgb: 18, 18, 28;
+  --private-chat-input-capsule-hover-rgb: 25, 25, 40;
+  --private-chat-input-agent-plan-text-rgb: 180, 110, 0;
+  --private-chat-input-agent-debug-bg-rgb: 249, 115, 22;
+  --private-chat-input-agent-debug-text-rgb: 180, 83, 9;
+  --private-chat-input-send-dark-icon-rgb: 17, 17, 22;
+  --private-chat-input-send-dark-icon-strong-rgb: 5, 5, 8;
+  --private-chat-input-send-surface-rgb: 239, 241, 248;
+  --private-chat-input-send-surface-hover-rgb: 236, 239, 248;
+  --private-chat-input-send-surface-focus-start-rgb: 252, 253, 255;
+  --private-chat-input-send-surface-focus-end-rgb: 232, 235, 244;
+  --private-chat-input-send-surface-disabled-rgb: 246, 247, 250;
+  --private-chat-input-send-breathing-hover-glyph-rgb: 12, 13, 18;
+  --private-chat-input-send-inverse-surface-start-rgb: 21, 21, 28;
+  --private-chat-input-send-inverse-surface-end-rgb: 10, 10, 15;
+  --private-chat-input-send-inverse-text-rgb: 232, 234, 241;
+  --private-chat-input-send-inverse-hover-start-rgb: 41, 41, 52;
+  --private-chat-input-send-inverse-hover-end-rgb: 22, 22, 31;
+  --private-chat-input-send-inverse-hover-text-rgb: 250, 251, 255;
+  --private-chat-input-send-inverse-focus-start-rgb: 30, 30, 40;
+  --private-chat-input-send-inverse-focus-end-rgb: 18, 18, 25;
+  --private-chat-input-send-inverse-focus-text-rgb: 240, 242, 248;
+  --private-chat-input-send-inverse-disabled-bg-rgb: 10, 10, 14;
+  --private-chat-input-send-inverse-disabled-text-rgb: 24, 24, 34;
+  --private-chat-input-stop-inverse-glyph-start-rgb: 237, 237, 242;
+  --private-chat-input-stop-inverse-glyph-end-rgb: 200, 202, 212;
+  --private-chat-input-stop-inverse-hover-start-rgb: 36, 36, 47;
+  --private-chat-input-stop-inverse-hover-end-rgb: 20, 20, 30;
+  --private-chat-input-stop-inverse-hover-glyph-start-rgb: 244, 245, 250;
+  --private-chat-input-stop-inverse-hover-glyph-end-rgb: 216, 218, 228;
+  --private-chat-input-queued-badge-ring-rgb: 18, 18, 28;
+
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  transform: translateY(0);
+  transition:
+    max-width 0.28s cubic-bezier(0.4, 0, 0.2, 1),
+    transform 0.28s cubic-bezier(0.4, 0, 0.2, 1);
+
+  // ─── Single-line capsule mode ─────────────────────────────────────────────
+  &--capsule {
+    .bitfun-chat-input__box--capsule {
+      flex-direction: row;
+      align-items: center;
+      min-height: 44px;
+      max-height: 44px;
+      // 7px horizontal padding matches the (44 - 2*1 - 28) / 2 = 7px vertical
+      // gap around the 28px round buttons, keeping all four sides equal
+      padding: 0 7px;
+      border-radius: 22px;
+      overflow: visible;
+
+      // Dissolve the actions wrapper so its children become direct flex items
+      .bitfun-chat-input__actions {
+        display: contents;
+      }
+
+      .bitfun-chat-input__actions-left {
+        order: 1;
+        flex-shrink: 0;
+        display: flex;
+        align-items: center;
+        padding: 0;
+        // Match the 7px box padding so the round Plus button keeps equal
+        // clearance on all four sides (top/bottom/left/right)
+        margin-right: 7px;
+        animation: none;
+
+        // Enlarge the Plus button to match the capsule height
+        .bitfun-chat-input__agent-boost-add {
+          width: 28px !important;
+          height: 28px !important;
+          min-width: 28px !important;
+          border-radius: 50% !important;
+          display: flex !important;
+          align-items: center !important;
+          justify-content: center !important;
+        }
+      }
+
+      .bitfun-chat-input__input-area {
+        order: 2;
+        flex: 1;
+        min-width: 0;
+        min-height: 0;
+        padding-bottom: 0;
+        display: flex;
+        align-items: center;
+
+        .rich-text-input {
+          min-height: 22px !important;
+          max-height: 22px !important;
+          overflow: hidden;
+          line-height: var(--flowchat-support-line-height);
+          font-size: var(--flowchat-font-size-base);
+          padding: 0 !important;
+          width: 100%;
+          // Allow clicks to reach the contenteditable in capsule mode
+          pointer-events: auto;
+
+        }
+      }
+
+      .bitfun-chat-input__actions-right {
+        order: 3;
+        flex-shrink: 0;
+        display: flex;
+        align-items: center;
+        gap: $size-gap-1;
+        padding: 0;
+        animation: none;
+
+        // Enlarge send/stop button to match the capsule height
+        .bitfun-chat-input__send-button {
+          width: 28px !important;
+          height: 28px !important;
+          border-radius: 50% !important;
+          display: inline-flex !important;
+          align-items: center !important;
+          justify-content: center !important;
+
+          &--breathing {
+            width: auto !important;
+            height: auto !important;
+          }
+        }
+
+        .bitfun-chat-input__breathing-circle {
+          width: 28px !important;
+          height: 28px !important;
+        }
+
+        .bitfun-chat-input__model-usage-group {
+          display: flex;
+          align-items: center;
+        }
+      }
+
+      // Hide things that belong to multi-line only
+      .bitfun-chat-input__cowork-examples,
+      .bitfun-chat-input__recommendations,
+      .bitfun-chat-input__target-switcher,
+      .bitfun-chat-input__image-strip {
+        display: none !important;
+      }
+    }
+  }
+
+  &__placeholder {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    pointer-events: none;
+    color: color-mix(in srgb, var(--color-text-muted) 52%, transparent);
+    font-size: var(--flowchat-font-size-base);
+    line-height: var(--flowchat-support-line-height);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    user-select: none;
+  }
+
+  // In multi-line card mode: align to top of text area
+  &__box--multi-line &__placeholder {
+    padding-top: 1px;
+  }
+
+  // In capsule: vertically centre inside the 22px line height
+  &__box--capsule &__placeholder {
+    top: 50%;
+    transform: translateY(-50%);
+  }
+
+  :root[data-theme="light"] &,
+  :root[data-theme-type="light"] &,
+  .light & {
+    &__placeholder {
+      color: color-mix(in srgb, var(--color-text-secondary) 48%, transparent);
+    }
+  }
+
+  &__space-hint {
+    display: none;
+  }
+
+  &__space-key {
+    display: inline-block;
+    padding: 0 4px;
+    color: var(--color-text-secondary);
+    font-size: var(--flowchat-font-size-xs);
+    font-weight: 500;
+    letter-spacing: 0.01em;
+    background: transparent;
+    border: none;
+    box-shadow: none;
+  }
+
+  &__cancel-shortcut {
+    display: inline-flex;
+    align-items: center;
+    flex-shrink: 0;
+    gap: var(--flowchat-inline-gap);
+    font-size: var(--flowchat-font-size-sm);
+    line-height: var(--flowchat-support-line-height);
+    color: var(--color-text-muted);
+    opacity: 0.72;
+    white-space: nowrap;
+    pointer-events: none;
+  }
+
+  &__capsule-divider {
+    width: 1px;
+    height: 14px;
+    flex-shrink: 0;
+    background: color-mix(in srgb, var(--color-text-muted) 28%, transparent);
+    pointer-events: none;
+  }
+
+  :root[data-theme="light"] &,
+  :root[data-theme-type="light"] &,
+  .light & {
+    .bitfun-chat-input__capsule-divider {
+      background: rgba(var(--color-overlay-slate-rgb), 0.2);
+    }
+  }
+  
+  // Non-agent scenes: high transparency to avoid obscuring content
+  &--non-agent {
+    .bitfun-chat-input__box {
+      background: rgba(var(--color-static-black-rgb), 0.03);
+      border-color: rgba(var(--color-static-white-rgb), 0.14);
+      box-shadow: none;
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+      transition: all 0.25s ease;
+
+      &:hover {
+        background: var(--color-bg-tertiary);
+        border-color: var(--border-medium);
+        box-shadow: 0 4px 16px var(--color-overlay-black-20);
+      }
+
+      &:focus-within {
+        background: var(--color-bg-tertiary);
+        border-color: var(--border-base);
+        box-shadow: 
+          0 12px 32px rgba(var(--color-static-black-rgb), 0.45),
+          inset 0 1px 0 var(--color-overlay-white-12),
+          inset 0 -1px 0 var(--color-overlay-white-04);
+      }
+    }
+
+    .bitfun-chat-input__input-area,
+    .bitfun-chat-input__actions,
+    .bitfun-chat-input__recommendations {
+      opacity: 0.25;
+      transition: opacity 0.25s ease;
+    }
+
+    &:hover,
+    &:focus-within {
+      .bitfun-chat-input__input-area,
+      .bitfun-chat-input__actions,
+      .bitfun-chat-input__recommendations {
+        opacity: 1;
+      }
+    }
+  }
+
+  gap: var(--flowchat-control-gap);
+
+  /* Queue sits directly above the input card; keep this pair tighter than other stacked blocks. */
+  > .bitfun-pending-queue-panel + .bitfun-chat-input__container {
+    margin-top: -6px;
+  }
+
+  &__recommendations {
+    margin-bottom: var(--flowchat-card-gap);
+  }
+
+  &__cowork-examples {
+    margin-bottom: var(--flowchat-card-gap);
+  }
+  
+  & > * {
+    pointer-events: auto;
+  }
+  
+  &__container {
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--flowchat-card-gap);
+    justify-content: center;
+
+    .session-file-modifications-bar {
+      width: 100%;
+      max-width: 900px;
+    }
+    
+    & > * {
+      pointer-events: auto;
+    }
+  }
+  
+  &__box {
+    position: relative;
+    width: 100%;
+    height: auto;
+    min-height: 76px;
+    max-height: 500px;
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    pointer-events: auto;
+    border: 1px solid var(--color-overlay-white-12);
+    border-radius: calc(var(--flowchat-card-radius) + 4px);
+    padding: var(--flowchat-card-expanded-pad-x) var(--flowchat-card-expanded-pad-y) 0;
+    background: var(--color-bg-scene);
+    backdrop-filter: blur(16px) saturate(1.2);
+    -webkit-backdrop-filter: blur(16px) saturate(1.2);
+    transition:
+      border-radius 0.32s cubic-bezier(0.4, 0, 0.2, 1),
+      padding 0.32s cubic-bezier(0.4, 0, 0.2, 1),
+      min-height 0.32s cubic-bezier(0.4, 0, 0.2, 1),
+      max-height 0.32s cubic-bezier(0.4, 0, 0.2, 1),
+      box-shadow 0.32s cubic-bezier(0.4, 0, 0.2, 1),
+      border-color 0.32s cubic-bezier(0.4, 0, 0.2, 1);
+    box-shadow: 
+      0 8px 24px rgba(var(--color-static-black-rgb), 0.35),
+      inset 0 1px 0 var(--color-overlay-white-08),
+      inset 0 -1px 0 var(--color-overlay-white-04);
+    cursor: default;
+    
+    &::before {
+      content: none;
+    }
+
+    // Capsule (single-line) mode appearance
+    &--capsule {
+      border-radius: 22px;
+      min-height: 44px;
+      max-height: 44px;
+      padding: 0 7px;
+      background: rgba(var(--private-chat-input-capsule-bg-rgb), 0.22);
+      border: 1px solid var(--color-overlay-white-08);
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      box-shadow:
+        0 8px 24px rgba(var(--color-static-black-rgb), 0.18),
+        inset 0 1px 0 var(--color-overlay-white-08);
+
+      &:hover {
+        background: rgba(var(--private-chat-input-capsule-hover-rgb), 0.38);
+        border-color: rgba(var(--color-static-white-rgb), 0.16);
+        backdrop-filter: blur(12px);
+        -webkit-backdrop-filter: blur(12px);
+        box-shadow:
+          0 12px 30px rgba(var(--color-static-black-rgb), 0.24),
+          inset 0 1px 0 var(--color-overlay-white-08);
+      }
+
+      &:focus-within {
+        background: rgba(var(--private-chat-input-capsule-hover-rgb), 0.42);
+        border-color: var(--color-overlay-white-20);
+        box-shadow:
+          0 12px 30px rgba(var(--color-static-black-rgb), 0.28),
+          inset 0 1px 0 var(--color-overlay-white-12);
+      }
+    }
+
+    :root[data-theme="light"] &--capsule,
+    :root[data-theme-type="light"] &--capsule,
+    .light &--capsule {
+      background: rgba(var(--color-static-white-rgb), 0.28);
+      border: 1px solid var(--color-overlay-black-08);
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      box-shadow:
+        0 2px 8px var(--color-overlay-black-08),
+        inset 0 1px 0 var(--color-overlay-white-80);
+
+      &:hover {
+        background: rgba(var(--color-static-white-rgb), 0.45);
+        border-color: rgba(var(--color-static-black-rgb), 0.14);
+        box-shadow:
+          0 12px 24px var(--color-overlay-black-12),
+          inset 0 1px 0 var(--color-overlay-white-90);
+      }
+    }
+    
+    &--multi-line {
+      // Max ~5 lines: 5 × (14px × 1.45) ≈ 101px + padding + action bar ≈ 160px
+      .bitfun-chat-input__input-area {
+        min-height: 56px;
+
+        .rich-text-input {
+          max-height: 102px; // ~5 lines of text
+        }
+      }
+    }
+    
+    &:focus-within {
+      border-color: var(--border-base);
+      box-shadow: 
+        0 12px 32px rgba(var(--color-static-black-rgb), 0.45),
+        inset 0 1px 0 var(--color-overlay-white-12),
+        inset 0 -1px 0 var(--color-overlay-white-04);
+    }
+    
+    & > * {
+      pointer-events: auto;
+    }
+  }
+
+  &__target-switcher {
+    display: flex;
+    align-items: center;
+    gap: 0.125rem;
+    padding-bottom: 7px;
+    margin-bottom: 0.06rem;
+    border-bottom: 1px solid var(--color-overlay-white-08);
+    animation: bitfun-chat-input-fade-in 0.1s ease-out;
+  }
+
+  &__target-switcher-label {
+    font-size: var(--flowchat-font-size-xxs);
+    color: var(--color-text-muted);
+    font-weight: 400;
+    padding: 0.12rem var(--flowchat-card-expanded-pad-y) 0.12rem 0;
+    margin-right: var(--flowchat-inline-gap);
+    flex-shrink: 0;
+    letter-spacing: 0.02em;
+    opacity: 0.72;
+  }
+
+  &__target-tab {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--flowchat-inline-gap);
+    padding: 0.12rem var(--flowchat-card-expanded-pad-y);
+    border: none;
+    background: transparent;
+    color: var(--color-text-muted);
+    font-size: var(--flowchat-font-size-2xs);
+    font-weight: 400;
+    border-radius: 5px;
+    cursor: pointer;
+    transition: color 0.15s ease, background 0.15s ease;
+    white-space: nowrap;
+    outline: none;
+
+    &:hover:not(#{&}--active) {
+      color: var(--color-text-secondary);
+      background: var(--color-overlay-white-04);
+    }
+
+    &--active {
+      color: color-mix(in srgb, var(--color-accent-500) 95%, var(--color-text-primary));
+      font-weight: 500;
+      background: color-mix(in srgb, var(--color-accent-500) 9%, transparent);
+    }
+  }
+
+  &__target-tab-name {
+    max-width: 110px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: var(--flowchat-font-size-xxs);
+    font-weight: 400;
+    opacity: 0.65;
+
+    &::before {
+      content: '·';
+      margin-right: 2px;
+    }
+  }
+  
+  
+  &__input-area {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    width: 100%;
+    min-height: 56px;
+    overflow: visible;
+    // Last line descenders + clearance above the action row (send is 28px tall in a short bar)
+    padding-bottom: 4px;
+  }
+
+  &__image-strip {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--flowchat-inline-gap);
+    margin-bottom: var(--flowchat-inline-gap);
+    padding: 0.12rem 0;
+  }
+
+  &__image-chip {
+    position: relative;
+    width: 44px;
+    height: 44px;
+    border-radius: 6px;
+    overflow: visible;
+    background: var(--element-bg-medium);
+    border: 1px solid var(--border-subtle);
+    flex-shrink: 0;
+
+    &:hover .bitfun-chat-input__image-chip-remove {
+      opacity: 1;
+      transform: scale(1);
+    }
+  }
+
+  &__image-chip-thumb {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    border-radius: 5px;
+    display: block;
+
+    &--placeholder {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--color-text-secondary);
+    }
+  }
+
+  &__image-chip-remove {
+    position: absolute;
+    top: -6px;
+    right: -6px;
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    border: none;
+    background: var(--color-bg-elevated);
+    color: var(--color-text-primary);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    padding: 0;
+    box-shadow: 0 1px 3px rgba(var(--color-static-black-rgb), 0.35);
+    opacity: 0;
+    transform: scale(0.85);
+    transition: opacity 0.15s ease, transform 0.15s ease, background 0.15s ease;
+
+    &:hover {
+      background: var(--element-bg-hover);
+    }
+
+    &:focus-visible {
+      opacity: 1;
+      outline: 2px solid var(--color-accent-500);
+      outline-offset: 1px;
+    }
+  }
+  
+  &__action-button {
+    flex-shrink: 0;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    border: none;
+    background: transparent;
+    color: var(--color-text-secondary);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    padding: 0;
+    opacity: 0.3;
+    
+    .bitfun-chat-input__box:focus-within & {
+      opacity: 1;
+    }
+    
+    &:hover {
+      background: var(--element-bg-medium);
+      color: var(--color-text-primary);
+      opacity: 1;
+    }
+    
+    &:active {
+      transform: scale(0.95);
+    }
+  }
+
+  &__agent-boost {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    flex-shrink: 0;
+  }
+
+  &__agent-boost-add {
+    width: 20px !important;
+    height: 20px !important;
+    min-width: 20px !important;
+    padding: 0 !important;
+    border-radius: 50% !important;
+    opacity: 1;
+    color: var(--color-text-secondary);
+    background: var(--element-bg-subtle) !important;
+
+    .bitfun-chat-input__box:focus-within & {
+      color: var(--color-text-primary);
+      background: var(--element-bg-medium) !important;
+    }
+
+    &:hover {
+      color: var(--color-text-primary);
+      background: var(--element-bg-medium) !important;
+    }
+  }
+
+  &__agent-capsule {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.125rem;
+    max-width: 148px;
+    padding: 0.12rem 0.25rem 0.12rem var(--flowchat-card-expanded-pad-x);
+    border-radius: 999px;
+    border: none;
+    font-size: var(--flowchat-font-size-xxs);
+    font-weight: 500;
+    letter-spacing: 0.02em;
+    color: var(--color-text-secondary);
+    background: color-mix(in srgb, var(--color-text-muted) 14%, transparent);
+
+    &--Plan {
+      background: color-mix(in srgb, var(--color-warning) 15%, transparent);
+      color: rgba(var(--private-chat-input-agent-plan-text-rgb), 0.98);
+    }
+
+    &--debug {
+      background: rgba(var(--private-chat-input-agent-debug-bg-rgb), 0.2);
+      color: rgba(var(--private-chat-input-agent-debug-text-rgb), 0.98);
+    }
+  }
+
+  &__agent-capsule-label {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    min-width: 0;
+  }
+
+  &__agent-capsule-close {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    width: 18px;
+    height: 18px;
+    margin: 0 -2px 0 0;
+    padding: 0;
+    border: none;
+    border-radius: 50%;
+    background: transparent;
+    color: inherit;
+    cursor: pointer;
+    opacity: 0.9;
+    transition: opacity 0.15s ease, background 0.15s ease;
+
+    &:hover {
+      opacity: 1;
+      background: color-mix(in srgb, currentColor 14%, transparent);
+    }
+  }
+
+  &__agent-boost-empty {
+    padding: var(--flowchat-card-expanded-pad-x) var(--flowchat-card-expanded-pad-x);
+    font-size: var(--flowchat-font-size-2xs);
+    color: var(--color-text-muted);
+    text-align: center;
+    line-height: var(--flowchat-support-line-height);
+
+    &--inline {
+      padding: var(--flowchat-card-expanded-pad-y) var(--flowchat-card-expanded-pad-x) var(--flowchat-card-expanded-pad-x);
+      text-align: left;
+    }
+  }
+
+  &__boost-section {
+    padding: 2px 0 4px;
+  }
+
+  &__boost-section-divider {
+    height: 1px;
+    margin: 0;
+    background: var(--border-subtle);
+  }
+
+  &__boost-context-row {
+    display: flex;
+    align-items: center;
+    gap: var(--flowchat-control-gap);
+    width: 100%;
+    margin: 0;
+    padding: var(--flowchat-card-expanded-pad-y) var(--flowchat-card-expanded-pad-x);
+    background: transparent;
+    font-size: var(--flowchat-font-size-2xs);
+    color: var(--color-text-secondary);
+    cursor: pointer;
+    user-select: none;
+    border-radius: 4px;
+    transition: background 0.15s ease, color 0.15s ease;
+
+    &:hover {
+      background: var(--element-bg-medium);
+      color: var(--color-text-primary);
+    }
+  }
+
+  &__boost-context-icon {
+    flex-shrink: 0;
+    opacity: 0.88;
+  }
+
+  // Skills row: hover opens secondary panel (similar to @ mention flyout)
+  &__boost-submenu-host {
+    position: relative;
+    border-radius: 4px;
+    transition: background 0.15s ease;
+
+    &:hover {
+      background: var(--element-bg-medium);
+
+      .bitfun-chat-input__boost-submenu-trigger {
+        color: var(--color-text-primary);
+      }
+
+      .bitfun-chat-input__boost-submenu-chevron {
+        opacity: 0.85;
+      }
+    }
+  }
+
+  &__boost-submenu-trigger {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--flowchat-control-gap);
+    width: 100%;
+    margin: 0;
+    padding: var(--flowchat-card-expanded-pad-y) var(--flowchat-card-expanded-pad-x);
+    background: transparent;
+    font-size: var(--flowchat-font-size-2xs);
+    color: var(--color-text-secondary);
+    cursor: pointer;
+    user-select: none;
+    transition: color 0.15s ease;
+  }
+
+  &__boost-submenu-trigger-main {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--flowchat-control-gap);
+    min-width: 0;
+  }
+
+  &__boost-submenu-chevron {
+    flex-shrink: 0;
+    opacity: 0.45;
+    color: var(--color-text-muted);
+    transition: opacity 0.15s ease, transform 0.15s ease;
+  }
+
+  // Shell: absolute from host, padding-left/right acts as mouse bridge over the gap
+  &__boost-submenu-shell {
+    position: absolute;
+    top: -4px;
+    left: 100%;
+    padding-left: 10px;
+    z-index: calc(#{$z-dropdown} + 20);
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+    transition:
+      opacity 0.12s ease,
+      visibility 0.12s ease;
+
+    &--open {
+      opacity: 1;
+      visibility: visible;
+      pointer-events: auto;
+    }
+
+    // Open to the left of the host
+    &--left {
+      left: auto;
+      right: 100%;
+      padding-left: 0;
+      padding-right: 10px;
+    }
+
+    // Align upward (panel grows upward from bottom of host)
+    &--up {
+      top: auto;
+      bottom: -4px;
+    }
+  }
+
+  &__boost-submenu-panel {
+    min-width: 220px;
+    max-width: 300px;
+    max-height: 280px;
+    display: flex;
+    flex-direction: column;
+    background: var(--color-bg-elevated);
+    border: 1px solid var(--border-subtle);
+    border-radius: 8px;
+    box-shadow:
+      0 8px 32px rgba(var(--color-static-black-rgb), 0.35),
+      0 4px 16px var(--color-overlay-black-20),
+      0 0 1px var(--color-accent-300),
+      inset 0 1px 0 var(--color-overlay-white-08);
+    backdrop-filter: blur(20px) saturate(1.2);
+    -webkit-backdrop-filter: blur(20px) saturate(1.2);
+    overflow: hidden;
+    animation: mentionPickerSlideUp 0.16s cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+
+  &__boost-submenu-loading,
+  &__boost-submenu-empty {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    justify-content: center;
+    gap: var(--flowchat-control-gap);
+    padding: var(--flowchat-card-expanded-pad-x) var(--flowchat-card-expanded-pad-x);
+    font-size: var(--flowchat-font-size-2xs);
+    color: var(--color-text-muted);
+  }
+
+  &__boost-submenu-spinner {
+    animation: spin 0.8s linear infinite;
+    color: var(--color-accent-500);
+  }
+
+  &__boost-submenu-list {
+    flex: 1;
+    min-height: 0;
+    max-height: 210px;
+    overflow-y: auto;
+    padding: 4px;
+
+    &::-webkit-scrollbar {
+      width: 3px;
+    }
+
+    &::-webkit-scrollbar-thumb {
+      background: var(--color-overlay-white-15);
+      border-radius: 2px;
+    }
+  }
+
+  &__boost-submenu-item {
+    display: flex;
+    align-items: center;
+    gap: var(--flowchat-control-gap);
+    width: 100%;
+    padding: 0.32rem var(--flowchat-card-expanded-pad-y);
+    border-radius: 4px;
+    background: transparent;
+    font-size: var(--flowchat-font-size-xs);
+    color: var(--color-text-primary);
+    cursor: pointer;
+    user-select: none;
+    transition: background 0.15s ease, color 0.15s ease;
+
+    &:hover {
+      background: var(--element-bg-medium);
+      color: var(--color-text-primary);
+    }
+  }
+
+  &__boost-submenu-item-icon {
+    flex-shrink: 0;
+    opacity: 0.75;
+    color: color-mix(in srgb, var(--color-accent-500) 88%, transparent);
+  }
+
+  &__boost-submenu-item-name {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    min-width: 0;
+    line-height: var(--flowchat-support-line-height);
+  }
+
+  &__boost-submenu-manage {
+    flex-shrink: 0;
+    width: 100%;
+    margin: 0;
+    padding: var(--flowchat-card-expanded-pad-y) var(--flowchat-card-expanded-pad-x) var(--flowchat-card-expanded-pad-x);
+    border-top: 1px solid var(--border-subtle);
+    background: transparent;
+    font-size: var(--flowchat-font-size-xxs);
+    font-weight: 500;
+    color: color-mix(in srgb, var(--color-accent-500) 95%, var(--color-text-primary));
+    cursor: pointer;
+    text-align: center;
+    user-select: none;
+    transition: background 0.15s ease, color 0.15s ease;
+
+    &:hover {
+      background: var(--element-bg-medium);
+      color: color-mix(in srgb, var(--color-accent-500) 94%, var(--color-text-primary));
+    }
+  }
+
+  @keyframes mentionPickerSlideUp {
+    from {
+      opacity: 0;
+      transform: translateY(8px) scale(0.98);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0) scale(1);
+    }
+  }
+
+  &__mode-pending-indicator {
+    font-size: var(--flowchat-font-size-xxs);
+    color: color-mix(in srgb, var(--color-warning) 90%, transparent);
+    margin-left: 4px;
+    display: inline-flex;
+    align-items: center;
+    font-weight: 500;
+    line-height: var(--flowchat-compact-line-height);
+    vertical-align: middle;
+  }
+  
+  &__mode-dropdown {
+    position: absolute;
+    bottom: calc(100% + 6px);
+    left: 0;
+    min-width: 200px;
+    background: var(--color-bg-elevated);
+    border: 1px solid var(--color-overlay-white-12);
+    border-radius: 6px;
+    overflow: hidden;
+    backdrop-filter: blur(20px) saturate(1.2);
+    -webkit-backdrop-filter: blur(20px) saturate(1.2);
+    box-shadow: 
+      0 8px 32px var(--color-overlay-black-50),
+      0 0 1px var(--color-overlay-white-12),
+      inset 0 1px 0 var(--color-overlay-white-08);
+    z-index: $z-dropdown;
+    animation: mode-dropdown-fade-in 0.15s ease-out;
+
+    &--agent-boost {
+      min-width: 228px;
+      max-width: 288px;
+      padding-bottom: 2px;
+      overflow: visible;
+    }
+  }
+  
+  &__mode-option {
+    padding: var(--flowchat-inline-gap) var(--flowchat-card-expanded-pad-x);
+    font-size: var(--flowchat-font-size-2xs);
+    color: var(--color-text-secondary);
+    cursor: pointer;
+    transition: all 0.15s ease;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--flowchat-control-gap);
+    
+    &:hover:not(&--disabled) {
+      background: var(--color-overlay-white-04);
+      color: var(--color-text-primary);
+    }
+
+    &:hover:not(&--disabled),
+    &:focus-within:not(&--disabled) {
+      .bitfun-chat-input__mode-default-button:not(.bitfun-chat-input__mode-default-button--active) {
+        opacity: 0.72;
+        pointer-events: auto;
+        transform: scale(1);
+      }
+    }
+    
+    &--active {
+      .bitfun-chat-input__mode-option-name {
+        color: color-mix(in srgb, var(--color-accent-500) 95%, var(--color-text-primary));
+      }
+    }
+    
+    &--pending {
+      .bitfun-chat-input__mode-option-name {
+        color: var(--color-warning);
+        
+        &::after {
+          content: ' (Pending)';
+          font-size: var(--flowchat-font-size-xxs);
+          opacity: 0.8;
+        }
+      }
+    }
+    
+    &--disabled {
+      color: var(--color-text-disabled);
+      cursor: default;
+      opacity: 0.5;
+      
+      &:hover {
+        background: transparent;
+      }
+    }
+    
+  }
+  
+  &__mode-divider {
+    display: flex;
+    align-items: center;
+    margin: 4px 12px;
+    position: relative;
+  }
+  
+  &__mode-divider-line {
+    flex: 1;
+    height: 1px;
+    background: var(--color-overlay-white-08);
+  }
+  
+  &__mode-divider-text {
+    padding: 0 8px;
+    font-size: var(--flowchat-font-size-xxs);
+    color: var(--color-text-muted);
+    white-space: nowrap;
+    font-weight: 500;
+    letter-spacing: 0.5px;
+  }
+  
+  &__mode-submenu {
+    margin: 2px 0;
+  }
+  
+  &__mode-submenu-trigger {
+    padding: var(--flowchat-inline-gap) var(--flowchat-card-expanded-pad-x);
+    font-size: var(--flowchat-font-size-2xs);
+    color: var(--color-text-secondary);
+    cursor: pointer;
+    transition: all 0.15s ease;
+    display: flex;
+    align-items: center;
+    gap: var(--flowchat-inline-gap);
+    
+    &:hover {
+      background: var(--color-overlay-white-04);
+      color: var(--color-text-primary);
+    }
+    
+    &--expanded {
+      .bitfun-chat-input__mode-submenu-label {
+        color: var(--color-text-primary);
+      }
+    }
+    
+    &--has-active {
+      .bitfun-chat-input__mode-submenu-label {
+        color: color-mix(in srgb, var(--color-accent-500) 90%, var(--color-text-primary));
+      }
+    }
+  }
+  
+  &__mode-submenu-label {
+    font-weight: 500;
+    color: var(--color-text-secondary);
+  }
+  
+  &__mode-submenu-active-name {
+    font-size: var(--flowchat-font-size-xxs);
+    color: color-mix(in srgb, var(--color-accent-500) 90%, var(--color-text-primary));
+    font-weight: 500;
+    margin-left: auto;
+    padding-left: 8px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 100px;
+  }
+  
+  &__mode-submenu-dots {
+    font-size: var(--flowchat-font-size-xxs);
+    color: var(--color-text-muted);
+    margin-left: auto;
+    letter-spacing: 1px;
+  }
+  
+  &__mode-submenu-content {
+    background: var(--color-overlay-black-12);
+    
+    .bitfun-chat-input__mode-option {
+      padding-left: 24px;
+      font-size: var(--flowchat-font-size-xxs);
+      
+      &:hover:not(&--disabled) {
+        background: var(--color-overlay-white-04);
+      }
+    }
+  }
+  
+  &__mode-option-name {
+    font-weight: 500;
+    color: var(--color-text-secondary);
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  &__mode-option-actions {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    flex: 0 0 auto;
+  }
+
+  &__mode-default-button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    height: 20px;
+    padding: 0;
+    border: none;
+    border-radius: 50%;
+    background: transparent;
+    color: var(--color-text-muted);
+    cursor: pointer;
+    opacity: 0;
+    pointer-events: none;
+    transform: scale(0.92);
+    transition:
+      background 0.15s ease,
+      color 0.15s ease,
+      opacity 0.15s ease,
+      transform 0.15s ease;
+
+    &:hover:not(:disabled) {
+      background: color-mix(in srgb, currentColor 13%, transparent);
+      color: var(--color-warning);
+      opacity: 1;
+      transform: scale(1.04);
+    }
+
+    &:disabled {
+      cursor: default;
+      opacity: 0.45;
+    }
+
+    &--active {
+      color: var(--color-warning);
+      opacity: 1;
+      pointer-events: auto;
+      transform: scale(1);
+    }
+  }
+  
+  &__mode-option-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0.12rem 0.32rem;
+    border-radius: 3px;
+    background: var(--color-warning-bg);
+    color: var(--color-warning);
+    font-size: var(--flowchat-font-size-xxs);
+    font-weight: 600;
+    letter-spacing: 0.5px;
+    margin-left: 6px;
+    
+    &--wip {
+      background: color-mix(in srgb, var(--color-accent-500) 12%, transparent);
+      color: color-mix(in srgb, var(--color-accent-500) 90%, var(--color-text-primary));
+    }
+  }
+  
+  @keyframes mode-dropdown-fade-in {
+    from {
+      opacity: 0;
+      transform: translateY(4px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+  
+  &__slash-command-picker {
+    position: absolute;
+    bottom: calc(100% + 6px);
+    left: 0;
+    width: 260px;
+    max-height: 280px;
+    background: var(--color-bg-elevated);
+    border: 1px solid var(--border-subtle);
+    border-radius: 6px;
+    overflow: hidden;
+    backdrop-filter: blur(20px) saturate(1.2);
+    -webkit-backdrop-filter: blur(20px) saturate(1.2);
+    box-shadow: 
+      0 8px 32px var(--color-overlay-black-50),
+      0 0 1px var(--color-overlay-white-12),
+      inset 0 1px 0 var(--color-overlay-white-08);
+    z-index: $z-dropdown;
+    animation: mode-dropdown-fade-in 0.15s ease-out;
+  }
+  
+  &__slash-command-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: var(--flowchat-card-expanded-pad-y) var(--flowchat-card-expanded-pad-x);
+    border-bottom: 1px solid var(--border-subtle);
+    font-size: var(--flowchat-font-size-xxs);
+    font-weight: 500;
+    color: var(--color-text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+  
+  &__slash-command-hint {
+    font-size: var(--flowchat-font-size-xxs);
+    color: var(--color-text-muted);
+    font-weight: 400;
+    text-transform: none;
+    letter-spacing: 0;
+  }
+  
+  &__slash-command-list {
+    max-height: 240px;
+    overflow-y: auto;
+    padding: 4px 0;
+    
+    &::-webkit-scrollbar {
+      width: 3px;
+    }
+    
+    &::-webkit-scrollbar-track {
+      background: transparent;
+    }
+    
+    &::-webkit-scrollbar-thumb {
+      background: var(--color-overlay-white-15);
+      border-radius: 2px;
+      
+      &:hover {
+        background: rgba(var(--color-static-white-rgb), 0.25);
+      }
+    }
+  }
+
+  &__slash-command-section {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px var(--flowchat-card-expanded-pad-x) 4px;
+  }
+
+  &__slash-command-section-line {
+    flex: 1;
+    min-width: 16px;
+    height: 1px;
+    background: var(--border-subtle);
+  }
+
+  &__slash-command-section-title {
+    flex: 0 0 auto;
+    font-size: var(--flowchat-font-size-xxs);
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--color-text-muted);
+  }
+  
+  &__slash-command-item {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--flowchat-control-gap);
+    padding: var(--flowchat-inline-gap) var(--flowchat-card-expanded-pad-x);
+    cursor: pointer;
+    transition: all 0.15s ease;
+    min-width: 0;
+    
+    &:hover {
+      background: var(--element-bg-soft);
+    }
+    
+    &--selected {
+      background: var(--element-bg-medium);
+    }
+    
+    &--active {
+      .bitfun-chat-input__slash-command-name {
+        color: color-mix(in srgb, var(--color-accent-500) 95%, var(--color-text-primary));
+      }
+    }
+  }
+  
+  &__slash-command-name {
+    font-size: var(--flowchat-font-size-2xs);
+    font-weight: 500;
+    color: color-mix(in srgb, var(--color-accent-500) 90%, var(--color-text-primary));
+    font-family: var(--font-family-mono);
+    flex: 0 0 112px;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  
+  &__slash-command-label {
+    font-size: var(--flowchat-font-size-2xs);
+    color: var(--color-text-secondary);
+    flex: 1;
+    min-width: 0;
+    line-height: 1.35;
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    overflow: hidden;
+
+    &--single-line {
+      display: block;
+      white-space: nowrap;
+      text-overflow: ellipsis;
+      -webkit-line-clamp: unset;
+    }
+  }
+  
+  &__slash-command-current {
+    font-size: var(--flowchat-font-size-xxs);
+    padding: 0.12rem 0.32rem;
+    border-radius: 3px;
+    background: color-mix(in srgb, var(--color-accent-500) 15%, transparent);
+    color: color-mix(in srgb, var(--color-accent-500) 90%, var(--color-text-primary));
+    font-weight: 500;
+    flex: 0 0 auto;
+  }
+  
+  &__slash-command-empty {
+    padding: var(--size-gap-4) var(--flowchat-card-expanded-pad-x);
+    text-align: center;
+    font-size: var(--flowchat-font-size-2xs);
+    color: var(--color-text-muted);
+  }
+
+  // Popovers: heavy blur + dark shadows read as gray/black on light theme
+  :root[data-theme="light"] &,
+  :root[data-theme-type="light"] &,
+  .light & {
+    &__slash-command-picker,
+    &__mode-dropdown {
+      background: var(--color-bg-elevated);
+      border: 1px solid var(--border-subtle);
+      backdrop-filter: none;
+      -webkit-backdrop-filter: none;
+      box-shadow:
+        0 4px 18px var(--color-overlay-slate-04),
+        0 1px 3px var(--color-overlay-slate-04),
+        inset 0 1px 0 var(--color-overlay-white-95);
+    }
+
+    &__mode-option:not(.bitfun-chat-input__mode-option--disabled):hover {
+      background: var(--element-bg-soft);
+    }
+
+    &__mode-submenu-content {
+      background: var(--color-overlay-slate-04);
+
+      .bitfun-chat-input__mode-option:hover:not(.bitfun-chat-input__mode-option--disabled) {
+        background: var(--element-bg-soft);
+      }
+    }
+
+    &__mode-submenu-trigger:hover {
+      background: var(--element-bg-soft);
+    }
+
+    &__slash-command-list::-webkit-scrollbar-thumb {
+      background: var(--color-overlay-slate-08);
+
+      &:hover {
+        background: var(--color-overlay-slate-12);
+      }
+    }
+  }
+  
+  &__actions {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    // Must fit IconButton small (28px); fixed 20px caused vertical overflow into the input above
+    min-height: 28px;
+    margin-top: 4px;
+    padding: 0 0 $size-gap-2;
+  }
+  
+  &__actions-left {
+    display: flex;
+    align-items: center;
+    gap: $size-gap-1;
+    min-width: 0;
+    animation: bitfun-stacked-reveal 0.28s cubic-bezier(0.4, 0, 0.2, 1) 0.17s both;
+  }
+
+  &__model-usage-group {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    flex-shrink: 0;
+  }
+
+  &__actions-right {
+    display: flex;
+    align-items: center;
+    gap: $size-gap-1;
+    height: 100%;
+    animation: bitfun-stacked-reveal 0.24s cubic-bezier(0.4, 0, 0.2, 1) 0.22s both;
+  }
+
+  &__split-actions {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    flex-shrink: 0;
+  }
+  
+  /* Send: same chrome language as stop — luminous disk + dark icon on dark UI,
+     charcoal disk + light icon on light UI. */
+  &__send-button {
+    position: relative;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    border: none;
+    background: var(--color-overlay-white-08);
+    color: rgba(var(--private-chat-input-send-dark-icon-rgb), 0.55);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition:
+      transform 0.18s ease,
+      filter 0.18s ease,
+      box-shadow 0.18s ease,
+      border-color 0.18s ease,
+      background 0.18s ease,
+      color 0.18s ease;
+    flex-shrink: 0;
+    
+    &:not(:disabled) {
+      background: rgba(var(--private-chat-input-send-surface-rgb), 0.96);
+      border: 1px solid transparent;
+      color: rgb(var(--private-chat-input-send-dark-icon-rgb));
+      box-shadow: none;
+    }
+
+    &:hover:not(:disabled) {
+      transform: scale(1.07);
+      filter: none;
+      background: linear-gradient(
+        165deg,
+        var(--color-static-white) 0%,
+        rgba(var(--private-chat-input-send-surface-hover-rgb), 0.99) 100%
+      );
+      border-color: rgba(var(--color-static-white-rgb), 0.52);
+      color: rgb(var(--private-chat-input-send-dark-icon-strong-rgb));
+      box-shadow:
+        0 0 0 1px rgba(var(--color-static-black-rgb), 0.32),
+        0 8px 18px rgba(var(--color-static-black-rgb), 0.32);
+    }
+
+    .bitfun-chat-input__box:focus-within &:not(:disabled) {
+      filter: none;
+      transform: scale(1.05);
+      background: linear-gradient(
+        165deg,
+        rgba(var(--private-chat-input-send-surface-focus-start-rgb), 0.99) 0%,
+        rgba(var(--private-chat-input-send-surface-focus-end-rgb), 0.97) 100%
+      );
+      border-color: var(--border-prominent);
+      box-shadow:
+        0 0 0 1px rgba(var(--color-static-black-rgb), 0.36),
+        0 3px 12px rgba(var(--color-static-black-rgb), 0.28);
+    }
+    
+    &:active:not(:disabled) {
+      transform: scale(0.96);
+      filter: none;
+      box-shadow:
+        0 0 0 1px var(--color-overlay-black-40),
+        0 1px 3px var(--color-overlay-black-20);
+    }
+    
+    &:disabled {
+      cursor: default;
+      background: rgba(var(--private-chat-input-send-surface-disabled-rgb), 0.18);
+      border: none;
+      color: rgba(var(--private-chat-input-send-dark-icon-rgb), 0.38);
+      opacity: 1;
+      box-shadow: none;
+      filter: saturate(0.65);
+    }
+    
+    &--breathing {
+      position: relative;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: transparent !important;
+      border: none !important;
+      border-radius: 0 !important;
+      padding: 0;
+      width: auto;
+      height: auto;
+      box-shadow: none !important;
+      transform: none !important;
+      cursor: pointer;
+      
+      .bitfun-chat-input__box:focus-within & {
+        background: transparent !important;
+        border: none !important;
+        box-shadow: none !important;
+        transform: none !important;
+      }
+      
+      &:hover {
+        background: transparent !important;
+        border: none !important;
+        box-shadow: none !important;
+      }
+
+      &:hover .bitfun-chat-input__breathing-circle {
+        transform: scale(1.07);
+        filter: none;
+        background: linear-gradient(
+          165deg,
+          var(--color-static-white) 0%,
+          rgba(var(--private-chat-input-send-surface-hover-rgb), 0.99) 100%
+        );
+        border-color: rgba(var(--color-static-white-rgb), 0.52);
+        box-shadow:
+          0 0 0 1px rgba(var(--color-static-black-rgb), 0.32),
+          0 8px 18px rgba(var(--color-static-black-rgb), 0.32);
+
+        &::after {
+          background: rgb(var(--private-chat-input-send-breathing-hover-glyph-rgb));
+          box-shadow: none;
+        }
+      }
+    }
+  }
+  
+  &__loading-spinner {
+    position: absolute;
+    inset: 1.5px;
+    border-radius: 50%;
+    border: 1px solid transparent;
+    border-top-color: var(--color-static-white);
+    animation: spin 0.8s linear infinite;
+  }
+  
+  /* Stop: theme-inverted pause glyph — luminous disk + deep square on dark UI;
+     charcoal disk + soft square on light UI (matches contrast on each chrome). */
+  &__breathing-circle {
+    position: relative;
+    box-sizing: border-box;
+    flex-shrink: 0;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition:
+      transform 0.18s ease,
+      filter 0.18s ease,
+      box-shadow 0.18s ease,
+      background 0.18s ease,
+      border-color 0.18s ease;
+    background: rgba(var(--private-chat-input-send-surface-rgb), 0.96);
+    border: 1px solid transparent;
+    box-shadow: none;
+
+    &::after {
+      content: '';
+      width: 9px;
+      height: 9px;
+      border-radius: 2px;
+      background: rgb(var(--private-chat-input-send-dark-icon-rgb));
+      box-shadow: none;
+      transition:
+        background 0.18s ease,
+        box-shadow 0.18s ease;
+    }
+  }
+
+  :root[data-theme="light"] &,
+  :root[data-theme-type="light"] &,
+  .light & {
+    .bitfun-chat-input__send-button:not(.bitfun-chat-input__send-button--breathing) {
+      &:not(:disabled) {
+        background: linear-gradient(
+          165deg,
+          rgb(var(--private-chat-input-send-inverse-surface-start-rgb)) 0%,
+          rgb(var(--private-chat-input-send-inverse-surface-end-rgb)) 100%
+        );
+        border: 1px solid transparent;
+        color: rgb(var(--private-chat-input-send-inverse-text-rgb));
+        box-shadow: none;
+      }
+
+      &:hover:not(:disabled) {
+        filter: none;
+        transform: scale(1.07);
+        background: linear-gradient(
+          165deg,
+          rgb(var(--private-chat-input-send-inverse-hover-start-rgb)) 0%,
+          rgb(var(--private-chat-input-send-inverse-hover-end-rgb)) 100%
+        );
+        border-color: rgba(var(--color-static-black-rgb), 0.58);
+        color: rgb(var(--private-chat-input-send-inverse-hover-text-rgb));
+        box-shadow:
+          0 0 0 1px rgba(var(--color-static-black-rgb), 0.16),
+          0 8px 20px rgba(var(--color-static-black-rgb), 0.22);
+      }
+
+      .bitfun-chat-input__box:focus-within &:not(:disabled) {
+        filter: none;
+        transform: scale(1.05);
+        background: linear-gradient(
+          165deg,
+          rgb(var(--private-chat-input-send-inverse-focus-start-rgb)) 0%,
+          rgb(var(--private-chat-input-send-inverse-focus-end-rgb)) 100%
+        );
+        border-color: rgba(var(--color-static-black-rgb), 0.52);
+        color: rgb(var(--private-chat-input-send-inverse-focus-text-rgb));
+        box-shadow:
+          0 0 0 1px rgba(var(--color-static-black-rgb), 0.13),
+          0 4px 14px var(--color-overlay-black-20);
+      }
+
+      &:disabled {
+        background: rgba(var(--private-chat-input-send-inverse-disabled-bg-rgb), 0.12);
+        border: none;
+        color: rgba(var(--private-chat-input-send-inverse-disabled-text-rgb), 0.28);
+        box-shadow: none;
+        filter: none;
+      }
+    }
+
+    .bitfun-chat-input__breathing-circle {
+      background: linear-gradient(
+        165deg,
+        rgb(var(--private-chat-input-send-inverse-surface-start-rgb)) 0%,
+        rgb(var(--private-chat-input-send-inverse-surface-end-rgb)) 100%
+      );
+      border: 1px solid transparent;
+      box-shadow: none;
+
+      &::after {
+        background: linear-gradient(
+          165deg,
+          rgb(var(--private-chat-input-stop-inverse-glyph-start-rgb)) 0%,
+          rgb(var(--private-chat-input-stop-inverse-glyph-end-rgb)) 100%
+        );
+        box-shadow: none;
+        transition:
+          background 0.18s ease,
+          box-shadow 0.18s ease;
+      }
+    }
+
+    .bitfun-chat-input__send-button--breathing:hover .bitfun-chat-input__breathing-circle {
+      transform: scale(1.07);
+      background: linear-gradient(
+        165deg,
+        rgb(var(--private-chat-input-stop-inverse-hover-start-rgb)) 0%,
+        rgb(var(--private-chat-input-stop-inverse-hover-end-rgb)) 100%
+      );
+      border-color: rgba(var(--color-static-black-rgb), 0.55);
+      box-shadow:
+        0 0 0 1px var(--color-overlay-black-15),
+        0 8px 20px var(--color-overlay-black-20);
+
+      &::after {
+        background: linear-gradient(
+          165deg,
+          rgb(var(--private-chat-input-stop-inverse-hover-glyph-start-rgb)) 0%,
+          rgb(var(--private-chat-input-stop-inverse-hover-glyph-end-rgb)) 100%
+        );
+        box-shadow: none;
+      }
+    }
+  }
+
+  &__queued-badge {
+    position: absolute;
+    top: -4px;
+    right: -4px;
+    min-width: 11px;
+    height: 11px;
+    padding: 0 3px;
+    border-radius: 999px;
+    background: var(--color-error);
+    color: var(--color-static-white);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: var(--flowchat-font-size-xxs);
+    font-weight: 700;
+    line-height: 1;
+    box-shadow: 0 0 0 1px rgba(var(--private-chat-input-queued-badge-ring-rgb), 0.85);
+    pointer-events: none;
+  }
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes bitfun-breathing-pulse {
+  0%, 100% {
+    transform: scale(1);
+    box-shadow: 0 0 12px color-mix(in srgb, var(--color-warning) 50%, transparent);
+    opacity: 1;
+  }
+  50% {
+    transform: scale(1.15);
+    box-shadow:
+      0 0 20px color-mix(in srgb, var(--color-warning) 80%, transparent),
+      0 0 30px color-mix(in srgb, var(--color-warning) 40%, transparent);
+    opacity: 0.9;
+  }
+}
+
+@keyframes bitfun-breathing-pulse-fast {
+  0%, 100% {
+    transform: scale(1);
+    box-shadow: 0 0 12px color-mix(in srgb, var(--color-warning) 60%, transparent);
+  }
+  50% {
+    transform: scale(1.2);
+    box-shadow:
+      0 0 24px color-mix(in srgb, var(--color-warning) 90%, transparent),
+      0 0 40px color-mix(in srgb, var(--color-warning) 50%, transparent);
+  }
+}
+
+
+@keyframes bitfun-chat-input-fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes bitfun-space-hint-pop {
+  0% {
+    opacity: 0;
+    transform: translateY(3px);
+  }
+  100% {
+    opacity: 0.62;
+    transform: translateY(0);
+  }
+}
+
+@keyframes bitfun-box-fade-in {
+  0% {
+    opacity: 0;
+    transform: translateY(6px) scale(0.98);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes bitfun-active-content-appear {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes bitfun-stacked-reveal {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}

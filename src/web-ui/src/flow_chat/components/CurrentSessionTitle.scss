@@ -1,0 +1,73 @@
+/**
+ * CurrentSessionTitle styles
+ * Displays the title of the active session
+ */
+
+@use '../../component-library/styles/tokens' as *;
+
+.bitfun-current-session-title {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: $size-gap-2;
+  height: 100%;
+  padding: 0 $size-gap-4;
+  user-select: none;
+  cursor: default;
+  position: relative;
+
+  &__text {
+    font-size: var(--flowchat-font-size-base);
+    font-weight: $font-weight-medium;
+    color: var(--color-text-primary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 500px;
+    
+    transition: opacity $motion-base $easing-standard, 
+                color $motion-base $easing-standard;
+  }
+
+  &__create-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    padding: 0;
+    border: none;
+    border-radius: $size-radius-sm;
+    background: transparent;
+    color: var(--color-text-muted);
+    cursor: pointer;
+    opacity: 1;
+    transition: all $motion-fast $easing-standard;
+    flex-shrink: 0;
+
+    &:hover {
+      background: var(--element-bg-soft);
+      color: var(--color-accent-500);
+      transform: translateY(-1px);
+    }
+
+    &:active {
+      transform: translateY(0);
+      background: var(--element-bg-medium);
+    }
+
+    svg {
+      flex-shrink: 0;
+    }
+  }
+
+  &:hover {
+    .bitfun-current-session-title__text {
+      color: var(--color-text-primary);
+    }
+
+    .bitfun-current-session-title__create-btn {
+      color: var(--color-text-secondary);
+    }
+  }
+}

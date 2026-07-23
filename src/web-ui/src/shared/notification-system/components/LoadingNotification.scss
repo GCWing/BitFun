@@ -1,0 +1,138 @@
+ 
+
+@use '../../../component-library/styles/tokens' as *;
+
+.loading-notification {
+  min-width: 260px;
+  max-width: 320px;
+  background: var(--color-bg-primary);
+  border-radius: $size-radius-base;
+  box-shadow: 0 2px 6px var(--color-overlay-black-08);
+  border: 1px solid var(--border-base);
+  padding: $size-gap-2 $size-gap-3;
+  display: flex;
+  align-items: flex-start;
+  gap: $size-gap-2;
+  animation: bitfun-notification-slide-in 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  
+  
+  &--completed {
+    .loading-notification__spinner {
+      animation: none;
+    }
+  }
+  
+  &--failed {
+    border-color: var(--color-error-border);
+    
+    .loading-notification__spinner {
+      animation: none;
+    }
+  }
+
+  
+  &__icon {
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    height: 20px;
+  }
+
+  
+  &__spinner {
+    color: var(--color-warning);
+    animation: bitfun-spin 1s linear infinite;
+  }
+
+  
+  &__status-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    font-size: 10px;
+    font-weight: $font-weight-semibold;
+
+    &--success {
+      background: var(--color-success-bg);
+      color: var(--color-success);
+    }
+
+    &--error {
+      background: var(--color-error-bg);
+      color: var(--color-error);
+    }
+  }
+
+  
+  &__content {
+    flex: 1;
+    min-width: 0;
+  }
+
+  &__title {
+    font-size: var(--font-size-xs);
+    font-weight: $font-weight-medium;
+    color: var(--color-text-primary);
+    margin-bottom: 2px;
+  }
+
+  &__message {
+    font-size: 11px;
+    color: var(--color-text-secondary);
+    line-height: 1.4;
+  }
+
+  
+  &__cancel {
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    height: 20px;
+    padding: 0;
+    background: transparent;
+    border: none;
+    border-radius: $size-radius-sm;
+    color: var(--color-text-muted);
+    cursor: pointer;
+    transition: all $motion-base $easing-standard;
+
+    &:hover {
+      background: var(--element-bg-base);
+      color: var(--color-text-primary);
+    }
+
+    &:active {
+      transform: scale(0.9);
+    }
+  }
+}
+
+
+@keyframes bitfun-spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+
+@keyframes bitfun-notification-slide-in {
+  from {
+    opacity: 0;
+    transform: translateX(-100%);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+

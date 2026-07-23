@@ -1,0 +1,30 @@
+{
+  "title": "審核",
+  "subtitle": "控制 Review 需要擴展覆蓋時使用的成本和容量上限。",
+  "loading": "正在載入審核設定...",
+  "desktopOnly": {
+    "title": "僅桌面端可用",
+    "description": "Review 容量設定僅在 BitFun 桌面應用中可用；目前介面不支援啟動 Review。"
+  },
+  "error": {
+    "title": "審核設定暫不可用",
+    "retry": "重試"
+  },
+  "capacity": {
+    "title": "容量",
+    "description": "限制 Review 的並行工作數量以及等待供應商容量的時長。",
+    "maxParallelReviewers": {
+      "label": "最大並行審核工作",
+      "description": "嚴格 Review 同時執行的審核工作上限。調高後可能並行啟動更多模型請求，更早觸發供應商限流，並增加 Token 消耗。"
+    },
+    "maxQueueWaitSeconds": {
+      "label": "容量等待視窗",
+      "description": "可選審核工作等待供應商容量的時長；已經執行的檢查可能讓審核總耗時更長。"
+    }
+  },
+  "messages": {
+    "loadFailed": "載入審核設定失敗。",
+    "saveFailed": "儲存審核設定失敗。",
+    "saved": "審核設定已儲存。"
+  }
+}

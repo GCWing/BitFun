@@ -1,0 +1,496 @@
+{
+  "version": "1.0",
+  "id": "editor",
+  "title": "编辑器配置",
+  "icon": "edit",
+  "description": "代码编辑器外观和行为设置",
+  "order": 2,
+  "sections": [
+    {
+      "id": "appearance",
+      "title": "外观设置",
+      "description": "编辑器的视觉外观配置",
+      "fields": [
+        {
+          "type": "select",
+          "dataType": "string",
+          "key": "theme",
+          "title": "编辑器主题",
+          "description": "选择编辑器的色彩主题",
+          "default": "vs-dark",
+          "ui": {
+            "options": [
+              {
+                "value": "vs",
+                "label": "浅色主题",
+                "description": "经典的浅色编辑器主题"
+              },
+              {
+                "value": "vs-dark",
+                "label": "深色主题",
+                "description": "经典的深色编辑器主题"
+              },
+              {
+                "value": "hc-black",
+                "label": "高对比度",
+                "description": "高对比度黑色主题"
+              },
+              {
+                "value": "github-light",
+                "label": "GitHub 浅色",
+                "description": "GitHub 风格浅色主题"
+              },
+              {
+                "value": "github-dark",
+                "label": "GitHub 深色",
+                "description": "GitHub 风格深色主题"
+              }
+            ]
+          }
+        },
+        {
+          "type": "select",
+          "dataType": "string",
+          "key": "fontFamily",
+          "title": "字体",
+          "description": "编辑器使用的字体",
+          "default": "JetBrains Mono",
+          "ui": {
+            "options": [
+              {
+                "value": "JetBrains Mono",
+                "label": "JetBrains Mono",
+                "description": "专为开发者设计的等宽字体"
+              },
+              {
+                "value": "Fira Code",
+                "label": "Fira Code",
+                "description": "支持连字的编程字体"
+              },
+              {
+                "value": "Cascadia Code",
+                "label": "Cascadia Code",
+                "description": "Microsoft 开发的编程字体"
+              },
+              {
+                "value": "Source Code Pro",
+                "label": "Source Code Pro",
+                "description": "Adobe 开源的等宽字体"
+              },
+              {
+                "value": "Consolas",
+                "label": "Consolas",
+                "description": "Windows 系统默认编程字体"
+              },
+              {
+                "value": "Monaco",
+                "label": "Monaco",
+                "description": "macOS 系统经典编程字体"
+              }
+            ]
+          }
+        },
+        {
+          "type": "range",
+          "dataType": "number",
+          "key": "fontSize",
+          "title": "字体大小",
+          "description": "编辑器文字的大小",
+          "default": 14,
+          "ui": {
+            "min": 10,
+            "max": 24,
+            "step": 1,
+            "marks": {
+              "10": "小",
+              "14": "标准",
+              "18": "大",
+              "24": "超大"
+            },
+            "showValue": true,
+            "suffix": "px"
+          },
+          "validation": {
+            "min": 10,
+            "max": 24
+          }
+        },
+        {
+          "type": "range",
+          "dataType": "number",
+          "key": "lineHeight",
+          "title": "行高",
+          "description": "代码行之间的间距",
+          "default": 1.5,
+          "ui": {
+            "min": 1.0,
+            "max": 2.0,
+            "step": 0.1,
+            "showValue": true
+          }
+        },
+        {
+          "type": "switch",
+          "dataType": "boolean",
+          "key": "fontLigatures",
+          "title": "启用字体连字",
+          "description": "显示字体连字效果（如 => 显示为箭头）",
+          "default": true
+        }
+      ]
+    },
+    {
+      "id": "behavior",
+      "title": "编辑行为",
+      "description": "编辑器的交互行为设置",
+      "fields": [
+        {
+          "type": "number",
+          "dataType": "number",
+          "key": "tabSize",
+          "title": "Tab 大小",
+          "description": "Tab 键对应的空格数量",
+          "default": 2,
+          "ui": {
+            "min": 1,
+            "max": 8,
+            "step": 1
+          },
+          "validation": {
+            "min": 1,
+            "max": 8
+          }
+        },
+        {
+          "type": "switch",
+          "dataType": "boolean",
+          "key": "insertSpaces",
+          "title": "使用空格替代Tab",
+          "description": "按 Tab 键时插入空格而不是制表符",
+          "default": true
+        },
+        {
+          "type": "select",
+          "dataType": "string",
+          "key": "wordWrap",
+          "title": "自动换行",
+          "description": "长行文本超出编辑器宽度时的换行方式",
+          "default": "off",
+          "ui": {
+            "options": [
+              {
+                "value": "off",
+                "label": "关闭",
+                "description": "不自动换行，长行可横向滚动"
+              },
+              {
+                "value": "on",
+                "label": "开启",
+                "description": "超出编辑器宽度时自动换行"
+              },
+              {
+                "value": "wordWrapColumn",
+                "label": "按列数换行",
+                "description": "超出指定列数时换行"
+              },
+              {
+                "value": "bounded",
+                "label": "自适应换行",
+                "description": "取编辑器宽度与换行列数的较小值进行换行"
+              }
+            ]
+          }
+        },
+        {
+          "type": "select",
+          "dataType": "string",
+          "key": "cursorStyle",
+          "title": "光标样式",
+          "description": "编辑器光标的显示样式",
+          "default": "line",
+          "ui": {
+            "options": [
+              {
+                "value": "line",
+                "label": "竖线",
+                "description": "细竖线光标"
+              },
+              {
+                "value": "block",
+                "label": "方块",
+                "description": "实心方块光标"
+              },
+              {
+                "value": "underline",
+                "label": "下划线",
+                "description": "下划线光标"
+              },
+              {
+                "value": "line-thin",
+                "label": "细竖线",
+                "description": "更细的竖线光标"
+              },
+              {
+                "value": "block-outline",
+                "label": "空心方块",
+                "description": "空心方块光标"
+              }
+            ]
+          }
+        },
+        {
+          "type": "switch",
+          "dataType": "boolean",
+          "key": "cursorBlinking",
+          "title": "光标闪烁",
+          "description": "光标是否闪烁",
+          "default": true
+        },
+        {
+          "type": "switch",
+          "dataType": "boolean",
+          "key": "autoClosingBrackets",
+          "title": "自动闭合括号",
+          "description": "输入左括号时自动添加右括号",
+          "default": true
+        },
+        {
+          "type": "switch",
+          "dataType": "boolean",
+          "key": "autoClosingQuotes",
+          "title": "自动闭合引号",
+          "description": "输入引号时自动添加闭合引号",
+          "default": true
+        }
+      ]
+    },
+    {
+      "id": "features",
+      "title": "功能特性",
+      "description": "编辑器高级功能的开关",
+      "collapsible": true,
+      "collapsed": false,
+      "fields": [
+        {
+          "type": "switch",
+          "dataType": "boolean",
+          "key": "minimap",
+          "title": "显示缩略图",
+          "description": "在编辑器右侧显示代码缩略图",
+          "default": true
+        },
+        {
+          "type": "switch",
+          "dataType": "boolean",
+          "key": "lineNumbers",
+          "title": "显示行号",
+          "description": "在编辑器左侧显示行号",
+          "default": true
+        },
+        {
+          "type": "switch",
+          "dataType": "boolean",
+          "key": "showWhitespace",
+          "title": "显示空白字符",
+          "description": "显示空格、制表符等不可见字符",
+          "default": false
+        },
+        {
+          "type": "switch",
+          "dataType": "boolean",
+          "key": "renderIndentGuides",
+          "title": "显示缩进参考线",
+          "description": "显示垂直的缩进参考线",
+          "default": true
+        },
+        {
+          "type": "switch",
+          "dataType": "boolean",
+          "key": "highlightActiveIndentGuide",
+          "title": "高亮当前缩进",
+          "description": "高亮显示当前光标所在的缩进级别",
+          "default": true
+        },
+        {
+          "type": "switch",
+          "dataType": "boolean",
+          "key": "bracketPairColorization",
+          "title": "括号配对着色",
+          "description": "用不同颜色显示配对的括号",
+          "default": true
+        },
+        {
+          "type": "switch",
+          "dataType": "boolean",
+          "key": "smoothScrolling",
+          "title": "平滑滚动",
+          "description": "启用平滑的滚动动画",
+          "default": true
+        }
+      ]
+    },
+    {
+      "id": "code-assistance",
+      "title": "代码辅助",
+      "description": "智能代码编辑辅助功能",
+      "collapsible": true,
+      "collapsed": false,
+      "fields": [
+        {
+          "type": "switch",
+          "dataType": "boolean",
+          "key": "autoCompletion",
+          "title": "自动补全",
+          "description": "启用智能代码自动补全",
+          "default": true
+        },
+        {
+          "type": "switch",
+          "dataType": "boolean",
+          "key": "quickSuggestions",
+          "title": "快速建议",
+          "description": "输入时显示快速建议",
+          "default": true
+        },
+        {
+          "type": "number",
+          "dataType": "number",
+          "key": "quickSuggestionsDelay",
+          "title": "建议延迟",
+          "description": "显示建议前的延迟时间（毫秒）",
+          "default": 300,
+          "ui": {
+            "min": 0,
+            "max": 2000,
+            "step": 100,
+            "suffix": "ms"
+          },
+          "conditional": {
+            "when": "quickSuggestions",
+            "value": true,
+            "show": true
+          }
+        },
+        {
+          "type": "switch",
+          "dataType": "boolean",
+          "key": "parameterHints",
+          "title": "参数提示",
+          "description": "显示函数参数提示",
+          "default": true
+        },
+        {
+          "type": "switch",
+          "dataType": "boolean",
+          "key": "hoverInfo",
+          "title": "悬停信息",
+          "description": "鼠标悬停时显示详细信息",
+          "default": true
+        },
+        {
+          "type": "switch",
+          "dataType": "boolean",
+          "key": "codeActionsOnSave",
+          "title": "保存时代码操作",
+          "description": "保存文件时自动执行代码格式化等操作",
+          "default": true
+        },
+        {
+          "type": "group",
+          "title": "错误检查",
+          "ui": {
+            "collapsible": true,
+            "collapsed": false,
+            "border": true
+          },
+          "fields": [
+            {
+              "type": "switch",
+              "dataType": "boolean",
+              "key": "showErrors",
+              "title": "显示错误",
+              "description": "在编辑器中高亮显示语法错误",
+              "default": true
+            },
+            {
+              "type": "switch",
+              "dataType": "boolean",
+              "key": "showWarnings",
+              "title": "显示警告",
+              "description": "在编辑器中显示代码警告",
+              "default": true
+            },
+            {
+              "type": "switch",
+              "dataType": "boolean",
+              "key": "showInfo",
+              "title": "显示信息",
+              "description": "显示代码优化建议等信息",
+              "default": false
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "formatting",
+      "title": "代码格式化",
+      "description": "代码自动格式化相关设置",
+      "collapsible": true,
+      "collapsed": true,
+      "fields": [
+        {
+          "type": "switch",
+          "dataType": "boolean",
+          "key": "formatOnSave",
+          "title": "保存时格式化",
+          "description": "保存文件时自动格式化代码",
+          "default": true
+        },
+        {
+          "type": "switch",
+          "dataType": "boolean",
+          "key": "formatOnPaste",
+          "title": "粘贴时格式化",
+          "description": "粘贴代码时自动格式化",
+          "default": false
+        },
+        {
+          "type": "switch",
+          "dataType": "boolean",
+          "key": "formatOnType",
+          "title": "输入时格式化",
+          "description": "输入时自动格式化代码",
+          "default": false
+        },
+        {
+          "type": "select",
+          "dataType": "string",
+          "key": "defaultFormatter",
+          "title": "默认格式化器",
+          "description": "选择默认的代码格式化工具",
+          "default": "prettier",
+          "ui": {
+            "options": [
+              {
+                "value": "prettier",
+                "label": "Prettier",
+                "description": "支持多语言的代码格式化工具"
+              },
+              {
+                "value": "builtin",
+                "label": "内置格式化器",
+                "description": "编辑器内置的格式化功能"
+              },
+              {
+                "value": "eslint",
+                "label": "ESLint",
+                "description": "JavaScript/TypeScript 代码检查和格式化"
+              }
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}

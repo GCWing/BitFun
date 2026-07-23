@@ -1,0 +1,73 @@
+/* Context compression card styles. */
+.context-compression-display {
+  --context-compression-note-rgb: 148, 163, 184;
+
+  .compression-icon {
+    color: var(--color-text-secondary);
+  }
+
+  .tool-card-icon.compression-icon {
+    color: var(--color-text-secondary);
+  }
+
+  .compression-info {
+    display: flex;
+    align-items: center;
+    gap: var(--flowchat-control-gap);
+    flex-wrap: nowrap;
+
+    .token-stat {
+      font-weight: 600;
+      color: var(--color-text-primary);
+      white-space: nowrap;
+    }
+
+    .savings-tag {
+      display: inline-flex;
+      align-items: center;
+      padding: 0.12rem 0.5rem;
+      border-radius: 4px;
+      font-size: var(--flowchat-font-size-xs);
+      font-weight: 600;
+      flex-shrink: 0;
+      white-space: nowrap;
+      color: color-mix(in srgb, var(--color-success) 75%, transparent);
+      background: color-mix(in srgb, var(--color-success) 8%, transparent);
+    }
+
+    .processing-text {
+      color: var(--color-text-secondary);
+      font-style: italic;
+    }
+  }
+
+  .compression-meta {
+    font-size: var(--flowchat-font-size-sm);
+    color: var(--color-text-secondary);
+    white-space: nowrap;
+  }
+
+  .error-content {
+    padding: var(--flowchat-card-expanded-pad-y) var(--size-gap-4);
+    background: var(--glass-red-subtle);
+    border-top: 1px solid color-mix(in srgb, var(--color-error) 20%, transparent);
+
+    .error-message {
+      color: color-mix(in srgb, var(--color-error) 90%, transparent);
+      font-size: var(--flowchat-font-size-sm);
+    }
+  }
+
+  .icon-completed {
+    color: color-mix(in srgb, var(--color-success) 90%, transparent);
+  }
+
+  .compression-detail-note {
+    padding: var(--flowchat-card-expanded-pad-y) var(--size-gap-4);
+    font-size: var(--flowchat-font-size-sm);
+    line-height: var(--flowchat-support-line-height);
+    color: var(--color-text-secondary);
+    background: rgba(var(--context-compression-note-rgb), 0.08);
+    border-top: 1px solid rgba(var(--context-compression-note-rgb), 0.18);
+  }
+}

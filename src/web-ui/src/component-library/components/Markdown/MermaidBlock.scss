@@ -1,0 +1,318 @@
+/**
+ * MermaidBlock styles
+ * Styles for rendering Mermaid diagrams during streaming output
+ */
+@use '../../styles/markdown-layout' as markdown;
+
+.mermaid-block {
+  --mermaid-block-shadow-color: var(--color-overlay-black-40);
+
+  margin: markdown.$block-gap 0;
+  border-radius: 6px;
+  overflow: hidden;
+  background: var(--color-bg-primary);
+  border: 1px solid var(--element-bg-base);
+  transition: all 0.3s ease;
+
+  &:hover {
+    box-shadow:
+      0 8px 24px var(--mermaid-block-shadow-color),
+      inset 0 1px 0 var(--element-bg-medium),
+      inset 0 -1px 0 var(--element-bg-subtle);
+    border-color: var(--element-bg-strong);
+  }
+
+  &--streaming {
+    .mermaid-block__streaming {
+      padding: var(--flowchat-code-block-pad-y) var(--flowchat-code-block-pad-x);
+    }
+
+    .streaming-cursor {
+      display: inline-block;
+      color: var(--color-accent-500);
+      animation: blink 1s infinite;
+      margin-left: 2px;
+    }
+
+    @keyframes blink {
+      0%, 49% { opacity: 1; }
+      50%, 100% { opacity: 0; }
+    }
+  }
+
+  &--incomplete {
+    .mermaid-block__hint {
+      display: flex;
+      align-items: center;
+      gap: var(--flowchat-inline-gap);
+      padding: var(--flowchat-card-pad-y) var(--flowchat-card-pad-x);
+      background: var(--color-warning-bg);
+      border-top: 1px solid var(--color-warning-border);
+      color: var(--color-warning);
+      font-size: var(--flowchat-font-size-xs);
+
+      svg {
+        flex-shrink: 0;
+      }
+    }
+  }
+
+  &--waiting,
+  &--rendering {
+    .mermaid-block__loading {
+      padding: var(--flowchat-card-pad-y) var(--flowchat-card-pad-x);
+      text-align: center;
+    }
+
+    .mermaid-block__loading-indicator {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: var(--flowchat-inline-gap);
+      color: var(--color-accent-500);
+      font-size: var(--tool-card-action-font-size);
+      margin-bottom: var(--flowchat-card-gap);
+
+      .spinning {
+        animation: spin 1s linear infinite;
+      }
+
+      @keyframes spin {
+        from { transform: rotate(0deg); }
+        to { transform: rotate(360deg); }
+      }
+    }
+  }
+
+  &--rendered {
+    position: relative;
+
+    .mermaid-block__diagram {
+      padding: var(--flowchat-card-pad-y) var(--flowchat-card-pad-x);
+      background: transparent;
+      overflow-x: auto;
+      animation: fadeIn 0.4s ease;
+
+      svg {
+        display: block;
+        margin: 0 auto;
+        max-width: 100%;
+        height: auto;
+      }
+
+      @keyframes fadeIn {
+        from {
+          opacity: 0;
+          transform: translateY(10px);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      }
+    }
+
+    .mermaid-block__actions {
+      position: absolute;
+      top: 4px;
+      right: 4px;
+      display: flex;
+      gap: 0.125rem;
+      opacity: 0;
+      transition: opacity 0.2s ease;
+    }
+
+    &:hover .mermaid-block__actions {
+      opacity: 1;
+    }
+
+    .mermaid-block__source {
+      padding: var(--flowchat-code-block-pad-y) var(--flowchat-code-block-pad-x);
+      border-top: 1px solid var(--element-bg-base);
+      background: transparent;
+
+      .mermaid-code {
+        margin: 0;
+        padding: 0;
+        background: transparent;
+        border: none;
+        border-radius: 0;
+      }
+    }
+  }
+
+  &--error {
+    border-color: var(--color-error-border);
+
+    .mermaid-block__error-message {
+      display: flex;
+      align-items: center;
+      gap: var(--flowchat-inline-gap);
+      padding: var(--flowchat-card-pad-y) var(--flowchat-card-pad-x);
+      background: var(--color-error-bg);
+      border-bottom: 1px solid var(--color-error-border);
+      color: var(--color-error);
+      font-size: var(--tool-card-action-font-size);
+
+      svg {
+        flex-shrink: 0;
+      }
+    }
+
+    .mermaid-block__actions {
+      display: flex;
+      gap: var(--flowchat-inline-gap);
+      padding: var(--flowchat-card-pad-y) var(--flowchat-card-pad-x);
+      background: var(--color-bg-secondary);
+      border-top: 1px solid var(--element-bg-base);
+    }
+  }
+
+
+  .mermaid-block__code-preview {
+    padding: var(--flowchat-code-block-pad-y) var(--flowchat-code-block-pad-x);
+    background: transparent;
+
+    .mermaid-code {
+      margin: 0;
+      padding: 0;
+      background: transparent;
+      border: none;
+      border-radius: 0;
+      font-family: var(--font-family-mono);
+      font-size: var(--flowchat-code-font-size);
+      line-height: var(--flowchat-code-line-height);
+      color: var(--color-text-primary);
+      overflow-x: auto;
+      white-space: pre;
+
+      code {
+        background: transparent;
+        padding: 0;
+        border: none;
+        color: inherit;
+      }
+    }
+  }
+
+  .mermaid-block__source .mermaid-code,
+  .mermaid-block__code-preview .mermaid-code {
+    margin: 0;
+    padding: 0;
+    background: transparent !important;
+    border: none !important;
+    border-radius: 0;
+    box-shadow: none;
+  }
+
+  .mermaid-icon-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    padding: 0;
+    background: transparent;
+    border: none;
+    border-radius: 4px;
+    color: var(--color-text-muted);
+    cursor: pointer;
+    transition: all 0.15s ease;
+
+    &:hover {
+      background: var(--element-bg-medium);
+      color: var(--color-text-primary);
+    }
+
+    &:active {
+      transform: scale(0.9);
+    }
+
+    svg {
+      flex-shrink: 0;
+    }
+
+    &.copied {
+      color: var(--color-success);
+    }
+  }
+
+  .mermaid-action-btn {
+    display: flex;
+    align-items: center;
+    gap: 0.375rem;
+    padding: 0.5rem 0.875rem;
+    background: transparent;
+    border: 1px solid var(--element-bg-medium);
+    border-radius: 4px;
+    color: var(--color-text-secondary);
+    font-size: 0.8125rem;
+    cursor: pointer;
+    transition: all 0.2s ease;
+
+    &:hover {
+      background: var(--element-bg-subtle);
+      border-color: var(--element-bg-strong);
+      color: var(--color-text-primary);
+    }
+
+    &:active {
+      transform: scale(0.98);
+    }
+
+    svg {
+      flex-shrink: 0;
+    }
+  }
+
+  @media (max-width: 768px) {
+    .mermaid-action-btn {
+      span {
+        display: none;
+      }
+      padding: 0.5rem;
+    }
+  }
+}
+
+.mermaid-block__diagram {
+  svg {
+    font-family: var(--font-family-sans);
+
+    .node {
+      rect, circle, ellipse, polygon {
+        stroke-width: 2px;
+      }
+    }
+
+    .edgePath {
+      .path {
+        stroke-width: 2px;
+      }
+    }
+
+    text {
+      font-size: 14px;
+    }
+
+    .edgeLabel {
+      background-color: var(--color-bg-secondary);
+    }
+  }
+}
+
+@media print {
+  .mermaid-block {
+    break-inside: avoid;
+    border: 1px solid var(--color-static-black);
+
+    .mermaid-block__actions {
+      display: none;
+    }
+
+    .mermaid-block__diagram svg {
+      max-width: 100%;
+      page-break-inside: avoid;
+    }
+  }
+}

@@ -1,0 +1,149 @@
+/* Unified floating input style system - uses design tokens */
+
+/* Base floating input styles */
+.floating-input-base {
+  position: fixed;
+  bottom: var(--size-gap-5);
+  left: 50%;
+  transform: translateX(-50%);
+  width: 400px; /* Width when unfocused */
+  max-width: calc(100vw - calc(var(--size-gap-5) * 2));
+  background: color-mix(in srgb, var(--color-bg-primary) 70%, transparent);
+  backdrop-filter: blur(20px) saturate(1.2);
+  -webkit-backdrop-filter: blur(20px) saturate(1.2);
+  border-radius: calc(var(--size-radius-lg) * 2); /* Pill shape */
+  border: 1px solid var(--border-accent-subtle);
+  box-shadow: 
+    var(--shadow-xl),
+    0 4px 15px color-mix(in srgb, var(--color-accent-600) 10%, transparent),
+    inset 0 1px 0 var(--color-overlay-white-08);
+  padding: var(--size-gap-3) var(--size-gap-4);
+  z-index: 100;
+  transition: all var(--motion-base) var(--easing-standard);
+  opacity: 0.6; /* Overall opacity when inactive */
+  display: flex;
+  align-items: center;
+  min-height: 48px;
+}
+
+/* Hover effect for floating input */
+.floating-input-base:hover {
+  opacity: 0.8;
+  border-color: color-mix(in srgb, var(--color-accent-600) 25%, transparent);
+  box-shadow: 
+    0 12px 40px var(--color-overlay-black-40),
+    0 6px 20px var(--border-accent-subtle),
+    inset 0 1px 0 var(--color-overlay-white-12);
+  transform: translateX(-50%) translateY(-1px);
+}
+
+/* Focus effect for floating input - fully expanded when active */
+.floating-input-base:focus-within {
+  opacity: 1;
+  width: 800px; /* Expanded width when active */
+  padding: var(--size-gap-4) var(--size-gap-5);
+  border-radius: var(--size-radius-lg);
+  border-color: color-mix(in srgb, var(--color-accent-600) 50%, transparent);
+  background: color-mix(in srgb, var(--color-bg-primary) 98%, transparent);
+  box-shadow: 
+    0 20px 60px color-mix(in srgb, var(--color-static-black) 60%, transparent),
+    0 10px 40px color-mix(in srgb, var(--color-accent-600) 25%, transparent),
+    inset 0 1px 0 var(--color-overlay-white-20);
+  transform: translateX(-50%) translateY(-4px);
+}
+
+/* Input field styles inside floating input */
+.floating-input-base .floating-input-field {
+  flex: 1;
+  background: transparent;
+  border: none;
+  color: var(--color-text-primary);
+  font-size: var(--font-size-sm);
+  font-family: var(--font-family-sans);
+  line-height: var(--line-height-base);
+  resize: none;
+  outline: none;
+  min-height: 24px;
+  max-height: 120px;
+}
+
+.floating-input-base .floating-input-field::placeholder {
+  color: color-mix(in srgb, var(--color-static-white) 50%, transparent);
+  font-style: italic;
+}
+
+/* Button styles inside floating input */
+.floating-input-base .floating-input-button {
+  background: none;
+  border: none;
+  color: color-mix(in srgb, var(--color-static-white) 70%, transparent);
+  cursor: pointer;
+  padding: var(--size-gap-2);
+  border-radius: var(--size-radius-sm);
+  transition: all var(--motion-fast) var(--easing-standard);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-left: var(--size-gap-2);
+}
+
+.floating-input-base .floating-input-button:hover:not(:disabled) {
+  color: var(--color-accent-500);
+  background: color-mix(in srgb, var(--color-accent-600) 10%, transparent);
+}
+
+.floating-input-base .floating-input-button:disabled {
+  opacity: var(--opacity-disabled);
+  cursor: default;
+}
+
+/* Inner container styles when active */
+.floating-input-base:focus-within .floating-input-wrapper {
+  background: var(--color-overlay-black-20);
+  border: 1px solid var(--border-accent-soft);
+  border-radius: var(--size-radius-md);
+  padding: var(--size-gap-2);
+}
+
+/* Message container needs bottom space to avoid overlap */
+.has-floating-input {
+  padding-bottom: 120px !important;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .floating-input-base {
+    width: calc(50vw);
+    bottom: 15px;
+    padding: var(--size-gap-1) var(--size-gap-3);
+    min-width: 300px;
+    max-width: calc(100vw - 30px);
+  }
+  
+  .floating-input-base:focus-within {
+    width: calc(100vw - 20px);
+    padding: var(--size-gap-3) var(--size-gap-4);
+  }
+  
+  .has-floating-input {
+    padding-bottom: 140px !important;
+  }
+}
+
+/* Dark theme adjustments */
+@media (prefers-color-scheme: dark) {
+  .floating-input-base {
+    background: color-mix(in srgb, var(--color-bg-primary) 65%, transparent);
+    border-color: color-mix(in srgb, var(--color-accent-600) 12%, transparent);
+  }
+  
+  .floating-input-base:hover {
+    background: color-mix(in srgb, var(--color-bg-primary) 75%, transparent);
+    border-color: color-mix(in srgb, var(--color-accent-600) 20%, transparent);
+  }
+  
+  .floating-input-base:focus-within {
+    background: color-mix(in srgb, var(--color-bg-primary) 99%, transparent);
+    border-color: color-mix(in srgb, var(--color-accent-600) 45%, transparent);
+  }
+}

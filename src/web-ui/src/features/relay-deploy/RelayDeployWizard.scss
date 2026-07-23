@@ -1,0 +1,601 @@
+/**
+ * Relay Deploy Wizard Styles
+ * Mirrors the account-login / SSH connection dialog visual language.
+ */
+
+.relay-deploy-wizard {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  // Fixed shell height so step / error / terminal changes do not resize the modal.
+  width: 100%;
+  height: min(640px, calc(100vh - 96px));
+  min-height: min(640px, calc(100vh - 96px));
+  max-height: min(640px, calc(100vh - 96px));
+  overflow: hidden;
+  font-family: inherit;
+
+  // ── step indicator ──────────────────────────────────────────────────────
+  &__steps {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 16px 10px;
+    border-bottom: 1px solid var(--border-subtle);
+    flex-shrink: 0;
+  }
+
+  &__step {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    color: var(--color-text-muted);
+
+    &.active {
+      color: var(--color-accent-500);
+
+      .relay-deploy-wizard__step-dot {
+        border-color: var(--color-accent-500);
+        background: var(--color-accent-500);
+        color: var(--color-static-white);
+      }
+    }
+
+    &.completed {
+      color: var(--color-success);
+    }
+  }
+
+  &__step-dot {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    border: 1px solid var(--border-base);
+    font-size: 10px;
+    font-weight: 600;
+    flex-shrink: 0;
+  }
+
+  &__step-label {
+    font-size: 11px;
+    font-weight: 500;
+    white-space: nowrap;
+  }
+
+  &__step-connector {
+    flex: 1;
+    height: 1px;
+    background: var(--border-subtle);
+    min-width: 8px;
+  }
+
+  // ── shared ──────────────────────────────────────────────────────────────
+  &__error-banner {
+    flex-shrink: 0;
+    padding: 8px 16px 10px;
+    border-bottom: 1px solid var(--border-subtle);
+    background: var(--color-bg-primary);
+  }
+
+  &__error-alert.alert {
+    padding: 8px 10px;
+    align-items: center;
+  }
+
+  &__scroll {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    padding: 10px 0 6px;
+    display: flex;
+    flex-direction: column;
+  }
+
+  &__desc {
+    margin: 0;
+    padding: 0 16px 10px;
+    font-size: 12px;
+    color: var(--color-text-secondary);
+    line-height: 1.5;
+  }
+
+  &__section {
+    padding: 0 16px;
+    margin-bottom: 4px;
+  }
+
+  &__section-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    margin-bottom: 6px;
+  }
+
+  &__section-title {
+    margin: 0;
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--color-text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+
+  &__search {
+    width: 140px;
+  }
+
+  &__server-list {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  &__server-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 7px 10px;
+    border-radius: 6px;
+    background: var(--color-bg-secondary);
+    border: 1px solid var(--border-subtle);
+    cursor: pointer;
+    transition: border-color 0.15s;
+
+    &:hover { border-color: var(--color-accent-500); }
+
+    &--config:hover { border-color: var(--border-base); }
+  }
+
+  &__server-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 26px;
+    height: 26px;
+    border-radius: 6px;
+    background: color-mix(in srgb, var(--color-accent-500) 12%, transparent);
+    color: var(--color-accent-500);
+    flex-shrink: 0;
+  }
+
+  &__server-info {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+  }
+
+  &__server-name {
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--color-text-primary);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  &__server-detail {
+    font-size: 10px;
+    color: var(--color-text-muted);
+    font-family: var(--font-family-mono);
+  }
+
+  &__divider {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 16px;
+    color: var(--color-text-muted);
+    font-size: 11px;
+
+    &::before,
+    &::after {
+      content: '';
+      flex: 1;
+      height: 1px;
+      background: var(--border-subtle);
+    }
+  }
+
+  &__form {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    padding: 8px 16px;
+    border-radius: 8px;
+    scroll-margin-top: 8px;
+    transition: background-color var(--motion-fast) var(--easing-standard);
+
+    &--highlighted {
+      animation: relay-deploy-form-reveal 1.2s ease-out;
+    }
+  }
+
+  &__reg-mode {
+    display: flex;
+    gap: 8px;
+    margin: 0 16px 12px;
+  }
+
+  &__reg-mode-btn {
+    flex: 1;
+    padding: 6px 10px;
+    border-radius: 6px;
+    border: 1px solid var(--border-subtle);
+    background: var(--color-bg-secondary);
+    color: var(--color-text-secondary);
+    font-size: 12px;
+    cursor: pointer;
+    transition: border-color 0.15s, color 0.15s;
+
+    &:hover:not(:disabled) {
+      color: var(--color-text-primary);
+    }
+
+    &:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    &.is-active {
+      border-color: var(--color-accent-500);
+      color: var(--color-accent-500);
+      font-weight: 600;
+    }
+  }
+
+  &__row {
+    display: flex;
+    gap: 8px;
+  }
+
+  &__field {
+    display: flex;
+    flex-direction: column;
+
+    &--flex { flex: 1; }
+    &--port { width: 76px; flex-shrink: 0; }
+  }
+
+  &__label {
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--color-text-secondary);
+    margin-bottom: 4px;
+  }
+
+  &__actions {
+    display: flex;
+    justify-content: flex-end;
+    align-items: center;
+    gap: 8px;
+    flex-shrink: 0;
+    margin-top: auto;
+    padding: 12px 16px 8px;
+    background: var(--color-bg-primary);
+
+    .btn.btn-sm {
+      height: 28px;
+      min-height: 28px;
+      padding: 0 10px;
+      font-size: 11px;
+    }
+  }
+
+  &__hint {
+    font-size: 11px;
+    color: var(--color-text-muted);
+    margin-right: auto;
+  }
+
+  // ── preflight ───────────────────────────────────────────────────────────
+  &__server-banner {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin: 0 16px 10px;
+    padding: 6px 10px;
+    border-radius: 6px;
+    background: var(--color-bg-secondary);
+    border: 1px solid var(--border-subtle);
+    font-size: 11px;
+    font-family: var(--font-family-mono);
+    color: var(--color-text-secondary);
+  }
+
+  &__checking {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 32px 16px;
+    color: var(--color-text-secondary);
+    font-size: 12px;
+
+    // Match terminal pane height so swap does not jump the dialog.
+    &--terminal {
+      margin: 0 16px 10px;
+      min-height: 320px;
+      height: 320px;
+      border-radius: 6px;
+      border: 1px solid var(--border-subtle);
+      background: var(--color-bg-secondary);
+      box-sizing: border-box;
+    }
+  }
+
+  &__checks {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    margin: 0 16px 10px;
+    border: 1px solid var(--border-subtle);
+    border-radius: 6px;
+    overflow: hidden;
+  }
+
+  &__check-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 10px;
+    font-size: 12px;
+    background: var(--color-bg-primary);
+
+    &:not(:last-child) {
+      border-bottom: 1px solid var(--border-subtle);
+    }
+  }
+
+  &__check-icon {
+    flex-shrink: 0;
+
+    &--ok { color: var(--color-success); }
+    &--warn { color: var(--color-warning); }
+    &--fail { color: var(--color-error); }
+  }
+
+  &__check-label {
+    font-weight: 500;
+    color: var(--color-text-primary);
+    flex-shrink: 0;
+  }
+
+  &__check-detail {
+    color: var(--color-text-secondary);
+    font-size: 11px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  &__port-row {
+    display: flex;
+    align-items: flex-end;
+    gap: 12px;
+    margin: 0 16px 10px;
+    flex-wrap: wrap;
+  }
+
+  &__port-hint {
+    margin: 0 0 6px;
+    font-size: 11px;
+    color: var(--color-text-muted);
+    line-height: 1.4;
+    flex: 1;
+    min-width: 160px;
+  }
+
+  &__notice {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    margin: 0 16px 10px;
+    padding: 10px 12px;
+    border-radius: 8px;
+    font-size: 12px;
+
+    &--info {
+      background: color-mix(in srgb, var(--color-accent-500) 8%, var(--color-bg-secondary));
+      border: 1px solid color-mix(in srgb, var(--color-accent-500) 25%, transparent);
+      color: var(--color-text-primary);
+
+      svg { color: var(--color-accent-500); flex-shrink: 0; margin-top: 1px; }
+    }
+
+    &--warn {
+      background: color-mix(in srgb, var(--color-warning) 10%, var(--color-bg-secondary));
+      border: 1px solid color-mix(in srgb, var(--color-warning) 35%, transparent);
+      color: var(--color-text-primary);
+
+      svg { color: var(--color-warning); flex-shrink: 0; margin-top: 1px; }
+    }
+  }
+
+  &__notice-text {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+  }
+
+  &__notice-title {
+    font-weight: 600;
+  }
+
+  &__notice-desc {
+    font-size: 11px;
+    color: var(--color-text-secondary);
+    line-height: 1.5;
+  }
+
+  // ── embedded remote PTY ─────────────────────────────────────────────────
+  &__terminal {
+    margin: 0 16px 10px;
+    border-radius: 6px;
+    border: 1px solid var(--border-subtle);
+    background: var(--color-bg-secondary);
+    overflow: hidden;
+    // Fixed geometry — avoids modal jump from flex growth / xterm measure.
+    flex: 0 0 auto;
+    width: calc(100% - 32px);
+    box-sizing: border-box;
+    min-height: 220px;
+    height: 220px;
+    display: flex;
+    flex-direction: column;
+
+    .bitfun-terminal {
+      flex: 1;
+      min-height: 0;
+      height: 100%;
+      // Slightly denser than default panel terminal (fontSize 12 via options).
+      .xterm {
+        font-size: 12px;
+      }
+    }
+
+    &--large {
+      min-height: 320px;
+      height: 320px;
+    }
+  }
+
+  // ── legacy log (kept for non-PTY fallbacks) ─────────────────────────────
+  &__log {
+    margin: 0 16px 10px;
+    padding: 10px 12px;
+    border-radius: 6px;
+    background: var(--color-bg-secondary);
+    border: 1px solid var(--border-subtle);
+    font-family: var(--font-family-mono);
+    font-size: 10.5px;
+    line-height: 1.5;
+    color: var(--color-text-secondary);
+    white-space: pre-wrap;
+    word-break: break-all;
+    overflow-y: auto;
+    max-height: 220px;
+
+    &--large {
+      flex: 1;
+      min-height: 200px;
+      max-height: none;
+    }
+  }
+
+  &__task-status {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 0 16px 8px;
+    font-size: 12px;
+    color: var(--color-text-secondary);
+    flex-shrink: 0;
+    min-height: 22px;
+
+    &--failed { color: var(--color-error); }
+  }
+
+  &__task-header {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    margin: 0 16px 10px;
+    padding: 10px 12px;
+    border-radius: 8px;
+    background: var(--color-bg-secondary);
+    border: 1px solid var(--border-subtle);
+    flex-shrink: 0;
+    // Reserve status block so running → failed does not shift layout.
+    min-height: 52px;
+    box-sizing: border-box;
+
+    svg { flex-shrink: 0; margin-top: 2px; }
+  }
+
+  &__task-header-text {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+  }
+
+  &__task-title {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--color-text-primary);
+  }
+
+  &__task-desc {
+    font-size: 11px;
+    color: var(--color-text-secondary);
+    line-height: 1.5;
+  }
+
+  // ── done ────────────────────────────────────────────────────────────────
+  &__done {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+    padding: 24px 16px;
+    text-align: center;
+  }
+
+  &__done-icon {
+    color: var(--color-accent-500);
+  }
+
+  &__done-title {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--color-text-primary);
+  }
+
+  &__done-url {
+    padding: 5px 12px;
+    border-radius: 6px;
+    background: var(--color-bg-secondary);
+    border: 1px solid var(--border-subtle);
+    font-family: var(--font-family-mono);
+    font-size: 12px;
+    color: var(--color-accent-500);
+  }
+
+  &__verify {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    max-width: 100%;
+    line-height: 1.5;
+
+    &.ok { color: var(--color-success); }
+    &.failed { color: var(--color-warning); }
+
+    svg { flex-shrink: 0; }
+  }
+
+  .spinning {
+    animation: relay-deploy-spin 1s linear infinite;
+  }
+}
+
+@keyframes relay-deploy-spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+@keyframes relay-deploy-form-reveal {
+  0% {
+    background: color-mix(in srgb, var(--color-accent-500) 14%, transparent);
+  }
+  40% {
+    background: color-mix(in srgb, var(--color-accent-500) 8%, transparent);
+  }
+  100% {
+    background: transparent;
+  }
+}

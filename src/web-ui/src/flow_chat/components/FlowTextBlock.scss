@@ -1,0 +1,191 @@
+/**
+ * FlowTextBlock styles
+ */
+@use '../../component-library/styles/markdown-layout' as markdown;
+
+.flow-text-block {
+  width: 100%;
+  margin: 0 0 var(--flowchat-flow-item-gap) 0;
+  font-size: var(--flowchat-font-size-base);
+  line-height: var(--flowchat-text-line-height);
+  /* Transparent border to match the box-sizing of bordered cards (BaseToolCard,
+   * TerminalRegion, etc.) so that text and card content share the same left edge. */
+  border: 1px solid transparent;
+  box-sizing: border-box;
+
+  .markdown-renderer {
+    --markdown-font-size: var(--flowchat-font-size-base);
+    --markdown-font-size-sm: var(--flowchat-font-size-sm);
+    --markdown-code-font-size: var(--flowchat-code-font-size);
+    --markdown-line-height: var(--flowchat-text-line-height);
+    --markdown-block-gap: #{markdown.$block-gap};
+    --markdown-paragraph-gap: #{markdown.$paragraph-gap};
+
+    font-size: var(--flowchat-font-size-base);
+    line-height: var(--flowchat-text-line-height);
+  }
+
+  /* Keep all rendered link variants (anchors and button-like local links) visibly link-blue. */
+  .markdown-renderer a,
+  .markdown-renderer .file-link,
+  .markdown-renderer .visualization-link,
+  .markdown-renderer .tab-link {
+    color: var(--flowchat-link-color);
+    text-decoration: underline;
+    text-decoration-thickness: 1px;
+    text-underline-offset: 2px;
+  }
+
+  .markdown-renderer a:hover,
+  .markdown-renderer .file-link:hover,
+  .markdown-renderer .visualization-link:hover,
+  .markdown-renderer .tab-link:hover {
+    color: var(--flowchat-link-hover-color);
+    text-decoration-thickness: 1.5px;
+  }
+
+  .markdown-renderer a .inline-code,
+  .markdown-renderer .file-link .inline-code,
+  .markdown-renderer .visualization-link .inline-code,
+  .markdown-renderer .tab-link .inline-code {
+    color: inherit !important;
+  }
+
+  /* Flow chat keeps code fences one text step below prose. */
+  .markdown-renderer .code-block-wrapper pre[class*='language-'],
+  .markdown-renderer .code-block-wrapper pre code,
+  .markdown-renderer .code-block-wrapper pre[style],
+  .markdown-renderer .code-block-wrapper code[style],
+  .markdown-renderer pre code {
+    font-size: var(--flowchat-code-font-size) !important;
+  }
+
+  .markdown-renderer .table-wrapper table {
+    font-size: var(--flowchat-font-size-sm);
+  }
+
+  /* Inline `code`: no chip background in chat (code blocks unchanged). */
+  .markdown-renderer .inline-code {
+    background: transparent;
+    border: none;
+    padding: 0.1em 0.2em;
+  }
+
+  .markdown-renderer .inline-code:hover {
+    background: transparent;
+    border: none;
+  }
+
+  /* Tighter code fence toolbar than global Markdown.scss (flow chat only). */
+  .markdown-renderer .code-block-toolbar {
+    min-height: 1.625rem;
+    padding: 0.2rem 0.45rem 0.2rem 0.6rem;
+  }
+
+  .markdown-renderer .code-block-lang {
+    font-size: var(--flowchat-font-size-xxs);
+    line-height: var(--flowchat-compact-line-height);
+  }
+
+  .markdown-renderer .code-block-wrapper .copy-button {
+    width: 26px;
+    height: 26px;
+    padding: 0.2rem;
+    transition:
+      transform 0.15s ease,
+      opacity 0.2s ease;
+  }
+
+  .markdown-renderer .code-block-wrapper .copy-button:hover {
+    background: transparent;
+    color: var(--color-text-muted);
+    transform: scale(1.08);
+  }
+
+  .markdown-renderer .code-block-wrapper .copy-button:active {
+    background: transparent;
+    color: var(--color-text-muted);
+    transform: scale(1.02);
+  }
+
+  .markdown-renderer .code-block-wrapper .copy-button.copy-success:hover {
+    color: var(--color-success);
+    transform: scale(1.08);
+  }
+
+  /* MermaidBlock.scss adds a heavy hover shadow; keep chat diagrams flat. */
+  .markdown-renderer .mermaid-block:hover {
+    box-shadow: none;
+  }
+
+  .text-content {
+    color: var(--color-text-primary);
+    line-height: var(--flowchat-text-line-height);
+    white-space: pre-wrap;
+    word-wrap: break-word;
+  }
+  
+  &.streaming {
+    .markdown-renderer {
+      animation: none;
+    }
+  }
+
+  &--runtime-status {
+    display: flex;
+    align-items: center;
+    gap: var(--flowchat-control-gap);
+    min-height: 1.5rem;
+    color: var(--color-text-muted);
+    font-size: var(--flowchat-font-size-base);
+    line-height: var(--flowchat-support-line-height);
+    opacity: 0.86;
+  }
+
+  &__runtime-status-icon {
+    flex: 0 0 auto;
+  }
+
+  &__runtime-status-text {
+    overflow-wrap: anywhere;
+  }
+}
+
+/* Light theme: copy button icon color (scoped to flow chat). */
+:root[data-theme='light'] .flow-text-block .markdown-renderer .code-block-wrapper .copy-button:hover,
+:root[data-theme-type='light'] .flow-text-block .markdown-renderer .code-block-wrapper .copy-button:hover,
+[data-theme-type='light'] .flow-text-block .markdown-renderer .code-block-wrapper .copy-button:hover,
+.light .flow-text-block .markdown-renderer .code-block-wrapper .copy-button:hover {
+  color: var(--color-overlay-black-50);
+}
+
+:root[data-theme='light'] .flow-text-block .markdown-renderer .code-block-wrapper .copy-button.copy-success:hover,
+:root[data-theme-type='light'] .flow-text-block .markdown-renderer .code-block-wrapper .copy-button.copy-success:hover,
+[data-theme-type='light'] .flow-text-block .markdown-renderer .code-block-wrapper .copy-button.copy-success:hover,
+.light .flow-text-block .markdown-renderer .code-block-wrapper .copy-button.copy-success:hover {
+  color: var(--color-success);
+}
+
+:root[data-theme='light'] .flow-text-block .markdown-renderer .inline-code,
+:root[data-theme-type='light'] .flow-text-block .markdown-renderer .inline-code,
+[data-theme-type='light'] .flow-text-block .markdown-renderer .inline-code,
+.light .flow-text-block .markdown-renderer .inline-code {
+  background: transparent;
+  border: none;
+}
+
+:root[data-theme='light'] .flow-text-block .markdown-renderer .inline-code:hover,
+:root[data-theme-type='light'] .flow-text-block .markdown-renderer .inline-code:hover,
+[data-theme-type='light'] .flow-text-block .markdown-renderer .inline-code:hover,
+.light .flow-text-block .markdown-renderer .inline-code:hover {
+  background: transparent;
+  border: none;
+}
+
+@media (prefers-color-scheme: dark) {
+  .flow-text-block .markdown-renderer .inline-code,
+  .flow-text-block .markdown-renderer .inline-code:hover {
+    background: transparent;
+    border: none;
+  }
+}

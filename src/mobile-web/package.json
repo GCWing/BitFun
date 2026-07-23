@@ -1,0 +1,32 @@
+{
+  "name": "bitfun-mobile-web",
+  "version": "0.2.13",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "type-check": "tsc --noEmit",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@noble/ciphers": "^2.1.1",
+    "@noble/curves": "^2.0.1",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "react-markdown": "^10.1.0",
+    "react-syntax-highlighter": "^15.6.6",
+    "remark-gfm": "^4.0.1",
+    "zustand": "^5.0.10"
+  },
+  "devDependencies": {
+    "@types/react": "^18.3.0",
+    "@types/react-dom": "^18.3.0",
+    "@types/react-syntax-highlighter": "^15.5.13",
+    "@vitejs/plugin-react": "^4.6.0",
+    "sass": "^1.93.2",
+    "typescript": "~5.8.3",
+    "vite": "^7.0.4",
+    "ws": "^8.19.0"
+  }
+}

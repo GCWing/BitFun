@@ -1,0 +1,120 @@
+// Thinking display — aligned with desktop ModelThinkingDisplay
+.chat-thinking {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+}
+
+// Collapsed state
+.chat-thinking__toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: none;
+  border: none;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-xs);
+  cursor: pointer;
+  padding: 3px 0;
+  text-align: left;
+
+  &:active { opacity: 0.7; }
+}
+
+.chat-thinking__chevron {
+  display: inline-flex;
+  align-items: center;
+  transition: transform var(--motion-fast) var(--easing-standard);
+
+  &.is-open {
+    transform: rotate(90deg);
+  }
+}
+
+.chat-thinking__label {
+  color: var(--color-text-muted);
+  font-style: italic;
+  font-size: var(--font-size-xs);
+}
+
+// Expand/collapse container using grid animation
+.chat-thinking__expand-container {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows var(--motion-base) var(--easing-standard);
+
+  &.is-expanded {
+    grid-template-rows: 1fr;
+  }
+}
+
+.chat-thinking__expand-inner {
+  overflow: hidden;
+}
+
+// Content area with gradient masks
+.chat-thinking__content-wrapper {
+  position: relative;
+  max-height: 300px;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+
+  // Top gradient mask
+  &::before,
+  &::after {
+    content: '';
+    position: sticky;
+    left: 0;
+    right: 0;
+    height: 24px;
+    z-index: 1;
+    pointer-events: none;
+    display: block;
+  }
+
+  &::before {
+    top: 0;
+    background: linear-gradient(to bottom, var(--color-bg-flowchat), transparent);
+  }
+
+  &::after {
+    bottom: 0;
+    background: linear-gradient(to top, var(--color-bg-flowchat), transparent);
+  }
+
+  &.at-top::before { display: none; }
+  &.at-bottom::after { display: none; }
+}
+
+.chat-thinking__content {
+  padding: var(--size-gap-2) 0;
+  font-size: var(--font-size-xs);
+  color: var(--color-text-muted);
+  line-height: var(--line-height-relaxed);
+
+  p { margin-bottom: 6px; &:last-child { margin-bottom: 0; } }
+  code {
+    background: var(--element-bg-base);
+    padding: 1px 4px;
+    border-radius: 3px;
+    font-size: 11px;
+    font-family: var(--font-family-mono);
+  }
+}
+
+// Streaming state — inline indicator
+.chat-thinking--streaming {
+  .chat-thinking__label {
+    &::after {
+      content: '';
+      display: inline-block;
+      width: 4px;
+      height: 12px;
+      background: var(--color-text-muted);
+      margin-left: 4px;
+      animation: pulse 1s ease-in-out infinite;
+      vertical-align: middle;
+      border-radius: 1px;
+    }
+  }
+}

@@ -1,0 +1,269 @@
+/**
+ * Session file modifications bar styles (vertical layout).
+ */
+
+@use '../../../component-library/styles/tokens' as *;
+
+.session-file-modifications-bar {
+  display: flex;
+  flex-direction: column;
+  gap: $size-gap-1;
+  padding: $size-gap-2 $size-gap-3;
+  border-bottom: 1px dashed var(--border-base);
+
+  // Frosted glass effect aligned with FlowChatHeader.
+  background: color-mix(in srgb, var(--color-bg-elevated) 45%, transparent);
+  backdrop-filter: blur(20px) saturate(1.3);
+  -webkit-backdrop-filter: blur(20px) saturate(1.3);
+
+  transition: all $motion-base $easing-standard;
+  position: relative;
+  z-index: 9;
+
+  // Compact mode (above ChatInput)
+  &--compact {
+    max-width: 700px;
+    width: 100%;
+    margin: 0 auto;
+    border-bottom: none;
+    border-top: 1px dashed var(--border-base);
+    padding: 8px 12px;
+
+    .session-file-modifications-bar__list {
+      max-height: 200px;
+    }
+  }
+
+  // ==================== Header ====================
+  &__header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: $size-gap-2;
+    min-height: 28px;
+  }
+
+  .header-info {
+    display: flex;
+    align-items: center;
+    gap: $size-gap-3;
+    flex: 1;
+    min-width: 0;
+  }
+
+  .file-count {
+    font-size: var(--tool-card-action-font-size);
+    font-weight: $font-weight-medium;
+    color: var(--color-text-primary);
+    white-space: nowrap;
+  }
+
+  .total-stats {
+    display: flex;
+    align-items: center;
+    gap: $size-gap-2;
+    font-size: var(--tool-card-action-font-size);
+    font-weight: $font-weight-medium;
+    font-family: 'SF Mono', 'Monaco', 'Cascadia Code', monospace;
+
+    .stat-add {
+      color: var(--color-success);
+    }
+
+    .stat-del {
+      color: var(--color-error);
+    }
+  }
+
+  // Expand/collapse button
+  .expand-toggle-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    padding: 0;
+    background: transparent;
+    border: none;
+    border-radius: 6px;
+    color: var(--color-text-secondary);
+    cursor: pointer;
+    transition: all $motion-fast $easing-standard;
+    flex-shrink: 0;
+
+    &:hover:not(:disabled) {
+      background: var(--element-bg-hover);
+      color: var(--color-text-primary);
+    }
+
+    &:active:not(:disabled) {
+      transform: scale(0.95);
+    }
+
+    &:disabled {
+      opacity: 0.4;
+      cursor: not-allowed;
+    }
+
+    svg {
+      width: 16px;
+      height: 16px;
+      stroke-width: 2.5;
+    }
+  }
+
+  // ==================== File list ====================
+  &__list {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    max-height: 300px;
+    overflow-y: auto;
+    padding-right: 4px;
+
+    scrollbar-width: thin;
+    scrollbar-color: var(--border-medium) transparent;
+
+    &::-webkit-scrollbar {
+      width: 6px;
+    }
+
+    &::-webkit-scrollbar-track {
+      background: transparent;
+    }
+
+    &::-webkit-scrollbar-thumb {
+      background-color: var(--border-medium);
+      border-radius: 3px;
+
+      &:hover {
+        background-color: var(--border-strong);
+      }
+    }
+  }
+
+  // ==================== File row ====================
+  .file-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 10px;
+    background: transparent;
+    border: none;
+    border-radius: 4px;
+    font-size: var(--tool-card-action-font-size);
+    color: var(--color-text-primary);
+    cursor: pointer;
+    transition: all $motion-fast $easing-standard;
+    user-select: none;
+
+    &:hover {
+      background: var(--element-bg-hover);
+    }
+
+    &:active {
+      background: var(--element-bg-base);
+    }
+
+    &__icon {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      width: 20px;
+      height: 20px;
+
+      .icon-write {
+        color: var(--color-success);
+      }
+
+      .icon-edit {
+        color: var(--color-accent-500);
+      }
+
+      .icon-delete {
+        color: var(--color-error);
+      }
+    }
+
+    &__name {
+      flex: 1;
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      font-weight: $font-weight-medium;
+    }
+
+    &__source {
+      display: inline-flex;
+      align-items: center;
+      min-height: 20px;
+      padding: 0 7px;
+      border-radius: 999px;
+      border: 1px solid color-mix(in srgb, var(--color-accent-400) 18%, var(--border-subtle));
+      background: color-mix(in srgb, var(--color-accent-400) 9%, transparent);
+      color: color-mix(in srgb, var(--color-accent-400) 72%, var(--color-text-secondary));
+      font-size: var(--flowchat-font-size-xxs);
+      font-weight: $font-weight-semibold;
+      line-height: 1;
+      white-space: nowrap;
+      flex-shrink: 0;
+    }
+
+    &__stats {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      flex-shrink: 0;
+      font-size: var(--tool-card-action-font-size);
+      font-weight: $font-weight-medium;
+      font-family: 'SF Mono', 'Monaco', 'Cascadia Code', monospace;
+
+      .stat-add {
+        color: var(--color-success);
+      }
+
+      .stat-del {
+        color: var(--color-error);
+      }
+    }
+
+    &__error {
+      font-size: var(--flowchat-font-size-xs);
+      color: var(--color-error);
+      font-style: italic;
+    }
+
+    // Delete style
+    &--delete {
+      .file-row__name {
+        text-decoration: line-through;
+        color: var(--color-text-secondary);
+      }
+    }
+
+    &--error {
+      cursor: not-allowed;
+      opacity: 0.6;
+
+      &:hover {
+        background: transparent;
+      }
+    }
+  }
+
+  // ==================== More files hint ====================
+  .more-files-hint {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 8px;
+    font-size: var(--tool-card-action-font-size);
+    color: var(--color-text-secondary);
+    font-style: italic;
+    background: color-mix(in srgb, var(--color-bg-secondary) 50%, transparent);
+    border-radius: 4px;
+    border: 1px dashed var(--border-base);
+  }
+}

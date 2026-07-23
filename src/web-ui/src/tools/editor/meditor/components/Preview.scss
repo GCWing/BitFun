@@ -1,0 +1,12 @@
+@use '../../../../component-library/styles/tokens.scss' as *;
+
+.m-editor-preview {
+  width: 100%;
+  height: 100%;
+  overflow-y: auto;
+
+  &-content {
+    padding: $size-gap-4;
+    overflow-x: auto;
+  }
+}

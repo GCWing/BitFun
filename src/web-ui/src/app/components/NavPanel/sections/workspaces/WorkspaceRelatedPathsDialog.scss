@@ -1,0 +1,268 @@
+.workspace-related-paths-dialog {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-width: 0;
+  padding-block: 4px 16px;
+  color: var(--color-text-primary);
+
+  &__modal {
+    overflow-x: hidden;
+  }
+
+  &__intro {
+    position: relative;
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    align-items: start;
+    gap: 14px;
+    padding: 16px;
+    overflow: hidden;
+    border: 1px solid color-mix(in srgb, var(--border-subtle) 78%, transparent);
+    border-radius: 14px;
+    background:
+      radial-gradient(circle at 0% 0%, color-mix(in srgb, var(--color-accent-500) 14%, transparent), transparent 36%),
+      color-mix(in srgb, var(--element-bg-subtle) 72%, transparent);
+
+    &::after {
+      content: '';
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      border-radius: inherit;
+      box-shadow: inset 0 1px 0 color-mix(in srgb, var(--color-text-primary) 7%, transparent);
+    }
+  }
+
+  &__intro-icon {
+    position: relative;
+    z-index: 1;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 38px;
+    height: 38px;
+    flex-shrink: 0;
+    border: 1px solid color-mix(in srgb, var(--color-accent-500) 24%, transparent);
+    border-radius: 12px;
+    background: color-mix(in srgb, var(--color-accent-500) 12%, var(--element-bg-subtle));
+    color: var(--color-accent-500);
+  }
+
+  &__intro-copy {
+    position: relative;
+    z-index: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    min-width: 0;
+  }
+
+  &__intro-title {
+    font-size: 14px;
+    font-weight: 650;
+    line-height: 1.35;
+    color: var(--color-text-primary);
+    letter-spacing: -0.01em;
+  }
+
+  &__intro-text,
+  &__scope {
+    font-size: 12px;
+    line-height: 1.55;
+    color: var(--color-text-secondary);
+  }
+
+  &__scope {
+    color: var(--color-text-muted);
+  }
+
+  &__intro-badge {
+    position: relative;
+    z-index: 1;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 24px;
+    padding: 0 9px;
+    border: 1px solid color-mix(in srgb, var(--color-accent-500) 18%, transparent);
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--color-accent-500) 9%, transparent);
+    color: var(--color-accent-500);
+    white-space: nowrap;
+  }
+
+  &__intro-badge-label {
+    font-size: 11px;
+    font-weight: 600;
+  }
+
+  &__empty {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 92px;
+    padding: 18px 16px;
+    border: 1px dashed color-mix(in srgb, var(--border-subtle) 84%, transparent);
+    border-radius: 14px;
+    background: color-mix(in srgb, var(--element-bg-subtle) 64%, transparent);
+    color: var(--color-text-secondary);
+    font-size: 12px;
+    line-height: 1.5;
+    text-align: center;
+  }
+
+  &__list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  &__card {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding: 12px;
+    border: 1px solid color-mix(in srgb, var(--border-subtle) 82%, transparent);
+    border-radius: 12px;
+    background: color-mix(in srgb, var(--element-bg-subtle) 76%, transparent);
+    transition: border-color 0.18s ease, background 0.18s ease;
+
+    &:hover {
+      border-color: color-mix(in srgb, var(--border-medium) 74%, transparent);
+      background: color-mix(in srgb, var(--element-bg-soft) 70%, transparent);
+    }
+  }
+
+  &__card-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+  }
+
+  &__card-index {
+    display: inline-flex;
+    align-items: center;
+    height: 20px;
+    padding: 0 8px;
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--element-bg-base) 62%, transparent);
+    color: var(--color-text-secondary);
+    font-size: 11px;
+    font-weight: 600;
+    line-height: 1;
+  }
+
+  &__remove {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 26px;
+    height: 26px;
+    border: 1px solid transparent;
+    border-radius: 8px;
+    background: transparent;
+    color: var(--color-text-muted);
+    cursor: pointer;
+    transition: background 0.18s ease, border-color 0.18s ease, color 0.18s ease;
+
+    &:hover {
+      border-color: color-mix(in srgb, var(--color-error) 20%, transparent);
+      background: color-mix(in srgb, var(--color-error) 9%, transparent);
+      color: var(--color-error);
+    }
+  }
+
+  &__path-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 8px;
+    align-items: stretch;
+  }
+
+  &__path-input .bitfun-input-container,
+  &__description .bitfun-textarea__field {
+    border-radius: 8px;
+  }
+
+  &__path-input .bitfun-input-container {
+    height: 32px;
+    background: color-mix(in srgb, var(--element-bg-base) 72%, transparent);
+  }
+
+  &__select {
+    min-width: 84px;
+    border: 1px solid color-mix(in srgb, var(--border-subtle) 90%, transparent);
+    border-radius: 8px;
+    background: transparent;
+    white-space: nowrap;
+  }
+
+  &__description .bitfun-textarea__field {
+    min-height: 64px;
+    padding: 10px 12px;
+    background: transparent;
+    font-size: 12px;
+    resize: none;
+  }
+
+  &__error {
+    padding: 10px 12px;
+    border: 1px solid color-mix(in srgb, var(--color-error) 22%, transparent);
+    border-radius: 10px;
+    background: color-mix(in srgb, var(--color-error) 8%, transparent);
+    color: color-mix(in srgb, var(--color-error) 88%, var(--color-text-primary));
+    font-size: 12px;
+    line-height: 1.45;
+  }
+
+  &__footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding-top: 2px;
+  }
+
+  &__add {
+    border-radius: 8px;
+  }
+
+  &__footer-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+}
+
+@media (max-width: 720px) {
+  .workspace-related-paths-dialog {
+    &__intro {
+      grid-template-columns: auto minmax(0, 1fr);
+    }
+
+    &__intro-badge {
+      grid-column: 1 / -1;
+      justify-self: start;
+    }
+
+    &__path-row {
+      grid-template-columns: 1fr;
+    }
+
+    &__select {
+      width: 100%;
+    }
+
+    &__footer {
+      flex-direction: column;
+      align-items: stretch;
+    }
+
+    &__footer-actions {
+      width: 100%;
+      justify-content: flex-end;
+    }
+  }
+}

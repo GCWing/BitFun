@@ -1,0 +1,32 @@
+@use '../../../component-library/styles/tokens' as *;
+
+.bitfun-editor-config {
+  &__content {
+    display: flex;
+    flex-direction: column;
+    gap: $size-gap-6;
+  }
+
+  &__actions {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: $size-gap-2;
+    width: 100%;
+  }
+
+  &__saving {
+    font-size: var(--font-size-xs);
+    color: var(--color-text-secondary);
+    white-space: nowrap;
+  }
+}
+
+@container config-panel (max-width: 520px) {
+  .bitfun-editor-config {
+    &__actions {
+      justify-content: flex-start;
+      flex-wrap: wrap;
+    }
+  }
+}

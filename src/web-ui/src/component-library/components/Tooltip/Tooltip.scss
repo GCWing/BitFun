@@ -1,0 +1,150 @@
+/**
+ * Tooltip component styles
+ */
+@use '../../styles/tokens.scss' as tokens;
+
+.bitfun-tooltip {
+  position: fixed;
+  opacity: 0;
+  pointer-events: none;
+  z-index: tokens.$z-tooltip;
+
+  transform: scale(0.98);
+  transition:
+    opacity 0.12s ease-out,
+    transform 0.12s ease-out;
+
+  &--visible {
+    opacity: 1;
+    pointer-events: none;
+    transform: scale(1);
+  }
+
+  &--interactive.bitfun-tooltip--visible {
+    pointer-events: auto;
+  }
+
+  &__content {
+    padding: 6px 10px;
+
+    font-family: var(--font-family-sans);
+    font-size: var(--font-size-xs);
+    font-weight: var(--font-weight-normal);
+    line-height: 1.4;
+    color: var(--color-text-primary);
+
+    background: color-mix(in srgb, var(--color-bg-elevated) 96%, transparent);
+
+    border: 1px solid var(--border-base);
+    border-radius: var(--size-radius-sm);
+
+    backdrop-filter: blur(8px) saturate(1.1);
+    -webkit-backdrop-filter: blur(8px) saturate(1.1);
+
+    box-shadow: var(--shadow-sm);
+
+    max-width: 280px;
+    max-height: min(320px, calc(100vh - 24px));
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    word-wrap: break-word;
+    user-select: text;
+
+    &::-webkit-scrollbar {
+      width: 4px;
+    }
+
+    &::-webkit-scrollbar-track {
+      background: transparent;
+    }
+
+    &::-webkit-scrollbar-thumb {
+      background: var(--border-medium);
+      border-radius: 2px;
+    }
+  }
+
+  &--top.bitfun-tooltip--visible {
+    animation: bitfun-tooltip-fade-in-top 0.12s ease-out;
+  }
+
+  &--bottom.bitfun-tooltip--visible {
+    animation: bitfun-tooltip-fade-in-bottom 0.12s ease-out;
+  }
+
+  &--left.bitfun-tooltip--visible {
+    animation: bitfun-tooltip-fade-in-left 0.12s ease-out;
+  }
+
+  &--right.bitfun-tooltip--visible {
+    animation: bitfun-tooltip-fade-in-right 0.12s ease-out;
+  }
+}
+
+
+@keyframes bitfun-tooltip-fade-in-top {
+  from {
+    opacity: 0;
+    transform: translateY(3px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes bitfun-tooltip-fade-in-bottom {
+  from {
+    opacity: 0;
+    transform: translateY(-3px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes bitfun-tooltip-fade-in-left {
+  from {
+    opacity: 0;
+    transform: translateX(3px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes bitfun-tooltip-fade-in-right {
+  from {
+    opacity: 0;
+    transform: translateX(-3px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+
+@media (prefers-contrast: high) {
+  .bitfun-tooltip {
+    &__content {
+      border-width: 1px;
+      border-color: var(--border-prominent);
+      box-shadow: 0 2px 8px var(--color-overlay-black-30);
+    }
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bitfun-tooltip {
+    transition: opacity 0.08s ease;
+    transform: none;
+
+    &--visible {
+      transform: none;
+      animation: none;
+    }
+  }
+}

@@ -1,0 +1,72 @@
+{
+  "title": "工具设置",
+  "subtitle": "工具执行配置与可用工具列表",
+  "section": {
+    "config": {
+      "title": "执行行为",
+      "description": "控制工具调用时的确认与超时策略。"
+    },
+    "list": {
+      "title": "工具列表",
+      "description": "共 {{count}} 个可用工具。"
+    }
+  },
+  "config": {
+    "autoExecute": "自动执行",
+    "autoExecuteDesc": "跳过工具执行前的用户确认步骤。",
+    "subagentMaxConcurrency": "子智能体并发上限",
+    "subagentMaxConcurrencyDesc": "同一时间允许并行运行的子智能体数量。",
+    "confirmTimeout": "确认超时",
+    "confirmTimeoutDesc": "等待用户确认工具调用的最长时间（秒）。",
+    "confirmTimeoutHint": "设置为 0 可关闭确认超时。",
+    "executionTimeout": "执行超时",
+    "executionTimeoutDesc": "工具执行的最长时间（秒）。",
+    "executionTimeoutHint": "设置为 0 可关闭执行超时。子智能体和命令执行工具有各自的执行限制，不受此项约束。",
+    "subagentBatchPolicy": {
+      "label": "子智能体批量调度",
+      "desc": "选择同一模型回复中多个子智能体启动请求的调度方式。",
+      "tooltipLabel": "子智能体批量调度说明",
+      "safeOnly": "仅安全并发",
+      "safeOnlyDesc": "只并发运行目标标记为只读的子智能体。",
+      "forceParallel": "强制并行",
+      "forceParallelDesc": "并行运行同一回复中的多个子智能体启动请求，同时仍遵守子智能体容量上限。"
+    },
+    "seconds": "秒"
+  },
+  "filters": {
+    "all": "全部",
+    "readonly": "只读",
+    "writable": "可写"
+  },
+  "search": {
+    "placeholder": "搜索工具..."
+  },
+  "badges": {
+    "readonly": "只读",
+    "writable": "可写",
+    "concurrent": "并发安全",
+    "permission": "需要权限"
+  },
+  "properties": {
+    "title": "工具属性",
+    "readonlyMode": "只读模式",
+    "concurrencySafe": "并发安全",
+    "needsPermission": "需要权限",
+    "yes": "是",
+    "no": "否"
+  },
+  "schema": {
+    "title": "输入参数结构"
+  },
+  "messages": {
+    "loading": "加载中...",
+    "loadFailed": "加载失败",
+    "retry": "重试",
+    "noTools": "暂无可用工具",
+    "noMatchingTools": "没有找到匹配的工具",
+    "autoExecuteEnabled": "已启用自动执行工具",
+    "autoExecuteDisabled": "已关闭自动执行工具",
+    "saveSuccess": "已保存",
+    "saveFailed": "保存失败"
+  }
+}

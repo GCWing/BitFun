@@ -1,0 +1,302 @@
+/**
+ * NumberInput component styles
+ */
+@use '../../styles/tokens.scss' as tokens;
+
+.bitfun-number-input {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+
+  &__label {
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-medium);
+    color: var(--color-text-secondary);
+    letter-spacing: 0.2px;
+  }
+
+  &__container {
+    position: relative;
+    display: flex;
+    align-items: center;
+    background: transparent;
+    border: 1px solid var(--border-base);
+    border-radius: var(--size-radius-sm);
+    transition: all var(--motion-base) var(--easing-standard);
+    overflow: hidden;
+
+    &:hover:not(.bitfun-number-input--disabled &) {
+      background: var(--element-bg-subtle);
+      border-color: var(--border-strong);
+    }
+
+    &:focus-within {
+      background: transparent;
+      border-color: var(--color-accent-500);
+    }
+  }
+
+  &__value-area {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 0 12px;
+    position: relative;
+    z-index: 1;
+  }
+
+  &__input {
+    flex: 1;
+    width: 100%;
+    min-width: 0;
+    background: transparent;
+    border: none !important;
+    outline: none !important;
+    box-shadow: none !important;
+    color: var(--color-text-primary);
+    font-size: inherit;
+    font-weight: var(--font-weight-medium);
+    font-variant-numeric: tabular-nums;
+    text-align: center;
+    padding: 0;
+
+    &::placeholder {
+      color: var(--color-text-muted);
+    }
+
+    &:focus {
+      border: none !important;
+      outline: none !important;
+      box-shadow: none !important;
+    }
+
+    &:disabled {
+      cursor: default;
+    }
+
+    &::-webkit-outer-spin-button,
+    &::-webkit-inner-spin-button {
+      -webkit-appearance: none;
+      margin: 0;
+    }
+
+    &[type=number] {
+      -moz-appearance: textfield;
+    }
+  }
+
+  &__unit {
+    font-size: 0.85em;
+    font-weight: var(--font-weight-normal);
+    color: var(--color-text-muted);
+    flex-shrink: 0;
+    opacity: 0.8;
+  }
+
+  &__buttons {
+    display: flex;
+    flex-direction: column;
+    border-left: 1px solid var(--border-subtle);
+    position: relative;
+    z-index: 1;
+  }
+
+  &__btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: transparent;
+    border: none;
+    color: var(--color-text-muted);
+    cursor: pointer;
+    transition: all var(--motion-fast) var(--easing-standard);
+    position: relative;
+    overflow: hidden;
+
+    &:hover:not(:disabled) {
+      color: var(--color-accent-500);
+      background: var(--element-bg-subtle);
+    }
+
+    &:active:not(:disabled) {
+      transform: scale(0.9);
+    }
+
+    &:disabled {
+      opacity: 0.3;
+      cursor: default;
+    }
+
+    svg {
+      position: relative;
+      z-index: 1;
+    }
+
+    &--up {
+      border-bottom: 1px solid var(--border-subtle);
+      border-radius: 0 var(--size-radius-sm) 0 0;
+    }
+
+    &--down {
+      border-radius: 0 0 var(--size-radius-sm) 0;
+    }
+
+    &--minus,
+    &--plus {
+      border-radius: var(--size-radius-sm);
+    }
+  }
+
+  &__progress {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 2px;
+    background: transparent;
+    overflow: hidden;
+    opacity: 0;
+    transition: opacity var(--motion-base) var(--easing-standard);
+  }
+
+  &__container:hover &__progress,
+  &__container:focus-within &__progress {
+    opacity: 1;
+  }
+
+  &__progress-bar {
+    height: 100%;
+    background: var(--color-accent-500);
+    border-radius: 0 2px 2px 0;
+    transition: width var(--motion-base) var(--easing-standard);
+  }
+
+  &--small {
+    .bitfun-number-input__container {
+      height: 28px;
+      font-size: 12px;
+    }
+
+    .bitfun-number-input__value-area {
+      padding: 0 8px;
+    }
+
+    .bitfun-number-input__btn {
+      width: 22px;
+      height: 14px;
+
+      svg {
+        width: 12px;
+        height: 12px;
+      }
+    }
+  }
+
+  &--medium {
+    .bitfun-number-input__container {
+      height: 36px;
+      font-size: 14px;
+    }
+
+    .bitfun-number-input__btn {
+      width: 28px;
+      height: 18px;
+    }
+  }
+
+  &--large {
+    .bitfun-number-input__container {
+      height: 44px;
+      font-size: 16px;
+    }
+
+    .bitfun-number-input__value-area {
+      padding: 0 16px;
+    }
+
+    .bitfun-number-input__btn {
+      width: 36px;
+      height: 22px;
+
+      svg {
+        width: 16px;
+        height: 16px;
+      }
+    }
+  }
+
+
+  &--compact {
+    .bitfun-number-input__container {
+      border-radius: var(--size-radius-sm);
+    }
+
+    .bitfun-number-input__value-area {
+      padding: 0 8px;
+    }
+
+    .bitfun-number-input__progress {
+      display: none;
+    }
+  }
+
+  &--stepper {
+    .bitfun-number-input__buttons {
+      flex-direction: row;
+      border-left: none;
+      position: absolute;
+      left: 0;
+      right: 0;
+      top: 0;
+      bottom: 0;
+      justify-content: space-between;
+      pointer-events: none;
+    }
+
+    .bitfun-number-input__btn {
+      pointer-events: auto;
+      width: 32px;
+      height: 100%;
+      border: none;
+
+      &--minus {
+        border-right: 1px solid var(--border-subtle);
+        border-radius: var(--size-radius-sm) 0 0 var(--size-radius-sm);
+      }
+
+      &--plus {
+        border-left: 1px solid var(--border-subtle);
+        border-radius: 0 var(--size-radius-sm) var(--size-radius-sm) 0;
+      }
+    }
+
+    .bitfun-number-input__value-area {
+      padding: 0 40px;
+    }
+  }
+
+
+  &--disabled {
+    opacity: var(--opacity-disabled);
+    pointer-events: none;
+
+    .bitfun-number-input__container {
+      background: transparent;
+    }
+  }
+
+  &--dragging {
+    .bitfun-number-input__container {
+      border-color: var(--color-purple-500);
+      background: var(--color-purple-100);
+    }
+
+    .bitfun-number-input__progress-bar {
+      background: var(--color-purple-500);
+    }
+  }
+
+  &--editing {
+  }
+}

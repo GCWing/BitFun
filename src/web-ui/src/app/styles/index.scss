@@ -1,0 +1,22 @@
+/**
+ * BitFun application styles entry point.
+ */
+
+/* ========== @use rules must come first ========== */
+@use './global.scss';
+@use '../layout/AppLayout.scss';
+
+/* ========== Utility styles ========== */
+@import './utilities/animations.css';
+@import './utilities/scrollbar.css';
+@import './utilities/effects.css';
+@import './utilities/zindex.css';
+@import './utilities/resizer.css';
+@import './utilities/layout.css';
+@import './utilities/floating-input.css';
+@import './utilities/high-dpi-optimization.css';
+@import './utilities/index.css';
+
+/* ========== Component styles ========== */
+@import './components/forms.css';
+

@@ -1,0 +1,82 @@
+/**
+ * BitFun Fonts Definition
+ * 
+ * 1. Noto Sans SC - UI font (Chinese and English)
+ *    Currently using Noto Sans SC WOFF2 font files with standard font-family name
+ *    Core weights preserved: 400-Regular, 500-Medium, 600-Semibold
+ * 
+ * 2. Fira Code - Code editor font
+ *    Professional programming font, supports ligatures
+ *    Core weights preserved: 400-Regular, 500-Medium, 600-SemiBold + variable font
+ */
+
+/* ============================================
+   Fira Code - Code editor special font
+   ============================================ */
+
+/* Fira Code - Regular (400) */
+@font-face {
+  font-family: 'Fira Code';
+  src: url('./FiraCode/FiraCode-Regular.woff2') format('woff2');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* Fira Code - Medium (500) */
+@font-face {
+  font-family: 'Fira Code';
+  src: url('./FiraCode/FiraCode-Medium.woff2') format('woff2');
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* Fira Code - SemiBold (600) */
+@font-face {
+  font-family: 'Fira Code';
+  src: url('./FiraCode/FiraCode-SemiBold.woff2') format('woff2');
+  font-weight: 600;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* Fira Code VF - Variable font (contains all weights 300-700)*/
+@font-face {
+  font-family: 'Fira Code VF';
+  src: url('./FiraCode/FiraCode-VF.woff2') format('woff2-variations');
+  font-weight: 300 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* ============================================
+  Noto Sans SC - UI font (font-family: Noto Sans SC)
+   ============================================ */
+
+/* Noto Sans SC - Regular (400) */
+@font-face {
+  font-family: 'Noto Sans SC';
+  src: url('./Noto_Sans_SC/static/NotoSansSC-Regular.woff2') format('woff2');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* Noto Sans SC - Medium (500) */
+@font-face {
+  font-family: 'Noto Sans SC';
+  src: url('./Noto_Sans_SC/static/NotoSansSC-Medium.woff2') format('woff2');
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* Noto Sans SC - Semibold (600) */
+@font-face {
+  font-family: 'Noto Sans SC';
+  src: url('./Noto_Sans_SC/static/NotoSansSC-SemiBold.woff2') format('woff2');
+  font-weight: 600;
+  font-style: normal;
+  font-display: swap;
+}

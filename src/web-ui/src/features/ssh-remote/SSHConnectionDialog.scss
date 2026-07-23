@@ -1,0 +1,311 @@
+/**
+ * SSH Connection Dialog Styles
+ */
+
+.ssh-connection-dialog {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  font-family: inherit;
+
+  &__error-banner {
+    flex-shrink: 0;
+    padding: 8px 16px 10px;
+    border-bottom: 1px solid var(--border-subtle);
+    background: var(--color-bg-primary);
+  }
+
+  &__error-alert.alert {
+    padding: 8px 10px;
+    align-items: center;
+  }
+
+  &__scroll {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    padding: 10px 0 6px;
+  }
+
+  &__section {
+    margin-bottom: 12px;
+    padding: 0 16px;
+  }
+
+  &__section-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    margin-bottom: 6px;
+  }
+
+  &__section-title {
+    font-size: 11px;
+    font-weight: 600;
+    font-family: inherit;
+    color: var(--color-text-muted);
+    margin: 0;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    white-space: nowrap;
+  }
+
+  &__search {
+    max-width: 160px;
+    flex-shrink: 0;
+  }
+
+  &__saved-list {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    max-height: 132px;
+    overflow-y: auto;
+    scrollbar-width: none;
+
+    &::-webkit-scrollbar {
+      display: none;
+    }
+  }
+
+  &__saved-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 5px 10px;
+    border-radius: 6px;
+    background: var(--element-bg-subtle);
+    transition: all var(--motion-fast) var(--easing-standard);
+    cursor: pointer;
+    position: relative;
+
+    &:hover {
+      background: var(--element-bg-soft);
+    }
+
+    &:active {
+      transform: scale(0.99);
+    }
+
+    &--config {
+      .ssh-connection-dialog__saved-icon {
+        background: var(--color-success-bg);
+        color: var(--color-success);
+      }
+
+      .ssh-connection-dialog__saved-actions {
+        opacity: 1;
+      }
+    }
+  }
+
+  &__saved-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    background: var(--color-accent-100);
+    border-radius: 6px;
+    color: var(--color-accent-500);
+    flex-shrink: 0;
+  }
+
+  &__saved-info {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    min-width: 0;
+    flex: 1;
+  }
+
+  &__saved-name {
+    font-size: 13px;
+    font-weight: 500;
+    font-family: inherit;
+    color: var(--color-text-primary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    line-height: 1.3;
+  }
+
+  &__saved-detail {
+    font-size: 12px;
+    font-weight: 400;
+    font-family: inherit;
+    color: var(--color-text-muted);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    line-height: 1.3;
+    font-variant-numeric: tabular-nums;
+  }
+
+  &__saved-meta {
+    display: flex;
+    align-items: center;
+    flex-shrink: 0;
+  }
+
+  &__saved-auth {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 8px;
+    background: var(--element-bg-subtle);
+    border: 1px solid var(--border-subtle);
+    border-radius: 4px;
+    font-size: 11px;
+    color: var(--color-text-muted);
+    white-space: nowrap;
+  }
+
+  &__saved-actions {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    flex-shrink: 0;
+    opacity: 0;
+    transition: opacity var(--motion-fast) var(--easing-standard);
+
+    .ssh-connection-dialog__saved-item:hover & {
+      opacity: 1;
+    }
+  }
+
+  &__delete-btn {
+    color: var(--color-text-muted);
+    opacity: 0.7;
+
+    &:hover {
+      color: var(--color-error);
+      opacity: 1;
+    }
+  }
+
+  &__divider {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    margin: 12px 16px;
+    padding-top: 4px;
+
+    &::before,
+    &::after {
+      content: '';
+      flex: 1;
+      height: 1px;
+      background: var(--border-subtle);
+    }
+
+    span {
+      font-size: 11px;
+      font-weight: 500;
+      font-family: inherit;
+      color: var(--color-text-muted);
+      white-space: nowrap;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+  }
+
+  &__form {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    padding: 8px 16px;
+    border-radius: 8px;
+    scroll-margin-top: 8px;
+    transition: background-color var(--motion-fast) var(--easing-standard);
+
+    &--highlighted {
+      animation: ssh-connection-form-reveal 1.2s ease-out;
+    }
+  }
+
+  &__row {
+    display: flex;
+    gap: 12px;
+  }
+
+  &__field {
+    &--flex {
+      flex: 1;
+    }
+
+    &--port {
+      width: 100px;
+      flex-shrink: 0;
+    }
+  }
+
+  &__browse-key {
+    flex-shrink: 0;
+    margin-right: -6px;
+  }
+
+  &__label {
+    display: block;
+    font-size: 12px;
+    font-weight: 500;
+    font-family: inherit;
+    color: var(--color-text-muted);
+    margin-bottom: 6px;
+  }
+
+  &__actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    flex-shrink: 0;
+    margin-top: 0;
+    padding: 8px 16px;
+    background: var(--color-bg-primary);
+
+    .btn.btn-sm {
+      height: 28px;
+      min-height: 28px;
+      padding: 0 10px;
+      font-size: 11px;
+    }
+
+    .btn-loading-icon {
+      width: 13px;
+      height: 13px;
+    }
+  }
+
+  &__spinner {
+    animation: spin 1s linear infinite;
+    margin-right: 6px;
+  }
+}
+
+@keyframes ssh-connection-form-reveal {
+  0% {
+    background: color-mix(in srgb, var(--color-accent-500) 14%, transparent);
+  }
+  40% {
+    background: color-mix(in srgb, var(--color-accent-500) 8%, transparent);
+  }
+  100% {
+    background: transparent;
+  }
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/** SSH remote workspace dialog only: above nav fixed popovers (~10k) so the dimmed backdrop captures clicks. */
+.ssh-connection-dialog__modal-overlay {
+  z-index: 20000;
+}

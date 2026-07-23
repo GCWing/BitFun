@@ -1,0 +1,402 @@
+{
+  "title": "模型配置",
+  "subtitle": "配置和管理 AI 模型提供商",
+  "editProvider": "编辑服务商配置",
+  "newProvider": "新建服务商配置",
+  "editModel": "编辑模型配置",
+  "newModel": "新建模型配置",
+  "editProviderSubtitle": "基础服务商参数配置",
+  "editSubtitle": "基础模型参数配置",
+  "confirmDelete": "确定删除此配置？",
+  "subagentModels": {
+    "title": "Subagent 模型",
+    "default": {
+      "label": "Subagent 默认模型",
+      "description": "Subagent 未单独配置模型时，统一使用此模型",
+      "configureTooltip": "设置 Subagent 的默认模型。前往“定制 > 专业智能体”可为每个 Subagent 单独配置模型",
+      "updateFailed": "更新 Subagent 默认模型失败"
+    },
+    "options": {
+      "inherit": "继承父会话",
+      "fast": "快速模型",
+      "primary": "主力模型",
+      "auto": "自动选择"
+    },
+    "loadFailed": "加载 Subagent 模型配置失败"
+  },
+  "sessionTitle": {
+    "title": "会话标题自动生成",
+    "subtitle": "新对话时 AI 自动生成简洁标题",
+    "enable": "启用",
+    "loadFailed": "加载会话标题配置失败",
+    "model": {
+      "label": "模型",
+      "primary": "主力模型",
+      "fast": "快速模型"
+    },
+    "models": {
+      "empty": "暂无可用模型，请先在「模型」中添加模型。",
+      "updateSuccess": "{{agentName}} 将使用 {{modelName}}"
+    },
+    "messages": {
+      "saveSuccess": "设置已保存",
+      "saveFailed": "保存失败",
+      "updateFailed": "设置失败"
+    }
+  },
+  "subscriptionAuth": {
+    "sectionTitle": "订阅账号",
+    "sectionDescription": "登录 Codex / Antigravity / OpenCode 订阅后，可直接作为模型 API 使用",
+    "rescan": "刷新状态",
+    "import": "导入使用",
+    "login": "登录",
+    "cancel": "取消",
+    "loginCancelled": "已取消登录",
+    "logout": "退出登录",
+    "refresh": "刷新 Token",
+    "refreshSuccess": "Token 已刷新",
+    "refreshFailed": "刷新失败：{{error}}",
+    "loginSuccess": "登录成功",
+    "loginFailed": "登录失败：{{error}}",
+    "logoutSuccess": "已退出登录",
+    "logoutCleanupPending": "已退出登录，系统凭据清理仍在等待中，稍后会自动重试。",
+    "logoutFailed": "退出登录失败：{{error}}",
+    "userCodeHint": "请在浏览器中输入验证码：{{code}}",
+    "openUrlManually": "无法自动打开浏览器，请手动访问：{{url}}",
+    "expiresAt": "Token 有效期至 {{time}}",
+    "tokenValid": "Token 已就绪",
+    "notSignedIn": "未登录",
+    "label": "认证方式",
+    "options": {
+      "apiKey": "API Key",
+      "codex": "Codex（ChatGPT 订阅）",
+      "antigravity": "Antigravity（Google 订阅）",
+      "opencode": "OpenCode Zen 订阅"
+    },
+    "detected": "将使用 {{label}}（账号 {{account}}）",
+    "notConnected": "尚未登录 {{kind}}，请先在上方完成登录",
+    "unknownAccount": "当前登录账号",
+    "secureStoreMigrationNotice": "订阅凭据现已由系统安全凭据库保存。旧版从第三方 CLI 自动导入的凭据不会被读取；如果你曾使用该方式，请在此重新登录一次。",
+    "dismissMigrationNotice": "知道了",
+    "reauthenticationRequired": "系统凭据库中未找到可用凭据，请重新登录一次",
+    "vaultUnavailable": "系统凭据库已锁定或暂时不可用。请解锁后重试，你的登录信息并未被移除",
+    "retryVault": "重试凭据库",
+    "loginPending": "正在等待浏览器完成授权",
+    "loginCancelling": "正在取消登录并关闭授权会话",
+    "loginCompletedBeforeCancel": "授权已在取消前完成，因此该账号仍保持登录状态",
+    "timeRemaining": "剩余时间 {{time}}",
+    "verificationCode": "验证码",
+    "copyCode": "复制验证码",
+    "codeCopied": "验证码已复制",
+    "copyCodeFailed": "复制验证码失败",
+    "openAuthorization": "打开授权页面",
+    "retryLogin": "重新登录",
+    "loginNeedsRetry": "本次登录未完成",
+    "loginFailedInline": "{{error}}",
+    "logoutConfirmTitle": "确认退出订阅账号",
+    "logoutAffectedModels": "退出后，当前使用该账号的 {{count}} 个模型配置将无法请求模型：",
+    "logoutNoAffectedModels": "当前没有模型配置使用此订阅账号。",
+    "logoutConsequence": "模型配置不会被删除；重新登录同一订阅账号后可以继续使用。",
+    "confirmLogout": "确认退出"
+  },
+  "providerSelection": {
+    "title": "选择模型提供商",
+    "subtitle": "选择一个预设提供商快速配置，或选择自定义完全手动配置",
+    "or": "或者",
+    "orSelectProvider": "或选择预设提供商",
+    "customTitle": "自定义配置",
+    "customDescription": "手动配置所有参数，适用于私有部署或其他未列出的提供商",
+    "getApiKey": "获取 API Key",
+    "fetchModels": "获取模型列表",
+    "fetchHint": "可从当前供应商拉取模型列表；拉取失败时回退到常用预设模型",
+    "fetchingModels": "正在拉取模型列表...",
+    "fetchSuccessCount": "已从供应商拉取 {{count}} 个模型",
+    "fetchFailedFallback": "拉取模型列表失败，已回退到常用预设模型",
+    "fetchEmptyFallback": "供应商未返回可用模型，已回退到常用预设模型",
+    "fillApiKeyBeforeFetch": "请先填写 API Key 再获取模型列表",
+    "usingPresetModels": "当前显示的是常用预设模型",
+    "noPresetModels": "暂无可用模型，请获取模型列表或手动输入模型名",
+    "backToSelection": "返回选择提供商",
+    "selectModel": "选择模型",
+    "multiSelectHint": "支持多选；选中后可分别设置每个模型的上下文窗口、最大输出 Tokens 和推理配置",
+    "searchOrInputModel": "搜索或输入模型名称...",
+    "inputModelName": "输入自定义模型名称...",
+    "useCustomModel": "按 Enter 使用",
+    "addCustomModel": "添加自定义模型",
+    "addSearchedModel": "添加该模型",
+    "modelAlreadyInList": "该模型已在列表中",
+    "noModelsSelected": "请先选择模型",
+    "removeModel": "移除模型",
+    "expandModelSettings": "展开「{{name}}」的详细设置",
+    "collapseModelSettings": "收起「{{name}}」的详细设置",
+    "urlHint": "已预填官方 API 地址，如使用代理或私有部署可修改",
+    "formatHint": "已根据提供商自动选择，通常无需修改"
+  },
+  "providers": {
+    "openbitfun": {
+      "name": "OpenBitFun",
+      "description": "OpenBitFun 大模型平台"
+    },
+    "gemini": {
+      "name": "Google Gemini",
+      "description": "Google Gemini 系列模型"
+    },
+    "anthropic": {
+      "name": "Anthropic Claude",
+      "description": "Anthropic Claude 系列模型"
+    },
+    "minimax": {
+      "name": "MiniMax",
+      "description": "MiniMax 系列模型"
+    },
+    "moonshot": {
+      "name": "月之暗面",
+      "description": "月之暗面 Kimi 系列模型"
+    },
+    "deepseek": {
+      "name": "DeepSeek",
+      "description": "DeepSeek 系列模型"
+    },
+    "zhipu": {
+      "name": "智谱AI",
+      "description": "智谱AI GLM 系列模型",
+      "urlOptions": {
+        "default": "OpenAI格式-默认",
+        "anthropic": "Anthropic格式",
+        "codingPlan": "OpenAI格式-CodingPlan"
+      }
+    },
+    "qwen": {
+      "name": "通义千问",
+      "description": "阿里云百炼大模型平台"
+    },
+    "volcengine": {
+      "name": "火山引擎",
+      "description": "字节跳动火山引擎大模型平台"
+    },
+    "siliconflow": {
+      "name": "硅基流动",
+      "description": "硅基流动大模型平台",
+      "urlOptions": {
+        "default": "OpenAI格式-默认",
+        "anthropic": "Anthropic格式"
+      }
+    },
+    "nvidia": {
+      "name": "NVIDIA",
+      "description": "NVIDIA NIM 大模型平台"
+    },
+    "openrouter": {
+      "name": "OpenRouter",
+      "description": "OpenRouter 大模型平台"
+    }
+  },
+  "tabs": {
+    "api": "API配置",
+    "proxy": "代理配置"
+  },
+  "categories": {
+    "all": "全部",
+    "text": "文本",
+    "multimodal": "多模态",
+    "other": "辅助"
+  },
+  "category": {
+    "label": "模型分类",
+    "placeholder": "选择模型分类",
+    "general_chat": "文本生成",
+    "multimodal": "多模态",
+    "image_generation": "图像生成",
+    "speech_recognition": "语音识别"
+  },
+  "categoryIcons": {
+    "general_chat": "文本",
+    "multimodal": "多模态",
+    "image_generation": "绘图",
+    "speech_recognition": "语音"
+  },
+  "categoryHints": {
+    "general_chat": "文本生成：生成文本回复、代码等，适用于大多数对话场景",
+    "multimodal": "多模态：理解图片内容并进行图文混合对话",
+    "image_generation": "图像生成：根据文字描述生成图片",
+    "speech_recognition": "语音识别：将语音转换为文字（如智谱 GLM-ASR）"
+  },
+  "form": {
+    "configName": "服务商名称",
+    "configNamePlaceholder": "输入服务商名称",
+    "modelName": "模型名称",
+    "modelSelection": "选择模型",
+    "modelNameHint": "智谱 GLM-ASR 使用 glm-asr，其他语音模型填写对应的模型名称",
+    "baseUrl": "API地址",
+    "resolvedUrlLabel": "实际请求地址：",
+    "forceUrlHint": "以 # 结尾可强制使用输入地址",
+    "apiKey": "API密钥",
+    "apiKeyPlaceholder": "输入您的 API Key",
+    "provider": "请求格式",
+    "providerPlaceholder": "选择请求格式",
+    "contextWindow": "上下文窗口大小",
+    "contextWindowHint": "模型支持的最大上下文窗口大小（用于计算token占用百分比）",
+    "maxTokens": "最大输出Tokens",
+    "maxTokensHint": "单次请求时限制模型输出的最大token数量（影响响应长度）",
+    "description": "描述",
+    "descriptionPlaceholder": "配置说明（可选）"
+  },
+  "thinking": {
+    "enable": "启用思考",
+    "mode": "推理模式",
+    "enableHint": "需要模型支持思考模式",
+    "summaryOn": "思考开",
+    "summaryOff": "思考关",
+    "summaryDefault": "API 默认",
+    "summaryEnabled": "显式启用",
+    "summaryDisabled": "显式禁用",
+    "summaryAdaptive": "自适应",
+    "budgetTokens": "Claude 思考预算",
+    "optionDefault": "API 默认",
+    "optionEnabled": "启用",
+    "optionDisabled": "禁用",
+    "optionAdaptive": "自适应"
+  },
+  "reasoningEffort": {
+    "label": "推理深度",
+    "hint": "控制 provider 支持的推理强度，适用于 DeepSeek、Responses API 与支持自适应推理的 Claude 模型",
+    "placeholder": "使用 API 默认值"
+  },
+  "details": {
+    "basicInfo": "基本信息",
+    "modelName": "模型名称",
+    "provider": "请求格式",
+    "apiUrl": "API地址",
+    "contextWindow": "上下文窗口",
+    "maxOutput": "最大输出",
+    "description": "描述",
+    "capabilities": "能力",
+    "tokens": "tokens"
+  },
+  "proxy": {
+    "enable": "启用代理",
+    "enableHint": "启用后所有AI请求将通过代理发送（需重启IDE生效）",
+    "url": "代理地址",
+    "urlPlaceholder": "http://127.0.0.1:7890 或 socks5://127.0.0.1:1080",
+    "urlHint": "支持 HTTP/HTTPS/SOCKS5 代理，格式：协议://地址:端口",
+    "username": "用户名（可选）",
+    "usernamePlaceholder": "代理认证用户名",
+    "password": "密码（可选）",
+    "passwordPlaceholder": "代理认证密码",
+    "save": "保存代理配置",
+    "saveSuccess": "代理配置已保存，重启IDE后生效"
+  },
+  "streamIdleTimeout": {
+    "title": "流式超时",
+    "effectiveNextRound": "修改后下一次对话生效",
+    "label": "Chunk 空闲超时（秒）",
+    "hint": "流式响应开始后，两次 chunk 之间的最大等待时间。留空表示无限等待。",
+    "placeholder": "留空表示不设超时",
+    "invalid": "请输入正整数秒数，或留空。",
+    "save": "保存流式超时",
+    "saveSuccess": "流式超时已保存"
+  },
+  "streamTtftTimeout": {
+    "title": "首 Token 超时",
+    "label": "TTFT 超时（秒）",
+    "hint": "请求发出后，等待首个有效流式输出的最长时间。留空表示无限等待。",
+    "placeholder": "留空表示不设超时",
+    "invalid": "请输入正整数秒数，或留空。",
+    "save": "保存首 Token 超时",
+    "saveSuccess": "首 Token 超时已保存"
+  },
+  "capabilities": {
+    "text_chat": "对话",
+    "image_understanding": "多模态",
+    "image_generation": "绘图",
+    "function_calling": "工具",
+    "speech_recognition": "语音"
+  },
+  "formats": {
+    "openaiCompatible": "OpenAI 兼容",
+    "responsesApi": "OpenAI Responses API",
+    "claudeApi": "Claude API",
+    "geminiApi": "Gemini GenerateContent API"
+  },
+  "actions": {
+    "save": "保存",
+    "cancel": "取消",
+    "edit": "编辑",
+    "delete": "删除",
+    "test": "测试连接",
+    "newConfig": "新建配置",
+    "addModel": "添加模型",
+    "addProvider": "添加服务商",
+    "createFirst": "创建第一个配置"
+  },
+  "empty": {
+    "noModels": "暂无模型配置",
+    "noMatchingModels": "没有找到匹配的模型"
+  },
+  "search": {
+    "placeholder": "搜索模型名称、提供商..."
+  },
+  "messages": {
+    "fillRequired": "请填写必要字段",
+    "fillModelName": "请填写模型名称",
+    "duplicateModelNameUnderProvider": "该服务商下已有同名模型，请改用其他名称或编辑已有条目",
+    "invalidBaseUrlScheme": "API地址必须以 http:// 或 https:// 开头",
+    "contextWindowTooSmall": "上下文窗口大小不能小于 32K Tokens",
+    "saveFailed": "保存失败",
+    "deleteFailed": "删除配置失败",
+    "loadFailed": "加载AI配置失败",
+    "testSuccess": "测试成功",
+    "testFailed": "测试失败",
+    "errorDetails": "详细错误",
+    "connectionTestMessages": {
+      "toolCallsNotDetected": "本次测试未检测到工具调用，因此暂时无法验证工具调用能力。",
+      "imageInputCheckFailed": "连接已成功，但图片输入测试未通过。",
+      "tlsOrCertificateIssue": "连接失败可能与 SSL/TLS 证书校验有关。请检查公司代理、自签证书、系统根证书或网络拦截设置；如果确认网络环境可信，可在该模型的高级设置中开启“跳过SSL证书验证”，但这会降低 HTTPS 安全性。",
+      "proxyIssue": "连接失败可能与代理或隧道配置有关。请检查全局代理设置、代理认证、代理是否支持 HTTPS CONNECT，以及当前网络是否允许访问该模型 API 地址。",
+      "networkIssue": "连接失败发生在发送请求阶段，尚未收到服务端 HTTP 响应。请检查网络连通性、DNS、代理、防火墙和证书环境；如果处在公司代理或自签证书环境，也可能需要检查高级设置中的“跳过SSL证书验证”。"
+    },
+    "autoSetPrimary": "已自动设为主力模型",
+    "defaultDescription": "{{name}} 模型配置",
+    "cloneName": "{{name}} - 副本",
+    "templateName": "{{provider}} - {{modelName}}",
+    "templateDescription": "{{description}} - {{modelName}}"
+  },
+  "advancedSettings": {
+    "title": "高级设置",
+    "inlineThinkInText": {
+      "label": "解析文本中的 <think> 标签",
+      "hint": "将文本流中的 <think>...</think> 实时拆分为思考内容"
+    },
+    "skipSslVerify": {
+      "label": "跳过SSL证书验证",
+      "warning": "跳过SSL证书验证存在安全风险，请仅在测试环境或内网环境使用！"
+    },
+    "customHeaders": {
+      "label": "自定义请求头",
+      "hint": "添加或修改HTTP请求头",
+      "modeLabel": "应用模式",
+      "modeReplace": "替换",
+      "modeMerge": "合并",
+      "modeReplaceHint": "自定义请求头将完全替换默认请求头（需要自行添加Content-Type、Authorization等）",
+      "modeMergeHint": "先应用默认请求头，再应用自定义请求头（可覆盖已有值，添加新值）",
+      "addHeader": "添加字段",
+      "keyPlaceholder": "key",
+      "valuePlaceholder": "value"
+    },
+    "customRequestBody": {
+      "label": "自定义请求体",
+      "hint": "输入JSON格式的请求体字段，用于覆盖默认请求参数",
+      "modeMerge": "合并",
+      "modeTrim": "精简",
+      "modeMergeHint": "在默认请求体基础上合并自定义字段，可覆盖已有字段。",
+      "trimHintOpenAI": "发送前仅保留 model、messages、max_tokens，以及 stream / tools 等运行必需字段，再应用自定义请求体。",
+      "trimHintResponses": "发送前仅保留 model、input、instructions、max_output_tokens，以及 stream / tools 等运行必需字段，再应用自定义请求体。",
+      "trimHintAnthropic": "发送前仅保留 model、messages、system、max_tokens，以及 stream / tools 等运行必需字段，再应用自定义请求体。",
+      "trimHintGemini": "发送前仅保留 contents、systemInstruction、generationConfig.maxOutputTokens，以及 tools / toolConfig；Gemini 的 model 由请求 URL 决定。",
+      "placeholder": "例如：\n{\n  \"temperature\": 0.8,\n  \"top_p\": 0.9\n}",
+      "invalidJson": "JSON格式错误，请检查语法",
+      "validJson": "JSON格式有效",
+      "mergeHint": "自定义字段将覆盖默认请求体中的对应字段"
+    }
+  }
+}

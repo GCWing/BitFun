@@ -1,0 +1,259 @@
+/* TodoWrite tool styles. */
+@use './_tool-card-common.scss';
+
+/* Compact mode (single-line listing) */
+.todo-write-compact {
+  font-size: var(--tool-card-action-font-size);
+  line-height: var(--tool-card-action-line-height);
+
+  .todo-count {
+    color: var(--color-text-muted);
+    font-size: inherit;
+    flex-shrink: 0;
+    font-family: var(--tool-card-font-mono);
+  }
+
+  .todo-progress {
+    color: var(--color-text-muted);
+    font-size: inherit;
+    margin-left: var(--flowchat-inline-gap);
+    font-family: var(--tool-card-font-mono);
+  }
+}
+
+/* Standard mode — wraps a CompactToolCard */
+.todo-write-host {
+  width: 100%;
+
+  .compact-card-action {
+    font-weight: 400;
+  }
+
+  /* Collapsed + expanded header: same type metrics */
+  .compact-card-action .todo-header-action-cluster,
+  .compact-card-action .todo-header-tasks-label,
+  .compact-card-action .todo-stats,
+  .compact-card-content .todo-header-content,
+  .compact-card-content .todo-header-current,
+  .compact-card-content .todo-header-more,
+  .compact-card-content .todo-stats {
+    font-size: var(--tool-card-action-font-size);
+    line-height: var(--tool-card-action-line-height);
+  }
+
+  .compact-card-content .todo-header-more {
+    padding: 0 0.32rem;
+  }
+
+  .todo-write-card {
+    /* No extra chrome; CompactToolCard provides collapsed/expanded styling. */
+  }
+
+  /* Expanded shell: thin neutral frame, no heavy elevation. */
+  .base-tool-card-wrapper.todo-write-card {
+    border: 1px solid var(--border-subtle);
+    box-shadow: none;
+
+    &:hover {
+      border-color: var(--border-base);
+      box-shadow: none;
+    }
+
+    &:active {
+      box-shadow: none;
+    }
+  }
+
+  /* Collapsed row: “任务 (n/m)” in the action column; expanded omits action (see TSX). */
+  .todo-header-action-cluster {
+    display: inline-flex;
+    align-items: baseline;
+    gap: var(--flowchat-inline-gap);
+    min-width: 0;
+  }
+
+  .todo-header-tasks-label {
+    flex-shrink: 0;
+  }
+
+  /* Muted body copy (expanded header has no action column). */
+  .compact-card-content {
+    color: var(--color-text-muted);
+    font-weight: 400;
+  }
+
+  .base-tool-card-wrapper.compact-tool-card-wrapper--expanded-card {
+    .compact-card-content {
+      color: var(--color-text-muted);
+      font-weight: 400;
+    }
+
+    /* Tighter icon rail → text (expanded todo header) */
+    &.todo-write-card .base-tool-card-header {
+      gap: 0.18rem;
+    }
+
+    &.todo-write-card .tool-card-icon-slot {
+      margin-right: 2px;
+      width: 32px;
+    }
+  }
+
+  /* Header copy — same tone as action label */
+  .todo-header-content {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--flowchat-inline-gap);
+    min-width: 0;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    color: var(--color-text-muted);
+    font-weight: 400;
+
+    &--muted {
+      color: var(--color-text-muted);
+      font-weight: 400;
+    }
+
+    &--success {
+      color: var(--color-text-muted);
+      font-weight: 400;
+    }
+  }
+
+  .todo-header-current {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: var(--color-text-muted);
+    font-weight: 400;
+  }
+
+  .todo-header-more {
+    flex-shrink: 0;
+    color: var(--color-text-muted);
+    background: var(--element-bg-subtle);
+    border-radius: 8px;
+    font-family: inherit;
+    font-variant-numeric: tabular-nums;
+    font-weight: 400;
+  }
+
+  .todo-stats {
+    font-family: inherit;
+    font-variant-numeric: tabular-nums;
+    color: var(--color-text-muted);
+    letter-spacing: normal;
+    white-space: nowrap;
+
+    &--suffix {
+      flex-shrink: 0;
+    }
+  }
+
+  /* Expanded body — align list with card edges */
+  .todo-expanded-body {
+    margin: calc(var(--flowchat-card-expanded-pad-y) * -1) calc(var(--tool-card-expanded-pad-x) * -1);
+  }
+  .todo-full-list {
+    background: transparent;
+    max-height: 280px;
+    overflow-y: auto;
+    overflow-x: hidden;
+
+    &::-webkit-scrollbar {
+      width: 4px;
+    }
+    &::-webkit-scrollbar-track {
+      background: transparent;
+    }
+    &::-webkit-scrollbar-thumb {
+      background: var(--border-base);
+      border-radius: 2px;
+    }
+  }
+
+  .todo-item {
+    display: flex;
+    align-items: center;
+    padding: var(--flowchat-card-expanded-pad-y) var(--flowchat-card-expanded-pad-x);
+    font-size: var(--tool-card-action-font-size);
+    line-height: var(--tool-card-action-line-height);
+    font-weight: 400;
+    transition: background 0.12s ease;
+    position: relative;
+    border-left: none;
+
+    &:hover {
+      background: var(--element-bg-subtle);
+    }
+
+    &.status-in_progress {
+      background: var(--element-bg-subtle);
+
+      .todo-content {
+        color: var(--color-text-muted);
+        font-weight: 400;
+      }
+    }
+
+    &.status-completed {
+      .todo-content {
+        text-decoration: line-through;
+        color: var(--color-text-muted);
+        opacity: 0.75;
+      }
+    }
+
+    &.status-cancelled {
+      opacity: 0.65;
+      .todo-content {
+        text-decoration: line-through;
+        color: var(--color-text-muted);
+      }
+    }
+
+    &.status-pending .todo-content {
+      color: var(--color-text-muted);
+    }
+  }
+
+  .todo-item-left {
+    display: flex;
+    align-items: center;
+    gap: var(--flowchat-inline-gap);
+    flex: 1;
+    min-width: 0;
+  }
+
+  .todo-status-icon {
+    flex-shrink: 0;
+    width: 12px;
+    height: 12px;
+
+    &--completed  { color: var(--color-text-muted); opacity: 0.85; }
+    &--pending    { color: var(--color-text-muted); opacity: 0.65; }
+    &--cancelled  { color: var(--color-text-muted); opacity: 0.65; }
+
+    &--in-progress {
+      color: var(--color-text-muted);
+      width: auto;
+      height: auto;
+    }
+  }
+
+  .todo-content {
+    flex: 1;
+    color: var(--color-text-muted);
+    font-weight: 400;
+    line-height: var(--tool-card-action-line-height);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .todo-compact-loading-icon {
+    color: var(--color-info);
+  }
+}

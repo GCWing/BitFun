@@ -1,0 +1,209 @@
+/**
+ * ContentCanvas main container component.
+ * Core component for the right panel, aggregating submodules.
+ */
+
+import React, { useCallback, useEffect, useMemo, useRef } from 'react';
+import { EditorArea } from './editor-area';
+import { AnchorZone } from './anchor-zone';
+import { MissionControl } from './mission-control';
+import { EmptyState } from './empty-state';
+import { useCanvasStore } from './stores';
+import { useTabLifecycle, useKeyboardShortcuts, usePanelTabCoordinator } from './hooks';
+import type { AnchorPosition } from './types';
+import { TAB_EVENTS } from './types';
+import { selectActiveBtwSessionTab } from '@/flow_chat/services/btwSessionPane';
+import { openMainSession } from '@/flow_chat/services/sessionActivation';
+import { isSamePath } from '@/shared/utils/pathUtils';
+import './ContentCanvas.scss';
+export interface ContentCanvasProps {
+  /** Workspace path */
+  workspacePath?: string;
+  /** App mode */
+  mode?: 'agent' | 'project' | 'git' | 'bottom-terminal';
+  /** Whether the containing scene is currently visible */
+  isSceneActive?: boolean;
+  /** Interaction callback */
+  onInteraction?: (itemId: string, userInput: string) => Promise<void>;
+  /** Before-close callback */
+  onBeforeClose?: (content: any) => Promise<boolean>;
+  /** Disable pop-out and panel-close controls (used in panel-view scene) */
+  disablePopOut?: boolean;
+  /** Override the event this canvas listens to for creating tabs. */
+  createTabEventName?: string;
+  /** Override the expansion event this canvas dispatches/listens for. */
+  expandPanelEventName?: string;
+  /** Custom collapsed state for canvases hosted outside the right panel. */
+  isPanelCollapsed?: boolean;
+  /** Custom expand behavior for canvases hosted outside the right panel. */
+  onExpandPanel?: () => void;
+  /** Custom collapse behavior for canvases hosted outside the right panel. */
+  onCollapsePanel?: () => void;
+  /** Suspend terminal fit/PTY resize while the hosting panel is animating. */
+  terminalResizeSuspended?: boolean;
+}
+
+export const ContentCanvas: React.FC<ContentCanvasProps> = ({
+  workspacePath,
+  mode = 'agent',
+  isSceneActive = true,
+  onInteraction,
+  disablePopOut = false,
+  createTabEventName,
+  expandPanelEventName = TAB_EVENTS.EXPAND_RIGHT_PANEL,
+  isPanelCollapsed,
+  onExpandPanel,
+  onCollapsePanel,
+  terminalResizeSuspended = false,
+}) => {
+  // Store state
+  const {
+    primaryGroup,
+    secondaryGroup,
+    tertiaryGroup,
+    layout,
+    isMissionControlOpen,
+    setAnchorPosition,
+    setAnchorSize,
+    closeMissionControl,
+    openMissionControl,
+  } = useCanvasStore();
+  const activeBtwSessionTab = useCanvasStore(state => selectActiveBtwSessionTab(state as any));
+  const activeBtwSessionData = activeBtwSessionTab?.content.data as
+    | { childSessionId: string; parentSessionId: string; workspacePath?: string }
+    | undefined;
+  const lastSyncedBtwTabIdRef = useRef<string | null>(null);
+  // Initialize hooks
+  const { handleCloseWithDirtyCheck, handleCloseAllWithDirtyCheck } = useTabLifecycle({
+    mode,
+    createTabEventName,
+    expandPanelEventName,
+  });
+  useKeyboardShortcuts({ enabled: true, handleCloseWithDirtyCheck });
+  // Panel/tab state coordinator (auto manage expand/collapse)
+  const { collapsePanel } = usePanelTabCoordinator({
+    autoCollapseOnEmpty: true,
+    autoExpandOnTabOpen: true,
+    isCollapsed: isPanelCollapsed,
+    onExpand: onExpandPanel,
+    onCollapse: onCollapsePanel,
+    expandEventName: expandPanelEventName,
+  });
+
+  useEffect(() => {
+    if (mode !== 'agent' || !activeBtwSessionTab?.id || !activeBtwSessionData?.parentSessionId) {
+      lastSyncedBtwTabIdRef.current = null;
+      return;
+    }
+
+    if (lastSyncedBtwTabIdRef.current === activeBtwSessionTab.id) {
+      return;
+    }
+
+    // Only sync when the BTW session belongs to the current workspace,
+    // preventing the wrong session from opening when switching workspaces.
+    const btwWorkspacePath = activeBtwSessionData.workspacePath;
+    if (workspacePath && btwWorkspacePath && !isSamePath(workspacePath, btwWorkspacePath)) {
+      lastSyncedBtwTabIdRef.current = activeBtwSessionTab.id;
+      return;
+    }
+
+    lastSyncedBtwTabIdRef.current = activeBtwSessionTab.id;
+    void openMainSession(activeBtwSessionData.parentSessionId);
+  }, [activeBtwSessionData?.parentSessionId, activeBtwSessionData?.workspacePath, activeBtwSessionTab?.id, mode, workspacePath]);
+
+  // Keep the editor area mounted for hidden terminal tabs. Closing a terminal
+  // tab backgrounds it without destroying the xterm instance.
+  const hasRenderableTabs = useMemo(() => {
+    const groups = [primaryGroup, secondaryGroup, tertiaryGroup];
+    return groups.some(group =>
+      group.tabs.some(tab => !tab.isHidden || tab.content.type === 'terminal')
+    );
+  }, [primaryGroup, secondaryGroup, tertiaryGroup]);
+
+  // Handle anchor close
+  const handleAnchorClose = useCallback(() => {
+    setAnchorPosition('hidden');
+  }, [setAnchorPosition]);
+
+  // Handle anchor position change
+  const handleAnchorPositionChange = useCallback((position: AnchorPosition) => {
+    setAnchorPosition(position);
+  }, [setAnchorPosition]);
+
+  // Handle anchor size change
+  const handleAnchorSizeChange = useCallback((size: number) => {
+    setAnchorSize(size);
+  }, [setAnchorSize]);
+
+  // Handle mission control open
+  const handleOpenMissionControl = useCallback(() => {
+    openMissionControl();
+  }, [openMissionControl]);
+
+  // Handle mission control close
+  const handleCloseMissionControl = useCallback(() => {
+    closeMissionControl();
+  }, [closeMissionControl]);
+
+  // Render content
+  const renderContent = () => {
+    // Show empty state when there are no visible tabs and no terminal keep-alive tabs.
+    if (!hasRenderableTabs) {
+      return <EmptyState onClose={disablePopOut ? undefined : collapsePanel} />;
+    }
+
+    return (
+      <div className="canvas-content-canvas__main">
+        {/* Editor area */}
+        <div className="canvas-content-canvas__editor">
+          <EditorArea
+            workspacePath={workspacePath}
+            isSceneActive={isSceneActive}
+            onOpenMissionControl={handleOpenMissionControl}
+            onInteraction={onInteraction}
+            onTabCloseWithDirtyCheck={handleCloseWithDirtyCheck}
+            onTabCloseAllWithDirtyCheck={handleCloseAllWithDirtyCheck}
+            disablePopOut={disablePopOut}
+            terminalResizeSuspended={terminalResizeSuspended}
+          />
+        </div>
+
+        {/* Anchor area */}
+        {layout.anchorPosition !== 'hidden' && (
+          <AnchorZone
+            position={layout.anchorPosition}
+            size={layout.anchorSize}
+            onSizeChange={handleAnchorSizeChange}
+            onPositionChange={handleAnchorPositionChange}
+            onClose={handleAnchorClose}
+          >
+            {/* Anchor content (e.g., terminal) renders here */}
+            <div className="canvas-content-canvas__anchor-content">
+            </div>
+          </AnchorZone>
+        )}
+      </div>
+    );
+  };
+
+  return (
+    <div
+      className={`canvas-content-canvas ${layout.isMaximized ? 'is-maximized' : ''}`}
+      data-shortcut-scope="canvas"
+    >
+      {/* Main content */}
+      {renderContent()}
+
+      {/* Mission control overlay */}
+      <MissionControl
+        isOpen={isMissionControlOpen}
+        onClose={handleCloseMissionControl}
+        handleCloseWithDirtyCheck={handleCloseWithDirtyCheck}
+      />
+    </div>
+  );
+};
+ContentCanvas.displayName = 'ContentCanvas';
+
+export default ContentCanvas;

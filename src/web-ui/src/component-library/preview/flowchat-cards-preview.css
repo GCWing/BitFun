@@ -1,0 +1,121 @@
+/**
+ * FlowChat Cards preview styles
+ */
+
+/* Preview-only tool card typography override. */
+:root {
+  --tool-card-font-mono: 'SF Mono', 'Monaco', 'Cascadia Code', 'Cascadia Mono', Consolas, 'Inconsolata', 'Fira Code', 'Fira Mono', 'Droid Sans Mono', 'Source Code Pro', 'Lucida Console', 'Courier New', monospace;
+  --private-flowchat-preview-border: color-mix(in srgb, var(--color-static-black) 90%, var(--color-static-white));
+  --private-flowchat-preview-text-muted: color-mix(in srgb, var(--color-static-white) 63%, var(--color-static-black));
+}
+
+.column-item-preview {
+  display: block !important;
+  width: 100%;
+}
+
+.column-item-preview > div {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  width: 100%;
+}
+
+.column-item-preview h3 {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--private-flowchat-preview-text-muted);
+  margin: 0 0 12px 0;
+  padding: 0;
+  border-bottom: 1px solid var(--private-flowchat-preview-border);
+  padding-bottom: 8px;
+}
+
+/* Reset potential style conflicts */
+.column-item-preview .base-tool-card,
+.column-item-preview .read-file-card,
+.column-item-preview .file-operation-card,
+.column-item-preview .search-card,
+.column-item-preview .terminal-card,
+.column-item-preview .task-card,
+.column-item-preview .todo-card,
+.column-item-preview .think-card,
+.column-item-preview .web-search-card,
+.column-item-preview .flow-thinking-item {
+  box-sizing: border-box;
+  display: block;
+}
+
+.column-item-preview .base-tool-card--compact,
+.column-item-preview .read-file-card--compact,
+.column-item-preview .file-operation-card--compact,
+.column-item-preview .search-card--compact,
+.column-item-preview .terminal-card--compact,
+.column-item-preview .task-card--compact,
+.column-item-preview .todo-card--compact,
+.column-item-preview .think-card--compact,
+.column-item-preview .web-search-card--compact {
+  width: 100%;
+  max-width: none;
+  margin-bottom: 0;
+}
+
+.column-item-preview .base-tool-card--standard,
+.column-item-preview .base-tool-card--detailed {
+  width: 100%;
+  max-width: 100%;
+}
+
+.column-item-preview button {
+  cursor: pointer;
+  pointer-events: auto;
+}
+
+.column-item-preview pre {
+  overflow-x: auto;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+}
+
+.column-item-preview * {
+  box-sizing: border-box;
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
+.animate-spin {
+  animation: spin 1s linear infinite;
+}
+
+/* Flow thinking component styles - minimal without borders */
+.column-item-preview .flow-thinking-item {
+  width: 100%;
+  background: transparent;
+  border: none;
+}
+
+.column-item-preview .flow-thinking-item.streaming {
+  background: transparent;
+  border: none;
+}
+
+.column-item-preview .flow-thinking-item.collapsed {
+  background: transparent;
+  border: none;
+}

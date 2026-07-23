@@ -1,0 +1,252 @@
+{
+  "nav": {
+    "title": "Skills",
+    "summary": "Browse installed skills locally and jump to the external marketplace section.",
+    "anchors": {
+      "installed": "Installed Skills",
+      "market": "Marketplace"
+    },
+    "anchorDescriptions": {
+      "installed": "Manage skills already available in this environment.",
+      "market": "Search and download more skills from skills.sh."
+    },
+    "categories": {
+      "discover": "Discover",
+      "installed": "Installed"
+    },
+    "items": {
+      "market": "Marketplace",
+      "installedAll": "All",
+      "installedUser": "User",
+      "installedProject": "Project"
+    }
+  },
+  "page": {
+    "title": "Skills",
+    "subtitle": "Manage installed skills and discover reusable skills from the external marketplace.",
+    "searchPlaceholder": "Search installed and marketplace skills..."
+  },
+  "installed": {
+    "titleAll": "Installed Skills",
+    "subtitleAll": "Manage all installed user-level and project-level skills",
+    "titleUser": "User Skills",
+    "subtitleUser": "Globally installed user-level skills",
+    "titleProject": "Project Skills",
+    "subtitleProject": "Project-level skills in the current workspace"
+  },
+  "toolbar": {
+    "searchPlaceholder": "Search skills...",
+    "addTooltip": "Add Skill",
+    "hideDuplicates": "Duplicates"
+  },
+  "filters": {
+    "all": "All",
+    "builtin": "Built-in",
+    "user": "User",
+    "project": "Project",
+    "suite": "Suites"
+  },
+  "categories": {
+    "all": "All installed skills, including built-in, user-level, and project-level.",
+    "builtin": "Core skills shipped with the app. They cannot be deleted.",
+    "user": "User-level skills installed globally for your account.",
+    "project": "Project-level skills for the current workspace.",
+    "suite": "Built-in skill suites grouped by mode, with one-click visibility controls."
+  },
+  "section": {
+    "user": {
+      "description": "Skills installed globally for the current user."
+    },
+    "project": {
+      "description": "Project-level skills in the current workspace."
+    }
+  },
+  "market": {
+    "title": "Skill Marketplace",
+    "subtitle": "Search and download reusable skills (default scope: current project)",
+    "subtitlePrefix": "Browse reusable skills from",
+    "subtitleSuffix": ".",
+    "searchPlaceholder": "Search marketplace skills...",
+    "loading": "Loading marketplace skills...",
+    "errorPrefix": "Failed to load marketplace: ",
+    "empty": {
+      "noMatch": "No matching marketplace skills found",
+      "noSkills": "No marketplace skills available"
+    },
+    "resultsInfo": "{{count}} results for \"{{query}}\"",
+    "item": {
+      "sourceLabel": "Source: ",
+      "installs": "Installs: {{count}}",
+      "noDescription": "No description available",
+      "downloadProject": "Download to Project",
+      "installed": "Installed",
+      "installedTooltip": "This skill is already installed",
+      "downloading": "Downloading...",
+      "downloadUser": "Download to User"
+    },
+    "pagination": {
+      "prev": "Previous page",
+      "next": "Next page",
+      "info": "{{current}} / {{total}}",
+      "infoMore": "Page {{current}}",
+      "loading": "Loading..."
+    },
+    "sourceNote": {
+      "prefix": "Source:",
+      "suffix": " · Up to {{max}} results"
+    },
+    "detail": {
+      "installsLabel": "Installs",
+      "linkLabel": "Link"
+    }
+  },
+  "suite": {
+    "title": "Skill Suites",
+    "subtitle": "Pick a mode to manage skill visibility. Group actions apply immediately, while individual skill edits can be saved per group.",
+    "modeLabel": "Mode",
+    "refreshTooltip": "Refresh current mode",
+    "refreshAction": "Refresh",
+    "loading": "Loading skill suites...",
+    "empty": "No skills are available.",
+    "groups": {
+      "office": "Office",
+      "computerUse": "Computer Use",
+      "meta": "Meta",
+      "miniapp": "MiniApp",
+      "canvas": "Canvas",
+      "gstack": "gstack",
+      "other": "Other"
+    },
+    "sections": {
+      "myGroups": "My groups",
+      "builtin": "Built-in groups",
+      "otherSkills": "Other skills"
+    },
+    "manageGroups": "Manage Skill groups",
+    "modes": {
+      "agentic": "agentic",
+      "cowork": "Cowork",
+      "team": "Team"
+    },
+    "modeDescriptions": {
+      "agentic": "Coding-first default profile",
+      "cowork": "Office workflow profile",
+      "claw": "Assistant mode",
+      "team": "Team mode"
+    },
+    "modeActions": {
+      "reset": "Reset {{mode}}",
+      "resetShort": "Reset"
+    },
+    "groupActions": {
+      "save": "Save",
+      "enableGroup": "Enable group",
+      "disableGroup": "Disable group"
+    },
+    "resetDialog": {
+      "title": "Reset {{mode}}?",
+      "message": "This will restore the mode's skill visibility to the default state.",
+      "messageWithUnsaved": "This will restore the mode's skill visibility to the default state and discard the current unsaved edits.",
+      "confirm": "Reset",
+      "cancel": "Cancel"
+    },
+    "groupState": {
+      "enabled": "Visible",
+      "disabled": "Hidden",
+      "partial": "Partial"
+    },
+    "skillState": {
+      "enabled": "Enabled for this mode",
+      "disabled": "Disabled for this mode",
+      "pending": "Unsaved",
+      "covered": "Covered · {{source}}",
+      "coveredDetail": "Enabled, but this mode uses the same-name skill from {{source}}."
+    },
+    "groupCount": "{{total}} skills",
+    "messages": {
+      "saveSuccess": "Updated {{mode}} suite visibility",
+      "saveFailed": "Failed to update suite: {{error}}",
+      "resetSuccess": "Restored {{mode}} suite defaults",
+      "resetFailed": "Failed to reset suite: {{error}}",
+      "refreshFailed": "Failed to refresh suite: {{error}}",
+      "saveFirst": "Save the current skill edits first."
+    }
+  },
+  "form": {
+    "title": "Add Skill",
+    "closeTooltip": "Close",
+    "level": {
+      "label": "Level",
+      "user": "User-level (Global)",
+      "project": "Project-level (Current Workspace)",
+      "projectDisabled": " - Need to open workspace first",
+      "currentWorkspace": "Current workspace: {{path}}",
+      "selectedProjectPath": "Selected project path: {{path}}"
+    },
+    "path": {
+      "label": "Skill Folder Path",
+      "placeholder": "Select or enter skill folder path",
+      "browseTooltip": "Browse",
+      "hint": "Folder must contain a valid SKILL.md file"
+    },
+    "validating": "Validating...",
+    "actions": {
+      "cancel": "Cancel",
+      "add": "Add",
+      "adding": "Adding..."
+    }
+  },
+  "list": {
+    "loading": "Loading...",
+    "errorPrefix": "Failed to load: ",
+    "loadFailed": "Could not load skills",
+    "retry": "Retry",
+    "desktopUnavailable": "Manage skills in Desktop.",
+    "remoteUnavailable": "Skill management is unavailable during a remote connection.",
+    "empty": {
+      "noMatch": "No matching skills found",
+      "noSkills": "No skills configured yet"
+    },
+    "item": {
+      "user": "User",
+      "project": "Project",
+      "localUser": "This device · User",
+      "remoteProject": "Remote workspace · Project",
+      "builtin": "Built-in",
+      "userInstalled": "Installed",
+      "detail": "Details",
+      "deleteTooltip": "Delete",
+      "pathLabel": "Path:",
+      "sourceLabel": "Source:",
+      "openPathInExplorer": "Open this folder in file explorer",
+      "revealPathUnavailableRemote": "Remote workspace paths cannot be opened in the local file manager",
+      "shadowed": "Covered",
+      "shadowedTooltip": "The same-name skill from {{source}} normally has higher priority.",
+      "shadowedLabel": "Higher-priority source:",
+      "shadowedDetail": "The same-name skill from {{source}}",
+      "unknownSource": "another source"
+    }
+  },
+  "deleteModal": {
+    "title": "Confirm Delete",
+    "message": "Are you sure you want to delete skill \"{{name}}\"?",
+    "warning": "This will delete the skill folder and cannot be undone.",
+    "cancel": "Cancel",
+    "delete": "Delete"
+  },
+  "messages": {
+    "invalidPath": "Please select a valid skill folder",
+    "noWorkspace": "Please open a workspace first to add project-level skills",
+    "addSuccess": "Skill \"{{name}}\" added successfully",
+    "addFailed": "Failed to add: {{error}}",
+    "deleteSuccess": "Skill \"{{name}}\" deleted",
+    "deleteFailed": "Failed to delete: {{error}}",
+    "toggleSuccess": "Skill \"{{name}}\" {{status}}",
+    "toggleFailed": "Failed to toggle: {{error}}",
+    "marketDownloadSuccess": "Skill \"{{name}}\" downloaded successfully",
+    "marketDownloadFailed": "Failed to download: {{error}}",
+    "enabled": "enabled",
+    "disabled": "disabled",
+    "revealPathFailed": "Could not open in file explorer: {{error}}"
+  }
+}

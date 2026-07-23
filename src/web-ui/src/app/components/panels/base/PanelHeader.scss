@@ -1,0 +1,34 @@
+.bitfun-panel-header {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  // Unified header height: IconButton(xs=24px) + padding(6px*2)=36px
+  padding: 6px 12px;
+  background: var(--color-bg-primary);
+  border-bottom: 1px solid var(--border-base);
+  flex-shrink: 0;
+  min-height: 36px;
+
+  &__title {
+    margin: 0;
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--color-text-primary);
+    text-align: center;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  &__actions {
+    position: absolute;
+    right: 12px;
+    top: 50%;
+    transform: translateY(-50%);
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    flex-shrink: 0;
+  }
+}

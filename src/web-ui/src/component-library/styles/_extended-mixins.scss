@@ -1,0 +1,530 @@
+/**
+ * Extended mixins
+ */
+@use 'tokens' as *;
+@use 'functions' as fn;
+@use 'sass:math';
+
+// ==================== Layout mixins ====================
+
+@mixin flex-layout($direction: row, $align: center, $justify: start, $gap: 0) {
+  display: flex;
+  flex-direction: $direction;
+  
+  @if $align == 'start' {
+    align-items: flex-start;
+  } @else if $align == 'center' {
+    align-items: center;
+  } @else if $align == 'end' {
+    align-items: flex-end;
+  } @else if $align == 'stretch' {
+    align-items: stretch;
+  }
+  
+  @if $justify == 'start' {
+    justify-content: flex-start;
+  } @else if $justify == 'center' {
+    justify-content: center;
+  } @else if $justify == 'end' {
+    justify-content: flex-end;
+  } @else if $justify == 'between' {
+    justify-content: space-between;
+  } @else if $justify == 'around' {
+    justify-content: space-around;
+  }
+  
+  @if $gap != 0 and $gap != null {
+    gap: $gap;
+  }
+}
+
+@mixin grid-layout($columns: 12, $gap: $size-gap-4) {
+  display: grid;
+  grid-template-columns: repeat($columns, 1fr);
+  gap: $gap;
+}
+
+@mixin center($position: both) {
+  position: absolute;
+  
+  @if $position == both {
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+  } @else if $position == horizontal {
+    left: 50%;
+    transform: translateX(-50%);
+  } @else if $position == vertical {
+    top: 50%;
+    transform: translateY(-50%);
+  }
+}
+
+@mixin fill-container {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+}
+
+// ==================== Sizing mixins ====================
+
+@mixin size($width, $height: $width) {
+  width: $width;
+  height: $height;
+}
+
+@mixin min-size($width, $height: $width) {
+  min-width: $width;
+  min-height: $height;
+}
+
+@mixin max-size($width, $height: $width) {
+  max-width: $width;
+  max-height: $height;
+}
+
+@mixin circle($size) {
+  @include size($size);
+  border-radius: 50%;
+}
+
+@mixin square($size) {
+  @include size($size);
+  aspect-ratio: 1;
+}
+
+// ==================== Typography mixins ====================
+
+@mixin text-ellipsis {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@mixin line-clamp($lines: 2) {
+  display: -webkit-box;
+  -webkit-line-clamp: $lines;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+@mixin no-select {
+  user-select: none;
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+}
+
+@mixin text-gradient($gradient) {
+  background: $gradient;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+// ==================== Interaction mixins ====================
+
+@mixin transition($properties: all, $duration: $motion-base, $easing: $easing-standard) {
+  transition: $properties $duration $easing;
+}
+
+@mixin hover-lift($offset: -2px, $scale: 1.02) {
+  transition: all $motion-base $easing-standard;
+  
+  &:hover {
+    transform: translateY($offset) scale($scale);
+  }
+}
+
+@mixin ripple-effect($color: rgba(255, 255, 255, 0.3)) {
+  position: relative;
+  overflow: hidden;
+  
+  &::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 0;
+    height: 0;
+    border-radius: 50%;
+    background: $color;
+    transform: translate(-50%, -50%);
+    transition: width 0.6s, height 0.6s;
+  }
+  
+  &:active::after {
+    width: 300px;
+    height: 300px;
+  }
+}
+
+@mixin disabled-state($opacity: $opacity-disabled) {
+  &:disabled,
+  &.is-disabled {
+    opacity: $opacity;
+    cursor: default;
+    pointer-events: none;
+  }
+}
+
+@mixin icon-hover-bold(
+  $stroke-width-default: 1.5,
+  $stroke-width-hover: 2.5,
+  $stroke-width-active: 2.2
+) {
+  svg {
+    stroke: currentColor;
+    fill: none;
+    stroke-width: $stroke-width-default;
+    transition: all 0.3s $easing-smooth;
+  }
+
+  &:hover:not(:disabled) {
+    svg {
+      stroke-width: $stroke-width-hover;
+    }
+  }
+
+  &.is-active,
+  &[aria-current="true"],
+  &[data-active="true"] {
+    svg {
+      stroke-width: $stroke-width-active;
+    }
+  }
+}
+
+// ==================== Visual effects mixins ====================
+
+@mixin glass-effect($bg: var(--color-overlay-white-12), $blur: 10px, $opacity: 0.8) {
+  background: $bg;
+  backdrop-filter: blur($blur) saturate(1.2);
+  -webkit-backdrop-filter: blur($blur) saturate(1.2);
+  opacity: $opacity;
+}
+
+@mixin gradient-border($gradient, $width: 1px, $radius: $size-radius-base) {
+  position: relative;
+  border-radius: $radius;
+  
+  &::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    border-radius: inherit;
+    padding: $width;
+    background: $gradient;
+    -webkit-mask: 
+      linear-gradient(#ffffff 0 0) content-box,
+      linear-gradient(#ffffff 0 0);
+    -webkit-mask-composite: xor;
+    mask-composite: exclude;
+  }
+}
+
+@mixin inner-glow($color: var(--color-overlay-white-20), $size: 2px) {
+  box-shadow: inset 0 0 $size $color;
+}
+
+@mixin outer-glow($color: rgba(96, 165, 250, 0.3), $size: 8px) {
+  box-shadow: 0 0 $size $color;
+}
+
+// ==================== Responsive mixins ====================
+
+@mixin respond-to($breakpoint) {
+  @if $breakpoint == 'mobile' {
+    @media (max-width: 767px) {
+      @content;
+    }
+  } @else if $breakpoint == 'tablet' {
+    @media (min-width: 768px) and (max-width: 1023px) {
+      @content;
+    }
+  } @else if $breakpoint == 'desktop' {
+    @media (min-width: 1024px) {
+      @content;
+    }
+  } @else if $breakpoint == 'wide' {
+    @media (min-width: 1440px) {
+      @content;
+    }
+  }
+}
+
+@mixin mobile-first($width) {
+  @media (min-width: $width) {
+    @content;
+  }
+}
+
+@mixin desktop-first($width) {
+  @media (max-width: $width) {
+    @content;
+  }
+}
+
+// ==================== Accessibility mixins ====================
+
+@mixin sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border-width: 0;
+}
+
+@mixin focus-outline($color: $color-accent-500, $width: 2px, $offset: 2px) {
+  &:focus-visible {
+    outline: $width solid $color;
+    outline-offset: $offset;
+  }
+}
+
+// ==================== Scrollbar mixins ====================
+
+@mixin custom-scrollbar(
+  $width: 8px,
+  $track-color: var(--color-overlay-white-08),
+  $thumb-color: var(--color-overlay-white-12),
+  $thumb-hover-color: $overlay-white-24
+) {
+  &::-webkit-scrollbar {
+    width: $width;
+    height: $width;
+  }
+  
+  &::-webkit-scrollbar-track {
+    background: $track-color;
+    border-radius: math.div($width, 2);
+  }
+  
+  &::-webkit-scrollbar-thumb {
+    background: $thumb-color;
+    border-radius: math.div($width, 2);
+    
+    &:hover {
+      background: $thumb-hover-color;
+    }
+  }
+  
+  scrollbar-width: thin;
+  scrollbar-color: $thumb-color $track-color;
+}
+
+@mixin hide-scrollbar {
+  &::-webkit-scrollbar {
+    display: none;
+  }
+  
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+@mixin hover-scrollbar(
+  $width: 6px,
+  $thumb-color: var(--color-overlay-white-12),
+  $thumb-hover-color: $overlay-white-24
+) {
+  &::-webkit-scrollbar {
+    width: $width;
+    height: $width;
+  }
+  
+  &::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  
+  &::-webkit-scrollbar-thumb {
+    background: transparent;
+    border-radius: math.div($width, 2);
+    transition: background 0.2s ease;
+  }
+  
+  &:hover::-webkit-scrollbar-thumb {
+    background: $thumb-color;
+  }
+  
+  &:hover::-webkit-scrollbar-thumb:hover {
+    background: $thumb-hover-color;
+  }
+  
+  scrollbar-width: thin;
+  scrollbar-color: transparent transparent;
+  
+  &:hover {
+    scrollbar-color: $thumb-color transparent;
+  }
+}
+
+@mixin hover-scrollbar-with-activity(
+  $width: 6px,
+  $thumb-color: var(--color-overlay-white-12),
+  $thumb-hover-color: $overlay-white-24
+) {
+  @include hover-scrollbar($width, $thumb-color, $thumb-hover-color);
+  
+  &.is-scrolling::-webkit-scrollbar-thumb {
+    background: $thumb-color;
+  }
+  
+  &.is-scrolling {
+    scrollbar-color: $thumb-color transparent;
+  }
+}
+
+// ==================== Animation mixins ====================
+
+@mixin fade-in($duration: $motion-base) {
+  animation: fade-in $duration $easing-standard;
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@mixin slide-in($direction: bottom, $distance: 20px, $duration: $motion-base) {
+  animation: slide-in-#{$direction} $duration $easing-standard;
+}
+
+@keyframes slide-in-bottom {
+  from {
+    transform: translateY(20px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+@keyframes slide-in-top {
+  from {
+    transform: translateY(-20px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+@keyframes slide-in-left {
+  from {
+    transform: translateX(-20px);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+@keyframes slide-in-right {
+  from {
+    transform: translateX(20px);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+@mixin scale-in($from: 0.9, $duration: $motion-base) {
+  animation: scale-in $duration $easing-standard;
+  
+  @keyframes scale-in {
+    from {
+      transform: scale($from);
+      opacity: 0;
+    }
+    to {
+      transform: scale(1);
+      opacity: 1;
+    }
+  }
+}
+
+// ==================== Print mixins ====================
+
+@mixin print-hide {
+  @media print {
+    display: none !important;
+  }
+}
+
+@mixin print-only {
+  display: none;
+  
+  @media print {
+    display: block;
+  }
+}
+
+// ==================== Utility mixins ====================
+
+@mixin clearfix {
+  &::after {
+    content: '';
+    display: table;
+    clear: both;
+  }
+}
+
+@mixin placeholder {
+  &::-webkit-input-placeholder {
+    @content;
+  }
+  
+  &::-moz-placeholder {
+    @content;
+  }
+  
+  &:-ms-input-placeholder {
+    @content;
+  }
+  
+  &::placeholder {
+    @content;
+  }
+}
+
+@mixin reset-button {
+  margin: 0;
+  padding: 0;
+  border: none;
+  background: none;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+  outline: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+@mixin reset-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+@mixin hardware-acceleration {
+  transform: translateZ(0);
+  backface-visibility: hidden;
+  perspective: 1000px;
+}

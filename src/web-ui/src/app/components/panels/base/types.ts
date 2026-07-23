@@ -1,0 +1,85 @@
+/**
+ * Type definitions for panel components.
+ * Defines content types, interfaces, and configuration for the panel system.
+ */
+
+export type PanelContentType = 
+  | 'empty'
+  | 'code-preview'
+  | 'code-viewer'
+  | 'code-editor'
+  | 'markdown-viewer' 
+  | 'markdown-editor'
+  | 'text-viewer'
+  | 'file-viewer'
+  | 'image-viewer'
+  | 'diff-code-editor'
+  | 'git-diff'
+  | 'git-settings'
+  | 'git-graph'
+  | 'git-branch-history'
+  | 'ai-session'
+  | 'planner'
+  | 'ui-editor'
+  | 'ui-relation-graph'
+  | 'design-tokens'
+  | 'task-detail'
+  | 'plan-viewer'
+  | 'btw-session'
+  | 'session-usage'
+  | 'background-command-output'
+  | 'review-platform'
+  | 'review-platform-pr-detail'
+  | 'terminal'
+  | 'generative-widget'
+  | 'bitfun-canvas'
+  | 'browser';
+
+export interface PanelContent {
+  type: PanelContentType;
+  title: string;
+  data?: any;
+  metadata?: Record<string, any>;
+}
+
+export interface TabData {
+  id: string;
+  title: string;
+  content: PanelContent;
+  isDirty?: boolean; // Has unsaved changes
+}
+
+export interface FlexiblePanelProps {
+  content: PanelContent | null;
+  onContentChange?: (content: PanelContent | null) => void;
+  className?: string;
+  onInteraction?: (itemId: string, userInput: string) => Promise<void>;
+  workspacePath?: string;
+  onBeforeClose?: (content: PanelContent | null) => Promise<boolean>;
+  terminalResizeSuspended?: boolean;
+}
+
+export interface TabbedFlexiblePanelProps {
+  className?: string;
+  onTabsChange?: (tabs: TabData[]) => void;
+  onInteraction?: (itemId: string, userInput: string) => Promise<void>;
+  workspacePath?: string;
+  onBeforeClose?: (content: PanelContent | null) => Promise<boolean>;
+}
+
+export interface TabbedFlexiblePanelRef {
+  addTab: (content: PanelContent) => void;
+  switchToTab: (tabId: string) => void;
+  findTabByMetadata: (metadata: Record<string, any>) => TabData | null;
+  updateTabContent: (tabId: string, content: PanelContent) => void;
+  closeAllTabs: () => void;
+}
+
+export interface PanelContentConfig {
+  type: PanelContentType;
+  displayName: string;
+  icon: React.ComponentType<{ size?: string | number }>;
+  supportsCopy: boolean;
+  supportsDownload: boolean;
+  showHeader: boolean;
+}

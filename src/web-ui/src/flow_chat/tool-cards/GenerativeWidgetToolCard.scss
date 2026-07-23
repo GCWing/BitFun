@@ -1,0 +1,105 @@
+.generative-widget-card {
+  overflow: hidden;
+}
+
+.generative-widget-card.clickable {
+  cursor: pointer;
+}
+
+.generative-widget-card .base-tool-card-expanded,
+.generative-widget-card .base-tool-card-error {
+  padding: 0;
+}
+
+.generative-widget-card__icon {
+  color: var(--color-cyan-500);
+}
+
+.generative-widget-card__title {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--flowchat-inline-gap);
+  min-width: 0;
+}
+
+.generative-widget-card__extra {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--flowchat-control-gap);
+}
+
+.generative-widget-card__status {
+  font-size: var(--flowchat-font-size-sm);
+  color: var(--color-text-secondary);
+  white-space: nowrap;
+}
+
+.generative-widget-card__status--error {
+  color: color-mix(in srgb, var(--color-error) 72%, var(--color-static-white));
+}
+
+.generative-widget-card__preview {
+  padding: var(--flowchat-card-expanded-pad-y) var(--flowchat-card-expanded-pad-x);
+}
+
+.generative-widget-card__preview--export {
+  padding: 0;
+}
+
+.generative-widget-card__placeholder {
+  min-height: 160px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--size-gap-4);
+  color: var(--color-text-secondary);
+  font-size: var(--flowchat-font-size-sm);
+}
+
+.generative-widget-card__placeholder--error {
+  color: color-mix(in srgb, var(--color-error) 64%, var(--color-static-white));
+}
+
+.generative-widget-card__capture-root {
+  position: relative;
+}
+
+.generative-widget-card__export-image-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border: 1px solid var(--border-subtle);
+  background: color-mix(in srgb, var(--color-bg-secondary) 84%, transparent);
+  color: var(--color-text-secondary);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+
+  &:hover:not(:disabled) {
+    background: color-mix(in srgb, var(--color-bg-secondary) 92%, transparent);
+    color: var(--color-text-primary);
+    border-color: var(--border-base);
+  }
+
+  &:disabled {
+    opacity: 0.65;
+    cursor: default;
+  }
+}
+
+.generative-widget-card__export-stage {
+  position: fixed;
+  left: -10000px;
+  top: 0;
+  width: 0;
+  height: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.generative-widget-card__export-stage-inner {
+  padding: var(--size-gap-5);
+  background: var(--color-bg-scene);
+}

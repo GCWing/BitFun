@@ -1,0 +1,291 @@
+/**
+ * Reproduction steps block styles
+ */
+@use '../../../flow_chat/tool-cards/_tool-card-common.scss';
+
+
+.reproduction-steps-block {
+  display: flex;
+  flex-direction: column;
+  margin: var(--flowchat-card-gap) 0;
+  border-radius: var(--flowchat-card-radius);
+  border: 1px solid var(--color-warning);
+  background: var(--color-bg-scene);
+  backdrop-filter: blur(10px);
+  transition: all 0.2s ease;
+  overflow: hidden;
+  position: relative;
+
+
+  animation: waitingPulse 2s ease-in-out infinite;
+
+
+  &:hover:not(.proceeded) {
+    box-shadow: 0 0 12px color-mix(in srgb, var(--color-warning) 25%, transparent);
+  }
+
+
+  &.proceeded {
+    border-color: var(--border-base);
+    animation: none;
+  }
+}
+
+
+.reproduction-steps-header {
+  display: flex;
+  align-items: center;
+  gap: var(--flowchat-control-gap);
+  padding: var(--flowchat-card-expanded-pad-y) var(--flowchat-card-expanded-pad-x);
+  background: transparent;
+  transition: background 0.15s ease;
+
+
+  &.clickable {
+    cursor: pointer;
+    user-select: none;
+
+    &:hover {
+      background: var(--element-bg-subtle);
+    }
+  }
+}
+
+
+.reproduction-steps-block.expanded .reproduction-steps-header {
+  border-bottom: 1px solid var(--border-base);
+}
+
+
+.reproduction-steps-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--color-text-muted);
+  flex-shrink: 0;
+}
+
+.reproduction-steps-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  color: var(--color-warning);
+  flex-shrink: 0;
+
+  svg {
+    width: 16px;
+    height: 16px;
+  }
+}
+
+
+.proceeded .reproduction-steps-icon {
+  color: var(--color-text-secondary);
+}
+
+.reproduction-steps-title {
+  font-size: var(--flowchat-font-size-sm);
+  font-weight: 600;
+  color: var(--color-text-primary);
+  flex: 1;
+  letter-spacing: -0.01em;
+}
+
+.reproduction-steps-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.18rem 0.5rem;
+  background: var(--element-bg-subtle);
+  color: var(--color-text-secondary);
+  border: 1px solid var(--border-base);
+  border-radius: var(--size-radius-sm);
+  font-size: var(--flowchat-font-size-xxs);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  flex-shrink: 0;
+}
+
+
+.reproduction-steps-content {
+  padding: var(--flowchat-card-expanded-pad-y) var(--flowchat-card-expanded-pad-x);
+}
+
+.reproduction-steps-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--flowchat-flow-item-gap);
+}
+
+.reproduction-step-item {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--flowchat-control-gap);
+  padding: var(--flowchat-card-expanded-pad-y) var(--flowchat-card-expanded-pad-x);
+  background: transparent;
+  border: 1px solid var(--border-base);
+  border-radius: var(--flowchat-card-radius);
+  font-size: var(--flowchat-font-size-sm);
+  font-weight: 500;
+  color: var(--color-text-primary);
+  line-height: var(--flowchat-support-line-height);
+  transition: all 0.15s ease;
+
+  &:hover {
+    background: var(--element-bg-subtle);
+    border-color: var(--border-medium);
+  }
+
+
+  &::before {
+    content: counter(step-counter);
+    counter-increment: step-counter;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 20px;
+    height: 20px;
+    padding: 0 4px;
+    background: color-mix(in srgb, var(--color-warning) 12%, transparent);
+    color: var(--color-warning);
+    border-radius: var(--size-radius-sm);
+    font-size: var(--flowchat-font-size-xxs);
+    font-weight: 600;
+    flex-shrink: 0;
+  }
+}
+
+
+.proceeded .reproduction-step-item::before {
+  background: var(--element-bg-subtle);
+  color: var(--color-text-secondary);
+}
+
+
+.reproduction-steps-list {
+  counter-reset: step-counter;
+}
+
+
+.reproduction-steps-actions {
+  padding: var(--flowchat-card-expanded-pad-y) var(--flowchat-card-expanded-pad-x);
+  display: flex;
+  flex-direction: column;
+  gap: var(--flowchat-control-gap);
+  border-top: 1px solid var(--border-base);
+}
+
+.reproduction-steps-hint {
+  display: flex;
+  align-items: center;
+  gap: var(--flowchat-control-gap);
+  padding: var(--flowchat-card-expanded-pad-y) var(--flowchat-card-expanded-pad-x);
+  background: var(--element-bg-soft);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--flowchat-card-radius);
+  font-size: var(--flowchat-font-size-sm);
+  color: var(--color-text-secondary);
+  line-height: var(--flowchat-support-line-height);
+}
+
+.reproduction-proceed-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--flowchat-inline-gap);
+  padding: var(--flowchat-card-expanded-pad-y) var(--size-gap-4);
+  background: var(--element-bg-base);
+  color: var(--color-text-primary);
+  border: 1px solid var(--border-base);
+  border-radius: var(--flowchat-card-radius);
+  font-size: var(--flowchat-font-size-sm);
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  width: 100%;
+
+  &:hover:not(:disabled) {
+    background: var(--element-bg-medium);
+    border-color: var(--border-medium);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px var(--color-overlay-black-20);
+  }
+
+  &:active:not(:disabled) {
+    transform: translateY(0);
+    background: var(--element-bg-strong);
+  }
+
+  &:disabled {
+    opacity: var(--opacity-disabled);
+    cursor: default;
+  }
+
+  svg {
+    width: 14px;
+    height: 14px;
+    opacity: 0.9;
+  }
+
+  .spin {
+    animation: spin 1s linear infinite;
+  }
+}
+
+
+.reproduction-steps-completed {
+  display: flex;
+  align-items: center;
+  gap: var(--flowchat-control-gap);
+  padding: var(--flowchat-card-expanded-pad-y) var(--flowchat-card-expanded-pad-x);
+  color: var(--color-text-secondary);
+  font-size: var(--flowchat-font-size-sm);
+  font-weight: 500;
+  border-top: 1px dashed var(--border-base);
+
+  svg {
+    flex-shrink: 0;
+    width: 14px;
+    height: 14px;
+  }
+}
+
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+
+@keyframes waitingPulse {
+  0%, 100% {
+    box-shadow: 0 0 0 0 transparent;
+  }
+  50% {
+    box-shadow: 0 0 12px var(--color-warning-border);
+  }
+}
+
+.reproduction-steps-content {
+  animation: fadeIn 0.2s ease-out;
+}

@@ -1,0 +1,25 @@
+.subagent-model-config__label {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--size-gap-1);
+  min-width: 0;
+}
+
+.subagent-model-config__configure {
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--motion-fast) var(--easing-standard);
+}
+
+.subagent-model-config__row:hover .subagent-model-config__configure,
+.subagent-model-config__row:focus-within .subagent-model-config__configure {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+@media (hover: none) {
+  .subagent-model-config__configure {
+    opacity: 1;
+    pointer-events: auto;
+  }
+}

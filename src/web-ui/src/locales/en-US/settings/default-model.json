@@ -1,0 +1,93 @@
+{
+  "title": "Default Model Configuration",
+  "subtitle": "Configure AI models for different scenarios",
+  "loading": "Loading...",
+  "tabs": {
+    "default": "Default Config",
+    "models": "Model List",
+    "proxy": "Proxy"
+  },
+  "core": {
+    "title": "Core Configuration",
+    "required": "Required",
+    "optional": "Optional",
+    "primary": {
+      "label": "Primary Model",
+      "description": "For complex reasoning, code generation, multi-step tasks",
+      "placeholder": "Select primary model"
+    },
+    "fast": {
+      "label": "Fast Model",
+      "description": "For simple Q&A, quick responses, cost-saving scenarios",
+      "hint": "When not configured, all tasks use the primary model",
+      "placeholder": "Select fast model",
+      "notSet": "Not set (use primary model)"
+    }
+  },
+  "optional": {
+    "title": "Multimodal Model Configuration",
+    "capabilities": {
+      "image_understanding": {
+        "label": "Image Understanding",
+        "description": "Analyze images and screenshots, support mixed image-text conversations"
+      },
+      "image_generation": {
+        "label": "Image Generation",
+        "description": "Generate images from text descriptions"
+      },
+      "speech_recognition": {
+        "label": "Speech Recognition",
+        "description": "Convert speech to text, support voice input"
+      }
+    },
+    "notConfigured": "Not configured",
+    "notSet": "Not set",
+    "selectModel": "Select model",
+    "autoSelect": "Auto select"
+  },
+  "advanced": {
+    "title": "Advanced Configuration",
+    "modeOverrides": {
+      "title": "Mode Model Overrides",
+      "description": "Specify different models for specific modes (default: primary model)"
+    },
+    "subAgentOverrides": {
+      "title": "SubAgent Model Overrides",
+      "description": "Specify different models for specific assistants (default: primary model)"
+    },
+    "subAgents": {
+      "git-func-agent": {
+        "displayName": "Git Functions",
+        "description": "Commit messages, code review"
+      },
+      "startchat-func-agent": {
+        "displayName": "Chat Startup",
+        "description": "Work status analysis, welcome messages"
+      },
+      "arc-func-agent": {
+        "displayName": "Architecture Analysis",
+        "description": "Dependency graph, Mermaid diagrams"
+      },
+      "compression": {
+        "displayName": "Context Compression",
+        "description": "Intelligently compress long conversation context"
+      }
+    }
+  },
+  "selection": {
+    "primary": "Primary",
+    "fast": "Fast",
+    "custom": "Custom",
+    "selectModel": "Select model",
+    "notConfigured": "Not configured, will use primary model"
+  },
+  "empty": {
+    "noModels": "No models available. Please add models in the \"Model List\" tab first."
+  },
+  "messages": {
+    "loadFailed": "Failed to load configuration",
+    "updateFailed": "Update failed",
+    "modelUpdated": "{{slot}} set to {{name}}",
+    "capabilityUpdated": "Capability model updated"
+  }
+}

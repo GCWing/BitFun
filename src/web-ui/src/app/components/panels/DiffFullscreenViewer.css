@@ -1,0 +1,296 @@
+/**
+ * Diff fullscreen viewer styles.
+ */
+
+.diff-fullscreen-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 999999;
+  background: color-mix(in srgb, var(--color-static-black) 95%, transparent);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  animation: fadeIn 0.2s ease-out;
+  pointer-events: auto;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.diff-fullscreen-container {
+  width: 100vw;
+  height: 100vh;
+  background: color-mix(in srgb, var(--color-static-black) 96%, var(--color-static-white));
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  animation: slideInUp 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  pointer-events: auto;
+  z-index: 1;
+}
+
+@keyframes slideInUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Top toolbar */
+.diff-fullscreen-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 20px;
+  background: color-mix(in srgb, var(--color-static-black) 90%, transparent);
+  border-bottom: 1px solid var(--color-overlay-white-12);
+  backdrop-filter: blur(8px);
+  flex-shrink: 0;
+  z-index: 2;
+  pointer-events: auto;
+  position: relative;
+}
+
+.file-info {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex: 1;
+  min-width: 0;
+}
+
+.file-icon {
+  color: var(--color-overlay-white-70);
+  flex-shrink: 0;
+}
+
+.file-details {
+  min-width: 0;
+}
+
+.file-name {
+  color: var(--color-overlay-white-95);
+  font-size: 14px;
+  font-weight: 600;
+  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+  margin-bottom: 2px;
+}
+
+.file-path-full {
+  color: color-mix(in srgb, var(--color-static-white) 50%, transparent);
+  font-size: 12px;
+  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Header actions */
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.header-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  border: none;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  background: var(--color-overlay-white-08);
+  color: var(--color-overlay-white-80);
+  border: 1px solid var(--color-overlay-white-12);
+}
+
+.header-btn:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px var(--color-overlay-black-30);
+}
+
+.header-btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+  transform: none;
+}
+
+.header-btn.accept-btn {
+  background: var(--color-success-bg);
+  color: var(--color-success);
+  border-color: var(--color-success-border);
+}
+
+.header-btn.accept-btn:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--color-success) 25%, transparent);
+  border-color: color-mix(in srgb, var(--color-success) 50%, transparent);
+  box-shadow: 0 4px 12px color-mix(in srgb, var(--color-success) 20%, transparent);
+}
+
+.header-btn.reject-btn {
+  background: var(--color-error-bg);
+  color: var(--color-error);
+  border-color: var(--color-error-border);
+}
+
+.header-btn.reject-btn:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--color-error) 25%, transparent);
+  border-color: color-mix(in srgb, var(--color-error) 50%, transparent);
+  box-shadow: 0 4px 12px color-mix(in srgb, var(--color-error) 20%, transparent);
+}
+
+.header-btn.close-btn:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--color-error) 20%, transparent);
+  color: var(--color-error);
+  border-color: var(--color-error-border);
+}
+
+.header-divider {
+  width: 1px;
+  height: 20px;
+  background: var(--color-overlay-white-12);
+  margin: 0 4px;
+}
+
+/* Diff content */
+.diff-fullscreen-content {
+  flex: 1;
+  min-height: 0;
+  position: relative;
+  background: color-mix(in srgb, var(--color-static-black) 96%, var(--color-static-white));
+  pointer-events: auto;
+  z-index: 1;
+}
+
+/* Ensure WebDiffViewer renders correctly in fullscreen */
+.diff-fullscreen-content .web-diff-viewer {
+  height: 100%;
+  pointer-events: auto;
+}
+
+.diff-fullscreen-content .diff-viewer-container {
+  height: 100%;
+  pointer-events: auto;
+}
+
+.diff-fullscreen-content .diff-editor {
+  height: 100%;
+  pointer-events: auto;
+}
+
+/* Ensure Monaco editor is interactive */
+.diff-fullscreen-content .monaco-editor {
+  pointer-events: auto !important;
+}
+
+.diff-fullscreen-content .monaco-editor .view-lines {
+  pointer-events: auto !important;
+}
+
+/* Ensure diff buttons remain clickable */
+.diff-fullscreen-content .monaco-diff-buttons {
+  pointer-events: auto !important;
+  z-index: 10 !important;
+}
+
+.diff-fullscreen-content .monaco-btn {
+  pointer-events: auto !important;
+}
+
+/* Loading overlay */
+.fullscreen-loading-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: var(--color-overlay-black-80);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  color: var(--color-overlay-white-90);
+  font-size: 14px;
+  backdrop-filter: blur(4px);
+  z-index: 1000;
+}
+
+.fullscreen-loading-overlay .loading-spinner {
+  width: 24px;
+  height: 24px;
+  border: 2px solid color-mix(in srgb, var(--color-static-white) 30%, transparent);
+  border-top: 2px solid var(--color-overlay-white-90);
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+/* Responsive layout */
+@media (max-width: 768px) {
+  .diff-fullscreen-header {
+    padding: 8px 12px;
+    flex-direction: column;
+    gap: 8px;
+    align-items: stretch;
+  }
+  
+  .file-info {
+    justify-content: center;
+  }
+  
+  .header-actions {
+    justify-content: center;
+    flex-wrap: wrap;
+  }
+  
+  .header-btn {
+    padding: 6px 10px;
+    font-size: 12px;
+  }
+  
+  .file-name {
+    font-size: 13px;
+  }
+  
+  .file-path-full {
+    font-size: 11px;
+  }
+}
+
+/* Dark theme tweaks */
+@media (prefers-color-scheme: dark) {
+  .diff-fullscreen-container {
+    background: var(--color-bg-primary);
+  }
+  
+  .diff-fullscreen-header {
+    background: color-mix(in srgb, var(--color-static-black) 95%, transparent);
+    border-bottom-color: var(--color-overlay-white-15);
+  }
+  
+  .diff-fullscreen-content {
+    background: var(--color-bg-primary);
+  }
+}

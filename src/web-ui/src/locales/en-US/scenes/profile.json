@@ -1,0 +1,208 @@
+{
+  "defaultDesc": "A focused AI partner for programming, skilled in code analysis and project management",
+
+  "modelSlots": {
+    "primary":     { "label": "Primary",   "desc": "General conversation & reasoning" },
+    "fast":        { "label": "Fast",       "desc": "Lightweight fast responses" },
+    "compression": { "label": "Compress",   "desc": "Context length compression" },
+    "image":       { "label": "Image",      "desc": "Image generation & understanding" },
+    "voice":       { "label": "Voice",      "desc": "Voice synthesis & recognition" },
+    "retrieval":   { "label": "Retrieval",  "desc": "Vector retrieval & embedding" }
+  },
+
+  "slotDefault": {
+    "primary":     "Primary Model",
+    "fast":        "Fast Model",
+    "unconfigured": "Not configured"
+  },
+
+  "modelGroups": {
+    "presets": "System Presets",
+    "models":  "Available Models"
+  },
+
+  "hero": {
+    "editNameTitle":  "Click to edit name",
+    "editDescTitle":  "Click to edit description",
+    "descPlaceholder": "Add description...",
+    "radarTitle":     "Click to expand · Click dimension labels to navigate"
+  },
+
+  "identity": {
+    "emoji": "Emoji Marker",
+    "emojiPlaceholder": "Set emoji marker",
+    "creature": "Role Type",
+    "creaturePlaceholderShort": "Set role type",
+    "vibe": "Style Vibe",
+    "vibePlaceholderShort": "Set style vibe",
+    "resetTooltip": "Reset assistant persona",
+    "resetConfirmTitle": "Reset assistant persona",
+    "resetConfirmMessage": "This will restore BOOTSTRAP.md, SOUL.md, USER.md, and IDENTITY.md to their default templates and overwrite the current contents. Continue?",
+    "resetConfirmAction": "Reset",
+    "resetCancel": "Cancel",
+    "resetSuccess": "Assistant persona reset",
+    "resetFailed": "Failed to reset assistant persona"
+  },
+
+  "home": {
+    "descHint": "Click to edit the IDENTITY.md body."
+  },
+
+  "sections": {
+    "brain":        "Brain",
+    "capabilities": "Capabilities",
+    "interaction":  "Interaction"
+  },
+
+  "cards": {
+    "model":       "Models",
+    "rules":       "Behavior Rules",
+    "memory":      "Memory",
+    "toolsMcp":    "Tools & MCP",
+    "skills":      "Skills",
+    "preferences": "Preferences"
+  },
+
+  "actions": {
+    "globalManage": "Global Manage",
+    "manage":       "Manage",
+    "selectAll":    "Select all",
+    "clearAll":     "Clear all",
+    "reset":        "Reset",
+    "collapse":     "Collapse"
+  },
+
+  "kpi": {
+    "rules":        "User {{user}} · Project {{project}} · {{enabled}} active",
+    "memory":       "{{count}} active",
+    "skills":       "{{count}} active",
+    "toolStats":    "{{enabled}}/{{total}} built-in",
+    "toolStatsMcp": "{{enabled}}/{{total}} built-in · MCP {{mcpHealthy}}/{{mcpTotal}}"
+  },
+
+  "empty": {
+    "rules":     "No rules configured",
+    "memory":    "No memories",
+    "tools":     "No tools available",
+    "skills":    "No skills"
+  },
+
+  "notifications": {
+    "modelUpdated":  "Model updated",
+    "updateFailed":  "Update failed",
+    "toggleFailed":  "Toggle failed",
+    "resetSuccess":  "Reset complete",
+    "resetFailed":   "Reset failed",
+    "resetConfirm":  "Reset tool configuration?"
+  },
+
+  "radar": {
+    "title":    "Persona Radar",
+    "subtitle": "Click dimension labels to navigate to the corresponding settings",
+    "dims": {
+      "creativity":   "Creativity",
+      "rigor":        "Rigor",
+      "autonomy":     "Autonomy",
+      "memory":       "Memory",
+      "expression":   "Expression",
+      "adaptability": "Adaptability"
+    }
+  },
+
+  "prefs": {
+    "visualMode":         "Visual Mode",
+    "visualModeDesc":     "Show visual feedback during execution",
+    "sessionTitle":       "Auto-name Sessions",
+    "sessionTitleDesc":   "Auto-generate titles for new sessions"
+  },
+
+  "nursery": {
+    "backToGallery": "Assistant",
+
+    "gallery": {
+      "title":              "Assistant",
+      "subtitle":           "Manage all your assistant instances",
+      "newAssistant":       "New Assistant",
+      "assistantsTitle":    "Assistant Instances",
+      "assistantsSubtitle": "Click a card to configure"
+    },
+
+    "template": {
+      "title":        "Assistant Defaults",
+      "subtitle":     "Configure assistant tools and skills",
+      "configure":    "Assistant Settings",
+      "tokenTitle":   "Context Usage Estimate",
+      "tokenSystemPrompt": "System Prompt",
+      "tokenToolInjection": "Tool Injection",
+      "tokenRules":   "Rules",
+      "tokenMemories": "Memories",
+      "tokenTotal":   "Default Total",
+      "stats": {
+        "tools":          "{{count}} tools",
+        "skills":         "{{count}} skills"
+      },
+      "groupCountEmpty": "None",
+      "builtinToolsSection": "Built-in tools",
+      "colEnabled": "Enabled",
+      "colDisabled": "Disabled",
+      "colEmpty": "None",
+      "mcpToolsSection": "MCP tools",
+      "mcpEmptyTitle": "No MCP servers connected",
+      "mcpEmptyHint": "Add MCP servers in Settings to see their tools here.",
+      "mcpServerNoTools": "No tools available from this server",
+      "closeDetail": "Close detail",
+      "detailPanel": "Detail panel",
+      "openServerDetail": "MCP server details",
+      "toolTypeBuiltin": "Built-in tool",
+      "toolTypeMcp": "MCP tool",
+      "readonlyTool": "Read-only",
+      "serverToolsHeading": "Tools on this server",
+      "skillEnabledCandidates": "Enabled candidates",
+      "unknownSkillSource": "Other source",
+      "skillScopeUser": "User",
+      "skillScopeProject": "Project",
+      "skillRuntimeSelected": "Used at runtime",
+      "skillRuntimeCovered": "Enabled, covered by {{source}}",
+      "skillRuntimeEnabled": "Enabled, not currently selected",
+      "skillOrigin": "Source and scope: {{origin}}"
+    },
+
+    "tabs": {
+      "identity":    "Identity",
+      "personality": "Personality",
+      "ability":     "Ability",
+      "memory":      "Memory"
+    },
+
+    "card": {
+      "unnamed":             "Unnamed Assistant",
+      "noVibe":              "An assistant waiting to be defined",
+      "configure":           "Click to configure",
+      "newSession":          "New session",
+      "tokenTitle":          "Context usage estimate",
+      "primaryBadge":        "Primary",
+      "delete":              "Delete assistant",
+      "deleteConfirmTitle":  "Delete assistant",
+      "deleteConfirmMessage": "Delete assistant \"{{name}}\"? This cannot be undone.",
+      "deleteConfirm":       "Delete",
+      "deleteCancel":        "Cancel"
+    },
+
+    "assistant": {
+      "inheritGroup":   "Inherit from Template",
+      "inheritPrimary": "Inherit from template (primary)",
+      "inheritFast":    "Inherit from template (fast)",
+      "personaDocsTitle": "Key documents",
+      "sessionsSectionTitle": "Sessions",
+      "scheduledSessionsTitle": "Scheduled sessions",
+      "scheduledSessionsNoWorkspace": "Select an assistant workspace to manage scheduled sessions.",
+      "personaDocs": {
+        "IDENTITY": "Identity",
+        "SOUL":     "Core persona",
+        "USER":     "User profile"
+      },
+      "personaDocSaveFailed": "Failed to save document",
+      "personaDocLoadFailed": "Failed to load document"
+    }
+  }
+}

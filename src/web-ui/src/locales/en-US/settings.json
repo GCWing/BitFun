@@ -1,0 +1,543 @@
+{
+  "configCenter": {
+    "selectConfig": "Select Configuration",
+    "searchPlaceholder": "Search settings…",
+    "searchNoResults": "No matching settings",
+    "searchClear": "Clear search",
+    "beta": "Beta",
+    "searchAliases": {
+      "archivedSessions": [],
+      "keyboard": [],
+      "sessionPersonalization": [],
+      "sessionPermissions": [],
+      "quickActions": [],
+      "review": [],
+      "memories": []
+    },
+    "tabDescriptions": {
+      "basics": "Logging, terminal shell, notifications, and launch at login.",
+      "appearance": "Language, theme, and UI font size.",
+      "models": "AI models, API keys, providers, proxy, and session title.",
+      "sessionPersonalization": "Agent companion.",
+      "sessionPermissions": "Accelerated workspace search, tool confirmation, Computer use, browser, and debug.",
+      "quickActions": "One-click AI actions after coding. Built-in and customizable prompts.",
+      "review": "Review strategy, coverage depth, capacity, cost, and latency controls.",
+      "memories": "Automatic memory generation, injection, retention windows, and memory models.",
+      "mcpTools": "MCP servers and tool integrations.",
+      "externalSources": "Load compatible commands and extensions from other AI applications.",
+      "acpAgents": "External ACP agents such as opencode, Claude Code, and Codex.",
+      "editor": "Editor font, display, and formatting.",
+      "lsp": "Language servers and code intelligence.",
+      "keyboard": "Shortcuts and key bindings.",
+      "archivedSessions": "View, restore, or permanently delete archived sessions."
+    },
+    "categories": {
+      "general": "General",
+      "smartCapabilities": "Smart Configuration",
+      "devkit": "Dev Kit"
+    },
+    "tabs": {
+      "basics": "Basics",
+      "appearance": "Appearance",
+      "models": "Models",
+      "sessionPersonalization": "Personalization",
+      "sessionPermissions": "Permissions",
+      "quickActions": "Quick Actions",
+      "review": "Review",
+      "memories": "Memory",
+      "skills": "Skills",
+      "mcpTools": "MCP",
+      "externalSources": "External AI Apps",
+      "acpAgents": "ACP Agents",
+      "agents": "Agents",
+      "editor": "Editor",
+      "lsp": "LSP",
+      "keyboard": "Keyboard",
+      "archivedSessions": "Archived Sessions"
+    }
+  },
+  "general": {
+    "title": "General",
+    "language": {
+      "title": "Language",
+      "description": "Select interface language",
+      "auto": "Auto Detect"
+    },
+    "theme": {
+      "title": "Theme",
+      "description": "Select interface theme",
+      "light": "Light",
+      "dark": "Dark",
+      "system": "Follow System"
+    },
+    "startup": {
+      "title": "Startup",
+      "restoreSession": "Restore Previous Session",
+      "showWelcome": "Show Welcome Page"
+    }
+  },
+  "editor": {
+    "title": "Editor",
+    "font": {
+      "title": "Font",
+      "family": "Font Family",
+      "size": "Font Size",
+      "lineHeight": "Line Height"
+    },
+    "display": {
+      "title": "Display",
+      "wordWrap": "Word Wrap",
+      "minimap": "Show Minimap",
+      "lineNumbers": "Show Line Numbers",
+      "breadcrumbs": "Show Breadcrumbs",
+      "whitespace": "Show Whitespace"
+    },
+    "behavior": {
+      "title": "Behavior",
+      "autoSave": "Auto Save",
+      "autoSaveDelay": "Auto Save Delay",
+      "formatOnSave": "Format on Save",
+      "formatOnPaste": "Format on Paste"
+    },
+    "indentation": {
+      "title": "Indentation",
+      "type": "Indentation Type",
+      "spaces": "Spaces",
+      "tabs": "Tabs",
+      "size": "Indentation Size"
+    }
+  },
+  "ai": {
+    "title": "AI Settings",
+    "model": {
+      "title": "Model",
+      "select": "Select Model",
+      "provider": "Provider",
+      "apiKey": "API Key",
+      "baseUrl": "Base URL",
+      "add": "Add Model",
+      "edit": "Edit Model",
+      "delete": "Delete Model"
+    },
+    "behavior": {
+      "title": "Behavior",
+      "streaming": "Streaming",
+      "temperature": "Temperature",
+      "maxTokens": "Max Tokens",
+      "contextLength": "Context Length"
+    },
+    "agent": {
+      "title": "Agent",
+      "defaultAgent": "Default Agent",
+      "customAgents": "Custom Agents"
+    }
+  },
+  "terminal": {
+    "title": "Terminal",
+    "shell": {
+      "title": "Shell",
+      "default": "Default Shell",
+      "profiles": "Shell Profiles"
+    },
+    "display": {
+      "title": "Display",
+      "fontSize": "Font Size",
+      "fontFamily": "Font Family",
+      "cursorStyle": "Cursor Style",
+      "scrollback": "Scrollback Lines"
+    }
+  },
+  "workspace": {
+    "files": {
+      "title": "Files",
+      "exclude": "Exclude Files",
+      "watcherExclude": "Exclude from Watcher",
+      "associations": "File Associations"
+    },
+    "search": {
+      "title": "Search",
+      "exclude": "Exclude from Search",
+      "useIgnoreFiles": "Use Ignore Files"
+    }
+  },
+  "keyboard": {
+    "title": "Keyboard Shortcuts",
+    "description": "View and edit bindings below.",
+    "search": "Search shortcuts or key bindings…",
+    "apply": "Apply",
+    "saving": "Saving…",
+    "reset": "Reset to Defaults",
+    "clickToRecord": "Click to record a new key binding",
+    "recording": "Press new key combination…",
+    "revertChange": "Revert this change",
+    "fixedBinding": "This shortcut is fixed and cannot be changed",
+    "noResults": "No matching shortcuts found",
+    "conflict": "Conflict",
+    "saveError": "Failed to save, please try again",
+    "resetError": "Failed to reset, please try again",
+    "mergedNonUniform": "Mixed bindings — record to reset as a set",
+    "keyLabels": {
+      "space": "Space"
+    },
+    "scopes": {
+      "app": "Global",
+      "canvas": "Editor Canvas",
+      "editor": "Code editor (text focus)",
+      "chat": "Agent Session",
+      "terminal": "Terminal",
+      "filetree": "File Tree",
+      "git": "Git"
+    },
+    "shortcuts": {
+      "panel": {
+        "toggleLeft": "Expand or collapse left navigation",
+        "toggleBoth": "Collapse All Panels"
+      },
+      "nav": {
+        "toggleSearch": "Open navigation search"
+      },
+      "scene": {
+        "focusMerged": "Switch scene",
+        "focusMergedHint": "Record Alt (or your chosen modifiers) + any digit 1–3 once; keys 1–3 map to scenes left to right.",
+        "openSession": "Open Agent Session",
+        "openGit": "Open Git",
+        "openSettings": "Open Settings",
+        "openTerminal": "Open Terminal"
+      },
+      "app": {
+        "closePreview": "Close Preview / Dismiss Dialog"
+      },
+      "canvas": {
+        "missionControl": "Mission Control",
+        "splitHorizontal": "Horizontal Split",
+        "splitVertical": "Vertical Split",
+        "anchorZone": "Toggle Anchor Zone",
+        "maximize": "Maximize Editor",
+        "closePreview": "Close Preview"
+      },
+      "editor": {
+        "findInFile": "Find in file (Monaco)"
+      },
+      "tab": {
+        "close": "Close Current Tab",
+        "reopenClosed": "Reopen Closed Tab",
+        "switchMerged": "Switch editor tab",
+        "switchMergedHint": "Record modifier + any digit 1–9 once; the same modifiers apply to all tab slots."
+      },
+      "chat": {
+        "btwFill": "Start side-thread session",
+        "stopGeneration": "Stop Generation",
+        "activateInput": "Activate Input",
+        "newSession": "New Session",
+        "insertNewline": "Insert Newline in Chat Input"
+      },
+      "filetree": {
+        "rename": "Rename",
+        "delete": "Delete",
+        "refresh": "Refresh",
+        "newFile": "New File",
+        "newFolder": "New Folder",
+        "collapseAll": "Collapse All",
+        "paste": "Paste"
+      },
+      "git": {
+        "commit": "Commit",
+        "refresh": "Refresh Status",
+        "stageAll": "Stage All Changes",
+        "unstageAll": "Unstage All Changes",
+        "push": "Push",
+        "pull": "Pull"
+      }
+    }
+  },
+  "advanced": {
+    "title": "Advanced",
+    "experimental": {
+      "title": "Experimental Features",
+      "description": "These features may be unstable"
+    },
+    "debug": {
+      "title": "Debug",
+      "logging": "Enable Logging",
+      "developerTools": "Developer Tools"
+    },
+    "data": {
+      "title": "Data",
+      "export": "Export Settings",
+      "import": "Import Settings",
+      "reset": "Reset All Settings",
+      "resetConfirm": "Are you sure you want to reset all settings? This action cannot be undone."
+    }
+  },
+  "about": {
+    "title": "About",
+    "version": "Version",
+    "checkUpdate": "Check for Updates",
+    "changelog": "Changelog",
+    "license": "License",
+    "openSource": "Open Source Licenses",
+    "feedback": "Feedback",
+    "reportIssue": "Report Issue",
+    "documentation": "Documentation"
+  },
+  "aiModel": {
+    "title": "Model Configuration",
+    "subtitle": "Configure AI models and API keys",
+    "addModel": "Add Model",
+    "editModel": "Edit Model Configuration",
+    "newModel": "New Model Configuration",
+    "editSubtitle": "Basic Model Parameters",
+    "deleteModel": "Delete Model",
+    "confirmDelete": "Are you sure you want to delete this configuration?",
+    "modelName": "Model Name",
+    "modelId": "Model ID",
+    "provider": "Request Format",
+    "providerPlaceholder": "Select request format",
+    "apiKey": "API Key",
+    "apiKeyPlaceholder": "Enter your API Key",
+    "baseUrl": "API URL",
+    "baseUrlPlaceholder": "Enter API URL (optional)",
+    "configName": "Configuration Name",
+    "configNamePlaceholder": "Give this configuration a name",
+    "maxTokens": "Max Output Tokens",
+    "maxTokensHint": "Maximum tokens for model output per request (affects response length)",
+    "contextWindow": "Context Window Size",
+    "contextWindowHint": "Maximum context window size supported by the model (for calculating token usage percentage)",
+    "temperature": "Temperature",
+    "streaming": "Streaming",
+    "enabled": "Enabled",
+    "test": "Test Connection",
+    "testing": "Testing...",
+    "testSuccess": "Connection successful",
+    "testFailed": "Connection failed",
+    "noModels": "No model configurations",
+    "noModelsHint": "Click the button above to add your first AI model",
+    "createFirst": "Create First Configuration",
+    "noMatchingModels": "No matching models found",
+    "searchPlaceholder": "Search model name, provider...",
+    "newConfig": "New Configuration",
+    "save": "Save",
+    "cancel": "Cancel",
+    "edit": "Edit",
+    "delete": "Delete",
+    "description": "Description",
+    "descriptionPlaceholder": "Configuration description (optional)",
+    "tabs": {
+      "api": "API Configuration",
+      "proxy": "Proxy Configuration"
+    },
+    "categories": {
+      "all": "All",
+      "text": "Text",
+      "multimodal": "Image",
+      "other": "Utility"
+    },
+    "category": {
+      "label": "Model Category",
+      "placeholder": "Select model category",
+      "general_chat": "Text Generation",
+      "multimodal": "Image Understanding",
+      "image_generation": "Image Generation",
+      "speech_recognition": "Speech Recognition"
+    },
+    "categoryHints": {
+      "general_chat": "Text Generation: Generate text responses, code, etc. for most conversation scenarios",
+      "multimodal": "Image Understanding: Understand image content and have mixed text-image conversations",
+      "image_generation": "Image Generation: Generate images from text descriptions",
+      "speech_recognition": "Speech Recognition: Convert speech to text (e.g., GLM-ASR)"
+    },
+    "modelNameHint": "GLM-ASR uses glm-asr, other speech models use their corresponding model names",
+    "thinking": {
+      "enable": "Enable Thinking",
+      "enableHint": "Requires model to support thinking mode"
+    },
+    "details": {
+      "basicInfo": "Basic Information",
+      "modelName": "Model Name",
+      "provider": "Request Format",
+      "apiUrl": "API URL",
+      "contextWindow": "Context Window",
+      "maxOutput": "Max Output",
+      "description": "Description",
+      "tokens": "tokens"
+    },
+    "proxy": {
+      "enable": "Enable Proxy",
+      "enableHint": "When enabled, all AI requests will be sent through proxy (requires IDE restart)",
+      "url": "Proxy URL",
+      "urlPlaceholder": "http://127.0.0.1:7890 or socks5://127.0.0.1:1080",
+      "urlHint": "Supports HTTP/HTTPS/SOCKS5 proxy, format: protocol://address:port",
+      "username": "Username (optional)",
+      "usernamePlaceholder": "Proxy authentication username",
+      "password": "Password (optional)",
+      "passwordPlaceholder": "Proxy authentication password",
+      "save": "Save Proxy Configuration",
+      "saveSuccess": "Proxy configuration saved, restart IDE to take effect"
+    },
+    "messages": {
+      "fillRequired": "Please fill in required fields",
+      "fillModelName": "Please fill in model name",
+      "saveFailed": "Save failed",
+      "deleteFailed": "Failed to delete configuration",
+      "loadFailed": "Failed to load AI configuration",
+      "errorDetails": "Error details"
+    },
+    "capabilities": {
+      "text_chat": "Chat",
+      "image_understanding": "Vision",
+      "image_generation": "Image",
+      "search": "Search",
+      "function_calling": "Tools",
+      "speech_recognition": "Speech"
+    }
+  },
+  "superAgent": {
+    "title": "Super Agent",
+    "subtitle": "Configure main agent model assignments",
+    "textChat": "Text Chat",
+    "textChatDesc": "Handle daily conversations and Q&A",
+    "codeGeneration": "Code Generation",
+    "codeGenerationDesc": "Generate and complete code",
+    "codeReview": "Code Review",
+    "codeReviewDesc": "Review and optimize code",
+    "planning": "Task Planning",
+    "planningDesc": "Decompose and plan complex tasks",
+    "selectModel": "Select Model",
+    "notConfigured": "Not Configured",
+    "configured": "Configured",
+    "modelUpdated": "{{capability}} updated to {{modelName}}",
+    "capabilities": {
+      "text_chat": "Text Chat Model",
+      "image_understanding": "Image Understanding Model",
+      "image_generation": "Image Generation Model",
+      "search": "Search API Model",
+      "speech_recognition": "Speech Recognition Model"
+    },
+    "capabilityDescs": {
+      "text_chat": "Handles all text conversations, code generation, tool calls, etc.",
+      "image_understanding": "Analyzes and understands image content, supports mixed text-image conversations",
+      "image_generation": "Generates images from text descriptions (e.g., DALL-E, Stable Diffusion)",
+      "search": "Real-time web search for latest data support",
+      "speech_recognition": "Converts speech to text, supports voice input (e.g., GLM-ASR)"
+    }
+  },
+  "aiFeatures": {
+    "title": "AI Features",
+    "subtitle": "Configure AI enhancement features",
+    "codeCompletion": "Code Completion",
+    "codeCompletionDesc": "Intelligent code completion suggestions",
+    "inlineChat": "Inline Chat",
+    "inlineChatDesc": "Chat with AI directly in the editor",
+    "semanticSearch": "Semantic Search",
+    "semanticSearchDesc": "Semantic-based code search",
+    "autoFix": "Auto Fix",
+    "autoFixDesc": "Automatically fix code errors and warnings"
+  },
+  "modes": {
+    "title": "Modes",
+    "subtitle": "Configure different working modes",
+    "agentMode": "Agent Mode",
+    "agentModeDesc": "AI can execute code and use tools",
+    "chatMode": "Chat Mode",
+    "chatModeDesc": "Pure conversation, no actions",
+    "askMode": "Ask Mode",
+    "askModeDesc": "Read-only mode, only answer questions"
+  },
+  "agenticTools": {
+    "title": "Tool Settings",
+    "subtitle": "Configure Agentic tool permissions and behavior",
+    "fileOperations": "File Operations",
+    "fileOperationsDesc": "Allow AI to read and write files",
+    "terminalAccess": "Terminal Access",
+    "terminalAccessDesc": "Allow AI to execute terminal commands",
+    "webSearch": "Web Search",
+    "webSearchDesc": "Allow AI to search the web",
+    "browserControl": "Browser Control",
+    "browserControlDesc": "Allow AI to control the browser"
+  },
+  "skills": {
+    "title": "Skills",
+    "subtitle": "Manage AI skill extensions",
+    "addSkill": "Add Skill",
+    "noSkills": "No skills",
+    "noSkillsHint": "Skills can extend AI capabilities"
+  },
+  "agents": {
+    "title": "Agents",
+    "subtitle": "Configure agents",
+    "addAgent": "Add Agent",
+    "noAgents": "No sub-agents",
+    "noAgentsHint": "Sub-agents can handle specific types of tasks"
+  },
+  "mcp": {
+    "title": "MCP",
+    "subtitle": "Manage MCP server connections",
+    "addServer": "Add Server",
+    "serverName": "Server Name",
+    "serverUrl": "Server URL",
+    "connected": "Connected",
+    "disconnected": "Disconnected",
+    "noServers": "No MCP servers",
+    "noServersHint": "Add MCP servers to extend functionality"
+  },
+  "editorConfig": {
+    "title": "Editor",
+    "subtitle": "Configure code editor",
+    "fontSize": "Font Size",
+    "fontFamily": "Font Family",
+    "lineHeight": "Line Height",
+    "tabSize": "Tab Size",
+    "wordWrap": "Word Wrap",
+    "minimap": "Show Minimap",
+    "lineNumbers": "Show Line Numbers"
+  },
+  "lspConfig": {
+    "title": "LSP",
+    "subtitle": "Configure language servers",
+    "installedServers": "Installed Language Servers",
+    "noServers": "No language servers",
+    "noServersHint": "Language servers provide code intelligence features"
+  },
+  "debugConfig": {
+    "title": "Debug",
+    "subtitle": "Configure debug options",
+    "enableLogging": "Enable Logging",
+    "logLevel": "Log Level",
+    "developerTools": "Developer Tools"
+  },
+  "terminalConfig": {
+    "title": "Terminal",
+    "subtitle": "Configure integrated terminal",
+    "shell": "Default Shell",
+    "fontSize": "Font Size",
+    "fontFamily": "Font Family",
+    "cursorStyle": "Cursor Style",
+    "scrollback": "Scrollback Lines"
+  },
+  "configPageHeaderExample": {
+    "basic": {
+      "title": "Basic Settings"
+    },
+    "apiNetwork": {
+      "title": "API & Network",
+      "subtitle": "Configure and manage AI models, including API keys and default model settings"
+    },
+    "learning": {
+      "title": "Learning & Knowledge",
+      "subtitle": "Manage AI memory, knowledge bases, and skills",
+      "import": "Import",
+      "addMemory": "Add Memory"
+    },
+    "agents": {
+      "title": "Agent Configuration",
+      "subtitle": "Configure and manage agents, including function agents and super agents",
+      "create": "Create Agent"
+    },
+    "theme": {
+      "title": "Theme Settings",
+      "subtitle": "Customize the app appearance and theme colors",
+      "import": "Import Theme",
+      "export": "Export Current Theme"
+    }
+  }
+}

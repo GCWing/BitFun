@@ -1,0 +1,61 @@
+{
+  "title": "AI Features",
+  "subtitle": "Configure AI enhancement features and models",
+  "tabs": {
+    "all": "All",
+    "switches": "Feature Switches",
+    "models": "Model Config"
+  },
+  "sections": {
+    "interaction": "Interaction",
+    "development": "Development",
+    "analysis": "Analysis"
+  },
+  "features": {
+    "sessionTitle": {
+      "title": "Auto Session Title",
+      "subtitle": "AI automatically generates concise titles for new conversations",
+      "warning": "Session title will use first 20 characters of user message"
+    },
+    "compression": {
+      "title": "Context Compression",
+      "subtitle": "Intelligently compress long conversation context"
+    }
+  },
+  "model": {
+    "label": "Model",
+    "primary": "Primary Model",
+    "fast": "Fast Model"
+  },
+  "common": {
+    "enable": "Enable",
+    "reset": "Reset",
+    "save": "Save",
+    "saving": "Saving..."
+  },
+  "models": {
+    "empty": "No available models. Please add models in \"Models\" first.",
+    "placeholder": "Use main Agent model",
+    "updateSuccess": "{{agentName}} will use {{modelName}}"
+  },
+  "builtinAgents": {
+    "git-func-agent": {
+      "displayName": "Git Functions",
+      "description": "Commit messages, code review"
+    },
+    "startchat-func-agent": {
+      "displayName": "Session Start",
+      "description": "Work status analysis, welcome messages"
+    }
+  },
+  "loading": {
+    "text": "Loading configuration..."
+  },
+  "messages": {
+    "saveSuccess": "Settings saved",
+    "saveFailed": "Save failed",
+    "confirmReset": "Are you sure you want to reset feature switches to defaults?",
+    "hasChanges": "You have unsaved changes",
+    "updateFailed": "Update failed"
+  }
+}

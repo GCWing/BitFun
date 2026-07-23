@@ -1,0 +1,245 @@
+/**
+ * BitFun main layout styles (SCSS).
+ * Token-driven application shell with a consistent dark background.
+ * Follows BEM naming and design tokens.
+ */
+
+@use '../../component-library/styles/tokens.scss' as *;
+
+// ==================== CSS reset ====================
+// Note: keep box-sizing !important for global consistency.
+*, *::before, *::after {
+  box-sizing: border-box !important;
+}
+
+html, body {
+  margin: 0;
+  padding: 0;
+  height: 100vh;
+  width: 100vw;
+  background: var(--color-bg-primary);
+  overflow: hidden;
+}
+
+#root {
+  margin: 0;
+  padding: 0;
+  height: 100vh;
+  width: 100vw;
+  overflow: hidden;
+}
+
+// ==================== Main layout container ====================
+.bitfun-app-layout {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  width: 100vw;
+  overflow: hidden;
+  
+  // Use theme background
+  background: var(--color-bg-primary);
+  
+  color: var(--color-text-primary);
+  font-family: $font-family-sans;
+  position: relative;
+
+  // Ensure layout stability
+  min-height: 100vh;
+  max-height: 100vh;
+
+  // Font rendering
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+
+  &:focus {
+    outline: none;
+  }
+
+  // All children
+  * {
+    box-sizing: border-box;
+  }
+
+  // Focus management
+  *:focus-visible {
+    outline: 2px solid var(--color-accent-500);
+    outline-offset: 2px;
+    border-radius: $size-radius-sm;
+  }
+  
+  // ==================== Startup mode ====================
+  &--startup-mode {
+    background: var(--color-bg-primary);
+  }
+  
+  // ==================== Transitioning ====================
+  &--transitioning {
+    // Styles during transition
+    .bitfun-app-main-workspace {
+      // Content transition handled by child components
+    }
+  }
+
+  // ==================== Modifier - loading ====================
+  &--loading {
+    pointer-events: none;
+    opacity: 0.9;
+  }
+
+  // ==================== Modifier - error ====================
+  &--error {
+    .bitfun-app-header {
+      border-bottom-color: var(--color-error);
+      background: linear-gradient(135deg, 
+        var(--color-error-bg) 0%, 
+        var(--element-bg-base) 100%);
+    }
+  }
+
+  // ==================== Modifier - modal open ====================
+  &--modal-open {
+    overflow: hidden;
+
+    .bitfun-app-main {
+      filter: blur(2px);
+      pointer-events: none;
+    }
+  }
+
+}
+
+// ==================== Main content area (full height, no TitleBar) ====================
+.bitfun-app-main-workspace {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  margin-top: 0;
+  width: 100%;
+  overflow: hidden;
+  position: relative;
+  background: var(--color-bg-scene);
+}
+
+.bitfun-window-mode-hint {
+  position: fixed;
+  top: calc(env(safe-area-inset-top, 0px) + #{$size-gap-3});
+  left: 50%;
+  z-index: $z-notification;
+  display: inline-flex;
+  align-items: center;
+  gap: $size-gap-2;
+  max-width: min(560px, calc(100vw - 32px));
+  min-height: 34px;
+  padding: $size-gap-1 $size-gap-3;
+  border: 1px solid var(--border-subtle);
+  border-radius: $size-radius-base;
+  background: color-mix(in srgb, var(--color-bg-elevated) 90%, transparent);
+  box-shadow: 0 12px 28px var(--color-overlay-black-30);
+  color: var(--color-text-primary);
+  pointer-events: none;
+  transform: translateX(-50%);
+  animation: bitfun-window-mode-hint-in $motion-base $easing-decelerate both;
+  backdrop-filter: blur(12px);
+
+  &__title {
+    flex: 0 0 auto;
+    min-width: 0;
+    font-size: var(--font-size-sm);
+    font-weight: $font-weight-semibold;
+    line-height: 1.35;
+    white-space: nowrap;
+  }
+
+  &__detail {
+    min-width: 0;
+    color: var(--color-text-muted);
+    font-size: var(--font-size-xs);
+    line-height: 1.35;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+}
+
+@keyframes bitfun-window-mode-hint-in {
+  from {
+    opacity: 0;
+    transform: translateX(-50%) translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
+}
+
+// ==================== Scrollbar styles ====================
+// Moved to global scrollbar.css for shared management.
+
+// ==================== Responsive ====================
+@media (max-width: 768px) {
+  .bitfun-window-mode-hint {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 1px;
+    width: calc(100vw - 24px);
+    max-width: none;
+
+    &__title,
+    &__detail {
+      white-space: normal;
+    }
+  }
+}
+
+// ==================== Dark theme tweaks ====================
+@media (prefers-color-scheme: dark) {
+  .bitfun-app-layout {
+    background: var(--color-bg-scene);
+  }
+}
+
+// ==================== High-contrast mode ====================
+@media (prefers-contrast: high) {
+  .bitfun-app-layout {
+    background: var(--color-bg-scene);
+  }
+}
+
+// ==================== Reduced motion preference ====================
+@media (prefers-reduced-motion: reduce) {
+  .bitfun-app-layout * {
+    transition: none;
+    animation: none;
+  }
+
+  .bitfun-window-mode-hint {
+    animation: none;
+  }
+}
+
+// ==================== Animations ====================
+@keyframes shimmer {
+  0%, 100% {
+    transform: translateX(-100%);
+  }
+  50% {
+    transform: translateX(100%);
+  }
+}
+
+// Startup sweep glow: icy blue band from left to right, no delay.
+@keyframes header-sweep-glow {
+  0% {
+    transform: translateX(-100%);
+    opacity: 1;
+  }
+  95% {
+    opacity: 1;
+  }
+  100% {
+    transform: translateX(300%);
+    opacity: 0;
+  }
+}

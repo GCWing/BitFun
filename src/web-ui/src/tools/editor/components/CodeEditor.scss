@@ -1,0 +1,325 @@
+/**
+ * CodeEditor Tool Component Styles
+ * Follows SCSS isolation strategy and BEM naming conventions
+ * 
+ * Handles loading, error, and status overlay styles.
+ * Editor core styling is provided by Monaco Editor theme.
+ */
+
+@use '@/component-library/styles/tokens' as *;
+
+// Component Variables
+$_editor-loading-spinner-size: 32px;
+$_editor-loading-spinner-border: 3px;
+$_editor-error-icon-size: 48px;
+$_editor-padding-mobile: 20px;
+$_editor-padding-desktop: 32px;
+
+// Main Component
+.code-editor-tool {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  width: 100%;
+  position: relative;
+  background: var(--color-bg-scene);
+
+  
+  > .editor-status-bar {
+    flex-shrink: 0;
+  }
+  
+  // Loading State
+  &.is-loading,
+  &__loading {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    background: var(--color-bg-scene);
+    color: var(--color-text-muted);
+  }
+  
+  &__loading-spinner {
+    width: $_editor-loading-spinner-size;
+    height: $_editor-loading-spinner-size;
+    border: $_editor-loading-spinner-border solid var(--color-accent-200);
+    border-top-color: var(--color-accent-500);
+    border-radius: $size-radius-full;
+    animation: code-editor-spin $motion-lazy $easing-standard infinite;
+    margin-bottom: $size-gap-4;
+    box-shadow: 
+      0 0 20px color-mix(in srgb, var(--color-accent-500) 30%, transparent),
+      0 0 40px var(--color-accent-200);
+  }
+  
+  &__loading-text {
+    margin: 0;
+    font-size: var(--font-size-sm);
+    color: var(--color-text-muted);
+    font-family: $font-family-mono;
+    animation: code-editor-pulse $motion-slow ease-in-out infinite;
+  }
+  
+  // Error State
+  &.is-error,
+  &__error {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    background: var(--color-bg-scene);
+    text-align: center;
+    padding: $_editor-padding-desktop;
+  }
+  
+  &__error-icon {
+    width: 32px;
+    height: 32px;
+    color: var(--color-text-muted);
+    margin-bottom: $size-gap-3;
+    opacity: 0.5;
+  }
+  
+  &__error-message {
+    margin: 0 0 $size-gap-3 0;
+    font-size: var(--font-size-sm);
+    color: var(--color-text-muted);
+    font-family: $font-family-mono;
+  }
+  
+  &__error-retry-btn {
+    padding: $size-gap-1 $size-gap-3;
+    background: transparent;
+    border: 1px dashed var(--color-text-muted);
+    border-radius: $size-radius-sm;
+    color: var(--color-text-muted);
+    font-size: var(--font-size-xs);
+    font-family: $font-family-mono;
+    cursor: pointer;
+    transition: all $motion-base $easing-standard;
+    
+    &:hover {
+      color: var(--color-text-secondary);
+      background: var(--color-bg-secondary);
+    }
+    
+    &:active {
+      background: var(--color-bg-tertiary);
+    }
+    
+    &:focus-visible {
+      outline: 1px solid var(--color-text-muted);
+      outline-offset: 1px;
+    }
+  }
+  
+  // Editor Content Area
+  &__content {
+    flex: 1;
+    min-height: 0;
+    position: relative;
+    
+    > div {
+      height: 100%;
+    }
+  }
+  
+  // Overlay Styles
+  &__loading-overlay,
+  &__error-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    background: color-mix(in srgb, var(--color-bg-scene) 85%, transparent);
+    backdrop-filter: blur(4px);
+    z-index: 100;
+    animation: code-editor-fade-in 0.2s ease-out;
+  }
+  
+  &__loading-overlay {
+    pointer-events: none;
+  }
+  
+  &__error-overlay {
+    text-align: center;
+    padding: $_editor-padding-desktop;
+  }
+  
+  // Save Status Indicator
+  &__saving-indicator {
+    position: absolute;
+    top: $size-gap-4;
+    right: $size-gap-4;
+    background: color-mix(in srgb, var(--color-accent-500) 90%, transparent);
+    color: var(--color-bg-primary);
+    padding: $size-gap-2 $size-gap-4;
+    border-radius: $size-radius-base;
+    font-size: var(--font-size-xs);
+    font-weight: $font-weight-semibold;
+    font-family: $font-family-mono;
+    box-shadow: $glow-shadow-blue;
+    z-index: 50;
+    animation: code-editor-fade-in 0.2s ease-out;
+  }
+
+  &.is-large-file-mode {
+    :global {
+      .monaco-editor .view-line .mtkoverflow {
+        pointer-events: none !important;
+        cursor: default !important;
+        text-decoration: none !important;
+      }
+    }
+  }
+  
+  // Ctrl+Hover Underline Styles
+  :global {
+    .monaco-editor {
+      .ctrl-hover-underline {
+        text-decoration: underline;
+        text-decoration-color: color-mix(in srgb, var(--color-accent-500) 80%, transparent);
+        text-underline-offset: 2px;
+        cursor: pointer !important;
+      }
+      
+      .monaco-cross-file-link {
+        text-decoration: underline;
+        text-decoration-color: color-mix(in srgb, var(--color-accent-500) 80%, transparent);
+        text-decoration-thickness: 1px;
+        text-underline-offset: 2px;
+        cursor: pointer !important;
+      }
+    }
+    
+    .monaco-hover,
+    .monaco-editor-hover {
+      font-size: 12px !important;
+      
+      .hover-row,
+      .hover-contents {
+        font-size: 12px !important;
+        color: var(--color-static-black) !important;
+      }
+      
+      p, span, div {
+        font-size: 12px !important;
+        color: var(--color-static-black) !important;
+      }
+      
+      .markdown-string {
+        font-size: 12px !important;
+        color: var(--color-static-black) !important;
+      }
+    }
+  }
+}
+
+// Animations
+@keyframes code-editor-spin {
+  from { 
+    transform: rotate(0deg); 
+  }
+  to { 
+    transform: rotate(360deg); 
+  }
+}
+
+@keyframes code-editor-pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.6;
+  }
+}
+
+@keyframes code-editor-error-pulse {
+  0%, 100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.8;
+    transform: scale(1.05);
+  }
+}
+
+@keyframes code-editor-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+// Responsive
+@media (max-width: 768px) {
+  .code-editor-tool {
+    &__loading,
+    &__error {
+      padding: $_editor-padding-mobile;
+    }
+    
+    &__loading-spinner {
+      width: $_editor-loading-spinner-size - 4px;
+      height: $_editor-loading-spinner-size - 4px;
+    }
+    
+    &__loading-text,
+    &__error-message {
+      font-size: var(--font-size-xs);
+      max-width: 300px;
+    }
+    
+    &__error-icon {
+      width: 16px;
+      height: 16px;
+    }
+    
+    &__error-retry-btn {
+      padding: $size-gap-1 $size-gap-2;
+    }
+  }
+}
+
+// High Contrast Mode
+@media (prefers-contrast: high) {
+  .code-editor-tool {
+    &__loading-spinner {
+      border-color: var(--color-text-muted);
+      border-top-color: var(--color-text-primary);
+    }
+    
+    &__error-icon {
+      opacity: 1;
+    }
+    
+    &__error-retry-btn {
+      text-decoration: underline;
+    }
+  }
+}
+
+// Global Monaco Hover Style Overrides
+:global {
+  body > .monaco-hover,
+  body > .monaco-editor-hover,
+  .monaco-hover-content {
+    font-size: 12px !important;
+    
+    * {
+      font-size: 12px !important;
+      color: var(--color-static-black) !important;
+    }
+  }
+}

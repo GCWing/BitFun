@@ -1,0 +1,88 @@
+@use './TerminalToolCard.scss';
+
+.exec-process-tool-card {
+  .exec-process-output-copy-region {
+    position: relative;
+  }
+
+  .exec-process-output-copy-actions {
+    position: absolute;
+    top: 0.25rem;
+    right: 0.25rem;
+    z-index: 2;
+    display: flex;
+    align-items: center;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.16s ease;
+  }
+
+  .exec-process-output-copy-region:hover .exec-process-output-copy-actions,
+  .exec-process-output-copy-actions:focus-within {
+    opacity: 1;
+    pointer-events: auto;
+  }
+
+  .exec-process-copy-output-btn {
+    background: var(--color-bg-scene);
+    box-shadow: 0 1px 4px rgba(var(--color-static-black-rgb), 0.16);
+
+    &:hover:not(:disabled) {
+      background: var(--element-bg-subtle);
+    }
+  }
+
+  .exec-process-empty-output {
+    color: var(--color-text-muted);
+  }
+
+  .exec-process-result-notice {
+    color: var(--color-text-secondary);
+  }
+
+  .exec-process-result-footer {
+    flex-wrap: wrap;
+    row-gap: 0.25rem;
+  }
+
+  .exec-process-footer-group {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--flowchat-inline-gap);
+    min-width: 0;
+  }
+
+  .exec-process-footer-group--workdir {
+    flex: 1 1 auto;
+    min-width: 8rem;
+  }
+
+  .exec-process-footer-group--meta {
+    flex: 0 0 auto;
+  }
+
+  .exec-process-footer-group--metrics {
+    flex: 0 0 auto;
+    margin-left: auto;
+  }
+
+  .exec-process-footer-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    min-width: 0;
+    flex: 0 0 auto;
+  }
+
+  .exec-process-footer-group--workdir .terminal-result-value {
+    flex: 1 1 auto;
+  }
+
+  .exec-process-footer-group--meta .terminal-result-value {
+    flex: 0 0 auto;
+  }
+
+  .exec-process-footer-group--metrics .terminal-exit-code {
+    margin-left: 0;
+  }
+}

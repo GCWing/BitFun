@@ -1,0 +1,548 @@
+@use '../../../component-library/styles/tokens' as *;
+
+.bitfun-remote-connect {
+  display: flex;
+  flex-direction: column;
+}
+
+.bitfun-remote-connect__title-extra {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.bitfun-remote-connect__disclaimer-trigger {
+  border: none;
+  background: transparent;
+  padding: 0;
+  font-size: 12px;
+  color: var(--color-text-muted);
+  text-decoration: underline;
+  cursor: pointer;
+  transition: color 0.15s ease, opacity 0.15s ease;
+
+  &:hover {
+    color: var(--color-text-primary);
+  }
+
+  &:focus-visible {
+    outline: 2px solid color-mix(in srgb, var(--color-accent-500) 55%, transparent);
+    outline-offset: 2px;
+    border-radius: 4px;
+  }
+}
+
+// ==================== Group tabs (top level) ====================
+
+.bitfun-remote-connect__groups {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px 16px 0;
+  gap: 0;
+}
+
+.bitfun-remote-connect__group-btn {
+  background: none;
+  border: none;
+  padding: 6px 20px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  transition: color 0.15s ease;
+  white-space: nowrap;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+
+  &:hover:not(.is-active):not(:disabled) {
+    color: var(--color-text-secondary);
+  }
+
+  &.is-active {
+    color: var(--color-text-primary);
+    font-weight: 600;
+  }
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: default;
+  }
+}
+
+.bitfun-remote-connect__group-divider {
+  width: 1px;
+  height: 16px;
+  background: var(--border-subtle);
+  flex-shrink: 0;
+}
+
+.bitfun-remote-connect__dot {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--color-success);
+  flex-shrink: 0;
+}
+
+// ==================== Sub-tabs (second level) ====================
+
+.bitfun-remote-connect__subtabs {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px 16px 0;
+  gap: 0;
+}
+
+.bitfun-remote-connect__subtab {
+  background: none;
+  border: none;
+  padding: 4px 10px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  transition: color 0.15s ease;
+  white-space: nowrap;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+
+  &:hover:not(.is-active):not(:disabled) {
+    color: var(--color-text-secondary);
+  }
+
+  &.is-active {
+    color: var(--color-text-primary);
+    font-weight: 600;
+  }
+
+  &.is-connected {
+    color: var(--color-success);
+    font-weight: 600;
+  }
+
+  &:disabled {
+    opacity: 0.4;
+    cursor: default;
+  }
+}
+
+.bitfun-remote-connect__subtab-divider {
+  width: 1px;
+  height: 12px;
+  background: var(--border-subtle);
+  flex-shrink: 0;
+}
+
+.bitfun-remote-connect__dot-sm {
+  display: inline-block;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--color-success);
+  flex-shrink: 0;
+}
+
+// ==================== Body ====================
+
+.bitfun-remote-connect__body {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 20px 24px 24px;
+  gap: 14px;
+}
+
+// ==================== QR box ====================
+
+.bitfun-remote-connect__qr-box {
+  appearance: none;
+  width: 200px;
+  height: 200px;
+  border-radius: 10px;
+  border: 1px solid var(--border-subtle);
+  background: var(--color-static-white);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px;
+  cursor: pointer;
+  transition: transform 0.15s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.15s ease;
+
+  &:hover {
+    box-shadow: 0 2px 8px var(--color-overlay-black-12);
+  }
+
+  &:active {
+    transform: scale(0.95);
+    box-shadow: 0 1px 2px var(--color-overlay-black-08);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--color-accent-500);
+    outline-offset: 3px;
+  }
+
+  svg {
+    width: 100%;
+    height: 100%;
+  }
+}
+
+// ==================== Pairing code (bot) ====================
+
+.bitfun-remote-connect__pairing-code-box {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+}
+
+.bitfun-remote-connect__pairing-code {
+  font-size: 36px;
+  font-weight: 700;
+  letter-spacing: 8px;
+  font-family: 'Fira Code', 'Courier New', monospace;
+  color: var(--color-text-primary);
+  padding: 16px 24px;
+  border-radius: 10px;
+  border: 2px dashed var(--border-subtle);
+  background: var(--element-bg-subtle);
+  user-select: all;
+}
+
+// ==================== Status ====================
+
+.bitfun-remote-connect__status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.bitfun-remote-connect__peer-user-id {
+  font-size: 12px;
+  color: var(--color-text-secondary);
+}
+
+// ==================== Ngrok usage link ====================
+
+.bitfun-remote-connect__ngrok-usage-link {
+  text-align: center;
+  padding: 10px 0 2px;
+  margin: 0;
+  font-size: 12.5px;
+}
+
+// ==================== Connected ====================
+
+.bitfun-remote-connect__connected {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 24px;
+  gap: 14px;
+}
+
+// ==================== Hint text ====================
+
+.bitfun-remote-connect__hint,
+.bitfun-remote-connect__description {
+  font-size: 12px;
+  color: var(--color-text-muted);
+  line-height: 1.6;
+  margin: 0;
+  width: 100%;
+  max-width: 420px;
+}
+
+.bitfun-remote-connect__hint {
+  text-align: center;
+}
+
+.bitfun-remote-connect__description {
+  text-align: left;
+}
+
+.bitfun-remote-connect__info-card {
+  width: 100%;
+  max-width: 360px;
+  margin: 0 auto;
+  padding: 14px 16px;
+  border: 1px dashed var(--border-subtle);
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--element-bg-subtle) 84%, transparent);
+  box-sizing: border-box;
+}
+
+.bitfun-remote-connect__info-text,
+.bitfun-remote-connect__info-meta {
+  font-size: 12px;
+  color: var(--color-text-muted);
+  line-height: 1.7;
+  margin: 0;
+  text-align: left;
+}
+
+.bitfun-remote-connect__info-meta-group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 10px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.bitfun-remote-connect__lan-ip-select {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.bitfun-remote-connect__info-meta-label {
+  font-size: 12px;
+  color: var(--color-text-muted);
+  white-space: nowrap;
+}
+
+.bitfun-remote-connect__lan-ip-dropdown {
+  flex: 1;
+  min-width: 0;
+}
+
+.bitfun-remote-connect__description-link,
+.bitfun-remote-connect__step-link {
+  color: var(--color-text-secondary);
+  text-decoration: underline;
+  cursor: pointer;
+  text-underline-offset: 2px;
+  transition: color 0.15s ease, opacity 0.15s ease;
+
+  &:hover {
+    color: var(--color-text-primary);
+  }
+
+  &:focus-visible {
+    outline: 2px solid color-mix(in srgb, var(--color-accent-500) 55%, transparent);
+    outline-offset: 2px;
+    border-radius: 4px;
+  }
+}
+
+.bitfun-remote-connect__error {
+  font-size: 12px;
+  color: var(--color-error);
+  text-align: center;
+  margin: 0;
+}
+
+.bitfun-remote-connect__error-group {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+
+.bitfun-remote-connect__error-action {
+  background: transparent;
+  border: none;
+  padding: 0;
+  font-size: 12px;
+  color: var(--color-accent-500);
+  text-decoration: underline;
+  cursor: pointer;
+
+  &:hover {
+    opacity: 0.85;
+  }
+}
+
+// ==================== Input ====================
+
+.bitfun-remote-connect__field {
+  width: 100%;
+  max-width: 280px;
+
+  .bitfun-input-label {
+    font-size: 12px;
+    color: var(--color-text-muted);
+    margin-bottom: 0;
+  }
+
+  .bitfun-input-container {
+    min-height: 32px;
+  }
+
+  &--inline {
+    max-width: 360px;
+
+    .bitfun-input-container {
+      gap: 12px;
+    }
+  }
+}
+
+.bitfun-remote-connect__field-prefix {
+  min-width: 96px;
+  color: var(--color-text-secondary);
+  text-align: left;
+  flex-shrink: 0;
+}
+
+// ==================== Buttons ====================
+
+.bitfun-remote-connect__btn {
+  padding: 8px 24px;
+  font-size: 13px;
+  font-weight: 500;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+
+  &--connect {
+    background: var(--color-accent-600);
+    color: var(--color-static-white);
+    border: 1px solid color-mix(in srgb, var(--color-accent-700) 35%, transparent);
+
+    &:hover:not(:disabled) {
+      background: var(--color-accent-700);
+    }
+
+    &:focus-visible {
+      outline: 2px solid color-mix(in srgb, var(--color-accent-500) 55%, transparent);
+      outline-offset: 1px;
+    }
+
+    &:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+    }
+  }
+
+  &--disconnect,
+  &--cancel {
+    background: var(--element-bg-subtle);
+    color: var(--color-text-secondary);
+    border: 1px solid var(--border-subtle);
+
+    &:hover {
+      color: var(--color-text-primary);
+      border-color: var(--color-text-muted);
+    }
+  }
+}
+
+// ==================== Bot guide ====================
+
+.bitfun-remote-connect__bot-guide {
+  width: 100%;
+  max-width: 460px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+
+  .bitfun-remote-connect__field {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    margin: 0 auto;
+
+    .bitfun-input-label {
+      text-align: center;
+    }
+  }
+
+  .bitfun-remote-connect__field--inline {
+    align-items: stretch;
+  }
+}
+
+.bitfun-remote-connect__steps {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  width: 100%;
+}
+
+.bitfun-remote-connect__step {
+  font-size: 12px;
+  color: var(--color-text-muted);
+  line-height: 1.6;
+  margin: 0;
+  text-align: left;
+  width: 100%;
+}
+
+// ==================== Bot mode selector ====================
+
+.bitfun-remote-connect__mode-selector {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px;
+  background: var(--element-bg-base);
+  border: 1px solid var(--border-subtle);
+  border-radius: 20px;
+}
+
+.bitfun-remote-connect__mode-btn {
+  padding: 5px 14px;
+  font-size: var(--font-size-xs);
+  font-weight: $font-weight-medium;
+  color: var(--color-text-muted);
+  background: transparent;
+  border: none;
+  border-radius: 17px;
+  cursor: pointer;
+  transition: all $motion-fast $easing-standard;
+
+  &:hover:not(.is-active) {
+    color: var(--color-text-primary);
+    background: var(--element-bg-subtle);
+  }
+
+  &.is-active {
+    color: var(--color-static-white);
+    background: var(--color-success);
+    font-weight: $font-weight-semibold;
+    box-shadow: 0 1px 4px color-mix(in srgb, var(--color-success) 35%, transparent);
+    cursor: default;
+  }
+
+  &:focus-visible {
+    outline: 2px solid color-mix(in srgb, var(--color-success) 50%, transparent);
+    outline-offset: 1px;
+  }
+}
+
+.bitfun-remote-connect__weixin-qr {
+  margin-top: 12px;
+  text-align: center;
+}
+
+.bitfun-remote-connect__weixin-qr-img {
+  display: block;
+  max-width: 220px;
+  height: auto;
+  margin: 0 auto 8px;
+  border-radius: 8px;
+}
+
+.bitfun-remote-connect__weixin-qr-svg-wrap {
+  display: inline-block;
+  margin: 0 auto 8px;
+  padding: 10px;
+  background: var(--color-static-white);
+  border-radius: 8px;
+  box-sizing: border-box;
+
+  svg {
+    display: block;
+    vertical-align: top;
+  }
+}

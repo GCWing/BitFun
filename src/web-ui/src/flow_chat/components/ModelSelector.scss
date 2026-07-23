@@ -1,0 +1,378 @@
+/**
+ * ModelSelector styles.
+ * Shows current model info at the bottom when ChatInput is expanded,
+ * with quick switching support.
+ *
+ * Design guidelines:
+ * - Radius: 4px (button/badge), 6px (dropdown)
+ * - Border: light gray; blue-purple gradient on hover/active
+ * - Shadow: layered soft shadows, avoid harsh glow
+ */
+
+@use '../../component-library/styles/tokens' as *;
+
+.bitfun-model-selector {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  
+  // ==================== Trigger button ====================
+  
+  &__trigger {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    height: 20px;
+    padding: 0 8px;
+    border-radius: 10px;
+    border: none;
+    background: transparent;
+    color: var(--color-text-secondary);
+    font-size: var(--flowchat-font-size-2xs);
+    font-weight: 400;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    outline: none;
+    opacity: 0.3;
+    white-space: nowrap;
+    letter-spacing: 0.3px;
+    
+    // More visible while input is focused
+    .bitfun-chat-input__box:focus-within & {
+      opacity: 1;
+    }
+    
+    &:hover {
+      background: var(--element-bg-medium);
+      color: var(--color-text-primary);
+      opacity: 1;
+    }
+    
+    &--open {
+      background: color-mix(in srgb, var(--color-accent-500) 15%, transparent);
+      color: var(--color-text-primary);
+      opacity: 1;
+    }
+    
+    &:disabled {
+      opacity: 0.4;
+      cursor: default;
+    }
+  }
+  
+  &__name {
+    max-width: 100px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  
+  &__thinking-icon {
+    color: var(--color-text-muted);
+    flex-shrink: 0;
+  }
+
+  &__fast-icon {
+    color: var(--color-warning);
+    flex-shrink: 0;
+  }
+  
+  &__badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 1px 4px;
+    border-radius: 3px;
+    background: color-mix(in srgb, var(--color-accent-500) 15%, transparent);
+    color: color-mix(in srgb, var(--color-accent-500) 90%, var(--color-text-primary));
+    font-size: var(--flowchat-font-size-2xs);
+    font-weight: 600;
+    letter-spacing: 0.5px;
+    line-height: 1;
+  }
+
+  &__effort-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 1px 4px;
+    border-radius: 3px;
+    background: color-mix(in srgb, var(--color-success) 15%, transparent);
+    color: color-mix(in srgb, var(--color-success) 90%, var(--color-text-primary));
+    font-size: var(--flowchat-font-size-2xs);
+    font-weight: 600;
+    letter-spacing: 0.3px;
+    line-height: 1;
+    text-transform: uppercase;
+  }
+  
+  &__ctx-usage {
+    font-size: var(--flowchat-font-size-2xs);
+    font-weight: 400;
+    color: var(--color-text-muted);
+    opacity: 0.55;
+    letter-spacing: 0.2px;
+    transition: color 0.3s ease, opacity 0.3s ease;
+    flex-shrink: 0;
+
+    &--warning {
+      color: color-mix(in srgb, var(--color-warning) 90%, transparent);
+      opacity: 0.9;
+    }
+
+    &--critical {
+      color: color-mix(in srgb, var(--color-error) 95%, var(--color-text-primary));
+      opacity: 1;
+      animation: bitfun-ctx-critical-pulse 2s ease-in-out infinite;
+    }
+  }
+
+  &__chevron {
+    color: var(--color-text-muted);
+    flex-shrink: 0;
+    transition: transform 0.2s ease;
+    
+    .bitfun-model-selector__trigger--open & {
+      transform: rotate(180deg);
+    }
+  }
+  
+  // ==================== Dropdown menu ====================
+  
+  &__dropdown {
+    position: absolute;
+    bottom: calc(100% + 6px);
+    left: 0;
+    min-width: 220px;
+    max-width: 280px;
+    background: var(--color-bg-elevated);
+    border: 1px solid var(--color-overlay-white-12);
+    border-radius: 6px;
+    overflow: hidden;
+    backdrop-filter: blur(20px) saturate(1.2);
+    -webkit-backdrop-filter: blur(20px) saturate(1.2);
+    box-shadow: 
+      0 8px 32px var(--color-overlay-black-50),
+      0 0 1px var(--color-overlay-white-12),
+      inset 0 1px 0 var(--color-overlay-white-08);
+    z-index: $z-dropdown;
+    animation: bitfun-model-dropdown-fade-in 0.15s ease-out;
+  }
+  
+  &__dropdown-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 12px;
+    border-bottom: 1px solid var(--color-overlay-white-08);
+    font-size: var(--flowchat-font-size-xxs);
+    font-weight: 500;
+    color: var(--color-text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+  
+  &__dropdown-hint {
+    font-size: var(--flowchat-font-size-2xs);
+    color: var(--color-text-muted);
+    font-weight: 400;
+    text-transform: none;
+    letter-spacing: 0;
+  }
+  
+  &__divider {
+    height: 1px;
+    background: var(--border-subtle);
+    margin: 4px 12px;
+  }
+
+  &__config-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 8px 12px 10px;
+  }
+
+  &__config-copy {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+  }
+
+  &__config-name {
+    color: var(--color-text-primary);
+    font-size: var(--flowchat-font-size-xs);
+    font-weight: 500;
+  }
+
+  &__config-description {
+    color: var(--color-text-muted);
+    font-size: var(--flowchat-font-size-2xs);
+    line-height: 1.35;
+  }
+  
+  &__list {
+    max-height: 240px;
+    overflow-y: auto;
+    padding: 4px 0;
+    
+    // Scrollbar styling
+    &::-webkit-scrollbar {
+      width: 3px;
+    }
+    
+    &::-webkit-scrollbar-track {
+      background: transparent;
+    }
+    
+    &::-webkit-scrollbar-thumb {
+      background: var(--color-overlay-white-15);
+      border-radius: 2px;
+      
+      &:hover {
+        background: rgba(var(--color-static-white-rgb), 0.25);
+      }
+    }
+  }
+  
+  // ==================== Options ====================
+  
+  &__option {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 7px 12px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    
+    &:hover {
+      background: var(--color-accent-100);
+    }
+    
+    &--selected {
+      background: var(--element-bg-subtle);
+
+      .bitfun-model-selector__option-name {
+        color: color-mix(in srgb, var(--color-accent-500) 95%, var(--color-text-primary));
+      }
+
+      &:hover {
+        background: var(--color-accent-200);
+      }
+    }
+    
+    &--primary {
+      .bitfun-model-selector__option-name {
+        color: color-mix(in srgb, var(--color-purple-500) 90%, var(--color-text-primary));
+      }
+      
+      &:hover {
+        background: var(--color-accent-100);
+      }
+    }
+  }
+  
+  &__option-main {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+    flex: 1;
+  }
+  
+  &__option-name {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    font-size: var(--flowchat-font-size-xs);
+    font-weight: 500;
+    color: var(--color-text-secondary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  
+  &__option-desc {
+    font-size: var(--flowchat-font-size-2xs);
+    color: var(--color-text-muted);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  &__option-provider {
+    color: var(--color-text-muted);
+  }
+
+  &__option-meta {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    min-width: 0;
+  }
+
+  &__option-subdesc {
+    font-size: var(--flowchat-font-size-2xs);
+    color: var(--color-text-muted);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  
+  &__option-thinking {
+    color: var(--color-text-muted);
+    flex-shrink: 0;
+  }
+  
+  &__option-check {
+    color: color-mix(in srgb, var(--color-accent-500) 80%, transparent);
+    flex-shrink: 0;
+  }
+
+  :root[data-theme="light"] &,
+  :root[data-theme-type="light"] &,
+  .light & {
+    &__dropdown {
+      background: var(--color-bg-elevated);
+      border: 1px solid var(--border-subtle);
+      backdrop-filter: none;
+      -webkit-backdrop-filter: none;
+      box-shadow:
+        0 4px 18px var(--color-overlay-slate-04),
+        0 1px 3px var(--color-overlay-slate-04),
+        inset 0 1px 0 var(--color-overlay-white-95);
+    }
+
+    &__dropdown-header {
+      border-bottom-color: var(--border-subtle);
+    }
+
+    &__list::-webkit-scrollbar-thumb {
+      background: var(--color-overlay-slate-08);
+
+      &:hover {
+        background: var(--color-overlay-slate-12);
+      }
+    }
+  }
+}
+
+// Dropdown fade-in animation
+@keyframes bitfun-model-dropdown-fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes bitfun-ctx-critical-pulse {
+  0%, 100% { opacity: 0.8; }
+  50%       { opacity: 1; }
+}

@@ -1,0 +1,443 @@
+{
+  "title": "外部 AI 應用",
+  "subtitle": "使用其他 AI 應用的命令、工具、Agent 與 MCP。",
+  "legacyHostNotice": "目前執行 Host 使用舊版外部來源協定；升級 Host 後才能使用安全模式。",
+  "loading": "正在檢查外部來源…",
+  "checkingNonBlocking": "正在檢查更新…",
+  "common": {
+    "details": "詳細資料",
+    "hideDetails": "收合詳細資料",
+    "close": "關閉",
+    "unknown": "未知",
+    "technicalDetails": "技術詳細資料",
+    "selected": "目前使用",
+    "selectedUnavailable": "已選擇，目前無法使用",
+    "notSelected": "未使用",
+    "availableChoice": "可選",
+    "openInExplorer": "在檔案管理員中開啟",
+    "openInExplorerRemote": "遠端工作區路徑無法在本機檔案管理員中開啟",
+    "openInExplorerUnavailable": "目前 Host 無法開啟來源位置"
+  },
+  "actions": {
+    "refresh": "重新整理",
+    "refreshing": "正在重新整理…",
+    "updated": "已儲存。",
+    "waitForUpdate": "另一項變更仍在儲存，請等待完成後再做選擇。",
+    "agentUpdated": "已儲存「{{name}}」的變更並重新整理狀態。",
+    "mcpUpdated": "已儲存 MCP 伺服器選擇並重新整理狀態。"
+  },
+  "recoveryActions": {
+    "refresh": "重新整理狀態",
+    "retry": "重試",
+    "review": "檢查待處理項目",
+    "resolve_conflict": "解決衝突",
+    "install_runtime": "安裝或修復所需執行階段，然後重新整理。",
+    "reconnect_host": "重新連線或升級執行 Host，然後重試。",
+    "exit_safe_mode": "退出安全模式"
+  },
+  "safeMode": {
+    "title": "外部來源安全模式",
+    "description": "阻止新的外部工具、Agent 與 MCP 呼叫，同時保留已探索的命令與診斷資訊；已在執行的呼叫不會被取消。",
+    "activeDescription": "新的外部可執行呼叫已被阻止；已在執行的呼叫仍可能完成，命令與診斷資訊可繼續用於復原。",
+    "activeNotice": "安全模式僅對目前的 Host 程序與執行域有效；重新啟動或切換執行 Host 後會自動關閉。",
+    "toggleLabel": "使用外部來源安全模式",
+    "entered": "外部來源安全模式已啟用。",
+    "exited": "外部來源安全模式已關閉，符合條件的整合已重新協調。"
+  },
+  "unavailable": {
+    "hostTitle": "此處暫時無法使用",
+    "hostDescription": "請在桌面端檢視或管理外部設定。",
+    "remoteDescription": "此遠端專案暫不支援外部設定，請切回本機專案。",
+    "remoteConnectionDescription": "遠端連線無法使用，請重試或中斷連線。"
+  },
+  "policy": {
+    "title": "接入設定",
+    "externalBadge": "外部",
+    "readySummary": "已發現 {{count}} 項",
+    "attentionSummary": "{{count}} 項需要處理",
+    "enabledLabel": "允許外部相容",
+    "updated": "已儲存。",
+    "recoveryRequired": "設定版本較新，外部能力已關閉。",
+    "unknownStatus": "設定狀態暫不支援，外部能力已關閉。",
+    "hostReadOnlyHint": "僅可檢視，請在桌面端管理。",
+    "remoteReadOnlyHint": "此遠端專案僅可檢視，請切回本機專案管理。",
+    "backupAndReset": "備份並重設",
+    "resetConfirmTitle": "備份並重設策略？",
+    "resetConfirmMessage": "BitFun 會在本機保留新版策略備份，恢復安全預設值，並在你主動開啟前維持外部執行關閉。",
+    "recoveryResetComplete": "不相容策略已備份，並已恢復安全預設值。",
+    "inherited": "繼承全域",
+    "projectOverride": "專案覆寫",
+    "resetWorkspace": "使用全域設定",
+    "adapterRevision": "適配器 {{revision}}",
+    "sourceCount": "{{count}} 個來源位置",
+    "capabilities": "自訂能力",
+    "capabilitiesFor": "自訂 {{ecosystem}} 能力",
+    "modeLabel": "{{ecosystem}} 相容模式",
+    "capabilityAccessLabel": "{{ecosystem}} 的{{capability}}存取策略",
+    "unsupportedSafelyOff": "目前版本不支援（已安全關閉）",
+    "capabilitiesHint": "分別選擇各類外部內容的探索與使用方式。",
+    "safetyLimited": "安全上限",
+    "scope": {
+      "user": "全域",
+      "workspace": "目前專案",
+      "workspaceHint": "僅影響目前專案。",
+      "workspaceUnavailable": "開啟專案後可個別設定。"
+    },
+    "mode": {
+      "recommended": "建議",
+      "discoverOnly": "僅探索",
+      "disabled": "關閉",
+      "custom": "自訂"
+    },
+    "access": {
+      "disabled": "關閉",
+      "discoverOnly": "僅探索",
+      "askBeforeUse": "使用前詢問",
+      "auto": "自動使用"
+    },
+    "capability": {
+      "command": "命令",
+      "tool": "工具",
+      "subagent": "Agent",
+      "mcp": "MCP 伺服器"
+    },
+    "state": {
+      "checking": "檢查中",
+      "attention": "需要處理",
+      "ready": "已就緒",
+      "noConfig": "未發現設定"
+    },
+    "health": {
+      "available": "適配器可用",
+      "partial": "適配器部分可用",
+      "degraded": "適配器已降級",
+      "unavailable": "適配器無法使用"
+    }
+  },
+  "errors": {
+    "loadFailed": "暫時無法讀取外部設定，請重新整理後重試。",
+    "refreshFailed": "檢查失敗，目前已啟用內容維持不變。",
+    "mutationUnknown": "無法確認是否儲存，請重新整理確認。"
+  },
+  "operationErrors": {
+    "rejected": "目前設定不允許此變更。",
+    "refreshRequired": "操作完成前目錄已變更。請重新整理並確認目前狀態後重試。",
+    "policyIncompatible": "外部設定由較新的 BitFun 版本寫入。請先備份並重設，再進行變更。",
+    "unavailableRetry": "暫時無法使用，請稍後重試。",
+    "internal": "操作失敗，請重新整理後重試。",
+    "referenceId": "參考編號：{{id}}",
+    "stage": "處理階段：{{stage}}",
+    "causationId": "關聯操作：{{id}}"
+  },
+  "diagnostics": {
+    "summary": "有 {{count}} 項內容需要注意，請查看詳細資料以瞭解影響範圍。",
+    "sourceSummary": "{{name}} 有 {{count}} 項問題",
+    "category": {
+      "confirmationStateUnavailable": "BitFun 無法驗證已儲存的工具確認狀態，因此相關工具保持停用。請檢查 BitFun 設定儲存空間後重新整理。",
+      "conflictHistoryUnavailable": "BitFun 無法儲存衝突資訊，因此相關名稱保持不可用。請檢查 BitFun 設定儲存空間後重新整理。",
+      "checkInProgress": "仍在檢查一個來源，現有內容可以繼續使用。",
+      "checkTimedOut": "檢查一個來源耗時過長，其他內容仍可使用。請重新整理後重試。",
+      "confirmationRequired": "一個來源需要你的確認，BitFun 才能使用其中的內容。",
+      "sourceTooLarge": "來源內容過多，部分檔案已略過。請減少檔案數量或大小後重新整理。",
+      "invalidSettings": "部分設定無法讀取，已被略過。請修正來源設定後重新整理。",
+      "unreadableSource": "BitFun 無法讀取來源中的部分內容。請檢查檔案存取權限後重新整理。",
+      "notSupported": "BitFun 暫不支援此類外部內容，因此沒有載入或執行它。",
+      "checkFailed": "BitFun 未能檢查一個來源，其他來源仍可使用。請重新整理後重試。",
+      "sourceIssue": "BitFun 在一個來源中發現問題，受影響的內容未啟用。請查看技術詳細資料。"
+    }
+  },
+  "sources": {
+    "title": "設定來源",
+    "description": "設定仍保留在原位置；開啟此頁面後會自動檢查變更。",
+    "globalOnly": "目前僅顯示適用於所有工作區的來源；開啟工作區後還會顯示該專案的來源。",
+    "empty": "未發現設定。",
+    "commandCount": "{{count}} 個命令",
+    "toolCount": "{{count}} 個工具",
+    "agentCount": "{{count}} 個 Agent",
+    "mcpCount": "{{count}} 個 MCP 伺服器",
+    "toggleLabel": "啟用 {{name}}"
+  },
+  "agents": {
+    "title": "發現的 Agent",
+    "description": "Agent 仍保留在原應用程式中。啟用前，請確認下方的模型、工具與執行位置；其指令或這些設定變更後，BitFun 會再次請你確認。",
+    "disable": "停用",
+    "enable": "啟用 Agent",
+    "reviewTitle": "查看 {{name}} 的執行設定",
+    "approvalWarning": "啟用後，此 Agent 可以讓所選模型呼叫上方工具。其指令、模型、工具或設定來源變更時，BitFun 會要求你再次確認。",
+    "singleRun": "單次執行，不支援追問",
+    "modelUnavailable": "無法使用",
+    "model": "模型：{{model}}",
+    "tools": "工具：{{tools}}",
+    "executionDomain": "執行位置：本機與目前工作區",
+    "compatibility": "狀態：{{state}}",
+    "noDescription": "未提供說明",
+    "noTools": "無工具",
+    "sourceLocations": "設定來源（{{count}} 個）"
+  },
+  "agentState": {
+    "approval_required": "待確認",
+    "declined": "保持停用",
+    "disabled": "已停用",
+    "active": "已啟用",
+    "conflict": "需要選擇",
+    "blocked": "暫不支援",
+    "unavailable": "暫時不可用"
+  },
+  "agentChanges": {
+    "unavailable": "{{name}} 已無法用於新任務（{{state}}）。請在下方檢查它目前使用的模型、工具、設定來源或同名衝突。",
+    "unavailableMany": "已有 {{count}} 個已啟用 Agent 無法用於新任務。請在下方檢查它們目前的設定。",
+    "removedState": "設定來源已刪除"
+  },
+  "agentCompatibility": {
+    "ready": "支援",
+    "ready_with_degradation": "支援，但部分設定不會生效",
+    "blocked": "不支援",
+    "invalid": "設定有誤"
+  },
+  "agentDiagnostics": {
+    "activationBlocked": "暫時無法啟用此 Agent。",
+    "degradedOnly": "部分設定在 BitFun 中不會生效。請查看說明，確認實際結果符合預期。",
+    "configurationUnavailable": {
+      "reason": "BitFun 無法讀取模型設定。",
+      "impact": "{{impact}}",
+      "nextStep": "請開啟 BitFun 的模型設定，確認 BitFun 可以正常讀取與儲存設定，然後重新整理。"
+    },
+    "modelUnavailable": {
+      "reason": "此 Agent 要求的模型在 BitFun 中不可用。",
+      "impact": "{{impact}}",
+      "nextStep": "請在來源應用中改用可用模型，或在 BitFun 中設定可用的固定 Sub-Agent 模型，然後重新整理。"
+    },
+    "toolUnavailable": {
+      "reason": "此 Agent 要求的一個或多個工具在 BitFun 中不可用。",
+      "impact": "{{impact}}",
+      "nextStep": "請在來源應用中移除或替換不支援的工具，然後重新整理。"
+    },
+    "invalidDefinition": {
+      "reason": "此 Agent 的設定缺少必填內容或包含無效內容。",
+      "impact": "{{impact}}",
+      "nextStep": "請在原應用中修正 Agent 設定，然後重新整理。"
+    },
+    "unsupportedBehavior": {
+      "reason": "此 Agent 需要 BitFun 目前不支援的行為或設定。",
+      "impact": "{{impact}}",
+      "nextStep": "請在原應用程式中改用受支援的設定並補齊必填內容，然後重新整理。"
+    },
+    "ignoredOption": {
+      "reason": "BitFun 不會套用這項設定。",
+      "impact": "{{impact}}",
+      "nextStep": "啟用前，請確認上方實際使用的模型與工具，並確認最終結果仍符合預期。"
+    }
+  },
+  "agentConflicts": {
+    "title": "同名 Agent",
+    "description": "BitFun 不會無提示地替你選擇。待選項目與目前選擇都會保留顯示；其中一個 Agent 發生變更前，BitFun 會記住你的選擇。",
+    "agentName": "找到多個名為 {{name}} 的 Agent",
+    "disableAll": "暫不使用任何一個",
+    "pending": "請選擇日後執行任務時使用哪一個 Agent。選擇外部 Agent 時，也會確認下方顯示的模型、工具與執行位置。",
+    "currentSelection": "新任務會使用目前選擇。若要變更，請在上方選擇其他選項。",
+    "currentSelectionUnavailable": "仍保留此來源為目前選擇，但它目前已停用或無法用於新任務。請啟用或修復它、改選其他來源，或讓此名稱維持無法使用。",
+    "keptUnavailable": "目前保持此 Agent 名稱不可用。需要使用時，可在上方選擇一個 Agent。",
+    "selectionApproves": "選擇後，也表示你確認了下方顯示的模型、工具、執行位置與設定來源。"
+  },
+  "mcp": {
+    "title": "找到的 MCP 伺服器",
+    "description": "MCP 設定仍保存在原應用程式中。外部伺服器在此處為唯讀；你可以將其停用，或回到原應用程式修改設定。",
+    "externalSource": "外部 AI 應用程式",
+    "source": "來源：{{source}}",
+    "sourceLocation": "設定位置：{{location}}",
+    "scope": "適用範圍：{{scope}}",
+    "command": "命令：{{command}}",
+    "url": "位址：{{url}}",
+    "workingDirectory": "啟動目錄：{{location}}",
+    "environmentCount": "已設定 {{count}} 個環境變數",
+    "environmentNames": "環境變數：{{names}}",
+    "environmentReads": "將讀取 BitFun 環境變數：{{names}}",
+    "argumentCount": "命令參數數量：{{count}}",
+    "headerCount": "已設定 {{count}} 個 HTTP 標頭",
+    "headerNames": "HTTP 標頭：{{names}}",
+    "changePolicy": "伺服器設定變更後，BitFun 會在再次載入前請你確認。",
+    "runtimeUnavailableGuidance": "請先停用此伺服器，修正來源設定或驗證後再啟用，通常不需要重新啟動 BitFun。",
+    "unsupportedGuidance": "請在來源應用程式中修改此設定，然後重新整理。",
+    "enable": "啟用伺服器",
+    "disable": "停用",
+    "empty": "未發現 MCP 伺服器。",
+    "emptyGuidance": "BitFun 目前從 OpenCode 相容設定中發現 MCP 伺服器，支援以下設定位置：",
+    "emptyLocation": {
+      "userGlobal": "使用者全域：~/.config/opencode/opencode.json",
+      "project": "專案級：.opencode/opencode.json",
+      "envConfig": "環境變數 OPENCODE_CONFIG 指向的檔案"
+    },
+    "emptyExample": "在設定檔中加入 \"mcp\" 欄位即可，例如：{ \"mcp\": { \"server-name\": { ... } } }",
+    "transport": {
+      "local_stdio": "本機程序",
+      "streamable_http": "遠端連線"
+    }
+  },
+  "mcpApprovals": {
+    "title": "待確認的 MCP 伺服器",
+    "description": "BitFun 從其他 AI 應用程式找到可執行命令或網路連線設定；確認前不會啟動程序或存取遠端位址。",
+    "warning": "啟用後，BitFun 可能以你的使用者權限啟動本機程序，或連線到上方顯示的遠端服務。伺服器可以向 Agent 提供工具，並接收呼叫這些工具時提交的參數。",
+    "keepDisabled": "保持停用",
+    "enable": "啟用伺服器"
+  },
+  "mcpState": {
+    "approval_required": "待確認",
+    "starting": "正在啟動",
+    "active": "已啟用",
+    "declined": "保持停用",
+    "conflict": "需要選擇",
+    "covered": "未選用",
+    "source_disabled": "來源已停用",
+    "configuration_changed": "設定已變更，需再次確認",
+    "unsupported": "暫不支援",
+    "runtime_unavailable": "暫時無法使用",
+    "removed": "已刪除"
+  },
+  "mcpConflicts": {
+    "title": "同名 MCP 伺服器",
+    "description": "BitFun 不會自行選擇。請選擇使用 BitFun 或外部伺服器；其中任一設定變更前，BitFun 會記住本次選擇。",
+    "serverName": "有多個 MCP 伺服器名為 {{name}}",
+    "pending": "請選擇一個伺服器。選擇外部伺服器時，也會確認其目前設定。",
+    "currentSelection": "目前使用已選擇的伺服器；可選擇其他可用項目進行變更。",
+    "unavailable": "目前無法使用",
+    "nativeDisabled": "請先啟用此 BitFun 伺服器，再選擇它",
+    "review": "查看 {{name}}",
+    "approveAndUse": "核准並使用 {{name}}"
+  },
+  "tools": {
+    "title": "發現的工具",
+    "description": "工具程式碼仍保留在原位置；BitFun 檢查來源時不會執行這些程式碼。",
+    "review": "查看設定",
+    "disable": "停用這些工具",
+    "reviewTitle": "查看 {{name}}（來自 {{source}}）",
+    "reason": "原因：{{reason}}",
+    "nextStep": "下一步：{{nextStep}}",
+    "targetScope": "此操作會同時影響該來源提供的所有工具。"
+  },
+  "toolApprovals": {
+    "title": "待確認的工具",
+    "description": "啟用其他應用程式中的工具程式碼前，請確認程式碼位置以及它可以存取的內容。",
+    "source": "來源：{{location}}",
+    "sourceRoot": "來源資料夾：{{location}}",
+    "modulePath": "程式碼檔案：{{location}}",
+    "scope": "適用範圍：{{scope}}",
+    "executionDomain": "執行位置：{{domain}}",
+    "runtime": "執行環境：{{runtime}}",
+    "workingDirectory": "啟動目錄：{{location}}",
+    "capabilities": "可直接存取：{{capabilities}}",
+    "warning": "工具程式碼會使用你的使用者權限並繼承環境變數，且不會在作業系統沙箱中隔離。它啟動的程序可能在你取消後繼續執行。",
+    "keepDisabled": "保持停用",
+    "enable": "啟用工具"
+  },
+  "capability": {
+    "file_system": "檔案",
+    "network": "網路",
+    "process": "程序",
+    "environment": "環境變數"
+  },
+  "toolState": {
+    "approval_required": "待確認",
+    "declined": "已保持停用",
+    "disabled": "已停用",
+    "active": "已啟用",
+    "conflict": "需要選擇",
+    "unsupported": "暫不支援",
+    "runtime_unavailable": "執行環境不可用",
+    "load_failed": "無法載入"
+  },
+  "toolReason": {
+    "approval_required": "啟用前，需要確認此工具檔案的存取範圍。",
+    "declined": "你已選擇保持這些工具停用。",
+    "disabled": "來源或其工具能力已被策略停用。",
+    "active": "工具程式碼已載入，可以使用。",
+    "conflict": "另一個工具使用了相同名稱。",
+    "unsupported": "此工具檔案包含 BitFun 目前不支援的語法或操作。",
+    "runtime_unavailable": "所需的 JavaScript 執行環境無法使用。",
+    "load_failed": "BitFun 無法載入此工具檔案。"
+  },
+  "toolNextStep": {
+    "approval_required": "確認上方來源與存取範圍後，啟用或繼續停用這些工具。",
+    "declined": "確認上方來源與存取範圍後，再啟用這些工具。",
+    "disabled": "請先啟用此來源或其工具能力。",
+    "active": "無需操作。若要停止使用該來源的所有工具，請停用這些工具。",
+    "conflict": "請在下方選擇要使用的工具，或繼續保持停用。",
+    "unsupported": "請將來源改為 BitFun 目前支援的單一 JavaScript 檔案格式，然後重新整理。",
+    "runtime_unavailable": "請安裝或修復 Node.js，然後重新整理。執行環境無法使用期間，你仍可繼續使用其他功能。",
+    "load_failed": "請修正來源後重新整理，或繼續停用這些工具。"
+  },
+  "toolConflicts": {
+    "title": "同名工具",
+    "description": "待選項目與目前選擇都會保留顯示。選擇前，BitFun 會繼續使用可用的本機或 MCP 工具；若沒有可用工具，則停用此名稱。可用工具發生變更前，BitFun 會記住你的選擇。",
+    "toolName": "找到多個名為 {{name}} 的工具",
+    "pending": "請選擇日後呼叫此工具名稱時使用哪一個工具。",
+    "currentSelection": "呼叫此工具名稱時會使用目前選擇。若要變更，請在上方選擇其他工具。",
+    "currentSelectionUnavailable": "仍保留此工具來源為目前選擇，但它目前已停用或無法使用。請啟用或修復它，或選擇其他工具。"
+  },
+  "toolCandidateKind": {
+    "built_in": "內建",
+    "mcp": "MCP",
+    "external": "外部"
+  },
+  "scope": {
+    "user_global": "所有工作區",
+    "project": "目前工作區",
+    "remote_user": "所有遠端工作區",
+    "remote_project": "目前遠端工作區"
+  },
+  "executionLocation": {
+    "local": "本機",
+    "remote": "目前遠端環境",
+    "unknown": "未知"
+  },
+  "runtime": {
+    "java_script": "JavaScript",
+    "type_script": "TypeScript"
+  },
+  "lifecycle": {
+    "available": "可用",
+    "restricted": "目前版本暫不支援",
+    "degraded": "部分內容不可用",
+    "unavailable": "暫時不可用",
+    "removed": "來源已移除",
+    "suppressed": "已停用",
+    "using_last_valid_version": "正在使用上次可用的內容"
+  },
+  "conflicts": {
+    "title": "同名命令",
+    "description": "BitFun 不會無提示地替你選擇。待選項目與目前選擇都會保留顯示；其中一個來源發生變更前，BitFun 會記住你的選擇。",
+    "commandName": "多個來源提供了 /{{name}}",
+    "pending": "請選擇使用哪個來源的命令。",
+    "currentSelection": "目前命令會使用已選來源。若要變更，請在上方選擇其他可用來源。",
+    "currentSelectionUnavailable": "仍保留此命令來源為目前選擇，但它目前無法執行。請改選可用來源，或先修復此來源。",
+    "restricted": "目前版本暫不支援"
+  },
+  "opencode": {
+    "title": "OpenCode 擴充",
+    "description": "從 OpenCode 相容設定中發現的外部能力。",
+    "summary": "發現 {{agents}} 個 Agent · {{commands}} 個命令 · {{tools}} 個工具 · {{mcps}} 個 MCP",
+    "configLocations": "設定位置",
+    "inherited": "繼承自整體模式",
+    "capability": {
+      "subagent": {
+        "description": "發現 {{count}} 個 Agent · 來自{{scope}}",
+        "effect": "啟用後允許呼叫 OpenCode 中定義的 Agent。",
+        "risk": "Agent 可執行模型呼叫，請確認來源可信。"
+      },
+      "command": {
+        "description": "發現 {{count}} 個命令 · 來自{{scope}}",
+        "effect": "啟用後可在 BitFun 中呼叫 OpenCode 命令。",
+        "risk": ""
+      },
+      "mcp": {
+        "description": "發現 {{count}} 個 MCP 伺服器",
+        "effect": "啟用後可連接 OpenCode 設定的 MCP 伺服器。",
+        "risk": "MCP 伺服器可啟動本機行程或連接遠端位址。"
+      },
+      "tool": {
+        "description": "發現 {{count}} 個工具 · 來自{{scope}}",
+        "effect": "啟用後可使用 OpenCode 中定義的工具。",
+        "risk": "工具程式碼以你的使用者權限執行，不在沙箱中隔離。"
+      }
+    }
+  }
+}

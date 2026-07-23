@@ -1,0 +1,425 @@
+ 
+
+@use '../../../component-library/styles/tokens.scss' as *;
+
+.default-model-config {
+  padding: 0;
+
+  &__optional-label {
+    margin-left: 4px;
+    color: var(--color-text-muted);
+    font-size: var(--font-size-xs);
+    font-weight: $font-weight-normal;
+    opacity: 0.75;
+  }
+  
+  
+  
+  &__section {
+    display: flex;
+    flex-direction: column;
+    gap: $size-gap-3;
+    margin-bottom: $size-gap-6;
+    
+    &:last-child {
+      margin-bottom: 0;
+    }
+  }
+  
+  &__section-toggle {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    color: var(--color-text-muted);
+    transition: color $motion-base $easing-standard;
+  }
+  
+  &__section-content {
+    padding-left: $size-gap-1;
+    animation: default-model-fade-in 0.2s ease;
+  }
+  
+  
+  
+  &__more-section {
+    margin-top: 8px;
+    
+    
+    &--expanded {
+      .default-model-config__expand-line {
+        border-top-style: solid;
+      }
+    }
+  }
+  
+  &__expand-trigger {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 6px 0;
+    cursor: pointer;
+    user-select: none;
+    transition: opacity 0.15s ease;
+    
+    &:hover {
+      .default-model-config__expand-text {
+        color: var(--color-text-secondary);
+      }
+      
+      .default-model-config__expand-line {
+        border-color: var(--border-base);
+      }
+    }
+    
+    &:focus-visible {
+      outline: none;
+      
+      .default-model-config__expand-text {
+        text-decoration: underline;
+      }
+    }
+  }
+  
+  &__expand-line {
+    width: calc(40% - 40px);
+    height: 0;
+    border: none;
+    border-top: 1px dashed var(--border-subtle);
+    transition: border-color 0.15s ease;
+  }
+  
+  &__expand-text {
+    flex-shrink: 0;
+    font-size: 12px;
+    color: var(--color-text-muted);
+    transition: color 0.15s ease;
+    white-space: nowrap;
+  }
+  
+  &__expand-content {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin-top: 8px;
+    animation: default-model-fade-in 0.2s ease;
+  }
+  
+  
+  
+  &__core-section {
+    display: flex;
+    flex-direction: column;
+    gap: $size-gap-5;
+  }
+  
+  &__model-slot {
+    display: flex;
+    flex-direction: column;
+    gap: $size-gap-2;
+  }
+  
+  &__slot-header {
+    display: flex;
+    align-items: center;
+    gap: $size-gap-2;
+  }
+  
+  &__slot-label {
+    font-size: var(--font-size-base);
+    font-weight: $font-weight-semibold;
+    color: var(--color-text-primary);
+  }
+  
+  &__slot-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 2px 8px;
+    font-size: var(--font-size-xs);
+    font-weight: $font-weight-medium;
+    border-radius: $size-radius-sm;
+    background: var(--color-success-bg);
+    border: none;
+    color: var(--color-text-secondary);
+    
+    &--optional {
+      background: var(--color-warning-bg);
+      color: var(--color-text-muted);
+    }
+  }
+  
+  &__slot-description {
+    font-size: var(--font-size-sm);
+    color: var(--color-text-secondary);
+    line-height: 1.5;
+    margin: 0;
+  }
+  
+  &__slot-hint {
+    font-size: var(--font-size-xs);
+    color: var(--color-text-muted);
+    margin: 0;
+    font-style: italic;
+  }
+  
+  &__slot-select {
+    max-width: 400px;
+  }
+
+  
+  
+  &__capability-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+    gap: $size-gap-3;
+  }
+  
+  &__capability-item {
+    display: flex;
+    flex-direction: column;
+    gap: $size-gap-2;
+    padding: $size-gap-2 0;
+    background: transparent;
+    border: none;
+    transition: all $motion-base $easing-standard;
+    
+    &--configured {
+      .default-model-config__capability-status {
+        color: var(--color-accent-500);
+        font-weight: $font-weight-medium;
+      }
+    }
+  }
+  
+  &__capability-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: $size-gap-2;
+  }
+  
+  &__capability-label {
+    display: flex;
+    align-items: center;
+    gap: $size-gap-2;
+    font-size: var(--font-size-sm);
+    font-weight: $font-weight-semibold;
+    color: var(--color-text-primary);
+    
+    svg {
+      color: var(--color-text-secondary);
+      flex-shrink: 0;
+    }
+  }
+  
+  &__capability-status {
+    font-size: var(--font-size-xs);
+    color: var(--color-text-muted);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 120px;
+  }
+  
+  &__capability-description {
+    font-size: var(--font-size-xs);
+    color: var(--color-text-secondary);
+    line-height: 1.4;
+    margin: 0;
+  }
+  
+  
+  
+  &__advanced-settings {
+    margin-top: $size-gap-4;
+    border-top: 1px dashed var(--border-base);
+    padding-top: $size-gap-2;
+  }
+  
+  &__advanced-toggle {
+    display: flex;
+    align-items: center;
+    gap: $size-gap-2;
+    padding: $size-gap-2 $size-gap-3;
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    color: var(--color-text-secondary);
+    font-size: var(--font-size-sm);
+    font-weight: $font-weight-medium;
+    transition: all $motion-base $easing-standard;
+    border-radius: $size-radius-sm;
+    
+    &:hover {
+      color: var(--color-text-primary);
+      background: var(--element-bg-subtle);
+    }
+    
+    svg {
+      flex-shrink: 0;
+    }
+    
+    span {
+      flex-shrink: 0;
+    }
+  }
+  
+  &__advanced-content {
+    display: flex;
+    flex-direction: column;
+    gap: $size-gap-4;
+    margin-top: $size-gap-3;
+    padding-left: $size-gap-2;
+    animation: default-model-fade-in 0.2s ease;
+  }
+  
+  &__override-section {
+    margin-bottom: $size-gap-5;
+    
+    &:last-child {
+      margin-bottom: 0;
+    }
+  }
+  
+  &__override-title {
+    font-size: var(--font-size-sm);
+    font-weight: $font-weight-semibold;
+    color: var(--color-text-primary);
+    margin: 0 0 $size-gap-1 0;
+  }
+  
+  &__override-description {
+    font-size: var(--font-size-xs);
+    color: var(--color-text-secondary);
+    margin: 0 0 $size-gap-3 0;
+  }
+  
+  &__override-list {
+    display: flex;
+    flex-direction: column;
+    gap: $size-gap-2;
+  }
+  
+  &__override-row {
+    display: flex;
+    align-items: center;
+    gap: $size-gap-4;
+  }
+  
+  &__override-name {
+    flex: 0 0 140px;
+    font-size: var(--font-size-sm);
+    font-weight: $font-weight-medium;
+    color: var(--color-text-primary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  
+  &__override-selector {
+    flex: 1;
+    min-width: 0;
+  }
+  
+  
+  
+  &__empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: $size-gap-10 $size-gap-5;
+    text-align: center;
+    color: var(--color-text-secondary);
+    
+    svg {
+      margin-bottom: $size-gap-3;
+      opacity: 0.4;
+      color: var(--color-text-muted);
+    }
+    
+    p {
+      margin: 0;
+      font-size: var(--font-size-sm);
+      line-height: 1.5;
+    }
+  }
+  
+  
+  
+  &__loading {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: $size-gap-12 $size-gap-5;
+    
+    p {
+      margin-top: $size-gap-4;
+      color: var(--color-text-secondary);
+      font-size: var(--font-size-sm);
+    }
+  }
+}
+
+
+
+@keyframes default-model-fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+
+
+@container config-panel (max-width: 520px) {
+  .default-model-config {
+    &__section {
+      gap: $size-gap-2;
+      margin-bottom: $size-gap-4;
+    }
+    
+    &__core-section {
+      gap: $size-gap-3;
+    }
+    
+    &__model-slot {
+      gap: $size-gap-2;
+    }
+    
+    &__slot-label {
+      font-size: var(--font-size-sm);
+    }
+    
+    &__slot-description {
+      font-size: var(--font-size-xs);
+    }
+    
+    &__capability-grid {
+      grid-template-columns: 1fr;
+      gap: $size-gap-2;
+    }
+    
+    &__capability-item {
+      padding: $size-gap-2 0;
+    }
+    
+    &__override-row {
+      flex-direction: column;
+      align-items: stretch;
+      gap: $size-gap-2;
+    }
+    
+    &__override-name {
+      flex: none;
+      font-size: var(--font-size-xs);
+    }
+  }
+}

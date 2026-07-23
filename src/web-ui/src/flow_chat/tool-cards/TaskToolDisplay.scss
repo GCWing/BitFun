@@ -1,0 +1,682 @@
+/* Task tool card styles (BaseToolCard). */
+.task-tool-display {
+  /* Match .base-tool-card-header: gap + icon rail like .tool-card-icon-slot. */
+  .task-header-wrapper {
+    display: flex;
+    align-items: stretch;
+    gap: var(--flowchat-inline-gap);
+    width: 100%;
+  }
+
+  .task-icon {
+    color: var(--color-text-secondary);
+
+    &.is-running {
+      color: var(--color-accent-500);
+    }
+  }
+
+  &.base-tool-card-wrapper:hover
+    .base-tool-card.base-tool-card--header-expandable:not(.status-cancelled)
+    .tool-card-icon-slot--expandable
+    .tool-card-icon-main {
+    opacity: 0;
+  }
+
+  &.base-tool-card-wrapper:hover
+    .base-tool-card.base-tool-card--header-expandable:not(.status-cancelled)
+    .tool-card-icon-slot--expandable
+    .tool-card-icon-expand-hint {
+    opacity: 1;
+  }
+
+  .task-content-wrapper {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-width: 0;
+    align-self: stretch;
+    justify-content: center;
+  }
+
+  /* Title row + right rail: same vertical midline (avoid stretch making icons look low). */
+  .task-body-columns {
+    display: flex;
+    align-items: center;
+    gap: 0;
+    flex: 1;
+    min-width: 0;
+  }
+
+  .task-body-main {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-self: stretch;
+    flex: 1;
+    min-width: 0;
+  }
+
+  /* Narrow right rail; invisible hit layer matches hover tint + opens detail panel.
+     Stretch full header row height so ::before hover fill reaches padding edges (no vertical gap). */
+  .task-header-rail {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    align-self: stretch;
+    flex-shrink: 0;
+    width: var(--tool-card-header-icon-slot);
+    padding: 0;
+    margin-left: 4px;
+
+    /* Hover fill: full header height + extend into header right padding to card inner edge. */
+    &::before {
+      content: '';
+      position: absolute;
+      left: 0;
+      right: calc(-1 * var(--tool-card-header-pad-right));
+      top: calc(-1 * var(--tool-card-header-pad-y));
+      bottom: calc(-1 * var(--tool-card-header-pad-y));
+      background-color: transparent;
+      border-radius: 0;
+      transition: background-color 0.15s ease;
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    &:hover::before {
+      background-color: var(--element-bg-hover);
+    }
+
+    &:hover .task-header-rail__visual {
+      color: var(--color-text-primary);
+    }
+
+    &::after {
+      content: '';
+      position: absolute;
+      left: 0;
+      top: calc(-1 * var(--tool-card-header-pad-y));
+      bottom: calc(-1 * var(--tool-card-header-pad-y));
+      width: 0;
+      border-left: 1px solid var(--border-base);
+      pointer-events: none;
+      z-index: 1;
+    }
+  }
+
+  .task-header-rail__hit {
+    position: absolute;
+    left: 0;
+    top: calc(-1 * var(--tool-card-header-pad-y));
+    right: calc(-1 * var(--tool-card-header-pad-right));
+    bottom: calc(-1 * var(--tool-card-header-pad-y));
+    z-index: 2;
+    margin: 0;
+    padding: 0;
+    border: none;
+    background: transparent;
+    cursor: pointer;
+    appearance: none;
+    font: inherit;
+
+    &:focus-visible {
+      outline: 2px solid var(--color-accent-500);
+      outline-offset: -2px;
+    }
+  }
+
+  /*
+   * Rail icons: fill exactly the same rectangle as ::before (hover tint) and __hit (click zone).
+   *
+   * Root cause of "偏左":
+   *   - The hover/hit area extends right: calc(-1 * --tool-card-header-pad-right) = -10px
+   *     into the card's right padding, so its total width is rail(34px) + padding(10px) = 44px.
+   *   - Previously __visual used right: 0, giving only 33px. Icon center was at 17.5px from
+   *     the divider; hover center was at 22px — a 4.5px leftward offset, visible to the eye.
+   *   - Fix: match the same right edge so icon center == hover center == 22px from divider.
+   */
+  .task-header-rail__visual {
+    position: absolute;
+    z-index: 1;
+    /* Start after the 1px divider line (::after sits at left: 0). */
+    left: 1px;
+    /* Match hover fill (::before) and hit area right edge — both extend into right padding. */
+    right: calc(-1 * var(--tool-card-header-pad-right));
+    top: 0;
+    bottom: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 0;
+    margin: 0;
+    padding: 0;
+    line-height: 0;
+    font-size: 0;
+    color: var(--color-text-muted);
+    pointer-events: none;
+
+    > * + * {
+      margin-top: var(--flowchat-inline-gap);
+    }
+
+    > svg {
+      display: block;
+      flex-shrink: 0;
+    }
+
+    .tool-card-status-icon:empty {
+      display: none;
+    }
+
+    .tool-card-status-icon:not(:empty) {
+      line-height: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+
+    .cube-loading {
+      flex-direction: column;
+      gap: 0 !important;
+      line-height: 0;
+    }
+  }
+
+  .task-header-main {
+    display: flex;
+    align-items: center;
+    gap: var(--flowchat-inline-gap);
+    width: 100%;
+    min-height: 20px;
+  }
+
+
+  .task-action {
+    font-size: var(--tool-card-action-font-size);
+    font-weight: 500;
+    color: var(--color-text-primary);
+    flex-shrink: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+
+    &__model-tag {
+      font-size: var(--flowchat-font-size-xxs);
+      font-weight: 400;
+      color: var(--color-text-secondary);
+      vertical-align: baseline;
+    }
+  }
+
+  .task-header-main--failed {
+    .task-action {
+      color: var(--color-text-muted);
+    }
+
+    
+    .agent-type-badge {
+      opacity: 0.6;
+    }
+  }
+
+  .task-failed-badge {
+    --task-failed-badge-rgb: 107, 114, 128;
+
+    display: inline-flex;
+    align-items: center;
+    padding: 0.1rem var(--flowchat-inline-gap);
+    border-radius: 3px;
+    font-size: var(--flowchat-font-size-xxs);
+    font-weight: 500;
+    flex-shrink: 0;
+    color: var(--color-text-muted);
+    background: rgba(var(--task-failed-badge-rgb), 0.15);
+  }
+
+  .task-subagent-stop-button {
+    width: 22px;
+    height: 22px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    padding: 0;
+    border: 1px solid var(--border-base);
+    border-radius: 4px;
+    color: var(--color-text-secondary);
+    background: var(--element-bg-soft);
+    cursor: pointer;
+    transition:
+      color 0.15s ease,
+      background-color 0.15s ease,
+      border-color 0.15s ease;
+
+    &:hover:not(:disabled) {
+      color: var(--color-error);
+      background: var(--element-bg-hover);
+      border-color: var(--color-error);
+    }
+
+    &:focus-visible {
+      outline: 2px solid var(--color-accent-500);
+      outline-offset: 2px;
+    }
+
+    &:disabled {
+      cursor: default;
+      opacity: 0.7;
+    }
+
+    svg {
+      display: block;
+      flex-shrink: 0;
+    }
+
+    &:disabled svg {
+      animation: task-subagent-stop-spin 1s linear infinite;
+    }
+  }
+
+  .agent-type-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.125rem var(--flowchat-inline-gap);
+    border-radius: 4px;
+    font-size: var(--flowchat-font-size-xxs);
+    font-weight: 500;
+    flex-shrink: 0;
+    color: var(--color-text-secondary);
+    background: var(--color-overlay-white-12);
+    letter-spacing: 0.02em;
+  }
+
+  .task-header-meta {
+    display: flex;
+    align-items: center;
+    gap: var(--flowchat-inline-gap);
+    margin-left: auto;
+    margin-right: 10px;
+    flex-shrink: 0;
+    min-width: 0;
+
+    svg {
+      flex-shrink: 0;
+    }
+  }
+
+  .task-status-icon--rail {
+    margin: 0;
+    padding: 0;
+  }
+
+  /* Prompt uses the thinking markdown typography, but needs its own clipping box.
+     The generic thinking content has vertical padding; with a one-line max-height
+     that can leave only padding visible and push the prompt text out of view. */
+  .task-expanded-content .task-prompt-content {
+    padding: 0 var(--flowchat-card-pad-x);
+    max-height: 3.2em;
+    overflow-y: auto;
+  }
+
+  .task-expanded-content .task-prompt-wrapper {
+    &::before,
+    &::after {
+      content: none;
+    }
+  }
+
+  .task-interruption-note {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--flowchat-inline-gap);
+    color: var(--color-text-secondary);
+    font-size: var(--tool-card-action-font-size);
+    line-height: var(--flowchat-support-line-height);
+
+    svg {
+      flex-shrink: 0;
+      margin-top: 0.15em;
+      color: var(--color-warning);
+    }
+  }
+
+  .task-interruption-divider {
+    height: 1px;
+    background: var(--border-base);
+    margin: -2px calc(-1 * var(--tool-card-expanded-pad-x)) 0;
+  }
+
+  .task-expanded-content .task-prompt-markdown {
+    > :first-child {
+      margin-top: 0 !important;
+    }
+
+    > :last-child {
+      margin-bottom: 0 !important;
+    }
+  }
+
+  /* Extra breathing room below header / divider before prompt + actions. */
+  &.base-tool-card-wrapper > .base-tool-card-expanded {
+    padding-top: 8px;
+  }
+
+  &.base-tool-card-wrapper > .base-tool-card-expanded:has(.task-prompt-content) {
+    padding-bottom: 0;
+  }
+
+  .duration-text {
+    display: flex;
+    align-items: center;
+    gap: var(--flowchat-inline-gap);
+    color: var(--color-text-secondary);
+    font-size: var(--flowchat-font-size-xs);
+    font-weight: 600;
+    letter-spacing: 0.01em;
+    line-height: var(--flowchat-compact-line-height);
+
+    svg {
+      flex-shrink: 0;
+      opacity: 0.95;
+    }
+  }
+
+  .duration-text--completed-success {
+    color: var(--color-success);
+  }
+
+  .duration-text--completed-error,
+  .duration-text--completed-cancelled {
+    color: var(--color-error);
+  }
+
+  .section-header {
+    display: flex;
+    align-items: center;
+    gap: var(--flowchat-inline-gap);
+    margin-bottom: var(--flowchat-card-gap);
+    font-size: var(--flowchat-font-size-xs);
+    font-weight: 600;
+    color: var(--color-text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    opacity: 0.8;
+  }
+
+  .section-icon {
+    color: var(--color-text-muted);
+    flex-shrink: 0;
+  }
+
+  .section-title {
+    flex: 1;
+  }
+
+  .task-expanded-content {
+    display: flex;
+    flex-direction: column;
+    gap: var(--flowchat-card-gap);
+  }
+
+
+  .error-content {
+    display: flex;
+    flex-direction: column;
+    gap: var(--flowchat-card-gap);
+  }
+
+  .error-message {
+    font-size: var(--tool-card-action-font-size);
+    color: var(--color-error);
+    line-height: var(--flowchat-support-line-height);
+  }
+
+  .error-meta {
+    display: flex;
+    align-items: center;
+    gap: var(--flowchat-inline-gap);
+    font-size: var(--flowchat-font-size-xs);
+    color: var(--color-text-muted);
+  }
+
+  .error-task,
+  .error-agent {
+    flex-shrink: 0;
+  }
+
+  .error-separator {
+    color: var(--border-base);
+  }
+
+  .tool-actions {
+    display: flex;
+    gap: var(--flowchat-inline-gap);
+    margin-top: var(--flowchat-card-gap);
+  }
+
+  .confirm-button,
+  .reject-button {
+    padding: var(--flowchat-control-pad-y) var(--flowchat-control-pad-x);
+    border-radius: 4px;
+    font-size: var(--tool-card-action-font-size);
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    border: none;
+
+    &:disabled {
+      opacity: 0.5;
+      cursor: default;
+    }
+  }
+
+  .confirm-button {
+    background: var(--color-accent-500);
+    color: var(--color-static-white);
+
+    &:hover:not(:disabled) {
+      background: var(--color-accent-600);
+    }
+  }
+
+  .reject-button {
+    background: var(--element-bg-soft);
+    color: var(--color-text-primary);
+    border: 1px solid var(--border-base);
+
+    &:hover:not(:disabled) {
+      background: var(--element-bg-hover);
+      border-color: var(--color-error);
+      color: var(--color-error);
+    }
+  }
+}
+
+
+/**
+ * Make the entire header area show pointer cursor.
+ * BaseToolCard already sets cursor:pointer on .base-tool-card,
+ * but the header content area clips it — force it here.
+ */
+.task-tool-display {
+  .base-tool-card {
+    cursor: pointer;
+  }
+}
+
+/**
+ * Unified task + subagent card wrapper.
+ * Wraps the task tool header card and the subagent items container so they
+ * behave as a single card with a shared hover/shadow effect.
+ */
+.task-with-subagent-wrapper {
+  position: relative;
+  border-radius: 8px;
+  margin: 4px 0 10px;
+  transition: box-shadow 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  contain: layout paint style;
+
+  .flow-tool-card-wrapper .base-tool-card-wrapper.task-tool-display {
+    margin: 0;
+    /*
+     * The global BaseToolCard uses transition: all. During task/subagent merge
+     * that animates border/background/radius removal and briefly exposes a
+     * separate rounded card behind the prompt. Only keep shadow/border hover
+     * feedback in this grouped shell.
+     */
+    transition:
+      box-shadow 0.18s ease,
+      border-color 0.18s ease;
+  }
+
+  // Keep expand/collapse press feedback subtle inside grouped subagent cards.
+  .flow-tool-card-wrapper .base-tool-card-wrapper.task-tool-display:active {
+    box-shadow:
+      0 1px 3px rgba(var(--color-static-black-rgb), 0.14),
+      inset 0 1px 2px rgba(var(--color-static-black-rgb), 0.18);
+  }
+
+  // Expanded state: the wrapper becomes the unified visual container.
+  &.task-with-subagent-wrapper--expanded {
+    // The wrapper itself provides the unified card appearance.
+    background: var(--color-bg-scene);
+    border: 1px solid var(--border-base);
+    backdrop-filter: blur(10px);
+    overflow: hidden;
+    box-shadow:
+      0 2px 6px var(--color-overlay-black-15),
+      0 1px 3px var(--color-overlay-black-12);
+
+    // Strip the BaseToolCard's own border/background/shadow so it merges
+    // into the wrapper; the wrapper provides the unified card chrome.
+    .flow-tool-card-wrapper .base-tool-card-wrapper.task-tool-display {
+      border: none;
+      border-radius: 0;
+      background: transparent;
+      backdrop-filter: none;
+      box-shadow: none;
+      transition: none;
+
+      &:hover {
+        box-shadow: none;
+        border-color: transparent;
+      }
+
+      &:active {
+        box-shadow: none;
+      }
+    }
+
+    // Strip the subagent container's own border/background/shadow so it
+    // merges into the wrapper; the wrapper provides the unified card chrome.
+    .subagent-items-container,
+    .subagent-projection-container {
+      border: none;
+      background: transparent;
+      backdrop-filter: none;
+    }
+
+    .base-tool-card-expanded {
+      animation: none;
+    }
+
+    &.task-with-subagent-wrapper--has-prompt .subagent-items-container,
+    &.task-with-subagent-wrapper--has-prompt .subagent-projection-container--expanded {
+      border-top: 1px solid var(--border-base);
+    }
+
+    // Match `.task-expanded-content .task-prompt-content` horizontal inset.
+    .subagent-projection-container--expanded {
+      --task-prompt-inline-pad: calc(
+        var(--flowchat-card-expanded-pad-x) + var(--flowchat-card-pad-x)
+      );
+      padding:
+        8px
+        var(--task-prompt-inline-pad)
+        10px
+        var(--task-prompt-inline-pad);
+    }
+
+    // Hide the header top accent line — the wrapper border already frames
+    // the unified card; keeping ::before would show a ghost divider above
+    // the title, making the header look like a floating frame.
+    .base-tool-card-header::before {
+      display: none;
+    }
+  }
+
+  // Hover over expanded card: stronger elevation.
+  &.task-with-subagent-wrapper--expanded:hover {
+    box-shadow:
+      0 2px 8px rgba(var(--color-static-black-rgb), 0.18),
+      0 1px 4px var(--color-overlay-black-12),
+      inset 0 1px 0 var(--color-overlay-white-04);
+    border-color: var(--border-medium);
+  }
+}
+
+/* Loading: task status icon (cube) hidden; border-pulse + text-fade from BaseToolCard handle the rest */
+.task-tool-display.base-tool-card-wrapper--loading-shimmer .tool-card-status-icon:has(.cube-loading) {
+  display: none !important;
+}
+
+/* E — task description text fades with the card */
+.task-tool-display.base-tool-card-wrapper--loading-shimmer .task-action {
+  animation: tool-card-text-fade 1.6s ease-in-out infinite;
+}
+
+/* Reviewer context block — replaces raw prompt for review-team members. */
+.task-reviewer-context {
+  display: flex;
+  flex-direction: column;
+  gap: var(--flowchat-inline-gap);
+  padding: var(--flowchat-inline-gap) 0;
+  font-size: var(--tool-card-action-font-size);
+  line-height: var(--flowchat-support-line-height);
+  color: var(--color-text-secondary);
+
+  &__role {
+    font-weight: 600;
+    font-size: var(--tool-card-action-font-size);
+  }
+
+  &__description {
+    color: var(--color-text-muted);
+  }
+
+  &__responsibilities {
+    margin: 0;
+    padding-left: 16px;
+    list-style: disc;
+
+    li {
+      color: var(--color-text-secondary);
+    }
+  }
+}
+
+@keyframes task-subagent-stop-spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}

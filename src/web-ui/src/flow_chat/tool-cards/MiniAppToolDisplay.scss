@@ -1,0 +1,186 @@
+/**
+ * InitMiniApp tool display — matches GitToolDisplay / BaseToolCard patterns.
+ */
+
+@use './_tool-card-common.scss';
+
+.base-tool-card-wrapper.miniapp-tool-display .base-tool-card--header-expandable .base-tool-card-header {
+  cursor: pointer;
+}
+
+.base-tool-card-wrapper.miniapp-tool-display .base-tool-card:not(.base-tool-card--header-expandable) .base-tool-card-header {
+  cursor: default;
+}
+
+.base-tool-card-wrapper.miniapp-tool-display .miniapp-result-footer {
+  margin-left: calc(-1 * var(--flowchat-card-expanded-pad-x));
+  margin-right: calc(-1 * var(--flowchat-card-expanded-pad-x));
+  margin-bottom: calc(-1 * var(--flowchat-card-expanded-pad-y));
+  padding: var(--flowchat-card-expanded-pad-y) var(--flowchat-card-expanded-pad-x);
+  border-radius: 0 0 var(--flowchat-card-radius) var(--flowchat-card-radius);
+}
+
+.miniapp-tool-display {
+  .miniapp-icon {
+    color: var(--color-text-secondary);
+  }
+
+  .tool-card-icon.miniapp-icon {
+    color: var(--color-text-secondary);
+  }
+
+  .miniapp-tool-info {
+    display: flex;
+    align-items: center;
+    gap: var(--flowchat-control-gap);
+    flex-wrap: nowrap;
+    min-width: 0;
+    flex: 1;
+
+    .operation-tag {
+      display: inline-flex;
+      align-items: center;
+      font-size: var(--tool-card-action-font-size);
+      font-weight: 500;
+      flex-shrink: 0;
+      white-space: nowrap;
+      color: var(--color-text-primary);
+    }
+
+    .command-text {
+      font-family: var(--tool-card-font-mono);
+      font-size: var(--tool-card-action-font-size);
+      font-weight: 500;
+      color: var(--color-text-primary);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      min-width: 0;
+    }
+  }
+
+  .output-summary {
+    font-size: var(--flowchat-font-size-xs);
+    color: var(--color-text-secondary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 200px;
+    font-family: var(--tool-card-font-mono);
+  }
+
+  .error-indicator {
+    display: flex;
+    align-items: center;
+
+    .error-text {
+      font-size: var(--tool-card-action-font-size);
+      color: color-mix(in srgb, var(--color-error) 90%, transparent);
+      font-weight: 600;
+    }
+  }
+
+  .miniapp-result-container {
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .miniapp-result-rows {
+    padding: var(--flowchat-card-expanded-pad-y) var(--flowchat-card-expanded-pad-x) 0;
+    display: flex;
+    flex-direction: column;
+    gap: var(--flowchat-flow-item-gap);
+  }
+
+  .miniapp-result-row {
+    display: flex;
+    align-items: baseline;
+    gap: var(--flowchat-control-gap);
+    flex-wrap: wrap;
+    line-height: var(--flowchat-support-line-height);
+  }
+
+  .miniapp-result-label {
+    font-size: var(--flowchat-font-size-xxs);
+    font-weight: 600;
+    color: var(--color-text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    flex-shrink: 0;
+  }
+
+  .miniapp-result-value {
+    font-family: var(--tool-card-font-mono);
+    font-size: var(--flowchat-font-size-xs);
+    color: var(--color-text-primary);
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    line-height: var(--flowchat-compact-line-height);
+  }
+
+  .miniapp-result-footer {
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+    gap: var(--flowchat-control-gap);
+    flex-wrap: wrap;
+    line-height: var(--flowchat-compact-line-height);
+    margin-top: var(--flowchat-card-gap);
+    background: var(--element-bg-subtle);
+    box-sizing: border-box;
+    border-top: 1px solid var(--border-subtle);
+  }
+
+  .miniapp-open-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--flowchat-inline-gap);
+    padding: 0.32rem var(--flowchat-card-expanded-pad-x);
+    border-radius: 4px;
+    border: 1px solid var(--border-subtle);
+    background: transparent;
+    color: var(--color-text-primary);
+    font-size: var(--flowchat-font-size-sm);
+    font-weight: 500;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+
+    &:hover {
+      background: var(--element-bg-hover);
+      border-color: var(--border-base);
+    }
+  }
+
+  .error-content {
+    padding: var(--flowchat-card-expanded-pad-y) var(--size-gap-4);
+    background: var(--glass-red-subtle);
+    border-top: 1px solid color-mix(in srgb, var(--color-error) 20%, transparent);
+
+    .error-message {
+      color: color-mix(in srgb, var(--color-error) 90%, transparent);
+      font-size: var(--flowchat-font-size-sm);
+      margin-bottom: var(--flowchat-card-gap);
+      font-family: var(--tool-card-font-mono);
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+
+    .error-meta {
+      display: flex;
+      align-items: center;
+      gap: var(--flowchat-control-gap);
+      font-size: var(--flowchat-font-size-sm);
+      color: var(--color-text-secondary);
+
+      .error-operation {
+        color: color-mix(in srgb, var(--color-error) 70%, transparent);
+        font-family: var(--tool-card-font-mono);
+      }
+    }
+  }
+}

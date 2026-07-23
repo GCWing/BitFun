@@ -1,0 +1,73 @@
+/* Full-page layout styles */
+
+.full-page-layout {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.full-page-tabs {
+  display: flex;
+  gap: 8px;
+  padding: 24px 32px;
+  background: var(--color-bg-secondary);
+  border-bottom: 1px solid var(--border-subtle);
+  overflow-x: auto;
+  flex-shrink: 0;
+}
+
+.full-page-tab {
+  padding: 12px 20px;
+  background: transparent;
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  min-width: 180px;
+  text-align: left;
+}
+
+.full-page-tab:hover {
+  background: var(--element-bg-base);
+  border-color: var(--border-base);
+  color: var(--color-text-secondary);
+}
+
+.full-page-tab.active {
+  background: var(--element-bg-medium);
+  border-color: var(--border-accent-subtle);
+  color: var(--color-text-primary);
+}
+
+.tab-name {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.tab-description {
+  font-size: 12px;
+  opacity: 0.7;
+}
+
+.full-page-content {
+  flex: 1;
+  overflow-y: auto;
+}
+
+.full-page-item {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+}
+
+.full-page-item > * {
+  width: 100%;
+}
