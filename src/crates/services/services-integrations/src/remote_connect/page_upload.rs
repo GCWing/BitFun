@@ -117,12 +117,15 @@ pub struct PageVersionInfo {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PageOpenLink {
     pub open_url: String,
+    pub page_url: String,
     pub expires_in_seconds: u64,
 }
 
 #[derive(Debug, Deserialize)]
 struct PageOpenLinkRelayResponse {
     open_url_path: String,
+    #[serde(default)]
+    page_url_path: String,
     expires_in_seconds: u64,
 }
 
@@ -548,9 +551,9 @@ pub async fn list_page_versions_from_relay(
         .map_err(|e| anyhow!("parse list versions: {e}"))?)
 }
 
-/// Create a short-lived, one-time browser handoff URL for a production Page or
-/// a specific immutable preview. The account bearer token is sent only in the
-/// authenticated request header and is never embedded in the returned URL.
+/// Resolve browser and canonical URLs for a production Page or immutable
+/// preview. Page access authentication is performed by the Relay at the Page
+/// URL; the management bearer token is never embedded in either returned URL.
 pub async fn create_page_open_link_on_relay(
     relay_url: &str,
     token: &str,
@@ -583,8 +586,14 @@ pub async fn create_page_open_link_on_relay(
         .json()
         .await
         .map_err(|e| anyhow!("parse page open link response: {e}"))?;
+    let page_url_path = if result.page_url_path.is_empty() {
+        &result.open_url_path
+    } else {
+        &result.page_url_path
+    };
     Ok(PageOpenLink {
         open_url: join_relay_url(relay_url, &result.open_url_path),
+        page_url: join_relay_url(relay_url, page_url_path),
         expires_in_seconds: result.expires_in_seconds,
     })
 }

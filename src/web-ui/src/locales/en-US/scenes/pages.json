@@ -22,8 +22,8 @@
     "private": "Private",
     "relay": "Signed-in relay users",
     "public": "Public",
-    "privateHint": "Only you can open this Page",
-    "relayHint": "Signed-in users on this relay can open it",
+    "privateHint": "Sign in as the Page owner to open it",
+    "relayHint": "Sign in with any account on this relay to open it",
     "publicHint": "Anyone with the link can open it",
     "changeAria": "Change visibility for {{title}}"
   },
@@ -45,9 +45,10 @@
     "refresh": "Refresh",
     "retry": "Try again",
     "signIn": "Open account sign-in",
-    "openProduction": "Open production",
+    "openProduction": "Open",
     "copyLink": "Copy link",
     "versions": "Versions",
+    "manage": "Manage",
     "deploy": "Deploy",
     "unpublish": "Stop production",
     "changeVisibility": "Change visibility",
@@ -58,6 +59,12 @@
     "copyVersionAria": "Copy link for version {{version}}",
     "deleteVersionAria": "Delete version {{version}}"
   },
+  "manage": {
+    "title": "Page details and access",
+    "description": "Change the Page name and sign-in requirement.",
+    "lifecycleTitle": "Production and data",
+    "lifecycleDescription": "Stopping production keeps saved versions. Deleting the Page permanently removes every version and its Page Function data."
+  },
   "versions": {
     "title": "Immutable versions",
     "empty": "No saved versions were returned.",
@@ -67,7 +74,7 @@
   },
   "confirm": {
     "visibilityTitle": "Change Page visibility?",
-    "visibilityMessage": "/{{slug}} will change from {{current}} to {{target}}. Public Pages can be opened by anyone with the URL.",
+    "visibilityMessage": "/{{slug}} will change from {{current}} to {{target}}. Every option except Public requires sign-in.",
     "deployTitle": "Switch the production version?",
     "deployMessage": "/{{slug}} will switch production from {{current}} to {{target}}. The previous version remains available for rollback.",
     "unpublishTitle": "Stop serving this Page in production?",
@@ -81,7 +88,7 @@
     "versionsLoadFailed": "Could not load versions: {{error}}",
     "openFailed": "Could not open the Page: {{error}}",
     "linkCopied": "Page URL copied.",
-    "temporaryLinkCopied": "A one-time secure Page link was copied. Open it within 60 seconds.",
+    "protectedLinkCopied": "Protected Page URL copied. Visitors must sign in first.",
     "copyFailed": "Could not copy the Page link: {{error}}",
     "visibilityUpdated": "Visibility changed to {{visibility}}.",
     "visibilityFailed": "Could not change visibility: {{error}}",

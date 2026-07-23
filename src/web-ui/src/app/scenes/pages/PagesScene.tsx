@@ -15,6 +15,7 @@ import {
   RefreshCw,
   Rocket,
   Save,
+  Settings2,
   Trash2,
   Users,
   type LucideIcon,
@@ -90,6 +91,7 @@ const PagesScene: React.FC<PagesSceneProps> = ({ isActive = true }) => {
   const [relayBaseUrl, setRelayBaseUrl] = useState('');
   const [versionsBySlug, setVersionsBySlug] = useState<Record<string, PageVersionInfo[]>>({});
   const [expandedSlugs, setExpandedSlugs] = useState<Set<string>>(() => new Set());
+  const [managedSlugs, setManagedSlugs] = useState<Set<string>>(() => new Set());
   const [loading, setLoading] = useState(false);
   const [loadError, setLoadError] = useState('');
   const [loginRequired, setLoginRequired] = useState(false);
@@ -123,6 +125,7 @@ const PagesScene: React.FC<PagesSceneProps> = ({ isActive = true }) => {
     setRelayBaseUrl('');
     setVersionsBySlug({});
     setExpandedSlugs(new Set());
+    setManagedSlugs(new Set());
     setTitleDrafts({});
     setPendingBySlug({});
     setLoadError('');
@@ -159,6 +162,9 @@ const PagesScene: React.FC<PagesSceneProps> = ({ isActive = true }) => {
       Object.entries(current).filter(([slug]) => canRetainSlugState(slug)),
     ));
     setExpandedSlugs((current) => new Set(
+      [...current].filter((slug) => canRetainSlugState(slug)),
+    ));
+    setManagedSlugs((current) => new Set(
       [...current].filter((slug) => canRetainSlugState(slug)),
     ));
     setTitleDrafts((current) => Object.fromEntries(
@@ -399,9 +405,34 @@ const PagesScene: React.FC<PagesSceneProps> = ({ isActive = true }) => {
       }
     }
     if (pageOwnerRef.current?.epoch === ownerEpoch) {
+      setManagedSlugs((current) => {
+        const next = new Set(current);
+        next.delete(page.slug);
+        return next;
+      });
       setExpandedSlugs((current) => new Set(current).add(page.slug));
     }
   }, [expandedSlugs, loadVersions, versionsBySlug]);
+
+  const toggleManagement = useCallback((slug: string) => {
+    const willOpen = !managedSlugs.has(slug);
+    setManagedSlugs((current) => {
+      const next = new Set(current);
+      if (willOpen) {
+        next.add(slug);
+      } else {
+        next.delete(slug);
+      }
+      return next;
+    });
+    if (willOpen) {
+      setExpandedSlugs((expanded) => {
+        const collapsed = new Set(expanded);
+        collapsed.delete(slug);
+        return collapsed;
+      });
+    }
+  }, [managedSlugs]);
 
   const openPage = useCallback(async (
     page: PageInfo,
@@ -433,25 +464,21 @@ const PagesScene: React.FC<PagesSceneProps> = ({ isActive = true }) => {
     const lease = await beginPageAction(page, key, ownerEpoch);
     if (!lease) return;
     try {
-      let url = '';
-      let temporary = false;
       const path = version?.preview_url_path ?? page.url_path;
-      if (page.visibility === 'public' && relayBaseUrl && path) {
-        url = `${relayBaseUrl}${path.startsWith('/') ? '' : '/'}${path}`;
-      } else {
-        const link = await pageAPI.createOpenLink(
+      const url = /^https?:\/\//i.test(path)
+        ? path
+        : relayBaseUrl && path
+          ? `${relayBaseUrl}${path.startsWith('/') ? '' : '/'}${path}`
+        : (await pageAPI.createOpenLink(
           page.slug,
           page.generation,
           version?.version_id,
-        );
-        url = link.open_url;
-        temporary = true;
-      }
+        )).page_url;
       if (!await validatePageAction(lease)) return;
       await systemAPI.setClipboard(url);
-      notification.success(temporary
-        ? t('notifications.temporaryLinkCopied')
-        : t('notifications.linkCopied'));
+      notification.success(page.visibility === 'public'
+        ? t('notifications.linkCopied')
+        : t('notifications.protectedLinkCopied'));
     } catch (error) {
       if (!await validatePageAction(lease)) return;
       log.error('Failed to copy Page link', {
@@ -699,81 +726,85 @@ const PagesScene: React.FC<PagesSceneProps> = ({ isActive = true }) => {
         ) : null}
       />
 
-      {loadError && pages.length > 0 && (
-        <div className="pages-scene__refresh-error" role="alert" data-testid="pages-refresh-error">
-          <span>{t('loadFailed')}</span>
-          <small>{loadError}</small>
-          <Button variant="secondary" size="small" onClick={() => void loadPages()}>
-            {t('actions.retry')}
-          </Button>
-        </div>
-      )}
-
-      {loading && pages.length === 0 ? (
-        <div
-          className="pages-scene__grid"
-          data-testid="pages-loading"
-          role="status"
-          aria-busy="true"
-          aria-label={t('loading')}
-        >
-          {[0, 1, 2].map((index) => (
-            <div className="pages-scene__card pages-scene__card--skeleton" key={index}>
-              <div className="pages-scene__skeleton-head">
-                <span className="pages-scene__skeleton-block" />
-                <span className="pages-scene__skeleton-lines">
-                  <span className="pages-scene__skeleton-line is-w-55" />
-                  <span className="pages-scene__skeleton-line is-w-35" />
-                </span>
-              </div>
-              <span className="pages-scene__skeleton-line is-w-80" />
-              <span className="pages-scene__skeleton-line is-w-65" />
-              <span className="pages-scene__skeleton-line is-w-45" />
-            </div>
-          ))}
-        </div>
-      ) : loginRequired ? (
-        <GalleryEmpty
-          icon={<PanelsTopLeft size={36} />}
-          message={<>{t('signInRequired')}<small>{t('signInHint')}</small></>}
-          action={(
-            <Button variant="primary" size="small" onClick={() => setShowAccountDialog(true)}>
-              {t('actions.signIn')}
+      <div className="pages-scene__content">
+        {loadError && pages.length > 0 && (
+          <div className="pages-scene__refresh-error" role="alert" data-testid="pages-refresh-error">
+            <span>{t('loadFailed')}</span>
+            <small>{loadError}</small>
+            <Button variant="secondary" size="small" onClick={() => void loadPages()}>
+              {t('actions.retry')}
             </Button>
-          )}
-          testId="pages-sign-in-required"
-        />
-      ) : loadError && pages.length === 0 ? (
-        <GalleryEmpty
-          icon={<PanelsTopLeft size={36} />}
-          message={<>{t('loadFailed')}<small>{loadError}</small></>}
-          isError
-          action={<Button variant="secondary" size="small" onClick={() => void loadPages()}>{t('actions.retry')}</Button>}
-          testId="pages-error"
-        />
-      ) : pages.length === 0 ? (
-        <GalleryEmpty
-          icon={<PanelsTopLeft size={36} />}
-          message={<>{t('empty')}<small>{t('emptyHint')}</small></>}
-          testId="pages-empty"
-        />
-      ) : (
-        <div className="pages-scene__grid" role="list">
-          {pages.map((page) => {
-            const versions = versionsBySlug[page.slug] ?? [];
-            const expanded = expandedSlugs.has(page.slug);
-            const deployed = Boolean(page.deployed_version_id);
-            const pendingAction = pendingBySlug[page.slug];
-            const pageBusy = Boolean(pendingAction);
-            const titleDraft = titleDrafts[page.slug] ?? page.title;
-            const titleDirty = titleDraft.trim().length > 0 && titleDraft.trim() !== page.title;
-            const titleSaving = pendingAction === `title:${page.slug}`;
-            const VisibilityIcon = VISIBILITY_ICONS[page.visibility];
-            return (
-              <article className="pages-scene__card" key={page.slug} role="listitem">
+          </div>
+        )}
+
+        {loading && pages.length === 0 ? (
+          <div
+            className="pages-scene__grid"
+            data-testid="pages-loading"
+            role="status"
+            aria-busy="true"
+            aria-label={t('loading')}
+          >
+            {[0, 1, 2].map((index) => (
+              <div className="pages-scene__card pages-scene__card--skeleton" key={index}>
+                <div className="pages-scene__skeleton-head">
+                  <span className="pages-scene__skeleton-block" />
+                  <span className="pages-scene__skeleton-lines">
+                    <span className="pages-scene__skeleton-line is-w-55" />
+                    <span className="pages-scene__skeleton-line is-w-35" />
+                  </span>
+                </div>
+                <span className="pages-scene__skeleton-line is-w-80" />
+                <span className="pages-scene__skeleton-line is-w-65" />
+                <span className="pages-scene__skeleton-line is-w-45" />
+              </div>
+            ))}
+          </div>
+        ) : loginRequired ? (
+          <GalleryEmpty
+            icon={<PanelsTopLeft size={36} />}
+            message={<>{t('signInRequired')}<small>{t('signInHint')}</small></>}
+            action={(
+              <Button variant="primary" size="small" onClick={() => setShowAccountDialog(true)}>
+                {t('actions.signIn')}
+              </Button>
+            )}
+            testId="pages-sign-in-required"
+          />
+        ) : loadError && pages.length === 0 ? (
+          <GalleryEmpty
+            icon={<PanelsTopLeft size={36} />}
+            message={<>{t('loadFailed')}<small>{loadError}</small></>}
+            isError
+            action={<Button variant="secondary" size="small" onClick={() => void loadPages()}>{t('actions.retry')}</Button>}
+            testId="pages-error"
+          />
+        ) : pages.length === 0 ? (
+          <GalleryEmpty
+            icon={<PanelsTopLeft size={36} />}
+            message={<>{t('empty')}<small>{t('emptyHint')}</small></>}
+            testId="pages-empty"
+          />
+        ) : (
+          <div className="pages-scene__grid" role="list">
+            {pages.map((page) => {
+              const versions = versionsBySlug[page.slug] ?? [];
+              const expanded = expandedSlugs.has(page.slug);
+              const managing = managedSlugs.has(page.slug);
+              const deployed = Boolean(page.deployed_version_id);
+              const pendingAction = pendingBySlug[page.slug];
+              const pageBusy = Boolean(pendingAction);
+              const titleDraft = titleDrafts[page.slug] ?? page.title;
+              const titleDirty = titleDraft.trim().length > 0 && titleDraft.trim() !== page.title;
+              const titleSaving = pendingAction === `title:${page.slug}`;
+              const VisibilityIcon = VISIBILITY_ICONS[page.visibility];
+              const managementId = `page-management-${page.slug}`;
+              const versionsId = `page-versions-${page.slug}`;
+              return (
+                <article className="pages-scene__card" key={page.slug} role="listitem">
                 <header className="pages-scene__card-head">
                   <span className="pages-scene__card-icon" aria-hidden="true">
-                    <PanelsTopLeft size={16} />
+                    <PanelsTopLeft size={18} />
                   </span>
                   <div className="pages-scene__identity">
                     <h3 title={page.title || page.slug}>{page.title || page.slug}</h3>
@@ -798,64 +829,13 @@ const PagesScene: React.FC<PagesSceneProps> = ({ isActive = true }) => {
                     <Files size={12} aria-hidden="true" />
                     {t('meta.files', { count: page.file_count })}
                   </span>
-                </div>
-
-                <div className="pages-scene__settings">
-                  <div className="pages-scene__setting-row">
-                    <span className="pages-scene__setting-label">{t('titleField.label')}</span>
-                    <div className="pages-scene__title-control">
-                      <Input
-                        size="small"
-                        value={titleDraft}
-                        maxLength={120}
-                        disabled={pageBusy}
-                        onChange={(event) => {
-                          const value = event.currentTarget.value;
-                          setTitleDrafts((current) => ({
-                            ...current,
-                            [page.slug]: value,
-                          }));
-                        }}
-                        onKeyDown={(event) => {
-                          if (event.key === 'Enter') void saveTitle(page, pageOwnerEpoch);
-                        }}
-                        aria-label={t('titleField.inputAria', { slug: page.slug })}
-                      />
-                      {(titleDirty || titleSaving) && (
-                        <Button
-                          variant="secondary"
-                          size="small"
-                          disabled={pageBusy || !titleDirty}
-                          isLoading={titleSaving}
-                          onClick={() => void saveTitle(page, pageOwnerEpoch)}
-                        >
-                          <Save size={13} /> {t('actions.saveTitle')}
-                        </Button>
-                      )}
-                    </div>
-                  </div>
-
-                  <div className="pages-scene__setting-row">
-                    <span className="pages-scene__setting-label">{t('visibility.label')}</span>
-                    <div className="pages-scene__visibility-control">
-                      <Select
-                        size="small"
-                        value={page.visibility}
-                        options={visibilityOptions}
-                        disabled={pageBusy}
-                        onChange={(value) => void changeVisibility(
-                          page,
-                          pageOwnerEpoch,
-                          String(value) as PageVisibility,
-                        )}
-                        triggerAriaLabel={t('visibility.changeAria', { title: page.title || page.slug })}
-                      />
-                      <span className="pages-scene__visibility-hint">
-                        <VisibilityIcon size={12} aria-hidden="true" />
-                        {visibilityHint(page.visibility)}
-                      </span>
-                    </div>
-                  </div>
+                  <span
+                    className="pages-scene__meta-item pages-scene__meta-item--visibility"
+                    title={visibilityHint(page.visibility)}
+                  >
+                    <VisibilityIcon size={12} aria-hidden="true" />
+                    {visibilityLabel(page.visibility)}
+                  </span>
                 </div>
 
                 <footer className="pages-scene__actions">
@@ -888,6 +868,7 @@ const PagesScene: React.FC<PagesSceneProps> = ({ isActive = true }) => {
                     disabled={pageBusy}
                     isLoading={pendingAction === `versions:${page.slug}`}
                     aria-expanded={expanded}
+                    aria-controls={versionsId}
                   >
                     <FileClock size={13} /> {t('actions.versions')}
                     {versions.length > 0 && (
@@ -896,30 +877,124 @@ const PagesScene: React.FC<PagesSceneProps> = ({ isActive = true }) => {
                     {expanded ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
                   </Button>
                   <span className="pages-scene__actions-spacer" />
-                  {deployed && (
-                    <Button
-                      variant="ghost"
-                      size="small"
-                      onClick={() => void unpublishPage(page, pageOwnerEpoch)}
-                      disabled={pageBusy}
-                      isLoading={pendingAction === `unpublish:${page.slug}`}
-                    >
-                      <CircleStop size={13} /> {t('actions.unpublish')}
-                    </Button>
-                  )}
                   <Button
-                    variant="danger"
+                    variant="secondary"
                     size="small"
-                    onClick={() => void deletePage(page, pageOwnerEpoch)}
+                    onClick={() => toggleManagement(page.slug)}
                     disabled={pageBusy}
-                    isLoading={pendingAction === `delete-page:${page.slug}`}
+                    aria-expanded={managing}
+                    aria-controls={managementId}
                   >
-                    <Trash2 size={13} /> {t('actions.deletePage')}
+                    <Settings2 size={13} /> {t('actions.manage')}
+                    {managing ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
                   </Button>
                 </footer>
 
+                <section
+                  id={managementId}
+                  className="pages-scene__management"
+                  aria-labelledby={`${managementId}-title`}
+                  hidden={!managing}
+                >
+                  <div className="pages-scene__management-heading">
+                    <h4 id={`${managementId}-title`}>{t('manage.title')}</h4>
+                    <p>{t('manage.description')}</p>
+                  </div>
+
+                  <div className="pages-scene__settings">
+                    <div className="pages-scene__setting-field">
+                      <span className="pages-scene__setting-label">{t('titleField.label')}</span>
+                      <div className="pages-scene__title-control">
+                        <Input
+                          size="small"
+                          value={titleDraft}
+                          maxLength={120}
+                          disabled={pageBusy}
+                          onChange={(event) => {
+                            const value = event.currentTarget.value;
+                            setTitleDrafts((current) => ({
+                              ...current,
+                              [page.slug]: value,
+                            }));
+                          }}
+                          onKeyDown={(event) => {
+                            if (event.key === 'Enter') void saveTitle(page, pageOwnerEpoch);
+                          }}
+                          aria-label={t('titleField.inputAria', { slug: page.slug })}
+                        />
+                        {(titleDirty || titleSaving) && (
+                          <Button
+                            variant="secondary"
+                            size="small"
+                            disabled={pageBusy || !titleDirty}
+                            isLoading={titleSaving}
+                            onClick={() => void saveTitle(page, pageOwnerEpoch)}
+                          >
+                            <Save size={13} /> {t('actions.saveTitle')}
+                          </Button>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="pages-scene__setting-field">
+                      <span className="pages-scene__setting-label">{t('visibility.label')}</span>
+                      <div className="pages-scene__visibility-control">
+                        <Select
+                          size="small"
+                          value={page.visibility}
+                          options={visibilityOptions}
+                          disabled={pageBusy}
+                          onChange={(value) => void changeVisibility(
+                            page,
+                            pageOwnerEpoch,
+                            String(value) as PageVisibility,
+                          )}
+                          triggerAriaLabel={t('visibility.changeAria', { title: page.title || page.slug })}
+                        />
+                        <span className="pages-scene__visibility-hint">
+                          <VisibilityIcon size={12} aria-hidden="true" />
+                          {visibilityHint(page.visibility)}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="pages-scene__management-danger">
+                    <div className="pages-scene__management-danger-copy">
+                      <strong>{t('manage.lifecycleTitle')}</strong>
+                      <span>{t('manage.lifecycleDescription')}</span>
+                    </div>
+                    <div className="pages-scene__management-actions">
+                      {deployed && (
+                        <Button
+                          variant="ghost"
+                          size="small"
+                          onClick={() => void unpublishPage(page, pageOwnerEpoch)}
+                          disabled={pageBusy}
+                          isLoading={pendingAction === `unpublish:${page.slug}`}
+                        >
+                          <CircleStop size={13} /> {t('actions.unpublish')}
+                        </Button>
+                      )}
+                      <Button
+                        variant="danger"
+                        size="small"
+                        onClick={() => void deletePage(page, pageOwnerEpoch)}
+                        disabled={pageBusy}
+                        isLoading={pendingAction === `delete-page:${page.slug}`}
+                      >
+                        <Trash2 size={13} /> {t('actions.deletePage')}
+                      </Button>
+                    </div>
+                  </div>
+                </section>
+
                 {expanded && (
-                  <div className="pages-scene__versions" data-testid={`page-versions-${page.slug}`}>
+                  <div
+                    id={versionsId}
+                    className="pages-scene__versions"
+                    data-testid={`page-versions-${page.slug}`}
+                  >
                     <div className="pages-scene__versions-heading">
                       <span>
                         <FileClock size={13} aria-hidden="true" />
@@ -1007,11 +1082,12 @@ const PagesScene: React.FC<PagesSceneProps> = ({ isActive = true }) => {
                     )}
                   </div>
                 )}
-              </article>
-            );
-          })}
-        </div>
-      )}
+                </article>
+              );
+            })}
+          </div>
+        )}
+      </div>
       {showAccountDialog && (
         <Suspense fallback={null}>
           <RemoteConnectDialog

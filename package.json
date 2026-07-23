@@ -82,6 +82,9 @@
     "cli:test": "cd src/apps/cli && cargo test",
     "preview-components": "pnpm --dir src/web-ui exec vite --config vite.config.preview.ts",
     "build-components": "pnpm --dir src/web-ui exec vite build --config vite.config.preview.ts",
+    "type-check:relay-page-auth": "tsc --noEmit --skipLibCheck --lib ES2020,DOM --moduleResolution bundler --module preserve --target ES2020 src/crates/services/relay-service/web/page-auth-client.ts",
+    "build:relay-page-auth": "pnpm run type-check:relay-page-auth && esbuild src/crates/services/relay-service/web/page-auth-client.ts --bundle --minify --format=iife --platform=browser --target=es2020 --legal-comments=inline --outfile=src/crates/services/relay-service/src/routes/page_auth_client.bundle.js",
+    "test:relay-page-auth": "node --test src/crates/services/relay-service/web/page-auth-client.test.mjs",
     "website:dev": "pnpm --dir website run dev",
     "website:build": "pnpm --dir website run build",
     "website:preview": "pnpm --dir website run preview",
@@ -99,6 +102,7 @@
     "e2e:test:perf:long-session-interactions:release-fast": "cross-env BITFUN_E2E_APP_MODE=release-fast E2E_LOG_LEVEL=warn node tests/e2e/scripts/run-long-session-interaction-matrix.mjs"
   },
   "devDependencies": {
+    "@noble/hashes": "^2.0.1",
     "@tauri-apps/cli": "^2.10.0",
     "@vitejs/plugin-react": "^4.6.0",
     "copyfiles": "^2.4.1",

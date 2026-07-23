@@ -18,6 +18,7 @@ const mocks = vi.hoisted(() => ({
   confirmDanger: vi.fn(),
   listen: vi.fn(),
   openExternal: vi.fn(),
+  setClipboard: vi.fn(),
 }));
 
 vi.mock('@/infrastructure/api/service-api/ApiClient', () => ({
@@ -45,7 +46,7 @@ vi.mock('@/infrastructure/api/service-api/RemoteConnectAPI', () => ({
 }));
 
 vi.mock('@/infrastructure/api/service-api/SystemAPI', () => ({
-  systemAPI: { openExternal: mocks.openExternal, setClipboard: vi.fn() },
+  systemAPI: { openExternal: mocks.openExternal, setClipboard: mocks.setClipboard },
 }));
 
 vi.mock('@/infrastructure/i18n', () => {
@@ -114,6 +115,7 @@ describe('PagesScene initial loading', () => {
     mocks.confirmDanger.mockReset().mockResolvedValue(true);
     mocks.listen.mockReset().mockImplementation(() => vi.fn());
     mocks.openExternal.mockReset().mockResolvedValue(undefined);
+    mocks.setClipboard.mockReset().mockResolvedValue(undefined);
   });
 
   afterEach(() => {
@@ -139,7 +141,7 @@ describe('PagesScene initial loading', () => {
     expect(container.querySelector('[data-testid="pages-error"]')).not.toBeNull();
   });
 
-  it('locks every action on one Page while an operation is pending and exposes title editing', async () => {
+  it('discloses management controls on demand and locks every action while an operation is pending', async () => {
     mocks.listPages.mockResolvedValue([{
       slug: 'demo',
       generation: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
@@ -153,7 +155,11 @@ describe('PagesScene initial loading', () => {
       preview_url_path: '/p/alice/demo/@v/v1',
       deployed_version_id: 'v1',
     }]);
-    let resolveOpenLink: ((value: { open_url: string; expires_in_seconds: number }) => void) | undefined;
+    let resolveOpenLink: ((value: {
+      open_url: string;
+      page_url: string;
+      expires_in_seconds: number;
+    }) => void) | undefined;
     mocks.createOpenLink.mockImplementation(() => new Promise((resolve) => {
       resolveOpenLink = resolve;
     }));
@@ -164,7 +170,17 @@ describe('PagesScene initial loading', () => {
       await new Promise((resolve) => setTimeout(resolve, 0));
     });
 
+    const management = container.querySelector('#page-management-demo') as HTMLElement | null;
+    expect(management?.hidden).toBe(true);
+    const manage = [...container.querySelectorAll('button')]
+      .find((button) => button.textContent?.includes('actions.manage'));
+    await act(async () => {
+      manage?.click();
+      await Promise.resolve();
+    });
+    expect(management?.hidden).toBe(false);
     expect(container.querySelector('input[aria-label="titleField.inputAria"]')).not.toBeNull();
+
     const buttons = [...container.querySelectorAll('button')];
     const open = buttons.find((button) => button.textContent?.includes('actions.openProduction'));
     const remove = buttons.find((button) => button.textContent?.includes('actions.deletePage'));
@@ -178,10 +194,56 @@ describe('PagesScene initial loading', () => {
     expect(remove?.disabled).toBe(true);
 
     await act(async () => {
-      resolveOpenLink?.({ open_url: 'https://relay.test/open', expires_in_seconds: 60 });
+      resolveOpenLink?.({
+        open_url: 'https://relay.test/open',
+        page_url: 'https://relay.test/p/alice/demo',
+        expires_in_seconds: 60,
+      });
       await Promise.resolve();
     });
     expect(remove?.disabled).toBe(false);
+  });
+
+  it('copies the canonical protected URL instead of an account handoff ticket', async () => {
+    mocks.listPages.mockResolvedValue([{
+      slug: 'private-demo',
+      generation: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+      visibility: 'private',
+      title: 'Private demo',
+      file_count: 1,
+      total_bytes: 20,
+      created_at: 1,
+      updated_at: 1,
+      url_path: 'https://pages.test/site/p/alice/private-demo',
+      preview_url_path: 'https://pages.test/site/p/alice/private-demo/@v/v1',
+      deployed_version_id: 'v1',
+    }]);
+    mocks.createOpenLink.mockResolvedValue({
+      open_url: 'https://relay.test/api/page-open/one-time-ticket',
+      page_url: 'https://relay.test/p/alice/private-demo',
+      expires_in_seconds: 60,
+    });
+
+    await act(async () => {
+      root.render(<PagesScene isActive />);
+      await Promise.resolve();
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    const copy = [...container.querySelectorAll('button')]
+      .find((button) => button.textContent?.includes('actions.copyLink'));
+    await act(async () => {
+      copy?.click();
+      await Promise.resolve();
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+
+    expect(mocks.setClipboard).toHaveBeenCalledWith(
+      'https://pages.test/site/p/alice/private-demo',
+    );
+    expect(mocks.createOpenLink).not.toHaveBeenCalled();
+    expect(mocks.setClipboard).not.toHaveBeenCalledWith(
+      'https://relay.test/api/page-open/one-time-ticket',
+    );
   });
 
   it('does not restore a deleted Page from an older refresh response', async () => {
@@ -456,7 +518,11 @@ describe('PagesScene initial loading', () => {
       deployed_version_id: 'b1',
     };
     mocks.listPages.mockResolvedValueOnce([oldPage]);
-    let resolveStaleOpen: ((value: { open_url: string; expires_in_seconds: number }) => void)
+    let resolveStaleOpen: ((value: {
+      open_url: string;
+      page_url: string;
+      expires_in_seconds: number;
+    }) => void)
       | undefined;
     mocks.createOpenLink.mockImplementationOnce(() => new Promise((resolve) => {
       resolveStaleOpen = resolve;
@@ -496,6 +562,7 @@ describe('PagesScene initial loading', () => {
     await act(async () => {
       resolveStaleOpen?.({
         open_url: 'https://relay.test/stale-open',
+        page_url: 'https://relay.test/p/alice/same-user',
         expires_in_seconds: 60,
       });
       await Promise.resolve();

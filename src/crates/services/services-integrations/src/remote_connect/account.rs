@@ -975,6 +975,20 @@ mod tests {
     }
 
     #[test]
+    fn password_hash_matches_the_browser_argon2id_vector() {
+        let params = KdfParams {
+            m: 8 * 1024,
+            t: 1,
+            p: 1,
+        };
+        let salt = std::array::from_fn::<_, SALT_LEN, _>(|index| index as u8);
+        assert_eq!(
+            derive_password_hash("correct horse battery staple", &salt, &params).unwrap(),
+            "mu73UxPlhfSSwzxeEtgumtJTt914Yy1Tfomc1O3deJw="
+        );
+    }
+
+    #[test]
     fn detects_insufficient_storage_errors_for_quota_relief() {
         assert!(is_insufficient_storage_error(&anyhow!(
             "relay returned HTTP 507 Insufficient Storage (the configured account or asset quota is full)"

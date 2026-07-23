@@ -15,6 +15,10 @@ pub(super) struct RelayConfig {
     /// Global capacity for content-addressed room and Page assets.
     pub asset_store_max_bytes: u64,
     pub cors_allow_origins: Vec<String>,
+    /// Browser-visible base URL used for published Page content.
+    pub page_public_base_url: Option<String>,
+    /// Browser-visible base URL used for trusted Relay Page login.
+    pub page_auth_base_url: Option<String>,
     /// Path to the SQLite database file used for account storage.
     /// When None, account features are disabled (relay acts as pure relay only).
     pub db_path: Option<String>,
@@ -32,6 +36,8 @@ impl Default for RelayConfig {
             room_web_dir: "/tmp/bitfun-room-web".to_string(),
             asset_store_max_bytes: bitfun_relay_service::DEFAULT_DISK_ASSET_STORE_MAX_BYTES,
             cors_allow_origins: Vec::new(),
+            page_public_base_url: None,
+            page_auth_base_url: None,
             db_path: None,
         }
     }
@@ -76,6 +82,12 @@ impl RelayConfig {
                 .map(str::to_string)
                 .collect();
         }
+        cfg.page_public_base_url = std::env::var("RELAY_PAGE_PUBLIC_BASE_URL")
+            .ok()
+            .filter(|value| !value.trim().is_empty());
+        cfg.page_auth_base_url = std::env::var("RELAY_PAGE_AUTH_BASE_URL")
+            .ok()
+            .filter(|value| !value.trim().is_empty());
         cfg
     }
 }
