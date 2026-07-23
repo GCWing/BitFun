@@ -13,6 +13,8 @@ export class RemoteDescriptorParser {
     const roomId = params.get('room') || '';
     const publicKey = params.get('pk') || '';
     const relay = params.get('relay') || '';
+    const accountAuth = params.get('auth') === 'account';
+    const accountUsername = (params.get('user') || '').trim();
 
     if (!roomId || !publicKey) {
       throw new Error(RemoteI18n.t('errors.remoteUrlMissingParams'));
@@ -21,8 +23,26 @@ export class RemoteDescriptorParser {
     return {
       relayUrl: RemoteDescriptorParser.resolveRelayBaseUrl(value, relay),
       roomId,
-      publicKey
+      publicKey,
+      accountAuth,
+      accountUsername
     };
+  }
+
+  static accountAuthRequired(input: string): boolean {
+    try {
+      return RemoteDescriptorParser.parse(input).accountAuth;
+    } catch (_err) {
+      return false;
+    }
+  }
+
+  static accountUsername(input: string): string {
+    try {
+      return RemoteDescriptorParser.parse(input).accountUsername;
+    } catch (_err) {
+      return '';
+    }
   }
 
   private static extractQuery(value: string): string {
@@ -65,9 +85,18 @@ export class RemoteDescriptorParser {
     const withoutHash = hashIndex >= 0 ? fullUrl.slice(0, hashIndex) : fullUrl;
     const questionIndex = withoutHash.indexOf('?');
     const withoutQuery = questionIndex >= 0 ? withoutHash.slice(0, questionIndex) : withoutHash;
-    return withoutQuery
-      .replace(/\/r\/[^/]*$/, '')
-      .replace(/\/[^/]*$/, '')
-      .replace(/\/$/, '');
+    const relayRouteIndex = withoutQuery.indexOf('/r/');
+    if (relayRouteIndex >= 0) {
+      return withoutQuery.slice(0, relayRouteIndex).replace(/\/$/, '');
+    }
+
+    const schemeIndex = withoutQuery.indexOf('://');
+    if (schemeIndex >= 0) {
+      const pathIndex = withoutQuery.indexOf('/', schemeIndex + 3);
+      const origin = pathIndex >= 0 ? withoutQuery.slice(0, pathIndex) : withoutQuery;
+      return origin.replace(/\/$/, '');
+    }
+
+    return withoutQuery.replace(/\/[^/]*$/, '').replace(/\/$/, '');
   }
 }

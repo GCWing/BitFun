@@ -1,24 +1,14 @@
-import { ChatMessage, ChatMessageItemResponse, ImageAttachment, RemoteSession, RemoteToolStatusResponse } from '../model/RemoteModels';
-import { Encoding } from './Encoding';
+import { ChatMessage, ChatMessageItemResponse, ImageAttachment, RemoteSession, RemoteToolStatusResponse } from '../../model/RemoteModels';
+import { Encoding } from '../Encoding';
+import { GeneralChatPort, GeneralChatSendResult, GeneralChatStreamObserver } from './GeneralChatPort';
 
-export interface GeneralChatSendResult {
-  userMessage: ChatMessage;
-  assistantMessage: ChatMessage;
-  streamChunks: string[];
-  tools: RemoteToolStatusResponse[];
-}
-
-export class GeneralChatBackend {
-  private sessions: RemoteSession[] = [];
-  private messagesBySession: Map<string, ChatMessage[]> = new Map<string, ChatMessage[]>();
-
-  listSessions(): RemoteSession[] {
-    return this.sessions.slice();
+export class MockGeneralChatAdapter implements GeneralChatPort {
+  async generateTitle(firstMessage: string, _assistantMessage: string): Promise<string> {
+    return firstMessage.trim().slice(0, 12);
   }
-
-  createSession(firstMessage: string): RemoteSession {
+  async createSession(firstMessage: string): Promise<RemoteSession> {
     const now = new Date().toISOString();
-    const title = GeneralChatBackend.titleFromMessage(firstMessage);
+    const title = MockGeneralChatAdapter.titleFromMessage(firstMessage);
     const session: RemoteSession = {
       id: Encoding.randomId('chat'),
       title,
@@ -30,92 +20,52 @@ export class GeneralChatBackend {
       workspacePath: '',
       workspaceName: 'BitFun'
     };
-    this.sessions = [session].concat(this.sessions);
-    this.messagesBySession.set(session.id, []);
     return session;
   }
 
-  messages(sessionId: string): ChatMessage[] {
-    return (this.messagesBySession.get(sessionId) || []).slice();
-  }
-
-  renameSession(sessionId: string, title: string): void {
-    const nextTitle = title.trim();
-    if (nextTitle.length === 0) {
-      return;
-    }
-    this.sessions = this.sessions.map((session: RemoteSession) => {
-      if (session.id !== sessionId) {
-        return session;
-      }
-      return {
-        id: session.id,
-        title: nextTitle,
-        agentType: session.agentType,
-        status: session.status,
-        updatedAt: new Date().toISOString(),
-        createdAt: session.createdAt,
-        messageCount: session.messageCount,
-        workspacePath: session.workspacePath,
-        workspaceName: session.workspaceName
-      };
-    });
-  }
-
-  sendMessage(sessionId: string, text: string, images: ImageAttachment[] = []): GeneralChatSendResult {
+  async sendMessage(
+    _sessionId: string,
+    text: string,
+    images: ImageAttachment[] = [],
+    _history: ChatMessage[] = [],
+    observer?: GeneralChatStreamObserver
+  ): Promise<GeneralChatSendResult> {
     const trimmed = text.trim();
     const now = new Date().toISOString();
     const userMessage: ChatMessage = {
       id: Encoding.randomId('msg'),
       role: 'user',
       text: trimmed,
-      status: 'sent',
+      status: 'pending',
       timestamp: now,
       images
     };
-    const tools = GeneralChatBackend.toolsFor(trimmed, images);
+    const tools = MockGeneralChatAdapter.toolsFor(trimmed, images);
     const assistantMessage: ChatMessage = {
       id: Encoding.randomId('assistant'),
       turnId: Encoding.randomId('turn'),
       role: 'assistant',
-      text: GeneralChatBackend.replyFor(trimmed, images),
+      text: MockGeneralChatAdapter.replyFor(trimmed, images),
       status: 'completed',
       timestamp: new Date().toISOString(),
       tools,
-      items: GeneralChatBackend.itemsFor(tools, GeneralChatBackend.replyFor(trimmed, images))
+      items: MockGeneralChatAdapter.itemsFor(tools, MockGeneralChatAdapter.replyFor(trimmed, images))
     };
-    const messages = (this.messagesBySession.get(sessionId) || []).concat([userMessage, assistantMessage]);
-    this.messagesBySession.set(sessionId, messages);
-    this.bumpSession(sessionId, trimmed, messages.length);
+    if (observer) {
+      await observer.onUserMessage(userMessage);
+      MockGeneralChatAdapter.streamChunks(assistantMessage.text).forEach((delta: string) => {
+        observer.onDelta(delta);
+      });
+    }
     return {
       userMessage,
       assistantMessage,
-      streamChunks: GeneralChatBackend.streamChunks(assistantMessage.text),
+      streamChunks: MockGeneralChatAdapter.streamChunks(assistantMessage.text),
       tools
     };
   }
 
-  private bumpSession(sessionId: string, latestText: string, messageCount: number): void {
-    const updatedAt = new Date().toISOString();
-    this.sessions = this.sessions.map((session: RemoteSession) => {
-      if (session.id !== sessionId) {
-        return session;
-      }
-      return {
-        id: session.id,
-        title: session.title || GeneralChatBackend.titleFromMessage(latestText),
-        agentType: session.agentType,
-        status: 'ready',
-        updatedAt,
-        createdAt: session.createdAt,
-        messageCount,
-        workspacePath: session.workspacePath,
-        workspaceName: session.workspaceName
-      };
-    });
-    this.sessions.sort((first: RemoteSession, second: RemoteSession) => {
-      return GeneralChatBackend.timeValue(second.updatedAt) - GeneralChatBackend.timeValue(first.updatedAt);
-    });
+  cancelCurrentRequest(): void {
   }
 
   private static titleFromMessage(text: string): string {
@@ -137,7 +87,7 @@ export class GeneralChatBackend {
         '你可以继续问我：这张图里有什么、帮我提取文字、总结界面问题，或者让它和一个文件/网页一起分析。'
       ].join('\n');
     }
-    if (GeneralChatBackend.looksLikeSearchTask(normalized)) {
+    if (MockGeneralChatAdapter.looksLikeSearchTask(normalized)) {
       return [
         '我可以帮你做网络搜索和资料整理。',
         '',
@@ -149,7 +99,7 @@ export class GeneralChatBackend {
         '3. 按你的目标输出摘要、对比表或行动建议。'
       ].join('\n');
     }
-    if (GeneralChatBackend.looksLikeCodeTask(normalized)) {
+    if (MockGeneralChatAdapter.looksLikeCodeTask(normalized)) {
       return [
         '这个问题可能需要 Code 能力来读取本地项目、运行命令或查看日志。',
         '',
@@ -172,7 +122,7 @@ export class GeneralChatBackend {
         '手机端助手适合做文件总结、重点提取、改写、翻译、生成待办和跨文件对比。当前是 mock 回复；接入 BitFun harness 后会对真实附件内容进行处理。'
       ].join('\n');
     }
-    if (GeneralChatBackend.looksLikeWritingTask(normalized)) {
+    if (MockGeneralChatAdapter.looksLikeWritingTask(normalized)) {
       return [
         '我可以帮你写作、改写和整理表达。',
         '',
@@ -247,7 +197,7 @@ export class GeneralChatBackend {
     const normalized = text.trim();
     if (images.length > 0) {
       return [
-        GeneralChatBackend.tool(
+        MockGeneralChatAdapter.tool(
         'analyze_image',
         '分析图片内容',
         '识别图片、提取文字和主要视觉元素',
@@ -255,15 +205,15 @@ export class GeneralChatBackend {
       )
       ];
     }
-    if (GeneralChatBackend.looksLikeSearchTask(normalized)) {
+    if (MockGeneralChatAdapter.looksLikeSearchTask(normalized)) {
       return [
-        GeneralChatBackend.tool(
+        MockGeneralChatAdapter.tool(
           'web_search',
           '搜索网络资料',
           normalized,
           '找到 5 条相关结果，已合并重复信息并保留待核验点。'
         ),
-        GeneralChatBackend.tool(
+        MockGeneralChatAdapter.tool(
           'summarize_sources',
           '整理搜索结果',
           '提取要点、冲突信息和下一步建议',
@@ -273,13 +223,13 @@ export class GeneralChatBackend {
     }
     if (normalized.indexOf('文件') >= 0 || normalized.toLowerCase().indexOf('file') >= 0) {
       return [
-        GeneralChatBackend.tool(
+        MockGeneralChatAdapter.tool(
           'parse_file',
           '读取文件内容',
           '等待附件或文件上下文',
           '当前没有真实附件，已模拟文件解析流程。'
         ),
-        GeneralChatBackend.tool(
+        MockGeneralChatAdapter.tool(
           'summarize_document',
           '总结文件',
           '生成摘要、重点和待办',
@@ -287,9 +237,9 @@ export class GeneralChatBackend {
         )
       ];
     }
-    if (GeneralChatBackend.looksLikeCodeTask(normalized)) {
+    if (MockGeneralChatAdapter.looksLikeCodeTask(normalized)) {
       return [
-        GeneralChatBackend.tool(
+        MockGeneralChatAdapter.tool(
           'classify_code_request',
           '判断代码任务类型',
           normalized,
@@ -347,8 +297,4 @@ export class GeneralChatBackend {
       normalized.indexOf('build') >= 0;
   }
 
-  private static timeValue(value: string): number {
-    const parsed = new Date(value).getTime();
-    return Number.isNaN(parsed) ? 0 : parsed;
-  }
 }

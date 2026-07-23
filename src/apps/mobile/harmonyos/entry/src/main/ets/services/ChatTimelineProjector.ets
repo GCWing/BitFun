@@ -15,6 +15,41 @@ export interface ChatTimelineItem {
   isFinalizing: boolean;
 }
 
+/** Shared render invalidation for both remote polling and general-chat streaming. */
+export class ChatTimelineRevisionTracker {
+  private signature: string = '';
+  private revision: number = 0;
+
+  update(items: ChatTimelineItem[]): number {
+    const nextSignature = items.map((item: ChatTimelineItem) => {
+      const message = item.message;
+      return `${item.type}:${item.id}:${item.isStreaming}:${item.isFinalizing}:` +
+        `${message ? message.status : ''}:${message ? message.renderVersion || 0 : 0}:` +
+        `${message ? this.textSignature(message.text) : ''}:${message && message.thinking ? this.textSignature(message.thinking) : ''}:` +
+        `${message && message.items ? message.items.length : 0}:${message && message.tools ? message.tools.length : 0}`;
+    }).join('|');
+    if (nextSignature !== this.signature) {
+      this.signature = nextSignature;
+      this.revision += 1;
+    }
+    return this.revision;
+  }
+
+  private textSignature(value: string): string {
+    let hash = 0;
+    for (let index = 0; index < value.length; index++) {
+      hash = ((hash << 5) - hash + value.charCodeAt(index)) | 0;
+    }
+    return `${value.length}:${Math.abs(hash).toString(36)}`;
+  }
+
+  reset(): number {
+    this.signature = '';
+    this.revision += 1;
+    return this.revision;
+  }
+}
+
 export class ChatTimelineProjector {
   static project(
     messages: ChatMessage[],

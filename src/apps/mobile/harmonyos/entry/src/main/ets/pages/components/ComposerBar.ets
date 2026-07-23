@@ -1,51 +1,60 @@
 import { SelectedImageAttachment } from '../../model/RemoteModels';
 import { RemoteI18n } from '../../i18n/RemoteI18n';
-import { ACCENT, CARD, GREEN, INK, LINE, MUTED, SOFT } from './Theme';
+import { ChatComposerPolicy } from '../../services/ChatComposerPolicy';
+import { ChatComposerCapabilities, REMOTE_CHAT_COMPOSER_CAPABILITIES } from './ChatComposerCapabilities';
+import { ChatSurface } from './ChatSurface';
+import { CARD, GREEN, INK, MUTED } from './Theme';
 
 @Component
 export struct ComposerBar {
-  @Link chatInput: string;
+  @Prop capabilities: ChatComposerCapabilities = REMOTE_CHAT_COMPOSER_CAPABILITIES;
+  @Prop chatInput: string = '';
   @Link showQuickActions: boolean;
   @Prop selectedImages: SelectedImageAttachment[] = [];
   @Prop isBusy: boolean = false;
   @Prop connectionState: string = 'connected';
   @Prop isVoiceListening: boolean = false;
+  onPickImages: () => void = () => {};
   onRemoveImage: (imageId: string) => void = (_imageId: string) => {};
   onSend: () => void = () => {};
   onVoiceInput: () => void = () => {};
+  onChatInputChange: (value: string) => void = (_value: string) => {};
 
   build() {
     Column({ space: 8 }) {
       if (this.selectedImages.length > 0) {
         this.SelectedImageStrip()
       }
-      Row({ space: 9 }) {
-        Text('+')
-          .width(40)
-          .height(40)
-          .fontSize(24)
-          .fontColor(this.isVoiceListening ? MUTED : INK)
-          .textAlign(TextAlign.Center)
-          .backgroundColor(this.isVoiceListening ? '#ECEBE8' : SOFT)
-          .borderRadius(20)
-          .onClick(() => {
-            if (this.isVoiceListening) {
-              return;
-            }
-            this.showQuickActions = !this.showQuickActions;
-          })
+      Row({ space: 5 }) {
+        if (this.shouldShowAddButton()) {
+          Stack({ alignContent: Alignment.Center }) {
+            this.PlusGlyph()
+          }
+            .width(36)
+            .height(44)
+            .onClick(() => {
+              if (this.isVoiceListening) {
+                return;
+              }
+              if (this.capabilities.supportsAttachments) {
+                this.showQuickActions = !this.showQuickActions;
+                return;
+              }
+              this.onPickImages();
+            })
+        }
         this.InputField()
         this.PrimaryActionButton()
       }
       .width('100%')
-      .height(56)
-      .padding({ left: 10, right: 10 })
-      .backgroundColor(this.isVoiceListening ? '#FBFFFC' : CARD)
-      .borderRadius(28)
-      .border({ width: 1, color: this.isVoiceListening ? '#A7E6BD' : LINE })
+      .height(52)
+      .padding({ left: 8, right: 3 })
+      .backgroundColor(CARD)
+      .borderRadius(26)
+      .shadow({ radius: 24, color: '#18000000', offsetY: 7 })
     }
     .width('100%')
-    .padding({ left: 18, right: 18, top: 8, bottom: 16 })
+    .padding({ left: 16, right: 16, top: 8, bottom: 14 })
     .backgroundColor('#00000000')
   }
 
@@ -57,8 +66,8 @@ export struct ComposerBar {
       }
       TextInput({ placeholder: this.inputPlaceholder(), text: this.chatInput })
         .layoutWeight(1)
-        .height(40)
-        .fontSize(15)
+        .height(42)
+        .fontSize(16)
         .fontColor(INK)
         .placeholderColor(this.isVoiceListening ? GREEN : MUTED)
         .backgroundColor('#00000000')
@@ -66,11 +75,11 @@ export struct ComposerBar {
         .padding({ left: this.isVoiceListening ? 0 : 4, right: 4 })
         .defaultFocus(false)
         .onChange((value: string) => {
-          this.chatInput = value;
+          this.onChatInputChange(value);
         })
     }
     .layoutWeight(1)
-    .height(40)
+    .height(42)
     .padding({ left: this.isVoiceListening ? 12 : 0, right: 0 })
     .backgroundColor(this.isVoiceListening ? '#F0FAF4' : '#00000000')
     .borderRadius(20)
@@ -88,15 +97,13 @@ export struct ComposerBar {
             .backgroundColor(CARD)
             .borderRadius(3)
         } else if (this.hasComposedContent()) {
-          Text('↑')
-            .width(40)
-            .height(40)
-            .fontSize(25)
-            .fontWeight(FontWeight.Bold)
-            .fontColor(this.canSend() ? CARD : MUTED)
-            .textAlign(TextAlign.Center)
+          Image($r('app.media.gpt_composer_send'))
+            .width(39)
+            .height(39)
+            .objectFit(ImageFit.Contain)
+            .opacity(this.canSend() ? 1 : 0.38)
         } else {
-          this.MicrophoneGlyph(this.canUseVoice() ? CARD : MUTED)
+          this.MicrophoneGlyph()
         }
       }
       .width(40)
@@ -124,28 +131,21 @@ export struct ComposerBar {
   }
 
   @Builder
-  MicrophoneGlyph(color: string) {
-    Column({ space: 1 }) {
-      Text('')
-        .width(12)
-        .height(17)
-        .borderRadius(6)
-        .border({ width: 2, color })
-      Text('')
-        .width(2)
-        .height(5)
-        .backgroundColor(color)
-        .borderRadius(1)
-      Text('')
-        .width(13)
-        .height(2)
-        .backgroundColor(color)
-        .borderRadius(1)
-    }
-    .width(40)
-    .height(40)
-    .justifyContent(FlexAlign.Center)
-    .alignItems(HorizontalAlign.Center)
+  PlusGlyph() {
+    Image($r('app.media.gpt_composer_plus'))
+      .width(23)
+      .height(23)
+      .objectFit(ImageFit.Contain)
+      .opacity(this.isVoiceListening ? 0.36 : 1)
+  }
+
+  @Builder
+  MicrophoneGlyph() {
+    Image($r('app.media.gpt_composer_mic'))
+      .width(22)
+      .height(27)
+      .objectFit(ImageFit.Contain)
+      .opacity(this.canUseVoice() ? 1 : 0.4)
   }
 
   @Builder
@@ -219,17 +219,25 @@ export struct ComposerBar {
   }
 
   private canSend(): boolean {
-    return this.hasComposedContent() &&
-      !this.isBusy &&
-      (this.connectionState === 'connected' || this.connectionState === 'reconnecting');
+    return ChatComposerPolicy.canSend(
+      this.chatInput,
+      this.selectedImages.length,
+      this.isBusy,
+      this.capabilities.requiresRemoteConnection,
+      this.connectionState
+    );
   }
 
   private canUseVoice(): boolean {
-    return !this.hasComposedContent() && !this.isBusy;
+    return ChatComposerPolicy.canUseVoice(this.chatInput, this.selectedImages.length, this.isBusy);
   }
 
   private hasComposedContent(): boolean {
     return this.chatInput.trim().length > 0 || this.selectedImages.length > 0;
+  }
+
+  private shouldShowAddButton(): boolean {
+    return this.capabilities.supportsAttachments || this.capabilities.surface === ChatSurface.General;
   }
 
   private inputPlaceholder(): string {
@@ -242,9 +250,6 @@ export struct ComposerBar {
     if (this.isVoiceListening) {
       return GREEN;
     }
-    if (this.canSend() || this.canUseVoice()) {
-      return ACCENT;
-    }
-    return SOFT;
+    return '#00000000';
   }
 }

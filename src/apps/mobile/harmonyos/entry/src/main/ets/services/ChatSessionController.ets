@@ -92,6 +92,7 @@ export class ChatSessionController {
       return;
     }
     this.hasActiveRunningTurn = true;
+    this.turnJustEndedAt = 0;
     RemoteLogger.info(`poller nudge session=${ChatSessionController.shortId(this.sessionId)}`);
     this.scheduleNext(0);
   }
@@ -181,15 +182,15 @@ export class ChatSessionController {
     }
 
     const isRunningNow = this.isRunningTurn(this.activeTurn);
-    if (hadRunningTurn && !isRunningNow) {
+    const turnEndedNow = hadRunningTurn && !isRunningNow;
+    if (turnEndedNow) {
       this.turnJustEndedAt = Date.now();
-    }
-    if (hasAssistantMessage) {
-      this.turnJustEndedAt = 0;
     }
     this.hasActiveRunningTurn = isRunningNow;
 
-    this.emitSnapshot(true, result, incomingMessages, hadRunningTurn && !isRunningNow);
+    const isSettlingEndedTurn = this.turnJustEndedAt > 0 &&
+      Date.now() - this.turnJustEndedAt < this.turnEndedGracePeriodMs;
+    this.emitSnapshot(true, result, incomingMessages, turnEndedNow || (isSettlingEndedTurn && !isRunningNow));
   }
 
   private shouldClearMissingActiveTurn(result: PollSessionResult): boolean {
@@ -245,6 +246,7 @@ export class ChatSessionController {
     if (this.turnJustEndedAt > 0 && now - this.turnJustEndedAt < this.turnEndedGracePeriodMs) {
       return this.settleIntervalMs;
     }
+    this.turnJustEndedAt = 0;
     return this.hasActiveRunningTurn ? this.activeIntervalMs : this.idleIntervalMs;
   }
 
