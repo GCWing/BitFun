@@ -49,6 +49,7 @@ import {
   updateImageAnalysisItem as updateImageAnalysisItemModule,
   updateSessionMetadata,
 } from './flow-chat-manager';
+import { installPeerSessionRefresh } from './flow-chat-manager/PeerSessionRefreshModule';
 
 const log = createLogger('FlowChatManager');
 
@@ -61,6 +62,7 @@ export class FlowChatManager {
   private eventListenerCleanup: (() => void) | null = null;
   private initializationRequests = new Map<string, Promise<boolean>>();
   private latestInitializationRequestKey: string | null = null;
+  private peerSessionRefreshCleanup: (() => void) | null = null;
   private disposed = false;
 
   private constructor() {
@@ -88,6 +90,7 @@ export class FlowChatManager {
     
     this.agentService = AgentService.getInstance();
     installPendingQueueDrainListener(this.context);
+    this.peerSessionRefreshCleanup = installPeerSessionRefresh(this.context);
   }
 
   /** Public hook used by the queue panel "send now" fallback to drain head item. */
@@ -414,6 +417,8 @@ export class FlowChatManager {
     this.initializationRequests.clear();
     this.latestInitializationRequestKey = null;
     this.cleanupEventListeners();
+    this.peerSessionRefreshCleanup?.();
+    this.peerSessionRefreshCleanup = null;
     this.context.eventBatcher.destroy();
   }
 

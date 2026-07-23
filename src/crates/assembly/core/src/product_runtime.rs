@@ -541,6 +541,21 @@ impl CoreAgentRuntimeCompatibility {
             .is_some())
     }
 
+    /// Return the authoritative in-memory session snapshot when this process
+    /// currently owns the session runtime.
+    ///
+    /// Persisted session state intentionally sanitizes `Processing` to `Idle`
+    /// so a later process restart cannot resurrect work. Live read-only views
+    /// (for example Peer Device controllers) still need the current process
+    /// state to distinguish an executing session from interrupted history.
+    pub fn loaded_session_snapshot(&self, session_id: &str) -> BitFunResult<Option<Session>> {
+        validate_persisted_session_id(session_id)?;
+        Ok(self
+            .coordinator
+            .get_session_manager()
+            .get_session(session_id))
+    }
+
     pub async fn update_loaded_session_title(
         &self,
         session_id: &str,
@@ -1056,6 +1071,7 @@ mod tests {
         let _ = build;
         let _ = CoreAgentRuntimeCompatibility::list_persisted_sessions;
         let _ = CoreAgentRuntimeCompatibility::load_persisted_session_turns;
+        let _ = CoreAgentRuntimeCompatibility::loaded_session_snapshot;
         let _ = CoreAgentRuntimeCompatibility::unload_persisted_session;
     }
 

@@ -75,6 +75,14 @@ FS) and must not be mixed with Peer Device Mode.
   controllers; controller re-emits the same event names locally. This includes
   SSH-backed remote PTY Ready / Data / Exit events created on B, not only B's
   local terminal service events.
+- Because DeviceEvent delivery has no ACK/replay contract, the controller also
+  reconciles its active chat session from the Peer Host every 3s, immediately
+  after session/visibility changes, and after detecting a dropped data event.
+  Realtime events remain the primary path; snapshot reconciliation repairs a
+  controller that attached after turn/round lifecycle events or crossed a
+  transient relay gap. The host overlays its authoritative in-memory session
+  state onto the persisted view so an executing turn is not misclassified as
+  interrupted history.
 - CLI Peer Host forwards only turns submitted through Peer Host and linked
   child turns. A background-result follow-up inherits ownership only when its
   Core-internal metadata identifies the exact tracked parent and source child
@@ -96,8 +104,7 @@ FS) and must not be mixed with Peer Device Mode.
   delivery lease serializes detach or offline removal with the local Relay
   enqueue attempt. An explicit disconnect still restores the local controller
   UI, but reports a warning when host cancellation was not confirmed. This
-  boundary does not change the Relay envelope or add ACK, replay, or reconnect
-  recovery.
+  boundary does not change the Relay envelope or add ACK or replay.
 - Relay `POST /api/devices/:id/rpc` waits up to **120s** for the peer response;
   reverse proxies in front of the relay must use a matching (or higher) read
   timeout or they will return 504 first.

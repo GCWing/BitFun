@@ -62,6 +62,14 @@ Controller-side React/transport layer for Peer Device Mode. Architecture:
     Remote `SIGINT` / `SIGTSTP` map to PTY control bytes instead of silently
     succeeding without affecting the process.
 
+12. **Active chat has snapshot self-healing.** DeviceEvent has no ACK/replay, so
+    FlowChat reconciles the active Peer session from `restore_session_view`
+    every 3s and immediately after a detected event gap. The Peer Host must
+    overlay its live in-memory session state on the persisted view; otherwise
+    an in-progress turn is normalized as interrupted history and later chunks
+    are dropped by the controller state machine. Reconciliation must not
+    overwrite a local projection that changed while HostInvoke was in flight.
+
 ## Related account-login guards
 
 Incomplete login (cloud vs local settings choice) must not persist a session

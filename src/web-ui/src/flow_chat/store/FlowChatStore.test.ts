@@ -40,6 +40,7 @@ const stateMachineManagerMock = vi.hoisted(() => ({
   delete: vi.fn(),
   getOrCreate: vi.fn(),
   reset: vi.fn(),
+  transition: vi.fn(async () => true),
 }));
 
 vi.mock('@/infrastructure/api', () => ({
@@ -87,6 +88,9 @@ vi.mock('@/infrastructure/config/services/ConfigManager', () => ({
 
 vi.mock('../state-machine', () => ({
   stateMachineManager: stateMachineManagerMock,
+  SessionExecutionEvent: {
+    START: 'start',
+  },
 }));
 
 const resetStore = () => {
@@ -843,6 +847,231 @@ describe('FlowChatStore historical session hydration state', () => {
     expect(apiMocks.accountFetchSessionTurns).not.toHaveBeenCalled();
     expect(apiMocks.restoreSessionView).toHaveBeenCalled();
     expect(flowChatStore.getState().sessions.get('history-1')?.historyState).not.toBe('failed');
+  });
+
+  it('keeps an in-memory Peer Host turn live when opening mid-execution', async () => {
+    peerModeFlagMock.active = true;
+    apiMocks.restoreSessionView.mockResolvedValueOnce({
+      session: {
+        sessionId: 'history-1',
+        sessionName: 'History 1',
+        agentType: 'agentic',
+        state: 'Processing { current_turn_id: "turn-live", phase: Streaming }',
+        turnCount: 1,
+        createdAt: 1,
+      },
+      turns: [{
+        turnId: 'turn-live',
+        turnIndex: 0,
+        sessionId: 'history-1',
+        timestamp: 1,
+        userMessage: { id: 'user-live', content: 'keep going', timestamp: 1 },
+        modelRounds: [{
+          id: 'round-live',
+          turnId: 'turn-live',
+          roundIndex: 0,
+          timestamp: 1,
+          textItems: [{
+            id: 'text-live',
+            content: 'partial',
+            isStreaming: true,
+            timestamp: 2,
+            status: 'streaming',
+          }],
+          toolItems: [],
+          thinkingItems: [],
+          startTime: 1,
+          status: 'streaming',
+        }],
+        startTime: 1,
+        status: 'inprogress',
+      }],
+      contextRestoreState: 'pending',
+    });
+    flowChatStore.setState(() => ({
+      sessions: new Map([
+        ['history-1', createSession({
+          sessionId: 'history-1',
+          isHistorical: true,
+          historyState: 'metadata-only',
+        })],
+      ]),
+      activeSessionId: 'history-1',
+    }));
+
+    await flowChatStore.loadSessionHistory('history-1', '/Users/host/project');
+
+    const turn = flowChatStore.getState().sessions.get('history-1')?.dialogTurns[0];
+    expect(turn).toMatchObject({
+      id: 'turn-live',
+      status: 'processing',
+      modelRounds: [{
+        id: 'round-live',
+        status: 'streaming',
+        isStreaming: true,
+        items: [{
+          id: 'text-live',
+          status: 'streaming',
+          isStreaming: true,
+          content: 'partial',
+        }],
+      }],
+    });
+    expect(stateMachineManagerMock.reset).toHaveBeenCalledWith('history-1');
+    expect(stateMachineManagerMock.transition).toHaveBeenCalledWith(
+      'history-1',
+      'start',
+      {
+        taskId: 'history-1',
+        dialogTurnId: 'turn-live',
+      },
+    );
+  });
+
+  it('reconciles a newly persisted active Peer turn without replacing older history', async () => {
+    peerModeFlagMock.active = true;
+    apiMocks.restoreSessionView.mockResolvedValueOnce({
+      session: {
+        sessionId: 'history-1',
+        sessionName: 'History 1',
+        agentType: 'agentic',
+        state: 'Processing { current_turn_id: "turn-live", phase: Streaming }',
+        turnCount: 2,
+        createdAt: 1,
+      },
+      turns: [{
+        turnId: 'turn-live',
+        turnIndex: 1,
+        sessionId: 'history-1',
+        timestamp: 2,
+        userMessage: { id: 'user-live', content: 'new prompt', timestamp: 2 },
+        modelRounds: [],
+        startTime: 2,
+        status: 'inprogress',
+      }],
+      contextRestoreState: 'pending',
+      isPartial: true,
+      loadedTurnCount: 1,
+      totalTurnCount: 2,
+    });
+    const oldTurn = {
+      id: 'turn-old',
+      sessionId: 'history-1',
+      userMessage: { id: 'user-old', content: 'old prompt', timestamp: 1 },
+      modelRounds: [],
+      status: 'completed' as const,
+      startTime: 1,
+      backendTurnIndex: 0,
+    };
+    flowChatStore.setState(() => ({
+      sessions: new Map([
+        ['history-1', createSession({
+          sessionId: 'history-1',
+          historyState: 'ready',
+          dialogTurns: [oldTurn],
+        })],
+      ]),
+      activeSessionId: 'history-1',
+    }));
+
+    const result = await flowChatStore.refreshPeerSessionSnapshot(
+      'history-1',
+      '/Users/host/project',
+      { replaceRunningSnapshot: false },
+    );
+
+    expect(result).toMatchObject({
+      applied: true,
+      latestTurnId: 'turn-live',
+      latestTurnStatus: 'processing',
+    });
+    expect(
+      flowChatStore.getState().sessions.get('history-1')?.dialogTurns.map(turn => turn.id),
+    ).toEqual(['turn-old', 'turn-live']);
+  });
+
+  it('replaces a stale running projection after the Peer Host has completed', async () => {
+    peerModeFlagMock.active = true;
+    apiMocks.restoreSessionView.mockResolvedValueOnce({
+      session: {
+        sessionId: 'history-1',
+        sessionName: 'History 1',
+        agentType: 'agentic',
+        state: 'Idle',
+        turnCount: 1,
+        createdAt: 1,
+      },
+      turns: [{
+        turnId: 'turn-live',
+        turnIndex: 0,
+        sessionId: 'history-1',
+        timestamp: 1,
+        userMessage: { id: 'user-live', content: 'finish this', timestamp: 1 },
+        modelRounds: [{
+          id: 'round-live',
+          turnId: 'turn-live',
+          roundIndex: 0,
+          timestamp: 1,
+          textItems: [{
+            id: 'text-live',
+            content: 'complete answer',
+            isStreaming: false,
+            timestamp: 2,
+            status: 'completed',
+          }],
+          toolItems: [],
+          thinkingItems: [],
+          startTime: 1,
+          endTime: 3,
+          status: 'completed',
+        }],
+        startTime: 1,
+        endTime: 3,
+        status: 'completed',
+      }],
+      contextRestoreState: 'pending',
+      isPartial: false,
+      loadedTurnCount: 1,
+      totalTurnCount: 1,
+    });
+    const staleTurn = {
+      id: 'turn-live',
+      sessionId: 'history-1',
+      userMessage: { id: 'user-live', content: 'finish this', timestamp: 1 },
+      modelRounds: [],
+      status: 'processing' as const,
+      startTime: 1,
+      backendTurnIndex: 0,
+    };
+    flowChatStore.setState(() => ({
+      sessions: new Map([
+        ['history-1', createSession({
+          sessionId: 'history-1',
+          historyState: 'ready',
+          dialogTurns: [staleTurn],
+        })],
+      ]),
+      activeSessionId: 'history-1',
+    }));
+
+    const result = await flowChatStore.refreshPeerSessionSnapshot(
+      'history-1',
+      '/Users/host/project',
+      { replaceRunningSnapshot: false },
+    );
+
+    expect(result.applied).toBe(true);
+    expect(flowChatStore.getState().sessions.get('history-1')?.dialogTurns[0])
+      .toMatchObject({
+        status: 'completed',
+        modelRounds: [{
+          status: 'completed',
+          items: [{
+            type: 'text',
+            content: 'complete answer',
+          }],
+        }],
+      });
   });
 
   it('loads model config once while processing multiple persisted sessions', async () => {

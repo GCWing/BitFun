@@ -80,6 +80,7 @@ import {
   clearRuntimeStatus,
   scheduleModelResponseStatus,
 } from './RuntimeStatusModule';
+import { requestPeerSessionRefresh } from './PeerSessionRefreshModule';
 
 const log = createLogger('EventHandlerModule');
 const TURN_COMPLETION_QUIET_WINDOW_MS = 500;
@@ -167,6 +168,7 @@ function logDroppedDataEvent(
   turnId: string | null,
   details: Record<string, unknown>
 ): void {
+  requestPeerSessionRefresh(sessionId);
   log.debug('Dropped agentic data event', {
     eventName,
     sessionId,
@@ -1623,6 +1625,7 @@ function handleTextChunk(context: FlowChatContext, event: any): void {
 
   const dialogTurn = session.dialogTurns.find((turn: DialogTurn) => turn.id === turnId);
   if (!dialogTurn) {
+    requestPeerSessionRefresh(sessionId);
     log.debug('Dialog turn not found', { turnId });
     return;
   }
@@ -1795,6 +1798,7 @@ function handleModelRoundStart(context: FlowChatContext, event: ModelRoundStarte
 
   const dialogTurn = session.dialogTurns.find((turn: DialogTurn) => turn.id === turnId);
   if (!dialogTurn) {
+    requestPeerSessionRefresh(sessionId);
     log.debug('Dialog turn not found (model round start)', { turnId });
     return;
   }

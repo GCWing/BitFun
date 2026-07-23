@@ -76,6 +76,21 @@ pub(crate) struct DesktopSessionWithTurnsRestore {
     pub turns: Vec<DialogTurnData>,
 }
 
+fn overlay_live_session_state(restored: &mut Session, live: Option<Session>) {
+    let Some(live) = live else {
+        return;
+    };
+    if live.session_id != restored.session_id {
+        return;
+    }
+
+    // Disk state deliberately stores Processing as Idle so a process restart
+    // never revives work. A view served by the process that still owns the
+    // runtime must expose its live state, otherwise a Peer controller treats
+    // an executing turn as interrupted history and drops subsequent chunks.
+    restored.state = live.state;
+}
+
 #[derive(Clone)]
 struct ResolvedDesktopSessionScope {
     workspace_path: String,
@@ -510,7 +525,7 @@ impl DesktopSessionApplication {
         let resolve_storage_path_duration_ms =
             path_started_at.elapsed().as_millis().min(u64::MAX as u128) as u64;
         on_storage_path_resolved(resolve_storage_path_duration_ms);
-        let (session, turns, total_turn_count, mut timings) = self
+        let (mut session, turns, total_turn_count, mut timings) = self
             .compatibility
             .restore_session_view_from_storage_path(
                 &storage_path,
@@ -520,6 +535,11 @@ impl DesktopSessionApplication {
             )
             .await
             .map_err(|error| DesktopSessionApplicationError::Core(error.to_string()))?;
+        let live_session = self
+            .compatibility
+            .loaded_session_snapshot(session_id)
+            .map_err(|error| DesktopSessionApplicationError::Core(error.to_string()))?;
+        overlay_live_session_state(&mut session, live_session);
         timings.resolve_storage_path_duration_ms = resolve_storage_path_duration_ms;
         Ok(DesktopSessionViewRestore {
             session,
@@ -763,6 +783,48 @@ mod tests {
             choose_remote_ssh_host(None, None, Some(" saved-host ")),
             Some("saved-host".to_string())
         );
+    }
+
+    #[test]
+    fn live_processing_state_overlays_sanitized_view_state() {
+        let mut restored = Session::new_with_id(
+            "session-1".to_string(),
+            "Restored".to_string(),
+            "agentic".to_string(),
+            Default::default(),
+        );
+        let mut live = restored.clone();
+        live.state = bitfun_core::agentic::core::SessionState::Processing {
+            current_turn_id: "turn-1".to_string(),
+            phase: bitfun_core::agentic::core::ProcessingPhase::Streaming,
+        };
+
+        overlay_live_session_state(&mut restored, Some(live));
+
+        assert!(matches!(
+            restored.state,
+            bitfun_core::agentic::core::SessionState::Processing {
+                ref current_turn_id,
+                ..
+            } if current_turn_id == "turn-1"
+        ));
+    }
+
+    #[test]
+    fn missing_live_session_keeps_persisted_view_state() {
+        let mut restored = Session::new_with_id(
+            "session-1".to_string(),
+            "Restored".to_string(),
+            "agentic".to_string(),
+            Default::default(),
+        );
+
+        overlay_live_session_state(&mut restored, None);
+
+        assert!(matches!(
+            restored.state,
+            bitfun_core::agentic::core::SessionState::Idle
+        ));
     }
 
     #[tokio::test]

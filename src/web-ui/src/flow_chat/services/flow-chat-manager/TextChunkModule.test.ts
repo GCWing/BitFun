@@ -113,6 +113,60 @@ function insertTool(session: Session): void {
 }
 
 describe('processNormalTextChunkInternal', () => {
+  it('continues a streaming text item restored by a mid-turn Peer snapshot', () => {
+    const session = makeSession();
+    session.dialogTurns[0].modelRounds[0].items.push({
+      id: 'restored-text',
+      type: 'text',
+      content: 'Restored partial',
+      isStreaming: true,
+      isMarkdown: true,
+      timestamp: 1001,
+      status: 'streaming',
+    });
+    const context = makeContext(session);
+
+    processNormalTextChunkInternal(
+      context,
+      'session-1',
+      'turn-1',
+      'round-1',
+      ' plus live chunk',
+    );
+
+    const textItems = session.dialogTurns[0].modelRounds[0].items
+      .filter(item => item.type === 'text');
+    expect(textItems).toHaveLength(1);
+    expect((textItems[0] as any).content).toBe('Restored partial plus live chunk');
+  });
+
+  it('continues a streaming thinking item restored by a mid-turn Peer snapshot', () => {
+    const session = makeSession();
+    session.dialogTurns[0].modelRounds[0].items.push({
+      id: 'restored-thinking',
+      type: 'thinking',
+      content: 'Restored reasoning',
+      isStreaming: true,
+      isCollapsed: false,
+      timestamp: 1001,
+      status: 'streaming',
+    });
+    const context = makeContext(session);
+
+    processThinkingChunkInternal(
+      context,
+      'session-1',
+      'turn-1',
+      'round-1',
+      ' plus live reasoning',
+    );
+
+    const thinkingItems = session.dialogTurns[0].modelRounds[0].items
+      .filter(item => item.type === 'thinking');
+    expect(thinkingItems).toHaveLength(1);
+    expect((thinkingItems[0] as any).content).toBe('Restored reasoning plus live reasoning');
+  });
+
   it('keeps using the existing active text item after tools in the same round', () => {
     const session = makeSession();
     const context = makeContext(session);

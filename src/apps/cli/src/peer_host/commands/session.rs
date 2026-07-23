@@ -69,6 +69,15 @@ fn session_to_json(session: Session, turn_count: usize) -> Value {
     })
 }
 
+fn overlay_live_session_state(restored: &mut Session, live: Option<Session>) {
+    let Some(live) = live else {
+        return;
+    };
+    if live.session_id == restored.session_id {
+        restored.state = live.state;
+    }
+}
+
 fn restored_session_to_json(restored: AgentSessionRestoreResult) -> Value {
     let session = restored.session;
     json!({
@@ -165,7 +174,7 @@ pub(crate) async fn restore_session_view(
         .filter(|n| *n > 0)
         .map(|n| n.min(16));
 
-    let (session, turns, total_turn_count, timings) = state
+    let (mut session, turns, total_turn_count, timings) = state
         .compatibility
         .restore_session_view_for_workspace(
             storage_request,
@@ -175,6 +184,11 @@ pub(crate) async fn restore_session_view(
         )
         .await
         .map_err(|e| format!("Failed to restore session view: {e}"))?;
+    let live_session = state
+        .compatibility
+        .loaded_session_snapshot(&session_id)
+        .map_err(|e| format!("Failed to read live session state: {e}"))?;
+    overlay_live_session_state(&mut session, live_session);
 
     let loaded_turn_count = turns.len();
     let is_partial = loaded_turn_count < total_turn_count;
@@ -533,8 +547,13 @@ pub(crate) async fn save_session_turn(
 
 #[cfg(test)]
 mod tests {
-    use super::{restored_session_to_json, session_stats_validation_error};
+    use super::{
+        overlay_live_session_state, restored_session_to_json, session_stats_validation_error,
+    };
     use bitfun_agent_runtime::sdk::{AgentSessionRestoreResult, AgentSessionSummary, SessionState};
+    use bitfun_core::agentic::core::{
+        ProcessingPhase, Session as CoreSession, SessionConfig, SessionState as CoreSessionState,
+    };
 
     #[test]
     fn basic_restore_keeps_peer_host_session_shape() {
@@ -571,5 +590,30 @@ mod tests {
             session_stats_validation_error("session_id cannot contain path separators"),
             "Failed to get session stats: Validation error: session_id cannot contain path separators"
         );
+    }
+
+    #[test]
+    fn view_restore_uses_the_cli_hosts_live_processing_state() {
+        let mut restored = CoreSession::new_with_id(
+            "session_1".to_string(),
+            "Main".to_string(),
+            "agentic".to_string(),
+            SessionConfig::default(),
+        );
+        let mut live = restored.clone();
+        live.state = CoreSessionState::Processing {
+            current_turn_id: "turn_1".to_string(),
+            phase: ProcessingPhase::Streaming,
+        };
+
+        overlay_live_session_state(&mut restored, Some(live));
+
+        assert!(matches!(
+            restored.state,
+            CoreSessionState::Processing {
+                ref current_turn_id,
+                ..
+            } if current_turn_id == "turn_1"
+        ));
     }
 }
