@@ -121,7 +121,7 @@ const MOCK_BACKGROUND_SUBAGENTS: BackgroundSubagentSummary[] = [
     sessionId: 'mock-background-subagent-review',
     parentSessionId: 'mock-parent-session',
     title: 'Reviewing auth boundary changes',
-    agentType: 'ReviewSecurity',
+    agentType: 'ReviewWorker',
     status: 'processing',
     createdAt: Date.now() - 36_000,
     updatedAt: Date.now() - 4_000,

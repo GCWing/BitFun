@@ -5,11 +5,13 @@ export const STATIC_HIDDEN_AGENT_IDS = new Set<string>([
 
 export const FALLBACK_REVIEW_HIDDEN_AGENT_IDS = new Set<string>([
   'DeepReview',
+  'ReviewWorker',
   'ReviewBusinessLogic',
   'ReviewPerformance',
   'ReviewSecurity',
   'ReviewArchitecture',
   'ReviewFrontend',
+  'ReviewGeneral',
   'ReviewJudge',
 ]);
 

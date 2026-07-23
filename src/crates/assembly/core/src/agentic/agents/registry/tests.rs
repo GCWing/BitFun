@@ -292,6 +292,7 @@ fn generate_doc_hidden_agent_defaults_to_fast() {
 fn deep_review_family_defaults_to_fast() {
     for agent_type in [
         "DeepReview",
+        "ReviewWorker",
         "ReviewGeneral",
         "ReviewBusinessLogic",
         "ReviewPerformance",
@@ -310,16 +311,16 @@ fn deep_review_family_defaults_to_fast() {
 }
 
 #[tokio::test]
-async fn frontend_reviewer_is_registered_as_review_subagent() {
+async fn dynamic_reviewer_is_registered_as_review_subagent() {
     let registry = AgentRegistry::new();
     let subagents = registry.get_subagents_info(None).await;
-    let frontend = subagents
+    let worker = subagents
         .iter()
-        .find(|agent| agent.id == "ReviewFrontend")
-        .expect("ReviewFrontend should be registered as a subagent");
+        .find(|agent| agent.id == "ReviewWorker")
+        .expect("ReviewWorker should be registered as a subagent");
 
-    assert!(frontend.is_review);
-    assert!(frontend.is_readonly);
+    assert!(worker.is_review);
+    assert!(worker.is_readonly);
 }
 
 #[test]
@@ -327,6 +328,7 @@ fn built_in_readonly_reviewers_are_marked_as_review_agents() {
     let registry = AgentRegistry::new();
 
     for agent_type in [
+        "ReviewWorker",
         "ReviewGeneral",
         "ReviewBusinessLogic",
         "ReviewPerformance",
@@ -342,6 +344,17 @@ fn built_in_readonly_reviewers_are_marked_as_review_agents() {
             "{agent_type} must pass DeepReview Task policy validation"
         );
     }
+}
+
+#[test]
+fn historical_reviewer_invocations_bind_to_the_current_worker_runtime() {
+    let registry = AgentRegistry::new();
+    let binding = registry
+        .resolve_subagent_for_fresh_invocation("ReviewSecurity", None, false)
+        .expect("the historical reviewer alias should resolve");
+
+    assert_eq!(binding.logical_id, "ReviewSecurity");
+    assert_eq!(binding.runtime_agent_key, "ReviewWorker");
 }
 
 #[tokio::test]
@@ -385,6 +398,9 @@ async fn task_visible_subagents_are_filtered_by_parent_agent() {
         .await;
     assert!(deep_review_visible
         .iter()
+        .any(|agent| agent.id == "ReviewWorker"));
+    assert!(!deep_review_visible
+        .iter()
         .any(|agent| agent.id == "ReviewSecurity"));
     assert!(!deep_review_visible
         .iter()
@@ -404,7 +420,7 @@ async fn task_visible_subagents_are_filtered_by_parent_agent() {
         .any(|agent| agent.id == "ResearchSpecialist"));
     assert!(!deep_research_visible
         .iter()
-        .any(|agent| agent.id == "ReviewSecurity"));
+        .any(|agent| agent.id == "ReviewWorker"));
 }
 
 #[test]

@@ -102,13 +102,26 @@ describe('reviewTeamService', () => {
   });
 
   const coreSubagents = (enabled = true): SubagentInfo[] => [
-    subagent('ReviewBusinessLogic', enabled),
-    subagent('ReviewPerformance', enabled),
-    subagent('ReviewSecurity', enabled),
-    subagent('ReviewArchitecture', enabled),
-    subagent('ReviewFrontend', enabled),
+    subagent('ReviewWorker', enabled),
     subagent('ReviewJudge', enabled),
   ];
+
+  it('uses one dynamic built-in worker instead of fixed review-domain agents', () => {
+    expect(FALLBACK_REVIEW_TEAM_DEFINITION.coreRoles.map((role) => role.subagentId)).toEqual([
+      'ReviewWorker',
+      'ReviewJudge',
+    ]);
+    expect(FALLBACK_REVIEW_TEAM_DEFINITION.hiddenAgentIds).not.toEqual(
+      expect.arrayContaining([
+        'ReviewBusinessLogic',
+        'ReviewPerformance',
+        'ReviewSecurity',
+        'ReviewArchitecture',
+        'ReviewFrontend',
+        'ReviewGeneral',
+      ]),
+    );
+  });
 
   it('uses slow-provider-friendly review team defaults', () => {
     expect(DEFAULT_REVIEW_TEAM_EXECUTION_POLICY).toMatchObject({
@@ -289,34 +302,10 @@ describe('reviewTeamService', () => {
 
     await prepareDefaultReviewTeamForLaunch(WORKSPACE_PATH);
 
-    expect(SubagentAPI.updateSubagentConfig).toHaveBeenCalledTimes(6);
+    expect(SubagentAPI.updateSubagentConfig).toHaveBeenCalledTimes(2);
     expect(SubagentAPI.updateSubagentConfig).toHaveBeenCalledWith({
       parentAgentType: 'DeepReview',
-      subagentId: 'ReviewBusinessLogic',
-      enabled: true,
-      workspacePath: WORKSPACE_PATH,
-    });
-    expect(SubagentAPI.updateSubagentConfig).toHaveBeenCalledWith({
-      parentAgentType: 'DeepReview',
-      subagentId: 'ReviewPerformance',
-      enabled: true,
-      workspacePath: WORKSPACE_PATH,
-    });
-    expect(SubagentAPI.updateSubagentConfig).toHaveBeenCalledWith({
-      parentAgentType: 'DeepReview',
-      subagentId: 'ReviewSecurity',
-      enabled: true,
-      workspacePath: WORKSPACE_PATH,
-    });
-    expect(SubagentAPI.updateSubagentConfig).toHaveBeenCalledWith({
-      parentAgentType: 'DeepReview',
-      subagentId: 'ReviewArchitecture',
-      enabled: true,
-      workspacePath: WORKSPACE_PATH,
-    });
-    expect(SubagentAPI.updateSubagentConfig).toHaveBeenCalledWith({
-      parentAgentType: 'DeepReview',
-      subagentId: 'ReviewFrontend',
+      subagentId: 'ReviewWorker',
       enabled: true,
       workspacePath: WORKSPACE_PATH,
     });
@@ -482,6 +471,39 @@ describe('reviewTeamService', () => {
     });
   });
 
+  it('keeps the fallback definition aligned with the backend-owned dynamic team contract', async () => {
+    vi.mocked(agentAPI.getDefaultReviewTeamDefinition).mockRejectedValue(
+      new Error('backend unavailable'),
+    );
+
+    await expect(loadDefaultReviewTeamDefinition()).resolves.toMatchObject({
+      name: 'Code Review',
+      description:
+        'One primary review with an optional dynamically scoped worker and conditional quality inspection.',
+      coreRoles: [
+        expect.objectContaining({ subagentId: 'ReviewWorker', accentColor: '#3b82f6' }),
+        expect.objectContaining({ subagentId: 'ReviewJudge', accentColor: '#8b5cf6' }),
+      ],
+      strategyProfiles: {
+        normal: expect.objectContaining({ label: 'Normal' }),
+        deep: expect.objectContaining({ label: 'Deep' }),
+      },
+      hiddenAgentIds: ['DeepReview', 'ReviewWorker', 'ReviewJudge'],
+      disallowedExtraSubagentIds: [
+        'DeepReview',
+        'ReviewArchitecture',
+        'ReviewBusinessLogic',
+        'ReviewFixer',
+        'ReviewFrontend',
+        'ReviewGeneral',
+        'ReviewJudge',
+        'ReviewPerformance',
+        'ReviewSecurity',
+        'ReviewWorker',
+      ],
+    });
+  });
+
   it('keeps invalid configured extra members explainable in the run manifest', () => {
     const readonlyReviewExtra = subagent('ExtraReadonlyReview', true, 'user', 'fast', true, true);
     const readonlyPlainExtra = subagent('ExtraReadonlyPlain', true, 'user', 'fast', true, false);
@@ -622,11 +644,7 @@ describe('reviewTeamService', () => {
     expect(manifest.workspacePath).toBe(WORKSPACE_PATH);
     expect(manifest.policySource).toBe('default-review-team-config');
     expect(manifest.coreReviewers.map((member) => member.subagentId)).toEqual([
-      'ReviewBusinessLogic',
-      'ReviewPerformance',
-      'ReviewSecurity',
-      'ReviewArchitecture',
-      'ReviewFrontend',
+      'ReviewWorker',
     ]);
     expect(manifest.qualityGateReviewer?.subagentId).toBe('ReviewJudge');
     expect(manifest.enabledExtraReviewers.map((member) => member.subagentId)).toEqual([
@@ -1084,7 +1102,7 @@ describe('reviewTeamService', () => {
     expect(promptBlock).not.toContain('incremental_review_cache');
   });
 
-  it('skips the frontend reviewer when the resolved target has no frontend tags', () => {
+  it('keeps the dynamic worker available for a resolved backend target', () => {
     const team = resolveDefaultReviewTeam(
       coreSubagents(),
       storedConfigWithExtra(),
@@ -1100,20 +1118,12 @@ describe('reviewTeamService', () => {
     expect(manifest.target.resolution).toBe('resolved');
     expect(manifest.target.tags).toEqual(['backend_core']);
     expect(manifest.coreReviewers.map((member) => member.subagentId)).toEqual([
-      'ReviewBusinessLogic',
-      'ReviewPerformance',
-      'ReviewSecurity',
-      'ReviewArchitecture',
+      'ReviewWorker',
     ]);
-    expect(manifest.skippedReviewers).toEqual([
-      expect.objectContaining({
-        subagentId: 'ReviewFrontend',
-        reason: 'not_applicable',
-      }),
-    ]);
+    expect(manifest.skippedReviewers).toEqual([]);
   });
 
-  it('keeps explicit file-path targets compatible with conditional frontend reviewer gating', () => {
+  it('keeps explicit file-path targets compatible with the dynamic worker', () => {
     const team = resolveDefaultReviewTeam(
       coreSubagents(),
       storedConfigWithExtra(),
@@ -1125,20 +1135,12 @@ describe('reviewTeamService', () => {
     });
 
     expect(manifest.coreReviewers.map((member) => member.subagentId)).toEqual([
-      'ReviewBusinessLogic',
-      'ReviewPerformance',
-      'ReviewSecurity',
-      'ReviewArchitecture',
+      'ReviewWorker',
     ]);
-    expect(manifest.skippedReviewers).toEqual([
-      expect.objectContaining({
-        subagentId: 'ReviewFrontend',
-        reason: 'not_applicable',
-      }),
-    ]);
+    expect(manifest.skippedReviewers).toEqual([]);
   });
 
-  it('runs the frontend reviewer for frontend and contract targets', () => {
+  it('uses the same dynamic worker for frontend and contract targets', () => {
     const team = resolveDefaultReviewTeam(
       coreSubagents(),
       storedConfigWithExtra(),
@@ -1154,15 +1156,12 @@ describe('reviewTeamService', () => {
     expect(manifest.target.tags).toEqual(
       expect.arrayContaining(['desktop_contract', 'frontend_contract']),
     );
-    expect(manifest.coreReviewers.map((member) => member.subagentId)).toContain(
-      'ReviewFrontend',
-    );
-    expect(manifest.skippedReviewers).not.toEqual([
-      expect.objectContaining({ subagentId: 'ReviewFrontend' }),
+    expect(manifest.coreReviewers.map((member) => member.subagentId)).toEqual([
+      'ReviewWorker',
     ]);
   });
 
-  it('runs conditional reviewers conservatively for unknown targets', () => {
+  it('keeps the dynamic worker available for unknown targets', () => {
     const team = resolveDefaultReviewTeam(
       coreSubagents(),
       storedConfigWithExtra(),
@@ -1173,9 +1172,9 @@ describe('reviewTeamService', () => {
     });
 
     expect(manifest.target.resolution).toBe('unknown');
-    expect(manifest.coreReviewers.map((member) => member.subagentId)).toContain(
-      'ReviewFrontend',
-    );
+    expect(manifest.coreReviewers.map((member) => member.subagentId)).toEqual([
+      'ReviewWorker',
+    ]);
   });
 
   it('adds a balanced token budget to the run manifest by default', () => {
@@ -1241,10 +1240,7 @@ describe('reviewTeamService', () => {
       maxSameRoleInstances: 1,
     });
     expect(manifest.coreReviewers.map((member) => member.subagentId)).toEqual([
-      'ReviewBusinessLogic',
-      'ReviewSecurity',
-      'ReviewArchitecture',
-      'ReviewFrontend',
+      'ReviewWorker',
     ]);
     expect(manifest.scopeProfile).toMatchObject({
       reviewDepth: 'high_risk_only',
@@ -1338,7 +1334,7 @@ describe('reviewTeamService', () => {
 
     expect(manifest.workPackets).toHaveLength(8);
     expect(manifest.workPackets?.every((packet) =>
-      packet.subagentId === 'ReviewGeneral' && packet.launchBatch <= 4
+      packet.subagentId === 'ReviewWorker' && packet.launchBatch <= 4
     )).toBe(true);
     expect(manifest.managedReviewPlan).toMatchObject({
       totalFileCount: 367,
@@ -1724,7 +1720,7 @@ describe('reviewTeamService', () => {
       },
     });
     expect(manifest.coreReviewers.map((member) => member.subagentId)).toEqual([
-      'ReviewBusinessLogic',
+      'ReviewWorker',
     ]);
     expect(manifest.enabledExtraReviewers).toEqual([]);
     expect(manifest.tokenBudget).toMatchObject({
@@ -1823,7 +1819,7 @@ describe('reviewTeamService', () => {
       storedConfigWithExtra(['ExtraEnabled'], {
         strategy_level: 'quick',
         member_strategy_overrides: {
-          ReviewSecurity: 'deep',
+          ReviewWorker: 'deep',
           ExtraEnabled: 'normal',
         },
       }),
@@ -1836,33 +1832,12 @@ describe('reviewTeamService', () => {
     expect(manifest.strategyLevel).toBe('quick');
     expect(manifest.coreReviewers).toEqual([
       expect.objectContaining({
-        subagentId: 'ReviewBusinessLogic',
-        strategyLevel: 'quick',
-        strategySource: 'team',
-        defaultModelSlot: 'fast',
-        strategyDirective: REVIEW_STRATEGY_DEFINITIONS.quick.roleDirectives.ReviewBusinessLogic,
-      }),
-      expect.objectContaining({
-        subagentId: 'ReviewSecurity',
+        subagentId: 'ReviewWorker',
         strategyLevel: 'deep',
         strategySource: 'member',
         model: 'primary',
         defaultModelSlot: 'primary',
-        strategyDirective: REVIEW_STRATEGY_DEFINITIONS.deep.roleDirectives.ReviewSecurity,
-      }),
-      expect.objectContaining({
-        subagentId: 'ReviewArchitecture',
-        strategyLevel: 'quick',
-        strategySource: 'team',
-        defaultModelSlot: 'fast',
-        strategyDirective: REVIEW_STRATEGY_DEFINITIONS.quick.roleDirectives.ReviewArchitecture,
-      }),
-      expect.objectContaining({
-        subagentId: 'ReviewFrontend',
-        strategyLevel: 'quick',
-        strategySource: 'team',
-        defaultModelSlot: 'fast',
-        strategyDirective: REVIEW_STRATEGY_DEFINITIONS.quick.roleDirectives.ReviewFrontend,
+        strategyDirective: REVIEW_STRATEGY_DEFINITIONS.deep.roleDirectives.ReviewWorker,
       }),
     ]);
     expect(manifest.enabledExtraReviewers).toEqual([]);
@@ -1881,10 +1856,62 @@ describe('reviewTeamService', () => {
     expect(promptBlock).toContain('"selected_strategy": "quick"');
     expect(promptBlock).toContain('Prepared Review execution plan');
     expect(promptBlock).toContain('Execution rules:');
-    expect(promptBlock).toContain('"subagent_type": "ReviewSecurity"');
+    expect(promptBlock).toContain('"subagent_type": "ReviewWorker"');
     expect(promptBlock).toContain('"model_id": "primary"');
     expect(promptBlock).not.toContain('prompt_directive');
     expect(promptBlock).not.toContain('Token/time impact');
+  });
+
+  it('migrates a historical reviewer strategy override to the dynamic worker', () => {
+    const team = resolveDefaultReviewTeam(
+      coreSubagents(),
+      storedConfigWithExtra([], {
+        strategy_level: 'deep',
+        member_strategy_overrides: { ReviewSecurity: 'quick' },
+      }),
+    );
+    const manifest = buildEffectiveReviewTeamManifest(team, {
+      workspacePath: WORKSPACE_PATH,
+    });
+
+    expect(team.memberStrategyOverrides.ReviewWorker).toBe('quick');
+    expect(manifest.coreReviewers).toEqual([
+      expect.objectContaining({
+        subagentId: 'ReviewWorker',
+        strategyLevel: 'quick',
+        strategySource: 'member',
+      }),
+    ]);
+  });
+
+  it('does not fold an exact custom historical id into the dynamic worker', () => {
+    const team = resolveDefaultReviewTeam(
+      [...coreSubagents(), subagent('ReviewSecurity', true, 'user')],
+      storedConfigWithExtra([], {
+        strategy_level: 'deep',
+        member_strategy_overrides: { ReviewSecurity: 'quick' },
+      }),
+    );
+
+    expect(team.memberStrategyOverrides.ReviewWorker).toBeUndefined();
+    expect(team.coreMembers.find((member) => member.subagentId === 'ReviewWorker')).toMatchObject({
+      strategyLevel: 'deep',
+      strategySource: 'team',
+    });
+  });
+
+  it('prefers the deepest legacy worker override when historical roles conflict', () => {
+    const team = resolveDefaultReviewTeam(
+      coreSubagents(),
+      storedConfigWithExtra([], {
+        member_strategy_overrides: {
+          ReviewSecurity: 'quick',
+          ReviewArchitecture: 'deep',
+        },
+      }),
+    );
+
+    expect(team.memberStrategyOverrides.ReviewWorker).toBe('deep');
   });
 
   it('applies a project strategy override to the launch manifest without changing member overrides', () => {
@@ -1896,7 +1923,7 @@ describe('reviewTeamService', () => {
       storedConfigWithExtra(['ExtraEnabled'], {
         strategy_level: 'normal',
         member_strategy_overrides: {
-          ReviewSecurity: 'quick',
+          ReviewWorker: 'quick',
         },
       }),
     );
@@ -1910,13 +1937,7 @@ describe('reviewTeamService', () => {
     expect(manifest.coreReviewers).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
-          subagentId: 'ReviewBusinessLogic',
-          strategyLevel: 'deep',
-          strategySource: 'team',
-          defaultModelSlot: 'primary',
-        }),
-        expect.objectContaining({
-          subagentId: 'ReviewSecurity',
+          subagentId: 'ReviewWorker',
           strategyLevel: 'quick',
           strategySource: 'member',
           defaultModelSlot: 'fast',
@@ -1932,7 +1953,7 @@ describe('reviewTeamService', () => {
 
     const promptBlock = buildReviewTeamPromptBlock(team, manifest);
     expect(promptBlock).toContain('"selected_strategy": "deep"');
-    expect(promptBlock).toContain('"subagent_type": "ReviewSecurity"');
+    expect(promptBlock).toContain('"subagent_type": "ReviewWorker"');
     expect(promptBlock).not.toContain('prompt_directive');
   });
 

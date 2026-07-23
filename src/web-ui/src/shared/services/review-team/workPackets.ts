@@ -9,7 +9,7 @@ import type {
 } from './types';
 import { groupFilesByWorkspaceArea } from './pathMetadata';
 
-export const MANAGED_REVIEW_AGENT_TYPE = 'ReviewGeneral';
+export const MANAGED_REVIEW_AGENT_TYPE = 'ReviewWorker';
 
 export interface ManagedReviewWorkPacketOptions {
   target: ReviewTargetClassification;
@@ -77,7 +77,7 @@ export function buildManagedReviewWorkPackets(
     launchBatch: Math.floor(index / maxParallelInstances) + 1,
     subagentId: MANAGED_REVIEW_AGENT_TYPE,
     displayName: `Review batch ${index + 1}`,
-    roleName: 'General Review Worker',
+    roleName: 'Dynamic Review Worker',
     assignedScope: {
       kind: 'review_target',
       targetSource: options.target.source,

@@ -138,21 +138,6 @@ function readTaskRunInBackground(input: unknown, toolResult: FlowToolItem['toolR
   return false;
 }
 
-const INTERNAL_READONLY_REVIEW_AGENT_IDS = new Set([
-  'CodeReview',
-  'ReviewBusinessLogic',
-  'ReviewPerformance',
-  'ReviewSecurity',
-  'ReviewArchitecture',
-  'ReviewFrontend',
-  'ReviewJudge',
-  'ReviewGeneral',
-]);
-
-function isInternalReadonlyReviewAgent(subagentType: string): boolean {
-  return INTERNAL_READONLY_REVIEW_AGENT_IDS.has(subagentType);
-}
-
 function readTaskWasCancelled(
   status: FlowToolItem['status'],
   toolResult: FlowToolItem['toolResult'] | undefined,
@@ -196,27 +181,51 @@ function readLinkedSubagentSnapshot(sessionId: string): string {
   ]);
 }
 
-function isDeepReviewReviewerTask(toolItem: FlowToolItem): boolean {
-  if (!['task', 'launchreviewagent'].includes(toolItem.toolName?.toLowerCase() ?? '')) {
+const LEGACY_DEEP_REVIEWER_TYPES = new Set([
+  'ReviewBusinessLogic',
+  'ReviewPerformance',
+  'ReviewSecurity',
+  'ReviewArchitecture',
+  'ReviewFrontend',
+  'ReviewGeneral',
+  'ReviewJudge',
+]);
+
+function isDeepReviewReviewerTask(toolItem: FlowToolItem, parentSessionId?: string): boolean {
+  const toolName = toolItem.toolName?.toLowerCase() ?? '';
+  if (toolName === 'launchreviewagent') {
+    return true;
+  }
+  if (toolName !== 'task') {
     return false;
   }
 
   const input = toolItem.toolCall?.input;
-  const subagentType = readTaskSubagentType(input);
-  if (!subagentType) {
-    return false;
-  }
-
-  if (getReviewerContextBySubagentId(subagentType) || isInternalReadonlyReviewAgent(subagentType)) {
-    return true;
-  }
-
   if (!input || typeof input !== 'object') {
     return false;
   }
 
-  const description = readStringValue((input as Record<string, unknown>).description);
-  return /\bpacket\s+(reviewer|judge):/i.test(description);
+  const taskInput = input as Record<string, unknown>;
+  const packetId = readStringValue(taskInput.packet_id) || readStringValue(taskInput.packetId);
+  if (/^(reviewer|judge|managed-review):/i.test(packetId)) {
+    return true;
+  }
+
+  const description = readStringValue(taskInput.description);
+  if (/\bpacket\s+(reviewer|judge|managed-review):/i.test(description)) {
+    return true;
+  }
+
+  const subagentType = readStringValue(taskInput.subagent_type);
+  if (LEGACY_DEEP_REVIEWER_TYPES.has(subagentType)) {
+    const parentSession = parentSessionId
+      ? flowChatStore.getState().sessions.get(parentSessionId)
+      : undefined;
+    const parentAgentType = parentSession?.config?.agentType ?? parentSession?.mode ?? '';
+    return parentAgentType === 'DeepReview';
+  }
+
+  return false;
 }
 
 export const TaskToolDisplay: React.FC<ToolCardProps> = ({
@@ -233,7 +242,7 @@ export const TaskToolDisplay: React.FC<ToolCardProps> = ({
   const rawTaskAction = readTaskAction(toolCall?.input, toolResult);
   const isCancelAction = rawTaskAction === 'cancel';
   const isBackgroundTask = readTaskRunInBackground(toolCall?.input, toolResult);
-  const isReviewCoverageTask = isDeepReviewReviewerTask(toolItem);
+  const isReviewCoverageTask = isDeepReviewReviewerTask(toolItem, sessionId);
   const [isStoppingSubagent, setIsStoppingSubagent] = useState(false);
   
   // Restore collapse state; default to collapsed.

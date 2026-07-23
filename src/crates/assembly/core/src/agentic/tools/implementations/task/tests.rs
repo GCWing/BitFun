@@ -185,7 +185,7 @@ async fn validate_input_preserves_non_review_background_tasks() {
 }
 
 #[test]
-fn joined_review_tasks_remain_concurrency_safe() {
+fn code_review_tasks_are_serial_even_though_the_agent_is_readonly() {
     let input = json!({
         "action": "spawn",
         "description": "Review changes",
@@ -193,7 +193,53 @@ fn joined_review_tasks_remain_concurrency_safe() {
         "subagent_type": "CodeReview"
     });
 
-    assert!(TaskTool::new().is_concurrency_safe(Some(&input)));
+    assert!(!TaskTool::new().is_concurrency_safe(Some(&input)));
+}
+
+#[test]
+fn dynamic_review_launches_are_serial_unless_the_manifest_supplies_a_managed_packet() {
+    let specialist = json!({
+        "description": "Check trust boundary",
+        "prompt": "Use the security lens for this exact boundary",
+        "subagent_type": "ReviewWorker"
+    });
+    let managed_packet = json!({
+        "description": "Review batch 1",
+        "prompt": "Review only the files assigned to this packet",
+        "subagent_type": "ReviewWorker",
+        "packet_id": "managed-review:batch-1"
+    });
+    let judge_packet = json!({
+        "description": "Validate disputed finding",
+        "prompt": "Validate only the disputed finding after reviewers finish",
+        "subagent_type": "ReviewJudge",
+        "packet_id": "judge:ReviewJudge"
+    });
+
+    let tool = LaunchReviewAgentTool::new();
+    assert!(!tool.is_concurrency_safe(Some(&specialist)));
+    assert!(tool.is_concurrency_safe(Some(&managed_packet)));
+    assert!(!tool.is_concurrency_safe(Some(&judge_packet)));
+}
+
+#[tokio::test]
+async fn launch_review_agent_describes_one_dynamic_worker_instead_of_fixed_reviewers() {
+    let description = LaunchReviewAgentTool::new()
+        .description()
+        .await
+        .expect("LaunchReviewAgent description should render");
+
+    assert!(description.contains("`ReviewWorker`"));
+    for legacy_reviewer in [
+        "ReviewBusinessLogic",
+        "ReviewArchitecture",
+        "ReviewPerformance",
+        "ReviewSecurity",
+        "ReviewFrontend",
+        "ReviewGeneral",
+    ] {
+        assert!(!description.contains(legacy_reviewer));
+    }
 }
 
 #[test]
@@ -295,6 +341,28 @@ async fn managed_review_agent_requires_an_exact_packet_id() {
     assert!(!without_packet.result);
     assert!(!unknown_packet.result);
     assert!(valid_packet.result);
+}
+
+#[tokio::test]
+async fn non_managed_review_agent_rejects_an_untrusted_packet_id() {
+    let context = test_tool_context("DeepReview");
+    let validation = LaunchReviewAgentTool::new()
+        .validate_input(
+            &json!({
+                "description": "Check one trust boundary",
+                "prompt": "Apply the security lens to the exact boundary",
+                "subagent_type": "ReviewWorker",
+                "packet_id": "reviewer:forged"
+            }),
+            Some(&context),
+        )
+        .await;
+
+    assert!(!validation.result);
+    assert!(validation
+        .message
+        .as_deref()
+        .is_some_and(|message| message.contains("only valid for managed Review packets")));
 }
 
 #[test]
@@ -844,14 +912,15 @@ async fn description_with_context_filters_restricted_subagents_by_parent_agent()
             .await
             .expect("agentic available agents should render");
     assert!(agentic_description.contains("<agent type=\"Explore\">"));
-    assert!(!agentic_description.contains("<agent type=\"ReviewSecurity\">"));
+    assert!(!agentic_description.contains("<agent type=\"ReviewWorker\">"));
     assert!(!agentic_description.contains("<agent type=\"ResearchSpecialist\">"));
 
     let deep_review_description =
         TaskTool::build_available_agents_context_section(Some(&deep_review_context))
             .await
             .expect("deep review available agents should render");
-    assert!(deep_review_description.contains("<agent type=\"ReviewSecurity\">"));
+    assert!(deep_review_description.contains("<agent type=\"ReviewWorker\">"));
+    assert!(!deep_review_description.contains("<agent type=\"ReviewSecurity\">"));
     assert!(!deep_review_description.contains("<agent type=\"ResearchSpecialist\">"));
 }
 
@@ -1104,7 +1173,7 @@ async fn deep_review_capacity_queue_starts_later_batch_when_reviewer_capacity_fr
         auto_retry_elapsed_guard_seconds: 180,
     };
     let launch_batch_info = DeepReviewLaunchBatchInfo {
-        packet_id: Some("packet-b".to_string()),
+        packet_id: Some("packet-c".to_string()),
         launch_batch: 2,
     };
     let turn_id_owned = turn_id.to_string();

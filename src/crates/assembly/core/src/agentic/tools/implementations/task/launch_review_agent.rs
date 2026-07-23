@@ -35,7 +35,7 @@ impl LaunchReviewAgentTool {
                 },
                 "prompt": {
                     "type": "string",
-                    "description": "The review assignment for this DeepReview team member. Keep it scoped to the assigned packet and do not include top-level LaunchReviewAgent arguments inside this string."
+                    "description": "The bounded review assignment. For ReviewWorker, state the exact review lens, concrete question, file or packet scope, and evidence expected. Do not include top-level LaunchReviewAgent arguments inside this string."
                 },
                 "subagent_type": {
                     "type": "string",
@@ -180,11 +180,7 @@ When the prepared manifest contains active work packets, launch only those packe
 When active work packets are empty, the DeepReview agent is the primary reviewer. Use this tool only when a concrete uncertainty needs one focused fresh perspective, or when a high-severity, conflicting, or low-confidence conclusion needs ReviewJudge validation. New strict runs allow at most one specialist and one ReviewJudge call.
 
 Built-in review agent types:
-- `ReviewBusinessLogic`: product behavior, business logic, state transitions, and user-visible correctness.
-- `ReviewArchitecture`: module boundaries, ownership, maintainability, API shape, and long-term design risks.
-- `ReviewPerformance`: latency, resource use, async/concurrency behavior, hot paths, and scalability.
-- `ReviewSecurity`: auth, trust boundaries, injection, filesystem/network safety, secret handling, and privilege risks.
-- `ReviewFrontend`: i18n, frontend performance, accessibility, state management, frontend-backend API contracts, and platform boundaries.
+- `ReviewWorker`: one read-only worker whose bounded prompt supplies the dynamic review lens, concrete question, file or packet scope, and expected evidence. It may cover a narrow specialist uncertainty or a managed file packet, but must not widen its assignment.
 - `ReviewJudge`: final quality-inspector pass after reviewer outputs are available.
 
 Extra active reviewers may be provided by the run manifest. Use only a `subagent_type` active for this run. Outside a manifest-declared work-packet plan, do not split files, launch routine parallel coverage, or repeat the primary review.
@@ -279,14 +275,19 @@ Retry rules:
             }
             return Ok(invocation.description.clone());
         };
+        if managed_plan.is_none() {
+            return Err(BitFunError::tool(
+                "packet_id is only valid for managed Review packets declared by the run manifest"
+                    .to_string(),
+            ));
+        }
         let description = format!("[packet {packet_id}] {}", invocation.description);
-        if managed_plan.is_some()
-            && Self::deep_review_launch_batch_for_task(
-                &invocation.subagent_type,
-                Some(&description),
-                run_manifest,
-            )
-            .is_none()
+        if Self::deep_review_launch_batch_for_task(
+            &invocation.subagent_type,
+            Some(&description),
+            run_manifest,
+        )
+        .is_none()
         {
             return Err(BitFunError::tool(format!(
                 "packet_id '{packet_id}' is not active for managed reviewer '{}'",
@@ -328,9 +329,20 @@ impl Tool for LaunchReviewAgentTool {
     }
 
     fn is_concurrency_safe(&self, input: Option<&Value>) -> bool {
-        let subagent_type = input
-            .and_then(|value| value.get("subagent_type"))
-            .and_then(Value::as_str);
+        let Some(input) = input else {
+            return false;
+        };
+        let has_parallel_reviewer_packet = input
+            .get("packet_id")
+            .and_then(Value::as_str)
+            .is_some_and(|packet_id| {
+                let packet_id = packet_id.trim().to_ascii_lowercase();
+                packet_id.starts_with("reviewer:") || packet_id.starts_with("managed-review:")
+            });
+        if !has_parallel_reviewer_packet {
+            return false;
+        }
+        let subagent_type = input.get("subagent_type").and_then(Value::as_str);
         match subagent_type {
             Some(id) => get_agent_registry()
                 .get_subagent_is_readonly(id)

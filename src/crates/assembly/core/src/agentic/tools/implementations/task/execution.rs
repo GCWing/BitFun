@@ -234,13 +234,6 @@ impl TaskTool {
                         )
                     })?;
                     let all_agent_types = self.get_agents_types(Some(context)).await;
-                    if !all_agent_types.contains(&subagent_type) {
-                        return Err(BitFunError::tool(format!(
-                            "subagent_type {} is not valid, must be one of: {}",
-                            subagent_type,
-                            all_agent_types.join(", ")
-                        )));
-                    }
                     let binding = get_agent_registry()
                         .resolve_subagent_for_fresh_invocation(
                             &subagent_type,
@@ -253,6 +246,15 @@ impl TaskTool {
                                 subagent_type
                             ))
                         })?;
+                    if !all_agent_types.contains(&subagent_type)
+                        && !all_agent_types.contains(&binding.runtime_agent_key)
+                    {
+                        return Err(BitFunError::tool(format!(
+                            "subagent_type {} is not valid, must be one of: {}",
+                            subagent_type,
+                            all_agent_types.join(", ")
+                        )));
+                    }
                     supports_follow_up = binding.supports_follow_up;
                     if !supports_follow_up && model_id.is_some() {
                         return Err(BitFunError::tool(
@@ -555,19 +557,28 @@ impl TaskTool {
                         })?;
                 }
             }
-            record_deep_review_task_budget(&dialog_turn_id, &policy, role, subagent_type, is_retry)
-                .map_err(|violation| {
-                    if is_auto_retry {
-                        record_deep_review_runtime_auto_retry_suppressed(
-                            &dialog_turn_id,
-                            LaunchReviewAgentTool::auto_retry_suppression_reason(violation.code),
-                        );
-                    }
-                    BitFunError::tool(format!(
-                        "DeepReview Task policy violation: {}",
-                        violation.to_tool_error_message()
-                    ))
-                })?;
+            record_deep_review_task_budget(
+                &dialog_turn_id,
+                &policy,
+                role,
+                subagent_type,
+                is_retry,
+                deep_review_launch_batch_info
+                    .as_ref()
+                    .and_then(|info| info.packet_id.as_deref()),
+            )
+            .map_err(|violation| {
+                if is_auto_retry {
+                    record_deep_review_runtime_auto_retry_suppressed(
+                        &dialog_turn_id,
+                        LaunchReviewAgentTool::auto_retry_suppression_reason(violation.code),
+                    );
+                }
+                BitFunError::tool(format!(
+                    "DeepReview Task policy violation: {}",
+                    violation.to_tool_error_message()
+                ))
+            })?;
             if is_retry && role == DeepReviewSubagentRole::Reviewer {
                 if is_auto_retry {
                     record_deep_review_runtime_auto_retry(&dialog_turn_id);

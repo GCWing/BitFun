@@ -23,7 +23,7 @@ You do NOT make code changes. You produce a **Security Posture Report** with con
 When this skill is invoked by BitFun Team Mode, this skill supplies the security-review lens. Use existing Task sub-agents for independent security evidence gathering, then make final severity and remediation calls in the main Team session.
 
 - Do not assume a CSO sub-agent exists. Choose only from the Task tool's available agents.
-- Prefer a matching custom security sub-agent if available; otherwise use `ReviewSecurity` for diff-focused review when available, `Explore` for broader code/config mapping, and `FileFinder` for security-sensitive files.
+- Prefer a matching custom security sub-agent if available; otherwise use one `CodeReview` task with an exact security lens for diff-focused review, `Explore` for broader code/config mapping, and `FileFinder` for security-sensitive files.
 - Keep Task work read-only. Ask for concrete evidence: file paths, trust boundaries, inputs, auth/data flows, exploit preconditions, and confidence.
 - In parallel batches, return a compact Security brief: `critical/high findings`, `trust-boundary risks`, `false-positive notes`, `required fixes`, `verification`.
 - The main Team orchestrator decides what blocks Build/Ship and asks the user for risk acceptance when needed.

@@ -2,7 +2,4 @@ mod review_fixer;
 mod review_specialists;
 
 pub use review_fixer::ReviewFixerAgent;
-pub use review_specialists::{
-    ArchitectureReviewerAgent, BusinessLogicReviewerAgent, FrontendReviewerAgent,
-    GeneralReviewerAgent, PerformanceReviewerAgent, ReviewJudgeAgent, SecurityReviewerAgent,
-};
+pub use review_specialists::{ReviewJudgeAgent, ReviewWorkerAgent};
