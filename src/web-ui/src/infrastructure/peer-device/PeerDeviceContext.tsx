@@ -138,10 +138,11 @@ async function detachPeerControl(deviceId: string, controllerDeviceId: string): 
   );
 }
 
-function parseHostInvokeResult(raw: string): void {
+function parseHostInvokeResult<T = unknown>(raw: string): T | undefined {
   const envelope = JSON.parse(raw) as {
     resp?: string;
     ok?: boolean;
+    value?: unknown;
     error?: string;
     message?: string;
   };
@@ -151,6 +152,7 @@ function parseHostInvokeResult(raw: string): void {
   if (envelope.resp === 'host_invoke_result' && !envelope.ok) {
     throw new Error(envelope.error || 'Peer HostInvoke failed');
   }
+  return envelope.value as T | undefined;
 }
 
 export const PeerDeviceProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -248,7 +250,11 @@ export const PeerDeviceProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       await exitPeerMode('switch');
     }
 
-    parseHostInvokeResult(
+    const peerCapabilities = parseHostInvokeResult<{
+      capabilities?: {
+        idempotent_dialog_submit?: boolean;
+      };
+    }>(
       await remoteConnectAPI.accountDeviceRpc(
         deviceId,
         JSON.stringify({ cmd: 'host_invoke', command: 'peer_mode_ping', args: {} }),
@@ -273,6 +279,8 @@ export const PeerDeviceProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         {
           onHostInvokeSuccess: notePeerRpcSuccess,
           onHostInvokeTransportFailure: notePeerTransportFailure,
+          supportsIdempotentDialogSubmit:
+            peerCapabilities?.capabilities?.idempotent_dialog_submit === true,
         },
       );
 

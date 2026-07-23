@@ -4,6 +4,7 @@ import {
   PEER_READ_REQUEST_TIMEOUT_MS,
   PeerDeviceTransportAdapter,
   isPeerLocalOnlyCommand,
+  isPeerRetryableIdempotentMutation,
   isPeerRetryableReadCommand,
   peerInvokePriorityFor,
 } from './peer-device-adapter';
@@ -68,6 +69,21 @@ describe('peerInvokePriorityFor', () => {
     expect(isPeerRetryableReadCommand('start_dialog_turn')).toBe(false);
     expect(isPeerRetryableReadCommand('delete_session')).toBe(false);
     expect(isPeerRetryableReadCommand('respond_permission')).toBe(false);
+  });
+
+  it('retries only mutations with an explicit host idempotency identity', () => {
+    expect(isPeerRetryableIdempotentMutation('start_dialog_turn', {
+      request: { sessionId: 'session-1', turnId: 'turn-1' },
+    })).toBe(true);
+    expect(isPeerRetryableIdempotentMutation('start_acp_dialog_turn', {
+      request: { sessionId: 'session-1', turnId: 'turn-1' },
+    })).toBe(true);
+    expect(isPeerRetryableIdempotentMutation('start_dialog_turn', {
+      request: { sessionId: 'session-1' },
+    })).toBe(false);
+    expect(isPeerRetryableIdempotentMutation('delete_session', {
+      request: { sessionId: 'session-1', turnId: 'turn-1' },
+    })).toBe(false);
   });
 
   it('ranks git/ssh/editor/fs/search noise low', () => {
@@ -225,12 +241,14 @@ describe('PeerDeviceTransportAdapter queue', () => {
     }
   });
 
-  it('does not replay mutations after a transport failure', async () => {
+  it('does not replay mutations when the host has not advertised deduplication', async () => {
     const deviceRpc = vi.fn().mockRejectedValue(new Error('outcome unknown'));
     const adapter = new PeerDeviceTransportAdapter('peer-1', deviceRpc);
 
     await expect(
-      adapter.request('start_dialog_turn', { request: { sessionId: 's1' } }),
+      adapter.request('start_dialog_turn', {
+        request: { sessionId: 's1', turnId: 'turn-1' },
+      }),
     ).rejects.toThrow('outcome unknown');
     expect(deviceRpc).toHaveBeenCalledTimes(1);
     expect(deviceRpc).toHaveBeenCalledWith(
@@ -238,6 +256,47 @@ describe('PeerDeviceTransportAdapter queue', () => {
       expect.any(String),
       PEER_MUTATION_REQUEST_TIMEOUT_MS,
     );
+  });
+
+  it('recovers an idempotent dialog submission after a transient Relay failure', async () => {
+    vi.useFakeTimers();
+    try {
+      const deviceRpc = vi.fn()
+        .mockRejectedValueOnce(new Error('error sending request for url'))
+        .mockResolvedValueOnce(JSON.stringify({
+          resp: 'host_invoke_result',
+          ok: true,
+          value: { success: true, message: 'Dialog turn started' },
+        }));
+      const adapter = new PeerDeviceTransportAdapter('peer-1', deviceRpc, {
+        supportsIdempotentDialogSubmit: true,
+      });
+      const params = {
+        request: {
+          sessionId: 'session-1',
+          turnId: 'turn-1',
+          userInput: 'hello',
+        },
+      };
+
+      const request = adapter.request('start_dialog_turn', params);
+      await vi.advanceTimersByTimeAsync(500);
+
+      await expect(request).resolves.toEqual({
+        success: true,
+        message: 'Dialog turn started',
+      });
+      expect(deviceRpc).toHaveBeenCalledTimes(2);
+      expect(deviceRpc).toHaveBeenNthCalledWith(
+        1,
+        'peer-1',
+        expect.any(String),
+        PEER_MUTATION_REQUEST_TIMEOUT_MS,
+      );
+      expect(deviceRpc.mock.calls[1][1]).toBe(deviceRpc.mock.calls[0][1]);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('bounds a hung read and rejects after its retry budget', async () => {

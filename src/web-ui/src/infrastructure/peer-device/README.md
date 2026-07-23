@@ -77,8 +77,13 @@ Controller-side React/transport layer for Peer Device Mode. Architecture:
     HostInvoke concurrency is four with one slot reserved from normal/low
     traffic. Read-only commands have a real 10s deadline and two
     exponential-backoff retries. Mutations have a 30s deadline and are never
-    replayed automatically without an idempotency contract. A failed session
-    list must leave its loading state and offer an explicit retry.
+    replayed automatically without an idempotency contract. Dialog submission
+    is the explicit exception: `start_dialog_turn` and
+    `start_acp_dialog_turn` reuse `(sessionId, turnId)`, and the host
+    coalesces/caches duplicate execution attempts. The controller must observe
+    the matching `idempotent_dialog_submit` capability in `peer_mode_ping`
+    before replaying either command; an older host stays single-shot. A failed
+    session list must leave its loading state and offer an explicit retry.
 
 ## Related account-login guards
 

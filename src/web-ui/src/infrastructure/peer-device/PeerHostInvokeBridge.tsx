@@ -8,6 +8,10 @@ import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 import { invoke } from '@tauri-apps/api/core';
 import { createLogger } from '@/shared/utils/logger';
 import { isTauriRuntime } from '@/infrastructure/runtime';
+import {
+  PeerHostInvokeIdempotencyCache,
+  type PeerHostInvokeExecutionResult,
+} from './peerHostInvokeIdempotency';
 
 const log = createLogger('PeerHostInvokeBridge');
 
@@ -31,6 +35,33 @@ interface HostInvokeBridgeRequest {
   args: unknown;
 }
 
+async function executeHostInvoke(
+  command: string,
+  args: unknown,
+): Promise<PeerHostInvokeExecutionResult> {
+  try {
+    const value = args === undefined || args === null
+      ? await invoke(command)
+      : await invoke(command, args as Record<string, unknown>);
+    return {
+      ok: true,
+      value: value ?? null,
+      error: null,
+    };
+  } catch (error) {
+    const message = serializeInvokeError(error);
+    log.warn('Peer host invoke failed', {
+      command: safeCommandForLog(command),
+      error_category: 'host_invoke',
+    });
+    return {
+      ok: false,
+      value: null,
+      error: message,
+    };
+  }
+}
+
 export function PeerHostInvokeBridge(): null {
   useEffect(() => {
     if (!isTauriRuntime()) {
@@ -39,42 +70,31 @@ export function PeerHostInvokeBridge(): null {
 
     let disposed = false;
     let unlisten: UnlistenFn | null = null;
+    const idempotencyCache = new PeerHostInvokeIdempotencyCache();
 
     void (async () => {
       try {
         unlisten = await listen<HostInvokeBridgeRequest>('peer-host-invoke://request', async (event) => {
           if (disposed) return;
           const { id, command, args } = event.payload;
+          const result = await idempotencyCache.execute(
+            command,
+            args,
+            () => executeHostInvoke(command, args),
+          );
           try {
-            const value = args === undefined || args === null
-              ? await invoke(command)
-              : await invoke(command, args as Record<string, unknown>);
             await invoke('peer_host_invoke_complete', {
               id,
-              ok: true,
-              value: value ?? null,
-              error: null,
+              ok: result.ok,
+              value: result.value,
+              error: result.error,
             });
-          } catch (error) {
-            const message = serializeInvokeError(error);
+          } catch {
             const loggedCommand = safeCommandForLog(command);
-            log.warn('Peer host invoke failed', {
+            log.error('Failed to report peer host invoke result', {
               command: loggedCommand,
-              error_category: 'host_invoke',
+              error_category: 'completion',
             });
-            try {
-              await invoke('peer_host_invoke_complete', {
-                id,
-                ok: false,
-                value: null,
-                error: message,
-              });
-            } catch {
-              log.error('Failed to report peer host invoke error', {
-                command: loggedCommand,
-                error_category: 'completion',
-              });
-            }
           }
         });
       } catch {

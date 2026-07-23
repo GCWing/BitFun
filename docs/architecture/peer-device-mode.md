@@ -56,12 +56,19 @@ FS) and must not be mixed with Peer Device Mode.
   are always interactive priority, and one slot is kept free from normal and
   low-priority work so input cannot be trapped behind slow polling requests.
 - Idempotent read HostInvokes use a 10s per-attempt deadline and at most two
-  exponential-backoff retries. Mutating commands use a 30s deadline without
-  automatic replay because a timed-out mutation has an unknown outcome. The
-  desktop `account_device_rpc` command enforces the requested deadline around
-  the native HTTP future; the controller's Promise deadline is not merely a UI
-  timer. Failed session-list loads leave the spinner and expose an explicit
-  retry action.
+  exponential-backoff retries. Mutating commands use a 30s deadline and are
+  not replayed unless both ends share an explicit idempotency contract.
+  `start_dialog_turn` and `start_acp_dialog_turn` use their stable
+  `(sessionId, turnId)` identity for bounded retry: the controller reuses the
+  exact payload, while the host coalesces concurrent attempts and caches the
+  completed result for the retry window. The controller enables this exception
+  only when the initial `peer_mode_ping` advertises
+  `idempotent_dialog_submit`, so mixed-version peers remain single-shot.
+  Other mutations remain single-shot because a timed-out outcome is unknown.
+  The desktop `account_device_rpc` command enforces the requested deadline
+  around the native HTTP future; the controller's Promise deadline is not
+  merely a UI timer. Failed session-list loads leave the spinner and expose an
+  explicit retry action.
 - While Peer Mode is active, background noise is reduced further:
   - controller-local SSH heartbeats and remote-workspace auto-reconnect pause
   - Git / FilesPanel window-focus refresh pauses

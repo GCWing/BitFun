@@ -318,6 +318,9 @@ pub async fn peer_mode_ping() -> Result<Value, String> {
         "peer": true,
         "device_id": current_device_id_for_peer()
             .unwrap_or_else(|_| "unknown".to_string()),
+        "capabilities": {
+            "idempotent_dialog_submit": true,
+        },
     }))
 }
 
@@ -413,6 +416,17 @@ mod tests {
             controllers: controllers.iter().map(|value| value.to_string()).collect(),
             permission_request_ids: requests.iter().map(|value| value.to_string()).collect(),
         }
+    }
+
+    #[tokio::test]
+    async fn peer_ping_advertises_idempotent_dialog_submission() {
+        let value = peer_mode_ping().await.expect("peer ping");
+        assert_eq!(
+            value
+                .pointer("/capabilities/idempotent_dialog_submit")
+                .and_then(Value::as_bool),
+            Some(true)
+        );
     }
 
     #[test]

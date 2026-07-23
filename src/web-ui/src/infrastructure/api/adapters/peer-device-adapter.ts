@@ -161,6 +161,11 @@ const RETRYABLE_READ_COMMANDS = new Set([
   'get_system_info',
 ]);
 
+const RETRYABLE_IDEMPOTENT_MUTATION_COMMANDS = new Set([
+  'start_dialog_turn',
+  'start_acp_dialog_turn',
+]);
+
 export function isPeerLocalOnlyCommand(command: string): boolean {
   return LOCAL_ONLY_COMMANDS.has(command);
 }
@@ -170,6 +175,31 @@ export function isPeerRetryableReadCommand(command: string): boolean {
     command.startsWith('read_') ||
     command.startsWith('list_') ||
     command.startsWith('get_');
+}
+
+function asRecord(value: unknown): Record<string, unknown> | null {
+  return typeof value === 'object' && value !== null
+    ? value as Record<string, unknown>
+    : null;
+}
+
+/**
+ * Mutations are retryable only when the peer can deduplicate the same logical
+ * submission. Dialog turns carry a controller-generated turnId, which the
+ * Peer Host bridge uses as an idempotency key.
+ */
+export function isPeerRetryableIdempotentMutation(
+  command: string,
+  params: unknown,
+): boolean {
+  if (!RETRYABLE_IDEMPOTENT_MUTATION_COMMANDS.has(command)) {
+    return false;
+  }
+  const request = asRecord(asRecord(params)?.request);
+  return typeof request?.sessionId === 'string' &&
+    request.sessionId.trim().length > 0 &&
+    typeof request.turnId === 'string' &&
+    request.turnId.trim().length > 0;
 }
 
 export type PeerInvokePriority = 'high' | 'normal' | 'low';
@@ -219,7 +249,32 @@ export const PEER_HOST_INVOKE_MAX_CONCURRENT = 4;
 export const PEER_READ_REQUEST_TIMEOUT_MS = 10_000;
 export const PEER_MUTATION_REQUEST_TIMEOUT_MS = 30_000;
 export const PEER_READ_MAX_RETRIES = 2;
+export const PEER_IDEMPOTENT_MUTATION_MAX_RETRIES = 2;
 export const PEER_RETRY_BASE_DELAY_MS = 500;
+
+interface PeerRpcPolicy {
+  timeoutMs: number;
+  maxRetries: number;
+  retryKind: 'read' | 'idempotent-mutation' | 'none';
+}
+
+const READ_RPC_POLICY: PeerRpcPolicy = {
+  timeoutMs: PEER_READ_REQUEST_TIMEOUT_MS,
+  maxRetries: PEER_READ_MAX_RETRIES,
+  retryKind: 'read',
+};
+
+const MUTATION_RPC_POLICY: PeerRpcPolicy = {
+  timeoutMs: PEER_MUTATION_REQUEST_TIMEOUT_MS,
+  maxRetries: 0,
+  retryKind: 'none',
+};
+
+const IDEMPOTENT_MUTATION_RPC_POLICY: PeerRpcPolicy = {
+  timeoutMs: PEER_MUTATION_REQUEST_TIMEOUT_MS,
+  maxRetries: PEER_IDEMPOTENT_MUTATION_MAX_RETRIES,
+  retryKind: 'idempotent-mutation',
+};
 
 type DeviceRpcFn = (
   targetDeviceId: string,
@@ -231,6 +286,11 @@ export interface PeerDeviceTransportHooks {
   /** Fired only for transport/RPC layer failures, not product command errors. */
   onHostInvokeTransportFailure?: (error: unknown, meta?: { action: string; priority: PeerInvokePriority }) => void;
   onHostInvokeSuccess?: () => void;
+  /**
+   * Enables replay of stable dialog submissions only when the target host
+   * advertises matching execution-side deduplication.
+   */
+  supportsIdempotentDialogSubmit?: boolean;
 }
 
 interface HostInvokeResultEnvelope {
@@ -447,7 +507,7 @@ export class PeerDeviceTransportAdapter implements ITransportAdapter {
       const raw = await this.invokeDeviceRpc(
         action,
         JSON.stringify(command),
-        retryable,
+        retryable ? READ_RPC_POLICY : MUTATION_RPC_POLICY,
       );
       const envelope = JSON.parse(raw) as T;
       if (envelope.resp === 'error') {
@@ -484,12 +544,18 @@ export class PeerDeviceTransportAdapter implements ITransportAdapter {
       command: action,
       args: params === undefined ? {} : params,
     });
+    const rpcPolicy = isPeerRetryableReadCommand(action)
+      ? READ_RPC_POLICY
+      : this.hooks.supportsIdempotentDialogSubmit === true &&
+          isPeerRetryableIdempotentMutation(action, params)
+        ? IDEMPOTENT_MUTATION_RPC_POLICY
+        : MUTATION_RPC_POLICY;
 
     try {
       const raw = await this.invokeDeviceRpc(
         action,
         commandJson,
-        isPeerRetryableReadCommand(action),
+        rpcPolicy,
       );
       const envelope = JSON.parse(raw) as HostInvokeResultEnvelope;
       if (timing) {
@@ -527,29 +593,25 @@ export class PeerDeviceTransportAdapter implements ITransportAdapter {
   private async invokeDeviceRpc(
     action: string,
     commandJson: string,
-    retryable: boolean,
+    policy: PeerRpcPolicy,
   ): Promise<string> {
-    const timeoutMs = retryable
-      ? PEER_READ_REQUEST_TIMEOUT_MS
-      : PEER_MUTATION_REQUEST_TIMEOUT_MS;
-    const maxRetries = retryable ? PEER_READ_MAX_RETRIES : 0;
-
     for (let attempt = 0; ; attempt += 1) {
       try {
         return await this.withTimeout(
-          this.deviceRpc(this.targetDeviceId, commandJson, timeoutMs),
+          this.deviceRpc(this.targetDeviceId, commandJson, policy.timeoutMs),
           action,
-          timeoutMs,
+          policy.timeoutMs,
         );
       } catch (error) {
-        if (attempt >= maxRetries) {
+        if (attempt >= policy.maxRetries) {
           throw error;
         }
         const delayMs = PEER_RETRY_BASE_DELAY_MS * (2 ** attempt);
-        log.warn('Retrying read-only Peer request', {
+        log.warn('Retrying recoverable Peer request', {
           action,
+          retryKind: policy.retryKind,
           attempt: attempt + 1,
-          maxRetries,
+          maxRetries: policy.maxRetries,
           delayMs,
           error,
         });
