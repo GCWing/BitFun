@@ -1,0 +1,47 @@
+name: browser_data_extraction
+description: "Extract structured data from a web page using the user's browser (preserves login sessions)"
+parameters:
+  - name: url
+    description: "The URL to extract data from"
+    required: true
+  - name: data_description
+    description: "What data to extract (e.g., 'product prices', 'article titles')"
+    required: true
+  - name: selector
+    description: "Optional CSS selector to scope extraction"
+    required: false
+steps:
+  - domain: browser
+    action: connect
+    description: "Connect to user's default browser via CDP"
+
+  - domain: browser
+    action: navigate
+    params:
+      url: "{{url}}"
+    description: "Navigate to the target URL"
+
+  - domain: browser
+    action: wait
+    params:
+      duration_ms: 2000
+    description: "Wait for page to fully load"
+
+  - domain: browser
+    action: snapshot
+    description: "Take accessibility snapshot to understand page structure"
+
+  - domain: browser
+    action: evaluate
+    params:
+      expression: "document.title + ' — ' + document.querySelector('meta[name=\"description\"]')?.content"
+    description: "Get page metadata for context"
+    output_var: page_meta
+
+  - domain: browser
+    action: get_text
+    params:
+      selector: "{{selector}}"
+    description: "Extract text content from target area"
+    condition: "selector is provided"
+    output_var: extracted_text

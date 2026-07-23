@@ -1,32 +1,69 @@
 [workspace]
 members = [
-    "src/crates/taiji-abnormal",
-    "src/crates/taiji-alert",
-    "src/crates/taiji-backtest",
-    "src/crates/taiji-bar",
-    "src/crates/taiji-blog-gen",
-    "src/crates/taiji-cli",
-    "src/crates/taiji-content",
-    "src/crates/taiji-engine",
-    "src/crates/taiji-engine-py",
-    "src/crates/taiji-example",
-    "src/crates/taiji-executor",
-    "src/crates/taiji-growth",
-    "src/crates/taiji-knowledge-graph",
-    "src/crates/taiji-llm",
-    "src/crates/taiji-orderflow",
-    "src/crates/taiji-pattern",
-    "src/crates/taiji-publisher",
-    "src/crates/taiji-realtime",
-    "src/crates/taiji-sentiment",
-    "src/crates/taiji-strategen",
-    "src/crates/taiji-strategy-template",
+    "src/apps/cli",
+    "src/apps/desktop",
+    "src/apps/server",
+    "src/apps/relay-server",
+    "src/crates/interfaces/acp",
+    "src/crates/assembly/core",
+    "src/crates/assembly/external-sources",
+    "src/crates/adapters/ai-adapters",
+    "src/crates/adapters/opencode-adapter",
+    "src/crates/adapters/webdriver",
+    "src/crates/adapters/transport",
+    "src/crates/services/services-core",
+    "src/crates/services/services-integrations",
+    "src/crates/services/relay-service",
+    "src/crates/services/page-function-runtime",
+    "src/crates/services/terminal",
+    "src/crates/assembly/product-capabilities",
+    "src/crates/contracts/product-domains",
+    "src/crates/execution/agent-runtime",
+    "src/crates/execution/agent-stream",
+    "src/crates/execution/tool-call-jsonrepair",
+    "src/crates/execution/tool-contracts",
+    "src/crates/execution/harness",
+    "src/crates/execution/plugin-runtime-host",
+    "src/crates/execution/runtime-services",
+    "src/crates/execution/tool-provider-groups",
+    "src/crates/execution/tool-execution",
+    "src/crates/contracts/core-types",
+    "src/crates/contracts/events",
+    "src/crates/contracts/runtime-ports",
+    "src/crates/taiji/taiji-bar",
+    "src/crates/taiji/taiji-cli",
+    # "src/crates/taiji/taiji-dvmi",      # 闂簮锛氭嫄鐐?鍙岀嚎涓夋€?
+    # "src/crates/taiji/taiji-magnet",     # 闂簮锛氱浣撳畾浣?
+    # "src/crates/taiji/taiji-thrust",     # 闂簮锛氫笁鎺ㄦ娴?
+    # "src/crates/taiji/taiji-risk",       # 闂簮锛氶鎺ц鍒?鍙傛暟
+    "src/crates/taiji/taiji-engine",
+    "src/crates/taiji/taiji-engine-py",
+    "src/crates/taiji/taiji-content",
+    "src/crates/taiji/taiji-publisher",
+    "src/crates/taiji/taiji-growth",
+    "src/crates/taiji/taiji-alert",
+    "src/crates/taiji/taiji-knowledge-graph",
+    "src/crates/taiji/taiji-blog-gen",
+    "src/crates/taiji/taiji-example",
+    "src/crates/taiji/taiji-llm",
+    "src/crates/taiji/taiji-backtest",
+    "src/crates/taiji/taiji-executor",
+    "src/crates/taiji/taiji-realtime",
+    "src/crates/taiji/taiji-pattern",
+    "src/crates/taiji/taiji-abnormal",
+    "src/crates/taiji/taiji-sentiment",
+    "src/crates/taiji/taiji-orderflow",
+    "src/crates/taiji/taiji-strategen",
+]
+
+exclude = [
+    "BitFun-Installer/src-tauri",
 ]
 
 resolver = "2"
 
+# Shared package metadata 鈥?single source of truth for version
 [workspace.package]
-name = "taiji-quant"
 version = "0.1.0"
 authors = ["Taiji Quant Team"]
 edition = "2021"
@@ -49,6 +86,7 @@ todo = "warn"
 unimplemented = "warn"
 undocumented_unsafe_blocks = "warn"
 
+# Shared dependency versions to keep all crates aligned
 [workspace.dependencies]
 # Async runtime
 tokio = { version = "1.52", features = ["full"] }
@@ -75,24 +113,59 @@ tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 # Utilities
 uuid = { version = "1.0", features = ["v4", "serde"] }
 chrono = { version = "0.4", features = ["serde", "clock"] }
+chrono-tz = "0.10.4"
 cron = "0.15.0"
+# Tauri 2.9.2 utilities conflict with time 0.3.48 on current stable Rust.
+time = { version = "=0.3.47", default-features = false }
+# brotli-decompressor 5.0.2 / alloc-stdlib 0.2.3 pull alloc-no-stdlib 3.x while brotli still uses 2.x.
+brotli-decompressor = "=5.0.0"
+alloc-no-stdlib = "=2.0.4"
+alloc-stdlib = "=0.2.2"
 regex = "1"
 base64 = "0.22"
+# Keep macOS Tauri's dispatch2/bitflags expansion on the known-good bitflags release.
+bitflags = "=2.11.1"
 image = { version = "0.25", default-features = false, features = ["png", "jpeg", "gif", "webp", "bmp"] }
+md5 = "0.7"
 dashmap = "6"
 crossbeam = "0.8"
 parking_lot = "0.12"
 statrs = "0.17"
 indexmap = "2"
-rand = "0.8"
+include_dir = "0.7"
+aes = "0.8"
+hex = "0.4"
+chardetng = "0.1.17"
+encoding_rs = "0.8.35"
+url = "2"
 
 # HTTP client
 reqwest = { version = "0.13.4", default-features = false, features = ["native-tls", "rustls", "json", "stream", "multipart", "query", "form"] }
 
-# Web server / WebSocket
+# Debug Log HTTP Server
 axum = { version = "0.8", features = ["json", "ws"] }
 tower-http = { version = "0.6.11", features = ["cors", "fs"] }
-tokio-tungstenite = { version = "0.29", features = ["rustls-tls-native-roots"] }
+
+# File system
+glob = "0.3"
+ignore = "0.4"
+notify = "8.2"
+dirs = "6.0"
+keyring-core = "1.0.0"
+apple-native-keyring-store = { version = "1.0.1", features = ["keychain"] }
+windows-native-keyring-store = "1.1.0"
+zbus-secret-service-keyring-store = { version = "1.0.0", features = ["crypto-rust"] }
+dark-light = "1.1"
+dunce = "1"
+filetime = "0.2"
+fs2 = "0.4"
+zip = { version = "4.6", default-features = false, features = ["deflate"] } # plugin load
+flate2 = "1.0"
+tar = "0.4"
+bzip2 = "0.5"
+xz2 = "0.1"
+zstd = "0.13"
+toml = "0.9"
 
 # Template engine
 tera = "1.20"
@@ -100,30 +173,135 @@ tera = "1.20"
 # Email
 lettre = { version = "0.11", features = ["tokio1-native-tls"] }
 
-# CLI
+# Git
+git2 = { version = "0.21", default-features = false, features = ["https", "vendored-libgit2"] }
+
+# Terminal
+portable-pty = "0.8"
+vte = "0.15.0"
 clap = { version = "4.6.1", features = ["derive"] }
+crossterm = "0.28"
+ratatui = "0.29"
+unicode-width = "0.2"
+pulldown-cmark = "0.11"
+syntect = { version = "5", default-features = false, features = ["default-syntaxes", "default-themes", "regex-fancy"] }
+syntect-tui = "3.0"
+once_cell = "1"
+libc = "0.2"
+arboard = "3"
 
-# Graph
+# Grep (search)
+grep-searcher = "0.1"
+grep-regex = "0.1"
+globset = "0.4"
+
+# SSE
+eventsource-stream = "0.2.3"
+sse-stream = "0.2.3"
+
+# Command detection (cross-platform)
+which = "8.0"
+similar = "2.5"
+urlencoding = "2.1"
+oxc = { version = "0.138.0", default-features = false, features = ["ast_visit", "codegen", "semantic", "transformer"] }
+rquickjs = { version = "0.9", default-features = false, features = ["classes", "properties", "macro"] }
+
+# Tauri (desktop only)
+tauri = { version = "2.11", features = ["unstable", "macos-private-api", "tray-icon"] }
+tauri-plugin-opener = "2.5"
+tauri-plugin-dialog = "2.7"
+tauri-plugin-fs = "2.5"
+tauri-plugin-log = "2.8"
+tauri-plugin-autostart = "2.5"
+tauri-plugin-notification = "2.3"
+tauri-plugin-updater = "2.10"
+tauri-plugin-global-shortcut = "2.3"
+tauri-plugin-single-instance = "2.4"
+tauri-plugin-window-state = "2.4"
+tauri-build = { version = "2.6", features = [] }
+
+# Desktop support
+screenshots = "0.8"
+enigo = "0.2"
+resvg = { version = "0.47", default-features = false }
+atspi = "0.29"
+leptess = "0.14"
+core-foundation = "0.9"
+core-graphics = { version = "0.23", features = ["elcapitan", "highsierra"] }
+foreign-types = "0.5"
+dispatch = "0.2"
+block2 = "0.6"
+objc2 = "0.6"
+objc2-foundation = "0.3"
+objc2-app-kit = "0.3"
+objc2-vision = { version = "0.3.2", features = ["VNRecognizeTextRequest", "VNRequest", "VNObservation", "VNRequestHandler", "VNUtils", "VNTypes", "objc2-core-foundation"] }
+objc2-web-kit = { version = "0.3", features = ["WKWebView", "WKSnapshotConfiguration", "WKPDFConfiguration", "block2", "objc2-app-kit"] }
+tempfile = "3"
+webview2-com = "0.38"
+windows = "0.61"
+windows-core = "0.61"
+glib = "0.18"
+gtk = "0.18"
+webkit2gtk = "2.0"
+
+# Windows-specific dependencies
+win32job = "2.0"
+
+# I18n internationalization
+fluent-bundle = "0.15"
+unic-langid = "0.9"
+
+# Encryption (Remote Connect E2E)
+x25519-dalek = { version = "2.0", features = ["static_secrets"] }
+aes-gcm = "0.10"
+sha2 = "0.10"
+sha1 = "0.10"
+argon2 = "0.5"
+rand = "0.8"
+
+# Device/Network info (Remote Connect)
+mac_address = "1.1"
+local-ip-address = "0.6"
+hostname = "0.4"
+
+# QR code generation
+qrcode = "0.14"
+
+# WebSocket client
+tokio-tungstenite = { version = "0.29", features = ["rustls-tls-native-roots"] }
+
+# MCP and remote runtimes
+rmcp = { version = "1.7", default-features = false, features = [
+    "auth",
+    "base64",
+    "client",
+    "elicitation",
+    "macros",
+    "reqwest",
+    "schemars",
+    "server",
+] }
+agent-client-protocol = { version = "0.12", features = ["unstable"] }
+russh = "0.45"
+russh-sftp = "2.1"
+russh-keys = "0.45"
+shellexpand = "3"
+ffmpeg-sidecar = "2.5"
 petgraph = { version = "0.6", features = ["serde-1"] }
-
-# ML
 candle-core = "0.7"
 ndarray = "0.16"
+ssh_config = "0.1"
+rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12"] }
 
-# Python bindings
-pyo3 = { version = "0.24", features = ["extension-module"] }
-
-# Chinese text segmentation
-jieba-rs = "0.7"
-
-# Parallel processing
-rayon = "1.10"
-
-# CSV
-csv = "1"
-
-# File system
-tempfile = "3"
+[patch.crates-io]
+# tao 0.35.3 can re-enter its Windows window callback while holding input locks.
+# Use the upstream fix until it is included in a crates.io release.
+tao = { git = "https://github.com/tauri-apps/tao.git", rev = "c704261c519c58cfdd0bc2d58ba24e06a0b71c92" }
+# Tauri 2.11 loses keyboard focus for child webviews after Windows reactivates
+# an `unstable` multi-webview window. Use the upstream 2.12 fix until released.
+tauri-runtime = { git = "https://github.com/tauri-apps/tauri.git", rev = "ce3860e84b79af0d5ee628b304399499a87328b1" }
+tauri-runtime-wry = { git = "https://github.com/tauri-apps/tauri.git", rev = "ce3860e84b79af0d5ee628b304399499a87328b1" }
+tauri-utils = { git = "https://github.com/tauri-apps/tauri.git", rev = "ce3860e84b79af0d5ee628b304399499a87328b1" }
 
 [profile.dev]
 incremental = true
@@ -133,3 +311,10 @@ opt-level = 3
 lto = true
 codegen-units = 1
 strip = true
+
+[profile.release-fast]
+inherits = "release"
+lto = false
+codegen-units = 16
+strip = false
+incremental = true

@@ -1,0 +1,28 @@
+[package]
+name = "taiji-strategen"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+description = "Strategy generator — LLM-driven hypothesis → validate → compile → backtest → refine pipeline (MIT)"
+
+[dependencies]
+taiji-engine = { path = "../taiji-engine" }
+taiji-backtest = { path = "../taiji-backtest" }
+taiji-llm = { path = "../taiji-llm" }
+serde = { workspace = true }
+serde_json = { workspace = true }
+serde_yaml = { workspace = true }
+tokio = { workspace = true }
+async-trait = { workspace = true }
+rand = { workspace = true }
+statrs = { workspace = true }
+anyhow = { workspace = true }
+thiserror = { workspace = true }
+chrono = { workspace = true }
+
+[dev-dependencies]
+tempfile = "3"
+
+[lints]
+workspace = true

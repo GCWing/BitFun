@@ -1,0 +1,195 @@
+{
+  "errors": {
+    "install": {
+      "failed": "安装失败"
+    },
+    "installPath": {
+      "notAbsolute": "安装路径必须是绝对路径。",
+      "filesystemRoot": "不能安装到磁盘根目录，请选择磁盘下的某个文件夹。",
+      "pathNotDirectory": "所选路径已存在但不是文件夹。",
+      "directoryMustBeEmptyOrBitfun": "安装目录必须为空，或已包含 BitFun 安装。",
+      "inspectDirectoryFailed": "无法读取安装目录，请检查权限后重试。",
+      "directoryNotWritable": "安装目录不可写入。请更换路径，或以管理员身份运行安装器（见下方说明）。",
+      "parentNotWritable": "上级目录不可写入。系统目录（如 Program Files）通常需要管理员权限（见下方说明）。",
+      "adminHint": "若需安装到受保护位置（例如 Program Files），请关闭本安装器，在安装程序上右键选择「以管理员身份运行」后重新安装。也可安装到当前用户目录（例如 %LOCALAPPDATA%\\Programs），一般无需管理员权限。"
+    }
+  },
+  "options": {
+    "title": "选项",
+    "subtitle": "确认安装位置与安装偏好",
+    "theme": "主题",
+    "changeLanguage": "切换语言",
+    "pathLabel": "安装路径",
+    "pathPlaceholder": "选择目录...",
+    "browse": "浏览",
+    "required": "所需空间",
+    "available": "可用空间",
+    "insufficientSpace": "磁盘空间不足",
+    "optionsLabel": "安装选项",
+    "desktopShortcut": "创建桌面快捷方式",
+    "startMenu": "添加到开始菜单",
+    "launchAfterInstall": "安装后启动 BitFun",
+    "back": "返回",
+    "install": "安装",
+    "installing": "准备中…",
+    "existingInstallTitle": "检测到本机已安装 BitFun",
+    "existingInstallVersion": "已安装版本：{{version}}",
+    "existingInstallLocation": "安装位置：{{path}}",
+    "existingInstallBinaryMissing": "该路径下未找到主程序文件，可先运行卸载程序或重新安装。",
+    "existingInstallHint": "直接点击「安装」可在原位置升级或修复。若需先卸载，可点击下方按钮运行卸载程序。",
+    "existingInstallRunUninstaller": "运行卸载程序"
+  },
+  "model": {
+    "title": "模型",
+    "subtitle": "安装完成，继续配置模型与主题",
+    "provider": "服务商",
+    "config": "连接信息",
+    "modelName": "模型名称（如 deepseek-v4-flash）",
+    "skip": "稍后配置",
+    "nextTheme": "下一步：主题",
+    "description": "配置和管理 AI 模型提供商",
+    "providerLabel": "选择模型提供商",
+    "selectProvider": "或选择预设提供商",
+    "customProvider": "自定义配置",
+    "modelNamePlaceholder": "输入自定义模型名称...",
+    "baseUrlPlaceholder": "示例：https://open.bigmodel.cn/api/paas/v4/chat/completions",
+    "providers": {
+      "openbitfun": {
+        "name": "OpenBitFun",
+        "description": "OpenBitFun 大模型平台"
+      },
+      "gemini": {
+        "name": "Google Gemini",
+        "description": "Google Gemini 系列模型"
+      },
+      "anthropic": {
+        "name": "Anthropic Claude",
+        "description": "Anthropic Claude 系列模型"
+      },
+      "minimax": {
+        "name": "MiniMax",
+        "description": "MiniMax 系列模型",
+        "urlOptions": {
+          "default": "Anthropic格式-默认",
+          "openai": "OpenAI兼容格式"
+        }
+      },
+      "moonshot": {
+        "name": "月之暗面",
+        "description": "月之暗面 Kimi 系列模型"
+      },
+      "deepseek": {
+        "name": "DeepSeek",
+        "description": "DeepSeek 系列模型"
+      },
+      "zhipu": {
+        "name": "智谱AI",
+        "description": "智谱AI GLM 系列模型",
+        "urlOptions": {
+          "default": "OpenAI格式-默认",
+          "anthropic": "Anthropic格式",
+          "codingPlan": "OpenAI格式-CodingPlan"
+        }
+      },
+      "qwen": {
+        "name": "通义千问",
+        "description": "阿里云百炼大模型平台",
+        "urlOptions": {
+          "default": "OpenAI格式-默认",
+          "codingPlan": "OpenAI格式-Coding Plan",
+          "codingPlanAnthropic": "Anthropic格式-Coding Plan"
+        }
+      },
+      "volcengine": {
+        "name": "火山引擎",
+        "description": "字节跳动火山引擎大模型平台"
+      },
+      "siliconflow": {
+        "name": "硅基流动",
+        "description": "硅基流动大模型平台",
+        "urlOptions": {
+          "default": "OpenAI格式-默认",
+          "anthropic": "Anthropic格式"
+        }
+      },
+      "nvidia": {
+        "name": "NVIDIA",
+        "description": "NVIDIA NIM 大模型平台"
+      },
+      "openrouter": {
+        "name": "OpenRouter",
+        "description": "OpenRouter 大模型平台"
+      }
+    },
+    "modelNameSelectPlaceholder": "选择模型",
+    "testConnection": "测试连接",
+    "testing": "测试中...",
+    "testSuccess": "测试成功",
+    "testFailed": "测试失败",
+    "fillApiKeyBeforeFetch": "请先填写 API Key 再获取模型列表",
+    "fetchingModels": "正在拉取模型列表...",
+    "fetchFailedFallback": "拉取模型列表失败，已回退到常用预设模型",
+    "fetchEmptyFallback": "供应商未返回可用模型，已回退到常用预设模型",
+    "usingPresetModels": "当前显示的是常用预设模型",
+    "addCustomModel": "添加自定义模型",
+    "form": {
+      "baseUrl": "API地址",
+      "apiKey": "API密钥",
+      "apiKeyPlaceholder": "输入您的 API Key",
+      "provider": "请求格式",
+      "providerPlaceholder": "选择请求格式",
+      "modelSelection": "选择模型",
+      "resolvedUrlLabel": "实际请求地址："
+    },
+    "formats": {
+      "openaiCompatible": "OpenAI 兼容",
+      "responsesApi": "OpenAI Responses API",
+      "claudeApi": "Claude API",
+      "geminiApi": "Gemini GenerateContent API"
+    },
+    "showSecret": "显示",
+    "hideSecret": "隐藏"
+  },
+  "progress": {
+    "title": "安装中",
+    "prepare": "准备中",
+    "extract": "正在解压文件",
+    "registry": "正在注册应用",
+    "shortcuts": "正在创建快捷方式",
+    "path": "正在更新 PATH",
+    "config": "正在应用启动偏好设置",
+    "complete": "即将完成",
+    "starting": "启动中...",
+    "failed": "安装失败",
+    "confirmContinue": "继续完成配置"
+  },
+  "themeSetup": {
+    "title": "主题与启动",
+    "subtitle": "选择首次启动主题，然后开始使用",
+    "followSystem": "跟随系统",
+    "themeNames": {
+      "bitfun-dark": "暗色",
+      "bitfun-light": "亮色",
+      "bitfun-midnight": "午夜",
+      "bitfun-china-style": "墨韵",
+      "bitfun-china-night": "墨夜",
+      "bitfun-cyber": "赛博",
+      "bitfun-slate": "石板灰",
+      "bitfun-tokyo-night": "东京夜"
+    }
+  },
+  "complete": {
+    "finish": "完成"
+  },
+  "uninstall": {
+    "title": "卸载 BitFun",
+    "subtitle": "将移除 BitFun 及其集成项（快捷方式、右键菜单、PATH）。",
+    "installPath": "安装目录",
+    "pathUnknown": "未检测到安装目录",
+    "confirm": "开始卸载",
+    "uninstalling": "正在卸载...",
+    "completed": "卸载已完成，可关闭窗口。",
+    "cancel": "取消",
+    "close": "关闭"
+  }
+}

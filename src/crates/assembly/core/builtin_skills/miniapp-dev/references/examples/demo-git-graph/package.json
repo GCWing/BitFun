@@ -1,0 +1,10 @@
+{
+  "name": "miniapp-git-graph",
+  "private": true,
+  "scripts": {
+    "build": "node source/build.js"
+  },
+  "dependencies": {
+    "simple-git": "^3.27.0"
+  }
+}

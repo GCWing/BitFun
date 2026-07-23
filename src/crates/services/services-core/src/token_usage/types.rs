@@ -1,0 +1,165 @@
+//! Token usage data types
+
+use chrono::{DateTime, Utc};
+use serde::{Deserialize, Serialize};
+use std::collections::{HashMap, HashSet};
+
+/// Single token usage record for a specific API call
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TokenUsageRecord {
+    /// Resolved `AIModelConfig.id` used for the request.
+    pub model_config_id: String,
+    /// Provider model name sent on the request.
+    pub effective_model_name: String,
+    pub session_id: String,
+    pub turn_id: String,
+    pub timestamp: DateTime<Utc>,
+    pub input_tokens: u32,
+    pub output_tokens: u32,
+    pub cached_tokens: u32,
+    /// Whether cached token count was explicitly reported by the provider/event.
+    #[serde(default)]
+    pub cached_tokens_available: bool,
+    /// Cache WRITE tokens (Anthropic only: `cache_creation_input_tokens`).
+    /// These are tokens written into the cache this call (billed at write price).
+    /// Extracted from `token_details.cacheCreationTokenCount` when present.
+    #[serde(default)]
+    pub cache_write_tokens: u32,
+    pub total_tokens: u32,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub token_details: Option<serde_json::Value>,
+    /// Whether this record is from a subagent call
+    #[serde(default)]
+    pub is_subagent: bool,
+}
+
+/// Aggregated token statistics for a model
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct ModelTokenStats {
+    pub model_id: String,
+    pub total_input: u64,
+    pub total_output: u64,
+    /// Cumulative cache HIT tokens (served from cache, charged at cache-read price).
+    pub total_cached: u64,
+    /// Cumulative cache WRITE tokens (Anthropic only; charged at cache-write price).
+    #[serde(default)]
+    pub total_cache_write: u64,
+    /// Prompt input tokens from requests where the provider explicitly reported
+    /// cache hit telemetry. Used as the cache hit ratio denominator.
+    #[serde(default)]
+    pub cache_reported_input_tokens: u64,
+    pub total_tokens: u64,
+    /// Number of distinct sessions that used this model
+    pub session_count: u32,
+    /// Number of API requests made with this model
+    pub request_count: u32,
+    /// Set of session IDs that used this model (for dedup counting)
+    #[serde(default)]
+    pub session_ids: HashSet<String>,
+    pub first_used: Option<DateTime<Utc>>,
+    pub last_used: Option<DateTime<Utc>>,
+}
+
+impl ModelTokenStats {
+    /// Fraction of prompt tokens served from cache (0.0–1.0).
+    /// Returns `None` when no prompt tokens have been recorded or when the
+    /// provider never reported cache token counts.
+    pub fn cache_hit_ratio(&self) -> Option<f64> {
+        if self.cache_reported_input_tokens == 0 {
+            return None;
+        }
+        Some(self.total_cached as f64 / self.cache_reported_input_tokens as f64)
+    }
+
+    /// Estimated cost-savings ratio attributed to prefix-cache hits.
+    ///
+    /// Uses DeepSeek / Anthropic cache pricing where a cache-read costs about 10%
+    /// of a full prompt token. The returned value represents the fraction of prompt
+    /// spend that was avoided. Returns `None` when `cache_hit_ratio` is `None`.
+    pub fn estimated_cache_savings_ratio(&self) -> Option<f64> {
+        self.cache_hit_ratio().map(|r| r * 0.90)
+    }
+}
+
+/// Token statistics for a specific session
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SessionTokenStats {
+    pub session_id: String,
+    pub model_id: String,
+    pub total_input: u32,
+    pub total_output: u32,
+    /// Cumulative cache HIT tokens for this session.
+    pub total_cached: u32,
+    /// Cumulative cache WRITE tokens for this session (Anthropic only).
+    #[serde(default)]
+    pub total_cache_write: u32,
+    /// Prompt input tokens from requests where the provider explicitly reported
+    /// cache hit telemetry. Used as the cache hit ratio denominator.
+    #[serde(default)]
+    pub cache_reported_input_tokens: u32,
+    pub total_tokens: u32,
+    pub request_count: u32,
+    pub created_at: DateTime<Utc>,
+    pub last_updated: DateTime<Utc>,
+}
+
+impl SessionTokenStats {
+    /// Fraction of prompt tokens served from cache (0.0–1.0).
+    /// Returns `None` when no prompt tokens recorded or provider never reported cache counts.
+    pub fn cache_hit_ratio(&self) -> Option<f64> {
+        if self.cache_reported_input_tokens == 0 {
+            return None;
+        }
+        Some(self.total_cached as f64 / self.cache_reported_input_tokens as f64)
+    }
+
+    /// Estimated cost-savings ratio from prefix-cache hits (cache read about 10% of full price).
+    pub fn estimated_cache_savings_ratio(&self) -> Option<f64> {
+        self.cache_hit_ratio().map(|r| r * 0.90)
+    }
+}
+
+/// Time range for querying statistics
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+pub enum TimeRange {
+    Today,
+    ThisWeek,
+    ThisMonth,
+    All,
+    Custom {
+        start: DateTime<Utc>,
+        end: DateTime<Utc>,
+    },
+}
+
+/// Query parameters for token usage
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TokenUsageQuery {
+    pub model_id: Option<String>,
+    pub session_id: Option<String>,
+    pub time_range: TimeRange,
+    pub limit: Option<usize>,
+    pub offset: Option<usize>,
+    /// Whether to include subagent token usage in results (default: false)
+    #[serde(default)]
+    pub include_subagent: bool,
+}
+
+/// Summary of token usage with breakdown
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TokenUsageSummary {
+    pub total_input: u64,
+    pub total_output: u64,
+    /// Aggregate cache HIT tokens across all records in the query.
+    pub total_cached: u64,
+    /// Aggregate cache WRITE tokens across all records in the query (Anthropic only).
+    #[serde(default)]
+    pub total_cache_write: u64,
+    /// Aggregate prompt input tokens from requests where cache hit telemetry was reported.
+    #[serde(default)]
+    pub cache_reported_input_tokens: u64,
+    pub total_tokens: u64,
+    pub by_model: HashMap<String, ModelTokenStats>,
+    pub by_session: HashMap<String, SessionTokenStats>,
+    pub record_count: usize,
+}

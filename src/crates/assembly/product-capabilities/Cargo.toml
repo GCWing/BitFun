@@ -1,0 +1,24 @@
+[package]
+name = "bitfun-product-capabilities"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+description = "BitFun product capability pack contracts"
+
+[lib]
+name = "bitfun_product_capabilities"
+crate-type = ["rlib"]
+
+[dependencies]
+bitfun-harness = { path = "../../execution/harness" }
+bitfun-runtime-ports = { path = "../../contracts/runtime-ports" }
+bitfun-runtime-services = { path = "../../execution/runtime-services" }
+bitfun-tool-packs = { path = "../../execution/tool-provider-groups", default-features = false }
+
+[dev-dependencies]
+async-trait = { workspace = true }
+bitfun-agent-runtime = { path = "../../execution/agent-runtime" }
+tokio = { workspace = true }
+
+[lints]
+workspace = true

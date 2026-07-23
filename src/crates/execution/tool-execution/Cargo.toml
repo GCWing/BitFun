@@ -1,0 +1,34 @@
+[package]
+name = "tool-runtime"
+version.workspace = true
+edition.workspace = true
+
+[features]
+default = []
+web-readable = ["dep:htmd", "dep:legible", "dep:readability-js", "dep:regex"]
+
+[dependencies]
+bitfun-agent-tools = { path = "../tool-contracts" }
+bitfun-events = { path = "../../contracts/events" }
+bitfun-runtime-ports = { path = "../../contracts/runtime-ports" }
+dashmap = { workspace = true }
+globset = { workspace = true }
+dunce = { workspace = true }
+grep-regex = { workspace = true }
+grep-searcher = { workspace = true }
+htmd = { version = "0.5.4", optional = true }
+ignore = { workspace = true }
+legible = { version = "0.4.2", optional = true }
+log = { workspace = true }
+regex = { workspace = true, optional = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+tokio = { workspace = true }
+tokio-util = { workspace = true }
+vte = { workspace = true, features = ["ansi"] }
+
+[target.'cfg(not(target_env = "ohos"))'.dependencies]
+readability-js = { version = "0.1.5", optional = true }
+
+[lints]
+workspace = true

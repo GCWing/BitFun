@@ -1,0 +1,194 @@
+# 贡献指南
+
+[English](./CONTRIBUTING.md)
+
+感谢你对 BitFun 的兴趣！BitFun 是一个由 Rust 与 TypeScript 驱动的多端 AI 编程环境，桌面端/CLI/Server 共享核心逻辑。本指南说明如何高效参与贡献。
+
+## 行为准则
+
+请保持尊重、友善与建设性沟通。我们欢迎不同背景与经验的贡献者。
+
+## 快速开始
+
+### 环境准备
+
+- Node.js 22.12+（建议 LTS 版本）
+- pnpm 10.15.0（建议通过 Corepack 使用）
+- Rust toolchain（通过 rustup 安装）
+- 桌面端开发需准备 Tauri 依赖
+
+BitFun 将本地 JavaScript 构建和 CI 统一到 Node.js 22.12+。仓库里的
+GitHub Actions 升级使用的是兼容 Node.js 24 的 action runtime，但项目脚本
+默认仍以 Node.js 22.12+ 为基线，除非局部指南另有说明。从旧 Node.js 版本切换
+后，请重新运行 `pnpm install`。
+
+#### Windows：OpenSSL 配置
+
+大多数 Windows 贡献者不需要手动配置 OpenSSL。使用 `pnpm run desktop:dev`
+或常规 `desktop:build*` 脚本即可；脚本会在需要时自动引导预编译的 OpenSSL 包。
+
+只有在自动引导失败、准备 CI 环境，或你明确使用 `pnpm run desktop:dev:raw`
+时才需要手动处理。此时运行 `scripts/ci/setup-openssl-windows.ps1`，或将
+`OPENSSL_DIR` 指向预编译的 x64 OpenSSL 目录，并设置 `OPENSSL_STATIC=1`。
+
+### 安装依赖
+
+```bash
+pnpm install
+```
+
+### 常用命令
+
+```bash
+# Desktop（日常开发推荐）
+pnpm run desktop:dev                # 完整热更新：Vite HMR + Rust 自动重编译并重启
+
+# Desktop（轻量预览，无 Rust 自动重编译）
+pnpm run desktop:preview:debug      # 复用预构建二进制 + Vite HMR；Rust 改动需手动重启
+
+# Desktop（生产构建）
+pnpm run desktop:build
+
+# E2E
+pnpm run e2e:test
+```
+
+> **`desktop:dev` 与 `desktop:preview:debug` 的区别**：`desktop:dev` 运行 `tauri dev`，提供**完整热更新** — 前端改动通过 Vite HMR 即时生效，Rust/后端改动会触发增量重编译并自动重启应用，是日常开发的首选方式。`desktop:preview:debug` 启动预构建的 debug 二进制和 Vite dev server；前端编辑仍可 HMR，但 **Rust 侧改动不会自动重编译** — 需要手动停止并重新运行命令（或使用 `--force-rebuild`）。适合仅需迭代前端代码、或希望跳过 `tauri dev` 初始化以更快冷启动的场景。
+
+> 完整脚本列表见 [`package.json`](package.json)。agent 专用命令、验证与架构规则见 [`AGENTS.md`](AGENTS.md)。
+
+### 桌面端调试工具
+
+桌面端 dev 构建会启用 `devtools` Cargo feature。`F12` 打开原生 webview
+DevTools；`Cmd/Ctrl + Shift + I` 切换 BitFun 元素检查器，`Cmd/Ctrl + Shift + J`
+也可以打开原生 DevTools。面向最终用户的 `release` 构建不会启用这些工具。
+
+## 代码规范与架构约束
+
+架构敏感规则、模块边界和验证矩阵以 [`AGENTS.md`](AGENTS.md) 为准。面向贡献者只需把握：
+
+- 日志只使用英文，并保持必要、可读。
+- 用户可见文案走项目 i18n 流程；不要把 Web UI locale catalog 共享给较小产品形态。
+- shared core 必须保持平台无关；Desktop/Tauri 细节属于 app adapter，并通过类型化能力接口回流；需要事件投递时使用已有生产 transport adapter。
+- Tauri command 使用 `snake_case` 命令名和结构化 `request` 参数。
+- core 拆解、feature 边界、依赖边界和构建提速重构必须遵循
+  `docs/architecture/product-architecture.md`。
+- 功能级规则应放在离代码最近的模块 `AGENTS.md` 中。
+
+## 重点关注的贡献方向
+
+1. 贡献好的想法/创意（功能、交互、视觉等），提交 Issue
+   > 欢迎产品经理、UI 设计师通过 PI 快速提交创意，我们会帮助完善开发
+2. 优化 Agent 系统和效果
+3. 对提升系统稳定性和完善基础能力
+4. 扩展生态（Skills、MCP、LSP 插件，或者对某些垂域开发场景的更好支持）
+
+## 贡献流程与 PR 约定
+
+### 除功能/修复外的贡献方向
+
+我们欢迎不仅限于功能或修复的 PR。示例包括：
+
+| 贡献方向 | 位置/文件 | 示例说明 |
+| --- | --- | --- |
+| Prompts | `src/crates/assembly/core/src/agentic/agents/prompts/` | 新增或优化提示词，并按需更新相关逻辑 |
+| Tools | `src/crates/assembly/core/src/agentic/tools/implementations/`、`src/crates/assembly/core/src/agentic/tools/registry.rs` | 新增工具实现，并在工具注册表中注册 |
+| Subagents | `src/crates/assembly/core/src/agentic/agents/custom_subagents/`、`src/crates/assembly/core/src/agentic/agents/registry.rs` | 新增子代理实现，并在子代理注册表中注册 |
+| 模式贡献 | `src/crates/assembly/core/src/agentic/agents/*_mode.rs`、`src/crates/assembly/core/src/agentic/agents/prompts/*_mode.md`、`src/web-ui/src/locales/*/settings/modes.json` | 新增/优化 Agent 模式（例如 Plan/Debug/Agentic 或自定义模式）的逻辑与提示词，并同步前端模式文案 |
+| Code Agent 与 AIIde 场景指南 | `website/src/docs/` | 补充流程、playbook 与真实场景说明（或从 `README.md` 链接） |
+
+### 开始前
+
+- 先开 Issue 说明问题或方案，尤其是较大改动，以避免重复与设计冲突
+- 新功能或 UI 变更建议先讨论设计方向，确保符合产品体验
+- 将 Issue 和 PR 模板作为填写指引；保持 PR 聚焦，必要时说明跳过了哪些验证以及原因。
+
+### PR 标题与描述
+
+建议使用 Conventional Commits 风格，便于维护版本记录与自动化流程：
+
+- `feat:` 新功能
+- `fix:` 修复问题
+- `docs:` 文档变更
+- `chore:` 维护/依赖
+- `refactor:` 重构且不改行为
+- `test:` 测试相关
+
+UI 改动请附前后对比截图或短录屏，方便快速评审。
+
+如为 AI 辅助产出，请在 PR 中注明并说明测试程度（未测/轻测/已测），便于评审风险。
+
+不要提交临时 AI prompt、本地绝对路径、生成的草稿文件、配对密钥、token、证书或无关产物。PR 应聚焦于本次产品或维护改动。
+
+### 分支管理
+
+**`main` 分支为默认协作分支，并接受特性 PR。** 本仓库欢迎产品经理、开发者使用 AI 生成代码进行快速验证或提交想法，因此 **所有 PR 请直接提交到 `main` 分支**。
+
+### 变更范围
+
+保持 PR 小而聚焦，避免混杂无关改动。
+
+## 测试与验证
+
+按改动文件和行为选择最小检查。完整构建和大范围测试由 CI 保护；只有改动影响构建、打包、发布行为，
+或 CI 无法覆盖对应路径时，才在本地运行更重命令。
+
+常见本地检查：
+
+| 改动类型 | 常用验证 |
+| --- | --- |
+| 仓库元信息或 GitHub 配置 | `pnpm run check:repo-hygiene && pnpm run check:github-config && git diff --check` |
+| 前端运行时或 UI | `pnpm run type-check:web`；行为变化时再加最近的 focused test |
+| Mobile web | `pnpm --dir src/mobile-web run type-check` |
+| Rust 共享 runtime 或 services | `cargo check --workspace`；行为变化时再加 focused `cargo test` |
+| Desktop/Tauri 集成 | `cargo check -p bitfun-desktop` |
+| i18n 资源或契约 | 使用 `AGENTS.md` 中匹配的 i18n 验证行 |
+
+UI 改动在有帮助时附截图或短录屏。无法运行相关检查时，在 PR 中说明原因，并提供风险更低的手动验证路径。
+
+## 安全与合规
+
+- 不要提交密钥、Token、证书或任何敏感信息
+- 新增依赖请确认许可证兼容并说明用途
+
+## 感谢
+
+每一份贡献都很重要，欢迎提交 Issue、PR 或建议！
+
+## Taiji 模块
+
+本仓库同时托管 **太极（Taiji）** 多智能体量化系统，代码位于 `src/crates/taiji/`。
+
+### Crate 布局
+
+| 类别 | 数量 | Crate |
+| --- | --- | --- |
+| 活跃 | 20 | `taiji-bar`、`taiji-cli`、`taiji-engine`、`taiji-engine-py`、`taiji-content`、`taiji-publisher`、`taiji-growth`、`taiji-alert`、`taiji-knowledge-graph`、`taiji-blog-gen`、`taiji-example`、`taiji-llm`、`taiji-backtest`、`taiji-executor`、`taiji-realtime`、`taiji-pattern`、`taiji-abnormal`、`taiji-sentiment`、`taiji-orderflow`、`taiji-strategen` |
+| 闭源（已注释） | 4 | `taiji-dvmi`、`taiji-magnet`、`taiji-thrust`、`taiji-risk` |
+
+### 闭源策略
+
+上述 4 个闭源 crate 在 `Cargo.toml` 的 workspace members 中已**注释掉**。**不得取消注释或将闭源代码提交到公开仓库。** CI 测试 job 同样排除这些 crate。
+
+### 开始前
+
+- 务必先阅读 `docs/architecture/product-architecture.md`，了解架构敏感规则与模块边界。
+- 熟悉 taiji crate 之间的依赖关系：参见 `.bitfun/team/type-contract-phase8-10.md` 中的跨 crate 依赖矩阵与 merge 规则。
+
+### 验证
+
+提交 taiji 改动前，按 crate 级验证：
+
+```bash
+cargo check -p <crate>
+cargo test -p <crate>
+```
+
+workspace 级 taiji 验证：
+
+```bash
+cargo check --workspace
+cargo test --workspace
+```
+
+PR 应聚焦单一功能领域，如有跳过的验证请注明原因。

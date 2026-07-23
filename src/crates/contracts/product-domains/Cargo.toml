@@ -1,0 +1,43 @@
+[package]
+name = "bitfun-product-domains"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+description = "BitFun product domain owner crate"
+
+[lib]
+name = "bitfun_product_domains"
+crate-type = ["rlib"]
+
+[[test]]
+name = "plugin_source_contracts"
+path = "tests/plugin_source_contracts.rs"
+required-features = ["plugin-source"]
+
+[[test]]
+name = "external_source_contracts"
+path = "tests/external_source_contracts.rs"
+required-features = ["external-sources"]
+
+[dependencies]
+serde = { workspace = true }
+serde_json = { workspace = true }
+dirs = { workspace = true, optional = true }
+log = { workspace = true, optional = true }
+sha2 = { workspace = true, optional = true }
+hex = { workspace = true, optional = true }
+which = { workspace = true, optional = true }
+
+[features]
+default = []
+plugin-source = ["hex", "sha2"]
+miniapp = ["dirs", "sha2", "which"]
+function-agents = ["log"]
+external-sources = ["hex", "sha2"]
+product-full = ["plugin-source", "miniapp", "function-agents", "external-sources"]
+
+[dev-dependencies]
+tokio = { workspace = true }
+
+[lints]
+workspace = true

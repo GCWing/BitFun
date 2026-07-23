@@ -1,7 +1,7 @@
 {
   "name": "taiji-quant",
   "private": true,
-  "version": "0.2.13",
+  "version": "0.1.0",
   "type": "module",
   "engines": {
     "node": ">=22.12.0"

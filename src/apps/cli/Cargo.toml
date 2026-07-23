@@ -1,0 +1,101 @@
+[package]
+name = "bitfun-cli"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+description = "BitFun CLI - Terminal User Interface"
+default-run = "bitfun"
+autobins = false
+
+[[bin]]
+name = "bitfun"
+path = "src/main.rs"
+
+[[bin]]
+name = "bitfun-cli"
+path = "src/bin/bitfun_cli_compat.rs"
+
+[dependencies]
+# Internal crates
+bitfun-core = { path = "../../crates/assembly/core", default-features = false, features = ["product-full"] }
+bitfun-events = { path = "../../crates/contracts/events" }
+bitfun-acp = { path = "../../crates/interfaces/acp" }
+bitfun-agent-runtime = { path = "../../crates/execution/agent-runtime" }
+bitfun-runtime-ports = { path = "../../crates/contracts/runtime-ports" }
+bitfun-runtime-services = { path = "../../crates/execution/runtime-services" }
+bitfun-agent-tools = { path = "../../crates/execution/tool-contracts" }
+bitfun-product-domains = { path = "../../crates/contracts/product-domains", default-features = false, features = ["external-sources"] }
+
+# CLI framework
+clap = { workspace = true }
+
+# TUI framework (Terminal User Interface)
+ratatui = { workspace = true }
+crossterm = { workspace = true }
+
+# Config and serialization
+dirs = { workspace = true }
+toml = { workspace = true }
+
+# Session management
+uuid = { workspace = true }
+chrono = { workspace = true }
+dashmap = { workspace = true }
+
+# Async trait
+async-trait = { workspace = true }
+
+# Unicode width calculation (for correct wide-char handling)
+unicode-width = { workspace = true }
+
+# Path canonicalization without Windows UNC prefix
+dunce = { workspace = true }
+
+# Markdown parsing and rendering
+pulldown-cmark = { workspace = true }
+
+# Diff computation for tool card rendering
+similar = { workspace = true }
+
+# Syntax highlighting for code blocks and tool cards
+syntect = { workspace = true }
+syntect-tui = { workspace = true }
+
+# Lazy initialization for syntax highlighter singleton
+once_cell = { workspace = true }
+
+# Unix-only best-effort terminal color detection (OSC 11)
+libc = { workspace = true }
+
+# Clipboard access (for reliable paste on Windows where bracketed paste is broken)
+arboard = { workspace = true }
+
+# Inherited from workspace
+tokio = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+anyhow = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+
+[dev-dependencies]
+tempfile = "3"
+sha2 = { workspace = true }
+hex = { workspace = true }
+
+[target.'cfg(windows)'.dependencies]
+windows = { workspace = true, features = ["Win32_Foundation", "Win32_System_Console"] }
+
+# portable-pty: ohos requires 0.9 (nix 0.25 is incompatible); all other
+# platforms use 0.8 to avoid the PSEUDOCONSOLE_INHERIT_CURSOR ConPTY bug.
+[target.'cfg(not(target_env = "ohos"))'.dev-dependencies]
+portable-pty = { workspace = true }
+
+[target.'cfg(target_env = "ohos")'.dev-dependencies]
+portable-pty = "0.9"
+
+[features]
+default = []
+
+[lints]
+workspace = true

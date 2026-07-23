@@ -1,0 +1,56 @@
+services:
+  relay-server:
+    build:
+      context: ../../..
+      dockerfile: src/apps/relay-server/Dockerfile
+      args:
+        # Pass through optional parallelism limit for low-memory hosts:
+        #   RELAY_CARGO_BUILD_JOBS=1 docker compose build
+        CARGO_BUILD_JOBS: ${RELAY_CARGO_BUILD_JOBS:-}
+    # Intentionally no `platform:` pin — build/run for the host CPU
+    # (linux/amd64 on x86_64, linux/arm64 on aarch64).
+    container_name: bitfun-relay
+    restart: unless-stopped
+    ports:
+      # Host and container port both follow RELAY_PORT (default 9700).
+      - "${RELAY_HOST_BIND_IP:-0.0.0.0}:${RELAY_PORT:-9700}:${RELAY_PORT:-9700}"
+    environment:
+      - RELAY_PORT=${RELAY_PORT:-9700}
+      - RELAY_STATIC_DIR=/app/static
+      # Room mobile-web assets and BitFun Pages (`pages/{user_id}/{slug}/`) share this dir.
+      - RELAY_ROOM_WEB_DIR=/app/room-web
+      - RELAY_ROOM_TTL=300
+      - RELAY_ASSET_STORE_MAX_BYTES=1073741824
+      - RELAY_DB_PATH=/app/data/bitfun_relay.db
+    volumes:
+      - ./static:/app/static:ro
+      - room-web:/app/room-web
+      - relay-db:/app/data
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS \"http://127.0.0.1:$${RELAY_PORT}/health\" || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+  # Optional: Caddy reverse proxy for automatic HTTPS.
+  # Uncomment if you need HTTPS / domain-based access.
+  # caddy:
+  #   image: caddy:2-alpine
+  #   container_name: bitfun-caddy
+  #   restart: unless-stopped
+  #   ports:
+  #     - "80:80"
+  #     - "443:443"
+  #   volumes:
+  #     - ./Caddyfile:/etc/caddy/Caddyfile
+  #     - caddy-data:/data
+  #     - caddy-config:/config
+  #   depends_on:
+  #     - relay-server
+
+volumes:
+  room-web:
+  relay-db:
+  # caddy-data:
+  # caddy-config:

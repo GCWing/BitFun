@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Install BitFun</title>
+  <script>
+    (function () {
+      var dark = '#121214';
+      var light = '#e8ecf2';
+      var m = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)');
+      document.documentElement.style.backgroundColor = m && m.matches ? dark : light;
+    })();
+  </script>
+  <style>
+    html, body { margin: 0; padding: 0; }
+    html { background-color: #121214; }
+    body { background-color: inherit; }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+  <script type="module" src="/src/main.tsx"></script>
+</body>
+</html>

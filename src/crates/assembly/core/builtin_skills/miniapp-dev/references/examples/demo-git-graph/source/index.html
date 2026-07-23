@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Git Graph</title>
+</head>
+<body>
+  <div id="app">
+    <header class="toolbar">
+      <div class="toolbar__left">
+        <button type="button" id="btn-open-repo" class="btn btn--primary" title="选择仓库">
+          <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M2 13V3a1 1 0 011-1h4l2 2h4a1 1 0 011 1v8a1 1 0 01-1 1H3a1 1 0 01-1-1z"/></svg>
+          <span>选择仓库</span>
+        </button>
+        <span id="repo-path" class="toolbar__path" title=""></span>
+        <div class="toolbar__branch-filter" id="branch-filter-wrap">
+          <button type="button" id="btn-branch-filter" class="btn btn--secondary" title="分支过滤">
+            <span id="branch-filter-label">All branches</span>
+            <svg class="chevron" width="10" height="10" viewBox="0 0 16 16" fill="currentColor"><path d="M8 11L3 6h10l-5 5z"/></svg>
+          </button>
+          <div id="branch-filter-dropdown" class="dropdown-panel" aria-hidden="true"></div>
+        </div>
+        <button type="button" id="btn-refresh" class="btn btn--icon" title="刷新">↻</button>
+        <button type="button" id="btn-remotes" class="btn btn--secondary" title="远程">远程</button>
+        <button type="button" id="btn-find" class="btn btn--secondary" title="查找 (Ctrl+F)">查找</button>
+      </div>
+      <div class="toolbar__right">
+        <span id="branch-badge" class="badge badge--branch" style="display:none">
+          <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><line x1="6" y1="3" x2="6" y2="13"/><circle cx="6" cy="3" r="1.5"/><circle cx="6" cy="13" r="1.5"/><path d="M6 7c0-2 4-2 4-4"/><circle cx="10" cy="3" r="1.5"/></svg>
+          <span id="branch-name"></span>
+        </span>
+        <span id="status-badge" class="badge badge--status" style="display:none"></span>
+      </div>
+    </header>
+
+    <!-- Find widget (overlay) -->
+    <div id="find-widget" class="find-widget" style="display:none">
+      <input type="text" id="find-input" class="find-widget__input" placeholder="搜索提交消息 / Hash / 作者" />
+      <span id="find-result" class="find-widget__result"></span>
+      <button type="button" id="find-prev" class="btn btn--icon" title="上一个">↑</button>
+      <button type="button" id="find-next" class="btn btn--icon" title="下一个">↓</button>
+      <button type="button" id="find-close" class="btn btn--icon" title="关闭">×</button>
+    </div>
+
+    <main class="main">
+      <div id="empty-state" class="empty-state">
+        <div class="empty-state__icon">
+          <svg class="empty-state__graph-icon" width="64" height="64" viewBox="0 0 64 64" fill="none">
+            <circle class="empty-state__node empty-state__node--1" cx="32" cy="16" r="6" stroke-width="2"/>
+            <circle class="empty-state__node empty-state__node--2" cx="20" cy="40" r="6" stroke-width="2"/>
+            <circle class="empty-state__node empty-state__node--3" cx="44" cy="40" r="6" stroke-width="2"/>
+            <circle class="empty-state__node empty-state__node--4" cx="32" cy="56" r="6" stroke-width="2"/>
+            <line class="empty-state__line empty-state__line--1" x1="32" y1="22" x2="20" y2="34" stroke-width="1.5"/>
+            <line class="empty-state__line empty-state__line--1" x1="32" y1="22" x2="44" y2="34" stroke-width="1.5"/>
+            <line class="empty-state__line empty-state__line--2" x1="20" y1="46" x2="32" y2="50" stroke-width="1.5"/>
+            <line class="empty-state__line empty-state__line--3" x1="44" y1="46" x2="32" y2="50" stroke-width="1.5"/>
+          </svg>
+        </div>
+        <h2 class="empty-state__title">Git Graph</h2>
+        <p class="empty-state__desc">可视化浏览 Git 提交历史、分支与合并</p>
+        <button type="button" id="btn-empty-open" class="btn btn--primary btn--lg">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M2 13V3a1 1 0 011-1h4l2 2h4a1 1 0 011 1v8a1 1 0 01-1 1H3a1 1 0 01-1-1z"/></svg>
+          <span>打开仓库目录</span>
+        </button>
+      </div>
+
+      <div id="graph-area" class="graph-area" style="display:none">
+        <div class="graph-area__scroll" id="graph-scroll">
+          <div class="commit-list" id="commit-list"></div>
+          <div id="load-more" class="load-more" style="display:none">
+            <button type="button" id="btn-load-more" class="btn btn--secondary">加载更多</button>
+          </div>
+        </div>
+      </div>
+
+      <div id="detail-resizer" class="detail-panel-resizer" style="display:none"></div>
+      <aside id="detail-panel" class="detail-panel" style="display:none">
+        <div class="detail-panel__header">
+          <span class="detail-panel__title" id="detail-panel-title">提交详情</span>
+          <button type="button" id="btn-close-detail" class="btn-icon btn-icon--header" title="关闭">
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="4" y1="4" x2="12" y2="12"/><line x1="12" y1="4" x2="4" y2="12"/></svg>
+          </button>
+        </div>
+        <div id="detail-body" class="detail-panel__body">
+          <div id="detail-summary" class="detail-body__summary"></div>
+          <div id="detail-files-section" class="detail-body__files-section" style="display:none">
+            <div class="detail-section__label" id="detail-files-label">Changed Files</div>
+            <ul id="detail-files-list" class="detail-files"></ul>
+          </div>
+          <div id="detail-code-preview" class="detail-code-preview" style="display:none">
+            <div class="detail-code-preview__header">
+              <span class="detail-code-preview__filename" id="detail-code-preview-filename"></span>
+              <span class="detail-code-preview__stats" id="detail-code-preview-stats"></span>
+            </div>
+            <div class="detail-code-preview__content" id="detail-code-preview-content"></div>
+          </div>
+        </div>
+      </aside>
+
+      <!-- Remote panel (slide-out) -->
+      <aside id="remote-panel" class="remote-panel" style="display:none">
+        <div class="remote-panel__header">
+          <span>远程</span>
+          <button type="button" id="btn-remote-close" class="btn-icon">×</button>
+        </div>
+        <div id="remote-list" class="remote-panel__body"></div>
+      </aside>
+    </main>
+
+    <!-- Context menu (single, dynamic) -->
+    <div id="context-menu" class="context-menu" role="menu" aria-hidden="true"></div>
+
+    <!-- Modal dialog (single, dynamic content) -->
+    <div id="modal-overlay" class="modal-overlay" aria-hidden="true">
+      <div id="modal-dialog" class="modal-dialog" role="dialog">
+        <div class="modal-dialog__header">
+          <h3 id="modal-title" class="modal-dialog__title"></h3>
+          <button type="button" id="modal-close" class="btn-icon" aria-label="关闭">×</button>
+        </div>
+        <div id="modal-body" class="modal-dialog__body"></div>
+        <div class="modal-dialog__footer">
+          <div class="modal-dialog__actions"></div>
+        </div>
+      </div>
+    </div>
+
+    <div id="loading-overlay" class="loading-overlay" style="display:none">
+      <div class="spinner"></div>
+      <span>加载中…</span>
+    </div>
+  </div>
+</body>
+</html>

@@ -1,0 +1,21 @@
+[package]
+name = "taiji-orderflow"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+description = "Order flow analysis: VPIN + OFI with Welford online statistics (MIT)"
+
+[lib]
+name = "taiji_orderflow"
+crate-type = ["rlib"]
+
+[dependencies]
+taiji-engine = { path = "../taiji-engine" }
+serde_json = { workspace = true }
+
+[dev-dependencies]
+serde = { version = "1", features = ["derive"] }
+
+[lints]
+workspace = true

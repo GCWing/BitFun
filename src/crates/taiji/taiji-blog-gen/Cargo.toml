@@ -1,0 +1,23 @@
+[package]
+name = "taiji-blog-gen"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+description = "Taiji blog generator — Agent JSON → Hugo Markdown blog posts"
+
+[[bin]]
+name = "taiji-blog-gen"
+path = "src/main.rs"
+
+[dependencies]
+taiji-growth = { path = "../taiji-growth" }
+serde = { workspace = true }
+serde_json = { workspace = true }
+tera = { workspace = true }
+chrono = { workspace = true }
+clap = { workspace = true }
+anyhow = { workspace = true }
+
+[lints]
+workspace = true

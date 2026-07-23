@@ -1,0 +1,33 @@
+<svg width="960" height="250" viewBox="0 0 960 250" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="title desc">
+  <title id="title">flashgrep search speed comparison</title>
+  <desc id="desc">Search speed comparison showing traditional retrieval at 145.9 seconds and BitFun plus flashgrep at 7.82 seconds.</desc>
+  <rect width="960" height="250" rx="18" fill="#ffffff"/>
+  <rect x="1" y="1" width="958" height="248" rx="18" fill="none" stroke="#e5edf3"/>
+  <style>
+    .axis { font: 600 11px Inter, "Segoe UI", Arial, sans-serif; fill: #7b8797; }
+    .label { font: 800 15px Inter, "Segoe UI", Arial, sans-serif; fill: #111b2d; }
+    .value { font: 800 13px Inter, "Segoe UI", Arial, sans-serif; fill: #263244; }
+    .value-bitfun { font: 800 13px Inter, "Segoe UI", Arial, sans-serif; fill: #1463d7; }
+    .grid { stroke: #e7edf4; stroke-width: 1; }
+  </style>
+
+  <line x1="250" y1="54" x2="830" y2="54" class="grid"/>
+  <line x1="250" y1="54" x2="250" y2="184" class="grid"/>
+  <line x1="443" y1="54" x2="443" y2="184" class="grid"/>
+  <line x1="637" y1="54" x2="637" y2="184" class="grid"/>
+  <line x1="830" y1="54" x2="830" y2="184" class="grid"/>
+  <text x="250" y="37" text-anchor="middle" class="axis">0s</text>
+  <text x="443" y="37" text-anchor="middle" class="axis">50s</text>
+  <text x="637" y="37" text-anchor="middle" class="axis">100s</text>
+  <text x="830" y="37" text-anchor="middle" class="axis">150s</text>
+
+  <text x="74" y="103" class="label">Traditional retrieval</text>
+  <rect x="250" y="86" width="580" height="16" rx="8" fill="#eef1f5"/>
+  <rect x="250" y="86" width="564" height="16" rx="8" fill="#9ba6b6"/>
+  <text x="826" y="100" class="value">145.9s</text>
+
+  <text x="74" y="167" class="label">BitFun + flashgrep</text>
+  <rect x="250" y="150" width="580" height="16" rx="8" fill="#eef5ff"/>
+  <rect x="250" y="150" width="30" height="16" rx="8" fill="#2f80ed"/>
+  <text x="294" y="164" class="value-bitfun">7.82s</text>
+</svg>

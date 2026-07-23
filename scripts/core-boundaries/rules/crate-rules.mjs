@@ -5,6 +5,7 @@ export const noCoreDependencyCrates = [
   'events',
   'ai-adapters',
   'agent-stream',
+  'tool-call-jsonrepair',
   'agent-runtime',
   'harness',
   'plugin-runtime-host',

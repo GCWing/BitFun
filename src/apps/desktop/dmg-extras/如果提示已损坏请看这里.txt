@@ -1,0 +1,16 @@
+如果 macOS 提示 "BitFun 已损坏，无法打开"，请按以下步骤操作：
+
+1. 将 BitFun.app 拖入 Applications（应用程序）文件夹
+2. 打开「终端」应用（在 应用程序 > 实用工具 中）
+3. 粘贴以下命令并按回车执行：
+
+   xattr -d com.apple.quarantine /Applications/BitFun.app
+
+4. 再次打开 BitFun 即可正常使用
+
+---
+
+原因说明：
+macOS 的 Gatekeeper 安全机制会对从网络下载的应用添加隔离标记。
+由于 BitFun 尚未进行 Apple 公证（Notarization），系统会误报"已损坏"。
+上述命令用于移除隔离标记，不会影响系统安全。

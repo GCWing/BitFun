@@ -1,0 +1,36 @@
+name: browser_screenshot
+description: "Capture a screenshot of a web page"
+parameters:
+  - name: url
+    description: "The URL to capture"
+    required: true
+  - name: wait_ms
+    description: "Milliseconds to wait after page load before screenshot"
+    required: false
+    default: "3000"
+steps:
+  - domain: browser
+    action: connect
+    description: "Connect to user's default browser via CDP"
+
+  - domain: browser
+    action: navigate
+    params:
+      url: "{{url}}"
+    description: "Navigate to the target URL"
+
+  - domain: browser
+    action: wait
+    params:
+      duration_ms: "{{wait_ms}}"
+    description: "Wait for page to fully render"
+
+  - domain: browser
+    action: get_title
+    description: "Get the page title for reference"
+    output_var: page_title
+
+  - domain: browser
+    action: screenshot
+    description: "Capture the page screenshot"
+    output_var: screenshot_data

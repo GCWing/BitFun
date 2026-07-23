@@ -1,0 +1,44 @@
+/* Git Graph MiniApp — theme tokens (host --bitfun-* when running in BitFun) */
+:root {
+  --bg:          var(--bitfun-bg, #0d1117);
+  --bg-surface:  var(--bitfun-bg-secondary, #161b22);
+  --bg-hover:    var(--bitfun-element-hover, #1c2333);
+  --bg-active:   var(--bitfun-element-bg, #1f2a3d);
+  --border:      var(--bitfun-border, #30363d);
+  --border-light: var(--bitfun-border-subtle, #21262d);
+  --text:        var(--bitfun-text, #e6edf3);
+  --text-sec:    var(--bitfun-text-secondary, #8b949e);
+  --text-dim:    var(--bitfun-text-muted, #484f58);
+  --accent:      var(--bitfun-accent, #58a6ff);
+  --accent-dim:  var(--bitfun-accent-hover, #1f6feb);
+  --green:       var(--bitfun-success, #3fb950);
+  --red:         var(--bitfun-error, #f85149);
+  --orange:      var(--bitfun-warning, #d29922);
+  --purple:      var(--bitfun-info, #bc8cff);
+  --branch-1:    var(--bitfun-accent, #58a6ff);
+  --branch-2:    var(--bitfun-success, #3fb950);
+  --branch-3:    var(--bitfun-info, #bc8cff);
+  --branch-4:    var(--bitfun-warning, #f0883e);
+  --branch-5:    #f778ba;
+  --branch-6:    #79c0ff;
+  --branch-7:    #56d364;
+  --radius:      var(--bitfun-radius, 6px);
+  --radius-lg:   var(--bitfun-radius-lg, 10px);
+  --graph-node-stroke: var(--bitfun-bg, #0d1117);
+  --graph-uncommitted: var(--text-dim, #808080);
+  --graph-lane-width: 18px;
+  --graph-row-height: 28px;
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: var(--bitfun-font-sans, -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif);
+  font-size: 13px;
+  color: var(--text);
+  background: var(--bg);
+  min-height: 100vh;
+  overflow: hidden;
+}
+
+#app { display: flex; flex-direction: column; height: 100vh; }

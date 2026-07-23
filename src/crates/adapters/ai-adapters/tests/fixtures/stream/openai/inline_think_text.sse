@@ -1,0 +1,6 @@
+data: {"id":"chatcmpl_test","object":"chat.completion.chunk","created":300,"model":"gpt-test","choices":[{"index":0,"delta":{"content":"<think>I should inspect the data."},"finish_reason":null}],"usage":null}
+
+data: {"id":"chatcmpl_test","object":"chat.completion.chunk","created":301,"model":"gpt-test","choices":[{"index":0,"delta":{"content":" Then answer carefully.</think>Final answer."},"finish_reason":"stop"}],"usage":{"prompt_tokens":4,"completion_tokens":6,"total_tokens":10}}
+
+data: [DONE]
+

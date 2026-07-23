@@ -305,6 +305,13 @@
     "save": "Save First Token Timeout",
     "saveSuccess": "First token timeout saved"
   },
+  "toolArgumentJsonRepair": {
+    "title": "Tool Argument JSON Repair",
+    "description": "Applies to the next model round.",
+    "label": "Repair malformed tool arguments",
+    "hint": "Only after the provider confirms a normal tool-use completion. This can change malformed JSON before normal tool validation.",
+    "saveSuccess": "Tool argument JSON repair setting saved"
+  },
   "capabilities": {
     "text_chat": "Chat",
     "image_understanding": "Vision",

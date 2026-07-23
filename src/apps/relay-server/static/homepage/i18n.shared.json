@@ -1,0 +1,17 @@
+{
+  "zh-CN": {
+    "features": {
+      "remoteControl": "远程控制"
+    }
+  },
+  "en-US": {
+    "features": {
+      "remoteControl": "Remote Control"
+    }
+  },
+  "zh-TW": {
+    "features": {
+      "remoteControl": "遠端控制"
+    }
+  }
+}

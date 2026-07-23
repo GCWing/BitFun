@@ -1,0 +1,4 @@
+[
+  { "name": "preact", "url": "https://esm.sh/preact@10.22.0" },
+  { "name": "preact/hooks", "url": "https://esm.sh/preact@10.22.0/hooks" }
+]

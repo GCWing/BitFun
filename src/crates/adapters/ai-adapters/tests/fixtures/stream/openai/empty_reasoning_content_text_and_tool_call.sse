@@ -1,0 +1,10 @@
+data: {"id":"chatcmpl_test","object":"chat.completion.chunk","created":400,"model":"deepseek-v4-test","choices":[{"index":0,"delta":{"reasoning_content":""},"finish_reason":null}],"usage":null}
+
+data: {"id":"chatcmpl_test","object":"chat.completion.chunk","created":401,"model":"deepseek-v4-test","choices":[{"index":0,"delta":{"content":"Let me check that for you."},"finish_reason":null}],"usage":null}
+
+data: {"id":"chatcmpl_test","object":"chat.completion.chunk","created":402,"model":"deepseek-v4-test","choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"id":"call_ds_1","type":"function","function":{"name":"lookup_status","arguments":"{\"ticket_id\":\"BF-"}}]},"finish_reason":null}],"usage":null}
+
+data: {"id":"chatcmpl_test","object":"chat.completion.chunk","created":403,"model":"deepseek-v4-test","choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"id":null,"type":"function","function":{"arguments":"123\"}"}}]},"finish_reason":"tool_calls"}],"usage":{"prompt_tokens":4,"completion_tokens":6,"total_tokens":10}}
+
+data: [DONE]
+

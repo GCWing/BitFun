@@ -1,0 +1,50 @@
+{
+  "testProjects": {
+    "simple": {
+      "name": "test-project-simple",
+      "description": "A simple test project for E2E testing",
+      "path": "./fixtures/projects/simple"
+    }
+  },
+  "chatMessages": {
+    "greeting": "Hello, please help me write a simple Hello World program",
+    "codeRequest": "Please help me create a Python script that prints the numbers 1 to 10",
+    "questionSimple": "What is the Tauri framework?"
+  },
+  "modelConfigs": {
+    "default": {
+      "name": "Test Model",
+      "modelName": "gpt-4",
+      "baseUrl": "https://api.openai.com/v1"
+    }
+  },
+  "timeouts": {
+    "pageLoad": 10000,
+    "streamingResponse": 60000,
+    "animation": 2000,
+    "shortWait": 500
+  },
+  "selectors": {
+    "header": {
+      "container": "[data-testid='header-container']",
+      "homeBtn": "[data-testid='header-home-btn']",
+      "minimizeBtn": "[data-testid='header-minimize-btn']",
+      "maximizeBtn": "[data-testid='header-maximize-btn']",
+      "closeBtn": "[data-testid='header-close-btn']"
+    },
+    "startup": {
+      "container": "[data-testid='startup-container']",
+      "openFolderBtn": "[data-testid='startup-open-folder-btn']"
+    },
+    "chat": {
+      "inputContainer": "[data-testid='chat-input-container']",
+      "textarea": "[data-testid='chat-input-textarea']",
+      "sendBtn": "[data-testid='chat-input-send-btn']",
+      "messageList": "[data-testid='message-list']"
+    },
+    "layout": {
+      "app": "[data-testid='app-layout']",
+      "mainContent": "[data-testid='app-main-content']"
+    }
+  }
+}

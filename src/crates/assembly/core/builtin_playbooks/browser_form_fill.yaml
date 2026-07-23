@@ -1,0 +1,37 @@
+name: browser_form_fill
+description: "Auto-fill a web form with provided data"
+parameters:
+  - name: url
+    description: "The URL containing the form"
+    required: true
+  - name: form_data
+    description: "JSON object of field-value pairs to fill. Keys should be CSS selectors, names, or @eN refs from the snapshot."
+    required: true
+steps:
+  - domain: browser
+    action: connect
+    description: "Connect to user's default browser via CDP"
+
+  - domain: browser
+    action: navigate
+    params:
+      url: "{{url}}"
+    description: "Navigate to the form page"
+
+  - domain: browser
+    action: wait
+    params:
+      duration_ms: 2000
+    description: "Wait for page to load"
+
+  - domain: browser
+    action: snapshot
+    description: "Snapshot interactive elements to discover form fields and their @refs"
+    output_var: page_snapshot
+
+  - domain: browser
+    action: evaluate
+    params:
+      expression: "JSON.stringify(Array.from(document.querySelectorAll('input, textarea, select')).map(el => ({tag: el.tagName, type: el.type, name: el.name, id: el.id, placeholder: el.placeholder, label: el.labels?.[0]?.textContent?.trim(), ref: el.getAttribute('data-cdp-ref')})))"
+    description: "List all form fields with identifiers — use this to map form_data keys to @refs or selectors, then call ControlHub browser.fill for each field"
+    output_var: form_fields

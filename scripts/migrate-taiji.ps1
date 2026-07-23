@@ -108,7 +108,7 @@ $pureAdditions = @(
 
 $integrationFiles = @(
     # batch A: pure new files
-    'src/apps/desktop/src/api/video_api.rs'
+    'src/apps/desktop/src/api/ffmpeg_api.rs'
     'src/crates/assembly/core/src/agentic/tools/implementations/legion_control_tool.rs'
     'src/crates/assembly/core/src/agentic/agents/prompts/acp_agent.md'
     'src/crates/assembly/core/src/agentic/agents/definitions/subagents/acp_agent.rs'

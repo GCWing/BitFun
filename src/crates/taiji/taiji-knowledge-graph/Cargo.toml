@@ -1,0 +1,25 @@
+[package]
+name = "taiji-knowledge-graph"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+description = "Taiji knowledge graph — petgraph-backed concept/strategy/case relation graph"
+
+[lib]
+name = "taiji_knowledge_graph"
+crate-type = ["rlib"]
+
+[dependencies]
+serde = { workspace = true }
+serde_json = { workspace = true }
+chrono = { workspace = true }
+petgraph = { workspace = true }
+log = { workspace = true }
+anyhow = { workspace = true }
+
+[build-dependencies]
+serde_json = { workspace = true }
+
+[lints]
+workspace = true

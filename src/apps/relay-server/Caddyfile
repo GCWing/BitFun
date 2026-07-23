@@ -1,0 +1,111 @@
+# Caddyfile for BitFun Relay Server
+# Replace YOUR_DOMAIN with your actual domain, or use :443 with self-signed cert.
+#
+# Body size: account sync POSTs full encrypted session bundles. Axum allows
+# up to 64 MiB on /api/sync/* (see README). If you terminate TLS here, raise
+# the proxy body limit to at least that size, e.g.:
+#   request_body {
+#       max_size 100MB
+#   }
+#
+# Device RPC (/api/devices/*/rpc) waits up to 120s for the peer HostInvoke
+# response. Keep reverse-proxy read/response timeouts above that, or the
+# proxy returns HTTP 504 before Axum can.
+#
+# IMPORTANT: URL structure when using a /relay path prefix
+#   /              → static homepage (from static/homepage/)
+#   /relay/*       → relay service (prefix stripped before proxying)
+#   /relay/health  → health check
+#   /relay/ws      → WebSocket endpoint
+#   /relay/api/*   → all API endpoints
+#
+# Option A: With a domain (Let's Encrypt auto-HTTPS), root path
+#   relay.yourdomain.com {
+#       reverse_proxy relay-server:9700 {
+#           transport http {
+#               response_header_timeout 130s
+#               read_timeout 130s
+#               write_timeout 130s
+#           }
+#       }
+#   }
+#
+# Option A2: With a /relay path prefix (homepage at /, service at /relay/)
+#   relay.yourdomain.com {
+#       root * /app/homepage
+#       try_files {path} {path}/ /index.html
+#       handle_path /relay/* {
+#           reverse_proxy relay-server:9700 {
+#               transport http {
+#                   response_header_timeout 130s
+#                   read_timeout 130s
+#                   write_timeout 130s
+#               }
+#           }
+#       }
+#   }
+#
+# Option B: IP-only with self-signed cert
+:443 {
+    tls internal
+    reverse_proxy relay-server:9700 {
+        transport http {
+            response_header_timeout 130s
+            read_timeout 130s
+            write_timeout 130s
+        }
+    }
+}
+
+:80 {
+    reverse_proxy relay-server:9700 {
+        transport http {
+            response_header_timeout 130s
+            read_timeout 130s
+            write_timeout 130s
+        }
+    }
+}
+
+# ─────────────────────────────────────────────────────────────────────────
+# Nginx equivalent (Option A2: /relay prefix, homepage at /)
+# ─────────────────────────────────────────────────────────────────────────
+#
+#   server {
+#       listen 80;
+#       server_name remote.yourdomain.com;
+#
+#       # Homepage (static files from relay-server/static/homepage/)
+#       location / {
+#           root /path/to/relay-server/static/homepage;
+#           index index.html;
+#           try_files $uri $uri/ =404;
+#       }
+#
+#       # Redirect /relay → /relay/
+#       location = /relay {
+#           return 301 /relay/;
+#       }
+#
+#       # Relay service (strip /relay prefix, proxy to port 9700)
+#       location /relay/ {
+#           proxy_pass http://127.0.0.1:9700/;
+#           proxy_set_header Host $host;
+#           proxy_set_header X-Real-IP $remote_addr;
+#           proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+#           proxy_set_header X-Forwarded-Proto $scheme;
+#
+#           # WebSocket support (/relay/ws endpoint)
+#           proxy_http_version 1.1;
+#           proxy_set_header Upgrade $http_upgrade;
+#           proxy_set_header Connection "upgrade";
+#
+#           # Long timeouts for device RPC (up to 120s) and sync
+#           proxy_buffering off;
+#           proxy_read_timeout 130s;
+#           proxy_send_timeout 130s;
+#
+#           # Sync POSTs can carry large encrypted session bundles
+#           client_max_body_size 100m;
+#       }
+#   }

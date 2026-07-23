@@ -1,0 +1,17 @@
+If macOS says "BitFun is damaged and can't be opened", follow these steps:
+
+1. Drag BitFun.app into the Applications folder
+2. Open Terminal (found in Applications > Utilities)
+3. Paste the following command and press Enter:
+
+   xattr -d com.apple.quarantine /Applications/BitFun.app
+
+4. Open BitFun again — it should launch normally
+
+---
+
+Why this happens:
+macOS Gatekeeper adds a quarantine flag to apps downloaded from the internet.
+Because BitFun is not yet notarized by Apple, the system incorrectly reports
+it as "damaged". The command above removes the quarantine flag and does not
+affect your system security.

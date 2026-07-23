@@ -1,0 +1,403 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+    paths-ignore:
+      - '**/*.md'
+      - 'png/**'
+  push:
+    branches: [main]
+    paths-ignore:
+      - '**/*.md'
+      - 'png/**'
+
+# Cancel previous runs on same branch/PR
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  # ── CLI: independent tests ─────────────────────────────────────────
+  cli-test:
+    name: CLI Tests (ubuntu-latest)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Install Linux system dependencies
+        shell: bash
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            pkg-config \
+            build-essential \
+            libssl-dev \
+            libxcb1-dev \
+            libxcb-render0-dev \
+            libxcb-shape0-dev \
+            libxcb-xfixes0-dev
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Generate dependency lockfile
+        run: cargo generate-lockfile
+
+      - uses: swatinem/rust-cache@v2
+        with:
+          shared-key: "cli-ci-v2-ubuntu"
+          cache-bin: false
+          save-if: ${{ github.event_name != 'pull_request' }}
+
+      - name: Run CLI, ACP, and agent runtime tests
+        run: cargo test --locked -p bitfun-cli -p bitfun-acp -p bitfun-agent-runtime
+
+  # ── Rust: build check ─────────────────────────────────────────────
+  rust-build-check:
+    name: Rust Build Check (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    needs: frontend-build
+    env:
+      # Keep the workspace check plus desktop test profiles within hosted-runner disk limits.
+      CARGO_INCREMENTAL: "0"
+      CARGO_PROFILE_DEV_DEBUG: "0"
+      CARGO_PROFILE_TEST_DEBUG: "0"
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - ubuntu-latest
+          - macos-15
+          - windows-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Setup OpenSSL (Windows, prebuilt)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: ./scripts/ci/setup-openssl-windows.ps1
+
+      - name: Download frontend build artifacts
+        uses: actions/download-artifact@v7
+        with:
+          name: frontend-dist
+          path: dist
+
+      - name: Create mobile-web dist directory (workaround for Tauri)
+        shell: bash
+        run: mkdir -p src/mobile-web/dist
+
+      - name: Install Linux system dependencies (Tauri)
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          sudo apt-get update
+          if apt-cache show libwebkit2gtk-4.1-dev >/dev/null 2>&1; then
+            WEBKIT_PKG=libwebkit2gtk-4.1-dev
+          else
+            WEBKIT_PKG=libwebkit2gtk-4.0-dev
+          fi
+
+          if apt-cache show libappindicator3-dev >/dev/null 2>&1; then
+            APPINDICATOR_PKG=libappindicator3-dev
+          else
+            APPINDICATOR_PKG=libayatana-appindicator3-dev
+          fi
+
+          sudo apt-get install -y --no-install-recommends \
+            pkg-config \
+            libglib2.0-dev \
+            libgtk-3-dev \
+            libxdo-dev \
+            "$WEBKIT_PKG" \
+            "$APPINDICATOR_PKG" \
+            librsvg2-dev \
+            patchelf \
+            libleptonica-dev \
+            libtesseract-dev \
+            tesseract-ocr \
+            tesseract-ocr-eng
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Generate dependency lockfile
+        run: cargo generate-lockfile
+
+      - uses: swatinem/rust-cache@v2
+        with:
+          shared-key: "ci-check-v3-${{ runner.os }}-no-cargo-bin-v1"
+          cache-bin: false
+          # PR caches are scoped to merge refs; main pushes own shared cache refreshes.
+          save-if: ${{ github.event_name != 'pull_request' }}
+
+      - name: Check compilation
+        run: cargo check --locked --workspace
+
+      - name: Check compilation with video feature
+        run: cargo check --locked -p bitfun-desktop --features video
+
+      - name: Run Windows ConPTY CLI smoke test
+        if: runner.os == 'Windows'
+        run: cargo test --locked -p bitfun-cli --test terminal_process_contracts
+
+      - name: Run core and desktop Rust tests
+        run: cargo test --locked -p bitfun-core -p bitfun-desktop
+
+      # These crates own platform-sensitive behavior that is not exercised by
+      # testing bitfun-core/bitfun-desktop alone. Keep their focused contract
+      # suites in the OS matrix so Linux success cannot hide Windows/macOS
+      # regressions in worker interruption, relay storage, or OAuth handling.
+      - name: Run Page Functions runtime tests
+        run: cargo test --locked -p bitfun-page-function-runtime
+
+      - name: Run Relay service tests
+        run: cargo test --locked -p bitfun-relay-service
+
+      - name: Run subscription authentication tests
+        run: cargo test --locked -p bitfun-ai-adapters --features subscription-auth subscription_auth
+
+  # ── Frontend: build ────────────────────────────────────────────────
+  frontend-build:
+    name: Frontend Build
+    runs-on: ubuntu-latest
+    env:
+      NODE_OPTIONS: --max-old-space-size=6144
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 2
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Check repository hygiene
+        run: pnpm run check:repo-hygiene
+
+      - name: Check core boundaries
+        run: node --test scripts/check-core-boundaries.test.mjs
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Validate PPT Live generated-file contract
+        run: pnpm run test:ppt-live
+
+      - name: Validate GitHub config
+        run: pnpm run check:github-config
+
+      - name: Select i18n contract profile
+        shell: bash
+        run: |
+          if git rev-parse HEAD^1 >/dev/null 2>&1 &&
+            git diff --name-only HEAD^1 HEAD -- scripts/i18n-audit.mjs scripts/i18n-contract.test.mjs | grep -q .; then
+            echo "BITFUN_I18N_CONTRACT_TEST_AUDIT_INTEGRATION=1" >> "$GITHUB_ENV"
+          fi
+
+      - name: Validate i18n contract
+        run: pnpm run i18n:contract:test:ci
+
+      - name: Audit i18n resources
+        run: pnpm run i18n:audit
+
+      - name: Validate theme color audit contract
+        run: pnpm run theme:color-audit:test
+
+      - name: Audit theme color governance
+        run: pnpm run theme:color-audit:all
+
+      - name: Validate theme visual governance contract
+        run: pnpm run theme:visual-contract
+
+      - name: Lint web UI
+        run: pnpm run lint:web
+
+      - name: Run web UI tests
+        run: pnpm --dir src/web-ui run test:run
+
+      - name: Build web UI
+        run: pnpm run build:web
+
+      - name: Type-check mobile web
+        run: pnpm --dir src/mobile-web run type-check
+
+      - name: Build mobile web
+        run: pnpm run build:mobile-web
+
+      - name: Upload frontend build artifacts
+        uses: actions/upload-artifact@v6
+        with:
+          name: frontend-dist
+          path: dist
+          retention-days: 1
+
+  # ── Taiji: cargo test ──────────────────────────────────────────────
+  taiji-cargo-test:
+    name: Taiji Cargo Test (ubuntu-latest)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Install Linux system dependencies
+        shell: bash
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            pkg-config \
+            build-essential \
+            libssl-dev \
+            libglib2.0-dev \
+            libgtk-3-dev \
+            libxdo-dev \
+            libwebkit2gtk-4.1-dev \
+            libappindicator3-dev \
+            librsvg2-dev \
+            patchelf \
+            libleptonica-dev \
+            libtesseract-dev \
+            tesseract-ocr \
+            tesseract-ocr-eng
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Generate dependency lockfile
+        run: cargo generate-lockfile
+
+      - uses: swatinem/rust-cache@v2
+        with:
+          shared-key: "taiji-ci-test-v1"
+          cache-bin: false
+          save-if: ${{ github.event_name != 'pull_request' }}
+
+      - name: Run taiji crate tests
+        run: cargo test --workspace --exclude taiji-dvmi --exclude taiji-magnet --exclude taiji-thrust --exclude taiji-risk
+
+  # ── Taiji: cargo check ─────────────────────────────────────────────
+  taiji-cargo-check:
+    name: Taiji Cargo Check (ubuntu-latest)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Install Linux system dependencies
+        shell: bash
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            pkg-config \
+            build-essential \
+            libssl-dev \
+            libglib2.0-dev \
+            libgtk-3-dev \
+            libxdo-dev \
+            libwebkit2gtk-4.1-dev \
+            libappindicator3-dev \
+            librsvg2-dev \
+            patchelf \
+            libleptonica-dev \
+            libtesseract-dev \
+            tesseract-ocr \
+            tesseract-ocr-eng
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Generate dependency lockfile
+        run: cargo generate-lockfile
+
+      - uses: swatinem/rust-cache@v2
+        with:
+          shared-key: "taiji-ci-check-v1"
+          cache-bin: false
+          save-if: ${{ github.event_name != 'pull_request' }}
+
+      - name: Check taiji crates compilation
+        run: cargo check --workspace --exclude taiji-dvmi --exclude taiji-magnet --exclude taiji-thrust --exclude taiji-risk
+
+  # ── Taiji: clippy ───────────────────────────────────────────────────
+  taiji-clippy:
+    name: Taiji Clippy (ubuntu-latest)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Install Linux system dependencies
+        shell: bash
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            pkg-config \
+            build-essential \
+            libssl-dev \
+            libglib2.0-dev \
+            libgtk-3-dev \
+            libxdo-dev \
+            libwebkit2gtk-4.1-dev \
+            libappindicator3-dev \
+            librsvg2-dev \
+            patchelf \
+            libleptonica-dev \
+            libtesseract-dev \
+            tesseract-ocr \
+            tesseract-ocr-eng
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Generate dependency lockfile
+        run: cargo generate-lockfile
+
+      - uses: swatinem/rust-cache@v2
+        with:
+          shared-key: "taiji-clippy-ci-v1"
+          cache-bin: false
+          save-if: ${{ github.event_name != 'pull_request' }}
+
+      - name: Install clippy
+        run: rustup component add clippy
+
+      - name: Run clippy on taiji crates
+        run: cargo clippy --workspace --exclude taiji-dvmi --exclude taiji-magnet --exclude taiji-thrust --exclude taiji-risk -- -D warnings
+
+  # ── Taiji: cargo audit ─────────────────────────────────────────────
+  taiji-cargo-audit:
+    name: Taiji Cargo Audit (ubuntu-latest)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Install Linux system dependencies
+        shell: bash
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            pkg-config \
+            build-essential \
+            libssl-dev
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Generate dependency lockfile
+        run: cargo generate-lockfile
+
+      - uses: swatinem/rust-cache@v2
+        with:
+          shared-key: "taiji-ci-audit-v1"
+          cache-bin: false
+          save-if: ${{ github.event_name != 'pull_request' }}
+
+      - name: Install cargo-audit
+        run: cargo install cargo-audit
+
+      - name: Run cargo audit
+        run: cargo audit

@@ -1,0 +1,710 @@
+//! WebSocket client for connecting to the Relay Server.
+//!
+//! Manages the desktop-side WebSocket connection. In the new architecture the
+//! relay bridges HTTP requests from mobile to the desktop via WebSocket.
+//! The desktop receives `PairRequest` and `Command` messages (with correlation
+//! IDs) and responds with `RelayResponse`.
+//!
+//! Supports automatic reconnect with exponential backoff and room re-creation
+//! so that in-flight QR codes remain valid.
+
+use anyhow::{anyhow, Result};
+use futures::{SinkExt, StreamExt};
+use log::{debug, error, info, warn};
+use serde::{Deserialize, Serialize};
+use std::sync::Arc;
+use tokio::sync::{mpsc, RwLock};
+use tokio_tungstenite::tungstenite::Message;
+#[cfg(windows)]
+use tokio_tungstenite::{tungstenite::client::IntoClientRequest, Connector};
+
+/// Install the rustls ring CryptoProvider as the process-level default.
+///
+/// Call this once at application startup so that all subsequent TLS operations
+/// (relay_client, reqwest, tokio-tungstenite) reuse the same provider.
+/// `install_default()` returns `Err` only when a provider is already installed,
+/// which is harmless — we silently ignore it.
+///
+/// This is safe to call multiple times and from any thread. Required on all
+/// platforms: rustls 0.23 does not auto-select a provider when multiple TLS
+/// stacks are linked into the process.
+pub fn ensure_rustls_crypto_provider() {
+    let _ = rustls::crypto::ring::default_provider().install_default();
+}
+
+type WsStream =
+    tokio_tungstenite::WebSocketStream<tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>>;
+
+const RELAY_DIAL_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(15);
+
+/// Messages in the relay protocol (both directions).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum RelayMessage {
+    // ── Outbound (desktop → relay) ──────────────────────────────────
+    CreateRoom {
+        room_id: Option<String>,
+        device_id: String,
+        device_type: String,
+        public_key: String,
+    },
+    /// Respond to a bridged HTTP request identified by `correlation_id`.
+    RelayResponse {
+        correlation_id: String,
+        encrypted_data: String,
+        nonce: String,
+    },
+    Heartbeat,
+    /// Account-authenticated connect (parallel to CreateRoom for device
+    /// routing). Validates the token and registers this device.
+    AuthConnect {
+        token: String,
+        device_name: String,
+    },
+    /// Route an encrypted payload to another device in the same account.
+    DeviceMessage {
+        target_device_id: String,
+        correlation_id: String,
+        encrypted_data: String,
+        nonce: String,
+    },
+
+    // ── Inbound (relay → desktop) ───────────────────────────────────
+    RoomCreated {
+        room_id: String,
+    },
+    /// Mobile pairing request forwarded by the relay.
+    PairRequest {
+        correlation_id: String,
+        public_key: String,
+        device_id: String,
+        device_name: String,
+    },
+    /// Encrypted command from mobile forwarded by the relay.
+    Command {
+        correlation_id: String,
+        encrypted_data: String,
+        nonce: String,
+    },
+    HeartbeatAck,
+    Error {
+        message: String,
+    },
+    /// Account connect succeeded — relay validated the token.
+    AuthOk {
+        user_id: String,
+        device_id: String,
+    },
+    AuthError {
+        message: String,
+    },
+    /// A device-to-device message routed from another device in the account.
+    IncomingDeviceMessage {
+        source_device_id: String,
+        correlation_id: String,
+        encrypted_data: String,
+        nonce: String,
+    },
+    /// Current online devices in the account (presence broadcast).
+    DevicePresence {
+        devices: Vec<DevicePresenceEntry>,
+    },
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DevicePresenceEntry {
+    pub device_id: String,
+    pub device_name: String,
+}
+
+/// Events emitted by the relay client to the upper layers.
+#[derive(Debug, Clone)]
+pub enum RelayEvent {
+    Connected,
+    RoomCreated {
+        room_id: String,
+    },
+    /// Mobile wants to pair.
+    PairRequest {
+        correlation_id: String,
+        public_key: String,
+        device_id: String,
+        device_name: String,
+    },
+    /// Mobile sent an encrypted command.
+    CommandReceived {
+        correlation_id: String,
+        encrypted_data: String,
+        nonce: String,
+    },
+    Reconnected,
+    Disconnected,
+    Error {
+        message: String,
+    },
+    /// Account auth-connect succeeded.
+    AuthOk {
+        user_id: String,
+        device_id: String,
+    },
+    AuthError {
+        message: String,
+    },
+    /// Encrypted device-to-device message from another device in the account.
+    DeviceMessageReceived {
+        source_device_id: String,
+        correlation_id: String,
+        encrypted_data: String,
+        nonce: String,
+    },
+    /// Online device list for the account.
+    DevicePresence {
+        devices: Vec<DevicePresenceEntry>,
+    },
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ConnectionState {
+    Disconnected,
+    Connecting,
+    Connected,
+    Reconnecting,
+}
+
+#[derive(Debug, Clone, Default)]
+struct ReconnectCtx {
+    ws_url: String,
+    device_id: String,
+    room_id: String,
+    public_key: String,
+    /// Account token for device-routing re-auth after reconnect.
+    token: String,
+    /// Device name for re-auth after reconnect.
+    device_name: String,
+}
+
+pub struct RelayClient {
+    state: Arc<RwLock<ConnectionState>>,
+    event_tx: mpsc::UnboundedSender<RelayEvent>,
+    cmd_tx: Arc<RwLock<Option<mpsc::UnboundedSender<RelayMessage>>>>,
+    room_id: Arc<RwLock<Option<String>>>,
+    reconnect_ctx: Arc<RwLock<Option<ReconnectCtx>>>,
+}
+
+impl RelayClient {
+    pub fn new() -> (Self, mpsc::UnboundedReceiver<RelayEvent>) {
+        let (event_tx, event_rx) = mpsc::unbounded_channel();
+        let client = Self {
+            state: Arc::new(RwLock::new(ConnectionState::Disconnected)),
+            event_tx,
+            cmd_tx: Arc::new(RwLock::new(None)),
+            room_id: Arc::new(RwLock::new(None)),
+            reconnect_ctx: Arc::new(RwLock::new(None)),
+        };
+        (client, event_rx)
+    }
+
+    pub async fn connection_state(&self) -> ConnectionState {
+        self.state.read().await.clone()
+    }
+
+    pub async fn connect(&self, ws_url: &str) -> Result<()> {
+        *self.state.write().await = ConnectionState::Connecting;
+
+        let ws_stream = dial(ws_url).await?;
+
+        info!("Connected to relay server at {ws_url}");
+        *self.state.write().await = ConnectionState::Connected;
+
+        *self.reconnect_ctx.write().await = Some(ReconnectCtx {
+            ws_url: ws_url.to_string(),
+            ..Default::default()
+        });
+
+        let _ = self.event_tx.send(RelayEvent::Connected);
+        self.launch_tasks(ws_stream).await;
+        Ok(())
+    }
+
+    async fn launch_tasks(&self, ws_stream: WsStream) {
+        let (mut ws_write, ws_read) = ws_stream.split();
+        let (cmd_tx, mut cmd_rx) = mpsc::unbounded_channel::<RelayMessage>();
+
+        let cmd_tx_arc = self.cmd_tx.clone();
+        let state_arc = self.state.clone();
+        let room_id_arc = self.room_id.clone();
+        let event_tx = self.event_tx.clone();
+        let reconnect_arc = self.reconnect_ctx.clone();
+
+        *cmd_tx_arc.write().await = Some(cmd_tx);
+
+        // ── Write task ──────────────────────────────────────────────────────
+        tokio::spawn(async move {
+            while let Some(msg) = cmd_rx.recv().await {
+                if let Ok(json) = serde_json::to_string(&msg) {
+                    if ws_write.send(Message::Text(json.into())).await.is_err() {
+                        break;
+                    }
+                }
+            }
+            debug!("Write task exited");
+        });
+
+        // ── Read task with reconnect loop ───────────────────────────────────
+        let mut ws_read = ws_read;
+        tokio::spawn(async move {
+            'outer: loop {
+                while let Some(res) = ws_read.next().await {
+                    match res {
+                        Ok(Message::Text(text)) => {
+                            match serde_json::from_str::<RelayMessage>(&text) {
+                                Ok(msg) => {
+                                    Self::dispatch(msg, &event_tx, &room_id_arc).await;
+                                }
+                                Err(e) => {
+                                    warn!("Unparseable relay msg: {e}");
+                                }
+                            }
+                        }
+                        Ok(Message::Ping(_)) => {}
+                        Ok(Message::Close(_)) => {
+                            info!("Relay server closed connection");
+                            break;
+                        }
+                        Err(e) => {
+                            error!("WebSocket read error: {e}");
+                            break;
+                        }
+                        _ => {}
+                    }
+                }
+
+                *state_arc.write().await = ConnectionState::Reconnecting;
+                info!("Relay connection dropped; will attempt reconnect");
+
+                let ctx = reconnect_arc.read().await.clone();
+                let Some(ctx) = ctx else {
+                    info!("No reconnect ctx — giving up");
+                    break 'outer;
+                };
+
+                if ctx.ws_url.is_empty() {
+                    break 'outer;
+                }
+
+                let mut backoff = 2u64;
+                loop {
+                    if *state_arc.read().await == ConnectionState::Disconnected {
+                        break 'outer;
+                    }
+
+                    info!("Reconnect in {backoff}s (url={})", &ctx.ws_url);
+                    tokio::time::sleep(std::time::Duration::from_secs(backoff)).await;
+
+                    match dial(&ctx.ws_url).await {
+                        Ok(new_stream) => {
+                            info!("Reconnected to relay server at {}", &ctx.ws_url);
+                            *state_arc.write().await = ConnectionState::Connected;
+
+                            let (mut new_write, new_read) = new_stream.split();
+                            let (new_cmd_tx, mut new_cmd_rx) =
+                                mpsc::unbounded_channel::<RelayMessage>();
+                            *cmd_tx_arc.write().await = Some(new_cmd_tx.clone());
+
+                            tokio::spawn(async move {
+                                while let Some(msg) = new_cmd_rx.recv().await {
+                                    if let Ok(json) = serde_json::to_string(&msg) {
+                                        if new_write.send(Message::Text(json.into())).await.is_err()
+                                        {
+                                            break;
+                                        }
+                                    }
+                                }
+                            });
+
+                            if !ctx.room_id.is_empty() {
+                                let recreate = RelayMessage::CreateRoom {
+                                    room_id: Some(ctx.room_id.clone()),
+                                    device_id: ctx.device_id.clone(),
+                                    device_type: "desktop".to_string(),
+                                    public_key: ctx.public_key.clone(),
+                                };
+                                let _ = new_cmd_tx.send(recreate);
+                                info!("Room '{}' recreated after reconnect", &ctx.room_id);
+                            }
+
+                            // Re-authenticate device routing after reconnect.
+                            if !ctx.token.is_empty() {
+                                let reauth = RelayMessage::AuthConnect {
+                                    token: ctx.token.clone(),
+                                    device_name: ctx.device_name.clone(),
+                                };
+                                let _ = new_cmd_tx.send(reauth);
+                                info!("Re-sent AuthConnect after reconnect");
+                            }
+
+                            let _ = event_tx.send(RelayEvent::Reconnected);
+                            ws_read = new_read;
+                            continue 'outer;
+                        }
+                        Err(e) => {
+                            warn!("Reconnect attempt failed: {e}");
+                            backoff = std::cmp::min(backoff * 2, 30);
+                        }
+                    }
+                }
+            }
+
+            *state_arc.write().await = ConnectionState::Disconnected;
+            let _ = event_tx.send(RelayEvent::Disconnected);
+        });
+
+        // ── Heartbeat task ──────────────────────────────────────────────────
+        let hb_state = self.state.clone();
+        let hb_cmd = self.cmd_tx.clone();
+        tokio::spawn(async move {
+            loop {
+                tokio::time::sleep(std::time::Duration::from_secs(30)).await;
+                let st = hb_state.read().await.clone();
+                if st == ConnectionState::Disconnected {
+                    break;
+                }
+                if st != ConnectionState::Connected {
+                    continue;
+                }
+                if let Some(tx) = hb_cmd.read().await.as_ref() {
+                    let _ = tx.send(RelayMessage::Heartbeat);
+                }
+            }
+        });
+    }
+
+    async fn dispatch(
+        msg: RelayMessage,
+        event_tx: &mpsc::UnboundedSender<RelayEvent>,
+        room_id_store: &Arc<RwLock<Option<String>>>,
+    ) {
+        match msg {
+            RelayMessage::RoomCreated { room_id } => {
+                debug!("Room created/restored: {room_id}");
+                *room_id_store.write().await = Some(room_id.clone());
+                let _ = event_tx.send(RelayEvent::RoomCreated { room_id });
+            }
+            RelayMessage::PairRequest {
+                correlation_id,
+                public_key,
+                device_id,
+                device_name,
+            } => {
+                info!("PairRequest from {device_id}");
+                let _ = event_tx.send(RelayEvent::PairRequest {
+                    correlation_id,
+                    public_key,
+                    device_id,
+                    device_name,
+                });
+            }
+            RelayMessage::Command {
+                correlation_id,
+                encrypted_data,
+                nonce,
+            } => {
+                debug!("Command received, corr={correlation_id}");
+                let _ = event_tx.send(RelayEvent::CommandReceived {
+                    correlation_id,
+                    encrypted_data,
+                    nonce,
+                });
+            }
+            RelayMessage::HeartbeatAck => {
+                debug!("Heartbeat acknowledged");
+            }
+            RelayMessage::Error { message } => {
+                error!("Relay error: {message}");
+                let _ = event_tx.send(RelayEvent::Error { message });
+            }
+            RelayMessage::AuthOk { user_id, device_id } => {
+                info!("Account auth-connect ok: user_id={user_id}");
+                let _ = event_tx.send(RelayEvent::AuthOk { user_id, device_id });
+            }
+            RelayMessage::AuthError { message } => {
+                warn!("Account auth-connect failed: {message}");
+                let _ = event_tx.send(RelayEvent::AuthError { message });
+            }
+            RelayMessage::IncomingDeviceMessage {
+                source_device_id,
+                correlation_id,
+                encrypted_data,
+                nonce,
+            } => {
+                debug!("DeviceMessage from {source_device_id} corr={correlation_id}");
+                let _ = event_tx.send(RelayEvent::DeviceMessageReceived {
+                    source_device_id,
+                    correlation_id,
+                    encrypted_data,
+                    nonce,
+                });
+            }
+            RelayMessage::DevicePresence { devices } => {
+                debug!("DevicePresence: {} online", devices.len());
+                let _ = event_tx.send(RelayEvent::DevicePresence { devices });
+            }
+            _ => {}
+        }
+    }
+
+    pub async fn send(&self, msg: RelayMessage) -> Result<()> {
+        let guard = self.cmd_tx.read().await;
+        let tx = guard.as_ref().ok_or_else(|| anyhow!("not connected"))?;
+        tx.send(msg).map_err(|e| anyhow!("send failed: {e}"))?;
+        Ok(())
+    }
+
+    pub async fn create_room(
+        &self,
+        device_id: &str,
+        public_key: &str,
+        room_id: Option<&str>,
+    ) -> Result<()> {
+        if let Some(rid) = room_id {
+            let mut guard = self.reconnect_ctx.write().await;
+            if let Some(ref mut ctx) = *guard {
+                ctx.device_id = device_id.to_string();
+                ctx.room_id = rid.to_string();
+                ctx.public_key = public_key.to_string();
+            }
+        }
+
+        self.send(RelayMessage::CreateRoom {
+            room_id: room_id.map(|s| s.to_string()),
+            device_id: device_id.to_string(),
+            device_type: "desktop".to_string(),
+            public_key: public_key.to_string(),
+        })
+        .await
+    }
+
+    /// Send a relay response back to the relay server for a bridged HTTP request.
+    pub async fn send_relay_response(
+        &self,
+        correlation_id: &str,
+        encrypted_data: &str,
+        nonce: &str,
+    ) -> Result<()> {
+        self.send(RelayMessage::RelayResponse {
+            correlation_id: correlation_id.to_string(),
+            encrypted_data: encrypted_data.to_string(),
+            nonce: nonce.to_string(),
+        })
+        .await
+    }
+
+    /// Authenticate this connection with an account token (parallel to
+    /// `create_room` for the device-routing pathway). The relay validates the
+    /// token and registers the device; success arrives as `RelayEvent::AuthOk`.
+    pub async fn connect_authenticated(&self, token: &str, device_name: &str) -> Result<()> {
+        // Store credentials in reconnect context so the WS read task can
+        // re-send AuthConnect after a reconnect.
+        let mut guard = self.reconnect_ctx.write().await;
+        if let Some(ref mut ctx) = *guard {
+            ctx.token = token.to_string();
+            ctx.device_name = device_name.to_string();
+        } else {
+            *guard = Some(ReconnectCtx {
+                token: token.to_string(),
+                device_name: device_name.to_string(),
+                ..Default::default()
+            });
+        }
+        drop(guard);
+
+        self.send(RelayMessage::AuthConnect {
+            token: token.to_string(),
+            device_name: device_name.to_string(),
+        })
+        .await
+    }
+
+    /// Send an encrypted payload to another device in the same account. The
+    /// relay routes by `target_device_id` without decrypting.
+    pub async fn send_device_message(
+        &self,
+        target_device_id: &str,
+        correlation_id: &str,
+        encrypted_data: &str,
+        nonce: &str,
+    ) -> Result<()> {
+        self.send(RelayMessage::DeviceMessage {
+            target_device_id: target_device_id.to_string(),
+            correlation_id: correlation_id.to_string(),
+            encrypted_data: encrypted_data.to_string(),
+            nonce: nonce.to_string(),
+        })
+        .await
+    }
+
+    pub async fn disconnect(&self) {
+        *self.state.write().await = ConnectionState::Disconnected;
+        *self.reconnect_ctx.write().await = None;
+        *self.cmd_tx.write().await = None;
+        info!("Relay client disconnected");
+    }
+
+    pub fn room_id(&self) -> &Arc<RwLock<Option<String>>> {
+        &self.room_id
+    }
+}
+
+async fn dial(ws_url: &str) -> Result<WsStream> {
+    // Ensure CryptoProvider is installed before any rustls TLS handshake.
+    // Startup already calls this; calling again is a no-op once installed and
+    // protects reconnect / late-init paths.
+    ensure_rustls_crypto_provider();
+
+    let config = tokio_tungstenite::tungstenite::protocol::WebSocketConfig::default()
+        .max_message_size(Some(64 * 1024 * 1024))
+        .max_frame_size(Some(64 * 1024 * 1024))
+        .max_write_buffer_size(64 * 1024 * 1024);
+
+    #[cfg(windows)]
+    {
+        await_dial(ws_url, async move {
+            let request = ws_url
+                .into_client_request()
+                .map_err(|e| anyhow!("dial {ws_url}: build request failed: {e}"))?;
+
+            // Wrap TLS connector construction in catch_unwind so that a panic
+            // (e.g. duplicate CryptoProvider install) is converted to an error
+            // instead of unwinding the tokio task and potentially crashing the
+            // process.
+            let connector = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                build_windows_rustls_connector()
+            }))
+            .map_err(|_| anyhow!("dial {ws_url}: TLS connector construction panicked"))??;
+
+            let (stream, _) = tokio_tungstenite::connect_async_tls_with_config(
+                request,
+                Some(config),
+                false,
+                Some(connector),
+            )
+            .await
+            .map_err(|e| anyhow!("dial {ws_url}: {e}"))?;
+            Ok(stream)
+        })
+        .await
+    }
+
+    #[cfg(not(windows))]
+    {
+        // Non-Windows uses tokio-tungstenite's built-in rustls connector.
+        // CryptoProvider must already be installed (see ensure_rustls_crypto_provider).
+        await_dial(ws_url, async move {
+            let (stream, _) =
+                tokio_tungstenite::connect_async_with_config(ws_url, Some(config), false)
+                    .await
+                    .map_err(|e| anyhow!("dial {ws_url}: {e}"))?;
+            Ok(stream)
+        })
+        .await
+    }
+}
+
+async fn await_dial<T, F>(ws_url: &str, dial_future: F) -> Result<T>
+where
+    F: std::future::Future<Output = Result<T>>,
+{
+    tokio::time::timeout(RELAY_DIAL_TIMEOUT, dial_future)
+        .await
+        .map_err(|_| {
+            anyhow!(
+                "dial {ws_url}: connection timed out after {} seconds",
+                RELAY_DIAL_TIMEOUT.as_secs()
+            )
+        })?
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test(start_paused = true)]
+    async fn dial_timeout_bounds_a_pending_connection_attempt() {
+        let result = await_dial(
+            "wss://relay.example.invalid/ws",
+            std::future::pending::<Result<()>>(),
+        )
+        .await;
+
+        let error = result.expect_err("pending dial must be bounded by the connection timeout");
+        assert_eq!(
+            error.to_string(),
+            "dial wss://relay.example.invalid/ws: connection timed out after 15 seconds"
+        );
+    }
+
+    #[tokio::test]
+    async fn dial_timeout_preserves_connection_errors() {
+        let result = await_dial::<(), _>(
+            "wss://relay.example.invalid/ws",
+            std::future::ready(Err(anyhow!("dial failed before timeout"))),
+        )
+        .await;
+
+        assert_eq!(
+            result.expect_err("dial error must be returned").to_string(),
+            "dial failed before timeout"
+        );
+    }
+}
+
+#[cfg(windows)]
+fn build_windows_rustls_connector() -> Result<Connector> {
+    // Install the ring CryptoProvider as the process-level default.
+    // Required by rustls 0.23+ when `default-features = false`.
+    // `install_default()` returns Err only when a provider is already installed,
+    // which is fine — subsequent reconnects reuse the same process-level provider.
+    let _ = rustls::crypto::ring::default_provider().install_default();
+
+    let mut root_store = rustls::RootCertStore::empty();
+
+    let native_certs = rustls_native_certs::load_native_certs();
+    if !native_certs.errors.is_empty() {
+        warn!(
+            "Windows native root certificate loading errors: {:?}",
+            native_certs.errors
+        );
+    }
+    let (added, ignored) = root_store.add_parsable_certificates(native_certs.certs);
+    debug!(
+        "Loaded current-user Windows root certificates, added={}, ignored={}",
+        added, ignored
+    );
+
+    if let Ok(local_machine_root) = schannel::cert_store::CertStore::open_local_machine("ROOT") {
+        let local_machine_der_certs = local_machine_root
+            .certs()
+            .map(|cert| rustls::pki_types::CertificateDer::from(cert.to_der().to_vec()))
+            .collect::<Vec<_>>();
+        let total = local_machine_der_certs.len();
+        let (added, ignored) = root_store.add_parsable_certificates(local_machine_der_certs);
+        debug!(
+            "Loaded local-machine Windows root certificates, total={}, added={}, ignored={}",
+            total, added, ignored
+        );
+    } else {
+        warn!("Failed to open local-machine Windows ROOT certificate store");
+    }
+
+    if root_store.is_empty() {
+        return Err(anyhow!(
+            "No trusted Windows root certificates available for relay connection"
+        ));
+    }
+
+    let client_config = rustls::ClientConfig::builder()
+        .with_root_certificates(root_store)
+        .with_no_client_auth();
+
+    Ok(Connector::Rustls(std::sync::Arc::new(client_config)))
+}

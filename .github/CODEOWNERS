@@ -1,0 +1,11 @@
+# taiji crates — quantitative trading subsystem
+/src/crates/taiji/                        @taiji-maintainers
+/scripts/teaching/                        @taiji-maintainers
+/scripts/trading/                         @taiji-maintainers
+/test_data/                               @taiji-maintainers
+/docs/plans/                              @taiji-maintainers
+/taiji-website/                           @taiji-maintainers
+
+# NOTE: @taiji-maintainers 是占位团队名。
+# 仓库管理员需在 GitHub 仓库 Settings → Branches → Code owners 区域
+# 将其替换为真实的 GitHub 用户名或团队（例如 @my-org/taiji-team 或 @username）。

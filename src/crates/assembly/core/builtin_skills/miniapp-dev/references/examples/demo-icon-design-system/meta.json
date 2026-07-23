@@ -1,0 +1,31 @@
+{
+  "id": "icon-design-system",
+  "name": "Icon Design System",
+  "description": "AI 辅助的图标设计系统工具。通过对话定义设计风格，批量生成图标 SVG，管理变体，支持手动编辑与导出。",
+  "icon": "pen-tool",
+  "category": "design",
+  "tags": ["design", "icon", "ai", "svg"],
+  "version": 1,
+  "created_at": 0,
+  "updated_at": 0,
+  "permissions": {
+    "fs": {
+      "read": ["{appdata}", "{user-selected}"],
+      "write": ["{appdata}", "{user-selected}"]
+    },
+    "net": {
+      "allow": ["esm.sh"]
+    },
+    "ai": {
+      "enabled": true,
+      "allowed_models": ["primary", "fast"],
+      "max_tokens_per_request": 8192,
+      "rate_limit_per_minute": 30
+    },
+    "node": {
+      "enabled": true,
+      "timeout_ms": 60000
+    }
+  },
+  "ai_context": null
+}

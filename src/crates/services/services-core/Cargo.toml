@@ -1,0 +1,67 @@
+[package]
+name = "bitfun-services-core"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+description = "BitFun core service owner crate"
+
+[lib]
+name = "bitfun_services_core"
+crate-type = ["rlib"]
+
+[dependencies]
+anyhow = { workspace = true, optional = true }
+async-trait = { workspace = true, optional = true }
+bitfun-core-types = { path = "../../contracts/core-types" }
+bitfun-runtime-ports = { path = "../../contracts/runtime-ports", optional = true }
+tokio = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+serde_yaml = { workspace = true, optional = true }
+base64 = { workspace = true }
+chrono = { workspace = true }
+zip = { workspace = true, optional = true }
+thiserror = { workspace = true }
+log = { workspace = true }
+fs2 = { workspace = true }
+notify = { workspace = true, optional = true }
+ignore = { workspace = true }
+sha2 = { workspace = true }
+which = { workspace = true }
+similar = { workspace = true }
+regex = { workspace = true }
+rusqlite = { version = "0.32", features = ["bundled"], optional = true }
+
+[target.'cfg(windows)'.dependencies]
+win32job = { workspace = true }
+windows = { workspace = true, features = [
+    "Win32_Foundation",
+    "Win32_Storage_FileSystem",
+    "Win32_System_Diagnostics_ToolHelp",
+    "Win32_System_Threading",
+] }
+
+[target.'cfg(unix)'.dependencies]
+libc = { workspace = true }
+
+[features]
+default = ["lsp"]
+lsp = ["dep:anyhow", "dep:notify", "dep:zip"]
+markdown = ["dep:serde_yaml"]
+workspace-runtime = ["dep:anyhow", "dep:async-trait", "dep:bitfun-runtime-ports"]
+permission = ["dep:async-trait", "dep:bitfun-runtime-ports", "dep:rusqlite", "bitfun-runtime-ports/permission"]
+
+[dev-dependencies]
+filetime = { workspace = true }
+tempfile = { workspace = true }
+
+[[test]]
+name = "markdown_owner_contracts"
+required-features = ["markdown"]
+
+[[test]]
+name = "lsp_plugin_registry_contracts"
+required-features = ["lsp"]
+
+[lints]
+workspace = true

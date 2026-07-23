@@ -1,0 +1,18 @@
+[package]
+name = "bitfun-events"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+bitfun-core-types = { path = "../core-types" }
+async-trait = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+anyhow = { workspace = true }
+chrono = { workspace = true }
+uuid = { workspace = true }
+log = { workspace = true }
+
+[lints]
+workspace = true
+

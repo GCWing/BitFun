@@ -1,0 +1,214 @@
+name: CLI Package Manual
+
+on:
+  workflow_dispatch:
+    inputs:
+      platform:
+        description: "Platform to build."
+        required: true
+        default: linux-arm64
+        type: choice
+        options:
+          - linux-arm64
+          - linux-x64
+          - macos-arm64
+          - macos-x64
+          - windows-x64
+          - all
+      ubuntu_version:
+        description: "Ubuntu runner baseline for Linux builds. Ignored for macOS and Windows."
+        required: true
+        default: "22.04"
+        type: choice
+        options:
+          - "22.04"
+          - "24.04"
+      ref_name:
+        description: "Branch, tag, or commit SHA to build. Leave empty to use the selected workflow ref."
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cli-package-manual-${{ inputs.platform }}-${{ inputs.ubuntu_version }}-${{ inputs.ref_name || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  prepare:
+    name: Prepare
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.meta.outputs.version }}
+      short_sha: ${{ steps.meta.outputs.short_sha }}
+      checkout_ref: ${{ steps.meta.outputs.checkout_ref }}
+      matrix: ${{ steps.meta.outputs.matrix }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ inputs.ref_name != '' && inputs.ref_name || github.ref }}
+          fetch-depth: 0
+
+      - name: Resolve build metadata
+        id: meta
+        shell: bash
+        env:
+          INPUT_PLATFORM: ${{ inputs.platform }}
+          INPUT_UBUNTU_VERSION: ${{ inputs.ubuntu_version }}
+          INPUT_REF_NAME: ${{ inputs.ref_name }}
+        run: |
+          set -euo pipefail
+
+          VERSION="$(jq -r '.version' package.json)"
+          FULL_SHA="$(git rev-parse HEAD)"
+          SHORT_SHA="$(git rev-parse --short HEAD)"
+          CHECKOUT_REF="$FULL_SHA"
+
+          case "${INPUT_UBUNTU_VERSION}" in
+            22.04)
+              LINUX_X64_RUNNER="ubuntu-22.04"
+              LINUX_ARM64_RUNNER="ubuntu-22.04-arm"
+              LINUX_NAME_SUFFIX="ubuntu2204"
+              ;;
+            24.04)
+              LINUX_X64_RUNNER="ubuntu-24.04"
+              LINUX_ARM64_RUNNER="ubuntu-24.04-arm"
+              LINUX_NAME_SUFFIX="ubuntu2404"
+              ;;
+            *)
+              echo "Unsupported ubuntu_version: ${INPUT_UBUNTU_VERSION}" >&2
+              exit 1
+              ;;
+          esac
+
+          case "${INPUT_PLATFORM}" in
+            linux-arm64)
+              MATRIX="{\"platform\":[{\"os\":\"${LINUX_ARM64_RUNNER}\",\"name\":\"linux-arm64-${LINUX_NAME_SUFFIX}\",\"target\":\"aarch64-unknown-linux-gnu\"}]}"
+              ;;
+            linux-x64)
+              MATRIX="{\"platform\":[{\"os\":\"${LINUX_X64_RUNNER}\",\"name\":\"linux-x64-${LINUX_NAME_SUFFIX}\",\"target\":\"x86_64-unknown-linux-gnu\"}]}"
+              ;;
+            macos-arm64)
+              MATRIX='{"platform":[{"os":"macos-15","name":"macos-arm64","target":"aarch64-apple-darwin"}]}'
+              ;;
+            macos-x64)
+              MATRIX='{"platform":[{"os":"macos-15-intel","name":"macos-x64","target":"x86_64-apple-darwin"}]}'
+              ;;
+            windows-x64)
+              MATRIX='{"platform":[{"os":"windows-latest","name":"windows-x64","target":"x86_64-pc-windows-msvc"}]}'
+              ;;
+            all)
+              MATRIX="{\"platform\":[{\"os\":\"macos-15\",\"name\":\"macos-arm64\",\"target\":\"aarch64-apple-darwin\"},{\"os\":\"macos-15-intel\",\"name\":\"macos-x64\",\"target\":\"x86_64-apple-darwin\"},{\"os\":\"${LINUX_X64_RUNNER}\",\"name\":\"linux-x64-${LINUX_NAME_SUFFIX}\",\"target\":\"x86_64-unknown-linux-gnu\"},{\"os\":\"${LINUX_ARM64_RUNNER}\",\"name\":\"linux-arm64-${LINUX_NAME_SUFFIX}\",\"target\":\"aarch64-unknown-linux-gnu\"},{\"os\":\"windows-latest\",\"name\":\"windows-x64\",\"target\":\"x86_64-pc-windows-msvc\"}]}"
+              ;;
+            *)
+              echo "Unsupported platform: ${INPUT_PLATFORM}" >&2
+              exit 1
+              ;;
+          esac
+
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "short_sha=$SHORT_SHA" >> "$GITHUB_OUTPUT"
+          echo "checkout_ref=$CHECKOUT_REF" >> "$GITHUB_OUTPUT"
+          echo "matrix=$MATRIX" >> "$GITHUB_OUTPUT"
+
+  build:
+    name: Build (${{ matrix.platform.name }})
+    runs-on: ${{ matrix.platform.os }}
+    needs: prepare
+
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJson(needs.prepare.outputs.matrix) }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          ref: ${{ needs.prepare.outputs.checkout_ref }}
+
+      - name: Install Linux system dependencies
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            pkg-config \
+            build-essential \
+            libssl-dev \
+            libxcb1-dev \
+            libxcb-render0-dev \
+            libxcb-shape0-dev \
+            libxcb-xfixes0-dev
+
+      - name: Setup Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.platform.target }}
+
+      - name: Cache Rust build
+        uses: swatinem/rust-cache@v2
+        with:
+          shared-key: "cli-manual-v1-${{ matrix.platform.name }}"
+          cache-bin: false
+
+      - name: Build CLI (Unix)
+        if: runner.os != 'Windows'
+        shell: bash
+        run: |
+          set -euo pipefail
+          cargo build --release \
+            --target ${{ matrix.platform.target }} \
+            -p bitfun-cli
+
+      - name: Build CLI (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        env:
+          RUSTFLAGS: -C target-feature=+crt-static
+        run: cargo build --release --target ${{ matrix.platform.target }} -p bitfun-cli
+
+      - name: Test installer (Unix)
+        if: runner.os != 'Windows'
+        shell: bash
+        env:
+          CARGO_BUILD_TARGET: ${{ matrix.platform.target }}
+        run: bash scripts/cli/test-install-unix.sh "${{ matrix.platform.target }}"
+
+      - name: Test installer (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        env:
+          CARGO_BUILD_TARGET: ${{ matrix.platform.target }}
+          RUSTFLAGS: -C target-feature=+crt-static
+        run: ./scripts/cli/test-install-windows.ps1 -Target $env:CARGO_BUILD_TARGET
+
+      - name: Package and smoke test (Unix)
+        if: runner.os != 'Windows'
+        id: stage
+        shell: bash
+        env:
+          VERSION: ${{ needs.prepare.outputs.version }}
+          TARGET: ${{ matrix.platform.target }}
+        run: |
+          set -euo pipefail
+          bash scripts/cli/package-unix.sh "$VERSION" "$TARGET"
+
+      - name: Package and smoke test (Windows)
+        if: runner.os == 'Windows'
+        id: stage-windows
+        shell: pwsh
+        env:
+          VERSION: ${{ needs.prepare.outputs.version }}
+          TARGET: ${{ matrix.platform.target }}
+        run: |
+          ./scripts/cli/package-windows.ps1 -Version $env:VERSION -Target $env:TARGET
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v6
+        with:
+          name: bitfun-cli-${{ needs.prepare.outputs.version }}-${{ needs.prepare.outputs.short_sha }}-${{ matrix.platform.name }}
+          if-no-files-found: error
+          path: |
+            ${{ steps.stage.outputs.archive || steps.stage-windows.outputs.archive }}
+            ${{ steps.stage.outputs.checksum || steps.stage-windows.outputs.checksum }}

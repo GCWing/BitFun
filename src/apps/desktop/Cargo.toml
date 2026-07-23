@@ -1,0 +1,146 @@
+[package]
+name = "bitfun-desktop"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+description = "BitFun Desktop Application (Tauri)"
+
+[lib]
+name = "bitfun_desktop_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[[bin]]
+name = "bitfun-desktop"
+path = "src/main.rs"
+
+[build-dependencies]
+tauri-build = { workspace = true }
+serde_json = { workspace = true }
+
+[dependencies]
+# Internal crates
+bitfun-core = { path = "../../crates/assembly/core", default-features = false, features = ["product-full"] }
+bitfun-relay-service = { path = "../../crates/services/relay-service" }
+bitfun-agent-runtime = { path = "../../crates/execution/agent-runtime" }
+bitfun-runtime-ports = { path = "../../crates/contracts/runtime-ports" }
+bitfun-product-domains = { path = "../../crates/contracts/product-domains", default-features = false }
+bitfun-services-integrations = { path = "../../crates/services/services-integrations", default-features = false, features = ["canvas-runtime"] }
+bitfun-agent-tools = { path = "../../crates/execution/tool-contracts" }
+bitfun-transport = { path = "../../crates/adapters/transport", features = ["tauri-adapter"] }
+bitfun-events = { path = "../../crates/contracts/events" }
+bitfun-webdriver = { path = "../../crates/adapters/webdriver" }
+bitfun-acp = { path = "../../crates/interfaces/acp" }
+taiji-content = { path = "../../crates/taiji/taiji-content", optional = true }
+ffmpeg-sidecar = { workspace = true, optional = true }
+dunce = { workspace = true, optional = true }
+
+# Tauri
+tauri = { workspace = true }
+tauri-plugin-opener = { workspace = true }
+tauri-plugin-dialog = { workspace = true }
+tauri-plugin-fs = { workspace = true }
+tauri-plugin-log = { workspace = true }
+tauri-plugin-autostart = { workspace = true }
+tauri-plugin-notification = { workspace = true }
+tauri-plugin-updater = { workspace = true }
+tauri-plugin-global-shortcut = { workspace = true }
+tauri-plugin-single-instance = { workspace = true }
+tauri-plugin-window-state = { workspace = true }
+# Keep Tauri's transitive time resolution on the known-good release in CI,
+# where the root Cargo.lock is intentionally ignored.
+time = { workspace = true }
+brotli-decompressor = { workspace = true }
+alloc-no-stdlib = { workspace = true }
+alloc-stdlib = { workspace = true }
+
+# Inherited from workspace
+tokio = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+anyhow = { workspace = true }
+base64 = { workspace = true }
+log = { workspace = true }
+chrono = { workspace = true }
+uuid = { workspace = true }
+regex = { workspace = true }
+dirs = { workspace = true }
+dark-light = { workspace = true }
+similar = { workspace = true }
+ignore = { workspace = true }
+urlencoding = { workspace = true }
+reqwest = { workspace = true }
+zip = { workspace = true }
+tar = { workspace = true }
+flate2 = { workspace = true }
+bzip2 = { workspace = true }
+xz2 = { workspace = true }
+zstd = { workspace = true }
+thiserror = { workspace = true }
+futures = { workspace = true }
+async-trait = { workspace = true }
+axum = { workspace = true }
+tower-http = { workspace = true }
+sha1 = { workspace = true }
+screenshots = { workspace = true }
+enigo = { workspace = true }
+image = { version = "0.24", default-features = false, features = ["png", "jpeg"] }
+resvg = { workspace = true }
+
+[target.'cfg(target_os = "macos")'.dependencies]
+bitflags = { workspace = true }
+core-foundation = { workspace = true }
+core-graphics = { workspace = true }
+dispatch = { workspace = true }
+foreign-types = { workspace = true }
+libc = { workspace = true }
+objc2 = { workspace = true, features = ["exception"] }
+objc2-foundation = { workspace = true }
+objc2-app-kit = { workspace = true }
+objc2-vision = { workspace = true }
+
+[target.'cfg(windows)'.dependencies]
+win32job = { workspace = true }
+windows = { workspace = true, features = [
+  "Foundation",
+  "Globalization",
+  "Graphics_Capture",
+  "Graphics_DirectX",
+  "Graphics_DirectX_Direct3D11",
+  "Graphics_Imaging",
+  "Media_Ocr",
+  "Storage_Streams",
+  "Win32_Foundation",
+  "Win32_Graphics_Direct3D",
+  "Win32_Graphics_Direct3D11",
+  "Win32_Graphics_Dwm",
+  "Win32_Graphics_Dxgi",
+  "Win32_Graphics_Dxgi_Common",
+  "Win32_Graphics_Gdi",
+  "Win32_Storage_Xps",
+  "Win32_System_Com",
+  "Win32_System_Ole",
+  "Win32_System_Variant",
+  "Win32_System_WinRT",
+  "Win32_System_WinRT_Direct3D11",
+  "Win32_System_WinRT_Graphics",
+  "Win32_System_WinRT_Graphics_Capture",
+  "Win32_UI_Accessibility",
+  "Win32_UI_WindowsAndMessaging",
+] }
+windows-core = { workspace = true }
+
+[features]
+default = []
+# Enable webview devtools and element inspector for development builds.
+# Only active in debug builds or when explicitly requested via --features devtools.
+# Never enabled in release profile intended for end users.
+devtools = ["tauri/devtools", "bitfun-webdriver/embedded"]
+# Enable ffmpeg-sidecar video pipeline (taiji content workshop).
+video = ["taiji-content", "ffmpeg-sidecar", "dunce"]
+
+[target.'cfg(target_os = "linux")'.dependencies]
+atspi = { workspace = true }
+leptess = { workspace = true }
+
+[lints]
+workspace = true
