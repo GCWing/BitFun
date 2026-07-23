@@ -36,6 +36,10 @@ type WsStream =
     tokio_tungstenite::WebSocketStream<tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>>;
 
 const RELAY_DIAL_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(15);
+/// Heartbeats are sent every 30 seconds. Two missed acknowledgements plus
+/// scheduling/network slack indicates a half-open socket that should be
+/// replaced even when the OS has not surfaced a read error yet.
+const RELAY_INBOUND_IDLE_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(75);
 
 /// Messages in the relay protocol (both directions).
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -254,7 +258,19 @@ impl RelayClient {
         let mut ws_read = ws_read;
         tokio::spawn(async move {
             'outer: loop {
-                while let Some(res) = ws_read.next().await {
+                loop {
+                    let res = match await_relay_inbound(ws_read.next()).await {
+                        Ok(Some(res)) => res,
+                        Ok(None) => break,
+                        Err(_) => {
+                            warn!(
+                                "Relay connection received no traffic for {} seconds; \
+                                 treating socket as stale",
+                                RELAY_INBOUND_IDLE_TIMEOUT.as_secs()
+                            );
+                            break;
+                        }
+                    };
                     match res {
                         Ok(Message::Text(text)) => {
                             match serde_json::from_str::<RelayMessage>(&text) {
@@ -624,6 +640,15 @@ where
         })?
 }
 
+async fn await_relay_inbound<T, F>(inbound_future: F) -> std::result::Result<T, ()>
+where
+    F: std::future::Future<Output = T>,
+{
+    tokio::time::timeout(RELAY_INBOUND_IDLE_TIMEOUT, inbound_future)
+        .await
+        .map_err(|_| ())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -655,6 +680,12 @@ mod tests {
             result.expect_err("dial error must be returned").to_string(),
             "dial failed before timeout"
         );
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn inbound_idle_timeout_detects_a_half_open_socket() {
+        let result = await_relay_inbound(std::future::pending::<()>()).await;
+        assert!(result.is_err(), "an idle relay stream must time out");
     }
 }
 

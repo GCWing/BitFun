@@ -19,6 +19,7 @@ mod page_upload;
 pub mod pairing;
 pub mod qr_generator;
 pub mod relay_client;
+mod relay_http;
 pub mod session_store;
 pub mod sync_state;
 

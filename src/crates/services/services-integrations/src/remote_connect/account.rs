@@ -14,6 +14,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::remote_connect::device::DeviceIdentity;
 use crate::remote_connect::encryption::{decrypt, encrypt};
+use crate::remote_connect::relay_http::{relay_http_client, send_with_retry, RelayHttpRetry};
 
 /// Salt length for provisioning (client-side account-blob export). Only used
 /// by tests until that tooling lands.
@@ -234,12 +235,7 @@ impl Default for AccountClient {
 impl AccountClient {
     pub fn new() -> Self {
         Self {
-            // Sync uploads full encrypted session bundles; 30s is too short for
-            // large conversations over slower links.
-            http: reqwest::Client::builder()
-                .timeout(std::time::Duration::from_secs(120))
-                .build()
-                .unwrap_or_else(|_| reqwest::Client::new()),
+            http: relay_http_client(),
         }
     }
 
@@ -295,12 +291,14 @@ impl AccountClient {
             return Err(anyhow!("invalid account credential fields"));
         }
         let challenge_req = serde_json::json!({ "username": username });
-        let resp = self
-            .http
-            .post(Self::endpoint(relay_url, "/api/auth/login/challenge")?)
-            .json(&challenge_req)
-            .send()
-            .await?;
+        let resp = send_with_retry(
+            "login challenge",
+            self.http
+                .post(Self::endpoint(relay_url, "/api/auth/login/challenge")?)
+                .json(&challenge_req),
+            RelayHttpRetry::SafeRead,
+        )
+        .await?;
         if !resp.status().is_success() {
             return Err(Self::into_error(resp).await);
         }
@@ -479,13 +477,15 @@ impl AccountClient {
             "nonce": nonce,
             "version": version,
         });
-        let resp = self
-            .http
-            .post(Self::endpoint(relay_url, "/api/sync/sessions")?)
-            .header("Authorization", Self::auth_header(session))
-            .json(&body)
-            .send()
-            .await?;
+        let resp = send_with_retry(
+            "upload session",
+            self.http
+                .post(Self::endpoint(relay_url, "/api/sync/sessions")?)
+                .header("Authorization", Self::auth_header(session))
+                .json(&body),
+            RelayHttpRetry::IdempotentWrite,
+        )
+        .await?;
         if !resp.status().is_success() {
             return Err(Self::into_error(resp).await);
         }
@@ -531,12 +531,14 @@ impl AccountClient {
         let mut url = Self::endpoint(relay_url, "/api/sync/sessions")?;
         url.query_pairs_mut()
             .append_pair("since", &since.max(0).to_string());
-        let resp = self
-            .http
-            .get(url)
-            .header("Authorization", Self::auth_header(session))
-            .send()
-            .await?;
+        let resp = send_with_retry(
+            "list sessions",
+            self.http
+                .get(url)
+                .header("Authorization", Self::auth_header(session)),
+            RelayHttpRetry::SafeRead,
+        )
+        .await?;
         if !resp.status().is_success() {
             return Err(Self::into_error(resp).await);
         }
@@ -590,15 +592,17 @@ impl AccountClient {
         session: &AccountSession,
         session_id: &str,
     ) -> Result<Option<FetchedSession>> {
-        let resp = self
-            .http
-            .get(Self::endpoint(
-                relay_url,
-                &format!("/api/sync/sessions/{}", urlencoding::encode(session_id)),
-            )?)
-            .header("Authorization", Self::auth_header(session))
-            .send()
-            .await?;
+        let resp = send_with_retry(
+            "fetch session",
+            self.http
+                .get(Self::endpoint(
+                    relay_url,
+                    &format!("/api/sync/sessions/{}", urlencoding::encode(session_id)),
+                )?)
+                .header("Authorization", Self::auth_header(session)),
+            RelayHttpRetry::SafeRead,
+        )
+        .await?;
         if resp.status() == reqwest::StatusCode::NOT_FOUND {
             return Ok(None);
         }
@@ -652,13 +656,15 @@ impl AccountClient {
             "nonce": nonce,
             "version": version,
         });
-        let resp = self
-            .http
-            .post(Self::endpoint(relay_url, "/api/sync/settings")?)
-            .header("Authorization", Self::auth_header(session))
-            .json(&body)
-            .send()
-            .await?;
+        let resp = send_with_retry(
+            "upload settings",
+            self.http
+                .post(Self::endpoint(relay_url, "/api/sync/settings")?)
+                .header("Authorization", Self::auth_header(session))
+                .json(&body),
+            RelayHttpRetry::IdempotentWrite,
+        )
+        .await?;
         if !resp.status().is_success() {
             return Err(Self::into_error(resp).await);
         }
@@ -685,12 +691,14 @@ impl AccountClient {
         relay_url: &str,
         session: &AccountSession,
     ) -> Result<Option<SettingsBlob>> {
-        let resp = self
-            .http
-            .get(Self::endpoint(relay_url, "/api/sync/settings")?)
-            .header("Authorization", Self::auth_header(session))
-            .send()
-            .await?;
+        let resp = send_with_retry(
+            "fetch settings",
+            self.http
+                .get(Self::endpoint(relay_url, "/api/sync/settings")?)
+                .header("Authorization", Self::auth_header(session)),
+            RelayHttpRetry::SafeRead,
+        )
+        .await?;
         if resp.status() == reqwest::StatusCode::NOT_FOUND {
             return Ok(None);
         }
@@ -758,12 +766,14 @@ impl AccountClient {
         relay_url: &str,
         session: &AccountSession,
     ) -> Result<Vec<DeviceInfo>> {
-        let resp = self
-            .http
-            .get(Self::endpoint(relay_url, "/api/devices")?)
-            .header("Authorization", Self::auth_header(session))
-            .send()
-            .await?;
+        let resp = send_with_retry(
+            "list devices",
+            self.http
+                .get(Self::endpoint(relay_url, "/api/devices")?)
+                .header("Authorization", Self::auth_header(session)),
+            RelayHttpRetry::SafeRead,
+        )
+        .await?;
         if !resp.status().is_success() {
             return Err(Self::into_error(resp).await);
         }

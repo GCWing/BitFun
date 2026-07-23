@@ -55,6 +55,36 @@ describe('Remote Connect safety contracts', () => {
     expect(invalidation).toContain('setActiveAccountEpoch(null)');
   });
 
+  it('debounces transient device-list failures while device routing remains healthy', () => {
+    const refreshFlow = accountPanelSource.slice(
+      accountPanelSource.indexOf('const refreshDevices'),
+      accountPanelSource.indexOf('const applyPresenceOnline'),
+    );
+
+    expect(refreshFlow).toContain('refreshInFlightRef.current?.epoch === epoch');
+    expect(refreshFlow).toContain('deviceListFailureCountRef.current += 1');
+    expect(refreshFlow).toContain('!deviceRoutingReadyRef.current');
+    expect(refreshFlow).toContain('DEVICE_LIST_FAILURE_THRESHOLD');
+    expect(refreshFlow.indexOf('!deviceRoutingReadyRef.current')).toBeLessThan(
+      refreshFlow.indexOf('markRelayUnreachable()'),
+    );
+  });
+
+  it('retries initial device routing without starting a duplicate sync-time connection', () => {
+    const retryHelper = accountPanelSource.slice(
+      accountPanelSource.indexOf('async function connectDevicesWithRetry'),
+      accountPanelSource.indexOf('function parseRelayServer'),
+    );
+    const backgroundSync = accountPanelSource.slice(
+      accountPanelSource.indexOf('const startBackgroundSync'),
+      accountPanelSource.indexOf('const handleRetrySync'),
+    );
+
+    expect(retryHelper).toContain('DEVICE_CONNECT_MAX_ATTEMPTS');
+    expect(retryHelper).toContain('isRelayUnreachable(error)');
+    expect(backgroundSync).not.toContain('accountConnectDevices');
+  });
+
   it('binds overwrite finalize and cleanup to an opaque pending login id', () => {
     expect(accountPanelSource).toContain('pendingLoginIdRef.current = result.pending_login_id');
     expect(accountPanelSource).toContain('accountFinalizeLogin(pendingLoginId)');

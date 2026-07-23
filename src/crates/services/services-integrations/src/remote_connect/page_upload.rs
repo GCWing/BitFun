@@ -6,6 +6,8 @@ use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use std::path::Path;
 
+use crate::remote_connect::relay_http::{relay_http_client, send_with_retry, RelayHttpRetry};
+
 const MAX_UPLOAD_BATCH_BASE64_BYTES: usize = 256 * 1024;
 const MAX_PAGE_BYTES: u64 = 100 * 1024 * 1024;
 const MAX_FILE_BYTES: u64 = 10 * 1024 * 1024;
@@ -344,7 +346,7 @@ async fn save_page_version_from_collected_files(
         total_bytes
     );
 
-    let client = reqwest::Client::new();
+    let client = relay_http_client();
     let relay_base = relay_url.trim_end_matches('/');
     let auth = format!("Bearer {token}");
 
@@ -499,15 +501,18 @@ pub async fn publish_page_to_relay(
 }
 
 pub async fn list_pages_from_relay(relay_url: &str, token: &str) -> Result<Vec<PageInfo>> {
-    let client = reqwest::Client::new();
+    let client = relay_http_client();
     let url = format!("{}/api/pages", relay_url.trim_end_matches('/'));
-    let resp = client
-        .get(&url)
-        .header("Authorization", format!("Bearer {token}"))
-        .timeout(std::time::Duration::from_secs(15))
-        .send()
-        .await
-        .map_err(|e| anyhow!("list pages failed: {e}"))?;
+    let resp = send_with_retry(
+        "list pages",
+        client
+            .get(&url)
+            .header("Authorization", format!("Bearer {token}"))
+            .timeout(std::time::Duration::from_secs(15)),
+        RelayHttpRetry::SafeRead,
+    )
+    .await
+    .map_err(|e| anyhow!("list pages failed: {e}"))?;
     if !resp.status().is_success() {
         let status = resp.status();
         let body = resp.text().await.unwrap_or_default();
@@ -526,20 +531,23 @@ pub async fn list_page_versions_from_relay(
     expected_generation: &str,
 ) -> Result<Vec<PageVersionInfo>> {
     validate_slug(slug)?;
-    let client = reqwest::Client::new();
+    let client = relay_http_client();
     let url = format!(
         "{}/api/pages/{}/versions?expected_generation={}",
         relay_url.trim_end_matches('/'),
         slug,
         expected_generation
     );
-    let resp = client
-        .get(&url)
-        .header("Authorization", format!("Bearer {token}"))
-        .timeout(std::time::Duration::from_secs(15))
-        .send()
-        .await
-        .map_err(|e| anyhow!("list versions failed: {e}"))?;
+    let resp = send_with_retry(
+        "list page versions",
+        client
+            .get(&url)
+            .header("Authorization", format!("Bearer {token}"))
+            .timeout(std::time::Duration::from_secs(15)),
+        RelayHttpRetry::SafeRead,
+    )
+    .await
+    .map_err(|e| anyhow!("list versions failed: {e}"))?;
     if !resp.status().is_success() {
         let status = resp.status();
         let body = resp.text().await.unwrap_or_default();
@@ -562,7 +570,7 @@ pub async fn create_page_open_link_on_relay(
     expected_generation: &str,
 ) -> Result<PageOpenLink> {
     validate_slug(slug)?;
-    let client = reqwest::Client::new();
+    let client = relay_http_client();
     let url = format!("{}/api/pages/{}", relay_url.trim_end_matches('/'), slug);
     let resp = client
         .post(&url)
@@ -606,7 +614,7 @@ pub async fn deploy_page_version_on_relay(
     expected_generation: &str,
 ) -> Result<PageInfo> {
     validate_slug(slug)?;
-    let client = reqwest::Client::new();
+    let client = relay_http_client();
     let url = format!(
         "{}/api/pages/{}/deploy",
         relay_url.trim_end_matches('/'),
@@ -642,7 +650,7 @@ pub async fn delete_page_version_on_relay(
     expected_generation: &str,
 ) -> Result<()> {
     validate_slug(slug)?;
-    let client = reqwest::Client::new();
+    let client = relay_http_client();
     let url = format!(
         "{}/api/pages/{}/versions/{}?expected_generation={}",
         relay_url.trim_end_matches('/'),
@@ -677,7 +685,7 @@ pub async fn update_page_on_relay(
     if let Some(v) = visibility {
         validate_visibility(v)?;
     }
-    let client = reqwest::Client::new();
+    let client = relay_http_client();
     let url = format!("{}/api/pages/{}", relay_url.trim_end_matches('/'), slug);
     let mut body = serde_json::Map::new();
     body.insert(
@@ -716,7 +724,7 @@ pub async fn unpublish_page_from_relay(
     expected_generation: &str,
 ) -> Result<()> {
     validate_slug(slug)?;
-    let client = reqwest::Client::new();
+    let client = relay_http_client();
     let url = format!(
         "{}/api/pages/{}/unpublish?expected_generation={}",
         relay_url.trim_end_matches('/'),
@@ -745,7 +753,7 @@ pub async fn delete_page_from_relay(
     expected_generation: &str,
 ) -> Result<()> {
     validate_slug(slug)?;
-    let client = reqwest::Client::new();
+    let client = relay_http_client();
     let url = format!(
         "{}/api/pages/{}?expected_generation={}",
         relay_url.trim_end_matches('/'),
