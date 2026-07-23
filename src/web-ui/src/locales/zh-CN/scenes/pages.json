@@ -22,8 +22,8 @@
     "private": "仅自己",
     "relay": "已登录中继用户",
     "public": "公开",
-    "privateHint": "仅你自己可以访问",
-    "relayHint": "登录该中继的账号均可访问",
+    "privateHint": "登录页面所有者账号后可访问",
+    "relayHint": "登录该中继的任意账号后可访问",
     "publicHint": "任何获得链接的人都可以访问",
     "changeAria": "修改 {{title}} 的可见范围"
   },
@@ -45,9 +45,10 @@
     "refresh": "刷新",
     "retry": "重试",
     "signIn": "打开账号登录",
-    "openProduction": "打开生产环境",
+    "openProduction": "打开",
     "copyLink": "复制链接",
     "versions": "版本",
+    "manage": "管理设置",
     "deploy": "部署",
     "unpublish": "停止生产服务",
     "changeVisibility": "修改可见范围",
@@ -58,6 +59,12 @@
     "copyVersionAria": "复制版本 {{version}} 的链接",
     "deleteVersionAria": "删除版本 {{version}}"
   },
+  "manage": {
+    "title": "页面信息与访问",
+    "description": "修改页面名称和访问要求。",
+    "lifecycleTitle": "生产与数据",
+    "lifecycleDescription": "停止生产会保留已保存版本；删除页面会永久移除所有版本和 Page Function 数据。"
+  },
   "versions": {
     "title": "不可变版本",
     "empty": "没有返回已保存版本。",
@@ -67,7 +74,7 @@
   },
   "confirm": {
     "visibilityTitle": "修改页面可见范围？",
-    "visibilityMessage": "/{{slug}} 将从“{{current}}”改为“{{target}}”。公开页面可被任何获得链接的人访问。",
+    "visibilityMessage": "/{{slug}} 将从“{{current}}”改为“{{target}}”。除“公开”外，访问者都必须先登录。",
     "deployTitle": "切换生产版本？",
     "deployMessage": "/{{slug}} 的生产版本将从 {{current}} 切换到 {{target}}，原版本仍会保留以便回滚。",
     "unpublishTitle": "停止该页面的生产服务？",
@@ -81,7 +88,7 @@
     "versionsLoadFailed": "无法加载版本：{{error}}",
     "openFailed": "无法打开页面：{{error}}",
     "linkCopied": "页面链接已复制。",
-    "temporaryLinkCopied": "一次性安全页面链接已复制，请在 60 秒内打开。",
+    "protectedLinkCopied": "受保护页面链接已复制，访问者需要先登录。",
     "copyFailed": "无法复制页面链接：{{error}}",
     "visibilityUpdated": "可见范围已改为{{visibility}}。",
     "visibilityFailed": "无法修改可见范围：{{error}}",

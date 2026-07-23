@@ -32,6 +32,7 @@ export interface PageVersionInfo {
 
 export interface PageOpenLink {
   open_url: string;
+  page_url: string;
   expires_in_seconds: number;
 }
 

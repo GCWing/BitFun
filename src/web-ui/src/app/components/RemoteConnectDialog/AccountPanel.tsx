@@ -1164,9 +1164,9 @@ export const AccountPanel: React.FC<AccountPanelProps> = ({
               })}
             </div>
             <div className="account-panel__pages-section">
-              <span className="account-panel__pages-section-title">
+              <h3 className="account-panel__pages-section-title">
                 {t('accountLogin.pagesSectionTitle')}
-              </span>
+              </h3>
               <button
                 type="button"
                 className="account-panel__pages-entry"
@@ -1185,7 +1185,9 @@ export const AccountPanel: React.FC<AccountPanelProps> = ({
                     {t('accountLogin.pagesEntryDesc')}
                   </span>
                 </span>
-                <ChevronRight size={14} aria-hidden="true" />
+                <span className="account-panel__pages-entry-arrow" aria-hidden="true">
+                  <ChevronRight size={15} />
+                </span>
               </button>
             </div>
             <div className="account-panel__actions">

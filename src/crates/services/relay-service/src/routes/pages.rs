@@ -4,11 +4,11 @@
 //! Preview: `/p/{user}/{slug}/@v/{version}/...`
 //! Production: `/p/{user}/{slug}/...` (deployed version only).
 
-use axum::extract::{DefaultBodyLimit, Path, Query, State};
-use axum::http::{header, HeaderMap, HeaderValue, Method, StatusCode};
+use axum::extract::{ConnectInfo, DefaultBodyLimit, Path, Query, State};
+use axum::http::{header, HeaderMap, HeaderValue, Method, StatusCode, Uri};
 use axum::response::{IntoResponse, Redirect, Response};
 use axum::routing::{get, post};
-use axum::{Json, Router};
+use axum::{Extension, Json, Router};
 use base64::{engine::general_purpose::STANDARD as B64, Engine};
 use bitfun_page_function_runtime::{
     run_fetch, FetchRequest, PageFunctionError, PageMeta, DEFAULT_TIMEOUT, WORKER_ENTRY_PATH,
@@ -18,6 +18,7 @@ use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::collections::HashMap;
 use std::hash::{DefaultHasher, Hash, Hasher};
+use std::net::SocketAddr;
 use std::sync::{Arc, Mutex as StdMutex};
 use std::time::{Duration, Instant};
 
@@ -42,12 +43,13 @@ const MAX_PAGE_NOTE_CHARS: usize = 1000;
 const MAX_PAGE_NOTE_BYTES: usize = 4096;
 // A 10 MiB file expands to roughly 13.34 MiB in base64 before JSON framing.
 pub const PAGE_UPLOAD_BODY_LIMIT: usize = 15 * 1024 * 1024;
-const PAGE_OPEN_TICKET_TTL: Duration = Duration::from_secs(60);
-const PAGE_BROWSER_GRANT_TTL: Duration = Duration::from_secs(10 * 60);
-const MAX_PAGE_OPEN_TICKETS: usize = 4096;
-const MAX_PAGE_OPEN_TICKETS_PER_USER: usize = 256;
+const PAGE_BROWSER_GRANT_TTL: Duration = Duration::from_secs(8 * 60 * 60);
+const PAGE_LOGIN_REQUEST_TTL: Duration = Duration::from_secs(5 * 60);
+const PAGE_LOGIN_EXCHANGE_TTL: Duration = Duration::from_secs(60);
 const MAX_PAGE_BROWSER_GRANTS: usize = 8192;
 const MAX_PAGE_BROWSER_GRANTS_PER_USER: usize = 512;
+const MAX_PAGE_LOGIN_REQUESTS: usize = 4096;
+const MAX_PAGE_LOGIN_EXCHANGES: usize = 4096;
 const PAGE_ACCESS_COOKIE: &str = "bitfun_page_access";
 const PAGE_UPLOAD_SESSION_TTL: Duration = Duration::from_secs(15 * 60);
 const MAX_PAGE_UPLOAD_SESSIONS: usize = 4096;
@@ -57,19 +59,36 @@ const PAGE_UPLOAD_LOCK_SHARDS: usize = 64;
 #[derive(Clone)]
 struct PageAccessScope {
     user_id: String,
-    username: String,
+    viewer_user_id: String,
     slug: String,
     generation: String,
     version_id: Option<String>,
     expires_at: Instant,
 }
 
-/// Process-local, time-bounded grants used to hand an authenticated Page URL
-/// from the desktop client to the user's external browser without putting the
-/// account bearer token in a URL.
+#[derive(Clone)]
+struct PageLoginRequest {
+    user_id: String,
+    slug: String,
+    generation: String,
+    version_id: Option<String>,
+    page_path: String,
+    cookie_path: String,
+    expires_at: Instant,
+}
+
+#[derive(Clone)]
+struct PageLoginExchange {
+    request: PageLoginRequest,
+    viewer_user_id: String,
+    expires_at: Instant,
+}
+
+/// Process-local, time-bounded browser sessions for authenticated Pages.
 pub struct PageAccessManager {
-    open_tickets: DashMap<String, PageAccessScope>,
     browser_grants: DashMap<String, PageAccessScope>,
+    login_requests: DashMap<String, PageLoginRequest>,
+    login_exchanges: DashMap<String, PageLoginExchange>,
     capacity_lock: StdMutex<()>,
 }
 
@@ -151,8 +170,9 @@ impl PageUploadManager {
 impl Default for PageAccessManager {
     fn default() -> Self {
         Self {
-            open_tickets: DashMap::new(),
             browser_grants: DashMap::new(),
+            login_requests: DashMap::new(),
+            login_exchanges: DashMap::new(),
             capacity_lock: StdMutex::new(()),
         }
     }
@@ -164,15 +184,18 @@ impl PageAccessManager {
     }
 
     fn prune_expired(&self, now: Instant) {
-        self.open_tickets.retain(|_, scope| scope.expires_at > now);
         self.browser_grants
             .retain(|_, scope| scope.expires_at > now);
+        self.login_requests
+            .retain(|_, request| request.expires_at > now);
+        self.login_exchanges
+            .retain(|_, exchange| exchange.expires_at > now);
     }
 
-    fn issue_open_ticket(
+    fn issue_browser_grant(
         &self,
         user_id: String,
-        username: String,
+        viewer_user_id: String,
         slug: String,
         generation: String,
         version_id: Option<String>,
@@ -183,69 +206,122 @@ impl PageAccessManager {
             .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
         let now = Instant::now();
         self.prune_expired(now);
-        let user_tickets = self
-            .open_tickets
+        let viewer_grants = self
+            .browser_grants
             .iter()
-            .filter(|entry| entry.user_id == user_id)
+            .filter(|entry| entry.viewer_user_id == viewer_user_id)
             .count();
-        if self.open_tickets.len() >= MAX_PAGE_OPEN_TICKETS
-            || user_tickets >= MAX_PAGE_OPEN_TICKETS_PER_USER
+        if self.browser_grants.len() >= MAX_PAGE_BROWSER_GRANTS
+            || viewer_grants >= MAX_PAGE_BROWSER_GRANTS_PER_USER
         {
             return Err(StatusCode::TOO_MANY_REQUESTS);
         }
-        let ticket = random_page_access_token();
-        self.open_tickets.insert(
-            ticket.clone(),
+        let grant = random_page_access_token();
+        self.browser_grants.insert(
+            grant.clone(),
             PageAccessScope {
                 user_id,
-                username,
+                viewer_user_id,
                 slug,
                 generation,
                 version_id,
-                expires_at: now + PAGE_OPEN_TICKET_TTL,
+                expires_at: now + PAGE_BROWSER_GRANT_TTL,
             },
         );
-        Ok(ticket)
+        Ok(grant)
     }
 
-    fn exchange_ticket(
+    fn issue_login_request(
         &self,
-        ticket: &str,
-    ) -> Result<Option<(String, PageAccessScope)>, StatusCode> {
+        user_id: String,
+        slug: String,
+        generation: String,
+        version_id: Option<String>,
+        page_path: String,
+        cookie_path: String,
+    ) -> Result<String, StatusCode> {
         let _capacity_guard = self
             .capacity_lock
             .lock()
             .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
         let now = Instant::now();
         self.prune_expired(now);
-        let Some(scope) = self
-            .open_tickets
-            .get(ticket)
-            .map(|entry| entry.value().clone())
-        else {
-            return Ok(None);
-        };
-        if scope.expires_at <= now {
-            self.open_tickets.remove(ticket);
-            return Ok(None);
-        }
-        let user_grants = self
-            .browser_grants
-            .iter()
-            .filter(|entry| entry.user_id == scope.user_id)
-            .count();
-        if self.browser_grants.len() >= MAX_PAGE_BROWSER_GRANTS
-            || user_grants >= MAX_PAGE_BROWSER_GRANTS_PER_USER
-        {
+        if self.login_requests.len() >= MAX_PAGE_LOGIN_REQUESTS {
             return Err(StatusCode::TOO_MANY_REQUESTS);
         }
-        let Some((_, mut scope)) = self.open_tickets.remove(ticket) else {
+        let token = random_page_access_token();
+        self.login_requests.insert(
+            token.clone(),
+            PageLoginRequest {
+                user_id,
+                slug,
+                generation,
+                version_id,
+                page_path,
+                cookie_path,
+                expires_at: now + PAGE_LOGIN_REQUEST_TTL,
+            },
+        );
+        Ok(token)
+    }
+
+    fn login_request(&self, token: &str) -> Option<PageLoginRequest> {
+        let now = Instant::now();
+        let request = self
+            .login_requests
+            .get(token)
+            .filter(|request| request.expires_at > now)
+            .map(|request| request.value().clone());
+        if request.is_none() {
+            self.login_requests.remove(token);
+            self.prune_expired(now);
+        }
+        request
+    }
+
+    fn issue_login_exchange(
+        &self,
+        request_token: &str,
+        viewer_user_id: String,
+    ) -> Result<Option<String>, StatusCode> {
+        let _capacity_guard = self
+            .capacity_lock
+            .lock()
+            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+        let now = Instant::now();
+        self.prune_expired(now);
+        if self.login_exchanges.len() >= MAX_PAGE_LOGIN_EXCHANGES {
+            return Err(StatusCode::TOO_MANY_REQUESTS);
+        }
+        let Some((_, request)) = self.login_requests.remove(request_token) else {
             return Ok(None);
         };
-        let grant = random_page_access_token();
-        scope.expires_at = now + PAGE_BROWSER_GRANT_TTL;
-        self.browser_grants.insert(grant.clone(), scope.clone());
-        Ok(Some((grant, scope)))
+        if request.expires_at <= now {
+            return Ok(None);
+        }
+        let code = random_page_access_token();
+        self.login_exchanges.insert(
+            code.clone(),
+            PageLoginExchange {
+                request,
+                viewer_user_id,
+                expires_at: now + PAGE_LOGIN_EXCHANGE_TTL,
+            },
+        );
+        Ok(Some(code))
+    }
+
+    fn consume_login_exchange(&self, code: &str) -> Result<Option<PageLoginExchange>, StatusCode> {
+        let _capacity_guard = self
+            .capacity_lock
+            .lock()
+            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+        let now = Instant::now();
+        self.prune_expired(now);
+        let Some((_, exchange)) = self.login_exchanges.remove(code) else {
+            return Ok(None);
+        };
+        Ok((exchange.expires_at > now).then_some(exchange))
     }
 
     fn authorizes_page(
@@ -293,10 +369,13 @@ impl PageAccessManager {
     }
 
     fn revoke_page(&self, user_id: &str, slug: &str) {
-        self.open_tickets
-            .retain(|_, scope| scope.user_id != user_id || scope.slug != slug);
         self.browser_grants
             .retain(|_, scope| scope.user_id != user_id || scope.slug != slug);
+        self.login_requests
+            .retain(|_, request| request.user_id != user_id || request.slug != slug);
+        self.login_exchanges.retain(|_, exchange| {
+            exchange.request.user_id != user_id || exchange.request.slug != slug
+        });
     }
 }
 
@@ -467,7 +546,10 @@ pub fn pages_router() -> Router<AppState> {
                 .patch(update_page)
                 .delete(delete_page),
         )
-        .route("/api/page-open/{ticket}", get(exchange_open_ticket))
+        .route("/api/page-auth/login", post(page_browser_login))
+        .route("/api/page-auth/sign-in", get(page_browser_sign_in))
+        .route("/api/page-auth/callback", get(page_browser_callback))
+        .route("/api/page-auth/client.js", get(page_auth_client_script))
         // Preview routes (more specific first).
         .route(
             "/p/{username}/{slug}/@v/{version_id}",
@@ -639,6 +721,7 @@ pub struct ExpectedGenerationQuery {
 #[derive(Serialize)]
 pub struct PageOpenResponse {
     pub open_url_path: String,
+    pub page_url_path: String,
     pub expires_in_seconds: u64,
 }
 
@@ -683,52 +766,691 @@ async fn create_open_ticket(
         return Err(StatusCode::NOT_FOUND);
     }
 
-    let ticket = state.page_access_manager.issue_open_ticket(
-        auth.user_id,
-        username,
-        slug,
-        page.generation,
-        version_id,
-    )?;
+    let page_url_path = match version_id.as_deref() {
+        Some(version_id) => format!("/p/{username}/{slug}/@v/{version_id}"),
+        None => format!("/p/{username}/{slug}"),
+    };
+    let page_url_path = external_page_url(&state, &page_url_path);
     Ok(Json(PageOpenResponse {
-        open_url_path: format!("/api/page-open/{ticket}"),
-        expires_in_seconds: PAGE_OPEN_TICKET_TTL.as_secs(),
+        open_url_path: page_url_path.clone(),
+        page_url_path,
+        expires_in_seconds: 0,
     }))
 }
 
-async fn exchange_open_ticket(
+#[derive(Deserialize)]
+struct PageBrowserLoginRequest {
+    username: String,
+    password_hash: String,
+    #[serde(default)]
+    return_to: Option<String>,
+    #[serde(default)]
+    state: Option<String>,
+    #[serde(default)]
+    path_prefix: Option<String>,
+}
+
+#[derive(Serialize)]
+struct PageBrowserLoginResponse {
+    redirect_to: String,
+}
+
+struct PageLoginTarget {
+    owner_username: String,
+    slug: String,
+    version_id: Option<String>,
+    cookie_path: String,
+    return_to: String,
+}
+
+#[derive(Deserialize)]
+struct PageBrowserSignInQuery {
+    state: String,
+}
+
+#[derive(Deserialize)]
+struct PageBrowserCallbackQuery {
+    code: String,
+}
+
+fn external_page_url(state: &AppState, path: &str) -> String {
+    state
+        .page_browser_auth
+        .as_ref()
+        .map(|config| format!("{}{path}", config.public_base_url))
+        .unwrap_or_else(|| path.to_string())
+}
+
+fn external_page_cookie_path(state: &AppState, path: &str) -> String {
+    state
+        .page_browser_auth
+        .as_ref()
+        .map(|config| format!("{}{path}", config.public_path_prefix))
+        .unwrap_or_else(|| path.to_string())
+}
+
+fn request_host_matches_origin(headers: &HeaderMap, expected_origin: &str) -> bool {
+    let Some((_, authority)) = expected_origin.split_once("://") else {
+        return false;
+    };
+    headers
+        .get(header::HOST)
+        .and_then(|value| value.to_str().ok())
+        .is_some_and(|host| host.eq_ignore_ascii_case(authority))
+}
+
+fn parse_page_path_prefix(path_prefix: Option<&str>) -> Result<String, StatusCode> {
+    let Some(path_prefix) = path_prefix else {
+        return Ok(String::new());
+    };
+    let path_prefix = path_prefix.trim_end_matches('/');
+    if path_prefix.is_empty() {
+        return Ok(String::new());
+    }
+    if path_prefix.len() > 256
+        || !path_prefix.starts_with('/')
+        || path_prefix.chars().any(char::is_control)
+        || !path_prefix.bytes().all(|byte| {
+            byte.is_ascii_alphanumeric() || matches!(byte, b'/' | b'-' | b'.' | b'_' | b'~' | b'%')
+        })
+        || path_prefix
+            .split('/')
+            .any(|segment| matches!(segment, "." | ".."))
+    {
+        return Err(StatusCode::BAD_REQUEST);
+    }
+    Ok(path_prefix.to_string())
+}
+
+fn parse_page_login_target(
+    return_to: &str,
+    path_prefix: Option<&str>,
+) -> Result<PageLoginTarget, StatusCode> {
+    if return_to.is_empty() || return_to.len() > 4096 || return_to.chars().any(char::is_control) {
+        return Err(StatusCode::BAD_REQUEST);
+    }
+    let uri = return_to
+        .parse::<Uri>()
+        .map_err(|_| StatusCode::BAD_REQUEST)?;
+    if uri.scheme().is_some() || uri.authority().is_some() {
+        return Err(StatusCode::BAD_REQUEST);
+    }
+    let segments = uri.path().split('/').collect::<Vec<_>>();
+    if segments.len() < 4
+        || !segments[0].is_empty()
+        || segments[1] != "p"
+        || !is_safe_page_username(segments[2])
+        || !is_valid_slug(segments[3])
+    {
+        return Err(StatusCode::BAD_REQUEST);
+    }
+    let version_id = if segments.get(4) == Some(&"@v") {
+        let version_id = segments.get(5).ok_or(StatusCode::BAD_REQUEST)?;
+        if version_id.is_empty()
+            || version_id.len() > 128
+            || !version_id
+                .bytes()
+                .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_'))
+        {
+            return Err(StatusCode::BAD_REQUEST);
+        }
+        Some((*version_id).to_string())
+    } else {
+        None
+    };
+    let cookie_path = match version_id.as_deref() {
+        Some(version_id) => {
+            format!("/p/{}/{}/@v/{version_id}", segments[2], segments[3])
+        }
+        None => format!("/p/{}/{}", segments[2], segments[3]),
+    };
+    let cookie_path = format!("{}{cookie_path}", parse_page_path_prefix(path_prefix)?);
+    Ok(PageLoginTarget {
+        owner_username: segments[2].to_string(),
+        slug: segments[3].to_string(),
+        version_id,
+        cookie_path,
+        return_to: uri
+            .path_and_query()
+            .map(|value| value.as_str().to_string())
+            .ok_or(StatusCode::BAD_REQUEST)?,
+    })
+}
+
+async fn page_for_login_request(
+    db: &crate::db::DbPool,
+    request: &PageLoginRequest,
+) -> Result<(PageRow, PageVisibility), Response> {
+    let page = match PageRow::get(db, &request.user_id, &request.slug).await {
+        Ok(Some(page)) if page.generation == request.generation => page,
+        Ok(_) => {
+            return Err(page_auth_error_response(
+                StatusCode::NOT_FOUND,
+                "Page not found",
+            ))
+        }
+        Err(error) => {
+            tracing::error!("Page browser login lookup failed: {error}");
+            return Err(page_auth_error_response(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "internal error",
+            ));
+        }
+    };
+    if let Some(version_id) = request.version_id.as_deref() {
+        match PageVersionRow::get(db, &page.user_id, &page.slug, version_id).await {
+            Ok(Some(_)) => {}
+            Ok(None) => {
+                return Err(page_auth_error_response(
+                    StatusCode::NOT_FOUND,
+                    "Page not found",
+                ));
+            }
+            Err(error) => {
+                tracing::error!("Page browser login version lookup failed: {error}");
+                return Err(page_auth_error_response(
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    "internal error",
+                ));
+            }
+        }
+    } else if page.deployed_version_id.is_none() {
+        return Err(page_auth_error_response(
+            StatusCode::NOT_FOUND,
+            "Page not found",
+        ));
+    }
+    let Some(visibility) = page.visibility_enum() else {
+        return Err(page_auth_error_response(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "internal error",
+        ));
+    };
+    Ok((page, visibility))
+}
+
+async fn page_browser_sign_in(
     State(state): State<AppState>,
     headers: HeaderMap,
-    Path(ticket): Path<String>,
-) -> Result<Response, StatusCode> {
-    if ticket.len() != 64 || !ticket.bytes().all(|byte| byte.is_ascii_hexdigit()) {
-        return Err(StatusCode::NOT_FOUND);
-    }
-    let (grant, scope) = state
-        .page_access_manager
-        .exchange_ticket(&ticket)?
-        .ok_or(StatusCode::NOT_FOUND)?;
-    let page_path = format!("/p/{}/{}", scope.username, scope.slug);
-    let target = match scope.version_id {
-        Some(version_id) => format!("{page_path}/@v/{version_id}"),
-        None => page_path.clone(),
+    Query(query): Query<PageBrowserSignInQuery>,
+) -> Response {
+    let Some(config) = state.page_browser_auth.as_ref() else {
+        return page_auth_error_response(StatusCode::NOT_FOUND, "Page sign-in is not configured");
     };
-    let secure = request_used_https(&headers);
+    if !request_host_matches_origin(&headers, &config.auth_origin) {
+        return page_auth_error_response(StatusCode::NOT_FOUND, "Page sign-in is not available");
+    }
+    let Some(request) = state.page_access_manager.login_request(&query.state) else {
+        return page_auth_error_response(StatusCode::GONE, "Page sign-in link expired");
+    };
+    let db = match require_db(&state) {
+        Ok(db) => db,
+        Err(status) => return page_auth_error_response(status, "account features disabled"),
+    };
+    let (_, visibility) = match page_for_login_request(db, &request).await {
+        Ok(result) => result,
+        Err(response) => return response,
+    };
+    if visibility == PageVisibility::Public {
+        return Redirect::to(&format!("{}{}", config.public_base_url, request.page_path))
+            .into_response();
+    }
+    page_login_form_response(visibility, Some(&query.state), "./client.js")
+}
+
+async fn page_browser_login(
+    State(state): State<AppState>,
+    connect_info: Option<Extension<ConnectInfo<SocketAddr>>>,
+    headers: HeaderMap,
+    Json(body): Json<PageBrowserLoginRequest>,
+) -> Response {
+    let db = match require_db(&state) {
+        Ok(db) => db,
+        Err(status) => return page_auth_error_response(status, "account features disabled"),
+    };
+    if let Some(config) = state.page_browser_auth.as_ref() {
+        if !request_host_matches_origin(&headers, &config.auth_origin) {
+            return page_auth_error_response(
+                StatusCode::NOT_FOUND,
+                "Page sign-in is not available",
+            );
+        }
+        let Some(request_token) = body.state.as_deref() else {
+            return page_auth_error_response(StatusCode::BAD_REQUEST, "missing Page sign-in state");
+        };
+        let Some(request) = state.page_access_manager.login_request(request_token) else {
+            return page_auth_error_response(StatusCode::GONE, "Page sign-in link expired");
+        };
+        let (page, visibility) = match page_for_login_request(db, &request).await {
+            Ok(result) => result,
+            Err(response) => return response,
+        };
+        if visibility == PageVisibility::Public {
+            return Json(PageBrowserLoginResponse {
+                redirect_to: format!("{}{}", config.public_base_url, request.page_path),
+            })
+            .into_response();
+        }
+        let viewer = match crate::routes::auth::verify_password_hash_credentials(
+            &state,
+            connect_info.map(|Extension(ConnectInfo(addr))| addr),
+            &headers,
+            &body.username,
+            &body.password_hash,
+        )
+        .await
+        {
+            Ok(viewer) => viewer,
+            Err(error) => return error.into_response(),
+        };
+        if visibility == PageVisibility::Private && viewer.user_id != page.user_id {
+            return page_auth_error_response(
+                StatusCode::FORBIDDEN,
+                "account does not have access to this Page",
+            );
+        }
+        let code = match state
+            .page_access_manager
+            .issue_login_exchange(request_token, viewer.user_id)
+        {
+            Ok(Some(code)) => code,
+            Ok(None) => {
+                return page_auth_error_response(StatusCode::GONE, "Page sign-in link expired");
+            }
+            Err(status) => {
+                return page_auth_error_response(status, "unable to create Page session");
+            }
+        };
+        return (
+            [(header::CACHE_CONTROL, "no-store")],
+            Json(PageBrowserLoginResponse {
+                redirect_to: format!(
+                    "{}/api/page-auth/callback?code={code}",
+                    config.public_base_url
+                ),
+            }),
+        )
+            .into_response();
+    }
+
+    let Some(return_to) = body.return_to.as_deref() else {
+        return page_auth_error_response(StatusCode::BAD_REQUEST, "missing Page return path");
+    };
+    let target = match parse_page_login_target(return_to, body.path_prefix.as_deref()) {
+        Ok(target) => target,
+        Err(status) => return page_auth_error_response(status, "invalid Page return path"),
+    };
+    let page = match PageRow::get_by_username(db, &target.owner_username, &target.slug).await {
+        Ok(Some(page)) => page,
+        Ok(None) => return page_auth_error_response(StatusCode::NOT_FOUND, "Page not found"),
+        Err(error) => {
+            tracing::error!("Page browser login lookup failed: {error}");
+            return page_auth_error_response(StatusCode::INTERNAL_SERVER_ERROR, "internal error");
+        }
+    };
+    if let Some(version_id) = target.version_id.as_deref() {
+        match PageVersionRow::get(db, &page.user_id, &page.slug, version_id).await {
+            Ok(Some(_)) => {}
+            Ok(None) => return page_auth_error_response(StatusCode::NOT_FOUND, "Page not found"),
+            Err(error) => {
+                tracing::error!("Page browser login version lookup failed: {error}");
+                return page_auth_error_response(
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    "internal error",
+                );
+            }
+        }
+    } else if page.deployed_version_id.is_none() {
+        return page_auth_error_response(StatusCode::NOT_FOUND, "Page not found");
+    }
+
+    let visibility = match page.visibility_enum() {
+        Some(visibility) => visibility,
+        None => {
+            return page_auth_error_response(StatusCode::INTERNAL_SERVER_ERROR, "internal error");
+        }
+    };
+    if visibility == PageVisibility::Public {
+        return (
+            [(header::CACHE_CONTROL, "no-store")],
+            Json(PageBrowserLoginResponse {
+                redirect_to: target.return_to,
+            }),
+        )
+            .into_response();
+    }
+
+    let viewer = match crate::routes::auth::verify_password_hash_credentials(
+        &state,
+        connect_info.map(|Extension(ConnectInfo(addr))| addr),
+        &headers,
+        &body.username,
+        &body.password_hash,
+    )
+    .await
+    {
+        Ok(viewer) => viewer,
+        Err(error) => return error.into_response(),
+    };
+    if visibility == PageVisibility::Private && viewer.user_id != page.user_id {
+        return page_auth_error_response(
+            StatusCode::FORBIDDEN,
+            "account does not have access to this Page",
+        );
+    }
+
+    let grant = match state.page_access_manager.issue_browser_grant(
+        page.user_id,
+        viewer.user_id,
+        target.slug,
+        page.generation,
+        target.version_id,
+    ) {
+        Ok(grant) => grant,
+        Err(status) => return page_auth_error_response(status, "unable to create Page session"),
+    };
     let cookie = format!(
-        "{PAGE_ACCESS_COOKIE}={grant}; Path={target}; Max-Age={}; HttpOnly; SameSite=Lax{}",
+        "{PAGE_ACCESS_COOKIE}={grant}; Path={}; Max-Age={}; HttpOnly; SameSite=Lax{}",
+        target.cookie_path,
         PAGE_BROWSER_GRANT_TTL.as_secs(),
-        if secure { "; Secure" } else { "" }
+        if request_used_https(&headers) {
+            "; Secure"
+        } else {
+            ""
+        }
     );
-    let mut response = Redirect::temporary(&target).into_response();
+    let mut response = Json(PageBrowserLoginResponse {
+        redirect_to: target.return_to,
+    })
+    .into_response();
     response.headers_mut().insert(
         header::SET_COOKIE,
-        HeaderValue::from_str(&cookie).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?,
+        HeaderValue::from_str(&cookie).expect("validated Page cookie must be a valid header"),
     );
+    response
+        .headers_mut()
+        .insert(header::CACHE_CONTROL, HeaderValue::from_static("no-store"));
+    response
+}
+
+async fn page_browser_callback(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Query(query): Query<PageBrowserCallbackQuery>,
+) -> Response {
+    let Some(config) = state.page_browser_auth.as_ref() else {
+        return page_auth_error_response(StatusCode::NOT_FOUND, "Page sign-in is not configured");
+    };
+    if !request_host_matches_origin(&headers, &config.public_origin) {
+        return page_auth_error_response(
+            StatusCode::NOT_FOUND,
+            "Page sign-in callback is not available",
+        );
+    }
+    if query.code.len() != 64 || !query.code.bytes().all(|byte| byte.is_ascii_hexdigit()) {
+        return page_auth_error_response(StatusCode::BAD_REQUEST, "invalid Page sign-in code");
+    }
+    let exchange = match state
+        .page_access_manager
+        .consume_login_exchange(&query.code)
+    {
+        Ok(Some(exchange)) => exchange,
+        Ok(None) => {
+            return page_auth_error_response(StatusCode::GONE, "Page sign-in code expired");
+        }
+        Err(status) => {
+            return page_auth_error_response(status, "unable to complete Page sign-in");
+        }
+    };
+    let db = match require_db(&state) {
+        Ok(db) => db,
+        Err(status) => return page_auth_error_response(status, "account features disabled"),
+    };
+    let (page, visibility) = match page_for_login_request(db, &exchange.request).await {
+        Ok(result) => result,
+        Err(response) => return response,
+    };
+    if visibility == PageVisibility::Private && exchange.viewer_user_id != page.user_id {
+        return page_auth_error_response(
+            StatusCode::FORBIDDEN,
+            "account does not have access to this Page",
+        );
+    }
+    let grant = match state.page_access_manager.issue_browser_grant(
+        page.user_id,
+        exchange.viewer_user_id,
+        exchange.request.slug,
+        page.generation,
+        exchange.request.version_id,
+    ) {
+        Ok(grant) => grant,
+        Err(status) => return page_auth_error_response(status, "unable to create Page session"),
+    };
+    let cookie = format!(
+        "{PAGE_ACCESS_COOKIE}={grant}; Path={}; Max-Age={}; HttpOnly; SameSite=Lax{}",
+        exchange.request.cookie_path,
+        PAGE_BROWSER_GRANT_TTL.as_secs(),
+        if config.public_base_url.starts_with("https://") {
+            "; Secure"
+        } else {
+            ""
+        }
+    );
+    let return_to = format!("{}{}", config.public_base_url, exchange.request.page_path);
+    let mut response = Redirect::to(&return_to).into_response();
+    response.headers_mut().insert(
+        header::SET_COOKIE,
+        HeaderValue::from_str(&cookie).expect("validated Page cookie must be a valid header"),
+    );
+    response
+        .headers_mut()
+        .insert(header::CACHE_CONTROL, HeaderValue::from_static("no-store"));
+    response
+}
+
+fn page_auth_error_response(status: StatusCode, error: &str) -> Response {
+    (
+        status,
+        Json(crate::routes::auth::ErrorResponse {
+            error: error.to_string(),
+            retry_after_secs: None,
+        }),
+    )
+        .into_response()
+}
+
+const PAGE_AUTH_CLIENT_JS: &str = include_str!("page_auth_client.bundle.js");
+
+async fn page_auth_client_script(State(state): State<AppState>, headers: HeaderMap) -> Response {
+    if state
+        .page_browser_auth
+        .as_ref()
+        .is_some_and(|config| !request_host_matches_origin(&headers, &config.auth_origin))
+    {
+        return page_auth_error_response(StatusCode::NOT_FOUND, "Page sign-in is not available");
+    }
+    let mut response = PAGE_AUTH_CLIENT_JS.into_response();
+    let headers = response.headers_mut();
+    headers.insert(
+        header::CONTENT_TYPE,
+        HeaderValue::from_static("application/javascript; charset=utf-8"),
+    );
+    headers.insert(
+        header::CACHE_CONTROL,
+        HeaderValue::from_static("no-cache, max-age=0"),
+    );
+    headers.insert(
+        header::X_CONTENT_TYPE_OPTIONS,
+        HeaderValue::from_static("nosniff"),
+    );
+    response
+}
+
+fn page_login_form_response(
+    visibility: PageVisibility,
+    login_state: Option<&str>,
+    client_script: &str,
+) -> Response {
+    let access_description = match visibility {
+        PageVisibility::Private => {
+            "仅页面所有者账号可以访问。 Only the Page owner account can continue."
+        }
+        PageVisibility::Relay => {
+            "此中继的任意账号均可访问。 Any account on this relay can continue."
+        }
+        PageVisibility::Public => "",
+    };
+    let login_state_attribute = login_state
+        .map(|state| format!(r#" data-page-login-state="{state}""#))
+        .unwrap_or_default();
+    secure_page_html_response(
+        if login_state.is_some() {
+            StatusCode::OK
+        } else {
+            StatusCode::UNAUTHORIZED
+        },
+        format!(
+            r#"<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>需要登录 · BitFun Page</title>
+  <style>{}</style>
+</head>
+<body>
+  <main>
+    <div class="mark" aria-hidden="true">B</div>
+    <p class="eyebrow">BITFUN PAGE</p>
+    <h1>登录后访问</h1>
+    <p>此页面受访问权限保护，请使用 BitFun 账号登录。</p>
+    <p class="secondary">This Page is protected. Sign in with your BitFun account.</p>
+    <p class="access">{access_description}</p>
+    <form data-page-login-form{login_state_attribute}>
+      <label class="field">
+        <span>用户名 <small>Username</small></span>
+        <input data-page-login-username name="username" type="text" autocomplete="username" maxlength="128" required autofocus>
+      </label>
+      <label class="field">
+        <span>密码 <small>Password</small></span>
+        <span class="password">
+          <input data-page-login-password name="password" type="password" autocomplete="current-password" maxlength="1024" required>
+          <button data-page-login-toggle-password class="toggle" type="button" aria-pressed="false">显示</button>
+        </span>
+      </label>
+      <p data-page-login-error class="error" role="alert" hidden></p>
+      <button data-page-login-submit class="submit" type="submit">登录并访问</button>
+    </form>
+    <p class="note">密码只在此浏览器中用于 Argon2id 派生，不会以明文发送给 Relay。</p>
+    <noscript><p class="error">登录需要启用 JavaScript。 JavaScript is required to sign in.</p></noscript>
+  </main>
+  <script src="{client_script}" defer></script>
+</body>
+</html>"#,
+            PAGE_ACCESS_HTML_STYLE
+        ),
+    )
+}
+
+fn page_login_required_response(
+    state: &AppState,
+    page: &PageWithUsername,
+    visibility: PageVisibility,
+    username: &str,
+    version_id: Option<&str>,
+) -> Result<Response, StatusCode> {
+    let page_path = match version_id {
+        Some(version_id) => format!("/p/{username}/{}/@v/{version_id}", page.slug),
+        None => format!("/p/{username}/{}", page.slug),
+    };
+    let Some(config) = state.page_browser_auth.as_ref() else {
+        let client_script = if version_id.is_some() {
+            "../../../../api/page-auth/client.js"
+        } else {
+            "../../api/page-auth/client.js"
+        };
+        return Ok(page_login_form_response(visibility, None, client_script));
+    };
+    let cookie_path = external_page_cookie_path(state, &page_path);
+    let login_state = state.page_access_manager.issue_login_request(
+        page.user_id.clone(),
+        page.slug.clone(),
+        page.generation.clone(),
+        version_id.map(str::to_string),
+        page_path,
+        cookie_path,
+    )?;
+    let mut response = Redirect::temporary(&format!(
+        "{}/api/page-auth/sign-in?state={login_state}",
+        config.auth_base_url
+    ))
+    .into_response();
     response
         .headers_mut()
         .insert(header::CACHE_CONTROL, HeaderValue::from_static("no-store"));
     Ok(response)
 }
+
+fn secure_page_html_response(status: StatusCode, html: String) -> Response {
+    let mut response = html.into_response();
+    *response.status_mut() = status;
+    let headers = response.headers_mut();
+    headers.insert(
+        header::CONTENT_TYPE,
+        HeaderValue::from_static("text/html; charset=utf-8"),
+    );
+    headers.insert(
+        header::CACHE_CONTROL,
+        HeaderValue::from_static("no-store, max-age=0"),
+    );
+    headers.insert(
+        header::CONTENT_SECURITY_POLICY,
+        HeaderValue::from_static(
+            "default-src 'none'; script-src 'self'; connect-src 'self'; style-src 'unsafe-inline'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'",
+        ),
+    );
+    headers.insert(
+        header::REFERRER_POLICY,
+        HeaderValue::from_static("no-referrer"),
+    );
+    headers.insert(
+        header::X_CONTENT_TYPE_OPTIONS,
+        HeaderValue::from_static("nosniff"),
+    );
+    headers.insert("x-frame-options", HeaderValue::from_static("DENY"));
+    response
+}
+
+const PAGE_ACCESS_HTML_STYLE: &str = r#"
+:root{color-scheme:dark;font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
+*{box-sizing:border-box}
+body{min-height:100vh;margin:0;display:grid;place-items:center;padding:24px;background:#101114;color:#f4f5f7}
+main{width:min(100%,460px);padding:32px;border:1px solid #32353c;border-radius:16px;background:#1a1c21;box-shadow:0 18px 60px rgba(0,0,0,.32)}
+.mark{display:grid;place-items:center;width:44px;height:44px;margin-bottom:24px;border-radius:12px;background:#4f8cff;color:white;font-size:20px;font-weight:700;box-shadow:0 10px 28px rgba(79,140,255,.28)}
+.eyebrow{margin:0 0 8px;color:#77a7ff;font-size:12px;font-weight:700;letter-spacing:.12em}
+h1{margin:0 0 14px;font-size:24px;line-height:1.3}
+p{margin:0;color:#b5b8c0;font-size:14px;line-height:1.7}
+.secondary{margin-top:8px;color:#838791;font-size:13px}
+.access{margin-top:18px;padding:10px 12px;border:1px solid #343a46;border-radius:8px;background:#20242c;color:#cbd6eb;font-size:12px}
+code{padding:2px 6px;border:1px solid #3a3e47;border-radius:6px;background:#22252b;color:#dce7ff}
+form{margin-top:26px}
+.field{display:block;margin-top:16px;color:#d7d9df;font-size:13px;font-weight:600}
+.field:first-child{margin-top:0}
+.field small{margin-left:5px;color:#777c87;font-size:11px;font-weight:500}
+input{width:100%;height:42px;margin-top:7px;padding:0 12px;border:1px solid #3a3e47;border-radius:8px;outline:none;background:#15171b;color:#f4f5f7;font:inherit}
+input:focus{border-color:#5d96ff;box-shadow:0 0 0 3px rgba(79,140,255,.18)}
+.password{position:relative;display:block}
+.password input{padding-right:60px}
+button{border:0;font:inherit;cursor:pointer}
+.toggle{position:absolute;right:6px;bottom:5px;height:32px;padding:0 8px;background:transparent;color:#8fb6ff;font-size:12px}
+.submit{width:100%;min-height:44px;margin-top:20px;border-radius:9px;background:#4f8cff;color:white;font-weight:650}
+.submit:hover{background:#68a0ff}
+.submit:disabled{cursor:wait;opacity:.72}
+button:focus-visible{outline:3px solid rgba(104,160,255,.4);outline-offset:3px}
+button span{margin-left:6px;font-size:12px;font-weight:500;opacity:.78}
+.error{margin-top:12px;color:#ff8c8c;font-size:12px}
+.note{margin-top:14px;color:#737782;font-size:12px;text-align:center}
+"#;
 
 fn request_used_https(headers: &HeaderMap) -> bool {
     headers
@@ -787,7 +1509,7 @@ async fn list_pages(
         // A row deleted after the initial list query must not be resurrected
         // in the response from the stale in-memory `p` snapshot.
         if let Some(page) = page {
-            infos.push(page_to_info(&page, &username));
+            infos.push(page_to_info(&state, &page, &username));
         }
     }
     Ok(Json(infos))
@@ -1266,7 +1988,10 @@ async fn freeze_version(
         note: body.note,
         created_at: chrono::Utc::now().timestamp(),
         deployed: false,
-        preview_url_path: format!("/p/{username}/{slug}/@v/{version_id}"),
+        preview_url_path: external_page_url(
+            &state,
+            &format!("/p/{username}/{slug}/@v/{version_id}"),
+        ),
     }))
 }
 
@@ -1313,7 +2038,10 @@ async fn list_versions(
             .into_iter()
             .map(|v| VersionInfo {
                 generation: page.generation.clone(),
-                preview_url_path: format!("/p/{username}/{slug}/@v/{}", v.version_id),
+                preview_url_path: external_page_url(
+                    &state,
+                    &format!("/p/{username}/{slug}/@v/{}", v.version_id),
+                ),
                 deployed: deployed.as_deref() == Some(v.version_id.as_str()),
                 version_id: v.version_id,
                 title: v.title,
@@ -1359,7 +2087,7 @@ async fn deploy_version(
         .ok()
         .flatten()
         .unwrap_or_default();
-    Ok(Json(page_to_info(&page, &username)))
+    Ok(Json(page_to_info(&state, &page, &username)))
 }
 
 async fn unpublish_page(
@@ -1449,6 +2177,7 @@ async fn update_page(
         .acquire_page_write(&auth.user_id, &slug)
         .await;
     let page = bind_page_generation_locked(db, &auth.user_id, &slug, expected_generation).await?;
+    let previous_visibility = page.visibility.clone();
     let visibility = match body.visibility.as_deref() {
         Some(v) => Some(PageVisibility::parse(v).ok_or(StatusCode::BAD_REQUEST)?),
         None => None,
@@ -1475,12 +2204,15 @@ async fn update_page(
         PageMutationOutcome::NotFound => return Err(StatusCode::NOT_FOUND),
         PageMutationOutcome::GenerationMismatch => return Err(StatusCode::CONFLICT),
     };
+    if page.visibility != previous_visibility {
+        state.page_access_manager.revoke_page(&auth.user_id, &slug);
+    }
     let username = UserRow::find_by_username_for_user_id(db, &auth.user_id)
         .await
         .ok()
         .flatten()
         .unwrap_or_default();
-    Ok(Json(page_to_info(&page, &username)))
+    Ok(Json(page_to_info(&state, &page, &username)))
 }
 
 async fn delete_page(
@@ -1624,6 +2356,13 @@ async fn serve_page(
     path: &str,
     body: axum::body::Bytes,
 ) -> Result<axum::response::Response, StatusCode> {
+    if state
+        .page_browser_auth
+        .as_ref()
+        .is_some_and(|config| !request_host_matches_origin(&headers, &config.public_origin))
+    {
+        return Err(StatusCode::NOT_FOUND);
+    }
     let db = require_db(&state)?;
     if !is_valid_slug(slug) || username.is_empty() || username.contains("..") {
         return Err(StatusCode::NOT_FOUND);
@@ -1671,7 +2410,21 @@ async fn serve_page(
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
         .ok_or(StatusCode::NOT_FOUND)?;
-    enforce_visibility(&state, &headers, &page, version_override).await?;
+    if let Err(status) = enforce_visibility(&state, &headers, &page, version_override).await {
+        if status == StatusCode::UNAUTHORIZED && (method == Method::GET || method == Method::HEAD) {
+            let visibility = page
+                .visibility_enum()
+                .ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
+            return page_login_required_response(
+                &state,
+                &page,
+                visibility,
+                username,
+                version_override,
+            );
+        }
+        return Err(status);
+    }
 
     // Resolve version.
     let version_id = if let Some(v) = version_override {
@@ -1730,6 +2483,7 @@ async fn serve_page(
     Ok((
         [
             (header::CONTENT_TYPE, mime),
+            (header::CACHE_CONTROL, "no-store"),
             (
                 header::HeaderName::from_static("x-content-type-options"),
                 "nosniff",
@@ -1859,6 +2613,7 @@ async fn serve_with_worker(
             return Ok((
                 [
                     (header::CONTENT_TYPE, mime),
+                    (header::CACHE_CONTROL, "no-store"),
                     (
                         header::HeaderName::from_static("x-content-type-options"),
                         "nosniff",
@@ -1872,7 +2627,11 @@ async fn serve_with_worker(
 
     let mut builder = axum::http::Response::builder()
         .status(response.status)
-        .header("x-content-type-options", "nosniff");
+        .header("x-content-type-options", "nosniff")
+        // Visibility is mutable while a Page version is immutable. Reusing a
+        // previously public cached document after switching to protected
+        // visibility would bypass the Relay check entirely.
+        .header(header::CACHE_CONTROL, "no-store");
     for (k, v) in response.headers {
         if let (Ok(name), Ok(val)) = (
             axum::http::HeaderName::try_from(k),
@@ -1898,6 +2657,7 @@ fn should_forward_page_worker_response_header(name: &axum::http::HeaderName) -> 
         name.as_str(),
         "accept-ch"
             | "alt-svc"
+            | "cache-control"
             | "clear-site-data"
             | "connection"
             | "content-length"
@@ -1922,17 +2682,17 @@ fn should_forward_page_worker_response_header(name: &axum::http::HeaderName) -> 
 
 // ── Helpers ─────────────────────────────────────────────────────────────
 
-fn page_to_info(page: &PageRow, username: &str) -> PageInfo {
+fn page_to_info(state: &AppState, page: &PageRow, username: &str) -> PageInfo {
     let url_path = if username.is_empty() || page.deployed_version_id.is_none() {
         String::new()
     } else {
-        format!("/p/{username}/{}", page.slug)
+        external_page_url(state, &format!("/p/{username}/{}", page.slug))
     };
     let preview_url_path = page.deployed_version_id.as_ref().map(|v| {
         if username.is_empty() {
             String::new()
         } else {
-            format!("/p/{username}/{}/@v/{v}", page.slug)
+            external_page_url(state, &format!("/p/{username}/{}/@v/{v}", page.slug))
         }
     });
     PageInfo {
@@ -2070,14 +2830,13 @@ async fn enforce_visibility(
     match visibility {
         PageVisibility::Public => Ok(()),
         PageVisibility::Relay => {
-            if resolve_viewer(state, headers).await.is_ok()
-                || state.page_access_manager.authorizes_page(
-                    headers,
-                    &page.user_id,
-                    &page.slug,
-                    &page.generation,
-                    version_id,
-                )
+            if state.page_access_manager.authorizes_page(
+                headers,
+                &page.user_id,
+                &page.slug,
+                &page.generation,
+                version_id,
+            ) || resolve_viewer(state, headers).await.is_ok()
             {
                 Ok(())
             } else {
@@ -2085,13 +2844,6 @@ async fn enforce_visibility(
             }
         }
         PageVisibility::Private => {
-            // Return NOT_FOUND for any auth failure so the existence of a
-            // private page is not revealed to anonymous or foreign viewers.
-            if let Ok(viewer) = resolve_viewer(state, headers).await {
-                if viewer.user_id == page.user_id {
-                    return Ok(());
-                }
-            }
             if state.page_access_manager.authorizes_page(
                 headers,
                 &page.user_id,
@@ -2099,9 +2851,15 @@ async fn enforce_visibility(
                 &page.generation,
                 version_id,
             ) {
-                Ok(())
-            } else {
-                Err(StatusCode::NOT_FOUND)
+                return Ok(());
+            }
+            match resolve_viewer(state, headers).await {
+                Ok(viewer) if viewer.user_id == page.user_id => Ok(()),
+                Ok(_) => Err(StatusCode::NOT_FOUND),
+                Err(StatusCode::UNAUTHORIZED | StatusCode::FORBIDDEN) => {
+                    Err(StatusCode::UNAUTHORIZED)
+                }
+                Err(status) => Err(status),
             }
         }
     }
@@ -2252,6 +3010,15 @@ mod tests {
             validate_optional_expected_generation(Some("not-a-generation")).unwrap_err(),
             StatusCode::BAD_REQUEST
         );
+        assert_eq!(parse_page_path_prefix(Some("/relay/")).unwrap(), "/relay");
+        assert_eq!(
+            parse_page_path_prefix(Some("/relay/../admin")).unwrap_err(),
+            StatusCode::BAD_REQUEST
+        );
+        assert_eq!(
+            parse_page_path_prefix(Some("/relay; Domain=attacker.invalid")).unwrap_err(),
+            StatusCode::BAD_REQUEST
+        );
     }
 
     #[test]
@@ -2259,6 +3026,7 @@ mod tests {
         for name in [
             "service-worker-allowed",
             "set-cookie",
+            "cache-control",
             "clear-site-data",
             "strict-transport-security",
             "reporting-endpoints",
@@ -2268,17 +3036,15 @@ mod tests {
             assert!(!should_forward_page_worker_response_header(&name), "{name}");
         }
 
-        for name in [
-            "content-type",
-            "cache-control",
-            "access-control-allow-origin",
-        ] {
+        for name in ["content-type", "access-control-allow-origin"] {
             let name = axum::http::HeaderName::from_bytes(name.as_bytes()).unwrap();
             assert!(should_forward_page_worker_response_header(&name), "{name}");
         }
     }
 
-    async fn setup_app_with_pool() -> (axum::Router, String, String, Arc<crate::db::DbPool>) {
+    async fn setup_app_with_page_auth(
+        page_browser_auth: Option<crate::PageBrowserAuthConfig>,
+    ) -> (axum::Router, String, String, Arc<crate::db::DbPool>) {
         let pool = connect(":memory:").await.unwrap();
         let pool = Arc::new(pool);
         UserRow::create(&pool, "u1", "alice", "s", "ks", "{}", "hash", "wmk")
@@ -2299,15 +3065,21 @@ mod tests {
         let page_data_dir = tmp.path().join("page-data");
         std::mem::forget(tmp);
 
-        let app = crate::build_relay_router_with_page_data(
+        let app = crate::build_relay_router_with_page_data_origins_and_page_auth(
             RoomManager::new(),
             Arc::new(MemoryAssetStore::new()),
             std::time::Instant::now(),
             Some(Arc::clone(&pool)),
             "test",
             Some(page_data_dir),
+            Vec::new(),
+            page_browser_auth,
         );
         (app, tok_alice.token, tok_bob.token, pool)
+    }
+
+    async fn setup_app_with_pool() -> (axum::Router, String, String, Arc<crate::db::DbPool>) {
+        setup_app_with_page_auth(None).await
     }
 
     async fn setup_app() -> (axum::Router, String, String) {
@@ -2726,6 +3498,10 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(resp.status(), StatusCode::OK);
+        assert_eq!(
+            resp.headers().get(header::CACHE_CONTROL).unwrap(),
+            "no-store"
+        );
 
         let resp = app
             .oneshot(
@@ -3725,27 +4501,28 @@ mod tests {
         resp.status()
     }
 
-    async fn exchange_page_cookie(
+    async fn login_page_cookie(
         app: &axum::Router,
-        token: &str,
+        username: &str,
         slug: &str,
         version_id: Option<&str>,
     ) -> (String, String) {
-        let generation = test_page_generation(app, token, slug)
-            .await
-            .expect("Page must exist before creating an open ticket");
+        let return_to = match version_id {
+            Some(version_id) => format!("/p/alice/{slug}/@v/{version_id}"),
+            None => format!("/p/alice/{slug}"),
+        };
         let response = app
             .clone()
             .oneshot(
                 Request::builder()
                     .method("POST")
-                    .uri(format!("/api/pages/{slug}"))
-                    .header("Authorization", format!("Bearer {token}"))
+                    .uri("/api/page-auth/login")
                     .header("content-type", "application/json")
                     .body(axum::body::Body::from(
                         serde_json::json!({
-                            "version_id": version_id,
-                            "expected_generation": generation,
+                            "username": username,
+                            "password_hash": "hash",
+                            "return_to": return_to,
                         })
                         .to_string(),
                     ))
@@ -3754,19 +4531,6 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(response.status(), StatusCode::OK);
-        let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
-        let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
-        let response = app
-            .clone()
-            .oneshot(
-                Request::builder()
-                    .uri(json["open_url_path"].as_str().unwrap())
-                    .body(axum::body::Body::empty())
-                    .unwrap(),
-            )
-            .await
-            .unwrap();
-        assert_eq!(response.status(), StatusCode::TEMPORARY_REDIRECT);
         let set_cookie = response
             .headers()
             .get(header::SET_COOKIE)
@@ -3785,11 +4549,36 @@ mod tests {
         save_and_deploy_with_visibility(&app, &alice, "rel", "<html>r</html>", "relay").await;
         save_and_deploy(&app, &alice, "pub", "<html>u</html>").await;
 
-        // Private: hidden from anonymous and foreign users, visible to owner.
+        // Private: anonymous visitors are prompted to sign in, foreign
+        // authenticated users cannot discover it, and the owner can view it.
+        let anonymous_private = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .uri("/p/alice/priv")
+                    .body(axum::body::Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(anonymous_private.status(), StatusCode::UNAUTHORIZED);
         assert_eq!(
-            get_page(&app, "/p/alice/priv", None).await,
-            StatusCode::NOT_FOUND
+            anonymous_private
+                .headers()
+                .get(header::CONTENT_TYPE)
+                .unwrap(),
+            "text/html; charset=utf-8"
         );
+        assert!(anonymous_private
+            .headers()
+            .get(header::CONTENT_SECURITY_POLICY)
+            .is_some());
+        let body = to_bytes(anonymous_private.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let login_html = String::from_utf8_lossy(&body);
+        assert!(login_html.contains("登录后访问"));
+        assert!(login_html.contains("data-page-login-username"));
         assert_eq!(
             get_page(&app, "/p/alice/priv", Some(&bob)).await,
             StatusCode::NOT_FOUND
@@ -3801,7 +4590,7 @@ mod tests {
         // Query-string tokens must be ignored (same-origin JS could steal them).
         assert_eq!(
             get_page(&app, &format!("/p/alice/priv?access_token={alice}"), None).await,
-            StatusCode::NOT_FOUND
+            StatusCode::UNAUTHORIZED
         );
 
         // Relay: any authenticated relay user may view, anonymous may not.
@@ -3820,11 +4609,96 @@ mod tests {
 
         // Public: no credentials needed.
         assert_eq!(get_page(&app, "/p/alice/pub", None).await, StatusCode::OK);
+
+        let generation = test_page_generation(&app, &alice, "pub").await.unwrap();
+        let public_open = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/api/pages/pub")
+                    .header("Authorization", format!("Bearer {alice}"))
+                    .header("content-type", "application/json")
+                    .body(axum::body::Body::from(
+                        serde_json::json!({ "expected_generation": generation }).to_string(),
+                    ))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(public_open.status(), StatusCode::OK);
+        let body = to_bytes(public_open.into_body(), usize::MAX).await.unwrap();
+        let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        assert_eq!(json["open_url_path"], "/p/alice/pub");
+        assert_eq!(json["page_url_path"], "/p/alice/pub");
+        assert_eq!(json["expires_in_seconds"], 0);
     }
 
     #[tokio::test]
-    async fn one_time_open_ticket_exchanges_for_scoped_http_only_cookie() {
-        let (app, alice, bob) = setup_app().await;
+    async fn visibility_change_revokes_existing_browser_grants() {
+        let (app, alice, _) = setup_app().await;
+        save_and_deploy_with_visibility(
+            &app,
+            &alice,
+            "visibility-revoke",
+            "<html>private</html>",
+            "private",
+        )
+        .await;
+        let (cookie, _) = login_page_cookie(&app, "alice", "visibility-revoke", None).await;
+        let authorized = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .uri("/p/alice/visibility-revoke")
+                    .header(header::COOKIE, &cookie)
+                    .body(axum::body::Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(authorized.status(), StatusCode::OK);
+
+        let generation = test_page_generation(&app, &alice, "visibility-revoke")
+            .await
+            .unwrap();
+        let update = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method("PATCH")
+                    .uri("/api/pages/visibility-revoke")
+                    .header("Authorization", format!("Bearer {alice}"))
+                    .header("content-type", "application/json")
+                    .body(axum::body::Body::from(
+                        serde_json::json!({
+                            "expected_generation": generation,
+                            "visibility": "relay",
+                        })
+                        .to_string(),
+                    ))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(update.status(), StatusCode::OK);
+
+        let stale_grant = app
+            .oneshot(
+                Request::builder()
+                    .uri("/p/alice/visibility-revoke")
+                    .header(header::COOKIE, cookie)
+                    .body(axum::body::Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(stale_grant.status(), StatusCode::UNAUTHORIZED);
+    }
+
+    #[tokio::test]
+    async fn browser_login_enforces_page_visibility_and_sets_scoped_http_only_cookie() {
+        let (app, alice, _bob) = setup_app().await;
         let private_version = save_and_deploy_with_visibility(
             &app,
             &alice,
@@ -3835,37 +4709,10 @@ mod tests {
         .await;
         save_and_deploy_with_visibility(&app, &alice, "other-private", "<html>o</html>", "private")
             .await;
+        save_and_deploy_with_visibility(&app, &alice, "relay-open", "<html>r</html>", "relay")
+            .await;
 
-        let unauthorized = app
-            .clone()
-            .oneshot(
-                Request::builder()
-                    .method("POST")
-                    .uri("/api/pages/private-open")
-                    .header("content-type", "application/json")
-                    .body(axum::body::Body::from("{}"))
-                    .unwrap(),
-            )
-            .await
-            .unwrap();
-        assert_eq!(unauthorized.status(), StatusCode::UNAUTHORIZED);
-
-        let foreign = app
-            .clone()
-            .oneshot(
-                Request::builder()
-                    .method("POST")
-                    .uri("/api/pages/private-open")
-                    .header("Authorization", format!("Bearer {bob}"))
-                    .header("content-type", "application/json")
-                    .body(axum::body::Body::from("{}"))
-                    .unwrap(),
-            )
-            .await
-            .unwrap();
-        assert_eq!(foreign.status(), StatusCode::NOT_FOUND);
-
-        let ticket_response = app
+        let open_response = app
             .clone()
             .oneshot(
                 Request::builder()
@@ -3889,31 +4736,116 @@ mod tests {
             )
             .await
             .unwrap();
-        assert_eq!(ticket_response.status(), StatusCode::OK);
-        let body = to_bytes(ticket_response.into_body(), usize::MAX)
+        assert_eq!(open_response.status(), StatusCode::OK);
+        let body = to_bytes(open_response.into_body(), usize::MAX)
             .await
             .unwrap();
         let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
-        let open_path = json["open_url_path"].as_str().unwrap();
-        assert!(!open_path.contains(&alice));
+        assert_eq!(json["open_url_path"], "/p/alice/private-open");
+        assert_eq!(json["page_url_path"], "/p/alice/private-open");
+        assert_eq!(json["expires_in_seconds"], 0);
 
-        let exchange = app
+        let login_page = app
             .clone()
             .oneshot(
                 Request::builder()
-                    .uri(open_path)
-                    .header("x-forwarded-proto", "https")
+                    .uri("/p/alice/private-open")
                     .body(axum::body::Body::empty())
                     .unwrap(),
             )
             .await
             .unwrap();
-        assert_eq!(exchange.status(), StatusCode::TEMPORARY_REDIRECT);
+        assert_eq!(login_page.status(), StatusCode::UNAUTHORIZED);
+        assert!(login_page.headers().get(header::SET_COOKIE).is_none());
+        let body = to_bytes(login_page.into_body(), usize::MAX).await.unwrap();
+        let html = String::from_utf8_lossy(&body);
+        assert!(html.contains("data-page-login-username"));
+        assert!(html.contains("data-page-login-password"));
+        assert!(html.contains("/api/page-auth/client.js"));
+
+        let script = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .uri("/api/page-auth/client.js")
+                    .body(axum::body::Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(script.status(), StatusCode::OK);
         assert_eq!(
-            exchange.headers().get(header::LOCATION).unwrap(),
-            "/p/alice/private-open"
+            script.headers().get(header::CONTENT_TYPE).unwrap(),
+            "application/javascript; charset=utf-8"
         );
-        let cookie = exchange
+
+        let wrong_password = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/api/page-auth/login")
+                    .header("content-type", "application/json")
+                    .body(axum::body::Body::from(
+                        serde_json::json!({
+                            "username": "alice",
+                            "password_hash": "wrong",
+                            "return_to": "/p/alice/private-open",
+                        })
+                        .to_string(),
+                    ))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(wrong_password.status(), StatusCode::UNAUTHORIZED);
+        assert!(wrong_password.headers().get(header::SET_COOKIE).is_none());
+
+        let foreign_private = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/api/page-auth/login")
+                    .header("content-type", "application/json")
+                    .body(axum::body::Body::from(
+                        serde_json::json!({
+                            "username": "bob",
+                            "password_hash": "hash",
+                            "return_to": "/p/alice/private-open",
+                        })
+                        .to_string(),
+                    ))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(foreign_private.status(), StatusCode::FORBIDDEN);
+        assert!(foreign_private.headers().get(header::SET_COOKIE).is_none());
+
+        let login = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/api/page-auth/login")
+                    .header("x-forwarded-proto", "https")
+                    .header("content-type", "application/json")
+                    .body(axum::body::Body::from(
+                        serde_json::json!({
+                            "username": "alice",
+                            "password_hash": "hash",
+                            "return_to": "/p/alice/private-open",
+                            "path_prefix": "/relay",
+                        })
+                        .to_string(),
+                    ))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(login.status(), StatusCode::OK);
+        let cookie = login
             .headers()
             .get(header::SET_COOKIE)
             .unwrap()
@@ -3923,21 +4855,9 @@ mod tests {
         assert!(cookie.contains("HttpOnly"));
         assert!(cookie.contains("SameSite=Lax"));
         assert!(cookie.contains("Secure"));
-        assert!(cookie.contains("Path=/p/alice/private-open"));
+        assert!(cookie.contains("Path=/relay/p/alice/private-open"));
         assert!(!cookie.contains(&alice));
         let browser_cookie = cookie.split(';').next().unwrap();
-
-        let replay = app
-            .clone()
-            .oneshot(
-                Request::builder()
-                    .uri(open_path)
-                    .body(axum::body::Body::empty())
-                    .unwrap(),
-            )
-            .await
-            .unwrap();
-        assert_eq!(replay.status(), StatusCode::NOT_FOUND);
 
         let authorized = app
             .clone()
@@ -3952,8 +4872,8 @@ mod tests {
             .unwrap();
         assert_eq!(authorized.status(), StatusCode::OK);
 
-        // A production ticket is not a blanket grant for immutable preview
-        // routes, even when the preview belongs to the same Page.
+        // A production browser session is not a blanket grant for immutable
+        // preview routes, even when the preview belongs to the same Page.
         let wrong_version_scope = app
             .clone()
             .oneshot(
@@ -3965,9 +4885,10 @@ mod tests {
             )
             .await
             .unwrap();
-        assert_eq!(wrong_version_scope.status(), StatusCode::NOT_FOUND);
+        assert_eq!(wrong_version_scope.status(), StatusCode::UNAUTHORIZED);
 
         let wrong_page = app
+            .clone()
             .oneshot(
                 Request::builder()
                     .uri("/p/alice/other-private")
@@ -3977,7 +4898,270 @@ mod tests {
             )
             .await
             .unwrap();
-        assert_eq!(wrong_page.status(), StatusCode::NOT_FOUND);
+        assert_eq!(wrong_page.status(), StatusCode::UNAUTHORIZED);
+
+        let relay_login = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/api/page-auth/login")
+                    .header("content-type", "application/json")
+                    .body(axum::body::Body::from(
+                        serde_json::json!({
+                            "username": "bob",
+                            "password_hash": "hash",
+                            "return_to": "/p/alice/relay-open",
+                        })
+                        .to_string(),
+                    ))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(relay_login.status(), StatusCode::OK);
+        let relay_cookie = relay_login
+            .headers()
+            .get(header::SET_COOKIE)
+            .unwrap()
+            .to_str()
+            .unwrap()
+            .split(';')
+            .next()
+            .unwrap()
+            .to_string();
+        let relay_page = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .uri("/p/alice/relay-open")
+                    .header(header::COOKIE, relay_cookie)
+                    .body(axum::body::Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(relay_page.status(), StatusCode::OK);
+
+        let open_redirect = app
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/api/page-auth/login")
+                    .header("content-type", "application/json")
+                    .body(axum::body::Body::from(
+                        serde_json::json!({
+                            "username": "alice",
+                            "password_hash": "hash",
+                            "return_to": "https://attacker.invalid/",
+                        })
+                        .to_string(),
+                    ))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(open_redirect.status(), StatusCode::BAD_REQUEST);
+    }
+
+    #[tokio::test]
+    async fn isolated_page_login_uses_one_time_cross_origin_callback() {
+        let config = crate::PageBrowserAuthConfig::new(
+            "https://pages.test/site",
+            "https://relay.test/relay",
+        )
+        .unwrap();
+        let (app, alice, _, _) = setup_app_with_page_auth(Some(config)).await;
+        save_and_deploy_with_visibility(
+            &app,
+            &alice,
+            "isolated-login",
+            "<html>private</html>",
+            "private",
+        )
+        .await;
+
+        let generation = test_page_generation(&app, &alice, "isolated-login")
+            .await
+            .unwrap();
+        let open = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/api/pages/isolated-login")
+                    .header("Authorization", format!("Bearer {alice}"))
+                    .header("content-type", "application/json")
+                    .body(axum::body::Body::from(
+                        serde_json::json!({ "expected_generation": generation }).to_string(),
+                    ))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(open.status(), StatusCode::OK);
+        let body = to_bytes(open.into_body(), usize::MAX).await.unwrap();
+        let open_json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        assert_eq!(
+            open_json["page_url_path"],
+            "https://pages.test/site/p/alice/isolated-login"
+        );
+
+        let protected_page = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .uri("/p/alice/isolated-login")
+                    .header(header::HOST, "pages.test")
+                    .body(axum::body::Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert!(protected_page.status().is_redirection());
+        assert!(protected_page.headers().get(header::SET_COOKIE).is_none());
+        let sign_in_url = protected_page
+            .headers()
+            .get(header::LOCATION)
+            .unwrap()
+            .to_str()
+            .unwrap()
+            .to_string();
+        let state = sign_in_url
+            .split_once("?state=")
+            .map(|(_, state)| state)
+            .unwrap();
+        assert_eq!(state.len(), 64);
+        assert!(sign_in_url.starts_with("https://relay.test/relay/api/page-auth/sign-in"));
+
+        let page_on_auth_origin = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .uri("/p/alice/isolated-login")
+                    .header(header::HOST, "relay.test")
+                    .body(axum::body::Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(page_on_auth_origin.status(), StatusCode::NOT_FOUND);
+
+        let wrong_host = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .uri(format!("/api/page-auth/sign-in?state={state}"))
+                    .header(header::HOST, "pages.test")
+                    .body(axum::body::Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(wrong_host.status(), StatusCode::NOT_FOUND);
+
+        let sign_in = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .uri(format!("/api/page-auth/sign-in?state={state}"))
+                    .header(header::HOST, "relay.test")
+                    .body(axum::body::Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(sign_in.status(), StatusCode::OK);
+        let body = to_bytes(sign_in.into_body(), usize::MAX).await.unwrap();
+        let html = String::from_utf8_lossy(&body);
+        assert!(html.contains("data-page-login-username"));
+        assert!(html.contains(&format!(r#"data-page-login-state="{state}""#)));
+        assert!(html.contains(r#"src="./client.js""#));
+
+        let login = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/api/page-auth/login")
+                    .header(header::HOST, "relay.test")
+                    .header("content-type", "application/json")
+                    .body(axum::body::Body::from(
+                        serde_json::json!({
+                            "username": "alice",
+                            "password_hash": "hash",
+                            "state": state,
+                        })
+                        .to_string(),
+                    ))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(login.status(), StatusCode::OK);
+        assert!(login.headers().get(header::SET_COOKIE).is_none());
+        let body = to_bytes(login.into_body(), usize::MAX).await.unwrap();
+        let login_json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        let callback_url = login_json["redirect_to"].as_str().unwrap();
+        let code = callback_url
+            .split_once("?code=")
+            .map(|(_, code)| code)
+            .unwrap();
+        assert_eq!(code.len(), 64);
+        assert!(callback_url.starts_with("https://pages.test/site/api/page-auth/callback"));
+
+        let callback = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .uri(format!("/api/page-auth/callback?code={code}"))
+                    .header(header::HOST, "pages.test")
+                    .body(axum::body::Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert!(callback.status().is_redirection());
+        assert_eq!(
+            callback.headers().get(header::LOCATION).unwrap(),
+            "https://pages.test/site/p/alice/isolated-login"
+        );
+        let set_cookie = callback
+            .headers()
+            .get(header::SET_COOKIE)
+            .unwrap()
+            .to_str()
+            .unwrap();
+        assert!(set_cookie.contains("Path=/site/p/alice/isolated-login;"));
+        assert!(set_cookie.contains("HttpOnly"));
+        assert!(set_cookie.contains("Secure"));
+        let browser_cookie = set_cookie.split(';').next().unwrap();
+
+        let replay = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .uri(format!("/api/page-auth/callback?code={code}"))
+                    .header(header::HOST, "pages.test")
+                    .body(axum::body::Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(replay.status(), StatusCode::GONE);
+
+        let page = app
+            .oneshot(
+                Request::builder()
+                    .uri("/p/alice/isolated-login")
+                    .header(header::HOST, "pages.test")
+                    .header(header::COOKIE, browser_cookie)
+                    .body(axum::body::Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(page.status(), StatusCode::OK);
     }
 
     #[tokio::test]
@@ -3992,9 +5176,9 @@ mod tests {
         )
         .await;
         let (production_cookie, production_set_cookie) =
-            exchange_page_cookie(&app, &alice, "cookie-scope", None).await;
+            login_page_cookie(&app, "alice", "cookie-scope", None).await;
         let (preview_cookie, preview_set_cookie) =
-            exchange_page_cookie(&app, &alice, "cookie-scope", Some(&version)).await;
+            login_page_cookie(&app, "alice", "cookie-scope", Some(&version)).await;
         assert!(production_set_cookie.contains("Path=/p/alice/cookie-scope;"));
         assert!(preview_set_cookie.contains(&format!("Path=/p/alice/cookie-scope/@v/{version};")));
 
@@ -4027,16 +5211,15 @@ mod tests {
     #[test]
     fn access_grants_are_generation_bound_and_capacity_is_per_user() {
         let manager = PageAccessManager::new();
-        let ticket = manager
-            .issue_open_ticket(
+        let grant = manager
+            .issue_browser_grant(
                 "u1".into(),
-                "alice".into(),
+                "viewer-1".into(),
                 "site".into(),
                 "generation-one".into(),
                 None,
             )
             .unwrap();
-        let (grant, _) = manager.exchange_ticket(&ticket).unwrap().unwrap();
         let mut headers = HeaderMap::new();
         headers.insert(
             header::COOKIE,
@@ -4046,11 +5229,11 @@ mod tests {
         assert!(!manager.authorizes_page(&headers, "u1", "site", "generation-two", None,));
 
         let bounded = PageAccessManager::new();
-        for index in 0..MAX_PAGE_OPEN_TICKETS_PER_USER {
+        for index in 0..MAX_PAGE_BROWSER_GRANTS_PER_USER {
             bounded
-                .issue_open_ticket(
+                .issue_browser_grant(
                     "u1".into(),
-                    "alice".into(),
+                    "viewer-1".into(),
                     format!("site-{index}"),
                     "generation".into(),
                     None,
@@ -4059,9 +5242,9 @@ mod tests {
         }
         assert_eq!(
             bounded
-                .issue_open_ticket(
+                .issue_browser_grant(
                     "u1".into(),
-                    "alice".into(),
+                    "viewer-1".into(),
                     "overflow".into(),
                     "generation".into(),
                     None,
@@ -4070,9 +5253,9 @@ mod tests {
             StatusCode::TOO_MANY_REQUESTS
         );
         assert!(bounded
-            .issue_open_ticket(
-                "u2".into(),
-                "bob".into(),
+            .issue_browser_grant(
+                "u1".into(),
+                "viewer-2".into(),
                 "other".into(),
                 "generation".into(),
                 None,
@@ -4085,7 +5268,7 @@ mod tests {
         let (app, alice, _) = setup_app().await;
         save_and_deploy_with_visibility(&app, &alice, "recreated", "<html>old</html>", "private")
             .await;
-        let (old_cookie, _) = exchange_page_cookie(&app, &alice, "recreated", None).await;
+        let (old_cookie, _) = login_page_cookie(&app, "alice", "recreated", None).await;
         let old_generation = test_page_generation(&app, &alice, "recreated")
             .await
             .unwrap();
@@ -4116,7 +5299,7 @@ mod tests {
             )
             .await
             .unwrap();
-        assert_eq!(response.status(), StatusCode::NOT_FOUND);
+        assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
     }
 
     #[tokio::test]

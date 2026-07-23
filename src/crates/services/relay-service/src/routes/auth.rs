@@ -207,6 +207,94 @@ fn err(error: &str, status: StatusCode) -> (StatusCode, Json<ErrorResponse>) {
     )
 }
 
+pub(crate) async fn verify_password_hash_credentials(
+    state: &AppState,
+    peer_addr: Option<SocketAddr>,
+    headers: &HeaderMap,
+    username: &str,
+    password_hash: &str,
+) -> Result<UserRow, (StatusCode, Json<ErrorResponse>)> {
+    let Some(db) = state.db.as_ref() else {
+        return Err(err(
+            "account features disabled",
+            StatusCode::NOT_IMPLEMENTED,
+        ));
+    };
+
+    let ip = client_ip(headers, peer_addr);
+    if !state
+        .login_rate_limiter
+        .check_and_record(&ip, MAX_LOGIN_ATTEMPTS_PER_MIN)
+    {
+        return Err(err(
+            "too many login attempts from this IP",
+            StatusCode::TOO_MANY_REQUESTS,
+        ));
+    }
+
+    if !valid_bounded_text(username, MAX_USERNAME_BYTES) || !valid_password_hash(password_hash) {
+        return Err(err("invalid login parameters", StatusCode::BAD_REQUEST));
+    }
+
+    let user = UserRow::find_by_username(db, username.trim())
+        .await
+        .map_err(|error| {
+            tracing::error!("login: db error: {error}");
+            err("internal error", StatusCode::INTERNAL_SERVER_ERROR)
+        })?
+        .ok_or_else(|| err("invalid username or password", StatusCode::UNAUTHORIZED))?;
+
+    if user.is_locked() {
+        let retry = user.locked_until - Utc::now().timestamp();
+        return Err((
+            StatusCode::TOO_MANY_REQUESTS,
+            Json(ErrorResponse {
+                error: "account temporarily locked, try later".to_string(),
+                retry_after_secs: Some(retry.max(0)),
+            }),
+        ));
+    }
+
+    // The browser or native client already paid the Argon2id cost. Compare
+    // the fixed secret without a data-dependent early exit.
+    let password_matches = user.password_hash.len() == password_hash.len()
+        && bool::from(
+            user.password_hash
+                .as_bytes()
+                .ct_eq(password_hash.as_bytes()),
+        );
+    if !password_matches {
+        let locked_until = UserRow::record_failed_attempt(db, &user.user_id)
+            .await
+            .map_err(|error| {
+                tracing::error!("login: failed to record attempt: {error}");
+                err("internal error", StatusCode::INTERNAL_SERVER_ERROR)
+            })?;
+        let now = Utc::now().timestamp();
+        if locked_until > now {
+            return Err((
+                StatusCode::TOO_MANY_REQUESTS,
+                Json(ErrorResponse {
+                    error: "too many failed attempts, account locked".to_string(),
+                    retry_after_secs: Some(locked_until - now),
+                }),
+            ));
+        }
+        return Err(err(
+            "invalid username or password",
+            StatusCode::UNAUTHORIZED,
+        ));
+    }
+
+    UserRow::reset_failed_attempts(db, &user.user_id)
+        .await
+        .map_err(|error| {
+            tracing::error!("login: failed to reset attempts: {error}");
+            err("internal error", StatusCode::INTERNAL_SERVER_ERROR)
+        })?;
+    Ok(user)
+}
+
 // ── Handlers ────────────────────────────────────────────────────────────
 
 /// `POST /api/auth/login/challenge` — fetch KDF params + wrapped master key
@@ -271,94 +359,23 @@ pub async fn login(
     headers: HeaderMap,
     Json(body): Json<LoginRequest>,
 ) -> Result<Json<AuthResponse>, (StatusCode, Json<ErrorResponse>)> {
-    let Some(db) = state.db.as_ref() else {
-        return Err(err(
-            "account features disabled",
-            StatusCode::NOT_IMPLEMENTED,
-        ));
-    };
-
-    let ip = client_ip(
-        &headers,
-        connect_info.map(|Extension(ConnectInfo(addr))| addr),
-    );
-    if !state
-        .login_rate_limiter
-        .check_and_record(&ip, MAX_LOGIN_ATTEMPTS_PER_MIN)
-    {
-        return Err(err(
-            "too many login attempts from this IP",
-            StatusCode::TOO_MANY_REQUESTS,
-        ));
-    }
-
-    if !valid_bounded_text(&body.username, MAX_USERNAME_BYTES)
-        || !valid_password_hash(&body.password_hash)
-        || !valid_device_id(&body.device_id)
+    if !valid_device_id(&body.device_id)
         || !valid_bounded_text(&body.device_name, MAX_DEVICE_NAME_BYTES)
     {
         return Err(err("invalid login parameters", StatusCode::BAD_REQUEST));
     }
-
-    let user = UserRow::find_by_username(db, body.username.trim())
-        .await
-        .map_err(|e| {
-            tracing::error!("login: db error: {e}");
-            err("internal error", StatusCode::INTERNAL_SERVER_ERROR)
-        })?
-        .ok_or_else(|| err("invalid username or password", StatusCode::UNAUTHORIZED))?;
-
-    // Account-level lockout (durable backstop).
-    if user.is_locked() {
-        let retry = user.locked_until - Utc::now().timestamp();
-        return Err((
-            StatusCode::TOO_MANY_REQUESTS,
-            Json(ErrorResponse {
-                error: "account temporarily locked, try later".to_string(),
-                retry_after_secs: Some(retry.max(0)),
-            }),
-        ));
-    }
-
-    // The client already paid the Argon2id cost. Compare the resulting fixed
-    // secret without data-dependent early exit so the relay does not expose a
-    // prefix timing oracle.
-    let password_matches = user.password_hash.len() == body.password_hash.len()
-        && bool::from(
-            user.password_hash
-                .as_bytes()
-                .ct_eq(body.password_hash.as_bytes()),
-        );
-    if !password_matches {
-        let locked_until = UserRow::record_failed_attempt(db, &user.user_id)
-            .await
-            .map_err(|e| {
-                tracing::error!("login: failed to record attempt: {e}");
-                err("internal error", StatusCode::INTERNAL_SERVER_ERROR)
-            })?;
-        let now = Utc::now().timestamp();
-        if locked_until > now {
-            return Err((
-                StatusCode::TOO_MANY_REQUESTS,
-                Json(ErrorResponse {
-                    error: "too many failed attempts, account locked".to_string(),
-                    retry_after_secs: Some(locked_until - now),
-                }),
-            ));
-        }
-        return Err(err(
-            "invalid username or password",
-            StatusCode::UNAUTHORIZED,
-        ));
-    }
-
-    // Success: reset failure counter and issue a token.
-    UserRow::reset_failed_attempts(db, &user.user_id)
-        .await
-        .map_err(|e| {
-            tracing::error!("login: failed to reset attempts: {e}");
-            err("internal error", StatusCode::INTERNAL_SERVER_ERROR)
-        })?;
+    let db = state
+        .db
+        .as_ref()
+        .ok_or_else(|| err("account features disabled", StatusCode::NOT_IMPLEMENTED))?;
+    let user = verify_password_hash_credentials(
+        &state,
+        connect_info.map(|Extension(ConnectInfo(addr))| addr),
+        &headers,
+        &body.username,
+        &body.password_hash,
+    )
+    .await?;
 
     DeviceRow::upsert(db, &body.device_id, &user.user_id, &body.device_name, None)
         .await

@@ -352,6 +352,18 @@ See `Caddyfile` for the Caddy equivalent.
 | `RELAY_ROOM_TTL` | `300` | Idle room TTL in seconds (0 = no expiry). Active heartbeats and commands refresh activity. |
 | `RELAY_DB_PATH` | _(none)_ | SQLite path for account storage. **Unset = pure relay (no login).** Set a persistent path (Compose: `/app/data/bitfun_relay.db`) to enable login, device routing, and sync. Accounts are provisioned only via `relay-admin`. |
 | `RELAY_CORS_ALLOW_ORIGINS` | _(none)_ | Comma-separated browser origin allowlist, for example `https://remote.example.com`. Empty means same-origin only. `*` is rejected when account APIs are enabled. |
+| `RELAY_PAGE_PUBLIC_BASE_URL` | _(none)_ | Browser-visible base URL for untrusted published Page content, for example `https://pages.example.com`. Configure together with `RELAY_PAGE_AUTH_BASE_URL`. |
+| `RELAY_PAGE_AUTH_BASE_URL` | _(none)_ | Browser-visible base URL for the trusted Relay Page login UI, for example `https://relay.example.com/relay`. It must use a different browser origin from `RELAY_PAGE_PUBLIC_BASE_URL`. |
+
+Production deployments that use non-public Pages should configure both Page
+base URLs. The reverse proxy must route both hosts to this Relay and preserve
+the original `Host`; it may strip the configured path prefix before proxying.
+Relay then serves Page content only on the public origin and the account login
+UI only on the authentication origin. Login completes through a 60-second,
+single-use callback code; the callback writes an HttpOnly, Page-path-scoped
+cookie on the public origin. If the variables are omitted, same-origin login is
+kept only for local/backward-compatible deployments and the server logs a
+warning.
 
 When `RELAY_DB_PATH` is set, database open or migration failure is fatal: the
 process exits instead of silently starting without account protection. The
@@ -380,6 +392,20 @@ limit. **No public registration endpoint.**
 | `/api/auth/login` | POST | Verify password hash and issue a token; returns `{ token, user_id }` |
 | `/api/auth/logout` | POST | Revoke the caller's token |
 | `/api/auth/delegate` | POST | Issue a delegated token for a paired client (authenticated caller) |
+
+### Published Page browser authentication
+
+Public Pages need no session. `relay` Pages accept any valid account on this
+Relay; `private` Pages accept only the owner account. The browser derives the
+same Argon2id password hash as native clients, so plaintext passwords are never
+sent to Relay.
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/api/page-auth/sign-in?state=…` | GET | Trusted Relay-hosted username/password form |
+| `/api/page-auth/login` | POST | Verify the derived password hash and issue a single-use callback code |
+| `/api/page-auth/callback?code=…` | GET | Consume the code on the Page origin and set the scoped browser session cookie |
+| `/api/page-auth/client.js` | GET | Browser Argon2id login client |
 
 ### Devices (requires `RELAY_DB_PATH` + Bearer token)
 

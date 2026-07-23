@@ -65,8 +65,8 @@ pub struct AppState {
     pub db: Option<Arc<crate::db::DbPool>>,
     /// Optional per-page mutable data root (KV/SQLite/blobs). Required for Page Functions data plane.
     pub page_data: Option<crate::page_data::PageDataStore>,
-    /// Short-lived browser handoff tickets and page-scoped grants. These stay
-    /// process-local so no account credential is persisted or exposed in URLs.
+    /// Page-scoped browser sessions issued after Relay account login. These
+    /// stay process-local so no reusable account credential is persisted.
     pub page_access_manager: Arc<crate::routes::pages::PageAccessManager>,
     /// Manifest-bound Page draft upload sessions and per-Page serialization.
     pub page_upload_manager: Arc<crate::routes::pages::PageUploadManager>,
@@ -79,6 +79,9 @@ pub struct AppState {
     /// Browser origins explicitly allowed to call this relay. An empty list
     /// means same-origin only; non-browser clients normally omit Origin.
     pub cors_allow_origins: Arc<Vec<String>>,
+    /// Optional isolated browser origins for untrusted Page content and the
+    /// trusted Relay account login UI.
+    pub page_browser_auth: Option<Arc<crate::PageBrowserAuthConfig>>,
 }
 
 // ── Health & Info ──────────────────────────────────────────────────────────
@@ -635,6 +638,7 @@ mod tests {
             login_rate_limiter: Arc::new(crate::routes::auth::LoginRateLimiter::new()),
             device_manager: crate::relay::DeviceManager::new(),
             cors_allow_origins: Arc::new(Vec::new()),
+            page_browser_auth: None,
         }
     }
 

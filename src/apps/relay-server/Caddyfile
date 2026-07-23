@@ -45,6 +45,25 @@
 #       }
 #   }
 #
+# Option A3: Isolated production Page and Relay login origins
+#   Set:
+#     RELAY_PAGE_PUBLIC_BASE_URL=https://pages.yourdomain.com
+#     RELAY_PAGE_AUTH_BASE_URL=https://relay.yourdomain.com/relay
+#
+#   relay.yourdomain.com {
+#       handle_path /relay/* {
+#           reverse_proxy relay-server:9700
+#       }
+#   }
+#
+#   pages.yourdomain.com {
+#       reverse_proxy relay-server:9700
+#   }
+#
+# The Relay enforces the Host split as well: `/p/*` Page content is accepted
+# only on the public origin, while Page sign-in and password-hash verification
+# are accepted only on the authentication origin.
+#
 # Option B: IP-only with self-signed cert
 :443 {
     tls internal
