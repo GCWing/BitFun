@@ -21,6 +21,7 @@ pub struct ExecCommandArgs {
     pub fork_session: bool,
     pub output_format: ExecOutputFormat,
     pub output_patch: Option<String>,
+    pub verify_final_changes: bool,
     pub confirm: bool,
     pub no_title: bool,
     pub no_persist: bool,
@@ -77,6 +78,7 @@ pub async fn handle_exec_command(config: CliConfig, args: ExecCommandArgs) -> Re
         &agentic_system,
         workspace_path_resolved,
         args.output_patch,
+        args.verify_final_changes,
         args.output_format,
         ExecSessionOptions {
             resume,

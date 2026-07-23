@@ -26,6 +26,11 @@ pub(crate) fn is_qwen_reasoning_effort_model(model_name: &str) -> bool {
     )
 }
 
+pub(crate) fn is_glm_reasoning_effort_model(model_name: &str) -> bool {
+    parse_glm_major_minor(model_name)
+        .is_some_and(|(major, minor)| major > 5 || (major == 5 && minor >= 2))
+}
+
 pub(crate) fn normalize_deepseek_reasoning_effort(effort: &str) -> Option<&'static str> {
     match effort.trim().to_ascii_lowercase().as_str() {
         "" => None,
@@ -48,6 +53,19 @@ pub(crate) fn normalize_qwen_reasoning_effort(effort: &str) -> Option<&'static s
         "high" => Some("high"),
         "xhigh" | "x-high" | "max" => Some("xhigh"),
         _ => Some("high"),
+    }
+}
+
+pub(crate) fn normalize_glm_reasoning_effort(effort: &str) -> Option<&'static str> {
+    match effort.trim().to_ascii_lowercase().as_str() {
+        "" => None,
+        "none" => Some("none"),
+        "minimal" => Some("minimal"),
+        "low" => Some("low"),
+        "medium" => Some("medium"),
+        "high" => Some("high"),
+        "xhigh" | "x-high" | "max" => Some("max"),
+        _ => Some("max"),
     }
 }
 
@@ -122,6 +140,10 @@ pub(crate) fn apply_openai_compatible_reasoning_fields(
         }
     } else if is_qwen_reasoning_effort_model(model_name) {
         if let Some(effort) = reasoning_effort.and_then(normalize_qwen_reasoning_effort) {
+            request_body["reasoning_effort"] = serde_json::json!(effort);
+        }
+    } else if is_glm_reasoning_effort_model(model_name) {
+        if let Some(effort) = reasoning_effort.and_then(normalize_glm_reasoning_effort) {
             request_body["reasoning_effort"] = serde_json::json!(effort);
         }
     }

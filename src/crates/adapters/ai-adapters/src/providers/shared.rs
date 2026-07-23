@@ -276,6 +276,8 @@ struct AIRequestEffectiveOptionsAudit {
     reasoning_mode_config: String,
     thinking_effective: Option<String>,
     reasoning_effort_effective: Option<String>,
+    temperature: Option<f64>,
+    top_p: Option<f64>,
     max_tokens: Option<u64>,
     stream: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -357,6 +359,14 @@ fn u64_at(value: &serde_json::Value, path: &[&str]) -> Option<u64> {
     cursor.as_u64()
 }
 
+fn f64_at(value: &serde_json::Value, path: &[&str]) -> Option<f64> {
+    let mut cursor = value;
+    for key in path {
+        cursor = cursor.get(*key)?;
+    }
+    cursor.as_f64()
+}
+
 fn effective_thinking(request_body: &serde_json::Value) -> Option<String> {
     if let Some(thinking_type) = string_at(request_body, &["thinking", "type"]) {
         return Some(thinking_type.to_string());
@@ -416,6 +426,15 @@ fn effective_max_tokens(request_body: &serde_json::Value) -> Option<u64> {
         .or_else(|| u64_at(request_body, &["generationConfig", "maxOutputTokens"]))
 }
 
+fn effective_temperature(request_body: &serde_json::Value) -> Option<f64> {
+    f64_at(request_body, &["temperature"])
+        .or_else(|| f64_at(request_body, &["generationConfig", "temperature"]))
+}
+
+fn effective_top_p(request_body: &serde_json::Value) -> Option<f64> {
+    f64_at(request_body, &["top_p"]).or_else(|| f64_at(request_body, &["generationConfig", "topP"]))
+}
+
 fn effective_thinking_budget_tokens(request_body: &serde_json::Value) -> Option<u64> {
     u64_at(request_body, &["thinking", "budget_tokens"])
         .or_else(|| {
@@ -449,6 +468,8 @@ fn build_ai_request_effective_options_audit(
         reasoning_mode_config: reasoning_mode_name(reasoning_mode).to_string(),
         thinking_effective: effective_thinking(request_body),
         reasoning_effort_effective: effective_reasoning_effort(request_body),
+        temperature: effective_temperature(request_body),
+        top_p: effective_top_p(request_body),
         max_tokens: effective_max_tokens(request_body),
         stream: request_body
             .get("stream")
@@ -513,11 +534,19 @@ pub(crate) fn audit_ai_request_effective_options(
     if matches!(mode, AIRequestAuditMode::Both | AIRequestAuditMode::LogOnly) {
         log::info!(
             target: target,
-            "AI request effective options: provider={} model={} thinking={} reasoning_effort={} max_tokens={} stream={}",
+            "AI request effective options: provider={} model={} thinking={} reasoning_effort={} temperature={} top_p={} max_tokens={} stream={}",
             audit.provider,
             audit.model.as_deref().unwrap_or("none"),
             audit.thinking_effective.as_deref().unwrap_or("none"),
             audit.reasoning_effort_effective.as_deref().unwrap_or("none"),
+            audit
+                .temperature
+                .map(|value| value.to_string())
+                .unwrap_or_else(|| "none".to_string()),
+            audit
+                .top_p
+                .map(|value| value.to_string())
+                .unwrap_or_else(|| "none".to_string()),
             audit
                 .max_tokens
                 .map(|value| value.to_string())

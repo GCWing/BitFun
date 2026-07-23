@@ -8,20 +8,40 @@ enum ShellCommandRisk {
 }
 
 const READ_ONLY_COMMANDS: &[&str] = &[
-    "basename", "cat", "cut", "dirname", "egrep", "fgrep", "file", "find", "grep", "head",
-    "ls", "md5sum", "pwd", "rg", "sha1sum", "sha256sum", "sha512sum", "sort", "stat",
-    "tail", "uniq", "wc", "xxd",
+    "basename",
+    "cat",
+    "cut",
+    "dirname",
+    "egrep",
+    "fgrep",
+    "file",
+    "find",
+    "grep",
+    "head",
+    "ls",
+    "md5sum",
+    "pwd",
+    "rg",
+    "sha1sum",
+    "sha256sum",
+    "sha512sum",
+    "sort",
+    "stat",
+    "tail",
+    "uniq",
+    "wc",
+    "xxd",
 ];
 
 const STATEFUL_COMMANDS: &[&str] = &[
-    "bash", "cargo", "cc", "clang", "cmake", "g++", "gcc", "git", "go", "java", "make",
-    "ninja", "node", "npm", "pip", "pip3", "pnpm", "pytest", "python", "python3", "rustc",
-    "sh", "sqlite3", "uv", "yarn",
+    "bash", "cargo", "cc", "clang", "cmake", "g++", "gcc", "git", "go", "java", "make", "ninja",
+    "node", "npm", "pip", "pip3", "pnpm", "pytest", "python", "python3", "rustc", "sh", "sqlite3",
+    "uv", "yarn",
 ];
 
 const MUTATING_COMMANDS: &[&str] = &[
-    "apt", "apt-get", "chmod", "chown", "cp", "dd", "install", "ln", "mkdir", "mv", "rm",
-    "rmdir", "sed", "tee", "touch", "truncate", "unzip",
+    "apt", "apt-get", "chmod", "chown", "cp", "dd", "install", "ln", "mkdir", "mv", "rm", "rmdir",
+    "sed", "tee", "touch", "truncate", "unzip",
 ];
 
 pub(crate) fn exec_command_is_concurrency_safe(command: &str) -> bool {
@@ -133,9 +153,7 @@ fn is_env_assignment(token: &str) -> bool {
         return false;
     };
     !key.is_empty()
-        && key
-            .chars()
-            .all(|c| c == '_' || c.is_ascii_alphanumeric())
+        && key.chars().all(|c| c == '_' || c.is_ascii_alphanumeric())
         && key
             .chars()
             .next()
@@ -240,8 +258,12 @@ mod tests {
             ShellCommandRisk::Mutating
         );
         assert!(!exec_command_is_concurrency_safe("python3 -c 'print(1)'"));
-        assert!(!exec_command_is_concurrency_safe("cat input.txt > output.txt"));
-        assert!(exec_command_is_concurrency_safe("xxd /app/main.db-wal | head -50"));
+        assert!(!exec_command_is_concurrency_safe(
+            "cat input.txt > output.txt"
+        ));
+        assert!(exec_command_is_concurrency_safe(
+            "xxd /app/main.db-wal | head -50"
+        ));
     }
 
     #[test]

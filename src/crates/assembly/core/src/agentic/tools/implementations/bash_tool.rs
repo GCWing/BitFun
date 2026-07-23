@@ -1,7 +1,7 @@
-use crate::agentic::tools::implementations::shell_command_safety;
 use crate::agentic::tools::framework::{
     Tool, ToolRenderOptions, ToolResult, ToolUseContext, ValidationResult,
 };
+use crate::agentic::tools::implementations::shell_command_safety;
 use crate::agentic::workspace::WorkspaceCommandOptions;
 use crate::infrastructure::events::event_system::get_global_event_system;
 use crate::infrastructure::events::event_system::BackendEvent::{
@@ -470,6 +470,15 @@ Usage notes:
                 error_code: Some(400),
                 meta: None,
             };
+        }
+
+        if let Some(rejection) =
+            crate::agentic::execution::edit_constraint_guard::check_bash_command(
+                context,
+                command.unwrap_or_default(),
+            )
+        {
+            return rejection;
         }
 
         match Self::resolve_working_directory(input, context) {

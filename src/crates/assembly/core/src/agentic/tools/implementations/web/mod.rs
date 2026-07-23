@@ -101,6 +101,20 @@ mod tests {
         server.await.expect("server task");
     }
 
+    #[tokio::test]
+    async fn webfetch_accepts_normal_code_hosting_urls() {
+        let tool = WebFetchTool::new();
+
+        for url in [
+            "https://github.com/owner/repo",
+            "https://raw.githubusercontent.com/owner/repo/main/README.md",
+            "https://sourcegraph.com/github.com/owner/repo",
+        ] {
+            let validation = tool.validate_input(&json!({ "url": url }), None).await;
+            assert!(validation.result, "should allow: {url}");
+        }
+    }
+
     #[test]
     fn webfetch_text_alias_normalizes_to_markdown() {
         assert!(matches!(
@@ -204,5 +218,26 @@ Second paragraph.
         assert_eq!(out[0]["url"], "https://example.com/one");
         assert_eq!(out[0]["snippet"], "Result One First paragraph.");
         assert_eq!(out[1]["title"], "Result Two");
+    }
+
+    #[test]
+    fn websearch_preserves_code_hosting_results() {
+        let tool = WebSearchTool::new();
+        let text = r#"Title: GitHub result
+URL: https://github.com/owner/repo/pull/1
+Text: Matching pull request.
+
+Title: Sourcegraph result
+URL: https://sourcegraph.com/github.com/owner/repo/-/blob/src/lib.rs
+Text: Matching source file.
+"#;
+
+        let out = tool.results(text);
+        assert_eq!(out.len(), 2);
+        assert_eq!(out[0]["url"], "https://github.com/owner/repo/pull/1");
+        assert_eq!(
+            out[1]["url"],
+            "https://sourcegraph.com/github.com/owner/repo/-/blob/src/lib.rs"
+        );
     }
 }

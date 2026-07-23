@@ -22,14 +22,12 @@ use crate::diagnostics::{emit_exit_diagnostic, ExitContext, ExitKind};
 
 const TOOL_START_INPUT_PREVIEW_CHARS: usize = 4_000;
 
-/// Patch verification gate. Activates when `--output-patch` is set and the
-/// detector finds a runnable verifier in the workspace (Makefile/justfile target,
-/// go.mod, Cargo.toml, tsconfig.json, package.json script, or a parse-only
-/// fallback over changed files). On verification failure, the agent is re-prompted
-/// with the captured output and given another chance to finalize.
+/// Final-change verification gate. Enabled by default for headless `exec`; it
+/// can be disabled with `--no-verify-final-changes`. When the detector finds
+/// verifiers scoped to the changed files (Go, Cargo, TypeScript, or a parse-only
+/// fallback), failures are fed back to the agent for another finalization turn.
 ///
 /// Tuning knobs come from env vars:
-/// - `BITFUN_PATCH_VERIFY_CMD` — explicit command override (skips detection).
 /// - `BITFUN_PATCH_VERIFY_TIMEOUT_SEC` — default 900s. Should be wide enough to
 ///   cover a real cold workspace build; treat exceeding it as "scope too broad",
 ///   not as "verifier means the patch is broken".
@@ -100,8 +98,11 @@ pub struct ExecMode {
     agent_type: String,
     agent: Arc<CoreAgentAdapter>,
     workspace_path: Option<PathBuf>,
+    initial_diff_base: Option<String>,
+    initial_untracked_files: std::collections::BTreeSet<String>,
     /// None: no patch output, Some("-"): output to stdout, Some(path): save to file
     output_patch: Option<String>,
+    verify_final_changes: bool,
     output_format: ExecOutputFormat,
     session_options: ExecSessionOptions,
 }
@@ -114,9 +115,20 @@ impl ExecMode {
         agentic_system: &AgenticSystem,
         workspace_path: Option<PathBuf>,
         output_patch: Option<String>,
+        verify_final_changes: bool,
         output_format: ExecOutputFormat,
         session_options: ExecSessionOptions,
     ) -> Self {
+        let needs_change_baseline =
+            needs_change_baseline(output_patch.as_deref(), verify_final_changes);
+        let (initial_diff_base, initial_untracked_files) = if needs_change_baseline {
+            workspace_path
+                .as_deref()
+                .map(|workspace| (git_diff_base(workspace), untracked_files(workspace)))
+                .unwrap_or_default()
+        } else {
+            Default::default()
+        };
         let agent = Arc::new(CoreAgentAdapter::new(
             agentic_system.coordinator.clone(),
             agentic_system.event_queue.clone(),
@@ -129,7 +141,10 @@ impl ExecMode {
             agent_type,
             agent,
             workspace_path,
+            initial_diff_base,
+            initial_untracked_files,
             output_patch,
+            verify_final_changes,
             output_format,
             session_options,
         }
@@ -208,25 +223,15 @@ impl ExecMode {
 
     fn get_git_diff(&self) -> Option<String> {
         let workspace = self.workspace_path.as_ref()?;
-
-        let git_dir = workspace.join(".git");
-        if !git_dir.exists() {
-            eprintln!("Warning: Workspace is not a git repository, cannot generate patch");
-            return None;
-        }
-
-        let output = bitfun_core::util::process_manager::create_command("git")
-            .args(["diff", "--no-color"])
-            .current_dir(workspace)
-            .output()
-            .ok()?;
-
-        if output.status.success() {
-            Some(String::from_utf8_lossy(&output.stdout).to_string())
-        } else {
+        let patch = collect_worktree_patch(
+            workspace,
+            self.initial_diff_base.as_deref(),
+            &self.initial_untracked_files,
+        );
+        if patch.is_none() {
             eprintln!("Warning: git diff execution failed");
-            None
         }
+        patch
     }
 
     pub async fn run(&mut self) -> Result<()> {
@@ -266,63 +271,185 @@ impl ExecMode {
             .clone()
             .or_else(|| std::env::current_dir().ok())
             .unwrap_or_else(|| PathBuf::from("."));
-        let verify_enabled = self.output_patch.is_some();
         let mut current_message = self.message.clone();
         let mut retries_used: u32 = 0;
         let mut total_tool_calls = 0usize;
         let mut subagent_parent_sessions: HashMap<String, String> = HashMap::new();
 
         let final_outcome: Result<()> = 'retry: loop {
-        let turn_id = self
-            .agent
-            .send_message(current_message.clone(), &self.agent_type)
-            .await
-            .map_err(|e| {
-                emit_exit_diagnostic(
-                    ExitKind::SendMessageFailed,
-                    &e.to_string(),
-                    &self.exit_context(Some(&session_id), None),
-                );
-                e
-            })?;
-        tracing::info!(session_id = %session_id, turn_id = %turn_id, "Message sent");
+            let turn_id = self
+                .agent
+                .send_message(current_message.clone(), &self.agent_type)
+                .await
+                .map_err(|e| {
+                    emit_exit_diagnostic(
+                        ExitKind::SendMessageFailed,
+                        &e.to_string(),
+                        &self.exit_context(Some(&session_id), None),
+                    );
+                    e
+                })?;
+            tracing::info!(session_id = %session_id, turn_id = %turn_id, "Message sent");
 
-        // Per-turn loop state.
-        let mut terminal_outcome: Option<Result<()>> = None;
-        let mut observed_turn_activity = false;
+            // Per-turn loop state.
+            let mut terminal_outcome: Option<Result<()>> = None;
+            let mut observed_turn_activity = false;
 
-        loop {
-            // Wait for events, but wake periodically so exec mode cannot hang
-            // forever if a terminal event is missed after core has gone idle.
-            tokio::select! {
-                _ = event_queue.wait_for_events() => {}
-                _ = sleep(Duration::from_secs(1)) => {}
-            }
-
-            let events = event_queue.dequeue_batch(20).await;
-
-            for envelope in events {
-                let event = &envelope.event;
-
-                if let AgenticEvent::SubagentSessionLinked {
-                    session_id: subagent_session_id,
-                    parent_session_id,
-                    ..
-                } = event
-                {
-                    subagent_parent_sessions
-                        .insert(subagent_session_id.clone(), parent_session_id.clone());
-                    continue;
+            loop {
+                // Wait for events, but wake periodically so exec mode cannot hang
+                // forever if a terminal event is missed after core has gone idle.
+                tokio::select! {
+                    _ = event_queue.wait_for_events() => {}
+                    _ = sleep(Duration::from_secs(1)) => {}
                 }
 
-                // Only process events for our session
-                if event.session_id() != Some(&session_id) {
-                    // Check if this is a subagent event whose parent is in our session
-                    if let AgenticEvent::ToolEvent { tool_event, .. } = event {
-                        let parent_session_id = event.session_id().and_then(|event_session_id| {
-                            subagent_parent_sessions.get(event_session_id)
-                        });
-                        if parent_session_id.map(String::as_str) == Some(session_id.as_str()) {
+                let events = event_queue.dequeue_batch(20).await;
+
+                for envelope in events {
+                    let event = &envelope.event;
+
+                    if let AgenticEvent::SubagentSessionLinked {
+                        session_id: subagent_session_id,
+                        parent_session_id,
+                        ..
+                    } = event
+                    {
+                        subagent_parent_sessions
+                            .insert(subagent_session_id.clone(), parent_session_id.clone());
+                        continue;
+                    }
+
+                    // Only process events for our session
+                    if event.session_id() != Some(&session_id) {
+                        // Check if this is a subagent event whose parent is in our session
+                        if let AgenticEvent::ToolEvent { tool_event, .. } = event {
+                            let parent_session_id =
+                                event.session_id().and_then(|event_session_id| {
+                                    subagent_parent_sessions.get(event_session_id)
+                                });
+                            if parent_session_id.map(String::as_str) == Some(session_id.as_str()) {
+                                use bitfun_events::ToolEventData;
+                                match tool_event {
+                                    ToolEventData::Started {
+                                        tool_name,
+                                        tool_id,
+                                        params,
+                                        ..
+                                    } => {
+                                        self.emit(json!({
+                                            "type": "subagent_tool_start",
+                                            "session_id": session_id,
+                                            "tool_id": tool_id,
+                                            "tool_name": tool_name,
+                                            "input": params,
+                                        }))?;
+                                        self.print_text(|| {
+                                            let started_at = chrono::Utc::now().to_rfc3339();
+                                            let input_preview = Self::tool_input_preview(params);
+                                            println!("   [subagent] {}", tool_name);
+                                            println!("      Started at: {}", started_at);
+                                            println!("      Tool ID: {}", tool_id);
+                                            println!("      CWD: {}", self.workspace_display());
+                                            println!("      Input: {}", input_preview);
+                                            std::io::stdout().flush().ok();
+                                        });
+                                    }
+                                    ToolEventData::Completed {
+                                        tool_name,
+                                        tool_id,
+                                        result_for_assistant,
+                                        result,
+                                        duration_ms,
+                                        ..
+                                    } => {
+                                        let summary = result_for_assistant
+                                            .clone()
+                                            .unwrap_or_else(|| result.to_string());
+                                        self.emit(json!({
+                                            "type": "subagent_tool_result",
+                                            "session_id": session_id,
+                                            "tool_id": tool_id,
+                                            "tool_name": tool_name,
+                                            "duration_ms": duration_ms,
+                                            "result": result,
+                                            "summary": summary,
+                                        }))?;
+                                        self.print_text(|| {
+                                            println!(
+                                                "   [subagent] {} completed: {}",
+                                                tool_name, summary
+                                            )
+                                        });
+                                    }
+                                    ToolEventData::Failed {
+                                        tool_name,
+                                        tool_id,
+                                        error,
+                                        ..
+                                    } => {
+                                        self.emit(json!({
+                                            "type": "subagent_tool_error",
+                                            "session_id": session_id,
+                                            "tool_id": tool_id,
+                                            "tool_name": tool_name,
+                                            "error": error,
+                                        }))?;
+                                        self.print_text(|| {
+                                            println!(
+                                                "   [subagent] {} failed: {}",
+                                                tool_name, error
+                                            )
+                                        });
+                                    }
+                                    _ => {}
+                                }
+                            }
+                        }
+                        continue;
+                    }
+
+                    observed_turn_activity = true;
+
+                    match event {
+                        AgenticEvent::ModelRoundStarted {
+                            model_id: Some(model_id),
+                            ..
+                        }
+                        | AgenticEvent::ModelRoundCompleted {
+                            model_id: Some(model_id),
+                            ..
+                        }
+                        | AgenticEvent::TokenUsageUpdated { model_id, .. } => {
+                            self.record_resolved_model_id(&session_id, model_id).await;
+                        }
+
+                        AgenticEvent::TextChunk { text, .. } => {
+                            self.emit(json!({
+                                "type": "text",
+                                "session_id": session_id,
+                                "text": text,
+                            }))?;
+                            self.print_text(|| {
+                                print!("{}", text);
+                                use std::io::Write;
+                                std::io::stdout().flush().ok();
+                            });
+                        }
+
+                        AgenticEvent::ThinkingChunk { content, .. } => {
+                            self.emit(json!({
+                                "type": "thinking",
+                                "session_id": session_id,
+                                "text": content,
+                            }))?;
+                            self.print_text(|| {
+                                print!("\x1b[2m{}\x1b[0m", content);
+                                use std::io::Write;
+                                std::io::stdout().flush().ok();
+                            });
+                        }
+
+                        AgenticEvent::ToolEvent { tool_event, .. } => {
                             use bitfun_events::ToolEventData;
                             match tool_event {
                                 ToolEventData::Started {
@@ -332,22 +459,30 @@ impl ExecMode {
                                     ..
                                 } => {
                                     self.emit(json!({
-                                        "type": "subagent_tool_start",
+                                        "type": "tool_start",
                                         "session_id": session_id,
                                         "tool_id": tool_id,
                                         "tool_name": tool_name,
                                         "input": params,
                                     }))?;
-                                    self.print_text(|| {
-                                        let started_at = chrono::Utc::now().to_rfc3339();
-                                        let input_preview = Self::tool_input_preview(params);
-                                        println!("   [subagent] {}", tool_name);
-                                        println!("      Started at: {}", started_at);
-                                        println!("      Tool ID: {}", tool_id);
-                                        println!("      CWD: {}", self.workspace_display());
-                                        println!("      Input: {}", input_preview);
-                                        std::io::stdout().flush().ok();
-                                    });
+                                    self.print_tool_start_details(tool_name, tool_id, params);
+                                    total_tool_calls += 1;
+                                }
+                                ToolEventData::Progress {
+                                    tool_name,
+                                    tool_id,
+                                    message,
+                                    percentage,
+                                } => {
+                                    self.emit(json!({
+                                        "type": "tool_progress",
+                                        "session_id": session_id,
+                                        "tool_id": tool_id,
+                                        "tool_name": tool_name,
+                                        "message": message,
+                                        "percentage": percentage,
+                                    }))?;
+                                    self.print_text(|| println!("   In progress: {}", message));
                                 }
                                 ToolEventData::Completed {
                                     tool_name,
@@ -361,7 +496,7 @@ impl ExecMode {
                                         .clone()
                                         .unwrap_or_else(|| result.to_string());
                                     self.emit(json!({
-                                        "type": "subagent_tool_result",
+                                        "type": "tool_result",
                                         "session_id": session_id,
                                         "tool_id": tool_id,
                                         "tool_name": tool_name,
@@ -371,8 +506,8 @@ impl ExecMode {
                                     }))?;
                                     self.print_text(|| {
                                         println!(
-                                            "   [subagent] {} completed: {}",
-                                            tool_name, summary
+                                            "   [+] {} ({}ms): {}",
+                                            tool_name, duration_ms, summary
                                         )
                                     });
                                 }
@@ -383,153 +518,109 @@ impl ExecMode {
                                     ..
                                 } => {
                                     self.emit(json!({
-                                        "type": "subagent_tool_error",
+                                        "type": "tool_error",
                                         "session_id": session_id,
                                         "tool_id": tool_id,
                                         "tool_name": tool_name,
                                         "error": error,
                                     }))?;
-                                    self.print_text(|| {
-                                        println!("   [subagent] {} failed: {}", tool_name, error)
-                                    });
+                                    self.print_text(|| println!("   [x] {}: {}", tool_name, error));
                                 }
                                 _ => {}
                             }
                         }
+
+                        AgenticEvent::DialogTurnCompleted { .. } => {
+                            self.emit(json!({
+                                "type": "done",
+                                "session_id": session_id,
+                                "status": "completed",
+                                "tool_calls": total_tool_calls,
+                            }))?;
+                            self.print_text(|| {
+                                println!("\n");
+                                println!("Execution complete");
+                                if total_tool_calls > 0 {
+                                    println!(
+                                        "\nTool call statistics: {} tools invoked",
+                                        total_tool_calls
+                                    );
+                                }
+                            });
+                            terminal_outcome = Some(Ok(()));
+                            break;
+                        }
+
+                        AgenticEvent::DialogTurnFailed { error, .. } => {
+                            self.emit(json!({
+                                "type": "error",
+                                "session_id": session_id,
+                                "message": error,
+                            }))?;
+                            self.print_text(|| eprintln!("\nExecution failed: {}", error));
+                            emit_exit_diagnostic(
+                                ExitKind::DialogTurnFailed,
+                                error,
+                                &self.exit_context(Some(&session_id), Some(&turn_id)),
+                            );
+                            terminal_outcome =
+                                Some(Err(anyhow::anyhow!("Execution failed: {}", error)));
+                            break;
+                        }
+
+                        AgenticEvent::DialogTurnCancelled { .. } => {
+                            self.emit(json!({
+                                "type": "done",
+                                "session_id": session_id,
+                                "status": "cancelled",
+                                "tool_calls": total_tool_calls,
+                            }))?;
+                            self.print_text(|| println!("\nExecution cancelled"));
+                            terminal_outcome = Some(Ok(()));
+                            break;
+                        }
+
+                        AgenticEvent::SystemError { error, .. } => {
+                            self.emit(json!({
+                                "type": "error",
+                                "session_id": session_id,
+                                "message": error,
+                            }))?;
+                            self.print_text(|| eprintln!("\nSystem error: {}", error));
+                            emit_exit_diagnostic(
+                                ExitKind::SystemError,
+                                error,
+                                &self.exit_context(Some(&session_id), Some(&turn_id)),
+                            );
+                            terminal_outcome =
+                                Some(Err(anyhow::anyhow!("System error: {}", error)));
+                            break;
+                        }
+
+                        _ => {}
                     }
-                    continue;
                 }
 
-                observed_turn_activity = true;
+                if terminal_outcome.is_some() {
+                    break;
+                }
 
-                match event {
-                    AgenticEvent::ModelRoundStarted {
-                        model_id: Some(model_id),
-                        ..
-                    }
-                    | AgenticEvent::ModelRoundCompleted {
-                        model_id: Some(model_id),
-                        ..
-                    }
-                    | AgenticEvent::TokenUsageUpdated { model_id, .. } => {
-                        self.record_resolved_model_id(&session_id, model_id).await;
-                    }
-
-                    AgenticEvent::TextChunk { text, .. } => {
-                        self.emit(json!({
-                            "type": "text",
-                            "session_id": session_id,
-                            "text": text,
-                        }))?;
-                        self.print_text(|| {
-                            print!("{}", text);
-                            use std::io::Write;
-                            std::io::stdout().flush().ok();
-                        });
-                    }
-
-                    AgenticEvent::ThinkingChunk { content, .. } => {
-                        self.emit(json!({
-                            "type": "thinking",
-                            "session_id": session_id,
-                            "text": content,
-                        }))?;
-                        self.print_text(|| {
-                            print!("\x1b[2m{}\x1b[0m", content);
-                            use std::io::Write;
-                            std::io::stdout().flush().ok();
-                        });
-                    }
-
-                    AgenticEvent::ToolEvent { tool_event, .. } => {
-                        use bitfun_events::ToolEventData;
-                        match tool_event {
-                            ToolEventData::Started {
-                                tool_name,
-                                tool_id,
-                                params,
-                                ..
-                            } => {
-                                self.emit(json!({
-                                    "type": "tool_start",
-                                    "session_id": session_id,
-                                    "tool_id": tool_id,
-                                    "tool_name": tool_name,
-                                    "input": params,
-                                }))?;
-                                self.print_tool_start_details(tool_name, tool_id, params);
-                                total_tool_calls += 1;
-                            }
-                            ToolEventData::Progress {
-                                tool_name,
-                                tool_id,
-                                message,
-                                percentage,
-                            } => {
-                                self.emit(json!({
-                                    "type": "tool_progress",
-                                    "session_id": session_id,
-                                    "tool_id": tool_id,
-                                    "tool_name": tool_name,
-                                    "message": message,
-                                    "percentage": percentage,
-                                }))?;
-                                self.print_text(|| println!("   In progress: {}", message));
-                            }
-                            ToolEventData::Completed {
-                                tool_name,
-                                tool_id,
-                                result_for_assistant,
-                                result,
-                                duration_ms,
-                                ..
-                            } => {
-                                let summary = result_for_assistant
-                                    .clone()
-                                    .unwrap_or_else(|| result.to_string());
-                                self.emit(json!({
-                                    "type": "tool_result",
-                                    "session_id": session_id,
-                                    "tool_id": tool_id,
-                                    "tool_name": tool_name,
-                                    "duration_ms": duration_ms,
-                                    "result": result,
-                                    "summary": summary,
-                                }))?;
-                                self.print_text(|| {
-                                    println!(
-                                        "   [+] {} ({}ms): {}",
-                                        tool_name, duration_ms, summary
-                                    )
-                                });
-                            }
-                            ToolEventData::Failed {
-                                tool_name,
-                                tool_id,
-                                error,
-                                ..
-                            } => {
-                                self.emit(json!({
-                                    "type": "tool_error",
-                                    "session_id": session_id,
-                                    "tool_id": tool_id,
-                                    "tool_name": tool_name,
-                                    "error": error,
-                                }))?;
-                                self.print_text(|| println!("   [x] {}: {}", tool_name, error));
-                            }
-                            _ => {}
-                        }
-                    }
-
-                    AgenticEvent::DialogTurnCompleted { .. } => {
-                        self.emit(json!({
-                            "type": "done",
-                            "session_id": session_id,
-                            "status": "completed",
-                            "tool_calls": total_tool_calls,
-                        }))?;
-                        self.print_text(|| {
+                if observed_turn_activity {
+                    match self
+                        .agent
+                        .coordinator()
+                        .get_session_manager()
+                        .get_session(&session_id)
+                        .map(|session| session.state)
+                    {
+                        Some(SessionState::Idle)
+                            if !self.agent.coordinator().has_active_turn(&turn_id) =>
+                        {
+                            tracing::warn!(
+                            "Exec observed idle session without terminal turn event; treating turn as settled: session_id={}, turn_id={}",
+                            session_id,
+                            turn_id
+                        );
                             println!("\n");
                             println!("Execution complete");
                             if total_tool_calls > 0 {
@@ -538,134 +629,67 @@ impl ExecMode {
                                     total_tool_calls
                                 );
                             }
-                        });
-                        terminal_outcome = Some(Ok(()));
-                        break;
-                    }
-
-                    AgenticEvent::DialogTurnFailed { error, .. } => {
-                        self.emit(json!({
-                            "type": "error",
-                            "session_id": session_id,
-                            "message": error,
-                        }))?;
-                        self.print_text(|| eprintln!("\nExecution failed: {}", error));
-                        emit_exit_diagnostic(
-                            ExitKind::DialogTurnFailed,
-                            error,
-                            &self.exit_context(Some(&session_id), Some(&turn_id)),
-                        );
-                        terminal_outcome =
-                            Some(Err(anyhow::anyhow!("Execution failed: {}", error)));
-                        break;
-                    }
-
-                    AgenticEvent::DialogTurnCancelled { .. } => {
-                        self.emit(json!({
-                            "type": "done",
-                            "session_id": session_id,
-                            "status": "cancelled",
-                            "tool_calls": total_tool_calls,
-                        }))?;
-                        self.print_text(|| println!("\nExecution cancelled"));
-                        terminal_outcome = Some(Ok(()));
-                        break;
-                    }
-
-                    AgenticEvent::SystemError { error, .. } => {
-                        self.emit(json!({
-                            "type": "error",
-                            "session_id": session_id,
-                            "message": error,
-                        }))?;
-                        self.print_text(|| eprintln!("\nSystem error: {}", error));
-                        emit_exit_diagnostic(
-                            ExitKind::SystemError,
-                            error,
-                            &self.exit_context(Some(&session_id), Some(&turn_id)),
-                        );
-                        terminal_outcome = Some(Err(anyhow::anyhow!("System error: {}", error)));
-                        break;
-                    }
-
-                    _ => {}
-                }
-            }
-
-            if terminal_outcome.is_some() {
-                break;
-            }
-
-            if observed_turn_activity {
-                match self
-                    .agent
-                    .coordinator()
-                    .get_session_manager()
-                    .get_session(&session_id)
-                    .map(|session| session.state)
-                {
-                    Some(SessionState::Idle)
-                        if !self.agent.coordinator().has_active_turn(&turn_id) =>
-                    {
-                        tracing::warn!(
-                            "Exec observed idle session without terminal turn event; treating turn as settled: session_id={}, turn_id={}",
-                            session_id,
-                            turn_id
-                        );
-                        println!("\n");
-                        println!("Execution complete");
-                        if total_tool_calls > 0 {
-                            println!("\nTool call statistics: {} tools invoked", total_tool_calls);
+                            terminal_outcome = Some(Ok(()));
+                            break;
                         }
-                        terminal_outcome = Some(Ok(()));
-                        break;
+                        Some(SessionState::Idle) => {}
+                        Some(SessionState::Error { error, .. }) => {
+                            eprintln!("\nExecution failed: {}", error);
+                            emit_exit_diagnostic(
+                                ExitKind::DialogTurnFailed,
+                                &error,
+                                &self.exit_context(Some(&session_id), Some(&turn_id)),
+                            );
+                            terminal_outcome =
+                                Some(Err(anyhow::anyhow!("Execution failed: {}", error)));
+                            break;
+                        }
+                        _ => {}
                     }
-                    Some(SessionState::Idle) => {}
-                    Some(SessionState::Error { error, .. }) => {
-                        eprintln!("\nExecution failed: {}", error);
-                        emit_exit_diagnostic(
-                            ExitKind::DialogTurnFailed,
-                            &error,
-                            &self.exit_context(Some(&session_id), Some(&turn_id)),
-                        );
-                        terminal_outcome =
-                            Some(Err(anyhow::anyhow!("Execution failed: {}", error)));
-                        break;
-                    }
-                    _ => {}
                 }
             }
-        }
 
-        self.wait_for_turn_settlement(&session_id, &turn_id).await;
+            self.wait_for_turn_settlement(&session_id, &turn_id).await;
 
-        let outcome = terminal_outcome.unwrap_or(Ok(()));
+            let outcome = terminal_outcome.unwrap_or(Ok(()));
 
-        // Patch verification gate. Only runs when --output-patch is set,
-        // the agent's turn settled cleanly, and the workspace exposes a
-        // verifier we can detect. Failure to verify triggers up to
-        // verify_cfg.max_retries additional turns, each fed the verifier's
-        // output (or a scope-narrowing hint, for timeouts) as a system
-        // reminder. Passes / skips fall straight through to emit the patch.
-        if verify_enabled && outcome.is_ok() {
-            if let Some(command) = detect_verify_command(&verify_workspace) {
-                let result = self
-                    .verify_patch(&command, &verify_cfg, retries_used)
-                    .await;
-                let passed = result.status == VerifyStatus::Passed;
-                if !passed {
+            // Final-change verification gate. Runs independently of patch output
+            // when enabled, after the agent's turn settles cleanly and the workspace
+            // exposes a verifier we can detect. Failure triggers up to
+            // verify_cfg.max_retries additional turns, each fed the verifier's
+            // output (or a scope-narrowing hint, for timeouts) as a system
+            // reminder. Passes / skips fall straight through to emit the patch.
+            if self.verify_final_changes && outcome.is_ok() {
+                if let Some(command) = detect_verify_command(
+                    &verify_workspace,
+                    self.initial_diff_base.as_deref(),
+                    &self.initial_untracked_files,
+                ) {
+                    let result = self.verify_patch(&command, &verify_cfg, retries_used).await;
                     self.emit(json!({
-                        "type": "verify_failed",
+                        "type": "verify_result",
                         "session_id": session_id,
                         "attempt": retries_used + 1,
                         "command": &result.command,
                         "status": result.status,
                         "exit_code": result.exit_code,
                         "duration_ms": result.duration_ms,
-                        "stderr_tail": result.stderr_tail,
+                        "output_tail": result.stderr_tail,
                     }))?;
-                    if retries_used < verify_cfg.max_retries {
-                        self.print_text(|| {
+                    let passed = result.status == VerifyStatus::Passed;
+                    if !passed {
+                        self.emit(json!({
+                            "type": "verify_failed",
+                            "session_id": session_id,
+                            "attempt": retries_used + 1,
+                            "command": &result.command,
+                            "status": result.status,
+                            "exit_code": result.exit_code,
+                            "duration_ms": result.duration_ms,
+                            "stderr_tail": result.stderr_tail,
+                        }))?;
+                        if retries_used < verify_cfg.max_retries {
+                            self.print_text(|| {
                             eprintln!(
                                 "\nVerification failed (attempt {}, exit {:?}): {} — asking the agent to fix and retry",
                                 retries_used + 1,
@@ -673,22 +697,28 @@ impl ExecMode {
                                 result.command,
                             );
                         });
-                        current_message = build_retry_message(&result);
-                        retries_used += 1;
-                        continue 'retry;
-                    }
-                    self.print_text(|| {
+                            current_message = build_retry_message(&result);
+                            retries_used += 1;
+                            continue 'retry;
+                        }
+                        self.print_text(|| {
                         eprintln!(
-                            "\nVerification still failing after {} attempt(s); emitting patch unverified ({})",
+                            "\nVerification still failing after {} attempt(s); finishing with unverified changes ({})",
                             retries_used + 1,
                             result.command,
                         );
                     });
+                    }
+                } else {
+                    self.emit(json!({
+                        "type": "verify_skipped",
+                        "session_id": session_id,
+                        "reason": "no_applicable_changed_files",
+                    }))?;
                 }
             }
-        }
 
-        break outcome;
+            break outcome;
         };
 
         self.output_patch_if_needed();
@@ -984,6 +1014,10 @@ impl ExecMode {
     }
 }
 
+fn needs_change_baseline(output_patch: Option<&str>, verify_final_changes: bool) -> bool {
+    output_patch.is_some() || verify_final_changes
+}
+
 fn tail_chars(s: &str, max: usize) -> String {
     let total = s.chars().count();
     if total <= max {
@@ -1043,171 +1077,271 @@ This is your next signal — diagnose what is still wrong, fix it, and run the v
     }
 }
 
-/// Resolves the verification command for `workspace`. Priority:
-///   1. `BITFUN_PATCH_VERIFY_CMD` env override (escape hatch for harnesses).
-///   2. Project-defined targets: `make`/`just` `check|test|ci`.
-///   3. Language manifests, **scoped to what `git diff` says actually
-///      changed**, not the whole workspace:
-///        - `go.mod`       → `go vet -printf=false -composites=false
-///          -stdmethods=false` on the directory of each changed `.go`
-///          file; skip if no `.go` files changed. We use `vet` over
-///          `build` because `vet` runs the same parser + type checker
-///          (so it catches every "patch doesn't compile" error in our
-///          class — undefined symbol, type mismatch, wrong arity,
-///          missing import) while skipping codegen and linking. On big
-///          Go repos that's roughly 30% faster cold, and it also
-///          compiles `*_test.go` so a patch that breaks the package's
-///          own tests is caught here too. The three disabled analyzers
-///          are the only defaults known to false-positive on real
-///          production codebases.
-///        - `Cargo.toml`   → `cargo check -p <crate>` for the crate(s)
-///          owning the changed `.rs` files; skip if no `.rs` files map
-///          to a workspace member.
-///        - `tsconfig.json`→ `tsc --noEmit -p .` (whole-project; scope
-///          per-tsconfig is a follow-up).
-///        - `package.json` → matching script via the lockfile-selected
-///          package manager.
-///   4. Parse-only fallback over changed files (.py, .js/.mjs/.cjs, .go).
+/// Resolves verifiers scoped to the files that will be emitted in the patch:
+///   1. Go files are grouped by their nearest `go.mod` and vetted from that
+///      module root.
+///   2. Rust files are grouped by their nearest package `Cargo.toml` and checked
+///      through that manifest, including test targets.
+///   3. TypeScript and JSX files use their nearest `tsconfig.json`.
+///   4. Remaining Python, JavaScript, and Go files receive parse-only checks.
+/// Commands for mixed-language patches are composed instead of stopping at the
+/// first detected language.
 /// Returns None if nothing applies — verification silently skips in that case.
 ///
-/// Scoping is the difference between a 30s targeted build and a 6-minute
-/// whole-repo build. Whole-workspace targets used to be the default; for
-/// SWE-bench-class evaluations they ate the entire agent budget on
-/// monorepos like teleport.
-fn detect_verify_command(workspace: &std::path::Path) -> Option<String> {
-    if let Ok(cmd) = std::env::var("BITFUN_PATCH_VERIFY_CMD") {
-        let trimmed = cmd.trim();
-        if !trimmed.is_empty() {
-            return Some(trimmed.to_string());
-        }
+/// Deliberately never auto-select project-wide Makefile or justfile targets:
+/// a target named `test` or `check` is not evidence that it is relevant to the
+/// changed code or suitable for the current runtime.
+fn detect_verify_command(
+    workspace: &std::path::Path,
+    diff_base: Option<&str>,
+    initial_untracked_files: &std::collections::BTreeSet<String>,
+) -> Option<String> {
+    let changed = changed_files(workspace, diff_base, initial_untracked_files);
+    if changed.is_empty() {
+        return None;
     }
 
-    const TARGETS: &[&str] = &["check", "test", "ci"];
-
-    if let Some(target) = detect_make_or_just_target(workspace, "Makefile", TARGETS) {
-        return Some(format!("make {}", target));
-    }
-    if let Some(target) = detect_make_or_just_target(workspace, "justfile", TARGETS) {
-        return Some(format!("just {}", target));
-    }
-    if let Some(target) = detect_make_or_just_target(workspace, ".justfile", TARGETS) {
-        return Some(format!("just {}", target));
+    let mut commands = Vec::new();
+    commands.extend(scoped_go_commands(workspace, &changed));
+    commands.extend(scoped_cargo_commands(workspace, &changed));
+    commands.extend(scoped_typescript_commands(workspace, &changed));
+    if let Some(command) = build_parse_only_command(workspace, &changed) {
+        commands.push(command);
     }
 
-    // Compute the change set once; later detectors use it both to scope the
-    // build/check and to power the parse-only fallback.
-    let changed = changed_files(workspace);
-
-    if workspace.join("go.mod").exists() {
-        let pkgs = scoped_go_packages(&changed);
-        if !pkgs.is_empty() {
-            // `-printf=false -composites=false -stdmethods=false` disables
-            // the three default analyzers known to false-positive on
-            // production code: `printf` on user-defined Printf-style
-            // functions, `composites` on intentional positional literals,
-            // `stdmethods` on methods that share a name with stdlib
-            // interfaces but are not implementations. Type checking
-            // (which is what catches "patch doesn't compile") runs
-            // regardless of analyzer selection, so this trims noise
-            // without trimming our actual signal.
-            return Some(format!(
-                "go vet -printf=false -composites=false -stdmethods=false {}",
-                pkgs.join(" ")
-            ));
-        }
-        // go.mod exists but no .go files changed — fall through rather than
-        // vetting the entire module just to satisfy detection.
-    }
-    if workspace.join("Cargo.toml").exists() {
-        let crates = scoped_cargo_crates(workspace, &changed);
-        if !crates.is_empty() {
-            let flags = crates
-                .iter()
-                .map(|name| format!("-p {}", shell_single_quote(name)))
-                .collect::<Vec<_>>()
-                .join(" ");
-            return Some(format!(
-                "cargo check {} --message-format=short",
-                flags
-            ));
-        }
-        // Cargo.toml present but no .rs files attributable to a workspace
-        // member — fall through.
-    }
-    if workspace.join("tsconfig.json").exists() {
-        return Some("npx --no-install tsc --noEmit -p .".to_string());
-    }
-    if let Some(cmd) = detect_package_json_command(workspace) {
-        return Some(cmd);
-    }
-
-    if !changed.is_empty() {
-        if let Some(cmd) = build_parse_only_command(&changed) {
-            return Some(cmd);
-        }
-    }
-
-    None
+    (!commands.is_empty()).then(|| commands.join(" && "))
 }
 
-/// For each changed `.go` file, return its containing directory as a Go
-/// package target (`./path/to/dir`). De-duplicated and sorted. Empty if no
-/// `.go` files were changed — callers should treat that as "no Go gate".
-fn scoped_go_packages(files: &[String]) -> Vec<String> {
-    use std::collections::BTreeSet;
-    let mut dirs: BTreeSet<String> = BTreeSet::new();
-    for f in files {
-        if !f.to_ascii_lowercase().ends_with(".go") {
+fn scoped_go_commands(workspace: &std::path::Path, files: &[String]) -> Vec<String> {
+    use std::collections::{BTreeMap, BTreeSet};
+
+    let mut packages_by_module: BTreeMap<PathBuf, BTreeSet<String>> = BTreeMap::new();
+    let mut manifest_only_modules = BTreeSet::new();
+    for file in files {
+        let path = workspace.join(file);
+        let lower = file.to_ascii_lowercase();
+        let Some(module_manifest) = find_nearest_manifest(workspace, &path, "go.mod") else {
             continue;
-        }
-        let path = std::path::Path::new(f);
-        if let Some(dir) = path.parent() {
-            let s = dir.to_string_lossy();
-            if s.is_empty() {
-                dirs.insert(".".to_string());
-            } else {
-                dirs.insert(format!("./{}", s));
+        };
+        let module_dir = module_manifest.parent().unwrap_or(workspace).to_path_buf();
+        if lower.ends_with(".go") {
+            let package_dir = path.parent().unwrap_or(&module_dir);
+            let has_current_go_source = std::fs::read_dir(package_dir)
+                .ok()
+                .into_iter()
+                .flatten()
+                .any(|entry| {
+                    entry
+                        .ok()
+                        .and_then(|entry| entry.path().extension().map(|ext| ext == "go"))
+                        .unwrap_or(false)
+                });
+            if !has_current_go_source {
+                continue;
             }
+            let relative = package_dir.strip_prefix(&module_dir).unwrap_or(package_dir);
+            let target = if relative.as_os_str().is_empty() {
+                ".".to_string()
+            } else {
+                format!("./{}", relative.to_string_lossy().replace('\\', "/"))
+            };
+            packages_by_module
+                .entry(module_dir)
+                .or_default()
+                .insert(target);
+        } else if matches!(
+            std::path::Path::new(&lower)
+                .file_name()
+                .and_then(|name| name.to_str()),
+            Some("go.mod" | "go.sum")
+        ) {
+            manifest_only_modules.insert(module_dir);
         }
     }
-    dirs.into_iter().collect()
+
+    let mut commands = Vec::new();
+    for (module_dir, packages) in &packages_by_module {
+        let targets = packages
+            .iter()
+            .map(|target| shell_single_quote(target))
+            .collect::<Vec<_>>()
+            .join(" ");
+        let command = format!("go vet -printf=false -composites=false -stdmethods=false {targets}");
+        commands.push(command_in_directory(workspace, module_dir, &command));
+    }
+    for module_dir in manifest_only_modules {
+        if !packages_by_module.contains_key(&module_dir) {
+            commands.push(command_in_directory(
+                workspace,
+                &module_dir,
+                "go list -m all",
+            ));
+        }
+    }
+    commands
 }
 
-/// For each changed `.rs` file, walk up to the nearest `Cargo.toml` that
-/// declares a `[package].name` and return those crate names, deduplicated
-/// and sorted. Empty if no `.rs` files were changed or no owner could be
-/// resolved (e.g. file lives only under a virtual workspace root).
-fn scoped_cargo_crates(workspace: &std::path::Path, files: &[String]) -> Vec<String> {
-    use std::collections::BTreeSet;
-    let mut crates: BTreeSet<String> = BTreeSet::new();
-    for f in files {
-        if !f.to_ascii_lowercase().ends_with(".rs") {
+fn scoped_cargo_commands(workspace: &std::path::Path, files: &[String]) -> Vec<String> {
+    use std::collections::{BTreeMap, BTreeSet};
+
+    let mut packages: BTreeMap<PathBuf, (Option<String>, BTreeSet<String>)> = BTreeMap::new();
+    for file in files {
+        let lower = file.to_ascii_lowercase();
+        let is_source = lower.ends_with(".rs");
+        let is_manifest = matches!(
+            std::path::Path::new(&lower)
+                .file_name()
+                .and_then(|name| name.to_str()),
+            Some("cargo.toml" | "cargo.lock")
+        );
+        if !is_source && !is_manifest {
             continue;
         }
-        let abs = workspace.join(f);
-        if let Some(name) = find_owning_crate_name(workspace, &abs) {
-            crates.insert(name);
+        let path = workspace.join(file);
+        let Some(manifest) = find_nearest_manifest(workspace, &path, "Cargo.toml") else {
+            continue;
+        };
+        let name = read_cargo_package_name(&manifest);
+        let integration_target = is_source
+            .then(|| cargo_integration_test_target(&manifest, &path))
+            .flatten();
+        let entry = packages
+            .entry(manifest)
+            .or_insert_with(|| (name, BTreeSet::new()));
+        if let Some(target) = integration_target {
+            entry.1.insert(target);
         }
     }
-    crates.into_iter().collect()
+
+    packages
+        .into_iter()
+        .flat_map(|(manifest, (package, integration_tests))| {
+            let manifest = manifest
+                .strip_prefix(workspace)
+                .unwrap_or(&manifest)
+                .to_string_lossy()
+                .replace('\\', "/");
+            match package {
+                Some(package) => {
+                    let manifest_arg = shell_single_quote(&manifest);
+                    let package_arg = shell_single_quote(&package);
+                    let mut commands = vec![format!(
+                        "cargo check --manifest-path {manifest_arg} -p {package_arg} --message-format=short"
+                    )];
+                    if !integration_tests.is_empty() {
+                        let targets = integration_tests
+                            .iter()
+                            .map(|target| format!("--test {}", shell_single_quote(target)))
+                            .collect::<Vec<_>>()
+                            .join(" ");
+                        commands.push(format!(
+                            "cargo check --manifest-path {manifest_arg} -p {package_arg} {targets} --message-format=short"
+                        ));
+                    }
+                    commands
+                }
+                None => vec![format!(
+                    "cargo metadata --no-deps --format-version 1 --manifest-path {}",
+                    shell_single_quote(&manifest),
+                )],
+            }
+        })
+        .collect()
 }
 
-fn find_owning_crate_name(
+fn cargo_integration_test_target(
+    manifest: &std::path::Path,
+    source: &std::path::Path,
+) -> Option<String> {
+    if !source.is_file() {
+        return None;
+    }
+    let relative = source.strip_prefix(manifest.parent()?).ok()?;
+    let mut components = relative.components();
+    if components.next()?.as_os_str() != "tests" {
+        return None;
+    }
+    let target = components.next()?.as_os_str().to_str()?;
+    if components.next().is_some() {
+        return None;
+    }
+    std::path::Path::new(target)
+        .file_stem()
+        .and_then(|stem| stem.to_str())
+        .map(ToString::to_string)
+}
+
+fn find_nearest_manifest(
     workspace: &std::path::Path,
     file: &std::path::Path,
-) -> Option<String> {
+    manifest_name: &str,
+) -> Option<PathBuf> {
     let mut current = file.parent()?;
     loop {
-        let cargo_toml = current.join("Cargo.toml");
-        if cargo_toml.exists() {
-            if let Some(name) = read_cargo_package_name(&cargo_toml) {
-                return Some(name);
-            }
+        let manifest = current.join(manifest_name);
+        if manifest.is_file() {
+            return Some(manifest);
         }
         if current == workspace {
             return None;
         }
         current = current.parent()?;
+    }
+}
+
+fn scoped_typescript_commands(workspace: &std::path::Path, files: &[String]) -> Vec<String> {
+    use std::collections::BTreeSet;
+
+    let mut configs = BTreeSet::new();
+    for file in files {
+        let lower = file.to_ascii_lowercase();
+        let extension_is_supported = [".ts", ".tsx", ".mts", ".cts", ".js", ".jsx", ".mjs", ".cjs"]
+            .iter()
+            .any(|extension| lower.ends_with(extension));
+        let is_config = std::path::Path::new(&lower)
+            .file_name()
+            .and_then(|name| name.to_str())
+            == Some("tsconfig.json");
+        if !extension_is_supported && !is_config {
+            continue;
+        }
+        if let Some(config) =
+            find_nearest_manifest(workspace, &workspace.join(file), "tsconfig.json")
+        {
+            configs.insert(config);
+        }
+    }
+
+    configs
+        .into_iter()
+        .map(|config| {
+            let relative = config
+                .strip_prefix(workspace)
+                .unwrap_or(&config)
+                .to_string_lossy()
+                .replace('\\', "/");
+            format!(
+                "npx --no-install tsc --noEmit -p {}",
+                shell_single_quote(&relative)
+            )
+        })
+        .collect()
+}
+
+fn command_in_directory(
+    workspace: &std::path::Path,
+    directory: &std::path::Path,
+    command: &str,
+) -> String {
+    let relative = directory.strip_prefix(workspace).unwrap_or(directory);
+    if relative.as_os_str().is_empty() {
+        command.to_string()
+    } else {
+        format!(
+            "(cd {} && {})",
+            shell_single_quote(&relative.to_string_lossy().replace('\\', "/")),
+            command
+        )
     }
 }
 
@@ -1244,67 +1378,100 @@ fn read_cargo_package_name(toml_path: &std::path::Path) -> Option<String> {
     None
 }
 
-fn detect_make_or_just_target(
+fn changed_files(
     workspace: &std::path::Path,
-    file: &str,
-    candidates: &[&str],
-) -> Option<String> {
-    let content = std::fs::read_to_string(workspace.join(file)).ok()?;
-    candidates.iter().find_map(|target| {
-        let head = format!("{}:", target);
-        let mid = format!("\n{}:", target);
-        if content.starts_with(&head) || content.contains(&mid) {
-            Some(target.to_string())
-        } else {
-            None
-        }
-    })
-}
+    diff_base: Option<&str>,
+    initial_untracked_files: &std::collections::BTreeSet<String>,
+) -> Vec<String> {
+    use std::collections::BTreeSet;
 
-fn detect_package_json_command(workspace: &std::path::Path) -> Option<String> {
-    let content = std::fs::read_to_string(workspace.join("package.json")).ok()?;
-    let json: serde_json::Value = serde_json::from_str(&content).ok()?;
-    let scripts = json.get("scripts")?.as_object()?;
-
-    let pm = if workspace.join("pnpm-lock.yaml").exists() {
-        "pnpm"
-    } else if workspace.join("yarn.lock").exists() {
-        "yarn"
-    } else {
-        "npm"
-    };
-
-    for candidate in ["typecheck", "check", "build"] {
-        if scripts.contains_key(candidate) {
-            return Some(match pm {
-                "npm" => format!("npm run {}", candidate),
-                other => format!("{} {}", other, candidate),
-            });
+    let mut files = BTreeSet::new();
+    if let Some(diff_base) = diff_base {
+        let diff = bitfun_core::util::process_manager::create_command("git")
+            .args(["diff", diff_base, "--name-only", "--find-renames", "-z"])
+            .current_dir(workspace)
+            .output();
+        if let Ok(output) = diff {
+            if output.status.success() {
+                files.extend(nul_separated_paths(&output.stdout));
+            }
         }
     }
-    None
+
+    let untracked = bitfun_core::util::process_manager::create_command("git")
+        .args(["ls-files", "--others", "--exclude-standard", "-z"])
+        .current_dir(workspace)
+        .output();
+    if let Ok(output) = untracked {
+        if output.status.success() {
+            files.extend(
+                nul_separated_paths(&output.stdout)
+                    .into_iter()
+                    .filter(|path| !initial_untracked_files.contains(path)),
+            );
+        }
+    }
+
+    files.into_iter().collect()
 }
 
-fn changed_files(workspace: &std::path::Path) -> Vec<String> {
-    let output = bitfun_core::util::process_manager::create_command("git")
-        .args(["diff", "--name-only", "--diff-filter=AM"])
-        .current_dir(workspace)
-        .output()
-        .ok();
-    let output = match output {
-        Some(o) if o.status.success() => o,
-        _ => return Vec::new(),
-    };
-    String::from_utf8_lossy(&output.stdout)
-        .lines()
-        .map(|line| line.trim().to_string())
-        .filter(|line| !line.is_empty())
+fn nul_separated_paths(output: &[u8]) -> Vec<String> {
+    output
+        .split(|byte| *byte == 0)
+        .filter(|path| !path.is_empty())
+        .map(|path| String::from_utf8_lossy(path).to_string())
         .collect()
 }
 
-fn build_parse_only_command(files: &[String]) -> Option<String> {
+fn untracked_files(workspace: &std::path::Path) -> std::collections::BTreeSet<String> {
+    let output = bitfun_core::util::process_manager::create_command("git")
+        .args(["ls-files", "--others", "--exclude-standard", "-z"])
+        .current_dir(workspace)
+        .output();
+    match output {
+        Ok(output) if output.status.success() => {
+            nul_separated_paths(&output.stdout).into_iter().collect()
+        }
+        _ => std::collections::BTreeSet::new(),
+    }
+}
+
+fn git_diff_base(workspace: &std::path::Path) -> Option<String> {
+    let head = bitfun_core::util::process_manager::create_command("git")
+        .args(["rev-parse", "--verify", "HEAD"])
+        .current_dir(workspace)
+        .output()
+        .ok();
+    if let Some(output) = head.filter(|output| output.status.success()) {
+        let head = String::from_utf8_lossy(&output.stdout).trim().to_string();
+        if !head.is_empty() {
+            return Some(head);
+        }
+    }
+
+    // Repositories without an initial commit still need a stable base if the
+    // agent creates its first commit. Hashing an empty tree through stdin works
+    // for both SHA-1 and SHA-256 repositories without modifying the worktree.
+    let empty_tree = bitfun_core::util::process_manager::create_command("git")
+        .args(["hash-object", "-t", "tree", "--stdin"])
+        .current_dir(workspace)
+        .output()
+        .ok()?;
+    if !empty_tree.status.success() {
+        return None;
+    }
+    let oid = String::from_utf8_lossy(&empty_tree.stdout)
+        .trim()
+        .to_string();
+    (!oid.is_empty()).then_some(oid)
+}
+
+fn build_parse_only_command(workspace: &std::path::Path, files: &[String]) -> Option<String> {
     let mut checks: Vec<String> = Vec::new();
     for file in files {
+        if !workspace.join(file).is_file() {
+            continue;
+        }
         let quoted = shell_single_quote(file);
         let lower = file.to_ascii_lowercase();
         if lower.ends_with(".py") {
@@ -1312,14 +1479,12 @@ fn build_parse_only_command(files: &[String]) -> Option<String> {
                 "python3 -c 'import ast,sys; ast.parse(open(sys.argv[1]).read())' {}",
                 quoted
             ));
-        } else if lower.ends_with(".js")
-            || lower.ends_with(".mjs")
-            || lower.ends_with(".cjs")
-            || lower.ends_with(".jsx")
-        {
+        } else if lower.ends_with(".js") || lower.ends_with(".mjs") || lower.ends_with(".cjs") {
             checks.push(format!("node --check {}", quoted));
-        } else if lower.ends_with(".go") {
-            checks.push(format!("gofmt -e {} > /dev/null", quoted));
+        } else if lower.ends_with(".go")
+            && find_nearest_manifest(workspace, &workspace.join(file), "go.mod").is_none()
+        {
+            checks.push(format!("gofmt -e -d {}", quoted));
         }
     }
     if checks.is_empty() {
@@ -1331,6 +1496,60 @@ fn build_parse_only_command(files: &[String]) -> Option<String> {
 
 fn shell_single_quote(s: &str) -> String {
     format!("'{}'", s.replace('\'', r"'\''"))
+}
+
+fn collect_worktree_patch(
+    workspace: &std::path::Path,
+    diff_base: Option<&str>,
+    initial_untracked_files: &std::collections::BTreeSet<String>,
+) -> Option<String> {
+    // Diff against HEAD so staged and unstaged tracked edits share one artifact.
+    // Untracked, non-ignored files are appended as ordinary new-file patches.
+    let diff_base = diff_base?;
+    let tracked = bitfun_core::util::process_manager::create_command("git")
+        .args(["diff", diff_base, "--no-color", "--binary"])
+        .current_dir(workspace)
+        .output()
+        .ok()?;
+    if !tracked.status.success() {
+        return None;
+    }
+
+    let mut patch = String::from_utf8_lossy(&tracked.stdout).to_string();
+    let untracked = bitfun_core::util::process_manager::create_command("git")
+        .args(["ls-files", "--others", "--exclude-standard", "-z"])
+        .current_dir(workspace)
+        .output()
+        .ok()?;
+    if !untracked.status.success() {
+        return None;
+    }
+    for path in nul_separated_paths(&untracked.stdout) {
+        if initial_untracked_files.contains(&path) {
+            continue;
+        }
+        let output = bitfun_core::util::process_manager::create_command("git")
+            .args([
+                "diff",
+                "--no-index",
+                "--no-color",
+                "--binary",
+                "--",
+                "/dev/null",
+                &path,
+            ])
+            .current_dir(workspace)
+            .output()
+            .ok()?;
+        if !matches!(output.status.code(), Some(0 | 1)) {
+            return None;
+        }
+        if !patch.is_empty() && !patch.ends_with('\n') {
+            patch.push('\n');
+        }
+        patch.push_str(&String::from_utf8_lossy(&output.stdout));
+    }
+    Some(patch)
 }
 
 pub(crate) fn write_patch_to_path(output_target: &str, patch: &str) -> std::io::Result<()> {
@@ -1346,42 +1565,5 @@ pub(crate) fn write_patch_to_path(output_target: &str, patch: &str) -> std::io::
 }
 
 #[cfg(test)]
-mod patch_tests {
-    use super::{write_patch_to_path, ExecMode, TOOL_START_INPUT_PREVIEW_CHARS};
-    use serde_json::json;
-
-    #[test]
-    fn write_patch_to_path_creates_nested_parent_directories() {
-        let temp = tempfile::tempdir().expect("tempdir");
-        let patch_path = temp.path().join("parent/child/out.patch");
-        write_patch_to_path(patch_path.to_str().expect("utf8 path"), "diff content")
-            .expect("write patch");
-
-        let written = std::fs::read_to_string(&patch_path).expect("read patch");
-        assert_eq!(written, "diff content");
-    }
-
-    #[test]
-    fn tool_input_preview_redacts_data_urls() {
-        let preview = ExecMode::tool_input_preview(&json!({
-            "image": {
-                "data_url": "data:image/png;base64,abc",
-                "name": "sample"
-            }
-        }));
-
-        assert!(!preview.contains("data:image/png"));
-        assert!(preview.contains("\"has_data_url\":true"));
-        assert!(preview.contains("\"name\":\"sample\""));
-    }
-
-    #[test]
-    fn tool_input_preview_truncates_large_inputs() {
-        let preview = ExecMode::tool_input_preview(&json!({
-            "content": "x".repeat(TOOL_START_INPUT_PREVIEW_CHARS + 100)
-        }));
-
-        assert!(preview.ends_with("... [truncated]"));
-        assert!(preview.len() < TOOL_START_INPUT_PREVIEW_CHARS + 100);
-    }
-}
+#[path = "exec/patch_tests.rs"]
+mod patch_tests;
