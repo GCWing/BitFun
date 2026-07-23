@@ -18,6 +18,7 @@ use base64::{engine::general_purpose::STANDARD as BASE64, Engine};
 use chrono::Utc;
 use dashmap::DashMap;
 use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
 use std::net::SocketAddr;
 use std::sync::OnceLock;
 use subtle::ConstantTimeEq;
@@ -61,8 +62,6 @@ fn valid_login_request_id(value: &str) -> bool {
 }
 
 fn decoy_login_challenge(username: &str) -> LoginChallengeResponse {
-    use sha2::{Digest, Sha256};
-
     static SECRET: OnceLock<[u8; 32]> = OnceLock::new();
     let secret = SECRET.get_or_init(rand::random);
     let material = |label: &[u8]| {
@@ -100,7 +99,12 @@ fn decoy_login_challenge(username: &str) -> LoginChallengeResponse {
 /// which is acceptable for brute-force throttling (the account lockout in the
 /// DB is the durable backstop).
 pub struct LoginRateLimiter {
-    attempts: DashMap<String, Vec<i64>>,
+    attempts: DashMap<String, Vec<RateLimitAttempt>>,
+}
+
+struct RateLimitAttempt {
+    timestamp: i64,
+    replay_key: Option<String>,
 }
 
 impl LoginRateLimiter {
@@ -110,27 +114,46 @@ impl LoginRateLimiter {
         }
     }
 
-    /// Record an attempt for `ip` and return `true` if the IP is still under
-    /// the per-minute limit (i.e. the attempt is allowed).
-    fn check_and_record(&self, ip: &str, max_per_min: usize) -> bool {
+    /// Record an attempt for one rate-limit scope and return `true` if the IP
+    /// is still under the per-minute limit. An exact replay key is counted once
+    /// so an ambiguous idempotent response cannot consume the full login budget.
+    fn check_and_record(
+        &self,
+        scope: &str,
+        ip: &str,
+        max_per_min: usize,
+        replay_key: Option<&str>,
+    ) -> bool {
         let now = Utc::now().timestamp();
         let cutoff = now - 60;
-        if self.attempts.len() >= MAX_RATE_LIMIT_BUCKETS && !self.attempts.contains_key(ip) {
+        let bucket_key = format!("{scope}:{ip}");
+        if self.attempts.len() >= MAX_RATE_LIMIT_BUCKETS && !self.attempts.contains_key(&bucket_key)
+        {
             self.attempts.retain(|_, timestamps| {
-                timestamps.retain(|timestamp| *timestamp > cutoff);
+                timestamps.retain(|attempt| attempt.timestamp > cutoff);
                 !timestamps.is_empty()
             });
             if self.attempts.len() >= MAX_RATE_LIMIT_BUCKETS {
                 return false;
             }
         }
-        let mut entry = self.attempts.entry(ip.to_string()).or_default();
+        let mut entry = self.attempts.entry(bucket_key).or_default();
         let timestamps = entry.value_mut();
-        timestamps.retain(|t| *t > cutoff);
+        timestamps.retain(|attempt| attempt.timestamp > cutoff);
+        if replay_key.is_some_and(|key| {
+            timestamps
+                .iter()
+                .any(|attempt| attempt.replay_key.as_deref() == Some(key))
+        }) {
+            return true;
+        }
         if timestamps.len() >= max_per_min {
             return false;
         }
-        timestamps.push(now);
+        timestamps.push(RateLimitAttempt {
+            timestamp: now,
+            replay_key: replay_key.map(str::to_string),
+        });
         true
     }
 }
@@ -221,6 +244,7 @@ pub(crate) async fn verify_password_hash_credentials(
     headers: &HeaderMap,
     username: &str,
     password_hash: &str,
+    rate_limit_replay_key: Option<&str>,
 ) -> Result<UserRow, (StatusCode, Json<ErrorResponse>)> {
     let Some(db) = state.db.as_ref() else {
         return Err(err(
@@ -230,10 +254,12 @@ pub(crate) async fn verify_password_hash_credentials(
     };
 
     let ip = client_ip(headers, peer_addr);
-    if !state
-        .login_rate_limiter
-        .check_and_record(&ip, MAX_LOGIN_ATTEMPTS_PER_MIN)
-    {
+    if !state.login_rate_limiter.check_and_record(
+        "credentials",
+        &ip,
+        MAX_LOGIN_ATTEMPTS_PER_MIN,
+        rate_limit_replay_key,
+    ) {
         return Err(err(
             "too many login attempts from this IP",
             StatusCode::TOO_MANY_REQUESTS,
@@ -326,7 +352,7 @@ pub async fn login_challenge(
     );
     if !state
         .login_rate_limiter
-        .check_and_record(&ip, MAX_CHALLENGE_PER_MIN)
+        .check_and_record("challenge", &ip, MAX_CHALLENGE_PER_MIN, None)
     {
         return Err(err(
             "too many requests, try later",
@@ -381,12 +407,27 @@ pub async fn login(
         .db
         .as_ref()
         .ok_or_else(|| err("account features disabled", StatusCode::NOT_IMPLEMENTED))?;
+    let rate_limit_replay_key = body.request_id.as_ref().map(|request_id| {
+        let mut hasher = Sha256::new();
+        for value in [
+            request_id.as_str(),
+            body.username.as_str(),
+            body.password_hash.as_str(),
+            body.device_id.as_str(),
+            body.device_name.as_str(),
+        ] {
+            hasher.update((value.len() as u64).to_be_bytes());
+            hasher.update(value.as_bytes());
+        }
+        BASE64.encode(hasher.finalize())
+    });
     let user = verify_password_hash_credentials(
         &state,
         connect_info.map(|Extension(ConnectInfo(addr))| addr),
         &headers,
         &body.username,
         &body.password_hash,
+        rate_limit_replay_key.as_deref(),
     )
     .await?;
 
@@ -740,5 +781,19 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(count.0, 1);
+    }
+
+    #[test]
+    fn exact_idempotent_login_replays_consume_one_rate_limit_slot() {
+        let limiter = LoginRateLimiter::new();
+        for _ in 0..20 {
+            assert!(limiter.check_and_record("credentials", "127.0.0.1", 2, Some("same")));
+        }
+        assert!(limiter.check_and_record("credentials", "127.0.0.1", 2, Some("second")));
+        assert!(!limiter.check_and_record("credentials", "127.0.0.1", 2, Some("third")));
+
+        // Challenge traffic has its own budget and cannot exhaust credential
+        // verification for the same client IP.
+        assert!(limiter.check_and_record("challenge", "127.0.0.1", 1, None));
     }
 }

@@ -13,6 +13,8 @@ use std::{
 
 const RELAY_HTTP_TIMEOUT: Duration = Duration::from_secs(120);
 const RELAY_HTTP_CONNECT_TIMEOUT: Duration = Duration::from_secs(10);
+const RELAY_HTTP_READ_TIMEOUT: Duration = Duration::from_secs(30);
+const RELAY_HTTP_RETRY_BUDGET: Duration = Duration::from_secs(120);
 const MAX_RETRY_AFTER: Duration = Duration::from_secs(5);
 
 static RELAY_HTTP_CLIENT: OnceLock<reqwest::Client> = OnceLock::new();
@@ -76,6 +78,7 @@ pub(crate) fn relay_http_client() -> reqwest::Client {
             reqwest::Client::builder()
                 .timeout(RELAY_HTTP_TIMEOUT)
                 .connect_timeout(RELAY_HTTP_CONNECT_TIMEOUT)
+                .read_timeout(RELAY_HTTP_READ_TIMEOUT)
                 .pool_idle_timeout(Duration::from_secs(90))
                 .build()
                 .unwrap_or_else(|error| {
@@ -89,6 +92,24 @@ pub(crate) fn relay_http_client() -> reqwest::Client {
 }
 
 pub(crate) async fn send_with_retry(
+    operation: &'static str,
+    request: RequestBuilder,
+    policy: RelayHttpRetry,
+) -> Result<BufferedRelayResponse> {
+    tokio::time::timeout(
+        RELAY_HTTP_RETRY_BUDGET,
+        send_with_retry_within_budget(operation, request, policy),
+    )
+    .await
+    .map_err(|_| {
+        anyhow!(
+            "relay HTTP {operation} exceeded the {}s total retry budget",
+            RELAY_HTTP_RETRY_BUDGET.as_secs()
+        )
+    })?
+}
+
+async fn send_with_retry_within_budget(
     operation: &'static str,
     request: RequestBuilder,
     policy: RelayHttpRetry,
@@ -123,6 +144,15 @@ pub(crate) async fn send_with_retry(
                     Err(error)
                         if is_retryable_transport_error(&error) && attempt < max_attempts =>
                     {
+                        // Once a definitive non-retryable HTTP status arrives,
+                        // replaying a write just to recover its error body can
+                        // repeat authentication/validation side effects.
+                        if !status.is_success() && !is_transient_status(status) {
+                            return Ok(BufferedRelayResponse {
+                                status,
+                                body: Vec::new(),
+                            });
+                        }
                         let delay = retry_delay(attempt, None);
                         warn!(
                             "Relay HTTP response body will retry: operation={operation} \
@@ -167,7 +197,6 @@ fn is_transient_status(status: StatusCode) -> bool {
         status,
         StatusCode::REQUEST_TIMEOUT
             | StatusCode::TOO_EARLY
-            | StatusCode::TOO_MANY_REQUESTS
             | StatusCode::INTERNAL_SERVER_ERROR
             | StatusCode::BAD_GATEWAY
             | StatusCode::SERVICE_UNAVAILABLE
@@ -243,7 +272,6 @@ mod tests {
         for status in [
             StatusCode::REQUEST_TIMEOUT,
             StatusCode::TOO_EARLY,
-            StatusCode::TOO_MANY_REQUESTS,
             StatusCode::INTERNAL_SERVER_ERROR,
             StatusCode::BAD_GATEWAY,
             StatusCode::SERVICE_UNAVAILABLE,
@@ -256,6 +284,7 @@ mod tests {
             StatusCode::UNAUTHORIZED,
             StatusCode::NOT_FOUND,
             StatusCode::CONFLICT,
+            StatusCode::TOO_MANY_REQUESTS,
             StatusCode::PAYLOAD_TOO_LARGE,
         ] {
             assert!(!is_transient_status(status), "{status} must not be retried");
@@ -336,6 +365,40 @@ mod tests {
 
         assert_eq!(response.text().await.unwrap(), "ok");
         assert_eq!(attempts.load(Ordering::SeqCst), 2);
+        server.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn non_retryable_status_does_not_replay_for_a_truncated_error_body() {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let address = listener.local_addr().unwrap();
+        let attempts = Arc::new(AtomicUsize::new(0));
+        let server_attempts = attempts.clone();
+        let server = tokio::spawn(async move {
+            let (mut stream, _) = listener.accept().await.unwrap();
+            let mut request = vec![0u8; 2048];
+            let _ = stream.read(&mut request).await.unwrap();
+            server_attempts.fetch_add(1, Ordering::SeqCst);
+            stream
+                .write_all(
+                    b"HTTP/1.1 401 Unauthorized\r\nContent-Length: 10\r\nConnection: close\r\n\r\nshort",
+                )
+                .await
+                .unwrap();
+        });
+        let client = reqwest::Client::builder().no_proxy().build().unwrap();
+
+        let response = send_with_retry(
+            "test-truncated-error-body",
+            client.post(format!("http://{address}/login")),
+            RelayHttpRetry::IdempotentWrite,
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+        assert!(response.bytes().await.unwrap().is_empty());
+        assert_eq!(attempts.load(Ordering::SeqCst), 1);
         server.await.unwrap();
     }
 }

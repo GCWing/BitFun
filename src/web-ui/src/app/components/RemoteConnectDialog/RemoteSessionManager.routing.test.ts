@@ -93,6 +93,7 @@ describe('mobile RemoteSessionManager target routing', () => {
     expect(remoteRequest).toHaveBeenCalledWith(
       'remote-device',
       expect.objectContaining({ cmd: 'get_workspace_info' }),
+      { retryable: true },
     );
     expect(homeRequest).not.toHaveBeenCalled();
   });
@@ -172,6 +173,7 @@ describe('mobile RemoteSessionManager target routing', () => {
         cmd: 'read_file_chunk',
         offset: 0,
       }),
+      { retryable: true },
     );
   });
 });

@@ -65,7 +65,8 @@ export function isDelegatedIdentityChangedError(
 
 const RELAY_HTTP_MAX_ATTEMPTS = 5;
 const RELAY_HTTP_RETRY_BASE_DELAY_MS = 300;
-const TRANSIENT_RELAY_STATUSES = new Set([408, 425, 429, 500, 502, 503, 504]);
+const RELAY_HTTP_RETRY_BUDGET_MS = 120_000;
+const TRANSIENT_RELAY_STATUSES = new Set([408, 425, 500, 502, 503, 504]);
 
 type RelayRequestOptions = {
   retryable?: boolean;
@@ -129,7 +130,16 @@ export class RelayHttpClient {
     const controller = new AbortController();
     const timer = window.setTimeout(() => controller.abort(), timeoutMs);
     try {
-      return await fetch(input, { ...init, signal: controller.signal });
+      const response = await fetch(input, { ...init, signal: controller.signal });
+      // Keep the deadline active until the full body has been received.
+      // `fetch()` resolves after response headers, so returning that Response
+      // directly would let a stalled body wait forever outside the timeout.
+      const body = await response.arrayBuffer();
+      return new Response(body, {
+        status: response.status,
+        statusText: response.statusText,
+        headers: response.headers,
+      });
     } catch (error: unknown) {
       if ((error as { name?: string })?.name === 'AbortError') {
         throw new Error('Request timed out');
@@ -146,9 +156,18 @@ export class RelayHttpClient {
     timeoutMs: number,
   ): Promise<Response> {
     let lastError: unknown = null;
+    const deadlineMs = Date.now() + RELAY_HTTP_RETRY_BUDGET_MS;
     for (let attempt = 1; attempt <= RELAY_HTTP_MAX_ATTEMPTS; attempt += 1) {
       try {
-        const response = await this.fetchWithTimeout(input, init, timeoutMs);
+        const remainingMs = deadlineMs - Date.now();
+        if (remainingMs <= 0) {
+          throw lastError ?? new Error('Relay request retry budget exceeded');
+        }
+        const response = await this.fetchWithTimeout(
+          input,
+          init,
+          Math.min(timeoutMs, remainingMs),
+        );
         if (
           TRANSIENT_RELAY_STATUSES.has(response.status)
           && attempt < RELAY_HTTP_MAX_ATTEMPTS
@@ -156,21 +175,16 @@ export class RelayHttpClient {
           lastError = new Error(`Relay returned HTTP ${response.status}`);
           void response.body?.cancel();
         } else {
-          // `fetch()` may resolve after headers and fail only while the caller
-          // consumes JSON. Buffer inside the retry boundary so truncated bodies
-          // from a weak link are replayed just like connect/time-out failures.
-          const body = await response.arrayBuffer();
-          return new Response(body, {
-            status: response.status,
-            statusText: response.statusText,
-            headers: response.headers,
-          });
+          return response;
         }
       } catch (error) {
         lastError = error;
         if (attempt === RELAY_HTTP_MAX_ATTEMPTS) throw error;
       }
       const delayMs = RELAY_HTTP_RETRY_BASE_DELAY_MS * (2 ** (attempt - 1));
+      if (Date.now() + delayMs >= deadlineMs) {
+        throw lastError ?? new Error('Relay request retry budget exceeded');
+      }
       await new Promise(resolve => window.setTimeout(resolve, delayMs));
     }
     throw lastError;

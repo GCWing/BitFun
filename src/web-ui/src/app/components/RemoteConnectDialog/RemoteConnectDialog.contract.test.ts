@@ -85,6 +85,17 @@ describe('Remote Connect safety contracts', () => {
     expect(backgroundSync).not.toContain('accountConnectDevices');
   });
 
+  it('delegates transient retries without replaying the complete account sync workflow', () => {
+    const backgroundSync = accountPanelSource.slice(
+      accountPanelSource.indexOf('const startBackgroundSync'),
+      accountPanelSource.indexOf('const handleRetrySync'),
+    );
+
+    expect(backgroundSync).toContain('AccountClient owns transient Relay retries');
+    expect(backgroundSync).not.toContain('for (let attempt');
+    expect(backgroundSync.match(/accountAutoSync/g)).toHaveLength(1);
+  });
+
   it('binds overwrite finalize and cleanup to an opaque pending login id', () => {
     expect(accountPanelSource).toContain('pendingLoginIdRef.current = result.pending_login_id');
     expect(accountPanelSource).toContain('accountFinalizeLogin(pendingLoginId)');

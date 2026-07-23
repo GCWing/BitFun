@@ -1038,6 +1038,7 @@ async fn page_browser_login(
             &headers,
             &body.username,
             &body.password_hash,
+            None,
         )
         .await
         {
@@ -1127,6 +1128,7 @@ async fn page_browser_login(
         &headers,
         &body.username,
         &body.password_hash,
+        None,
     )
     .await
     {

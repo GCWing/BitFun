@@ -643,40 +643,15 @@ export const AccountPanel: React.FC<AccountPanelProps> = ({
           if (!isCurrentOperation()) return;
         }
         const wp = workspacePath || '/';
-        const maxAttempts = 5;
-        let result: Awaited<ReturnType<typeof remoteConnectAPI.accountAutoSync>> | null = null;
-        let lastError: unknown = null;
-        for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
-          if (!isCurrentOperation()) return;
-          try {
-            result = await remoteConnectAPI.accountAutoSync(
-              isFirstLogin,
-              wp,
-              configJson,
-              operationId,
-            );
-            if (!isCurrentOperation()) return;
-            lastError = null;
-            break;
-          } catch (e) {
-            if (!isCurrentOperation()) return;
-            lastError = e;
-            log.warn(`Auto-sync attempt ${attempt}/${maxAttempts} failed`, e);
-            if (isNonRetryableSyncError(e)) {
-              break;
-            }
-            if (attempt < maxAttempts) {
-              info(t('accountLogin.syncRetrying', { attempt, max: maxAttempts }));
-              await new Promise((resolve) => setTimeout(resolve, 2000 * attempt));
-              if (!isCurrentOperation()) return;
-            }
-          }
-        }
-        if (!result) {
-          throw lastError instanceof Error
-            ? lastError
-            : new Error(String(lastError ?? 'auto-sync failed'));
-        }
+        // AccountClient owns transient Relay retries with one shared deadline.
+        // Replaying this entire workflow would also repeat deterministic local
+        // config/filesystem work and multiply the transport retry budget.
+        const result = await remoteConnectAPI.accountAutoSync(
+          isFirstLogin,
+          wp,
+          configJson,
+          operationId,
+        );
         if (!isCurrentOperation()) return;
         log.info(
           `Auto-sync done: settings=${result.settings_synced} exported=${result.sessions_exported}`,
