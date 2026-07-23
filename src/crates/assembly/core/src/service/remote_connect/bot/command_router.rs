@@ -293,13 +293,17 @@ fn confirm_mode_switch_view(target_mode: BotDisplayMode, s: &'static BotStrings)
     } else {
         s.mode_assistant
     };
-    let body = format!("{} → {}", s.mode_confirm_switch_prefix, target_label);
+    let body = format!(
+        "{} → {}\n\n1. {}",
+        s.mode_confirm_switch_prefix, target_label, s.item_confirm_switch
+    );
     MenuView::plain(s.settings_title)
-        .with_body(body)
+        .with_numbered_body(body)
         .with_items(vec![
             MenuItem::primary(s.item_confirm_switch, "1"),
             MenuItem::default(s.item_back, "/menu"),
         ])
+        .with_footer(s.pending_back_hint)
 }
 
 // ── Model switching ────────────────────────────────────────────────
@@ -340,10 +344,9 @@ fn model_selection_view(
 
     items.push(MenuItem::default(s.item_back, "/menu"));
     MenuView::plain(s.switch_model_title)
-        .with_body(body.trim_end().to_string())
+        .with_numbered_body(body.trim_end().to_string())
         .with_items(items)
         .with_footer(s.footer_reply_model)
-        .without_plain_text_items()
 }
 
 async fn start_switch_model(state: &mut BotChatState, s: &'static BotStrings) -> HandleResult {
@@ -672,7 +675,7 @@ async fn dispatch(
 // re-implementing the encryption/request envelope inline.
 
 fn devices_unavailable_view(s: &'static BotStrings) -> MenuView {
-    MenuView::plain("Multi-device Control")
+    MenuView::plain(s.devices_title)
         .with_body(s.devices_account_required)
         .with_items(vec![MenuItem::default(s.item_back, "/menu")])
 }
@@ -733,42 +736,47 @@ async fn list_devices(state: &mut BotChatState, s: &'static BotStrings) -> Handl
     // Build a selectable list: "0. Local" + each online device.
     let online: Vec<_> = devices.into_iter().filter(|d| d.online).collect();
 
-    let mut body = String::new();
-    // Always offer "Local" as option 1 (index 0 internally).
-    let is_local = state.active_remote_device.is_none();
-    let marker = if is_local { s.current_marker } else { "" };
-    body.push_str(&format!("1. {}{}\n", s.devices_local, marker));
-
-    let mut items = vec![MenuItem::default(s.devices_local, "1")];
     let mut options: Vec<(String, String)> =
         vec![("local".to_string(), s.devices_local.to_string())];
 
-    for (i, d) in online.iter().enumerate() {
-        let is_active = state
-            .active_remote_device
-            .as_ref()
-            .map(|a| a.device_id == d.device_id)
-            .unwrap_or(false);
-        let marker = if is_active { s.current_marker } else { "" };
-        body.push_str(&format!("{}. {}{}\n", i + 2, d.device_name, marker));
-        body.push_str(&format!("   {}\n", d.device_id));
-        items.push(MenuItem::default(
-            truncate_label(&d.device_name, 24),
-            (i + 2).to_string(),
-        ));
+    for d in &online {
         options.push((d.device_id.clone(), d.device_name.clone()));
+    }
+
+    let view = device_selection_view(state, &options, s);
+    state.set_pending(PendingAction::SelectDevice { options });
+    result_from_menu(state, view)
+}
+
+fn device_selection_view(
+    state: &BotChatState,
+    options: &[(String, String)],
+    s: &'static BotStrings,
+) -> MenuView {
+    let mut body = String::new();
+    let mut items = Vec::new();
+    for (i, (device_id, device_name)) in options.iter().enumerate() {
+        let is_current = if device_id == "local" {
+            state.active_remote_device.is_none()
+        } else {
+            state
+                .active_remote_device
+                .as_ref()
+                .is_some_and(|active| active.device_id == *device_id)
+        };
+        let marker = if is_current { s.current_marker } else { "" };
+        body.push_str(&format!("{}. {}{}\n", i + 1, device_name, marker));
+        items.push(MenuItem::default(
+            truncate_label(device_name, 24),
+            (i + 1).to_string(),
+        ));
     }
     items.push(MenuItem::default(s.item_back, "/menu"));
 
-    state.set_pending(PendingAction::SelectDevice { options });
-
-    let view = MenuView::plain(s.devices_title)
-        .with_body(body.trim_end().to_string())
+    MenuView::plain(s.devices_title)
+        .with_numbered_body(body.trim_end().to_string())
         .with_items(items)
         .with_footer(s.devices_pick_to_switch)
-        .without_plain_text_items();
-
-    result_from_menu(state, view)
 }
 
 // ── Remote device RPC helpers ────────────────────────────────────
@@ -1050,10 +1058,9 @@ fn workspace_selection_view(
     }
     items.push(MenuItem::default(s.item_back, "/menu"));
     MenuView::plain(s.switch_pick_workspace)
-        .with_body(body.trim_end().to_string())
+        .with_numbered_body(body.trim_end().to_string())
         .with_items(items)
         .with_footer(s.footer_reply_workspace)
-        .without_plain_text_items()
 }
 
 fn assistant_selection_view(
@@ -1074,10 +1081,9 @@ fn assistant_selection_view(
     }
     items.push(MenuItem::default(s.item_back, "/menu"));
     MenuView::plain(s.switch_pick_assistant)
-        .with_body(body.trim_end().to_string())
+        .with_numbered_body(body.trim_end().to_string())
         .with_items(items)
         .with_footer(s.footer_reply_assistant)
-        .without_plain_text_items()
 }
 
 fn session_selection_view(
@@ -1108,10 +1114,9 @@ fn session_selection_view(
         s.footer_reply_session
     };
     MenuView::plain(format!("{} · #{}", s.resume_page_label, page + 1))
-        .with_body(body.trim_end().to_string())
+        .with_numbered_body(body.trim_end().to_string())
         .with_items(items)
         .with_footer(footer)
-        .without_plain_text_items()
 }
 
 async fn select_workspace(
@@ -1541,7 +1546,7 @@ async fn start_resume(
                     let name = sess
                         .get("name")
                         .and_then(|v| v.as_str())
-                        .unwrap_or("Untitled");
+                        .unwrap_or(s.resume_untitled);
                     let agent = sess
                         .get("agent_type")
                         .and_then(|v| v.as_str())
@@ -1550,15 +1555,20 @@ async fn start_resume(
                         .get("message_count")
                         .and_then(|v| v.as_u64())
                         .unwrap_or(0);
+                    let msg_hint = match count {
+                        0 => s.resume_msg_count_zero.to_string(),
+                        1 => s.resume_msg_count_one.to_string(),
+                        n => fmt_count(s.resume_msg_count_many_fmt, n as usize),
+                    };
                     let is_current = state.current_session_id.as_deref() == Some(sid);
                     let marker = if is_current { s.current_marker } else { "" };
                     body.push_str(&format!(
-                        "{}. {}{}\n   {} · {} msg\n",
+                        "{}. {}{}\n   {} · {}\n",
                         i + 1,
                         name,
                         marker,
                         agent,
-                        count
+                        msg_hint
                     ));
                     items.push(MenuItem::default(
                         truncate_label(name, 26),
@@ -1587,7 +1597,7 @@ async fn start_resume(
                     dev.device_name,
                     page + 1
                 ))
-                .with_body(body.trim_end().to_string())
+                .with_numbered_body(body.trim_end().to_string())
                 .with_items(items)
                 .with_footer(footer);
                 return result_from_menu(state, view);
@@ -1730,7 +1740,7 @@ async fn start_resume(
         s.footer_reply_session
     };
     let view = MenuView::plain(format!("{} · #{}", s.resume_page_label, page + 1))
-        .with_body(body.trim_end().to_string())
+        .with_numbered_body(body.trim_end().to_string())
         .with_items(items)
         .with_footer(footer);
     result_from_menu(state, view)
@@ -2362,9 +2372,7 @@ async fn pending_invalid(state: &mut BotChatState, s: &'static BotStrings) -> Ha
         PendingAction::ConfirmModeSwitch { target_mode, .. } => {
             confirm_mode_switch_view(*target_mode, s)
         }
-        PendingAction::SelectDevice { .. } => {
-            MenuView::plain(s.devices_title).with_footer(s.devices_pick_to_switch)
-        }
+        PendingAction::SelectDevice { options } => device_selection_view(state, options, s),
     };
     let original_body = view.body.take().unwrap_or_default();
     let new_body = if original_body.is_empty() {
@@ -2441,7 +2449,7 @@ fn build_question_view(
     items.push(MenuItem::default(s.item_back, "/menu"));
 
     MenuView::plain(title)
-        .with_body(body.trim_end().to_string())
+        .with_numbered_body(body.trim_end().to_string())
         .with_items(items)
         .with_footer(footer)
 }
@@ -3246,6 +3254,89 @@ mod menu_tests {
             !body.contains(s.current_session_label),
             "current_session_label leaked into body: {body}"
         );
+    }
+
+    #[test]
+    fn session_menu_plain_text_lists_each_choice_once() {
+        let state = BotChatState::new("c".into());
+        let s = strings_for(BotLanguage::ZhCN);
+        let options = vec![
+            ("session-a".to_string(), "会话甲".to_string()),
+            ("session-b".to_string(), "会话乙".to_string()),
+        ];
+
+        let view = session_selection_view(&state, &options, 0, true, s);
+        let text = view.render_plain_text(BotLanguage::ZhCN);
+
+        assert_eq!(text.matches("会话甲").count(), 1, "{text}");
+        assert_eq!(text.matches("会话乙").count(), 1, "{text}");
+        assert!(!text.contains("3. 下一页"), "{text}");
+        assert!(!text.contains("4. 返回"), "{text}");
+        assert!(text.contains("发送 0 查看下一页"), "{text}");
+        assert!(text.contains("/menu 返回"), "{text}");
+    }
+
+    #[test]
+    fn question_menu_plain_text_does_not_repeat_button_choices() {
+        let s = strings_for(BotLanguage::ZhCN);
+        let questions = vec![BotQuestion {
+            question: "请选择方案".to_string(),
+            header: String::new(),
+            options: vec![
+                BotQuestionOption {
+                    label: "方案甲".to_string(),
+                    description: "快速".to_string(),
+                },
+                BotQuestionOption {
+                    label: "方案乙".to_string(),
+                    description: "稳妥".to_string(),
+                },
+            ],
+            multi_select: false,
+        }];
+
+        let view = build_question_view(s, &questions, 0, false);
+        let text = view.render_plain_text(BotLanguage::ZhCN);
+
+        assert_eq!(text.matches("方案甲").count(), 1, "{text}");
+        assert_eq!(text.matches("方案乙").count(), 1, "{text}");
+        assert_eq!(text.matches("其他").count(), 1, "{text}");
+        assert!(!text.contains("4. 返回"), "{text}");
+    }
+
+    #[test]
+    fn confirmation_plain_text_uses_one_and_zero_semantics() {
+        let s = strings_for(BotLanguage::ZhCN);
+        let view = confirm_mode_switch_view(BotDisplayMode::Pro, s);
+        let text = view.render_plain_text(BotLanguage::ZhCN);
+
+        assert_eq!(text.matches(s.item_confirm_switch).count(), 1, "{text}");
+        assert!(!text.contains("2. 返回"), "{text}");
+        assert!(text.contains("0"), "{text}");
+        assert!(text.contains("/menu"), "{text}");
+    }
+
+    #[test]
+    fn device_menu_plain_text_is_reconstructable_without_ids_or_duplicates() {
+        let mut state = BotChatState::new("c".into());
+        state.select_remote_device(RemoteDeviceTarget {
+            device_id: "opaque-device-id".to_string(),
+            device_name: "办公室电脑".to_string(),
+        });
+        let s = strings_for(BotLanguage::ZhCN);
+        let options = vec![
+            ("local".to_string(), s.devices_local.to_string()),
+            ("opaque-device-id".to_string(), "办公室电脑".to_string()),
+        ];
+
+        let view = device_selection_view(&state, &options, s);
+        let text = view.render_plain_text(BotLanguage::ZhCN);
+
+        assert_eq!(text.matches("办公室电脑").count(), 1, "{text}");
+        assert!(text.contains(s.current_marker), "{text}");
+        assert!(!text.contains("opaque-device-id"), "{text}");
+        assert!(!text.contains("3. 返回"), "{text}");
+        assert!(text.contains("发送 0 返回"), "{text}");
     }
 }
 

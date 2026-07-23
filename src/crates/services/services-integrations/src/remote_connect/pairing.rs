@@ -172,7 +172,16 @@ impl PairingProtocol {
 
     /// Step 2 (Desktop): Peer joined with their public key — derive shared secret.
     pub async fn on_peer_joined(&mut self, peer_public_key_b64: &str) -> Result<PairingChallenge> {
-        if self.state().await != PairingState::WaitingForScan {
+        let state = self.state().await;
+        // Mobile browsers do not persist the ephemeral ECDH private key. A
+        // refresh, a duplicated URL, or a reload during verification therefore
+        // starts a fresh handshake in the same still-valid QR room. Let the
+        // latest handshake supersede the previous one; identity authorization
+        // is still enforced after the encrypted challenge response.
+        if !matches!(
+            state,
+            PairingState::WaitingForScan | PairingState::Verifying | PairingState::Connected
+        ) {
             return Err(anyhow!("pairing request is not valid in the current state"));
         }
         let keypair = self
@@ -380,6 +389,94 @@ mod tests {
 
         // Challenges are single-use even when a response is replayed verbatim.
         assert!(protocol.verify_response(&response).await.is_err());
+    }
+
+    #[tokio::test]
+    async fn connected_pairing_accepts_a_fresh_browser_handshake() {
+        let device = DeviceIdentity {
+            device_id: "test-desktop-id".into(),
+            device_name: "TestDesktop".into(),
+            mac_address: "AA:BB:CC:DD:EE:FF".into(),
+        };
+        let first_mobile = DeviceIdentity {
+            device_id: "first-mobile-id".into(),
+            device_name: "FirstMobile".into(),
+            mac_address: "11:22:33:44:55:66".into(),
+        };
+        let second_mobile = DeviceIdentity {
+            device_id: "second-mobile-id".into(),
+            device_name: "SecondMobile".into(),
+            mac_address: "22:33:44:55:66:77".into(),
+        };
+        let mut protocol = PairingProtocol::new(device);
+        let qr = protocol.initiate("wss://relay.example.com").await.unwrap();
+        let desktop_pub = encryption::parse_public_key(&qr.public_key).unwrap();
+
+        let first_keypair = KeyPair::generate();
+        let first_challenge = protocol
+            .on_peer_joined(&first_keypair.public_key_base64())
+            .await
+            .unwrap();
+        let first_response =
+            PairingProtocol::answer_challenge(&first_challenge, &first_mobile, None, None);
+        assert!(protocol.verify_response(&first_response).await.unwrap());
+        assert_eq!(protocol.state().await, PairingState::Connected);
+
+        let second_keypair = KeyPair::generate();
+        let second_challenge = protocol
+            .on_peer_joined(&second_keypair.public_key_base64())
+            .await
+            .expect("a valid QR room must allow a browser refresh or another browser");
+        assert_eq!(protocol.state().await, PairingState::Verifying);
+        assert_eq!(
+            *protocol.shared_secret().unwrap(),
+            second_keypair.derive_shared_secret(&desktop_pub)
+        );
+
+        let second_response =
+            PairingProtocol::answer_challenge(&second_challenge, &second_mobile, None, None);
+        assert!(protocol.verify_response(&second_response).await.unwrap());
+        assert_eq!(protocol.state().await, PairingState::Connected);
+        assert_eq!(protocol.peer_device_name(), Some("SecondMobile"));
+    }
+
+    #[tokio::test]
+    async fn fresh_pair_request_supersedes_an_abandoned_browser_handshake() {
+        let device = DeviceIdentity {
+            device_id: "test-desktop-id".into(),
+            device_name: "TestDesktop".into(),
+            mac_address: "AA:BB:CC:DD:EE:FF".into(),
+        };
+        let latest_mobile = DeviceIdentity {
+            device_id: "latest-mobile-id".into(),
+            device_name: "LatestMobile".into(),
+            mac_address: "33:44:55:66:77:88".into(),
+        };
+        let mut protocol = PairingProtocol::new(device);
+        let qr = protocol.initiate("wss://relay.example.com").await.unwrap();
+        let desktop_pub = encryption::parse_public_key(&qr.public_key).unwrap();
+
+        let abandoned_keypair = KeyPair::generate();
+        protocol
+            .on_peer_joined(&abandoned_keypair.public_key_base64())
+            .await
+            .unwrap();
+        assert_eq!(protocol.state().await, PairingState::Verifying);
+
+        let latest_keypair = KeyPair::generate();
+        let latest_challenge = protocol
+            .on_peer_joined(&latest_keypair.public_key_base64())
+            .await
+            .expect("a reload must supersede an unfinished handshake");
+        assert_eq!(
+            *protocol.shared_secret().unwrap(),
+            latest_keypair.derive_shared_secret(&desktop_pub)
+        );
+
+        let latest_response =
+            PairingProtocol::answer_challenge(&latest_challenge, &latest_mobile, None, None);
+        assert!(protocol.verify_response(&latest_response).await.unwrap());
+        assert_eq!(protocol.state().await, PairingState::Connected);
     }
 
     #[tokio::test]
