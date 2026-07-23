@@ -25,7 +25,13 @@ import { filterSlashCommands, useAcpSlashCommands } from '../hooks/useAcpSlashCo
 import { acpSessionRef, acpSlashCommandText } from '../utils/acpSession';
 import { AcpPlanPanel } from './AcpPlanPanel';
 import type { FlowChatState } from '../types/flow-chat';
-import type { ContextItem, FileContext, DirectoryContext, ImageContext } from '@/types/context.ts';
+import type {
+  ContextItem,
+  DirectoryContext,
+  FileContext,
+  ImageContext,
+  SessionReferenceContext,
+} from '@/types/context.ts';
 import { SmartRecommendations } from './smart-recommendations';
 import { useCurrentWorkspace, useWorkspaceContext } from '@/infrastructure/contexts/WorkspaceContext';
 import { flowChatSessionConfigForCurrentWorkspace } from '@/app/utils/projectSessionWorkspace';
@@ -3951,7 +3957,8 @@ export const ChatInput: React.FC<ChatInputProps> = ({
                 isOpen={mentionState.isActive}
                 searchQuery={mentionState.query}
                 workspacePath={workspacePath}
-                onSelect={(context: FileContext | DirectoryContext) => {
+                excludeSessionId={effectiveTargetSessionId || undefined}
+                onSelect={(context: FileContext | DirectoryContext | SessionReferenceContext) => {
                   addContext(context);
                   
                   if (richTextInputRef.current && (richTextInputRef.current as any).insertTagReplacingMention) {

@@ -28,6 +28,16 @@ export interface SessionMetadataPage {
   hasMore: boolean;
 }
 
+export interface SessionReferenceCandidate {
+  sessionId: string;
+  sessionName: string;
+  workspacePath: string;
+  remoteConnectionId?: string;
+  remoteSshHost?: string;
+  workspaceLabel: string;
+  lastActivityAt: number;
+}
+
 export interface SessionUsageReportRequest {
   sessionId: string;
   workspacePath: string;
@@ -193,6 +203,19 @@ function remoteSessionFields(
 }
 
 export class SessionAPI {
+  async searchReferenceableSessions(
+    query: string,
+    limit = 30,
+  ): Promise<SessionReferenceCandidate[]> {
+    try {
+      return await api.invoke('search_referenceable_sessions', {
+        request: { query, limit },
+      });
+    } catch (error) {
+      throw createTauriCommandError('search_referenceable_sessions', error, { query, limit });
+    }
+  }
+
   async forkSession(
     sourceSessionId: string,
     sourceTurnId: string,

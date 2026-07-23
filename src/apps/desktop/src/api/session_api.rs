@@ -7,15 +7,18 @@ use crate::runtime::{
     UiSessionMetadataField,
 };
 use crate::startup_trace::DesktopStartupTrace;
+use bitfun_core::agentic::coordination::get_global_scheduler;
 use bitfun_core::agentic::persistence::{
     PersistenceManager, SessionBranchResult, SessionMetadataPage,
 };
 use bitfun_core::infrastructure::PathManager;
+use bitfun_core::service::remote_ssh::normalize_remote_workspace_path;
 use bitfun_core::service::session::{
     DialogTurnData, SessionKind, SessionMetadata, SessionStatus, SessionTranscriptExport,
     SessionTranscriptExportOptions,
 };
 use bitfun_core::service::session_usage::SessionUsageReport;
+use bitfun_core::service::workspace::WorkspaceKind;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use std::time::Instant;
@@ -107,6 +110,31 @@ pub struct ExportSessionTranscriptRequest {
     pub thinking: bool,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub turns: Option<Vec<String>>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SearchReferenceableSessionsRequest {
+    pub query: String,
+    #[serde(default = "default_session_reference_search_limit")]
+    pub limit: usize,
+}
+
+fn default_session_reference_search_limit() -> usize {
+    30
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SessionReferenceCandidate {
+    pub session_id: String,
+    pub session_name: String,
+    pub workspace_path: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub remote_connection_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub remote_ssh_host: Option<String>,
+    pub workspace_label: String,
+    pub last_activity_at: u64,
 }
 
 fn default_tools() -> bool {
@@ -229,6 +257,82 @@ pub async fn list_persisted_sessions(
                 desktop_session_error(error)
             )
         })
+}
+
+/// Search lightweight persisted metadata across open local and SSH
+/// workspaces. This deliberately never loads dialog turns or generates a
+/// transcript; that work happens only when the selected message is dispatched.
+#[tauri::command]
+pub async fn search_referenceable_sessions(
+    request: SearchReferenceableSessionsRequest,
+    runtime: State<'_, DesktopRuntimeContext>,
+    app_state: State<'_, AppState>,
+) -> Result<Vec<SessionReferenceCandidate>, String> {
+    let query = request.query.trim().to_lowercase();
+    if query.is_empty() {
+        return Ok(Vec::new());
+    }
+    let limit = request.limit.clamp(1, 30);
+    let scheduler = get_global_scheduler();
+    let mut workspaces = app_state.workspace_service.get_opened_workspaces().await;
+    workspaces.sort_by_key(|workspace| std::cmp::Reverse(workspace.last_accessed));
+
+    let mut candidates = Vec::new();
+    for workspace in workspaces {
+        let remote_connection_id = workspace.remote_ssh_connection_id().map(ToOwned::to_owned);
+        let remote_ssh_host = workspace
+            .metadata
+            .get("sshHost")
+            .and_then(|value| value.as_str())
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .map(str::to_string);
+        let workspace_path = if workspace.workspace_kind == WorkspaceKind::Remote {
+            normalize_remote_workspace_path(&workspace.root_path.to_string_lossy())
+        } else {
+            workspace.root_path.to_string_lossy().to_string()
+        };
+        let metadata = runtime
+            .session_application()
+            .list_persisted_sessions(desktop_session_scope(
+                workspace_path.clone(),
+                remote_connection_id.clone(),
+                remote_ssh_host.clone(),
+            ))
+            .await
+            .map_err(|error| {
+                format!(
+                    "Failed to list sessions for workspace {}: {}",
+                    workspace.name,
+                    desktop_session_error(error)
+                )
+            })?;
+
+        for session in metadata {
+            if session.status == SessionStatus::Archived
+                || !matches!(session.session_kind, SessionKind::Standard)
+                || scheduler.as_ref().is_some_and(|scheduler| {
+                    scheduler.is_session_busy_or_queued(&session.session_id)
+                })
+                || !session.session_name.to_lowercase().contains(&query)
+            {
+                continue;
+            }
+            candidates.push(SessionReferenceCandidate {
+                session_id: session.session_id,
+                session_name: session.session_name,
+                workspace_path: workspace_path.clone(),
+                remote_connection_id: remote_connection_id.clone(),
+                remote_ssh_host: remote_ssh_host.clone(),
+                workspace_label: workspace.name.clone(),
+                last_activity_at: session.last_active_at,
+            });
+        }
+    }
+
+    candidates.sort_by(|left, right| right.last_activity_at.cmp(&left.last_activity_at));
+    candidates.truncate(limit);
+    Ok(candidates)
 }
 
 #[tauri::command]

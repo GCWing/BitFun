@@ -1098,6 +1098,18 @@ impl DialogScheduler {
         self.queues.depth(session_id)
     }
 
+    /// Whether a session has a running or queued turn. This is intentionally a
+    /// narrow observation API for features that need an idle target without
+    /// depending on scheduler internals.
+    pub fn is_session_busy_or_queued(&self, session_id: &str) -> bool {
+        self.active_turns.contains(session_id)
+            || self.queues.has_items(session_id)
+            || self
+                .session_manager
+                .get_session(session_id)
+                .is_some_and(|session| matches!(session.state, SessionState::Processing { .. }))
+    }
+
     async fn finish_removed_queued_turn(&self, session_id: &str, removed_turn: QueuedTurn) {
         match removed_turn.execution {
             QueuedTurnExecution::Standard => {
