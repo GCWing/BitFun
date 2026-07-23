@@ -1,9 +1,90 @@
 {
   "title": "外部 AI 應用",
-  "subtitle": "使用其他 AI 應用的命令、工具、Agent 與 MCP。",
+  "subtitle": "使用其他 AI 應用的命令、工具、Agent 與 MCP，並檢查其 Hook。",
   "legacyHostNotice": "目前執行 Host 使用舊版外部來源協定；升級 Host 後才能使用安全模式。",
   "loading": "正在檢查外部來源…",
   "checkingNonBlocking": "正在檢查更新…",
+  "hooks": {
+    "title": "Hooks",
+    "description": "檢查 OpenCode、Claude Code 與 Codex 的靜態 Hook 設定。",
+    "refresh": "重新整理 Hooks",
+    "refreshing": "正在重新整理 Hooks…",
+    "showMoreSources": "再顯示 {{count}} 個來源",
+    "showMoreEntries": "再顯示 {{count}} 個 Hook",
+    "showMoreDiagnostics": "再顯示 {{count}} 筆診斷",
+    "showMoreSourcesForProvider": "再顯示 {{provider}} 的 {{count}} 個來源",
+    "showMoreEntriesForProvider": "再顯示 {{provider}} 的 {{count}} 個 Hook",
+    "showMoreDiagnosticsForProvider": "再顯示 {{provider}} 的 {{count}} 筆診斷",
+    "technicalDetails": "技術詳情",
+    "loading": "正在檢查 Hook 設定…",
+    "pending": "Hook 探索仍在進行，目錄會自動更新。",
+    "empty": "未發現支援的 Hook 設定。",
+    "error": "Hook 設定目前無法使用（{{code}}）。",
+    "staleAfterRefresh": "重新整理失敗（{{code}}），正在顯示最近一次有效目錄。",
+    "pollInterrupted": "Hook 自動探索已中斷（{{code}}）。請重新整理重試；目前可見目錄可能來自最近一次成功檢查。",
+    "summary": "{{hooks}} 個 Hook · {{mapped}} 個等價語意涵蓋 · {{sources}} 個來源",
+    "providerEmpty": "未發現此應用的靜態 Hook 來源。",
+    "providerFailed": "此應用的靜態 Hook 探索失敗，目前沒有可用目錄。",
+    "providerStaleEmpty": "最近一次有效目錄為空，且最新重新整理失敗。",
+    "noEntries": "此來源中沒有可靜態識別的 Hook 事件。",
+    "entriesDeferred": "更多 Hook 可透過提供者區域底部的「顯示更多」查看。",
+    "matcher": "比對條件：{{matcher}}",
+    "matcherValue": {
+      "all": "全部",
+      "dynamic": "動態",
+      "unavailable": "無法使用",
+      "unknown": "未知"
+    },
+    "diagnostics": "診斷",
+    "readOnly": "僅供檢視。BitFun 不會從此目錄載入或執行處理器。",
+    "unsupported": {
+      "remote": "目前版本暫不支援檢查遠端工作區的 Hook。",
+      "peer": "目前版本暫不支援透過 Peer Device Mode 檢查 Hook。"
+    },
+    "health": {
+      "available": "可用",
+      "partial": "部分讀取",
+      "degraded": "已降級",
+      "unavailable": "無法使用",
+      "stale": "最近一次有效結果",
+      "failed": "探索失敗"
+    },
+    "handler": {
+      "function": "函式",
+      "command": "命令",
+      "http": "HTTP",
+      "mcp_tool": "MCP 工具",
+      "prompt": "Prompt",
+      "agent": "Agent"
+    },
+    "scope": {
+      "user_global": "使用者",
+      "project": "專案",
+      "remote_user": "遠端使用者",
+      "remote_project": "遠端專案"
+    },
+    "activation": {
+      "disabled": "已在原生設定中停用",
+      "unsupported": "原生執行階段不支援",
+      "unknown": "未評估原生啟用狀態"
+    },
+    "diagnosticCategory": {
+      "nativeDisabled": "此原生設定已停用 Hook。",
+      "activationUnknown": "信任與啟用狀態需要由來源應用程式執行階段判斷。",
+      "staticCoverage": "靜態檢查只能顯示此來源的部分資訊。",
+      "opaque": "部分註冊無法在不執行原始碼的情況下安全識別。",
+      "inspectionLimit": "部分 Hook 設定因靜態檢查安全限制而被省略。",
+      "invalidConfiguration": "部分 Hook 設定無效或無法解析。",
+      "unavailable": "部分 Hook 設定無法讀取。",
+      "generic": "Hook 檢查回報了一項診斷（{{code}}）。"
+    },
+    "projection": {
+      "tool_before": "等價涵蓋 BitFun 工具執行前（未連接執行階段）",
+      "tool_after": "等價涵蓋 BitFun 工具執行後（未連接執行階段）",
+      "nativeOnly": "僅來源應用支援",
+      "opaque": "靜態資訊不完整"
+    }
+  },
   "common": {
     "details": "詳細資料",
     "hideDetails": "收合詳細資料",

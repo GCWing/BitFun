@@ -6,6 +6,7 @@ import { createRoot, type Root } from 'react-dom/client';
 import ExternalSourcesConfig from './ExternalSourcesConfig';
 
 const getSnapshotMock = vi.hoisted(() => vi.fn());
+const getHookCatalogMock = vi.hoisted(() => vi.fn());
 const setSourceEnabledMock = vi.hoisted(() => vi.fn());
 const setSafeModeMock = vi.hoisted(() => vi.fn());
 const setConflictChoiceMock = vi.hoisted(() => vi.fn());
@@ -79,6 +80,9 @@ vi.mock('@/infrastructure/api/service-api/ExternalSourcesAPI', () => ({
     updateIntegrationPolicy: updateIntegrationPolicyMock,
     revealSourceLocation: revealSourceLocationMock,
   },
+}));
+vi.mock('@/infrastructure/api/service-api/ExternalHooksAPI', () => ({
+  externalHooksAPI: { getCatalog: getHookCatalogMock },
 }));
 
 const snapshot = {
@@ -240,6 +244,16 @@ describe('ExternalSourcesConfig', () => {
     workspaceState.path = 'D:/workspace/project';
     workspaceState.kind = 'normal';
     peerState.deviceId = '';
+    getHookCatalogMock.mockResolvedValue({
+      schemaVersion: 1,
+      discoveryPending: false,
+      providers: [],
+      sources: [],
+      entries: [],
+      staleProviderIds: [],
+      failedProviderIds: [],
+      diagnostics: [],
+    });
     getSnapshotMock.mockResolvedValue(snapshot);
     setSourceEnabledMock.mockResolvedValue(snapshot);
     setSafeModeMock.mockResolvedValue(snapshot);
@@ -1461,13 +1475,17 @@ describe('ExternalSourcesConfig', () => {
     });
     expect(container.textContent).toContain('agentChanges.unavailable');
     expect(container.textContent).toContain('External Review');
-    expect(container.querySelectorAll('[role="status"]')).toHaveLength(1);
+    expect(Array.from(container.querySelectorAll('[role="status"]')).filter(
+      (status) => status.textContent?.includes('agentChanges.unavailable'),
+    )).toHaveLength(1);
 
     await act(async () => {
       window.dispatchEvent(new Event('focus'));
       await Promise.resolve();
     });
-    expect(container.querySelectorAll('[role="status"]')).toHaveLength(1);
+    expect(Array.from(container.querySelectorAll('[role="status"]')).filter(
+      (status) => status.textContent?.includes('agentChanges.unavailable'),
+    )).toHaveLength(1);
 
     getSnapshotMock.mockResolvedValue({
       ...activeSnapshot,

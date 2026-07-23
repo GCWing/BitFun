@@ -17,7 +17,10 @@ export const noCoreDependencyCrates = [
   'agent-tools',
   'tool-packs',
   'product-domains',
+  'claude-code-adapter',
+  'codex-adapter',
   'opencode-adapter',
+  'static-hook-support',
   'external-sources',
   'terminal',
   'tool-runtime',
@@ -38,6 +41,33 @@ export const forbiddenManifestDependencyRules = [
       'OpenCode adapter production dependencies are limited to the reviewed product composition root',
     message:
       'only bitfun-core product-full assembly may register bitfun-opencode-adapter through reviewed capability composition roots',
+  },
+  ...[
+    ['bitfun-claude-code-adapter', 'claude-code-adapter'],
+    ['bitfun-codex-adapter', 'codex-adapter'],
+  ].map(([dependencyName, crateName]) => ({
+    dependencyNames: [dependencyName],
+    scanRoots: ['src/apps', 'src/crates', 'BitFun-Installer/src-tauri'],
+    workspaceManifestPath: 'Cargo.toml',
+    allowManifestPaths: [
+      `src/crates/adapters/${crateName}/Cargo.toml`,
+      'src/crates/assembly/core/Cargo.toml',
+    ],
+    reason: `${crateName} production dependencies are limited to the reviewed product composition root`,
+    message: `only bitfun-core product-full assembly may register ${dependencyName} through the static Hook provider boundary`,
+  })),
+  {
+    dependencyNames: ['bitfun-static-hook-support'],
+    scanRoots: ['src/apps', 'src/crates', 'BitFun-Installer/src-tauri'],
+    workspaceManifestPath: 'Cargo.toml',
+    allowManifestPaths: [
+      'src/crates/adapters/static-hook-support/Cargo.toml',
+      'src/crates/adapters/opencode-adapter/Cargo.toml',
+      'src/crates/adapters/claude-code-adapter/Cargo.toml',
+      'src/crates/adapters/codex-adapter/Cargo.toml',
+    ],
+    reason: 'static Hook parsing support is private to ecosystem source adapters',
+    message: 'static Hook support may only be consumed by reviewed ecosystem Hook adapters',
   },
 ];
 

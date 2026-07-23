@@ -50,6 +50,7 @@ import {
   type ExternalSourcePresentationGroup,
 } from '../externalSourcePresentation';
 import { externalSourceRequestScopeKey } from './externalSourceRequestScope';
+import ExternalHooksPanel from './ExternalHooksPanel';
 import './ExternalSourcesConfig.scss';
 
 const DISCOVERY_POLL_DELAYS_MS = [750, 1_500, 3_000, 5_000] as const;
@@ -245,6 +246,7 @@ const ExternalSourcesConfig: React.FC = () => {
   const peerDeviceId = peerDevice?.peerMode.active ? peerDevice.peerMode.deviceId : undefined;
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [hookRefreshEpoch, setHookRefreshEpoch] = useState(0);
   const [busyKey, setBusyKey] = useState<string | null>(null);
   const [reviewingToolKey, setReviewingToolKey] = useState<string | null>(null);
   const [reviewingAgentKey, setReviewingAgentKey] = useState<string | null>(null);
@@ -1111,7 +1113,10 @@ const ExternalSourcesConfig: React.FC = () => {
               size="small"
               aria-label={refreshing ? t('actions.refreshing') : t('actions.refresh')}
               disabled={refreshing || (!hostCapabilities.canRefresh && !error)}
-              onClick={() => void loadSnapshot(true, true)}
+              onClick={() => {
+                setHookRefreshEpoch((epoch) => epoch + 1);
+                void loadSnapshot(true, true);
+              }}
             >
               <RefreshCw size={15} aria-hidden="true" />
             </Button>
@@ -1119,6 +1124,11 @@ const ExternalSourcesConfig: React.FC = () => {
         )}
       />
       <ConfigPageContent id="external-integration-attention-region">
+        <ExternalHooksPanel
+          workspacePath={workspacePath}
+          unsupportedReason={peerDeviceId ? 'peer' : remoteWorkspace ? 'remote' : undefined}
+          refreshEpoch={hookRefreshEpoch}
+        />
         {hostUnavailable ? (
           <ConfigPageSection
             title={t('unavailable.hostTitle')}

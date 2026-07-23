@@ -23,7 +23,7 @@ fn external_command_projections(
     let mut projections = snapshot
         .commands
         .iter()
-        .map(|entry| {
+        .filter_map(|entry| {
             let ecosystem = snapshot
                 .sources
                 .iter()
@@ -70,7 +70,7 @@ fn external_command_projections(
                     conflict_key,
                 })
             });
-            ExternalCommandProjection {
+            Some(ExternalCommandProjection {
                 action_id: format!("external-command:{}", entry.definition.name),
                 command_name: entry.definition.name.clone(),
                 invocation_alias: format!("/{}", entry.definition.name),
@@ -80,7 +80,7 @@ fn external_command_projections(
                 restricted,
                 provider_conflict_key: None,
                 native_collision,
-            }
+            })
         })
         .collect::<Vec<_>>();
 

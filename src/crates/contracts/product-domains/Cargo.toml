@@ -24,6 +24,11 @@ name = "external_hook_contribution_contracts"
 path = "tests/external_hook_contribution_contracts.rs"
 required-features = ["external-sources"]
 
+[[test]]
+name = "external_hook_catalog_contracts"
+path = "tests/external_hook_catalog_contracts.rs"
+required-features = ["external-sources"]
+
 [dependencies]
 serde = { workspace = true }
 serde_json = { workspace = true }

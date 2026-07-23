@@ -8,6 +8,10 @@
 #[cfg(feature = "product-full")]
 pub mod agentic; // Agent system, tool system, and product runtime orchestration
 #[cfg(feature = "product-full")]
+pub mod external_hooks;
+#[cfg(all(test, feature = "product-full"))]
+mod external_hooks_tests;
+#[cfg(feature = "product-full")]
 mod external_mcp;
 #[cfg(all(test, feature = "product-full"))]
 mod external_mcp_tests;

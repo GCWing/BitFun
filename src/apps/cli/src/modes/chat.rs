@@ -65,6 +65,10 @@ use bitfun_core::agentic::tools::implementations::skills::{
     registry::SkillRegistry,
     ModeSkillInfo, SkillInfo,
 };
+use bitfun_core::external_hooks::{
+    local_external_hook_catalog_snapshot, ExternalHookCatalogSnapshotV1,
+    ExternalHookMatcherSummary, ExternalHookNativeActivation, ExternalHookProjectionStatus,
+};
 use bitfun_core::external_sources::{
     apply_external_source_control_action, choose_external_subagent_conflict,
     expand_external_prompt_command, external_source_conflict_choices, external_source_snapshot,
@@ -82,6 +86,7 @@ use bitfun_core::external_sources::{
 };
 use bitfun_core::service::config::GlobalConfigManager;
 use bitfun_core::service::session_usage::render_usage_report_markdown;
+use bitfun_product_domains::external_sources::{ExternalSourceHealth, ExternalSourceScope};
 
 /// Spinner/UI redraw interval while a turn is processing.
 const SPINNER_REDRAW_INTERVAL_MS: u64 = 100;
@@ -90,6 +95,7 @@ const RESIZE_REDRAW_DEBOUNCE_MS: u64 = 75;
 
 include!("chat/external_review.rs");
 include!("chat/external_sources.rs");
+include!("chat/external_hooks.rs");
 
 fn agent_event_stream_failure(error: TryRecvError) -> Option<String> {
     match error {
@@ -212,6 +218,14 @@ pub(crate) struct ChatMode {
     external_agent_notice_key: Option<String>,
     external_agent_review_snapshot: Option<ExternalSourceCatalogSnapshot>,
     external_agent_mutation_rx: Option<Receiver<ExternalAgentMutationResult>>,
+    external_hook_catalog_rx: Option<
+        Receiver<
+            std::result::Result<
+                ExternalHookCatalogSnapshotV1,
+                bitfun_core::external_sources::ExternalSourceOperationError,
+            >,
+        >,
+    >,
 }
 
 /// Map agent_type to a display name for status messages
@@ -260,6 +274,7 @@ impl ChatMode {
             external_agent_notice_key: None,
             external_agent_review_snapshot: None,
             external_agent_mutation_rx: None,
+            external_hook_catalog_rx: None,
         }
     }
 

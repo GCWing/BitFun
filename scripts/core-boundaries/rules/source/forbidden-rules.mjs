@@ -4119,8 +4119,10 @@ export const forbiddenContentUnderRules = [
           'src/crates/adapters/opencode-adapter/tests/tool_source_contracts.rs',
           'src/crates/adapters/opencode-adapter/tests/opencode_subagent_adapter.rs',
           'src/crates/adapters/opencode-adapter/tests/opencode_mcp_adapter.rs',
+          'src/crates/adapters/opencode-adapter/tests/hook_source.rs',
           'src/crates/assembly/core/src/plugin_runtime.rs',
           'src/crates/assembly/core/src/external_sources.rs',
+          'src/crates/assembly/core/src/external_hooks.rs',
         ],
         message:
           'only a reviewed product composition root may import bitfun-opencode-adapter through a capability-specific provider boundary',
@@ -4139,6 +4141,44 @@ export const forbiddenContentUnderRules = [
           'only a reviewed product composition root may import bitfun-opencode-adapter and inject it into Plugin Runtime Host',
       },
     ],
+  },
+  {
+    path: 'src',
+    reason: 'Claude Code static Hook adapter imports are limited to its fixtures and composition root',
+    patterns: [{
+      regex: /\b(?:use\s+bitfun_claude_code_adapter\b|extern\s+crate\s+bitfun_claude_code_adapter\b|bitfun_claude_code_adapter::)/,
+      allowPaths: [
+        'src/crates/adapters/claude-code-adapter/tests/hook_source.rs',
+        'src/crates/assembly/core/src/external_hooks.rs',
+      ],
+      message: 'Claude Code Hook adapter may only be imported by its fixtures and the reviewed composition root',
+    }],
+  },
+  {
+    path: 'src',
+    reason: 'Codex static Hook adapter imports are limited to its fixtures and composition root',
+    patterns: [{
+      regex: /\b(?:use\s+bitfun_codex_adapter\b|extern\s+crate\s+bitfun_codex_adapter\b|bitfun_codex_adapter::)/,
+      allowPaths: [
+        'src/crates/adapters/codex-adapter/tests/hook_source.rs',
+        'src/crates/assembly/core/src/external_hooks.rs',
+      ],
+      message: 'Codex Hook adapter may only be imported by its fixtures and the reviewed composition root',
+    }],
+  },
+  {
+    path: 'src',
+    reason: 'shared static Hook support is private to reviewed ecosystem Hook adapters',
+    patterns: [{
+      regex: /\b(?:use\s+bitfun_static_hook_support\b|extern\s+crate\s+bitfun_static_hook_support\b|bitfun_static_hook_support::)/,
+      allowPaths: [
+        'src/crates/adapters/static-hook-support/tests/parser.rs',
+        'src/crates/adapters/opencode-adapter/src/hook_source.rs',
+        'src/crates/adapters/claude-code-adapter/src/hook_source.rs',
+        'src/crates/adapters/codex-adapter/src/hook_source.rs',
+      ],
+      message: 'static Hook parsing support may only be imported by reviewed ecosystem Hook adapters',
+    }],
   },
   {
     path: 'src/crates/assembly/core/src',

@@ -13,6 +13,9 @@ pub mod external_integration_policy;
 pub mod external_hook_contributions;
 
 #[cfg(feature = "external-sources")]
+pub mod external_hook_catalog;
+
+#[cfg(feature = "external-sources")]
 pub mod external_source_control;
 
 #[cfg(feature = "external-sources")]

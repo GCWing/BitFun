@@ -459,6 +459,10 @@ pub const REMOTE_WORKSPACE_COMMAND_POLICIES: &[(&str, RemoteWorkspacePolicy)] = 
         RemoteWorkspacePolicy::LegacyUnaudited,
     ),
     (
+        "get_external_hook_catalog",
+        RemoteWorkspacePolicy::RemoteUnsupported,
+    ),
+    (
         "get_external_source_snapshot",
         RemoteWorkspacePolicy::RemoteUnsupported,
     ),

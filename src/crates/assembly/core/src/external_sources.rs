@@ -416,7 +416,7 @@ fn config_update_refreshes_external_model_bindings(event: &ConfigUpdateEvent) ->
     matches!(event, ConfigUpdateEvent::ModelConfigurationUpdated)
 }
 
-fn host_execution_domain_id() -> Result<ExecutionDomainId, String> {
+pub(crate) fn host_execution_domain_id() -> Result<ExecutionDomainId, String> {
     ExecutionDomainId::new(LEGACY_LOCAL_EXECUTION_DOMAIN_ID).map_err(|error| error.to_string())
 }
 
@@ -2849,7 +2849,9 @@ fn workspace_service_gate() -> &'static tokio::sync::Mutex<()> {
     GATE.get_or_init(|| tokio::sync::Mutex::new(()))
 }
 
-fn normalize_workspace_root(workspace_root: Option<&Path>) -> Result<Option<PathBuf>, String> {
+pub(crate) fn normalize_workspace_root(
+    workspace_root: Option<&Path>,
+) -> Result<Option<PathBuf>, String> {
     let Some(workspace_root) = workspace_root else {
         return Ok(None);
     };

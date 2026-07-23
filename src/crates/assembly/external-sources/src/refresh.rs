@@ -435,6 +435,10 @@ impl<R: DiscoveryRequest> DiscoveryLane<R> {
         Some(completed.result)
     }
 
+    pub(crate) async fn has_in_flight(&self) -> bool {
+        !self.tasks.lock().await.is_empty()
+    }
+
     #[cfg(test)]
     async fn cancel(&self, provider_id: &str) -> bool {
         let mut tasks = self.tasks.lock().await;

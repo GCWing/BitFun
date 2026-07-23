@@ -1,0 +1,23 @@
+[package]
+name = "bitfun-static-hook-support"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+description = "Shared redacting parser support for static external Hook adapters"
+
+[lib]
+name = "bitfun_static_hook_support"
+crate-type = ["rlib"]
+
+[dependencies]
+bitfun-product-domains = { path = "../../contracts/product-domains", default-features = false, features = ["external-sources"] }
+serde_json = { workspace = true }
+toml = { workspace = true }
+hex = { workspace = true }
+sha2 = { workspace = true }
+
+[dev-dependencies]
+tempfile = { workspace = true }
+
+[lints]
+workspace = true

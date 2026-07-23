@@ -4,6 +4,7 @@
 //! execution, runtime support, or a stable wire protocol.
 
 use crate::external_sources::{validate_id, ExternalSourceContractError};
+use serde::{Deserialize, Serialize};
 use std::collections::BTreeSet;
 use std::fmt;
 
@@ -30,7 +31,8 @@ impl fmt::Display for ExternalHookContributionId {
 }
 
 /// Hook points with a current static OpenCode mapping.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
 pub enum ExternalHookPoint {
     ToolBefore,
     ToolAfter,

@@ -1,0 +1,24 @@
+[package]
+name = "bitfun-claude-code-adapter"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+description = "Claude Code static source adapter for BitFun"
+
+[lib]
+name = "bitfun_claude_code_adapter"
+crate-type = ["rlib"]
+
+[dependencies]
+bitfun-product-domains = { path = "../../contracts/product-domains", default-features = false, features = ["external-sources"] }
+bitfun-static-hook-support = { path = "../static-hook-support" }
+dirs = { workspace = true }
+hex = { workspace = true }
+serde_json = { workspace = true }
+sha2 = { workspace = true }
+
+[dev-dependencies]
+tempfile = { workspace = true }
+
+[lints]
+workspace = true

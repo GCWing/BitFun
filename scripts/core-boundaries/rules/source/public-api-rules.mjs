@@ -181,6 +181,23 @@ function opencodeAdapterEntry(symbol, consumer) {
   };
 }
 
+function opencodeHookAdapterEntry(symbol, consumer) {
+  return {
+    symbol,
+    owner: 'opencode-adapter static Hook source owner',
+    consumer,
+    verification:
+      'OpenCode static Hook fixture tests, bitfun-core catalog composition tests, and core-boundary public API budget checks',
+    p0: 'runtime-free OpenCode Hook discovery and catalog projection',
+    contractSlice: contractSlices.opencodeAdapterBoundary,
+    wireImpact: false,
+    rationale:
+      'the product catalog needs one OpenCode-specific parser behind the ecosystem-neutral external Hook provider contract',
+    exit:
+      'remove only if OpenCode Hook discovery moves behind another reviewed adapter with equivalent redaction and fail-closed tests',
+  };
+}
+
 export const opencodeAdapterPublicApiEntries = [
   opencodeAdapterEntry(
     'load_opencode_package_adapter',
@@ -218,7 +235,65 @@ export const opencodeAdapterPublicApiEntries = [
     'OpenCodeMcpProviderOptions',
     'OpenCode MCP adapter fixture tests and explicit environment injection',
   ),
+  opencodeHookAdapterEntry(
+    'OpenCodeHookProvider',
+    'bitfun-core external Hook catalog composition root and OpenCode static Hook fixtures',
+  ),
+  opencodeHookAdapterEntry(
+    'OpenCodeHookProviderOptions',
+    'OpenCode static Hook fixture tests and explicit environment injection',
+  ),
 ];
+
+function staticHookAdapterEntry(symbol, owner, consumer) {
+  return {
+    symbol,
+    owner,
+    consumer,
+    verification: 'ecosystem Hook fixtures and core-boundary public API budget checks',
+    p0: 'runtime-free static Hook discovery',
+    contractSlice: contractSlices.externalSourceHookContract,
+    wireImpact: false,
+    rationale: 'the source adapter needs one narrow, redacted static-inspection surface',
+    exit: 'remove only with the corresponding static Hook source adapter',
+  };
+}
+
+export const claudeCodeHookAdapterPublicApiEntries = [
+  'ClaudeCodeHookProvider',
+  'ClaudeCodeHookProviderOptions',
+].map((symbol) => staticHookAdapterEntry(
+  symbol,
+  'claude-code-adapter static Hook owner',
+  'bitfun-core composition root and Claude Code Hook fixtures',
+));
+
+export const codexHookAdapterPublicApiEntries = [
+  'CodexHookProvider',
+  'CodexHookProviderOptions',
+].map((symbol) => staticHookAdapterEntry(
+  symbol,
+  'codex-adapter static Hook owner',
+  'bitfun-core composition root and Codex Hook fixtures',
+));
+
+export const staticHookSupportPublicApiEntries = [
+  'BoundedFileRead',
+  'read_bounded_file',
+  'regular_file_exists',
+  'bounded_project_ancestors',
+  'StaticHookDocumentFormat',
+  'StaticHookHandlerRule',
+  'StaticHookParseIssue',
+  'StaticHookHandlerFact',
+  'StaticHookParseResult',
+  'redacted_parse_content_version',
+  'parse_hook_document',
+].map((symbol) => staticHookAdapterEntry(
+  symbol,
+  'static-hook-support parser owner',
+  'OpenCode, Claude Code, and Codex static Hook source adapters',
+));
 
 function externalHookContractEntry(symbol, owner, consumer, wireImpact = false) {
   return {
@@ -226,14 +301,14 @@ function externalHookContractEntry(symbol, owner, consumer, wireImpact = false) 
     owner,
     consumer,
     verification:
-      'product-domain Hook contract tests, OpenCode mapping tests, managed-package read-projection tests, and core-boundary checks',
-    p0: 'runtime-free external Hook source-projection contract',
+      'product-domain Hook contract tests, ecosystem adapter fixtures, catalog coordinator tests, and core-boundary checks',
+    p0: 'runtime-free external Hook contribution and catalog contracts',
     contractSlice: contractSlices.externalSourceHookContract,
     wireImpact,
     rationale:
-      'the production OpenCode managed-package read projection needs typed Hook identities and safety facts without runtime or ecosystem payload coupling',
+      'static Hook inspection needs typed, redacted identities and safety facts without runtime or ecosystem payload coupling',
     exit:
-      'remove with the OpenCode static Hook projection or through a reviewed contract migration with equivalent fail-closed mapping tests',
+      'remove only through a reviewed Hook contract migration with equivalent redaction and fail-closed mapping tests',
   };
 }
 
@@ -248,6 +323,29 @@ export const externalHookContractPublicApiEntries = [
     symbol,
     'product-domains external Hook contract owner',
     'OpenCode managed-package read projection through source_adapter::read_diagnostics',
+  ),
+);
+
+export const externalHookCatalogPublicApiEntries = [
+  'EXTERNAL_HOOK_CATALOG_SCHEMA_V1',
+  'ExternalHookSourceKind',
+  'ExternalHookHandlerKind',
+  'ExternalHookProjectionStatus',
+  'ExternalHookNativeActivation',
+  'ExternalHookMatcherSummary',
+  'ExternalHookMapping',
+  'ExternalHookProviderIdentity',
+  'ExternalHookSource',
+  'ExternalHookCatalogEntry',
+  'ExternalHookProviderSnapshot',
+  'ExternalHookSourceProvider',
+  'ExternalHookCatalogSnapshotV1',
+].map((symbol) =>
+  externalHookContractEntry(
+    symbol,
+    'product-domains external Hook catalog contract owner',
+    'ecosystem Hook source adapters, external-sources catalog coordinator, bitfun-core, and read-only product surfaces',
+    true,
   ),
 );
 
@@ -556,6 +654,16 @@ export const externalSourceCoordinatorPublicApiEntries = [
     'external-sources assembly owner',
     'bitfun-core product composition root',
   ),
+  externalHookContractEntry(
+    'ExternalHookCatalogCoordinator',
+    'external-sources Hook catalog coordinator owner',
+    'bitfun-core local-workspace Hook catalog service',
+  ),
+  externalHookContractEntry(
+    'ExternalHookDiscoveryResult',
+    'external-sources Hook discovery scheduler owner',
+    'bitfun-core local-workspace Hook catalog service',
+  ),
   ...['ExternalSourceDiscoveryRequest', 'ExternalSourceDiscoveryResult'].map((symbol) =>
     externalSourceEntry(
       symbol,
@@ -844,6 +952,21 @@ export const publicApiAllowlistRules = [
     allowedSymbolEntries: opencodeAdapterPublicApiEntries,
   },
   {
+    path: 'src/crates/adapters/claude-code-adapter/src/lib.rs',
+    reason: 'Claude Code adapter public API is limited to static Hook discovery',
+    allowedSymbolEntries: claudeCodeHookAdapterPublicApiEntries,
+  },
+  {
+    path: 'src/crates/adapters/codex-adapter/src/lib.rs',
+    reason: 'Codex adapter public API is limited to static Hook discovery',
+    allowedSymbolEntries: codexHookAdapterPublicApiEntries,
+  },
+  {
+    path: 'src/crates/adapters/static-hook-support/src/lib.rs',
+    reason: 'shared static Hook parsing helpers must stay narrow and redacted',
+    allowedSymbolEntries: staticHookSupportPublicApiEntries,
+  },
+  {
     path: 'src/crates/execution/plugin-runtime-host/src/lib.rs',
     reason:
       'Plugin Runtime Host public API must stay limited to the injected adapter trait and host boundary type',
@@ -884,6 +1007,12 @@ export const publicApiAllowlistRules = [
     reason:
       'external Hook contracts must stay ecosystem-neutral, runtime-free, fail-closed, and explicitly consumer-backed',
     allowedSymbolEntries: externalHookContractPublicApiEntries,
+  },
+  {
+    path: 'src/crates/contracts/product-domains/src/external_hook_catalog.rs',
+    reason:
+      'external Hook catalog contracts must stay ecosystem-neutral, runtime-free, redacted, bounded, and explicitly consumer-backed',
+    allowedSymbolEntries: externalHookCatalogPublicApiEntries,
   },
   {
     path: 'src/crates/assembly/external-sources/src/lib.rs',

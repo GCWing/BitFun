@@ -265,7 +265,8 @@ Plugin Runtime P0 只验证了 BitFun 专用插件目录中的来源校验、工
 选择后接入现有 Task/Subagent owner，并以 generation lease 固定 fresh single-run 调用；MCP 可把受支持的用户/项目
 配置经确认和同名冲突选择后交给现有 MCP owner 运行。四类贡献对象互不复用，主体逻辑不按生态分支。当前仍不表示
 package plugin、Hook、primary agent、外部 agent 续接、SSH Remote 工作区来源发现或完整
-配置兼容已经可用。
+配置兼容已经可用。独立的静态 Hook 目录可以发现并脱敏展示 OpenCode、Claude Code 与 Codex 的本地声明，但不加载
+handler、不授予权限，也不改变这里对 Hook Runtime“尚不可用”的判断。
 
 目标路线不要求 OpenCode 插件作者维护 `bitfun.plugin.json` 或复制到 `.bitfun/plugins`。BitFun 直接发现用户和
 项目的 OpenCode 配置、插件目录、工具目录和软件包来源；低风险内容按用户偏好自动应用或先询问，可执行来源在
@@ -355,7 +356,7 @@ flowchart LR
 | 产品形态 | 当前扩展能力 | 入口行为 |
 |---|---|---|
 | Desktop / product-full | 生产入口仍依赖 `bitfun-core/product-full` 作为兼容组装层；Beta“外部 AI 应用”设置消费版本化 control/catalog 同代快照，显示正交生命周期、审批、冲突、诊断和 Host 能力，并可切换易失 Safe Mode；MCP 原生清单优先展示，外部候选保持独立来源、作用域和覆盖状态；Skills 场景显示已发现 Skill 的生态来源、用户/项目作用域与覆盖结果 | 当前四条可执行纵向切片由事实所在 Host 执行；本机 Desktop 使用本机 Host，Peer 控制界面代理 Peer Host，不在控制端回退发现或执行。Safe Mode 只撤下外部 Tool/Subagent/MCP 新调用，不改写来源偏好、不停止发现也不取消在途调用；状态仅在当前 Host 进程/执行域有效，重启或切换 Host 后关闭，所有产品面必须明确提示。Skill 仍使用独立 Registry；受管 package plugin 仍只有静态预览 |
-| CLI | 入口仍以 `bitfun-core/product-full` 作为执行兼容 owner；交互式 TUI 已可执行受支持的 Prompt Command，`/extensions` 的 status、refresh、Safe Mode 与 source enable/disable 消费同一 v1 控制 DTO，`/tools` 与 `/agents` 继续承载能力专属查看和操作；命令结果复用现有异步事件循环，不新增调度器。Skill 列表显示来源，模式配置按实际选择结果说明覆盖来源 | 已批准的 standalone Tool 进入现有 Tool Runtime；已批准的外部 Subagent 只支持 fresh single-run。CLI/TUI 不解析生态文件、不启动第二套 worker/Agent owner；Safe Mode 操作后重读权威 catalog 再更新命令路由。非交互入口和 SSH Remote 未接入时不得借本机 TUI 路径代执行；其余 Runtime Parts/Rust Runtime SDK、会话和工作区 owner 边界保持不变 |
+| CLI | 入口仍以 `bitfun-core/product-full` 作为执行兼容 owner；交互式 TUI 已可执行受支持的 Prompt Command，`/extensions` 的 status、refresh、Safe Mode 与 source enable/disable 消费同一 v1 控制 DTO，`/hooks` 异步读取与 Desktop 相同的只读 Hook 快照并遵循既有命令冲突策略，`/tools` 与 `/agents` 继续承载能力专属查看和操作；命令结果复用现有异步事件循环和 Discovery Lane，不新增调度器。Skill 列表显示来源，模式配置按实际选择结果说明覆盖来源 | 已批准的 standalone Tool 进入现有 Tool Runtime；已批准的外部 Subagent 只支持 fresh single-run。CLI/TUI 不解析生态文件、不启动第二套 worker/Agent owner；Hook 的 coverage mapping 只表示契约覆盖，不表示外部 handler 已加载、激活或执行。Safe Mode 操作后重读权威 catalog 再更新命令路由。非交互入口和 SSH Remote 未接入时不得借本机 TUI 路径代执行；其余 Runtime Parts/Rust Runtime SDK、会话和工作区 owner 边界保持不变 |
 | HarmonyOS PC 原生 CLI/TUI | 未来平台目标，当前未实现 | 目标、问题和风险见平台规约；具体适配另立专题，HAP、手机 Remote App 与远端代执行均不替代 |
 | HarmonyOS PC GUI | 完整 HarmonyOS PC 支持的另一目标形态，当前未实现 | 与 CLI/TUI 共享稳定能力和 Runtime 语义，但独立设计宿主、界面与发布验证；Web、Remote 或现有 Tauri Desktop 均不能替代 |
 | HarmonyOS 手机 Remote App | `src/apps/mobile/harmonyos` 是 phone-only ArkTS 远程入口，不持有本地 Rust Agent Runtime | 保持当前能力并按移动端专题独立演进；本轮不提前设计移动 Runtime/TUI/GUI，也不能据此宣称 HarmonyOS PC 本地能力 |

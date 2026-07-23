@@ -4,25 +4,27 @@ mod tests {
 
     use super::{
         action_opens_extension_management, agent_event_stream_failure, apply_agent_mode_feedback,
-        apply_model_selection_feedback, builtin_command_reconfirmation, command_route,
-        external_agent_attention, external_agent_diagnostic_lines,
-        external_agent_pending_notice_key, external_agent_result_is_stale,
-        external_agent_review_text, external_command_projections, external_control_review_text,
-        external_integration_policy_lines, external_operation_error_status,
-        external_tool_mutation_result_label, external_tool_pending_notice_key,
-        external_tool_result_is_stale, external_tool_review_text, external_tool_run_location_label,
-        mark_active_turn_failed, merge_external_agent_mutation_snapshot,
-        mode_change_blocks_typed_submission, mode_change_completion_should_exit,
-        native_command_conflict_key, parse_command_token, parse_external_agent_review_action,
-        parse_external_control_action, parse_external_tool_review_action,
-        previous_session_mode_change_status, CommandQualifier, CommandRoute,
-        ExternalAgentReviewAction, ExternalControlUiAction, ExternalSourceConflictPreferences,
-        ExternalToolReviewAction, ModeSelectionApplyOutcome, ModelSelectionApplyOutcome,
+        apply_model_selection_feedback, builtin_command_reconfirmation,
+        builtin_hook_help_requested, command_route, external_agent_attention,
+        external_agent_diagnostic_lines, external_agent_pending_notice_key,
+        external_agent_result_is_stale, external_agent_review_text, external_command_projections,
+        external_control_review_text, external_hook_help_text, external_integration_policy_lines,
+        external_operation_error_status, external_tool_mutation_result_label,
+        external_tool_pending_notice_key, external_tool_result_is_stale, external_tool_review_text,
+        external_tool_run_location_label, mark_active_turn_failed,
+        merge_external_agent_mutation_snapshot, mode_change_blocks_typed_submission,
+        mode_change_completion_should_exit, native_command_conflict_key, parse_command_token,
+        parse_external_agent_review_action, parse_external_control_action,
+        parse_external_tool_review_action, previous_session_mode_change_status,
+        render_external_hook_catalog, CommandQualifier, CommandRoute, ExternalAgentReviewAction,
+        ExternalControlUiAction, ExternalSourceConflictPreferences, ExternalToolReviewAction,
+        ModeSelectionApplyOutcome, ModelSelectionApplyOutcome,
     };
     use crate::actions::{action_conflict_behavior_version, ActionState, ResolvedKeymap};
     use crate::chat_state::ChatState;
     use crate::config::ShortcutsConfig;
     use crate::ui::command_menu::{ExternalCommandProjection, NativeCommandCollisionProjection};
+    use bitfun_core::external_hooks::ExternalHookCatalogSnapshotV1;
     use bitfun_core::external_sources::{
         ExternalSourceAssetKind, ExternalSourceCatalogSnapshot, ExternalSourceControlSnapshotV1,
         ExternalSourceDiagnostic, ExternalSourceDiagnosticSeverity, ExternalSourceOperationError,
@@ -669,6 +671,246 @@ mod tests {
             parse_command_token("/External:review"),
             (CommandQualifier::External, "review")
         );
+    }
+
+    #[test]
+    fn hooks_uses_the_existing_native_command_collision_flow() {
+        let action =
+            crate::actions::action_for_alias("/hooks", crate::actions::ActionContext::Chat)
+                .expect("/hooks must be registered");
+        assert_eq!(action.id, "hooks");
+        let collision = external_command("hooks", None);
+        assert_eq!(
+            command_route(
+                CommandQualifier::Unqualified,
+                true,
+                Some(&collision),
+                false,
+                false,
+            ),
+            CommandRoute::AskForCollisionChoice
+        );
+        assert_eq!(
+            command_route(
+                CommandQualifier::External,
+                true,
+                Some(&collision),
+                false,
+                false,
+            ),
+            CommandRoute::External
+        );
+        let selected_external = external_command("hooks", Some("external:hooks"));
+        assert_eq!(
+            command_route(
+                CommandQualifier::Unqualified,
+                true,
+                Some(&selected_external),
+                false,
+                false,
+            ),
+            CommandRoute::External
+        );
+        assert!(builtin_hook_help_requested("hooks", "unexpected"));
+        assert!(builtin_hook_help_requested("help", "hooks"));
+        assert!(!builtin_hook_help_requested("help", "other"));
+    }
+
+    #[test]
+    fn selected_external_help_keeps_its_hooks_argument() {
+        let selected_external = external_command("help", Some("external:help"));
+        assert_eq!(
+            command_route(
+                CommandQualifier::Unqualified,
+                true,
+                Some(&selected_external),
+                false,
+                false,
+            ),
+            CommandRoute::External
+        );
+    }
+
+    #[test]
+    fn hook_catalog_text_is_read_only_redacted_and_explains_native_only_events() {
+        let snapshot: ExternalHookCatalogSnapshotV1 = serde_json::from_value(serde_json::json!({
+            "schemaVersion": 1,
+            "discoveryPending": false,
+            "providers": [{
+                "providerId": "claude-code.hooks",
+                "ecosystemId": "claude-code",
+                "displayName": "Claude Code Hooks"
+            }],
+            "sources": [{
+                "key": {"providerId": "claude-code.hooks", "sourceId": "project-settings"},
+                "ecosystemId": "claude-code",
+                "displayName": "Claude Code project settings",
+                "sourceKind": "settings",
+                "scope": "project",
+                "locationHint": ".claude/settings.json",
+                "health": "available",
+                "contentVersion": "sha256:source"
+            }],
+            "entries": [
+                {
+                    "stableKey": "claude-pre",
+                    "source": {"providerId": "claude-code.hooks", "sourceId": "project-settings"},
+                    "nativeEvent": "PreToolUse",
+                    "matcher": {"kind": "pattern", "display": "Bash|Edit"},
+                    "handlerKind": "command",
+                    "projectionStatus": "mapped",
+                    "nativeActivation": "unknown",
+                    "mapping": {"hookPoint": "tool_before"},
+                    "contentVersion": "sha256:pre"
+                },
+                {
+                    "stableKey": "claude-session",
+                    "source": {"providerId": "claude-code.hooks", "sourceId": "project-settings"},
+                    "nativeEvent": "SessionStart",
+                    "matcher": {"kind": "any"},
+                    "handlerKind": "http",
+                    "projectionStatus": "native_only",
+                    "nativeActivation": "unknown",
+                    "contentVersion": "sha256:session"
+                },
+                {
+                    "stableKey": "claude-opaque",
+                    "source": {"providerId": "claude-code.hooks", "sourceId": "project-settings"},
+                    "nativeEvent": "<dynamic>",
+                    "matcher": {"kind": "dynamic"},
+                    "handlerKind": "function",
+                    "projectionStatus": "opaque",
+                    "nativeActivation": "unknown",
+                    "contentVersion": "sha256:opaque"
+                }
+            ],
+            "staleProviderIds": [],
+            "diagnostics": []
+        }))
+        .unwrap();
+
+        let text = render_external_hook_catalog(&snapshot);
+        assert!(text.contains("Hooks (read-only)"));
+        assert!(text.contains("Claude Code"));
+        assert!(text.contains("PreToolUse"));
+        assert!(text.contains("coverage mapped: BitFun tool before"));
+        assert!(text.contains("SessionStart"));
+        assert!(text.contains("native only"));
+        assert!(text.contains("opaque static registration"));
+        assert!(text.contains("Bash|Edit"));
+        assert!(!text.contains("command body"));
+    }
+
+    #[test]
+    fn hooks_help_uses_the_established_slash_help_pattern() {
+        let help = external_hook_help_text();
+        assert!(help.contains("Usage: /hooks"));
+        assert!(help.contains("/help hooks"));
+        assert!(help.contains("/hooks -h"));
+        assert!(help.contains("/hooks --help"));
+        assert!(!help.contains("/builtin:hooks"));
+    }
+
+    #[test]
+    fn hook_catalog_text_distinguishes_failed_empty_providers() {
+        let snapshot: ExternalHookCatalogSnapshotV1 = serde_json::from_value(serde_json::json!({
+            "schemaVersion": 1,
+            "discoveryPending": false,
+            "providers": [{
+                "providerId": "failed.hooks",
+                "ecosystemId": "failed",
+                "displayName": "Failed Hooks"
+            }],
+            "sources": [],
+            "entries": [],
+            "failedProviderIds": ["failed.hooks"],
+            "diagnostics": [{
+                "severity": "error",
+                "assetKind": "hook",
+                "code": "failed.hook.read_failed",
+                "message": "read failed"
+            }]
+        }))
+        .unwrap();
+
+        let text = render_external_hook_catalog(&snapshot);
+
+        assert!(text.contains("Failed Hooks: 0 Hooks, 0 sources (discovery failed)"));
+        assert!(text.contains("No valid catalog is available"));
+        assert!(!text.contains("No supported Hook configuration was found"));
+    }
+
+    #[test]
+    fn hook_catalog_text_does_not_call_a_stale_empty_catalog_successful() {
+        let snapshot: ExternalHookCatalogSnapshotV1 = serde_json::from_value(serde_json::json!({
+            "schemaVersion": 1,
+            "discoveryPending": false,
+            "providers": [{
+                "providerId": "stale.hooks",
+                "ecosystemId": "stale",
+                "displayName": "Stale Hooks"
+            }],
+            "sources": [],
+            "entries": [],
+            "staleProviderIds": ["stale.hooks"],
+            "diagnostics": []
+        }))
+        .unwrap();
+
+        let text = render_external_hook_catalog(&snapshot);
+
+        assert!(text.contains("The last valid catalog is empty"));
+        assert!(!text.contains("No supported Hook configuration was found"));
+    }
+
+    #[test]
+    fn hook_catalog_text_bounds_large_provider_output() {
+        let mut snapshot: ExternalHookCatalogSnapshotV1 =
+            serde_json::from_value(serde_json::json!({
+                "schemaVersion": 1,
+                "discoveryPending": false,
+                "providers": [{
+                    "providerId": "test.hooks",
+                    "ecosystemId": "test",
+                    "displayName": "Test Hooks"
+                }],
+                "sources": [{
+                    "key": {"providerId": "test.hooks", "sourceId": "project"},
+                    "ecosystemId": "test",
+                    "displayName": "Project Hooks",
+                    "sourceKind": "settings",
+                    "scope": "project",
+                    "locationHint": ".test/settings.json",
+                    "health": "available",
+                    "contentVersion": "source-v1"
+                }],
+                "entries": [],
+                "staleProviderIds": [],
+                "diagnostics": []
+            }))
+            .unwrap();
+        snapshot.entries = (0..105)
+            .map(
+                |index| bitfun_core::external_hooks::ExternalHookCatalogEntry {
+                    stable_key: format!("test-{index}"),
+                    source: snapshot.sources[0].key.clone(),
+                    native_event: format!("Event{index}"),
+                    matcher: bitfun_core::external_hooks::ExternalHookMatcherSummary::Any,
+                    handler_kind: bitfun_core::external_hooks::ExternalHookHandlerKind::Command,
+                    projection_status:
+                        bitfun_core::external_hooks::ExternalHookProjectionStatus::NativeOnly,
+                    native_activation:
+                        bitfun_core::external_hooks::ExternalHookNativeActivation::Unknown,
+                    mapping: None,
+                    content_version: format!("entry-v{index}"),
+                },
+            )
+            .collect();
+
+        let text = render_external_hook_catalog(&snapshot);
+
+        assert_eq!(text.matches("    - Event").count(), 100);
+        assert!(text.contains("omitted 0 source(s), 5 Hook(s)"));
     }
 
     #[test]

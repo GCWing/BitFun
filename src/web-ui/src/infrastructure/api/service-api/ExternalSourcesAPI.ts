@@ -944,7 +944,10 @@ function parseOperationError(value: unknown, visited = new Set<unknown>()): Exte
   return null;
 }
 
-async function invokeExternal<T>(command: string, args: Record<string, unknown>): Promise<T> {
+export async function invokeExternalSourceCommand<T>(
+  command: string,
+  args: Record<string, unknown>,
+): Promise<T> {
   try {
     return await api.invoke<T>(command, args);
   } catch (error) {
@@ -990,7 +993,7 @@ async function invokeSnapshot(
   command: string,
   args: Record<string, unknown>,
 ): Promise<ExternalSourceCatalogSnapshot> {
-  await invokeExternal<unknown>(command, args);
+  await invokeExternalSourceCommand<unknown>(command, args);
   const request = args.request && typeof args.request === 'object'
     ? args.request as Record<string, unknown>
     : {};
@@ -1006,7 +1009,7 @@ async function invokeSurfaceSnapshot(
   command: string,
   args: Record<string, unknown>,
 ): Promise<ExternalSourceSurfaceSnapshot> {
-  return normalizeSurfaceSnapshot(await invokeExternal<unknown>(command, args));
+  return normalizeSurfaceSnapshot(await invokeExternalSourceCommand<unknown>(command, args));
 }
 
 function legacySurfaceSnapshot(catalog: ExternalSourceCatalogSnapshot): ExternalSourceSurfaceSnapshot {
@@ -1042,7 +1045,7 @@ async function invokeCompatibleSurfaceSnapshot(
     if (!(error instanceof ExternalSourceApiError) || error.code !== 'incompatible_version') {
       throw error;
     }
-    const catalog = normalizeSnapshot(await invokeExternal<unknown>(
+    const catalog = normalizeSnapshot(await invokeExternalSourceCommand<unknown>(
       'get_external_source_snapshot',
       args,
     ));
@@ -1050,8 +1053,11 @@ async function invokeCompatibleSurfaceSnapshot(
   }
 }
 
-function normalizeOptionalWorkspacePath(workspacePath: string | undefined): string | undefined {
-  return workspacePath?.trim() ? workspacePath : undefined;
+export function normalizeOptionalWorkspacePath(
+  workspacePath: string | undefined,
+): string | undefined {
+  const normalized = workspacePath?.trim();
+  return normalized || undefined;
 }
 
 let operationSequence = 0;
@@ -1081,7 +1087,7 @@ export const externalSourcesAPI = {
   },
 
   revealSourceLocation(workspacePath: string | undefined, sourceKey: string) {
-    return invokeExternal<void>('reveal_external_source_location', {
+    return invokeExternalSourceCommand<void>('reveal_external_source_location', {
       request: {
         workspacePath: normalizeOptionalWorkspacePath(workspacePath),
         sourceKey,

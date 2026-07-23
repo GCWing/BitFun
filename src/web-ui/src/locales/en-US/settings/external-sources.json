@@ -1,9 +1,90 @@
 {
   "title": "External AI applications",
-  "subtitle": "Use commands, tools, agents, and MCP from other AI applications.",
+  "subtitle": "Use commands, tools, agents, and MCP from other AI applications, and inspect their Hooks.",
   "legacyHostNotice": "This execution Host uses the legacy external-source protocol. Safe Mode requires a Host upgrade.",
   "loading": "Checking external sources…",
   "checkingNonBlocking": "Checking for updates…",
+  "hooks": {
+    "title": "Hooks",
+    "description": "Inspect static Hook configuration from OpenCode, Claude Code, and Codex.",
+    "refresh": "Refresh Hooks",
+    "refreshing": "Refreshing Hooks…",
+    "showMoreSources": "Show {{count}} more sources",
+    "showMoreEntries": "Show {{count}} more Hooks",
+    "showMoreDiagnostics": "Show {{count}} more diagnostics",
+    "showMoreSourcesForProvider": "Show {{count}} more sources for {{provider}}",
+    "showMoreEntriesForProvider": "Show {{count}} more Hooks for {{provider}}",
+    "showMoreDiagnosticsForProvider": "Show {{count}} more diagnostics for {{provider}}",
+    "technicalDetails": "Technical details",
+    "loading": "Checking Hook configuration…",
+    "pending": "Hook discovery is still running. The catalog will update automatically.",
+    "empty": "No supported Hook configuration was found.",
+    "error": "Hook configuration is unavailable ({{code}}).",
+    "staleAfterRefresh": "The refresh failed ({{code}}). Showing the last valid catalog.",
+    "pollInterrupted": "Automatic Hook discovery was interrupted ({{code}}). Refresh to retry; any visible catalog may be from the last successful check.",
+    "summary": "{{hooks}} Hooks · {{mapped}} semantic coverage matches · {{sources}} sources",
+    "providerEmpty": "No static Hook source was found for this application.",
+    "providerFailed": "Static Hook discovery failed for this application; no valid catalog is available.",
+    "providerStaleEmpty": "The last valid catalog is empty, and the latest refresh failed.",
+    "noEntries": "No statically identifiable Hook events were found in this source.",
+    "entriesDeferred": "More Hooks are available through the provider-level Show more action.",
+    "matcher": "Matcher: {{matcher}}",
+    "matcherValue": {
+      "all": "All",
+      "dynamic": "Dynamic",
+      "unavailable": "Unavailable",
+      "unknown": "Unknown"
+    },
+    "diagnostics": "Diagnostics",
+    "readOnly": "Read only. BitFun does not load or run handlers from this catalog.",
+    "unsupported": {
+      "remote": "Hook inspection is not available for remote workspaces in this version.",
+      "peer": "Hook inspection is not available through Peer Device Mode in this version."
+    },
+    "health": {
+      "available": "Available",
+      "partial": "Partially read",
+      "degraded": "Degraded",
+      "unavailable": "Unavailable",
+      "stale": "Last valid result",
+      "failed": "Discovery failed"
+    },
+    "handler": {
+      "function": "Function",
+      "command": "Command",
+      "http": "HTTP",
+      "mcp_tool": "MCP tool",
+      "prompt": "Prompt",
+      "agent": "Agent"
+    },
+    "scope": {
+      "user_global": "User",
+      "project": "Project",
+      "remote_user": "Remote user",
+      "remote_project": "Remote project"
+    },
+    "activation": {
+      "disabled": "Disabled in native configuration",
+      "unsupported": "Unsupported by the native runtime",
+      "unknown": "Native activation not evaluated"
+    },
+    "diagnosticCategory": {
+      "nativeDisabled": "Hooks are disabled in this native configuration.",
+      "activationUnknown": "Native trust and activation require the source application's runtime.",
+      "staticCoverage": "This source is only partially visible through static inspection.",
+      "opaque": "Some registrations cannot be identified safely without executing source code.",
+      "inspectionLimit": "Some Hook configuration was omitted by a static inspection safety limit.",
+      "invalidConfiguration": "Some Hook configuration is invalid or could not be parsed.",
+      "unavailable": "Some Hook configuration could not be read.",
+      "generic": "Hook inspection reported a diagnostic ({{code}})."
+    },
+    "projection": {
+      "tool_before": "Equivalent BitFun tool-before coverage (not connected)",
+      "tool_after": "Equivalent BitFun tool-after coverage (not connected)",
+      "nativeOnly": "Native-only event",
+      "opaque": "Opaque static registration"
+    }
+  },
   "common": {
     "details": "Details",
     "hideDetails": "Hide details",

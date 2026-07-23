@@ -1165,6 +1165,7 @@ pub enum ExternalSourceAssetKind {
     Tool,
     Subagent,
     Mcp,
+    Hook,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

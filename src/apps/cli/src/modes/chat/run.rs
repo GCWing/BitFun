@@ -276,6 +276,9 @@ impl ChatMode {
             if self.poll_external_control_mutation(&mut chat_view) {
                 needs_redraw = true;
             }
+            if self.poll_external_hook_catalog(&mut chat_view, &mut chat_state) {
+                needs_redraw = true;
+            }
 
             if let Some(receiver) = permission_rx.as_mut() {
                 for _ in 0..4 {

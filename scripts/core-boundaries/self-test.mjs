@@ -870,11 +870,23 @@ export function runManifestParserSelfTest({
   const opencodeAdapterPublicApiRule = publicApiAllowlistRules.find(
     (rule) => rule.path === 'src/crates/adapters/opencode-adapter/src/lib.rs',
   );
+  const claudeHookAdapterPublicApiRule = publicApiAllowlistRules.find(
+    (rule) => rule.path === 'src/crates/adapters/claude-code-adapter/src/lib.rs',
+  );
+  const codexHookAdapterPublicApiRule = publicApiAllowlistRules.find(
+    (rule) => rule.path === 'src/crates/adapters/codex-adapter/src/lib.rs',
+  );
+  const staticHookSupportPublicApiRule = publicApiAllowlistRules.find(
+    (rule) => rule.path === 'src/crates/adapters/static-hook-support/src/lib.rs',
+  );
   const externalSubagentPublicApiRule = publicApiAllowlistRules.find(
     (rule) => rule.path === 'src/crates/contracts/product-domains/src/external_subagents.rs',
   );
   const externalHookPublicApiRule = publicApiAllowlistRules.find(
     (rule) => rule.path === 'src/crates/contracts/product-domains/src/external_hook_contributions.rs',
+  );
+  const externalHookCatalogPublicApiRule = publicApiAllowlistRules.find(
+    (rule) => rule.path === 'src/crates/contracts/product-domains/src/external_hook_catalog.rs',
   );
   const externalSourcePublicApiRule = publicApiAllowlistRules.find(
     (rule) => rule.path === 'src/crates/contracts/product-domains/src/external_sources.rs',
@@ -1000,10 +1012,10 @@ export function runManifestParserSelfTest({
   ).map((entry) => entry.symbol);
   if (
     opencodeAdapterPublicApiSymbols.join(',') !==
-    'load_opencode_package_adapter,OpenCodeCommandProvider,OpenCodeCommandProviderOptions,OpenCodeToolProvider,OpenCodeToolProviderOptions,OpenCodeSubagentProvider,OpenCodeSubagentProviderOptions,OpenCodeMcpProvider,OpenCodeMcpProviderOptions'
+    'load_opencode_package_adapter,OpenCodeCommandProvider,OpenCodeCommandProviderOptions,OpenCodeToolProvider,OpenCodeToolProviderOptions,OpenCodeSubagentProvider,OpenCodeSubagentProviderOptions,OpenCodeMcpProvider,OpenCodeMcpProviderOptions,OpenCodeHookProvider,OpenCodeHookProviderOptions'
   ) {
     throw new Error(
-      'OpenCode adapter public API budget must stay limited to the reviewed package factory and capability-specific command, tool, subagent, and MCP providers',
+      'OpenCode adapter public API budget must stay limited to the reviewed package factory and capability-specific command, tool, subagent, MCP, and static Hook providers',
     );
   }
   for (const entry of opencodeAdapterPublicApiRule.allowedSymbolEntries) {
@@ -1019,11 +1031,25 @@ export function runManifestParserSelfTest({
       throw new Error(`OpenCode adapter public API entry must not claim wire impact: ${entry.symbol}`);
     }
   }
+  for (const [label, rule, requiredSymbols] of [
+    ['Claude Code Hook adapter', claudeHookAdapterPublicApiRule, ['ClaudeCodeHookProvider', 'ClaudeCodeHookProviderOptions']],
+    ['Codex Hook adapter', codexHookAdapterPublicApiRule, ['CodexHookProvider', 'CodexHookProviderOptions']],
+    ['static Hook support', staticHookSupportPublicApiRule, ['read_bounded_file', 'regular_file_exists', 'redacted_parse_content_version', 'parse_hook_document']],
+  ]) {
+    if (!rule || requiredSymbols.some((symbol) => !rule.allowedSymbolEntries.some(
+      (entry) => entry.symbol === symbol && entry.contractSlice === 'external-source-hook-contract',
+    ))) {
+      throw new Error(`${label} must have a narrow consumer-backed public API budget`);
+    }
+  }
   if (!externalSubagentPublicApiRule) {
     throw new Error('external subagent contracts must have an independent public API budget rule');
   }
   if (!externalHookPublicApiRule) {
     throw new Error('external Hook contracts must have an independent public API budget rule');
+  }
+  if (!externalHookCatalogPublicApiRule) {
+    throw new Error('external Hook catalog contracts must have an independent public API budget rule');
   }
   if (!publicApiContractSlices.includes('external-source-hook-contract')) {
     throw new Error('external Hook contracts must have an independent contract slice');
@@ -1043,6 +1069,23 @@ export function runManifestParserSelfTest({
         && entry.verification,
     )) {
       throw new Error(`external Hook public API budget is missing a consumer-backed symbol: ${requiredSymbol}`);
+    }
+  }
+  for (const requiredSymbol of [
+    'EXTERNAL_HOOK_CATALOG_SCHEMA_V1',
+    'ExternalHookProviderIdentity',
+    'ExternalHookSourceProvider',
+    'ExternalHookProviderSnapshot',
+    'ExternalHookCatalogSnapshotV1',
+  ]) {
+    if (!externalHookCatalogPublicApiRule.allowedSymbolEntries.some(
+      (entry) => entry.symbol === requiredSymbol
+        && entry.contractSlice === 'external-source-hook-contract'
+        && entry.wireImpact === true
+        && entry.consumer
+        && entry.verification,
+    )) {
+      throw new Error(`external Hook catalog public API budget is missing a consumer-backed symbol: ${requiredSymbol}`);
     }
   }
   if (!publicApiContractSlices.includes('external-source-subagent-contract')) {
@@ -1079,6 +1122,19 @@ export function runManifestParserSelfTest({
     )) {
       throw new Error(`external source coordinator public API budget is missing control symbol: ${requiredSymbol}`);
     }
+  }
+  if (!externalSourceCoordinatorPublicApiRule?.allowedSymbolEntries.some(
+    (entry) => entry.symbol === 'ExternalHookCatalogCoordinator'
+      && entry.contractSlice === 'external-source-hook-contract'
+      && entry.wireImpact === false,
+  )) {
+    throw new Error('external source coordinator public API budget is missing the static Hook catalog coordinator');
+  }
+  if (!externalSourceCoordinatorPublicApiRule.allowedSymbolEntries.some(
+    (entry) => entry.symbol === 'ExternalHookDiscoveryResult'
+      && entry.contractSlice === 'external-source-hook-contract',
+  )) {
+    throw new Error('external source coordinator public API budget is missing the typed Hook discovery result');
   }
   for (const requiredSymbol of [
     'ExternalSourceControlSnapshotV1',
@@ -1156,6 +1212,18 @@ export function runManifestParserSelfTest({
   if (!opencodeManifestRule) {
     throw new Error('OpenCode adapter must have a forbidden manifest dependency rule');
   }
+  for (const dependencyName of [
+    'bitfun-claude-code-adapter',
+    'bitfun-codex-adapter',
+    'bitfun-static-hook-support',
+  ]) {
+    if (!forbiddenManifestDependencyRules.some(
+      (rule) => rule.dependencyNames?.includes(dependencyName)
+        && rule.workspaceManifestPath === 'Cargo.toml',
+    )) {
+      throw new Error(`${dependencyName} must have a workspace-wide manifest dependency guard`);
+    }
+  }
   for (const scanRoot of ['src/apps', 'src/crates', 'BitFun-Installer/src-tauri']) {
     if (!opencodeManifestRule.scanRoots?.includes(scanRoot)) {
       throw new Error(`OpenCode adapter manifest guard must scan ${scanRoot}`);
@@ -1224,6 +1292,14 @@ export function runManifestParserSelfTest({
   }
   if (!noCoreDependencyCrates.includes('plugin-runtime-host')) {
     throw new Error('plugin-runtime-host must be covered by the no-core dependency guard');
+  }
+  for (const adapterCrate of ['claude-code-adapter', 'codex-adapter', 'static-hook-support']) {
+    if (crateLayoutRules.find((rule) => rule.crateName === adapterCrate)?.layer !== 'adapters') {
+      throw new Error(`${adapterCrate} must be registered in the adapter crate layout`);
+    }
+    if (!noCoreDependencyCrates.includes(adapterCrate)) {
+      throw new Error(`${adapterCrate} must be covered by the no-core dependency guard`);
+    }
   }
   const pluginRuntimeHostRule = lightweightBoundaryRules.find(
     (rule) => rule.crateName === 'plugin-runtime-host',

@@ -1,9 +1,90 @@
 {
   "title": "外部 AI 应用",
-  "subtitle": "使用其他 AI 应用的命令、工具、Agent 和 MCP。",
+  "subtitle": "使用其他 AI 应用的命令、工具、Agent 和 MCP，并检查其 Hook。",
   "legacyHostNotice": "当前执行 Host 使用旧版外部来源协议；升级 Host 后才能使用安全模式。",
   "loading": "正在检查外部来源…",
   "checkingNonBlocking": "正在检查更新…",
+  "hooks": {
+    "title": "Hooks",
+    "description": "检查 OpenCode、Claude Code 和 Codex 的静态 Hook 配置。",
+    "refresh": "刷新 Hooks",
+    "refreshing": "正在刷新 Hooks…",
+    "showMoreSources": "再显示 {{count}} 个来源",
+    "showMoreEntries": "再显示 {{count}} 个 Hook",
+    "showMoreDiagnostics": "再显示 {{count}} 条诊断",
+    "showMoreSourcesForProvider": "再显示 {{provider}} 的 {{count}} 个来源",
+    "showMoreEntriesForProvider": "再显示 {{provider}} 的 {{count}} 个 Hook",
+    "showMoreDiagnosticsForProvider": "再显示 {{provider}} 的 {{count}} 条诊断",
+    "technicalDetails": "技术详情",
+    "loading": "正在检查 Hook 配置…",
+    "pending": "Hook 发现仍在进行，目录会自动更新。",
+    "empty": "未发现受支持的 Hook 配置。",
+    "error": "Hook 配置当前不可用（{{code}}）。",
+    "staleAfterRefresh": "刷新失败（{{code}}），正在显示最近一次有效目录。",
+    "pollInterrupted": "Hook 自动发现已中断（{{code}}）。请刷新重试；当前可见目录可能来自最近一次成功检查。",
+    "summary": "{{hooks}} 个 Hook · {{mapped}} 个等价语义覆盖 · {{sources}} 个来源",
+    "providerEmpty": "未发现此应用的静态 Hook 来源。",
+    "providerFailed": "此应用的静态 Hook 发现失败，当前没有可用目录。",
+    "providerStaleEmpty": "最近一次有效目录为空，且最新刷新失败。",
+    "noEntries": "此来源中没有可静态识别的 Hook 事件。",
+    "entriesDeferred": "更多 Hook 可通过提供方区域底部的“显示更多”查看。",
+    "matcher": "匹配条件：{{matcher}}",
+    "matcherValue": {
+      "all": "全部",
+      "dynamic": "动态",
+      "unavailable": "不可用",
+      "unknown": "未知"
+    },
+    "diagnostics": "诊断",
+    "readOnly": "仅供查看。BitFun 不会从此目录加载或运行处理器。",
+    "unsupported": {
+      "remote": "当前版本暂不支持检查远程工作区的 Hook。",
+      "peer": "当前版本暂不支持通过 Peer Device Mode 检查 Hook。"
+    },
+    "health": {
+      "available": "可用",
+      "partial": "部分读取",
+      "degraded": "已降级",
+      "unavailable": "不可用",
+      "stale": "最近一次有效结果",
+      "failed": "发现失败"
+    },
+    "handler": {
+      "function": "函数",
+      "command": "命令",
+      "http": "HTTP",
+      "mcp_tool": "MCP 工具",
+      "prompt": "Prompt",
+      "agent": "Agent"
+    },
+    "scope": {
+      "user_global": "用户",
+      "project": "项目",
+      "remote_user": "远程用户",
+      "remote_project": "远程项目"
+    },
+    "activation": {
+      "disabled": "已在原生配置中禁用",
+      "unsupported": "原生运行时不支持",
+      "unknown": "未评估原生激活状态"
+    },
+    "diagnosticCategory": {
+      "nativeDisabled": "此原生配置已禁用 Hook。",
+      "activationUnknown": "信任与激活状态需要由来源应用运行时判断。",
+      "staticCoverage": "静态检查只能显示此来源的部分信息。",
+      "opaque": "部分注册无法在不执行源码的情况下安全识别。",
+      "inspectionLimit": "部分 Hook 配置因静态检查安全限制而被省略。",
+      "invalidConfiguration": "部分 Hook 配置无效或无法解析。",
+      "unavailable": "部分 Hook 配置无法读取。",
+      "generic": "Hook 检查报告了一项诊断（{{code}}）。"
+    },
+    "projection": {
+      "tool_before": "等价覆盖 BitFun 工具执行前（未连接运行时）",
+      "tool_after": "等价覆盖 BitFun 工具执行后（未连接运行时）",
+      "nativeOnly": "仅来源应用支持",
+      "opaque": "静态信息不完整"
+    }
+  },
   "common": {
     "details": "详情",
     "hideDetails": "收起详情",

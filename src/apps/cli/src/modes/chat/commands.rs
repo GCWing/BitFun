@@ -312,6 +312,10 @@ impl ChatMode {
             builtin_reconfirmation_required,
         ) {
             CommandRoute::Builtin => {
+                if builtin_hook_help_requested(command_name, arguments) {
+                    chat_state.add_system_message(external_hook_help_text());
+                    return Ok(None);
+                }
                 let action = builtin_action.expect("route requires an available built-in action");
                 self.dispatch_action(
                     action,
@@ -707,6 +711,9 @@ impl ChatMode {
             ActionHandler::Extensions => {
                 self.handle_external_control("", chat_view, chat_state, rt_handle);
             }
+            ActionHandler::Hooks => {
+                self.handle_external_hooks(chat_view, chat_state, rt_handle);
+            }
             ActionHandler::AcpHelp => {
                 chat_state.add_system_message(crate::acp_cli::acp_help_text("bitfun"));
                 chat_view.set_status(Some(
@@ -875,6 +882,9 @@ impl ChatMode {
 fn action_opens_extension_management(action: &ActionSpec) -> bool {
     matches!(
         action.handler,
-        ActionHandler::Tools | ActionHandler::Extensions | ActionHandler::OpenAgentSelector
+        ActionHandler::Tools
+            | ActionHandler::Extensions
+            | ActionHandler::Hooks
+            | ActionHandler::OpenAgentSelector
     )
 }

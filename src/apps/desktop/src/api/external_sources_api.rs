@@ -132,7 +132,7 @@ pub struct ChooseExternalMcpConflictRequest {
 pub type ExternalSourceSnapshotResponse = ExternalSourcePublicSnapshot;
 pub type ExternalSourceControlResponse = ExternalSourceSurfaceSnapshotV1;
 
-async fn require_local_workspace(
+pub(super) async fn require_local_workspace(
     workspace_path: Option<&str>,
 ) -> ExternalSourceOperationResult<Option<&Path>> {
     let Some(workspace_path) = workspace_path else {

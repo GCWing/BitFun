@@ -1005,7 +1005,10 @@ fn command_content_version(name: &str, input: &OpenCodeCommandInput) -> String {
     format!("sha256:{}", hex::encode(hasher.finalize()))
 }
 
-fn opencode_user_config_dir(xdg_config_home: Option<PathBuf>, home: Option<PathBuf>) -> PathBuf {
+pub(crate) fn opencode_user_config_dir(
+    xdg_config_home: Option<PathBuf>,
+    home: Option<PathBuf>,
+) -> PathBuf {
     xdg_config_home
         .or_else(|| home.map(|home| home.join(".config")))
         .unwrap_or_else(|| PathBuf::from(".config"))
@@ -1018,7 +1021,7 @@ fn environment_truthy(key: &str) -> bool {
         .is_some_and(|value| matches!(value.to_ascii_lowercase().as_str(), "true" | "1"))
 }
 
-fn strip_jsonc(input: &str) -> String {
+pub(crate) fn strip_jsonc(input: &str) -> String {
     let mut without_comments = String::with_capacity(input.len());
     let chars = input.chars().collect::<Vec<_>>();
     let mut index = 0;

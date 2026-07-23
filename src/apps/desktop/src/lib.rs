@@ -44,6 +44,7 @@ use api::custom_agent_api::{
     update_custom_agent,
 };
 use api::diff_api::*;
+use api::external_hooks_api::*;
 use api::external_sources_api::*;
 use api::git_agent_api::*;
 use api::git_api::*;
@@ -966,6 +967,7 @@ pub async fn run() {
             api::btw_api::btw_cancel,
             api::editor_ai_api::editor_ai_stream,
             api::editor_ai_api::editor_ai_cancel,
+            get_external_hook_catalog,
             get_external_source_snapshot,
             reveal_external_source_location,
             get_external_source_control_snapshot,

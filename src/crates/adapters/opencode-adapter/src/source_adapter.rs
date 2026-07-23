@@ -2025,6 +2025,253 @@ fn discover_exported_hooks(
         .unwrap_or_default())
 }
 
+pub(crate) struct StaticHookEvent {
+    pub registration_id: String,
+    pub native_event: String,
+}
+
+pub(crate) struct StaticHookEventDiscovery {
+    pub events: Vec<StaticHookEvent>,
+    pub opaque_events: Vec<StaticHookEvent>,
+    pub dynamic_registrations: Vec<String>,
+}
+
+pub(crate) fn statically_discover_hook_events(
+    path: &Path,
+    source: &str,
+) -> Result<StaticHookEventDiscovery, String> {
+    let allocator = Allocator::default();
+    let source_type = SourceType::from_path(path).unwrap_or(SourceType::ts());
+    // OXC already understands comments and regular-expression literals. A
+    // text-level comment pass can corrupt valid JavaScript such as `/https?:\/\//`.
+    let parsed = Parser::new(&allocator, source, source_type).parse();
+    if !parsed.diagnostics.is_empty() {
+        return Err(OpenCodeHookProjectionError::ParseFailed
+            .as_str()
+            .to_string());
+    }
+    let mut events = Vec::new();
+    let mut opaque_events = Vec::new();
+    let mut dynamic_registrations = Vec::new();
+    let mut dynamic_seen = HashSet::new();
+    let mut exported_declaration_seen = false;
+    for statement in &parsed.program.body {
+        if let Statement::ExportDefaultDeclaration(export) = statement {
+            exported_declaration_seen = true;
+            let has_runtime_value = match &export.declaration {
+                oxc_parse::ast::ast::ExportDefaultDeclarationKind::FunctionDeclaration(
+                    function,
+                ) => !function.declare,
+                oxc_parse::ast::ast::ExportDefaultDeclarationKind::ClassDeclaration(class) => {
+                    !class.declare
+                }
+                oxc_parse::ast::ast::ExportDefaultDeclarationKind::TSInterfaceDeclaration(_) => {
+                    false
+                }
+                _ => true,
+            };
+            if has_runtime_value {
+                push_dynamic_registration(
+                    "default".to_string(),
+                    &mut dynamic_registrations,
+                    &mut dynamic_seen,
+                );
+            }
+            continue;
+        }
+        if let Statement::ExportAllDeclaration(export) = statement {
+            exported_declaration_seen = true;
+            if matches!(
+                export.export_kind,
+                oxc_parse::ast::ast::ImportOrExportKind::Value
+            ) {
+                let registration_id = export
+                    .exported
+                    .as_ref()
+                    .map(|name| name.name().to_string())
+                    .unwrap_or_else(|| format!("<export-all:{}>", export.source.value));
+                push_dynamic_registration(
+                    registration_id,
+                    &mut dynamic_registrations,
+                    &mut dynamic_seen,
+                );
+            }
+            continue;
+        }
+        let Statement::ExportNamedDeclaration(export) = statement else {
+            continue;
+        };
+        let Some(declaration) = &export.declaration else {
+            if !export.specifiers.is_empty() {
+                exported_declaration_seen = true;
+                if matches!(
+                    export.export_kind,
+                    oxc_parse::ast::ast::ImportOrExportKind::Value
+                ) {
+                    for specifier in &export.specifiers {
+                        if matches!(
+                            specifier.export_kind,
+                            oxc_parse::ast::ast::ImportOrExportKind::Value
+                        ) {
+                            push_dynamic_registration(
+                                specifier.exported.name().to_string(),
+                                &mut dynamic_registrations,
+                                &mut dynamic_seen,
+                            );
+                        }
+                    }
+                }
+            }
+            continue;
+        };
+        exported_declaration_seen = true;
+        if declaration.declare() {
+            continue;
+        }
+        let Declaration::VariableDeclaration(declaration) = declaration else {
+            let registration_id = match declaration {
+                Declaration::FunctionDeclaration(function) => {
+                    function.id.as_ref().map(|id| id.name.to_string())
+                }
+                Declaration::ClassDeclaration(class) => {
+                    class.id.as_ref().map(|id| id.name.to_string())
+                }
+                Declaration::TSEnumDeclaration(declaration)
+                    if !declaration.declare && !declaration.r#const =>
+                {
+                    Some(declaration.id.name.to_string())
+                }
+                _ => None,
+            };
+            if let Some(registration_id) = registration_id {
+                push_dynamic_registration(
+                    registration_id,
+                    &mut dynamic_registrations,
+                    &mut dynamic_seen,
+                );
+            }
+            continue;
+        };
+        for declarator in &declaration.declarations {
+            let is_simple_identifier = declarator.id.get_identifier_name().is_some();
+            let mut registration_ids = declarator
+                .id
+                .get_binding_identifiers()
+                .into_iter()
+                .map(|identifier| identifier.name.to_string())
+                .collect::<Vec<_>>();
+            if !is_simple_identifier {
+                if registration_ids.is_empty() {
+                    registration_ids.push("<destructured-export>".to_string());
+                }
+                for registration_id in registration_ids {
+                    push_dynamic_registration(
+                        registration_id,
+                        &mut dynamic_registrations,
+                        &mut dynamic_seen,
+                    );
+                }
+                continue;
+            }
+            let registration_id = registration_ids
+                .pop()
+                .expect("identifier binding must contain its registration name");
+            let Some(Expression::ArrowFunctionExpression(arrow)) = declarator
+                .init
+                .as_ref()
+                .map(Expression::get_inner_expression)
+            else {
+                push_dynamic_registration(
+                    registration_id,
+                    &mut dynamic_registrations,
+                    &mut dynamic_seen,
+                );
+                continue;
+            };
+            let Some(object) = arrow_return_object(arrow) else {
+                push_dynamic_registration(
+                    registration_id,
+                    &mut dynamic_registrations,
+                    &mut dynamic_seen,
+                );
+                continue;
+            };
+            if collect_static_hook_properties(
+                object,
+                &registration_id,
+                &mut events,
+                &mut opaque_events,
+            ) {
+                push_dynamic_registration(
+                    registration_id,
+                    &mut dynamic_registrations,
+                    &mut dynamic_seen,
+                );
+            }
+        }
+    }
+    if !exported_declaration_seen {
+        push_dynamic_registration(
+            "<module>".to_string(),
+            &mut dynamic_registrations,
+            &mut dynamic_seen,
+        );
+    }
+    Ok(StaticHookEventDiscovery {
+        events,
+        opaque_events,
+        dynamic_registrations,
+    })
+}
+
+fn collect_static_hook_properties(
+    object: &ObjectExpression<'_>,
+    registration_id: &str,
+    events: &mut Vec<StaticHookEvent>,
+    opaque_events: &mut Vec<StaticHookEvent>,
+) -> bool {
+    let mut seen = HashSet::new();
+    let mut has_dynamic_registration = false;
+    for property in &object.properties {
+        let ObjectPropertyKind::ObjectProperty(property) = property else {
+            has_dynamic_registration = true;
+            continue;
+        };
+        let Some(name) = property.key.static_name() else {
+            has_dynamic_registration = true;
+            continue;
+        };
+        let name = name.into_owned();
+        if name == CUSTOM_TOOL_EXTENSION_POINT || !seen.insert(name.clone()) {
+            continue;
+        }
+        if name.is_empty() || name.len() > 160 || name.chars().any(char::is_control) {
+            has_dynamic_registration = true;
+        } else if DISCOVERABLE_HOOK_PROPERTIES.contains(&name.as_str()) {
+            events.push(StaticHookEvent {
+                registration_id: registration_id.to_string(),
+                native_event: name,
+            });
+        } else {
+            opaque_events.push(StaticHookEvent {
+                registration_id: registration_id.to_string(),
+                native_event: name,
+            });
+        }
+    }
+    has_dynamic_registration
+}
+
+fn push_dynamic_registration(
+    registration_id: String,
+    dynamic_registrations: &mut Vec<String>,
+    seen: &mut HashSet<String>,
+) {
+    if seen.insert(registration_id.clone()) {
+        dynamic_registrations.push(registration_id);
+    }
+}
+
 fn exported_hook_object<'a>(
     statement: &'a Statement<'a>,
     export_name: &str,

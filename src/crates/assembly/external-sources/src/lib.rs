@@ -5,12 +5,14 @@
 //! product composition root.
 
 mod control_plane;
+mod hook;
 mod mcp;
 mod refresh;
 mod subagent;
 mod tool;
 
 pub use control_plane::ExternalSourceControlPlane;
+pub use hook::{ExternalHookCatalogCoordinator, ExternalHookDiscoveryResult};
 pub use refresh::{DeferredDiscovery, DiscoveryBatch};
 
 use refresh::{DiscoveryLane, DiscoveryRequest};
