@@ -27,7 +27,7 @@
   padding: var(--mouse-glow-border-width);
   pointer-events: none;
   opacity: 0;
-  transition: opacity var(--motion-fast) var(--easing-standard);
+  transition: none;
   background-image: radial-gradient(
     circle var(--mouse-glow-size) at var(--mouse-glow-local-x) var(--mouse-glow-local-y),
     var(--mouse-glow-core) 0%,
@@ -47,6 +47,7 @@
 
   &[data-active] {
     opacity: 1;
+    transition: opacity var(--motion-fast) var(--easing-standard);
   }
 }
 

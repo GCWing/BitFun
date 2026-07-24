@@ -110,6 +110,80 @@ describe('MouseGlowService', () => {
     surface.remove();
   });
 
+  it('clears the previous glow immediately when the pointer leaves its surface', () => {
+    const surface = document.createElement('div');
+    surface.setAttribute('data-mouse-glow-surface', '');
+    surface.getBoundingClientRect = () => ({
+      bottom: 128,
+      height: 80,
+      left: 20,
+      right: 220,
+      top: 48,
+      width: 200,
+      x: 20,
+      y: 48,
+      toJSON: () => ({}),
+    });
+    const plainElement = document.createElement('span');
+    document.body.append(surface, plainElement);
+    service.initialize();
+
+    surface.dispatchEvent(new MouseEvent('pointermove', {
+      bubbles: true,
+      clientX: 72,
+      clientY: 68,
+    }));
+    nextFrame?.(0);
+
+    const overlay = document.getElementById('bitfun-mouse-glow-overlay');
+    expect(overlay?.hasAttribute('data-active')).toBe(true);
+
+    plainElement.dispatchEvent(new MouseEvent('pointermove', {
+      bubbles: true,
+      clientX: 260,
+      clientY: 68,
+    }));
+
+    expect(overlay?.hasAttribute('data-active')).toBe(false);
+    surface.remove();
+    plainElement.remove();
+  });
+
+  it('clears the glow when the pointer enters an iframe', () => {
+    const surface = document.createElement('div');
+    surface.setAttribute('data-mouse-glow-surface', '');
+    surface.getBoundingClientRect = () => ({
+      bottom: 128,
+      height: 80,
+      left: 20,
+      right: 220,
+      top: 48,
+      width: 200,
+      x: 20,
+      y: 48,
+      toJSON: () => ({}),
+    });
+    const iframe = document.createElement('iframe');
+    document.body.append(surface, iframe);
+    service.initialize();
+
+    surface.dispatchEvent(new MouseEvent('pointermove', {
+      bubbles: true,
+      clientX: 72,
+      clientY: 68,
+    }));
+    nextFrame?.(0);
+    surface.dispatchEvent(new MouseEvent('pointerout', {
+      bubbles: true,
+      relatedTarget: iframe,
+    }));
+
+    const overlay = document.getElementById('bitfun-mouse-glow-overlay');
+    expect(overlay?.hasAttribute('data-active')).toBe(false);
+    surface.remove();
+    iframe.remove();
+  });
+
   it('automatically detects bordered product surfaces without an explicit marker', () => {
     const surface = document.createElement('section');
     surface.className = 'workspace-card';

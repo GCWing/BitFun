@@ -102,16 +102,29 @@ export class MouseGlowService {
     this.pointerX = event.clientX;
     this.pointerY = event.clientY;
     const path = event.composedPath?.() ?? [];
-    this.pendingElements = path.filter(
+    const elements = path.filter(
       (item): item is HTMLElement => item instanceof HTMLElement
     );
+    if (this.activeSurface && !elements.includes(this.activeSurface)) {
+      this.deactivateSurface();
+    }
+    this.pendingElements = elements;
     this.pendingSurface = null;
     this.scheduleFrame();
   };
 
   private readonly handlePointerOut = (event: PointerEvent): void => {
-    if (event.relatedTarget === null) {
+    const relatedTarget = event.relatedTarget;
+    if (relatedTarget === null || relatedTarget instanceof HTMLIFrameElement) {
       this.resetPointerState();
+      return;
+    }
+
+    if (
+      !(relatedTarget instanceof Node)
+      || (this.activeSurface && !this.activeSurface.contains(relatedTarget))
+    ) {
+      this.deactivateSurface();
     }
   };
 
@@ -161,6 +174,12 @@ export class MouseGlowService {
       window.cancelAnimationFrame(this.frameId);
       this.frameId = null;
     }
+    this.pendingElements = null;
+    this.pendingSurface = null;
+    this.deactivateSurface();
+  }
+
+  private deactivateSurface(): void {
     this.pendingElements = null;
     this.pendingSurface = null;
     this.activeSurface = null;
