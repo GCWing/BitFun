@@ -20,7 +20,7 @@
   );
 
   position: fixed;
-  z-index: tokens.$z-context-menu + 1;
+  z-index: tokens.$z-floating - 1;
   top: 0;
   left: 0;
   box-sizing: border-box;
@@ -55,17 +55,17 @@
   --mouse-glow-border-width: 1.5px;
   --mouse-glow-core: color-mix(
     in srgb,
-    var(--color-purple-600) 82%,
+    var(--color-text-muted) 82%,
     var(--color-text-primary)
   );
   --mouse-glow-falloff: color-mix(
     in srgb,
-    var(--color-purple-600) 38%,
+    var(--color-text-muted) 34%,
     transparent
   );
   --mouse-glow-shadow: color-mix(
     in srgb,
-    var(--color-purple-600) 58%,
+    var(--color-text-muted) 46%,
     transparent
   );
 }
