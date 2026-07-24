@@ -605,22 +605,22 @@
       "changeFailed": "Failed to change the permission mode.",
       "ask": {
         "label": "Ask",
-        "description": "Low-risk reads, browsing, Task, and Skill are allowed automatically; file changes and commands require approval."
+        "description": "External access, file changes, and command execution require confirmation."
       },
       "auto": {
         "label": "Auto approve",
-        "description": "Automatically approves Ask requests; explicit denies still apply."
+        "description": "Automatically approve requests that require confirmation."
       },
       "fullAccess": {
         "label": "Full access",
-        "description": "Allows tools by default; product restrictions and OS permissions still apply."
+        "description": "Tools are allowed by default without confirmation."
       },
       "acp": {
         "label": "ACP controlled",
         "tooltip": "Permissions for this session are controlled by the ACP client."
       },
       "fullAccessWarningTitle": "Enable full access?",
-      "fullAccessWarningMessage": "Full access allows tools to read and write files, run commands, and call integrations without asking each time. Explicit deny rules, product restrictions, and operating system permissions still apply.",
+      "fullAccessWarningMessage": "Full access allows tools by default without asking each time.",
       "fullAccessConfirm": "Enable full access",
       "cancel": "Cancel"
     },
