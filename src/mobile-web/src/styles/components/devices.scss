@@ -53,6 +53,10 @@
     opacity: var(--opacity-disabled);
     cursor: not-allowed;
   }
+
+  &.is-loading svg {
+    animation: reconnect-spin 0.8s linear infinite;
+  }
 }
 
 .devices-page__title {

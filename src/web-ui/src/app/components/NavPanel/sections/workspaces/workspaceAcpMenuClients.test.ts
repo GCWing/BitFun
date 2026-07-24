@@ -58,7 +58,7 @@ describe('loadWorkspaceAcpMenuClients', () => {
       {
         id: 'claude-code',
         tool: { name: 'claude', installed: false },
-        adapter: { name: '@zed-industries/claude-code-acp', installed: true },
+        adapter: { name: '@agentclientprotocol/claude-agent-acp', installed: true },
         runnable: false,
         notes: ['claude is not available on remote PATH'],
       },
@@ -126,7 +126,7 @@ describe('loadWorkspaceAcpMenuClients', () => {
         {
           id: 'codex',
           tool: { name: 'codex', installed: true },
-          adapter: { name: '@zed-industries/codex-acp', installed: false },
+          adapter: { name: '@agentclientprotocol/codex-acp', installed: false },
           runnable: false,
           notes: ['npx is not available on remote PATH'],
         },
@@ -135,7 +135,7 @@ describe('loadWorkspaceAcpMenuClients', () => {
         {
           id: 'codex',
           tool: { name: 'codex', installed: true },
-          adapter: { name: '@zed-industries/codex-acp', installed: true },
+          adapter: { name: '@agentclientprotocol/codex-acp', installed: true },
           runnable: true,
           notes: [],
         },

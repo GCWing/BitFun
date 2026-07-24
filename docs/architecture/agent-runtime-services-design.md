@@ -7,22 +7,27 @@ crate 内部结构和行为保护要求。本文件记录设计约束，不记�
 结果见 [`product-customization-blueprint.md`](product-customization-blueprint.md)；CLI 入口、配置兼容和
 CLI Agent 体验边界见 [`cli-product-line-design.md`](cli-product-line-design.md)；能力 Provider 如何装配、对外能力门面与
 多宿主 adapter 的状态、权限、并发和兼容边界见
-[`capability-runtime-integration-design.md`](extensions/capability-runtime-integration-design.md)。
+[`capability-runtime-integration-design.md`](extensions/capability-runtime-integration-design.md)；公开 BitFun Agent SDK 的
+用户心智、SDK Host、Headless CLI/ACP/Server 关系和 Claude Agent SDK 等价门槛见
+[`agent-sdk-product-architecture.md`](agent-sdk-product-architecture.md)。
 
 本文中的接口片段只说明依赖方向和职责，不自动构成当前 API 或实施承诺。当前接口名称、字段和消费方以代码为准；
-新增公共类型前必须有真实生产调用方、版本边界和验证路径。现有 Agent Runtime SDK 仍是 v1 preview，CLI、ACP、
+新增公共类型前必须有真实生产调用方、版本边界和验证路径。现有 `agent-runtime::sdk` 是
+Rust Runtime SDK（当前 preview），不是公开 Python/TypeScript BitFun Agent SDK。CLI、ACP、
 Desktop 仍保留 `bitfun-core/product-full` 兼容 owner。CLI 与 CLI 托管的 ACP server 已消费各自的产品组装结果；
-Desktop 主交互只消费由现有 Core owner 构造的窄口径 SDK 门面，尚未组装完整 Desktop profile。这些接入都不等于
-协调器、调度器、持久化或工具执行 owner 已迁移；ACP 的完整持久化历史、模式、模型目录/提供方配置、MCP、客户端路径与
-Desktop 的其余入口仍保留明确的兼容边界，活动会话的模型写入已通过 SDK 回到 Core owner。
+Desktop 主交互只消费由现有 Core owner 构造的窄口径应用门面，尚未组装完整 Desktop profile。这些接入都不等于
+协调器、调度器、持久化或工具执行 owner 已迁移；ACP 的完整持久化历史、模型/模式目录与提供方配置、MCP、客户端路径与
+Desktop 的其余入口仍保留明确的兼容边界，活动会话的模型/模式写入已通过 Agent Runtime API 回到 Core owner。
 
-阅读路径：第 1 节确认 SDK、内核、产品特性、扩展接口和 crate 边界；第 2-3 节说明稳定接口、
+阅读路径：先从公开 SDK 产品文档区分公开语言 SDK 与内部应用门面；再由第 1 节确认内核、产品特性、
+扩展接口和 crate 边界；第 2-3 节说明稳定接口、
 运行时服务、内核、工具和工作流；第 4 节说明产品组装与扩展注册；第 5 节作为质量保护和
 目标态判定标准。
 
 ## 1. 设计目标与边界
 
-- 智能体内核可被 Desktop、CLI、Server、Remote、ACP、Web 和独立 SDK 形态嵌入。
+- 智能体内核可被 Desktop、CLI、Server、Remote、ACP、Web 和公开 SDK adapter 调用；这些入口共享应用用例，
+  不共享 UI、协议或公开语言包。
 - 智能体内核对外提供稳定、窄口径的 Rust 运行时接口，而不是暴露 `bitfun-core`、产品命令路径或具体管理器。
 - 产品特性把内核能力组装为用户侧能力，可能同时触达 Rust 和 UI，但不拥有内核状态机或平台实现。
 - 运行时内部接口、能力服务接口、扩展接口和主机内部 ABI 分层表达；OpenCode / ACP / 插件适配器仅承担映射和注册。
@@ -31,39 +36,40 @@ Desktop 的其余入口仍保留明确的兼容边界，活动会话的模型写
 - 具体服务、界面宿主、插件运行时主机绑定和适配器清单集合由上层产品组装注入。
 - 每个 crate 只依赖最小稳定集合，依赖方向可检查。
 
-### 1.1 SDK 发布边界
+### 1.1 Rust Runtime SDK（当前 preview）与公开 Agent SDK
 
-Agent Runtime SDK 的发布边界以调用方能力为准，而不是以物理 crate 命名为准。达到目标状态时，外部调用方
-应能在不依赖 `bitfun-core`、app crate、Tauri 或产品内部 manager 的情况下完成以下动作：
+当前 `agent-runtime::sdk` 是低层 **Rust Runtime SDK**，成熟度为 preview：它通过 Rust 类型化端口服务 Desktop、CLI、
+ACP 等现有入口，也可用于受控 Rust 嵌入。它不是 Python/TypeScript **BitFun Agent SDK**。两者调用同一个
+Agent Runtime，不形成两套 Agent loop。
 
-- 构建运行时：注入模型提供方、`RuntimeServices`、工具提供方、工作流提供方、智能体定义、
-  钩子和运行时配置。
-- 发起执行：创建或恢复会话，提交轮次，取消轮次，消费提供方无关事件流。
-- 执行工具：通过稳定工具清单、权限请求、工具结果、产物引用和取消语义
-  管理工具调用。
-- 扩展能力：通过注册表注册子智能体、提示模块、skill、MCP 工具、接口工具、工作流和轮次后处理器。
-- 处理运维语义：接收类型化错误、用量/成本/缓存事实、遥测事件、检查点/恢复事实和不支持能力。
+| 入口 | 面向谁 | 主要接口 | 不暴露 |
+|---|---|---|---|
+| Rust Runtime SDK | BitFun 内部入口、低层 Rust 嵌入 | Query/Session/Turn/事件等类型化 Rust 用例；builder 和 registry 仅用于内部装配 | Tauri/React、具体 manager、生态原始对象 |
+| BitFun Agent SDK | Python/TypeScript 应用开发者 | `query()`、client/session、async Message/Event/Result、typed callback | builder、port、registry、Product Assembly、SDK Host protocol |
 
-因此，SDK 可用性准备的最低标准是：
+公开 Agent SDK 必须覆盖以下用户用例，而不是要求调用方自行装配 Runtime：
 
-- 公共门面只暴露 builder、runner、请求/响应 DTO、事件流、类型化错误和注册表接口。
-- 所有 DTO 可序列化，所有运行时句柄通过类型化端口注入，不进入传输 schema。
-- `bitfun-agent-runtime`、工具原语、运行时服务和工作流能通过测试替身提供方独立测试。
-- 内部 SDK 最小特性不牵引 Desktop、Tauri、Git 提供方、MCP 客户端、AI HTTP 客户端、remote SSH 或产品 UI。
-- 完整产品能力只能通过产品组装或兼容 `bitfun-core/product-full` 组装，不反向污染 SDK 接口。
+| 用户用例 | 公开能力 |
+|---|---|
+| 运行 Agent | `query()`、异步流、结构化 Result、取消和执行上限 |
+| 管理上下文 | Session create/resume/fork/close、Turn start/steer/cancel |
+| 使用能力 | 内置 Tool、既有 MCP、Subagent、Skill 和明确的来源状态 |
+| 控制副作用 | Permission 与 Hook callback；最终策略仍由 BitFun owner 决定 |
+| 扩展应用 | Python/TypeScript 函数 Tool 和用户输入 callback |
+| 运维 | 类型化错误、用量/成本/缓存、trace、checkpoint/恢复事实和 capability 状态 |
 
-Agent Runtime SDK 和“对外能力门面”不是同一发布包必须同时暴露的接口。前者服务于嵌入式 Agent Runtime，后者
-只为外部宿主暴露当前场景需要的 Memory 查询、Workflow 调用、状态或事件等窄用例。若外部产品只调用一项 BitFun
-能力，不得迫使其依赖完整 Runtime builder、产品组装、插件 Host ABI 或内部注册表。只有同一语义被真实嵌入方
-复用后，才允许两者共享稳定 DTO 或版本边界。
+Python/TypeScript SDK 通过匹配版本的本地 SDK Host 调用共享 Agent Runtime API；GUI、TUI、Headless CLI、
+ACP 和 Server 使用各自 adapter，不反向依赖公开语言 package。所有 wire DTO 可序列化，运行时句柄不进入
+schema；SDK Host 不拥有 Session、Tool、MCP、Permission、Hook 或 Event 状态。
 
-SDK 公共接口以 `AGENT_RUNTIME_SDK_API_VERSION` 标记兼容边界。当前接口版本为 v1 preview：
+Rust Runtime SDK 以 `AGENT_RUNTIME_SDK_API_VERSION` 标记兼容边界。当前接口版本为 v1 preview：
 小版本更新允许增加可选 builder hook、有默认实现的端口方法或注册表查询能力，但不得向外部可用
 Rust 结构体字面量（struct literal）构造的 DTO 直接增加字段，也不得改变既有端口语义、错误分类、session / turn 标识含义或
 默认 feature 依赖。任何需要调用方改写现有嵌入代码的变更，必须提升接口版本并提供兼容迁移路径。
 
 只要外部调用方仍必须导入 `bitfun-core`、启用 `product-full`、持有具体服务管理器、读取产品命令
-注册表或依赖全局可变状态，SDK 发布边界就不成立。
+注册表、理解 ACP/内部端口或依赖全局可变状态，公开 SDK 发布边界就不成立。公开 SDK 的完整
+术语、能力等价和版本要求以 [`agent-sdk-product-architecture.md`](agent-sdk-product-architecture.md) 为准。
 
 ### 1.2 内核与特性的分界
 
@@ -79,7 +85,7 @@ Rust 结构体字面量（struct literal）构造的 DTO 直接增加字段，�
 
 判断标准：
 
-- 在 Desktop、CLI、Web、ACP 和 SDK 中都可复用，且不依赖 UI 或平台具体实现的能力，优先归智能体内核。
+- 在 Desktop、CLI、Web、ACP 和公开 SDK adapter 中都可复用，且不依赖 UI 或平台具体实现的能力，优先归智能体内核。
 - 会改变用户入口、命令、设置、入口视图、默认策略或产品文案的能力，归产品特性。
 - 会接触 OS、网络、终端、文件系统、远端主机、MCP server 或 AI 提供方具体实现的能力，归跨平台适配器或协议适配器。
 - 来自外部插件、OpenCode、ACP 外部智能体/工具桥接、外部 skill 或第三方包的能力，先进入
@@ -95,7 +101,7 @@ Rust 结构体字面量（struct literal）构造的 DTO 直接增加字段，�
 | 前后端能力服务切面 | 智能体内核如何产出会话、事件、权限和诊断事实 | 宿主协议 DTO、插件状态视图字段、产品形态状态词 |
 | BitFun 与插件切面 | 插件贡献如何进入内核、执行层和安全控制面 | 具体生态接口、未预算界面贡献字段、OpenCode 原始 payload |
 | 插件通用运行时切面 | `PluginRuntimeBinding` 如何注入 Agent Runtime 内部 builder | `PluginRuntimeClient`、dispatch/read schema、隔离字段；这些由插件主机文档和 `runtime-ports` 代码定义 |
-| 外部生态兼容适配切面 | 不进入 Agent Runtime SDK；各生态 adapter 只作为来源或宿主边界的反腐层 | OpenCode client/server facade、Claude/Codex/Trae Hook 细节、配置导入细节、跨生态稳定 payload |
+| 外部生态兼容适配切面 | 不进入 Agent Runtime API 或公开 SDK；各生态 adapter 只作为来源或宿主边界的反腐层 | OpenCode client/server facade、Claude/Codex/Trae Hook 细节、配置导入细节、跨生态稳定 payload |
 
 OpenCode 适配器、ACP 桥接和未来插件运行时必须先映射到主架构定义的切面，再由产品组装注册。它们不能直接写智能体内核权威状态；通过 Compatibility Facade、Tool Runtime 或界面宿主调用的 BitFun 能力必须经过相应权限与审计路径。插件脚本直接使用 Bun 文件、网络或进程接口产生的副作用不在这项保证内：没有可执行的操作系统隔离时，严格策略必须禁用相应插件或明确报告 `policy-limited`，不能宣称已被沙箱拦截。
 
@@ -335,7 +341,7 @@ pub trait SecurityDecisionPort: Send + Sync {
 
 ## 3. 内核、工具与工作流
 
-### 3.1 Agent Kernel / Runtime SDK
+### 3.1 Agent Runtime / Agent Runtime API
 
 目标归属 crate：`bitfun-agent-runtime`。
 
@@ -357,7 +363,7 @@ pub trait SecurityDecisionPort: Send + Sync {
 - 运行时事件。
 - 轮次后处理器。
 
-公共门面：
+当前 Rust Runtime SDK 的装配与调用形态：
 
 ```rust
 pub struct AgentRuntimeBuilder {
@@ -401,11 +407,12 @@ impl AgentRuntime {
 }
 ```
 
-该门面是目标接口形态。它必须只接收已组装的类型化部件，不负责创建
+该 Rust 接口是内部产品入口复用的当前形态，不是公开 Python/TypeScript SDK 的目标 API。它必须只接收
+已组装的类型化部件，不负责创建
 文件系统、终端、MCP、AI 客户端、Remote 提供方或产品命令。
 当前 v1 preview 接口以 message / attachment / metadata 作为最小输入形态；若把
 model-round cancellation token、结构化 AgentInput 或更复杂的事件游标纳入公开 SDK，
-必须提升 SDK 接口版本并保留旧路径兼容。
+必须分别评审 Rust Runtime SDK、SDK Host protocol 和公开 SDK API 的版本，并保留旧路径兼容。
 
 产品特性边界：
 
@@ -422,7 +429,7 @@ model-round cancellation token、结构化 AgentInput 或更复杂的事件游�
   handler、具体提示组装、workspace / remote / config IO、自定义子智能体文件 IO 和平台适配器
   在行为等价未证明前不得下沉到运行时内核。
 - 产品特性命令、UI 状态、settings 持久化、插件 UI 渲染和交付形态默认策略不得下沉到运行时内核。
-- prompt、event、thread goal、scheduler 或 subagent 的纯事实如果进入 Agent Runtime SDK，旧归属模块只能保留兼容入口；
+- prompt、event、thread goal、scheduler 或 subagent 的纯事实如果进入 Agent Runtime API，旧归属模块只能保留兼容入口；
   行为等价需要有接口等价测试和边界保护证明。
 
 建议内部模块：
@@ -615,7 +622,7 @@ pub struct ToolExecutionContext {
 - 工具原语只消费 `ToolExecutionServices` 这样的窄服务视图，不依赖完整
   `RuntimeServices` bundle。
 - path policy、runtime artifact ref、remote POSIX containment 由 `tool-contracts` 承载。
-- MCP 工具作为外部工具提供方注入，不内置在 Agent Runtime SDK。
+- MCP 工具由既有 MCP lifecycle owner 管理，并以类型化 Tool provider/catalog 注入 Tool owner；Agent Runtime API 不创建或持有独立 MCP client/registry。
 - `GetToolSpec` 是工具目录能力，不是产品 UI。
 
 必须保护：
@@ -638,7 +645,7 @@ pub struct ToolExecutionContext {
 - 把 SDD、DeepReview、DeepResearch、MiniApp、function-agent 等工作流从运行时内核中分离。
 - 定义工作流描述符、路由计划、提供方注册表、工作流计划、步骤、策略、产物、
   review gate 和 post-processor。
-- 通过 Agent Runtime SDK、工具运行时和服务端口编排。
+- 通过 Agent Runtime API、工具运行时和服务端口编排。
 
 建议内部模块：
 
@@ -691,7 +698,7 @@ pub struct HarnessExecutionContext {
 - 工作流允许编排运行时/工具，但不拥有会话管理器内部结构。
 - 工作流不直接访问具体文件系统 / Git / 终端。
 - 产品命令只映射到工作流能力，不把命令展示逻辑下沉。
-- 新工作流通过提供方注册，不改 Agent Runtime SDK 内核。
+- 新工作流通过提供方注册，不改 Agent Runtime 或 Agent Runtime API 的稳定用例。
 - 描述符专用 / 旧门面提供方只能表达路由计划；不得被描述为已经拥有具体工作流执行。
   执行语义移动必须单独证明行为等价。
 
@@ -704,26 +711,35 @@ pub struct HarnessExecutionContext {
 `src/crates/assembly/core` 仍承担 `bitfun-core` 兼容组装。现有 `ProductAssembler` 是具体结构体，
 通过 `assemble(ProductAssemblyInput)` 产生 `ProductRuntimeParts`，本文件不再为它定义第二套目标接口。
 
-当前 CLI 与 CLI 托管的 ACP server 已使用类型化 `RuntimeServices`，分别以 `DeliveryProfile::Cli` 和
-`DeliveryProfile::Acp` 构造 `ProductRuntimeParts`。Desktop 主交互直接从现有协调器和调度器端口构造窄口径
-Agent Runtime SDK 门面，不注册未实现的 `RuntimeServices` 能力，也不宣称完整 Desktop profile 可用。CLI 通过
-一个调用级上下文把 Agent Runtime SDK、Harness、能力注册、调用级权限和 Agentic 事件广播交给 TUI、Exec、Session、Usage 与
-交互模式下的 Peer Host。SDK 已承接会话创建/列举/删除/恢复、会话模型更新、类型化转录读取、轮次提交/取消，以及 CLI/TUI
-的工具确认、拒绝和用户问题回答；固定 ID 创建使用独立的 `create_session_with_id` 方法，普通创建 DTO 保持 v1
-字段集合。未实现该能力的提供方返回类型化不支持错误；实现成功时 Runtime 必须校验返回 ID 与请求完全一致，不能
-替换为自动生成的 ID。`SessionSelector::Create` 仍保持自动生成。Peer Host 通过同一 SDK 处理对话提交、精确取消、
-工具确认、拒绝和会话模型更新。SDK v1 尚未覆盖的分支、用量、快照和持久化维护等操作仍由
-`assembly/core` 的单一兼容门面转发。
+当前 CLI、CLI 托管的 ACP server 与独立 SDK Host 已使用类型化 `RuntimeServices`，分别以
+`DeliveryProfile::Cli`、`DeliveryProfile::Acp` 和 `DeliveryProfile::Sdk` 构造 `ProductRuntimeParts`。
+SDK profile 当前从共享产品事实获得与 Headless CLI 相同的能力集合，但保持独立产品身份和
+`AgentSubmissionSource::SdkHost`；这不建立 CLI crate/协议依赖。Desktop 主交互直接从现有协调器和调度器端口构造窄口径
+Rust Runtime SDK，不注册未实现的 `RuntimeServices` 能力，也不宣称完整 Desktop profile 可用。CLI 通过
+一个调用级上下文把该 Rust 接口、Harness、能力注册、调用级权限和 Agentic 事件广播交给 TUI、Exec、Session、Usage 与
+交互模式下的 Peer Host。Rust Runtime SDK 已承接会话创建/列举/删除/基础恢复、重命名/归档、会话模型更新、thread-goal 查询、类型化转录读取、本地分支、用量生成、
+轮次提交/取消与精确结算，以及 CLI/TUI 的工具确认、拒绝和用户问题回答；固定 ID 创建使用独立的
+`create_session_with_id` 方法，普通创建 DTO 只增加可选工作区 ID 与模型 ID 事实，不承载调用方指定的会话 ID。
+未实现该能力的提供方返回类型化不支持错误；实现成功时 Runtime 必须校验返回 ID 与请求完全一致，不能
+替换为自动生成的 ID。`SessionSelector::Create` 仍保持自动生成。Peer Host 通过同一 Rust Runtime SDK 处理对话提交、精确取消、
+工具确认/拒绝、会话创建/基础恢复/重命名/归档、thread-goal 查询和会话模型更新。TUI 用量卡片以固定的、模型上下文不可见的
+本地命令轮次契约回到 Core owner。CLI 上下文还单独持有不属于 Agent Runtime API 或 `RuntimeServices` capability 的
+本地工作区快照 owner port；Peer Host 只用它完成本地工作区准备、会话文件清单、类型化统计和工作区文件回滚。
+账号同步、富历史读取及 Peer Host/ACP 的其余维护等产品操作仍由 `assembly/core` 的单一兼容门面转发。
 `doctor` 与 `health` 校验真实组装结果及必需注册完整性；
 Core 的 Network、Git 和 MCP Catalog 当前仍含兼容 marker，因此该诊断不等于对这些外部服务做实时探活。
 
 该切换仍是 `product-full` 兼容组装，不是 owner 迁移。协调器、调度器、持久化、工具管线和 Agentic Event Queue
-仍由 Core 唯一持有；CLI 与 ACP 不复制这些状态。ACP 服务端通过 SDK 处理会话创建/列举、轮次、取消、交互响应和事件订阅，
-但完整持久化历史回放、模式、模型目录/配置和 MCP 仍走单一 Core 兼容门面；会话模型写入通过 SDK 回到同一 Core owner。ACP stdio、连接和协议投影仍在
-`interfaces/acp`。Desktop 复用同一 Core owner 构造一个窄口径 SDK 门面，主界面的轮次提交/取消、工具确认/拒绝和
-用户问题回答与会话模型更新已通过该门面；会话 CRUD/恢复视图、MCP、MiniApp、Cron、远程连接、Tauri 窗口与平台资源
+仍由 Core 唯一持有；CLI 与 ACP 不复制这些状态。ACP 服务端通过 Rust Runtime SDK 处理会话创建/列举、轮次、取消、交互响应和事件订阅，
+但完整持久化历史回放、模型/模式目录与提供方配置和 MCP 仍走单一 Core 兼容门面；会话模型/模式写入通过 Agent Runtime API 回到同一 Core owner。ACP stdio、连接和协议投影仍在
+`interfaces/acp`。Desktop 复用同一 Core owner 构造一个窄口径 Rust Runtime SDK，主界面的轮次提交/取消、工具确认/拒绝和
+用户问题回答与会话模型更新已通过 Rust Runtime SDK；会话 CRUD/恢复视图、MCP、MiniApp、Cron、远程连接、Tauri 窗口与平台资源
 仍保留在 Desktop/Core 兼容入口。Server 仅提供健康检查、信息与 ping 路由。未接入入口的 profile、枚举分支和
 单元测试仍不能证明对应产品形态可用。
+
+Desktop 与 CLI Peer Host 还各自注入同一个 Core-backed `LocalWorkspaceSnapshotPort` 契约。它是两个本地宿主之间的内部 owner 边界，
+不是公开 Agent SDK、Agent Runtime API 的通用能力、完整 Desktop profile、跨宿主远程能力或通用 checkpoint/rewind API。Core 继续持有 `SnapshotManager`、工具拦截、
+持久化和事件；宿主继续持有远程检测/结果投影，以及回滚时的会话取消、维护、历史顺序和部分失败语义。
 
 职责：
 
@@ -736,8 +752,8 @@ Core 的 Network、Git 和 MCP Catalog 当前仍含兼容 marker，因此该诊�
 
 | 阶段 | 约束 |
 |---|---|
-| 当前 | CLI、Peer Host 与 CLI 托管的 ACP server 消费真实 Runtime Parts / SDK，Core 兼容门面只承接已列明的 SDK v1 缺口；不扩张字段或再造描述符 |
-| 迁移 | 迁移执行 owner、ACP 剩余兼容路径或 Desktop 入口前，必须分别证明行为等价；relay 的 Cargo 反向边已删除，room/device 状态、account/sync 存储、asset store 与 HTTP/WebSocket router 已下沉，但 embedded TCP bind、静态 fallback 和任务生命周期仍是 assembly 兼容债务 |
+| 当前 | CLI、Peer Host 与 CLI 托管的 ACP server 消费真实 Runtime Parts / Rust Runtime SDK，Core 兼容门面只承接已列明的 preview 缺口；不扩张字段或再造描述符 |
+| 迁移 | 迁移执行 owner、ACP 剩余兼容路径或 Desktop 入口前，必须分别证明行为等价；relay 的 Cargo 反向边已删除，room/device 状态、account/sync 存储、asset store 与 HTTP/WebSocket router 已下沉，embedded TCP bind、静态 fallback 和任务生命周期也已由窄宿主端口迁至 Desktop |
 | 完成 | 每个声称支持的 profile 都由生产入口消费组装结果，并有最小入口验证；无消费方的 profile 不对外宣称可用 |
 
 产品定义、品牌资源和界面布局的长期边界以
@@ -749,7 +765,9 @@ Core 的 Network、Git 和 MCP Catalog 当前仍含兼容 marker，因此该诊�
 
 - 具体运行时服务通过 `RuntimeServicesBuilder` / provider registry 构造。
 - CLI 只选择 `DeliveryProfile::Cli` 一次；必需服务缺失时组装失败，不回退到静态计划或另一 profile。
-- CLI 的 ACP stdio 入口只选择 `DeliveryProfile::Acp` 一次；组装或 SDK runtime 构造失败时在接受 stdio 请求前退出。
+- CLI 的 ACP stdio 入口只选择 `DeliveryProfile::Acp` 一次；组装或 Rust Runtime SDK 构造失败时在接受 stdio 请求前退出。
+- 独立 `bitfun-sdk-host` 只选择 `DeliveryProfile::Sdk` 一次；stdio framing 与进程 bootstrap 留在 app，
+  `interfaces/sdk-host` 只保留版本化协议和连接用例。Host 不通过 CLI 启动，也不使用 CLI submission source。
 - CLI 的 `json` 输出为单结果文档，`stream-json` 直接复用现有 `AgenticEventEnvelope`；协议层不新增
   `schema_version`、`sequence` 或平行事件 taxonomy。
 - 能力计划选择工具提供方组计划和 Harness 描述符；当前不存在供任意模块注册所有对象的通用组装注册表。
@@ -772,7 +790,7 @@ Core 的 Network、Git 和 MCP Catalog 当前仍含兼容 marker，因此该诊�
   传输/接口适配器；运行时部件只接收类型化服务端口、DTO、事件事实和能力可用性。
 - 宿主通信的抽取门槛、Tauri 薄适配职责和逐能力迁移顺序以
   [`product-architecture.md`](product-architecture.md#22-宿主通信契约与-tauri-薄适配) 为准；不得用通用 API 转发层
-  包装所有 Runtime SDK 方法。
+  包装所有 Agent Runtime API 方法。
 - 插件运行时客户端只能作为内核可调用的类型化边界注入；智能体内核、工具运行时和工作流不直接加载
   OpenCode 插件代码。
 - feature group 是构建时能力边界；能力计划和能力可用性是产品运行时能力边界；两者必须在
@@ -790,22 +808,42 @@ Core 的 Network、Git 和 MCP Catalog 当前仍含兼容 marker，因此该诊�
 |---|---|---|
 | Desktop | Tauri 窗口、桌面接口、本地权限界面 | 运行时事件、权限事实、产物引用、桌面服务提供方、能力服务读模型 |
 | CLI | TUI、命令输入、终端展示、包工作流 | 命令提供方、智能体/会话/工具接口、CLI 安全服务提供方、能力服务读模型 |
-| Server / SDK | HTTP/WebSocket 路由、server 工作区策略、外部 SDK 嵌入 | 传输 DTO、运行时请求/响应、工作区身份、稳定 Rust 内核接口 |
+| Server | HTTP/WebSocket 路由、server 工作区策略 | 传输 DTO、运行时请求/响应、工作区身份、能力服务读模型 |
+| Public Agent SDK | Python/TypeScript `query()`、client/session、异步消息流、callback | 版本化 SDK Host、能力协商、稳定/实验 schema、背压与进程生命周期 |
 | Remote / mobile | 远端工作区、relay/bot、文件/终端视图 | 远端状态、逻辑路径、权限/事件事实、远端能力事实 |
 | ACP | ACP 协议、客户端生命周期、远端探测 | 外部智能体/工具能力、环境事实、权限桥接 |
 | Web UI / mobile web | UI 状态、hydration、配对、会话展示、插件状态视图 | 接口/传输 DTO、运行时事件事实、能力服务读模型 |
 
-当前 Runtime SDK 已提供会话创建、列出、删除、恢复、模型更新和类型化转录读取。模型更新只接受会话 ID 与模型 ID，
-不承载模型目录、模式、提供方配置或宿主 UI 选择语义。`AgentSessionRestoreRequest/Result` 与
-`AgentSessionRestorePort` 归 Agent Runtime SDK，以继续复用 Runtime owner 的完整 `SessionState`；类型化
+当前 Rust Runtime SDK 已提供会话创建、列出、删除、恢复、模型/模式更新、类型化转录读取、本地分支、用量生成，以及
+精确轮次结算。模型与模式更新只接受会话 ID 和被选择的稳定 ID，
+不承载目录、提供方配置、选择策略或宿主 UI 语义。模式 ID 由 Core 对当前有效目录校验；同值更新不刷新活动时间，
+有效变更先按会话串行化，再通过与轮次元数据保存、删除共用的规范化物理路径锁持久化，成功后才提交到活动会话。
+该锁只保证单进程内同一会话元数据的读改写顺序，不宣称跨进程事务，也不把 metadata/state 等多文件更新声明为崩溃原子提交。
+恢复标准主会话时，如果持久化模式已从当前目录移除，
+Core 会选择仍可执行的内置回退模式并同步修正元数据；内部子会话的专用模式不走这条迁移规则。
+Desktop 的通用会话元数据命令必须显式声明 UI 字段集合，并只在 owner 锁内更新这些字段；Review 状态与未读、关注、标题等
+独立写入意图不得通过完整旧快照互相覆盖。
+Relay 导入的会话元数据以私有 `pending/complete` 标记区分仅有摘要与完整历史；打开本地会话时先检查并补齐该导入，
+再让 Core 恢复模型上下文。普通本地会话只做一次元数据读取且不访问账号或网络；部分导入失败保持可重试并停止本次打开，
+不能让 UI 与 Core 分别发布不同的截断历史。
+`AgentSessionRestoreRequest/Result` 与
+`AgentSessionRestorePort` 归 Agent Runtime API，以继续复用 Runtime owner 的完整 `SessionState`；类型化
 `SessionTranscript` 归 `runtime-ports`。两者都由 `assembly/core` 注入真实持久化 owner，当前由 CLI/TUI
-消费；ACP 为保证模型配置与完整历史来自同一次恢复，继续通过 Core 兼容门面读取协议回放所需的完整轮次，避免为单一协议
-扩张通用 transcript。CLI/TUI 的工具确认、拒绝和用户问题回答，以及 ACP 服务端 / Peer Host 的工具确认与拒绝，通过类型化
+消费；TUI 与 ACP 的活动会话模式更新也通过窄端口回到同一 Core owner。ACP 为保证模型配置与完整历史来自同一次恢复，继续通过
+Core 兼容门面读取协议回放所需的完整轮次，避免为单一协议扩张通用 transcript，也不绕过附件内容所需的独立授权能力。
+会话分支请求显式携带可选远程身份；当前本地 provider 对远程身份返回 `NotAvailable`，不据本地路径
+推断远程语义。CLI/TUI 的工具确认、拒绝和用户问题回答，以及 ACP 服务端 / Peer Host 的工具确认与拒绝，通过类型化
 `AgentInteractionResponsePort` 回到 Core 的工具管线或用户输入 owner，不改变审批策略或交互所有权。
+本地工作区快照准备、会话文件清单、类型化统计和工作区文件回滚由 `LocalWorkspaceSnapshotPort` 直接调用现有 Core 快照 owner；
+该端口没有远程身份字段，不由 Agent Runtime API re-export，也不注册成完整产品 capability。Desktop 保留既有远程空结果兼容；
+Peer Host 对显式远程身份或远程路径返回清晰的不支持错误；二者都不会把远程请求转入本地端口。
+Peer Host 的历史截断、维护锁、后代会话清理和事件投影不进入端口。
 `CoreAgentRuntimeCompatibility` 仍承载未迁移的
-持久化、分支、用量和快照等操作；不能据此把整个兼容门面一次性删除，也不能把这些
-操作提前声明为跨宿主稳定接口。旧固定 ID 创建方法仅作为标记废弃的源码迁移转发保留一个兼容周期，生产 CLI
-调用已经迁移到 Runtime SDK；该转发不得重新成为新调用入口。
+账号同步、富历史读取及 Peer Host/ACP 其余维护等操作；不能据此把整个兼容门面一次性删除，也不能把这些
+操作提前声明为跨宿主稳定接口。固定 ID 创建的兼容周期已经结束；会话创建、分支和用量生成均由 Rust Runtime SDK
+承接；会话重命名/归档、基础恢复、thread-goal 查询和完成态本地命令轮次也通过显式窄端口回到 Core owner，
+不形成通用会话 mutation 或 transcript writer。Core provider 直接调用现有协调器、持久化和用量 owner，不再反向经过兼容门面。账号、登录态、
+用户身份和同步策略仍是可选产品能力，不进入 Agent Runtime 或该 Core provider 的稳定接口。
 
 ### 4.3 Product Capability 设计
 
@@ -842,7 +880,7 @@ Provider 装配同样按需增加，不提前为 Memory、Context、Workflow、S
 插件运行时主机的权威设计见 [`plugin-runtime-host-design.md`](extensions/plugin-runtime-host-design.md)。本文件只约束 Agent Runtime 与插件主机的关系：
 
 - Agent Runtime 只接收 `PluginRuntimeBinding`，不创建插件主机、不发现插件来源、不加载 OpenCode 适配器。
-- `PluginRuntimeClient` 是 Agent Runtime 内部可调用边界，不进入 SDK 门面、能力服务接口或产品入口 DTO。
+- `PluginRuntimeClient` 是 Agent Runtime 内部可调用边界，不进入 Agent Runtime API、公开 SDK、能力服务接口或产品入口 DTO。
 - OpenCode 适配层只存在于插件主机内部；Agent Runtime 不依赖 `bitfun-opencode-adapter`，也不按具体生态类型分支。
 - 插件贡献进入 Agent Runtime 前必须已经转换成 BitFun 类型化工具、Hook 输入/输出、诊断或明确不支持；
   OpenCode 原始对象不能进入业务状态。
@@ -866,11 +904,25 @@ Provider 装配同样按需增加，不提前为 Memory、Context、Workflow、S
 
 `bitfun-acp` 保持集成归属。
 
-CLI 托管的 ACP 服务端使用 `DeliveryProfile::Acp` 组装一个 Agent Runtime，通过 SDK 处理会话创建/列举、轮次提交/取消、
+CLI 托管的 ACP 服务端使用 `DeliveryProfile::Acp` 组装一个 Agent Runtime，通过 Rust Runtime SDK 处理会话创建/列举、轮次提交/取消、
 交互响应和只读 Agent 事件订阅。ACP 只把共享运行时事实映射成协议更新；标准输入输出、连接、权限 RPC 与通知生命周期
-不进入 SDK。完整持久化历史恢复、模式、模型目录/提供方配置、MCP 和 ACP 客户端路径仍是明确的 Core 兼容范围；
-活动会话的模型写入已经通过 SDK 回到 Core owner，
+不进入 Agent Runtime API。完整持久化历史恢复、模型/模式目录与提供方配置读取、MCP 和 ACP 客户端路径仍是明确的 Core 兼容范围；
+活动会话的模型/模式写入已经通过 Agent Runtime API 回到 Core owner，
 不据此扩张通用 runtime DTO。
+
+`session/load` 在恢复前占用会话 ID，先完成纯参数校验和临时 MCP 建立，再恢复 Core；只有完整历史通知发送成功后才发布
+活动 ACP 状态并返回成功。同一 ID 的重叠打开或关闭在产生回放和 MCP 副作用前以可重试临时状态拒绝；恢复后的任一步失败
+都会卸载本请求加载的 Core 内存状态并回收临时 MCP，但不删除既有历史。`session/new` 先生成稳定 ID，完成目录校验和
+临时 MCP 建立后再以同一 ID 创建 Core 会话；建立过程失败时尝试回收临时 MCP 和本请求创建的 Core 会话。首次落盘若因
+回滚失败留下目录，会以类型化残余资源结果进入同一补偿路径，不报告“未创建 Core 会话”。补偿失败会携带会话 ID、
+残余资源种类、Core 是否由本请求创建及恢复动作，不伪装成普通输入错误，也不建议 `session/load` 删除既有历史。
+成功的 `session/close` 先阻止新轮次，清空已接收队列、取消后台子会话与活动轮次并确认调度排空，再卸载 Core 临时状态、
+回收临时 MCP 和连接映射；持久化历史及其存储绑定保留，可由后续 `session/load` 重新打开。
+任一步未完成时保留 ACP 会话所有权和持久化历史，返回 `session_close_incomplete`、失败阶段与可重试动作；只有临时 MCP
+未回收时才标记具体残余资源，不能沿用 `session/new` 的“本请求创建 Core 会话”语义。
+无效请求与会话不存在分别保持协议可识别的参数错误和资源不存在错误，其他后端故障不泄漏为可重试的客户端输入错误。
+活动会话占用范围是一个 ACP stdio 进程；当前不宣称同一持久化会话可由多个 ACP 进程并发写入。跨进程共享需要先定义
+执行域、权限、冲突和崩溃恢复契约，不在本切片中用临时文件锁提前固化。
 
 继续拥有：
 
@@ -894,18 +946,18 @@ pub trait ExternalToolProvider: Send + Sync {
 }
 ```
 
-Agent Runtime SDK 只能看到 external agent/tool capability，不感知 ACP protocol、进程管理、
+Agent Runtime API 只能看到 external agent/tool capability，不感知 ACP protocol、进程管理、
 remote probing 或 startup timeout。
 
 ### 4.6 Skills / Prompt / Subagent
 
 建议归属：
 
-- prompt module：Agent Runtime SDK 的 prompt assembly contract。
+- prompt module：Agent Runtime 的 prompt assembly contract。
 - skill：prompt / resource / instruction 扩展，作为 agent definition 或 harness input 的一部分。
 - subagent definition：现有 `RuntimeAgentRegistry` 与智能体定义 owner。
-- subagent execution：Agent Runtime SDK。
-- Task tool：Tool Runtime entrypoint，调用 Agent Runtime SDK。
+- subagent execution：Agent Runtime。
+- Task tool：Tool Runtime entrypoint，经 Agent Runtime API 调用 Agent Runtime。
 
 约束：
 
@@ -976,7 +1028,7 @@ pub trait BeforeToolExecution: Send + Sync {
 错误：
 
 - contracts crate 使用可移植错误事实。
-- Agent Runtime SDK / Runtime Services 负责错误分类和事件上报边界。
+- Agent Runtime / Runtime Services 负责错误分类和事件上报边界；Agent Runtime API 只做类型化用例映射。
 - Product Surface 只负责展示逻辑。
 - unsupported capability 必须明确，不允许泛化为 unknown failure。
 
@@ -1051,42 +1103,45 @@ Product 测试：
 - MCP dynamic tool catalog。
 - MiniApp 与 review workflow。
 - 插件状态视图和 host fallback。
-- 内部 SDK 最小特性 / no-default-features 嵌入验证。
+- Rust Runtime SDK 最小特性 / no-default-features 嵌入验证。
 - OpenCode / plugin adapter 的 capability/effect 声明与安全决策测试。
 
 ### 5.4 当前结果与剩余完成条件
 
 已经成立：
 
-- `bitfun-agent-runtime` 不依赖 `bitfun-core`，内部 SDK 预览门面已有最小测试保护。
+- `bitfun-agent-runtime` 不依赖 `bitfun-core`，Rust Runtime SDK 已有最小测试保护。
 - `bitfun-runtime-services` 提供类型化服务注入；工具 contracts、provider groups 与 execution 已分层。
 - `bitfun-harness` 已提供类型化工作流描述与注册能力。
 - `bitfun-core` 可继续作为 `product-full` 兼容门面，避免迁移期间一次性重写入口。
-- CLI 已以 `DeliveryProfile::Cli` 构造真实 Runtime Parts 和 SDK runtime；本地 Agent 入口、会话、用量和
-  Peer Host 共用一个调用级上下文与广播事件源，审批策略不再写回全局配置。Peer Host 通过 SDK 提交/精确取消
-  turn、更新会话模型并处理工具确认/拒绝，通过单一 Core 兼容门面处理会话与快照缺口，不再构造独立调度器、持久化 manager 或事件队列；
+- CLI 已以 `DeliveryProfile::Cli` 构造真实 Runtime Parts 和 Rust Runtime SDK；本地 Agent 入口、会话、用量和
+  Peer Host 共用一个调用级上下文与广播事件源，审批策略不再写回全局配置。Peer Host 通过该 Rust 接口提交/精确取消
+  turn、处理基础会话控制、更新会话模型并处理工具确认/拒绝；本地工作区快照准备、文件清单、统计和文件回滚通过独立 owner port 复用 Core 实现，
+  富历史和其余持久化维护缺口仍通过单一 Core 兼容门面处理，不再构造独立调度器、持久化 manager 或事件队列；
   wire schema、Relay ACK/重放和重连协议未在该切换中扩张。
-- CLI 通过 SDK 处理已覆盖的 session/turn/cancel 操作，并通过一个 Core 兼容门面处理 SDK v1 缺口；
+- CLI 主会话客户端通过 Rust Runtime SDK 处理 session、transcript、fork、usage report、用量卡片完成态本地命令轮次、turn、cancel 与 settlement；其他 preview 缺口仍通过一个 Core 兼容门面处理；
   该门面复用现有 owner，不建立第二套状态或事件 schema。
 - CLI 托管的 ACP 服务端已以 `DeliveryProfile::Acp` 构造真实 Runtime Parts；会话创建/列举、轮次、取消、会话模型更新、工具确认/拒绝和
-  Agent 事件订阅复用同一 SDK 语义，ACP stdio、连接与协议投影保持不变。Agentic Event Queue 仍是唯一事件 owner；
+  Agent 事件订阅复用同一 Agent Runtime API 语义，ACP stdio、连接与协议投影保持不变。Agentic Event Queue 仍是唯一事件 owner；
   全局有界 broadcast 继续服务 CLI/TUI，活动 ACP prompt 使用固定容量、仅接收本会话事件的临时通道，并在最后一个订阅者
   释放时立即回收。CLI 宿主进程只保留一个旧消费队列排空任务，不增加每会话转发任务或第二套事件 schema。ACP 组装入口使用独立的
   轮次提交适配器，在会话锁内拒绝忙碌会话的第二个 prompt；CLI/TUI、Desktop 和远程入口的既有排队策略不变。
-- Desktop 主交互已从现有协调器与调度器端口构造窄口径 Agent Runtime SDK 门面；Tauri 命令只负责保留现有 DTO、
-  补全图片载荷并映射类型化请求。ACP 取消分支继续优先处理，Desktop 平台生命周期和未迁移服务不进入 SDK，也不创建
+- Desktop 主交互已从现有协调器与调度器端口构造窄口径 Rust Runtime SDK；Tauri 命令只负责保留现有 DTO、
+  补全图片载荷并映射类型化请求。ACP 取消分支继续优先处理，Desktop 平台生命周期和未迁移服务不进入该 Rust 接口，也不创建
   第二套 owner 或事件 schema。完整 `DeliveryProfile::Desktop` 必须等待真实 Desktop `RuntimeServices` 提供方和事件
-  消费/投影路径齐备后再组装；当前切片不注册 `Events` 能力，也不以失败占位端口或无人消费的内存通道伪装可用。
+  消费/投影路径齐备后再组装；当前切片只额外注入本地工作区快照 owner port，不注册 `Events` 或快照 capability，
+  也不以失败占位端口或无人消费的内存通道伪装可用。
 
 仍需完成：
 
-- 把 embedded relay 的 TCP bind、静态 fallback 和任务生命周期移出 assembly；room/device 状态、account/sync
-  存储、asset store 与 HTTP/WebSocket router 已归属 `services/relay-service`，Cargo 反向边已删除并由通用边界检查保护。
-- 继续缩小 CLI 的 Core 兼容门面；只有稳定端口、真实生产调用方和行为等价测试齐备时才迁移 owner。
-- 继续按真实复用需求缩小 ACP 的完整持久化历史、模式、模型目录/提供方配置、MCP 与客户端兼容路径；Desktop 仅继续迁移存在稳定端口和
+- 继续缩小 CLI 的 Core 兼容门面；本地快照窄端口不扩张为远程快照、完整 checkpoint/rewind、Agent Runtime API 通用能力或公开 Agent SDK 能力。
+  只有稳定端口、真实生产调用方和行为等价测试齐备时才迁移其余 owner。
+- 继续按真实复用需求缩小 ACP 的完整持久化历史、模型/模式目录与提供方配置读取、MCP 与客户端兼容路径；Desktop 仅继续迁移存在稳定端口和
   行为等价测试的入口。完整 Desktop 产品组装需先补齐真实必需服务与事件消费路径，不以桩实现提前声明能力；ACP 生命周期
   和 Desktop 平台资源仍留在各自入口。
-- 为 Agent Runtime SDK 增加至少一个非 `bitfun-core` 的真实嵌入方；预览 facade 和单元测试不等于外部可用 SDK。
+- 继续用 Rust Runtime SDK 收敛真实产品入口；preview 成熟度、内部 adapter 和单元测试不等于
+  外部可用 SDK。公开 SDK 的 Python/TypeScript 消费方、SDK Host、Claude 等价矩阵和发布门槛以
+  [`agent-sdk-product-architecture.md`](agent-sdk-product-architecture.md) 为准。
 - 仅在真实端到端切片中接入插件主机；外部插件先转换为类型化工具、Hook、事件、权限请求或诊断，
   不把生态对象带入 Agent Runtime。
 - 未接入的 Server、Remote、Web、Mobile 和 SDK profile 保持未交付表述，不以空计划或枚举分支代替产品验证。

@@ -65,7 +65,6 @@ pub enum ToolEffectFactsSource {
 pub struct ToolEffectFacts {
     pub source: ToolEffectFactsSource,
     pub readonly_by_default: bool,
-    pub needs_permissions_by_default: bool,
     pub concurrency_safe_by_default: bool,
 }
 
@@ -79,22 +78,17 @@ pub struct ToolCancellationContract {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ToolEffectFilter {
     pub readonly_default_only: bool,
-    pub include_default_permissioned: bool,
 }
 
 impl ToolEffectFilter {
     pub fn readonly_only() -> Self {
         Self {
             readonly_default_only: true,
-            include_default_permissioned: false,
         }
     }
 
     pub fn matches_default_effects(&self, effects: ToolEffectFacts) -> bool {
         if self.readonly_default_only && !effects.readonly_by_default {
-            return false;
-        }
-        if !self.include_default_permissioned && effects.needs_permissions_by_default {
             return false;
         }
         true
@@ -246,7 +240,6 @@ pub async fn materialize_tool_snapshot<Tool: ToolRegistryItem + ?Sized>(
             effects: ToolEffectFacts {
                 source: ToolEffectFactsSource::NoInputDefault,
                 readonly_by_default: tool.is_readonly(),
-                needs_permissions_by_default: tool.needs_permissions(None),
                 concurrency_safe_by_default: tool.is_concurrency_safe(None),
             },
             cancellation: ToolCancellationContract {

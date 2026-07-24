@@ -8,7 +8,10 @@ use crate::agentic::workspace::WorkspaceServices;
 use crate::agentic::WorkspaceBinding;
 pub use bitfun_agent_runtime::events::FinishReason;
 use bitfun_agent_tools::LoadedDeferredToolSpec;
-use bitfun_runtime_ports::{DelegationPolicy, RemoteExecPort, TerminalPort};
+use bitfun_runtime_ports::{
+    DelegationPolicy, PermissionDelegationContext, PermissionRuntimeCeiling, RemoteExecPort,
+    TerminalPort,
+};
 use serde_json::Value;
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -26,8 +29,12 @@ pub struct ExecutionContext {
     pub workspace: Option<WorkspaceBinding>,
     pub context: HashMap<String, String>,
     pub subagent_parent_info: Option<SubagentParentInfo>,
+    /// Permission routing context. This can survive a partially persisted
+    /// subagent lineage even when the historical parent turn is unavailable.
+    pub permission_delegation: Option<PermissionDelegationContext>,
+    /// Parent runtime restrictions inherited only by delegated child agents.
+    pub permission_runtime_ceiling: Option<PermissionRuntimeCeiling>,
     pub(crate) delegation_policy: DelegationPolicy,
-    pub skip_tool_confirmation: bool,
     pub runtime_tool_restrictions: ToolRuntimeRestrictions,
     /// Workspace I/O services (filesystem + shell) injected into tools
     pub workspace_services: Option<WorkspaceServices>,
@@ -50,6 +57,7 @@ pub struct ExecutionContext {
 pub struct RoundContext {
     pub session_id: String,
     pub subagent_parent_info: Option<SubagentParentInfo>,
+    pub permission_delegation: Option<PermissionDelegationContext>,
     pub dialog_turn_id: String,
     pub turn_index: usize,
     pub round_number: usize,
@@ -66,6 +74,7 @@ pub struct RoundContext {
     pub primary_model_facts: PrimaryModelFacts,
     pub agent_type: String,
     pub context_vars: HashMap<String, String>,
+    pub permission_runtime_ceiling: Option<PermissionRuntimeCeiling>,
     pub(crate) delegation_policy: DelegationPolicy,
     pub runtime_tool_restrictions: ToolRuntimeRestrictions,
     /// Cooperative interrupt checked by tool execution so round injections can be

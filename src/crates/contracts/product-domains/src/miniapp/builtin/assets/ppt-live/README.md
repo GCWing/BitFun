@@ -19,10 +19,13 @@ ppt-live/
 │   └── ui.bundle.js        # 唯一的运行时 JS（由 builtin.rs 加载）
 └── src/
     ├── export-deck-host.js       # 导出函数的 re-export 壳（ui.js 通过它引入导出能力）
-    ├── export-deck-browser.js    # PPTX/PDF/PNG 导出实现（依赖 pptxgenjs, pdf-lib, jszip）
-    ├── export-slide-browser.js   # 幻灯片预处理编排（挂载 DOM → sanitize → 提取 slideData）
-    ├── html2pptx-dom-core.js     # HTML→slideData 提取核心（Stage 1）
-    ├── pptx-html-build.js        # slideData→PPTX 构建核心（Stage 2）
+    ├── export-deck-browser.js    # EditableSlideScene/PDF/PNG 导出实现
+    ├── export-slide-browser.js   # 幻灯片预处理编排（挂载 DOM → sanitize → scene）
+    ├── export-degrade.js         # 导出降级层（剥样式 / 移除元素 / 简化页面，代替阻断）
+    ├── editable-slide-normalize.js # HTML/SVG/table → EditableSlideScene
+    ├── editable-slide-scene.js   # 可编辑场景契约、校验与结构化错误
+    ├── html2pptx-dom-core.js     # DOM 几何与原生元素提取辅助
+    ├── pptx-html-build.js        # 唯一 EditableSlideScene→PPTX serializer
     ├── sanitize-slide-html.js    # 导出前 HTML 净化/修复
     ├── render.js                 # 幻灯片渲染（编辑器、缩略图、预览）
     ├── deck-ai.js                # AI 生成对接
@@ -101,32 +104,19 @@ node build-bitfun.mjs
 
 ## 导出管线
 
-PPT Live 的核心功能是将 AI 生成的 HTML 幻灯片导出为 PPTX。导出管线分两个阶段：
+PPT Live 只有一条 PPTX 导出管线：HTML 幻灯片和旧 element-model 幻灯片都先归一化为
+`EditableSlideScene`，再由 `buildSlideFromScene(scene, pres)` 这个唯一 serializer
+映射为 PowerPoint 原生文本、形状、线、表格和有明确用户图片意图的 picture。
 
-### Stage 1: HTML → slideData 提取（`html2pptx-dom-core.js`）
+`EditableSlideScene` 不接受栅格兜底、整页截图、SVG 图片层或降级成功状态。可确定重写的
+CSS/SVG 构造会转换为原生节点；其余无法表示的输入由导出降级层（`export-degrade.js`）处理：
+不支持的样式（box-shadow、text-shadow、filter、mask、background-image、动画等）被剥离，
+无法表示的元素被移除，仍失败的页面被替换为简化可编辑场景——所有降级都会记录在导出摘要中，
+单个元素或单页问题不再阻断整个导出。表格通过 `addTable` 写为原生 `a:tbl`，生成的几何不得产生
+`p:pic` 或媒体关系。
 
-`extractSlideDataFromDocument(doc)` 遍历 DOM 文档，产出结构化数据：
-
-```
-slideData = {
-  background: { type, value/path },
-  elements: [
-    { type, position: {x, y, w, h (inches)}, style: {...}, text },
-    ...
-  ],
-  placeholders: [...],
-  errors: [...]
-}
-```
-
-- 位置来自 `getBoundingClientRect()`（border-box），通过 `pxToInch = px / 96` 转为英寸
-- 元素的 CSS padding 被提取为 PPTX `margin`（内部 inset），防止文字偏移
-- 垂直对齐从 CSS flex/grid `align-items` 或 `line-height` 比例推断
-
-### Stage 2: slideData → PPTX 构建（`pptx-html-build.js`）
-
-`buildSlideFromExtracted(slideData, bodyDimensions, pres)` 将每个 element 映射为
-pptxgenjs API 调用（`addText`、`addImage`、`addShape`）。
+DOM 几何来自 `getBoundingClientRect()`（border-box），以 `px / 96` 转换为英寸。
+CSS padding 会成为文本框或表格单元格 inset；垂直对齐由可表示的布局属性推导。
 
 关键设计：
 - `WIDTH_SAFETY_IN = 0.15"` — 文本框加宽 0.15 英寸以吸收浏览器与 PowerPoint
@@ -139,17 +129,21 @@ pptxgenjs API 调用（`addText`、`addImage`、`addShape`）。
 ### 编排流程（`export-slide-browser.js`）
 
 ```
-prepareSlidesForPptxExport(slides, options)
+prepareEditableSlides(slides, options)
   → loadHtmlInExportRoot(html)     // 挂载到离屏 shadow-DOM div (1280×720)
   → sanitizeSlideDocumentRoot(doc) // 净化 HTML
   → waitForExportPaint()           // 等待两帧渲染
-  → measureBodyDimensions(doc)     // 检测溢出
-  → extractSlideDataFromDocument(doc)  // Stage 1
-  → options.renderRaster(html)     // 可选：栅格化背景层（文字隐藏）
-  → 返回 prepared slides
+  → normalizeWithDegradation(...)  // 严格 normalize + 有界降级修复循环
+  → buildSimplifiedEditableScene() // 单页最终兜底（保留页数与文字）
+  → 返回 EditableSlideScene[]
 ```
 
-然后 `exportPptxPrepared(deck, preparedSlides)` 调用 Stage 2 生成最终 PPTX。
+`options.onDegrade(record)` 逐条收集降级记录（剥样式 / 移除元素 / 简化页面），
+由 `summarizePptxExportDiagnostics(scenes, degradations)` 合并进导出摘要展示给用户。
+
+旧 element-model 页面通过 `normalizeElementSlideToEditableScene` 进入同一 scene 契约。
+`exportEditablePptx(deck, scenes)` 逐页调用唯一 serializer 生成最终 PPTX；流程为顺序执行，
+不插入人工延时。
 
 ## 版本号协议
 

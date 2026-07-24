@@ -183,6 +183,178 @@ async fn managed_package_is_read_through_plugin_runtime_host() {
 }
 
 #[tokio::test]
+async fn tool_hook_is_statically_mapped_in_read_diagnostics_without_execution() {
+    let fixture = ManagedPackageFixture::new("hook-static-mapping", PLUGIN_SOURCE);
+    let input = fixture.approved_input().await;
+    let adapter = load_opencode_package_adapter(input, None, 1_720_000_001)
+        .expect("create OpenCode package adapter")
+        .0;
+    let host = PluginRuntimeHost::new(adapter);
+
+    let response = host
+        .read_plugins(read_request())
+        .await
+        .expect("read package through host");
+    let diagnostic = response
+        .diagnostics
+        .iter()
+        .find(|diagnostic| diagnostic.code == "opencode.hook_mapped_runtime_unavailable")
+        .expect("typed Hook mapping diagnostic");
+
+    assert!(diagnostic.message.contains("tool.execute.before"));
+    assert!(diagnostic.message.contains("read tool arguments"));
+    assert!(diagnostic.message.contains("modify tool arguments"));
+    assert_eq!(
+        response.plugin_statuses[0].status,
+        PluginStatusKind::TrustRequired
+    );
+}
+
+#[tokio::test]
+async fn single_line_expression_body_hook_is_statically_mapped() {
+    let source = r#"export const InlinePlugin: Plugin = async () => ({ "tool.execute.after": async (_input, output) => output })"#;
+    let fixture = ManagedPackageFixture::new("hook-inline-expression", source);
+    let input = fixture.approved_input().await;
+    let adapter = load_opencode_package_adapter(input, None, 1_720_000_001)
+        .expect("create OpenCode package adapter")
+        .0;
+    let host = PluginRuntimeHost::new(adapter);
+
+    let response = host
+        .read_plugins(read_request())
+        .await
+        .expect("read package through host");
+    let diagnostic = response
+        .diagnostics
+        .iter()
+        .find(|diagnostic| diagnostic.code == "opencode.hook_mapped_runtime_unavailable")
+        .expect("single-line Hook mapping diagnostic");
+
+    assert!(diagnostic.message.contains("tool.execute.after"));
+    assert!(diagnostic.message.contains("read tool results"));
+    assert!(diagnostic.message.contains("modify tool results"));
+}
+
+#[tokio::test]
+async fn event_name_references_do_not_become_typed_hook_contributions() {
+    let source = r#"
+export const EventObserverPlugin: Plugin = async () => {
+  return {
+    event: async ({ event }) => {
+      if (event.type === "tool.execute.before") {
+        console.log(event.type)
+      }
+    },
+  }
+}
+"#;
+    let fixture = ManagedPackageFixture::new("hook-event-reference", source);
+    let input = fixture.approved_input().await;
+    let adapter = load_opencode_package_adapter(input, None, 1_720_000_001)
+        .expect("create OpenCode package adapter")
+        .0;
+    let host = PluginRuntimeHost::new(adapter);
+
+    let response = host
+        .read_plugins(read_request())
+        .await
+        .expect("read package through host");
+
+    assert!(!response
+        .diagnostics
+        .iter()
+        .any(|diagnostic| diagnostic.code == "opencode.hook_mapped_runtime_unavailable"));
+    let generic_event_diagnostic = response
+        .diagnostics
+        .iter()
+        .find(|diagnostic| diagnostic.code == "opencode.hook_projection_only")
+        .expect("generic event Hook diagnostic");
+    assert!(generic_event_diagnostic.message.ends_with("event"));
+    assert!(!generic_event_diagnostic
+        .message
+        .contains("tool.execute.before"));
+}
+
+#[tokio::test]
+async fn real_unsupported_hooks_are_reported_without_event_type_false_positives() {
+    let source = r#"
+export const UnsupportedHooksPlugin: Plugin = async () => ({
+  config: async () => {},
+  "chat.message": async () => {},
+  "permission.ask": async () => {},
+  "command.execute.before": async () => {},
+  "tool.definition": async () => {},
+  "permission.asked": async () => {},
+})
+"#;
+    let fixture = ManagedPackageFixture::new("unsupported-hooks", source);
+    let input = fixture.approved_input().await;
+    let adapter = load_opencode_package_adapter(input, None, 1_720_000_001)
+        .expect("create OpenCode package adapter")
+        .0;
+    let host = PluginRuntimeHost::new(adapter);
+
+    let response = host
+        .read_plugins(read_request())
+        .await
+        .expect("read package through host");
+    let messages = response
+        .diagnostics
+        .iter()
+        .filter(|diagnostic| diagnostic.code == "opencode.hook_projection_only")
+        .map(|diagnostic| diagnostic.message.as_str())
+        .collect::<Vec<_>>();
+
+    for hook in [
+        "config",
+        "chat.message",
+        "permission.ask",
+        "command.execute.before",
+        "tool.definition",
+    ] {
+        assert!(messages.iter().any(|message| message.ends_with(hook)));
+    }
+    assert!(!messages
+        .iter()
+        .any(|message| message.contains("permission.asked")));
+}
+
+#[tokio::test]
+async fn hook_parse_failure_is_explicit_without_guessing_contributions() {
+    let source = r#"
+export const BrokenHookPlugin: Plugin = async () => ({
+  tool: {
+    summary: tool({
+      description: "Summarize",
+    }),
+  },
+  "tool.execute.before": async () => {},
+  broken: [
+})
+"#;
+    let fixture = ManagedPackageFixture::new("hook-parse-failure", source);
+    let input = fixture.approved_input().await;
+    let adapter = load_opencode_package_adapter(input, None, 1_720_000_001)
+        .expect("preserve custom-tool projection with Hook parse diagnostic")
+        .0;
+    let host = PluginRuntimeHost::new(adapter);
+
+    let response = host
+        .read_plugins(read_request())
+        .await
+        .expect("read package through host");
+
+    assert!(response
+        .diagnostics
+        .iter()
+        .any(|diagnostic| diagnostic.code == "opencode.hook_projection_parse_failed"));
+    assert!(!response
+        .diagnostics
+        .iter()
+        .any(|diagnostic| diagnostic.code == "opencode.hook_mapped_runtime_unavailable"));
+}
+
+#[tokio::test]
 async fn source_approval_does_not_create_custom_tool_candidate() {
     let fixture = ManagedPackageFixture::new("approval", PLUGIN_SOURCE);
     let input = fixture.approved_input().await;

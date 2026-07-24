@@ -1,7 +1,13 @@
-import React, { useEffect, useRef, useCallback, useState } from 'react';
+import React, { useEffect, useLayoutEffect, useRef, useCallback, useState } from 'react';
 import LanguageToggleButton from '../components/LanguageToggleButton';
+import { useControlTargetEpoch } from '../hooks/useControlTargetEpoch';
 import { useI18n } from '../i18n';
-import { RemoteSessionManager, type RecentWorkspaceEntry, type SessionInfo } from '../services/RemoteSessionManager';
+import {
+  isRemoteControlTargetChangedError,
+  RemoteSessionManager,
+  type RecentWorkspaceEntry,
+  type SessionInfo,
+} from '../services/RemoteSessionManager';
 import { useMobileStore } from '../services/store';
 import { useTheme } from '../theme';
 import logoIcon from '../assets/Logo-ICON.png';
@@ -16,6 +22,31 @@ interface SessionListPageProps {
   onOpenWorkspace: () => void;
   onDisconnect: () => void;
   onOpenDevices?: () => void;
+}
+
+type SessionListTargetOwner = {
+  sessionMgr: RemoteSessionManager;
+  epoch: number;
+  active: boolean;
+};
+
+/**
+ * Resolve the epoch owned by one render. The explicit renderedEpoch check is
+ * what prevents an old timer/poll closure from borrowing a newer mutable ref
+ * owner during the render-to-passive-cleanup window.
+ */
+export function captureSessionListOwnerEpoch(
+  owner: SessionListTargetOwner,
+  sessionMgr: RemoteSessionManager,
+  renderedEpoch: number,
+): number | null {
+  if (
+    !owner.active
+    || owner.sessionMgr !== sessionMgr
+    || owner.epoch !== renderedEpoch
+    || sessionMgr.controlTargetEpoch !== renderedEpoch
+  ) return null;
+  return renderedEpoch;
 }
 
 function formatTime(
@@ -155,7 +186,7 @@ const SessionListPage: React.FC<SessionListPageProps> = ({ sessionMgr, onSelectS
     currentAssistant,
     setCurrentAssistant,
     setPairedDisplayMode,
-    authenticatedUserId,
+    authenticatedUserLabel,
     connectionHealth,
     controlTarget,
   } = useMobileStore();
@@ -163,6 +194,8 @@ const SessionListPage: React.FC<SessionListPageProps> = ({ sessionMgr, onSelectS
   const [creating, setCreating] = useState(false);
   const [loading, setLoading] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
+  const [targetInitializing, setTargetInitializing] = useState(true);
+  const targetInitializingRef = useRef(true);
   const [hasMore, setHasMore] = useState(false);
   const [displayMode, setDisplayMode] = useState<DisplayMode>(() => {
     const hint = useMobileStore.getState().pairedDisplayMode;
@@ -198,6 +231,39 @@ const SessionListPage: React.FC<SessionListPageProps> = ({ sessionMgr, onSelectS
   const longPressPosRef = useRef({ x: 0, y: 0 });
   const longPressTriggeredRef = useRef(false);
   const toastTimerRef = useRef<ReturnType<typeof setTimeout>>();
+  const controlTargetEpoch = useControlTargetEpoch(sessionMgr);
+  const sessionListOwnerRef = useRef({
+    sessionMgr,
+    epoch: controlTargetEpoch,
+    active: true,
+  });
+  if (
+    sessionListOwnerRef.current.sessionMgr !== sessionMgr
+    || sessionListOwnerRef.current.epoch !== controlTargetEpoch
+  ) {
+    sessionListOwnerRef.current = {
+      sessionMgr,
+      epoch: controlTargetEpoch,
+      active: true,
+    };
+  }
+
+  const captureSessionListEpoch = useCallback((): number | null => {
+    return captureSessionListOwnerEpoch(
+      sessionListOwnerRef.current,
+      sessionMgr,
+      controlTargetEpoch,
+    );
+  }, [controlTargetEpoch, sessionMgr]);
+
+  const isSessionListCurrent = useCallback((epoch: number | null): boolean => {
+    const owner = sessionListOwnerRef.current;
+    return epoch !== null
+      && owner.active
+      && owner.sessionMgr === sessionMgr
+      && owner.epoch === epoch
+      && sessionMgr.controlTargetEpoch === epoch;
+  }, [controlTargetEpoch, sessionMgr]);
 
   const hasSearchQuery = searchQuery.trim().length > 0;
   // Show the resume card as soon as session data is available — don't gate it
@@ -264,34 +330,44 @@ const SessionListPage: React.FC<SessionListPageProps> = ({ sessionMgr, onSelectS
 
   const handleRename = useCallback(async () => {
     if (!renameTarget || !renameValue.trim()) return;
+    const targetEpoch = captureSessionListEpoch();
+    if (targetEpoch === null) return;
     setRenaming(true);
     try {
       await sessionMgr.renameSession(renameTarget.session_id, renameValue.trim());
+      if (!isSessionListCurrent(targetEpoch)) return;
       useMobileStore.getState().updateSessionName(renameTarget.session_id, renameValue.trim());
       setRenameTarget(null);
       setMenuSession(null);
     } catch (e: any) {
-      showToast(e.message || t('sessions.renameFailed'));
+      if (isSessionListCurrent(targetEpoch) && !isRemoteControlTargetChangedError(e)) {
+        showToast(e.message || t('sessions.renameFailed'));
+      }
     } finally {
-      setRenaming(false);
+      if (isSessionListCurrent(targetEpoch)) setRenaming(false);
     }
-  }, [renameTarget, renameValue, sessionMgr, showToast, t]);
+  }, [captureSessionListEpoch, isSessionListCurrent, renameTarget, renameValue, sessionMgr, showToast, t]);
 
   const handleDelete = useCallback(async () => {
     if (!deleteConfirmTarget) return;
+    const targetEpoch = captureSessionListEpoch();
+    if (targetEpoch === null) return;
     setDeleting(true);
     try {
       await sessionMgr.deleteSession(deleteConfirmTarget.session_id);
+      if (!isSessionListCurrent(targetEpoch)) return;
       useMobileStore.getState().removeSession(deleteConfirmTarget.session_id);
       setDeleteConfirmTarget(null);
       setMenuSession(null);
       showToast(t('sessions.deleted'));
     } catch (e: any) {
-      showToast(e.message || t('sessions.deleteFailed'));
+      if (isSessionListCurrent(targetEpoch) && !isRemoteControlTargetChangedError(e)) {
+        showToast(e.message || t('sessions.deleteFailed'));
+      }
     } finally {
-      setDeleting(false);
+      if (isSessionListCurrent(targetEpoch)) setDeleting(false);
     }
-  }, [deleteConfirmTarget, sessionMgr, showToast, t]);
+  }, [captureSessionListEpoch, deleteConfirmTarget, isSessionListCurrent, sessionMgr, showToast, t]);
 
   const [pullDistance, setPullDistance] = useState(0);
   const [refreshing, setRefreshing] = useState(false);
@@ -302,10 +378,76 @@ const SessionListPage: React.FC<SessionListPageProps> = ({ sessionMgr, onSelectS
   const touchStartY = useRef(0);
   const isPulling = useRef(false);
 
+  const committedSessionListTargetRef = useRef({ sessionMgr, epoch: controlTargetEpoch });
+  useLayoutEffect(() => {
+    const previous = committedSessionListTargetRef.current;
+    const targetChanged = previous.sessionMgr !== sessionMgr
+      || previous.epoch !== controlTargetEpoch;
+    const owner = sessionListOwnerRef.current;
+    owner.active = owner.sessionMgr === sessionMgr
+      && owner.epoch === controlTargetEpoch
+      && sessionMgr.controlTargetEpoch === controlTargetEpoch;
+    if (targetChanged) {
+      targetInitializingRef.current = true;
+      setTargetInitializing(true);
+      listRequestSeqRef.current += 1;
+      setLoading(false);
+      setLoadingMore(false);
+      setRefreshing(false);
+      clearLongPressTimer();
+      longPressTriggeredRef.current = false;
+      isPulling.current = false;
+      setPullDistance(0);
+      if (toastTimerRef.current) {
+        clearTimeout(toastTimerRef.current);
+        toastTimerRef.current = undefined;
+      }
+      setCreating(false);
+      setRenaming(false);
+      setDeleting(false);
+      setAssistantList([]);
+      setWorkspaceList([]);
+      setShowAssistantPicker(false);
+      setShowWorkspacePicker(false);
+      setMenuSession(null);
+      setRenameTarget(null);
+      setRenameValue('');
+      setDeleteConfirmTarget(null);
+      setActionToast(null);
+      setShowDisconnectConfirm(false);
+      setSearchQuery('');
+      setDisplayMode('pro');
+      setHasMore(false);
+      setSessions([]);
+      setCurrentWorkspace(null);
+      setCurrentAssistant(null);
+      setPairedDisplayMode(null);
+      setError(null);
+      offsetRef.current = 0;
+      initLoadedPathRef.current = undefined;
+    }
+    committedSessionListTargetRef.current = { sessionMgr, epoch: controlTargetEpoch };
+    return () => {
+      owner.active = false;
+      listRequestSeqRef.current += 1;
+    };
+  }, [
+    controlTargetEpoch,
+    sessionMgr,
+    setCurrentAssistant,
+    setCurrentWorkspace,
+    setError,
+    setPairedDisplayMode,
+    setSessions,
+  ]);
+
   // Load assistant list when entering assistant mode
   const loadAssistantList = useCallback(async () => {
+    const targetEpoch = captureSessionListEpoch();
+    if (targetEpoch === null) return undefined;
     try {
       const assistants = await sessionMgr.listAssistants();
+      if (!isSessionListCurrent(targetEpoch)) return undefined;
       setAssistantList(assistants);
       // Set default assistant if none selected
       if (!currentAssistant && assistants.length > 0) {
@@ -315,17 +457,23 @@ const SessionListPage: React.FC<SessionListPageProps> = ({ sessionMgr, onSelectS
       }
       return currentAssistant?.path;
     } catch (e: any) {
-      setError(e.message);
+      if (isSessionListCurrent(targetEpoch) && !isRemoteControlTargetChangedError(e)) {
+        setError(e.message);
+      }
       return undefined;
     }
-  }, [sessionMgr, currentAssistant, setCurrentAssistant, setError]);
+  }, [captureSessionListEpoch, currentAssistant, isSessionListCurrent, sessionMgr, setCurrentAssistant, setError]);
 
   const loadFirstPage = useCallback(async (
     workspacePath: string | undefined,
     query = '',
     identity?: { remoteConnectionId?: string; remoteSshHost?: string },
   ) => {
+    const targetEpoch = captureSessionListEpoch();
+    if (targetEpoch === null) return;
     const requestSeq = ++listRequestSeqRef.current;
+    // A new first page owns the complete list and supersedes pagination.
+    setLoadingMore(false);
     setLoading(true);
     offsetRef.current = 0;
     try {
@@ -336,29 +484,43 @@ const SessionListPage: React.FC<SessionListPageProps> = ({ sessionMgr, onSelectS
         query,
         identity,
       );
-      if (requestSeq !== listRequestSeqRef.current) return;
+      if (
+        requestSeq !== listRequestSeqRef.current
+        || !isSessionListCurrent(targetEpoch)
+      ) return;
       setSessions(resp.sessions);
       setHasMore(resp.has_more);
       offsetRef.current = resp.sessions.length;
     } catch (e: any) {
-      if (requestSeq !== listRequestSeqRef.current) return;
-      setError(e.message);
+      if (
+        requestSeq !== listRequestSeqRef.current
+        || !isSessionListCurrent(targetEpoch)
+      ) return;
+      if (!isRemoteControlTargetChangedError(e)) setError(e.message);
     } finally {
-      if (requestSeq === listRequestSeqRef.current) {
+      if (
+        requestSeq === listRequestSeqRef.current
+        && isSessionListCurrent(targetEpoch)
+      ) {
         setLoading(false);
       }
     }
-  }, [sessionMgr, setSessions, setError]);
+  }, [captureSessionListEpoch, isSessionListCurrent, sessionMgr, setError, setSessions]);
 
   // Load workspace list for Pro mode picker
   const loadWorkspaceList = useCallback(async () => {
+    const targetEpoch = captureSessionListEpoch();
+    if (targetEpoch === null) return;
     try {
       const workspaces = await sessionMgr.listRecentWorkspaces();
+      if (!isSessionListCurrent(targetEpoch)) return;
       setWorkspaceList(workspaces);
     } catch (e: any) {
-      setError(e.message);
+      if (isSessionListCurrent(targetEpoch) && !isRemoteControlTargetChangedError(e)) {
+        setError(e.message);
+      }
     }
-  }, [sessionMgr, setError]);
+  }, [captureSessionListEpoch, isSessionListCurrent, sessionMgr, setError]);
 
   const handleSelectWorkspace = useCallback(async (workspace: {
     path: string;
@@ -366,11 +528,15 @@ const SessionListPage: React.FC<SessionListPageProps> = ({ sessionMgr, onSelectS
     remote_connection_id?: string;
     remote_ssh_host?: string;
   }) => {
+    if (targetInitializingRef.current) return;
+    const targetEpoch = captureSessionListEpoch();
+    if (targetEpoch === null) return;
     try {
       const result = await sessionMgr.setWorkspace(workspace.path, {
         remoteConnectionId: workspace.remote_connection_id,
         remoteSshHost: workspace.remote_ssh_host,
       });
+      if (!isSessionListCurrent(targetEpoch)) return;
       if (result.success) {
         const path = result.path || workspace.path;
         const remoteConnectionId =
@@ -393,19 +559,25 @@ const SessionListPage: React.FC<SessionListPageProps> = ({ sessionMgr, onSelectS
         setError(result.error || 'Failed to set workspace');
       }
     } catch (e: any) {
-      setError(e.message);
+      if (isSessionListCurrent(targetEpoch) && !isRemoteControlTargetChangedError(e)) {
+        setError(e.message);
+      }
     }
-  }, [sessionMgr, setCurrentWorkspace, setError, loadFirstPage, searchQuery]);
+  }, [captureSessionListEpoch, isSessionListCurrent, loadFirstPage, searchQuery, sessionMgr, setCurrentWorkspace, setError]);
 
   const trySelectFirstProWorkspace = useCallback(async (): Promise<boolean> => {
+    const targetEpoch = captureSessionListEpoch();
+    if (targetEpoch === null) return false;
     try {
       const list = await sessionMgr.listRecentWorkspaces();
+      if (!isSessionListCurrent(targetEpoch)) return false;
       const candidate = pickFirstProWorkspace(list);
       if (!candidate) return false;
       const result = await sessionMgr.setWorkspace(candidate.path, {
         remoteConnectionId: candidate.remote_connection_id,
         remoteSshHost: candidate.remote_ssh_host,
       });
+      if (!isSessionListCurrent(targetEpoch)) return false;
       if (result.success) {
         const path = result.path || candidate.path;
         const remoteConnectionId =
@@ -423,22 +595,26 @@ const SessionListPage: React.FC<SessionListPageProps> = ({ sessionMgr, onSelectS
           remote_ssh_host: remoteSshHost,
         });
         await loadFirstPage(path, searchQuery, identity);
-        return true;
+        return isSessionListCurrent(targetEpoch);
       }
       setError(result.error || t('workspace.failedToSetWorkspace'));
       return false;
     } catch (e: any) {
-      setError(e.message);
+      if (isSessionListCurrent(targetEpoch) && !isRemoteControlTargetChangedError(e)) {
+        setError(e.message);
+      }
       return false;
     }
-  }, [sessionMgr, setCurrentWorkspace, setError, loadFirstPage, searchQuery, t]);
+  }, [captureSessionListEpoch, isSessionListCurrent, loadFirstPage, searchQuery, sessionMgr, setCurrentWorkspace, setError, t]);
 
   const loadNextPage = useCallback(async (
     workspacePath: string | undefined,
     query = '',
     identity?: { remoteConnectionId?: string; remoteSshHost?: string },
   ) => {
-    if (loadingMore || !hasMore) return;
+    if (loading || loadingMore || !hasMore) return;
+    const targetEpoch = captureSessionListEpoch();
+    if (targetEpoch === null) return;
     const requestSeq = listRequestSeqRef.current;
     setLoadingMore(true);
     try {
@@ -449,24 +625,38 @@ const SessionListPage: React.FC<SessionListPageProps> = ({ sessionMgr, onSelectS
         query,
         identity,
       );
-      if (requestSeq !== listRequestSeqRef.current) return;
+      if (
+        requestSeq !== listRequestSeqRef.current
+        || !isSessionListCurrent(targetEpoch)
+      ) return;
       appendSessions(resp.sessions);
       setHasMore(resp.has_more);
       offsetRef.current += resp.sessions.length;
     } catch (e: any) {
-      if (requestSeq !== listRequestSeqRef.current) return;
-      setError(e.message);
+      if (
+        requestSeq !== listRequestSeqRef.current
+        || !isSessionListCurrent(targetEpoch)
+      ) return;
+      if (!isRemoteControlTargetChangedError(e)) setError(e.message);
     } finally {
-      setLoadingMore(false);
+      if (
+        requestSeq === listRequestSeqRef.current
+        && isSessionListCurrent(targetEpoch)
+      ) setLoadingMore(false);
     }
-  }, [sessionMgr, appendSessions, setError, loadingMore, hasMore]);
+  }, [appendSessions, captureSessionListEpoch, hasMore, isSessionListCurrent, loading, loadingMore, sessionMgr, setError]);
 
   useEffect(() => {
     let cancelled = false;
+    const targetEpoch = captureSessionListEpoch();
+    if (targetEpoch === null) return;
+    const isInitCurrent = () => (
+      !cancelled && isSessionListCurrent(targetEpoch)
+    );
     const init = async () => {
       try {
         const info = await sessionMgr.getWorkspaceInfo();
-        if (cancelled) return;
+        if (!isInitCurrent()) return;
         if (info.workspace_kind === 'assistant' && info.path) {
           setCurrentAssistant({
             path: info.path,
@@ -478,6 +668,7 @@ const SessionListPage: React.FC<SessionListPageProps> = ({ sessionMgr, onSelectS
           initLoadedPathRef.current = info.path;
           await loadFirstPage(info.path);
         } else {
+          setDisplayMode('pro');
           const ws = info.has_workspace ? info : null;
           setCurrentWorkspace(ws);
           if (ws?.path) {
@@ -491,21 +682,36 @@ const SessionListPage: React.FC<SessionListPageProps> = ({ sessionMgr, onSelectS
           }
         }
       } catch (e: any) {
-        if (!cancelled) setError(e.message);
+        if (isInitCurrent() && !isRemoteControlTargetChangedError(e)) setError(e.message);
       } finally {
-        if (!cancelled) setPairedDisplayMode(null);
+        if (isInitCurrent()) {
+          setPairedDisplayMode(null);
+          setLoading(false);
+          targetInitializingRef.current = false;
+          setTargetInitializing(false);
+        }
       }
     };
     init();
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [controlTargetEpoch]);
 
   const refreshData = useCallback(async () => {
+    const targetEpoch = captureSessionListEpoch();
+    if (targetEpoch === null) return;
     const requestSeq = ++listRequestSeqRef.current;
+    // Refresh replaces both a first-page request and pagination. Their stale
+    // finally blocks intentionally cannot publish, so this owner must also
+    // settle the flags it superseded.
+    setLoadingMore(false);
     try {
       if (displayMode === 'pro') {
         const info = await sessionMgr.getWorkspaceInfo();
+        if (
+          requestSeq !== listRequestSeqRef.current
+          || !isSessionListCurrent(targetEpoch)
+        ) return;
         if (info.workspace_kind === 'assistant') {
           setCurrentWorkspace(null);
           setSessions([]);
@@ -519,20 +725,35 @@ const SessionListPage: React.FC<SessionListPageProps> = ({ sessionMgr, onSelectS
           remoteConnectionId: ws?.remote_connection_id,
           remoteSshHost: ws?.remote_ssh_host,
         });
-        if (requestSeq !== listRequestSeqRef.current) return;
+        if (
+          requestSeq !== listRequestSeqRef.current
+          || !isSessionListCurrent(targetEpoch)
+        ) return;
         setSessions(resp.sessions);
         setHasMore(resp.has_more);
         offsetRef.current = resp.sessions.length;
       } else {
         // Assistant mode: use currentAssistant path
         const resp = await sessionMgr.listSessions(currentAssistant?.path, PAGE_SIZE, 0, searchQuery);
-        if (requestSeq !== listRequestSeqRef.current) return;
+        if (
+          requestSeq !== listRequestSeqRef.current
+          || !isSessionListCurrent(targetEpoch)
+        ) return;
         setSessions(resp.sessions);
         setHasMore(resp.has_more);
         offsetRef.current = resp.sessions.length;
       }
     } catch { /* ignore */ }
-  }, [sessionMgr, setSessions, setCurrentWorkspace, currentAssistant?.path, displayMode, searchQuery]);
+    finally {
+      if (
+        requestSeq === listRequestSeqRef.current
+        && isSessionListCurrent(targetEpoch)
+      ) {
+        setLoading(false);
+        setLoadingMore(false);
+      }
+    }
+  }, [captureSessionListEpoch, currentAssistant?.path, displayMode, isSessionListCurrent, searchQuery, sessionMgr, setCurrentWorkspace, setSessions]);
 
   useEffect(() => {
     const poll = setInterval(refreshData, 10000);
@@ -592,14 +813,16 @@ const SessionListPage: React.FC<SessionListPageProps> = ({ sessionMgr, onSelectS
   const handleTouchEnd = useCallback(async () => {
     if (!isPulling.current) return;
     isPulling.current = false;
+    const targetEpoch = captureSessionListEpoch();
+    if (targetEpoch === null) return;
     if (pullDistance >= PULL_THRESHOLD) {
       setRefreshing(true);
       setPullDistance(PULL_THRESHOLD);
       await refreshData();
-      setRefreshing(false);
+      if (isSessionListCurrent(targetEpoch)) setRefreshing(false);
     }
-    setPullDistance(0);
-  }, [pullDistance, refreshData]);
+    if (isSessionListCurrent(targetEpoch)) setPullDistance(0);
+  }, [captureSessionListEpoch, isSessionListCurrent, pullDistance, refreshData]);
 
   const handleScroll = useCallback((e: React.UIEvent<HTMLDivElement>) => {
     const el = e.currentTarget;
@@ -624,7 +847,9 @@ const SessionListPage: React.FC<SessionListPageProps> = ({ sessionMgr, onSelectS
   ]);
 
   const handleCreate = useCallback(async (agentType: string) => {
-    if (creating) return;
+    if (creating || targetInitializingRef.current) return;
+    const targetEpoch = captureSessionListEpoch();
+    if (targetEpoch === null) return;
     setCreating(true);
     try {
       // For assistant mode (Claw), use currentAssistant.path
@@ -635,9 +860,11 @@ const SessionListPage: React.FC<SessionListPageProps> = ({ sessionMgr, onSelectS
         : {
             remoteConnectionId: currentWorkspace?.remote_connection_id,
             remoteSshHost: currentWorkspace?.remote_ssh_host,
-          };
+      };
       const id = await sessionMgr.createSession(agentType, undefined, workspacePath, identity);
+      if (!isSessionListCurrent(targetEpoch)) return;
       await loadFirstPage(workspacePath, searchQuery, identity);
+      if (!isSessionListCurrent(targetEpoch)) return;
       const label = isClawAgent(agentType)
         ? t('sessions.remoteClawSession')
         : isCoworkAgent(agentType)
@@ -645,17 +872,21 @@ const SessionListPage: React.FC<SessionListPageProps> = ({ sessionMgr, onSelectS
           : t('sessions.remoteCodeSession');
       onSelectSession(id, label, true);
     } catch (e: any) {
-      setError(e.message);
+      if (isSessionListCurrent(targetEpoch) && !isRemoteControlTargetChangedError(e)) {
+        setError(e.message);
+      }
     } finally {
-      setCreating(false);
+      if (isSessionListCurrent(targetEpoch)) setCreating(false);
     }
   }, [
     creating,
+    captureSessionListEpoch,
     currentWorkspace?.path,
     currentWorkspace?.remote_connection_id,
     currentWorkspace?.remote_ssh_host,
     currentAssistant?.path,
     displayMode,
+    isSessionListCurrent,
     loadFirstPage,
     onSelectSession,
     searchQuery,
@@ -665,10 +896,14 @@ const SessionListPage: React.FC<SessionListPageProps> = ({ sessionMgr, onSelectS
   ]);
 
   const handleSelectMode = useCallback(async (mode: DisplayMode) => {
+    if (targetInitializingRef.current) return;
+    const targetEpoch = captureSessionListEpoch();
+    if (targetEpoch === null) return;
     setDisplayMode(mode);
     setShowAssistantPicker(false);
     if (mode === 'assistant') {
       const assistantPath = await loadAssistantList();
+      if (!isSessionListCurrent(targetEpoch)) return;
       loadFirstPage(assistantPath, searchQuery);
     } else {
       if (currentWorkspace?.path) {
@@ -680,18 +915,24 @@ const SessionListPage: React.FC<SessionListPageProps> = ({ sessionMgr, onSelectS
         await trySelectFirstProWorkspace();
       }
     }
-  }, [currentWorkspace?.path, loadFirstPage, loadAssistantList, searchQuery, trySelectFirstProWorkspace]);
+  }, [captureSessionListEpoch, currentWorkspace?.path, isSessionListCurrent, loadAssistantList, loadFirstPage, searchQuery, trySelectFirstProWorkspace]);
 
   const handleSelectAssistant = useCallback(async (assistant: { path: string; name: string; assistant_id?: string }) => {
+    if (targetInitializingRef.current) return;
+    const targetEpoch = captureSessionListEpoch();
+    if (targetEpoch === null) return;
     try {
       await sessionMgr.setAssistant(assistant.path);
+      if (!isSessionListCurrent(targetEpoch)) return;
       setCurrentAssistant(assistant);
       setShowAssistantPicker(false);
       loadFirstPage(assistant.path, searchQuery);
     } catch (e: any) {
-      setError(e.message);
+      if (isSessionListCurrent(targetEpoch) && !isRemoteControlTargetChangedError(e)) {
+        setError(e.message);
+      }
     }
-  }, [sessionMgr, setCurrentAssistant, setError, loadFirstPage, searchQuery]);
+  }, [captureSessionListEpoch, isSessionListCurrent, loadFirstPage, searchQuery, sessionMgr, setCurrentAssistant, setError]);
 
   const workspaceDisplayName = currentWorkspace?.project_name || t('sessions.noWorkspaceSelected');
   const assistantDisplayName = currentAssistant?.name || t('shared.agents.default');
@@ -704,10 +945,10 @@ const SessionListPage: React.FC<SessionListPageProps> = ({ sessionMgr, onSelectS
           <img src={logoIcon} alt="BitFun" className="session-list__logo" />
           <div className="session-list__header-copy">
             <h1>{t('shared.product.remote')}</h1>
-            {authenticatedUserId && (
-              <span className="session-list__header-user-id">
+            {authenticatedUserLabel && (
+              <span className="session-list__header-account-name">
                 <span className={`session-list__health-dot session-list__health-dot--${connectionHealth}`} title={(() => { switch (connectionHealth) { case 'connected': return t('sessions.connectionConnected'); case 'checking': return t('sessions.connectionChecking'); case 'unreachable': return t('sessions.connectionUnreachable'); default: return t('sessions.connectionUnpaired'); } })()} />
-                {authenticatedUserId}
+                {authenticatedUserLabel}
                 {controlTarget && !controlTarget.isHome && controlTarget.deviceName && (
                   <span className="session-list__header-target" title={t('devices.controllingDevice', { name: controlTarget.deviceName })}>
                     {controlTarget.deviceName}
@@ -730,7 +971,7 @@ const SessionListPage: React.FC<SessionListPageProps> = ({ sessionMgr, onSelectS
               </svg>
             </button>
           )}
-          <LanguageToggleButton />
+          <LanguageToggleButton className="session-list__language-btn" />
           <button className="session-list__theme-btn" onClick={toggleTheme} aria-label={t('common.toggleTheme')}>
             <ThemeToggleIcon isDark={isDark} />
           </button>
@@ -809,6 +1050,7 @@ const SessionListPage: React.FC<SessionListPageProps> = ({ sessionMgr, onSelectS
           <button
             className={`session-list__mode-toggle-btn ${isProMode ? 'is-active' : ''}`}
             onClick={() => handleSelectMode('pro')}
+            disabled={targetInitializing}
           >
             <ProModeIcon />
             <span>{t('shared.modes.expert')}</span>
@@ -816,6 +1058,7 @@ const SessionListPage: React.FC<SessionListPageProps> = ({ sessionMgr, onSelectS
           <button
             className={`session-list__mode-toggle-btn ${!isProMode ? 'is-active' : ''}`}
             onClick={() => handleSelectMode('assistant')}
+            disabled={targetInitializing}
           >
             <AssistantModeIcon />
             <span>{t('shared.modes.assistant')}</span>
@@ -828,6 +1071,7 @@ const SessionListPage: React.FC<SessionListPageProps> = ({ sessionMgr, onSelectS
             <div
               className="session-list__workspace-bar"
               onClick={() => {
+                if (targetInitializingRef.current) return;
                 loadWorkspaceList();
                 setShowWorkspacePicker(true);
               }}
@@ -906,6 +1150,7 @@ const SessionListPage: React.FC<SessionListPageProps> = ({ sessionMgr, onSelectS
             <div
               className="session-list__assistant-bar"
               onClick={() => {
+                if (targetInitializingRef.current) return;
                 loadAssistantList();
                 setShowAssistantPicker(true);
               }}
@@ -971,7 +1216,7 @@ const SessionListPage: React.FC<SessionListPageProps> = ({ sessionMgr, onSelectS
                     <button
                       className="session-list__create-btn session-list__create-btn--code"
                       onClick={() => handleCreate('code')}
-                      disabled={creating}
+                      disabled={creating || targetInitializing}
                     >
                       <div className="session-list__create-icon">
                         <SessionTypeIcon agentType="code" />
@@ -987,7 +1232,7 @@ const SessionListPage: React.FC<SessionListPageProps> = ({ sessionMgr, onSelectS
                     <button
                       className="session-list__create-btn session-list__create-btn--cowork"
                       onClick={() => handleCreate('cowork')}
-                      disabled={creating}
+                      disabled={creating || targetInitializing}
                     >
                       <div className="session-list__create-icon">
                         <SessionTypeIcon agentType="cowork" />
@@ -1008,7 +1253,7 @@ const SessionListPage: React.FC<SessionListPageProps> = ({ sessionMgr, onSelectS
                   <button
                     className="session-list__create-btn session-list__create-btn--claw"
                     onClick={() => handleCreate('claw')}
-                    disabled={creating}
+                    disabled={creating || targetInitializing}
                   >
                     <div className="session-list__create-icon">
                       <SessionTypeIcon agentType="claw" />
@@ -1047,22 +1292,23 @@ const SessionListPage: React.FC<SessionListPageProps> = ({ sessionMgr, onSelectS
                   placeholder={t('sessions.searchSessions')}
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
+                  disabled={targetInitializing}
                   enterKeyHint="search"
                 />
                 {searchQuery && (
-                  <button className="session-list__search-clear" onClick={() => setSearchQuery('')} aria-label="Clear">
+                  <button className="session-list__search-clear" onClick={() => setSearchQuery('')} aria-label="Clear" disabled={targetInitializing}>
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
                   </button>
                 )}
               </div>
 
-              {loading && sessions.length === 0 && (
+              {(loading || targetInitializing) && sessions.length === 0 && (
                 <div className="session-list__empty">{t('sessions.loadingSessions')}</div>
               )}
-              {!loading && sessions.length === 0 && !hasSearchQuery && (
+              {!loading && !targetInitializing && sessions.length === 0 && !hasSearchQuery && (
                 <div className="session-list__empty">{t('sessions.noSessions')}</div>
               )}
-              {!loading && sessions.length === 0 && hasSearchQuery && (
+              {!loading && !targetInitializing && sessions.length === 0 && hasSearchQuery && (
                 <div className="session-list__empty">{t('sessions.emptySearch')}</div>
               )}
 

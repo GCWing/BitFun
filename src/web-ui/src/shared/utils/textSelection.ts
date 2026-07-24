@@ -80,28 +80,35 @@ export const clearSelection = (): void => {
 
  
 export const copyTextToClipboard = async (text: string): Promise<boolean> => {
-  try {
-    if (navigator.clipboard && navigator.clipboard.writeText) {
+  if (navigator.clipboard?.writeText) {
+    try {
       await navigator.clipboard.writeText(text);
       return true;
-    } else {
-      
-      const textArea = document.createElement('textarea');
-      textArea.value = text;
-      textArea.style.position = 'fixed';
-      textArea.style.left = '-999999px';
-      textArea.style.top = '-999999px';
-      document.body.appendChild(textArea);
-      textArea.focus();
-      textArea.select();
-      
-      const result = document.execCommand('copy');
-      document.body.removeChild(textArea);
-      return result;
+    } catch (error) {
+      // WebView clipboard permission can be denied even when the API exists.
+      // Fall through to the selection-based copy path before reporting failure.
+      log.warn('Clipboard API copy failed; trying fallback', error);
     }
+  }
+
+  const textArea = document.createElement('textarea');
+  try {
+    textArea.value = text;
+    textArea.setAttribute('readonly', '');
+    textArea.style.position = 'fixed';
+    textArea.style.left = '-999999px';
+    textArea.style.top = '-999999px';
+    document.body.appendChild(textArea);
+    textArea.focus();
+    textArea.select();
+    return document.execCommand('copy');
   } catch (error) {
     log.error('Failed to copy text to clipboard', error);
     return false;
+  } finally {
+    if (textArea.isConnected) {
+      document.body.removeChild(textArea);
+    }
   }
 };
 

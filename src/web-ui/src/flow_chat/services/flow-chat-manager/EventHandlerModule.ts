@@ -3,15 +3,16 @@
  * Initializes event listeners and handles various Agentic events
  */
 
-import { FlowChatStore } from '../../store/FlowChatStore';
+import { FlowChatStore, mergeModelRoundAttemptDiagnostics } from '../../store/FlowChatStore';
 import { stateMachineManager } from '../../state-machine';
 import { SessionExecutionEvent, SessionExecutionState } from '../../state-machine/types';
 import { agenticEventListener, type AgenticEventCallbacks } from '../AgenticEventListener';
 import { 
-  generateTextChunkKey, 
+  generateTextChunkKey,
   generateToolEventKey,
   normalizeParamsPartialFragment,
   parseEventKey,
+  TEXT_CHUNK_MAX_LATENCY_MS,
   type FlowToolEvent,
   type SubagentParentInfo,
   type TextChunkEventData,
@@ -19,7 +20,6 @@ import {
   type ParamsPartialToolEvent
 } from '../EventBatcher';
 import { notificationService } from '../../../shared/notification-system/services/NotificationService';
-import type { NotificationAction } from '../../../shared/notification-system/types';
 import { createLogger } from '@/shared/utils/logger';
 import { handleThreadGoalUpdated } from '../threadGoalEventService';
 import { resolveThreadGoalUserMessageDisplay } from '../../utils/threadGoalDisplay';
@@ -29,20 +29,18 @@ import type {
   ImageAnalysisEvent,
   ModelRoundStartedEvent,
   ModelRoundCompletedEvent,
+  ModelRoundAttemptSupersededEvent,
   OpenBuiltInBrowserEvent,
   AcpContextUsageUpdatedEvent,
   SessionModelAutoMigratedEvent,
   SubagentSessionLinkedEvent,
 } from '@/infrastructure/api/service-api/AgentAPI';
-import { i18nService } from '@/infrastructure/i18n/core/I18nService';
 import { MCPAPI } from '@/infrastructure/api/service-api/MCPAPI';
 import { ACPClientAPI, type AcpPermissionRequestEvent } from '@/infrastructure/api/service-api/ACPClientAPI';
 import { globalEventBus } from '@/infrastructure/event-bus';
 import type { FlowChatContext, DialogTurn, ModelRound, FlowToolItem } from './types';
 import {
-  getAiErrorPresentation,
   normalizeAiErrorDetail,
-  type AiErrorPresentation,
   type AiErrorDetail,
 } from '@/shared/ai-errors/aiErrorPresenter';
 import { useReviewActionBarStore } from '../../store/deepReviewActionBarStore';
@@ -58,7 +56,6 @@ import {
   immediateSaveDialogTurn, 
   saveDialogTurnToDisk,
   cleanupSaveState,
-  updateSessionMetadata,
 } from './PersistenceModule';
 import { 
   processNormalTextChunkInternal, 
@@ -66,7 +63,6 @@ import {
   completeActiveTextItems,
   cleanupSessionBuffers
 } from './TextChunkModule';
-import { pendingQueueManager } from './PendingQueueModule';
 import { 
   processToolEvent,
   processToolParamsPartialInternal,
@@ -79,6 +75,8 @@ import {
   clearRuntimeStatus,
   scheduleModelResponseStatus,
 } from './RuntimeStatusModule';
+import { requestPeerSessionRefresh } from './PeerSessionRefreshModule';
+import { isPeerDeviceModeActive } from '@/infrastructure/peer-device/peerModeFlag';
 
 const log = createLogger('EventHandlerModule');
 const TURN_COMPLETION_QUIET_WINDOW_MS = 500;
@@ -153,6 +151,7 @@ export const __test_only__ = {
   resolveDialogTurnDisplayContent,
   mergeParamsPartialEventData,
   findSubagentParentInfoByRound,
+  handleDialogTurnFailed,
 };
 
 function shouldMarkUnreadCompletion(sessionId: string): boolean {
@@ -166,6 +165,7 @@ function logDroppedDataEvent(
   turnId: string | null,
   details: Record<string, unknown>
 ): void {
+  requestPeerSessionRefresh(sessionId);
   log.debug('Dropped agentic data event', {
     eventName,
     sessionId,
@@ -749,6 +749,9 @@ export async function initializeEventListeners(
     },
     onModelRoundCompleted: (event) => {
       handleModelRoundComplete(context, event);
+    },
+    onModelRoundAttemptSuperseded: (event) => {
+      handleModelRoundAttemptSuperseded(context, event);
     },
     onDialogTurnCompleted: (event) => {
       handleDialogTurnComplete(context, event, onTodoWriteResult);
@@ -1622,6 +1625,7 @@ function handleTextChunk(context: FlowChatContext, event: any): void {
 
   const dialogTurn = session.dialogTurns.find((turn: DialogTurn) => turn.id === turnId);
   if (!dialogTurn) {
+    requestPeerSessionRefresh(sessionId);
     log.debug('Dialog turn not found', { turnId });
     return;
   }
@@ -1658,7 +1662,8 @@ function handleTextChunk(context: FlowChatContext, event: any): void {
       ...existing,
       text: existing.text + incoming.text,
       isThinkingEnd: existing.isThinkingEnd || incoming.isThinkingEnd
-    })
+    }),
+    { maxLatencyMs: TEXT_CHUNK_MAX_LATENCY_MS }
   );
 }
 
@@ -1689,7 +1694,12 @@ export function processBatchedEvents(
           processNormalTextChunkInternal(context, sessionId, turnId, roundId, text, attemptId, attemptIndex);
         }
         
-        debouncedSaveDialogTurn(context, sessionId, turnId, 2000);
+        // The executing host owns turn persistence. A Peer controller receives
+        // the same chunks for rendering and must not echo a save RPC for every
+        // checkpoint, especially on a weak link.
+        if (!isPeerDeviceModeActive()) {
+          debouncedSaveDialogTurn(context, sessionId, turnId, 2000);
+        }
       } else if (eventType === 'tool:params') {
         const { sessionId, turnId, toolEvent } = payload;
         processToolParamsPartialInternal(sessionId, turnId, toolEvent);
@@ -1793,6 +1803,7 @@ function handleModelRoundStart(context: FlowChatContext, event: ModelRoundStarte
 
   const dialogTurn = session.dialogTurns.find((turn: DialogTurn) => turn.id === turnId);
   if (!dialogTurn) {
+    requestPeerSessionRefresh(sessionId);
     log.debug('Dialog turn not found (model round start)', { turnId });
     return;
   }
@@ -1853,6 +1864,52 @@ function handleModelRoundStart(context: FlowChatContext, event: ModelRoundStarte
 
 function optionalNumber(value: unknown): number | undefined {
   return typeof value === 'number' && Number.isFinite(value) ? value : undefined;
+}
+
+function handleModelRoundAttemptSuperseded(
+  context: FlowChatContext,
+  event: ModelRoundAttemptSupersededEvent,
+): void {
+  const sessionId = event?.sessionId ?? (event as any)?.session_id;
+  const turnId = event?.turnId ?? (event as any)?.turn_id;
+  const roundId = event?.roundId ?? (event as any)?.round_id;
+  const diagnostic = event?.diagnostic;
+
+  if (!sessionId || !turnId || !roundId) {
+    log.warn('ModelRoundAttemptSuperseded missing identity fields', { event });
+    return;
+  }
+
+  if (
+    !diagnostic ||
+    typeof diagnostic.attemptId !== 'string' ||
+    typeof diagnostic.attemptIndex !== 'number' ||
+    typeof diagnostic.category !== 'string'
+  ) {
+    log.warn('ModelRoundAttemptSuperseded has an invalid diagnostic', { sessionId, turnId, roundId });
+    return;
+  }
+
+  if (!shouldProcessEvent(sessionId, turnId, 'data', 'ModelRoundAttemptSuperseded')) {
+    return;
+  }
+
+  const round = context.flowChatStore.getState().sessions.get(sessionId)
+    ?.dialogTurns.find(dialogTurn => dialogTurn.id === turnId)
+    ?.modelRounds.find(modelRound => modelRound.id === roundId);
+  if (!round) {
+    log.debug('Model round not found (attempt superseded)', { sessionId, turnId, roundId });
+    return;
+  }
+
+  context.flowChatStore.updateModelRound(
+    sessionId,
+    turnId,
+    roundId,
+    current => mergeModelRoundAttemptDiagnostics(current, [diagnostic], {
+      supersedeMatchingAttempts: true,
+    }),
+  );
 }
 
 /**
@@ -2232,13 +2289,6 @@ export function handleDialogTurnComplete(
   beginTurnCompletion(context, sessionId, turnId, partialRecoveryReason);
 }
 
-/**
- * Handle dialog turn failed event
- */
-/**
- * Format a raw dialog error string into a user-friendly notification.
- * Returns a title, a short message with actionable advice, and the original error for diagnostics.
- */
 function normalizeDialogErrorDetail(event: any): AiErrorDetail {
   const rawCategory = typeof event.errorCategory === 'string' ? event.errorCategory : undefined;
   const detail = event.errorDetail && typeof event.errorDetail === 'object'
@@ -2246,87 +2296,6 @@ function normalizeDialogErrorDetail(event: any): AiErrorDetail {
     : { category: rawCategory, rawMessage: event.error };
 
   return normalizeAiErrorDetail(detail, event.error);
-}
-
-export interface DialogErrorNotification {
-  type: 'error' | 'warning';
-  title: string;
-  message: string;
-  detail: string;
-  rawError: string;
-  diagnostics: string;
-  actions?: NotificationAction[];
-  metadata?: Record<string, any>;
-}
-
-export function formatDialogErrorForNotification(
-  rawError: string,
-  errorDetail?: AiErrorDetail
-): DialogErrorNotification {
-  const raw = rawError || '';
-  const normalizedDetail = normalizeAiErrorDetail(errorDetail ?? { rawMessage: raw }, raw);
-  const presentation = getAiErrorPresentation(normalizedDetail);
-  const title = i18nService.t(presentation.titleKey);
-  const message = i18nService.t(presentation.messageKey);
-  const diagnostics = buildDialogErrorDiagnostics(presentation, raw, normalizedDetail);
-
-  return {
-    type: presentation.severity,
-    title,
-    message,
-    detail: diagnostics || raw,
-    rawError: raw,
-    diagnostics,
-    actions: buildDialogErrorActions(diagnostics),
-    metadata: {
-      aiError: {
-        category: presentation.category,
-        retryable: presentation.retryable,
-        diagnostics,
-        rawError: raw,
-        detail: normalizedDetail,
-      },
-    },
-  };
-}
-
-function buildDialogErrorDiagnostics(
-  presentation: AiErrorPresentation,
-  rawError: string,
-  detail: AiErrorDetail
-): string {
-  const lines = [
-    presentation.diagnostics,
-    detail.providerMessage ? `provider_message=${detail.providerMessage}` : null,
-    rawError ? `raw_error=${rawError}` : null,
-  ].filter(Boolean);
-
-  return lines.join('\n');
-}
-
-function buildDialogErrorActions(diagnostics: string): NotificationAction[] | undefined {
-  if (!diagnostics) {
-    return undefined;
-  }
-
-  return [
-    {
-      label: i18nService.t('errors:ai.actions.copyDiagnostics'),
-      variant: 'secondary',
-      onClick: () => {
-        const clipboard = typeof navigator !== 'undefined' ? navigator.clipboard : undefined;
-        if (!clipboard?.writeText) {
-          return;
-        }
-
-        void clipboard.writeText(diagnostics).then(() => {
-          notificationService.success(i18nService.t('flow-chat:deepReviewActionBar.diagnosticsCopied'), {
-            duration: 2500,
-          });
-        });
-      },
-    },
-  ];
 }
 
 function handleDialogTurnFailed(context: FlowChatContext, event: any): void {
@@ -2368,9 +2337,10 @@ function handleDialogTurnFailed(context: FlowChatContext, event: any): void {
   context.flowChatStore.markSessionFinished(sessionId);
   
   const dialogTurn = session.dialogTurns.find(turn => turn.id === turnId);
-  const hasSuccessfulModelRounds = dialogTurn && dialogTurn.modelRounds.length > 0;
-  
-  if (hasSuccessfulModelRounds) {
+  if (dialogTurn) {
+    const terminalError = typeof error === 'string' && error.trim()
+      ? error
+      : errorDetail.rawMessage || errorDetail.providerMessage || 'Execution failed';
     context.flowChatStore.updateDialogTurn(sessionId, turnId, turn => {
       const updatedModelRounds = turn.modelRounds.map((round) => {
         if (round.isStreaming) {
@@ -2389,42 +2359,14 @@ function handleDialogTurnFailed(context: FlowChatContext, event: any): void {
         ...turn,
         modelRounds: updatedModelRounds,
         status: 'error' as const,
-        error: error || 'Execution failed',
+        error: terminalError,
+        errorDetail,
         endTime: Date.now()
       };
     });
     
     saveDialogTurnToDisk(context, sessionId, turnId).catch(err => {
       log.warn('Failed to save failed dialog turn', { sessionId, turnId, error: err });
-    });
-  } else {
-    if (dialogTurn?.userMessage?.content) {
-      try {
-        // B-policy: restore the failed turn's user content into the pending
-        // queue exactly once, marked `failed` and `retryCount=1`. The auto-drain
-        // listener skips items with `retryCount > 0`, so the user must
-        // explicitly edit / send-now / delete to clear the entry. This prevents
-        // the previous behaviour where a hard error (auth, rate-limit, bad
-        // tool args) would auto-resend in a tight loop.
-        pendingQueueManager.enqueue({
-          sessionId,
-          content: dialogTurn.userMessage.content,
-          displayMessage: dialogTurn.userMessage.content,
-          retryCount: 1,
-          initialStatus: 'failed',
-        });
-      } catch (err) {
-        log.warn('Failed to restore failed turn into pending queue', {
-          sessionId,
-          turnId,
-          err,
-        });
-      }
-    }
-
-    context.flowChatStore.deleteDialogTurn(sessionId, turnId);
-    updateSessionMetadata(context, sessionId).catch(err => {
-      log.warn('Failed to update failed session metadata', { sessionId, error: err });
     });
   }
   reconcileBackgroundSubagentSession(sessionId);
@@ -2441,20 +2383,6 @@ function handleDialogTurnFailed(context: FlowChatContext, event: any): void {
     });
   }
   
-  const formatted = formatDialogErrorForNotification(error, errorDetail);
-  const options = {
-    title: formatted.title,
-    duration: 8000,
-    actions: formatted.actions,
-    metadata: formatted.metadata,
-  };
-
-  if (formatted.type === 'warning') {
-    notificationService.warning(formatted.message, options);
-  } else {
-    notificationService.error(formatted.message, options);
-  }
-
   if (shouldMarkUnreadCompletion(sessionId)) {
     context.flowChatStore.markSessionUnreadCompletion(sessionId, 'error');
   }

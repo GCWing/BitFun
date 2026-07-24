@@ -14,10 +14,6 @@ import { TimeFormat } from '../main/ets/services/TimeFormat';
 import { X25519 } from '../main/ets/services/X25519';
 import { ChatMessage, ImageAttachment, PollSessionResult, RemoteQuestionAnswerPayload } from '../main/ets/model/RemoteModels';
 
-interface ToolInputFixture {
-  safe: boolean;
-}
-
 interface CryptoImageFixture {
   id: string;
   data_url: string;
@@ -338,10 +334,9 @@ export default function localUnitTest() {
     });
 
     it('builds tool and file commands', 0, () => {
-      const toolInput: ToolInputFixture = { safe: true };
       const answers: RemoteQuestionAnswerPayload = { answer: 'yes', '0': 'yes' };
 
-      expectCommandJson(RemoteCommandFactory.confirmTool('tool-1', toolInput), '{"cmd":"confirm_tool","tool_id":"tool-1","updated_input":{"safe":true}}');
+      expectCommandJson(RemoteCommandFactory.confirmTool('tool-1'), '{"cmd":"confirm_tool","tool_id":"tool-1"}');
       expectCommandJson(RemoteCommandFactory.rejectTool('tool-1', 'no'), '{"cmd":"reject_tool","tool_id":"tool-1","reason":"no"}');
       expectCommandJson(RemoteCommandFactory.cancelTool('tool-1', 'stop'), '{"cmd":"cancel_tool","tool_id":"tool-1","reason":"stop"}');
       expectCommandJson(RemoteCommandFactory.answerQuestion('tool-2', answers), '{"cmd":"answer_question","tool_id":"tool-2","answers":{"0":"yes","answer":"yes"}}');

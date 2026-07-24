@@ -62,6 +62,35 @@ export function getModelDisplayName(config: ProviderConfigLike): string {
   return `${providerName}/${modelName}`;
 }
 
+const RESERVED_MODEL_CONFIG_IDS = new Set(['primary', 'fast', 'auto', 'default']);
+
+/** Allocate a readable config ID for a newly created model. */
+export function allocateModelConfigId(modelName: string, existingIds: Iterable<string>): string {
+  const base = modelName.trim();
+  if (!base) {
+    throw new Error('Model name is required to allocate a model config ID.');
+  }
+
+  const occupiedIds = new Set(
+    Array.from(existingIds, (id) => id.trim()).filter(Boolean),
+  );
+  const isAvailable = (candidate: string) => (
+    !occupiedIds.has(candidate)
+    && !RESERVED_MODEL_CONFIG_IDS.has(candidate.toLowerCase())
+  );
+
+  if (isAvailable(base)) {
+    return base;
+  }
+
+  for (let suffix = 2; ; suffix += 1) {
+    const candidate = `${base}-${suffix}`;
+    if (isAvailable(candidate)) {
+      return candidate;
+    }
+  }
+}
+
 export const PROVIDER_TEMPLATES: Record<string, ProviderTemplate> = {
   openbitfun: {
     id: 'openbitfun',

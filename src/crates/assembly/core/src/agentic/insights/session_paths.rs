@@ -6,6 +6,12 @@ use bitfun_runtime_ports::{SessionStoragePathRequest, SessionStorePort};
 use std::collections::HashSet;
 use std::path::PathBuf;
 
+#[derive(Debug, Clone)]
+pub struct EffectiveSessionStorageTarget {
+    pub workspace_path: PathBuf,
+    pub session_storage_path: PathBuf,
+}
+
 /// Resolve the final sessions directory for a tracked workspace.
 pub async fn effective_session_storage_dir_for_workspace(ws: &WorkspaceInfo) -> PathBuf {
     let path_str = ws.root_path.to_string_lossy().to_string();
@@ -40,6 +46,14 @@ pub async fn effective_session_storage_dir_for_workspace(ws: &WorkspaceInfo) -> 
 ///
 /// Each returned path is the value to pass to [`PersistenceManager::list_sessions`].
 pub async fn collect_effective_session_storage_roots() -> Vec<PathBuf> {
+    collect_effective_session_storage_targets()
+        .await
+        .into_iter()
+        .map(|target| target.session_storage_path)
+        .collect()
+}
+
+pub async fn collect_effective_session_storage_targets() -> Vec<EffectiveSessionStorageTarget> {
     let mut paths = Vec::new();
     let mut seen = HashSet::new();
 
@@ -51,7 +65,10 @@ pub async fn collect_effective_session_storage_roots() -> Vec<PathBuf> {
         let sessions_dir = effective_session_storage_dir_for_workspace(&ws).await;
 
         if sessions_dir.exists() && seen.insert(sessions_dir.clone()) {
-            paths.push(sessions_dir);
+            paths.push(EffectiveSessionStorageTarget {
+                workspace_path: ws.root_path,
+                session_storage_path: sessions_dir,
+            });
         }
     }
 

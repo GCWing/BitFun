@@ -404,6 +404,20 @@ fn build_transcript_section(
     }
 }
 
+/// The character contribution of one complete rendered turn, excluding the
+/// shared index. Reference transcripts select whole turns from newest to
+/// oldest against this value, then render the selected turns chronologically.
+pub(crate) fn rendered_turn_char_count(
+    turn: &DialogTurnData,
+    options: &SessionTranscriptExportOptions,
+) -> usize {
+    build_transcript_section(turn, options)
+        .lines
+        .join("\n")
+        .chars()
+        .count()
+}
+
 fn offset_range(range: &TranscriptLineRange, offset: usize) -> TranscriptLineRange {
     TranscriptLineRange {
         start_line: range.start_line + offset,

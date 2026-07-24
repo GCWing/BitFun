@@ -1,6 +1,6 @@
 //! InitMiniApp tool — create a new MiniApp skeleton; AI then uses generic file tools to edit.
 
-use crate::agentic::tools::framework::{Tool, ToolResult, ToolUseContext};
+use crate::agentic::tools::framework::{PermissionIntent, Tool, ToolResult, ToolUseContext};
 use crate::infrastructure::events::{emit_global_event, BackendEvent};
 use crate::miniapp::try_get_global_miniapp_manager;
 use crate::miniapp::types::{
@@ -107,8 +107,20 @@ Returns app_id and the app root directory. Use the root directory and file names
         false
     }
 
-    fn needs_permissions(&self, _input: Option<&Value>) -> bool {
-        false
+    fn permission_intents(
+        &self,
+        input: &Value,
+        _context: &ToolUseContext,
+    ) -> BitFunResult<Vec<PermissionIntent>> {
+        let name = input
+            .get("name")
+            .and_then(Value::as_str)
+            .unwrap_or("unnamed")
+            .trim();
+        Ok(vec![PermissionIntent::new(
+            "custom_tool",
+            vec![format!("miniapp:InitMiniApp:{name}")],
+        )])
     }
 
     async fn call_impl(
@@ -221,11 +233,28 @@ Returns app_id and the app root directory. Use the root directory and file names
 #[cfg(test)]
 mod tests {
     use super::InitMiniAppTool;
-    use crate::agentic::tools::framework::{Tool, ToolExposure};
+    use crate::agentic::tools::framework::{Tool, ToolExposure, ToolUseContext};
+    use serde_json::json;
 
     #[test]
     fn init_miniapp_stays_expanded_for_assistant_creation() {
         let tool = InitMiniAppTool::new();
         assert_eq!(tool.default_exposure(), ToolExposure::Direct);
+    }
+
+    #[test]
+    fn init_miniapp_emits_stable_permission_identity() {
+        let tool = InitMiniAppTool::new();
+        let context = ToolUseContext::for_tool_listing(None, None);
+        let intents = tool
+            .permission_intents(&json!({ "name": "Release Notes" }), &context)
+            .expect("permission intent");
+
+        assert_eq!(intents.len(), 1);
+        assert_eq!(intents[0].action, "custom_tool");
+        assert_eq!(
+            intents[0].resources,
+            ["miniapp:InitMiniApp:Release Notes".to_string()]
+        );
     }
 }

@@ -1,9 +1,7 @@
 use crate::agentic::agents::{
     get_agent_registry, AgentInfo, SubagentListScope, SubagentQueryContext,
 };
-use crate::agentic::coordination::{
-    get_global_coordinator, validate_background_subagent_delivery, SubagentExecutionRequest,
-};
+use crate::agentic::coordination::{get_global_coordinator, SubagentExecutionRequest};
 use crate::agentic::deep_review::task_adapter::{
     self as deep_review_task_adapter, DeepReviewLaunchBatchInfo,
     DeepReviewProviderQueueWaitOutcome, DeepReviewQueueWaitOutcome, DeepReviewQueueWaitSkipReason,
@@ -20,15 +18,15 @@ use crate::agentic::deep_review_policy::{
 };
 use crate::agentic::events::DeepReviewQueueStatus;
 use crate::agentic::tools::framework::{
-    Tool, ToolRenderOptions, ToolResult, ToolUseContext, ValidationResult,
+    PermissionIntent, Tool, ToolRenderOptions, ToolResult, ToolUseContext, ValidationResult,
 };
 use crate::agentic::tools::pipeline::SubagentParentInfo;
 use crate::service::config::global::GlobalConfigManager;
-use crate::service::config::types::AIConfig;
+use crate::service::config::types::{AIConfig, GlobalConfig};
 use crate::util::errors::{BitFunError, BitFunResult};
 use crate::util::timing::elapsed_ms_u64;
 use async_trait::async_trait;
-use bitfun_runtime_ports::SubagentContextMode;
+use bitfun_runtime_ports::{PermissionRuntimeCeiling, SubagentContextMode};
 use input::{TaskAction, TaskInvocation};
 use log::{debug, warn};
 use serde_json::{json, Map, Value};
@@ -100,6 +98,7 @@ impl TaskTool {
                 workspace_root,
                 list_scope: SubagentListScope::TaskVisible,
                 include_disabled: false,
+                external_sources_supported: context.is_none_or(|ctx| !ctx.is_remote()),
             })
             .await
     }
@@ -172,6 +171,9 @@ impl Tool for TaskTool {
         let subagent_type = input
             .and_then(|v| v.get("subagent_type"))
             .and_then(|v| v.as_str());
+        if subagent_type == Some("CodeReview") {
+            return false;
+        }
         match subagent_type {
             Some(id) => get_agent_registry()
                 .get_subagent_is_readonly(id)
@@ -180,8 +182,36 @@ impl Tool for TaskTool {
         }
     }
 
-    fn needs_permissions(&self, _input: Option<&Value>) -> bool {
-        false
+    fn permission_intents(
+        &self,
+        input: &Value,
+        _context: &ToolUseContext,
+    ) -> BitFunResult<Vec<PermissionIntent>> {
+        let action = TaskAction::parse(input)?;
+        let resource = match action {
+            TaskAction::Spawn => input
+                .get("subagent_type")
+                .and_then(Value::as_str)
+                .map(str::trim)
+                .filter(|subagent_type| !subagent_type.is_empty())
+                .unwrap_or("fork_context")
+                .to_string(),
+            TaskAction::SendInput => input
+                .get("session_id")
+                .and_then(Value::as_str)
+                .map(str::trim)
+                .filter(|session_id| !session_id.is_empty())
+                .map(|session_id| format!("send_input:{session_id}"))
+                .ok_or_else(|| BitFunError::validation("session_id is required".to_string()))?,
+            TaskAction::Cancel => input
+                .get("session_id")
+                .and_then(Value::as_str)
+                .map(str::trim)
+                .filter(|session_id| !session_id.is_empty())
+                .map(|session_id| format!("cancel:{session_id}"))
+                .ok_or_else(|| BitFunError::validation("session_id is required".to_string()))?,
+        };
+        Ok(vec![PermissionIntent::new("task", vec![resource])])
     }
 
     async fn validate_input(
@@ -200,9 +230,9 @@ impl Tool for TaskTool {
     fn render_tool_use_message(&self, input: &Value, options: &ToolRenderOptions) -> String {
         match TaskAction::parse(input).ok() {
             Some(TaskAction::Cancel) => input
-                .get("session_id")
+                .get("agent_id")
                 .and_then(Value::as_str)
-                .map(|session_id| format!("Cancelling background task: {}", session_id))
+                .map(|agent_id| format!("Cancelling background task: {}", agent_id))
                 .unwrap_or_else(|| "Cancelling background task".to_string()),
             Some(TaskAction::SendInput) => input
                 .get("description")

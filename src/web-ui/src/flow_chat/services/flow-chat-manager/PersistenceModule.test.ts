@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { DialogTurn, FlowTextItem, ModelRound } from '../../types/flow-chat';
 import {
   convertDialogTurnToBackendFormat,
+  debouncedSaveDialogTurn,
   immediateSaveDialogTurn,
   saveDialogTurnToDisk,
 } from './PersistenceModule';
@@ -154,6 +155,28 @@ describe('PersistenceModule', () => {
     expect(persisted.hasFinalResponse).toBe(false);
   });
 
+  it('persists terminal error diagnostics for failed turns', () => {
+    const turn = createDialogTurn('error');
+    turn.error = 'OpenAI Streaming API failed after 10 attempts: connection refused';
+    turn.errorDetail = {
+      category: 'network',
+      provider: 'openai',
+      requestId: 'req-1',
+    };
+
+    const persisted = convertDialogTurnToBackendFormat(turn, 0);
+
+    expect(persisted).toMatchObject({
+      error: 'OpenAI Streaming API failed after 10 attempts: connection refused',
+      errorDetail: {
+        category: 'network',
+        provider: 'openai',
+        requestId: 'req-1',
+      },
+      status: 'error',
+    });
+  });
+
   it('persists ACP permission metadata for pending confirmation tools', () => {
     const turn = createDialogTurn('processing');
     turn.modelRounds[0].items = [
@@ -289,6 +312,26 @@ describe('PersistenceModule', () => {
     await vi.advanceTimersByTimeAsync(1);
     await flushMicrotasks();
     expect(saveSessionTurn).toHaveBeenCalledTimes(1);
+  });
+
+  it('checkpoints continuous streamed output without waiting for a quiet period', async () => {
+    const turn = createDialogTurn('processing');
+    const context = createContext(turn);
+
+    debouncedSaveDialogTurn(context, SESSION_ID, TURN_ID, 2000);
+    await vi.advanceTimersByTimeAsync(1000);
+    debouncedSaveDialogTurn(context, SESSION_ID, TURN_ID, 2000);
+    await vi.advanceTimersByTimeAsync(999);
+    expect(saveSessionTurn).not.toHaveBeenCalled();
+
+    await vi.advanceTimersByTimeAsync(1);
+    await flushMicrotasks();
+    expect(saveSessionTurn).toHaveBeenCalledTimes(1);
+
+    debouncedSaveDialogTurn(context, SESSION_ID, TURN_ID, 2000);
+    await vi.advanceTimersByTimeAsync(2000);
+    await flushMicrotasks();
+    expect(saveSessionTurn).toHaveBeenCalledTimes(2);
   });
 
   it('flushes terminal turn saves immediately', async () => {

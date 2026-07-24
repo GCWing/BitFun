@@ -43,14 +43,16 @@ const DEFAULT_ITEM_ORDER: &[&str] = &[
     "new_session",
     "sessions",
     "usage",
+    "toggle_auto_approve",
     "skills",
-    "subagents",
     "select_model",
     "add_model",
     "theme",
     "switch_agent",
+    "tools",
     "mcp_servers",
-    "external_tools",
+    "extensions",
+    "hooks",
     "login",
     "logout",
     "help",
@@ -755,14 +757,15 @@ mod tests {
     }
 
     #[test]
-    fn processing_palette_omits_idle_only_actions() {
+    fn processing_palette_keeps_agent_management_and_omits_idle_only_actions() {
         let ids = default_palette_items(ActionState::chat(true, false))
             .into_iter()
             .map(|item| item.id)
             .collect::<Vec<_>>();
 
-        assert!(!ids.iter().any(|id| id == "switch_agent"));
+        assert!(ids.iter().any(|id| id == "switch_agent"));
         assert!(!ids.iter().any(|id| id == "new_session"));
+        assert!(!ids.iter().any(|id| id == "toggle_auto_approve"));
         assert!(ids.iter().any(|id| id == "help"));
     }
 

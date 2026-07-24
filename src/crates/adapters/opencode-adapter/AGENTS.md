@@ -3,9 +3,10 @@
 # OpenCode Adapter
 
 The current crate owns the static OpenCode source preview used by the existing
-managed-package path and the OpenCode-specific implementations of command and
-standalone-tool provider contracts. It preserves OpenCode source discovery,
-precedence, formats, argument expansion, and versioned compatibility semantics.
+managed-package path, the OpenCode-specific implementations of command,
+standalone-tool, subagent, and MCP provider contracts, and runtime-free mapping
+of caller-normalized tool Hook descriptors. It preserves OpenCode source
+discovery, precedence, formats, argument expansion, and versioned compatibility semantics.
 Shared source catalog, lifecycle coordination, file-watch implementation,
 product policy, UI, credentials, worker supervision, and final effect writes
 belong elsewhere.
@@ -15,9 +16,10 @@ Product-source boundary:
 - The current `load_opencode_package_adapter` entry remains static-preview only
   until OC-R1/OC-R2 replace its production role. Do not extend this P0 entry into
   another managed OpenCode package format.
-- In the target flow, standard OpenCode config, global/project plugin directories,
-  tool directories, and package specs are live sources. Source files stay
-  read-only and need no BitFun import. Low-risk declarative results follow the
+- Standard OpenCode Command, standalone Tool, and Subagent config and directories
+  are current read-only live sources. Full plugin directories and package specs
+  remain target work rather than executable production sources. Source files need
+  no BitFun import. Low-risk declarative results follow the
   user's auto-apply/ask preference; executable sources require a source/target
   decision before first import. Pre-import execution-envelope expansion and
   post-import contribution expansion are separate gates, not repeated approval
@@ -62,15 +64,23 @@ Product-source boundary:
   expansion inside this crate. Cross-crate outputs use typed source snapshots,
   adapter bindings, and Plugin Runtime Host DTOs; do not expose raw OpenCode JSON
   or source syntax as product contracts.
-- Current source inspection recognizes only the tested declarative subset. It is
-  not a general JavaScript or TypeScript parser. Packages with no recognized
-  entry and recognized unsupported hooks must produce diagnostics; other syntax
-  is outside the current compatibility claim.
+- Current source inspection recognizes only the tested declarative subset. The
+  adapter may reuse the workspace-pinned parse-only OXC profile for syntax-safe static
+  projection, but it is not a general JavaScript/TypeScript semantic analyzer or
+  runtime. Packages with no recognized entry and recognized unsupported hooks
+  must produce diagnostics; other syntax is outside the compatibility claim.
 - Unsupported OpenCode capabilities must be explicit diagnostics or typed
   unsupported candidates. Do not silently ignore them.
 - Public APIs require a current Product Assembly consumer, a capability-specific
   provider contract, boundary updates, and focused tests. Do not expose generic
   OpenCode JSON access or add APIs only for target-design completeness.
+- Runtime-free Hook mapping accepts only the `opencode.plugins` provider and is
+  consumed by the existing managed-package `.js` / `.ts` read projection. OXC may
+  extract static top-level property names from the exported plugin return object;
+  the adapter owns their OpenCode meaning. Mapping may emit static declarations
+  and diagnostics with incomplete safety. Parse failures must remain explicit
+  diagnostics, while event payload types must not be treated as Hook properties.
+  The adapter must not load handlers, dispatch Hooks, or imply executable support.
 - The reviewed product composition root selects and constructs the compiled
   OpenCode adapter/provider and injects it into Plugin Runtime Host. It does not
   discover dynamic sources, prepare dependencies, or import plugin modules.
@@ -87,6 +97,9 @@ Product-source boundary:
 ## Verification
 
 - `cargo test -p bitfun-opencode-adapter --test opencode_source_adapter`
+- `cargo test -p bitfun-opencode-adapter --test opencode_command_adapter`
+- `cargo test -p bitfun-opencode-adapter --test tool_source_contracts`
+- `cargo test -p bitfun-opencode-adapter --test opencode_subagent_adapter`
 - `cargo test -p bitfun-opencode-adapter p0_c2_fixture`
 - `cargo test -p bitfun-opencode-adapter host_path_projects_trusted_custom_tool_candidate_with_permission_prompt`
 - `node scripts/check-core-boundaries.mjs`

@@ -1428,7 +1428,6 @@ async function startLongSessionViewportTimelineRecorder(
       '.history-session-placeholder',
       '.bitfun-scene-viewport__lazy-fallback',
       '.bitfun-assistant-scene__loading',
-      '.bitfun-app-acp-session-loading',
       '[role="status"][aria-busy="true"]',
     ];
     const OBSERVED_MUTATION_SELECTOR = [
@@ -1559,7 +1558,6 @@ async function startLongSessionViewportTimelineRecorder(
         element.closest('.history-session-placeholder') ||
         element.closest('.bitfun-scene-viewport__lazy-fallback') ||
         element.closest('.bitfun-assistant-scene__loading') ||
-        element.closest('.bitfun-app-acp-session-loading') ||
         element.closest('[role="status"][aria-busy="true"]'),
       );
 

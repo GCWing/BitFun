@@ -87,11 +87,11 @@ OpenCode 的可写钩子不是只读通知。适配器按 OpenCode 顺序执行�
 | `src/crates/execution/plugin-runtime-host` | 当前请求校验、期限和故障状态 | 承担通用调用可靠性；不依赖具体脚本运行时或生态类型 |
 | `src/crates/assembly/core` 的产品组装点 | 当前选择插件运行时 binding 与可用性 | 选择并构造已编译的 adapter/provider，注入窄 `PluginRuntimeBinding`、执行服务和产品能力/策略上限；不发现动态来源、不准备依赖、不 import 插件代码 |
 | `src/crates/contracts/product-domains` / `src/crates/services/services-integrations` 的插件来源模块 | 当前 BitFun 专用目录、内容校验、审核与启停状态 | 继续服务 BitFun 原生包；OpenCode 外部目录由兼容来源发现流程直接读取，不要求重新打包 |
-| `src/crates/adapters/opencode-adapter` | 当前静态解释少量 OpenCode 文件 | 承担 OpenCode 格式/进程协议适配和 OpenCode Source Coordinator；不持有 worker、最终工具、配置、权限或界面状态 |
-| 目标脚本执行服务 | 当前不存在 | 作为可替换服务管理运行时、依赖、worker 和资源回收；产品组装只依赖窄接口 |
+| `src/crates/adapters/opencode-adapter` | 当前分别解释受支持的 Command、standalone Tool 和 Subagent 来源，并映射到独立 provider 契约 | 承担 OpenCode 格式/进程协议适配和 OpenCode Source Coordinator；不持有 worker、最终工具、配置、权限或界面状态 |
+| 脚本执行服务 | standalone Tool 已有 provider-neutral `ScriptToolRuntime` 端口和 Node worker；package plugin 的依赖准备、Bun loader 与通用 worker 服务尚不存在 | 作为可替换服务管理运行时、依赖、worker 和资源回收；产品组装只依赖窄接口 |
 | Tool / Config / Permission / Session / TUI 等消费边界 | Tool、Config、Permission、Session 等已有真实 owner；TUI Input/Command/State/Effect 等仍聚集在现有终端代码 | 复用已有 owner；缺失边界只从真实消费路径增量抽取，不先建通用扩展框架 |
-| CLI | 当前消费 BitFun 原生包的管理状态、诊断和 OpenCode 静态预览；尚无真实 OpenCode 插件执行闭环 | 只消费能力服务、状态视图和操作接口，不直接调用主机或适配器 |
-| Desktop | 当前没有 managed-plugin 管理或 OpenCode 静态预览的生产 UI/调用方 | 出现真实入口后仍只消费能力服务、状态视图和操作接口 |
+| `src/apps/cli` 交互式 TUI（ChatMode） | 当前通过外部来源能力服务使用 Command、管理 standalone Tool 和 Subagent；顶层 headless CLI/`exec` 没有对应入口，也尚无 OpenCode package plugin 执行闭环 | 只消费能力服务、状态视图和操作接口，不直接调用主机或适配器 |
+| Desktop | “外部 AI 应用”已展示来源、standalone Tool 与 Subagent 的审批、冲突和诊断；仍没有 managed-plugin/package plugin 的生产管理入口 | 继续只消费能力服务、状态视图和操作接口，不直接调用主机或适配器 |
 | Web、Server、Remote | 当前没有生产插件执行入口；Server 仅有健康检查、信息与 ping 路由 | 出现真实入口后仍只消费类型化状态和操作接口，不复制插件主机 |
 
 `src/crates/assembly/core` 的 `plugin_runtime` 运行时组合点是唯一可以选择具体生态 adapter factory、构造 adapter
@@ -107,7 +107,7 @@ trait object 并注入 Host 的位置。Host 只围绕注入对象工作，不�
 | Config owner → OpenCode Source Coordinator | 规范化配置值、来源身份与顺序、配置代次；不含 worker 或动态导出 | Config owner 保存配置与来源解释 |
 | Source Coordinator → 依赖/脚本执行服务 | 来源限定身份、target、候选代次、入口、依赖与有效策略；返回经摘要校验的 prepared target 引用 | Coordinator 保存候选/激活代次；执行服务保存缓存、进程句柄和物化结果 |
 | Source Coordinator → Plugin Runtime Host | 已完成来源准入的 prepared target 引用、adapter binding、切换/停用请求；返回激活或失败状态 | Host 保存逻辑 target 状态、在途调用和贡献注册状态，不保存产品确认偏好 |
-| Host → 依赖/脚本执行服务 | 经注入控制端口请求启动、类型化调用、取消、整树终止和物理健康探测；返回类型化结果/健康事实 | 执行服务保存 OS 句柄、进程树与资源事实；业务结果仍由归属模块提交 |
+| Host → 依赖/脚本执行服务 | 经注入控制端口请求启动、类型化调用、取消、已纳管进程组/树终止和物理健康探测；返回类型化结果/健康事实 | 执行服务保存 OS 句柄、进程树与资源事实；业务结果仍由归属模块提交 |
 
 新增接口前必须先指出真实调用方和最终状态归属。工具调用、钩子变换、OpenCode Client 代理和终端贡献的输入、
 期限、错误与返回语义不同，应分别建立窄路径；不能为了减少接口数量把它们编码成字符串事件和任意 JSON。
@@ -223,7 +223,7 @@ Host 不解析 Prompt、Memory 或 Tool 内容自行打点，也不重复计算�
 ### 6.1 进程与队列
 
 - 外部插件 target 使用独立操作系统进程，不与 Rust 主进程或其他插件共享不可终止的执行线程。
-- 脚本执行服务必须唯一持有完整进程树：Windows 使用 Job Object，Unix 至少使用独立 process group。Host 不持有
+- 脚本执行服务必须唯一持有已纳管进程树：Windows 使用 Job Object，Unix 至少使用独立 process group；Unix 主动脱离 process group 的后代属于明确残余风险。Host 不持有
   平台句柄，只能经注入的执行控制端口请求取消、超时、停用和退出时终止整棵树，不能只回收直接子进程。
 - 内存、CPU 和子进程数使用平台可执行的 Job Object、cgroup/rlimit 等预算；无法提供硬限制的平台必须显示残余风险，不能仅凭独立进程承诺资源耗尽不会影响其他插件或宿主。
 - 初始化、工具、钩子、客户端代理和清理分别设置期限；清理超时不能阻止产品退出或终端恢复。
@@ -288,23 +288,33 @@ OpenCode 来源完成首次激活后，本地默认运行策略以兼容为先�
 
 ## 8. 当前实现附录
 
-当前 P0-C.1/P0-C.2 只验证了 BitFun 原生来源和静态预览链路：
+BitFun 受管插件包的 P0-C.1/P0-C.2 链路当前只验证了原生来源和静态预览：
 
 1. 从用户数据目录的 `plugins` 和项目 `.bitfun/plugins` 发现 `bitfun.plugin.json` 包。
 2. 校验清单、路径、文件大小和内容摘要，并保存工作区的来源审核与启停状态。
 3. CLI 在启用前展示精确内容摘要；内容变化时旧启用状态失效。
-4. OpenCode 适配器只读取固定文件，使用有限字符串规则预览 custom tool 名称。
+4. 该受管包链路中的 OpenCode 投影只读取固定文件，使用有限字符串规则预览 custom tool 名称。
 5. 产品组装只能读取带权限要求的工具候选；不加载 JS/TS，不注册或执行工具，也不运行钩子。
 
-因此当前状态只能表述为“来源可识别、静态候选可预览”，不能表述为“OpenCode 插件可运行”。CLI 已允许
-在包文件缺失或损坏时清理残留启用状态，这是现有链路必须保留的恢复能力。
+因此，受管包链路只能表述为“来源可识别、静态候选可预览”，不能表述为“OpenCode package plugin 可运行”。
+CLI 已允许在包文件缺失或损坏时清理残留启用状态，这是现有链路必须保留的恢复能力。与此独立的外部来源轨道
+已经接入 prompt-only Command、受支持的单文件 `.js` standalone Tool、Subagent 安全子集和 OpenCode MCP 配置
+安全子集；其中 standalone Tool
+通过窄 `ScriptToolRuntime` 真实执行，但这不证明 package plugin、Hook、完整 Client 或 TUI target 已经可运行。
+四个切片当前都只在事实所在 Host 的本地执行域运行；本机 Desktop/CLI 直接使用本机 Host，Peer 控制界面可代理
+Peer Host 的来源发现、审批与冲突决策，并按 Host 身份与工作区隔离结果。该能力不等于 SSH Remote 工作区执行；
+SSH Remote 外部来源发现仍明确返回不支持，也不回退读取控制端或 Host 的同名本机来源。MCP
+运行实例和工具 route 额外按规范化 workspace 隔离；更新、停用、空闲回收和删除先撤 route，再异步回收连接与进程，
+慢启动在发布工具前复核撤销状态。
 
-`bitfun.plugin.json` 继续作为 BitFun 原生包格式。目标 OpenCode 路径直接发现用户和项目的 `opencode.json`、
-`.opencode/plugins`、`.opencode/tools` 及软件包配置，自动记录当前执行版本；不得要求作者先复制到
-`.bitfun/plugins` 或维护另一份清单。
+`bitfun.plugin.json` 继续作为 BitFun 原生包格式。现有外部来源轨道已直接发现用户和项目的 Command、standalone
+Tool、Subagent 与 MCP 安全子集，包括配置文件中的受支持声明；远程、组织、系统管理员、MDM 和内联内容等完整
+OpenCode 配置来源图尚未接入。后续 package plugin
+路径还需直接发现 `.opencode/plugins` 和软件包配置并记录当前执行版本，不得要求作者先复制到 `.bitfun/plugins`
+或维护另一份清单。
 
 当前内部契约中的 `PluginRuntimeBinding`、通用派发、状态版本和静态候选可在迁移期保留，但不能据此设计完整
-OpenCode API。真实执行接入后，未被消费的过渡对象应删除或收窄，避免新旧两套调用模型长期并存。
+OpenCode API。package plugin 真实执行接入后，未被消费的过渡对象应删除或收窄，避免新旧两套调用模型长期并存。
 
 ## 9. Remote 与多执行域
 

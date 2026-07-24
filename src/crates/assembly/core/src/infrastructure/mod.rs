@@ -5,13 +5,13 @@
 #[cfg(feature = "ai-adapter-runtime")]
 pub mod ai;
 pub mod app_paths;
-#[cfg(feature = "ai-adapter-runtime")]
-pub mod cli_credentials;
 #[cfg(feature = "product-full")]
 pub mod debug_log;
 pub mod events;
 pub mod filesystem;
 pub mod storage;
+#[cfg(feature = "ai-adapter-runtime")]
+pub mod subscription_auth;
 
 #[cfg(feature = "ai-adapter-runtime")]
 pub use ai::AIClient;

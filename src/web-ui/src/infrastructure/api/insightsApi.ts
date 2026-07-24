@@ -1,4 +1,6 @@
 import { invoke } from '@tauri-apps/api/core';
+import { listen, type UnlistenFn } from '@tauri-apps/api/event';
+import { openPath } from '@tauri-apps/plugin-opener';
 
 // ============ Types (strict 1:1 mirror of Rust types) ============
 
@@ -106,13 +108,18 @@ export interface InsightsReport {
   analyzed_sessions: number;
   total_messages: number;
   days_covered: number;
+  session_usage: InsightsSessionUsage;
+  generation_usage: InsightsGenerationUsage;
+  generation_models: string[];
 
   stats: InsightsStats;
 
   at_a_glance: AtAGlance;
   interaction_style: InteractionStyle;
   project_areas: ProjectArea[];
+  wins_intro: string;
   big_wins: BigWin[];
+  friction_intro: string;
   friction_categories: FrictionCategory[];
   suggestions: InsightsSuggestions;
   horizon_intro: string;
@@ -120,6 +127,26 @@ export interface InsightsReport {
   fun_ending: FunEnding | null;
 
   html_report_path: string | null;
+}
+
+export interface InsightsSessionUsage {
+  input_tokens: number;
+  output_tokens: number;
+  total_tokens: number;
+  turns_with_usage: number;
+  output_reported_turns: number;
+  total_turns: number;
+}
+
+export interface InsightsGenerationUsage {
+  input_tokens: number;
+  output_tokens: number;
+  total_tokens: number;
+  reasoning_tokens: number;
+  cached_input_tokens: number;
+  cache_creation_input_tokens: number;
+  model_calls: number;
+  reported_model_calls: number;
 }
 
 export interface InsightsReportMeta {
@@ -133,6 +160,9 @@ export interface InsightsReportMeta {
   total_hours: number;
   top_goals: string[];
   languages: string[];
+  session_usage: InsightsSessionUsage;
+  generation_usage: InsightsGenerationUsage;
+  generation_models: string[];
 }
 
 export interface InsightsProgressEvent {
@@ -145,9 +175,9 @@ export interface InsightsProgressEvent {
 // ============ API client ============
 
 export const insightsApi = {
-  async generateInsights(days?: number): Promise<InsightsReport> {
+  async generateInsights(days?: number, modelId?: string): Promise<InsightsReport> {
     return invoke('generate_insights', {
-      request: { days: days ?? 30 },
+      request: { days: days ?? 30, modelId: modelId || 'auto' },
     });
   },
 
@@ -169,5 +199,15 @@ export const insightsApi = {
 
   async cancelGeneration(): Promise<void> {
     return invoke('cancel_insights_generation');
+  },
+
+  async listenProgress(
+    handler: (event: InsightsProgressEvent) => void,
+  ): Promise<UnlistenFn> {
+    return listen<InsightsProgressEvent>('insights-progress', (event) => handler(event.payload));
+  },
+
+  async openReport(path: string): Promise<void> {
+    await openPath(path);
   },
 };

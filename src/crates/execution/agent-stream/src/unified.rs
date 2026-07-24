@@ -1,3 +1,4 @@
+use crate::tool_call_accumulator::ToolCallCompletion;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::borrow::Cow;
@@ -24,6 +25,11 @@ pub struct UnifiedResponse {
     pub thinking_signature: Option<String>,
     pub tool_call: Option<UnifiedToolCall>,
     pub usage: Option<UnifiedTokenUsage>,
+    /// Provider adapter's normalized terminal completion fact. This is only
+    /// populated on terminal events and remains separate from the raw finish
+    /// reason retained for diagnostics and replay.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tool_call_completion: Option<ToolCallCompletion>,
     pub finish_reason: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub provider_metadata: Option<Value>,
@@ -52,6 +58,7 @@ impl fmt::Debug for UnifiedResponse {
             .field("thinking_signature", &"<omitted>")
             .field("tool_call", &self.tool_call)
             .field("usage", &self.usage)
+            .field("tool_call_completion", &self.tool_call_completion)
             .field("finish_reason", &self.finish_reason)
             .field("provider_metadata", &"<omitted>")
             .finish()

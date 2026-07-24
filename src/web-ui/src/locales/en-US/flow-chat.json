@@ -1,4 +1,51 @@
 {
+  "permission": {
+    "title": "Permission required",
+    "subagentOwner": "{{subagent}} subagent",
+    "feedbackLabel": "Rejection feedback",
+    "feedbackPlaceholder": "Optional guidance when rejecting",
+    "responseFailed": "The permission response could not be delivered. Try again.",
+    "allowOnce": "Allow once",
+    "allowAlways": "Always allow",
+    "allowAlwaysTooltip": "Always allow saves matching access for {{projectPath}}.",
+    "allowAlwaysTooltipCurrentProject": "Always allow saves matching access for the current project.",
+    "allowAlwaysTooltipNoGrant": "This request has no savable access scope; always allow applies only to this request.",
+    "risks": {
+      "pageSave": "Save a new immutable version of “{{slug}}” with {{visibility}} visibility without changing production.",
+      "pagePublish": "Save “{{slug}}” with {{visibility}} visibility and switch its production version.",
+      "pageDeploy": "Switch production traffic for “{{slug}}” to immutable version “{{version}}”."
+    },
+    "visibility": {
+      "private": "private",
+      "relay": "signed-in users",
+      "public": "public"
+    },
+    "reject": "Reject",
+    "batchCount": "{{count}} permission requests",
+    "collapsePanel": "Collapse permission requests",
+    "expandPanel": "Expand {{count}} pending permission requests",
+    "current": "Current",
+    "pending": "Pending",
+    "actions": {
+      "read": "Read files",
+      "edit": "Edit files",
+      "bash": "Run command",
+      "git": "Git action",
+      "computerUse": "Control device",
+      "webSearch": "Search web",
+      "webFetch": "Access web",
+      "mcp": "MCP tool",
+      "task": "Run task",
+      "skill": "Run skill",
+      "pagePublish": "Save page version",
+      "pageDeploy": "Deploy page version",
+      "customTool": "External tool",
+      "externalDirectory": "Access external directory",
+      "other": "Other action"
+    },
+    "allowCurrentAndFollowing": "Allow all",
+    "rejectCurrentAndFollowing": "Reject all"
+  },
   "emptyState": {
     "welcomeBack": "Welcome back!",
     "workingIn": "You are working in <workspace>{{workspace}}</workspace>",
@@ -43,7 +90,7 @@
     "loadingTitle": "Loading saved session",
     "loadingDescription": "Preparing the conversation history.",
     "failedTitle": "Session history did not load",
-    "failedDescription": "Retry loading the saved conversation.",
+    "failedDescription": "Retry loading the saved conversation. If it was imported from another device, check your account and connection first.",
     "preparingOlderHistory": "Preparing older history...",
     "olderHistoryNotReady": "Older history is not ready yet.",
     "remoteSessionMissing": "The backend session data was not found. If you just reconnected an SSH remote workspace, close and reopen the remote project, or create a new session and try again.",
@@ -551,6 +598,32 @@
   },
   "chatInput": {
     "addBoostTooltip": "Agent modes, image, or skills",
+    "permissionMode": {
+      "menuLabel": "Permission mode",
+      "globalScope": "Global",
+      "current": "Permissions: {{mode}}",
+      "changeFailed": "Failed to change the permission mode.",
+      "ask": {
+        "label": "Ask",
+        "description": "Low-risk reads, browsing, Task, and Skill are allowed automatically; file changes and commands require approval."
+      },
+      "auto": {
+        "label": "Auto approve",
+        "description": "Automatically approves Ask requests; explicit denies still apply."
+      },
+      "fullAccess": {
+        "label": "Full access",
+        "description": "Allows tools by default; product restrictions and OS permissions still apply."
+      },
+      "acp": {
+        "label": "ACP controlled",
+        "tooltip": "Permissions for this session are controlled by the ACP client."
+      },
+      "fullAccessWarningTitle": "Enable full access?",
+      "fullAccessWarningMessage": "Full access allows tools to read and write files, run commands, and call integrations without asking each time. Explicit deny rules, product restrictions, and operating system permissions still apply.",
+      "fullAccessConfirm": "Enable full access",
+      "cancel": "Cancel"
+    },
     "addModeTooltip": "Add Plan or Debug",
     "boostSectionAgent": "Agent",
     "boostSectionContext": "Context",
@@ -968,20 +1041,19 @@
   "deepReviewConsent": {
     "windowTitle": "Review plan",
     "eyebrow": "Review plan",
-    "title": "Add broader review coverage?",
-    "body": "BitFun selected additional independent checks for this change. Review the target scope, planned checks, runtime tendency, and read-only boundary before continuing.",
+    "title": "Start this review?",
+    "body": "BitFun reviews this change directly and may add focused independent checks only when the evidence needs them. Confirm the target, review budget, expected time, and read-only boundary before continuing.",
     "readonlyLabel": "Read-only",
     "readonly": "Reviewers do not modify files.",
     "sessionConcurrencyTitle": "Active session is busy",
     "sessionConcurrencyBody": "The target session already has {{count}} review tasks running. Continuing will share the available review capacity.",
-    "costLabel": "Coverage",
-    "cost": "Planned review agent runs; model requests and token use are not estimated here.",
+    "costLabel": "Review budget",
+    "cost": "The review budget allows optional independent checks. Actual requests and token use depend on the evidence found.",
     "timeLabel": "Time",
     "time": "Runs in background and may take longer.",
     "cancel": "Cancel",
     "confirm": "Start review",
-    "initialCalls": "Independent checks: {{planned}} planned review agent run",
-    "parallelCalls": "Up to {{count}} review agent runs may occur without another confirmation.",
+    "callLimit": "Maximum checks: {{count}}. Actual work depends on the review target and the evidence found.",
     "runStrategy": "Run strategy: {{strategy}}",
     "strategyLabels": {
       "quick": "Focused",
@@ -990,8 +1062,8 @@
     },
     "strategySummaries": {
       "quick": "Focused review checks the most relevant risks for the selected target.",
-      "normal": "Standard adds independent coverage while keeping cost practical.",
-      "deep": "Extensive review adds the broadest applicable coverage for high-risk changes."
+      "normal": "Standard review examines the selected target in more depth and may add independent checks when useful.",
+      "deep": "Extensive review examines all applicable high-risk areas and may add independent validation when the evidence needs it."
     },
     "summaryTitle": "Review plan",
     "targetFiles": "{{count}} files",
@@ -1163,6 +1235,17 @@
     "exporting": "Exporting...",
     "exportToImage": "Export as Image"
   },
+  "turnFailure": {
+    "showDetails": "Show technical details",
+    "hideDetails": "Hide technical details",
+    "provider": "Provider",
+    "errorCode": "Error code",
+    "httpStatus": "HTTP status",
+    "requestId": "Request ID",
+    "providerError": "Provider error",
+    "copy": "Copy",
+    "copied": "Copied"
+  },
   "modelRound": {
     "copyDialog": "Copy dialog",
     "copiedDialog": "Copied!",
@@ -1183,6 +1266,26 @@
     "retryHistoryHide": "Hide retry history",
     "attemptLabel": "Attempt {{index}}",
     "attemptSuperseded": "superseded",
+    "attemptDiagnostics": {
+      "show": "Show retry diagnostic details",
+      "hide": "Hide retry diagnostic details",
+      "copy": "Copy",
+      "copied": "Copied",
+      "providerError": "Provider error",
+      "toolArguments": "Tool arguments: {{name}}",
+      "rawArguments": "Raw arguments",
+      "validationError": "Parser or validation error",
+      "unknownTool": "Unknown tool",
+      "categories": {
+        "transientRequestError": "Request failed before the provider responded",
+        "interruptedToolArguments": "Tool arguments were interrupted",
+        "partialStreamError": "Stream ended with a recoverable error",
+        "invalidToolArguments": "Provider returned invalid tool arguments",
+        "noEffectiveOutput": "Provider returned no usable output",
+        "transientStreamError": "Stream failed before usable output",
+        "unknown": "Retry diagnostic: {{category}}"
+      }
+    },
     "meta": {
       "label": "Response metadata",
       "completed": "Completed",
@@ -1327,6 +1430,30 @@
       "labelAppId": "app_id",
       "labelPath": "path",
       "nameLabel": "App: {{name}}"
+    },
+    "pageDeploy": {
+      "title": "Deploy Page",
+      "deployingShort": "…",
+      "untitled": "(unnamed)",
+      "deployFailed": "Could not deploy BitFun Page version",
+      "openFailed": "Could not create a secure link for this Page.",
+      "labelSlug": "slug",
+      "labelVersion": "version",
+      "labelPath": "url_path",
+      "openProduction": "Open production URL"
+    },
+    "pagePublish": {
+      "title": "Publish Page",
+      "publishingShort": "…",
+      "untitled": "(unnamed)",
+      "publishFailed": "Could not publish BitFun Page",
+      "openFailed": "Could not create a secure link for this Page.",
+      "labelSlug": "slug",
+      "labelVersion": "version",
+      "labelPath": "url_path",
+      "labelPreview": "preview_url_path",
+      "openProduction": "Open production URL",
+      "openPreview": "Open preview URL"
     },
     "terminal": {
       "executeCommand": "Execute command:",
@@ -1480,6 +1607,10 @@
       "permissionDeniedHint": "BitFun needs macOS Accessibility and Screen Recording permissions before it can control other apps. Open System Settings, grant access to BitFun, then retry.",
       "openSettings": "Open System Settings",
       "openSettingsFailed": "Could not open System Settings"
+    },
+    "viewImage": {
+      "viewing": "Viewing image...",
+      "viewedImages": "Viewed {{count}} image"
     },
     "webFetch": {
       "parsingUrl": "Parsing URL...",
@@ -2075,6 +2206,8 @@
     "autoModelDesc": "Automatically Routing",
     "primaryModel": "Primary Model",
     "fastModel": "Fast Model",
+    "fastMode": "Fast mode",
+    "fastModeDescription": "1.5x speed with higher credit usage",
     "modelNotConfigured": "Not Configured",
     "contextUsage": {
       "agentPrompt": "Last request prompt: {{usage}}",

@@ -1,4 +1,9 @@
 use crate::service::config::types::AIModelConfig;
+use crate::service::config::types::{
+    automatic_max_output_tokens, is_valid_configured_max_output_tokens,
+    DEFAULT_MODEL_CONTEXT_WINDOW_TOKENS, MAX_CONFIGURED_OUTPUT_TOKENS_RATIO_PERCENT,
+    MIN_MODEL_CONTEXT_WINDOW_TOKENS,
+};
 pub use bitfun_core_types::AIConfig;
 use log::warn;
 
@@ -94,6 +99,41 @@ impl TryFrom<AIModelConfig> for AIConfig {
                 resolve_request_url(&other.base_url, &other.provider, &other.model_name)
             });
 
+        let context_window = other
+            .context_window
+            .unwrap_or(DEFAULT_MODEL_CONTEXT_WINDOW_TOKENS);
+        if context_window < MIN_MODEL_CONTEXT_WINDOW_TOKENS {
+            return Err(format!(
+                "Model '{}' context_window must be at least {}",
+                other.name, MIN_MODEL_CONTEXT_WINDOW_TOKENS
+            ));
+        }
+
+        let max_tokens = match other.max_tokens {
+            Some(configured_max_tokens)
+                if is_valid_configured_max_output_tokens(context_window, configured_max_tokens) =>
+            {
+                configured_max_tokens
+            }
+            Some(configured_max_tokens) => {
+                let automatic_max_tokens = automatic_max_output_tokens(context_window);
+                let maximum_allowed_tokens = u64::from(context_window)
+                    * u64::from(MAX_CONFIGURED_OUTPUT_TOKENS_RATIO_PERCENT)
+                    / 100;
+                warn!(
+                    "Invalid model max_tokens; falling back to automatic output limit: model_id={}, model_name={}, context_window={}, configured_max_tokens={}, maximum_allowed_tokens={}, automatic_max_tokens={}",
+                    other.id,
+                    other.name,
+                    context_window,
+                    configured_max_tokens,
+                    maximum_allowed_tokens,
+                    automatic_max_tokens
+                );
+                automatic_max_tokens
+            }
+            None => automatic_max_output_tokens(context_window),
+        };
+
         Ok(AIConfig {
             name: other.name.clone(),
             base_url: other.base_url.clone(),
@@ -101,8 +141,8 @@ impl TryFrom<AIModelConfig> for AIConfig {
             api_key: other.api_key.clone(),
             model: other.model_name.clone(),
             format: other.provider.clone(),
-            context_window: other.context_window.unwrap_or(128128),
-            max_tokens: other.max_tokens,
+            context_window,
+            max_tokens: Some(max_tokens),
             temperature: other.temperature,
             top_p: other.top_p,
             reasoning_mode,
@@ -236,5 +276,58 @@ mod tests {
 
         let config = AIConfig::try_from(model).expect("conversion should succeed");
         assert_eq!(config.reasoning_mode, ReasoningMode::Enabled);
+    }
+
+    #[test]
+    fn derives_the_largest_output_tier_within_one_quarter_of_context() {
+        for (context_window, expected_max_tokens) in [
+            (32_000, 8_000),
+            (48_000, 8_000),
+            (64_000, 16_000),
+            (128_000, 32_000),
+            (128_128, 32_000),
+            (256_000, 64_000),
+            (1_000_000, 64_000),
+        ] {
+            let mut model = base_model_config();
+            model.context_window = Some(context_window);
+            model.max_tokens = None;
+
+            let config = AIConfig::try_from(model).expect("conversion should succeed");
+
+            assert_eq!(config.max_tokens, Some(expected_max_tokens));
+        }
+    }
+
+    #[test]
+    fn preserves_a_configured_output_limit_within_forty_percent_of_context() {
+        let mut model = base_model_config();
+        model.context_window = Some(1_000_000);
+        model.max_tokens = Some(384_000);
+
+        let config = AIConfig::try_from(model).expect("conversion should succeed");
+
+        assert_eq!(config.max_tokens, Some(384_000));
+    }
+
+    #[test]
+    fn falls_back_to_the_automatic_output_limit_when_configured_limit_is_too_large() {
+        let mut model = base_model_config();
+        model.context_window = Some(128_000);
+        model.max_tokens = Some(64_000);
+
+        let config = AIConfig::try_from(model).expect("conversion should succeed");
+
+        assert_eq!(config.max_tokens, Some(32_000));
+    }
+
+    #[test]
+    fn rejects_a_context_window_smaller_than_the_supported_minimum() {
+        let mut model = base_model_config();
+        model.context_window = Some(16_000);
+
+        let error = AIConfig::try_from(model).expect_err("conversion should reject small context");
+
+        assert!(error.contains("at least 32000"));
     }
 }

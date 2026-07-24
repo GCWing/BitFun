@@ -26,6 +26,15 @@ pub enum BitFunError {
     #[error("Session error: {0}")]
     Session(String),
 
+    #[error(
+        "Session creation persistence failed and rollback did not complete: session_id={session_id}, error={error}, cleanup_error={cleanup_error}"
+    )]
+    SessionCreateCleanupRequired {
+        session_id: String,
+        error: String,
+        cleanup_error: String,
+    },
+
     #[error("Workspace error: {0}")]
     Workspace(String),
 

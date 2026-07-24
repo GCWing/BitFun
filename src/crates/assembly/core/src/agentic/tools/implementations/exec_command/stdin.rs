@@ -162,7 +162,7 @@ Output is only what was produced during this tool call's wait window."#
     async fn validate_input(
         &self,
         input: &Value,
-        _context: Option<&ToolUseContext>,
+        context: Option<&ToolUseContext>,
     ) -> ValidationResult {
         if let Some(message) = write_stdin_input_validation_message(input) {
             return ValidationResult {
@@ -171,6 +171,14 @@ Output is only what was produced during this tool call's wait window."#
                 error_code: Some(400),
                 meta: None,
             };
+        }
+        if let (Some(context), Some(chars)) = (context, input.get("chars").and_then(Value::as_str))
+        {
+            if let Some(rejection) =
+                crate::agentic::execution::edit_constraint_guard::check_bash_command(context, chars)
+            {
+                return rejection;
+            }
         }
         ValidationResult {
             result: true,

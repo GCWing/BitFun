@@ -66,8 +66,16 @@
     "item": {
       "user": "User",
       "project": "Project",
+      "localUser": "This device · User",
+      "remoteProject": "Remote workspace · Project",
       "deleteTooltip": "Delete",
-      "pathLabel": "Path:"
+      "pathLabel": "Path:",
+      "sourceLabel": "Source:",
+      "shadowed": "Covered",
+      "shadowedTooltip": "The same-name skill from {{source}} normally has higher priority.",
+      "shadowedLabel": "Higher-priority source:",
+      "shadowedDetail": "The same-name skill from {{source}}",
+      "unknownSource": "another source"
     }
   },
   "deleteModal": {

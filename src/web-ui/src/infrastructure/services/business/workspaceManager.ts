@@ -574,16 +574,30 @@ class WorkspaceManager {
   }
 
   /**
+   * Drop controller-local workspace pointers before peer transport is live so
+   * create_session / SessionModule cannot prefer a stale controller path while
+   * rebootstrap is still in flight.
+   */
+  public clearForPeerModeSwitch(): void {
+    this.isInitialized = false;
+    this.isInitializing = false;
+    this.updateWorkspaceState(null, [], [], false, null);
+  }
+
+  /**
    * Tear down local workspace product state and reload opened/recent
    * workspaces from the current transport target (local or peer).
    */
   public async reinitializeForPeerModeSwitch(): Promise<void> {
     log.info('Reinitializing workspace state for peer mode switch');
-    this.isInitialized = false;
-    this.isInitializing = false;
-    this.updateWorkspaceState(null, [], [], false, null);
+    this.clearForPeerModeSwitch();
     this.emit({ type: 'workspace:loading', loading: true });
     await this.initialize();
+    if (!this.isInitialized) {
+      throw new Error(
+        this.state.error || 'Workspace state could not be loaded from the Peer host',
+      );
+    }
   }
 
   public async openWorkspace(path: string): Promise<WorkspaceInfo> {
@@ -1139,6 +1153,24 @@ class WorkspaceManager {
       return updatedWorkspace;
     } catch (error) {
       log.error('Failed to update workspace related paths', { workspaceId, error });
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      this.updateState({ error: errorMessage }, { type: 'workspace:error', error: errorMessage });
+      throw error;
+    }
+  }
+
+  public async renameWorkspace(workspaceId: string, name: string): Promise<WorkspaceInfo> {
+    try {
+      this.setError(null);
+
+      const updatedWorkspace = await globalStateAPI.updateWorkspaceInfo(workspaceId, {
+        name: name.trim(),
+      });
+
+      this.applyWorkspaceRecordUpdate(updatedWorkspace);
+      return updatedWorkspace;
+    } catch (error) {
+      log.error('Failed to rename workspace', { workspaceId, error });
       const errorMessage = error instanceof Error ? error.message : String(error);
       this.updateState({ error: errorMessage }, { type: 'workspace:error', error: errorMessage });
       throw error;

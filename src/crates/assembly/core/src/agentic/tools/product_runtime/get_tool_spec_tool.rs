@@ -72,10 +72,6 @@ impl Tool for GetToolSpecTool {
         with_runtime(|runtime| runtime.is_concurrency_safe(input))
     }
 
-    fn needs_permissions(&self, input: Option<&Value>) -> bool {
-        with_runtime(|runtime| runtime.needs_permissions(input))
-    }
-
     fn render_tool_use_message(&self, input: &Value, _options: &ToolRenderOptions) -> String {
         with_runtime(|runtime| runtime.render_tool_use_message(input))
     }

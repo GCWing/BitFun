@@ -16,9 +16,10 @@ use bitfun_agent_runtime::skills::{
     normalize_local_skill_dir_name, normalize_remote_skill_dir_name, normalize_skill_keys,
     resolve_default_hidden_builtin_for_explicit_invocation, resolve_user_config_skill_root,
     resolve_visible_skills, sort_skill_candidates_by_dir, sort_skills,
-    ExplicitSkillInvocationResolution, SkillCandidate, BITFUN_SYSTEM_SKILL_DIR,
-    BITFUN_SYSTEM_SKILL_SLOT, BITFUN_USER_SKILL_SLOT, PROJECT_SKILL_KEY_PREFIX,
-    PROJECT_SKILL_ROOTS, USER_CONFIG_SKILL_ROOTS, USER_HOME_SKILL_ROOTS, USER_SKILL_KEY_PREFIX,
+    ExplicitSkillInvocationResolution, SkillCandidate, BITFUN_SKILL_SOURCE_ID,
+    BITFUN_SKILL_SOURCE_LABEL, BITFUN_SYSTEM_SKILL_DIR, BITFUN_SYSTEM_SKILL_SLOT,
+    BITFUN_USER_SKILL_SLOT, PROJECT_SKILL_KEY_PREFIX, PROJECT_SKILL_ROOTS, USER_CONFIG_SKILL_ROOTS,
+    USER_HOME_SKILL_ROOTS, USER_SKILL_KEY_PREFIX,
 };
 use log::{debug, error};
 use std::collections::HashSet;
@@ -35,6 +36,8 @@ struct SkillRootEntry {
     path: PathBuf,
     level: SkillLocation,
     slot: &'static str,
+    source_id: &'static str,
+    source_label: &'static str,
     priority: usize,
     is_builtin: bool,
 }
@@ -43,6 +46,8 @@ struct SkillRootEntry {
 struct RemoteSkillRootEntry {
     path: String,
     slot: &'static str,
+    source_id: &'static str,
+    source_label: &'static str,
     priority: usize,
 }
 
@@ -86,6 +91,8 @@ impl SkillRegistry {
                         path,
                         level: SkillLocation::Project,
                         slot: spec.slot,
+                        source_id: spec.source_id,
+                        source_label: spec.source_label,
                         priority,
                         is_builtin: false,
                     });
@@ -100,12 +107,19 @@ impl SkillRegistry {
             for spec in USER_HOME_SKILL_ROOTS {
                 let path = home.join(spec.parent).join(spec.subdir);
                 if spec.parent == ".opencode" {
-                    deferred_home_entries.push((path, spec.slot));
+                    deferred_home_entries.push((
+                        path,
+                        spec.slot,
+                        spec.source_id,
+                        spec.source_label,
+                    ));
                 } else if path.exists() && path.is_dir() {
                     entries.push(SkillRootEntry {
                         path,
                         level: SkillLocation::User,
                         slot: spec.slot,
+                        source_id: spec.source_id,
+                        source_label: spec.source_label,
                         priority,
                         is_builtin: false,
                     });
@@ -124,6 +138,8 @@ impl SkillRegistry {
                 path: bitfun_skills,
                 level: SkillLocation::User,
                 slot: BITFUN_USER_SKILL_SLOT,
+                source_id: BITFUN_SKILL_SOURCE_ID,
+                source_label: BITFUN_SKILL_SOURCE_LABEL,
                 priority,
                 is_builtin: false,
             });
@@ -136,6 +152,8 @@ impl SkillRegistry {
                 path: builtin_skills,
                 level: SkillLocation::User,
                 slot: BITFUN_SYSTEM_SKILL_SLOT,
+                source_id: BITFUN_SKILL_SOURCE_ID,
+                source_label: BITFUN_SKILL_SOURCE_LABEL,
                 priority,
                 is_builtin: true,
             });
@@ -150,6 +168,8 @@ impl SkillRegistry {
                         path,
                         level: SkillLocation::User,
                         slot: spec.slot,
+                        source_id: spec.source_id,
+                        source_label: spec.source_label,
                         priority,
                         is_builtin: false,
                     });
@@ -158,12 +178,14 @@ impl SkillRegistry {
             }
         }
 
-        for (path, slot) in deferred_home_entries {
+        for (path, slot, source_id, source_label) in deferred_home_entries {
             if path.exists() && path.is_dir() {
                 entries.push(SkillRootEntry {
                     path,
                     level: SkillLocation::User,
                     slot,
+                    source_id,
+                    source_label,
                     priority,
                     is_builtin: false,
                 });
@@ -219,6 +241,8 @@ impl SkillRegistry {
                         skills.push(SkillCandidate::from_data(
                             skill_data,
                             entry.slot,
+                            entry.source_id,
+                            entry.source_label,
                             key_prefix,
                             entry.priority,
                             entry.is_builtin,
@@ -265,6 +289,8 @@ impl SkillRegistry {
                 roots.push(RemoteSkillRootEntry {
                     path,
                     slot: spec.slot,
+                    source_id: spec.source_id,
+                    source_label: spec.source_label,
                     priority,
                 });
             }
@@ -303,6 +329,8 @@ impl SkillRegistry {
                             skills.push(SkillCandidate::from_data(
                                 skill_data,
                                 entry.slot,
+                                entry.source_id,
+                                entry.source_label,
                                 PROJECT_SKILL_KEY_PREFIX,
                                 entry.priority,
                                 false,

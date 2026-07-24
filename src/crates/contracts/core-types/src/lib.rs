@@ -7,6 +7,7 @@ pub mod ai;
 pub mod errors;
 pub mod lsp;
 pub mod session;
+pub mod session_usage;
 pub mod surface;
 pub mod tool_image_attachment;
 
@@ -16,7 +17,10 @@ pub use ai::{
     ToolCallResponseInfo, ToolDefinition,
 };
 pub use errors::{AiErrorDetail, ErrorCategory};
-pub use session::{validate_session_id, SessionKind};
+pub use session::{
+    validate_session_id, SessionContinuationPolicy, SessionKind, SessionModelBindingPolicy,
+};
+pub use session_usage::*;
 pub use surface::{
     ApprovalSource, CapabilityRequest, CapabilityRequestKind, PermissionDecision, PermissionScope,
     RuntimeArtifactKind, RuntimeArtifactRef, SurfaceKind, ThreadEnvironment, ThreadEnvironmentKind,

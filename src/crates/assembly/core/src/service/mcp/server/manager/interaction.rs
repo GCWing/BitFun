@@ -3,6 +3,10 @@ use bitfun_services_integrations::mcp::server::{detect_mcp_list_changed_kind, MC
 use std::collections::HashSet;
 
 impl MCPServerManager {
+    fn external_server_request_allowed(method: &str) -> bool {
+        method == "ping"
+    }
+
     fn path_to_file_uri(path: &Path) -> Option<String> {
         reqwest::Url::from_directory_path(path)
             .ok()
@@ -51,6 +55,27 @@ impl MCPServerManager {
         method: String,
         params: Option<Value>,
     ) {
+        if self
+            .ephemeral_workspace_scopes
+            .read()
+            .await
+            .contains_key(server_id)
+            && !Self::external_server_request_allowed(&method)
+        {
+            let error = MCPError::method_not_found(method.clone());
+            if let Err(error) = connection.send_error(request_id, error).await {
+                warn!(
+                    "Failed to reject unsupported external MCP request: server_name={} server_id={} method={} error={}",
+                    server_name, server_id, method, error
+                );
+            } else {
+                warn!(
+                    "Rejected unsupported external MCP request: server_name={} server_id={} method={}",
+                    server_name, server_id, method
+                );
+            }
+            return;
+        }
         match method.as_str() {
             "ping" => {
                 if let Err(e) = connection.send_response(request_id, json!({})).await {
@@ -381,5 +406,19 @@ mod tests {
             roots.is_empty(),
             "MCP roots/list must not expose the process current directory when no workspace is active"
         );
+    }
+
+    #[test]
+    fn external_runtime_allows_ping_but_not_host_capability_requests() {
+        assert!(MCPServerManager::external_server_request_allowed("ping"));
+        assert!(!MCPServerManager::external_server_request_allowed(
+            "roots/list"
+        ));
+        assert!(!MCPServerManager::external_server_request_allowed(
+            "elicitation/create"
+        ));
+        assert!(!MCPServerManager::external_server_request_allowed(
+            "sampling/createMessage"
+        ));
     }
 }

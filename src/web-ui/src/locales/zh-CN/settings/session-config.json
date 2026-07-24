@@ -1,18 +1,13 @@
 {
   "personalizationPage": {
     "title": "个性化",
-    "subtitle": "会话标题自动生成"
+    "subtitle": "个性化配置你的 BitFun"
   },
   "permissionsPage": {
     "title": "权限管理",
     "subtitle": "加速工作区搜索、工具执行、工具定义加载、浏览器控制与调试模式"
   },
   "features": {
-    "sessionTitle": {
-      "title": "会话标题自动生成",
-      "subtitle": "新对话时 AI 自动生成简洁标题",
-      "warning": "会话标题将使用用户消息的前 20 个字符"
-    },
     "workspaceSearch": {
       "title": "加速工作区搜索",
       "subtitle": "为本地工作区启用基于 flashgrep 的索引搜索。关闭后 BitFun 会回退到原有搜索。",
@@ -22,6 +17,75 @@
   "toolExecution": {
     "sectionTitle": "工具执行行为",
     "sectionDescription": "本会话中 AI 调用工具时的确认与超时策略。"
+  },
+  "permissionPolicy": {
+    "sectionTitle": "工具权限",
+    "sectionDescription": "设置默认工具访问策略和权限询问的处理方式。",
+    "mode": "权限模式",
+    "ask": "需要确认",
+    "askDescription": "低风险读取、浏览、Task 和 Skill 自动允许；文件修改、命令执行及其他受限操作需要确认。",
+    "fullAccess": "完全访问",
+    "fullAccessDescription": "默认允许工具执行，但显式拒绝规则、产品限制和操作系统权限仍然生效。",
+    "fullAccessWarningTitle": "启用完全访问？",
+    "fullAccessWarningMessage": "完全访问会允许工具读取和写入文件、执行命令及调用集成，不再逐次询问。显式拒绝规则、产品限制和操作系统权限仍然生效。",
+    "fullAccessConfirm": "启用完全访问",
+    "cancel": "取消",
+    "autoApprove": "自动批准",
+    "autoApproveDescription": "仅自动批准求值结果为“需要确认”的操作。被拒绝的操作仍会阻止，且不会创建记忆授权。",
+    "globalRules": "全局规则",
+    "globalRulesDescription": "定义用户级规则；它们在所选模式之后、项目和 Agent 规则之前应用。",
+    "manageGlobalRules": "管理规则",
+    "globalRulesDialogTitle": "全局工具权限规则",
+    "globalRulesDialogDescription": "这些用户级规则会应用于所有工作区。后续项目和 Agent 规则可以覆盖它们；产品强制限制始终优先。",
+    "globalRulesTitle": "自定义全局规则",
+    "globalRulesEmpty": "尚未配置自定义全局规则。当前权限模式仍会生效。",
+    "addGlobalRule": "添加规则",
+    "globalRulesEffect": "效果",
+    "globalRulesAction": "操作",
+    "globalRulesResource": "资源",
+    "globalRulesResourcePlaceholder": "例如，workspace/*",
+    "moveGlobalRuleUp": "上移规则",
+    "moveGlobalRuleDown": "下移规则",
+    "removeGlobalRule": "删除规则",
+    "discardGlobalRules": "放弃更改",
+    "saveGlobalRules": "保存规则",
+    "globalRulesEffects": { "allow": "允许", "ask": "询问", "deny": "拒绝" }
+  },
+  "projectPermissions": {
+    "description": "“始终允许”会保存为当前项目的记忆授权；静态项目规则会在工具执行前直接应用。",
+    "grantsTitle": "记忆授权",
+    "grantsEmpty": "当前项目没有记忆授权。",
+    "removeGrant": "撤销授权",
+    "removeGrantTitle": "撤销记忆授权？",
+    "removeGrantMessage": "撤销对 {{resource}} 的 {{action}} 记忆授权？下次匹配的请求将再次询问。",
+    "removeGrantConfirm": "撤销授权",
+    "removeGrantSuccess": "已撤销记忆授权",
+    "removeGrantFailed": "撤销记忆授权失败",
+    "clearGrants": "全部清除",
+    "clearGrantsTitle": "清除全部记忆授权？",
+    "clearGrantsMessage": "清除当前项目的全部记忆授权？下次匹配的请求将再次询问。",
+    "clearGrantsConfirm": "清除全部授权",
+    "clearGrantsSuccess": "已清除记忆授权",
+    "clearGrantsFailed": "清除记忆授权失败",
+    "grantsLoadFailed": "加载记忆授权失败",
+    "rulesTitle": "静态项目规则",
+    "rulesEmpty": "尚未配置静态项目规则。",
+    "rulesLoadFailed": "加载静态项目规则失败",
+    "addRule": "添加规则",
+    "effect": "效果",
+    "action": "操作",
+    "resource": "资源",
+    "actionPlaceholder": "例如 read 或 bash",
+    "resourcePlaceholder": "例如 src/*",
+    "moveRuleUp": "上移规则",
+    "moveRuleDown": "下移规则",
+    "removeRule": "删除规则",
+    "saveRules": "保存规则",
+    "rulesSaveSuccess": "已保存静态项目规则",
+    "rulesSaveFailed": "保存静态项目规则失败",
+    "rulesConflict": "规则文件已在外部变更，请重新打开项目权限后再保存。",
+    "cancel": "取消",
+    "effects": { "allow": "允许", "ask": "询问", "deny": "拒绝" }
   },
   "deferredToolLoading": {
     "sectionTitle": "工具延迟加载",
@@ -74,17 +138,8 @@
     "createLauncherDesc": "创建带调试端口的浏览器快捷方式。",
     "tabs": "个标签页"
   },
-  "model": {
-    "label": "模型",
-    "primary": "主力模型",
-    "fast": "快速模型"
-  },
   "common": {
     "enable": "启用"
-  },
-  "models": {
-    "empty": "暂无可用模型，请先在「模型」中添加模型。",
-    "updateSuccess": "{{agentName}} 将使用 {{modelName}}"
   },
   "loading": {
     "text": "加载配置中..."

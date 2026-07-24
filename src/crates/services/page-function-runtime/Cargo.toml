@@ -1,0 +1,20 @@
+[package]
+name = "bitfun-page-function-runtime"
+version = "0.2.13"
+authors = ["BitFun Team"]
+edition = "2021"
+description = "Embedded JS Page Function runtime for BitFun Pages (rquickjs)"
+
+[lib]
+name = "bitfun_page_function_runtime"
+path = "src/lib.rs"
+
+[dependencies]
+# Versions stay explicit so the crate can build inside the standalone relay Docker context.
+rquickjs = { version = "0.9", default-features = false, features = ["classes", "properties", "macro"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+thiserror = "2"
+
+[dev-dependencies]
+tokio = { version = "1.52", features = ["macros", "rt"] }

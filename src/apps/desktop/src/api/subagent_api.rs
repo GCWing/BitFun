@@ -6,6 +6,7 @@ use bitfun_core::agentic::agents::{
     SubagentListScope, SubagentQueryContext,
 };
 use bitfun_core::service::config::SubagentModelSelection;
+use bitfun_core::service::remote_ssh::workspace_state::is_remote_path;
 use log::warn;
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
@@ -39,19 +40,48 @@ fn workspace_root_from_request(workspace_path: Option<&str>) -> Option<PathBuf> 
         .map(PathBuf::from)
 }
 
+async fn supports_local_external_sources(workspace_path: Option<&str>) -> bool {
+    match workspace_path {
+        Some(path) if !path.is_empty() => !is_remote_path(path).await,
+        _ => true,
+    }
+}
+
+fn reject_external_subagent_mutation(
+    state: &AppState,
+    subagent_id: &str,
+    workspace: Option<&std::path::Path>,
+) -> Result<(), String> {
+    if state
+        .agent_registry
+        .is_external_subagent_route(subagent_id, workspace)
+    {
+        return Err(
+            "external_subagent_read_only: manage external agents in External AI Apps".to_string(),
+        );
+    }
+    Ok(())
+}
+
 #[tauri::command]
 pub async fn list_subagents(
     state: State<'_, AppState>,
     request: ListSubagentsRequest,
 ) -> Result<Vec<AgentInfo>, String> {
+    let external_sources_supported =
+        supports_local_external_sources(request.workspace_path.as_deref()).await;
     let workspace = workspace_root_from_request(request.workspace_path.as_deref());
+    let query_workspace = external_sources_supported
+        .then_some(workspace.as_deref())
+        .flatten();
     let list = state
         .agent_registry
         .get_subagents_for_query(&SubagentQueryContext {
             parent_agent_type: None,
-            workspace_root: workspace.as_deref(),
+            workspace_root: query_workspace,
             list_scope: SubagentListScope::RegistryManagement,
             include_disabled: true,
+            external_sources_supported,
         })
         .await;
 
@@ -71,14 +101,20 @@ pub async fn list_visible_subagents(
     state: State<'_, AppState>,
     request: ListVisibleSubagentsRequest,
 ) -> Result<Vec<AgentInfo>, String> {
+    let external_sources_supported =
+        supports_local_external_sources(request.workspace_path.as_deref()).await;
     let workspace = workspace_root_from_request(request.workspace_path.as_deref());
+    let query_workspace = external_sources_supported
+        .then_some(workspace.as_deref())
+        .flatten();
     Ok(state
         .agent_registry
         .get_subagents_for_query(&SubagentQueryContext {
             parent_agent_type: Some(request.parent_agent_type.as_str()),
-            workspace_root: workspace.as_deref(),
+            workspace_root: query_workspace,
             list_scope: SubagentListScope::TaskVisible,
             include_disabled: false,
+            external_sources_supported,
         })
         .await)
 }
@@ -88,14 +124,20 @@ pub async fn list_manageable_subagents(
     state: State<'_, AppState>,
     request: ListManageableSubagentsRequest,
 ) -> Result<Vec<AgentInfo>, String> {
+    let external_sources_supported =
+        supports_local_external_sources(request.workspace_path.as_deref()).await;
     let workspace = workspace_root_from_request(request.workspace_path.as_deref());
+    let query_workspace = external_sources_supported
+        .then_some(workspace.as_deref())
+        .flatten();
     Ok(state
         .agent_registry
         .get_subagents_for_query(&SubagentQueryContext {
             parent_agent_type: Some(request.parent_agent_type.as_str()),
-            workspace_root: workspace.as_deref(),
+            workspace_root: query_workspace,
             list_scope: SubagentListScope::RegistryManagement,
             include_disabled: true,
+            external_sources_supported,
         })
         .await)
 }
@@ -113,6 +155,7 @@ pub async fn get_subagent_detail(
     request: GetSubagentDetailRequest,
 ) -> Result<CustomSubagentDetail, String> {
     let workspace = workspace_root_from_request(request.workspace_path.as_deref());
+    reject_external_subagent_mutation(&state, &request.subagent_id, workspace.as_deref())?;
     state
         .agent_registry
         .get_custom_subagent_detail(&request.subagent_id, workspace.as_deref())
@@ -124,6 +167,7 @@ pub async fn get_subagent_detail(
 #[serde(rename_all = "camelCase")]
 pub struct DeleteSubagentRequest {
     pub subagent_id: String,
+    pub workspace_path: Option<String>,
 }
 
 #[tauri::command]
@@ -132,6 +176,8 @@ pub async fn delete_subagent(
     request: DeleteSubagentRequest,
 ) -> Result<(), String> {
     let subagent_id = request.subagent_id;
+    let workspace = workspace_root_from_request(request.workspace_path.as_deref());
+    reject_external_subagent_mutation(&state, &subagent_id, workspace.as_deref())?;
 
     let file_path = state
         .agent_registry
@@ -178,6 +224,7 @@ pub async fn update_subagent(
         return Err("Prompt cannot be empty".to_string());
     }
     let workspace = workspace_root_from_request(request.workspace_path.as_deref());
+    reject_external_subagent_mutation(&state, &request.subagent_id, workspace.as_deref())?;
     state
         .agent_registry
         .update_custom_subagent_definition(
@@ -406,6 +453,7 @@ pub async fn update_subagent_config(
 ) -> Result<UpdateSubagentConfigResponse, String> {
     let subagent_id = &request.subagent_id;
     let workspace = workspace_root_from_request(request.workspace_path.as_deref());
+    reject_external_subagent_mutation(&state, subagent_id, workspace.as_deref())?;
     if let Some(workspace) = workspace.as_deref() {
         state.agent_registry.load_custom_subagents(workspace).await;
     }

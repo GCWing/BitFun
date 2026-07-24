@@ -4,6 +4,7 @@ import { api } from './ApiClient';
 import { createTauriCommandError } from '../errors/TauriCommandError';
 import type { SendMessageRequest } from './tauri-commands';
 import type { ConnectionTestMessageCode } from '@/shared/utils/aiConnectionTestMessages';
+import type { SubscriptionProvider } from '@/infrastructure/config/types';
 
 export interface CreateAISessionRequest {
   session_id?: string;
@@ -29,19 +30,43 @@ export interface RemoteModelInfo {
   display_name?: string;
 }
 
-export type CliCredentialKind = 'codex' | 'gemini';
-export type CliCredentialMode = 'api_key' | 'chat_gpt' | 'oauth_personal';
+export type SubscriptionLoginStatus = 'pending' | 'authorized' | 'failed' | 'cancelled';
 
-export interface DiscoveredCliCredential {
-  kind: CliCredentialKind;
-  mode: CliCredentialMode;
+export interface SubscriptionAccount {
+  provider: SubscriptionProvider;
   display_label: string;
   account?: string | null;
   expires_at?: number | null;
-  source_path: string;
+  connected: boolean;
+  reauthentication_required?: boolean;
+  vault_unavailable?: boolean;
   suggested_format: string;
   suggested_base_url: string;
   suggested_model: string;
+}
+
+export interface SubscriptionLogoutResult {
+  cleanup_pending: boolean;
+  warning?: string | null;
+}
+
+export interface SubscriptionLoginStartResult {
+  provider: SubscriptionProvider;
+  session_id: string;
+  authorization_url: string;
+  user_code?: string | null;
+  instructions: string;
+}
+
+export interface SubscriptionLoginSessionSnapshot {
+  provider: SubscriptionProvider;
+  session_id: string;
+  status: SubscriptionLoginStatus;
+  authorization_url?: string | null;
+  user_code?: string | null;
+  instructions?: string | null;
+  error?: string | null;
+  account?: SubscriptionAccount | null;
 }
 
 export class AIApi {
@@ -157,21 +182,67 @@ export class AIApi {
   }
 
    
-  async discoverCliCredentials(): Promise<DiscoveredCliCredential[]> {
+  async listSubscriptionAccounts(): Promise<SubscriptionAccount[]> {
     try {
-      return await api.invoke<DiscoveredCliCredential[]>('discover_cli_credentials', {});
+      return await api.invoke<SubscriptionAccount[]>('list_subscription_accounts', {});
     } catch (error) {
-      throw createTauriCommandError('discover_cli_credentials', error);
+      throw createTauriCommandError('list_subscription_accounts', error);
     }
   }
 
-  async refreshCliCredential(kind: CliCredentialKind): Promise<DiscoveredCliCredential> {
+  async startSubscriptionLogin(
+    provider: SubscriptionProvider,
+    sessionId: string,
+  ): Promise<SubscriptionLoginStartResult> {
     try {
-      return await api.invoke<DiscoveredCliCredential>('refresh_cli_credential', {
-        request: { kind }
+      return await api.invoke<SubscriptionLoginStartResult>('start_subscription_login', {
+        request: { provider, sessionId },
       });
     } catch (error) {
-      throw createTauriCommandError('refresh_cli_credential', error, { kind });
+      throw createTauriCommandError('start_subscription_login', error, { provider, sessionId });
+    }
+  }
+
+  async getSubscriptionLoginStatus(
+    provider: SubscriptionProvider,
+    sessionId: string,
+  ): Promise<SubscriptionLoginSessionSnapshot> {
+    try {
+      return await api.invoke<SubscriptionLoginSessionSnapshot>('get_subscription_login_status', {
+        request: { provider, sessionId },
+      });
+    } catch (error) {
+      throw createTauriCommandError('get_subscription_login_status', error, { provider, sessionId });
+    }
+  }
+
+  async cancelSubscriptionLogin(provider: SubscriptionProvider, sessionId: string): Promise<void> {
+    try {
+      await api.invoke('cancel_subscription_login', { request: { provider, sessionId } });
+    } catch (error) {
+      throw createTauriCommandError('cancel_subscription_login', error, { provider, sessionId });
+    }
+  }
+
+  async logoutSubscriptionAccount(provider: SubscriptionProvider): Promise<SubscriptionLogoutResult> {
+    try {
+      return await api.invoke<SubscriptionLogoutResult>('logout_subscription_account', {
+        request: { provider },
+      });
+    } catch (error) {
+      throw createTauriCommandError('logout_subscription_account', error, { provider });
+    }
+  }
+
+  async refreshSubscriptionAccount(
+    provider: SubscriptionProvider,
+  ): Promise<SubscriptionAccount> {
+    try {
+      return await api.invoke<SubscriptionAccount>('refresh_subscription_account', {
+        request: { provider },
+      });
+    } catch (error) {
+      throw createTauriCommandError('refresh_subscription_account', error, { provider });
     }
   }
 }

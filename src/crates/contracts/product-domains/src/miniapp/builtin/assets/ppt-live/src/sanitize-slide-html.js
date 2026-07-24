@@ -342,24 +342,24 @@ export function sanitizeSlideDocumentRoot(doc = document, aggressive = false) {
       });
     }
 
-    function collectFallbackDiagnostics(root) {
+    function collectEditableExportDiagnostics(root) {
       root.querySelectorAll('*').forEach((element) => {
         const computed = view.getComputedStyle(element);
         const backgroundImage = String(computed.backgroundImage || element.style?.backgroundImage || '');
         if (backgroundImage.includes('gradient')) {
           addDiagnostic(
-            'fallback',
+            'rewrite',
             'css_gradient',
-            'CSS gradient requires fallback rendering; native gradient mapping is not available.',
+            'CSS gradient will be rewritten as editable solid strips.',
             element,
           );
         }
         const filter = String(computed.filter || element.style?.filter || '');
         if (filter && filter !== 'none') {
           addDiagnostic(
-            'fallback',
+            'blocking',
             'css_filter',
-            'CSS filter requires fallback rendering.',
+            'CSS filter cannot be represented as editable objects.',
             element,
           );
         }
@@ -367,16 +367,16 @@ export function sanitizeSlideDocumentRoot(doc = document, aggressive = false) {
       root.querySelectorAll('svg').forEach((svg) => {
         if (svg.querySelector('filter,mask,foreignObject,use,pattern,textPath,clipPath,image')) {
           addDiagnostic(
-            'fallback',
-            'complex_svg_raster',
-            'SVG filter, mask, or foreignObject requires local browser raster rendering.',
+            'blocking',
+            'complex_svg_unsupported',
+            'SVG filter, mask, or foreignObject cannot be represented as editable objects.',
             svg,
           );
         } else if (svg.querySelector('path')) {
           addDiagnostic(
-            'fallback',
-            'complex_svg_vector',
-            'Complex SVG geometry will be preserved as a local SVG image.',
+            'rewrite',
+            'svg_path_rewrite',
+            'SVG path geometry will be rewritten as editable line segments.',
             svg,
           );
         }
@@ -402,9 +402,9 @@ export function sanitizeSlideDocumentRoot(doc = document, aggressive = false) {
             return;
           }
           matches.forEach((element) => addDiagnostic(
-            'fallback',
+            'blocking',
             'generated_content',
-            'Pseudo-element generated content requires fallback rendering.',
+            'Pseudo-element generated content cannot be represented as editable objects.',
             element,
           ));
         });
@@ -591,8 +591,11 @@ export function sanitizeSlideDocumentRoot(doc = document, aggressive = false) {
       (root.head || root.documentElement).appendChild(style);
     }
 
+    document.querySelectorAll('[style]').forEach((element) => {
+      element.dataset.pptxAuthoredStyle = element.getAttribute('style');
+    });
     assignSourceIds();
-    collectFallbackDiagnostics(document);
+    collectEditableExportDiagnostics(document);
     ensureExportCanvas();
     repairNestedParagraphs(document);
     promoteDecoratedSpans(document);

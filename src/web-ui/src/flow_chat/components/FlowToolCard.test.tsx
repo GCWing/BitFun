@@ -38,6 +38,14 @@ vi.mock('./FlowToolCardErrorBoundary', () => ({
 
 vi.mock('./ToolApprovalBar', () => ({ ToolApprovalBar: () => null }));
 
+const permissionContextMock = vi.hoisted(() => ({
+  pendingPermissionToolCallIds: new Set<string>(),
+}));
+
+vi.mock('./modern/FlowChatContext', () => ({
+  useFlowChatContext: () => permissionContextMock,
+}));
+
 import { FlowToolCard } from './FlowToolCard';
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
@@ -55,6 +63,7 @@ describe('FlowToolCard deferred identity', () => {
   afterEach(() => {
     act(() => root.unmount());
     container.remove();
+    permissionContextMock.pendingPermissionToolCallIds.clear();
   });
 
   it('switches from the gateway card to the effective card when wire input completes', () => {
@@ -88,5 +97,58 @@ describe('FlowToolCard deferred identity', () => {
     expect(container.querySelector('[data-selected-card="CreatePlan"]')).not.toBeNull();
     expect(container.querySelector('[data-card-tool-name="CreatePlan"]')).not.toBeNull();
     expect(container.querySelector('[data-tool-name="CreatePlan"]')).not.toBeNull();
+  });
+
+  it('marks permission-pending cards for the shared warning highlight', () => {
+    act(() => root.render(
+      <FlowToolCard
+        toolItem={{
+          id: 'permission-tool',
+          type: 'tool',
+          toolName: 'Write',
+          toolCall: { id: 'permission-tool', input: { file_path: 'src/main.rs' } },
+          status: 'pending_confirmation',
+          timestamp: 1,
+        }}
+      />,
+    ));
+
+    expect(container.querySelector('.flow-tool-card-wrapper--permission-pending')).not.toBeNull();
+  });
+
+  it('does not highlight a same-name card without a matching permission call ID', () => {
+    act(() => root.render(
+      <FlowToolCard
+        toolItem={{
+          id: 'running-command',
+          type: 'tool',
+          toolName: 'ExecCommand',
+          toolCall: { id: 'running-command', input: { cmd: 'cargo check' } },
+          status: 'running',
+          timestamp: 1,
+        }}
+      />,
+    ));
+
+    expect(container.querySelector('.flow-tool-card-wrapper--permission-pending')).toBeNull();
+  });
+
+  it('highlights only the tool card matching a permission call ID', () => {
+    permissionContextMock.pendingPermissionToolCallIds.add('pending-call');
+
+    const tool = (id: string): FlowToolItem => ({
+      id,
+      type: 'tool',
+      toolName: 'ExecCommand',
+      toolCall: { id, input: { cmd: 'cargo check' } },
+      status: 'running',
+      timestamp: 1,
+    });
+
+    act(() => root.render(<FlowToolCard toolItem={tool('other-call')} />));
+    expect(container.querySelector('.flow-tool-card-wrapper--permission-pending')).toBeNull();
+
+    act(() => root.render(<FlowToolCard toolItem={tool('pending-call')} />));
+    expect(container.querySelector('.flow-tool-card-wrapper--permission-pending')).not.toBeNull();
   });
 });

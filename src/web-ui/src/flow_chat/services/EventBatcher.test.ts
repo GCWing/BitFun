@@ -1,6 +1,9 @@
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { setIncludeSensitiveDiagnostics } from '@/shared/utils/logger';
 import {
+  DEFAULT_EVENT_MAX_LATENCY_MS,
+  EventBatcher,
+  TEXT_CHUNK_MAX_LATENCY_MS,
   generateTextChunkKey,
   generateToolEventKey,
   getBatchedEventsLogPayload,
@@ -28,6 +31,7 @@ describe('summarizeBatchedEventsForLog', () => {
         strategy: 'accumulate',
         sourceCount: 12,
         timestamp: 1000,
+        maxLatencyMs: 100,
       },
     ];
 
@@ -51,6 +55,7 @@ describe('summarizeBatchedEventsForLog', () => {
         strategy: 'accumulate',
         sourceCount: 12,
         timestamp: 1000,
+        maxLatencyMs: 100,
       },
     ];
 
@@ -111,5 +116,91 @@ describe('generateToolEventKey', () => {
       text: 'beta',
       contentType: 'text',
     }));
+  });
+});
+
+describe('EventBatcher dual latency', () => {
+  const rafCallbacks = new Map<number, FrameRequestCallback>();
+  let nextRafId = 1;
+
+  async function drainAnimationFrames(): Promise<void> {
+    const pending = [...rafCallbacks.entries()];
+    rafCallbacks.clear();
+    for (const [, cb] of pending) {
+      cb(performance.now());
+    }
+  }
+
+  beforeEach(() => {
+    nextRafId = 1;
+    rafCallbacks.clear();
+    vi.useFakeTimers({ now: 0 });
+    vi.stubGlobal('requestAnimationFrame', (cb: FrameRequestCallback) => {
+      const id = nextRafId++;
+      rafCallbacks.set(id, cb);
+      return id;
+    });
+    vi.stubGlobal('cancelAnimationFrame', (id: number) => {
+      rafCallbacks.delete(id);
+    });
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
+  });
+
+  it('flushes text events near the text latency budget', async () => {
+    const onFlush = vi.fn();
+    const batcher = new EventBatcher({ onFlush });
+
+    batcher.add('text:s:r:text:none', { text: 'a' }, 'accumulate', (a, b) => ({
+      text: `${a.text}${b.text}`,
+    }), { maxLatencyMs: TEXT_CHUNK_MAX_LATENCY_MS });
+
+    await vi.advanceTimersByTimeAsync(TEXT_CHUNK_MAX_LATENCY_MS - 1);
+    await drainAnimationFrames();
+    expect(onFlush).not.toHaveBeenCalled();
+
+    await vi.advanceTimersByTimeAsync(1);
+    await drainAnimationFrames();
+    expect(onFlush).toHaveBeenCalledTimes(1);
+    expect(onFlush.mock.calls[0][0][0].payload.text).toBe('a');
+    batcher.destroy();
+  });
+
+  it('keeps default tool latency at 100ms', async () => {
+    const onFlush = vi.fn();
+    const batcher = new EventBatcher({ onFlush });
+
+    batcher.add('tool:progress:s:t:none', { progress: 1 }, 'replace');
+
+    await vi.advanceTimersByTimeAsync(DEFAULT_EVENT_MAX_LATENCY_MS - 1);
+    await drainAnimationFrames();
+    expect(onFlush).not.toHaveBeenCalled();
+
+    await vi.advanceTimersByTimeAsync(1);
+    await drainAnimationFrames();
+    expect(onFlush).toHaveBeenCalledTimes(1);
+    batcher.destroy();
+  });
+
+  it('reschedules earlier when a text event arrives after a tool event', async () => {
+    const onFlush = vi.fn();
+    const batcher = new EventBatcher({ onFlush });
+
+    batcher.add('tool:progress:s:t:none', { progress: 1 }, 'replace');
+    await vi.advanceTimersByTimeAsync(10);
+
+    batcher.add('text:s:r:text:none', { text: 'hi' }, 'replace', undefined, {
+      maxLatencyMs: TEXT_CHUNK_MAX_LATENCY_MS,
+    });
+
+    // Original tool schedule would still be ~90ms away; text should pull flush forward.
+    await vi.advanceTimersByTimeAsync(TEXT_CHUNK_MAX_LATENCY_MS);
+    await drainAnimationFrames();
+    expect(onFlush).toHaveBeenCalledTimes(1);
+    expect(onFlush.mock.calls[0][0]).toHaveLength(2);
+    batcher.destroy();
   });
 });

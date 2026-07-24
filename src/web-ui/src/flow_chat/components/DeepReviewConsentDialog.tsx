@@ -28,15 +28,12 @@ export interface DeepReviewConsentControls {
   deepReviewConsentDialog: React.ReactNode;
 }
 
-function getInitialReviewCallFacts(preview: ReviewTeamRunManifest): {
-  planned: number;
-  maximum: number;
-} {
-  const planned = Math.max(1, preview.tokenBudget.estimatedReviewerCalls || 1);
-  return {
-    planned,
-    maximum: Math.max(planned, preview.tokenBudget.maxReviewerCalls || planned),
-  };
+function getReviewCallLimit(preview: ReviewTeamRunManifest): number {
+  return Math.max(
+    1,
+    preview.tokenBudget.estimatedReviewerCalls || 1,
+    preview.tokenBudget.maxReviewerCalls || 1,
+  );
 }
 
 function getReviewTargetFileCount(preview: ReviewTeamRunManifest): number {
@@ -123,7 +120,7 @@ export function useDeepReviewConsent(): DeepReviewConsentControls {
     const skippedCount = skippedReviewers.length;
     const selectedStrategyLabel = getStrategyLabel(preview.strategyLevel, t);
     const targetSummary = getReviewTargetSummary(preview, t);
-    const callFacts = getInitialReviewCallFacts(preview);
+    const reviewCallLimit = getReviewCallLimit(preview);
     return (
       <div className="deep-review-consent__summary">
         <div className="deep-review-consent__summary-header">
@@ -159,15 +156,10 @@ export function useDeepReviewConsent(): DeepReviewConsentControls {
 
         <div className="deep-review-consent__token-estimate">
           <strong>
-            {t('deepReviewConsent.initialCalls', {
-              planned: callFacts.planned,
+            {t('deepReviewConsent.callLimit', {
+              count: reviewCallLimit,
             })}
           </strong>
-          <span>
-            {t('deepReviewConsent.parallelCalls', {
-              count: callFacts.maximum,
-            })}
-          </span>
         </div>
 
         {preview.workspacePath && (

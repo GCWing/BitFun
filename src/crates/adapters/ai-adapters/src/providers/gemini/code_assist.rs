@@ -31,11 +31,24 @@ fn cached_project() -> &'static Mutex<Option<String>> {
 }
 
 pub(crate) fn apply_headers(client: &AIClient, builder: RequestBuilder) -> RequestBuilder {
+    let has_custom_user_agent = client
+        .config
+        .custom_headers
+        .as_ref()
+        .is_some_and(|headers| {
+            headers
+                .keys()
+                .any(|key| key.eq_ignore_ascii_case("user-agent"))
+        });
     shared::apply_header_policy(client, builder, |builder| {
-        builder
+        let builder = builder
             .header("Content-Type", "application/json")
-            .header("Authorization", format!("Bearer {}", client.config.api_key))
-            .header("User-Agent", "BitFun-CodeAssist/1.0")
+            .header("Authorization", format!("Bearer {}", client.config.api_key));
+        if has_custom_user_agent {
+            builder
+        } else {
+            builder.header("User-Agent", "BitFun-CodeAssist/1.0")
+        }
     })
 }
 
@@ -80,11 +93,32 @@ async fn discover_project(client: &AIClient) -> Result<String> {
         }
     }
 
-    let metadata = serde_json::json!({
-        "ideType": "IDE_UNSPECIFIED",
-        "platform": "PLATFORM_UNSPECIFIED",
-        "pluginType": "GEMINI",
-    });
+    let antigravity = client
+        .config
+        .custom_headers
+        .as_ref()
+        .and_then(|headers| headers.get("Client-Metadata"))
+        .is_some_and(|value| value.contains("ANTIGRAVITY"));
+    let metadata = if antigravity {
+        let platform = if cfg!(target_os = "windows") {
+            "WINDOWS"
+        } else if cfg!(target_os = "macos") {
+            "MACOS"
+        } else {
+            "LINUX"
+        };
+        serde_json::json!({
+            "ideType": "ANTIGRAVITY",
+            "platform": platform,
+            "pluginType": "GEMINI",
+        })
+    } else {
+        serde_json::json!({
+            "ideType": "IDE_UNSPECIFIED",
+            "platform": "PLATFORM_UNSPECIFIED",
+            "pluginType": "GEMINI",
+        })
+    };
 
     let load_url = format!("{}{}", CODE_ASSIST_BASE, LOAD_CODE_ASSIST_ENDPOINT);
     let load_body = serde_json::json!({ "metadata": metadata });
@@ -155,11 +189,25 @@ pub(crate) async fn send_stream(
         extra_body,
     );
 
-    let request_body = serde_json::json!({
+    let antigravity = client
+        .config
+        .custom_headers
+        .as_ref()
+        .and_then(|headers| headers.get("Client-Metadata"))
+        .is_some_and(|value| value.contains("ANTIGRAVITY"));
+    let mut request_body = serde_json::json!({
         "model": client.config.model,
         "project": project,
         "request": inner,
     });
+    if antigravity {
+        if let Some(obj) = request_body.as_object_mut() {
+            obj.insert(
+                "userAgent".to_string(),
+                serde_json::Value::String("antigravity".to_string()),
+            );
+        }
+    }
 
     let url = if client.config.request_url.is_empty() {
         format!("{}{}", CODE_ASSIST_BASE, STREAM_ENDPOINT)

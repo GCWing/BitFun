@@ -23,6 +23,7 @@
     "builtin": "内置",
     "user": "用户",
     "project": "项目",
+    "external": "外部",
     "mode": "Agent",
     "subagent": "Sub-Agent"
   },
@@ -60,6 +61,7 @@
       "subagent": "Sub-Agent",
       "userSubagent": "用户 Sub-Agent",
       "projectSubagent": "项目 Sub-Agent",
+      "externalSubagent": "外部 Sub-Agent",
       "disabled": "已禁用"
     },
     "actions": {
@@ -68,16 +70,18 @@
     "meta": {
       "tools": "{{count}} 个工具",
       "skills": "{{count}} 个 Skills",
-      "subagents": "{{count}} 个 Sub-Agent"
+      "subagents": "{{count}} 个 Sub-Agent",
+      "externalProvider": "外部 · {{provider}}",
+      "singleRun": "单次运行 · 不支持续问"
     },
     "modelSelector": {
       "label": "模型",
-      "default": "使用 Subagent 默认模型",
+      "default": "使用默认 Sub-Agent 模型",
       "inherit": "继承父会话",
       "fast": "快速模型",
       "primary": "主力模型",
       "auto": "自动选择",
-      "updateFailed": "更新 Subagent 模型失败"
+      "updateFailed": "更新 Sub-Agent 模型失败"
     }
   },
   "capabilityCategories": {
@@ -119,21 +123,122 @@
     "subagentToggleFailed": "Sub-Agent 切换失败",
     "sharedProfileLabel": "共享配置",
     "sharedProfileDefaultLabel": "共享编码配置",
-    "sharedProfileDescription": "这里的改动也会同时应用到：{{modes}}。",
+    "sharedProfileDescription": "这里的改动会同时应用到：{{modes}}。",
+    "unknownSkillSource": "其他来源",
+    "skillScopeUser": "用户",
+    "skillScopeProject": "项目",
+    "skillScopeLocalUser": "本机 · 用户",
+    "skillScopeRemoteProject": "远程工作区 · 项目",
+    "skillRuntimeSelected": "运行时采用",
+    "skillRuntimeCovered": "已启用，被 {{source}} 覆盖",
+    "skillRuntimeEnabled": "已启用，当前未采用",
     "skillShadowed": "该 Skill 被同名且优先级更高的 Skill 遮蔽，运行时不会生效",
     "noSkills": "未启用任何 Skill",
+    "capabilityTooltip": {
+      "executionPermission": "执行权限",
+      "standardPermission": "常规",
+      "provider": "提供方",
+      "mcpServer": "MCP 服务器",
+      "skillKey": "Key",
+      "sourceLevel": "来源/层级",
+      "status": "状态",
+      "subagentId": "ID",
+      "source": "来源",
+      "toolCount": "工具数",
+      "externalManaged": "由外部提供方管理"
+    },
     "skillGroups": {
       "computerUse": "Computer Use",
       "office": "Office",
       "meta": "Meta",
       "miniapp": "MiniApp",
+      "canvas": "画布",
       "gstack": "gstack",
-      "team": "Team",
       "other": "其他"
+    },
+    "skillGroupPicker": {
+      "builtin": "内置分组",
+      "myGroups": "我的分组",
+      "otherSkills": "其他 Skill",
+      "selectedCount": "已启用 {{count}} 个 Skill",
+      "manageGroups": "管理分组",
+      "manageTitle": "管理我的 Skill 分组",
+      "manageSubtitle": "整理可复用的个人 Skill 选择。",
+      "createGroup": "新建分组",
+      "saveGroup": "保存分组",
+      "editGroup": "编辑分组",
+      "deleteGroup": "删除分组",
+      "moveUp": "上移",
+      "moveDown": "下移",
+      "groupName": "分组名称",
+      "groupNamePlaceholder": "例如：日常开发",
+      "groupSkills": "Skill",
+      "groupCount": "{{count}} 个 Skill",
+      "unavailableCount": "{{count}} 个不可用",
+      "noUserGroups": "还没有个人 Skill 分组。",
+      "enableGroupSkills": "启用 {{name}} 中的所有 Skill",
+      "clearGroupSkills": "清空 {{name}} 中的 Skill",
+      "deleteTitle": "删除 Skill 分组",
+      "deleteMessage": "删除 \"{{name}}\"？这不会更改任何 Agent 的 Skill 选择。",
+      "deleteConfirm": "删除",
+      "saveFailed": "保存 Skill 分组失败",
+      "validation": {
+        "nameRequired": "请输入分组名称",
+        "nameDuplicate": "已存在同名分组",
+        "skillsRequired": "请至少选择一个 Skill"
+      }
+    },
+    "toolGroups": {
+      "builtin": "内置分组",
+      "myGroups": "我的分组",
+      "extensions": "扩展工具",
+      "otherTools": "其他工具",
+      "filesSearch": "查看与检索",
+      "fileEditing": "文件编辑",
+      "commands": "命令执行",
+      "delegation": "代理与技能",
+      "web": "网络访问",
+      "imageUnderstanding": "图像理解",
+      "interactionCanvas": "交互与画布",
+      "computerAutomation": "计算机与自动化",
+      "extension": "扩展 · {{provider}}",
+      "other": "其他",
+      "selectedCount": "已启用 {{count}} 个工具",
+      "manageGroups": "管理分组",
+      "manageTitle": "管理我的工具分组",
+      "manageSubtitle": "整理可复用的个人工具选择。",
+      "createGroup": "新建分组",
+      "saveGroup": "保存分组",
+      "editGroup": "编辑分组",
+      "deleteGroup": "删除分组",
+      "moveUp": "上移",
+      "moveDown": "下移",
+      "groupName": "分组名称",
+      "groupNamePlaceholder": "例如：日常代码修改",
+      "groupTools": "工具",
+      "groupCount": "{{count}} 个工具",
+      "unavailableCount": "{{count}} 个不可用",
+      "noUserGroups": "还没有个人工具分组。",
+      "noEnabledTools": "未启用任何工具",
+      "readonly": "只读",
+      "permissionRequired": "需要权限",
+      "enableGroupTools": "启用 {{name}} 中的全部工具",
+      "clearGroupTools": "清空 {{name}} 中的工具",
+      "deleteTitle": "删除工具分组",
+      "deleteMessage": "确定删除「{{name}}」？不会影响任何 Agent 的工具选择。",
+      "deleteConfirm": "删除",
+      "saveFailed": "保存工具分组失败",
+      "validation": {
+        "nameRequired": "请输入分组名称",
+        "nameDuplicate": "已存在同名分组",
+        "toolsRequired": "请至少选择一个工具"
+      }
     },
     "customActions": "自定义 Agent",
     "editAgent": "编辑",
     "deleteAgent": "删除",
+    "externalActions": "外部 Agent",
+    "manageExternalAgent": "前往外部 AI 应用管理",
     "deleteConfirm": "确定删除自定义 Agent「{{name}}」？此操作不可恢复。",
     "deleteSuccess": "已删除「{{name}}」",
     "deleteFailed": "删除失败：",
@@ -149,6 +254,8 @@
       "updateSuccess": "已保存「{{name}}」",
       "updateFailed": "保存失败：",
       "kind": "类型",
+      "kindAgentTooltip": "创建后可在对话输入框的模式选择器中作为独立模式直接选择。",
+      "kindSubagentTooltip": "创建后主 Agent 可通过委派它完成子任务；不会作为可直接选择的模式。",
       "id": "ID",
       "idPlaceholder": "用于配置和路由的稳定标识符",
       "idRequired": "ID 不能为空",
@@ -185,80 +292,39 @@
       "createSuccess": "已创建 Agent「{{name}}」",
       "createFailed": "创建失败：",
       "review": "评审",
-      "reviewToolsHint": "Review 检查只能使用只读工具。"
+      "reviewToolsHint": "审核检查只能使用只读工具。"
     }
   },
   "reviewTeams": {
     "members": {
-      "businessLogic": {
-        "funName": "逻辑审核员",
-        "role": "业务逻辑审核员",
-        "description": "专门追踪业务规则、状态流转、回滚路径和真实用户正确性的流程侦探。",
+      "worker": {
+        "funName": "按需审核",
+        "role": "按需审核检查",
+        "description": "一项只读检查；只有在需要补充证据时，才会根据当前变更确定检查重点和范围。",
         "responsibilities": [
-          "验证业务流程、状态切换和领域规则是否仍然正确。",
-          "检查边界条件、回滚路径以及数据一致性假设。",
-          "优先指出会直接影响用户结果或产品意图的问题。"
-        ]
-      },
-      "performance": {
-        "funName": "性能审核员",
-        "role": "性能审核员",
-        "description": "专盯热点路径、无效工作、阻塞调用和规模化回退问题的速度分析员。",
-        "responsibilities": [
-          "检查热点路径、大循环以及不必要的分配或重复计算。",
-          "识别阻塞调用、N+1 模式和低效的数据搬运。",
-          "给出贴合现有架构、可落地的性能优化建议。"
-        ]
-      },
-      "security": {
-        "funName": "安全审核员",
-        "role": "安全审核员",
-        "description": "专门盯住注入风险、信任边界、权限错误以及危险文件或命令处理的边界守卫。",
-        "responsibilities": [
-          "审核信任边界、鉴权假设和敏感数据处理方式。",
-          "寻找注入、危险命令执行与数据暴露风险。",
-          "优先给出不依赖大改造的具体修复方案。"
+          "只检查主审核指定的问题。",
+          "不超出已确定的范围，并用具体证据说明结论。",
+          "不修改文件，也不重复主审核已经完成的工作。"
         ]
       },
       "judge": {
-        "funName": "审核仲裁员",
-        "role": "审核质检员",
-        "description": "独立的第三方仲裁者，从逻辑一致性和证据质量角度校验审核员报告。仅在特定声明需要验证时才抽查代码位置，而非从头重新审核代码库。",
+        "funName": "独立复核",
+        "role": "审核质量复核",
+        "description": "只在严重问题、证据冲突或结论明显不确定时启用的只读独立复核。",
         "responsibilities": [
-          "基于逻辑一致性和证据质量，对各审核员的发现进行验证、合并、重新定级或驳回。",
-          "通过审核审核员的推理过程，过滤误报以及方向错误的优化建议。",
-          "仅在审核员的声明需要验证时，对特定代码位置进行抽查。",
-          "确保每条保留的问题都带有明确修复方案或后续计划。"
-        ]
-      },
-      "architecture": {
-        "funName": "架构审核员",
-        "role": "架构审核员",
-        "description": "负责检查模块边界、依赖方向、API 契约设计和抽象完整性的结构守护者。",
-        "responsibilities": [
-          "检测层级边界违规和方向错误的导入。",
-          "验证 API 契约、工具模式和传输消息的一致性。",
-          "确保平台无关代码不会泄露平台特定细节。"
-        ]
-      },
-      "frontend": {
-        "funName": "前端审核员",
-        "role": "前端审核员",
-        "description": "检查国际化同步、前端性能模式、无障碍访问和前后端契约一致性的 UI 专家。",
-        "responsibilities": [
-          "验证所有语言区域的国际化键完整性。",
-          "检查前端性能模式（记忆化、虚拟化、effect/reactivity 依赖）。",
-          "标记无障碍访问违规和前后端 API 契约偏差。"
+          "根据具体证据确认或驳回有争议的发现。",
+          "只检查确实需要独立验证的结论。",
+          "确保每个保留的问题都有安全、可执行的下一步。"
         ]
       }
     },
     "extraReviewer": {
-      "role": "额外专项审核员",
-      "description": "严格 Review 的可选专项覆盖，会带着自己的系统提示、工具和视角参与审核。",
+      "role": "额外审核检查",
+      "description": "用户可按具体关注点添加的独立检查。",
       "responsibilities": [
-        "从额外的独立视角补充本次审核目标中的问题发现。",
-        "保持 scope 严格聚焦在本次 diff、commit 或工作区改动上。",
-        "输出清晰、可执行的修复建议或后续计划。"
+        "从额外的独立角度检查当前变更。",
+        "只检查用户指定的改动和文件。",
+        "提供有具体依据的问题、修复建议或后续步骤。"
       ]
     }
   },
@@ -270,7 +336,7 @@
     "Explore": "探索智能体：快速浏览代码库，理解项目结构和关键文件",
     "FileFinder": "文件查找智能体：根据需求定位相关文件和代码片段",
     "CodeReview": "代码审查智能体：对代码进行质量检查和改进建议",
-    "DeepReview": "严格 Review 兼容智能体：在历史会话或命令需要时执行最高强度 Review 路径",
+    "DeepReview": "严格审核兼容模式：仅在历史会话或命令需要时执行最高强度的审核流程",
     "GenerateDoc": "文档生成智能体：自动生成代码文档和说明",
     "Init": "初始化智能体：帮助设置项目结构和初始配置",
     "ReviewFixer": "审查修复智能体：根据审查结果自动修复代码问题",

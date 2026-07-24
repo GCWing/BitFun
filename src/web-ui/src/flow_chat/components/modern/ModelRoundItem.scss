@@ -5,11 +5,26 @@
    * No bottom margin — the inter-round gap is covered by the same line-height rhythm
    * as inter-item gaps inside a round, so flow text → tool / tool → thinking / cross-
    * round transitions all read as one continuous, evenly-spaced text column.
+   *
+   * Enter animation must NOT live on the base selector alone: rounds toggle
+   * `--streaming` → `--complete` when the typewriter finishes, and re-applying
+   * `animation: fadeIn` would replay opacity 0→1 (looks like the whole chat
+   * refreshed). Play fadeIn only for freshly mounted complete rounds via
+   * `--enter`; streaming/complete modifiers keep animation off.
    */
   margin-bottom: 0;
   padding: 0 var(--flowchat-content-inline-pad);
-  animation: fadeIn 0.4s ease;
   position: relative;
+  opacity: 1;
+
+  /*
+   * Freshly mounted history/complete rounds may opt into `--enter`.
+   * Rounds that began as `--streaming` omit `--enter`, so flipping to
+   * `--complete` later cannot replay fadeIn.
+   */
+  &--enter {
+    animation: fadeIn 0.4s ease;
+  }
 
   // Streaming state
   &--streaming {
@@ -24,7 +39,7 @@
     }
   }
 
-  // Complete state
+  // Complete state — keep opacity stable; do not attach an animation here.
   &--complete {
     opacity: 1;
   }
@@ -50,6 +65,12 @@
   gap: var(--flowchat-inline-gap);
   padding: var(--flowchat-inline-gap) 0;
   margin-top: var(--flowchat-inline-gap);
+
+  // Reserve layout while typewriter catch-up finishes; reveal without resize.
+  &--pending {
+    visibility: hidden;
+    pointer-events: none;
+  }
 }
 
 .model-round-item__meta {
@@ -145,12 +166,109 @@
 }
 
 .model-round-item__retry-attempt-label {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.25rem;
   margin-bottom: 0.35rem;
   color: var(--color-text-muted);
   font-size: 11px;
   line-height: 16px;
   text-transform: uppercase;
   letter-spacing: 0.04em;
+}
+
+.model-round-item__attempt-diagnostic-toggle,
+.model-round-item__attempt-diagnostic-copy {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--color-text-muted);
+  cursor: pointer;
+
+  &:hover {
+    background: var(--color-overlay-white-08);
+    color: var(--color-text-primary);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--border-accent);
+    outline-offset: 1px;
+  }
+}
+
+.model-round-item__attempt-diagnostic-toggle {
+  color: var(--color-warning);
+}
+
+.model-round-item__attempt-diagnostic-details {
+  display: block;
+  flex: 0 0 100%;
+  width: min(100%, 48rem);
+  margin: 0.2rem 0 0.45rem;
+  padding: 0.55rem 0.65rem;
+  border: 1px solid color-mix(in srgb, var(--border-base) 72%, transparent);
+  border-radius: 4px;
+  background: var(--color-bg-secondary);
+  color: var(--color-text-secondary);
+  font-size: 12px;
+  font-weight: 400;
+  letter-spacing: 0;
+  line-height: 18px;
+  text-transform: none;
+}
+
+.model-round-item__attempt-diagnostic-category,
+.model-round-item__attempt-diagnostic-section,
+.model-round-item__attempt-diagnostic-tool-title {
+  display: block;
+}
+
+.model-round-item__attempt-diagnostic-category {
+  margin-bottom: 0.35rem;
+  color: var(--color-text-primary);
+  font-weight: 600;
+}
+
+.model-round-item__attempt-diagnostic-section + .model-round-item__attempt-diagnostic-section {
+  margin-top: 0.55rem;
+}
+
+.model-round-item__attempt-diagnostic-tool-title {
+  margin-bottom: 0.2rem;
+  color: var(--color-text-primary);
+  font-weight: 600;
+}
+
+.model-round-item__attempt-diagnostic-section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  min-width: 0;
+  color: var(--color-text-muted);
+  font-size: 11px;
+}
+
+.model-round-item__attempt-diagnostic-section pre {
+  max-height: 16rem;
+  margin: 0.2rem 0 0.35rem;
+  padding: 0.45rem;
+  overflow: auto;
+  border-radius: 3px;
+  background: var(--color-bg-tertiary);
+  color: var(--color-text-primary);
+  font-family: var(--font-family-mono);
+  font-size: 11px;
+  line-height: 16px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
 }
 
 .model-round-item__action-btn {

@@ -159,7 +159,7 @@ fn non_p0_surfaces_cannot_inherit_executable_plugin_host() {
         DeliveryProfile::MobileWeb,
         DeliveryProfile::Sdk,
     ] {
-        let services = if matches!(profile, DeliveryProfile::Acp) {
+        let services = if matches!(profile, DeliveryProfile::Acp | DeliveryProfile::Sdk) {
             product_full_services()
         } else {
             baseline_services()
@@ -219,6 +219,7 @@ fn default_assembled_product_shapes_keep_profile_specific_plugin_availability() 
                 | DeliveryProfile::Desktop
                 | DeliveryProfile::Cli
                 | DeliveryProfile::Acp
+                | DeliveryProfile::Sdk
         ) {
             product_full_services()
         } else {

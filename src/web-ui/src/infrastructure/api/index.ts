@@ -9,6 +9,8 @@ export * from './service-api/ApiClient';
 export * from './service-api/tauri-commands';
 export * from './service-api/AIApi';
 export * from './service-api/CronAPI';
+export * from './service-api/PermissionAPI';
+export * from './service-api/PageAPI';
 
 // Import API modules
 import { workspaceAPI } from './service-api/WorkspaceAPI';
@@ -23,6 +25,8 @@ import { snapshotAPI } from './service-api/SnapshotAPI';
 import { globalAPI } from './service-api/GlobalAPI';
 import { contextAPI } from './service-api/ContextAPI';
 import { cronAPI } from './service-api/CronAPI';
+import { permissionAPI } from './service-api/PermissionAPI';
+import { pageAPI } from './service-api/PageAPI';
 import { gitAPI } from './service-api/GitAPI';
 import { gitAgentAPI } from './service-api/GitAgentAPI';
 import { gitRepoHistoryAPI, type GitRepoHistory } from './service-api/GitRepoHistoryAPI';
@@ -35,7 +39,7 @@ import { reviewPlatformAPI } from './service-api/ReviewPlatformAPI';
 import { insightsApi } from './insightsApi';
 
 // Export API modules
-export { workspaceAPI, configAPI, aiApi, toolAPI, agentAPI, systemAPI, projectAPI, diffAPI, snapshotAPI, globalAPI, contextAPI, cronAPI, gitAPI, gitAgentAPI, gitRepoHistoryAPI, startchatAgentAPI, sessionAPI, i18nAPI, btwAPI, editorAiAPI, reviewPlatformAPI, insightsApi };
+export { workspaceAPI, configAPI, aiApi, toolAPI, agentAPI, systemAPI, projectAPI, diffAPI, snapshotAPI, globalAPI, contextAPI, cronAPI, permissionAPI, pageAPI, gitAPI, gitAgentAPI, gitRepoHistoryAPI, startchatAgentAPI, sessionAPI, i18nAPI, btwAPI, editorAiAPI, reviewPlatformAPI, insightsApi };
 export * from './service-api/ReviewPlatformAPI';
 
 // Export types
@@ -56,6 +60,8 @@ export const bitfunAPI = {
   global: globalAPI,
   context: contextAPI,
   cron: cronAPI,
+  permission: permissionAPI,
+  pages: pageAPI,
   git: gitAPI,
   gitAgent: gitAgentAPI,
   gitRepoHistory: gitRepoHistoryAPI,

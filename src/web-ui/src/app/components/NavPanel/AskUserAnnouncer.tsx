@@ -5,45 +5,7 @@ import { stateMachineManager } from '@/flow_chat/state-machine';
 import { SessionExecutionState } from '@/flow_chat/state-machine/types';
 import { hasPendingAskUserQuestion, resolveTrackedTurn } from '@/flow_chat/utils/askUserQuestionState';
 import { resolveSessionTitle } from '@/flow_chat/utils/sessionTitle';
-
-type TFunc = (key: string, params?: Record<string, unknown>) => string;
-
-/**
- * Compute an aria-live message from the previous and current sets of waiting
- * session titles. Exported as a pure function for unit testing.
- *
- * - Single add:  "Session '<name>' needs your input"
- * - Multi add:    "<n> sessions need your input"
- * - All resolved: "Sessions no longer waiting for input"
- * - Partial:     "Session '<name>' received input. <n> still waiting."
- */
-export function computeAnnouncementMessage(
-  prevTitles: Map<string, string>,
-  currentTitles: Map<string, string>,
-  t: TFunc,
-): string {
-  const added: string[] = [];
-  const removed: string[] = [];
-  for (const [id, title] of currentTitles) {
-    if (!prevTitles.has(id)) added.push(title);
-  }
-  for (const [id, title] of prevTitles) {
-    if (!currentTitles.has(id)) removed.push(title);
-  }
-
-  if (added.length > 0) {
-    return added.length === 1
-      ? t('nav.sessions.ariaNeedsInputWithName', { name: added[0] })
-      : t('nav.sessions.ariaNeedsInputPlural', { count: currentTitles.size });
-  }
-  if (removed.length > 0) {
-    if (currentTitles.size === 0) {
-      return t('nav.sessions.ariaInputResolved');
-    }
-    return t('nav.sessions.ariaInputResolvedRemaining', { name: removed[0], count: currentTitles.size });
-  }
-  return '';
-}
+import { computeAnnouncementMessage } from './askUserAnnouncement';
 
 /**
  * Collect the current set of sessions waiting for AskUserQuestion input.

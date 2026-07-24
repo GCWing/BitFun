@@ -7,13 +7,13 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const cliPath = path.join(__dirname, '..', 'target', 'debug', 'bitfun-cli');
-const cliReleasePath = path.join(__dirname, '..', 'target', 'release', 'bitfun-cli');
+const cliPath = path.join(__dirname, '..', 'target', 'debug', 'bitfun');
+const cliReleasePath = path.join(__dirname, '..', 'target', 'release', 'bitfun');
 const usePath = fs.existsSync(cliPath)
   ? cliPath
   : fs.existsSync(cliReleasePath)
     ? cliReleasePath
-    : 'bitfun-cli';
+    : 'bitfun';
 
 const cwd = '/tmp/test-acp-node';
 fs.mkdirSync(cwd, { recursive: true });

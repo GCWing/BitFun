@@ -566,6 +566,54 @@ describe('processToolEvent rejected event behavior', () => {
   });
 });
 
+describe('processToolEvent completed image behavior', () => {
+  afterEach(() => {
+    resetStore();
+  });
+
+  it('preserves image attachments on the completed tool item', () => {
+    const tool: FlowToolItem = {
+      id: 'tool-image-1',
+      type: 'tool',
+      toolName: 'view_image',
+      timestamp: 1001,
+      status: 'running',
+      toolCall: {
+        id: 'tool-image-1',
+        input: { path: 'screenshots/preview.png' },
+      },
+    };
+
+    FlowChatStore.getInstance().setState(() => ({
+      sessions: new Map([['session-1', createSessionWithTool(tool)]]),
+      activeSessionId: 'session-1',
+    }));
+
+    processToolEvent(
+      makeToolContext(),
+      'session-1',
+      'turn-1',
+      'round-1',
+      {
+        event_type: 'Completed',
+        tool_id: 'tool-image-1',
+        tool_name: 'view_image',
+        result: { path: 'screenshots/preview.png', width: 80, height: 60 },
+        image_attachments: [{ mime_type: 'image/png', data_base64: 'AAAA' }],
+        duration_ms: 12,
+      },
+    );
+
+    const updatedTool = FlowChatStore.getInstance()
+      .findToolItem('session-1', 'turn-1', 'tool-image-1') as FlowToolItem;
+
+    expect(updatedTool.status).toBe('completed');
+    expect(updatedTool.toolResult?.imageAttachments).toEqual([
+      { mime_type: 'image/png', data_base64: 'AAAA' },
+    ]);
+  });
+});
+
 describe('processToolEvent AskUserQuestion retry superseded handling', () => {
   afterEach(() => {
     resetStore();

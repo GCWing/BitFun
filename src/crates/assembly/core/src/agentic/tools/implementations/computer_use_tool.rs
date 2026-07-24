@@ -8,7 +8,9 @@ use crate::agentic::tools::computer_use_host::{
     ScreenshotCropCenter, UiElementLocateQuery,
 };
 use crate::agentic::tools::computer_use_optimizer::hash_screenshot_bytes;
-use crate::agentic::tools::framework::{Tool, ToolExposure, ToolResult, ToolUseContext};
+use crate::agentic::tools::framework::{
+    PermissionIntent, Tool, ToolExposure, ToolResult, ToolUseContext,
+};
 use crate::service::config::global::GlobalConfigManager;
 use crate::util::errors::{BitFunError, BitFunResult};
 use crate::util::types::ToolImageAttachment;
@@ -21,6 +23,33 @@ use bitfun_agent_tools::computer_use::{
 };
 use log::{debug, warn};
 use serde_json::{json, Value};
+
+fn computer_use_permission_resource(input: &Value) -> String {
+    let action = input
+        .get("action")
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .unwrap_or("unknown");
+    let target = [
+        "app_name",
+        "url",
+        "path",
+        "title_contains",
+        "identifier_contains",
+    ]
+    .into_iter()
+    .find_map(|field| {
+        input
+            .get(field)
+            .and_then(Value::as_str)
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .map(|value| format!("{field}={value}"))
+    });
+
+    target.map_or_else(|| action.to_string(), |target| format!("{action}:{target}"))
+}
 
 /// Merges [`ComputerUseHost::computer_use_session_snapshot`] + optional `input_coordinates` into tool JSON.
 /// Also records the action for loop detection and adds loop warnings if detected.
@@ -1055,8 +1084,15 @@ impl Tool for ComputerUseTool {
         false
     }
 
-    fn needs_permissions(&self, _input: Option<&Value>) -> bool {
-        true
+    fn permission_intents(
+        &self,
+        input: &Value,
+        _context: &ToolUseContext,
+    ) -> BitFunResult<Vec<PermissionIntent>> {
+        Ok(vec![PermissionIntent::new(
+            "computer_use",
+            vec![computer_use_permission_resource(input)],
+        )])
     }
 
     async fn is_enabled(&self) -> bool {
@@ -1982,8 +2018,33 @@ fn req_i32(input: &Value, key: &str) -> BitFunResult<i32> {
 #[cfg(test)]
 mod tests {
     use super::ComputerUseTool;
-    use crate::agentic::tools::framework::Tool;
-    use serde_json::Value;
+    use crate::agentic::tools::framework::{Tool, ToolUseContext};
+    use serde_json::{json, Value};
+
+    #[test]
+    fn computer_use_permission_resource_identifies_action_and_safe_target() {
+        let tool = ComputerUseTool::new();
+        let context = ToolUseContext::for_tool_listing(None, None);
+        let intents = tool
+            .permission_intents(
+                &json!({
+                    "action": "open_app",
+                    "app_name": "Visual Studio Code",
+                    "text": "secret text must not be projected",
+                    "script": "secret script must not be projected"
+                }),
+                &context,
+            )
+            .expect("permission intent");
+
+        assert_eq!(intents.len(), 1);
+        assert_eq!(intents[0].action, "computer_use");
+        assert_eq!(
+            intents[0].resources,
+            ["open_app:app_name=Visual Studio Code".to_string()]
+        );
+        assert!(!intents[0].resources[0].contains("secret"));
+    }
 
     fn action_enum(schema: &Value) -> Vec<String> {
         schema

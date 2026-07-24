@@ -46,10 +46,6 @@ impl Tool for CallDeferredTool {
         false
     }
 
-    fn needs_permissions(&self, _input: Option<&Value>) -> bool {
-        false
-    }
-
     fn render_tool_use_message(&self, input: &Value, _options: &ToolRenderOptions) -> String {
         let target = input
             .get("tool_name")

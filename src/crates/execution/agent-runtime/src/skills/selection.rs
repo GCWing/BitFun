@@ -16,6 +16,8 @@ impl SkillCandidate {
     pub fn from_data(
         mut data: SkillData,
         slot: &str,
+        source_id: &str,
+        source_label: &str,
         key_prefix: &str,
         priority: usize,
         is_builtin: bool,
@@ -36,6 +38,8 @@ impl SkillCandidate {
                 path: data.path,
                 level: data.location,
                 source_slot: data.source_slot,
+                source_id: source_id.to_string(),
+                source_label: source_label.to_string(),
                 dir_name: data.dir_name,
                 is_builtin,
                 group_key,
@@ -165,7 +169,9 @@ pub fn annotate_shadowed_skills(candidates: Vec<SkillCandidate>) -> Vec<SkillInf
     let mut by_name: HashMap<String, SkillCandidate> = HashMap::new();
     for candidate in &candidates {
         match by_name.get(&candidate.info.name) {
-            Some(existing) if existing.priority <= candidate.priority => {}
+            Some(existing)
+                if skill_candidate_precedence(existing)
+                    <= skill_candidate_precedence(candidate) => {}
             _ => {
                 by_name.insert(candidate.info.name.clone(), candidate.clone());
             }
@@ -193,12 +199,16 @@ pub fn build_mode_skill_infos(
     user_overrides: &UserModeSkillOverrides,
     disabled_project_skills: &HashSet<String>,
 ) -> Vec<ModeSkillInfo> {
+    let resolved_by_name: HashMap<String, String> = resolved_skills
+        .iter()
+        .map(|skill| (skill.name.clone(), skill.key.clone()))
+        .collect();
     let resolved_keys: HashSet<String> =
         resolved_skills.into_iter().map(|skill| skill.key).collect();
 
     all_skills
         .into_iter()
-        .map(|skill| {
+        .map(|mut skill| {
             let state = resolve_skill_state_for_mode(
                 &skill,
                 mode_id,
@@ -206,6 +216,15 @@ pub fn build_mode_skill_infos(
                 disabled_project_skills,
             );
             let selected_for_runtime = resolved_keys.contains(&skill.key);
+            let mode_winner_key = state
+                .effective_enabled
+                .then(|| resolved_by_name.get(&skill.name))
+                .flatten()
+                .filter(|winner_key| **winner_key != skill.key)
+                .cloned();
+
+            skill.is_shadowed = mode_winner_key.is_some();
+            skill.shadowed_by_key = mode_winner_key;
 
             ModeSkillInfo {
                 skill,
@@ -279,6 +298,8 @@ mod tests {
                 path: path.to_string(),
                 level: SkillLocation::Project,
                 source_slot: String::new(),
+                source_id: String::new(),
+                source_label: String::new(),
                 dir_name: name.to_string(),
                 is_builtin: false,
                 group_key: None,

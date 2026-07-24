@@ -6,6 +6,10 @@ export function formatContextForPrompt(context: ContextItem): string {
       return `[File: ${context.relativePath || context.filePath}]`;
     case 'directory':
       return `[Directory: ${context.directoryPath}]`;
+    case 'session-reference':
+      // The backend materializes this context into a current-session artifact
+      // and injects the safe usage reminder at dispatch time.
+      return '';
     case 'code-snippet':
       return `[Code Snippet: ${context.filePath}:${context.startLine}-${context.endLine}]`;
     case 'pull-request':

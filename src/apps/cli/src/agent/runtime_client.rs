@@ -1,0 +1,729 @@
+//! CLI/TUI Agent Runtime SDK client.
+//!
+//! Keeps CLI session state while product operations remain behind portable
+//! Runtime SDK ports.
+//! Event consumption is NOT done here — it's done in the chat/exec mode main loops.
+
+use anyhow::Result;
+use std::path::{Path, PathBuf};
+use std::sync::{Arc, RwLock};
+use tokio::sync::Mutex;
+
+use bitfun_agent_runtime::sdk::{
+    AgentDialogTurnRequest, AgentRuntime, AgentSessionCreateRequest, AgentSessionDeleteRequest,
+    AgentSessionForkRequest, AgentSessionForkResult, AgentSessionListRequest,
+    AgentSessionModeUpdateRequest, AgentSessionModelUpdateRequest, AgentSessionRestoreRequest,
+    AgentSessionUsageRequest, AgentTurnCancellationRequest, AgentTurnSettlementRequest,
+    AgentUserAnswersRequest, PortErrorKind, RuntimeError, SessionTranscript,
+    SessionTranscriptRequest, SessionUsageReport, AUTO_APPROVE_ASK_CONTEXT_KEY,
+};
+use bitfun_agent_runtime::user_questions::USER_INPUT_AVAILABLE_CONTEXT_KEY;
+use bitfun_runtime_ports::{AgentSessionSummary, AgentSubmissionSource, DialogSubmissionPolicy};
+
+use crate::runtime::approval::CliApprovalPolicy;
+use crate::runtime::events::CliAgentEventSource;
+use crate::runtime::CliRuntimeContext;
+
+fn validated_session_summary(
+    sessions: &[AgentSessionSummary],
+    session_id: &str,
+    workspace_path: &Path,
+) -> Result<AgentSessionSummary> {
+    sessions
+        .iter()
+        .find(|summary| summary.session_id == session_id)
+        .cloned()
+        .ok_or_else(|| {
+            anyhow::anyhow!(
+                "Session {session_id} was not found in the current workspace: {}",
+                workspace_path.display()
+            )
+        })
+}
+
+fn cli_approval_metadata(
+    approval_policy: CliApprovalPolicy,
+) -> serde_json::Map<String, serde_json::Value> {
+    let mut metadata = serde_json::Map::new();
+    if matches!(
+        approval_policy,
+        CliApprovalPolicy::Reject | CliApprovalPolicy::Auto
+    ) {
+        metadata.insert(
+            USER_INPUT_AVAILABLE_CONTEXT_KEY.to_string(),
+            serde_json::Value::Bool(false),
+        );
+    }
+    let auto_approve_ask = match approval_policy {
+        CliApprovalPolicy::Ask => None,
+        CliApprovalPolicy::DisableAuto | CliApprovalPolicy::Reject => Some(false),
+        CliApprovalPolicy::Auto => Some(true),
+    };
+    if let Some(auto_approve_ask) = auto_approve_ask {
+        metadata.insert(
+            AUTO_APPROVE_ASK_CONTEXT_KEY.to_string(),
+            serde_json::Value::Bool(auto_approve_ask),
+        );
+    }
+    metadata
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) struct SessionModeMigrationNotice {
+    pub(crate) previous_mode_id: String,
+    pub(crate) restored_mode_id: String,
+}
+
+impl SessionModeMigrationNotice {
+    pub(crate) fn user_message(&self) -> String {
+        format!(
+            "Session mode \"{}\" is unavailable. This session was restored with \"{}\". Review the mode before continuing.",
+            self.previous_mode_id, self.restored_mode_id
+        )
+    }
+}
+
+fn session_mode_migration_notice(
+    previous: &AgentSessionSummary,
+    restored: &AgentSessionSummary,
+) -> Option<SessionModeMigrationNotice> {
+    (previous.agent_type != restored.agent_type).then(|| SessionModeMigrationNotice {
+        previous_mode_id: previous.agent_type.clone(),
+        restored_mode_id: restored.agent_type.clone(),
+    })
+}
+
+/// CLI-owned client for the portable Agent Runtime SDK.
+/// Stateless regarding agent_type; callers pass it per call.
+pub(crate) struct CliAgentRuntimeClient {
+    runtime: AgentRuntime,
+    event_source: CliAgentEventSource,
+    approval_policy: Arc<RwLock<CliApprovalPolicy>>,
+    workspace_path: Arc<RwLock<Option<PathBuf>>>,
+    /// Session ID — uses Mutex for interior mutability
+    session_id: Arc<Mutex<Option<String>>>,
+    /// Current turn ID (for cancellation)
+    current_turn_id: Arc<Mutex<Option<String>>>,
+}
+
+impl CliAgentRuntimeClient {
+    pub(crate) fn new(runtime: &CliRuntimeContext, workspace_path: Option<PathBuf>) -> Self {
+        Self {
+            runtime: runtime.agent_runtime().clone(),
+            event_source: runtime.agent_events().clone(),
+            approval_policy: Arc::new(RwLock::new(runtime.approval_policy())),
+            workspace_path: Arc::new(RwLock::new(workspace_path)),
+            session_id: Arc::new(Mutex::new(None)),
+            current_turn_id: Arc::new(Mutex::new(None)),
+        }
+    }
+
+    pub(crate) fn event_source(&self) -> &CliAgentEventSource {
+        &self.event_source
+    }
+
+    pub(crate) fn set_approval_policy(&self, policy: CliApprovalPolicy) {
+        *self
+            .approval_policy
+            .write()
+            .unwrap_or_else(|poisoned| poisoned.into_inner()) = policy;
+    }
+
+    pub(crate) fn approval_policy(&self) -> CliApprovalPolicy {
+        *self
+            .approval_policy
+            .read()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+    }
+
+    pub(crate) fn workspace_path_buf(&self) -> PathBuf {
+        self.workspace_path
+            .read()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .clone()
+            .or_else(|| std::env::current_dir().ok())
+            .unwrap_or_else(|| PathBuf::from("."))
+    }
+
+    pub(crate) fn workspace_path_string(&self) -> String {
+        self.workspace_path_buf().to_string_lossy().to_string()
+    }
+
+    fn current_workspace_path(&self) -> PathBuf {
+        self.workspace_path_buf()
+    }
+
+    async fn list_sessions_in_workspace(
+        &self,
+        workspace_path: &Path,
+    ) -> Result<Vec<AgentSessionSummary>> {
+        self.runtime
+            .list_sessions(AgentSessionListRequest {
+                workspace_path: workspace_path.to_string_lossy().to_string(),
+                remote_connection_id: None,
+                remote_ssh_host: None,
+            })
+            .await
+            .map_err(|error| anyhow::anyhow!(error.into_message()))
+    }
+
+    pub(crate) async fn list_sessions(&self) -> Result<Vec<AgentSessionSummary>> {
+        let workspace_path = self.current_workspace_path();
+        self.list_sessions_in_workspace(&workspace_path).await
+    }
+
+    pub(crate) async fn restore_session_in_current_workspace(
+        &self,
+        session_id: &str,
+    ) -> Result<(
+        AgentSessionSummary,
+        PathBuf,
+        Option<SessionModeMigrationNotice>,
+    )> {
+        tracing::info!("Restoring session: {}", session_id);
+
+        let effective_workspace = self.current_workspace_path();
+        let sessions = self
+            .list_sessions_in_workspace(&effective_workspace)
+            .await?;
+        let previous_summary =
+            validated_session_summary(&sessions, session_id, &effective_workspace)?;
+
+        let restored = self
+            .runtime
+            .restore_session(AgentSessionRestoreRequest {
+                workspace_path: effective_workspace.to_string_lossy().to_string(),
+                session_id: session_id.to_string(),
+                include_internal: false,
+                remote_connection_id: None,
+                remote_ssh_host: None,
+            })
+            .await
+            .map_err(|error| anyhow::anyhow!(error.into_message()))?;
+
+        let mut session_id_guard = self.session_id.lock().await;
+        let mut turn_id_guard = self.current_turn_id.lock().await;
+        let mut workspace_guard = self
+            .workspace_path
+            .write()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        *workspace_guard = Some(effective_workspace.clone());
+        *session_id_guard = Some(session_id.to_string());
+        *turn_id_guard = None;
+
+        let migration_notice = session_mode_migration_notice(&previous_summary, &restored.session);
+        Ok((restored.session, effective_workspace, migration_notice))
+    }
+
+    pub(crate) async fn delete_session(&self, session_id: &str) -> Result<()> {
+        self.runtime
+            .delete_session(AgentSessionDeleteRequest {
+                workspace_path: self.workspace_path_string(),
+                session_id: session_id.to_string(),
+                remote_connection_id: None,
+                remote_ssh_host: None,
+            })
+            .await
+            .map_err(|error| anyhow::anyhow!(error.into_message()))
+    }
+
+    pub(crate) async fn get_transcript(&self, session_id: &str) -> Result<SessionTranscript> {
+        self.runtime
+            .read_session_transcript(SessionTranscriptRequest {
+                session_id: session_id.to_string(),
+                turn_id: None,
+            })
+            .await
+            .map_err(|error| anyhow::anyhow!(error.into_message()))
+    }
+
+    pub(crate) async fn update_session_model(
+        &self,
+        session_id: &str,
+        model_id: &str,
+    ) -> Result<()> {
+        self.runtime
+            .update_session_model(AgentSessionModelUpdateRequest {
+                session_id: session_id.to_string(),
+                model_id: model_id.to_string(),
+            })
+            .await
+            .map_err(|error| anyhow::anyhow!(error.into_message()))
+    }
+
+    pub(crate) async fn update_session_mode(&self, session_id: &str, mode_id: &str) -> Result<()> {
+        self.runtime
+            .update_session_mode(AgentSessionModeUpdateRequest {
+                session_id: session_id.to_string(),
+                mode_id: mode_id.to_string(),
+            })
+            .await
+            .map_err(|error| anyhow::anyhow!(error.into_message()))
+    }
+
+    pub(crate) async fn branch_session_at_latest_turn(
+        &self,
+        source_session_id: &str,
+    ) -> Result<AgentSessionForkResult> {
+        self.runtime
+            .fork_session(AgentSessionForkRequest {
+                workspace_path: self.workspace_path_string(),
+                source_session_id: source_session_id.to_string(),
+                remote_connection_id: None,
+                remote_ssh_host: None,
+            })
+            .await
+            .map_err(|error| anyhow::anyhow!(error.into_message()))
+    }
+
+    pub(crate) async fn generate_session_usage_report(
+        &self,
+        request: AgentSessionUsageRequest,
+    ) -> Result<SessionUsageReport> {
+        self.runtime
+            .generate_session_usage(request)
+            .await
+            .map_err(|error| anyhow::anyhow!(error.into_message()))
+    }
+
+    pub(crate) async fn wait_for_turn_settlement(
+        &self,
+        session_id: &str,
+        turn_id: &str,
+        wait_timeout_ms: u64,
+    ) -> std::result::Result<(), RuntimeError> {
+        self.runtime
+            .wait_for_turn_settlement(AgentTurnSettlementRequest {
+                session_id: session_id.to_string(),
+                turn_id: turn_id.to_string(),
+                wait_timeout_ms,
+            })
+            .await
+    }
+
+    fn build_default_session_name() -> String {
+        format!(
+            "CLI Session - {}",
+            chrono::Local::now().format("%Y-%m-%d %H:%M:%S")
+        )
+    }
+
+    fn is_session_not_found_error(error: &RuntimeError) -> bool {
+        matches!(
+            error,
+            RuntimeError::Port(port_error) if port_error.kind == PortErrorKind::NotFound
+        )
+    }
+
+    async fn recreate_session_with_id(&self, session_id: &str, agent_type: &str) -> Result<()> {
+        let mut session_name = Self::build_default_session_name();
+        let mut effective_agent_type = agent_type.to_string();
+
+        let workspace = self.workspace_path_buf();
+        if let Ok(sessions) = self
+            .runtime
+            .list_sessions(AgentSessionListRequest {
+                workspace_path: workspace.to_string_lossy().to_string(),
+                remote_connection_id: None,
+                remote_ssh_host: None,
+            })
+            .await
+        {
+            if let Some(summary) = sessions.iter().find(|s| s.session_id == session_id) {
+                session_name = summary.session_name.clone();
+                effective_agent_type = summary.agent_type.clone();
+            }
+        }
+
+        self.runtime
+            .create_session_with_id(
+                session_id.to_string(),
+                AgentSessionCreateRequest {
+                    session_name,
+                    agent_type: effective_agent_type,
+                    workspace_path: Some(self.workspace_path_string()),
+                    workspace_id: None,
+                    remote_connection_id: None,
+                    remote_ssh_host: None,
+                    model_id: None,
+                    metadata: serde_json::Map::new(),
+                },
+            )
+            .await
+            .map_err(|error| anyhow::anyhow!(error.into_message()))?;
+
+        tracing::info!("Recreated backend session with existing id: {}", session_id);
+        Ok(())
+    }
+
+    async fn ensure_backend_session_alive(&self, session_id: &str, agent_type: &str) -> Result<()> {
+        let workspace = self.workspace_path_buf();
+        match self
+            .runtime
+            .restore_session(AgentSessionRestoreRequest {
+                workspace_path: workspace.to_string_lossy().to_string(),
+                session_id: session_id.to_string(),
+                include_internal: false,
+                remote_connection_id: None,
+                remote_ssh_host: None,
+            })
+            .await
+        {
+            Ok(_) => {
+                tracing::info!("Backend session restored: {}", session_id);
+                Ok(())
+            }
+            Err(error) => {
+                let session_not_found = Self::is_session_not_found_error(&error);
+                let message = error.into_message();
+                if session_not_found {
+                    tracing::warn!(
+                        "Session is unavailable, recreating backend session: {}",
+                        session_id
+                    );
+                    self.recreate_session_with_id(session_id, agent_type).await
+                } else {
+                    Err(anyhow::anyhow!(message))
+                }
+            }
+        }
+    }
+
+    pub(crate) async fn create_session_with_id(
+        &self,
+        session_id: String,
+        agent_type: &str,
+    ) -> Result<String> {
+        let mut session_id_guard = self.session_id.lock().await;
+
+        let session = self
+            .runtime
+            .create_session_with_id(
+                session_id,
+                AgentSessionCreateRequest {
+                    session_name: Self::build_default_session_name(),
+                    agent_type: agent_type.to_string(),
+                    workspace_path: Some(self.workspace_path_string()),
+                    workspace_id: None,
+                    remote_connection_id: None,
+                    remote_ssh_host: None,
+                    model_id: None,
+                    metadata: serde_json::Map::new(),
+                },
+            )
+            .await
+            .map_err(|error| anyhow::anyhow!(error.into_message()))?;
+
+        let id = session.session_id.clone();
+        *session_id_guard = Some(id.clone());
+        tracing::info!("Created runtime session with fixed id: {}", id);
+
+        Ok(id)
+    }
+}
+
+impl CliAgentRuntimeClient {
+    pub(crate) async fn ensure_session(&self, agent_type: &str) -> Result<String> {
+        let mut session_id_guard = self.session_id.lock().await;
+
+        if let Some(ref id) = *session_id_guard {
+            return Ok(id.clone());
+        }
+
+        let session = self
+            .runtime
+            .create_session(AgentSessionCreateRequest {
+                session_name: Self::build_default_session_name(),
+                agent_type: agent_type.to_string(),
+                workspace_path: Some(self.workspace_path_string()),
+                workspace_id: None,
+                remote_connection_id: None,
+                remote_ssh_host: None,
+                model_id: None,
+                metadata: serde_json::Map::new(),
+            })
+            .await
+            .map_err(|error| anyhow::anyhow!(error.into_message()))?;
+
+        let id = session.session_id.clone();
+
+        *session_id_guard = Some(id.clone());
+        tracing::info!("Created core session: {}", id);
+
+        Ok(id)
+    }
+
+    pub(crate) async fn send_message(&self, message: String, agent_type: &str) -> Result<String> {
+        let session_id = self.ensure_session(agent_type).await?;
+        tracing::info!("Sending message to session {}: {}", session_id, message);
+
+        // Generate a turn_id
+        let turn_id = uuid::Uuid::new_v4().to_string();
+
+        // Store current turn_id for cancellation
+        {
+            let mut turn_guard = self.current_turn_id.lock().await;
+            *turn_guard = Some(turn_id.clone());
+        }
+
+        // Start the dialog turn; events arrive through the shared broadcast source.
+        let metadata = cli_approval_metadata(self.approval_policy());
+        let request = AgentDialogTurnRequest {
+            session_id: session_id.clone(),
+            message: message.clone(),
+            original_message: None,
+            turn_id: Some(turn_id.clone()),
+            agent_type: agent_type.to_string(),
+            workspace_path: Some(self.workspace_path_string()),
+            remote_connection_id: None,
+            remote_ssh_host: None,
+            policy: DialogSubmissionPolicy::for_source(AgentSubmissionSource::Cli),
+            reply_route: None,
+            prepended_reminders: Vec::new(),
+            attachments: Vec::new(),
+            metadata,
+        };
+        let start_result = self.runtime.submit_dialog_turn(request.clone()).await;
+
+        if let Err(err) = start_result {
+            let session_not_found = Self::is_session_not_found_error(&err);
+            let error_message = err.into_message();
+            if session_not_found {
+                tracing::warn!(
+                    "Session missing when starting turn, attempting recovery and retry: session_id={}, error={}",
+                    session_id,
+                    error_message
+                );
+                self.ensure_backend_session_alive(&session_id, agent_type)
+                    .await?;
+                self.runtime
+                    .submit_dialog_turn(request)
+                    .await
+                    .map_err(|error| anyhow::anyhow!(error.into_message()))?;
+            } else {
+                return Err(anyhow::anyhow!(error_message));
+            }
+        }
+
+        Ok(turn_id)
+    }
+
+    pub(crate) async fn cancel_current_turn(&self) -> Result<()> {
+        let session_id = self.session_id.lock().await.clone();
+        let turn_id = self.current_turn_id.lock().await.clone();
+
+        if let (Some(session_id), Some(turn_id)) = (session_id, turn_id) {
+            tracing::info!("Cancelling turn: session={}, turn={}", session_id, turn_id);
+            self.runtime
+                .cancel_turn(AgentTurnCancellationRequest {
+                    session_id,
+                    turn_id: Some(turn_id.clone()),
+                    source: Some(AgentSubmissionSource::Cli),
+                    requester_session_id: None,
+                    reason: Some("user_cancelled".to_string()),
+                    wait_timeout_ms: None,
+                })
+                .await
+                .map_err(|error| anyhow::anyhow!(error.into_message()))?;
+
+            let mut turn_id_guard = self.current_turn_id.lock().await;
+            if turn_id_guard.as_deref() == Some(turn_id.as_str()) {
+                *turn_id_guard = None;
+            }
+        }
+
+        Ok(())
+    }
+
+    pub(crate) async fn create_new_session(&self, agent_type: &str) -> Result<String> {
+        let mut session_id_guard = self.session_id.lock().await;
+
+        let session = self
+            .runtime
+            .create_session(AgentSessionCreateRequest {
+                session_name: Self::build_default_session_name(),
+                agent_type: agent_type.to_string(),
+                workspace_path: Some(self.workspace_path_string()),
+                workspace_id: None,
+                remote_connection_id: None,
+                remote_ssh_host: None,
+                model_id: None,
+                metadata: serde_json::Map::new(),
+            })
+            .await
+            .map_err(|error| anyhow::anyhow!(error.into_message()))?;
+
+        let id = session.session_id.clone();
+
+        *session_id_guard = Some(id.clone());
+        tracing::info!("Created new core session: {}", id);
+
+        Ok(id)
+    }
+
+    pub(crate) async fn restore_session(&self, session_id: &str) -> Result<()> {
+        self.restore_session_in_current_workspace(session_id)
+            .await?;
+        Ok(())
+    }
+
+    pub(crate) async fn submit_user_answers(
+        &self,
+        tool_id: &str,
+        answers: serde_json::Value,
+    ) -> Result<()> {
+        tracing::info!("Submitting user answers for tool: {}", tool_id);
+        self.runtime
+            .submit_user_answers(AgentUserAnswersRequest {
+                tool_id: tool_id.to_string(),
+                answers,
+            })
+            .await
+            .map_err(|e| anyhow::anyhow!("Submit user answers failed: {}", e.into_message()))
+    }
+}
+
+#[cfg(test)]
+mod recovery_tests {
+    use bitfun_agent_runtime::sdk::{PortError, PortErrorKind, RuntimeError};
+
+    use super::CliAgentRuntimeClient;
+
+    #[test]
+    fn session_recovery_requires_structured_not_found_error() {
+        let missing_session =
+            RuntimeError::Port(PortError::new(PortErrorKind::NotFound, "session not found"));
+        let unrelated_backend_error =
+            RuntimeError::Port(PortError::new(PortErrorKind::Backend, "model not found"));
+
+        assert!(CliAgentRuntimeClient::is_session_not_found_error(
+            &missing_session
+        ));
+        assert!(!CliAgentRuntimeClient::is_session_not_found_error(
+            &unrelated_backend_error
+        ));
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::path::Path;
+
+    use bitfun_runtime_ports::AgentSessionSummary;
+
+    use bitfun_agent_runtime::sdk::AUTO_APPROVE_ASK_CONTEXT_KEY;
+    use bitfun_agent_runtime::user_questions::USER_INPUT_AVAILABLE_CONTEXT_KEY;
+
+    use crate::runtime::approval::CliApprovalPolicy;
+
+    use super::{cli_approval_metadata, session_mode_migration_notice, validated_session_summary};
+
+    #[test]
+    fn cli_approval_metadata_keeps_auto_invocation_scoped() {
+        let auto = cli_approval_metadata(CliApprovalPolicy::Auto);
+        assert_eq!(auto[AUTO_APPROVE_ASK_CONTEXT_KEY], true);
+        assert_eq!(auto[USER_INPUT_AVAILABLE_CONTEXT_KEY], false);
+
+        let reject = cli_approval_metadata(CliApprovalPolicy::Reject);
+        assert_eq!(reject[AUTO_APPROVE_ASK_CONTEXT_KEY], false);
+
+        let ask = cli_approval_metadata(CliApprovalPolicy::Ask);
+        assert!(!ask.contains_key(AUTO_APPROVE_ASK_CONTEXT_KEY));
+        assert!(!ask.contains_key(USER_INPUT_AVAILABLE_CONTEXT_KEY));
+
+        let disabled = cli_approval_metadata(CliApprovalPolicy::DisableAuto);
+        assert_eq!(disabled[AUTO_APPROVE_ASK_CONTEXT_KEY], false);
+        assert!(!disabled.contains_key(USER_INPUT_AVAILABLE_CONTEXT_KEY));
+    }
+
+    #[test]
+    fn model_updates_use_the_runtime_sdk_without_the_core_compatibility_facade() {
+        let source = include_str!("runtime_client.rs").replace("\r\n", "\n");
+        let runtime_update = ["self.runtime", "\n            .update_session_model"].concat();
+        let compatibility_update =
+            ["self.compatibility", "\n            .update_session_model"].concat();
+
+        assert!(source.contains(&runtime_update));
+        assert!(!source.contains(&compatibility_update));
+    }
+
+    #[test]
+    fn mode_updates_use_the_runtime_sdk_without_the_core_compatibility_facade() {
+        let source = include_str!("runtime_client.rs").replace("\r\n", "\n");
+        let runtime_update = ["self.runtime", "\n            .update_session_mode"].concat();
+        let compatibility_update = [
+            "self.compatibility",
+            "\n            .update_session_agent_type",
+        ]
+        .concat();
+
+        assert!(source.contains(&runtime_update));
+        assert!(!source.contains(&compatibility_update));
+    }
+
+    fn session_summary(session_id: &str) -> AgentSessionSummary {
+        AgentSessionSummary {
+            session_id: session_id.to_string(),
+            session_name: "Workspace session".to_string(),
+            agent_type: "agentic".to_string(),
+            model_id: None,
+            last_user_dialog_agent_type: None,
+            last_submitted_agent_type: None,
+            turn_count: 1,
+            created_at_ms: 1,
+            last_active_at_ms: 2,
+        }
+    }
+
+    #[test]
+    fn workspace_restore_validation_accepts_listed_session() {
+        let sessions = vec![session_summary("session-in-workspace")];
+
+        let summary = validated_session_summary(
+            &sessions,
+            "session-in-workspace",
+            Path::new("D:/workspace/current"),
+        )
+        .expect("listed session should be restorable");
+
+        assert_eq!(summary.session_id, "session-in-workspace");
+    }
+
+    #[test]
+    fn workspace_restore_validation_rejects_session_outside_current_workspace() {
+        let sessions = vec![session_summary("different-session")];
+
+        let error = validated_session_summary(
+            &sessions,
+            "session-from-another-workspace",
+            Path::new("D:/workspace/current"),
+        )
+        .expect_err("a session absent from the workspace-scoped list must be rejected");
+
+        let message = error.to_string();
+        assert!(message.contains("session-from-another-workspace"));
+        assert!(message.contains("D:/workspace/current"));
+    }
+
+    #[test]
+    fn restore_reports_a_cli_local_notice_when_core_migrates_the_mode() {
+        let previous = AgentSessionSummary {
+            agent_type: "removed-mode".to_string(),
+            ..session_summary("mode-migration")
+        };
+        let restored = session_summary("mode-migration");
+
+        let notice = session_mode_migration_notice(&previous, &restored)
+            .expect("changed mode should be reported to the TUI");
+
+        assert_eq!(notice.previous_mode_id, "removed-mode");
+        assert_eq!(notice.restored_mode_id, "agentic");
+    }
+
+    #[test]
+    fn restore_does_not_report_a_notice_when_the_mode_is_unchanged() {
+        let summary = session_summary("unchanged-mode");
+
+        assert!(session_mode_migration_notice(&summary, &summary).is_none());
+    }
+}

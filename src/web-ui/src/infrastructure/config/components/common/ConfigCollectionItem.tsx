@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useId, useState } from 'react';
+import { ChevronDown } from 'lucide-react';
 import './ConfigCollectionItem.scss';
 
 export interface ConfigCollectionItemProps extends React.HTMLAttributes<HTMLDivElement> {
@@ -26,12 +27,14 @@ export const ConfigCollectionItem: React.FC<ConfigCollectionItemProps> = ({
   ...rootProps
 }) => {
   const [internalExpanded, setInternalExpanded] = useState(false);
+  const labelId = useId();
+  const detailsId = useId();
   const isControlled = expandedProp !== undefined;
   const isExpanded = isControlled ? expandedProp : internalExpanded;
   const hasDetails = Boolean(details);
 
-  const handleRowClick = () => {
-    if (!hasDetails) return;
+  const toggleDetails = () => {
+    if (!hasDetails || disabled) return;
     if (isControlled) {
       onToggle?.();
     } else {
@@ -44,17 +47,14 @@ export const ConfigCollectionItem: React.FC<ConfigCollectionItemProps> = ({
       {...rootProps}
       className={`bitfun-collection-item ${isExpanded ? 'is-expanded' : ''} ${disabled ? 'is-disabled' : ''} ${className}`}
     >
-      <div
-        className={`bitfun-config-page-row bitfun-config-page-row--center bitfun-collection-item__row ${hasDetails ? 'is-clickable' : ''}`}
-        onClick={handleRowClick}
-      >
+      <div className="bitfun-config-page-row bitfun-config-page-row--center bitfun-collection-item__row">
         <div className="bitfun-config-page-row__meta">
           <div
             className={`bitfun-config-page-row__label bitfun-collection-item__label ${
               badgePlacement === 'below' ? 'bitfun-collection-item__label--stacked' : ''
             }`}
           >
-            <span className="bitfun-collection-item__name">{label}</span>
+            <span id={labelId} className="bitfun-collection-item__name">{label}</span>
             {badge && (
               <span
                 className={`bitfun-collection-item__badges ${
@@ -68,16 +68,28 @@ export const ConfigCollectionItem: React.FC<ConfigCollectionItemProps> = ({
             )}
           </div>
         </div>
-        <div
-          className="bitfun-config-page-row__control"
-          onClick={(e) => e.stopPropagation()}
-        >
-          <div className="bitfun-collection-item__control">{control}</div>
+        <div className="bitfun-config-page-row__control">
+          <div className="bitfun-collection-item__control">
+            {control}
+            {hasDetails ? (
+              <button
+                type="button"
+                className="bitfun-collection-btn bitfun-collection-item__details-toggle"
+                onClick={toggleDetails}
+                disabled={disabled}
+                aria-labelledby={labelId}
+                aria-expanded={isExpanded}
+                aria-controls={detailsId}
+              >
+                <ChevronDown size={14} aria-hidden="true" />
+              </button>
+            ) : null}
+          </div>
         </div>
       </div>
 
       {isExpanded && details && (
-        <div className="bitfun-collection-item__details">{details}</div>
+        <div id={detailsId} className="bitfun-collection-item__details">{details}</div>
       )}
     </div>
   );

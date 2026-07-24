@@ -7,11 +7,13 @@ export const STATIC_HIDDEN_AGENT_IDS = new Set<string>([
 
 export const FALLBACK_REVIEW_HIDDEN_AGENT_IDS = new Set<string>([
   'DeepReview',
+  'ReviewWorker',
   'ReviewBusinessLogic',
   'ReviewPerformance',
   'ReviewSecurity',
   'ReviewArchitecture',
   'ReviewFrontend',
+  'ReviewGeneral',
   'ReviewJudge',
 ]);
 
@@ -31,4 +33,11 @@ export function isAgentInOverviewZone(
   hiddenAgentIds: ReadonlySet<string> = HIDDEN_AGENT_IDS,
 ): boolean {
   return !hiddenAgentIds.has(agent.id) && !CORE_AGENT_IDS.has(agent.id);
+}
+
+/** External subagents are visible in the overview but managed by their source adapter. */
+export function isLocallyManageableSubagent(
+  subagent: { source?: string | null; subagentSource?: string | null },
+): boolean {
+  return (subagent.subagentSource ?? subagent.source) !== 'external';
 }

@@ -4,7 +4,9 @@
 
 use crate::util::errors::*;
 use async_trait::async_trait;
+use bitfun_runtime_ports::{PermissionRule, ToolPermissionConfig};
 use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
 use std::collections::HashMap;
 
 fn deserialize_agent_profiles<'de, D>(
@@ -54,6 +56,9 @@ pub struct GlobalConfig {
     pub terminal: TerminalConfig,
     pub workspace: WorkspaceConfig,
     pub ai: AIConfig,
+    /// User-level static tool permission policy and interaction preferences.
+    #[serde(default)]
+    pub tool_permissions: ToolPermissionConfig,
     #[serde(default)]
     pub memories: MemoriesConfig,
     /// Project-scoped overlays stored in the shared config document.
@@ -119,10 +124,80 @@ pub struct AppConfig {
     /// the frontend owns the versioned format (StoredKeybindingsV1).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub keybindings: Option<serde_json::Value>,
+    /// Global, user-defined groups used to organize Agent tool pickers.
+    #[serde(default, skip_serializing_if = "UserToolGroupsConfig::is_empty")]
+    pub user_tool_groups: UserToolGroupsConfig,
+    /// Global, user-defined groups used to organize Skill pickers.
+    #[serde(default, skip_serializing_if = "UserSkillGroupsConfig::is_empty")]
+    pub user_skill_groups: UserSkillGroupsConfig,
     /// What happens when the window close button is clicked on Windows / Linux.
     /// Allowed values: "quit" | "minimize_to_tray" | "ask".
     #[serde(default = "default_close_button_behavior")]
     pub close_button_behavior: String,
+}
+
+/// Versioned user preference for grouping selectable Agent tools in the UI.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct UserToolGroupsConfig {
+    pub version: u32,
+    pub groups: Vec<UserToolGroup>,
+}
+
+impl UserToolGroupsConfig {
+    pub fn is_empty(&self) -> bool {
+        self.groups.is_empty()
+    }
+}
+
+impl Default for UserToolGroupsConfig {
+    fn default() -> Self {
+        Self {
+            version: 1,
+            groups: Vec::new(),
+        }
+    }
+}
+
+/// A user-defined group of canonical tool names.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct UserToolGroup {
+    pub id: String,
+    pub name: String,
+    pub tool_names: Vec<String>,
+}
+
+/// Versioned user preference for grouping selectable Skills in the UI.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct UserSkillGroupsConfig {
+    pub version: u32,
+    pub groups: Vec<UserSkillGroup>,
+}
+
+impl UserSkillGroupsConfig {
+    pub fn is_empty(&self) -> bool {
+        self.groups.is_empty()
+    }
+}
+
+impl Default for UserSkillGroupsConfig {
+    fn default() -> Self {
+        Self {
+            version: 1,
+            groups: Vec::new(),
+        }
+    }
+}
+
+/// A user-defined group of stable Skill keys.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct UserSkillGroup {
+    pub id: String,
+    pub name: String,
+    pub skill_keys: Vec<String>,
 }
 
 /// App logging configuration.
@@ -628,17 +703,14 @@ pub struct AIConfig {
     #[serde(default = "default_tool_execution_timeout")]
     pub tool_execution_timeout_secs: Option<u64>,
 
-    /// Tool confirmation timeout in seconds; `None` means wait indefinitely.
-    #[serde(default = "default_tool_confirmation_timeout")]
-    pub tool_confirmation_timeout_secs: Option<u64>,
-
-    /// Skip tool execution confirmation (global, applies to all modes).
-    #[serde(default = "default_skip_tool_confirmation")]
-    pub skip_tool_confirmation: bool,
-
     /// Whether tools with deferred exposure load their schemas on demand.
     #[serde(default = "default_enable_deferred_tool_loading")]
     pub enable_deferred_tool_loading: bool,
+
+    /// Allows broad JSON repair for non-Write tool arguments only after a
+    /// provider confirms a normal tool-use completion.
+    #[serde(default = "default_true")]
+    pub allow_tool_json_repair: bool,
 
     /// Debug-mode configuration (log path, language templates, etc.).
     #[serde(default)]
@@ -815,6 +887,10 @@ pub struct AgentProfileConfig {
     /// User-level subagent availability overrides for this shared profile.
     #[serde(default, skip_serializing_if = "HashMap::is_empty")]
     pub subagent_overrides: ParentSubagentOverrideConfig,
+
+    /// Agent-level permission rules applied after project rules.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub tool_permission_rules: Vec<PermissionRule>,
 }
 
 /// API view of a mode configuration.
@@ -847,15 +923,6 @@ fn default_stream_ttft_timeout() -> Option<u64> {
 /// Default is no timeout (wait forever).
 fn default_tool_execution_timeout() -> Option<u64> {
     None
-}
-
-/// Default is no timeout (wait forever).
-fn default_tool_confirmation_timeout() -> Option<u64> {
-    None
-}
-
-fn default_skip_tool_confirmation() -> bool {
-    true
 }
 
 fn default_enable_deferred_tool_loading() -> bool {
@@ -1155,6 +1222,30 @@ pub enum AgentSubagentOverrideState {
 pub type ParentSubagentOverrideConfig = HashMap<String, AgentSubagentOverrideState>;
 pub type AgentSubagentOverrideConfig = HashMap<String, ParentSubagentOverrideConfig>;
 
+pub const DEFAULT_MODEL_CONTEXT_WINDOW_TOKENS: u32 = 128_128;
+pub const MIN_MODEL_CONTEXT_WINDOW_TOKENS: u32 = 32_000;
+pub const MAX_CONFIGURED_OUTPUT_TOKENS_RATIO_PERCENT: u32 = 40;
+const AUTOMATIC_MAX_OUTPUT_TOKEN_TIERS: [u32; 5] = [8_000, 16_000, 24_000, 32_000, 64_000];
+
+/// Chooses the largest supported output tier that does not exceed one quarter
+/// of the model context window.
+pub fn automatic_max_output_tokens(context_window: u32) -> u32 {
+    let quarter_context = context_window / 4;
+    AUTOMATIC_MAX_OUTPUT_TOKEN_TIERS
+        .iter()
+        .rev()
+        .copied()
+        .find(|tier| *tier <= quarter_context)
+        .unwrap_or(quarter_context)
+}
+
+/// A configured output cap may use up to 40% of the model context window.
+pub fn is_valid_configured_max_output_tokens(context_window: u32, max_tokens: u32) -> bool {
+    max_tokens > 0
+        && u64::from(max_tokens) * 100
+            <= u64::from(context_window) * u64::from(MAX_CONFIGURED_OUTPUT_TOKENS_RATIO_PERCENT)
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default, from = "AIModelConfigCompat")]
 pub struct AIModelConfig {
@@ -1172,7 +1263,8 @@ pub struct AIModelConfig {
     pub api_key: String,
     /// Context window size (total token limit for input + output).
     pub context_window: Option<u32>,
-    /// Max output tokens (request parameter limiting model output length).
+    /// Optional advanced override for the request output limit. When absent,
+    /// BitFun derives a tiered limit from the context window at runtime.
     pub max_tokens: Option<u32>,
     pub temperature: Option<f64>,
     pub top_p: Option<f64>,
@@ -1243,22 +1335,66 @@ pub struct AIModelConfig {
     pub auth: AuthConfig,
 }
 
+/// Stable identity of the runtime-affecting parts of a concrete model config.
+///
+/// Credentials are deliberately excluded: rotating a secret must not require
+/// the user to approve the same provider/model again. Endpoint, provider,
+/// model, request options, and authentication source remain part of the
+/// identity so an approved binding cannot silently drift to different runtime
+/// behavior while retaining the same config id.
+pub fn model_runtime_binding_fingerprint(model: &AIModelConfig) -> String {
+    let mut value = serde_json::to_value(model).unwrap_or(serde_json::Value::Null);
+    if let serde_json::Value::Object(fields) = &mut value {
+        fields.remove("api_key");
+    }
+
+    fn canonicalize(value: serde_json::Value) -> serde_json::Value {
+        match value {
+            serde_json::Value::Object(fields) => {
+                let mut entries = fields.into_iter().collect::<Vec<_>>();
+                entries.sort_by(|left, right| left.0.cmp(&right.0));
+                serde_json::Value::Object(
+                    entries
+                        .into_iter()
+                        .map(|(key, value)| (key, canonicalize(value)))
+                        .collect(),
+                )
+            }
+            serde_json::Value::Array(values) => {
+                serde_json::Value::Array(values.into_iter().map(canonicalize).collect())
+            }
+            value => value,
+        }
+    }
+
+    let canonical = serde_json::to_vec(&canonicalize(value)).unwrap_or_default();
+    let mut hasher = Sha256::new();
+    hasher.update(canonical);
+    hex::encode(hasher.finalize())
+}
+
+/// Subscription provider whose in-app OAuth tokens authenticate a model.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SubscriptionProvider {
+    Codex,
+    Antigravity,
+    Opencode,
+}
+
 /// Where to obtain the runtime auth material for an `AIModelConfig`.
 ///
-/// Stored on disk as `{"type":"api_key"}` / `{"type":"codex_cli"}` /
-/// `{"type":"gemini_cli"}`; the concrete sub-mode (apikey vs OAuth) is
-/// auto-detected from the CLI's on-disk state at resolution time so the user
-/// only has to choose "use Codex CLI" once.
+/// Stored on disk as `{"type":"api_key"}` or
+/// `{"type":"subscription","provider":"codex"|"antigravity"|"opencode"}`.
+/// Tokens live in the subscription auth store and are resolved at request time.
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum AuthConfig {
-    /// Use the inline `api_key` string (default; legacy behavior).
+    /// Use the inline `api_key` string (default).
     #[default]
     ApiKey,
-    /// Reuse `~/.codex/auth.json` (apikey or ChatGPT-login).
-    CodexCli,
-    /// Reuse `~/.gemini/.env` or `~/.gemini/oauth_creds.json`.
-    GeminiCli,
+    /// Use BitFun in-app subscription OAuth for the named provider.
+    Subscription { provider: SubscriptionProvider },
 }
 
 #[derive(Debug, Clone, Deserialize, Default)]
@@ -1291,8 +1427,16 @@ struct AIModelConfigCompat {
     thinking_budget_tokens: Option<u32>,
     custom_request_body: Option<String>,
     custom_request_body_mode: Option<String>,
+    /// Parsed flexibly so unknown legacy auth tags fall back to ApiKey.
     #[serde(default)]
-    auth: AuthConfig,
+    auth: Option<serde_json::Value>,
+}
+
+fn parse_auth_config(value: Option<serde_json::Value>) -> AuthConfig {
+    match value {
+        None => AuthConfig::ApiKey,
+        Some(raw) => serde_json::from_value(raw).unwrap_or(AuthConfig::ApiKey),
+    }
 }
 
 impl From<AIModelConfigCompat> for AIModelConfig {
@@ -1334,7 +1478,7 @@ impl From<AIModelConfigCompat> for AIModelConfig {
             thinking_budget_tokens: value.thinking_budget_tokens,
             custom_request_body: value.custom_request_body,
             custom_request_body_mode: value.custom_request_body_mode,
-            auth: value.auth,
+            auth: parse_auth_config(value.auth),
         }
     }
 }
@@ -1425,6 +1569,7 @@ impl Default for GlobalConfig {
             ai: AIConfig::default(),
             memories: MemoriesConfig::default(),
             project: ProjectConfig::default(),
+            tool_permissions: ToolPermissionConfig::default(),
             mcp_servers: None,
             acp_clients: None,
             themes: Some(ThemesConfig::default()),
@@ -1464,6 +1609,8 @@ impl Default for AppConfig {
             flow_chat: AppFlowChatConfig::default(),
             ai_experience: AIExperienceConfig::default(),
             keybindings: None,
+            user_tool_groups: UserToolGroupsConfig::default(),
+            user_skill_groups: UserSkillGroupsConfig::default(),
             close_button_behavior: default_close_button_behavior(),
         }
     }
@@ -1612,9 +1759,8 @@ impl Default for AIConfig {
             stream_idle_timeout_secs: default_stream_idle_timeout(),
             stream_ttft_timeout_secs: default_stream_ttft_timeout(),
             tool_execution_timeout_secs: default_tool_execution_timeout(),
-            tool_confirmation_timeout_secs: default_tool_confirmation_timeout(),
-            skip_tool_confirmation: true,
             enable_deferred_tool_loading: default_enable_deferred_tool_loading(),
+            allow_tool_json_repair: true,
             debug_mode_config: DebugModeConfig::default(),
             computer_use_enabled: false,
             browser_control_preferred_browser: String::new(),
@@ -1858,8 +2004,9 @@ mod tests {
         AIConfig, AIExperienceConfig, AIModelConfig, AgentModelDefaultsConfig, AgentProfileConfig,
         AgentProfileView, AppLoggingConfig, GlobalConfig, MemoryExternalContextPolicy,
         ModelExchangeTracingMode, ReasoningMode, SubagentBatchExecutionPolicy,
-        SubagentModelSelection,
+        SubagentModelSelection, UserSkillGroupsConfig, UserToolGroupsConfig,
     };
+    use bitfun_runtime_ports::ToolPermissionConfig;
 
     #[test]
     fn agent_profile_defaults_keep_all_collections_empty() {
@@ -1870,6 +2017,7 @@ mod tests {
         assert!(config.disabled_user_skills.is_empty());
         assert!(config.enabled_user_skills.is_empty());
         assert!(config.subagent_overrides.is_empty());
+        assert!(config.tool_permission_rules.is_empty());
 
         let view = AgentProfileView::default();
         assert!(view.profile_id.is_empty());
@@ -1877,6 +2025,109 @@ mod tests {
         assert!(view.default_tools.is_empty());
         assert!(view.disabled_user_skills.is_empty());
         assert!(view.enabled_user_skills.is_empty());
+    }
+
+    #[test]
+    fn legacy_agent_profile_defaults_permission_rules_and_omits_empty_field() {
+        let config: AgentProfileConfig = serde_json::from_value(serde_json::json!({
+            "profile_id": "coding_shared",
+            "added_tools": ["read"]
+        }))
+        .expect("legacy agent profile should deserialize");
+
+        assert!(config.tool_permission_rules.is_empty());
+        let serialized = serde_json::to_value(config).expect("agent profile should serialize");
+        assert!(serialized.get("tool_permission_rules").is_none());
+    }
+
+    #[test]
+    fn legacy_global_config_defaults_permission_settings() {
+        let config: GlobalConfig = serde_json::from_value(serde_json::json!({}))
+            .expect("legacy config should deserialize with permission defaults");
+
+        assert_eq!(config.tool_permissions, ToolPermissionConfig::default());
+    }
+
+    #[test]
+    fn user_tool_groups_default_to_version_one_without_persisted_groups() {
+        let config: GlobalConfig = serde_json::from_value(serde_json::json!({}))
+            .expect("legacy global config should deserialize");
+        assert_eq!(config.app.user_tool_groups, UserToolGroupsConfig::default());
+
+        let serialized = serde_json::to_value(&config).expect("config should serialize");
+        assert!(serialized["app"].get("user_tool_groups").is_none());
+    }
+
+    #[test]
+    fn user_tool_groups_preserve_the_versioned_ui_shape() {
+        let config: GlobalConfig = serde_json::from_value(serde_json::json!({
+            "app": {
+                "user_tool_groups": {
+                    "version": 1,
+                    "groups": [{
+                        "id": "daily-code",
+                        "name": "Daily code changes",
+                        "toolNames": ["Read", "Edit"]
+                    }]
+                }
+            }
+        }))
+        .expect("user tool groups should deserialize");
+
+        assert_eq!(
+            config.app.user_tool_groups.groups[0].tool_names,
+            vec!["Read".to_string(), "Edit".to_string()]
+        );
+
+        let serialized = serde_json::to_value(&config).expect("config should serialize");
+        assert_eq!(
+            serialized["app"]["user_tool_groups"]["groups"][0]["toolNames"],
+            serde_json::json!(["Read", "Edit"])
+        );
+    }
+
+    #[test]
+    fn user_skill_groups_default_to_version_one_without_persisted_groups() {
+        let config: GlobalConfig = serde_json::from_value(serde_json::json!({}))
+            .expect("legacy global config should deserialize");
+        assert_eq!(
+            config.app.user_skill_groups,
+            UserSkillGroupsConfig::default()
+        );
+
+        let serialized = serde_json::to_value(&config).expect("config should serialize");
+        assert!(serialized["app"].get("user_skill_groups").is_none());
+    }
+
+    #[test]
+    fn user_skill_groups_preserve_the_versioned_ui_shape() {
+        let config: GlobalConfig = serde_json::from_value(serde_json::json!({
+            "app": {
+                "user_skill_groups": {
+                    "version": 1,
+                    "groups": [{
+                        "id": "daily-coding",
+                        "name": "Daily coding",
+                        "skillKeys": ["builtin::find-skills", "user::review"]
+                    }]
+                }
+            }
+        }))
+        .expect("user skill groups should deserialize");
+
+        assert_eq!(
+            config.app.user_skill_groups.groups[0].skill_keys,
+            vec![
+                "builtin::find-skills".to_string(),
+                "user::review".to_string()
+            ]
+        );
+
+        let serialized = serde_json::to_value(&config).expect("config should serialize");
+        assert_eq!(
+            serialized["app"]["user_skill_groups"]["groups"][0]["skillKeys"],
+            serde_json::json!(["builtin::find-skills", "user::review"])
+        );
     }
 
     #[test]
@@ -2176,6 +2427,7 @@ mod tests {
         assert_eq!(config.stream_idle_timeout_secs, Some(600));
         assert_eq!(config.stream_ttft_timeout_secs, Some(600));
         assert!(config.enable_deferred_tool_loading);
+        assert!(config.allow_tool_json_repair);
         assert_eq!(config.subagent_max_concurrency, 5);
         assert_eq!(
             config.subagent_batch_execution_policy,
@@ -2347,12 +2599,31 @@ mod tests {
 
         assert_eq!(config.stream_idle_timeout_secs, Some(600));
         assert_eq!(config.stream_ttft_timeout_secs, Some(600));
+        assert!(config.allow_tool_json_repair);
         assert_eq!(config.subagent_max_concurrency, 5);
         assert_eq!(
             config.subagent_batch_execution_policy,
             SubagentBatchExecutionPolicy::ForceParallel
         );
         assert!(config.review_teams.contains_key("default"));
+    }
+
+    #[test]
+    fn preserves_explicit_disabled_tool_json_repair() {
+        let config: AIConfig = serde_json::from_value(serde_json::json!({
+            "models": [],
+            "func_agent_models": {},
+            "default_models": {},
+            "agent_profiles": {},
+            "allow_tool_json_repair": false,
+            "proxy": {
+                "enabled": false,
+                "url": ""
+            }
+        }))
+        .expect("config with an explicit JSON repair setting should deserialize");
+
+        assert!(!config.allow_tool_json_repair);
     }
 
     #[test]

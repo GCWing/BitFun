@@ -28,8 +28,15 @@ fn legacy_library_path_exposes_supported_relay_api() {
         start_time: Instant::now(),
         asset_store: Arc::new(MemoryAssetStore::new()),
         db: None,
+        page_data: None,
+        page_access_manager: Arc::new(routes::pages::PageAccessManager::new()),
+        page_upload_manager: Arc::new(routes::pages::PageUploadManager::new()),
+        page_execution_guard: Arc::new(
+            bitfun_relay_server::page_execution::PageExecutionGuard::new(),
+        ),
         login_rate_limiter: Arc::new(routes::auth::LoginRateLimiter::new()),
         device_manager: relay::DeviceManager::new(),
+        cors_allow_origins: Arc::new(Vec::new()),
     };
 
     fn require_store<T: WebAssetStore>() {}

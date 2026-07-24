@@ -56,4 +56,9 @@ impl SessionContextStore {
         self.session_contexts.remove(session_id);
         debug!("Deleted session context cache: session_id={}", session_id);
     }
+
+    #[cfg(test)]
+    pub(crate) fn has_session(&self, session_id: &str) -> bool {
+        self.session_contexts.contains_key(session_id)
+    }
 }

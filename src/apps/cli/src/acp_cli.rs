@@ -52,9 +52,12 @@ impl ExternalAcpClient {
             Self::Opencode => ("opencode", vec!["acp"]),
             Self::ClaudeCode => (
                 "npx",
-                vec!["--yes", "@zed-industries/claude-code-acp@latest"],
+                vec!["--yes", "@agentclientprotocol/claude-agent-acp@latest"],
             ),
-            Self::Codex => ("npx", vec!["--yes", "@zed-industries/codex-acp@latest"]),
+            Self::Codex => (
+                "npx",
+                vec!["--yes", "@agentclientprotocol/codex-acp@latest"],
+            ),
         };
         AcpClientConfig {
             name: Some(self.display_name().to_string()),
@@ -260,8 +263,8 @@ pub(crate) async fn list_external_clients() -> Result<()> {
     }
 
     println!();
-    println!("Enable a built-in client with `bitfun-cli acp clients enable opencode`.");
-    println!("Run a prompt with `bitfun-cli acp run opencode \"your task\"`.");
+    println!("Enable a built-in client with `bitfun acp clients enable opencode`.");
+    println!("Run a prompt with `bitfun acp run opencode \"your task\"`.");
     Ok(())
 }
 

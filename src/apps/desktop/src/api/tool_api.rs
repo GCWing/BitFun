@@ -63,7 +63,6 @@ pub struct ToolInfo {
     pub input_schema: serde_json::Value,
     pub is_readonly: bool,
     pub is_concurrency_safe: bool,
-    pub needs_permissions: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub dynamic_info: Option<DynamicToolInfo>,
 }
@@ -93,29 +92,6 @@ pub struct ToolValidationResponse {
     pub message: Option<String>,
     pub error_code: Option<i32>,
     pub meta: Option<serde_json::Value>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct ToolConfirmationRequest {
-    #[serde(alias = "tool_use_id")]
-    pub tool_use_id: String,
-    #[serde(alias = "tool_name")]
-    pub tool_name: String,
-    pub action: String,
-    #[serde(alias = "task_id")]
-    pub task_id: Option<String>,
-    #[serde(alias = "updated_input")]
-    pub updated_input: Option<serde_json::Value>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct ToolConfirmationResponse {
-    #[serde(alias = "tool_use_id")]
-    pub tool_use_id: String,
-    pub success: bool,
-    pub message: String,
 }
 
 async fn build_tool_context(workspace_path: Option<&str>) -> ToolUseContext {
@@ -221,7 +197,6 @@ async fn build_tool_info(tool: &Arc<dyn bitfun_core::agentic::tools::framework::
         input_schema: tool.input_schema_for_model().await,
         is_readonly: tool.is_readonly(),
         is_concurrency_safe: tool.is_concurrency_safe(None),
-        needs_permissions: tool.needs_permissions(None),
         dynamic_info: tool.dynamic_tool_info().map(to_dynamic_tool_info),
     }
 }

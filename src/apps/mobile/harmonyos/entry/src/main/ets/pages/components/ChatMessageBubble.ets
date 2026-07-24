@@ -47,7 +47,7 @@ export struct ChatMessageBubble {
   @Prop downloadingFilePath: string = '';
   @Prop downloadedFilePath: string = '';
   @Prop fileDownloadStatus: string = '';
-  onApproveTool: (toolId: string, updatedInput?: Object) => void = (_toolId: string, _updatedInput?: Object) => {};
+  onApproveTool: (toolId: string) => void = (_toolId: string) => {};
   onRejectTool: (toolId: string) => void = (_toolId: string) => {};
   onCancelTool: (toolId: string) => void = (_toolId: string) => {};
   onAnswerQuestion: (toolId: string, answers: RemoteQuestionAnswerPayload) => void =
@@ -348,8 +348,8 @@ export struct ChatMessageBubble {
     ToolStatusList({
       tools,
       isBusy: this.isBusy,
-      onApproveTool: (toolId: string, updatedInput?: Object) => {
-        this.onApproveTool(toolId, updatedInput);
+      onApproveTool: (toolId: string) => {
+        this.onApproveTool(toolId);
       },
       onRejectTool: (toolId: string) => {
         this.onRejectTool(toolId);

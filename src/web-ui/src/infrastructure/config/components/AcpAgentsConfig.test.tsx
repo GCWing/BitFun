@@ -78,6 +78,7 @@ vi.mock('./common', () => ({
     </header>
   ),
   ConfigPageLayout: ({ children }: { children: React.ReactNode }) => <main>{children}</main>,
+  ConfigPageSectionStack: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
   ConfigPageSection: ({
     children,
     title,
@@ -241,14 +242,14 @@ describe('AcpAgentsConfig', () => {
       {
         id: 'claude-code',
         tool: { name: 'claude', installed: true },
-        adapter: { name: '@zed-industries/claude-code-acp', installed: false },
+        adapter: { name: '@agentclientprotocol/claude-agent-acp', installed: false },
         runnable: false,
         notes: [],
       },
       {
         id: 'codex',
         tool: { name: 'codex', installed: true },
-        adapter: { name: '@zed-industries/codex-acp', installed: false },
+        adapter: { name: '@agentclientprotocol/codex-acp', installed: false },
         runnable: false,
         notes: [],
       },
@@ -298,7 +299,7 @@ describe('AcpAgentsConfig', () => {
       {
         id: 'claude-code',
         tool: { name: 'claude', installed: true },
-        adapter: { name: '@zed-industries/claude-code-acp', installed: true },
+        adapter: { name: '@agentclientprotocol/claude-agent-acp', installed: true },
         runnable: true,
         notes: [],
       },
@@ -326,7 +327,7 @@ describe('AcpAgentsConfig', () => {
           'claude-code': {
             name: 'Claude Code',
             command: 'npx',
-            args: ['--yes', '@zed-industries/claude-code-acp@latest'],
+            args: ['--yes', '@agentclientprotocol/claude-agent-acp@latest'],
             env: {},
             enabled: true,
             readonly: false,
@@ -335,7 +336,7 @@ describe('AcpAgentsConfig', () => {
           codex: {
             name: 'Codex',
             command: 'npx',
-            args: ['--yes', '@zed-industries/codex-acp@latest'],
+            args: ['--yes', '@agentclientprotocol/codex-acp@latest'],
             env: {},
             enabled: true,
             readonly: false,
@@ -385,7 +386,7 @@ describe('AcpAgentsConfig', () => {
         {
           id: 'claude-code',
           tool: { name: 'claude', installed: true },
-          adapter: { name: '@zed-industries/claude-code-acp', installed: true },
+          adapter: { name: '@agentclientprotocol/claude-agent-acp', installed: true },
           runnable: true,
           notes: [],
         },
@@ -410,7 +411,7 @@ describe('AcpAgentsConfig', () => {
         {
           id: 'claude-code',
           tool: { name: 'claude', installed: true },
-          adapter: { name: '@zed-industries/claude-code-acp', installed: true },
+          adapter: { name: '@agentclientprotocol/claude-agent-acp', installed: true },
           runnable: true,
           notes: [],
         },

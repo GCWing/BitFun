@@ -69,6 +69,10 @@ SessionManager -> Session -> DialogTurn -> ModelRound
   composition files allowed to select ecosystem adapters for their respective
   capability contracts. Product surfaces consume product-level views and must
   not import adapter or Host ABI types.
+- External-source Desktop, TUI, Peer, and Server surfaces share the versioned
+  product-domain control DTO and closed generic actions. Capability-specific
+  approvals and conflict choices remain typed owner operations; do not add a
+  second surface-specific lifecycle model or arbitrary control payload.
 - Remote/service changes must keep external protocol lifecycle, workspace
   projection, scheduler/session restore, terminal pre-warm, and product
   execution boundaries explicit.

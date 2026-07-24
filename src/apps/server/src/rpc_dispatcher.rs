@@ -509,33 +509,6 @@ pub async fn dispatch(
                 "has_more": has_more,
             }))
         }
-        "confirm_tool_execution" => {
-            let request = extract_request(&params)?;
-            let tool_id = get_string(&request, "toolId")?;
-            let updated_input = request.get("updatedInput").cloned();
-            state
-                .coordinator
-                .confirm_tool(&tool_id, updated_input)
-                .await
-                .map_err(|e| anyhow!("{}", e))?;
-            Ok(serde_json::json!({ "success": true }))
-        }
-        "reject_tool_execution" => {
-            let request = extract_request(&params)?;
-            let tool_id = get_string(&request, "toolId")?;
-            let reason = request
-                .get("reason")
-                .and_then(|v| v.as_str())
-                .unwrap_or("User rejected")
-                .to_string();
-            state
-                .coordinator
-                .reject_tool(&tool_id, reason)
-                .await
-                .map_err(|e| anyhow!("{}", e))?;
-            Ok(serde_json::json!({ "success": true }))
-        }
-
         // ── I18n ─────────────────────────────────────────────
         "i18n_get_current_language" => {
             let lang: String = state

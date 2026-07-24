@@ -162,14 +162,17 @@ pub async fn browser_webview_create(
             builder = builder.devtools(true);
         }
 
-        window
-            .add_child(
-                builder,
-                tauri::LogicalPosition::new(request.x, request.y),
-                tauri::LogicalSize::new(request.width, request.height),
-            )
-            .map(|_| ())
-            .map_err(|e| format!("failed to create browser webview: {e}"))
+        w let webview = window
+        .add_child(
+            builder,
+            tauri::LogicalPosition::new(request.x, request.y),
+            tauri::LogicalSize::new(request.width, request.height),
+        )
+        .map_err(|e| format!("failed to create browser webview: {e}"))?;
+
+        webview
+            .hide()
+            .map_err(|e| format!("failed to hide browser webview before positioning: {e}"))
     }
     #[cfg(target_env = "ohos")]
     {
@@ -241,9 +244,9 @@ pub async fn browser_webview_set_bounds(
     {
         validate_webview_bounds(request.x, request.y, request.width, request.height)?;
 
-        let webview = app
-            .get_webview(&request.label)
-            .ok_or_else(|| format!("Webview not found: {}", request.label))?;
+    let webview = app
+        .get_webview(&request.label)
+        .ok_or_else(|| format!("Webview not found: {}", request.label))?;
 
         webview
             .set_bounds(tauri::Rect {

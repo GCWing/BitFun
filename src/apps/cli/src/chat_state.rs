@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, VecDeque};
 /// Chat state module
 ///
 /// Pure UI rendering state for the chat interface.
@@ -7,7 +7,9 @@ use std::collections::HashMap;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use bitfun_agent_runtime::prompt_markup::strip_prompt_markup;
-use bitfun_agent_runtime::sdk::{SessionTranscript, TranscriptContent, TranscriptMessage};
+use bitfun_agent_runtime::sdk::{
+    PermissionRequest, SessionTranscript, TranscriptContent, TranscriptMessage,
+};
 use bitfun_agent_tools::effective_tool_invocation;
 use bitfun_events::ToolEventData;
 
@@ -307,6 +309,8 @@ pub(crate) struct ChatState {
     pub workspace: Option<String>,
     /// Current model display name (shown in shortcuts bar)
     pub current_model_name: String,
+    /// Effective Auto mode for permission results that evaluate to Ask.
+    pub auto_approve_ask: bool,
     /// Messages for UI rendering
     pub messages: Vec<ChatMessage>,
     /// Session statistics
@@ -327,6 +331,8 @@ pub(crate) struct ChatState {
     // -- Permission state --
     /// Current pending permission prompt (if a tool needs user confirmation)
     pub permission_prompt: Option<PermissionPrompt>,
+    /// Additional permission requests waiting behind the visible prompt.
+    permission_queue: VecDeque<PermissionRequest>,
 
     // -- Question state --
     /// Current pending question prompt (if AskUserQuestion tool is waiting for answers)
@@ -347,6 +353,7 @@ impl ChatState {
             agent_type,
             workspace,
             current_model_name: String::new(),
+            auto_approve_ask: false,
             messages: Vec::new(),
             metadata: ChatMetadata::default(),
             current_turn_id: None,
@@ -354,8 +361,90 @@ impl ChatState {
             tool_index: HashMap::new(),
             is_processing: false,
             permission_prompt: None,
+            permission_queue: VecDeque::new(),
             question_prompt: None,
         }
+    }
+
+    pub(crate) fn enqueue_permission_request(&mut self, request: PermissionRequest) -> bool {
+        let request_id = request.request_id.as_str();
+        if self
+            .permission_prompt
+            .as_ref()
+            .is_some_and(|prompt| prompt.request.request_id == request_id)
+            || self
+                .permission_queue
+                .iter()
+                .any(|queued| queued.request_id == request_id)
+        {
+            return false;
+        }
+
+        if self.permission_prompt.is_none() {
+            self.permission_prompt = Some(PermissionPrompt::new(request));
+        } else if self.permission_prompt.as_ref().is_some_and(|prompt| {
+            prompt.request.round_id == request.round_id && request.order < prompt.request.order
+        }) {
+            let current = self
+                .permission_prompt
+                .take()
+                .expect("permission prompt should exist when reordering");
+            self.permission_prompt = Some(PermissionPrompt::new(request));
+            self.insert_permission_request_sorted(current.request);
+        } else {
+            self.insert_permission_request_sorted(request);
+        }
+        true
+    }
+
+    fn insert_permission_request_sorted(&mut self, request: PermissionRequest) {
+        let same_round_positions = self
+            .permission_queue
+            .iter()
+            .enumerate()
+            .filter_map(|(index, queued)| (queued.round_id == request.round_id).then_some(index))
+            .collect::<Vec<_>>();
+
+        let insert_position = if let Some(position) = same_round_positions
+            .iter()
+            .copied()
+            .find(|&index| request.order < self.permission_queue[index].order)
+        {
+            position
+        } else if let Some(position) = same_round_positions.last().copied() {
+            position + 1
+        } else if self
+            .permission_prompt
+            .as_ref()
+            .is_some_and(|prompt| prompt.request.round_id == request.round_id)
+        {
+            0
+        } else {
+            self.permission_queue.len()
+        };
+
+        self.permission_queue.insert(insert_position, request);
+    }
+
+    pub(crate) fn resolve_permission_request(&mut self, request_id: &str) -> bool {
+        if self
+            .permission_prompt
+            .as_ref()
+            .is_some_and(|prompt| prompt.request.request_id == request_id)
+        {
+            self.permission_prompt = self.permission_queue.pop_front().map(PermissionPrompt::new);
+            return true;
+        }
+
+        let Some(position) = self
+            .permission_queue
+            .iter()
+            .position(|request| request.request_id == request_id)
+        else {
+            return false;
+        };
+        self.permission_queue.remove(position);
+        true
     }
 
     /// Load historical messages from the portable runtime transcript.
@@ -652,12 +741,6 @@ impl ChatState {
                     tool.parameters = effective_params.clone();
                     tool.progress_message = Some("Waiting for user confirmation".to_string());
                 });
-                // Auto-create permission prompt for user interaction
-                self.permission_prompt = Some(PermissionPrompt::new(
-                    identity.tool_id.clone(),
-                    tool_name.to_string(),
-                    effective_params.clone(),
-                ));
                 self.rebuild_streaming_message();
             }
 
@@ -665,10 +748,6 @@ impl ChatState {
                 self.update_tool(&identity.tool_id, |tool| {
                     tool.status = ToolDisplayStatus::Confirmed;
                 });
-                // Clear permission prompt if it matches this tool
-                if self.permission_prompt.as_ref().map(|p| &p.tool_id) == Some(&identity.tool_id) {
-                    self.permission_prompt = None;
-                }
                 self.rebuild_streaming_message();
             }
 
@@ -677,10 +756,6 @@ impl ChatState {
                     tool.status = ToolDisplayStatus::Rejected;
                     tool.result = Some("User rejected execution".to_string());
                 });
-                // Clear permission prompt if it matches this tool
-                if self.permission_prompt.as_ref().map(|p| &p.tool_id) == Some(&identity.tool_id) {
-                    self.permission_prompt = None;
-                }
                 self.rebuild_streaming_message();
             }
 
@@ -854,7 +929,6 @@ impl ChatState {
         self.current_flow_items.clear();
         self.tool_index.clear();
         self.is_processing = false;
-        self.permission_prompt = None;
         self.question_prompt = None;
     }
 
@@ -876,7 +950,6 @@ impl ChatState {
         self.current_flow_items.clear();
         self.tool_index.clear();
         self.is_processing = false;
-        self.permission_prompt = None;
         self.question_prompt = None;
     }
 
@@ -897,7 +970,6 @@ impl ChatState {
         self.current_flow_items.clear();
         self.tool_index.clear();
         self.is_processing = false;
-        self.permission_prompt = None;
         self.question_prompt = None;
     }
 
@@ -1132,10 +1204,39 @@ fn truncate_string(s: &str, max_len: usize) -> String {
 mod tests {
     use super::{ChatState, FlowItem, ToolDisplayStatus};
     use bitfun_agent_runtime::sdk::{
-        SessionTranscript, TranscriptContent, TranscriptMessage, TranscriptToolCall,
+        PermissionDelegationContext, PermissionRequest, PermissionRequestSource,
+        PermissionRequestSourceKind, SessionTranscript, TranscriptContent, TranscriptMessage,
+        TranscriptToolCall,
     };
     use bitfun_events::{ToolEventData, ToolEventIdentity};
     use serde_json::json;
+
+    fn permission_request(request_id: &str, child_session_id: &str) -> PermissionRequest {
+        PermissionRequest {
+            request_id: request_id.to_string(),
+            round_id: format!("synthetic:{request_id}"),
+            order: 0,
+            tool_call_id: Some(format!("{request_id}-tool")),
+            project_path: None,
+            project_id: "project-1".to_string(),
+            session_id: child_session_id.to_string(),
+            agent_id: "Explore".to_string(),
+            action: "edit".to_string(),
+            resources: vec!["src/main.rs".to_string()],
+            save_resources: Vec::new(),
+            source: PermissionRequestSource {
+                kind: PermissionRequestSourceKind::ToolCall,
+                identity: "Write".to_string(),
+            },
+            delegation: Some(PermissionDelegationContext {
+                parent_session_id: "parent-session".to_string(),
+                parent_dialog_turn_id: Some("parent-turn".to_string()),
+                parent_tool_call_id: format!("{request_id}-parent-task"),
+                subagent_type: "Explore".to_string(),
+            }),
+            display_metadata: serde_json::Map::new(),
+        }
+    }
 
     fn deferred_input() -> serde_json::Value {
         json!({
@@ -1158,6 +1259,97 @@ mod tests {
                 "title": "Deferred tool plan",
                 "steps": ["Inspect", "Implement"]
             })
+        );
+    }
+
+    #[test]
+    fn permission_queue_deduplicates_and_advances_in_fifo_order() {
+        let mut state = ChatState::new(
+            "parent-session".to_string(),
+            "Session".to_string(),
+            "agentic".to_string(),
+            None,
+        );
+        let first = permission_request("request-z", "child-a");
+        let second = permission_request("request-a", "child-b");
+        let third = permission_request("request-m", "child-c");
+
+        assert!(state.enqueue_permission_request(first.clone()));
+        assert!(state.enqueue_permission_request(second.clone()));
+        assert!(state.enqueue_permission_request(third.clone()));
+        assert!(!state.enqueue_permission_request(second));
+        assert_eq!(
+            state
+                .permission_prompt
+                .as_ref()
+                .map(|prompt| prompt.request.request_id.as_str()),
+            Some("request-z")
+        );
+
+        assert!(state.resolve_permission_request("request-a"));
+        assert!(state.resolve_permission_request("request-z"));
+        assert_eq!(
+            state
+                .permission_prompt
+                .as_ref()
+                .map(|prompt| prompt.request.request_id.as_str()),
+            Some("request-m")
+        );
+        assert!(!state.resolve_permission_request("unrelated"));
+        assert!(state.resolve_permission_request("request-m"));
+        assert!(state.permission_prompt.is_none());
+    }
+
+    #[test]
+    fn permission_queue_orders_requests_within_their_round() {
+        let mut state = ChatState::new(
+            "session-1".to_string(),
+            "Session".to_string(),
+            "agentic".to_string(),
+            None,
+        );
+        let first = PermissionRequest {
+            round_id: "round-1".to_string(),
+            order: 2,
+            ..permission_request("request-2", "session-1")
+        };
+        let second = PermissionRequest {
+            round_id: "round-1".to_string(),
+            order: 0,
+            ..permission_request("request-0", "session-1")
+        };
+        let third = PermissionRequest {
+            round_id: "round-1".to_string(),
+            order: 1,
+            ..permission_request("request-1", "session-1")
+        };
+
+        assert!(state.enqueue_permission_request(first));
+        assert!(state.enqueue_permission_request(second));
+        assert!(state.enqueue_permission_request(third));
+        assert_eq!(
+            state
+                .permission_prompt
+                .as_ref()
+                .map(|prompt| prompt.request.request_id.as_str()),
+            Some("request-0")
+        );
+
+        assert!(state.resolve_permission_request("request-0"));
+        assert_eq!(
+            state
+                .permission_prompt
+                .as_ref()
+                .map(|prompt| prompt.request.request_id.as_str()),
+            Some("request-1")
+        );
+        assert!(state.resolve_permission_request("request-1"));
+        assert_eq!(
+            state
+                .permission_prompt
+                .as_ref()
+                .map(|prompt| prompt.request.request_id.as_str()),
+            Some("request-2")
         );
     }
 

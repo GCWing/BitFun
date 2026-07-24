@@ -4,6 +4,7 @@ use crate::agentic::tools::framework::{
 use crate::agentic::tools::registry::ToolRegistry;
 use crate::service::remote_ssh::workspace_state::is_remote_path;
 use crate::service::snapshot::service::SnapshotService;
+use crate::service::snapshot::snapshot_core::SessionStats;
 use crate::service::snapshot::types::{
     OperationType, SnapshotConfig, SnapshotError, SnapshotResult,
 };
@@ -202,12 +203,19 @@ impl SnapshotManager {
 
     /// Returns session statistics.
     pub async fn get_session_stats(&self, session_id: &str) -> SnapshotResult<serde_json::Value> {
-        let snapshot_service = self.snapshot_service.read().await;
-        let stats = snapshot_service.get_session_stats(session_id).await?;
+        let stats = self.get_session_stats_fact(session_id).await?;
 
         serde_json::to_value(stats).map_err(|e| {
             SnapshotError::ConfigError(format!("Failed to serialize statistics: {}", e))
         })
+    }
+
+    pub(crate) async fn get_session_stats_fact(
+        &self,
+        session_id: &str,
+    ) -> SnapshotResult<SessionStats> {
+        let snapshot_service = self.snapshot_service.read().await;
+        snapshot_service.get_session_stats(session_id).await
     }
 
     /// Returns system statistics.
@@ -358,7 +366,7 @@ fn set_snapshot_manager_new_delay_for_test(delay: Duration) {
 }
 
 #[cfg(test)]
-fn clear_snapshot_manager_for_test(workspace_dir: &Path) {
+pub(crate) fn clear_snapshot_manager_for_test(workspace_dir: &Path) {
     if let Ok(mut managers) = snapshot_managers().write() {
         managers.remove(workspace_dir);
     }
@@ -483,8 +491,12 @@ impl Tool for WrappedTool {
         self.original_tool.is_concurrency_safe(input)
     }
 
-    fn needs_permissions(&self, input: Option<&Value>) -> bool {
-        self.original_tool.needs_permissions(input)
+    fn permission_intents(
+        &self,
+        input: &Value,
+        context: &ToolUseContext,
+    ) -> crate::util::errors::BitFunResult<Vec<bitfun_agent_tools::PermissionIntent>> {
+        self.original_tool.permission_intents(input, context)
     }
 
     async fn validate_input(

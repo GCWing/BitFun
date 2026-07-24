@@ -19,6 +19,9 @@ facts. It is an interface crate, not a runtime implementation crate.
 - `SessionStorePort` owns typed session storage-path resolution plus restore /
   load request and timing facts only. Concrete session persistence, file IO,
   session lifecycle, context restore, and prompt assembly do not belong here.
+- Session model/mode mutation ports carry only the selected identity to the
+  current owner. Catalog lookup, validity policy, persistence implementation,
+  and product presentation stay outside this crate.
 - `ScriptToolRuntime` owns only provider-neutral availability, versioned
   load/invoke/cancel/dispose requests, execution context paths, and string
   results. Ecosystem source parsing, approval/conflict policy, product routing,

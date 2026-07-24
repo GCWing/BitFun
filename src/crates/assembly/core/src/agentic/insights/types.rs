@@ -30,6 +30,8 @@ pub struct BaseStats {
     pub total_messages: u32,
     pub total_turns: u32,
     pub total_duration_minutes: u64,
+    #[serde(default)]
+    pub total_duration_millis: u64,
     pub first_session_at: Option<String>,
     pub last_session_at: Option<String>,
     pub tool_usage: HashMap<String, u32>,
@@ -54,6 +56,8 @@ pub struct BaseStats {
     /// Language labels inferred from edited file paths (Edit/Write); drives aggregate `languages`.
     #[serde(default)]
     pub languages_by_files: HashMap<String, u32>,
+    #[serde(default)]
+    pub session_usage: InsightsSessionUsage,
 }
 
 // ============ Stage 2: Facet Extraction (AI) ============
@@ -124,6 +128,8 @@ pub struct InsightsAggregate {
     pub total_lines_removed: usize,
     #[serde(default)]
     pub total_files_modified: usize,
+    #[serde(default)]
+    pub session_usage: InsightsSessionUsage,
 }
 
 // ============ Stage 4: AI Analysis Results ============
@@ -255,6 +261,13 @@ pub struct InsightsReport {
     pub total_messages: u32,
     pub days_covered: u32,
 
+    #[serde(default)]
+    pub session_usage: InsightsSessionUsage,
+    #[serde(default)]
+    pub generation_usage: InsightsGenerationUsage,
+    #[serde(default)]
+    pub generation_models: Vec<String>,
+
     pub stats: InsightsStats,
 
     pub at_a_glance: AtAGlance,
@@ -276,6 +289,33 @@ pub struct InsightsReport {
     pub html_report_path: Option<String>,
 }
 
+/// Token usage accumulated from the persisted turns included in this report.
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
+pub struct InsightsSessionUsage {
+    pub input_tokens: u64,
+    pub output_tokens: u64,
+    pub total_tokens: u64,
+    pub turns_with_usage: u32,
+    pub output_reported_turns: u32,
+    pub total_turns: u32,
+}
+
+/// Token usage reported by model calls made while generating one insights report.
+///
+/// Providers may omit usage metadata, so callers should compare
+/// `reported_model_calls` with `model_calls` before treating the totals as complete.
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
+pub struct InsightsGenerationUsage {
+    pub input_tokens: u64,
+    pub output_tokens: u64,
+    pub total_tokens: u64,
+    pub reasoning_tokens: u64,
+    pub cached_input_tokens: u64,
+    pub cache_creation_input_tokens: u64,
+    pub model_calls: u32,
+    pub reported_model_calls: u32,
+}
+
 /// Metadata for listing saved reports
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct InsightsReportMeta {
@@ -294,6 +334,12 @@ pub struct InsightsReportMeta {
     pub top_goals: Vec<String>,
     #[serde(default)]
     pub languages: Vec<String>,
+    #[serde(default)]
+    pub session_usage: InsightsSessionUsage,
+    #[serde(default)]
+    pub generation_usage: InsightsGenerationUsage,
+    #[serde(default)]
+    pub generation_models: Vec<String>,
 }
 
 // ============ API Request/Response ============
@@ -301,4 +347,5 @@ pub struct InsightsReportMeta {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct GenerateInsightsRequest {
     pub days: Option<u32>,
+    pub model_id: Option<String>,
 }

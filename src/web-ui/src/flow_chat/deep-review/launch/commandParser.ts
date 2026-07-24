@@ -306,13 +306,23 @@ function isValidExplicitRef(ref: string): boolean {
     ref.includes('..') ||
     ref.includes('@{') ||
     ref.includes('//') ||
-    /[\u0000-\u0020\u007F~^:?*[\]\\]/.test(ref)
+    hasInvalidRefCharacter(ref)
   ) {
     return false;
   }
   return ref
     .split('/')
     .every((component) => !component.startsWith('.') && !component.endsWith('.lock'));
+}
+
+function hasInvalidRefCharacter(value: string): boolean {
+  for (const character of value) {
+    const codePoint = character.codePointAt(0);
+    if (codePoint !== undefined && (codePoint <= 0x20 || codePoint === 0x7f)) {
+      return true;
+    }
+  }
+  return /[~^:?*[\]\\]/.test(value);
 }
 
 function isExplicitRefKeywordPosition(commandFocus: string, start: number): boolean {

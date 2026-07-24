@@ -40,7 +40,6 @@ fn background_delivery_starts_agent_session_follow_up_when_session_is_not_proces
             action,
             BackgroundDeliveryAction::SubmitAgentSessionFollowUp {
                 queue_priority: DialogQueuePriority::Low,
-                skip_tool_confirmation: true,
             }
         );
     }
@@ -58,7 +57,6 @@ fn background_delivery_follow_up_uses_agent_session_source_semantics() {
 
     assert_eq!(policy.trigger_source, DialogTriggerSource::AgentSession);
     assert_eq!(policy.queue_priority, DialogQueuePriority::Low);
-    assert!(policy.skip_tool_confirmation);
 }
 
 #[test]

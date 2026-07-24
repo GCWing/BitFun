@@ -9,6 +9,7 @@ export const crateLayoutRules = [
 
   { crateName: 'agent-runtime', layer: 'execution', path: 'src/crates/execution/agent-runtime' },
   { crateName: 'agent-stream', layer: 'execution', path: 'src/crates/execution/agent-stream' },
+  { crateName: 'tool-call-jsonrepair', layer: 'execution', path: 'src/crates/execution/tool-call-jsonrepair' },
   { crateName: 'agent-tools', layer: 'execution', path: 'src/crates/execution/tool-contracts' },
   { crateName: 'harness', layer: 'execution', path: 'src/crates/execution/harness' },
   { crateName: 'plugin-runtime-host', layer: 'execution', path: 'src/crates/execution/plugin-runtime-host' },
@@ -22,11 +23,16 @@ export const crateLayoutRules = [
   { crateName: 'services-core', layer: 'services', path: 'src/crates/services/services-core' },
   { crateName: 'services-integrations', layer: 'services', path: 'src/crates/services/services-integrations' },
   { crateName: 'relay-service', layer: 'services', path: 'src/crates/services/relay-service' },
+  { crateName: 'page-function-runtime', layer: 'services', path: 'src/crates/services/page-function-runtime' },
   { crateName: 'terminal', layer: 'services', path: 'src/crates/services/terminal' },
 
   { crateName: 'acp', layer: 'interfaces', path: 'src/crates/interfaces/acp' },
+  { crateName: 'sdk-host', layer: 'interfaces', path: 'src/crates/interfaces/sdk-host' },
   { crateName: 'ai-adapters', layer: 'adapters', path: 'src/crates/adapters/ai-adapters' },
+  { crateName: 'claude-code-adapter', layer: 'adapters', path: 'src/crates/adapters/claude-code-adapter' },
+  { crateName: 'codex-adapter', layer: 'adapters', path: 'src/crates/adapters/codex-adapter' },
   { crateName: 'opencode-adapter', layer: 'adapters', path: 'src/crates/adapters/opencode-adapter' },
+  { crateName: 'static-hook-support', layer: 'adapters', path: 'src/crates/adapters/static-hook-support' },
   { crateName: 'transport', layer: 'adapters', path: 'src/crates/adapters/transport' },
   { crateName: 'webdriver', layer: 'adapters', path: 'src/crates/adapters/webdriver' },
 

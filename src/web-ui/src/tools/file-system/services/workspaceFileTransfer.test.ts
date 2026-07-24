@@ -1,11 +1,27 @@
 import { describe, expect, it } from "vitest";
 import {
+  decodeBase64FileChunk,
+  isSafePeerTransferEntryName,
   joinWorkspaceTargetPath,
   normalizeClipboardLocalPaths,
   resolvePasteTargetDirectory,
 } from "./workspaceFileTransfer";
 
 describe("workspaceFileTransfer", () => {
+  it("decodes peer file chunks without corrupting binary bytes", () => {
+    expect(Array.from(decodeBase64FileChunk("AP+AAQI="))).toEqual([
+      0x00, 0xff, 0x80, 0x01, 0x02,
+    ]);
+  });
+
+  it("rejects peer directory entries that can escape the selected destination", () => {
+    expect(isSafePeerTransferEntryName("report.txt")).toBe(true);
+    expect(isSafePeerTransferEntryName("..")).toBe(false);
+    expect(isSafePeerTransferEntryName("nested/file.txt")).toBe(false);
+    expect(isSafePeerTransferEntryName("nested\\file.txt")).toBe(false);
+    expect(isSafePeerTransferEntryName("bad\0name")).toBe(false);
+  });
+
   it("joins remote workspace paths with POSIX separators", () => {
     expect(
       joinWorkspaceTargetPath("/home/user/project/", "file.txt", true),

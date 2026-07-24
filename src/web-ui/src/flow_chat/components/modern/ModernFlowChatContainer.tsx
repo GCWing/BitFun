@@ -44,6 +44,8 @@ import {
 import type { LineRange } from '@/component-library';
 import { isChatPopupActive, subscribeChatPopupChange } from '../chatPopupState';
 import { useWorkspaceContext } from '@/infrastructure/contexts/WorkspaceContext';
+import { flowChatSessionConfigForCurrentWorkspace } from '@/app/utils/projectSessionWorkspace';
+import { createLogger } from '@/shared/utils/logger';
 import { parsePullRequestUrl } from '@/shared/utils/pullRequestLinks';
 import { createBackgroundCommandOutputTab, createReviewPlatformPullRequestDetailTab } from '@/shared/utils/tabUtils';
 import { isAcpFlowSession } from '../../utils/acpSession';
@@ -74,10 +76,16 @@ import {
   type BackgroundSubagentActivityItem,
 } from '../../utils/backgroundSubagentActivity';
 import './ModernFlowChatContainer.scss';
+import { PermissionRequestPanel } from './PermissionRequestPanel';
+import { pendingPermissionToolCallIdsForSession } from './permissionRequestRouting';
+import { usePermissionRequests } from './usePermissionRequests';
+
+const log = createLogger('ModernFlowChatContainer');
 
 interface ModernFlowChatContainerProps {
   className?: string;
   config?: Partial<FlowChatConfig>;
+  permissionPanelAboveChatInput?: boolean;
 
   // Callbacks compatible with the legacy version.
   onFileViewRequest?: (filePath: string, fileName: string, lineRange?: LineRange) => void;
@@ -113,7 +121,7 @@ const MOCK_BACKGROUND_SUBAGENTS: BackgroundSubagentSummary[] = [
     sessionId: 'mock-background-subagent-review',
     parentSessionId: 'mock-parent-session',
     title: 'Reviewing auth boundary changes',
-    agentType: 'ReviewSecurity',
+    agentType: 'ReviewWorker',
     status: 'processing',
     createdAt: Date.now() - 36_000,
     updatedAt: Date.now() - 4_000,
@@ -216,6 +224,7 @@ function backgroundCommandSummaryFromActivity(activity: BackgroundCommandActivit
 export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = ({
   className = '',
   config,
+  permissionPanelAboveChatInput = false,
   onFileViewRequest,
   onTabOpen,
   onOpenVisualization,
@@ -224,6 +233,14 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
   const { t } = useTranslation('flow-chat');
   const virtualItems = useVirtualItems();
   const activeSession = useActiveSession();
+  const {
+    requests: permissionRequests,
+    activeBatch: activePermissionBatch,
+    respond: respondPermission,
+    respondBatch: respondPermissionBatch,
+  } = usePermissionRequests(
+    activeSession?.sessionId,
+  );
   const visibleTurnInfo = useVisibleTurnInfo();
   const [pendingHeaderTurnId, setPendingHeaderTurnId] = useState<string | null>(null);
   const [queuedHeaderTurnPinId, setQueuedHeaderTurnPinId] = useState<string | null>(null);
@@ -254,7 +271,7 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
   const chatScopeRef = useRef<HTMLDivElement>(null);
   const [historyInitialContentReadyKey, setHistoryInitialContentReadyKey] = useState<string | null>(null);
   const [historyInitialContentPostPaintKey, setHistoryInitialContentPostPaintKey] = useState<string | null>(null);
-  const { workspacePath } = useWorkspaceContext();
+  const { workspacePath, activeWorkspace } = useWorkspaceContext();
   const allowUserMessageRollback = !isAcpFlowSession(activeSession);
   const historyState = activeSession?.historyState;
   const hasRestoredTurnsPendingVirtualItems =
@@ -308,6 +325,11 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
     goToPrev: handleSearchPrev,
     clearSearch,
   } = useFlowChatSearch(virtualItems);
+  const searchCurrentMatch = searchMatches[searchCurrentMatchIndex];
+  const searchCurrentMatchFlowItemId = searchCurrentMatch?.flowItemId;
+  const searchCurrentMatchTurnId = searchCurrentMatch?.turnId;
+  const searchCurrentMatchVirtualItemIndex = searchCurrentMatch?.virtualItemIndex ?? -1;
+  const searchCurrentMatchExpandableKey = searchCurrentMatch?.expandableIds?.join('\u0000') ?? '';
 
   useFlowChatSync();
   useFlowChatCopyDialog();
@@ -389,6 +411,10 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
     onSwitchToChatPanel,
     onToolConfirm: handleToolConfirm,
     onToolReject: handleToolReject,
+    pendingPermissionToolCallIds: pendingPermissionToolCallIdsForSession(
+      permissionRequests,
+      activeSession?.sessionId,
+    ),
     sessionId: activeSession?.sessionId,
     activeSessionOverride: activeSession,
     allowUserMessageRollback,
@@ -417,6 +443,7 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
     onSwitchToChatPanel,
     handleToolConfirm,
     handleToolReject,
+    permissionRequests,
     activeSession,
     allowUserMessageRollback,
     config,
@@ -999,14 +1026,31 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
   ]);
 
   useEffect(() => {
-    if (searchCurrentMatchVirtualIndex < 0) return;
+    if (searchCurrentMatchVirtualItemIndex < 0 || !searchQuery.trim()) {
+      virtualListRef.current?.clearSearchMatch();
+      return;
+    }
+
     const frameId = requestAnimationFrame(() => {
-      virtualListRef.current?.scrollToIndex(searchCurrentMatchVirtualIndex);
+      virtualListRef.current?.scrollToSearchMatch({
+        virtualItemIndex: searchCurrentMatchVirtualItemIndex,
+        query: searchQuery,
+        flowItemId: searchCurrentMatchFlowItemId,
+        expandableIds: searchCurrentMatchExpandableKey
+          ? searchCurrentMatchExpandableKey.split('\u0000')
+          : undefined,
+      });
     });
     return () => {
       cancelAnimationFrame(frameId);
     };
-  }, [searchCurrentMatchVirtualIndex]);
+  }, [
+    searchCurrentMatchFlowItemId,
+    searchCurrentMatchTurnId,
+    searchCurrentMatchExpandableKey,
+    searchCurrentMatchVirtualItemIndex,
+    searchQuery,
+  ]);
 
   const handleJumpToTurn = useCallback((turnId: string) => {
     if (!turnId) return false;
@@ -1387,9 +1431,12 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
       void (async () => {
         try {
           useSessionModeStore.getState().setMode('code');
-          await FlowChatManager.getInstance().createChatSession({}, 'agentic');
-        } catch {
-          /* ignore */
+          await FlowChatManager.getInstance().createChatSession(
+            flowChatSessionConfigForCurrentWorkspace(activeWorkspace),
+            'agentic',
+          );
+        } catch (error) {
+          log.error('Failed to create session from shortcut', { error });
         }
       })();
     },
@@ -1475,6 +1522,17 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
           onClose={handleCloseBackgroundCommandInput}
           onSend={handleSendBackgroundCommandInput}
         />
+
+        {activePermissionBatch && (
+          <PermissionRequestPanel
+            key={`${activePermissionBatch.sessionId}:${activePermissionBatch.roundId}`}
+            requests={activePermissionBatch.requests}
+            totalPendingCount={permissionRequests.length}
+            aboveChatInput={permissionPanelAboveChatInput}
+            onRespond={respondPermission}
+            onRespondBatch={respondPermissionBatch}
+          />
+        )}
 
         <div
           className="modern-flowchat-container__messages"

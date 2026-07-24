@@ -17,7 +17,8 @@ import { useI18n } from '@/infrastructure/i18n';
 import { notificationService } from '@/shared/notification-system';
 import { globalEventBus } from '@/infrastructure/event-bus';
 import { shouldIgnoreCardToggleClick } from '@/shared/utils/textSelection';
-import { ReproductionStepsBlock, Tooltip, confirmDanger, ToolProcessingDots } from '@/component-library';
+import { Tooltip, confirmDanger, ToolProcessingDots } from '@/component-library';
+import { ReproductionStepsBlock } from '@/component-library/components/Markdown/ReproductionStepsBlock';
 import { UserMessageEditComposer } from './UserMessageEditComposer';
 import {
   describeUserMessageEditImpact,

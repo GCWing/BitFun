@@ -38,7 +38,9 @@ use crate::agentic::tools::{
 use crate::agentic::WorkspaceBinding;
 use crate::infrastructure::ai::get_global_ai_client_factory;
 use crate::service::config::get_global_config_service;
-use crate::service::config::types::{ModelCapability, ModelCategory};
+use crate::service::config::types::{
+    automatic_max_output_tokens, model_runtime_binding_fingerprint, ModelCapability, ModelCategory,
+};
 use crate::util::errors::{BitFunError, BitFunResult};
 use crate::util::token_counter::TokenCounter;
 use crate::util::types::Message as AIMessage;
@@ -47,6 +49,7 @@ use crate::util::{elapsed_ms_u64, truncate_at_char_boundary};
 use bitfun_agent_runtime::output_surface::TOOL_CONTEXT_INLINE_MARKDOWN_IMAGE_DISPLAY_KEY;
 use bitfun_agent_runtime::remote_file_delivery::TOOL_CONTEXT_REMOTE_FILE_DELIVERY_KEY;
 use bitfun_ai_adapters::ModelExchangeTraceConfig;
+use bitfun_core_types::SessionModelBindingPolicy;
 use log::{debug, error, info, trace, warn};
 use sha2::{Digest, Sha256};
 use std::collections::{HashMap, HashSet};
@@ -339,7 +342,6 @@ pub struct ExecutionEngine {
 }
 
 impl ExecutionEngine {
-    const AUTO_COMPRESSION_DEFAULT_OUTPUT_RESERVE_TOKENS: usize = 16_000;
     const AUTO_COMPRESSION_SAFETY_RESERVE_TOKENS: usize = 10_000;
     const FINALIZE_AFTER_REPEATED_TOOL_FAILURES_REMINDER: &'static str = "This turn must end now because repeated tool failures have prevented further progress. Ignore any unfinished work. Your task now is to give the user a final answer. Do not call any more tools; any tool call will fail. Respond in plain text only. Summarize what was completed, what failed, the evidence available from the tool results, and the single best next step for the user.";
     const FINALIZE_AFTER_MAX_ROUNDS_REMINDER: &'static str = "This turn must end now because it has reached the round limit. Ignore any unfinished work. Your task now is to give the user a final answer. Do not call any more tools; any tool call will fail. Respond in plain text only. Summarize the most useful completed work and evidence collected so far, and clearly distinguish resolved items from anything still unresolved.";
@@ -513,7 +515,7 @@ impl ExecutionEngine {
     ) -> CompressionTriggerBudget {
         let output_reserve_tokens = configured_max_tokens
             .map(|value| value as usize)
-            .unwrap_or(Self::AUTO_COMPRESSION_DEFAULT_OUTPUT_RESERVE_TOKENS);
+            .unwrap_or_else(|| automatic_max_output_tokens(context_window as u32) as usize);
         let safety_reserve_tokens = Self::AUTO_COMPRESSION_SAFETY_RESERVE_TOKENS;
         let input_limit =
             context_window.saturating_sub(output_reserve_tokens + safety_reserve_tokens);
@@ -886,6 +888,7 @@ impl ExecutionEngine {
 
     async fn resolve_primary_model_context(
         model_id: &str,
+        model_binding_policy: SessionModelBindingPolicy,
         ai_client_model: &str,
         ai_client_api_format: &str,
         unavailable_log_message: &str,
@@ -895,7 +898,16 @@ impl ExecutionEngine {
             let ai_config: crate::service::config::types::AIConfig =
                 service.get_config(Some("ai")).await.unwrap_or_default();
 
-            let resolved_id = Self::resolve_configured_model_id(&ai_config, model_id);
+            let resolved_id = if matches!(
+                model_binding_policy,
+                SessionModelBindingPolicy::ApprovedImmutable
+            ) {
+                ai_config
+                    .resolve_model_reference(model_id)
+                    .unwrap_or_else(|| model_id.to_string())
+            } else {
+                Self::resolve_configured_model_id(&ai_config, model_id)
+            };
             let model_cfg = ai_config.models.iter().find(|m| m.id == resolved_id);
 
             let supports = model_cfg.is_some_and(|m| {
@@ -1221,11 +1233,6 @@ impl ExecutionEngine {
         original_user_input: &str,
         turn_index: usize,
     ) -> BitFunResult<String> {
-        let agent_registry = get_agent_registry();
-        let fallback_model_id = agent_registry
-            .get_model_id_for_agent(agent_type, workspace.map(|binding| binding.root_path()))
-            .await
-            .map_err(|e| BitFunError::AIClient(format!("Failed to get model ID: {}", e)))?;
         let config_service = get_global_config_service().await.map_err(|e| {
             BitFunError::AIClient(format!(
                 "Failed to get config service for model resolution: {}",
@@ -1236,6 +1243,56 @@ impl ExecutionEngine {
             .get_config(Some("ai"))
             .await
             .unwrap_or_default();
+        if matches!(
+            session.config.model_binding_policy,
+            SessionModelBindingPolicy::ApprovedImmutable
+        ) {
+            let model_id = session
+                .config
+                .model_id
+                .as_deref()
+                .map(str::trim)
+                .filter(|model_id| !model_id.is_empty())
+                .ok_or_else(|| {
+                    BitFunError::AIClient(
+                        "Approved immutable session has no concrete model id".to_string(),
+                    )
+                })?;
+            let expected_fingerprint = session
+                .config
+                .model_binding_fingerprint
+                .as_deref()
+                .ok_or_else(|| {
+                    BitFunError::AIClient(
+                        "Approved immutable session has no model binding fingerprint".to_string(),
+                    )
+                })?;
+            let mut matches = ai_config
+                .models
+                .iter()
+                .filter(|model| model.enabled && model.id == model_id);
+            let model = matches.next().ok_or_else(|| {
+                BitFunError::AIClient(format!(
+                    "Approved model configuration is unavailable: {}",
+                    model_id
+                ))
+            })?;
+            if matches.next().is_some()
+                || model_runtime_binding_fingerprint(model) != expected_fingerprint
+            {
+                return Err(BitFunError::AIClient(format!(
+                    "Approved model binding changed before execution: {}",
+                    model_id
+                )));
+            }
+            return Ok(model_id.to_string());
+        }
+
+        let agent_registry = get_agent_registry();
+        let fallback_model_id = agent_registry
+            .get_model_id_for_agent(agent_type, workspace.map(|binding| binding.root_path()))
+            .await
+            .map_err(|e| BitFunError::AIClient(format!("Failed to get model ID: {}", e)))?;
         let configured_model_id = session
             .config
             .model_id
@@ -1355,6 +1412,7 @@ impl ExecutionEngine {
         let round_context = RoundContext {
             session_id: input.context.session_id.clone(),
             subagent_parent_info: input.context.subagent_parent_info.clone(),
+            permission_delegation: input.context.permission_delegation.clone(),
             dialog_turn_id: input.context.dialog_turn_id.clone(),
             turn_index: input.context.turn_index,
             round_number: input.round_number,
@@ -1369,6 +1427,7 @@ impl ExecutionEngine {
             primary_model_facts: input.primary_model_facts.clone(),
             agent_type: input.agent_type,
             context_vars: input.execution_context_vars.clone(),
+            permission_runtime_ceiling: input.context.permission_runtime_ceiling.clone(),
             delegation_policy: input.context.delegation_policy,
             runtime_tool_restrictions: finalize_runtime_tool_restrictions,
             steering_interrupt: None,
@@ -1770,18 +1829,33 @@ impl ExecutionEngine {
         let ai_client_factory = get_global_ai_client_factory().await.map_err(|e| {
             BitFunError::AIClient(format!("Failed to get AI client factory: {}", e))
         })?;
-        let ai_client = ai_client_factory
-            .get_client_resolved(&model_id)
-            .await
-            .map_err(|e| {
-                BitFunError::AIClient(format!(
-                    "Failed to get AI client (model_id={}): {}",
-                    model_id, e
-                ))
-            })?;
+        let ai_client_result = if matches!(
+            session.config.model_binding_policy,
+            SessionModelBindingPolicy::ApprovedImmutable
+        ) {
+            ai_client_factory
+                .get_client_by_approved_binding(
+                    &model_id,
+                    session
+                        .config
+                        .model_binding_fingerprint
+                        .as_deref()
+                        .unwrap_or_default(),
+                )
+                .await
+        } else {
+            ai_client_factory.get_client_resolved(&model_id).await
+        };
+        let ai_client = ai_client_result.map_err(|e| {
+            BitFunError::AIClient(format!(
+                "Failed to get AI client (model_id={}): {}",
+                model_id, e
+            ))
+        })?;
 
         let primary_model_facts = Self::resolve_primary_model_context(
             &model_id,
+            session.config.model_binding_policy,
             &ai_client.config.model,
             &ai_client.config.format,
             "Config service unavailable, assuming compression model is text-only for image input gating",
@@ -1826,6 +1900,7 @@ impl ExecutionEngine {
             context.workspace_services.as_ref(),
             Some(&primary_model_facts),
             &tool_manifest_context_vars,
+            &context.runtime_tool_restrictions,
         );
         let tool_manifest = if enable_tools {
             Some(
@@ -2541,6 +2616,46 @@ impl ExecutionEngine {
             .get("original_user_input")
             .cloned()
             .unwrap_or_default();
+
+        // Edit constraint guard: process each distinct user instruction once.
+        // The fast extractor receives the active state so explicit additions
+        // and revocations form an auditable session-persistent state machine.
+        if !original_user_input.trim().is_empty() {
+            let revocation_authorized = context
+                .context
+                .get("edit_constraint_revocation_authorized")
+                .is_some_and(|value| value == "true");
+            let message_sha256 = crate::agentic::execution::edit_constraint_guard::message_sha256(
+                &original_user_input,
+            );
+            let already_processed = self
+                .session_manager
+                .edit_constraint_state(&context.session_id)
+                .is_some_and(|state| {
+                    state.message_processed(&context.dialog_turn_id, &message_sha256)
+                });
+            if !already_processed {
+                let active_constraints = self
+                    .session_manager
+                    .edit_constraints(&context.session_id)
+                    .unwrap_or_default();
+                let mut extraction = crate::agentic::execution::edit_constraint_guard::extract_constraints_with_active_and_revocation_authorization(
+                    &original_user_input,
+                    &active_constraints,
+                    revocation_authorized,
+                )
+                .await;
+                extraction.dialog_turn_id = Some(context.dialog_turn_id.clone());
+                if crate::agentic::execution::edit_constraint_guard::extraction_requires_session_state(
+                    &extraction,
+                ) {
+                    self.session_manager
+                        .remember_edit_constraint_extraction(&context.session_id, extraction)
+                        .await;
+                }
+            }
+        }
+
         let model_id = self
             .resolve_model_id_for_turn(
                 &session,
@@ -2561,19 +2676,34 @@ impl ExecutionEngine {
         })?;
 
         // Get AI client by model ID
-        let ai_client = ai_client_factory
-            .get_client_resolved(&model_id)
-            .await
-            .map_err(|e| {
-                BitFunError::AIClient(format!(
-                    "Failed to get AI client (model_id={}): {}",
-                    model_id, e
-                ))
-            })?;
+        let ai_client_result = if matches!(
+            session.config.model_binding_policy,
+            SessionModelBindingPolicy::ApprovedImmutable
+        ) {
+            ai_client_factory
+                .get_client_by_approved_binding(
+                    &model_id,
+                    session
+                        .config
+                        .model_binding_fingerprint
+                        .as_deref()
+                        .unwrap_or_default(),
+                )
+                .await
+        } else {
+            ai_client_factory.get_client_resolved(&model_id).await
+        };
+        let ai_client = ai_client_result.map_err(|e| {
+            BitFunError::AIClient(format!(
+                "Failed to get AI client (model_id={}): {}",
+                model_id, e
+            ))
+        })?;
 
         // Primary model vision capability (tools + system prompt appendix; also used below for API message stripping).
         let primary_model_facts = Self::resolve_primary_model_context(
             &model_id,
+            session.config.model_binding_policy,
             &ai_client.config.model,
             &ai_client.config.format,
             "Config service unavailable, assuming primary model is text-only for image input gating",
@@ -2653,6 +2783,7 @@ impl ExecutionEngine {
             context.workspace_services.as_ref(),
             Some(&primary_model_facts),
             &tool_manifest_context_vars,
+            &context.runtime_tool_restrictions,
         );
 
         let tool_manifest = if enable_tools {
@@ -3086,10 +3217,7 @@ impl ExecutionEngine {
             );
 
             // Create round context
-            let mut round_context_vars = execution_context_vars.clone();
-            if context.skip_tool_confirmation {
-                round_context_vars.insert("skip_tool_confirmation".to_string(), "true".to_string());
-            }
+            let round_context_vars = execution_context_vars.clone();
             let loaded_deferred_tool_specs =
                 collect_product_loaded_deferred_tool_specs(&messages, &deferred_tools);
 
@@ -3100,6 +3228,7 @@ impl ExecutionEngine {
             let round_context = RoundContext {
                 session_id: context.session_id.clone(),
                 subagent_parent_info: context.subagent_parent_info.clone(),
+                permission_delegation: context.permission_delegation.clone(),
                 dialog_turn_id: context.dialog_turn_id.clone(),
                 turn_index: context.turn_index,
                 round_number: round_index,
@@ -3114,6 +3243,7 @@ impl ExecutionEngine {
                 primary_model_facts: primary_model_facts.clone(),
                 agent_type: agent_type.clone(),
                 context_vars: round_context_vars,
+                permission_runtime_ceiling: context.permission_runtime_ceiling.clone(),
                 delegation_policy: context.delegation_policy,
                 runtime_tool_restrictions: context.runtime_tool_restrictions.clone(),
                 steering_interrupt: context.round_injection.as_ref().map(|source| {
@@ -3986,12 +4116,12 @@ mod tests {
     }
 
     #[test]
-    fn compression_trigger_budget_uses_16k_output_reserve_when_max_tokens_is_unset() {
+    fn compression_trigger_budget_uses_the_automatic_output_tier_when_max_tokens_is_unset() {
         let budget = ExecutionEngine::compression_trigger_budget(128_000, None);
 
-        assert_eq!(budget.output_reserve_tokens, 16_000);
+        assert_eq!(budget.output_reserve_tokens, 32_000);
         assert_eq!(budget.safety_reserve_tokens, 10_000);
-        assert_eq!(budget.input_limit, 102_000);
+        assert_eq!(budget.input_limit, 86_000);
     }
 
     #[test]
@@ -4249,8 +4379,9 @@ mod tests {
             workspace: None,
             context: HashMap::new(),
             subagent_parent_info: None,
+            permission_delegation: None,
+            permission_runtime_ceiling: None,
             delegation_policy: bitfun_runtime_ports::DelegationPolicy::top_level(),
-            skip_tool_confirmation: false,
             runtime_tool_restrictions: ToolRuntimeRestrictions::default(),
             workspace_services: None,
             terminal_port: None,
@@ -4339,7 +4470,9 @@ mod tests {
             arguments: json!({ "job_id": "job-1" }),
             raw_arguments: None,
             is_error: false,
+            parse_error: None,
             recovered_from_truncation: false,
+            repair_kind: Default::default(),
         }];
         let results = vec![Message::tool_result(ToolResult {
             tool_id: "tool-1".to_string(),
@@ -4366,7 +4499,9 @@ mod tests {
             arguments: json!({ "path": "missing.txt" }),
             raw_arguments: None,
             is_error: false,
+            parse_error: None,
             recovered_from_truncation: false,
+            repair_kind: Default::default(),
         }];
         let results = vec![Message::tool_result(ToolResult {
             tool_id: "tool-1".to_string(),

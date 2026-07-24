@@ -3,9 +3,7 @@ import {
   classifyReviewTargetFromFiles,
   classifyReviewTargetFromPathChanges,
   createUnknownReviewTargetClassification,
-  getReviewerApplicabilityRule,
   normalizeReviewPath,
-  shouldRunReviewerForTarget,
 } from './reviewTargetClassifier';
 
 describe('reviewTargetClassifier', () => {
@@ -140,35 +138,4 @@ describe('reviewTargetClassifier', () => {
     ]);
   });
 
-  it('keeps frontend reviewer applicability in a reusable registry', () => {
-    const rule = getReviewerApplicabilityRule('ReviewFrontend');
-
-    expect(rule).toEqual(
-      expect.objectContaining({
-        subagentId: 'ReviewFrontend',
-        runWhenTargetUnknown: true,
-        matchingTags: expect.arrayContaining([
-          'frontend_ui',
-          'frontend_contract',
-        ]),
-      }),
-    );
-  });
-
-  it('evaluates conditional reviewer applicability from registry tags', () => {
-    const backendTarget = classifyReviewTargetFromFiles(
-      ['src/crates/assembly/core/src/service/config/types.rs'],
-      'session_files',
-    );
-    const frontendTarget = classifyReviewTargetFromFiles(
-      ['src/web-ui/src/App.tsx'],
-      'session_files',
-    );
-    const unknownTarget = createUnknownReviewTargetClassification('manual_prompt');
-
-    expect(shouldRunReviewerForTarget('ReviewFrontend', backendTarget)).toBe(false);
-    expect(shouldRunReviewerForTarget('ReviewFrontend', frontendTarget)).toBe(true);
-    expect(shouldRunReviewerForTarget('ReviewFrontend', unknownTarget)).toBe(true);
-    expect(shouldRunReviewerForTarget('ReviewSecurity', backendTarget)).toBe(true);
-  });
 });

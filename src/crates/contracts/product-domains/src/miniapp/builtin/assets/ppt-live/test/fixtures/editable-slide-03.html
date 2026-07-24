@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<style>
+  *,*::before,*::after { margin:0; padding:0; box-sizing:border-box; }
+  body {
+    width: 960pt; height: 540pt;
+    font-family: system-ui, -apple-system, "PingFang SC", "Source Han Sans SC", sans-serif;
+    background: #FAFAF7; color: #111111;
+    overflow: hidden; position: relative;
+  }
+</style>
+</head>
+<body>
+
+  <!-- ===== Title ===== -->
+  <div style="position: absolute; top: 36pt; left: 60pt; right: 60pt;">
+    <h1 style="font-size: 28pt; font-weight: 700; color: #111111; line-height: 1.15;">数据处理流水线与质量看板</h1>
+    <p style="font-size: 13pt; color: #787774; margin-top: 6pt;">五阶段端到端流程 · 关键质量指标实时监控</p>
+  </div>
+
+  <!-- ===== Flowchart heading ===== -->
+  <div style="position: absolute; top: 96pt; left: 60pt;">
+    <h3 style="font-size: 12pt; font-weight: 700; color: #787774;">端到端流程</h3>
+  </div>
+
+  <!-- ===== Flowchart: 5 boxes + 4 SVG arrows ===== -->
+
+  <!-- Box 1: 数据采集 -->
+  <div style="position: absolute; top: 118pt; left: 75pt; width: 130pt; height: 55pt; background: #F3F2EF; border: 1pt solid #e5e7eb; border-radius: 6pt; display: flex; flex-direction: column; align-items: center; justify-content: center;">
+    <h4 style="font-size: 12pt; font-weight: 700; color: #1E293B;">数据采集</h4>
+    <p style="font-size: 9pt; color: #787774; margin-top: 2pt;">Kafka / MQ</p>
+  </div>
+  <!-- Arrow 1 -->
+  <svg width="40pt" height="20pt" viewBox="0 0 40 20" style="position: absolute; top: 135.5pt; left: 205pt;" xmlns="http://www.w3.org/2000/svg">
+    <line x1="2" y1="10" x2="32" y2="10" stroke="#787774" stroke-width="1.5"/>
+    <polygon points="32,5 40,10 32,15" fill="#787774"/>
+  </svg>
+
+  <!-- Box 2: 清洗脱敏 -->
+  <div style="position: absolute; top: 118pt; left: 245pt; width: 130pt; height: 55pt; background: #F3F2EF; border: 1pt solid #e5e7eb; border-radius: 6pt; display: flex; flex-direction: column; align-items: center; justify-content: center;">
+    <h4 style="font-size: 12pt; font-weight: 700; color: #1E293B;">清洗脱敏</h4>
+    <p style="font-size: 9pt; color: #787774; margin-top: 2pt;">去重 / 脱敏 / 校验</p>
+  </div>
+  <!-- Arrow 2 -->
+  <svg width="40pt" height="20pt" viewBox="0 0 40 20" style="position: absolute; top: 135.5pt; left: 375pt;" xmlns="http://www.w3.org/2000/svg">
+    <line x1="2" y1="10" x2="32" y2="10" stroke="#787774" stroke-width="1.5"/>
+    <polygon points="32,5 40,10 32,15" fill="#787774"/>
+  </svg>
+
+  <!-- Box 3: 特征构建 (highlighted) -->
+  <div style="position: absolute; top: 118pt; left: 415pt; width: 130pt; height: 55pt; background: #0f766e; border: 1pt solid #0f766e; border-radius: 6pt; display: flex; flex-direction: column; align-items: center; justify-content: center;">
+    <h4 style="font-size: 12pt; font-weight: 700; color: #ffffff;">特征构建</h4>
+    <p style="font-size: 9pt; color: #d1fae5; margin-top: 2pt;">向量化 / 聚合</p>
+  </div>
+  <!-- Arrow 3 -->
+  <svg width="40pt" height="20pt" viewBox="0 0 40 20" style="position: absolute; top: 135.5pt; left: 545pt;" xmlns="http://www.w3.org/2000/svg">
+    <line x1="2" y1="10" x2="32" y2="10" stroke="#787774" stroke-width="1.5"/>
+    <polygon points="32,5 40,10 32,15" fill="#787774"/>
+  </svg>
+
+  <!-- Box 4: 模型推理 -->
+  <div style="position: absolute; top: 118pt; left: 585pt; width: 130pt; height: 55pt; background: #F3F2EF; border: 1pt solid #e5e7eb; border-radius: 6pt; display: flex; flex-direction: column; align-items: center; justify-content: center;">
+    <h4 style="font-size: 12pt; font-weight: 700; color: #1E293B;">模型推理</h4>
+    <p style="font-size: 9pt; color: #787774; margin-top: 2pt;">打分 / 预测</p>
+  </div>
+  <!-- Arrow 4 -->
+  <svg width="40pt" height="20pt" viewBox="0 0 40 20" style="position: absolute; top: 135.5pt; left: 715pt;" xmlns="http://www.w3.org/2000/svg">
+    <line x1="2" y1="10" x2="32" y2="10" stroke="#787774" stroke-width="1.5"/>
+    <polygon points="32,5 40,10 32,15" fill="#787774"/>
+  </svg>
+
+  <!-- Box 5: 结果分发 -->
+  <div style="position: absolute; top: 118pt; left: 755pt; width: 130pt; height: 55pt; background: #F3F2EF; border: 1pt solid #e5e7eb; border-radius: 6pt; display: flex; flex-direction: column; align-items: center; justify-content: center;">
+    <h4 style="font-size: 12pt; font-weight: 700; color: #1E293B;">结果分发</h4>
+    <p style="font-size: 9pt; color: #787774; margin-top: 2pt;">API / Webhook</p>
+  </div>
+
+  <!-- ===== Table heading ===== -->
+  <div style="position: absolute; top: 200pt; left: 60pt;">
+    <h3 style="font-size: 12pt; font-weight: 700; color: #787774;">关键质量指标</h3>
+  </div>
+
+  <!-- ===== Table ===== -->
+  <div style="position: absolute; top: 224pt; left: 60pt; width: 840pt;">
+    <table style="width: 100%; border-collapse: collapse; font-size: 11pt;">
+      <thead>
+        <tr>
+          <th style="background: #1E293B; padding: 8pt 12pt; border: 1pt solid #1E293B; width: 14%;"><p style="color: #ffffff; font-weight: 700; font-size: 11pt; text-align: left;">阶段</p></th>
+          <th style="background: #1E293B; padding: 8pt 12pt; border: 1pt solid #1E293B; width: 22%;"><p style="color: #ffffff; font-weight: 700; font-size: 11pt; text-align: left;">输入</p></th>
+          <th style="background: #1E293B; padding: 8pt 12pt; border: 1pt solid #1E293B; width: 36%;"><p style="color: #ffffff; font-weight: 700; font-size: 11pt; text-align: left;">处理动作</p></th>
+          <th style="background: #1E293B; padding: 8pt 12pt; border: 1pt solid #1E293B; width: 28%;"><p style="color: #ffffff; font-weight: 700; font-size: 11pt; text-align: left;">质量门槛</p></th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td style="background: #ffffff; padding: 8pt 12pt; border: 1pt solid #e5e7eb;"><p style="font-weight: 600; color: #0f766e; font-size: 11pt;">采集</p></td>
+          <td style="background: #ffffff; padding: 8pt 12pt; border: 1pt solid #e5e7eb;"><p style="color: #111111; font-size: 11pt;">Kafka / MQTT</p></td>
+          <td style="background: #ffffff; padding: 8pt 12pt; border: 1pt solid #e5e7eb;"><p style="color: #111111; font-size: 11pt;">拉取与推送双模式接入</p></td>
+          <td style="background: #ffffff; padding: 8pt 12pt; border: 1pt solid #e5e7eb;"><p style="color: #111111; font-size: 11pt;">完整率 ≥ 99.5%</p></td>
+        </tr>
+        <tr>
+          <td style="background: #FAFAF7; padding: 8pt 12pt; border: 1pt solid #e5e7eb;"><p style="font-weight: 600; color: #0f766e; font-size: 11pt;">清洗</p></td>
+          <td style="background: #FAFAF7; padding: 8pt 12pt; border: 1pt solid #e5e7eb;"><p style="color: #111111; font-size: 11pt;">原始数据流</p></td>
+          <td style="background: #FAFAF7; padding: 8pt 12pt; border: 1pt solid #e5e7eb;"><p style="color: #111111; font-size: 11pt;">字段校验、去重、PII 脱敏</p></td>
+          <td style="background: #FAFAF7; padding: 8pt 12pt; border: 1pt solid #e5e7eb;"><p style="color: #111111; font-size: 11pt;">脏数据率 ≤ 0.3%</p></td>
+        </tr>
+        <tr>
+          <td style="background: #ffffff; padding: 8pt 12pt; border: 1pt solid #e5e7eb;"><p style="font-weight: 600; color: #0f766e; font-size: 11pt;">特征</p></td>
+          <td style="background: #ffffff; padding: 8pt 12pt; border: 1pt solid #e5e7eb;"><p style="color: #111111; font-size: 11pt;">清洗后数据</p></td>
+          <td style="background: #ffffff; padding: 8pt 12pt; border: 1pt solid #e5e7eb;"><p style="color: #111111; font-size: 11pt;">向量化、时序聚合、维度对齐</p></td>
+          <td style="background: #ffffff; padding: 8pt 12pt; border: 1pt solid #e5e7eb;"><p style="color: #111111; font-size: 11pt;">特征覆盖率 ≥ 95%</p></td>
+        </tr>
+        <tr>
+          <td style="background: #FAFAF7; padding: 8pt 12pt; border: 1pt solid #e5e7eb;"><p style="font-weight: 600; color: #0f766e; font-size: 11pt;">推理</p></td>
+          <td style="background: #FAFAF7; padding: 8pt 12pt; border: 1pt solid #e5e7eb;"><p style="color: #111111; font-size: 11pt;">特征向量</p></td>
+          <td style="background: #FAFAF7; padding: 8pt 12pt; border: 1pt solid #e5e7eb;"><p style="color: #111111; font-size: 11pt;">模型打分、阈值判定、结果序列化</p></td>
+          <td style="background: #FAFAF7; padding: 8pt 12pt; border: 1pt solid #e5e7eb;"><p style="color: #111111; font-size: 11pt;">P99 延迟 ≤ 80ms</p></td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- ===== Note ===== -->
+  <div style="position: absolute; top: 388pt; left: 60pt; right: 60pt;">
+    <p style="font-size: 10pt; color: #787774; line-height: 1.5;">注：质量门槛基于生产环境 30 天滚动窗口统计，触发告警后自动回滚至上一稳定版本。特征构建阶段标记为关键路径（绿色），延迟超标将直接影响 SLA。</p>
+  </div>
+
+  <!-- ===== Footer ===== -->
+  <div style="position: absolute; left: 60pt; bottom: 36pt;">
+    <p style="font-size: 9pt; color: #787774;">PPT Live 测试 · 表格与流程图 · 03 / 03</p>
+  </div>
+
+</body>
+</html>

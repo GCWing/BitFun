@@ -41,6 +41,14 @@ impl WorkspaceFileSystem for RemoteWorkspaceFs {
     }
 
     async fn write_file(&self, path: &str, contents: &[u8]) -> anyhow::Result<()> {
+        if let Some((parent, _)) = path
+            .rsplit_once('/')
+            .filter(|(parent, _)| !parent.is_empty())
+        {
+            self.file_service
+                .create_dir_all(&self.connection_id, parent)
+                .await?;
+        }
         self.file_service
             .write_file(&self.connection_id, path, contents)
             .await

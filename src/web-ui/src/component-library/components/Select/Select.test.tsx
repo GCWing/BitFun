@@ -166,4 +166,81 @@ describe('Select', () => {
     expect(selectRoot?.className).toContain('select--placement-bottom');
     expect(dropdown?.className).toContain('select__dropdown--bottom');
   });
+
+  it('keeps grouped order stable and skips disabled options during keyboard navigation', async () => {
+    const onChange = vi.fn();
+    Object.defineProperty(HTMLElement.prototype, 'scrollIntoView', {
+      configurable: true,
+      value: vi.fn(),
+    });
+    await act(async () => {
+      root.render(
+        <Select
+          options={[
+            { value: 'disabled', label: 'Disabled ungrouped', disabled: true },
+            { value: 'group-a', label: 'Group A choice', group: 'Group A' },
+            { value: 'group-b', label: 'Group B choice', group: 'Group B' },
+          ]}
+          onChange={onChange}
+        />
+      );
+    });
+
+    const trigger = container.querySelector('.select__trigger') as HTMLElement;
+    await act(async () => {
+      trigger.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }));
+      await Promise.resolve();
+    });
+
+    const listbox = container.querySelector('[role="listbox"]') as HTMLElement;
+    const options = Array.from(container.querySelectorAll<HTMLElement>('[role="option"]'));
+    expect(options.map((option) => option.textContent)).toEqual([
+      'Disabled ungrouped',
+      'Group A choice',
+      'Group B choice',
+    ]);
+    expect(trigger.getAttribute('aria-controls')).toBe(listbox.id);
+    expect(trigger.getAttribute('aria-activedescendant')).toBe(options[1].id);
+    expect(options[1].className).toContain('select__option--highlighted');
+    expect(container.querySelector('[role="group"]')?.getAttribute('aria-label')).toBe('Group A');
+
+    await act(async () => {
+      trigger.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+    });
+    expect(onChange).toHaveBeenCalledWith('group-a');
+  });
+
+  it('links the searchable input to the listbox and active option', async () => {
+    Object.defineProperty(HTMLElement.prototype, 'scrollIntoView', {
+      configurable: true,
+      value: vi.fn(),
+    });
+    await act(async () => {
+      root.render(
+        <Select
+          searchable
+          searchPlaceholder="Find a choice"
+          options={[
+            { value: 'disabled', label: 'Disabled', disabled: true },
+            { value: 'enabled', label: 'Enabled' },
+          ]}
+        />
+      );
+    });
+    const trigger = container.querySelector('.select__trigger') as HTMLElement;
+    await act(async () => trigger.click());
+    const input = container.querySelector('.select__search-input') as HTMLInputElement;
+    const listbox = container.querySelector('[role="listbox"]') as HTMLElement;
+
+    await act(async () => {
+      input.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }));
+      await Promise.resolve();
+    });
+
+    expect(input.getAttribute('aria-controls')).toBe(listbox.id);
+    expect(input.getAttribute('aria-label')).toBe('Find a choice');
+    expect(input.getAttribute('aria-activedescendant')).toBe(
+      container.querySelectorAll<HTMLElement>('[role="option"]')[1].id,
+    );
+  });
 });

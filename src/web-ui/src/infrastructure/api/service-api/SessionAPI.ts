@@ -3,6 +3,15 @@ import { api } from './ApiClient';
 import { createTauriCommandError } from '../errors/TauriCommandError';
 import type { SessionMetadata, DialogTurnData } from '@/shared/types/session-history';
 
+export type UiSessionMetadataField =
+  | 'sessionName'
+  | 'tags'
+  | 'todos'
+  | 'reviewActionState'
+  | 'unreadCompletion'
+  | 'needsUserAttention'
+  | 'titleMetadata';
+
 export interface SessionMetadataPageRequest {
   workspacePath: string;
   limit: number;
@@ -17,6 +26,16 @@ export interface SessionMetadataPage {
   loadedTopLevelCount: number;
   nextCursor?: string;
   hasMore: boolean;
+}
+
+export interface SessionReferenceCandidate {
+  sessionId: string;
+  sessionName: string;
+  workspacePath: string;
+  remoteConnectionId?: string;
+  remoteSshHost?: string;
+  workspaceLabel: string;
+  lastActivityAt: number;
 }
 
 export interface SessionUsageReportRequest {
@@ -184,6 +203,19 @@ function remoteSessionFields(
 }
 
 export class SessionAPI {
+  async searchReferenceableSessions(
+    query: string,
+    limit = 30,
+  ): Promise<SessionReferenceCandidate[]> {
+    try {
+      return await api.invoke('search_referenceable_sessions', {
+        request: { query, limit },
+      });
+    } catch (error) {
+      throw createTauriCommandError('search_referenceable_sessions', error, { query, limit });
+    }
+  }
+
   async forkSession(
     sourceSessionId: string,
     sourceTurnId: string,
@@ -295,6 +327,7 @@ export class SessionAPI {
   async saveSessionMetadata(
     metadata: SessionMetadata,
     workspacePath: string,
+    fields: UiSessionMetadataField[],
     remoteConnectionId?: string,
     remoteSshHost?: string
   ): Promise<void> {
@@ -302,6 +335,7 @@ export class SessionAPI {
       await api.invoke('save_session_metadata', {
         request: {
           metadata,
+          fields,
           workspace_path: workspacePath,
           ...remoteSessionFields(remoteConnectionId, remoteSshHost),
         }

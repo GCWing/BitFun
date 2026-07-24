@@ -3,6 +3,10 @@
 /// Commands that must never run on a peer on behalf of a controller.
 /// Mirrors desktop `peer_host_invoke::LOCAL_ONLY_COMMANDS` (minus control-plane
 /// commands which are handled specially before this check).
+///
+/// Keep `account_finalize_login` and cloud session/turn commands here — they
+/// are controller identity/hydrate APIs. See
+/// `src/web-ui/src/infrastructure/peer-device/README.md`.
 static LOCAL_ONLY_COMMANDS: &[&str] = &[
     "show_main_window",
     "hide_main_window_after_close_request",
@@ -15,6 +19,7 @@ static LOCAL_ONLY_COMMANDS: &[&str] = &[
     "check_for_updates",
     "install_update",
     "account_login",
+    "account_finalize_login",
     "account_logout",
     "account_status",
     "account_get_credential_hint",
@@ -57,6 +62,13 @@ static LOCAL_ONLY_COMMANDS: &[&str] = &[
     "remote_connect_set_bot_verbose_mode",
     "computer_use_request_permissions",
     "computer_use_open_system_settings",
+    "relay_deploy_preflight",
+    "relay_deploy_install_docker",
+    "relay_deploy_start",
+    "relay_deploy_poll",
+    "relay_deploy_cancel",
+    "relay_deploy_register",
+    "relay_deploy_verify",
 ];
 
 /// Desktop IDE surfaces that CLI Peer Host does not implement.

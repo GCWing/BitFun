@@ -17,6 +17,12 @@ interface AsyncPrismSyntaxHighlighterProps {
   lineNumberStyle?: React.CSSProperties;
   fallback?: React.ComponentType<FlowCodeBlockFallbackProps>;
   fallbackProps?: FlowCodeBlockFallbackProps;
+  /**
+   * Keep the lightweight fallback mounted even when Prism is already loaded.
+   * Used while chat text is still streaming so we do not remount the code-block
+   * tree (Fallback ↔ Prism) on every streaming flag flip.
+   */
+  preferFallback?: boolean;
   traceContext?: MarkdownTraceContext;
   children: string;
 }
@@ -59,6 +65,7 @@ export const AsyncPrismSyntaxHighlighter: React.FC<AsyncPrismSyntaxHighlighterPr
   lineNumberStyle,
   fallback: Fallback,
   fallbackProps,
+  preferFallback = false,
   traceContext,
   children,
 }) => {
@@ -140,7 +147,7 @@ export const AsyncPrismSyntaxHighlighter: React.FC<AsyncPrismSyntaxHighlighterPr
     />
   ) : null;
 
-  if (!Highlighter) {
+  if (!Highlighter || preferFallback) {
     if (Fallback && fallbackProps) {
       return (
         <>

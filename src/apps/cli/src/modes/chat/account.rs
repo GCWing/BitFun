@@ -128,9 +128,29 @@ impl ChatMode {
                 }
             }
             LoginFormAction::SyncUseLocal => {
+                if let Err(e) = tokio::task::block_in_place(|| {
+                    rt_handle.block_on(crate::account::finalize_login_after_sync_choice())
+                }) {
+                    chat_view.login_form_set_error(format!("Finalize login failed: {e}"));
+                    let _ = tokio::task::block_in_place(|| {
+                        rt_handle.block_on(crate::account::logout())
+                    });
+                    chat_view.show_login_form();
+                    return Ok(None);
+                }
                 self.start_sync_and_show_account(true, chat_view, chat_state, rt_handle);
             }
             LoginFormAction::SyncUseCloud => {
+                if let Err(e) = tokio::task::block_in_place(|| {
+                    rt_handle.block_on(crate::account::finalize_login_after_sync_choice())
+                }) {
+                    chat_view.login_form_set_error(format!("Finalize login failed: {e}"));
+                    let _ = tokio::task::block_in_place(|| {
+                        rt_handle.block_on(crate::account::logout())
+                    });
+                    chat_view.show_login_form();
+                    return Ok(None);
+                }
                 self.start_sync_and_show_account(false, chat_view, chat_state, rt_handle);
             }
             LoginFormAction::SyncCancel => {

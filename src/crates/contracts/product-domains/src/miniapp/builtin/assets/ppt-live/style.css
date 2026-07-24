@@ -320,6 +320,9 @@ button, input, select, textarea { font-size: inherit; line-height: inherit; }
   min-width: 0;
   min-height: 0;
   display: grid;
+  /* Explicit minmax(0, 1fr) column: an implicit auto column would let a long
+     nowrap status/export message widen the whole layout past the viewport. */
+  grid-template-columns: minmax(0, 1fr);
   grid-template-rows: auto minmax(0, 1fr) 28px;
   overflow: hidden;
   background: var(--studio-bg);
@@ -966,12 +969,12 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 .generation-pipeline li.is-done { border-color: var(--studio-chip-done-border); }
 .generation-pipeline small { display: block; margin-top: 2px; color: var(--studio-muted); font-size: 10px; }
 
-/* Agent sidebar */
+/* Agent sidebar — prompt / style-layout / process-outline each ~1/3 */
 .agent-sidebar {
   min-width: 0;
   min-height: 0;
   display: grid;
-  grid-template-rows: auto auto minmax(120px, 1fr);
+  grid-template-rows: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr);
   border-left: 1px solid var(--studio-line);
   background: var(--studio-sidebar-bg);
   overflow: hidden;
@@ -987,9 +990,10 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
   position: relative;
   z-index: 3;
   display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto auto;
   gap: 10px;
   border-bottom: 1px solid var(--studio-line);
-  overflow: visible;
+  overflow: hidden;
 }
 
 .agent-card--tabs {
@@ -1004,8 +1008,9 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
   z-index: 1;
   display: grid;
   grid-template-rows: auto;
+  align-content: start;
   min-height: 0;
-  max-height: clamp(200px, 36vh, 400px);
+  overflow-x: hidden;
   overflow-y: auto;
   /* Reserve the scrollbar track so the content width never jumps when the
      scrollbar appears or disappears (e.g. while a dropdown is open). */
@@ -1039,13 +1044,20 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
   border-color: var(--studio-warning);
 }
 
+.onebox-label {
+  min-height: 0;
+  display: grid;
+  grid-template-rows: minmax(0, 1fr);
+}
+
 .onebox-input {
   width: 100%;
-  min-height: 120px;
+  min-height: 0;
+  height: 100%;
   border: 1px solid var(--studio-border);
   border-radius: 10px;
   padding: 10px 12px;
-  resize: vertical;
+  resize: none;
   color: var(--studio-text);
   background: var(--studio-input-bg);
   font-family: var(--app-font);
@@ -1241,6 +1253,15 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
   color: var(--studio-primary);
 }
 
+.onebox-model {
+  display: grid;
+  gap: 4px;
+}
+
+.onebox-model .property-label {
+  margin: 0;
+}
+
 .onebox-submit { min-height: 40px; width: 100%; }
 
 .prompt-actions {
@@ -1293,12 +1314,106 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 .sidebar-tab-panel {
   min-height: 0;
   display: none;
-  grid-template-rows: minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 1fr);
   gap: 8px;
   overflow: hidden;
 }
 
+.sidebar-tab-panel[data-sidebar-panel="outline"] {
+  grid-template-rows: minmax(0, 1fr);
+}
+
 .sidebar-tab-panel.is-active { display: grid; }
+
+.generation-progress {
+  display: grid;
+  gap: 8px;
+  padding: 8px 8px 10px;
+  border: 1px solid var(--studio-line);
+  border-radius: 8px;
+  background: var(--studio-control-muted);
+}
+
+.generation-progress[hidden] {
+  display: none !important;
+}
+
+.generation-progress.is-active {
+  border-color: var(--studio-chip-active-border);
+}
+
+.generation-progress.is-error {
+  border-color: var(--studio-chip-error-border);
+}
+
+.generation-progress__meta {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.generation-progress__label {
+  color: var(--studio-text);
+  font-size: 11px;
+  font-weight: 650;
+}
+
+.generation-progress__count {
+  color: var(--studio-muted);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.generation-progress__track {
+  height: 4px;
+  border-radius: 999px;
+  background: var(--studio-control-subtle);
+  overflow: hidden;
+}
+
+.generation-progress__fill {
+  height: 100%;
+  width: 0;
+  border-radius: inherit;
+  background: var(--studio-accent);
+  transition: width 220ms ease;
+}
+
+.generation-phase-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.generation-phase {
+  padding: 2px 7px;
+  border-radius: 999px;
+  border: 1px solid var(--studio-line);
+  color: var(--studio-muted);
+  font-size: 10px;
+  line-height: 1.4;
+}
+
+.generation-phase.is-running {
+  border-color: var(--studio-chip-active-border);
+  color: var(--studio-text);
+  background: color-mix(in srgb, var(--studio-accent) 10%, transparent);
+}
+
+.generation-phase.is-done {
+  border-color: var(--studio-chip-done-border);
+  color: var(--studio-text);
+}
+
+.generation-phase.is-error {
+  border-color: var(--studio-chip-error-border);
+  color: var(--studio-error, #c84b31);
+}
 
 .generation-steps, .outline-list {
   margin: 0;
@@ -2701,6 +2816,8 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
   justify-content: space-between;
   gap: var(--space-4);
   min-height: 28px;
+  min-width: 0;
+  overflow: hidden;
   padding: 0 var(--space-4);
   border-top: 1px solid var(--studio-line);
   color: var(--studio-muted);
@@ -2713,6 +2830,14 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
   display: flex;
   align-items: center;
   gap: var(--space-3);
+  min-width: 0;
+}
+
+.statusbar-left > #statusLine {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .statusbar-spinner {
@@ -2877,20 +3002,12 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
     padding: 10px;
   }
 
-  .agent-card--properties {
-    max-height: clamp(160px, 30vh, 300px);
-  }
-
   .property-section__header {
     padding: 10px 12px;
   }
 
   .property-section__body {
     padding: 0 12px 12px;
-  }
-
-  .onebox-input {
-    min-height: 100px;
   }
 }
 

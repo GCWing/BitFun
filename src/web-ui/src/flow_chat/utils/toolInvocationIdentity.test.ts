@@ -3,7 +3,6 @@ import { describe, expect, it } from 'vitest';
 import {
   effectiveToolInvocation,
   projectEffectiveToolItem,
-  replaceEffectiveToolInput,
 } from './toolInvocationIdentity';
 
 describe('toolInvocationIdentity', () => {
@@ -54,20 +53,5 @@ describe('toolInvocationIdentity', () => {
     expect(projected.toolCall.input).toEqual({ file_path: 'README.md', content: 'updated' });
     expect(item.toolName).toBe('CallDeferredTool');
     expect(item.toolCall.input).toHaveProperty('tool_name', 'Write');
-  });
-
-  it('writes edited effective input back into deferred args', () => {
-    const wireInput = {
-      tool_name: 'Write',
-      args: { file_path: 'README.md', content: 'before' },
-    };
-
-    expect(replaceEffectiveToolInput('CallDeferredTool', wireInput, {
-      file_path: 'README.md',
-      content: 'after',
-    })).toEqual({
-      tool_name: 'Write',
-      args: { file_path: 'README.md', content: 'after' },
-    });
   });
 });

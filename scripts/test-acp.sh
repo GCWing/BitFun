@@ -5,7 +5,7 @@
 echo "=== BitFun ACP Server Test ==="
 echo ""
 
-BINARY="${BITFUN_CLI:-target/debug/bitfun-cli}"
+BINARY="${BITFUN_CLI:-target/debug/bitfun}"
 WORKSPACE="/tmp/test-acp"
 PIPE_DIR="$(mktemp -d /tmp/bitfun-acp-test-sh.XXXXXX)"
 ACP_IN="$PIPE_DIR/in"

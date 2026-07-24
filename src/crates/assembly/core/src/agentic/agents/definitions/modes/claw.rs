@@ -17,6 +17,8 @@ impl ClawMode {
         Self {
             default_tools: vec![
                 "Task".to_string(),
+                "ListModels".to_string(),
+                "AgentWait".to_string(),
                 "Read".to_string(),
                 "view_image".to_string(),
                 "analyze_image".to_string(),
@@ -41,6 +43,8 @@ impl ClawMode {
                 // agent/tool instead of being surfaced as a ControlHub domain.
                 "ControlHub".to_string(),
                 "InitMiniApp".to_string(),
+                "PageDeploy".to_string(),
+                "PagePublish".to_string(),
             ],
         }
     }
@@ -87,13 +91,14 @@ impl Agent for ClawMode {
 #[cfg(test)]
 mod tests {
     use super::ClawMode;
-    use crate::agentic::agents::Agent;
+    use crate::agentic::agents::{Agent, PromptBuilderContext};
     use bitfun_agent_runtime::prompt::UserContextSection;
 
     #[test]
     fn claw_mode_includes_init_miniapp_in_default_tools() {
         let tools = ClawMode::new().default_tools();
         assert!(tools.contains(&"InitMiniApp".to_string()));
+        assert!(tools.contains(&"ListModels".to_string()));
     }
 
     #[test]
@@ -101,5 +106,16 @@ mod tests {
         assert!(ClawMode::new()
             .user_context_policy()
             .includes(UserContextSection::MemorySummary));
+    }
+
+    #[tokio::test]
+    async fn claw_prompt_conditions_optional_control_and_session_tools() {
+        let prompt = ClawMode::new()
+            .get_system_prompt(Some(&PromptBuilderContext::new("/workspace", None, None)))
+            .await
+            .expect("Claw prompt");
+
+        assert!(prompt.contains("only when it appears in your current tool list"));
+        assert!(prompt.contains("only when both tools appear in your current tool list"));
     }
 }

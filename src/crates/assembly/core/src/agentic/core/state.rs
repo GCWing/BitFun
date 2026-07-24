@@ -30,12 +30,6 @@ pub enum ToolExecutionState {
         chunks_received: usize,
     },
 
-    /// Waiting for user confirmation
-    AwaitingConfirmation {
-        params: serde_json::Value,
-        timeout_at: SystemTime,
-    },
-
     /// Execution completed
     Completed {
         result: ToolResult,
@@ -105,7 +99,6 @@ pub struct ToolStats {
     pub waiting: usize,
     pub running: usize,
     pub streaming: usize,
-    pub awaiting_confirmation: usize,
     pub completed: usize,
     pub failed: usize,
     pub rejected: usize,

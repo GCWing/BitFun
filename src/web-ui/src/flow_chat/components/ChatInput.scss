@@ -95,7 +95,9 @@
       align-items: center;
       min-height: 44px;
       max-height: 44px;
-      padding: 0 6px 0 2px;
+      // 7px horizontal padding matches the (44 - 2*1 - 28) / 2 = 7px vertical
+      // gap around the 28px round buttons, keeping all four sides equal
+      padding: 0 7px;
       border-radius: 22px;
       overflow: visible;
 
@@ -109,7 +111,10 @@
         flex-shrink: 0;
         display: flex;
         align-items: center;
-        padding: 0 2px 0 4px;
+        padding: 0;
+        // Match the 7px box padding so the round Plus button keeps equal
+        // clearance on all four sides (top/bottom/left/right)
+        margin-right: 7px;
         animation: none;
 
         // Enlarge the Plus button to match the capsule height
@@ -153,7 +158,7 @@
         display: flex;
         align-items: center;
         gap: $size-gap-1;
-        padding: 0 4px 0 2px;
+        padding: 0;
         animation: none;
 
         // Enlarge send/stop button to match the capsule height
@@ -389,7 +394,7 @@
       border-radius: 22px;
       min-height: 44px;
       max-height: 44px;
-      padding: 0 6px 0 2px;
+      padding: 0 7px;
       background: rgba(var(--private-chat-input-capsule-bg-rgb), 0.22);
       border: 1px solid var(--color-overlay-white-08);
       backdrop-filter: blur(8px);
@@ -1461,6 +1466,7 @@
     display: flex;
     align-items: center;
     gap: $size-gap-1;
+    min-width: 0;
     animation: bitfun-stacked-reveal 0.28s cubic-bezier(0.4, 0, 0.2, 1) 0.17s both;
   }
 

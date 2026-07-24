@@ -20,6 +20,33 @@ use crate::routes::api::AppState;
 /// conversations. Keep an explicit ceiling so reverse proxies and operators
 /// can align `client_max_body_size` (nginx) / equivalent limits.
 pub const SYNC_BODY_LIMIT: usize = 64 * 1024 * 1024;
+const MAX_ENCRYPTED_BLOB_BYTES: usize = 48 * 1024 * 1024;
+const MAX_SESSION_ID_BYTES: usize = 256;
+const MAX_NONCE_BYTES: usize = 256;
+
+// Per-account sync-session quotas.
+//
+// Defaults use i32::MAX so BitFun's own deployments do not hit artificial
+// product caps. Keep these knobs (and the upsert/make-room enforcement paths)
+// so self-hosted / open-source operators can lower them to bound each user's
+// cloud session backup footprint.
+const MAX_SYNC_SESSIONS_PER_USER: i64 = i32::MAX as i64;
+const MAX_SYNC_SESSION_BYTES_PER_USER: i64 = i32::MAX as i64;
+
+fn valid_session_id(value: &str) -> bool {
+    !value.trim().is_empty()
+        && value.len() <= MAX_SESSION_ID_BYTES
+        && !value.chars().any(char::is_control)
+}
+
+fn valid_encrypted_blob(encrypted_data: &str, nonce: &str, version: i64) -> bool {
+    !encrypted_data.is_empty()
+        && encrypted_data.len() <= MAX_ENCRYPTED_BLOB_BYTES
+        && !nonce.is_empty()
+        && nonce.len() <= MAX_NONCE_BYTES
+        && !nonce.chars().any(char::is_control)
+        && version > 0
+}
 
 /// Validated principal extracted from the bearer token.
 pub struct AuthUser {
@@ -29,19 +56,31 @@ pub struct AuthUser {
 }
 
 /// Validate the bearer token in `headers`; returns the owning user/device.
-async fn validate_auth(state: &AppState, headers: &HeaderMap) -> Result<AuthUser, StatusCode> {
-    let db = state.db.as_ref().ok_or(StatusCode::NOT_IMPLEMENTED)?;
-    let token = headers
+pub async fn validate_auth(state: &AppState, headers: &HeaderMap) -> Result<AuthUser, StatusCode> {
+    let token = extract_bearer_token(headers).ok_or(StatusCode::UNAUTHORIZED)?;
+    validate_token(state, &token).await
+}
+
+/// Extract `Bearer` token from the `Authorization` header.
+pub fn extract_bearer_token(headers: &HeaderMap) -> Option<String> {
+    headers
         .get(header::AUTHORIZATION)
         .and_then(|v| v.to_str().ok())
         .and_then(|s| s.strip_prefix("Bearer "))
         .map(|t| t.trim().to_string())
         .filter(|t| !t.is_empty())
-        .ok_or(StatusCode::UNAUTHORIZED)?;
-    let auth = AuthToken::find(db, &token)
+}
+
+/// Validate a raw token string against the account database.
+pub async fn validate_token(state: &AppState, token: &str) -> Result<AuthUser, StatusCode> {
+    let db = state.db.as_ref().ok_or(StatusCode::NOT_IMPLEMENTED)?;
+    let auth = AuthToken::find(db, token)
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
         .ok_or(StatusCode::UNAUTHORIZED)?;
+    if !auth.is_device_token() {
+        return Err(StatusCode::FORBIDDEN);
+    }
     Ok(AuthUser {
         user_id: auth.user_id,
         device_id: auth.device_id,
@@ -98,17 +137,55 @@ async fn sessions_upsert(
     Json(body): Json<SessionUpsertRequest>,
 ) -> Result<StatusCode, StatusCode> {
     let auth = validate_auth(&state, &headers).await?;
+    if !valid_session_id(&body.session_id)
+        || !valid_encrypted_blob(&body.encrypted_data, &body.nonce, body.version)
+    {
+        return Err(StatusCode::BAD_REQUEST);
+    }
     let db = state.db.as_ref().ok_or(StatusCode::NOT_IMPLEMENTED)?;
-    SyncSessionRow::upsert(
+    let mut stored = SyncSessionRow::upsert_with_quota(
         db,
         &auth.user_id,
         &body.session_id,
         &body.encrypted_data,
         &body.nonce,
         body.version,
+        MAX_SYNC_SESSIONS_PER_USER,
+        MAX_SYNC_SESSION_BYTES_PER_USER,
     )
     .await
     .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    if !stored {
+        // Prefer keeping the session being uploaded: evict LRU cloud backups
+        // until this blob fits the configured per-user quotas, then retry once.
+        let evicted = SyncSessionRow::make_room_for_upsert(
+            db,
+            &auth.user_id,
+            &body.session_id,
+            body.encrypted_data.len() as i64,
+            MAX_SYNC_SESSIONS_PER_USER,
+            MAX_SYNC_SESSION_BYTES_PER_USER,
+        )
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+        if evicted > 0 {
+            stored = SyncSessionRow::upsert_with_quota(
+                db,
+                &auth.user_id,
+                &body.session_id,
+                &body.encrypted_data,
+                &body.nonce,
+                body.version,
+                MAX_SYNC_SESSIONS_PER_USER,
+                MAX_SYNC_SESSION_BYTES_PER_USER,
+            )
+            .await
+            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+        }
+    }
+    if !stored {
+        return Err(StatusCode::INSUFFICIENT_STORAGE);
+    }
     Ok(StatusCode::NO_CONTENT)
 }
 
@@ -141,6 +218,9 @@ async fn sessions_get(
     Path(session_id): Path<String>,
 ) -> Result<Json<SessionBlob>, StatusCode> {
     let auth = validate_auth(&state, &headers).await?;
+    if !valid_session_id(&session_id) {
+        return Err(StatusCode::BAD_REQUEST);
+    }
     let db = state.db.as_ref().ok_or(StatusCode::NOT_IMPLEMENTED)?;
     let row = SyncSessionRow::get(db, &auth.user_id, &session_id)
         .await
@@ -161,6 +241,9 @@ async fn sessions_delete(
     Path(session_id): Path<String>,
 ) -> Result<StatusCode, StatusCode> {
     let auth = validate_auth(&state, &headers).await?;
+    if !valid_session_id(&session_id) {
+        return Err(StatusCode::BAD_REQUEST);
+    }
     let db = state.db.as_ref().ok_or(StatusCode::NOT_IMPLEMENTED)?;
     SyncSessionRow::delete(db, &auth.user_id, &session_id)
         .await
@@ -191,6 +274,9 @@ async fn settings_upsert(
     Json(body): Json<SettingsUpsertRequest>,
 ) -> Result<StatusCode, StatusCode> {
     let auth = validate_auth(&state, &headers).await?;
+    if !valid_encrypted_blob(&body.encrypted_data, &body.nonce, body.version) {
+        return Err(StatusCode::BAD_REQUEST);
+    }
     let db = state.db.as_ref().ok_or(StatusCode::NOT_IMPLEMENTED)?;
     SyncSettingsRow::upsert(
         db,

@@ -9,7 +9,6 @@
  */
 
 import React, { useState, useCallback, useEffect, useMemo, useRef, useContext, lazy, Suspense } from 'react';
-import { LoaderCircle } from 'lucide-react';
 import { useWorkspaceContext } from '../../infrastructure/contexts/WorkspaceContext';
 import { useWindowControls } from '../hooks/useWindowControls';
 import { isWindowFullscreenShortcut } from '../hooks/windowFullscreenShortcut';
@@ -35,12 +34,13 @@ import { SSHContext } from '@/features/ssh-remote/SSHRemoteContext';
 import { shortcutManager, parseStoredKeybindings } from '@/infrastructure/services/ShortcutManager';
 import { useSessionModeStore } from '../stores/sessionModeStore';
 import { isMacOSDesktopRuntime } from '@/infrastructure/runtime';
+import { flowChatSessionConfigForWorkspace } from '../utils/projectSessionWorkspace';
+import { notificationService } from '@/shared/notification-system';
 import './AppLayout.scss';
 
 type TransitionDirection = 'entering' | 'returning' | null;
 
 const log = createLogger('AppLayout');
-const ACP_SESSION_PENDING_TIMEOUT_MS = 75_000;
 const NewProjectDialog = lazy(() =>
   import('../components/NewProjectDialog').then(module => ({ default: module.NewProjectDialog }))
 );
@@ -66,6 +66,7 @@ interface AcpSessionCreationEventDetail {
   clientId?: string;
   action?: 'create' | 'restore';
   requestId?: string;
+  succeeded?: boolean;
 }
 
 interface WindowModeHint {
@@ -216,12 +217,6 @@ const AppLayout: React.FC<AppLayoutProps> = ({ className = '' }) => {
   const [showNewProjectDialog, setShowNewProjectDialog] = useState(false);
   const [showAboutDialog, setShowAboutDialog] = useState(false);
   const [showWorkspaceStatus, setShowWorkspaceStatus] = useState(false);
-  const [pendingAcpSessionClients, setPendingAcpSessionClients] = useState<Array<{
-    id: string;
-    clientId: string;
-    action: 'create' | 'restore';
-    startedAt: number;
-  }>>([]);
   const handleOpenProject = useCallback(async () => {
     try {
       const selected = await workspaceAPI.open_oh_file_dialog({ directory: true });
@@ -326,7 +321,10 @@ const AppLayout: React.FC<AppLayoutProps> = ({ className = '' }) => {
             currentWorkspace.workspaceKind === WorkspaceKind.Assistant
               ? 'Claw'
               : explicitPreferredMode || 'agentic';
-          sessionId = await flowChatManager.createChatSession({}, initialSessionMode);
+          sessionId = await flowChatManager.createChatSession(
+            flowChatSessionConfigForWorkspace(currentWorkspace),
+            initialSessionMode,
+          );
           if (cancelled) {
             return;
           }
@@ -576,19 +574,24 @@ const AppLayout: React.FC<AppLayoutProps> = ({ className = '' }) => {
   // Create FlowChat session (toolbar / floating UI). detail.mode: 'cowork' → Cowork, else code (agentic).
   const handleCreateFlowChatSession = React.useCallback(async (mode?: 'code' | 'cowork') => {
     try {
+      if (!currentWorkspace?.rootPath) {
+        log.warn('Cannot create FlowChat session without an active workspace');
+        return;
+      }
       const flowChatManager = FlowChatManager.getInstance();
       const setMode = useSessionModeStore.getState().setMode;
+      const sessionConfig = flowChatSessionConfigForWorkspace(currentWorkspace);
       if (mode === 'cowork') {
         setMode('cowork');
-        await flowChatManager.createChatSession({}, 'Cowork');
+        await flowChatManager.createChatSession(sessionConfig, 'Cowork');
       } else {
         setMode('code');
-        await flowChatManager.createChatSession({}, 'agentic');
+        await flowChatManager.createChatSession(sessionConfig, 'agentic');
       }
     } catch (error) {
       log.error('Failed to create FlowChat session', error);
     }
-  }, []);
+  }, [currentWorkspace]);
 
   React.useEffect(() => {
     const handler = (e: Event) => {
@@ -629,37 +632,27 @@ const AppLayout: React.FC<AppLayoutProps> = ({ className = '' }) => {
       const action = detail?.action === 'restore' ? 'restore' : 'create';
       const id = detail?.requestId?.trim() || `${action}:${clientId}`;
       if (detail?.phase === 'start') {
-        setPendingAcpSessionClients(prev => [
-          ...prev.filter(item => item.id !== id),
-          { id, clientId, action, startedAt: Date.now() },
-        ]);
+        notificationService.silent({
+          title: clientId,
+          message: tCommon('nav.workspaces.startingAcpSession'),
+          type: 'info',
+          metadata: { source: 'acp-session', clientId, action, requestId: id, phase: 'start' },
+        });
       } else if (detail?.phase === 'finish') {
-        setPendingAcpSessionClients(prev => {
-          const index = prev.findIndex(item =>
-            item.id === id ||
-            (!detail?.requestId && item.clientId === clientId && item.action === action)
-          );
-          if (index === -1) return prev;
-          return prev.filter((_, currentIndex) => currentIndex !== index);
+        const succeeded = detail.succeeded !== false;
+        notificationService.silent({
+          title: clientId,
+          message: succeeded
+            ? tCommon('nav.workspaces.acpSessionStarted')
+            : tCommon('nav.workspaces.acpSessionStartFailed'),
+          type: succeeded ? 'success' : 'error',
+          metadata: { source: 'acp-session', clientId, action, requestId: id, phase: 'finish', succeeded },
         });
       }
     };
     window.addEventListener('bitfun:acp-session-creation', handler);
     return () => window.removeEventListener('bitfun:acp-session-creation', handler);
-  }, []);
-
-  React.useEffect(() => {
-    if (pendingAcpSessionClients.length === 0) return undefined;
-
-    const intervalId = window.setInterval(() => {
-      const expiresBefore = Date.now() - ACP_SESSION_PENDING_TIMEOUT_MS;
-      setPendingAcpSessionClients(prev =>
-        prev.filter(item => item.startedAt >= expiresBefore)
-      );
-    }, 5_000);
-
-    return () => window.clearInterval(intervalId);
-  }, [pendingAcpSessionClients.length]);
+  }, [tCommon]);
 
   // Global drag-and-drop
   React.useEffect(() => {
@@ -738,20 +731,6 @@ const AppLayout: React.FC<AppLayoutProps> = ({ className = '' }) => {
           <Suspense fallback={null}>
             <FloatingMiniChat />
           </Suspense>
-        )}
-        {pendingAcpSessionClients.length > 0 && (
-          <div className="bitfun-app-acp-session-loading" role="status" aria-live="polite">
-            <LoaderCircle size={18} className="bitfun-app-acp-session-loading__spinner" />
-            <span>
-              {pendingAcpSessionClients[pendingAcpSessionClients.length - 1].action === 'restore'
-                ? tCommon('nav.workspaces.restoringAcpSession', {
-                  agentName: pendingAcpSessionClients[pendingAcpSessionClients.length - 1].clientId,
-                })
-                : tCommon('nav.workspaces.creatingAcpSession', {
-                  agentName: pendingAcpSessionClients[pendingAcpSessionClients.length - 1].clientId,
-                })}
-            </span>
-          </div>
         )}
       </div>
 

@@ -151,7 +151,7 @@ describe('ReviewActionBarPersistenceService', () => {
       } as any);
 
       expect(sessionAPI.saveSessionMetadata).toHaveBeenCalledTimes(1);
-      const [metadata, workspacePath] = (sessionAPI.saveSessionMetadata as any).mock.calls[0];
+      const [metadata, workspacePath, fields] = (sessionAPI.saveSessionMetadata as any).mock.calls[0];
       expect(metadata.sessionId).toBe('session-1');
       expect(metadata.sessionName).toBe('Existing Session');
       expect(metadata.agentType).toBe('agentic');
@@ -171,6 +171,7 @@ describe('ReviewActionBarPersistenceService', () => {
         persistedAt: expect.any(Number),
       });
       expect(workspacePath).toBe('/workspace/project');
+      expect(fields).toEqual(['reviewActionState']);
     });
 
     it('builds complete metadata when no existing metadata is available', async () => {
@@ -253,7 +254,8 @@ describe('ReviewActionBarPersistenceService', () => {
       } as any);
 
       expect(sessionAPI.saveSessionMetadata).toHaveBeenCalledTimes(1);
-      const [, , remoteConnectionId, remoteSshHost] = (sessionAPI.saveSessionMetadata as any).mock.calls[0];
+      const [, , fields, remoteConnectionId, remoteSshHost] = (sessionAPI.saveSessionMetadata as any).mock.calls[0];
+      expect(fields).toEqual(['reviewActionState']);
       expect(remoteConnectionId).toBe('remote-1');
       expect(remoteSshHost).toBe('ssh-host-1');
     });
@@ -275,10 +277,11 @@ describe('ReviewActionBarPersistenceService', () => {
       await clearPersistedReviewState('session-1', '/workspace/project');
 
       expect(sessionAPI.saveSessionMetadata).toHaveBeenCalledTimes(1);
-      const [metadata] = (sessionAPI.saveSessionMetadata as any).mock.calls[0];
+      const [metadata, , fields] = (sessionAPI.saveSessionMetadata as any).mock.calls[0];
       expect(metadata.sessionId).toBe('session-1');
       expect(metadata.sessionName).toBe('Test Session');
       expect(metadata.reviewActionState).toBeUndefined();
+      expect(fields).toEqual(['reviewActionState']);
     });
   });
 

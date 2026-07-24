@@ -2,8 +2,10 @@
 
 mod config;
 mod dialog;
+mod external_sources;
 mod filesystem;
 mod git;
+mod permission;
 mod session;
 mod snapshot;
 mod soft;
@@ -37,6 +39,21 @@ pub(crate) async fn dispatch(
         "set_config" => config::set_config(args).await,
         "get_agent_profile_config" => config::get_agent_profile_config(args).await,
         "get_agent_profile_configs" => config::get_agent_profile_configs().await,
+        "get_external_source_snapshot"
+        | "get_external_source_control_snapshot"
+        | "reveal_external_source_location"
+        | "apply_external_source_control_action_command"
+        | "set_external_source_enabled_command"
+        | "set_external_source_conflict_choice_command"
+        | "set_external_tool_target_decision_command"
+        | "set_external_tool_conflict_choice_command"
+        | "set_external_subagent_activation_command"
+        | "choose_external_subagent_conflict_command"
+        | "set_external_mcp_server_decision_command"
+        | "choose_external_mcp_conflict_command"
+        | "update_external_integration_policy_command" => {
+            external_sources::dispatch(command, args, state).await
+        }
 
         // Filesystem
         "get_directory_children" | "list_files" => {
@@ -77,8 +94,22 @@ pub(crate) async fn dispatch(
         // Dialog / tools
         "start_dialog_turn" => dialog::start_dialog_turn(state, args).await,
         "cancel_dialog_turn" => dialog::cancel_dialog_turn(state, args).await,
-        "confirm_tool_execution" => dialog::confirm_tool_execution(state, args).await,
-        "reject_tool_execution" => dialog::reject_tool_execution(state, args).await,
+        "list_pending_permission_requests" => permission::list_pending_permission_requests(state),
+        "subscribe_permission_requests" => permission::subscribe_permission_requests(),
+        "respond_permission" => permission::respond_permission(state, args).await,
+        "respond_permission_batch" => permission::respond_permission_batch(state, args).await,
+        "list_project_permission_grants" => {
+            permission::list_project_permission_grants(state, args).await
+        }
+        "remove_project_permission_grant" => {
+            permission::remove_project_permission_grant(state, args).await
+        }
+        "clear_project_permission_grants" => {
+            permission::clear_project_permission_grants(state, args).await
+        }
+        "list_project_permission_audit" => {
+            permission::list_project_permission_audit(state, args).await
+        }
 
         // Git (local workspace only)
         "git_is_repository" => git::git_is_repository(args).await,

@@ -10,12 +10,12 @@ share only stable capability facts through contract crates.
 
 The CLI-hosted ACP server consumes `DeliveryProfile::Acp` through
 `ProductAssembler` and uses the Agent Runtime SDK for session creation/listing,
-dialog submission/cancellation, interaction responses, and agent event
-subscription. `bitfun-acp` still depends directly on `bitfun-core` with
-`product-full` for single-pass full persisted-history restore, model/mode configuration,
-model catalog/config reads, MCP provisioning, and the ACP client half of this
-crate. Do not describe the crate as Core-independent until those production
-paths have separately proven portable replacements.
+active session model/mode updates, dialog submission/cancellation, interaction
+responses, and agent event subscription. `bitfun-acp` still depends directly on
+`bitfun-core` with `product-full` for single-pass full persisted-history restore,
+model/mode catalog and provider configuration reads, MCP provisioning, and the
+ACP client half of this crate. Do not describe the crate as Core-independent
+until those production paths have separately proven portable replacements.
 
 ## Guardrails
 

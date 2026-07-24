@@ -1,14 +1,10 @@
 //! Unified process management to avoid Windows child process leaks
 
-use std::io;
 use std::process::Command;
 use std::sync::LazyLock;
 #[cfg(target_os = "macos")]
 use std::sync::OnceLock;
-use tokio::process::{Child, Command as TokioCommand};
-#[cfg(unix)]
-use tokio::time::timeout;
-use tokio::time::Duration;
+use tokio::process::Command as TokioCommand;
 
 #[cfg(windows)]
 use log::warn;
@@ -164,92 +160,6 @@ fn build_macos_path_env() -> Option<std::ffi::OsString> {
     }
 
     std::env::join_paths(merged).ok()
-}
-
-#[cfg(unix)]
-pub fn configure_process_group(command: &mut TokioCommand) {
-    command.process_group(0);
-}
-
-#[cfg(not(unix))]
-pub fn configure_process_group(_command: &mut TokioCommand) {}
-
-#[cfg(unix)]
-pub async fn terminate_child_process_tree(
-    child: &mut Child,
-    graceful_timeout: Duration,
-) -> io::Result<()> {
-    let pid = child.id();
-
-    if let Some(pid) = pid {
-        let process_group = format!("-{}", pid);
-        let _ = create_tokio_command("kill")
-            .arg("-TERM")
-            .arg(&process_group)
-            .status()
-            .await;
-
-        match timeout(graceful_timeout, child.wait()).await {
-            Ok(wait_result) => return wait_result.map(|_| ()),
-            Err(_) => {
-                let _ = create_tokio_command("kill")
-                    .arg("-KILL")
-                    .arg(&process_group)
-                    .status()
-                    .await;
-                return child.wait().await.map(|_| ());
-            }
-        }
-    }
-
-    child.start_kill()?;
-    child.wait().await.map(|_| ())
-}
-
-#[cfg(windows)]
-pub async fn terminate_child_process_tree(
-    child: &mut Child,
-    graceful_timeout: Duration,
-) -> io::Result<()> {
-    let pid = child.id();
-
-    let _ = graceful_timeout;
-
-    if let Some(pid) = pid {
-        let _ = create_tokio_command("taskkill")
-            .arg("/PID")
-            .arg(pid.to_string())
-            .arg("/T")
-            .arg("/F")
-            .status()
-            .await;
-        return child.wait().await.map(|_| ());
-    }
-
-    child.start_kill()?;
-    child.wait().await.map(|_| ())
-}
-
-pub fn spawn_child_process_tree_cleanup(child: Child, graceful_timeout: Duration) {
-    let _ = std::thread::Builder::new()
-        .name("process-tree-cleanup".to_string())
-        .spawn(move || {
-            match tokio::runtime::Builder::new_current_thread()
-                .enable_all()
-                .build()
-            {
-                Ok(runtime) => {
-                    runtime.block_on(async move {
-                        let mut child = child;
-                        let _ = terminate_child_process_tree(&mut child, graceful_timeout).await;
-                    });
-                }
-                Err(_) => {
-                    let mut child = child;
-                    let _ = child.start_kill();
-                }
-            }
-        });
 }
 
 pub fn cleanup_all_processes() {

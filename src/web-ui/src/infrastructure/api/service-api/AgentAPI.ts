@@ -2,7 +2,11 @@
 
 import { api } from './ApiClient';
 import { createTauriCommandError } from '../errors/TauriCommandError';
-import type { DialogTurnData, SessionRelationship } from '@/shared/types/session-history';
+import type {
+  DialogTurnData,
+  ModelRoundAttemptDiagnostic,
+  SessionRelationship,
+} from '@/shared/types/session-history';
 import type { ImageContextData as ImageInputContextData } from './ImageContextTypes';
 import type { AgentSource } from './CustomAgentAPI';
 import type {
@@ -81,6 +85,46 @@ export interface StartDialogTurnResponse {
   success: boolean;
   message: string;
 }
+
+export type PermissionReplyKind = 'once' | 'always' | 'reject';
+
+export interface PermissionRequestSource {
+  kind: 'tool_call' | 'provider' | 'extension';
+  identity: string;
+}
+
+export interface PermissionDelegationContext {
+  parentSessionId: string;
+  parentDialogTurnId?: string;
+  parentToolCallId: string;
+  subagentType: string;
+}
+
+export interface PermissionRequest {
+  requestId: string;
+  /** Model round that owns this permission request. */
+  roundId: string;
+  /** Stable permission order within the model round. */
+  order: number;
+  /** Provider/tool-stream call ID for correlating one concrete tool card. */
+  toolCallId?: string;
+  /** User-presentable workspace root; distinct from the stable project ID. */
+  projectPath?: string;
+  projectId: string;
+  sessionId: string;
+  agentId: string;
+  action: string;
+  resources: string[];
+  saveResources?: string[];
+  source: PermissionRequestSource;
+  delegation?: PermissionDelegationContext;
+  displayMetadata?: Record<string, unknown>;
+}
+
+export type PermissionRequestEvent =
+  | { event: 'asked'; request: PermissionRequest }
+  | { event: 'replied'; requestId: string; reply: { reply: PermissionReplyKind }; source: string }
+  | { event: 'cancelled'; requestId: string; reason: string };
 
 export interface CompactSessionRequest {
   sessionId: string;
@@ -416,6 +460,12 @@ export interface ModelRoundCompletedEvent extends AgenticEvent {
   attemptCount?: number;
   failureCategory?: string;
   tokenDetails?: unknown;
+}
+
+export interface ModelRoundAttemptSupersededEvent extends AgenticEvent {
+  turnId: string;
+  roundId: string;
+  diagnostic: ModelRoundAttemptDiagnostic;
 }
 
 export interface ModelRoundStartedEvent extends AgenticEvent {
@@ -835,32 +885,58 @@ export class AgentAPI {
     }
   }
 
-  async confirmToolExecution(sessionId: string, toolId: string): Promise<void> {
+  async listPendingPermissionRequests(): Promise<PermissionRequest[]> {
     try {
-      await api.invoke<void>('confirm_tool_execution', {
-        request: {
-          sessionId,
-          toolId
-        }
-      });
+      return await api.invoke<PermissionRequest[]>('list_pending_permission_requests');
     } catch (error) {
-      throw createTauriCommandError('confirm_tool_execution', error, { sessionId, toolId });
+      throw createTauriCommandError('list_pending_permission_requests', error);
     }
   }
 
-   
-  async rejectToolExecution(sessionId: string, toolId: string, reason?: string): Promise<void> {
+  async subscribePermissionRequests(): Promise<void> {
     try {
-      await api.invoke<void>('reject_tool_execution', {
-        request: {
-          sessionId,
-          toolId,
-          reason
-        }
-      });
+      await api.invoke<void>('subscribe_permission_requests');
     } catch (error) {
-      throw createTauriCommandError('reject_tool_execution', error, { sessionId, toolId, reason });
+      throw createTauriCommandError('subscribe_permission_requests', error);
     }
+  }
+
+  async respondPermission(
+    requestId: string,
+    reply: PermissionReplyKind,
+    feedback?: string,
+  ): Promise<void> {
+    const request = {
+      requestId,
+      reply,
+      ...(feedback?.trim() ? { feedback: feedback.trim() } : {}),
+    };
+    try {
+      await api.invoke<void>('respond_permission', { request });
+    } catch (error) {
+      throw createTauriCommandError('respond_permission', error, request);
+    }
+  }
+
+  async respondPermissionBatch(
+    requestId: string,
+    reply: PermissionReplyKind,
+    feedback?: string,
+  ): Promise<string[]> {
+    const request = {
+      requestId,
+      reply,
+      ...(feedback?.trim() ? { feedback: feedback.trim() } : {}),
+    };
+    try {
+      return await api.invoke<string[]>('respond_permission_batch', { request });
+    } catch (error) {
+      throw createTauriCommandError('respond_permission_batch', error, request);
+    }
+  }
+
+  onPermissionRequestEvent(callback: (event: PermissionRequestEvent) => void): () => void {
+    return api.listen<PermissionRequestEvent>('permission://event', callback);
   }
   
 
@@ -900,7 +976,10 @@ export class AgentAPI {
     return api.listen<ModelRoundCompletedEvent>('agentic://model-round-completed', callback);
   }
 
-   
+  onModelRoundAttemptSuperseded(callback: (event: ModelRoundAttemptSupersededEvent) => void): () => void {
+    return api.listen<ModelRoundAttemptSupersededEvent>('agentic://model-round-attempt-superseded', callback);
+  }
+
   onTextChunk(callback: (event: TextChunkEvent) => void): () => void {
     return api.listen<TextChunkEvent>('agentic://text-chunk', callback);
   }

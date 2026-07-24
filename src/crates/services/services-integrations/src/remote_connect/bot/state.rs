@@ -168,6 +168,13 @@ pub struct BotChatState {
     /// Cleared by `/devices` → pick "local" or selecting an offline device.
     #[serde(skip, default)]
     pub active_remote_device: Option<RemoteDeviceTarget>,
+    /// Records that the serializable workspace/session fields currently belong
+    /// to an account-routed device. The device target itself and delegated
+    /// credentials intentionally stay in memory only, but this marker must be
+    /// persisted so a restart cannot reinterpret a remote path/session as a
+    /// local desktop context.
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub account_remote_context: bool,
 }
 
 /// A remote device the bot has switched to. All subsequent bot commands
@@ -197,6 +204,7 @@ impl BotChatState {
             delegated_token: None,
             delegated_master_key: None,
             active_remote_device: None,
+            account_remote_context: false,
         }
     }
 
@@ -252,6 +260,71 @@ impl BotChatState {
     pub fn has_delegated_identity(&self) -> bool {
         self.delegated_token.is_some() && self.delegated_master_key.is_some()
     }
+
+    /// Switch command routing to an account device and fence every workspace
+    /// or session selection made for the previous target.
+    pub fn select_remote_device(&mut self, target: RemoteDeviceTarget) {
+        self.clear_device_scoped_context();
+        self.active_remote_device = Some(target);
+        self.account_remote_context = true;
+    }
+
+    /// Return command routing to this desktop without leaking a remote
+    /// workspace/session into local execution.
+    pub fn select_local_device(&mut self) {
+        let was_remote = self.active_remote_device.take().is_some() || self.account_remote_context;
+        self.account_remote_context = false;
+        if was_remote {
+            self.clear_device_scoped_context();
+        }
+    }
+
+    /// Sanitize state loaded from disk. Delegated authority is never restored,
+    /// and a persisted remote-context marker makes its workspace/session
+    /// selections invalid on a fresh process.
+    pub fn prepare_for_restore(&mut self) {
+        if self.account_remote_context {
+            self.clear_delegated_identity();
+        }
+    }
+
+    /// Remove every account-bound value when the desktop account changes.
+    /// A bot chat can outlive many desktop login sessions, so retaining these
+    /// fields would either keep controlling the previous account or replay an
+    /// old device selection with the replacement account's credentials.
+    pub fn clear_delegated_identity(&mut self) {
+        self.relay_url = None;
+        self.delegated_token = None;
+        self.delegated_master_key = None;
+
+        let was_remote = self.active_remote_device.take().is_some() || self.account_remote_context;
+        self.account_remote_context = false;
+        let was_selecting_device = matches!(
+            self.pending_action,
+            Some(PendingAction::SelectDevice { .. })
+        );
+        if was_remote {
+            // Workspace/session selections made while targeting a remote
+            // device are owned by that account and must not fall through to
+            // local execution after the remote target is cleared.
+            self.clear_device_scoped_context();
+        }
+        if was_remote || was_selecting_device {
+            self.clear_pending();
+            self.last_menu_commands.clear();
+        }
+    }
+
+    fn clear_device_scoped_context(&mut self) {
+        self.current_workspace = None;
+        self.current_assistant = None;
+        self.current_assistant_name = None;
+        self.current_session_id = None;
+    }
+}
+
+fn is_false(value: &bool) -> bool {
+    !*value
 }
 
 fn now_secs() -> i64 {
@@ -404,6 +477,95 @@ mod tests {
         assert!(state.pending_action.is_none());
         assert_eq!(state.pending_expires_at, 0);
         assert_eq!(state.pending_invalid_count, 0);
+    }
+
+    #[test]
+    fn clearing_delegated_identity_drops_remote_account_state() {
+        let mut state = BotChatState::new("chat".into());
+        state.relay_url = Some("https://relay-a.example".into());
+        state.set_delegated_identity("token-a".into(), vec![7; 32]);
+        state.select_remote_device(RemoteDeviceTarget {
+            device_id: "device-a".into(),
+            device_name: "Device A".into(),
+        });
+        state.current_workspace = Some(BotWorkspaceRef::local("/remote/a"));
+        state.current_assistant = Some("/remote/a".into());
+        state.current_assistant_name = Some("Remote A".into());
+        state.current_session_id = Some("session-a".into());
+        state.set_pending(PendingAction::SelectSession {
+            options: vec![],
+            page: 0,
+            has_more: false,
+        });
+        state.last_menu_commands = vec!["/sessions".into()];
+
+        state.clear_delegated_identity();
+
+        assert!(state.relay_url.is_none());
+        assert!(!state.has_delegated_identity());
+        assert!(state.active_remote_device.is_none());
+        assert!(state.current_workspace.is_none());
+        assert!(state.current_assistant.is_none());
+        assert!(state.current_assistant_name.is_none());
+        assert!(state.current_session_id.is_none());
+        assert!(state.pending_action.is_none());
+        assert!(state.last_menu_commands.is_empty());
+    }
+
+    #[test]
+    fn persisted_remote_context_is_sanitized_during_restore() {
+        let mut state = BotChatState::new("chat".into());
+        state.paired = true;
+        state.select_remote_device(RemoteDeviceTarget {
+            device_id: "device-a".into(),
+            device_name: "Device A".into(),
+        });
+        state.current_workspace = Some(BotWorkspaceRef::local("/remote/a"));
+        state.current_assistant = Some("/remote/a".into());
+        state.current_assistant_name = Some("Remote A".into());
+        state.current_session_id = Some("session-a".into());
+
+        let encoded = serde_json::to_string(&state).expect("state should serialize");
+        assert!(encoded.contains("account_remote_context"));
+        assert!(!encoded.contains("device-a"));
+
+        let mut restored: BotChatState =
+            serde_json::from_str(&encoded).expect("state should deserialize");
+        assert!(restored.active_remote_device.is_none());
+        assert!(restored.account_remote_context);
+
+        restored.prepare_for_restore();
+
+        assert!(!restored.account_remote_context);
+        assert!(restored.current_workspace.is_none());
+        assert!(restored.current_assistant.is_none());
+        assert!(restored.current_assistant_name.is_none());
+        assert!(restored.current_session_id.is_none());
+
+        let reencoded = serde_json::to_string(&restored).expect("restored state should serialize");
+        let recovered_again: BotChatState =
+            serde_json::from_str(&reencoded).expect("clean state should deserialize");
+        assert!(!recovered_again.account_remote_context);
+        assert!(recovered_again.current_workspace.is_none());
+        assert!(recovered_again.current_session_id.is_none());
+    }
+
+    #[test]
+    fn switching_back_to_local_drops_remote_context() {
+        let mut state = BotChatState::new("chat".into());
+        state.select_remote_device(RemoteDeviceTarget {
+            device_id: "device-a".into(),
+            device_name: "Device A".into(),
+        });
+        state.current_workspace = Some(BotWorkspaceRef::local("/remote/a"));
+        state.current_session_id = Some("session-a".into());
+
+        state.select_local_device();
+
+        assert!(state.active_remote_device.is_none());
+        assert!(!state.account_remote_context);
+        assert!(state.current_workspace.is_none());
+        assert!(state.current_session_id.is_none());
     }
 
     #[test]

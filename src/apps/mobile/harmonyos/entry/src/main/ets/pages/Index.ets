@@ -319,8 +319,8 @@ struct Index {
             onLoadOlder: () => {
               this.loadOlderMessages();
             },
-            onApproveTool: (toolId: string, updatedInput?: Object) => {
-              this.approveTool(toolId, updatedInput);
+            onApproveTool: (toolId: string) => {
+              this.approveTool(toolId);
             },
             onRejectTool: (toolId: string) => {
               this.rejectTool(toolId);
@@ -1577,9 +1577,9 @@ struct Index {
     this.sendChatMessage();
   }
 
-  private async approveTool(toolId: string, updatedInput?: Object): Promise<void> {
+  private async approveTool(toolId: string): Promise<void> {
     await this.runToolAction(toolId, RemoteI18n.t('status.approvingTool'), RemoteI18n.t('status.toolApproved'), () => {
-      return this.sessionManager.confirmTool(toolId, updatedInput);
+      return this.sessionManager.confirmTool(toolId);
     });
   }
 

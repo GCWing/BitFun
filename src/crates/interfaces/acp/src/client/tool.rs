@@ -86,10 +86,6 @@ impl Tool for AcpAgentTool {
         false
     }
 
-    fn needs_permissions(&self, _input: Option<&Value>) -> bool {
-        !self.definition.read_only
-    }
-
     async fn validate_input(
         &self,
         input: &Value,

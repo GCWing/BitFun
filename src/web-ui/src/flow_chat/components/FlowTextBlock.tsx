@@ -1,8 +1,7 @@
 /**
  * Streaming text block component.
- * Applies a typewriter effect during streaming to smooth out
- * the batched content updates from EventBatcher (~100ms).
- * Supports a streaming cursor indicator.
+ * Applies an adaptive typewriter during streaming to smoothly drain
+ * batched EventBatcher text updates. Supports a streaming cursor indicator.
  */
 
 import React, { useState, useEffect, useRef } from 'react';
@@ -13,6 +12,7 @@ import type { MarkdownTraceContext } from '@/component-library';
 import type { FlowTextItem } from '../types/flow-chat';
 import { useFlowChatContext } from './modern/FlowChatContext';
 import { useTypewriter } from '../hooks/useTypewriter';
+import { useReportTypewriterReveal } from '../hooks/typewriterRevealGateContext';
 import { isStartupRenderTraceEnabled } from '@/shared/utils/startupTrace';
 import './FlowTextBlock.scss';
 
@@ -87,9 +87,34 @@ export const FlowTextBlock = React.memo<FlowTextBlockProps>(({
 
   const isStreaming = textItem.isStreaming &&
     (textItem.status === 'streaming' || textItem.status === 'running');
-  const displayContent = useTypewriter(content, isStreaming, {
+  const { displayText: displayContent, isRevealing } = useTypewriter(content, isStreaming, {
     replayOnMount: replayStreamingOnMount,
   });
+  useReportTypewriterReveal(textItem.id, isRevealing);
+  // Keep streaming render mode until the typewriter finishes draining so the
+  // Markdown path does not flash when the model completes early.
+  const isVisuallyStreaming = isStreaming || isRevealing;
+  // Leave Markdown streaming mode one frame after visual settle so footer /
+  // list layout commits first; avoids a same-frame Prism upgrade flash.
+  const [markdownStreaming, setMarkdownStreaming] = useState(isVisuallyStreaming);
+  useEffect(() => {
+    if (isVisuallyStreaming) {
+      setMarkdownStreaming(true);
+      return;
+    }
+    let cancelled = false;
+    const frameId = requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        if (!cancelled) {
+          setMarkdownStreaming(false);
+        }
+      });
+    });
+    return () => {
+      cancelled = true;
+      cancelAnimationFrame(frameId);
+    };
+  }, [isVisuallyStreaming]);
   
   // Heuristic: if content does not change for a while, streaming is done.
   const [isContentGrowing, setIsContentGrowing] = useState(isStreaming);
@@ -124,9 +149,9 @@ export const FlowTextBlock = React.memo<FlowTextBlockProps>(({
     return clearGrowthTimeout;
   }, [content, isStreaming]);
   
-  const isActivelyStreaming = textItem.isStreaming &&
-    (textItem.status === 'streaming' || textItem.status === 'running') &&
-    isContentGrowing;
+  // Keep streaming chrome while either the model is actively emitting or the
+  // typewriter is still revealing leftover characters.
+  const isActivelyStreaming = (isStreaming && isContentGrowing) || isRevealing;
   const markdownTraceContext = isStartupRenderTraceEnabled() ? traceContext : undefined;
 
   if (textItem.runtimeStatus) {
@@ -146,7 +171,7 @@ export const FlowTextBlock = React.memo<FlowTextBlockProps>(({
       data-testid={testId}
       data-flow-item-id={textItem.id}
       data-status={textItem.status}
-      data-streaming={isStreaming ? 'true' : 'false'}
+      data-streaming={isVisuallyStreaming ? 'true' : 'false'}
       {...testAttributes}
     >
       {textItem.isMarkdown ? (
@@ -154,14 +179,9 @@ export const FlowTextBlock = React.memo<FlowTextBlockProps>(({
           content={displayContent}
           basePath={markdownBasePath}
           remoteConnectionId={markdownRemoteConnectionId}
-          // Pass the raw streaming flag (not the idle-gated
-          // `isActivelyStreaming`) so the code-block render path inside
-          // Markdown stays stable across bursty AI output. Otherwise
-          // `isContentGrowing` toggles every >500ms idle and forces the
-          // fallback <pre> / Prism highlighter to swap back and forth,
-          // which makes line numbers and the code body visibly shake
-          // until the stream finally completes.
-          isStreaming={isStreaming}
+          // Prefer deferred visual streaming so Prism upgrade does not share a
+          // frame with footer insertion / list scroll settlement.
+          isStreaming={markdownStreaming}
           onFileViewRequest={onFileViewRequest}
           onTabOpen={onTabOpen}
           onHttpLinkClick={onHttpLinkClick}

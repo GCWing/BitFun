@@ -36,3 +36,8 @@
     background: color-mix(in srgb, var(--color-accent-500) 8%, transparent);
   }
 }
+
+::highlight(bitfun-flowchat-search-current) {
+  color: inherit;
+  background: color-mix(in srgb, var(--color-accent-500) 42%, transparent);
+}

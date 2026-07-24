@@ -3,8 +3,7 @@ use std::sync::{Arc, Mutex};
 use async_trait::async_trait;
 use bitfun_agent_runtime::sdk::{
     AgentInteractionResponsePort, AgentRuntimeBuilder, AgentSubmissionPort, AgentSubmissionRequest,
-    AgentSubmissionResult, AgentToolConfirmationRequest, AgentToolRejectionRequest,
-    AgentUserAnswersRequest, PortError, PortResult, RuntimeError,
+    AgentSubmissionResult, AgentUserAnswersRequest, PortError, PortResult, RuntimeError,
 };
 use bitfun_runtime_ports::PortErrorKind;
 use serde_json::json;
@@ -35,8 +34,6 @@ impl AgentSubmissionPort for FakeSubmissionPort {
 
 #[derive(Debug, Clone, PartialEq)]
 enum RecordedResponse {
-    Confirm(AgentToolConfirmationRequest),
-    Reject(AgentToolRejectionRequest),
     Answers(AgentUserAnswersRequest),
 }
 
@@ -47,22 +44,6 @@ struct RecordingInteractionResponsePort {
 
 #[async_trait]
 impl AgentInteractionResponsePort for RecordingInteractionResponsePort {
-    async fn confirm_tool(&self, request: AgentToolConfirmationRequest) -> PortResult<()> {
-        self.responses
-            .lock()
-            .unwrap()
-            .push(RecordedResponse::Confirm(request));
-        Ok(())
-    }
-
-    async fn reject_tool(&self, request: AgentToolRejectionRequest) -> PortResult<()> {
-        self.responses
-            .lock()
-            .unwrap()
-            .push(RecordedResponse::Reject(request));
-        Ok(())
-    }
-
     async fn submit_user_answers(&self, request: AgentUserAnswersRequest) -> PortResult<()> {
         self.responses
             .lock()
@@ -73,7 +54,7 @@ impl AgentInteractionResponsePort for RecordingInteractionResponsePort {
 }
 
 #[tokio::test]
-async fn sdk_forwards_typed_interaction_responses_without_losing_payloads() {
+async fn sdk_forwards_typed_user_answers_without_losing_payloads() {
     let responses = Arc::new(RecordingInteractionResponsePort::default());
     let runtime = AgentRuntimeBuilder::new()
         .with_submission_port(Arc::new(FakeSubmissionPort))
@@ -81,27 +62,11 @@ async fn sdk_forwards_typed_interaction_responses_without_losing_payloads() {
         .build()
         .expect("runtime with interaction response port");
 
-    let confirmation = AgentToolConfirmationRequest {
-        tool_id: "tool-1".to_string(),
-        updated_input: Some(json!({ "path": "updated.txt" })),
-    };
-    let rejection = AgentToolRejectionRequest {
-        tool_id: "tool-2".to_string(),
-        reason: "Use the read-only path".to_string(),
-    };
     let answers = AgentUserAnswersRequest {
         tool_id: "tool-3".to_string(),
         answers: json!({ "choice": "continue", "notes": ["keep history"] }),
     };
 
-    runtime
-        .confirm_tool(confirmation.clone())
-        .await
-        .expect("confirm tool");
-    runtime
-        .reject_tool(rejection.clone())
-        .await
-        .expect("reject tool");
     runtime
         .submit_user_answers(answers.clone())
         .await
@@ -109,11 +74,7 @@ async fn sdk_forwards_typed_interaction_responses_without_losing_payloads() {
 
     assert_eq!(
         *responses.responses.lock().unwrap(),
-        vec![
-            RecordedResponse::Confirm(confirmation),
-            RecordedResponse::Reject(rejection),
-            RecordedResponse::Answers(answers),
-        ]
+        vec![RecordedResponse::Answers(answers)]
     );
 }
 
@@ -125,9 +86,9 @@ async fn sdk_reports_a_missing_interaction_response_port() {
         .expect("runtime without optional interaction response port");
 
     let error = runtime
-        .confirm_tool(AgentToolConfirmationRequest {
-            tool_id: "tool-1".to_string(),
-            updated_input: None,
+        .submit_user_answers(AgentUserAnswersRequest {
+            tool_id: "tool-3".to_string(),
+            answers: json!({ "choice": "continue" }),
         })
         .await
         .expect_err("missing port must be explicit");
@@ -137,28 +98,6 @@ async fn sdk_reports_a_missing_interaction_response_port() {
 
 #[test]
 fn interaction_response_requests_keep_camel_case_wire_fields() {
-    assert_eq!(
-        serde_json::to_value(AgentToolConfirmationRequest {
-            tool_id: "tool-1".to_string(),
-            updated_input: Some(json!({ "command": "safe" })),
-        })
-        .expect("serialize confirmation request"),
-        json!({
-            "toolId": "tool-1",
-            "updatedInput": { "command": "safe" },
-        })
-    );
-    assert_eq!(
-        serde_json::to_value(AgentToolRejectionRequest {
-            tool_id: "tool-2".to_string(),
-            reason: "User rejected".to_string(),
-        })
-        .expect("serialize rejection request"),
-        json!({
-            "toolId": "tool-2",
-            "reason": "User rejected",
-        })
-    );
     assert_eq!(
         serde_json::to_value(AgentUserAnswersRequest {
             tool_id: "tool-3".to_string(),

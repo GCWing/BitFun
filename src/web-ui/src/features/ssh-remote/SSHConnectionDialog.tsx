@@ -3,7 +3,7 @@
  * Professional SSH connection dialog following BitFun design patterns
  */
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useI18n } from '@/infrastructure/i18n';
 import { useSSHRemoteContext } from './SSHRemoteContext';
 import { SSHAuthPromptDialog, type SSHAuthPromptSubmitPayload } from './SSHAuthPromptDialog';
@@ -59,6 +59,31 @@ export const SSHConnectionDialog: React.FC<SSHConnectionDialogProps> = ({
 
   const [showPassword, setShowPassword] = useState(false);
   const [showPassphrase, setShowPassphrase] = useState(false);
+  const formRef = useRef<HTMLDivElement>(null);
+  const formHighlightTimerRef = useRef<number | null>(null);
+  const [formHighlighted, setFormHighlighted] = useState(false);
+
+  const revealConnectionForm = useCallback(() => {
+    const el = formRef.current;
+    if (!el) return;
+    el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    setFormHighlighted(true);
+    if (formHighlightTimerRef.current != null) {
+      window.clearTimeout(formHighlightTimerRef.current);
+    }
+    formHighlightTimerRef.current = window.setTimeout(() => {
+      setFormHighlighted(false);
+      formHighlightTimerRef.current = null;
+    }, 1200);
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (formHighlightTimerRef.current != null) {
+        window.clearTimeout(formHighlightTimerRef.current);
+      }
+    };
+  }, []);
 
   async function loadSavedConnections() {
     setLocalError(null);
@@ -281,6 +306,8 @@ export const SSHConnectionDialog: React.FC<SSHConnectionDialogProps> = ({
       keyPath,
       passphrase: '',
     });
+    // Config list sits above the form; scroll so the filled fields are visible.
+    requestAnimationFrame(() => revealConnectionForm());
   };
 
   const handleCredentialsPromptSubmit = async (payload: SSHAuthPromptSubmitPayload) => {
@@ -326,6 +353,7 @@ export const SSHConnectionDialog: React.FC<SSHConnectionDialogProps> = ({
       keyPath,
       passphrase: '',
     });
+    requestAnimationFrame(() => revealConnectionForm());
   };
 
   const handleDeleteConnection = async (e: React.MouseEvent, connectionId: string) => {
@@ -540,7 +568,13 @@ export const SSHConnectionDialog: React.FC<SSHConnectionDialogProps> = ({
           )}
 
           {/* New connection form */}
-          <div className="ssh-connection-dialog__form">
+          <div
+            ref={formRef}
+            className={[
+              'ssh-connection-dialog__form',
+              formHighlighted ? 'ssh-connection-dialog__form--highlighted' : '',
+            ].filter(Boolean).join(' ')}
+          >
             {/* Host and Port */}
             <div className="ssh-connection-dialog__row">
               <div className="ssh-connection-dialog__field ssh-connection-dialog__field--flex">

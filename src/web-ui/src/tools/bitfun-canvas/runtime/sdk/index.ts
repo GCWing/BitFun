@@ -37,13 +37,13 @@ export {
   TodoList,
   TodoListCard,
   UsageBar,
-  normalizeDiffLines,
 } from './data-display';
+export { normalizeDiffLines } from './diffLines';
 export {
   DependencyGraph,
   FlowDiagram,
-  computeDAGLayout,
 } from './diagrams';
+export { computeDAGLayout } from './diagramLayout';
 export {
   useCallback,
   useCanvasAction,

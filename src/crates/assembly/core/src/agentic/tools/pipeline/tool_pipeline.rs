@@ -1,7 +1,7 @@
 //! Tool pipeline
 //!
 //! Manages the complete lifecycle of tools:
-//! confirmation, execution, caching, retries, etc.
+//! permission authorization, execution, caching, retries, etc.
 
 use super::state_manager::{tool_task_state_kind, ToolStateManager};
 use super::types::*;
@@ -15,27 +15,32 @@ use crate::agentic::tools::tool_context_runtime::ToolUseContext;
 use crate::agentic::tools::tool_result_storage;
 use crate::util::elapsed_ms_u64;
 use crate::util::errors::{BitFunError, BitFunResult};
-use bitfun_agent_runtime::tool_confirmation::{
-    resolve_confirmation_failure, resolve_confirmation_wait_result, resolve_tool_confirmation_plan,
-    ConfirmationFailureKind, ToolConfirmationChannelStore, ToolConfirmationPlan,
-    ToolConfirmationRequestFacts, ToolConfirmationResponse, ToolConfirmationWaitResult,
+use bitfun_agent_runtime::permission::{
+    PendingPermissionReceiver, PermissionRequestManager, PermissionWaitOutcome,
 };
+use bitfun_agent_stream::ToolArgumentRepairKind;
 use bitfun_agent_tools::{
-    build_invalid_tool_call_error_message, build_tool_call_truncation_recovery_notice,
-    build_tool_confirmation_timeout_presentation, build_tool_execution_error_presentation,
+    build_invalid_tool_call_error_message, build_normal_tool_json_repair_notice,
+    build_permission_denied_tool_presentation, build_tool_execution_error_presentation,
     build_tool_execution_timeout_presentation,
     build_user_rejected_tool_presentation_with_instruction,
-    build_user_steering_interrupted_presentation, render_tool_result_for_assistant,
-    truncate_raw_tool_arguments_preview, truncate_tool_arguments_preview,
-    validate_tool_execution_admission, ResolvedToolInvocation, ToolExecutionAdmissionRejection,
-    ToolExecutionAdmissionRequest, GET_TOOL_SPEC_TOOL_NAME, USER_STEERING_INTERRUPTED_MESSAGE,
+    build_user_steering_interrupted_presentation, build_write_tail_closure_notice,
+    render_tool_result_for_assistant, truncate_raw_tool_arguments_preview,
+    truncate_tool_arguments_preview, validate_tool_execution_admission, PermissionIntent,
+    ResolvedToolInvocation, ToolExecutionAdmissionRejection, ToolExecutionAdmissionRequest,
+    ToolExecutionErrorPresentation, GET_TOOL_SPEC_TOOL_NAME, USER_STEERING_INTERRUPTED_MESSAGE,
 };
-use bitfun_runtime_ports::RoundInjectionToolPreemption;
+use bitfun_runtime_ports::{
+    wildcard_matches, PermissionEffect, PermissionGrant, PermissionReply, PermissionRequest,
+    PermissionRequestSource, PermissionRequestSourceKind, PermissionResourceCaseSensitivity,
+    PermissionRule, RoundInjectionToolPreemption,
+};
 use futures::future::join_all;
 use log::{debug, error, info, warn};
+use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::{Instant, SystemTime};
-use tokio::sync::RwLock as TokioRwLock;
+use tokio::sync::{Mutex as TokioMutex, RwLock as TokioRwLock};
 use tokio::time::{timeout, Duration};
 use tokio_util::sync::CancellationToken;
 use tool_runtime::pipeline::{
@@ -302,7 +307,27 @@ fn build_user_steering_interrupted_result(
 fn build_user_rejected_tool_result(
     task_id: &str,
     task: Option<ToolTask>,
-    instruction: Option<&str>,
+    feedback: Option<&str>,
+) -> ToolExecutionResult {
+    build_permission_rejected_tool_result(task_id, task, |tool_name| {
+        build_user_rejected_tool_presentation_with_instruction(tool_name, feedback)
+    })
+}
+
+fn build_permission_denied_tool_result(
+    task_id: &str,
+    task: Option<ToolTask>,
+    reason: &str,
+) -> ToolExecutionResult {
+    build_permission_rejected_tool_result(task_id, task, |tool_name| {
+        build_permission_denied_tool_presentation(tool_name, reason)
+    })
+}
+
+fn build_permission_rejected_tool_result(
+    task_id: &str,
+    task: Option<ToolTask>,
+    presentation_for: impl FnOnce(&str) -> ToolExecutionErrorPresentation,
 ) -> ToolExecutionResult {
     let (tool_id, wire_tool_name, effective_tool_name, execution_time_ms) = if let Some(task) = task
     {
@@ -325,8 +350,7 @@ fn build_user_rejected_tool_result(
         )
     };
 
-    let presentation =
-        build_user_rejected_tool_presentation_with_instruction(&effective_tool_name, instruction);
+    let presentation = presentation_for(&effective_tool_name);
     let persisted_effective_tool_name =
         persisted_effective_tool_name(&wire_tool_name, &effective_tool_name);
 
@@ -387,14 +411,211 @@ fn map_tool_execution_admission_rejection(error: ToolExecutionAdmissionRejection
 fn recovered_write_has_potentially_truncated_marked_path(
     tool_name: &str,
     arguments: &serde_json::Value,
+    repair_kind: ToolArgumentRepairKind,
     recovered_from_truncation: bool,
 ) -> bool {
-    recovered_from_truncation
+    (repair_kind.is_write_tail_closure() || recovered_from_truncation)
         && tool_name == "Write"
         && arguments
             .get("payload")
             .and_then(serde_json::Value::as_str)
             .is_some_and(|value| value.starts_with("+++ ") && !value.contains('\n'))
+}
+
+enum PermissionAuthorization {
+    Allowed,
+    UserRejected { feedback: Option<String> },
+    PolicyDenied { reason: String },
+}
+
+fn user_rejection_audit_reason(tool_name: &str, feedback: Option<&str>) -> String {
+    match feedback {
+        Some(feedback) => {
+            format!("User rejected permission for tool '{tool_name}' with feedback: {feedback}")
+        }
+        None => format!("User rejected permission for tool '{tool_name}'"),
+    }
+}
+
+#[derive(Debug)]
+enum PermissionExecutionPlan {
+    Allowed,
+    Rejected { reason: String },
+    Awaiting(Vec<PendingPermissionReceiver>),
+}
+
+#[derive(Debug, Clone)]
+enum PermissionPlanDraft {
+    Allowed,
+    Rejected { reason: String },
+    Requests(Vec<PermissionRequest>),
+}
+
+pub fn permission_project_id_for_workspace_identity(
+    identity: &crate::service::remote_ssh::workspace_state::WorkspaceSessionIdentity,
+    is_remote: bool,
+) -> BitFunResult<String> {
+    if !is_remote {
+        return Ok(
+            bitfun_services_integrations::remote_ssh::paths::local_workspace_stable_storage_id(
+                identity.logical_workspace_path(),
+            ),
+        );
+    }
+
+    if identity.hostname == "_unresolved" {
+        let connection_id = identity.remote_connection_id.as_deref().ok_or_else(|| {
+            BitFunError::validation(
+                "Unresolved remote workspace permission identity has no connection id".to_string(),
+            )
+        })?;
+        let key =
+            bitfun_services_integrations::remote_ssh::paths::unresolved_remote_session_storage_key(
+                connection_id,
+                identity.logical_workspace_path(),
+            );
+        return Ok(format!("remote_unresolved_{key}"));
+    }
+
+    Ok(
+        bitfun_services_integrations::remote_ssh::paths::remote_workspace_stable_id(
+            &identity.hostname,
+            identity.logical_workspace_path(),
+        ),
+    )
+}
+
+fn permission_project_id(context: &ToolUseContext) -> BitFunResult<String> {
+    let workspace = context.workspace.as_ref().ok_or_else(|| {
+        BitFunError::validation("A workspace is required for file permissions".to_string())
+    })?;
+    permission_project_id_for_workspace_identity(&workspace.session_identity, workspace.is_remote())
+}
+
+fn permission_project_path(context: &ToolUseContext) -> BitFunResult<String> {
+    let workspace = context.workspace.as_ref().ok_or_else(|| {
+        BitFunError::validation("A workspace is required for file permissions".to_string())
+    })?;
+    Ok(workspace
+        .session_identity
+        .logical_workspace_path()
+        .to_string())
+}
+
+const ACCOUNT_PERMISSION_SCOPE: &str = "account";
+const ACCOUNT_PERMISSION_PROJECT_ID: &str = "__bitfun_account_actions__";
+const ACCOUNT_PERMISSION_PROJECT_PATH: &str = "BitFun account";
+
+fn permission_scope(
+    context: &ToolUseContext,
+    intents: &[PermissionIntent],
+) -> BitFunResult<(String, String)> {
+    if context.workspace.is_some() {
+        return Ok((
+            permission_project_id(context)?,
+            permission_project_path(context)?,
+        ));
+    }
+
+    let account_scoped = intents.iter().all(|intent| {
+        intent
+            .display_metadata
+            .get("permissionScope")
+            .and_then(serde_json::Value::as_str)
+            == Some(ACCOUNT_PERMISSION_SCOPE)
+    });
+    if account_scoped {
+        return Ok((
+            ACCOUNT_PERMISSION_PROJECT_ID.to_string(),
+            ACCOUNT_PERMISSION_PROJECT_PATH.to_string(),
+        ));
+    }
+
+    Err(BitFunError::validation(
+        "A workspace is required for file permissions".to_string(),
+    ))
+}
+
+fn permission_resource_case_sensitivity(
+    context: &ToolUseContext,
+) -> PermissionResourceCaseSensitivity {
+    if context.is_remote() || !cfg!(windows) {
+        PermissionResourceCaseSensitivity::Sensitive
+    } else {
+        PermissionResourceCaseSensitivity::Insensitive
+    }
+}
+
+fn permission_intent_effect(
+    intent: &PermissionIntent,
+    rules: &[PermissionRule],
+    grants: &[PermissionGrant],
+    case_sensitivity: PermissionResourceCaseSensitivity,
+) -> PermissionEffect {
+    let evaluator = bitfun_runtime_ports::PermissionEvaluator::new(case_sensitivity);
+    let mut aggregate = PermissionEffect::Allow;
+
+    for resource in &intent.resources {
+        let configured_effect = if intent.action == "bash" {
+            rules
+                .iter()
+                .rev()
+                .find(|rule| {
+                    wildcard_matches(
+                        &intent.action,
+                        &rule.action,
+                        PermissionResourceCaseSensitivity::Sensitive,
+                    ) && match rule.effect {
+                        PermissionEffect::Allow => rule.resource == *resource,
+                        PermissionEffect::Ask | PermissionEffect::Deny => {
+                            wildcard_matches(resource, &rule.resource, case_sensitivity)
+                        }
+                    }
+                })
+                .map(|rule| rule.effect)
+                .unwrap_or(PermissionEffect::Ask)
+        } else {
+            evaluator.evaluate_resource(&intent.action, resource, rules)
+        };
+
+        match configured_effect {
+            PermissionEffect::Deny => return PermissionEffect::Deny,
+            PermissionEffect::Allow => {}
+            PermissionEffect::Ask => {
+                let remembered = grants.iter().any(|grant| {
+                    if intent.action == "bash" {
+                        grant.action == intent.action && grant.resource == *resource
+                    } else {
+                        wildcard_matches(
+                            &intent.action,
+                            &grant.action,
+                            PermissionResourceCaseSensitivity::Sensitive,
+                        ) && wildcard_matches(resource, &grant.resource, case_sensitivity)
+                    }
+                });
+                if !remembered {
+                    aggregate = PermissionEffect::Ask;
+                }
+            }
+        }
+    }
+
+    let effect = if intent.resources.is_empty() {
+        PermissionEffect::Ask
+    } else {
+        aggregate
+    };
+    if effect != PermissionEffect::Deny
+        && intent
+            .display_metadata
+            .get("requiresFreshApproval")
+            .and_then(serde_json::Value::as_bool)
+            .unwrap_or(false)
+    {
+        PermissionEffect::Ask
+    } else {
+        effect
+    }
 }
 
 const SUBAGENT_LAUNCH_TOOL_NAME: &str = "Task";
@@ -404,9 +625,10 @@ const SUBAGENT_LAUNCH_TOOL_NAME: &str = "Task";
 pub struct ToolPipeline {
     tool_registry: Arc<TokioRwLock<ToolRegistry>>,
     state_manager: Arc<ToolStateManager>,
-    confirmation_channels: ToolConfirmationChannelStore,
     cancellation_tokens: ToolCancellationTokenStore,
     computer_use_host: Option<ComputerUseHostRef>,
+    permission_request_manager: Option<Arc<PermissionRequestManager>>,
+    permission_plans: Arc<TokioMutex<HashMap<String, PermissionExecutionPlan>>>,
 }
 
 impl ToolPipeline {
@@ -418,14 +640,448 @@ impl ToolPipeline {
         Self {
             tool_registry,
             state_manager,
-            confirmation_channels: ToolConfirmationChannelStore::new(),
             cancellation_tokens: ToolCancellationTokenStore::new(),
             computer_use_host,
+            permission_request_manager: None,
+            permission_plans: Arc::new(TokioMutex::new(HashMap::new())),
         }
+    }
+
+    pub fn with_permission_request_manager(
+        mut self,
+        permission_request_manager: Arc<PermissionRequestManager>,
+    ) -> Self {
+        self.permission_request_manager = Some(permission_request_manager);
+        self
     }
 
     pub fn computer_use_host(&self) -> Option<ComputerUseHostRef> {
         self.computer_use_host.clone()
+    }
+
+    async fn draft_permission_plan(
+        &self,
+        task: ToolTask,
+        tool_name: String,
+        intents: Vec<PermissionIntent>,
+        context: ToolUseContext,
+    ) -> BitFunResult<PermissionPlanDraft> {
+        if intents.is_empty() {
+            return Ok(PermissionPlanDraft::Allowed);
+        }
+
+        let (project_id, project_path) = permission_scope(&context, &intents)?;
+        let permission_rules = task.options.permission_rules.clone();
+        let case_sensitivity = permission_resource_case_sensitivity(&context);
+        let round_id = task.context.round_id.clone();
+        let tool_call_id = task.tool_call.tool_id.clone();
+        let session_id = task.context.session_id.clone();
+        let agent_type = task.context.agent_type.clone();
+        let permission_delegation = task.context.permission_delegation.clone().or_else(|| {
+            task.context
+                .subagent_parent_info
+                .as_ref()
+                .map(|parent| parent.permission_delegation_context(&agent_type))
+        });
+        let manager = self.permission_request_manager.clone();
+        let grants = match manager {
+            Some(ref manager) => manager
+                .list_project_grants(&project_id)
+                .await
+                .map_err(|error| BitFunError::service(error.to_string()))?,
+            None => Vec::new(),
+        };
+        let mut asks = Vec::new();
+
+        for intent in intents {
+            match permission_intent_effect(&intent, &permission_rules, &grants, case_sensitivity) {
+                PermissionEffect::Allow => {}
+                PermissionEffect::Ask => asks.push(intent),
+                PermissionEffect::Deny => {
+                    return Ok(PermissionPlanDraft::Rejected {
+                        reason: format!(
+                            "Permission policy denied '{}' for {}",
+                            intent.action,
+                            intent.resources.join(", ")
+                        ),
+                    });
+                }
+            }
+        }
+
+        if asks.is_empty() {
+            return Ok(PermissionPlanDraft::Allowed);
+        }
+
+        if manager.is_none() {
+            return Err(BitFunError::service(
+                "Permission request manager is unavailable for a file tool request".to_string(),
+            ));
+        }
+
+        let requests = asks
+            .into_iter()
+            .map(|intent| PermissionRequest {
+                request_id: uuid::Uuid::new_v4().to_string(),
+                round_id: round_id.clone(),
+                order: task.tool_call_order,
+                tool_call_id: Some(tool_call_id.clone()),
+                project_path: Some(project_path.clone()),
+                project_id: project_id.clone(),
+                session_id: session_id.clone(),
+                agent_id: agent_type.clone(),
+                action: intent.action,
+                resources: intent.resources,
+                save_resources: intent.save_resources,
+                source: PermissionRequestSource {
+                    kind: PermissionRequestSourceKind::ToolCall,
+                    identity: tool_name.clone(),
+                },
+                delegation: permission_delegation.clone(),
+                display_metadata: intent.display_metadata,
+            })
+            .collect();
+
+        Ok(PermissionPlanDraft::Requests(requests))
+    }
+
+    async fn register_permission_requests(
+        &self,
+        requests: Vec<PermissionRequest>,
+        dialog_turn_id: &str,
+        auto_approve: bool,
+    ) -> BitFunResult<Vec<PendingPermissionReceiver>> {
+        let manager = self.permission_request_manager.as_ref().ok_or_else(|| {
+            BitFunError::service(
+                "Permission request manager is unavailable for a file tool request".to_string(),
+            )
+        })?;
+
+        let receivers = if auto_approve {
+            manager
+                .register_batch_non_interactive_for_turn(
+                    requests.clone(),
+                    dialog_turn_id.to_string(),
+                )
+                .await
+        } else {
+            manager
+                .register_batch_for_turn(requests.clone(), dialog_turn_id.to_string())
+                .await
+        }
+        .map_err(|error| BitFunError::service(error.to_string()))?;
+
+        if auto_approve {
+            for request in &requests {
+                if let Err(error) = manager
+                    .reply(
+                        &request.request_id,
+                        PermissionReply::Once,
+                        bitfun_runtime_ports::PermissionReplySource::AutoApprove,
+                    )
+                    .await
+                {
+                    self.cancel_permission_request_ids(
+                        requests
+                            .iter()
+                            .map(|request| request.request_id.clone())
+                            .collect(),
+                        "Automatic permission approval failed".to_string(),
+                    )
+                    .await;
+                    return Err(BitFunError::service(error.to_string()));
+                }
+            }
+        }
+
+        Ok(receivers)
+    }
+
+    async fn prepare_permission_plans(&self, task_ids: &[String]) -> BitFunResult<()> {
+        let mut drafts = Vec::with_capacity(task_ids.len());
+        let mut ordered_requests = Vec::new();
+
+        for task_id in task_ids {
+            let Some(task) = self.state_manager.get_task(task_id) else {
+                continue;
+            };
+            let tool_name = task.invocation.effective_tool_name.clone();
+            if task.invocation_resolution_error.is_some()
+                || task.tool_call.tool_name.is_empty()
+                || task.tool_call.is_error
+                || recovered_write_has_potentially_truncated_marked_path(
+                    &tool_name,
+                    &task.invocation.effective_arguments,
+                    task.tool_call.repair_kind,
+                    task.tool_call.recovered_from_truncation,
+                )
+            {
+                continue;
+            }
+            let tool = {
+                let registry = self.tool_registry.read().await;
+                if validate_tool_execution_admission(ToolExecutionAdmissionRequest {
+                    tool_name: &tool_name,
+                    allowed_tools: &task.context.allowed_tools,
+                    runtime_tool_restrictions: &task.context.runtime_tool_restrictions,
+                    invocation_is_deferred: task.invocation.is_deferred(),
+                    deferred_tools: &task.context.deferred_tools,
+                    loaded_deferred_tool_specs: &task.context.loaded_deferred_tool_specs,
+                    current_catalog_generation: registry.current_snapshot_generation(),
+                    get_tool_spec_tool_name: GET_TOOL_SPEC_TOOL_NAME,
+                })
+                .is_err()
+                {
+                    continue;
+                }
+                registry.get_tool(&tool_name)
+            };
+            let Some(tool) = tool else {
+                continue;
+            };
+            let tool_context = self.build_tool_use_context(&task, CancellationToken::new());
+            let validation = tool
+                .validate_input(&task.invocation.effective_arguments, Some(&tool_context))
+                .await;
+            if !validation.result {
+                continue;
+            }
+            let intents =
+                tool.permission_intents(&task.invocation.effective_arguments, &tool_context)?;
+            let draft = self
+                .draft_permission_plan(
+                    task.clone(),
+                    tool_name.clone(),
+                    intents,
+                    tool_context.clone(),
+                )
+                .await?;
+            if let PermissionPlanDraft::Requests(requests) = &draft {
+                ordered_requests.extend(
+                    requests
+                        .iter()
+                        .cloned()
+                        .map(|request| (task_id.clone(), request)),
+                );
+            }
+            drafts.push((task_id.clone(), draft));
+        }
+
+        if !ordered_requests.is_empty() {
+            let batch_requests = ordered_requests
+                .iter()
+                .map(|(_, request)| request.clone())
+                .collect::<Vec<_>>();
+            let auto_approve = task_ids
+                .first()
+                .and_then(|task_id| self.state_manager.get_task(task_id))
+                .is_some_and(|task| task.options.auto_approve_ask);
+            let dialog_turn_id = task_ids
+                .first()
+                .and_then(|task_id| self.state_manager.get_task(task_id))
+                .map(|task| task.context.dialog_turn_id)
+                .ok_or_else(|| {
+                    BitFunError::service("Permission batch lost its owning Dialog Turn".to_string())
+                })?;
+            let receivers = self
+                .register_permission_requests(batch_requests, &dialog_turn_id, auto_approve)
+                .await?;
+
+            let mut receivers_by_task = HashMap::<String, Vec<PendingPermissionReceiver>>::new();
+            for ((task_id, _), receiver) in ordered_requests.into_iter().zip(receivers) {
+                receivers_by_task.entry(task_id).or_default().push(receiver);
+            }
+            for (task_id, draft) in &drafts {
+                if let PermissionPlanDraft::Requests(_) = draft {
+                    let receivers = receivers_by_task.remove(task_id).ok_or_else(|| {
+                        BitFunError::service(format!(
+                            "Permission plan lost its pending receivers for tool task '{task_id}'"
+                        ))
+                    })?;
+                    self.permission_plans.lock().await.insert(
+                        task_id.clone(),
+                        PermissionExecutionPlan::Awaiting(receivers),
+                    );
+                }
+            }
+        }
+
+        for (task_id, draft) in drafts {
+            match draft {
+                PermissionPlanDraft::Allowed => {
+                    self.permission_plans
+                        .lock()
+                        .await
+                        .insert(task_id, PermissionExecutionPlan::Allowed);
+                }
+                PermissionPlanDraft::Rejected { reason } => {
+                    self.permission_plans
+                        .lock()
+                        .await
+                        .insert(task_id, PermissionExecutionPlan::Rejected { reason });
+                }
+                PermissionPlanDraft::Requests(_) => {}
+            }
+        }
+
+        Ok(())
+    }
+
+    async fn await_prepared_permission_plan(
+        &self,
+        task_id: &str,
+        cancellation_token: &CancellationToken,
+    ) -> BitFunResult<PermissionAuthorization> {
+        let Some(plan) = self.permission_plans.lock().await.remove(task_id) else {
+            return Ok(PermissionAuthorization::Allowed);
+        };
+
+        self.await_permission_execution_plan(plan, cancellation_token)
+            .await
+    }
+
+    async fn await_permission_execution_plan(
+        &self,
+        plan: PermissionExecutionPlan,
+        cancellation_token: &CancellationToken,
+    ) -> BitFunResult<PermissionAuthorization> {
+        let receivers = match plan {
+            PermissionExecutionPlan::Allowed => return Ok(PermissionAuthorization::Allowed),
+            PermissionExecutionPlan::Rejected { reason } => {
+                return Ok(PermissionAuthorization::PolicyDenied { reason });
+            }
+            PermissionExecutionPlan::Awaiting(receivers) => receivers,
+        };
+
+        let mut receivers = receivers.into_iter();
+        while let Some(pending) = receivers.next() {
+            let request_id = pending.request_id().to_string();
+            let outcome = tokio::select! {
+                outcome = pending.wait() => outcome,
+                _ = cancellation_token.cancelled() => {
+                    let remaining = std::iter::once(request_id.clone())
+                        .chain(receivers.map(|pending| pending.request_id().to_string()));
+                    self.cancel_permission_request_ids(
+                        remaining.collect(),
+                        "Tool execution was cancelled".to_string(),
+                    )
+                    .await;
+                    return Err(BitFunError::Cancelled(
+                        "Tool execution was cancelled while awaiting permission".to_string(),
+                    ));
+                }
+            };
+
+            match outcome {
+                PermissionWaitOutcome::Replied(PermissionReply::Once | PermissionReply::Always) => {
+                }
+                PermissionWaitOutcome::Replied(PermissionReply::Reject { feedback }) => {
+                    self.cancel_permission_request_ids(
+                        receivers
+                            .map(|pending| pending.request_id().to_string())
+                            .collect(),
+                        "Another permission request for this tool was rejected".to_string(),
+                    )
+                    .await;
+                    let feedback = feedback
+                        .map(|feedback| feedback.trim().to_string())
+                        .filter(|feedback| !feedback.is_empty());
+                    return Ok(PermissionAuthorization::UserRejected { feedback });
+                }
+                PermissionWaitOutcome::Cancelled { reason } => {
+                    self.cancel_permission_request_ids(
+                        receivers
+                            .map(|pending| pending.request_id().to_string())
+                            .collect(),
+                        "Another permission request for this tool was cancelled".to_string(),
+                    )
+                    .await;
+                    return Err(BitFunError::Cancelled(reason));
+                }
+            }
+
+            if cancellation_token.is_cancelled() {
+                self.cancel_permission_request_ids(
+                    receivers
+                        .map(|pending| pending.request_id().to_string())
+                        .collect(),
+                    "Tool execution was cancelled".to_string(),
+                )
+                .await;
+                return Err(BitFunError::Cancelled(
+                    "Tool execution was cancelled after permission reply".to_string(),
+                ));
+            }
+        }
+
+        Ok(PermissionAuthorization::Allowed)
+    }
+
+    async fn cancel_permission_request_ids(&self, request_ids: Vec<String>, reason: String) {
+        let Some(manager) = self.permission_request_manager.as_ref() else {
+            return;
+        };
+        for request_id in request_ids {
+            if let Err(error) = manager.cancel_request(&request_id, reason.clone()).await {
+                warn!(
+                    "Failed to cancel prepared permission request: request_id={}, error={}",
+                    request_id, error
+                );
+            }
+        }
+    }
+
+    async fn cleanup_permission_plans(&self, task_ids: &[String], reason: String) {
+        for task_id in task_ids {
+            let Some(plan) = self.permission_plans.lock().await.remove(task_id) else {
+                continue;
+            };
+            if let PermissionExecutionPlan::Awaiting(receivers) = plan {
+                self.cancel_permission_request_ids(
+                    receivers
+                        .into_iter()
+                        .map(|pending| pending.request_id().to_string())
+                        .collect(),
+                    reason.clone(),
+                )
+                .await;
+            }
+        }
+    }
+
+    async fn authorize_permission_intents(
+        &self,
+        task: &ToolTask,
+        tool_name: &str,
+        intents: Vec<PermissionIntent>,
+        context: &ToolUseContext,
+        cancellation_token: &CancellationToken,
+    ) -> BitFunResult<PermissionAuthorization> {
+        let draft = self
+            .draft_permission_plan(
+                task.clone(),
+                tool_name.to_string(),
+                intents,
+                context.clone(),
+            )
+            .await?;
+        let plan = match draft {
+            PermissionPlanDraft::Allowed => PermissionExecutionPlan::Allowed,
+            PermissionPlanDraft::Rejected { reason } => {
+                PermissionExecutionPlan::Rejected { reason }
+            }
+            PermissionPlanDraft::Requests(requests) => PermissionExecutionPlan::Awaiting(
+                self.register_permission_requests(
+                    requests,
+                    &task.context.dialog_turn_id,
+                    task.options.auto_approve_ask,
+                )
+                .await?,
+            ),
+        };
+
+        self.await_permission_execution_plan(plan, cancellation_token)
+            .await
     }
 
     fn pending_round_injection_tool_preemption(
@@ -604,16 +1260,25 @@ impl ToolPipeline {
 
         // Create tasks for all tool calls
         let mut task_ids = Vec::with_capacity(resolved_tool_calls.len());
-        for (tool_call, invocation, resolution_error) in resolved_tool_calls {
-            let task = ToolTask::new_resolved(
+        for (tool_call_order, (tool_call, invocation, resolution_error)) in
+            resolved_tool_calls.into_iter().enumerate()
+        {
+            let mut task = ToolTask::new_resolved(
                 tool_call,
                 invocation,
                 resolution_error,
                 context.clone(),
                 options.clone(),
             );
+            task.tool_call_order = tool_call_order as u32;
             let tool_id = self.state_manager.create_task(task).await;
             task_ids.push(tool_id);
+        }
+
+        if let Err(error) = self.prepare_permission_plans(&task_ids).await {
+            self.cleanup_permission_plans(&task_ids, "Permission planning failed".to_string())
+                .await;
+            return Err(error);
         }
 
         if !options.allow_parallel {
@@ -624,7 +1289,10 @@ impl ToolPipeline {
                 task_ids.len().saturating_sub(concurrency_safe_count),
                 tool_names.join(", ")
             );
-            return self.execute_sequential(task_ids).await;
+            let result = self.execute_sequential(task_ids.clone()).await;
+            self.cleanup_permission_plans(&task_ids, "Tool execution finished".to_string())
+                .await;
+            return result;
         }
 
         // Partition into batches of consecutive same-safety tool calls
@@ -681,6 +1349,8 @@ impl ToolPipeline {
             all_results.extend(batch_results);
         }
 
+        self.cleanup_permission_plans(&task_ids, "Tool execution finished".to_string())
+            .await;
         Ok(all_results)
     }
 
@@ -769,9 +1439,11 @@ impl ToolPipeline {
         let tool_name = task.invocation.effective_tool_name.clone();
         let tool_args = task.invocation.effective_arguments.clone();
         let tool_is_error = task.tool_call.is_error;
-        let recovered_from_truncation = task.tool_call.recovered_from_truncation;
+        let repair_kind = task.tool_call.repair_kind;
+        let recovered_from_truncation =
+            repair_kind.is_write_tail_closure() || task.tool_call.recovered_from_truncation;
         let queue_wait_ms = elapsed_ms_since(task.created_at);
-        let mut confirmation_wait_ms = 0;
+        let confirmation_wait_ms = 0;
 
         debug!(
             "Tool task details: tool_name={}, wire_tool_name={}, tool_id={}, queue_wait_ms={}",
@@ -795,6 +1467,7 @@ impl ToolPipeline {
         } else if recovered_write_has_potentially_truncated_marked_path(
             &tool_name,
             &tool_args,
+            repair_kind,
             recovered_from_truncation,
         ) {
             Some(
@@ -824,11 +1497,20 @@ impl ToolPipeline {
             return Err(BitFunError::Validation(error_msg));
         }
 
-        if recovered_from_truncation {
-            warn!(
-                "Tool '{}' arguments were recovered from a truncated stream (tool_id={}, session_id={}). Executing with patched arguments — content may be incomplete.",
+        match repair_kind {
+            ToolArgumentRepairKind::WriteTailClosure => warn!(
+                "Tool arguments recovered with Write close-only repair: tool_name={}, tool_id={}, session_id={}",
                 tool_name, tool_id, task.context.session_id
-            );
+            ),
+            ToolArgumentRepairKind::PermissiveNormalToolJsonRepair => warn!(
+                "Tool arguments repaired after normal tool-use completion: tool_name={}, tool_id={}, session_id={}",
+                tool_name, tool_id, task.context.session_id
+            ),
+            ToolArgumentRepairKind::None if recovered_from_truncation => warn!(
+                "Executing legacy recovered Write tool call without repair provenance: tool_name={}, tool_id={}, session_id={}",
+                tool_name, tool_id, task.context.session_id
+            ),
+            ToolArgumentRepairKind::None => {}
         }
 
         // Repetition alone is not execution failure: polling and status checks
@@ -922,150 +1604,70 @@ impl ToolPipeline {
         self.cancellation_tokens
             .insert(tool_id.clone(), cancellation_token.clone());
 
+        let has_prepared_plan = self.permission_plans.lock().await.contains_key(&tool_id);
+        let permission_authorization = if has_prepared_plan {
+            self.await_prepared_permission_plan(&tool_id, &cancellation_token)
+                .await
+        } else {
+            let permission_intents = tool.permission_intents(&tool_args, &tool_context)?;
+            self.authorize_permission_intents(
+                &task,
+                &tool_name,
+                permission_intents,
+                &tool_context,
+                &cancellation_token,
+            )
+            .await
+        };
+
+        let rejected = match permission_authorization {
+            Ok(PermissionAuthorization::Allowed) => None,
+            Ok(PermissionAuthorization::UserRejected { feedback }) => {
+                let reason = user_rejection_audit_reason(&tool_name, feedback.as_deref());
+                let result = build_user_rejected_tool_result(
+                    &tool_id,
+                    self.state_manager.get_task(&tool_id),
+                    feedback.as_deref(),
+                );
+                Some((reason, result))
+            }
+            Ok(PermissionAuthorization::PolicyDenied { reason }) => {
+                let result = build_permission_denied_tool_result(
+                    &tool_id,
+                    self.state_manager.get_task(&tool_id),
+                    &reason,
+                );
+                Some((reason, result))
+            }
+            Err(error) => {
+                self.cancellation_tokens.remove(&tool_id);
+                return Err(error);
+            }
+        };
+
+        if let Some((reason, result)) = rejected {
+            let preflight_ms = elapsed_ms_u64(start_time);
+            self.state_manager
+                .update_state(
+                    &tool_id,
+                    ToolExecutionState::Rejected {
+                        reason,
+                        duration_ms: Some(preflight_ms),
+                        queue_wait_ms: Some(queue_wait_ms),
+                        preflight_ms: Some(preflight_ms),
+                        confirmation_wait_ms: Some(0),
+                        execution_ms: None,
+                    },
+                )
+                .await;
+            self.cancellation_tokens.remove(&tool_id);
+            return Ok(result);
+        }
+
         debug!("Executing tool: tool_name={}", tool_name);
 
         let is_streaming = tool.supports_streaming();
         let preflight_ms = elapsed_ms_u64(start_time);
-
-        let confirmation_plan = resolve_tool_confirmation_plan(ToolConfirmationRequestFacts {
-            confirm_before_run: task.options.confirm_before_run,
-            tool_needs_permission: tool.needs_permissions(Some(&tool_args)),
-            confirmation_timeout_secs: task.options.confirmation_timeout_secs,
-            now: SystemTime::now(),
-        });
-
-        if let ToolConfirmationPlan::Await {
-            timeout_at,
-            timeout_secs,
-        } = confirmation_plan
-        {
-            info!("Tool requires confirmation: tool_name={}", tool_name);
-
-            let rx = self.confirmation_channels.register(tool_id.clone());
-
-            self.state_manager
-                .update_state(
-                    &tool_id,
-                    ToolExecutionState::AwaitingConfirmation {
-                        params: tool_args.clone(),
-                        timeout_at,
-                    },
-                )
-                .await;
-
-            debug!("Waiting for confirmation: tool_name={}", tool_name);
-            let confirmation_started_at = Instant::now();
-
-            let confirmation_result = match timeout_secs {
-                Some(timeout_secs) => {
-                    debug!(
-                        "Waiting for user confirmation with timeout: timeout_secs={}, tool_name={}",
-                        timeout_secs, tool_name
-                    );
-                    // There is a timeout limit
-                    timeout(Duration::from_secs(timeout_secs), rx).await.ok()
-                }
-                None => {
-                    debug!(
-                        "Waiting for user confirmation without timeout: tool_name={}",
-                        tool_name
-                    );
-                    Some(rx.await)
-                }
-            };
-            confirmation_wait_ms = elapsed_ms_u64(confirmation_started_at);
-
-            let confirmation_wait_result = match confirmation_result {
-                Some(Ok(ToolConfirmationResponse::Confirmed)) => {
-                    debug!("Tool confirmed: tool_name={}", tool_name);
-                    ToolConfirmationWaitResult::Confirmed
-                }
-                Some(Ok(ToolConfirmationResponse::Rejected(reason))) => {
-                    ToolConfirmationWaitResult::Rejected(reason)
-                }
-                Some(Err(_)) => ToolConfirmationWaitResult::ChannelClosed,
-                None => ToolConfirmationWaitResult::TimedOut,
-            };
-            let confirmation_outcome =
-                resolve_confirmation_wait_result(confirmation_wait_result, &tool_name);
-
-            if let Some(failure) = resolve_confirmation_failure(confirmation_outcome) {
-                if matches!(
-                    failure.kind,
-                    ConfirmationFailureKind::ChannelClosed | ConfirmationFailureKind::Timeout
-                ) {
-                    self.confirmation_channels.cancel(&tool_id);
-                }
-
-                if matches!(failure.kind, ConfirmationFailureKind::Timeout) {
-                    warn!("{}", failure.error_message);
-                }
-
-                self.state_manager
-                    .update_state(
-                        &tool_id,
-                        match failure.kind {
-                            ConfirmationFailureKind::Rejected => ToolExecutionState::Rejected {
-                                reason: failure.state_reason,
-                                duration_ms: Some(elapsed_ms_u64(start_time)),
-                                queue_wait_ms: Some(queue_wait_ms),
-                                preflight_ms: Some(preflight_ms),
-                                confirmation_wait_ms: Some(elapsed_ms_u64(confirmation_started_at)),
-                                execution_ms: None,
-                            },
-                            ConfirmationFailureKind::ChannelClosed
-                            | ConfirmationFailureKind::Timeout => ToolExecutionState::Cancelled {
-                                reason: failure.state_reason,
-                                duration_ms: Some(elapsed_ms_u64(start_time)),
-                                queue_wait_ms: Some(queue_wait_ms),
-                                preflight_ms: Some(preflight_ms),
-                                confirmation_wait_ms: Some(elapsed_ms_u64(confirmation_started_at)),
-                                execution_ms: None,
-                            },
-                        },
-                    )
-                    .await;
-
-                match failure.kind {
-                    ConfirmationFailureKind::Rejected => {
-                        return Ok(build_user_rejected_tool_result(
-                            &tool_id,
-                            self.state_manager.get_task(&tool_id),
-                            failure.rejection_instruction.as_deref(),
-                        ));
-                    }
-                    ConfirmationFailureKind::ChannelClosed => {
-                        return Err(BitFunError::service(failure.error_message));
-                    }
-                    ConfirmationFailureKind::Timeout => {
-                        let presentation = build_tool_confirmation_timeout_presentation(&tool_name);
-                        return Ok(ToolExecutionResult {
-                            tool_id: tool_id.clone(),
-                            tool_name: wire_tool_name.clone(),
-                            effective_tool_name: tool_name.clone(),
-                            result: ModelToolResult {
-                                tool_id,
-                                effective_tool_name: persisted_effective_tool_name(
-                                    &wire_tool_name,
-                                    &tool_name,
-                                ),
-                                tool_name: wire_tool_name,
-                                result: presentation.result_json,
-                                result_for_assistant: Some(presentation.result_for_assistant),
-                                is_error: false,
-                                duration_ms: Some(elapsed_ms_u64(start_time)),
-                                image_attachments: None,
-                            },
-                            execution_time_ms: elapsed_ms_u64(start_time),
-                        });
-                    }
-                }
-            }
-
-            self.confirmation_channels.cancel(&tool_id);
-        }
-
-        let preflight_ms = elapsed_ms_u64(start_time).saturating_sub(confirmation_wait_ms);
 
         if cancellation_token.is_cancelled() {
             self.state_manager
@@ -1131,13 +1733,19 @@ impl ToolPipeline {
                     .await;
                 tool_result.duration_ms = Some(duration_ms);
 
-                // The tool call succeeded with arguments that we patched
-                // because the model's output was truncated mid-stream. Tell
-                // the model so it can decide whether the partial call needs
-                // to be continued or regenerated.
-                if recovered_from_truncation {
+                if !matches!(repair_kind, ToolArgumentRepairKind::None) || recovered_from_truncation
+                {
                     let original = tool_result.result_for_assistant.unwrap_or_default();
-                    let notice = build_tool_call_truncation_recovery_notice(&tool_name);
+                    let notice = match repair_kind {
+                        ToolArgumentRepairKind::WriteTailClosure => {
+                            build_write_tail_closure_notice(&tool_name)
+                        }
+                        ToolArgumentRepairKind::PermissiveNormalToolJsonRepair => {
+                            build_normal_tool_json_repair_notice(&tool_name)
+                        }
+                        // Old persisted calls carry only the legacy boolean.
+                        ToolArgumentRepairKind::None => build_write_tail_closure_notice(&tool_name),
+                    };
                     tool_result.result_for_assistant = Some(if original.is_empty() {
                         notice.trim_end().to_string()
                     } else {
@@ -1502,13 +2110,7 @@ impl ToolPipeline {
             );
         }
 
-        // 2. Clean up confirmation channel (if waiting for confirmation)
-        if self.confirmation_channels.cancel(tool_id) {
-            // Channel will be automatically closed, causing await rx to return Err
-            debug!("Cleared confirmation channel: tool_id={}", tool_id);
-        }
-
-        // 3. Update state to cancelled
+        // 2. Update state to cancelled
         self.state_manager
             .update_state(
                 tool_id,
@@ -1566,85 +2168,6 @@ impl ToolPipeline {
         );
         Ok(())
     }
-
-    /// Confirm tool execution
-    pub async fn confirm_tool(
-        &self,
-        tool_id: &str,
-        updated_input: Option<serde_json::Value>,
-    ) -> BitFunResult<()> {
-        let task = self
-            .state_manager
-            .get_task(tool_id)
-            .ok_or_else(|| BitFunError::NotFound(format!("Tool task not found: {}", tool_id)))?;
-
-        // Check if the state is waiting for confirmation
-        if !matches!(task.state, ToolExecutionState::AwaitingConfirmation { .. }) {
-            return Err(BitFunError::Validation(format!(
-                "Tool is not in awaiting confirmation state: {:?}",
-                task.state
-            )));
-        }
-
-        // If the user modified the parameters, update the task parameters first
-        if let Some(new_args) = updated_input {
-            debug!("User updated tool arguments: tool_id={}", tool_id);
-            self.state_manager.update_task_arguments(tool_id, new_args);
-        }
-
-        // Get sender from map and send confirmation response
-        if self.confirmation_channels.confirm(tool_id) {
-            info!("User confirmed tool execution: tool_id={}", tool_id);
-            Ok(())
-        } else {
-            Err(BitFunError::NotFound(format!(
-                "Confirmation channel not found: {}",
-                tool_id
-            )))
-        }
-    }
-
-    /// Reject tool execution
-    pub async fn reject_tool(&self, tool_id: &str, reason: String) -> BitFunResult<()> {
-        let task = self
-            .state_manager
-            .get_task(tool_id)
-            .ok_or_else(|| BitFunError::NotFound(format!("Tool task not found: {}", tool_id)))?;
-
-        // Check if the state is waiting for confirmation
-        if !matches!(task.state, ToolExecutionState::AwaitingConfirmation { .. }) {
-            return Err(BitFunError::Validation(format!(
-                "Tool is not in awaiting confirmation state: {:?}",
-                task.state
-            )));
-        }
-
-        // Get sender from map and send rejection response
-        if self.confirmation_channels.reject(tool_id, reason.clone()) {
-            info!(
-                "User rejected tool execution: tool_id={}, reason={}",
-                tool_id, reason
-            );
-            Ok(())
-        } else {
-            // If the channel does not exist, mark it as rejected directly.
-            self.state_manager
-                .update_state(
-                    tool_id,
-                    ToolExecutionState::Rejected {
-                        reason: format!("User rejected: {}", reason),
-                        duration_ms: None,
-                        queue_wait_ms: None,
-                        preflight_ms: None,
-                        confirmation_wait_ms: None,
-                        execution_ms: None,
-                    },
-                )
-                .await;
-
-            Ok(())
-        }
-    }
 }
 
 #[cfg(test)]
@@ -1661,14 +2184,20 @@ mod tests {
     use crate::agentic::tools::ToolRuntimeRestrictions;
     use crate::agentic::WorkspaceBinding;
     use async_trait::async_trait;
-    use bitfun_agent_tools::{LoadedDeferredToolSpec, CALL_DEFERRED_TOOL_NAME};
+    use bitfun_agent_tools::{
+        LoadedDeferredToolSpec, CALL_DEFERRED_TOOL_NAME, USER_REJECTED_TOOL_MESSAGE,
+    };
     use bitfun_runtime_ports::{
-        RoundInjection, RoundInjectionExecutionPolicy, RoundInjectionKind, RoundInjectionTarget,
-        RoundInjectionToolPreemption,
+        ClockPort, PermissionAuditEvent, PermissionAuditRecord, PermissionAuditStorePort,
+        PermissionGrant, PermissionGrantKey, PermissionGrantStorePort, PermissionReplyStorePort,
+        PortResult, RoundInjection, RoundInjectionExecutionPolicy, RoundInjectionKind,
+        RoundInjectionTarget, RoundInjectionToolPreemption, RuntimeServiceCapability,
+        RuntimeServicePort,
     };
     use serde_json::json;
     use std::collections::HashMap;
     use std::path::PathBuf;
+    use std::sync::atomic::{AtomicUsize, Ordering};
     use std::sync::{Arc, Mutex};
     use std::time::SystemTime;
     use tokio::time::{sleep, Duration};
@@ -1685,6 +2214,7 @@ mod tests {
         assert!(recovered_write_has_potentially_truncated_marked_path(
             "Write",
             &json!({ "payload": "+++ C:/workspace/truncated" }),
+            Default::default(),
             true,
         ));
     }
@@ -1694,11 +2224,13 @@ mod tests {
         assert!(!recovered_write_has_potentially_truncated_marked_path(
             "Write",
             &json!({ "payload": "+++ C:/workspace/empty.txt" }),
+            Default::default(),
             false,
         ));
         assert!(!recovered_write_has_potentially_truncated_marked_path(
             "Write",
             &json!({ "payload": "+++ C:/workspace/empty.txt\n" }),
+            Default::default(),
             true,
         ));
     }
@@ -1708,25 +2240,288 @@ mod tests {
         assert!(!recovered_write_has_potentially_truncated_marked_path(
             "Write",
             &json!({ "payload": "partial content without a path" }),
+            Default::default(),
             true,
         ));
         assert!(!recovered_write_has_potentially_truncated_marked_path(
             "Write",
             &json!({ "payload": "+++ C:/workspace/main.rs\npartial content" }),
+            Default::default(),
             true,
         ));
+    }
+
+    #[test]
+    fn bash_permission_allows_only_exact_command_grants() {
+        let intent = PermissionIntent::new("bash", vec!["git status && rm -rf build".to_string()]);
+        let wildcard_allow = vec![PermissionRule::new(
+            "bash",
+            "git *",
+            PermissionEffect::Allow,
+        )];
+        assert_eq!(
+            permission_intent_effect(
+                &intent,
+                &wildcard_allow,
+                &[],
+                PermissionResourceCaseSensitivity::Sensitive,
+            ),
+            PermissionEffect::Ask
+        );
+
+        let exact_allow = vec![PermissionRule::new(
+            "bash",
+            "git status && rm -rf build",
+            PermissionEffect::Allow,
+        )];
+        assert_eq!(
+            permission_intent_effect(
+                &intent,
+                &exact_allow,
+                &[],
+                PermissionResourceCaseSensitivity::Sensitive,
+            ),
+            PermissionEffect::Allow
+        );
+
+        let wildcard_deny = vec![PermissionRule::new("bash", "*", PermissionEffect::Deny)];
+        assert_eq!(
+            permission_intent_effect(
+                &intent,
+                &wildcard_deny,
+                &[],
+                PermissionResourceCaseSensitivity::Sensitive,
+            ),
+            PermissionEffect::Deny
+        );
+    }
+
+    #[test]
+    fn account_scoped_fresh_approval_works_without_a_workspace_and_ignores_allow_rules() {
+        let mut intent = PermissionIntent::new(
+            "page_publish",
+            vec!["page:demo; visibility=private; deploy=saved-version-only".to_string()],
+        );
+        intent.display_metadata.insert(
+            "permissionScope".to_string(),
+            json!(ACCOUNT_PERMISSION_SCOPE),
+        );
+        intent
+            .display_metadata
+            .insert("requiresFreshApproval".to_string(), json!(true));
+        let context = ToolUseContext::for_tool_listing(None, None);
+        assert_eq!(
+            permission_scope(&context, &[intent.clone()]).expect("account scope"),
+            (
+                ACCOUNT_PERMISSION_PROJECT_ID.to_string(),
+                ACCOUNT_PERMISSION_PROJECT_PATH.to_string(),
+            )
+        );
+
+        let allow = vec![PermissionRule::new(
+            "page_publish",
+            "*",
+            PermissionEffect::Allow,
+        )];
+        assert_eq!(
+            permission_intent_effect(
+                &intent,
+                &allow,
+                &[],
+                PermissionResourceCaseSensitivity::Sensitive,
+            ),
+            PermissionEffect::Ask
+        );
+        let deny = vec![PermissionRule::new(
+            "page_publish",
+            "*",
+            PermissionEffect::Deny,
+        )];
+        assert_eq!(
+            permission_intent_effect(
+                &intent,
+                &deny,
+                &[],
+                PermissionResourceCaseSensitivity::Sensitive,
+            ),
+            PermissionEffect::Deny
+        );
+    }
+
+    #[test]
+    fn ordinary_permission_intents_still_require_a_workspace() {
+        let context = ToolUseContext::for_tool_listing(None, None);
+        let intent = PermissionIntent::new("edit", vec!["src/main.rs".to_string()]);
+        assert!(permission_scope(&context, &[intent]).is_err());
     }
 
     struct StaticTestTool {
         name: String,
         response: serde_json::Value,
         delay_ms: u64,
-        needs_permissions: bool,
+        readonly: bool,
     }
 
     struct CapturingTestTool {
         name: String,
         received_arguments: Arc<Mutex<Option<serde_json::Value>>>,
+    }
+
+    struct V2FileTestTool {
+        intents: Vec<PermissionIntent>,
+        call_count: Arc<AtomicUsize>,
+    }
+
+    #[async_trait]
+    impl Tool for V2FileTestTool {
+        fn name(&self) -> &str {
+            "Write"
+        }
+
+        fn is_readonly(&self) -> bool {
+            // Keep the test tool eligible for the parallel batch scheduler
+            // while its explicit permission intent still exercises permission prompts.
+            true
+        }
+
+        async fn description(&self) -> BitFunResult<String> {
+            Ok("File permission test tool".to_string())
+        }
+
+        fn short_description(&self) -> String {
+            "File permission test tool".to_string()
+        }
+
+        fn input_schema(&self) -> serde_json::Value {
+            json!({ "type": "object" })
+        }
+
+        fn permission_intents(
+            &self,
+            _input: &serde_json::Value,
+            _context: &ToolUseContext,
+        ) -> BitFunResult<Vec<PermissionIntent>> {
+            Ok(self.intents.clone())
+        }
+
+        async fn call_impl(
+            &self,
+            _input: &serde_json::Value,
+            _context: &ToolUseContext,
+        ) -> BitFunResult<Vec<ToolResult>> {
+            self.call_count.fetch_add(1, Ordering::SeqCst);
+            Ok(vec![ToolResult::Result {
+                data: json!({ "written": true }),
+                result_for_assistant: None,
+                image_attachments: None,
+            }])
+        }
+    }
+
+    #[derive(Default)]
+    struct MemoryPermissionStore {
+        grants: Mutex<Vec<PermissionGrant>>,
+        audit: Mutex<Vec<PermissionAuditRecord>>,
+    }
+
+    impl RuntimeServicePort for MemoryPermissionStore {
+        fn capability(&self) -> RuntimeServiceCapability {
+            RuntimeServiceCapability::Permission
+        }
+    }
+
+    #[async_trait]
+    impl PermissionGrantStorePort for MemoryPermissionStore {
+        async fn list_project_grants(&self, project_id: &str) -> PortResult<Vec<PermissionGrant>> {
+            Ok(self
+                .grants
+                .lock()
+                .expect("permission grant lock")
+                .iter()
+                .filter(|grant| grant.project_id == project_id)
+                .cloned()
+                .collect())
+        }
+
+        async fn add_project_grants(&self, grants: Vec<PermissionGrant>) -> PortResult<()> {
+            self.grants
+                .lock()
+                .expect("permission grant lock")
+                .extend(grants);
+            Ok(())
+        }
+
+        async fn remove_project_grant(&self, key: PermissionGrantKey) -> PortResult<bool> {
+            let mut grants = self.grants.lock().expect("permission grant lock");
+            let original_len = grants.len();
+            grants.retain(|grant| grant.key() != key);
+            Ok(grants.len() != original_len)
+        }
+
+        async fn clear_project_grants(&self, project_id: &str) -> PortResult<usize> {
+            let mut grants = self.grants.lock().expect("permission grant lock");
+            let original_len = grants.len();
+            grants.retain(|grant| grant.project_id != project_id);
+            Ok(original_len - grants.len())
+        }
+    }
+
+    #[async_trait]
+    impl PermissionAuditStorePort for MemoryPermissionStore {
+        async fn append_permission_audit(&self, record: PermissionAuditRecord) -> PortResult<()> {
+            self.audit
+                .lock()
+                .expect("permission audit lock")
+                .push(record);
+            Ok(())
+        }
+
+        async fn list_project_permission_audit(
+            &self,
+            project_id: &str,
+        ) -> PortResult<Vec<PermissionAuditRecord>> {
+            Ok(self
+                .audit
+                .lock()
+                .expect("permission audit lock")
+                .iter()
+                .filter(|record| record.request.project_id == project_id)
+                .cloned()
+                .collect())
+        }
+    }
+
+    #[async_trait]
+    impl PermissionReplyStorePort for MemoryPermissionStore {
+        async fn commit_permission_reply(
+            &self,
+            grants: Vec<PermissionGrant>,
+            audit: Vec<PermissionAuditRecord>,
+        ) -> PortResult<()> {
+            self.grants
+                .lock()
+                .expect("permission grant lock")
+                .extend(grants);
+            self.audit
+                .lock()
+                .expect("permission audit lock")
+                .extend(audit);
+            Ok(())
+        }
+    }
+
+    struct FixedPermissionClock;
+
+    impl RuntimeServicePort for FixedPermissionClock {
+        fn capability(&self) -> RuntimeServiceCapability {
+            RuntimeServiceCapability::Clock
+        }
+    }
+
+    impl ClockPort for FixedPermissionClock {
+        fn now_unix_millis(&self) -> i64 {
+            42
+        }
     }
 
     #[async_trait]
@@ -1808,11 +2603,7 @@ mod tests {
         }
 
         fn is_readonly(&self) -> bool {
-            !self.needs_permissions
-        }
-
-        fn needs_permissions(&self, _input: Option<&serde_json::Value>) -> bool {
-            self.needs_permissions
+            self.readonly
         }
 
         fn input_schema(&self) -> serde_json::Value {
@@ -1865,7 +2656,9 @@ mod tests {
             arguments: json!({ "path": "src/main.rs" }),
             raw_arguments: None,
             is_error: false,
+            parse_error: None,
             recovered_from_truncation: false,
+            repair_kind: Default::default(),
         }
     }
 
@@ -1881,6 +2674,7 @@ mod tests {
             primary_model_facts: tool_runtime::context::PrimaryModelFacts::default(),
             context_vars: HashMap::new(),
             subagent_parent_info: None,
+            permission_delegation: None,
             delegation_policy: bitfun_runtime_ports::DelegationPolicy::top_level(),
             deferred_tools: Vec::new(),
             loaded_deferred_tool_specs: Vec::new(),
@@ -1956,25 +2750,7 @@ mod tests {
                 name: name.to_string(),
                 response,
                 delay_ms,
-                needs_permissions: false,
-            }));
-    }
-
-    async fn register_permissioned_static_test_tool(
-        pipeline: &ToolPipeline,
-        name: &str,
-        response: serde_json::Value,
-        delay_ms: u64,
-    ) {
-        pipeline
-            .tool_registry
-            .write()
-            .await
-            .register_tool(Arc::new(StaticTestTool {
-                name: name.to_string(),
-                response,
-                delay_ms,
-                needs_permissions: true,
+                readonly: true,
             }));
     }
 
@@ -1999,6 +2775,761 @@ mod tests {
             .read()
             .await
             .current_snapshot_generation()
+    }
+
+    async fn register_v2_file_test_tool(
+        pipeline: &ToolPipeline,
+        intents: Vec<PermissionIntent>,
+        call_count: Arc<AtomicUsize>,
+    ) {
+        pipeline
+            .tool_registry
+            .write()
+            .await
+            .register_tool(Arc::new(V2FileTestTool {
+                intents,
+                call_count,
+            }));
+    }
+
+    fn permission_test_context() -> ToolExecutionContext {
+        let mut context = test_tool_execution_context();
+        context.workspace = Some(WorkspaceBinding::new(
+            None,
+            std::env::temp_dir().join("bitfun-permission-test"),
+        ));
+        context
+    }
+
+    fn subagent_permission_test_context(parent_tool_call_id: &str) -> ToolExecutionContext {
+        let mut context = permission_test_context();
+        context.session_id = "subagent-session".to_string();
+        context.dialog_turn_id = "subagent-turn".to_string();
+        context.agent_type = "Explore".to_string();
+        context.subagent_parent_info = Some(SubagentParentInfo {
+            session_id: "parent-session".to_string(),
+            dialog_turn_id: "parent-turn".to_string(),
+            tool_call_id: parent_tool_call_id.to_string(),
+        });
+        context
+    }
+
+    #[tokio::test]
+    async fn non_readonly_tools_use_v2_custom_tool_fallback() {
+        let pipeline = test_tool_pipeline();
+        pipeline
+            .tool_registry
+            .write()
+            .await
+            .register_tool(Arc::new(StaticTestTool {
+                name: "UnclassifiedMutation".to_string(),
+                response: json!({ "unexpected": true }),
+                delay_ms: 0,
+                readonly: false,
+            }));
+        let mut options = ToolExecutionOptions::default();
+        options.permission_rules = vec![PermissionRule::new(
+            "custom_tool",
+            "UnclassifiedMutation",
+            PermissionEffect::Deny,
+        )];
+
+        let results = pipeline
+            .execute_tools(
+                vec![test_tool_call("fallback-deny", "UnclassifiedMutation")],
+                permission_test_context(),
+                options,
+            )
+            .await
+            .expect("fallback policy denial");
+
+        assert!(matches!(
+            pipeline
+                .state_manager
+                .get_task("fallback-deny")
+                .map(|task| task.state),
+            Some(ToolExecutionState::Rejected { .. })
+        ));
+        assert_eq!(results[0].result.result["category"], "permission_denied");
+        assert!(results[0]
+            .result
+            .result_for_assistant
+            .as_deref()
+            .is_some_and(|message| message.contains("current permission policy")));
+    }
+
+    fn permission_test_manager(store: Arc<MemoryPermissionStore>) -> Arc<PermissionRequestManager> {
+        Arc::new(
+            PermissionRequestManager::new(
+                store.clone(),
+                store.clone(),
+                Arc::new(FixedPermissionClock),
+            )
+            .with_grant_store(store),
+        )
+    }
+
+    async fn wait_for_permission_request(
+        manager: &PermissionRequestManager,
+    ) -> bitfun_runtime_ports::PermissionRequest {
+        for _ in 0..100 {
+            if let Some(request) = manager.pending_requests().into_iter().next() {
+                return request;
+            }
+            sleep(Duration::from_millis(5)).await;
+        }
+        panic!("permission request was not registered");
+    }
+
+    async fn wait_for_permission_request_count(
+        manager: &PermissionRequestManager,
+        expected: usize,
+    ) -> Vec<bitfun_runtime_ports::PermissionRequest> {
+        for _ in 0..100 {
+            let requests = manager.pending_requests();
+            if requests.len() >= expected {
+                return requests;
+            }
+            sleep(Duration::from_millis(5)).await;
+        }
+        panic!("expected {expected} permission requests to be registered");
+    }
+
+    #[tokio::test]
+    async fn v2_allow_and_deny_are_enforced_before_tool_side_effects() {
+        let pipeline = test_tool_pipeline();
+        let calls = Arc::new(AtomicUsize::new(0));
+        register_v2_file_test_tool(
+            &pipeline,
+            vec![PermissionIntent::new(
+                "edit",
+                vec!["src/main.rs".to_string(), "src/private/key.rs".to_string()],
+            )],
+            Arc::clone(&calls),
+        )
+        .await;
+
+        let mut allow_options = ToolExecutionOptions::default();
+        allow_options.permission_rules = vec![PermissionRule::new(
+            "edit",
+            "src/*",
+            PermissionEffect::Allow,
+        )];
+        let results = pipeline
+            .execute_tools(
+                vec![test_tool_call("allow", "Write")],
+                permission_test_context(),
+                allow_options,
+            )
+            .await
+            .expect("allowed tool should execute");
+        assert!(!results[0].result.is_error);
+        assert_eq!(calls.load(Ordering::SeqCst), 1);
+
+        let mut deny_options = ToolExecutionOptions::default();
+        deny_options.auto_approve_ask = true;
+        deny_options.permission_rules = vec![
+            PermissionRule::new("edit", "src/*", PermissionEffect::Allow),
+            PermissionRule::new("edit", "src/private/*", PermissionEffect::Deny),
+        ];
+        let results = pipeline
+            .execute_tools(
+                vec![test_tool_call("deny", "Write")],
+                permission_test_context(),
+                deny_options,
+            )
+            .await
+            .expect("denied tool should return a structured rejection");
+        assert!(!results[0].result.is_error);
+        assert!(matches!(
+            pipeline
+                .state_manager
+                .get_task("deny")
+                .map(|task| task.state),
+            Some(ToolExecutionState::Rejected { .. })
+        ));
+        assert_eq!(calls.load(Ordering::SeqCst), 1);
+        assert_eq!(results[0].result.result["category"], "permission_denied");
+    }
+
+    #[tokio::test]
+    async fn v2_rejecting_one_parallel_tool_does_not_reject_sibling() {
+        let store = Arc::new(MemoryPermissionStore::default());
+        let manager = permission_test_manager(Arc::clone(&store));
+        let pipeline = test_tool_pipeline().with_permission_request_manager(Arc::clone(&manager));
+        let calls = Arc::new(AtomicUsize::new(0));
+        register_v2_file_test_tool(
+            &pipeline,
+            vec![PermissionIntent::new(
+                "edit",
+                vec!["src/main.rs".to_string()],
+            )],
+            Arc::clone(&calls),
+        )
+        .await;
+
+        let mut permission_events = manager.subscribe();
+        let running_pipeline = pipeline.clone();
+        let execution = tokio::spawn(async move {
+            running_pipeline
+                .execute_tools(
+                    vec![
+                        test_tool_call("reject-me", "Write"),
+                        test_tool_call("keep-going", "Write"),
+                    ],
+                    permission_test_context(),
+                    ToolExecutionOptions::default(),
+                )
+                .await
+        });
+
+        let requests = wait_for_permission_request_count(&manager, 2).await;
+        assert_eq!(requests.len(), 2);
+        let expected_project_path = std::env::temp_dir()
+            .join("bitfun-permission-test")
+            .to_string_lossy()
+            .to_string();
+        assert_eq!(
+            requests[0].project_path.as_deref(),
+            Some(expected_project_path.as_str())
+        );
+        assert_eq!(requests[0].tool_call_id.as_deref(), Some("reject-me"));
+        assert_eq!(requests[0].order, 0);
+        assert_eq!(requests[1].tool_call_id.as_deref(), Some("keep-going"));
+        assert_eq!(requests[1].order, 1);
+        for (event, expected_request) in [
+            permission_events.recv().await.expect("first asked event"),
+            permission_events.recv().await.expect("second asked event"),
+        ]
+        .into_iter()
+        .zip(requests.iter())
+        {
+            match event {
+                bitfun_runtime_ports::PermissionRequestEvent::Asked { request } => {
+                    assert_eq!(request.request_id, expected_request.request_id);
+                }
+                other => panic!("expected asked event, got {other:?}"),
+            }
+        }
+        let rejected_request = requests
+            .iter()
+            .find(|request| request.tool_call_id.as_deref() == Some("reject-me"))
+            .expect("rejected tool permission request");
+        let sibling_request = requests
+            .iter()
+            .find(|request| request.tool_call_id.as_deref() == Some("keep-going"))
+            .expect("sibling tool permission request");
+
+        manager
+            .reply(
+                &rejected_request.request_id,
+                PermissionReply::Reject { feedback: None },
+                bitfun_runtime_ports::PermissionReplySource::User,
+            )
+            .await
+            .expect("reject one tool");
+        assert_eq!(
+            manager
+                .pending_requests()
+                .iter()
+                .map(|request| request.request_id.as_str())
+                .collect::<Vec<_>>(),
+            vec![sibling_request.request_id.as_str()]
+        );
+
+        manager
+            .reply(
+                &sibling_request.request_id,
+                PermissionReply::Once,
+                bitfun_runtime_ports::PermissionReplySource::User,
+            )
+            .await
+            .expect("allow sibling tool");
+
+        let results = execution
+            .await
+            .expect("parallel tool execution join")
+            .expect("parallel tool execution");
+        assert_eq!(results.len(), 2);
+        assert_eq!(calls.load(Ordering::SeqCst), 1);
+        assert_eq!(results[0].result.result["category"], "user_rejected");
+        assert!(results[0].result.result["instruction"].is_null());
+        assert_eq!(
+            results[0].result.result_for_assistant.as_deref(),
+            Some(USER_REJECTED_TOOL_MESSAGE)
+        );
+        assert!(!results[1].result.is_error);
+    }
+
+    #[tokio::test]
+    async fn v2_rejection_feedback_is_preserved_for_the_assistant() {
+        let store = Arc::new(MemoryPermissionStore::default());
+        let manager = permission_test_manager(Arc::clone(&store));
+        let pipeline = test_tool_pipeline().with_permission_request_manager(Arc::clone(&manager));
+        let calls = Arc::new(AtomicUsize::new(0));
+        register_v2_file_test_tool(
+            &pipeline,
+            vec![PermissionIntent::new(
+                "edit",
+                vec!["src/main.rs".to_string()],
+            )],
+            Arc::clone(&calls),
+        )
+        .await;
+
+        let running_pipeline = pipeline.clone();
+        let execution = tokio::spawn(async move {
+            running_pipeline
+                .execute_tools(
+                    vec![test_tool_call("reject-with-feedback", "Write")],
+                    permission_test_context(),
+                    ToolExecutionOptions::default(),
+                )
+                .await
+        });
+
+        let request = wait_for_permission_request(&manager).await;
+        manager
+            .reply(
+                &request.request_id,
+                PermissionReply::Reject {
+                    feedback: Some("Use a read-only path".to_string()),
+                },
+                bitfun_runtime_ports::PermissionReplySource::User,
+            )
+            .await
+            .expect("reject request with feedback");
+
+        let results = execution
+            .await
+            .expect("feedback rejection task join")
+            .expect("feedback rejection should return a structured result");
+        assert_eq!(calls.load(Ordering::SeqCst), 0);
+        assert_eq!(results[0].result.result["category"], "user_rejected");
+        assert_eq!(
+            results[0].result.result["instruction"],
+            "Use a read-only path"
+        );
+        assert_eq!(
+            results[0].result.result_for_assistant.as_deref(),
+            Some(
+                "The user rejected this tool call with the following instruction: \"Use a read-only path\". Do not retry it unless the user explicitly asks you to. If you cannot complete the task without running this tool call, stop and ask the user how to proceed."
+            )
+        );
+    }
+
+    #[tokio::test]
+    async fn v2_subagent_request_projects_exact_parent_task_context() {
+        let store = Arc::new(MemoryPermissionStore::default());
+        let manager = permission_test_manager(Arc::clone(&store));
+        let pipeline = test_tool_pipeline().with_permission_request_manager(Arc::clone(&manager));
+        let calls = Arc::new(AtomicUsize::new(0));
+        register_v2_file_test_tool(
+            &pipeline,
+            vec![PermissionIntent::new(
+                "edit",
+                vec!["src/main.rs".to_string()],
+            )],
+            Arc::clone(&calls),
+        )
+        .await;
+
+        let running_pipeline = pipeline.clone();
+        let execution = tokio::spawn(async move {
+            running_pipeline
+                .execute_tools(
+                    vec![test_tool_call("child-write", "Write")],
+                    subagent_permission_test_context("parent-task-call"),
+                    ToolExecutionOptions::default(),
+                )
+                .await
+        });
+
+        let request = wait_for_permission_request(&manager).await;
+        assert_eq!(request.session_id, "subagent-session");
+        assert_eq!(request.tool_call_id.as_deref(), Some("child-write"));
+        let delegation = request
+            .delegation
+            .as_ref()
+            .expect("subagent request should project delegation context");
+        assert_eq!(delegation.parent_session_id, "parent-session");
+        assert_eq!(
+            delegation.parent_dialog_turn_id.as_deref(),
+            Some("parent-turn")
+        );
+        assert_eq!(delegation.parent_tool_call_id, "parent-task-call");
+        assert_eq!(delegation.subagent_type, "Explore");
+
+        manager
+            .reply(
+                &request.request_id,
+                PermissionReply::Once,
+                bitfun_runtime_ports::PermissionReplySource::User,
+            )
+            .await
+            .expect("allow child request");
+        execution
+            .await
+            .expect("child task join")
+            .expect("child execution");
+        assert_eq!(calls.load(Ordering::SeqCst), 1);
+    }
+
+    #[tokio::test]
+    async fn v2_request_routes_partial_persisted_subagent_delegation() {
+        let store = Arc::new(MemoryPermissionStore::default());
+        let manager = permission_test_manager(Arc::clone(&store));
+        let pipeline = test_tool_pipeline().with_permission_request_manager(Arc::clone(&manager));
+        let calls = Arc::new(AtomicUsize::new(0));
+        register_v2_file_test_tool(
+            &pipeline,
+            vec![PermissionIntent::new(
+                "edit",
+                vec!["src/main.rs".to_string()],
+            )],
+            Arc::clone(&calls),
+        )
+        .await;
+
+        let mut context = permission_test_context();
+        context.session_id = "subagent-session".to_string();
+        context.agent_type = "Explore".to_string();
+        context.permission_delegation = Some(bitfun_runtime_ports::PermissionDelegationContext {
+            parent_session_id: "parent-session".to_string(),
+            parent_dialog_turn_id: None,
+            parent_tool_call_id: "parent-task-call".to_string(),
+            subagent_type: "Explore".to_string(),
+        });
+
+        let running_pipeline = pipeline.clone();
+        let execution = tokio::spawn(async move {
+            running_pipeline
+                .execute_tools(
+                    vec![test_tool_call("child-write", "Write")],
+                    context,
+                    ToolExecutionOptions::default(),
+                )
+                .await
+        });
+
+        let request = wait_for_permission_request(&manager).await;
+        let delegation = request
+            .delegation
+            .as_ref()
+            .expect("partial subagent lineage should route permission requests");
+        assert_eq!(delegation.parent_session_id, "parent-session");
+        assert_eq!(delegation.parent_dialog_turn_id, None);
+        assert_eq!(delegation.parent_tool_call_id, "parent-task-call");
+
+        manager
+            .reply(
+                &request.request_id,
+                PermissionReply::Once,
+                bitfun_runtime_ports::PermissionReplySource::User,
+            )
+            .await
+            .expect("allow child request");
+        execution
+            .await
+            .expect("child task join")
+            .expect("child execution");
+        assert_eq!(calls.load(Ordering::SeqCst), 1);
+    }
+
+    #[tokio::test]
+    async fn once_and_always_replies_control_execution_and_remembered_grants() {
+        let store = Arc::new(MemoryPermissionStore::default());
+        let manager = permission_test_manager(Arc::clone(&store));
+        let pipeline = test_tool_pipeline().with_permission_request_manager(Arc::clone(&manager));
+        let calls = Arc::new(AtomicUsize::new(0));
+        register_v2_file_test_tool(
+            &pipeline,
+            vec![PermissionIntent::new(
+                "edit",
+                vec!["src/main.rs".to_string(), "src/private/key.rs".to_string()],
+            )],
+            Arc::clone(&calls),
+        )
+        .await;
+
+        let once_pipeline = pipeline.clone();
+        let once = tokio::spawn(async move {
+            once_pipeline
+                .execute_tools(
+                    vec![test_tool_call("once", "Write")],
+                    permission_test_context(),
+                    ToolExecutionOptions::default(),
+                )
+                .await
+        });
+        let request = wait_for_permission_request(&manager).await;
+        assert_eq!(request.tool_call_id.as_deref(), Some("once"));
+        assert!(request.delegation.is_none());
+        manager
+            .reply(
+                &request.request_id,
+                PermissionReply::Once,
+                bitfun_runtime_ports::PermissionReplySource::User,
+            )
+            .await
+            .expect("once reply");
+        once.await.expect("once task join").expect("once execution");
+        assert_eq!(calls.load(Ordering::SeqCst), 1);
+
+        let always_pipeline = pipeline.clone();
+        let always = tokio::spawn(async move {
+            always_pipeline
+                .execute_tools(
+                    vec![test_tool_call("always", "Write")],
+                    permission_test_context(),
+                    ToolExecutionOptions::default(),
+                )
+                .await
+        });
+        let request = wait_for_permission_request(&manager).await;
+        manager
+            .reply(
+                &request.request_id,
+                PermissionReply::Always,
+                bitfun_runtime_ports::PermissionReplySource::User,
+            )
+            .await
+            .expect("always reply");
+        always
+            .await
+            .expect("always task join")
+            .expect("always execution");
+        assert_eq!(calls.load(Ordering::SeqCst), 2);
+
+        pipeline
+            .execute_tools(
+                vec![test_tool_call("remembered", "Write")],
+                permission_test_context(),
+                ToolExecutionOptions::default(),
+            )
+            .await
+            .expect("remembered grant should allow the same project");
+        assert_eq!(calls.load(Ordering::SeqCst), 3);
+
+        assert_eq!(
+            store.audit.lock().expect("permission audit lock").len(),
+            4,
+            "once and always should each persist requested and replied audit facts"
+        );
+
+        let mut other_project_context = permission_test_context();
+        other_project_context.workspace = Some(WorkspaceBinding::new(
+            None,
+            std::env::temp_dir().join("bitfun-permission-other-project"),
+        ));
+        let other_pipeline = pipeline.clone();
+        let other_project = tokio::spawn(async move {
+            other_pipeline
+                .execute_tools(
+                    vec![test_tool_call("other-project", "Write")],
+                    other_project_context,
+                    ToolExecutionOptions::default(),
+                )
+                .await
+        });
+        let other_request = wait_for_permission_request(&manager).await;
+        let remembered_project_id = store
+            .grants
+            .lock()
+            .expect("permission grant lock")
+            .first()
+            .expect("remembered grant")
+            .project_id
+            .clone();
+        assert_ne!(other_request.project_id, remembered_project_id);
+        manager
+            .reply(
+                &other_request.request_id,
+                PermissionReply::Reject { feedback: None },
+                bitfun_runtime_ports::PermissionReplySource::User,
+            )
+            .await
+            .expect("reject other project request");
+        other_project
+            .await
+            .expect("other project task join")
+            .expect("other project rejection");
+        assert_eq!(calls.load(Ordering::SeqCst), 3);
+
+        let mut remote_context = permission_test_context();
+        let local_root = remote_context
+            .workspace
+            .as_ref()
+            .expect("local permission workspace")
+            .root_path()
+            .to_path_buf();
+        let remote_identity =
+            crate::service::remote_ssh::workspace_state::workspace_session_identity(
+                local_root.to_string_lossy().as_ref(),
+                Some("permission-remote-connection"),
+                Some("remote.example"),
+            )
+            .expect("remote permission identity");
+        remote_context.workspace = Some(WorkspaceBinding::new_remote(
+            None,
+            local_root,
+            "permission-remote-connection".to_string(),
+            "Remote permission test".to_string(),
+            remote_identity,
+        ));
+        let remote_pipeline = pipeline.clone();
+        let remote_execution = tokio::spawn(async move {
+            remote_pipeline
+                .execute_tools(
+                    vec![test_tool_call("remote-project", "Write")],
+                    remote_context,
+                    ToolExecutionOptions::default(),
+                )
+                .await
+        });
+        let remote_request = wait_for_permission_request(&manager).await;
+        assert_ne!(remote_request.project_id, remembered_project_id);
+        assert!(remote_request.project_id.starts_with("remote_"));
+        manager
+            .reply(
+                &remote_request.request_id,
+                PermissionReply::Reject { feedback: None },
+                bitfun_runtime_ports::PermissionReplySource::User,
+            )
+            .await
+            .expect("reject remote project request");
+        remote_execution
+            .await
+            .expect("remote project task join")
+            .expect("remote project rejection");
+        assert_eq!(calls.load(Ordering::SeqCst), 3);
+
+        let mut deny_options = ToolExecutionOptions::default();
+        deny_options.permission_rules = vec![
+            PermissionRule::new("edit", "src/*", PermissionEffect::Allow),
+            PermissionRule::new("edit", "src/private/*", PermissionEffect::Deny),
+        ];
+        pipeline
+            .execute_tools(
+                vec![test_tool_call("deny-after-grant", "Write")],
+                permission_test_context(),
+                deny_options,
+            )
+            .await
+            .expect("policy denial should be structured");
+        assert_eq!(calls.load(Ordering::SeqCst), 3);
+    }
+
+    #[tokio::test]
+    async fn v2_auto_approve_subagent_ask_preserves_lineage_without_interactive_event() {
+        let store = Arc::new(MemoryPermissionStore::default());
+        let manager = permission_test_manager(Arc::clone(&store));
+        let mut events = manager.subscribe();
+        let pipeline = test_tool_pipeline().with_permission_request_manager(Arc::clone(&manager));
+        let calls = Arc::new(AtomicUsize::new(0));
+        register_v2_file_test_tool(
+            &pipeline,
+            vec![PermissionIntent::new(
+                "edit",
+                vec!["src/main.rs".to_string()],
+            )],
+            Arc::clone(&calls),
+        )
+        .await;
+
+        let mut options = ToolExecutionOptions::default();
+        options.auto_approve_ask = true;
+        pipeline
+            .execute_tools(
+                vec![test_tool_call("auto", "Write")],
+                subagent_permission_test_context("background-task-call"),
+                options,
+            )
+            .await
+            .expect("auto-approved tool should execute");
+
+        assert_eq!(calls.load(Ordering::SeqCst), 1);
+        assert!(store
+            .grants
+            .lock()
+            .expect("permission grant lock")
+            .is_empty());
+        let audit = store.audit.lock().expect("permission audit lock");
+        assert_eq!(audit.len(), 2);
+        assert!(audit.iter().all(|record| {
+            record
+                .request
+                .delegation
+                .as_ref()
+                .is_some_and(|delegation| {
+                    delegation.parent_tool_call_id == "background-task-call"
+                        && delegation.subagent_type == "Explore"
+                })
+        }));
+        assert!(matches!(audit[0].event, PermissionAuditEvent::Requested));
+        assert!(matches!(
+            audit[1].event,
+            PermissionAuditEvent::Replied {
+                reply: PermissionReply::Once,
+                source: bitfun_runtime_ports::PermissionReplySource::AutoApprove,
+            }
+        ));
+        assert!(matches!(
+            events.try_recv(),
+            Err(tokio::sync::broadcast::error::TryRecvError::Empty)
+        ));
+        assert!(manager.pending_requests().is_empty());
+    }
+
+    #[tokio::test]
+    async fn v2_cancellation_clears_pending_request_without_side_effect() {
+        let store = Arc::new(MemoryPermissionStore::default());
+        let manager = permission_test_manager(Arc::clone(&store));
+        let pipeline = test_tool_pipeline().with_permission_request_manager(Arc::clone(&manager));
+        let calls = Arc::new(AtomicUsize::new(0));
+        register_v2_file_test_tool(
+            &pipeline,
+            vec![PermissionIntent::new(
+                "edit",
+                vec!["src/main.rs".to_string()],
+            )],
+            Arc::clone(&calls),
+        )
+        .await;
+
+        let running_pipeline = pipeline.clone();
+        let task = tokio::spawn(async move {
+            running_pipeline
+                .execute_tools(
+                    vec![test_tool_call("cancel", "Write")],
+                    subagent_permission_test_context("cancelled-parent-task"),
+                    ToolExecutionOptions::default(),
+                )
+                .await
+        });
+        let request = wait_for_permission_request(&manager).await;
+        assert_eq!(
+            request
+                .delegation
+                .as_ref()
+                .map(|delegation| delegation.parent_tool_call_id.as_str()),
+            Some("cancelled-parent-task")
+        );
+        pipeline
+            .cancel_tool("cancel", "test cancellation".to_string())
+            .await
+            .expect("cancel tool");
+        task.await
+            .expect("cancel task join")
+            .expect("cancel result");
+        assert!(manager.pending_requests().is_empty());
+        assert_eq!(calls.load(Ordering::SeqCst), 0);
+        assert!(store
+            .audit
+            .lock()
+            .expect("permission audit lock")
+            .iter()
+            .any(|record| matches!(record.event, PermissionAuditEvent::Cancelled { .. })));
     }
 
     #[tokio::test]
@@ -2026,14 +3557,7 @@ mod tests {
         });
 
         let results = pipeline
-            .execute_tools(
-                vec![call],
-                context,
-                ToolExecutionOptions {
-                    confirm_before_run: false,
-                    ..ToolExecutionOptions::default()
-                },
-            )
+            .execute_tools(vec![call], context, ToolExecutionOptions::default())
             .await
             .expect("deferred tool execution");
 
@@ -2198,54 +3722,6 @@ mod tests {
         );
     }
 
-    #[tokio::test]
-    async fn deferred_gateway_uses_effective_target_permission_policy() {
-        let pipeline = test_tool_pipeline();
-        register_permissioned_static_test_tool(
-            &pipeline,
-            "write_weather",
-            json!({ "ok": true }),
-            0,
-        )
-        .await;
-
-        let mut context = test_tool_execution_context();
-        context.allowed_tools = vec![
-            CALL_DEFERRED_TOOL_NAME.to_string(),
-            "write_weather".to_string(),
-        ];
-        context.deferred_tools = vec!["write_weather".to_string()];
-        context.loaded_deferred_tool_specs = vec![loaded_spec(
-            "write_weather",
-            current_registry_generation(&pipeline).await,
-        )];
-
-        let mut call = test_tool_call("deferred_permission", CALL_DEFERRED_TOOL_NAME);
-        call.arguments = json!({
-            "tool_name": "write_weather",
-            "args": { "city": "Shanghai" }
-        });
-
-        let results = pipeline
-            .execute_tools(
-                vec![call],
-                context,
-                ToolExecutionOptions {
-                    confirmation_timeout_secs: Some(0),
-                    ..ToolExecutionOptions::default()
-                },
-            )
-            .await
-            .expect("permission timeout should be returned as a tool result");
-
-        assert_eq!(results.len(), 1);
-        assert_eq!(results[0].tool_name, CALL_DEFERRED_TOOL_NAME);
-        assert_eq!(results[0].effective_tool_name, "write_weather");
-        assert_eq!(results[0].result.tool_name, CALL_DEFERRED_TOOL_NAME);
-        assert_eq!(results[0].result.result["category"], "confirmation_timeout");
-        assert_eq!(results[0].result.result["tool_name"], "write_weather");
-    }
-
     fn test_round_injection(
         kind: RoundInjectionKind,
         tool_preemption: RoundInjectionToolPreemption,
@@ -2321,131 +3797,6 @@ mod tests {
             .as_deref()
             .unwrap_or_default()
             .contains("Raw arguments:"));
-    }
-
-    #[tokio::test]
-    async fn confirmation_timeout_returns_timeout_result_without_argument_error() {
-        let pipeline = test_tool_pipeline();
-        register_permissioned_static_test_tool(
-            &pipeline,
-            "ExecCommand",
-            json!({ "unexpected": true }),
-            0,
-        )
-        .await;
-
-        let task_id = "tool_1".to_string();
-        pipeline
-            .state_manager
-            .create_task(ToolTask::new(
-                test_tool_call(&task_id, "ExecCommand"),
-                test_tool_execution_context(),
-                ToolExecutionOptions {
-                    confirm_before_run: true,
-                    confirmation_timeout_secs: Some(1),
-                    ..Default::default()
-                },
-            ))
-            .await;
-
-        // The public execute_tools path is easier to keep stable via timeout
-        // by not delivering confirmation. We use a second task with the same
-        // setup to exercise the actual pipeline path.
-        let results = pipeline
-            .execute_tools(
-                vec![test_tool_call("tool_1", "ExecCommand")],
-                test_tool_execution_context(),
-                ToolExecutionOptions {
-                    confirmation_timeout_secs: Some(0),
-                    ..Default::default()
-                },
-            )
-            .await
-            .expect("timeout should be returned as a tool result");
-
-        assert_eq!(results.len(), 1);
-        let result = &results[0].result;
-        assert!(!result.is_error);
-        assert_eq!(result.result["category"], json!("confirmation_timeout"));
-        assert_eq!(result.result["tool_name"], json!("ExecCommand"));
-        assert!(result.result["provided_arguments"].is_null());
-        let assistant_text = result.result_for_assistant.as_deref().unwrap_or_default();
-        assert!(assistant_text.contains("confirmation window expired"));
-        assert!(!assistant_text.contains("failed"));
-        assert!(!assistant_text.contains("Provided arguments"));
-    }
-
-    #[tokio::test]
-    async fn confirmation_rejection_returns_user_rejected_result_without_argument_error() {
-        let pipeline = test_tool_pipeline();
-        register_permissioned_static_test_tool(
-            &pipeline,
-            "ExecCommand",
-            json!({ "unexpected": true }),
-            0,
-        )
-        .await;
-
-        let reject_pipeline = pipeline.clone();
-        let reject_handle = tokio::spawn(async move {
-            for _ in 0..50 {
-                if reject_pipeline
-                    .state_manager
-                    .get_task("tool_1")
-                    .is_some_and(|task| {
-                        matches!(task.state, ToolExecutionState::AwaitingConfirmation { .. })
-                    })
-                {
-                    reject_pipeline
-                        .reject_tool(
-                            "tool_1",
-                            "Use the built-in status view instead.".to_string(),
-                        )
-                        .await
-                        .expect("reject tool confirmation");
-                    return;
-                }
-                sleep(Duration::from_millis(10)).await;
-            }
-            panic!("tool should enter awaiting confirmation");
-        });
-
-        let results = pipeline
-            .execute_tools(
-                vec![test_tool_call("tool_1", "ExecCommand")],
-                test_tool_execution_context(),
-                ToolExecutionOptions::default(),
-            )
-            .await
-            .expect("user rejection should be returned as a tool result");
-        reject_handle.await.expect("rejection task should finish");
-
-        assert_eq!(results.len(), 1);
-        let result = &results[0].result;
-        assert!(!result.is_error);
-        assert_eq!(result.result["status"], json!("rejected"));
-        assert_eq!(result.result["category"], json!("user_rejected"));
-        assert_eq!(result.result["tool_name"], json!("ExecCommand"));
-        assert_eq!(
-            result.result["instruction"],
-            json!("Use the built-in status view instead.")
-        );
-        assert!(result.result["provided_arguments"].is_null());
-
-        let assistant_text = result.result_for_assistant.as_deref().unwrap_or_default();
-        assert!(assistant_text.contains(
-            "The user rejected this tool call with the following instruction: \"Use the built-in status view instead.\""
-        ));
-        assert!(assistant_text.contains("Do not retry it unless the user explicitly asks you to."));
-        assert!(!assistant_text.contains("invalid_arguments"));
-        assert!(!assistant_text.contains("Provided arguments"));
-        assert!(!assistant_text.contains("failed"));
-
-        let task = pipeline
-            .state_manager
-            .get_task("tool_1")
-            .expect("tool task should be retained");
-        assert!(matches!(task.state, ToolExecutionState::Rejected { .. }));
     }
 
     #[tokio::test]
@@ -2679,22 +4030,23 @@ mod tests {
     }
 
     #[test]
-    fn truncation_notice_for_interactive_tools_does_not_claim_file_write() {
-        let notice = build_tool_call_truncation_recovery_notice("AskUserQuestion");
+    fn normal_json_repair_notice_for_interactive_tools_does_not_claim_file_write() {
+        let notice = build_normal_tool_json_repair_notice("AskUserQuestion");
 
-        assert!(notice.contains("AskUserQuestion call was truncated"));
+        assert!(notice.contains("AskUserQuestion call contained malformed JSON"));
         assert!(notice.contains("fresh complete AskUserQuestion call"));
         assert!(!notice.contains("file was written"));
-        assert!(!notice.contains("issue ONE Edit call"));
+        assert!(!notice.contains("max_tokens"));
     }
 
     #[test]
-    fn truncation_notice_for_write_tools_keeps_write_continuation_guidance() {
-        let notice = build_tool_call_truncation_recovery_notice("Write");
+    fn write_tail_closure_notice_keeps_write_continuation_guidance() {
+        let notice = build_write_tail_closure_notice("Write");
 
         assert!(notice.contains("file may have been written with partial content"));
         assert!(notice.contains("latest Read result"));
         assert!(notice.contains("use Edit to add only the missing continuation"));
+        assert!(!notice.contains("max_tokens"));
     }
 
     #[test]

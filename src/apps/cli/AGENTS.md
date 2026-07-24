@@ -46,8 +46,13 @@ before product-definition, TUI layout, branding, packaging, runtime, or plugin a
   external-source approval, conflict, Tool Runtime, and script-worker owners.
   CLI/TUI consumes typed snapshots and actions; it must not import modules,
   spawn tool workers, bypass a pending decision, or implement a second approval
-  store. TypeScript, dependency loading, package plugins, hooks, and subagents
-  remain non-executable until their own reviewed capability slice lands.
+  store. TypeScript, dependency loading, package plugins, and hooks remain
+  non-executable until their own reviewed capability slice lands.
+- OpenCode external subagents may execute only through the shared source
+  decision and existing Subagent owner. TUI consumes typed summaries and
+  generation-checked actions; it must not parse agent files, inject source
+  prompts directly, invent model fallbacks, or offer follow-up for the current
+  fresh single-run compatibility slice.
 - The managed-package OpenCode adapter remains a static-preview path. Other
   OpenCode plugin capabilities, Codex, and Claude remain import/reference sources
   unless their own reviewed adapter design explicitly changes. Never copy
@@ -76,6 +81,10 @@ before product-definition, TUI layout, branding, packaging, runtime, or plugin a
   stable capability requests instead of reimplementing behavior per entrypoint.
 - `json` is one result document; `stream-json` is one complete event per line.
   Keep protocol stdout free of logs and preserve schema/exit-code compatibility.
+- Keep `src/modes/exec.rs` as the stable module facade. The current private split
+  keeps lifecycle/event settlement in `exec/lifecycle.rs` and Patch capture/write
+  behavior in `exec/patch.rs`; further private splits are allowed when they keep
+  one executor, one output schema, and one lifecycle owner.
 - Approval policy is invocation-scoped: interactive TUI defaults to ask;
   non-interactive execution fails when confirmation is required unless an
   explicit argument or managed policy approves it. Do not mutate a global
@@ -103,6 +112,6 @@ two-product build assertion.
 
 ## Install for end users
 
-Prefer [`install.sh`](install.sh) / [`README.md`](README.md): release build, copy to
-`~/.local/bin`, and idempotent `~/.bashrc` / `~/.zshrc` PATH wiring so users can
-run `bitfun-cli` after install.
+Use [`install.ps1`](install.ps1), [`install.sh`](install.sh), and [`README.md`](README.md) for
+platform-native per-user installation. Document `bitfun` as primary; ship `bitfun-cli` only as the
+deprecated compatibility entrypoint, and use `bitfun` in all new examples and integrations.

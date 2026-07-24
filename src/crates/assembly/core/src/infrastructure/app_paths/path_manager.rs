@@ -283,6 +283,13 @@ impl PathManager {
             .join("memories.sqlite")
     }
 
+    /// Get the durable agent coordination database file.
+    pub fn agent_coordination_database_file(&self) -> PathBuf {
+        self.user_data_dir()
+            .join("agent-runtime")
+            .join("coordination.sqlite")
+    }
+
     /// Get user memory workspace root directory: ~/.bitfun/memories/
     pub fn memories_root_dir(&self) -> PathBuf {
         self.bitfun_home_dir().join("memories")
@@ -374,6 +381,12 @@ impl PathManager {
     pub fn project_agent_profiles_file(&self, workspace_path: &Path) -> PathBuf {
         self.project_internal_config_dir(workspace_path)
             .join("agent_profiles.json")
+    }
+
+    /// Get project tool permission rules file: {project}/.bitfun/config/tool_permissions.json
+    pub fn project_permission_file(&self, workspace_path: &Path) -> PathBuf {
+        self.project_internal_config_dir(workspace_path)
+            .join("tool_permissions.json")
     }
 
     /// Get project mode skills file: {project}/.bitfun/config/mode_skills.json

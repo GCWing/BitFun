@@ -6,7 +6,7 @@
 import React, { useCallback } from 'react';
 import { Monitor } from 'lucide-react';
 import { useI18n } from '@/infrastructure/i18n/hooks/useI18n';
-import { usePeerDeviceModeOptional } from '@/infrastructure/peer-device/PeerDeviceContext';
+import { usePeerDeviceModeOptional } from '@/infrastructure/peer-device/peerDeviceContextState';
 import { useNotification } from '@/shared/notification-system';
 import './PeerRemoteBadge.scss';
 

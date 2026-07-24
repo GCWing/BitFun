@@ -16,12 +16,11 @@ const KIND_ORDER: Record<AcpPermissionOption['kind'], number> = {
 
 interface AcpPermissionActionsProps {
   toolItem: FlowToolItem;
-  input?: any;
   disabled?: boolean;
   presentation?: 'icon' | 'text';
   className?: string;
   buttonClassName?: string;
-  onConfirm?: (updatedInput?: any, permissionOptionId?: string, approve?: boolean) => void;
+  onConfirm?: (permissionOptionId?: string, approve?: boolean) => void;
   onReject?: (options?: ToolRejectOptions) => void;
 }
 
@@ -64,7 +63,6 @@ function buttonVariant(kind: AcpPermissionOption['kind']): 'success' | 'danger' 
 
 export const AcpPermissionActions: React.FC<AcpPermissionActionsProps> = ({
   toolItem,
-  input,
   disabled = false,
   presentation = 'icon',
   className = '',
@@ -94,7 +92,7 @@ export const AcpPermissionActions: React.FC<AcpPermissionActionsProps> = ({
           event.stopPropagation();
 
           if (approve) {
-            onConfirm?.(input, option.optionId, true);
+            onConfirm?.(option.optionId, true);
           } else {
             onReject?.({ permissionOptionId: option.optionId });
           }

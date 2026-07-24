@@ -1,4 +1,51 @@
 {
+  "permission": {
+    "title": "需要授權",
+    "subagentOwner": "{{subagent}} 子 Agent",
+    "feedbackLabel": "拒絕回饋",
+    "feedbackPlaceholder": "拒絕時可選填後續建議",
+    "responseFailed": "權限回覆未能送達，請重試。",
+    "allowOnce": "允許一次",
+    "allowAlways": "始終允許",
+    "allowAlwaysTooltip": "始終允許會為 {{projectPath}} 儲存相符的存取權限。",
+    "allowAlwaysTooltipCurrentProject": "始終允許會為目前項目儲存相符的存取權限。",
+    "allowAlwaysTooltipNoGrant": "此請求沒有可儲存的存取範圍；始終允許僅套用於這次請求。",
+    "risks": {
+      "pageSave": "以{{visibility}}可見性儲存「{{slug}}」的新不可變版本，不變更目前正式版本。",
+      "pagePublish": "以{{visibility}}可見性儲存「{{slug}}」，並切換其正式版本。",
+      "pageDeploy": "將「{{slug}}」的正式流量切換到不可變版本「{{version}}」。"
+    },
+    "visibility": {
+      "private": "僅自己可見",
+      "relay": "登入使用者可見",
+      "public": "公開"
+    },
+    "reject": "拒絕",
+    "batchCount": "{{count}} 個授權請求",
+    "collapsePanel": "收起授權請求",
+    "expandPanel": "展開 {{count}} 個待處理的授權請求",
+    "current": "目前",
+    "pending": "等待中",
+    "actions": {
+      "read": "讀取檔案",
+      "edit": "編輯檔案",
+      "bash": "執行命令",
+      "git": "Git 操作",
+      "computerUse": "控制裝置",
+      "webSearch": "搜尋網路",
+      "webFetch": "存取網頁",
+      "mcp": "MCP 呼叫",
+      "task": "執行任務",
+      "skill": "執行技能",
+      "pagePublish": "儲存頁面版本",
+      "pageDeploy": "部署頁面版本",
+      "customTool": "外部工具",
+      "externalDirectory": "存取外部目錄",
+      "other": "其他操作"
+    },
+    "allowCurrentAndFollowing": "允許全部",
+    "rejectCurrentAndFollowing": "拒絕全部"
+  },
   "emptyState": {
     "welcomeBack": "歡迎回來！",
     "workingIn": "您正在 <workspace>{{workspace}}</workspace> 中",
@@ -43,7 +90,7 @@
     "loadingTitle": "正在載入歷史會話",
     "loadingDescription": "正在準備該會話的歷史內容。",
     "failedTitle": "歷史會話載入失敗",
-    "failedDescription": "可以重新載入已儲存的會話內容。",
+    "failedDescription": "可以重新載入已儲存的會話內容；若會話來自其他裝置，請先檢查帳號登入與網路連線。",
     "preparingOlderHistory": "正在準備更早的歷史記錄...",
     "olderHistoryNotReady": "更早的歷史記錄暫未準備好。",
     "remoteSessionMissing": "在後端找不到該會話資料。若剛重新連接過 SSH 遠端工作區，請關閉並重新開啟該遠端項目，或新增會話後再試。",
@@ -551,6 +598,32 @@
   },
   "chatInput": {
     "addBoostTooltip": "智能體模式、圖片或 Skill",
+    "permissionMode": {
+      "menuLabel": "權限模式",
+      "globalScope": "全域",
+      "current": "權限：{{mode}}",
+      "changeFailed": "切換權限模式失敗。",
+      "ask": {
+        "label": "需要確認",
+        "description": "低風險讀取、瀏覽、Task 和 Skill 自動允許；修改檔案和執行命令需要確認。"
+      },
+      "auto": {
+        "label": "自動批准",
+        "description": "自動批准需要確認的請求；明確拒絕仍然生效。"
+      },
+      "fullAccess": {
+        "label": "完全存取",
+        "description": "預設允許工具執行；產品限制和系統權限仍然生效。"
+      },
+      "acp": {
+        "label": "ACP 控制",
+        "tooltip": "此工作階段的權限由 ACP 用戶端控制。"
+      },
+      "fullAccessWarningTitle": "啟用完全存取？",
+      "fullAccessWarningMessage": "完全存取會允許工具讀取和寫入檔案、執行命令及調用整合，不再逐次詢問。明確拒絕規則、產品限制和作業系統權限仍然生效。",
+      "fullAccessConfirm": "啟用完全存取",
+      "cancel": "取消"
+    },
     "addModeTooltip": "附加 Plan 或 Debug",
     "boostSectionAgent": "智能體",
     "boostSectionContext": "上下文",
@@ -855,7 +928,7 @@
     "copyDiagnostics": "複製排障摘要",
     "diagnosticsCopied": "已複製排障摘要",
     "diagnosticsCopyFailed": "複製排障摘要失敗",
-    "diagnosticsTitle": "嚴格 Review 排障摘要",
+    "diagnosticsTitle": "嚴格審核疑難排解摘要",
     "diagnosticsErrorType": "錯誤類型",
     "diagnosticsDescription": "錯誤描述",
     "diagnosticsSuggestedActions": "建議操作",
@@ -884,9 +957,9 @@
     },
     "resultRecovery": {
       "title": "嚴格審核需要補全結果",
-      "missingSubmitCodeReview": "審核已結束，但 BitFun 沒有收到可確認的結構化結果。繼續會保留已完成的審核工作，並要求 agent 補交缺失的審核報告。",
-      "invalidSubmitCodeReview": "審核回傳了 BitFun 無法讀取的結果。繼續會保留已完成的審核工作，並要求 agent 修復報告。",
-      "wrongReviewMode": "審核回傳了標準審核結果。繼續會保留已完成的審核工作，並要求 agent 提交嚴格審核報告。"
+      "missingSubmitCodeReview": "審核已結束，但 BitFun 沒有收到可確認的結構化結果。繼續會保留已完成的審核工作，並補交缺失的審核報告。",
+      "invalidSubmitCodeReview": "審核回傳了 BitFun 無法讀取的結果。繼續會保留已完成的審核工作，並修正報告。",
+      "wrongReviewMode": "審核回傳了標準審核結果。繼續會保留已完成的審核工作，並提交嚴格審核報告。"
     },
     "capacityQueue": {
       "title": "審核正在等待容量",
@@ -928,7 +1001,7 @@
       "cancelQueued": "取消等待中的審核",
       "skipOptionalQueued": "保留核心檢查",
       "openReviewSettings": "開啟審核設定",
-      "controlFailed": "目前無法控制這個 Review 項的容量。可使用停止來中斷 Review，或等待容量狀態刷新。",
+      "controlFailed": "目前無法控制這個審核項目的容量。可停止本次審核，或等待容量狀態更新。",
       "controlFailedWithReason": "容量控制失敗：{{reason}}。請重試，或在審核卡住時使用停止來中斷。",
       "controlPartiallyFailedWithReason": "容量控制已部分套用；{{total}} 個審核項中有 {{failed}} 個失敗：{{reason}}。請等待容量狀態刷新後重試，或在卡住時使用停止。"
     },
@@ -968,20 +1041,19 @@
   "deepReviewConsent": {
     "windowTitle": "審核方案",
     "eyebrow": "審核方案",
-    "title": "增加更廣的審核覆蓋？",
-    "body": "BitFun 為本次變更選擇了額外的獨立檢查。繼續前可確認目標範圍、計畫檢查、耗時傾向和唯讀邊界。",
+    "title": "開始本次審核？",
+    "body": "BitFun 會先直接審核本次變更，只在證據顯示有必要時增加獨立檢查。繼續前可確認目標範圍、審核預算、預計耗時與唯讀邊界。",
     "readonlyLabel": "唯讀",
     "readonly": "審核者不會修改檔案。",
     "sessionConcurrencyTitle": "目前會話較忙",
     "sessionConcurrencyBody": "目標會話已有 {{count}} 個審核工作在執行，繼續後將共享目前可用的審核容量。",
-    "costLabel": "覆蓋",
-    "cost": "計畫的審查代理執行；此處不估算底層模型請求或 Token。",
+    "costLabel": "審核預算",
+    "cost": "審核預算用於視需要執行的獨立檢查；實際呼叫次數和模型用量取決於審核中發現的證據。",
     "timeLabel": "耗時",
     "time": "背景執行，可能需要更久。",
     "cancel": "取消",
     "confirm": "開始審核",
-    "initialCalls": "獨立檢查：計畫 {{planned}} 次審查代理執行",
-    "parallelCalls": "無需再次確認時，最多可能執行 {{count}} 次審查代理。",
+    "callLimit": "檢查上限：{{count}}。實際工作量取決於審核目標和發現的證據。",
     "runStrategy": "運行策略：{{strategy}}",
     "strategyLabels": {
       "quick": "聚焦",
@@ -990,8 +1062,8 @@
     },
     "strategySummaries": {
       "quick": "聚焦審核會檢查目前目標最相關的風險。",
-      "normal": "標準審核會增加獨立覆蓋，同時保持成本合理。",
-      "deep": "全面審核會為高風險變更增加適用範圍內最廣的覆蓋。"
+      "normal": "標準審核會更深入檢查目前目標，並在確有幫助時增加獨立檢查。",
+      "deep": "全面審核會檢查所有適用的高風險領域，並在證據需要驗證時增加檢查。"
     },
     "summaryTitle": "審核方案",
     "targetFiles": "{{count}} 個檔案",
@@ -1000,7 +1072,7 @@
     "skippedReviewers": "{{count}} 個可選檢查未納入",
     "skippedReviewers_one": "{{count}} 個可選檢查未納入",
     "skippedReviewers_other": "{{count}} 個可選檢查未納入",
-    "skippedGroupTitle": "已選擇 Review 範圍",
+    "skippedGroupTitle": "已選擇審核範圍",
     "targetSource": {
       "manualPrompt": "給定內容",
       "workspaceDiff": "工作區改動",
@@ -1163,6 +1235,17 @@
     "exporting": "正在導出...",
     "exportToImage": "導出為圖片"
   },
+  "turnFailure": {
+    "showDetails": "顯示技術詳情",
+    "hideDetails": "隱藏技術詳情",
+    "provider": "服務商",
+    "errorCode": "錯誤碼",
+    "httpStatus": "HTTP 狀態",
+    "requestId": "請求 ID",
+    "providerError": "服務商錯誤",
+    "copy": "複製",
+    "copied": "已複製"
+  },
   "modelRound": {
     "copyDialog": "複製對話",
     "copiedDialog": "已複製!",
@@ -1183,6 +1266,26 @@
     "retryHistoryHide": "隱藏重試歷史",
     "attemptLabel": "第 {{index}} 次嘗試",
     "attemptSuperseded": "已被重試接替",
+    "attemptDiagnostics": {
+      "show": "顯示本次重試診斷詳情",
+      "hide": "隱藏本次重試診斷詳情",
+      "copy": "複製",
+      "copied": "已複製",
+      "providerError": "服務商錯誤",
+      "toolArguments": "工具參數：{{name}}",
+      "rawArguments": "原始參數",
+      "validationError": "解析或驗證錯誤",
+      "unknownTool": "未知工具",
+      "categories": {
+        "transientRequestError": "請求在服務商回應前失敗",
+        "interruptedToolArguments": "工具參數輸出被中斷",
+        "partialStreamError": "串流輸出以可復原錯誤結束",
+        "invalidToolArguments": "服務商回傳了不合法的工具參數",
+        "noEffectiveOutput": "服務商未回傳可用輸出",
+        "transientStreamError": "串流輸出在產生可用內容前失敗",
+        "unknown": "重試診斷：{{category}}"
+      }
+    },
     "meta": {
       "label": "回應中繼資料",
       "completed": "完成",
@@ -1327,6 +1430,30 @@
       "labelAppId": "app_id",
       "labelPath": "path",
       "nameLabel": "應用：{{name}}"
+    },
+    "pageDeploy": {
+      "title": "部署頁面",
+      "deployingShort": "…",
+      "untitled": "（未命名）",
+      "deployFailed": "無法部署 BitFun Page 版本",
+      "openFailed": "無法為該頁面建立安全存取連結。",
+      "labelSlug": "slug",
+      "labelVersion": "version",
+      "labelPath": "url_path",
+      "openProduction": "開啟生產連結"
+    },
+    "pagePublish": {
+      "title": "發佈頁面",
+      "publishingShort": "…",
+      "untitled": "（未命名）",
+      "publishFailed": "無法發佈 BitFun Page",
+      "openFailed": "無法為該頁面建立安全存取連結。",
+      "labelSlug": "slug",
+      "labelVersion": "version",
+      "labelPath": "url_path",
+      "labelPreview": "preview_url_path",
+      "openProduction": "開啟生產連結",
+      "openPreview": "開啟預覽連結"
     },
     "terminal": {
       "executeCommand": "執行命令:",
@@ -1481,6 +1608,10 @@
       "openSettings": "打開系統設定",
       "openSettingsFailed": "無法打開系統設定"
     },
+    "viewImage": {
+      "viewing": "正在查看圖像...",
+      "viewedImages": "已查看 {{count}} 張圖像"
+    },
     "webFetch": {
       "parsingUrl": "解析連結中...",
       "readLabel": "讀取網頁:",
@@ -1551,8 +1682,8 @@
       "collapseDetails": "收起詳情",
       "expandDetails": "展開詳情",
       "openInPanel": "在面板中開啟詳情",
-      "reviewCoverageLabel": "Review 檢查",
-      "reviewCoverageDescription": "正在檢查 Review 覆蓋"
+      "reviewCoverageLabel": "審核檢查",
+      "reviewCoverageDescription": "正在補充審核證據"
     },
     "taskDetailPanel": {
       "untitled": "未命名任務",
@@ -1578,7 +1709,7 @@
       "loadingMore": "正在載入更多輸出...",
       "loading": "正在載入任務詳情...",
       "stopReviewWork": "停止此檢查",
-      "stopReviewWorkHint": "僅取消這個檢查項，整體 Review 仍可繼續並產生摘要。"
+      "stopReviewWorkHint": "僅取消這個檢查項目，整體審核仍可繼續並產生摘要。"
     },
     "timeout": {
       "disableTooltip": "關閉超時限制",
@@ -1838,7 +1969,7 @@
       "runManifest": {
         "recommendedStrategy": "推薦策略",
         "riskRecommendationTitle": "風險推薦",
-        "reviewDepth": "Review 範圍",
+        "reviewDepth": "審核範圍",
         "reviewDepthLabels": {
           "high_risk_only": "聚焦",
           "risk_expanded": "擴展",
@@ -1848,7 +1979,7 @@
         "budget": "預算",
         "estimatedCalls": "預計審核檢查",
         "activeGroupTitle": "已覆蓋",
-        "skippedGroupTitle": "已選擇 Review 範圍",
+        "skippedGroupTitle": "已選擇審核範圍",
         "reducedCoverageSummary": "BitFun 已為此目標選擇最相關的檢查。{{count}} 個可選檢查因適用性、設定或預算未納入本次執行。",
         "reducedCoverageSummary_one": "BitFun 已為此目標選擇最相關的檢查。{{count}} 個可選檢查因適用性、設定或預算未納入本次執行。",
         "reducedCoverageSummary_other": "BitFun 已為此目標選擇最相關的檢查。{{count}} 個可選檢查因適用性、設定或預算未納入本次執行。"
@@ -1882,8 +2013,8 @@
           "detail": "{{count}} 個審核結果是部分結果，可信度有限。"
         },
         "reduced_scope": {
-          "label": "聚焦 Review 範圍",
-          "detail": "本次 Review 使用了聚焦範圍設定。"
+          "label": "聚焦審核範圍",
+          "detail": "本次審核使用了聚焦範圍設定。"
         },
         "target_evidence_limited": {
           "label": "目標證據受限",
@@ -1894,7 +2025,7 @@
           "detail": "{{count}} 條重試指引用於補足部分審核覆蓋。"
         },
         "skipped_reviewers": {
-          "label": "Review 範圍已匹配",
+          "label": "審核範圍已匹配",
           "detail": "{{count}} 個可選檢查因適用性、設定或預算未納入本次執行。"
         },
         "token_budget_limited": {
@@ -2075,6 +2206,8 @@
     "autoModelDesc": "自動路由最優模型",
     "primaryModel": "Primary 模型",
     "fastModel": "Fast 模型",
+    "fastMode": "Fast 模式",
+    "fastModeDescription": "1.5 倍速度，消耗更多額度",
     "modelNotConfigured": "未設定",
     "contextUsage": {
       "agentPrompt": "上次請求輸入上下文: {{usage}}",

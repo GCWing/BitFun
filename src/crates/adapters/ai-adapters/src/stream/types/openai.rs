@@ -1,5 +1,16 @@
 use super::unified::{UnifiedResponse, UnifiedTokenUsage, UnifiedToolCall};
+use bitfun_agent_stream::ToolCallCompletion;
 use serde::Deserialize;
+
+pub(crate) fn map_openai_finish_reason(reason: &str) -> ToolCallCompletion {
+    match reason.trim().to_ascii_lowercase().as_str() {
+        "tool_calls" | "function_call" => ToolCallCompletion::NormalToolUse,
+        "length" => ToolCallCompletion::OutputLimit,
+        "content_filter" => ToolCallCompletion::ContentFiltered,
+        "stop" => ToolCallCompletion::NormalNoToolUse,
+        _ => ToolCallCompletion::Unknown,
+    }
+}
 
 #[derive(Debug, Deserialize)]
 struct PromptTokensDetails {
@@ -207,6 +218,7 @@ impl OpenAISSEData {
                 thinking_signature: None,
                 tool_call: None,
                 usage: usage.take(),
+                tool_call_completion: None,
                 finish_reason: None,
                 provider_metadata: None,
             });
@@ -221,6 +233,7 @@ impl OpenAISSEData {
                     thinking_signature: None,
                     tool_call: Some(UnifiedToolCall::from(tool_call)),
                     usage: if is_first_event { usage.take() } else { None },
+                    tool_call_completion: None,
                     finish_reason: None,
                     provider_metadata: None,
                 });
@@ -229,6 +242,7 @@ impl OpenAISSEData {
 
         if let Some(finish_reason) = finish_reason {
             if let Some(last_response) = responses.last_mut() {
+                last_response.tool_call_completion = Some(map_openai_finish_reason(&finish_reason));
                 last_response.finish_reason = Some(finish_reason);
                 return responses;
             }
@@ -239,6 +253,7 @@ impl OpenAISSEData {
                 thinking_signature: None,
                 tool_call: None,
                 usage,
+                tool_call_completion: Some(map_openai_finish_reason(&finish_reason)),
                 finish_reason: Some(finish_reason),
                 provider_metadata: None,
             });
@@ -252,6 +267,7 @@ impl OpenAISSEData {
                 thinking_signature: None,
                 tool_call: None,
                 usage,
+                tool_call_completion: None,
                 finish_reason,
                 provider_metadata: None,
             });
@@ -272,7 +288,28 @@ impl From<OpenAISSEData> for UnifiedResponse {
 
 #[cfg(test)]
 mod tests {
-    use super::OpenAISSEData;
+    use super::{map_openai_finish_reason, OpenAISSEData};
+    use bitfun_agent_stream::ToolCallCompletion;
+
+    #[test]
+    fn maps_documented_openai_chat_finish_reasons_conservatively() {
+        assert_eq!(
+            map_openai_finish_reason("tool_calls"),
+            ToolCallCompletion::NormalToolUse
+        );
+        assert_eq!(
+            map_openai_finish_reason("length"),
+            ToolCallCompletion::OutputLimit
+        );
+        assert_eq!(
+            map_openai_finish_reason("content_filter"),
+            ToolCallCompletion::ContentFiltered
+        );
+        assert_eq!(
+            map_openai_finish_reason("custom_terminal_state"),
+            ToolCallCompletion::Unknown
+        );
+    }
 
     #[test]
     fn splits_multiple_tool_calls_in_first_choice() {

@@ -13,6 +13,7 @@ pub mod file_read_freshness;
 pub mod framework;
 pub mod input_validator;
 pub mod mcp_tool_bridge;
+pub mod permission_intent;
 pub mod tool_execution_presentation;
 pub mod tool_result_storage;
 pub mod tool_snapshot;
@@ -56,9 +57,9 @@ pub use framework::{
     build_tool_manifest_policy_tools, build_tool_path_policy_denial_message,
     build_tool_runtime_artifact_reference, build_tool_session_runtime_artifact_reference,
     collect_loaded_deferred_tool_specs, get_tool_spec_input_schema,
-    get_tool_spec_is_concurrency_safe, get_tool_spec_is_readonly, get_tool_spec_needs_permissions,
-    get_tool_spec_short_description, is_bitfun_current_session_uri, is_bitfun_runtime_uri,
-    is_bitfun_tool_uri, is_miniapp_headless_agent_run, is_remote_posix_path_within_root,
+    get_tool_spec_is_concurrency_safe, get_tool_spec_is_readonly, get_tool_spec_short_description,
+    is_bitfun_current_session_uri, is_bitfun_runtime_uri, is_bitfun_tool_uri,
+    is_miniapp_headless_agent_run, is_remote_posix_path_within_root,
     is_tool_path_allowed_by_resolved_roots, materialize_static_tool_provider_groups,
     miniapp_headless_agent_tool_restrictions, normalize_absolute_posix_path, normalize_host_path,
     normalize_runtime_relative_path, parse_bitfun_current_session_uri, parse_bitfun_runtime_uri,
@@ -99,16 +100,16 @@ pub use mcp_tool_bridge::{
     McpToolBridgeDefinition, McpToolBridgeDefinitionInput, McpToolBridgeToolInfo,
     MCP_TOOL_DELIMITER, MCP_TOOL_PREFIX,
 };
+pub use permission_intent::PermissionIntent;
 pub use tool_execution_presentation::{
-    build_invalid_tool_call_error_message, build_tool_call_truncation_recovery_notice,
-    build_tool_confirmation_timeout_presentation, build_tool_execution_error_presentation,
-    build_tool_execution_timeout_presentation, build_user_rejected_tool_presentation,
-    build_user_rejected_tool_presentation_with_instruction,
-    build_user_steering_interrupted_presentation, is_write_like_tool_name,
-    render_tool_result_for_assistant, truncate_raw_tool_arguments_preview,
+    build_invalid_tool_call_error_message, build_normal_tool_json_repair_notice,
+    build_permission_denied_tool_presentation, build_tool_call_truncation_recovery_notice,
+    build_tool_execution_error_presentation, build_tool_execution_timeout_presentation,
+    build_user_rejected_tool_presentation, build_user_rejected_tool_presentation_with_instruction,
+    build_user_steering_interrupted_presentation, build_write_tail_closure_notice,
+    is_write_like_tool_name, render_tool_result_for_assistant, truncate_raw_tool_arguments_preview,
     truncate_raw_tool_arguments_preview_to, truncate_tool_arguments_preview,
-    ToolExecutionErrorPresentation, TOOL_CONFIRMATION_TIMEOUT_MESSAGE,
-    TOOL_ERROR_ARGUMENTS_PREVIEW_BYTES, USER_REJECTED_TOOL_MESSAGE,
+    ToolExecutionErrorPresentation, TOOL_ERROR_ARGUMENTS_PREVIEW_BYTES, USER_REJECTED_TOOL_MESSAGE,
     USER_STEERING_INTERRUPTED_MESSAGE,
 };
 pub use tool_result_storage::{

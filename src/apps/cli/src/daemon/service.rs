@@ -128,7 +128,7 @@ fn ensure_systemd_user_available() -> Result<()> {
         _ => Err(anyhow!(
             "systemd user session is not available (no user bus; common in containers, WSL, or SSH sessions without systemd --user).\n\
              Enable a systemd user session for this account, or run the daemon under your own supervisor instead:\n\
-             \x20 bitfun-cli daemon run"
+             \x20 bitfun daemon run"
         )),
     }
 }
@@ -201,7 +201,7 @@ fn install_platform_service(executable: &Path) -> Result<String> {
 #[cfg(not(unix))]
 fn install_platform_service(_executable: &Path) -> Result<String> {
     Err(anyhow!(
-        "daemon auto-start service is not supported on this platform; run `bitfun-cli daemon run` in a terminal instead"
+        "daemon auto-start service is not supported on this platform; run `bitfun daemon run` in a terminal instead"
     ))
 }
 
@@ -274,7 +274,7 @@ pub(crate) fn install_service() -> Result<()> {
         Ok(Some(_)) => {}
         Ok(None) => {
             return Err(anyhow!(
-                "not logged in; run `bitfun-cli`, log in with `/login`, then re-run `bitfun-cli daemon install`"
+                "not logged in; run `bitfun`, log in with `/login`, then re-run `bitfun daemon install`"
             ));
         }
         Err(error) => return Err(anyhow!("read account session: {error}")),
@@ -318,7 +318,7 @@ pub(crate) fn print_status() -> Result<()> {
         );
     }
     if !installed && !running {
-        println!("hint: `bitfun-cli daemon install` keeps this device reachable after reboot");
+        println!("hint: `bitfun daemon install` keeps this device reachable after reboot");
     }
     Ok(())
 }
@@ -329,8 +329,8 @@ mod tests {
 
     #[test]
     fn systemd_unit_runs_daemon_run_and_restarts_on_failure() {
-        let unit = render_systemd_unit(Path::new("/home/u/.local/bin/bitfun-cli"));
-        assert!(unit.contains("ExecStart=/home/u/.local/bin/bitfun-cli daemon run"));
+        let unit = render_systemd_unit(Path::new("/home/u/.local/bin/bitfun"));
+        assert!(unit.contains("ExecStart=/home/u/.local/bin/bitfun daemon run"));
         assert!(unit.contains("Restart=on-failure"));
         assert!(unit.contains("WantedBy=default.target"));
         assert!(unit.contains("After=network-online.target"));
@@ -339,8 +339,8 @@ mod tests {
     #[cfg(target_os = "macos")]
     #[test]
     fn launch_agent_runs_daemon_run_at_load() {
-        let plist = render_launch_agent(Path::new("/usr/local/bin/bitfun-cli"));
-        assert!(plist.contains("<string>/usr/local/bin/bitfun-cli</string>"));
+        let plist = render_launch_agent(Path::new("/usr/local/bin/bitfun"));
+        assert!(plist.contains("<string>/usr/local/bin/bitfun</string>"));
         assert!(plist.contains("<string>run</string>"));
         assert!(plist.contains("<key>RunAtLoad</key>"));
         assert!(plist.contains(LAUNCH_AGENT_LABEL));

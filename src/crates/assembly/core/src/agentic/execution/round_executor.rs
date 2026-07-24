@@ -6,66 +6,44 @@ use super::model_exchange_trace::prepare_model_exchange_trace;
 use super::stream_processor::{StreamProcessOptions, StreamProcessor, StreamResult};
 use super::types::{FinishReason, RoundContext, RoundResult};
 use crate::agentic::core::{Message, ToolCall};
-use crate::agentic::events::{AgenticEvent, EventPriority, EventQueue, ToolEventData};
+use crate::agentic::events::{
+    AgenticEvent, EventPriority, EventQueue, ModelRoundAttemptDiagnostic,
+    ModelRoundAttemptToolDiagnostic, ToolEventData,
+};
 use crate::agentic::memories::{
     parse_bitfun_memory_citation, parse_bitfun_memory_citation_payloads,
     strip_bitfun_memory_citations,
 };
+use crate::agentic::permission_policy::resolve_effective_permission_rules;
 use crate::agentic::tools::computer_use_host::ComputerUseHostRef;
 use crate::agentic::tools::pipeline::{
     SubagentBatchExecutionPolicy as PipelineSubagentBatchExecutionPolicy, ToolExecutionContext,
     ToolExecutionOptions, ToolPipeline,
 };
-use crate::agentic::tools::registry::{get_global_tool_registry, ToolRegistry};
 use crate::agentic::tools::tool_context_runtime;
 use crate::agentic::tools::tool_result_storage;
 use crate::agentic::MessageContent;
 use crate::infrastructure::ai::AIClient;
+use crate::service::config::project_permission_store::{
+    load_project_permission_config_local, load_project_permission_config_remote,
+};
+use crate::service::config::types::AgentProfileConfig;
 use crate::service::config::types::SubagentBatchExecutionPolicy as ConfigSubagentBatchExecutionPolicy;
 use crate::service::config::GlobalConfigManager;
 use crate::util::elapsed_ms_u64;
 use crate::util::errors::{BitFunError, BitFunResult};
 use crate::util::types::Message as AIMessage;
 use crate::util::types::ToolDefinition;
-use bitfun_agent_runtime::tool_confirmation::{
-    resolve_tool_confirmation_policy_gate, ToolConfirmationContextPolicy,
-    ToolConfirmationPolicyGateFacts,
-};
+use bitfun_agent_runtime::permission::AUTO_APPROVE_ASK_CONTEXT_KEY;
 use bitfun_agent_runtime::turn_cancellation::DialogTurnCancellationTokenStore;
-use bitfun_agent_tools::ResolvedToolInvocation;
 use bitfun_ai_adapters::{
     ModelExchangeRequestTraceHandle, ModelExchangeResponseTrace, ModelExchangeTraceConfig,
 };
+use bitfun_runtime_ports::PermissionRule;
 use log::{debug, error, warn};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tokio_util::sync::CancellationToken;
-
-fn tool_call_needs_permission(
-    registry: &ToolRegistry,
-    tool_call: &ToolCall,
-    workspace_root: Option<&std::path::Path>,
-    is_remote: bool,
-) -> bool {
-    let invocation = ResolvedToolInvocation::from_wire_call(
-        tool_call.tool_name.clone(),
-        tool_call.arguments.clone(),
-    )
-    .unwrap_or_else(|_| {
-        ResolvedToolInvocation::direct(tool_call.tool_name.clone(), tool_call.arguments.clone())
-    });
-
-    registry
-        .get_tool(&invocation.effective_tool_name)
-        .and_then(|tool| {
-            crate::external_tools::resolve_external_tool_for_workspace(
-                tool,
-                crate::external_tools::external_tool_route_root(workspace_root, is_remote),
-            )
-        })
-        .map(|tool| tool.needs_permissions(Some(&invocation.effective_arguments)))
-        .unwrap_or(false)
-}
 
 /// Round executor
 pub struct RoundExecutor {
@@ -78,9 +56,63 @@ pub struct RoundExecutor {
 impl RoundExecutor {
     const MAX_STREAM_ATTEMPTS: usize = 10;
     const RETRY_BASE_DELAY_MS: u64 = 500;
+    const RATE_LIMIT_RETRY_BASE_DELAY_MS: u64 = 2_000;
+    const MAX_EXPONENTIAL_DELAY_MS: u64 = 30_000;
+    const MAX_RATE_LIMIT_DELAY_MS: u64 = 60_000;
+    const MAX_RETRY_EXPONENT_SHIFT: u32 = 6;
 
     fn has_user_visible_assistant_text(text: &str) -> bool {
         !text.trim().is_empty()
+    }
+
+    fn retry_diagnostic(
+        attempt_id: String,
+        attempt_index: u32,
+        category: &str,
+        raw_error: Option<String>,
+        tool_calls: &[ToolCall],
+    ) -> ModelRoundAttemptDiagnostic {
+        ModelRoundAttemptDiagnostic {
+            attempt_id,
+            attempt_index,
+            category: category.to_string(),
+            raw_error,
+            tool_calls: tool_calls
+                .iter()
+                .filter(|tool_call| !tool_call.is_valid())
+                .map(|tool_call| ModelRoundAttemptToolDiagnostic {
+                    tool_id: (!tool_call.tool_id.is_empty()).then(|| tool_call.tool_id.clone()),
+                    tool_name: (!tool_call.tool_name.is_empty())
+                        .then(|| tool_call.tool_name.clone()),
+                    raw_arguments: tool_call.raw_arguments.clone(),
+                    validation_error: tool_call.parse_error.clone(),
+                })
+                .collect(),
+        }
+    }
+
+    async fn record_retry_diagnostic(
+        &self,
+        context: &RoundContext,
+        round_id: &str,
+        attempt_id: String,
+        attempt_index: u32,
+        category: &str,
+        raw_error: Option<String>,
+        tool_calls: &[ToolCall],
+    ) {
+        let diagnostic =
+            Self::retry_diagnostic(attempt_id, attempt_index, category, raw_error, tool_calls);
+        self.emit_event(
+            AgenticEvent::ModelRoundAttemptSuperseded {
+                session_id: context.session_id.clone(),
+                turn_id: context.dialog_turn_id.clone(),
+                round_id: round_id.to_string(),
+                diagnostic: diagnostic.clone(),
+            },
+            EventPriority::High,
+        )
+        .await;
     }
 
     fn parsed_memory_citation_from_stream_result(
@@ -112,6 +144,31 @@ impl RoundExecutor {
                 PipelineSubagentBatchExecutionPolicy::Serial
             }
         }
+    }
+
+    fn resolve_permission_rules(
+        global: &crate::service::config::types::GlobalConfig,
+        project_rules: &[PermissionRule],
+        agent_profile: Option<&AgentProfileConfig>,
+        parent_runtime_ceiling: Option<&bitfun_runtime_ports::PermissionRuntimeCeiling>,
+    ) -> Vec<PermissionRule> {
+        resolve_effective_permission_rules(
+            global,
+            project_rules,
+            agent_profile,
+            parent_runtime_ceiling,
+            &[],
+        )
+    }
+
+    fn resolve_auto_approve_ask(
+        global: &crate::service::config::types::GlobalConfig,
+        context_vars: &std::collections::HashMap<String, String>,
+    ) -> bool {
+        context_vars
+            .get(AUTO_APPROVE_ASK_CONTEXT_KEY)
+            .and_then(|value| value.parse::<bool>().ok())
+            .unwrap_or(global.tool_permissions.interaction.auto_approve_ask)
     }
 
     async fn sleep_with_cancellation(
@@ -180,6 +237,15 @@ impl RoundExecutor {
 
         let trace_config =
             prepare_model_exchange_trace(&context, &round_id, ai_client.as_ref()).await;
+        // Resolve this user policy once for the entire round, before the
+        // stream begins. The stream crate receives only this immutable fact;
+        // it never reads product configuration directly.
+        let global_config: crate::service::config::types::GlobalConfig =
+            match GlobalConfigManager::get_service().await {
+                Ok(service) => service.get_config(None).await.unwrap_or_default(),
+                Err(_) => Default::default(),
+            };
+        let allow_normal_tool_json_repair = global_config.ai.allow_tool_json_repair;
         let max_attempts = Self::MAX_STREAM_ATTEMPTS;
         let mut attempt_index = 0usize;
         let (stream_result, send_to_stream_ms, stream_processing_ms, final_trace_handle) = loop {
@@ -235,7 +301,17 @@ impl RoundExecutor {
                     if Self::is_transient_network_error(&err_msg)
                         && attempt_index < max_attempts - 1
                     {
-                        let delay_ms = Self::retry_delay_ms(attempt_index);
+                        self.record_retry_diagnostic(
+                            &context,
+                            &round_id,
+                            attempt_id.clone(),
+                            attempt_number,
+                            "transient_request_error",
+                            Some(err_msg.clone()),
+                            &[],
+                        )
+                        .await;
+                        let delay_ms = Self::retry_delay_ms_for_error(attempt_index, &err_msg);
                         warn!(
                             "Retrying AI request after connection failure: session_id={}, round_id={}, attempt={}/{}, delay_ms={}, error={}",
                             context.session_id,
@@ -317,6 +393,7 @@ impl RoundExecutor {
                     &cancel_token,
                     StreamProcessOptions {
                         recover_partial_on_cancel: context.recover_partial_on_cancel,
+                        allow_normal_tool_json_repair,
                         ..Default::default()
                     },
                 )
@@ -333,13 +410,23 @@ impl RoundExecutor {
                             && attempt_index < max_attempts - 1
                             && Self::is_transient_network_error(&err_msg)
                         {
+                            self.record_retry_diagnostic(
+                                &context,
+                                &round_id,
+                                attempt_id.clone(),
+                                attempt_number,
+                                "interrupted_tool_arguments",
+                                Some(err_msg.clone()),
+                                &result.tool_calls,
+                            )
+                            .await;
                             Self::complete_model_exchange_trace(
                                 trace_config.as_ref(),
                                 trace_handle.as_ref(),
                                 Self::trace_response_from_stream_result("partial", &result),
                             )
                             .await;
-                            let delay_ms = Self::retry_delay_ms(attempt_index);
+                            let delay_ms = Self::retry_delay_ms_for_error(attempt_index, &err_msg);
                             warn!(
                                 "Retrying stream because tool arguments were interrupted before valid JSON completed: session_id={}, round_id={}, attempt={}/{}, delay_ms={}, invalid_tool_calls={}, error={}",
                                 context.session_id,
@@ -424,13 +511,24 @@ impl RoundExecutor {
                         && Self::is_transient_network_error(partial_recovery_reason)
                         && attempt_index < max_attempts - 1
                     {
+                        self.record_retry_diagnostic(
+                            &context,
+                            &round_id,
+                            attempt_id.clone(),
+                            attempt_number,
+                            "partial_stream_error",
+                            Some(partial_recovery_reason.to_string()),
+                            &result.tool_calls,
+                        )
+                        .await;
                         Self::complete_model_exchange_trace(
                             trace_config.as_ref(),
                             trace_handle.as_ref(),
                             Self::trace_response_from_stream_result("partial", &result),
                         )
                         .await;
-                        let delay_ms = Self::retry_delay_ms(attempt_index);
+                        let delay_ms =
+                            Self::retry_delay_ms_for_error(attempt_index, partial_recovery_reason);
                         warn!(
                             "Retrying stream because tool calls arrived on an interrupted network stream without assistant text: session_id={}, round_id={}, attempt={}/{}, delay_ms={}, tool_calls={}, reason={}",
                             context.session_id,
@@ -449,6 +547,16 @@ impl RoundExecutor {
                     if Self::is_invalid_tool_only_without_text(&result) {
                         let err_msg = "Provider returned only invalid tool arguments".to_string();
                         if attempt_index < max_attempts - 1 {
+                            self.record_retry_diagnostic(
+                                &context,
+                                &round_id,
+                                attempt_id.clone(),
+                                attempt_number,
+                                "invalid_tool_arguments",
+                                None,
+                                &result.tool_calls,
+                            )
+                            .await;
                             Self::complete_model_exchange_trace(
                                 trace_config.as_ref(),
                                 trace_handle.as_ref(),
@@ -498,6 +606,16 @@ impl RoundExecutor {
                     }
 
                     if no_effective_output && attempt_index < max_attempts - 1 {
+                        self.record_retry_diagnostic(
+                            &context,
+                            &round_id,
+                            attempt_id.clone(),
+                            attempt_number,
+                            "no_effective_output",
+                            None,
+                            &[],
+                        )
+                        .await;
                         Self::complete_model_exchange_trace(
                             trace_config.as_ref(),
                             trace_handle.as_ref(),
@@ -554,7 +672,17 @@ impl RoundExecutor {
                     )
                     .await;
                     if can_retry {
-                        let delay_ms = Self::retry_delay_ms(attempt_index);
+                        self.record_retry_diagnostic(
+                            &context,
+                            &round_id,
+                            attempt_id.clone(),
+                            attempt_number,
+                            "transient_stream_error",
+                            Some(err_msg.clone()),
+                            &[],
+                        )
+                        .await;
+                        let delay_ms = Self::retry_delay_ms_for_error(attempt_index, &err_msg);
                         warn!(
                             "Retrying stream after transient error with no effective output: session_id={}, round_id={}, attempt={}/{}, delay_ms={}, error={}",
                             context.session_id,
@@ -742,6 +870,11 @@ impl RoundExecutor {
         let tool_results = if let Some(tool_pipeline) = &self.tool_pipeline {
             // Create tool execution context
             let allowed_tools = context.available_tools.clone();
+            let permission_delegation = context.permission_delegation.clone().or_else(|| {
+                subagent_parent_info
+                    .as_ref()
+                    .map(|parent| parent.permission_delegation_context(&context.agent_type))
+            });
             let tool_context = ToolExecutionContext {
                 session_id: context.session_id.clone(),
                 dialog_turn_id: context.dialog_turn_id.clone(),
@@ -753,6 +886,7 @@ impl RoundExecutor {
                 primary_model_facts: context.primary_model_facts.clone(),
                 context_vars: context.context_vars.clone(),
                 subagent_parent_info,
+                permission_delegation,
                 delegation_policy: context.delegation_policy,
                 deferred_tools: context.deferred_tools.clone(),
                 loaded_deferred_tool_specs: context.loaded_deferred_tool_specs.clone(),
@@ -764,103 +898,56 @@ impl RoundExecutor {
                 remote_exec_port: context.remote_exec_port.clone(),
             };
 
-            // Read tool execution related configuration from global config
-            let (
-                needs_confirmation,
-                tool_execution_timeout,
-                tool_confirmation_timeout,
-                subagent_batch_execution_policy,
-            ) = {
-                let config_service = GlobalConfigManager::get_service().await.ok();
+            // Use the round-start configuration so stream repair and tool
+            // execution policy stay stable throughout this model round.
+            let tool_execution_timeout = global_config.ai.tool_execution_timeout_secs;
+            let subagent_batch_execution_policy = Self::map_subagent_batch_execution_policy(
+                global_config.ai.subagent_batch_execution_policy,
+            );
+            let auto_approve_ask =
+                Self::resolve_auto_approve_ask(&global_config, &context.context_vars);
 
-                // Timeout and skip confirmation settings
-                let (exec_timeout, confirm_timeout, skip_confirmation, task_policy) =
-                    if let Some(ref service) = config_service {
-                        let ai_config: crate::service::config::types::AIConfig =
-                            service.get_config(Some("ai")).await.unwrap_or_default();
-
-                        if ai_config.skip_tool_confirmation {
-                            debug!("Global config skips tool confirmation");
+            let project_rules = match context.workspace.as_ref() {
+                Some(workspace) if workspace.is_remote() => {
+                    match context.workspace_services.as_ref() {
+                        Some(services) => {
+                            load_project_permission_config_remote(
+                                services.fs.as_ref(),
+                                &workspace.root_path_string(),
+                            )
+                            .await?
+                            .rules
                         }
-
-                        (
-                            ai_config.tool_execution_timeout_secs,
-                            ai_config.tool_confirmation_timeout_secs,
-                            ai_config.skip_tool_confirmation,
-                            Self::map_subagent_batch_execution_policy(
-                                ai_config.subagent_batch_execution_policy,
-                            ),
-                        )
-                    } else {
-                        (
-                            None,
-                            None,
-                            false,
-                            PipelineSubagentBatchExecutionPolicy::default(),
-                        ) // Default: no timeout, requires confirmation
-                    };
-
-                let skip_from_context = context
-                    .context_vars
-                    .get("skip_tool_confirmation")
-                    .map(|v| v == "true")
-                    .unwrap_or(false);
-                let require_from_context = context
-                    .context_vars
-                    .get("require_tool_confirmation")
-                    .map(|v| v == "true")
-                    .unwrap_or(false);
-                let context_policy = if require_from_context {
-                    ToolConfirmationContextPolicy::Require
-                } else if skip_from_context {
-                    ToolConfirmationContextPolicy::Skip
-                } else {
-                    ToolConfirmationContextPolicy::Inherit
-                };
-
-                let skips_confirmation = match context_policy {
-                    ToolConfirmationContextPolicy::Require => false,
-                    ToolConfirmationContextPolicy::Skip => true,
-                    ToolConfirmationContextPolicy::Inherit => skip_confirmation,
-                };
-                let any_tool_needs_permission = if skips_confirmation {
-                    false
-                } else {
-                    let registry = get_global_tool_registry();
-                    let tool_registry = registry.read().await;
-
-                    stream_result.tool_calls.iter().any(|tool_call| {
-                        tool_call_needs_permission(
-                            &tool_registry,
-                            tool_call,
-                            context
-                                .workspace
-                                .as_ref()
-                                .map(|workspace| workspace.root_path()),
-                            context
-                                .workspace
-                                .as_ref()
-                                .is_some_and(|workspace| workspace.is_remote()),
-                        )
-                    })
-                };
-                let needs_confirm =
-                    resolve_tool_confirmation_policy_gate(ToolConfirmationPolicyGateFacts {
-                        global_skip_tool_confirmation: skip_confirmation,
-                        context_policy,
-                        any_tool_needs_permission,
-                    })
-                    .confirm_before_run();
-
-                (needs_confirm, exec_timeout, confirm_timeout, task_policy)
+                        None => Vec::new(),
+                    }
+                }
+                Some(workspace) => {
+                    load_project_permission_config_local(workspace.root_path())
+                        .await?
+                        .rules
+                }
+                None => Vec::new(),
             };
+
+            let agent_profile_id =
+                crate::agentic::agents::resolve_mode_config_profile_id(&context.agent_type);
+            let agent_profile = global_config
+                .ai
+                .agent_profiles
+                .get(agent_profile_id.as_ref());
+            let permission_rules = Self::resolve_permission_rules(
+                &global_config,
+                &project_rules,
+                agent_profile,
+                context.permission_runtime_ceiling.as_ref(),
+            );
 
             // Create tool execution options (use configured timeout values)
             let tool_options = ToolExecutionOptions {
-                confirm_before_run: needs_confirmation,
                 timeout_secs: tool_execution_timeout,
-                confirmation_timeout_secs: tool_confirmation_timeout,
                 subagent_batch_execution_policy,
+                permission_rules,
+                auto_approve_ask,
                 ..ToolExecutionOptions::default()
             };
 
@@ -1238,7 +1325,26 @@ impl RoundExecutor {
     }
 
     fn retry_delay_ms(attempt_index: usize) -> u64 {
-        Self::RETRY_BASE_DELAY_MS * (1u64 << attempt_index.min(3))
+        Self::retry_delay_ms_for_error(attempt_index, "")
+    }
+
+    fn retry_delay_ms_for_error(attempt_index: usize, error_message: &str) -> u64 {
+        let shift = u32::try_from(attempt_index)
+            .unwrap_or(u32::MAX)
+            .min(Self::MAX_RETRY_EXPONENT_SHIFT);
+        let msg = error_message.to_lowercase();
+        let is_rate_limit =
+            msg.contains("429") || msg.contains("rate limit") || msg.contains("too many requests");
+
+        if is_rate_limit {
+            Self::RATE_LIMIT_RETRY_BASE_DELAY_MS
+                .saturating_mul(1u64 << shift)
+                .min(Self::MAX_RATE_LIMIT_DELAY_MS)
+        } else {
+            Self::RETRY_BASE_DELAY_MS
+                .saturating_mul(1u64 << shift)
+                .min(Self::MAX_EXPONENTIAL_DELAY_MS)
+        }
     }
 
     /// Check whether an error message represents a transient (retryable) condition.
@@ -1377,17 +1483,21 @@ fn token_details_from_usage(
 
 #[cfg(test)]
 mod tests {
-    use super::{tool_call_needs_permission, RoundExecutor, StreamProcessor};
+    use super::{RoundExecutor, StreamProcessor};
     use crate::agentic::core::ToolCall;
     use crate::agentic::events::{EventQueue, EventQueueConfig};
     use crate::agentic::execution::stream_processor::StreamResult;
     use crate::agentic::execution::types::RoundContext;
-    use crate::agentic::tools::registry::create_tool_registry;
     use crate::agentic::tools::ToolRuntimeRestrictions;
+    use crate::service::config::types::{AgentProfileConfig, GlobalConfig};
     use crate::util::errors::BitFunError;
     use crate::util::types::ai::GeminiUsage;
+    use bitfun_agent_runtime::permission::AUTO_APPROVE_ASK_CONTEXT_KEY;
     use bitfun_agent_runtime::turn_cancellation::DialogTurnCancellationTokenStore;
-    use bitfun_runtime_ports::DelegationPolicy;
+    use bitfun_runtime_ports::{
+        DelegationPolicy, PermissionEffect, PermissionEvaluator, PermissionPolicyPreset,
+        PermissionRule,
+    };
     use serde_json::json;
     use std::collections::HashMap;
     use std::sync::Arc;
@@ -1404,28 +1514,11 @@ mod tests {
         }
     }
 
-    #[test]
-    fn deferred_permission_gate_uses_effective_target() {
-        let registry = create_tool_registry();
-        let call = ToolCall {
-            tool_id: "tool-1".to_string(),
-            tool_name: bitfun_agent_tools::CALL_DEFERRED_TOOL_NAME.to_string(),
-            arguments: json!({
-                "tool_name": "Write",
-                "args": { "payload": "+++ file.txt\ncontent" }
-            }),
-            raw_arguments: None,
-            is_error: false,
-            recovered_from_truncation: false,
-        };
-
-        assert!(tool_call_needs_permission(&registry, &call, None, false));
-    }
-
     fn test_round_context() -> RoundContext {
         RoundContext {
             session_id: "session-1".to_string(),
             subagent_parent_info: None,
+            permission_delegation: None,
             dialog_turn_id: "turn-1".to_string(),
             turn_index: 0,
             round_number: 0,
@@ -1442,6 +1535,7 @@ mod tests {
             ),
             agent_type: "agentic".to_string(),
             context_vars: HashMap::new(),
+            permission_runtime_ceiling: None,
             delegation_policy: DelegationPolicy::top_level(),
             runtime_tool_restrictions: ToolRuntimeRestrictions::default(),
             steering_interrupt: None,
@@ -1451,6 +1545,83 @@ mod tests {
             remote_exec_port: None,
             recover_partial_on_cancel: false,
         }
+    }
+
+    #[test]
+    fn resolves_global_project_and_agent_permission_rules_before_execution() {
+        let mut global = GlobalConfig::default();
+        global.tool_permissions.policy.preset = PermissionPolicyPreset::FullAccess;
+        global.tool_permissions.policy.rules =
+            vec![PermissionRule::new("bash", "rm *", PermissionEffect::Ask)];
+        let project_rules = vec![PermissionRule::new(
+            "edit",
+            "generated/*",
+            PermissionEffect::Deny,
+        )];
+        let agent = AgentProfileConfig {
+            tool_permission_rules: vec![PermissionRule::new(
+                "edit",
+                "generated/review.md",
+                PermissionEffect::Allow,
+            )],
+            ..AgentProfileConfig::default()
+        };
+
+        let resolved =
+            RoundExecutor::resolve_permission_rules(&global, &project_rules, Some(&agent), None);
+        let evaluator = PermissionEvaluator::case_sensitive();
+
+        assert_eq!(
+            evaluator.evaluate_resource("bash", "rm -rf target", &resolved),
+            PermissionEffect::Ask
+        );
+        assert_eq!(
+            evaluator.evaluate_resource("edit", "generated/review.md", &resolved),
+            PermissionEffect::Allow
+        );
+        assert_eq!(
+            evaluator.evaluate_resource("edit", "generated/api.rs", &resolved),
+            PermissionEffect::Deny
+        );
+        assert_eq!(
+            evaluator.evaluate_resource("read", "src/main.rs", &resolved),
+            PermissionEffect::Allow
+        );
+    }
+
+    #[test]
+    fn auto_approve_context_overrides_persisted_interaction_preference() {
+        let mut global = GlobalConfig::default();
+        global.tool_permissions.interaction.auto_approve_ask = true;
+        let mut context_vars = std::collections::HashMap::new();
+
+        assert!(RoundExecutor::resolve_auto_approve_ask(
+            &global,
+            &context_vars
+        ));
+        context_vars.insert(
+            AUTO_APPROVE_ASK_CONTEXT_KEY.to_string(),
+            "false".to_string(),
+        );
+
+        assert!(!RoundExecutor::resolve_auto_approve_ask(
+            &global,
+            &context_vars
+        ));
+        context_vars.insert(AUTO_APPROVE_ASK_CONTEXT_KEY.to_string(), "true".to_string());
+        assert!(RoundExecutor::resolve_auto_approve_ask(
+            &global,
+            &context_vars
+        ));
+
+        context_vars.insert(
+            AUTO_APPROVE_ASK_CONTEXT_KEY.to_string(),
+            "invalid".to_string(),
+        );
+        assert!(RoundExecutor::resolve_auto_approve_ask(
+            &global,
+            &context_vars
+        ));
     }
 
     #[tokio::test]
@@ -1622,7 +1793,9 @@ mod tests {
                 arguments: json!({}),
                 raw_arguments: Some("{\"command\":".to_string()),
                 is_error: true,
+                parse_error: Some("EOF while parsing an object".to_string()),
                 recovered_from_truncation: false,
+                repair_kind: Default::default(),
             }],
             usage: Some(GeminiUsage {
                 prompt_token_count: 100,
@@ -1677,8 +1850,40 @@ mod tests {
                 "tool_name": "Bash",
                 "arguments": {},
                 "raw_arguments": "{\"command\":",
-                "is_error": true
+                "is_error": true,
+                "parse_error": "EOF while parsing an object"
             }]))
+        );
+    }
+
+    #[test]
+    fn retry_diagnostic_preserves_invalid_tool_arguments_and_parser_error() {
+        let diagnostic = RoundExecutor::retry_diagnostic(
+            "round-1:attempt:1".to_string(),
+            1,
+            "invalid_tool_arguments",
+            None,
+            &[ToolCall {
+                tool_id: "tool-1".to_string(),
+                tool_name: "Bash".to_string(),
+                arguments: json!({}),
+                raw_arguments: Some("{\"command\":".to_string()),
+                is_error: true,
+                parse_error: Some("EOF while parsing an object".to_string()),
+                recovered_from_truncation: false,
+                repair_kind: Default::default(),
+            }],
+        );
+
+        assert_eq!(diagnostic.category, "invalid_tool_arguments");
+        assert_eq!(diagnostic.tool_calls.len(), 1);
+        assert_eq!(
+            diagnostic.tool_calls[0].raw_arguments.as_deref(),
+            Some("{\"command\":")
+        );
+        assert_eq!(
+            diagnostic.tool_calls[0].validation_error.as_deref(),
+            Some("EOF while parsing an object")
         );
     }
 
@@ -1704,6 +1909,32 @@ mod tests {
         assert!(RoundExecutor::is_transient_network_error(
             "rate limit exceeded"
         ));
+    }
+
+    #[test]
+    fn retry_delay_grows_beyond_previous_four_second_cap() {
+        assert_eq!(RoundExecutor::retry_delay_ms(0), 500);
+        assert_eq!(RoundExecutor::retry_delay_ms(3), 4_000);
+        assert_eq!(RoundExecutor::retry_delay_ms(5), 16_000);
+        assert_eq!(RoundExecutor::retry_delay_ms(6), 30_000);
+        assert_eq!(RoundExecutor::retry_delay_ms(9), 30_000);
+    }
+
+    #[test]
+    fn rate_limit_retry_delay_uses_longer_ladder() {
+        assert_eq!(
+            RoundExecutor::retry_delay_ms_for_error(0, "error 429 Too Many Requests"),
+            2_000
+        );
+        assert_eq!(
+            RoundExecutor::retry_delay_ms_for_error(3, "rate limit exceeded"),
+            16_000
+        );
+        assert_eq!(
+            RoundExecutor::retry_delay_ms_for_error(5, "too many requests"),
+            60_000
+        );
+        assert_eq!(RoundExecutor::retry_delay_ms_for_error(9, "429"), 60_000);
     }
 
     #[test]

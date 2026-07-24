@@ -109,9 +109,6 @@ fn cancellation_policy_preserves_cancellable_and_terminal_state_contract() {
     assert!(should_cancel_tool_state(ToolTaskStateKind::Queued));
     assert!(should_cancel_tool_state(ToolTaskStateKind::Waiting));
     assert!(should_cancel_tool_state(ToolTaskStateKind::Running));
-    assert!(should_cancel_tool_state(
-        ToolTaskStateKind::AwaitingConfirmation
-    ));
     assert!(!should_cancel_tool_state(ToolTaskStateKind::Streaming));
     assert!(!should_cancel_tool_state(ToolTaskStateKind::Completed));
     assert!(!should_cancel_tool_state(ToolTaskStateKind::Failed));
@@ -161,19 +158,17 @@ fn state_counts_preserve_pipeline_stats_contract() {
         ToolTaskStateKind::Waiting,
         ToolTaskStateKind::Running,
         ToolTaskStateKind::Streaming,
-        ToolTaskStateKind::AwaitingConfirmation,
         ToolTaskStateKind::Completed,
         ToolTaskStateKind::Failed,
         ToolTaskStateKind::Rejected,
         ToolTaskStateKind::Cancelled,
     ]);
 
-    assert_eq!(counts.total, 10);
+    assert_eq!(counts.total, 9);
     assert_eq!(counts.queued, 2);
     assert_eq!(counts.waiting, 1);
     assert_eq!(counts.running, 1);
     assert_eq!(counts.streaming, 1);
-    assert_eq!(counts.awaiting_confirmation, 1);
     assert_eq!(counts.completed, 1);
     assert_eq!(counts.failed, 1);
     assert_eq!(counts.rejected, 1);

@@ -19,6 +19,17 @@ Main areas:
 
 Peer Device Mode ownership and boundaries:
 `docs/architecture/peer-device-mode.md`.
+Frontend regression guards:
+`src/web-ui/src/infrastructure/peer-device/README.md`.
+
+Account login (pending sync choice / finalize) lives in
+`src/api/remote_connect_api.rs` (`PENDING_SYNC_CHOICE`, `account_login`,
+`account_finalize_login`). Do not persist a session before the user chooses
+cloud vs local settings.
+
+One-click relay deploy: Tauri surface `src/api/relay_deploy_api.rs`, orchestration
+in `bitfun-services-integrations` `remote_ssh/relay_deploy.rs`. Feature invariants:
+`src/web-ui/src/features/relay-deploy/README.md`.
 
 If a change affects behavior shared by multiple runtimes, place stable contracts,
 execution policy, and services in their owning lower-layer crates. Keep only
@@ -49,6 +60,10 @@ pnpm run desktop:build:fast
 | `pnpm run desktop:build:fast` | Debug build without bundling; fastest compile for manual testing |
 | `pnpm run desktop:build:release-fast` | Release-like build with reduced LTO; use when you need release behavior but can't wait for full LTO |
 | `pnpm run desktop:build:nsis:fast` | Windows installer using `release-fast` profile; for quick installer validation |
+
+## Target cache GC
+
+`desktop:dev` (on exit), `desktop:preview:debug` (on shutdown), and `desktop:build*` prune stale `target/<profile>/incremental` roots (keep latest per crate) and true-orphan `deps` hashes with no matching `.fingerprint` directory. Fingerprints are never mtime-pruned (that forced cold rebuilds). Manual: `pnpm run target:gc -- --profile debug`. Disable with `BITFUN_TARGET_GC=0`; dry-run with `BITFUN_TARGET_GC_DRY_RUN=1`.
 
 `release-fast` profile (`Cargo.toml`): inherits `release` but disables LTO, increases `codegen-units` to 16, enables incremental compilation. Significantly faster at the cost of binary size and marginal runtime performance.
 

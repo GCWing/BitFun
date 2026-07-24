@@ -289,10 +289,6 @@ Use this tool when you recognize a common task pattern — it saves planning tim
         })
     }
 
-    fn needs_permissions(&self, _input: Option<&Value>) -> bool {
-        false
-    }
-
     fn is_readonly(&self) -> bool {
         true
     }

@@ -21,7 +21,7 @@ pub(crate) struct ControllerLease {
 
 static CONTROL_SUBSCRIBERS: OnceLock<Mutex<ControllerRegistry>> = OnceLock::new();
 static CONTROLLER_DELIVERY: OnceLock<RwLock<()>> = OnceLock::new();
-const MAX_ATTACHED_CONTROLLERS: usize = 64;
+const MAX_ATTACHED_CONTROLLERS: usize = i32::MAX as usize;
 
 fn control_subscribers() -> &'static Mutex<ControllerRegistry> {
     CONTROL_SUBSCRIBERS.get_or_init(|| Mutex::new(ControllerRegistry::default()))

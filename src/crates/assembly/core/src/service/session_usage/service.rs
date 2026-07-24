@@ -15,23 +15,10 @@ use crate::service::token_usage::{
 };
 use crate::util::errors::{BitFunError, BitFunResult};
 use chrono::Utc;
-use serde::{Deserialize, Serialize};
 use std::collections::{BTreeSet, HashMap, HashSet};
 use std::path::Path;
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(rename_all = "camelCase")]
-pub struct SessionUsageReportRequest {
-    pub session_id: String,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub workspace_path: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub remote_connection_id: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub remote_ssh_host: Option<String>,
-    #[serde(default)]
-    pub include_hidden_subagents: bool,
-}
+pub use bitfun_runtime_ports::AgentSessionUsageRequest as SessionUsageReportRequest;
 
 pub async fn generate_session_usage_report(
     persistence_manager: &PersistenceManager,
@@ -1727,6 +1714,7 @@ mod tests {
             parent_turn_index: Some(0),
             parent_tool_call_id: Some("tool-1".to_string()),
             subagent_type: Some("Explore".to_string()),
+            continuation_policy: None,
         });
         let mut grandchild = SessionMetadata::new(
             "grandchild-session".to_string(),
@@ -1742,6 +1730,7 @@ mod tests {
             parent_turn_index: Some(0),
             parent_tool_call_id: Some("child-tool".to_string()),
             subagent_type: Some("Explore".to_string()),
+            continuation_policy: None,
         });
 
         let (session_ids, complete) =
@@ -2320,6 +2309,7 @@ mod tests {
             }),
             success: false,
             result_for_assistant: None,
+            image_attachments: None,
             error: Some("operation timed out".to_string()),
             duration_ms: Some(95_000),
         });
@@ -2700,6 +2690,7 @@ mod tests {
                 first_visible_output_ms: None,
                 stream_duration_ms: None,
                 attempt_count: None,
+                attempt_diagnostics: vec![],
                 failure_category: None,
                 token_details: None,
                 status: "completed".to_string(),
@@ -2710,6 +2701,8 @@ mod tests {
             token_usage: None,
             finish_reason: None,
             has_final_response: None,
+            error: None,
+            error_detail: None,
             status: TurnStatus::Completed,
         }
     }
@@ -2740,6 +2733,7 @@ mod tests {
             first_visible_output_ms: Some(8),
             stream_duration_ms: Some(duration_ms.saturating_sub(10)),
             attempt_count: Some(1),
+            attempt_diagnostics: vec![],
             failure_category: None,
             token_details: None,
             status: "completed".to_string(),
@@ -2782,6 +2776,7 @@ mod tests {
                 result: serde_json::json!({}),
                 success,
                 result_for_assistant: None,
+                image_attachments: None,
                 error: (!success).then(|| "tool failed".to_string()),
                 duration_ms: Some(duration_ms),
             }),

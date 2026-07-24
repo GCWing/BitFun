@@ -38,8 +38,8 @@
     "tabDescriptions": {
       "basics": "日誌、終端 Shell、通知與開機啟動。",
       "appearance": "語言、主題與介面字體大小。",
-      "models": "AI 模型、API 密鑰、供應商與代理。",
-      "sessionPersonalization": "會話標題與 Agent 夥伴。",
+      "models": "AI 模型、API 密鑰、供應商、代理與會話標題。",
+      "sessionPersonalization": "Agent 夥伴。",
       "sessionPermissions": "加速工作區搜尋、工具確認與逾時、Computer use、瀏覽器與偵錯。",
       "review": "Review 策略、覆蓋深度、容量、成本和耗時控制。",
       "memories": "自動記憶生成、注入、整理窗口與記憶模型。",

@@ -30,15 +30,10 @@ The backend does not resolve the review target or build the launch manifest. The
 
 `src/crates/assembly/core/src/agentic/agents/definitions/review/review_specialists.rs` defines read-only reviewer agents:
 
-- `ReviewBusinessLogic`
-- `ReviewGeneral` (internal managed-batch worker)
-- `ReviewPerformance`
-- `ReviewSecurity`
-- `ReviewArchitecture`
-- `ReviewFrontend`
+- `ReviewWorker`
 - `ReviewJudge`
 
-These agents form an optional specialist pool, not mandatory coverage lanes. A new strict run may launch at most one specialist for a concrete uncertainty. The existing generic Git exposure remains for legacy compatibility, but it is not authorized as prepared changed-code evidence. Prepared `GetFileDiff` is the source of truth for changed code; when the local binding is `matching_clean`, existing Read/Grep/Glob/LS tools may supplement it with repository context. `ReviewJudge` is a conditional quality check used only for a high-severity finding, conflicting evidence, or a materially low-confidence conclusion; it does not perform a full independent review pass.
+`ReviewWorker` is an optional capability, not a fixed domain lane. The owning `DeepReview` agent selects a concrete lens from the actual change or the user's requested focus, then supplies the exact question, scope, and evidence expectation in the launch prompt. A new strict run may launch at most one such worker for a concrete uncertainty. The retired `ReviewBusinessLogic`, `ReviewPerformance`, `ReviewSecurity`, `ReviewArchitecture`, `ReviewFrontend`, and `ReviewGeneral` ids remain non-discoverable compatibility aliases for stored configuration, historical manifests, and their direct task invocations; they resolve to `ReviewWorker` under the same DeepReview visibility, manifest, read-only, and budget gates, but are not registered or emitted for new runs. The existing generic Git exposure remains for legacy compatibility, but it is not authorized as prepared changed-code evidence. Prepared `GetFileDiff` is the source of truth for changed code; when the local binding is `matching_clean`, existing Read/Grep/Glob/LS tools may supplement it with repository context. `ReviewJudge` is a conditional quality check used only for a high-severity finding, conflicting evidence, or a materially low-confidence conclusion; it does not perform a full independent review pass.
 
 `ReviewFixer` is the separate writable remediation identity. DeepReview runtime policy rejects it during review execution. The frontend action surface invokes it only after user approval, and a new read-only Review run checks the fix when requested.
 
@@ -83,6 +78,8 @@ An explicit, complete Git range with a matching clean workspace or a provider PR
 
 Prepared Review target evidence uses bounded `GetFileDiff` pages as changed-code evidence. Local ranges read exact Git revisions; PR targets read provider diffs on demand and revalidate base/head before each file. The parent Review has a 240,000-character aggregate allowance and admits at most 128 provider diff acquisitions before provider I/O; one acquisition normally performs one file-page request and one detail request. Repeating the same page for the same reviewer returns a compact already-served result instead of the diff again. Exhaustion and stale target bindings return structured limited evidence. Existing generic Git exposure remains for legacy compatibility but does not authorize ref guessing or scope widening; Read/Grep/Glob/LS are supplemental only for a matching clean Git-range binding, never for a provider-only PR target.
 
+Local Review `Read` calls also keep a session-scoped, metadata-only receipt of returned line ranges keyed by logical path, nanosecond mtime, byte length, and a streamed SHA-256 content digest. A fully covered repeat on the unchanged revision returns a compact already-served result; changed files, remote workspaces, tail reads, partial overlaps, and non-Review agents continue through the normal read path. Digest work is restricted to receipt-enabled Review agents. Replacing or compacting model context clears these receipts so the runtime never suppresses content that is no longer present in context.
+
 Deleted, renamed, binary, oversized, conflicted, or unavailable files remain visible as coverage facts. The PR panel is the only built-in PR Review entry and associates progress/results by provider repository, PR id, and immutable revisions. Cached overview data is display-only until the selected PR is revalidated; revision or runtime-evidence changes make prior results stale, and failed or unavailable results remain distinct from limited coverage. The implementation does not add automatic checkout, reviewer command execution, speculative cache plans, automatic Review, inline comments, approval, merge, or automatic publishing.
 
 ## Strict Review Delegation Policy
@@ -115,7 +112,7 @@ For new strict launches:
 
 For managed large L1 launches:
 
-- `workPackets` contains only deterministic `ReviewGeneral` file batches;
+- `workPackets` contains only deterministic `ReviewWorker` file batches;
 - packet calls are foreground-waited and may never be converted to background `Task` calls;
 - `managedReviewPlan` records total, planned, and deferred file counts plus batch, concurrency, and timeout bounds;
 - the final report must mark deferred, provider-omitted, timed-out, or unavailable scope as limited coverage;
@@ -133,13 +130,13 @@ Review launches start directly without routine confirmation. Exceptional states 
 
 ## Managed Work Packets and Historical Compatibility
 
-New strict reviews do not generate work packets or module-aware reviewer shards. New managed large L1 reviews generate only bounded `ReviewGeneral` packets. Stored manifests may also contain historical reviewer/judge packets, launch batches, packet ids, assigned scopes, and retry metadata. Runtime parsing, report enrichment, recovery UI, and target-evidence validation distinguish the new managed plan from historical manifests.
+New strict reviews do not generate work packets or module-aware reviewer shards. New managed large L1 reviews generate only bounded `ReviewWorker` packets. Stored manifests may also contain historical fixed reviewer ids, reviewer/judge packets, launch batches, packet ids, assigned scopes, and retry metadata. Runtime parsing, report enrichment, recovery UI, and target-evidence validation distinguish the new managed plan from historical manifests.
 
 Packet support is not a general fan-out policy. New packets are admitted only when `managedReviewPlan` is present; strict specialist policy remains unchanged. Packet-specific queue and retry behavior applies only when the prepared manifest actually contains those packets.
 
 ## Backend Policy and Admission
 
-`DeepReviewExecutionPolicy` parses runtime policy and the per-turn specialist-call ceiling. `DeepReviewRunManifestGate` admits specialist-pool members, the optional `ReviewJudge`, and `ReviewGeneral` only when it is named by a prepared managed packet. It rejects `ReviewFixer`, nested `DeepReview`, skipped members, and unconfigured agents.
+`DeepReviewExecutionPolicy` parses runtime policy and the per-turn specialist-call ceiling. `DeepReviewRunManifestGate` admits the dynamic `ReviewWorker`, explicitly configured custom specialists, and the optional `ReviewJudge`; worker packets require a prepared bounded managed plan. It rejects `ReviewFixer`, nested `DeepReview`, skipped members, and unconfigured agents.
 
 `DeepReviewBudgetTracker` separately permits at most one initial specialist and one Judge call for a new strict turn. This keeps the safety boundary deterministic without hard-coding which domain deserves delegation.
 

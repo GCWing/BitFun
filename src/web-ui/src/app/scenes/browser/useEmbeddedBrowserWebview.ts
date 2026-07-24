@@ -5,7 +5,7 @@ import { validateUrl } from './browserUrlCheck';
 
 const WEBVIEW_RESIZE_DEBOUNCE_MS = 160;
 const WEBVIEW_BOUNDS_EPSILON = 1;
-const DEFAULT_WEBVIEW_BOUNDS: WebviewBounds = { left: 0, top: 0, width: 960, height: 640 };
+const WEBVIEW_BOUNDS_WAIT_TIMEOUT_MS = 2000;
 const OVERLAY_SELECTOR = '.modal-overlay, .canvas-mission-control';
 const BROWSER_WEBVIEW_PAGE_LOAD_EVENT = 'browser-webview-page-load';
 const WEBVIEW_CREATE_RETRY_DELAYS_MS = [0, 250, 750];
@@ -196,6 +196,19 @@ export function useEmbeddedBrowserWebview(options: UseEmbeddedBrowserWebviewOpti
     };
   }, []);
 
+  const waitForViewportBounds = useCallback(async (): Promise<WebviewBounds> => {
+    const startedAt = performance.now();
+
+    while (performance.now() - startedAt < WEBVIEW_BOUNDS_WAIT_TIMEOUT_MS) {
+      const bounds = readViewportBounds();
+      if (bounds) return bounds;
+
+      await new Promise<void>((resolve) => window.requestAnimationFrame(() => resolve()));
+    }
+
+    throw new Error('Browser viewport did not become visible before webview creation');
+  }, [readViewportBounds]);
+
   const syncWebviewBounds = useCallback(async (handle?: BrowserWebviewHandle | null) => {
     const target = handle ?? webviewRef.current;
     if (!isTauri || !target || !viewportRef.current) return;
@@ -317,7 +330,7 @@ export function useEmbeddedBrowserWebview(options: UseEmbeddedBrowserWebviewOpti
     if (previous) await closeWebview(previous);
 
     const { Webview } = await import('@tauri-apps/api/webview');
-    const initialBounds = readViewportBounds() ?? DEFAULT_WEBVIEW_BOUNDS;
+    const initialBounds = await waitForViewportBounds();
     let lastError: unknown = null;
 
     for (let attempt = 0; attempt < WEBVIEW_CREATE_RETRY_DELAYS_MS.length; attempt += 1) {
@@ -352,7 +365,7 @@ export function useEmbeddedBrowserWebview(options: UseEmbeddedBrowserWebviewOpti
     }
 
     throw lastError;
-  }, [closeWebview, labelPrefix, log, readViewportBounds, startPageLoadListener]);
+  }, [closeWebview, labelPrefix, log, startPageLoadListener, waitForViewportBounds]);
 
   const navigateExistingWebview = useCallback(async (url: string): Promise<boolean> => {
     const label = webviewLabelRef.current;

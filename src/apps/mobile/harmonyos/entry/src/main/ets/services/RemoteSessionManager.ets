@@ -207,8 +207,8 @@ export class RemoteSessionManager {
     await this.send<CommandStatusResponse>(RemoteCommandFactory.deleteSession(sessionId));
   }
 
-  async confirmTool(toolId: string, updatedInput?: Object): Promise<void> {
-    await this.send<CommandStatusResponse>(RemoteCommandFactory.confirmTool(toolId, updatedInput));
+  async confirmTool(toolId: string): Promise<void> {
+    await this.send<CommandStatusResponse>(RemoteCommandFactory.confirmTool(toolId));
   }
 
   async rejectTool(toolId: string, reason: string): Promise<void> {

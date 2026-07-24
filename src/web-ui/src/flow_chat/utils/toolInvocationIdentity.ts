@@ -61,19 +61,3 @@ export function projectEffectiveToolItem(toolItem: FlowToolItem): FlowToolItem {
     },
   };
 }
-
-export function replaceEffectiveToolInput(
-  wireToolName: string,
-  wireInput: unknown,
-  effectiveInput: unknown,
-): unknown {
-  const current = effectiveToolInvocation(wireToolName, wireInput);
-  if (!current.isDeferred || wireInput === null || typeof wireInput !== 'object') {
-    return effectiveInput;
-  }
-
-  return {
-    ...(wireInput as Record<string, unknown>),
-    args: effectiveInput,
-  };
-}

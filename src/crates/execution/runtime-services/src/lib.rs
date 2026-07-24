@@ -3,10 +3,10 @@
 use std::sync::Arc;
 
 use bitfun_runtime_ports::{
-    ClockPort, FileSystemPort, GitPort, McpCatalogPort, NetworkPort, PermissionPort,
-    RemoteCapabilityPort, RemoteConnectionPort, RemoteExecPort, RemoteProjectionPort,
-    RemoteWorkspacePort, RuntimeEventSink, RuntimeServiceCapability, RuntimeServicePort,
-    SessionStorePort, TerminalPort, WorkspacePort,
+    ClockPort, FileSystemPort, GitPort, McpCatalogPort, NetworkPort, RemoteCapabilityPort,
+    RemoteConnectionPort, RemoteExecPort, RemoteProjectionPort, RemoteWorkspacePort,
+    RuntimeEventSink, RuntimeServiceCapability, RuntimeServicePort, SessionStorePort, TerminalPort,
+    WorkspacePort,
 };
 
 pub mod backend_events;
@@ -73,7 +73,6 @@ pub struct RuntimeServices {
     pub filesystem: Arc<dyn FileSystemPort>,
     pub workspace: Arc<dyn WorkspacePort>,
     pub session_store: Arc<dyn SessionStorePort>,
-    pub permission: Arc<dyn PermissionPort>,
     pub events: Arc<dyn RuntimeEventSink>,
     pub clock: Arc<dyn ClockPort>,
     pub terminal: Option<Arc<dyn TerminalPort>>,
@@ -93,7 +92,6 @@ impl std::fmt::Debug for RuntimeServices {
             .field("filesystem", &self.filesystem.capability())
             .field("workspace", &self.workspace.capability())
             .field("session_store", &self.session_store.capability())
-            .field("permission", &self.permission.capability())
             .field("events", &RuntimeServiceCapability::Events)
             .field("clock", &self.clock.capability())
             .field(
@@ -148,9 +146,9 @@ impl RuntimeServices {
             RuntimeServiceCapability::FileSystem
             | RuntimeServiceCapability::Workspace
             | RuntimeServiceCapability::SessionStore
-            | RuntimeServiceCapability::Permission
             | RuntimeServiceCapability::Events
             | RuntimeServiceCapability::Clock => true,
+            RuntimeServiceCapability::Permission => false,
             RuntimeServiceCapability::Terminal => self.terminal.is_some(),
             RuntimeServiceCapability::RemoteExec => self.remote_exec.is_some(),
             RuntimeServiceCapability::Network => self.network.is_some(),
@@ -190,7 +188,6 @@ pub struct RuntimeServicesBuilder {
     filesystem: Option<Arc<dyn FileSystemPort>>,
     workspace: Option<Arc<dyn WorkspacePort>>,
     session_store: Option<Arc<dyn SessionStorePort>>,
-    permission: Option<Arc<dyn PermissionPort>>,
     events: Option<Arc<dyn RuntimeEventSink>>,
     clock: Option<Arc<dyn ClockPort>>,
     terminal: Option<Arc<dyn TerminalPort>>,
@@ -221,11 +218,6 @@ impl RuntimeServicesBuilder {
 
     pub fn with_session_store(mut self, port: Arc<dyn SessionStorePort>) -> Self {
         self.session_store = Some(port);
-        self
-    }
-
-    pub fn with_permission(mut self, port: Arc<dyn PermissionPort>) -> Self {
-        self.permission = Some(port);
         self
     }
 
@@ -306,10 +298,6 @@ impl RuntimeServicesBuilder {
             session_store: Self::required_service(
                 self.session_store,
                 RuntimeServiceCapability::SessionStore,
-            )?,
-            permission: Self::required_service(
-                self.permission,
-                RuntimeServiceCapability::Permission,
             )?,
             events: Self::required(self.events, RuntimeServiceCapability::Events)?,
             clock: Self::required_service(self.clock, RuntimeServiceCapability::Clock)?,

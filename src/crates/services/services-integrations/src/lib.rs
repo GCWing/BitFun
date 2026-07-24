@@ -39,6 +39,14 @@ pub mod plugin_source;
 #[cfg(feature = "remote-connect")]
 pub mod remote_connect;
 
+#[cfg(all(test, feature = "remote-connect"))]
+mod feature_contract_tests {
+    #[test]
+    fn remote_connect_feature_exposes_its_public_module() {
+        let _ = super::remote_connect::RemoteConnectSubmissionSource::Relay;
+    }
+}
+
 #[cfg(feature = "remote-ssh")]
 pub mod remote_ssh;
 

@@ -103,7 +103,7 @@ vi.mock('react-virtuoso', () => ({
               data-virtual-index={index}
               data-item-type={item.type}
             >
-              {item.turnId}
+              {item.type === 'user-message' ? item.data.content : item.turnId}
             </div>
           ))}
         {props.components?.Footer ? <props.components.Footer /> : null}
@@ -524,6 +524,117 @@ describe('VirtualMessageList session boundary', () => {
     expect(scroller.scrollTop).toBe(4_443);
     expect(target.getBoundingClientRect().top).toBe(57);
     expect(virtuosoMocks.scrollToIndex).toHaveBeenCalledTimes(1);
+  });
+
+  it('centers the exact text range when navigating to a search match', () => {
+    const listRef = React.createRef<VirtualMessageListRef>();
+    stateMocks.activeSession = createSessionWithTurns('session-a', ['turn-a', 'turn-b']);
+    stateMocks.virtualItems = [
+      createItem('turn-a'),
+      {
+        ...createItem('turn-b'),
+        data: {
+          ...createItem('turn-b').data,
+          content: 'prefix needle suffix',
+        },
+      },
+    ];
+
+    act(() => {
+      root.render(<VirtualMessageList ref={listRef} />);
+    });
+
+    const scroller = container.querySelector<HTMLElement>('[data-virtuoso-scroller="true"]');
+    expect(scroller).not.toBeNull();
+    if (!scroller) {
+      return;
+    }
+
+    setScrollerGeometry(scroller, {
+      scrollHeight: 2_000,
+      clientHeight: 500,
+      scrollTop: 0,
+    });
+    vi.spyOn(scroller, 'getBoundingClientRect').mockReturnValue(createRect({
+      top: 0,
+      bottom: 500,
+      height: 500,
+    }));
+    Object.defineProperty(Range.prototype, 'getBoundingClientRect', {
+      configurable: true,
+      value: vi.fn(() => createRect({
+        top: 800,
+        bottom: 820,
+        height: 20,
+      })),
+    });
+    virtuosoMocks.scrollToIndex.mockClear();
+
+    act(() => {
+      listRef.current?.scrollToSearchMatch({
+        virtualItemIndex: 1,
+        query: 'needle',
+      });
+    });
+    flushAnimationFrame();
+
+    expect(virtuosoMocks.scrollToIndex).toHaveBeenCalledWith(expect.objectContaining({
+      align: 'center',
+      behavior: 'auto',
+    }));
+    expect(scroller.scrollTop).toBe(560);
+    delete (Range.prototype as Range & {
+      getBoundingClientRect?: () => DOMRect;
+    }).getBoundingClientRect;
+  });
+
+  it('renders only a bounded static-history window around an omitted search result', () => {
+    const listRef = React.createRef<VirtualMessageListRef>();
+    const turnIds = Array.from({ length: 8 }, (_, index) => `turn-${index}`);
+    const targetTurnId = 'turn-1';
+    const latestTurnId = 'turn-7';
+
+    stateMocks.activeSession = createSessionWithTurns('session-a', turnIds, {
+      isHistorical: false,
+      historyState: 'ready',
+      contextRestoreState: 'pending',
+      isPartial: true,
+    });
+    stateMocks.virtualItems = turnIds.flatMap(turnId => [
+      createItem(turnId),
+      createModelItem(turnId),
+    ]);
+
+    act(() => {
+      root.render(<VirtualMessageList ref={listRef} />);
+    });
+
+    expect(container.querySelector(
+      `[data-turn-id="${targetTurnId}"][data-item-type="user-message"]`,
+    )).toBeNull();
+    expect(container.querySelector(
+      `[data-turn-id="${latestTurnId}"][data-item-type="user-message"]`,
+    )).not.toBeNull();
+
+    act(() => {
+      listRef.current?.scrollToSearchMatch({
+        virtualItemIndex: 2,
+        query: targetTurnId,
+      });
+    });
+    flushAnimationFrame();
+
+    expect(container.querySelector(
+      `[data-turn-id="${targetTurnId}"][data-item-type="user-message"]`,
+    )).not.toBeNull();
+    expect(container.querySelector(
+      `[data-turn-id="${latestTurnId}"][data-item-type="user-message"]`,
+    )).toBeNull();
+    expect(container.querySelector(
+      '[data-history-initial-render-tail-spacer="true"]',
+    )).not.toBeNull();
+    expect(container.querySelectorAll('.virtual-item-wrapper').length)
+      .toBeLessThan(stateMocks.virtualItems.length);
   });
 
   it('keeps a static initial history turn pin from being pulled back to bottom by the initial guard', () => {

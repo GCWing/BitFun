@@ -9,7 +9,9 @@ use tauri::{AppHandle, Emitter, State};
 use tokio::sync::Mutex;
 
 use bitfun_core::infrastructure::try_get_path_manager_arc;
-use bitfun_core::service::remote_ssh::workspace_state::get_remote_workspace_manager;
+use bitfun_core::service::remote_ssh::workspace_state::{
+    get_remote_workspace_manager, init_remote_workspace_manager,
+};
 use bitfun_core::service::runtime::RuntimeManager;
 use bitfun_core::service::config::load_terminal_env_vars;
 use bitfun_core::service::terminal::TerminalEvent;
@@ -25,6 +27,8 @@ use bitfun_core::service::terminal::{
     ShellInfo as CoreShellInfo, ShellType, SignalRequest as CoreSignalRequest, TerminalApi,
     TerminalConfig, WriteRequest as CoreWriteRequest,
 };
+
+use super::app_state::AppState;
 
 pub struct TerminalState {
     api: Arc<Mutex<Option<TerminalApi>>>,
@@ -110,6 +114,9 @@ pub struct CreateSessionRequest {
     pub shell_type: Option<String>,
     pub shell_id: Option<String>,
     pub working_directory: Option<String>,
+    /// When set, open a remote PTY on this SSH connection without requiring a
+    /// registered remote workspace (used by Relay Deploy wizard).
+    pub connection_id: Option<String>,
     pub env: Option<std::collections::HashMap<String, String>>,
     pub cols: Option<u16>,
     pub rows: Option<u16>,
@@ -339,12 +346,156 @@ async fn is_remote_session(session_id: &str) -> bool {
     false
 }
 
+fn emit_terminal_event(app_handle: &AppHandle, event: &TerminalEvent) -> bool {
+    let event_name = "terminal_event";
+    let local_emit_succeeded = match app_handle.emit(event_name, event) {
+        Ok(()) => true,
+        Err(error) => {
+            warn!("Failed to emit terminal event: {}", error);
+            false
+        }
+    };
+    if let Ok(payload) = serde_json::to_value(event) {
+        super::remote_connect_api::maybe_fanout_peer_ui_event(event_name, payload);
+    }
+    local_emit_succeeded
+}
+
+fn remote_terminal_signal_bytes(signal: &str) -> Option<&'static [u8]> {
+    match signal.trim().to_ascii_uppercase().as_str() {
+        "SIGINT" | "INT" => Some(&[0x03]),
+        "SIGTSTP" | "TSTP" => Some(&[0x1a]),
+        _ => None,
+    }
+}
+
+async fn spawn_remote_pty_session(
+    app: &AppHandle,
+    terminal_manager: &bitfun_core::service::remote_ssh::RemoteTerminalManager,
+    connection_id: &str,
+    request: &CreateSessionRequest,
+    initial_cwd: Option<&str>,
+) -> Result<SessionResponse, String> {
+    let result = terminal_manager
+        .create_session(
+            request.session_id.clone(),
+            request.name.clone(),
+            connection_id,
+            request.cols.unwrap_or(80),
+            request.rows.unwrap_or(24),
+            initial_cwd,
+            request.source.as_deref().and_then(parse_session_source),
+        )
+        .await
+        .map_err(|e| format!("Failed to create remote session: {}", e))?;
+
+    let session = result.session;
+    let mut rx = result.output_rx;
+    let session_id = session.id.clone();
+
+    let response = SessionResponse {
+        id: session.id,
+        name: session.name,
+        shell_type: "Remote".to_string(),
+        cwd: session.cwd.clone(),
+        pid: session.pid,
+        status: format!("{:?}", session.status),
+        cols: session.cols,
+        rows: session.rows,
+        connection_id: Some(connection_id.to_string()),
+        source: format_session_source(&session.source),
+    };
+
+    let app_handle = app.clone();
+    let sid = session_id.clone();
+    tokio::spawn(async move {
+        emit_terminal_event(
+            &app_handle,
+            &TerminalEvent::Ready {
+                session_id: sid.clone(),
+                pid: 0,
+                cwd: String::new(),
+            },
+        );
+
+        loop {
+            match rx.recv().await {
+                Ok(data) => {
+                    let text = String::from_utf8_lossy(&data).to_string();
+                    if !emit_terminal_event(
+                        &app_handle,
+                        &TerminalEvent::Data {
+                            session_id: sid.clone(),
+                            data: text,
+                        },
+                    ) {
+                        break;
+                    }
+                }
+                Err(tokio::sync::broadcast::error::RecvError::Lagged(n)) => {
+                    warn!(
+                        "Remote terminal output lagged, skipped {} messages: session_id={}",
+                        n, sid
+                    );
+                    continue;
+                }
+                Err(tokio::sync::broadcast::error::RecvError::Closed) => {
+                    break;
+                }
+            }
+        }
+
+        emit_terminal_event(
+            &app_handle,
+            &TerminalEvent::Exit {
+                session_id: sid,
+                exit_code: Some(0),
+            },
+        );
+    });
+
+    Ok(response)
+}
+
 #[tauri::command]
 pub async fn terminal_create(
     _app: AppHandle,
     request: CreateSessionRequest,
     state: State<'_, TerminalState>,
+    app_state: State<'_, AppState>,
 ) -> Result<SessionResponse, String> {
+    // Explicit SSH connection (Relay Deploy wizard) — no remote workspace required.
+    // Register AppState's RemoteTerminalManager onto the global workspace manager so
+    // subsequent terminal_get/write/resize/close look up the same session store.
+    if let Some(connection_id) = request
+        .connection_id
+        .as_deref()
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+    {
+        let terminal_manager = app_state
+            .get_remote_terminal_manager_async()
+            .await
+            .map_err(|e| e.to_string())?;
+        let workspace_manager = init_remote_workspace_manager();
+        if let Ok(ssh) = app_state.get_ssh_manager_async().await {
+            terminal_manager.set_ssh_manager(ssh.clone()).await;
+            workspace_manager.set_ssh_manager(ssh).await;
+        }
+        workspace_manager
+            .set_terminal_manager(terminal_manager.clone())
+            .await;
+        let initial_cwd = request.working_directory.as_deref();
+        return spawn_remote_pty_session(
+            &_app,
+            &terminal_manager,
+            connection_id,
+            &request,
+            initial_cwd,
+        )
+        .await;
+    }
+
     if let Some((connection_id, remote_cwd)) =
         lookup_remote_for_terminal(request.working_directory.as_deref()).await
     {
@@ -354,86 +505,14 @@ pub async fn terminal_create(
                 .await
                 .ok_or("Remote terminal manager not available")?;
 
-            let result = terminal_manager
-                .create_session(
-                    request.session_id,
-                    request.name,
-                    &connection_id,
-                    request.cols.unwrap_or(80),
-                    request.rows.unwrap_or(24),
-                    Some(remote_cwd.as_str()),
-                    request.source.as_deref().and_then(parse_session_source),
-                )
-                .await
-                .map_err(|e| format!("Failed to create remote session: {}", e))?;
-
-            let session = result.session;
-            let mut rx = result.output_rx;
-            let session_id = session.id.clone();
-
-            let response = SessionResponse {
-                id: session.id,
-                name: session.name,
-                shell_type: "Remote".to_string(),
-                cwd: session.cwd.clone(),
-                pid: session.pid,
-                status: format!("{:?}", session.status),
-                cols: session.cols,
-                rows: session.rows,
-                connection_id: Some(connection_id.clone()),
-                source: format_session_source(&session.source),
-            };
-
-            let app_handle = _app.clone();
-            let sid = session_id.clone();
-            tokio::spawn(async move {
-                let _ = app_handle.emit(
-                    "terminal_event",
-                    &TerminalEvent::Ready {
-                        session_id: sid.clone(),
-                        pid: 0,
-                        cwd: String::new(),
-                    },
-                );
-
-                loop {
-                    match rx.recv().await {
-                        Ok(data) => {
-                            let text = String::from_utf8_lossy(&data).to_string();
-                            if let Err(e) = app_handle.emit(
-                                "terminal_event",
-                                &TerminalEvent::Data {
-                                    session_id: sid.clone(),
-                                    data: text,
-                                },
-                            ) {
-                                warn!("Failed to emit remote terminal event: {}", e);
-                                break;
-                            }
-                        }
-                        Err(tokio::sync::broadcast::error::RecvError::Lagged(n)) => {
-                            warn!(
-                                "Remote terminal output lagged, skipped {} messages: session_id={}",
-                                n, sid
-                            );
-                            continue;
-                        }
-                        Err(tokio::sync::broadcast::error::RecvError::Closed) => {
-                            break;
-                        }
-                    }
-                }
-
-                let _ = app_handle.emit(
-                    "terminal_event",
-                    &TerminalEvent::Exit {
-                        session_id: sid,
-                        exit_code: Some(0),
-                    },
-                );
-            });
-
-            return Ok(response);
+            return spawn_remote_pty_session(
+                &_app,
+                &terminal_manager,
+                &connection_id,
+                &request,
+                Some(remote_cwd.as_str()),
+            )
+            .await;
         }
     }
 
@@ -646,7 +725,22 @@ pub async fn terminal_signal(
     state: State<'_, TerminalState>,
 ) -> Result<(), String> {
     if is_remote_session(&request.session_id).await {
-        // Remote terminals don't support signal yet
+        let signal_data = remote_terminal_signal_bytes(&request.signal).ok_or_else(|| {
+            format!(
+                "Unsupported remote terminal signal: {}",
+                request.signal.trim()
+            )
+        })?;
+        let remote_manager =
+            get_remote_workspace_manager().ok_or("Remote workspace manager not available")?;
+        let terminal_manager = remote_manager
+            .get_terminal_manager()
+            .await
+            .ok_or("Remote terminal manager not available")?;
+        terminal_manager
+            .write(&request.session_id, signal_data)
+            .await
+            .map_err(|e| format!("Failed to send remote terminal signal: {}", e))?;
         return Ok(());
     }
 
@@ -860,13 +954,21 @@ pub fn start_terminal_event_loop(terminal_state: TerminalState, app_handle: AppH
         let mut rx = api.subscribe_events();
 
         while let Some(event) = rx.recv().await {
-            let event_name = "terminal_event";
-            if let Err(e) = app_handle.emit(event_name, &event) {
-                warn!("Failed to emit terminal event: {}", e);
-            }
-            if let Ok(payload) = serde_json::to_value(&event) {
-                crate::api::remote_connect_api::maybe_fanout_peer_ui_event(event_name, payload);
-            }
+            emit_terminal_event(&app_handle, &event);
         }
     });
+}
+
+#[cfg(test)]
+mod tests {
+    use super::remote_terminal_signal_bytes;
+
+    #[test]
+    fn maps_supported_remote_terminal_signals_to_control_bytes() {
+        assert_eq!(remote_terminal_signal_bytes("SIGINT"), Some(&[0x03][..]));
+        assert_eq!(remote_terminal_signal_bytes("int"), Some(&[0x03][..]));
+        assert_eq!(remote_terminal_signal_bytes("SIGTSTP"), Some(&[0x1a][..]));
+        assert_eq!(remote_terminal_signal_bytes("tstp"), Some(&[0x1a][..]));
+        assert_eq!(remote_terminal_signal_bytes("SIGTERM"), None);
+    }
 }

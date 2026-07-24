@@ -180,7 +180,6 @@ fn capability_packs_describe_service_tool_and_harness_requirements() {
     let service_capabilities = registry.required_service_capabilities();
     assert!(service_capabilities.contains(&RuntimeServiceCapability::FileSystem));
     assert!(service_capabilities.contains(&RuntimeServiceCapability::Workspace));
-    assert!(service_capabilities.contains(&RuntimeServiceCapability::Permission));
     assert!(service_capabilities.contains(&RuntimeServiceCapability::Events));
 
     let harness_capabilities = registry
@@ -275,7 +274,6 @@ fn no_direct_core_profiles_do_not_select_product_full_runtime_capabilities() {
         DeliveryProfile::Remote,
         DeliveryProfile::Web,
         DeliveryProfile::MobileWeb,
-        DeliveryProfile::Sdk,
     ] {
         let plan = product_assembly_plan_for_profile(profile);
 
@@ -359,7 +357,7 @@ fn product_delivery_profile_matrix_documents_current_core_dependency_shape() {
             ),
             (
                 DeliveryProfile::Sdk,
-                ProductCoreDependencyMode::NoDirectCoreDependency,
+                ProductCoreDependencyMode::ProductFullCompatibility,
             ),
         ]
     );
@@ -725,7 +723,6 @@ fn product_assembler_allows_no_direct_core_profiles_without_product_services() {
         DeliveryProfile::Remote,
         DeliveryProfile::Web,
         DeliveryProfile::MobileWeb,
-        DeliveryProfile::Sdk,
     ] {
         let services = FakeRuntimeServicesProvider::with_all_required()
             .build_services()
@@ -770,7 +767,6 @@ fn default_capability_assembly_keeps_service_tool_and_harness_facts_together() {
             RuntimeServiceCapability::FileSystem,
             RuntimeServiceCapability::Workspace,
             RuntimeServiceCapability::SessionStore,
-            RuntimeServiceCapability::Permission,
             RuntimeServiceCapability::Events,
             RuntimeServiceCapability::Clock,
             RuntimeServiceCapability::Terminal,

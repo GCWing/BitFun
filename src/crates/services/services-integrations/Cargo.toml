@@ -69,7 +69,12 @@ git2 = { workspace = true, features = ["vendored-openssl"], optional = true }
 
 [target.'cfg(windows)'.dependencies]
 schannel = { version = "0.1", optional = true }
-windows = { workspace = true, optional = true, features = ["Win32_Foundation", "Win32_Storage_FileSystem"] }
+windows = { workspace = true, optional = true, features = [
+    "Win32_Foundation",
+    "Win32_Storage_FileSystem",
+    "Win32_System_Diagnostics_ToolHelp",
+    "Win32_System_Threading",
+] }
 
 [features]
 default = []
@@ -105,6 +110,7 @@ mcp = [
     "rmcp",
     "rmcp/transport-streamable-http-client-reqwest",
     "sse-stream",
+    "process-tree",
 ]
 miniapp-runtime = [
     "base64",
@@ -207,7 +213,8 @@ workspace-search = [
     "thiserror",
     "which",
 ]
-script-tool-runtime = ["async-trait", "bitfun-runtime-ports", "which"]
+process-tree = ["bitfun-services-core"]
+script-tool-runtime = ["async-trait", "bitfun-runtime-ports", "process-tree", "which"]
 web-tools = ["reqwest", "thiserror"]
 product-full = [
     "announcement",
@@ -232,6 +239,7 @@ ssh_config = ["dep:ssh_config"]
 
 [dev-dependencies]
 tempfile = { workspace = true }
+tokio = { workspace = true, features = ["test-util"] }
 
 [[test]]
 name = "debug_log_owner_contracts"

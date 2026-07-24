@@ -1,314 +1,187 @@
-# 可编辑 PPTX：HTML 硬约束 + 尺寸 + 常见错误
+# 可编辑 PPTX Authoring Contract
 
-把 HTML **逐元素** 翻译成 PowerPoint 文本框/形状时，必须满足下列规则（与 `html2pptx` 管线一致）。
+PPT Live 的唯一导出链路是 **editable HTML → EditableSlideScene → OOXML**。HTML 是 authoring source，`EditableSlideScene` 是唯一规范化场景，OOXML 是唯一导出结果；不存在并行的图片导出、视觉保底或降级成功路径。
 
-> **核心前提**：要走这条路，HTML 必须从第一行就按下面 4 条约束写。**不是写完再转**——事后补救会触发 2-3 小时返工（2026-04-20 期权私董会项目实测踩坑）。
->
-> 视觉自由度优先（动画 / web component / CSS 渐变 / 复杂 SVG）**不要**走可编辑 PPTX 管线——这是格式物理约束（见文末「为什么 4 条约束不是 Bug 而是物理约束」）。演讲用保留 1920 HTML 即可。
+本契约高于其他 style preset 和视觉参考。遇到冲突时，必须改变视觉表达以适配本契约；不能改变导出路径。
 
----
+## Authoring subset（生成规则）
 
-## 画布尺寸：用 960×540pt（LAYOUT_WIDE）
+- 每页严格为 **1280px × 720px**。只使用 solid color；不得生成 CSS gradient 或 `background-image`，即使 converter 对部分旧输入有兼容重写能力。
+- HTML 文字只可放在 `<p>`、`<h1>`–`<h6>`、`<li>` 中；`span` 只作这些标签内的文本 run。不得生成 `div` 裸文字。
+- 背景、border、圆角只放在 `div` 等几何容器；文字标签不得承载 background、border 或 shadow。
+- `box-shadow` 只支持单层 outer、非 inset、zero spread 的原生映射；多层 shadow 只取首个可用层，负 spread 按 0 近似，inset 等其余不支持形态导出时自动移除，不得依赖。`text-shadow` 任何非 `none` 形态在导出时一律自动移除，不得依赖其呈现层次。
+- 禁止 CSS `filter`、`mask`、generated content、animation、外部资源和复杂/filled SVG path；禁止任意顶点/非严格对称 polygon，仅允许严格对称 triangle/diamond。
+- 线与曲线优先直接生成 `line` 或 `polyline`；只有确有必要时才写兼容边界所列的 path 子集，且最终仍须成为独立 editable line。
+- Authoring 流程箭头只由 editable line + CSS border triangle，或 SVG line + strict symmetric triangle polygon 构成。
+- 表格必须是真实 `<table>` 并导出为 native `a:tbl`；图表、流程箭头、虚线和曲线必须由支持的可编辑原语构成。
+- intentional 图片只允许内联 base64 PNG、JPEG、WebP，且不得承载文字、图表或几何；禁止 GIF，因为无法证明其为静态内容。
+- 禁止任何正向 rasterize、screenshot 或 fallback 建议；无法表示时停止生成并报告具体元素。
 
-PPTX 单位是 **inch**（物理尺寸），不是 px。决策原则：body 的 computedStyle 尺寸要**匹配 presentation layout 的 inch 尺寸**（±0.1"，由 `html2pptx.cjs` 的 `validateDimensions` 强制检查）。
+## Converter legacy rewrite boundary（兼容边界，不是生成建议）
 
-### 3 个候选尺寸对比
+- 本边界只用于兼容既有输入，不是生成许可；authoring agent 仍必须遵守上面的更严格 subset。
+- SVG `text` 是 converter 支持的 SVG 原语；它不改变 authoring 时 HTML 文字只能使用规定标签的要求。
+- `div` 裸文字仅属 repair 兼容，authoring 不应生成。
+- path 仅支持 `M/L/H/V/C/S/Q/T/Z`（含相对命令），必须 `fill:none`；`Z` 可以闭合 path，但拒绝 `A` 和任何 path/ancestor `transform`。
+- `C/S/Q/T` 曲线由 converter 自适应采样为多段 editable line，不是 PowerPoint curve；authoring 仍优先 `line`/`polyline`，确需 path 时才使用上述子集。
+- SVG polygon 只识别几何上严格对称的 triangle 和 diamond；任意顶点或非严格对称 polygon 都会被拒绝。
+- legacy CSS 只兼容受限 `linear-gradient`：角度接受 `deg`、`turn`、`rad`、`grad` 或 `to top/right/bottom/left` 及对角方向；颜色 stop 只接受 converter 支持的纯色，位置只接受 percentage stop，缺省 stop 在相邻已知位置间均匀分配。
+- converter 拒绝 `radial-gradient`、px/em stop、double-position stop、color hint、不支持的颜色与非法 alpha；合法 `linear-gradient` 被采样为 editable solid strips，这不是生成建议。
+- legacy 单层 hard ring `box-shadow`（`0 0 0 Npx`、非 inset、blur=0）会被重写为同心可编辑 shape；authoring 仍应优先 zero-spread outer shadow，不得依赖 ring rewrite。
 
-| HTML body | 物理尺寸 | 对应 PPT layout | 何时选 |
-|---|---|---|---|
-| **`960pt × 540pt`** | **13.333″ × 7.5″** | **pptxgenjs `LAYOUT_WIDE`** | ✅ **默认推荐**（现代 PowerPoint 16:9 标配） |
-| `720pt × 405pt` | 10″ × 5.625″ | 自定义 | 仅当用户指定「老版 PowerPoint Widescreen」模板时 |
-| `1920px × 1080px` | 20″ × 11.25″ | 自定义 | ❌ 非标尺寸，投影后字体显得异常小 |
+<!-- End editable contract -->
 
-**别把 HTML 尺寸当分辨率想。** PPTX 是矢量文档，body 尺寸决定的是**物理尺寸**不是清晰度。超大 body（20″×11.25″）不会让文字更清晰——只会让字号 pt 相对画布变小，投影/打印时反而更难看。
+## 1. 固定画布
 
-### body 写法三选一（等价）
-
-```css
-body { width: 960pt;  height: 540pt; }    /* 最清晰，推荐 */
-body { width: 1280px; height: 720px; }    /* 等价，px 习惯 */
-body { width: 13.333in; height: 7.5in; }  /* 等价，英寸直觉 */
-```
-
-配套的 pptxgenjs 代码：
-
-```js
-const pptx = new pptxgen();
-pptx.layout = 'LAYOUT_WIDE';  // 13.333 × 7.5 inch, 无需自定义
-```
-
----
-
-## 4 条硬约束（违反会直接报错）
-
-`html2pptx.cjs` 把 HTML 的 DOM 逐元素翻译成 PowerPoint 对象。PowerPoint 的格式约束投射到 HTML 上 = 下面 4 条规则。
-
-### 规则 1：DIV 里不能直接写文字 — 必须用 `<p>` 或 `<h1>`-`<h6>` 包裹
-
-```html
-<!-- ❌ 错误：文字直接在 div 里 -->
-<div class="title">Q3营收增长23%</div>
-
-<!-- ✅ 正确：文字在 <p> 或 <h1>-<h6> 里 -->
-<div class="title"><h1>Q3营收增长23%</h1></div>
-<div class="body"><p>新用户是主要驱动力</p></div>
-```
-
-**为什么**：PowerPoint 文本必须存在 text frame 里，text frame 对应 HTML 的段落级元素（p/h*/li）。裸 `<div>` 在 PPTX 里没有对应的文本容器。
-
-**也不能用 `<span>` 承载主文字**——span 是行内元素，没法独立对齐成文本框。span 只能**夹在 p/h\* 里**做局部样式（加粗、换色）。
-
-### 规则 2：不支持 CSS 渐变 — 只能用纯色
+每一页都必须是完整 HTML 文档，并严格使用 **1280px × 720px**：
 
 ```css
-/* ❌ 错误 */
-background: linear-gradient(to right, #FF6B6B, #4ECDC4);
-
-/* ✅ 正确：纯色 */
-background: #FF6B6B;
-
-/* ✅ 如果必须多色条纹，用 flex 子元素各自纯色 */
-.stripe-bar { display: flex; }
-.stripe-bar div { flex: 1; }
-.red   { background: #FF6B6B; }
-.teal  { background: #4ECDC4; }
+html,
+body {
+  width: 1280px;
+  height: 720px;
+  margin: 0;
+  overflow: hidden;
+}
 ```
 
-**为什么**：PowerPoint 的 shape fill 只支持 solid/gradient-fill 两种，但 pptxgenjs 的 `fill: { color: ... }` 只映射 solid。渐变走 PowerPoint 原生 gradient 需要另写结构，目前工具链不支持。
+- 不得改用 960pt、1920×1080、百分比画布、`vw`/`vh` 或运行时缩放。
+- 页面内容不得超出画布；正文文本框底边与画布底部至少留 48px。
+- 画布背景必须是纯色。
 
-### 规则 3：背景/边框/阴影只能在 DIV 上，不能在文字标签上
+## 2. 文本标签结构
+
+- 所有可见文字必须位于 `<p>`、`<h1>`–`<h6>` 或 `<li>` 中。
+- `<span>`、`<strong>`、`<em>`、`<b>`、`<i>`、`<u>` 只可作为上述文本标签内部的 run，用于局部字重、颜色或样式。
+- `<div>`、`<td>`、`<th>` 和 shape 容器不得直接放 HTML 裸文字；表格单元格文字也要用 `<p>` 等文本标签包裹。converter 对 SVG `text` 的兼容支持见上方边界。
+- 不得使用 `::before`、`::after` 或 `content` 生成任何文字、图标、编号或装饰。
+- 文本标签只负责文本属性；background、边框、圆角和阴影不得放在文本标签上。
+
+正确：
 
 ```html
-<!-- ❌ 错误：<p> 有背景色 -->
-<p style="background: #FFD700; border-radius: 4px;">重点内容</p>
-
-<!-- ✅ 正确：外层 div 承载背景/边框，<p> 只负责文字 -->
-<div style="background: #FFD700; border-radius: 4px; padding: 8pt 12pt;">
-  <p>重点内容</p>
+<div class="card">
+  <h2>结论标题</h2>
+  <p>支持结论的说明。</p>
 </div>
 ```
 
-**为什么**：PowerPoint 里 shape（方块/圆角矩形）和 text frame 是两个对象。HTML 的 `<p>` 只翻译成 text frame，背景/边框/阴影属于 shape——必须在**包裹 text 的 div** 上写。
-
-### 规则 4：DIV 不能用 `background-image` — 用 `<img>` 标签
+错误：
 
 ```html
-<!-- ❌ 错误 -->
-<div style="background-image: url('chart.png')"></div>
-
-<!-- ✅ 正确 -->
-<img src="chart.png" style="position: absolute; left: 50%; top: 20%; width: 300pt; height: 200pt;" />
+<div class="card">裸文字</div>
+<p style="background:#ffd700; border:1px solid #111;">错误结构</p>
 ```
 
-**为什么**：`html2pptx.cjs` 只从 `<img>` 元素提取图片路径，不解析 CSS 的 `background-image` URL。
+## 3. Solid、Background 与 Border
 
----
+- 所有 fill、background 和 border 都必须是纯色；禁止 CSS gradient、纹理、图案填充和半透明叠图模拟。
+- 背景、边框和圆角只放在 `<div>` 等几何容器上。`box-shadow` 的精确可编辑子集为单层 outer shadow、非 inset、zero spread 的原生映射；多层 shadow 只取首个可用层，负 spread 按 0 近似，inset 等其余不支持形态导出时自动移除。converter 可将 legacy hard ring（`0 0 0 Npx`）重写为同心可编辑 shape，但 authoring 不得依赖该 rewrite。
+- 文字标签不得有 background、border、border-radius 或 box-shadow；`text-shadow` 任何非 `none` 形态在导出时一律自动移除，不得依赖其呈现层次。
+- `background-image` 在任何元素上都禁止。
+- 数据条、色带和热力档位用多个离散纯色几何元素表达。
 
-## 合并文本框（`data-pptx-merge`）
+## 4. 支持的可编辑原语
 
-**默认行为**：HTML 里每个 `<p>`/`<h1>`-`<h6>` 在 PPTX 里都是**独立文本框**。卡片里写 3 个 `<p>` → PPT 里 3 个文本框摞着，编辑时不能整段回车换行加段，得逐个改字号/对齐。
+生成时优先直接使用可映射 primitive：
 
-**解决方法**：给外层 div 加 `data-pptx-merge="true"`，容器内的所有 `<p>/<h*>` 会合并为**一个可编辑文本框**，每段之间用段落分隔符隔开，PPT 里就是一段一段连续编辑。
+- 文本：段落、标题、列表和文本 run。
+- Shape：矩形、圆角矩形、圆/椭圆、预设三角形、预设箭头和导出器明确支持的 preset shape。
+- Line：水平线、垂直线、旋转直线、虚线和由多个可编辑线段组成的曲线。
+- Table：真实 HTML table。
+- Image：仅限符合第 7 节的 intentional 图片。
+
+CSS 三角、基础 SVG 和 open path 可由 rewriter 映射，但生成时优先直接使用可映射 primitive，减少重写歧义：
+
+- CSS border 三角可映射为 preset triangle 加旋转。
+- 基础 SVG converter 可处理 `rect`、`circle`、`ellipse`、`line`、`polyline`、`text` 等已支持元素；authoring 的普通文字仍使用 HTML 文本标签。
+- path 仅使用兼容边界列出的命令，保持 `fill:none`；rewriter 把曲线采样为多个 editable line。
+- SVG polygon 只能是几何上严格对称的 triangle 或 diamond；任意顶点轮廓不属于 authoring subset。
+
+## 5. 明确禁止
+
+- 禁止 CSS `filter`、`mask`、生成内容和 `background-image`。
+- 禁止 `clip-path`、任意顶点/非严格对称 polygon、混合模式和依赖浏览器合成的视觉效果；仅严格对称 triangle/diamond 可进入 polygon rewrite。
+- 禁止复杂或填充的 SVG `path`；禁止把 path、文字或图表嵌入 SVG 再作为整体视觉。
+- 禁止外部图片资源、animation，以及任何 rasterize、screenshot、fallback 建议。
+- 禁止外链 CSS、字体、脚本、SVG、PNG、JPEG、WebP 或其他网络/文件资源。
+- 禁止 Web Component、canvas、video、animated GIF、CSS transition、keyframes 和运行时动画。
+- 禁止把不支持的视觉隐藏、忽略或标记为“降级成功”；无法表示时必须停止生成并指出具体元素。
+
+## 6. 表格必须成为 Native `a:tbl`
+
+表格必须写真实的 `<table>`，使用 `thead`、`tbody`、`tr`、`th` 和 `td` 表达结构：
 
 ```html
-<!-- ✅ 合并写法：4 段全部在一个文本框里 -->
-<div class="card" data-pptx-merge="true"
-     style="position: absolute; top: 60pt; left: 60pt; width: 420pt;
-            background: #1A4A8A; border-radius: 8pt; padding: 20pt 24pt;">
-  <h2 style="font-size: 24pt; color: #FFFFFF;">标题</h2>
-  <p  style="font-size: 14pt; color: #DDEEFF;">第一段正文。</p>
-  <p  style="font-size: 14pt; color: #FFD166;">第二段：换颜色作为强调。</p>
-  <p  style="font-size: 14pt; color: #DDEEFF;">第三段：同一个文本框里继续写。</p>
+<table>
+  <thead>
+    <tr>
+      <th><p>指标</p></th>
+      <th><p>结果</p></th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><p>转化率</p></td>
+      <td><p>42%</p></td>
+    </tr>
+  </tbody>
+</table>
+```
+
+- 导出结果必须是 native `a:tbl`，单元格文字、fill、border、宽度和对齐都保持可编辑。
+- 不得用 div grid、独立矩形集合、SVG、截图或图片伪装表格。
+- 只使用导出器支持的规则；不确定的 `rowspan`/`colspan` 应改写为无合并单元格的真实表格。
+
+## 7. Intentional 图片
+
+intentional 图片只可使用 `<img>` 和内联 base64 raster，例如：
+
+```html
+<img
+  src="data:image/png;base64,..."
+  alt="用户提供的产品实拍"
+  style="position:absolute; left:760px; top:120px; width:420px; height:320px;"
+>
+```
+
+- 可用 PNG、JPEG 或 WebP data URL；不得使用外部 URL、相对路径、绝对路径、blob URL 或 SVG data URL。
+- intentional 图片只承载本来就是照片、实拍、扫描件或用户明确提供的位图内容，且不得承载文字、图表或几何。
+- 不得把生成内容先转成位图再以内联图片绕过 authoring contract。
+
+## 8. 图表、流程与关系图
+
+- 图表、流程箭头、虚线和曲线必须使用支持的可编辑原语。
+- 条形、柱形、堆叠条和热力矩阵用纯色 shape；点图用圆/椭圆；坐标轴、目标线和连接线用 line。
+- 流程节点用支持的基础 shape；流程箭头用 editable line + CSS border triangle，或 SVG line + strict symmetric triangle polygon，方向必须明确。
+- 虚线使用 line 的 dash 属性对应写法，不得用点状图片或重复背景。
+- 折线和曲线优先直接拆成 editable line/polyline；必要 path 由 converter 采样成多个 editable line，不得使用 filled path。
+- 所有标签和数值都作为独立文本对象，不得烘焙进 SVG 或图片。
+
+## 9. 合并文本框
+
+需要在 PowerPoint 中连续编辑多段文字时，可给容器添加 `data-pptx-merge="true"`：
+
+```html
+<div data-pptx-merge="true">
+  <h2>标题</h2>
+  <p>第一段。</p>
+  <p>第二段。</p>
 </div>
 ```
 
-**保留的样式**（per-paragraph 作为 run options 写入）：`font-size`、`color`、`font-family`、`font-weight`（bold）、`font-style`（italic）、`text-decoration: underline`、`<b>/<i>/<u>/<strong>/<em>/<span>` 内联样式。
+- merge 容器不能嵌套。
+- 容器的纯色 background、border 和圆角仍作为独立 shape。
+- 合并段落必须使用统一对齐和行距；需要不同对齐时拆成多个文本框。
 
-**取自第一段、整框统一**：`text-align`、`line-height`。因为 PowerPoint 的对齐和行距是 paragraph/textbox 级别——一框里只能有一种对齐。如果几段对齐不同，请别用 merge，让它们各自独立。
+## 10. 写入前检查
 
-**容器自身的 `background`/`border`/`box-shadow`/`border-radius`** 照常作为 shape 渲染，行为和普通 div 完全一样——也就是说蓝色卡片底 + 文本仍然是「shape + text frame」两层，只是文本层从 3-4 个文本框塌缩成 1 个。
+每页写入时一次满足：
 
-**限制**：
-- 不能嵌套 `data-pptx-merge`（会报错）。
-- 容器不能用 `background-image`（同 4 条硬约束规则 4）。
-- 容器内不要再放有 `background`/`border` 的子 div——它们仍会被当作独立 shape 渲染，但里面的文字已被合并走了，可能产生视觉错位。
-
-**什么时候用**：内容会反复改、要在 PPT 里继续编辑的场景。一次性导出归档的不用加，行为一致。
-
----
-
-## Path A HTML 模板骨架
-
-每张 slide 一个独立 HTML 文件，彼此作用域隔离（避开单文件 deck 的 CSS 污染）。
-
-```html
-<!DOCTYPE html>
-<html lang="zh-CN">
-<head>
-<meta charset="UTF-8">
-<style>
-  * { margin: 0; padding: 0; box-sizing: border-box; }
-  body {
-    width: 960pt; height: 540pt;           /* ⚠️ 匹配 LAYOUT_WIDE */
-    font-family: system-ui, -apple-system, "PingFang SC", sans-serif;
-    background: #FEFEF9;                    /* 纯色，不能渐变 */
-    overflow: hidden;
-  }
-  /* DIV 负责布局/背景/边框 */
-  .card {
-    position: absolute;
-    background: #1A4A8A;                    /* 背景在 DIV 上 */
-    border-radius: 4pt;
-    padding: 12pt 16pt;
-  }
-  /* 文字标签只负责字体样式，不加背景/边框 */
-  .card h2 { font-size: 24pt; color: #FFFFFF; font-weight: 700; }
-  .card p  { font-size: 14pt; color: rgba(255,255,255,0.85); }
-</style>
-</head>
-<body>
-
-  <!-- 标题区：外层 div 定位，内层文字标签 -->
-  <div style="position: absolute; top: 40pt; left: 60pt; right: 60pt;">
-    <h1 style="font-size: 36pt; color: #1A1A1A; font-weight: 700;">标题用断言句，不是主题词</h1>
-    <p style="font-size: 16pt; color: #555555; margin-top: 10pt;">副标题补充说明</p>
-  </div>
-
-  <!-- 内容卡片：div 负责背景，h2/p 负责文字 -->
-  <div class="card" style="top: 130pt; left: 60pt; width: 240pt; height: 160pt;">
-    <h2>要点一</h2>
-    <p>简短说明文字</p>
-  </div>
-
-  <!-- 列表：使用 ul/li，不用手动 • 符号 -->
-  <div style="position: absolute; top: 320pt; left: 60pt; width: 540pt;">
-    <ul style="font-size: 16pt; color: #1A1A1A; padding-left: 24pt; list-style: disc;">
-      <li>第一条要点</li>
-      <li>第二条要点</li>
-      <li>第三条要点</li>
-    </ul>
-  </div>
-
-  <!-- 插图：用 <img> 标签，不用 background-image -->
-  <img src="illustration.png" style="position: absolute; right: 60pt; top: 110pt; width: 320pt; height: 240pt;" />
-
-</body>
-</html>
-```
-
----
-
-## 常见错误速查
-
-| 错误信息 | 原因 | 修复方法 |
-|---------|------|---------|
-| `DIV element contains unwrapped text "XXX"` | div 里有裸文字 | 把文字包进 `<p>` 或 `<h1>`-`<h6>` |
-| `CSS gradients are not supported` | 用了 linear/radial-gradient | 改为纯色，或用 flex 子元素分段 |
-| `Text element <p> has background` | `<p>` 标签加了背景色 | 外套 `<div>` 承载背景，`<p>` 只写文字 |
-| `Background images on DIV elements are not supported` | div 用了 background-image | 改为 `<img>` 标签 |
-| `HTML content overflows body by Xpt vertically` | 内容超出 540pt | 减少内容或缩小字号，或 `overflow: hidden` 截断 |
-| `HTML dimensions don't match presentation layout` | body 尺寸和 pres layout 对不上 | body 用 `960pt × 540pt` 配 `LAYOUT_WIDE`；或 defineLayout 自定义尺寸 |
-| `Text box "XXX" ends too close to bottom edge` | 大字号 `<p>` 距离 body 底边 < 0.5 inch | 往上挪，留足下边距；PPT 底部本身就会被遮住一部分 |
-
----
-
-## 基本工作流（3 步出 PPTX）
-
-### Step 1：按约束写每页独立 HTML
-
-```
-我的Deck/
-├── slides/
-│   ├── 01-cover.html    # 每个文件都是完整 960×540pt HTML
-│   ├── 02-agenda.html
-│   └── ...
-└── illustration/        # 所有 <img> 引用的图片
-    ├── chart1.png
-    └── ...
-```
-
-### Step 2：在 PowerPoint 里抽查
-
-- 双击文字应能直接编辑（若变成整页图片 → 检查规则 1）
-- 无文字溢出画布（`validateDimensions` / 肉眼）
-
----
-
-## 这条路径 vs 其他选项（什么时候选什么）
-
-| 需求 | 选什么 |
-|------|------|
-| 同事会改 PPTX 里的文字 / 发给非技术人员继续编辑 | **本文路径**（editable，需从头按 4 条约束写 HTML） |
-| 只是演讲用 / 发存档，不再改 | 保持 1920 演讲 HTML，不必迁就 PPTX 四条约束 |
-| 视觉自由度优先（动画、web component、CSS 渐变、复杂 SVG），接受不可编辑 | **1920 演讲 HTML**（或单独存档版），不要硬转 editable pptx |
-
-**绝不要在视觉自由写好的 HTML 上硬跑 html2pptx**——实测 pass 率 < 30%，应保留演讲版或重写 960pt 简化版，不要硬挤 PPTX。
-
----
-
-## Fallback：已有视觉稿但用户坚持要 editable PPTX
-
-偶尔会遇到：已有视觉驱动的 1920 HTML（渐变、web component、复杂 SVG），用户仍坚持要可编辑 PPTX。
-
-**不要硬跑 `html2pptx` 期待它 pass**——实测视觉驱动 HTML 在 html2pptx 上 pass 率 <30%，剩下 70% 会报错或走样。正确的 fallback 是：
-
-### Step 1 · 先告知局限性（透明沟通）
-
-一句话跟用户说清三件事：
-
-> 「你现在的 HTML 用了 [具体列出：渐变 / web component / 复杂 SVG / ...]，直接转 editable PPTX 会 fail。我有两个方案：
-> - A. **保留 1920 演讲 HTML**（推荐）——视觉完整，不在 PowerPoint 里改字
-> - B. **以视觉稿为蓝本，重写一版 960pt editable HTML**（保留色彩/布局/文案，按四条硬约束重组结构，**牺牲**渐变、web component、复杂 SVG）
->
-> 你选哪个？」
-
-不要把 B 方案说得云淡风轻——明确告知**会丢失什么**。让用户做取舍。
-
-### Step 2 · 如果用户选 B：AI 主动改写，不要求用户自己写
-
-这里的 doctrine 是：**用户给的是设计意图，你负责翻译成合规实现**。不是让用户去学 4 条硬约束然后自己重写。
-
-改写时的遵循原则：
-- **保留**：色彩系统（主色/辅色/中性色）、信息层级（标题/副标题/正文/注解）、核心文案、layout 骨架（上中下 / 左右分栏 / 网格）、页面节奏
-- **降级**：CSS 渐变 → 纯色或 flex 分段、web component → 段落级 HTML、复杂 SVG → 简化的 `<img>` 或纯色几何、阴影 → 删除或降为极弱、自定义字体 → 向系统字体靠齐
-- **重写**：裸文字 → 包进 `<p>` / `<h*>`、`background-image` → `<img>` 标签、`<p>` 上的背景边框 → 外层 div 承载
-
-### Step 3 · 产出对照清单（透明交付）
-
-改写完成后给用户一份 before/after 对照，让他知道哪些视觉细节被简化了：
-
-```
-原设计 → editable 版调整
-- 标题区紫色渐变 → 主色 #5B3DE8 纯色背景
-- 数据卡片阴影 → 删除（改为 2pt 描边区分）
-- 复杂 SVG 折线图 → 简化为 <img> PNG（从 HTML 截图生成）
-- Hero 区 web component 动效 → 静态首帧（web component 无法翻译）
-```
-
-### Step 4 · 双版本交付（可选）
-
-- **演讲版**：保留原 1920×1080 视觉 HTML
-- **可编辑版**：单独目录或文件集的 960pt 简化 HTML
-- 向用户说明两版分工，避免混在同一文件里互相破坏约束
-
-### 什么情况下直接拒绝 B 方案
-
-个别场景下改写代价过高，应该劝用户放弃 editable PPTX：
-- HTML 核心价值是动画或交互（改写后只剩静态首帧，信息量损失 50%+）
-- 页数 > 30，改写成本超过 2 小时
-- 视觉设计深度依赖精确 SVG / 自定义 filter（改写后和原图几乎无关）
-
-此时告诉用户：「改写代价过高，建议保留 1920 演讲版；若坚持可编辑 pptx，需接受视觉大幅简化。」
-
----
-
-## 为什么 4 条约束不是 Bug 而是物理约束
-
-这 4 条不是 `html2pptx.cjs` 作者偷懒——它们是 **PowerPoint 文件格式（OOXML）本身的约束**投射到 HTML 上的结果：
-
-- PPTX 里文字必须在 text frame（`<a:txBody>`），对应段落级 HTML 元素
-- PPTX 的 shape 和 text frame 是两个对象，无法在同一 element 上同时画背景和写文字
-- PPTX 的 shape fill 对 gradient 支持有限（仅某些 preset gradients，不支持 CSS 任意角度渐变）
-- PPTX 的 picture 对象必须引用真实图片文件，不是 CSS 属性
-
-理解这点后，**不要期待工具变聪明** —— 是 HTML 写法要适配 PPTX 格式，不是反过来。
+1. body 严格为 1280px × 720px。
+2. 所有文字使用规定标签，且无 generated content。
+3. 所有视觉都能映射为 text、shape、line、native `a:tbl` 或 intentional image。
+4. 无 filter、mask、background-image、复杂/filled SVG path、非严格对称 triangle/diamond 的 SVG polygon、外部资源和 animation。
+5. 无 rasterize、screenshot 或 fallback 路径。
+6. 表格为真实 `<table>`，图片为允许的内联 base64 raster。
+7. 内容无溢出，所有对象可被唯一场景链路序列化。
