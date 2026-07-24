@@ -584,6 +584,27 @@ fn legacy_public_snapshot_downprojects_new_tool_review_variants() {
             "approvalKey": "approval-v1",
             "decisionKey": "decision-v1",
             "activation": { "state": "declined" }
+        }],
+        "subagents": [{
+            "candidateId": "external-review",
+            "logicalId": "review",
+            "displayName": "External Review",
+            "description": "Review changes",
+            "providerLabel": "OpenCode",
+            "scope": "project",
+            "sourceKeys": [],
+            "sourceLocationLabels": [],
+            "sourceCount": 1,
+            "effectiveToolLabels": ["Read"],
+            "unavailableToolLabels": ["Shell"],
+            "supportsFollowUp": false,
+            "compatibilityState": "blocked",
+            "diagnostics": [{
+                "code": "external_subagent.tool_unavailable",
+                "blocksActivation": true
+            }],
+            "activationState": { "state": "blocked" },
+            "decisionKey": "agent-decision-v1"
         }]
     }))
     .expect("new public snapshot");
@@ -591,6 +612,9 @@ fn legacy_public_snapshot_downprojects_new_tool_review_variants() {
     let legacy =
         serde_json::to_value(snapshot.into_legacy_v0_compatible()).expect("legacy public snapshot");
     assert_eq!(legacy["tools"][0]["activation"]["state"], "disabled");
+    assert!(legacy["subagents"][0]
+        .get("unavailableToolLabels")
+        .is_none());
 }
 
 #[test]

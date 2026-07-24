@@ -253,6 +253,7 @@
     "compatibility": "Status: {{state}}",
     "noDescription": "No description provided",
     "noTools": "No tools",
+    "unavailableToolsUnknown": "Names were not provided by this host",
     "sourceLocations": "Configuration sources ({{count}})"
   },
   "agentState": {
@@ -289,9 +290,42 @@
       "nextStep": "Choose an available model in the source application, or set an available fixed Sub-Agent model in BitFun, then refresh."
     },
     "toolUnavailable": {
-      "reason": "One or more requested tools are not available in BitFun.",
+      "reason": "Unavailable tools: {{tools}}.",
       "impact": "{{impact}}",
       "nextStep": "Remove or replace the unsupported tools in the source application, then refresh."
+    },
+    "promptMissing": {
+      "reason": "The agent prompt is missing or empty.",
+      "impact": "{{impact}}",
+      "nextStep": "Add a non-empty prompt in the source application, then refresh."
+    },
+    "unsupportedSetting": {
+      "reason": "BitFun does not currently support this agent's {{setting}} setting.",
+      "impact": "{{impact}}",
+      "nextStep": "Remove or change {{setting}} in the source application, then refresh."
+    },
+    "ignoredSetting": {
+      "reason": "BitFun will not apply this agent's {{setting}} setting.",
+      "impact": "{{impact}}",
+      "nextStep": "Review the effective model and tools above before enabling this agent."
+    },
+    "settings": {
+      "unknownField": "unknown field",
+      "ambientPermissions": "global permission",
+      "permissions": "permission",
+      "options": "options",
+      "nativeAgentOverlay": "built-in agent override",
+      "legacyPrimaryMode": "legacy primary mode",
+      "primaryAgentMode": "primary agent mode",
+      "toolPatterns": "tool wildcard",
+      "defaultPermissions": "default permission semantics",
+      "variant": "model variant",
+      "temperature": "temperature",
+      "topP": "top_p",
+      "steps": "step limit",
+      "maxSteps": "maxSteps limit",
+      "color": "display color",
+      "primaryFacet": "primary-agent facet"
     },
     "invalidDefinition": {
       "reason": "The agent settings have an invalid or missing required value.",
@@ -357,7 +391,9 @@
   "mcpApprovals": {
     "title": "MCP servers to review",
     "description": "BitFun found executable or network configuration from another AI application. It is not started or contacted until you confirm it.",
-    "warning": "Enabling can start a local process with your user permissions or connect to the shown remote service. The server can provide tools to the agent and can receive arguments sent to those tools.",
+    "compactWarning": "Enabling can run this command with your user permissions or connect to this service; the server can receive data sent in tool calls.",
+    "showDetails": "Show configuration and risk",
+    "warning": "Local commands can read the listed environment variables, and remote requests can send the listed headers. Review these details before enabling.",
     "keepDisabled": "Keep disabled",
     "enable": "Enable server"
   },

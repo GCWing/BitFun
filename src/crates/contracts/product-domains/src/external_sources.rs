@@ -1912,6 +1912,9 @@ impl ExternalSourcePublicSnapshot {
                 tool.activation = ExternalToolActivationState::Disabled;
             }
         }
+        for subagent in &mut self.subagents {
+            subagent.unavailable_tool_labels.clear();
+        }
         self
     }
 }

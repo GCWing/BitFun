@@ -61,6 +61,25 @@ const SOURCE_COUNT_LABELS = [
   ['mcps', 'sources.mcpCount'],
 ] as const;
 
+const AGENT_DIAGNOSTIC_SETTING_KEYS: Record<string, string> = {
+  opencode_unknown_agent_field: 'unknownField',
+  opencode_ambient_permission_not_imported: 'ambientPermissions',
+  opencode_agent_permission_not_imported: 'permissions',
+  opencode_agent_options_not_imported: 'options',
+  opencode_native_agent_overlay_not_imported: 'nativeAgentOverlay',
+  opencode_legacy_primary_mode_not_imported: 'legacyPrimaryMode',
+  opencode_primary_agent_not_imported: 'primaryAgentMode',
+  opencode_agent_tool_pattern_not_imported: 'toolPatterns',
+  opencode_default_permission_semantics_not_imported: 'defaultPermissions',
+  opencode_agent_variant_not_imported: 'variant',
+  opencode_agent_temperature_not_imported: 'temperature',
+  opencode_agent_top_p_not_imported: 'topP',
+  opencode_agent_steps_not_imported: 'steps',
+  opencode_agent_maxSteps_not_imported: 'maxSteps',
+  opencode_agent_color_not_imported: 'color',
+  opencode_primary_facet_not_imported: 'primaryFacet',
+};
+
 type SnapshotLoadResult =
   | { status: 'accepted'; snapshot: ExternalSourceCatalogSnapshot }
   | { status: 'ignored' }
@@ -84,11 +103,32 @@ function agentDiagnosticCategory(code: string, blocksActivation: boolean): strin
   if (code.includes('configuration_unavailable')) return 'configurationUnavailable';
   if (code.includes('model_unavailable')) return 'modelUnavailable';
   if (code.includes('tool_unavailable')) return 'toolUnavailable';
+  if (code === 'opencode_agent_prompt_not_imported') return 'promptMissing';
+  if (AGENT_DIAGNOSTIC_SETTING_KEYS[code]) {
+    return blocksActivation ? 'unsupportedSetting' : 'ignoredSetting';
+  }
   if (code.includes('type_invalid') || code.includes('definition_invalid')
     || code.endsWith('_invalid')) {
     return 'invalidDefinition';
   }
   return blocksActivation ? 'unsupportedBehavior' : 'ignoredOption';
+}
+
+function agentDiagnosticParams(
+  code: string,
+  category: string,
+  unavailableToolLabels: string[],
+  t: TFunction,
+): Record<string, string> | undefined {
+  if (category === 'toolUnavailable') {
+    return {
+      tools: unavailableToolLabels.join(', ') || t('agents.unavailableToolsUnknown'),
+    };
+  }
+  const settingKey = AGENT_DIAGNOSTIC_SETTING_KEYS[code];
+  return settingKey
+    ? { setting: t(`agentDiagnostics.settings.${settingKey}`) }
+    : undefined;
 }
 
 function sourceDiagnosticCategory(code: string): string {
@@ -1801,6 +1841,7 @@ const ExternalSourcesConfig: React.FC = () => {
                     candidate.record.key.providerId === request.definition.id.source.providerId
                     && candidate.record.key.sourceId === request.definition.id.source.sourceId
                   ));
+                  const reviewRiskId = `mcp-review-risk-${encodeURIComponent(request.decisionKey)}`;
                   return (
                     <div
                       className="bitfun-external-sources-config__tool-card"
@@ -1809,20 +1850,10 @@ const ExternalSourcesConfig: React.FC = () => {
                     <div className="bitfun-external-sources-config__conflict-title">
                       {request.definition.name}
                     </div>
-                    <div className="bitfun-external-sources-config__tool-detail">
+                    <div className="bitfun-external-sources-config__review-summary">
                       <span>{t('mcp.source', {
                         source: source?.record.displayName ?? t('mcp.externalSource'),
                       })}</span>
-                      {source ? (
-                        <span>{t('mcp.sourceLocation', {
-                          location: source.record.location,
-                        })}</span>
-                      ) : null}
-                      {source ? (
-                        <span>{t('mcp.scope', {
-                          scope: sourceScopeLabel(source.record.scope, t),
-                        })}</span>
-                      ) : null}
                       <span>{t(`mcp.transport.${request.definition.transport}`)}</span>
                       {request.definition.commandPreview ? (
                         <span>{t('mcp.command', { command: request.definition.commandPreview })}</span>
@@ -1830,39 +1861,64 @@ const ExternalSourcesConfig: React.FC = () => {
                       {request.definition.remoteUrlPreview ? (
                         <span>{t('mcp.url', { url: request.definition.remoteUrlPreview })}</span>
                       ) : null}
-                      {request.definition.workingDirectory ? (
-                        <span>{t('mcp.workingDirectory', {
-                          location: request.definition.workingDirectory,
-                        })}</span>
-                      ) : null}
-                      <span>{t('mcp.argumentCount', {
-                        count: request.definition.argumentCount,
-                      })}</span>
-                      <span>{t('mcp.environmentCount', {
-                        count: request.definition.environmentKeys.length,
-                      })}</span>
-                      {request.definition.environmentKeys.length > 0 ? (
-                        <span>{t('mcp.environmentNames', {
-                          names: request.definition.environmentKeys.join(', '),
-                        })}</span>
-                      ) : null}
-                      {(request.definition.environmentReferenceNames?.length ?? 0) > 0 ? (
-                        <span>{t('mcp.environmentReads', {
-                          names: (request.definition.environmentReferenceNames ?? []).join(', '),
-                        })}</span>
-                      ) : null}
-                      <span>{t('mcp.headerCount', {
-                        count: request.definition.headerNames.length,
-                      })}</span>
-                      {request.definition.headerNames.length > 0 ? (
-                        <span>{t('mcp.headerNames', {
-                          names: request.definition.headerNames.join(', '),
-                        })}</span>
-                      ) : null}
                     </div>
-                    <div className="bitfun-external-sources-config__tool-warning">
-                      {t('mcpApprovals.warning')}
+                    <div
+                      className={[
+                        'bitfun-external-sources-config__tool-warning',
+                        'bitfun-external-sources-config__review-risk',
+                      ].join(' ')}
+                      id={reviewRiskId}
+                      role="note"
+                    >
+                      {t('mcpApprovals.compactWarning')}
                     </div>
+                    <details className="bitfun-external-sources-config__review-details">
+                      <summary>{t('mcpApprovals.showDetails')}</summary>
+                      <div className="bitfun-external-sources-config__tool-detail">
+                        {source ? (
+                          <span>{t('mcp.sourceLocation', {
+                            location: source.record.location,
+                          })}</span>
+                        ) : null}
+                        {source ? (
+                          <span>{t('mcp.scope', {
+                            scope: sourceScopeLabel(source.record.scope, t),
+                          })}</span>
+                        ) : null}
+                        {request.definition.workingDirectory ? (
+                          <span>{t('mcp.workingDirectory', {
+                            location: request.definition.workingDirectory,
+                          })}</span>
+                        ) : null}
+                        <span>{t('mcp.argumentCount', {
+                          count: request.definition.argumentCount,
+                        })}</span>
+                        <span>{t('mcp.environmentCount', {
+                          count: request.definition.environmentKeys.length,
+                        })}</span>
+                        {request.definition.environmentKeys.length > 0 ? (
+                          <span>{t('mcp.environmentNames', {
+                            names: request.definition.environmentKeys.join(', '),
+                          })}</span>
+                        ) : null}
+                        {(request.definition.environmentReferenceNames?.length ?? 0) > 0 ? (
+                          <span>{t('mcp.environmentReads', {
+                            names: (request.definition.environmentReferenceNames ?? []).join(', '),
+                          })}</span>
+                        ) : null}
+                        <span>{t('mcp.headerCount', {
+                          count: request.definition.headerNames.length,
+                        })}</span>
+                        {request.definition.headerNames.length > 0 ? (
+                          <span>{t('mcp.headerNames', {
+                            names: request.definition.headerNames.join(', '),
+                          })}</span>
+                        ) : null}
+                      </div>
+                      <div className="bitfun-external-sources-config__tool-warning">
+                        {t('mcpApprovals.warning')}
+                      </div>
+                    </details>
                     <div className="bitfun-external-sources-config__tool-actions">
                       <Button
                         variant="secondary"
@@ -1880,6 +1936,7 @@ const ExternalSourcesConfig: React.FC = () => {
                       <Button
                         variant="primary"
                         size="small"
+                        aria-describedby={reviewRiskId}
                         disabled={!policyCompatible || busyKey !== null
                           || !hostCapabilities.canApproveRuntime}
                         onClick={() => void decideMcpServer(
@@ -2291,10 +2348,19 @@ const ExternalSourcesConfig: React.FC = () => {
                                   diagnostic.code,
                                   diagnostic.blocksActivation,
                                 );
+                                const params = agentDiagnosticParams(
+                                  diagnostic.code,
+                                  category,
+                                  agent.unavailableToolLabels ?? [],
+                                  t,
+                                );
                               return (
                                 <div key={diagnostic.code}>
-                                  <span>{t(`agentDiagnostics.${category}.reason`)}</span>
-                                  <span>{t(`agentDiagnostics.${category}.nextStep`)}</span>
+                                  <span>{t(`agentDiagnostics.${category}.reason`, params)}</span>
+                                  <code className="bitfun-external-sources-config__diagnostic-code">
+                                    {diagnostic.code}
+                                  </code>
+                                  <span>{t(`agentDiagnostics.${category}.nextStep`, params)}</span>
                                 </div>
                               );
                             })}
@@ -2409,15 +2475,25 @@ const ExternalSourcesConfig: React.FC = () => {
                                     diagnostic.code,
                                     diagnostic.blocksActivation,
                                   );
+                                  const params = agentDiagnosticParams(
+                                    diagnostic.code,
+                                    category,
+                                    externalAgent.unavailableToolLabels ?? [],
+                                    t,
+                                  );
                                   return (
                                     <span key={diagnostic.code}>
-                                      {t(`agentDiagnostics.${category}.reason`)}{' '}
+                                      {t(`agentDiagnostics.${category}.reason`, params)}{' '}
                                       {t(`agentDiagnostics.${category}.impact`, {
                                         impact: diagnostic.blocksActivation
                                           ? t('agentDiagnostics.activationBlocked')
                                           : t('agentDiagnostics.degradedOnly'),
+                                        ...params,
                                       })}{' '}
-                                      {t(`agentDiagnostics.${category}.nextStep`)}
+                                      <code className="bitfun-external-sources-config__diagnostic-code">
+                                        {diagnostic.code}
+                                      </code>{' '}
+                                      {t(`agentDiagnostics.${category}.nextStep`, params)}
                                     </span>
                                   );
                                 })}

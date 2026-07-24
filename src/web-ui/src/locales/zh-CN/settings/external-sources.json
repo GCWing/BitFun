@@ -253,6 +253,7 @@
     "compatibility": "状态：{{state}}",
     "noDescription": "未提供说明",
     "noTools": "无工具",
+    "unavailableToolsUnknown": "当前 Host 未提供工具名称",
     "sourceLocations": "配置来源（{{count}} 个）"
   },
   "agentState": {
@@ -289,9 +290,42 @@
       "nextStep": "请在来源应用中改用可用模型，或在 BitFun 中设置可用的固定 Sub-Agent 模型，然后刷新。"
     },
     "toolUnavailable": {
-      "reason": "该 Agent 请求的一个或多个工具在 BitFun 中不可用。",
+      "reason": "BitFun 中不可用的工具：{{tools}}。",
       "impact": "{{impact}}",
       "nextStep": "请在来源应用中移除或替换不支持的工具，然后刷新。"
+    },
+    "promptMissing": {
+      "reason": "该 Agent 缺少有效的 prompt。",
+      "impact": "{{impact}}",
+      "nextStep": "请在来源应用中补充非空 prompt，然后刷新。"
+    },
+    "unsupportedSetting": {
+      "reason": "BitFun 当前不支持该 Agent 的“{{setting}}”设置。",
+      "impact": "{{impact}}",
+      "nextStep": "请在来源应用中移除或修改“{{setting}}”，然后刷新。"
+    },
+    "ignoredSetting": {
+      "reason": "BitFun 不会应用该 Agent 的“{{setting}}”设置。",
+      "impact": "{{impact}}",
+      "nextStep": "启用前，请核对上方实际使用的模型和工具。"
+    },
+    "settings": {
+      "unknownField": "未知字段",
+      "ambientPermissions": "全局权限",
+      "permissions": "permission 权限",
+      "options": "options",
+      "nativeAgentOverlay": "内置 Agent 覆盖",
+      "legacyPrimaryMode": "旧版 primary 模式",
+      "primaryAgentMode": "primary Agent 模式",
+      "toolPatterns": "工具通配规则",
+      "defaultPermissions": "默认权限语义",
+      "variant": "模型 variant",
+      "temperature": "temperature 参数",
+      "topP": "top_p 参数",
+      "steps": "steps 步数限制",
+      "maxSteps": "maxSteps 步数限制",
+      "color": "显示颜色",
+      "primaryFacet": "primary Agent 能力"
     },
     "invalidDefinition": {
       "reason": "该 Agent 的配置缺少必填内容或包含无效内容。",
@@ -357,7 +391,9 @@
   "mcpApprovals": {
     "title": "待确认的 MCP 服务器",
     "description": "BitFun 从其他 AI 应用中发现了可执行命令或网络连接配置；确认前不会启动进程或访问远程地址。",
-    "warning": "启用后，BitFun 可能以你的用户权限启动本地进程，或连接到上方显示的远程服务。服务器可以向 Agent 提供工具，并接收调用这些工具时提交的参数。",
+    "compactWarning": "启用后，BitFun 可能以你的用户权限启动该命令或连接该服务；服务器可接收工具调用中发送的数据。",
+    "showDetails": "查看配置与风险",
+    "warning": "本地命令可读取列出的环境变量，远程请求可发送列出的请求头；启用前请核对这些详情。",
     "keepDisabled": "保持停用",
     "enable": "启用服务器"
   },
