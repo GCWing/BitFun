@@ -196,7 +196,7 @@ pub struct ExternalIntegrationPolicySettings {
 impl Default for ExternalIntegrationPolicySettings {
     fn default() -> Self {
         Self {
-            enabled: true,
+            enabled: false,
             ecosystems: BTreeMap::new(),
             extensions: BTreeMap::new(),
         }
@@ -453,11 +453,11 @@ impl Default for ExternalIntegrationPolicySnapshot {
             ),
             workspace_override: None,
             global_effective: EffectiveExternalIntegrationPolicy {
-                enabled: true,
+                enabled: false,
                 ecosystems: BTreeMap::new(),
             },
             effective: EffectiveExternalIntegrationPolicy {
-                enabled: true,
+                enabled: false,
                 ecosystems: BTreeMap::new(),
             },
             registered_ecosystems: Vec::new(),

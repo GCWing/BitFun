@@ -969,7 +969,7 @@ fn test_external_integration_ecosystems() -> Vec<ExternalIntegrationEcosystemDes
 }
 
 #[test]
-fn recommended_external_integration_policy_is_low_friction_and_fail_closed() {
+fn external_integration_policy_is_disabled_by_default() {
     let effective = evaluate_external_integration_policy(
         &ExternalIntegrationPolicyDocument::default(),
         Some("workspace-a"),
@@ -981,6 +981,38 @@ fn recommended_external_integration_policy_is_low_friction_and_fail_closed() {
         .get(&EcosystemId::new(TEST_ECOSYSTEM_ID).unwrap())
         .expect("test ecosystem is registered");
 
+    assert!(!effective.enabled);
+    assert_eq!(opencode.mode, ExternalIntegrationMode::Disabled);
+    for capability in [
+        EXTERNAL_CAPABILITY_COMMAND,
+        EXTERNAL_CAPABILITY_TOOL,
+        EXTERNAL_CAPABILITY_SUBAGENT,
+        EXTERNAL_CAPABILITY_MCP,
+    ] {
+        assert_eq!(
+            opencode.capabilities[&external_capability(capability)],
+            ExternalIntegrationAccess::Disabled
+        );
+    }
+}
+
+#[test]
+fn explicitly_enabled_recommended_policy_keeps_registered_access_defaults() {
+    let mut document = ExternalIntegrationPolicyDocument::default();
+    document.user_defaults.enabled = true;
+
+    let effective = evaluate_external_integration_policy(
+        &document,
+        Some("workspace-a"),
+        &test_external_integration_ecosystems(),
+    )
+    .expect("enabled recommended policy evaluates");
+    let opencode = effective
+        .ecosystems
+        .get(&EcosystemId::new(TEST_ECOSYSTEM_ID).unwrap())
+        .expect("test ecosystem is registered");
+
+    assert!(effective.enabled);
     assert_eq!(opencode.mode, ExternalIntegrationMode::Recommended);
     assert_eq!(
         opencode.capabilities[&external_capability(EXTERNAL_CAPABILITY_COMMAND)],
@@ -1002,6 +1034,7 @@ fn recommended_external_integration_policy_is_low_friction_and_fail_closed() {
 fn workspace_policy_overrides_only_the_fields_the_user_changed() {
     let ecosystem = EcosystemId::new(TEST_ECOSYSTEM_ID).unwrap();
     let mut document = ExternalIntegrationPolicyDocument::default();
+    document.user_defaults.enabled = true;
     document.user_defaults.ecosystems.insert(
         ecosystem.clone(),
         ExternalEcosystemPolicy {
@@ -1065,6 +1098,7 @@ fn high_risk_auto_access_is_limited_by_the_capability_owner() {
     let ecosystem = EcosystemId::new(TEST_ECOSYSTEM_ID).unwrap();
     let mcp = external_capability(EXTERNAL_CAPABILITY_MCP);
     let mut document = ExternalIntegrationPolicyDocument::default();
+    document.user_defaults.enabled = true;
     document.user_defaults.ecosystems.insert(
         ecosystem.clone(),
         ExternalEcosystemPolicy {
