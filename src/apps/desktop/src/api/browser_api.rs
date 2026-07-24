@@ -162,7 +162,7 @@ pub async fn browser_webview_create(
             builder = builder.devtools(true);
         }
 
-        w let webview = window
+        let webview = window
         .add_child(
             builder,
             tauri::LogicalPosition::new(request.x, request.y),

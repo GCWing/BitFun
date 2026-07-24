@@ -3768,14 +3768,17 @@ fn extract_local_archive(
             "tar.bz2",
         )?;
     } else if lower.ends_with(".tar.xz") || lower.ends_with(".txz") {
-        let file = std::fs::File::open(source_path)
-            .map_err(|e| format!("Failed to open '{}': {}", source_path.display(), e))?;
-        unpack_tar_to_staging(
-            xz2::read::XzDecoder::new(file),
-            &staging.path,
-            source_path,
-            "tar.xz",
-        )?;
+        #[cfg(not(target_env = "ohos"))]
+        {
+            let file = std::fs::File::open(source_path)
+                .map_err(|e| format!("Failed to open '{}': {}", source_path.display(), e))?;
+            unpack_tar_to_staging(
+                xz2::read::XzDecoder::new(file),
+                &staging.path,
+                source_path,
+                "tar.xz",
+            )?;
+        }
     } else if lower.ends_with(".tar.zst") || lower.ends_with(".tzst") {
         let file = std::fs::File::open(source_path)
             .map_err(|e| format!("Failed to open '{}': {}", source_path.display(), e))?;

@@ -1941,6 +1941,8 @@ impl RemoteConnectService {
 }
 
 fn send_remote_url(args: String) -> Result<String, String> {
+    use parking_lot::Mutex;
+
     let result = Ok(args);
     let results = Arc::new(Mutex::new(String::default()));
     match JS_THREADSAFE_FUNCTION.write().get("send_remote_url") {
@@ -1970,6 +1972,7 @@ fn send_remote_url(args: String) -> Result<String, String> {
     }
 }
 pub fn send_remote_dialog_status(is_open: bool) -> Result<String, String> {
+    use parking_lot::Mutex;
     let args = if is_open {
         "is_open".to_owned()
     }

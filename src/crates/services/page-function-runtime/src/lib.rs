@@ -11,7 +11,9 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
+#[cfg(not(target_env = "ohos"))]
 use rquickjs::promise::MaybePromise;
+#[cfg(not(target_env = "ohos"))]
 use rquickjs::{Context, Ctx, Function, Object, Runtime};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -97,46 +99,48 @@ pub fn run_fetch(
     host: Arc<dyn PageHost>,
     timeout: Duration,
 ) -> Result<FetchResponse, PageFunctionError> {
-    let started = Instant::now();
-    let interrupted = Arc::new(AtomicBool::new(false));
-    let runtime = Runtime::new().map_err(|e| PageFunctionError::Init(e.to_string()))?;
-    runtime.set_memory_limit(16 * 1024 * 1024);
-    runtime.set_max_stack_size(256 * 1024);
-    let interrupt_flag = Arc::clone(&interrupted);
-    runtime.set_interrupt_handler(Some(Box::new(move || {
-        let timed_out = started.elapsed() >= timeout;
-        if timed_out {
-            interrupt_flag.store(true, Ordering::Relaxed);
-        }
-        timed_out
-    })));
+    #[cfg(not(target_env = "ohos"))]
+    {
+        let started = Instant::now();
+        let interrupted = Arc::new(AtomicBool::new(false));
+        let runtime = Runtime::new().map_err(|e| PageFunctionError::Init(e.to_string()))?;
+        runtime.set_memory_limit(16 * 1024 * 1024);
+        runtime.set_max_stack_size(256 * 1024);
+        let interrupt_flag = Arc::clone(&interrupted);
+        runtime.set_interrupt_handler(Some(Box::new(move || {
+            let timed_out = started.elapsed() >= timeout;
+            if timed_out {
+                interrupt_flag.store(true, Ordering::Relaxed);
+            }
+            timed_out
+        })));
 
-    let context = Context::full(&runtime).map_err(|e| PageFunctionError::Init(e.to_string()))?;
+        let context = Context::full(&runtime).map_err(|e| PageFunctionError::Init(e.to_string()))?;
 
-    let json_out: String = context.with(|ctx| {
-        if started.elapsed() >= timeout {
-            return Err(PageFunctionError::Timeout(timeout));
-        }
+        let json_out: String = context.with(|ctx| {
+            if started.elapsed() >= timeout {
+                return Err(PageFunctionError::Timeout(timeout));
+            }
 
-        ctx.eval::<(), _>(worker_source).map_err(|e| {
-            execution_error(
-                &interrupted,
-                started,
-                timeout,
-                PageFunctionError::Eval(format!("{e}")),
-            )
-        })?;
+            ctx.eval::<(), _>(worker_source).map_err(|e| {
+                execution_error(
+                    &interrupted,
+                    started,
+                    timeout,
+                    PageFunctionError::Eval(format!("{e}")),
+                )
+            })?;
 
-        // Ensure fetch exists before wrapping.
-        let globals = ctx.globals();
-        let _: Function = globals
-            .get("fetch")
-            .map_err(|_| PageFunctionError::MissingFetch)?;
+            // Ensure fetch exists before wrapping.
+            let globals = ctx.globals();
+            let _: Function = globals
+                .get("fetch")
+                .map_err(|_| PageFunctionError::MissingFetch)?;
 
-        // Serialize response in JS to avoid RefCell re-entrancy when reading objects.
-        // Support both sync returns and Promise / async function fetch.
-        ctx.eval::<(), _>(
-            r#"
+            // Serialize response in JS to avoid RefCell re-entrancy when reading objects.
+            // Support both sync returns and Promise / async function fetch.
+            ctx.eval::<(), _>(
+                r#"
             globalThis.__bitfun_normalize = function(r) {
               if (typeof r === "string") {
                 return JSON.stringify({ status: 200, headers: { "content-type": "text/plain; charset=utf-8" }, body: r });
@@ -165,64 +169,70 @@ pub fn run_fetch(
               return globalThis.__bitfun_normalize(r);
             };
             "#,
-        )
-        .map_err(|e| {
-            execution_error(
-                &interrupted,
-                started,
-                timeout,
-                PageFunctionError::Eval(format!("wrap fetch: {e}")),
             )
-        })?;
-
-        let invoke: Function = globals
-            .get("__bitfun_invoke")
-            .map_err(|e| PageFunctionError::Init(e.to_string()))?;
-
-        let env = build_env_object(&ctx, host)?;
-        let req_obj = request_to_object(&ctx, request)?;
-        let maybe: MaybePromise = invoke
-            .call((req_obj, env))
-            .map_err(|e| {
-                execution_error(
-                    &interrupted,
-                    started,
-                    timeout,
-                    PageFunctionError::Handler(format!("{e}")),
-                )
-            })?;
-
-        // Drive QuickJS microtasks until the (maybe) promise settles, respecting timeout.
-        let out = loop {
-            if started.elapsed() >= timeout {
-                return Err(PageFunctionError::Timeout(timeout));
-            }
-            match maybe.result::<String>() {
-                Some(Ok(s)) => break s,
-                Some(Err(e)) => {
-                    return Err(execution_error(
+                .map_err(|e| {
+                    execution_error(
                         &interrupted,
                         started,
                         timeout,
-                        PageFunctionError::Handler(format!("async fetch failed: {e}")),
-                    ));
+                        PageFunctionError::Eval(format!("wrap fetch: {e}")),
+                    )
+                })?;
+
+            let invoke: Function = globals
+                .get("__bitfun_invoke")
+                .map_err(|e| PageFunctionError::Init(e.to_string()))?;
+
+            let env = build_env_object(&ctx, host)?;
+            let req_obj = request_to_object(&ctx, request)?;
+            let maybe: MaybePromise = invoke
+                .call((req_obj, env))
+                .map_err(|e| {
+                    execution_error(
+                        &interrupted,
+                        started,
+                        timeout,
+                        PageFunctionError::Handler(format!("{e}")),
+                    )
+                })?;
+
+            // Drive QuickJS microtasks until the (maybe) promise settles, respecting timeout.
+            let out = loop {
+                if started.elapsed() >= timeout {
+                    return Err(PageFunctionError::Timeout(timeout));
                 }
-                None => {
-                    if !ctx.execute_pending_job() {
-                        return Err(PageFunctionError::Handler(
-                            "async fetch returned a pending promise with no runnable jobs \
-                             (host bindings are synchronous; do not await external I/O)"
-                                .into(),
+                match maybe.result::<String>() {
+                    Some(Ok(s)) => break s,
+                    Some(Err(e)) => {
+                        return Err(execution_error(
+                            &interrupted,
+                            started,
+                            timeout,
+                            PageFunctionError::Handler(format!("async fetch failed: {e}")),
                         ));
                     }
+                    None => {
+                        if !ctx.execute_pending_job() {
+                            return Err(PageFunctionError::Handler(
+                                "async fetch returned a pending promise with no runnable jobs \
+                             (host bindings are synchronous; do not await external I/O)"
+                                    .into(),
+                            ));
+                        }
+                    }
                 }
-            }
-        };
-        Ok(out)
-    })?;
+            };
+            Ok(out)
+        })?;
 
-    serde_json::from_str::<FetchResponse>(&json_out)
-        .map_err(|e| PageFunctionError::Handler(format!("invalid fetch response JSON: {e}")))
+        serde_json::from_str::<FetchResponse>(&json_out)
+            .map_err(|e| PageFunctionError::Handler(format!("invalid fetch response JSON: {e}")))
+    }
+
+    #[cfg(target_env = "ohos")]
+    {
+        Err(PageFunctionError::Init("Unable to support the system".to_string()))
+    }
 }
 
 fn execution_error(
@@ -238,6 +248,7 @@ fn execution_error(
     }
 }
 
+#[cfg(not(target_env = "ohos"))]
 fn build_env_object<'js>(
     ctx: &Ctx<'js>,
     host: Arc<dyn PageHost>,
@@ -248,7 +259,7 @@ fn build_env_object<'js>(
             host_call(host.as_ref(), &op, &a, &b, &c)
         },
     )
-    .map_err(|e| PageFunctionError::Init(e.to_string()))?;
+        .map_err(|e| PageFunctionError::Init(e.to_string()))?;
 
     let factory_src = r#"
         (function(hostCall) {
@@ -381,6 +392,7 @@ fn host_call(host: &dyn PageHost, op: &str, a: &str, b: &str, c: &str) -> String
     }
 }
 
+#[cfg(not(target_env = "ohos"))]
 fn request_to_object<'js>(
     ctx: &Ctx<'js>,
     request: &FetchRequest,

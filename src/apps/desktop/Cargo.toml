@@ -40,7 +40,6 @@ tauri-plugin-log = { workspace = true }
 napi-ohos = { workspace = true }
 napi-derive-ohos = { workspace = true }
 tauri-plugin-global-shortcut = { workspace = true }
-tauri-plugin-single-instance = { workspace = true }
 # Keep Tauri's transitive time resolution on the known-good release in CI,
 # where the root Cargo.lock is intentionally ignored.
 time = { workspace = true }

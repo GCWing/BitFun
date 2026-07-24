@@ -549,29 +549,32 @@ fn show_main_window_for_startup(
     total_started_at: Instant,
     startup_trace: &DesktopStartupTrace,
 ) {
-    let show_started_at = Instant::now();
-    if let Err(error) = window.show() {
-        warn!("Failed to show main window during startup: {}", error);
-        return;
-    }
-    startup_trace.record_elapsed_step("native_window", "show_window", show_started_at);
-    debug!(
+    #[cfg(not(target_env = "ohos"))]
+    {
+        let show_started_at = Instant::now();
+        if let Err(error) = window.show() {
+            warn!("Failed to show main window during startup: {}", error);
+            return;
+        }
+        startup_trace.record_elapsed_step("native_window", "show_window", show_started_at);
+        debug!(
         "Main window startup show step completed: step=show duration_ms={} since_create_start_ms={}",
         show_started_at.elapsed().as_millis(),
         total_started_at.elapsed().as_millis()
     );
 
-    let focus_started_at = Instant::now();
-    if let Err(error) = window.set_focus() {
-        warn!("Failed to focus main window during startup: {}", error);
-        return;
-    }
-    startup_trace.record_elapsed_step("native_window", "focus_window", focus_started_at);
-    debug!(
+        let focus_started_at = Instant::now();
+        if let Err(error) = window.set_focus() {
+            warn!("Failed to focus main window during startup: {}", error);
+            return;
+        }
+        startup_trace.record_elapsed_step("native_window", "focus_window", focus_started_at);
+        debug!(
         "Main window startup show step completed: step=focus duration_ms={} since_create_start_ms={}",
         focus_started_at.elapsed().as_millis(),
         total_started_at.elapsed().as_millis()
     );
+    }
 }
 
 fn app_url(path: &str) -> WebviewUrl {

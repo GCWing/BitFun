@@ -14,7 +14,6 @@ import {
   canDeleteSkill,
   getSkillSourceLabel,
 } from '../skillSourcePresentation';
-import { open } from '@tauri-apps/plugin-dialog';
 import { createLogger } from '@/shared/utils/logger';
 import './SkillsConfig.scss';
 import {workspaceAPI} from "@/infrastructure";

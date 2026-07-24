@@ -29,6 +29,7 @@ use std::sync::{
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use tauri::Emitter;
 use tauri::Manager;
+#[cfg(not(target_env = "ohos"))]
 use tauri_plugin_window_state::{AppHandleExt, StateFlags};
 
 // Re-export API
@@ -268,13 +269,17 @@ fn handle_secondary_launch(app: &tauri::AppHandle) {
     }
 }
 
+#[cfg(not(target_env = "ohos"))]
 fn main_window_state_flags() -> StateFlags {
     StateFlags::SIZE | StateFlags::POSITION | StateFlags::MAXIMIZED | StateFlags::FULLSCREEN
 }
 
 pub(crate) fn save_main_window_state(app: &tauri::AppHandle) {
-    if let Err(error) = app.save_window_state(main_window_state_flags()) {
-        log::warn!("Failed to save main window state: {}", error);
+    #[cfg(not(target_env = "ohos"))]
+    {
+        if let Err(error) = app.save_window_state(main_window_state_flags()) {
+            log::warn!("Failed to save main window state: {}", error);
+        }
     }
 }
 
