@@ -1218,7 +1218,7 @@ pub enum AgentSubagentOverrideState {
 pub type ParentSubagentOverrideConfig = HashMap<String, AgentSubagentOverrideState>;
 pub type AgentSubagentOverrideConfig = HashMap<String, ParentSubagentOverrideConfig>;
 
-pub const DEFAULT_MODEL_CONTEXT_WINDOW_TOKENS: u32 = 128_128;
+pub const DEFAULT_MODEL_CONTEXT_WINDOW_TOKENS: u32 = 1_048_576;
 pub const MIN_MODEL_CONTEXT_WINDOW_TOKENS: u32 = 32_000;
 pub const MAX_CONFIGURED_OUTPUT_TOKENS_RATIO_PERCENT: u32 = 40;
 const AUTOMATIC_MAX_OUTPUT_TOKEN_TIERS: [u32; 5] = [8_000, 16_000, 24_000, 32_000, 64_000];

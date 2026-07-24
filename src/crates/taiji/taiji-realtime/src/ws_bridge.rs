@@ -66,6 +66,7 @@ use std::thread;
 
 use axum::{
     extract::ws::{Message, WebSocket, WebSocketUpgrade},
+    extract::Query,
     response::IntoResponse,
     routing::get,
     Router,
@@ -75,15 +76,28 @@ use futures_util::{SinkExt, StreamExt};
 use taiji_engine::types::tick::TickData;
 use tokio::sync::broadcast;
 
+/// Query parameters for WebSocket upgrade request.
+#[derive(serde::Deserialize, Default)]
+struct WsQueryParams {
+    /// Optional authentication token.
+    /// When `WsBridge` is configured with an `auth_token`, this parameter
+    /// must match; otherwise the connection is rejected with 401.
+    token: Option<String>,
+}
+
 /// WebSocket 桥接——从 crossbeam channel 读取 TickData，广播到所有 WS 客户端。
 ///
 /// 默认监听 `127.0.0.1`，可通过 [`with_bind_address`](Self::with_bind_address) 配置。
 /// 可通过 [`with_shutdown`](Self::with_shutdown) 注入优雅关闭信号。
+/// 可通过 [`with_auth_token`](Self::with_auth_token) 配置可选的 token 认证。
 pub struct WsBridge {
     port: u16,
     bind_address: String,
     receiver: Option<Receiver<TickData>>,
     shutdown_rx: Option<tokio::sync::oneshot::Receiver<()>>,
+    /// Optional authentication token. When set, clients must provide
+    /// `?token=<value>` in the WebSocket upgrade request query string.
+    auth_token: Option<String>,
 }
 
 impl WsBridge {
@@ -96,6 +110,7 @@ impl WsBridge {
             bind_address: "127.0.0.1".to_string(),
             receiver: Some(receiver),
             shutdown_rx: None,
+            auth_token: None,
         }
     }
 
@@ -104,6 +119,16 @@ impl WsBridge {
     /// 支持 IPv4（如 `"0.0.0.0"`）和 IPv6（如 `"::1"`）地址。
     pub fn with_bind_address(mut self, addr: impl Into<String>) -> Self {
         self.bind_address = addr.into();
+        self
+    }
+
+    /// 设置可选的认证 token（P1-21）。
+    ///
+    /// 当设置后，客户端必须在 WebSocket 升级请求的 query string 中
+    /// 提供 `?token=<value>`。token 不匹配的连接将被返回 401 拒绝。
+    /// 未设置时（默认），所有连接均被接受（向后兼容）。
+    pub fn with_auth_token(mut self, token: impl Into<String>) -> Self {
+        self.auth_token = Some(token.into());
         self
     }
 
@@ -122,6 +147,7 @@ impl WsBridge {
     /// 然后启动 axum server 监听指定端口。
     pub async fn start(&mut self) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         let receiver = self.receiver.take().ok_or("WsBridge already started")?;
+        let auth_token = self.auth_token.take();
 
         // tokio broadcast: 容量 256，用于向所有 WS 客户端转发
         let (broadcast_tx, _) = broadcast::channel::<String>(256);
@@ -145,9 +171,14 @@ impl WsBridge {
             }
         });
 
+        let state = AppState {
+            tx: broadcast_tx,
+            auth_token,
+        };
+
         let app = Router::new()
             .route("/ws", get(ws_handler))
-            .with_state(broadcast_tx);
+            .with_state(state);
 
         let ip: std::net::IpAddr = self
             .bind_address
@@ -175,12 +206,35 @@ impl WsBridge {
     }
 }
 
+/// App state type for axum.
+#[derive(Clone)]
+struct AppState {
+    tx: broadcast::Sender<String>,
+    auth_token: Option<String>,
+}
+
 /// WebSocket 升级处理——每个客户端订阅 broadcast。
 async fn ws_handler(
     ws: WebSocketUpgrade,
-    axum::extract::State(tx): axum::extract::State<broadcast::Sender<String>>,
+    Query(params): Query<WsQueryParams>,
+    axum::extract::State(state): axum::extract::State<AppState>,
 ) -> impl IntoResponse {
-    ws.on_upgrade(move |socket| handle_socket(socket, tx))
+    // P1-21: Optional token authentication.
+    // If an auth_token is configured, reject requests without a matching token.
+    if let Some(ref expected) = state.auth_token {
+        match &params.token {
+            Some(t) if t == expected => {}
+            _ => {
+                return axum::response::Response::builder()
+                    .status(axum::http::StatusCode::UNAUTHORIZED)
+                    .body(axum::body::Body::from(
+                        r#"{"error":"unauthorized: invalid or missing token"}"#,
+                    ))
+                    .unwrap();
+            }
+        }
+    }
+    ws.on_upgrade(move |socket| handle_socket(socket, state.tx))
 }
 
 /// 处理单个 WebSocket 连接——从 broadcast 读取并写入 WS。
@@ -218,6 +272,7 @@ mod tests {
                 bind_address: "127.0.0.1".to_string(),
                 receiver: None,
                 shutdown_rx: None,
+                auth_token: None,
             }
         }
     }

@@ -250,6 +250,14 @@ impl AgentRuntimeBuilder {
         self
     }
 
+    pub fn with_session_tree(
+        mut self,
+        tree: Arc<bitfun_services_core::session::tree::SessionTreeManager>,
+    ) -> Self {
+        self.inner = self.inner.with_session_tree(tree);
+        self
+    }
+
     pub fn build(self) -> Result<AgentRuntime, RuntimeBuildError> {
         self.inner.build().map(|inner| AgentRuntime { inner })
     }

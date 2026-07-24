@@ -30,6 +30,7 @@ use bitfun_runtime_ports::{
     ThreadGoal,
 };
 use bitfun_runtime_services::RuntimeServices;
+use bitfun_services_core::session::tree::SessionTreeManager;
 
 use crate::event_source::{AgentEventReceiver, AgentEventSource, AgentSessionEventReceiver};
 use crate::permission::{PermissionRequestEventReceiver, PermissionRequestManager};
@@ -206,6 +207,7 @@ pub struct AgentRuntime {
     hook_registry: RuntimeHookRegistry,
     agent_registry: Option<Arc<dyn RuntimeAgentRegistry>>,
     plugin_runtime: PluginRuntimeBinding,
+    session_tree: Option<Arc<SessionTreeManager>>,
 }
 
 impl std::fmt::Debug for AgentRuntime {
@@ -339,6 +341,10 @@ impl std::fmt::Debug for AgentRuntime {
                     .map(|_| "<dyn RuntimeAgentRegistry>"),
             )
             .field("plugin_runtime", &self.plugin_runtime.availability())
+            .field(
+                "session_tree",
+                &self.session_tree.as_ref().map(|_| "<SessionTreeManager>"),
+            )
             .finish()
     }
 }
@@ -382,6 +388,7 @@ pub struct AgentRuntimeBuilder {
     hook_registry: RuntimeHookRegistry,
     agent_registry: Option<Arc<dyn RuntimeAgentRegistry>>,
     plugin_runtime: PluginRuntimeBinding,
+    session_tree: Option<Arc<SessionTreeManager>>,
 }
 
 impl AgentRuntimeBuilder {
@@ -530,6 +537,11 @@ impl AgentRuntimeBuilder {
         self
     }
 
+    pub fn with_session_tree(mut self, tree: Arc<SessionTreeManager>) -> Self {
+        self.session_tree = Some(tree);
+        self
+    }
+
     pub fn build(self) -> Result<AgentRuntime, RuntimeBuildError> {
         let Self {
             submission,
@@ -556,6 +568,7 @@ impl AgentRuntimeBuilder {
             hook_registry,
             agent_registry,
             plugin_runtime,
+            session_tree,
         } = self;
 
         if plugin_runtime.is_client_binding() && !plugin_runtime.availability().is_executable() {
@@ -587,6 +600,7 @@ impl AgentRuntimeBuilder {
             hook_registry,
             agent_registry,
             plugin_runtime,
+            session_tree,
         })
     }
 }
@@ -835,6 +849,10 @@ impl AgentRuntime {
 
     pub fn plugin_runtime(&self) -> &PluginRuntimeBinding {
         &self.plugin_runtime
+    }
+
+    pub fn session_tree(&self) -> Option<&Arc<SessionTreeManager>> {
+        self.session_tree.as_ref()
     }
 
     pub fn registered_agent_ids(&self, query: RuntimeAgentRegistryQuery<'_>) -> Vec<String> {
@@ -1253,6 +1271,20 @@ impl AgentRuntime {
                     })
                     .await?;
                 let agent_type = created.agent_type;
+                    if let Some(ref tree) = self.session_tree {
+                        if let Some(parent_id) = request.metadata.get("parent_session_id").and_then(|v| v.as_str()) {
+                            let parent_depth = tree.get_depth(parent_id).unwrap_or(0);
+                            let child_depth = parent_depth + 1;
+                            if let Err(e) = tree.register_child(parent_id, &created.session_id, child_depth) {
+                                log::warn!(
+                                    "Failed to register child session {} under parent {}: {:?}",
+                                    created.session_id,
+                                    parent_id,
+                                    e,
+                                );
+                            }
+                        }
+                    }
                 (created.session_id, Some(agent_type))
             }
         };
@@ -1411,6 +1443,8 @@ mod tests {
                 turn_count: 3,
                 created_at_ms: 1000,
                 last_active_at_ms: 2000,
+                parent_session_id: None,
+                status: None,
             }])
         }
 
@@ -1483,6 +1517,8 @@ mod tests {
                     turn_count: 3,
                     created_at_ms: 1000,
                     last_active_at_ms: 2000,
+                    parent_session_id: None,
+                    status: None,
                 },
                 state: SessionState::Idle,
             })
@@ -2253,6 +2289,8 @@ mod tests {
                 turn_count: 3,
                 created_at_ms: 1000,
                 last_active_at_ms: 2000,
+                parent_session_id: None,
+                status: None,
             },
             state: SessionState::Error {
                 error: "recoverable failure".to_string(),

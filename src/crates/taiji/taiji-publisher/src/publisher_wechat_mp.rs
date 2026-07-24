@@ -93,9 +93,42 @@ struct ArticleDetail {
 }
 
 /// Token cache.
+///
+/// # Security Note (P1-13)
+///
+/// The `access_token` is stored as a plain `String`. When the token expires or
+/// the cache is replaced, the old value remains in heap memory until deallocated.
+/// A core dump or memory inspection could reveal a still-valid token.
+///
+/// **Recommended hardening**: Use the `secrecy::Secret<String>` wrapper (from the
+/// `secrecy` crate) for the `access_token` field. This provides:
+/// - Zeroization on drop (memory is overwritten before deallocation)
+/// - Debug/serialize protection (prevents accidental exposure in logs/output)
+///
+/// For now, we manually overwrite the token on `Drop` as a partial mitigation.
 struct TokenCache {
     access_token: String,
     expires_at: DateTime<Utc>,
+}
+
+impl Drop for TokenCache {
+    fn drop(&mut self) {
+        // P1-13: Overwrite token bytes in memory before deallocation.
+        // This is a best-effort mitigation; `secrecy::Secret` provides
+        // stronger guarantees via mlock + explicit zeroize.
+        let len = self.access_token.len();
+        if len > 0 {
+            // SAFETY: We overwrite the valid UTF-8 bytes with zeros,
+            // then immediately clear the String so no invalid UTF-8 is observable.
+            unsafe {
+                let vec = self.access_token.as_mut_vec();
+                for byte in vec.iter_mut() {
+                    *byte = 0;
+                }
+            }
+        }
+        self.access_token.clear();
+    }
 }
 
 /// WeChat Official Account publisher.

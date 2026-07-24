@@ -1599,9 +1599,14 @@ impl PersistenceManager {
         let existing_metadata = self
             .load_session_metadata(workspace_path, &session.session_id)
             .await?;
-        let metadata = self
+        let mut metadata = self
             .build_session_metadata(workspace_path, session, existing_metadata.as_ref())
             .await;
+        metadata.runtime_state =
+            Some(serde_json::to_value(sanitize_persisted_session_state(
+                &session.state,
+            ))
+            .unwrap_or(serde_json::Value::Null));
         self.save_session_metadata_locked(workspace_path, &metadata)
             .await?;
 
@@ -1999,10 +2004,10 @@ impl PersistenceManager {
         let mut summaries = Vec::with_capacity(metadata_list.len());
 
         for metadata in metadata_list {
-            let state = self
-                .load_stored_session_state(workspace_path, &metadata.session_id)
-                .await?
-                .map(|value| sanitize_persisted_session_state(&value.runtime_state))
+            let state = metadata
+                .runtime_state
+                .as_ref()
+                .and_then(|v| serde_json::from_value::<SessionState>(v.clone()).ok())
                 .unwrap_or(SessionState::Idle);
 
             summaries.push(SessionSummary {
@@ -2017,6 +2022,10 @@ impl PersistenceManager {
                 created_at: Self::unix_ms_to_system_time(metadata.created_at),
                 last_activity_at: Self::unix_ms_to_system_time(metadata.last_active_at),
                 state,
+                parent_session_id: metadata
+                    .relationship
+                    .as_ref()
+                    .and_then(|r| r.parent_session_id.clone()),
             });
         }
 

@@ -97,6 +97,72 @@ impl std::fmt::Display for PortError {
 
 impl std::error::Error for PortError {}
 
+/// Shared agent type used by SessionControl and SessionMessage tools.
+///
+/// Known built-in variants have canonical serde representations:
+/// - `Agentic` → `"agentic"` (canonical)
+/// - `Plan` → `"Plan"` (canonical)
+/// - `Cowork` → `"Cowork"` (canonical)
+///
+/// Any unrecognised string deserializes into `Other(String)`, so the enum
+/// automatically tolerates agent types added by custom or external registries
+/// without requiring a crate-level code change.
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum AgentType {
+    /// Known built-in variant: `agentic`.
+    #[serde(rename = "agentic", alias = "Agentic", alias = "AGENTIC")]
+    Agentic,
+    /// Known built-in variant: `Plan`.
+    #[serde(rename = "Plan", alias = "plan", alias = "PLAN")]
+    Plan,
+    /// Known built-in variant: `Cowork`.
+    #[serde(rename = "Cowork", alias = "cowork", alias = "COWORK")]
+    Cowork,
+    /// Catch-all for any agent type string not in the known set (custom / external).
+    #[serde(untagged)]
+    Other(String),
+}
+
+impl AgentType {
+    /// Returns the canonical wire representation.
+    pub fn as_str(&self) -> &str {
+        match self {
+            Self::Agentic => "agentic",
+            Self::Plan => "Plan",
+            Self::Cowork => "Cowork",
+            Self::Other(value) => value.as_str(),
+        }
+    }
+
+    /// Default agent type used when none is specified.
+    pub const fn default_value() -> Self {
+        Self::Agentic
+    }
+
+    /// Returns `true` if this is one of the three known built-in variants.
+    pub fn is_known_builtin(&self) -> bool {
+        matches!(self, Self::Agentic | Self::Plan | Self::Cowork)
+    }
+}
+
+impl From<&str> for AgentType {
+    fn from(value: &str) -> Self {
+        match value {
+            "agentic" | "Agentic" | "AGENTIC" => Self::Agentic,
+            "Plan" | "plan" | "PLAN" => Self::Plan,
+            "Cowork" | "cowork" | "COWORK" => Self::Cowork,
+            other => Self::Other(other.to_string()),
+        }
+    }
+}
+
+impl std::fmt::Display for AgentType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum RuntimeServiceCapability {
@@ -1014,6 +1080,12 @@ pub struct AgentSessionSummary {
     pub turn_count: usize,
     pub created_at_ms: u64,
     pub last_active_at_ms: u64,
+    /// Optional parent session ID for tree-structured display.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub parent_session_id: Option<String>,
+    /// Optional session runtime status (e.g. "idle", "active", "error").
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub status: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -1526,6 +1598,17 @@ pub const MAX_THREAD_GOAL_OBJECTIVE_CHARS: usize = 4_000;
 pub const MAX_CONTEXT_SUMMARY_CHARS: usize = 12_000;
 
 /// Max automatic goal continuation dialog turns per objective (legacy goal_mode parity).
+///
+/// This is a defense-in-depth upper bound, not a user-configurable value. The thread-goal
+/// auto-continuation counter (`auto_continuation_count` on `ThreadGoal`) is incremented
+/// once per continuation turn and compared against this constant. When exceeded, the
+/// goal transitions to `Blocked` to prevent runaway autonomous turns.
+///
+/// Safety note: This value is intentionally high (100) because:
+/// - Each continuation turn consumes model tokens (cost).
+/// - The token budget (`token_budget` on `ThreadGoal`) acts as the primary soft limit.
+/// - The task-level depth check (`Task` tool `max_depth`) acts as the structural hard limit.
+/// - This counter is a secondary failsafe for edge cases where budgets are unset.
 pub const MAX_THREAD_GOAL_AUTO_CONTINUATIONS: u32 = 100;
 
 /// Alias retained for migration from legacy `goal_mode` metadata and docs.
@@ -2161,12 +2244,16 @@ impl DelegationPolicy {
     }
 
     pub fn spawn_child(self) -> Self {
+        let new_depth = self.nesting_depth.saturating_add(1);
         Self {
-            allow_subagent_spawn: false,
-            nesting_depth: self.nesting_depth.saturating_add(1),
+            allow_subagent_spawn: new_depth < MAX_FISSION_DEPTH,
+            nesting_depth: new_depth,
         }
     }
 }
+
+/// Maximum allowed fission depth for subagent delegation trees.
+pub const MAX_FISSION_DEPTH: u8 = 10;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -2991,6 +3078,8 @@ mod tests {
             turn_count: 3,
             created_at_ms: 1000,
             last_active_at_ms: 2000,
+            parent_session_id: None,
+            status: None,
         };
         let delete_request = AgentSessionDeleteRequest {
             workspace_path: "/workspace/project".to_string(),
@@ -3227,7 +3316,7 @@ mod tests {
 
         let child = top_level.spawn_child();
 
-        assert!(!child.allow_subagent_spawn);
+        assert!(child.allow_subagent_spawn);
         assert_eq!(child.nesting_depth, 1);
         assert_eq!(child.spawn_child().nesting_depth, 2);
     }

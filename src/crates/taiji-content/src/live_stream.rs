@@ -5,6 +5,25 @@ use std::process::{Child, ChildStdin, Command, Stdio};
 use crate::kline_renderer::KLineRenderer;
 use crate::types::bar_types::RawBar;
 
+/// Mask the path and query of a streaming URL, keeping only scheme + host.
+///
+/// Example: `rtmp://live.example.com/live/stream-key?token=secret` → `rtmp://live.example.com/***`
+fn sanitize_url(url: &str) -> String {
+    if let Some(scheme_end) = url.find("://") {
+        let after_scheme = &url[scheme_end + 3..];
+        if let Some(path_start) = after_scheme.find('/') {
+            let host_end = scheme_end + 3 + path_start;
+            format!("{}/***", &url[..host_end])
+        } else {
+            // No path — unlikely for RTMP, but mask anyway.
+            format!("{}/***", url)
+        }
+    } else {
+        // Cannot parse; return fully masked.
+        "***".to_string()
+    }
+}
+
 /// Per-bar live-streaming engine: KLineRenderer → FFmpeg image2pipe → RTMP.
 pub struct LiveStreamEngine {
     rtmp_url: String,
@@ -84,7 +103,7 @@ impl LiveStreamEngine {
             self.width,
             self.height,
             self.fps,
-            self.rtmp_url
+            sanitize_url(&self.rtmp_url)
         );
 
         Ok(())
@@ -140,15 +159,19 @@ impl LiveStreamEngine {
                     })
                     .unwrap_or_default();
 
+                // Redact the RTMP URL from stderr before logging, since ffmpeg
+                // may echo command-line arguments that contain the stream key.
+                let stderr_sanitized = stderr_output.replace(&self.rtmp_url, &sanitize_url(&self.rtmp_url));
+
                 log::error!(
                     "FFmpeg exited with status {:?}: {}",
                     status.code(),
-                    stderr_output
+                    stderr_sanitized
                 );
                 return Err(format!(
                     "FFmpeg exited with status {:?}: {}",
                     status.code(),
-                    stderr_output
+                    stderr_sanitized
                 ));
             }
 

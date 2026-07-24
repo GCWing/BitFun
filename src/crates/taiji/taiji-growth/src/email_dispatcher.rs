@@ -8,11 +8,17 @@ use lettre::{
     Tokio1Executor,
 };
 use tera::{Context, Tera};
+use tokio::time::{interval, Duration, MissedTickBehavior};
 
 use crate::types::{
     BatchResult, ContentAsset, EmailBatch, EmailLog, EmailStatus, EmailType, SignalSummary,
     SmtpConfig, Subscriber, SubscriberStatus,
 };
+
+/// P1-14: Minimum interval between consecutive SMTP sends (milliseconds).
+const SEND_INTERVAL_MS: u64 = 200;
+/// P1-14: Maximum emails per batch send.
+const MAX_BATCH_SIZE: usize = 50;
 
 // ── 编译期嵌入模板 ──
 
@@ -140,14 +146,25 @@ impl EmailDispatcher {
     /// 批量发送邮件。
     ///
     /// 仅向 `Active` 状态订阅者发送，返回每条结果。
+    /// P1-14: Enforces rate limiting (200ms between sends) and batch size cap (50).
     pub async fn send_batch(
         &self,
         subscribers: &[Subscriber],
         content: &EmailBatch,
     ) -> Result<Vec<BatchResult>, String> {
+        // P1-14: Cap batch size to prevent abuse.
+        let subscribers = if subscribers.len() > MAX_BATCH_SIZE {
+            &subscribers[..MAX_BATCH_SIZE]
+        } else {
+            subscribers
+        };
+
         let mut results = Vec::with_capacity(subscribers.len());
+        let mut ticker = interval(Duration::from_millis(SEND_INTERVAL_MS));
+        ticker.set_missed_tick_behavior(MissedTickBehavior::Delay);
 
         for sub in subscribers {
+            ticker.tick().await; // P1-14: Rate limiting between sends
             if sub.status != SubscriberStatus::Active {
                 results.push(BatchResult {
                     subscriber_id: sub.id.clone(),

@@ -19,6 +19,7 @@ export interface SessionRelationship {
   parentTurnIndex?: number | null;
   parentToolCallId?: string | null;
   subagentType?: string | null;
+  depth?: number | null;
 }
 
 export interface SessionCustomMetadata extends Record<string, unknown> {

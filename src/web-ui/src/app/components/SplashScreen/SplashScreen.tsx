@@ -1,5 +1,5 @@
 /**
- * SplashScreen 鈥?full-screen loading overlay shown on app start.
+ * SplashScreen — full-screen loading overlay shown on app start.
  *
  * Idle:    logo larger, soft fade in/out.
  * Exiting: logo scales up and fades; backdrop dissolves.
@@ -56,7 +56,7 @@ const SplashScreen: React.FC<SplashScreenProps> = ({
       <div className="splash-screen__center">
         <div className="splash-screen__logo-wrap">
           <img
-            src="/taiji-icon-128.png"
+            src="/Logo-ICON-128.png"
             alt="BitFun"
             className="splash-screen__logo"
             draggable={false}

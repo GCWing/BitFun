@@ -1463,6 +1463,7 @@ mod task_context_tests {
                     tool_call_id: "parent_tool".to_string(),
                     session_id: "parent_session".to_string(),
                     dialog_turn_id: "parent_turn".to_string(),
+                    depth: None,
                 }),
                 permission_delegation: None,
                 delegation_policy: DelegationPolicy::top_level().spawn_child(),

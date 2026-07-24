@@ -1,9 +1,35 @@
-//! Conversation coordinator
+//! Conversation coordinator — top-level component integrating all agentic subsystems.
 //!
-//! Top-level component that integrates all subsystems and provides a unified interface
+//! # Functional sections (ordered by appearance)
+//!
+//! | Section | Approx. lines | Description |
+//! |---|---|---|
+//! | Constants | 97–200 | Concurrency limits, tool names, timeouts, token budgets. |
+//! | Helper types | 202–713 | `AgentRoundInjectionSource`, `SubagentConcurrencyLimiter`, `SessionBackgroundSubagentState`. |
+//! | `ConversationCoordinator` struct | 715–800 | Central coordinator holding session manager, execution engine, event router, tool pipeline, thread goal runtime, session tree, etc. |
+//! | Construction & lifecycle | 802–1460 | `new()`, `set_terminal_port()`, `set_remote_exec_port()`, `session_tree()`, scheduler notifier wiring. |
+//! | Session config & model resolution | 1460–2948 | Workspace resolution, model binding, context profiles, session config defaults. |
+//! | Context compaction | 2948–4038 | Manual (`/compact`) and automatic context compression. |
+//! | Dialog turn submission & execution | 4038–4370 | Submitting user messages, background results, steering injections into running turns. |
+//! | Session lifecycle management | 4370–4810 | `delete_session()`, `delete_hidden_subagent_sessions_for_parent_turns()`, `list_sessions()`, `cancel_session()`. |
+//! | Event subscription | 4810–4828 | `subscribe_internal()`, `unsubscribe_internal()`. |
+//! | Subagent concurrency | 4828–6189 | Semaphore-based concurrency limiting, background subagent wait/outcome handling. |
+//! | Hidden subagent sessions | 6190–7200 | Hidden "behind-the-work" subagent sessions for background tasks. |
+//! | Thread goal management | 7200–8000 | Goal-mode continuation loop, token budget enforcement, thread goal status transitions. |
+//! | Workspace bootstrap | 8000–8089 | Persona file injection, workspace readiness checks. |
+//! | `AgentSessionManagementPort` impl | 8089–8666 | Port trait implementation for session create / list / cancel / delete / rename / fork. |
+//! | Global singleton & helpers | 8666–10680 | `get_global_coordinator()`, `runtime_session_summary()`, error mapping helpers. |
+//! | Tests | 10680–end | Unit tests for model resolution, session management, subagent delegation, etc. |
+//!
+//! # Key design notes
+//!
+//! - The coordinator is a **singleton** (`OnceLock<Arc<ConversationCoordinator>>`).
+//! - All mutable state lives behind `Arc<DashMap<…>>` or `Arc<RwLock<…>>` to support concurrent access.
+//! - The session tree (`SessionTreeManager`) is lazily populated from persisted metadata on first `list_sessions` (R-004).
+//! - Authorization for cancel/delete uses in-memory tree first, then falls back to persisted metadata chain query.
 
 use super::{
-    coordination_store::{BackgroundTaskRegistration, CoordinationStore},
+    coordination_store::{BackgroundTaskRecord, BackgroundTaskRegistration, CoordinationStore},
     scheduler::{
         abort_thread_goal_continuation_for_session, clear_thread_goal_continuation_abort,
         get_global_scheduler, DialogSubmissionPolicy, HiddenSubagentQueueCancelHandle,
@@ -48,6 +74,7 @@ use crate::agentic::tools::{
     ToolRuntimeRestrictions,
 };
 use crate::agentic::workspace::WorkspaceServices;
+use bitfun_services_core::session::tree::SessionTreeManager;
 use crate::agentic::WorkspaceBinding;
 use crate::service::bootstrap::{
     ensure_workspace_persona_files_for_prompt, is_workspace_bootstrap_pending,
@@ -74,7 +101,9 @@ use bitfun_agent_runtime::remote_file_delivery::{
     TOOL_CONTEXT_REMOTE_FILE_DELIVERY_KEY,
 };
 use bitfun_agent_runtime::user_questions::USER_INPUT_AVAILABLE_CONTEXT_KEY;
+use bitfun_events::agentic::SubagentCompletionStatus;
 use bitfun_runtime_ports::{
+    AgentDialogPrependedReminder, AgentDialogTurnPort, AgentDialogTurnRequest,
     AgentSessionWorkspaceBinding, AgentThreadGoalDeliveryKind, AgentThreadGoalDeliveryRequest,
     DelegationPolicy, PermissionDelegationContext, PermissionRuntimeCeiling, RemoteExecPort,
     SessionStoragePathRequest, SessionStorePort, SubagentContextMode, TerminalPort, ThreadGoal,
@@ -237,6 +266,8 @@ pub(crate) struct SubagentExecutionRequest {
     pub(crate) permission_runtime_ceiling: PermissionRuntimeCeiling,
     /// Execution policy for the child subagent session being launched.
     pub(crate) delegation_policy: DelegationPolicy,
+    /// When false, creates an ephemeral subagent session that is not persisted.
+    pub(crate) run_in_background: bool,
     /// Pins an immutable external generation from Task validation until the
     /// queued or running invocation reaches a terminal state.
     pub(crate) external_generation_lease:
@@ -326,6 +357,7 @@ fn build_subagent_session_relationship(
     parent_info: Option<&SubagentParentInfo>,
     agent_type: &str,
     continuation_policy: SessionContinuationPolicy,
+    parent_depth: Option<u32>,
 ) -> SessionRelationship {
     SessionRelationship {
         kind: Some(SessionRelationshipKind::Subagent),
@@ -336,6 +368,7 @@ fn build_subagent_session_relationship(
         parent_tool_call_id: parent_info.map(|info| info.tool_call_id.clone()),
         subagent_type: Some(agent_type.to_string()),
         continuation_policy: Some(continuation_policy),
+        depth: Some(parent_depth.map(|d| d + 1).unwrap_or(1)),
     }
 }
 
@@ -387,6 +420,7 @@ fn subagent_parent_info_from_relationship(
         session_id: parent_session_id.to_string(),
         dialog_turn_id: parent_dialog_turn_id.to_string(),
         tool_call_id: parent_tool_call_id.to_string(),
+        depth: relationship.depth,
     })
 }
 
@@ -757,7 +791,7 @@ impl SubagentTimeoutHandle {
 
 /// Conversation coordinator
 pub struct ConversationCoordinator {
-    session_manager: Arc<SessionManager>,
+    pub(crate) session_manager: Arc<SessionManager>,
     execution_engine: Arc<ExecutionEngine>,
     tool_pipeline: Arc<ToolPipeline>,
     event_queue: Arc<EventQueue>,
@@ -789,6 +823,8 @@ pub struct ConversationCoordinator {
     thread_goal_runtime: Arc<ThreadGoalRuntime>,
     terminal_port: OnceLock<Arc<dyn TerminalPort>>,
     remote_exec_port: OnceLock<Arc<dyn RemoteExecPort>>,
+    /// R-003: In-memory session tree for parent-child relationship tracking.
+    session_tree: Arc<SessionTreeManager>,
 }
 
 impl ConversationCoordinator {
@@ -1363,6 +1399,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             thread_goal_runtime: Arc::new(ThreadGoalRuntime::new()),
             terminal_port: OnceLock::new(),
             remote_exec_port: OnceLock::new(),
+            session_tree: Arc::new(SessionTreeManager::new(64)),
         }
     }
 
@@ -1388,6 +1425,11 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
 
     pub fn remote_exec_port(&self) -> Option<Arc<dyn RemoteExecPort>> {
         self.remote_exec_port.get().map(Arc::clone)
+    }
+
+    /// R-003: Access the in-memory session tree manager.
+    pub fn session_tree(&self) -> &Arc<SessionTreeManager> {
+        &self.session_tree
     }
 
     pub(super) fn execution_cancel_token_for_dialog_turn(
@@ -1556,6 +1598,14 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
         // resolve to a different effective storage path and double-writing can leave
         // metadata/turn files split across two locations.
 
+        // Sync context window from AI config after session creation.
+        // SessionConfig::default() hardcodes max_context_tokens: 128128,
+        // but the selected model may support more (e.g. 1M for DeepSeek).
+        let _ = self
+            .session_manager
+            .refresh_session_context_window(&session.session_id)
+            .await;
+
         self.emit_event(AgenticEvent::SessionCreated {
             session_id: session.session_id.clone(),
             session_name: session.session_name.clone(),
@@ -1588,6 +1638,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             agent_type,
             config,
             created_by,
+            false,
         )
         .await
     }
@@ -1685,6 +1736,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                 workspace_hostname: None,
                 unread_completion: None,
                 needs_user_attention: None,
+                runtime_state: None,
             };
             if let Err(e) = persistence_manager
                 .create_session_metadata_if_absent(&workspace_path_buf, &metadata)
@@ -2023,14 +2075,20 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
         agent_type: String,
         config: SessionConfig,
         created_by: Option<String>,
+        is_ephemeral: bool,
     ) -> BitFunResult<Session> {
+        let kind = if is_ephemeral {
+            SessionKind::EphemeralSubagent
+        } else {
+            SessionKind::Subagent
+        };
         self.create_hidden_agent_session(
             session_id,
             session_name,
             agent_type,
             config,
             created_by,
-            SessionKind::Subagent,
+            kind,
         )
         .await
     }
@@ -2479,7 +2537,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             .ok_or_else(|| BitFunError::NotFound(format!("Session not found: {session_id}")))?;
         if matches!(
             session.kind,
-            SessionKind::Subagent | SessionKind::EphemeralChild
+            SessionKind::Subagent | SessionKind::EphemeralChild | SessionKind::EphemeralSubagent
         ) {
             return Err(BitFunError::Validation(
                 "Thread goals are only available for main sessions".to_string(),
@@ -5204,7 +5262,9 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             Some(target_session_id) => match self.session_manager.get_session(&target_session_id) {
                 Some(session) => {
                     if session.kind != session_kind {
-                        let error = if session_kind == SessionKind::Subagent {
+                        let error = if session_kind == SessionKind::Subagent
+                            || session_kind == SessionKind::EphemeralSubagent
+                        {
                             BitFunError::Validation(format!(
                                 "Subagent execution target must be a subagent session: {}",
                                 target_session_id
@@ -5295,6 +5355,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                     subagent_parent_info.as_ref(),
                     &logical_agent_type,
                     continuation_policy,
+                    subagent_parent_info.as_ref().and_then(|info| info.depth),
                 ),
             )
             .await
@@ -5305,6 +5366,14 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             )
             .await;
             return Err(error);
+        }
+
+        // R-003: Register in memory tree
+        if let Some(ref parent_info) = subagent_parent_info {
+            let child_depth = parent_info.depth.map(|d| d + 1).unwrap_or(1);
+            let _ = self
+                .session_tree
+                .register_child(&parent_info.session_id, &session_id, child_depth);
         }
 
         // Register timeout handle so it can be adjusted at runtime.
@@ -6597,7 +6666,11 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                             request.delegation_policy,
                         ),
                         prompt_cache_source_session_id: None,
-                        session_kind: SessionKind::Subagent,
+                        session_kind: if request.run_in_background {
+                            SessionKind::Subagent
+                        } else {
+                            SessionKind::EphemeralSubagent
+                        },
                         emit_lifecycle_events: true,
                         prepared_session_created: false,
                         external_generation_lease: request.external_generation_lease,
@@ -6676,7 +6749,11 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                         request.delegation_policy,
                     ),
                     prompt_cache_source_session_id: None,
-                    session_kind: SessionKind::Subagent,
+                    session_kind: if request.run_in_background {
+                        SessionKind::Subagent
+                    } else {
+                        SessionKind::EphemeralSubagent
+                    },
                     emit_lifecycle_events: true,
                     prepared_session_created: false,
                     external_generation_lease: request.external_generation_lease,
@@ -6760,7 +6837,11 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                         request.delegation_policy,
                     ),
                     prompt_cache_source_session_id: Some(snapshot.parent_session_id),
-                    session_kind: SessionKind::Subagent,
+                    session_kind: if request.run_in_background {
+                        SessionKind::Subagent
+                    } else {
+                        SessionKind::EphemeralSubagent
+                    },
                     emit_lifecycle_events: true,
                     prepared_session_created: false,
                     external_generation_lease: request.external_generation_lease,
@@ -6783,7 +6864,9 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                         target_session_id
                     ))
                 })?;
-            if session.kind != SessionKind::Subagent {
+            if session.kind != SessionKind::Subagent
+                && session.kind != SessionKind::EphemeralSubagent
+            {
                 return Err(BitFunError::Validation(format!(
                     "Subagent execution target must be a subagent session: {}",
                     target_session_id
@@ -7017,6 +7100,15 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
     ) -> BitFunResult<String> {
         self.background_subagent_outcomes
             .resolve_agent_id(parent_session_id, agent_id)
+            .await
+    }
+
+    pub(crate) async fn list_background_subagents(
+        &self,
+        parent_session_id: &str,
+    ) -> BitFunResult<Vec<BackgroundTaskRecord>> {
+        self.background_subagent_outcomes
+            .list_records(parent_session_id)
             .await
     }
 
@@ -7281,6 +7373,11 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             );
             let background_subagent_tasks = self.background_subagent_tasks.clone();
             let background_subagent_outcomes = self.background_subagent_outcomes.clone();
+            let event_queue = self.event_queue.clone();
+            let agent_type = request.agent_type.clone();
+            let subagent_parent_info_for_emit = subagent_parent_info.clone();
+            let subagent_session_id_for_emit = subagent_session_id.clone();
+            let subagent_dialog_turn_id_for_emit = subagent_dialog_turn_id.clone();
 
             tokio::spawn(async move {
                 let result = match parent_cancel_token.as_ref() {
@@ -7314,6 +7411,66 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                 background_subagent_outcomes
                     .complete(task_pk, result.as_ref())
                     .await;
+
+                let (completion_status, output_text) = match &result {
+                    Ok(sr) => {
+                        let status = match sr.status {
+                            SubagentResultStatus::Completed => {
+                                SubagentCompletionStatus::Completed
+                            }
+                            SubagentResultStatus::PartialTimeout => {
+                                SubagentCompletionStatus::PartialTimeout
+                            }
+                        };
+                        (status, Some(sr.text.clone()))
+                    }
+                    Err(_) => (SubagentCompletionStatus::Failed, None),
+                };
+                let _ = event_queue
+                    .enqueue(
+                        AgenticEvent::SubagentTurnCompleted {
+                            session_id: subagent_session_id_for_emit.clone(),
+                            subagent_dialog_turn_id: subagent_dialog_turn_id_for_emit.clone(),
+                            parent_session_id: subagent_parent_info_for_emit.session_id.clone(),
+                            parent_dialog_turn_id: subagent_parent_info_for_emit
+                                .dialog_turn_id
+                                .clone(),
+                            parent_tool_call_id: subagent_parent_info_for_emit
+                                .tool_call_id
+                                .clone(),
+                            agent_type: Some(agent_type.clone()),
+                            status: completion_status,
+                            output_text: output_text.clone(),
+                        },
+                        Some(EventPriority::Normal),
+                    )
+                    .await;
+                let _ = scheduler_for_cancel
+                    .submit_dialog_turn(AgentDialogTurnRequest {
+                        session_id: subagent_parent_info_for_emit.session_id.clone(),
+                        message: output_text
+                            .as_deref()
+                            .unwrap_or("(no output)")
+                            .to_string(),
+                        original_message: None,
+                        turn_id: None,
+                        agent_type: agent_type.clone(),
+                        workspace_path: None,
+                        remote_connection_id: None,
+                        remote_ssh_host: None,
+                        policy: DialogSubmissionPolicy::for_source(
+                            DialogTriggerSource::AgentSession,
+                        ),
+                        reply_route: None,
+                        prepended_reminders: vec![AgentDialogPrependedReminder {
+                            kind: "task_subagent_result".to_string(),
+                            text: "Background subagent task completed".to_string(),
+                        }],
+                        attachments: Vec::new(),
+                        metadata: serde_json::Map::new(),
+                    })
+                    .await;
+
                 background_subagent_tasks.remove(&task_pk);
             });
 
@@ -7351,6 +7508,11 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
         );
         let background_subagent_tasks = self.background_subagent_tasks.clone();
         let background_subagent_outcomes = self.background_subagent_outcomes.clone();
+        let event_queue = self.event_queue.clone();
+        let agent_type = request.agent_type.clone();
+        let subagent_parent_info_for_emit = subagent_parent_info.clone();
+        let subagent_session_id_for_emit = subagent_session_id.clone();
+        let subagent_dialog_turn_id_for_emit = subagent_dialog_turn_id.clone();
 
         tokio::spawn(async move {
             let result = coordinator
@@ -7373,6 +7535,68 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             background_subagent_outcomes
                 .complete(task_pk, result.as_ref())
                 .await;
+
+            let (completion_status, output_text) = match &result {
+                Ok(sr) => {
+                    let status = match sr.status {
+                        SubagentResultStatus::Completed => {
+                            SubagentCompletionStatus::Completed
+                        }
+                        SubagentResultStatus::PartialTimeout => {
+                            SubagentCompletionStatus::PartialTimeout
+                        }
+                    };
+                    (status, Some(sr.text.clone()))
+                }
+                Err(_) => (SubagentCompletionStatus::Failed, None),
+            };
+            let _ = event_queue
+                .enqueue(
+                    AgenticEvent::SubagentTurnCompleted {
+                        session_id: subagent_session_id_for_emit.clone(),
+                        subagent_dialog_turn_id: subagent_dialog_turn_id_for_emit.clone(),
+                        parent_session_id: subagent_parent_info_for_emit.session_id.clone(),
+                        parent_dialog_turn_id: subagent_parent_info_for_emit
+                            .dialog_turn_id
+                            .clone(),
+                        parent_tool_call_id: subagent_parent_info_for_emit
+                            .tool_call_id
+                            .clone(),
+                        agent_type: Some(agent_type.clone()),
+                        status: completion_status,
+                        output_text: output_text.clone(),
+                    },
+                    Some(EventPriority::Normal),
+                )
+                .await;
+            if let Some(scheduler) = get_global_scheduler() {
+                let _ = scheduler
+                    .submit_dialog_turn(AgentDialogTurnRequest {
+                        session_id: subagent_parent_info_for_emit.session_id.clone(),
+                        message: output_text
+                            .as_deref()
+                            .unwrap_or("(no output)")
+                            .to_string(),
+                        original_message: None,
+                        turn_id: None,
+                        agent_type: agent_type.clone(),
+                        workspace_path: None,
+                        remote_connection_id: None,
+                        remote_ssh_host: None,
+                        policy: DialogSubmissionPolicy::for_source(
+                            DialogTriggerSource::AgentSession,
+                        ),
+                        reply_route: None,
+                        prepended_reminders: vec![AgentDialogPrependedReminder {
+                            kind: "task_subagent_result".to_string(),
+                            text: "Background subagent task completed".to_string(),
+                        }],
+                        attachments: Vec::new(),
+                        metadata: serde_json::Map::new(),
+                    })
+                    .await;
+            }
+
             background_subagent_tasks.remove(&task_pk);
         });
 
@@ -7838,6 +8062,12 @@ fn runtime_session_time_ms(time: std::time::SystemTime) -> u64 {
 }
 
 fn runtime_session_summary(session: SessionSummary) -> bitfun_runtime_ports::AgentSessionSummary {
+    let status = Some(match &session.state {
+        SessionState::Idle => "idle",
+        SessionState::Processing { .. } => "active",
+        SessionState::Error { .. } => "error",
+    }
+    .to_string());
     bitfun_runtime_ports::AgentSessionSummary {
         session_id: session.session_id,
         session_name: session.session_name,
@@ -7848,6 +8078,8 @@ fn runtime_session_summary(session: SessionSummary) -> bitfun_runtime_ports::Age
         turn_count: session.turn_count,
         created_at_ms: runtime_session_time_ms(session.created_at),
         last_active_at_ms: runtime_session_time_ms(session.last_activity_at),
+        parent_session_id: session.parent_session_id,
+        status,
     }
 }
 
@@ -7925,12 +8157,30 @@ impl bitfun_runtime_ports::AgentSessionManagementPort for ConversationCoordinato
             )
         })?;
 
+        // R-004: Lazily populate the in-memory session tree from persisted
+        // metadata on first list so that parent-child relationships are visible.
+        {
+            let metadata_list = self
+                .session_manager
+                .persistence_manager()
+                .list_session_metadata_including_internal(&effective_storage_path)
+                .await
+                .unwrap_or_default();
+            self.session_tree.load_from_sessions(&metadata_list);
+        }
+
         self.list_sessions(&effective_storage_path)
             .await
             .map(|sessions| {
                 sessions
                     .into_iter()
-                    .map(runtime_session_summary)
+                    .map(|mut summary| {
+                        // Populate parent_session_id from the session tree if available.
+                        if summary.parent_session_id.is_none() {
+                            summary.parent_session_id = self.session_tree.get_parent(&summary.session_id);
+                        }
+                        runtime_session_summary(summary)
+                    })
                     .collect::<Vec<_>>()
             })
             .map_err(|error| {
@@ -8138,6 +8388,8 @@ impl bitfun_agent_runtime::sdk::AgentSessionRestorePort for ConversationCoordina
                 turn_count: session.dialog_turn_ids.len(),
                 created_at_ms: runtime_session_time_ms(session.created_at),
                 last_active_at_ms: runtime_session_time_ms(session.last_activity_at),
+                parent_session_id: None,
+                status: None,
             },
             state: session.state,
         })
@@ -9302,6 +9554,7 @@ mod tests {
             None,
             &logical_type,
             SessionContinuationPolicy::FreshOnly,
+            None,
         );
         assert_eq!(relationship.subagent_type.as_deref(), Some("Reviewer"));
         assert_eq!(
@@ -9359,6 +9612,7 @@ mod tests {
             parent_tool_call_id: None,
             subagent_type: None,
             continuation_policy: None,
+            depth: None,
         };
 
         assert!(super::session_lineage_matches_parent(
@@ -9388,6 +9642,7 @@ mod tests {
             parent_tool_call_id: Some("task-tool-call".to_string()),
             subagent_type: Some("Explore".to_string()),
             continuation_policy: None,
+            depth: None,
         };
 
         assert_eq!(
@@ -9417,6 +9672,7 @@ mod tests {
             parent_tool_call_id: Some("task-tool-call".to_string()),
             subagent_type: Some("Explore".to_string()),
             continuation_policy: None,
+            depth: None,
         };
 
         assert!(super::subagent_parent_info_from_relationship(Some(&relationship)).is_none());
@@ -10209,6 +10465,7 @@ mod tests {
                 session_id: parent_session.session_id.clone(),
                 dialog_turn_id: "parent-turn".to_string(),
                 tool_call_id: "task-tool".to_string(),
+                depth: None,
             },
             context: HashMap::from([(
                 AUTO_APPROVE_ASK_CONTEXT_KEY.to_string(),
@@ -10220,6 +10477,7 @@ mod tests {
             ])
             .expect("test ceiling should be valid"),
             delegation_policy: DelegationPolicy::top_level().spawn_child(),
+            run_in_background: true,
             external_generation_lease: None,
         };
 
@@ -10273,10 +10531,12 @@ mod tests {
                 session_id: parent_session.session_id.clone(),
                 dialog_turn_id: "parent-turn".to_string(),
                 tool_call_id: "task-tool".to_string(),
+                depth: None,
             },
             context: HashMap::new(),
             permission_runtime_ceiling: PermissionRuntimeCeiling::default(),
             delegation_policy: DelegationPolicy::top_level().spawn_child(),
+            run_in_background: true,
             external_generation_lease: None,
         };
 
@@ -10345,10 +10605,12 @@ mod tests {
                 session_id: parent_session.session_id.clone(),
                 dialog_turn_id: "parent-turn".to_string(),
                 tool_call_id: "task-tool".to_string(),
+                depth: None,
             },
             context: HashMap::new(),
             permission_runtime_ceiling: PermissionRuntimeCeiling::default(),
             delegation_policy: DelegationPolicy::top_level().spawn_child(),
+            run_in_background: false,
             external_generation_lease: None,
         };
 
@@ -10388,10 +10650,12 @@ mod tests {
                 session_id: parent_session.session_id.clone(),
                 dialog_turn_id: "parent-turn".to_string(),
                 tool_call_id: "task-tool".to_string(),
+                depth: None,
             },
             context: HashMap::new(),
             permission_runtime_ceiling: PermissionRuntimeCeiling::default(),
             delegation_policy: DelegationPolicy::top_level().spawn_child(),
+            run_in_background: false,
             external_generation_lease: None,
         };
 

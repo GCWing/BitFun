@@ -1267,7 +1267,7 @@ pub async fn create_session(
     let config = request
         .config
         .map(|c| SessionConfig {
-            max_context_tokens: c.max_context_tokens.unwrap_or(128128),
+            max_context_tokens: c.max_context_tokens.unwrap_or(1_048_576),
             auto_compact: c.auto_compact.unwrap_or(true),
             enable_tools: c.enable_tools.unwrap_or(true),
             safe_mode: c.safe_mode.unwrap_or(true),
@@ -1289,7 +1289,10 @@ pub async fn create_session(
         });
 
     let session_kind = request.session_kind.unwrap_or_default();
-    let session = if matches!(session_kind, SessionKind::Subagent) {
+    let session = if matches!(
+        session_kind,
+        SessionKind::Subagent | SessionKind::EphemeralSubagent
+    ) {
         coordinator
             .create_hidden_subagent_session_with_workspace(
                 request.session_id,

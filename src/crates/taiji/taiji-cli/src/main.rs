@@ -9,13 +9,14 @@ use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result};
 use clap::{Parser, Subcommand};
-use tracing::{debug, info, warn};
+use tracing::{debug, error, info, warn};
 
 use taiji_engine::compliance;
 use taiji_engine::config::PipelineConfig;
 use taiji_engine::factory::NodeFactory;
 use taiji_engine::node::{ComputeNode, NodeConfig};
 use taiji_engine::pipeline::Pipeline;
+use taiji_engine::safe_json;
 use taiji_engine::store::StateStore;
 use taiji_engine::types::signal::Signal;
 use taiji_engine::types::tick::TickData;
@@ -198,6 +199,15 @@ fn run_pipeline(
         .with_context(|| format!("Failed to read config file: {}", config_path.display()))?;
     let config = PipelineConfig::from_yaml(&yaml_str)
         .map_err(|e| anyhow::anyhow!("Failed to parse config: {}", e))?;
+
+    // P1-8: Verify YAML does not exceed depth limit (defense-in-depth).
+    if let Err(e) = safe_json::from_yaml_str_limited::<serde_json::Value>(&yaml_str) {
+        error!("Config YAML depth check failed: {}", e);
+        return Err(anyhow::anyhow!(
+            "Config YAML exceeds depth limit: {}",
+            e
+        ));
+    }
 
     info!("Pipeline: {} v{}", config.name, config.version);
     debug!("  bar_gen: {:?}", config.bar_gen.time_freqs);
@@ -387,8 +397,10 @@ fn run_pipeline(
 fn run_backtest(config_path: &PathBuf, csv_path: &Option<PathBuf>, parallel: bool) -> Result<()> {
     let yaml_str = std::fs::read_to_string(config_path)
         .with_context(|| format!("Failed to read backtest config: {}", config_path.display()))?;
-    let mut config: taiji_backtest::BacktestConfig = serde_yaml::from_str(&yaml_str)
-        .map_err(|e| anyhow::anyhow!("Failed to parse backtest config: {}", e))?;
+    // P1-8: Depth-limited YAML deserialization.
+    let mut config: taiji_backtest::BacktestConfig =
+        safe_json::from_yaml_str_limited(&yaml_str)
+            .map_err(|e| anyhow::anyhow!("Failed to parse backtest config: {}", e))?;
     config.pipeline_template = resolve_relative(&config.pipeline_template, config_path);
 
     if parallel {
@@ -466,6 +478,11 @@ fn run_reload_config(config_path: &PathBuf) -> Result<()> {
         .with_context(|| format!("Failed to read config file: {}", config_path.display()))?;
     let config = PipelineConfig::from_yaml(&yaml_str)
         .map_err(|e| anyhow::anyhow!("Failed to parse config: {}", e))?;
+
+    // P1-8: Verify YAML depth.
+    if let Err(e) = safe_json::from_yaml_str_limited::<serde_json::Value>(&yaml_str) {
+        warn!("Config YAML depth check failed: {}", e);
+    }
 
     info!("Reload config: {} v{}", config.name, config.version);
     debug!("  bar_gen modes: {:?}", config.bar_gen.modes);

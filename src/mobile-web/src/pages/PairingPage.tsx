@@ -171,7 +171,7 @@ const PairingPage: React.FC<PairingPageProps> = ({ onPaired }) => {
     const passwordValue = providedPassword;
     const autoReconnect = options?.autoReconnect === true;
     // Prefer the explicit installId from the caller; fall back to the stable
-    // localStorage-backed id. Do not close over React state here — that used
+    // localStorage-backed id. Do not close over React state here 鈥?that used
     // to recreate this callback and re-trigger bootstrap side effects.
     const currentInstallId = options?.installId || getOrCreateInstallId();
     const activeLockUntil = lockUntilRef.current;
@@ -367,7 +367,7 @@ const PairingPage: React.FC<PairingPageProps> = ({ onPaired }) => {
   attemptPairRef.current = attemptPair;
 
   // Mount-once bootstrap: restore form fields and optionally auto-reconnect.
-  // Must NOT depend on `attemptPair` identity — a later callback recreation
+  // Must NOT depend on `attemptPair` identity 鈥?a later callback recreation
   // used to reset status to `pairing` without starting a new request, which
   // left the page spinning forever after a fast reconnect failure.
   useEffect(() => {
@@ -382,7 +382,7 @@ const PairingPage: React.FC<PairingPageProps> = ({ onPaired }) => {
       localStorage.removeItem(MOBILE_LOCK_UNTIL_KEY);
       localStorage.removeItem(MOBILE_FAILURE_COUNT_KEY);
     }
-    // Account mode always needs a password — never auto-reconnect without it.
+    // Account mode always needs a password 鈥?never auto-reconnect without it.
     const shouldAutoReconnect = !requiresAccountAuth
       && !!savedUserId
       && !!currentInstallId

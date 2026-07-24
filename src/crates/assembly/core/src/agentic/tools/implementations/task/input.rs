@@ -5,6 +5,8 @@ pub(super) enum TaskAction {
     Spawn,
     SendInput,
     Cancel,
+    List,
+    History,
 }
 
 impl TaskAction {
@@ -26,8 +28,10 @@ impl TaskAction {
             "spawn" => Ok(Self::Spawn),
             "send_input" => Ok(Self::SendInput),
             "cancel" => Ok(Self::Cancel),
+            "list" => Ok(Self::List),
+            "history" => Ok(Self::History),
             other => Err(BitFunError::tool(format!(
-                "action must be one of: spawn, send_input, cancel; got '{}'",
+                "action must be one of: spawn, send_input, cancel, list, history; got '{}'",
                 other
             ))),
         }
@@ -59,6 +63,8 @@ impl TaskAction {
             Self::Spawn => "spawn",
             Self::SendInput => "send_input",
             Self::Cancel => "cancel",
+            Self::List => "list",
+            Self::History => "history",
         }
     }
 }
@@ -229,6 +235,80 @@ impl TaskTool {
                     input,
                     &[
                         "prompt",
+                        "fork_context",
+                        "subagent_type",
+                        "model_id",
+                        "run_in_background",
+                        "retry",
+                        "auto_retry",
+                        "retry_coverage",
+                    ],
+                    action,
+                )?;
+
+                Ok(TaskInvocation {
+                    action,
+                    description: None,
+                    prompt: None,
+                    context_mode: SubagentContextMode::Fresh,
+                    target_agent_id,
+                    subagent_type: None,
+                    model_id: None,
+                    inherit_parent_model: false,
+                    timeout_seconds: None,
+                    run_in_background: false,
+                    is_retry: false,
+                    requested_auto_retry: false,
+                })
+            }
+            TaskAction::List => {
+                Self::ensure_fields_absent(
+                    input,
+                    &[
+                        "agent_id",
+                        "prompt",
+                        "description",
+                        "fork_context",
+                        "subagent_type",
+                        "model_id",
+                        "run_in_background",
+                        "retry",
+                        "auto_retry",
+                        "retry_coverage",
+                    ],
+                    action,
+                )?;
+
+                Ok(TaskInvocation {
+                    action,
+                    description: None,
+                    prompt: None,
+                    context_mode: SubagentContextMode::Fresh,
+                    target_agent_id: None,
+                    subagent_type: None,
+                    model_id: None,
+                    inherit_parent_model: false,
+                    timeout_seconds: None,
+                    run_in_background: false,
+                    is_retry: false,
+                    requested_auto_retry: false,
+                })
+            }
+            TaskAction::History => {
+                let target_agent_id =
+                    Self::optional_trimmed_string(input, "agent_id")?.or_else(|| {
+                        input
+                            .get("session_id")
+                            .and_then(Value::as_str)
+                            .map(str::trim)
+                            .filter(|s| !s.is_empty())
+                            .map(String::from)
+                    });
+                Self::ensure_fields_absent(
+                    input,
+                    &[
+                        "prompt",
+                        "description",
                         "fork_context",
                         "subagent_type",
                         "model_id",

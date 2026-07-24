@@ -20,6 +20,12 @@ pub struct SubagentParentInfo {
     pub session_id: String,
     #[serde(rename = "dialogTurnId")]
     pub dialog_turn_id: String,
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "depth"
+    )]
+    pub depth: Option<u32>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -64,6 +70,16 @@ pub struct DeepReviewQueueState {
     pub max_queue_wait_seconds: Option<u64>,
     #[serde(default)]
     pub session_concurrency_high: bool,
+}
+
+/// 子Agent完成状态。与 SubagentResultStatus 一一对应。
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "snake_case")]
+pub enum SubagentCompletionStatus {
+    Completed,
+    Failed,
+    Cancelled,
+    PartialTimeout,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -136,6 +152,19 @@ pub enum AgenticEvent {
         /// Resolved model selector stored on the child session.
         #[serde(skip_serializing_if = "Option::is_none")]
         model_id: Option<String>,
+    },
+
+    /// 子Agent turn 完成时发射
+    SubagentTurnCompleted {
+        session_id: String,
+        subagent_dialog_turn_id: String,
+        parent_session_id: String,
+        parent_dialog_turn_id: String,
+        parent_tool_call_id: String,
+        agent_type: Option<String>,
+        status: SubagentCompletionStatus,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        output_text: Option<String>,
     },
 
     DialogTurnCompleted {
@@ -342,6 +371,15 @@ pub enum AgenticEvent {
         /// Why the migration happened, e.g. `"model_disabled"` or
         /// `"model_deleted"`.
         reason: String,
+    },
+
+    /// Emitted when review propagation detects that a subagent has completed
+    /// and the parent session should trigger a review cycle (DeepReview or
+    /// custom review). Frontend handles: notification + tree node update.
+    ReviewPropagationNeeded {
+        parent_session_id: String,
+        child_session_id: String,
+        child_agent_type: String,
     },
 }
 
@@ -551,6 +589,7 @@ impl AgenticEvent {
             | Self::ImageAnalysisCompleted { session_id, .. }
             | Self::DialogTurnStarted { session_id, .. }
             | Self::SubagentSessionLinked { session_id, .. }
+            | Self::SubagentTurnCompleted { session_id, .. }
             | Self::DialogTurnCompleted { session_id, .. }
             | Self::TokenUsageUpdated { session_id, .. }
             | Self::ContextCompressionStarted { session_id, .. }
@@ -567,6 +606,7 @@ impl AgenticEvent {
             | Self::UserSteeringInjected { session_id, .. }
             | Self::DeepReviewQueueStateChanged { session_id, .. }
             | Self::SessionModelAutoMigrated { session_id, .. } => Some(session_id),
+            Self::ReviewPropagationNeeded { parent_session_id, .. } => Some(&parent_session_id),
             Self::SystemError { session_id, .. } => session_id.as_deref(),
         }
     }
@@ -593,6 +633,7 @@ impl AgenticEvent {
             | Self::ModelRoundCompleted { .. }
             | Self::TokenUsageUpdated { .. }
             | Self::DialogTurnCompleted { .. }
+            | Self::SubagentTurnCompleted { .. }
             | Self::ContextCompressionStarted { .. }
             | Self::ThreadGoalUpdated { .. }
             | Self::UserSteeringInjected { .. }
@@ -906,5 +947,12 @@ mod tests {
         assert_eq!(serialized["parent_tool_call_id"], "tool-1");
         assert_eq!(serialized["agent_type"], "GeneralPurpose");
         assert_eq!(serialized["model_id"], "fast");
+    }
+
+    #[test]
+    fn subagent_completion_status_serializes_snake_case() {
+        let status = SubagentCompletionStatus::PartialTimeout;
+        let json = serde_json::to_string(&status).unwrap();
+        assert_eq!(json, "\"partial_timeout\"");
     }
 }

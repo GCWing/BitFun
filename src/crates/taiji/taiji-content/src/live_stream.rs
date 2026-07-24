@@ -42,7 +42,9 @@ impl LiveStreamEngine {
             return Err("LiveStreamEngine already started".into());
         }
 
-        let mut cmd = Command::new("ffmpeg");
+        // P1-12: Use a hardcoded whitelist for the ffmpeg binary name.
+        let ffmpeg_bin = "ffmpeg";
+        let mut cmd = Command::new(ffmpeg_bin);
 
         cmd.arg("-y")
             .arg("-f")
@@ -84,7 +86,7 @@ impl LiveStreamEngine {
             self.width,
             self.height,
             self.fps,
-            self.rtmp_url
+            mask_rtmp_url(&self.rtmp_url)
         );
 
         Ok(())
@@ -164,6 +166,30 @@ impl LiveStreamEngine {
     }
 }
 
+/// Mask the stream key portion of an RTMP URL for safe logging.
+///
+/// RTMP URLs have the format `rtmp://host:port/app/stream_key`.
+/// The stream key is equivalent to a password — anyone with it can push
+/// video to the stream. This function replaces the last path segment
+/// with `***` so the URL is safe to include in log output.
+///
+/// Example: `rtmp://live.example.com/live/my-secret-key` → `rtmp://live.example.com/live/***`
+fn mask_rtmp_url(url: &str) -> String {
+    // Strip the protocol prefix
+    let rest = url
+        .strip_prefix("rtmp://")
+        .or_else(|| url.strip_prefix("rtmps://"))
+        .unwrap_or(url);
+    // Find the last '/' which separates app from stream key
+    if let Some(last_slash) = rest.rfind('/') {
+        let prefix = &url[..url.len() - (rest.len() - last_slash)];
+        format!("{}/***", prefix)
+    } else {
+        // No stream key segment; return as-is
+        url.to_string()
+    }
+}
+
 impl Drop for LiveStreamEngine {
     fn drop(&mut self) {
         let _ = self.stop();
@@ -238,5 +264,27 @@ mod tests {
         // that the engine doesn't panic on drop.
         let _ = engine.start();
         // engine goes out of scope → Drop::drop calls stop()
+    }
+
+    #[test]
+    fn test_mask_rtmp_url() {
+        assert_eq!(
+            mask_rtmp_url("rtmp://live.example.com/live/my-secret-key"),
+            "rtmp://live.example.com/live/***"
+        );
+        assert_eq!(
+            mask_rtmp_url("rtmp://localhost/app/stream"),
+            "rtmp://localhost/app/***"
+        );
+        // No stream key segment
+        assert_eq!(
+            mask_rtmp_url("rtmp://localhost"),
+            "rtmp://localhost"
+        );
+        // rtmps variant
+        assert_eq!(
+            mask_rtmp_url("rtmps://secure.example.com/live/key123"),
+            "rtmps://secure.example.com/live/***"
+        );
     }
 }

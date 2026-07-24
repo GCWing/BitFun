@@ -109,8 +109,9 @@ fn append_provider_group_tools(tools: &mut Vec<String>, provider_id: &'static st
 pub fn shared_coding_mode_tools() -> Vec<String> {
     let mut tools = vec![
         "Task".to_string(),
+        "SessionMessage".to_string(),
+        "SessionHistory".to_string(),
         "ListModels".to_string(),
-        "AgentWait".to_string(),
         "Read".to_string(),
         "view_image".to_string(),
         "analyze_image".to_string(),
@@ -140,6 +141,16 @@ pub fn shared_coding_mode_tools() -> Vec<String> {
         "PagePublish".to_string(),
     ];
     append_provider_group_tools(&mut tools, "core.canvas");
+    tools
+}
+
+/// 所有 SubAgent（内置 + ACP + 自定义）统一工具集。
+/// 包含 shared_coding_mode_tools() + SessionControl（裂变核心）。
+pub fn subagent_default_tools() -> Vec<String> {
+    let mut tools = shared_coding_mode_tools();
+    if !tools.contains(&"SessionControl".to_string()) {
+        tools.push("SessionControl".to_string());
+    }
     tools
 }
 

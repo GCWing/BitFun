@@ -4,6 +4,7 @@ use std::collections::HashMap;
 
 /// 数据源配置
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct DataSourceConfig {
     pub type_name: String,
     pub params: HashMap<String, serde_json::Value>,

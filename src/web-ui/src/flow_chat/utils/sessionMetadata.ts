@@ -29,7 +29,7 @@ const TOP_LEVEL_METADATA_KEYS = new Set([
 
 type SessionRelationshipInput = Pick<
   Session,
-  'sessionKind' | 'parentSessionId' | 'btwOrigin' | 'parentToolCallId' | 'subagentType'
+  'sessionKind' | 'parentSessionId' | 'btwOrigin' | 'parentToolCallId' | 'subagentType' | 'depth'
 >;
 
 export interface ResolvedSessionRelationship {
@@ -79,7 +79,7 @@ export function normalizeSessionRelationship(
   input?: Partial<SessionRelationshipInput> | null
 ): Pick<
   Session,
-  'sessionKind' | 'parentSessionId' | 'btwOrigin' | 'parentToolCallId' | 'subagentType'
+  'sessionKind' | 'parentSessionId' | 'btwOrigin' | 'parentToolCallId' | 'subagentType' | 'depth'
 > {
   const sessionKind = normalizeSessionKind(input?.sessionKind);
   const parentSessionId = normalizeString(
@@ -101,6 +101,7 @@ export function normalizeSessionRelationship(
       btwOrigin: undefined,
       parentToolCallId: undefined,
       subagentType: undefined,
+      depth: undefined,
     };
   }
 
@@ -117,6 +118,7 @@ export function normalizeSessionRelationship(
     btwOrigin: origin,
     parentToolCallId,
     subagentType,
+    depth: input?.depth,
   };
 }
 
@@ -149,7 +151,7 @@ export function deriveSessionRelationshipFromMetadata(
   metadata?: Pick<SessionMetadata, 'customMetadata' | 'relationship'> | null
 ): Pick<
   Session,
-  'sessionKind' | 'parentSessionId' | 'btwOrigin' | 'parentToolCallId' | 'subagentType'
+  'sessionKind' | 'parentSessionId' | 'btwOrigin' | 'parentToolCallId' | 'subagentType' | 'depth'
 > {
   const relationship = metadata?.relationship;
   const relationshipKind = normalizeSessionKind(relationship?.kind);
@@ -159,6 +161,7 @@ export function deriveSessionRelationshipFromMetadata(
       parentSessionId: normalizeString(relationship?.parentSessionId) ?? undefined,
       parentToolCallId: normalizeString(relationship?.parentToolCallId),
       subagentType: normalizeString(relationship?.subagentType),
+      depth: relationship?.depth ?? undefined,
       btwOrigin: {
         requestId: normalizeString(relationship?.parentRequestId),
         parentSessionId: normalizeString(relationship?.parentSessionId),
@@ -177,6 +180,7 @@ export function deriveSessionRelationshipFromMetadata(
     parentSessionId: customMetadata?.parentSessionId ?? undefined,
     parentToolCallId: normalizeString(customMetadata?.parentToolCallId),
     subagentType: normalizeString(customMetadata?.subagentType),
+    depth: undefined,
     btwOrigin:
       sessionKind !== 'normal'
         ? {

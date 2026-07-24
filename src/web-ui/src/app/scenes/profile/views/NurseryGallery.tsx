@@ -138,19 +138,19 @@ const NurseryGallery: React.FC = () => {
 
       {/* Template hero: panda + card side by side, bottom-aligned */}
       <div className="nursery-template-hero">
-        {/* Panda 鈥?hover independently, no card linkage */}
+        {/* Panda — hover independently, no card linkage */}
         <div className="nursery-template-panda">
           <img
             className="nursery-template-panda__img nursery-template-panda__img--default"
             src="/panda_full_1.png"
             alt=""
-            onError={(e) => { (e.target as HTMLImageElement).src = '/taiji-icon.png'; }}
+            onError={(e) => { (e.target as HTMLImageElement).src = '/Logo-ICON.png'; }}
           />
           <img
             className="nursery-template-panda__img nursery-template-panda__img--hover"
             src="/panda_full_2.png"
             alt=""
-            onError={(e) => { (e.target as HTMLImageElement).src = '/taiji-icon.png'; }}
+            onError={(e) => { (e.target as HTMLImageElement).src = '/Logo-ICON.png'; }}
           />
         </div>
 

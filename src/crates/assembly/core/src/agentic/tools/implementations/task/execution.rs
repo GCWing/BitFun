@@ -1,5 +1,10 @@
 use super::*;
 use crate::agentic::core::{SessionContinuationPolicy, SessionModelBindingPolicy};
+use crate::agentic::persistence::PersistenceManager;
+use crate::infrastructure::PathManager;
+use crate::service::session::SessionTranscriptExportOptions;
+use crate::service_agent_runtime::CoreServiceAgentRuntime;
+use std::sync::Arc;
 
 fn build_deep_review_subagent_context(
     role: DeepReviewSubagentRole,
@@ -146,6 +151,14 @@ impl TaskTool {
             .clone()
             .ok_or_else(|| BitFunError::tool("session_id is required in context".to_string()))?;
 
+        if invocation.action == TaskAction::List {
+            return Self::list_background_subagents(&session_id).await;
+        }
+
+        if invocation.action == TaskAction::History {
+            return Self::get_subagent_history(&session_id, invocation).await;
+        }
+
         if invocation.action == TaskAction::Cancel {
             return Self::cancel_background_runs(&session_id, invocation).await;
         }
@@ -185,6 +198,101 @@ impl TaskTool {
         }])
     }
 
+    async fn list_background_subagents(
+        parent_session_id: &str,
+    ) -> BitFunResult<Vec<ToolResult>> {
+        let coordinator = get_global_coordinator()
+            .ok_or_else(|| BitFunError::tool("coordinator not initialized".to_string()))?;
+        let records = coordinator
+            .list_background_subagents(parent_session_id)
+            .await?;
+
+        let tasks: Vec<Value> = records
+            .into_iter()
+            .map(|record| {
+                json!({
+                    "agent_id": record.agent_id,
+                    "session_id": record.child_session_id,
+                    "status": record.status.as_str(),
+                })
+            })
+            .collect();
+
+        Ok(vec![ToolResult::Result {
+            data: json!({
+                "action": "list",
+                "tasks": tasks,
+            }),
+            result_for_assistant: Some(format!(
+                "Found {} background subagent(s) for the current conversation.",
+                tasks.len()
+            )),
+            image_attachments: None,
+        }])
+    }
+
+    async fn get_subagent_history(
+        parent_session_id: &str,
+        invocation: TaskInvocation,
+    ) -> BitFunResult<Vec<ToolResult>> {
+        let target_session_id = if let Some(agent_id) = invocation.target_agent_id.as_deref() {
+            let coordinator = get_global_coordinator()
+                .ok_or_else(|| BitFunError::tool("coordinator not initialized".to_string()))?;
+            coordinator
+                .resolve_agent_id(parent_session_id, agent_id)
+                .await?
+        } else {
+            invocation
+                .target_agent_id
+                .clone()
+                .ok_or_else(|| {
+                    BitFunError::tool(
+                        "agent_id or session_id is required when action is history".to_string(),
+                    )
+                })?
+        };
+
+        let (_display_workspace, session_storage_dir) =
+            CoreServiceAgentRuntime::resolve_session_workspace_paths(&target_session_id)
+                .await
+                .ok_or_else(|| {
+                    BitFunError::NotFound(format!(
+                        "Workspace for session '{}' could not be resolved",
+                        target_session_id
+                    ))
+                })?;
+
+        let manager = PersistenceManager::new(Arc::new(PathManager::new()?))?;
+        let transcript = manager
+            .export_session_transcript(
+                &session_storage_dir,
+                &target_session_id,
+                &SessionTranscriptExportOptions {
+                    tools: true,
+                    tool_inputs: true,
+                    thinking: true,
+                    turns: None,
+                },
+            )
+            .await?;
+
+        Ok(vec![ToolResult::Result {
+            data: json!({
+                "action": "history",
+                "session_id": target_session_id,
+                "transcript_path": transcript.transcript_path,
+            }),
+            result_for_assistant: Some(format!(
+                "Transcript for session '{}' exported to '{}'. The index is on lines {}-{}. Read that range first, then use Grep or Read on that path for targeted navigation.",
+                target_session_id,
+                transcript.transcript_path,
+                transcript.index_range.start_line,
+                transcript.index_range.end_line
+            )),
+            image_attachments: None,
+        }])
+    }
+
     async fn run_subagent_invocation(
         &self,
         input: &Value,
@@ -196,6 +304,23 @@ impl TaskTool {
         Self::ensure_delegation_allowed(context)?;
         let coordinator = get_global_coordinator()
             .ok_or_else(|| BitFunError::tool("coordinator not initialized".to_string()))?;
+
+        // Hard guard: reject spawning if the current session has already reached
+        // the tree's maximum depth, preventing unbounded recursive subagent chains.
+        // Uses get_depth (current node depth) rather than subtree_depth (max
+        // descendant depth) to avoid false positives when a shallow session has
+        // deep descendants.
+        {
+            let tree = coordinator.session_tree();
+            let current_depth = tree.get_depth(&session_id).unwrap_or(0);
+            if current_depth >= tree.max_depth {
+                return Err(BitFunError::tool(format!(
+                    "Task depth limit reached: current depth {} >= max allowed depth {}. \
+                     Cannot spawn further subagents.",
+                    current_depth, tree.max_depth
+                )));
+            }
+        }
 
         let description = invocation.description.clone();
         let mut prompt = invocation.prompt.clone().ok_or_else(|| {
@@ -690,8 +815,9 @@ impl TaskTool {
         } = request;
         let parent_info = SubagentParentInfo {
             tool_call_id,
-            session_id,
+            session_id: session_id.clone(),
             dialog_turn_id,
+            depth: coordinator.session_tree().get_depth(&session_id),
         };
         let background_result = coordinator
             .start_background_subagent(
@@ -710,6 +836,7 @@ impl TaskTool {
                     context: subagent_context.unwrap_or_default(),
                     permission_runtime_ceiling,
                     delegation_policy: context.delegation_policy().spawn_child(),
+                    run_in_background: true,
                     external_generation_lease,
                 },
                 timeout_seconds,
@@ -774,6 +901,7 @@ impl TaskTool {
                 tool_call_id: tool_call_id.clone(),
                 session_id: session_id.clone(),
                 dialog_turn_id: dialog_turn_id.clone(),
+                depth: coordinator.session_tree().get_depth(&session_id),
             };
             let subagent_execution_started_at = Instant::now();
             debug!(
@@ -805,6 +933,7 @@ impl TaskTool {
                         context: subagent_context.clone().unwrap_or_default(),
                         permission_runtime_ceiling: permission_runtime_ceiling.clone(),
                         delegation_policy: context.delegation_policy().spawn_child(),
+                        run_in_background: false,
                         external_generation_lease: external_generation_lease.clone(),
                     },
                     context.cancellation_token(),

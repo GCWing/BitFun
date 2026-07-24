@@ -3,6 +3,7 @@ use std::path::PathBuf;
 
 /// FFmpeg compose config: frame input + audio input + subtitles + encoding parameters.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct ComposeConfig {
     /// PNG frame sequence directory (intermediate product, independently managed)
     pub frames_dir: PathBuf,

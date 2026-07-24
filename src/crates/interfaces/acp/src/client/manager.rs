@@ -1641,6 +1641,26 @@ impl AcpClientService {
             debug!("Registering ACP client tool: name={}", tool.name());
             registry.register_tool(tool);
         }
+
+        // --- R-001: 同步注册 ACP Agent 到 AgentRegistry ---
+        {
+            use bitfun_core::agentic::agents::{
+                AcpAgent, AgentCategory, AgentSource, SubAgentSource, get_agent_registry,
+            };
+
+            let agent_registry = get_agent_registry();
+            for (id, config) in configs.iter().filter(|(_, c)| c.enabled) {
+                let display_name = config.name.clone().unwrap_or_else(|| id.clone());
+                let agent = Arc::new(AcpAgent::new(id.clone(), display_name));
+                agent_registry.register_agent(
+                    agent,
+                    AgentCategory::SubAgent,
+                    AgentSource::External,
+                    Some(SubAgentSource::External),
+                    None,
+                );
+            }
+        }
     }
 
     async fn handle_permission_request(

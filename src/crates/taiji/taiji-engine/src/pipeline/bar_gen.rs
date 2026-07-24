@@ -56,6 +56,11 @@ impl PartialBar {
     }
 
     fn update(&mut self, price: f64, vol: f64, amount: f64, oi: Option<f64>, delta: f64) {
+        // P1-7: All values are already validated by update_tick, but guard here
+        // as defense-in-depth against NaN/Inf in bar aggregation.
+        if !price.is_finite() || !vol.is_finite() || !amount.is_finite() || !delta.is_finite() {
+            return;
+        }
         self.high = self.high.max(price);
         self.low = self.low.min(price);
         self.close = price;
@@ -120,10 +125,18 @@ impl BarGenerator {
     /// Process one tick. Returns all bars closed by this tick (sorted by Freq).
     pub fn update_tick(&mut self, tick: &TickData) -> Vec<(Freq, RawBar)> {
         let mut closed = Vec::new();
+
+        // P1-7: Reject NaN/Inf at data entry to prevent downstream computation poisoning.
+        // NaN propagates through all arithmetic ops (NaN + 1.0 = NaN), silently
+        // corrupting the entire DAG output. We filter here so that every downstream
+        // node is guaranteed finite inputs.
         let price = tick.last_price;
         let vol = tick.volume;
         let amount = tick.turnover;
-        let oi = if tick.open_interest > 0.0 {
+        if !price.is_finite() || !vol.is_finite() || !amount.is_finite() {
+            return closed;
+        }
+        let oi = if tick.open_interest > 0.0 && tick.open_interest.is_finite() {
             Some(tick.open_interest)
         } else {
             None

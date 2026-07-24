@@ -7,7 +7,7 @@ impl TaskTool {
             "description".to_string(),
             json!({
                 "type": "string",
-                "description": "A short (3-5 word) description of the task"
+                "description": "A short (3-5 word) description of the task. Use SessionControl (list) to discover sessions and SessionMessage to communicate with them."
             }),
         );
         properties.insert(
@@ -40,7 +40,7 @@ impl TaskTool {
             "action".to_string(),
             json!({
                 "type": "string",
-                "enum": ["spawn", "send_input", "cancel"],
+                "enum": ["spawn", "send_input", "cancel", "list", "history"],
                 "description": "The action to perform."
             }),
         );
@@ -60,7 +60,7 @@ impl TaskTool {
             "agent_id".to_string(),
             json!({
                 "type": "string",
-                "description": "Required for action='send_input' and action='cancel'."
+                "description": "Required for action='send_input' and action='cancel'. Also accepted for action='history'."
             }),
         );
         properties.insert(
@@ -91,6 +91,8 @@ Supported actions:
 - `spawn`: create and run a new subagent. The result contains an `agent_id` for future `send_input` or `cancel`.
 - `send_input`: continue an existing subagent. Provide `agent_id`, `description`, and `prompt`. Optionally provide `model_id` to switch the subagent model for this and later turns.
 - `cancel`: cancel a background subagent. Provide `agent_id`.
+- `list`: list all background subagents for the current conversation. Returns agent_id, session_id, and status for each.
+- `history`: read the conversation history of a specified subagent. Provide `agent_id` or `session_id`. Optionally provide `max_turns` to limit the number of turns returned.
 
 Two modes for action='spawn':
 The two modes are mutually exclusive: do not provide `subagent_type` when `fork_context=true`.
@@ -126,6 +128,9 @@ Usage notes:
 - When launching multiple non-read-only subagents in parallel, assign non-overlapping scopes and outputs so their file edits, commands, or external side effects do not conflict.
 - Treat subagent outputs as useful evidence, but verify details yourself before making edits or final claims that depend on exact code.
 - If an agent description mentions proactive use, consider it when relevant and use your judgment.
+- Use SessionControl (list) to discover subagent sessions.
+- Use SessionMessage to communicate with subagent sessions.
+- Use SessionHistory to export and inspect subagent transcripts.
 
 Examples (assume "example-reviewer" is present in the agent listing):
 <examples>

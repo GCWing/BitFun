@@ -234,7 +234,7 @@ export const ExportImageButton: React.FC<ExportImageButtonProps> = ({
             img.onload = () => resolve(img);
             img.onerror = reject;
             // Cache-bust to avoid stale decoded copies when re-exporting.
-            img.src = `/Logo-ICON.png?t=${Date.now()}`;
+            img.src = `/taiji-icon.png?t=${Date.now()}`;
           }),
           3_000,
           'Logo preload',

@@ -63,7 +63,10 @@ impl FfmpegComposer {
         let frame_input = frames_dir.join(&cfg.frame_pattern);
         let frame_input_str = frame_input.to_string_lossy();
 
-        let mut cmd = Command::new("ffmpeg");
+        // P1-12: Whitelist the ffmpeg binary name to prevent command injection
+        // via a tampered config that specifies a different binary.
+        let ffmpeg_bin = "ffmpeg";
+        let mut cmd = Command::new(ffmpeg_bin);
 
         // Basic input parameters
         cmd.arg("-y")

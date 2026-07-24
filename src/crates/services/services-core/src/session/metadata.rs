@@ -79,6 +79,7 @@ pub fn build_session_metadata(facts: SessionMetadataBuildFacts<'_>) -> SessionMe
         workspace_hostname: facts.workspace_hostname.map(str::to_string),
         unread_completion: existing.and_then(|value| value.unread_completion.clone()),
         needs_user_attention: existing.and_then(|value| value.needs_user_attention.clone()),
+        runtime_state: existing.and_then(|value| value.runtime_state.clone()),
     }
 }
 
@@ -90,7 +91,9 @@ fn build_session_relationship(
     let existing_custom_metadata = existing.and_then(|value| value.custom_metadata.as_ref());
 
     let kind = match session_kind {
-        SessionKind::Subagent => Some(SessionRelationshipKind::Subagent),
+        SessionKind::Subagent | SessionKind::EphemeralSubagent => {
+            Some(SessionRelationshipKind::Subagent)
+        }
         SessionKind::EphemeralChild => Some(SessionRelationshipKind::Btw),
         SessionKind::Standard => existing_relationship
             .as_ref()
@@ -151,6 +154,7 @@ fn build_session_relationship(
         parent_tool_call_id,
         subagent_type,
         continuation_policy,
+        depth: None,
     })
 }
 
@@ -428,6 +432,7 @@ mod tests {
             parent_tool_call_id: Some("tool".to_string()),
             subagent_type: Some("ReviewSecurity".to_string()),
             continuation_policy: Some(SessionContinuationPolicy::FreshOnly),
+            ..Default::default()
         };
 
         set_session_relationship(&mut metadata, relationship.clone());
@@ -543,6 +548,7 @@ mod tests {
                 parent_tool_call_id: Some("tool-1".to_string()),
                 subagent_type: Some("review".to_string()),
                 continuation_policy: None,
+                ..Default::default()
             })
         );
     }

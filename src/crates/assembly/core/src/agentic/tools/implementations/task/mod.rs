@@ -207,6 +207,19 @@ impl Tool for TaskTool {
                 .filter(|session_id| !session_id.is_empty())
                 .map(|session_id| format!("cancel:{session_id}"))
                 .ok_or_else(|| BitFunError::validation("session_id is required".to_string()))?,
+            TaskAction::List => "list".to_string(),
+            TaskAction::History => input
+                .get("agent_id")
+                .or_else(|| input.get("session_id"))
+                .and_then(Value::as_str)
+                .map(str::trim)
+                .filter(|id| !id.is_empty())
+                .map(|id| format!("history:{id}"))
+                .ok_or_else(|| {
+                    BitFunError::validation(
+                        "agent_id or session_id is required".to_string(),
+                    )
+                })?,
         };
         Ok(vec![PermissionIntent::new("task", vec![resource])])
     }
@@ -242,6 +255,13 @@ impl Tool for TaskTool {
                     }
                 })
                 .unwrap_or_else(|| "Sending input to task".to_string()),
+            Some(TaskAction::List) => "Listing background tasks".to_string(),
+            Some(TaskAction::History) => input
+                .get("agent_id")
+                .or_else(|| input.get("session_id"))
+                .and_then(Value::as_str)
+                .map(|id| format!("Getting history for task: {}", id))
+                .unwrap_or_else(|| "Getting task history".to_string()),
             Some(TaskAction::Spawn) | None => {
                 if let Some(description) = input.get("description").and_then(|v| v.as_str()) {
                     if options.verbose {

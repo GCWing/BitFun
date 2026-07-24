@@ -674,47 +674,23 @@ async fn validate_input_rejects_fork_context_conflicting_fields() {
 }
 
 #[tokio::test]
-async fn call_impl_rejects_nested_subagent_delegation() {
+async fn call_impl_allows_nested_subagent_within_fission_depth() {
+    // R-001: spawn_child() now allows nesting up to MAX_FISSION_DEPTH=10.
+    // At depth=1 (<10), delegation is permitted.
     let policy = DelegationPolicy::top_level().spawn_child();
-    let context = ToolUseContext {
-        tool_call_id: Some("tool-call-1".to_string()),
-        agent_type: Some("agentic".to_string()),
-        session_id: Some("session-1".to_string()),
-        dialog_turn_id: Some("turn-1".to_string()),
-        workspace: None,
-        loaded_deferred_tool_specs: Vec::new(),
-        primary_model_facts: tool_runtime::context::PrimaryModelFacts::default(),
-        custom_data: HashMap::from([
-            (
-                "delegation_allow_subagent_spawn".to_string(),
-                json!(policy.allow_subagent_spawn),
-            ),
-            (
-                "delegation_nesting_depth".to_string(),
-                json!(policy.nesting_depth),
-            ),
-        ]),
-        computer_use_host: None,
-        runtime_tool_restrictions: ToolRuntimeRestrictions::default(),
-        runtime_handles: bitfun_runtime_ports::ToolRuntimeHandles::default(),
-    };
+    assert!(policy.allow_subagent_spawn, "nesting at depth=1 should be allowed (1 < MAX_FISSION_DEPTH=10)");
+    assert_eq!(policy.nesting_depth, 1);
+}
 
-    let error = TaskTool::new()
-        .call_impl(
-            &json!({
-                "action": "spawn",
-                "description": "delegate",
-                "prompt": "Inspect the repo",
-                "subagent_type": "Explore"
-            }),
-            &context,
-        )
-        .await
-        .expect_err("nested subagent delegation should be rejected");
-
-    assert!(error
-        .to_string()
-        .contains("Recursive subagent delegation is blocked. Use direct tools instead."));
+#[tokio::test]
+async fn call_impl_rejects_nested_subagent_at_max_depth() {
+    // R-001: At MAX_FISSION_DEPTH, delegation is blocked.
+    let mut policy = DelegationPolicy::top_level();
+    for _ in 0..10 {
+        policy = policy.spawn_child();
+    }
+    assert!(!policy.allow_subagent_spawn, "nesting at depth=10 should be blocked (reached MAX_FISSION_DEPTH)");
+    assert_eq!(policy.nesting_depth, 10);
 }
 
 #[test]

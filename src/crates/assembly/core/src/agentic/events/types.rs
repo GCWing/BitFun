@@ -15,10 +15,16 @@ pub use bitfun_events::{
 
 // ============ Core layer AgenticEvent extension ============
 
-/// Core layer AgenticEvent
+/// Core layer AgenticEvent type alias.
 ///
-/// Used internally in core, contains full type information (SessionState)
-/// When sent to transport layer, it is converted to BaseAgenticEvent (using serde_json::Value)
+/// Currently an alias for `BaseAgenticEvent` (from `bitfun_events`). In earlier phases
+/// this was intended to wrap `BaseAgenticEvent` with core-specific extensions (e.g.,
+/// `SessionState`), but that enrichment now happens through re-exports rather than a
+/// newtype. If core-specific fields are needed in the future, replace this alias with
+/// a struct wrapping `BaseAgenticEvent`.
+///
+/// When sent to the transport layer, this is serialized as `BaseAgenticEvent`
+/// (using `serde_json::Value`).
 pub type AgenticEvent = BaseAgenticEvent;
 
 // ============ Helper conversion functions ============

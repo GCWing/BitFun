@@ -4,11 +4,10 @@
 //! `SubAgent` so it appears in the agent selector and can be targeted by
 //! `SessionControl` / `SessionMessage` for legion orchestration.
 
-use crate::agentic::agents::{Agent, UserContextPolicy};
+use crate::agentic::agents::{subagent_default_tools, Agent, UserContextPolicy};
 use async_trait::async_trait;
 
 /// A thin Agent wrapper around a single ACP client config.
-#[allow(dead_code)]
 pub struct AcpAgent {
     agent_id: String,
     display_name: String,
@@ -22,12 +21,7 @@ impl AcpAgent {
             // ACP prompt tool is registered in the global tool registry by
             // register_configured_tools() — do NOT add it to default_tools
             // here, or the tool name will appear twice in the model manifest.
-            default_tools: vec![
-                "Read".to_string(),
-                "Grep".to_string(),
-                "Glob".to_string(),
-                "LS".to_string(),
-            ],
+            default_tools: subagent_default_tools(),
             agent_id,
             display_name,
         }

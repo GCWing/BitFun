@@ -15,6 +15,9 @@ export interface FlowItem {
   id: string;
   type: 'text' | 'tool' | 'image-analysis' | 'thinking' | 'user-steering';
   timestamp: number;
+  /** TODO(tech-debt): This union is too wide — every concrete FlowItem subtype only
+   *  uses a subset of these statuses. Consider narrowing per-type via discriminated
+   *  union or a base `status` plus per-subtype status enums. */
   status: 'pending' | 'queued' | 'waiting' | 'preparing' | 'running' | 'streaming' | 'receiving' | 'completed' | 'cancelled' | 'rejected' | 'error' | 'analyzing' | 'pending_confirmation' | 'confirmed'; // Includes error, analyzing, and confirmation states.
   attemptId?: string;
   attemptIndex?: number;
@@ -387,6 +390,9 @@ export interface Session {
   /**
    * Optional parent session id for hierarchical sessions.
    * Used by /btw "side threads" and potentially other derived sessions.
+   *
+   * NOTE: This is a UI-local field derived from SessionRelationship; the backend
+   * SessionTreeNode uses `relationship.parent_session_id`. Keep in sync.
    */
   parentSessionId?: string;
 
@@ -401,6 +407,13 @@ export interface Session {
 
   /** Logical subagent id / type used to launch this hidden subagent session. */
   subagentType?: string;
+
+  /**
+   * Depth in session tree (root = 0, child = parent_depth + 1).
+   * NOTE: This is a UI-local cache derived from the backend SessionTreeManager.
+   * The backend assigns depth on registration; the UI mirrors it for nav rendering.
+   */
+  depth?: number;
 
   /** Whether `/goal` mode is active for this session. */
   goalModeActive?: boolean;
@@ -489,6 +502,9 @@ export interface SessionConfig {
   /** Disambiguates sessions when multiple remote workspaces share the same `workspacePath`. */
   remoteConnectionId?: string;
   remoteSshHost?: string;
+  maxContextTokens?: number;
+  autoCompact?: boolean;
+  enableTools?: boolean;
 }
 
 /**

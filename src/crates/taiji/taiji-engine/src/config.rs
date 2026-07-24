@@ -2,12 +2,14 @@ use crate::error::{Result, TaijiError};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct BarGenConfig {
     pub modes: Vec<String>,      // ["time", "volume", "range"]
     pub time_freqs: Vec<String>, // ["1m", "5m", "15m", "30m", "1h", "1d"]
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct DataSourceSpec {
     #[serde(rename = "type")]
     pub type_name: String,
@@ -15,6 +17,7 @@ pub struct DataSourceSpec {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct NodeSpec {
     pub id: String,
     #[serde(rename = "type")]
@@ -25,6 +28,7 @@ pub struct NodeSpec {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct PipelineConfig {
     pub name: String,
     pub version: String,

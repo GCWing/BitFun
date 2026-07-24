@@ -23,10 +23,6 @@ parking_lot = { workspace = true }
 tracing = { workspace = true }
 dashmap = { workspace = true }
 csv = "1"
-# TODO(P0-1): Upgrade to unleash-client = "0.4" when network is available.
-# Current 0.1.3 is extremely outdated and may contain known CVEs.
-# Note: unleash-client is currently unused in source code — no API migration needed.
-unleash-client = "0.1.3"
 anyhow = { workspace = true }
 uuid = { workspace = true }
 rand = { workspace = true }

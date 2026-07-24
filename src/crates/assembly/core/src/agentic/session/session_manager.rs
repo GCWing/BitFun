@@ -44,10 +44,10 @@ use crate::util::timing::elapsed_ms_u64;
 pub use bitfun_runtime_ports::SessionViewRestoreTiming;
 use bitfun_runtime_ports::{SessionStoragePathRequest, SessionStorePort};
 use bitfun_services_core::session::{
-    apply_session_lineage, collect_hidden_subagent_cascade as collect_hidden_subagent_cascade_ids,
+    apply_session_lineage,
     merge_session_custom_metadata as merge_session_custom_metadata_value,
     set_deep_review_run_manifest, set_review_target_evidence, set_session_relationship,
-    SessionStorageLayout,
+    SessionRelationshipKind, SessionStorageLayout,
 };
 use dashmap::{mapref::entry::Entry, DashMap};
 use log::{debug, error, info, warn};
@@ -169,6 +169,13 @@ pub struct SessionManager {
     evidence_ledger: Arc<SessionEvidenceLedger>,
     persistence_manager: Arc<PersistenceManager>,
     memory_database: Arc<MemoryDatabase>,
+
+    /// Cache of parent_session_id → subagent children (child_session_id, parent_dialog_turn_id).
+    /// Incrementally maintained to avoid full metadata scans during cascade traversal.
+    subagent_children: Arc<DashMap<String, Vec<(String, String)>>>,
+    /// Set to true when sessions are created or deleted so the subagent_children
+    /// cache is rebuilt on the next cascade traversal.
+    subagent_children_dirty: Arc<std::sync::atomic::AtomicBool>,
 
     /// Configuration
     config: SessionManagerConfig,
@@ -468,7 +475,8 @@ impl SessionManager {
             return Self::context_window_for_model_selection(ai_config, configured_model_id);
         }
 
-        let fallback_model_id = (session.kind != SessionKind::Subagent)
+        let fallback_model_id = (session.kind != SessionKind::Subagent
+            && session.kind != SessionKind::EphemeralSubagent)
             .then(|| ai_config.agent_model_defaults.mode.trim().to_string())
             .filter(|model_id| !Self::is_auto_model_selector(model_id));
 
@@ -580,7 +588,7 @@ impl SessionManager {
     fn should_persist_session_kind(kind: SessionKind) -> bool {
         match kind {
             SessionKind::Standard | SessionKind::Subagent => true,
-            SessionKind::EphemeralChild => false,
+            SessionKind::EphemeralChild | SessionKind::EphemeralSubagent => false,
         }
     }
 
@@ -1567,6 +1575,8 @@ impl SessionManager {
             evidence_ledger: Arc::new(SessionEvidenceLedger::new()),
             persistence_manager,
             memory_database,
+            subagent_children: Arc::new(DashMap::new()),
+            subagent_children_dirty: Arc::new(std::sync::atomic::AtomicBool::new(true)),
             config,
         };
 
@@ -1801,6 +1811,8 @@ impl SessionManager {
                 evidence_ledger,
                 persistence_manager,
                 memory_database,
+                subagent_children: Arc::new(DashMap::new()),
+                subagent_children_dirty: Arc::new(std::sync::atomic::AtomicBool::new(true)),
                 config: manager_config,
             };
 
@@ -2002,7 +2014,12 @@ impl SessionManager {
         Ok(session)
     }
 
-    /// Get session
+    /// Get session.
+    /// Hot-path: cloning the full Session is intentional to avoid holding
+    /// the DashMap shard lock across await points.  The session struct is
+    /// relatively lightweight for typical workloads; the heaviest field
+    /// (dialog_turn_ids) is a Vec<String> that rarely exceeds a few
+    /// hundred entries.
     pub fn get_session(&self, session_id: &str) -> Option<Session> {
         self.sessions.get(session_id).map(|s| s.clone())
     }
@@ -3146,7 +3163,9 @@ impl SessionManager {
             &session_storage_path,
             session_id,
         )
-        .await
+        .await?;
+        self.invalidate_subagent_children_cache();
+        Ok(())
     }
 
     pub(crate) async fn delete_session_by_id(&self, session_id: &str) -> BitFunResult<()> {
@@ -3183,12 +3202,17 @@ impl SessionManager {
                 &session_storage_path,
             )
             .await;
-        self.delete_session_from_paths_locked(
-            &cleanup_workspace_path,
-            &session_storage_path,
-            session_id,
-        )
-        .await
+        let result = self
+            .delete_session_from_paths_locked(
+                &cleanup_workspace_path,
+                &session_storage_path,
+                session_id,
+            )
+            .await;
+        if result.is_ok() {
+            self.invalidate_subagent_children_cache();
+        }
+        result
     }
 
     /// Release one loaded session and its transient runtime stores while keeping
@@ -4498,13 +4522,8 @@ impl SessionManager {
                         created_at: session.created_at,
                         last_activity_at: session.last_activity_at,
                         state: session.state.clone(),
+                        parent_session_id: None,
                     }
-                })
-                .filter(|summary| {
-                    !matches!(
-                        summary.kind,
-                        SessionKind::Subagent | SessionKind::EphemeralChild
-                    )
                 })
                 .collect();
             Ok(summaries)
@@ -4675,10 +4694,15 @@ impl SessionManager {
         session_id: &str,
         relationship: SessionRelationship,
     ) -> BitFunResult<()> {
-        self.update_persisted_session_metadata(session_id, |metadata| {
-            set_session_relationship(metadata, relationship)
-        })
-        .await
+        let result = self
+            .update_persisted_session_metadata(session_id, |metadata| {
+                set_session_relationship(metadata, relationship)
+            })
+            .await;
+        if result.is_ok() {
+            self.invalidate_subagent_children_cache();
+        }
+        result
     }
 
     pub async fn persist_session_lineage(
@@ -4686,10 +4710,15 @@ impl SessionManager {
         session_id: &str,
         relationship: SessionRelationship,
     ) -> BitFunResult<()> {
-        self.update_persisted_session_metadata(session_id, |metadata| {
-            apply_session_lineage(metadata, relationship)
-        })
-        .await
+        let result = self
+            .update_persisted_session_metadata(session_id, |metadata| {
+                apply_session_lineage(metadata, relationship)
+            })
+            .await;
+        if result.is_ok() {
+            self.invalidate_subagent_children_cache();
+        }
+        result
     }
 
     pub async fn collect_hidden_subagent_cascade_for_parent_turns(
@@ -4702,15 +4731,58 @@ impl SessionManager {
             return Ok(Vec::new());
         }
 
+        self.ensure_subagent_children_cache(workspace_path).await?;
+        Ok(collect_hidden_subagent_cascade_from_index(
+            &self.subagent_children,
+            parent_session_id,
+            parent_dialog_turn_ids,
+        ))
+    }
+
+    async fn ensure_subagent_children_cache(
+        &self,
+        workspace_path: &Path,
+    ) -> BitFunResult<()> {
+        if !self
+            .subagent_children_dirty
+            .swap(false, std::sync::atomic::Ordering::AcqRel)
+        {
+            return Ok(());
+        }
         let metadata_list = self
             .persistence_manager
             .list_session_metadata_including_internal(workspace_path)
             .await?;
-        Ok(collect_hidden_subagent_cascade_ids(
-            metadata_list,
-            parent_session_id,
-            parent_dialog_turn_ids,
-        ))
+        self.subagent_children.clear();
+        for metadata in &metadata_list {
+            let Some(ref relationship) = metadata.relationship else {
+                continue;
+            };
+            if !matches!(
+                relationship.kind,
+                Some(SessionRelationshipKind::Subagent)
+            ) {
+                continue;
+            }
+            let Some(ref parent_id) = relationship.parent_session_id else {
+                continue;
+            };
+            let dialog_turn_id = relationship
+                .parent_dialog_turn_id
+                .clone()
+                .unwrap_or_default();
+            self.subagent_children
+                .entry(parent_id.clone())
+                .or_default()
+                .push((metadata.session_id.clone(), dialog_turn_id));
+        }
+        Ok(())
+    }
+
+    /// Mark subagent children cache as dirty, forcing a rebuild on next cascade traversal.
+    fn invalidate_subagent_children_cache(&self) {
+        self.subagent_children_dirty
+            .store(true, std::sync::atomic::Ordering::Release);
     }
 
     pub async fn set_session_deep_review_run_manifest(
@@ -6083,6 +6155,58 @@ impl SessionManager {
 
         debug!("Cleanup task started");
     }
+}
+
+/// Traverse the subagent_children index in post-order to collect hidden subagent
+/// session IDs matching the given parent session and dialog turn IDs.
+fn collect_hidden_subagent_cascade_from_index(
+    subagent_children: &DashMap<String, Vec<(String, String)>>,
+    parent_session_id: &str,
+    parent_dialog_turn_ids: &HashSet<String>,
+) -> Vec<String> {
+    let mut root_session_ids = Vec::new();
+    if let Some(children) = subagent_children.get(parent_session_id) {
+        for (child_id, dialog_turn_id) in children.iter() {
+            if parent_dialog_turn_ids.contains(dialog_turn_id.as_str())
+            {
+                root_session_ids.push(child_id.clone());
+            }
+        }
+    }
+
+    let mut visited = HashSet::new();
+    let mut ordered_session_ids = Vec::new();
+    for root_id in root_session_ids {
+        collect_subagent_post_order_from_index(
+            subagent_children,
+            &root_id,
+            &mut visited,
+            &mut ordered_session_ids,
+        );
+    }
+    ordered_session_ids
+}
+
+fn collect_subagent_post_order_from_index(
+    subagent_children: &DashMap<String, Vec<(String, String)>>,
+    session_id: &str,
+    visited: &mut HashSet<String>,
+    ordered_session_ids: &mut Vec<String>,
+) {
+    if !visited.insert(session_id.to_string()) {
+        return;
+    }
+    if let Some(children) = subagent_children.get(session_id) {
+        for (child_id, _) in children.iter() {
+            collect_subagent_post_order_from_index(
+                subagent_children,
+                child_id,
+                visited,
+                ordered_session_ids,
+            );
+        }
+    }
+    ordered_session_ids.push(session_id.to_string());
 }
 
 #[cfg(test)]
@@ -7768,6 +7892,7 @@ mod tests {
                     parent_tool_call_id: None,
                     subagent_type: None,
                     continuation_policy: None,
+                    ..Default::default()
                 },
             )
             .await
@@ -7790,6 +7915,7 @@ mod tests {
                 parent_tool_call_id: None,
                 subagent_type: None,
                 continuation_policy: None,
+                ..Default::default()
             })
         );
 
@@ -7830,6 +7956,7 @@ mod tests {
             parent_tool_call_id: Some("tool-1".to_string()),
             subagent_type: Some("Explore".to_string()),
             continuation_policy: None,
+            ..Default::default()
         });
         persistence_manager
             .save_session_metadata(workspace.path(), &matched_root)
@@ -7852,6 +7979,7 @@ mod tests {
             parent_tool_call_id: Some("tool-child".to_string()),
             subagent_type: Some("Explore".to_string()),
             continuation_policy: None,
+            ..Default::default()
         });
         persistence_manager
             .save_session_metadata(workspace.path(), &matched_grandchild)
@@ -7874,6 +8002,7 @@ mod tests {
             parent_tool_call_id: Some("tool-2".to_string()),
             subagent_type: Some("Explore".to_string()),
             continuation_policy: None,
+            ..Default::default()
         });
         persistence_manager
             .save_session_metadata(workspace.path(), &unmatched_root)
@@ -7895,6 +8024,7 @@ mod tests {
             parent_tool_call_id: None,
             subagent_type: None,
             continuation_policy: None,
+            ..Default::default()
         });
         persistence_manager
             .save_session_metadata(workspace.path(), &visible_review_child)

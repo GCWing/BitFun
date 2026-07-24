@@ -24,25 +24,8 @@ impl SessionControlAction {
     }
 }
 
-#[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
-pub enum SessionControlAgentType {
-    #[serde(rename = "agentic", alias = "Agentic", alias = "AGENTIC")]
-    Agentic,
-    #[serde(rename = "Plan", alias = "plan", alias = "PLAN")]
-    Plan,
-    #[serde(rename = "Cowork", alias = "cowork", alias = "COWORK")]
-    Cowork,
-}
-
-impl SessionControlAgentType {
-    pub const fn as_str(&self) -> &'static str {
-        match self {
-            Self::Agentic => "agentic",
-            Self::Plan => "Plan",
-            Self::Cowork => "Cowork",
-        }
-    }
-}
+/// Re-export of the shared agent type enum from runtime-ports.
+pub use bitfun_runtime_ports::AgentType as SessionControlAgentType;
 
 #[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
 pub struct SessionControlInput {

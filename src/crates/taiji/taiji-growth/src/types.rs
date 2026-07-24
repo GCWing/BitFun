@@ -58,6 +58,7 @@ pub struct ContentAsset {
 ///
 /// 指定从哪支品种/周期的分析数据生成网站报告。
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct ReportConfig {
     /// 品种代码，如 "ag2506"
     pub instrument: String,
@@ -75,6 +76,7 @@ pub struct ReportConfig {
 ///
 /// 映射到 Zola `config.toml` / Hugo `config.yaml` 的关键字段。
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct WebsiteConfig {
     /// 站点标题
     pub site_title: String,
@@ -99,6 +101,7 @@ pub struct WebsiteConfig {
 // lacks. Extract a shared `SmtpConfig` with all fields into
 // `taiji-engine` or a new `taiji-shared` crate.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct SmtpConfig {
     /// SMTP 服务器地址
     pub host: String,

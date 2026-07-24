@@ -6,6 +6,7 @@ pub use taiji_content::DateRange;
 
 /// Walk-forward cross-validation configuration.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct WalkForwardConfig {
     /// Number of folds (default 4).
     #[serde(default = "default_folds")]
@@ -25,6 +26,7 @@ fn default_train_ratio() -> f64 {
 
 /// Backtest engine configuration.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct BacktestConfig {
     /// Instruments to backtest.
     pub instruments: Vec<String>,

@@ -2100,6 +2100,7 @@ fn agent_dialog_turn_prepended_messages(
         .map(|reminder| {
             let kind = match reminder.kind.as_str() {
                 "session_message_request" => InternalReminderKind::SessionMessageRequest,
+                "task_subagent_result" => InternalReminderKind::BackgroundResult,
                 "scheduled_job" => InternalReminderKind::ScheduledJob,
                 other => {
                     return Err(PortError::new(

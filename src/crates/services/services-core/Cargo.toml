@@ -14,7 +14,9 @@ anyhow = { workspace = true, optional = true }
 async-trait = { workspace = true, optional = true }
 bitfun-core-types = { path = "../../contracts/core-types" }
 bitfun-runtime-ports = { path = "../../contracts/runtime-ports", optional = true }
+dashmap = { workspace = true }
 tokio = { workspace = true }
+futures = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 serde_yaml = { workspace = true, optional = true }

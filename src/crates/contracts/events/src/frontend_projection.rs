@@ -440,6 +440,35 @@ pub fn project_agentic_frontend_event(event: AgenticEvent) -> Option<AgenticFron
             }),
         )),
         AgenticEvent::SystemError { .. } => None,
+        AgenticEvent::ReviewPropagationNeeded { .. } => None,
+        AgenticEvent::SubagentTurnCompleted {
+            session_id,
+            subagent_dialog_turn_id,
+            parent_session_id,
+            parent_dialog_turn_id,
+            parent_tool_call_id,
+            agent_type,
+            status,
+            output_text,
+        } => Some(AgenticFrontendEvent::new(
+            "agentic://subagent-turn-completed",
+            {
+                let mut p = serde_json::Map::new();
+                p.insert("sessionId".to_string(), json!(session_id));
+                p.insert("subagentDialogTurnId".to_string(), json!(subagent_dialog_turn_id));
+                p.insert("parentSessionId".to_string(), json!(parent_session_id));
+                p.insert("parentDialogTurnId".to_string(), json!(parent_dialog_turn_id));
+                p.insert("parentToolCallId".to_string(), json!(parent_tool_call_id));
+                if let Some(at) = agent_type {
+                    p.insert("agentType".to_string(), json!(at));
+                }
+                p.insert("status".to_string(), json!(status));
+                if let Some(text) = output_text {
+                    p.insert("outputText".to_string(), json!(text));
+                }
+                serde_json::Value::Object(p)
+            },
+        )),
     }
 }
 

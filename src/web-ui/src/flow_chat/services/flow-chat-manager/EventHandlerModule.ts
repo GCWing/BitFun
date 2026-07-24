@@ -34,6 +34,7 @@ import type {
   AcpContextUsageUpdatedEvent,
   SessionModelAutoMigratedEvent,
   SubagentSessionLinkedEvent,
+  SubagentTurnCompletedEvent,
 } from '@/infrastructure/api/service-api/AgentAPI';
 import { i18nService } from '@/infrastructure/i18n/core/I18nService';
 import { MCPAPI } from '@/infrastructure/api/service-api/MCPAPI';
@@ -507,6 +508,50 @@ function handleSubagentSessionLinked(
   reconcileBackgroundSubagentSession(childSessionId);
 }
 
+function handleSubagentTurnCompleted(
+  context: FlowChatContext,
+  event: SubagentTurnCompletedEvent,
+): void {
+  const childSessionId = event?.sessionId ?? (event as any)?.childSessionId;
+  const parentSessionId = event?.parentSessionId ?? (event as any)?.parent_session_id;
+  const parentDialogTurnId =
+    event?.parentDialogTurnId ?? (event as any)?.parent_dialog_turn_id;
+  const parentToolCallId = event?.parentToolCallId ?? (event as any)?.parent_tool_call_id;
+  const subagentDialogTurnId =
+    event?.subagentDialogTurnId ?? (event as any)?.subagent_dialog_turn_id;
+  const modelId = event?.modelId ?? (event as any)?.model_id;
+  const effectiveModelName = event?.effectiveModelName ?? (event as any)?.effective_model_name;
+
+  if (childSessionId && parentSessionId && parentDialogTurnId && parentToolCallId) {
+    const parentInfo: SubagentParentInfo = {
+      sessionId: parentSessionId,
+      dialogTurnId: parentDialogTurnId,
+      toolCallId: parentToolCallId,
+    };
+    attachSubagentSessionToParentTool(parentInfo, childSessionId, subagentDialogTurnId);
+    if (typeof modelId === 'string' && modelId.trim()) {
+      FlowChatStore.getInstance().updateSessionModelName(childSessionId, modelId.trim());
+    }
+  }
+
+  if (subagentDialogTurnId && parentSessionId && parentDialogTurnId && parentToolCallId) {
+    updateSubagentParentTaskModel(
+      context,
+      {
+        sessionId: parentSessionId,
+        dialogTurnId: parentDialogTurnId,
+        toolCallId: parentToolCallId,
+      },
+      typeof modelId === 'string' && modelId.trim() ? modelId.trim() : undefined,
+      typeof effectiveModelName === 'string' && effectiveModelName.trim()
+        ? effectiveModelName.trim()
+        : '',
+    );
+  }
+
+  reconcileBackgroundSubagentSession(childSessionId);
+}
+
 function getLinkedSubagentParentInfo(sessionId: string): SubagentParentInfo | undefined {
   const session = FlowChatStore.getInstance().getState().sessions.get(sessionId);
   if (
@@ -786,6 +831,9 @@ export async function initializeEventListeners(
     },
     onSessionModelAutoMigrated: (event) => {
       handleSessionModelAutoMigrated(event);
+    },
+    onSubagentTurnCompleted: (event) => {
+      handleSubagentTurnCompleted(context, event);
     },
     onUserSteeringInjected: (event) => {
       handleUserSteeringInjected(context, event);

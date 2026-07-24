@@ -2792,6 +2792,7 @@ mod tests {
             session_id: "parent-session".to_string(),
             dialog_turn_id: "parent-turn".to_string(),
             tool_call_id: parent_tool_call_id.to_string(),
+            depth: None,
         });
         context
     }

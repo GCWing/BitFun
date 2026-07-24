@@ -300,23 +300,42 @@ WHERE task_pk = ?5 AND status = 'running'
             }
 
             let mut records = Vec::with_capacity(requested_bg_task_ids.len());
-            for bg_task_id in requested_bg_task_ids {
-                let record = connection
-                    .query_row(
-                        &format!(
-                            "{} WHERE tasks.parent_session_id = ?1 AND tasks.bg_task_id = ?2",
-                            BACKGROUND_TASK_SELECT
-                        ),
-                        params![parent_session_id, bg_task_id],
-                        background_task_from_row,
-                    )
-                    .optional()
-                    .map_err(db_error)?
-                    .ok_or_else(|| {
-                        BitFunError::tool(format!("Background task was not found: {bg_task_id}"))
-                    })?;
-                if record.delivered_at_ms.is_none() {
-                    records.push(record);
+            let mut found_ids = std::collections::HashSet::with_capacity(requested_bg_task_ids.len());
+
+            for chunk in requested_bg_task_ids.chunks(990) {
+                let placeholders: Vec<String> = (2..=chunk.len() + 1)
+                    .map(|i| format!("?{i}"))
+                    .collect();
+                let sql = format!(
+                    "{} WHERE tasks.parent_session_id = ?1 AND tasks.bg_task_id IN ({})",
+                    BACKGROUND_TASK_SELECT,
+                    placeholders.join(", ")
+                );
+                let mut statement = connection.prepare(&sql).map_err(db_error)?;
+                let mut param_values: Vec<Box<dyn rusqlite::types::ToSql>> =
+                    Vec::with_capacity(chunk.len() + 1);
+                param_values.push(Box::new(parent_session_id.clone()));
+                for id in chunk {
+                    param_values.push(Box::new(id.clone()));
+                }
+                let param_refs: Vec<&dyn rusqlite::types::ToSql> =
+                    param_values.iter().map(|v| v.as_ref()).collect();
+                let rows = statement
+                    .query_map(param_refs.as_slice(), background_task_from_row)
+                    .map_err(db_error)?;
+                for row in rows {
+                    let record = row.map_err(db_error)?;
+                    found_ids.insert(record.bg_task_id.clone());
+                    if record.delivered_at_ms.is_none() {
+                        records.push(record);
+                    }
+                }
+            }
+            for bg_task_id in &requested_bg_task_ids {
+                if !found_ids.contains(bg_task_id.as_str()) {
+                    return Err(BitFunError::tool(format!(
+                        "Background task was not found: {bg_task_id}"
+                    )));
                 }
             }
             Ok(records)
@@ -330,21 +349,48 @@ WHERE task_pk = ?5 AND status = 'running'
     ) -> BitFunResult<Vec<BackgroundTaskRecord>> {
         let task_pks = task_pks.to_vec();
         self.with_connection(move |connection| {
-            let mut records = Vec::with_capacity(task_pks.len());
-            for task_pk in task_pks {
-                if let Some(record) = connection
-                    .query_row(
-                        &format!("{} WHERE tasks.task_pk = ?1", BACKGROUND_TASK_SELECT),
-                        params![task_pk],
-                        background_task_from_row,
-                    )
-                    .optional()
-                    .map_err(db_error)?
-                {
-                    records.push(record);
+            if task_pks.is_empty() {
+                return Ok(Vec::new());
+            }
+            let mut all_records = Vec::with_capacity(task_pks.len());
+            for chunk in task_pks.chunks(990) {
+                let placeholders: Vec<String> = (1..=chunk.len())
+                    .map(|i| format!("?{i}"))
+                    .collect();
+                let sql = format!(
+                    "{} WHERE tasks.task_pk IN ({})",
+                    BACKGROUND_TASK_SELECT,
+                    placeholders.join(", ")
+                );
+                let mut statement = connection.prepare(&sql).map_err(db_error)?;
+                let rows = statement
+                    .query_map(rusqlite::params_from_iter(chunk.iter().copied()), background_task_from_row)
+                    .map_err(db_error)?;
+                for row in rows {
+                    all_records.push(row.map_err(db_error)?);
                 }
             }
-            Ok(records)
+            Ok(all_records)
+        })
+        .await
+    }
+
+    pub(crate) async fn list_tasks(
+        &self,
+        parent_session_id: &str,
+    ) -> BitFunResult<Vec<BackgroundTaskRecord>> {
+        let parent_session_id = parent_session_id.to_string();
+        self.with_connection(move |connection| {
+            let mut statement = connection
+                .prepare(&format!(
+                    "{} WHERE tasks.parent_session_id = ?1 ORDER BY tasks.task_pk",
+                    BACKGROUND_TASK_SELECT
+                ))
+                .map_err(db_error)?;
+            let rows = statement
+                .query_map(params![parent_session_id], background_task_from_row)
+                .map_err(db_error)?;
+            collect_rows(rows)
         })
         .await
     }
@@ -359,42 +405,77 @@ WHERE task_pk = ?5 AND status = 'running'
         let task_pks = task_pks.to_vec();
         let delivered_parent_dialog_turn_id = delivered_parent_dialog_turn_id.to_string();
         self.with_connection(move |connection| {
+            if task_pks.is_empty() {
+                return Ok(Vec::new());
+            }
             let transaction = connection
                 .transaction_with_behavior(TransactionBehavior::Immediate)
                 .map_err(db_error)?;
-            let mut claimed = Vec::new();
-            for task_pk in task_pks {
-                let changed = transaction
-                    .execute(
-                        r#"
-UPDATE background_tasks
-SET delivered_at_ms = ?1, delivered_parent_dialog_turn_id = ?2
-WHERE task_pk = ?3
-  AND parent_session_id = ?4
-  AND status != 'running'
-  AND delivered_at_ms IS NULL
-                        "#,
-                        params![
-                            unix_time_ms() as i64,
-                            delivered_parent_dialog_turn_id,
-                            task_pk,
-                            parent_session_id,
-                        ],
-                    )
-                    .map_err(db_error)?;
-                if changed == 0 {
-                    continue;
-                }
-                claimed.push(
-                    transaction
-                        .query_row(
-                            &format!("{} WHERE tasks.task_pk = ?1", BACKGROUND_TASK_SELECT),
-                            params![task_pk],
-                            background_task_from_row,
-                        )
-                        .map_err(db_error)?,
+
+            let delivered_at_ms = unix_time_ms() as i64;
+            let mut claimed = Vec::with_capacity(task_pks.len());
+
+            for chunk in task_pks.chunks(990) {
+                let in_placeholders: Vec<String> = (3..=chunk.len() + 2)
+                    .map(|i| format!("?{i}"))
+                    .collect();
+                let in_clause = in_placeholders.join(", ");
+                let update_sql = format!(
+                    "UPDATE background_tasks SET delivered_at_ms = ?1, delivered_parent_dialog_turn_id = ?2 WHERE task_pk IN ({}) AND parent_session_id = ?{} AND status != 'running' AND delivered_at_ms IS NULL",
+                    in_clause,
+                    chunk.len() + 3
                 );
+
+                let mut update_params: Vec<Box<dyn rusqlite::types::ToSql>> =
+                    Vec::with_capacity(chunk.len() + 3);
+                update_params.push(Box::new(delivered_at_ms));
+                update_params.push(Box::new(delivered_parent_dialog_turn_id.clone()));
+                for pk in chunk {
+                    update_params.push(Box::new(*pk));
+                }
+                update_params.push(Box::new(parent_session_id.clone()));
+                let update_param_refs: Vec<&dyn rusqlite::types::ToSql> =
+                    update_params.iter().map(|v| v.as_ref()).collect();
+                transaction
+                    .execute(&update_sql, update_param_refs.as_slice())
+                    .map_err(db_error)?;
+
+                // SELECT only the rows that were just updated.
+                let select_in_placeholders: Vec<String> = (1..=chunk.len())
+                    .map(|i| format!("?{i}"))
+                    .collect();
+                let select_in_clause = select_in_placeholders.join(", ");
+                let select_sql = format!(
+                    "{} WHERE tasks.task_pk IN ({}) AND tasks.parent_session_id = ?{} AND tasks.delivered_parent_dialog_turn_id = ?{}",
+                    BACKGROUND_TASK_SELECT,
+                    select_in_clause,
+                    chunk.len() + 1,
+                    chunk.len() + 2,
+                );
+
+                let mut select_params: Vec<Box<dyn rusqlite::types::ToSql>> =
+                    Vec::with_capacity(chunk.len() + 2);
+                for pk in chunk {
+                    select_params.push(Box::new(*pk));
+                }
+                select_params.push(Box::new(parent_session_id.clone()));
+                select_params.push(Box::new(delivered_parent_dialog_turn_id.clone()));
+                let select_param_refs: Vec<&dyn rusqlite::types::ToSql> =
+                    select_params.iter().map(|v| v.as_ref()).collect();
+
+                {
+                    let mut statement = transaction.prepare(&select_sql).map_err(db_error)?;
+                    let rows = statement
+                        .query_map(select_param_refs.as_slice(), background_task_from_row)
+                        .map_err(db_error)?;
+                    for row in rows {
+                        if let Ok(record) = row {
+                            claimed.push(record);
+                        }
+                    }
+                }
             }
+
             transaction.commit().map_err(db_error)?;
             Ok(claimed)
         })
@@ -482,37 +563,55 @@ WHERE task_pk = ?3
             let transaction = connection
                 .transaction_with_behavior(TransactionBehavior::Immediate)
                 .map_err(db_error)?;
-            let mut deleted_task_pks = Vec::new();
-            for turn_id in parent_dialog_turn_ids {
-                {
-                    let mut statement = transaction
-                        .prepare(
-                            "SELECT task_pk FROM background_tasks WHERE parent_session_id = ?1 AND parent_dialog_turn_id = ?2",
-                        )
-                        .map_err(db_error)?;
-                    deleted_task_pks.extend(
-                        statement
-                            .query_map(params![parent_session_id, turn_id], |row| {
-                                row.get::<_, i64>(0)
-                            })
-                            .map_err(db_error)?
-                            .collect::<rusqlite::Result<Vec<_>>>()
-                            .map_err(db_error)?,
-                    );
-                }
-                transaction
-                    .execute(
-                        "DELETE FROM background_tasks WHERE parent_session_id = ?1 AND parent_dialog_turn_id = ?2",
-                        params![parent_session_id, turn_id],
-                    )
-                    .map_err(db_error)?;
-                transaction
-                    .execute(
-                        "UPDATE background_tasks SET delivered_at_ms = NULL, delivered_parent_dialog_turn_id = NULL WHERE parent_session_id = ?1 AND delivered_parent_dialog_turn_id = ?2",
-                        params![parent_session_id, turn_id],
-                    )
-                    .map_err(db_error)?;
+            if parent_dialog_turn_ids.is_empty() {
+                return Ok(Vec::new());
             }
+            let mut deleted_task_pks = Vec::new();
+            for chunk in parent_dialog_turn_ids.chunks(990) {
+                let turn_placeholders: Vec<String> = (2..=chunk.len() + 1)
+                    .map(|i| format!("?{i}"))
+                    .collect();
+                let in_clause = turn_placeholders.join(", ");
+
+                // Build dynamic parameter slice: ?1 = parent_session_id, ?2.. = turn_ids
+                let mut param_refs: Vec<&dyn rusqlite::types::ToSql> =
+                    Vec::with_capacity(1 + chunk.len());
+                param_refs.push(&parent_session_id);
+                for id in chunk {
+                    param_refs.push(id);
+                }
+                let params: &[&dyn rusqlite::types::ToSql] = param_refs.as_slice();
+
+                // Single SELECT with IN clause
+                let select_sql = format!(
+                    "SELECT task_pk FROM background_tasks WHERE parent_session_id = ?1 AND parent_dialog_turn_id IN ({})",
+                    in_clause
+                );
+                {
+                    let mut statement = transaction.prepare(&select_sql).map_err(db_error)?;
+                    let rows = statement
+                        .query_map(params, |row| row.get::<_, i64>(0))
+                        .map_err(db_error)?;
+                    for row in rows {
+                        deleted_task_pks.push(row.map_err(db_error)?);
+                    }
+                }
+
+                // Single DELETE with IN clause
+                let delete_sql = format!(
+                    "DELETE FROM background_tasks WHERE parent_session_id = ?1 AND parent_dialog_turn_id IN ({})",
+                    in_clause
+                );
+                transaction.execute(&delete_sql, params).map_err(db_error)?;
+
+                // Single UPDATE with IN clause
+                let update_sql = format!(
+                    "UPDATE background_tasks SET delivered_at_ms = NULL, delivered_parent_dialog_turn_id = NULL WHERE parent_session_id = ?1 AND delivered_parent_dialog_turn_id IN ({})",
+                    in_clause
+                );
+                transaction.execute(&update_sql, params).map_err(db_error)?;
+            }
+
             transaction.commit().map_err(db_error)?;
             Ok(deleted_task_pks)
         })

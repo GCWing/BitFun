@@ -39,6 +39,10 @@ struct PartialBar {
 
 impl PartialBar {
     fn new(price: f64, vol: f64, amount: f64, oi: Option<f64>, time: DateTime<Utc>) -> Self {
+        debug_assert!(
+            price.is_finite() && vol.is_finite() && amount.is_finite(),
+            "PartialBar::new: price/vol/amount must be finite"
+        );
         Self {
             open: price,
             high: price,
@@ -56,6 +60,15 @@ impl PartialBar {
     }
 
     fn update(&mut self, price: f64, vol: f64, amount: f64, oi: Option<f64>, delta: f64) {
+        // Guard: reject non-finite values to prevent silent propagation of corrupted market data
+        if !price.is_finite()
+            || !vol.is_finite()
+            || !amount.is_finite()
+            || !delta.is_finite()
+            || oi.is_some_and(|v| !v.is_finite())
+        {
+            return;
+        }
         self.high = self.high.max(price);
         self.low = self.low.min(price);
         self.close = price;
@@ -123,7 +136,13 @@ impl BarGenerator {
         let price = tick.last_price;
         let vol = tick.volume;
         let amount = tick.turnover;
-        let oi = if tick.open_interest > 0.0 {
+
+        // Guard: reject non-finite price/volume/amount to prevent corrupted bar data
+        if !price.is_finite() || !vol.is_finite() || !amount.is_finite() {
+            return closed;
+        }
+
+        let oi = if tick.open_interest.is_finite() && tick.open_interest > 0.0 {
             Some(tick.open_interest)
         } else {
             None
@@ -379,5 +398,164 @@ mod tests {
 
         tick.trade_type = Some(2.0);
         assert_eq!(BarGenerator::classify_delta(&tick), 2.0);
+    }
+
+    // ── NaN / Inf rejection tests ──
+
+    #[test]
+    fn test_nan_price_rejected() {
+        let sym = Symbol::from("rb9999");
+        let mut bg = BarGenerator::new(sym.clone(), vec![AggMode::Time], vec![Freq::F5]);
+
+        // First tick creates the partial bar
+        bg.update_tick(&make_tick(ts(9, 0, 0), 4000.0, 100.0, 400_000.0, 5000.0));
+
+        // NaN price → tick should be silently ignored, no bar closed
+        let closed = bg.update_tick(&make_tick(
+            ts(9, 1, 0),
+            f64::NAN,
+            200.0,
+            800_000.0,
+            5000.0,
+        ));
+        assert!(closed.is_empty());
+    }
+
+    #[test]
+    fn test_inf_price_rejected() {
+        let sym = Symbol::from("rb9999");
+        let mut bg = BarGenerator::new(sym.clone(), vec![AggMode::Time], vec![Freq::F5]);
+
+        bg.update_tick(&make_tick(ts(9, 0, 0), 4000.0, 100.0, 400_000.0, 5000.0));
+
+        let closed = bg.update_tick(&make_tick(
+            ts(9, 1, 0),
+            f64::INFINITY,
+            200.0,
+            800_000.0,
+            5000.0,
+        ));
+        assert!(closed.is_empty());
+    }
+
+    #[test]
+    fn test_neg_inf_price_rejected() {
+        let sym = Symbol::from("rb9999");
+        let mut bg = BarGenerator::new(sym.clone(), vec![AggMode::Time], vec![Freq::F5]);
+
+        bg.update_tick(&make_tick(ts(9, 0, 0), 4000.0, 100.0, 400_000.0, 5000.0));
+
+        let closed = bg.update_tick(&make_tick(
+            ts(9, 1, 0),
+            f64::NEG_INFINITY,
+            200.0,
+            800_000.0,
+            5000.0,
+        ));
+        assert!(closed.is_empty());
+    }
+
+    #[test]
+    fn test_nan_volume_rejected() {
+        let sym = Symbol::from("rb9999");
+        let mut bg = BarGenerator::new(sym.clone(), vec![AggMode::Time], vec![Freq::F5]);
+
+        bg.update_tick(&make_tick(ts(9, 0, 0), 4000.0, 100.0, 400_000.0, 5000.0));
+
+        let closed = bg.update_tick(&make_tick(
+            ts(9, 1, 0),
+            4010.0,
+            f64::NAN,
+            800_000.0,
+            5000.0,
+        ));
+        assert!(closed.is_empty());
+    }
+
+    #[test]
+    fn test_nan_turnover_rejected() {
+        let sym = Symbol::from("rb9999");
+        let mut bg = BarGenerator::new(sym.clone(), vec![AggMode::Time], vec![Freq::F5]);
+
+        bg.update_tick(&make_tick(ts(9, 0, 0), 4000.0, 100.0, 400_000.0, 5000.0));
+
+        let closed = bg.update_tick(&make_tick(
+            ts(9, 1, 0),
+            4010.0,
+            200.0,
+            f64::NAN,
+            5000.0,
+        ));
+        assert!(closed.is_empty());
+    }
+
+    #[test]
+    fn test_bar_values_remain_finite_after_nan_rejection() {
+        let sym = Symbol::from("rb9999");
+        let mut bg = BarGenerator::new(sym.clone(), vec![AggMode::Time], vec![Freq::F5]);
+
+        // Build a normal bar
+        bg.update_tick(&make_tick(ts(9, 0, 0), 4000.0, 100.0, 400_000.0, 5000.0));
+        bg.update_tick(&make_tick(
+            ts(9, 1, 0),
+            4010.0,
+            200.0,
+            802_000.0,
+            5000.0,
+        ));
+
+        // Send all-NaN tick — should be silently ignored
+        bg.update_tick(&make_tick(
+            ts(9, 2, 0),
+            f64::NAN,
+            f64::NAN,
+            f64::NAN,
+            f64::NAN,
+        ));
+
+        // Cross boundary to close the bar
+        let closed = bg.update_tick(&make_tick(
+            ts(9, 5, 0),
+            4020.0,
+            300.0,
+            1_206_000.0,
+            5100.0,
+        ));
+        assert_eq!(closed.len(), 1);
+
+        let (_freq, bar) = &closed[0];
+        assert!(bar.open.is_finite());
+        assert!(bar.high.is_finite());
+        assert!(bar.low.is_finite());
+        assert!(bar.close.is_finite());
+        assert!(bar.vol.is_finite());
+        assert!(bar.amount.is_finite());
+    }
+
+    #[test]
+    fn test_first_tick_nan_does_not_create_bar() {
+        let sym = Symbol::from("rb9999");
+        let mut bg = BarGenerator::new(sym.clone(), vec![AggMode::Time], vec![Freq::F5]);
+
+        // Very first tick is NaN — should be rejected, no partial bar created
+        let closed = bg.update_tick(&make_tick(
+            ts(9, 0, 0),
+            f64::NAN,
+            f64::NAN,
+            f64::NAN,
+            5000.0,
+        ));
+        assert!(closed.is_empty());
+
+        // Next valid tick crosses boundary → no old bar to close (none was created)
+        let closed = bg.update_tick(&make_tick(
+            ts(9, 5, 0),
+            4020.0,
+            300.0,
+            1_206_000.0,
+            5100.0,
+        ));
+        // Should be empty because no prior bar existed in the 09:00 bucket
+        assert!(closed.is_empty());
     }
 }

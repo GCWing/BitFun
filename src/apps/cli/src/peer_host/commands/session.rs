@@ -549,6 +549,8 @@ mod tests {
                 turn_count: 3,
                 created_at_ms: 12_345,
                 last_active_at_ms: 20_000,
+                parent_session_id: None,
+                status: None,
             },
             state: SessionState::Idle,
         });

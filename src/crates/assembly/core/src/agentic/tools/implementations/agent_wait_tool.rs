@@ -11,9 +11,11 @@ use serde_json::{json, Value};
 use std::collections::HashSet;
 use tokio::time::Duration;
 
-const DEFAULT_TIMEOUT_MS: u64 = 10 * 60 * 1_000;
+const DEFAULT_TIMEOUT_MS: u64 = 60_000;
 const MAX_TIMEOUT_MS: u64 = 60 * 60 * 1_000;
 
+/// DEPRECATED。子 agent 通信请用 SessionMessage（异步，无需等待）。
+/// 上限 60s，仅用于确认 session 创建成功的短等待，不用于长任务。
 pub struct AgentWaitTool;
 
 #[derive(Debug, PartialEq, Eq)]
@@ -190,7 +192,7 @@ The selected task set is fixed when the call starts. wait_mode defaults to `all`
                 },
                 "timeout_ms": {
                     "type": "integer",
-                    "description": "Maximum time to wait in milliseconds. Defaults to ten minutes."
+                    "description": "Maximum time to wait in milliseconds. Defaults to 60 seconds."
                 }
             },
             "additionalProperties": false
