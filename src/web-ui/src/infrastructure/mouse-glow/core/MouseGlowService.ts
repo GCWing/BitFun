@@ -251,16 +251,42 @@ export class MouseGlowService {
     if (overlay.parentElement !== overlayHost) {
       overlayHost.appendChild(overlay);
     }
+    const overlayPosition = this.getOverlayPosition(geometry, overlayHost);
     this.activeSurface = surface;
     overlay.toggleAttribute('data-divider', dividerGeometry !== null);
+    overlay.toggleAttribute('data-local-position', overlayPosition.isLocal);
     overlay.style.width = `${geometry.width}px`;
     overlay.style.height = `${geometry.height}px`;
     overlay.style.borderRadius = dividerGeometry ? '0px' : style.borderRadius;
-    overlay.style.transform = `translate3d(${geometry.left}px, ${geometry.top}px, 0)`;
+    overlay.style.transform =
+      `translate3d(${overlayPosition.left}px, ${overlayPosition.top}px, 0)`;
     overlay.style.setProperty('--mouse-glow-local-x', `${this.pointerX - geometry.left}px`);
     overlay.style.setProperty('--mouse-glow-local-y', `${this.pointerY - geometry.top}px`);
     overlay.hidden = false;
     overlay.setAttribute('data-active', '');
+  }
+
+  private getOverlayPosition(
+    geometry: OverlayGeometry,
+    host: HTMLElement,
+  ): { isLocal: boolean; left: number; top: number } {
+    if (host === document.body) {
+      return { isLocal: false, left: geometry.left, top: geometry.top };
+    }
+
+    const hostStyle = window.getComputedStyle(host);
+    if (hostStyle.position === 'static') {
+      return { isLocal: false, left: geometry.left, top: geometry.top };
+    }
+
+    const hostRect = host.getBoundingClientRect();
+    const borderLeftWidth = parseFloat(hostStyle.borderLeftWidth) || 0;
+    const borderTopWidth = parseFloat(hostStyle.borderTopWidth) || 0;
+    return {
+      isLocal: true,
+      left: geometry.left - hostRect.left - borderLeftWidth + host.scrollLeft,
+      top: geometry.top - hostRect.top - borderTopWidth + host.scrollTop,
+    };
   }
 
   private ensureOverlay(): HTMLDivElement {

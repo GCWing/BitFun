@@ -294,6 +294,60 @@ describe('MouseGlowService', () => {
     divider.remove();
   });
 
+  it('uses local coordinates inside a transformed input host', () => {
+    const transformedHost = document.createElement('div');
+    transformedHost.style.position = 'absolute';
+    transformedHost.style.zIndex = '100';
+    transformedHost.style.transform = 'translateX(-50%)';
+    transformedHost.getBoundingClientRect = () => ({
+      bottom: 700,
+      height: 200,
+      left: 100,
+      right: 800,
+      top: 500,
+      width: 700,
+      x: 100,
+      y: 500,
+      toJSON: () => ({}),
+    });
+    const inputSurface = document.createElement('div');
+    inputSurface.setAttribute('data-mouse-glow-surface', '');
+    inputSurface.style.border = '1px solid black';
+    inputSurface.style.borderRadius = '22px';
+    inputSurface.getBoundingClientRect = () => ({
+      bottom: 584,
+      height: 44,
+      left: 120,
+      right: 720,
+      top: 540,
+      width: 600,
+      x: 120,
+      y: 540,
+      toJSON: () => ({}),
+    });
+    const editor = document.createElement('div');
+    editor.setAttribute('contenteditable', 'true');
+    inputSurface.appendChild(editor);
+    transformedHost.appendChild(inputSurface);
+    document.body.appendChild(transformedHost);
+    service.initialize();
+
+    editor.dispatchEvent(new MouseEvent('pointermove', {
+      bubbles: true,
+      clientX: 180,
+      clientY: 560,
+    }));
+    nextFrame?.(0);
+
+    const overlay = document.getElementById('bitfun-mouse-glow-overlay');
+    expect(overlay?.parentElement).toBe(transformedHost);
+    expect(overlay?.hasAttribute('data-local-position')).toBe(true);
+    expect(overlay?.style.transform).toBe('translate3d(20px, 40px, 0)');
+    expect(overlay?.style.getPropertyValue('--mouse-glow-local-x')).toBe('60px');
+    expect(overlay?.style.getPropertyValue('--mouse-glow-local-y')).toBe('20px');
+    transformedHost.remove();
+  });
+
   it('automatically detects bordered product surfaces without an explicit marker', () => {
     const surface = document.createElement('section');
     surface.className = 'workspace-card';

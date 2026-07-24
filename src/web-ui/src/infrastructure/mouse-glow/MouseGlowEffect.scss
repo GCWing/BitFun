@@ -55,6 +55,10 @@
     -webkit-mask: none;
     mask: none;
   }
+
+  &[data-local-position] {
+    position: absolute;
+  }
 }
 
 :root[data-theme-type='light'] .bitfun-mouse-glow-overlay,
