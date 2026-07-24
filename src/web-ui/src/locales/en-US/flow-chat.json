@@ -498,6 +498,8 @@
     "copyFullContent": "Copy Full Content",
     "copyContent": "Copy Content",
     "copyDialog": "Copy Entire Dialog",
+    "copyAllReply": "Copy All Reply",
+    "copyFinalSummary": "Copy Final Summary",
     "copyToolInput": "Copy Tool Input",
     "copyToolOutput": "Copy Tool Output"
   },
@@ -1249,6 +1251,8 @@
   },
   "modelRound": {
     "copyDialog": "Copy dialog",
+    "copyAllReply": "Copy All Reply",
+    "copyFinalSummary": "Copy Final Summary",
     "copiedDialog": "Copied!",
     "forkDialog": "Fork session from here",
     "forkFailed": "Failed to fork session",

@@ -9,7 +9,7 @@
 
 import React, { useMemo, useState, useCallback, useEffect, useLayoutEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Copy, Check, CircleAlert } from 'lucide-react';
+import { Copy, Check, CircleAlert, FileText } from 'lucide-react';
 import type { ModelRound, ModelRoundAttempt, ModelRoundAttemptDiagnostic, FlowItem, FlowTextItem, FlowToolItem, FlowThinkingItem, TokenUsage, ToolRejectOptions } from '../../types/flow-chat';
 import { useI18n } from '@/infrastructure/i18n';
 import { FlowTextBlock } from '../FlowTextBlock';
@@ -22,7 +22,8 @@ import { isCollapsibleTool } from '../../tool-cards/toolCardMetadata';
 import { useFlowChatContext } from './FlowChatContext';
 import { FlowChatStore } from '../../store/FlowChatStore';
 import { taskCollapseStateManager } from '../../store/TaskCollapseStateManager';
-import { getEffectiveToolName, projectEffectiveToolItem } from '../../utils/toolInvocationIdentity';
+import { getEffectiveToolName } from '../../utils/toolInvocationIdentity';
+import { collectAssistantText } from '../../utils/collectAssistantText';
 import { ExportImageButton } from './ExportImageButton';
 import { ForkSessionButton } from './ForkSessionButton';
 import {
@@ -47,7 +48,6 @@ import {
   startupTrace,
 } from '@/shared/utils/startupTrace';
 import { SubagentProjectionView } from '../subagent/SubagentProjectionView';
-import { formatSessionViewPreviewText } from '../../utils/sessionViewPreview';
 import { buildModelRoundUsageMeta } from '../../utils/tokenUsageDisplay';
 import './ModelRoundItem.scss';
 import './SubagentItems.scss';
@@ -370,7 +370,7 @@ export const ModelRoundItem = React.memo<ModelRoundItemProps>(
     // but a round that started as streaming must never replay fadeIn when it
     // later flips to complete (that looked like a full chat refresh).
     const [shouldPlayEnterAnimation] = useState(() => !round.isStreaming);
-    const [copied, setCopied] = useState(false);
+    const [copied, setCopied] = useState<'all' | 'final' | null>(null);
     const [showRetryHistory, setShowRetryHistory] = useState(false);
     const [showRoundHistory, setShowRoundHistory] = useState(false);
     const [openHistoryRoundAttemptIds, setOpenHistoryRoundAttemptIds] = useState<Record<string, boolean>>({});
@@ -383,7 +383,7 @@ export const ModelRoundItem = React.memo<ModelRoundItemProps>(
       
       const handleClickOutside = (event: MouseEvent) => {
         if (copyButtonRef.current && !copyButtonRef.current.contains(event.target as Node)) {
-          setCopied(false);
+          setCopied(null);
         }
       };
       
@@ -613,88 +613,29 @@ export const ModelRoundItem = React.memo<ModelRoundItemProps>(
       })
     ), [sessionId, transientNowMs, turnId]);
 
-    const extractDialogTurnContent = useCallback(() => {
-      const flowChatStore = FlowChatStore.getInstance();
-      const state = flowChatStore.getState();
-      
-      let targetSession = null;
+    const extractAssistantText = useCallback((mode: 'all' | 'final'): string => {
+      const state = FlowChatStore.getInstance().getState();
       for (const [, session] of state.sessions) {
-        if (session.dialogTurns.some((turn: any) => turn.id === turnId)) {
-          targetSession = session;
-          break;
-        }
+        const turn = session.dialogTurns.find((d: any) => d.id === turnId);
+        if (turn) return collectAssistantText(turn, mode);
       }
-      
-      if (!targetSession) return '';
-      
-      const dialogTurn = targetSession.dialogTurns.find((turn: any) => turn.id === turnId);
-      if (!dialogTurn) return '';
-      
-      const contentParts: string[] = [];
-      
-      if (dialogTurn.userMessage?.content) {
-        contentParts.push(`${t('modelRound.userLabel')}\n${dialogTurn.userMessage.content}`);
-      }
-      
-      dialogTurn.modelRounds.forEach((modelRound: any) => {
-        const roundContent: string[] = [];
-        
-        modelRound.items.forEach((item: any) => {
-          if (item.type === 'text' && item.content?.trim()) {
-            roundContent.push(item.content.trim());
-          } else if (item.type === 'thinking' && item.content?.trim()) {
-            roundContent.push(`[Thinking]\n${item.content.trim()}`);
-          } else if (item.type === 'tool' && item.toolCall) {
-            const effectiveItem = projectEffectiveToolItem(item);
-            const toolName = effectiveItem.toolName || t('copyOutput.unknownTool');
-            let toolContent = t('modelRound.toolCallLabel', { name: toolName }) + '\n';
-            
-            if (effectiveItem.toolCall.input) {
-              const inputStr = typeof effectiveItem.toolCall.input === 'string'
-                ? effectiveItem.toolCall.input
-                : JSON.stringify(effectiveItem.toolCall.input, null, 2);
-              toolContent += `\n[Input]\n\`\`\`json\n${inputStr}\n\`\`\`\n`;
-            }
-            
-            if (item.toolResult) {
-              if (item.toolResult.error) {
-                toolContent += `\n[Error]\n${item.toolResult.error}\n`;
-              } else if (item.toolResult.result !== undefined) {
-                const resultStr = typeof item.toolResult.result === 'string'
-                  ? item.toolResult.result
-                  : JSON.stringify(item.toolResult.result, null, 2);
-                toolContent += `\n[Result]\n\`\`\`\n${formatSessionViewPreviewText(resultStr)}\n\`\`\`\n`;
-              }
-            }
-            
-            roundContent.push(toolContent.trim());
-          }
-        });
-        
-        if (roundContent.length > 0) {
-          contentParts.push(roundContent.join('\n\n'));
-        }
-      });
-      
-      return contentParts.join('\n\n---\n\n');
-    }, [t, turnId]);
-    
-    const handleCopy = useCallback(async () => {
+      return '';
+    }, [turnId]);
+
+    const handleCopy = useCallback(async (mode: 'all' | 'final') => {
       try {
-        const content = extractDialogTurnContent();
-        
+        const content = extractAssistantText(mode);
         if (!content.trim()) {
           log.warn('No content to copy');
           return;
         }
-        
         await navigator.clipboard.writeText(content);
-        setCopied(true);
-        setTimeout(() => setCopied(false), 2000);
+        setCopied(mode);
+        setTimeout(() => setCopied(null), 2000);
       } catch (error) {
         log.error('Failed to copy', error);
       }
-    }, [extractDialogTurnContent]);
+    }, [extractAssistantText]);
     
     const hasContent = sortedItems.some(item => 
       (item.type === 'text' && (item as FlowTextItem).content.trim()) ||
@@ -917,15 +858,28 @@ export const ModelRoundItem = React.memo<ModelRoundItemProps>(
 
             <ForkSessionButton sessionId={sessionId} turnId={turnId} />
 
-            <Tooltip content={copied ? t('modelRound.copiedDialog') : t('modelRound.copyDialog')} placement="top">
+            <Tooltip content={copied === 'all' ? t('modelRound.copiedDialog') : t('modelRound.copyAllReply')} placement="top">
               <button
                 ref={copyButtonRef}
-                className={`model-round-item__action-btn model-round-item__copy-btn ${copied ? 'copied' : ''}`}
-                onClick={handleCopy}
+                className={`model-round-item__action-btn model-round-item__copy-btn ${copied === 'all' ? 'copied' : ''}`}
+                onClick={() => handleCopy('all')}
                 tabIndex={shouldRevealFooter ? 0 : -1}
                 disabled={!shouldRevealFooter}
+                aria-label={t('modelRound.copyAllReply')}
               >
-                {copied ? <Check size={14} /> : <Copy size={14} />}
+                {copied === 'all' ? <Check size={14} /> : <Copy size={14} />}
+              </button>
+            </Tooltip>
+            
+            <Tooltip content={copied === 'final' ? t('modelRound.copiedDialog') : t('modelRound.copyFinalSummary')} placement="top">
+              <button
+                className={`model-round-item__action-btn model-round-item__copy-btn ${copied === 'final' ? 'copied' : ''}`}
+                onClick={() => handleCopy('final')}
+                tabIndex={shouldRevealFooter ? 0 : -1}
+                disabled={!shouldRevealFooter}
+                aria-label={t('modelRound.copyFinalSummary')}
+              >
+                {copied === 'final' ? <Check size={14} /> : <FileText size={14} />}
               </button>
             </Tooltip>
             

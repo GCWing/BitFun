@@ -80,17 +80,30 @@ export class FlowChatMenuProvider implements IMenuProvider {
       });
       
       items.push({
-        id: 'flowchat-copy-dialog',
-        label: i18nService.t('flow-chat:contextMenu.copyDialog'),
-        icon: 'MessageSquare',
+        id: 'flowchat-copy-all-reply',
+        label: i18nService.t('flow-chat:contextMenu.copyAllReply'),
+        icon: 'Copy',
         onClick: () => {
-          globalEventBus.emit('flowchat:copy-dialog', { 
-            dialogTurn, 
-            context: flowChatContext 
+          globalEventBus.emit('flowchat:copy-dialog', {
+            dialogTurn,
+            context: flowChatContext,
+            mode: 'all'
           });
         }
       });
-    }
+      items.push({
+        id: 'flowchat-copy-final-summary',
+        label: i18nService.t('flow-chat:contextMenu.copyFinalSummary'),
+        icon: 'FileText',
+        onClick: () => {
+          globalEventBus.emit('flowchat:copy-dialog', {
+            dialogTurn,
+            context: flowChatContext,
+            mode: 'final'
+          });
+        }
+      });
+   }
 
     
     if (context.type === ContextType.FLOWCHAT_TOOL_CARD && metadata?.flowItem) {

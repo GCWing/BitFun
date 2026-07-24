@@ -498,6 +498,8 @@
     "copyFullContent": "复制完整内容",
     "copyContent": "复制内容",
     "copyDialog": "复制整个对话",
+    "copyAllReply": "复制全部回复",
+    "copyFinalSummary": "复制最终总结",
     "copyToolInput": "复制工具输入",
     "copyToolOutput": "复制工具输出"
   },
@@ -1249,6 +1251,8 @@
   },
   "modelRound": {
     "copyDialog": "复制对话",
+    "copyAllReply": "复制全部回复",
+    "copyFinalSummary": "复制最终总结",
     "copiedDialog": "已复制!",
     "forkDialog": "从这里分叉会话",
     "forkFailed": "创建分叉会话失败",
