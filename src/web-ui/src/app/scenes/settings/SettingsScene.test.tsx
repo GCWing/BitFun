@@ -71,6 +71,7 @@ describe('SettingsScene lazy tab routing', () => {
       root.unmount();
     });
     container.remove();
+    vi.useRealTimers();
   });
 
   async function renderActiveTab(tab: 'mcp-tools' | 'acp-agents' | 'external-sources') {
@@ -96,5 +97,32 @@ describe('SettingsScene lazy tab routing', () => {
     await renderActiveTab('external-sources');
 
     expect(container.querySelector('[data-testid="external-sources-config"]')).not.toBeNull();
+  });
+
+  it('keeps the previous settings page mounted through the local transition', async () => {
+    vi.useFakeTimers();
+    await act(async () => {
+      root.render(<SettingsScene />);
+    });
+
+    await act(async () => {
+      useSettingsStore.setState({ activeTab: 'appearance' });
+      await Promise.resolve();
+    });
+
+    const activePanel = container.querySelector('[data-settings-panel-active="true"]');
+    const outgoingPanel = container.querySelector('.bitfun-settings-scene__content-wrapper--outgoing');
+    expect(activePanel?.getAttribute('data-settings-panel')).toBe('appearance');
+    expect(outgoingPanel?.getAttribute('data-settings-panel')).toBe('basics');
+
+    act(() => {
+      vi.advanceTimersByTime(179);
+    });
+    expect(container.querySelector('[data-settings-panel="basics"]')).not.toBeNull();
+
+    act(() => {
+      vi.advanceTimersByTime(1);
+    });
+    expect(container.querySelector('[data-settings-panel="basics"]')).toBeNull();
   });
 });

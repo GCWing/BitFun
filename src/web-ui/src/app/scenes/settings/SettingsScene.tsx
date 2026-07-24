@@ -6,32 +6,35 @@
  * driven by settingsStore.activeTab.
  */
 
-import React, { lazy, Suspense, useEffect } from 'react';
+import React, {
+  Suspense,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from 'react';
 import { useSettingsStore } from './settingsStore';
+import type { ConfigTab } from './settingsConfig';
+import {
+  AcpAgentsConfig,
+  AIModelConfig,
+  AppearanceConfig,
+  ArchivedSessionsConfig,
+  BasicsConfig,
+  EditorConfig,
+  ExternalSourcesConfig,
+  KeyboardShortcutsTab,
+  McpToolsConfig,
+  MemoriesConfig,
+  QuickActionsConfig,
+  ReviewConfig,
+  SessionPermissionsConfig,
+  SessionPersonalizationConfig,
+} from './settingsContentRegistry';
 import './SettingsScene.scss';
 
-const AIModelConfig = lazy(() => import('../../../infrastructure/config/components/AIModelConfig'));
-const McpToolsConfig = lazy(() => import('../../../infrastructure/config/components/McpToolsConfig'));
-const AcpAgentsConfig = lazy(() => import('../../../infrastructure/config/components/AcpAgentsConfig'));
-const ExternalSourcesConfig = lazy(() => import('../../../infrastructure/config/components/ExternalSourcesConfig'));
-const EditorConfig = lazy(() => import('../../../infrastructure/config/components/EditorConfig'));
-const BasicsConfig = lazy(() => import('../../../infrastructure/config/components/BasicsConfig'));
-const AppearanceConfig = lazy(() => import('../../../infrastructure/config/components/AppearanceConfig'));
-const ReviewConfig = lazy(() => import('../../../infrastructure/config/components/ReviewConfig'));
-const MemoriesConfig = lazy(() => import('../../../infrastructure/config/components/MemoriesConfig'));
-const QuickActionsConfig = lazy(() => import('../../../infrastructure/config/components/QuickActionsConfig'));
-const ArchivedSessionsConfig = lazy(() => import('./components/ArchivedSessionsConfig'));
-const KeyboardShortcutsTab = lazy(() => import('./components/KeyboardShortcutsTab'));
-const SessionPersonalizationConfig = lazy(() =>
-  import('../../../infrastructure/config/components/SessionConfig').then((module) => ({
-    default: module.SessionPersonalizationConfig,
-  }))
-);
-const SessionPermissionsConfig = lazy(() =>
-  import('../../../infrastructure/config/components/SessionConfig').then((module) => ({
-    default: module.SessionPermissionsConfig,
-  }))
-);
+// Keep in sync with settings-content-exit in SettingsScene.scss.
+const SETTINGS_CONTENT_EXIT_DURATION_MS = 180;
 
 function SettingsSceneLoading() {
   return (
@@ -44,12 +47,34 @@ function SettingsSceneLoading() {
   );
 }
 
+function resolveSettingsContent(tab: ConfigTab): React.ComponentType | null {
+  switch (tab) {
+    case 'basics':                  return BasicsConfig;
+    case 'appearance':              return AppearanceConfig;
+    case 'models':                  return AIModelConfig;
+    case 'archived-sessions':       return ArchivedSessionsConfig;
+    case 'session-personalization': return SessionPersonalizationConfig;
+    case 'session-permissions':     return SessionPermissionsConfig;
+    case 'quick-actions':           return QuickActionsConfig;
+    case 'review':                  return ReviewConfig;
+    case 'memories':                return MemoriesConfig;
+    case 'mcp-tools':               return McpToolsConfig;
+    case 'external-sources':        return ExternalSourcesConfig;
+    case 'acp-agents':              return AcpAgentsConfig;
+    case 'editor':                  return EditorConfig;
+    case 'keyboard':                return KeyboardShortcutsTab;
+    default:                        return null;
+  }
+}
+
 const SettingsScene: React.FC = () => {
   const activeTab = useSettingsStore(s => s.activeTab);
   const setActiveTab = useSettingsStore(s => s.setActiveTab);
 
-  const resolvedTab: typeof activeTab =
+  const resolvedTab: ConfigTab =
     (activeTab as string) === 'session-config' ? 'session-personalization' : activeTab;
+  const [outgoingTab, setOutgoingTab] = useState<ConfigTab | null>(null);
+  const previousTabRef = useRef<ConfigTab>(resolvedTab);
 
   useEffect(() => {
     /** Legacy merged session settings tab removed in favor of two panels. */
@@ -58,38 +83,60 @@ const SettingsScene: React.FC = () => {
     }
   }, [activeTab, setActiveTab]);
 
-  let Content: React.ComponentType | null = null;
+  // Derive the previous tab during render so React keeps its keyed subtree
+  // mounted in the same commit that introduces the incoming page.
+  const renderedOutgoingTab = previousTabRef.current !== resolvedTab
+    ? previousTabRef.current
+    : outgoingTab;
 
-  switch (resolvedTab) {
-    case 'basics':           Content = BasicsConfig;         break;
-    case 'appearance':       Content = AppearanceConfig;     break;
-    case 'models':           Content = AIModelConfig;        break;
-    case 'archived-sessions': Content = ArchivedSessionsConfig; break;
-    case 'session-personalization': Content = SessionPersonalizationConfig; break;
-    case 'session-permissions':     Content = SessionPermissionsConfig;     break;
-    case 'quick-actions':    Content = QuickActionsConfig;   break;
-    case 'review':           Content = ReviewConfig;         break;
-    case 'memories':         Content = MemoriesConfig;       break;
-    case 'mcp-tools':        Content = McpToolsConfig;      break;
-    case 'external-sources': Content = ExternalSourcesConfig; break;
-    case 'acp-agents':       Content = AcpAgentsConfig;     break;
-    case 'editor':           Content = EditorConfig;         break;
-    case 'keyboard':         Content = KeyboardShortcutsTab; break;
+  useLayoutEffect(() => {
+    const previousTab = previousTabRef.current;
+    previousTabRef.current = resolvedTab;
+    if (previousTab === resolvedTab) return;
+
+    setOutgoingTab(previousTab);
+    const exitTimer = window.setTimeout(() => {
+      setOutgoingTab(current => current === previousTab ? null : current);
+    }, SETTINGS_CONTENT_EXIT_DURATION_MS);
+
+    return () => window.clearTimeout(exitTimer);
+  }, [resolvedTab]);
+
+  const renderedTabs: ConfigTab[] = [resolvedTab];
+  if (renderedOutgoingTab && renderedOutgoingTab !== resolvedTab) {
+    renderedTabs.push(renderedOutgoingTab);
   }
 
   return (
     <div className="bitfun-settings-scene" data-testid="settings-scene" data-settings-tab={resolvedTab}>
-      {Content && (
-        <div
-          key={resolvedTab}
-          className="bitfun-settings-scene__content-wrapper"
-          data-testid="settings-scene-content"
-        >
-          <Suspense fallback={<SettingsSceneLoading />}>
-            <Content />
-          </Suspense>
-        </div>
-      )}
+      <div className="bitfun-settings-scene__content-stack">
+        {renderedTabs.map(tab => {
+          const Content = resolveSettingsContent(tab);
+          if (!Content) return null;
+
+          const isActive = tab === resolvedTab;
+          const isOutgoing = !isActive && tab === renderedOutgoingTab;
+          return (
+            <div
+              key={tab}
+              className={[
+                'bitfun-settings-scene__content-wrapper',
+                isActive && 'bitfun-settings-scene__content-wrapper--active',
+                isActive && renderedOutgoingTab && 'bitfun-settings-scene__content-wrapper--entering',
+                isOutgoing && 'bitfun-settings-scene__content-wrapper--outgoing',
+              ].filter(Boolean).join(' ')}
+              aria-hidden={!isActive}
+              data-testid="settings-scene-content"
+              data-settings-panel={tab}
+              data-settings-panel-active={isActive ? 'true' : 'false'}
+            >
+              <Suspense fallback={isActive ? <SettingsSceneLoading /> : null}>
+                <Content />
+              </Suspense>
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 };

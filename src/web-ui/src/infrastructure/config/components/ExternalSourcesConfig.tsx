@@ -1093,7 +1093,14 @@ const ExternalSourcesConfig: React.FC = () => {
   ), [busyKey, hostCapabilities.canManageSources, policyCompatible, setEnabled, t]);
 
   if (loading && !snapshot) {
-    return <ConfigPageLoading text={t('loading')} />;
+    return (
+      <ConfigPageLayout className="bitfun-external-sources-config">
+        <ConfigPageHeader title={t('title')} subtitle={t('subtitle')} />
+        <ConfigPageContent>
+          <ConfigPageLoading text={t('loading')} />
+        </ConfigPageContent>
+      </ConfigPageLayout>
+    );
   }
 
   const hostUnavailable = !snapshot && error?.code === 'host_unavailable';

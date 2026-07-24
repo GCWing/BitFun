@@ -11,10 +11,17 @@
   height: 100%;
   overflow-y: auto;
   overflow-x: hidden;
+  /*
+   * Keep the content axis fixed when a page gains or loses a vertical scrollbar.
+   * Reserving both edges also keeps the 600px content column visually centered.
+   */
+  scrollbar-gutter: stable both-edges;
   background: var(--color-bg-scene);
   color: var(--color-text-primary);
   font-family: var(--font-family-sans);
   /* Shared layout contract for settings pages in wide scenes. */
+  --config-page-content-inline-padding: #{configLayout.$config-page-content-inline-padding};
+  --config-page-content-max-width: #{configLayout.$config-page-content-max-width};
   --config-page-content-bottom-padding: 48px;
   /* Vertical gap between top-level sections (ConfigPageSection blocks) inside ConfigPageContent. */
   --config-page-section-gap: 40px;
@@ -35,11 +42,18 @@
    * the actual content, not at the flex-allocated truncated position. */
   flex-shrink: 0;
   overflow: visible;
-  padding: 0 configLayout.$config-page-content-inline-padding;
+  /*
+   * Page-specific class names are attached to this public wrapper. Keep its box
+   * spacing neutral and let the private inner frame own the shared gutters.
+   */
+  padding: 0;
 }
 
 .bitfun-config-page-content__inner {
-  width: min(100%, configLayout.$config-page-content-max-width);
+  width: min(
+    calc(100% - (2 * var(--config-page-content-inline-padding))),
+    var(--config-page-content-max-width)
+  );
   margin-inline: auto;
   display: flex;
   flex-direction: column;
@@ -187,11 +201,11 @@
 
   .bitfun-config-page-content {
     --config-page-section-gap: var(--size-gap-8);
-    padding-inline: var(--size-gap-4);
+    --config-page-content-inline-padding: var(--size-gap-4);
   }
 
   .bitfun-config-page-content__inner {
-    width: 100%;
+    width: calc(100% - (2 * var(--config-page-content-inline-padding)));
   }
 }
 

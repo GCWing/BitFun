@@ -28,6 +28,7 @@ const translateMock = vi.hoisted(() => (key: string, params?: Record<string, unk
     'messages.saved': 'Saved',
     'messages.loadFailed': 'Failed to load Review settings.',
     'messages.saveFailed': 'Failed to save Review settings.',
+    loading: 'Loading review settings',
   };
   if (key in translations) return translations[key];
   return key;
@@ -233,6 +234,28 @@ describe('ReviewConfig', () => {
     expect(container.textContent).not.toContain('extra.title');
     expect(container.textContent).not.toContain('team management');
     expect(container.textContent).not.toContain('orchestration controls');
+  });
+
+  it('keeps the shared page header and content frame while loading', async () => {
+    let resolveLoad: ((team: ReturnType<typeof createReviewTeam>) => void) | undefined;
+    loadDefaultReviewTeamMock.mockImplementationOnce(
+      () => new Promise((resolve) => {
+        resolveLoad = resolve;
+      }),
+    );
+
+    await act(async () => {
+      root.render(<ReviewConfig />);
+      await Promise.resolve();
+    });
+
+    expect(container.querySelector('main > header')?.textContent).toContain('Review');
+    expect(container.querySelector('main > div')?.textContent).toContain('Loading review settings');
+
+    await act(async () => {
+      resolveLoad?.(createReviewTeam());
+      await Promise.resolve();
+    });
   });
 
   it('shows an honest read-only boundary outside the desktop runtime', async () => {

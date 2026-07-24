@@ -4,12 +4,23 @@
 
 @keyframes settings-content-enter {
   from {
-    opacity: 0;
-    transform: translateY(6px);
+    transform: translate3d(0, 4px, 0);
   }
+
   to {
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+@keyframes settings-content-exit {
+  from {
     opacity: 1;
-    transform: translateY(0);
+    transform: translate3d(0, 0, 0);
+  }
+
+  to {
+    opacity: 0;
+    transform: translate3d(0, -2px, 0);
   }
 }
 
@@ -50,17 +61,50 @@
     margin-top: var(--size-gap-6);
   }
 
-  &__content-wrapper {
+  &__content-stack {
     flex: 1;
+    position: relative;
+    min-width: 0;
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  &__content-wrapper {
+    position: absolute;
+    inset: 0;
     display: flex;
     flex-direction: column;
+    min-width: 0;
+    min-height: 0;
     overflow: hidden;
-    animation: settings-content-enter 220ms cubic-bezier(0.25, 1, 0.5, 1) both;
+
+    &--active {
+      z-index: 1;
+    }
+
+    &--entering {
+      animation: settings-content-enter 220ms cubic-bezier(0.22, 1, 0.36, 1) both;
+      will-change: transform;
+    }
+
+    &--outgoing {
+      z-index: 2;
+      pointer-events: none;
+      animation: settings-content-exit 180ms cubic-bezier(0.4, 0, 1, 1) both;
+      will-change: transform, opacity;
+    }
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
   .bitfun-settings-scene__content-wrapper {
-    animation: none;
+    &--entering {
+      animation: none;
+    }
+
+    &--outgoing {
+      display: none;
+      animation: none;
+    }
   }
 }

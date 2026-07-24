@@ -284,6 +284,33 @@ describe('ExternalSourcesConfig', () => {
     vi.clearAllMocks();
   });
 
+  it('keeps the shared page frame while the initial snapshot is loading', async () => {
+    let resolveSnapshot: ((value: typeof snapshot) => void) | undefined;
+    getSnapshotMock.mockImplementationOnce(
+      () => new Promise((resolve) => {
+        resolveSnapshot = resolve;
+      }),
+    );
+
+    await act(async () => {
+      root.render(<ExternalSourcesConfig />);
+      await Promise.resolve();
+    });
+
+    const page = container.querySelector(
+      '.bitfun-config-page-layout.bitfun-external-sources-config',
+    );
+    expect(page?.querySelector('.bitfun-config-page-header__title')?.textContent).toBe('title');
+    expect(page?.querySelector(
+      '.bitfun-config-page-content .bitfun-config-page-loading',
+    )?.textContent).toBe('loading');
+
+    await act(async () => {
+      resolveSnapshot?.(snapshot);
+      await Promise.resolve();
+    });
+  });
+
   it('keeps compatibility controls compact and applies the safe OpenCode defaults', async () => {
     const policySnapshot = {
       ...snapshot,

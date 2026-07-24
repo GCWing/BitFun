@@ -1,0 +1,283 @@
+/**
+ * BitFun global motion baseline.
+ *
+ * Semantic controls and surfaces participate automatically. Product-specific
+ * motion can opt in without adding another keyframe:
+ *
+ *   data-motion="interactive"  press / hover feedback
+ *   data-motion="view"         page or panel entrance
+ *   data-motion="popup"        menu, popover, or floating surface entrance
+ *   data-motion="overlay"      backdrop entrance
+ *   data-motion="none"         disable motion for this subtree
+ *
+ * Keep this layer deliberately subtle. Component-owned entrance animation
+ * wins because fallback selectors use :where() and have zero specificity.
+ * Interactive transition timing is intentionally centralized here.
+ */
+
+@keyframes bitfun-motion-view-enter {
+  from {
+    opacity: 0.92;
+  }
+
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes bitfun-motion-view-exit {
+  from {
+    opacity: 1;
+  }
+
+  to {
+    opacity: 0;
+  }
+}
+
+@keyframes bitfun-motion-popup-enter {
+  from {
+    opacity: 0;
+    translate: 0 -2px;
+    scale: 0.992;
+  }
+
+  to {
+    opacity: 1;
+    translate: 0 0;
+    scale: 1;
+  }
+}
+
+@keyframes bitfun-motion-dialog-enter {
+  from {
+    opacity: 0;
+    translate: 0 6px;
+    scale: 0.992;
+  }
+
+  to {
+    opacity: 1;
+    translate: 0 0;
+    scale: 1;
+  }
+}
+
+@keyframes bitfun-motion-overlay-enter {
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  /**
+   * Buttons and button-like controls.
+   *
+   * Individual transform properties compose with component-owned `transform`
+   * (icons, drag handles, toggles) instead of replacing it.
+   */
+  :where(
+    button,
+    input[type='button'],
+    input[type='submit'],
+    input[type='reset'],
+    summary,
+    [role='button'],
+    [role='checkbox'],
+    [role='radio'],
+    [role='switch'],
+    [data-motion='interactive']
+  ):where(
+    :not(:disabled):not([aria-disabled='true']):not([data-motion='none'])
+  ) {
+    transform-origin: center;
+    transition:
+      translate var(--motion-fast, 150ms) var(--easing-standard, cubic-bezier(0.4, 0, 0.2, 1)),
+      scale var(--motion-fast, 150ms) var(--easing-standard, cubic-bezier(0.4, 0, 0.2, 1)),
+      transform var(--motion-fast, 150ms) var(--easing-standard, cubic-bezier(0.4, 0, 0.2, 1)),
+      background-color var(--motion-fast, 150ms) var(--easing-standard, cubic-bezier(0.4, 0, 0.2, 1)),
+      border-color var(--motion-fast, 150ms) var(--easing-standard, cubic-bezier(0.4, 0, 0.2, 1)),
+      color var(--motion-fast, 150ms) var(--easing-standard, cubic-bezier(0.4, 0, 0.2, 1)),
+      box-shadow var(--motion-fast, 150ms) var(--easing-standard, cubic-bezier(0.4, 0, 0.2, 1)),
+      opacity var(--motion-fast, 150ms) var(--easing-standard, cubic-bezier(0.4, 0, 0.2, 1));
+    transition-property:
+      translate,
+      scale,
+      transform,
+      background-color,
+      border-color,
+      color,
+      box-shadow,
+      opacity !important;
+  }
+
+  @media (hover: hover) and (pointer: fine) {
+    :where(
+      button,
+      input[type='button'],
+      input[type='submit'],
+      input[type='reset'],
+      summary,
+      [role='button'],
+      [role='checkbox'],
+      [role='radio'],
+      [role='switch'],
+      [data-motion='interactive']
+    ):where(
+      :not(:disabled):not([aria-disabled='true']):not([data-motion='none'])
+    ):hover {
+      translate: 0 -1px;
+    }
+  }
+
+  :where(
+    button,
+    input[type='button'],
+    input[type='submit'],
+    input[type='reset'],
+    summary,
+    [role='button'],
+    [role='checkbox'],
+    [role='radio'],
+    [role='switch'],
+    [data-motion='interactive']
+  ):where(
+    :not(:disabled):not([aria-disabled='true']):not([data-motion='none'])
+  ):active {
+    translate: 0 0;
+    scale: 0.985;
+  }
+
+  /**
+   * View entrance is explicit. Automatically fading every tab panel makes
+   * ordinary content replacement look like a page refresh, especially when
+   * the component already owns a transition or a Suspense fallback.
+   */
+  :where([data-motion='view']):where(:not([data-motion='none'])) {
+    animation: bitfun-motion-view-enter 140ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+
+  :where(
+    [data-scene-transition='exit'],
+    [data-motion='view-exit']
+  ):where(:not([data-motion='none'])) {
+    animation: bitfun-motion-view-exit 140ms cubic-bezier(0.4, 0, 1, 1) both;
+  }
+
+  /**
+   * Floating surfaces. Existing component animations retain precedence; these
+   * selectors fill the gaps for current and future semantic popups.
+   */
+  :where(
+    [role='menu'],
+    [role='listbox'],
+    [role='tooltip'],
+    [data-motion='popup'],
+    [class$='__dropdown'],
+    [class*='__dropdown '],
+    [class$='-dropdown'],
+    [class*='-dropdown '],
+    [class$='__popover'],
+    [class*='__popover '],
+    [class$='-popover'],
+    [class*='-popover '],
+    [class$='__context-menu'],
+    [class*='__context-menu '],
+    [class$='-context-menu'],
+    [class*='-context-menu ']
+  ):where(:not([data-motion='none'])) {
+    transform-origin: var(--bitfun-motion-origin, center top);
+    animation: bitfun-motion-popup-enter 160ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+
+  /**
+   * A dialog may itself be the full-screen overlay. Move only dialog surfaces;
+   * overlay/backdrop roots receive a fade below.
+   */
+  :where(
+    [role='dialog'],
+    [role='alertdialog'],
+    [data-motion='dialog']
+  ):where(
+    :not(
+      [class*='overlay'],
+      [class*='backdrop'],
+      [data-motion='overlay'],
+      [data-motion='none']
+    )
+  ) {
+    transform-origin: center;
+    animation: bitfun-motion-dialog-enter 220ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+
+  :where(
+    [data-motion='overlay'],
+    [role='dialog'][class*='overlay'],
+    [role='dialog'][class*='backdrop'],
+    [role='alertdialog'][class*='overlay'],
+    [role='alertdialog'][class*='backdrop'],
+    body > [class$='-overlay'],
+    body > [class$='__overlay'],
+    body > [class$='-backdrop'],
+    body > [class$='__backdrop']
+  ):where(:not([data-motion='none'])) {
+    animation: bitfun-motion-overlay-enter 160ms ease-out both;
+  }
+
+  /**
+   * A small, explicit set of reusable interactive surfaces that are not native
+   * buttons. New surfaces should prefer semantic roles or data-motion.
+   */
+  :where(
+    .v-card--interactive,
+    .bitfun-context-card--interactive,
+    .bitfun-nav-panel__section-header--interactive
+  ):where(:not([data-motion='none'])) {
+    transform-origin: center;
+    transition:
+      translate var(--motion-fast, 150ms) var(--easing-standard, cubic-bezier(0.4, 0, 0.2, 1)),
+      scale var(--motion-fast, 150ms) var(--easing-standard, cubic-bezier(0.4, 0, 0.2, 1)),
+      transform var(--motion-fast, 150ms) var(--easing-standard, cubic-bezier(0.4, 0, 0.2, 1)),
+      background-color var(--motion-fast, 150ms) var(--easing-standard, cubic-bezier(0.4, 0, 0.2, 1)),
+      border-color var(--motion-fast, 150ms) var(--easing-standard, cubic-bezier(0.4, 0, 0.2, 1)),
+      box-shadow var(--motion-fast, 150ms) var(--easing-standard, cubic-bezier(0.4, 0, 0.2, 1));
+    transition-property:
+      translate,
+      scale,
+      transform,
+      background-color,
+      border-color,
+      box-shadow !important;
+  }
+
+  @media (hover: hover) and (pointer: fine) {
+    :where(
+      .v-card--interactive,
+      .bitfun-context-card--interactive,
+      .bitfun-nav-panel__section-header--interactive
+    ):where(:not([data-motion='none'])):hover {
+      translate: 0 -1px;
+    }
+  }
+
+  :where(
+    .v-card--interactive,
+    .bitfun-context-card--interactive,
+    .bitfun-nav-panel__section-header--interactive
+  ):where(:not([data-motion='none'])):active {
+    translate: 0 0;
+    scale: 0.99;
+  }
+}
+
+/* Explicit opt-out for embedded apps, canvases, or latency-sensitive surfaces. */
+:where([data-motion='none'], [data-motion='none'] *) {
+  animation: none !important;
+  transition: none !important;
+  translate: none !important;
+  scale: none !important;
+}

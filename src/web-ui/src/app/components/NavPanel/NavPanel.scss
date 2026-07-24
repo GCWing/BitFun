@@ -11,12 +11,6 @@
 @use '../../../component-library/styles/btn-primary-tokens.scss' as btn-primary;
 
 $_nav-width: 240px;
-// Scene-inner fade: used when switching between different SceneNav components
-// while already in scene-nav mode (e.g. file-viewer → settings).
-@keyframes bitfun-nav-panel-scene-inner-in {
-  from { opacity: 0; }
-  to   { opacity: 1; }
-}
 
 $_item-height: 32px;
 $_section-header-height: 24px;
@@ -80,11 +74,8 @@ $_section-header-height: 24px;
     // ── SceneNav overlay ──
     &--scene {
       clip-path: inset(var(--clip-origin-top) 0 var(--clip-origin-bottom) 0);
-  // Wrapper re-keyed on sceneId change → plays the fade-in when the
-  // SceneNav content is swapped while the accordion row stays expanded.
       transition: clip-path $motion-base $easing-decelerate,
                   opacity $motion-fast $easing-decelerate;
-    animation: bitfun-nav-panel-scene-inner-in $motion-fast $easing-decelerate;
       position: absolute;
       inset: 0;
       z-index: 1;

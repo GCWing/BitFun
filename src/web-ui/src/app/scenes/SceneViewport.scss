@@ -106,7 +106,8 @@
     display: none;
     overflow: hidden;
 
-    &--active {
+    &--active,
+    &--outgoing {
       display: flex;
       flex-direction: row;
       min-width: 0;
@@ -120,11 +121,26 @@
         height: 100%;
       }
     }
+
+    &--active {
+      z-index: 1;
+    }
+
+    &--outgoing {
+      z-index: 2;
+      pointer-events: none;
+    }
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
   .bitfun-scene-viewport__clip::after {
     transition: none;
+  }
+
+  // Do not keep the previous scene painted during the exit grace period when
+  // the user has asked for motion to be reduced.
+  .bitfun-scene-viewport__scene--exiting {
+    display: none;
   }
 }
