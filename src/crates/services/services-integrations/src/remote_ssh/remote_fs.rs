@@ -72,12 +72,9 @@ impl RemoteFileService {
     ) -> anyhow::Result<Vec<u8>> {
         let manager = self.get_manager(connection_id).await?;
         if manager.is_container_workspace(connection_id).await {
-            let bytes = manager.container_read_file(connection_id, path).await?;
-            let total = bytes.len() as u64;
-            if !on_progress(total, total) {
-                return Err(anyhow!("Transfer cancelled"));
-            }
-            return Ok(bytes);
+            return manager
+                .container_read_file_with_progress(connection_id, path, on_progress)
+                .await;
         }
         manager
             .sftp_read_with_progress(connection_id, path, 262_144, on_progress)
@@ -112,14 +109,9 @@ impl RemoteFileService {
     ) -> anyhow::Result<()> {
         let manager = self.get_manager(connection_id).await?;
         if manager.is_container_workspace(connection_id).await {
-            manager
-                .container_write_file(connection_id, path, content)
-                .await?;
-            let total = content.len() as u64;
-            if !on_progress(total, total) {
-                return Err(anyhow!("Transfer cancelled"));
-            }
-            return Ok(());
+            return manager
+                .container_write_file_with_progress(connection_id, path, content, on_progress)
+                .await;
         }
         manager
             .sftp_write_with_progress(connection_id, path, content, 262_144, on_progress)

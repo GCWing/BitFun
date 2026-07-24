@@ -286,7 +286,19 @@ export const SSHRemoteProvider: React.FC<SSHRemoteProviderProps> = ({ children }
     // Determine auth method from tagged enum (password uses empty string; backend fills from vault)
     let authMethod: SSHConnectionConfig['auth'] | null = null;
     if (savedConn.authType.type === 'PrivateKey') {
-      authMethod = { type: 'PrivateKey', keyPath: savedConn.authType.keyPath };
+      authMethod = {
+        type: 'PrivateKey',
+        keyPath: savedConn.authType.keyPath,
+        certificatePath: savedConn.authType.certificatePath,
+      };
+    } else if (savedConn.authType.type === 'Agent') {
+      authMethod = {
+        type: 'Agent',
+        keyFingerprint: savedConn.authType.keyFingerprint,
+        fallbackKeyPath: savedConn.authType.fallbackKeyPath,
+      };
+    } else if (savedConn.authType.type === 'KeyboardInteractive') {
+      return false;
     } else {
       // Caller must only invoke password reconnect when vault has a password (see checkRemoteWorkspace).
       authMethod = { type: 'Password', password: '' };
@@ -302,6 +314,7 @@ export const SSHRemoteProvider: React.FC<SSHRemoteProviderProps> = ({ children }
       defaultWorkspace: savedConn.defaultWorkspace,
       proxyJump: savedConn.proxyJump,
       container: savedConn.container,
+      options: savedConn.options,
     };
 
     return reconnectUntilDeadline({
@@ -488,6 +501,9 @@ export const SSHRemoteProvider: React.FC<SSHRemoteProviderProps> = ({ children }
           if (!hasVault) {
             skipPasswordAutoReconnect.add(ws.connectionId);
           }
+        } else if (sc?.authType.type === 'KeyboardInteractive') {
+          // Interactive responses are intentionally never persisted.
+          skipPasswordAutoReconnect.add(ws.connectionId);
         }
       }
 

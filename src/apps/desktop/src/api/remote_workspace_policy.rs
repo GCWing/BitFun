@@ -1542,10 +1542,7 @@ pub const REMOTE_WORKSPACE_COMMAND_POLICIES: &[(&str, RemoteWorkspacePolicy)] = 
         RemoteWorkspacePolicy::LocalOnly,
     ),
     ("speech_delete_model", RemoteWorkspacePolicy::LocalOnly),
-    (
-        "speech_download_model",
-        RemoteWorkspacePolicy::LocalOnly,
-    ),
+    ("speech_download_model", RemoteWorkspacePolicy::LocalOnly),
     (
         "speech_finish_input_session",
         RemoteWorkspacePolicy::LocalOnly,
@@ -1581,11 +1578,19 @@ pub const REMOTE_WORKSPACE_COMMAND_POLICIES: &[(&str, RemoteWorkspacePolicy)] = 
         RemoteWorkspacePolicy::WorkspaceAgnostic,
     ),
     (
+        "ssh_list_docker_containers",
+        RemoteWorkspacePolicy::WorkspaceAgnostic,
+    ),
+    (
         "ssh_list_saved_connections",
         RemoteWorkspacePolicy::WorkspaceAgnostic,
     ),
     (
         "ssh_save_connection",
+        RemoteWorkspacePolicy::WorkspaceAgnostic,
+    ),
+    (
+        "ssh_test_connection",
         RemoteWorkspacePolicy::WorkspaceAgnostic,
     ),
     (

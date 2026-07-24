@@ -55,6 +55,9 @@ pub struct SSHConnectionConfig {
     /// Optional Docker container that becomes the effective workspace target.
     #[serde(default)]
     pub container: Option<ContainerWorkspaceConfig>,
+    /// Connection and authentication timeout/retry policy.
+    #[serde(default)]
+    pub options: SSHConnectionOptions,
 }
 
 impl SSHConnectionConfig {
@@ -66,9 +69,10 @@ impl SSHConnectionConfig {
         self.host == other.host
             && self.port == other.port
             && self.username == other.username
-            && std::mem::discriminant(&self.auth) == std::mem::discriminant(&other.auth)
+            && self.auth.connection_params_equal(&other.auth)
             && self.proxy_jump == other.proxy_jump
             && self.container == other.container
+            && self.options == other.options
     }
 
     pub fn uses_local_docker(&self) -> bool {
@@ -84,6 +88,81 @@ impl SSHConnectionConfig {
                 ContainerAccess::DockerExec | ContainerAccess::Auto
             )
         })
+    }
+}
+
+impl SSHAuthMethod {
+    fn connection_params_equal(&self, other: &Self) -> bool {
+        match (self, other) {
+            (Self::Password { .. }, Self::Password { .. })
+            | (Self::KeyboardInteractive { .. }, Self::KeyboardInteractive { .. }) => true,
+            (
+                Self::PrivateKey {
+                    key_path,
+                    certificate_path,
+                    ..
+                },
+                Self::PrivateKey {
+                    key_path: other_key_path,
+                    certificate_path: other_certificate_path,
+                    ..
+                },
+            ) => key_path == other_key_path && certificate_path == other_certificate_path,
+            (
+                Self::Agent {
+                    key_fingerprint,
+                    fallback_key_path,
+                },
+                Self::Agent {
+                    key_fingerprint: other_key_fingerprint,
+                    fallback_key_path: other_fallback_key_path,
+                },
+            ) => {
+                key_fingerprint == other_key_fingerprint
+                    && fallback_key_path == other_fallback_key_path
+            }
+            _ => false,
+        }
+    }
+}
+
+fn default_connect_timeout_secs() -> u64 {
+    30
+}
+
+fn default_auth_timeout_secs() -> u64 {
+    60
+}
+
+fn default_auth_attempts() -> u8 {
+    3
+}
+
+fn default_connect_attempts() -> u8 {
+    1
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct SSHConnectionOptions {
+    #[serde(default = "default_connect_timeout_secs")]
+    pub connect_timeout_secs: u64,
+    #[serde(default = "default_auth_timeout_secs")]
+    pub auth_timeout_secs: u64,
+    #[serde(default = "default_auth_attempts")]
+    pub auth_attempts: u8,
+    #[serde(default = "default_connect_attempts")]
+    pub connect_attempts: u8,
+}
+
+impl Default for SSHConnectionOptions {
+    fn default() -> Self {
+        Self {
+            connect_timeout_secs: default_connect_timeout_secs(),
+            auth_timeout_secs: default_auth_timeout_secs(),
+            auth_attempts: default_auth_attempts(),
+            connect_attempts: default_connect_attempts(),
+        }
     }
 }
 
@@ -107,8 +186,8 @@ pub enum ContainerAccess {
     Sshd,
     /// Execute every workspace operation through `docker exec`.
     DockerExec,
-    /// Prefer the configured container target. P0 currently resolves this to
-    /// `docker exec`; the serialized value leaves room for sshd probing later.
+    /// Probe the container's published sshd endpoint and fall back to
+    /// `docker exec` when the SSH handshake or authentication is unavailable.
     Auto,
 }
 
@@ -149,10 +228,28 @@ pub enum SSHAuthMethod {
         key_path: String,
         /// Optional passphrase for encrypted private key
         passphrase: Option<String>,
+        /// Optional OpenSSH user certificate paired with the private key.
+        #[serde(default, rename = "certificatePath")]
+        certificate_path: Option<String>,
+    },
+    /// Use identities exposed by the platform OpenSSH agent.
+    Agent {
+        /// Optional public-key fingerprint used to select one agent identity.
+        #[serde(default, rename = "keyFingerprint")]
+        key_fingerprint: Option<String>,
+        /// Optional compatibility fallback when an agent is unavailable.
+        #[serde(default, rename = "fallbackKeyPath")]
+        fallback_key_path: Option<String>,
+    },
+    /// Keyboard-interactive authentication (password/OTP/challenge response).
+    ///
+    /// Responses are runtime-only and are never copied into `SavedConnection`.
+    KeyboardInteractive {
+        #[serde(default)]
+        responses: Vec<String>,
     },
 }
 
-/// Legacy `{"type":"Agent"}` in saved config maps to default private key path.
 fn deserialize_ssh_auth_method<'de, D>(deserializer: D) -> Result<SSHAuthMethod, D::Error>
 where
     D: Deserializer<'de>,
@@ -167,22 +264,41 @@ where
             #[serde(rename = "keyPath")]
             key_path: String,
             passphrase: Option<String>,
+            #[serde(default, rename = "certificatePath")]
+            certificate_path: Option<String>,
         },
-        Agent,
+        Agent {
+            #[serde(default, rename = "keyFingerprint")]
+            key_fingerprint: Option<String>,
+            #[serde(default, rename = "fallbackKeyPath")]
+            fallback_key_path: Option<String>,
+        },
+        KeyboardInteractive {
+            #[serde(default)]
+            responses: Vec<String>,
+        },
     }
     match Helper::deserialize(deserializer)? {
         Helper::Password { password } => Ok(SSHAuthMethod::Password { password }),
         Helper::PrivateKey {
             key_path,
             passphrase,
+            certificate_path,
         } => Ok(SSHAuthMethod::PrivateKey {
             key_path,
             passphrase,
+            certificate_path,
         }),
-        Helper::Agent => Ok(SSHAuthMethod::PrivateKey {
-            key_path: "~/.ssh/id_rsa".to_string(),
-            passphrase: None,
+        Helper::Agent {
+            key_fingerprint,
+            fallback_key_path,
+        } => Ok(SSHAuthMethod::Agent {
+            key_fingerprint,
+            fallback_key_path: fallback_key_path.or_else(|| Some("~/.ssh/id_rsa".to_string())),
         }),
+        Helper::KeyboardInteractive { responses } => {
+            Ok(SSHAuthMethod::KeyboardInteractive { responses })
+        }
     }
 }
 
@@ -218,6 +334,8 @@ pub struct SavedConnection {
     pub proxy_jump: Option<String>,
     #[serde(default)]
     pub container: Option<ContainerWorkspaceConfig>,
+    #[serde(default)]
+    pub options: SSHConnectionOptions,
 }
 
 /// Saved auth type (excludes sensitive credentials; password ciphertext is in `ssh_password_vault.json`)
@@ -228,7 +346,16 @@ pub enum SavedAuthType {
     PrivateKey {
         #[serde(rename = "keyPath")]
         key_path: String,
+        #[serde(default, rename = "certificatePath")]
+        certificate_path: Option<String>,
     },
+    Agent {
+        #[serde(default, rename = "keyFingerprint")]
+        key_fingerprint: Option<String>,
+        #[serde(default, rename = "fallbackKeyPath")]
+        fallback_key_path: Option<String>,
+    },
+    KeyboardInteractive,
 }
 
 fn deserialize_saved_auth_type<'de, D>(deserializer: D) -> Result<SavedAuthType, D::Error>
@@ -242,15 +369,34 @@ where
         PrivateKey {
             #[serde(rename = "keyPath")]
             key_path: String,
+            #[serde(default, rename = "certificatePath")]
+            certificate_path: Option<String>,
         },
-        Agent,
+        Agent {
+            #[serde(default, rename = "keyFingerprint")]
+            key_fingerprint: Option<String>,
+            #[serde(default, rename = "fallbackKeyPath")]
+            fallback_key_path: Option<String>,
+        },
+        KeyboardInteractive,
     }
     match Helper::deserialize(deserializer)? {
         Helper::Password => Ok(SavedAuthType::Password),
-        Helper::PrivateKey { key_path } => Ok(SavedAuthType::PrivateKey { key_path }),
-        Helper::Agent => Ok(SavedAuthType::PrivateKey {
-            key_path: "~/.ssh/id_rsa".to_string(),
+        Helper::PrivateKey {
+            key_path,
+            certificate_path,
+        } => Ok(SavedAuthType::PrivateKey {
+            key_path,
+            certificate_path,
         }),
+        Helper::Agent {
+            key_fingerprint,
+            fallback_key_path,
+        } => Ok(SavedAuthType::Agent {
+            key_fingerprint,
+            fallback_key_path: fallback_key_path.or_else(|| Some("~/.ssh/id_rsa".to_string())),
+        }),
+        Helper::KeyboardInteractive => Ok(SavedAuthType::KeyboardInteractive),
     }
 }
 
@@ -339,6 +485,34 @@ pub struct ServerInfo {
     pub home_dir: String,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct DockerContainerInfo {
+    pub id: String,
+    pub name: String,
+    pub image: String,
+    pub status: String,
+    pub state: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct ConnectionTestStage {
+    pub id: String,
+    pub label: String,
+    pub success: bool,
+    pub error: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ConnectionTestReport {
+    pub success: bool,
+    pub stages: Vec<ConnectionTestStage>,
+    pub server_info: Option<ServerInfo>,
+    pub resolved_container_access: Option<ContainerAccess>,
+}
+
 /// Result of remote file operation
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -397,6 +571,9 @@ pub struct SSHConfigEntry {
     pub identity_file: Option<String>,
     /// Whether to use SSH agent
     pub agent: Option<bool>,
+    /// Optional OpenSSH user certificate path.
+    #[serde(default)]
+    pub certificate_file: Option<String>,
     /// OpenSSH ProxyJump chain, preserving aliases and order.
     #[serde(default)]
     pub proxy_jump: Option<String>,

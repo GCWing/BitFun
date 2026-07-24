@@ -13,7 +13,7 @@ use bitfun_services_integrations::remote_ssh::{
 };
 
 #[test]
-fn remote_ssh_legacy_agent_auth_maps_to_default_private_key() {
+fn remote_ssh_legacy_agent_auth_keeps_default_private_key_fallback() {
     let config: SSHConnectionConfig = serde_json::from_value(serde_json::json!({
         "id": "conn-1",
         "name": "dev",
@@ -26,17 +26,21 @@ fn remote_ssh_legacy_agent_auth_maps_to_default_private_key() {
     .unwrap();
 
     match config.auth {
-        SSHAuthMethod::PrivateKey {
-            key_path,
-            passphrase,
+        SSHAuthMethod::Agent {
+            key_fingerprint,
+            fallback_key_path,
         } => {
-            assert_eq!(key_path, "~/.ssh/id_rsa");
-            assert_eq!(passphrase, None);
+            assert_eq!(key_fingerprint, None);
+            assert_eq!(fallback_key_path.as_deref(), Some("~/.ssh/id_rsa"));
         }
-        SSHAuthMethod::Password { .. } => panic!("legacy agent auth must map to private key"),
+        _ => panic!("legacy agent auth must remain agent-compatible"),
     }
     assert_eq!(config.proxy_jump, None);
     assert_eq!(config.container, None);
+    assert_eq!(config.options.connect_timeout_secs, 30);
+    assert_eq!(config.options.auth_timeout_secs, 60);
+    assert_eq!(config.options.auth_attempts, 3);
+    assert_eq!(config.options.connect_attempts, 1);
 
     let saved: SavedConnection = serde_json::from_value(serde_json::json!({
         "id": "conn-1",
@@ -50,12 +54,19 @@ fn remote_ssh_legacy_agent_auth_maps_to_default_private_key() {
     }))
     .unwrap();
 
-    match saved.auth_type {
-        SavedAuthType::PrivateKey { key_path } => assert_eq!(key_path, "~/.ssh/id_rsa"),
-        SavedAuthType::Password => panic!("legacy agent auth type must map to private key"),
-    }
+    assert!(matches!(
+        saved.auth_type,
+        SavedAuthType::Agent {
+            key_fingerprint: None,
+            ref fallback_key_path,
+        } if fallback_key_path.as_deref() == Some("~/.ssh/id_rsa")
+    ));
     assert_eq!(saved.proxy_jump, None);
     assert_eq!(saved.container, None);
+    assert_eq!(saved.options.connect_timeout_secs, 30);
+    assert_eq!(saved.options.auth_timeout_secs, 60);
+    assert_eq!(saved.options.auth_attempts, 3);
+    assert_eq!(saved.options.connect_attempts, 1);
 }
 
 #[test]
@@ -69,6 +80,7 @@ fn remote_target_contract_uses_proxy_jump_and_kebab_case_container_access() {
         auth: SSHAuthMethod::PrivateKey {
             key_path: "~/.ssh/train".to_string(),
             passphrase: None,
+            certificate_path: None,
         },
         default_workspace: Some("/workspace".to_string()),
         proxy_jump: Some("jump1,jump2".to_string()),
@@ -81,6 +93,7 @@ fn remote_target_contract_uses_proxy_jump_and_kebab_case_container_access() {
             user: Some("trainer".to_string()),
             interactive: true,
         }),
+        options: Default::default(),
     };
 
     let json = serde_json::to_value(&config).unwrap();

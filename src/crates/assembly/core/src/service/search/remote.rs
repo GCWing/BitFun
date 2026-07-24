@@ -15,7 +15,7 @@ use bitfun_services_integrations::remote_ssh::workspace_search::{
     RemoteWorkspaceSearchStdioProtocol,
 };
 use std::sync::Arc;
-use tokio::io::AsyncWriteExt;
+use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::sync::mpsc;
 
 const REMOTE_FLASHGREP_LOG_TARGET: &str = "flashgrep";
@@ -170,12 +170,12 @@ impl RemoteWorkspaceSearchProvider for CoreRemoteWorkspaceSearchProvider {
         write_rx: mpsc::Receiver<Vec<u8>>,
         protocol: RemoteWorkspaceSearchStdioProtocol,
     ) -> Result<(), String> {
-        let channel = self
+        let transport = self
             .ssh_manager
-            .open_exec_channel(connection_id, command)
+            .open_workspace_stdio(connection_id, command)
             .await
             .map_err(|error| format!("Failed to start remote flashgrep stdio daemon: {error}"))?;
-        spawn_remote_stdio_owner(connection_id.to_string(), channel, write_rx, protocol);
+        spawn_remote_stdio_owner(connection_id.to_string(), transport, write_rx, protocol);
         Ok(())
     }
 }
@@ -211,20 +211,37 @@ pub async fn remote_workspace_search_service_for_path(
 
 fn spawn_remote_stdio_owner(
     connection_id: String,
-    mut channel: russh::Channel<russh::client::Msg>,
+    transport: bitfun_services_integrations::remote_ssh::WorkspaceStdio,
     mut write_rx: mpsc::Receiver<Vec<u8>>,
     protocol: RemoteWorkspaceSearchStdioProtocol,
 ) {
     tokio::spawn(async move {
-        let mut writer = channel.make_writer();
+        let (mut writer, mut stdout, mut stderr, _control, _completion) = transport.into_parts();
         let mut read_buffer = Vec::<u8>::new();
+        let stderr_protocol = protocol.clone();
+        let stderr_connection_id = connection_id.clone();
+        let stderr_task = tokio::spawn(async move {
+            let mut buffer = vec![0u8; 16 * 1024];
+            loop {
+                match stderr.read(&mut buffer).await {
+                    Ok(0) | Err(_) => break,
+                    Ok(read) => {
+                        let text = String::from_utf8_lossy(&buffer[..read]);
+                        let log_context = format!("connection_id={stderr_connection_id}");
+                        for line in text.lines() {
+                            stderr_protocol.log_stderr_line_with_context(Some(&log_context), line);
+                        }
+                    }
+                }
+            }
+        });
+        let mut stdout_chunk = vec![0u8; 16 * 1024];
 
         loop {
             tokio::select! {
                 outbound = write_rx.recv() => {
                     let Some(outbound) = outbound else {
-                        let _ = channel.eof().await;
-                        let _ = channel.close().await;
+                        let _ = writer.shutdown().await;
                         break;
                     };
                     if let Err(error) = writer.write_all(&outbound).await {
@@ -253,10 +270,11 @@ fn spawn_remote_stdio_owner(
                     }
                 }
 
-                message = channel.wait() => {
-                    match message {
-                        Some(russh::ChannelMsg::Data { data }) => {
-                            if let Err(error) = protocol.handle_stdout_chunk(&mut read_buffer, data.as_ref()).await {
+                read = stdout.read(&mut stdout_chunk) => {
+                    match read {
+                        Ok(0) => break,
+                        Ok(read) => {
+                            if let Err(error) = protocol.handle_stdout_chunk(&mut read_buffer, &stdout_chunk[..read]).await {
                                 log::warn!(
                                     target: REMOTE_FLASHGREP_LOG_TARGET,
                                     "Failed to decode remote flashgrep stdio message: connection_id={}, error={}",
@@ -271,31 +289,21 @@ fn spawn_remote_stdio_owner(
                                 break;
                             }
                         }
-                        Some(russh::ChannelMsg::ExtendedData { data, .. }) => {
-                            let text = String::from_utf8_lossy(&data);
-                            let log_context = format!("connection_id={connection_id}");
-                            for line in text.lines() {
-                                protocol.log_stderr_line_with_context(Some(&log_context), line);
-                            }
-                        }
-                        Some(russh::ChannelMsg::ExitStatus { exit_status }) => {
-                            log::debug!(
+                        Err(error) => {
+                            log::warn!(
                                 target: REMOTE_FLASHGREP_LOG_TARGET,
-                                "Remote flashgrep stdio daemon exited: connection_id={}, exit_status={}",
+                                "Failed to read remote flashgrep stdio response: connection_id={}, error={}",
                                 connection_id,
-                                exit_status
+                                error
                             );
                             break;
                         }
-                        Some(russh::ChannelMsg::Eof) | Some(russh::ChannelMsg::Close) | None => {
-                            break;
-                        }
-                        Some(_) => {}
                     }
                 }
             }
         }
 
+        stderr_task.abort();
         protocol
             .close_with_message("remote flashgrep stdio daemon closed before sending a response")
             .await;

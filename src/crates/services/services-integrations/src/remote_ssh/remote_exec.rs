@@ -10,11 +10,9 @@ use rand::Rng;
 use russh::client::Msg;
 use russh::{Channel, ChannelMsg, Sig};
 use std::collections::{HashMap, VecDeque};
-use std::process::Stdio;
 use std::sync::{Arc, Mutex as StdMutex, OnceLock};
 use terminal_core::{spawn_pty, PtyEvent, ShellConfig, ShellType};
-use tokio::io::AsyncReadExt;
-use tokio::process::Command;
+use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::sync::{mpsc, Mutex, Notify};
 use tokio::time::{Duration, Instant};
 use uuid::Uuid;
@@ -646,97 +644,17 @@ impl RemoteExecProcess {
 async fn spawn_remote_process(
     request: RemoteExecCommandRequest,
 ) -> anyhow::Result<RemoteExecProcess> {
-    if let Some(spec) = request
-        .ssh_manager
-        .local_container_exec_spec(&request.connection_id, &request.command, request.tty)
-        .await?
-    {
-        return if request.tty {
-            spawn_local_container_pty_process(request, spec).await
-        } else {
-            spawn_local_container_pipe_process(request, spec).await
-        };
-    }
     if request.tty {
-        spawn_remote_pty_process(request).await
-    } else {
-        spawn_remote_pipe_process(request).await
-    }
-}
-
-async fn spawn_local_container_pipe_process(
-    request: RemoteExecCommandRequest,
-    (executable, args): (String, Vec<String>),
-) -> anyhow::Result<RemoteExecProcess> {
-    let mut child = Command::new(&executable)
-        .args(args)
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .kill_on_drop(true)
-        .spawn()
-        .with_context(|| format!("Failed to start local Docker executable '{}'", executable))?;
-    drop(child.stdin.take());
-    let stdout = child
-        .stdout
-        .take()
-        .ok_or_else(|| anyhow!("Local Docker stdout pipe is unavailable"))?;
-    let stderr = child
-        .stderr
-        .take()
-        .ok_or_else(|| anyhow!("Local Docker stderr pipe is unavailable"))?;
-    let output = Arc::new(OutputState::new(request.output_capture_tx.clone()));
-    let stdout_task = tokio::spawn(read_local_process_output(stdout, output.clone()));
-    let stderr_task = tokio::spawn(read_local_process_output(stderr, output.clone()));
-    let (command_tx, mut command_rx) = mpsc::channel::<RemoteExecProcessCommand>(8);
-    let owner_output = output.clone();
-    tokio::spawn(async move {
-        let exit_code = loop {
-            tokio::select! {
-                status = child.wait() => {
-                    break status.ok().and_then(|status| status.code());
-                }
-                command = command_rx.recv() => {
-                    match command {
-                        Some(RemoteExecProcessCommand::Control(action)) => {
-                            let _ = child.kill().await;
-                            let fallback = match action {
-                                RemoteExecControlAction::Interrupt => 130,
-                                RemoteExecControlAction::Kill => 137,
-                            };
-                            break child.wait().await.ok().and_then(|status| status.code()).or(Some(fallback));
-                        }
-                        None => {
-                            let _ = child.kill().await;
-                            break child.wait().await.ok().and_then(|status| status.code()).or(Some(137));
-                        }
-                        Some(RemoteExecProcessCommand::Write(_)) => {}
-                    }
-                }
-            }
-        };
-        let _ = stdout_task.await;
-        let _ = stderr_task.await;
-        owner_output.close(exit_code).await;
-    });
-    Ok(RemoteExecProcess {
-        output,
-        command_tx,
-        out_of_band_control_action: StdMutex::new(None),
-    })
-}
-
-async fn read_local_process_output<R>(mut reader: R, output: Arc<OutputState>)
-where
-    R: tokio::io::AsyncRead + Unpin,
-{
-    let mut buffer = vec![0u8; 16 * 1024];
-    loop {
-        match reader.read(&mut buffer).await {
-            Ok(0) | Err(_) => break,
-            Ok(read) => output.push_chunk(buffer[..read].to_vec()).await,
+        if let Some(spec) = request
+            .ssh_manager
+            .local_container_exec_spec(&request.connection_id, &request.command, true)
+            .await?
+        {
+            return spawn_local_container_pty_process(request, spec).await;
         }
+        return spawn_remote_pty_process(request).await;
     }
+    spawn_remote_pipe_process(request).await
 }
 
 async fn spawn_local_container_pty_process(
@@ -816,13 +734,13 @@ async fn spawn_local_container_pty_process(
 async fn spawn_remote_pipe_process(
     request: RemoteExecCommandRequest,
 ) -> anyhow::Result<RemoteExecProcess> {
-    let channel = request
+    let transport = request
         .ssh_manager
-        .open_exec_channel(&request.connection_id, &request.command)
+        .open_workspace_stdio(&request.connection_id, &request.command)
         .await?;
     let output = Arc::new(OutputState::new(request.output_capture_tx.clone()));
     let (command_tx, command_rx) = mpsc::channel::<RemoteExecProcessCommand>(8);
-    tokio::spawn(remote_pipe_owner(channel, command_rx, output.clone()));
+    tokio::spawn(workspace_pipe_owner(transport, command_rx, output.clone()));
 
     Ok(RemoteExecProcess {
         output,
@@ -849,28 +767,35 @@ async fn spawn_remote_pty_process(
     })
 }
 
-async fn remote_pipe_owner(
-    mut channel: Channel<Msg>,
+async fn workspace_pipe_owner(
+    transport: crate::remote_ssh::WorkspaceStdio,
     mut command_rx: mpsc::Receiver<RemoteExecProcessCommand>,
     output: Arc<OutputState>,
 ) {
+    let (mut stdin, mut stdout, mut stderr, control, completion) = transport.into_parts();
+    let mut completion_task = tokio::spawn(completion.wait());
     let mut exit_code = None;
     let mut control_state: Option<RemotePipeControlState> = None;
+    let mut stdout_closed = false;
+    let mut stderr_closed = false;
+    let mut stdout_buffer = vec![0u8; 16 * 1024];
+    let mut stderr_buffer = vec![0u8; 16 * 1024];
 
     loop {
+        if exit_code.is_some() && stdout_closed && stderr_closed {
+            break;
+        }
         if let Some(state) = control_state {
             if Instant::now() >= state.deadline() {
                 match state {
                     RemotePipeControlState::InterruptGrace { .. } => {
-                        let _ = channel.signal(Sig::KILL).await;
-                        let _ = channel.eof().await;
+                        let _ = control.kill().await;
                         control_state = Some(RemotePipeControlState::KillDrain {
                             deadline: Instant::now()
                                 + Duration::from_millis(REMOTE_CONTROL_DRAIN_TIMEOUT_MS),
                         });
                     }
                     RemotePipeControlState::KillDrain { .. } => {
-                        let _ = channel.close().await;
                         break;
                     }
                 }
@@ -888,50 +813,54 @@ async fn remote_pipe_owner(
 
             command = command_rx.recv() => {
                 match command {
-                    Some(RemoteExecProcessCommand::Write(_)) => {}
+                    Some(RemoteExecProcessCommand::Write(bytes)) => {
+                        if stdin.write_all(&bytes).await.is_err() {
+                            break;
+                        }
+                        let _ = stdin.flush().await;
+                    }
                     Some(RemoteExecProcessCommand::Control(RemoteExecControlAction::Interrupt)) => {
-                        let _ = channel.signal(Sig::INT).await;
-                        let _ = channel.eof().await;
+                        let _ = control.interrupt().await;
                         control_state = Some(RemotePipeControlState::InterruptGrace {
                             deadline: Instant::now()
                                 + Duration::from_millis(REMOTE_INTERRUPT_GRACE_TIMEOUT_MS),
                         });
                     }
                     Some(RemoteExecProcessCommand::Control(RemoteExecControlAction::Kill)) => {
-                        let _ = channel.signal(Sig::TERM).await;
-                        let _ = channel.eof().await;
+                        let _ = control.kill().await;
                         control_state = Some(RemotePipeControlState::KillDrain {
                             deadline: Instant::now()
                                 + Duration::from_millis(REMOTE_CONTROL_DRAIN_TIMEOUT_MS),
                         });
                     }
                     None => {
-                        let _ = channel.signal(Sig::KILL).await;
-                        let _ = channel.close().await;
-                        break;
+                        let _ = control.kill().await;
+                        control_state = Some(RemotePipeControlState::KillDrain {
+                            deadline: Instant::now()
+                                + Duration::from_millis(REMOTE_CONTROL_DRAIN_TIMEOUT_MS),
+                        });
                     }
                 }
             }
 
-            message = channel.wait() => {
-                match message {
-                    Some(ChannelMsg::Data { data }) => output.push_chunk(data.to_vec()).await,
-                    Some(ChannelMsg::ExtendedData { data, .. }) => {
-                        output.push_chunk(data.to_vec()).await;
-                    }
-                    Some(ChannelMsg::ExitStatus { exit_status }) => {
-                        exit_code = Some(exit_status as i32);
-                    }
-                    Some(ChannelMsg::ExitSignal { signal_name, .. }) => {
-                        exit_code = Some(match signal_name {
-                            Sig::INT => 130,
-                            Sig::KILL => 137,
-                            Sig::TERM => 143,
-                            _ => -1,
-                        });
-                    }
-                    Some(ChannelMsg::Eof) | Some(ChannelMsg::Close) | None => break,
-                    Some(_) => {}
+            read = stdout.read(&mut stdout_buffer), if !stdout_closed => {
+                match read {
+                    Ok(0) | Err(_) => stdout_closed = true,
+                    Ok(read) => output.push_chunk(stdout_buffer[..read].to_vec()).await,
+                }
+            }
+
+            read = stderr.read(&mut stderr_buffer), if !stderr_closed => {
+                match read {
+                    Ok(0) | Err(_) => stderr_closed = true,
+                    Ok(read) => output.push_chunk(stderr_buffer[..read].to_vec()).await,
+                }
+            }
+
+            completed = &mut completion_task, if exit_code.is_none() => {
+                exit_code = completed.ok().and_then(|exit| exit.exit_code);
+                if exit_code.is_none() {
+                    exit_code = Some(-1);
                 }
             }
 
@@ -939,6 +868,10 @@ async fn remote_pipe_owner(
         }
     }
 
+    let _ = stdin.shutdown().await;
+    if !completion_task.is_finished() {
+        completion_task.abort();
+    }
     output.close(exit_code).await;
 }
 

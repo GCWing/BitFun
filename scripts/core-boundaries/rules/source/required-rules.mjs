@@ -8116,7 +8116,7 @@ export const requiredContentRules = [
   {
     path: 'src/crates/assembly/core/src/service/search/remote.rs',
     reason:
-      'core remote search runtime must remain a compatibility facade over services-integrations while retaining concrete SSH/russh bridge adapters',
+      'core remote search runtime must remain a compatibility facade over services-integrations while retaining the transport-neutral workspace stdio bridge adapter',
     patterns: [
       {
         regex: /\bServiceRemoteWorkspaceSearchService\b/,
@@ -8131,8 +8131,8 @@ export const requiredContentRules = [
         message: 'missing preferred remote connection lookup adapter',
       },
       {
-        regex: /\bopen_exec_channel\b/,
-        message: 'missing SSH stdio bridge adapter',
+        regex: /\bopen_workspace_stdio\b/,
+        message: 'missing transport-neutral workspace stdio bridge adapter',
       },
       {
         regex: /\bRemoteWorkspaceSearchStdioProtocol\b/,

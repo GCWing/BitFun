@@ -6,6 +6,8 @@
 pub mod paths;
 pub mod remote_git;
 mod shell;
+#[cfg(feature = "remote-ssh-concrete")]
+mod transport;
 pub mod types;
 pub mod workspace_registry;
 #[cfg(feature = "workspace-search")]
@@ -31,6 +33,11 @@ pub mod remote_terminal;
 
 pub use paths::*;
 pub use remote_git::{build_remote_git_command, shell_quote_posix};
+#[cfg(feature = "remote-ssh-concrete")]
+pub use transport::{
+    WorkspaceProcessCompletion, WorkspaceProcessControl, WorkspaceProcessExit,
+    WorkspaceProcessSignal, WorkspaceReader, WorkspaceStdio, WorkspaceWriter,
+};
 pub use types::*;
 pub use workspace_registry::*;
 pub use workspace_services::{remote_workspace_services, RemoteWorkspaceFs, RemoteWorkspaceShell};

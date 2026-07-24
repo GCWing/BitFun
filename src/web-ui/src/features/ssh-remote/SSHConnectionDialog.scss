@@ -242,6 +242,18 @@
     }
   }
 
+  &__field-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    margin-bottom: 6px;
+
+    .ssh-connection-dialog__label {
+      margin-bottom: 0;
+    }
+  }
+
   &__container-fields {
     display: flex;
     flex-direction: column;
@@ -250,6 +262,48 @@
     border: 1px solid var(--border-subtle);
     border-radius: 8px;
     background: var(--element-bg-subtle);
+  }
+
+  &__connection-options {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding-top: 4px;
+  }
+
+  &__test-report {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 10px;
+    border: 1px solid var(--border-subtle);
+    border-radius: 7px;
+    background: var(--element-bg-subtle);
+
+    &--success {
+      border-color: var(--color-success);
+    }
+
+    &--error {
+      border-color: var(--color-error);
+    }
+  }
+
+  &__test-stage {
+    display: grid;
+    grid-template-columns: 16px minmax(80px, auto) 1fr;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+    font-size: 11px;
+    color: var(--color-text-secondary);
+
+    > span:last-child:not(:nth-child(2)) {
+      overflow: hidden;
+      color: var(--color-text-muted);
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
   }
 
   &__hint {

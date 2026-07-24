@@ -11,8 +11,9 @@ use crate::api::app_state::SSHServiceError;
 use crate::startup_trace::DesktopStartupTrace;
 use crate::AppState;
 use bitfun_core::service::remote_ssh::{
-    RemoteTreeNode, SSHAuthMethod, SSHConfigEntry, SSHConfigLookupResult, SSHConnectionConfig,
-    SSHConnectionResult, SavedConnection, ServerInfo,
+    ConnectionTestReport, DockerContainerInfo, RemoteTreeNode, SSHAuthMethod, SSHConfigEntry,
+    SSHConfigLookupResult, SSHConnectionConfig, SSHConnectionManager, SSHConnectionResult,
+    SavedConnection, ServerInfo,
 };
 
 impl From<SSHServiceError> for String {
@@ -22,6 +23,29 @@ impl From<SSHServiceError> for String {
 }
 
 // === SSH Connection Management ===
+
+async fn hydrate_stored_password(
+    manager: &SSHConnectionManager,
+    config: &mut SSHConnectionConfig,
+) -> Result<(), String> {
+    if let SSHAuthMethod::Password { ref password } = config.auth {
+        if password.is_empty() {
+            match manager.load_stored_password(&config.id).await {
+                Ok(Some(password)) => {
+                    config.auth = SSHAuthMethod::Password { password };
+                }
+                Ok(None) => {
+                    return Err(
+                        "SSH password is required (no saved password for this connection)"
+                            .to_string(),
+                    );
+                }
+                Err(error) => return Err(error.to_string()),
+            }
+        }
+    }
+    Ok(())
+}
 
 #[tauri::command]
 pub async fn ssh_list_saved_connections(
@@ -109,22 +133,7 @@ pub async fn ssh_connect(
         }
     };
 
-    if let SSHAuthMethod::Password { ref password } = config.auth {
-        if password.is_empty() {
-            match manager.load_stored_password(&config.id).await {
-                Ok(Some(pwd)) => {
-                    config.auth = SSHAuthMethod::Password { password: pwd };
-                }
-                Ok(None) => {
-                    return Err(
-                        "SSH password is required (no saved password for this connection)"
-                            .to_string(),
-                    );
-                }
-                Err(e) => return Err(e.to_string()),
-            }
-        }
-    }
+    hydrate_stored_password(&manager, &mut config).await?;
 
     log::info!("ssh_connect: about to establish connection");
     let config_to_save = config.clone();
@@ -142,6 +151,29 @@ pub async fn ssh_connect(
     }
     log::info!("ssh_connect result: {:?}", result);
     result
+}
+
+#[tauri::command]
+pub async fn ssh_test_connection(
+    state: State<'_, AppState>,
+    mut config: SSHConnectionConfig,
+) -> Result<ConnectionTestReport, String> {
+    let manager = state.get_ssh_manager_async().await?;
+    hydrate_stored_password(&manager, &mut config).await?;
+    Ok(manager.test_connection(&config).await)
+}
+
+#[tauri::command]
+pub async fn ssh_list_docker_containers(
+    state: State<'_, AppState>,
+    mut config: SSHConnectionConfig,
+) -> Result<Vec<DockerContainerInfo>, String> {
+    let manager = state.get_ssh_manager_async().await?;
+    hydrate_stored_password(&manager, &mut config).await?;
+    manager
+        .list_docker_containers_for_config(&config)
+        .await
+        .map_err(|error| error.to_string())
 }
 
 #[tauri::command]

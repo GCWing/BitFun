@@ -12,9 +12,17 @@ export interface SSHConnectionConfig {
   defaultWorkspace?: string;
   proxyJump?: string;
   container?: ContainerWorkspaceConfig;
+  options?: SSHConnectionOptions;
 }
 
 export type ContainerAccess = 'sshd' | 'docker-exec' | 'auto';
+
+export interface SSHConnectionOptions {
+  connectTimeoutSecs: number;
+  authTimeoutSecs: number;
+  authAttempts: number;
+  connectAttempts: number;
+}
 
 export interface ContainerWorkspaceConfig {
   name: string;
@@ -28,11 +36,15 @@ export interface ContainerWorkspaceConfig {
 
 export type SSHAuthMethod =
   | { type: 'Password'; password: string }
-  | { type: 'PrivateKey'; keyPath: string; passphrase?: string };
+  | { type: 'PrivateKey'; keyPath: string; passphrase?: string; certificatePath?: string }
+  | { type: 'Agent'; keyFingerprint?: string; fallbackKeyPath?: string }
+  | { type: 'KeyboardInteractive'; responses: string[] };
 
 export type SavedAuthType =
   | { type: 'Password' }
-  | { type: 'PrivateKey'; keyPath: string };
+  | { type: 'PrivateKey'; keyPath: string; certificatePath?: string }
+  | { type: 'Agent'; keyFingerprint?: string; fallbackKeyPath?: string }
+  | { type: 'KeyboardInteractive' };
 
 export interface SavedConnection {
   id: string;
@@ -45,6 +57,7 @@ export interface SavedConnection {
   lastConnected?: number;
   proxyJump?: string;
   container?: ContainerWorkspaceConfig;
+  options?: SSHConnectionOptions;
 }
 
 export interface SSHConnectionResult {
@@ -91,6 +104,7 @@ export interface SSHConfigEntry {
   port?: number;
   user?: string;
   identityFile?: string;
+  certificateFile?: string;
   agent?: boolean;
   proxyJump?: string;
 }
@@ -98,4 +112,26 @@ export interface SSHConfigEntry {
 export interface SSHConfigLookupResult {
   found: boolean;
   config?: SSHConfigEntry;
+}
+
+export interface DockerContainerInfo {
+  id: string;
+  name: string;
+  image: string;
+  status: string;
+  state: string;
+}
+
+export interface ConnectionTestStage {
+  id: string;
+  label: string;
+  success: boolean;
+  error?: string;
+}
+
+export interface ConnectionTestReport {
+  success: boolean;
+  stages: ConnectionTestStage[];
+  serverInfo?: ServerInfo;
+  resolvedContainerAccess?: ContainerAccess;
 }
