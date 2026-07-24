@@ -37,9 +37,11 @@ slices that are outside pure product logic but still platform-neutral.
   explicit remote SSH features.
 - One-click relay self-deploy (`remote_ssh/relay_deploy.rs`) stages embedded
   scripts under `~/.bitfun/relay-deploy/` and clones source to
-  `~/.bitfun/relay-src/` (never `$HOME/bitfun`). Invariants:
-  `src/web-ui/src/features/relay-deploy/README.md`. Desktop Tauri wrapper:
-  `src/apps/desktop/src/api/relay_deploy_api.rs`.
+  `~/.bitfun/relay-src/` (never `$HOME/bitfun`). Embeds
+  `src/apps/relay-server/mirror.sh` and runs `bitfun_mirror_init` before apt /
+  Docker install / GitHub sync so mainland China hosts use configured mirrors.
+  Invariants: `src/web-ui/src/features/relay-deploy/README.md`. Desktop Tauri
+  wrapper: `src/apps/desktop/src/api/relay_deploy_api.rs`.
 - Workspace search owns the local flashgrep daemon/session lifecycle and
   indexed-search result conversion behind `workspace-search`; product config
   and workspace bootstrap stay in the core facade as injected hooks.

@@ -19,6 +19,8 @@
 //! Product / regression invariants (wizard + entry points):
 //! `src/web-ui/src/features/relay-deploy/README.md`. Do not change clone destination,
 //! password handoff, or “already deployed” semantics without updating that doc.
+//! China mirror helpers live in `src/apps/relay-server/mirror.sh` and are embedded
+//! here so detection/apply runs before GitHub/Docker downloads.
 
 use anyhow::{anyhow, Result};
 use serde::{Deserialize, Serialize};
@@ -47,6 +49,12 @@ const REPO_GIT_URL: &str = "https://github.com/GCWing/BitFun.git";
 const REPO_GIT_BRANCH: &str = "main";
 /// Tarball fallback when git is unavailable or clone/fetch fails.
 const REPO_TARBALL_URL: &str = "https://github.com/GCWing/BitFun/archive/refs/heads/main.tar.gz";
+/// Canonical China-mirror helper (shared with `src/apps/relay-server/deploy.sh`).
+/// Embedded so Desktop orchestration can apply mirrors before the git clone.
+const RELAY_MIRROR_SH: &str = include_str!(concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/../../../apps/relay-server/mirror.sh"
+));
 /// Remote directory (relative to the SSH user's home) holding deploy state.
 const DEPLOY_STATE_DIR: &str = ".bitfun/relay-deploy";
 /// BitFun-managed source checkout (relative to home). Must stay under `.bitfun/`
@@ -773,8 +781,17 @@ async fn exec_ok(manager: &SSHConnectionManager, connection_id: &str, command: &
 }
 
 /// Shared interactive prepare helpers embedded in driver scripts.
-fn prepare_helpers_bash() -> &'static str {
-    r#"
+fn prepare_helpers_bash() -> String {
+    // Mirror helpers first so prepare/install/deploy can call bitfun_mirror_init
+    // before apt/git/docker downloads.
+    format!(
+        r#"
+# --- begin BitFun relay mirror.sh (embedded) ---
+{mirror}
+# --- end BitFun relay mirror.sh ---
+"#,
+        mirror = RELAY_MIRROR_SH
+    ) + r#"
 # Privilege helpers:
 # - Never use `sudo -v` when NOPASSWD is set — on many cloud images `sudo -v`
 #   still demands a password even though `sudo -n true` works.
@@ -919,6 +936,8 @@ bitfun_docker() {
 bitfun_run_deploy_sh() {
   local dir="$1"
   local port="${RELAY_PORT:-9700}"
+  # Prefer already-resolved mirror mode so deploy.sh does not re-probe.
+  local mirror_mode="${BITFUN_MIRROR:-${BITFUN_MIRROR_MODE:-auto}}"
   # DOCKER_BUILDKIT is required for Dockerfile cargo registry/git/target mounts.
   case "${BITFUN_DOCKER_MODE:-direct}" in
     sudo)
@@ -926,20 +945,38 @@ bitfun_run_deploy_sh() {
         sudo -n -E env RELAY_PORT="$port" RELAY_CARGO_BUILD_JOBS="${RELAY_CARGO_BUILD_JOBS:-}" \
           DOCKER_BUILDKIT=1 COMPOSE_DOCKER_CLI_BUILD=1 BUILDKIT_PROGRESS=plain \
           DOCKER_CONFIG="${DOCKER_CONFIG:-}" \
+          BITFUN_MIRROR="$mirror_mode" \
+          BITFUN_USE_CN_MIRROR="${BITFUN_USE_CN_MIRROR:-0}" \
+          BITFUN_APT_MIRROR="${BITFUN_APT_MIRROR:-}" \
+          BITFUN_CARGO_SPARSE_URL="${BITFUN_CARGO_SPARSE_URL:-}" \
+          BITFUN_DOCKER_REGISTRY_MIRRORS="${BITFUN_DOCKER_REGISTRY_MIRRORS:-}" \
+          BITFUN_GITHUB_PROXY="${BITFUN_GITHUB_PROXY:-}" \
           bash "$dir/deploy.sh"
       else
         sudo -E env RELAY_PORT="$port" RELAY_CARGO_BUILD_JOBS="${RELAY_CARGO_BUILD_JOBS:-}" \
           DOCKER_BUILDKIT=1 COMPOSE_DOCKER_CLI_BUILD=1 BUILDKIT_PROGRESS=plain \
           DOCKER_CONFIG="${DOCKER_CONFIG:-}" \
+          BITFUN_MIRROR="$mirror_mode" \
+          BITFUN_USE_CN_MIRROR="${BITFUN_USE_CN_MIRROR:-0}" \
+          BITFUN_APT_MIRROR="${BITFUN_APT_MIRROR:-}" \
+          BITFUN_CARGO_SPARSE_URL="${BITFUN_CARGO_SPARSE_URL:-}" \
+          BITFUN_DOCKER_REGISTRY_MIRRORS="${BITFUN_DOCKER_REGISTRY_MIRRORS:-}" \
+          BITFUN_GITHUB_PROXY="${BITFUN_GITHUB_PROXY:-}" \
           bash "$dir/deploy.sh"
       fi
       ;;
     sg)
-      sg docker -c "env RELAY_PORT='$port' RELAY_CARGO_BUILD_JOBS='${RELAY_CARGO_BUILD_JOBS:-}' DOCKER_BUILDKIT=1 COMPOSE_DOCKER_CLI_BUILD=1 BUILDKIT_PROGRESS=plain DOCKER_CONFIG='${DOCKER_CONFIG:-}' bash '$dir/deploy.sh'"
+      sg docker -c "env RELAY_PORT='$port' RELAY_CARGO_BUILD_JOBS='${RELAY_CARGO_BUILD_JOBS:-}' DOCKER_BUILDKIT=1 COMPOSE_DOCKER_CLI_BUILD=1 BUILDKIT_PROGRESS=plain DOCKER_CONFIG='${DOCKER_CONFIG:-}' BITFUN_MIRROR='$mirror_mode' BITFUN_USE_CN_MIRROR='${BITFUN_USE_CN_MIRROR:-0}' BITFUN_APT_MIRROR='${BITFUN_APT_MIRROR:-}' BITFUN_CARGO_SPARSE_URL='${BITFUN_CARGO_SPARSE_URL:-}' BITFUN_DOCKER_REGISTRY_MIRRORS='${BITFUN_DOCKER_REGISTRY_MIRRORS:-}' BITFUN_GITHUB_PROXY='${BITFUN_GITHUB_PROXY:-}' bash '$dir/deploy.sh'"
       ;;
     *)
       env RELAY_PORT="$port" RELAY_CARGO_BUILD_JOBS="${RELAY_CARGO_BUILD_JOBS:-}" \
         DOCKER_BUILDKIT=1 COMPOSE_DOCKER_CLI_BUILD=1 BUILDKIT_PROGRESS=plain \
+        BITFUN_MIRROR="$mirror_mode" \
+        BITFUN_USE_CN_MIRROR="${BITFUN_USE_CN_MIRROR:-0}" \
+        BITFUN_APT_MIRROR="${BITFUN_APT_MIRROR:-}" \
+        BITFUN_CARGO_SPARSE_URL="${BITFUN_CARGO_SPARSE_URL:-}" \
+        BITFUN_DOCKER_REGISTRY_MIRRORS="${BITFUN_DOCKER_REGISTRY_MIRRORS:-}" \
+        BITFUN_GITHUB_PROXY="${BITFUN_GITHUB_PROXY:-}" \
         bash "$dir/deploy.sh"
       ;;
   esac
@@ -988,6 +1025,10 @@ touch "$PREPARE_FLAG"
 echo ">>> prepare starting (uid=$(id -u) home=$HOME)" | tee -a "$LOG"
 cleanup_prepare() {{ rm -f "$PREPARE_FLAG"; }}
 trap cleanup_prepare EXIT
+# Region/mirrors before apt tool install and Docker/GitHub downloads.
+export BITFUN_REPO_GIT_URL="{REPO_GIT_URL}"
+export BITFUN_REPO_TARBALL_URL="{REPO_TARBALL_URL}"
+bitfun_mirror_init
 bitfun_ensure_tools
 export DOCKER_CONFIG="${{DOCKER_CONFIG:-$HOME/.bitfun/docker-config}}"
 mkdir -p "$DOCKER_CONFIG"
@@ -1024,9 +1065,13 @@ if [ "{kind}" = "install" ]; then
   export BITFUN_KEEP_HOME="${{BITFUN_KEEP_HOME:-$HOME}}"
   set +e
   if command -v stdbuf >/dev/null 2>&1; then
-    stdbuf -oL -eL env BITFUN_KEEP_HOME="$BITFUN_KEEP_HOME" bash "$BODY" 2>&1 | tee -a "$LOG"
+    stdbuf -oL -eL env BITFUN_KEEP_HOME="$BITFUN_KEEP_HOME" \
+      BITFUN_MIRROR="${{BITFUN_MIRROR:-${{BITFUN_MIRROR_MODE:-auto}}}}" \
+      bash "$BODY" 2>&1 | tee -a "$LOG"
   else
-    env BITFUN_KEEP_HOME="$BITFUN_KEEP_HOME" bash "$BODY" 2>&1 | tee -a "$LOG"
+    env BITFUN_KEEP_HOME="$BITFUN_KEEP_HOME" \
+      BITFUN_MIRROR="${{BITFUN_MIRROR:-${{BITFUN_MIRROR_MODE:-auto}}}}" \
+      bash "$BODY" 2>&1 | tee -a "$LOG"
   fi
   code=${{PIPESTATUS[0]}}
   set -e
@@ -1045,6 +1090,14 @@ echo ">>> Starting background task (log: $LOG)" | tee -a "$LOG"
 nohup env BITFUN_DOCKER_MODE="$BITFUN_DOCKER_MODE" DOCKER_CONFIG="$DOCKER_CONFIG" \
   RELAY_CARGO_BUILD_JOBS="${{RELAY_CARGO_BUILD_JOBS:-}}" \
   DOCKER_BUILDKIT=1 COMPOSE_DOCKER_CLI_BUILD=1 BUILDKIT_PROGRESS=plain \
+  BITFUN_MIRROR="${{BITFUN_MIRROR:-${{BITFUN_MIRROR_MODE:-auto}}}}" \
+  BITFUN_USE_CN_MIRROR="${{BITFUN_USE_CN_MIRROR:-0}}" \
+  BITFUN_APT_MIRROR="${{BITFUN_APT_MIRROR:-}}" \
+  BITFUN_CARGO_SPARSE_URL="${{BITFUN_CARGO_SPARSE_URL:-}}" \
+  BITFUN_DOCKER_REGISTRY_MIRRORS="${{BITFUN_DOCKER_REGISTRY_MIRRORS:-}}" \
+  BITFUN_GITHUB_PROXY="${{BITFUN_GITHUB_PROXY:-}}" \
+  BITFUN_REPO_GIT_URL="${{BITFUN_REPO_GIT_URL:-}}" \
+  BITFUN_REPO_TARBALL_URL="${{BITFUN_REPO_TARBALL_URL:-}}" \
   "${{RUNNER[@]}}" "$BODY" >"$LOG" 2>&1 < /dev/null &
 echo $! >"$PIDF"
 rm -f "$PREPARE_FLAG"
@@ -1056,6 +1109,8 @@ exec tail -n +1 -f "$LOG"
         stem = stem,
         kind = kind,
         helpers = helpers,
+        REPO_GIT_URL = REPO_GIT_URL,
+        REPO_TARBALL_URL = REPO_TARBALL_URL,
     )
 }
 
@@ -1080,18 +1135,39 @@ fi
 if [ -z "$DEPLOY_USER" ] || [ "$DEPLOY_USER" = "root" ]; then
   DEPLOY_USER="$(id -un)"
 fi
-echo ">>> Installing Docker (get.docker.com) as uid=$(id -u) for user=$DEPLOY_USER ..."
-curl -fsSL --retry 3 https://get.docker.com -o /tmp/bitfun-get-docker.sh
+export BITFUN_REPO_GIT_URL="{REPO_GIT_URL}"
+export BITFUN_REPO_TARBALL_URL="{REPO_TARBALL_URL}"
+bitfun_mirror_init
+echo ">>> Installing Docker as uid=$(id -u) for user=$DEPLOY_USER (mirror_mode=${{BITFUN_MIRROR_MODE:-global}}) ..."
+INSTALLED=0
+if [ "${{BITFUN_MIRROR_MODE:-}}" = "cn" ]; then
+  if bitfun_mirror_install_docker_aliyun; then
+    INSTALLED=1
+  else
+    echo ">>> Aliyun docker-ce install failed; falling back to get.docker.com mirror..."
+  fi
+fi
+if [ "$INSTALLED" != "1" ]; then
+  bitfun_mirror_fetch_docker_install_script /tmp/bitfun-get-docker.sh \
+    || curl -fsSL --retry 3 https://get.docker.com -o /tmp/bitfun-get-docker.sh
+  if [ "$(id -u)" = "0" ]; then
+    sh /tmp/bitfun-get-docker.sh
+  else
+    bitfun_priv sh /tmp/bitfun-get-docker.sh
+  fi
+  rm -f /tmp/bitfun-get-docker.sh
+fi
 if [ "$(id -u)" = "0" ]; then
-  sh /tmp/bitfun-get-docker.sh
   systemctl enable --now docker
   usermod -aG docker "$DEPLOY_USER" || true
 else
-  bitfun_priv sh /tmp/bitfun-get-docker.sh
   bitfun_priv systemctl enable --now docker
   bitfun_priv usermod -aG docker "$DEPLOY_USER"
 fi
-rm -f /tmp/bitfun-get-docker.sh
+# Re-apply Docker registry mirrors after engine install (daemon.json may be new).
+if [ "${{BITFUN_MIRROR_MODE:-}}" = "cn" ]; then
+  bitfun_mirror_apply_docker_daemon || true
+fi
 bitfun_fix_docker_home
 # Verify without relying on a new login session
 if docker info >/dev/null 2>&1 \
@@ -1106,6 +1182,8 @@ else
 fi
 "#,
         helpers = helpers,
+        REPO_GIT_URL = REPO_GIT_URL,
+        REPO_TARBALL_URL = REPO_TARBALL_URL,
         TASK_DONE_MARKER = TASK_DONE_MARKER,
     )
 }
@@ -1122,9 +1200,11 @@ bitfun_sync_source() {{
   # `git clone <url>` without a path would create ./BitFun — we always pass "$src".
   # Tarball extracts BitFun-main/; we use --strip-components=1 into "$src".
   local src="$1"
-  local git_url="{REPO_GIT_URL}"
+  local git_upstream="{REPO_GIT_URL}"
+  local tarball_upstream="{REPO_TARBALL_URL}"
+  local git_url="${{BITFUN_GITHUB_GIT_URL:-$git_upstream}}"
+  local tarball_url="${{BITFUN_GITHUB_TARBALL_URL:-$tarball_upstream}}"
   local branch="{REPO_GIT_BRANCH}"
-  local tarball_url="{REPO_TARBALL_URL}"
   local managed_prefix="$HOME/.bitfun/"
   local relay_deploy_sh="src/apps/relay-server/deploy.sh"
 
@@ -1173,13 +1253,14 @@ bitfun_sync_source() {{
   }}
 
   bitfun_fetch_tarball() {{
-    echo ">>> Downloading BitFun source (tarball fallback)..."
+    local url="$1"
+    echo ">>> Downloading BitFun source (tarball): $url"
     command -v curl >/dev/null 2>&1 || bitfun_ensure_tools
     command -v tar >/dev/null 2>&1 || bitfun_ensure_tools
     bitfun_replace_managed_src
     mkdir -p "$src"
     # Archive root is BitFun-main/; strip so files land directly in "$src".
-    curl -fsSL --retry 3 "$tarball_url" | tar xz -C "$src" --strip-components=1
+    curl -fsSL --retry 3 "$url" | tar xz -C "$src" --strip-components=1
     bitfun_assert_source_layout
   }}
 
@@ -1189,7 +1270,7 @@ bitfun_sync_source() {{
 
   if command -v git >/dev/null 2>&1; then
     if [ -d "$src/.git" ]; then
-      echo ">>> Updating BitFun source (git fetch)..."
+      echo ">>> Updating BitFun source (git fetch via $git_url)..."
       git -C "$src" remote set-url origin "$git_url" 2>/dev/null || true
       if git -C "$src" fetch --depth 1 origin "$branch" \
         && git -C "$src" checkout -f -B "$branch" "origin/$branch" \
@@ -1198,13 +1279,24 @@ bitfun_sync_source() {{
         echo ">>> Source updated to $(git -C "$src" rev-parse --short HEAD 2>/dev/null || echo unknown)"
         return 0
       fi
+      if [ "$git_url" != "$git_upstream" ]; then
+        echo ">>> git update via mirror failed; retrying upstream..."
+        git -C "$src" remote set-url origin "$git_upstream" 2>/dev/null || true
+        if git -C "$src" fetch --depth 1 origin "$branch" \
+          && git -C "$src" checkout -f -B "$branch" "origin/$branch" \
+          && git -C "$src" clean -fd \
+          && bitfun_assert_source_layout; then
+          echo ">>> Source updated to $(git -C "$src" rev-parse --short HEAD 2>/dev/null || echo unknown)"
+          return 0
+        fi
+      fi
       echo ">>> git update failed; recloning managed source..."
       bitfun_replace_managed_src
     elif [ -e "$src" ]; then
       echo ">>> Managed source exists but is not a git checkout; replacing..."
       bitfun_replace_managed_src
     fi
-    echo ">>> Cloning into $src (explicit path; not default BitFun/)..."
+    echo ">>> Cloning into $src via $git_url ..."
     mkdir -p "$(dirname "$src")"
     # Explicit destination avoids creating $PWD/BitFun from the repo name.
     if git clone --depth 1 --branch "$branch" "$git_url" "$src" \
@@ -1212,11 +1304,27 @@ bitfun_sync_source() {{
       echo ">>> Source cloned at $(git -C "$src" rev-parse --short HEAD 2>/dev/null || echo unknown)"
       return 0
     fi
+    if [ "$git_url" != "$git_upstream" ]; then
+      echo ">>> git clone via mirror failed; retrying upstream $git_upstream ..."
+      bitfun_replace_managed_src
+      mkdir -p "$(dirname "$src")"
+      if git clone --depth 1 --branch "$branch" "$git_upstream" "$src" \
+        && bitfun_assert_source_layout; then
+        echo ">>> Source cloned at $(git -C "$src" rev-parse --short HEAD 2>/dev/null || echo unknown)"
+        return 0
+      fi
+    fi
     echo ">>> git clone failed; falling back to tarball"
   else
     echo ">>> git unavailable; using tarball fallback"
   fi
-  bitfun_fetch_tarball
+  if bitfun_fetch_tarball "$tarball_url"; then
+    return 0
+  fi
+  if [ "$tarball_url" != "$tarball_upstream" ]; then
+    echo ">>> tarball mirror failed; retrying upstream..."
+    bitfun_fetch_tarball "$tarball_upstream"
+  fi
 }}
 "#,
         REPO_GIT_URL = REPO_GIT_URL,
@@ -1250,6 +1358,9 @@ fi
 RELAY_PORT="${{RELAY_PORT:-{port}}}"
 export RELAY_PORT
 echo ">>> Using RELAY_PORT=$RELAY_PORT"
+export BITFUN_REPO_GIT_URL="{REPO_GIT_URL}"
+export BITFUN_REPO_TARBALL_URL="{REPO_TARBALL_URL}"
+bitfun_mirror_init
 SRC="$HOME/{SOURCE_DIR}"
 bitfun_sync_source "$SRC"
 cd "$SRC/src/apps/relay-server"
@@ -1279,15 +1390,50 @@ echo {TASK_DONE_MARKER}
         SOURCE_DIR = SOURCE_DIR,
         port = port,
         TASK_DONE_MARKER = TASK_DONE_MARKER,
+        REPO_GIT_URL = REPO_GIT_URL,
+        REPO_TARBALL_URL = REPO_TARBALL_URL,
     )
 }
 
 #[cfg(test)]
 mod tests {
     use super::{
-        classify_docker_access, decide_task_status, parse_preflight, split_poll_stdout,
-        DockerAccessMode, RelayTaskStatus,
+        classify_docker_access, decide_task_status, parse_preflight, prepare_helpers_bash,
+        split_poll_stdout, sync_source_bash, DockerAccessMode, RelayTaskStatus, RELAY_MIRROR_SH,
     };
+
+    #[test]
+    fn embedded_mirror_script_exposes_init_and_cn_defaults() {
+        assert!(
+            RELAY_MIRROR_SH.contains("bitfun_mirror_init"),
+            "mirror.sh must define bitfun_mirror_init"
+        );
+        assert!(
+            RELAY_MIRROR_SH.contains("rsproxy.cn"),
+            "mirror.sh must default cargo to rsproxy"
+        );
+        assert!(
+            RELAY_MIRROR_SH.contains("ghfast.top"),
+            "mirror.sh must default GitHub proxy"
+        );
+        let helpers = prepare_helpers_bash();
+        assert!(
+            helpers.contains("bitfun_mirror_init"),
+            "prepare helpers must embed mirror.sh"
+        );
+        assert!(
+            helpers.contains("bitfun_run_deploy_sh"),
+            "prepare helpers must keep deploy runner"
+        );
+    }
+
+    #[test]
+    fn sync_source_uses_mirror_url_env_with_upstream_fallback() {
+        let sync = sync_source_bash();
+        assert!(sync.contains("BITFUN_GITHUB_GIT_URL"));
+        assert!(sync.contains("BITFUN_GITHUB_TARBALL_URL"));
+        assert!(sync.contains("retrying upstream"));
+    }
 
     #[test]
     fn decide_status_pending_before_pty_is_running() {

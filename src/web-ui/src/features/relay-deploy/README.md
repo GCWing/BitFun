@@ -46,6 +46,12 @@ Desktop Tauri surface: `src/apps/desktop/src/api/relay_deploy_api.rs`
 8. **Scripts are embedded Rust templates** staged via SFTP. Do not rely on a
    static repo `.sh` alone on the server until the desktop binary re-stages.
 
+9. **China mirrors before overseas downloads.** Desktop orchestration embeds
+   `src/apps/relay-server/mirror.sh` and runs `bitfun_mirror_init` before apt
+   tool install, Docker Engine install, and GitHub sync. `deploy.sh` sources
+   the same file so manual and one-click paths stay aligned. Force with
+   `BITFUN_MIRROR=cn|global`.
+
 ## Related docs
 
 - Relay runtime / admin: [`src/apps/relay-server/README.md`](../../../apps/relay-server/README.md)

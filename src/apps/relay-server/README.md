@@ -36,6 +36,26 @@ memory VPS (common on arm64), use:
 RELAY_CARGO_BUILD_JOBS=1 bash deploy.sh
 ```
 
+### Mainland China hosts
+
+`deploy.sh` (and Desktop one-click deploy) auto-detects mainland China and
+configures host + build mirrors for apt, Docker Hub, Cargo/crates.io, GitHub,
+and Docker Engine install. Override when needed:
+
+```bash
+BITFUN_MIRROR=cn bash deploy.sh          # force China mirrors
+BITFUN_MIRROR=global bash deploy.sh      # force upstream mirrors
+bash deploy.sh --cn-mirror
+bash deploy.sh --global-mirror
+```
+
+Defaults (overridable via env): Aliyun apt, Docker registry mirrors
+(`docker.1ms.run` / `dockerproxy.net` / `docker.m.daocloud.io`),
+rsproxy Cargo sparse index, `ghfast.top` GitHub prefix, Aliyun docker-ce
+for Engine install (fallback: jsDelivr docker-install). See `mirror.sh`
+for the full list (`BITFUN_APT_MIRROR`, `BITFUN_DOCKER_REGISTRY_MIRRORS`,
+`BITFUN_CARGO_SPARSE_URL`, `BITFUN_GITHUB_PROXY`, …).
+
 `deploy.sh` enables Docker BuildKit so the Dockerfile can reuse Cargo
 registry/git/`target` cache mounts across redeploys. Keep BuildKit enabled
 (`DOCKER_BUILDKIT=1`, the deploy default) and avoid `docker builder prune`
