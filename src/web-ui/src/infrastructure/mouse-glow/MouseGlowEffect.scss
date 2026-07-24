@@ -27,7 +27,7 @@
   padding: var(--mouse-glow-border-width);
   pointer-events: none;
   opacity: 0;
-  transition: none;
+  visibility: hidden;
   background-image: radial-gradient(
     circle var(--mouse-glow-size) at var(--mouse-glow-local-x) var(--mouse-glow-local-y),
     var(--mouse-glow-core) 0%,
@@ -47,7 +47,7 @@
 
   &[data-active] {
     opacity: 1;
-    transition: opacity var(--motion-fast) var(--easing-standard);
+    visibility: visible;
   }
 }
 
@@ -56,17 +56,17 @@
   --mouse-glow-border-width: 1.5px;
   --mouse-glow-core: color-mix(
     in srgb,
-    var(--color-text-muted) 82%,
-    var(--color-text-primary)
+    var(--color-static-black) 58%,
+    var(--color-static-white)
   );
   --mouse-glow-falloff: color-mix(
     in srgb,
-    var(--color-text-muted) 34%,
+    var(--color-static-black) 24%,
     transparent
   );
   --mouse-glow-shadow: color-mix(
     in srgb,
-    var(--color-text-muted) 46%,
+    var(--color-static-black) 32%,
     transparent
   );
 }

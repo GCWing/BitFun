@@ -100,6 +100,7 @@ describe('MouseGlowService', () => {
 
     const overlay = document.getElementById('bitfun-mouse-glow-overlay');
     expect(overlay?.hasAttribute('data-active')).toBe(false);
+    expect(overlay?.hidden).toBe(true);
     nextFrame?.(0);
 
     expect(overlay?.style.width).toBe('200px');
@@ -107,6 +108,7 @@ describe('MouseGlowService', () => {
     expect(overlay?.style.getPropertyValue('--mouse-glow-local-x')).toBe('52px');
     expect(overlay?.style.getPropertyValue('--mouse-glow-local-y')).toBe('20px');
     expect(overlay?.hasAttribute('data-active')).toBe(true);
+    expect(overlay?.hidden).toBe(false);
     surface.remove();
   });
 
@@ -145,6 +147,7 @@ describe('MouseGlowService', () => {
     }));
 
     expect(overlay?.hasAttribute('data-active')).toBe(false);
+    expect(overlay?.hidden).toBe(true);
     surface.remove();
     plainElement.remove();
   });
@@ -180,6 +183,7 @@ describe('MouseGlowService', () => {
 
     const overlay = document.getElementById('bitfun-mouse-glow-overlay');
     expect(overlay?.hasAttribute('data-active')).toBe(false);
+    expect(overlay?.hidden).toBe(true);
     surface.remove();
     iframe.remove();
   });

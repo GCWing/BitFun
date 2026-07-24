@@ -183,7 +183,10 @@ export class MouseGlowService {
     this.pendingElements = null;
     this.pendingSurface = null;
     this.activeSurface = null;
-    this.overlay?.removeAttribute('data-active');
+    if (this.overlay) {
+      this.overlay.hidden = true;
+      this.overlay.removeAttribute('data-active');
+    }
   }
 
   private scheduleFrame(): void {
@@ -231,6 +234,7 @@ export class MouseGlowService {
     overlay.style.transform = `translate3d(${rect.left}px, ${rect.top}px, 0)`;
     overlay.style.setProperty('--mouse-glow-local-x', `${this.pointerX - rect.left}px`);
     overlay.style.setProperty('--mouse-glow-local-y', `${this.pointerY - rect.top}px`);
+    overlay.hidden = false;
     overlay.setAttribute('data-active', '');
   }
 
@@ -244,6 +248,7 @@ export class MouseGlowService {
     overlay.id = MOUSE_GLOW_OVERLAY_ID;
     overlay.className = 'bitfun-mouse-glow-overlay';
     overlay.setAttribute('aria-hidden', 'true');
+    overlay.hidden = true;
     document.body.appendChild(overlay);
     return overlay;
   }
