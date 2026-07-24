@@ -1336,6 +1336,7 @@
       "username": "Username",
       "connectionName": "Connection Name",
       "connectionNamePlaceholder": "Leave empty to auto-generate",
+      "advancedSettings": "Advanced settings",
       "authMethod": "Authentication Method",
       "password": "Password",
       "privateKey": "Private Key",

@@ -16,6 +16,7 @@ import { IconButton } from '@/component-library';
 import {
   ArrowDownToLine,
   CheckCircle2,
+  ChevronDown,
   Eye,
   EyeOff,
   FolderOpen,
@@ -99,6 +100,7 @@ export const SSHConnectionDialog: React.FC<SSHConnectionDialogProps> = ({
 
   const [showPassword, setShowPassword] = useState(false);
   const [showPassphrase, setShowPassphrase] = useState(false);
+  const [showAdvancedSettings, setShowAdvancedSettings] = useState(false);
   const formRef = useRef<HTMLDivElement>(null);
   const formHighlightTimerRef = useRef<number | null>(null);
   const [formHighlighted, setFormHighlighted] = useState(false);
@@ -150,6 +152,7 @@ export const SSHConnectionDialog: React.FC<SSHConnectionDialogProps> = ({
     if (open) {
       clearError();
       setLocalError(null);
+      setShowAdvancedSettings(false);
       setSavedSearch('');
       setConfigSearch('');
       setConnectionTest(null);
@@ -168,6 +171,9 @@ export const SSHConnectionDialog: React.FC<SSHConnectionDialogProps> = ({
         const result = await sshApi.getSSHConfig(formData.host.trim());
         if (result.found && result.config) {
           const config = result.config;
+          if (config.proxyJump) {
+            setShowAdvancedSettings(true);
+          }
           // Auto-fill fields from SSH config if they're not already set
           setFormData((prev) => ({
             ...prev,
@@ -298,6 +304,7 @@ export const SSHConnectionDialog: React.FC<SSHConnectionDialogProps> = ({
       || connectAttempts < 1
       || connectAttempts > 5
     ) {
+      setShowAdvancedSettings(true);
       setLocalError(t('ssh.remote.connectionOptionsInvalid'));
       return null;
     }
@@ -508,6 +515,7 @@ export const SSHConnectionDialog: React.FC<SSHConnectionDialogProps> = ({
       authAttempts: '3',
       connectAttempts: '1',
     });
+    setShowAdvancedSettings(Boolean(configHost.proxyJump));
     // Config list sits above the form; scroll so the filled fields are visible.
     requestAnimationFrame(() => revealConnectionForm());
   };
@@ -549,6 +557,9 @@ export const SSHConnectionDialog: React.FC<SSHConnectionDialogProps> = ({
   const handleEditConnection = (e: React.MouseEvent, conn: SavedConnection) => {
     e.stopPropagation();
     const keyPath = conn.authType.type === 'PrivateKey' ? conn.authType.keyPath : '~/.ssh/id_rsa';
+    const defaultConnectionName = conn.container?.local
+      ? conn.container.name
+      : `${conn.username}@${conn.host}`;
     const authType = conn.authType.type === 'Password'
       ? 'password'
       : conn.authType.type === 'PrivateKey'
@@ -594,6 +605,14 @@ export const SSHConnectionDialog: React.FC<SSHConnectionDialogProps> = ({
       authAttempts: String(conn.options?.authAttempts ?? 3),
       connectAttempts: String(conn.options?.connectAttempts ?? 1),
     });
+    setShowAdvancedSettings(
+      Boolean(conn.proxyJump)
+      || conn.name !== defaultConnectionName
+      || (conn.options?.connectTimeoutSecs ?? 30) !== 30
+      || (conn.options?.authTimeoutSecs ?? 60) !== 60
+      || (conn.options?.authAttempts ?? 3) !== 3
+      || (conn.options?.connectAttempts ?? 1) !== 1
+    );
     requestAnimationFrame(() => revealConnectionForm());
   };
 
@@ -866,7 +885,7 @@ export const SSHConnectionDialog: React.FC<SSHConnectionDialogProps> = ({
             {!isLocalDockerTarget && (
               <>
             {/* Host and Port */}
-            <div className="ssh-connection-dialog__row">
+            <div className="ssh-connection-dialog__row ssh-connection-dialog__row--host">
               <div className="ssh-connection-dialog__field ssh-connection-dialog__field--flex">
                 <Input
                   label={t('ssh.remote.host')}
@@ -898,18 +917,6 @@ export const SSHConnectionDialog: React.FC<SSHConnectionDialogProps> = ({
                 prefix={<User size={16} />}
                 size="medium"
               />
-            </div>
-            <div className="ssh-connection-dialog__field">
-              <Input
-                label={t('ssh.remote.proxyJump')}
-                value={formData.proxyJump}
-                onChange={(e) => handleInputChange('proxyJump', e.target.value)}
-                placeholder={t('ssh.remote.proxyJumpPlaceholder')}
-                size="medium"
-              />
-              <div className="ssh-connection-dialog__hint">
-                {t('ssh.remote.proxyJumpHint')}
-              </div>
             </div>
               </>
             )}
@@ -1010,17 +1017,6 @@ export const SSHConnectionDialog: React.FC<SSHConnectionDialogProps> = ({
                 </div>
               </div>
             )}
-
-            {/* Connection Name */}
-            <div className="ssh-connection-dialog__field">
-              <Input
-                label={t('ssh.remote.connectionName')}
-                value={formData.name}
-                onChange={(e) => handleInputChange('name', e.target.value)}
-                placeholder={t('ssh.remote.connectionNamePlaceholder')}
-                size="medium"
-              />
-            </div>
 
             {!isLocalDockerTarget && (
               <>
@@ -1158,47 +1154,100 @@ export const SSHConnectionDialog: React.FC<SSHConnectionDialogProps> = ({
               </div>
             )}
 
-            <div className="ssh-connection-dialog__connection-options">
-              <div className="ssh-connection-dialog__hint">
-                {t('ssh.remote.connectionOptions')}
-              </div>
-              <div className="ssh-connection-dialog__row">
-                <div className="ssh-connection-dialog__field ssh-connection-dialog__field--flex">
-                  <Input
-                    label={t('ssh.remote.connectTimeout')}
-                    value={formData.connectTimeoutSecs}
-                    onChange={(e) => handleInputChange('connectTimeoutSecs', e.target.value)}
-                    size="medium"
-                  />
-                </div>
-                <div className="ssh-connection-dialog__field ssh-connection-dialog__field--flex">
-                  <Input
-                    label={t('ssh.remote.authTimeout')}
-                    value={formData.authTimeoutSecs}
-                    onChange={(e) => handleInputChange('authTimeoutSecs', e.target.value)}
-                    size="medium"
-                  />
-                </div>
-                <div className="ssh-connection-dialog__field ssh-connection-dialog__field--port">
-                  <Input
-                    label={t('ssh.remote.authAttempts')}
-                    value={formData.authAttempts}
-                    onChange={(e) => handleInputChange('authAttempts', e.target.value)}
-                    size="medium"
-                  />
-                </div>
-                <div className="ssh-connection-dialog__field ssh-connection-dialog__field--port">
-                  <Input
-                    label={t('ssh.remote.connectAttempts')}
-                    value={formData.connectAttempts}
-                    onChange={(e) => handleInputChange('connectAttempts', e.target.value)}
-                    size="medium"
-                  />
-                </div>
-              </div>
-            </div>
               </>
             )}
+
+            <div className="ssh-connection-dialog__advanced">
+              <button
+                type="button"
+                className="ssh-connection-dialog__advanced-toggle"
+                aria-expanded={showAdvancedSettings}
+                onClick={() => setShowAdvancedSettings((visible) => !visible)}
+              >
+                <span>{t('ssh.remote.advancedSettings')}</span>
+                <ChevronDown
+                  size={16}
+                  aria-hidden="true"
+                  className={[
+                    'ssh-connection-dialog__advanced-chevron',
+                    showAdvancedSettings
+                      ? 'ssh-connection-dialog__advanced-chevron--expanded'
+                      : '',
+                  ].filter(Boolean).join(' ')}
+                />
+              </button>
+
+              {showAdvancedSettings && (
+                <div className="ssh-connection-dialog__advanced-panel">
+                  <div className="ssh-connection-dialog__field">
+                    <Input
+                      label={t('ssh.remote.connectionName')}
+                      value={formData.name}
+                      onChange={(e) => handleInputChange('name', e.target.value)}
+                      placeholder={t('ssh.remote.connectionNamePlaceholder')}
+                      size="medium"
+                    />
+                  </div>
+
+                  {!isLocalDockerTarget && (
+                    <>
+                      <div className="ssh-connection-dialog__field">
+                        <Input
+                          label={t('ssh.remote.proxyJump')}
+                          value={formData.proxyJump}
+                          onChange={(e) => handleInputChange('proxyJump', e.target.value)}
+                          placeholder={t('ssh.remote.proxyJumpPlaceholder')}
+                          size="medium"
+                        />
+                        <div className="ssh-connection-dialog__hint">
+                          {t('ssh.remote.proxyJumpHint')}
+                        </div>
+                      </div>
+
+                      <div className="ssh-connection-dialog__connection-options">
+                        <div className="ssh-connection-dialog__label">
+                          {t('ssh.remote.connectionOptions')}
+                        </div>
+                        <div className="ssh-connection-dialog__options-grid">
+                          <div className="ssh-connection-dialog__field">
+                            <Input
+                              label={t('ssh.remote.connectTimeout')}
+                              value={formData.connectTimeoutSecs}
+                              onChange={(e) => handleInputChange('connectTimeoutSecs', e.target.value)}
+                              size="medium"
+                            />
+                          </div>
+                          <div className="ssh-connection-dialog__field">
+                            <Input
+                              label={t('ssh.remote.authTimeout')}
+                              value={formData.authTimeoutSecs}
+                              onChange={(e) => handleInputChange('authTimeoutSecs', e.target.value)}
+                              size="medium"
+                            />
+                          </div>
+                          <div className="ssh-connection-dialog__field">
+                            <Input
+                              label={t('ssh.remote.authAttempts')}
+                              value={formData.authAttempts}
+                              onChange={(e) => handleInputChange('authAttempts', e.target.value)}
+                              size="medium"
+                            />
+                          </div>
+                          <div className="ssh-connection-dialog__field">
+                            <Input
+                              label={t('ssh.remote.connectAttempts')}
+                              value={formData.connectAttempts}
+                              onChange={(e) => handleInputChange('connectAttempts', e.target.value)}
+                              size="medium"
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    </>
+                  )}
+                </div>
+              )}
+            </div>
 
             {connectionTest && (
               <div

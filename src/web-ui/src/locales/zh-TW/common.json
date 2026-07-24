@@ -1336,6 +1336,7 @@
       "username": "用戶名",
       "connectionName": "連接名稱",
       "connectionNamePlaceholder": "留空自動生成",
+      "advancedSettings": "進階設定",
       "authMethod": "認證方式",
       "password": "密碼",
       "privateKey": "私鑰",
