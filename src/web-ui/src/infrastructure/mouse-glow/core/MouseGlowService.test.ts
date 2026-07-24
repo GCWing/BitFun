@@ -188,6 +188,112 @@ describe('MouseGlowService', () => {
     iframe.remove();
   });
 
+  it('keeps background glow below floating controls and highlights the floating layer itself', () => {
+    const stackingHost = document.createElement('div');
+    stackingHost.style.position = 'relative';
+    stackingHost.style.zIndex = '1';
+    const surface = document.createElement('div');
+    surface.setAttribute('data-mouse-glow-surface', '');
+    surface.getBoundingClientRect = () => ({
+      bottom: 128,
+      height: 80,
+      left: 20,
+      right: 220,
+      top: 48,
+      width: 200,
+      x: 20,
+      y: 48,
+      toJSON: () => ({}),
+    });
+    const listbox = document.createElement('div');
+    listbox.setAttribute('role', 'listbox');
+    listbox.style.position = 'absolute';
+    listbox.style.zIndex = '60';
+    listbox.style.border = '1px solid black';
+    listbox.getBoundingClientRect = () => ({
+      bottom: 300,
+      height: 160,
+      left: 180,
+      right: 380,
+      top: 140,
+      width: 200,
+      x: 180,
+      y: 140,
+      toJSON: () => ({}),
+    });
+    const option = document.createElement('div');
+    option.setAttribute('role', 'option');
+    listbox.appendChild(option);
+    surface.appendChild(listbox);
+    stackingHost.appendChild(surface);
+    document.body.appendChild(stackingHost);
+    service.initialize();
+
+    surface.dispatchEvent(new MouseEvent('pointermove', {
+      bubbles: true,
+      clientX: 72,
+      clientY: 68,
+    }));
+    nextFrame?.(0);
+
+    const overlay = document.getElementById('bitfun-mouse-glow-overlay');
+    expect(overlay?.hasAttribute('data-active')).toBe(true);
+    expect(overlay?.parentElement).toBe(stackingHost);
+    expect(Number(window.getComputedStyle(listbox).zIndex)).toBeGreaterThan(49);
+
+    option.dispatchEvent(new MouseEvent('pointermove', {
+      bubbles: true,
+      clientX: 220,
+      clientY: 180,
+    }));
+    nextFrame?.(16);
+
+    expect(overlay?.hasAttribute('data-active')).toBe(true);
+    expect(overlay?.parentElement).toBe(listbox);
+    expect(overlay?.style.width).toBe('200px');
+    expect(overlay?.style.height).toBe('160px');
+    stackingHost.remove();
+  });
+
+  it('highlights a nearby single-border divider as a line', () => {
+    const divider = document.createElement('section');
+    divider.style.display = 'block';
+    divider.style.opacity = '1';
+    divider.style.visibility = 'visible';
+    divider.style.border = '0 solid transparent';
+    divider.style.borderBottom = '1px solid black';
+    divider.getBoundingClientRect = () => ({
+      bottom: 120,
+      height: 80,
+      left: 40,
+      right: 360,
+      top: 40,
+      width: 320,
+      x: 40,
+      y: 40,
+      toJSON: () => ({}),
+    });
+    const content = document.createElement('span');
+    divider.appendChild(content);
+    document.body.appendChild(divider);
+    service.initialize();
+
+    content.dispatchEvent(new MouseEvent('pointermove', {
+      bubbles: true,
+      clientX: 96,
+      clientY: 116,
+    }));
+    nextFrame?.(0);
+
+    const overlay = document.getElementById('bitfun-mouse-glow-overlay');
+    expect(overlay?.hasAttribute('data-active')).toBe(true);
+    expect(overlay?.hasAttribute('data-divider')).toBe(true);
+    expect(overlay?.style.width).toBe('320px');
+    expect(overlay?.style.height).toBe('1px');
+    expect(overlay?.style.transform).toBe('translate3d(40px, 119px, 0)');
+    divider.remove();
+  });
+
   it('automatically detects bordered product surfaces without an explicit marker', () => {
     const surface = document.createElement('section');
     surface.className = 'workspace-card';

@@ -49,6 +49,12 @@
     opacity: 1;
     visibility: visible;
   }
+
+  &[data-divider] {
+    padding: 0;
+    -webkit-mask: none;
+    mask: none;
+  }
 }
 
 :root[data-theme-type='light'] .bitfun-mouse-glow-overlay,
@@ -56,17 +62,17 @@
   --mouse-glow-border-width: 1.5px;
   --mouse-glow-core: color-mix(
     in srgb,
-    var(--color-static-black) 58%,
+    var(--color-static-black) 38%,
     var(--color-static-white)
   );
   --mouse-glow-falloff: color-mix(
     in srgb,
-    var(--color-static-black) 24%,
+    var(--color-static-black) 16%,
     transparent
   );
   --mouse-glow-shadow: color-mix(
     in srgb,
-    var(--color-static-black) 32%,
+    var(--color-static-black) 20%,
     transparent
   );
 }

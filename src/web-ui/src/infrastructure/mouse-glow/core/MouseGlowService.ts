@@ -4,6 +4,12 @@ export const DEFAULT_MOUSE_GLOW_ENABLED = true;
 const MOUSE_GLOW_OVERLAY_ID = 'bitfun-mouse-glow-overlay';
 const AUTOMATIC_SURFACE_CLASS_PATTERN =
   /(?:^|[-_])(card|panel|dialog|modal|surface|frame)(?:$|[-_])/i;
+const DIVIDER_CLASS_PATTERN =
+  /(?:^|[-_])(divider|separator|splitter|rule)(?:$|[-_])/i;
+const FLOATING_LAYER_CLASS_PATTERN =
+  /(?:^|[-_])(dialog|dropdown|flyout|menu|modal|overlay|popover|popup)(?:$|[-_])/i;
+const DIVIDER_EDGE_PROXIMITY = 18;
+const FLOATING_LAYER_ROLES = new Set(['dialog', 'listbox', 'menu', 'tree']);
 const EXCLUDED_SURFACE_TAGS = new Set([
   'CANVAS',
   'HTML',
@@ -18,6 +24,19 @@ const EXCLUDED_SURFACE_TAGS = new Set([
 ]);
 
 type MouseGlowListener = () => void;
+type BorderSideName = 'top' | 'right' | 'bottom' | 'left';
+
+interface VisibleBorderSide {
+  name: BorderSideName;
+  width: number;
+}
+
+interface OverlayGeometry {
+  height: number;
+  left: number;
+  top: number;
+  width: number;
+}
 
 export class MouseGlowService {
   private enabled = DEFAULT_MOUSE_GLOW_ENABLED;
@@ -186,6 +205,7 @@ export class MouseGlowService {
     if (this.overlay) {
       this.overlay.hidden = true;
       this.overlay.removeAttribute('data-active');
+      this.overlay.removeAttribute('data-divider');
     }
   }
 
@@ -207,8 +227,7 @@ export class MouseGlowService {
   private updateOverlay(surface: HTMLElement | null): void {
     const overlay = this.overlay;
     if (!overlay || !surface?.isConnected) {
-      this.activeSurface = null;
-      overlay?.removeAttribute('data-active');
+      this.deactivateSurface();
       return;
     }
 
@@ -221,19 +240,25 @@ export class MouseGlowService {
       || rect.top > window.innerHeight
       || rect.left > window.innerWidth
     ) {
-      this.activeSurface = null;
-      overlay.removeAttribute('data-active');
+      this.deactivateSurface();
       return;
     }
 
     const style = window.getComputedStyle(surface);
+    const dividerGeometry = this.getDividerGeometry(surface, rect, style);
+    const geometry = dividerGeometry ?? rect;
+    const overlayHost = this.findOverlayHost(surface);
+    if (overlay.parentElement !== overlayHost) {
+      overlayHost.appendChild(overlay);
+    }
     this.activeSurface = surface;
-    overlay.style.width = `${rect.width}px`;
-    overlay.style.height = `${rect.height}px`;
-    overlay.style.borderRadius = style.borderRadius;
-    overlay.style.transform = `translate3d(${rect.left}px, ${rect.top}px, 0)`;
-    overlay.style.setProperty('--mouse-glow-local-x', `${this.pointerX - rect.left}px`);
-    overlay.style.setProperty('--mouse-glow-local-y', `${this.pointerY - rect.top}px`);
+    overlay.toggleAttribute('data-divider', dividerGeometry !== null);
+    overlay.style.width = `${geometry.width}px`;
+    overlay.style.height = `${geometry.height}px`;
+    overlay.style.borderRadius = dividerGeometry ? '0px' : style.borderRadius;
+    overlay.style.transform = `translate3d(${geometry.left}px, ${geometry.top}px, 0)`;
+    overlay.style.setProperty('--mouse-glow-local-x', `${this.pointerX - geometry.left}px`);
+    overlay.style.setProperty('--mouse-glow-local-y', `${this.pointerY - geometry.top}px`);
     overlay.hidden = false;
     overlay.setAttribute('data-active', '');
   }
@@ -268,6 +293,16 @@ export class MouseGlowService {
   private findSurface(elements: HTMLElement[]): HTMLElement | null {
     if (elements.some(element => element.hasAttribute('data-mouse-glow-ignore'))) {
       return null;
+    }
+
+    const dividerSurface = elements.find(element => this.isDividerSurface(element));
+    if (dividerSurface) {
+      return dividerSurface;
+    }
+
+    const floatingSurface = elements.find(element => this.isFloatingLayer(element));
+    if (floatingSurface && this.isAutomaticSurface(floatingSurface, false)) {
+      return floatingSurface;
     }
 
     const explicitSurface = elements.find(element =>
@@ -307,27 +342,11 @@ export class MouseGlowService {
     }
 
     const style = window.getComputedStyle(element);
-    if (
-      style.display === 'none'
-      || style.display === 'contents'
-      || style.visibility === 'hidden'
-      || (style.opacity !== '' && Number(style.opacity) === 0)
-    ) {
+    if (!this.isVisibleElement(style)) {
       return false;
     }
 
-    const visibleBorderSides = [
-      [style.borderTopWidth, style.borderTopStyle, style.borderTopColor],
-      [style.borderRightWidth, style.borderRightStyle, style.borderRightColor],
-      [style.borderBottomWidth, style.borderBottomStyle, style.borderBottomColor],
-      [style.borderLeftWidth, style.borderLeftStyle, style.borderLeftColor],
-    ].filter(([width, borderStyle, color]) =>
-      parseFloat(width) > 0
-      && borderStyle !== 'none'
-      && !this.isTransparentColor(color)
-    ).length;
-
-    if (visibleBorderSides >= 2) {
+    if (this.getVisibleBorderSides(style).length >= 2) {
       return true;
     }
 
@@ -336,6 +355,194 @@ export class MouseGlowService {
       style.backgroundImage !== 'none' || !this.isTransparentColor(style.backgroundColor);
 
     return hasSemanticClass && hasRoundedCorners && hasBackground;
+  }
+
+  private isDividerSurface(element: HTMLElement): boolean {
+    if (
+      element === document.body
+      || element === this.overlay
+      || EXCLUDED_SURFACE_TAGS.has(element.tagName)
+      || element.getAttribute('aria-hidden') === 'true'
+    ) {
+      return false;
+    }
+
+    if (element.tagName === 'A' || element.tagName === 'BUTTON') {
+      return false;
+    }
+
+    const rect = element.getBoundingClientRect();
+    const style = window.getComputedStyle(element);
+    if (!this.isVisibleElement(style)) {
+      return false;
+    }
+
+    if (this.hasDividerSemantics(element)) {
+      return (
+        (rect.width >= 32 && rect.height > 0)
+        || (rect.height >= 32 && rect.width > 0)
+      );
+    }
+
+    const borderSides = this.getVisibleBorderSides(style);
+    if (borderSides.length !== 1) {
+      return false;
+    }
+
+    const [borderSide] = borderSides;
+    if (
+      ((borderSide.name === 'top' || borderSide.name === 'bottom') && rect.width < 64)
+      || ((borderSide.name === 'left' || borderSide.name === 'right') && rect.height < 32)
+    ) {
+      return false;
+    }
+
+    const edgePosition = {
+      top: rect.top,
+      right: rect.right,
+      bottom: rect.bottom,
+      left: rect.left,
+    }[borderSide.name];
+    const pointerPosition =
+      borderSide.name === 'top' || borderSide.name === 'bottom'
+        ? this.pointerY
+        : this.pointerX;
+
+    return Math.abs(pointerPosition - edgePosition) <= DIVIDER_EDGE_PROXIMITY;
+  }
+
+  private getDividerGeometry(
+    element: HTMLElement,
+    rect: DOMRect,
+    style: CSSStyleDeclaration,
+  ): OverlayGeometry | null {
+    const borderSides = this.getVisibleBorderSides(style);
+    if (borderSides.length === 1) {
+      const [borderSide] = borderSides;
+      const thickness = Math.max(borderSide.width, 1);
+      switch (borderSide.name) {
+        case 'top':
+          return { height: thickness, left: rect.left, top: rect.top, width: rect.width };
+        case 'right':
+          return {
+            height: rect.height,
+            left: rect.right - thickness,
+            top: rect.top,
+            width: thickness,
+          };
+        case 'bottom':
+          return {
+            height: thickness,
+            left: rect.left,
+            top: rect.bottom - thickness,
+            width: rect.width,
+          };
+        case 'left':
+          return { height: rect.height, left: rect.left, top: rect.top, width: thickness };
+      }
+    }
+
+    if (this.hasDividerSemantics(element)) {
+      return {
+        height: Math.max(rect.height, 1),
+        left: rect.left,
+        top: rect.top,
+        width: Math.max(rect.width, 1),
+      };
+    }
+
+    return null;
+  }
+
+  private getVisibleBorderSides(style: CSSStyleDeclaration): VisibleBorderSide[] {
+    const sides: Array<[BorderSideName, string, string, string]> = [
+      ['top', style.borderTopWidth, style.borderTopStyle, style.borderTopColor],
+      ['right', style.borderRightWidth, style.borderRightStyle, style.borderRightColor],
+      ['bottom', style.borderBottomWidth, style.borderBottomStyle, style.borderBottomColor],
+      ['left', style.borderLeftWidth, style.borderLeftStyle, style.borderLeftColor],
+    ];
+
+    return sides.flatMap(([name, width, borderStyle, color]) => {
+      const numericWidth = parseFloat(width);
+      return (
+        numericWidth > 0
+        && borderStyle !== 'none'
+        && !this.isTransparentColor(color)
+      )
+        ? [{ name, width: numericWidth }]
+        : [];
+    });
+  }
+
+  private hasDividerSemantics(element: HTMLElement): boolean {
+    return (
+      element.tagName === 'HR'
+      || element.getAttribute('role') === 'separator'
+      || Array.from(element.classList).some(className => DIVIDER_CLASS_PATTERN.test(className))
+    );
+  }
+
+  private findOverlayHost(surface: HTMLElement): HTMLElement {
+    if (this.isFloatingLayer(surface)) {
+      return surface;
+    }
+
+    let current = surface.parentElement;
+    while (current && current !== document.body) {
+      if (this.isFloatingLayer(current)) {
+        return current;
+      }
+      if (this.createsStackingContext(current)) {
+        return current;
+      }
+      current = current.parentElement;
+    }
+    return document.body;
+  }
+
+  private isFloatingLayer(element: HTMLElement): boolean {
+    const role = element.getAttribute('role');
+    if (
+      (role && FLOATING_LAYER_ROLES.has(role))
+      || element.getAttribute('aria-modal') === 'true'
+      || element.hasAttribute('popover')
+    ) {
+      return true;
+    }
+
+    const style = window.getComputedStyle(element);
+    const isPositionedLayer = style.position === 'absolute' || style.position === 'fixed';
+    return (
+      isPositionedLayer
+      && Array.from(element.classList).some(className =>
+        FLOATING_LAYER_CLASS_PATTERN.test(className)
+      )
+    );
+  }
+
+  private createsStackingContext(element: HTMLElement): boolean {
+    const style = window.getComputedStyle(element);
+    const positionedWithZIndex =
+      style.position !== 'static' && style.zIndex !== 'auto';
+
+    return (
+      positionedWithZIndex
+      || style.position === 'fixed'
+      || style.position === 'sticky'
+      || style.isolation === 'isolate'
+      || (style.opacity !== '' && style.opacity !== '1')
+      || (style.mixBlendMode !== '' && style.mixBlendMode !== 'normal')
+      || style.willChange.includes('opacity')
+    );
+  }
+
+  private isVisibleElement(style: CSSStyleDeclaration): boolean {
+    return (
+      style.display !== 'none'
+      && style.display !== 'contents'
+      && style.visibility !== 'hidden'
+      && (style.opacity === '' || Number(style.opacity) !== 0)
+    );
   }
 
   private hasSemanticSurfaceClass(element: HTMLElement): boolean {
