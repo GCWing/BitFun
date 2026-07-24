@@ -473,7 +473,6 @@ const MainNav: React.FC<MainNavProps> = ({
               onClick={() => setSearchOpen(true)}
               aria-label={t('nav.search.triggerTooltip')}
               data-testid="nav-search-trigger"
-              data-mouse-glow-surface=""
             >
               <span className="bitfun-nav-panel__search-trigger__icon" aria-hidden="true">
                 <span className="bitfun-nav-panel__search-trigger__icon-inner">

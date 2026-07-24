@@ -2,25 +2,19 @@ export const MOUSE_GLOW_STORAGE_KEY = 'bitfun:appearance:mouse-glow-enabled';
 export const DEFAULT_MOUSE_GLOW_ENABLED = true;
 
 const MOUSE_GLOW_OVERLAY_ID = 'bitfun-mouse-glow-overlay';
+// Detection is computed-style first. These class patterns are fallbacks only for
+// borderless visual surfaces and floating-layer placement, not an allowlist.
 const AUTOMATIC_SURFACE_CLASS_PATTERN =
   /(?:^|[-_])(card|panel|dialog|modal|surface|frame)(?:$|[-_])/i;
 const DIVIDER_CLASS_PATTERN =
   /(?:^|[-_])(divider|separator|splitter|rule)(?:$|[-_])/i;
 const FLOATING_LAYER_CLASS_PATTERN =
   /(?:^|[-_])(dialog|dropdown|flyout|menu|modal|overlay|popover|popup)(?:$|[-_])/i;
-const DIVIDER_EDGE_PROXIMITY = 18;
 const FLOATING_LAYER_ROLES = new Set(['dialog', 'listbox', 'menu', 'tree']);
 const EXCLUDED_SURFACE_TAGS = new Set([
-  'CANVAS',
   'HTML',
   'IFRAME',
-  'INPUT',
-  'LABEL',
   'OPTION',
-  'SELECT',
-  'SVG',
-  'TEXTAREA',
-  'VIDEO',
 ]);
 
 type MouseGlowListener = () => void;
@@ -345,35 +339,27 @@ export class MouseGlowService {
   }
 
   private findSurface(elements: HTMLElement[]): HTMLElement | null {
-    if (elements.some(element => element.hasAttribute('data-mouse-glow-ignore'))) {
+    if (
+      elements.some(element =>
+        element.hasAttribute('data-mouse-glow-ignore')
+        || this.isResizeInteractionElement(element)
+      )
+    ) {
       return null;
     }
 
-    const dividerSurface = elements.find(element => this.isDividerSurface(element));
-    if (dividerSurface) {
-      return dividerSurface;
-    }
-
-    const floatingSurface = elements.find(element => this.isFloatingLayer(element));
-    if (floatingSurface && this.isAutomaticSurface(floatingSurface, false)) {
-      return floatingSurface;
-    }
-
-    const explicitSurface = elements.find(element =>
-      element.hasAttribute('data-mouse-glow-surface')
-    );
-    if (explicitSurface) {
-      return explicitSurface;
-    }
-
-    const semanticSurface = elements.find(element =>
-      this.hasSemanticSurfaceClass(element) && this.isAutomaticSurface(element, true)
-    );
-    if (semanticSurface) {
-      return semanticSurface;
-    }
-
-    return elements.find(element => this.isAutomaticSurface(element, false)) ?? null;
+    // The event path is ordered from the deepest target outward, so the first
+    // matching visual boundary is also the most specific one under the pointer.
+    return elements.find(element => {
+      if (this.isDividerSurface(element)) {
+        return true;
+      }
+      if (element.hasAttribute('data-mouse-glow-surface')) {
+        return true;
+      }
+      const hasSemanticClass = this.hasSemanticSurfaceClass(element);
+      return this.isAutomaticSurface(element, hasSemanticClass);
+    }) ?? null;
   }
 
   private isAutomaticSurface(element: HTMLElement, hasSemanticClass: boolean): boolean {
@@ -381,17 +367,12 @@ export class MouseGlowService {
       element === document.body
       || element === this.overlay
       || EXCLUDED_SURFACE_TAGS.has(element.tagName)
-      || element.getAttribute('aria-hidden') === 'true'
     ) {
       return false;
     }
 
-    if ((element.tagName === 'A' || element.tagName === 'BUTTON') && !hasSemanticClass) {
-      return false;
-    }
-
     const rect = element.getBoundingClientRect();
-    if (rect.width < 64 || rect.height < 32) {
+    if (rect.width <= 0 || rect.height <= 0) {
       return false;
     }
 
@@ -401,6 +382,10 @@ export class MouseGlowService {
     }
 
     if (this.getVisibleBorderSides(style).length >= 2) {
+      return true;
+    }
+
+    if (this.hasVisibleOutline(style) || this.hasInsetBorderShadow(style)) {
       return true;
     }
 
@@ -416,12 +401,7 @@ export class MouseGlowService {
       element === document.body
       || element === this.overlay
       || EXCLUDED_SURFACE_TAGS.has(element.tagName)
-      || element.getAttribute('aria-hidden') === 'true'
     ) {
-      return false;
-    }
-
-    if (element.tagName === 'A' || element.tagName === 'BUTTON') {
       return false;
     }
 
@@ -431,38 +411,12 @@ export class MouseGlowService {
       return false;
     }
 
-    if (this.hasDividerSemantics(element)) {
-      return (
-        (rect.width >= 32 && rect.height > 0)
-        || (rect.height >= 32 && rect.width > 0)
-      );
-    }
-
     const borderSides = this.getVisibleBorderSides(style);
-    if (borderSides.length !== 1) {
-      return false;
+    if (borderSides.length === 1) {
+      return true;
     }
 
-    const [borderSide] = borderSides;
-    if (
-      ((borderSide.name === 'top' || borderSide.name === 'bottom') && rect.width < 64)
-      || ((borderSide.name === 'left' || borderSide.name === 'right') && rect.height < 32)
-    ) {
-      return false;
-    }
-
-    const edgePosition = {
-      top: rect.top,
-      right: rect.right,
-      bottom: rect.bottom,
-      left: rect.left,
-    }[borderSide.name];
-    const pointerPosition =
-      borderSide.name === 'top' || borderSide.name === 'bottom'
-        ? this.pointerY
-        : this.pointerX;
-
-    return Math.abs(pointerPosition - edgePosition) <= DIVIDER_EDGE_PROXIMITY;
+    return this.hasDividerSemantics(element) && this.isLineLikeGeometry(rect);
   }
 
   private getDividerGeometry(
@@ -534,6 +488,28 @@ export class MouseGlowService {
       || element.getAttribute('role') === 'separator'
       || Array.from(element.classList).some(className => DIVIDER_CLASS_PATTERN.test(className))
     );
+  }
+
+  private isLineLikeGeometry(rect: DOMRect): boolean {
+    const isHorizontalLine = rect.width > rect.height * 2 && rect.height <= 4;
+    const isVerticalLine = rect.height > rect.width * 2 && rect.width <= 4;
+    return isHorizontalLine || isVerticalLine;
+  }
+
+  private hasVisibleOutline(style: CSSStyleDeclaration): boolean {
+    return (
+      parseFloat(style.outlineWidth) > 0
+      && style.outlineStyle !== 'none'
+      && !this.isTransparentColor(style.outlineColor)
+    );
+  }
+
+  private hasInsetBorderShadow(style: CSSStyleDeclaration): boolean {
+    return style.boxShadow !== 'none' && /\binset\b/i.test(style.boxShadow);
+  }
+
+  private isResizeInteractionElement(element: HTMLElement): boolean {
+    return /(?:^|-)resize$/i.test(window.getComputedStyle(element).cursor);
   }
 
   private findOverlayHost(surface: HTMLElement): HTMLElement {

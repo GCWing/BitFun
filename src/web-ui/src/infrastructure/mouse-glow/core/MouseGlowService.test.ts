@@ -283,7 +283,7 @@ describe('MouseGlowService', () => {
     content.dispatchEvent(new MouseEvent('pointermove', {
       bubbles: true,
       clientX: 96,
-      clientY: 116,
+      clientY: 60,
     }));
     nextFrame?.(0);
 
@@ -293,6 +293,7 @@ describe('MouseGlowService', () => {
     expect(overlay?.style.width).toBe('320px');
     expect(overlay?.style.height).toBe('1px');
     expect(overlay?.style.transform).toBe('translate3d(40px, 119px, 0)');
+    expect(overlay?.style.getPropertyValue('--mouse-glow-local-y')).toBe('-59px');
     divider.remove();
   });
 
@@ -389,7 +390,7 @@ describe('MouseGlowService', () => {
     surface.remove();
   });
 
-  it('detects semantic card buttons while ignoring ordinary controls', () => {
+  it('detects semantic borderless cards', () => {
     const cardButton = document.createElement('button');
     cardButton.className = 'nursery-template-card';
     cardButton.style.borderRadius = '15px';
@@ -421,10 +422,10 @@ describe('MouseGlowService', () => {
     cardButton.remove();
   });
 
-  it('highlights an explicitly marked input-like control', () => {
+  it('automatically detects an inset-shadow search control', () => {
     const searchButton = document.createElement('button');
-    searchButton.setAttribute('data-mouse-glow-surface', '');
     searchButton.style.borderRadius = '9999px';
+    searchButton.style.boxShadow = 'inset 0 0 0 1px black';
     searchButton.getBoundingClientRect = () => ({
       bottom: 72,
       height: 32,
@@ -452,5 +453,69 @@ describe('MouseGlowService', () => {
     expect(overlay?.style.height).toBe('32px');
     expect(overlay?.style.borderRadius).toBe('9999px');
     searchButton.remove();
+  });
+
+  it('automatically detects small bordered controls', () => {
+    const control = document.createElement('input');
+    control.style.border = '1px solid black';
+    control.style.borderRadius = '6px';
+    control.getBoundingClientRect = () => ({
+      bottom: 60,
+      height: 28,
+      left: 20,
+      right: 48,
+      top: 32,
+      width: 28,
+      x: 20,
+      y: 32,
+      toJSON: () => ({}),
+    });
+    document.body.appendChild(control);
+    service.initialize();
+
+    control.dispatchEvent(new MouseEvent('pointermove', {
+      bubbles: true,
+      clientX: 34,
+      clientY: 46,
+    }));
+    nextFrame?.(0);
+
+    const overlay = document.getElementById('bitfun-mouse-glow-overlay');
+    expect(overlay?.hasAttribute('data-active')).toBe(true);
+    expect(overlay?.style.width).toBe('28px');
+    expect(overlay?.style.height).toBe('28px');
+    control.remove();
+  });
+
+  it('ignores resize interaction handles', () => {
+    const resizer = document.createElement('div');
+    resizer.setAttribute('role', 'separator');
+    resizer.style.cursor = 'col-resize';
+    resizer.style.borderLeft = '1px solid black';
+    resizer.getBoundingClientRect = () => ({
+      bottom: 600,
+      height: 600,
+      left: 240,
+      right: 248,
+      top: 0,
+      width: 8,
+      x: 240,
+      y: 0,
+      toJSON: () => ({}),
+    });
+    document.body.appendChild(resizer);
+    service.initialize();
+
+    resizer.dispatchEvent(new MouseEvent('pointermove', {
+      bubbles: true,
+      clientX: 244,
+      clientY: 300,
+    }));
+    nextFrame?.(0);
+
+    const overlay = document.getElementById('bitfun-mouse-glow-overlay');
+    expect(overlay?.hasAttribute('data-active')).toBe(false);
+    expect(overlay?.hidden).toBe(true);
+    resizer.remove();
   });
 });

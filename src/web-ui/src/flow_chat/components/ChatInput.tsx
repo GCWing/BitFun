@@ -3885,7 +3885,6 @@ export const ChatInput: React.FC<ChatInputProps> = ({
           <AcpPlanPanel entries={acpPlanEntries} />
           <div
             className={`bitfun-chat-input__box ${isMultiLine ? 'bitfun-chat-input__box--multi-line' : 'bitfun-chat-input__box--capsule'}`}
-            data-mouse-glow-surface=""
           >
             {showTargetSwitcher && (
               <div className="bitfun-chat-input__target-switcher" data-testid="chat-input-target-switcher">
