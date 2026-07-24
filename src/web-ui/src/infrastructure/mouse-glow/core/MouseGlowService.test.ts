@@ -250,8 +250,10 @@ describe('MouseGlowService', () => {
 
     expect(overlay?.hasAttribute('data-active')).toBe(true);
     expect(overlay?.parentElement).toBe(listbox);
-    expect(overlay?.style.width).toBe('200px');
-    expect(overlay?.style.height).toBe('160px');
+    expect(overlay?.hasAttribute('data-local-position')).toBe(true);
+    expect(overlay?.style.width).toBe('198px');
+    expect(overlay?.style.height).toBe('158px');
+    expect(overlay?.style.transform).toBe('translate3d(0px, 0px, 0)');
     stackingHost.remove();
   });
 

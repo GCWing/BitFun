@@ -246,11 +246,17 @@ export class MouseGlowService {
 
     const style = window.getComputedStyle(surface);
     const dividerGeometry = this.getDividerGeometry(surface, rect, style);
-    const geometry = dividerGeometry ?? rect;
+    const surfaceGeometry = dividerGeometry ?? rect;
     const overlayHost = this.findOverlayHost(surface);
     if (overlay.parentElement !== overlayHost) {
       overlayHost.appendChild(overlay);
     }
+    const geometry = this.getVisibleOverlayGeometry(
+      surfaceGeometry,
+      surface,
+      overlayHost,
+      style,
+    );
     const overlayPosition = this.getOverlayPosition(geometry, overlayHost);
     this.activeSurface = surface;
     overlay.toggleAttribute('data-divider', dividerGeometry !== null);
@@ -264,6 +270,28 @@ export class MouseGlowService {
     overlay.style.setProperty('--mouse-glow-local-y', `${this.pointerY - geometry.top}px`);
     overlay.hidden = false;
     overlay.setAttribute('data-active', '');
+  }
+
+  private getVisibleOverlayGeometry(
+    geometry: OverlayGeometry,
+    surface: HTMLElement,
+    host: HTMLElement,
+    style: CSSStyleDeclaration,
+  ): OverlayGeometry {
+    if (host !== surface || !this.isFloatingLayer(surface)) {
+      return geometry;
+    }
+
+    const borderTopWidth = parseFloat(style.borderTopWidth) || 0;
+    const borderRightWidth = parseFloat(style.borderRightWidth) || 0;
+    const borderBottomWidth = parseFloat(style.borderBottomWidth) || 0;
+    const borderLeftWidth = parseFloat(style.borderLeftWidth) || 0;
+    return {
+      height: Math.max(geometry.height - borderTopWidth - borderBottomWidth, 1),
+      left: geometry.left + borderLeftWidth,
+      top: geometry.top + borderTopWidth,
+      width: Math.max(geometry.width - borderLeftWidth - borderRightWidth, 1),
+    };
   }
 
   private getOverlayPosition(
