@@ -24,6 +24,8 @@ const switchChatSessionMock = vi.hoisted(() => vi.fn());
 const virtualListMock = vi.hoisted(() => ({
   scrollToTurn: vi.fn(),
   scrollToIndex: vi.fn(),
+  scrollToSearchMatch: vi.fn(),
+  clearSearchMatch: vi.fn(),
   scrollToPhysicalBottomAndClearPin: vi.fn(),
   scrollToTurnEndAndClearPin: vi.fn(() => true),
   scrollToLatestEndPosition: vi.fn(),
@@ -269,6 +271,8 @@ describe('ModernFlowChatContainer historical empty state', () => {
     switchChatSessionMock.mockReset();
     virtualListMock.scrollToTurn.mockReset();
     virtualListMock.scrollToIndex.mockReset();
+    virtualListMock.scrollToSearchMatch.mockReset();
+    virtualListMock.clearSearchMatch.mockReset();
     virtualListMock.scrollToPhysicalBottomAndClearPin.mockReset();
     virtualListMock.scrollToTurnEndAndClearPin.mockReset();
     virtualListMock.scrollToTurnEndAndClearPin.mockReturnValue(true);
@@ -831,6 +835,51 @@ describe('ModernFlowChatContainer historical empty state', () => {
 
     projectionSpy.mockRestore();
     pendingSpy.mockRestore();
+  });
+
+  it('repositions an unchanged virtual match when the search query changes', async () => {
+    stateMocks.activeSession = createSession({
+      isHistorical: false,
+      historyState: 'ready',
+      dialogTurns: [createTurn('turn-1', 'Searchable prompt')],
+    } as Partial<Session>);
+    stateMocks.virtualItems = [
+      { type: 'user-message', turnId: 'turn-1', data: { id: 'user-turn-1', content: 'Searchable prompt' } },
+    ];
+    searchStateMock.searchQuery = 'search';
+    searchStateMock.matches = [{
+      virtualItemIndex: 0,
+      turnId: 'turn-1',
+      type: 'user-message',
+    }];
+    searchStateMock.currentMatchIndex = 0;
+    searchStateMock.currentMatchVirtualIndex = 0;
+
+    await act(async () => {
+      root.render(<ModernFlowChatContainer />);
+    });
+    flushAnimationFrame();
+
+    expect(virtualListMock.scrollToSearchMatch).toHaveBeenLastCalledWith({
+      virtualItemIndex: 0,
+      query: 'search',
+      flowItemId: undefined,
+      expandableIds: undefined,
+    });
+
+    searchStateMock.searchQuery = 'searchable';
+    await act(async () => {
+      root.render(<ModernFlowChatContainer />);
+    });
+    flushAnimationFrame();
+
+    expect(virtualListMock.scrollToSearchMatch).toHaveBeenCalledTimes(2);
+    expect(virtualListMock.scrollToSearchMatch).toHaveBeenLastCalledWith({
+      virtualItemIndex: 0,
+      query: 'searchable',
+      flowItemId: undefined,
+      expandableIds: undefined,
+    });
   });
 
   it('keeps the new-session welcome for genuinely new empty sessions', () => {

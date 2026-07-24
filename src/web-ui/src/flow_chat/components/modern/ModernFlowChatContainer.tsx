@@ -325,6 +325,11 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
     goToPrev: handleSearchPrev,
     clearSearch,
   } = useFlowChatSearch(virtualItems);
+  const searchCurrentMatch = searchMatches[searchCurrentMatchIndex];
+  const searchCurrentMatchFlowItemId = searchCurrentMatch?.flowItemId;
+  const searchCurrentMatchTurnId = searchCurrentMatch?.turnId;
+  const searchCurrentMatchVirtualItemIndex = searchCurrentMatch?.virtualItemIndex ?? -1;
+  const searchCurrentMatchExpandableKey = searchCurrentMatch?.expandableIds?.join('\u0000') ?? '';
 
   useFlowChatSync();
   useFlowChatCopyDialog();
@@ -1021,14 +1026,31 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
   ]);
 
   useEffect(() => {
-    if (searchCurrentMatchVirtualIndex < 0) return;
+    if (searchCurrentMatchVirtualItemIndex < 0 || !searchQuery.trim()) {
+      virtualListRef.current?.clearSearchMatch();
+      return;
+    }
+
     const frameId = requestAnimationFrame(() => {
-      virtualListRef.current?.scrollToIndex(searchCurrentMatchVirtualIndex);
+      virtualListRef.current?.scrollToSearchMatch({
+        virtualItemIndex: searchCurrentMatchVirtualItemIndex,
+        query: searchQuery,
+        flowItemId: searchCurrentMatchFlowItemId,
+        expandableIds: searchCurrentMatchExpandableKey
+          ? searchCurrentMatchExpandableKey.split('\u0000')
+          : undefined,
+      });
     });
     return () => {
       cancelAnimationFrame(frameId);
     };
-  }, [searchCurrentMatchVirtualIndex]);
+  }, [
+    searchCurrentMatchFlowItemId,
+    searchCurrentMatchTurnId,
+    searchCurrentMatchExpandableKey,
+    searchCurrentMatchVirtualItemIndex,
+    searchQuery,
+  ]);
 
   const handleJumpToTurn = useCallback((turnId: string) => {
     if (!turnId) return false;

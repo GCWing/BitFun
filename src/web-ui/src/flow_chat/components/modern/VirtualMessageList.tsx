@@ -53,6 +53,12 @@ import {
   activeSessionHistoryProjectionHandoff,
   type HistoryProjectionHandoffSnapshot,
 } from './historyProjectionHandoff';
+import {
+  findElementWithDataValue,
+  findFlowChatSearchTextRange,
+  getFlowChatSearchTextRoot,
+  setFlowChatSearchHighlight,
+} from './flowChatSearchDom';
 import './VirtualMessageList.scss';
 
 const COMPENSATION_EPSILON_PX = 0.5;
@@ -73,6 +79,7 @@ const PARTIAL_HISTORY_FULL_PROJECTION_TOP_THRESHOLD_PX = 1200;
 const HISTORY_PROJECTION_HANDOFF_MAX_DURATION_MS = 5000;
 const SESSION_OPEN_HANDOFF_ITEM_BUDGET = 24;
 const PREVIOUS_HISTORY_BOUNDARY_STATUS_DURATION_MS = 2500;
+const SEARCH_NAVIGATION_MAX_ATTEMPTS = 24;
 
 type LatestEndAnchorResolveReason =
   | 'raf'
@@ -98,6 +105,14 @@ export type FlowChatTurnPinRequestStatus = 'rejected' | 'pending' | 'settled';
 export interface VirtualMessageListRef {
   scrollToTurn: (turnIndex: number) => void;
   scrollToIndex: (index: number) => void;
+  // Materializes a virtual item, reveals collapsed search content, and centers the exact text range.
+  scrollToSearchMatch: (target: {
+    virtualItemIndex: number;
+    query: string;
+    flowItemId?: string;
+    expandableIds?: readonly string[];
+  }) => void;
+  clearSearchMatch: () => void;
   // Clears pin reservation first, then scrolls to the physical bottom.
   scrollToPhysicalBottomAndClearPin: () => void;
   // Clears pin reservation first, then keeps the target turn visible near the natural tail.
@@ -435,6 +450,7 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
   const pinReservationReconcileFrameRef = useRef<number | null>(null);
   const turnPinStabilizationFrameRef = useRef<number | null>(null);
   const latestEndAnchorStabilizationFrameRef = useRef<number | null>(null);
+  const searchNavigationRequestIdRef = useRef(0);
   const staticInitialHistoryBottomGuardFrameRef = useRef<number | null>(null);
   const staticInitialHistoryBottomGuardUntilMsRef = useRef(0);
   const latestEndAnchorRequestRef = useRef<LatestEndAnchorRequestState | null>(null);
@@ -3581,6 +3597,204 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
     }
   }, [clearPinReservationForUserNavigation, exitFollowOutput, toVirtuosoIndex, virtualItems.length]);
 
+  const clearSearchMatch = useCallback(() => {
+    searchNavigationRequestIdRef.current += 1;
+    setFlowChatSearchHighlight(null);
+  }, []);
+
+  const scrollToSearchMatch = useCallback((target: {
+    virtualItemIndex: number;
+    query: string;
+    flowItemId?: string;
+    expandableIds?: readonly string[];
+  }) => {
+    const query = target.query.trim();
+    if (
+      !query ||
+      target.virtualItemIndex < 0 ||
+      target.virtualItemIndex >= virtualItems.length
+    ) {
+      clearSearchMatch();
+      return;
+    }
+
+    const requestId = searchNavigationRequestIdRef.current + 1;
+    searchNavigationRequestIdRef.current = requestId;
+    setFlowChatSearchHighlight(null);
+    exitFollowOutput('scroll-to-index');
+    clearPinReservationForUserNavigation();
+
+    const virtuoso = virtuosoRef.current;
+    if (virtuoso) {
+      if (target.virtualItemIndex === 0) {
+        virtuoso.scrollTo({ top: 0, behavior: 'auto' });
+      } else {
+        virtuoso.scrollToIndex({
+          index: toVirtuosoIndex(target.virtualItemIndex),
+          align: 'center',
+          behavior: 'auto',
+        });
+      }
+    }
+
+    let attempts = 0;
+    let revealedCollapsedContent = false;
+    const resolveExactTextPosition = () => {
+      if (searchNavigationRequestIdRef.current !== requestId) {
+        return;
+      }
+
+      attempts += 1;
+      const scroller = scrollerElementRef.current;
+      const wrapper = getRenderedVirtualItemElement(target.virtualItemIndex);
+      if (!scroller || !wrapper) {
+        const targetTurnId = virtualItems[target.virtualItemIndex]?.turnId;
+        if (
+          scroller &&
+          !wrapper &&
+          !virtuosoRef.current &&
+          useStaticInitialHistoryListRef.current &&
+          targetTurnId
+        ) {
+          setStaticAnchorWindowTurnId(currentTurnId => (
+            currentTurnId === targetTurnId ? currentTurnId : targetTurnId
+          ));
+        }
+        if (attempts < SEARCH_NAVIGATION_MAX_ATTEMPTS) {
+          requestAnimationFrame(resolveExactTextPosition);
+        }
+        return;
+      }
+
+      for (const expandableId of target.expandableIds ?? []) {
+        const expandable = findElementWithDataValue(
+          wrapper,
+          'data-tool-card-id',
+          expandableId,
+        );
+        if (!expandable) {
+          if (attempts < SEARCH_NAVIGATION_MAX_ATTEMPTS) {
+            requestAnimationFrame(resolveExactTextPosition);
+          }
+          return;
+        }
+
+        if (expandable.dataset.expanded === 'false') {
+          const toggle = expandable.querySelector<HTMLElement>(
+            '[data-testid="chat-explore-group-toggle"], [data-testid="chat-thinking-toggle"]',
+          );
+          if (toggle) {
+            revealedCollapsedContent = true;
+            toggle.click();
+          }
+          if (attempts < SEARCH_NAVIGATION_MAX_ATTEMPTS) {
+            requestAnimationFrame(resolveExactTextPosition);
+          }
+          return;
+        }
+      }
+
+      if (target.flowItemId) {
+        const flowItem = findElementWithDataValue(
+          wrapper,
+          'data-flow-item-id',
+          target.flowItemId,
+        );
+        const thinkingItem = findElementWithDataValue(
+          wrapper,
+          'data-tool-card-id',
+          target.flowItemId,
+        );
+        if (!flowItem && !thinkingItem) {
+          if (attempts < SEARCH_NAVIGATION_MAX_ATTEMPTS) {
+            requestAnimationFrame(resolveExactTextPosition);
+          }
+          return;
+        }
+      }
+
+      const textRoot = getFlowChatSearchTextRoot(wrapper, target.flowItemId);
+      const userMessage = textRoot.closest<HTMLElement>('.user-message-item');
+      if (
+        userMessage &&
+        !userMessage.classList.contains('user-message-item--expanded') &&
+        textRoot.scrollHeight > textRoot.clientHeight + 1
+      ) {
+        revealedCollapsedContent = true;
+        textRoot.click();
+        if (attempts < SEARCH_NAVIGATION_MAX_ATTEMPTS) {
+          requestAnimationFrame(resolveExactTextPosition);
+        }
+        return;
+      }
+
+      const range = findFlowChatSearchTextRange(textRoot, query);
+      if (!range) {
+        if (attempts < SEARCH_NAVIGATION_MAX_ATTEMPTS) {
+          requestAnimationFrame(resolveExactTextPosition);
+        }
+        return;
+      }
+
+      setFlowChatSearchHighlight(range);
+
+      let ancestor = range.startContainer.parentElement;
+      while (ancestor && ancestor !== scroller && wrapper.contains(ancestor)) {
+        const styles = ancestor.ownerDocument.defaultView?.getComputedStyle(ancestor);
+        const canScrollVertically = (
+          ancestor.scrollHeight > ancestor.clientHeight + 1 &&
+          (styles?.overflowY === 'auto' || styles?.overflowY === 'scroll')
+        );
+        if (canScrollVertically) {
+          const rangeRect = range.getBoundingClientRect();
+          const ancestorRect = ancestor.getBoundingClientRect();
+          const nextScrollTop = ancestor.scrollTop +
+            rangeRect.top -
+            ancestorRect.top -
+            Math.max(0, (ancestor.clientHeight - rangeRect.height) / 2);
+          ancestor.scrollTop = Math.max(
+            0,
+            Math.min(nextScrollTop, ancestor.scrollHeight - ancestor.clientHeight),
+          );
+        }
+        ancestor = ancestor.parentElement;
+      }
+
+      const rangeRect = range.getBoundingClientRect();
+      const scrollerRect = scroller.getBoundingClientRect();
+      const nextScrollTop = scroller.scrollTop +
+        rangeRect.top -
+        scrollerRect.top -
+        Math.max(0, (scroller.clientHeight - rangeRect.height) / 2);
+      scroller.scrollTop = Math.max(
+        0,
+        Math.min(nextScrollTop, scroller.scrollHeight - scroller.clientHeight),
+      );
+      previousScrollTopRef.current = scroller.scrollTop;
+      recordScrollerGeometry(scroller);
+      scheduleVisibleTurnMeasure(2);
+      if (revealedCollapsedContent && attempts < SEARCH_NAVIGATION_MAX_ATTEMPTS) {
+        requestAnimationFrame(resolveExactTextPosition);
+      }
+    };
+
+    requestAnimationFrame(resolveExactTextPosition);
+  }, [
+    clearPinReservationForUserNavigation,
+    clearSearchMatch,
+    exitFollowOutput,
+    getRenderedVirtualItemElement,
+    recordScrollerGeometry,
+    scheduleVisibleTurnMeasure,
+    toVirtuosoIndex,
+    virtualItems,
+  ]);
+
+  useEffect(() => () => {
+    searchNavigationRequestIdRef.current += 1;
+    setFlowChatSearchHighlight(null);
+  }, []);
+
   const pinTurnToTopWithStatus = useCallback((turnId: string, options?: { behavior?: ScrollBehavior; pinMode?: FlowChatPinTurnToTopMode }): FlowChatTurnPinRequestStatus => {
     const shouldExitFollowOutput = !(
       options?.pinMode === 'sticky-latest' &&
@@ -3818,6 +4032,8 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
   useImperativeHandle(ref, () => ({
     scrollToTurn,
     scrollToIndex,
+    scrollToSearchMatch,
+    clearSearchMatch,
     scrollToPhysicalBottomAndClearPin,
     scrollToTurnEndAndClearPin,
     isTurnRenderedInViewport,
@@ -3830,8 +4046,10 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
     isTurnTextRenderedInViewport,
     pinTurnToTop,
     pinTurnToTopWithStatus,
+    clearSearchMatch,
     scrollToTurn,
     scrollToIndex,
+    scrollToSearchMatch,
     scrollToPhysicalBottomAndClearPin,
     scrollToTurnEndAndClearPin,
     scrollToLatestEndPosition,
