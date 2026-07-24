@@ -1866,39 +1866,52 @@ impl DialogScheduler {
                         );
                         }
                         GoalContinuationAfterTurnAction::Evaluate { turn_completed } => {
-                            self.goal_continuation_abort.clear(&session_id);
-                            match self
-                                .coordinator
-                                .prepare_goal_continuation_after_turn(
-                                    &session_id,
-                                    outcome.turn_id(),
-                                    active_turn.user_input(),
-                                    active_turn.user_message_metadata(),
-                                    turn_completed,
-                                )
-                                .await
-                            {
-                                Ok(Some(plan)) => {
-                                    let prepended: Vec<Message> = plan
-                                        .prepended_reminders
-                                        .into_iter()
-                                        .map(|text| {
-                                            Message::internal_reminder(
-                                                InternalReminderKind::GoalContinuation,
-                                                text,
-                                            )
-                                        })
-                                        .collect();
-                                    let mut last_error = None;
-                                    for attempt in 1..=MAX_THREAD_GOAL_AUTO_CONTINUATIONS {
-                                        if self.goal_continuation_abort.contains(&session_id) {
-                                            debug!(
+                            // Skip goal continuation when there are queued messages
+                            // pending or any other session in the workspace still has
+                            // an active turn — async subagent replies may still be in
+                            // flight. Goal checks only trigger when all sessions are
+                            // idle and the queue is drained.
+                            let has_queued = self.queues.has_items(&session_id);
+                            let has_active_sessions = !self.active_turns.is_empty();
+                            if has_queued || has_active_sessions {
+                                debug!(
+                                    "Skipping goal continuation: queued_messages={}, active_sessions={} for session_id={}",
+                                    has_queued, has_active_sessions, session_id
+                                );
+                            } else {
+                                self.goal_continuation_abort.clear(&session_id);
+                                match self
+                                    .coordinator
+                                    .prepare_goal_continuation_after_turn(
+                                        &session_id,
+                                        outcome.turn_id(),
+                                        active_turn.user_input(),
+                                        active_turn.user_message_metadata(),
+                                        turn_completed,
+                                    )
+                                    .await
+                                {
+                                    Ok(Some(plan)) => {
+                                        let prepended: Vec<Message> = plan
+                                            .prepended_reminders
+                                            .into_iter()
+                                            .map(|text| {
+                                                Message::internal_reminder(
+                                                    InternalReminderKind::GoalContinuation,
+                                                    text,
+                                                )
+                                            })
+                                            .collect();
+                                        let mut last_error = None;
+                                        for attempt in 1..=MAX_THREAD_GOAL_AUTO_CONTINUATIONS {
+                                            if self.goal_continuation_abort.contains(&session_id) {
+                                                debug!(
                                         "Aborting goal continuation submit retries after user cancellation: session_id={}",
                                         session_id
                                     );
-                                            break;
-                                        }
-                                        match self
+                                                break;
+                                            }
+                                            match self
                                             .submit_with_prepended_messages(
                                                 session_id.clone(),
                                                 "Continue working toward the active thread goal."
@@ -1955,22 +1968,23 @@ impl DialogScheduler {
                                                 }
                                             }
                                         }
-                                    }
-                                    if let Some(error) = last_error {
-                                        if !self.goal_continuation_abort.contains(&session_id) {
-                                            warn!(
+                                        }
+                                        if let Some(error) = last_error {
+                                            if !self.goal_continuation_abort.contains(&session_id) {
+                                                warn!(
                                         "Failed to submit goal continuation turn after retries: session_id={}, error={}",
                                         session_id, error
                                     );
+                                            }
                                         }
                                     }
-                                }
-                                Ok(None) => {}
-                                Err(error) => {
-                                    warn!(
+                                    Ok(None) => {}
+                                    Err(error) => {
+                                        warn!(
                                 "Goal verification failed after turn stopped: session_id={}, status={}, error={}",
                                 session_id, status, error
                             );
+                                    }
                                 }
                             }
                         }

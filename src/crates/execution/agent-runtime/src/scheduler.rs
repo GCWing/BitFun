@@ -158,6 +158,11 @@ impl ActiveDialogTurnStore {
         self.inner.contains_key(session_id)
     }
 
+    /// Returns true when no session has an active turn.
+    pub fn is_empty(&self) -> bool {
+        self.inner.is_empty()
+    }
+
     pub fn matches_turn(&self, session_id: &str, turn_id: &str) -> bool {
         self.inner
             .get(session_id)
