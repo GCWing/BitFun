@@ -1,5 +1,6 @@
 import { preferences } from '@kit.ArkData';
 import { Encoding } from './Encoding';
+import { RemoteModelPreferenceStore } from './RemoteModelController';
 
 const STORE_NAME = 'bitfun_remote_identity';
 const INSTALL_ID_KEY = 'mobile_install_id';
@@ -17,7 +18,7 @@ export interface MobileIdentitySnapshot {
   userIdLockUntil: number;
 }
 
-export class MobileIdentityStore {
+export class MobileIdentityStore implements RemoteModelPreferenceStore {
   private preferences?: preferences.Preferences;
 
   async init(context: Context): Promise<MobileIdentitySnapshot> {

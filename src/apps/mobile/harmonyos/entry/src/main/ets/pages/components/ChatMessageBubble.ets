@@ -47,7 +47,8 @@ export struct ChatMessageBubble {
   @Prop downloadingFilePath: string = '';
   @Prop downloadedFilePath: string = '';
   @Prop fileDownloadStatus: string = '';
-  onApproveTool: (toolId: string) => void = (_toolId: string) => {};
+  onApproveTool: (toolId: string, updatedInput?: Object) => void =
+    (_toolId: string, _updatedInput?: Object) => {};
   onRejectTool: (toolId: string) => void = (_toolId: string) => {};
   onCancelTool: (toolId: string) => void = (_toolId: string) => {};
   onAnswerQuestion: (toolId: string, answers: RemoteQuestionAnswerPayload) => void =
@@ -56,6 +57,24 @@ export struct ChatMessageBubble {
   onRetryMessage: (text: string) => void = (_text: string) => {};
   onDownloadFile: (path: string) => void = (_path: string) => {};
   @State expandedActivityPath: string = '';
+  @State typingPhase: number = 0;
+  private typingTimerId: number = 0;
+
+  aboutToAppear(): void {
+    if (!this.shouldShowTypingDots(this.item)) {
+      return;
+    }
+    this.typingTimerId = setInterval(() => {
+      this.typingPhase = (this.typingPhase + 1) % 3;
+    }, 360);
+  }
+
+  aboutToDisappear(): void {
+    if (this.typingTimerId !== 0) {
+      clearInterval(this.typingTimerId);
+      this.typingTimerId = 0;
+    }
+  }
 
   build() {
     if (this.item.role === 'user') {
@@ -118,6 +137,23 @@ export struct ChatMessageBubble {
         }
         if (this.item.images && this.item.images.length > 0) {
           this.MessageImages(this.item.images)
+        }
+        if (this.item.status === 'failed' && (this.item.detail || '').trim().length > 0) {
+          Row({ space: 8 }) {
+            Text(RemoteI18n.t('generalChat.replyInterrupted'))
+              .fontSize(12)
+              .fontColor(RED)
+            Text(RemoteI18n.t('common.retry'))
+              .fontSize(12)
+              .fontColor(CARD)
+              .height(28)
+              .padding({ left: 10, right: 10 })
+              .backgroundColor(ACCENT)
+              .borderRadius(14)
+              .onClick(() => {
+                this.onRetryMessage(this.item.detail || '')
+              })
+          }
         }
       }
       .layoutWeight(1)
@@ -348,8 +384,8 @@ export struct ChatMessageBubble {
     ToolStatusList({
       tools,
       isBusy: this.isBusy,
-      onApproveTool: (toolId: string) => {
-        this.onApproveTool(toolId);
+      onApproveTool: (toolId: string, updatedInput?: Object) => {
+        this.onApproveTool(toolId, updatedInput);
       },
       onRejectTool: (toolId: string) => {
         this.onRejectTool(toolId);
@@ -367,17 +403,33 @@ export struct ChatMessageBubble {
   TypingDots() {
     Row({ space: 5 }) {
       Text('•')
+        .width(6)
+        .height(18)
         .fontSize(16)
         .fontColor(MUTED)
+        .opacity(this.typingDotOpacity(0))
+        .animation({ duration: 180, curve: Curve.EaseInOut })
       Text('•')
+        .width(6)
+        .height(18)
         .fontSize(16)
         .fontColor(MUTED)
+        .opacity(this.typingDotOpacity(1))
+        .animation({ duration: 180, curve: Curve.EaseInOut })
       Text('•')
+        .width(6)
+        .height(18)
         .fontSize(16)
         .fontColor(MUTED)
+        .opacity(this.typingDotOpacity(2))
+        .animation({ duration: 180, curve: Curve.EaseInOut })
     }
     .height(24)
     .padding({ left: 2 })
+  }
+
+  private typingDotOpacity(index: number): number {
+    return this.typingPhase === index ? 1.0 : 0.34;
   }
 
   @Builder

@@ -3,15 +3,15 @@ import { RemoteI18n } from '../../i18n/RemoteI18n';
 import { ACCENT, CARD, GREEN, INK, LINE, MUTED, PAGE_BG } from './Theme';
 
 @Component
-export struct ChatHeader {
+export struct RemoteChatHeader {
   @Prop activeSession: SessionSummary = {
     sessionId: '',
     title: '',
     workspacePath: '',
     agentType: 'code'
   };
-  @Prop workspaceName: string = '';
   @Prop workspaceBranch: string = '';
+  @Prop desktopName: string = '';
   @Prop canStop: boolean = false;
   @Prop modelCatalog: RemoteModelCatalog = {
     version: 0,
@@ -20,6 +20,7 @@ export struct ChatHeader {
   };
   @Prop selectedModelId: string = '';
   onBack: () => void = () => {};
+  onNewSession: () => void = () => {};
   onStop: () => void = () => {};
   onRenameSession: (title: string) => void = (_title: string) => {};
   onSelectModel: (modelId: string) => void = (_modelId: string) => {};
@@ -29,15 +30,11 @@ export struct ChatHeader {
 
   build() {
     Column() {
-      if (this.isGeneralChat()) {
-        this.GeneralHeaderRow()
-      } else {
-        this.HeaderRow()
-      }
-      if (!this.isGeneralChat() && this.showTitleEditor) {
+      this.HeaderRow()
+      if (this.showTitleEditor) {
         this.TitleEditor()
       }
-      if (!this.isGeneralChat() && this.showModelSelector) {
+      if (this.showModelSelector) {
         this.ModelSelector()
       }
     }
@@ -46,64 +43,25 @@ export struct ChatHeader {
   }
 
   @Builder
-  GeneralHeaderRow() {
-    Row() {
-      Stack({ alignContent: Alignment.Center }) {
-        Image($r('app.media.gpt_home_menu_glyph'))
-          .width(26)
-          .height(26)
-          .objectFit(ImageFit.Contain)
-      }
-      .width(48)
-      .height(48)
-      .onClick(() => {
-        this.onBack();
-      })
-      Text('BitFun')
-        .fontSize(17)
-        .fontWeight(FontWeight.Medium)
-        .fontColor(INK)
-        .height(48)
-        .padding({ left: 18, right: 18 })
-        .margin({ left: 12 })
-      Blank()
-      Stack({ alignContent: Alignment.Center }) {
-        Image($r('app.media.gpt_home_chat_glyph'))
-          .width(27)
-          .height(27)
-          .objectFit(ImageFit.Contain)
-      }
-      .width(48)
-      .height(48)
-      .onClick(() => {
-        this.onBack();
-      })
-    }
-    .width('100%')
-    .height(52)
-    .alignItems(VerticalAlign.Center)
-    .padding({ left: 24, right: 24 })
-    .backgroundColor(PAGE_BG)
-  }
-
-  @Builder
   HeaderRow() {
-    Row({ space: 14 }) {
-      Text('‹')
-        .width(54)
-        .height(54)
-        .fontSize(34)
-        .fontColor(INK)
-        .textAlign(TextAlign.Center)
+    Row({ space: 12 }) {
+      Stack({ alignContent: Alignment.Center }) {
+        Image($r('app.media.remote_ref_back'))
+          .width(16)
+          .height(25)
+          .objectFit(ImageFit.Contain)
+      }
+        .width(48)
+        .height(48)
         .backgroundColor(CARD)
-        .borderRadius(27)
-        .border({ width: 1, color: LINE })
+        .borderRadius(24)
+        .shadow({ radius: 16, color: '#10000000', offsetY: 7 })
         .onClick(() => {
           this.onBack();
         })
       Column({ space: 3 }) {
         Text(this.activeSession.title || RemoteI18n.t('chat.remoteSession'))
-          .fontSize(20)
+          .fontSize(18)
           .fontWeight(FontWeight.Medium)
           .fontColor(INK)
           .textAlign(TextAlign.Start)
@@ -114,11 +72,6 @@ export struct ChatHeader {
             this.showTitleEditor = true;
           })
         Row({ space: 6 }) {
-          Text('')
-            .width(7)
-            .height(7)
-            .backgroundColor(GREEN)
-            .borderRadius(4)
           Text(this.headerContextTitle())
             .fontSize(14)
             .fontColor(MUTED)
@@ -131,38 +84,40 @@ export struct ChatHeader {
       }
       .layoutWeight(1)
       .alignItems(HorizontalAlign.Start)
-      Row({ space: 8 }) {
-        if (this.canStop) {
-          Text('□')
-            .width(54)
-            .height(54)
-            .fontSize(16)
-            .fontColor(INK)
-            .textAlign(TextAlign.Center)
-            .backgroundColor(CARD)
-            .borderRadius(27)
-            .border({ width: 1, color: LINE })
-            .onClick(() => {
-              this.onStop();
-            })
+      Row() {
+        Stack({ alignContent: Alignment.Center }) {
+          Image($r('app.media.remote_ref_edit'))
+            .width(24)
+            .height(24)
+            .objectFit(ImageFit.Contain)
         }
-        Text('···')
-          .width(54)
-          .height(54)
-          .fontSize(19)
-          .fontColor(INK)
-          .textAlign(TextAlign.Center)
-          .backgroundColor(CARD)
-          .borderRadius(27)
-          .border({ width: 1, color: LINE })
+          .width(44)
+          .height(48)
+          .onClick(() => {
+            this.onNewSession();
+          })
+        Stack({ alignContent: Alignment.Center }) {
+          Image($r('app.media.remote_ref_more'))
+            .width(25)
+            .height(8)
+            .objectFit(ImageFit.Contain)
+        }
+          .width(44)
+          .height(48)
           .onClick(() => {
             this.showModelSelector = !this.showModelSelector;
           })
       }
+      .width(90)
+      .height(48)
+      .padding({ left: 1, right: 1 })
+      .backgroundColor(CARD)
+      .borderRadius(24)
+      .shadow({ radius: 16, color: '#10000000', offsetY: 7 })
     }
     .width('100%')
     .alignItems(VerticalAlign.Center)
-    .padding({ left: 18, right: 18, top: 22, bottom: 24 })
+    .padding({ left: 18, right: 18, top: 14, bottom: 16 })
     .backgroundColor(PAGE_BG)
   }
 
@@ -229,6 +184,26 @@ export struct ChatHeader {
           })
       }
       .width('100%')
+      if (this.canStop) {
+        Row() {
+          Text(RemoteI18n.t('chat.stop'))
+            .fontSize(14)
+            .fontColor(INK)
+          Blank()
+          Text('■')
+            .fontSize(12)
+            .fontColor(INK)
+        }
+        .width('100%')
+        .height(42)
+        .padding({ left: 12, right: 12 })
+        .backgroundColor('#F0EFEB')
+        .borderRadius(12)
+        .onClick(() => {
+          this.showModelSelector = false;
+          this.onStop();
+        })
+      }
       List({ space: 8 }) {
         ForEach(this.enabledModels(), (model: RemoteModelConfig) => {
           ListItem() {
@@ -283,12 +258,11 @@ export struct ChatHeader {
   }
 
   private headerContextTitle(): string {
+    if (this.desktopName.length > 0) {
+      return this.desktopName;
+    }
     const brand = 'BitFun';
     return this.workspaceBranch.length > 0 ? `${brand} · ${this.workspaceBranch}` : brand;
-  }
-
-  private isGeneralChat(): boolean {
-    return this.activeSession.agentType === 'chat';
   }
 
   private enabledModels(): RemoteModelConfig[] {

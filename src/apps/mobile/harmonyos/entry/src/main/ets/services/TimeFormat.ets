@@ -29,7 +29,7 @@ export class TimeFormat {
     return TimeFormat.absoluteDate(timestamp);
   }
 
-  private static timestampMs(value: string): number {
+  static timestampMs(value: string): number {
     const text = (value || '').trim();
     if (text.length === 0) {
       return Number.NaN;
@@ -38,7 +38,16 @@ export class TimeFormat {
     if (/^\d+(\.\d+)?$/.test(text)) {
       const numeric = Number(text);
       if (!Number.isNaN(numeric)) {
-        return numeric < 100000000000 ? numeric * 1000 : numeric;
+        if (numeric < 100000000000) {
+          return numeric * 1000;
+        }
+        if (numeric < 100000000000000) {
+          return numeric;
+        }
+        if (numeric < 100000000000000000) {
+          return numeric / 1000;
+        }
+        return numeric / 1000000;
       }
     }
 
