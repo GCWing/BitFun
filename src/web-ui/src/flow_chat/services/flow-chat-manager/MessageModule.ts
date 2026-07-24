@@ -21,11 +21,6 @@ import {
   FLOWCHAT_PIN_TURN_TO_TOP_EVENT,
   type FlowChatPinTurnToTopRequest,
 } from '../../events/flowchatNavigation';
-import {
-  cancelTransientBtwSession,
-  isTransientBtwSession,
-  sendMessageToTransientBtwSession,
-} from '../BtwThreadService';
 import { pendingQueueManager } from './PendingQueueModule';
 
 const log = createLogger('MessageModule');
@@ -211,28 +206,6 @@ export async function sendMessage(
 
     if (context.pendingHistoryLoads.has(sessionId)) {
       throw new Error('Session history is still restoring, please retry once loading finishes');
-    }
-
-    if (isTransientBtwSession(refreshedSession)) {
-      const parentSessionId = refreshedSession.parentSessionId?.trim();
-      if (!parentSessionId) {
-        throw new Error(`Transient /btw session is missing parentSessionId: ${sessionId}`);
-      }
-
-      await sendMessageToTransientBtwSession({
-        parentSessionId,
-        childSessionId: sessionId,
-        question: message,
-        childSessionName: refreshedSession.title,
-        modelId: refreshedSession.config.modelName,
-        imagePayload: options?.imageContexts
-          ? {
-              imageContexts: options.imageContexts,
-              imageDisplayData: options.imageDisplayData ?? [],
-            }
-          : undefined,
-      });
-      return;
     }
 
     if (!acpClientId) {
@@ -432,17 +405,6 @@ export async function cancelSessionTask(context: FlowChatContext, requestedSessi
     if (!sessionId) {
       log.debug('No active session to cancel');
       return false;
-    }
-
-    const session = state.sessions.get(sessionId);
-    if (isTransientBtwSession(session)) {
-      context.userCancelledSessionIds.add(sessionId);
-      context.flowChatStore.cancelSessionTask(sessionId);
-      markCurrentTurnItemsAsCancelled(context, sessionId);
-      cleanupSessionBuffers(context, sessionId);
-      await stateMachineManager.transition(sessionId, SessionExecutionEvent.FINISHING_SETTLED);
-      const success = await cancelTransientBtwSession(sessionId);
-      return success;
     }
 
     const currentState = stateMachineManager.getCurrentState(sessionId);

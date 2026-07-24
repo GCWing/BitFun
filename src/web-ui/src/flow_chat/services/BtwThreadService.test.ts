@@ -7,11 +7,7 @@ const mockUpdateSessionRelationship = vi.fn();
 const mockUpdateSessionBtwOrigin = vi.fn();
 const mockAddBtwThreadMarker = vi.fn();
 const mockUpdateSessionModelName = vi.fn();
-const mockAddDialogTurn = vi.fn();
-const mockDeleteDialogTurn = vi.fn();
-const mockCancelSessionTask = vi.fn();
-const mockBtwCancel = vi.fn();
-const mockTransition = vi.fn();
+const mockEnsureBackendSession = vi.fn();
 
 const sessions = new Map<string, any>();
 
@@ -21,7 +17,6 @@ vi.mock('@/infrastructure/api', () => ({
   },
   btwAPI: {
     askStream: (...args: any[]) => mockAskStream(...args),
-    cancel: (...args: any[]) => mockBtwCancel(...args),
   },
 }));
 
@@ -33,30 +28,23 @@ vi.mock('../store/FlowChatStore', () => ({
     updateSessionBtwOrigin: (...args: any[]) => mockUpdateSessionBtwOrigin(...args),
     addBtwThreadMarker: (...args: any[]) => mockAddBtwThreadMarker(...args),
     updateSessionModelName: (...args: any[]) => mockUpdateSessionModelName(...args),
-    addDialogTurn: (...args: any[]) => mockAddDialogTurn(...args),
-    deleteDialogTurn: (...args: any[]) => mockDeleteDialogTurn(...args),
-    cancelSessionTask: (...args: any[]) => mockCancelSessionTask(...args),
   },
 }));
 
 vi.mock('../state-machine', () => ({
-  SessionExecutionEvent: {
-    START: 'start',
-    FINISHING_SETTLED: 'finishing_settled',
-  },
   stateMachineManager: {
     get: () => ({
       getContext: () => ({
         currentDialogTurnId: 'turn-parent-1',
       }),
     }),
-    transition: (...args: any[]) => mockTransition(...args),
   },
 }));
 
 vi.mock('./FlowChatManager', () => ({
   flowChatManager: {
     discardLocalSession: vi.fn(),
+    ensureBackendSession: (...args: any[]) => mockEnsureBackendSession(...args),
   },
 }));
 
@@ -67,9 +55,10 @@ vi.mock('@/shared/notification-system', () => ({
 }));
 
 import {
-  cancelTransientBtwSession,
   createBtwChildSession,
-  sendMessageToTransientBtwSession,
+  createBtwSessionPlaceholder,
+  sendMessageToBtwSession,
+  startBtwThread,
 } from './BtwThreadService';
 
 describe('BtwThreadService', () => {
@@ -92,8 +81,6 @@ describe('BtwThreadService', () => {
       ],
     });
     mockAskStream.mockResolvedValue({ ok: true });
-    mockBtwCancel.mockResolvedValue(undefined);
-    mockTransition.mockResolvedValue(true);
     mockCreateSession.mockResolvedValue({
       sessionId: 'child-1',
     });
@@ -160,17 +147,55 @@ describe('BtwThreadService', () => {
     }));
   });
 
-  it('passes image contexts through to the desktop /btw API', async () => {
+  it('creates a durable /btw placeholder with its parent anchor', () => {
+    const result = createBtwSessionPlaceholder({
+      parentSessionId: 'parent-1',
+      workspacePath: '/workspace',
+      childSessionName: 'Side question',
+    });
+
+    expect(result.childSessionId).toMatch(/^btw_session_/);
+    expect(result.parentDialogTurnId).toBe('turn-parent-1');
+    expect(result.parentTurnIndex).toBe(1);
+    expect(mockAddExternalSession).toHaveBeenCalledWith(
+      result.childSessionId,
+      'Side question',
+      'agentic',
+      '/workspace',
+      expect.objectContaining({
+        parentSessionId: 'parent-1',
+        sessionKind: 'btw',
+        isTransient: false,
+        btwOrigin: {
+          parentSessionId: 'parent-1',
+          parentDialogTurnId: 'turn-parent-1',
+          parentTurnIndex: 1,
+        },
+      }),
+      'remote-1',
+      'host-1',
+    );
+    expect(mockUpdateSessionRelationship).toHaveBeenCalledWith(result.childSessionId, {
+      parentSessionId: 'parent-1',
+      sessionKind: 'btw',
+    });
+  });
+
+  it('passes image contexts and parent turn metadata through to the desktop /btw API', async () => {
     sessions.set('btw-child', {
       sessionId: 'btw-child',
       title: 'Side question',
-      isTransient: true,
+      isTransient: false,
       sessionKind: 'btw',
-      agentBackedTransient: false,
       config: { modelName: 'fast' },
+      btwOrigin: {
+        parentSessionId: 'parent-1',
+        parentDialogTurnId: 'turn-parent-1',
+        parentTurnIndex: 1,
+      },
     });
 
-    await sendMessageToTransientBtwSession({
+    await sendMessageToBtwSession({
       parentSessionId: 'parent-1',
       childSessionId: 'btw-child',
       question: 'What is in this image?',
@@ -199,6 +224,8 @@ describe('BtwThreadService', () => {
         sessionId: 'parent-1',
         childSessionId: 'btw-child',
         question: 'What is in this image?',
+        parentDialogTurnId: 'turn-parent-1',
+        parentTurnIndex: 1,
         imageContexts: [
           expect.objectContaining({
             id: 'img-1',
@@ -209,97 +236,90 @@ describe('BtwThreadService', () => {
       }),
     );
     expect(mockAskStream.mock.calls[0][0]).not.toHaveProperty('modelId');
-    expect(mockAddDialogTurn).toHaveBeenCalledWith(
-      'btw-child',
-      expect.objectContaining({
-        id: expect.stringMatching(/^btw-turn-/),
-        sessionId: 'btw-child',
-        userMessage: expect.objectContaining({
-          content: 'What is in this image?',
-          hasImages: true,
-          images: [
-            expect.objectContaining({
-              id: 'img-1',
-              name: 'clip.png',
-              imagePath: 'C:/tmp/clip.png',
-            }),
-          ],
-        }),
-        status: 'pending',
-      }),
-    );
     expect(mockUpdateSessionBtwOrigin).toHaveBeenCalledWith(
       'btw-child',
       expect.objectContaining({
         requestId: expect.any(String),
         parentSessionId: 'parent-1',
+        parentDialogTurnId: 'turn-parent-1',
+        parentTurnIndex: 1,
       }),
       'btw',
     );
   });
 
-  it('cancels transient /btw sessions through the desktop /btw API', async () => {
-    sessions.set('btw-child', {
-      sessionId: 'btw-child',
-      title: 'Side question',
-      isTransient: true,
-      sessionKind: 'btw',
-      agentBackedTransient: false,
-      config: { modelName: 'fast' },
-      btwOrigin: {
-        parentSessionId: 'parent-1',
-        requestId: 'req-1',
-      },
-    });
-
-    await expect(cancelTransientBtwSession('btw-child')).resolves.toBe(true);
-
-    expect(mockBtwCancel).toHaveBeenCalledWith({ requestId: 'req-1' });
-    expect(mockCancelSessionTask).not.toHaveBeenCalled();
-  });
-
-  it('removes the pending local turn and settles the state machine when /btw send fails', async () => {
+  it('discards the local placeholder when the first /btw request fails', async () => {
     const error = new Error('backend refused');
     mockAskStream.mockRejectedValueOnce(error);
-    sessions.set('btw-child', {
-      sessionId: 'btw-child',
-      title: 'Side question',
-      isTransient: true,
-      sessionKind: 'btw',
-      agentBackedTransient: false,
-      config: { modelName: 'fast' },
-      dialogTurns: [],
+    mockAddExternalSession.mockImplementationOnce((sessionId, title, mode, workspacePath, meta) => {
+      sessions.set(sessionId, {
+        sessionId,
+        title,
+        mode,
+        workspacePath,
+        config: {},
+        sessionKind: meta?.sessionKind,
+        parentSessionId: meta?.parentSessionId,
+        btwOrigin: meta?.btwOrigin,
+        isTransient: meta?.isTransient,
+      });
     });
 
-    await expect(sendMessageToTransientBtwSession({
+    await expect(startBtwThread({
       parentSessionId: 'parent-1',
-      childSessionId: 'btw-child',
       question: 'Will this send?',
+      workspacePath: '/workspace',
     })).rejects.toThrow('backend refused');
 
-    expect(mockAddDialogTurn).toHaveBeenCalledWith(
-      'btw-child',
-      expect.objectContaining({
-        id: expect.stringMatching(/^btw-turn-/),
-      }),
-    );
-    const [, localTurn] = mockAddDialogTurn.mock.calls.at(-1)!;
-    expect(mockDeleteDialogTurn).toHaveBeenCalledWith('btw-child', localTurn.id);
-    expect(mockTransition).toHaveBeenCalledWith('btw-child', 'finishing_settled');
+    const childSessionId = mockAddExternalSession.mock.calls[0][0];
+    const { flowChatManager } = await import('./FlowChatManager');
+    expect(flowChatManager.discardLocalSession).toHaveBeenCalledWith(childSessionId);
+  });
+
+  it('restores the parent coordinator session before starting a persistent /btw thread', async () => {
+    sessions.set('parent-1', {
+      ...sessions.get('parent-1'),
+      isHistorical: false,
+      historyState: 'ready',
+      contextRestoreState: 'pending',
+    });
+    mockAddExternalSession.mockImplementationOnce((sessionId, title, mode, workspacePath, meta) => {
+      sessions.set(sessionId, {
+        sessionId,
+        title,
+        mode,
+        workspacePath,
+        config: {},
+        sessionKind: meta?.sessionKind,
+        parentSessionId: meta?.parentSessionId,
+        btwOrigin: meta?.btwOrigin,
+        isTransient: meta?.isTransient,
+      });
+    });
+
+    await startBtwThread({
+      parentSessionId: 'parent-1',
+      question: 'Restore the parent first',
+      workspacePath: '/workspace',
+    });
+
+    expect(mockEnsureBackendSession).toHaveBeenCalledWith('parent-1');
+    expect(mockAskStream).toHaveBeenCalledWith(expect.objectContaining({
+      sessionId: 'parent-1',
+    }));
   });
 
   it('uses an explicit model override for /btw sends when provided', async () => {
     sessions.set('btw-child', {
       sessionId: 'btw-child',
       title: 'Side question',
-      isTransient: true,
+      isTransient: false,
       sessionKind: 'btw',
-      agentBackedTransient: false,
       config: { modelName: 'parent-multimodal-model' },
       dialogTurns: [],
     });
 
-    await sendMessageToTransientBtwSession({
+    await sendMessageToBtwSession({
       parentSessionId: 'parent-1',
       childSessionId: 'btw-child',
       question: 'What is in this image?',

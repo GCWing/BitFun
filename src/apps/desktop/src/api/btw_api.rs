@@ -2,9 +2,9 @@
 //!
 //! Desktop adapter for the core `/btw` feature.
 //!
-//! `/btw` runs as a hidden transient child session that reuses the parent
-//! session's full context snapshot while still flowing through the normal
-//! agentic event pipeline.
+//! `/btw` runs as a persistent child session that reuses the parent session's
+//! full context snapshot while still flowing through the normal agentic event
+//! pipeline.
 
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
@@ -23,6 +23,8 @@ pub struct BtwAskStreamRequest {
     pub question: String,
     pub child_session_id: String,
     pub child_session_name: Option<String>,
+    pub parent_dialog_turn_id: Option<String>,
+    pub parent_turn_index: Option<usize>,
     /// Optional model id override. Supports "fast"/"primary" aliases.
     pub model_id: Option<String>,
     #[serde(default)]
@@ -97,7 +99,7 @@ pub async fn btw_ask_stream(
     let image_contexts = request.image_contexts;
 
     let turn_id = coordinator
-        .start_hidden_btw_turn(
+        .start_btw_turn(
             &request.request_id,
             &request.session_id,
             &child_session_id,
@@ -105,6 +107,8 @@ pub async fn btw_ask_stream(
             &request.question,
             model_id.as_deref(),
             image_contexts,
+            request.parent_dialog_turn_id.as_deref(),
+            request.parent_turn_index,
         )
         .await
         .map_err(|e| e.to_string())?;

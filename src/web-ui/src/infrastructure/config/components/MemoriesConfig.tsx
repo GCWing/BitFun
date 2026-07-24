@@ -29,6 +29,7 @@ const log = createLogger('MemoriesConfig');
 
 const DEFAULT_MEMORIES_CONFIG: MemoriesConfigShape = {
   generate_memories: true,
+  generate_for_btw_sessions: false,
   use_memories: true,
   external_context_policy: 'clear_tool_results',
   max_raw_memories_for_consolidation: 64,
@@ -59,6 +60,7 @@ function normalizeMemoriesConfig(config: Partial<MemoriesConfigShape> | null | u
   };
   return {
     generate_memories: normalized.generate_memories,
+    generate_for_btw_sessions: normalized.generate_for_btw_sessions,
     use_memories: normalized.use_memories,
     external_context_policy: normalized.external_context_policy,
     max_raw_memories_for_consolidation: normalized.max_raw_memories_for_consolidation,
@@ -293,6 +295,19 @@ const MemoriesConfig: React.FC = () => {
               checked={config.use_memories}
               onChange={(event) => void updateConfig('use_memories', event.target.checked)}
               disabled={savingKey === 'use_memories'}
+              size="small"
+            />
+          </ConfigPageRow>
+
+          <ConfigPageRow
+            label={t('fields.generateForBtwSessions.label')}
+            description={t('fields.generateForBtwSessions.description')}
+            align="center"
+          >
+            <Switch
+              checked={config.generate_for_btw_sessions}
+              onChange={(event) => void updateConfig('generate_for_btw_sessions', event.target.checked)}
+              disabled={savingKey === 'generate_for_btw_sessions'}
               size="small"
             />
           </ConfigPageRow>
