@@ -58,6 +58,7 @@ use api::search_api::*;
 use api::session_api::*;
 use api::skill_api::*;
 use api::snapshot_service::*;
+use api::speech_api::*;
 use api::startchat_agent_api::*;
 use api::storage_commands::*;
 use api::subagent_api::*;
@@ -1065,6 +1066,15 @@ pub async fn run() {
             get_runtime_logging_info,
             export_diagnostics_bundle,
             get_runtime_capabilities,
+            speech_list_models,
+            speech_download_model,
+            speech_cancel_model_download,
+            speech_delete_model,
+            speech_verify_model,
+            speech_start_input_session,
+            speech_append_audio_chunk,
+            speech_finish_input_session,
+            speech_cancel_input_session,
             get_agent_profile_configs,
             get_agent_profile_config,
             set_agent_profile_config,

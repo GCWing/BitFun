@@ -8,6 +8,7 @@ pub mod agentic;
 pub mod backend;
 pub mod emitter;
 pub mod frontend_projection;
+pub mod speech;
 pub mod types;
 
 pub use agentic::{
@@ -22,4 +23,5 @@ pub use backend::{
 pub use bitfun_core_types::ToolImageAttachment;
 pub use emitter::EventEmitter;
 pub use frontend_projection::{project_agentic_frontend_event, AgenticFrontendEvent};
+pub use speech::{SPEECH_MODEL_PROGRESS_EVENT, SPEECH_MODEL_STATUS_CHANGED_EVENT};
 pub use types::*;

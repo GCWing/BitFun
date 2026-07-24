@@ -534,7 +534,8 @@
     "openWorkspaceFolderFailed": "Failed to open workspace folder: {{error}}",
     "spaceToActivate": "Press <space>Space</space> to type",
     "assistantPlaceholder": "Message {{name}}...",
-    "sendHint": "Enter to send / Ctrl+Enter or Shift+Enter for new line"
+    "sendHint": "Enter to send / Ctrl+Enter or Shift+Enter for new line",
+    "voiceInput": { "start": "Start voice input", "stop": "Stop recording", "preparing": "Preparing microphone", "transcribing": "Transcribing", "disabled": "Voice input is disabled", "unsupported": "Microphone capture is unavailable", "modelMissing": "Download the local speech model first", "cloudPending": "Cloud transcription is configured but not connected yet", "permissionDenied": "Microphone permission was denied", "deviceDisconnected": "The selected microphone was disconnected", "lowVolume": "No voice detected. Check the selected microphone.", "failed": "Voice input failed", "empty": "No speech was recognized", "transcribeOnly": "Insert transcription", "transcribeAndSend": "Transcribe and send" }
   },
   "workspaceStrip": {
     "branchTooltipUnavailable": "Not a git repository or no current branch"

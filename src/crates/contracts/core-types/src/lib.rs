@@ -8,6 +8,7 @@ pub mod errors;
 pub mod lsp;
 pub mod session;
 pub mod session_usage;
+pub mod speech;
 pub mod surface;
 pub mod tool_image_attachment;
 
@@ -21,6 +22,7 @@ pub use session::{
     validate_session_id, SessionContinuationPolicy, SessionKind, SessionModelBindingPolicy,
 };
 pub use session_usage::*;
+pub use speech::*;
 pub use surface::{
     ApprovalSource, CapabilityRequest, CapabilityRequestKind, PermissionDecision, PermissionScope,
     RuntimeArtifactKind, RuntimeArtifactRef, SurfaceKind, ThreadEnvironment, ThreadEnvironmentKind,

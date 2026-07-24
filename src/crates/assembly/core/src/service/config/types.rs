@@ -248,6 +248,31 @@ pub struct AiExperienceQuickAction {
     pub enabled: bool,
 }
 
+/// Local voice input preferences for the chat composer.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
+pub struct VoiceInputConfig {
+    pub enabled: bool,
+    pub provider: String,
+    pub model_id: String,
+    pub default_language: String,
+    pub max_recording_seconds: u32,
+    pub microphone_device_id: String,
+}
+
+impl Default for VoiceInputConfig {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            provider: "local".to_string(),
+            model_id: "sensevoice-small-int8".to_string(),
+            default_language: "auto".to_string(),
+            max_recording_seconds: 60,
+            microphone_device_id: String::new(),
+        }
+    }
+}
+
 /// AI experience configuration.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default)]
@@ -270,6 +295,8 @@ pub struct AIExperienceConfig {
     pub agent_companion_pet: Option<AgentCompanionPetSelection>,
     /// Whether to enable flashgrep-backed accelerated workspace search.
     pub enable_workspace_search: bool,
+    /// Local speech-to-text settings for the chat composer.
+    pub voice_input: VoiceInputConfig,
     /// User-defined quick actions (post-coding menu); persisted for the web UI.
     #[serde(default)]
     pub quick_actions: Vec<AiExperienceQuickAction>,
@@ -1643,6 +1670,7 @@ impl Default for AIExperienceConfig {
             agent_companion_display_mode: "desktop".to_string(),
             agent_companion_pet: default_agent_companion_pet(),
             enable_workspace_search: false,
+            voice_input: VoiceInputConfig::default(),
             quick_actions: Vec::new(),
         }
     }

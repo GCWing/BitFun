@@ -4,6 +4,7 @@ import { configManager } from './ConfigManager';
 import { DEFAULT_AGENT_COMPANION_PET } from './AgentCompanionPetService';
 import { configAPI } from '@/infrastructure/api/service-api/ConfigAPI';
 import { createLogger } from '@/shared/utils/logger';
+import type { VoiceInputSettings } from '../types';
 
 const log = createLogger('AIExperienceConfig');
 
@@ -26,6 +27,8 @@ export interface AIExperienceSettings {
   agent_companion_pet?: AgentCompanionPetSelection | null;
   /** Flashgrep-backed accelerated workspace search for local workspaces. */
   enable_workspace_search: boolean;
+  /** Local speech-to-text settings for the chat composer. */
+  voice_input: VoiceInputSettings;
   /** User-defined quick actions shown in the post-coding actions menu. */
   quick_actions?: QuickAction[];
 }
@@ -66,11 +69,26 @@ const defaultSettings: AIExperienceSettings = {
   agent_companion_display_mode: 'desktop',
   agent_companion_pet: DEFAULT_AGENT_COMPANION_PET,
   enable_workspace_search: false,
+  voice_input: {
+    enabled: true,
+    provider: 'local',
+    model_id: 'sensevoice-small-int8',
+    default_language: 'auto',
+    max_recording_seconds: 60,
+    microphone_device_id: '',
+  },
   quick_actions: DEFAULT_QUICK_ACTIONS,
 };
 
 function normalizeSettings(settings: AIExperienceSettings | null | undefined): AIExperienceSettings {
-  const merged = { ...defaultSettings, ...settings };
+  const merged = {
+    ...defaultSettings,
+    ...settings,
+    voice_input: {
+      ...defaultSettings.voice_input,
+      ...settings?.voice_input,
+    },
+  };
   // Legacy configs used null to mean the built-in SVG panda. Panda is now the default preset.
   if (!merged.agent_companion_pet) {
     merged.agent_companion_pet = DEFAULT_AGENT_COMPANION_PET;

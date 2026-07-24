@@ -1,0 +1,198 @@
+{
+  "title": "Voice Input",
+  "subtitle": "Manage voice input, local models, and cloud transcription model selection.",
+  "loading": "Loading voice input settings...",
+  "sections": {
+    "composer": "Composer",
+    "diagnostics": "Input and recognition test",
+    "model": "Local model",
+    "cloudModel": "Cloud transcription model"
+  },
+  "languages": {
+    "auto": "Auto",
+    "zh": "中文",
+    "yue": "粤语",
+    "en": "English",
+    "ja": "日本語",
+    "ko": "한국어",
+    "ar": "العربية",
+    "de": "Deutsch",
+    "fr": "Français",
+    "es": "Español",
+    "pt": "Português",
+    "id": "Bahasa Indonesia",
+    "it": "Italiano",
+    "ru": "Русский",
+    "th": "ไทย",
+    "vi": "Tiếng Việt",
+    "tr": "Türkçe",
+    "hi": "हिन्दी",
+    "ms": "Bahasa Melayu",
+    "nl": "Nederlands",
+    "sv": "Svenska",
+    "da": "Dansk",
+    "fi": "Suomi",
+    "pl": "Polski",
+    "cs": "Čeština",
+    "fil": "Filipino",
+    "fa": "فارسی",
+    "el": "Ελληνικά",
+    "hu": "Magyar",
+    "mk": "Македонски",
+    "ro": "Română"
+  },
+  "composer": {
+    "enabled": {
+      "label": "Show voice input",
+      "description": "Display the microphone action in the composer."
+    },
+    "provider": {
+      "label": "Transcription location",
+      "description": "Use a downloaded local model, or use a cloud ASR model configured on this page.",
+      "local": "Local",
+      "cloud": "Cloud"
+    },
+    "model": {
+      "label": "Transcription model",
+      "description": "Recognition model used after recording stops.",
+      "localDescription": "Local recognition model used after recording stops.",
+      "cloudDescription": "Cloud ASR model used after recording stops.",
+      "cloudActiveDescription": "Cloud ASR model configured below and used after recording stops.",
+      "cloudPlaceholder": "Save a cloud model below first"
+    },
+    "cloud": {
+      "keyManaged": "Cloud model configured.",
+      "empty": "Save a cloud transcription model below first."
+    },
+    "language": {
+      "label": "Recognition language",
+      "description": "Default language used for local transcription."
+    },
+    "maxRecording": {
+      "label": "Recording limit",
+      "description": "Maximum seconds per voice input."
+    }
+  },
+  "diagnostics": {
+    "microphone": {
+      "label": "Input device",
+      "description": "Microphone used for voice input.",
+      "systemDefault": "System default",
+      "unnamed": "Microphone {{index}}",
+      "refresh": "Refresh microphones"
+    },
+    "level": {
+      "label": "Microphone level",
+      "description": "Check the selected device without running recognition.",
+      "start": "Test microphone",
+      "stop": "Stop test"
+    },
+    "recognition": {
+      "label": "Recognition test",
+      "description": "Run the selected microphone through the installed local model.",
+      "start": "Start recognition test",
+      "finish": "Finish and transcribe",
+      "modelRequired": "Install the local model before running recognition.",
+      "timing": "Inference {{duration}} ms"
+    },
+    "messages": {
+      "deviceDisconnected": "The selected microphone was disconnected.",
+      "microphoneFailed": "The selected microphone could not be opened.",
+      "recognitionFailed": "The recognition test failed.",
+      "noSpeech": "No speech was recognized."
+    }
+  },
+  "states": {
+    "not_installed": "Not installed",
+    "downloading": "Downloading",
+    "installed": "Installed",
+    "verifying": "Verifying",
+    "corrupt": "Needs repair",
+    "deleting": "Deleting",
+    "error": "Error"
+  },
+  "model": {
+    "refresh": "Refresh",
+    "version": "Version {{version}}",
+    "size": "{{size}}",
+    "progress": "{{percent}}% · {{downloaded}} / {{total}}",
+    "download": "Download",
+    "downloading": "Downloading",
+    "downloaded": "Downloaded",
+    "select": "Use",
+    "selected": "In use",
+    "cancel": "Cancel",
+    "cancelling": "Cancelling",
+    "openFolder": "Open location",
+    "verify": "Verify",
+    "verifying": "Verifying",
+    "delete": "Delete",
+    "deleting": "Deleting",
+    "keep": "Keep",
+    "deleteConfirmTitle": "Delete local speech model?",
+    "deleteConfirmMessage": "{{name}} will be removed from local storage.",
+    "empty": "No speech model is available.",
+    "resourceHints": {
+      "sensevoice": "Lightweight default model with low resource use for everyday short dictation.",
+      "qwen3": "Higher-quality multilingual model, about 838 MiB to download and about 2.3 GiB runtime memory.",
+      "default": "Local models use disk space and runtime memory."
+    }
+  },
+  "cloudConfig": {
+    "inUse": "Current cloud model",
+    "save": "Save and use",
+    "note": "The key is saved with the cloud model; voice input only records the selected model.",
+    "defaults": {
+      "providerName": "Cloud ASR"
+    },
+    "presets": {
+      "qwen": "Qwen3-ASR-Flash",
+      "custom": "OpenAI-compatible"
+    },
+    "preset": {
+      "label": "Provider",
+      "description": "Use the built-in Qwen ASR preset, or configure an OpenAI-compatible transcription service."
+    },
+    "providerName": {
+      "label": "Config name",
+      "description": "Shown in the cloud model selector on this page.",
+      "placeholder": "For example, Qwen ASR"
+    },
+    "baseUrl": {
+      "label": "Base URL",
+      "description": "OpenAI-compatible API root. Transcription will use /audio/transcriptions.",
+      "placeholder": "https://dashscope.aliyuncs.com/compatible-mode/v1"
+    },
+    "modelName": {
+      "label": "Model ID",
+      "description": "Model name used by the cloud transcription API.",
+      "placeholder": "qwen3-asr-flash"
+    },
+    "apiKey": {
+      "label": "API Key",
+      "description": "Used to call the cloud transcription service.",
+      "placeholder": "Enter API key"
+    },
+    "messages": {
+      "fillRequired": "Fill provider, Base URL, model ID, and API key",
+      "invalidBaseUrl": "Base URL must start with http:// or https://",
+      "saveSuccess": "Cloud transcription model saved",
+      "saveFailed": "Failed to save cloud transcription model"
+    }
+  },
+  "messages": {
+    "unsupported": "Voice input is available in the BitFun desktop app.",
+    "loadFailed": "Failed to load voice input settings",
+    "saveSuccess": "Voice input settings saved",
+    "saveFailed": "Failed to save voice input settings",
+    "downloadSuccess": "Speech model downloaded",
+    "downloadFailed": "Failed to download speech model",
+    "downloadCancelled": "Speech model download cancelled",
+    "cancelFailed": "Failed to cancel download",
+    "openFolderFailed": "Failed to open speech model location",
+    "verifySuccess": "Speech model verified",
+    "verifyFailed": "Failed to verify speech model",
+    "deleteSuccess": "Speech model deleted",
+    "deleteFailed": "Failed to delete speech model"
+  }
+}

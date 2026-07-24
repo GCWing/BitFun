@@ -4181,6 +4181,23 @@ export const forbiddenContentUnderRules = [
     }],
   },
   {
+    path: 'src/crates/assembly/core/src/service',
+    reason:
+      'concrete speech runtime ownership belongs in services-integrations',
+    patterns: [
+      {
+        regex: /\bpub\s+mod\s+speech\s*;/,
+        message:
+          'core must not declare a speech service owner; use stable core-types contracts and compose the services-integrations provider at the app boundary',
+      },
+      {
+        regex: /\bpub\s+use\s+(?:self::)?speech(?:::|\s*::)/,
+        message:
+          'core must not re-export the concrete speech service provider',
+      },
+    ],
+  },
+  {
     path: 'src/crates/assembly/core/src',
     reason:
       'core must use runtime-ports as the owner path for portable subagent contracts',

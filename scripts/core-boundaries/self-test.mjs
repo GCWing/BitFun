@@ -1221,6 +1221,25 @@ export function runManifestParserSelfTest({
   if (!opencodeManifestRule) {
     throw new Error('OpenCode adapter must have a forbidden manifest dependency rule');
   }
+  const speechEngineManifestRule = forbiddenManifestDependencyRules.find((rule) =>
+    rule.dependencyNames?.includes('sherpa-onnx'),
+  );
+  if (!speechEngineManifestRule) {
+    throw new Error('speech engine must have a forbidden manifest dependency rule');
+  }
+  if (!speechEngineManifestRule.allowManifestPaths?.includes(
+    'src/crates/services/services-integrations/Cargo.toml',
+  )) {
+    throw new Error('speech engine manifest guard must allow only its integration service owner');
+  }
+  const coreSpeechOwnerRule = forbiddenContentUnderRules.find(
+    (rule) => rule.path === 'src/crates/assembly/core/src/service',
+  );
+  if (!coreSpeechOwnerRule || !coreSpeechOwnerRule.patterns.some(
+    (pattern) => pattern.regex.source.includes('mod\\s+speech'),
+  )) {
+    throw new Error('core speech ownership guard must forbid a speech service module');
+  }
   for (const dependencyName of [
     'bitfun-claude-code-adapter',
     'bitfun-codex-adapter',

@@ -10,11 +10,22 @@ const MULTIMODAL_MODEL_HINTS = [
   'kimi',
 ];
 
+const SPEECH_RECOGNITION_MODEL_HINTS = [
+  'asr',
+  'transcribe',
+  'transcription',
+  'whisper',
+  'speech',
+];
+
 export function inferModelCategory(
   modelName: string,
   _provider?: string
 ): ModelCategory {
   const normalized = modelName.trim().toLowerCase();
+  if (SPEECH_RECOGNITION_MODEL_HINTS.some(hint => normalized.includes(hint))) {
+    return 'speech_recognition';
+  }
   if (MULTIMODAL_MODEL_HINTS.some(hint => normalized.includes(hint))) {
     return 'multimodal';
   }
@@ -32,8 +43,16 @@ export function resolveModelCategory(
     return 'multimodal';
   }
 
+  if (category === 'speech_recognition') {
+    return 'speech_recognition';
+  }
+
   if (category === 'general_chat' && inferred === 'multimodal') {
     return 'multimodal';
+  }
+
+  if (category === 'general_chat' && inferred === 'speech_recognition') {
+    return 'speech_recognition';
   }
 
   return category ?? inferred;
@@ -41,6 +60,8 @@ export function resolveModelCategory(
 
 export function getCapabilitiesByCategory(category: ModelCategory): ModelCapability[] {
   switch (category) {
+    case 'speech_recognition':
+      return ['speech_recognition'];
     case 'multimodal':
       return ['text_chat', 'image_understanding', 'function_calling'];
     case 'general_chat':

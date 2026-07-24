@@ -242,6 +242,9 @@ qrcode = "0.14"
 # WebSocket client
 tokio-tungstenite = { version = "0.29", features = ["rustls-tls-native-roots"] }
 
+# Local speech recognition
+sherpa-onnx = "1.13.4"
+
 # MCP and remote runtimes
 rmcp = { version = "1.7", default-features = false, features = [
     "auth",

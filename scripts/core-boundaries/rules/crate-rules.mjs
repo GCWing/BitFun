@@ -31,6 +31,18 @@ export const noCoreDependencyCrates = [
 
 export const forbiddenManifestDependencyRules = [
   {
+    dependencyNames: ['sherpa-onnx'],
+    scanRoots: ['src/apps', 'src/crates', 'BitFun-Installer/src-tauri'],
+    forbidWorkspaceAliases: false,
+    allowManifestPaths: [
+      'src/crates/services/services-integrations/Cargo.toml',
+    ],
+    reason:
+      'speech recognition engines are concrete integration service dependencies',
+    message:
+      'sherpa-onnx must stay in services-integrations and be injected by a product composition root',
+  },
+  {
     dependencyNames: ['bitfun-opencode-adapter'],
     scanRoots: ['src/apps', 'src/crates', 'BitFun-Installer/src-tauri'],
     workspaceManifestPath: 'Cargo.toml',
