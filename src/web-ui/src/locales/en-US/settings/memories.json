@@ -24,6 +24,10 @@
       "label": "Use memories in sessions",
       "description": "New sessions can read the consolidated memory summary as context."
     },
+    "generateForBtwSessions": {
+      "label": "Generate memories from BTW sessions",
+      "description": "Allow newly created persistent BTW sessions to contribute to global memory. This requires automatic memory generation to be enabled."
+    },
     "externalContextPolicy": {
       "label": "External context handling",
       "description": "Choose how memory extraction handles sessions that used web search, web page reading, or similar tools."

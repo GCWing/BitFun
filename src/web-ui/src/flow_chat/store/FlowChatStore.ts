@@ -40,7 +40,6 @@ import type { SessionMetadataPage } from '@/infrastructure/api/service-api/Sessi
 import {
   deriveLastFinishedAtFromMetadata,
   deriveSessionRelationshipFromMetadata,
-  isLegacyPersistedBtwSession,
   normalizeSessionRelationship,
 } from '../utils/sessionMetadata';
 import type { SessionTitleDescriptor } from '../utils/sessionTitle';
@@ -3717,9 +3716,6 @@ export class FlowChatStore {
         if (existingSession) {
           return;
         }
-        if (isLegacyPersistedBtwSession(metadata)) {
-          return;
-        }
         // Skip archived sessions - they are managed in the settings page.
         if (metadata.status === 'archived') {
           return;
@@ -4086,9 +4082,6 @@ export class FlowChatStore {
         try {
           const existingSession = this.state.sessions.get(metadata.sessionId);
           if (existingSession) {
-            return;
-          }
-          if (isLegacyPersistedBtwSession(metadata)) {
             return;
           }
           // Skip archived sessions - they are managed in the settings page

@@ -39,6 +39,7 @@ export type MemoryExternalContextPolicy = 'clear_tool_results' | 'allow' | 'skip
 
 export interface MemoriesConfig {
   generate_memories: boolean;
+  generate_for_btw_sessions: boolean;
   use_memories: boolean;
   external_context_policy: MemoryExternalContextPolicy;
   max_raw_memories_for_consolidation: number;

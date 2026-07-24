@@ -690,7 +690,10 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
             }
           : undefined;
 
-        if (relationship.canOpenInAuxPane && parentSessionId && session) {
+        const parentSession = parentSessionId
+          ? flowChatStore.getState().sessions.get(parentSessionId)
+          : undefined;
+        if (relationship.canOpenInAuxPane && parentSessionId && parentSession && session) {
           await openMainSession(parentSessionId, {
             workspaceId,
             activateWorkspace,

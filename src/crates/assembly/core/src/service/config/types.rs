@@ -755,6 +755,8 @@ pub enum MemoryExternalContextPolicy {
 pub struct MemoriesConfig {
     /// Enables automatic Phase 1 extraction and Phase 2 consolidation.
     pub generate_memories: bool,
+    /// Allows persistent BTW sessions to become memory-generation sources.
+    pub generate_for_btw_sessions: bool,
     /// Enables prompt injection of the consolidated memory summary.
     pub use_memories: bool,
     /// Controls how sessions that used external context tools are handled.
@@ -1768,6 +1770,7 @@ impl Default for MemoriesConfig {
     fn default() -> Self {
         Self {
             generate_memories: false,
+            generate_for_btw_sessions: false,
             use_memories: false,
             external_context_policy: MemoryExternalContextPolicy::ClearToolResults,
             max_raw_memories_for_consolidation: default_memory_max_raw_memories_for_consolidation(),
@@ -2507,6 +2510,7 @@ mod tests {
         let config = GlobalConfig::default();
 
         assert!(!config.memories.generate_memories);
+        assert!(!config.memories.generate_for_btw_sessions);
         assert!(!config.memories.use_memories);
         assert_eq!(
             config.memories.external_context_policy,
@@ -2533,6 +2537,7 @@ mod tests {
         let config: GlobalConfig = serde_json::from_value(serde_json::json!({
             "memories": {
                 "generate_memories": false,
+                "generate_for_btw_sessions": true,
                 "use_memories": false,
                 "external_context_policy": "skip_session",
                 "max_raw_memories_for_consolidation": 12,
@@ -2554,6 +2559,7 @@ mod tests {
         .expect("global config with memories section should deserialize");
 
         assert!(!config.memories.generate_memories);
+        assert!(config.memories.generate_for_btw_sessions);
         assert!(!config.memories.use_memories);
         assert_eq!(
             config.memories.external_context_policy,
