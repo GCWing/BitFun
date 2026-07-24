@@ -96,14 +96,14 @@
   ) {
     transform-origin: center;
     transition:
-      translate var(--motion-fast, 150ms) var(--easing-standard, cubic-bezier(0.4, 0, 0.2, 1)),
-      scale var(--motion-fast, 150ms) var(--easing-standard, cubic-bezier(0.4, 0, 0.2, 1)),
-      transform var(--motion-fast, 150ms) var(--easing-standard, cubic-bezier(0.4, 0, 0.2, 1)),
-      background-color var(--motion-fast, 150ms) var(--easing-standard, cubic-bezier(0.4, 0, 0.2, 1)),
-      border-color var(--motion-fast, 150ms) var(--easing-standard, cubic-bezier(0.4, 0, 0.2, 1)),
-      color var(--motion-fast, 150ms) var(--easing-standard, cubic-bezier(0.4, 0, 0.2, 1)),
-      box-shadow var(--motion-fast, 150ms) var(--easing-standard, cubic-bezier(0.4, 0, 0.2, 1)),
-      opacity var(--motion-fast, 150ms) var(--easing-standard, cubic-bezier(0.4, 0, 0.2, 1));
+      translate var(--motion-fast) var(--easing-standard),
+      scale var(--motion-fast) var(--easing-standard),
+      transform var(--motion-fast) var(--easing-standard),
+      background-color var(--motion-fast) var(--easing-standard),
+      border-color var(--motion-fast) var(--easing-standard),
+      color var(--motion-fast) var(--easing-standard),
+      box-shadow var(--motion-fast) var(--easing-standard),
+      opacity var(--motion-fast) var(--easing-standard);
     transition-property:
       translate,
       scale,
@@ -190,7 +190,7 @@
     [class$='-context-menu'],
     [class*='-context-menu ']
   ):where(:not([data-motion='none'])) {
-    transform-origin: var(--bitfun-motion-origin, center top);
+    transform-origin: center top;
     animation: bitfun-motion-popup-enter 160ms cubic-bezier(0.22, 1, 0.36, 1) both;
   }
 
@@ -239,12 +239,12 @@
   ):where(:not([data-motion='none'])) {
     transform-origin: center;
     transition:
-      translate var(--motion-fast, 150ms) var(--easing-standard, cubic-bezier(0.4, 0, 0.2, 1)),
-      scale var(--motion-fast, 150ms) var(--easing-standard, cubic-bezier(0.4, 0, 0.2, 1)),
-      transform var(--motion-fast, 150ms) var(--easing-standard, cubic-bezier(0.4, 0, 0.2, 1)),
-      background-color var(--motion-fast, 150ms) var(--easing-standard, cubic-bezier(0.4, 0, 0.2, 1)),
-      border-color var(--motion-fast, 150ms) var(--easing-standard, cubic-bezier(0.4, 0, 0.2, 1)),
-      box-shadow var(--motion-fast, 150ms) var(--easing-standard, cubic-bezier(0.4, 0, 0.2, 1));
+      translate var(--motion-fast) var(--easing-standard),
+      scale var(--motion-fast) var(--easing-standard),
+      transform var(--motion-fast) var(--easing-standard),
+      background-color var(--motion-fast) var(--easing-standard),
+      border-color var(--motion-fast) var(--easing-standard),
+      box-shadow var(--motion-fast) var(--easing-standard);
     transition-property:
       translate,
       scale,

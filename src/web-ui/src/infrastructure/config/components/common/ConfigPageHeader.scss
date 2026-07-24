@@ -1,6 +1,7 @@
  
 
 @use '../../../../component-library/styles/tokens' as *;
+@use './config-page-layout.tokens' as configLayout;
 
 
 .bitfun-config-page-header {
@@ -11,8 +12,8 @@
 
 .bitfun-config-page-header__inner {
   width: min(
-    calc(100% - (2 * var(--config-page-content-inline-padding))),
-    var(--config-page-content-max-width)
+    calc(100% - (2 * #{configLayout.$config-page-content-inline-padding})),
+    #{configLayout.$config-page-content-max-width}
   );
   margin-inline: auto;
   display: flex;
@@ -96,24 +97,20 @@
   height: 1px;
   background: var(--border-subtle);
   width: min(
-    calc(100% - (2 * var(--config-page-content-inline-padding))),
-    var(--config-page-content-max-width)
+    calc(100% - (2 * #{configLayout.$config-page-content-inline-padding})),
+    #{configLayout.$config-page-content-max-width}
   );
   margin: var(--size-gap-4) auto;
   display: none;
 }
 
 @container config-panel (max-width: 900px) {
-  .bitfun-config-page-header {
-    --config-page-content-inline-padding: var(--size-gap-4);
-  }
-
   .bitfun-config-page-header__inner {
-    width: calc(100% - (2 * var(--config-page-content-inline-padding)));
+    width: calc(100% - (2 * var(--size-gap-4)));
   }
 
   .bitfun-config-page-header-divider {
-    --config-page-content-inline-padding: var(--size-gap-4);
+    width: calc(100% - (2 * var(--size-gap-4)));
   }
 }
 
@@ -159,4 +156,3 @@
     margin: var(--size-gap-3) auto;
   }
 }
-
