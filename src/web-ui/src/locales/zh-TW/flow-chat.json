@@ -928,7 +928,7 @@
     "copyDiagnostics": "複製排障摘要",
     "diagnosticsCopied": "已複製排障摘要",
     "diagnosticsCopyFailed": "複製排障摘要失敗",
-    "diagnosticsTitle": "嚴格 Review 排障摘要",
+    "diagnosticsTitle": "嚴格審核疑難排解摘要",
     "diagnosticsErrorType": "錯誤類型",
     "diagnosticsDescription": "錯誤描述",
     "diagnosticsSuggestedActions": "建議操作",
@@ -957,9 +957,9 @@
     },
     "resultRecovery": {
       "title": "嚴格審核需要補全結果",
-      "missingSubmitCodeReview": "審核已結束，但 BitFun 沒有收到可確認的結構化結果。繼續會保留已完成的審核工作，並要求 agent 補交缺失的審核報告。",
-      "invalidSubmitCodeReview": "審核回傳了 BitFun 無法讀取的結果。繼續會保留已完成的審核工作，並要求 agent 修復報告。",
-      "wrongReviewMode": "審核回傳了標準審核結果。繼續會保留已完成的審核工作，並要求 agent 提交嚴格審核報告。"
+      "missingSubmitCodeReview": "審核已結束，但 BitFun 沒有收到可確認的結構化結果。繼續會保留已完成的審核工作，並補交缺失的審核報告。",
+      "invalidSubmitCodeReview": "審核回傳了 BitFun 無法讀取的結果。繼續會保留已完成的審核工作，並修正報告。",
+      "wrongReviewMode": "審核回傳了標準審核結果。繼續會保留已完成的審核工作，並提交嚴格審核報告。"
     },
     "capacityQueue": {
       "title": "審核正在等待容量",
@@ -1001,7 +1001,7 @@
       "cancelQueued": "取消等待中的審核",
       "skipOptionalQueued": "保留核心檢查",
       "openReviewSettings": "開啟審核設定",
-      "controlFailed": "目前無法控制這個 Review 項的容量。可使用停止來中斷 Review，或等待容量狀態刷新。",
+      "controlFailed": "目前無法控制這個審核項目的容量。可停止本次審核，或等待容量狀態更新。",
       "controlFailedWithReason": "容量控制失敗：{{reason}}。請重試，或在審核卡住時使用停止來中斷。",
       "controlPartiallyFailedWithReason": "容量控制已部分套用；{{total}} 個審核項中有 {{failed}} 個失敗：{{reason}}。請等待容量狀態刷新後重試，或在卡住時使用停止。"
     },
@@ -1041,20 +1041,19 @@
   "deepReviewConsent": {
     "windowTitle": "審核方案",
     "eyebrow": "審核方案",
-    "title": "增加更廣的審核覆蓋？",
-    "body": "BitFun 為本次變更選擇了額外的獨立檢查。繼續前可確認目標範圍、計畫檢查、耗時傾向和唯讀邊界。",
+    "title": "開始本次審核？",
+    "body": "BitFun 會先直接審核本次變更，只在證據顯示有必要時增加獨立檢查。繼續前可確認目標範圍、審核預算、預計耗時與唯讀邊界。",
     "readonlyLabel": "唯讀",
     "readonly": "審核者不會修改檔案。",
     "sessionConcurrencyTitle": "目前會話較忙",
     "sessionConcurrencyBody": "目標會話已有 {{count}} 個審核工作在執行，繼續後將共享目前可用的審核容量。",
-    "costLabel": "覆蓋",
-    "cost": "計畫的審查代理執行；此處不估算底層模型請求或 Token。",
+    "costLabel": "審核預算",
+    "cost": "審核預算用於視需要執行的獨立檢查；實際呼叫次數和模型用量取決於審核中發現的證據。",
     "timeLabel": "耗時",
     "time": "背景執行，可能需要更久。",
     "cancel": "取消",
     "confirm": "開始審核",
-    "initialCalls": "獨立檢查：計畫 {{planned}} 次審查代理執行",
-    "parallelCalls": "無需再次確認時，最多可能執行 {{count}} 次審查代理。",
+    "callLimit": "檢查上限：{{count}}。實際工作量取決於審核目標和發現的證據。",
     "runStrategy": "運行策略：{{strategy}}",
     "strategyLabels": {
       "quick": "聚焦",
@@ -1063,8 +1062,8 @@
     },
     "strategySummaries": {
       "quick": "聚焦審核會檢查目前目標最相關的風險。",
-      "normal": "標準審核會增加獨立覆蓋，同時保持成本合理。",
-      "deep": "全面審核會為高風險變更增加適用範圍內最廣的覆蓋。"
+      "normal": "標準審核會更深入檢查目前目標，並在確有幫助時增加獨立檢查。",
+      "deep": "全面審核會檢查所有適用的高風險領域，並在證據需要驗證時增加檢查。"
     },
     "summaryTitle": "審核方案",
     "targetFiles": "{{count}} 個檔案",
@@ -1073,7 +1072,7 @@
     "skippedReviewers": "{{count}} 個可選檢查未納入",
     "skippedReviewers_one": "{{count}} 個可選檢查未納入",
     "skippedReviewers_other": "{{count}} 個可選檢查未納入",
-    "skippedGroupTitle": "已選擇 Review 範圍",
+    "skippedGroupTitle": "已選擇審核範圍",
     "targetSource": {
       "manualPrompt": "給定內容",
       "workspaceDiff": "工作區改動",
@@ -1682,8 +1681,8 @@
       "collapseDetails": "收起詳情",
       "expandDetails": "展開詳情",
       "openInPanel": "在面板中開啟詳情",
-      "reviewCoverageLabel": "Review 檢查",
-      "reviewCoverageDescription": "正在檢查 Review 覆蓋"
+      "reviewCoverageLabel": "審核檢查",
+      "reviewCoverageDescription": "正在補充審核證據"
     },
     "taskDetailPanel": {
       "untitled": "未命名任務",
@@ -1709,7 +1708,7 @@
       "loadingMore": "正在載入更多輸出...",
       "loading": "正在載入任務詳情...",
       "stopReviewWork": "停止此檢查",
-      "stopReviewWorkHint": "僅取消這個檢查項，整體 Review 仍可繼續並產生摘要。"
+      "stopReviewWorkHint": "僅取消這個檢查項目，整體審核仍可繼續並產生摘要。"
     },
     "timeout": {
       "disableTooltip": "關閉超時限制",
@@ -1969,7 +1968,7 @@
       "runManifest": {
         "recommendedStrategy": "推薦策略",
         "riskRecommendationTitle": "風險推薦",
-        "reviewDepth": "Review 範圍",
+        "reviewDepth": "審核範圍",
         "reviewDepthLabels": {
           "high_risk_only": "聚焦",
           "risk_expanded": "擴展",
@@ -1979,7 +1978,7 @@
         "budget": "預算",
         "estimatedCalls": "預計審核檢查",
         "activeGroupTitle": "已覆蓋",
-        "skippedGroupTitle": "已選擇 Review 範圍",
+        "skippedGroupTitle": "已選擇審核範圍",
         "reducedCoverageSummary": "BitFun 已為此目標選擇最相關的檢查。{{count}} 個可選檢查因適用性、設定或預算未納入本次執行。",
         "reducedCoverageSummary_one": "BitFun 已為此目標選擇最相關的檢查。{{count}} 個可選檢查因適用性、設定或預算未納入本次執行。",
         "reducedCoverageSummary_other": "BitFun 已為此目標選擇最相關的檢查。{{count}} 個可選檢查因適用性、設定或預算未納入本次執行。"
@@ -2013,8 +2012,8 @@
           "detail": "{{count}} 個審核結果是部分結果，可信度有限。"
         },
         "reduced_scope": {
-          "label": "聚焦 Review 範圍",
-          "detail": "本次 Review 使用了聚焦範圍設定。"
+          "label": "聚焦審核範圍",
+          "detail": "本次審核使用了聚焦範圍設定。"
         },
         "target_evidence_limited": {
           "label": "目標證據受限",
@@ -2025,7 +2024,7 @@
           "detail": "{{count}} 條重試指引用於補足部分審核覆蓋。"
         },
         "skipped_reviewers": {
-          "label": "Review 範圍已匹配",
+          "label": "審核範圍已匹配",
           "detail": "{{count}} 個可選檢查因適用性、設定或預算未納入本次執行。"
         },
         "token_budget_limited": {

@@ -26,7 +26,7 @@ export const REVIEW_STRATEGY_PROFILES: Record<
     level: 'quick',
     label: 'Quick',
     summary:
-      'Quick keeps the primary review concise and allows only a narrowly justified worker lens.',
+      'Quick keeps the main review concise and allows narrowly focused extra checks only when justified.',
     defaultModelSlot: 'fast',
     promptDirective:
       'Prefer a concise diff-focused pass. Report only high-confidence correctness, security, or regression risks and avoid speculative design rewrites.',
@@ -41,7 +41,7 @@ export const REVIEW_STRATEGY_PROFILES: Record<
     level: 'normal',
     label: 'Normal',
     summary:
-      'Normal balances evidence depth with one optional dynamically selected specialist lens.',
+      'Normal balances evidence depth with optional independent checks selected for the current change.',
     defaultModelSlot: 'fast',
     promptDirective:
       'Perform a practical evidence-backed review and stop investigating once each suspected issue is confirmed or dismissed.',
@@ -56,7 +56,7 @@ export const REVIEW_STRATEGY_PROFILES: Record<
     level: 'deep',
     label: 'Deep',
     summary:
-      'Deep gives the primary reviewer and one justified dynamic lens the longest bounded budget.',
+      'Deep gives the main review and any justified independent checks the longest bounded budget.',
     defaultModelSlot: 'primary',
     promptDirective:
       'Inspect edge cases, cross-file interactions, failure modes, and remediation tradeoffs before finalizing findings.',

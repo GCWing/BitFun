@@ -121,26 +121,26 @@ pub fn default_review_team_definition() -> ReviewTeamDefinition {
         role(
             "worker",
             REVIEW_WORKER_AGENT_TYPE,
-            "Review Worker",
-            "Dynamic Review Worker",
-            "A read-only worker whose concrete lens, question, and scope are selected for the current change instead of being fixed in the agent identity.",
+            "Focused Review",
+            "On-demand Review Check",
+            "A read-only check whose focus and scope are chosen for the current change when more evidence would be useful.",
             &[
-                "Apply only the lens and question supplied by the owning Review agent.",
-                "Stay within the prepared target and return evidence-backed findings and exact coverage.",
-                "Do not widen permissions, modify files, or repeat the primary review.",
+                "Check only the question assigned by the main review.",
+                "Stay within the selected scope and support conclusions with concrete evidence.",
+                "Do not modify files or repeat work already completed by the main review.",
             ],
             "#3b82f6",
         ),
         role(
             "judge",
             REVIEW_JUDGE_AGENT_TYPE,
-            "Review Arbiter",
-            "Review Quality Inspector",
-            "An independent arbiter used only for high-severity, conflicting, or materially low-confidence conclusions.",
+            "Independent Review Check",
+            "Review Quality Check",
+            "A read-only independent check used only when a serious finding, conflicting evidence, or an uncertain conclusion needs validation.",
             &[
-                "Validate or reject disputed findings against concrete evidence.",
-                "Spot-check only the claims that need independent verification.",
-                "Ensure every surviving issue has a safe actionable response.",
+                "Confirm or reject disputed findings using concrete evidence.",
+                "Check only the claims that need independent validation.",
+                "Make sure each retained issue has a safe, practical next step.",
             ],
             "#8b5cf6",
         ),
@@ -152,7 +152,7 @@ pub fn default_review_team_definition() -> ReviewTeamDefinition {
             strategy_profile(
                 "quick",
                 "Quick",
-                "Quick keeps the primary review concise and allows only a narrowly justified worker lens.",
+                "Quick keeps the main review concise and allows narrowly focused extra checks only when justified.",
                 "0.4-0.6x",
                 "0.5-0.7x",
                 "fast",
@@ -166,7 +166,7 @@ pub fn default_review_team_definition() -> ReviewTeamDefinition {
             strategy_profile(
                 "normal",
                 "Normal",
-                "Normal balances evidence depth with one optional dynamically selected specialist lens.",
+                "Normal balances evidence depth with optional independent checks selected for the current change.",
                 "1x",
                 "1x",
                 "fast",
@@ -180,7 +180,7 @@ pub fn default_review_team_definition() -> ReviewTeamDefinition {
             strategy_profile(
                 "deep",
                 "Deep",
-                "Deep gives the primary reviewer and one justified dynamic lens the longest bounded budget.",
+                "Deep gives the main review and any justified independent checks the longest bounded budget.",
                 "1.8-2.5x",
                 "1.5-2.5x",
                 "primary",
@@ -208,7 +208,7 @@ pub fn default_review_team_definition() -> ReviewTeamDefinition {
     ReviewTeamDefinition {
         id: "default-review-team".to_string(),
         name: "Code Review".to_string(),
-        description: "One primary review with an optional dynamically scoped worker and conditional quality inspection.".to_string(),
+        description: "One main review that can request focused independent checks when more evidence is needed.".to_string(),
         warning: "Strict review may take longer and usually consumes more tokens than a standard review.".to_string(),
         default_model: "fast".to_string(),
         default_strategy_level: "normal".to_string(),
@@ -251,6 +251,40 @@ mod tests {
     }
 
     #[test]
+    fn default_team_uses_readable_user_facing_copy() {
+        let definition = default_review_team_definition();
+        let worker = &definition.core_roles[0];
+        let judge = &definition.core_roles[1];
+
+        assert_eq!(worker.fun_name, "Focused Review");
+        assert_eq!(worker.role_name, "On-demand Review Check");
+        assert_eq!(judge.fun_name, "Independent Review Check");
+        assert_eq!(judge.role_name, "Review Quality Check");
+        assert_eq!(
+            definition.description,
+            "One main review that can request focused independent checks when more evidence is needed."
+        );
+
+        let user_facing_copy = definition
+            .strategy_profiles
+            .values()
+            .map(|profile| profile.summary.as_str())
+            .chain([worker.description.as_str(), judge.description.as_str()])
+            .collect::<Vec<_>>()
+            .join("\n")
+            .to_ascii_lowercase();
+        for implementation_term in ["worker", "lens", "specialist", "inspector"] {
+            assert!(
+                !user_facing_copy.contains(implementation_term),
+                "user-facing copy should not contain {implementation_term}"
+            );
+        }
+        assert!(!user_facing_copy.contains("one optional"));
+        assert!(!user_facing_copy.contains("one justified"));
+        assert!(!user_facing_copy.contains("one narrowly focused"));
+    }
+
+    #[test]
     fn serialized_default_team_keeps_the_frontend_fallback_contract() {
         let value = serde_json::to_value(default_review_team_definition())
             .expect("default team should serialize");
@@ -258,7 +292,7 @@ mod tests {
         assert_eq!(value["name"], "Code Review");
         assert_eq!(
             value["description"],
-            "One primary review with an optional dynamically scoped worker and conditional quality inspection."
+            "One main review that can request focused independent checks when more evidence is needed."
         );
         assert_eq!(value["coreRoles"][0]["subagentId"], "ReviewWorker");
         assert_eq!(value["coreRoles"][0]["accentColor"], "#3b82f6");

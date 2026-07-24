@@ -91,13 +91,12 @@ export const PREDICTIVE_TIMEOUT_BASE_SECONDS: Record<ReviewStrategyLevel, number
 export const REVIEW_TEAM_MEMBER_ACCENT_DEFAULT = UI_EXCEPTION_ACCENTS.reviewTeam.memberDefault;
 
 export const EXTRA_MEMBER_DEFAULTS = {
-  roleName: 'Additional Specialist Reviewer',
-  description:
-    'Optional specialist coverage for strict Review with its own instructions, tools, and perspective.',
+  roleName: 'Additional Review Check',
+  description: 'An optional independent check for a specific concern chosen by the user.',
   responsibilities: [
-    'Bring an extra independent review perspective into the same target scope.',
-    'Stay tightly focused on the requested diff, commit, or workspace changes.',
-    'Return concrete findings with clear fix suggestions or follow-up steps.',
+    'Add another independent view of the current change.',
+    'Check only the requested changes and selected files.',
+    'Return concrete findings with clear fixes or follow-up steps.',
   ],
   accentColor: REVIEW_TEAM_MEMBER_ACCENT_DEFAULT,
 };
@@ -114,28 +113,28 @@ export const DEFAULT_REVIEW_TEAM_CORE_ROLES: ReviewTeamCoreRoleDefinition[] = [
   {
     key: 'worker',
     subagentId: 'ReviewWorker',
-    funName: 'Review Worker',
-    roleName: 'Dynamic Review Worker',
+    funName: 'Focused Review',
+    roleName: 'On-demand Review Check',
     description:
-      'A read-only worker whose concrete lens, question, and scope are selected for the current change instead of being fixed in the agent identity.',
+      'A read-only check whose focus and scope are chosen for the current change when more evidence would be useful.',
     responsibilities: [
-      'Apply only the lens and question supplied by the owning Review agent.',
-      'Stay within the prepared target and return evidence-backed findings and exact coverage.',
-      'Do not widen permissions, modify files, or repeat the primary review.',
+      'Check only the question assigned by the main review.',
+      'Stay within the selected scope and support conclusions with concrete evidence.',
+      'Do not modify files or repeat work already completed by the main review.',
     ],
-    accentColor: UI_EXCEPTION_ACCENTS.reviewTeam.businessLogic,
+    accentColor: UI_EXCEPTION_ACCENTS.reviewTeam.worker,
   },
   {
     key: 'judge',
     subagentId: 'ReviewJudge',
-    funName: 'Review Arbiter',
-    roleName: 'Review Quality Inspector',
+    funName: 'Independent Review Check',
+    roleName: 'Review Quality Check',
     description:
-      'An independent arbiter used only for high-severity, conflicting, or materially low-confidence conclusions.',
+      'A read-only independent check used only when a serious finding, conflicting evidence, or an uncertain conclusion needs validation.',
     responsibilities: [
-      'Validate or reject disputed findings against concrete evidence.',
-      'Spot-check only the claims that need independent verification.',
-      'Ensure every surviving issue has a safe actionable response.',
+      'Confirm or reject disputed findings using concrete evidence.',
+      'Check only the claims that need independent validation.',
+      'Make sure each retained issue has a safe, practical next step.',
     ],
     accentColor: UI_EXCEPTION_ACCENTS.reviewTeam.judge,
   },
@@ -163,7 +162,7 @@ export const FALLBACK_REVIEW_TEAM_DEFINITION: ReviewTeamDefinition = {
   id: DEFAULT_REVIEW_TEAM_ID,
   name: 'Code Review',
   description:
-    'One primary review with an optional dynamically scoped worker and conditional quality inspection.',
+    'One main review that can request focused independent checks when more evidence is needed.',
   warning:
     'Strict review may take longer and usually consumes more tokens than a standard review.',
   defaultModel: DEFAULT_REVIEW_TEAM_MODEL,

@@ -32,6 +32,12 @@ vi.mock('react-i18next', () => {
     if (key === 'toolCards.taskTool.defaultAgentKind') {
       return 'Sub-agent';
     }
+    if (key === 'toolCards.taskTool.reviewCoverageLabel') {
+      return 'Review check';
+    }
+    if (key === 'toolCards.taskTool.reviewCoverageDescription') {
+      return 'Checking review coverage';
+    }
     if (key === 'toolCards.taskTool.cancelSession') {
       return `Cancel session: ${options?.sessionId}`;
     }
@@ -396,7 +402,7 @@ describeWithJsdom('TaskToolDisplay', () => {
         id: 'launch-review-call-1',
         input: {
           packet_id: 'managed-review:batch-1-of-4',
-          description: '[packet managed-review:batch-1-of-4] Review web UI changes',
+          description: '[packet managed-review:batch-1-of-4] Review batch 1',
           prompt: 'Internal worker prompt',
           subagent_type: 'ReviewGeneral',
         },
@@ -409,7 +415,8 @@ describeWithJsdom('TaskToolDisplay', () => {
       );
     });
 
-    expect(container.textContent).toContain('Review web UI changes');
+    expect(container.textContent).toContain('Checking review coverage');
+    expect(container.textContent).not.toContain('Review batch 1');
     expect(container.textContent).not.toContain('LaunchReviewAgent');
     expect(container.textContent).not.toContain('ReviewGeneral');
     expect(container.textContent).not.toContain('managed-review:batch-1-of-4');

@@ -376,8 +376,11 @@ export const TaskToolDisplay: React.FC<ToolCardProps> = ({
       readStringValue(toolCall.input.modelId);
 
     if (isReviewCoverageTask) {
-      const reviewDescription = readStringValue(description)
-        .replace(/^\[packet\s+[^\]]+\]\s*/i, '');
+      const packetId = readStringValue(toolCall.input.packet_id)
+        || readStringValue(toolCall.input.packetId);
+      const reviewDescription = /^managed-review:/i.test(packetId)
+        ? ''
+        : readStringValue(description).replace(/^\[packet\s+[^\]]+\]\s*/i, '');
       return {
         description: reviewDescription || t('toolCards.taskTool.reviewCoverageDescription'),
         prompt: 'Not provided',

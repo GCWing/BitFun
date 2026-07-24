@@ -928,7 +928,7 @@
     "copyDiagnostics": "复制排障摘要",
     "diagnosticsCopied": "已复制排障摘要",
     "diagnosticsCopyFailed": "复制排障摘要失败",
-    "diagnosticsTitle": "严格 Review 排障摘要",
+    "diagnosticsTitle": "严格审核排障摘要",
     "diagnosticsErrorType": "错误类型",
     "diagnosticsDescription": "错误描述",
     "diagnosticsSuggestedActions": "建议操作",
@@ -957,9 +957,9 @@
     },
     "resultRecovery": {
       "title": "严格审核需要补全结果",
-      "missingSubmitCodeReview": "审核已结束，但 BitFun 没有收到可确认的结构化结果。继续会保留已完成的审核工作，并要求 agent 补交缺失的审核报告。",
-      "invalidSubmitCodeReview": "审核返回了 BitFun 无法读取的结果。继续会保留已完成的审核工作，并要求 agent 修复报告。",
-      "wrongReviewMode": "审核返回了标准审核结果。继续会保留已完成的审核工作，并要求 agent 提交严格审核报告。"
+      "missingSubmitCodeReview": "审核已结束，但 BitFun 没有收到可确认的结构化结果。继续会保留已完成的审核工作，并补交缺失的审核报告。",
+      "invalidSubmitCodeReview": "审核返回了 BitFun 无法读取的结果。继续会保留已完成的审核工作，并修复报告。",
+      "wrongReviewMode": "审核返回了标准审核结果。继续会保留已完成的审核工作，并提交严格审核报告。"
     },
     "capacityQueue": {
       "title": "审核正在等待容量",
@@ -1001,7 +1001,7 @@
       "cancelQueued": "取消等待中的审核",
       "skipOptionalQueued": "保留核心检查",
       "openReviewSettings": "打开审核设置",
-      "controlFailed": "当前无法控制这个 Review 项的容量。可使用停止来中断 Review，或等待容量状态刷新。",
+      "controlFailed": "当前无法控制这个审核项的容量。可停止本次审核，或等待容量状态刷新。",
       "controlFailedWithReason": "容量控制失败：{{reason}}。请重试，或在审核卡住时使用停止来中断。",
       "controlPartiallyFailedWithReason": "容量控制已部分应用；{{total}} 个审核项中有 {{failed}} 个失败：{{reason}}。请等待容量状态刷新后重试，或在卡住时使用停止。"
     },
@@ -1041,20 +1041,19 @@
   "deepReviewConsent": {
     "windowTitle": "审核方案",
     "eyebrow": "审核方案",
-    "title": "增加更广的审核覆盖？",
-    "body": "BitFun 为本次变更选择了额外的独立检查。继续前可确认目标范围、计划检查、耗时倾向和只读边界。",
+    "title": "开始本次审核？",
+    "body": "BitFun 会先直接审核本次变更，仅在证据确实需要时按需增加独立检查。继续前可确认目标范围、审核预算、预计耗时和只读边界。",
     "readonlyLabel": "只读",
     "readonly": "审核者不会修改文件。",
     "sessionConcurrencyTitle": "当前会话较忙",
     "sessionConcurrencyBody": "目标会话已有 {{count}} 个审核工作在运行，继续后将共享当前可用的审核容量。",
-    "costLabel": "覆盖",
-    "cost": "计划的审查代理执行；此处不估算底层模型请求或 Token。",
+    "costLabel": "审核预算",
+    "cost": "审核预算用于按需的独立检查；实际调用次数和模型用量取决于审核中发现的证据。",
     "timeLabel": "耗时",
     "time": "后台运行，可能需要更久。",
     "cancel": "取消",
     "confirm": "开始审核",
-    "initialCalls": "独立检查：计划 {{planned}} 次审查代理执行",
-    "parallelCalls": "无需再次确认时，最多可能执行 {{count}} 次审查代理。",
+    "callLimit": "检查上限：{{count}}。实际工作量取决于审核目标和发现的证据。",
     "runStrategy": "运行策略：{{strategy}}",
     "strategyLabels": {
       "quick": "聚焦",
@@ -1063,8 +1062,8 @@
     },
     "strategySummaries": {
       "quick": "聚焦审核会检查当前目标最相关的风险。",
-      "normal": "标准审核会增加独立覆盖，同时保持成本合理。",
-      "deep": "全面审核会为高风险变更增加适用范围内最广的覆盖。"
+      "normal": "标准审核会更深入地检查当前目标，并在确有帮助时按需增加独立检查。",
+      "deep": "全面审核会检查所有适用的高风险领域，并在证据需要验证时按需增加检查。"
     },
     "summaryTitle": "审核方案",
     "targetFiles": "{{count}} 个文件",
@@ -1073,7 +1072,7 @@
     "skippedReviewers": "{{count}} 个可选检查未纳入",
     "skippedReviewers_one": "{{count}} 个可选检查未纳入",
     "skippedReviewers_other": "{{count}} 个可选检查未纳入",
-    "skippedGroupTitle": "已选择 Review 范围",
+    "skippedGroupTitle": "已选择审核范围",
     "targetSource": {
       "manualPrompt": "给定内容",
       "workspaceDiff": "工作区改动",
@@ -1682,8 +1681,8 @@
       "collapseDetails": "收起详情",
       "expandDetails": "展开详情",
       "openInPanel": "在面板中打开详情",
-      "reviewCoverageLabel": "Review 检查",
-      "reviewCoverageDescription": "正在检查 Review 覆盖"
+      "reviewCoverageLabel": "审核检查",
+      "reviewCoverageDescription": "正在补充审核证据"
     },
     "taskDetailPanel": {
       "untitled": "未命名任务",
@@ -1709,7 +1708,7 @@
       "loadingMore": "正在加载更多输出...",
       "loading": "正在加载任务详情...",
       "stopReviewWork": "停止此检查",
-      "stopReviewWorkHint": "仅取消这个检查项，整体 Review 仍可继续并生成摘要。"
+      "stopReviewWorkHint": "仅取消这个检查项，整体审核仍可继续并生成摘要。"
     },
     "timeout": {
       "disableTooltip": "关闭超时限制",
@@ -1969,7 +1968,7 @@
       "runManifest": {
         "recommendedStrategy": "推荐策略",
         "riskRecommendationTitle": "风险推荐",
-        "reviewDepth": "Review 范围",
+        "reviewDepth": "审核范围",
         "reviewDepthLabels": {
           "high_risk_only": "聚焦",
           "risk_expanded": "扩展",
@@ -1979,7 +1978,7 @@
         "budget": "预算",
         "estimatedCalls": "预计审核检查",
         "activeGroupTitle": "已覆盖",
-        "skippedGroupTitle": "已选择 Review 范围",
+        "skippedGroupTitle": "已选择审核范围",
         "reducedCoverageSummary": "BitFun 已为此目标选择最相关的检查。{{count}} 个可选检查因适用性、配置或预算未纳入本次运行。",
         "reducedCoverageSummary_one": "BitFun 已为此目标选择最相关的检查。{{count}} 个可选检查因适用性、配置或预算未纳入本次运行。",
         "reducedCoverageSummary_other": "BitFun 已为此目标选择最相关的检查。{{count}} 个可选检查因适用性、配置或预算未纳入本次运行。"
@@ -2013,8 +2012,8 @@
           "detail": "{{count}} 个审核结果是部分结果，可信度有限。"
         },
         "reduced_scope": {
-          "label": "聚焦 Review 范围",
-          "detail": "本次 Review 使用了聚焦范围配置。"
+          "label": "聚焦审核范围",
+          "detail": "本次审核使用了聚焦范围配置。"
         },
         "target_evidence_limited": {
           "label": "目标证据受限",
@@ -2025,7 +2024,7 @@
           "detail": "{{count}} 条重试指引用于补足部分审核覆盖。"
         },
         "skipped_reviewers": {
-          "label": "Review 范围已匹配",
+          "label": "审核范围已匹配",
           "detail": "{{count}} 个可选检查因适用性、配置或预算未纳入本次运行。"
         },
         "token_budget_limited": {

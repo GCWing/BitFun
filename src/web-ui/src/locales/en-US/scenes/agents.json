@@ -298,84 +298,33 @@
   "reviewTeams": {
     "members": {
       "worker": {
-        "funName": "Review Worker",
-        "role": "Dynamic Review Worker",
-        "description": "A read-only worker whose concrete lens, question, and scope are selected for the current change instead of being fixed in the agent identity.",
+        "funName": "Focused Review",
+        "role": "On-demand Review Check",
+        "description": "A read-only check whose focus and scope are chosen for the current change when more evidence would be useful.",
         "responsibilities": [
-          "Apply only the lens and question supplied by the owning Review agent.",
-          "Stay within the prepared target and return evidence-backed findings and exact coverage.",
-          "Do not widen permissions, modify files, or repeat the primary review."
-        ]
-      },
-      "businessLogic": {
-        "funName": "Logic Reviewer",
-        "role": "Business Logic Reviewer",
-        "description": "A workflow sleuth that inspects business rules, state transitions, recovery paths, and real-user correctness.",
-        "responsibilities": [
-          "Verify workflows, state transitions, and domain rules still behave correctly.",
-          "Check boundary cases, rollback paths, and data integrity assumptions.",
-          "Focus on issues that can break user outcomes or product intent."
-        ]
-      },
-      "performance": {
-        "funName": "Performance Reviewer",
-        "role": "Performance Reviewer",
-        "description": "A speed-focused profiler that hunts hot paths, unnecessary work, blocking calls, and scale-sensitive regressions.",
-        "responsibilities": [
-          "Inspect hot paths, large loops, and unnecessary allocations or recomputation.",
-          "Flag blocking work, N+1 patterns, and wasteful data movement.",
-          "Keep performance advice practical and aligned with the existing architecture."
-        ]
-      },
-      "security": {
-        "funName": "Security Reviewer",
-        "role": "Security Reviewer",
-        "description": "A boundary guardian that scans for injection risks, trust leaks, privilege mistakes, and unsafe file or command handling.",
-        "responsibilities": [
-          "Review trust boundaries, auth assumptions, and sensitive data handling.",
-          "Look for injection, unsafe command execution, and exposure risks.",
-          "Highlight concrete fixes that reduce risk without broad rewrites."
+          "Check only the question assigned by the main review.",
+          "Stay within the selected scope and support conclusions with concrete evidence.",
+          "Do not modify files or repeat work already completed by the main review."
         ]
       },
       "judge": {
-        "funName": "Review Arbiter",
-        "role": "Review Quality Inspector",
-        "description": "An independent third-party arbiter that validates reviewer reports for logical consistency and evidence quality. It spot-checks specific code locations only when a claim needs verification, rather than re-reviewing the codebase from scratch.",
+        "funName": "Independent Review Check",
+        "role": "Review Quality Check",
+        "description": "A read-only independent check used only when a serious finding, conflicting evidence, or an uncertain conclusion needs validation.",
         "responsibilities": [
-          "Validate, merge, reprioritize, or reject reviewer findings based on logical consistency and evidence quality.",
-          "Filter out false positives and directionally-wrong optimization advice by examining reviewer reasoning.",
-          "Spot-check specific code locations only when a reviewer's claim needs verification.",
-          "Ensure every surviving issue has an actionable fix or follow-up plan."
-        ]
-      },
-      "architecture": {
-        "funName": "Architecture Reviewer",
-        "role": "Architecture Reviewer",
-        "description": "A structural watchdog that checks module boundaries, dependency direction, API contract design, and abstraction integrity.",
-        "responsibilities": [
-          "Detect layer boundary violations and wrong-direction imports.",
-          "Verify API contracts, tool schemas, and transport messages stay consistent.",
-          "Ensure platform-agnostic code does not leak platform-specific details."
-        ]
-      },
-      "frontend": {
-        "funName": "Frontend Reviewer",
-        "role": "Frontend Reviewer",
-        "description": "A UI specialist that checks i18n synchronization, frontend performance patterns, accessibility, and frontend-backend contract alignment.",
-        "responsibilities": [
-          "Verify i18n key completeness across all locales.",
-          "Check frontend performance patterns (memoization, virtualization, effect/reactivity dependencies).",
-          "Flag accessibility violations and frontend-backend API contract drift."
+          "Confirm or reject disputed findings using concrete evidence.",
+          "Check only the claims that need independent validation.",
+          "Make sure each retained issue has a safe, practical next step."
         ]
       }
     },
     "extraReviewer": {
-      "role": "Additional Specialist Reviewer",
-      "description": "Optional specialist coverage for strict Review with its own instructions, tools, and perspective.",
+      "role": "Additional Review Check",
+      "description": "An optional independent check for a specific concern chosen by the user.",
       "responsibilities": [
-        "Bring an extra independent review perspective into the same target scope.",
-        "Stay tightly focused on the requested diff, commit, or workspace changes.",
-        "Return concrete findings with clear fix suggestions or follow-up steps."
+        "Add another independent view of the current change.",
+        "Check only the requested changes and selected files.",
+        "Return concrete findings with clear fixes or follow-up steps."
       ]
     }
   },

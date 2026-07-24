@@ -1041,20 +1041,19 @@
   "deepReviewConsent": {
     "windowTitle": "Review plan",
     "eyebrow": "Review plan",
-    "title": "Add broader review coverage?",
-    "body": "BitFun selected additional independent checks for this change. Review the target scope, planned checks, runtime tendency, and read-only boundary before continuing.",
+    "title": "Start this review?",
+    "body": "BitFun reviews this change directly and may add focused independent checks only when the evidence needs them. Confirm the target, review budget, expected time, and read-only boundary before continuing.",
     "readonlyLabel": "Read-only",
     "readonly": "Reviewers do not modify files.",
     "sessionConcurrencyTitle": "Active session is busy",
     "sessionConcurrencyBody": "The target session already has {{count}} review tasks running. Continuing will share the available review capacity.",
-    "costLabel": "Coverage",
-    "cost": "Planned review agent runs; model requests and token use are not estimated here.",
+    "costLabel": "Review budget",
+    "cost": "The review budget allows optional independent checks. Actual requests and token use depend on the evidence found.",
     "timeLabel": "Time",
     "time": "Runs in background and may take longer.",
     "cancel": "Cancel",
     "confirm": "Start review",
-    "initialCalls": "Independent checks: {{planned}} planned review agent run",
-    "parallelCalls": "Up to {{count}} review agent runs may occur without another confirmation.",
+    "callLimit": "Maximum checks: {{count}}. Actual work depends on the review target and the evidence found.",
     "runStrategy": "Run strategy: {{strategy}}",
     "strategyLabels": {
       "quick": "Focused",
@@ -1063,8 +1062,8 @@
     },
     "strategySummaries": {
       "quick": "Focused review checks the most relevant risks for the selected target.",
-      "normal": "Standard adds independent coverage while keeping cost practical.",
-      "deep": "Extensive review adds the broadest applicable coverage for high-risk changes."
+      "normal": "Standard review examines the selected target in more depth and may add independent checks when useful.",
+      "deep": "Extensive review examines all applicable high-risk areas and may add independent validation when the evidence needs it."
     },
     "summaryTitle": "Review plan",
     "targetFiles": "{{count}} files",

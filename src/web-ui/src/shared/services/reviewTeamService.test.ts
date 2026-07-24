@@ -479,7 +479,7 @@ describe('reviewTeamService', () => {
     await expect(loadDefaultReviewTeamDefinition()).resolves.toMatchObject({
       name: 'Code Review',
       description:
-        'One primary review with an optional dynamically scoped worker and conditional quality inspection.',
+        'One main review that can request focused independent checks when more evidence is needed.',
       coreRoles: [
         expect.objectContaining({ subagentId: 'ReviewWorker', accentColor: '#3b82f6' }),
         expect.objectContaining({ subagentId: 'ReviewJudge', accentColor: '#8b5cf6' }),

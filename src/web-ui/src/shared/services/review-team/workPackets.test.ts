@@ -21,6 +21,9 @@ describe('buildManagedReviewWorkPackets', () => {
 
     expect(packets).toHaveLength(4);
     expect(packets.every((packet) => packet.subagentId === 'ReviewWorker')).toBe(true);
+    expect(
+      packets.every((packet) => packet.roleName === 'Dynamic Review Worker'),
+    ).toBe(true);
     expect(packets.every((packet) => packet.assignedScope.files.length <= 40)).toBe(true);
     expect(packets.map((packet) => packet.launchBatch)).toEqual([1, 1, 2, 2]);
     expect(packets.map((packet) => packet.packetId)).toEqual([
