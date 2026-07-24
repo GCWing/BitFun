@@ -137,5 +137,8 @@ devtools = ["tauri/devtools", "bitfun-webdriver/embedded"]
 atspi = { workspace = true }
 leptess = { workspace = true }
 
+[dev-dependencies]
+tempfile = { workspace = true }
+
 [lints]
 workspace = true

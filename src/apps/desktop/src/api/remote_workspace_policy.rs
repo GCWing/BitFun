@@ -260,7 +260,7 @@ pub const REMOTE_WORKSPACE_COMMAND_POLICIES: &[(&str, RemoteWorkspacePolicy)] = 
     ),
     ("close_workspace", RemoteWorkspacePolicy::LegacyUnaudited),
     ("compact_session", RemoteWorkspacePolicy::LegacyUnaudited),
-    ("compress_path", RemoteWorkspacePolicy::LegacyUnaudited),
+    ("compress_path", RemoteWorkspacePolicy::RemoteRouted),
     ("compute_diff", RemoteWorkspacePolicy::LegacyUnaudited),
     ("computer_use_get_status", RemoteWorkspacePolicy::LocalOnly),
     (
@@ -301,7 +301,7 @@ pub const REMOTE_WORKSPACE_COMMAND_POLICIES: &[(&str, RemoteWorkspacePolicy)] = 
     ("debug_devtools_available", RemoteWorkspacePolicy::LocalOnly),
     ("debug_element_picked", RemoteWorkspacePolicy::LocalOnly),
     ("debug_open_devtools", RemoteWorkspacePolicy::LocalOnly),
-    ("decompress_path", RemoteWorkspacePolicy::LegacyUnaudited),
+    ("decompress_path", RemoteWorkspacePolicy::RemoteRouted),
     (
         "delete_agent_companion_pet_package",
         RemoteWorkspacePolicy::LegacyUnaudited,

@@ -22,7 +22,9 @@ use bitfun_core::infrastructure::{
 use bitfun_core::service::file_watch;
 use bitfun_core::service::remote_ssh::get_remote_workspace_manager;
 use bitfun_core::service::remote_ssh::workspace_state::is_remote_path;
-use bitfun_core::service::remote_ssh::{RemoteDirEntry, RemoteFileService, RemoteWorkspaceEntry};
+use bitfun_core::service::remote_ssh::{
+    shell_quote_posix, RemoteDirEntry, RemoteFileService, RemoteWorkspaceEntry,
+};
 use bitfun_core::service::workspace::{
     ScanOptions, WorkspaceInfo, WorkspaceKind, WorkspaceOpenOptions,
 };
@@ -3096,26 +3098,19 @@ pub async fn compress_path(
     // Remote: execute compress command via SSH.
     if let Some(cid) = &remote_cid {
         let manager = state.get_ssh_manager_async().await?;
-        let parent = Path::new(&src)
-            .parent()
-            .ok_or_else(|| format!("Cannot determine parent directory of '{}'", src))?
-            .to_string_lossy()
-            .to_string();
-        let base_name = Path::new(&src)
-            .file_name()
-            .and_then(|n| n.to_str())
-            .ok_or_else(|| format!("Cannot determine file name of '{}'", src))?
-            .to_string();
+        let (parent, base_name) = split_remote_archive_path(&src)?;
 
-        // Try zip first, fall back to tar.gz.
-        // Escape single quotes in paths for shell safety.
-        let escaped_src = src.replace('\'', "'\\''");
-        let escaped_parent = parent.replace('\'', "'\\''");
-        let escaped_name = base_name.replace('\'', "'\\''");
-
-        let zip_out = format!("{}/{}.zip", parent, base_name);
-        let zip_shell_out = format!("{}/{}.zip", escaped_parent, escaped_name);
-        let zip_cmd = format!("zip -r -q '{}' '{}'", zip_shell_out, escaped_src);
+        // Run from the source's parent directory so an absolute remote path is
+        // never serialized as archive member directories. Directory archives
+        // contain the selected directory's contents at their root; extraction
+        // therefore does not create `<name>/<name>/...`.
+        let zip_out = join_remote_path(&parent, &format!("{}.zip", base_name));
+        let zip_cmd = build_remote_compress_command(
+            &parent,
+            &base_name,
+            &format!("{}.zip", base_name),
+            RemoteArchiveFormat::Zip,
+        );
 
         let (stdout, stderr, code) = manager
             .execute_command(cid, &zip_cmd)
@@ -3127,11 +3122,12 @@ pub async fn compress_path(
         }
 
         // zip not available or failed — try tar.
-        let tar_out = format!("{}/{}.tar.gz", parent, base_name);
-        let tar_shell_out = format!("{}/{}.tar.gz", escaped_parent, escaped_name);
-        let tar_cmd = format!(
-            "tar -czf '{}' -C '{}' '{}'",
-            tar_shell_out, escaped_parent, escaped_name
+        let tar_out = join_remote_path(&parent, &format!("{}.tar.gz", base_name));
+        let tar_cmd = build_remote_compress_command(
+            &parent,
+            &base_name,
+            &format!("{}.tar.gz", base_name),
+            RemoteArchiveFormat::TarGz,
         );
 
         let (stdout2, stderr2, code2) = manager
@@ -3145,10 +3141,8 @@ pub async fn compress_path(
 
         let zip_err = if stderr.is_empty() { stdout } else { stderr };
         let tar_err = if stderr2.is_empty() { stdout2 } else { stderr2 };
-        let zip_not_found =
-            zip_err.contains("command not found") || zip_err.contains("not installed");
-        let tar_not_found =
-            tar_err.contains("command not found") || tar_err.contains("not installed");
+        let zip_not_found = remote_tool_missing(&zip_err, "zip");
+        let tar_not_found = remote_tool_missing(&tar_err, "tar");
         if zip_not_found && tar_not_found {
             return Err("Remote server has neither 'zip' nor 'tar' installed. \
                  Please install at least one of them."
@@ -3166,6 +3160,11 @@ pub async fn compress_path(
     let parent = src_path
         .parent()
         .ok_or_else(|| format!("Cannot determine parent directory of '{}'", src))?;
+    let parent = if parent.as_os_str().is_empty() {
+        Path::new(".")
+    } else {
+        parent
+    };
     let file_name = src_path
         .file_name()
         .and_then(|n| n.to_str())
@@ -3177,22 +3176,7 @@ pub async fn compress_path(
     let src_path_clone = src_path.clone();
     let file_name_clone = file_name.clone();
     tokio::task::spawn_blocking(move || {
-        let file = std::fs::File::create(&zip_path_clone)
-            .map_err(|e| format!("Failed to create '{}': {}", zip_path_clone.display(), e))?;
-        let mut zip_writer = zip::ZipWriter::new(file);
-        let options = zip::write::SimpleFileOptions::default()
-            .compression_method(zip::CompressionMethod::Deflated);
-
-        if src_path_clone.is_dir() {
-            add_dir_to_zip(&mut zip_writer, &src_path_clone, &file_name_clone, options)?;
-        } else {
-            add_file_to_zip(&mut zip_writer, &src_path_clone, &file_name_clone, options)?;
-        }
-
-        zip_writer
-            .finish()
-            .map_err(|e| format!("Failed to finalize zip archive: {}", e))?;
-        Ok::<(), String>(())
+        create_local_zip_archive(&src_path_clone, &zip_path_clone, &file_name_clone)
     })
     .await
     .map_err(|e| e.to_string())??;
@@ -3200,8 +3184,118 @@ pub async fn compress_path(
     Ok(zip_path.to_string_lossy().to_string())
 }
 
-/// Recursively add a directory tree to a zip archive.
-fn add_dir_to_zip(
+#[derive(Clone, Copy)]
+enum RemoteArchiveFormat {
+    Zip,
+    TarGz,
+}
+
+fn split_remote_archive_path(path: &str) -> Result<(String, String), String> {
+    let trimmed = path.trim_end_matches('/');
+    if trimmed.is_empty() {
+        return Err(format!("Cannot determine file name of '{}'", path));
+    }
+
+    let (parent, base_name) = match trimmed.rsplit_once('/') {
+        Some(("", name)) => ("/".to_string(), name.to_string()),
+        Some((parent, name)) => (parent.to_string(), name.to_string()),
+        None => (".".to_string(), trimmed.to_string()),
+    };
+
+    if base_name.is_empty() || matches!(base_name.as_str(), "." | "..") {
+        return Err(format!("Cannot determine file name of '{}'", path));
+    }
+
+    Ok((parent, base_name))
+}
+
+fn join_remote_path(parent: &str, name: &str) -> String {
+    match parent {
+        "/" => format!("/{}", name),
+        "." => name.to_string(),
+        _ => format!("{}/{}", parent.trim_end_matches('/'), name),
+    }
+}
+
+fn remote_tool_missing(message: &str, tool: &str) -> bool {
+    let lower = message.to_lowercase();
+    lower.contains("command not found")
+        || lower.contains("not installed")
+        || (lower.contains(&tool.to_lowercase()) && lower.contains("not found"))
+}
+
+fn build_remote_compress_command(
+    parent: &str,
+    base_name: &str,
+    archive_name: &str,
+    format: RemoteArchiveFormat,
+) -> String {
+    let parent = shell_quote_posix(parent);
+    let source = shell_quote_posix(&format!("./{}", base_name));
+    let archive = shell_quote_posix(&format!("./{}", archive_name));
+    let archive_from_source = shell_quote_posix(&format!("../{}", archive_name));
+
+    let compress = match format {
+        RemoteArchiveFormat::Zip => format!(
+            "if [ -d {source} ]; then \
+                 (cd -- {source} && zip -r -q {archive_from_source} .); \
+             else \
+                 zip -q {archive} {source}; \
+             fi"
+        ),
+        RemoteArchiveFormat::TarGz => format!(
+            "if [ -d {source} ]; then \
+                 (cd -- {source} && tar -czf {archive_from_source} .); \
+             else \
+                 tar -czf {archive} {source}; \
+             fi"
+        ),
+    };
+
+    format!(
+        "cd -- {parent} || exit 1; \
+         rm -f {archive}; \
+         {compress}; \
+         status=$?; \
+         if [ \"$status\" -ne 0 ]; then rm -f {archive}; fi; \
+         exit \"$status\""
+    )
+}
+
+fn create_local_zip_archive(
+    source_path: &Path,
+    zip_path: &Path,
+    source_name: &str,
+) -> Result<(), String> {
+    let result = (|| {
+        let file = std::fs::File::create(zip_path)
+            .map_err(|e| format!("Failed to create '{}': {}", zip_path.display(), e))?;
+        let mut zip_writer = zip::ZipWriter::new(file);
+        let options = zip::write::SimpleFileOptions::default()
+            .compression_method(zip::CompressionMethod::Deflated);
+
+        if source_path.is_dir() {
+            // The destination folder created by extraction already carries the
+            // archive stem, so archive only the directory's children.
+            add_dir_contents_to_zip(&mut zip_writer, source_path, "", options)?;
+        } else {
+            add_file_to_zip(&mut zip_writer, source_path, source_name, options)?;
+        }
+
+        zip_writer
+            .finish()
+            .map_err(|e| format!("Failed to finalize zip archive: {}", e))?;
+        Ok(())
+    })();
+
+    if result.is_err() {
+        let _ = std::fs::remove_file(zip_path);
+    }
+    result
+}
+
+/// Recursively add a directory's children to a zip archive.
+fn add_dir_contents_to_zip(
     zip: &mut zip::ZipWriter<std::fs::File>,
     dir: &Path,
     archive_prefix: &str,
@@ -3213,10 +3307,16 @@ fn add_dir_to_zip(
         let entry = entry.map_err(|e| format!("Failed to read directory entry: {}", e))?;
         let path = entry.path();
         let name = entry.file_name().to_string_lossy().to_string();
-        let archive_path = format!("{}/{}", archive_prefix, name);
+        let archive_path = if archive_prefix.is_empty() {
+            name
+        } else {
+            format!("{}/{}", archive_prefix, name)
+        };
 
         if path.is_dir() {
-            add_dir_to_zip(zip, &path, &archive_path, options)?;
+            zip.add_directory(format!("{}/", archive_path.replace('\\', "/")), options)
+                .map_err(|e| format!("Failed to add directory '{}' to zip: {}", archive_path, e))?;
+            add_dir_contents_to_zip(zip, &path, &archive_path, options)?;
         } else if path.is_file() {
             add_file_to_zip(zip, &path, &archive_path, options)?;
         }
@@ -3262,75 +3362,88 @@ pub async fn decompress_path(
 ) -> Result<String, String> {
     let src = request.path;
     let remote_cid = request.remote_connection_id;
-    let src_path = Path::new(&src);
-
-    let parent = src_path
-        .parent()
-        .ok_or_else(|| format!("Cannot determine parent directory of '{}'", src))?
-        .to_string_lossy()
-        .to_string();
-    let file_name = src_path
-        .file_name()
-        .and_then(|n| n.to_str())
-        .ok_or_else(|| format!("Cannot determine file name of '{}'", src))?
-        .to_string();
-
-    // Determine the archive stem (file name without extension(s)).
-    let stem = archive_stem(&file_name);
-    let dest_dir_name = stem;
 
     // Remote: execute decompress command via SSH.
     if let Some(cid) = &remote_cid {
         let manager = state.get_ssh_manager_async().await?;
-        let escaped_src = src.replace('\'', "'\\''");
-        let escaped_parent = parent.replace('\'', "'\\''");
-        let escaped_dest_name = dest_dir_name.replace('\'', "'\\''");
-        let escaped_dest = format!("{}/{}", escaped_parent, escaped_dest_name);
-        let dest_cmd = format!("mkdir -p '{}'", escaped_dest);
+        let (remote_parent, remote_file_name) = split_remote_archive_path(&src)?;
+        let remote_dest_dir_name = archive_destination_name(&remote_file_name)?;
 
-        let (_, _, _) = manager
-            .execute_command(cid, &dest_cmd)
-            .await
-            .map_err(|e| e.to_string())?;
+        let lower = remote_file_name.to_lowercase();
+        let (extract_command, required_tool, label, legacy_wrapper_relative) =
+            if lower.ends_with(".zip") {
+                (
+                    format!(
+                        "unzip -o -q {} -d \"$stage\"",
+                        shell_quote_posix(&format!("./{}", remote_file_name))
+                    ),
+                    "unzip",
+                    "zip",
+                    legacy_remote_zip_wrapper_path(&remote_parent, &remote_dest_dir_name),
+                )
+            } else if lower.ends_with(".tar.gz") || lower.ends_with(".tgz") {
+                (
+                    format!(
+                        "tar -xzf {} -C \"$stage\"",
+                        shell_quote_posix(&format!("./{}", remote_file_name))
+                    ),
+                    "tar",
+                    "tar.gz",
+                    None,
+                )
+            } else if lower.ends_with(".tar.bz2") || lower.ends_with(".tbz2") {
+                (
+                    format!(
+                        "tar -xjf {} -C \"$stage\"",
+                        shell_quote_posix(&format!("./{}", remote_file_name))
+                    ),
+                    "tar",
+                    "tar.bz2",
+                    None,
+                )
+            } else if lower.ends_with(".tar.xz") || lower.ends_with(".txz") {
+                (
+                    format!(
+                        "tar -xJf {} -C \"$stage\"",
+                        shell_quote_posix(&format!("./{}", remote_file_name))
+                    ),
+                    "tar",
+                    "tar.xz",
+                    None,
+                )
+            } else if lower.ends_with(".tar.zst") || lower.ends_with(".tzst") {
+                (
+                    format!(
+                        "tar --zstd -xf {} -C \"$stage\"",
+                        shell_quote_posix(&format!("./{}", remote_file_name))
+                    ),
+                    "tar",
+                    "tar.zst",
+                    None,
+                )
+            } else if lower.ends_with(".tar") {
+                (
+                    format!(
+                        "tar -xf {} -C \"$stage\"",
+                        shell_quote_posix(&format!("./{}", remote_file_name))
+                    ),
+                    "tar",
+                    "tar",
+                    None,
+                )
+            } else {
+                return Err(format!(
+                    "Unsupported archive format: '{}'",
+                    remote_file_name
+                ));
+            };
 
-        let lower = file_name.to_lowercase();
-        let (flag, label) = if lower.ends_with(".zip") {
-            // zip uses a separate command, not tar.
-            let cmd = format!("unzip -o -q '{}' -d '{}'", escaped_src, escaped_dest);
-            let (stdout, stderr, code) = manager
-                .execute_command(cid, &cmd)
-                .await
-                .map_err(|e| e.to_string())?;
-            if code != 0 {
-                let err = if stderr.is_empty() { stdout } else { stderr };
-                let trimmed = err.trim();
-                if trimmed.contains("command not found") || trimmed.contains("not installed") {
-                    return Err("Remote server does not have 'unzip' installed. \
-                         Please install it."
-                        .to_string());
-                }
-                return Err(format!("Extraction failed: {}", trimmed));
-            }
-            return Ok(format!("{}/{}", parent, dest_dir_name));
-        } else if lower.ends_with(".tar.gz") || lower.ends_with(".tgz") {
-            ("-z", "tar.gz")
-        } else if lower.ends_with(".tar.bz2") || lower.ends_with(".tbz2") {
-            ("-j", "tar.bz2")
-        } else if lower.ends_with(".tar.xz") || lower.ends_with(".txz") {
-            ("-J", "tar.xz")
-        } else if lower.ends_with(".tar.zst") || lower.ends_with(".tzst") {
-            ("--zstd", "tar.zst")
-        } else if lower.ends_with(".tar") {
-            ("", "tar")
-        } else {
-            return Err(format!("Unsupported archive format: '{}'", file_name));
-        };
-
-        let cmd = if flag.is_empty() {
-            format!("tar -xf '{}' -C '{}'", escaped_src, escaped_dest)
-        } else {
-            format!("tar {} -xf '{}' -C '{}'", flag, escaped_src, escaped_dest)
-        };
+        let cmd = build_remote_extract_command(
+            &remote_parent,
+            &remote_dest_dir_name,
+            &extract_command,
+            legacy_wrapper_relative.as_deref(),
+        );
         let (stdout, stderr, code) = manager
             .execute_command(cid, &cmd)
             .await
@@ -3338,121 +3451,394 @@ pub async fn decompress_path(
         if code != 0 {
             let err = if stderr.is_empty() { stdout } else { stderr };
             let trimmed = err.trim();
-            if trimmed.contains("command not found") || trimmed.contains("not installed") {
+            if remote_tool_missing(trimmed, required_tool) {
                 return Err(format!(
-                    "Remote server does not have the required tool for {} files. \
-                     Please install 'tar'.",
-                    label
+                    "Remote server does not have '{}' installed, which is required for {} files.",
+                    required_tool, label
                 ));
             }
             return Err(format!("Extraction failed: {}", trimmed));
         }
 
-        return Ok(format!("{}/{}", parent, dest_dir_name));
+        return Ok(join_remote_path(&remote_parent, &remote_dest_dir_name));
     }
 
     // Local decompression.
-    let dest_dir = PathBuf::from(&parent).join(&dest_dir_name);
-    let lower = file_name.to_lowercase();
+    let src_path = PathBuf::from(&src);
+    let parent = src_path
+        .parent()
+        .ok_or_else(|| format!("Cannot determine parent directory of '{}'", src))?;
+    let parent = if parent.as_os_str().is_empty() {
+        Path::new(".")
+    } else {
+        parent
+    };
+    let file_name = src_path
+        .file_name()
+        .and_then(|n| n.to_str())
+        .ok_or_else(|| format!("Cannot determine file name of '{}'", src))?
+        .to_string();
+    let dest_dir = parent.join(archive_destination_name(&file_name)?);
 
     let dest_dir_clone = dest_dir.clone();
-    let src_clone = src.clone();
+    let src_clone = src_path;
     let file_name_clone = file_name.clone();
     tokio::task::spawn_blocking(move || {
-        std::fs::create_dir_all(&dest_dir_clone)
-            .map_err(|e| format!("Failed to create '{}': {}", dest_dir_clone.display(), e))?;
-
-        if lower.ends_with(".zip") {
-            let file = std::fs::File::open(&src_clone)
-                .map_err(|e| format!("Failed to open '{}': {}", src_clone, e))?;
-            let mut archive = zip::ZipArchive::new(file)
-                .map_err(|e| format!("Failed to read zip '{}': {}", src_clone, e))?;
-            for i in 0..archive.len() {
-                let mut entry = archive
-                    .by_index(i)
-                    .map_err(|e| format!("Failed to read zip entry {}: {}", i, e))?;
-                let entry_name = entry.name().to_string();
-                let out_path = dest_dir_clone.join(&entry_name);
-
-                // Security: prevent path traversal (zip-slip).
-                let canonical_dest = dest_dir_clone
-                    .canonicalize()
-                    .unwrap_or_else(|_| dest_dir_clone.clone());
-                if !out_path.starts_with(&canonical_dest) {
-                    log::warn!("Skipping zip entry with path traversal: {}", entry_name);
-                    continue;
-                }
-
-                if entry.is_dir() {
-                    std::fs::create_dir_all(&out_path).map_err(|e| {
-                        format!("Failed to create dir '{}': {}", out_path.display(), e)
-                    })?;
-                } else {
-                    if let Some(p) = out_path.parent() {
-                        std::fs::create_dir_all(p)
-                            .map_err(|e| format!("Failed to create parent dir: {}", e))?;
-                    }
-                    let mut out_file = std::fs::File::create(&out_path)
-                        .map_err(|e| format!("Failed to create '{}': {}", out_path.display(), e))?;
-                    std::io::copy(&mut entry, &mut out_file)
-                        .map_err(|e| format!("Failed to extract '{}': {}", entry_name, e))?;
-                }
-            }
-        } else if lower.ends_with(".tar.gz") || lower.ends_with(".tgz") {
-            let file = std::fs::File::open(&src_clone)
-                .map_err(|e| format!("Failed to open '{}': {}", src_clone, e))?;
-            let gz = flate2::read::GzDecoder::new(file);
-            let mut archive = tar::Archive::new(gz);
-            archive.set_overwrite(true);
-            archive
-                .unpack(&dest_dir_clone)
-                .map_err(|e| format!("Failed to extract tar.gz '{}': {}", src_clone, e))?;
-        } else if lower.ends_with(".tar.bz2") || lower.ends_with(".tbz2") {
-            let file = std::fs::File::open(&src_clone)
-                .map_err(|e| format!("Failed to open '{}': {}", src_clone, e))?;
-            let bz = bzip2::read::BzDecoder::new(file);
-            let mut archive = tar::Archive::new(bz);
-            archive.set_overwrite(true);
-            archive
-                .unpack(&dest_dir_clone)
-                .map_err(|e| format!("Failed to extract tar.bz2 '{}': {}", src_clone, e))?;
-        } else if lower.ends_with(".tar.xz") || lower.ends_with(".txz") {
-            let file = std::fs::File::open(&src_clone)
-                .map_err(|e| format!("Failed to open '{}': {}", src_clone, e))?;
-            let xz = xz2::read::XzDecoder::new(file);
-            let mut archive = tar::Archive::new(xz);
-            archive.set_overwrite(true);
-            archive
-                .unpack(&dest_dir_clone)
-                .map_err(|e| format!("Failed to extract tar.xz '{}': {}", src_clone, e))?;
-        } else if lower.ends_with(".tar.zst") || lower.ends_with(".tzst") {
-            let file = std::fs::File::open(&src_clone)
-                .map_err(|e| format!("Failed to open '{}': {}", src_clone, e))?;
-            let zst = zstd::Decoder::new(file)
-                .map_err(|e| format!("Failed to init zstd decoder for '{}': {}", src_clone, e))?;
-            let mut archive = tar::Archive::new(zst);
-            archive.set_overwrite(true);
-            archive
-                .unpack(&dest_dir_clone)
-                .map_err(|e| format!("Failed to extract tar.zst '{}': {}", src_clone, e))?;
-        } else if lower.ends_with(".tar") {
-            let file = std::fs::File::open(&src_clone)
-                .map_err(|e| format!("Failed to open '{}': {}", src_clone, e))?;
-            let mut archive = tar::Archive::new(file);
-            archive.set_overwrite(true);
-            archive
-                .unpack(&dest_dir_clone)
-                .map_err(|e| format!("Failed to extract tar '{}': {}", src_clone, e))?;
-        } else {
-            return Err(format!("Unsupported archive format: '{}'", file_name_clone));
-        }
-
-        Ok::<(), String>(())
+        extract_local_archive(&src_clone, &dest_dir_clone, &file_name_clone)
     })
     .await
     .map_err(|e| e.to_string())??;
 
     Ok(dest_dir.to_string_lossy().to_string())
+}
+
+fn build_remote_extract_command(
+    parent: &str,
+    dest_dir_name: &str,
+    extract_command: &str,
+    legacy_wrapper_relative: Option<&str>,
+) -> String {
+    let parent = shell_quote_posix(parent);
+    let dest_path = shell_quote_posix(&format!("./{}", dest_dir_name));
+    let legacy_wrapper_relative = shell_quote_posix(legacy_wrapper_relative.unwrap_or(""));
+
+    format!(
+        r#"cd -- {parent} || exit 1
+dest_path={dest_path}
+legacy_wrapper_rel={legacy_wrapper_relative}
+if [ -L "$dest_path" ] || {{ [ -e "$dest_path" ] && [ ! -d "$dest_path" ]; }}; then
+    echo "Extraction destination is not a directory: $dest_path" >&2
+    exit 1
+fi
+stage=$(mktemp -d './.bitfun-extract.XXXXXXXX') || exit 1
+{extract_command}
+status=$?
+if [ "$status" -ne 0 ]; then
+    rm -rf "$stage"
+    exit "$status"
+fi
+source_root=$stage
+if [ -n "$legacy_wrapper_rel" ]; then
+    cursor=$stage
+    relative_chain=
+    while :; do
+        count=0
+        only=
+        for child in "$cursor"/.[!.]* "$cursor"/..?* "$cursor"/*; do
+            if [ -e "$child" ] || [ -L "$child" ]; then
+                count=$((count + 1))
+                only=$child
+                if [ "$count" -gt 1 ]; then
+                    break
+                fi
+            fi
+        done
+        if [ "$count" -ne 1 ] || [ ! -d "$only" ] || [ -L "$only" ]; then
+            break
+        fi
+        cursor=$only
+        component=${{only##*/}}
+        if [ -n "$relative_chain" ]; then
+            relative_chain="$relative_chain/$component"
+        else
+            relative_chain=$component
+        fi
+        if [ "$relative_chain" = "$legacy_wrapper_rel" ]; then
+            source_root=$cursor
+            break
+        fi
+        case "$legacy_wrapper_rel/" in
+            "$relative_chain/"*) ;;
+            *)
+                break
+                ;;
+        esac
+    done
+fi
+if [ ! -e "$dest_path" ]; then
+    mv "$source_root" "$dest_path"
+    status=$?
+else
+    mkdir -p "$dest_path"
+    status=$?
+    if [ "$status" -eq 0 ]; then
+        cp -a "$source_root"/. "$dest_path"/
+        status=$?
+    fi
+fi
+rm -rf "$stage"
+exit "$status""#
+    )
+}
+
+fn legacy_remote_zip_wrapper_path(parent: &str, dest_dir_name: &str) -> Option<String> {
+    let relative_parent = parent.strip_prefix('/')?.trim_matches('/');
+    if relative_parent.is_empty() {
+        return None;
+    }
+
+    let components = relative_parent
+        .split('/')
+        .filter(|component| !component.is_empty())
+        .collect::<Vec<_>>();
+    if components
+        .iter()
+        .any(|component| matches!(*component, "." | ".."))
+    {
+        return None;
+    }
+
+    Some(format!("{}/{}", components.join("/"), dest_dir_name))
+}
+
+struct ExtractionStagingDirectory {
+    path: PathBuf,
+}
+
+impl ExtractionStagingDirectory {
+    fn create(parent: &Path) -> Result<Self, String> {
+        let path = parent.join(format!(".bitfun-extract-{}", uuid::Uuid::new_v4().simple()));
+        std::fs::create_dir(&path)
+            .map_err(|e| format!("Failed to create extraction staging directory: {}", e))?;
+        Ok(Self { path })
+    }
+}
+
+impl Drop for ExtractionStagingDirectory {
+    fn drop(&mut self) {
+        let _ = std::fs::remove_dir_all(&self.path);
+    }
+}
+
+fn extract_local_archive(
+    source_path: &Path,
+    dest_dir: &Path,
+    file_name: &str,
+) -> Result<(), String> {
+    let parent = dest_dir
+        .parent()
+        .filter(|path| !path.as_os_str().is_empty())
+        .unwrap_or_else(|| Path::new("."));
+    let staging = ExtractionStagingDirectory::create(parent)?;
+    let lower = file_name.to_lowercase();
+
+    if lower.ends_with(".zip") {
+        extract_zip_to_staging(source_path, &staging.path)?;
+    } else if lower.ends_with(".tar.gz") || lower.ends_with(".tgz") {
+        let file = std::fs::File::open(source_path)
+            .map_err(|e| format!("Failed to open '{}': {}", source_path.display(), e))?;
+        unpack_tar_to_staging(
+            flate2::read::GzDecoder::new(file),
+            &staging.path,
+            source_path,
+            "tar.gz",
+        )?;
+    } else if lower.ends_with(".tar.bz2") || lower.ends_with(".tbz2") {
+        let file = std::fs::File::open(source_path)
+            .map_err(|e| format!("Failed to open '{}': {}", source_path.display(), e))?;
+        unpack_tar_to_staging(
+            bzip2::read::BzDecoder::new(file),
+            &staging.path,
+            source_path,
+            "tar.bz2",
+        )?;
+    } else if lower.ends_with(".tar.xz") || lower.ends_with(".txz") {
+        let file = std::fs::File::open(source_path)
+            .map_err(|e| format!("Failed to open '{}': {}", source_path.display(), e))?;
+        unpack_tar_to_staging(
+            xz2::read::XzDecoder::new(file),
+            &staging.path,
+            source_path,
+            "tar.xz",
+        )?;
+    } else if lower.ends_with(".tar.zst") || lower.ends_with(".tzst") {
+        let file = std::fs::File::open(source_path)
+            .map_err(|e| format!("Failed to open '{}': {}", source_path.display(), e))?;
+        let zst = zstd::Decoder::new(file).map_err(|e| {
+            format!(
+                "Failed to init zstd decoder for '{}': {}",
+                source_path.display(),
+                e
+            )
+        })?;
+        unpack_tar_to_staging(zst, &staging.path, source_path, "tar.zst")?;
+    } else if lower.ends_with(".tar") {
+        let file = std::fs::File::open(source_path)
+            .map_err(|e| format!("Failed to open '{}': {}", source_path.display(), e))?;
+        unpack_tar_to_staging(file, &staging.path, source_path, "tar")?;
+    } else {
+        return Err(format!("Unsupported archive format: '{}'", file_name));
+    }
+
+    archive_destination_name(file_name)?;
+    merge_extracted_directory(&staging.path, dest_dir)
+}
+
+fn extract_zip_to_staging(source_path: &Path, staging_path: &Path) -> Result<(), String> {
+    let file = std::fs::File::open(source_path)
+        .map_err(|e| format!("Failed to open '{}': {}", source_path.display(), e))?;
+    let mut archive = zip::ZipArchive::new(file)
+        .map_err(|e| format!("Failed to read zip '{}': {}", source_path.display(), e))?;
+
+    for i in 0..archive.len() {
+        let mut entry = archive
+            .by_index(i)
+            .map_err(|e| format!("Failed to read zip entry {}: {}", i, e))?;
+        let entry_name = entry.name().to_string();
+        let Some(enclosed_name) = entry.enclosed_name() else {
+            warn!("Skipping unsafe zip entry path: {}", entry_name);
+            continue;
+        };
+        let out_path = staging_path.join(enclosed_name);
+
+        if entry.is_dir() {
+            std::fs::create_dir_all(&out_path)
+                .map_err(|e| format!("Failed to create dir '{}': {}", out_path.display(), e))?;
+        } else {
+            if let Some(parent) = out_path.parent() {
+                std::fs::create_dir_all(parent)
+                    .map_err(|e| format!("Failed to create parent dir: {}", e))?;
+            }
+            let mut out_file = std::fs::File::create(&out_path)
+                .map_err(|e| format!("Failed to create '{}': {}", out_path.display(), e))?;
+            std::io::copy(&mut entry, &mut out_file)
+                .map_err(|e| format!("Failed to extract '{}': {}", entry_name, e))?;
+        }
+    }
+
+    Ok(())
+}
+
+fn unpack_tar_to_staging<R: Read>(
+    reader: R,
+    staging_path: &Path,
+    source_path: &Path,
+    format_label: &str,
+) -> Result<(), String> {
+    let mut archive = tar::Archive::new(reader);
+    archive.set_overwrite(true);
+    archive.unpack(staging_path).map_err(|e| {
+        format!(
+            "Failed to extract {} '{}': {}",
+            format_label,
+            source_path.display(),
+            e
+        )
+    })
+}
+
+fn merge_extracted_directory(source_dir: &Path, dest_dir: &Path) -> Result<(), String> {
+    match std::fs::symlink_metadata(dest_dir) {
+        Ok(metadata) => {
+            if !metadata.file_type().is_dir() || metadata.file_type().is_symlink() {
+                return Err(format!(
+                    "Extraction destination is not a directory: '{}'",
+                    dest_dir.display()
+                ));
+            }
+        }
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+            return std::fs::rename(source_dir, dest_dir).map_err(|e| {
+                format!(
+                    "Failed to move extracted content to '{}': {}",
+                    dest_dir.display(),
+                    e
+                )
+            });
+        }
+        Err(error) => {
+            return Err(format!(
+                "Failed to inspect extraction destination '{}': {}",
+                dest_dir.display(),
+                error
+            ));
+        }
+    }
+
+    for entry in std::fs::read_dir(source_dir)
+        .map_err(|e| format!("Failed to read extracted content: {}", e))?
+    {
+        let entry = entry.map_err(|e| format!("Failed to read extracted entry: {}", e))?;
+        let source_path = entry.path();
+        let target_path = dest_dir.join(entry.file_name());
+        let source_type = entry
+            .file_type()
+            .map_err(|e| format!("Failed to inspect extracted entry: {}", e))?;
+
+        if source_type.is_dir() && !source_type.is_symlink() {
+            match std::fs::symlink_metadata(&target_path) {
+                Ok(target_metadata)
+                    if target_metadata.file_type().is_dir()
+                        && !target_metadata.file_type().is_symlink() =>
+                {
+                    merge_extracted_directory(&source_path, &target_path)?;
+                    std::fs::remove_dir(&source_path).map_err(|e| {
+                        format!(
+                            "Failed to remove extraction staging directory '{}': {}",
+                            source_path.display(),
+                            e
+                        )
+                    })?;
+                }
+                Ok(_) => {
+                    remove_existing_extraction_target(&target_path)?;
+                    std::fs::rename(&source_path, &target_path).map_err(|e| {
+                        format!(
+                            "Failed to move extracted directory to '{}': {}",
+                            target_path.display(),
+                            e
+                        )
+                    })?;
+                }
+                Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+                    std::fs::rename(&source_path, &target_path).map_err(|e| {
+                        format!(
+                            "Failed to move extracted directory to '{}': {}",
+                            target_path.display(),
+                            e
+                        )
+                    })?;
+                }
+                Err(error) => {
+                    return Err(format!(
+                        "Failed to inspect extraction target '{}': {}",
+                        target_path.display(),
+                        error
+                    ));
+                }
+            }
+        } else {
+            if std::fs::symlink_metadata(&target_path).is_ok() {
+                remove_existing_extraction_target(&target_path)?;
+            }
+            std::fs::rename(&source_path, &target_path).map_err(|e| {
+                format!(
+                    "Failed to move extracted file to '{}': {}",
+                    target_path.display(),
+                    e
+                )
+            })?;
+        }
+    }
+
+    Ok(())
+}
+
+fn remove_existing_extraction_target(path: &Path) -> Result<(), String> {
+    let metadata = std::fs::symlink_metadata(path).map_err(|e| {
+        format!(
+            "Failed to inspect existing path '{}': {}",
+            path.display(),
+            e
+        )
+    })?;
+    if metadata.file_type().is_dir() && !metadata.file_type().is_symlink() {
+        std::fs::remove_dir_all(path)
+            .map_err(|e| format!("Failed to replace directory '{}': {}", path.display(), e))
+    } else {
+        std::fs::remove_file(path)
+            .map_err(|e| format!("Failed to replace file '{}': {}", path.display(), e))
+    }
 }
 
 /// Determine the stem of an archive file name by stripping known extensions.
@@ -3477,6 +3863,336 @@ fn archive_stem(file_name: &str) -> String {
             Some(pos) if pos > 0 => file_name[..pos].to_string(),
             _ => file_name.to_string(),
         }
+    }
+}
+
+fn archive_destination_name(file_name: &str) -> Result<String, String> {
+    let stem = archive_stem(file_name);
+    if stem.is_empty() || matches!(stem.as_str(), "." | "..") {
+        Err(format!(
+            "Cannot determine extraction folder name from '{}'",
+            file_name
+        ))
+    } else {
+        Ok(stem)
+    }
+}
+
+#[cfg(test)]
+mod archive_tests {
+    use super::*;
+
+    fn write_test_zip(path: &Path, entries: &[(&str, &str)]) {
+        let file = std::fs::File::create(path).expect("create test zip");
+        let mut writer = zip::ZipWriter::new(file);
+        let options = zip::write::SimpleFileOptions::default()
+            .compression_method(zip::CompressionMethod::Deflated);
+        for (name, content) in entries {
+            writer.start_file(*name, options).expect("start zip entry");
+            writer
+                .write_all(content.as_bytes())
+                .expect("write zip entry");
+        }
+        writer.finish().expect("finish test zip");
+    }
+
+    #[test]
+    fn directory_zip_stores_children_at_archive_root() {
+        let temp = tempfile::tempdir().expect("create temp dir");
+        let source = temp.path().join("project");
+        std::fs::create_dir_all(source.join("src/empty")).expect("create source directories");
+        std::fs::write(source.join("README.md"), "readme").expect("write README");
+        std::fs::write(source.join("src/main.rs"), "fn main() {}").expect("write source file");
+        let archive_path = temp.path().join("project.zip");
+
+        create_local_zip_archive(&source, &archive_path, "project").expect("create local archive");
+
+        let file = std::fs::File::open(&archive_path).expect("open archive");
+        let mut archive = zip::ZipArchive::new(file).expect("read archive");
+        let mut names = (0..archive.len())
+            .map(|index| {
+                archive
+                    .by_index(index)
+                    .expect("read archive entry")
+                    .name()
+                    .to_string()
+            })
+            .collect::<Vec<_>>();
+        names.sort();
+
+        assert!(names.contains(&"README.md".to_string()));
+        assert!(names.contains(&"src/main.rs".to_string()));
+        assert!(names.contains(&"src/empty/".to_string()));
+        assert!(
+            names.iter().all(|name| !name.starts_with("project/")),
+            "archive unexpectedly contains a duplicate root: {names:?}"
+        );
+    }
+
+    #[test]
+    fn local_zip_round_trip_does_not_create_duplicate_root() {
+        let temp = tempfile::tempdir().expect("create temp dir");
+        let source = temp.path().join("project");
+        std::fs::create_dir_all(source.join("src")).expect("create source directories");
+        std::fs::write(source.join("src/main.rs"), "fn main() {}").expect("write source file");
+        let archive_path = temp.path().join("project.zip");
+
+        create_local_zip_archive(&source, &archive_path, "project").expect("create local archive");
+        std::fs::remove_dir_all(&source).expect("remove source before extraction");
+        extract_local_archive(&archive_path, &source, "project.zip")
+            .expect("extract local archive");
+
+        assert_eq!(
+            std::fs::read_to_string(source.join("src/main.rs")).expect("read extracted file"),
+            "fn main() {}"
+        );
+        assert!(!source.join("project").exists());
+    }
+
+    #[test]
+    fn local_zip_round_trip_preserves_a_real_same_name_child_directory() {
+        let temp = tempfile::tempdir().expect("create temp dir");
+        let source = temp.path().join("project");
+        std::fs::create_dir_all(source.join("project/src"))
+            .expect("create same-name child directory");
+        std::fs::write(source.join("project/src/main.rs"), "nested")
+            .expect("write nested source file");
+        let archive_path = temp.path().join("project.zip");
+
+        create_local_zip_archive(&source, &archive_path, "project").expect("create local archive");
+        std::fs::remove_dir_all(&source).expect("remove source before extraction");
+        extract_local_archive(&archive_path, &source, "project.zip")
+            .expect("extract local archive");
+
+        assert_eq!(
+            std::fs::read_to_string(source.join("project/src/main.rs"))
+                .expect("read nested source file"),
+            "nested"
+        );
+        assert!(!source.join("src/main.rs").exists());
+    }
+
+    #[test]
+    fn local_extraction_preserves_unproven_absolute_style_paths() {
+        let temp = tempfile::tempdir().expect("create temp dir");
+        let archive_path = temp.path().join("project.zip");
+        write_test_zip(
+            &archive_path,
+            &[("home/developer/work/project/src/main.rs", "legacy")],
+        );
+        let destination = temp.path().join("project");
+
+        extract_local_archive(&archive_path, &destination, "project.zip")
+            .expect("extract legacy archive");
+
+        assert_eq!(
+            std::fs::read_to_string(destination.join("home/developer/work/project/src/main.rs"))
+                .expect("read preserved file"),
+            "legacy"
+        );
+        assert!(!destination.join("src/main.rs").exists());
+    }
+
+    #[test]
+    fn zip_extraction_skips_parent_traversal_entries() {
+        let temp = tempfile::tempdir().expect("create temp dir");
+        let archive_path = temp.path().join("safe.zip");
+        write_test_zip(
+            &archive_path,
+            &[("../escaped.txt", "unsafe"), ("inside.txt", "safe")],
+        );
+        let destination = temp.path().join("safe");
+
+        extract_local_archive(&archive_path, &destination, "safe.zip")
+            .expect("extract safe entries");
+
+        assert!(!temp.path().join("escaped.txt").exists());
+        assert_eq!(
+            std::fs::read_to_string(destination.join("inside.txt")).expect("read safe entry"),
+            "safe"
+        );
+    }
+
+    #[test]
+    fn remote_paths_are_split_with_posix_semantics() {
+        assert_eq!(
+            split_remote_archive_path("/home/developer/project/").expect("split absolute path"),
+            ("/home/developer".to_string(), "project".to_string())
+        );
+        assert_eq!(
+            split_remote_archive_path("project.zip").expect("split relative path"),
+            (".".to_string(), "project.zip".to_string())
+        );
+        assert_eq!(
+            join_remote_path("/home/developer", "project.zip"),
+            "/home/developer/project.zip"
+        );
+    }
+
+    #[test]
+    fn remote_compression_runs_inside_the_selected_directory() {
+        let command = build_remote_compress_command(
+            "/home/developer/work tree",
+            "project",
+            "project.zip",
+            RemoteArchiveFormat::Zip,
+        );
+
+        assert!(command.contains("cd -- '/home/developer/work tree'"));
+        assert!(command.contains("cd -- ./project"));
+        assert!(command.contains("zip -r -q ../project.zip ."));
+        assert!(
+            !command.contains("/home/developer/work tree/project"),
+            "absolute source path must not become an archive member path"
+        );
+    }
+
+    #[test]
+    fn remote_extraction_uses_staging_and_normalizes_legacy_wrappers() {
+        let legacy_wrapper =
+            legacy_remote_zip_wrapper_path("/home/developer", "project").expect("legacy wrapper");
+        let command = build_remote_extract_command(
+            "/home/developer",
+            "project",
+            "unzip -o -q ./project.zip -d \"$stage\"",
+            Some(&legacy_wrapper),
+        );
+
+        assert!(command.contains("mktemp -d './.bitfun-extract.XXXXXXXX'"));
+        assert!(command.contains("legacy_wrapper_rel=home/developer/project"));
+        assert!(command.contains(r#"if [ "$relative_chain" = "$legacy_wrapper_rel" ]"#));
+        assert!(command.contains(r#"cp -a "$source_root"/. "$dest_path"/"#));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn generated_remote_shell_commands_have_valid_syntax() {
+        let commands = [
+            build_remote_compress_command(
+                "/home/developer/work tree",
+                "project",
+                "project.zip",
+                RemoteArchiveFormat::Zip,
+            ),
+            build_remote_compress_command(
+                "/home/developer/work tree",
+                "project",
+                "project.tar.gz",
+                RemoteArchiveFormat::TarGz,
+            ),
+            build_remote_extract_command(
+                "/home/developer/work tree",
+                "project",
+                "unzip -o -q ./project.zip -d \"$stage\"",
+                Some("home/developer/work tree/project"),
+            ),
+        ];
+
+        for command in commands {
+            let status = std::process::Command::new("sh")
+                .args(["-n", "-c", &command])
+                .status()
+                .expect("validate shell syntax");
+            assert!(status.success(), "invalid shell command: {command}");
+        }
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn remote_tar_shell_round_trip_preserves_flat_root_contents() {
+        let temp = tempfile::tempdir().expect("create temp dir");
+        let parent = temp.path().join("remote work tree");
+        let source = parent.join("project");
+        std::fs::create_dir_all(source.join("src")).expect("create remote-style source");
+        std::fs::write(source.join("src/main.rs"), "round-trip")
+            .expect("write remote-style source");
+        let parent_text = parent.to_string_lossy();
+
+        let compress = build_remote_compress_command(
+            &parent_text,
+            "project",
+            "project.tar.gz",
+            RemoteArchiveFormat::TarGz,
+        );
+        let status = std::process::Command::new("sh")
+            .args(["-c", &compress])
+            .status()
+            .expect("run remote-style tar compression");
+        assert!(status.success(), "remote-style compression failed");
+
+        std::fs::remove_dir_all(&source).expect("remove source before extraction");
+        let extract = build_remote_extract_command(
+            &parent_text,
+            "project",
+            "tar -xzf ./project.tar.gz -C \"$stage\"",
+            None,
+        );
+        let status = std::process::Command::new("sh")
+            .args(["-c", &extract])
+            .status()
+            .expect("run remote-style tar extraction");
+        assert!(status.success(), "remote-style extraction failed");
+        assert_eq!(
+            std::fs::read_to_string(source.join("src/main.rs")).expect("read round-trip file"),
+            "round-trip"
+        );
+        assert!(!source.join("project").exists());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn remote_shell_only_flattens_the_exact_legacy_absolute_zip_wrapper() {
+        let temp = tempfile::tempdir().expect("create temp dir");
+        let parent = temp.path().join("remote work tree");
+        std::fs::create_dir_all(&parent).expect("create remote-style parent");
+        let parent_text = parent.to_string_lossy();
+        let legacy_wrapper =
+            legacy_remote_zip_wrapper_path(&parent_text, "project").expect("derive legacy wrapper");
+        let legacy_extract = build_remote_extract_command(
+            &parent_text,
+            "project",
+            "mkdir -p \"$stage/$legacy_wrapper_rel/src\" && \
+             printf legacy > \"$stage/$legacy_wrapper_rel/src/legacy.rs\"",
+            Some(&legacy_wrapper),
+        );
+        let status = std::process::Command::new("sh")
+            .args(["-c", &legacy_extract])
+            .status()
+            .expect("simulate legacy remote zip extraction");
+        assert!(status.success(), "legacy remote extraction failed");
+        assert_eq!(
+            std::fs::read_to_string(parent.join("project/src/legacy.rs"))
+                .expect("read legacy file"),
+            "legacy"
+        );
+
+        std::fs::remove_dir_all(parent.join("project")).expect("remove legacy destination");
+        let unproven_extract = build_remote_extract_command(
+            &parent_text,
+            "project",
+            "mkdir -p \"$stage/project/src\" && \
+             printf nested > \"$stage/project/src/nested.rs\"",
+            None,
+        );
+        let status = std::process::Command::new("sh")
+            .args(["-c", &unproven_extract])
+            .status()
+            .expect("extract unproven same-name directory");
+        assert!(status.success(), "unproven extraction failed");
+        assert_eq!(
+            std::fs::read_to_string(parent.join("project/project/src/nested.rs"))
+                .expect("read preserved same-name directory"),
+            "nested"
+        );
+    }
+
+    #[test]
+    fn extraction_rejects_archive_names_without_a_folder_stem() {
+        assert!(archive_destination_name(".zip").is_err());
+        assert_eq!(
+            archive_destination_name("project.tar.gz").expect("archive destination"),
+            "project"
+        );
     }
 }
 
