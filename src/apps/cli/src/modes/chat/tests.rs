@@ -5,20 +5,21 @@ mod tests {
     use super::{
         action_opens_extension_management, agent_event_stream_failure, apply_agent_mode_feedback,
         apply_model_selection_feedback, builtin_command_reconfirmation,
-        builtin_hook_help_requested, command_route, external_agent_attention,
-        external_agent_diagnostic_lines, external_agent_pending_notice_key,
-        external_agent_result_is_stale, external_agent_review_text, external_command_projections,
-        external_control_review_text, external_hook_help_text, external_integration_policy_lines,
+        cli_native_prompt_command_descriptors, command_route, extension_command_help_request,
+        external_agent_attention, external_agent_diagnostic_lines,
+        external_agent_pending_notice_key, external_agent_result_is_stale,
+        external_agent_review_text, external_command_projections, external_control_review_text,
+        external_hook_help_text, external_integration_policy_lines,
         external_operation_error_status, external_tool_mutation_result_label,
         external_tool_pending_notice_key, external_tool_result_is_stale, external_tool_review_text,
         external_tool_run_location_label, mark_active_turn_failed,
         merge_external_agent_mutation_snapshot, mode_change_blocks_typed_submission,
-        mode_change_completion_should_exit, native_command_conflict_key, parse_command_token,
-        parse_external_agent_review_action, parse_external_control_action,
-        parse_external_tool_review_action, previous_session_mode_change_status,
-        render_external_hook_catalog, CommandQualifier, CommandRoute, ExternalAgentReviewAction,
-        ExternalControlUiAction, ExternalSourceConflictPreferences, ExternalToolReviewAction,
-        ModeSelectionApplyOutcome, ModelSelectionApplyOutcome,
+        mode_change_completion_should_exit, native_command_choice_is_active,
+        native_command_reconfirmation_is_required, parse_external_agent_review_action,
+        parse_external_control_action, parse_external_tool_review_action,
+        previous_session_mode_change_status, render_external_hook_catalog, CommandRoute,
+        ExternalAgentReviewAction, ExternalControlUiAction, ExternalSourceConflictPreferences,
+        ExternalToolReviewAction, ModeSelectionApplyOutcome, ModelSelectionApplyOutcome,
     };
     use crate::actions::{action_conflict_behavior_version, ActionState, ResolvedKeymap};
     use crate::chat_state::ChatState;
@@ -26,8 +27,9 @@ mod tests {
     use crate::ui::command_menu::{ExternalCommandProjection, NativeCommandCollisionProjection};
     use bitfun_core::external_hooks::ExternalHookCatalogSnapshotV1;
     use bitfun_core::external_sources::{
-        ExternalSourceAssetKind, ExternalSourceCatalogSnapshot, ExternalSourceControlSnapshotV1,
-        ExternalSourceDiagnostic, ExternalSourceDiagnosticSeverity, ExternalSourceOperationError,
+        native_prompt_command_conflict_key, ExternalSourceAssetKind, ExternalSourceCatalogSnapshot,
+        ExternalSourceControlSnapshotV1, ExternalSourceDiagnostic,
+        ExternalSourceDiagnosticSeverity, ExternalSourceOperationError,
         ExternalSourceOperationErrorCode, ExternalSubagentActivationState,
         ExternalToolActivationState,
     };
@@ -148,7 +150,7 @@ mod tests {
         assert!(text.contains("Source opencode.commands:project"));
         assert!(text.contains("source disable <source-key>"));
         assert!(text.contains("Tools: 2 items, 1 review, 0 conflicts, inactive"));
-        assert!(text.contains("/builtin:extensions safe-mode off"));
+        assert!(text.contains("/extensions safe-mode off"));
     }
 
     #[test]
@@ -195,7 +197,7 @@ mod tests {
         assert!(text.contains("Issues"));
         assert!(text.contains("[external_tool.runtime_unavailable]"));
         assert!(text.contains("Recovery"));
-        assert!(text.contains("/builtin:extensions refresh"));
+        assert!(text.contains("/extensions refresh"));
         assert!(text.contains("install or repair the required runtime"));
     }
 
@@ -451,7 +453,7 @@ mod tests {
 
         let stale_status = external_operation_error_status("tools", &stale);
         assert!(stale_status.contains("settings changed"));
-        assert!(stale_status.contains("/builtin:tools refresh"));
+        assert!(stale_status.contains("/tools refresh"));
         assert!(!stale_status.contains("raw stale detail"));
 
         let policy_status = external_operation_error_status("agents", &policy);
@@ -470,13 +472,13 @@ mod tests {
 
         assert!(summary.contains("BitFun and MCP"));
         assert!(summary.contains("External AI applications"));
-        assert!(summary.contains("Use /mcps to manage MCP servers"));
+        assert!(summary.contains("Use /mcp to manage MCP servers"));
         assert!(summary.contains("BitFun does not run external code while checking sources"));
         assert!(summary.contains("filesystem, network, process, environment variables"));
         assert!(summary.contains("inherited environment variables"));
         assert!(summary.contains("processes it starts may keep running after cancellation"));
-        assert!(summary.contains("/builtin:tools enable 1"));
-        assert!(summary.contains("/builtin:tools choose 1 2"));
+        assert!(summary.contains("/tools enable 1"));
+        assert!(summary.contains("/tools choose 1 2"));
         assert!(summary.contains("<workspace>/.opencode/tools/review.js"));
         assert!(summary.contains("Source folder: <workspace>/.opencode/tools"));
         assert!(summary.contains("Applies to: current workspace"));
@@ -518,7 +520,7 @@ mod tests {
         assert!(summary.contains("Current choices"));
         assert!(summary.contains("OpenCode review [selected, currently unavailable]"));
         assert!(summary.contains("BitFun review [not selected]"));
-        assert!(summary.contains("/builtin:tools choose 1 1"));
+        assert!(summary.contains("/tools choose 1 1"));
 
         snapshot.tools[0].activation = ExternalToolActivationState::Active;
         let active_summary = external_tool_review_text(Some(&snapshot));
@@ -647,33 +649,6 @@ mod tests {
     }
 
     #[test]
-    fn explicit_builtin_never_falls_through_to_an_external_command() {
-        let external = external_command("review", None);
-        assert_eq!(
-            command_route(
-                CommandQualifier::Builtin,
-                false,
-                Some(&external),
-                false,
-                false,
-            ),
-            CommandRoute::UnknownBuiltin
-        );
-    }
-
-    #[test]
-    fn command_qualifiers_are_ascii_case_insensitive() {
-        assert_eq!(
-            parse_command_token("/BUILTIN:help"),
-            (CommandQualifier::Builtin, "help")
-        );
-        assert_eq!(
-            parse_command_token("/External:review"),
-            (CommandQualifier::External, "review")
-        );
-    }
-
-    #[test]
     fn hooks_uses_the_existing_native_command_collision_flow() {
         let action =
             crate::actions::action_for_alias("/hooks", crate::actions::ActionContext::Chat)
@@ -681,52 +656,38 @@ mod tests {
         assert_eq!(action.id, "hooks");
         let collision = external_command("hooks", None);
         assert_eq!(
-            command_route(
-                CommandQualifier::Unqualified,
-                true,
-                Some(&collision),
-                false,
-                false,
-            ),
+            command_route(true, Some(&collision), false, false),
             CommandRoute::AskForCollisionChoice
-        );
-        assert_eq!(
-            command_route(
-                CommandQualifier::External,
-                true,
-                Some(&collision),
-                false,
-                false,
-            ),
-            CommandRoute::External
         );
         let selected_external = external_command("hooks", Some("external:hooks"));
         assert_eq!(
-            command_route(
-                CommandQualifier::Unqualified,
-                true,
-                Some(&selected_external),
-                false,
-                false,
-            ),
+            command_route(true, Some(&selected_external), false, false),
             CommandRoute::External
         );
-        assert!(builtin_hook_help_requested("hooks", "unexpected"));
-        assert!(builtin_hook_help_requested("help", "hooks"));
-        assert!(!builtin_hook_help_requested("help", "other"));
+        assert!(extension_command_help_request("hooks", "--help").is_some());
+        assert!(extension_command_help_request("hooks", "unexpected").is_none());
+        assert!(extension_command_help_request("help", "hooks").is_some());
+        assert!(extension_command_help_request("help", "other").is_none());
+        assert!(extension_command_help_request("extensions", "-h")
+            .unwrap()
+            .contains("Usage: /extensions"));
+        assert!(extension_command_help_request("help", "mcp")
+            .unwrap()
+            .contains("Usage: /mcp"));
+        let agent_help = extension_command_help_request("agent", "-h").unwrap();
+        assert!(agent_help.contains("Usage: /agent"));
+        assert!(agent_help.contains("Alias: /agents"));
+        assert_eq!(
+            extension_command_help_request("help", "agents"),
+            Some(agent_help)
+        );
     }
 
     #[test]
     fn selected_external_help_keeps_its_hooks_argument() {
         let selected_external = external_command("help", Some("external:help"));
         assert_eq!(
-            command_route(
-                CommandQualifier::Unqualified,
-                true,
-                Some(&selected_external),
-                false,
-                false,
-            ),
+            command_route(true, Some(&selected_external), false, false),
             CommandRoute::External
         );
     }
@@ -990,59 +951,72 @@ mod tests {
         }));
         assert!(projections
             .iter()
-            .any(|projection| projection.invocation_alias == "/external:first.commands:review"));
-        assert!(projections
-            .iter()
-            .any(|projection| projection.invocation_alias == "/external:second.commands:review"));
+            .all(|projection| projection.invocation_alias == "/review"));
     }
 
     #[test]
     fn native_collision_requires_one_choice_and_then_reuses_it() {
         let unresolved = external_command("help", None);
         assert_eq!(
-            command_route(
-                CommandQualifier::Unqualified,
-                true,
-                Some(&unresolved),
-                false,
-                false,
-            ),
+            command_route(true, Some(&unresolved), false, false),
             CommandRoute::AskForCollisionChoice
         );
         let selected = external_command("help", Some("external:help"));
         assert_eq!(
-            command_route(
-                CommandQualifier::Unqualified,
-                true,
-                Some(&selected),
-                false,
-                false,
-            ),
+            command_route(true, Some(&selected), false, false),
             CommandRoute::External
         );
     }
 
     #[test]
-    fn discovery_pending_requires_an_explicit_command_qualifier() {
+    fn native_choice_is_reused_when_multiple_external_candidates_remain_unresolved() {
+        let selected_native = "bitfun.cli:help";
+        let first = external_command("help", Some(selected_native));
+        let mut second = external_command("help", Some(selected_native));
+        second.candidate_id = "external:help:second".to_string();
+        second
+            .native_collision
+            .as_mut()
+            .unwrap()
+            .external_candidate_id = second.candidate_id.clone();
+
+        assert!(native_command_choice_is_active(None, &[first, second]));
+        assert!(!native_command_reconfirmation_is_required(
+            false, true, true,
+        ));
         assert_eq!(
-            command_route(CommandQualifier::Unqualified, true, None, true, false,),
-            CommandRoute::WaitForDiscovery
+            command_route(true, None, false, false),
+            CommandRoute::Builtin,
         );
+    }
+
+    #[test]
+    fn discovery_pending_does_not_block_known_bitfun_commands() {
         assert_eq!(
-            command_route(CommandQualifier::Builtin, true, None, true, false),
+            command_route(true, None, true, false),
             CommandRoute::Builtin
         );
+        assert_eq!(
+            command_route(false, None, true, false),
+            CommandRoute::WaitForDiscovery
+        );
+    }
+
+    #[test]
+    fn mcp_primary_and_compatibility_aliases_keep_the_native_candidate_identity() {
+        for alias in ["mcp", "mcps"] {
+            let descriptors = cli_native_prompt_command_descriptors(alias);
+            assert_eq!(descriptors.len(), 1);
+            assert_eq!(descriptors[0].command_name, alias);
+            assert_eq!(descriptors[0].candidate_id, "bitfun.cli:mcp_servers");
+        }
     }
 
     #[test]
     fn removed_external_candidate_requires_builtin_reconfirmation() {
         assert_eq!(
-            command_route(CommandQualifier::Unqualified, true, None, false, true,),
+            command_route(true, None, false, true),
             CommandRoute::AskForCollisionChoice
-        );
-        assert_eq!(
-            command_route(CommandQualifier::Builtin, true, None, false, true),
-            CommandRoute::Builtin
         );
     }
 
@@ -1059,14 +1033,21 @@ mod tests {
             ]),
         };
 
-        let pending = builtin_command_reconfirmation(action.id, action.name, &preferences).unwrap();
+        let pending = builtin_command_reconfirmation(action.id, "help", &preferences).unwrap();
         assert!(!pending.confirmed);
 
+        let conflict_key = native_prompt_command_conflict_key(
+            "local-user",
+            "help",
+            [(
+                pending.candidate_id.as_str(),
+                action_conflict_behavior_version(action.id),
+            )],
+        );
         preferences
             .choices
-            .insert(pending.conflict_key.clone(), pending.candidate_id.clone());
-        let confirmed =
-            builtin_command_reconfirmation(action.id, action.name, &preferences).unwrap();
+            .insert(conflict_key, pending.candidate_id.clone());
+        let confirmed = builtin_command_reconfirmation(action.id, "help", &preferences).unwrap();
         assert!(confirmed.confirmed);
     }
 
@@ -1304,9 +1285,9 @@ mod tests {
         assert!(summary.contains("one run only; no follow-up"));
         assert!(summary.contains("Model: fast"));
         assert!(summary.contains("Tools: read, search"));
-        assert!(summary.contains("/builtin:agents enable 1"));
-        assert!(summary.contains("/builtin:agents choose 1 2"));
-        assert!(summary.contains("/builtin:agents choose 1 0"));
+        assert!(summary.contains("/agent enable 1"));
+        assert!(summary.contains("/agent choose 1 2"));
+        assert!(summary.contains("/agent choose 1 0"));
         assert!(summary.contains("Runs on: this computer in the current workspace"));
         assert!(summary.contains("instructions guide the selected model"));
         assert!(summary.contains("may call the tools listed below"));
@@ -1326,7 +1307,7 @@ mod tests {
         let tools = crate::actions::action_for_alias("/tools", crate::actions::ActionContext::Chat)
             .unwrap();
         let agents =
-            crate::actions::action_for_alias("/agents", crate::actions::ActionContext::Chat)
+            crate::actions::action_for_alias("/agent", crate::actions::ActionContext::Chat)
                 .unwrap();
         let help =
             crate::actions::action_for_alias("/help", crate::actions::ActionContext::Chat).unwrap();
@@ -1337,13 +1318,16 @@ mod tests {
     }
 
     #[test]
-    fn agents_management_behavior_change_invalidates_an_old_native_choice() {
+    fn agent_management_behavior_change_invalidates_an_old_native_choice() {
         let candidate_id = "bitfun.cli:switch_agent";
-        let old_key =
-            native_command_conflict_key("local-user", "agents", [(candidate_id, "switch-mode-v1")]);
-        let current_key = native_command_conflict_key(
+        let old_key = native_prompt_command_conflict_key(
             "local-user",
             "agents",
+            [(candidate_id, "switch-mode-v1")],
+        );
+        let current_key = native_prompt_command_conflict_key(
+            "local-user",
+            "agent",
             [(
                 candidate_id,
                 action_conflict_behavior_version("switch_agent"),
@@ -1366,7 +1350,7 @@ mod tests {
             summary.contains("Review agent (OpenCode, external) [selected, currently unavailable]")
         );
         assert!(summary.contains("BitFun review (BitFun, BitFun/local) [not selected]"));
-        assert!(summary.contains("/builtin:agents choose 1 1"));
+        assert!(summary.contains("/agent choose 1 1"));
 
         snapshot.subagents[0].activation_state = ExternalSubagentActivationState::Active;
         let active_summary = external_agent_review_text(Some(&snapshot));

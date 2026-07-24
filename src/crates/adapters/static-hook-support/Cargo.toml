@@ -3,7 +3,7 @@ name = "bitfun-static-hook-support"
 version.workspace = true
 authors.workspace = true
 edition.workspace = true
-description = "Shared redacting parser support for static external Hook adapters"
+description = "Shared bounded and redacting support for static external source adapters"
 
 [lib]
 name = "bitfun_static_hook_support"

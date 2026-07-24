@@ -705,6 +705,8 @@
     "currentMode": "Current mode: {{mode}}",
     "noMatchingMode": "No matching mode",
     "noMatchingCommand": "No matching command",
+    "nativeCommandChoiceNotSaved": "This command will run once, but your conflict choice could not be saved.",
+    "nativeCommandReconfirmationRequired": "The external command you previously chose is no longer available. Choose the BitFun command from the slash menu to run it.",
     "selectHint": "↑↓ Select · Enter Confirm · Esc Cancel",
     "current": "Current",
     "computerUseDisabled": "Computer Use is disabled in Settings → Session permissions",
@@ -744,7 +746,10 @@
     "switchWorkspaceFailed": "Failed to switch workspace: {{error}}",
     "mcpPromptMissingArgs": "This MCP prompt requires arguments: {{args}}",
     "mcpPromptFailed": "MCP prompt failed",
-    "loadingMcpPrompts": "Loading MCP prompts..."
+    "loadingMcpPrompts": "Loading MCP prompts...",
+    "externalCommandsLoading": "Loading compatible commands...",
+    "externalCommandsHostUnavailable": "External commands are not available on this host.",
+    "externalCommandsLoadFailed": "External commands could not be loaded. Reopen the command picker to retry."
   },
   "planner": {
     "title": "Task Planning",

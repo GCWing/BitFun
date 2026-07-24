@@ -17,9 +17,57 @@ fn external_hook_help_text() -> String {
     .join("\n")
 }
 
-fn builtin_hook_help_requested(command_name: &str, arguments: &str) -> bool {
-    (command_name.eq_ignore_ascii_case("help") && arguments.trim().eq_ignore_ascii_case("hooks"))
-        || (command_name.eq_ignore_ascii_case("hooks") && !arguments.trim().is_empty())
+fn extension_command_help_request(command_name: &str, arguments: &str) -> Option<String> {
+    let arguments = arguments.trim();
+    let requested = if command_name.eq_ignore_ascii_case("help") {
+        arguments
+    } else if matches!(arguments, "-h" | "--help" | "help") {
+        command_name
+    } else {
+        return None;
+    };
+    match requested.to_ascii_lowercase().as_str() {
+        "hooks" => Some(external_hook_help_text()),
+        "extensions" => Some([
+            "External integrations",
+            "",
+            "Usage: /extensions [status | refresh | safe-mode on | safe-mode off | source enable <source-key> | source disable <source-key>]",
+            "",
+            "Shows external AI application sources and controls BitFun Safe Mode. Source files remain owned by their native application.",
+            "",
+            "Help: /help extensions, /extensions -h, or /extensions --help",
+        ].join("\n")),
+        "tools" => Some([
+            "Tools",
+            "",
+            "Usage: /tools [refresh | enable <number> | disable <number> | choose <conflict-number> <choice-number>]",
+            "",
+            "Shows BitFun, MCP, and compatible external tool sources. Activation and conflicts remain guarded by BitFun policy.",
+            "",
+            "Help: /help tools, /tools -h, or /tools --help",
+        ].join("\n")),
+        "agent" | "agents" => Some([
+            "Agents",
+            "",
+            "Usage: /agent [refresh | enable <number> | disable <number> | choose <conflict-number> <choice-number>]",
+            "Alias: /agents",
+            "",
+            "Without arguments, opens the agent selector. Management arguments review compatible external subagents.",
+            "",
+            "Help: /help agent, /agent -h, or /agent --help",
+        ].join("\n")),
+        "mcp" | "mcps" => Some([
+            "MCP servers",
+            "",
+            "Usage: /mcp",
+            "Alias: /mcps",
+            "",
+            "Opens the shared MCP server manager, including compatible external MCP definitions after approval.",
+            "",
+            "Help: /help mcp, /mcp -h, or /mcp --help",
+        ].join("\n")),
+        _ => None,
+    }
 }
 
 fn render_external_hook_catalog(snapshot: &ExternalHookCatalogSnapshotV1) -> String {

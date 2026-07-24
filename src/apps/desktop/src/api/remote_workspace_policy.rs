@@ -350,6 +350,10 @@ pub const REMOTE_WORKSPACE_COMMAND_POLICIES: &[(&str, RemoteWorkspacePolicy)] = 
     ),
     ("execute_tool", RemoteWorkspacePolicy::LegacyUnaudited),
     (
+        "expand_external_prompt_command_command",
+        RemoteWorkspacePolicy::RemoteUnsupported,
+    ),
+    (
         "explorer_get_children",
         RemoteWorkspacePolicy::LegacyUnaudited,
     ),
@@ -464,6 +468,10 @@ pub const REMOTE_WORKSPACE_COMMAND_POLICIES: &[(&str, RemoteWorkspacePolicy)] = 
     ),
     (
         "get_external_source_snapshot",
+        RemoteWorkspacePolicy::RemoteUnsupported,
+    ),
+    (
+        "get_native_prompt_command_conflicts_command",
         RemoteWorkspacePolicy::RemoteUnsupported,
     ),
     (
@@ -1481,6 +1489,10 @@ pub const REMOTE_WORKSPACE_COMMAND_POLICIES: &[(&str, RemoteWorkspacePolicy)] = 
     ),
     (
         "set_external_source_conflict_choice_command",
+        RemoteWorkspacePolicy::RemoteUnsupported,
+    ),
+    (
+        "set_native_prompt_command_conflict_choice_command",
         RemoteWorkspacePolicy::RemoteUnsupported,
     ),
     (

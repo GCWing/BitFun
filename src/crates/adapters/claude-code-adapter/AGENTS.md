@@ -1,6 +1,8 @@
 # Claude Code Adapter Instructions
 
-- This crate may read and normalize Claude Code configuration but must never invoke Hook handlers, start Claude Code, connect MCP servers, or own product policy.
+- This crate may read and normalize Claude Code Command, Subagent, MCP, and Hook configuration but must never invoke Hook handlers, start Claude Code, connect MCP servers, or own product policy.
 - Keep handler bodies, commands, prompts, URLs, arguments, environment values, and credentials inside the adapter. Public contracts expose only bounded summaries.
 - Preserve native Claude Code event and handler names. Map only reviewed BitFun Hook points; report every other event as native-only.
+- Preserve native precedence independently for each capability. Unsupported behavior fields must block or degrade explicitly; never flatten them into a global cross-ecosystem priority.
+- Command discovery may inspect only bounded Skill names to honor Claude's Skill-over-command collision. It must not parse Skill bodies or become a second Skill owner.
 - Do not depend on another ecosystem adapter. Shared product behavior belongs in contracts or assembly.

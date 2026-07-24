@@ -14,17 +14,21 @@ pub use bitfun_product_domains::external_source_control::{
     ExternalSourceControlSnapshotV1, ExternalSourceRuntimeState, ExternalSourceSurfaceSnapshotV1,
     EXTERNAL_SOURCE_CONTROL_SCHEMA_V1,
 };
+use bitfun_product_domains::external_sources::native_prompt_command_group_fingerprint;
 pub use bitfun_product_domains::external_sources::{
-    prompt_command_conflict_key, EcosystemId, ExpandedPromptCommand,
-    ExternalIntegrationCapabilityId, ExternalMcpActivationState, ExternalMcpApprovalRequest,
-    ExternalMcpCatalogEntry, ExternalMcpConflict, ExternalMcpTransportKind,
-    ExternalSourceAssetKind, ExternalSourceCatalogEntry, ExternalSourceCatalogSnapshot,
-    ExternalSourceDiagnostic, ExternalSourceDiagnosticSeverity, ExternalSourceHostCapabilities,
-    ExternalSourceLifecycleState, ExternalSourceOperationError, ExternalSourceOperationErrorCode,
-    ExternalSourceOperationResult, ExternalSourcePublicSnapshot, ExternalToolActivationState,
-    ExternalToolApprovalRequest, ExternalToolCapability, ExternalToolCatalogEntry,
-    ExternalToolConflict, ExternalToolConflictCandidateKind, ExternalToolRuntimeKind,
-    PromptCommandAvailability, PromptCommandCatalogEntry, PromptCommandDefinition, SourceKey,
+    native_prompt_command_conflict_key, prompt_command_conflict_key, EcosystemId,
+    ExpandedPromptCommand, ExternalIntegrationCapabilityId, ExternalMcpActivationState,
+    ExternalMcpApprovalRequest, ExternalMcpCatalogEntry, ExternalMcpConflict,
+    ExternalMcpTransportKind, ExternalSourceAssetKind, ExternalSourceCatalogEntry,
+    ExternalSourceCatalogSnapshot, ExternalSourceDiagnostic, ExternalSourceDiagnosticSeverity,
+    ExternalSourceHostCapabilities, ExternalSourceLifecycleState, ExternalSourceOperationError,
+    ExternalSourceOperationErrorCode, ExternalSourceOperationResult, ExternalSourcePublicSnapshot,
+    ExternalToolActivationState, ExternalToolApprovalRequest, ExternalToolCapability,
+    ExternalToolCatalogEntry, ExternalToolConflict, ExternalToolConflictCandidateKind,
+    ExternalToolRuntimeKind, NativePromptCommandConflictProjection,
+    NativePromptCommandConflictSnapshot, NativePromptCommandDescriptor,
+    NativePromptCommandReconfirmationProjection, PromptCommandAvailability,
+    PromptCommandCatalogEntry, PromptCommandDefinition, SourceKey,
 };
 pub use bitfun_product_domains::external_subagents::{
     ExternalSubagentActivationState, ExternalSubagentCompatibilityState, ExternalSubagentConflict,
@@ -48,6 +52,10 @@ use crate::external_tools::{
     TOOL_CONFLICT_RESELECTION_REQUIRED, UNRESOLVED_TOOL_CONFLICT_CHOICE,
 };
 use crate::service::config::{subscribe_config_updates, ConfigUpdateEvent};
+use bitfun_claude_code_adapter::{
+    ClaudeCodeCommandProvider, ClaudeCodeMcpProvider, ClaudeCodeSubagentProvider,
+};
+use bitfun_codex_adapter::{CodexMcpProvider, CodexSubagentProvider};
 use bitfun_external_sources::{
     DeferredDiscovery, ExternalMcpDiscoveryResult, ExternalSourceControlPlane,
     ExternalSourceCoordinator, ExternalSourceDiscoveryResult, ExternalSubagentDiscoveryResult,
@@ -63,8 +71,8 @@ use bitfun_product_domains::external_integration_policy::{
     EXTERNAL_INTEGRATION_POLICY_SCHEMA_MAJOR,
 };
 use bitfun_product_domains::external_sources::{
-    ExecutionDomainId, ExternalMcpSourceProvider, ExternalSourceContext, ExternalSourceScope,
-    ExternalToolSourceProvider, PromptCommandSourceProvider,
+    ExecutionDomainId, ExternalMcpRevisionKey, ExternalMcpSourceProvider, ExternalSourceContext,
+    ExternalSourceScope, ExternalToolSourceProvider, PromptCommandSourceProvider,
 };
 use bitfun_product_domains::external_subagents::ExternalSubagentSourceProvider;
 use bitfun_services_core::json_store::JsonFileStore;
@@ -84,6 +92,8 @@ const PROVIDER_DISCOVERY_TIMEOUT: std::time::Duration = std::time::Duration::fro
 const EXTERNAL_SOURCE_PREFERENCES_FILE: &str = "external-sources.json";
 const SUBAGENT_CONFLICT_RESELECTION_REQUIRED: &str = "__bitfun_reselection_required__";
 const OPENCODE_ECOSYSTEM_ID: &str = "opencode";
+const CLAUDE_CODE_ECOSYSTEM_ID: &str = "claude-code";
+const CODEX_ECOSYSTEM_ID: &str = "codex";
 pub const EXTERNAL_CAPABILITY_COMMAND: &str = "command";
 pub const EXTERNAL_CAPABILITY_TOOL: &str = "tool";
 pub const EXTERNAL_CAPABILITY_SUBAGENT: &str = "subagent";
@@ -177,42 +187,101 @@ impl ExternalEcosystemRegistration {
 }
 
 fn default_external_integration_registry() -> Vec<ExternalEcosystemRegistration> {
-    vec![ExternalEcosystemRegistration {
-        descriptor: ExternalIntegrationEcosystemDescriptor {
-            ecosystem_id: EcosystemId::new(OPENCODE_ECOSYSTEM_ID)
-                .expect("OpenCode ecosystem id is valid"),
-            display_name: "OpenCode".to_string(),
-            adapter_revision: "1".to_string(),
-            capabilities: vec![
-                external_capability_descriptor(
-                    EXTERNAL_CAPABILITY_COMMAND,
-                    ExternalIntegrationAccess::Auto,
-                    ExternalIntegrationAccess::Auto,
-                ),
-                external_capability_descriptor(
-                    EXTERNAL_CAPABILITY_TOOL,
-                    ExternalIntegrationAccess::AskBeforeUse,
-                    ExternalIntegrationAccess::AskBeforeUse,
-                ),
-                external_capability_descriptor(
-                    EXTERNAL_CAPABILITY_SUBAGENT,
-                    ExternalIntegrationAccess::AskBeforeUse,
-                    ExternalIntegrationAccess::AskBeforeUse,
-                ),
-                external_capability_descriptor(
-                    EXTERNAL_CAPABILITY_MCP,
-                    ExternalIntegrationAccess::AskBeforeUse,
-                    ExternalIntegrationAccess::AskBeforeUse,
-                ),
-            ],
+    vec![
+        ExternalEcosystemRegistration {
+            descriptor: ExternalIntegrationEcosystemDescriptor {
+                ecosystem_id: EcosystemId::new(OPENCODE_ECOSYSTEM_ID)
+                    .expect("OpenCode ecosystem id is valid"),
+                display_name: "OpenCode".to_string(),
+                adapter_revision: "1".to_string(),
+                capabilities: vec![
+                    external_capability_descriptor(
+                        EXTERNAL_CAPABILITY_COMMAND,
+                        ExternalIntegrationAccess::Auto,
+                        ExternalIntegrationAccess::Auto,
+                    ),
+                    external_capability_descriptor(
+                        EXTERNAL_CAPABILITY_TOOL,
+                        ExternalIntegrationAccess::AskBeforeUse,
+                        ExternalIntegrationAccess::AskBeforeUse,
+                    ),
+                    external_capability_descriptor(
+                        EXTERNAL_CAPABILITY_SUBAGENT,
+                        ExternalIntegrationAccess::AskBeforeUse,
+                        ExternalIntegrationAccess::AskBeforeUse,
+                    ),
+                    external_capability_descriptor(
+                        EXTERNAL_CAPABILITY_MCP,
+                        ExternalIntegrationAccess::AskBeforeUse,
+                        ExternalIntegrationAccess::AskBeforeUse,
+                    ),
+                ],
+            },
+            contract_major: EXTERNAL_ADAPTER_CONTRACT_MAJOR,
+            upstream_format_revision: "opencode-config-v1",
+            command_provider: Some(Arc::new(OpenCodeCommandProvider::default())),
+            tool_provider: Some(Arc::new(OpenCodeToolProvider::default())),
+            subagent_provider: Some(Arc::new(OpenCodeSubagentProvider::default())),
+            mcp_provider: Some(Arc::new(OpenCodeMcpProvider::default())),
         },
-        contract_major: EXTERNAL_ADAPTER_CONTRACT_MAJOR,
-        upstream_format_revision: "opencode-config-v1",
-        command_provider: Some(Arc::new(OpenCodeCommandProvider::default())),
-        tool_provider: Some(Arc::new(OpenCodeToolProvider::default())),
-        subagent_provider: Some(Arc::new(OpenCodeSubagentProvider::default())),
-        mcp_provider: Some(Arc::new(OpenCodeMcpProvider::default())),
-    }]
+        ExternalEcosystemRegistration {
+            descriptor: ExternalIntegrationEcosystemDescriptor {
+                ecosystem_id: EcosystemId::new(CLAUDE_CODE_ECOSYSTEM_ID)
+                    .expect("Claude Code ecosystem id is valid"),
+                display_name: "Claude Code".to_string(),
+                adapter_revision: "1".to_string(),
+                capabilities: vec![
+                    external_capability_descriptor(
+                        EXTERNAL_CAPABILITY_COMMAND,
+                        ExternalIntegrationAccess::Auto,
+                        ExternalIntegrationAccess::Auto,
+                    ),
+                    external_capability_descriptor(
+                        EXTERNAL_CAPABILITY_SUBAGENT,
+                        ExternalIntegrationAccess::AskBeforeUse,
+                        ExternalIntegrationAccess::AskBeforeUse,
+                    ),
+                    external_capability_descriptor(
+                        EXTERNAL_CAPABILITY_MCP,
+                        ExternalIntegrationAccess::AskBeforeUse,
+                        ExternalIntegrationAccess::AskBeforeUse,
+                    ),
+                ],
+            },
+            contract_major: EXTERNAL_ADAPTER_CONTRACT_MAJOR,
+            upstream_format_revision: "claude-code-config-v1",
+            command_provider: Some(Arc::new(ClaudeCodeCommandProvider::default())),
+            tool_provider: None,
+            subagent_provider: Some(Arc::new(ClaudeCodeSubagentProvider::default())),
+            mcp_provider: Some(Arc::new(ClaudeCodeMcpProvider::default())),
+        },
+        ExternalEcosystemRegistration {
+            descriptor: ExternalIntegrationEcosystemDescriptor {
+                ecosystem_id: EcosystemId::new(CODEX_ECOSYSTEM_ID)
+                    .expect("Codex ecosystem id is valid"),
+                display_name: "Codex".to_string(),
+                adapter_revision: "1".to_string(),
+                capabilities: vec![
+                    external_capability_descriptor(
+                        EXTERNAL_CAPABILITY_SUBAGENT,
+                        ExternalIntegrationAccess::AskBeforeUse,
+                        ExternalIntegrationAccess::AskBeforeUse,
+                    ),
+                    external_capability_descriptor(
+                        EXTERNAL_CAPABILITY_MCP,
+                        ExternalIntegrationAccess::AskBeforeUse,
+                        ExternalIntegrationAccess::AskBeforeUse,
+                    ),
+                ],
+            },
+            contract_major: EXTERNAL_ADAPTER_CONTRACT_MAJOR,
+            upstream_format_revision: "codex-config-v1",
+            command_provider: None,
+            tool_provider: None,
+            subagent_provider: Some(Arc::new(CodexSubagentProvider::default())),
+            mcp_provider: Some(Arc::new(CodexMcpProvider::default())),
+        },
+    ]
 }
 
 fn default_external_integration_ecosystems() -> Vec<ExternalIntegrationEcosystemDescriptor> {
@@ -239,7 +308,7 @@ fn default_external_integration_ecosystems() -> Vec<ExternalIntegrationEcosystem
 /// resolve this identity once; capability owners never hard-code it.
 const LEGACY_LOCAL_EXECUTION_DOMAIN_ID: &str = "local-user";
 
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default, rename_all = "camelCase")]
 struct ExternalSourcesConfig {
     #[serde(default)]
@@ -249,6 +318,10 @@ struct ExternalSourcesConfig {
     /// through public Host APIs.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     integration_policy_backups: Vec<serde_json::Value>,
+    /// Host-private entropy for opaque MCP configuration revisions. It is
+    /// persisted locally but never projected through a public snapshot.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    mcp_revision_secret: Option<String>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     suppressed_source_keys: Vec<String>,
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
@@ -280,6 +353,50 @@ struct ExternalSourcesConfig {
     /// Preserves fields written by a newer preferences schema.
     #[serde(flatten, default, skip_serializing_if = "BTreeMap::is_empty")]
     extensions: BTreeMap<String, serde_json::Value>,
+}
+
+impl std::fmt::Debug for ExternalSourcesConfig {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter
+            .debug_struct("ExternalSourcesConfig")
+            .field("integration_policy", &self.integration_policy)
+            .field(
+                "integration_policy_backups",
+                &self.integration_policy_backups,
+            )
+            .field(
+                "mcp_revision_secret",
+                &self.mcp_revision_secret.as_ref().map(|_| "[REDACTED]"),
+            )
+            .field("suppressed_source_keys", &self.suppressed_source_keys)
+            .field("conflict_choices", &self.conflict_choices)
+            .field(
+                "conflict_lineage_current_keys",
+                &self.conflict_lineage_current_keys,
+            )
+            .field("conflicted_candidate_ids", &self.conflicted_candidate_ids)
+            .field("approved_tool_targets", &self.approved_tool_targets)
+            .field("declined_tool_decisions", &self.declined_tool_decisions)
+            .field("tool_conflict_choices", &self.tool_conflict_choices)
+            .field("preference_revision", &self.preference_revision)
+            .field(
+                "approved_subagent_envelopes",
+                &self.approved_subagent_envelopes,
+            )
+            .field(
+                "declined_subagent_decisions",
+                &self.declined_subagent_decisions,
+            )
+            .field("subagent_conflict_choices", &self.subagent_conflict_choices)
+            .field(
+                "subagent_conflict_lineage_current_keys",
+                &self.subagent_conflict_lineage_current_keys,
+            )
+            .field("mcp_server_decisions", &self.mcp_server_decisions)
+            .field("mcp_conflict_choices", &self.mcp_conflict_choices)
+            .field("extensions", &self.extensions)
+            .finish()
+    }
 }
 
 /// Persistence-only version gate. Unknown major versions remain opaque until
@@ -403,6 +520,51 @@ impl ExternalSourcePreferenceStore {
             .await
             .map_err(|error| error.to_string())
     }
+}
+
+fn decode_mcp_revision_key(value: &str) -> Option<ExternalMcpRevisionKey> {
+    let bytes = hex::decode(value).ok()?;
+    let bytes: [u8; 32] = bytes.try_into().ok()?;
+    Some(ExternalMcpRevisionKey::new(bytes))
+}
+
+async fn external_sources_config_with_mcp_revision_key(
+) -> Result<(ExternalSourcesConfig, ExternalMcpRevisionKey), String> {
+    let store = ExternalSourcePreferenceStore::global()?;
+    let config = store.read().await?;
+    if let Some(revision_key) = config
+        .mcp_revision_secret
+        .as_deref()
+        .and_then(decode_mcp_revision_key)
+    {
+        return Ok((config, revision_key));
+    }
+    let generated = {
+        let first = uuid::Uuid::new_v4();
+        let second = uuid::Uuid::new_v4();
+        let mut bytes = [0_u8; 32];
+        bytes[..16].copy_from_slice(first.as_bytes());
+        bytes[16..].copy_from_slice(second.as_bytes());
+        bytes
+    };
+    let (_, config) = store
+        .update(|config| {
+            if config
+                .mcp_revision_secret
+                .as_deref()
+                .and_then(decode_mcp_revision_key)
+                .is_none()
+            {
+                config.mcp_revision_secret = Some(hex::encode(generated));
+            }
+        })
+        .await?;
+    let revision_key = config
+        .mcp_revision_secret
+        .as_deref()
+        .and_then(decode_mcp_revision_key)
+        .ok_or_else(|| "External MCP revision key could not be initialized".to_string())?;
+    Ok((config, revision_key))
 }
 
 #[derive(Clone, Copy)]
@@ -632,6 +794,7 @@ struct WorkspaceExternalSourceService {
     profile: ExternalSourceServiceProfile,
     workspace_root: Option<PathBuf>,
     execution_domain_id: ExecutionDomainId,
+    mcp_revision_key: ExternalMcpRevisionKey,
     control_plane: Arc<ExternalSourceControlPlane>,
     snapshot: StdMutex<ExternalSourceCatalogSnapshot>,
     updates: broadcast::Sender<ExternalSourceCatalogSnapshot>,
@@ -693,14 +856,16 @@ impl WorkspaceExternalSourceService {
             .iter()
             .filter_map(|registration| registration.mcp_provider.as_ref().map(Arc::clone))
             .collect();
+        let (preferences, mcp_revision_key) =
+            external_sources_config_with_mcp_revision_key().await?;
         let control_plane = Arc::new(ExternalSourceControlPlane::new(
             context,
+            mcp_revision_key.clone(),
             providers,
             tool_providers,
             subagent_providers,
             mcp_providers,
         )?);
-        let preferences = read_external_sources_config().await?;
         let suppressed_sources = preferences
             .suppressed_source_keys
             .iter()
@@ -730,6 +895,7 @@ impl WorkspaceExternalSourceService {
             profile,
             workspace_root,
             execution_domain_id,
+            mcp_revision_key,
             control_plane,
             snapshot: StdMutex::new(initial_snapshot),
             updates,
@@ -1008,7 +1174,7 @@ impl WorkspaceExternalSourceService {
         let mcp_snapshot = lock_mcp_coordinator(&self.control_plane).snapshot();
         let mcp_workspace_key = workspace_route_key(self.workspace_root.as_deref());
         let native_mcp_candidates = if !mcp_active_ecosystems.is_empty() {
-            load_native_mcp_candidates().await
+            load_native_mcp_candidates(&self.mcp_revision_key).await
         } else {
             Ok(Vec::new())
         };
@@ -2557,12 +2723,35 @@ impl WorkspaceExternalSourceService {
         self: &Arc<Self>,
         name: &str,
         arguments: &str,
+        native_commands: &[NativePromptCommandDescriptor],
         expected_candidate_id: Option<&str>,
         expected_content_version: Option<&str>,
+        expected_native_conflict_key: Option<&str>,
+        expected_preference_revision: Option<u64>,
     ) -> Result<ExpandedPromptCommand, String> {
         // Explicit invocation refreshes first, so a stable deletion cannot be
         // bypassed by an old menu projection.
         let snapshot = self.refresh_preserving_worker_recovery().await?;
+        let preferences = read_external_sources_config().await?;
+        let native_conflicts = project_native_prompt_command_conflicts(
+            &snapshot,
+            native_commands,
+            &preferences.conflict_choices,
+            &preferences.conflicted_candidate_ids,
+            preferences.preference_revision,
+        )?;
+        let current_native_conflicts = native_conflicts
+            .conflicts
+            .iter()
+            .filter(|conflict| conflict.command_name.eq_ignore_ascii_case(name))
+            .collect::<Vec<_>>();
+        validate_native_prompt_command_expansion_guard(
+            &current_native_conflicts,
+            &preferences,
+            expected_candidate_id,
+            expected_native_conflict_key,
+            expected_preference_revision,
+        )?;
         let source_key = snapshot
             .commands
             .iter()
@@ -3166,7 +3355,52 @@ fn sanitize_external_snapshot_locations(
     }
 }
 
-async fn load_native_mcp_candidates() -> Result<Vec<NativeMcpCandidate>, String> {
+fn native_mcp_behavior_version(
+    revision_key: &ExternalMcpRevisionKey,
+    config: &crate::service::mcp::MCPServerConfig,
+) -> Result<String, String> {
+    let value = serde_json::to_value(config)
+        .map_err(|error| format!("Could not fingerprint BitFun MCP configuration: {error}"))?;
+    let mut encoded = Vec::new();
+    write_canonical_json(&value, &mut encoded)
+        .map_err(|error| format!("Could not fingerprint BitFun MCP configuration: {error}"))?;
+    Ok(revision_key.opaque_revision("bitfun.mcp.behavior.v1", [encoded.as_slice()]))
+}
+
+fn write_canonical_json(value: &serde_json::Value, output: &mut Vec<u8>) -> serde_json::Result<()> {
+    match value {
+        serde_json::Value::Array(values) => {
+            output.push(b'[');
+            for (index, value) in values.iter().enumerate() {
+                if index > 0 {
+                    output.push(b',');
+                }
+                write_canonical_json(value, output)?;
+            }
+            output.push(b']');
+        }
+        serde_json::Value::Object(values) => {
+            output.push(b'{');
+            let mut entries = values.iter().collect::<Vec<_>>();
+            entries.sort_by(|(left, _), (right, _)| left.cmp(right));
+            for (index, (key, value)) in entries.into_iter().enumerate() {
+                if index > 0 {
+                    output.push(b',');
+                }
+                serde_json::to_writer(&mut *output, key)?;
+                output.push(b':');
+                write_canonical_json(value, output)?;
+            }
+            output.push(b'}');
+        }
+        value => serde_json::to_writer(output, value)?,
+    }
+    Ok(())
+}
+
+async fn load_native_mcp_candidates(
+    revision_key: &ExternalMcpRevisionKey,
+) -> Result<Vec<NativeMcpCandidate>, String> {
     let service = crate::service::mcp::get_global_mcp_service()
         .ok_or_else(|| "MCP service is not initialized".to_string())?;
     let configs = service
@@ -3176,11 +3410,7 @@ async fn load_native_mcp_candidates() -> Result<Vec<NativeMcpCandidate>, String>
         .map_err(|error| format!("Could not read BitFun MCP configuration: {error}"))?;
     let mut candidates = Vec::with_capacity(configs.len());
     for config in configs {
-        let encoded = serde_json::to_vec(&config)
-            .map_err(|error| format!("Could not fingerprint BitFun MCP configuration: {error}"))?;
-        let mut behavior_hasher = Sha256::new();
-        behavior_hasher.update(&encoded);
-        let behavior_version = format!("sha256:{}", hex::encode(behavior_hasher.finalize()));
+        let behavior_version = native_mcp_behavior_version(revision_key, &config)?;
         let candidate_id = native_mcp_candidate_id(&config.id);
         candidates.push(NativeMcpCandidate {
             candidate_id,
@@ -4441,6 +4671,244 @@ pub(super) fn external_mcp_decision_allowed(
         )
 }
 
+fn project_native_prompt_command_conflicts(
+    snapshot: &ExternalSourceCatalogSnapshot,
+    native_commands: &[NativePromptCommandDescriptor],
+    conflict_choices: &BTreeMap<String, String>,
+    conflicted_candidate_ids: &BTreeSet<String>,
+    preference_revision: u64,
+) -> Result<NativePromptCommandConflictSnapshot, String> {
+    for command in native_commands {
+        command
+            .validate()
+            .map_err(|error| invalid_operation_error(&error.to_string()))?;
+    }
+    let command_names = native_commands
+        .iter()
+        .map(|command| command.command_name.to_ascii_lowercase())
+        .collect::<BTreeSet<_>>();
+    let mut projected = Vec::new();
+    let mut reconfirmations = Vec::new();
+    for command_name in &command_names {
+        let native = native_commands
+            .iter()
+            .filter(|command| command.command_name.eq_ignore_ascii_case(command_name))
+            .collect::<Vec<_>>();
+        if native.is_empty() {
+            continue;
+        }
+        let unresolved_conflict = snapshot.command_conflicts.iter().find(|conflict| {
+            conflict.selected_candidate_id.is_none()
+                && conflict.command_name.eq_ignore_ascii_case(command_name)
+        });
+        let external = if let Some(conflict) = unresolved_conflict {
+            conflict
+                .candidates
+                .iter()
+                .map(|candidate| {
+                    (
+                        candidate.candidate_id.clone(),
+                        candidate.content_version.clone(),
+                        candidate.source.clone(),
+                    )
+                })
+                .collect::<Vec<_>>()
+        } else {
+            snapshot
+                .commands
+                .iter()
+                .filter(|entry| entry.definition.name.eq_ignore_ascii_case(command_name))
+                .map(|entry| {
+                    (
+                        entry.definition.id.stable_key(),
+                        entry.definition.content_version.clone(),
+                        entry.definition.id.source.clone(),
+                    )
+                })
+                .collect::<Vec<_>>()
+        };
+        let Some((_, _, source)) = external.first() else {
+            reconfirmations.extend(native.iter().filter_map(|command| {
+                conflicted_candidate_ids
+                    .contains(&command.candidate_id)
+                    .then(|| NativePromptCommandReconfirmationProjection {
+                        command_name: command_name.clone(),
+                        native_candidate_id: command.candidate_id.clone(),
+                    })
+            }));
+            continue;
+        };
+        let execution_domain = snapshot
+            .sources
+            .iter()
+            .find(|entry| &entry.record.key == source)
+            .map(|entry| entry.record.execution_domain_id.as_str())
+            .ok_or_else(|| invalid_operation_error("External command source is unavailable"))?;
+        let mut participants = native
+            .iter()
+            .map(|command| {
+                (
+                    command.candidate_id.as_str(),
+                    command.behavior_version.as_str(),
+                )
+            })
+            .collect::<Vec<_>>();
+        participants.extend(
+            external
+                .iter()
+                .map(|(candidate_id, version, _)| (candidate_id.as_str(), version.as_str())),
+        );
+        let conflict_key =
+            native_prompt_command_conflict_key(execution_domain, command_name, participants);
+        let selected_candidate_id = conflict_choices.get(&conflict_key).cloned();
+        projected.extend(external.into_iter().map(|(candidate_id, _, _)| {
+            NativePromptCommandConflictProjection {
+                command_name: command_name.clone(),
+                external_candidate_id: candidate_id,
+                conflict_key: conflict_key.clone(),
+                selected_candidate_id: selected_candidate_id.clone(),
+            }
+        }));
+    }
+    projected.sort_by(|left, right| {
+        (&left.command_name, &left.external_candidate_id)
+            .cmp(&(&right.command_name, &right.external_candidate_id))
+    });
+    reconfirmations.sort_by(|left, right| {
+        (&left.command_name, &left.native_candidate_id)
+            .cmp(&(&right.command_name, &right.native_candidate_id))
+    });
+    Ok(NativePromptCommandConflictSnapshot {
+        preference_revision,
+        conflicts: projected,
+        reconfirmations,
+    })
+}
+
+pub async fn native_prompt_command_conflicts(
+    workspace_root: Option<&Path>,
+    native_commands: Vec<NativePromptCommandDescriptor>,
+) -> Result<NativePromptCommandConflictSnapshot, String> {
+    let snapshot = external_source_snapshot(workspace_root, false).await?;
+    let preferences = read_external_sources_config().await?;
+    project_native_prompt_command_conflicts(
+        &snapshot,
+        &native_commands,
+        &preferences.conflict_choices,
+        &preferences.conflicted_candidate_ids,
+        preferences.preference_revision,
+    )
+}
+
+pub async fn set_native_prompt_command_conflict_choice(
+    workspace_root: Option<&Path>,
+    native_commands: Vec<NativePromptCommandDescriptor>,
+    selected_candidate_id: &str,
+    expected_preference_revision: u64,
+) -> Result<NativePromptCommandConflictSnapshot, String> {
+    let snapshot = external_source_snapshot(workspace_root, false).await?;
+    let preferences = read_external_sources_config().await?;
+    if preferences.preference_revision != expected_preference_revision {
+        return Err(stale_operation_error(
+            "External source preferences changed before the command choice was saved",
+        ));
+    }
+    let projection = project_native_prompt_command_conflicts(
+        &snapshot,
+        &native_commands,
+        &preferences.conflict_choices,
+        &preferences.conflicted_candidate_ids,
+        preferences.preference_revision,
+    )?;
+    let selected_projection = projection.conflicts.iter().find(|conflict| {
+        conflict.external_candidate_id == selected_candidate_id
+            || native_commands.iter().any(|command| {
+                command
+                    .command_name
+                    .eq_ignore_ascii_case(&conflict.command_name)
+                    && command.candidate_id == selected_candidate_id
+            })
+    });
+    if selected_projection.is_none() {
+        let reconfirmation = projection
+            .reconfirmations
+            .iter()
+            .find(|item| item.native_candidate_id == selected_candidate_id);
+        if let Some(reconfirmation) = reconfirmation {
+            let native_candidate_ids = native_commands
+                .iter()
+                .filter(|command| {
+                    command
+                        .command_name
+                        .eq_ignore_ascii_case(&reconfirmation.command_name)
+                })
+                .map(|command| command.candidate_id.clone())
+                .collect::<Vec<_>>();
+            let preferences = confirm_native_prompt_command_reconfirmation(
+                &reconfirmation.command_name,
+                native_candidate_ids,
+                expected_preference_revision,
+            )
+            .await?;
+            return project_native_prompt_command_conflicts(
+                &snapshot,
+                &native_commands,
+                &preferences.conflict_choices,
+                &preferences.conflicted_candidate_ids,
+                preferences.preference_revision,
+            );
+        }
+    }
+    let Some(selected_projection) = selected_projection else {
+        return Err(invalid_operation_error(
+            "The selected native command conflict candidate is no longer available",
+        ));
+    };
+    let mut participants = projection
+        .conflicts
+        .iter()
+        .filter(|conflict| conflict.conflict_key == selected_projection.conflict_key)
+        .map(|conflict| conflict.external_candidate_id.clone())
+        .collect::<Vec<_>>();
+    participants.extend(
+        native_commands
+            .iter()
+            .filter(|command| {
+                command
+                    .command_name
+                    .eq_ignore_ascii_case(&selected_projection.command_name)
+            })
+            .map(|command| command.candidate_id.clone()),
+    );
+    participants.sort();
+    participants.dedup();
+    let native_candidate_ids = native_commands
+        .iter()
+        .filter(|command| {
+            command
+                .command_name
+                .eq_ignore_ascii_case(&selected_projection.command_name)
+        })
+        .map(|command| command.candidate_id.clone())
+        .collect::<Vec<_>>();
+    let (choices, _, conflicted_candidate_ids, preference_revision) =
+        remember_native_prompt_command_conflict_choice(
+            &selected_projection.conflict_key,
+            selected_candidate_id,
+            participants,
+            native_candidate_ids,
+            expected_preference_revision,
+        )
+        .await?;
+    project_native_prompt_command_conflicts(
+        &snapshot,
+        &native_commands,
+        &choices,
+        &conflicted_candidate_ids,
+        preference_revision,
+    )
+}
+
 pub async fn external_source_conflict_choices() -> Result<
     (
         BTreeMap<String, String>,
@@ -4457,10 +4925,11 @@ pub async fn external_source_conflict_choices() -> Result<
     ))
 }
 
-pub async fn remember_external_source_conflict_choice(
+async fn remember_native_prompt_command_conflict_choice(
     conflict_key: &str,
     candidate_id: &str,
     participants: Vec<String>,
+    native_candidate_ids: Vec<String>,
     expected_preference_revision: u64,
 ) -> Result<
     (
@@ -4472,32 +4941,219 @@ pub async fn remember_external_source_conflict_choice(
     String,
 > {
     validate_conflict_preference(conflict_key, candidate_id)?;
-    if participants.is_empty()
+    if native_prompt_command_conflict_key_command(conflict_key).is_none()
+        || participants.is_empty()
+        || native_candidate_ids.is_empty()
         || !participants
             .iter()
             .any(|candidate| candidate == candidate_id)
         || participants
             .iter()
             .any(|candidate| validate_conflict_preference(conflict_key, candidate).is_err())
+        || native_candidate_ids.iter().any(|candidate| {
+            !participants.contains(candidate)
+                || !candidate.starts_with("bitfun.")
+                || validate_conflict_preference(conflict_key, candidate).is_err()
+        })
     {
         return Err(invalid_operation_error(
-            "External source conflict participants are invalid",
+            "Native prompt command conflict participants are invalid",
         ));
     }
-    let preferences = persist_conflict_choice(
-        conflict_key,
-        candidate_id,
-        participants,
-        expected_preference_revision,
-    )
-    .await?;
-    propagate_conflict_preferences(&preferences);
+
+    let conflict_key = conflict_key.to_string();
+    let candidate_id = candidate_id.to_string();
+    let persisted = ExternalSourcePreferenceStore::global()?
+        .update(move |config| {
+            if config.preference_revision != expected_preference_revision {
+                return false;
+            }
+            let changed = reconcile_native_prompt_command_conflict_preference(
+                config,
+                &conflict_key,
+                &candidate_id,
+                &native_candidate_ids,
+            );
+            if changed {
+                config.preference_revision = config.preference_revision.saturating_add(1);
+            }
+            true
+        })
+        .await
+        .and_then(|(applied, config)| {
+            applied.then_some(config).ok_or_else(|| {
+                stale_operation_error(
+                    "External command preferences changed; refresh before retrying",
+                )
+            })
+        })?;
+    propagate_conflict_preferences(&persisted);
     Ok((
-        preferences.conflict_choices,
-        preferences.conflict_lineage_current_keys,
-        preferences.conflicted_candidate_ids,
-        preferences.preference_revision,
+        persisted.conflict_choices,
+        persisted.conflict_lineage_current_keys,
+        persisted.conflicted_candidate_ids,
+        persisted.preference_revision,
     ))
+}
+
+fn reconcile_native_prompt_command_conflict_preference(
+    config: &mut ExternalSourcesConfig,
+    conflict_key: &str,
+    candidate_id: &str,
+    native_candidate_ids: &[String],
+) -> bool {
+    let previous_choices = config.conflict_choices.clone();
+    let previous_candidates = config.conflicted_candidate_ids.clone();
+    let lineage = conflict_key.rsplit_once(':').map(|(lineage, _)| lineage);
+    config.conflict_choices.retain(|key, _| {
+        !key.starts_with("native:prompt_command:")
+            || lineage.is_none_or(|lineage| {
+                key.rsplit_once(':')
+                    .is_none_or(|(candidate_lineage, _)| candidate_lineage != lineage)
+            })
+    });
+    config
+        .conflict_choices
+        .insert(conflict_key.to_string(), candidate_id.to_string());
+    config
+        .conflicted_candidate_ids
+        .extend(native_candidate_ids.iter().cloned());
+    config.conflict_choices != previous_choices
+        || config.conflicted_candidate_ids != previous_candidates
+}
+
+async fn confirm_native_prompt_command_reconfirmation(
+    command_name: &str,
+    native_candidate_ids: Vec<String>,
+    expected_preference_revision: u64,
+) -> Result<ExternalSourcesConfig, String> {
+    let command_name = command_name.to_ascii_lowercase();
+    let persisted = ExternalSourcePreferenceStore::global()?
+        .update(move |config| {
+            if config.preference_revision != expected_preference_revision {
+                return false;
+            }
+            if reconcile_native_prompt_command_reconfirmation(
+                config,
+                &command_name,
+                &native_candidate_ids,
+            ) {
+                config.preference_revision = config.preference_revision.saturating_add(1);
+            }
+            true
+        })
+        .await
+        .and_then(|(applied, config)| {
+            applied.then_some(config).ok_or_else(|| {
+                stale_operation_error(
+                    "External command preferences changed; refresh before retrying",
+                )
+            })
+        })?;
+    propagate_conflict_preferences(&persisted);
+    Ok(persisted)
+}
+
+fn reconcile_native_prompt_command_reconfirmation(
+    config: &mut ExternalSourcesConfig,
+    command_name: &str,
+    native_candidate_ids: &[String],
+) -> bool {
+    let previous_choices = config.conflict_choices.clone();
+    let previous_candidates = config.conflicted_candidate_ids.clone();
+    let native_group_fingerprint =
+        native_prompt_command_group_fingerprint(native_candidate_ids.iter().map(String::as_str));
+    for native_candidate_id in native_candidate_ids {
+        config.conflicted_candidate_ids.remove(native_candidate_id);
+    }
+    config.conflict_choices.retain(|key, _| {
+        !native_prompt_command_conflict_key_parts(key).is_some_and(
+            |(candidate, group_fingerprint)| {
+                candidate.eq_ignore_ascii_case(command_name)
+                    && group_fingerprint == &native_group_fingerprint[..24]
+            },
+        )
+    });
+    config.conflict_choices != previous_choices
+        || config.conflicted_candidate_ids != previous_candidates
+}
+
+fn native_prompt_command_conflict_key_command(key: &str) -> Option<&str> {
+    native_prompt_command_conflict_key_parts(key).map(|(command_name, _)| command_name)
+}
+
+fn native_prompt_command_conflict_key_parts(key: &str) -> Option<(&str, &str)> {
+    let rest = key.strip_prefix("native:prompt_command:")?;
+    let (_execution_domain_fingerprint, rest) = rest.split_once(':')?;
+    let (command_name_length, encoded_command) = rest.split_once(':')?;
+    let command_name_length = command_name_length.parse::<usize>().ok()?;
+    let command_name = encoded_command.get(..command_name_length)?;
+    let suffix = encoded_command
+        .get(command_name_length..)?
+        .strip_prefix(':')?;
+    let (native_group_fingerprint, participant_fingerprint) = suffix.split_once(':')?;
+    if command_name.is_empty()
+        || native_group_fingerprint.is_empty()
+        || participant_fingerprint.is_empty()
+    {
+        return None;
+    }
+    Some((command_name, native_group_fingerprint))
+}
+
+fn native_prompt_command_expansion_guard_matches(
+    config: &ExternalSourcesConfig,
+    conflict_key: &str,
+    candidate_id: &str,
+    expected_preference_revision: u64,
+) -> bool {
+    conflict_key.starts_with("native:prompt_command:")
+        && config.preference_revision == expected_preference_revision
+        && config
+            .conflict_choices
+            .get(conflict_key)
+            .map(String::as_str)
+            == Some(candidate_id)
+}
+
+fn validate_native_prompt_command_expansion_guard(
+    current_conflicts: &[&NativePromptCommandConflictProjection],
+    preferences: &ExternalSourcesConfig,
+    expected_candidate_id: Option<&str>,
+    expected_conflict_key: Option<&str>,
+    expected_preference_revision: Option<u64>,
+) -> Result<(), String> {
+    if current_conflicts.is_empty() {
+        return if expected_conflict_key.is_none() && expected_preference_revision.is_none() {
+            Ok(())
+        } else {
+            Err(invalid_operation_error(
+                "A native command conflict guard was provided without a current conflict",
+            ))
+        };
+    }
+    let (Some(candidate_id), Some(conflict_key), Some(expected_revision)) = (
+        expected_candidate_id,
+        expected_conflict_key,
+        expected_preference_revision,
+    ) else {
+        return Err(stale_operation_error(
+            "The native and external command choice must be provided before expansion",
+        ));
+    };
+    let authorized = current_conflicts.iter().any(|projected| {
+        projected.external_candidate_id == candidate_id
+            && projected.conflict_key == conflict_key
+            && native_prompt_command_expansion_guard_matches(
+                preferences,
+                conflict_key,
+                candidate_id,
+                expected_revision,
+            )
+    });
+    authorized.then_some(()).ok_or_else(|| {
+        stale_operation_error("The native and external command choice changed before expansion")
+    })
 }
 
 pub async fn set_external_prompt_command_conflict_choice(
@@ -4964,16 +5620,22 @@ pub async fn expand_external_prompt_command(
     workspace_root: Option<&Path>,
     name: &str,
     arguments: &str,
+    native_commands: Vec<NativePromptCommandDescriptor>,
     expected_candidate_id: Option<&str>,
     expected_content_version: Option<&str>,
+    expected_native_conflict_key: Option<&str>,
+    expected_preference_revision: Option<u64>,
 ) -> Result<ExpandedPromptCommand, String> {
     service_for(workspace_root)
         .await?
         .expand_command(
             name,
             arguments,
+            &native_commands,
             expected_candidate_id,
             expected_content_version,
+            expected_native_conflict_key,
+            expected_preference_revision,
         )
         .await
 }
@@ -5006,12 +5668,85 @@ impl ExternalSourceSubscription {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::service::mcp::{ConfigLocation, MCPServerConfig, MCPServerType};
     use bitfun_product_domains::external_sources::{
         EcosystemId, ExternalSourceProviderError, ExternalSourceRecord, ExternalSourceScope,
         PromptCommandAvailability, PromptCommandDefinition, PromptCommandProviderIdentity,
         PromptCommandProviderSnapshot, SourceQualifiedCommandId,
     };
     use std::sync::atomic::{AtomicUsize, Ordering};
+
+    fn native_mcp_config_with_pin(pin: &str) -> MCPServerConfig {
+        MCPServerConfig {
+            id: "native-secret-test".to_string(),
+            name: "native-secret-test".to_string(),
+            server_type: MCPServerType::Local,
+            transport: None,
+            command: Some("native-secret-test".to_string()),
+            args: Vec::new(),
+            env: [("PIN".to_string(), pin.to_string())].into_iter().collect(),
+            working_directory: None,
+            inherit_parent_environment: Some(false),
+            headers: Default::default(),
+            url: None,
+            auto_start: false,
+            enabled: true,
+            location: ConfigLocation::User,
+            capabilities: Vec::new(),
+            settings: Default::default(),
+            oauth: None,
+            oauth_enabled: None,
+            xaa: None,
+        }
+    }
+
+    #[test]
+    fn native_mcp_behavior_versions_are_keyed_before_public_projection() {
+        let key = ExternalMcpRevisionKey::new([7; 32]);
+        let first_config = native_mcp_config_with_pin("0007");
+        let changed_config = native_mcp_config_with_pin("0008");
+        let first = native_mcp_behavior_version(&key, &first_config).unwrap();
+        let repeated = native_mcp_behavior_version(&key, &first_config).unwrap();
+        let changed = native_mcp_behavior_version(&key, &changed_config).unwrap();
+        let raw_candidate = format!(
+            "sha256:{}",
+            hex::encode(Sha256::digest(serde_json::to_vec(&first_config).unwrap()))
+        );
+
+        assert_eq!(first, repeated);
+        assert_ne!(first, changed);
+        assert_ne!(first, raw_candidate);
+        assert!(first.starts_with("hmac-sha256:"));
+    }
+
+    #[test]
+    fn canonical_json_is_independent_of_object_insertion_order() {
+        let first = serde_json::json!({"outer": {"b": 2, "a": 1}});
+        let second: serde_json::Value = serde_json::from_str(r#"{"outer":{"a":1,"b":2}}"#).unwrap();
+        let mut first_bytes = Vec::new();
+        let mut second_bytes = Vec::new();
+
+        write_canonical_json(&first, &mut first_bytes).unwrap();
+        write_canonical_json(&second, &mut second_bytes).unwrap();
+
+        assert_eq!(first_bytes, second_bytes);
+        assert_eq!(
+            String::from_utf8(first_bytes).unwrap(),
+            r#"{"outer":{"a":1,"b":2}}"#
+        );
+    }
+
+    #[test]
+    fn external_sources_config_debug_redacts_the_persisted_revision_secret() {
+        let config = ExternalSourcesConfig {
+            mcp_revision_secret: Some("private-revision-secret".to_string()),
+            ..Default::default()
+        };
+
+        let debug = format!("{config:?}");
+        assert!(debug.contains("[REDACTED]"));
+        assert!(!debug.contains("private-revision-secret"));
+    }
 
     #[test]
     fn only_model_configuration_events_refresh_external_model_bindings() {
@@ -5032,6 +5767,299 @@ mod tests {
         assert_eq!(
             external_integration_error_code("legacy internal failure: private detail"),
             "internal"
+        );
+    }
+
+    #[test]
+    fn native_prompt_command_choice_is_versioned_by_every_participant() {
+        let source_key = SourceKey::new("opencode.commands", "project").unwrap();
+        let definition = PromptCommandDefinition {
+            id: SourceQualifiedCommandId::new(source_key.clone(), "review").unwrap(),
+            name: "review".to_string(),
+            description: "Review changes".to_string(),
+            template: "Review changes".to_string(),
+            availability: PromptCommandAvailability::Available,
+            content_version: "external-v1".to_string(),
+        };
+        let snapshot = ExternalSourceCatalogSnapshot {
+            generation: 1,
+            discovery_pending: false,
+            sources: vec![ExternalSourceCatalogEntry {
+                stable_key: source_key.stable_key(),
+                presentation_group_id: None,
+                record: ExternalSourceRecord {
+                    key: source_key,
+                    ecosystem_id: EcosystemId::new("opencode").unwrap(),
+                    display_name: "OpenCode project commands".to_string(),
+                    source_kind: "prompt_commands".to_string(),
+                    scope: ExternalSourceScope::Project,
+                    location: "/repo/.opencode/commands".to_string(),
+                    execution_domain_id: ExecutionDomainId::new("local-user").unwrap(),
+                    health:
+                        bitfun_product_domains::external_sources::ExternalSourceHealth::Available,
+                    content_version: "source-v1".to_string(),
+                    diagnostics: Vec::new(),
+                },
+                lifecycle: ExternalSourceLifecycleState::Available,
+            }],
+            commands: vec![PromptCommandCatalogEntry { definition }],
+            command_conflicts: Vec::new(),
+            tools: Vec::new(),
+            tool_approval_requests: Vec::new(),
+            tool_conflicts: Vec::new(),
+            mcp_generation: 0,
+            mcp_servers: Vec::new(),
+            mcp_approval_requests: Vec::new(),
+            mcp_conflicts: Vec::new(),
+            subagent_generation: 0,
+            preference_revision: 4,
+            subagents: Vec::new(),
+            subagent_conflicts: Vec::new(),
+            pending_subagent_approvals: Vec::new(),
+            integration_policy: Default::default(),
+            diagnostics: Vec::new(),
+        };
+        let native_v1 = NativePromptCommandDescriptor {
+            command_name: "review".to_string(),
+            candidate_id: "bitfun.desktop:action:review".to_string(),
+            behavior_version: "native-v1".to_string(),
+        };
+        let first = project_native_prompt_command_conflicts(
+            &snapshot,
+            std::slice::from_ref(&native_v1),
+            &BTreeMap::new(),
+            &BTreeSet::new(),
+            4,
+        )
+        .unwrap();
+        let first_conflict = first.conflicts.first().unwrap();
+        assert_eq!(first_conflict.selected_candidate_id, None);
+
+        let choices = BTreeMap::from([(
+            first_conflict.conflict_key.clone(),
+            native_v1.candidate_id.clone(),
+        )]);
+        let selected = project_native_prompt_command_conflicts(
+            &snapshot,
+            std::slice::from_ref(&native_v1),
+            &choices,
+            &BTreeSet::new(),
+            5,
+        )
+        .unwrap();
+        assert_eq!(
+            selected.conflicts[0].selected_candidate_id.as_deref(),
+            Some(native_v1.candidate_id.as_str())
+        );
+
+        let cli_surface = NativePromptCommandDescriptor {
+            command_name: "review".to_string(),
+            candidate_id: "bitfun.cli:action:review".to_string(),
+            behavior_version: "native-v1".to_string(),
+        };
+        let isolated = project_native_prompt_command_conflicts(
+            &snapshot,
+            &[cli_surface],
+            &choices,
+            &BTreeSet::new(),
+            5,
+        )
+        .unwrap();
+        assert_ne!(
+            isolated.conflicts[0].conflict_key,
+            first_conflict.conflict_key
+        );
+        assert_eq!(isolated.conflicts[0].selected_candidate_id, None);
+
+        let removed_snapshot = ExternalSourceCatalogSnapshot {
+            commands: Vec::new(),
+            command_conflicts: Vec::new(),
+            ..snapshot.clone()
+        };
+        let removed = project_native_prompt_command_conflicts(
+            &removed_snapshot,
+            std::slice::from_ref(&native_v1),
+            &choices,
+            &BTreeSet::from([native_v1.candidate_id.clone()]),
+            5,
+        )
+        .unwrap();
+        assert!(removed.conflicts.is_empty());
+        assert_eq!(
+            removed.reconfirmations,
+            [NativePromptCommandReconfirmationProjection {
+                command_name: "review".to_string(),
+                native_candidate_id: native_v1.candidate_id.clone(),
+            }]
+        );
+
+        let native_v2 = NativePromptCommandDescriptor {
+            behavior_version: "native-v2".to_string(),
+            ..native_v1
+        };
+        let changed = project_native_prompt_command_conflicts(
+            &snapshot,
+            &[native_v2],
+            &choices,
+            &BTreeSet::new(),
+            5,
+        )
+        .unwrap();
+        assert_ne!(
+            changed.conflicts[0].conflict_key,
+            first_conflict.conflict_key
+        );
+        assert_eq!(changed.conflicts[0].selected_candidate_id, None);
+    }
+
+    #[test]
+    fn native_prompt_command_choice_does_not_mark_external_candidate_as_self_conflicted() {
+        let mut config = ExternalSourcesConfig::default();
+        let native = "bitfun.desktop:action:review".to_string();
+        let external = "opencode.commands:project:review";
+        let first_key = native_prompt_command_conflict_key(
+            "local-user",
+            "review",
+            [(&native[..], "native-v1"), (external, "external-v1")],
+        );
+
+        assert!(reconcile_native_prompt_command_conflict_preference(
+            &mut config,
+            &first_key,
+            external,
+            std::slice::from_ref(&native),
+        ));
+        assert_eq!(
+            config.conflict_choices.get(&first_key).map(String::as_str),
+            Some(external)
+        );
+        assert!(config.conflicted_candidate_ids.contains(&native));
+        assert!(!config.conflicted_candidate_ids.contains(external));
+
+        let next_key = native_prompt_command_conflict_key(
+            "local-user",
+            "review",
+            [(&native[..], "native-v1"), (external, "external-v2")],
+        );
+        assert!(reconcile_native_prompt_command_conflict_preference(
+            &mut config,
+            &next_key,
+            &native,
+            std::slice::from_ref(&native),
+        ));
+        assert!(!config.conflict_choices.contains_key(&first_key));
+        assert_eq!(config.conflict_choices.get(&next_key), Some(&native));
+
+        assert!(reconcile_native_prompt_command_reconfirmation(
+            &mut config,
+            "review",
+            std::slice::from_ref(&native),
+        ));
+        assert!(!config.conflicted_candidate_ids.contains(&native));
+        assert!(!config.conflict_choices.contains_key(&next_key));
+
+        config.preference_revision = 7;
+        config
+            .conflict_choices
+            .insert(first_key.clone(), external.to_string());
+        assert!(native_prompt_command_expansion_guard_matches(
+            &config, &first_key, external, 7,
+        ));
+        assert!(!native_prompt_command_expansion_guard_matches(
+            &config, &first_key, external, 8,
+        ));
+        assert!(!native_prompt_command_expansion_guard_matches(
+            &config,
+            "prompt_command:local-user:review:first",
+            external,
+            7,
+        ));
+        let projection = NativePromptCommandConflictProjection {
+            command_name: "review".to_string(),
+            external_candidate_id: external.to_string(),
+            conflict_key: first_key.clone(),
+            selected_candidate_id: Some(external.to_string()),
+        };
+        assert!(validate_native_prompt_command_expansion_guard(
+            &[&projection],
+            &config,
+            None,
+            None,
+            None,
+        )
+        .is_err());
+        assert!(validate_native_prompt_command_expansion_guard(
+            &[&projection],
+            &config,
+            Some(external),
+            Some(&first_key),
+            Some(7),
+        )
+        .is_ok());
+        assert!(native_prompt_command_conflict_key_command(&first_key)
+            .is_some_and(|command| command.eq_ignore_ascii_case("REVIEW")));
+        assert_ne!(
+            native_prompt_command_conflict_key_command(&first_key),
+            Some("other")
+        );
+
+        let namespaced_key = native_prompt_command_conflict_key(
+            "local-user",
+            "foo:bar",
+            [(&native[..], "native-v1"), (external, "external-v1")],
+        );
+        assert_eq!(
+            native_prompt_command_conflict_key_command(&namespaced_key),
+            Some("foo:bar")
+        );
+        assert_ne!(
+            native_prompt_command_conflict_key_command(&namespaced_key),
+            Some("bar")
+        );
+    }
+
+    #[test]
+    fn native_prompt_command_reconfirmation_clears_the_whole_native_command_group() {
+        let mut config = ExternalSourcesConfig::default();
+        let first = "bitfun.desktop:action:review".to_string();
+        let second = "bitfun.desktop:mode:review".to_string();
+        let external = "opencode.commands:project:review";
+        let desktop_key = native_prompt_command_conflict_key(
+            "local-user",
+            "review",
+            [
+                (&first[..], "native-v1"),
+                (&second[..], "native-v1"),
+                (external, "external-v1"),
+            ],
+        );
+        let cli = "bitfun.cli:action:review".to_string();
+        let cli_key = native_prompt_command_conflict_key(
+            "local-user",
+            "review",
+            [(&cli[..], "native-v1"), (external, "external-v1")],
+        );
+        config
+            .conflicted_candidate_ids
+            .extend([first.clone(), second.clone()]);
+        config
+            .conflict_choices
+            .insert(desktop_key.clone(), external.to_string());
+        config
+            .conflict_choices
+            .insert(cli_key.clone(), external.to_string());
+
+        assert!(reconcile_native_prompt_command_reconfirmation(
+            &mut config,
+            "review",
+            &[first.clone(), second.clone()],
+        ));
+        assert!(!config.conflicted_candidate_ids.contains(&first));
+        assert!(!config.conflicted_candidate_ids.contains(&second));
+        assert!(!config.conflict_choices.contains_key(&desktop_key));
+        assert_eq!(
+            config.conflict_choices.get(&cli_key).map(String::as_str),
+            Some(external)
         );
     }
 
@@ -5333,8 +6361,15 @@ mod tests {
         };
         let (updates, _) = broadcast::channel(8);
         let control_plane = Arc::new(
-            ExternalSourceControlPlane::new(context, providers, Vec::new(), Vec::new(), Vec::new())
-                .unwrap(),
+            ExternalSourceControlPlane::new(
+                context,
+                ExternalMcpRevisionKey::new([7; 32]),
+                providers,
+                Vec::new(),
+                Vec::new(),
+                Vec::new(),
+            )
+            .unwrap(),
         );
         let mut snapshot = merge_tool_state(
             control_plane.commands(|coordinator| coordinator.snapshot()),
@@ -5348,6 +6383,7 @@ mod tests {
             profile: ExternalSourceServiceProfile::LocalExecution,
             workspace_root: None,
             execution_domain_id: ExecutionDomainId::new(LEGACY_LOCAL_EXECUTION_DOMAIN_ID).unwrap(),
+            mcp_revision_key: ExternalMcpRevisionKey::new([7; 32]),
             control_plane,
             snapshot: StdMutex::new(snapshot),
             updates,
@@ -5663,6 +6699,63 @@ mod tests {
                 integration_access(&policy, OPENCODE_ECOSYSTEM_ID, capability_id),
                 recommended
             );
+        }
+    }
+
+    #[test]
+    fn default_registry_exposes_only_each_ecosystems_supported_asset_kinds() {
+        let registrations = default_external_integration_registry();
+        assert_eq!(registrations.len(), 3);
+
+        let expected = BTreeMap::from([
+            (
+                "opencode",
+                BTreeSet::from([
+                    EXTERNAL_CAPABILITY_COMMAND,
+                    EXTERNAL_CAPABILITY_TOOL,
+                    EXTERNAL_CAPABILITY_SUBAGENT,
+                    EXTERNAL_CAPABILITY_MCP,
+                ]),
+            ),
+            (
+                "claude-code",
+                BTreeSet::from([
+                    EXTERNAL_CAPABILITY_COMMAND,
+                    EXTERNAL_CAPABILITY_SUBAGENT,
+                    EXTERNAL_CAPABILITY_MCP,
+                ]),
+            ),
+            (
+                "codex",
+                BTreeSet::from([EXTERNAL_CAPABILITY_SUBAGENT, EXTERNAL_CAPABILITY_MCP]),
+            ),
+        ]);
+
+        for registration in registrations {
+            registration
+                .validate()
+                .expect("built-in registration is valid");
+            let ecosystem = registration.descriptor.ecosystem_id.as_str();
+            let capabilities = registration
+                .descriptor
+                .capabilities
+                .iter()
+                .map(|capability| capability.capability_id.as_str())
+                .collect::<BTreeSet<_>>();
+            assert_eq!(capabilities, expected[ecosystem]);
+            for capability in &registration.descriptor.capabilities {
+                let expected_access = if ecosystem == "opencode"
+                    && capability.capability_id.as_str() == EXTERNAL_CAPABILITY_COMMAND
+                    || ecosystem == "claude-code"
+                        && capability.capability_id.as_str() == EXTERNAL_CAPABILITY_COMMAND
+                {
+                    ExternalIntegrationAccess::Auto
+                } else {
+                    ExternalIntegrationAccess::AskBeforeUse
+                };
+                assert_eq!(capability.recommended_access, expected_access);
+                assert_eq!(capability.safety_ceiling, expected_access);
+            }
         }
     }
 

@@ -129,6 +129,22 @@ import {
   type ContextUsageDisplay,
 } from '../utils/tokenUsageDisplay';
 import { agentAPI } from '@/infrastructure/api/service-api/AgentAPI';
+import {
+  ExternalSourceApiError,
+  externalSourcesAPI,
+  type NativePromptCommandDescriptor,
+} from '@/infrastructure/api/service-api/ExternalSourcesAPI';
+import { externalSourceDiscoveryPollDelay } from '@/infrastructure/api/service-api/externalSourceDiscovery';
+import {
+  buildExternalPromptCommandItems,
+  classifyExternalPromptCommandCatalogIssue,
+  externalPromptComposerIsUnchanged,
+  isExternalPromptSubmissionTargetCurrent,
+  routeUnmatchedExternalPromptCommand,
+  resolveExternalPromptCommandInvocation,
+  type ExternalPromptCommandCatalogIssue,
+  type ExternalPromptCommandItem,
+} from '../utils/externalPromptCommands';
 import './ChatInput.scss';
 
 import { setChatPopupActive } from './chatPopupState';
@@ -185,13 +201,61 @@ type SlashSkillItem = {
   skillName: string;
 };
 
+type SlashExternalPromptCommandItem = ExternalPromptCommandItem & {
+  kind: 'externalCommand';
+};
+
+function toSlashExternalPromptCommands(
+  snapshot: Parameters<typeof buildExternalPromptCommandItems>[0],
+): SlashExternalPromptCommandItem[] {
+  return buildExternalPromptCommandItems(snapshot).map(item => ({
+    ...item,
+    kind: 'externalCommand' as const,
+  }));
+}
+
 type SlashPickerItem =
   | SlashActionItem
   | SlashModeItem
   | SlashMcpPromptItem
   | SlashAcpCommandItem
-  | SlashSkillItem;
+  | SlashSkillItem
+  | SlashExternalPromptCommandItem;
 type ChatInputTarget = 'main' | 'btw';
+
+function nativePromptCommandCandidateId(
+  kind: Exclude<SlashPickerItem['kind'], 'externalCommand'>,
+  id: string,
+): string {
+  return `bitfun.desktop:${kind}:${id}`;
+}
+
+function toNativePromptCommandDescriptor(
+  item: Exclude<SlashPickerItem, SlashExternalPromptCommandItem>,
+): NativePromptCommandDescriptor {
+  const command = item.kind === 'mode' ? `/${item.id}` : item.command;
+  const commandName = command.slice(1).split(/\s+/, 1)[0]?.toLowerCase() ?? '';
+  const behaviorVersion = item.kind === 'mcpPrompt'
+    ? JSON.stringify({
+        kind: item.kind,
+        serverId: item.serverId,
+        promptName: item.promptName,
+        arguments: item.arguments.map(argument => ({
+          name: argument.name,
+          required: argument.required,
+        })),
+      })
+    : JSON.stringify(item.kind === 'mode'
+        ? { kind: item.kind, id: item.id }
+        : item.kind === 'skill'
+          ? { kind: item.kind, id: item.id, skillName: item.skillName }
+          : { kind: item.kind, id: item.id, command });
+  return {
+    commandName,
+    candidateId: nativePromptCommandCandidateId(item.kind, item.id),
+    behaviorVersion,
+  };
+}
 
 function getCharacterCount(text: string): number {
   return Array.from(text).length;
@@ -306,6 +370,8 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   const reviewLaunchPendingRef = useRef(false);
   const largePasteCountersRef = useRef<Record<number, number>>({});
   const undoImageStackRef = useRef<string[]>([]);
+  const nativePromptModeSelectionGenerationRef = useRef(0);
+  const nativePromptModeSelectionQueueRef = useRef<Promise<void>>(Promise.resolve());
   
   // History navigation state
   const [historyIndex, setHistoryIndex] = useState(-1);
@@ -355,6 +421,11 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   });
 
   const dispatchInput = useCallback((action: InputAction) => {
+    const changesValue = (action.type === 'SET_VALUE' && action.payload !== inputValueRef.current)
+      || (action.type === 'CLEAR_VALUE' && inputValueRef.current !== '');
+    if (changesValue) {
+      nativePromptModeSelectionGenerationRef.current += 1;
+    }
     dispatchLocalInput(action);
 
     const sessionId = effectiveTargetSessionIdRef.current;
@@ -694,6 +765,8 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   const { transition, setQueuedInput } = useSessionStateMachineActions(effectiveTargetSessionId);
 
   const { workspace, workspacePath, workspaceName } = useCurrentWorkspace();
+  const workspacePathRef = useRef(workspacePath || '');
+  workspacePathRef.current = workspacePath || '';
   const { openedWorkspaces } = useWorkspaceContext();
 
   const chatStripRepositoryPath = useMemo(() => {
@@ -1112,6 +1185,98 @@ export const ChatInput: React.FC<ChatInputProps> = ({
 
   const [mcpPromptCommands, setMcpPromptCommands] = useState<SlashMcpPromptItem[]>([]);
   const [mcpPromptCommandsLoading, setMcpPromptCommandsLoading] = useState(false);
+  const [externalPromptCommands, setExternalPromptCommands] = useState<SlashExternalPromptCommandItem[]>([]);
+  const [externalPromptCommandsLoading, setExternalPromptCommandsLoading] = useState(false);
+  const [externalPromptCommandsPending, setExternalPromptCommandsPending] = useState(false);
+  const [externalPromptCommandsIssue, setExternalPromptCommandsIssue] = useState<ExternalPromptCommandCatalogIssue>();
+  const [selectedExternalPromptCandidateId, setSelectedExternalPromptCandidateId] = useState<string>();
+  const [selectedNonExternalSlashCommand, setSelectedNonExternalSlashCommand] = useState<string>();
+  const [selectedNonExternalSlashCandidateId, setSelectedNonExternalSlashCandidateId] = useState<string>();
+  const externalPromptCatalogRequestRef = useRef(0);
+
+  const refreshExternalPromptCommands = useCallback(async (
+    showLoading: boolean,
+    forceRefresh = false,
+  ) => {
+    const requestId = ++externalPromptCatalogRequestRef.current;
+    if (isAcpInputSession) {
+      setExternalPromptCommands([]);
+      setExternalPromptCommandsPending(false);
+      setExternalPromptCommandsIssue(undefined);
+      setExternalPromptCommandsLoading(false);
+      return undefined;
+    }
+    if (showLoading) {
+      setExternalPromptCommandsLoading(true);
+    }
+    try {
+      const snapshot = await externalSourcesAPI.getSnapshot(
+        workspacePath || undefined,
+        forceRefresh,
+      );
+      if (requestId !== externalPromptCatalogRequestRef.current) return undefined;
+      setExternalPromptCommands(toSlashExternalPromptCommands(snapshot));
+      setExternalPromptCommandsPending(snapshot.discoveryPending);
+      setExternalPromptCommandsIssue(undefined);
+      return snapshot;
+    } catch (error) {
+      if (requestId !== externalPromptCatalogRequestRef.current) return undefined;
+      const issue = classifyExternalPromptCommandCatalogIssue(error);
+      setExternalPromptCommands([]);
+      setSelectedExternalPromptCandidateId(undefined);
+      setExternalPromptCommandsIssue(issue);
+      setExternalPromptCommandsPending(false);
+      if (issue === 'host_unavailable') {
+        log.debug('External prompt commands are unavailable on this host', {
+          code: error instanceof ExternalSourceApiError ? error.code : 'internal',
+        });
+      } else {
+        log.warn('Failed to load external prompt command catalog', {
+          code: error instanceof ExternalSourceApiError ? error.code : 'internal',
+        });
+      }
+      return undefined;
+    } finally {
+      if (showLoading && requestId === externalPromptCatalogRequestRef.current) {
+        setExternalPromptCommandsLoading(false);
+      }
+    }
+  }, [isAcpInputSession, workspacePath]);
+
+  useEffect(() => {
+    externalPromptCatalogRequestRef.current += 1;
+    setExternalPromptCommands([]);
+    setExternalPromptCommandsPending(false);
+    setExternalPromptCommandsIssue(undefined);
+    setSelectedExternalPromptCandidateId(undefined);
+    setSelectedNonExternalSlashCommand(undefined);
+    setSelectedNonExternalSlashCandidateId(undefined);
+    void refreshExternalPromptCommands(true);
+
+    return () => {
+      externalPromptCatalogRequestRef.current += 1;
+    };
+  }, [refreshExternalPromptCommands]);
+
+  useEffect(() => {
+    if (!externalPromptCommandsPending) return undefined;
+    let cancelled = false;
+    let timer: number | undefined;
+    let attempt = 0;
+    const schedulePoll = () => {
+      timer = window.setTimeout(async () => {
+        const snapshot = await refreshExternalPromptCommands(false);
+        if (cancelled || !snapshot || !snapshot.discoveryPending) return;
+        attempt += 1;
+        schedulePoll();
+      }, externalSourceDiscoveryPollDelay(attempt));
+    };
+    schedulePoll();
+    return () => {
+      cancelled = true;
+      if (timer !== undefined) window.clearTimeout(timer);
+    };
+  }, [externalPromptCommandsPending, refreshExternalPromptCommands]);
 
   const loadMcpPromptCommands = useCallback(async () => {
     setMcpPromptCommandsLoading(true);
@@ -1196,6 +1361,15 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     query: '',
     selectedIndex: 0,
   });
+
+  const slashPickerWasActiveRef = useRef(false);
+  useEffect(() => {
+    const opening = slashCommandState.isActive && !slashPickerWasActiveRef.current;
+    slashPickerWasActiveRef.current = slashCommandState.isActive;
+    if (opening && !externalPromptCommandsLoading && !externalPromptCommandsPending) {
+      void refreshExternalPromptCommands(false);
+    }
+  }, [externalPromptCommandsLoading, externalPromptCommandsPending, refreshExternalPromptCommands, slashCommandState.isActive]);
 
   // Keep the module-level popup-active flag in sync so ModernFlowChatContainer
   // can disable the global Escape shortcut while popups are open.
@@ -2095,6 +2269,21 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     });
   }, [isAcpInputSession, mcpPromptCommands, slashCommandState.query]);
 
+  const getFilteredExternalPromptCommands = useCallback((): SlashExternalPromptCommandItem[] => {
+    if (isAcpInputSession
+      || derivedState?.isProcessing
+      || (inlineTriggerState.isActive && inlineTriggerState.startOffset > 0)) {
+      return [];
+    }
+    const q = (slashCommandState.query || '').trim().toLowerCase();
+    if (!q) {
+      return externalPromptCommands;
+    }
+    return externalPromptCommands.filter(item =>
+      item.command.slice(1).toLowerCase().includes(q)
+        || item.label.toLowerCase().includes(q));
+  }, [derivedState?.isProcessing, externalPromptCommands, inlineTriggerState, isAcpInputSession, slashCommandState.query]);
+
   const getFilteredAcpCommands = useCallback((): SlashAcpCommandItem[] => {
     return filterSlashCommands(acpAgentCommands, slashCommandState.query).map(command => ({
       kind: 'acpCommand',
@@ -2170,6 +2359,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     }
 
     const actions = getFilteredActions();
+    const externalCommands = getFilteredExternalPromptCommands();
     const mcpPrompts = getFilteredMcpPromptCommands();
     const skills = getFilteredSkills();
     let modeList = incrementalCodeModes;
@@ -2186,8 +2376,8 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       id: mode.id,
       name: mode.name,
     }));
-    return [...acpCommands, ...actions, ...mcpPrompts, ...modes, ...skills];
-  }, [canSwitchModes, getFilteredActions, getFilteredAcpCommands, getFilteredMcpPromptCommands, getFilteredSkills, incrementalCodeModes, isAcpInputSession, slashCommandState.query]);
+    return [...acpCommands, ...actions, ...externalCommands, ...mcpPrompts, ...modes, ...skills];
+  }, [canSwitchModes, getFilteredActions, getFilteredAcpCommands, getFilteredExternalPromptCommands, getFilteredMcpPromptCommands, getFilteredSkills, incrementalCodeModes, isAcpInputSession, slashCommandState.query]);
 
   const getActiveSlashPickerItems = useCallback((): SlashPickerItem[] => {
     if (slashCommandState.kind === 'actions') {
@@ -2218,6 +2408,20 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     prunePendingLargePastes(text);
     dispatchInput({ type: 'SET_VALUE', payload: text });
     inputValueRef.current = text;
+
+    if (selectedExternalPromptCandidateId) {
+      const selected = externalPromptCommands.find(
+        item => item.candidateId === selectedExternalPromptCandidateId,
+      );
+      if (!selected || !isSlashCommand(text.trim(), selected.command as `/${string}`)) {
+        setSelectedExternalPromptCandidateId(undefined);
+      }
+    }
+    if (selectedNonExternalSlashCommand
+      && !isSlashCommand(text.trim(), selectedNonExternalSlashCommand as `/${string}`)) {
+      setSelectedNonExternalSlashCommand(undefined);
+      setSelectedNonExternalSlashCandidateId(undefined);
+    }
 
     const localSlashCommandsEnabled = !isAcpInputSession;
     const trimmed = text.trim();
@@ -2297,7 +2501,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
         selectedIndex: 0,
       });
     }
-  }, [contexts, derivedState, dispatchInput, inputState.isActive, isAcpInputSession, prunePendingLargePastes, removeContext, resolveTypedMcpPromptCommand, setQueuedInput, slashCommandState.isActive, slashCommandState.kind]);
+  }, [contexts, derivedState, dispatchInput, externalPromptCommands, inputState.isActive, isAcpInputSession, prunePendingLargePastes, removeContext, resolveTypedMcpPromptCommand, selectedExternalPromptCandidateId, selectedNonExternalSlashCommand, setQueuedInput, slashCommandState.isActive, slashCommandState.kind]);
 
   const submitBtwFromInput = useCallback(async () => {
     if (!derivedState) return;
@@ -2895,6 +3099,278 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     t,
   ]);
 
+  const submitExternalPromptCommandFromInput = useCallback(async (
+    message: string,
+    originalMessage: string,
+    originalPendingLargePastes: PendingLargePasteMap,
+  ): Promise<boolean> => {
+    const submissionSessionId = effectiveTargetSessionId;
+    const submissionWorkspacePath = workspacePath || '';
+    const submissionComposerValue = inputValueRef.current;
+    const submissionTargetIsCurrent = () => isExternalPromptSubmissionTargetCurrent(
+      submissionSessionId,
+      effectiveTargetSessionIdRef.current,
+      submissionWorkspacePath,
+      workspacePathRef.current,
+    );
+    let composerCleared = false;
+    const trimmedMessage = message.trim();
+    const commandWhitespaceIndex = trimmedMessage.search(/\s/);
+    const command = trimmedMessage.startsWith('/')
+      ? (commandWhitespaceIndex === -1
+          ? trimmedMessage
+          : trimmedMessage.slice(0, commandWhitespaceIndex)).toLowerCase()
+      : '';
+    const externalCandidates = externalPromptCommands.filter(
+      item => item.command.toLowerCase() === command,
+    );
+    const nativeCommands = getSlashPickerItems()
+      .filter((item): item is Exclude<SlashPickerItem, SlashExternalPromptCommandItem> => (
+        item.kind !== 'externalCommand'
+      ))
+      .map(toNativePromptCommandDescriptor)
+      .filter(item => `/${item.commandName}` === command)
+      .filter((item, index, all) => (
+        all.findIndex(candidate => candidate.candidateId === item.candidateId) === index
+      ));
+    const reservedCommands = new Set(nativeCommands.map(item => `/${item.commandName}`));
+    const externalCandidateIds = new Set(
+      externalCandidates.map(candidate => candidate.candidateId),
+    );
+    const explicitNativeCandidate = selectedNonExternalSlashCommand === command
+      ? nativeCommands.find(candidate => (
+          candidate.candidateId === selectedNonExternalSlashCandidateId
+        ))
+      : undefined;
+
+    if (externalCandidates.length === 0) {
+      const unmatchedRoute = routeUnmatchedExternalPromptCommand({
+        hasNativeCommand: nativeCommands.length > 0,
+        catalogLoading: externalPromptCommandsLoading,
+        discoveryPending: externalPromptCommandsPending,
+        catalogIssue: externalPromptCommandsIssue,
+      });
+      if (unmatchedRoute === 'native' || unmatchedRoute === 'ordinary') return false;
+      notificationService.warning(t(unmatchedRoute === 'load_failed'
+        ? 'chatInput.externalCommandsLoadFailed'
+        : 'chatInput.externalCommandsLoading'));
+      return true;
+    }
+
+    if (explicitNativeCandidate) {
+      try {
+        const nativeConflictSnapshot = await externalSourcesAPI.getNativePromptCommandConflicts(
+          submissionWorkspacePath || undefined,
+          nativeCommands,
+        );
+        if (!submissionTargetIsCurrent()) return true;
+        const nativeConflict = nativeConflictSnapshot.conflicts.find(conflict => (
+          externalCandidateIds.has(conflict.externalCandidateId)
+        ));
+        const nativeReconfirmation = nativeConflictSnapshot.reconfirmations?.some(item => (
+          item.nativeCandidateId === explicitNativeCandidate.candidateId
+        ));
+        if ((nativeConflict
+          && nativeConflict.selectedCandidateId !== explicitNativeCandidate.candidateId)
+          || nativeReconfirmation) {
+          await externalSourcesAPI.setNativePromptCommandConflictChoice(
+            submissionWorkspacePath || undefined,
+            nativeCommands,
+            explicitNativeCandidate.candidateId,
+            nativeConflictSnapshot.preferenceRevision,
+          );
+        }
+      } catch (error) {
+        log.warn('Failed to persist native prompt command conflict choice', {
+          code: error instanceof ExternalSourceApiError ? error.code : 'internal',
+        });
+        if (!submissionTargetIsCurrent()) return true;
+        notificationService.warning(t('chatInput.nativeCommandChoiceNotSaved'));
+      }
+      if (!submissionTargetIsCurrent()) return true;
+      return false;
+    }
+
+    try {
+      const nativeConflictSnapshot = nativeCommands.length > 0
+        ? await externalSourcesAPI.getNativePromptCommandConflicts(
+            submissionWorkspacePath || undefined,
+            nativeCommands,
+          )
+        : undefined;
+      if (!submissionTargetIsCurrent()) return true;
+      const nativeConflict = nativeConflictSnapshot?.conflicts.find(conflict => (
+        externalCandidateIds.has(conflict.externalCandidateId)
+      ));
+      if (externalCandidates.length === 0) {
+        const requiresReconfirmation = nativeConflictSnapshot?.reconfirmations?.some(item => (
+          nativeCommands.some(commandItem => (
+            commandItem.candidateId === item.nativeCandidateId
+          ))
+        ));
+        if (requiresReconfirmation) {
+          notificationService.warning(t('chatInput.nativeCommandReconfirmationRequired'));
+          return true;
+        }
+        return false;
+      }
+      const persistedCandidateId = nativeConflict?.selectedCandidateId;
+      if (persistedCandidateId
+        && nativeCommands.some(candidate => candidate.candidateId === persistedCandidateId)) {
+        return false;
+      }
+      const selectedExternalCandidateId = selectedExternalPromptCandidateId
+        ?? (persistedCandidateId && externalCandidateIds.has(persistedCandidateId)
+          ? persistedCandidateId
+          : undefined);
+      const resolution = resolveExternalPromptCommandInvocation(
+        message,
+        externalPromptCommands,
+        reservedCommands,
+        selectedExternalCandidateId,
+      );
+      if (resolution.state === 'none') {
+        return false;
+      }
+      if (resolution.state === 'conflict') {
+        setSlashCommandState({
+          isActive: true,
+          kind: 'all',
+          query: resolution.command.slice(1),
+          selectedIndex: 0,
+        });
+        notificationService.warning(t('chatInput.selectHint'));
+        return true;
+      }
+      if (resolution.state === 'unavailable') {
+        notificationService.warning(
+          resolution.item.unavailableReason || t('chatInput.noMatchingCommand'),
+        );
+        return true;
+      }
+
+      let expectedPreferenceRevision = nativeConflictSnapshot?.preferenceRevision ?? 0;
+      let nativeConflictKey = nativeConflict?.conflictKey;
+      if (resolution.item.conflictKey) {
+        const snapshot = await externalSourcesAPI.setConflictChoice(
+          submissionWorkspacePath || undefined,
+          resolution.item.conflictKey,
+          resolution.item.candidateId,
+          resolution.item.expectedPreferenceRevision ?? 0,
+        );
+        expectedPreferenceRevision = snapshot.preferenceRevision ?? expectedPreferenceRevision;
+        if (!submissionTargetIsCurrent()) return true;
+      }
+      if (nativeConflict
+        && selectedExternalPromptCandidateId === resolution.item.candidateId
+        && nativeConflict.selectedCandidateId !== resolution.item.candidateId) {
+        const updatedNativeConflicts = await externalSourcesAPI.setNativePromptCommandConflictChoice(
+          submissionWorkspacePath || undefined,
+          nativeCommands,
+          resolution.item.candidateId,
+          expectedPreferenceRevision,
+        );
+        expectedPreferenceRevision = updatedNativeConflicts.preferenceRevision;
+        nativeConflictKey = updatedNativeConflicts.conflicts.find(conflict => (
+          conflict.externalCandidateId === resolution.item.candidateId
+        ))?.conflictKey;
+        if (!nativeConflictKey) {
+          throw new Error('Native prompt command conflict guard is unavailable');
+        }
+        if (!submissionTargetIsCurrent()) return true;
+      }
+      const expanded = await externalSourcesAPI.expandPromptCommand(
+        submissionWorkspacePath || undefined,
+        resolution.item.command.slice(1),
+        resolution.arguments,
+        resolution.item.candidateId,
+        resolution.item.contentVersion,
+        nativeCommands,
+        nativeConflictKey ? {
+          conflictKey: nativeConflictKey,
+          expectedPreferenceRevision,
+        } : undefined,
+      );
+      if (!submissionTargetIsCurrent()) return true;
+      const expandedCharCount = getCharacterCount(expanded.content);
+      if (expandedCharCount > CHAT_INPUT_CONFIG.largePaste.maxMessageChars) {
+        notificationService.error(
+          t('input.messageTooLarge', {
+            max: CHAT_INPUT_CONFIG.largePaste.maxMessageChars,
+            count: expandedCharCount,
+          }),
+          { duration: 4000 },
+        );
+        return true;
+      }
+      if (!(await confirmPromptCacheGuardIfNeeded())) {
+        return true;
+      }
+      if (!submissionTargetIsCurrent()) return true;
+
+      if (submissionSessionId) {
+        addToHistory(submissionSessionId, message);
+      }
+      if (externalPromptComposerIsUnchanged(
+        submissionComposerValue,
+        inputValueRef.current,
+      )) {
+        setHistoryIndex(-1);
+        setSavedDraft('');
+        dispatchInput({ type: 'CLEAR_VALUE' });
+        composerCleared = true;
+        clearPendingLargePastes();
+        setQueuedInput(null);
+        setSelectedExternalPromptCandidateId(undefined);
+        setSelectedNonExternalSlashCommand(undefined);
+        setSelectedNonExternalSlashCandidateId(undefined);
+      }
+      await sendMessage(expanded.content, { displayMessage: originalMessage });
+      if (!submissionTargetIsCurrent()) return true;
+      if (composerCleared && inputValueRef.current === '') {
+        dispatchInput({ type: 'DEACTIVATE' });
+      }
+    } catch (error) {
+      log.warn('External prompt command invocation failed', {
+        code: error instanceof ExternalSourceApiError ? error.code : 'internal',
+      });
+      if (!submissionTargetIsCurrent()) {
+        if (composerCleared && submissionSessionId) {
+          const composer = sessionComposerStore.getState();
+          if (composer.getDraft(submissionSessionId)?.value === '') {
+            composer.setValue(submissionSessionId, originalMessage);
+            composer.setPendingLargePastes(submissionSessionId, originalPendingLargePastes);
+          }
+        }
+        return true;
+      }
+      const restoreSubmittedComposer = composerCleared
+        ? inputValueRef.current === ''
+        : externalPromptComposerIsUnchanged(
+            submissionComposerValue,
+            inputValueRef.current,
+          );
+      if (restoreSubmittedComposer) {
+        replacePendingLargePastes(originalPendingLargePastes);
+        dispatchInput({ type: 'ACTIVATE' });
+        dispatchInput({ type: 'SET_VALUE', payload: originalMessage });
+      }
+      if (error instanceof ExternalSourceApiError
+        && (error.code === 'stale_revision'
+          || error.code === 'conflict'
+          || error.code === 'not_found')) {
+        setSelectedExternalPromptCandidateId(undefined);
+        setSelectedNonExternalSlashCandidateId(undefined);
+        void refreshExternalPromptCommands(false, true);
+      }
+      notificationService.error(
+        error instanceof ExternalSourceApiError ? error.detail : t('error.unknown'),
+        { duration: 5000 },
+      );
+    }
+    return true;
+  }, [addToHistory, clearPendingLargePastes, confirmPromptCacheGuardIfNeeded, dispatchInput, effectiveTargetSessionId, externalPromptCommands, externalPromptCommandsIssue, externalPromptCommandsLoading, externalPromptCommandsPending, getSlashPickerItems, refreshExternalPromptCommands, replacePendingLargePastes, selectedExternalPromptCandidateId, selectedNonExternalSlashCandidateId, selectedNonExternalSlashCommand, sendMessage, setQueuedInput, t, workspacePath]);
+
   const handleCancelCurrentTask = useCallback(async () => {
     if (effectiveTargetSessionId) {
       await FlowChatManager.getInstance().cancelSessionTask(effectiveTargetSessionId);
@@ -2936,6 +3412,14 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     const messageCharCount = getCharacterCount(message);
     // Voice transcripts are always message content; they must not accidentally execute local commands.
     const localSlashCommandsEnabled = !isAcpInputSession && messageOverride === undefined;
+
+    if (localSlashCommandsEnabled && await submitExternalPromptCommandFromInput(
+      message,
+      originalMessage,
+      originalPendingLargePastes,
+    )) {
+      return;
+    }
 
     if (localSlashCommandsEnabled && isSlashCommand(message, '/btw')) {
       // When idle, /btw can be sent via the normal send button.
@@ -3077,6 +3561,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     confirmPromptCacheGuardIfNeeded,
     t,
     resolveTypedMcpPromptCommand,
+    submitExternalPromptCommandFromInput,
   ]);
   
   const getFilteredIncrementalModes = useCallback(() => {
@@ -3163,26 +3648,110 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     }
   }, [t, userDefaultModeId]);
   
-  const selectSlashCommandMode = useCallback((modeId: string) => {
-    requestModeChange(modeId);
-
-    if (getInlineSlashCommandPickerQuery(inlineTriggerState) !== null) {
-      const controller = richTextInputRef.current as (HTMLDivElement & {
-        replaceActiveInlineTrigger?: (replacementText: string) => void;
-      }) | null;
-      controller?.replaceActiveInlineTrigger?.('');
-      setSlashCommandState({ isActive: false, kind: 'modes', query: '', selectedIndex: 0 });
-      return;
+  const persistExplicitNativePromptCommandChoice = useCallback(async (
+    descriptor: NativePromptCommandDescriptor,
+    nativeCommands: NativePromptCommandDescriptor[],
+    operationIsCurrent: () => boolean,
+  ): Promise<boolean> => {
+    const capturedSessionId = effectiveTargetSessionId;
+    const capturedWorkspacePath = workspacePath || '';
+    const targetIsCurrent = () => isExternalPromptSubmissionTargetCurrent(
+      capturedSessionId,
+      effectiveTargetSessionIdRef.current,
+      capturedWorkspacePath,
+      workspacePathRef.current,
+    );
+    if (externalPromptCommandsIssue === 'host_unavailable') {
+      return targetIsCurrent() && operationIsCurrent();
     }
-    
-    dispatchInput({ type: 'CLEAR_VALUE' });
-    setSlashCommandState({
-      isActive: false,
-      kind: 'modes',
-      query: '',
-      selectedIndex: 0,
-    });
-  }, [dispatchInput, inlineTriggerState, requestModeChange]);
+    try {
+      const snapshot = await externalSourcesAPI.getNativePromptCommandConflicts(
+        capturedWorkspacePath || undefined,
+        nativeCommands,
+      );
+      if (!targetIsCurrent() || !operationIsCurrent()) return false;
+      const conflict = snapshot.conflicts.find(item => (
+        item.commandName === descriptor.commandName
+      ));
+      const requiresReconfirmation = snapshot.reconfirmations?.some(item => (
+        item.nativeCandidateId === descriptor.candidateId
+      ));
+      if ((conflict && conflict.selectedCandidateId !== descriptor.candidateId)
+        || requiresReconfirmation) {
+        await externalSourcesAPI.setNativePromptCommandConflictChoice(
+          capturedWorkspacePath || undefined,
+          nativeCommands,
+          descriptor.candidateId,
+          snapshot.preferenceRevision,
+        );
+        if (!targetIsCurrent() || !operationIsCurrent()) return false;
+      }
+    } catch (error) {
+      log.warn('Failed to persist native prompt command conflict choice', {
+        code: error instanceof ExternalSourceApiError ? error.code : 'internal',
+      });
+      if (targetIsCurrent() && operationIsCurrent()) {
+        notificationService.warning(t('chatInput.nativeCommandChoiceNotSaved'));
+      }
+    }
+    return targetIsCurrent() && operationIsCurrent();
+  }, [effectiveTargetSessionId, externalPromptCommandsIssue, t, workspacePath]);
+
+  const selectSlashCommandMode = useCallback((modeId: string) => {
+    const operationGeneration = ++nativePromptModeSelectionGenerationRef.current;
+    const operationIsCurrent = () => (
+      nativePromptModeSelectionGenerationRef.current === operationGeneration
+    );
+    const descriptor = {
+      commandName: modeId.toLowerCase(),
+      candidateId: nativePromptCommandCandidateId('mode', modeId),
+      behaviorVersion: JSON.stringify({ kind: 'mode', id: modeId }),
+    };
+    const nativeCommands = getSlashPickerItems()
+      .filter((item): item is Exclude<SlashPickerItem, SlashExternalPromptCommandItem> => (
+        item.kind !== 'externalCommand'
+      ))
+      .map(toNativePromptCommandDescriptor)
+      .filter(item => item.commandName === descriptor.commandName)
+      .filter((item, index, all) => (
+        all.findIndex(candidate => candidate.candidateId === item.candidateId) === index
+      ));
+    const previousOperation = nativePromptModeSelectionQueueRef.current;
+    const operation = (async () => {
+      await previousOperation;
+      if (!operationIsCurrent()) return false;
+      return persistExplicitNativePromptCommandChoice(
+        descriptor,
+        nativeCommands,
+        operationIsCurrent,
+      );
+    })();
+    nativePromptModeSelectionQueueRef.current = operation.then(() => undefined, () => undefined);
+    void (async () => {
+      if (!await operation) return;
+      requestModeChange(modeId);
+      setSelectedExternalPromptCandidateId(undefined);
+      setSelectedNonExternalSlashCommand(undefined);
+      setSelectedNonExternalSlashCandidateId(undefined);
+
+      if (getInlineSlashCommandPickerQuery(inlineTriggerState) !== null) {
+        const controller = richTextInputRef.current as (HTMLDivElement & {
+          replaceActiveInlineTrigger?: (replacementText: string) => void;
+        }) | null;
+        controller?.replaceActiveInlineTrigger?.('');
+        setSlashCommandState({ isActive: false, kind: 'modes', query: '', selectedIndex: 0 });
+        return;
+      }
+
+      dispatchInput({ type: 'CLEAR_VALUE' });
+      setSlashCommandState({
+        isActive: false,
+        kind: 'modes',
+        query: '',
+        selectedIndex: 0,
+      });
+    })();
+  }, [dispatchInput, getSlashPickerItems, inlineTriggerState, persistExplicitNativePromptCommandChoice, requestModeChange]);
 
   const selectSlashCommandAction = useCallback((actionId: SlashActionId) => {
     const raw = inputState.value || '';
@@ -3190,6 +3759,12 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     if (next === null) {
       return;
     }
+    nativePromptModeSelectionGenerationRef.current += 1;
+    setSelectedExternalPromptCandidateId(undefined);
+    setSelectedNonExternalSlashCommand(next.trim().split(/\s+/, 1)[0]?.toLowerCase());
+    setSelectedNonExternalSlashCandidateId(
+      nativePromptCommandCandidateId('action', actionId),
+    );
 
     if (getInlineSlashCommandPickerQuery(inlineTriggerState) !== null) {
       const controller = richTextInputRef.current as (HTMLDivElement & {
@@ -3210,7 +3785,37 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     window.setTimeout(() => richTextInputRef.current?.focus(), 0);
   }, [dispatchInput, inlineTriggerState, inputState.value, isBtwSession, setQueuedInput]);
 
+  const selectSlashExternalPromptCommand = useCallback((item: SlashExternalPromptCommandItem) => {
+    if (!item.available) {
+      notificationService.warning(item.unavailableReason || t('chatInput.noMatchingCommand'));
+      return;
+    }
+    nativePromptModeSelectionGenerationRef.current += 1;
+    setSelectedExternalPromptCandidateId(item.candidateId);
+    setSelectedNonExternalSlashCommand(undefined);
+    setSelectedNonExternalSlashCandidateId(undefined);
+    const replacement = `${item.command} `;
+    if (getInlineSlashCommandPickerQuery(inlineTriggerState) !== null) {
+      const controller = richTextInputRef.current as (HTMLDivElement & {
+        replaceActiveInlineTrigger?: (replacementText: string) => void;
+      }) | null;
+      controller?.replaceActiveInlineTrigger?.(item.command);
+    } else {
+      dispatchInput({ type: 'SET_VALUE', payload: replacement });
+      inputValueRef.current = replacement;
+    }
+    setQueuedInput(null);
+    setSlashCommandState({ isActive: false, kind: 'modes', query: '', selectedIndex: 0 });
+    window.setTimeout(() => richTextInputRef.current?.focus(), 0);
+  }, [dispatchInput, inlineTriggerState, setQueuedInput, t]);
+
   const selectSlashPromptCommand = useCallback((item: SlashMcpPromptItem) => {
+    nativePromptModeSelectionGenerationRef.current += 1;
+    setSelectedExternalPromptCandidateId(undefined);
+    setSelectedNonExternalSlashCommand(item.command.toLowerCase());
+    setSelectedNonExternalSlashCandidateId(
+      nativePromptCommandCandidateId(item.kind, item.id),
+    );
     if (getInlineSlashCommandPickerQuery(inlineTriggerState) !== null) {
       const controller = richTextInputRef.current as (HTMLDivElement & {
         replaceActiveInlineTrigger?: (replacementText: string) => void;
@@ -3231,6 +3836,12 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   }, [dispatchInput, inlineTriggerState, setQueuedInput]);
 
   const selectSlashAcpCommand = useCallback((item: SlashAcpCommandItem) => {
+    nativePromptModeSelectionGenerationRef.current += 1;
+    setSelectedExternalPromptCandidateId(undefined);
+    setSelectedNonExternalSlashCommand(item.command.toLowerCase());
+    setSelectedNonExternalSlashCandidateId(
+      nativePromptCommandCandidateId(item.kind, item.id),
+    );
     if (getInlineSlashCommandPickerQuery(inlineTriggerState) !== null) {
       const controller = richTextInputRef.current as (HTMLDivElement & {
         replaceActiveInlineTrigger?: (replacementText: string) => void;
@@ -3255,6 +3866,12 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   }, []);
 
   const selectSlashSkill = useCallback((item: SlashSkillItem) => {
+    nativePromptModeSelectionGenerationRef.current += 1;
+    setSelectedExternalPromptCandidateId(undefined);
+    setSelectedNonExternalSlashCommand(item.command.toLowerCase());
+    setSelectedNonExternalSlashCandidateId(
+      nativePromptCommandCandidateId(item.kind, item.id),
+    );
     const replaceInlineTrigger = getRichTextInlineTriggerController()?.replaceActiveInlineTrigger;
 
     if (inlineTriggerState.isActive) {
@@ -3437,6 +4054,8 @@ export const ChatInput: React.FC<ChatInputProps> = ({
               const item = items[slashCommandState.selectedIndex] as SlashPickerItem;
               if (item.kind === 'mode') {
                 selectSlashCommandMode(item.id);
+              } else if (item.kind === 'externalCommand') {
+                selectSlashExternalPromptCommand(item);
               } else if (item.kind === 'mcpPrompt') {
                 selectSlashPromptCommand(item);
               } else if (item.kind === 'acpCommand') {
@@ -3474,6 +4093,8 @@ export const ChatInput: React.FC<ChatInputProps> = ({
               const item = items[slashCommandState.selectedIndex] as SlashPickerItem;
               if (item.kind === 'mode') {
                 selectSlashCommandMode(item.id);
+              } else if (item.kind === 'externalCommand') {
+                selectSlashExternalPromptCommand(item);
               } else if (item.kind === 'mcpPrompt') {
                 selectSlashPromptCommand(item);
               } else if (item.kind === 'acpCommand') {
@@ -3607,7 +4228,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       e.preventDefault();
       void handleCancelCurrentTask();
     }
-  }, [handleSendOrCancel, submitBtwFromInput, submitGoalFromInput, derivedState, dispatchInput, handleCancelCurrentTask, slashCommandState, getFilteredIncrementalModes, getActiveSlashPickerItems, selectSlashCommandMode, selectSlashCommandAction, selectSlashPromptCommand, selectSlashAcpCommand, selectSlashSkill, canSwitchModes, getRichTextInlineTriggerController, historyIndex, inputHistory, savedDraft, inputState.value, currentSessionId, isBtwSession, showTargetSwitcher, setInputTarget, removeContext, t]);
+  }, [handleSendOrCancel, submitBtwFromInput, submitGoalFromInput, derivedState, dispatchInput, handleCancelCurrentTask, slashCommandState, getFilteredIncrementalModes, getActiveSlashPickerItems, selectSlashCommandMode, selectSlashCommandAction, selectSlashExternalPromptCommand, selectSlashPromptCommand, selectSlashAcpCommand, selectSlashSkill, canSwitchModes, getRichTextInlineTriggerController, historyIndex, inputHistory, savedDraft, inputState.value, currentSessionId, isBtwSession, showTargetSwitcher, setInputTarget, removeContext, t]);
 
   const handleImeCompositionStart = useCallback(() => {
     isImeComposingRef.current = true;
@@ -4038,9 +4659,23 @@ export const ChatInput: React.FC<ChatInputProps> = ({
                         <span className="bitfun-chat-input__slash-command-hint">{t('chatInput.selectHint')}</span>
                       </div>
                       <div className="bitfun-chat-input__slash-command-list">
-                        {items.length === 0 && (mcpPromptCommandsLoading || resolvedModeSkillsLoading) ? (
+                        {externalPromptCommandsIssue ? (
+                          <div className="bitfun-chat-input__slash-command-empty" role="status">
+                            {t(externalPromptCommandsIssue === 'host_unavailable'
+                              ? 'chatInput.externalCommandsHostUnavailable'
+                              : 'chatInput.externalCommandsLoadFailed')}
+                          </div>
+                        ) : null}
+                        {!externalPromptCommandsIssue && items.length === 0 && (
+                          externalPromptCommandsLoading
+                          || externalPromptCommandsPending
+                          || mcpPromptCommandsLoading
+                          || resolvedModeSkillsLoading
+                        ) ? (
                           <div className="bitfun-chat-input__slash-command-empty">
-                            {resolvedModeSkillsLoading && !mcpPromptCommandsLoading
+                            {externalPromptCommandsLoading || externalPromptCommandsPending
+                              ? t('chatInput.externalCommandsLoading')
+                              : resolvedModeSkillsLoading && !mcpPromptCommandsLoading
                               ? t('chatInput.boostSkillsLoading')
                               : t('chatInput.loadingMcpPrompts')}
                           </div>
@@ -4083,6 +4718,8 @@ export const ChatInput: React.FC<ChatInputProps> = ({
                                       selectSlashCommandMode(item.id);
                                     } else if (item.kind === 'skill') {
                                       selectSlashSkill(item);
+                                    } else if (item.kind === 'externalCommand') {
+                                      selectSlashExternalPromptCommand(item);
                                     } else if (item.kind === 'mcpPrompt') {
                                       selectSlashPromptCommand(item);
                                     } else if (item.kind === 'acpCommand') {
@@ -4106,11 +4743,11 @@ export const ChatInput: React.FC<ChatInputProps> = ({
                               </React.Fragment>
                             );
                           })
-                        ) : (
+                        ) : !externalPromptCommandsIssue ? (
                           <div className="bitfun-chat-input__slash-command-empty">
                             {t('chatInput.noMatchingCommand')}
                           </div>
-                        )}
+                        ) : null}
                       </div>
                     </div>
                   );
@@ -4150,6 +4787,8 @@ export const ChatInput: React.FC<ChatInputProps> = ({
                                     selectSlashCommandMode(item.id);
                                   } else if (item.kind === 'skill') {
                                     selectSlashSkill(item);
+                                  } else if (item.kind === 'externalCommand') {
+                                    selectSlashExternalPromptCommand(item);
                                   } else if (item.kind === 'mcpPrompt') {
                                     selectSlashPromptCommand(item);
                                   } else if (item.kind === 'acpCommand') {

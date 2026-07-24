@@ -699,6 +699,8 @@
     "currentMode": "目前模式: {{mode}}",
     "noMatchingMode": "沒有匹配的模式",
     "noMatchingCommand": "沒有匹配的命令",
+    "nativeCommandChoiceNotSaved": "本次仍會執行該命令，但未能儲存這次衝突選擇。",
+    "nativeCommandReconfirmationRequired": "先前選擇的外部命令已無法使用。請從斜線選單中選擇 BitFun 命令後再執行。",
     "selectHint": "↑↓ 選擇 · Enter 確認 · Esc 取消",
     "current": "目前",
     "computerUseDisabled": "已在「設定 → 工作階段權限」中停用 Computer Use",
@@ -744,7 +746,10 @@
     "usageFailed": "用量報告產生失敗",
     "mcpPromptMissingArgs": "此 MCP 提示詞需要參數：{{args}}",
     "mcpPromptFailed": "MCP 提示詞執行失敗",
-    "loadingMcpPrompts": "正在載入 MCP 提示詞..."
+    "loadingMcpPrompts": "正在載入 MCP 提示詞...",
+    "externalCommandsLoading": "正在載入相容命令...",
+    "externalCommandsHostUnavailable": "目前主機不支援外部命令。",
+    "externalCommandsLoadFailed": "外部命令載入失敗，請重新開啟命令選擇器重試。"
   },
   "planner": {
     "title": "任務規劃",

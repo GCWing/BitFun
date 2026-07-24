@@ -9,8 +9,8 @@ use crate::{
     ExternalToolDiscoveryRequest, ExternalToolDiscoveryResult,
 };
 use bitfun_product_domains::external_sources::{
-    ExternalMcpSourceProvider, ExternalSourceContext, ExternalToolSourceProvider,
-    PromptCommandSourceProvider,
+    ExternalMcpRevisionKey, ExternalMcpSourceProvider, ExternalSourceContext,
+    ExternalToolSourceProvider, PromptCommandSourceProvider,
 };
 use bitfun_product_domains::external_subagents::ExternalSubagentSourceProvider;
 use std::collections::BTreeSet;
@@ -53,6 +53,7 @@ impl fmt::Debug for ExternalSourceControlPlane {
 impl ExternalSourceControlPlane {
     pub fn new(
         context: ExternalSourceContext,
+        mcp_revision_key: ExternalMcpRevisionKey,
         command_providers: Vec<Arc<dyn PromptCommandSourceProvider>>,
         tool_providers: Vec<Arc<dyn ExternalToolSourceProvider>>,
         subagent_providers: Vec<Arc<dyn ExternalSubagentSourceProvider>>,
@@ -71,7 +72,11 @@ impl ExternalSourceControlPlane {
                 context.clone(),
                 subagent_providers,
             )?),
-            mcp: Mutex::new(ExternalMcpCoordinator::new(context, mcp_providers)?),
+            mcp: Mutex::new(ExternalMcpCoordinator::new(
+                context,
+                mcp_revision_key,
+                mcp_providers,
+            )?),
             command_lane: DiscoveryLane::new(),
             tool_lane: DiscoveryLane::new(),
             subagent_lane: DiscoveryLane::new(),

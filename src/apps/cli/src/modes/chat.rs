@@ -72,17 +72,17 @@ use bitfun_core::external_hooks::{
 use bitfun_core::external_sources::{
     apply_external_source_control_action, choose_external_subagent_conflict,
     expand_external_prompt_command, external_source_conflict_choices, external_source_snapshot,
-    get_external_source_control_snapshot, prompt_command_conflict_key,
-    remember_external_source_conflict_choice, sanitize_external_source_operation_error,
-    set_external_prompt_command_conflict_choice, set_external_subagent_activation,
-    set_external_tool_conflict_choice, set_external_tool_target_decision,
+    get_external_source_control_snapshot, native_prompt_command_conflict_key,
+    sanitize_external_source_operation_error, set_external_prompt_command_conflict_choice,
+    set_external_subagent_activation, set_external_tool_conflict_choice,
+    set_external_tool_target_decision, set_native_prompt_command_conflict_choice,
     subscribe_external_source_updates, ExternalSourceAssetKind, ExternalSourceCatalogSnapshot,
     ExternalSourceControlActionV1, ExternalSourceControlRequestV1,
     ExternalSourceDiagnosticSeverity, ExternalSourceHostCapabilities, ExternalSourceOperationError,
     ExternalSourceOperationErrorCode, ExternalSubagentActivationState,
     ExternalSubagentCompatibilityState, ExternalToolActivationState, ExternalToolCapability,
-    ExternalToolCatalogEntry, ExternalToolRuntimeKind, PromptCommandAvailability,
-    EXTERNAL_SOURCE_CONTROL_SCHEMA_V1,
+    ExternalToolCatalogEntry, ExternalToolRuntimeKind, NativePromptCommandDescriptor,
+    PromptCommandAvailability, EXTERNAL_SOURCE_CONTROL_SCHEMA_V1,
 };
 use bitfun_core::service::config::GlobalConfigManager;
 use bitfun_core::service::session_usage::render_usage_report_markdown;

@@ -593,7 +593,7 @@ impl ExternalSourceCoordinator {
 
             match provider
                 .provider
-                .resolve_commands(&provider_snapshot.commands, &enabled_source_keys)
+                .resolve_commands(provider_snapshot, &enabled_source_keys)
             {
                 Ok(commands) => {
                     for command in commands {

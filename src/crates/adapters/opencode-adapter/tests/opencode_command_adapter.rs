@@ -77,7 +77,7 @@ fn resolve_all(
 ) -> Vec<PromptCommandDefinition> {
     provider
         .resolve_commands(
-            &snapshot.commands,
+            snapshot,
             &snapshot
                 .sources
                 .iter()
@@ -268,9 +268,7 @@ fn suppressing_an_opencode_winner_reveals_the_next_ecosystem_source() {
         .map(|source| source.key.clone())
         .collect::<BTreeSet<_>>();
 
-    let resolved = provider
-        .resolve_commands(&snapshot.commands, &enabled)
-        .unwrap();
+    let resolved = provider.resolve_commands(&snapshot, &enabled).unwrap();
     assert_eq!(resolved[0].template, "project");
     let project_source = snapshot
         .commands
@@ -282,16 +280,11 @@ fn suppressing_an_opencode_winner_reveals_the_next_ecosystem_source() {
         .clone();
     enabled.remove(&project_source);
 
-    let fallback = provider
-        .resolve_commands(&snapshot.commands, &enabled)
-        .unwrap();
+    let fallback = provider.resolve_commands(&snapshot, &enabled).unwrap();
     assert_eq!(fallback[0].template, "global");
     enabled.insert(project_source);
     assert_eq!(
-        provider
-            .resolve_commands(&snapshot.commands, &enabled)
-            .unwrap()[0]
-            .template,
+        provider.resolve_commands(&snapshot, &enabled).unwrap()[0].template,
         "project"
     );
 }

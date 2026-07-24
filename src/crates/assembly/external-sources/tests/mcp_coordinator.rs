@@ -1,11 +1,12 @@
 use bitfun_external_sources::ExternalMcpCoordinator;
 use bitfun_product_domains::external_sources::{
     EcosystemId, ExecutionDomainId, ExternalMcpDiscoveryInput, ExternalMcpProviderIdentity,
-    ExternalMcpProviderSnapshot, ExternalMcpServerDefinition, ExternalMcpSourceProvider,
-    ExternalMcpStaticStatus, ExternalMcpTransportKind, ExternalSourceContext, ExternalSourceHealth,
-    ExternalSourceLifecycleState, ExternalSourceProviderError, ExternalSourceRecord,
-    ExternalSourceScope, ExternalWatchRoot, PreparedExternalMcpServer,
-    PreparedExternalMcpTransport, ProviderId, SourceKey, SourceQualifiedMcpServerId,
+    ExternalMcpProviderSnapshot, ExternalMcpRevisionKey, ExternalMcpServerDefinition,
+    ExternalMcpSourceProvider, ExternalMcpStaticStatus, ExternalMcpTransportKind,
+    ExternalSourceContext, ExternalSourceHealth, ExternalSourceLifecycleState,
+    ExternalSourceProviderError, ExternalSourceRecord, ExternalSourceScope, ExternalWatchRoot,
+    PreparedExternalMcpServer, PreparedExternalMcpTransport, ProviderId, SourceKey,
+    SourceQualifiedMcpServerId,
 };
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::PathBuf;
@@ -16,6 +17,10 @@ fn context() -> ExternalSourceContext {
         workspace_root: Some(PathBuf::from("/workspace")),
         execution_domain_id: ExecutionDomainId::new("local-user").unwrap(),
     }
+}
+
+fn revision_key() -> ExternalMcpRevisionKey {
+    ExternalMcpRevisionKey::new([7; 32])
 }
 
 fn source(source_id: &str) -> ExternalSourceRecord {
@@ -153,7 +158,8 @@ impl ExternalMcpSourceProvider for FakeProvider {
 fn coordinator_isolates_failures_keeps_last_success_and_withdraws_stable_deletions() {
     let provider = Arc::new(FakeProvider::new(snapshot("project", "behavior-v1")));
     let provider_trait: Arc<dyn ExternalMcpSourceProvider> = provider.clone();
-    let mut coordinator = ExternalMcpCoordinator::new(context(), vec![provider_trait]).unwrap();
+    let mut coordinator =
+        ExternalMcpCoordinator::new(context(), revision_key(), vec![provider_trait]).unwrap();
 
     let first = coordinator.refresh();
     assert!(!first.discovery_pending);
@@ -194,7 +200,8 @@ fn coordinator_isolates_failures_keeps_last_success_and_withdraws_stable_deletio
 fn coordinator_passes_suppression_to_the_provider_and_guards_preparation_revision() {
     let provider = Arc::new(FakeProvider::new(snapshot("project", "behavior-v1")));
     let provider_trait: Arc<dyn ExternalMcpSourceProvider> = provider.clone();
-    let mut coordinator = ExternalMcpCoordinator::new(context(), vec![provider_trait]).unwrap();
+    let mut coordinator =
+        ExternalMcpCoordinator::new(context(), revision_key(), vec![provider_trait]).unwrap();
     let first = coordinator.refresh();
     let server = first.servers[0].clone();
     let source_key = first.sources[0].stable_key.clone();
@@ -223,7 +230,8 @@ fn coordinator_passes_suppression_to_the_provider_and_guards_preparation_revisio
 fn coordinator_keeps_last_success_for_a_known_unavailable_source() {
     let provider = Arc::new(FakeProvider::new(snapshot("project", "behavior-v1")));
     let provider_trait: Arc<dyn ExternalMcpSourceProvider> = provider.clone();
-    let mut coordinator = ExternalMcpCoordinator::new(context(), vec![provider_trait]).unwrap();
+    let mut coordinator =
+        ExternalMcpCoordinator::new(context(), revision_key(), vec![provider_trait]).unwrap();
     let first = coordinator.refresh();
     assert_eq!(first.servers.len(), 1);
 
@@ -252,7 +260,8 @@ fn coordinator_keeps_last_success_for_a_known_unavailable_source() {
 fn coordinator_withdraws_merged_server_when_any_provenance_source_is_suppressed() {
     let provider = Arc::new(FakeProvider::new(merged_snapshot()));
     let provider_trait: Arc<dyn ExternalMcpSourceProvider> = provider.clone();
-    let mut coordinator = ExternalMcpCoordinator::new(context(), vec![provider_trait]).unwrap();
+    let mut coordinator =
+        ExternalMcpCoordinator::new(context(), revision_key(), vec![provider_trait]).unwrap();
     let first = coordinator.refresh();
     assert_eq!(first.servers.len(), 1);
 
@@ -287,7 +296,9 @@ fn coordinator_withdraws_merged_server_when_any_provenance_source_is_suppressed(
 fn coordinator_deduplicates_watch_roots_and_rejects_duplicate_providers() {
     let provider = Arc::new(FakeProvider::new(snapshot("project", "behavior-v1")));
     let provider_trait: Arc<dyn ExternalMcpSourceProvider> = provider.clone();
-    let coordinator = ExternalMcpCoordinator::new(context(), vec![provider_trait.clone()]).unwrap();
+    let coordinator =
+        ExternalMcpCoordinator::new(context(), revision_key(), vec![provider_trait.clone()])
+            .unwrap();
     assert_eq!(
         coordinator.watch_roots(),
         vec![ExternalWatchRoot {
@@ -295,8 +306,11 @@ fn coordinator_deduplicates_watch_roots_and_rejects_duplicate_providers() {
             recursive: true,
         }]
     );
-    let duplicate =
-        ExternalMcpCoordinator::new(context(), vec![provider_trait.clone(), provider_trait]);
+    let duplicate = ExternalMcpCoordinator::new(
+        context(),
+        revision_key(),
+        vec![provider_trait.clone(), provider_trait],
+    );
     assert!(duplicate.is_err());
     assert_eq!(
         provider.identity().provider_id,

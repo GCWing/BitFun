@@ -27,8 +27,8 @@ Product surfaces (Desktop / CLI / TUI)
 
 Same-level ecosystem adapters implement those provider contracts
   -> OpenCode adapter
-  -> future Codex adapter
-  -> future Claude Code adapter
+  -> Codex declarative-source adapter
+  -> Claude Code declarative-source adapter
 
 Product Assembly registers adapter implementations with the coordinator
 ```
@@ -66,8 +66,9 @@ Product Assembly registers adapter implementations with the coordinator
 | PR3：OpenCode Subagent（已实现） | 全局/项目 agent 定义经一次非阻塞确认后进入现有 Subagent owner，可选择、单次调用、更新和撤下；同名冲突由用户选择，unsupported 字段有明确诊断 | 现有 Subagent owner + 独立 Subagent 兼容接口 + generation lease | 原始 OpenCode 会话内核、完整 primary-agent 替换、外部 agent 续接、跨产品通用 agent JSON |
 | PR4：Skill 来源与覆盖状态（本轮） | GUI/TUI 对已发现 Skill 显示生态来源；被现有优先级覆盖的同名项继续可见，并标明较高优先级来源；模式配置按实际选择结果标明当前覆盖来源 | 现有 Skill Registry；只补 provider-neutral 来源元数据和宿主展示 | 修改 Skill 优先级、引入审批弹窗、复制导入、URL/脚本执行、把 Skill 并入外部来源协调器 |
 
-Tool 与 Subagent 不复用 Command 的贡献对象，只复用来源身份、状态、代次、诊断和观察生命周期。未来接入 Codex 或
-Claude Code 时新增同级 adapter，并在 Product Assembly 注册；不能修改 OpenCode adapter 来容纳其他生态。
+Tool 与 Subagent 不复用 Command 的贡献对象，只复用来源身份、状态、代次、诊断和观察生命周期。Codex 与
+Claude Code 的声明式安全子集已由同级 adapter 接入并在 Product Assembly 注册；后续能力仍在各自 adapter 演进，
+不能修改 OpenCode adapter 来容纳其他生态，也不能把当前子集表述为完整兼容。
 
 ## 3. PR1：来源目录与 OpenCode Command 纵向闭环
 
@@ -81,8 +82,9 @@ Claude Code 时新增同级 adapter，并在 Product Assembly 注册；不能修
   `template`、`description`。Markdown 已知字段按当前 OpenCode schema 校验，类型错误不得静默丢弃；同时保留
   OpenCode 对未引用冒号值的兼容重试。
 - 保留 OpenCode 生态内部的名称和覆盖顺序；独立 provider 之间或与 BitFun 本地能力同名时不得按适配器优先级静默决胜，
-  必须生成版本敏感的冲突指纹并等待用户选择。候选版本不变时只询问一次，更新后重新询问。交互式 TUI（ChatMode）将跨 provider
-  候选投影为 `/external:<provider>:<command>` 明确选择项；一次显式选择同时解决同名 BitFun 本地命令，不连续确认。
+  必须生成版本敏感的冲突指纹并等待用户选择。候选版本不变时只询问一次，更新后重新询问。交互式 TUI（ChatMode）继续显示
+  竞品一致的 `/command`，通过来源标签和内部 candidate id 区分候选；直接输入存在未解决冲突时 fail closed 并引导使用候选菜单，
+  不公开生态前缀或 `/builtin:`、`/external:` 选择语法。
 - 支持 `$ARGUMENTS` 与 `$1`、`$2` 等位置参数展开。显式选择或输入 `/command ...` 本身就是本次 prompt-only
   命令的用户确认；发现阶段不自动向会话发送内容。
 - `!shell`、`@file`、`{env:...}`、`{file:...}`、`agent`、`model`、`variant`、`subtask` 等尚未接通真实 owner 的语义继续被识别，但命令标记为
@@ -99,7 +101,7 @@ Claude Code 时新增同级 adapter，并在 Product Assembly 注册；不能修
 | `services/services-integrations` | 可订阅、去抖的文件变化事实 | 来源合并、OpenCode 语义、能力注册 |
 | `assembly/external-sources` | provider-neutral 的原子代次、隔离降级、同名冲突目录和版本敏感选择 | 注册具体 adapter、按生态分支或解释生态文件 |
 | `assembly/core` | 注册 adapter、按工作区协调刷新、定义偏好 schema/路径并通过服务原语持久化、连接 watcher 与产品入口 | 实现文件锁/原子写、复制 OpenCode parser、按生态分支能力行为 |
-| `apps/cli` | 将可用外部 Command 投影到 TUI 菜单和输入分发；本地冲突使用 `/builtin:name` 与 `/external:name` 明确选择 | 解析 OpenCode 文件或注册假工具 |
+| `apps/cli` | 将可用外部 Command 以原生 `/command` 投影到 TUI 菜单和输入分发；来源标签及内部 candidate id 处理同名候选 | 解析 OpenCode 文件、注册假工具或公开生态限定命令 |
 | `apps/desktop` / `web-ui` | 统一来源摘要、刷新、抑制/恢复和非阻塞反馈 | 持有 adapter、直接读取用户目录、通过 IPC 传输模板正文 |
 
 ### 3.3 生命周期与失败语义

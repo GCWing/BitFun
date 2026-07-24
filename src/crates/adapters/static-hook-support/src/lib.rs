@@ -1,4 +1,4 @@
-//! Shared, runtime-free parser support for ecosystem Hook source adapters.
+//! Shared, runtime-free bounded file and parser support for ecosystem source adapters.
 
 use bitfun_product_domains::external_hook_catalog::{
     ExternalHookHandlerKind, ExternalHookMatcherSummary,
@@ -6,7 +6,7 @@ use bitfun_product_domains::external_hook_catalog::{
 use serde_json::Value;
 use sha2::{Digest, Sha256};
 use std::io::Read;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 const MAX_MATCHER_BYTES: usize = 512;
 const MAX_EVENT_NAME_BYTES: usize = 160;
@@ -15,6 +15,13 @@ const MAX_EVENT_NAME_BYTES: usize = 160;
 pub enum BoundedFileRead {
     Content(Vec<u8>),
     TooLarge,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum BoundedTextRead {
+    Content(String),
+    TooLarge,
+    InvalidUtf8,
 }
 
 /// Reads at most `max_bytes + 1` bytes so a file changed between metadata and
@@ -31,6 +38,131 @@ pub fn read_bounded_file(path: &Path, max_bytes: usize) -> std::io::Result<Bound
     }
 }
 
+/// Reads a UTF-8 text file without allocating more than `max_bytes + 1`.
+pub fn read_bounded_text(path: &Path, max_bytes: usize) -> std::io::Result<BoundedTextRead> {
+    match read_bounded_file(path, max_bytes)? {
+        BoundedFileRead::Content(bytes) => Ok(match String::from_utf8(bytes) {
+            Ok(content) => BoundedTextRead::Content(content),
+            Err(_) => BoundedTextRead::InvalidUtf8,
+        }),
+        BoundedFileRead::TooLarge => Ok(BoundedTextRead::TooLarge),
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct BoundedDirectoryWalkLimits {
+    pub max_depth: usize,
+    pub max_entries: usize,
+    pub max_directories: usize,
+    pub max_files: usize,
+}
+
+impl BoundedDirectoryWalkLimits {
+    pub fn for_file_limit(max_files: usize) -> Self {
+        Self {
+            max_depth: 32,
+            max_entries: max_files.saturating_mul(4).max(1),
+            max_directories: max_files.max(1),
+            max_files,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum BoundedDirectoryWalkLimit {
+    Depth,
+    Entries,
+    Directories,
+    Files,
+}
+
+#[derive(Debug)]
+pub enum BoundedDirectoryWalkError {
+    Io(std::io::Error),
+    LimitExceeded(BoundedDirectoryWalkLimit),
+}
+
+impl std::fmt::Display for BoundedDirectoryWalkError {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Io(error) => write!(formatter, "{error}"),
+            Self::LimitExceeded(limit) => write!(formatter, "{limit:?} limit exceeded"),
+        }
+    }
+}
+
+impl std::error::Error for BoundedDirectoryWalkError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            Self::Io(error) => Some(error),
+            Self::LimitExceeded(_) => None,
+        }
+    }
+}
+
+/// Iteratively collects matching regular files without following symlinks.
+/// Limits apply to the actual traversal cost, not only to matching files.
+pub fn collect_bounded_regular_files(
+    root: &Path,
+    limits: BoundedDirectoryWalkLimits,
+    mut matches: impl FnMut(&Path) -> bool,
+) -> Result<Vec<PathBuf>, BoundedDirectoryWalkError> {
+    let metadata = match std::fs::symlink_metadata(root) {
+        Ok(metadata) => metadata,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(Vec::new()),
+        Err(error) => return Err(BoundedDirectoryWalkError::Io(error)),
+    };
+    if !metadata.is_dir() || metadata.file_type().is_symlink() {
+        return Ok(Vec::new());
+    }
+
+    let mut files = Vec::new();
+    let mut stack = vec![(root.to_path_buf(), 0usize)];
+    let mut visited_entries = 0usize;
+    let mut visited_directories = 1usize;
+    while let Some((directory, depth)) = stack.pop() {
+        let entries = std::fs::read_dir(&directory).map_err(BoundedDirectoryWalkError::Io)?;
+        for entry in entries {
+            let entry = entry.map_err(BoundedDirectoryWalkError::Io)?;
+            visited_entries = visited_entries.saturating_add(1);
+            if visited_entries > limits.max_entries {
+                return Err(BoundedDirectoryWalkError::LimitExceeded(
+                    BoundedDirectoryWalkLimit::Entries,
+                ));
+            }
+            let file_type = entry.file_type().map_err(BoundedDirectoryWalkError::Io)?;
+            if file_type.is_symlink() {
+                continue;
+            }
+            let path = entry.path();
+            if file_type.is_dir() {
+                let next_depth = depth.saturating_add(1);
+                if next_depth > limits.max_depth {
+                    return Err(BoundedDirectoryWalkError::LimitExceeded(
+                        BoundedDirectoryWalkLimit::Depth,
+                    ));
+                }
+                visited_directories = visited_directories.saturating_add(1);
+                if visited_directories > limits.max_directories {
+                    return Err(BoundedDirectoryWalkError::LimitExceeded(
+                        BoundedDirectoryWalkLimit::Directories,
+                    ));
+                }
+                stack.push((path, next_depth));
+            } else if file_type.is_file() && matches(&path) {
+                if files.len() >= limits.max_files {
+                    return Err(BoundedDirectoryWalkError::LimitExceeded(
+                        BoundedDirectoryWalkLimit::Files,
+                    ));
+                }
+                files.push(path);
+            }
+        }
+    }
+    files.sort();
+    Ok(files)
+}
+
 /// Distinguishes an absent path from metadata failures. Static adapters may
 /// ignore `NotFound`, but permission and transient filesystem failures must be
 /// surfaced so the coordinator can retain the last valid snapshot as stale.
@@ -40,6 +172,56 @@ pub fn regular_file_exists(path: &Path) -> std::io::Result<bool> {
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(false),
         Err(error) => Err(error),
     }
+}
+
+#[derive(Debug)]
+pub enum BoundedFileResolveError {
+    OutsideRoot,
+    NotRegular,
+    Io(std::io::Error),
+}
+
+/// Resolves a configured file once and verifies that its canonical target is a
+/// regular file inside the canonical source root. The source root itself may
+/// be a user-managed symlink, but indirection below it cannot escape that
+/// canonical root. Callers should read the returned canonical path; concurrent
+/// same-user filesystem replacement remains outside this static boundary.
+pub fn resolve_bounded_regular_file(
+    path: &Path,
+    allowed_root: &Path,
+) -> Result<PathBuf, BoundedFileResolveError> {
+    let canonical_root =
+        std::fs::canonicalize(allowed_root).map_err(BoundedFileResolveError::Io)?;
+    let canonical_path = std::fs::canonicalize(path).map_err(BoundedFileResolveError::Io)?;
+    if !canonical_path.starts_with(&canonical_root) {
+        return Err(BoundedFileResolveError::OutsideRoot);
+    }
+    let metadata = std::fs::metadata(&canonical_path).map_err(BoundedFileResolveError::Io)?;
+    if !metadata.is_file() {
+        return Err(BoundedFileResolveError::NotRegular);
+    }
+    Ok(canonical_path)
+}
+
+/// Produces a useful executable label without exposing an absolute path or a
+/// shell-like command string. Runtime preparation retains the original value.
+pub fn redacted_executable_preview(command: &str) -> String {
+    let command = command.trim();
+    if command.is_empty() {
+        return "unsupported".to_string();
+    }
+    if command.chars().any(char::is_whitespace)
+        || command.chars().any(char::is_control)
+        || command.contains('=')
+    {
+        return "<configured-command>".to_string();
+    }
+    let normalized = command.replace('\\', "/");
+    normalized
+        .rsplit('/')
+        .find(|segment| !segment.is_empty())
+        .unwrap_or("<configured-command>")
+        .to_string()
 }
 
 /// Returns the bounded project path chain from the outer project boundary to
@@ -315,5 +497,136 @@ mod tests {
             1,
         );
         assert!(!result.all_disabled);
+    }
+
+    #[test]
+    fn executable_preview_keeps_only_a_safe_basename() {
+        assert_eq!(
+            redacted_executable_preview(r"C:\Users\alice\private\mcp.exe"),
+            "mcp.exe",
+        );
+        assert_eq!(redacted_executable_preview("/home/alice/bin/mcp"), "mcp");
+        assert_eq!(redacted_executable_preview("npx"), "npx");
+        assert_eq!(
+            redacted_executable_preview("TOKEN=secret npx"),
+            "<configured-command>",
+        );
+    }
+
+    #[test]
+    fn bounded_file_accepts_regular_files_only_inside_the_declared_root() {
+        let temp = tempfile::tempdir().unwrap();
+        let root = temp.path().join("declared-root");
+        let outside = temp.path().join("outside");
+        std::fs::create_dir_all(&root).unwrap();
+        std::fs::create_dir_all(&outside).unwrap();
+        let inside_file = root.join("config.toml");
+        let outside_file = outside.join("config.toml");
+        std::fs::write(&inside_file, "enabled = true").unwrap();
+        std::fs::write(&outside_file, "enabled = true").unwrap();
+
+        assert_eq!(
+            resolve_bounded_regular_file(&inside_file, &root).unwrap(),
+            std::fs::canonicalize(inside_file).unwrap(),
+        );
+        assert!(matches!(
+            resolve_bounded_regular_file(&outside_file, &root),
+            Err(BoundedFileResolveError::OutsideRoot)
+        ));
+    }
+
+    #[test]
+    fn bounded_text_read_checks_the_bytes_actually_read() {
+        let temp = tempfile::tempdir().unwrap();
+        let path = temp.path().join("config.json");
+        std::fs::write(&path, "12345").unwrap();
+
+        assert_eq!(
+            read_bounded_text(&path, 4).unwrap(),
+            BoundedTextRead::TooLarge
+        );
+        assert_eq!(
+            read_bounded_text(&path, 5).unwrap(),
+            BoundedTextRead::Content("12345".to_string())
+        );
+    }
+
+    #[test]
+    fn bounded_walk_limits_actual_entries_and_depth() {
+        let temp = tempfile::tempdir().unwrap();
+        for name in ["a.txt", "b.txt", "c.txt"] {
+            std::fs::write(temp.path().join(name), "ignored").unwrap();
+        }
+        let error = collect_bounded_regular_files(
+            temp.path(),
+            BoundedDirectoryWalkLimits {
+                max_depth: 8,
+                max_entries: 2,
+                max_directories: 8,
+                max_files: 8,
+            },
+            |_| false,
+        )
+        .unwrap_err();
+        assert!(matches!(
+            error,
+            BoundedDirectoryWalkError::LimitExceeded(BoundedDirectoryWalkLimit::Entries)
+        ));
+
+        let nested = temp.path().join("one/two");
+        std::fs::create_dir_all(&nested).unwrap();
+        let error = collect_bounded_regular_files(
+            temp.path(),
+            BoundedDirectoryWalkLimits {
+                max_depth: 1,
+                max_entries: 16,
+                max_directories: 16,
+                max_files: 16,
+            },
+            |_| false,
+        )
+        .unwrap_err();
+        assert!(matches!(
+            error,
+            BoundedDirectoryWalkError::LimitExceeded(BoundedDirectoryWalkLimit::Depth)
+        ));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn bounded_file_rejects_an_intermediate_symlink_escape() {
+        use std::os::unix::fs::symlink;
+
+        let temp = tempfile::tempdir().unwrap();
+        let root = temp.path().join("declared-root");
+        let outside = temp.path().join("outside");
+        std::fs::create_dir_all(&root).unwrap();
+        std::fs::create_dir_all(&outside).unwrap();
+        std::fs::write(outside.join("config.toml"), "enabled = true").unwrap();
+        symlink(&outside, root.join("linked-directory")).unwrap();
+
+        assert!(matches!(
+            resolve_bounded_regular_file(&root.join("linked-directory/config.toml"), &root),
+            Err(BoundedFileResolveError::OutsideRoot)
+        ));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn bounded_file_accepts_a_user_managed_symlink_root() {
+        use std::os::unix::fs::symlink;
+
+        let temp = tempfile::tempdir().unwrap();
+        let actual = temp.path().join("dotfiles/claude");
+        std::fs::create_dir_all(&actual).unwrap();
+        let config = actual.join("config.json");
+        std::fs::write(&config, "{}").unwrap();
+        let linked = temp.path().join(".claude");
+        symlink(&actual, &linked).unwrap();
+
+        assert_eq!(
+            resolve_bounded_regular_file(&linked.join("config.json"), &linked).unwrap(),
+            std::fs::canonicalize(config).unwrap(),
+        );
     }
 }

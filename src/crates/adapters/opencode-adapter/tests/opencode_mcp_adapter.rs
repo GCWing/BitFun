@@ -1,8 +1,8 @@
 use bitfun_opencode_adapter::{OpenCodeMcpProvider, OpenCodeMcpProviderOptions};
 use bitfun_product_domains::external_sources::{
-    ExecutionDomainId, ExternalMcpDiscoveryInput, ExternalMcpSourceProvider,
-    ExternalMcpStaticStatus, ExternalMcpTransportKind, ExternalSourceContext, ExternalSourceScope,
-    PreparedExternalMcpTransport,
+    ExecutionDomainId, ExternalMcpDiscoveryInput, ExternalMcpRevisionKey,
+    ExternalMcpSourceProvider, ExternalMcpStaticStatus, ExternalMcpTransportKind,
+    ExternalSourceContext, ExternalSourceScope, PreparedExternalMcpTransport,
 };
 use std::collections::BTreeSet;
 use std::fs;
@@ -14,6 +14,10 @@ fn context(workspace_root: PathBuf) -> ExternalSourceContext {
         workspace_root: Some(workspace_root),
         execution_domain_id: ExecutionDomainId::new("local-user").unwrap(),
     }
+}
+
+fn revision_key() -> ExternalMcpRevisionKey {
+    ExternalMcpRevisionKey::new([7; 32])
 }
 
 fn options(user_config_dir: PathBuf) -> OpenCodeMcpProviderOptions {
@@ -78,10 +82,19 @@ fn discovery_deep_merges_layers_without_exposing_or_executing_runtime_values() {
     let input = ExternalMcpDiscoveryInput {
         context: context(project.clone()),
         suppressed_sources: BTreeSet::new(),
+        revision_key: revision_key(),
     };
     let snapshot = provider.discover(&input).unwrap();
 
     assert!(!marker.exists(), "discovery must remain static");
+    assert!(snapshot
+        .sources
+        .iter()
+        .all(|source| source.content_version.starts_with("hmac-sha256:")));
+    assert!(snapshot
+        .servers
+        .iter()
+        .all(|server| server.behavior_version.starts_with("hmac-sha256:")));
     assert_eq!(snapshot.servers.len(), 2);
     let github = snapshot
         .servers
@@ -154,6 +167,7 @@ fn local_server_without_cwd_uses_the_workspace_like_opencode() {
     let input = ExternalMcpDiscoveryInput {
         context: context(project.clone()),
         suppressed_sources: BTreeSet::new(),
+        revision_key: revision_key(),
     };
     let snapshot = provider.discover(&input).unwrap();
     let server = &snapshot.servers[0];
@@ -195,6 +209,7 @@ fn suppression_recomputes_the_opencode_merge_and_stale_prepare_fails_closed() {
     let base_input = ExternalMcpDiscoveryInput {
         context: context(project),
         suppressed_sources: BTreeSet::new(),
+        revision_key: revision_key(),
     };
     let initial = provider.discover(&base_input).unwrap();
     let initial_github = initial
@@ -213,6 +228,7 @@ fn suppression_recomputes_the_opencode_merge_and_stale_prepare_fails_closed() {
     let suppressed_input = ExternalMcpDiscoveryInput {
         context: base_input.context.clone(),
         suppressed_sources: [project_source].into_iter().collect(),
+        revision_key: base_input.revision_key.clone(),
     };
     let suppressed = provider.discover(&suppressed_input).unwrap();
     let github = suppressed
@@ -261,6 +277,7 @@ fn unsupported_or_source_disabled_servers_remain_visible_but_cannot_be_prepared(
     let input = ExternalMcpDiscoveryInput {
         context: context(project),
         suppressed_sources: BTreeSet::new(),
+        revision_key: revision_key(),
     };
     let snapshot = provider.discover(&input).unwrap();
 
@@ -326,6 +343,7 @@ fn opencode_config_dir_is_a_global_late_override_like_the_source_application() {
         .discover(&ExternalMcpDiscoveryInput {
             context: context(project),
             suppressed_sources: BTreeSet::new(),
+            revision_key: revision_key(),
         })
         .unwrap();
     let github = snapshot

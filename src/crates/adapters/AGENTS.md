@@ -13,9 +13,9 @@ services.
 |---|---|---|
 | `ai-adapters` | AI provider request/response adapters and stream protocol glue | [AGENTS.md](ai-adapters/AGENTS.md) |
 | `opencode-adapter` | OpenCode source semantics for the live Command, standalone Tool, Subagent, MCP, and static Hook providers; managed-package static preview | [AGENTS.md](opencode-adapter/AGENTS.md) |
-| `claude-code-adapter` | Runtime-free Claude Code Hook source discovery and redacted projection | [AGENTS.md](claude-code-adapter/AGENTS.md) |
-| `codex-adapter` | Runtime-free Codex Hook source discovery and redacted projection | [AGENTS.md](codex-adapter/AGENTS.md) |
-| `static-hook-support` | Shared bounded JSON/TOML Hook parser used by sibling ecosystem adapters; no ecosystem policy or runtime | inherited |
+| `claude-code-adapter` | Runtime-free Claude Code Command, Subagent, MCP, and Hook source semantics with redacted projection | [AGENTS.md](claude-code-adapter/AGENTS.md) |
+| `codex-adapter` | Runtime-free Codex Subagent, MCP, and Hook source semantics with redacted projection | [AGENTS.md](codex-adapter/AGENTS.md) |
+| `static-hook-support` | Shared bounded/redacting static-source utilities plus the JSON/TOML Hook parser used by sibling ecosystem adapters; no ecosystem policy or runtime | inherited |
 | `transport` | Event transport emitters and host transport adapters | [AGENTS.md](transport/AGENTS.md) |
 | `webdriver` | Embedded WebDriver protocol and browser automation adapter | [AGENTS.md](webdriver/AGENTS.md) |
 

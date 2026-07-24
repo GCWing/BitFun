@@ -35,6 +35,12 @@ pub(crate) struct NativeCommandCollisionProjection {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct CommandMenuSelection {
+    pub action_id: String,
+    pub command_name: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 struct CommandMenuItem {
     id: String,
     name: String,
@@ -89,10 +95,6 @@ impl CommandMenuState {
 
         let query = input.split_whitespace().next().unwrap_or("");
         let built_in = slash_actions(self.action_state);
-        let built_in_names = built_in
-            .iter()
-            .map(|action| action.name.to_ascii_lowercase())
-            .collect::<std::collections::HashSet<_>>();
         let mut commands = built_in
             .into_iter()
             .map(|action| {
@@ -110,22 +112,18 @@ impl CommandMenuState {
                 let reconfirmation_required = self.builtin_reconfirmations.contains(&command_name);
                 let discovery_pending = self.external_discovery_pending
                     && self.action_state.context == crate::actions::ActionContext::Chat;
-                let name = if selected_external
-                    || unresolved
-                    || reconfirmation_required
-                    || discovery_pending
-                {
-                    format!("/builtin:{}", action.name.trim_start_matches('/'))
-                } else {
-                    action.name.to_string()
-                };
                 CommandMenuItem {
                     id: action.id.to_string(),
-                    name,
+                    name: action.name.to_string(),
                     description: if unresolved || reconfirmation_required {
-                        format!("{} (choose once)", action.description)
+                        format!("{} · BitFun (choose once)", action.description)
                     } else if discovery_pending {
-                        format!("{} (checking external sources)", action.description)
+                        format!(
+                            "{} · BitFun (checking external sources)",
+                            action.description
+                        )
+                    } else if selected_external {
+                        format!("{} · BitFun", action.description)
                     } else {
                         action.description.to_string()
                     },
@@ -137,19 +135,6 @@ impl CommandMenuState {
         {
             commands.extend(self.external_commands.iter().map(|command| {
                 let requested_name = format!("/{}", command.command_name);
-                let selected_external =
-                    command.native_collision.as_ref().is_some_and(|collision| {
-                        collision.selected_candidate_id.as_deref()
-                            == Some(collision.external_candidate_id.as_str())
-                    });
-                let collides = built_in_names.contains(&requested_name.to_ascii_lowercase());
-                let name = if command.provider_conflict_key.is_some() {
-                    command.invocation_alias.clone()
-                } else if collides && !selected_external {
-                    format!("/external:{}", command.command_name)
-                } else {
-                    requested_name
-                };
                 let unresolved = command
                     .native_collision
                     .as_ref()
@@ -165,12 +150,14 @@ impl CommandMenuState {
                 };
                 CommandMenuItem {
                     id: command.action_id.clone(),
-                    name,
+                    name: requested_name,
                     description,
                 }
             }));
         }
         if query == "/" {
+            let mut seen_action_ids = BTreeSet::new();
+            commands.retain(|item| seen_action_ids.insert(item.id.clone()));
             self.items = commands;
         } else {
             let normalized = query
@@ -183,6 +170,19 @@ impl CommandMenuState {
                     .unwrap_or(&spec.name)
                     .to_ascii_lowercase()
                     .contains(&normalized)
+            });
+            let exact_action_ids = commands
+                .iter()
+                .filter(|item| item.name.eq_ignore_ascii_case(query))
+                .map(|item| item.id.clone())
+                .collect::<BTreeSet<_>>();
+            let mut seen_action_ids = BTreeSet::new();
+            commands.retain(|item| {
+                if exact_action_ids.contains(&item.id) {
+                    item.name.eq_ignore_ascii_case(query)
+                } else {
+                    seen_action_ids.insert(item.id.clone())
+                }
             });
             self.items = commands;
         }
@@ -227,16 +227,25 @@ impl CommandMenuState {
         self.list_state.select(Some(next));
     }
 
-    /// Confirm the selected command and return its name
-    pub(super) fn apply_selection(&mut self) -> Option<String> {
+    /// Confirm the selected command and retain the exact slash alias shown.
+    pub(super) fn apply_selection_with_name(&mut self) -> Option<CommandMenuSelection> {
         if !self.visible {
             return None;
         }
 
         let selected = self.selected_item()?;
-        let command = selected.id.clone();
+        let selection = CommandMenuSelection {
+            action_id: selected.id.clone(),
+            command_name: selected.name.trim_start_matches('/').to_ascii_lowercase(),
+        };
         self.suppress();
-        Some(command)
+        Some(selection)
+    }
+
+    /// Confirm the selected command and return its action id.
+    pub(super) fn apply_selection(&mut self) -> Option<String> {
+        self.apply_selection_with_name()
+            .map(|selection| selection.action_id)
     }
 
     pub(super) fn render(&mut self, frame: &mut Frame, area: Rect, theme: &Theme) {
@@ -297,6 +306,18 @@ impl CommandMenuState {
 
     /// Handle mouse events. Returns `Some(command_name)` when a command is clicked.
     pub(super) fn handle_mouse_event(&mut self, mouse: &MouseEvent) -> Option<String> {
+        self.handle_mouse_selection(mouse)
+            .map(|selection| selection.action_id)
+    }
+
+    pub(super) fn handle_mouse_event_with_name(
+        &mut self,
+        mouse: &MouseEvent,
+    ) -> Option<CommandMenuSelection> {
+        self.handle_mouse_selection(mouse)
+    }
+
+    fn handle_mouse_selection(&mut self, mouse: &MouseEvent) -> Option<CommandMenuSelection> {
         if !self.visible {
             return None;
         }
@@ -326,7 +347,7 @@ impl CommandMenuState {
             MouseEventKind::Down(MouseButton::Left) if in_menu => {
                 if let Some(index) = self.item_index_at(mouse.column, mouse.row, area) {
                     self.list_state.select(Some(index));
-                    return self.apply_selection();
+                    return self.apply_selection_with_name();
                 }
                 None
             }
@@ -467,9 +488,26 @@ mod tests {
         let mut menu = CommandMenuState::new(ActionState::chat(true, false));
         menu.update("/", 1);
 
-        assert!(names(&menu).contains(&"/agents"));
+        assert!(names(&menu).contains(&"/agent"));
+        assert!(!names(&menu).contains(&"/agents"));
         assert!(!names(&menu).contains(&"/new"));
         assert!(names(&menu).contains(&"/help"));
+    }
+
+    #[test]
+    fn compatibility_aliases_do_not_duplicate_primary_commands() {
+        let mut menu = CommandMenuState::new(ActionState::chat(false, false));
+        menu.update("/", 1);
+        assert!(names(&menu).contains(&"/agent"));
+        assert!(names(&menu).contains(&"/mcp"));
+        assert!(!names(&menu).contains(&"/agents"));
+        assert!(!names(&menu).contains(&"/mcps"));
+
+        menu.update("/agents", 7);
+        assert_eq!(names(&menu), vec!["/agents"]);
+
+        menu.update("/mcp", 4);
+        assert_eq!(names(&menu), vec!["/mcp"]);
     }
 
     #[test]
@@ -494,6 +532,18 @@ mod tests {
         });
 
         assert_eq!(selected.as_deref(), Some("help"));
+    }
+
+    #[test]
+    fn selection_retains_the_exact_builtin_alias_shown_to_the_user() {
+        for (input, expected_name) in [("/mcp", "mcp"), ("/mcps", "mcps")] {
+            let mut menu = CommandMenuState::new(ActionState::chat(false, false));
+            menu.update(input, input.len());
+
+            let selection = menu.apply_selection_with_name().unwrap();
+            assert_eq!(selection.action_id, "mcp_servers");
+            assert_eq!(selection.command_name, expected_name);
+        }
     }
 
     #[test]
@@ -540,7 +590,7 @@ mod tests {
     }
 
     #[test]
-    fn built_in_aliases_are_protected_with_an_explicit_external_fallback_alias() {
+    fn native_collisions_keep_plain_names_and_distinguish_candidates_by_description() {
         let mut menu = CommandMenuState::new(ActionState::chat(false, false));
         menu.set_external_commands(vec![ExternalCommandProjection {
             action_id: "external-command:help".to_string(),
@@ -561,8 +611,21 @@ mod tests {
         }]);
         menu.update("/", 1);
 
-        assert!(names(&menu).contains(&"/builtin:help"));
-        assert!(names(&menu).contains(&"/external:help"));
+        assert_eq!(
+            names(&menu)
+                .into_iter()
+                .filter(|name| *name == "/help")
+                .count(),
+            2
+        );
+        assert!(menu
+            .items
+            .iter()
+            .any(|item| { item.name == "/help" && item.description.contains("External help") }));
+        assert!(!menu
+            .items
+            .iter()
+            .any(|item| item.name.contains("/builtin:") || item.name.contains("/external:")));
     }
 
     #[test]
@@ -587,9 +650,13 @@ mod tests {
         }]);
         menu.update("/", 1);
 
-        assert!(names(&menu).contains(&"/builtin:help"));
-        assert!(names(&menu).contains(&"/help"));
-        assert!(!names(&menu).contains(&"/external:help"));
+        assert_eq!(
+            names(&menu)
+                .into_iter()
+                .filter(|name| *name == "/help")
+                .count(),
+            2
+        );
     }
 
     #[test]
@@ -598,10 +665,9 @@ mod tests {
         menu.set_external_source_state(Vec::new(), true, BTreeSet::new());
         menu.update("/help", 5);
 
-        assert!(names(&menu).contains(&"/builtin:help"));
-        assert!(!names(&menu).contains(&"/help"));
+        assert!(names(&menu).contains(&"/help"));
         assert!(menu.items.iter().any(|item| {
-            item.name == "/builtin:help" && item.description.contains("checking external sources")
+            item.name == "/help" && item.description.contains("checking external sources")
         }));
     }
 
@@ -611,8 +677,7 @@ mod tests {
         menu.set_external_source_state(Vec::new(), false, BTreeSet::from(["help".to_string()]));
         menu.update("/help", 5);
 
-        assert!(names(&menu).contains(&"/builtin:help"));
-        assert!(!names(&menu).contains(&"/help"));
+        assert!(names(&menu).contains(&"/help"));
         assert_eq!(menu.apply_selection().as_deref(), Some("help"));
     }
 
@@ -634,12 +699,12 @@ mod tests {
     }
 
     #[test]
-    fn unresolved_provider_candidates_have_explicit_selectable_aliases() {
+    fn unresolved_provider_candidates_use_plain_names_and_internal_action_ids() {
         let mut menu = CommandMenuState::new(ActionState::chat(false, false));
         menu.set_external_commands(vec![ExternalCommandProjection {
             action_id: "external-command-candidate:opencode-review".to_string(),
             command_name: "review".to_string(),
-            invocation_alias: "/external:opencode.commands:review".to_string(),
+            invocation_alias: "/review".to_string(),
             candidate_id: "opencode-review".to_string(),
             content_version: "v1".to_string(),
             description: "OpenCode project · opencode".to_string(),
@@ -647,9 +712,9 @@ mod tests {
             provider_conflict_key: Some("provider-conflict-v1".to_string()),
             native_collision: None,
         }]);
-        menu.update("/external:opencode", 18);
+        menu.update("/review", 7);
 
-        assert_eq!(names(&menu), ["/external:opencode.commands:review"]);
+        assert_eq!(names(&menu), ["/review"]);
         assert_eq!(
             menu.apply_selection().as_deref(),
             Some("external-command-candidate:opencode-review")

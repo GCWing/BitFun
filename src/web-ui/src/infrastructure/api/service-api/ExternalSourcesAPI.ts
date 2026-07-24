@@ -140,6 +140,8 @@ export interface ExternalSourceCatalogSnapshot {
     lifecycle: ExternalSourceLifecycle;
   }>;
   commands: Array<{
+    /** Opaque host identity used for guarded expansion; absent on legacy hosts. */
+    candidateId?: string;
     definition: {
       id: {
         source: { providerId: string; sourceId: string };
@@ -188,6 +190,10 @@ export interface ExternalSourceCatalogSnapshot {
   }>;
   /** Frontend view of the atomic control+catalog response. Legacy hosts omit it. */
   control?: ExternalSourceControlSnapshot;
+}
+
+export interface ExpandedExternalPromptCommand {
+  content: string;
 }
 
 export type ExternalSubagentActivation =
@@ -498,6 +504,26 @@ export class ExternalSourceApiError extends Error {
     super(detail);
     this.name = 'ExternalSourceApiError';
   }
+}
+
+export interface NativePromptCommandDescriptor {
+  commandName: string;
+  candidateId: string;
+  behaviorVersion: string;
+}
+
+export interface NativePromptCommandConflictSnapshot {
+  preferenceRevision: number;
+  conflicts: Array<{
+    commandName: string;
+    externalCandidateId: string;
+    conflictKey: string;
+    selectedCandidateId?: string;
+  }>;
+  reconfirmations?: Array<{
+    commandName: string;
+    nativeCandidateId: string;
+  }>;
 }
 
 const READ_ONLY_HOST_CAPABILITIES: ExternalSourceCatalogSnapshot['hostCapabilities'] = {
@@ -1101,6 +1127,71 @@ export const externalSourcesAPI = {
     return (await invokeCompatibleSurfaceSnapshot({
       request: { workspacePath: normalizeOptionalWorkspacePath(workspacePath), forceRefresh },
     })).catalog;
+  },
+
+  expandPromptCommand(
+    workspacePath: string | undefined,
+    name: string,
+    argumentsText: string,
+    candidateId: string,
+    expectedContentVersion: string,
+    nativeCommands: NativePromptCommandDescriptor[],
+    nativeConflictGuard?: {
+      conflictKey: string;
+      expectedPreferenceRevision: number;
+    },
+  ) {
+    return invokeExternalSourceCommand<ExpandedExternalPromptCommand>(
+      'expand_external_prompt_command_command',
+      {
+        request: {
+          workspacePath: normalizeOptionalWorkspacePath(workspacePath),
+          name,
+          arguments: argumentsText,
+          nativeCommands,
+          candidateId,
+          expectedContentVersion,
+          ...(nativeConflictGuard ? {
+            expectedNativeConflictKey: nativeConflictGuard.conflictKey,
+            expectedPreferenceRevision: nativeConflictGuard.expectedPreferenceRevision,
+          } : {}),
+        },
+      },
+    );
+  },
+
+  getNativePromptCommandConflicts(
+    workspacePath: string | undefined,
+    nativeCommands: NativePromptCommandDescriptor[],
+  ) {
+    return invokeExternalSourceCommand<NativePromptCommandConflictSnapshot>(
+      'get_native_prompt_command_conflicts_command',
+      {
+        request: {
+          workspacePath: normalizeOptionalWorkspacePath(workspacePath),
+          nativeCommands,
+        },
+      },
+    );
+  },
+
+  setNativePromptCommandConflictChoice(
+    workspacePath: string | undefined,
+    nativeCommands: NativePromptCommandDescriptor[],
+    selectedCandidateId: string,
+    expectedPreferenceRevision: number,
+  ) {
+    return invokeExternalSourceCommand<NativePromptCommandConflictSnapshot>(
+      'set_native_prompt_command_conflict_choice_command',
+      {
+        request: {
+          workspacePath: normalizeOptionalWorkspacePath(workspacePath),
+          nativeCommands,
+          selectedCandidateId,
+          expectedPreferenceRevision,
+        },
+      },
+    );
   },
 
   async setSourceEnabled(

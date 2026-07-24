@@ -16,18 +16,19 @@ use bitfun_product_domains::external_sources::{
     ExpandedPromptCommand, ExternalIntegrationCapabilityId, ExternalMcpActivationState,
     ExternalMcpApprovalRequest, ExternalMcpCatalogEntry, ExternalMcpConflict,
     ExternalMcpConflictCandidate, ExternalMcpDiscoveryInput, ExternalMcpProviderIdentity,
-    ExternalMcpProviderSnapshot, ExternalMcpServerDefinition, ExternalMcpStaticStatus,
-    ExternalMcpTransportKind, ExternalSourceAssetKind, ExternalSourceCatalogEntry,
-    ExternalSourceCatalogSnapshot, ExternalSourceContext, ExternalSourceDiagnostic,
-    ExternalSourceHealth, ExternalSourceHostCapabilities, ExternalSourceLifecycleState,
-    ExternalSourceOperationError, ExternalSourceOperationErrorCode, ExternalSourceProviderError,
-    ExternalSourcePublicSnapshot, ExternalSourceRecord, ExternalSourceScope,
-    ExternalToolCapability, ExternalToolDefinition, ExternalToolRuntimeKind,
-    ExternalToolStaticStatus, ExternalWatchRoot, PreparedExternalMcpServer,
-    PreparedExternalMcpTransport, PromptCommandAvailability, PromptCommandCatalogEntry,
-    PromptCommandDefinition, PromptCommandProviderIdentity, PromptCommandProviderSnapshot,
-    PromptCommandSourceProvider, SecretValue, SourceKey, SourceQualifiedCommandId,
-    SourceQualifiedMcpServerId, SourceQualifiedToolId, SourceQualifiedToolTargetId,
+    ExternalMcpProviderSnapshot, ExternalMcpRevisionKey, ExternalMcpServerDefinition,
+    ExternalMcpStaticStatus, ExternalMcpTransportKind, ExternalSourceAssetKind,
+    ExternalSourceCatalogEntry, ExternalSourceCatalogSnapshot, ExternalSourceContext,
+    ExternalSourceDiagnostic, ExternalSourceHealth, ExternalSourceHostCapabilities,
+    ExternalSourceLifecycleState, ExternalSourceOperationError, ExternalSourceOperationErrorCode,
+    ExternalSourceProviderError, ExternalSourcePublicSnapshot, ExternalSourceRecord,
+    ExternalSourceScope, ExternalToolCapability, ExternalToolDefinition, ExternalToolRuntimeKind,
+    ExternalToolStaticStatus, ExternalWatchRoot, NativePromptCommandDescriptor,
+    PreparedExternalMcpServer, PreparedExternalMcpTransport, PromptCommandAvailability,
+    PromptCommandCatalogEntry, PromptCommandDefinition, PromptCommandProviderIdentity,
+    PromptCommandProviderSnapshot, PromptCommandSourceProvider, SecretValue, SourceKey,
+    SourceQualifiedCommandId, SourceQualifiedMcpServerId, SourceQualifiedToolId,
+    SourceQualifiedToolTargetId,
 };
 use bitfun_product_domains::external_subagents::{
     external_subagent_approval_key, external_subagent_candidate_id, external_subagent_conflict_key,
@@ -39,7 +40,19 @@ use bitfun_product_domains::external_subagents::{
     ExternalSubagentProviderSnapshot, ExternalSubagentToolRequest, ExternalSubagentToolSelector,
     SecretText,
 };
+use sha2::{Digest, Sha256};
 use std::path::PathBuf;
+
+#[test]
+fn native_prompt_command_descriptors_reject_external_candidate_namespaces() {
+    let descriptor = NativePromptCommandDescriptor {
+        command_name: "review".to_string(),
+        candidate_id: "opencode.commands:project:review".to_string(),
+        behavior_version: "v1".to_string(),
+    };
+
+    assert!(descriptor.validate().is_err());
+}
 
 fn source(provider_id: &str, ecosystem_id: &str, source_id: &str) -> ExternalSourceRecord {
     ExternalSourceRecord {
@@ -562,7 +575,19 @@ fn legacy_public_snapshot_downprojects_new_tool_review_variants() {
         "generation": 1,
         "discoveryPending": false,
         "sources": [],
-        "commands": [],
+        "commands": [{
+            "candidateId": "17:opencode.commands6:global6:review",
+            "definition": {
+                "id": {
+                    "source": { "providerId": "opencode.commands", "sourceId": "global" },
+                    "localId": "review"
+                },
+                "name": "review",
+                "description": "Review changes",
+                "availability": { "state": "available" },
+                "contentVersion": "v1"
+            }
+        }],
         "tools": [{
             "definition": {
                 "id": {
@@ -611,6 +636,7 @@ fn legacy_public_snapshot_downprojects_new_tool_review_variants() {
 
     let legacy =
         serde_json::to_value(snapshot.into_legacy_v0_compatible()).expect("legacy public snapshot");
+    assert!(legacy["commands"][0].get("candidateId").is_none());
     assert_eq!(legacy["tools"][0]["activation"]["state"], "disabled");
     assert!(legacy["subagents"][0]
         .get("unavailableToolLabels")
@@ -781,6 +807,39 @@ fn external_mcp_contract_keeps_runtime_secrets_out_of_static_snapshots() {
 }
 
 #[test]
+fn external_mcp_revision_key_never_exposes_material_through_debug_output() {
+    let key = ExternalMcpRevisionKey::new([0x5a; 32]);
+    assert_eq!(format!("{key:?}"), "ExternalMcpRevisionKey([REDACTED])");
+    assert!(!format!("{key:?}").contains("5a"));
+}
+
+#[test]
+fn external_mcp_revision_is_stable_secret_sensitive_and_not_an_unkeyed_oracle() {
+    let key = ExternalMcpRevisionKey::new([7; 32]);
+    let first = key.opaque_revision(
+        "test.mcp.behavior.v1",
+        [b"server".as_slice(), b"PIN=0007".as_slice()],
+    );
+    let repeated = key.opaque_revision(
+        "test.mcp.behavior.v1",
+        [b"server".as_slice(), b"PIN=0007".as_slice()],
+    );
+    let changed = key.opaque_revision(
+        "test.mcp.behavior.v1",
+        [b"server".as_slice(), b"PIN=0008".as_slice()],
+    );
+    let raw_candidate = format!(
+        "sha256:{}",
+        hex::encode(Sha256::digest(b"server\0PIN=0007"))
+    );
+
+    assert_eq!(first, repeated);
+    assert_ne!(first, changed);
+    assert_ne!(first, raw_candidate);
+    assert!(first.starts_with("hmac-sha256:"));
+}
+
+#[test]
 fn external_mcp_snapshot_rejects_cross_provider_and_duplicate_servers() {
     let provider =
         ExternalMcpProviderIdentity::new("opencode.mcp", "opencode", "OpenCode MCP").unwrap();
@@ -815,6 +874,7 @@ fn external_mcp_snapshot_rejects_cross_provider_and_duplicate_servers() {
         suppressed_sources: [SourceKey::new("opencode.mcp", "suppressed").unwrap()]
             .into_iter()
             .collect(),
+        revision_key: ExternalMcpRevisionKey::new([7; 32]),
     };
     assert_eq!(input.suppressed_sources.len(), 1);
 }

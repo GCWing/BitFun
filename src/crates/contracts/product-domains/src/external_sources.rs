@@ -5,7 +5,9 @@
 //! a concrete ecosystem or carrying arbitrary extension payloads.
 
 use crate::external_integration_policy::ExternalIntegrationPolicySnapshot;
+use hmac::{Hmac, Mac};
 use serde::{Deserialize, Serialize};
+use sha2::Sha256;
 use std::collections::{BTreeMap, BTreeSet};
 use std::error::Error;
 use std::fmt;
@@ -1388,10 +1390,50 @@ pub struct ExternalSourceContext {
     pub execution_domain_id: ExecutionDomainId,
 }
 
+/// Host-private key used to turn secret-bearing executable configuration into
+/// a stable opaque revision. The key is deliberately not serializable and its
+/// debug representation never exposes key material.
+#[derive(Clone, PartialEq, Eq)]
+pub struct ExternalMcpRevisionKey([u8; 32]);
+
+impl ExternalMcpRevisionKey {
+    pub fn new(bytes: [u8; 32]) -> Self {
+        Self(bytes)
+    }
+
+    /// Produces a stable public revision without exposing an offline oracle
+    /// for literal credentials contained in executable configuration.
+    pub fn opaque_revision<'a>(
+        &self,
+        domain: &str,
+        parts: impl IntoIterator<Item = &'a [u8]>,
+    ) -> String {
+        let mut mac =
+            Hmac::<Sha256>::new_from_slice(&self.0).expect("SHA-256 HMAC accepts a 32-byte key");
+        update_hmac_framed(&mut mac, domain.as_bytes());
+        for part in parts {
+            update_hmac_framed(&mut mac, part);
+        }
+        format!("hmac-sha256:{}", hex::encode(mac.finalize().into_bytes()))
+    }
+}
+
+fn update_hmac_framed(mac: &mut Hmac<Sha256>, value: &[u8]) {
+    mac.update(&(value.len() as u64).to_be_bytes());
+    mac.update(value);
+}
+
+impl fmt::Debug for ExternalMcpRevisionKey {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter.write_str("ExternalMcpRevisionKey([REDACTED])")
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ExternalMcpDiscoveryInput {
     pub context: ExternalSourceContext,
     pub suppressed_sources: BTreeSet<SourceKey>,
+    pub revision_key: ExternalMcpRevisionKey,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -1442,15 +1484,19 @@ pub trait PromptCommandSourceProvider: Send + Sync {
     ) -> Result<ExpandedPromptCommand, ExternalSourceProviderError>;
 
     /// Resolves same-ecosystem overlays after product suppression is applied.
+    /// The full snapshot is supplied so a provider can preserve native source
+    /// ordering and treat known-but-unavailable higher-layer identities as
+    /// tombstones instead of silently reactivating a lower-layer definition.
     /// Providers with no internal duplicate names may use this default.
     fn resolve_commands(
         &self,
-        commands: &[PromptCommandDefinition],
+        snapshot: &PromptCommandProviderSnapshot,
         enabled_sources: &BTreeSet<SourceKey>,
     ) -> Result<Vec<PromptCommandDefinition>, ExternalSourceProviderError> {
         let mut names = BTreeSet::new();
         let mut resolved = Vec::new();
-        for command in commands
+        for command in snapshot
+            .commands
             .iter()
             .filter(|command| enabled_sources.contains(&command.id.source))
         {
@@ -1732,6 +1778,106 @@ pub fn prompt_command_conflict_key<'a>(
     )
 }
 
+pub fn native_prompt_command_conflict_key<'a>(
+    execution_domain_id: &str,
+    command_name: &str,
+    candidates: impl IntoIterator<Item = (&'a str, &'a str)>,
+) -> String {
+    let mut candidates = candidates.into_iter().collect::<Vec<_>>();
+    candidates.sort_unstable();
+    let normalized_name = command_name.to_ascii_lowercase();
+    let execution_domain_fingerprint = stable_fingerprint([execution_domain_id.as_bytes()]);
+    let native_group_fingerprint = native_prompt_command_group_fingerprint(
+        candidates
+            .iter()
+            .map(|(candidate_id, _)| *candidate_id)
+            .filter(|candidate_id| candidate_id.starts_with("bitfun.")),
+    );
+    let participant_fingerprint = prompt_command_conflict_key(
+        execution_domain_id,
+        &normalized_name,
+        candidates.iter().copied(),
+    );
+    format!(
+        "native:prompt_command:{}:{}:{}:{}:{}",
+        &execution_domain_fingerprint[..24],
+        normalized_name.len(),
+        normalized_name,
+        &native_group_fingerprint[..24],
+        stable_fingerprint([participant_fingerprint.as_bytes()]),
+    )
+}
+
+/// Computes the canonical identity of one product surface's native command
+/// candidate group. Consumers use the same fingerprint when invalidating only
+/// that surface's persisted conflict choices.
+pub fn native_prompt_command_group_fingerprint<'a>(
+    candidate_ids: impl IntoIterator<Item = &'a str>,
+) -> String {
+    let mut candidate_ids = candidate_ids.into_iter().collect::<Vec<_>>();
+    candidate_ids.sort_unstable();
+    candidate_ids.dedup();
+    let encoded = candidate_ids
+        .into_iter()
+        .map(|candidate_id| format!("{}:{candidate_id}", candidate_id.len()))
+        .collect::<Vec<_>>();
+    stable_fingerprint(encoded.iter().map(|value| value.as_bytes()))
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+/// Stable identity facts declared by a product surface for its own slash
+/// commands. This carries no executable payload: Core validates the facts and
+/// remains the sole owner of conflict keys, preferences, reconfirmation, and
+/// guarded external expansion.
+pub struct NativePromptCommandDescriptor {
+    pub command_name: String,
+    pub candidate_id: String,
+    pub behavior_version: String,
+}
+
+impl NativePromptCommandDescriptor {
+    pub fn validate(&self) -> Result<(), ExternalSourceContractError> {
+        validate_id(&self.command_name, "native prompt command name")?;
+        validate_text(&self.candidate_id, "native prompt command candidate")?;
+        if !self.candidate_id.starts_with("bitfun.") {
+            return Err(ExternalSourceContractError::InvalidIdentifier(
+                "native prompt command candidate",
+            ));
+        }
+        validate_text(
+            &self.behavior_version,
+            "native prompt command behavior version",
+        )
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct NativePromptCommandConflictProjection {
+    pub command_name: String,
+    pub external_candidate_id: String,
+    pub conflict_key: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub selected_candidate_id: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct NativePromptCommandReconfirmationProjection {
+    pub command_name: String,
+    pub native_candidate_id: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct NativePromptCommandConflictSnapshot {
+    pub preference_revision: u64,
+    pub conflicts: Vec<NativePromptCommandConflictProjection>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub reconfirmations: Vec<NativePromptCommandReconfirmationProjection>,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct ExternalSourceCatalogSnapshot {
@@ -1793,6 +1939,10 @@ pub struct ExternalPromptCommandDefinitionSummary {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct ExternalPromptCommandSummary {
+    /// Opaque guarded-execution identity. New product surfaces must pass this
+    /// value back unchanged rather than reproducing the stable-key encoding.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub candidate_id: String,
     pub definition: ExternalPromptCommandDefinitionSummary,
 }
 
@@ -1907,6 +2057,9 @@ impl ExternalSourcePublicSnapshot {
     /// New control clients use `ExternalSourceControlSnapshotV1` for the
     /// orthogonal review state instead.
     pub fn into_legacy_v0_compatible(mut self) -> Self {
+        for command in &mut self.commands {
+            command.candidate_id.clear();
+        }
         for tool in &mut self.tools {
             if matches!(tool.activation, ExternalToolActivationState::Declined) {
                 tool.activation = ExternalToolActivationState::Disabled;
@@ -1929,14 +2082,18 @@ impl From<ExternalSourceCatalogSnapshot> for ExternalSourcePublicSnapshot {
             commands: snapshot
                 .commands
                 .into_iter()
-                .map(|entry| ExternalPromptCommandSummary {
-                    definition: ExternalPromptCommandDefinitionSummary {
-                        id: entry.definition.id,
-                        name: entry.definition.name,
-                        description: entry.definition.description,
-                        availability: entry.definition.availability,
-                        content_version: entry.definition.content_version,
-                    },
+                .map(|entry| {
+                    let candidate_id = entry.definition.id.stable_key();
+                    ExternalPromptCommandSummary {
+                        candidate_id,
+                        definition: ExternalPromptCommandDefinitionSummary {
+                            id: entry.definition.id,
+                            name: entry.definition.name,
+                            description: entry.definition.description,
+                            availability: entry.definition.availability,
+                            content_version: entry.definition.content_version,
+                        },
+                    }
                 })
                 .collect(),
             command_conflicts: snapshot.command_conflicts,

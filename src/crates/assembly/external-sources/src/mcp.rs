@@ -1,10 +1,11 @@
 use bitfun_product_domains::external_sources::{
     EcosystemId, ExternalMcpDiscoveryInput, ExternalMcpProviderIdentity,
-    ExternalMcpProviderSnapshot, ExternalMcpServerDefinition, ExternalMcpSourceProvider,
-    ExternalMcpStaticStatus, ExternalSourceAssetKind, ExternalSourceCatalogEntry,
-    ExternalSourceContext, ExternalSourceDiagnostic, ExternalSourceHealth,
-    ExternalSourceLifecycleState, ExternalSourceProviderError, ExternalWatchRoot,
-    PreparedExternalMcpServer, ProviderId, SourceKey, SourceQualifiedMcpServerId,
+    ExternalMcpProviderSnapshot, ExternalMcpRevisionKey, ExternalMcpServerDefinition,
+    ExternalMcpSourceProvider, ExternalMcpStaticStatus, ExternalSourceAssetKind,
+    ExternalSourceCatalogEntry, ExternalSourceContext, ExternalSourceDiagnostic,
+    ExternalSourceHealth, ExternalSourceLifecycleState, ExternalSourceProviderError,
+    ExternalWatchRoot, PreparedExternalMcpServer, ProviderId, SourceKey,
+    SourceQualifiedMcpServerId,
 };
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
@@ -107,6 +108,7 @@ impl ExternalMcpDiscoveryResult {
 /// configuration while remaining independent of the source ecosystem.
 pub struct ExternalMcpCoordinator {
     context: ExternalSourceContext,
+    revision_key: ExternalMcpRevisionKey,
     providers: Vec<McpProviderGeneration>,
     suppressed_sources: BTreeSet<String>,
     generation: u64,
@@ -128,6 +130,7 @@ impl fmt::Debug for ExternalMcpCoordinator {
 impl ExternalMcpCoordinator {
     pub fn new(
         context: ExternalSourceContext,
+        revision_key: ExternalMcpRevisionKey,
         providers: Vec<Arc<dyn ExternalMcpSourceProvider>>,
     ) -> Result<Self, String> {
         let mut provider_ids = BTreeSet::new();
@@ -151,6 +154,7 @@ impl ExternalMcpCoordinator {
         let discovery_pending = !generations.is_empty();
         Ok(Self {
             context,
+            revision_key,
             providers: generations,
             suppressed_sources: BTreeSet::new(),
             generation: 0,
@@ -184,6 +188,7 @@ impl ExternalMcpCoordinator {
                 input: ExternalMcpDiscoveryInput {
                     context: self.context.clone(),
                     suppressed_sources: suppressed_sources.clone(),
+                    revision_key: self.revision_key.clone(),
                 },
             })
             .collect()
@@ -305,6 +310,7 @@ impl ExternalMcpCoordinator {
             &ExternalMcpDiscoveryInput {
                 context: self.context.clone(),
                 suppressed_sources: self.suppressed_source_keys(),
+                revision_key: self.revision_key.clone(),
             },
             server_id,
             expected_behavior_version,
