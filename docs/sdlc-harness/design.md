@@ -40,6 +40,7 @@
 | 执行安全 | 权限、执行位置、沙箱等级、网络域名、凭据访问、Harness 主动配置审核、应急放行 | 防止 prompt、配置或工具越权 |
 | 扩展消费 | 类型化工具、Hook 变换、公开事件、权限结果、来源与运行诊断 | 在不读取生态原始对象或主机内部状态的前提下复用扩展能力 |
 | 变更信心 | 变更摘要、验证摘要、风险提示、未验证项、跳过检查 | 给用户可理解的信心和下一步行动 |
+| Review 生命周期 | 稳定记录、不可变修订、执行阶段、结果可用性、问题结论、证据覆盖、目标新鲜度和用户处置 | 让后台审查可恢复、可复审且不把内部 child 变成第二个产品入口 |
 | 团队治理 | 路径规则、审查强度、强制检查、风险接受、审计策略 | 统一团队和高可靠场景体验 |
 | 生命周期上下文 | issue、spec、计划、PR、发布、事故、学习资产 | 支撑复杂项目追溯和复盘 |
 | 评测与学习 | 轨迹回放、评测任务、判定标准、反馈、指标 | 证明策略改善体验和质量 |
@@ -51,7 +52,7 @@
   快速工作台 / 变更摘要 / PR 就绪度 / 发布审查 / 设置
 
 体验视图层
-  任务状态 / 弱提示 / 可折叠摘要 / 确认 / 受限原因 / 降噪规则
+  任务状态 / Review 记录与修订 / 弱提示 / 可折叠摘要 / 确认 / 受限原因 / 降噪规则
 
 阶段收益编排
   用户收益 / 技术前置 / 延期边界 / 降级解释 / 质量一致性检查
@@ -85,6 +86,7 @@
 
 - 用户界面展示用户可理解的任务状态、摘要、提示和确认。
 - 体验视图层把内部策略画像映射为用户语言，并负责提示合并、延后和降噪。
+- Review 记录是现有只读 child 执行之上的稳定用户投影；复审创建新修订，目标证据、执行器和修复动作继续由原 owner 负责。
 - 阶段收益编排约束每次落地必须说明用户可见收益、后台前置、延期边界和质量一致性。
 - 配置化策略面决定内部体验强度、检查建议、证据展示层级和用户覆盖选项。
 - 安全边界负责权限、执行位置、沙箱等级、网络、凭据和高风险动作隔离；权限确认、快照/回滚隔离和运行时沙箱必须分开表达。
@@ -102,6 +104,7 @@
 | 任务事实、事件序列和审计事实落盘 | Agent Kernel | 产品入口、插件和适配器只能经类型化 owner 接口提交请求或结果；Security Boundary 只提交安全决策和安全审计 payload，不直接维护事件序列 |
 | 工具执行结果 | Execution | 插件工具与内置/MCP 工具走同一注册、权限、取消和结果路径；插件进程或 Harness 不能绕过 Execution 直接写结果 |
 | Review 目标证据 | 项目集成面解析当前工作区 / Git range / PR 的原始事实，交付物与证据面生成本次会话的固定目标清单和完整度；只有 immutable revision 或真实快照可声明内容不可变 | Reviewer、PR 面板和质量决策层只能消费目标证据或提交展示/执行请求；不能改写 base/head、静默补 fetch、把文件重叠当作目标身份 |
+| Review 记录、修订摘要与用户处置 | 既有 session-history persistence owner 保存记录锚点、修订有界投影和稀疏用户处置，提供按父任务或精确 PR identity 的只读摘要查询，并按记录执行归档、保留和删除 | UI 已加载 session 不是全量索引；Review child、PR adapter、质量数据面和模型不能各自维护记录身份、覆盖用户处置、复制完整报告或单独删除仍有后续修订的锚点 |
 | 权限和安全决策 | Security Boundary 产生 permission decision、`security.decided` payload 和安全审计 payload | ACP、MCP、hook、plugin 或模型建议不能直接 approve、deny；Agent Kernel 只记录决策事实，不重新判定权限 |
 | 就绪度和门禁视图 | 变更就绪度 / PR 门禁，基于证据、策略和人工决策生成 | Execution 和插件不能写通过、失败或阻断结论 |
 | 质量数据视图 | Quality Data Plane | 只归一化、查询和生成只读视图，不成为新的权威状态源 |
@@ -112,6 +115,7 @@
 |---|---|---|---|
 | 配置化策略画像 | [configurable-policy-profile.md](features/configurable-policy-profile.md) | 决定内部策略画像、检查强度和提示视图 | 是 |
 | 阶段收益编排 | [implementation-plan.md](implementation-plan.md) | 把能力拆成用户收益、技术前置、延期边界和验收切片 | 发布说明/阶段评审中 |
+| Review 生命周期 | [../architecture/review-lifecycle.md](../architecture/review-lifecycle.md) | 在现有 Review 执行之上投影一个可恢复记录及其修订、覆盖、新鲜度和问题连续性 | 是，但默认不展开内部执行详情 |
 | 安全边界 | [security-boundary.md](architecture/security-boundary.md) | 管执行安全、执行位置、沙箱等级、权限、应急放行 | 是，但低噪音 |
 | 项目画像与集成 | [project-profile-integration.md](architecture/project-profile-integration.md) | 渐进理解项目结构、规则和验证能力 | 部分 |
 | 质量数据面 | [quality-data-plane.md](architecture/quality-data-plane.md) | 记录事件、验证、提示和安全决策 | 否 |
@@ -159,6 +163,7 @@
 | 组织策略可强制 | 受管策略高于本地覆盖 |
 | 模型输出作为候选 | 模型只能输出解释、摘要、风险或影响候选；策略改变和权威状态来自确定性证据、用户决策或受管策略 |
 | Review 目标先于执行 | 当前修改、明确 Git range 和 provider PR 必须先形成带 revision、文件状态和完整度的只读目标证据；证据缺失只能降级，不能由 Reviewer 猜测或写成完整覆盖 |
+| Review 状态保持正交 | 执行阶段、结果可用性、问题结论、证据覆盖和目标新鲜度分别投影；有限覆盖不能隐藏已有问题，过期不能改写历史执行状态，模型未重复问题不能自动改变用户处置 |
 | Reviewer Git 最小权限 | 保留既有 Reviewer Git 暴露以兼容旧入口，但 prepared target evidence 不把它作为 changed-code 证据，也不新增 Git 工具或任意 shell；prepared target 只通过有界 `GetFileDiff` 消费变更。只有本地仓库与目标 head 匹配且整个工作区干净时，现有 Read/Grep/Glob/LS 才补充 live context；不做逐调用全仓扫描、网络、checkout 或仓库状态修改 |
 | 能力与操作边界统一 | tool、MCP、skills、插件、hook 和内置能力都必须携带足够的能力、目标对象、数据类别、来源和副作用信息，供现有安全 owner 判定 |
 | 未声明能力受限 | 新增扩展未声明能力、声明不完整或运行时行为超出声明时，只能进入受限模式或安全确认，不能按低风险静默执行 |

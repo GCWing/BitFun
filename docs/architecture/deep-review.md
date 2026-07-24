@@ -4,12 +4,25 @@
 
 DeepReview is the compatibility runtime for `Review: Strict` and the internal managed-batch executor for scale-limited ordinary Review targets. It remains a read-only child session and must not be presented as a second product entry next to Review. A strict run is reviewed directly by the child; a managed large run executes a deterministic bounded packet plan and returns one aggregate Review result.
 
+This document owns the current Review execution architecture: target evidence,
+read-only roles, managed packets, strict delegation, admission, queueing, and
+report submission. The adopted user-facing record, revision, freshness, and
+re-review model is defined separately in
+[review-lifecycle.md](review-lifecycle.md). That lifecycle sits above the
+existing child executions; it does not create another runtime or move target
+evidence into the UI projection. Until the lifecycle contracts are implemented,
+one Review run is still represented primarily by one child session and the
+unified launch path still opens that child in the auxiliary pane.
+
 Product-facing guardrails are summarized here:
 
 - `Review` is the primary user-facing entry.
 - `/review` is the intended long-term command entry; `/DeepReview` is only a transitional typed compatibility command for historical strict-review launches.
 - `ReviewTeam` is an internal strict-review reviewer-set configuration, not a separate product concept users must learn.
 - PR Review consumes Review results and future readiness projections; it must not own another reviewer executor.
+- A child session is one execution revision, not the durable product identity;
+  the target Review lifecycle groups revisions without merging independent
+  Review requests heuristically.
 
 The current implementation has four layers:
 
@@ -75,6 +88,13 @@ Review target evidence is session-scoped and covers current workspace changes, a
 - final report evidence status (`complete`, `limited`, `stale`, or `failed`) separately from the model's risk and recommendation
 
 An explicit, complete Git range with a matching clean workspace or a provider PR with immutable base/head and complete per-file diff availability may report `complete`. Workspace evidence remains `limited` because it is mutable, even when its prepared diff coverage is complete. Limited or stale evidence does not rewrite the model's risk or recommendation; the report and UI display reliability separately. Invalid evidence fails closed, while historical manifests with no target evidence keep legacy behavior.
+
+The current report contract stores reliability in one `evidence_status` value,
+so a stale result can replace an earlier limited-coverage value. The target
+versioned Review projection in [review-lifecycle.md](review-lifecycle.md)
+requires a lossless contract change: report enrichment must preserve coverage
+and freshness independently, or emit independent structured reason codes. The
+UI must not guess the overwritten dimension from one combined label.
 
 Prepared Review target evidence uses bounded `GetFileDiff` pages as changed-code evidence. Local ranges read exact Git revisions; PR targets read provider diffs on demand and revalidate base/head before each file. The parent Review has a 240,000-character aggregate allowance and admits at most 128 provider diff acquisitions before provider I/O; one acquisition normally performs one file-page request and one detail request. Repeating the same page for the same reviewer returns a compact already-served result instead of the diff again. Exhaustion and stale target bindings return structured limited evidence. Existing generic Git exposure remains for legacy compatibility but does not authorize ref guessing or scope widening; Read/Grep/Glob/LS are supplemental only for a matching clean Git-range binding, never for a provider-only PR target.
 
@@ -253,6 +273,14 @@ The DeepReview child session stores `deepReviewRunManifest` in frontend session 
 
 The review action bar persists UI state separately through `ReviewActionBarPersistenceService` so historical review sessions can restore visible remediation progress without rerunning the review.
 
+The target Review lifecycle keeps its record anchor, revision metadata, and
+bounded summary query in the existing session-history persistence owner. Full
+reports remain in the Review transcript, target evidence remains the scope
+authority, and historical sessions without lifecycle metadata must remain
+readable as single-revision legacy records. See
+[review-lifecycle.md](review-lifecycle.md) for the persistence and recovery
+invariants.
+
 ## Boundary Rules
 
 - Frontend components do not call Tauri directly; they use infrastructure APIs such as `agentAPI`.
@@ -261,6 +289,11 @@ The review action bar persists UI state separately through `ReviewActionBarPersi
 - Project integration adapters own raw workspace/Git target acquisition. The artifact/evidence layer owns the fixed session target manifest and its completeness. Mutable workspace targets may have complete prepared diff coverage, but their final evidence status remains `limited`. Reviewers may not mutate or silently widen that target.
 - The backend owns policy validation, runtime admission, queue/retry state, event emission, and report enrichment.
 - Reviewer subagents and review orchestrators stay read-only. Remediation runs under `ReviewFixer` after user approval, not during the reviewer pass.
+- Revision outcome projection is read-only presentation state above the
+  executor. The record anchor may own only lineage identity and sparse explicit
+  finding dispositions; remediation action state remains with the existing
+  Review action owner. Neither record nor revision metadata may become a second
+  target resolver, report store, content cache, or execution runtime.
 - Managed/historical work packets and current evidence packs are metadata only; they must not embed file contents or full diffs.
 - Existing reviewer Git exposure remains unchanged for legacy compatibility, but prepared target evidence does not authorize it as changed-code evidence and no dedicated multi-operation Git tool is added. Prepared `GetFileDiff` must be bounded and disable external diff/text conversion; live repository reads are supplemental and require a deterministic clean local binding.
 
