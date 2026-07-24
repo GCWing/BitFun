@@ -113,10 +113,22 @@
       opacity: 0.62;
     }
 
-    &--ask,
     &--acp {
       width: 18px;
       padding: 0;
+    }
+
+    &--ask {
+      border-color: var(--color-success-border);
+      background: var(--color-success-bg);
+      color: var(--color-success);
+
+      &:hover:not(:disabled),
+      &.bitfun-chat-input-workspace-strip__permission-trigger--open {
+        border-color: color-mix(in srgb, var(--color-success) 62%, transparent);
+        background: color-mix(in srgb, var(--color-success) 17%, transparent);
+        color: var(--color-success);
+      }
     }
 
     &--auto {

@@ -79,6 +79,7 @@ type BrowserControlBrowserOption = {
 };
 
 type SubagentBatchExecutionPolicy = 'safe_only' | 'force_parallel' | 'serial';
+type ToolPermissionMode = 'ask' | 'auto' | 'full_access';
 
 const DEFAULT_SUBAGENT_BATCH_EXECUTION_POLICY: SubagentBatchExecutionPolicy = 'force_parallel';
 const DEFAULT_SUBAGENT_MAX_CONCURRENCY = 5;
@@ -87,6 +88,11 @@ function normalizeSubagentBatchExecutionPolicy(value: unknown): SubagentBatchExe
   return value === 'force_parallel' || value === 'serial' || value === 'safe_only'
     ? value
     : DEFAULT_SUBAGENT_BATCH_EXECUTION_POLICY;
+}
+
+function resolveToolPermissionMode(config: ToolPermissionConfig): ToolPermissionMode {
+  if (config.policy.preset === 'full_access') return 'full_access';
+  return config.interaction.auto_approve_ask ? 'auto' : 'ask';
 }
 
 const DEFAULT_BROWSER_CONTROL_BROWSER = 'default';
@@ -280,11 +286,18 @@ const SessionSettingsPanels: React.FC<SessionSettingsPanelsProps> = ({ variant }
     }
   };
 
-  const handlePermissionPresetChange = async (value: string | number | (string | number)[]) => {
-    const nextPreset = String(Array.isArray(value) ? value[0] : value) === 'full_access' ? 'full_access' : 'ask';
-    if (nextPreset === toolPermissionConfig.policy.preset) return;
+  const handlePermissionModeChange = async (value: string | number | (string | number)[]) => {
+    const nextModeValue = String(Array.isArray(value) ? value[0] : value);
+    const nextMode: ToolPermissionMode = nextModeValue === 'full_access'
+      ? 'full_access'
+      : nextModeValue === 'auto'
+        ? 'auto'
+        : 'ask';
     const previousConfig = toolPermissionConfig;
-    if (nextPreset === 'full_access') {
+    const currentMode = resolveToolPermissionMode(previousConfig);
+    if (nextMode === currentMode) return;
+
+    if (nextMode === 'full_access') {
       const confirmed = await confirmDanger(
         t('permissionPolicy.fullAccessWarningTitle'),
         t('permissionPolicy.fullAccessWarningMessage'),
@@ -295,16 +308,18 @@ const SessionSettingsPanels: React.FC<SessionSettingsPanelsProps> = ({ variant }
       );
       if (!confirmed) return;
     }
-    await saveToolPermissionConfig(
-      { ...previousConfig, policy: { ...previousConfig.policy, preset: nextPreset } },
-      previousConfig,
-    );
-  };
 
-  const handleAutoApproveAskChange = async (enabled: boolean) => {
-    const previousConfig = toolPermissionConfig;
     await saveToolPermissionConfig(
-      { ...previousConfig, interaction: { ...previousConfig.interaction, auto_approve_ask: enabled } },
+      {
+        policy: {
+          ...previousConfig.policy,
+          preset: nextMode === 'full_access' ? 'full_access' : 'ask',
+        },
+        interaction: {
+          ...previousConfig.interaction,
+          auto_approve_ask: nextMode === 'auto',
+        },
+      },
       previousConfig,
     );
   };
@@ -1071,35 +1086,24 @@ const SessionSettingsPanels: React.FC<SessionSettingsPanelsProps> = ({ variant }
         >
           <ConfigPageRow
             label={t('permissionPolicy.mode')}
-            description={toolPermissionConfig.policy.preset === 'full_access'
+            description={resolveToolPermissionMode(toolPermissionConfig) === 'full_access'
               ? t('permissionPolicy.fullAccessDescription')
-              : t('permissionPolicy.askDescription')}
+              : resolveToolPermissionMode(toolPermissionConfig) === 'auto'
+                ? t('permissionPolicy.autoApproveDescription')
+                : t('permissionPolicy.askDescription')}
             align="center"
           >
             <div className="bitfun-func-agent-config__row-control">
               <Select
                 size="small"
-                value={toolPermissionConfig.policy.preset}
+                value={resolveToolPermissionMode(toolPermissionConfig)}
                 options={[
                   { value: 'ask', label: t('permissionPolicy.ask') },
+                  { value: 'auto', label: t('permissionPolicy.autoApprove') },
                   { value: 'full_access', label: t('permissionPolicy.fullAccess') },
                 ]}
                 disabled={permissionConfigSaving}
-                onChange={handlePermissionPresetChange}
-              />
-            </div>
-          </ConfigPageRow>
-          <ConfigPageRow
-            label={t('permissionPolicy.autoApprove')}
-            description={t('permissionPolicy.autoApproveDescription')}
-            align="center"
-          >
-            <div className="bitfun-func-agent-config__row-control">
-              <Switch
-                checked={toolPermissionConfig.interaction.auto_approve_ask}
-                onChange={(event) => void handleAutoApproveAskChange(event.target.checked)}
-                disabled={permissionConfigSaving}
-                size="small"
+                onChange={handlePermissionModeChange}
               />
             </div>
           </ConfigPageRow>

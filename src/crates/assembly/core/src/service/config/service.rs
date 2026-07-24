@@ -857,4 +857,49 @@ mod tests {
             "legacy theme payload should not be exported after import"
         );
     }
+
+    #[tokio::test]
+    async fn raw_import_migrates_legacy_skip_confirmation_and_removes_it_from_disk() {
+        let test_name = "legacy-skip-confirmation-raw-import";
+        let (service, dir) = test_service(test_name).await;
+        let mut raw_config =
+            serde_json::to_value(GlobalConfig::default()).expect("default config should serialize");
+        let raw_object = raw_config
+            .as_object_mut()
+            .expect("default config should serialize as an object");
+        raw_object.remove("tool_permissions");
+        raw_object
+            .get_mut("ai")
+            .and_then(serde_json::Value::as_object_mut)
+            .expect("default config should include an AI object")
+            .insert(
+                "skip_tool_confirmation".to_string(),
+                serde_json::Value::Bool(true),
+            );
+
+        service
+            .import_config_data(raw_config)
+            .await
+            .expect("legacy confirmation preference should import");
+
+        let permissions: serde_json::Value = service
+            .get_config(Some("tool_permissions"))
+            .await
+            .expect("migrated tool permissions should be readable");
+        assert_eq!(permissions["policy"]["preset"], "ask");
+        assert_eq!(permissions["interaction"]["auto_approve_ask"], true);
+
+        let path_manager = PathManager::with_user_root_for_tests(dir.path().join(test_name));
+        let persisted: serde_json::Value = serde_json::from_str(
+            &tokio::fs::read_to_string(path_manager.app_config_file())
+                .await
+                .expect("migrated config should be persisted"),
+        )
+        .expect("persisted config should be valid JSON");
+        assert!(persisted["ai"].get("skip_tool_confirmation").is_none());
+        assert_eq!(
+            persisted["tool_permissions"]["interaction"]["auto_approve_ask"],
+            true
+        );
+    }
 }

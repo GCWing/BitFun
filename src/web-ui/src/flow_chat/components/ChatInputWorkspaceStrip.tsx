@@ -141,7 +141,7 @@ export const ChatInputWorkspaceStrip: React.FC<ChatInputWorkspaceStripProps> = (
     : permissionMode === 'full_access'
       ? ShieldAlert
       : Shield;
-  const showPermissionLabel = permissionMode === 'auto' || permissionMode === 'full_access';
+  const showPermissionLabel = permissionMode !== 'acp';
 
   const split = !!label && showRightActions;
   const actionsOnly = !label && showRightActions;

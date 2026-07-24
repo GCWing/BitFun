@@ -125,6 +125,48 @@ pub(crate) fn normalize_legacy_agent_model_defaults_config_value(mut config: Val
     config
 }
 
+/// Moves the retired global confirmation preference into the permission V2
+/// interaction setting before Serde drops the legacy field.
+pub(crate) fn normalize_legacy_tool_permissions_config_value(mut config: Value) -> Value {
+    let Some(root) = config.as_object_mut() else {
+        return config;
+    };
+
+    let has_tool_permissions = root.contains_key("tool_permissions");
+    let legacy_skip_confirmation = root
+        .get_mut("ai")
+        .and_then(Value::as_object_mut)
+        .and_then(|ai| ai.remove("skip_tool_confirmation"))
+        .and_then(|value| value.as_bool());
+
+    if !has_tool_permissions {
+        if let Some(auto_approve_ask) = legacy_skip_confirmation {
+            root.insert(
+                "tool_permissions".to_string(),
+                serde_json::json!({
+                    "policy": {
+                        "preset": "ask",
+                        "rules": [],
+                    },
+                    "interaction": {
+                        "auto_approve_ask": auto_approve_ask,
+                    },
+                }),
+            );
+        }
+    }
+
+    config
+}
+
+fn normalize_legacy_config_value(config: Value) -> Value {
+    normalize_legacy_tool_permissions_config_value(
+        normalize_legacy_agent_model_defaults_config_value(normalize_legacy_theme_config_value(
+            config,
+        )),
+    )
+}
+
 fn config_value_for_persistence(config: &GlobalConfig) -> BitFunResult<Value> {
     let mut value = serde_json::to_value(config)
         .map_err(|e| BitFunError::config(format!("Failed to serialize config: {}", e)))?;
@@ -269,9 +311,7 @@ impl ConfigManager {
         let mut config_value: Value = serde_json::from_str(&content).map_err(|e| {
             BitFunError::config(format!("Failed to parse config file as JSON: {}", e))
         })?;
-        let normalized_config_value = normalize_legacy_agent_model_defaults_config_value(
-            normalize_legacy_theme_config_value(config_value.clone()),
-        );
+        let normalized_config_value = normalize_legacy_config_value(config_value.clone());
         let legacy_config_normalized = normalized_config_value != config_value;
         config_value = normalized_config_value;
 
@@ -331,9 +371,7 @@ impl ConfigManager {
 
     /// Performs a smart merge from a JSON value.
     async fn smart_merge_config_from_value(&mut self, user_value: Value) -> BitFunResult<()> {
-        let user_value = normalize_legacy_agent_model_defaults_config_value(
-            normalize_legacy_theme_config_value(user_value),
-        );
+        let user_value = normalize_legacy_config_value(user_value);
         let base_config = self.providers.get_default_config();
 
         let base_value = serde_json::to_value(&base_config).map_err(|e| {
@@ -525,9 +563,7 @@ impl ConfigManager {
     /// Imports configuration.
     pub async fn import_config(&mut self, config_data: serde_json::Value) -> BitFunResult<()> {
         let old_config = self.config.clone();
-        let config_data = normalize_legacy_agent_model_defaults_config_value(
-            normalize_legacy_theme_config_value(config_data),
-        );
+        let config_data = normalize_legacy_config_value(config_data);
 
         let imported_config: GlobalConfig = serde_json::from_value(config_data)
             .map_err(|e| BitFunError::config(format!("Failed to parse imported config: {}", e)))?;
@@ -860,6 +896,7 @@ mod tests {
     use super::{
         canonical_config_path, config_value_for_persistence,
         normalize_legacy_agent_model_defaults_config_value, normalize_legacy_theme_config_value,
+        normalize_legacy_tool_permissions_config_value,
     };
     use crate::service::config::types::GlobalConfig;
 
@@ -994,6 +1031,65 @@ mod tests {
             normalize_legacy_agent_model_defaults_config_value(config.clone()),
             config
         );
+    }
+
+    #[test]
+    fn legacy_skip_confirmation_migrates_to_auto_approve_and_is_removed() {
+        for (skip_tool_confirmation, auto_approve_ask) in [(false, false), (true, true)] {
+            let normalized = normalize_legacy_tool_permissions_config_value(serde_json::json!({
+                "ai": {
+                    "skip_tool_confirmation": skip_tool_confirmation,
+                },
+            }));
+
+            assert_eq!(
+                normalized["tool_permissions"],
+                serde_json::json!({
+                    "policy": {
+                        "preset": "ask",
+                        "rules": [],
+                    },
+                    "interaction": {
+                        "auto_approve_ask": auto_approve_ask,
+                    },
+                })
+            );
+            assert!(normalized["ai"].get("skip_tool_confirmation").is_none());
+        }
+    }
+
+    #[test]
+    fn current_tool_permissions_win_and_legacy_skip_confirmation_is_removed() {
+        let tool_permissions = serde_json::json!({
+            "policy": {
+                "preset": "full_access",
+                "rules": [],
+            },
+            "interaction": {
+                "auto_approve_ask": false,
+            },
+        });
+        let normalized = normalize_legacy_tool_permissions_config_value(serde_json::json!({
+            "tool_permissions": tool_permissions.clone(),
+            "ai": {
+                "skip_tool_confirmation": true,
+            },
+        }));
+
+        assert_eq!(normalized["tool_permissions"], tool_permissions);
+        assert!(normalized["ai"].get("skip_tool_confirmation").is_none());
+    }
+
+    #[test]
+    fn malformed_legacy_skip_confirmation_is_removed_without_granting_access() {
+        let normalized = normalize_legacy_tool_permissions_config_value(serde_json::json!({
+            "ai": {
+                "skip_tool_confirmation": "true",
+            },
+        }));
+
+        assert!(normalized.get("tool_permissions").is_none());
+        assert!(normalized["ai"].get("skip_tool_confirmation").is_none());
     }
 
     #[test]

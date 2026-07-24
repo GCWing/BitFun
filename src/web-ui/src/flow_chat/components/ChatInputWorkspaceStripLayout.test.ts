@@ -29,6 +29,9 @@ describe('ChatInputWorkspaceStrip layout styles', () => {
 
     expect(stylesheet).toContain('&__permission-trigger');
     expect(stylesheet).toContain('min-width: 18px;');
+    expect(stylesheet).toContain('&--ask {');
+    expect(stylesheet).toContain('border-color: var(--color-success-border);');
+    expect(stylesheet).toContain('background: var(--color-success-bg);');
     expect(stylesheet).toContain('width: min(286px, calc(100vw - 24px));');
     expect(stylesheet).toContain('@media (max-width: 560px)');
     expect(stylesheet).toContain('&__permission-label');

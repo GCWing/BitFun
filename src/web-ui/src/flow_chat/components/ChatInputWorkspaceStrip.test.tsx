@@ -112,6 +112,7 @@ describe('ChatInputWorkspaceStrip git refresh behavior', () => {
 
     const trigger = container.querySelector<HTMLButtonElement>('[data-testid="chat-input-permission-trigger"]');
     expect(trigger?.dataset.permissionMode).toBe('ask');
+    expect(trigger?.textContent).toContain('chatInput.permissionMode.ask.label');
 
     await act(async () => {
       trigger?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
