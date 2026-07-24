@@ -6,6 +6,7 @@
 @use './global.scss';
 @use './motion.scss';
 @use '../layout/AppLayout.scss';
+@use '../../infrastructure/mouse-glow/MouseGlowEffect.scss';
 
 /* ========== Utility styles ========== */
 @import './utilities/animations.css';

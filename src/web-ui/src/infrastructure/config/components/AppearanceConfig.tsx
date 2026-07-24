@@ -1,7 +1,8 @@
 import React, { useCallback, useMemo } from 'react';
 import { FontPreferencePanel } from '@/infrastructure/font-preference';
+import { useMouseGlowPreference } from '@/infrastructure/mouse-glow';
 import { useTranslation } from 'react-i18next';
-import { Select, Tooltip } from '@/component-library';
+import { Select, Switch, Tooltip } from '@/component-library';
 import {
   useTheme,
   ThemeMetadata,
@@ -148,6 +149,32 @@ function AppearanceThemeSection() {
         </ConfigPageSection>
       </div>
     </div>
+  );
+}
+
+function AppearanceEffectsSection() {
+  const { t } = useTranslation('settings/appearance');
+  const { enabled, setEnabled } = useMouseGlowPreference();
+
+  return (
+    <ConfigPageSection
+      title={t('effects.title')}
+      description={t('effects.hint')}
+    >
+      <ConfigPageRow
+        label={t('effects.mouseGlow.label')}
+        description={t('effects.mouseGlow.description')}
+        align="center"
+      >
+        <Switch
+          checked={enabled}
+          onChange={(event) => setEnabled(event.target.checked)}
+          aria-label={t('effects.mouseGlow.label')}
+          data-testid="appearance-mouse-glow-switch"
+          size="small"
+        />
+      </ConfigPageRow>
+    </ConfigPageSection>
   );
 }
 
@@ -398,6 +425,7 @@ const AppearanceConfig: React.FC = () => {
       <ConfigPageContent className="bitfun-appearance-config__content">
         <ConfigPageSectionStack data-testid="appearance-config">
           <AppearanceThemeSection />
+          <AppearanceEffectsSection />
           <FontPreferencePanel />
         </ConfigPageSectionStack>
       </ConfigPageContent>

@@ -8,6 +8,7 @@ import { PeerDeviceProvider } from "./infrastructure/peer-device/PeerDeviceConte
 import { PeerHostInvokeBridge } from "./infrastructure/peer-device/PeerHostInvokeBridge";
 import { PeerDirectoryPickerHost } from "./infrastructure/peer-device/PeerDirectoryPickerHost";
 import { I18nProvider } from "./infrastructure/i18n/providers/I18nProvider";
+import { mouseGlowService } from "./infrastructure/mouse-glow/core/MouseGlowService";
 import "./app/styles/index.scss";
 
 // Font: Noto Sans SC is loaded via a <link> tag in index.html.
@@ -229,6 +230,7 @@ async function initializeBeforeRender(): Promise<void> {
     });
   });
   log.info('Theme system initialized');
+  mouseGlowService.initialize();
   logElapsed(log, 'Startup phase completed', phaseStartedAt, {
     data: { phase: 'initializeBeforeRender' },
   });
