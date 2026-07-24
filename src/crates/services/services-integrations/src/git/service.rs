@@ -27,6 +27,34 @@ fn review_path_has_parent_traversal(path: &str, windows: bool) -> bool {
     }
 }
 
+fn resolve_git_approxidate(repo_path: &Path, option: &str, value: &str) -> Result<i64, GitError> {
+    let argument = format!("{option}={value}");
+    let output = execute_git_command_sync(
+        repo_path.to_string_lossy().as_ref(),
+        &["rev-parse", argument.as_str()],
+    )
+    .map_err(|error| {
+        GitError::CommandFailed(format!(
+            "Failed to parse Git date filter '{argument}': {error}"
+        ))
+    })?;
+    let timestamp = output
+        .trim()
+        .split_once('=')
+        .map(|(_, timestamp)| timestamp)
+        .ok_or_else(|| {
+            GitError::CommandFailed(format!(
+                "Git returned an invalid date filter for '{argument}': {}",
+                output.trim()
+            ))
+        })?;
+    timestamp.parse::<i64>().map_err(|error| {
+        GitError::CommandFailed(format!(
+            "Git returned an invalid timestamp for '{argument}': {error}"
+        ))
+    })
+}
+
 impl GitService {
     /// Checks whether the path is a Git repository.
     pub async fn is_repository<P: AsRef<Path>>(path: P) -> Result<bool, GitError> {
@@ -571,52 +599,39 @@ impl GitService {
         task::spawn_blocking(move || {
             let repo = Repository::open(&path_buf)
                 .map_err(|e| GitError::RepositoryNotFound(e.to_string()))?;
+            let since_timestamp = params
+                .since
+                .as_deref()
+                .filter(|value| !value.trim().is_empty())
+                .map(|value| resolve_git_approxidate(&path_buf, "--since", value))
+                .transpose()?;
+            let until_timestamp = params
+                .until
+                .as_deref()
+                .filter(|value| !value.trim().is_empty())
+                .map(|value| resolve_git_approxidate(&path_buf, "--until", value))
+                .transpose()?;
 
             let mut revwalk = repo
                 .revwalk()
                 .map_err(|e| GitError::CommandFailed(e.to_string()))?;
 
-            // Support commit range via since..until or since..HEAD semantics.
-            let has_range = params.since.is_some() || params.until.is_some();
-            if let Some(until_ref) = &params.until {
-                let until_oid = repo
-                    .revparse_single(until_ref)
-                    .map_err(|e| {
-                        GitError::CommandFailed(format!("Failed to resolve 'until' ref: {e}"))
-                    })?
-                    .id();
-                revwalk
-                    .push(until_oid)
-                    .map_err(|e| GitError::CommandFailed(e.to_string()))?;
-            } else {
-                revwalk
-                    .push_head()
-                    .map_err(|e| GitError::CommandFailed(e.to_string()))?;
-            }
-
-            if let Some(since_ref) = &params.since {
-                let since_oid = repo
-                    .revparse_single(since_ref)
-                    .map_err(|e| {
-                        GitError::CommandFailed(format!("Failed to resolve 'since' ref: {e}"))
-                    })?
-                    .id();
-                revwalk
-                    .hide(since_oid)
-                    .map_err(|e| GitError::CommandFailed(e.to_string()))?;
-            }
+            revwalk
+                .push_head()
+                .map_err(|e| GitError::CommandFailed(e.to_string()))?;
 
             // Safety valve: maximum revwalk steps for filtered queries.
             const MAX_REVWALK_STEPS: usize = 500;
             let has_filter = params.author.is_some() || params.grep.is_some();
-            let step_limit = if has_range || has_filter {
+            let has_time_filter = since_timestamp.is_some() || until_timestamp.is_some();
+            let step_limit = if has_time_filter || has_filter {
                 MAX_REVWALK_STEPS
             } else {
                 usize::MAX
             };
 
             let mut commits = Vec::new();
-            let mut count = 0;
+            let mut matched_count = 0;
             let skip = params.skip.unwrap_or(0);
             let max_count = params.max_count.unwrap_or(50);
             let mut walk_steps = 0;
@@ -625,10 +640,6 @@ impl GitService {
                 walk_steps += 1;
                 if walk_steps > step_limit {
                     break;
-                }
-                if count < skip as usize {
-                    count += 1;
-                    continue;
                 }
 
                 if commits.len() >= max_count as usize {
@@ -643,19 +654,29 @@ impl GitService {
 
                 let author = commit.author();
                 let message = commit.message().unwrap_or("").to_string();
+                let commit_timestamp = commit.time().seconds();
+
+                if since_timestamp.is_some_and(|threshold| commit_timestamp < threshold)
+                    || until_timestamp.is_some_and(|threshold| commit_timestamp > threshold)
+                {
+                    continue;
+                }
 
                 if let Some(author_filter) = &params.author {
                     if !author.name().unwrap_or("").contains(author_filter) {
-                        count += 1;
                         continue;
                     }
                 }
 
                 if let Some(grep_filter) = &params.grep {
                     if !message.contains(grep_filter) {
-                        count += 1;
                         continue;
                     }
+                }
+
+                if matched_count < skip as usize {
+                    matched_count += 1;
+                    continue;
                 }
 
                 let parents: Vec<String> = commit.parent_ids().map(|id| id.to_string()).collect();
@@ -679,7 +700,7 @@ impl GitService {
                     files_changed,
                 });
 
-                count += 1;
+                matched_count += 1;
             }
 
             Ok(commits)
@@ -1355,7 +1376,43 @@ impl GitService {
 
 #[cfg(test)]
 mod review_path_tests {
-    use super::review_path_has_parent_traversal;
+    use super::{review_path_has_parent_traversal, GitLogParams, GitService};
+    use std::{fs, path::Path, process::Command};
+
+    fn git(root: &Path, args: &[&str], commit_date: Option<&str>) {
+        let mut command = Command::new("git");
+        command.current_dir(root).args(args);
+        if let Some(commit_date) = commit_date {
+            command
+                .env("GIT_AUTHOR_DATE", commit_date)
+                .env("GIT_COMMITTER_DATE", commit_date);
+        }
+        let output = command.output().expect("git should be available for tests");
+        assert!(
+            output.status.success(),
+            "git {:?} failed: {}",
+            args,
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+
+    fn commit_file(root: &Path, contents: &str, message: &str, commit_date: &str) {
+        fs::write(root.join("tracked.txt"), contents).expect("fixture should be written");
+        git(root, &["add", "--", "tracked.txt"], None);
+        git(
+            root,
+            &[
+                "-c",
+                "user.name=BitFun Tests",
+                "-c",
+                "user.email=bitfun@example.com",
+                "commit",
+                "-m",
+                message,
+            ],
+            Some(commit_date),
+        );
+    }
 
     #[test]
     fn parent_traversal_uses_platform_path_separators() {
@@ -1365,5 +1422,57 @@ mod review_path_tests {
             false,
         ));
         assert!(review_path_has_parent_traversal(r"src\..\outside.rs", true,));
+    }
+
+    #[tokio::test]
+    async fn commit_date_filters_use_git_approxidates_instead_of_revision_names() {
+        let directory = tempfile::tempdir().expect("temporary repository should be created");
+        git(directory.path(), &["init"], None);
+        commit_file(
+            directory.path(),
+            "old\n",
+            "old commit",
+            "2020-01-01T00:00:00Z",
+        );
+        commit_file(
+            directory.path(),
+            "new\n",
+            "new commit",
+            "2030-01-01T00:00:00Z",
+        );
+
+        let recent = GitService::get_commits(
+            directory.path(),
+            GitLogParams {
+                since: Some("2025-01-01".to_string()),
+                ..Default::default()
+            },
+        )
+        .await
+        .expect("since date should be accepted");
+        assert_eq!(
+            recent
+                .iter()
+                .map(|commit| commit.message.trim())
+                .collect::<Vec<_>>(),
+            vec!["new commit"]
+        );
+
+        let older = GitService::get_commits(
+            directory.path(),
+            GitLogParams {
+                until: Some("2025-01-01".to_string()),
+                ..Default::default()
+            },
+        )
+        .await
+        .expect("until date should be accepted");
+        assert_eq!(
+            older
+                .iter()
+                .map(|commit| commit.message.trim())
+                .collect::<Vec<_>>(),
+            vec!["old commit"]
+        );
     }
 }

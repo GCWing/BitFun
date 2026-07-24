@@ -8,7 +8,7 @@ use crate::agentic::tools::framework::{
 };
 use crate::service::git::{
     execute_git_command, execute_git_command_raw, GitAddParams, GitCommitParams, GitDiffParams,
-    GitLogParams, GitPullParams, GitPushParams, GitService,
+    GitPullParams, GitPushParams, GitService,
 };
 use crate::util::elapsed_ms_u64;
 use crate::util::errors::{BitFunError, BitFunResult};
@@ -64,6 +64,7 @@ const ALLOWED_OPERATIONS: &[&str] = &[
     "describe",    // Describe version
     "shortlog",    // Short log
     "clean",       // Clean working directory
+    "var",         // Read Git author/committer identity and other Git variables
 ];
 
 /// Dangerous Git operations (require special warning)
@@ -86,16 +87,6 @@ struct ParsedCommitArgs {
     amend: bool,
     all: bool,
     no_verify: bool,
-}
-
-/// Parsed result of a `git log` args string.
-#[derive(Debug, PartialEq)]
-struct ParsedLogArgs {
-    max_count: i32,
-    oneline: bool,
-    stat: bool,
-    since: Option<String>,
-    until: Option<String>,
 }
 
 /// Execution plan for checkout/switch derived from the raw args.
@@ -195,6 +186,8 @@ impl GitTool {
                 *token,
                 "--since"
                     | "--until"
+                    | "--after"
+                    | "--before"
                     | "--oneline"
                     | "--grep"
                     | "--author"
@@ -202,6 +195,8 @@ impl GitTool {
                     | "--walk-reflogs"
             ) || token.starts_with("--since=")
                 || token.starts_with("--until=")
+                || token.starts_with("--after=")
+                || token.starts_with("--before=")
         });
         if has_log_flag {
             return Some("log");
@@ -443,61 +438,30 @@ impl GitTool {
         }
     }
 
-    /// Parse a `git log` args string.
-    ///
-    /// Supports `-n <num>`, `-n<num>`, `-<num>`, `--max-count[=<num>]`, and
-    /// `--since/--until` in both `=` and separated forms.
-    fn parse_log_args(args: &str) -> ParsedLogArgs {
-        const DEFAULT_MAX_COUNT: i32 = 50;
-        let tokens = Self::tokenize_args(args);
-        let mut parsed = ParsedLogArgs {
-            max_count: DEFAULT_MAX_COUNT,
-            oneline: Self::tokens_contain_flag(&tokens, None, Some("--oneline")),
-            stat: Self::tokens_contain_flag(&tokens, None, Some("--stat")),
-            since: None,
-            until: None,
-        };
+    fn log_args_have_max_count(tokens: &[String]) -> bool {
+        tokens.iter().any(|token| {
+            token == "-n"
+                || token == "--max-count"
+                || token.starts_with("--max-count=")
+                || token.strip_prefix("-n").is_some_and(|value| {
+                    !value.is_empty() && value.chars().all(|ch| ch.is_ascii_digit())
+                })
+                || token.len() > 1
+                    && token.starts_with(SHORT_FLAG_PREFIX)
+                    && !token.starts_with("--")
+                    && token[1..].chars().all(|ch| ch.is_ascii_digit())
+        })
+    }
 
-        let mut index = 0;
-        while index < tokens.len() {
-            let token = &tokens[index];
-            if token == "-n" || token == "--max-count" || token == "--since" || token == "--until" {
-                if let Some(value) = tokens.get(index + 1) {
-                    if token == "--since" {
-                        parsed.since = Some(value.clone());
-                    } else if token == "--until" {
-                        parsed.until = Some(value.clone());
-                    } else if let Ok(count) = value.parse::<i32>() {
-                        parsed.max_count = count;
-                    }
-                    index += 2;
-                    continue;
-                }
-            } else if let Some(value) = token.strip_prefix("--max-count=") {
-                if let Ok(count) = value.parse::<i32>() {
-                    parsed.max_count = count;
-                }
-            } else if let Some(value) = token.strip_prefix("--since=") {
-                parsed.since = Some(value.to_string());
-            } else if let Some(value) = token.strip_prefix("--until=") {
-                parsed.until = Some(value.to_string());
-            } else if let Some(value) = token.strip_prefix("-n") {
-                if let Ok(count) = value.parse::<i32>() {
-                    parsed.max_count = count;
-                }
-            } else if token.len() > 1
-                && token.starts_with(SHORT_FLAG_PREFIX)
-                && !token.starts_with("--")
-                && token[1..].chars().all(|ch| ch.is_ascii_digit())
-            {
-                if let Ok(count) = token[1..].parse::<i32>() {
-                    parsed.max_count = count;
-                }
-            }
-            index += 1;
+    /// Build native `git log` arguments without reinterpreting or dropping
+    /// standard Git flags. Keep the historical 50-commit safety bound only
+    /// when the caller did not provide an explicit count.
+    fn build_log_cli_args(args: &str) -> Vec<String> {
+        let mut tokens = Self::tokenize_args(args);
+        if !Self::log_args_have_max_count(&tokens) {
+            tokens.insert(0, "--max-count=50".to_string());
         }
-
-        parsed
+        tokens
     }
 
     /// Resolve repository root: workspace root or a path resolved with the same rules as file tools
@@ -536,21 +500,26 @@ impl GitTool {
             BitFunError::tool("Remote Git requires workspace shell (SSH)".to_string())
         })?;
 
-        let args_str = args.unwrap_or("").trim();
-        let cmd = if args_str.is_empty() {
-            format!(
-                "git --no-pager -C {} {}",
-                Self::sh_quote(repo_path),
-                operation
-            )
+        let arg_tokens = if operation == "log" {
+            Self::build_log_cli_args(args.unwrap_or(""))
         } else {
-            format!(
-                "git --no-pager -C {} {} {}",
-                Self::sh_quote(repo_path),
-                operation,
-                args_str
-            )
+            Self::tokenize_args(args.unwrap_or(""))
         };
+        let quoted_args = arg_tokens
+            .iter()
+            .map(|arg| Self::sh_quote(arg))
+            .collect::<Vec<_>>()
+            .join(" ");
+        let cmd = format!(
+            "git --no-pager -C {} {}{}",
+            Self::sh_quote(repo_path),
+            operation,
+            if quoted_args.is_empty() {
+                String::new()
+            } else {
+                format!(" {quoted_args}")
+            }
+        );
 
         let (stdout, stderr, exit_code) = shell
             .exec(&cmd, Some(180_000))
@@ -738,47 +707,31 @@ impl GitTool {
         }))
     }
 
-    /// Execute log operation using GitService
+    /// Execute log through native Git so every accepted argument keeps its
+    /// documented Git meaning. In particular, `--since`/`--until` are
+    /// approxidate filters rather than commit refs, and flags such as `--all`,
+    /// `--author-date-order`, `--format`, and `--date` are not discarded.
     async fn execute_log(repo_path: &str, args: Option<&str>) -> BitFunResult<Value> {
-        let parsed = Self::parse_log_args(args.unwrap_or(""));
-
-        let params = GitLogParams {
-            max_count: Some(parsed.max_count),
-            stat: Some(parsed.stat),
-            since: parsed.since,
-            until: parsed.until,
-            ..Default::default()
-        };
-
-        let commits = GitService::get_commits(repo_path, params)
+        let log_args = Self::build_log_cli_args(args.unwrap_or(""));
+        let mut command_args = Vec::with_capacity(log_args.len() + 1);
+        command_args.push("log".to_string());
+        command_args.extend(log_args);
+        let command_arg_refs = command_args.iter().map(String::as_str).collect::<Vec<_>>();
+        let raw = execute_git_command_raw(repo_path, &command_arg_refs)
             .await
-            .map_err(|e| BitFunError::tool(format!("Git log failed: {}", e)))?;
-
-        // Build output
-        let output_lines: Vec<String> = commits
+            .map_err(|e| BitFunError::tool(format!("Git log failed: {e}")))?;
+        let rendered_args = command_args[1..]
             .iter()
-            .map(|c| {
-                if parsed.oneline {
-                    format!(
-                        "{} {}",
-                        c.short_hash,
-                        c.message.lines().next().unwrap_or("")
-                    )
-                } else {
-                    format!(
-                        "commit {}\nAuthor: {} <{}>\nDate:   {}\n\n    {}\n",
-                        c.hash, c.author, c.author_email, c.date, c.message
-                    )
-                }
-            })
-            .collect();
+            .map(|arg| Self::sh_quote(arg))
+            .collect::<Vec<_>>()
+            .join(" ");
 
         Ok(json!({
-            "success": true,
-            "exit_code": 0,
-            "stdout": output_lines.join(if parsed.oneline { "\n" } else { "" }),
-            "stderr": "",
-            "data": commits
+            "success": raw.exit_code == 0,
+            "exit_code": raw.exit_code,
+            "stdout": raw.stdout,
+            "stderr": raw.stderr,
+            "command": format!("git log {rendered_args}")
         }))
     }
 
@@ -1105,6 +1058,7 @@ If this definition was returned by `GetToolSpec`, execute it through `CallDeferr
 - **init**: Create an empty Git repository
 - **blame**: Show what revision and author last modified each line
 - **cherry-pick**: Apply the changes introduced by some existing commits
+- **var**: Read Git identity and other Git variables
 
 ## Usage Examples
 
@@ -1143,14 +1097,31 @@ If this definition was returned by `GetToolSpec`, execute it through `CallDeferr
    {"operation": "switch", "args": "main"}
    ```
 
+8. Inspect work authored today:
+   ```json
+   {"operation": "var", "args": "GIT_AUTHOR_IDENT"}
+   {"operation": "status"}
+   {"operation": "log", "args": "--since=midnight --date=iso-local --format=\"%h%x09%ad%x09%an%x09%ae%x09%s\" --stat -50"}
+   ```
+
 ## Important: Input Shape
 
 - **Preferred format:** always send a JSON object with top-level `operation` plus optional `args`.
 - `operation` is the bare Git subcommand (`status`, `diff`, `log`, `add`, `commit`, ...).
 - `args` contains only flags, refs, paths, or commit-message text for that subcommand.
 - **Do NOT repeat the subcommand in `args`.** Example: `{"operation": "diff", "args": "HEAD~2..HEAD --stat"}` — not `{"operation": "diff", "args": "diff HEAD~2..HEAD --stat"}`.
+- `log` uses native Git argument semantics. Approxidates such as `--since=midnight`, `--since=today`, `--after="1 day ago"`, and matching `--until`/`--before` forms are date filters, not revision names.
+- `log` adds a 50-commit safety bound only when no `-n`/`--max-count` option is provided.
 - Prefer this tool over Bash for Git subcommands when `Git` is available. Bash is still fine for shell pipelines, hooks, or commands that combine Git with other tools.
 - Common shell-style mistakes (`"git status"`, `{"command": "git status"}`, or `{"args": "log --oneline -10"}`) are auto-normalized when possible, but the canonical `{operation, args?}` shape above is more reliable.
+
+## Time-Scoped Inspection
+
+- For requests such as "what did I change today?", check both the working tree (`status`) and commits since local midnight on the current branch. Use `var GIT_AUTHOR_IDENT` when authorship matters, then filter or interpret the log using the verified identity.
+- Prefer relative Git dates such as `--since=midnight`; do not guess the current calendar date.
+- Do not add `--all` unless the user asks for activity across branches or refs. `--all` can include other authors, merged histories, and duplicate logical work.
+- Keep uncommitted changes, authored commits, merged commits, and upstream changes distinct. A clean working tree only means there are no current uncommitted changes.
+- Do not report a user's commit count or cumulative diff from an unfiltered multi-author/all-ref range. If a range includes merges or upstream work, qualify the scope explicitly.
 
 ## Safety Notes
 
@@ -1205,7 +1176,7 @@ When creating commits, use this format for the commit message:
                 },
                 "args": {
                     "type": "string",
-                    "description": "Optional extra arguments for the selected operation: flags, refs, commit messages, or file paths. Examples: \"--staged\", \"--oneline -10\", \"-m \\\"message\\\"\", or \"-- src/file.rs\". Do not include \"git\" or repeat the operation/subcommand here."
+                    "description": "Optional extra arguments for the selected operation: flags, refs, commit messages, or file paths. Examples: \"--staged\", \"--oneline --since=midnight -10\", \"-m \\\"message\\\"\", or \"-- src/file.rs\". Git log arguments retain native Git semantics, including relative date filters. Do not include \"git\" or repeat the operation/subcommand here."
                 },
                 "working_directory": {
                     "type": "string",
@@ -1477,10 +1448,8 @@ When creating commits, use this format for the commit message:
                 json!(duration.as_millis() as u64),
             );
             if !context.is_remote() {
-                obj.insert(
-                    "command".to_string(),
-                    json!(format!("git {} {}", operation, args.unwrap_or(""))),
-                );
+                obj.entry("command".to_string())
+                    .or_insert_with(|| json!(format!("git {} {}", operation, args.unwrap_or(""))));
             }
             obj.insert("operation".to_string(), json!(operation));
             obj.insert("working_directory".to_string(), json!(repo_path));
@@ -1518,6 +1487,42 @@ mod tests {
 
     use super::{git_operation_needs_light_checkpoint, CheckoutPlan, GitTool, ParsedDiffArgs};
     use serde_json::json;
+    use std::{fs, path::Path, process::Command};
+
+    fn git(root: &Path, args: &[&str], commit_date: Option<&str>) {
+        let mut command = Command::new("git");
+        command.current_dir(root).args(args);
+        if let Some(commit_date) = commit_date {
+            command
+                .env("GIT_AUTHOR_DATE", commit_date)
+                .env("GIT_COMMITTER_DATE", commit_date);
+        }
+        let output = command.output().expect("git should be available for tests");
+        assert!(
+            output.status.success(),
+            "git {:?} failed: {}",
+            args,
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+
+    fn commit_file(root: &Path, contents: &str, message: &str, commit_date: &str) {
+        fs::write(root.join("tracked.txt"), contents).expect("fixture should be written");
+        git(root, &["add", "--", "tracked.txt"], None);
+        git(
+            root,
+            &[
+                "-c",
+                "user.name=BitFun Tests",
+                "-c",
+                "user.email=bitfun@example.com",
+                "commit",
+                "-m",
+                message,
+            ],
+            Some(commit_date),
+        );
+    }
 
     #[test]
     fn tokenize_args_respects_quotes() {
@@ -1634,24 +1639,62 @@ mod tests {
     }
 
     #[test]
-    fn parse_log_args_counts_and_filters() {
-        let parsed = GitTool::parse_log_args("--oneline -10");
-        assert_eq!(parsed.max_count, 10);
-        assert!(parsed.oneline);
+    fn build_log_cli_args_preserves_native_flags_and_adds_only_a_default_bound() {
+        assert_eq!(
+            GitTool::build_log_cli_args("--oneline -10"),
+            vec!["--oneline", "-10"]
+        );
+        assert_eq!(
+            GitTool::build_log_cli_args("-n 25 --since=midnight --author-date-order --all"),
+            vec![
+                "-n",
+                "25",
+                "--since=midnight",
+                "--author-date-order",
+                "--all"
+            ]
+        );
+        assert_eq!(
+            GitTool::build_log_cli_args("--max-count=7 --until \"1 day ago\""),
+            vec!["--max-count=7", "--until", "1 day ago"]
+        );
+        assert_eq!(
+            GitTool::build_log_cli_args("--after=2026-05-02 --oneline"),
+            vec!["--max-count=50", "--after=2026-05-02", "--oneline"]
+        );
+        assert_eq!(GitTool::build_log_cli_args("-n5"), vec!["-n5"]);
+    }
 
-        let parsed = GitTool::parse_log_args("-n 25 --since=2026-05-02");
-        assert_eq!(parsed.max_count, 25);
-        assert_eq!(parsed.since, Some("2026-05-02".to_string()));
+    #[tokio::test]
+    async fn execute_log_applies_date_filters_instead_of_treating_them_as_refs() {
+        let directory = tempfile::tempdir().expect("temporary repository should be created");
+        git(directory.path(), &["init"], None);
+        commit_file(
+            directory.path(),
+            "old\n",
+            "old commit",
+            "2020-01-01T00:00:00Z",
+        );
+        commit_file(
+            directory.path(),
+            "new\n",
+            "new commit",
+            "2030-01-01T00:00:00Z",
+        );
 
-        let parsed = GitTool::parse_log_args("--max-count=7 --until \"2026-06-01\"");
-        assert_eq!(parsed.max_count, 7);
-        assert_eq!(parsed.until, Some("2026-06-01".to_string()));
+        let output = GitTool::execute_log(
+            directory.path().to_str().expect("UTF-8 path"),
+            Some("--after=2025-01-01 --before=2035-01-01 --author-date-order --all --format=%s"),
+        )
+        .await
+        .expect("git log should execute");
 
-        let parsed = GitTool::parse_log_args("--oneline");
-        assert_eq!(parsed.max_count, 50);
-
-        let parsed = GitTool::parse_log_args("-n5");
-        assert_eq!(parsed.max_count, 5);
+        assert_eq!(output["success"], true);
+        assert_eq!(output["stdout"], "new commit\n");
+        assert!(output["command"]
+            .as_str()
+            .expect("command should be present")
+            .contains("'--after=2025-01-01'"));
     }
 
     #[tokio::test]
@@ -1699,6 +1742,13 @@ mod tests {
             .as_str()
             .unwrap()
             .contains("Do not include \"git\" or repeat the operation"));
+        assert!(schema["properties"]["args"]["description"]
+            .as_str()
+            .unwrap()
+            .contains("relative date filters"));
+        let description = tool.description().await.expect("description should render");
+        assert!(description.contains("do not guess the current calendar date"));
+        assert!(description.contains("Do not add `--all`"));
 
         let validation = tool
             .validate_input(&json!({"args": "--since=\"2026-05-02\" --oneline"}), None)
