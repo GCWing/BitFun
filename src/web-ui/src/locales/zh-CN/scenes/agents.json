@@ -297,6 +297,16 @@
   },
   "reviewTeams": {
     "members": {
+      "worker": {
+        "funName": "动态审核员",
+        "role": "动态审核工作单元",
+        "description": "一个只读审核工作单元；其具体审核维度、问题和范围会根据当前变更动态确定，而不是固定在 Agent 身份中。",
+        "responsibilities": [
+          "仅执行所属 Review Agent 指定的审核维度和问题。",
+          "严格限定在已准备的审核目标内，并返回有证据支持的发现和明确覆盖范围。",
+          "不得扩大权限、修改文件或重复主审核。"
+        ]
+      },
       "businessLogic": {
         "funName": "逻辑审核员",
         "role": "业务逻辑审核员",
