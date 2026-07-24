@@ -819,8 +819,8 @@ const ExternalSourcesConfig: React.FC = () => {
     || Boolean(workspace?.connectionId);
   const policy = snapshot?.integrationPolicy;
   const selectedPolicyEnabled = policyScope === 'workspace'
-    ? policy?.workspaceOverride?.enabled ?? policy?.userDefaults.enabled ?? true
-    : policy?.userDefaults.enabled ?? true;
+    ? policy?.workspaceOverride?.enabled ?? policy?.userDefaults.enabled ?? false
+    : policy?.userDefaults.enabled ?? false;
   const selectedPolicyEffective = policyScope === 'workspace'
     ? policy?.effective
     : policy?.globalEffective;

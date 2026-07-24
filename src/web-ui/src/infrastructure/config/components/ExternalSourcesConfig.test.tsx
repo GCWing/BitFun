@@ -496,6 +496,33 @@ describe('ExternalSourcesConfig', () => {
     expect(toolRow?.textContent).not.toContain('policy.access.auto');
   });
 
+  it('fails closed when an older host omits the stored enabled flag', async () => {
+    getSnapshotMock.mockResolvedValue({
+      ...snapshot,
+      integrationPolicy: {
+        ...integrationPolicy,
+        userDefaults: {
+          ...integrationPolicy.userDefaults,
+          enabled: undefined,
+        },
+        workspaceOverride: {
+          enabled: undefined,
+          ecosystems: {},
+        },
+      },
+    });
+
+    await act(async () => {
+      root.render(<ExternalSourcesConfig />);
+      await Promise.resolve();
+    });
+
+    const policyToggle = container.querySelector(
+      '.bitfun-external-sources-config__policy-card input[type="checkbox"]',
+    ) as HTMLInputElement;
+    expect(policyToggle.checked).toBe(false);
+  });
+
   it('requires one explicit conflict choice and persists source toggles', async () => {
     await act(async () => {
       root.render(<ExternalSourcesConfig />);
