@@ -100,9 +100,7 @@ describe('SessionsSection layout styles', () => {
     expect(backgroundSubagentIconBlock).toContain('place-self: center;');
     expect(backgroundSubagentIconBlock).toContain('display: block;');
     expect(backgroundSubagentIconBlock).toContain('transform-origin: center center;');
-    expect(backgroundSubagentIconBlock).toContain('--bitfun-subagent-bot-optical-y: -1px;');
-    expect(stylesheet).toContain(
-      'transform: translateY(var(--bitfun-subagent-bot-optical-y)) scale(1);',
-    );
+    expect(stylesheet).not.toContain('--bitfun-subagent-bot-optical-y');
+    expect(stylesheet).not.toContain('translateY(var(--bitfun-subagent-bot-optical-y))');
   });
 });

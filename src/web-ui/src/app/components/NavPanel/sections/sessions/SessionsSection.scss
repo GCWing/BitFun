@@ -313,10 +313,6 @@
     transition: opacity $motion-fast $easing-standard, transform $motion-fast $easing-standard;
 
     &.is-bot {
-      // Lucide Bot head mass sits below the viewBox center (thin antenna above).
-      // Nudge up so the glyph reads centered inside the circular badge.
-      --bitfun-subagent-bot-optical-y: -1px;
-      transform: translateY(var(--bitfun-subagent-bot-optical-y));
       animation: bitfun-nav-background-subagent-bot-cycle 3.6s ease-in-out infinite;
     }
 
@@ -727,13 +723,13 @@
   62%,
   100% {
     opacity: 1;
-    transform: translateY(var(--bitfun-subagent-bot-optical-y)) scale(1);
+    transform: scale(1);
   }
 
   70%,
   88% {
     opacity: 0;
-    transform: translateY(var(--bitfun-subagent-bot-optical-y)) scale(0.82);
+    transform: scale(0.82);
   }
 }
 
@@ -777,7 +773,7 @@
 
     &.is-bot {
       opacity: 1;
-      transform: translateY(var(--bitfun-subagent-bot-optical-y));
+      transform: none;
     }
 
     &.is-loader {
