@@ -58,6 +58,8 @@ pub(crate) mod review_platform_http;
 
 #[cfg(feature = "script-tool-runtime")]
 pub mod script_tool;
+#[cfg(feature = "speech")]
+pub mod speech;
 
 #[cfg(feature = "workspace-search")]
 pub mod workspace_search;

@@ -20,7 +20,7 @@ const log = createLogger('DefaultModelConfig');
 const normalizeSelectValue = (value: string | number | (string | number)[]): string | number =>
   Array.isArray(value) ? (value[0] ?? '') : value;
 
-type DefaultModelSlot = 'primary' | 'fast' | 'image_understanding';
+type DefaultModelSlot = 'primary' | 'fast' | 'image_understanding' | 'speech_recognition';
 
 export const DefaultModelConfig: React.FC = () => {
   const { t } = useTranslation('settings/default-model');
@@ -39,6 +39,7 @@ export const DefaultModelConfig: React.FC = () => {
     primary: null,
     fast: null,
     image_understanding: null,
+    speech_recognition: null,
   });
 
   const loadData = useCallback(async () => {
@@ -56,6 +57,7 @@ export const DefaultModelConfig: React.FC = () => {
         primary: defaultModelsConfig?.primary || null,
         fast: defaultModelsConfig?.fast || null,
         image_understanding: defaultModelsConfig?.image_understanding || null,
+        speech_recognition: defaultModelsConfig?.speech_recognition || null,
       });
     } catch (error) {
       log.error('Failed to load data', error);
@@ -97,6 +99,8 @@ export const DefaultModelConfig: React.FC = () => {
         return t('core.fast.label');
       case 'image_understanding':
         return t('optional.capabilities.image_understanding.label');
+      case 'speech_recognition':
+        return t('optional.capabilities.speech_recognition.label');
       default: {
         const exhaustive: never = slot;
         return exhaustive;
@@ -139,6 +143,10 @@ export const DefaultModelConfig: React.FC = () => {
   const imageUnderstandingModels = enabledModels.filter(model => {
     const capabilities = Array.isArray(model.capabilities) ? model.capabilities : [];
     return model.category === 'multimodal' || capabilities.includes('image_understanding');
+  });
+  const speechRecognitionModels = enabledModels.filter(model => {
+    const capabilities = Array.isArray(model.capabilities) ? model.capabilities : [];
+    return model.category === 'speech_recognition' || capabilities.includes('speech_recognition');
   });
 
   if (loading) {
@@ -215,6 +223,27 @@ export const DefaultModelConfig: React.FC = () => {
           renderOption={renderModelOption}
           renderValue={renderModelValue}
           className="model-select-presentation__select"
+          size="small"
+        />
+      </ConfigPageRow>
+
+      <ConfigPageRow
+        label={renderOptionalLabel(t('optional.capabilities.speech_recognition.label'))}
+        description={t('optional.capabilities.speech_recognition.description')}
+        align="center"
+      >
+        <Select
+          value={defaultModels.speech_recognition || ''}
+          onChange={(value) => handleDefaultModelChange('speech_recognition', normalizeSelectValue(value))}
+          placeholder={t('optional.notSet')}
+          options={[
+            { label: t('optional.notSet'), value: '' },
+            ...speechRecognitionModels.map(buildModelOption),
+          ]}
+          renderOption={renderModelOption}
+          renderValue={renderModelValue}
+          className="default-model-config__model-select"
+          disabled={speechRecognitionModels.length === 0}
           size="small"
         />
       </ConfigPageRow>

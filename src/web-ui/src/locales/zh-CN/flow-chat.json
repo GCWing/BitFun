@@ -534,7 +534,8 @@
     "openWorkspaceFolderFailed": "打开工作区文件夹失败：{{error}}",
     "spaceToActivate": "按<space>空格键</space>快速键入",
     "assistantPlaceholder": "给 {{name}} 发送消息...",
-    "sendHint": "Enter 发送 / Ctrl+Enter 或 Shift+Enter 换行"
+    "sendHint": "Enter 发送 / Ctrl+Enter 或 Shift+Enter 换行",
+    "voiceInput": { "start": "开始语音输入", "stop": "停止录音", "preparing": "正在准备麦克风", "transcribing": "正在转写", "disabled": "语音输入已关闭", "unsupported": "当前无法使用麦克风", "modelMissing": "请先下载本地语音模型", "cloudPending": "云端转写已配置，但转写通路尚未接入", "permissionDenied": "麦克风权限被拒绝", "deviceDisconnected": "所选麦克风已断开连接", "lowVolume": "没有检测到声音，请检查所选麦克风。", "failed": "语音输入失败", "empty": "没有识别到语音", "transcribeOnly": "插入转写文本", "transcribeAndSend": "转写并发送" }
   },
   "workspaceStrip": {
     "branchTooltipUnavailable": "非 Git 仓库或当前无分支"

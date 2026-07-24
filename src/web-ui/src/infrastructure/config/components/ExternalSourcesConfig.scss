@@ -494,6 +494,41 @@
     font-size: 11px;
   }
 
+  &__review-summary {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px 12px;
+    color: var(--color-text-secondary);
+    font-size: 12px;
+  }
+
+  &__review-risk {
+    margin-top: 6px;
+  }
+
+  &__review-details {
+    margin-top: 8px;
+    color: var(--color-text-secondary);
+    font-size: 12px;
+
+    > summary {
+      width: fit-content;
+      color: var(--color-accent-500);
+      cursor: pointer;
+      user-select: none;
+    }
+
+    &[open] > summary {
+      margin-bottom: 8px;
+    }
+  }
+
+  &__diagnostic-code {
+    color: var(--color-text-muted);
+    font-size: 11px;
+    overflow-wrap: anywhere;
+  }
+
   &__tool-actions {
     display: flex;
     justify-content: flex-end;

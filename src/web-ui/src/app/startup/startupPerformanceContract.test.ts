@@ -397,6 +397,7 @@ describe('startup performance contract', () => {
       '../../../infrastructure/config/components/ReviewConfig',
       '../../../infrastructure/config/components/MemoriesConfig',
       '../../../infrastructure/config/components/QuickActionsConfig',
+      '../../../infrastructure/config/components/VoiceInputConfig',
       '../../../infrastructure/config/components/SessionConfig',
       './components/ArchivedSessionsConfig',
       './components/KeyboardShortcutsTab',

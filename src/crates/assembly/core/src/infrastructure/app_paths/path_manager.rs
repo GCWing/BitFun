@@ -277,6 +277,31 @@ impl PathManager {
         self.user_root.join("data")
     }
 
+    /// User-level managed model resources shared across workspaces.
+    pub fn user_models_dir(&self) -> PathBuf {
+        self.user_data_dir().join("models")
+    }
+
+    /// User-level speech recognition model resources shared across workspaces.
+    pub fn speech_models_dir(&self) -> PathBuf {
+        self.user_models_dir().join("speech")
+    }
+
+    /// Versioned speech model resource directory.
+    pub fn speech_model_dir(&self, model_id: &str, version: &str) -> PathBuf {
+        self.speech_models_dir().join(model_id).join(version)
+    }
+
+    /// Temporary download workspace for managed speech model resources.
+    pub fn speech_model_downloads_dir(&self) -> PathBuf {
+        self.cache_root().join("model-downloads").join("speech")
+    }
+
+    /// Temporary audio chunks for local voice input sessions.
+    pub fn speech_input_temp_dir(&self) -> PathBuf {
+        self.temp_dir().join("speech-input")
+    }
+
     /// Get user memory database file: ~/.config/bitfun/data/memories/memories.sqlite
     pub fn memories_database_file(&self) -> PathBuf {
         self.user_data_dir()
@@ -552,11 +577,15 @@ impl PathManager {
             self.user_agents_dir(),
             self.cache_root(),
             self.user_data_dir(),
+            self.user_models_dir(),
+            self.speech_models_dir(),
+            self.speech_model_downloads_dir(),
             self.user_cron_dir(),
             self.user_rules_dir(),
             self.miniapps_dir(),
             self.logs_dir(),
             self.temp_dir(),
+            self.speech_input_temp_dir(),
         ];
 
         for dir in dirs {

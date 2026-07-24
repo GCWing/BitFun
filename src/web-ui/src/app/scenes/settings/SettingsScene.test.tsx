@@ -42,6 +42,10 @@ vi.mock('../../../infrastructure/config/components/QuickActionsConfig', () => ({
   default: () => <div data-testid="quick-actions-config" />,
 }));
 
+vi.mock('../../../infrastructure/config/components/VoiceInputConfig', () => ({
+  default: () => <div data-testid="voice-input-config" />,
+}));
+
 vi.mock('../../../infrastructure/config/components/SessionConfig', () => ({
   SessionPersonalizationConfig: () => <div data-testid="session-personalization-config" />,
   SessionPermissionsConfig: () => <div data-testid="session-permissions-config" />,
@@ -74,7 +78,9 @@ describe('SettingsScene lazy tab routing', () => {
     vi.useRealTimers();
   });
 
-  async function renderActiveTab(tab: 'mcp-tools' | 'acp-agents' | 'external-sources') {
+  async function renderActiveTab(
+    tab: 'mcp-tools' | 'acp-agents' | 'external-sources' | 'voice-input'
+  ) {
     useSettingsStore.setState({ activeTab: tab });
     await act(async () => {
       root.render(<SettingsScene />);
@@ -97,6 +103,12 @@ describe('SettingsScene lazy tab routing', () => {
     await renderActiveTab('external-sources');
 
     expect(container.querySelector('[data-testid="external-sources-config"]')).not.toBeNull();
+  });
+
+  it('renders the lazy voice input config tab', async () => {
+    await renderActiveTab('voice-input');
+
+    expect(container.querySelector('[data-testid="voice-input-config"]')).not.toBeNull();
   });
 
   it('keeps the previous settings page mounted through the local transition', async () => {

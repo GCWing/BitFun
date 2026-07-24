@@ -1529,6 +1529,33 @@ pub const REMOTE_WORKSPACE_COMMAND_POLICIES: &[(&str, RemoteWorkspacePolicy)] = 
         RemoteWorkspacePolicy::LocalOnly,
     ),
     ("show_main_window", RemoteWorkspacePolicy::LocalOnly),
+    (
+        "speech_append_audio_chunk",
+        RemoteWorkspacePolicy::LocalOnly,
+    ),
+    (
+        "speech_cancel_input_session",
+        RemoteWorkspacePolicy::LocalOnly,
+    ),
+    (
+        "speech_cancel_model_download",
+        RemoteWorkspacePolicy::LocalOnly,
+    ),
+    ("speech_delete_model", RemoteWorkspacePolicy::LocalOnly),
+    (
+        "speech_download_model",
+        RemoteWorkspacePolicy::LocalOnly,
+    ),
+    (
+        "speech_finish_input_session",
+        RemoteWorkspacePolicy::LocalOnly,
+    ),
+    ("speech_list_models", RemoteWorkspacePolicy::LocalOnly),
+    (
+        "speech_start_input_session",
+        RemoteWorkspacePolicy::LocalOnly,
+    ),
+    ("speech_verify_model", RemoteWorkspacePolicy::LocalOnly),
     ("ssh_connect", RemoteWorkspacePolicy::WorkspaceAgnostic),
     (
         "ssh_delete_connection",

@@ -5616,8 +5616,14 @@ mod tests {
 
     #[test]
     fn opencode_registry_owns_low_friction_defaults_and_safety_ceilings() {
-        let policy = integration_policy_snapshot(&ExternalSourcesConfig::default(), None)
-            .expect("built-in policy is valid");
+        let mut config = ExternalSourcesConfig::default();
+        config
+            .integration_policy
+            .known_mut()
+            .expect("the built-in policy schema is known")
+            .user_defaults
+            .enabled = true;
+        let policy = integration_policy_snapshot(&config, None).expect("built-in policy is valid");
         let descriptor = policy
             .registered_ecosystems
             .iter()
@@ -5662,8 +5668,15 @@ mod tests {
 
     #[test]
     fn active_capability_sets_are_scoped_per_ecosystem_for_every_asset_kind() {
-        let mut policy = integration_policy_snapshot(&ExternalSourcesConfig::default(), None)
-            .expect("built-in policy is valid");
+        let mut config = ExternalSourcesConfig::default();
+        config
+            .integration_policy
+            .known_mut()
+            .expect("the built-in policy schema is known")
+            .user_defaults
+            .enabled = true;
+        let mut policy =
+            integration_policy_snapshot(&config, None).expect("built-in policy is valid");
         let template_descriptor = policy.registered_ecosystems[0].clone();
         let template_effective = policy
             .effective
@@ -6022,6 +6035,12 @@ mod tests {
             approved_tool_targets: BTreeSet::from([approval_key.to_string()]),
             ..ExternalSourcesConfig::default()
         };
+        config
+            .integration_policy
+            .known_mut()
+            .expect("the built-in policy schema is known")
+            .user_defaults
+            .enabled = true;
 
         config.suppressed_source_keys.push(source.preference_key());
         assert!(!external_tool_invocation_is_authorized_by(

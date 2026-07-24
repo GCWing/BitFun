@@ -1,0 +1,47 @@
+{
+  "title": "語音輸入",
+  "subtitle": "管理語音輸入、本地模型和雲端轉寫模型選擇。",
+  "loading": "正在載入語音輸入設定...",
+  "sections": { "composer": "輸入框", "diagnostics": "輸入與辨識測試", "model": "本地模型", "cloudModel": "雲端轉寫模型" },
+  "languages": { "auto": "自動", "zh": "中文", "yue": "粵語", "en": "English", "ja": "日本語", "ko": "한국어", "ar": "العربية", "de": "Deutsch", "fr": "Français", "es": "Español", "pt": "Português", "id": "Bahasa Indonesia", "it": "Italiano", "ru": "Русский", "th": "ไทย", "vi": "Tiếng Việt", "tr": "Türkçe", "hi": "हिन्दी", "ms": "Bahasa Melayu", "nl": "Nederlands", "sv": "Svenska", "da": "Dansk", "fi": "Suomi", "pl": "Polski", "cs": "Čeština", "fil": "Filipino", "fa": "فارسی", "el": "Ελληνικά", "hu": "Magyar", "mk": "Македонски", "ro": "Română" },
+  "composer": {
+    "enabled": { "label": "顯示語音輸入", "description": "在輸入框中顯示麥克風按鈕。" },
+    "provider": { "label": "轉寫位置", "description": "選擇使用已下載的本地模型，或使用本頁設定的雲端 ASR 模型。", "local": "本地", "cloud": "雲端" },
+    "model": { "label": "轉寫模型", "description": "錄音結束後使用的辨識模型。", "localDescription": "錄音結束後使用的本地辨識模型。", "cloudDescription": "錄音結束後使用的雲端 ASR 模型。", "cloudActiveDescription": "錄音結束後使用下方設定的雲端 ASR 模型。", "cloudPlaceholder": "先在下方儲存雲端模型" },
+    "cloud": { "keyManaged": "雲端模型已設定。", "empty": "先在下方儲存一個雲端轉寫模型。" },
+    "language": { "label": "辨識語言", "description": "本地轉寫預設使用的語言。" },
+    "maxRecording": { "label": "錄音上限", "description": "單次語音輸入允許的最長秒數。" }
+  },
+  "diagnostics": {
+    "microphone": { "label": "輸入裝置", "description": "語音輸入使用的麥克風。", "systemDefault": "系統預設", "unnamed": "麥克風 {{index}}", "refresh": "重新整理麥克風清單" },
+    "level": { "label": "麥克風音量", "description": "只檢查所選裝置，不執行語音辨識。", "start": "測試麥克風", "stop": "停止測試" },
+    "recognition": { "label": "辨識測試", "description": "使用所選麥克風和已安裝的本地模型完成一次真實辨識。", "start": "開始辨識測試", "finish": "結束並轉寫", "modelRequired": "安裝本地模型後才能測試辨識。", "timing": "推理耗時 {{duration}} 毫秒" },
+    "messages": { "deviceDisconnected": "所選麥克風已中斷連線。", "microphoneFailed": "無法開啟所選麥克風。", "recognitionFailed": "辨識測試失敗。", "noSpeech": "沒有辨識到語音。" }
+  },
+  "states": { "not_installed": "未安裝", "downloading": "下載中", "installed": "已安裝", "verifying": "驗證中", "corrupt": "需要修復", "deleting": "刪除中", "error": "錯誤" },
+  "model": {
+    "refresh": "重新整理", "version": "版本 {{version}}", "size": "{{size}}", "progress": "{{percent}}% · {{downloaded}} / {{total}}",
+    "download": "下載", "downloading": "下載中", "downloaded": "已下載", "select": "使用", "selected": "使用中", "cancel": "取消", "cancelling": "取消中",
+    "openFolder": "開啟位置", "verify": "驗證", "verifying": "驗證中", "delete": "刪除", "deleting": "刪除中", "keep": "保留",
+    "deleteConfirmTitle": "刪除本地語音模型？", "deleteConfirmMessage": "{{name}} 將從本地儲存空間移除。", "empty": "沒有可用的語音模型。",
+    "resourceHints": { "sensevoice": "輕量預設模型，資源占用較低，適合日常短語音輸入。", "qwen3": "高品質多語種模型，下載約 838 MiB，執行記憶體約 2.3 GiB。", "default": "本地模型會占用磁碟空間和執行記憶體。" }
+  },
+  "cloudConfig": {
+    "inUse": "目前雲端模型", "save": "儲存並使用", "note": "密鑰隨雲端模型設定儲存；語音輸入只記錄目前選擇的模型。",
+    "defaults": { "providerName": "雲端 ASR" },
+    "presets": { "qwen": "Qwen3-ASR-Flash", "custom": "OpenAI-compatible" },
+    "preset": { "label": "服務商", "description": "選擇內建 Qwen ASR 預設，或設定相容 OpenAI 轉寫接口的服務。" },
+    "providerName": { "label": "設定名稱", "description": "用於在本頁的雲端模型選擇中顯示。", "placeholder": "例如 Qwen ASR" },
+    "baseUrl": { "label": "Base URL", "description": "相容 OpenAI 的接口根地址；轉寫會使用 /audio/transcriptions。", "placeholder": "https://dashscope.aliyuncs.com/compatible-mode/v1" },
+    "modelName": { "label": "模型 ID", "description": "雲端轉寫接口使用的模型名稱。", "placeholder": "qwen3-asr-flash" },
+    "apiKey": { "label": "API Key", "description": "用於呼叫雲端轉寫服務。", "placeholder": "輸入 API Key" },
+    "messages": { "fillRequired": "請填寫服務商、Base URL、模型 ID 和 API Key", "invalidBaseUrl": "Base URL 必須以 http:// 或 https:// 開頭", "saveSuccess": "雲端轉寫模型已儲存", "saveFailed": "儲存雲端轉寫模型失敗" }
+  },
+  "messages": {
+    "unsupported": "語音輸入僅在 BitFun 桌面版中可用。",
+    "loadFailed": "載入語音輸入設定失敗", "saveSuccess": "語音輸入設定已儲存", "saveFailed": "儲存語音輸入設定失敗",
+    "downloadSuccess": "語音模型已下載", "downloadFailed": "下載語音模型失敗", "downloadCancelled": "語音模型下載已取消", "cancelFailed": "取消下載失敗",
+    "openFolderFailed": "開啟語音模型位置失敗", "verifySuccess": "語音模型驗證通過", "verifyFailed": "驗證語音模型失敗",
+    "deleteSuccess": "語音模型已刪除", "deleteFailed": "刪除語音模型失敗"
+  }
+}

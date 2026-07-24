@@ -253,6 +253,7 @@
     "compatibility": "狀態：{{state}}",
     "noDescription": "未提供說明",
     "noTools": "無工具",
+    "unavailableToolsUnknown": "目前 Host 未提供工具名稱",
     "sourceLocations": "設定來源（{{count}} 個）"
   },
   "agentState": {
@@ -289,9 +290,42 @@
       "nextStep": "請在來源應用中改用可用模型，或在 BitFun 中設定可用的固定 Sub-Agent 模型，然後重新整理。"
     },
     "toolUnavailable": {
-      "reason": "此 Agent 要求的一個或多個工具在 BitFun 中不可用。",
+      "reason": "BitFun 中不可用的工具：{{tools}}。",
       "impact": "{{impact}}",
       "nextStep": "請在來源應用中移除或替換不支援的工具，然後重新整理。"
+    },
+    "promptMissing": {
+      "reason": "此 Agent 缺少有效的 prompt。",
+      "impact": "{{impact}}",
+      "nextStep": "請在來源應用中補上非空白 prompt，然後重新整理。"
+    },
+    "unsupportedSetting": {
+      "reason": "BitFun 目前不支援此 Agent 的「{{setting}}」設定。",
+      "impact": "{{impact}}",
+      "nextStep": "請在來源應用中移除或修改「{{setting}}」，然後重新整理。"
+    },
+    "ignoredSetting": {
+      "reason": "BitFun 不會套用此 Agent 的「{{setting}}」設定。",
+      "impact": "{{impact}}",
+      "nextStep": "啟用前，請核對上方實際使用的模型與工具。"
+    },
+    "settings": {
+      "unknownField": "未知欄位",
+      "ambientPermissions": "全域權限",
+      "permissions": "permission 權限",
+      "options": "options",
+      "nativeAgentOverlay": "內建 Agent 覆寫",
+      "legacyPrimaryMode": "舊版 primary 模式",
+      "primaryAgentMode": "primary Agent 模式",
+      "toolPatterns": "工具萬用字元規則",
+      "defaultPermissions": "預設權限語意",
+      "variant": "模型 variant",
+      "temperature": "temperature 參數",
+      "topP": "top_p 參數",
+      "steps": "steps 步數限制",
+      "maxSteps": "maxSteps 步數限制",
+      "color": "顯示顏色",
+      "primaryFacet": "primary Agent 能力"
     },
     "invalidDefinition": {
       "reason": "此 Agent 的設定缺少必填內容或包含無效內容。",
@@ -357,7 +391,9 @@
   "mcpApprovals": {
     "title": "待確認的 MCP 伺服器",
     "description": "BitFun 從其他 AI 應用程式找到可執行命令或網路連線設定；確認前不會啟動程序或存取遠端位址。",
-    "warning": "啟用後，BitFun 可能以你的使用者權限啟動本機程序，或連線到上方顯示的遠端服務。伺服器可以向 Agent 提供工具，並接收呼叫這些工具時提交的參數。",
+    "compactWarning": "啟用後，BitFun 可能以你的使用者權限啟動該命令或連線至該服務；伺服器可接收工具呼叫中傳送的資料。",
+    "showDetails": "查看設定與風險",
+    "warning": "本機命令可讀取列出的環境變數，遠端請求可傳送列出的標頭；啟用前請核對這些詳細資訊。",
     "keepDisabled": "保持停用",
     "enable": "啟用伺服器"
   },

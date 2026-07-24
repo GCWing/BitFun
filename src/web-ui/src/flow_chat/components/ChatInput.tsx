@@ -110,6 +110,8 @@ import {
   ChatInputWorkspaceStrip,
   type ChatInputPermissionMode,
 } from './ChatInputWorkspaceStrip';
+import { ComposerVoiceInputButton } from './voice/ComposerVoiceInputButton';
+import { useComposerVoiceInput } from './voice/useComposerVoiceInput';
 import { expandWidgetPromptReferenceTokens } from '@/tools/generative-widget/widgetPromptReference';
 import {
   appendSkillPromptReferenceToken,
@@ -2905,11 +2907,11 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     setIsModelSwitching(loading);
   }, []);
   
-  const handleSendOrCancel = useCallback(async () => {
+  const handleSendOrCancel = useCallback(async (messageOverride?: string) => {
     if (!derivedState) return;
     
     const { sendButtonMode } = derivedState;
-    const draftTrimmed = inputState.value.trim();
+    const draftTrimmed = (messageOverride ?? inputState.value).trim();
 
     // While generating, an empty control in `cancel` mode means stop. If the user has typed a follow-up,
     // never treat this path as cancel — that would call cancel_dialog_turn and abort the current round early.
@@ -2932,7 +2934,8 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     const originalPendingLargePastes = { ...pendingLargePastesRef.current };
     const message = expandComposerSpecialTokens(originalMessage);
     const messageCharCount = getCharacterCount(message);
-    const localSlashCommandsEnabled = !isAcpInputSession;
+    // Voice transcripts are always message content; they must not accidentally execute local commands.
+    const localSlashCommandsEnabled = !isAcpInputSession && messageOverride === undefined;
 
     if (localSlashCommandsEnabled && isSlashCommand(message, '/btw')) {
       // When idle, /btw can be sent via the normal send button.
@@ -3744,6 +3747,25 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   }, []);
 
 
+  const voiceInput = useComposerVoiceInput({
+    activateInput: () => dispatchInput({ type: 'ACTIVATE' }),
+    focusInputSoon: () => {
+      window.requestAnimationFrame(() => richTextInputRef.current?.focus());
+    },
+    insertText: (text) => {
+      const current = inputState.value.trim();
+      const mergedText = current ? `${inputState.value.trimEnd()} ${text}` : text;
+      dispatchInput({
+        type: 'SET_VALUE',
+        payload: mergedText,
+      });
+      return mergedText;
+    },
+    submitText: async (text) => {
+      await handleSendOrCancel(text);
+    },
+  });
+
   const renderActionButton = () => {
     if (!derivedState) return <IconButton className="bitfun-chat-input__send-button" disabled size="small"><ArrowUp size={11} /></IconButton>;
 
@@ -3754,7 +3776,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
         <Tooltip content={t('input.stopGeneration')}>
           <div
             className="bitfun-chat-input__send-button bitfun-chat-input__send-button--breathing"
-            onClick={handleSendOrCancel}
+            onClick={() => void handleSendOrCancel()}
             data-testid="chat-input-cancel-btn"
           >
             <div className="bitfun-chat-input__breathing-circle" />
@@ -3768,7 +3790,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       return (
         <IconButton
           className="bitfun-chat-input__send-button bitfun-chat-input__send-button--retry"
-          onClick={handleSendOrCancel}
+          onClick={() => void handleSendOrCancel()}
           disabled={isModelSwitching}
           tooltip={t('input.retry')}
           size="small"
@@ -3794,7 +3816,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
           </Tooltip>
           <IconButton
             className="bitfun-chat-input__send-button"
-            onClick={handleSendOrCancel}
+            onClick={() => void handleSendOrCancel()}
             disabled={!inputState.value.trim() || isModelSwitching}
             data-testid="chat-input-send-btn"
             tooltip={t('input.sendShortcut')}
@@ -3809,7 +3831,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     return (
       <IconButton
         className="bitfun-chat-input__send-button"
-        onClick={handleSendOrCancel}
+        onClick={() => void handleSendOrCancel()}
         disabled={!inputState.value.trim() || isModelSwitching}
         data-testid="chat-input-send-btn"
         tooltip={t('input.sendShortcut')}
@@ -4446,7 +4468,8 @@ export const ChatInput: React.FC<ChatInputProps> = ({
                 </div>
               </div>
               <div className="bitfun-chat-input__actions-right">
-                <div className="bitfun-chat-input__model-usage-group">
+                {voiceInput.phase === 'idle' ? (
+                  <div className="bitfun-chat-input__model-usage-group">
                   <ModelSelector
                     currentMode={effectiveSendAgentType}
                     sessionId={effectiveTargetSessionId || undefined}
@@ -4456,9 +4479,11 @@ export const ChatInput: React.FC<ChatInputProps> = ({
                     contextUsageSource={tokenUsage.source}
                     onLoadingChange={handleModelLoadingChange}
                   />
-                </div>
+                  </div>
+                ) : null}
 
-                {renderActionButton()}
+                <ComposerVoiceInputButton controller={voiceInput} />
+                {voiceInput.phase === 'idle' ? renderActionButton() : null}
               </div>
             </div>
           </div>

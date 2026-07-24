@@ -211,6 +211,7 @@ export interface ExternalSubagentSummary {
   sourceCount: number;
   effectiveModelLabel?: string;
   effectiveToolLabels: string[];
+  unavailableToolLabels: string[];
   supportsFollowUp: boolean;
   compatibilityState: 'ready' | 'ready_with_degradation' | 'blocked' | 'invalid';
   diagnostics: Array<{ code: string; blocksActivation: boolean }>;
@@ -775,6 +776,7 @@ function normalizeSnapshot(value: unknown): ExternalSourceCatalogSnapshot {
       sourceKeys: normalizeOptionalArray(subagent.sourceKeys),
       sourceLocationLabels: normalizeOptionalArray(subagent.sourceLocationLabels),
       effectiveToolLabels: normalizeOptionalArray(subagent.effectiveToolLabels),
+      unavailableToolLabels: normalizeOptionalArray(subagent.unavailableToolLabels),
       diagnostics: normalizeOptionalArray(subagent.diagnostics),
     })),
     subagentConflicts: normalizeOptionalArray<ExternalSubagentConflict>(candidate.subagentConflicts).map((conflict) => ({

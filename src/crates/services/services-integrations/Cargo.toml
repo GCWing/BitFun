@@ -17,6 +17,7 @@ log = { workspace = true }
 bitfun-agent-runtime = { path = "../../execution/agent-runtime", optional = true }
 bitfun-agent-tools = { path = "../../execution/tool-contracts", optional = true }
 bitfun-events = { path = "../../contracts/events" }
+bitfun-core-types = { path = "../../contracts/core-types", optional = true }
 bitfun-product-domains = { path = "../../contracts/product-domains", default-features = false, optional = true }
 bitfun-runtime-ports = { path = "../../contracts/runtime-ports", optional = true }
 aes-gcm = { workspace = true, optional = true }
@@ -26,9 +27,11 @@ argon2 = { workspace = true, optional = true }
 async-trait = { workspace = true, optional = true }
 base64 = { workspace = true, optional = true }
 bitfun-services-core = { path = "../services-core", default-features = false, optional = true }
+bzip2 = { workspace = true, optional = true }
 chrono = { workspace = true, optional = true }
 dunce = { workspace = true, optional = true }
 futures = { workspace = true, optional = true }
+futures-util = { workspace = true, optional = true }
 fs2 = { workspace = true, optional = true }
 git2 = { workspace = true, optional = true }
 hostname = { workspace = true, optional = true }
@@ -47,8 +50,10 @@ rmcp = { workspace = true, optional = true }
 rustls = { workspace = true, optional = true }
 rustls-native-certs = { version = "0.8", optional = true }
 sha2 = { workspace = true, optional = true }
+sherpa-onnx = { workspace = true, optional = true }
 sse-stream = { workspace = true, optional = true }
 thiserror = { workspace = true, optional = true }
+tar = { workspace = true, optional = true }
 tokio-util = { workspace = true, optional = true }
 tokio-tungstenite = { workspace = true, optional = true }
 urlencoding = { workspace = true, optional = true }
@@ -203,6 +208,21 @@ review-platform = [
     "thiserror",
     "urlencoding",
     "windows",
+]
+speech = [
+    "async-trait",
+    "base64",
+    "bzip2",
+    "chrono",
+    "dep:bitfun-core-types",
+    "futures-util",
+    "reqwest",
+    "sha2",
+    "sherpa-onnx",
+    "tar",
+    "thiserror",
+    "tokio-util",
+    "uuid",
 ]
 workspace-search = [
     "async-trait",

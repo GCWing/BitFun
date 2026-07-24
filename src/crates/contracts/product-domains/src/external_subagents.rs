@@ -516,6 +516,8 @@ pub struct ExternalSubagentSummary {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub effective_model_label: Option<String>,
     pub effective_tool_labels: Vec<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub unavailable_tool_labels: Vec<String>,
     pub supports_follow_up: bool,
     pub compatibility_state: ExternalSubagentCompatibilityState,
     pub diagnostics: Vec<ExternalSubagentDiagnosticSummary>,

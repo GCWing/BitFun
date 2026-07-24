@@ -534,7 +534,8 @@
     "openWorkspaceFolderFailed": "開啟工作區資料夾失敗：{{error}}",
     "spaceToActivate": "按<space>空格鍵</space>快速鍵入",
     "assistantPlaceholder": "傳訊息給 {{name}}...",
-    "sendHint": "Enter 傳送 / Ctrl+Enter 或 Shift+Enter 換行"
+    "sendHint": "Enter 傳送 / Ctrl+Enter 或 Shift+Enter 換行",
+    "voiceInput": { "start": "開始語音輸入", "stop": "停止錄音", "preparing": "正在準備麥克風", "transcribing": "正在轉寫", "disabled": "語音輸入已關閉", "unsupported": "目前無法使用麥克風", "modelMissing": "請先下載本地語音模型", "cloudPending": "雲端轉寫已設定，但轉寫通路尚未接入", "permissionDenied": "麥克風權限被拒絕", "deviceDisconnected": "所選麥克風已中斷連線", "lowVolume": "沒有偵測到聲音，請檢查所選麥克風。", "failed": "語音輸入失敗", "empty": "沒有辨識到語音", "transcribeOnly": "插入轉寫文字", "transcribeAndSend": "轉寫並傳送" }
   },
   "workspaceStrip": {
     "branchTooltipUnavailable": "非 Git 存放庫或目前無分支"

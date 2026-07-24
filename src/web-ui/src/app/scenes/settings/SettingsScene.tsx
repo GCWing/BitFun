@@ -30,6 +30,7 @@ import {
   ReviewConfig,
   SessionPermissionsConfig,
   SessionPersonalizationConfig,
+  VoiceInputConfig,
 } from './settingsContentRegistry';
 import './SettingsScene.scss';
 
@@ -56,6 +57,7 @@ function resolveSettingsContent(tab: ConfigTab): React.ComponentType | null {
     case 'session-personalization': return SessionPersonalizationConfig;
     case 'session-permissions':     return SessionPermissionsConfig;
     case 'quick-actions':           return QuickActionsConfig;
+    case 'voice-input':             return VoiceInputConfig;
     case 'review':                  return ReviewConfig;
     case 'memories':                return MemoriesConfig;
     case 'mcp-tools':               return McpToolsConfig;

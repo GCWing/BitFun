@@ -12,6 +12,7 @@ use bitfun_core::service::remote_ssh::{
 };
 use bitfun_core::service::{announcement, config, filesystem, mcp, search, token_usage, workspace};
 use bitfun_core::util::errors::*;
+use bitfun_services_integrations::speech::{SpeechService, SpeechStoragePaths};
 
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -69,6 +70,7 @@ pub struct AppState {
     pub config_service: Arc<config::ConfigService>,
     pub filesystem_service: Arc<filesystem::FileSystemService>,
     pub workspace_search_service: Arc<search::WorkspaceSearchService>,
+    pub speech_service: Arc<SpeechService>,
     pub agent_registry: Arc<agents::AgentRegistry>,
     pub mcp_service: Option<Arc<mcp::MCPService>>,
     pub acp_client_service: Option<Arc<bitfun_acp::AcpClientService>>,
@@ -186,6 +188,11 @@ impl AppState {
                 std::path::PathBuf::from("worker_host.js")
             }
         };
+        let speech_service = Arc::new(SpeechService::new(SpeechStoragePaths::new(
+            path_manager.speech_models_dir(),
+            path_manager.speech_model_downloads_dir(),
+            path_manager.speech_input_temp_dir(),
+        )));
         let js_worker_pool = JsWorkerPool::new(path_manager, worker_host_path)
             .ok()
             .map(Arc::new);
@@ -294,6 +301,7 @@ impl AppState {
             config_service,
             filesystem_service,
             workspace_search_service,
+            speech_service,
             agent_registry,
             mcp_service,
             acp_client_service,

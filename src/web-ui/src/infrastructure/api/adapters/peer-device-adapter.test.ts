@@ -11,6 +11,15 @@ import {
   peerInvokePriorityFor,
 } from './peer-device-adapter';
 
+describe('isPeerLocalOnlyCommand', () => {
+  it('keeps local speech capture and model events on the controller device', () => {
+    expect(isPeerLocalOnlyCommand('speech_list_models')).toBe(true);
+    expect(isPeerLocalOnlyCommand('speech_start_input_session')).toBe(true);
+    expect(isPeerLocalOnlyCommand('speech_append_audio_chunk')).toBe(true);
+    expect(isPeerLocalOnlyCommand('speech_finish_input_session')).toBe(true);
+  });
+});
+
 describe('peerInvokePriorityFor', () => {
   it('ranks session hydrate commands high', () => {
     expect(peerInvokePriorityFor('restore_session_view')).toBe('high');
