@@ -364,4 +364,37 @@ describe('MouseGlowService', () => {
     expect(overlay?.hasAttribute('data-active')).toBe(true);
     cardButton.remove();
   });
+
+  it('highlights an explicitly marked input-like control', () => {
+    const searchButton = document.createElement('button');
+    searchButton.setAttribute('data-mouse-glow-surface', '');
+    searchButton.style.borderRadius = '9999px';
+    searchButton.getBoundingClientRect = () => ({
+      bottom: 72,
+      height: 32,
+      left: 16,
+      right: 240,
+      top: 40,
+      width: 224,
+      x: 16,
+      y: 40,
+      toJSON: () => ({}),
+    });
+    document.body.appendChild(searchButton);
+    service.initialize();
+
+    searchButton.dispatchEvent(new MouseEvent('pointermove', {
+      bubbles: true,
+      clientX: 80,
+      clientY: 56,
+    }));
+    nextFrame?.(0);
+
+    const overlay = document.getElementById('bitfun-mouse-glow-overlay');
+    expect(overlay?.hasAttribute('data-active')).toBe(true);
+    expect(overlay?.style.width).toBe('224px');
+    expect(overlay?.style.height).toBe('32px');
+    expect(overlay?.style.borderRadius).toBe('9999px');
+    searchButton.remove();
+  });
 });

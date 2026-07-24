@@ -229,6 +229,7 @@ export const Search = forwardRef<HTMLInputElement, SearchProps>(({
     <div {...rootProps} className={classNames}>
       <div 
         className="search__wrapper"
+        data-mouse-glow-surface=""
         onMouseEnter={() => setIsHovered(true)}
         onMouseLeave={() => setIsHovered(false)}
       >
