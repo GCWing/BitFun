@@ -1474,7 +1474,7 @@ impl Default for AppLoggingConfig {
         Self {
             // Set to Debug in early development for easier diagnostics
             level: "debug".to_string(),
-            include_sensitive_diagnostics: true,
+            include_sensitive_diagnostics: false,
             model_exchange_tracing: ModelExchangeTracingConfig::default(),
         }
     }
