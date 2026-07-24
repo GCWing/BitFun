@@ -9,8 +9,10 @@ use anyhow::{anyhow, Context};
 use russh::client::Msg;
 #[cfg(feature = "remote-ssh-concrete")]
 use russh::{Channel, ChannelMsg, Sig};
+use std::future::Future;
 use std::pin::Pin;
 use std::process::Stdio;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::task::{Context as TaskContext, Poll};
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt, DuplexStream, ReadBuf};
@@ -22,6 +24,13 @@ const WORKSPACE_STDIO_BUFFER_SIZE: usize = 256 * 1024;
 
 pub type WorkspaceReader = Pin<Box<dyn AsyncRead + Send>>;
 pub type WorkspaceWriter = Pin<Box<dyn AsyncWrite + Send>>;
+pub(crate) type WorkspaceSignalHook = Arc<
+    dyn Fn(
+            WorkspaceProcessSignal,
+        ) -> Pin<Box<dyn Future<Output = anyhow::Result<()>> + Send + 'static>>
+        + Send
+        + Sync,
+>;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum WorkspaceProcessSignal {
@@ -37,6 +46,7 @@ pub struct WorkspaceProcessExit {
 #[derive(Clone)]
 pub struct WorkspaceProcessControl {
     sender: mpsc::Sender<WorkspaceProcessSignal>,
+    signal_hook: Option<WorkspaceSignalHook>,
 }
 
 impl WorkspaceProcessControl {
@@ -49,10 +59,25 @@ impl WorkspaceProcessControl {
     }
 
     async fn send(&self, signal: WorkspaceProcessSignal) -> anyhow::Result<()> {
-        self.sender
+        let hook_result = match &self.signal_hook {
+            Some(hook) => hook(signal).await,
+            None => Ok(()),
+        };
+        if self.signal_hook.is_some()
+            && matches!(signal, WorkspaceProcessSignal::Interrupt)
+            && hook_result.is_ok()
+        {
+            // A target-aware hook (for example Docker process-group control)
+            // handled the soft interrupt. Keep the owning transport open so
+            // the caller can drain output and escalate to Kill after grace.
+            return Ok(());
+        }
+        let send_result = self
+            .sender
             .send(signal)
             .await
-            .map_err(|_| anyhow!("Workspace process has already exited"))
+            .map_err(|_| anyhow!("Workspace process has already exited"));
+        hook_result.and(send_result)
     }
 }
 
@@ -90,7 +115,15 @@ pub struct WorkspaceStdio {
 impl WorkspaceStdio {
     #[cfg(feature = "remote-ssh-concrete")]
     pub(crate) fn from_ssh_channel(channel: Channel<Msg>) -> Self {
-        let pipes = WorkspacePipes::new();
+        Self::from_ssh_channel_with_signal_hook(channel, None)
+    }
+
+    #[cfg(feature = "remote-ssh-concrete")]
+    pub(crate) fn from_ssh_channel_with_signal_hook(
+        channel: Channel<Msg>,
+        signal_hook: Option<WorkspaceSignalHook>,
+    ) -> Self {
+        let pipes = WorkspacePipes::new(signal_hook);
         let control = pipes.control.clone();
         let completion = pipes.completion.clone();
         tokio::spawn(run_ssh_channel(channel, pipes.owner));
@@ -103,7 +136,16 @@ impl WorkspaceStdio {
         }
     }
 
+    #[cfg(test)]
     pub(crate) fn spawn_local_process(executable: &str, args: &[String]) -> anyhow::Result<Self> {
+        Self::spawn_local_process_with_signal_hook(executable, args, None)
+    }
+
+    pub(crate) fn spawn_local_process_with_signal_hook(
+        executable: &str,
+        args: &[String],
+        signal_hook: Option<WorkspaceSignalHook>,
+    ) -> anyhow::Result<Self> {
         let mut child = Command::new(executable)
             .args(args)
             .stdin(Stdio::piped())
@@ -125,7 +167,7 @@ impl WorkspaceStdio {
             .take()
             .ok_or_else(|| anyhow!("Local workspace process stderr is unavailable"))?;
 
-        let pipes = WorkspacePipes::new();
+        let pipes = WorkspacePipes::new(signal_hook);
         let control = pipes.control.clone();
         let completion = pipes.completion.clone();
         tokio::spawn(run_local_process(
@@ -165,10 +207,26 @@ impl WorkspaceStdio {
 
 struct WorkspaceLease {
     cancellation: CancellationToken,
+    signal_hook: Option<WorkspaceSignalHook>,
+    finished: Arc<AtomicBool>,
 }
 
 impl Drop for WorkspaceLease {
     fn drop(&mut self) {
+        if self.finished.load(Ordering::Acquire) {
+            return;
+        }
+        if let (Some(signal_hook), Ok(runtime)) = (
+            self.signal_hook.clone(),
+            tokio::runtime::Handle::try_current(),
+        ) {
+            let cancellation = self.cancellation.clone();
+            runtime.spawn(async move {
+                let _ = signal_hook(WorkspaceProcessSignal::Kill).await;
+                cancellation.cancel();
+            });
+            return;
+        }
         self.cancellation.cancel();
     }
 }
@@ -219,6 +277,7 @@ struct WorkspacePipeOwner {
     control_rx: mpsc::Receiver<WorkspaceProcessSignal>,
     completion_tx: watch::Sender<Option<WorkspaceProcessExit>>,
     cancellation: CancellationToken,
+    finished: Arc<AtomicBool>,
 }
 
 struct WorkspacePipes {
@@ -231,10 +290,13 @@ struct WorkspacePipes {
 }
 
 impl WorkspacePipes {
-    fn new() -> Self {
+    fn new(signal_hook: Option<WorkspaceSignalHook>) -> Self {
         let cancellation = CancellationToken::new();
+        let finished = Arc::new(AtomicBool::new(false));
         let lease = Arc::new(WorkspaceLease {
             cancellation: cancellation.clone(),
+            signal_hook: signal_hook.clone(),
+            finished: finished.clone(),
         });
         let (public_stdin, owner_stdin) = tokio::io::duplex(WORKSPACE_STDIO_BUFFER_SIZE);
         let (owner_stdout, public_stdout) = tokio::io::duplex(WORKSPACE_STDIO_BUFFER_SIZE);
@@ -255,7 +317,10 @@ impl WorkspacePipes {
                 inner: public_stderr,
                 _lease: lease,
             }),
-            control: WorkspaceProcessControl { sender: control_tx },
+            control: WorkspaceProcessControl {
+                sender: control_tx,
+                signal_hook,
+            },
             completion: WorkspaceProcessCompletion {
                 receiver: completion_rx,
             },
@@ -266,6 +331,7 @@ impl WorkspacePipes {
                 control_rx,
                 completion_tx,
                 cancellation,
+                finished,
             },
         }
     }
@@ -346,6 +412,7 @@ async fn run_ssh_channel(mut channel: Channel<Msg>, mut pipes: WorkspacePipeOwne
         }
     }
 
+    pipes.finished.store(true, Ordering::Release);
     let _ = pipes.stdout.shutdown().await;
     let _ = pipes.stderr.shutdown().await;
     let _ = pipes
@@ -396,6 +463,7 @@ async fn run_local_process(
         }
     };
 
+    pipes.finished.store(true, Ordering::Release);
     stdin_task.abort();
     let _ = stdout_task.await;
     let _ = stderr_task.await;
@@ -454,6 +522,43 @@ mod tests {
 
     #[tokio::test]
     #[cfg(unix)]
+    async fn local_process_control_invokes_target_signal_hook_before_shutdown() {
+        use std::sync::atomic::{AtomicBool, Ordering};
+
+        let hook_called = Arc::new(AtomicBool::new(false));
+        let hook: WorkspaceSignalHook = {
+            let hook_called = hook_called.clone();
+            Arc::new(move |_| {
+                let hook_called = hook_called.clone();
+                Box::pin(async move {
+                    hook_called.store(true, Ordering::SeqCst);
+                    Ok(())
+                })
+            })
+        };
+        let transport = WorkspaceStdio::spawn_local_process_with_signal_hook(
+            "sh",
+            &["-lc".to_string(), "sleep 0.1; exit 7".to_string()],
+            Some(hook),
+        )
+        .unwrap();
+        let (_stdin, _stdout, _stderr, control, completion) = transport.into_parts();
+
+        control.interrupt().await.unwrap();
+        let exit = tokio::time::timeout(std::time::Duration::from_secs(2), completion.wait())
+            .await
+            .expect("interrupt should terminate the supervised process");
+
+        assert!(hook_called.load(Ordering::SeqCst));
+        assert_eq!(
+            exit.exit_code,
+            Some(7),
+            "a hook-handled soft interrupt must not kill the owning transport"
+        );
+    }
+
+    #[tokio::test]
+    #[cfg(unix)]
     async fn dropping_all_io_streams_cancels_local_process() {
         let transport = WorkspaceStdio::spawn_local_process(
             "sh",
@@ -469,6 +574,42 @@ mod tests {
             .await
             .expect("dropping all IO should terminate the supervised process");
 
+        assert_eq!(exit.exit_code, Some(137));
+    }
+
+    #[tokio::test]
+    #[cfg(unix)]
+    async fn dropping_all_io_streams_invokes_target_kill_hook() {
+        use std::sync::atomic::{AtomicBool, Ordering};
+
+        let hook_called = Arc::new(AtomicBool::new(false));
+        let hook: WorkspaceSignalHook = {
+            let hook_called = hook_called.clone();
+            Arc::new(move |signal| {
+                let hook_called = hook_called.clone();
+                Box::pin(async move {
+                    assert_eq!(signal, WorkspaceProcessSignal::Kill);
+                    hook_called.store(true, Ordering::SeqCst);
+                    Ok(())
+                })
+            })
+        };
+        let transport = WorkspaceStdio::spawn_local_process_with_signal_hook(
+            "sh",
+            &["-lc".to_string(), "while :; do sleep 1; done".to_string()],
+            Some(hook),
+        )
+        .unwrap();
+        let (stdin, stdout, stderr, _control, completion) = transport.into_parts();
+        drop(stdin);
+        drop(stdout);
+        drop(stderr);
+
+        let exit = tokio::time::timeout(std::time::Duration::from_secs(2), completion.wait())
+            .await
+            .expect("dropping all IO should terminate the supervised process");
+
+        assert!(hook_called.load(Ordering::SeqCst));
         assert_eq!(exit.exit_code, Some(137));
     }
 }

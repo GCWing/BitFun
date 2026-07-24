@@ -142,8 +142,23 @@ fn remote_workspace_path_helpers_preserve_current_identity_contract() {
         sanitize_ssh_connection_id_for_local_dir("ssh-root@1.95.50.146:22"),
         "ssh-root@1.95.50.146:22"
     );
+    assert_eq!(
+        sanitize_ssh_connection_id_for_local_dir("../unsafe/id"),
+        "..-unsafe-id"
+    );
+    assert_eq!(sanitize_ssh_connection_id_for_local_dir(".."), "_dotdot_");
 
     assert_eq!(sanitize_remote_mirror_path_component(""), "_");
+    assert_eq!(sanitize_remote_mirror_path_component("."), "_dot_");
+    assert_eq!(sanitize_remote_mirror_path_component(".."), "_dotdot_");
+    assert!(remote_root_to_mirror_subpath("/../../escape")
+        .components()
+        .all(|component| !matches!(component, std::path::Component::ParentDir)));
+    #[cfg(windows)]
+    {
+        assert_eq!(sanitize_remote_mirror_path_component("CON"), "_CON");
+        assert_eq!(sanitize_remote_mirror_path_component("report. "), "report");
+    }
     assert_eq!(
         sanitize_ssh_hostname_for_mirror(" Example.COM "),
         "example.com"

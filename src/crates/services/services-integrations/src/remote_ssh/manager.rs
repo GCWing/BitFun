@@ -79,6 +79,14 @@ fn parse_ssh_config_value(value: &str) -> Option<&str> {
     value.split_whitespace().next()
 }
 
+#[cfg(feature = "ssh_config")]
+fn strip_utf8_bom(content: String) -> String {
+    content
+        .strip_prefix('\u{feff}')
+        .unwrap_or(&content)
+        .to_string()
+}
+
 /// Manually parse `~/.ssh/config` content into Host blocks with their direct settings.
 ///
 /// This is a fallback for when `SSHConfig::parse_str` fails — which happens when the
@@ -121,7 +129,7 @@ fn parse_ssh_config_manually(content: &str) -> Vec<SSHConfigEntry> {
                     port: block_port.take(),
                     user: block_user.take(),
                     identity_file: block_identity_file.take(),
-                    agent: None,
+                    agent: Some(true),
                     certificate_file: block_certificate_file.take(),
                     proxy_jump: block_proxy_jump.take(),
                 });
@@ -163,7 +171,7 @@ fn parse_ssh_config_manually(content: &str) -> Vec<SSHConfigEntry> {
             port: block_port,
             user: block_user,
             identity_file: block_identity_file,
-            agent: None,
+            agent: Some(true),
             certificate_file: block_certificate_file,
             proxy_jump: block_proxy_jump,
         });
@@ -994,33 +1002,148 @@ fn workspace_command(config: &SSHConnectionConfig, command: &str, tty: bool) -> 
     }
 }
 
-async fn execute_local_container_command(
-    config: &SSHConnectionConfig,
+fn supervised_container_command(
+    container: &ContainerWorkspaceConfig,
     command: &str,
-    options: SSHCommandOptions,
-    tty: bool,
-) -> anyhow::Result<SSHCommandResult> {
-    let container = config
-        .container
-        .as_ref()
-        .ok_or_else(|| anyhow!("Local Docker configuration is missing"))?;
-    validate_container_config(container)?;
+) -> (String, String) {
+    let pid_file = format!("/tmp/.bitfun-exec-{}.pid", uuid::Uuid::new_v4());
+    let quoted_pid_file = crate::remote_ssh::shell::quote_arg(&pid_file);
+    let quoted_command = crate::remote_ssh::shell::quote_arg(command);
+    let quoted_shell = crate::remote_ssh::shell::quote_arg(&container.shell);
+    let wrapped = format!(
+        "pid_file={quoted_pid_file}; \
+         child=; \
+         remove_pid_file() {{ rm -f -- \"$pid_file\"; }}; \
+         terminate_child() {{ \
+           [ -n \"$child\" ] || return 0; \
+           kill -TERM -- \"-$child\" 2>/dev/null \
+             || kill -TERM \"$child\" 2>/dev/null \
+             || true; \
+         }}; \
+         trap remove_pid_file EXIT; \
+         trap 'terminate_child; exit 143' HUP TERM; \
+         if command -v setsid >/dev/null 2>&1; then \
+           setsid {quoted_shell} -lc {quoted_command} <&0 & \
+         else \
+           {quoted_shell} -lc {quoted_command} <&0 & \
+         fi; \
+         child=$!; printf '%s' \"$child\" > \"$pid_file\" || exit 73; \
+         wait \"$child\"; status=$?; \
+         child=; trap - EXIT HUP TERM; remove_pid_file; exit \"$status\""
+    );
+    (wrapped, pid_file)
+}
 
-    let mut process = Command::new(&container.docker_path);
-    process
-        .args(docker_exec_args(container, command, tty))
-        .stdin(Stdio::null())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .kill_on_drop(true);
-    let child = process.spawn().with_context(|| {
-        format!(
-            "Failed to start local Docker executable '{}'",
-            container.docker_path
-        )
-    })?;
-    let wait = child.wait_with_output();
-    tokio::pin!(wait);
+fn container_signal_command(
+    pid_file: &str,
+    signal: crate::remote_ssh::WorkspaceProcessSignal,
+) -> String {
+    let signal_name = match signal {
+        crate::remote_ssh::WorkspaceProcessSignal::Interrupt => "INT",
+        crate::remote_ssh::WorkspaceProcessSignal::Kill => "KILL",
+    };
+    let quoted_pid_file = crate::remote_ssh::shell::quote_arg(pid_file);
+    format!(
+        "pid_file={quoted_pid_file}; \
+         attempt=0; \
+         while [ ! -r \"$pid_file\" ] && [ \"$attempt\" -lt 20 ]; do \
+           attempt=$((attempt + 1)); sleep 0.05; \
+         done; \
+         [ -r \"$pid_file\" ] || exit 0; \
+         pid=$(cat \"$pid_file\" 2>/dev/null) || exit 0; \
+         case \"$pid\" in ''|*[!0-9]*) exit 0;; esac; \
+         kill -{signal_name} -- \"-$pid\" 2>/dev/null \
+           || kill -{signal_name} \"$pid\" 2>/dev/null \
+           || true"
+    )
+}
+
+fn local_container_signal_hook(
+    container: ContainerWorkspaceConfig,
+    pid_file: String,
+) -> crate::remote_ssh::transport::WorkspaceSignalHook {
+    Arc::new(move |signal| {
+        let container = container.clone();
+        let pid_file = pid_file.clone();
+        Box::pin(async move {
+            let command = container_signal_command(&pid_file, signal);
+            let output = tokio::time::timeout(
+                Duration::from_secs(3),
+                Command::new(&container.docker_path)
+                    .args(docker_exec_args(&container, &command, false))
+                    .stdin(Stdio::null())
+                    .stdout(Stdio::null())
+                    .stderr(Stdio::piped())
+                    .output(),
+            )
+            .await
+            .map_err(|_| anyhow!("Timed out signalling the Docker container process"))?
+            .with_context(|| {
+                format!(
+                    "Failed to start Docker executable '{}' for process control",
+                    container.docker_path
+                )
+            })?;
+            if !output.status.success() {
+                anyhow::bail!(
+                    "Docker container process control failed: {}",
+                    String::from_utf8_lossy(&output.stderr).trim()
+                );
+            }
+            Ok(())
+        })
+    })
+}
+
+fn remote_container_signal_hook(
+    handle: Arc<Handle<SSHHandler>>,
+    container: ContainerWorkspaceConfig,
+    pid_file: String,
+) -> crate::remote_ssh::transport::WorkspaceSignalHook {
+    Arc::new(move |signal| {
+        let handle = handle.clone();
+        let container = container.clone();
+        let pid_file = pid_file.clone();
+        Box::pin(async move {
+            let signal_command = container_signal_command(&pid_file, signal);
+            let host_command = docker_exec_host_command(&container, &signal_command, false);
+            let result = SSHConnectionManager::execute_command_internal(
+                &handle,
+                &host_command,
+                SSHCommandOptions {
+                    timeout_ms: Some(3_000),
+                    cancellation_token: None,
+                },
+            )
+            .await?;
+            if result.exit_code != 0 {
+                anyhow::bail!(
+                    "Remote Docker container process control failed: {}",
+                    result.stderr.trim()
+                );
+            }
+            Ok(())
+        })
+    })
+}
+
+async fn collect_workspace_command_result(
+    transport: crate::remote_ssh::WorkspaceStdio,
+    options: SSHCommandOptions,
+) -> anyhow::Result<SSHCommandResult> {
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+
+    let (mut stdin, mut stdout, mut stderr, control, completion) = transport.into_parts();
+    let _ = stdin.shutdown().await;
+    let stdout_task = tokio::spawn(async move {
+        let mut bytes = Vec::new();
+        stdout.read_to_end(&mut bytes).await.map(|_| bytes)
+    });
+    let stderr_task = tokio::spawn(async move {
+        let mut bytes = Vec::new();
+        stderr.read_to_end(&mut bytes).await.map(|_| bytes)
+    });
+    let mut completion_task = tokio::spawn(completion.wait());
 
     let cancellation = options.cancellation_token.clone();
     let cancelled = async move {
@@ -1038,31 +1161,86 @@ async fn execute_local_container_command(
     };
     tokio::pin!(timeout);
 
-    tokio::select! {
-        result = &mut wait => {
-            let output = result.context("Local Docker command failed")?;
-            Ok(SSHCommandResult {
-                stdout: String::from_utf8_lossy(&output.stdout).to_string(),
-                stderr: String::from_utf8_lossy(&output.stderr).to_string(),
-                exit_code: output.status.code().unwrap_or(-1),
-                interrupted: false,
-                timed_out: false,
-            })
+    let mut interrupted = false;
+    let mut timed_out = false;
+    let mut fallback_exit_code = -1;
+    let exit = tokio::select! {
+        result = &mut completion_task => result.ok(),
+        _ = &mut cancelled => {
+            interrupted = true;
+            fallback_exit_code = 130;
+            let _ = control.interrupt().await;
+            match tokio::time::timeout(SSH_COMMAND_INTERRUPT_DRAIN_GRACE, &mut completion_task).await {
+                Ok(result) => result.ok(),
+                Err(_) => {
+                    let _ = control.kill().await;
+                    match tokio::time::timeout(Duration::from_secs(3), &mut completion_task).await {
+                        Ok(result) => result.ok(),
+                        Err(_) => {
+                            completion_task.abort();
+                            None
+                        }
+                    }
+                }
+            }
         }
-        _ = &mut cancelled => Ok(SSHCommandResult {
-            stdout: String::new(),
-            stderr: String::new(),
-            exit_code: 130,
-            interrupted: true,
-            timed_out: false,
-        }),
-        _ = &mut timeout => Ok(SSHCommandResult {
-            stdout: String::new(),
-            stderr: String::new(),
-            exit_code: 124,
-            interrupted: false,
-            timed_out: true,
-        }),
+        _ = &mut timeout => {
+            timed_out = true;
+            fallback_exit_code = 124;
+            let _ = control.interrupt().await;
+            match tokio::time::timeout(SSH_COMMAND_INTERRUPT_DRAIN_GRACE, &mut completion_task).await {
+                Ok(result) => result.ok(),
+                Err(_) => {
+                    let _ = control.kill().await;
+                    match tokio::time::timeout(Duration::from_secs(3), &mut completion_task).await {
+                        Ok(result) => result.ok(),
+                        Err(_) => {
+                            completion_task.abort();
+                            None
+                        }
+                    }
+                }
+            }
+        }
+    };
+    let stdout = collect_workspace_reader(
+        stdout_task,
+        "Workspace command stdout reader task failed",
+        interrupted || timed_out,
+    )
+    .await?;
+    let stderr = collect_workspace_reader(
+        stderr_task,
+        "Workspace command stderr reader task failed",
+        interrupted || timed_out,
+    )
+    .await?;
+    Ok(SSHCommandResult {
+        stdout: String::from_utf8_lossy(&stdout).into_owned(),
+        stderr: String::from_utf8_lossy(&stderr).into_owned(),
+        exit_code: exit
+            .and_then(|exit| exit.exit_code)
+            .unwrap_or(fallback_exit_code),
+        interrupted,
+        timed_out,
+    })
+}
+
+async fn collect_workspace_reader(
+    mut task: tokio::task::JoinHandle<std::io::Result<Vec<u8>>>,
+    task_error: &'static str,
+    allow_incomplete: bool,
+) -> anyhow::Result<Vec<u8>> {
+    match tokio::time::timeout(Duration::from_secs(3), &mut task).await {
+        Ok(result) => Ok(result.context(task_error)??),
+        Err(_) if allow_incomplete => {
+            task.abort();
+            Ok(Vec::new())
+        }
+        Err(_) => {
+            task.abort();
+            anyhow::bail!("Workspace command output stream did not close")
+        }
     }
 }
 
@@ -1473,7 +1651,7 @@ impl SSHConnectionManager {
         }
 
         let config_content = match tokio::fs::read_to_string(&ssh_config_path).await {
-            Ok(c) => c,
+            Ok(c) => strip_utf8_bom(c),
             Err(e) => {
                 log::warn!("Failed to read SSH config: {:?}", e);
                 return SSHConfigLookupResult {
@@ -1564,7 +1742,7 @@ impl SSHConnectionManager {
         }
 
         let config_content = match tokio::fs::read_to_string(&ssh_config_path).await {
-            Ok(c) => c,
+            Ok(c) => strip_utf8_bom(c),
             Err(e) => {
                 log::warn!("Failed to read SSH config: {:?}", e);
                 return Vec::new();
@@ -2811,8 +2989,11 @@ impl SSHConnectionManager {
         let mut session = handle.channel_open_session().await?;
         session.exec(true, command).await?;
 
-        let mut stdout = String::new();
-        let mut stderr = String::new();
+        // Keep bytes intact until the channel closes. SSH packets may split a
+        // valid UTF-8 code point at any byte boundary; decoding each packet
+        // independently would corrupt otherwise valid non-ASCII output.
+        let mut stdout = Vec::new();
+        let mut stderr = Vec::new();
         let mut exit_status: Option<i32> = None;
         let mut interrupted = false;
         let mut timed_out = false;
@@ -2897,7 +3078,7 @@ impl SSHConnectionManager {
                             command_preview
                         );
                     });
-                    stdout.push_str(&String::from_utf8_lossy(data));
+                    stdout.extend_from_slice(data);
                 }
                 Some(russh::ChannelMsg::ExtendedData { ref data, .. }) => {
                     stderr_first_chunk_once.call_once(|| {
@@ -2909,7 +3090,7 @@ impl SSHConnectionManager {
                             command_preview
                         );
                     });
-                    stderr.push_str(&String::from_utf8_lossy(data));
+                    stderr.extend_from_slice(data);
                 }
                 Some(russh::ChannelMsg::ExitStatus {
                     exit_status: status,
@@ -2974,8 +3155,8 @@ impl SSHConnectionManager {
         }
 
         let result = SSHCommandResult {
-            stdout,
-            stderr,
+            stdout: String::from_utf8_lossy(&stdout).into_owned(),
+            stderr: String::from_utf8_lossy(&stderr).into_owned(),
             exit_code: match exit_status {
                 Some(exit_code) => exit_code,
                 None if timed_out => 124,
@@ -3330,8 +3511,9 @@ impl SSHConnectionManager {
             )
         };
 
-        if config.uses_local_docker() {
-            return execute_local_container_command(&config, command, options, false).await;
+        if config.uses_docker_exec() {
+            let transport = self.open_workspace_stdio(connection_id, command).await?;
+            return collect_workspace_command_result(transport, options).await;
         }
         let handle =
             handle.ok_or_else(|| anyhow!("SSH handle is unavailable for {}", connection_id))?;
@@ -3389,19 +3571,49 @@ impl SSHConnectionManager {
         command: &str,
     ) -> anyhow::Result<crate::remote_ssh::WorkspaceStdio> {
         self.ensure_alive_or_reconnect(connection_id).await?;
-        let config = self
-            .get_effective_connection_config(connection_id)
-            .await
-            .ok_or_else(|| anyhow!("Connection {} not found", connection_id))?;
-        if config.uses_local_docker() {
+        let (handle, config) = {
+            let guard = self.connections.read().await;
+            let connection = guard
+                .get(connection_id)
+                .ok_or_else(|| anyhow!("Connection {} not found", connection_id))?;
+            (
+                connection.handle.clone(),
+                connection.effective_config.clone(),
+            )
+        };
+        if config.uses_docker_exec() {
             let container = config
                 .container
                 .as_ref()
-                .ok_or_else(|| anyhow!("Local Docker configuration is missing"))?;
+                .ok_or_else(|| anyhow!("Docker container configuration is missing"))?;
             validate_container_config(container)?;
-            return crate::remote_ssh::WorkspaceStdio::spawn_local_process(
-                &container.docker_path,
-                &docker_exec_args(container, command, false),
+            let (supervised_command, pid_file) = supervised_container_command(container, command);
+            if config.uses_local_docker() {
+                let signal_hook = local_container_signal_hook(container.clone(), pid_file);
+                return crate::remote_ssh::WorkspaceStdio::spawn_local_process_with_signal_hook(
+                    &container.docker_path,
+                    &docker_exec_args(container, &supervised_command, false),
+                    Some(signal_hook),
+                );
+            }
+
+            let handle =
+                handle.ok_or_else(|| anyhow!("SSH handle is unavailable for {}", connection_id))?;
+            let host_command = docker_exec_host_command(container, &supervised_command, false);
+            let channel = handle
+                .channel_open_session()
+                .await
+                .map_err(|error| anyhow!("Failed to open SSH exec channel: {}", error))?;
+            channel
+                .exec(true, host_command.as_str())
+                .await
+                .map_err(|error| anyhow!("Failed to start remote Docker command: {}", error))?;
+            let signal_hook = remote_container_signal_hook(handle, container.clone(), pid_file);
+            return Ok(
+                crate::remote_ssh::WorkspaceStdio::from_ssh_channel_with_signal_hook(
+                    channel,
+                    Some(signal_hook),
+                ),
             );
         }
 
@@ -3590,6 +3802,34 @@ impl SSHConnectionManager {
         Ok(Some((container.docker_path.clone(), args)))
     }
 
+    async fn execute_workspace_bytes(
+        &self,
+        connection_id: &str,
+        command: &str,
+    ) -> anyhow::Result<(Vec<u8>, Vec<u8>, i32)> {
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+
+        let transport = self.open_workspace_stdio(connection_id, command).await?;
+        let (mut stdin, mut stdout, mut stderr, _control, completion) = transport.into_parts();
+        let _ = stdin.shutdown().await;
+        let stdout_task = tokio::spawn(async move {
+            let mut bytes = Vec::new();
+            stdout.read_to_end(&mut bytes).await.map(|_| bytes)
+        });
+        let stderr_task = tokio::spawn(async move {
+            let mut bytes = Vec::new();
+            stderr.read_to_end(&mut bytes).await.map(|_| bytes)
+        });
+        let exit = completion.wait().await;
+        let stdout = stdout_task
+            .await
+            .context("Workspace stdout reader task failed")??;
+        let stderr = stderr_task
+            .await
+            .context("Workspace stderr reader task failed")??;
+        Ok((stdout, stderr, exit.exit_code.unwrap_or(-1)))
+    }
+
     pub async fn container_read_file(
         &self,
         connection_id: &str,
@@ -3772,14 +4012,20 @@ impl SSHConnectionManager {
                printf '%s\\0%s\\0%s\\0%s\\0%s\\0%s\\0' \"$name\" \"$item\" \"$kind\" \"$size\" \"$mtime\" \"$mode\"; \
              done"
         );
-        let (stdout, stderr, status) = self.execute_command(connection_id, &script).await?;
+        let (stdout, stderr, status) = self.execute_workspace_bytes(connection_id, &script).await?;
         if status != 0 {
             anyhow::bail!(
                 "Failed to list container directory '{}': {}",
                 path,
-                stderr.trim()
+                String::from_utf8_lossy(&stderr).trim()
             );
         }
+        let stdout = String::from_utf8(stdout).with_context(|| {
+            format!(
+                "Container directory '{}' contains a filename that is not valid UTF-8",
+                path
+            )
+        })?;
         parse_container_dir_output(&stdout)
     }
 
@@ -3860,7 +4106,7 @@ impl SSHConnectionManager {
              mode=$(stat -c %a \"$item\" 2>/dev/null || stat -f %Lp \"$item\" 2>/dev/null || true); \
              printf '%s\\0%s\\0%s\\0%s\\0%s\\0%s\\0' \"$name\" \"$item\" \"$kind\" \"$size\" \"$mtime\" \"$mode\""
         );
-        let (stdout, stderr, status) = self.execute_command(connection_id, &script).await?;
+        let (stdout, stderr, status) = self.execute_workspace_bytes(connection_id, &script).await?;
         if status == 44 {
             return Ok(None);
         }
@@ -3868,9 +4114,15 @@ impl SSHConnectionManager {
             anyhow::bail!(
                 "Failed to stat container path '{}': {}",
                 path,
-                stderr.trim()
+                String::from_utf8_lossy(&stderr).trim()
             );
         }
+        let stdout = String::from_utf8(stdout).with_context(|| {
+            format!(
+                "Container path '{}' is not representable as a UTF-8 workspace path",
+                path
+            )
+        })?;
         parse_container_file_output(&stdout)
     }
 
@@ -4674,6 +4926,20 @@ mod tests {
     use crate::remote_ssh::types::RemoteWorkspace;
     use std::time::{SystemTime, UNIX_EPOCH};
 
+    #[test]
+    #[cfg(feature = "ssh_config")]
+    fn ssh_config_fallback_accepts_utf8_bom_and_defaults_to_agent() {
+        let content = strip_utf8_bom(
+            "\u{feff}Host 跳板\n  HostName jump.example.com\n  User 构建\n".to_string(),
+        );
+        let entries = parse_ssh_config_manually(&content);
+
+        assert_eq!(entries.len(), 1);
+        assert_eq!(entries[0].host, "跳板");
+        assert_eq!(entries[0].user.as_deref(), Some("构建"));
+        assert_eq!(entries[0].agent, Some(true));
+    }
+
     fn test_data_dir(name: &str) -> std::path::PathBuf {
         let nanos = SystemTime::now()
             .duration_since(UNIX_EPOCH)
@@ -4743,6 +5009,29 @@ mod tests {
             docker_exec_host_command(&container, "printf '%s' \"$HOME\"", false),
             "'/opt/docker cli' 'exec' '-i' '--user' 'build user' 'dev container' '/bin/bash' '-lc' 'printf '\\''%s'\\'' \"$HOME\"'"
         );
+    }
+
+    #[test]
+    fn supervised_container_command_tracks_and_signals_the_container_process_group() {
+        let container = ContainerWorkspaceConfig {
+            name: "dev".to_string(),
+            access: ContainerAccess::DockerExec,
+            local: true,
+            docker_path: "docker".to_string(),
+            shell: "/bin/bash".to_string(),
+            user: None,
+            interactive: true,
+        };
+        let (wrapped, pid_file) =
+            supervised_container_command(&container, "printf '路径'; sleep 30");
+        let signal =
+            container_signal_command(&pid_file, crate::remote_ssh::WorkspaceProcessSignal::Kill);
+
+        assert!(pid_file.starts_with("/tmp/.bitfun-exec-"));
+        assert!(wrapped.contains("setsid '/bin/bash' -lc"));
+        assert!(wrapped.contains("printf '%s' \"$child\" > \"$pid_file\""));
+        assert!(signal.contains("kill -KILL -- \"-$pid\""));
+        assert!(signal.contains("kill -KILL \"$pid\""));
     }
 
     #[test]
@@ -4826,6 +5115,32 @@ mod tests {
             .container_mkdir(connection_id, "/tmp/bitfun-remote-workspace", true)
             .await
             .unwrap();
+        let cancellation = tokio_util::sync::CancellationToken::new();
+        let cancel_after_start = cancellation.clone();
+        tokio::spawn(async move {
+            tokio::time::sleep(Duration::from_millis(100)).await;
+            cancel_after_start.cancel();
+        });
+        let cancelled_command = manager
+            .execute_command_with_options(
+                connection_id,
+                "trap '' INT; sleep 30; touch /tmp/bitfun-remote-workspace/cancel-leaked",
+                SSHCommandOptions {
+                    timeout_ms: Some(5_000),
+                    cancellation_token: Some(cancellation),
+                },
+            )
+            .await
+            .unwrap();
+        assert!(cancelled_command.interrupted);
+        tokio::time::sleep(Duration::from_millis(200)).await;
+        assert!(
+            !manager
+                .container_exists(connection_id, "/tmp/bitfun-remote-workspace/cancel-leaked")
+                .await
+                .unwrap(),
+            "cancelled Docker command must not continue inside the container"
+        );
         let original = b"BitFun container workspace\0binary";
         manager
             .container_write_file(

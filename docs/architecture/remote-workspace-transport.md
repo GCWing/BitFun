@@ -17,6 +17,11 @@ Once connected, all workspace commands, terminal sessions, Agent subprocesses,
 ACP processes, search helpers, and file operations target the effective
 workspace. Docker-host commands are never an implicit fallback.
 
+The transport adapters run on macOS, Windows, and Linux clients. Remote paths
+remain POSIX paths on every client, and host `std::path` semantics must never be
+used to split or join them. Docker execution targets a POSIX-compatible
+container shell.
+
 ## Issue capability matrix
 
 | Issue tier | Capability | Design owner |
@@ -93,6 +98,13 @@ used by:
 - remote ACP subprocesses; and
 - remote Flashgrep search helpers.
 
+For non-TTY Docker processes, the command shell records the child PID inside
+the container and uses `setsid` when available. Interrupt and kill requests
+open a separate local or remote `docker exec` control path, signal the
+in-container process group, and then close the owning Docker CLI transport.
+This prevents cancelling the client-side CLI while leaving the workspace
+process running.
+
 TTY execution remains a terminal-specific adapter: SSH requests a PTY, while
 local Docker uses the existing local PTY service with `docker exec -it`.
 
@@ -109,6 +121,17 @@ destination with partial content.
 
 Directory and stat records use NUL-separated fields. File names containing
 newlines or the delimiters used by older implementations remain round-trippable.
+The records are decoded only after the full byte stream is assembled; invalid
+UTF-8 names return an explicit unsupported-path error. Likewise, streamed text
+output keeps incomplete UTF-8 suffixes between transport chunks instead of
+inserting replacement characters at arbitrary chunk boundaries.
+
+Remote names are validated before recursive download. Traversal components and
+local-platform-invalid names are rejected, and case-colliding sibling names are
+rejected on Windows and macOS before either entry can overwrite the other.
+Recursive local uploads reject non-UTF-8 names and symbolic links explicitly;
+recursive downloads reject remote symbolic links. Transfers never silently
+omit an entry or follow a link outside the selected tree.
 
 Host bind mounts are not path-translated. A host path is visible only at the
 path mounted inside the container.

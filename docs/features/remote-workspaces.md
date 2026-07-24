@@ -9,6 +9,12 @@ Agent commands, and workspace tools. The target can be:
 - a Docker container on the local machine; or
 - an sshd endpoint running inside a container.
 
+The local client behavior is supported on macOS, Windows, and Linux. Remote
+workspace paths are always interpreted with POSIX `/` separators, independent
+of the client OS. Docker workspace commands require a POSIX-compatible
+container shell; selecting a Windows container does not silently reinterpret
+paths or commands with Windows semantics.
+
 ## Jump hosts
 
 `ProxyJump` accepts a comma-separated chain such as `jump1,jump2` or
@@ -64,6 +70,19 @@ paths. File transfer uses binary stdin/stdout streams. Uploads write to a
 same-directory temporary file and rename atomically after success; cancellation
 leaves the previous destination intact. Ordinary SSH workspaces continue to use
 SFTP.
+
+Text command output is decoded as one UTF-8 byte stream, so a multibyte
+character split across SSH or Docker chunks is preserved. File bytes are never
+decoded. Workspace metadata and paths must be valid UTF-8; names that cannot be
+represented safely on the local filesystem (for example Windows reserved
+names, traversal components, or case-colliding names on common Windows/macOS
+filesystems) fail with an explicit error instead of being skipped or
+overwritten. Recursive transfers reject symbolic links instead of following
+them outside the selected tree.
+
+Non-TTY Docker commands run under an in-container supervisor. Interrupt and
+timeout handling signal the command's process group inside the container before
+closing the local or SSH-hosted Docker CLI process.
 
 The configured Docker CLI remains the security boundary. BitFun does not expose
 the Docker daemon over the network or bypass the current user's Docker
