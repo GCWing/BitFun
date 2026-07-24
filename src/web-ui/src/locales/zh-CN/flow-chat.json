@@ -605,22 +605,22 @@
       "changeFailed": "切换权限模式失败。",
       "ask": {
         "label": "需要确认",
-        "description": "低风险读取、浏览、Task 和 Skill 自动允许；修改文件和执行命令需要确认。"
+        "description": "外部访问，修改文件和执行命令需要确认。"
       },
       "auto": {
         "label": "自动批准",
-        "description": "自动批准需要确认的请求；明确拒绝仍然生效。"
+        "description": "自动批准需要确认的请求。"
       },
       "fullAccess": {
         "label": "完全访问",
-        "description": "默认允许工具执行；产品限制和系统权限仍然生效。"
+        "description": "默认允许工具执行，无需确认。"
       },
       "acp": {
         "label": "ACP 控制",
         "tooltip": "此会话的权限由 ACP 客户端控制。"
       },
       "fullAccessWarningTitle": "启用完全访问？",
-      "fullAccessWarningMessage": "完全访问会允许工具读取和写入文件、执行命令及调用集成，不再逐次询问。明确拒绝规则、产品限制和操作系统权限仍然生效。",
+      "fullAccessWarningMessage": "完全访问会默认允许工具执行，不再逐次确认。",
       "fullAccessConfirm": "启用完全访问",
       "cancel": "取消"
     },

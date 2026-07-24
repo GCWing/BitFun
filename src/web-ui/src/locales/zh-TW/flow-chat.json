@@ -605,22 +605,22 @@
       "changeFailed": "切換權限模式失敗。",
       "ask": {
         "label": "需要確認",
-        "description": "低風險讀取、瀏覽、Task 和 Skill 自動允許；修改檔案和執行命令需要確認。"
+        "description": "外部存取、修改檔案和執行命令需要確認。"
       },
       "auto": {
         "label": "自動批准",
-        "description": "自動批准需要確認的請求；明確拒絕仍然生效。"
+        "description": "自動批准需要確認的請求。"
       },
       "fullAccess": {
         "label": "完全存取",
-        "description": "預設允許工具執行；產品限制和系統權限仍然生效。"
+        "description": "預設允許工具執行，無需確認。"
       },
       "acp": {
         "label": "ACP 控制",
         "tooltip": "此工作階段的權限由 ACP 用戶端控制。"
       },
       "fullAccessWarningTitle": "啟用完全存取？",
-      "fullAccessWarningMessage": "完全存取會允許工具讀取和寫入檔案、執行命令及調用整合，不再逐次詢問。明確拒絕規則、產品限制和作業系統權限仍然生效。",
+      "fullAccessWarningMessage": "完全存取會預設允許工具執行，不再逐次確認。",
       "fullAccessConfirm": "啟用完全存取",
       "cancel": "取消"
     },
