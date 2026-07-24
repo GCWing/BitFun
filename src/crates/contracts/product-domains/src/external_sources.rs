@@ -1793,6 +1793,10 @@ pub struct ExternalPromptCommandDefinitionSummary {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct ExternalPromptCommandSummary {
+    /// Opaque guarded-execution identity. New product surfaces must pass this
+    /// value back unchanged rather than reproducing the stable-key encoding.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub candidate_id: String,
     pub definition: ExternalPromptCommandDefinitionSummary,
 }
 
@@ -1907,6 +1911,9 @@ impl ExternalSourcePublicSnapshot {
     /// New control clients use `ExternalSourceControlSnapshotV1` for the
     /// orthogonal review state instead.
     pub fn into_legacy_v0_compatible(mut self) -> Self {
+        for command in &mut self.commands {
+            command.candidate_id.clear();
+        }
         for tool in &mut self.tools {
             if matches!(tool.activation, ExternalToolActivationState::Declined) {
                 tool.activation = ExternalToolActivationState::Disabled;
@@ -1926,14 +1933,18 @@ impl From<ExternalSourceCatalogSnapshot> for ExternalSourcePublicSnapshot {
             commands: snapshot
                 .commands
                 .into_iter()
-                .map(|entry| ExternalPromptCommandSummary {
-                    definition: ExternalPromptCommandDefinitionSummary {
-                        id: entry.definition.id,
-                        name: entry.definition.name,
-                        description: entry.definition.description,
-                        availability: entry.definition.availability,
-                        content_version: entry.definition.content_version,
-                    },
+                .map(|entry| {
+                    let candidate_id = entry.definition.id.stable_key();
+                    ExternalPromptCommandSummary {
+                        candidate_id,
+                        definition: ExternalPromptCommandDefinitionSummary {
+                            id: entry.definition.id,
+                            name: entry.definition.name,
+                            description: entry.definition.description,
+                            availability: entry.definition.availability,
+                            content_version: entry.definition.content_version,
+                        },
+                    }
                 })
                 .collect(),
             command_conflicts: snapshot.command_conflicts,

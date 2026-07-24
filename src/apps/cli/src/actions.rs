@@ -344,7 +344,7 @@ static ACTION_SPECS: &[ActionSpec] = &[
     ActionSpec {
         id: "mcp_servers",
         name: "MCP servers",
-        aliases: &["/mcps"],
+        aliases: &["/mcp", "/mcps"],
         description: "Manage MCP servers",
         contexts: BOTH,
         availability: ActionAvailability::Always,

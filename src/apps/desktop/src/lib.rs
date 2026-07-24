@@ -975,6 +975,7 @@ pub async fn run() {
             update_external_integration_policy_command,
             set_external_source_enabled_command,
             set_external_source_conflict_choice_command,
+            expand_external_prompt_command_command,
             set_external_tool_target_decision_command,
             set_external_tool_conflict_choice_command,
             set_external_subagent_activation_command,

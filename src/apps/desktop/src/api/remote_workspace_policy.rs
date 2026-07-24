@@ -350,6 +350,10 @@ pub const REMOTE_WORKSPACE_COMMAND_POLICIES: &[(&str, RemoteWorkspacePolicy)] = 
     ),
     ("execute_tool", RemoteWorkspacePolicy::LegacyUnaudited),
     (
+        "expand_external_prompt_command_command",
+        RemoteWorkspacePolicy::RemoteUnsupported,
+    ),
+    (
         "explorer_get_children",
         RemoteWorkspacePolicy::LegacyUnaudited,
     ),

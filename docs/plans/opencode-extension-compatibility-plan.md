@@ -81,8 +81,9 @@ Claude Code 时新增同级 adapter，并在 Product Assembly 注册；不能修
   `template`、`description`。Markdown 已知字段按当前 OpenCode schema 校验，类型错误不得静默丢弃；同时保留
   OpenCode 对未引用冒号值的兼容重试。
 - 保留 OpenCode 生态内部的名称和覆盖顺序；独立 provider 之间或与 BitFun 本地能力同名时不得按适配器优先级静默决胜，
-  必须生成版本敏感的冲突指纹并等待用户选择。候选版本不变时只询问一次，更新后重新询问。交互式 TUI（ChatMode）将跨 provider
-  候选投影为 `/external:<provider>:<command>` 明确选择项；一次显式选择同时解决同名 BitFun 本地命令，不连续确认。
+  必须生成版本敏感的冲突指纹并等待用户选择。候选版本不变时只询问一次，更新后重新询问。交互式 TUI（ChatMode）继续显示
+  竞品一致的 `/command`，通过来源标签和内部 candidate id 区分候选；直接输入存在未解决冲突时 fail closed 并引导使用候选菜单，
+  不公开生态前缀或 `/builtin:`、`/external:` 选择语法。
 - 支持 `$ARGUMENTS` 与 `$1`、`$2` 等位置参数展开。显式选择或输入 `/command ...` 本身就是本次 prompt-only
   命令的用户确认；发现阶段不自动向会话发送内容。
 - `!shell`、`@file`、`{env:...}`、`{file:...}`、`agent`、`model`、`variant`、`subtask` 等尚未接通真实 owner 的语义继续被识别，但命令标记为
@@ -99,7 +100,7 @@ Claude Code 时新增同级 adapter，并在 Product Assembly 注册；不能修
 | `services/services-integrations` | 可订阅、去抖的文件变化事实 | 来源合并、OpenCode 语义、能力注册 |
 | `assembly/external-sources` | provider-neutral 的原子代次、隔离降级、同名冲突目录和版本敏感选择 | 注册具体 adapter、按生态分支或解释生态文件 |
 | `assembly/core` | 注册 adapter、按工作区协调刷新、定义偏好 schema/路径并通过服务原语持久化、连接 watcher 与产品入口 | 实现文件锁/原子写、复制 OpenCode parser、按生态分支能力行为 |
-| `apps/cli` | 将可用外部 Command 投影到 TUI 菜单和输入分发；本地冲突使用 `/builtin:name` 与 `/external:name` 明确选择 | 解析 OpenCode 文件或注册假工具 |
+| `apps/cli` | 将可用外部 Command 以原生 `/command` 投影到 TUI 菜单和输入分发；来源标签及内部 candidate id 处理同名候选 | 解析 OpenCode 文件、注册假工具或公开生态限定命令 |
 | `apps/desktop` / `web-ui` | 统一来源摘要、刷新、抑制/恢复和非阻塞反馈 | 持有 adapter、直接读取用户目录、通过 IPC 传输模板正文 |
 
 ### 3.3 生命周期与失败语义

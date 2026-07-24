@@ -11,11 +11,16 @@ crate-type = ["rlib"]
 
 [dependencies]
 bitfun-product-domains = { path = "../../contracts/product-domains", default-features = false, features = ["external-sources"] }
+bitfun-services-core = { path = "../../services/services-core", default-features = false, features = ["markdown"] }
 bitfun-static-hook-support = { path = "../static-hook-support" }
 dirs = { workspace = true }
+dunce = { workspace = true }
 hex = { workspace = true }
+regex = { workspace = true }
 serde_json = { workspace = true }
+serde_yaml = { workspace = true }
 sha2 = { workspace = true }
+url = { workspace = true }
 
 [dev-dependencies]
 tempfile = { workspace = true }
