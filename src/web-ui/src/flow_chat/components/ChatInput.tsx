@@ -9,7 +9,12 @@ import { useTranslation } from 'react-i18next';
 import { ArrowUp, BotMessageSquare, Image, RotateCcw, Plus, X, Sparkles, Loader2, ChevronRight, Files, MessageSquarePlus, Star } from 'lucide-react';
 import { ContextDropZone, useContextStore } from '../../shared/context-system';
 import { useActiveSessionState } from '@/flow_chat/hooks';
-import { RichTextInput, type MentionState, type InlineTriggerState } from './RichTextInput';
+import {
+  RichTextInput,
+  type InlineTriggerState,
+  type MentionState,
+  type RichTextInputElement,
+} from './RichTextInput';
 import { FileMentionPicker } from './FileMentionPicker';
 import { globalEventBus } from '@/infrastructure/event-bus';
 import {
@@ -113,6 +118,14 @@ import {
 import { ComposerVoiceInputButton } from './voice/ComposerVoiceInputButton';
 import { useComposerVoiceInput } from './voice/useComposerVoiceInput';
 import { expandWidgetPromptReferenceTokens } from '@/tools/generative-widget/widgetPromptReference';
+import {
+  composerPresentationContexts,
+  composerPresentationToEditorText,
+  composerPresentationToModelText,
+  hasComposerPresentationReferences,
+  parseComposerPresentation,
+  type ComposerPresentation,
+} from '../utils/composerPresentation';
 import {
   appendSkillPromptReferenceToken,
   createSkillPromptReferenceToken,
@@ -360,7 +373,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   const [inputState, dispatchLocalInput] = useReducer(inputReducer, initialInputState);
   const [modeState, dispatchMode] = useReducer(modeReducer, initialModeState);
   
-  const richTextInputRef = useRef<HTMLDivElement>(null);
+  const richTextInputRef = useRef<RichTextInputElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const agentBoostRef = useRef<HTMLDivElement>(null);
   const isImeComposingRef = useRef(false);
@@ -1592,6 +1605,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     const handleFillChatInput = (data: {
       content?: string;
       context?: ContextItem;
+      composerPresentation?: ComposerPresentation;
       onlyIfEmpty?: boolean;
       mode?: 'replace' | 'append';
       separator?: string;
@@ -1610,6 +1624,19 @@ export const ChatInput: React.FC<ChatInputProps> = ({
           input.focus();
           input.insertTag?.(data.context);
         }
+        return;
+      }
+
+      const composerPresentation = parseComposerPresentation(data.composerPresentation);
+      if (composerPresentation && data.mode !== 'append') {
+        const restoredValue = composerPresentationToEditorText(composerPresentation);
+        replaceContexts(composerPresentationContexts(composerPresentation));
+        clearPendingLargePastes();
+        dispatchInput({ type: 'ACTIVATE' });
+        dispatchInput({ type: 'SET_VALUE', payload: restoredValue });
+        inputValueRef.current = restoredValue;
+        richTextInputRef.current?.restoreComposerPresentation?.(composerPresentation);
+        richTextInputRef.current?.focus();
         return;
       }
 
@@ -1645,7 +1672,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     return () => {
       globalEventBus.off('fill-chat-input', handleFillChatInput);
     };
-  }, [addContext, clearPendingLargePastes, dispatchInput]);
+  }, [addContext, clearPendingLargePastes, dispatchInput, replaceContexts]);
 
   // Expose current input value for external queries (e.g. deep review fill-back confirmation)
   React.useEffect(() => {
@@ -3407,8 +3434,21 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     if (!draftTrimmed) return;
     
     const originalMessage = draftTrimmed;
+    const composerPresentation = messageOverride === undefined
+      ? richTextInputRef.current?.getComposerPresentation?.() ?? null
+      : null;
+    const persistedComposerPresentation = hasComposerPresentationReferences(composerPresentation)
+      ? composerPresentation
+      : null;
     const originalPendingLargePastes = { ...pendingLargePastesRef.current };
-    const message = expandComposerSpecialTokens(originalMessage);
+    const expandedMessage = expandComposerSpecialTokens(
+      persistedComposerPresentation
+        ? composerPresentationToModelText(persistedComposerPresentation)
+        : originalMessage,
+    );
+    const message = expandedMessage || (persistedComposerPresentation
+      ? 'Use the referenced session transcript as context.'
+      : expandedMessage);
     const messageCharCount = getCharacterCount(message);
     // Voice transcripts are always message content; they must not accidentally execute local commands.
     const localSlashCommandsEnabled = !isAcpInputSession && messageOverride === undefined;
@@ -3522,6 +3562,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     try {
       await sendMessage(message, {
         displayMessage: originalMessage,
+        composerPresentation: persistedComposerPresentation,
       });
       clearPendingLargePastes();
       dispatchInput({ type: 'CLEAR_VALUE' });
@@ -3548,6 +3589,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     clearPendingLargePastes,
     expandComposerSpecialTokens,
     isAcpInputSession,
+    richTextInputRef,
     replacePendingLargePastes,
     setQueuedInput,
     submitBtwFromInput,
