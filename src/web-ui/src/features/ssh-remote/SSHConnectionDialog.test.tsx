@@ -137,6 +137,10 @@ describe('SSHConnectionDialog advanced settings', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    Object.defineProperty(HTMLElement.prototype, 'scrollIntoView', {
+      configurable: true,
+      value: vi.fn(),
+    });
     container = document.createElement('div');
     document.body.appendChild(container);
     root = createRoot(container);
