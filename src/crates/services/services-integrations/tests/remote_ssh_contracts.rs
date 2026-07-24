@@ -154,6 +154,11 @@ fn remote_workspace_path_helpers_preserve_current_identity_contract() {
     assert!(remote_root_to_mirror_subpath("/../../escape")
         .components()
         .all(|component| !matches!(component, std::path::Component::ParentDir)));
+    assert_eq!(
+        remote_root_to_mirror_subpath("/home/user/../project"),
+        std::path::PathBuf::from("home").join("project"),
+        "safe legacy dot segments must keep their previous effective mirror path"
+    );
     #[cfg(windows)]
     {
         assert_eq!(sanitize_remote_mirror_path_component("CON"), "_CON");

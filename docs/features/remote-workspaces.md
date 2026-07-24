@@ -82,7 +82,10 @@ them outside the selected tree.
 
 Non-TTY Docker commands run under an in-container supervisor. Interrupt and
 timeout handling signal the command's process group inside the container before
-closing the local or SSH-hosted Docker CLI process.
+closing the local or SSH-hosted Docker CLI process. A read-only container
+temporary directory does not make an existing Docker workspace unusable;
+execution continues with transport-level cancellation as the compatibility
+fallback.
 
 The configured Docker CLI remains the security boundary. BitFun does not expose
 the Docker daemon over the network or bypass the current user's Docker
@@ -95,6 +98,9 @@ Existing SSH profiles remain plain SSH targets because the new `proxyJump` and
 Existing remote-workspace records keep their paths and connection metadata.
 Legacy connection IDs that included the SSH port are migrated together with
 their password-vault and workspace references.
+
+Legacy local-Docker profiles do not need an SSH password-vault entry, even if
+their old serialized auth placeholder is an empty password.
 
 If a saved password is unavailable after an upgrade or local keychain reset,
 BitFun keeps the connection and workspace records and asks for the password on

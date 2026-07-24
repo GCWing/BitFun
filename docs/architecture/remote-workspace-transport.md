@@ -103,7 +103,9 @@ the container and uses `setsid` when available. Interrupt and kill requests
 open a separate local or remote `docker exec` control path, signal the
 in-container process group, and then close the owning Docker CLI transport.
 This prevents cancelling the client-side CLI while leaving the workspace
-process running.
+process running. PID tracking is an enhancement, not a new execution
+prerequisite: containers with a read-only temporary directory keep the legacy
+Docker execution path and fall back to transport-level cancellation.
 
 TTY execution remains a terminal-specific adapter: SSH requests a PTY, while
 local Docker uses the existing local PTY service with `docker exec -it`.
@@ -168,6 +170,10 @@ New configuration fields have Serde defaults. Profiles written before this
 design remain direct SSH targets with the same IDs, credentials, paths, and
 workspace restore entries. Legacy port-bearing IDs are migrated together with
 password-vault and workspace references.
+
+Local Docker profiles may legitimately retain an empty legacy password
+placeholder. Connection, testing, and local container discovery do not require
+a password-vault entry for those profiles.
 
 Startup recovery never deletes a profile or workspace merely because a
 credential is unavailable, a connection times out, or a remote host is

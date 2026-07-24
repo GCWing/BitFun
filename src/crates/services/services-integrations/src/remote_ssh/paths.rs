@@ -157,6 +157,16 @@ pub fn remote_root_to_mirror_subpath(remote_root_norm: &str) -> PathBuf {
         if seg.is_empty() {
             continue;
         }
+        if seg == "." {
+            continue;
+        }
+        if seg == ".." {
+            // Match the effective local path produced by the legacy
+            // `PathBuf::push("..")` mapping without allowing the result to
+            // escape the host mirror root.
+            pb.pop();
+            continue;
+        }
         pb.push(sanitize_remote_mirror_path_component(seg));
     }
     if pb.as_os_str().is_empty() {

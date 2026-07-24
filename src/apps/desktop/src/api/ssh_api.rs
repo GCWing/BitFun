@@ -28,6 +28,12 @@ async fn hydrate_stored_password(
     manager: &SSHConnectionManager,
     config: &mut SSHConnectionConfig,
 ) -> Result<(), String> {
+    // Local Docker Exec/Auto profiles do not require SSH credentials. Older
+    // saved profiles may therefore legitimately contain an empty Password
+    // auth placeholder with no vault entry.
+    if config.uses_local_docker() {
+        return Ok(());
+    }
     if let SSHAuthMethod::Password { ref password } = config.auth {
         if password.is_empty() {
             match manager.load_stored_password(&config.id).await {
@@ -1117,7 +1123,9 @@ pub async fn remote_get_workspace_info(
 
 #[cfg(test)]
 mod tests {
-    use super::{local_download_name_key, validate_remote_name_for_local_download};
+    use super::{
+        hydrate_stored_password, local_download_name_key, validate_remote_name_for_local_download,
+    };
 
     #[test]
     fn download_names_cannot_escape_the_selected_local_directory() {
@@ -1125,6 +1133,47 @@ mod tests {
             assert!(validate_remote_name_for_local_download(name).is_err());
         }
         assert!(validate_remote_name_for_local_download("目录.txt").is_ok());
+    }
+
+    #[tokio::test]
+    async fn local_docker_profiles_do_not_require_a_legacy_password_vault_entry() {
+        use bitfun_core::service::remote_ssh::{
+            ContainerAccess, ContainerWorkspaceConfig, SSHAuthMethod, SSHConnectionConfig,
+            SSHConnectionManager,
+        };
+
+        let data_dir = tempfile::tempdir().unwrap();
+        let manager = SSHConnectionManager::new(data_dir.path().to_path_buf());
+        let mut config = SSHConnectionConfig {
+            id: "docker-local-legacy".to_string(),
+            name: "local container".to_string(),
+            host: String::new(),
+            port: 22,
+            username: String::new(),
+            auth: SSHAuthMethod::Password {
+                password: String::new(),
+            },
+            default_workspace: Some("/workspace".to_string()),
+            proxy_jump: None,
+            container: Some(ContainerWorkspaceConfig {
+                name: "dev".to_string(),
+                access: ContainerAccess::DockerExec,
+                local: true,
+                docker_path: "docker".to_string(),
+                shell: "/bin/sh".to_string(),
+                user: None,
+                interactive: true,
+            }),
+            options: Default::default(),
+        };
+
+        hydrate_stored_password(&manager, &mut config)
+            .await
+            .expect("local Docker must not require an SSH password");
+        assert!(matches!(
+            config.auth,
+            SSHAuthMethod::Password { ref password } if password.is_empty()
+        ));
     }
 
     #[cfg(any(windows, target_os = "macos"))]

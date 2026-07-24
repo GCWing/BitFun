@@ -1007,13 +1007,24 @@ fn supervised_container_command(
     command: &str,
 ) -> (String, String) {
     let pid_file = format!("/tmp/.bitfun-exec-{}.pid", uuid::Uuid::new_v4());
+    let wrapped = supervised_container_command_with_pid_file(container, command, &pid_file);
+    (wrapped, pid_file)
+}
+
+fn supervised_container_command_with_pid_file(
+    container: &ContainerWorkspaceConfig,
+    command: &str,
+    pid_file: &str,
+) -> String {
     let quoted_pid_file = crate::remote_ssh::shell::quote_arg(&pid_file);
     let quoted_command = crate::remote_ssh::shell::quote_arg(command);
     let quoted_shell = crate::remote_ssh::shell::quote_arg(&container.shell);
-    let wrapped = format!(
+    format!(
         "pid_file={quoted_pid_file}; \
          child=; \
-         remove_pid_file() {{ rm -f -- \"$pid_file\"; }}; \
+         tracking=1; \
+         (umask 077; : > \"$pid_file\") 2>/dev/null || tracking=0; \
+         remove_pid_file() {{ rm -f -- \"$pid_file\" 2>/dev/null || true; }}; \
          terminate_child() {{ \
            [ -n \"$child\" ] || return 0; \
            kill -TERM -- \"-$child\" 2>/dev/null \
@@ -1027,11 +1038,13 @@ fn supervised_container_command(
          else \
            {quoted_shell} -lc {quoted_command} <&0 & \
          fi; \
-         child=$!; printf '%s' \"$child\" > \"$pid_file\" || exit 73; \
+         child=$!; \
+         if [ \"$tracking\" -eq 1 ]; then \
+           printf '%s' \"$child\" > \"$pid_file\" || tracking=0; \
+         fi; \
          wait \"$child\"; status=$?; \
          child=; trap - EXIT HUP TERM; remove_pid_file; exit \"$status\""
-    );
-    (wrapped, pid_file)
+    )
 }
 
 fn container_signal_command(
@@ -1046,12 +1059,12 @@ fn container_signal_command(
     format!(
         "pid_file={quoted_pid_file}; \
          attempt=0; \
-         while [ ! -r \"$pid_file\" ] && [ \"$attempt\" -lt 20 ]; do \
+         while [ ! -s \"$pid_file\" ] && [ \"$attempt\" -lt 20 ]; do \
            attempt=$((attempt + 1)); sleep 0.05; \
          done; \
-         [ -r \"$pid_file\" ] || exit 0; \
-         pid=$(cat \"$pid_file\" 2>/dev/null) || exit 0; \
-         case \"$pid\" in ''|*[!0-9]*) exit 0;; esac; \
+         [ -s \"$pid_file\" ] || exit 75; \
+         pid=$(cat \"$pid_file\" 2>/dev/null) || exit 75; \
+         case \"$pid\" in ''|*[!0-9]*) exit 75;; esac; \
          kill -{signal_name} -- \"-$pid\" 2>/dev/null \
            || kill -{signal_name} \"$pid\" 2>/dev/null \
            || true"
@@ -5029,9 +5042,41 @@ mod tests {
 
         assert!(pid_file.starts_with("/tmp/.bitfun-exec-"));
         assert!(wrapped.contains("setsid '/bin/bash' -lc"));
+        assert!(wrapped.contains("|| tracking=0"));
         assert!(wrapped.contains("printf '%s' \"$child\" > \"$pid_file\""));
+        assert!(signal.contains("[ -s \"$pid_file\" ] || exit 75"));
         assert!(signal.contains("kill -KILL -- \"-$pid\""));
         assert!(signal.contains("kill -KILL \"$pid\""));
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn supervised_container_command_keeps_working_without_a_writable_pid_location() {
+        let container = ContainerWorkspaceConfig {
+            name: "dev".to_string(),
+            access: ContainerAccess::DockerExec,
+            local: true,
+            docker_path: "docker".to_string(),
+            shell: "/bin/sh".to_string(),
+            user: None,
+            interactive: true,
+        };
+        let wrapped = supervised_container_command_with_pid_file(
+            &container,
+            "printf 'compatible'",
+            "/dev/null/bitfun-exec.pid",
+        );
+        let output = std::process::Command::new("sh")
+            .args(["-lc", &wrapped])
+            .output()
+            .unwrap();
+
+        assert!(output.status.success());
+        assert_eq!(output.stdout, b"compatible");
+        assert!(
+            String::from_utf8_lossy(&output.stderr).trim().is_empty(),
+            "process-control fallback must not add command stderr"
+        );
     }
 
     #[test]
@@ -5345,6 +5390,53 @@ mod tests {
             other => panic!("expected password auth, got {:?}", other),
         }
 
+        let _ = tokio::fs::remove_dir_all(&dir).await;
+    }
+
+    #[tokio::test]
+    async fn restores_legacy_local_docker_profile_without_password_vault_entry() {
+        let dir = test_data_dir("legacy-local-docker-password-placeholder");
+        tokio::fs::create_dir_all(&dir).await.unwrap();
+        let manager = SSHConnectionManager::new(dir.clone());
+
+        tokio::fs::write(
+            dir.join("ssh_connections.json"),
+            serde_json::to_string_pretty(&serde_json::json!([{
+                "id": "docker-local-legacy",
+                "name": "local container",
+                "host": "",
+                "port": 22,
+                "username": "",
+                "authType": { "type": "Password" },
+                "defaultWorkspace": "/workspace",
+                "lastConnected": 1,
+                "container": {
+                    "name": "dev",
+                    "access": "docker-exec",
+                    "local": true
+                }
+            }]))
+            .unwrap(),
+        )
+        .await
+        .unwrap();
+
+        manager.load_saved_connections().await.unwrap();
+        let restored = manager
+            .load_connection_config_from_saved("docker-local-legacy")
+            .await
+            .unwrap()
+            .expect("legacy local Docker profile must remain restorable");
+
+        assert!(restored.uses_local_docker());
+        assert!(matches!(
+            restored.auth,
+            SSHAuthMethod::Password { ref password } if password.is_empty()
+        ));
+        assert_eq!(
+            restored.options,
+            crate::remote_ssh::types::SSHConnectionOptions::default()
+        );
         let _ = tokio::fs::remove_dir_all(&dir).await;
     }
 
