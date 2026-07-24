@@ -1,5 +1,9 @@
+#![recursion_limit = "256"]
 #![allow(non_snake_case)]
 //! BitFun Desktop - Tauri-based desktop application with TransportAdapter architecture
+//!
+//! The reqwest HTTP/2 and MCP transport type graph exceeds rustc's default
+//! trait-evaluation recursion budget when desktop tasks require `Send`.
 
 pub mod api;
 pub mod computer_use;
