@@ -743,7 +743,8 @@
     "switchWorkspaceFailed": "Failed to switch workspace: {{error}}",
     "mcpPromptMissingArgs": "This MCP prompt requires arguments: {{args}}",
     "mcpPromptFailed": "MCP prompt failed",
-    "loadingMcpPrompts": "Loading MCP prompts..."
+    "loadingMcpPrompts": "Loading MCP prompts...",
+    "externalCommandsLoading": "Loading compatible commands..."
   },
   "planner": {
     "title": "Task Planning",

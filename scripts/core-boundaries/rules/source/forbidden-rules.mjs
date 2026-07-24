@@ -4144,26 +4144,33 @@ export const forbiddenContentUnderRules = [
   },
   {
     path: 'src',
-    reason: 'Claude Code static Hook adapter imports are limited to its fixtures and composition root',
+    reason: 'Claude Code declarative source adapter imports are limited to its fixtures and composition roots',
     patterns: [{
       regex: /\b(?:use\s+bitfun_claude_code_adapter\b|extern\s+crate\s+bitfun_claude_code_adapter\b|bitfun_claude_code_adapter::)/,
       allowPaths: [
         'src/crates/adapters/claude-code-adapter/tests/hook_source.rs',
+        'src/crates/adapters/claude-code-adapter/tests/command_source.rs',
+        'src/crates/adapters/claude-code-adapter/tests/subagent_source.rs',
+        'src/crates/adapters/claude-code-adapter/tests/mcp_source.rs',
+        'src/crates/assembly/core/src/external_sources.rs',
         'src/crates/assembly/core/src/external_hooks.rs',
       ],
-      message: 'Claude Code Hook adapter may only be imported by its fixtures and the reviewed composition root',
+      message: 'Claude Code declarative source adapter may only be imported by its fixtures and reviewed composition roots',
     }],
   },
   {
     path: 'src',
-    reason: 'Codex static Hook adapter imports are limited to its fixtures and composition root',
+    reason: 'Codex declarative source adapter imports are limited to its fixtures and composition roots',
     patterns: [{
       regex: /\b(?:use\s+bitfun_codex_adapter\b|extern\s+crate\s+bitfun_codex_adapter\b|bitfun_codex_adapter::)/,
       allowPaths: [
         'src/crates/adapters/codex-adapter/tests/hook_source.rs',
+        'src/crates/adapters/codex-adapter/tests/subagent_source.rs',
+        'src/crates/adapters/codex-adapter/tests/mcp_source.rs',
+        'src/crates/assembly/core/src/external_sources.rs',
         'src/crates/assembly/core/src/external_hooks.rs',
       ],
-      message: 'Codex Hook adapter may only be imported by its fixtures and the reviewed composition root',
+      message: 'Codex declarative source adapter may only be imported by its fixtures and reviewed composition roots',
     }],
   },
   {

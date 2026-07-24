@@ -562,7 +562,19 @@ fn legacy_public_snapshot_downprojects_new_tool_review_variants() {
         "generation": 1,
         "discoveryPending": false,
         "sources": [],
-        "commands": [],
+        "commands": [{
+            "candidateId": "17:opencode.commands6:global6:review",
+            "definition": {
+                "id": {
+                    "source": { "providerId": "opencode.commands", "sourceId": "global" },
+                    "localId": "review"
+                },
+                "name": "review",
+                "description": "Review changes",
+                "availability": { "state": "available" },
+                "contentVersion": "v1"
+            }
+        }],
         "tools": [{
             "definition": {
                 "id": {
@@ -590,6 +602,7 @@ fn legacy_public_snapshot_downprojects_new_tool_review_variants() {
 
     let legacy =
         serde_json::to_value(snapshot.into_legacy_v0_compatible()).expect("legacy public snapshot");
+    assert!(legacy["commands"][0].get("candidateId").is_none());
     assert_eq!(legacy["tools"][0]["activation"]["state"], "disabled");
 }
 

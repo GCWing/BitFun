@@ -743,7 +743,8 @@
     "usageFailed": "用量报告生成失败",
     "mcpPromptMissingArgs": "此 MCP 提示词需要参数：{{args}}",
     "mcpPromptFailed": "MCP 提示词执行失败",
-    "loadingMcpPrompts": "正在加载 MCP 提示词..."
+    "loadingMcpPrompts": "正在加载 MCP 提示词...",
+    "externalCommandsLoading": "正在加载兼容命令..."
   },
   "planner": {
     "title": "任务规划",

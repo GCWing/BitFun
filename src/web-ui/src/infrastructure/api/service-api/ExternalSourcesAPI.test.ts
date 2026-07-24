@@ -101,6 +101,28 @@ describe('ExternalSourcesAPI', () => {
     });
   });
 
+  it('expands a prompt command only with the selected candidate and behavior version', async () => {
+    invokeMock.mockResolvedValueOnce({ content: 'expanded prompt' });
+
+    await externalSourcesAPI.expandPromptCommand(
+      'D:/workspace/project',
+      'review',
+      'focus on auth',
+      'claude-code.commands:project:review',
+      'behavior-v1',
+    );
+
+    expect(invokeMock).toHaveBeenCalledWith('expand_external_prompt_command_command', {
+      request: {
+        workspacePath: 'D:/workspace/project',
+        name: 'review',
+        arguments: 'focus on auth',
+        candidateId: 'claude-code.commands:project:review',
+        expectedContentVersion: 'behavior-v1',
+      },
+    });
+  });
+
   it('falls back to the legacy read path for an older Peer Host', async () => {
     invokeMock
       .mockRejectedValueOnce(

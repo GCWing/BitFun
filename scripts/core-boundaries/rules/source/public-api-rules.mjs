@@ -259,23 +259,70 @@ function staticHookAdapterEntry(symbol, owner, consumer) {
   };
 }
 
-export const claudeCodeHookAdapterPublicApiEntries = [
+function declarativeSourceAdapterEntry(
+  symbol,
+  owner,
+  consumer,
+  capability,
+  contractSlice,
+) {
+  return {
+    symbol,
+    owner,
+    consumer,
+    verification:
+      `${capability} adapter fixtures, bitfun-core composition tests, and core-boundary public API budget checks`,
+    p0: `runtime-free ${capability} discovery and ecosystem-neutral catalog projection`,
+    contractSlice,
+    wireImpact: false,
+    rationale:
+      `the product catalog needs one ecosystem-specific parser behind the ${capability} provider contract`,
+    exit:
+      `remove only if ${capability} discovery moves behind another reviewed adapter with equivalent fail-closed tests`,
+  };
+}
+
+export const claudeCodeAdapterPublicApiEntries = [
   'ClaudeCodeHookProvider',
   'ClaudeCodeHookProviderOptions',
 ].map((symbol) => staticHookAdapterEntry(
   symbol,
   'claude-code-adapter static Hook owner',
   'bitfun-core composition root and Claude Code Hook fixtures',
-));
+)).concat([
+  ['ClaudeCodeCommandProvider', 'command', contractSlices.externalSourceCommandContract],
+  ['ClaudeCodeCommandProviderOptions', 'command', contractSlices.externalSourceCommandContract],
+  ['ClaudeCodeSubagentProvider', 'subagent', contractSlices.externalSourceSubagentContract],
+  ['ClaudeCodeSubagentProviderOptions', 'subagent', contractSlices.externalSourceSubagentContract],
+  ['ClaudeCodeMcpProvider', 'MCP', contractSlices.externalSourceMcpContract],
+  ['ClaudeCodeMcpProviderOptions', 'MCP', contractSlices.externalSourceMcpContract],
+].map(([symbol, capability, contractSlice]) => declarativeSourceAdapterEntry(
+  symbol,
+  'claude-code-adapter declarative source owner',
+  `bitfun-core composition root and Claude Code ${capability} fixtures`,
+  capability,
+  contractSlice,
+)));
 
-export const codexHookAdapterPublicApiEntries = [
+export const codexAdapterPublicApiEntries = [
   'CodexHookProvider',
   'CodexHookProviderOptions',
 ].map((symbol) => staticHookAdapterEntry(
   symbol,
   'codex-adapter static Hook owner',
   'bitfun-core composition root and Codex Hook fixtures',
-));
+)).concat([
+  ['CodexSubagentProvider', 'subagent', contractSlices.externalSourceSubagentContract],
+  ['CodexSubagentProviderOptions', 'subagent', contractSlices.externalSourceSubagentContract],
+  ['CodexMcpProvider', 'MCP', contractSlices.externalSourceMcpContract],
+  ['CodexMcpProviderOptions', 'MCP', contractSlices.externalSourceMcpContract],
+].map(([symbol, capability, contractSlice]) => declarativeSourceAdapterEntry(
+  symbol,
+  'codex-adapter declarative source owner',
+  `bitfun-core composition root and Codex ${capability} fixtures`,
+  capability,
+  contractSlice,
+)));
 
 export const staticHookSupportPublicApiEntries = [
   'BoundedFileRead',
@@ -953,13 +1000,13 @@ export const publicApiAllowlistRules = [
   },
   {
     path: 'src/crates/adapters/claude-code-adapter/src/lib.rs',
-    reason: 'Claude Code adapter public API is limited to static Hook discovery',
-    allowedSymbolEntries: claudeCodeHookAdapterPublicApiEntries,
+    reason: 'Claude Code adapter public API is limited to reviewed declarative source providers',
+    allowedSymbolEntries: claudeCodeAdapterPublicApiEntries,
   },
   {
     path: 'src/crates/adapters/codex-adapter/src/lib.rs',
-    reason: 'Codex adapter public API is limited to static Hook discovery',
-    allowedSymbolEntries: codexHookAdapterPublicApiEntries,
+    reason: 'Codex adapter public API is limited to reviewed declarative source providers',
+    allowedSymbolEntries: codexAdapterPublicApiEntries,
   },
   {
     path: 'src/crates/adapters/static-hook-support/src/lib.rs',

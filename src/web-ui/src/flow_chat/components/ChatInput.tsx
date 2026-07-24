@@ -127,6 +127,15 @@ import {
   type ContextUsageDisplay,
 } from '../utils/tokenUsageDisplay';
 import { agentAPI } from '@/infrastructure/api/service-api/AgentAPI';
+import {
+  ExternalSourceApiError,
+  externalSourcesAPI,
+} from '@/infrastructure/api/service-api/ExternalSourcesAPI';
+import {
+  buildExternalPromptCommandItems,
+  resolveExternalPromptCommandInvocation,
+  type ExternalPromptCommandItem,
+} from '../utils/externalPromptCommands';
 import './ChatInput.scss';
 
 import { setChatPopupActive } from './chatPopupState';
@@ -183,12 +192,26 @@ type SlashSkillItem = {
   skillName: string;
 };
 
+type SlashExternalPromptCommandItem = ExternalPromptCommandItem & {
+  kind: 'externalCommand';
+};
+
+function toSlashExternalPromptCommands(
+  snapshot: Parameters<typeof buildExternalPromptCommandItems>[0],
+): SlashExternalPromptCommandItem[] {
+  return buildExternalPromptCommandItems(snapshot).map(item => ({
+    ...item,
+    kind: 'externalCommand' as const,
+  }));
+}
+
 type SlashPickerItem =
   | SlashActionItem
   | SlashModeItem
   | SlashMcpPromptItem
   | SlashAcpCommandItem
-  | SlashSkillItem;
+  | SlashSkillItem
+  | SlashExternalPromptCommandItem;
 type ChatInputTarget = 'main' | 'btw';
 
 function getCharacterCount(text: string): number {
@@ -1110,6 +1133,60 @@ export const ChatInput: React.FC<ChatInputProps> = ({
 
   const [mcpPromptCommands, setMcpPromptCommands] = useState<SlashMcpPromptItem[]>([]);
   const [mcpPromptCommandsLoading, setMcpPromptCommandsLoading] = useState(false);
+  const [externalPromptCommands, setExternalPromptCommands] = useState<SlashExternalPromptCommandItem[]>([]);
+  const [externalPromptCommandsLoading, setExternalPromptCommandsLoading] = useState(false);
+  const [selectedExternalPromptCandidateId, setSelectedExternalPromptCandidateId] = useState<string>();
+  const [selectedNonExternalSlashCommand, setSelectedNonExternalSlashCommand] = useState<string>();
+
+  useEffect(() => {
+    let cancelled = false;
+    setExternalPromptCommands([]);
+    setSelectedExternalPromptCandidateId(undefined);
+    setSelectedNonExternalSlashCommand(undefined);
+    if (isAcpInputSession) {
+      setExternalPromptCommandsLoading(false);
+      return () => {
+        cancelled = true;
+      };
+    }
+
+    setExternalPromptCommandsLoading(true);
+    void (async () => {
+      let snapshot = await externalSourcesAPI.getSnapshot(workspacePath || undefined, false);
+      if (cancelled) return;
+      setExternalPromptCommands(toSlashExternalPromptCommands(snapshot));
+      if (snapshot.discoveryPending) {
+        snapshot = await externalSourcesAPI.getSnapshot(workspacePath || undefined, true);
+        if (!cancelled) {
+          setExternalPromptCommands(toSlashExternalPromptCommands(snapshot));
+        }
+      }
+    })()
+      .catch(error => {
+        if (cancelled) return;
+        if (error instanceof ExternalSourceApiError
+          && (error.code === 'host_unavailable'
+            || error.code === 'host_capability_unavailable'
+            || error.code === 'incompatible_version')) {
+          log.debug('External prompt commands are unavailable on this host', {
+            code: error.code,
+          });
+          return;
+        }
+        log.warn('Failed to load external prompt command catalog', {
+          code: error instanceof ExternalSourceApiError ? error.code : 'internal',
+        });
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setExternalPromptCommandsLoading(false);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [isAcpInputSession, workspacePath]);
 
   const loadMcpPromptCommands = useCallback(async () => {
     setMcpPromptCommandsLoading(true);
@@ -2093,6 +2170,21 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     });
   }, [isAcpInputSession, mcpPromptCommands, slashCommandState.query]);
 
+  const getFilteredExternalPromptCommands = useCallback((): SlashExternalPromptCommandItem[] => {
+    if (isAcpInputSession
+      || derivedState?.isProcessing
+      || (inlineTriggerState.isActive && inlineTriggerState.startOffset > 0)) {
+      return [];
+    }
+    const q = (slashCommandState.query || '').trim().toLowerCase();
+    if (!q) {
+      return externalPromptCommands;
+    }
+    return externalPromptCommands.filter(item =>
+      item.command.slice(1).toLowerCase().includes(q)
+        || item.label.toLowerCase().includes(q));
+  }, [derivedState?.isProcessing, externalPromptCommands, inlineTriggerState, isAcpInputSession, slashCommandState.query]);
+
   const getFilteredAcpCommands = useCallback((): SlashAcpCommandItem[] => {
     return filterSlashCommands(acpAgentCommands, slashCommandState.query).map(command => ({
       kind: 'acpCommand',
@@ -2168,6 +2260,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     }
 
     const actions = getFilteredActions();
+    const externalCommands = getFilteredExternalPromptCommands();
     const mcpPrompts = getFilteredMcpPromptCommands();
     const skills = getFilteredSkills();
     let modeList = incrementalCodeModes;
@@ -2184,8 +2277,8 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       id: mode.id,
       name: mode.name,
     }));
-    return [...acpCommands, ...actions, ...mcpPrompts, ...modes, ...skills];
-  }, [canSwitchModes, getFilteredActions, getFilteredAcpCommands, getFilteredMcpPromptCommands, getFilteredSkills, incrementalCodeModes, isAcpInputSession, slashCommandState.query]);
+    return [...acpCommands, ...actions, ...externalCommands, ...mcpPrompts, ...modes, ...skills];
+  }, [canSwitchModes, getFilteredActions, getFilteredAcpCommands, getFilteredExternalPromptCommands, getFilteredMcpPromptCommands, getFilteredSkills, incrementalCodeModes, isAcpInputSession, slashCommandState.query]);
 
   const getActiveSlashPickerItems = useCallback((): SlashPickerItem[] => {
     if (slashCommandState.kind === 'actions') {
@@ -2216,6 +2309,19 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     prunePendingLargePastes(text);
     dispatchInput({ type: 'SET_VALUE', payload: text });
     inputValueRef.current = text;
+
+    if (selectedExternalPromptCandidateId) {
+      const selected = externalPromptCommands.find(
+        item => item.candidateId === selectedExternalPromptCandidateId,
+      );
+      if (!selected || !isSlashCommand(text.trim(), selected.command as `/${string}`)) {
+        setSelectedExternalPromptCandidateId(undefined);
+      }
+    }
+    if (selectedNonExternalSlashCommand
+      && !isSlashCommand(text.trim(), selectedNonExternalSlashCommand as `/${string}`)) {
+      setSelectedNonExternalSlashCommand(undefined);
+    }
 
     const localSlashCommandsEnabled = !isAcpInputSession;
     const trimmed = text.trim();
@@ -2295,7 +2401,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
         selectedIndex: 0,
       });
     }
-  }, [contexts, derivedState, dispatchInput, inputState.isActive, isAcpInputSession, prunePendingLargePastes, removeContext, resolveTypedMcpPromptCommand, setQueuedInput, slashCommandState.isActive, slashCommandState.kind]);
+  }, [contexts, derivedState, dispatchInput, externalPromptCommands, inputState.isActive, isAcpInputSession, prunePendingLargePastes, removeContext, resolveTypedMcpPromptCommand, selectedExternalPromptCandidateId, selectedNonExternalSlashCommand, setQueuedInput, slashCommandState.isActive, slashCommandState.kind]);
 
   const submitBtwFromInput = useCallback(async () => {
     if (!derivedState) return;
@@ -2893,6 +2999,116 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     t,
   ]);
 
+  const submitExternalPromptCommandFromInput = useCallback(async (
+    message: string,
+    originalMessage: string,
+    originalPendingLargePastes: PendingLargePasteMap,
+  ): Promise<boolean> => {
+    const reservedCommands = new Set(
+      getSlashPickerItems()
+        .filter(item => item.kind !== 'externalCommand')
+        .map(item => (
+          item.kind === 'mode' ? `/${item.id}` : item.command
+        ).toLowerCase()),
+    );
+    const resolution = resolveExternalPromptCommandInvocation(
+      message,
+      externalPromptCommands,
+      reservedCommands,
+      selectedExternalPromptCandidateId,
+    );
+    if (resolution.state === 'none') {
+      return false;
+    }
+    if (resolution.state === 'conflict') {
+      if (selectedNonExternalSlashCommand === resolution.command) {
+        return false;
+      }
+      setSlashCommandState({
+        isActive: true,
+        kind: 'all',
+        query: resolution.command.slice(1),
+        selectedIndex: 0,
+      });
+      notificationService.warning(t('chatInput.selectHint'));
+      return true;
+    }
+    if (resolution.state === 'unavailable') {
+      notificationService.warning(
+        resolution.item.unavailableReason || t('chatInput.noMatchingCommand'),
+      );
+      return true;
+    }
+
+    try {
+      if (resolution.item.conflictKey) {
+        await externalSourcesAPI.setConflictChoice(
+          workspacePath || undefined,
+          resolution.item.conflictKey,
+          resolution.item.candidateId,
+          resolution.item.expectedPreferenceRevision ?? 0,
+        );
+      }
+      const expanded = await externalSourcesAPI.expandPromptCommand(
+        workspacePath || undefined,
+        resolution.item.command.slice(1),
+        resolution.arguments,
+        resolution.item.candidateId,
+        resolution.item.contentVersion,
+      );
+      const expandedCharCount = getCharacterCount(expanded.content);
+      if (expandedCharCount > CHAT_INPUT_CONFIG.largePaste.maxMessageChars) {
+        notificationService.error(
+          t('input.messageTooLarge', {
+            max: CHAT_INPUT_CONFIG.largePaste.maxMessageChars,
+            count: expandedCharCount,
+          }),
+          { duration: 4000 },
+        );
+        return true;
+      }
+      if (!(await confirmPromptCacheGuardIfNeeded())) {
+        return true;
+      }
+
+      if (effectiveTargetSessionId) {
+        addToHistory(effectiveTargetSessionId, message);
+      }
+      setHistoryIndex(-1);
+      setSavedDraft('');
+      dispatchInput({ type: 'CLEAR_VALUE' });
+      clearPendingLargePastes();
+      setQueuedInput(null);
+      setSelectedExternalPromptCandidateId(undefined);
+      setSelectedNonExternalSlashCommand(undefined);
+      await sendMessage(expanded.content, { displayMessage: originalMessage });
+      dispatchInput({ type: 'DEACTIVATE' });
+    } catch (error) {
+      log.warn('External prompt command invocation failed', {
+        code: error instanceof ExternalSourceApiError ? error.code : 'internal',
+      });
+      replacePendingLargePastes(originalPendingLargePastes);
+      dispatchInput({ type: 'ACTIVATE' });
+      dispatchInput({ type: 'SET_VALUE', payload: originalMessage });
+      if (error instanceof ExternalSourceApiError
+        && (error.code === 'stale_revision'
+          || error.code === 'conflict'
+          || error.code === 'not_found')) {
+        setSelectedExternalPromptCandidateId(undefined);
+        void externalSourcesAPI.getSnapshot(workspacePath || undefined, true)
+          .then(snapshot => setExternalPromptCommands(toSlashExternalPromptCommands(snapshot)))
+          .catch(refreshError => log.warn('Failed to refresh external prompt commands', {
+            code: refreshError instanceof ExternalSourceApiError ? refreshError.code : 'internal',
+          }));
+      }
+      notificationService.error(
+        error instanceof ExternalSourceApiError ? error.detail : t('error.unknown'),
+        { duration: 5000 },
+      );
+    }
+    return true;
+  }, [addToHistory, clearPendingLargePastes, confirmPromptCacheGuardIfNeeded, dispatchInput, effectiveTargetSessionId, externalPromptCommands, getSlashPickerItems, replacePendingLargePastes, selectedExternalPromptCandidateId, selectedNonExternalSlashCommand, sendMessage, setQueuedInput, t, workspacePath]);
+
   const handleCancelCurrentTask = useCallback(async () => {
     if (effectiveTargetSessionId) {
       await FlowChatManager.getInstance().cancelSessionTask(effectiveTargetSessionId);
@@ -2933,6 +3149,14 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     const message = expandComposerSpecialTokens(originalMessage);
     const messageCharCount = getCharacterCount(message);
     const localSlashCommandsEnabled = !isAcpInputSession;
+
+    if (localSlashCommandsEnabled && await submitExternalPromptCommandFromInput(
+      message,
+      originalMessage,
+      originalPendingLargePastes,
+    )) {
+      return;
+    }
 
     if (localSlashCommandsEnabled && isSlashCommand(message, '/btw')) {
       // When idle, /btw can be sent via the normal send button.
@@ -3074,6 +3298,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     confirmPromptCacheGuardIfNeeded,
     t,
     resolveTypedMcpPromptCommand,
+    submitExternalPromptCommandFromInput,
   ]);
   
   const getFilteredIncrementalModes = useCallback(() => {
@@ -3162,6 +3387,8 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   
   const selectSlashCommandMode = useCallback((modeId: string) => {
     requestModeChange(modeId);
+    setSelectedExternalPromptCandidateId(undefined);
+    setSelectedNonExternalSlashCommand(undefined);
 
     if (getInlineSlashCommandPickerQuery(inlineTriggerState) !== null) {
       const controller = richTextInputRef.current as (HTMLDivElement & {
@@ -3187,6 +3414,8 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     if (next === null) {
       return;
     }
+    setSelectedExternalPromptCandidateId(undefined);
+    setSelectedNonExternalSlashCommand(next.trim().split(/\s+/, 1)[0]?.toLowerCase());
 
     if (getInlineSlashCommandPickerQuery(inlineTriggerState) !== null) {
       const controller = richTextInputRef.current as (HTMLDivElement & {
@@ -3207,7 +3436,31 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     window.setTimeout(() => richTextInputRef.current?.focus(), 0);
   }, [dispatchInput, inlineTriggerState, inputState.value, isBtwSession, setQueuedInput]);
 
+  const selectSlashExternalPromptCommand = useCallback((item: SlashExternalPromptCommandItem) => {
+    if (!item.available) {
+      notificationService.warning(item.unavailableReason || t('chatInput.noMatchingCommand'));
+      return;
+    }
+    setSelectedExternalPromptCandidateId(item.candidateId);
+    setSelectedNonExternalSlashCommand(undefined);
+    const replacement = `${item.command} `;
+    if (getInlineSlashCommandPickerQuery(inlineTriggerState) !== null) {
+      const controller = richTextInputRef.current as (HTMLDivElement & {
+        replaceActiveInlineTrigger?: (replacementText: string) => void;
+      }) | null;
+      controller?.replaceActiveInlineTrigger?.(item.command);
+    } else {
+      dispatchInput({ type: 'SET_VALUE', payload: replacement });
+      inputValueRef.current = replacement;
+    }
+    setQueuedInput(null);
+    setSlashCommandState({ isActive: false, kind: 'modes', query: '', selectedIndex: 0 });
+    window.setTimeout(() => richTextInputRef.current?.focus(), 0);
+  }, [dispatchInput, inlineTriggerState, setQueuedInput, t]);
+
   const selectSlashPromptCommand = useCallback((item: SlashMcpPromptItem) => {
+    setSelectedExternalPromptCandidateId(undefined);
+    setSelectedNonExternalSlashCommand(item.command.toLowerCase());
     if (getInlineSlashCommandPickerQuery(inlineTriggerState) !== null) {
       const controller = richTextInputRef.current as (HTMLDivElement & {
         replaceActiveInlineTrigger?: (replacementText: string) => void;
@@ -3228,6 +3481,8 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   }, [dispatchInput, inlineTriggerState, setQueuedInput]);
 
   const selectSlashAcpCommand = useCallback((item: SlashAcpCommandItem) => {
+    setSelectedExternalPromptCandidateId(undefined);
+    setSelectedNonExternalSlashCommand(item.command.toLowerCase());
     if (getInlineSlashCommandPickerQuery(inlineTriggerState) !== null) {
       const controller = richTextInputRef.current as (HTMLDivElement & {
         replaceActiveInlineTrigger?: (replacementText: string) => void;
@@ -3252,6 +3507,8 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   }, []);
 
   const selectSlashSkill = useCallback((item: SlashSkillItem) => {
+    setSelectedExternalPromptCandidateId(undefined);
+    setSelectedNonExternalSlashCommand(item.command.toLowerCase());
     const replaceInlineTrigger = getRichTextInlineTriggerController()?.replaceActiveInlineTrigger;
 
     if (inlineTriggerState.isActive) {
@@ -3434,6 +3691,8 @@ export const ChatInput: React.FC<ChatInputProps> = ({
               const item = items[slashCommandState.selectedIndex] as SlashPickerItem;
               if (item.kind === 'mode') {
                 selectSlashCommandMode(item.id);
+              } else if (item.kind === 'externalCommand') {
+                selectSlashExternalPromptCommand(item);
               } else if (item.kind === 'mcpPrompt') {
                 selectSlashPromptCommand(item);
               } else if (item.kind === 'acpCommand') {
@@ -3471,6 +3730,8 @@ export const ChatInput: React.FC<ChatInputProps> = ({
               const item = items[slashCommandState.selectedIndex] as SlashPickerItem;
               if (item.kind === 'mode') {
                 selectSlashCommandMode(item.id);
+              } else if (item.kind === 'externalCommand') {
+                selectSlashExternalPromptCommand(item);
               } else if (item.kind === 'mcpPrompt') {
                 selectSlashPromptCommand(item);
               } else if (item.kind === 'acpCommand') {
@@ -3604,7 +3865,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       e.preventDefault();
       void handleCancelCurrentTask();
     }
-  }, [handleSendOrCancel, submitBtwFromInput, submitGoalFromInput, derivedState, dispatchInput, handleCancelCurrentTask, slashCommandState, getFilteredIncrementalModes, getActiveSlashPickerItems, selectSlashCommandMode, selectSlashCommandAction, selectSlashPromptCommand, selectSlashAcpCommand, selectSlashSkill, canSwitchModes, getRichTextInlineTriggerController, historyIndex, inputHistory, savedDraft, inputState.value, currentSessionId, isBtwSession, showTargetSwitcher, setInputTarget, removeContext, t]);
+  }, [handleSendOrCancel, submitBtwFromInput, submitGoalFromInput, derivedState, dispatchInput, handleCancelCurrentTask, slashCommandState, getFilteredIncrementalModes, getActiveSlashPickerItems, selectSlashCommandMode, selectSlashCommandAction, selectSlashExternalPromptCommand, selectSlashPromptCommand, selectSlashAcpCommand, selectSlashSkill, canSwitchModes, getRichTextInlineTriggerController, historyIndex, inputHistory, savedDraft, inputState.value, currentSessionId, isBtwSession, showTargetSwitcher, setInputTarget, removeContext, t]);
 
   const handleImeCompositionStart = useCallback(() => {
     isImeComposingRef.current = true;
@@ -4016,9 +4277,11 @@ export const ChatInput: React.FC<ChatInputProps> = ({
                         <span className="bitfun-chat-input__slash-command-hint">{t('chatInput.selectHint')}</span>
                       </div>
                       <div className="bitfun-chat-input__slash-command-list">
-                        {items.length === 0 && (mcpPromptCommandsLoading || resolvedModeSkillsLoading) ? (
+                        {items.length === 0 && (externalPromptCommandsLoading || mcpPromptCommandsLoading || resolvedModeSkillsLoading) ? (
                           <div className="bitfun-chat-input__slash-command-empty">
-                            {resolvedModeSkillsLoading && !mcpPromptCommandsLoading
+                            {externalPromptCommandsLoading
+                              ? t('chatInput.externalCommandsLoading')
+                              : resolvedModeSkillsLoading && !mcpPromptCommandsLoading
                               ? t('chatInput.boostSkillsLoading')
                               : t('chatInput.loadingMcpPrompts')}
                           </div>
@@ -4061,6 +4324,8 @@ export const ChatInput: React.FC<ChatInputProps> = ({
                                       selectSlashCommandMode(item.id);
                                     } else if (item.kind === 'skill') {
                                       selectSlashSkill(item);
+                                    } else if (item.kind === 'externalCommand') {
+                                      selectSlashExternalPromptCommand(item);
                                     } else if (item.kind === 'mcpPrompt') {
                                       selectSlashPromptCommand(item);
                                     } else if (item.kind === 'acpCommand') {
@@ -4128,6 +4393,8 @@ export const ChatInput: React.FC<ChatInputProps> = ({
                                     selectSlashCommandMode(item.id);
                                   } else if (item.kind === 'skill') {
                                     selectSlashSkill(item);
+                                  } else if (item.kind === 'externalCommand') {
+                                    selectSlashExternalPromptCommand(item);
                                   } else if (item.kind === 'mcpPrompt') {
                                     selectSlashPromptCommand(item);
                                   } else if (item.kind === 'acpCommand') {

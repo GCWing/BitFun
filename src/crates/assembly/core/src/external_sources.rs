@@ -48,6 +48,10 @@ use crate::external_tools::{
     TOOL_CONFLICT_RESELECTION_REQUIRED, UNRESOLVED_TOOL_CONFLICT_CHOICE,
 };
 use crate::service::config::{subscribe_config_updates, ConfigUpdateEvent};
+use bitfun_claude_code_adapter::{
+    ClaudeCodeCommandProvider, ClaudeCodeMcpProvider, ClaudeCodeSubagentProvider,
+};
+use bitfun_codex_adapter::{CodexMcpProvider, CodexSubagentProvider};
 use bitfun_external_sources::{
     DeferredDiscovery, ExternalMcpDiscoveryResult, ExternalSourceControlPlane,
     ExternalSourceCoordinator, ExternalSourceDiscoveryResult, ExternalSubagentDiscoveryResult,
@@ -84,6 +88,8 @@ const PROVIDER_DISCOVERY_TIMEOUT: std::time::Duration = std::time::Duration::fro
 const EXTERNAL_SOURCE_PREFERENCES_FILE: &str = "external-sources.json";
 const SUBAGENT_CONFLICT_RESELECTION_REQUIRED: &str = "__bitfun_reselection_required__";
 const OPENCODE_ECOSYSTEM_ID: &str = "opencode";
+const CLAUDE_CODE_ECOSYSTEM_ID: &str = "claude-code";
+const CODEX_ECOSYSTEM_ID: &str = "codex";
 pub const EXTERNAL_CAPABILITY_COMMAND: &str = "command";
 pub const EXTERNAL_CAPABILITY_TOOL: &str = "tool";
 pub const EXTERNAL_CAPABILITY_SUBAGENT: &str = "subagent";
@@ -177,42 +183,101 @@ impl ExternalEcosystemRegistration {
 }
 
 fn default_external_integration_registry() -> Vec<ExternalEcosystemRegistration> {
-    vec![ExternalEcosystemRegistration {
-        descriptor: ExternalIntegrationEcosystemDescriptor {
-            ecosystem_id: EcosystemId::new(OPENCODE_ECOSYSTEM_ID)
-                .expect("OpenCode ecosystem id is valid"),
-            display_name: "OpenCode".to_string(),
-            adapter_revision: "1".to_string(),
-            capabilities: vec![
-                external_capability_descriptor(
-                    EXTERNAL_CAPABILITY_COMMAND,
-                    ExternalIntegrationAccess::Auto,
-                    ExternalIntegrationAccess::Auto,
-                ),
-                external_capability_descriptor(
-                    EXTERNAL_CAPABILITY_TOOL,
-                    ExternalIntegrationAccess::AskBeforeUse,
-                    ExternalIntegrationAccess::AskBeforeUse,
-                ),
-                external_capability_descriptor(
-                    EXTERNAL_CAPABILITY_SUBAGENT,
-                    ExternalIntegrationAccess::AskBeforeUse,
-                    ExternalIntegrationAccess::AskBeforeUse,
-                ),
-                external_capability_descriptor(
-                    EXTERNAL_CAPABILITY_MCP,
-                    ExternalIntegrationAccess::AskBeforeUse,
-                    ExternalIntegrationAccess::AskBeforeUse,
-                ),
-            ],
+    vec![
+        ExternalEcosystemRegistration {
+            descriptor: ExternalIntegrationEcosystemDescriptor {
+                ecosystem_id: EcosystemId::new(OPENCODE_ECOSYSTEM_ID)
+                    .expect("OpenCode ecosystem id is valid"),
+                display_name: "OpenCode".to_string(),
+                adapter_revision: "1".to_string(),
+                capabilities: vec![
+                    external_capability_descriptor(
+                        EXTERNAL_CAPABILITY_COMMAND,
+                        ExternalIntegrationAccess::Auto,
+                        ExternalIntegrationAccess::Auto,
+                    ),
+                    external_capability_descriptor(
+                        EXTERNAL_CAPABILITY_TOOL,
+                        ExternalIntegrationAccess::AskBeforeUse,
+                        ExternalIntegrationAccess::AskBeforeUse,
+                    ),
+                    external_capability_descriptor(
+                        EXTERNAL_CAPABILITY_SUBAGENT,
+                        ExternalIntegrationAccess::AskBeforeUse,
+                        ExternalIntegrationAccess::AskBeforeUse,
+                    ),
+                    external_capability_descriptor(
+                        EXTERNAL_CAPABILITY_MCP,
+                        ExternalIntegrationAccess::AskBeforeUse,
+                        ExternalIntegrationAccess::AskBeforeUse,
+                    ),
+                ],
+            },
+            contract_major: EXTERNAL_ADAPTER_CONTRACT_MAJOR,
+            upstream_format_revision: "opencode-config-v1",
+            command_provider: Some(Arc::new(OpenCodeCommandProvider::default())),
+            tool_provider: Some(Arc::new(OpenCodeToolProvider::default())),
+            subagent_provider: Some(Arc::new(OpenCodeSubagentProvider::default())),
+            mcp_provider: Some(Arc::new(OpenCodeMcpProvider::default())),
         },
-        contract_major: EXTERNAL_ADAPTER_CONTRACT_MAJOR,
-        upstream_format_revision: "opencode-config-v1",
-        command_provider: Some(Arc::new(OpenCodeCommandProvider::default())),
-        tool_provider: Some(Arc::new(OpenCodeToolProvider::default())),
-        subagent_provider: Some(Arc::new(OpenCodeSubagentProvider::default())),
-        mcp_provider: Some(Arc::new(OpenCodeMcpProvider::default())),
-    }]
+        ExternalEcosystemRegistration {
+            descriptor: ExternalIntegrationEcosystemDescriptor {
+                ecosystem_id: EcosystemId::new(CLAUDE_CODE_ECOSYSTEM_ID)
+                    .expect("Claude Code ecosystem id is valid"),
+                display_name: "Claude Code".to_string(),
+                adapter_revision: "1".to_string(),
+                capabilities: vec![
+                    external_capability_descriptor(
+                        EXTERNAL_CAPABILITY_COMMAND,
+                        ExternalIntegrationAccess::Auto,
+                        ExternalIntegrationAccess::Auto,
+                    ),
+                    external_capability_descriptor(
+                        EXTERNAL_CAPABILITY_SUBAGENT,
+                        ExternalIntegrationAccess::AskBeforeUse,
+                        ExternalIntegrationAccess::AskBeforeUse,
+                    ),
+                    external_capability_descriptor(
+                        EXTERNAL_CAPABILITY_MCP,
+                        ExternalIntegrationAccess::AskBeforeUse,
+                        ExternalIntegrationAccess::AskBeforeUse,
+                    ),
+                ],
+            },
+            contract_major: EXTERNAL_ADAPTER_CONTRACT_MAJOR,
+            upstream_format_revision: "claude-code-config-v1",
+            command_provider: Some(Arc::new(ClaudeCodeCommandProvider::default())),
+            tool_provider: None,
+            subagent_provider: Some(Arc::new(ClaudeCodeSubagentProvider::default())),
+            mcp_provider: Some(Arc::new(ClaudeCodeMcpProvider::default())),
+        },
+        ExternalEcosystemRegistration {
+            descriptor: ExternalIntegrationEcosystemDescriptor {
+                ecosystem_id: EcosystemId::new(CODEX_ECOSYSTEM_ID)
+                    .expect("Codex ecosystem id is valid"),
+                display_name: "Codex".to_string(),
+                adapter_revision: "1".to_string(),
+                capabilities: vec![
+                    external_capability_descriptor(
+                        EXTERNAL_CAPABILITY_SUBAGENT,
+                        ExternalIntegrationAccess::AskBeforeUse,
+                        ExternalIntegrationAccess::AskBeforeUse,
+                    ),
+                    external_capability_descriptor(
+                        EXTERNAL_CAPABILITY_MCP,
+                        ExternalIntegrationAccess::AskBeforeUse,
+                        ExternalIntegrationAccess::AskBeforeUse,
+                    ),
+                ],
+            },
+            contract_major: EXTERNAL_ADAPTER_CONTRACT_MAJOR,
+            upstream_format_revision: "codex-config-v1",
+            command_provider: None,
+            tool_provider: None,
+            subagent_provider: Some(Arc::new(CodexSubagentProvider::default())),
+            mcp_provider: Some(Arc::new(CodexMcpProvider::default())),
+        },
+    ]
 }
 
 fn default_external_integration_ecosystems() -> Vec<ExternalIntegrationEcosystemDescriptor> {
@@ -5657,6 +5722,63 @@ mod tests {
                 integration_access(&policy, OPENCODE_ECOSYSTEM_ID, capability_id),
                 recommended
             );
+        }
+    }
+
+    #[test]
+    fn default_registry_exposes_only_each_ecosystems_supported_asset_kinds() {
+        let registrations = default_external_integration_registry();
+        assert_eq!(registrations.len(), 3);
+
+        let expected = BTreeMap::from([
+            (
+                "opencode",
+                BTreeSet::from([
+                    EXTERNAL_CAPABILITY_COMMAND,
+                    EXTERNAL_CAPABILITY_TOOL,
+                    EXTERNAL_CAPABILITY_SUBAGENT,
+                    EXTERNAL_CAPABILITY_MCP,
+                ]),
+            ),
+            (
+                "claude-code",
+                BTreeSet::from([
+                    EXTERNAL_CAPABILITY_COMMAND,
+                    EXTERNAL_CAPABILITY_SUBAGENT,
+                    EXTERNAL_CAPABILITY_MCP,
+                ]),
+            ),
+            (
+                "codex",
+                BTreeSet::from([EXTERNAL_CAPABILITY_SUBAGENT, EXTERNAL_CAPABILITY_MCP]),
+            ),
+        ]);
+
+        for registration in registrations {
+            registration
+                .validate()
+                .expect("built-in registration is valid");
+            let ecosystem = registration.descriptor.ecosystem_id.as_str();
+            let capabilities = registration
+                .descriptor
+                .capabilities
+                .iter()
+                .map(|capability| capability.capability_id.as_str())
+                .collect::<BTreeSet<_>>();
+            assert_eq!(capabilities, expected[ecosystem]);
+            for capability in &registration.descriptor.capabilities {
+                let expected_access = if ecosystem == "opencode"
+                    && capability.capability_id.as_str() == EXTERNAL_CAPABILITY_COMMAND
+                    || ecosystem == "claude-code"
+                        && capability.capability_id.as_str() == EXTERNAL_CAPABILITY_COMMAND
+                {
+                    ExternalIntegrationAccess::Auto
+                } else {
+                    ExternalIntegrationAccess::AskBeforeUse
+                };
+                assert_eq!(capability.recommended_access, expected_access);
+                assert_eq!(capability.safety_ceiling, expected_access);
+            }
         }
     }
 

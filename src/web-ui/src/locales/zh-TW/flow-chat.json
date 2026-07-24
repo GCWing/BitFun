@@ -743,7 +743,8 @@
     "usageFailed": "用量報告產生失敗",
     "mcpPromptMissingArgs": "此 MCP 提示詞需要參數：{{args}}",
     "mcpPromptFailed": "MCP 提示詞執行失敗",
-    "loadingMcpPrompts": "正在載入 MCP 提示詞..."
+    "loadingMcpPrompts": "正在載入 MCP 提示詞...",
+    "externalCommandsLoading": "正在載入相容命令..."
   },
   "planner": {
     "title": "任務規劃",

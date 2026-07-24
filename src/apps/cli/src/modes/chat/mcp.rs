@@ -116,7 +116,7 @@ impl ChatMode {
                                     reason: native_choice
                                         .and_then(|candidate| candidate.unavailable_reason.clone())
                                         .unwrap_or_else(|| {
-                                            "Enable this BitFun server in its MCP configuration, then reopen /mcps"
+                                            "Enable this BitFun server in its MCP configuration, then reopen /mcp"
                                                 .to_string()
                                         }),
                                 },
@@ -474,7 +474,7 @@ impl ChatMode {
                     .await
                 }
                 McpItemAction::NativeToggle | McpItemAction::ReadOnly { .. } => {
-                    Err("The MCP action is no longer available; reopen /mcps".to_string())
+                    Err("The MCP action is no longer available; reopen /mcp".to_string())
                 }
             }
         });

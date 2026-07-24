@@ -999,7 +999,7 @@ impl StartupPage {
             ActionHandler::Skills => self.show_skill_selector(),
             ActionHandler::McpServers => {
                 return Some(StartupResult::NewSession {
-                    prompt: Some("/mcps".to_string()),
+                    prompt: Some("/mcp".to_string()),
                 });
             }
             ActionHandler::AcpHelp => {

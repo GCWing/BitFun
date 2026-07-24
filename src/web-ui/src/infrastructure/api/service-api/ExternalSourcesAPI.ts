@@ -140,6 +140,8 @@ export interface ExternalSourceCatalogSnapshot {
     lifecycle: ExternalSourceLifecycle;
   }>;
   commands: Array<{
+    /** Opaque host identity used for guarded expansion; absent on legacy hosts. */
+    candidateId?: string;
     definition: {
       id: {
         source: { providerId: string; sourceId: string };
@@ -188,6 +190,10 @@ export interface ExternalSourceCatalogSnapshot {
   }>;
   /** Frontend view of the atomic control+catalog response. Legacy hosts omit it. */
   control?: ExternalSourceControlSnapshot;
+}
+
+export interface ExpandedExternalPromptCommand {
+  content: string;
 }
 
 export type ExternalSubagentActivation =
@@ -1099,6 +1105,27 @@ export const externalSourcesAPI = {
     return (await invokeCompatibleSurfaceSnapshot({
       request: { workspacePath: normalizeOptionalWorkspacePath(workspacePath), forceRefresh },
     })).catalog;
+  },
+
+  expandPromptCommand(
+    workspacePath: string | undefined,
+    name: string,
+    argumentsText: string,
+    candidateId: string,
+    expectedContentVersion: string,
+  ) {
+    return invokeExternalSourceCommand<ExpandedExternalPromptCommand>(
+      'expand_external_prompt_command_command',
+      {
+        request: {
+          workspacePath: normalizeOptionalWorkspacePath(workspacePath),
+          name,
+          arguments: argumentsText,
+          candidateId,
+          expectedContentVersion,
+        },
+      },
+    );
   },
 
   async setSourceEnabled(
