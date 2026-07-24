@@ -297,6 +297,16 @@
   },
   "reviewTeams": {
     "members": {
+      "worker": {
+        "funName": "Review Worker",
+        "role": "Dynamic Review Worker",
+        "description": "A read-only worker whose concrete lens, question, and scope are selected for the current change instead of being fixed in the agent identity.",
+        "responsibilities": [
+          "Apply only the lens and question supplied by the owning Review agent.",
+          "Stay within the prepared target and return evidence-backed findings and exact coverage.",
+          "Do not widen permissions, modify files, or repeat the primary review."
+        ]
+      },
       "businessLogic": {
         "funName": "Logic Reviewer",
         "role": "Business Logic Reviewer",

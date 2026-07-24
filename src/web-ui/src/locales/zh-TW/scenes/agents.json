@@ -297,6 +297,16 @@
   },
   "reviewTeams": {
     "members": {
+      "worker": {
+        "funName": "動態審核員",
+        "role": "動態審核工作單元",
+        "description": "一個唯讀審核工作單元；其具體審核維度、問題與範圍會依目前變更動態決定，而不是固定在 Agent 身分中。",
+        "responsibilities": [
+          "僅執行所屬 Review Agent 指定的審核維度與問題。",
+          "嚴格限定在已準備的審核目標內，並回傳有證據支持的發現與明確涵蓋範圍。",
+          "不得擴大權限、修改檔案或重複主要審核。"
+        ]
+      },
       "businessLogic": {
         "funName": "邏輯審核員",
         "role": "業務邏輯審核員",
