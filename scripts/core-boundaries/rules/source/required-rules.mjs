@@ -4555,8 +4555,8 @@ export const requiredContentRules = [
         message: 'missing SFTP session owner path',
       },
       {
-        regex: /\bprunes_password_connection_without_vault_entry\b/,
-        message: 'missing saved credential pruning regression',
+        regex: /\bretains_legacy_password_connection_and_workspace_without_vault_entry\b/,
+        message: 'missing saved credential retention regression',
       },
     ],
   },

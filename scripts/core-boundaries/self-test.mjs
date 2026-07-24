@@ -4025,7 +4025,12 @@ export function runManifestParserSelfTest({
     },
     {
       path: 'src/crates/services/services-integrations/src/remote_ssh/manager.rs',
-      contracts: ['SSHConnectionManager', 'russh::client::connect_stream', 'SftpSession', 'prunes_password_connection_without_vault_entry'],
+      contracts: [
+        'SSHConnectionManager',
+        'russh::client::connect_stream',
+        'SftpSession',
+        'retains_legacy_password_connection_and_workspace_without_vault_entry',
+      ],
     },
     {
       path: 'src/crates/services/services-integrations/src/remote_ssh/remote_exec.rs',
