@@ -8,8 +8,8 @@ use bitfun_services_integrations::remote_ssh::{
     sanitize_remote_mirror_path_component, sanitize_ssh_connection_id_for_local_dir,
     sanitize_ssh_hostname_for_mirror, unresolved_remote_session_storage_dir,
     unresolved_remote_session_storage_key, workspace_logical_key, workspace_session_identity,
-    RemoteWorkspace, RemoteWorkspaceRegistry, SSHAuthMethod, SSHConnectionConfig, SavedAuthType,
-    SavedConnection, LOCAL_WORKSPACE_SSH_HOST,
+    ContainerAccess, ContainerWorkspaceConfig, RemoteWorkspace, RemoteWorkspaceRegistry,
+    SSHAuthMethod, SSHConnectionConfig, SavedAuthType, SavedConnection, LOCAL_WORKSPACE_SSH_HOST,
 };
 
 #[test]
@@ -35,6 +35,8 @@ fn remote_ssh_legacy_agent_auth_maps_to_default_private_key() {
         }
         SSHAuthMethod::Password { .. } => panic!("legacy agent auth must map to private key"),
     }
+    assert_eq!(config.proxy_jump, None);
+    assert_eq!(config.container, None);
 
     let saved: SavedConnection = serde_json::from_value(serde_json::json!({
         "id": "conn-1",
@@ -52,6 +54,44 @@ fn remote_ssh_legacy_agent_auth_maps_to_default_private_key() {
         SavedAuthType::PrivateKey { key_path } => assert_eq!(key_path, "~/.ssh/id_rsa"),
         SavedAuthType::Password => panic!("legacy agent auth type must map to private key"),
     }
+    assert_eq!(saved.proxy_jump, None);
+    assert_eq!(saved.container, None);
+}
+
+#[test]
+fn remote_target_contract_uses_proxy_jump_and_kebab_case_container_access() {
+    let config = SSHConnectionConfig {
+        id: "conn-1".to_string(),
+        name: "train".to_string(),
+        host: "train.internal".to_string(),
+        port: 22,
+        username: "trainer".to_string(),
+        auth: SSHAuthMethod::PrivateKey {
+            key_path: "~/.ssh/train".to_string(),
+            passphrase: None,
+        },
+        default_workspace: Some("/workspace".to_string()),
+        proxy_jump: Some("jump1,jump2".to_string()),
+        container: Some(ContainerWorkspaceConfig {
+            name: "trainer-dev".to_string(),
+            access: ContainerAccess::DockerExec,
+            local: false,
+            docker_path: "docker".to_string(),
+            shell: "/bin/bash".to_string(),
+            user: Some("trainer".to_string()),
+            interactive: true,
+        }),
+    };
+
+    let json = serde_json::to_value(&config).unwrap();
+    assert_eq!(json["proxyJump"], "jump1,jump2");
+    assert_eq!(json["container"]["access"], "docker-exec");
+    assert_eq!(json["container"]["dockerPath"], "docker");
+    let round_trip: SSHConnectionConfig = serde_json::from_value(json).unwrap();
+    assert_eq!(
+        round_trip.container.unwrap().access,
+        ContainerAccess::DockerExec
+    );
 }
 
 #[test]

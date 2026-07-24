@@ -242,6 +242,23 @@
     }
   }
 
+  &__container-fields {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    padding: 12px;
+    border: 1px solid var(--border-subtle);
+    border-radius: 8px;
+    background: var(--element-bg-subtle);
+  }
+
+  &__hint {
+    margin-top: 5px;
+    font-size: 11px;
+    line-height: 1.45;
+    color: var(--color-text-muted);
+  }
+
   &__browse-key {
     flex-shrink: 0;
     margin-right: -6px;

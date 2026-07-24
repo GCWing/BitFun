@@ -47,6 +47,7 @@ export const SSHConnectionDialog: React.FC<SSHConnectionDialogProps> = ({
 
   // Form state
   const [formData, setFormData] = useState({
+    targetType: 'ssh' as 'ssh' | 'remoteDocker' | 'localDocker' | 'containerSshd',
     name: '',
     host: '',
     port: '22',
@@ -55,6 +56,11 @@ export const SSHConnectionDialog: React.FC<SSHConnectionDialogProps> = ({
     password: '',
     keyPath: '~/.ssh/id_rsa',
     passphrase: '',
+    proxyJump: '',
+    containerName: '',
+    dockerPath: 'docker',
+    containerShell: '/bin/sh',
+    containerUser: '',
   });
 
   const [showPassword, setShowPassword] = useState(false);
@@ -132,6 +138,7 @@ export const SSHConnectionDialog: React.FC<SSHConnectionDialogProps> = ({
             port: config.port ? String(config.port) : prev.port,
             username: config.user || prev.username,
             keyPath: config.identityFile || prev.keyPath,
+            proxyJump: config.proxyJump || prev.proxyJump,
             // If identity file is set, default to privateKey auth
             authType: config.identityFile ? 'privateKey' : prev.authType,
           }));
@@ -181,12 +188,14 @@ export const SSHConnectionDialog: React.FC<SSHConnectionDialogProps> = ({
   };
 
   const handleConnect = async () => {
+    const isLocalDocker = formData.targetType === 'localDocker';
+    const usesContainer = formData.targetType !== 'ssh';
     // Validation
-    if (!formData.host.trim()) {
+    if (!isLocalDocker && !formData.host.trim()) {
       setLocalError(t('ssh.remote.hostRequired'));
       return;
     }
-    if (!formData.username.trim()) {
+    if (!isLocalDocker && !formData.username.trim()) {
       setLocalError(t('ssh.remote.usernameRequired'));
       return;
     }
@@ -195,34 +204,63 @@ export const SSHConnectionDialog: React.FC<SSHConnectionDialogProps> = ({
       setLocalError(t('ssh.remote.portInvalid'));
       return;
     }
-    if (formData.authType === 'password' && !formData.password) {
+    if (!isLocalDocker && formData.authType === 'password' && !formData.password) {
       setLocalError(t('ssh.remote.passwordRequired'));
       return;
     }
-    if (formData.authType === 'privateKey' && !formData.keyPath.trim()) {
+    if (!isLocalDocker && formData.authType === 'privateKey' && !formData.keyPath.trim()) {
       setLocalError(t('ssh.remote.keyPathRequired'));
       return;
     }
-
-    const hostInput = formData.host.trim();
-    let connectHost = hostInput;
-    try {
-      const lookup = await sshApi.getSSHConfig(hostInput);
-      const resolved = lookup.found && lookup.config?.hostname?.trim();
-      if (resolved) {
-        connectHost = resolved;
-      }
-    } catch {
-      // Use hostInput if ~/.ssh/config cannot be read
+    if (usesContainer && !formData.containerName.trim()) {
+      setLocalError(t('ssh.remote.containerRequired'));
+      return;
     }
 
+    const hostInput = isLocalDocker ? 'local-docker' : formData.host.trim();
+    let connectHost = hostInput;
+    let resolvedProxyJump = formData.proxyJump.trim();
+    if (!isLocalDocker) {
+      try {
+        const lookup = await sshApi.getSSHConfig(hostInput);
+        const resolved = lookup.found && lookup.config?.hostname?.trim();
+        if (resolved) {
+          connectHost = resolved;
+        }
+        if (lookup.found && lookup.config?.proxyJump && !resolvedProxyJump) {
+          resolvedProxyJump = lookup.config.proxyJump;
+        }
+      } catch {
+        // Use the manual values if ~/.ssh/config cannot be read.
+      }
+    }
+
+    const username = isLocalDocker
+      ? (formData.username.trim() || 'docker')
+      : formData.username.trim();
+    const containerName = formData.containerName.trim();
+    const id = isLocalDocker
+      ? `docker-local-${containerName}`
+      : `${generateConnectionId(connectHost, port, username)}${usesContainer ? `-container-${containerName}` : ''}`;
     const config: SSHConnectionConfig = {
-      id: generateConnectionId(connectHost, port, formData.username.trim()),
-      name: formData.name || `${formData.username}@${hostInput}`,
+      id,
+      name: formData.name || (isLocalDocker ? containerName : `${username}@${hostInput}`),
       host: connectHost,
       port,
-      username: formData.username.trim(),
-      auth: buildAuthMethod(),
+      username,
+      auth: isLocalDocker
+        ? { type: 'PrivateKey', keyPath: '' }
+        : buildAuthMethod(),
+      proxyJump: !isLocalDocker ? resolvedProxyJump || undefined : undefined,
+      container: usesContainer ? {
+        name: containerName,
+        access: formData.targetType === 'containerSshd' ? 'sshd' : 'docker-exec',
+        local: isLocalDocker,
+        dockerPath: formData.dockerPath.trim() || 'docker',
+        shell: formData.containerShell.trim() || '/bin/sh',
+        user: formData.containerUser.trim() || undefined,
+        interactive: true,
+      } : undefined,
     };
 
     setIsConnecting(true);
@@ -253,6 +291,9 @@ export const SSHConnectionDialog: React.FC<SSHConnectionDialogProps> = ({
             port: conn.port,
             username: conn.username,
             auth: { type: 'Password', password: '' },
+            defaultWorkspace: conn.defaultWorkspace,
+            proxyJump: conn.proxyJump,
+            container: conn.container,
           },
           { browseAfterConnect: true }
         );
@@ -278,6 +319,9 @@ export const SSHConnectionDialog: React.FC<SSHConnectionDialogProps> = ({
             port: conn.port,
             username: conn.username,
             auth,
+            defaultWorkspace: conn.defaultWorkspace,
+            proxyJump: conn.proxyJump,
+            container: conn.container,
           },
           { browseAfterConnect: true }
         );
@@ -305,6 +349,12 @@ export const SSHConnectionDialog: React.FC<SSHConnectionDialogProps> = ({
       password: '',
       keyPath,
       passphrase: '',
+      proxyJump: configHost.proxyJump || '',
+      targetType: 'ssh',
+      containerName: '',
+      dockerPath: 'docker',
+      containerShell: '/bin/sh',
+      containerUser: '',
     });
     // Config list sits above the form; scroll so the filled fields are visible.
     requestAnimationFrame(() => revealConnectionForm());
@@ -325,6 +375,9 @@ export const SSHConnectionDialog: React.FC<SSHConnectionDialogProps> = ({
         port: conn.port,
         username: resolvedUsername,
         auth,
+        defaultWorkspace: conn.defaultWorkspace,
+        proxyJump: conn.proxyJump,
+        container: conn.container,
       };
       await connect(conn.id, full, { browseAfterConnect: true });
       setCredentialsPrompt(null);
@@ -343,7 +396,15 @@ export const SSHConnectionDialog: React.FC<SSHConnectionDialogProps> = ({
   const handleEditConnection = (e: React.MouseEvent, conn: SavedConnection) => {
     e.stopPropagation();
     const keyPath = conn.authType.type === 'PrivateKey' ? conn.authType.keyPath : '~/.ssh/id_rsa';
+    const targetType = conn.container?.local
+      ? 'localDocker'
+      : conn.container?.access === 'docker-exec' || conn.container?.access === 'auto'
+        ? 'remoteDocker'
+        : conn.container?.access === 'sshd'
+          ? 'containerSshd'
+          : 'ssh';
     setFormData({
+      targetType,
       name: conn.name,
       host: conn.host,
       port: String(conn.port),
@@ -352,6 +413,11 @@ export const SSHConnectionDialog: React.FC<SSHConnectionDialogProps> = ({
       password: '',
       keyPath,
       passphrase: '',
+      proxyJump: conn.proxyJump || '',
+      containerName: conn.container?.name || '',
+      dockerPath: conn.container?.dockerPath || 'docker',
+      containerShell: conn.container?.shell || '/bin/sh',
+      containerUser: conn.container?.user || '',
     });
     requestAnimationFrame(() => revealConnectionForm());
   };
@@ -370,6 +436,14 @@ export const SSHConnectionDialog: React.FC<SSHConnectionDialogProps> = ({
     { label: t('ssh.remote.password') || 'Password', value: 'password', icon: <Lock size={14} /> },
     { label: t('ssh.remote.privateKey') || 'Private Key', value: 'privateKey', icon: <Key size={14} /> },
   ];
+  const targetOptions = [
+    { label: t('ssh.remote.targetSsh'), value: 'ssh' },
+    { label: t('ssh.remote.targetRemoteDocker'), value: 'remoteDocker' },
+    { label: t('ssh.remote.targetLocalDocker'), value: 'localDocker' },
+    { label: t('ssh.remote.targetContainerSshd'), value: 'containerSshd' },
+  ];
+  const isLocalDockerTarget = formData.targetType === 'localDocker';
+  const usesContainerTarget = formData.targetType !== 'ssh';
 
   const filteredSavedConnections = savedConnections.filter((conn) => {
     if (!savedSearch.trim()) return true;
@@ -463,7 +537,9 @@ export const SSHConnectionDialog: React.FC<SSHConnectionDialogProps> = ({
                     <div className="ssh-connection-dialog__saved-info">
                       <span className="ssh-connection-dialog__saved-name">{conn.name}</span>
                       <span className="ssh-connection-dialog__saved-detail">
-                        {conn.username}@{conn.host}:{conn.port}
+                        {conn.container?.local
+                          ? `Docker · ${conn.container.name}`
+                          : `${conn.username}@${conn.host}:${conn.port}${conn.container ? ` · ${conn.container.name}` : ''}${conn.proxyJump ? ` · ${t('ssh.remote.via')} ${conn.proxyJump}` : ''}`}
                       </span>
                     </div>
                     <div className="ssh-connection-dialog__saved-actions">
@@ -575,6 +651,20 @@ export const SSHConnectionDialog: React.FC<SSHConnectionDialogProps> = ({
               formHighlighted ? 'ssh-connection-dialog__form--highlighted' : '',
             ].filter(Boolean).join(' ')}
           >
+            <div className="ssh-connection-dialog__field">
+              <label className="ssh-connection-dialog__label">
+                {t('ssh.remote.targetType')}
+              </label>
+              <Select
+                options={targetOptions}
+                value={formData.targetType}
+                onChange={(value) => handleInputChange('targetType', String(value))}
+                size="medium"
+              />
+            </div>
+
+            {!isLocalDockerTarget && (
+              <>
             {/* Host and Port */}
             <div className="ssh-connection-dialog__row">
               <div className="ssh-connection-dialog__field ssh-connection-dialog__field--flex">
@@ -609,6 +699,74 @@ export const SSHConnectionDialog: React.FC<SSHConnectionDialogProps> = ({
                 size="medium"
               />
             </div>
+            <div className="ssh-connection-dialog__field">
+              <Input
+                label={t('ssh.remote.proxyJump')}
+                value={formData.proxyJump}
+                onChange={(e) => handleInputChange('proxyJump', e.target.value)}
+                placeholder={t('ssh.remote.proxyJumpPlaceholder')}
+                size="medium"
+              />
+              <div className="ssh-connection-dialog__hint">
+                {t('ssh.remote.proxyJumpHint')}
+              </div>
+            </div>
+              </>
+            )}
+
+            {usesContainerTarget && (
+              <div className="ssh-connection-dialog__container-fields">
+                <div className="ssh-connection-dialog__field">
+                  <Input
+                    label={t('ssh.remote.containerName')}
+                    value={formData.containerName}
+                    onChange={(e) => handleInputChange('containerName', e.target.value)}
+                    placeholder={t('ssh.remote.containerNamePlaceholder')}
+                    size="medium"
+                  />
+                </div>
+                {formData.targetType !== 'containerSshd' && (
+                  <>
+                    <div className="ssh-connection-dialog__field">
+                      <Input
+                        label={t('ssh.remote.dockerPath')}
+                        value={formData.dockerPath}
+                        onChange={(e) => handleInputChange('dockerPath', e.target.value)}
+                        placeholder="docker"
+                        size="medium"
+                      />
+                    </div>
+                    <div className="ssh-connection-dialog__row">
+                      <div className="ssh-connection-dialog__field ssh-connection-dialog__field--flex">
+                        <Input
+                          label={t('ssh.remote.containerShell')}
+                          value={formData.containerShell}
+                          onChange={(e) => handleInputChange('containerShell', e.target.value)}
+                          placeholder="/bin/sh"
+                          size="medium"
+                        />
+                      </div>
+                      <div className="ssh-connection-dialog__field ssh-connection-dialog__field--flex">
+                        <Input
+                          label={t('ssh.remote.containerUser')}
+                          value={formData.containerUser}
+                          onChange={(e) => handleInputChange('containerUser', e.target.value)}
+                          placeholder={t('ssh.remote.optional')}
+                          size="medium"
+                        />
+                      </div>
+                    </div>
+                  </>
+                )}
+                <div className="ssh-connection-dialog__hint">
+                  {formData.targetType === 'remoteDocker'
+                    ? t('ssh.remote.remoteDockerHint')
+                    : formData.targetType === 'localDocker'
+                      ? t('ssh.remote.localDockerHint')
+                      : t('ssh.remote.containerSshdHint')}
+                </div>
+              </div>
+            )}
 
             {/* Connection Name */}
             <div className="ssh-connection-dialog__field">
@@ -621,6 +779,8 @@ export const SSHConnectionDialog: React.FC<SSHConnectionDialogProps> = ({
               />
             </div>
 
+            {!isLocalDockerTarget && (
+              <>
             {/* Authentication Method */}
             <div className="ssh-connection-dialog__field">
               <label className="ssh-connection-dialog__label">
@@ -698,6 +858,8 @@ export const SSHConnectionDialog: React.FC<SSHConnectionDialogProps> = ({
                 </div>
               </>
             )}
+              </>
+            )}
           </div>
           </div>
 
@@ -715,7 +877,13 @@ export const SSHConnectionDialog: React.FC<SSHConnectionDialogProps> = ({
               variant="primary"
               size="small"
               onClick={handleConnect}
-              disabled={isConnecting || status === 'connecting' || !formData.host.trim() || !formData.username.trim()}
+              disabled={
+                isConnecting
+                || status === 'connecting'
+                || (isLocalDockerTarget
+                  ? !formData.containerName.trim()
+                  : !formData.host.trim() || !formData.username.trim())
+              }
             >
               {(isConnecting || status === 'connecting') ? (
                 <>

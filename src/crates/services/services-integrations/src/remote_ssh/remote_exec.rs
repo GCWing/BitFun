@@ -10,7 +10,11 @@ use rand::Rng;
 use russh::client::Msg;
 use russh::{Channel, ChannelMsg, Sig};
 use std::collections::{HashMap, VecDeque};
+use std::process::Stdio;
 use std::sync::{Arc, Mutex as StdMutex, OnceLock};
+use terminal_core::{spawn_pty, PtyEvent, ShellConfig, ShellType};
+use tokio::io::AsyncReadExt;
+use tokio::process::Command;
 use tokio::sync::{mpsc, Mutex, Notify};
 use tokio::time::{Duration, Instant};
 use uuid::Uuid;
@@ -642,11 +646,171 @@ impl RemoteExecProcess {
 async fn spawn_remote_process(
     request: RemoteExecCommandRequest,
 ) -> anyhow::Result<RemoteExecProcess> {
+    if let Some(spec) = request
+        .ssh_manager
+        .local_container_exec_spec(&request.connection_id, &request.command, request.tty)
+        .await?
+    {
+        return if request.tty {
+            spawn_local_container_pty_process(request, spec).await
+        } else {
+            spawn_local_container_pipe_process(request, spec).await
+        };
+    }
     if request.tty {
         spawn_remote_pty_process(request).await
     } else {
         spawn_remote_pipe_process(request).await
     }
+}
+
+async fn spawn_local_container_pipe_process(
+    request: RemoteExecCommandRequest,
+    (executable, args): (String, Vec<String>),
+) -> anyhow::Result<RemoteExecProcess> {
+    let mut child = Command::new(&executable)
+        .args(args)
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .kill_on_drop(true)
+        .spawn()
+        .with_context(|| format!("Failed to start local Docker executable '{}'", executable))?;
+    drop(child.stdin.take());
+    let stdout = child
+        .stdout
+        .take()
+        .ok_or_else(|| anyhow!("Local Docker stdout pipe is unavailable"))?;
+    let stderr = child
+        .stderr
+        .take()
+        .ok_or_else(|| anyhow!("Local Docker stderr pipe is unavailable"))?;
+    let output = Arc::new(OutputState::new(request.output_capture_tx.clone()));
+    let stdout_task = tokio::spawn(read_local_process_output(stdout, output.clone()));
+    let stderr_task = tokio::spawn(read_local_process_output(stderr, output.clone()));
+    let (command_tx, mut command_rx) = mpsc::channel::<RemoteExecProcessCommand>(8);
+    let owner_output = output.clone();
+    tokio::spawn(async move {
+        let exit_code = loop {
+            tokio::select! {
+                status = child.wait() => {
+                    break status.ok().and_then(|status| status.code());
+                }
+                command = command_rx.recv() => {
+                    match command {
+                        Some(RemoteExecProcessCommand::Control(action)) => {
+                            let _ = child.kill().await;
+                            let fallback = match action {
+                                RemoteExecControlAction::Interrupt => 130,
+                                RemoteExecControlAction::Kill => 137,
+                            };
+                            break child.wait().await.ok().and_then(|status| status.code()).or(Some(fallback));
+                        }
+                        None => {
+                            let _ = child.kill().await;
+                            break child.wait().await.ok().and_then(|status| status.code()).or(Some(137));
+                        }
+                        Some(RemoteExecProcessCommand::Write(_)) => {}
+                    }
+                }
+            }
+        };
+        let _ = stdout_task.await;
+        let _ = stderr_task.await;
+        owner_output.close(exit_code).await;
+    });
+    Ok(RemoteExecProcess {
+        output,
+        command_tx,
+        out_of_band_control_action: StdMutex::new(None),
+    })
+}
+
+async fn read_local_process_output<R>(mut reader: R, output: Arc<OutputState>)
+where
+    R: tokio::io::AsyncRead + Unpin,
+{
+    let mut buffer = vec![0u8; 16 * 1024];
+    loop {
+        match reader.read(&mut buffer).await {
+            Ok(0) | Err(_) => break,
+            Ok(read) => output.push_chunk(buffer[..read].to_vec()).await,
+        }
+    }
+}
+
+async fn spawn_local_container_pty_process(
+    request: RemoteExecCommandRequest,
+    (executable, args): (String, Vec<String>),
+) -> anyhow::Result<RemoteExecProcess> {
+    let shell_config = ShellConfig {
+        executable,
+        args,
+        env: HashMap::new(),
+        cwd: None,
+        login: false,
+    };
+    let process_id = u32::from_le_bytes(
+        Uuid::new_v4().as_bytes()[..4]
+            .try_into()
+            .expect("UUID prefix is four bytes"),
+    );
+    let spawned = spawn_pty(
+        process_id,
+        &shell_config,
+        ShellType::Custom("Docker".to_string()),
+        80,
+        24,
+    )
+    .map_err(|error| anyhow!("Failed to start local Docker PTY: {}", error))?;
+    let output = Arc::new(OutputState::new(request.output_capture_tx.clone()));
+    let (command_tx, mut command_rx) = mpsc::channel::<RemoteExecProcessCommand>(64);
+    let owner_output = output.clone();
+    let mut events = spawned.events;
+    let writer = spawned.writer;
+    let controller = spawned.controller;
+    tokio::spawn(async move {
+        let mut exit_code = None;
+        loop {
+            tokio::select! {
+                biased;
+                command = command_rx.recv() => {
+                    match command {
+                        Some(RemoteExecProcessCommand::Write(bytes)) => {
+                            if writer.write(&bytes).await.is_err() {
+                                break;
+                            }
+                        }
+                        Some(RemoteExecProcessCommand::Control(RemoteExecControlAction::Interrupt)) => {
+                            let _ = writer.write(&[0x03]).await;
+                        }
+                        Some(RemoteExecProcessCommand::Control(RemoteExecControlAction::Kill)) | None => {
+                            let _ = controller.shutdown(true).await;
+                            exit_code = Some(137);
+                            break;
+                        }
+                    }
+                }
+                event = events.recv() => {
+                    match event {
+                        Some(PtyEvent::Data(data)) => owner_output.push_chunk(data).await,
+                        Some(PtyEvent::Exit { exit_code: code }) => {
+                            exit_code = code.map(|code| code as i32);
+                            break;
+                        }
+                        None => break,
+                        Some(_) => {}
+                    }
+                }
+            }
+        }
+        owner_output.close(exit_code).await;
+    });
+    Ok(RemoteExecProcess {
+        output,
+        command_tx,
+        out_of_band_control_action: StdMutex::new(None),
+    })
 }
 
 async fn spawn_remote_pipe_process(

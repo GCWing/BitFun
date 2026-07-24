@@ -20,6 +20,8 @@ fn test_config() -> SSHConnectionConfig {
             password: "secret".to_string(),
         },
         default_workspace: Some("/repo".to_string()),
+        proxy_jump: None,
+        container: None,
     }
 }
 

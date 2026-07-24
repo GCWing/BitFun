@@ -10,6 +10,20 @@ export interface SSHConnectionConfig {
   username: string;
   auth: SSHAuthMethod;
   defaultWorkspace?: string;
+  proxyJump?: string;
+  container?: ContainerWorkspaceConfig;
+}
+
+export type ContainerAccess = 'sshd' | 'docker-exec' | 'auto';
+
+export interface ContainerWorkspaceConfig {
+  name: string;
+  access: ContainerAccess;
+  local: boolean;
+  dockerPath: string;
+  shell: string;
+  user?: string;
+  interactive: boolean;
 }
 
 export type SSHAuthMethod =
@@ -29,6 +43,8 @@ export interface SavedConnection {
   authType: SavedAuthType;
   defaultWorkspace?: string;
   lastConnected?: number;
+  proxyJump?: string;
+  container?: ContainerWorkspaceConfig;
 }
 
 export interface SSHConnectionResult {
@@ -76,6 +92,7 @@ export interface SSHConfigEntry {
   user?: string;
   identityFile?: string;
   agent?: boolean;
+  proxyJump?: string;
 }
 
 export interface SSHConfigLookupResult {

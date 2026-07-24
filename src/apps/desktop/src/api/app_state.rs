@@ -241,15 +241,11 @@ impl AppState {
         // Load persisted remote workspaces (may be multiple)
         match manager.load_remote_workspace().await {
             Ok(_) => {
-                if let Err(e) = manager
-                    .prune_remote_workspaces_without_saved_connections()
-                    .await
-                {
-                    log::warn!(
-                        "Failed to prune stale persisted remote workspaces on startup: {}",
-                        e
-                    );
-                }
+                // Do not prune restore metadata on startup. A saved connection
+                // may be temporarily unavailable because an older profile needs
+                // migration, its password vault cannot be decrypted, or its
+                // config failed to load. Explicit connection deletion already
+                // removes the corresponding workspace records.
                 let workspaces = manager.get_remote_workspaces().await;
                 if !workspaces.is_empty() {
                     log::info!("Loaded {} persisted remote workspace(s)", workspaces.len());

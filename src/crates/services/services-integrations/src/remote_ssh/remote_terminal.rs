@@ -11,7 +11,7 @@ use crate::remote_ssh::shell;
 use anyhow::Context;
 use std::collections::HashMap;
 use std::sync::Arc;
-use terminal_core::SessionSource;
+use terminal_core::{spawn_pty, PtyEvent, SessionSource, ShellConfig, ShellType};
 use tokio::io::AsyncWriteExt;
 use tokio::sync::{broadcast, mpsc, RwLock};
 use tokio::time::{timeout, Duration};
@@ -95,6 +95,41 @@ impl RemoteTerminalManager {
 
         let session_id = session_id.unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
         let name = name.unwrap_or_else(|| format!("Remote Terminal {}", &session_id[..8]));
+
+        if manager.is_local_container_connection(connection_id).await {
+            let cwd = if let Some(dir) = initial_cwd {
+                dir.to_string()
+            } else {
+                match timeout(
+                    REMOTE_PWD_PROBE_TIMEOUT,
+                    manager.execute_command(connection_id, "pwd"),
+                )
+                .await
+                {
+                    Ok(Ok((output, _, 0))) if !output.trim().is_empty() => {
+                        output.trim().to_string()
+                    }
+                    _ => "~".to_string(),
+                }
+            };
+            let spec = manager
+                .local_container_shell_spec(connection_id, (cwd != "~").then_some(cwd.as_str()))
+                .await?
+                .ok_or_else(|| anyhow::anyhow!("Local container shell is unavailable"))?;
+            drop(ssh_guard);
+            return self
+                .create_local_container_session(
+                    session_id,
+                    name,
+                    connection_id,
+                    cols,
+                    rows,
+                    cwd,
+                    source.unwrap_or_default(),
+                    spec,
+                )
+                .await;
+        }
 
         // Open PTY via manager, then extract the raw Channel
         let pty = manager
@@ -270,6 +305,110 @@ impl RemoteTerminalManager {
                 "Remote PTY owner task exited: session_id={}",
                 task_session_id
             );
+        });
+
+        Ok(CreateSessionResult { session, output_rx })
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    async fn create_local_container_session(
+        &self,
+        session_id: String,
+        name: String,
+        connection_id: &str,
+        cols: u16,
+        rows: u16,
+        cwd: String,
+        source: SessionSource,
+        (executable, args): (String, Vec<String>),
+    ) -> anyhow::Result<CreateSessionResult> {
+        let shell_config = ShellConfig {
+            executable,
+            args,
+            env: HashMap::new(),
+            cwd: None,
+            login: false,
+        };
+        let process_id = u32::from_le_bytes(
+            uuid::Uuid::new_v4().as_bytes()[..4]
+                .try_into()
+                .expect("UUID prefix is four bytes"),
+        );
+        let spawned = spawn_pty(
+            process_id,
+            &shell_config,
+            ShellType::Custom("Docker".to_string()),
+            cols,
+            rows,
+        )
+        .map_err(|error| anyhow::anyhow!("Failed to start local Docker terminal: {}", error))?;
+
+        let (output_tx, output_rx) = broadcast::channel::<Vec<u8>>(1000);
+        let (cmd_tx, mut cmd_rx) = mpsc::channel::<PtyCommand>(100);
+        let pid = Some(spawned.info.pid);
+        let mut events = spawned.events;
+        let writer = spawned.writer;
+        let controller = spawned.controller;
+        let session = RemoteTerminalSession {
+            id: session_id.clone(),
+            name,
+            connection_id: connection_id.to_string(),
+            cwd,
+            pid,
+            status: SessionStatus::Active,
+            cols,
+            rows,
+            source,
+        };
+        self.sessions
+            .write()
+            .await
+            .insert(session_id.clone(), session.clone());
+        self.handles.write().await.insert(
+            session_id.clone(),
+            ActiveHandle {
+                output_tx: output_tx.clone(),
+                cmd_tx,
+            },
+        );
+
+        let task_handles = self.handles.clone();
+        let task_sessions = self.sessions.clone();
+        tokio::spawn(async move {
+            loop {
+                tokio::select! {
+                    biased;
+                    command = cmd_rx.recv() => {
+                        match command {
+                            Some(PtyCommand::Write(data)) => {
+                                if writer.write(&data).await.is_err() {
+                                    break;
+                                }
+                            }
+                            Some(PtyCommand::Resize(cols, rows)) => {
+                                let _ = controller.resize(cols as u16, rows as u16).await;
+                            }
+                            Some(PtyCommand::Close) | None => {
+                                let _ = controller.shutdown(true).await;
+                                break;
+                            }
+                        }
+                    }
+                    event = events.recv() => {
+                        match event {
+                            Some(PtyEvent::Data(data)) => {
+                                let _ = output_tx.send(data);
+                            }
+                            Some(PtyEvent::Exit { .. }) | None => break,
+                            Some(_) => {}
+                        }
+                    }
+                }
+            }
+            task_handles.write().await.remove(&session_id);
+            if let Some(session) = task_sessions.write().await.get_mut(&session_id) {
+                session.status = SessionStatus::Closed;
+            }
         });
 
         Ok(CreateSessionResult { session, output_rx })

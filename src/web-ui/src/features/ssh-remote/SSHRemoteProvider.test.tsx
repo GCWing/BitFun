@@ -147,7 +147,69 @@ describe('SSHRemoteProvider startup restore', () => {
     expect(sshApiMock.getWorkspaceInfo).toHaveBeenCalledTimes(1);
   });
 
-  it('does not remove a disconnected remote workspace until the 180s reconnect budget elapses', async () => {
+  it('preserves jump and container targets during startup reconnect', async () => {
+    const remoteWorkspace = {
+      id: 'ws-container-1',
+      name: 'project',
+      rootPath: '/workspace/project',
+      workspaceType: WorkspaceType.SingleProject,
+      workspaceKind: WorkspaceKind.Remote,
+      languages: [] as string[],
+      openedAt: new Date().toISOString(),
+      lastAccessed: new Date().toISOString(),
+      tags: [] as string[],
+      connectionId: 'conn-container',
+      connectionName: 'training-container',
+      sshHost: 'train.internal',
+    };
+    workspaceManagerMock.getState.mockReturnValue({
+      loading: false,
+      openedWorkspaces: new Map([[remoteWorkspace.id, remoteWorkspace]]),
+      activeWorkspaceId: remoteWorkspace.id,
+    });
+    sshApiMock.listSavedConnections.mockResolvedValue([
+      {
+        id: 'conn-container',
+        name: 'training-container',
+        host: 'train.internal',
+        port: 22,
+        username: 'trainer',
+        authType: { type: 'PrivateKey', keyPath: '/tmp/train_key' },
+        proxyJump: 'jump1,jump2',
+        container: {
+          name: 'trainer-dev',
+          access: 'docker-exec',
+          local: false,
+          dockerPath: 'docker',
+          shell: '/bin/bash',
+          user: 'trainer',
+          interactive: true,
+        },
+      },
+    ]);
+    sshApiMock.connect.mockResolvedValue({
+      success: true,
+      connectionId: 'conn-container',
+    });
+
+    await renderProvider();
+
+    expect(sshApiMock.connect).toHaveBeenCalledWith(
+      expect.objectContaining({
+        proxyJump: 'jump1,jump2',
+        container: expect.objectContaining({
+          name: 'trainer-dev',
+          access: 'docker-exec',
+        }),
+      })
+    );
+    expect(sshApiMock.openWorkspace).toHaveBeenCalledWith(
+      'conn-container',
+      '/workspace/project'
+    );
+  });
+
+  it('keeps a disconnected remote workspace after the 180s reconnect budget elapses', async () => {
     vi.useFakeTimers();
 
     const remoteWorkspace = {
@@ -183,7 +245,7 @@ describe('SSHRemoteProvider startup restore', () => {
 
     await renderProvider();
 
-    // Fast connect failures must keep retrying; workspace must stay until budget ends.
+    // Fast connect failures must keep retrying without discarding restore metadata.
     await act(async () => {
       await vi.advanceTimersByTimeAsync(60_000);
     });
@@ -195,10 +257,86 @@ describe('SSHRemoteProvider startup restore', () => {
       await vi.advanceTimersByTimeAsync(120_000);
     });
 
-    expect(workspaceManagerMock.removeRemoteWorkspace).toHaveBeenCalledWith('conn-1', '/root/repos');
-    expect(sshApiMock.removeWorkspace).toHaveBeenCalledWith('conn-1', '/root/repos');
+    expect(workspaceManagerMock.removeRemoteWorkspace).not.toHaveBeenCalled();
+    expect(sshApiMock.removeWorkspace).not.toHaveBeenCalled();
     expect(notificationService.error).toHaveBeenCalledWith(
-      'Remote workspace could not reconnect within 180 seconds and was removed: /root/repos',
+      'Remote workspace could not reconnect within 180 seconds. It remains saved for retry: /root/repos',
+      { duration: 8000 }
+    );
+  });
+
+  it('keeps a password workspace when an upgraded profile has no vault entry', async () => {
+    const remoteWorkspace = {
+      id: 'ws-password-1',
+      name: 'repos',
+      rootPath: '/root/repos',
+      workspaceType: WorkspaceType.SingleProject,
+      workspaceKind: WorkspaceKind.Remote,
+      languages: [] as string[],
+      openedAt: new Date().toISOString(),
+      lastAccessed: new Date().toISOString(),
+      tags: [] as string[],
+      connectionId: 'conn-password',
+      connectionName: 'password-box',
+      sshHost: 'example.com',
+    };
+    workspaceManagerMock.getState.mockReturnValue({
+      loading: false,
+      openedWorkspaces: new Map([[remoteWorkspace.id, remoteWorkspace]]),
+      activeWorkspaceId: remoteWorkspace.id,
+    });
+    sshApiMock.listSavedConnections.mockResolvedValue([
+      {
+        id: 'conn-password',
+        name: 'password-box',
+        host: 'example.com',
+        port: 22,
+        username: 'root',
+        authType: { type: 'Password' },
+      },
+    ]);
+    sshApiMock.hasStoredPassword.mockResolvedValue(false);
+
+    await renderProvider();
+
+    expect(sshApiMock.connect).not.toHaveBeenCalled();
+    expect(workspaceManagerMock.removeRemoteWorkspace).not.toHaveBeenCalled();
+    expect(sshApiMock.removeWorkspace).not.toHaveBeenCalled();
+    expect(notificationService.warning).toHaveBeenCalledWith(
+      'Remote workspace was kept. Re-enter its SSH password to reconnect: /root/repos',
+      { duration: 8000 }
+    );
+  });
+
+  it('keeps workspace restore metadata when its saved connection is unavailable', async () => {
+    const remoteWorkspace = {
+      id: 'ws-orphaned-1',
+      name: 'repos',
+      rootPath: '/root/repos',
+      workspaceType: WorkspaceType.SingleProject,
+      workspaceKind: WorkspaceKind.Remote,
+      languages: [] as string[],
+      openedAt: new Date().toISOString(),
+      lastAccessed: new Date().toISOString(),
+      tags: [] as string[],
+      connectionId: 'legacy-connection',
+      connectionName: 'legacy-box',
+      sshHost: 'example.com',
+    };
+    workspaceManagerMock.getState.mockReturnValue({
+      loading: false,
+      openedWorkspaces: new Map([[remoteWorkspace.id, remoteWorkspace]]),
+      activeWorkspaceId: remoteWorkspace.id,
+    });
+    sshApiMock.listSavedConnections.mockResolvedValue([]);
+
+    await renderProvider();
+
+    expect(sshApiMock.connect).not.toHaveBeenCalled();
+    expect(workspaceManagerMock.removeRemoteWorkspace).not.toHaveBeenCalled();
+    expect(sshApiMock.removeWorkspace).not.toHaveBeenCalled();
+    expect(notificationService.warning).toHaveBeenCalledWith(
+      'Remote workspace was kept, but its saved SSH connection is unavailable: /root/repos',
       { duration: 8000 }
     );
   });

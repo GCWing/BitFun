@@ -214,18 +214,9 @@ export const SSHRemoteProvider: React.FC<SSHRemoteProviderProps> = ({ children }
 
         notificationService.error(
           pathList
-            ? `Remote workspace connection timed out after ${RECONNECT_TIMEOUT_SECONDS} seconds and was removed: ${pathList}`
-            : `Remote workspace connection timed out after ${RECONNECT_TIMEOUT_SECONDS} seconds.`,
+            ? `Remote workspace connection timed out after ${RECONNECT_TIMEOUT_SECONDS} seconds. The saved workspace was kept for retry: ${pathList}`
+            : `Remote workspace connection timed out after ${RECONNECT_TIMEOUT_SECONDS} seconds. The saved workspace was kept for retry.`,
           { duration: 8000 }
-        );
-
-        void Promise.allSettled(
-          openedRemoteWorkspaces.map(workspace =>
-            Promise.allSettled([
-              workspaceManager.removeRemoteWorkspace(workspace.connectionId, workspace.remotePath),
-              sshApi.removeWorkspace(workspace.connectionId, workspace.remotePath),
-            ])
-          )
         );
       }, REMOTE_WORKSPACE_RECONNECT_TIMEOUT_MS);
 
@@ -235,48 +226,29 @@ export const SSHRemoteProvider: React.FC<SSHRemoteProviderProps> = ({ children }
     setWorkspaceStatuses(prev => ({ ...prev, [connId]: st }));
   }, []);
 
-  const clearWorkspaceStatus = useCallback((connId: string) => {
-    const existingTimeout = workspaceStatusTimeouts.current.get(connId);
-    if (existingTimeout !== undefined) {
-      window.clearTimeout(existingTimeout);
-      workspaceStatusTimeouts.current.delete(connId);
-    }
-    setWorkspaceStatuses(prev => {
-      if (!(connId in prev)) return prev;
-      const next = { ...prev };
-      delete next[connId];
-      return next;
-    });
-  }, []);
-
-  const forgetRemoteWorkspace = useCallback(async (workspace: RemoteWorkspace) => {
-    if (isPeerDeviceModeActive()) {
-      // Removal invokes route to the peer while controlling it; the peer owns
-      // its remote workspaces, so the controller must never delete them.
-      log.info('Skipping remote workspace removal while peer device mode is active', {
-        connectionId: workspace.connectionId,
-        remotePath: workspace.remotePath,
-      });
-      return;
-    }
-    log.info('Forgetting remote workspace restore entry', {
-      connectionId: workspace.connectionId,
-      remotePath: workspace.remotePath,
-    });
-    clearWorkspaceStatus(workspace.connectionId);
-    await Promise.allSettled([
-      workspaceManager.removeRemoteWorkspace(workspace.connectionId, workspace.remotePath),
-      sshApi.removeWorkspace(workspace.connectionId, workspace.remotePath),
-    ]);
-  }, [clearWorkspaceStatus]);
-
   const reportRemoteWorkspaceReconnectFailure = useCallback((workspace: RemoteWorkspace) => {
     if (isPeerDeviceModeActive()) {
       return;
     }
     const path = normalizeRemoteWorkspacePath(workspace.remotePath);
     notificationService.error(
-      `Remote workspace could not reconnect within ${RECONNECT_TIMEOUT_SECONDS} seconds and was removed: ${path}`,
+      `Remote workspace could not reconnect within ${RECONNECT_TIMEOUT_SECONDS} seconds. It remains saved for retry: ${path}`,
+      { duration: 8000 }
+    );
+  }, []);
+
+  const reportRemoteWorkspaceRestoreDeferred = useCallback((
+    workspace: RemoteWorkspace,
+    reason: 'missing-connection' | 'missing-password'
+  ) => {
+    if (isPeerDeviceModeActive()) {
+      return;
+    }
+    const path = normalizeRemoteWorkspacePath(workspace.remotePath);
+    notificationService.warning(
+      reason === 'missing-password'
+        ? `Remote workspace was kept. Re-enter its SSH password to reconnect: ${path}`
+        : `Remote workspace was kept, but its saved SSH connection is unavailable: ${path}`,
       { duration: 8000 }
     );
   }, []);
@@ -327,6 +299,9 @@ export const SSHRemoteProvider: React.FC<SSHRemoteProviderProps> = ({ children }
       port: savedConn.port,
       username: savedConn.username,
       auth: authMethod,
+      defaultWorkspace: savedConn.defaultWorkspace,
+      proxyJump: savedConn.proxyJump,
+      container: savedConn.container,
     };
 
     return reconnectUntilDeadline({
@@ -561,19 +536,21 @@ export const SSHRemoteProvider: React.FC<SSHRemoteProviderProps> = ({ children }
           }
 
           if (missingSavedConnections.has(workspace.connectionId)) {
-            log.info('Skipping remote workspace restore because its saved connection is gone', {
+            log.info('Deferring remote workspace restore because its saved connection is unavailable', {
               connectionId: workspace.connectionId,
               remotePath: workspace.remotePath,
             });
-            await forgetRemoteWorkspace(workspace);
+            setWorkspaceStatus(workspace.connectionId, 'error');
+            reportRemoteWorkspaceRestoreDeferred(workspace, 'missing-connection');
             return { ok: false as const };
           }
 
           if (skipPasswordAutoReconnect.has(workspace.connectionId)) {
-            log.info('Skipping auto-reconnect: password auth but no stored password', {
+            log.info('Deferring auto-reconnect: password auth but no stored password', {
               connectionId: workspace.connectionId,
             });
-            await forgetRemoteWorkspace(workspace);
+            setWorkspaceStatus(workspace.connectionId, 'error');
+            reportRemoteWorkspaceRestoreDeferred(workspace, 'missing-password');
             return { ok: false as const };
           }
 
@@ -615,8 +592,8 @@ export const SSHRemoteProvider: React.FC<SSHRemoteProviderProps> = ({ children }
             connectionId: workspace.connectionId,
             auth: savedConn?.authType.type,
           });
+          setWorkspaceStatus(workspace.connectionId, 'error');
           reportRemoteWorkspaceReconnectFailure(workspace);
-          await forgetRemoteWorkspace(workspace);
           return { ok: false as const };
         })
       );
@@ -636,8 +613,8 @@ export const SSHRemoteProvider: React.FC<SSHRemoteProviderProps> = ({ children }
       log.error('checkRemoteWorkspace failed', e);
     }
   }, [
-    forgetRemoteWorkspace,
     reportRemoteWorkspaceReconnectFailure,
+    reportRemoteWorkspaceRestoreDeferred,
     setWorkspaceStatus,
     tryReconnectWithRetry,
   ]);

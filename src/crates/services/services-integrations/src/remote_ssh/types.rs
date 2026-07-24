@@ -45,6 +45,16 @@ pub struct SSHConnectionConfig {
     /// Default remote working directory
     #[serde(rename = "defaultWorkspace")]
     pub default_workspace: Option<String>,
+    /// OpenSSH-compatible comma-separated jump host chain.
+    ///
+    /// Each entry may be an alias from `~/.ssh/config` or
+    /// `[user@]host[:port]`. Jump authentication is resolved from the matching
+    /// SSH config entry, so every hop may use a different user and identity.
+    #[serde(default)]
+    pub proxy_jump: Option<String>,
+    /// Optional Docker container that becomes the effective workspace target.
+    #[serde(default)]
+    pub container: Option<ContainerWorkspaceConfig>,
 }
 
 impl SSHConnectionConfig {
@@ -57,7 +67,73 @@ impl SSHConnectionConfig {
             && self.port == other.port
             && self.username == other.username
             && std::mem::discriminant(&self.auth) == std::mem::discriminant(&other.auth)
+            && self.proxy_jump == other.proxy_jump
+            && self.container == other.container
     }
+
+    pub fn uses_local_docker(&self) -> bool {
+        self.container
+            .as_ref()
+            .is_some_and(|container| container.local)
+    }
+
+    pub fn uses_docker_exec(&self) -> bool {
+        self.container.as_ref().is_some_and(|container| {
+            matches!(
+                container.access,
+                ContainerAccess::DockerExec | ContainerAccess::Auto
+            )
+        })
+    }
+}
+
+fn default_docker_path() -> String {
+    "docker".to_string()
+}
+
+fn default_container_shell() -> String {
+    "/bin/sh".to_string()
+}
+
+fn default_true() -> bool {
+    true
+}
+
+/// How BitFun enters a configured container workspace.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "kebab-case")]
+pub enum ContainerAccess {
+    /// The top-level SSH host/port/user fields point at sshd in the container.
+    Sshd,
+    /// Execute every workspace operation through `docker exec`.
+    DockerExec,
+    /// Prefer the configured container target. P0 currently resolves this to
+    /// `docker exec`; the serialized value leaves room for sshd probing later.
+    Auto,
+}
+
+/// Docker container workspace configuration.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct ContainerWorkspaceConfig {
+    /// Container name or ID.
+    pub name: String,
+    pub access: ContainerAccess,
+    /// Run Docker on the local BitFun machine instead of an SSH host.
+    #[serde(default)]
+    pub local: bool,
+    /// Docker CLI path on the machine that owns the container.
+    #[serde(default = "default_docker_path")]
+    pub docker_path: String,
+    /// Shell inside the container.
+    #[serde(default = "default_container_shell")]
+    pub shell: String,
+    /// Optional container user passed to `docker exec --user`.
+    #[serde(default)]
+    pub user: Option<String>,
+    /// Keep stdin open with `docker exec -i`.
+    #[serde(default = "default_true")]
+    pub interactive: bool,
 }
 
 /// SSH authentication method
@@ -138,6 +214,10 @@ pub struct SavedConnection {
     pub default_workspace: Option<String>,
     #[serde(rename = "lastConnected")]
     pub last_connected: Option<u64>,
+    #[serde(default)]
+    pub proxy_jump: Option<String>,
+    #[serde(default)]
+    pub container: Option<ContainerWorkspaceConfig>,
 }
 
 /// Saved auth type (excludes sensitive credentials; password ciphertext is in `ssh_password_vault.json`)
@@ -317,6 +397,9 @@ pub struct SSHConfigEntry {
     pub identity_file: Option<String>,
     /// Whether to use SSH agent
     pub agent: Option<bool>,
+    /// OpenSSH ProxyJump chain, preserving aliases and order.
+    #[serde(default)]
+    pub proxy_jump: Option<String>,
 }
 
 /// Result of looking up SSH config for a host
