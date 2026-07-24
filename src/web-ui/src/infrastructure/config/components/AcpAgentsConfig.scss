@@ -1,12 +1,6 @@
 @use '../../../component-library/styles/tokens' as *;
 
 .bitfun-acp-agents {
-  &__manager {
-    display: flex;
-    flex-direction: column;
-    gap: $size-gap-4;
-  }
-
   &__toolbar {
     display: grid;
     grid-template-columns: minmax(0, 1fr) auto;

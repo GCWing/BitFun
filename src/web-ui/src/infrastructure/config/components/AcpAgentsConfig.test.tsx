@@ -78,6 +78,7 @@ vi.mock('./common', () => ({
     </header>
   ),
   ConfigPageLayout: ({ children }: { children: React.ReactNode }) => <main>{children}</main>,
+  ConfigPageSectionStack: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
   ConfigPageSection: ({
     children,
     title,

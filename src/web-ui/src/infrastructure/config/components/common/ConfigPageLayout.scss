@@ -46,6 +46,13 @@
   gap: var(--config-page-section-gap);
 }
 
+.bitfun-config-page-section-stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--config-page-section-gap);
+  min-width: 0;
+}
+
 .bitfun-config-page-section {
   display: flex;
   flex-direction: column;
@@ -174,12 +181,12 @@
 }
 
 @container config-panel (max-width: 900px) {
-  .bitfun-config-page-layout {
-    --config-page-content-bottom-padding: 40px;
-    --config-page-section-gap: var(--size-gap-8);
+  .bitfun-config-page-layout__scroll-end-spacer {
+    height: 40px;
   }
 
   .bitfun-config-page-content {
+    --config-page-section-gap: var(--size-gap-8);
     padding-inline: var(--size-gap-4);
   }
 
@@ -214,4 +221,3 @@
     justify-self: stretch;
   }
 }
-
