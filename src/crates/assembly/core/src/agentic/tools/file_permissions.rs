@@ -2,25 +2,50 @@ use crate::agentic::tools::framework::{PermissionIntent, ToolPathResolution, Too
 use crate::agentic::tools::restrictions::{
     canonicalize_local_path_best_effort, is_local_path_within_root,
 };
+use crate::infrastructure::get_path_manager_arc;
 use crate::util::errors::{BitFunError, BitFunResult};
 use std::collections::HashSet;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 pub(crate) fn file_permission_intents<'a>(
     action: &str,
     paths: impl IntoIterator<Item = &'a str>,
     context: &ToolUseContext,
 ) -> BitFunResult<Vec<PermissionIntent>> {
+    file_permission_intents_with_plan_edit_access(action, paths, context, false)
+}
+
+pub(crate) fn file_permission_intents_allowing_managed_plan_edits<'a>(
+    action: &str,
+    paths: impl IntoIterator<Item = &'a str>,
+    context: &ToolUseContext,
+) -> BitFunResult<Vec<PermissionIntent>> {
+    file_permission_intents_with_plan_edit_access(action, paths, context, true)
+}
+
+fn file_permission_intents_with_plan_edit_access<'a>(
+    action: &str,
+    paths: impl IntoIterator<Item = &'a str>,
+    context: &ToolUseContext,
+    allow_managed_plan_edits: bool,
+) -> BitFunResult<Vec<PermissionIntent>> {
     let mut resources = Vec::new();
     let mut external_directories = Vec::new();
     let mut seen_resources = HashSet::new();
     let mut seen_external_directories = HashSet::new();
+    let mut has_paths = false;
 
     for path in paths {
+        has_paths = true;
         let resolved = context.resolve_tool_path(path)?;
-        let resource = normalized_permission_resource(&resolved)?;
-        if seen_resources.insert(resource.clone()) {
-            resources.push(resource);
+        let skip_edit_permission = allow_managed_plan_edits
+            && action == "edit"
+            && is_current_workspace_plan_path(context, &resolved)?;
+        if !skip_edit_permission {
+            let resource = normalized_permission_resource(&resolved)?;
+            if seen_resources.insert(resource.clone()) {
+                resources.push(resource);
+            }
         }
 
         if let Some(directory) = external_directory_resource(context, &resolved)? {
@@ -30,13 +55,16 @@ pub(crate) fn file_permission_intents<'a>(
         }
     }
 
-    if resources.is_empty() {
+    if !has_paths {
         return Err(BitFunError::validation(
             "File permission intent requires at least one resource".to_string(),
         ));
     }
 
-    let mut intents = vec![PermissionIntent::new(action, resources)];
+    let mut intents = Vec::new();
+    if !resources.is_empty() {
+        intents.push(PermissionIntent::new(action, resources));
+    }
     if !external_directories.is_empty() {
         intents.push(PermissionIntent::new(
             "external_directory",
@@ -47,7 +75,7 @@ pub(crate) fn file_permission_intents<'a>(
 }
 
 fn normalized_permission_resource(resolved: &ToolPathResolution) -> BitFunResult<String> {
-    if resolved.uses_remote_workspace_backend() || resolved.runtime_scope.is_some() {
+    if resolved.uses_remote_workspace_backend() || resolved.is_runtime_artifact() {
         return Ok(resolved.resolved_path.replace('\\', "/"));
     }
 
@@ -62,7 +90,11 @@ fn external_directory_resource(
     context: &ToolUseContext,
     resolved: &ToolPathResolution,
 ) -> BitFunResult<Option<String>> {
-    if resolved.uses_remote_workspace_backend() || resolved.runtime_scope.is_some() {
+    if resolved.uses_remote_workspace_backend() || resolved.is_runtime_artifact() {
+        return Ok(None);
+    }
+
+    if is_bitfun_managed_local_path(context, resolved)? {
         return Ok(None);
     }
 
@@ -89,6 +121,66 @@ fn external_directory_resource(
             .to_string_lossy()
             .replace('\\', "/"),
     ))
+}
+
+fn is_bitfun_managed_local_path(
+    context: &ToolUseContext,
+    resolved: &ToolPathResolution,
+) -> BitFunResult<bool> {
+    let path = Path::new(&resolved.resolved_path);
+    for root in bitfun_managed_local_roots(context)? {
+        if is_local_path_within_root(path, &root)? {
+            return Ok(true);
+        }
+    }
+    Ok(false)
+}
+
+fn is_current_workspace_plan_path(
+    context: &ToolUseContext,
+    resolved: &ToolPathResolution,
+) -> BitFunResult<bool> {
+    if resolved.uses_remote_workspace_backend()
+        || resolved.is_runtime_artifact()
+        || context.workspace_root().is_none()
+    {
+        return Ok(false);
+    }
+
+    let plans_root = context.current_workspace_runtime_root()?.join("plans");
+    is_local_path_within_root(Path::new(&resolved.resolved_path), &plans_root)
+}
+
+fn bitfun_managed_local_roots(context: &ToolUseContext) -> BitFunResult<Vec<PathBuf>> {
+    let mut roots = vec![terminal_transcript_root(context)];
+    if context.workspace_root().is_none() {
+        return Ok(roots);
+    }
+
+    let runtime_root = context.current_workspace_runtime_root()?;
+    roots.push(runtime_root.join("plans"));
+    if let Some(session_id) = context.session_id.as_deref() {
+        roots.push(
+            context
+                .current_workspace_session_dir(session_id)?
+                .join("artifacts"),
+        );
+    }
+    Ok(roots)
+}
+
+fn terminal_transcript_root(_context: &ToolUseContext) -> PathBuf {
+    #[cfg(test)]
+    if let Some(path) = _context
+        .custom_data
+        .get("__bitfun_test_terminal_transcript_root")
+        .and_then(|value| value.as_str())
+        .filter(|path| !path.trim().is_empty())
+    {
+        return PathBuf::from(path);
+    }
+
+    get_path_manager_arc().user_data_dir().join("terminals")
 }
 
 #[cfg(test)]
@@ -150,6 +242,194 @@ mod tests {
 
         assert_eq!(intents.len(), 1);
         assert_eq!(intents[0].action, "read");
+    }
+
+    #[test]
+    fn current_session_artifacts_do_not_add_external_directory_intent() {
+        let temp = tempfile::tempdir().expect("temp dir");
+        let workspace = temp.path().join("workspace");
+        let runtime_root = temp.path().join("runtime");
+        fs::create_dir_all(&workspace).expect("workspace dir");
+
+        let mut context =
+            ToolUseContext::for_tool_listing(Some(WorkspaceBinding::new(None, workspace)), None);
+        context.session_id = Some("session-1".to_string());
+        context.custom_data.insert(
+            "__bitfun_test_runtime_root".to_string(),
+            json!(runtime_root.to_string_lossy().to_string()),
+        );
+
+        for path in [
+            "bitfun://current-session/artifacts/session-references/reference.txt",
+            "bitfun://current-session/artifacts/compression-transcripts/transcript.txt",
+        ] {
+            let intents = file_permission_intents("read", [path], &context)
+                .expect("current session permission intents");
+
+            assert_eq!(intents.len(), 1, "{path}");
+            assert_eq!(intents[0].action, "read", "{path}");
+            assert_eq!(intents[0].resources.len(), 1, "{path}");
+        }
+    }
+
+    #[test]
+    fn managed_local_absolute_paths_do_not_add_external_directory_intent() {
+        let temp = tempfile::tempdir().expect("temp dir");
+        let workspace = temp.path().join("workspace");
+        let runtime_root = temp.path().join("runtime");
+        let terminal_root = temp.path().join("terminals");
+        let plan = runtime_root.join("plans/plan.plan.md");
+        let reference = runtime_root.join("sessions/session-1/artifacts/session-references/ref.md");
+        let compression =
+            runtime_root.join("sessions/session-1/artifacts/compression-transcripts/turn.md");
+        let terminal_agents = terminal_root.join("AGENTS.md");
+        let terminal_index = terminal_root.join("index.json");
+        let terminal_log = terminal_root.join("transcript-1/000001.log");
+        fs::create_dir_all(&workspace).expect("workspace dir");
+        for path in [
+            &plan,
+            &reference,
+            &compression,
+            &terminal_agents,
+            &terminal_index,
+            &terminal_log,
+        ] {
+            fs::create_dir_all(path.parent().expect("parent dir")).expect("parent dir");
+            fs::write(path, "content").expect("managed file");
+        }
+
+        let mut context =
+            ToolUseContext::for_tool_listing(Some(WorkspaceBinding::new(None, workspace)), None);
+        context.session_id = Some("session-1".to_string());
+        context.custom_data.insert(
+            "__bitfun_test_runtime_root".to_string(),
+            json!(runtime_root.to_string_lossy().to_string()),
+        );
+        context.custom_data.insert(
+            "__bitfun_test_terminal_transcript_root".to_string(),
+            json!(terminal_root.to_string_lossy().to_string()),
+        );
+
+        for path in [
+            &plan,
+            &reference,
+            &compression,
+            &terminal_agents,
+            &terminal_index,
+            &terminal_log,
+        ] {
+            let file_path = path.to_string_lossy();
+            let intents = file_permission_intents("read", [file_path.as_ref()], &context)
+                .expect("managed file permission intents");
+
+            assert_eq!(intents.len(), 1, "{}", path.display());
+            assert_eq!(intents[0].action, "read", "{}", path.display());
+        }
+
+        let plan_path = plan.to_string_lossy();
+        let edit = file_permission_intents("edit", [plan_path.as_ref()], &context)
+            .expect("managed plan edit permission intents");
+        assert_eq!(edit.len(), 1);
+        assert_eq!(edit[0].action, "edit");
+    }
+
+    #[test]
+    fn plan_updates_skip_edit_permission_but_other_managed_writes_do_not() {
+        let temp = tempfile::tempdir().expect("temp dir");
+        let workspace = temp.path().join("workspace");
+        let runtime_root = temp.path().join("runtime");
+        let plan = runtime_root.join("plans/plan.plan.md");
+        let transcript =
+            runtime_root.join("sessions/session-1/artifacts/compression-transcripts/turn.md");
+        fs::create_dir_all(&workspace).expect("workspace dir");
+        for path in [&plan, &transcript] {
+            fs::create_dir_all(path.parent().expect("parent dir")).expect("parent dir");
+            fs::write(path, "old").expect("managed file");
+        }
+
+        let mut context =
+            ToolUseContext::for_tool_listing(Some(WorkspaceBinding::new(None, workspace)), None);
+        context.session_id = Some("session-1".to_string());
+        context.custom_data.insert(
+            "__bitfun_test_runtime_root".to_string(),
+            json!(runtime_root.to_string_lossy().to_string()),
+        );
+        context.custom_data.insert(
+            "__bitfun_test_terminal_transcript_root".to_string(),
+            json!(temp.path().join("terminals").to_string_lossy().to_string()),
+        );
+
+        let plan_path = plan.to_string_lossy();
+        let edit = FileEditTool::new()
+            .permission_intents(
+                &json!({
+                    "file_path": plan_path.as_ref(),
+                    "old_string": "old",
+                    "new_string": "updated"
+                }),
+                &context,
+            )
+            .expect("plan edit permission intents");
+        assert!(edit.is_empty());
+
+        let write = FileWriteTool::new()
+            .permission_intents(
+                &json!({ "payload": format!("+++ {plan_path}\nupdated") }),
+                &context,
+            )
+            .expect("plan write permission intents");
+        assert!(write.is_empty());
+
+        let delete = DeleteFileTool::new()
+            .permission_intents(&json!({ "path": plan_path.as_ref() }), &context)
+            .expect("plan delete permission intents");
+        assert_eq!(delete.len(), 1);
+        assert_eq!(delete[0].action, "edit");
+
+        let transcript_path = transcript.to_string_lossy();
+        let transcript_edit = FileEditTool::new()
+            .permission_intents(
+                &json!({
+                    "file_path": transcript_path.as_ref(),
+                    "old_string": "old",
+                    "new_string": "updated"
+                }),
+                &context,
+            )
+            .expect("transcript edit permission intents");
+        assert_eq!(transcript_edit.len(), 1);
+        assert_eq!(transcript_edit[0].action, "edit");
+    }
+
+    #[test]
+    fn unmanaged_runtime_paths_still_add_external_directory_intent() {
+        let temp = tempfile::tempdir().expect("temp dir");
+        let workspace = temp.path().join("workspace");
+        let runtime_root = temp.path().join("runtime");
+        let snapshot = runtime_root.join("snapshots/snapshot.json");
+        fs::create_dir_all(&workspace).expect("workspace dir");
+        fs::create_dir_all(snapshot.parent().expect("snapshot parent")).expect("snapshot parent");
+        fs::write(&snapshot, "snapshot").expect("snapshot file");
+
+        let mut context =
+            ToolUseContext::for_tool_listing(Some(WorkspaceBinding::new(None, workspace)), None);
+        context.session_id = Some("session-1".to_string());
+        context.custom_data.insert(
+            "__bitfun_test_runtime_root".to_string(),
+            json!(runtime_root.to_string_lossy().to_string()),
+        );
+        context.custom_data.insert(
+            "__bitfun_test_terminal_transcript_root".to_string(),
+            json!(temp.path().join("terminals").to_string_lossy().to_string()),
+        );
+
+        let snapshot_path = snapshot.to_string_lossy();
+        let intents = file_permission_intents("read", [snapshot_path.as_ref()], &context)
+            .expect("snapshot permission intents");
+
+        assert_eq!(intents.len(), 2);
+        assert_eq!(intents[0].action, "read");
+        assert_eq!(intents[1].action, "external_directory");
     }
 
     #[test]

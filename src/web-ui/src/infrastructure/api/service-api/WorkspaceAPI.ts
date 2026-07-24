@@ -240,15 +240,23 @@ export class WorkspaceAPI {
   }
 
    
-  async writeFileContent(workspacePath: string, filePath: string, content: string): Promise<void> {
+  async writeFileContent(
+    workspacePath: string,
+    filePath: string,
+    content: string,
+    remoteConnectionId?: string,
+  ): Promise<void> {
     try {
-      
-      
       await api.invoke('write_file_content', {
-        request: { workspacePath, filePath, content }
+        request: { workspacePath, filePath, content, remoteConnectionId }
       });
     } catch (error) {
-      throw createTauriCommandError('write_file_content', error, { workspacePath, filePath, content });
+      throw createTauriCommandError('write_file_content', error, {
+        workspacePath,
+        filePath,
+        content,
+        remoteConnectionId,
+      });
     }
   }
 
