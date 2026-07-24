@@ -47,6 +47,29 @@ export const ConfigPageContent: React.FC<ConfigPageContentProps> = ({
   );
 };
 
+export interface ConfigPageSectionStackProps extends React.HTMLAttributes<HTMLDivElement> {
+  children: React.ReactNode;
+}
+
+/**
+ * Keeps the standard page-level spacing when sections need a shared wrapper
+ * for state, test hooks, or adjacent page controls.
+ */
+export const ConfigPageSectionStack: React.FC<ConfigPageSectionStackProps> = ({
+  children,
+  className = '',
+  ...props
+}) => {
+  return (
+    <div
+      {...props}
+      className={`bitfun-config-page-section-stack ${className}`.trim()}
+    >
+      {children}
+    </div>
+  );
+};
+
 export interface ConfigPageSectionProps {
   title: string;
   /** Renders inline after the title (e.g. status badge). */
@@ -151,6 +174,5 @@ export const ConfigPageRow: React.FC<ConfigPageRowProps> = ({
 };
 
 export default ConfigPageLayout;
-
 
 

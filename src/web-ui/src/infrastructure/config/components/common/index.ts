@@ -10,15 +10,16 @@ export type { ConfigCollectionItemProps } from './ConfigCollectionItem';
 export {
   ConfigPageLayout,
   ConfigPageContent,
+  ConfigPageSectionStack,
   ConfigPageSection,
   ConfigPageRow,
 } from './ConfigPageLayout';
 export type {
   ConfigPageLayoutProps,
   ConfigPageContentProps,
+  ConfigPageSectionStackProps,
   ConfigPageSectionProps,
   ConfigPageRowProps,
 } from './ConfigPageLayout';
-
 
 

@@ -20,6 +20,7 @@ import {
   ConfigPageHeader,
   ConfigPageLayout,
   ConfigPageSection,
+  ConfigPageSectionStack,
 } from './common';
 import {
   ACPClientAPI,
@@ -908,7 +909,7 @@ const AcpAgentsConfig: React.FC = () => {
       />
 
       <ConfigPageContent>
-        <div className="bitfun-acp-agents__manager">
+        <ConfigPageSectionStack className="bitfun-acp-agents__manager">
           <div className="bitfun-acp-agents__toolbar">
             <Input
               className="bitfun-acp-agents__search"
@@ -1481,7 +1482,7 @@ const AcpAgentsConfig: React.FC = () => {
               </div>
             )}
           </ConfigPageSection>
-        </div>
+        </ConfigPageSectionStack>
       </ConfigPageContent>
     </ConfigPageLayout>
   );
