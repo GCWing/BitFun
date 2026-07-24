@@ -19,6 +19,11 @@ const remoteContextMock = vi.hoisted(() => ({
   clearError: vi.fn(),
 }));
 
+const authFilePickerMock = vi.hoisted(() => ({
+  pickSshPrivateKeyPath: vi.fn(),
+  pickSshCertificatePath: vi.fn(),
+}));
+
 vi.mock('@/infrastructure/i18n', () => ({
   useI18n: () => ({
     t: (key: string) => key,
@@ -39,7 +44,7 @@ vi.mock('./sshApi', () => ({
 }));
 
 vi.mock('./pickSshPrivateKeyPath', () => ({
-  pickSshPrivateKeyPath: vi.fn(),
+  ...authFilePickerMock,
 }));
 
 vi.mock('./SSHAuthPromptDialog', () => ({
@@ -71,11 +76,21 @@ vi.mock('@/component-library', () => ({
     children,
     onClick,
     disabled,
+    className,
+    'aria-label': ariaLabel,
   }: React.PropsWithChildren<{
     onClick?: React.MouseEventHandler<HTMLButtonElement>;
     disabled?: boolean;
+    className?: string;
+    'aria-label'?: string;
   }>) => (
-    <button type="button" onClick={onClick} disabled={disabled}>
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      className={className}
+      aria-label={ariaLabel}
+    >
       {children}
     </button>
   ),
@@ -84,15 +99,18 @@ vi.mock('@/component-library', () => ({
     value,
     onChange,
     className,
+    suffix,
   }: {
     label?: string;
     value?: string;
     onChange?: React.ChangeEventHandler<HTMLInputElement>;
     className?: string;
+    suffix?: React.ReactNode;
   }) => (
     <label className={className}>
       {label}
       <input aria-label={label} value={value} onChange={onChange} />
+      {suffix}
     </label>
   ),
   Select: ({
@@ -125,6 +143,8 @@ describe('SSHConnectionDialog advanced settings', () => {
     sshApiMock.listSavedConnections.mockResolvedValue([]);
     sshApiMock.listSSHConfigHosts.mockResolvedValue([]);
     sshApiMock.getSSHConfig.mockResolvedValue({ found: false });
+    authFilePickerMock.pickSshPrivateKeyPath.mockResolvedValue(null);
+    authFilePickerMock.pickSshCertificatePath.mockResolvedValue(null);
   });
 
   afterEach(() => {
@@ -195,5 +215,41 @@ describe('SSHConnectionDialog advanced settings', () => {
     expect(
       container.querySelector<HTMLInputElement>('input[aria-label="ssh.remote.connectAttempts"]')?.value
     ).toBe('2');
+  });
+
+  it('selects an OpenSSH certificate with the native file picker', async () => {
+    authFilePickerMock.pickSshCertificatePath.mockResolvedValue('/keys/dev-cert.pub');
+    sshApiMock.listSavedConnections.mockResolvedValue([
+      {
+        id: 'ssh-dev@example.test',
+        name: 'dev@example.test',
+        host: 'example.test',
+        port: 22,
+        username: 'dev',
+        authType: { type: 'PrivateKey', keyPath: '/keys/dev' },
+      },
+    ]);
+    await renderDialog();
+
+    const editButton = container.querySelector<HTMLButtonElement>('button[title="actions.edit"]');
+    act(() => {
+      editButton?.click();
+    });
+
+    const browseCertificate = container.querySelector<HTMLButtonElement>(
+      'button[aria-label="ssh.remote.browseCertificate"]'
+    );
+    expect(browseCertificate).not.toBeNull();
+    await act(async () => {
+      browseCertificate?.click();
+      await Promise.resolve();
+    });
+
+    expect(authFilePickerMock.pickSshCertificatePath).toHaveBeenCalledWith({
+      title: 'ssh.remote.pickCertificateDialogTitle',
+    });
+    expect(
+      container.querySelector<HTMLInputElement>('input[aria-label="ssh.remote.certificatePath"]')?.value
+    ).toBe('/keys/dev-cert.pub');
   });
 });

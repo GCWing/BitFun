@@ -11,7 +11,10 @@ import { Select } from '@/component-library';
 import { IconButton } from '@/component-library';
 import { FolderOpen, Key, Loader2, Lock, Server, User } from 'lucide-react';
 import type { SSHAuthMethod } from './types';
-import { pickSshPrivateKeyPath } from './pickSshPrivateKeyPath';
+import {
+  pickSshCertificatePath,
+  pickSshPrivateKeyPath,
+} from './pickSshPrivateKeyPath';
 import './SSHAuthPromptDialog.scss';
 
 export interface SSHAuthPromptSubmitPayload {
@@ -140,6 +143,14 @@ export const SSHAuthPromptDialog: React.FC<SSHAuthPromptDialogProps> = ({
     if (path) setKeyPath(path);
   }, [isConnecting, t]);
 
+  const handleBrowseCertificate = useCallback(async () => {
+    if (isConnecting) return;
+    const path = await pickSshCertificatePath({
+      title: t('ssh.remote.pickCertificateDialogTitle'),
+    });
+    if (path) setCertificatePath(path);
+  }, [isConnecting, t]);
+
   return (
     <Modal
       isOpen={open}
@@ -243,6 +254,20 @@ export const SSHAuthPromptDialog: React.FC<SSHAuthPromptDialogProps> = ({
                 value={certificatePath}
                 onChange={(e) => setCertificatePath(e.target.value)}
                 placeholder={t('ssh.remote.certificatePathOptional')}
+                suffix={
+                  <IconButton
+                    type="button"
+                    variant="ghost"
+                    size="small"
+                    className="ssh-auth-prompt-dialog__browse-key"
+                    tooltip={t('ssh.remote.browseCertificate')}
+                    aria-label={t('ssh.remote.browseCertificate')}
+                    disabled={isConnecting}
+                    onClick={() => void handleBrowseCertificate()}
+                  >
+                    <FolderOpen size={16} />
+                  </IconButton>
+                }
                 size="medium"
                 disabled={isConnecting}
               />

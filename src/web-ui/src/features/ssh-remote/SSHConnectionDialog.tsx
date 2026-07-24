@@ -43,7 +43,10 @@ import type {
   SSHConfigEntry,
 } from './types';
 import { sshApi } from './sshApi';
-import { pickSshPrivateKeyPath } from './pickSshPrivateKeyPath';
+import {
+  pickSshCertificatePath,
+  pickSshPrivateKeyPath,
+} from './pickSshPrivateKeyPath';
 import './SSHConnectionDialog.scss';
 
 interface SSHConnectionDialogProps {
@@ -214,6 +217,14 @@ export const SSHConnectionDialog: React.FC<SSHConnectionDialogProps> = ({
       title: t('ssh.remote.pickPrivateKeyDialogTitle'),
     });
     if (path) setFormData((prev) => ({ ...prev, keyPath: path }));
+  }, [isConnecting, status, t]);
+
+  const handleBrowseCertificate = useCallback(async () => {
+    if (isConnecting || status === 'connecting') return;
+    const path = await pickSshCertificatePath({
+      title: t('ssh.remote.pickCertificateDialogTitle'),
+    });
+    if (path) setFormData((prev) => ({ ...prev, certificatePath: path }));
   }, [isConnecting, status, t]);
 
   // Port is intentionally excluded so that the ID stays stable when the user
@@ -1101,6 +1112,20 @@ export const SSHConnectionDialog: React.FC<SSHConnectionDialogProps> = ({
                     value={formData.certificatePath}
                     onChange={(e) => handleInputChange('certificatePath', e.target.value)}
                     placeholder={t('ssh.remote.certificatePathOptional')}
+                    suffix={
+                      <IconButton
+                        type="button"
+                        variant="ghost"
+                        size="small"
+                        className="ssh-connection-dialog__browse-key"
+                        tooltip={t('ssh.remote.browseCertificate')}
+                        aria-label={t('ssh.remote.browseCertificate')}
+                        disabled={isConnecting || status === 'connecting'}
+                        onClick={() => void handleBrowseCertificate()}
+                      >
+                        <FolderOpen size={16} />
+                      </IconButton>
+                    }
                     size="medium"
                   />
                 </div>
