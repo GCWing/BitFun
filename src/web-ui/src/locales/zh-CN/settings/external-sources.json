@@ -16,7 +16,6 @@
     "showMoreEntriesForProvider": "再显示 {{provider}} 的 {{count}} 个 Hook",
     "showMoreDiagnosticsForProvider": "再显示 {{provider}} 的 {{count}} 条诊断",
     "technicalDetails": "技术详情",
-    "diagnosticCode": "参考编号：{{code}}",
     "loading": "正在检查 Hook 配置…",
     "pending": "Hook 发现仍在进行，目录会自动更新。",
     "empty": "未发现 Hook 配置。",
@@ -384,7 +383,6 @@
       "project": "项目级：.opencode/opencode.json",
       "envConfig": "环境变量 OPENCODE_CONFIG 指向的文件"
     },
-    "emptyExample": "在配置文件中添加 \"mcp\" 字段即可，例如：{ \"mcp\": { \"server-name\": { ... } } }",
     "transport": {
       "local_stdio": "本地进程",
       "streamable_http": "远程连接"

@@ -16,7 +16,6 @@
     "showMoreEntriesForProvider": "再顯示 {{provider}} 的 {{count}} 個 Hook",
     "showMoreDiagnosticsForProvider": "再顯示 {{provider}} 的 {{count}} 筆診斷",
     "technicalDetails": "技術詳情",
-    "diagnosticCode": "參考編號：{{code}}",
     "loading": "正在檢查 Hook 設定…",
     "pending": "Hook 探索仍在進行，目錄會自動更新。",
     "empty": "未發現 Hook 設定。",
@@ -384,7 +383,6 @@
       "project": "專案級：.opencode/opencode.json",
       "envConfig": "環境變數 OPENCODE_CONFIG 指向的檔案"
     },
-    "emptyExample": "在設定檔中加入 \"mcp\" 欄位即可，例如：{ \"mcp\": { \"server-name\": { ... } } }",
     "transport": {
       "local_stdio": "本機程序",
       "streamable_http": "遠端連線"

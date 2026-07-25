@@ -16,7 +16,6 @@
     "showMoreEntriesForProvider": "Show {{count}} more Hooks for {{provider}}",
     "showMoreDiagnosticsForProvider": "Show {{count}} more diagnostics for {{provider}}",
     "technicalDetails": "Technical details",
-    "diagnosticCode": "Reference code: {{code}}",
     "loading": "Checking Hook configuration…",
     "pending": "Hook discovery is still running. The catalog will update automatically.",
     "empty": "No Hook configuration was found.",
@@ -384,7 +383,6 @@
       "project": "Project: .opencode/opencode.json",
       "envConfig": "File pointed to by OPENCODE_CONFIG environment variable"
     },
-    "emptyExample": "Add an \"mcp\" field to the config file, e.g.: { \"mcp\": { \"server-name\": { ... } } }",
     "transport": {
       "local_stdio": "Local process",
       "streamable_http": "Remote connection"
