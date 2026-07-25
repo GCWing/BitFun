@@ -24,6 +24,7 @@
 
 use anyhow::{anyhow, Result};
 use serde::{Deserialize, Serialize};
+use std::time::Duration;
 
 use super::manager::SSHConnectionManager;
 use super::remote_git::shell_quote_posix;
@@ -71,6 +72,12 @@ const STALL_WINDOW_SECONDS: u64 = 30;
 /// target dir and Docker layers). Checked before the build rather than
 /// discovered as an opaque compiler failure part-way through.
 const SOURCE_BUILD_FREE_KB: u64 = 6 * 1024 * 1024;
+/// Trust root for published relay archives, injected at build time from the
+/// same `TAURI_UPDATER_PUBKEY` the Desktop updater uses. Absent in local and
+/// fork builds, which then fall back to the cross-origin checksum.
+const RELEASE_PUBKEY: Option<&str> = option_env!("BITFUN_RELEASE_PUBKEY");
+/// Targets a published relay archive exists for.
+const RELEASE_TARGETS: [&str; 2] = ["x86_64-unknown-linux-gnu", "aarch64-unknown-linux-gnu"];
 /// Canonical China-mirror helper (shared with `src/apps/relay-server/deploy.sh`).
 /// Embedded so Desktop orchestration can apply mirrors before the git clone.
 const RELAY_MIRROR_SH: &str = include_str!(concat!(
@@ -446,7 +453,13 @@ pub async fn start_task(
 
     let body = match task {
         RelayDeployTask::InstallDocker => install_docker_body_script(),
-        RelayDeployTask::Deploy => deploy_body_script(port),
+        RelayDeployTask::Deploy => {
+            // Verify the signed checksums here, where a trust root exists; the
+            // relay host has none.
+            let verified =
+                verified_release_checksums(&release_tag_for_version(RELEASE_VERSION)).await;
+            deploy_body_script_with_checksums(port, &verified_checksum_exports(&verified))
+        }
     };
     let driver = match task {
         RelayDeployTask::InstallDocker => interactive_driver_script(stem, "install"),
@@ -1419,8 +1432,106 @@ export BITFUN_STALL_SECONDS="{stall_seconds}"
     )
 }
 
+/// Checksums for the published relay archives, each proven by a signature this
+/// machine verified.
+///
+/// A relay host is an arbitrary user server with no minisign and no trust root,
+/// so it cannot check a signature itself. It does not have to: the signature
+/// covers the `.sha256` file, which is a couple of hundred bytes, so Desktop
+/// verifies that here and sends the resulting hash down with the deploy script.
+/// The server then needs nothing but `sha256sum`.
+///
+/// Best effort by design — an empty map simply leaves the remote on the
+/// cross-origin checksum path.
+async fn verified_release_checksums(release_tag: &str) -> std::collections::HashMap<String, String> {
+    let mut verified = std::collections::HashMap::new();
+    let Some(pubkey) = RELEASE_PUBKEY.filter(|key| !key.trim().is_empty()) else {
+        return verified;
+    };
+    let Ok(client) = reqwest::Client::builder()
+        .connect_timeout(Duration::from_secs(8))
+        .timeout(Duration::from_secs(30))
+        .build()
+    else {
+        return verified;
+    };
+
+    for target in RELEASE_TARGETS {
+        let checksum_url =
+            format!("{RELEASE_BASE}/download/{release_tag}/bitfun-relay-server-{target}.tar.gz.sha256");
+        let Some(checksum) = fetch_text(&client, &checksum_url).await else {
+            continue;
+        };
+        let Some(signature) = fetch_text(&client, &format!("{checksum_url}.sig")).await else {
+            continue;
+        };
+        if let Err(error) = verify_minisign(checksum.as_bytes(), &signature, pubkey) {
+            log::warn!("Relay checksum signature for {target} did not verify: {error}");
+            continue;
+        }
+        let Some(hash) = checksum
+            .split_whitespace()
+            .next()
+            .filter(|value| value.len() == 64 && value.chars().all(|c| c.is_ascii_hexdigit()))
+        else {
+            continue;
+        };
+        verified.insert(target.to_string(), hash.to_ascii_lowercase());
+    }
+    verified
+}
+
+async fn fetch_text(client: &reqwest::Client, url: &str) -> Option<String> {
+    client
+        .get(url)
+        .send()
+        .await
+        .ok()?
+        .error_for_status()
+        .ok()?
+        .text()
+        .await
+        .ok()
+}
+
+/// Verify a Tauri-format `.sig` (base64 of a minisign signature file) over
+/// `data`, using the base64-wrapped public key.
+fn verify_minisign(data: &[u8], signature_b64: &str, pubkey_b64: &str) -> Result<()> {
+    use base64::Engine as _;
+    let decode = |value: &str, what: &str| -> Result<String> {
+        let bytes = base64::engine::general_purpose::STANDARD
+            .decode(value.trim().as_bytes())
+            .map_err(|error| anyhow!("decode {what}: {error}"))?;
+        String::from_utf8(bytes).map_err(|error| anyhow!("decode {what} as UTF-8: {error}"))
+    };
+    let public_key = minisign_verify::PublicKey::decode(&decode(pubkey_b64, "public key")?)
+        .map_err(|error| anyhow!("invalid release public key: {error}"))?;
+    let signature = minisign_verify::Signature::decode(&decode(signature_b64, "signature")?)
+        .map_err(|error| anyhow!("invalid release signature: {error}"))?;
+    public_key
+        .verify(data, &signature, false)
+        .map_err(|error| anyhow!("signature does not match: {error}"))
+}
+
+/// Shell assignments exporting the verified hashes the remote script consumes.
+fn verified_checksum_exports(verified: &std::collections::HashMap<String, String>) -> String {
+    let mut exports = String::new();
+    for target in RELEASE_TARGETS {
+        if let Some(hash) = verified.get(target) {
+            exports.push_str(&format!(
+                "export BITFUN_EXPECTED_SHA256_{}=\"{hash}\"\n",
+                target.replace(['-', '.'], "_").to_uppercase()
+            ));
+        }
+    }
+    exports
+}
+
 /// Non-interactive body for deploy (runs under nohup after prepare).
-fn deploy_body_script(port: u16) -> String {
+///
+/// `verified_checksums` carries hashes this device proved by signature; empty
+/// leaves the remote on the cross-origin checksum path.
+fn deploy_body_script_with_checksums(port: u16, verified_checksums: &str) -> String {
     let helpers = prepare_helpers_bash();
     let sync = sync_source_bash();
     let release_binary_deploy = release_binary_deploy_bash();
@@ -1429,7 +1540,7 @@ fn deploy_body_script(port: u16) -> String {
 set -euo pipefail
 {helpers}
 {sync}
-{release_binary_deploy}
+{verified_checksums}{release_binary_deploy}
 export DOCKER_CONFIG="${{DOCKER_CONFIG:-$HOME/.bitfun/docker-config}}"
 export DOCKER_BUILDKIT=1
 export COMPOSE_DOCKER_CLI_BUILD=1
@@ -1489,6 +1600,7 @@ echo {TASK_DONE_MARKER}
 "#,
         helpers = helpers,
         sync = sync,
+        verified_checksums = verified_checksums,
         release_binary_deploy = release_binary_deploy,
         DEPLOY_STATE_DIR = DEPLOY_STATE_DIR,
         SOURCE_DIR = SOURCE_DIR,
@@ -1504,9 +1616,12 @@ echo {TASK_DONE_MARKER}
 #[cfg(test)]
 mod tests {
     use super::{
-        classify_docker_access, decide_task_status, deploy_body_script, parse_preflight,
+        classify_docker_access, decide_task_status, deploy_body_script_with_checksums,
+        parse_preflight,
         prepare_helpers_bash, release_binary_deploy_bash, release_tag_for_version,
-        split_poll_stdout, sync_source_bash, DockerAccessMode, RelayTaskStatus, RELAY_MIRROR_SH,
+        split_poll_stdout, sync_source_bash, verified_checksum_exports,
+        verified_release_checksums, verify_minisign, DockerAccessMode, RelayTaskStatus,
+        RELAY_MIRROR_SH, RELEASE_PUBKEY,
     };
 
     #[test]
@@ -1610,6 +1725,48 @@ mod tests {
     /// `bash -n` only proves the generated script parses. This runs its source
     /// ranking and download loop against a stubbed curl so the slow-link
     /// behaviour is actually exercised.
+    /// Same fixture as the CLI updater, produced with the real `minisign` CLI.
+    /// A relay host cannot check a signature itself, so this is the check that
+    /// stands between a hostile mirror and the user's server.
+    const FIXTURE_PUBKEY: &str = "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXkgRTNFMDg3NENFQzFDMjJDMwpSV1RESWh6c1RJZmc0MXcyR3dpZWkwek5ES2FMWW05ZFFWcEVXTlEvVWxweXQybWJTMkpFMVUyTQo=";
+    const FIXTURE_SIGNATURE: &str = "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIG1pbmlzaWduIHNlY3JldCBrZXkKUlVUREloenNUSWZnNDBMTitwb25aT3RCVy9VYmJtNWhkR1poM0lCb3IwUDBKaVZmZmM1cFJaNlZSNUpaSzNUUm1yWWpYMXFLQ2svWTdZUDhHdkRZT3YvanVoZlpnZmhyWEFRPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzg0OTUxOTM1CWZpbGU6YXJjaGl2ZS50YXIuZ3oJaGFzaGVkCjhWL21EUVAwZGdlZXVNU1lxWlpsOWdFSGUwOTJQTk9yRG1BMUV6ZHNQOUlEYkcyT1dneTFsQ1puUDBJaFIwQnJpMFBCeENRcUdDR2dpb0l0UGtSMUN3PT0K";
+    const FIXTURE_DATA: &[u8] = b"hello-bitfun\n";
+
+    #[test]
+    fn checksum_signature_verifies_and_rejects_tampering() {
+        verify_minisign(FIXTURE_DATA, FIXTURE_SIGNATURE, FIXTURE_PUBKEY)
+            .expect("minisign signature in Tauri's base64 wrapper must verify");
+        assert!(verify_minisign(b"tampered\n", FIXTURE_SIGNATURE, FIXTURE_PUBKEY).is_err());
+        assert!(verify_minisign(FIXTURE_DATA, "bm90LWEtc2ln", FIXTURE_PUBKEY).is_err());
+    }
+
+    #[test]
+    fn verified_checksums_reach_the_remote_script_as_exports() {
+        let mut verified = std::collections::HashMap::new();
+        verified.insert("x86_64-unknown-linux-gnu".to_string(), "a".repeat(64));
+        let exports = verified_checksum_exports(&verified);
+        assert!(exports.contains(&format!(
+            "export BITFUN_EXPECTED_SHA256_X86_64_UNKNOWN_LINUX_GNU=\"{}\"",
+            "a".repeat(64)
+        )));
+        // No entry for a target we could not verify: the remote must fall back
+        // rather than trust an unverified hash.
+        assert!(!exports.contains("AARCH64"));
+
+        // The generated script must consume exactly those names.
+        let script = deploy_body_script_with_checksums(9700, &exports);
+        assert!(script.contains("BITFUN_EXPECTED_SHA256_X86_64_UNKNOWN_LINUX_GNU"));
+        assert!(script.contains("BITFUN_EXPECTED_SHA256_AARCH64_UNKNOWN_LINUX_GNU"));
+    }
+
+    /// Without a trust root there is nothing to verify against, so no hash may
+    /// be asserted to the remote.
+    #[tokio::test]
+    async fn unsigned_builds_supply_no_checksums() {
+        assert!(RELEASE_PUBKEY.is_none() || RELEASE_PUBKEY == Some(""));
+        assert!(verified_release_checksums("v0.0.0").await.is_empty());
+    }
+
     #[cfg(unix)]
     #[test]
     fn release_download_picks_the_fastest_working_source() {
@@ -1635,7 +1792,7 @@ mod tests {
     #[cfg(unix)]
     #[test]
     fn generated_deploy_script_is_valid_bash() {
-        let script = deploy_body_script(9700);
+        let script = deploy_body_script_with_checksums(9700, "");
         let output = std::process::Command::new("bash")
             .args(["-n", "-c", &script])
             .output()

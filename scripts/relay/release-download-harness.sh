@@ -37,6 +37,11 @@ while IFS=: read -r pat m s; do
   case "$url" in *"$pat"*) mode="$m"; speed="$s" ;; esac
 done < "$PLAN"
 echo "${mode}  ${url}" >>"$TRACE"
+# Record only the resumable archive transfer (-C), not the ranged probe (-r):
+# the probe is deliberately time-boxed, the transfer must not be.
+case " $* " in
+  *" -C "*) printf '%s\n' "$*" >>"$WORKDIR/archive-flags" ;;
+esac
 [ "$mode" = dead ] && exit 7
 
 case "$url" in
@@ -105,6 +110,7 @@ run_case() {
   shift 2
   printf '%s\n' "$@" >"$WORK/plan"
   : >"$WORK/trace"
+  : >"$WORK/archive-flags"
   rm -rf "$WORK/home/.bitfun"
 
   local output got
@@ -188,6 +194,25 @@ EXPECT_SOURCE="$MIRROR_ASSET_URL" \
   run_case "mirror download verifies against the canonical GitHub checksum" download-ok \
   "ghfast.top:ok:1024" "//github.com:ok:1024" \
   "linux-binaries.json:ok:999999" "release/0.2.13:ok:2097152"
+
+# A wall-clock ceiling on the archive transfer is the original bug in disguise:
+# it kills a link that is slow but progressing. The throughput floor must be the
+# only give-up condition.
+if grep -q -- '--max-time' "$WORK/archive-flags"; then
+  echo "FAIL  archive download must not carry a wall-clock ceiling"
+  grep -- '--max-time' "$WORK/archive-flags" | sed 's/^/        /'
+  fail=$((fail + 1))
+else
+  echo "PASS  archive download has no wall-clock ceiling"
+  pass=$((pass + 1))
+fi
+if grep -q -- '--speed-limit' "$WORK/archive-flags"; then
+  echo "PASS  archive download gives up on a throughput floor"
+  pass=$((pass + 1))
+else
+  echo "FAIL  archive download has no throughput floor"
+  fail=$((fail + 1))
+fi
 
 echo "----"
 echo "pass=$pass fail=$fail"

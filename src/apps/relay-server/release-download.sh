@@ -102,7 +102,7 @@ bitfun_canonical_checksum_url() {
 
 bitfun_try_release_deploy() {
   local release_dir="$HOME/.bitfun/relay-release"
-  local target archive upstream_url download_dir extracted context image
+  local target archive upstream_url download_dir extracted context image expected_hash
   case "$(uname -m 2>/dev/null)" in
     x86_64 | amd64) target="x86_64-unknown-linux-gnu" ;;
     aarch64 | arm64) target="aarch64-unknown-linux-gnu" ;;
@@ -114,6 +114,16 @@ bitfun_try_release_deploy() {
 
   archive="bitfun-relay-server-${target}.tar.gz"
   upstream_url="$(bitfun_release_asset_url "$BITFUN_RELEASE_TAG" "$archive")"
+  case "$target" in
+    x86_64-unknown-linux-gnu) expected_hash="${BITFUN_EXPECTED_SHA256_X86_64_UNKNOWN_LINUX_GNU:-}" ;;
+    aarch64-unknown-linux-gnu) expected_hash="${BITFUN_EXPECTED_SHA256_AARCH64_UNKNOWN_LINUX_GNU:-}" ;;
+    *) expected_hash="" ;;
+  esac
+  if [ -n "$expected_hash" ]; then
+    echo ">>> Using a signature-verified checksum supplied by the client."
+  else
+    echo ">>> No signature-verified checksum available; falling back to the canonical GitHub checksum."
+  fi
   mkdir -p "$release_dir"
   chmod 700 "$release_dir" 2>/dev/null || true
   download_dir="$(mktemp -d "$release_dir/download.XXXXXX")"
@@ -137,6 +147,14 @@ bitfun_try_release_deploy() {
   # reached at all, and says so — that is a materially weaker guarantee.
   bitfun_fetch_release_checksum() {
     local url="$1" canonical
+    # Strongest case: the caller already verified a signature over the checksum
+    # and passed the hash down. Nothing fetched from any origin can override it,
+    # so a hostile mirror is out of the picture — and this host needs no
+    # minisign, only sha256sum.
+    if [ -n "$expected_hash" ]; then
+      printf '%s  %s\n' "$expected_hash" "$archive" >"$download_dir/${archive}.sha256"
+      return 0
+    fi
     canonical="$(bitfun_canonical_checksum_url "$url")"
     rm -f "$download_dir/${archive}.sha256"
     if curl -fsSL --retry 3 --connect-timeout 15 --max-time 60 \
@@ -190,9 +208,16 @@ bitfun_try_release_deploy() {
       done
     ) &
     watcher=$!
+    # No --max-time on purpose. Any wall-clock ceiling reintroduces the original
+    # bug one order of magnitude out: at the 8 KB/s floor a 30 MB archive needs
+    # ~3750 s, so a 3600 s cap would kill a transfer that was progressing fine,
+    # and --retry-max-time would already have refused to retry it. The
+    # throughput floor is the give-up condition — it aborts a dead or hung link
+    # within --speed-time, and --connect-timeout covers setup — so a ceiling
+    # adds nothing but a cliff for slow users.
     curl -fsSL -C - \
-      --retry 3 --retry-delay 3 --retry-max-time 300 \
-      --connect-timeout 15 --max-time 3600 \
+      --retry 3 --retry-delay 3 --retry-max-time 0 \
+      --connect-timeout 15 \
       --speed-limit "$BITFUN_STALL_BPS" --speed-time "$BITFUN_STALL_SECONDS" \
       -o "$download_dir/$archive" "$url" || status=$?
     rm -f "$done_marker"

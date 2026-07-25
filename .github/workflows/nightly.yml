@@ -67,6 +67,9 @@ jobs:
     if: needs.check-changes.outputs.should_build == 'true'
     env:
       NODE_OPTIONS: --max-old-space-size=6144
+      # Nightly relay archives are signed too (linux-binaries.yml receives the
+      # key), so nightly Desktop needs the same trust root to verify them.
+      BITFUN_RELEASE_PUBKEY: ${{ secrets.TAURI_UPDATER_PUBKEY }}
 
     strategy:
       fail-fast: false
@@ -276,6 +279,35 @@ jobs:
             --repo "GCWing/BitFun" \
             --out linux-release-assets/linux-binaries.json
 
+      # The Tauri bundler signs the five updater artifacts during `tauri build`,
+      # but the installers people download by hand from the release page — dmg,
+      # deb, rpm, the Windows installer and the direct AppImages — shipped with
+      # no signature at all. Sign them with the same key so every published
+      # artifact is verifiable. (This is not OS-level code signing: Gatekeeper
+      # and SmartScreen still need Apple/Authenticode certificates.)
+      - name: Sign installer packages
+        shell: bash
+        env:
+          BITFUN_SIGNING_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          BITFUN_SIGNING_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          BITFUN_SIGNING_PUBKEY: ${{ secrets.TAURI_UPDATER_PUBKEY }}
+        run: |
+          set -euo pipefail
+          mapfile -t assets < <(
+            find release-assets -type f \
+              \( -name '*.AppImage' -o -name '*.deb' -o -name '*.rpm' \
+                 -o -name '*.dmg' -o -name '*bitfun-installer.exe' \) | sort
+          )
+          if [[ "${#assets[@]}" -eq 0 ]]; then
+            echo "No installer packages found to sign."
+            exit 0
+          fi
+          bash scripts/sign-release-assets.sh "${assets[@]}"
+
+          # Publish the public key alongside the signatures: a signature nobody
+          # can fetch a key for is not verifiable.
+          printf '%s' "${BITFUN_SIGNING_PUBKEY}" | base64 -d >release-assets/minisign.pub
+
       - name: Create nightly release
         uses: softprops/action-gh-release@v3
         with:
@@ -296,6 +328,8 @@ jobs:
             release-assets/**/*.dmg
             release-assets/**/*.rpm
             release-assets/**/*bitfun-installer.exe
+            release-assets/**/*.sig
+            release-assets/minisign.pub
             linux-release-assets/bitfun-cli-*.tar.gz
             linux-release-assets/bitfun-cli-*.tar.gz.sha256
             linux-release-assets/bitfun-relay-server-*.tar.gz

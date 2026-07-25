@@ -134,45 +134,22 @@ jobs:
         run: bash scripts/relay/package-unix.sh "$ASSET_VERSION" "$TARGET"
 
       - name: Sign release archives
-        id: sign
         shell: bash
         env:
-          SIGNING_KEY: ${{ secrets.release_signing_key }}
-          SIGNING_PASSWORD: ${{ secrets.release_signing_password }}
-          SIGNING_PUBKEY: ${{ secrets.release_pubkey }}
+          BITFUN_SIGNING_KEY: ${{ secrets.release_signing_key }}
+          BITFUN_SIGNING_PASSWORD: ${{ secrets.release_signing_password }}
+          BITFUN_SIGNING_PUBKEY: ${{ secrets.release_pubkey }}
           CLI_ARCHIVE: ${{ steps.cli-stage.outputs.archive }}
           RELAY_ARCHIVE: ${{ steps.relay-stage.outputs.archive }}
         run: |
           set -euo pipefail
-          if [[ -z "${SIGNING_KEY:-}" ]]; then
-            echo "No release signing key configured; archives ship with checksums only."
-            echo "signed=false" >>"$GITHUB_OUTPUT"
-            exit 0
-          fi
-
-          sudo apt-get install -y --no-install-recommends minisign
-
-          # Tauri stores the minisign secret key base64-wrapped; unwrap it to the
-          # on-disk format minisign expects. Same key that signs Desktop updates,
-          # so the CLI and the Desktop updater share one trust root.
-          umask 077
-          printf '%s' "$SIGNING_KEY" | base64 -d >"$RUNNER_TEMP/release.key"
-          printf '%s' "$SIGNING_PUBKEY" | base64 -d >"$RUNNER_TEMP/release.pub"
-
-          for archive in "$CLI_ARCHIVE" "$RELAY_ARCHIVE"; do
-            printf '%s\n' "$SIGNING_PASSWORD" |
-              minisign -S -s "$RUNNER_TEMP/release.key" -m "$archive" -x "${archive}.minisig"
-            # Verify before publishing: a signature nobody checked is worse than
-            # none, because the client is about to treat it as proof.
-            minisign -Vm "$archive" -p "$RUNNER_TEMP/release.pub" -x "${archive}.minisig"
-            # Tauri's wire format is base64 of the whole signature file.
-            base64 -w0 <"${archive}.minisig" >"${archive}.sig"
-            rm -f "${archive}.minisig"
-            echo "Signed and verified: ${archive}.sig"
-          done
-
-          rm -f "$RUNNER_TEMP/release.key" "$RUNNER_TEMP/release.pub"
-          echo "signed=true" >>"$GITHUB_OUTPUT"
+          # The .sha256 files are signed too: remote relay hosts have no
+          # minisign, so Desktop verifies the signature over the tiny checksum
+          # file locally and hands the trusted hash to the server, which then
+          # only needs sha256sum.
+          bash scripts/sign-release-assets.sh \
+            "$CLI_ARCHIVE" "${CLI_ARCHIVE}.sha256" \
+            "$RELAY_ARCHIVE" "${RELAY_ARCHIVE}.sha256"
 
       - name: Upload Linux binary artifacts
         uses: actions/upload-artifact@v6
@@ -186,3 +163,4 @@ jobs:
             ${{ steps.relay-stage.outputs.archive }}
             ${{ steps.relay-stage.outputs.checksum }}
             *.tar.gz.sig
+            *.tar.gz.sha256.sig

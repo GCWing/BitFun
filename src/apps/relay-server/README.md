@@ -112,6 +112,30 @@ checkout is always `~/.bitfun/relay-src` (never `$HOME/BitFun`). Closing the
 wizard cancels the remote task. Account passwords are provisioned locally and
 imported via `relay-admin import-user`.
 
+### Release artifact verification
+
+Every published archive carries a `.sha256` and a `.sig` (minisign, base64 of the
+signature file — the same key and format the Desktop updater uses). The `.sha256`
+files are signed as well, which is what lets the one-click deploy verify a
+signature on the user's own machine and hand the server a trusted hash: a relay
+host has no minisign and no trust root of its own.
+
+Verifying an archive by hand:
+
+```bash
+BASE=https://github.com/GCWing/BitFun/releases/latest/download
+ASSET=bitfun-relay-server-x86_64-unknown-linux-gnu.tar.gz
+curl -fsSLO "$BASE/$ASSET" -O "$BASE/$ASSET.sig" -O "$BASE/minisign.pub"
+base64 -d <"$ASSET.sig" >"$ASSET.minisig"
+minisign -Vm "$ASSET" -p minisign.pub -x "$ASSET.minisig"
+```
+
+`minisign.pub` is published with every release and is the same key the Desktop
+updater trusts, so it can also be pinned out-of-band once and reused.
+
+Note this is not OS-level code signing: macOS Gatekeeper and Windows SmartScreen
+need Apple/Authenticode certificates, which the project does not currently hold.
+
 ### 1. Deploy the relay (manual / server shell)
 
 ```bash
