@@ -34,6 +34,7 @@ import type {
   AcpContextUsageUpdatedEvent,
   SessionModelAutoMigratedEvent,
   SubagentSessionLinkedEvent,
+  SubagentTurnCompletedEvent,
 } from '@/infrastructure/api/service-api/AgentAPI';
 import { MCPAPI } from '@/infrastructure/api/service-api/MCPAPI';
 import { ACPClientAPI, type AcpPermissionRequestEvent } from '@/infrastructure/api/service-api/ACPClientAPI';

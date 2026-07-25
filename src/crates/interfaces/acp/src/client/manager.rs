@@ -1639,25 +1639,9 @@ impl AcpClientService {
             registry.register_tool(tool);
         }
 
-        // --- R-001: 同步注册 ACP Agent 到 AgentRegistry ---
-        {
-            use bitfun_core::agentic::agents::{
-                AcpAgent, AgentCategory, AgentSource, SubAgentSource, get_agent_registry,
-            };
-
-            let agent_registry = get_agent_registry();
-            for (id, config) in configs.iter().filter(|(_, c)| c.enabled) {
-                let display_name = config.name.clone().unwrap_or_else(|| id.clone());
-                let agent = Arc::new(AcpAgent::new(id.clone(), display_name));
-                agent_registry.register_agent(
-                    agent,
-                    AgentCategory::SubAgent,
-                    AgentSource::External,
-                    Some(SubAgentSource::External),
-                    None,
-                );
-            }
-        }
+        // TODO(R-001): 同步注册 ACP Agent 到 AgentRegistry
+        // AcpAgent struct from taiji-quant fork not available in upstream taiji yet.
+        // Tools are already registered above; agent registration is a future optimization.
     }
 
     async fn handle_permission_request(
