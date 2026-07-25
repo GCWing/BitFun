@@ -94,7 +94,10 @@ export const optionalDependencyFeatureOwnerRules = [
       { depName: 'oxc', ownerFeatures: ['canvas-runtime'] },
       { depName: 'qrcode', ownerFeatures: ['remote-connect'] },
       { depName: 'rand', ownerFeatures: ['mcp', 'remote-connect', 'remote-ssh-concrete'] },
-      { depName: 'reqwest', ownerFeatures: ['announcement', 'browser-control', 'debug-log', 'mcp', 'miniapp-runtime', 'remote-connect', 'review-platform', 'speech', 'web-tools'] },
+      // remote-ssh-concrete: one-click relay deploy fetches the signed release
+      // checksum over HTTPS and verifies it on this device, because the target
+      // server has no minisign and no trust root of its own.
+      { depName: 'reqwest', ownerFeatures: ['announcement', 'browser-control', 'debug-log', 'mcp', 'miniapp-runtime', 'remote-connect', 'remote-ssh-concrete', 'review-platform', 'speech', 'web-tools'] },
       { depName: 'rmcp', ownerFeatures: ['mcp'] },
       { depName: 'russh', ownerFeatures: ['remote-ssh-concrete'] },
       { depName: 'russh-keys', ownerFeatures: ['remote-ssh-concrete'] },
