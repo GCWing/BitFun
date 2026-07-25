@@ -58,6 +58,50 @@ test('generates GitHub URLs for both Linux CLI and Relay architectures', () => {
   );
 });
 
+test('publishes sigUrl when a signature is present, omits it otherwise', () => {
+  const temp = fs.mkdtempSync(path.join(os.tmpdir(), 'bitfun-linux-manifest-sig-'));
+  const assets = path.join(temp, 'assets');
+  const out = path.join(temp, 'linux-binaries.json');
+  fs.mkdirSync(assets);
+
+  for (const target of ['x86_64-unknown-linux-gnu', 'aarch64-unknown-linux-gnu']) {
+    for (const filename of [
+      `bitfun-cli-1.2.3-${target}.tar.gz`,
+      `bitfun-relay-server-${target}.tar.gz`,
+    ]) {
+      fs.writeFileSync(path.join(assets, filename), '');
+      fs.writeFileSync(path.join(assets, `${filename}.sha256`), '');
+    }
+  }
+  // Sign only the x86_64 CLI, so both branches are covered in one run.
+  fs.writeFileSync(
+    path.join(assets, 'bitfun-cli-1.2.3-x86_64-unknown-linux-gnu.tar.gz.sig'),
+    ''
+  );
+
+  const result = spawnSync(
+    process.execPath,
+    [
+      'scripts/generate-linux-binaries-manifest.mjs',
+      '--assets-dir', assets,
+      '--version', '1.2.3',
+      '--tag', 'v1.2.3',
+      '--repo', 'GCWing/BitFun',
+      '--out', out,
+    ],
+    { cwd: repoRoot, encoding: 'utf8' }
+  );
+  assert.equal(result.status, 0, result.stderr);
+
+  const manifest = JSON.parse(fs.readFileSync(out, 'utf8'));
+  assert.match(
+    manifest.platforms['linux-x86_64'].cli.sigUrl,
+    /bitfun-cli-1\.2\.3-x86_64-unknown-linux-gnu\.tar\.gz\.sig$/
+  );
+  assert.equal(manifest.platforms['linux-x86_64'].relay.sigUrl, undefined);
+  assert.equal(manifest.platforms['linux-aarch64'].cli.sigUrl, undefined);
+});
+
 test('rejects versions whose build metadata GitHub would rewrite in asset names', () => {
   const temp = fs.mkdtempSync(path.join(os.tmpdir(), 'bitfun-linux-manifest-meta-'));
   const assets = path.join(temp, 'assets');
@@ -105,7 +149,7 @@ test('openbitfun sync mirrors both products and their checksums', () => {
 
   assert.match(syncScript, /linux-binaries\.json/);
   assert.match(syncScript, /for product in \("cli", "relay"\)/);
-  assert.match(syncScript, /for key in \("url", "sha256Url"\)/);
+  assert.match(syncScript, /for key in \("url", "sha256Url", "sigUrl"\)/);
   assert.match(syncScript, /OPENBITFUN_BASE_URL/);
   assert.match(syncScript, /WEBSITE_RELEASE_DIR.*linux-binaries\.json/);
 });

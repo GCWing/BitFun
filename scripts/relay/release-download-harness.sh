@@ -50,7 +50,13 @@ fi
 
 case "$url" in
   *.sha256)
-    printf '%s  %s\n' "$(cat "$WORKDIR/expected_sha")" "$(basename "${url%.sha256}")" >"$out"
+    # Only canonical github.com serves the true checksum. Every other origin
+    # serves a wrong one, so a successful verify proves the canonical URL was
+    # used rather than the download origin's own sidecar.
+    case "$url" in
+      https://github.com/*) printf '%s  %s\n' "$(cat "$WORKDIR/expected_sha")" "$(basename "${url%.sha256}")" >"$out" ;;
+      *)                    printf '%s  %s\n' "$(printf 'f%.0s' $(seq 64))" "$(basename "${url%.sha256}")" >"$out" ;;
+    esac
     exit 0 ;;
 esac
 
@@ -116,22 +122,23 @@ run_case() {
 
   if grep -q "DOWNLOAD-OK-reached-tar" "$WORK/trace"; then got=download-ok; else got=no-download; fi
 
-  if [ "$got" = "$expect" ]; then
+  local problem=""
+  if [ "$got" != "$expect" ]; then
+    problem="expected $expect, got $got"
+  elif [ -n "${EXPECT_SOURCE:-}" ] &&
+    ! printf '%s\n' "$output" | grep -qF "Downloading published Relay binary: ${EXPECT_SOURCE}"; then
+    # The chosen source must be the fastest one that actually works.
+    problem="expected the download to come from ${EXPECT_SOURCE}"
+  fi
+
+  if [ -z "$problem" ]; then
     echo "PASS  $name"
     pass=$((pass + 1))
   else
-    echo "FAIL  $name (expected $expect, got $got)"
+    echo "FAIL  $name ($problem)"
     printf '%s\n' "$output" | sed 's/^/        /'
     echo "      curl trace:"
     sed 's/^/        /' "$WORK/trace"
-    fail=$((fail + 1))
-  fi
-
-  # The chosen source must be the fastest one that works.
-  if [ -n "${EXPECT_SOURCE:-}" ] \
-    && ! printf '%s\n' "$output" | grep -q "Downloading published Relay binary: ${EXPECT_SOURCE}"; then
-    echo "FAIL  $name (expected to download from ${EXPECT_SOURCE})"
-    printf '%s\n' "$output" | sed 's/^/        /'
     fail=$((fail + 1))
   fi
 }
@@ -172,6 +179,15 @@ EXPECT_SOURCE="$GITHUB_URL" \
 EXPECT_SOURCE="" \
   run_case "every source dead reaches the source-build fallback" no-download \
   "ghfast.top:dead:0" "//github.com:dead:0" "linux-binaries.json:dead:0"
+
+# Security property: bytes from a mirror must be checked against the checksum
+# GitHub serves, not the one the mirror serves. The stub gives every non-GitHub
+# origin a wrong checksum, so downloading from the mirror can only succeed if
+# the canonical URL was used.
+EXPECT_SOURCE="$MIRROR_ASSET_URL" \
+  run_case "mirror download verifies against the canonical GitHub checksum" download-ok \
+  "ghfast.top:ok:1024" "//github.com:ok:1024" \
+  "linux-binaries.json:ok:999999" "release/0.2.13:ok:2097152"
 
 echo "----"
 echo "pass=$pass fail=$fail"

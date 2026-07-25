@@ -37,38 +37,51 @@ Desktop Tauri surface: `src/apps/desktop/src/api/relay_deploy_api.rs`
    `/<version>/` path. The mirror retains only the most recent releases, so a
    pinned version 404s for every older Desktop build.
 
-4. **Fallback source path is `~/.bitfun/relay-src`**, never `$HOME/BitFun` /
+4. **Verify against a checksum from a different origin than the bytes.** A
+   `.sha256` served by whoever served the archive only detects corruption; the
+   CN path deliberately prefers a third-party GitHub proxy, so the checksum is
+   always fetched from the canonical GitHub URL (derivable from any candidate
+   URL, including the mirror's versioned path). Same-origin fallback is allowed
+   only when GitHub is unreachable, and must say so in the log.
+
+5. **One implementation, two callers.** The download, verification and runtime
+   image live in `src/apps/relay-server/release-download.sh`; `deploy.sh`
+   sources it and `relay_deploy.rs` embeds it with `include_str!`, exactly as
+   `mirror.sh` is shared. Do not fork this logic back into the Rust template —
+   manual and one-click deploys must not drift.
+
+6. **Fallback source path is `~/.bitfun/relay-src`**, never `$HOME/BitFun` /
    `$HOME/bitfun`. Sync always passes an explicit clone destination. Destructive
    replace is only safe under `~/.bitfun/`.
 
-5. **Git first, tarball fallback.** When `.git` already exists, deploy must
+7. **Git first, tarball fallback.** When `.git` already exists, deploy must
    `fetch` + checkout, not re-clone from scratch (preserves BuildKit layers
    and Cargo cache mounts for registry/git/`target`).
 
-6. **Close wizard = cancel remote task.** Do not leave nohup builds running
+8. **Close wizard = cancel remote task.** Do not leave nohup builds running
    after the modal closes; cancel must kill the pid tree and best-effort stop
    compose/buildx workers.
 
-7. **Account password never leaves this device.** Provision locally, then
+9. **Account password never leaves this device.** Provision locally, then
    `relay-admin import-user` over the SSH session. Do not send plaintext
    passwords to the remote as env/script args.
 
-8. **“Already deployed” is container-aware, not only selected-port health.**
+10. **“Already deployed” is container-aware, not only selected-port health.**
    Changing the listen port must not hide a running `bitfun-relay`. Use
    `container_running` / `existing_relay_port` / `relay_healthy` (health on
    selected **or** existing port). “Create account” must hit the running port.
 
-9. **Port conflict ≠ our relay.** `port_busy && !port_owned_by_relay` blocks
+11. **Port conflict ≠ our relay.** `port_busy && !port_owned_by_relay` blocks
    deploy; busy-because-bitfun-relay does not.
 
-10. **Privilege / Docker install.** Do not call `sudo -v` unconditionally.
+12. **Privilege / Docker install.** Do not call `sudo -v` unconditionally.
    Detect root / passwordless sudo / interactive elevate. Docker install must
    not require a working daemon *before* install.
 
-11. **Scripts are embedded Rust templates** staged via SFTP. Do not rely on a
+13. **Scripts are embedded Rust templates** staged via SFTP. Do not rely on a
    static repo `.sh` alone on the server until the desktop binary re-stages.
 
-12. **China mirrors before overseas downloads.** Desktop orchestration embeds
+14. **China mirrors before overseas downloads.** Desktop orchestration embeds
    `src/apps/relay-server/mirror.sh` and runs `bitfun_mirror_init` before apt
    tool install, Docker Engine install, and GitHub sync. `deploy.sh` sources
    the same file so manual and one-click paths stay aligned. Force with

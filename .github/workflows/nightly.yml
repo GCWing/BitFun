@@ -217,6 +217,10 @@ jobs:
     needs: check-changes
     if: needs.check-changes.outputs.should_build == 'true'
     uses: ./.github/workflows/linux-binaries.yml
+    secrets:
+      release_signing_key: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+      release_signing_password: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+      release_pubkey: ${{ secrets.TAURI_UPDATER_PUBKEY }}
     with:
       checkout_ref: ${{ github.sha }}
       version: ${{ needs.check-changes.outputs.nightly_version }}
@@ -296,4 +300,5 @@ jobs:
             linux-release-assets/bitfun-cli-*.tar.gz.sha256
             linux-release-assets/bitfun-relay-server-*.tar.gz
             linux-release-assets/bitfun-relay-server-*.tar.gz.sha256
+            linux-release-assets/*.tar.gz.sig
             linux-release-assets/linux-binaries.json

@@ -243,6 +243,10 @@ jobs:
     name: Linux CLI and Relay Server
     needs: prepare
     uses: ./.github/workflows/linux-binaries.yml
+    secrets:
+      release_signing_key: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+      release_signing_password: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+      release_pubkey: ${{ secrets.TAURI_UPDATER_PUBKEY }}
     with:
       checkout_ref: ${{ needs.prepare.outputs.checkout_ref }}
       version: ${{ needs.prepare.outputs.version }}
@@ -332,6 +336,7 @@ jobs:
             linux-release-assets/bitfun-cli-*.tar.gz.sha256
             linux-release-assets/bitfun-relay-server-*.tar.gz
             linux-release-assets/bitfun-relay-server-*.tar.gz.sha256
+            linux-release-assets/*.tar.gz.sig
             linux-release-assets/linux-binaries.json
           fail_on_unmatched_files: true
 

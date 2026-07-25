@@ -14,6 +14,167 @@ use tauri_plugin_updater::UpdaterExt;
 /// Emitted during `install_update` download; matches `installUpdateWithProgress` / frontend listener.
 const UPDATE_PROGRESS_EVENT: &str = "bitfun-update-progress";
 
+/// Updater origins, in configured (fallback) order. Kept in step with
+/// `scripts/desktop-tauri-build.mjs`, which bakes the same pair into the bundle.
+const GITHUB_UPDATER_ENDPOINT: &str =
+    "https://github.com/GCWing/BitFun/releases/latest/download/latest.json";
+const OPENBITFUN_UPDATER_ENDPOINT: &str = "https://openbitfun.com/release/latest.json";
+
+/// Throughput probe settings, matching the CLI updater and the relay deploy
+/// script (`src/apps/cli/src/self_update.rs`,
+/// `src/apps/relay-server/release-download.sh`).
+const PROBE_WINDOW: std::time::Duration = std::time::Duration::from_secs(10);
+const PROBE_BYTES: u64 = 4 * 1024 * 1024;
+const HEALTHY_THROUGHPUT: u64 = 128 * 1024;
+
+/// Order the updater endpoints fastest-first.
+///
+/// Tauri walks `endpoints` and stops at the first that returns a usable
+/// manifest, then downloads from the URL *inside that manifest*. `latest.json`
+/// is ~2 KB, so a reachable-but-crawling GitHub always wins the race to answer
+/// and then pins an 80-160 MB download to itself — the mirror is only ever tried
+/// when GitHub errors outright. Probing the actual package each origin would
+/// serve, and ordering endpoints by that, makes the slow-link case fall to
+/// whichever origin can actually deliver.
+///
+/// Deliberately still routed through `Update::download`: minisign verification
+/// lives inside it, so fetching bytes by hand and calling `Update::install`
+/// would silently skip signature checking.
+async fn endpoints_fastest_first() -> Vec<tauri::Url> {
+    let client = match reqwest::Client::builder()
+        .connect_timeout(std::time::Duration::from_secs(5))
+        .build()
+    {
+        Ok(client) => client,
+        Err(_) => return default_endpoints(),
+    };
+
+    // Probe the package each origin would actually serve, not its manifest.
+    // `latest.json` is ~2 KB, so probing it measures round-trip latency and
+    // tells us nothing about an 80-160 MB transfer. Each manifest names its own
+    // download URL, which is exactly the thing worth measuring.
+    let platform = updater_platform_key();
+    let mut ranked = Vec::new();
+    for endpoint in [GITHUB_UPDATER_ENDPOINT, OPENBITFUN_UPDATER_ENDPOINT] {
+        let Ok(url) = endpoint.parse::<tauri::Url>() else {
+            continue;
+        };
+        let speed = match manifest_package_url(&client, endpoint, &platform).await {
+            Some(package) => probe_endpoint_throughput(&client, &package).await,
+            // Unreachable or no build for this platform: rank last, but still
+            // offer it — Tauri may succeed where a ranged probe did not.
+            None => 0,
+        };
+        log::debug!("Desktop updater probe: {} B/s via {}", speed, endpoint);
+        ranked.push((url, speed));
+    }
+    if ranked.is_empty() {
+        return default_endpoints();
+    }
+    ranked.sort_by(|left, right| right.1.cmp(&left.1));
+    if ranked[0].1 < HEALTHY_THROUGHPUT {
+        log::info!(
+            "Fastest updater origin is {} KB/s, under the {} KB/s bar; the download will be slow.",
+            ranked[0].1 / 1024,
+            HEALTHY_THROUGHPUT / 1024
+        );
+    }
+    ranked.into_iter().map(|(url, _)| url).collect()
+}
+
+/// Tauri's `latest.json` platform key for this host, e.g. `darwin-aarch64`.
+/// Mirrors `scripts/generate-tauri-latest-json.mjs`.
+fn updater_platform_key() -> String {
+    let os = match std::env::consts::OS {
+        "macos" => "darwin",
+        other => other,
+    };
+    format!("{os}-{}", std::env::consts::ARCH)
+}
+
+/// Read one updater manifest and return the download URL it advertises for this
+/// platform. Cheap: the manifest is a couple of kilobytes.
+async fn manifest_package_url(
+    client: &reqwest::Client,
+    endpoint: &str,
+    platform: &str,
+) -> Option<String> {
+    let manifest = tokio::time::timeout(
+        std::time::Duration::from_secs(10),
+        client.get(endpoint).send(),
+    )
+    .await
+    .ok()?
+    .ok()?
+    .error_for_status()
+    .ok()?
+    .json::<serde_json::Value>()
+    .await
+    .ok()?;
+    manifest
+        .get("platforms")?
+        .get(platform)?
+        .get("url")?
+        .as_str()
+        .map(str::to_owned)
+}
+
+fn default_endpoints() -> Vec<tauri::Url> {
+    [GITHUB_UPDATER_ENDPOINT, OPENBITFUN_UPDATER_ENDPOINT]
+        .iter()
+        .filter_map(|endpoint| endpoint.parse().ok())
+        .collect()
+}
+
+/// Bytes an origin delivers inside [`PROBE_WINDOW`], i.e. its throughput.
+async fn probe_endpoint_throughput(client: &reqwest::Client, url: &str) -> u64 {
+    use futures::StreamExt;
+
+    let started = std::time::Instant::now();
+    let request = client
+        .get(url)
+        .header(reqwest::header::RANGE, format!("bytes=0-{}", PROBE_BYTES - 1))
+        .send();
+    let Ok(Ok(response)) = tokio::time::timeout(PROBE_WINDOW, request).await else {
+        return 0;
+    };
+    if !response.status().is_success() {
+        return 0;
+    }
+
+    let mut received: u64 = 0;
+    let mut stream = response.bytes_stream();
+    loop {
+        let remaining = match PROBE_WINDOW.checked_sub(started.elapsed()) {
+            Some(left) if !left.is_zero() => left,
+            _ => break,
+        };
+        match tokio::time::timeout(remaining, stream.next()).await {
+            Ok(Some(Ok(chunk))) => received += chunk.len() as u64,
+            _ => break,
+        }
+        if received >= PROBE_BYTES {
+            break;
+        }
+    }
+    (received as f64 / started.elapsed().as_secs_f64().max(0.001)) as u64
+}
+
+/// Build an updater whose endpoints are ordered by measured throughput.
+/// Falls back to the bundled configuration if the builder rejects them.
+async fn ranked_updater(app: &AppHandle) -> Result<tauri_plugin_updater::Updater, String> {
+    let endpoints = endpoints_fastest_first().await;
+    let builder = app.updater_builder();
+    let builder = match builder.endpoints(endpoints) {
+        Ok(builder) => builder,
+        Err(error) => {
+            log::warn!("Updater endpoint ranking rejected, using bundled order: {}", error);
+            app.updater_builder()
+        }
+    };
+    builder.build().map_err(|error| error.to_string())
+}
+
 #[derive(Clone, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
 struct UpdateProgressPayload {
@@ -75,7 +236,7 @@ pub async fn check_for_updates(
     request: CheckForUpdatesRequest,
 ) -> Result<CheckForUpdatesResponse, String> {
     let _ = request;
-    let updater = app.updater().map_err(|e| e.to_string())?;
+    let updater = ranked_updater(&app).await?;
     let update = updater.check().await.map_err(|e| e.to_string())?;
     match update {
         Some(u) => Ok(CheckForUpdatesResponse {
@@ -103,7 +264,7 @@ pub struct InstallUpdateRequest {}
 #[tauri::command]
 pub async fn install_update(app: AppHandle, request: InstallUpdateRequest) -> Result<(), String> {
     let _ = request;
-    let updater = app.updater().map_err(|e| e.to_string())?;
+    let updater = ranked_updater(&app).await?;
     let update = updater.check().await.map_err(|e| e.to_string())?;
     let Some(update) = update else {
         return Err("No update available".to_string());
@@ -666,6 +827,25 @@ pub async fn send_system_notification(
 
 #[cfg(test)]
 mod tests {
+    /// The probe reads `platforms[<key>].url` out of `latest.json`; if this key
+    /// stops matching what scripts/generate-tauri-latest-json.mjs emits, every
+    /// probe silently scores 0 and ranking degrades to the configured order.
+    #[test]
+    fn updater_platform_key_matches_latest_json_convention() {
+        let key = super::updater_platform_key();
+        let (os, arch) = key.split_once('-').expect("os-arch shape");
+        assert!(
+            matches!(os, "darwin" | "linux" | "windows"),
+            "unexpected updater os segment: {os}"
+        );
+        assert!(
+            matches!(arch, "x86_64" | "aarch64"),
+            "unexpected updater arch segment: {arch}"
+        );
+        #[cfg(target_os = "macos")]
+        assert!(key.starts_with("darwin-"), "macOS must map to darwin, got {key}");
+    }
+
     use super::*;
 
     #[test]

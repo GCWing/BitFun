@@ -50,11 +50,19 @@ function asset(filename) {
   if (!fs.existsSync(checksumPath)) {
     throw new Error(`Required Linux checksum was not found: ${checksumPath}`);
   }
-  return {
+  const entry = {
     filename,
     url: `${releaseBase}/${filename}`,
     sha256Url: `${releaseBase}/${checksum}`,
   };
+  // Signature is optional: forks build without the release key. A checksum
+  // proves only that the transfer was intact, since whoever serves the archive
+  // serves the checksum too; the signature is what a mirror cannot forge.
+  const signature = `${filename}.sig`;
+  if (fs.existsSync(path.join(assetsDir, signature))) {
+    entry.sigUrl = `${releaseBase}/${signature}`;
+  }
+  return entry;
 }
 
 const manifest = {

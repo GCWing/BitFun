@@ -1,3 +1,7 @@
+// Trait resolution for this crate's async call graph (reqwest/h2 futures behind
+// several layers of `async fn`) exceeds the default depth.
+#![recursion_limit = "256"]
+
 /// BitFun CLI
 ///
 /// Command-line interface version, supports:

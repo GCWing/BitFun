@@ -61,6 +61,9 @@ struct ReleaseAsset {
     filename: String,
     url: String,
     sha256_url: String,
+    /// Present once the release is signed; absent on older manifests.
+    #[serde(default)]
+    sig_url: Option<String>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -249,16 +252,30 @@ async fn update_from_configured_sources(check_only: bool) -> Result<UpdateOutcom
     // so it is simply not offering these bytes yet.
     let mut candidates = Vec::new();
     let mut skipped = Vec::new();
+    // Checksum served by GitHub itself for this exact version. Verifying an
+    // archive against a `.sha256` from the same host it came from proves only
+    // that the transfer was not corrupted — a hostile mirror serves both and
+    // passes. Binding to a different origin means one compromised mirror is not
+    // enough.
+    let mut canonical_sha256_url = None;
+    let mut canonical_sig_url = None;
     for (source, manifest) in &manifests {
         if manifest.version != newest {
             continue;
         }
         match platform_asset(manifest, platform_key) {
-            Ok(asset) => candidates.push(AssetCandidate {
-                url: asset.url.clone(),
-                sha256_url: asset.sha256_url.clone(),
-                filename: asset.filename.clone(),
-            }),
+            Ok(asset) => {
+                if *source == "GitHub" {
+                    canonical_sha256_url = Some(asset.sha256_url.clone());
+                    canonical_sig_url = asset.sig_url.clone();
+                }
+                candidates.push(AssetCandidate {
+                    url: asset.url.clone(),
+                    sha256_url: asset.sha256_url.clone(),
+                    sig_url: asset.sig_url.clone(),
+                    filename: asset.filename.clone(),
+                });
+            }
             Err(error) => skipped.push(format!("{source}: {error:#}")),
         }
     }
@@ -269,6 +286,8 @@ async fn update_from_configured_sources(check_only: bool) -> Result<UpdateOutcom
         ));
     }
 
+    // Every candidate is the same asset, so any one names the staging file.
+    let asset_filename = candidates[0].filename.clone();
     let ranked = rank_sources(&client, candidates).await;
     if let Some(fastest) = ranked.first() {
         if fastest.1 < HEALTHY_THROUGHPUT {
@@ -281,18 +300,48 @@ async fn update_from_configured_sources(check_only: bool) -> Result<UpdateOutcom
     }
 
     // Partial progress carries across sources: every source serves the same
-    // artifact and the checksum catches a bad resume.
-    let mut buffer = Vec::new();
+    // artifact and the checksum catches a bad resume. It also carries across
+    // *runs* — the automatic path installs from a detached child, and a child
+    // killed at 90% should not start over on the next launch.
+    let staging = PartialDownload::open(&newest, &asset_filename);
+    let mut buffer = staging.resume();
+    if !buffer.is_empty() {
+        eprintln!(
+            "Resuming a previous BitFun CLI download at {} MB.",
+            buffer.len() / (1024 * 1024)
+        );
+    }
     let mut failures = Vec::new();
     for (candidate, _) in &ranked {
-        if let Err(error) = download_resumable(&client, &candidate.url, &mut buffer).await {
+        let outcome = download_resumable(&client, &candidate.url, &mut buffer).await;
+        staging.save(&buffer);
+        if let Err(error) = outcome {
             failures.push(format!("{}: {error:#}", candidate.url));
             continue;
         }
-        let checksum_text = match download_text(&client, &candidate.sha256_url).await {
+        let checksum_url = canonical_sha256_url
+            .as_deref()
+            .unwrap_or(candidate.sha256_url.as_str());
+        let checksum_text = match download_text(&client, checksum_url).await {
             Ok(text) => text,
+            // Falling back to the origin's own checksum is materially weaker, so
+            // only do it when the canonical copy is genuinely unreachable.
+            Err(error) if checksum_url != candidate.sha256_url => {
+                eprintln!(
+                    "Warning: canonical checksum at {checksum_url} is unreachable ({error:#}); \
+                     falling back to the one served by the download origin, which only \
+                     detects corruption, not a tampered mirror."
+                );
+                match download_text(&client, &candidate.sha256_url).await {
+                    Ok(text) => text,
+                    Err(error) => {
+                        failures.push(format!("{}: {error:#}", candidate.sha256_url));
+                        continue;
+                    }
+                }
+            }
             Err(error) => {
-                failures.push(format!("{}: {error:#}", candidate.sha256_url));
+                failures.push(format!("{checksum_url}: {error:#}"));
                 continue;
             }
         };
@@ -300,10 +349,30 @@ async fn update_from_configured_sources(check_only: bool) -> Result<UpdateOutcom
             // Bad bytes, not a bad link: discard so the next source does not
             // resume on top of them.
             buffer.clear();
+            staging.discard();
             failures.push(format!("{}: {error:#}", candidate.url));
             continue;
         }
+        // Checksum passed, so the bytes are intact. Signature proves who made
+        // them — the part a mirror or proxy cannot forge.
+        if let Some(pubkey) = release_pubkey() {
+            let sig_url = canonical_sig_url
+                .as_deref()
+                .or(candidate.sig_url.as_deref());
+            let Some(sig_url) = sig_url else {
+                return Err(anyhow!(
+                    "this build requires signed releases but {newest} publishes no signature; \
+                     refusing to install"
+                ));
+            };
+            let signature = download_text(&client, sig_url)
+                .await
+                .with_context(|| format!("fetch release signature {sig_url}"))?;
+            verify_signature(&buffer, &signature, pubkey)?;
+        }
+
         install_archive(&buffer, &current_exe)?;
+        staging.discard();
         restart_managed_daemon();
         println!("Updated to {newest} from {}", candidate.url);
         return Ok(UpdateOutcome::Updated);
@@ -315,11 +384,86 @@ async fn update_from_configured_sources(check_only: bool) -> Result<UpdateOutcom
     ))
 }
 
+/// Download staging that survives the process.
+///
+/// The automatic path installs from a detached child; without this a child
+/// killed near the end of a slow transfer would restart from zero on the next
+/// launch, which on a 20 KB/s link means never finishing. Keyed by version and
+/// filename so a stale partial from an older release is never resumed into.
+struct PartialDownload {
+    path: Option<PathBuf>,
+}
+
+impl PartialDownload {
+    fn open(version: &str, filename: &str) -> Self {
+        match crate::config::CliConfig::config_dir() {
+            Ok(dir) => Self::open_in(&dir, version, filename),
+            Err(_) => Self { path: None },
+        }
+    }
+
+    /// Directory-injected form. Keeps the tests off `$HOME`, which is
+    /// process-global and would make every other test in this binary flaky.
+    fn open_in(dir: &Path, version: &str, filename: &str) -> Self {
+        let key: String = format!("{version}-{filename}")
+            .chars()
+            .map(|c| {
+                if c.is_ascii_alphanumeric() || c == '.' || c == '-' {
+                    c
+                } else {
+                    '_'
+                }
+            })
+            .collect();
+        let path = dir.join(format!("update-partial-{key}"));
+
+        // A partial from a different version or asset is dead weight, and
+        // resuming one into this archive would only be caught by the checksum
+        // after the whole transfer.
+        if let Ok(entries) = fs::read_dir(dir) {
+            for entry in entries.flatten() {
+                let stale = entry.path();
+                let is_partial = stale
+                    .file_name()
+                    .and_then(|name| name.to_str())
+                    .is_some_and(|name| name.starts_with("update-partial-"));
+                if is_partial && stale != path {
+                    let _ = fs::remove_file(stale);
+                }
+            }
+        }
+        Self { path: Some(path) }
+    }
+
+    fn resume(&self) -> Vec<u8> {
+        self.path
+            .as_ref()
+            .and_then(|path| fs::read(path).ok())
+            .unwrap_or_default()
+    }
+
+    fn save(&self, buffer: &[u8]) {
+        if buffer.is_empty() {
+            return;
+        }
+        if let Some(path) = &self.path {
+            let _ = fs::write(path, buffer);
+        }
+    }
+
+    fn discard(&self) {
+        if let Some(path) = &self.path {
+            let _ = fs::remove_file(path);
+        }
+    }
+}
+
 /// One source's copy of the same archive.
 #[derive(Debug, Clone)]
 struct AssetCandidate {
     url: String,
     sha256_url: String,
+    sig_url: Option<String>,
     filename: String,
 }
 
@@ -548,6 +692,45 @@ async fn download_text(client: &Client, url: &str) -> Result<String> {
         .text()
         .await
         .with_context(|| format!("read {url}"))
+}
+
+/// Ed25519 (minisign) public key for official release archives, injected at
+/// build time from the same `TAURI_UPDATER_PUBKEY` the Desktop updater trusts.
+///
+/// Absent in local and fork builds; those fall back to checksum-only, which is
+/// why `signature_required` gates on it rather than assuming.
+const RELEASE_PUBKEY: Option<&str> = option_env!("BITFUN_RELEASE_PUBKEY");
+
+/// The trust root this binary was built with, if any. `Some` means an official
+/// release build, and signature verification is then mandatory.
+fn release_pubkey() -> Option<&'static str> {
+    RELEASE_PUBKEY.filter(|key| !key.trim().is_empty())
+}
+
+/// Verify a Tauri-format `.sig` (base64 of a minisign signature file) over the
+/// archive, using the base64-wrapped public key.
+///
+/// A checksum only proves the transfer was not corrupted: whoever serves the
+/// archive can serve a matching `.sha256`. A signature proves the bytes came
+/// from whoever holds the release key, which is what actually protects the
+/// third-party GitHub proxy and mirror paths.
+fn verify_signature(archive: &[u8], signature_b64: &str, pubkey_b64: &str) -> Result<()> {
+    use base64::Engine as _;
+    let decode = |value: &str, what: &str| -> Result<String> {
+        let bytes = base64::engine::general_purpose::STANDARD
+            .decode(value.trim().as_bytes())
+            .with_context(|| format!("decode {what}"))?;
+        String::from_utf8(bytes).with_context(|| format!("decode {what} as UTF-8"))
+    };
+
+    let public_key = minisign_verify::PublicKey::decode(&decode(pubkey_b64, "release public key")?)
+        .map_err(|error| anyhow!("invalid release public key: {error}"))?;
+    let signature =
+        minisign_verify::Signature::decode(&decode(signature_b64, "release signature")?)
+            .map_err(|error| anyhow!("invalid release signature: {error}"))?;
+    public_key
+        .verify(archive, &signature, false)
+        .map_err(|error| anyhow!("release signature does not match the archive: {error}"))
 }
 
 fn verify_sha256(archive: &[u8], checksum_text: &str, filename: &str) -> Result<()> {
@@ -839,6 +1022,7 @@ mod tests {
             AssetCandidate {
                 url: self.url.clone(),
                 sha256_url: format!("{}.sha256", self.url),
+                sig_url: None,
                 filename: filename.to_string(),
             }
         }
@@ -916,6 +1100,41 @@ mod tests {
         assert_eq!(speed, 0);
     }
 
+    /// A background installer killed mid-transfer must resume, not restart —
+    /// on a slow link restarting means never finishing. A partial from a
+    /// different release must never be resumed into.
+    #[test]
+    fn staged_partial_resumes_and_evicts_other_versions() {
+        let dir = tempfile::tempdir().expect("temp dir");
+        let stage = |version: &str, filename: &str| {
+            PartialDownload::open_in(dir.path(), version, filename)
+        };
+
+        let first = stage("0.2.14", "bitfun-cli-0.2.14-x86_64.tar.gz");
+        assert!(first.resume().is_empty(), "nothing staged yet");
+        first.save(b"partial-bytes");
+        assert_eq!(
+            stage("0.2.14", "bitfun-cli-0.2.14-x86_64.tar.gz").resume(),
+            b"partial-bytes",
+            "same version and asset must resume"
+        );
+
+        // Opening a different version evicts the stale partial rather than
+        // resuming a mismatched archive into the new one.
+        let newer = stage("0.2.15", "bitfun-cli-0.2.15-x86_64.tar.gz");
+        assert!(newer.resume().is_empty());
+        assert!(
+            stage("0.2.14", "bitfun-cli-0.2.14-x86_64.tar.gz")
+                .resume()
+                .is_empty(),
+            "the superseded partial must be gone"
+        );
+
+        newer.save(b"abc");
+        newer.discard();
+        assert!(newer.resume().is_empty(), "discard clears the staging file");
+    }
+
     #[test]
     fn newest_version_wins_across_manifests() {
         let manifest = |version: &str| LinuxBinariesManifest {
@@ -942,6 +1161,28 @@ mod tests {
         assert!(is_newer_version("0.2.14", "0.2.13"));
         assert!(!is_newer_version("0.2.13", "0.2.13-nightly.1+abc"));
         assert!(!is_newer_version("0.2.12", "0.2.13"));
+    }
+
+    /// Fixture produced with the real `minisign` CLI, then wrapped the way
+    /// Tauri wraps keys and signatures (base64 of the whole file), so this pins
+    /// the exact on-disk format CI must emit.
+    const FIXTURE_PUBKEY: &str = "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXkgRTNFMDg3NENFQzFDMjJDMwpSV1RESWh6c1RJZmc0MXcyR3dpZWkwek5ES2FMWW05ZFFWcEVXTlEvVWxweXQybWJTMkpFMVUyTQo=";
+    const FIXTURE_SIGNATURE: &str = "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIG1pbmlzaWduIHNlY3JldCBrZXkKUlVUREloenNUSWZnNDBMTitwb25aT3RCVy9VYmJtNWhkR1poM0lCb3IwUDBKaVZmZmM1cFJaNlZSNUpaSzNUUm1yWWpYMXFLQ2svWTdZUDhHdkRZT3YvanVoZlpnZmhyWEFRPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzg0OTUxOTM1CWZpbGU6YXJjaGl2ZS50YXIuZ3oJaGFzaGVkCjhWL21EUVAwZGdlZXVNU1lxWlpsOWdFSGUwOTJQTk9yRG1BMUV6ZHNQOUlEYkcyT1dneTFsQ1puUDBJaFIwQnJpMFBCeENRcUdDR2dpb0l0UGtSMUN3PT0K";
+    const FIXTURE_DATA: &[u8] = b"hello-bitfun\n";
+
+    #[test]
+    fn release_signature_accepts_the_tauri_wire_format() {
+        verify_signature(FIXTURE_DATA, FIXTURE_SIGNATURE, FIXTURE_PUBKEY)
+            .expect("minisign signature in Tauri's base64 wrapper must verify");
+    }
+
+    #[test]
+    fn release_signature_rejects_tampered_bytes() {
+        // The whole point: a mirror that alters the archive cannot also forge
+        // this, unlike the checksum it serves alongside it.
+        let tampered = b"hello-bitfun-tampered\n";
+        assert!(verify_signature(tampered, FIXTURE_SIGNATURE, FIXTURE_PUBKEY).is_err());
+        assert!(verify_signature(FIXTURE_DATA, "bm90LWEtc2lnbmF0dXJl", FIXTURE_PUBKEY).is_err());
     }
 
     #[test]

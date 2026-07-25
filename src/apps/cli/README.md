@@ -37,9 +37,22 @@ and whichever advertises the newer version decides what gets installed. When
 both carry it, each is probed with a short ranged request and the archive is
 downloaded from whichever is measurably faster — a source that is merely slow
 rather than broken no longer holds the update hostage. Downloads resume rather
-than restart, including across a switch of source, and the checksum is verified
-before anything is replaced. Concurrent updates are serialised by
+than restart, across a switch of source and across runs (a background install
+killed at 90% picks up where it stopped). Concurrent updates are serialised by
 `update.lock` in the CLI config directory.
+
+Two checks run before anything is replaced:
+
+- **Checksum**, fetched from the canonical GitHub URL even when the archive came
+  from a mirror. A `.sha256` served by the same host as the archive only proves
+  the transfer was intact — whoever serves one serves the other. Falling back to
+  the origin's own checksum happens only when GitHub is wholly unreachable, and
+  says so.
+- **Signature** (`.sig`, minisign), verified against the release key compiled
+  into official builds — the same trust root the Desktop updater uses. This is
+  the check a mirror or third-party proxy cannot forge. Official builds refuse
+  to install an unsigned release; builds without the key (local, forks) fall
+  back to checksum-only.
 
 `bitfun-cli` is a deprecated compatibility entrypoint. It writes
 `Warning: \`bitfun-cli\` is deprecated; use \`bitfun\` instead.` to stderr; new scripts and

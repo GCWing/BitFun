@@ -51,7 +51,7 @@ const REPO_GIT_BRANCH: &str = "main";
 const REPO_TARBALL_URL: &str = "https://github.com/GCWing/BitFun/archive/refs/heads/main.tar.gz";
 /// Release asset base. Asset names are stable across tags so the embedded
 /// Desktop version can address its matching server build without a GitHub API call.
-const RELEASE_DOWNLOAD_BASE: &str = "https://github.com/GCWing/BitFun/releases/download";
+const RELEASE_BASE: &str = "https://github.com/GCWing/BitFun/releases";
 const OPENBITFUN_RELEASE_BASE: &str = "https://openbitfun.com/release";
 const RELEASE_VERSION: &str = env!("CARGO_PKG_VERSION");
 /// Ranked-source download tuning, shared with the CLI self-updater
@@ -67,11 +67,21 @@ const HEALTHY_THROUGHPUT_BYTES_PER_SEC: u64 = 128 * 1024;
 /// available link must still be allowed to finish rather than loop forever.
 const STALL_THROUGHPUT_BYTES_PER_SEC: u64 = 8 * 1024;
 const STALL_WINDOW_SECONDS: u64 = 30;
+/// Free space the source-build fallback needs under `$HOME` (Cargo registry,
+/// target dir and Docker layers). Checked before the build rather than
+/// discovered as an opaque compiler failure part-way through.
+const SOURCE_BUILD_FREE_KB: u64 = 6 * 1024 * 1024;
 /// Canonical China-mirror helper (shared with `src/apps/relay-server/deploy.sh`).
 /// Embedded so Desktop orchestration can apply mirrors before the git clone.
 const RELAY_MIRROR_SH: &str = include_str!(concat!(
     env!("CARGO_MANIFEST_DIR"),
     "/../../../apps/relay-server/mirror.sh"
+));
+/// Published-binary download + runtime deploy (shared with `deploy.sh`, so the
+/// manual and one-click paths run the same code).
+const RELAY_RELEASE_DOWNLOAD_SH: &str = include_str!(concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/../../../apps/relay-server/release-download.sh"
 ));
 /// Remote directory (relative to the SSH user's home) holding deploy state.
 const DEPLOY_STATE_DIR: &str = ".bitfun/relay-deploy";
@@ -146,6 +156,10 @@ pub struct RelayPreflight {
     /// `sudo` exists but `sudo -n` fails (password required).
     pub sudo_needs_password: bool,
     pub mem_total_mb: u64,
+    /// Free space under `$HOME` in MB (archive staging + source checkout).
+    pub home_free_mb: u64,
+    /// Free space on Docker's data root in MB (images and layers).
+    pub docker_free_mb: u64,
     /// Selected listen port already bound by another process.
     pub port_busy: bool,
     /// Port that was probed (`port_busy` / selected-port health).
@@ -228,6 +242,13 @@ if [ ! -e "$HOME/.docker" ]; then echo "docker_home_writable=1"
 elif [ -w "$HOME/.docker" ] && {{ [ ! -e "$HOME/.docker/buildx" ] || [ -w "$HOME/.docker/buildx" ]; }}; then echo "docker_home_writable=1"
 else echo "docker_home_writable=0"; fi
 echo "mem_kb=$(awk '/MemTotal/ {{print $2}}' /proc/meminfo 2>/dev/null || echo 0)"
+# Free space where the work actually lands: ~/.bitfun holds the downloaded
+# archive and the source checkout, Docker's data root holds images and layers.
+echo "home_free_kb=$(df -Pk "$HOME" 2>/dev/null | awk 'NR==2 {{print $4}}' || echo 0)"
+DOCKER_ROOT=$(docker info -f '{{{{.DockerRootDir}}}}' 2>/dev/null \
+  || sudo -n docker info -f '{{{{.DockerRootDir}}}}' 2>/dev/null || echo /var/lib/docker)
+[ -d "$DOCKER_ROOT" ] || DOCKER_ROOT=/var
+echo "docker_free_kb=$(df -Pk "$DOCKER_ROOT" 2>/dev/null | awk 'NR==2 {{print $4}}' || echo 0)"
 if command -v ss >/dev/null 2>&1; then PORTS=$(ss -ltn 2>/dev/null); else PORTS=$(netstat -ltn 2>/dev/null); fi
 if printf '%s\n' "$PORTS" | awk '{{print $4}}' | grep -q ":${{PORT}}$"; then echo "port_busy=1"; else echo "port_busy=0"; fi
 # Prefer a docker CLI that can talk to the daemon (plain or passwordless sudo).
@@ -296,6 +317,8 @@ fn parse_preflight(out: &str, fallback_port: u16) -> RelayPreflight {
     let arch_supported = os == "Linux"
         && (arch == "x86_64" || arch == "amd64" || arch == "aarch64" || arch == "arm64");
     let mem_kb: u64 = get("mem_kb").parse().unwrap_or(0);
+    let home_free_kb: u64 = get("home_free_kb").parse().unwrap_or(0);
+    let docker_free_kb: u64 = get("docker_free_kb").parse().unwrap_or(0);
     let docker_installed = get("docker") == "1";
     let active_has_docker_group = get("active_docker_group") == "1";
     let in_docker_group_file = get("in_docker_group_file") == "1";
@@ -342,6 +365,8 @@ fn parse_preflight(out: &str, fallback_port: u16) -> RelayPreflight {
         sudo_available,
         sudo_needs_password,
         mem_total_mb: mem_kb / 1024,
+        home_free_mb: home_free_kb / 1024,
+        docker_free_mb: docker_free_kb / 1024,
         port_busy: get("port_busy") == "1",
         probed_port,
         port_owned_by_relay: get("port_owned") == "1",
@@ -1359,310 +1384,38 @@ bitfun_sync_source() {{
     )
 }
 
-/// Download the matching published Relay archive and build only a small runtime
-/// image around it. The existing container name, volumes, ports, and relay-admin
-/// path stay identical to the source-compose deployment.
+/// Preamble + shared script that downloads the matching published Relay archive
+/// and builds a small runtime image around it. The container name, volumes,
+/// ports and relay-admin path stay identical to the source-compose deployment.
+///
+/// The body lives in `src/apps/relay-server/release-download.sh` so the manual
+/// `deploy.sh` path runs exactly the same code, the same way `mirror.sh` is
+/// shared. Only the configuration differs: Desktop pins the release tag to its
+/// own version, the manual path tracks `latest`.
 fn release_binary_deploy_bash() -> String {
-    let release_tag = release_tag_for_version(RELEASE_VERSION);
     format!(
         r#"
-bitfun_try_release_deploy() {{
-  local release_dir="$HOME/.bitfun/relay-release"
-  local target archive upstream_url download_dir extracted context image
-  case "$(uname -m 2>/dev/null)" in
-    x86_64|amd64) target="x86_64-unknown-linux-gnu" ;;
-    aarch64|arm64) target="aarch64-unknown-linux-gnu" ;;
-    *)
-      echo ">>> No published Relay binary for architecture $(uname -m); using source build."
-      return 1
-      ;;
-  esac
-
-  archive="bitfun-relay-server-${{target}}.tar.gz"
-  upstream_url="{RELEASE_DOWNLOAD_BASE}/{release_tag}/${{archive}}"
-  mkdir -p "$release_dir"
-  chmod 700 "$release_dir" 2>/dev/null || true
-  download_dir="$(mktemp -d "$release_dir/download.XXXXXX")"
-
-  bitfun_verify_release_archive() {{
-    (
-      cd "$download_dir"
-      if command -v sha256sum >/dev/null 2>&1; then
-        sha256sum -c "${{archive}}.sha256"
-      elif command -v shasum >/dev/null 2>&1; then
-        shasum -a 256 -c "${{archive}}.sha256"
-      else
-        echo "ERROR: sha256sum or shasum is required to verify the Relay release." >&2
-        return 1
-      fi
-    )
-  }}
-
-  # Measure a candidate by how many bytes it delivers inside a fixed window.
-  # Bytes-in-fixed-time is throughput, so one ranged request yields the ranking
-  # without downloading the whole archive from a source we may not use.
-  bitfun_probe_source() {{
-    local url="$1" speed
-    speed="$(curl -sSL --connect-timeout 5 --max-time {probe_seconds} \
-      -r 0-{probe_bytes} -o /dev/null -w '%{{speed_download}}' "$url" 2>/dev/null || true)"
-    speed="${{speed%%.*}}"
-    case "$speed" in
-      ''|*[!0-9]*) echo 0 ;;
-      *) echo "$speed" ;;
-    esac
-  }}
-
-  # Resume-capable download. `-C -` continues a partial file, so a link that
-  # cannot finish inside one attempt still converges instead of restarting from
-  # zero. --speed-limit/--speed-time abandons a source that has gone dead
-  # without waiting out a wall-clock ceiling.
-  bitfun_download_release_pair() {{
-    local url="$1"
-    local watcher="" status=0
-    local done_marker="$download_dir/.download-active"
-    echo ">>> Downloading published Relay binary: $url"
-    # The wizard polls this log; without a heartbeat a slow link is
-    # indistinguishable from a hang. Poll a sentinel on a short interval rather
-    # than sleeping long: `kill` on a shell blocked in a long `sleep` is not
-    # delivered until that sleep returns, which would stall every download by a
-    # full tick after curl already finished.
-    : >"$done_marker"
-    (
-      local ticks=0
-      while [ -f "$done_marker" ]; do
-        sleep 2
-        ticks=$(( ticks + 1 ))
-        [ "$(( ticks % 10 ))" -eq 0 ] || continue
-        [ -f "$download_dir/$archive" ] || continue
-        echo ">>>   ... $(du -h "$download_dir/$archive" 2>/dev/null | cut -f1) downloaded"
-      done
-    ) &
-    watcher=$!
-    curl -fsSL -C - \
-      --retry 3 --retry-delay 3 --retry-max-time {retry_max_time} \
-      --connect-timeout 15 --max-time {max_time} \
-      --speed-limit {stall_floor} --speed-time {stall_seconds} \
-      -o "$download_dir/$archive" "$url" || status=$?
-    rm -f "$done_marker"
-    wait "$watcher" >/dev/null 2>&1 || true
-    if [ "$status" -ne 0 ]; then
-      echo ">>> Source failed or stalled below $(( {stall_floor} / 1024 )) KB/s (curl $status); trying the next source."
-      return 1
-    fi
-    rm -f "$download_dir/${{archive}}.sha256"
-    curl -fsSL --retry 3 --connect-timeout 15 --max-time 60 \
-      -o "$download_dir/${{archive}}.sha256" "${{url}}.sha256" || return 1
-    if bitfun_verify_release_archive; then
-      return 0
-    fi
-    # Bad bytes, not a bad link: mark the partial file poisoned so the caller
-    # discards it instead of resuming on top of it from the next source.
-    : >"$download_dir/${{archive}}.verify-failed"
-    return 1
-  }}
-
-  # Candidate sources, one per line. Files rather than arrays: this script runs
-  # on whatever bash the user's server has, and `"${{empty[@]}}"` under `set -u`
-  # aborts on bash 4.2 (CentOS 7).
-  local sources="$download_dir/sources.tsv" mirror_url="" probe speed best_speed
-  : >"$sources.in"
-  if [ "${{BITFUN_MIRROR_MODE:-global}}" = "cn" ] && [ -n "${{BITFUN_GITHUB_PROXY:-}}" ]; then
-    printf '%s\n' "${{BITFUN_GITHUB_PROXY%/}}/${{upstream_url}}" >>"$sources.in"
-  fi
-  printf '%s\n' "$upstream_url" >>"$sources.in"
-  # Take the mirror URL from the mirror's own manifest rather than building a
-  # /<version>/ path: openbitfun keeps only the most recent releases, so a
-  # pinned version 404s for every Desktop build that is not one of them.
-  # `|| true`: an unreachable mirror or a non-matching manifest must leave
-  # mirror_url empty, never abort the caller under `set -e`.
-  mirror_url="$(curl -fsSL --connect-timeout 10 --max-time 30 \
-    "{OPENBITFUN_RELEASE_BASE}/linux-binaries.json" 2>/dev/null \
-    | tr ',' '\n' | grep -F '"url"' | grep -F "$archive" \
-    | head -n 1 | sed -e 's/.*"url"[[:space:]]*:[[:space:]]*"//' -e 's/".*//' || true)"
-  if [ -n "$mirror_url" ]; then
-    printf '%s\n' "$mirror_url" >>"$sources.in"
-  fi
-
-  : >"$sources"
-  while IFS= read -r probe; do
-    [ -n "$probe" ] || continue
-    speed="$(bitfun_probe_source "$probe")"
-    echo ">>> Source probe: $(( speed / 1024 )) KB/s — $probe"
-    printf '%s\t%s\n' "$speed" "$probe" >>"$sources"
-  done <"$sources.in"
-
-  if [ ! -s "$sources" ]; then
-    echo ">>> No Relay binary source responded; falling back to source build."
-    rm -rf "$download_dir"
-    return 1
-  fi
-  sort -rn -k1,1 -o "$sources" "$sources"
-  best_speed="$(head -n 1 "$sources" | cut -f1)"
-  if [ "${{best_speed:-0}}" -lt {healthy_floor} ]; then
-    echo ">>> Fastest source is $(( ${{best_speed:-0}} / 1024 )) KB/s, under the $(( {healthy_floor} / 1024 )) KB/s bar; continuing anyway — a slow download still beats a source rebuild."
-  fi
-
-  # Try fastest first. Every source serves the identical artifact, so a partial
-  # file is reused across sources too (`-C -`); only a checksum mismatch, which
-  # means the bytes really are bad, wipes it and starts the next source clean.
-  local ok=0
-  while IFS=$'\t' read -r speed probe; do
-    [ -n "$probe" ] || continue
-    if bitfun_download_release_pair "$probe"; then
-      ok=1
-      break
-    fi
-    if [ -f "$download_dir/${{archive}}.verify-failed" ]; then
-      rm -f "$download_dir/$archive" "$download_dir/${{archive}}.verify-failed"
-    fi
-  done <"$sources"
-  if [ "$ok" -ne 1 ]; then
-    echo ">>> Published Relay binary unavailable from every source; falling back to source build."
-    rm -rf "$download_dir"
-    return 1
-  fi
-
-  mkdir -p "$download_dir/extracted"
-  if ! tar xzf "$download_dir/$archive" -C "$download_dir/extracted"; then
-    echo ">>> Published Relay archive could not be extracted; falling back to source build."
-    rm -rf "$download_dir"
-    return 1
-  fi
-  extracted="$(find "$download_dir/extracted" -mindepth 1 -maxdepth 1 -type d \
-    -name 'bitfun-relay-server-*' | head -n 1)"
-  if [ -z "$extracted" ] \
-    || [ ! -x "$extracted/bitfun-relay-server" ] \
-    || [ ! -x "$extracted/relay-admin" ] \
-    || [ ! -f "$extracted/static/index.html" ]; then
-    echo ">>> Published Relay archive layout is invalid; falling back to source build."
-    rm -rf "$download_dir"
-    return 1
-  fi
-
-  context="$release_dir/runtime"
-  rm -rf "$context.new"
-  mkdir -p "$context.new"
-  cp "$extracted/bitfun-relay-server" "$extracted/relay-admin" "$context.new/"
-  cp -R "$extracted/static" "$context.new/static"
-  cat >"$context.new/Dockerfile" <<'DOCKERFILE'
-FROM debian:bookworm-slim
-ENV DEBIAN_FRONTEND=noninteractive
-RUN apt-get update \
-    && apt-get install -y --no-install-recommends ca-certificates curl \
-    && rm -rf /var/lib/apt/lists/*
-WORKDIR /app
-COPY bitfun-relay-server relay-admin /app/
-COPY static /app/static
-RUN chmod 755 /app/bitfun-relay-server /app/relay-admin \
-    && mkdir -p /app/data /app/room-web
-HEALTHCHECK --interval=15s --timeout=5s --start-period=20s --retries=5 \
-  CMD curl -fsS "http://127.0.0.1:${{RELAY_PORT:-9700}}/health" || exit 1
-CMD ["/app/bitfun-relay-server"]
-DOCKERFILE
-  rm -rf "$context"
-  mv "$context.new" "$context"
-  rm -rf "$download_dir"
-
-  image="bitfun-relay:release-{release_tag}"
-  echo ">>> Building lightweight Relay runtime image (no Rust/Cargo compilation)..."
-  if ! bitfun_docker build -t "$image" "$context"; then
-    echo ">>> Published binary image build failed; falling back to source build."
-    return 1
-  fi
-
-  bitfun_docker volume create relay-server_relay-db >/dev/null
-  bitfun_docker volume create relay-server_room-web >/dev/null
-
-  local backup_container=""
-  if bitfun_docker container inspect bitfun-relay >/dev/null 2>&1; then
-    backup_container="bitfun-relay-before-release-$$"
-    bitfun_docker stop bitfun-relay >/dev/null 2>&1 || true
-    if ! bitfun_docker rename bitfun-relay "$backup_container"; then
-      echo ">>> Could not stage the existing Relay container; falling back to source build."
-      bitfun_docker start bitfun-relay >/dev/null 2>&1 || true
-      return 1
-    fi
-  fi
-
-  bitfun_restore_previous_relay() {{
-    bitfun_docker rm -f bitfun-relay >/dev/null 2>&1 || true
-    if [ -n "$backup_container" ]; then
-      bitfun_docker rename "$backup_container" bitfun-relay >/dev/null 2>&1 || true
-      bitfun_docker start bitfun-relay >/dev/null 2>&1 || true
-    fi
-  }}
-
-  # Wizard-close cancels this script with TERM/INT. Without a trap the user's
-  # relay would stay stopped under its backup name and disappear from the
-  # "already deployed" probe, so always put the previous container back.
-  trap 'bitfun_restore_previous_relay; trap - INT TERM; exit 1' INT TERM
-
-  echo ">>> Starting published Relay binary on port $RELAY_PORT..."
-  if ! bitfun_docker run -d \
-    --name bitfun-relay \
-    --restart unless-stopped \
-    --label com.docker.compose.project=relay-server \
-    --label com.docker.compose.service=relay-server \
-    -p "${{RELAY_HOST_BIND_IP:-0.0.0.0}}:${{RELAY_PORT}}:${{RELAY_PORT}}" \
-    -e "RELAY_PORT=${{RELAY_PORT}}" \
-    -e RELAY_STATIC_DIR=/app/static \
-    -e RELAY_ROOM_WEB_DIR=/app/room-web \
-    -e RELAY_ROOM_TTL=300 \
-    -e RELAY_ASSET_STORE_MAX_BYTES=1073741824 \
-    -e RELAY_DB_PATH=/app/data/bitfun_relay.db \
-    -v relay-server_room-web:/app/room-web \
-    -v relay-server_relay-db:/app/data \
-    "$image" >/dev/null; then
-    echo ">>> Published Relay binary could not start; restoring previous container."
-    bitfun_restore_previous_relay
-    trap - INT TERM
-    return 1
-  fi
-
-  # Probe the address the container is actually published on; a wildcard bind
-  # is reachable through loopback.
-  local attempt stale probe_host="${{RELAY_HOST_BIND_IP:-0.0.0.0}}"
-  if [ "$probe_host" = "0.0.0.0" ] || [ "$probe_host" = "::" ]; then
-    probe_host="127.0.0.1"
-  fi
-  for attempt in $(seq 1 20); do
-    if curl -fsS --max-time 3 "http://${{probe_host}}:${{RELAY_PORT}}/health" >/dev/null 2>&1; then
-      trap - INT TERM
-      if [ -n "$backup_container" ]; then
-        bitfun_docker rm "$backup_container" >/dev/null 2>&1 || true
-      fi
-      # Sweep backups orphaned by an earlier interrupted release deploy.
-      for stale in $(bitfun_docker ps -aq \
-        --filter 'name=^bitfun-relay-before-release-' 2>/dev/null); do
-        bitfun_docker rm -f "$stale" >/dev/null 2>&1 || true
-      done
-      echo ">>> Published Relay binary is healthy."
-      return 0
-    fi
-    if ! bitfun_docker inspect -f '{{{{.State.Running}}}}' bitfun-relay 2>/dev/null \
-      | grep -qx true; then
-      break
-    fi
-    sleep 2
-  done
-
-  echo ">>> Published Relay binary failed its health check; restoring previous container."
-  bitfun_docker logs --tail 40 bitfun-relay 2>/dev/null || true
-  bitfun_restore_previous_relay
-  trap - INT TERM
-  return 1
-}}
+export BITFUN_RELEASE_TAG="{release_tag}"
+export BITFUN_GITHUB_RELEASE_BASE="{RELEASE_BASE}"
+export BITFUN_OPENBITFUN_RELEASE_BASE="{OPENBITFUN_RELEASE_BASE}"
+export BITFUN_PROBE_SECONDS="{probe_seconds}"
+export BITFUN_PROBE_BYTES="{probe_bytes}"
+export BITFUN_HEALTHY_BPS="{healthy_floor}"
+export BITFUN_STALL_BPS="{stall_floor}"
+export BITFUN_STALL_SECONDS="{stall_seconds}"
+# --- begin BitFun relay release-download.sh ---
+{release_download}
+# --- end BitFun relay release-download.sh ---
 "#,
-        RELEASE_DOWNLOAD_BASE = RELEASE_DOWNLOAD_BASE,
+        release_tag = release_tag_for_version(RELEASE_VERSION),
+        RELEASE_BASE = RELEASE_BASE,
         OPENBITFUN_RELEASE_BASE = OPENBITFUN_RELEASE_BASE,
-        release_tag = release_tag,
         probe_seconds = SOURCE_PROBE_SECONDS,
-        probe_bytes = SOURCE_PROBE_BYTES - 1,
+        probe_bytes = SOURCE_PROBE_BYTES,
         healthy_floor = HEALTHY_THROUGHPUT_BYTES_PER_SEC,
         stall_floor = STALL_THROUGHPUT_BYTES_PER_SEC,
         stall_seconds = STALL_WINDOW_SECONDS,
-        retry_max_time = 300,
-        max_time = 3600,
+        release_download = RELAY_RELEASE_DOWNLOAD_SH,
     )
 }
 
@@ -1701,6 +1454,16 @@ if bitfun_try_release_deploy; then
   exit 0
 fi
 echo ">>> Release binary path did not complete; starting source-build fallback."
+# Compiling the relay pulls a Cargo registry, a target dir and Docker layers.
+# Running out of disk halfway through surfaces as an opaque compiler or BuildKit
+# error, so refuse up front with something the user can act on.
+SRC_FREE_KB=$(df -Pk "$HOME" 2>/dev/null | awk 'NR==2 {{print $4}}' || echo 0)
+if [ "${{SRC_FREE_KB:-0}}" -lt {source_build_free_kb} ]; then
+  echo ">>> ERROR: the source build needs about {source_build_free_gb} GB free under $HOME,"
+  echo ">>>        but only $(( SRC_FREE_KB / 1024 )) MB is available."
+  echo ">>>        Free up space, or install a published Relay binary manually."
+  exit 1
+fi
 SRC="$HOME/{SOURCE_DIR}"
 bitfun_sync_source "$SRC"
 cd "$SRC/src/apps/relay-server"
@@ -1733,6 +1496,8 @@ echo {TASK_DONE_MARKER}
         TASK_DONE_MARKER = TASK_DONE_MARKER,
         REPO_GIT_URL = REPO_GIT_URL,
         REPO_TARBALL_URL = REPO_TARBALL_URL,
+        source_build_free_kb = SOURCE_BUILD_FREE_KB,
+        source_build_free_gb = SOURCE_BUILD_FREE_KB / 1024 / 1024,
     )
 }
 
@@ -1807,7 +1572,7 @@ mod tests {
         let script = release_binary_deploy_bash();
         assert!(script.contains("bitfun-relay-server-${target}.tar.gz"));
         assert!(script.contains("sha256sum -c"));
-        assert!(script.contains("https://openbitfun.com/release/"));
+        assert!(script.contains("https://openbitfun.com/release"));
         assert!(script.contains("no Rust/Cargo compilation"));
         assert!(script.contains("--name bitfun-relay"));
         assert!(script.contains("relay-server_relay-db:/app/data"));
@@ -1818,7 +1583,8 @@ mod tests {
         assert!(script.contains("trap 'bitfun_restore_previous_relay"));
         assert!(script.contains("name=^bitfun-relay-before-release-"));
         // Port publishing keeps compose's configurable bind address.
-        assert!(script.contains("${RELAY_HOST_BIND_IP:-0.0.0.0}:${RELAY_PORT}:${RELAY_PORT}"));
+        assert!(script
+            .contains("${RELAY_HOST_BIND_IP:-0.0.0.0}:${RELAY_PORT:-9700}:${RELAY_PORT:-9700}"));
 
         // Slow-link contract. A wall-clock ceiling alone made a 20 KB/s link
         // fail forever: each attempt timed out mid-archive and restarted from
@@ -1833,6 +1599,12 @@ mod tests {
         // /<version>/ path that 404s for older Desktop builds.
         assert!(script.contains("linux-binaries.json"));
         assert!(!script.contains("release/0.2"));
+        // Checksums bind to a canonical GitHub URL, so a compromised mirror or
+        // third-party proxy cannot serve matching bytes and checksum together.
+        assert!(script.contains("bitfun_canonical_checksum_url"));
+        // The shared file backs both this path and deploy.sh.
+        assert!(script.contains("release-download.sh"));
+        assert!(script.contains("export BITFUN_RELEASE_TAG=\"v0.2"));
     }
 
     /// `bash -n` only proves the generated script parses. This runs its source
@@ -2030,6 +1802,8 @@ active_docker_group=0
 in_docker_group_file=1
 docker_home_writable=0
 mem_kb=2097152
+home_free_kb=12582912
+docker_free_kb=8388608
 port_busy=0
 container=1
 container_running=1
@@ -2050,5 +1824,7 @@ port_owned=0
         assert_eq!(pf.existing_relay_port, 9700);
         assert!(pf.relay_healthy);
         assert!(!pf.port_owned_by_relay);
+        assert_eq!(pf.home_free_mb, 12288);
+        assert_eq!(pf.docker_free_mb, 8192);
     }
 }

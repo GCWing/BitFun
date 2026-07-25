@@ -148,7 +148,9 @@ seen = set()
 for platform in data.get("platforms", {}).values():
     for product in ("cli", "relay"):
         entry = platform.get(product, {})
-        for key in ("url", "sha256Url"):
+        # sigUrl too: without the signature the mirrored copy cannot be verified
+        # as anything stronger than "not corrupted in transit".
+        for key in ("url", "sha256Url", "sigUrl"):
             url = entry.get(key)
             if not url:
                 continue
@@ -174,7 +176,7 @@ version_base = f"{base}/{data['version']}"
 for platform in data.get("platforms", {}).values():
     for product in ("cli", "relay"):
         entry = platform.get(product, {})
-        for key in ("url", "sha256Url"):
+        for key in ("url", "sha256Url", "sigUrl"):
             if entry.get(key):
                 entry[key] = f"{version_base}/{entry[key].rsplit('/', 1)[-1]}"
 with open(dest, "w", encoding="utf-8") as f:

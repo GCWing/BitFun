@@ -22,9 +22,12 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${SCRIPT_DIR}/common.sh"
 # shellcheck source=mirror.sh
 source "${SCRIPT_DIR}/mirror.sh"
+# shellcheck source=release-download.sh
+source "${SCRIPT_DIR}/release-download.sh"
 
 SKIP_BUILD=false
 SKIP_HEALTH_CHECK=false
+BUILD_FROM_SOURCE=false
 MIRROR_ARGS=()
 
 usage() {
@@ -43,6 +46,7 @@ Supported architectures:
 
 Options:
   --skip-build         Skip docker compose build, only recreate/start services
+  --build-from-source  Skip the published binary and compile from source
   --skip-health-check  Skip post-deploy health check
   --cn-mirror          Force China mirrors (apt/Docker/cargo/GitHub)
   --global-mirror      Force global upstream mirrors
@@ -63,6 +67,7 @@ EOF
 for arg in "$@"; do
   case "$arg" in
     --skip-build) SKIP_BUILD=true ;;
+    --build-from-source) BUILD_FROM_SOURCE=true ;;
     --skip-health-check) SKIP_HEALTH_CHECK=true ;;
     --cn-mirror|--global-mirror|--no-cn-mirror|--skip-mirror-apply)
       MIRROR_ARGS+=("$arg")
@@ -110,6 +115,25 @@ fi
   echo "BITFUN_APT_MIRROR=${BITFUN_APT_MIRROR:-mirrors.aliyun.com}"
   echo "BITFUN_CARGO_SPARSE_URL=${BITFUN_CARGO_SPARSE_URL:-sparse+https://rsproxy.cn/index/}"
 } >>.env
+
+# Prefer the published binary: a runtime image around a prebuilt archive takes
+# under a minute, while compiling the relay from source on a small VPS takes
+# ~20 minutes and needs ~2GB RAM. Identical code to the Desktop one-click path
+# (release-download.sh); it restores any previous container on failure and
+# returns non-zero to hand back to the source build below.
+if [ "$BUILD_FROM_SOURCE" = true ]; then
+  echo "[1/2] Skipping the published binary (--build-from-source)"
+elif [ "$SKIP_BUILD" = true ]; then
+  echo "[1/2] Skipping the published binary (--skip-build)"
+elif bitfun_try_release_deploy; then
+  RELAY_PORT="${RELAY_PORT:-9700}"
+  echo ""
+  echo "=== Deploy complete (published binary) ==="
+  echo "Relay server running on port ${RELAY_PORT} (host arch: ${HOST_ARCH})"
+  echo ""
+  check_relay_accounts_or_remind
+  exit 0
+fi
 
 # Build first so a compile failure does not take down a running relay.
 if [ "$SKIP_BUILD" = true ]; then
