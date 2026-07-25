@@ -27,11 +27,24 @@ fn review_path_has_parent_traversal(path: &str, windows: bool) -> bool {
     }
 }
 
+/// `git rev-parse` on a date string is a pure local parse, so anything slower
+/// than this is a stuck process, not a slow one.
+const APPROXIDATE_TIMEOUT: Duration = Duration::from_secs(5);
+
+/// Resolve a `since`/`until` value through Git's own approxidate parser.
+///
+/// Note the semantics this inherits: approxidate never rejects input. A typo
+/// like `--since=lst week` parses as "now", producing a filter that matches
+/// almost nothing and an empty, successful result. That is Git's documented
+/// behaviour and callers are matched to it deliberately, so unparseable input is
+/// logged rather than turned into an error — but it is why an empty commit list
+/// is worth double-checking against the filter that produced it.
 fn resolve_git_approxidate(repo_path: &Path, option: &str, value: &str) -> Result<i64, GitError> {
     let argument = format!("{option}={value}");
-    let output = execute_git_command_sync(
+    let output = execute_git_command_sync_with_timeout(
         repo_path.to_string_lossy().as_ref(),
         &["rev-parse", argument.as_str()],
+        APPROXIDATE_TIMEOUT,
     )
     .map_err(|error| {
         GitError::CommandFailed(format!(
@@ -48,11 +61,30 @@ fn resolve_git_approxidate(repo_path: &Path, option: &str, value: &str) -> Resul
                 output.trim()
             ))
         })?;
-    timestamp.parse::<i64>().map_err(|error| {
+    let timestamp = timestamp.parse::<i64>().map_err(|error| {
         GitError::CommandFailed(format!(
             "Git returned an invalid timestamp for '{argument}': {error}"
         ))
-    })
+    })?;
+
+    // Approxidate falls back to "now" for anything it cannot read, so a value
+    // that lands on the current second is the one signal that the input was
+    // probably a typo. Not an error — "now" and "today" are legitimate — but
+    // worth a line when the query then comes back empty.
+    let now = chrono::Utc::now().timestamp();
+    if (now - timestamp).abs() <= 1
+        && !matches!(
+            value.trim().to_ascii_lowercase().as_str(),
+            "now" | "today" | ""
+        )
+    {
+        log::warn!(
+            "Git date filter '{argument}' resolved to the current time; \
+             approxidate could not parse it and the result will be nearly empty"
+        );
+    }
+
+    Ok(timestamp)
 }
 
 impl GitService {

@@ -3206,6 +3206,22 @@ fn split_remote_archive_path(path: &str) -> Result<(String, String), String> {
         return Err(format!("Cannot determine file name of '{}'", path));
     }
 
+    // The parent is `cd`-ed into before the archive command runs, so traversal
+    // has to be rejected here too, not only in the file name.
+    //
+    // Only `..`. A `.` component is not traversal and `./name` has always been
+    // accepted — the resolved parent for a bare `name` is literally "." — so
+    // rejecting it would break paths that work today for no security gain.
+    //
+    // Checked against the input rather than the resolved parent, which is
+    // synthesized for relative paths.
+    if trimmed.split('/').rev().skip(1).any(|component| component == "..") {
+        return Err(format!(
+            "Remote path '{}' must not contain '..' components",
+            path
+        ));
+    }
+
     Ok((parent, base_name))
 }
 
@@ -3217,11 +3233,22 @@ fn join_remote_path(parent: &str, name: &str) -> String {
     }
 }
 
+/// Whether a remote command failed because the tool itself is absent.
+///
+/// Only shell-level phrasing counts. A tool that ran and then complained is not
+/// a missing tool: `tar: link: Not found in archive` mentions both "tar" and
+/// "not found", and treating that as absence tells the user to install
+/// something they already have while hiding the real cause — a corrupt archive.
 fn remote_tool_missing(message: &str, tool: &str) -> bool {
     let lower = message.to_lowercase();
+    let tool = tool.to_lowercase();
+    // POSIX shells: `sh: 1: tar: not found`, `bash: tar: command not found`,
+    // `zsh: command not found: tar`, busybox `tar: applet not found`.
     lower.contains("command not found")
         || lower.contains("not installed")
-        || (lower.contains(&tool.to_lowercase()) && lower.contains("not found"))
+        || lower.contains("applet not found")
+        || lower.contains(&format!("{tool}: not found"))
+        || lower.contains(&format!("{tool}: no such file or directory"))
 }
 
 fn build_remote_compress_command(
@@ -4027,6 +4054,36 @@ mod archive_tests {
             join_remote_path("/home/developer", "project.zip"),
             "/home/developer/project.zip"
         );
+        assert!(
+            split_remote_archive_path("/home/../etc/project.zip").is_err(),
+            "traversal in a parent component must be rejected, not just in the file name"
+        );
+        // `.` is not traversal, and these forms worked before the guard existed.
+        assert_eq!(
+            split_remote_archive_path("./project.zip").expect("dot-relative path"),
+            (".".to_string(), "project.zip".to_string())
+        );
+        assert_eq!(
+            split_remote_archive_path("/home/./project.zip").expect("dot component"),
+            ("/home/.".to_string(), "project.zip".to_string())
+        );
+    }
+
+    #[test]
+    fn tool_output_mentioning_not_found_is_not_a_missing_tool() {
+        assert!(remote_tool_missing("sh: 1: tar: not found", "tar"));
+        assert!(remote_tool_missing("bash: tar: command not found", "tar"));
+        assert!(remote_tool_missing("tar: applet not found", "tar"));
+        assert!(remote_tool_missing("zsh: command not found: zip", "zip"));
+        // tar ran fine; the archive is what is broken.
+        assert!(!remote_tool_missing(
+            "tar: link: Not found in archive",
+            "tar"
+        ));
+        assert!(!remote_tool_missing(
+            "unzip: cannot find zipfile directory in one of project.zip, not found",
+            "zip"
+        ));
     }
 
     #[test]

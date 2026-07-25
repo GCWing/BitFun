@@ -4,6 +4,21 @@
 //!
 //! The reqwest HTTP/2 and MCP transport type graph exceeds rustc's default
 //! trait-evaluation recursion budget when desktop tasks require `Send`.
+//!
+//! Concretely, dropping the limit back to 128 fails with `overflow evaluating
+//! the requirement Vec<slab::Entry<h2::…::Slot<h2::…::recv::Event>>>: Send`.
+//! The chain runs ~15 frames through h2's own internals (`Slab` → `Buffer` →
+//! `Recv` → `Actions` → `Inner` → `Arc<Mutex<_>>` → `RecvStream` → hyper's
+//! `Incoming`), into the MCP remote transport, then out through roughly ten
+//! nested `async fn` bodies from `agentic::coordination::scheduler` to the
+//! `tokio::spawn` in `api::remote_connect_api`.
+//!
+//! Most of that depth is in third-party types, so `Box::pin`-ing one of our own
+//! futures does not collapse it; only erasing a mid-chain future to
+//! `Pin<Box<dyn Future + Send>>` would, at the cost of an allocation and dynamic
+//! dispatch on the dialog-turn path. Raising the budget is the mechanism rustc
+//! itself suggests, costs nothing at runtime, and is re-checked whenever this
+//! attribute is touched.
 
 pub mod api;
 pub mod computer_use;
