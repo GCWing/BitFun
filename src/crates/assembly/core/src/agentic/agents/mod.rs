@@ -133,7 +133,9 @@ pub fn shared_coding_mode_tools() -> Vec<String> {
         "PageDeploy".to_string(),
         "PagePublish".to_string(),
     ];
-    append_provider_group_tools(&mut tools, "core.canvas");
+    // Canvas provider group tools disabled: canvas-runtime cannot be compiled
+    // on the OHOS target. Re-enable when canvas-runtime is available.
+    // append_provider_group_tools(&mut tools, "core.canvas");
     tools
 }
 

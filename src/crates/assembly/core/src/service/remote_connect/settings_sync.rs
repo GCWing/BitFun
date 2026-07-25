@@ -161,7 +161,7 @@ pub fn start_settings_sync_engine(hooks: SettingsSyncHooks) {
     let _ = HOOKS.set(hooks);
     let (tx, rx) = mpsc::unbounded_channel::<()>();
     let _ = PUSH_TX.set(tx);
-    tokio::spawn(settings_sync_loop(rx));
+    tauri::async_runtime::spawn(settings_sync_loop(rx));
 }
 
 /// Notify the engine that local settings changed (config set / import /

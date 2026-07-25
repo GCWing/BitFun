@@ -2563,7 +2563,7 @@ pub async fn account_connect_devices() -> Result<Vec<OnlineDeviceInfo>, String> 
                     emit_device_presence(&pairs);
                     // Another device came online — pull cloud settings if needed.
                     if devices.len() > 1 {
-                        tauri::async_runtime::spawn(async {
+                        tauri::async_runtime::spawn(async move {
                             pull_and_reconcile(account_generation).await;
                         });
                     }
