@@ -85,10 +85,10 @@ echo "=== BitFun Relay Server Deploy ==="
 echo "Target: current machine ($(uname -s) / ${HOST_ARCH}, uname=$(uname -m))"
 echo "Note: run this script on the target server after SSH login."
 
-# Detect region and persist host mirrors before Docker pulls / image build.
-bitfun_mirror_init "${MIRROR_ARGS[@]+"${MIRROR_ARGS[@]}"}"
-
 assert_supported_arch
+# Detect region and persist host mirrors before Docker pulls / image build.
+# Validate the host first so unsupported machines are not modified.
+bitfun_mirror_init "${MIRROR_ARGS[@]+"${MIRROR_ARGS[@]}"}"
 require_docker_daemon
 resolve_compose
 warn_if_forced_foreign_platform

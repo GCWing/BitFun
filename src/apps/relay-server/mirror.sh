@@ -72,19 +72,79 @@ bitfun_mirror_parse_args() {
 bitfun_mirror_http_ok() {
   local url="$1"
   local timeout="${2:-3}"
-  if ! command -v curl >/dev/null 2>&1; then
-    return 1
+  if command -v curl >/dev/null 2>&1; then
+    curl -fsS -m "$timeout" -o /dev/null "$url" >/dev/null 2>&1
+    return
   fi
-  curl -fsS -m "$timeout" -o /dev/null "$url" >/dev/null 2>&1
+  if command -v wget >/dev/null 2>&1; then
+    wget -q -T "$timeout" -O /dev/null "$url" >/dev/null 2>&1
+    return
+  fi
+  if command -v python3 >/dev/null 2>&1; then
+    python3 - "$url" "$timeout" >/dev/null 2>&1 <<'PY'
+import sys
+import urllib.request
+
+with urllib.request.urlopen(sys.argv[1], timeout=float(sys.argv[2])) as response:
+    response.read(1)
+PY
+    return
+  fi
+  return 1
 }
 
 bitfun_mirror_http_body() {
   local url="$1"
   local timeout="${2:-3}"
-  if ! command -v curl >/dev/null 2>&1; then
+  if command -v curl >/dev/null 2>&1; then
+    curl -fsS -m "$timeout" "$url" 2>/dev/null
+    return
+  fi
+  if command -v wget >/dev/null 2>&1; then
+    wget -q -T "$timeout" -O - "$url" 2>/dev/null
+    return
+  fi
+  if command -v python3 >/dev/null 2>&1; then
+    python3 - "$url" "$timeout" 2>/dev/null <<'PY'
+import sys
+import urllib.request
+
+with urllib.request.urlopen(sys.argv[1], timeout=float(sys.argv[2])) as response:
+    sys.stdout.buffer.write(response.read(65536))
+PY
+    return
+  fi
+  return 1
+}
+
+# Last-resort country lookup for minimal hosts without curl/wget/python.
+# Uses bash /dev/tcp against the same plain-HTTP ip-api endpoint already used
+# above, bounded by coreutils/busybox `timeout`.
+bitfun_mirror_country_via_bash_tcp() {
+  if ! command -v timeout >/dev/null 2>&1; then
     return 1
   fi
-  curl -fsS -m "$timeout" "$url" 2>/dev/null
+  local response code
+  response="$(
+    timeout 4 bash -c '
+      exec 3<>/dev/tcp/ip-api.com/80 || exit 1
+      printf "GET /line/?fields=countryCode HTTP/1.1\r\nHost: ip-api.com\r\nConnection: close\r\n\r\n" >&3
+      cat <&3
+    ' 2>/dev/null || true
+  )"
+  code="$(
+    printf '%s' "$response" \
+      | tr -d '\r' \
+      | awk '
+          body && /^[[:alpha:]][[:alpha:]]$/ { print toupper($0); exit }
+          /^$/ { body=1 }
+        '
+  )"
+  if [ "${#code}" -eq 2 ]; then
+    echo "$code"
+    return 0
+  fi
+  return 1
 }
 
 bitfun_mirror_detect_country() {
@@ -100,6 +160,11 @@ bitfun_mirror_detect_country() {
     return 0
   fi
   code="$(bitfun_mirror_http_body "https://ifconfig.co/country-iso" 3 | tr -d '[:space:]' | tr '[:lower:]' '[:upper:]')"
+  if [ "${#code}" -eq 2 ]; then
+    echo "$code"
+    return 0
+  fi
+  code="$(bitfun_mirror_country_via_bash_tcp 2>/dev/null || true)"
   if [ "${#code}" -eq 2 ]; then
     echo "$code"
     return 0
@@ -255,6 +320,37 @@ bitfun_mirror_backup_file() {
   fi
 }
 
+bitfun_mirror_chown_to_home_owner() {
+  if [ ! -d "$HOME" ] || ! command -v stat >/dev/null 2>&1; then
+    return 0
+  fi
+  local owner path_owner path
+  owner="$(stat -c '%u:%g' "$HOME" 2>/dev/null || true)"
+  if [ -z "$owner" ]; then
+    return 0
+  fi
+  for path in "$@"; do
+    path_owner="$(stat -c '%u:%g' "$path" 2>/dev/null || true)"
+    if [ -z "$path_owner" ] || [ "$path_owner" = "$owner" ]; then
+      continue
+    fi
+    if [ "$(id -u)" = "0" ]; then
+      chown "$owner" "$path" 2>/dev/null || true
+    else
+      bitfun_mirror_priv chown "$owner" "$path" 2>/dev/null || true
+    fi
+  done
+}
+
+bitfun_mirror_file_cksum() {
+  local path="$1"
+  if ! command -v cksum >/dev/null 2>&1; then
+    return 1
+  fi
+  cksum "$path" 2>/dev/null | awk '{print $1 " " $2}' \
+    || bitfun_mirror_priv cksum "$path" 2>/dev/null | awk '{print $1 " " $2}'
+}
+
 bitfun_mirror_apply_apt_debian_family() {
   local mirror="${BITFUN_APT_MIRROR:-mirrors.aliyun.com}"
   local id="" version_codename="" id_like=""
@@ -368,13 +464,24 @@ bitfun_mirror_apply_apt() {
 
 bitfun_mirror_write_docker_daemon_json() {
   local mirrors_csv="$1"
-  local tmp py
+  local tmp py added_tmp state_dir state_file created_state prior_added daemon_json mirror checksum
   tmp="$(mktemp)"
   py="$(mktemp)"
+  added_tmp="$(mktemp)"
+  daemon_json="${BITFUN_DOCKER_DAEMON_JSON:-/etc/docker/daemon.json}"
+  state_dir="$HOME/.bitfun/mirror-state"
+  state_file="${state_dir}/docker-added-mirrors"
+  created_state="${state_dir}/docker-daemon-created.cksum"
+  mkdir -p "$state_dir" 2>/dev/null || true
+  prior_added=""
+  if [ -f "$state_file" ]; then
+    prior_added="$(cat "$state_file" 2>/dev/null || bitfun_mirror_priv cat "$state_file" 2>/dev/null || true)"
+  fi
   cat >"$py" <<'PY'
 import json, os, sys
-path = "/etc/docker/daemon.json"
+path = sys.argv[5]
 mirrors = [m for m in sys.argv[1].split() if m]
+prior_added = [m for m in sys.argv[3].split() if m]
 data = {}
 if os.path.exists(path):
     try:
@@ -383,39 +490,93 @@ if os.path.exists(path):
         if raw:
             data = json.loads(raw)
             if not isinstance(data, dict):
-                data = {}
-    except Exception:
-        data = {}
+                raise ValueError("daemon.json root must be an object")
+    except Exception as exc:
+        print(f"cannot safely parse {path}: {exc}", file=sys.stderr)
+        sys.exit(2)
 existing = data.get("registry-mirrors") or []
 if not isinstance(existing, list):
-    existing = []
+    print("daemon.json registry-mirrors must be an array", file=sys.stderr)
+    sys.exit(2)
+legacy_managed = bool(data.pop("bitfun-cn-mirror", False))
 merged = []
 for item in list(existing) + mirrors:
     if item and item not in merged:
         merged.append(item)
 data["registry-mirrors"] = merged
-data["bitfun-cn-mirror"] = True
+added = []
+for item in prior_added:
+    if item and item not in added:
+        added.append(item)
+for item in mirrors:
+    if item not in existing or legacy_managed:
+        if item not in added:
+            added.append(item)
 out = sys.argv[2]
 with open(out, "w", encoding="utf-8") as f:
     json.dump(data, f, indent=2)
     f.write("\n")
+with open(sys.argv[4], "w", encoding="utf-8") as f:
+    for item in added:
+        f.write(item + "\n")
 PY
   if command -v python3 >/dev/null 2>&1; then
-    if [ -f /etc/docker/daemon.json ]; then
-      bitfun_mirror_backup_file /etc/docker/daemon.json
+    if [ -f "$daemon_json" ]; then
+      bitfun_mirror_backup_file "$daemon_json"
     fi
-    bitfun_mirror_priv mkdir -p /etc/docker
-    if python3 "$py" "$mirrors_csv" "$tmp"; then
-      bitfun_mirror_priv cp "$tmp" /etc/docker/daemon.json
-      echo ">>> docker mirror: merged registry-mirrors into /etc/docker/daemon.json"
+    if ! bitfun_mirror_priv mkdir -p "$(dirname "$daemon_json")"; then
+      echo ">>> docker mirror: cannot create $(dirname "$daemon_json")" >&2
+      rm -f "$tmp" "$py" "$added_tmp"
+      return 1
+    fi
+    if bitfun_mirror_priv python3 "$py" "$mirrors_csv" "$tmp" "$prior_added" "$added_tmp" "$daemon_json"; then
+      if command -v dockerd >/dev/null 2>&1 \
+        && ! bitfun_mirror_priv dockerd --validate --config-file "$tmp" >/dev/null; then
+        echo ">>> docker mirror: generated daemon.json failed dockerd validation; not installing it" >&2
+        rm -f "$tmp" "$py" "$added_tmp"
+        return 1
+      fi
+      if ! bitfun_mirror_priv cp "$tmp" "$daemon_json"; then
+        echo ">>> docker mirror: cannot install ${daemon_json}" >&2
+        rm -f "$tmp" "$py" "$added_tmp"
+        return 1
+      fi
+      if cp "$added_tmp" "$state_file" 2>/dev/null \
+        || bitfun_mirror_priv cp "$added_tmp" "$state_file" 2>/dev/null; then
+        :
+      else
+        echo ">>> docker mirror: could not persist rollback state" >&2
+        rm -f "$state_dir/version" 2>/dev/null \
+          || bitfun_mirror_priv rm -f "$state_dir/version" 2>/dev/null \
+          || true
+      fi
+      chmod 644 "$state_file" 2>/dev/null || true
+      bitfun_mirror_chown_to_home_owner "$state_dir" "$state_file"
+      if [ -f "$created_state" ]; then
+        checksum="$(bitfun_mirror_file_cksum "$daemon_json" || true)"
+        if [ -n "$checksum" ]; then
+          echo "$checksum" >"$created_state"
+          chmod 644 "$created_state" 2>/dev/null || true
+          bitfun_mirror_chown_to_home_owner "$created_state"
+        fi
+      fi
+      echo ">>> docker mirror: merged registry-mirrors into ${daemon_json}"
     else
-      echo ">>> docker mirror: python merge failed (continuing)" >&2
+      echo ">>> docker mirror: safe JSON merge failed; leaving daemon.json untouched" >&2
+      rm -f "$tmp" "$py" "$added_tmp"
+      return 1
     fi
   else
-    if [ -f /etc/docker/daemon.json ]; then
+    if [ -f "$daemon_json" ]; then
       echo ">>> docker mirror: python3 missing; leaving existing daemon.json untouched" >&2
+      rm -f "$tmp" "$py" "$added_tmp"
+      return 1
     else
-      bitfun_mirror_priv mkdir -p /etc/docker
+      if ! bitfun_mirror_priv mkdir -p "$(dirname "$daemon_json")"; then
+        echo ">>> docker mirror: cannot create $(dirname "$daemon_json")" >&2
+        rm -f "$tmp" "$py" "$added_tmp"
+        return 1
+      fi
       {
         echo '{'
         echo '  "registry-mirrors": ['
@@ -425,15 +586,45 @@ PY
           printf '    "%s"' "$m"
         done
         echo ''
-        echo '  ],'
-        echo '  "bitfun-cn-mirror": true'
+        echo '  ]'
         echo '}'
       } >"$tmp"
-      bitfun_mirror_priv cp "$tmp" /etc/docker/daemon.json
-      echo ">>> docker mirror: wrote /etc/docker/daemon.json"
+      if ! bitfun_mirror_priv cp "$tmp" "$daemon_json"; then
+        echo ">>> docker mirror: cannot install ${daemon_json}" >&2
+        rm -f "$tmp" "$py" "$added_tmp"
+        return 1
+      fi
+      : >"$added_tmp"
+      for mirror in $mirrors_csv; do
+        printf '%s\n' "$mirror" >>"$added_tmp"
+      done
+      if cp "$added_tmp" "$state_file" 2>/dev/null \
+        || bitfun_mirror_priv cp "$added_tmp" "$state_file" 2>/dev/null; then
+        :
+      else
+        echo ">>> docker mirror: could not persist rollback state" >&2
+        rm -f "$state_dir/version" 2>/dev/null \
+          || bitfun_mirror_priv rm -f "$state_dir/version" 2>/dev/null \
+          || true
+      fi
+      chmod 644 "$state_file" 2>/dev/null || true
+      bitfun_mirror_chown_to_home_owner "$state_dir" "$state_file"
+      checksum="$(bitfun_mirror_file_cksum "$daemon_json" || true)"
+      if [ -n "$checksum" ]; then
+        if echo "$checksum" >"$created_state"; then
+          chmod 644 "$created_state" 2>/dev/null || true
+          bitfun_mirror_chown_to_home_owner "$created_state"
+        else
+          echo ">>> docker mirror: could not persist created-file checksum for rollback" >&2
+          rm -f "$state_dir/version" 2>/dev/null \
+            || bitfun_mirror_priv rm -f "$state_dir/version" 2>/dev/null \
+            || true
+        fi
+      fi
+      echo ">>> docker mirror: wrote ${daemon_json}"
     fi
   fi
-  rm -f "$tmp" "$py"
+  rm -f "$tmp" "$py" "$added_tmp"
 }
 
 bitfun_mirror_restart_docker_if_needed() {
@@ -455,51 +646,229 @@ bitfun_mirror_apply_docker_daemon() {
   if [ -z "$mirrors" ]; then
     return 0
   fi
-  bitfun_mirror_write_docker_daemon_json "$mirrors" || echo ">>> docker mirror: apply failed (continuing)" >&2
-  bitfun_mirror_restart_docker_if_needed || true
+  if bitfun_mirror_write_docker_daemon_json "$mirrors"; then
+    bitfun_mirror_restart_docker_if_needed || true
+  else
+    echo ">>> docker mirror: apply failed (continuing)" >&2
+  fi
 }
 
-bitfun_mirror_apply_cargo_config() {
+bitfun_mirror_restore_apt() {
+  local list_file="/etc/apt/sources.list.d/bitfun-cn-mirror.list"
+  local changed=0 restore_failed=0 original disabled
+  for original in /etc/apt/sources.list /etc/apt/sources.list.d/debian.sources \
+    /etc/apt/sources.list.d/ubuntu.sources /etc/apt/sources.list.d/official-package-repositories.list; do
+    disabled="${original}.bitfun-disabled"
+    if [ ! -f "$disabled" ]; then
+      continue
+    fi
+    if [ -e "$original" ]; then
+      echo ">>> apt mirror: not restoring ${original}; a replacement already exists" >&2
+      restore_failed=1
+      continue
+    fi
+    if bitfun_mirror_priv mv "$disabled" "$original" 2>/dev/null; then
+      changed=1
+    else
+      echo ">>> apt mirror: failed to restore ${original}" >&2
+      restore_failed=1
+    fi
+  done
+  if [ -f "$list_file" ] && [ "$restore_failed" -eq 0 ]; then
+    if bitfun_mirror_priv rm -f "$list_file" 2>/dev/null; then
+      changed=1
+    else
+      echo ">>> apt mirror: failed to remove ${list_file}" >&2
+    fi
+  elif [ -f "$list_file" ]; then
+    echo ">>> apt mirror: keeping ${list_file} because an upstream source could not be restored" >&2
+  fi
+  if [ "$changed" -eq 1 ]; then
+    echo ">>> apt mirror: removed BitFun mirror list and restored disabled upstream sources"
+  fi
+}
+
+bitfun_mirror_remove_docker_daemon() {
+  local daemon_json="${BITFUN_DOCKER_DAEMON_JSON:-/etc/docker/daemon.json}"
+  local state_file="$HOME/.bitfun/mirror-state/docker-added-mirrors"
+  local created_state="$HOME/.bitfun/mirror-state/docker-daemon-created.cksum"
+  local version_file="$HOME/.bitfun/mirror-state/version"
+  local mode_file="$HOME/.bitfun/mirror-mode"
+  local managed=0 mirrors_to_remove="" tmp py status expected_checksum actual_checksum
+
+  if [ -f "$state_file" ]; then
+    managed=1
+    mirrors_to_remove="$(cat "$state_file" 2>/dev/null || bitfun_mirror_priv cat "$state_file" 2>/dev/null || true)"
+  elif [ ! -f "$version_file" ] && [ "$(cat "$mode_file" 2>/dev/null || true)" = "cn" ]; then
+    # Compatibility cleanup for hosts touched by early versions that did not
+    # record exactly which registry mirrors they added.
+    managed=1
+    mirrors_to_remove="$(bitfun_mirror_default_docker_mirrors)"
+  elif [ -r "$daemon_json" ] && grep -q '"bitfun-cn-mirror"' "$daemon_json" 2>/dev/null; then
+    managed=1
+    mirrors_to_remove="$(bitfun_mirror_default_docker_mirrors)"
+  fi
+  if [ "$managed" -ne 1 ]; then
+    if [ -f "$version_file" ] && [ ! -f "$state_file" ]; then
+      rm -f "$version_file" "$created_state" 2>/dev/null \
+        || bitfun_mirror_priv rm -f "$version_file" "$created_state" 2>/dev/null \
+        || true
+    fi
+    return 0
+  fi
+  if [ ! -f "$daemon_json" ]; then
+    rm -f "$state_file" "$version_file" "$created_state" 2>/dev/null \
+      || bitfun_mirror_priv rm -f "$state_file" "$version_file" "$created_state" 2>/dev/null \
+      || true
+    return 0
+  fi
+  if ! command -v python3 >/dev/null 2>&1; then
+    if [ -f "$created_state" ]; then
+      expected_checksum="$(cat "$created_state" 2>/dev/null || true)"
+      actual_checksum="$(bitfun_mirror_file_cksum "$daemon_json" || true)"
+      if [ -n "$expected_checksum" ] && [ "$actual_checksum" = "$expected_checksum" ]; then
+        bitfun_mirror_backup_file "$daemon_json"
+        if bitfun_mirror_priv rm -f "$daemon_json"; then
+          rm -f "$state_file" "$version_file" "$created_state" 2>/dev/null \
+            || bitfun_mirror_priv rm -f "$state_file" "$version_file" "$created_state" 2>/dev/null \
+            || true
+          echo ">>> docker mirror: removed BitFun-created ${daemon_json}"
+          if command -v docker >/dev/null 2>&1; then
+            bitfun_mirror_priv systemctl restart docker 2>/dev/null \
+              || bitfun_mirror_priv service docker restart 2>/dev/null \
+              || true
+          fi
+          return 0
+        fi
+      fi
+    fi
+    echo ">>> docker mirror: python3 missing; cannot safely remove managed daemon.json entries" >&2
+    return 1
+  fi
+
+  tmp="$(mktemp)"
+  py="$(mktemp)"
+  cat >"$py" <<'PY'
+import json, os, sys
+
+path = sys.argv[3]
+remove = {m for m in sys.argv[1].split() if m}
+try:
+    with open(path, "r", encoding="utf-8") as f:
+        data = json.load(f)
+except Exception as exc:
+    print(f"cannot safely parse {path}: {exc}", file=sys.stderr)
+    sys.exit(2)
+if not isinstance(data, dict):
+    print("daemon.json root must be an object", file=sys.stderr)
+    sys.exit(2)
+before = json.dumps(data, sort_keys=True)
+data.pop("bitfun-cn-mirror", None)
+existing = data.get("registry-mirrors")
+if isinstance(existing, list):
+    kept = [item for item in existing if item not in remove]
+    if kept:
+        data["registry-mirrors"] = kept
+    else:
+        data.pop("registry-mirrors", None)
+after = json.dumps(data, sort_keys=True)
+if before == after:
+    sys.exit(3)
+with open(sys.argv[2], "w", encoding="utf-8") as f:
+    json.dump(data, f, indent=2)
+    f.write("\n")
+PY
+
+  status=0
+  bitfun_mirror_priv python3 "$py" "$mirrors_to_remove" "$tmp" "$daemon_json" || status=$?
+  if [ "$status" -eq 3 ]; then
+    rm -f "$tmp" "$py"
+    rm -f "$state_file" 2>/dev/null || bitfun_mirror_priv rm -f "$state_file" 2>/dev/null || true
+    rm -f "$version_file" 2>/dev/null || bitfun_mirror_priv rm -f "$version_file" 2>/dev/null || true
+    rm -f "$created_state" 2>/dev/null || bitfun_mirror_priv rm -f "$created_state" 2>/dev/null || true
+    return 0
+  fi
+  if [ "$status" -ne 0 ]; then
+    echo ">>> docker mirror: failed to remove managed daemon.json entries" >&2
+    rm -f "$tmp" "$py"
+    return 1
+  fi
+  if command -v dockerd >/dev/null 2>&1 \
+    && ! bitfun_mirror_priv dockerd --validate --config-file "$tmp" >/dev/null; then
+    echo ">>> docker mirror: restored daemon.json failed dockerd validation; leaving current file untouched" >&2
+    rm -f "$tmp" "$py"
+    return 1
+  fi
+  bitfun_mirror_backup_file "$daemon_json"
+  if ! bitfun_mirror_priv cp "$tmp" "$daemon_json"; then
+    echo ">>> docker mirror: failed to restore ${daemon_json}" >&2
+    rm -f "$tmp" "$py"
+    return 1
+  fi
+  rm -f "$tmp" "$py"
+  rm -f "$state_file" 2>/dev/null || bitfun_mirror_priv rm -f "$state_file" 2>/dev/null || true
+  rm -f "$version_file" 2>/dev/null || bitfun_mirror_priv rm -f "$version_file" 2>/dev/null || true
+  rm -f "$created_state" 2>/dev/null || bitfun_mirror_priv rm -f "$created_state" 2>/dev/null || true
+  echo ">>> docker mirror: removed BitFun-managed registry mirrors from ${daemon_json}"
+  if command -v docker >/dev/null 2>&1; then
+    bitfun_mirror_priv systemctl restart docker 2>/dev/null \
+      || bitfun_mirror_priv service docker restart 2>/dev/null \
+      || true
+  fi
+}
+
+bitfun_mirror_remove_cargo_managed_block() {
   local cargo_home="${CARGO_HOME:-$HOME/.cargo}"
   local cfg="${cargo_home}/config.toml"
-  local sparse="${BITFUN_CARGO_SPARSE_URL:-sparse+https://rsproxy.cn/index/}"
-  mkdir -p "$cargo_home" 2>/dev/null || true
-  if [ -f "$cfg" ]; then
-    mkdir -p "$HOME/.bitfun/mirror-backup" 2>/dev/null || true
-    cp -a "$cfg" "$HOME/.bitfun/mirror-backup/cargo-config.toml.$(date +%Y%m%d%H%M%S)" 2>/dev/null || true
+  local tmp backup
+  if [ ! -f "$cfg" ]; then
+    return 0
   fi
-  # Replace BitFun-managed block; keep other user content when possible.
-  local tmp
+  if ! grep -q '^# >>> BITFUN-CN-MIRROR$' "$cfg" 2>/dev/null \
+    && ! bitfun_mirror_priv grep -q '^# >>> BITFUN-CN-MIRROR$' "$cfg" 2>/dev/null; then
+    return 0
+  fi
+  mkdir -p "$HOME/.bitfun/mirror-backup" 2>/dev/null || true
+  backup="$HOME/.bitfun/mirror-backup/cargo-config.toml.$(date +%Y%m%d%H%M%S)"
+  if cp -a "$cfg" "$backup" 2>/dev/null || bitfun_mirror_priv cp -a "$cfg" "$backup" 2>/dev/null; then
+    :
+  else
+    echo ">>> cargo mirror: cannot back up ${cfg}; leaving it untouched" >&2
+    return 1
+  fi
+  bitfun_mirror_chown_to_home_owner "$HOME/.bitfun/mirror-backup" "$backup"
   tmp="$(mktemp)"
-  if [ -f "$cfg" ]; then
-    # shellcheck disable=SC2016
-    awk '
+  # shellcheck disable=SC2016
+  if ! awk '
       BEGIN {skip=0}
       /^# >>> BITFUN-CN-MIRROR$/ {skip=1; next}
       /^# <<< BITFUN-CN-MIRROR$/ {skip=0; next}
       skip==0 {print}
-    ' "$cfg" >"$tmp"
-  else
-    : >"$tmp"
+    ' "$cfg" >"$tmp" 2>/dev/null; then
+    bitfun_mirror_priv awk '
+        BEGIN {skip=0}
+        /^# >>> BITFUN-CN-MIRROR$/ {skip=1; next}
+        /^# <<< BITFUN-CN-MIRROR$/ {skip=0; next}
+        skip==0 {print}
+      ' "$cfg" >"$tmp"
   fi
-  cat >>"$tmp" <<EOF
+  if cp "$tmp" "$cfg" 2>/dev/null || bitfun_mirror_priv cp "$tmp" "$cfg" 2>/dev/null; then
+    :
+  else
+    echo ">>> cargo mirror: failed to remove legacy managed block from ${cfg}" >&2
+    rm -f "$tmp"
+    return 1
+  fi
+  bitfun_mirror_chown_to_home_owner "$cargo_home" "$cfg"
+  rm -f "$tmp"
+  echo ">>> cargo mirror: removed legacy BitFun block from ${cfg}; relay Cargo mirroring is build-local"
+}
 
-# >>> BITFUN-CN-MIRROR
-[source.crates-io]
-replace-with = "bitfun-rsproxy-sparse"
-
-[source.bitfun-rsproxy-sparse]
-registry = "${sparse}"
-
-[registries.bitfun-rsproxy-sparse]
-index = "${sparse}"
-
-[net]
-git-fetch-with-cli = true
-# <<< BITFUN-CN-MIRROR
-EOF
-  mv "$tmp" "$cfg"
-  echo ">>> cargo mirror: configured ${cfg} → ${sparse}"
+bitfun_mirror_restore_host() {
+  echo ">>> Restoring global host sources managed by BitFun..."
+  bitfun_mirror_restore_apt || true
+  bitfun_mirror_remove_docker_daemon || true
+  bitfun_mirror_remove_cargo_managed_block || true
 }
 
 bitfun_mirror_apply_host() {
@@ -510,12 +879,20 @@ bitfun_mirror_apply_host() {
   if [ "${BITFUN_MIRROR_MODE:-global}" != "cn" ]; then
     return 0
   fi
-  echo ">>> Applying China host mirrors (apt / docker / cargo)..."
+  mkdir -p "$HOME/.bitfun/mirror-state" 2>/dev/null || true
+  echo "2" >"$HOME/.bitfun/mirror-state/version" 2>/dev/null || true
+  bitfun_mirror_chown_to_home_owner \
+    "$HOME/.bitfun" "$HOME/.bitfun/mirror-state" "$HOME/.bitfun/mirror-state/version"
+  echo ">>> Applying China host mirrors (apt / docker; Cargo stays build-local)..."
   bitfun_mirror_apply_apt || true
   bitfun_mirror_apply_docker_daemon || true
-  bitfun_mirror_apply_cargo_config || true
+  # Relay compilation happens inside Docker. Do not mutate the SSH user's
+  # global Cargo config; older versions did and could create duplicate TOML
+  # tables or root-owned ~/.cargo directories.
+  bitfun_mirror_remove_cargo_managed_block || true
   mkdir -p "$HOME/.bitfun" 2>/dev/null || true
   echo "cn" >"$HOME/.bitfun/mirror-mode" 2>/dev/null || true
+  bitfun_mirror_chown_to_home_owner "$HOME/.bitfun" "$HOME/.bitfun/mirror-mode"
 }
 
 # Install Docker Engine from Aliyun docker-ce (CN). Returns 0 on success.
@@ -599,8 +976,10 @@ bitfun_mirror_init() {
     echo ">>> docker registries:  ${BITFUN_DOCKER_REGISTRY_MIRRORS}"
     bitfun_mirror_apply_host
   else
+    bitfun_mirror_restore_host
     mkdir -p "$HOME/.bitfun" 2>/dev/null || true
     echo "global" >"$HOME/.bitfun/mirror-mode" 2>/dev/null || true
+    bitfun_mirror_chown_to_home_owner "$HOME/.bitfun" "$HOME/.bitfun/mirror-mode"
   fi
 }
 

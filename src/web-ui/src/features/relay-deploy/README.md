@@ -50,7 +50,9 @@ Desktop Tauri surface: `src/apps/desktop/src/api/relay_deploy_api.rs`
    `src/apps/relay-server/mirror.sh` and runs `bitfun_mirror_init` before apt
    tool install, Docker Engine install, and GitHub sync. `deploy.sh` sources
    the same file so manual and one-click paths stay aligned. Force with
-   `BITFUN_MIRROR=cn|global`.
+   `BITFUN_MIRROR=cn|global`. Docker daemon metadata must stay outside
+   `daemon.json`; host Cargo config must remain untouched; global mode rolls
+   back only BitFun-managed apt and Docker entries.
 
 ## Related docs
 

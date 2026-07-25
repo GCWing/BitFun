@@ -1,6 +1,6 @@
 # Relay Deploy: China Mirror Acceleration
 
-**Date:** 2026-07-24  
+**Date:** 2026-07-24
 **Status:** Approved for implementation (user: design + implement end-to-end)
 
 ## Problem
@@ -14,7 +14,9 @@ China hosts these endpoints are slow or unreliable, so deploy often stalls.
 1. Auto-detect mainland China at deploy start; allow force override.
 2. Cover the full path: Desktop SSH (Docker install, GitHub sync) + `deploy.sh`
    + Dockerfile (apt + cargo) + Docker Hub pulls.
-3. Persist host-level mirror config (apt, Docker `daemon.json`, cargo config).
+3. Persist host-level apt and Docker mirror config; keep Cargo mirroring scoped
+   to the relay Docker build so deployment never rewrites the SSH user's Cargo
+   configuration.
 4. Ship built-in default CN mirrors; allow env overrides.
 5. Keep non-CN hosts unchanged.
 
@@ -42,7 +44,7 @@ Priority:
 | Docker Hub registry-mirrors | `https://docker.1ms.run`, `https://dockerproxy.net`, `https://docker.m.daocloud.io` | `BITFUN_DOCKER_REGISTRY_MIRRORS` (space/comma separated) |
 | Debian/Ubuntu apt | `mirrors.aliyun.com` | `BITFUN_APT_MIRROR` |
 | RHEL/CentOS yum/dnf docker-ce | Aliyun docker-ce | same family |
-| Cargo / crates.io | `sparse+https://rsproxy.cn/index/` | `BITFUN_CARGO_SPARSE_URL` |
+| Relay Docker build Cargo / crates.io | `sparse+https://rsproxy.cn/index/` | `BITFUN_CARGO_SPARSE_URL` |
 | Rustup (host, if used) | `https://rsproxy.cn` | `BITFUN_RUSTUP_DIST_SERVER` |
 | GitHub git / tarball | `https://ghfast.top/` prefix | `BITFUN_GITHUB_PROXY` |
 | Docker Engine install | Aliyun docker-ce packages; fallback proxied `get.docker.com` | `BITFUN_DOCKER_INSTALL_URL` |
@@ -63,7 +65,7 @@ Flow:
 detect mode → if cn: apply host mirrors → export build/env vars
             → Docker install / GitHub sync use CN URLs
             → deploy.sh passes BITFUN_USE_CN_MIRROR=1 build-args
-            → Dockerfile rewrites apt + writes cargo config before cargo build
+            → Dockerfile rewrites apt + writes build-local cargo config
 ```
 
 ## Persistence / merge rules
@@ -74,9 +76,13 @@ detect mode → if cn: apply host mirrors → export build/env vars
 - **Docker daemon.json:** JSON-merge `registry-mirrors` (python3 when available);
   never drop unrelated keys; `systemctl restart docker` only if daemon was
   already manageable.
-- **Cargo:** write/merge `$HOME/.cargo/config.toml` (and builder
-  `/usr/local/cargo/config.toml` via Dockerfile) for rsproxy sparse.
+- **Cargo:** leave `$HOME/.cargo/config.toml` untouched. The builder writes
+  `/usr/local/cargo/config.toml` inside Docker for rsproxy sparse.
 - Marker file: `$HOME/.bitfun/mirror-mode` = `cn|global` for logs/idempotency.
+- **Rollback:** `BITFUN_MIRROR=global` removes the BitFun apt list, restores
+  source files renamed with `.bitfun-disabled`, removes only Docker mirrors
+  recorded as BitFun additions, and cleans the legacy managed Cargo block from
+  early deployments.
 
 ## Failure behavior
 
@@ -84,7 +90,8 @@ detect mode → if cn: apply host mirrors → export build/env vars
   deploy solely because a public mirror endpoint is down.
 - GitHub proxy failure keeps existing tarball fallback chain (try CN URL then
   upstream if override allows).
-- `BITFUN_MIRROR=global` skips all CN writes even on a China IP.
+- `BITFUN_MIRROR=global` skips CN writes and rolls back BitFun-owned host
+  mirror changes even on a China IP.
 
 ## Verification
 

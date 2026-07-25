@@ -1416,6 +1416,22 @@ mod tests {
             RELAY_MIRROR_SH.contains("ghfast.top"),
             "mirror.sh must default GitHub proxy"
         );
+        assert!(
+            RELAY_MIRROR_SH.contains("bitfun_mirror_country_via_bash_tcp"),
+            "mirror.sh must keep a country fallback for minimal hosts without curl"
+        );
+        assert!(
+            RELAY_MIRROR_SH.contains("bitfun_mirror_restore_host"),
+            "mirror.sh must support switching a managed host back to global mode"
+        );
+        assert!(
+            !RELAY_MIRROR_SH.contains("data[\"bitfun-cn-mirror\"]"),
+            "daemon.json must contain only dockerd-supported directives"
+        );
+        assert!(
+            !RELAY_MIRROR_SH.contains("bitfun_mirror_apply_cargo_config"),
+            "relay deploy must not rewrite the SSH user's global Cargo config"
+        );
         let helpers = prepare_helpers_bash();
         assert!(
             helpers.contains("bitfun_mirror_init"),
@@ -1433,6 +1449,79 @@ mod tests {
         assert!(sync.contains("BITFUN_GITHUB_GIT_URL"));
         assert!(sync.contains("BITFUN_GITHUB_TARBALL_URL"));
         assert!(sync.contains("retrying upstream"));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn mirror_docker_config_round_trip_preserves_unmanaged_settings() {
+        use std::{fs, process::Command};
+
+        let temp = tempfile::tempdir().expect("create mirror test dir");
+        let mirror_path = temp.path().join("mirror.sh");
+        let daemon_path = temp.path().join("etc/docker/daemon.json");
+        fs::create_dir_all(daemon_path.parent().expect("daemon parent"))
+            .expect("create daemon dir");
+        fs::write(&mirror_path, RELAY_MIRROR_SH).expect("write embedded mirror script");
+        fs::write(
+            &daemon_path,
+            r#"{
+  "debug": true,
+  "registry-mirrors": ["https://user.example"]
+}
+"#,
+        )
+        .expect("write initial daemon config");
+
+        let output = Command::new("bash")
+            .arg("-c")
+            .arg(
+                r#"
+set -euo pipefail
+export HOME="$2/home"
+export BITFUN_DOCKER_DAEMON_JSON="$2/etc/docker/daemon.json"
+mkdir -p "$HOME"
+source "$1"
+bitfun_mirror_priv() { "$@"; }
+bitfun_mirror_backup_file() { :; }
+bitfun_mirror_restart_docker_if_needed() { :; }
+bitfun_mirror_write_docker_daemon_json \
+  "https://docker.1ms.run https://dockerproxy.net"
+python3 - "$BITFUN_DOCKER_DAEMON_JSON" <<'PY'
+import json, sys
+with open(sys.argv[1], encoding="utf-8") as f:
+    data = json.load(f)
+assert data["debug"] is True
+assert data["registry-mirrors"] == [
+    "https://user.example",
+    "https://docker.1ms.run",
+    "https://dockerproxy.net",
+]
+assert "bitfun-cn-mirror" not in data
+PY
+bitfun_mirror_remove_docker_daemon
+python3 - "$BITFUN_DOCKER_DAEMON_JSON" <<'PY'
+import json, sys
+with open(sys.argv[1], encoding="utf-8") as f:
+    data = json.load(f)
+assert data == {
+    "debug": True,
+    "registry-mirrors": ["https://user.example"],
+}
+PY
+"#,
+            )
+            .arg("mirror-round-trip")
+            .arg(&mirror_path)
+            .arg(temp.path())
+            .output()
+            .expect("run mirror round-trip test");
+
+        assert!(
+            output.status.success(),
+            "mirror round trip failed:\nstdout:\n{}\nstderr:\n{}",
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr)
+        );
     }
 
     #[test]
