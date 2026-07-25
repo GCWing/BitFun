@@ -4,7 +4,7 @@
 //! enabled, the inhibitor lives for the desktop process and is released when
 //! the preference is disabled or the process exits.
 
-use std::sync::mpsc;
+use std::sync::{mpsc, Arc};
 
 use bitfun_core::service::config::{subscribe_config_updates, ConfigService, ConfigUpdateEvent};
 use serde::Deserialize;
@@ -23,30 +23,61 @@ enum SleepPreventionRequest {
 
 #[derive(Clone)]
 pub struct SleepPreventionState {
-    sender: mpsc::Sender<SleepPreventionRequest>,
+    worker: Arc<tokio::sync::Mutex<Option<mpsc::Sender<SleepPreventionRequest>>>>,
 }
 
 impl SleepPreventionState {
     async fn set_enabled(&self, enabled: bool) -> Result<(), String> {
+        let mut worker = self.worker.lock().await;
+        if !enabled && worker.is_none() {
+            return Ok(());
+        }
+
+        if worker.is_none() {
+            *worker = Some(start_worker()?);
+        }
+
         let (response, result) = tokio::sync::oneshot::channel();
-        self.sender
-            .send(SleepPreventionRequest::SetEnabled { enabled, response })
-            .map_err(|_| "Sleep-prevention worker is unavailable".to_string())?;
-        result
+        let send_result = worker
+            .as_ref()
+            .ok_or_else(|| "Sleep-prevention worker failed to initialize".to_string())?
+            .send(SleepPreventionRequest::SetEnabled { enabled, response });
+        if send_result.is_err() {
+            worker.take();
+            return Err("Sleep-prevention worker is unavailable".to_string());
+        }
+
+        let outcome = result
             .await
-            .map_err(|_| "Sleep-prevention worker stopped unexpectedly".to_string())?
+            .map_err(|_| "Sleep-prevention worker stopped unexpectedly".to_string())
+            .and_then(|outcome| outcome);
+
+        // An inactive or failed worker owns no useful resources. Dropping the
+        // final sender lets the thread exit instead of keeping one alive for
+        // the entire application lifetime while the preference is off.
+        if !enabled || outcome.is_err() {
+            worker.take();
+        }
+
+        outcome
     }
 }
 
 impl Default for SleepPreventionState {
     fn default() -> Self {
-        let (sender, receiver) = mpsc::channel();
-        std::thread::Builder::new()
-            .name("bitfun-sleep-prevention".to_string())
-            .spawn(move || run_worker(receiver))
-            .expect("failed to start sleep-prevention worker");
-        Self { sender }
+        Self {
+            worker: Arc::new(tokio::sync::Mutex::new(None)),
+        }
     }
+}
+
+fn start_worker() -> Result<mpsc::Sender<SleepPreventionRequest>, String> {
+    let (sender, receiver) = mpsc::channel();
+    std::thread::Builder::new()
+        .name("bitfun-sleep-prevention".to_string())
+        .spawn(move || run_worker(receiver))
+        .map_err(|error| format!("Failed to start sleep-prevention worker: {}", error))?;
+    Ok(sender)
 }
 
 fn run_worker(receiver: mpsc::Receiver<SleepPreventionRequest>) {
@@ -73,7 +104,21 @@ fn set_inhibitor_enabled(
                 .app_name("BitFun")
                 .app_reverse_domain("com.bitfun.desktop")
                 .create()
-                .map_err(|error| format!("Failed to prevent system sleep: {}", error))?;
+                .map_err(|error| {
+                    let message = format!("Failed to prevent system sleep: {}", error);
+                    #[cfg(target_os = "linux")]
+                    {
+                        format!(
+                            "{}. Linux sleep prevention requires the system D-Bus and \
+                             org.freedesktop.login1",
+                            message
+                        )
+                    }
+                    #[cfg(not(target_os = "linux"))]
+                    {
+                        message
+                    }
+                })?;
             *inhibitor = Some(guard);
             log::info!("System sleep prevention enabled");
         }
@@ -199,12 +244,26 @@ pub async fn set_prevent_sleep_enabled(
 
 #[cfg(test)]
 mod tests {
-    use super::SleepPreventionState;
+    use super::{start_worker, SleepPreventionState};
 
     #[tokio::test]
-    async fn disabling_an_inactive_inhibitor_is_idempotent() {
+    async fn inactive_state_does_not_start_a_worker() {
         let state = SleepPreventionState::default();
+        assert!(state.worker.lock().await.is_none());
+
         state.set_enabled(false).await.unwrap();
         state.set_enabled(false).await.unwrap();
+
+        assert!(state.worker.lock().await.is_none());
+    }
+
+    #[tokio::test]
+    async fn disabling_stops_an_existing_worker() {
+        let state = SleepPreventionState::default();
+        *state.worker.lock().await = Some(start_worker().unwrap());
+
+        state.set_enabled(false).await.unwrap();
+
+        assert!(state.worker.lock().await.is_none());
     }
 }
