@@ -1,0 +1,23 @@
+[package]
+name = "taiji-bar"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+description = "Tick-to-KLine aggregation engine (ref: czsc BarGenerator)"
+
+[lib]
+name = "taiji_bar"
+crate-type = ["rlib"]
+
+[dependencies]
+taiji-engine = { path = "../taiji-engine" }
+# chrono: workspace has serde+clock features
+chrono = { workspace = true }
+
+[dev-dependencies]
+serde_yaml = { workspace = true }
+serde_json = { workspace = true }
+
+[lints]
+workspace = true

@@ -1,0 +1,23 @@
+[package]
+name = "taiji-pattern"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+description = "Chart pattern recognition — DTW engine + three-layer index"
+
+[lib]
+name = "taiji_pattern"
+crate-type = ["rlib"]
+
+[dependencies]
+taiji-engine = { path = "../taiji-engine" }
+serde = { workspace = true }
+serde_json = { workspace = true }
+ndarray = "0.16"
+
+[dev-dependencies]
+chrono = { workspace = true }
+
+[lints]
+workspace = true
