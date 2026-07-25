@@ -66,19 +66,25 @@
   --mouse-glow-border-width: 1.5px;
   --mouse-glow-core: color-mix(
     in srgb,
-    var(--color-static-black) 38%,
+    var(--color-success) 82%,
     var(--color-static-white)
   );
   --mouse-glow-falloff: color-mix(
     in srgb,
-    var(--color-static-black) 16%,
+    var(--color-success) 34%,
     transparent
   );
   --mouse-glow-shadow: color-mix(
     in srgb,
-    var(--color-static-black) 20%,
+    var(--color-success) 28%,
     transparent
   );
+
+  filter:
+    hue-rotate(-18deg)
+    saturate(2.5)
+    brightness(1.12)
+    drop-shadow(0 0 8px var(--mouse-glow-shadow));
 }
 
 @media (prefers-reduced-motion: reduce) {
