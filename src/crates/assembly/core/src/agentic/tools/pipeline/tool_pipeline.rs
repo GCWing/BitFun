@@ -566,7 +566,10 @@ fn permission_intent_effect(
                         &rule.action,
                         PermissionResourceCaseSensitivity::Sensitive,
                     ) && match rule.effect {
-                        PermissionEffect::Allow => rule.resource == *resource,
+                        PermissionEffect::Allow => {
+                            rule.resource == *resource
+                                || (rule.action == "*" && rule.resource == "*")
+                        }
                         PermissionEffect::Ask | PermissionEffect::Deny => {
                             wildcard_matches(resource, &rule.resource, case_sensitivity)
                         }
@@ -2189,10 +2192,10 @@ mod tests {
     };
     use bitfun_runtime_ports::{
         ClockPort, PermissionAuditEvent, PermissionAuditRecord, PermissionAuditStorePort,
-        PermissionGrant, PermissionGrantKey, PermissionGrantStorePort, PermissionReplyStorePort,
-        PortResult, RoundInjection, RoundInjectionExecutionPolicy, RoundInjectionKind,
-        RoundInjectionTarget, RoundInjectionToolPreemption, RuntimeServiceCapability,
-        RuntimeServicePort,
+        PermissionGrant, PermissionGrantKey, PermissionGrantStorePort, PermissionPolicyPreset,
+        PermissionReplyStorePort, PortResult, RoundInjection, RoundInjectionExecutionPolicy,
+        RoundInjectionKind, RoundInjectionTarget, RoundInjectionToolPreemption,
+        RuntimeServiceCapability, RuntimeServicePort,
     };
     use serde_json::json;
     use std::collections::HashMap;
@@ -2293,6 +2296,22 @@ mod tests {
                 PermissionResourceCaseSensitivity::Sensitive,
             ),
             PermissionEffect::Deny
+        );
+    }
+
+    #[test]
+    fn full_access_baseline_allows_bash_commands() {
+        let intent = PermissionIntent::new("bash", vec!["git status && rm -rf build".to_string()]);
+        let full_access_rules = PermissionPolicyPreset::FullAccess.baseline_rules();
+
+        assert_eq!(
+            permission_intent_effect(
+                &intent,
+                &full_access_rules,
+                &[],
+                PermissionResourceCaseSensitivity::Sensitive,
+            ),
+            PermissionEffect::Allow
         );
     }
 
