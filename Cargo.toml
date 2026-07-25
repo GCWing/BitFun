@@ -191,6 +191,7 @@ tauri-plugin-global-shortcut = "2.3"
 tauri-plugin-single-instance = "2.4"
 tauri-plugin-window-state = "2.4"
 tauri-build = { version = "2.6", features = [] }
+keepawake = "0.6.0"
 
 # Desktop support
 screenshots = "0.8"

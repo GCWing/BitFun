@@ -12,6 +12,7 @@ mod embedded_relay_host;
 pub mod logging;
 pub mod macos_menubar;
 pub mod runtime;
+pub mod sleep_prevention;
 pub mod startup_trace;
 pub mod theme;
 pub mod tray;
@@ -470,6 +471,7 @@ pub async fn run() {
                 .build(),
         )
         .manage(app_state)
+        .manage(sleep_prevention::SleepPreventionState::default())
         .manage(desktop_runtime)
         .manage(coordinator_state)
         .manage(scheduler_state)
@@ -831,6 +833,7 @@ pub async fn run() {
             let step_started = Instant::now();
             init_services(app_handle.clone(), startup_log_level);
             api::remote_connect_api::set_account_app_handle(app_handle.clone());
+            sleep_prevention::spawn_config_listener(app_handle.clone());
             startup_trace.record_elapsed_step("native_setup", "init_services", step_started);
 
             let step_started = Instant::now();
@@ -1338,6 +1341,8 @@ pub async fn run() {
             api::system_api::initialize_tray_after_startup,
             api::system_api::startup_window_control,
             api::system_api::toggle_main_window_fullscreen,
+            sleep_prevention::get_prevent_sleep_enabled,
+            sleep_prevention::set_prevent_sleep_enabled,
             check_command_exists,
             check_commands_exist,
             run_system_command,

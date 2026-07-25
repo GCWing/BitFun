@@ -1,6 +1,6 @@
 {
   "title": "Basics",
-  "subtitle": "Logging, terminal, notifications, and launch at login",
+  "subtitle": "Power, logging, terminal, notifications, and launch at login",
   "appearance": {
     "title": "Appearance",
     "hint": "Interface language and visual theme",
@@ -98,6 +98,20 @@
       "loading": "Loading...",
       "loadFailed": "Failed to read launch-at-login setting",
       "saveFailed": "Failed to update launch-at-login setting"
+    }
+  },
+  "preventSleep": {
+    "sections": {
+      "title": "Power",
+      "hint": "Computer sleep behavior while BitFun is running"
+    },
+    "toggleLabel": "Prevent sleep",
+    "toggleDescription": "Keep the computer awake whenever BitFun is running, whether or not a task is active. The display may still turn off, and explicit sleep or closing a laptop lid follows system policy.",
+    "messages": {
+      "loading": "Loading…",
+      "loadFailed": "Failed to read the prevent-sleep setting",
+      "saveFailed": "Failed to update the prevent-sleep setting",
+      "saved": "Prevent-sleep setting saved"
     }
   },
   "logging": {

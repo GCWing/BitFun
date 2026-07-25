@@ -240,6 +240,100 @@ function BasicsAutoUpdateSection() {
   );
 }
 
+function BasicsPreventSleepSection() {
+  const { t } = useTranslation('settings/basics');
+  const isTauri = typeof window !== 'undefined' && '__TAURI__' in window;
+  const [enabled, setEnabled] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [message, setMessage] = useState<{ type: 'success' | 'error' | 'info'; text: string } | null>(null);
+
+  const showMessage = useCallback((type: 'success' | 'error' | 'info', text: string) => {
+    setMessage({ type, text });
+    setTimeout(() => setMessage(null), 3000);
+  }, []);
+
+  useEffect(() => {
+    if (!isTauri) {
+      setLoading(false);
+      return;
+    }
+
+    let cancelled = false;
+    void (async () => {
+      try {
+        setLoading(true);
+        const value = await systemAPI.getPreventSleepEnabled();
+        if (!cancelled) {
+          setEnabled(value);
+        }
+      } catch (error) {
+        log.error('Failed to load prevent-sleep preference', error);
+        if (!cancelled) {
+          showMessage('error', t('preventSleep.messages.loadFailed'));
+        }
+      } finally {
+        if (!cancelled) {
+          setLoading(false);
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [isTauri, showMessage, t]);
+
+  const handleToggle = useCallback(
+    async (next: boolean) => {
+      const previous = enabled;
+      setEnabled(next);
+      setSaving(true);
+      try {
+        await systemAPI.setPreventSleepEnabled(next);
+        showMessage('success', t('preventSleep.messages.saved'));
+      } catch (error) {
+        setEnabled(previous);
+        log.error('Failed to set prevent-sleep preference', { next, error });
+        showMessage('error', t('preventSleep.messages.saveFailed'));
+      } finally {
+        setSaving(false);
+      }
+    },
+    [enabled, showMessage, t]
+  );
+
+  if (!isTauri) {
+    return null;
+  }
+
+  if (loading) {
+    return <ConfigPageLoading text={t('preventSleep.messages.loading')} />;
+  }
+
+  return (
+    <ConfigPageSection
+      title={t('preventSleep.sections.title')}
+      description={t('preventSleep.sections.hint')}
+    >
+      <ConfigPageMessage message={message} />
+      <ConfigPageRow
+        label={t('preventSleep.toggleLabel')}
+        description={t('preventSleep.toggleDescription')}
+        align="center"
+      >
+        <Switch
+          checked={enabled}
+          onChange={(event) => {
+            void handleToggle(event.target.checked);
+          }}
+          disabled={saving}
+        />
+      </ConfigPageRow>
+    </ConfigPageSection>
+  );
+}
+
 function BasicsLoggingSection() {
   const { t } = useTranslation('settings/basics');
   const [configLevel, setConfigLevel] = useState<BackendLogLevel>('info');
@@ -875,6 +969,7 @@ const BasicsConfig: React.FC = () => {
       <ConfigPageHeader title={t('title')} subtitle={t('subtitle')} />
       <ConfigPageContent className="bitfun-basics-config__content">
         <BasicsLaunchAtLoginSection />
+        <BasicsPreventSleepSection />
         <BasicsAutoUpdateSection />
         <BasicsWindowBehaviorSection />
         <BasicsLoggingSection />

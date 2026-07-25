@@ -110,6 +110,8 @@ pub struct AppConfig {
     pub startup_behavior: String,
     pub confirm_on_exit: bool,
     pub restore_windows: bool,
+    /// Keep the local computer awake while the desktop application is running.
+    pub prevent_sleep: bool,
     pub zoom_level: f64,
     #[serde(default)]
     pub logging: AppLoggingConfig,
@@ -1614,6 +1616,7 @@ impl Default for AppConfig {
             startup_behavior: "lastWorkspace".to_string(),
             confirm_on_exit: true,
             restore_windows: true,
+            prevent_sleep: false,
             zoom_level: 1.0,
             logging: AppLoggingConfig::default(),
             sidebar: SidebarConfig {
@@ -2028,11 +2031,20 @@ impl AIModelConfig {
 mod tests {
     use super::{
         AIConfig, AIExperienceConfig, AIModelConfig, AgentModelDefaultsConfig, AgentProfileConfig,
-        AgentProfileView, AppLoggingConfig, GlobalConfig, MemoryExternalContextPolicy,
+        AgentProfileView, AppConfig, AppLoggingConfig, GlobalConfig, MemoryExternalContextPolicy,
         ModelExchangeTracingMode, ReasoningMode, SubagentBatchExecutionPolicy,
         SubagentModelSelection, UserSkillGroupsConfig, UserToolGroupsConfig,
     };
     use bitfun_runtime_ports::ToolPermissionConfig;
+
+    #[test]
+    fn prevent_sleep_defaults_to_disabled() {
+        assert!(!AppConfig::default().prevent_sleep);
+
+        let config: AppConfig =
+            serde_json::from_value(serde_json::json!({})).expect("empty app config should default");
+        assert!(!config.prevent_sleep);
+    }
 
     #[test]
     fn agent_profile_defaults_keep_all_collections_empty() {

@@ -18,6 +18,11 @@ describe('isPeerLocalOnlyCommand', () => {
     expect(isPeerLocalOnlyCommand('speech_append_audio_chunk')).toBe(true);
     expect(isPeerLocalOnlyCommand('speech_finish_input_session')).toBe(true);
   });
+
+  it('keeps sleep-prevention controls on the controller computer', () => {
+    expect(isPeerLocalOnlyCommand('get_prevent_sleep_enabled')).toBe(true);
+    expect(isPeerLocalOnlyCommand('set_prevent_sleep_enabled')).toBe(true);
+  });
 });
 
 describe('peerInvokePriorityFor', () => {

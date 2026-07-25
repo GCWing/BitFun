@@ -610,6 +610,10 @@ pub const REMOTE_WORKSPACE_COMMAND_POLICIES: &[(&str, RemoteWorkspacePolicy)] = 
         "get_subscription_login_status",
         RemoteWorkspacePolicy::LocalOnly,
     ),
+    (
+        "get_prevent_sleep_enabled",
+        RemoteWorkspacePolicy::LocalOnly,
+    ),
     ("get_system_info", RemoteWorkspacePolicy::WorkspaceAgnostic),
     ("get_tool_info", RemoteWorkspacePolicy::LegacyUnaudited),
     ("get_turn_files", RemoteWorkspacePolicy::LegacyUnaudited),
@@ -1500,6 +1504,10 @@ pub const REMOTE_WORKSPACE_COMMAND_POLICIES: &[(&str, RemoteWorkspacePolicy)] = 
         RemoteWorkspacePolicy::RemoteUnsupported,
     ),
     ("set_macos_edit_menu_mode", RemoteWorkspacePolicy::LocalOnly),
+    (
+        "set_prevent_sleep_enabled",
+        RemoteWorkspacePolicy::LocalOnly,
+    ),
     (
         "set_miniapp_draft_storage",
         RemoteWorkspacePolicy::LegacyUnaudited,

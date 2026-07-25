@@ -1,6 +1,6 @@
 {
   "title": "基础",
-  "subtitle": "日志、终端、通知与登录时启动",
+  "subtitle": "电源、日志、终端、通知与登录时启动",
   "appearance": {
     "title": "外观",
     "hint": "界面语言与视觉主题",
@@ -98,6 +98,20 @@
       "loading": "加载中…",
       "loadFailed": "无法读取开机启动设置",
       "saveFailed": "无法更新开机启动设置"
+    }
+  },
+  "preventSleep": {
+    "sections": {
+      "title": "电源",
+      "hint": "BitFun 运行时的电脑睡眠行为"
+    },
+    "toggleLabel": "阻止电脑睡眠",
+    "toggleDescription": "只要 BitFun 正在运行，就保持电脑唤醒，无论是否有任务在执行。显示器仍可关闭；主动睡眠或合上笔记本电脑由系统策略决定。",
+    "messages": {
+      "loading": "加载中…",
+      "loadFailed": "无法读取阻止睡眠设置",
+      "saveFailed": "无法更新阻止睡眠设置",
+      "saved": "阻止睡眠设置已保存"
     }
   },
   "logging": {
