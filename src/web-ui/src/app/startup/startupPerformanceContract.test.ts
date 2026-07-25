@@ -27,10 +27,10 @@ describe('startup performance contract', () => {
   it('keeps the pre-React startup fallback logo-only', () => {
     const source = readSource('../../../index.html');
 
-    expect(source).toContain('<link rel="icon" type="image/png" href="/Logo-ICON-128.png" />');
+    expect(source).toContain('<link rel="icon" type="image/png" href="/taiji-icon-128.png" />');
     expect(source).not.toContain('rel="preload" as="image"');
     expect(source).toContain('class="bitfun-preload__logo"');
-    expect(source).toContain('src="/Logo-ICON-128.png"');
+    expect(source).toContain('src="/taiji-icon-128.png"');
     expect(source).toContain('fetchpriority="low"');
     expect(source).not.toContain('Loading workspace...');
     expect(source).not.toContain('bitfun-preload__spinner');
@@ -43,7 +43,7 @@ describe('startup performance contract', () => {
 
   it('keeps the startup logo asset transparent without the desktop icon backing plate', async () => {
     const { default: sharp } = await import('sharp');
-    const assetPath = fileURLToPath(new URL('../../../public/Logo-ICON-128.png', import.meta.url));
+    const assetPath = fileURLToPath(new URL('../../../public/taiji-icon-128.png', import.meta.url));
     const { data, info } = await sharp(assetPath).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
     const alphaAt = (x: number, y: number): number => data[(y * info.width + x) * info.channels + 3] ?? 0;
 

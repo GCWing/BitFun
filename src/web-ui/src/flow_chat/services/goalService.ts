@@ -8,6 +8,13 @@ import type { GoalCommandAction } from './goalCommandParser';
 export { isGoalSlashCommand, parseGoalCommand } from './goalCommandParser';
 export type { GoalCommandAction } from './goalCommandParser';
 
+export interface GoalChainEntry {
+  sessionId: string;
+  sessionName: string;
+  goal: ThreadGoalSnapshot | null;
+  depth: number;
+}
+
 export interface ThreadGoalSnapshot {
   goalId?: string;
   objective: string;
@@ -319,6 +326,51 @@ export async function saveThreadGoalObjective(
     duration: 5000,
   });
   return snapshot;
+}
+
+/**
+ * Walk up the parentSessionId chain from the given session to the root,
+ * fetch the thread goal for every ancestor, and return an ordered list
+ * from L0 (root) to the current session.
+ */
+export async function fetchGoalChain(session: Session): Promise<GoalChainEntry[]> {
+  const ancestors: Session[] = [];
+  const visited = new Set<string>();
+  let current: Session | undefined = session;
+
+  while (current && !visited.has(current.sessionId)) {
+    visited.add(current.sessionId);
+    ancestors.push(current);
+    if (current.parentSessionId) {
+      current = flowChatStore.getState().sessions.get(current.parentSessionId);
+    } else {
+      break;
+    }
+  }
+
+  // Reverse so the root (L0) comes first
+  ancestors.reverse();
+
+  const result: GoalChainEntry[] = [];
+  for (let i = 0; i < ancestors.length; i++) {
+    const s = ancestors[i];
+    let goal: ThreadGoalSnapshot | null = null;
+    if (s.workspacePath) {
+      try {
+        goal = await fetchSessionThreadGoal(s);
+      } catch {
+        // best-effort: goal fetch failure shouldn't block the chain
+      }
+    }
+    result.push({
+      sessionId: s.sessionId,
+      sessionName: s.title || `Session ${s.sessionId}`,
+      goal,
+      depth: i,
+    });
+  }
+
+  return result;
 }
 
 function resolveGoalCommandError(error: unknown, params: GoalCommandParams): string {

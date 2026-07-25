@@ -233,6 +233,7 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
   const { t } = useTranslation('flow-chat');
   const virtualItems = useVirtualItems();
   const activeSession = useActiveSession();
+
   const {
     requests: permissionRequests,
     activeBatch: activePermissionBatch,

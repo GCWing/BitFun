@@ -357,6 +357,21 @@ export interface OpenBuiltInBrowserEvent {
   replaceExisting?: boolean;
 }
 
+/** Payload delivered on `agentic://thread-goal-updated`. */
+export interface ThreadGoalUpdatedPayload {
+  sessionId: string;
+  goal?: {
+    goalId: string;
+    objective: string;
+    status: string;
+    tokensUsed?: number;
+    tokenBudget?: number | null;
+    timeUsedSeconds?: number;
+    updatedAt?: number;
+    autoContinuationCount?: number;
+  } | null;
+}
+
 export interface TextChunkEvent extends AgenticEvent {
   roundId: string;
   attemptId?: string;
@@ -380,6 +395,16 @@ export interface SubagentSessionLinkedEvent extends AgenticEvent {
   parentToolCallId: string;
   agentType?: string;
   modelId?: string;
+}
+
+export interface SubagentTurnCompletedEvent extends AgenticEvent {
+  subagentDialogTurnId?: string;
+  parentSessionId: string;
+  parentDialogTurnId: string;
+  parentToolCallId: string;
+  agentType?: string;
+  status?: string;
+  outputText?: string;
 }
 
 export type DeepReviewQueueStatus =
@@ -998,6 +1023,15 @@ export class AgentAPI {
     );
   }
 
+  onSubagentTurnCompleted(
+    callback: (event: SubagentTurnCompletedEvent) => void
+  ): () => void {
+    return api.listen<SubagentTurnCompletedEvent>(
+      'agentic://subagent-turn-completed',
+      callback
+    );
+  }
+
   onDeepReviewQueueStateChanged(
     callback: (event: DeepReviewQueueStateChangedEvent) => void
   ): () => void {
@@ -1058,9 +1092,9 @@ export class AgentAPI {
   }
 
   onThreadGoalUpdated(
-    callback: (event: { sessionId: string; goal?: Record<string, unknown> | null }) => void
+    callback: (event: ThreadGoalUpdatedPayload) => void
   ): () => void {
-    return api.listen('agentic://thread-goal-updated', callback);
+    return api.listen<ThreadGoalUpdatedPayload>('agentic://thread-goal-updated', callback);
   }
 
   onOpenBuiltInBrowser(callback: (event: OpenBuiltInBrowserEvent) => void): () => void {
