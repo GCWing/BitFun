@@ -10,7 +10,7 @@ import {
 } from '../services/RemoteSessionManager';
 import { useMobileStore } from '../services/store';
 import { useTheme } from '../theme';
-import logoIcon from '../assets/Logo-ICON.png';
+import logoIcon from '../assets/taiji-icon.png';
 
 const PAGE_SIZE = 30;
 
@@ -266,7 +266,7 @@ const SessionListPage: React.FC<SessionListPageProps> = ({ sessionMgr, onSelectS
   }, [controlTargetEpoch, sessionMgr]);
 
   const hasSearchQuery = searchQuery.trim().length > 0;
-  // Show the resume card as soon as session data is available â€” don't gate it
+  // Show the resume card as soon as session data is available â€?don't gate it
   // behind `loading`, otherwise a background refresh hides the card and makes it
   // pop back in after the network round-trip, lagging behind the rest of the UI.
   const showResumeCard = sessions.length > 0 && !hasSearchQuery;
@@ -763,7 +763,7 @@ const SessionListPage: React.FC<SessionListPageProps> = ({ sessionMgr, onSelectS
   useEffect(() => {
     const workspacePath = displayMode === 'assistant' ? currentAssistant?.path : currentWorkspace?.path;
     if (!workspacePath) return;
-    // Skip the redundant first load when init() already loaded this path â€”
+    // Skip the redundant first load when init() already loaded this path â€?
     // otherwise the state change from init() triggers a second loadFirstPage
     // 250 ms later, causing an extra network round-trip and a loading flicker.
     if (initLoadedPathRef.current === workspacePath) {
@@ -1008,7 +1008,7 @@ const SessionListPage: React.FC<SessionListPageProps> = ({ sessionMgr, onSelectS
           </div>
         )}
 
-        {/* Resume Card â€” quick continue for the most recent session */}
+        {/* Resume Card â€?quick continue for the most recent session */}
         {showResumeCard && (
           <button
             type="button"

@@ -5,7 +5,7 @@ import { RelayHttpClient } from '../services/RelayHttpClient';
 import { RemoteSessionManager } from '../services/RemoteSessionManager';
 import { useMobileStore } from '../services/store';
 import { useTheme } from '../theme';
-import logoIcon from '../assets/Logo-ICON.png';
+import logoIcon from '../assets/taiji-icon.png';
 
 interface PairingPageProps {
   onPaired: (client: RelayHttpClient, sessionMgr: RemoteSessionManager) => void;
@@ -172,7 +172,7 @@ const PairingPage: React.FC<PairingPageProps> = ({ onPaired }) => {
     const passwordValue = providedPassword;
     const autoReconnect = options?.autoReconnect === true;
     // Prefer the explicit installId from the caller; fall back to the stable
-    // localStorage-backed id. Do not close over React state here â€” that used
+    // localStorage-backed id. Do not close over React state here â€?that used
     // to recreate this callback and re-trigger bootstrap side effects.
     const currentInstallId = options?.installId || getOrCreateInstallId();
     const activeLockUntil = lockUntilRef.current;
@@ -376,7 +376,7 @@ const PairingPage: React.FC<PairingPageProps> = ({ onPaired }) => {
   attemptPairRef.current = attemptPair;
 
   // Mount-once bootstrap: restore form fields and optionally auto-reconnect.
-  // Must NOT depend on `attemptPair` identity â€” a later callback recreation
+  // Must NOT depend on `attemptPair` identity â€?a later callback recreation
   // used to reset status to `pairing` without starting a new request, which
   // left the page spinning forever after a fast reconnect failure.
   useEffect(() => {
@@ -391,7 +391,7 @@ const PairingPage: React.FC<PairingPageProps> = ({ onPaired }) => {
       localStorage.removeItem(MOBILE_LOCK_UNTIL_KEY);
       localStorage.removeItem(MOBILE_FAILURE_COUNT_KEY);
     }
-    // Account mode always needs a password â€” never auto-reconnect without it.
+    // Account mode always needs a password â€?never auto-reconnect without it.
     const shouldAutoReconnect = !requiresAccountAuth
       && !!savedUserId
       && !!currentInstallId
