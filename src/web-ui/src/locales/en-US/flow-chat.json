@@ -2104,6 +2104,7 @@
     }
   },
   "modelBrainstorm": {
+    "triggerLabel": "Brainstorm",
     "menuTitle": "Brainstorm models",
     "disabledTooltip": "Multi-model brainstorm",
     "enabledTooltip": "Brainstorm with {{count}} models",
@@ -2115,7 +2116,7 @@
     "readonlyToolMetric": "{{count}} read-only tools",
     "thinkingMetric": "{{value}} thinking chars",
     "noReadonlyTools": "No read-only tools used",
-    "selectCandidate": "Continue with this model",
+    "selectCandidate": "Select this answer",
     "selectedCandidate": "Selected"
   },
   "reasoningEffort": {

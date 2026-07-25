@@ -667,6 +667,29 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   const [isModelSwitching, setIsModelSwitching] = useState(false);
   const [brainstormEnabled, setBrainstormEnabled] = useState(false);
   const [brainstormModelIds, setBrainstormModelIds] = useState<string[]>([]);
+  const brainstormSubmitStateRef = useRef<{
+    enabled: boolean;
+    modelIds: string[];
+    canUse: boolean;
+  }>({
+    enabled: false,
+    modelIds: [],
+    canUse: false,
+  });
+  const updateBrainstormEnabled = useCallback((enabled: boolean) => {
+    brainstormSubmitStateRef.current = {
+      ...brainstormSubmitStateRef.current,
+      enabled,
+    };
+    setBrainstormEnabled(enabled);
+  }, []);
+  const updateBrainstormModelIds = useCallback((modelIds: string[]) => {
+    brainstormSubmitStateRef.current = {
+      ...brainstormSubmitStateRef.current,
+      modelIds,
+    };
+    setBrainstormModelIds(modelIds);
+  }, []);
   const isAssistantWorkspace = useMemo(
     () => resolveSessionAssistantWorkspace({
       currentWorkspace: workspace,
@@ -918,10 +941,18 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   const canUseModelBrainstorm = !isAcpInputSession && !isBtwSession && !isSubagentInputTarget;
 
   useEffect(() => {
+    brainstormSubmitStateRef.current = {
+      enabled: brainstormEnabled,
+      modelIds: brainstormModelIds,
+      canUse: canUseModelBrainstorm,
+    };
+  }, [brainstormEnabled, brainstormModelIds, canUseModelBrainstorm]);
+
+  useEffect(() => {
     if (!canUseModelBrainstorm && brainstormEnabled) {
-      setBrainstormEnabled(false);
+      updateBrainstormEnabled(false);
     }
-  }, [brainstormEnabled, canUseModelBrainstorm]);
+  }, [brainstormEnabled, canUseModelBrainstorm, updateBrainstormEnabled]);
 
   useEffect(() => {
     if (!isSubagentInputTarget) {
@@ -2717,12 +2748,24 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   const handleModelLoadingChange = useCallback((loading: boolean) => {
     setIsModelSwitching(loading);
   }, []);
+
+  const getCurrentDraftValue = useCallback(() => {
+    if (inputState.value.trim()) {
+      return inputState.value;
+    }
+
+    const editor = richTextInputRef.current as (HTMLDivElement & {
+      getPlainText?: () => string;
+    }) | null;
+    return editor?.getPlainText?.() ?? editor?.textContent ?? '';
+  }, [inputState.value]);
   
   const handleSendOrCancel = useCallback(async () => {
     if (!derivedState) return;
     
     const { sendButtonMode } = derivedState;
-    const draftTrimmed = inputState.value.trim();
+    const draftValue = getCurrentDraftValue();
+    const draftTrimmed = draftValue.trim();
 
     // While generating, an empty control in `cancel` mode means stop. If the user has typed a follow-up,
     // never treat this path as cancel — that would call cancel_dialog_turn and abort the current round early.
@@ -2833,8 +2876,10 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       return;
     }
 
-    if (brainstormEnabled && canUseModelBrainstorm) {
-      if (brainstormModelIds.length < MODEL_BRAINSTORM_MIN_CANDIDATES) {
+    const brainstormSubmitState = brainstormSubmitStateRef.current;
+    if (brainstormSubmitState.enabled && brainstormSubmitState.canUse) {
+      const modelIdsForBrainstorm = brainstormSubmitState.modelIds;
+      if (modelIdsForBrainstorm.length < MODEL_BRAINSTORM_MIN_CANDIDATES) {
         notificationService.warning(
           t('modelBrainstorm.needMoreModels', { count: MODEL_BRAINSTORM_MIN_CANDIDATES })
         );
@@ -2851,6 +2896,11 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       setQueuedInput(null);
 
       try {
+        log.debug('Launching model brainstorm from chat input', {
+          sourceSessionId: effectiveTargetSessionId || undefined,
+          modelCount: modelIdsForBrainstorm.length,
+          modelIds: modelIdsForBrainstorm,
+        });
         await launchModelBrainstorm({
           message,
           displayMessage: originalMessage,
@@ -2858,7 +2908,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
           sourceSessionId: effectiveTargetSessionId || undefined,
           workspaceConfig: flowChatSessionConfigForCurrentWorkspace(workspace),
           agentType: effectiveSendAgentType,
-          modelIds: brainstormModelIds,
+          modelIds: modelIdsForBrainstorm,
         });
         clearContexts();
         dispatchInput({ type: 'CLEAR_VALUE' });
@@ -2913,7 +2963,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     brainstormEnabled,
     brainstormModelIds,
     canUseModelBrainstorm,
-    inputState.value,
+    getCurrentDraftValue,
     derivedState,
     handleCancelCurrentTask,
     transition,
@@ -3614,6 +3664,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     if (!derivedState) return <IconButton className="bitfun-chat-input__send-button" disabled size="small"><ArrowUp size={11} /></IconButton>;
 
     const { sendButtonMode, hasQueuedInput } = derivedState;
+    const hasSendableDraft = Boolean(getCurrentDraftValue().trim());
     
     if (sendButtonMode === 'cancel') {
       return (
@@ -3661,7 +3712,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
           <IconButton
             className="bitfun-chat-input__send-button"
             onClick={handleSendOrCancel}
-            disabled={!inputState.value.trim() || isModelSwitching}
+            disabled={!hasSendableDraft || isModelSwitching}
             data-testid="chat-input-send-btn"
             tooltip={t('input.sendShortcut')}
             size="small"
@@ -3676,7 +3727,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       <IconButton
         className="bitfun-chat-input__send-button"
         onClick={handleSendOrCancel}
-        disabled={!inputState.value.trim() || isModelSwitching}
+        disabled={!hasSendableDraft || isModelSwitching}
         data-testid="chat-input-send-btn"
         tooltip={t('input.sendShortcut')}
         size="small"
@@ -4317,8 +4368,8 @@ export const ChatInput: React.FC<ChatInputProps> = ({
                       enabled={brainstormEnabled}
                       selectedModelIds={brainstormModelIds}
                       disabled={!!derivedState?.isProcessing || isModelSwitching}
-                      onEnabledChange={setBrainstormEnabled}
-                      onSelectedModelIdsChange={setBrainstormModelIds}
+                      onEnabledChange={updateBrainstormEnabled}
+                      onSelectedModelIdsChange={updateBrainstormModelIds}
                     />
                   )}
                   <ModelSelector

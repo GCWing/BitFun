@@ -5,7 +5,11 @@ import { createLogger } from '@/shared/utils/logger';
 import type { ContextItem, ImageContext } from '@/shared/types/context';
 import type { SessionConfig } from '../types/flow-chat';
 import { FlowChatManager } from './FlowChatManager';
-import { useModelBrainstormStore, type ModelBrainstormCandidate } from '../store/modelBrainstormStore';
+import {
+  useModelBrainstormStore,
+  type ModelBrainstormCandidate,
+  type ModelBrainstormPublicContext,
+} from '../store/modelBrainstormStore';
 import { buildImagePayload } from '../utils/imagePayload';
 import { buildPromptMessage, stripInlineImageTags } from '../utils/messagePrompt';
 
@@ -87,6 +91,31 @@ function buildCandidateSessionTitle(model: BrainstormModelInfo): string {
   return `Brainstorm · ${model.label}`;
 }
 
+function buildPromptWithPublicContext(
+  promptMessage: string,
+  publicContext: ModelBrainstormPublicContext | undefined,
+): string {
+  const publicAnswer = publicContext?.answer.trim();
+  if (!publicContext || !publicAnswer) {
+    return promptMessage;
+  }
+
+  return [
+    'In the previous brainstorm round, the user selected the final answer below.',
+    'This selected answer is now public context for the current brainstorm round. Every candidate model must incorporate it into the current context.',
+    'If the current question refers to "this", "it", "the answer above", or similar wording, treat that as referring to this selected public answer. Do not claim you cannot see the previous selection.',
+    'You may still reason independently and point out concerns, but first acknowledge that this selected public answer is the user-chosen conclusion from the previous round.',
+    '',
+    `Selected model: ${publicContext.modelLabel}`,
+    '',
+    'Selected public answer:',
+    publicAnswer,
+    '',
+    'Current user question:',
+    promptMessage,
+  ].join('\n');
+}
+
 async function ensureSourceSession(
   manager: FlowChatManager,
   sourceSessionId: string | undefined,
@@ -106,7 +135,7 @@ export async function launchModelBrainstorm(
   request: LaunchModelBrainstormRequest,
 ): Promise<LaunchModelBrainstormResult> {
   const displayMessage = request.displayMessage?.trim() || request.message.trim();
-  const promptMessage = buildPromptMessage(stripInlineImageTags(request.message), request.contexts);
+  const basePromptMessage = buildPromptMessage(stripInlineImageTags(request.message), request.contexts);
   const selectedModels = await resolveSelectedModels(request.modelIds);
 
   if (selectedModels.length < MODEL_BRAINSTORM_MIN_CANDIDATES) {
@@ -122,6 +151,11 @@ export async function launchModelBrainstorm(
     request.workspaceConfig,
     request.agentType,
   );
+  const pendingPublicContext = useModelBrainstormStore.getState().getPublicContextForSession(sourceSessionId);
+  const promptMessage = buildPromptWithPublicContext(basePromptMessage, pendingPublicContext);
+  const reusableCandidateSessions = useModelBrainstormStore
+    .getState()
+    .getReusableCandidateSessionsForSession(sourceSessionId);
   const batchId = buildBatchId();
   const candidates: ModelBrainstormCandidate[] = selectedModels.map((model, index) => ({
     id: buildCandidateId(batchId, model.id, index),
@@ -147,23 +181,37 @@ export async function launchModelBrainstorm(
 
     try {
       updateCandidate({ status: 'starting' });
-      const sessionId = await manager.createChatSession(
-        {
-          ...request.workspaceConfig,
-          modelName: candidate.modelId,
-        },
-        request.agentType,
-        {
-          activate: false,
-          title: buildCandidateSessionTitle({
-            id: candidate.modelId,
-            label: candidate.modelLabel,
-            providerName: candidate.providerName || '',
-          }),
-        },
-      );
+      const reusableSession = reusableCandidateSessions[candidate.modelId];
+      let sessionId = reusableSession?.sessionId;
+      if (!sessionId) {
+        sessionId = await manager.createChatSession(
+          {
+            ...request.workspaceConfig,
+            modelName: candidate.modelId,
+          },
+          request.agentType,
+          {
+            activate: false,
+            title: buildCandidateSessionTitle({
+              id: candidate.modelId,
+              label: candidate.modelLabel,
+              providerName: candidate.providerName || '',
+            }),
+          },
+        );
+      }
 
       updateCandidate({ sessionId, status: 'running' });
+      if (reusableSession) {
+        log.debug('Reusing brainstorm candidate session history', {
+          batchId,
+          candidateId: candidate.id,
+          modelId: candidate.modelId,
+          sessionId,
+          previousBatchId: reusableSession.batchId,
+          previousCandidateId: reusableSession.candidateId,
+        });
+      }
       await manager.sendMessage(
         promptMessage,
         sessionId,
@@ -177,6 +225,10 @@ export async function launchModelBrainstorm(
             brainstormBatchId: batchId,
             brainstormCandidateId: candidate.id,
             brainstormModelId: candidate.modelId,
+            brainstormPublicContextBatchId: pendingPublicContext?.batchId,
+            brainstormPublicContextCandidateId: pendingPublicContext?.candidateId,
+            brainstormReusedSessionBatchId: reusableSession?.batchId,
+            brainstormReusedSessionCandidateId: reusableSession?.candidateId,
           },
         },
       );
@@ -201,6 +253,16 @@ export async function launchModelBrainstorm(
   const launchedCount = latestBatch?.candidates.filter(candidate => candidate.sessionId).length ?? 0;
   if (launchedCount === 0) {
     throw new Error('Failed to launch any brainstorm candidates.');
+  }
+  if (pendingPublicContext) {
+    useModelBrainstormStore.getState().consumePublicContextForSession(sourceSessionId);
+    log.debug('Consumed selected brainstorm answer as public context', {
+      sourceSessionId,
+      batchId,
+      publicContextBatchId: pendingPublicContext.batchId,
+      publicContextCandidateId: pendingPublicContext.candidateId,
+      modelId: pendingPublicContext.modelId,
+    });
   }
 
   return {

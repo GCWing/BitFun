@@ -2104,6 +2104,7 @@
     }
   },
   "modelBrainstorm": {
+    "triggerLabel": "头脑风暴",
     "menuTitle": "头脑风暴模型",
     "disabledTooltip": "多模型头脑风暴",
     "enabledTooltip": "使用 {{count}} 个模型头脑风暴",
@@ -2115,7 +2116,7 @@
     "readonlyToolMetric": "{{count}} 个只读工具",
     "thinkingMetric": "{{value}} 推理字符",
     "noReadonlyTools": "未使用只读工具",
-    "selectCandidate": "沿此模型继续",
+    "selectCandidate": "选择此答案",
     "selectedCandidate": "已选择"
   },
   "reasoningEffort": {

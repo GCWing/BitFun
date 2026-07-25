@@ -5,7 +5,7 @@
 
 import React, { useRef, useEffect, useCallback, useState } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { MessageCircle, Puzzle } from 'lucide-react';
+import { Puzzle } from 'lucide-react';
 import type { ContextItem } from '../../shared/types/context';
 import { getRichTextExternalSyncAction } from './richTextInputSync';
 import {
@@ -16,19 +16,10 @@ import {
   getSkillPromptReferenceMatches,
   parseSkillPromptReferenceToken,
 } from '../utils/skillPromptReference';
-import {
-  appendComposerTextSegment,
-  COMPOSER_PRESENTATION_VERSION,
-  type ComposerPresentation,
-  type ComposerPresentationSegment,
-} from '../utils/composerPresentation';
 import './RichTextInput.scss';
 
 const SKILL_REFERENCE_BADGE_ICON = renderToStaticMarkup(
   <Puzzle size={12} strokeWidth={2.2} aria-hidden="true" />,
-);
-const SESSION_REFERENCE_BADGE_ICON = renderToStaticMarkup(
-  <MessageCircle size={12} strokeWidth={2.2} aria-hidden="true" />,
 );
 
 /** @ mention state */
@@ -44,18 +35,6 @@ export interface InlineTriggerState {
   query: string;
   startOffset: number;
 }
-
-export type RichTextInputElement = HTMLDivElement & {
-  getComposerPresentation?: () => ComposerPresentation | null;
-  restoreComposerPresentation?: (presentation: ComposerPresentation) => void;
-  insertTag?: (context: ContextItem) => void;
-  insertTagReplacingMention?: (context: ContextItem) => void;
-  replaceActiveInlineTrigger?: (replacementText: string) => void;
-  appendInlineTokenAtEnd?: (token: string) => void;
-  openMention?: () => void;
-  closeMention?: () => void;
-  closeInlineTrigger?: () => void;
-};
 
 export interface RichTextInputProps
   extends Omit<
@@ -93,7 +72,6 @@ function getContextDisplayName(context: ContextItem): string {
   switch (context.type) {
     case 'file': return context.fileName;
     case 'directory': return context.directoryName;
-    case 'session-reference': return context.sessionName;
     case 'code-snippet': return `${context.fileName}:${context.startLine}-${context.endLine}`;
     case 'pull-request': return context.label;
     case 'image': return context.imageName;
@@ -117,7 +95,6 @@ function getContextTagFormat(context: ContextItem): string {
   switch (context.type) {
     case 'file': return `#file:${context.fileName}`;
     case 'directory': return `#dir:${context.directoryName}`;
-    case 'session-reference': return `[session: ${context.sessionName}]`;
     case 'code-snippet': return `#code:${context.fileName}:${context.startLine}-${context.endLine}`;
     case 'pull-request': return `#pr:${context.label.replace(/\s+/g, '_')}`;
     case 'image': return `#img:${context.imageName}`;
@@ -143,8 +120,6 @@ function getContextFullPath(context: ContextItem): string {
       return context.filePath;
     case 'directory':
       return context.directoryPath + (context.recursive ? ' (recursive)' : '');
-    case 'session-reference':
-      return `${context.workspaceLabel} · ${context.workspacePath}`;
     case 'code-snippet':
       return `${context.filePath} (lines ${context.startLine}-${context.endLine})`;
     case 'pull-request':
@@ -246,14 +221,6 @@ export const RichTextInput = React.forwardRef<HTMLDivElement, RichTextInputProps
     // Store full tag format for text extraction
     tag.dataset.tagFormat = getContextTagFormat(context);
     tag.title = getContextFullPath(context);
-
-    if (context.type === 'session-reference') {
-      tag.classList.add('rich-text-tag-pill--session-reference');
-      const badge = document.createElement('span');
-      badge.className = 'rich-text-tag-pill__badge rich-text-tag-pill__badge--icon';
-      badge.innerHTML = SESSION_REFERENCE_BADGE_ICON;
-      tag.appendChild(badge);
-    }
     
     const text = document.createElement('span');
     text.className = 'rich-text-tag-pill__text';
@@ -371,115 +338,6 @@ export const RichTextInput = React.forwardRef<HTMLDivElement, RichTextInputProps
   const createInlineTokenElement = useCallback((token: string): HTMLSpanElement | null => {
     return createWidgetReferenceElement(token) ?? createSkillReferenceElement(token);
   }, [createSkillReferenceElement, createWidgetReferenceElement]);
-
-  const buildComposerPresentation = useCallback((): ComposerPresentation | null => {
-    const editor = internalRef.current;
-    if (!editor) {
-      return null;
-    }
-
-    const contextsById = new Map(contexts.map(context => [context.id, context]));
-    const segments: ComposerPresentationSegment[] = [];
-    const appendText = (text: string) => appendComposerTextSegment(segments, sanitizeText(text));
-    const traverse = (node: Node) => {
-      if (node.nodeType === Node.TEXT_NODE) {
-        appendText(node.textContent || '');
-        return;
-      }
-      if (node.nodeType !== Node.ELEMENT_NODE) {
-        return;
-      }
-
-      const element = node as HTMLElement;
-      const isBlock = element.tagName === 'DIV' || element.tagName === 'P';
-      const previous = segments[segments.length - 1];
-      if (isBlock && segments.length > 0 && !(previous?.kind === 'text' && previous.text.endsWith('\n'))) {
-        appendText('\n');
-      }
-
-      const contextId = element.dataset.contextId;
-      if (contextId) {
-        const context = contextsById.get(contextId);
-        if (context && context.type !== 'image') {
-          segments.push({
-            kind: 'context',
-            context,
-            tag: getContextTagFormat(context),
-            label: getContextDisplayName(context),
-            title: getContextFullPath(context),
-          });
-          return;
-        }
-        appendText(element.dataset.tagFormat || '');
-        return;
-      }
-
-      const inlineToken = element.dataset.inlineTokenType;
-      const token = element.dataset.tagFormat;
-      if (inlineToken && token) {
-        const skill = parseSkillPromptReferenceToken(token);
-        if (skill) {
-          segments.push({
-            kind: 'inline-token',
-            token,
-            tokenType: 'skill',
-            label: skill.skillName,
-          });
-          return;
-        }
-        const widget = parseWidgetPromptReferenceToken(token);
-        if (widget) {
-          segments.push({
-            kind: 'inline-token',
-            token,
-            tokenType: 'widget',
-            label: widget.displayText,
-          });
-          return;
-        }
-      }
-
-      if (element.tagName === 'BR') {
-        appendText('\n');
-        return;
-      }
-      node.childNodes.forEach(traverse);
-    };
-
-    editor.childNodes.forEach(traverse);
-    return {
-      version: COMPOSER_PRESENTATION_VERSION,
-      segments,
-    };
-  }, [contexts, internalRef]);
-
-  const restoreComposerPresentation = useCallback((presentation: ComposerPresentation) => {
-    const editor = internalRef.current;
-    if (!editor || presentation.version !== COMPOSER_PRESENTATION_VERSION) {
-      return;
-    }
-
-    const fragment = document.createDocumentFragment();
-    for (const segment of presentation.segments) {
-      if (segment.kind === 'text') {
-        fragment.appendChild(document.createTextNode(segment.text));
-      } else if (segment.kind === 'context') {
-        fragment.appendChild(createTagElement(segment.context));
-      } else {
-        fragment.appendChild(createInlineTokenElement(segment.token) ?? document.createTextNode(segment.token));
-      }
-    }
-    editor.replaceChildren(fragment);
-
-    const selection = window.getSelection();
-    if (selection) {
-      const range = document.createRange();
-      range.selectNodeContents(editor);
-      range.collapse(false);
-      selection.removeAllRanges();
-      selection.addRange(range);
-    }
-  }, [createInlineTokenElement, createTagElement, internalRef]);
 
   const renderValueWithInlineTokens = useCallback((editor: HTMLElement, text: string) => {
     const fragment = document.createDocumentFragment();
@@ -858,8 +716,9 @@ export const RichTextInput = React.forwardRef<HTMLDivElement, RichTextInputProps
     isComposingRef.current = true;
     requestAnimationFrame(() => {
       isComposingRef.current = false;
+      handleInput();
     });
-  }, [closeInlineTrigger, closeMention, internalRef, onLargePaste]);
+  }, [closeInlineTrigger, closeMention, handleInput, internalRef, onLargePaste]);
 
   const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
     const nativeEvent = e.nativeEvent as KeyboardEvent;
@@ -1093,10 +952,19 @@ export const RichTextInput = React.forwardRef<HTMLDivElement, RichTextInputProps
       (internalRef.current as any).openMention = openMention;
       (internalRef.current as any).closeMention = closeMention;
       (internalRef.current as any).closeInlineTrigger = closeInlineTrigger;
-      (internalRef.current as RichTextInputElement).getComposerPresentation = buildComposerPresentation;
-      (internalRef.current as RichTextInputElement).restoreComposerPresentation = restoreComposerPresentation;
+      (internalRef.current as any).getPlainText = extractTextContent;
     }
-  }, [appendInlineTokenAtEnd, buildComposerPresentation, closeInlineTrigger, closeMention, insertTagAtCursor, insertTagReplacingMention, openMention, replaceActiveInlineTrigger, restoreComposerPresentation, internalRef]);
+  }, [
+    appendInlineTokenAtEnd,
+    closeInlineTrigger,
+    closeMention,
+    extractTextContent,
+    insertTagAtCursor,
+    insertTagReplacingMention,
+    openMention,
+    replaceActiveInlineTrigger,
+    internalRef,
+  ]);
 
   // Initialize and sync value changes from external sources.
   // This editor is effectively controlled by comparing the parent's value
@@ -1164,10 +1032,6 @@ export const RichTextInput = React.forwardRef<HTMLDivElement, RichTextInputProps
         tagElement.remove();
       }
     });
-
-    if (deletedIds.length > 0) {
-      triggerSyncRef.current?.();
-    }
 
     lastContextIdsRef.current = currentContextIds;
   }, [contexts, internalRef]);

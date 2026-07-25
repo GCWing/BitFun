@@ -2104,6 +2104,7 @@
     }
   },
   "modelBrainstorm": {
+    "triggerLabel": "頭腦風暴",
     "menuTitle": "頭腦風暴模型",
     "disabledTooltip": "多模型頭腦風暴",
     "enabledTooltip": "使用 {{count}} 個模型頭腦風暴",
@@ -2115,7 +2116,7 @@
     "readonlyToolMetric": "{{count}} 個唯讀工具",
     "thinkingMetric": "{{value}} 推理字元",
     "noReadonlyTools": "未使用唯讀工具",
-    "selectCandidate": "沿此模型繼續",
+    "selectCandidate": "選擇此答案",
     "selectedCandidate": "已選擇"
   },
   "reasoningEffort": {

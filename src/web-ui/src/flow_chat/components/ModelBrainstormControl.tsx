@@ -240,6 +240,7 @@ export const ModelBrainstormControl: React.FC<ModelBrainstormControlProps> = ({
           }}
         >
           <BrainCircuit size={13} strokeWidth={2.1} />
+          <span className="model-brainstorm-control__label">{t('modelBrainstorm.triggerLabel')}</span>
           {enabled && (
             <span className="model-brainstorm-control__count">{selectedCount}</span>
           )}

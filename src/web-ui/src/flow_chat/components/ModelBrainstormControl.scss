@@ -7,10 +7,10 @@
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    gap: 3px;
-    height: 22px;
-    min-width: 28px;
-    padding: 0 7px;
+    gap: 5px;
+    height: 24px;
+    min-width: 82px;
+    padding: 0 8px;
     border: 1px solid transparent;
     border-radius: 6px;
     background: transparent;
@@ -41,6 +41,13 @@
       cursor: default;
       opacity: 0.32;
     }
+  }
+
+  &__label {
+    font-size: var(--flowchat-font-size-2xs);
+    font-weight: 600;
+    line-height: 1;
+    white-space: nowrap;
   }
 
   &__count {

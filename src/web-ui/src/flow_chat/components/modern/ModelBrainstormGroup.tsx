@@ -1,8 +1,14 @@
 import React, { useEffect, useMemo, useReducer } from 'react';
 import { Check, Loader2, Wrench, Brain } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import type { DialogTurn, FlowThinkingItem, FlowToolItem, ModelRound, Session } from '../../types/flow-chat';
-import { FlowChatManager } from '../../services/FlowChatManager';
+import type {
+  DialogTurn,
+  FlowTextItem,
+  FlowThinkingItem,
+  FlowToolItem,
+  ModelRound,
+  Session,
+} from '../../types/flow-chat';
 import { FlowChatStore } from '../../store/FlowChatStore';
 import {
   useModelBrainstormStore,
@@ -144,6 +150,29 @@ function formatThinkingChars(chars: number): string {
   return String(chars);
 }
 
+function extractAssistantAnswer(turn: DialogTurn | undefined): string {
+  if (!turn) {
+    return '';
+  }
+
+  const roundsFromLatestFirst = [...turn.modelRounds].reverse();
+  for (const round of roundsFromLatestFirst) {
+    const text = round.items
+      .filter((item): item is FlowTextItem => item.type === 'text')
+      .filter(item => !item.runtimeStatus)
+      .map(item => item.content.trim())
+      .filter(Boolean)
+      .join('\n\n')
+      .trim();
+
+    if (text) {
+      return text;
+    }
+  }
+
+  return '';
+}
+
 export const ModelBrainstormGroup: React.FC<ModelBrainstormGroupProps> = ({ batch }) => {
   const { t } = useTranslation('flow-chat');
   const parentContext = useFlowChatContext();
@@ -162,13 +191,24 @@ export const ModelBrainstormGroup: React.FC<ModelBrainstormGroupProps> = ({ batc
     error: t('shared:statuses.failed'),
   };
 
-  const handleSelect = async (projection: CandidateProjection) => {
-    if (!projection.candidate.sessionId) {
+  const handleSelect = (projection: CandidateProjection) => {
+    if (!projection.candidate.sessionId || projection.status !== 'completed') {
       return;
     }
 
+    const answer = extractAssistantAnswer(projection.turn);
     useModelBrainstormStore.getState().selectCandidate(batch.id, projection.candidate.id);
-    await FlowChatManager.getInstance().switchChatSession(projection.candidate.sessionId);
+    if (answer) {
+      useModelBrainstormStore.getState().setPublicContextForSession(batch.sourceSessionId, {
+        sessionId: batch.sourceSessionId,
+        batchId: batch.id,
+        candidateId: projection.candidate.id,
+        modelId: projection.candidate.modelId,
+        modelLabel: projection.candidate.modelLabel,
+        answer,
+        createdAt: Date.now(),
+      });
+    }
   };
 
   return (
@@ -197,7 +237,7 @@ export const ModelBrainstormGroup: React.FC<ModelBrainstormGroupProps> = ({ batc
           const readonlyTooltip = projection.readonlyToolNames.length > 0
             ? projection.readonlyToolNames.join(', ')
             : t('modelBrainstorm.noReadonlyTools');
-          const canSelect = Boolean(projection.candidate.sessionId);
+          const canSelect = Boolean(projection.candidate.sessionId) && projection.status === 'completed';
 
           return (
             <article
@@ -297,7 +337,7 @@ export const ModelBrainstormGroup: React.FC<ModelBrainstormGroupProps> = ({ batc
                 disabled={!canSelect}
                 data-testid="model-brainstorm-select"
                 onClick={() => {
-                  void handleSelect(projection);
+                  handleSelect(projection);
                 }}
               >
                 {selected && <Check size={14} aria-hidden />}
