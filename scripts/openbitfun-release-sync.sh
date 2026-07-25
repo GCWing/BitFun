@@ -89,6 +89,46 @@ download_asset() {
   fi
 }
 
+# Check the mirrored Linux archives against the `.sha256` sidecars mirrored with
+# them. Reads the filename list on stdin, one per line.
+#
+# Scoped to the manifest's own assets rather than globbing `*.sha256`: the same
+# directory also holds the Desktop packages, whose sidecars this script does not
+# own and must not assume the format of. Deleting a good archive because a
+# foreign sidecar was laid out differently would be worse than not checking.
+#
+# A mismatch means this run pulled a bad copy from GitHub, so the archive is
+# removed: `download_asset` skips files that already exist, and leaving a corrupt
+# one in place would make every later run treat it as done. Removing it lets the
+# next run re-fetch and self-heal.
+verify_mirrored_checksums() {
+  local filename sidecar archive expected actual failed=0
+  while IFS= read -r filename; do
+    [ -n "$filename" ] || continue
+    case "$filename" in
+      *.sha256) ;;
+      *) continue ;;
+    esac
+    sidecar="${VERSION_DIR}/${filename}"
+    archive="${sidecar%.sha256}"
+    if [ ! -f "$sidecar" ] || [ ! -f "$archive" ]; then
+      continue
+    fi
+    expected="$(awk '{print $1; exit}' "$sidecar")"
+    actual="$(sha256sum "$archive" | awk '{print $1}')"
+    if [ "$expected" != "$actual" ]; then
+      log "ERROR: checksum mismatch for $(basename "$archive"): expected $expected, got $actual"
+      rm -f "$archive"
+      failed=1
+    fi
+  done
+  if [ "$failed" -ne 0 ]; then
+    log "ERROR: refusing to publish a manifest for unverified assets"
+    return 1
+  fi
+  return 0
+}
+
 # Fetch linux-binaries.json into $LINUX_MANIFEST_TMP, retrying transient
 # failures. Sets LINUX_MANIFEST_STATE to one of:
 #   ok        — downloaded
@@ -165,6 +205,16 @@ PY
       log "  Mirroring Linux binary asset: $filename"
       download_asset "$url" "${VERSION_DIR}/${filename}" || exit 1
     done <<< "$LINUX_ASSET_LIST"
+
+    # Verify before publishing the manifest that points at these bytes.
+    #
+    # Clients check an archive against the checksum served next to it. When both
+    # come from here, mirroring a corrupted archive alongside its original
+    # checksum is the one failure that verification cannot catch — every
+    # downstream install would then fail, or worse, succeed on bad bytes if the
+    # corruption also reached the sidecar. Checking here is the only place the
+    # two copies can still be compared.
+    cut -f2 <<< "$LINUX_ASSET_LIST" | verify_mirrored_checksums || exit 1
 
     "$PYTHON" - "$LINUX_MANIFEST_TMP" "${VERSION_DIR}/linux-binaries.json" \
       "$OPENBITFUN_BASE_URL" <<'PY'

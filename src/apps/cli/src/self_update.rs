@@ -40,6 +40,14 @@ const READ_TIMEOUT: Duration = Duration::from_secs(30);
 const MANIFEST_TIMEOUT: Duration = Duration::from_secs(20);
 /// Ceiling for the whole startup-path check, which precedes the first paint.
 const AUTO_CHECK_BUDGET: Duration = Duration::from_secs(10);
+/// Hard ceiling on an archive held in memory. The checksum can only be verified
+/// once the whole body has arrived, so without a cap a hostile or misconfigured
+/// origin can stream until the process is OOM-killed and no integrity check ever
+/// runs. Official CLI archives are tens of megabytes; this leaves ample room.
+const MAX_ARCHIVE_BYTES: usize = 512 * 1024 * 1024;
+/// How often a long download reports progress. Silence for minutes is
+/// indistinguishable from a hang.
+const PROGRESS_INTERVAL: Duration = Duration::from_secs(5);
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -81,7 +89,16 @@ pub(crate) async fn run_manual(check_only: bool) -> Result<UpdateOutcome> {
     } else {
         Some(InstallLock::acquire()?)
     };
-    let outcome = update_from_configured_sources(check_only).await?;
+    let result = update_from_configured_sources(check_only).await;
+    // A background install writes to /dev/null, so this file is the only way its
+    // failure ever reaches the user — the next launch reports it.
+    if is_background_install() {
+        match &result {
+            Err(error) => record_background_failure(&format!("{error:#}")),
+            Ok(_) => clear_background_failure(),
+        }
+    }
+    let outcome = result?;
     match outcome {
         UpdateOutcome::Current => {
             println!("BitFun CLI is up to date ({}).", env!("CARGO_PKG_VERSION"))
@@ -105,7 +122,14 @@ pub(crate) async fn run_manual(check_only: bool) -> Result<UpdateOutcome> {
 /// must never sit behind a transfer whose duration is set by the user's
 /// bandwidth; the previous inline download could hold the TUI for minutes.
 pub(crate) async fn maybe_run_automatic() {
-    if !automatic_update_is_eligible() || !automatic_check_is_due() {
+    if !automatic_update_is_eligible() {
+        return;
+    }
+    // Reported before the due-time gate, so a failure is not sat on for the rest
+    // of the six-hour interval. Previously an automatic update could fail every
+    // time and the user would only ever see it as "the version never changes".
+    report_background_failure();
+    if !automatic_check_is_due() {
         return;
     }
     mark_automatic_check();
@@ -152,12 +176,60 @@ fn spawn_detached_install() -> Result<bool> {
     let exe = std::env::current_exe().context("resolve current BitFun CLI executable")?;
     Command::new(exe)
         .arg("update")
+        .env(BACKGROUND_INSTALL_ENV, "1")
         .stdin(Stdio::null())
         .stdout(Stdio::null())
         .stderr(Stdio::null())
         .spawn()
         .context("spawn background CLI update")?;
     Ok(true)
+}
+
+/// Marks the detached child so it knows to leave a failure behind for the next
+/// interactive launch to report.
+const BACKGROUND_INSTALL_ENV: &str = "BITFUN_CLI_BACKGROUND_UPDATE";
+
+fn is_background_install() -> bool {
+    std::env::var_os(BACKGROUND_INSTALL_ENV).is_some()
+}
+
+fn background_failure_path() -> Option<PathBuf> {
+    crate::config::CliConfig::config_dir()
+        .ok()
+        .map(|dir| dir.join("update-last-error"))
+}
+
+fn record_background_failure(message: &str) {
+    let Some(path) = background_failure_path() else {
+        return;
+    };
+    if let Some(parent) = path.parent() {
+        let _ = fs::create_dir_all(parent);
+    }
+    let _ = fs::write(path, message);
+}
+
+fn clear_background_failure() {
+    if let Some(path) = background_failure_path() {
+        let _ = fs::remove_file(path);
+    }
+}
+
+/// Print (once) the reason the last background install gave up.
+fn report_background_failure() {
+    let Some(path) = background_failure_path() else {
+        return;
+    };
+    let Ok(message) = fs::read_to_string(&path) else {
+        return;
+    };
+    let _ = fs::remove_file(&path);
+    let message = message.trim();
+    if message.is_empty() {
+        return;
+    }
+    eprintln!("The last background BitFun CLI update failed: {message}");
+    eprintln!("Run `bitfun update` to retry.");
 }
 
 /// Guards against two `bitfun update` runs swapping the binaries at once.
@@ -190,16 +262,39 @@ impl InstallLock {
     fn acquire() -> Result<Self> {
         let path =
             Self::path().ok_or_else(|| anyhow!("cannot resolve the CLI update lock location"))?;
-        if Self::is_held() {
-            return Err(anyhow!(
-                "another BitFun CLI update is already running ({})",
-                path.display()
-            ));
+        if let Some(parent) = path.parent() {
+            let _ = fs::create_dir_all(parent);
         }
-        let _ = fs::remove_file(&path);
-        fs::write(&path, std::process::id().to_string())
-            .with_context(|| format!("create {}", path.display()))?;
-        Ok(Self { path })
+        // `create_new` is the whole point: a check-then-write leaves a window in
+        // which two `bitfun update` processes both see no lock, and interleaving
+        // their backup/stage/swap renames can leave no working binary at all.
+        // Only a stale lock is cleared, and only then is the create retried.
+        match fs::OpenOptions::new().write(true).create_new(true).open(&path) {
+            Ok(mut file) => {
+                use std::io::Write as _;
+                let _ = write!(file, "{}", std::process::id());
+                Ok(Self { path })
+            }
+            Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {
+                if Self::is_held() {
+                    return Err(anyhow!(
+                        "another BitFun CLI update is already running ({})",
+                        path.display()
+                    ));
+                }
+                fs::remove_file(&path)
+                    .with_context(|| format!("clear stale lock {}", path.display()))?;
+                let mut file = fs::OpenOptions::new()
+                    .write(true)
+                    .create_new(true)
+                    .open(&path)
+                    .with_context(|| format!("create {}", path.display()))?;
+                use std::io::Write as _;
+                let _ = write!(file, "{}", std::process::id());
+                Ok(Self { path })
+            }
+            Err(error) => Err(error).with_context(|| format!("create {}", path.display())),
+        }
     }
 }
 
@@ -630,14 +725,31 @@ async fn stream_with_stall_guard(
     buffer: &mut Vec<u8>,
     url: &str,
 ) -> Result<()> {
+    // `Content-Length` is the server's claim, not a promise, so it only shapes
+    // the progress line; the hard limit below is what actually bounds memory.
+    let expected_total = response
+        .content_length()
+        .map(|remaining| remaining as usize + buffer.len());
     let mut stream = response.bytes_stream();
     let mut window_start = Instant::now();
     let mut window_bytes: u64 = 0;
+    let mut last_report = Instant::now();
 
     while let Some(chunk) = stream.next().await {
         let chunk = chunk.with_context(|| format!("read {url}"))?;
+        if buffer.len() + chunk.len() > MAX_ARCHIVE_BYTES {
+            return Err(anyhow!(
+                "release archive exceeds the {} MB ceiling; refusing to keep reading",
+                MAX_ARCHIVE_BYTES / (1024 * 1024)
+            ));
+        }
         buffer.extend_from_slice(&chunk);
         window_bytes += chunk.len() as u64;
+
+        if last_report.elapsed() >= PROGRESS_INTERVAL {
+            report_progress(buffer.len(), expected_total);
+            last_report = Instant::now();
+        }
 
         let elapsed = window_start.elapsed();
         if elapsed >= STALL_WINDOW {
@@ -654,6 +766,19 @@ async fn stream_with_stall_guard(
         }
     }
     Ok(())
+}
+
+fn report_progress(downloaded: usize, expected_total: Option<usize>) {
+    let megabytes = |bytes: usize| bytes as f64 / (1024.0 * 1024.0);
+    match expected_total {
+        Some(total) if total > 0 => eprintln!(
+            "  downloaded {:.1} MB of {:.1} MB ({}%)",
+            megabytes(downloaded),
+            megabytes(total),
+            downloaded.saturating_mul(100) / total
+        ),
+        _ => eprintln!("  downloaded {:.1} MB", megabytes(downloaded)),
+    }
 }
 
 /// Download `url`, resuming with a Range request when a previous source left a
@@ -794,28 +919,74 @@ fn install_archive(archive: &[u8], current_exe: &Path) -> Result<()> {
 
     let primary_backup = stage.path().join("previous-bitfun");
     let legacy_backup = stage.path().join("previous-bitfun-cli");
+
+    // Rollback runs while something has already gone wrong, so its own failures
+    // are the ones that matter most: they are the difference between "the update
+    // did not apply" and "there is no working `bitfun` on this machine any
+    // more". Swallowing them leaves the user with a broken install and no clue.
+    let mut rollback_failures: Vec<String> = Vec::new();
+    let restore = |from: &Path, to: &Path, rollback_failures: &mut Vec<String>| {
+        if let Err(error) = fs::rename(from, to) {
+            rollback_failures.push(format!("restore {}: {error}", to.display()));
+        }
+    };
+    let rollback_error = |error: std::io::Error, step: &str, failures: Vec<String>| {
+        let base = anyhow!(error).context(step.to_string());
+        if failures.is_empty() {
+            return base;
+        }
+        base.context(format!(
+            "the previous CLI could NOT be put back ({}); reinstall BitFun manually",
+            failures.join("; ")
+        ))
+    };
+
     fs::rename(current_exe, &primary_backup).context("back up current bitfun")?;
     if let Err(error) = fs::rename(&legacy_target, &legacy_backup) {
-        let _ = fs::rename(&primary_backup, current_exe);
-        return Err(error).context("back up current bitfun-cli");
+        restore(&primary_backup, current_exe, &mut rollback_failures);
+        return Err(rollback_error(
+            error,
+            "back up current bitfun-cli",
+            rollback_failures,
+        ));
     }
     if let Err(error) = fs::rename(&staged_primary, current_exe) {
-        let _ = fs::rename(&legacy_backup, &legacy_target);
-        let _ = fs::rename(&primary_backup, current_exe);
-        return Err(error).context("install updated bitfun");
+        restore(&legacy_backup, &legacy_target, &mut rollback_failures);
+        restore(&primary_backup, current_exe, &mut rollback_failures);
+        return Err(rollback_error(
+            error,
+            "install updated bitfun",
+            rollback_failures,
+        ));
     }
     if let Err(error) = fs::rename(&staged_legacy, &legacy_target) {
-        let _ = fs::remove_file(current_exe);
-        let _ = fs::rename(&legacy_backup, &legacy_target);
-        let _ = fs::rename(&primary_backup, current_exe);
-        return Err(error).context("install updated bitfun-cli");
+        if let Err(remove_error) = fs::remove_file(current_exe) {
+            rollback_failures.push(format!("remove {}: {remove_error}", current_exe.display()));
+        }
+        restore(&legacy_backup, &legacy_target, &mut rollback_failures);
+        restore(&primary_backup, current_exe, &mut rollback_failures);
+        return Err(rollback_error(
+            error,
+            "install updated bitfun-cli",
+            rollback_failures,
+        ));
     }
     if let Err(error) = validate_entrypoint_pair(current_exe, &legacy_target) {
-        let _ = fs::remove_file(current_exe);
-        let _ = fs::remove_file(&legacy_target);
-        let _ = fs::rename(&legacy_backup, &legacy_target);
-        let _ = fs::rename(&primary_backup, current_exe);
-        return Err(error).context("validate installed CLI update");
+        for path in [current_exe, legacy_target.as_path()] {
+            if let Err(remove_error) = fs::remove_file(path) {
+                rollback_failures.push(format!("remove {}: {remove_error}", path.display()));
+            }
+        }
+        restore(&legacy_backup, &legacy_target, &mut rollback_failures);
+        restore(&primary_backup, current_exe, &mut rollback_failures);
+        let failed = error.context("validate installed CLI update");
+        if rollback_failures.is_empty() {
+            return Err(failed);
+        }
+        return Err(failed.context(format!(
+            "the previous CLI could NOT be put back ({}); reinstall BitFun manually",
+            rollback_failures.join("; ")
+        )));
     }
     Ok(())
 }
@@ -931,11 +1102,20 @@ fn mark_automatic_check() {
 }
 
 fn restart_managed_daemon() {
-    let Some(home) = dirs::home_dir() else {
-        return;
-    };
-    let unit = home.join(".config/systemd/user/bitfun-cli-daemon.service");
-    if unit.is_file() {
+    // `dirs::config_dir()` honours `XDG_CONFIG_HOME`, which is where systemd
+    // --user actually looks. Hard-coding `~/.config` missed the unit on any host
+    // that relocates it, and the daemon then kept running the old binary.
+    //
+    // Both are checked because an install predating this could have written the
+    // unit to `~/.config` on a host that sets `XDG_CONFIG_HOME` elsewhere; a
+    // `try-restart` for a unit systemd does not know is a harmless no-op, while
+    // missing one leaves a stale daemon behind.
+    let candidates = [dirs::config_dir(), dirs::home_dir().map(|it| it.join(".config"))];
+    let installed = candidates
+        .iter()
+        .flatten()
+        .any(|dir| dir.join("systemd/user/bitfun-cli-daemon.service").is_file());
+    if installed {
         let _ = Command::new("systemctl")
             .args(["--user", "try-restart", "bitfun-cli-daemon.service"])
             .status();
