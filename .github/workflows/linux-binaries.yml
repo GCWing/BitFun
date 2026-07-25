@@ -1,0 +1,128 @@
+name: Linux Binary Build
+
+on:
+  workflow_call:
+    inputs:
+      checkout_ref:
+        description: "Tag or commit SHA to build."
+        required: true
+        type: string
+      version:
+        description: "Release version used by binaries and archive metadata."
+        required: true
+        type: string
+      artifact_prefix:
+        description: "Stable prefix that isolates artifacts in the caller run."
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Linux Binaries (${{ matrix.platform.name }})
+    runs-on: ${{ matrix.platform.os }}
+    timeout-minutes: 90
+
+    strategy:
+      fail-fast: false
+      matrix:
+        platform:
+          - os: ubuntu-22.04
+            name: linux-x64
+            target: x86_64-unknown-linux-gnu
+          - os: ubuntu-24.04-arm
+            name: linux-arm64
+            target: aarch64-unknown-linux-gnu
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          ref: ${{ inputs.checkout_ref }}
+
+      - name: Install Linux system dependencies
+        shell: bash
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential \
+            clang \
+            cmake \
+            curl \
+            libssl-dev \
+            libxcb1-dev \
+            libxcb-render0-dev \
+            libxcb-shape0-dev \
+            libxcb-xfixes0-dev \
+            pkg-config \
+            python3
+
+      - name: Setup Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.platform.target }}
+
+      - name: Cache Rust build
+        uses: swatinem/rust-cache@v2
+        with:
+          shared-key: "linux-binaries-v1-${{ matrix.platform.name }}"
+          cache-bin: false
+
+      - name: Patch build version
+        shell: bash
+        env:
+          RELEASE_VERSION: ${{ inputs.version }}
+        run: |
+          set -euo pipefail
+          CARGO_VERSION="${RELEASE_VERSION%%+*}"
+          sed -i \
+            "s/^version = \".*\" # x-release-please-version/version = \"${CARGO_VERSION}\" # x-release-please-version/" \
+            Cargo.toml
+          sed -i \
+            "s/^version = \".*\" # x-release-please-version/version = \"${CARGO_VERSION}\" # x-release-please-version/" \
+            src/apps/relay-server/Cargo.toml
+
+      - name: Build CLI and Relay Server
+        shell: bash
+        run: |
+          cargo build --release \
+            --target ${{ matrix.platform.target }} \
+            -p bitfun-cli \
+            -p bitfun-relay-server \
+            --bins
+
+      - name: Test CLI installer
+        shell: bash
+        env:
+          CARGO_BUILD_TARGET: ${{ matrix.platform.target }}
+        run: bash scripts/cli/test-install-unix.sh "${{ matrix.platform.target }}"
+
+      - name: Package CLI
+        id: cli-stage
+        shell: bash
+        env:
+          VERSION: ${{ inputs.version }}
+          TARGET: ${{ matrix.platform.target }}
+        run: bash scripts/cli/package-unix.sh "$VERSION" "$TARGET"
+
+      - name: Package Relay Server
+        id: relay-stage
+        shell: bash
+        env:
+          VERSION: ${{ inputs.version }}
+          TARGET: ${{ matrix.platform.target }}
+        run: bash scripts/relay/package-unix.sh "$VERSION" "$TARGET"
+
+      - name: Upload Linux binary artifacts
+        uses: actions/upload-artifact@v6
+        with:
+          name: bitfun-linux-${{ inputs.artifact_prefix }}-${{ matrix.platform.name }}
+          if-no-files-found: error
+          retention-days: 7
+          path: |
+            ${{ steps.cli-stage.outputs.archive }}
+            ${{ steps.cli-stage.outputs.checksum }}
+            ${{ steps.relay-stage.outputs.archive }}
+            ${{ steps.relay-stage.outputs.checksum }}

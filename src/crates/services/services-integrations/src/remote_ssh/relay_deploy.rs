@@ -1,7 +1,6 @@
 //! One-click relay server self-deploy orchestration over an existing SSH connection.
 //!
-//! Drives the open-source relay-server deployment (`src/apps/relay-server/deploy.sh`)
-//! on a user-owned server:
+//! Drives the open-source relay-server deployment on a user-owned server:
 //!
 //! 1. `run_preflight` — probe OS/arch, Docker access mode, memory, port, existing installs.
 //! 2. `start_task` — stage an interactive driver script (run inside a remote PTY so sudo
@@ -12,9 +11,10 @@
 //!    best-effort compose teardown for in-progress deploys).
 //! 5. `import_account` — hand a locally-provisioned account to `relay-admin import-user`.
 //!
-//! Remote deploy state lives under `~/.bitfun/relay-deploy/`; the cloned source
-//! tree lives under `~/.bitfun/relay-src/` (never `$HOME/bitfun`, which may be
-//! the user's own project).
+//! Remote deploy state lives under `~/.bitfun/relay-deploy/`. Published binaries
+//! are staged under `~/.bitfun/relay-release/`; only the automatic fallback clones
+//! source under `~/.bitfun/relay-src/` (never `$HOME/bitfun`, which may be the
+//! user's own project).
 //!
 //! Product / regression invariants (wizard + entry points):
 //! `src/web-ui/src/features/relay-deploy/README.md`. Do not change clone destination,
@@ -49,6 +49,11 @@ const REPO_GIT_URL: &str = "https://github.com/GCWing/BitFun.git";
 const REPO_GIT_BRANCH: &str = "main";
 /// Tarball fallback when git is unavailable or clone/fetch fails.
 const REPO_TARBALL_URL: &str = "https://github.com/GCWing/BitFun/archive/refs/heads/main.tar.gz";
+/// Release asset base. Asset names are stable across tags so the embedded
+/// Desktop version can address its matching server build without a GitHub API call.
+const RELEASE_DOWNLOAD_BASE: &str = "https://github.com/GCWing/BitFun/releases/download";
+const OPENBITFUN_RELEASE_BASE: &str = "https://openbitfun.com/release";
+const RELEASE_VERSION: &str = env!("CARGO_PKG_VERSION");
 /// Canonical China-mirror helper (shared with `src/apps/relay-server/deploy.sh`).
 /// Embedded so Desktop orchestration can apply mirrors before the git clone.
 const RELAY_MIRROR_SH: &str = include_str!(concat!(
@@ -62,6 +67,14 @@ const DEPLOY_STATE_DIR: &str = ".bitfun/relay-deploy";
 const SOURCE_DIR: &str = ".bitfun/relay-src";
 /// Line printed by task scripts on success; polled to detect completion.
 const TASK_DONE_MARKER: &str = "RELAY_TASK_DONE";
+
+fn release_tag_for_version(version: &str) -> String {
+    if version.contains("-nightly.") {
+        "nightly".to_string()
+    } else {
+        format!("v{}", version.split('+').next().unwrap_or(version))
+    }
+}
 
 /// Long-running remote operations that run detached and are polled.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -1333,15 +1346,204 @@ bitfun_sync_source() {{
     )
 }
 
+/// Download the matching published Relay archive and build only a small runtime
+/// image around it. The existing container name, volumes, ports, and relay-admin
+/// path stay identical to the source-compose deployment.
+fn release_binary_deploy_bash() -> String {
+    let release_tag = release_tag_for_version(RELEASE_VERSION);
+    format!(
+        r#"
+bitfun_try_release_deploy() {{
+  local release_dir="$HOME/.bitfun/relay-release"
+  local target archive upstream_url openbitfun_url proxy_url download_dir extracted context image
+  case "$(uname -m 2>/dev/null)" in
+    x86_64|amd64) target="x86_64-unknown-linux-gnu" ;;
+    aarch64|arm64) target="aarch64-unknown-linux-gnu" ;;
+    *)
+      echo ">>> No published Relay binary for architecture $(uname -m); using source build."
+      return 1
+      ;;
+  esac
+
+  archive="bitfun-relay-server-${{target}}.tar.gz"
+  upstream_url="{RELEASE_DOWNLOAD_BASE}/{release_tag}/${{archive}}"
+  openbitfun_url="{OPENBITFUN_RELEASE_BASE}/{release_version}/${{archive}}"
+  mkdir -p "$release_dir"
+  chmod 700 "$release_dir" 2>/dev/null || true
+  download_dir="$(mktemp -d "$release_dir/download.XXXXXX")"
+
+  bitfun_verify_release_archive() {{
+    (
+      cd "$download_dir"
+      if command -v sha256sum >/dev/null 2>&1; then
+        sha256sum -c "${{archive}}.sha256"
+      elif command -v shasum >/dev/null 2>&1; then
+        shasum -a 256 -c "${{archive}}.sha256"
+      else
+        echo "ERROR: sha256sum or shasum is required to verify the Relay release." >&2
+        return 1
+      fi
+    )
+  }}
+
+  bitfun_download_release_pair() {{
+    local url="$1"
+    rm -f "$download_dir/$archive" "$download_dir/${{archive}}.sha256"
+    echo ">>> Downloading published Relay binary: $url"
+    curl -fsSL --retry 3 --connect-timeout 15 --max-time 900 \
+      -o "$download_dir/$archive" "$url" \
+      && curl -fsSL --retry 3 --connect-timeout 15 --max-time 60 \
+        -o "$download_dir/${{archive}}.sha256" "${{url}}.sha256" \
+      && bitfun_verify_release_archive
+  }}
+
+  proxy_url=""
+  if [ "${{BITFUN_MIRROR_MODE:-global}}" = "cn" ] && [ -n "${{BITFUN_GITHUB_PROXY:-}}" ]; then
+    proxy_url="${{BITFUN_GITHUB_PROXY%/}}/${{upstream_url}}"
+  fi
+  if [ -n "$proxy_url" ] && bitfun_download_release_pair "$proxy_url"; then
+    :
+  elif bitfun_download_release_pair "$upstream_url"; then
+    :
+  elif bitfun_download_release_pair "$openbitfun_url"; then
+    :
+  else
+    echo ">>> Published Relay binary unavailable from GitHub and openbitfun.com; falling back to source build."
+    rm -rf "$download_dir"
+    return 1
+  fi
+
+  mkdir -p "$download_dir/extracted"
+  if ! tar xzf "$download_dir/$archive" -C "$download_dir/extracted"; then
+    echo ">>> Published Relay archive could not be extracted; falling back to source build."
+    rm -rf "$download_dir"
+    return 1
+  fi
+  extracted="$(find "$download_dir/extracted" -mindepth 1 -maxdepth 1 -type d \
+    -name 'bitfun-relay-server-*' | head -n 1)"
+  if [ -z "$extracted" ] \
+    || [ ! -x "$extracted/bitfun-relay-server" ] \
+    || [ ! -x "$extracted/relay-admin" ] \
+    || [ ! -f "$extracted/static/index.html" ]; then
+    echo ">>> Published Relay archive layout is invalid; falling back to source build."
+    rm -rf "$download_dir"
+    return 1
+  fi
+
+  context="$release_dir/runtime"
+  rm -rf "$context.new"
+  mkdir -p "$context.new"
+  cp "$extracted/bitfun-relay-server" "$extracted/relay-admin" "$context.new/"
+  cp -R "$extracted/static" "$context.new/static"
+  cat >"$context.new/Dockerfile" <<'DOCKERFILE'
+FROM debian:bookworm-slim
+ENV DEBIAN_FRONTEND=noninteractive
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends ca-certificates curl \
+    && rm -rf /var/lib/apt/lists/*
+WORKDIR /app
+COPY bitfun-relay-server relay-admin /app/
+COPY static /app/static
+RUN chmod 755 /app/bitfun-relay-server /app/relay-admin \
+    && mkdir -p /app/data /app/room-web
+HEALTHCHECK --interval=15s --timeout=5s --start-period=20s --retries=5 \
+  CMD curl -fsS "http://127.0.0.1:${{RELAY_PORT:-9700}}/health" || exit 1
+CMD ["/app/bitfun-relay-server"]
+DOCKERFILE
+  rm -rf "$context"
+  mv "$context.new" "$context"
+  rm -rf "$download_dir"
+
+  image="bitfun-relay:release-{release_tag}"
+  echo ">>> Building lightweight Relay runtime image (no Rust/Cargo compilation)..."
+  if ! bitfun_docker build -t "$image" "$context"; then
+    echo ">>> Published binary image build failed; falling back to source build."
+    return 1
+  fi
+
+  bitfun_docker volume create relay-server_relay-db >/dev/null
+  bitfun_docker volume create relay-server_room-web >/dev/null
+
+  local backup_container=""
+  if bitfun_docker container inspect bitfun-relay >/dev/null 2>&1; then
+    backup_container="bitfun-relay-before-release-$$"
+    bitfun_docker stop bitfun-relay >/dev/null 2>&1 || true
+    if ! bitfun_docker rename bitfun-relay "$backup_container"; then
+      echo ">>> Could not stage the existing Relay container; falling back to source build."
+      bitfun_docker start bitfun-relay >/dev/null 2>&1 || true
+      return 1
+    fi
+  fi
+
+  bitfun_restore_previous_relay() {{
+    bitfun_docker rm -f bitfun-relay >/dev/null 2>&1 || true
+    if [ -n "$backup_container" ]; then
+      bitfun_docker rename "$backup_container" bitfun-relay >/dev/null 2>&1 || true
+      bitfun_docker start bitfun-relay >/dev/null 2>&1 || true
+    fi
+  }}
+
+  echo ">>> Starting published Relay binary on port $RELAY_PORT..."
+  if ! bitfun_docker run -d \
+    --name bitfun-relay \
+    --restart unless-stopped \
+    --label com.docker.compose.project=relay-server \
+    --label com.docker.compose.service=relay-server \
+    -p "0.0.0.0:${{RELAY_PORT}}:${{RELAY_PORT}}" \
+    -e "RELAY_PORT=${{RELAY_PORT}}" \
+    -e RELAY_STATIC_DIR=/app/static \
+    -e RELAY_ROOM_WEB_DIR=/app/room-web \
+    -e RELAY_ROOM_TTL=300 \
+    -e RELAY_ASSET_STORE_MAX_BYTES=1073741824 \
+    -e RELAY_DB_PATH=/app/data/bitfun_relay.db \
+    -v relay-server_room-web:/app/room-web \
+    -v relay-server_relay-db:/app/data \
+    "$image" >/dev/null; then
+    echo ">>> Published Relay binary could not start; restoring previous container."
+    bitfun_restore_previous_relay
+    return 1
+  fi
+
+  local attempt
+  for attempt in $(seq 1 20); do
+    if curl -fsS --max-time 3 "http://127.0.0.1:${{RELAY_PORT}}/health" >/dev/null 2>&1; then
+      if [ -n "$backup_container" ]; then
+        bitfun_docker rm "$backup_container" >/dev/null 2>&1 || true
+      fi
+      echo ">>> Published Relay binary is healthy."
+      return 0
+    fi
+    if ! bitfun_docker inspect -f '{{{{.State.Running}}}}' bitfun-relay 2>/dev/null \
+      | grep -qx true; then
+      break
+    fi
+    sleep 2
+  done
+
+  echo ">>> Published Relay binary failed its health check; restoring previous container."
+  bitfun_docker logs --tail 40 bitfun-relay 2>/dev/null || true
+  bitfun_restore_previous_relay
+  return 1
+}}
+"#,
+        RELEASE_DOWNLOAD_BASE = RELEASE_DOWNLOAD_BASE,
+        OPENBITFUN_RELEASE_BASE = OPENBITFUN_RELEASE_BASE,
+        release_tag = release_tag,
+        release_version = RELEASE_VERSION,
+    )
+}
+
 /// Non-interactive body for deploy (runs under nohup after prepare).
 fn deploy_body_script(port: u16) -> String {
     let helpers = prepare_helpers_bash();
     let sync = sync_source_bash();
+    let release_binary_deploy = release_binary_deploy_bash();
     format!(
         r#"#!/usr/bin/env bash
 set -euo pipefail
 {helpers}
 {sync}
+{release_binary_deploy}
 export DOCKER_CONFIG="${{DOCKER_CONFIG:-$HOME/.bitfun/docker-config}}"
 export DOCKER_BUILDKIT=1
 export COMPOSE_DOCKER_CLI_BUILD=1
@@ -1361,6 +1563,11 @@ echo ">>> Using RELAY_PORT=$RELAY_PORT"
 export BITFUN_REPO_GIT_URL="{REPO_GIT_URL}"
 export BITFUN_REPO_TARBALL_URL="{REPO_TARBALL_URL}"
 bitfun_mirror_init
+if bitfun_try_release_deploy; then
+  echo {TASK_DONE_MARKER}
+  exit 0
+fi
+echo ">>> Release binary path did not complete; starting source-build fallback."
 SRC="$HOME/{SOURCE_DIR}"
 bitfun_sync_source "$SRC"
 cd "$SRC/src/apps/relay-server"
@@ -1386,6 +1593,7 @@ echo {TASK_DONE_MARKER}
 "#,
         helpers = helpers,
         sync = sync,
+        release_binary_deploy = release_binary_deploy,
         DEPLOY_STATE_DIR = DEPLOY_STATE_DIR,
         SOURCE_DIR = SOURCE_DIR,
         port = port,
@@ -1398,7 +1606,8 @@ echo {TASK_DONE_MARKER}
 #[cfg(test)]
 mod tests {
     use super::{
-        classify_docker_access, decide_task_status, parse_preflight, prepare_helpers_bash,
+        classify_docker_access, decide_task_status, deploy_body_script, parse_preflight,
+        prepare_helpers_bash, release_binary_deploy_bash, release_tag_for_version,
         split_poll_stdout, sync_source_bash, DockerAccessMode, RelayTaskStatus, RELAY_MIRROR_SH,
     };
 
@@ -1449,6 +1658,44 @@ mod tests {
         assert!(sync.contains("BITFUN_GITHUB_GIT_URL"));
         assert!(sync.contains("BITFUN_GITHUB_TARBALL_URL"));
         assert!(sync.contains("retrying upstream"));
+    }
+
+    #[test]
+    fn release_tag_tracks_stable_and_nightly_channels() {
+        assert_eq!(release_tag_for_version("0.2.13"), "v0.2.13");
+        assert_eq!(
+            release_tag_for_version("0.2.14-nightly.20260724+abc123"),
+            "nightly"
+        );
+    }
+
+    #[test]
+    fn release_binary_deploy_verifies_assets_and_preserves_container_contract() {
+        let script = release_binary_deploy_bash();
+        assert!(script.contains("bitfun-relay-server-${target}.tar.gz"));
+        assert!(script.contains("sha256sum -c"));
+        assert!(script.contains("https://openbitfun.com/release/"));
+        assert!(script.contains("no Rust/Cargo compilation"));
+        assert!(script.contains("--name bitfun-relay"));
+        assert!(script.contains("relay-server_relay-db:/app/data"));
+        assert!(script.contains("/app/relay-admin"));
+        assert!(script.contains("falling back to source build"));
+        assert!(script.contains("bitfun_restore_previous_relay"));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn generated_deploy_script_is_valid_bash() {
+        let script = deploy_body_script(9700);
+        let output = std::process::Command::new("bash")
+            .args(["-n", "-c", &script])
+            .output()
+            .expect("parse generated deploy script");
+        assert!(
+            output.status.success(),
+            "generated deploy script is invalid:\n{}",
+            String::from_utf8_lossy(&output.stderr)
+        );
     }
 
     #[cfg(unix)]

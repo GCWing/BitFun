@@ -4,25 +4,28 @@
 #
 # Flow:
 #   1. Fetch latest.json from GitHub (follows /releases/latest/download/ redirect)
-#   2. Download every platform installer package into release/{version}/
-#   3. Rewrite download URLs in latest.json to point at openbitfun.com
-#   4. Publish release/{version}/latest.json and release/latest.json
-#   5. Remove old version dirs, keeping only the two most recent
+#   2. Download every Desktop updater package into release/{version}/
+#   3. If present, download linux-binaries.json plus its CLI/Relay assets
+#   4. Rewrite all mirrored URLs to point at openbitfun.com
+#   5. Publish versioned and root manifests
+#   6. Remove old version dirs, keeping only the two most recent
 #
 # The published release/latest.json is the Tauri updater fallback endpoint.
 # When GitHub is unreachable, the desktop client automatically falls through
 # to https://openbitfun.com/release/latest.json and downloads from this mirror.
 #
-# Cron (every 12 hours):
-#   0 */12 * * * /root/lwb/repo/BitFun-AutoUpdate/sync-release.sh \
-#       >> /root/lwb/repo/BitFun-AutoUpdate/sync.log 2>&1
+# Cron (every 10 minutes):
+#   */10 * * * * /root/repos/BitFun-AutoUpdate/openbitfun-release-sync.sh \
+#       >> /root/repos/BitFun-AutoUpdate/sync.log 2>&1
 #
 set -euo pipefail
 
 # ── Configuration ──────────────────────────────────────────────
 GITHUB_LATEST_JSON_URL="https://github.com/GCWing/BitFun/releases/latest/download/latest.json"
+GITHUB_LINUX_BINARIES_URL="https://github.com/GCWing/BitFun/releases/latest/download/linux-binaries.json"
 OPENBITFUN_BASE_URL="https://openbitfun.com/release"
-WEBSITE_RELEASE_DIR="/root/lwb/repo/BitFun-Website/dist/release"
+WEBSITE_RELEASE_DIR="/root/repos/BitFun-Website/dist/release"
+LOCK_FILE="/root/repos/BitFun-AutoUpdate/sync.lock"
 KEEP_VERSIONS=2
 CONNECT_TIMEOUT=30
 MAX_TIME=1800          # per-request ceiling (30 min; installer packages can be large)
@@ -33,8 +36,46 @@ PYTHON="${PYTHON:-python3}"
 # ── Helpers ────────────────────────────────────────────────────
 log() { echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] $*"; }
 
+download_asset() {
+  local url="$1"
+  local dest="$2"
+  local filename tmp ok attempt
+  filename="$(basename "$dest")"
+  if [ -f "$dest" ]; then
+    log "  Already exists: $filename"
+    return 0
+  fi
+
+  tmp="${dest}.part"
+  ok=0
+  for attempt in $(seq 1 "$MAX_RETRIES"); do
+    if curl -fsSL \
+        --connect-timeout "$CONNECT_TIMEOUT" \
+        --max-time "$MAX_TIME" \
+        -o "$tmp" "$url"; then
+      mv "$tmp" "$dest"
+      ok=1
+      break
+    fi
+    log "  Retry $attempt/$MAX_RETRIES for $filename"
+    sleep "$RETRY_DELAY"
+  done
+  if [ "$ok" -ne 1 ]; then
+    rm -f "$tmp"
+    log "ERROR: Failed to download $filename after $MAX_RETRIES attempts"
+    return 1
+  fi
+}
+
 # ── Main ───────────────────────────────────────────────────────
 main() {
+  mkdir -p "$(dirname "$LOCK_FILE")"
+  exec 9>"$LOCK_FILE"
+  if command -v flock >/dev/null 2>&1 && ! flock -n 9; then
+    log "Another release sync is still running; skipping this interval."
+    exit 0
+  fi
+
   log "=== BitFun release sync started ==="
 
   mkdir -p "$WEBSITE_RELEASE_DIR"
@@ -77,32 +118,8 @@ for p, info in data.get('platforms', {}).items():
 
   while IFS=$'\t' read -r url filename; do
     [ -z "$url" ] && continue
-    dest="${VERSION_DIR}/${filename}"
-
-    if [ -f "$dest" ]; then
-      log "  Already exists: $filename"
-      continue
-    fi
-
-    log "  Downloading: $filename"
-    ok=0
-    for attempt in $(seq 1 "$MAX_RETRIES"); do
-      if curl -fsSL \
-          --connect-timeout "$CONNECT_TIMEOUT" \
-          --max-time "$MAX_TIME" \
-          -o "$dest" "$url"; then
-        ok=1
-        break
-      fi
-      log "  Retry $attempt/$MAX_RETRIES for $filename"
-      sleep "$RETRY_DELAY"
-    done
-
-    if [ "$ok" -ne 1 ]; then
-      log "ERROR: Failed to download $filename after $MAX_RETRIES attempts"
-      rm -f "$dest"
-      exit 1
-    fi
+    log "  Mirroring Desktop asset: $filename"
+    download_asset "$url" "${VERSION_DIR}/${filename}" || exit 1
   done <<< "$ASSET_LIST"
 
   # 5. Rewrite URLs in latest.json to point at openbitfun.com
@@ -122,7 +139,73 @@ print(json.dumps(data, indent=2))
   cp "${VERSION_DIR}/latest.json" "${WEBSITE_RELEASE_DIR}/latest.json"
   log "Updated ${WEBSITE_RELEASE_DIR}/latest.json"
 
-  # 7. Clean up old versions — keep only the latest KEEP_VERSIONS dirs
+  # 7. Mirror the CLI + Relay release manifest and every asset it references.
+  LINUX_MANIFEST_TMP="${VERSION_DIR}/linux-binaries.github.json.part"
+  if curl -fsSL \
+      --connect-timeout "$CONNECT_TIMEOUT" \
+      --max-time "$MAX_TIME" \
+      -o "$LINUX_MANIFEST_TMP" \
+      "$GITHUB_LINUX_BINARIES_URL"; then
+    LINUX_VERSION=$("$PYTHON" -c \
+      "import json,sys;print(json.load(open(sys.argv[1], encoding='utf-8'))['version'])" \
+      "$LINUX_MANIFEST_TMP")
+    if [ "$LINUX_VERSION" != "$VERSION" ]; then
+      log "ERROR: Linux manifest version $LINUX_VERSION does not match Desktop version $VERSION"
+      rm -f "$LINUX_MANIFEST_TMP"
+      exit 1
+    fi
+
+    LINUX_ASSET_LIST=$("$PYTHON" - "$LINUX_MANIFEST_TMP" <<'PY'
+import json, sys
+with open(sys.argv[1], encoding="utf-8") as f:
+    data = json.load(f)
+seen = set()
+for platform in data.get("platforms", {}).values():
+    for product in ("cli", "relay"):
+        entry = platform.get(product, {})
+        for key in ("url", "sha256Url"):
+            url = entry.get(key)
+            if not url:
+                continue
+            filename = url.rsplit("/", 1)[-1]
+            if filename not in seen:
+                seen.add(filename)
+                print(f"{url}\t{filename}")
+PY
+)
+    while IFS=$'\t' read -r url filename; do
+      [ -z "$url" ] && continue
+      log "  Mirroring Linux binary asset: $filename"
+      download_asset "$url" "${VERSION_DIR}/${filename}" || exit 1
+    done <<< "$LINUX_ASSET_LIST"
+
+    "$PYTHON" - "$LINUX_MANIFEST_TMP" "${VERSION_DIR}/linux-binaries.json" \
+      "$OPENBITFUN_BASE_URL" <<'PY'
+import json, sys
+source, dest, base = sys.argv[1:]
+with open(source, encoding="utf-8") as f:
+    data = json.load(f)
+version_base = f"{base}/{data['version']}"
+for platform in data.get("platforms", {}).values():
+    for product in ("cli", "relay"):
+        entry = platform.get(product, {})
+        for key in ("url", "sha256Url"):
+            if entry.get(key):
+                entry[key] = f"{version_base}/{entry[key].rsplit('/', 1)[-1]}"
+with open(dest, "w", encoding="utf-8") as f:
+    json.dump(data, f, indent=2)
+    f.write("\n")
+PY
+    rm -f "$LINUX_MANIFEST_TMP"
+    cp "${VERSION_DIR}/linux-binaries.json" "${WEBSITE_RELEASE_DIR}/linux-binaries.json"
+    log "Updated ${WEBSITE_RELEASE_DIR}/linux-binaries.json"
+  else
+    rm -f "$LINUX_MANIFEST_TMP"
+    rm -f "${WEBSITE_RELEASE_DIR}/linux-binaries.json"
+    log "Linux binaries manifest is not present in the latest release yet; Desktop mirror only."
+  fi
+
+  # 8. Clean up old versions — keep only the latest KEEP_VERSIONS dirs
   ALL_DIRS=()
   while IFS= read -r d; do
     ALL_DIRS+=("$d")

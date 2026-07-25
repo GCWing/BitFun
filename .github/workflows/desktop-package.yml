@@ -239,10 +239,19 @@ jobs:
             src/apps/desktop/target/release/bundle
             BitFun-Installer/src-tauri/target/release/bitfun-installer.exe
 
+  linux-binaries:
+    name: Linux CLI and Relay Server
+    needs: prepare
+    uses: ./.github/workflows/linux-binaries.yml
+    with:
+      checkout_ref: ${{ needs.prepare.outputs.checkout_ref }}
+      version: ${{ needs.prepare.outputs.version }}
+      artifact_prefix: ${{ needs.prepare.outputs.release_tag }}
+
   # ── Upload assets to GitHub Release ────────────────────────────────
   upload-release-assets:
     name: Upload Release Assets
-    needs: [prepare, package]
+    needs: [prepare, package, linux-binaries]
     if: needs.prepare.outputs.upload_to_release == 'true'
     runs-on: ubuntu-latest
     env:
@@ -259,10 +268,19 @@ jobs:
           path: release-assets
           merge-multiple: true
 
+      - name: Download Linux binary artifacts
+        uses: actions/download-artifact@v7
+        with:
+          pattern: bitfun-linux-${{ needs.prepare.outputs.release_tag }}-*
+          path: linux-release-assets
+          merge-multiple: true
+
       - name: List release assets
         run: |
           echo "Release assets:"
           find release-assets -type f | sort
+          echo "Linux CLI and Relay Server assets:"
+          find linux-release-assets -type f | sort
 
       - name: Collect updater assets
         run: |
@@ -289,6 +307,15 @@ jobs:
             --version "${{ needs.prepare.outputs.version }}" \
             --required-platforms "${REQUIRED_UPDATER_PLATFORMS}"
 
+      - name: Generate Linux binaries manifest
+        run: |
+          node scripts/generate-linux-binaries-manifest.mjs \
+            --assets-dir linux-release-assets \
+            --version "${{ needs.prepare.outputs.version }}" \
+            --tag "${{ needs.prepare.outputs.release_tag }}" \
+            --repo "GCWing/BitFun" \
+            --out linux-release-assets/linux-binaries.json
+
       - name: Upload to release
         uses: softprops/action-gh-release@v3
         with:
@@ -301,6 +328,11 @@ jobs:
             release-assets/**/*.dmg
             release-assets/**/*.rpm
             release-assets/**/*bitfun-installer.exe
+            linux-release-assets/bitfun-cli-*.tar.gz
+            linux-release-assets/bitfun-cli-*.tar.gz.sha256
+            linux-release-assets/bitfun-relay-server-*.tar.gz
+            linux-release-assets/bitfun-relay-server-*.tar.gz.sha256
+            linux-release-assets/linux-binaries.json
           fail_on_unmatched_files: true
 
       - name: Verify published updater manifest
@@ -313,3 +345,10 @@ jobs:
             --version "${{ needs.prepare.outputs.version }}" \
             --required-platforms "${REQUIRED_UPDATER_PLATFORMS}" \
             --check-urls true
+
+      - name: Verify published Linux binaries manifest
+        run: |
+          curl -fsSL --retry 5 --retry-delay 3 \
+            "https://github.com/GCWing/BitFun/releases/download/${{ needs.prepare.outputs.release_tag }}/linux-binaries.json" \
+            -o linux-binaries.published.json
+          test "$(jq -r '.version' linux-binaries.published.json)" = "${{ needs.prepare.outputs.version }}"

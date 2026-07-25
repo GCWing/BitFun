@@ -95,15 +95,22 @@ Use this checklist on a machine you control (VPS, LAN server, or localhost).
 ### Desktop one-click deploy (preferred for end users)
 
 BitFun Desktop can SSH to your host and run the same Docker path without a
-manual clone. Entry points: Account Login → “一键部署到自己的服务器”, or
+manual clone. It first downloads the matching checksum-verified GitHub Release
+archive for Linux amd64/arm64, falls back to the versioned openbitfun.com mirror,
+and builds only a small runtime image around the published binaries. If both
+binary sources, checksum verification, image creation, startup, or health
+validation fail, it restores the previous healthy container and automatically
+falls back to the source Docker build. Entry points: Account Login →
+“一键部署到自己的服务器”, or
 Remote Connect → Network Relay → Self-Hosted → the same action.
 
 - Orchestration: `src/crates/services/services-integrations/src/remote_ssh/relay_deploy.rs`
 - Wizard + invariants: `src/web-ui/src/features/relay-deploy/README.md`
 
-Remote checkout path is always `~/.bitfun/relay-src` (never `$HOME/BitFun`).
-Closing the wizard cancels the remote task. Account passwords are provisioned
-locally and imported via `relay-admin import-user`.
+Release runtime state lives under `~/.bitfun/relay-release`; fallback source
+checkout is always `~/.bitfun/relay-src` (never `$HOME/BitFun`). Closing the
+wizard cancels the remote task. Account passwords are provisioned locally and
+imported via `relay-admin import-user`.
 
 ### 1. Deploy the relay (manual / server shell)
 

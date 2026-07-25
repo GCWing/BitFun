@@ -20,7 +20,16 @@ bitfun sessions list
 bitfun usage
 bitfun doctor
 bitfun health
+bitfun update                           # GitHub first, openbitfun.com fallback
+bitfun update --check                   # report only; do not install
 ```
+
+Official Linux archive installations check for updates before interactive TUI
+startup at most once every six hours. The check uses GitHub first, then
+`https://openbitfun.com/release/linux-binaries.json` when GitHub or its asset
+download fails. Set `behavior.auto_update = false` in the CLI config or export
+`BITFUN_CLI_DISABLE_AUTO_UPDATE=1` to disable automatic checks. Development and
+nightly binaries are never replaced by the stable automatic updater.
 
 `bitfun-cli` is a deprecated compatibility entrypoint. It writes
 `Warning: \`bitfun-cli\` is deprecated; use \`bitfun\` instead.` to stderr; new scripts and

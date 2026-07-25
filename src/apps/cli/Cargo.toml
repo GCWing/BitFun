@@ -77,10 +77,13 @@ serde_json = { workspace = true }
 anyhow = { workspace = true }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
+flate2 = { workspace = true }
+reqwest = { workspace = true }
+sha2 = { workspace = true }
+tar = { workspace = true }
+tempfile = "3"
 
 [dev-dependencies]
-tempfile = "3"
-sha2 = { workspace = true }
 hex = { workspace = true }
 
 [target.'cfg(windows)'.dependencies]

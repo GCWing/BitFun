@@ -212,10 +212,20 @@ jobs:
             src/apps/desktop/target/release/bundle
             BitFun-Installer/src-tauri/target/release/bitfun-installer.exe
 
+  linux-binaries:
+    name: Linux CLI and Relay Server
+    needs: check-changes
+    if: needs.check-changes.outputs.should_build == 'true'
+    uses: ./.github/workflows/linux-binaries.yml
+    with:
+      checkout_ref: ${{ github.sha }}
+      version: ${{ needs.check-changes.outputs.nightly_version }}
+      artifact_prefix: nightly
+
   # ── Publish nightly pre-release ────────────────────────────────────
   publish-nightly:
     name: Publish Nightly
-    needs: [check-changes, package]
+    needs: [check-changes, package, linux-binaries]
     if: needs.check-changes.outputs.should_build == 'true'
     runs-on: ubuntu-latest
 
@@ -229,16 +239,34 @@ jobs:
           path: release-assets
           merge-multiple: true
 
+      - name: Download Linux binary artifacts
+        uses: actions/download-artifact@v7
+        with:
+          pattern: bitfun-linux-nightly-*
+          path: linux-release-assets
+          merge-multiple: true
+
       - name: List release assets
         run: |
           echo "Nightly assets:"
           find release-assets -type f | sort
+          echo "Nightly Linux CLI and Relay Server assets:"
+          find linux-release-assets -type f | sort
 
       - name: Delete previous nightly release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           gh release delete "${{ env.NIGHTLY_TAG }}" --yes --cleanup-tag 2>/dev/null || true
+
+      - name: Generate Linux binaries manifest
+        run: |
+          node scripts/generate-linux-binaries-manifest.mjs \
+            --assets-dir linux-release-assets \
+            --version "${{ needs.check-changes.outputs.nightly_version }}" \
+            --tag "${{ env.NIGHTLY_TAG }}" \
+            --repo "GCWing/BitFun" \
+            --out linux-release-assets/linux-binaries.json
 
       - name: Create nightly release
         uses: softprops/action-gh-release@v3
@@ -260,3 +288,8 @@ jobs:
             release-assets/**/*.dmg
             release-assets/**/*.rpm
             release-assets/**/*bitfun-installer.exe
+            linux-release-assets/bitfun-cli-*.tar.gz
+            linux-release-assets/bitfun-cli-*.tar.gz.sha256
+            linux-release-assets/bitfun-relay-server-*.tar.gz
+            linux-release-assets/bitfun-relay-server-*.tar.gz.sha256
+            linux-release-assets/linux-binaries.json
