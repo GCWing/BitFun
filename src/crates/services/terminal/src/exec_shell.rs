@@ -34,19 +34,15 @@ pub enum ConfiguredShellPreference {
 
 pub fn resolve_local_exec_shell(configured_shell: Option<&str>) -> ResolvedLocalExecShell {
     let configured = configured_shell.and_then(parse_configured_shell_preference);
-    let detected_shells: Vec<_> = ShellDetector::detect_available_shells()
-        .into_iter()
-        .map(|shell| ResolvedLocalExecShell::new(shell.display_name, shell.path, shell.shell_type))
-        .collect();
-    let system_default = {
-        let shell = ShellDetector::get_default_shell();
-        ResolvedLocalExecShell::new(shell.display_name, shell.path, shell.shell_type)
-    };
 
     if cfg!(windows) {
-        select_windows_local_exec_shell(configured, &detected_shells, &system_default)
+        resolve_windows_local_exec_shell_with(configured, resolve_detected_shell)
     } else {
-        select_non_windows_local_exec_shell(configured, &detected_shells, &system_default)
+        resolve_non_windows_local_exec_shell_with(
+            configured,
+            resolve_detected_shell,
+            resolve_default_shell,
+        )
     }
 }
 
@@ -77,45 +73,57 @@ pub fn parse_configured_shell_preference(raw: &str) -> Option<ConfiguredShellPre
     })
 }
 
-fn select_non_windows_local_exec_shell(
+fn resolve_non_windows_local_exec_shell_with<FindShell, DefaultShell>(
     configured: Option<ConfiguredShellPreference>,
-    detected_shells: &[ResolvedLocalExecShell],
-    system_default: &ResolvedLocalExecShell,
-) -> ResolvedLocalExecShell {
-    configured
-        .and_then(shell_type_for_supported_preference)
-        .and_then(|shell_type| find_detected_shell(detected_shells, shell_type))
-        .unwrap_or_else(|| system_default.clone())
+    mut find_shell: FindShell,
+    default_shell: DefaultShell,
+) -> ResolvedLocalExecShell
+where
+    FindShell: FnMut(ShellType) -> Option<ResolvedLocalExecShell>,
+    DefaultShell: FnOnce() -> ResolvedLocalExecShell,
+{
+    if let Some(shell_type) = configured.and_then(shell_type_for_supported_preference) {
+        if let Some(shell) = find_shell(shell_type) {
+            return shell;
+        }
+    }
+    default_shell()
 }
 
-fn select_windows_local_exec_shell(
+fn resolve_windows_local_exec_shell_with<FindShell>(
     configured: Option<ConfiguredShellPreference>,
-    detected_shells: &[ResolvedLocalExecShell],
-    system_default: &ResolvedLocalExecShell,
-) -> ResolvedLocalExecShell {
+    mut find_shell: FindShell,
+) -> ResolvedLocalExecShell
+where
+    FindShell: FnMut(ShellType) -> Option<ResolvedLocalExecShell>,
+{
     // ExecCommand deliberately narrows Windows shells to the variants whose
     // one-shot command behavior we explicitly support well.
-    let pwsh = || find_detected_shell(detected_shells, ShellType::PowerShellCore);
-    let powershell = || find_detected_shell(detected_shells, ShellType::PowerShell);
-    let bash = || find_detected_shell(detected_shells, ShellType::Bash);
-
-    match configured {
-        Some(ConfiguredShellPreference::PowerShellCore) => pwsh()
-            .or_else(powershell)
-            .or_else(bash)
-            .unwrap_or_else(|| system_default.clone()),
-        Some(ConfiguredShellPreference::PowerShell) => powershell()
-            .or_else(pwsh)
-            .or_else(bash)
-            .unwrap_or_else(|| system_default.clone()),
-        Some(ConfiguredShellPreference::Bash) => bash()
-            .or_else(powershell)
-            .or_else(pwsh)
-            .unwrap_or_else(|| system_default.clone()),
-        Some(ConfiguredShellPreference::Cmd) => pwsh()
-            .or_else(powershell)
-            .or_else(bash)
-            .unwrap_or_else(|| system_default.clone()),
+    let order = match configured {
+        Some(ConfiguredShellPreference::PowerShellCore) => [
+            ShellType::PowerShellCore,
+            ShellType::PowerShell,
+            ShellType::Bash,
+            ShellType::Cmd,
+        ],
+        Some(ConfiguredShellPreference::PowerShell) => [
+            ShellType::PowerShell,
+            ShellType::PowerShellCore,
+            ShellType::Bash,
+            ShellType::Cmd,
+        ],
+        Some(ConfiguredShellPreference::Bash) => [
+            ShellType::Bash,
+            ShellType::PowerShell,
+            ShellType::PowerShellCore,
+            ShellType::Cmd,
+        ],
+        Some(ConfiguredShellPreference::Cmd) | None => [
+            ShellType::PowerShellCore,
+            ShellType::PowerShell,
+            ShellType::Bash,
+            ShellType::Cmd,
+        ],
         Some(
             ConfiguredShellPreference::Zsh
             | ConfiguredShellPreference::Fish
@@ -123,15 +131,25 @@ fn select_windows_local_exec_shell(
             | ConfiguredShellPreference::Ksh
             | ConfiguredShellPreference::Csh
             | ConfiguredShellPreference::Unsupported,
-        ) => powershell()
-            .or_else(pwsh)
-            .or_else(bash)
-            .unwrap_or_else(|| system_default.clone()),
-        None => pwsh()
-            .or_else(powershell)
-            .or_else(bash)
-            .unwrap_or_else(|| system_default.clone()),
+        ) => [
+            ShellType::PowerShell,
+            ShellType::PowerShellCore,
+            ShellType::Bash,
+            ShellType::Cmd,
+        ],
+    };
+
+    for shell_type in order {
+        if let Some(shell) = find_shell(shell_type) {
+            return shell;
+        }
     }
+
+    ResolvedLocalExecShell::new(
+        "Command Prompt".to_string(),
+        PathBuf::from("cmd.exe"),
+        ShellType::Cmd,
+    )
 }
 
 fn shell_type_for_supported_preference(preference: ConfiguredShellPreference) -> Option<ShellType> {
@@ -149,21 +167,21 @@ fn shell_type_for_supported_preference(preference: ConfiguredShellPreference) ->
     })
 }
 
-fn find_detected_shell(
-    detected_shells: &[ResolvedLocalExecShell],
-    shell_type: ShellType,
-) -> Option<ResolvedLocalExecShell> {
-    detected_shells
-        .iter()
-        .find(|shell| shell.shell_type == shell_type)
-        .cloned()
+fn resolve_detected_shell(shell_type: ShellType) -> Option<ResolvedLocalExecShell> {
+    ShellDetector::find_shell(&shell_type)
+        .map(|shell| ResolvedLocalExecShell::new(shell.display_name, shell.path, shell.shell_type))
+}
+
+fn resolve_default_shell() -> ResolvedLocalExecShell {
+    let shell = ShellDetector::get_default_shell();
+    ResolvedLocalExecShell::new(shell.display_name, shell.path, shell.shell_type)
 }
 
 #[cfg(test)]
 mod tests {
     use super::{
-        parse_configured_shell_preference, select_non_windows_local_exec_shell,
-        select_windows_local_exec_shell, ConfiguredShellPreference, ResolvedLocalExecShell,
+        parse_configured_shell_preference, resolve_non_windows_local_exec_shell_with,
+        resolve_windows_local_exec_shell_with, ConfiguredShellPreference, ResolvedLocalExecShell,
     };
     use crate::shell::ShellType;
     use std::path::PathBuf;
@@ -174,6 +192,16 @@ mod tests {
             path: PathBuf::from(path),
             shell_type,
         }
+    }
+
+    fn find_in(
+        detected: &[ResolvedLocalExecShell],
+        shell_type: ShellType,
+    ) -> Option<ResolvedLocalExecShell> {
+        detected
+            .iter()
+            .find(|shell| shell.shell_type == shell_type)
+            .cloned()
     }
 
     #[test]
@@ -216,10 +244,9 @@ mod tests {
                 ShellType::Bash,
             ),
         ];
-        let resolved = select_windows_local_exec_shell(
+        let resolved = resolve_windows_local_exec_shell_with(
             Some(ConfiguredShellPreference::Cmd),
-            &detected,
-            &detected[0],
+            |shell_type| find_in(&detected, shell_type),
         );
 
         assert_eq!(resolved.shell_type, ShellType::PowerShellCore);
@@ -236,10 +263,9 @@ mod tests {
             "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe",
             ShellType::PowerShell,
         )];
-        let resolved = select_windows_local_exec_shell(
+        let resolved = resolve_windows_local_exec_shell_with(
             Some(ConfiguredShellPreference::PowerShellCore),
-            &detected,
-            &detected[0],
+            |shell_type| find_in(&detected, shell_type),
         );
 
         assert_eq!(resolved.shell_type, ShellType::PowerShell);
@@ -255,10 +281,9 @@ mod tests {
             ),
             shell("Git Bash", "D:\\Tools\\Git\\bin\\bash.exe", ShellType::Bash),
         ];
-        let resolved = select_windows_local_exec_shell(
+        let resolved = resolve_windows_local_exec_shell_with(
             Some(ConfiguredShellPreference::Bash),
-            &detected,
-            &detected[0],
+            |shell_type| find_in(&detected, shell_type),
         );
 
         assert_eq!(resolved.shell_type, ShellType::Bash);
@@ -278,10 +303,9 @@ mod tests {
                 ShellType::PowerShell,
             ),
         ];
-        let resolved = select_windows_local_exec_shell(
+        let resolved = resolve_windows_local_exec_shell_with(
             Some(ConfiguredShellPreference::Fish),
-            &detected,
-            &detected[0],
+            |shell_type| find_in(&detected, shell_type),
         );
 
         assert_eq!(resolved.shell_type, ShellType::PowerShell);
@@ -297,7 +321,9 @@ mod tests {
                 ShellType::PowerShell,
             ),
         ];
-        let resolved = select_windows_local_exec_shell(None, &detected, &detected[0]);
+        let resolved = resolve_windows_local_exec_shell_with(None, |shell_type| {
+            find_in(&detected, shell_type)
+        });
 
         assert_eq!(resolved.shell_type, ShellType::PowerShell);
     }
@@ -308,13 +334,58 @@ mod tests {
             shell("Bash", "/bin/bash", ShellType::Bash),
             shell("Zsh", "/bin/zsh", ShellType::Zsh),
         ];
-        let resolved = select_non_windows_local_exec_shell(
+        let resolved = resolve_non_windows_local_exec_shell_with(
             Some(ConfiguredShellPreference::Zsh),
-            &detected,
-            &detected[0],
+            |shell_type| find_in(&detected, shell_type),
+            || detected[0].clone(),
         );
 
         assert_eq!(resolved.shell_type, ShellType::Zsh);
         assert_eq!(resolved.path, PathBuf::from("/bin/zsh"));
+    }
+
+    #[test]
+    fn windows_selected_powershell_stops_before_pwsh_and_bash_fallbacks() {
+        let expected = shell(
+            "Windows PowerShell",
+            "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe",
+            ShellType::PowerShell,
+        );
+        let mut requested = Vec::new();
+
+        let resolved = resolve_windows_local_exec_shell_with(
+            Some(ConfiguredShellPreference::PowerShell),
+            |shell_type| {
+                requested.push(shell_type.clone());
+                (shell_type == ShellType::PowerShell).then(|| expected.clone())
+            },
+        );
+
+        assert_eq!(resolved, expected);
+        assert_eq!(requested, vec![ShellType::PowerShell]);
+    }
+
+    #[test]
+    fn windows_missing_selection_stops_at_first_available_fallback() {
+        let expected = shell(
+            "Windows PowerShell",
+            "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe",
+            ShellType::PowerShell,
+        );
+        let mut requested = Vec::new();
+
+        let resolved = resolve_windows_local_exec_shell_with(
+            Some(ConfiguredShellPreference::PowerShellCore),
+            |shell_type| {
+                requested.push(shell_type.clone());
+                (shell_type == ShellType::PowerShell).then(|| expected.clone())
+            },
+        );
+
+        assert_eq!(resolved, expected);
+        assert_eq!(
+            requested,
+            vec![ShellType::PowerShellCore, ShellType::PowerShell]
+        );
     }
 }
