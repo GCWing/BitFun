@@ -1483,13 +1483,18 @@ DOCKERFILE
     fi
   }}
 
+  # Wizard-close cancels this script with TERM/INT. Without a trap the user's
+  # relay would stay stopped under its backup name and disappear from the
+  # "already deployed" probe, so always put the previous container back.
+  trap 'bitfun_restore_previous_relay; trap - INT TERM; exit 1' INT TERM
+
   echo ">>> Starting published Relay binary on port $RELAY_PORT..."
   if ! bitfun_docker run -d \
     --name bitfun-relay \
     --restart unless-stopped \
     --label com.docker.compose.project=relay-server \
     --label com.docker.compose.service=relay-server \
-    -p "0.0.0.0:${{RELAY_PORT}}:${{RELAY_PORT}}" \
+    -p "${{RELAY_HOST_BIND_IP:-0.0.0.0}}:${{RELAY_PORT}}:${{RELAY_PORT}}" \
     -e "RELAY_PORT=${{RELAY_PORT}}" \
     -e RELAY_STATIC_DIR=/app/static \
     -e RELAY_ROOM_WEB_DIR=/app/room-web \
@@ -1501,15 +1506,27 @@ DOCKERFILE
     "$image" >/dev/null; then
     echo ">>> Published Relay binary could not start; restoring previous container."
     bitfun_restore_previous_relay
+    trap - INT TERM
     return 1
   fi
 
-  local attempt
+  # Probe the address the container is actually published on; a wildcard bind
+  # is reachable through loopback.
+  local attempt stale probe_host="${{RELAY_HOST_BIND_IP:-0.0.0.0}}"
+  if [ "$probe_host" = "0.0.0.0" ] || [ "$probe_host" = "::" ]; then
+    probe_host="127.0.0.1"
+  fi
   for attempt in $(seq 1 20); do
-    if curl -fsS --max-time 3 "http://127.0.0.1:${{RELAY_PORT}}/health" >/dev/null 2>&1; then
+    if curl -fsS --max-time 3 "http://${{probe_host}}:${{RELAY_PORT}}/health" >/dev/null 2>&1; then
+      trap - INT TERM
       if [ -n "$backup_container" ]; then
         bitfun_docker rm "$backup_container" >/dev/null 2>&1 || true
       fi
+      # Sweep backups orphaned by an earlier interrupted release deploy.
+      for stale in $(bitfun_docker ps -aq \
+        --filter 'name=^bitfun-relay-before-release-' 2>/dev/null); do
+        bitfun_docker rm -f "$stale" >/dev/null 2>&1 || true
+      done
       echo ">>> Published Relay binary is healthy."
       return 0
     fi
@@ -1523,6 +1540,7 @@ DOCKERFILE
   echo ">>> Published Relay binary failed its health check; restoring previous container."
   bitfun_docker logs --tail 40 bitfun-relay 2>/dev/null || true
   bitfun_restore_previous_relay
+  trap - INT TERM
   return 1
 }}
 "#,
@@ -1681,6 +1699,11 @@ mod tests {
         assert!(script.contains("/app/relay-admin"));
         assert!(script.contains("falling back to source build"));
         assert!(script.contains("bitfun_restore_previous_relay"));
+        // Wizard-close must not leave the relay stopped under its backup name.
+        assert!(script.contains("trap 'bitfun_restore_previous_relay"));
+        assert!(script.contains("name=^bitfun-relay-before-release-"));
+        // Port publishing keeps compose's configurable bind address.
+        assert!(script.contains("${RELAY_HOST_BIND_IP:-0.0.0.0}:${RELAY_PORT}:${RELAY_PORT}"));
     }
 
     #[cfg(unix)]

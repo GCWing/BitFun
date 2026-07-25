@@ -58,6 +58,45 @@ test('generates GitHub URLs for both Linux CLI and Relay architectures', () => {
   );
 });
 
+test('rejects versions whose build metadata GitHub would rewrite in asset names', () => {
+  const temp = fs.mkdtempSync(path.join(os.tmpdir(), 'bitfun-linux-manifest-meta-'));
+  const assets = path.join(temp, 'assets');
+  const out = path.join(temp, 'linux-binaries.json');
+  fs.mkdirSync(assets);
+
+  const version = '1.2.3-nightly.20260724+abc1234';
+  for (const target of ['x86_64-unknown-linux-gnu', 'aarch64-unknown-linux-gnu']) {
+    for (const filename of [
+      `bitfun-cli-${version}-${target}.tar.gz`,
+      `bitfun-relay-server-${target}.tar.gz`,
+    ]) {
+      fs.writeFileSync(path.join(assets, filename), '');
+      fs.writeFileSync(path.join(assets, `${filename}.sha256`), '');
+    }
+  }
+
+  const result = spawnSync(
+    process.execPath,
+    [
+      'scripts/generate-linux-binaries-manifest.mjs',
+      '--assets-dir',
+      assets,
+      '--version',
+      version,
+      '--tag',
+      'nightly',
+      '--repo',
+      'GCWing/BitFun',
+      '--out',
+      out,
+    ],
+    { cwd: repoRoot, encoding: 'utf8' }
+  );
+  assert.notEqual(result.status, 0, 'build metadata must not reach a release asset name');
+  assert.match(result.stderr, /not preserved verbatim by GitHub/);
+  assert.equal(fs.existsSync(out), false);
+});
+
 test('openbitfun sync mirrors both products and their checksums', () => {
   const syncScript = fs.readFileSync(
     path.join(repoRoot, 'scripts/openbitfun-release-sync.sh'),

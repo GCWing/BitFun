@@ -260,10 +260,14 @@ jobs:
           gh release delete "${{ env.NIGHTLY_TAG }}" --yes --cleanup-tag 2>/dev/null || true
 
       - name: Generate Linux binaries manifest
+        env:
+          NIGHTLY_VERSION: ${{ needs.check-changes.outputs.nightly_version }}
         run: |
+          set -euo pipefail
+          # Asset names drop the `+<sha>` build metadata (see linux-binaries.yml).
           node scripts/generate-linux-binaries-manifest.mjs \
             --assets-dir linux-release-assets \
-            --version "${{ needs.check-changes.outputs.nightly_version }}" \
+            --version "${NIGHTLY_VERSION%%+*}" \
             --tag "${{ env.NIGHTLY_TAG }}" \
             --repo "GCWing/BitFun" \
             --out linux-release-assets/linux-binaries.json

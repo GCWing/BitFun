@@ -29,7 +29,18 @@ const platforms = [
   },
 ];
 
+// GitHub rewrites characters outside this set when it stores a release asset
+// (`+` becomes `.`, spaces become `.`), which would silently turn every URL in
+// this manifest into a 404. Fail at generation time instead.
+const GITHUB_SAFE_ASSET_NAME = /^[A-Za-z0-9][A-Za-z0-9._-]*$/;
+
 function asset(filename) {
+  if (!GITHUB_SAFE_ASSET_NAME.test(filename)) {
+    throw new Error(
+      `Release asset name is not preserved verbatim by GitHub: ${filename}. ` +
+        'Use only alphanumerics, dot, dash and underscore (strip SemVer build metadata).'
+    );
+  }
   const absolutePath = path.join(assetsDir, filename);
   if (!fs.existsSync(absolutePath)) {
     throw new Error(`Required Linux release asset was not found: ${absolutePath}`);

@@ -14,6 +14,8 @@ const GITHUB_MANIFEST: &str =
     "https://github.com/GCWing/BitFun/releases/latest/download/linux-binaries.json";
 const OPENBITFUN_MANIFEST: &str = "https://openbitfun.com/release/linux-binaries.json";
 const AUTO_CHECK_INTERVAL: Duration = Duration::from_secs(6 * 60 * 60);
+/// Hard ceiling on how long an automatic check may delay interactive startup.
+const AUTO_UPDATE_BUDGET: Duration = Duration::from_secs(90);
 const DEPRECATION_WARNING: &str = "Warning: `bitfun-cli` is deprecated; use `bitfun` instead.";
 
 #[derive(Debug, Deserialize)]
@@ -41,6 +43,8 @@ struct ReleaseAsset {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum UpdateOutcome {
     Current,
+    /// `--check` found a newer release but was asked not to install it.
+    Available,
     Updated,
     Unsupported,
 }
@@ -51,6 +55,8 @@ pub(crate) async fn run_manual(check_only: bool) -> Result<UpdateOutcome> {
         UpdateOutcome::Current => {
             println!("BitFun CLI is up to date ({}).", env!("CARGO_PKG_VERSION"))
         }
+        // `try_source` already printed the available version and its source.
+        UpdateOutcome::Available => println!("Run `bitfun update` to install it."),
         UpdateOutcome::Updated => println!(
             "BitFun CLI was updated successfully. Restart this command to use the new version."
         ),
@@ -66,12 +72,18 @@ pub(crate) async fn maybe_run_automatic() {
         return;
     }
     mark_automatic_check();
-    match update_from_configured_sources(false).await {
-        Ok(UpdateOutcome::Updated) => eprintln!(
+    // Interactive startup must never wait on the network longer than this, no
+    // matter how slowly a mirror trickles the archive out.
+    match tokio::time::timeout(AUTO_UPDATE_BUDGET, update_from_configured_sources(false)).await {
+        Ok(Ok(UpdateOutcome::Updated)) => eprintln!(
             "BitFun CLI updated in the background. The new version will be used next time."
         ),
-        Ok(_) => {}
-        Err(error) => tracing::debug!("Automatic CLI update check failed: {error}"),
+        Ok(Ok(_)) => {}
+        Ok(Err(error)) => tracing::debug!("Automatic CLI update check failed: {error}"),
+        Err(_) => tracing::debug!(
+            "Automatic CLI update check exceeded {}s; continuing startup.",
+            AUTO_UPDATE_BUDGET.as_secs()
+        ),
     }
 }
 
@@ -151,7 +163,7 @@ async fn try_source(
             source,
             env!("CARGO_PKG_VERSION")
         );
-        return Ok(Some(UpdateOutcome::Current));
+        return Ok(Some(UpdateOutcome::Available));
     }
 
     let platform = manifest
@@ -377,8 +389,12 @@ fn automatic_update_is_eligible() -> bool {
         .is_some_and(|path| current_platform_key().is_some() && !is_development_binary(&path))
 }
 
+/// Share the CLI's own config directory so a relocated profile (E2E storage
+/// guard, non-default home) does not silently re-check on every launch.
 fn automatic_stamp_path() -> Option<PathBuf> {
-    dirs::home_dir().map(|home| home.join(".config/bitfun/last-update-check"))
+    crate::config::CliConfig::config_dir()
+        .ok()
+        .map(|dir| dir.join("last-update-check"))
 }
 
 fn automatic_check_is_due() -> bool {

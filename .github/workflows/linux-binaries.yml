@@ -76,7 +76,12 @@ jobs:
           RELEASE_VERSION: ${{ inputs.version }}
         run: |
           set -euo pipefail
+          # Strip SemVer build metadata (`+<sha>`): GitHub rewrites non-alphanumeric
+          # characters in uploaded release asset names, so a `+` in a filename would
+          # make every URL in linux-binaries.json a 404. Desktop packaging strips it
+          # the same way, which also keeps the two asset sets on one version string.
           CARGO_VERSION="${RELEASE_VERSION%%+*}"
+          echo "ASSET_VERSION=${CARGO_VERSION}" >>"$GITHUB_ENV"
           sed -i \
             "s/^version = \".*\" # x-release-please-version/version = \"${CARGO_VERSION}\" # x-release-please-version/" \
             Cargo.toml
@@ -103,17 +108,15 @@ jobs:
         id: cli-stage
         shell: bash
         env:
-          VERSION: ${{ inputs.version }}
           TARGET: ${{ matrix.platform.target }}
-        run: bash scripts/cli/package-unix.sh "$VERSION" "$TARGET"
+        run: bash scripts/cli/package-unix.sh "$ASSET_VERSION" "$TARGET"
 
       - name: Package Relay Server
         id: relay-stage
         shell: bash
         env:
-          VERSION: ${{ inputs.version }}
           TARGET: ${{ matrix.platform.target }}
-        run: bash scripts/relay/package-unix.sh "$VERSION" "$TARGET"
+        run: bash scripts/relay/package-unix.sh "$ASSET_VERSION" "$TARGET"
 
       - name: Upload Linux binary artifacts
         uses: actions/upload-artifact@v6

@@ -67,6 +67,36 @@ download_asset() {
   fi
 }
 
+# Fetch linux-binaries.json into $LINUX_MANIFEST_TMP, retrying transient
+# failures. Sets LINUX_MANIFEST_STATE to one of:
+#   ok        — downloaded
+#   missing   — GitHub answered 404: the release genuinely has no manifest
+#   unhealthy — network/5xx: unknown, so callers must keep the published mirror
+fetch_linux_manifest() {
+  local attempt status
+  LINUX_MANIFEST_STATE="unhealthy"
+  for attempt in $(seq 1 "$MAX_RETRIES"); do
+    status="$(curl -sSL \
+      --connect-timeout "$CONNECT_TIMEOUT" \
+      --max-time "$MAX_TIME" \
+      -o "$LINUX_MANIFEST_TMP" \
+      -w '%{http_code}' \
+      "$GITHUB_LINUX_BINARIES_URL" || echo "000")"
+    if [ "$status" = "200" ]; then
+      LINUX_MANIFEST_STATE="ok"
+      return 0
+    fi
+    rm -f "$LINUX_MANIFEST_TMP"
+    if [ "$status" = "404" ]; then
+      LINUX_MANIFEST_STATE="missing"
+      return 0
+    fi
+    log "  Retry $attempt/$MAX_RETRIES for linux-binaries.json (HTTP $status)"
+    sleep "$RETRY_DELAY"
+  done
+  return 0
+}
+
 # ── Main ───────────────────────────────────────────────────────
 main() {
   mkdir -p "$(dirname "$LOCK_FILE")"
@@ -141,11 +171,9 @@ print(json.dumps(data, indent=2))
 
   # 7. Mirror the CLI + Relay release manifest and every asset it references.
   LINUX_MANIFEST_TMP="${VERSION_DIR}/linux-binaries.github.json.part"
-  if curl -fsSL \
-      --connect-timeout "$CONNECT_TIMEOUT" \
-      --max-time "$MAX_TIME" \
-      -o "$LINUX_MANIFEST_TMP" \
-      "$GITHUB_LINUX_BINARIES_URL"; then
+  LINUX_MANIFEST_STATE="missing"
+  fetch_linux_manifest
+  if [ "$LINUX_MANIFEST_STATE" = "ok" ]; then
     LINUX_VERSION=$("$PYTHON" -c \
       "import json,sys;print(json.load(open(sys.argv[1], encoding='utf-8'))['version'])" \
       "$LINUX_MANIFEST_TMP")
@@ -199,10 +227,14 @@ PY
     rm -f "$LINUX_MANIFEST_TMP"
     cp "${VERSION_DIR}/linux-binaries.json" "${WEBSITE_RELEASE_DIR}/linux-binaries.json"
     log "Updated ${WEBSITE_RELEASE_DIR}/linux-binaries.json"
-  else
-    rm -f "$LINUX_MANIFEST_TMP"
+  elif [ "$LINUX_MANIFEST_STATE" = "missing" ]; then
     rm -f "${WEBSITE_RELEASE_DIR}/linux-binaries.json"
     log "Linux binaries manifest is not present in the latest release yet; Desktop mirror only."
+  else
+    # Transient failure. Keep whatever is already published: CLI self-update and
+    # one-click Relay deploy both fall back to this file, so a single flaky run
+    # must not take it offline for the next 10 minutes.
+    log "WARN: Linux binaries manifest unreachable this run; keeping the published mirror."
   fi
 
   # 8. Clean up old versions — keep only the latest KEEP_VERSIONS dirs
