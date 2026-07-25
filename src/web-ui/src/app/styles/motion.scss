@@ -79,6 +79,14 @@
    *
    * Individual transform properties compose with component-owned `transform`
    * (icons, drag handles, toggles) instead of replacing it.
+   *
+   * Override contract: this is a zero-specificity `:where()` default, so any
+   * component that declares its own `transition` owns it completely. That is
+   * deliberate. The property list used to be re-asserted with `!important`,
+   * which forced all eight properties onto components that had chosen a longer
+   * duration for one of them — and made `transition: none` unattainable, so an
+   * element being dragged animated its way to the pointer. Opt out entirely
+   * with `[data-motion='none']`.
    */
   :where(
     button,
@@ -104,15 +112,6 @@
       color var(--motion-fast) var(--easing-standard),
       box-shadow var(--motion-fast) var(--easing-standard),
       opacity var(--motion-fast) var(--easing-standard);
-    transition-property:
-      translate,
-      scale,
-      transform,
-      background-color,
-      border-color,
-      color,
-      box-shadow,
-      opacity !important;
   }
 
   @media (hover: hover) and (pointer: fine) {

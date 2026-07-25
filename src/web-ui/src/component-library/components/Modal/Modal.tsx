@@ -10,6 +10,32 @@ import './Modal.scss';
 // Keep in sync with modal-overlay-exit/modal-dialog-exit in Modal.scss.
 const MODAL_EXIT_DURATION_MS = 180;
 
+/**
+ * Ref-counted `body` scroll lock, shared by every Modal instance.
+ *
+ * Modals stack — a dialog opening a confirmation on top of itself is routine —
+ * and each one clearing `overflow` on its own would unlock the page while the
+ * others are still open. The 180 ms exit delay widens that window: the inner
+ * modal's cleanup lands well after it has visually gone.
+ */
+let bodyScrollLockCount = 0;
+
+function lockBodyScroll(): () => void {
+  bodyScrollLockCount += 1;
+  document.body.style.overflow = 'hidden';
+  let released = false;
+  return () => {
+    if (released) {
+      return;
+    }
+    released = true;
+    bodyScrollLockCount = Math.max(0, bodyScrollLockCount - 1);
+    if (bodyScrollLockCount === 0) {
+      document.body.style.overflow = '';
+    }
+  };
+}
+
 export interface ModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -89,15 +115,11 @@ export const Modal: React.FC<ModalProps> = ({
   }, [isOpen, isPresent]);
 
   useEffect(() => {
-    if (isOpen || isPresent) {
-      document.body.style.overflow = 'hidden';
-    } else {
-      document.body.style.overflow = '';
+    if (!isOpen && !isPresent) {
+      return;
     }
 
-    return () => {
-      document.body.style.overflow = '';
-    };
+    return lockBodyScroll();
   }, [isOpen, isPresent]);
 
   useEffect(() => {
