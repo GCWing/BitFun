@@ -2,7 +2,11 @@ import { AlertTriangle, Check, Loader2, RefreshCw, XCircle } from 'lucide-react'
 import { Button, Modal } from '@/component-library';
 import { InlineDiffPreview } from '@/flow_chat/components/InlineDiffPreview';
 import { useI18n } from '@/infrastructure/i18n';
-import type { LearningProposal } from '@/infrastructure/api/service-api/LearningProposalAPI';
+import type {
+  LearningProposal,
+  LearningProposalConflict,
+  LearningProposalConflictType,
+} from '@/infrastructure/api/service-api/LearningProposalAPI';
 import {
   canApplyLearningProposal,
   canShowLearningProposalApprove,
@@ -20,6 +24,25 @@ function targetKindLabel(proposal: LearningProposal, t: Translate): string {
     case 'agents_md': return t('learningProposal.target.kind.agents_md');
     case 'none':
     default: return t('learningProposal.target.kind.none');
+  }
+}
+
+function conflictTypeLabel(conflictType: LearningProposalConflictType, t: Translate): string {
+  switch (conflictType) {
+    case 'contradicts': return t('learningProposal.conflict.type.contradicts');
+    case 'duplicates': return t('learningProposal.conflict.type.duplicates');
+    case 'stale': return t('learningProposal.conflict.type.stale');
+    case 'missing_step': return t('learningProposal.conflict.type.missing_step');
+    default: return conflictType;
+  }
+}
+
+function conflictTargetLabel(conflict: LearningProposalConflict, t: Translate): string {
+  switch (conflict.targetKind) {
+    case 'memory': return t('learningProposal.target.kind.memory');
+    case 'skill': return t('learningProposal.target.kind.skill');
+    case 'agents_md': return t('learningProposal.target.kind.agents_md');
+    default: return conflict.targetKind;
   }
 }
 
@@ -82,6 +105,12 @@ export function LearningProposalReviewDialog({
       ? t('learningProposal.review.remoteReadOnly')
       : t('learningProposal.review.targetReadOnly'))
     : undefined;
+  const approveLabelKey = proposal
+    ? (proposal.target?.applyMode === 'agent_patch'
+      ? 'learningProposal.actions.applyViaAgent'
+      : 'learningProposal.actions.approve')
+    : 'learningProposal.actions.approve';
+  const conflicts = proposal?.conflicts ?? [];
 
   return (
     <Modal
@@ -162,8 +191,66 @@ export function LearningProposalReviewDialog({
             </dl>
           </section>
 
-          {(proposal.rationale || proposal.futureUse) && (
+          {(proposal.rootCause || proposal.actionPlan) && (
             <section className="learning-proposal-review-dialog__analysis">
+              {proposal.rootCause && (
+                <div>
+                  <h3>{t('learningProposal.review.rootCauseTitle')}</h3>
+                  <p>{proposal.rootCause}</p>
+                </div>
+              )}
+              {proposal.actionPlan && (
+                <div>
+                  <h3>{t('learningProposal.review.actionPlanTitle')}</h3>
+                  <p>{proposal.actionPlan}</p>
+                </div>
+              )}
+            </section>
+          )}
+
+          {conflicts.length > 0 && (
+            <section className="learning-proposal-review-dialog__conflicts">
+              <h3>{t('learningProposal.review.conflictsTitle')}</h3>
+              <ul className="learning-proposal-review-dialog__conflict-list">
+                {conflicts.map((conflict, index) => (
+                  <li
+                    key={`${conflict.targetKind}-${conflict.conflictType}-${index}`}
+                    className="learning-proposal-review-dialog__conflict"
+                    data-conflict-type={conflict.conflictType}
+                  >
+                    <div className="learning-proposal-review-dialog__conflict-header">
+                      <span
+                        className={`learning-proposal-review-dialog__conflict-badge learning-proposal-review-dialog__conflict-badge--${conflict.conflictType}`}
+                      >
+                        {conflictTypeLabel(conflict.conflictType, t)}
+                      </span>
+                      <span className="learning-proposal-review-dialog__conflict-target">
+                        {conflictTargetLabel(conflict, t)}
+                      </span>
+                      {conflict.identifier && (
+                        <code className="learning-proposal-review-dialog__conflict-identifier">
+                          {conflict.identifier}
+                        </code>
+                      )}
+                    </div>
+                    {conflict.filePath && (
+                      <code className="learning-proposal-review-dialog__conflict-path">
+                        {conflict.filePath}
+                      </code>
+                    )}
+                    {conflict.snippet && (
+                      <blockquote className="learning-proposal-review-dialog__conflict-snippet">
+                        {conflict.snippet}
+                      </blockquote>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
+
+          {(proposal.rationale || proposal.futureUse) && (
+            <section className="learning-proposal-review-dialog__rationale">
               {proposal.rationale && (
                 <div>
                   <h3>{t('learningProposal.review.rationaleTitle')}</h3>
@@ -234,7 +321,7 @@ export function LearningProposalReviewDialog({
                 disabled={isBusy || !canApprove}
               >
                 <Check size={14} aria-hidden="true" />
-                {t('learningProposal.actions.approve')}
+                {t(approveLabelKey)}
               </Button>
             )}
           </div>

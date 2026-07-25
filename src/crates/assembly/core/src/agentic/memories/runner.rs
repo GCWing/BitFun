@@ -78,6 +78,8 @@ impl MemoryPhase2Consolidator for InternalAgentMemoryPhase2Consolidator {
             runtime_tool_restrictions: memory_phase2_tool_restrictions(memory_root),
             session_kind: SessionKind::EphemeralChild,
             emit_lifecycle_events: false,
+            remote_connection_id: None,
+            remote_ssh_host: None,
         };
         let started_at = std::time::Instant::now();
         let result = coordinator

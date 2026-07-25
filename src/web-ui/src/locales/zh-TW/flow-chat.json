@@ -2384,7 +2384,8 @@
       "reject": "拒絕",
       "refresh": "重新整理分析",
       "requestReanalysis": "要求重新分析",
-      "approve": "核准並寫入"
+      "approve": "核准並寫入",
+      "applyViaAgent": "由 Agent 寫入"
     },
     "notification": {
       "analyzingTitle": "正在分析所選資訊",
@@ -2427,16 +2428,27 @@
       "title": "審閱經驗沉澱提案",
       "loading": "正在載入最新提案...",
       "remoteReadOnly": "目前版本僅支援審閱遠端工作區提案，不會修改任何檔案。",
-      "targetReadOnly": "目前版本僅提供此目標的修改建議，不會直接修改 Skill 或專案指令檔案。",
+      "targetReadOnly": "目前版本僅提供此目標的修改建議，不會修改任何檔案。",
       "staleNotice": "分析完成後目標已發生變化，請先重新整理提案再核准。",
       "sourceTitle": "選取的原始內容",
       "sourceKind": "來源",
       "turn": "Turn",
       "round": "Round",
       "item": "Item",
+      "rootCauseTitle": "內容來源",
+      "actionPlanTitle": "將要做什麼",
+      "conflictsTitle": "相關衝突",
       "rationaleTitle": "為什麼選擇此目標",
       "futureUseTitle": "未來何時會發揮作用",
       "previewTitle": "建議變更"
+    },
+    "conflict": {
+      "type": {
+        "contradicts": "與現有內容矛盾",
+        "duplicates": "與現有內容重複",
+        "stale": "更新過時條目",
+        "missing_step": "Skill 缺失環節"
+      }
     },
     "errors": {
       "workspaceRequired": "請先開啟工作區，再沉澱經驗。",

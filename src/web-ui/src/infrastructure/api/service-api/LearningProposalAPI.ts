@@ -33,7 +33,21 @@ export type LearningProposalStatus =
   | 'failed';
 
 export type LearningProposalTargetKind = 'memory' | 'skill' | 'agents_md' | 'none';
-export type LearningProposalApplyMode = 'memory_note' | 'read_only';
+export type LearningProposalApplyMode = 'memory_note' | 'read_only' | 'agent_patch';
+
+export type LearningProposalConflictType =
+  | 'contradicts'
+  | 'duplicates'
+  | 'stale'
+  | 'missing_step';
+
+export interface LearningProposalConflict {
+  targetKind: LearningProposalTargetKind;
+  conflictType: LearningProposalConflictType;
+  identifier?: string;
+  filePath?: string;
+  snippet?: string;
+}
 
 export interface LearningProposalTarget {
   kind: LearningProposalTargetKind;
@@ -62,6 +76,9 @@ export interface LearningProposal {
   target?: LearningProposalTarget;
   rationale?: string;
   futureUse?: string;
+  rootCause?: string;
+  actionPlan?: string;
+  conflicts?: LearningProposalConflict[];
   preview?: LearningProposalPreview;
   baseHash?: string;
   diffHash?: string;

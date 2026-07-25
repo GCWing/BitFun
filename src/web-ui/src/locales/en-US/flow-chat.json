@@ -2384,7 +2384,8 @@
       "reject": "Reject",
       "refresh": "Refresh analysis",
       "requestReanalysis": "Request reanalysis",
-      "approve": "Approve and write"
+      "approve": "Approve and write",
+      "applyViaAgent": "Apply via agent"
     },
     "notification": {
       "analyzingTitle": "Analyzing selected insight",
@@ -2427,16 +2428,27 @@
       "title": "Review learning proposal",
       "loading": "Loading the latest proposal...",
       "remoteReadOnly": "Remote workspace proposals are read-only in this version. No file will be changed.",
-      "targetReadOnly": "This target is a suggestion only in this version. No Skill or repository instruction file will be changed.",
+      "targetReadOnly": "This target is a suggestion only in this version. No file will be changed.",
       "staleNotice": "The target changed after analysis. Refresh this proposal before approving it.",
       "sourceTitle": "Selected source",
       "sourceKind": "Source",
       "turn": "Turn",
       "round": "Round",
       "item": "Item",
+      "rootCauseTitle": "Where this comes from",
+      "actionPlanTitle": "What will change",
+      "conflictsTitle": "Related conflicts",
       "rationaleTitle": "Why this target",
       "futureUseTitle": "When this will help",
       "previewTitle": "Proposed change"
+    },
+    "conflict": {
+      "type": {
+        "contradicts": "Contradicts existing",
+        "duplicates": "Duplicates existing",
+        "stale": "Updates stale entry",
+        "missing_step": "Missing skill step"
+      }
     },
     "errors": {
       "workspaceRequired": "Open a workspace before capturing a learning.",

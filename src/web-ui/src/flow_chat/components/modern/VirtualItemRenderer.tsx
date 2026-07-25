@@ -111,6 +111,8 @@ export const VirtualItemRenderer = React.memo<VirtualItemRendererProps>(
           return { sourceKind: 'unknown', itemId: item.data.groupId };
         case 'turn-completion-notice':
           return { sourceKind: 'unknown', itemId: `turn-completion:${item.turnId}` };
+        case 'turn-failure-notice':
+          return { sourceKind: 'unknown', itemId: `turn-failure:${item.turnId}` };
         case 'image-analyzing':
           return { sourceKind: 'unknown', itemId: `image-analyzing:${item.turnId}` };
       }

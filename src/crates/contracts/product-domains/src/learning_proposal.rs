@@ -38,6 +38,29 @@ pub enum LearningProposalTargetKind {
 pub enum LearningProposalApplyMode {
     MemoryNote,
     ReadOnly,
+    AgentPatch,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum LearningProposalConflictType {
+    Contradicts,
+    Duplicates,
+    Stale,
+    MissingStep,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LearningProposalConflict {
+    pub target_kind: LearningProposalTargetKind,
+    pub conflict_type: LearningProposalConflictType,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub identifier: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub file_path: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub snippet: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -140,6 +163,12 @@ pub struct LearningProposal {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub future_use: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub root_cause: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub action_plan: Option<String>,
+    #[serde(default)]
+    pub conflicts: Vec<LearningProposalConflict>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub preview: Option<LearningProposalPreview>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub base_hash: Option<String>,
@@ -165,6 +194,9 @@ impl LearningProposal {
             target: None,
             rationale: None,
             future_use: None,
+            root_cause: None,
+            action_plan: None,
+            conflicts: Vec::new(),
             preview: None,
             base_hash: None,
             diff_hash: None,
@@ -186,10 +218,12 @@ impl LearningProposal {
 
     pub fn can_approve(&self) -> bool {
         self.status == LearningProposalStatus::Ready
-            && self
-                .target
-                .as_ref()
-                .is_some_and(|target| target.apply_mode == LearningProposalApplyMode::MemoryNote)
+            && self.target.as_ref().is_some_and(|target| {
+                matches!(
+                    target.apply_mode,
+                    LearningProposalApplyMode::MemoryNote | LearningProposalApplyMode::AgentPatch
+                )
+            })
             && self.preview.is_some()
             && self.base_hash.is_some()
             && self.diff_hash.is_some()

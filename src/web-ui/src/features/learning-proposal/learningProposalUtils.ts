@@ -12,9 +12,16 @@ export function isRemoteLearningProposal(proposal: LearningProposal): boolean {
 }
 
 export function canShowLearningProposalApprove(proposal: LearningProposal): boolean {
-  return proposal.target?.kind === 'memory'
-    && proposal.target.applyMode === 'memory_note'
-    && !isRemoteLearningProposal(proposal);
+  if (!proposal.target) {
+    return false;
+  }
+  if (proposal.target.applyMode === 'read_only') {
+    return false;
+  }
+  if (proposal.target.applyMode === 'memory_note' && isRemoteLearningProposal(proposal)) {
+    return false;
+  }
+  return true;
 }
 
 export function canApplyLearningProposal(proposal: LearningProposal): boolean {
@@ -23,6 +30,12 @@ export function canApplyLearningProposal(proposal: LearningProposal): boolean {
     && Boolean(proposal.preview)
     && Boolean(proposal.baseHash)
     && Boolean(proposal.diffHash);
+}
+
+export function approveActionLabelKey(proposal: LearningProposal): string {
+  return proposal.target?.applyMode === 'agent_patch'
+    ? 'learningProposal.actions.applyViaAgent'
+    : 'learningProposal.actions.approve';
 }
 
 export function learningProposalRequest(
