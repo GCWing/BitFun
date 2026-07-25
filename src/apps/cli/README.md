@@ -182,6 +182,14 @@ Do not copy only `bitfun-cli` from an archive. The deprecated command is intenti
 launcher for its sibling `bitfun`; if the sibling is missing, it reports an incomplete installation
 with recovery guidance instead of attempting another lookup.
 
+Every archive ships an adjacent `<archive>.sha256` — the complete verification surface across all
+platforms and both the stable and nightly channels. The release also carries a `SHA256SUMS`
+aggregate, but it covers only the macOS and Windows archives: Linux archives are published by
+`.github/workflows/linux-binaries.yml` in a separate workflow run (the only producer that also
+covers nightly, and the one that must hold the CLI and Relay archives together to emit
+`linux-binaries.json`), so they cannot be folded into that file deterministically. Verify Linux
+downloads with their `.sha256` sidecar.
+
 On a server that should stay reachable for account multi-device access, continue with the
 [daemon section](#always-on-account-device-host-daemon) above after `/login`.
 

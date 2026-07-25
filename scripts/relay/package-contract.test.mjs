@@ -36,3 +36,32 @@ test('formal and nightly releases gate publication on Linux binaries', () => {
   assert.match(reusable, /scripts\/relay\/package-unix\.sh/);
   assert.match(reusable, /scripts\/cli\/package-unix\.sh/);
 });
+
+test('exactly one workflow publishes the Linux CLI archives', () => {
+  // Both cli-package.yml and desktop-package.yml run on `release: published`.
+  // If both built Linux they would upload identical asset names concurrently,
+  // and softprops/action-gh-release deletes a same-named asset before writing,
+  // so the two runs can destroy each other's upload.
+  const cli = read('.github/workflows/cli-package.yml');
+
+  assert.doesNotMatch(cli, /target:\s*x86_64-unknown-linux-gnu/);
+  assert.doesNotMatch(cli, /target:\s*aarch64-unknown-linux-gnu/);
+  assert.doesNotMatch(cli, /uses:\s+\.\/\.github\/workflows\/linux-binaries\.yml/);
+
+  // macOS and Windows stay owned by cli-package.yml.
+  assert.match(cli, /target:\s*aarch64-apple-darwin/);
+  assert.match(cli, /target:\s*x86_64-apple-darwin/);
+  assert.match(cli, /target:\s*x86_64-pc-windows-msvc/);
+});
+
+test('release asset names carry no SemVer build metadata', () => {
+  // GitHub rewrites `+` in stored asset filenames, which would make every URL
+  // in linux-binaries.json a 404 on the nightly channel.
+  const reusable = read('.github/workflows/linux-binaries.yml');
+  const nightly = read('.github/workflows/nightly.yml');
+
+  assert.match(reusable, /ASSET_VERSION="\$\{RELEASE_VERSION%%\+\*\}"/);
+  assert.match(reusable, /package-unix\.sh "\$ASSET_VERSION"/);
+  assert.doesNotMatch(reusable, /package-unix\.sh "\$VERSION"/);
+  assert.match(nightly, /--version "\$\{NIGHTLY_VERSION%%\+\*\}"/);
+});

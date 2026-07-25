@@ -80,13 +80,13 @@ jobs:
           # characters in uploaded release asset names, so a `+` in a filename would
           # make every URL in linux-binaries.json a 404. Desktop packaging strips it
           # the same way, which also keeps the two asset sets on one version string.
-          CARGO_VERSION="${RELEASE_VERSION%%+*}"
-          echo "ASSET_VERSION=${CARGO_VERSION}" >>"$GITHUB_ENV"
+          ASSET_VERSION="${RELEASE_VERSION%%+*}"
+          echo "ASSET_VERSION=${ASSET_VERSION}" >>"$GITHUB_ENV"
           sed -i \
-            "s/^version = \".*\" # x-release-please-version/version = \"${CARGO_VERSION}\" # x-release-please-version/" \
+            "s/^version = \".*\" # x-release-please-version/version = \"${ASSET_VERSION}\" # x-release-please-version/" \
             Cargo.toml
           sed -i \
-            "s/^version = \".*\" # x-release-please-version/version = \"${CARGO_VERSION}\" # x-release-please-version/" \
+            "s/^version = \".*\" # x-release-please-version/version = \"${ASSET_VERSION}\" # x-release-please-version/" \
             src/apps/relay-server/Cargo.toml
 
       - name: Build CLI and Relay Server
