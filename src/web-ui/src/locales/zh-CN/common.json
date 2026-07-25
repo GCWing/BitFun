@@ -1312,6 +1312,7 @@
       "proxyJump": "跳板链（ProxyJump）",
       "proxyJumpPlaceholder": "jump1,jump2",
       "proxyJumpHint": "使用逗号分隔 SSH 配置别名或 [user@]host[:port]。每一跳可从 ~/.ssh/config 使用独立的 User 和 IdentityFile。",
+      "proxyJumpPasswordWarning": "若跳板机在 ~/.ssh/config 中没有配置 IdentityFile，该密码会被发送给它。如果不完全信任该跳板机，请为每一跳单独配置密钥。",
       "via": "经由",
       "containerName": "容器名称或 ID",
       "containerNamePlaceholder": "my-dev-container",

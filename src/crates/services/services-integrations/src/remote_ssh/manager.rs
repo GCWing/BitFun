@@ -209,9 +209,6 @@ struct ActiveConnection {
     /// Allows `is_connected` and SFTP/exec entry points to detect a dead session
     /// without waiting for the next failed I/O.
     alive: Arc<AtomicBool>,
-    /// Per-connection lock to serialize transparent reconnect attempts and
-    /// avoid stampedes when multiple SFTP/exec calls hit a dead session at once.
-    reconnect_lock: Arc<tokio::sync::Mutex<()>>,
 }
 
 struct EstablishedSession {
@@ -220,6 +217,53 @@ struct EstablishedSession {
     alive: Arc<AtomicBool>,
     server_info: Option<ServerInfo>,
     effective_config: SSHConnectionConfig,
+}
+
+/// Which stage of the connection chain an error came from.
+///
+/// `test_connection` needs this to attribute a failure exactly; matching on
+/// message text cannot, because two jump hosts may share a `user@host:port`
+/// label and the first match then always wins.
+///
+/// Deliberately *not* an `anyhow` context: a context replaces the error's
+/// `Display`, so tagging this way would turn every SSH error the user sees into
+/// "connection stage 'target'". This wrapper is transparent instead — `Display`
+/// and `source` both delegate, so `{}`, `{:#}` and `chain()` all read exactly as
+/// they did before the tag existed.
+#[derive(Debug)]
+struct StagedError {
+    stage: String,
+    inner: anyhow::Error,
+}
+
+impl std::fmt::Display for StagedError {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        std::fmt::Display::fmt(&self.inner, formatter)
+    }
+}
+
+impl std::error::Error for StagedError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        self.inner.source()
+    }
+}
+
+/// Per-handle ceiling for the goodbye packet. Generous for a local channel
+/// send, short enough that a chain of dead hops cannot stall shutdown.
+const SSH_DISCONNECT_TIMEOUT: Duration = Duration::from_secs(1);
+
+fn tag_failed_stage(stage: &str, error: anyhow::Error) -> anyhow::Error {
+    anyhow::Error::new(StagedError {
+        stage: stage.to_string(),
+        inner: error,
+    })
+}
+
+/// Outermost stage tag in an error's chain, if any.
+fn failed_stage_of(error: &anyhow::Error) -> Option<&str> {
+    error
+        .downcast_ref::<StagedError>()
+        .map(|staged| staged.stage.as_str())
 }
 
 /// SSH client handler with host key verification
@@ -853,7 +897,8 @@ fn validate_container_config(container: &ContainerWorkspaceConfig) -> anyhow::Re
     }
     if container.local && matches!(container.access, ContainerAccess::Sshd) {
         anyhow::bail!(
-            "A local container with sshd must be configured as an SSH endpoint, not local Docker"
+            "A local Docker container cannot use sshd access; choose docker-exec or auto instead. \
+             To reach a container over SSH, configure it as a remote SSH host."
         );
     }
     Ok(())
@@ -1002,6 +1047,54 @@ fn workspace_command(config: &SSHConnectionConfig, command: &str, tty: bool) -> 
     }
 }
 
+/// Shell prelude that removes orphaned upload temporaries.
+///
+/// The `trap cleanup EXIT` in the command below covers an orderly exit, but a
+/// dropped SSH channel (network failure, laptop lid) kills the remote shell
+/// without ever running it, so a long-lived host slowly accumulates orphans.
+///
+/// A day is the bound because the only thing distinguishing an orphan from a
+/// live upload is age, and the cost of guessing wrong is a corrupted transfer
+/// in another session. No real upload runs for 24 hours; plenty run for one.
+fn stale_upload_sweep(quoted_dir: &str) -> String {
+    format!(
+        "if command -v find >/dev/null 2>&1; then \
+           find {quoted_dir} -maxdepth 1 -name '.bitfun-upload-*.tmp' -mmin +1440 \
+             -exec rm -f -- {{}} \\; 2>/dev/null || true; \
+         fi; "
+    )
+}
+
+/// Shell prelude that removes pid files whose process is gone.
+///
+/// Liveness rather than age: a supervised command may legitimately run for
+/// hours, and deleting its pid file would silently break cancellation for that
+/// session — the pid file is how interrupt/kill finds the process. `kill -0`
+/// answers the question exactly, so nothing live is ever touched.
+///
+/// The empty-file case is the one exception. `supervised_container_command`
+/// creates the file before writing the pid into it, so an empty file may belong
+/// to a command that is starting right now; those are only removed once they
+/// are far too old for that to be true.
+fn stale_pid_file_sweep() -> String {
+    "for stale_pid_file in /tmp/.bitfun-exec-*.pid; do \
+       [ -e \"$stale_pid_file\" ] || continue; \
+       if [ ! -s \"$stale_pid_file\" ]; then \
+         if command -v find >/dev/null 2>&1; then \
+           find \"$stale_pid_file\" -mmin +60 -exec rm -f -- {} \\; 2>/dev/null || true; \
+         fi; \
+         continue; \
+       fi; \
+       stale_pid=$(cat \"$stale_pid_file\" 2>/dev/null || true); \
+       case \"$stale_pid\" in \
+         ''|*[!0-9]*) rm -f -- \"$stale_pid_file\" 2>/dev/null || true; continue;; \
+       esac; \
+       kill -0 \"$stale_pid\" 2>/dev/null || rm -f -- \"$stale_pid_file\" 2>/dev/null || true; \
+     done; \
+     unset stale_pid_file stale_pid 2>/dev/null || true; "
+        .to_string()
+}
+
 fn supervised_container_command(
     container: &ContainerWorkspaceConfig,
     command: &str,
@@ -1011,6 +1104,14 @@ fn supervised_container_command(
     (wrapped, pid_file)
 }
 
+/// Wrap `command` so it can be tracked and signalled from a separate channel.
+///
+/// `setsid` gives the command its own process group, which is what makes the
+/// `kill -- -$pid` group signal reach the whole tree. Where it is missing the
+/// child stays in this shell's group, so a group signal would either fail or
+/// hit the supervisor itself; both `terminate_child` here and
+/// [`container_signal_command`] therefore fall back to `pkill -P` plus a direct
+/// `kill`, which reaches one generation instead of all of them.
 fn supervised_container_command_with_pid_file(
     container: &ContainerWorkspaceConfig,
     command: &str,
@@ -1019,17 +1120,21 @@ fn supervised_container_command_with_pid_file(
     let quoted_pid_file = crate::remote_ssh::shell::quote_arg(&pid_file);
     let quoted_command = crate::remote_ssh::shell::quote_arg(command);
     let quoted_shell = crate::remote_ssh::shell::quote_arg(&container.shell);
+    let sweep = stale_pid_file_sweep();
     format!(
-        "pid_file={quoted_pid_file}; \
+        "{sweep}\
+         pid_file={quoted_pid_file}; \
          child=; \
          tracking=1; \
          (umask 077; : > \"$pid_file\") 2>/dev/null || tracking=0; \
          remove_pid_file() {{ rm -f -- \"$pid_file\" 2>/dev/null || true; }}; \
          terminate_child() {{ \
            [ -n \"$child\" ] || return 0; \
-           kill -TERM -- \"-$child\" 2>/dev/null \
-             || kill -TERM \"$child\" 2>/dev/null \
-             || true; \
+           if kill -TERM -- \"-$child\" 2>/dev/null; then return 0; fi; \
+           if command -v pkill >/dev/null 2>&1; then \
+             pkill -TERM -P \"$child\" 2>/dev/null || true; \
+           fi; \
+           kill -TERM \"$child\" 2>/dev/null || true; \
          }}; \
          trap remove_pid_file EXIT; \
          trap 'terminate_child; exit 143' HUP TERM; \
@@ -1065,9 +1170,12 @@ fn container_signal_command(
          [ -s \"$pid_file\" ] || exit 75; \
          pid=$(cat \"$pid_file\" 2>/dev/null) || exit 75; \
          case \"$pid\" in ''|*[!0-9]*) exit 75;; esac; \
-         kill -{signal_name} -- \"-$pid\" 2>/dev/null \
-           || kill -{signal_name} \"$pid\" 2>/dev/null \
-           || true"
+         if kill -{signal_name} -- \"-$pid\" 2>/dev/null; then :; else \
+           if command -v pkill >/dev/null 2>&1; then \
+             pkill -{signal_name} -P \"$pid\" 2>/dev/null || true; \
+           fi; \
+           kill -{signal_name} \"$pid\" 2>/dev/null || true; \
+         fi"
     )
 }
 
@@ -1349,6 +1457,12 @@ fn parse_container_file_output(
 #[derive(Clone)]
 pub struct SSHConnectionManager {
     connections: Arc<tokio::sync::RwLock<HashMap<String, ActiveConnection>>>,
+    /// Reconnect serialization, keyed by connection id and deliberately held
+    /// *outside* `ActiveConnection`. Reconnect replaces the map entry wholesale,
+    /// so a lock stored inside it would be orphaned mid-flight: waiters would
+    /// hold a mutex nobody else takes and re-run the reconnect they were queued
+    /// behind.
+    reconnect_locks: Arc<tokio::sync::RwLock<HashMap<String, Arc<tokio::sync::Mutex<()>>>>>,
     saved_connections: Arc<tokio::sync::RwLock<Vec<SavedConnection>>>,
     config_path: std::path::PathBuf,
     /// Known hosts storage
@@ -1369,6 +1483,7 @@ impl SSHConnectionManager {
         let password_vault = std::sync::Arc::new(SSHPasswordVault::new(data_dir));
         Self {
             connections: Arc::new(tokio::sync::RwLock::new(HashMap::new())),
+            reconnect_locks: Arc::new(tokio::sync::RwLock::new(HashMap::new())),
             saved_connections: Arc::new(tokio::sync::RwLock::new(Vec::new())),
             config_path,
             known_hosts: Arc::new(tokio::sync::RwLock::new(HashMap::new())),
@@ -1852,23 +1967,32 @@ impl SSHConnectionManager {
                 )
                 .await
                 .context("Could not connect to the Docker host")?;
-            let handle = established
-                .handle
-                .ok_or_else(|| anyhow!("Docker host SSH handle is unavailable"))?;
-            let command = format!(
-                "{} ps -a --format {}",
-                crate::remote_ssh::shell::quote_arg(&container.docker_path),
-                crate::remote_ssh::shell::quote_arg(format)
-            );
-            let result = Self::execute_command_internal(
-                &handle,
-                &command,
-                SSHCommandOptions {
-                    timeout_ms: Some(config.options.connect_timeout_secs.max(1) * 1000),
-                    cancellation_token: None,
-                },
-            )
-            .await?;
+            // This session is never published to the connections map, so nothing
+            // else will ever close it: every exit below has to run through the
+            // shutdown, or listing containers leaks one server-side session per
+            // hop each time the connection dialog refreshes.
+            let outcome = match established.handle.as_ref() {
+                Some(handle) => {
+                    let command = format!(
+                        "{} ps -a --format {}",
+                        crate::remote_ssh::shell::quote_arg(&container.docker_path),
+                        crate::remote_ssh::shell::quote_arg(format)
+                    );
+                    Self::execute_command_internal(
+                        handle,
+                        &command,
+                        SSHCommandOptions {
+                            timeout_ms: Some(config.options.connect_timeout_secs.max(1) * 1000),
+                            cancellation_token: None,
+                        },
+                    )
+                    .await
+                }
+                None => Err(anyhow!("Docker host SSH handle is unavailable")),
+            };
+            Self::shutdown_established_session(established).await;
+
+            let result = outcome?;
             if result.exit_code != 0 {
                 anyhow::bail!(
                     "Docker container listing failed on SSH host: {}",
@@ -1949,28 +2073,43 @@ impl SSHConnectionManager {
                 for stage in &mut stages {
                     stage.success = true;
                 }
+                let server_info = established.server_info.clone();
+                let resolved_container_access = established
+                    .effective_config
+                    .container
+                    .as_ref()
+                    .map(|container| container.access.clone());
+                // A test connection is never registered, so this is the only
+                // place that can close it. Without this the dialog's "Test"
+                // button leaks one server-side session per hop, per click.
+                Self::shutdown_established_session(established).await;
                 ConnectionTestReport {
                     success: true,
                     stages,
-                    server_info: established.server_info,
-                    resolved_container_access: established
-                        .effective_config
-                        .container
-                        .map(|container| container.access),
+                    server_info,
+                    resolved_container_access,
                 }
             }
             Err(error) => {
                 let error_text = error.to_string();
+                let reported_stage = failed_stage_of(&error);
                 let failing_index = stages
                     .iter()
-                    .position(|stage| {
-                        (stage.id.starts_with("jump-") && error_text.contains(&stage.label))
-                            || (stage.id == "container"
-                                && (error_text.to_ascii_lowercase().contains("docker container")
-                                    || error_text.to_ascii_lowercase().contains("container sshd")))
-                            || (stage.id == "docker-host"
-                                && error_text.to_ascii_lowercase().contains("docker")
-                                && !error_text.to_ascii_lowercase().contains("container"))
+                    .position(|stage| match reported_stage {
+                        // The chain marker is authoritative: it survives two hops
+                        // sharing a label, which text matching does not.
+                        Some(reported) => stage.id == reported,
+                        None => {
+                            (stage.id.starts_with("jump-") && error_text.contains(&stage.label))
+                                || (stage.id == "container"
+                                    && (error_text.to_ascii_lowercase().contains("docker container")
+                                        || error_text
+                                            .to_ascii_lowercase()
+                                            .contains("container sshd")))
+                                || (stage.id == "docker-host"
+                                    && error_text.to_ascii_lowercase().contains("docker")
+                                    && !error_text.to_ascii_lowercase().contains("container"))
+                        }
                     })
                     .unwrap_or_else(|| stages.len().saturating_sub(1));
                 for stage in stages.iter_mut().take(failing_index) {
@@ -2313,21 +2452,27 @@ impl SSHConnectionManager {
         let connection_id = config.id.clone();
         let server_info = established.server_info.clone();
 
-        let mut guard = self.connections.write().await;
-        guard.insert(
-            connection_id.clone(),
-            ActiveConnection {
-                handle: established.handle.map(Arc::new),
-                jump_handles: established.jump_handles.into_iter().map(Arc::new).collect(),
-                config,
-                effective_config: established.effective_config,
-                server_info: server_info.clone(),
-                sftp_session: Arc::new(tokio::sync::RwLock::new(None)),
-                server_key: None,
-                alive: established.alive,
-                reconnect_lock: Arc::new(tokio::sync::Mutex::new(())),
-            },
-        );
+        let replaced = {
+            let mut guard = self.connections.write().await;
+            guard.insert(
+                connection_id.clone(),
+                ActiveConnection {
+                    handle: established.handle.map(Arc::new),
+                    jump_handles: established.jump_handles.into_iter().map(Arc::new).collect(),
+                    config,
+                    effective_config: established.effective_config,
+                    server_info: server_info.clone(),
+                    sftp_session: Arc::new(tokio::sync::RwLock::new(None)),
+                    server_key: None,
+                    alive: established.alive,
+                },
+            )
+        };
+        // Reconnecting under an id that is still live would otherwise strand the
+        // previous session (plus one per jump host) on the server.
+        if let Some(previous) = replaced {
+            Self::shutdown_active_connection(previous).await;
+        }
 
         Ok(SSHConnectionResult {
             success: true,
@@ -2357,6 +2502,10 @@ impl SSHConnectionManager {
                     return Ok(session);
                 }
             }
+            // Left untagged on purpose: this one call can fail as either stage
+            // (missing `docker` binary vs. a container that will not start), and
+            // the message-based fallback in `test_connection` already tells them
+            // apart. A blanket marker would make it always report "container".
             let server_info = self.probe_local_container(config, timeout_secs).await?;
             return Ok(EstablishedSession {
                 handle: None,
@@ -2367,10 +2516,15 @@ impl SSHConnectionManager {
             });
         }
 
-        let jumps = self.resolve_proxy_jump_chain(config).await?;
+        let jumps = self
+            .resolve_proxy_jump_chain(config)
+            .await
+            .map_err(|error| tag_failed_stage("configuration", error))?;
         if jumps.is_empty() {
-            let (handle, alive, mut server_info) =
-                self.establish_direct_session(config, timeout_secs).await?;
+            let (handle, alive, mut server_info) = self
+                .establish_direct_session(config, timeout_secs)
+                .await
+                .map_err(|error| tag_failed_stage("target", error))?;
             if config
                 .container
                 .as_ref()
@@ -2393,7 +2547,8 @@ impl SSHConnectionManager {
                 server_info = self
                     .probe_remote_container(&handle, config, timeout_secs)
                     .await
-                    .map(Some)?;
+                    .map(Some)
+                    .map_err(|error| tag_failed_stage("container", error))?;
             }
             return Ok(EstablishedSession {
                 handle: Some(handle),
@@ -2423,7 +2578,8 @@ impl SSHConnectionManager {
                     "Jump 1 ({}) connection or authentication failed",
                     connection_label(first)
                 )
-            })?;
+            })
+            .map_err(|error| tag_failed_stage("jump-1", error))?;
         let mut jump_handles = vec![first_handle];
 
         for (index, hop) in jumps.iter().enumerate().skip(1) {
@@ -2440,7 +2596,8 @@ impl SSHConnectionManager {
                         connection_label(hop),
                         index
                     )
-                })?;
+                })
+                .map_err(|error| tag_failed_stage(&format!("jump-{}", index + 1), error))?;
             let (handle, _, _) = self
                 .establish_stream_session(
                     hop,
@@ -2455,7 +2612,8 @@ impl SSHConnectionManager {
                         index + 1,
                         connection_label(hop)
                     )
-                })?;
+                })
+                .map_err(|error| tag_failed_stage(&format!("jump-{}", index + 1), error))?;
             jump_handles.push(handle);
         }
 
@@ -2471,7 +2629,8 @@ impl SSHConnectionManager {
                     connection_label(config),
                     jump_handles.len()
                 )
-            })?;
+            })
+            .map_err(|error| tag_failed_stage("target", error))?;
         let (handle, alive, mut server_info) = self
             .establish_stream_session(
                 config,
@@ -2485,7 +2644,8 @@ impl SSHConnectionManager {
                     "Final target {} SSH handshake or authentication failed",
                     connection_label(config)
                 )
-            })?;
+            })
+            .map_err(|error| tag_failed_stage("target", error))?;
         if config
             .container
             .as_ref()
@@ -2725,14 +2885,28 @@ impl SSHConnectionManager {
                         .as_ref()
                         .and_then(|entry| entry.certificate_file.clone()),
                 }
-            } else if matches!(
-                &config.auth,
-                SSHAuthMethod::Password { .. } | SSHAuthMethod::KeyboardInteractive { .. }
-            ) {
-                // Explicit runtime challenge responses may also be needed by a
-                // bastion. Per-hop users still come from the jump token/config;
-                // keys and certificates remain independently configurable in
-                // each Host block.
+            } else if matches!(&config.auth, SSHAuthMethod::KeyboardInteractive { .. }) {
+                // Keyboard-interactive answers are one host's challenge/response
+                // exchange — an OTP accepted by the bastion is not an OTP for the
+                // next hop. Replaying the same vector would fail at hop 2 with an
+                // opaque auth error, so say what is actually missing instead.
+                anyhow::bail!(
+                    "ProxyJump entry '{}' has no IdentityFile in ~/.ssh/config, and \
+                     keyboard-interactive responses cannot be reused across hops. \
+                     Add an IdentityFile for this jump host (or load its key into the \
+                     SSH agent) and try again.",
+                    value
+                );
+            } else if matches!(&config.auth, SSHAuthMethod::Password { .. }) {
+                // Falling back to the target's password is the only thing left
+                // when a bastion has no key configured, but it does hand that
+                // password to every hop — the UI warns about this.
+                log::warn!(
+                    "ProxyJump entry '{}' has no IdentityFile; reusing the target's password \
+                     for this hop. Configure a per-host IdentityFile to avoid sending the \
+                     password to the bastion.",
+                    value
+                );
                 config.auth.clone()
             } else {
                 SSHAuthMethod::Agent {
@@ -3193,17 +3367,114 @@ impl SSHConnectionManager {
         Ok(result)
     }
 
+    /// Per-connection reconnect mutex, created on first use.
+    async fn reconnect_lock_for(&self, connection_id: &str) -> Arc<tokio::sync::Mutex<()>> {
+        if let Some(lock) = self.reconnect_locks.read().await.get(connection_id) {
+            return lock.clone();
+        }
+        self.reconnect_locks
+            .write()
+            .await
+            .entry(connection_id.to_string())
+            .or_insert_with(|| Arc::new(tokio::sync::Mutex::new(())))
+            .clone()
+    }
+
+    /// Send SSH_MSG_DISCONNECT before letting a handle drop.
+    ///
+    /// Dropping a russh `Handle` only closes the socket. The server has no way
+    /// to tell that from a network partition, so it keeps the session — and its
+    /// PTYs, forwardings and `MaxSessions` slot — until its own timeout fires.
+    async fn shutdown_handle(handle: &Handle<SSHHandler>) {
+        // Bounded: `disconnect` queues onto the session loop's channel, and a
+        // loop wedged on an unwritable socket would never drain it. This runs on
+        // app shutdown and on every reconnect, neither of which may block on a
+        // peer that has stopped reading. A missed goodbye packet costs one
+        // server-side session until its timeout — the status quo — while a hang
+        // here costs the whole shutdown.
+        match tokio::time::timeout(
+            SSH_DISCONNECT_TIMEOUT,
+            handle.disconnect(russh::Disconnect::ByApplication, "client closing", "en"),
+        )
+        .await
+        {
+            Ok(Ok(())) => {}
+            Ok(Err(error)) => {
+                log::debug!("SSH disconnect message could not be sent: {}", error)
+            }
+            Err(_) => log::debug!(
+                "SSH disconnect message timed out after {:?}; dropping the transport",
+                SSH_DISCONNECT_TIMEOUT
+            ),
+        }
+    }
+
+    /// Tear down a whole hop chain, target first.
+    ///
+    /// Order matters with ProxyJump: every hop carries the next one's stream, so
+    /// closing hop 1 first would cut the channel the later disconnects still
+    /// have to travel over and turn an orderly shutdown back into N abandoned
+    /// sessions.
+    async fn shutdown_handle_chain(handles: Vec<&Handle<SSHHandler>>) {
+        for handle in handles {
+            Self::shutdown_handle(handle).await;
+        }
+    }
+
+    /// Ordered handle chain of an `ActiveConnection`: target, then jump hosts
+    /// from the last hop backwards.
+    fn active_handle_chain(connection: &ActiveConnection) -> Vec<&Handle<SSHHandler>> {
+        let mut chain: Vec<&Handle<SSHHandler>> = Vec::with_capacity(
+            connection.jump_handles.len() + usize::from(connection.handle.is_some()),
+        );
+        chain.extend(connection.handle.as_deref());
+        chain.extend(connection.jump_handles.iter().rev().map(Arc::as_ref));
+        chain
+    }
+
+    /// Same ordering for a session that was never published to the map.
+    fn established_handle_chain(session: &EstablishedSession) -> Vec<&Handle<SSHHandler>> {
+        let mut chain: Vec<&Handle<SSHHandler>> =
+            Vec::with_capacity(session.jump_handles.len() + usize::from(session.handle.is_some()));
+        chain.extend(session.handle.as_ref());
+        chain.extend(session.jump_handles.iter().rev());
+        chain
+    }
+
+    async fn shutdown_active_connection(connection: ActiveConnection) {
+        Self::shutdown_handle_chain(Self::active_handle_chain(&connection)).await;
+    }
+
+    async fn shutdown_established_session(session: EstablishedSession) {
+        Self::shutdown_handle_chain(Self::established_handle_chain(&session)).await;
+    }
+
     /// Disconnect from a server
     pub async fn disconnect(&self, connection_id: &str) -> anyhow::Result<()> {
-        let mut guard = self.connections.write().await;
-        guard.remove(connection_id);
+        // Drop the map lock before the network round-trip: the disconnect below
+        // awaits, and holding the write lock across it would block every other
+        // connection's exec/SFTP entry point.
+        let removed = {
+            let mut guard = self.connections.write().await;
+            guard.remove(connection_id)
+        };
+        self.reconnect_locks.write().await.remove(connection_id);
+        if let Some(connection) = removed {
+            Self::shutdown_active_connection(connection).await;
+        }
         Ok(())
     }
 
     /// Disconnect all connections
     pub async fn disconnect_all(&self) {
-        let mut guard = self.connections.write().await;
-        guard.clear();
+        let removed: Vec<ActiveConnection> = {
+            let mut guard = self.connections.write().await;
+            guard.drain().map(|(_, connection)| connection).collect()
+        };
+        self.reconnect_locks.write().await.clear();
+        for connection in removed {
+            Self::shutdown_active_connection(connection).await;
+        }
     }
 
     /// Check if connected.
@@ -3332,20 +3603,13 @@ impl SSHConnectionManager {
             .load_connection_config_from_saved(connection_id)
             .await?;
 
-        let (alive_flag, reconnect_lock, active_config) = {
+        let reconnect_lock = self.reconnect_lock_for(connection_id).await;
+        let (alive_flag, active_config) = {
             let guard = self.connections.read().await;
             if let Some(conn) = guard.get(connection_id) {
-                (
-                    conn.alive.clone(),
-                    conn.reconnect_lock.clone(),
-                    Some(conn.config.clone()),
-                )
+                (conn.alive.clone(), Some(conn.config.clone()))
             } else {
-                (
-                    Arc::new(AtomicBool::new(false)),
-                    Arc::new(tokio::sync::Mutex::new(())),
-                    None,
-                )
+                (Arc::new(AtomicBool::new(false)), None)
             }
         };
 
@@ -3375,18 +3639,25 @@ impl SSHConnectionManager {
 
         // Serialize concurrent reconnect attempts for the same connection.
         let _guard = reconnect_lock.lock().await;
-        // Re-check under lock; another task may have already restored the session.
-        if alive_flag.load(Ordering::SeqCst) {
-            // Re-check config drift under lock as well.
-            if let Some(ref saved) = saved_config {
-                let guard = self.connections.read().await;
-                if let Some(conn) = guard.get(connection_id) {
-                    if saved.connection_params_equal(&conn.config) {
-                        return Ok(());
+        // Re-check under lock; another task may have already restored the
+        // session. The flag has to be re-read from the map, not from the Arc
+        // captured above: a successful reconnect installs a *new* `alive` Arc,
+        // leaving the captured one false forever. Trusting it would make every
+        // waiter queued behind the lock reconnect all over again — the exact
+        // stampede this lock exists to prevent.
+        {
+            let guard = self.connections.read().await;
+            if let Some(conn) = guard.get(connection_id) {
+                if conn.alive.load(Ordering::SeqCst) {
+                    match saved_config {
+                        Some(ref saved) if saved.connection_params_equal(&conn.config) => {
+                            return Ok(())
+                        }
+                        None => return Ok(()),
+                        // Still drifted: fall through and reconnect.
+                        Some(_) => {}
                     }
                 }
-            } else {
-                return Ok(());
             }
         }
 
@@ -3450,9 +3721,15 @@ impl SSHConnectionManager {
         // Replace the handle, update the config to the latest saved version,
         // and clear the cached SFTP session so subsequent operations open a
         // fresh channel on the new transport.
-        {
+        // Handles the reconnect displaces still have to be told goodbye: the
+        // session is usually dead, but "usually" covers neither config drift
+        // (where the old session is perfectly healthy) nor a half-open link the
+        // server still counts against its session limit.
+        let (stale_handle, stale_jump_handles) = {
             let mut guard = self.connections.write().await;
             if let Some(conn) = guard.get_mut(connection_id) {
+                let stale_handle = conn.handle.take();
+                let stale_jump_handles = std::mem::take(&mut conn.jump_handles);
                 conn.handle = established.handle.map(Arc::new);
                 conn.jump_handles = established.jump_handles.into_iter().map(Arc::new).collect();
                 conn.config = config;
@@ -3463,8 +3740,9 @@ impl SSHConnectionManager {
                 }
                 let mut sftp_guard = conn.sftp_session.write().await;
                 *sftp_guard = None;
+                (stale_handle, stale_jump_handles)
             } else {
-                guard.insert(
+                let replaced = guard.insert(
                     connection_id.to_string(),
                     ActiveConnection {
                         handle: established.handle.map(Arc::new),
@@ -3475,11 +3753,31 @@ impl SSHConnectionManager {
                         sftp_session: Arc::new(tokio::sync::RwLock::new(None)),
                         server_key: None,
                         alive: established.alive,
-                        reconnect_lock: Arc::new(tokio::sync::Mutex::new(())),
                     },
                 );
+                match replaced {
+                    Some(previous) => (previous.handle, previous.jump_handles),
+                    None => (None, Vec::new()),
+                }
             }
-        }
+        };
+        // Skip any handle another task still holds. Reconnect is automatic and
+        // can fire on config drift while the *old* session is perfectly healthy
+        // and carrying an in-flight exec or PTY; sending a goodbye there would
+        // kill that command. Those handles simply drop when their user finishes,
+        // which is the pre-existing behaviour. An explicit `disconnect()` has no
+        // such guard — ending in-flight work is what the user asked for.
+        let unused = |handle: &&Arc<Handle<SSHHandler>>| Arc::strong_count(handle) == 1;
+        let mut stale_chain: Vec<&Handle<SSHHandler>> = Vec::new();
+        stale_chain.extend(stale_handle.iter().filter(unused).map(Arc::as_ref));
+        stale_chain.extend(
+            stale_jump_handles
+                .iter()
+                .rev()
+                .filter(|handle| Arc::strong_count(handle) == 1)
+                .map(Arc::as_ref),
+        );
+        Self::shutdown_handle_chain(stale_chain).await;
 
         log::info!("SSH session {} reconnected successfully", connection_id);
         Ok(())
@@ -3940,9 +4238,12 @@ impl SSHConnectionManager {
         );
         let quoted_temporary = crate::remote_ssh::shell::quote_arg(&temporary);
         let quoted_path = crate::remote_ssh::shell::quote_arg(&path);
+        let quoted_parent = crate::remote_ssh::shell::quote_arg(parent);
         let expected_size = content.len();
+        let sweep = stale_upload_sweep(&quoted_parent);
         let command = format!(
-            "tmp={quoted_temporary}; target={quoted_path}; expected={expected_size}; \
+            "{sweep} \
+             tmp={quoted_temporary}; target={quoted_path}; expected={expected_size}; \
              cleanup() {{ rm -f -- \"$tmp\"; }}; trap cleanup EXIT HUP INT TERM; \
              umask 077; status=0; cat > \"$tmp\" || status=$?; \
              if [ \"$status\" -eq 0 ]; then \
@@ -4596,6 +4897,10 @@ impl SSHConnectionManager {
                 .container
                 .as_ref()
                 .expect("docker exec connection must have container config");
+            // `<shell> -lc <shell>` looks like a shell inside a shell, but the
+            // outer one execs the inner as the final simple command of `-c`, so
+            // one process ends up on the PTY — with the login profile already
+            // sourced, which a bare `docker exec -it … sh` would skip.
             let command = docker_exec_host_command(container, &container.shell, true);
             channel
                 .exec(false, command)
@@ -5022,6 +5327,58 @@ mod tests {
             docker_exec_host_command(&container, "printf '%s' \"$HOME\"", false),
             "'/opt/docker cli' 'exec' '-i' '--user' 'build user' 'dev container' '/bin/bash' '-lc' 'printf '\\''%s'\\'' \"$HOME\"'"
         );
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn pid_file_sweep_spares_processes_that_are_still_running() {
+        // The whole point of the pid file is cancellation, so removing one that
+        // is still in use silently breaks interrupt/kill for a command that may
+        // legitimately run for hours. Liveness, never age.
+        let live = format!("/tmp/.bitfun-exec-live-{}.pid", uuid::Uuid::new_v4());
+        let dead = format!("/tmp/.bitfun-exec-dead-{}.pid", uuid::Uuid::new_v4());
+        std::fs::write(&live, std::process::id().to_string()).expect("write live pid file");
+        // Reaped immediately, so its pid is guaranteed not to be running.
+        let mut corpse = std::process::Command::new("true")
+            .spawn()
+            .expect("spawn short-lived process");
+        let dead_pid = corpse.id();
+        corpse.wait().expect("reap");
+        std::fs::write(&dead, dead_pid.to_string()).expect("write dead pid file");
+
+        let output = std::process::Command::new("sh")
+            .args(["-lc", &stale_pid_file_sweep()])
+            .output()
+            .expect("run sweep");
+
+        assert!(output.status.success());
+        let live_exists = std::path::Path::new(&live).exists();
+        let dead_exists = std::path::Path::new(&dead).exists();
+        let _ = std::fs::remove_file(&live);
+        let _ = std::fs::remove_file(&dead);
+        assert!(live_exists, "a running command's pid file must survive");
+        assert!(!dead_exists, "an orphaned pid file must be removed");
+    }
+
+    #[test]
+    fn stage_tagging_is_readable_without_changing_the_error_text() {
+        let original = anyhow!("Jump 1 (deploy@bastion:22) connection or authentication failed")
+            .context("Could not connect to the Docker host");
+        let expected_display = format!("{original}");
+        let expected_alternate = format!("{original:#}");
+
+        let tagged = tag_failed_stage("jump-1", original);
+
+        // The tag exists only for attribution. An anyhow *context* would have
+        // replaced the message the user sees with "connection stage 'jump-1'".
+        assert_eq!(failed_stage_of(&tagged), Some("jump-1"));
+        assert_eq!(format!("{tagged}"), expected_display);
+        assert_eq!(format!("{tagged:#}"), expected_alternate);
+
+        // Still findable once a caller layers its own context on top.
+        let wrapped = tagged.context("Workspace connection failed");
+        assert_eq!(failed_stage_of(&wrapped), Some("jump-1"));
+        assert_eq!(format!("{wrapped}"), "Workspace connection failed");
     }
 
     #[test]

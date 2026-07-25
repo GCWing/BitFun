@@ -1312,6 +1312,7 @@
       "proxyJump": "Jump hosts (ProxyJump)",
       "proxyJumpPlaceholder": "jump1,jump2",
       "proxyJumpHint": "Comma-separated SSH config aliases or [user@]host[:port]. Each hop can use its own User and IdentityFile from ~/.ssh/config.",
+      "proxyJumpPasswordWarning": "A jump host with no IdentityFile in ~/.ssh/config will be sent this password. Give each hop its own key if you do not fully trust it.",
       "via": "via",
       "containerName": "Container name or ID",
       "containerNamePlaceholder": "my-dev-container",

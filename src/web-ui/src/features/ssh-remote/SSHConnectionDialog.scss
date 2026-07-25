@@ -387,6 +387,10 @@
     font-size: 11px;
     line-height: 1.45;
     color: var(--color-text-muted);
+
+    &--warning {
+      color: var(--color-warning);
+    }
   }
 
   &__browse-key {

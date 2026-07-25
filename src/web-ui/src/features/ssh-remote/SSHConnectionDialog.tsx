@@ -1227,6 +1227,17 @@ export const SSHConnectionDialog: React.FC<SSHConnectionDialogProps> = ({
                         <div className="ssh-connection-dialog__hint">
                           {t('ssh.remote.proxyJumpHint')}
                         </div>
+                        {/*
+                          A hop without its own IdentityFile falls back to this
+                          connection's credentials, so the bastion sees the
+                          target's password. Worth saying out loud before it is
+                          sent, not after.
+                        */}
+                        {formData.proxyJump.trim() && formData.authType === 'password' && (
+                          <div className="ssh-connection-dialog__hint ssh-connection-dialog__hint--warning">
+                            {t('ssh.remote.proxyJumpPasswordWarning')}
+                          </div>
+                        )}
                       </div>
 
                       <div className="ssh-connection-dialog__connection-options">
