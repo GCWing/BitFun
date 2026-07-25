@@ -1041,12 +1041,16 @@ const DEFAULT_PRODUCT_CAPABILITY_PACKS: &[ProductCapabilityPack] = &[
         INTEGRATION_TOOL_GROUPS,
         MINIAPP_HARNESS_PROVIDERS,
     ),
-    ProductCapabilityPack::new(
-        ProductCapabilityId::Canvas,
-        CANVAS_SERVICES,
-        CANVAS_TOOL_GROUPS,
-        NO_HARNESS_PROVIDERS,
-    ),
+    // Canvas pack disabled: canvas-runtime cannot be compiled on the OHOS
+    // target (oxc dependency), and the core.canvas provider group would
+    // trigger materialization panics. Re-enable when canvas-runtime is
+    // available on all supported targets.
+    // ProductCapabilityPack::new(
+    //     ProductCapabilityId::Canvas,
+    //     CANVAS_SERVICES,
+    //     CANVAS_TOOL_GROUPS,
+    //     NO_HARNESS_PROVIDERS,
+    // ),
 ];
 const EMPTY_PRODUCT_CAPABILITY_PACKS: &[ProductCapabilityPack] = &[];
 
