@@ -40,6 +40,8 @@ export class MouseGlowService {
   private pointerY = 0;
   private pendingElements: HTMLElement[] | null = null;
   private pendingSurface: HTMLElement | null = null;
+  /// Set by scroll/resize, consumed by the next frame. See `handleViewportChange`.
+  private resolveFromPointerPosition = false;
   private activeSurface: HTMLElement | null = null;
   private overlay: HTMLDivElement | null = null;
   private reducedMotionQuery: MediaQueryList | null = null;
@@ -51,11 +53,18 @@ export class MouseGlowService {
     }
 
     this.initialized = true;
+    const previousEnabled = this.enabled;
     this.enabled = this.readStoredPreference();
     this.reducedMotionQuery = window.matchMedia?.('(prefers-reduced-motion: reduce)') ?? null;
     this.overlay = this.ensureOverlay();
 
     this.applyEnabledState();
+    // Subscribers that attached before the stored preference was read are still
+    // showing the default. Without this the settings toggle can sit on "on"
+    // while the glow is off, for as long as nothing else emits.
+    if (previousEnabled !== this.enabled) {
+      this.emit();
+    }
     window.addEventListener('pointermove', this.handlePointerMove, { passive: true });
     window.addEventListener('pointerout', this.handlePointerOut, { passive: true });
     window.addEventListener('resize', this.handleViewportChange, { passive: true });
@@ -115,13 +124,12 @@ export class MouseGlowService {
     this.pointerX = event.clientX;
     this.pointerY = event.clientY;
     const path = event.composedPath?.() ?? [];
-    const elements = path.filter(
+    // Leaving the old surface visible until the frame resolves the new one:
+    // hiding here first made the glow disappear for a frame every time the
+    // pointer crossed from one card to the one next to it.
+    this.pendingElements = path.filter(
       (item): item is HTMLElement => item instanceof HTMLElement
     );
-    if (this.activeSurface && !elements.includes(this.activeSurface)) {
-      this.deactivateSurface();
-    }
-    this.pendingElements = elements;
     this.pendingSurface = null;
     this.scheduleFrame();
   };
@@ -133,11 +141,19 @@ export class MouseGlowService {
       return;
     }
 
-    if (
-      !(relatedTarget instanceof Node)
-      || (this.activeSurface && !this.activeSurface.contains(relatedTarget))
-    ) {
+    if (!(relatedTarget instanceof Node)) {
       this.deactivateSurface();
+      return;
+    }
+
+    if (this.activeSurface && !this.activeSurface.contains(relatedTarget)) {
+      // Same reason as above — resolve where the pointer went instead of
+      // blanking the overlay and waiting for the next `pointermove`.
+      this.pendingElements = relatedTarget instanceof Element
+        ? this.getAncestorElements(relatedTarget)
+        : null;
+      this.pendingSurface = null;
+      this.scheduleFrame();
     }
   };
 
@@ -146,11 +162,11 @@ export class MouseGlowService {
       return;
     }
 
-    const pointerTarget = document.elementFromPoint?.(this.pointerX, this.pointerY) ?? null;
-    this.pendingElements = pointerTarget
-      ? this.getAncestorElements(pointerTarget)
-      : null;
-    this.pendingSurface = pointerTarget ? null : this.activeSurface;
+    // Only flag the work. `elementFromPoint` forces a layout, and this listener
+    // is registered with `capture: true`, so it runs for every scroll event from
+    // every scrollable descendant — well over 60 a second on a trackpad. Doing
+    // the hit test in the frame callback collapses that back to once per frame.
+    this.resolveFromPointerPosition = true;
     this.scheduleFrame();
   };
 
@@ -189,6 +205,7 @@ export class MouseGlowService {
     }
     this.pendingElements = null;
     this.pendingSurface = null;
+    this.resolveFromPointerPosition = false;
     this.deactivateSurface();
   }
 
@@ -210,10 +227,21 @@ export class MouseGlowService {
 
     this.frameId = window.requestAnimationFrame(() => {
       this.frameId = null;
+      if (this.resolveFromPointerPosition) {
+        this.resolveFromPointerPosition = false;
+        // Post-scroll layout, so this is the authoritative answer for where the
+        // pointer now is — it supersedes anything a `pointermove` queued.
+        const pointerTarget = document.elementFromPoint?.(this.pointerX, this.pointerY) ?? null;
+        this.pendingElements = pointerTarget
+          ? this.getAncestorElements(pointerTarget)
+          : null;
+        this.pendingSurface = pointerTarget ? null : this.activeSurface;
+      }
       const surface = this.pendingElements
         ? this.findSurface(this.pendingElements)
         : this.pendingSurface;
       this.pendingElements = null;
+      this.pendingSurface = null;
       this.updateOverlay(surface);
     });
   }
@@ -339,30 +367,39 @@ export class MouseGlowService {
   }
 
   private findSurface(elements: HTMLElement[]): HTMLElement | null {
-    if (
-      elements.some(element =>
-        element.hasAttribute('data-mouse-glow-ignore')
-        || this.isResizeInteractionElement(element)
-      )
-    ) {
-      return null;
+    // Single pass, one `getComputedStyle` per element. The resize/ignore guard
+    // has to see the whole path while the surface search stops at the first
+    // match, but both need the same style object — reading it in two separate
+    // passes doubled the style work on every frame.
+    let surface: HTMLElement | null = null;
+
+    for (const element of elements) {
+      const style = window.getComputedStyle(element);
+      if (element.hasAttribute('data-mouse-glow-ignore') || this.isResizeCursor(style)) {
+        return null;
+      }
+      if (surface) {
+        continue;
+      }
+      // The event path is ordered from the deepest target outward, so the first
+      // matching visual boundary is also the most specific one under the pointer.
+      if (
+        this.isDividerSurface(element, style)
+        || element.hasAttribute('data-mouse-glow-surface')
+        || this.isAutomaticSurface(element, style, this.hasSemanticSurfaceClass(element))
+      ) {
+        surface = element;
+      }
     }
 
-    // The event path is ordered from the deepest target outward, so the first
-    // matching visual boundary is also the most specific one under the pointer.
-    return elements.find(element => {
-      if (this.isDividerSurface(element)) {
-        return true;
-      }
-      if (element.hasAttribute('data-mouse-glow-surface')) {
-        return true;
-      }
-      const hasSemanticClass = this.hasSemanticSurfaceClass(element);
-      return this.isAutomaticSurface(element, hasSemanticClass);
-    }) ?? null;
+    return surface;
   }
 
-  private isAutomaticSurface(element: HTMLElement, hasSemanticClass: boolean): boolean {
+  private isAutomaticSurface(
+    element: HTMLElement,
+    style: CSSStyleDeclaration,
+    hasSemanticClass: boolean,
+  ): boolean {
     if (
       element === document.body
       || element === this.overlay
@@ -376,7 +413,6 @@ export class MouseGlowService {
       return false;
     }
 
-    const style = window.getComputedStyle(element);
     if (!this.isVisibleElement(style)) {
       return false;
     }
@@ -396,7 +432,7 @@ export class MouseGlowService {
     return hasSemanticClass && hasRoundedCorners && hasBackground;
   }
 
-  private isDividerSurface(element: HTMLElement): boolean {
+  private isDividerSurface(element: HTMLElement, style: CSSStyleDeclaration): boolean {
     if (
       element === document.body
       || element === this.overlay
@@ -406,7 +442,6 @@ export class MouseGlowService {
     }
 
     const rect = element.getBoundingClientRect();
-    const style = window.getComputedStyle(element);
     if (!this.isVisibleElement(style)) {
       return false;
     }
@@ -508,8 +543,8 @@ export class MouseGlowService {
     return style.boxShadow !== 'none' && /\binset\b/i.test(style.boxShadow);
   }
 
-  private isResizeInteractionElement(element: HTMLElement): boolean {
-    return /(?:^|-)resize$/i.test(window.getComputedStyle(element).cursor);
+  private isResizeCursor(style: CSSStyleDeclaration): boolean {
+    return /(?:^|-)resize$/i.test(style.cursor);
   }
 
   private findOverlayHost(surface: HTMLElement): HTMLElement {

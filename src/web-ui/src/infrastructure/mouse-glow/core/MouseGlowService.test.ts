@@ -112,7 +112,7 @@ describe('MouseGlowService', () => {
     surface.remove();
   });
 
-  it('clears the previous glow immediately when the pointer leaves its surface', () => {
+  it('keeps the glow up until the frame resolves where the pointer went', () => {
     const surface = document.createElement('div');
     surface.setAttribute('data-mouse-glow-surface', '');
     surface.getBoundingClientRect = () => ({
@@ -146,10 +146,67 @@ describe('MouseGlowService', () => {
       clientY: 68,
     }));
 
+    // Deliberately still visible: hiding here and showing the next surface one
+    // frame later blanked the glow for a frame on every card-to-card crossing.
+    expect(overlay?.hasAttribute('data-active')).toBe(true);
+
+    nextFrame?.(0);
+
     expect(overlay?.hasAttribute('data-active')).toBe(false);
     expect(overlay?.hidden).toBe(true);
     surface.remove();
     plainElement.remove();
+  });
+
+  it('moves the glow between adjacent surfaces without a hidden frame', () => {
+    const makeSurface = (left: number): HTMLElement => {
+      const element = document.createElement('div');
+      element.setAttribute('data-mouse-glow-surface', '');
+      element.getBoundingClientRect = () => ({
+        bottom: 128,
+        height: 80,
+        left,
+        right: left + 200,
+        top: 48,
+        width: 200,
+        x: left,
+        y: 48,
+        toJSON: () => ({}),
+      });
+      return element;
+    };
+    const first = makeSurface(20);
+    const second = makeSurface(240);
+    document.body.append(first, second);
+    service.initialize();
+
+    first.dispatchEvent(new MouseEvent('pointermove', {
+      bubbles: true,
+      clientX: 72,
+      clientY: 68,
+    }));
+    nextFrame?.(0);
+
+    const overlay = document.getElementById('bitfun-mouse-glow-overlay');
+    expect(overlay?.hasAttribute('data-active')).toBe(true);
+
+    first.dispatchEvent(new PointerEvent('pointerout', {
+      bubbles: true,
+      relatedTarget: second,
+    }));
+    expect(overlay?.hasAttribute('data-active')).toBe(true);
+
+    second.dispatchEvent(new MouseEvent('pointermove', {
+      bubbles: true,
+      clientX: 300,
+      clientY: 68,
+    }));
+    nextFrame?.(0);
+
+    expect(overlay?.hasAttribute('data-active')).toBe(true);
+    expect(overlay?.hidden).toBe(false);
+    first.remove();
+    second.remove();
   });
 
   it('clears the glow when the pointer enters an iframe', () => {

@@ -80,8 +80,17 @@
     transparent
   );
 
+  /**
+   * Every filter here re-rasterizes an element whose background is rewritten on
+   * each pointer frame, so the chain is kept as short as the look allows.
+   *
+   * `saturate`/`brightness` are load-bearing: on a light background the plain
+   * accent mix reads as washed-out grey-blue, and no `color-mix` of the accent
+   * token reproduces the boosted result. `hue-rotate(4deg)` did not survive that
+   * test — a four-degree shift is invisible once `saturate` has already clipped
+   * the blue channel, so it was pure cost.
+   */
   filter:
-    hue-rotate(4deg)
     saturate(2.65)
     brightness(1.2)
     drop-shadow(0 0 8px var(--mouse-glow-shadow));
