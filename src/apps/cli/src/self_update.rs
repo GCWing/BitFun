@@ -1,5 +1,6 @@
 use anyhow::{anyhow, Context, Result};
 use flate2::read::GzDecoder;
+use futures_util::StreamExt;
 use reqwest::Client;
 use serde::Deserialize;
 use sha2::{Digest, Sha256};
@@ -7,16 +8,38 @@ use std::fs;
 use std::io::Cursor;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
-use std::time::{Duration, SystemTime};
+use std::time::{Duration, Instant, SystemTime};
 use tar::Archive;
 
 const GITHUB_MANIFEST: &str =
     "https://github.com/GCWing/BitFun/releases/latest/download/linux-binaries.json";
 const OPENBITFUN_MANIFEST: &str = "https://openbitfun.com/release/linux-binaries.json";
 const AUTO_CHECK_INTERVAL: Duration = Duration::from_secs(6 * 60 * 60);
-/// Hard ceiling on how long an automatic check may delay interactive startup.
-const AUTO_UPDATE_BUDGET: Duration = Duration::from_secs(90);
 const DEPRECATION_WARNING: &str = "Warning: `bitfun-cli` is deprecated; use `bitfun` instead.";
+
+/// Ranked-source download tuning. Mirrors the relay deploy path in
+/// `src/crates/services/services-integrations/src/remote_ssh/relay_deploy.rs`,
+/// which solves the same problem on the server side; keep the two in step.
+///
+/// A fixed-length ranged request measures throughput: bytes delivered inside
+/// the window *is* the speed estimate, so one probe per source ranks them all.
+const PROBE_WINDOW: Duration = Duration::from_secs(10);
+const PROBE_BYTES: u64 = 4 * 1024 * 1024;
+/// A source at or above this is used without hesitation.
+const HEALTHY_THROUGHPUT: u64 = 128 * 1024;
+/// Sustained below this counts as a dead link and we fail over. Deliberately
+/// far under the healthy bar: a genuinely slow but only available source must
+/// still be allowed to finish rather than loop forever.
+const STALL_THROUGHPUT: u64 = 8 * 1024;
+const STALL_WINDOW: Duration = Duration::from_secs(30);
+/// Per-chunk read ceiling. Replaces a whole-request timeout, which made success
+/// depend on archive size over link speed: a 30 MB archive under a 120 s total
+/// timeout simply could not be fetched below ~250 KB/s, from any source.
+const READ_TIMEOUT: Duration = Duration::from_secs(30);
+/// Manifests are a few KB, so they may carry a total ceiling; archives may not.
+const MANIFEST_TIMEOUT: Duration = Duration::from_secs(20);
+/// Ceiling for the whole startup-path check, which precedes the first paint.
+const AUTO_CHECK_BUDGET: Duration = Duration::from_secs(10);
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -50,6 +73,11 @@ pub(crate) enum UpdateOutcome {
 }
 
 pub(crate) async fn run_manual(check_only: bool) -> Result<UpdateOutcome> {
+    let _lock = if check_only {
+        None
+    } else {
+        Some(InstallLock::acquire()?)
+    };
     let outcome = update_from_configured_sources(check_only).await?;
     match outcome {
         UpdateOutcome::Current => {
@@ -67,23 +95,114 @@ pub(crate) async fn run_manual(check_only: bool) -> Result<UpdateOutcome> {
     Ok(outcome)
 }
 
+/// Startup-path update check.
+///
+/// This only fetches the manifest — a few KB, fast even on a crawling link —
+/// and hands the multi-megabyte archive to a detached child. Interactive launch
+/// must never sit behind a transfer whose duration is set by the user's
+/// bandwidth; the previous inline download could hold the TUI for minutes.
 pub(crate) async fn maybe_run_automatic() {
     if !automatic_update_is_eligible() || !automatic_check_is_due() {
         return;
     }
     mark_automatic_check();
-    // Interactive startup must never wait on the network longer than this, no
-    // matter how slowly a mirror trickles the archive out.
-    match tokio::time::timeout(AUTO_UPDATE_BUDGET, update_from_configured_sources(false)).await {
-        Ok(Ok(UpdateOutcome::Updated)) => eprintln!(
-            "BitFun CLI updated in the background. The new version will be used next time."
+
+    let client = match build_client() {
+        Ok(client) => client,
+        Err(error) => {
+            tracing::debug!("Automatic CLI update check skipped: {error}");
+            return;
+        }
+    };
+    // Even a manifest fetch gets a tight leash here: this runs before the TUI
+    // paints, and a check that is 6 hours overdue can wait for the next launch.
+    let Ok((manifests, errors)) =
+        tokio::time::timeout(AUTO_CHECK_BUDGET, fetch_manifests(&client)).await
+    else {
+        tracing::debug!("Automatic CLI update check timed out; continuing startup.");
+        return;
+    };
+    if manifests.is_empty() {
+        tracing::debug!("Automatic CLI update check failed: {}", errors.join("; "));
+        return;
+    }
+    let newest = newest_version(&manifests);
+    if !is_newer_version(&newest, env!("CARGO_PKG_VERSION")) {
+        return;
+    }
+
+    match spawn_detached_install() {
+        Ok(true) => eprintln!(
+            "BitFun CLI {newest} is downloading in the background; it will be used next launch."
         ),
-        Ok(Ok(_)) => {}
-        Ok(Err(error)) => tracing::debug!("Automatic CLI update check failed: {error}"),
-        Err(_) => tracing::debug!(
-            "Automatic CLI update check exceeded {}s; continuing startup.",
-            AUTO_UPDATE_BUDGET.as_secs()
-        ),
+        Ok(false) => tracing::debug!("A CLI update is already in progress; skipping."),
+        Err(error) => tracing::debug!("Could not start background CLI update: {error}"),
+    }
+}
+
+/// Run `bitfun update` detached so it outlives this process. Returns false when
+/// another install already holds the lock.
+fn spawn_detached_install() -> Result<bool> {
+    if InstallLock::is_held() {
+        return Ok(false);
+    }
+    let exe = std::env::current_exe().context("resolve current BitFun CLI executable")?;
+    Command::new(exe)
+        .arg("update")
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()
+        .context("spawn background CLI update")?;
+    Ok(true)
+}
+
+/// Guards against two `bitfun update` runs swapping the binaries at once.
+struct InstallLock {
+    path: PathBuf,
+}
+
+impl InstallLock {
+    fn path() -> Option<PathBuf> {
+        crate::config::CliConfig::config_dir()
+            .ok()
+            .map(|dir| dir.join("update.lock"))
+    }
+
+    /// A lock older than this is treated as abandoned by a killed process.
+    const STALE_AFTER: Duration = Duration::from_secs(60 * 60);
+
+    fn is_held() -> bool {
+        let Some(path) = Self::path() else {
+            return false;
+        };
+        let Ok(modified) = fs::metadata(&path).and_then(|meta| meta.modified()) else {
+            return false;
+        };
+        SystemTime::now()
+            .duration_since(modified)
+            .is_ok_and(|age| age < Self::STALE_AFTER)
+    }
+
+    fn acquire() -> Result<Self> {
+        let path =
+            Self::path().ok_or_else(|| anyhow!("cannot resolve the CLI update lock location"))?;
+        if Self::is_held() {
+            return Err(anyhow!(
+                "another BitFun CLI update is already running ({})",
+                path.display()
+            ));
+        }
+        let _ = fs::remove_file(&path);
+        fs::write(&path, std::process::id().to_string())
+            .with_context(|| format!("create {}", path.display()))?;
+        Ok(Self { path })
+    }
+}
+
+impl Drop for InstallLock {
+    fn drop(&mut self) {
+        let _ = fs::remove_file(&self.path);
     }
 }
 
@@ -96,76 +215,176 @@ async fn update_from_configured_sources(check_only: bool) -> Result<UpdateOutcom
         return Ok(UpdateOutcome::Unsupported);
     }
 
-    let client = Client::builder()
-        .connect_timeout(Duration::from_secs(8))
-        .timeout(Duration::from_secs(120))
-        .build()
-        .context("build CLI updater HTTP client")?;
-    let mut errors = Vec::new();
+    let client = build_client()?;
+    let (manifests, errors) = fetch_manifests(&client).await;
+    if manifests.is_empty() {
+        return Err(anyhow!(
+            "CLI update failed from both configured sources: {}",
+            errors.join("; ")
+        ));
+    }
 
-    for (source, manifest_url) in [
-        ("GitHub", GITHUB_MANIFEST),
-        ("openbitfun.com", OPENBITFUN_MANIFEST),
-    ] {
-        match try_source(
-            &client,
-            source,
-            manifest_url,
-            platform_key,
-            &current_exe,
-            check_only,
-        )
-        .await
-        {
-            Ok(Some(outcome)) => return Ok(outcome),
-            Ok(None) => {}
-            Err(error) => errors.push(format!("{source}: {error:#}")),
+    let newest = newest_version(&manifests);
+    if !is_newer_version(&newest, env!("CARGO_PKG_VERSION")) {
+        return Ok(UpdateOutcome::Current);
+    }
+    if check_only {
+        let from = manifests
+            .iter()
+            .filter(|(_, manifest)| manifest.version == newest)
+            .map(|(source, _)| *source)
+            .collect::<Vec<_>>()
+            .join(", ");
+        println!(
+            "BitFun CLI {} is available from {} (current {}).",
+            newest,
+            from,
+            env!("CARGO_PKG_VERSION")
+        );
+        return Ok(UpdateOutcome::Available);
+    }
+
+    // Only sources that actually carry the newest version are candidates. During
+    // the mirror's sync window openbitfun still advertises the previous release,
+    // so it is simply not offering these bytes yet.
+    let mut candidates = Vec::new();
+    let mut skipped = Vec::new();
+    for (source, manifest) in &manifests {
+        if manifest.version != newest {
+            continue;
+        }
+        match platform_asset(manifest, platform_key) {
+            Ok(asset) => candidates.push(AssetCandidate {
+                url: asset.url.clone(),
+                sha256_url: asset.sha256_url.clone(),
+                filename: asset.filename.clone(),
+            }),
+            Err(error) => skipped.push(format!("{source}: {error:#}")),
+        }
+    }
+    if candidates.is_empty() {
+        return Err(anyhow!(
+            "no source offers a usable {platform_key} CLI asset for {newest}: {}",
+            skipped.join("; ")
+        ));
+    }
+
+    let ranked = rank_sources(&client, candidates).await;
+    if let Some(fastest) = ranked.first() {
+        if fastest.1 < HEALTHY_THROUGHPUT {
+            eprintln!(
+                "Fastest update source is {} KB/s, under the {} KB/s bar; the download will take a while.",
+                fastest.1 / 1024,
+                HEALTHY_THROUGHPUT / 1024
+            );
         }
     }
 
+    // Partial progress carries across sources: every source serves the same
+    // artifact and the checksum catches a bad resume.
+    let mut buffer = Vec::new();
+    let mut failures = Vec::new();
+    for (candidate, _) in &ranked {
+        if let Err(error) = download_resumable(&client, &candidate.url, &mut buffer).await {
+            failures.push(format!("{}: {error:#}", candidate.url));
+            continue;
+        }
+        let checksum_text = match download_text(&client, &candidate.sha256_url).await {
+            Ok(text) => text,
+            Err(error) => {
+                failures.push(format!("{}: {error:#}", candidate.sha256_url));
+                continue;
+            }
+        };
+        if let Err(error) = verify_sha256(&buffer, &checksum_text, &candidate.filename) {
+            // Bad bytes, not a bad link: discard so the next source does not
+            // resume on top of them.
+            buffer.clear();
+            failures.push(format!("{}: {error:#}", candidate.url));
+            continue;
+        }
+        install_archive(&buffer, &current_exe)?;
+        restart_managed_daemon();
+        println!("Updated to {newest} from {}", candidate.url);
+        return Ok(UpdateOutcome::Updated);
+    }
+
     Err(anyhow!(
-        "CLI update failed from both configured sources: {}",
-        errors.join("; ")
+        "CLI update could not be downloaded from any source: {}",
+        failures.join("; ")
     ))
 }
 
-async fn try_source(
+/// One source's copy of the same archive.
+#[derive(Debug, Clone)]
+struct AssetCandidate {
+    url: String,
+    sha256_url: String,
+    filename: String,
+}
+
+async fn fetch_manifests(
     client: &Client,
-    source: &str,
-    manifest_url: &str,
-    platform_key: &str,
-    current_exe: &Path,
-    check_only: bool,
-) -> Result<Option<UpdateOutcome>> {
-    let manifest = client
-        .get(manifest_url)
-        .send()
-        .await
-        .with_context(|| format!("request {manifest_url}"))?
-        .error_for_status()
-        .with_context(|| format!("fetch {manifest_url}"))?
-        .json::<LinuxBinariesManifest>()
-        .await
-        .with_context(|| format!("parse {manifest_url}"))?;
+) -> (Vec<(&'static str, LinuxBinariesManifest)>, Vec<String>) {
+    // Concurrently: one unreachable source must not add its whole ceiling to
+    // the other's, which matters most on the startup path.
+    let (github, mirror) = tokio::join!(
+        fetch_manifest(client, GITHUB_MANIFEST),
+        fetch_manifest(client, OPENBITFUN_MANIFEST),
+    );
+
+    let mut manifests = Vec::new();
+    let mut errors = Vec::new();
+    for (source, result) in [("GitHub", github), ("openbitfun.com", mirror)] {
+        match result {
+            Ok(manifest) => manifests.push((source, manifest)),
+            Err(error) => errors.push(format!("{source}: {error:#}")),
+        }
+    }
+    (manifests, errors)
+}
+
+async fn fetch_manifest(client: &Client, manifest_url: &str) -> Result<LinuxBinariesManifest> {
+    // Manifests are a few KB, so a short total ceiling is safe here even though
+    // archive downloads deliberately have none.
+    let manifest = tokio::time::timeout(MANIFEST_TIMEOUT, async {
+        client
+            .get(manifest_url)
+            .send()
+            .await
+            .with_context(|| format!("request {manifest_url}"))?
+            .error_for_status()
+            .with_context(|| format!("fetch {manifest_url}"))?
+            .json::<LinuxBinariesManifest>()
+            .await
+            .with_context(|| format!("parse {manifest_url}"))
+    })
+    .await
+    .map_err(|_| anyhow!("{manifest_url} did not answer within {MANIFEST_TIMEOUT:?}"))??;
+
     if manifest.schema_version != 1 {
         return Err(anyhow!(
             "unsupported Linux binaries manifest schema {}",
             manifest.schema_version
         ));
     }
-    if !is_newer_version(&manifest.version, env!("CARGO_PKG_VERSION")) {
-        return Ok(Some(UpdateOutcome::Current));
-    }
-    if check_only {
-        println!(
-            "BitFun CLI {} is available from {} (current {}).",
-            manifest.version,
-            source,
-            env!("CARGO_PKG_VERSION")
-        );
-        return Ok(Some(UpdateOutcome::Available));
-    }
+    Ok(manifest)
+}
 
+fn newest_version(manifests: &[(&'static str, LinuxBinariesManifest)]) -> String {
+    let mut newest = manifests[0].1.version.clone();
+    for (_, manifest) in manifests {
+        if is_newer_version(&manifest.version, &newest) {
+            newest = manifest.version.clone();
+        }
+    }
+    newest
+}
+
+fn platform_asset<'a>(
+    manifest: &'a LinuxBinariesManifest,
+    platform_key: &str,
+) -> Result<&'a ReleaseAsset> {
     let platform = manifest
         .platforms
         .get(platform_key)
@@ -185,29 +404,138 @@ async fn try_source(
     if !platform.cli.filename.ends_with(".tar.gz") {
         return Err(anyhow!("CLI release asset is not a tar.gz archive"));
     }
-
-    let archive = download_bytes(client, &platform.cli.url).await?;
-    let checksum_text = download_text(client, &platform.cli.sha256_url).await?;
-    verify_sha256(&archive, &checksum_text, &platform.cli.filename)?;
-    install_archive(&archive, current_exe)?;
-    restart_managed_daemon();
-    println!("Updated from {source}: {}", manifest.version);
-    Ok(Some(UpdateOutcome::Updated))
+    Ok(&platform.cli)
 }
 
-async fn download_bytes(client: &Client, url: &str) -> Result<Vec<u8>> {
-    Ok(client
+fn build_client() -> Result<Client> {
+    Client::builder()
+        .connect_timeout(Duration::from_secs(8))
+        // Deliberately no `.timeout()`: a whole-request ceiling turns "slow" into
+        // "impossible" for any archive larger than ceiling x link speed. Stalls
+        // are caught by READ_TIMEOUT plus the throughput floor below.
+        .read_timeout(READ_TIMEOUT)
+        .build()
+        .context("build CLI updater HTTP client")
+}
+
+/// Bytes a source delivers inside [`PROBE_WINDOW`], i.e. its throughput.
+/// A source that errors or answers nothing scores 0 but is still attempted
+/// later: some CDNs refuse ranged requests while serving full ones fine.
+async fn probe_throughput(client: &Client, url: &str, window: Duration) -> u64 {
+    let started = Instant::now();
+    let request = client
         .get(url)
+        .header(reqwest::header::RANGE, format!("bytes=0-{}", PROBE_BYTES - 1))
+        .send();
+    let Ok(Ok(response)) = tokio::time::timeout(window, request).await else {
+        return 0;
+    };
+    if !response.status().is_success() {
+        return 0;
+    }
+
+    let mut received: u64 = 0;
+    let mut stream = response.bytes_stream();
+    loop {
+        let remaining = match window.checked_sub(started.elapsed()) {
+            Some(left) if !left.is_zero() => left,
+            _ => break,
+        };
+        match tokio::time::timeout(remaining, stream.next()).await {
+            Ok(Some(Ok(chunk))) => received += chunk.len() as u64,
+            // Timed out (window closed) or the body ended early.
+            _ => break,
+        }
+        if received >= PROBE_BYTES {
+            break;
+        }
+    }
+
+    let elapsed = started.elapsed().as_secs_f64().max(0.001);
+    (received as f64 / elapsed) as u64
+}
+
+/// Order candidates fastest-first. Every source serves the same artifact, so
+/// this only decides who to ask first, never what is acceptable.
+async fn rank_sources(
+    client: &Client,
+    candidates: Vec<AssetCandidate>,
+) -> Vec<(AssetCandidate, u64)> {
+    rank_sources_with_window(client, candidates, PROBE_WINDOW).await
+}
+
+async fn rank_sources_with_window(
+    client: &Client,
+    candidates: Vec<AssetCandidate>,
+    window: Duration,
+) -> Vec<(AssetCandidate, u64)> {
+    let mut ranked = Vec::with_capacity(candidates.len());
+    for candidate in candidates {
+        let speed = probe_throughput(client, &candidate.url, window).await;
+        tracing::debug!("CLI update source probe: {speed} B/s from {}", candidate.url);
+        ranked.push((candidate, speed));
+    }
+    ranked.sort_by(|left, right| right.1.cmp(&left.1));
+    ranked
+}
+
+/// Stream a body, appending to `buffer`, aborting if throughput stays under
+/// [`STALL_THROUGHPUT`] across a [`STALL_WINDOW`] slice.
+async fn stream_with_stall_guard(
+    response: reqwest::Response,
+    buffer: &mut Vec<u8>,
+    url: &str,
+) -> Result<()> {
+    let mut stream = response.bytes_stream();
+    let mut window_start = Instant::now();
+    let mut window_bytes: u64 = 0;
+
+    while let Some(chunk) = stream.next().await {
+        let chunk = chunk.with_context(|| format!("read {url}"))?;
+        buffer.extend_from_slice(&chunk);
+        window_bytes += chunk.len() as u64;
+
+        let elapsed = window_start.elapsed();
+        if elapsed >= STALL_WINDOW {
+            let rate = window_bytes / elapsed.as_secs().max(1);
+            if rate < STALL_THROUGHPUT {
+                return Err(anyhow!(
+                    "source stalled at {} KB/s (need {} KB/s)",
+                    rate / 1024,
+                    STALL_THROUGHPUT / 1024
+                ));
+            }
+            window_start = Instant::now();
+            window_bytes = 0;
+        }
+    }
+    Ok(())
+}
+
+/// Download `url`, resuming with a Range request when a previous source left a
+/// partial body. Every source serves an identical artifact, so partial progress
+/// carries across sources; a bad resume is caught by the checksum.
+async fn download_resumable(client: &Client, url: &str, buffer: &mut Vec<u8>) -> Result<()> {
+    let mut request = client.get(url);
+    if !buffer.is_empty() {
+        request = request.header(reqwest::header::RANGE, format!("bytes={}-", buffer.len()));
+    }
+    let response = request
         .send()
         .await
-        .with_context(|| format!("request {url}"))?
+        .with_context(|| format!("request {url}"))?;
+
+    // A server that ignores Range answers 200 with the whole body; restart
+    // cleanly rather than concatenating a duplicate prefix onto the partial.
+    if !buffer.is_empty() && response.status() != reqwest::StatusCode::PARTIAL_CONTENT {
+        buffer.clear();
+    }
+    let response = response
         .error_for_status()
-        .with_context(|| format!("download {url}"))?
-        .bytes()
-        .await
-        .with_context(|| format!("read {url}"))?
-        .to_vec())
+        .with_context(|| format!("download {url}"))?;
+    stream_with_stall_guard(response, buffer, url).await
 }
+
 
 async fn download_text(client: &Client, url: &str) -> Result<String> {
     client
@@ -433,8 +761,181 @@ fn restart_managed_daemon() {
 
 #[cfg(test)]
 mod tests {
-    use super::{is_newer_version, verify_sha256};
+    use super::*;
     use sha2::{Digest, Sha256};
+    use std::sync::Arc;
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+    use tokio::net::TcpListener;
+
+    /// Minimal HTTP/1.1 origin that serves `body` at a fixed rate, honours
+    /// `Range: bytes=<n>-` and can be told to hang up mid-response. Enough to
+    /// exercise the parts of the updater that only misbehave on a slow link.
+    struct StubOrigin {
+        url: String,
+    }
+
+    impl StubOrigin {
+        async fn spawn(body: Arc<Vec<u8>>, chunk: usize, delay: Duration, truncate: bool) -> Self {
+            let listener = TcpListener::bind("127.0.0.1:0").await.expect("bind");
+            let url = format!("http://{}/asset.tar.gz", listener.local_addr().unwrap());
+            tokio::spawn(async move {
+                loop {
+                    let Ok((mut socket, _)) = listener.accept().await else {
+                        return;
+                    };
+                    let body = Arc::clone(&body);
+                    tokio::spawn(async move {
+                        let mut request = vec![0u8; 2048];
+                        let read = socket.read(&mut request).await.unwrap_or(0);
+                        let text = String::from_utf8_lossy(&request[..read]).to_string();
+
+                        let start = text
+                            .lines()
+                            .find_map(|line| {
+                                let rest = line.strip_prefix("range: bytes=").or_else(|| {
+                                    line.to_ascii_lowercase()
+                                        .starts_with("range: bytes=")
+                                        .then(|| &line["range: bytes=".len()..])
+                                })?;
+                                rest.split('-').next()?.trim().parse::<usize>().ok()
+                            })
+                            .unwrap_or(0)
+                            .min(body.len());
+
+                        let slice = &body[start..];
+                        let status = if start > 0 {
+                            "206 Partial Content"
+                        } else {
+                            "200 OK"
+                        };
+                        let header = format!(
+                            "HTTP/1.1 {status}\r\nContent-Length: {}\r\nAccept-Ranges: bytes\r\n\r\n",
+                            slice.len()
+                        );
+                        if socket.write_all(header.as_bytes()).await.is_err() {
+                            return;
+                        }
+
+                        let stop = if truncate { slice.len() / 3 } else { slice.len() };
+                        let mut sent = 0usize;
+                        while sent < stop {
+                            let end = (sent + chunk).min(stop);
+                            if socket.write_all(&slice[sent..end]).await.is_err() {
+                                return;
+                            }
+                            let _ = socket.flush().await;
+                            sent = end;
+                            if !delay.is_zero() {
+                                tokio::time::sleep(delay).await;
+                            }
+                        }
+                    });
+                }
+            });
+            Self { url }
+        }
+
+        fn candidate(&self, filename: &str) -> AssetCandidate {
+            AssetCandidate {
+                url: self.url.clone(),
+                sha256_url: format!("{}.sha256", self.url),
+                filename: filename.to_string(),
+            }
+        }
+    }
+
+    fn payload(size: usize) -> Arc<Vec<u8>> {
+        Arc::new((0..size).map(|index| (index % 251) as u8).collect())
+    }
+
+    #[tokio::test]
+    async fn ranking_prefers_the_faster_source() {
+        let body = payload(256 * 1024);
+        // One origin trickles 2 KB every 20 ms (~100 KB/s); the other is unthrottled.
+        let slow = StubOrigin::spawn(Arc::clone(&body), 2048, Duration::from_millis(20), false).await;
+        let fast = StubOrigin::spawn(Arc::clone(&body), 64 * 1024, Duration::ZERO, false).await;
+        let client = build_client().expect("client");
+
+        let ranked = rank_sources_with_window(
+            &client,
+            vec![slow.candidate("a.tar.gz"), fast.candidate("a.tar.gz")],
+            Duration::from_millis(400),
+        )
+        .await;
+
+        assert_eq!(
+            ranked[0].0.url, fast.url,
+            "the faster origin must be attempted first, got {ranked:?}"
+        );
+        assert!(ranked[0].1 > ranked[1].1, "speeds must be ordered: {ranked:?}");
+    }
+
+    /// The regression that made slow links fail outright: a whole-request
+    /// timeout meant success depended on archive size over link speed. This
+    /// body takes far longer than the old 120 s ceiling would have allowed to
+    /// be proportionally, and must still complete.
+    #[tokio::test]
+    async fn slow_but_alive_source_completes() {
+        let body = payload(128 * 1024);
+        let slow = StubOrigin::spawn(Arc::clone(&body), 4096, Duration::from_millis(15), false).await;
+        let client = build_client().expect("client");
+
+        let mut buffer = Vec::new();
+        download_resumable(&client, &slow.url, &mut buffer)
+            .await
+            .expect("slow source must still finish");
+        assert_eq!(buffer, *body);
+    }
+
+    #[tokio::test]
+    async fn partial_download_resumes_across_sources() {
+        let body = payload(96 * 1024);
+        let truncating =
+            StubOrigin::spawn(Arc::clone(&body), 8192, Duration::ZERO, true).await;
+        let complete = StubOrigin::spawn(Arc::clone(&body), 8192, Duration::ZERO, false).await;
+        let client = build_client().expect("client");
+
+        let mut buffer = Vec::new();
+        // First source hangs up early, leaving a partial body behind.
+        let _ = download_resumable(&client, &truncating.url, &mut buffer).await;
+        let partial = buffer.len();
+        assert!(partial > 0 && partial < body.len(), "expected a partial body");
+
+        // Second source must continue from there, not restart.
+        download_resumable(&client, &complete.url, &mut buffer)
+            .await
+            .expect("resume");
+        assert_eq!(buffer, *body, "resumed body must match the original");
+    }
+
+    #[tokio::test]
+    async fn unreachable_source_scores_zero_without_hanging() {
+        let client = build_client().expect("client");
+        // Port 1 on loopback refuses immediately.
+        let speed = probe_throughput(&client, "http://127.0.0.1:1/asset", PROBE_WINDOW).await;
+        assert_eq!(speed, 0);
+    }
+
+    #[test]
+    fn newest_version_wins_across_manifests() {
+        let manifest = |version: &str| LinuxBinariesManifest {
+            schema_version: 1,
+            version: version.to_string(),
+            platforms: std::collections::HashMap::new(),
+        };
+        // Mirror lags GitHub during its sync window; the newer one must win.
+        let manifests = vec![
+            ("GitHub", manifest("0.2.14")),
+            ("openbitfun.com", manifest("0.2.13")),
+        ];
+        assert_eq!(newest_version(&manifests), "0.2.14");
+
+        let reversed = vec![
+            ("GitHub", manifest("0.2.13")),
+            ("openbitfun.com", manifest("0.2.14")),
+        ];
+        assert_eq!(newest_version(&reversed), "0.2.14");
+    }
 
     #[test]
     fn version_comparison_ignores_release_metadata() {

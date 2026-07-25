@@ -25,11 +25,21 @@ bitfun update --check                   # report only; do not install
 ```
 
 Official Linux archive installations check for updates before interactive TUI
-startup at most once every six hours. The check uses GitHub first, then
-`https://openbitfun.com/release/linux-binaries.json` when GitHub or its asset
-download fails. Set `behavior.auto_update = false` in the CLI config or export
+startup at most once every six hours. That check only fetches the release
+manifest — a few KB, bounded at ten seconds — and hands the actual archive to a
+detached background process, so launch never waits on a download. Set
+`behavior.auto_update = false` in the CLI config or export
 `BITFUN_CLI_DISABLE_AUTO_UPDATE=1` to disable automatic checks. Development and
 nightly binaries are never replaced by the stable automatic updater.
+
+Both GitHub and `https://openbitfun.com/release/linux-binaries.json` are read,
+and whichever advertises the newer version decides what gets installed. When
+both carry it, each is probed with a short ranged request and the archive is
+downloaded from whichever is measurably faster — a source that is merely slow
+rather than broken no longer holds the update hostage. Downloads resume rather
+than restart, including across a switch of source, and the checksum is verified
+before anything is replaced. Concurrent updates are serialised by
+`update.lock` in the CLI config directory.
 
 `bitfun-cli` is a deprecated compatibility entrypoint. It writes
 `Warning: \`bitfun-cli\` is deprecated; use \`bitfun\` instead.` to stderr; new scripts and

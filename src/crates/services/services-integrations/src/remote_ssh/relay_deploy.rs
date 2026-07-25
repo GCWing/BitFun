@@ -54,6 +54,19 @@ const REPO_TARBALL_URL: &str = "https://github.com/GCWing/BitFun/archive/refs/he
 const RELEASE_DOWNLOAD_BASE: &str = "https://github.com/GCWing/BitFun/releases/download";
 const OPENBITFUN_RELEASE_BASE: &str = "https://openbitfun.com/release";
 const RELEASE_VERSION: &str = env!("CARGO_PKG_VERSION");
+/// Ranked-source download tuning, shared with the CLI self-updater
+/// (`src/apps/cli/src/self_update.rs`) so both paths behave the same on a slow
+/// link. Each candidate gets a fixed-length ranged request; bytes delivered in
+/// that window is the throughput estimate used to rank sources.
+const SOURCE_PROBE_SECONDS: u64 = 10;
+const SOURCE_PROBE_BYTES: u64 = 4 * 1024 * 1024;
+/// A source at or above this is used without hesitation.
+const HEALTHY_THROUGHPUT_BYTES_PER_SEC: u64 = 128 * 1024;
+/// Below this for `STALL_WINDOW_SECONDS` the source counts as dead and we fail
+/// over. Deliberately far under the healthy bar: a genuinely slow but only
+/// available link must still be allowed to finish rather than loop forever.
+const STALL_THROUGHPUT_BYTES_PER_SEC: u64 = 8 * 1024;
+const STALL_WINDOW_SECONDS: u64 = 30;
 /// Canonical China-mirror helper (shared with `src/apps/relay-server/deploy.sh`).
 /// Embedded so Desktop orchestration can apply mirrors before the git clone.
 const RELAY_MIRROR_SH: &str = include_str!(concat!(
@@ -1355,7 +1368,7 @@ fn release_binary_deploy_bash() -> String {
         r#"
 bitfun_try_release_deploy() {{
   local release_dir="$HOME/.bitfun/relay-release"
-  local target archive upstream_url openbitfun_url proxy_url download_dir extracted context image
+  local target archive upstream_url download_dir extracted context image
   case "$(uname -m 2>/dev/null)" in
     x86_64|amd64) target="x86_64-unknown-linux-gnu" ;;
     aarch64|arm64) target="aarch64-unknown-linux-gnu" ;;
@@ -1367,7 +1380,6 @@ bitfun_try_release_deploy() {{
 
   archive="bitfun-relay-server-${{target}}.tar.gz"
   upstream_url="{RELEASE_DOWNLOAD_BASE}/{release_tag}/${{archive}}"
-  openbitfun_url="{OPENBITFUN_RELEASE_BASE}/{release_version}/${{archive}}"
   mkdir -p "$release_dir"
   chmod 700 "$release_dir" 2>/dev/null || true
   download_dir="$(mktemp -d "$release_dir/download.XXXXXX")"
@@ -1386,29 +1398,126 @@ bitfun_try_release_deploy() {{
     )
   }}
 
-  bitfun_download_release_pair() {{
-    local url="$1"
-    rm -f "$download_dir/$archive" "$download_dir/${{archive}}.sha256"
-    echo ">>> Downloading published Relay binary: $url"
-    curl -fsSL --retry 3 --connect-timeout 15 --max-time 900 \
-      -o "$download_dir/$archive" "$url" \
-      && curl -fsSL --retry 3 --connect-timeout 15 --max-time 60 \
-        -o "$download_dir/${{archive}}.sha256" "${{url}}.sha256" \
-      && bitfun_verify_release_archive
+  # Measure a candidate by how many bytes it delivers inside a fixed window.
+  # Bytes-in-fixed-time is throughput, so one ranged request yields the ranking
+  # without downloading the whole archive from a source we may not use.
+  bitfun_probe_source() {{
+    local url="$1" speed
+    speed="$(curl -sSL --connect-timeout 5 --max-time {probe_seconds} \
+      -r 0-{probe_bytes} -o /dev/null -w '%{{speed_download}}' "$url" 2>/dev/null || true)"
+    speed="${{speed%%.*}}"
+    case "$speed" in
+      ''|*[!0-9]*) echo 0 ;;
+      *) echo "$speed" ;;
+    esac
   }}
 
-  proxy_url=""
+  # Resume-capable download. `-C -` continues a partial file, so a link that
+  # cannot finish inside one attempt still converges instead of restarting from
+  # zero. --speed-limit/--speed-time abandons a source that has gone dead
+  # without waiting out a wall-clock ceiling.
+  bitfun_download_release_pair() {{
+    local url="$1"
+    local watcher="" status=0
+    local done_marker="$download_dir/.download-active"
+    echo ">>> Downloading published Relay binary: $url"
+    # The wizard polls this log; without a heartbeat a slow link is
+    # indistinguishable from a hang. Poll a sentinel on a short interval rather
+    # than sleeping long: `kill` on a shell blocked in a long `sleep` is not
+    # delivered until that sleep returns, which would stall every download by a
+    # full tick after curl already finished.
+    : >"$done_marker"
+    (
+      local ticks=0
+      while [ -f "$done_marker" ]; do
+        sleep 2
+        ticks=$(( ticks + 1 ))
+        [ "$(( ticks % 10 ))" -eq 0 ] || continue
+        [ -f "$download_dir/$archive" ] || continue
+        echo ">>>   ... $(du -h "$download_dir/$archive" 2>/dev/null | cut -f1) downloaded"
+      done
+    ) &
+    watcher=$!
+    curl -fsSL -C - \
+      --retry 3 --retry-delay 3 --retry-max-time {retry_max_time} \
+      --connect-timeout 15 --max-time {max_time} \
+      --speed-limit {stall_floor} --speed-time {stall_seconds} \
+      -o "$download_dir/$archive" "$url" || status=$?
+    rm -f "$done_marker"
+    wait "$watcher" >/dev/null 2>&1 || true
+    if [ "$status" -ne 0 ]; then
+      echo ">>> Source failed or stalled below $(( {stall_floor} / 1024 )) KB/s (curl $status); trying the next source."
+      return 1
+    fi
+    rm -f "$download_dir/${{archive}}.sha256"
+    curl -fsSL --retry 3 --connect-timeout 15 --max-time 60 \
+      -o "$download_dir/${{archive}}.sha256" "${{url}}.sha256" || return 1
+    if bitfun_verify_release_archive; then
+      return 0
+    fi
+    # Bad bytes, not a bad link: mark the partial file poisoned so the caller
+    # discards it instead of resuming on top of it from the next source.
+    : >"$download_dir/${{archive}}.verify-failed"
+    return 1
+  }}
+
+  # Candidate sources, one per line. Files rather than arrays: this script runs
+  # on whatever bash the user's server has, and `"${{empty[@]}}"` under `set -u`
+  # aborts on bash 4.2 (CentOS 7).
+  local sources="$download_dir/sources.tsv" mirror_url="" probe speed best_speed
+  : >"$sources.in"
   if [ "${{BITFUN_MIRROR_MODE:-global}}" = "cn" ] && [ -n "${{BITFUN_GITHUB_PROXY:-}}" ]; then
-    proxy_url="${{BITFUN_GITHUB_PROXY%/}}/${{upstream_url}}"
+    printf '%s\n' "${{BITFUN_GITHUB_PROXY%/}}/${{upstream_url}}" >>"$sources.in"
   fi
-  if [ -n "$proxy_url" ] && bitfun_download_release_pair "$proxy_url"; then
-    :
-  elif bitfun_download_release_pair "$upstream_url"; then
-    :
-  elif bitfun_download_release_pair "$openbitfun_url"; then
-    :
-  else
-    echo ">>> Published Relay binary unavailable from GitHub and openbitfun.com; falling back to source build."
+  printf '%s\n' "$upstream_url" >>"$sources.in"
+  # Take the mirror URL from the mirror's own manifest rather than building a
+  # /<version>/ path: openbitfun keeps only the most recent releases, so a
+  # pinned version 404s for every Desktop build that is not one of them.
+  # `|| true`: an unreachable mirror or a non-matching manifest must leave
+  # mirror_url empty, never abort the caller under `set -e`.
+  mirror_url="$(curl -fsSL --connect-timeout 10 --max-time 30 \
+    "{OPENBITFUN_RELEASE_BASE}/linux-binaries.json" 2>/dev/null \
+    | tr ',' '\n' | grep -F '"url"' | grep -F "$archive" \
+    | head -n 1 | sed -e 's/.*"url"[[:space:]]*:[[:space:]]*"//' -e 's/".*//' || true)"
+  if [ -n "$mirror_url" ]; then
+    printf '%s\n' "$mirror_url" >>"$sources.in"
+  fi
+
+  : >"$sources"
+  while IFS= read -r probe; do
+    [ -n "$probe" ] || continue
+    speed="$(bitfun_probe_source "$probe")"
+    echo ">>> Source probe: $(( speed / 1024 )) KB/s — $probe"
+    printf '%s\t%s\n' "$speed" "$probe" >>"$sources"
+  done <"$sources.in"
+
+  if [ ! -s "$sources" ]; then
+    echo ">>> No Relay binary source responded; falling back to source build."
+    rm -rf "$download_dir"
+    return 1
+  fi
+  sort -rn -k1,1 -o "$sources" "$sources"
+  best_speed="$(head -n 1 "$sources" | cut -f1)"
+  if [ "${{best_speed:-0}}" -lt {healthy_floor} ]; then
+    echo ">>> Fastest source is $(( ${{best_speed:-0}} / 1024 )) KB/s, under the $(( {healthy_floor} / 1024 )) KB/s bar; continuing anyway — a slow download still beats a source rebuild."
+  fi
+
+  # Try fastest first. Every source serves the identical artifact, so a partial
+  # file is reused across sources too (`-C -`); only a checksum mismatch, which
+  # means the bytes really are bad, wipes it and starts the next source clean.
+  local ok=0
+  while IFS=$'\t' read -r speed probe; do
+    [ -n "$probe" ] || continue
+    if bitfun_download_release_pair "$probe"; then
+      ok=1
+      break
+    fi
+    if [ -f "$download_dir/${{archive}}.verify-failed" ]; then
+      rm -f "$download_dir/$archive" "$download_dir/${{archive}}.verify-failed"
+    fi
+  done <"$sources"
+  if [ "$ok" -ne 1 ]; then
+    echo ">>> Published Relay binary unavailable from every source; falling back to source build."
     rm -rf "$download_dir"
     return 1
   fi
@@ -1547,7 +1656,13 @@ DOCKERFILE
         RELEASE_DOWNLOAD_BASE = RELEASE_DOWNLOAD_BASE,
         OPENBITFUN_RELEASE_BASE = OPENBITFUN_RELEASE_BASE,
         release_tag = release_tag,
-        release_version = RELEASE_VERSION,
+        probe_seconds = SOURCE_PROBE_SECONDS,
+        probe_bytes = SOURCE_PROBE_BYTES - 1,
+        healthy_floor = HEALTHY_THROUGHPUT_BYTES_PER_SEC,
+        stall_floor = STALL_THROUGHPUT_BYTES_PER_SEC,
+        stall_seconds = STALL_WINDOW_SECONDS,
+        retry_max_time = 300,
+        max_time = 3600,
     )
 }
 
@@ -1704,6 +1819,45 @@ mod tests {
         assert!(script.contains("name=^bitfun-relay-before-release-"));
         // Port publishing keeps compose's configurable bind address.
         assert!(script.contains("${RELAY_HOST_BIND_IP:-0.0.0.0}:${RELAY_PORT}:${RELAY_PORT}"));
+
+        // Slow-link contract. A wall-clock ceiling alone made a 20 KB/s link
+        // fail forever: each attempt timed out mid-archive and restarted from
+        // zero. Throughput floor + resume + ranking replace that.
+        assert!(script.contains("--speed-limit"));
+        assert!(script.contains("--speed-time"));
+        assert!(script.contains("-C -"));
+        assert!(script.contains("--retry-max-time"));
+        assert!(script.contains("bitfun_probe_source"));
+        assert!(script.contains("sort -rn -k1,1"));
+        // The mirror URL must come from the mirror's manifest, never a pinned
+        // /<version>/ path that 404s for older Desktop builds.
+        assert!(script.contains("linux-binaries.json"));
+        assert!(!script.contains("release/0.2"));
+    }
+
+    /// `bash -n` only proves the generated script parses. This runs its source
+    /// ranking and download loop against a stubbed curl so the slow-link
+    /// behaviour is actually exercised.
+    #[cfg(unix)]
+    #[test]
+    fn release_download_picks_the_fastest_working_source() {
+        let dir = tempfile::tempdir().expect("temp dir");
+        let script = dir.path().join("release.sh");
+        std::fs::write(&script, release_binary_deploy_bash()).expect("write script");
+
+        let harness = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../../../scripts/relay/release-download-harness.sh");
+        let output = std::process::Command::new("bash")
+            .arg(&harness)
+            .arg(&script)
+            .output()
+            .expect("run release download harness");
+        assert!(
+            output.status.success(),
+            "release download harness failed:\n{}\n{}",
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr)
+        );
     }
 
     #[cfg(unix)]

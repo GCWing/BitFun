@@ -352,3 +352,25 @@ jobs:
             "https://github.com/GCWing/BitFun/releases/download/${{ needs.prepare.outputs.release_tag }}/linux-binaries.json" \
             -o linux-binaries.published.json
           test "$(jq -r '.version' linux-binaries.published.json)" = "${{ needs.prepare.outputs.version }}"
+
+      # Nudge the openbitfun.com mirror to sync now instead of on its next
+      # 10-minute cron tick. Until the mirror has these bytes, CN clients have
+      # only the GitHub origin to fall back to. Best effort: the cron run is
+      # still the source of truth, so a failed or unconfigured ping never fails
+      # the release. Receiver setup: scripts/openbitfun-release-sync.sh.
+      - name: Request openbitfun mirror sync
+        continue-on-error: true
+        env:
+          SYNC_WEBHOOK_URL: ${{ secrets.OPENBITFUN_SYNC_WEBHOOK_URL }}
+          RELEASE_TAG: ${{ needs.prepare.outputs.release_tag }}
+        run: |
+          set -euo pipefail
+          if [[ -z "${SYNC_WEBHOOK_URL:-}" ]]; then
+            echo "OPENBITFUN_SYNC_WEBHOOK_URL is not configured; the mirror will pick this up on its next cron run."
+            exit 0
+          fi
+          curl -fsSL -X POST --retry 3 --retry-delay 5 --max-time 30 \
+            -H 'Content-Type: application/json' \
+            -d "{\"tag\":\"${RELEASE_TAG}\"}" \
+            "${SYNC_WEBHOOK_URL}" >/dev/null
+          echo "Mirror sync requested for ${RELEASE_TAG}."

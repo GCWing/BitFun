@@ -17,44 +17,58 @@ Desktop Tauri surface: `src/apps/desktop/src/api/relay_deploy_api.rs`
 ## Invariants (do not regress)
 
 1. **Published binary first, source fallback.** Download the matching stable
-   `v<desktop-version>` asset or the `nightly` asset for nightly Desktop builds,
-   trying GitHub before the versioned openbitfun.com mirror. Verify its `.sha256`
-   and preserve the existing `bitfun-relay` container, volumes, ports, and
-   `/app/relay-admin` contract. A download, checksum, runtime-image, startup, or
-   health failure restores the previous container before falling back to source.
+   `v<desktop-version>` asset or the `nightly` asset for nightly Desktop builds.
+   Verify its `.sha256` and preserve the existing `bitfun-relay` container,
+   volumes, ports, and `/app/relay-admin` contract. A download, checksum,
+   runtime-image, startup, or health failure restores the previous container
+   before falling back to source.
 
-2. **Fallback source path is `~/.bitfun/relay-src`**, never `$HOME/BitFun` /
+2. **Rank sources by measured speed; never by fixed priority.** The CN proxy,
+   GitHub, and the openbitfun.com mirror each get a short ranged probe and the
+   download goes to the fastest. A source that is slow rather than broken must
+   not hold the deploy: `--speed-limit`/`--speed-time` abandons a dead link
+   quickly, `-C -` resumes instead of restarting (a wall-clock ceiling alone
+   made a 20 KB/s link retry from zero forever), and every source is tried
+   fastest-first before giving up. If nothing clears the healthy-throughput
+   bar, still download — a slow transfer beats a 20-minute source rebuild.
+
+3. **Take the mirror URL from the mirror's own manifest**
+   (`openbitfun.com/release/linux-binaries.json`), never a constructed
+   `/<version>/` path. The mirror retains only the most recent releases, so a
+   pinned version 404s for every older Desktop build.
+
+4. **Fallback source path is `~/.bitfun/relay-src`**, never `$HOME/BitFun` /
    `$HOME/bitfun`. Sync always passes an explicit clone destination. Destructive
    replace is only safe under `~/.bitfun/`.
 
-3. **Git first, tarball fallback.** When `.git` already exists, deploy must
+5. **Git first, tarball fallback.** When `.git` already exists, deploy must
    `fetch` + checkout, not re-clone from scratch (preserves BuildKit layers
    and Cargo cache mounts for registry/git/`target`).
 
-4. **Close wizard = cancel remote task.** Do not leave nohup builds running
+6. **Close wizard = cancel remote task.** Do not leave nohup builds running
    after the modal closes; cancel must kill the pid tree and best-effort stop
    compose/buildx workers.
 
-5. **Account password never leaves this device.** Provision locally, then
+7. **Account password never leaves this device.** Provision locally, then
    `relay-admin import-user` over the SSH session. Do not send plaintext
    passwords to the remote as env/script args.
 
-6. **“Already deployed” is container-aware, not only selected-port health.**
+8. **“Already deployed” is container-aware, not only selected-port health.**
    Changing the listen port must not hide a running `bitfun-relay`. Use
    `container_running` / `existing_relay_port` / `relay_healthy` (health on
    selected **or** existing port). “Create account” must hit the running port.
 
-7. **Port conflict ≠ our relay.** `port_busy && !port_owned_by_relay` blocks
+9. **Port conflict ≠ our relay.** `port_busy && !port_owned_by_relay` blocks
    deploy; busy-because-bitfun-relay does not.
 
-8. **Privilege / Docker install.** Do not call `sudo -v` unconditionally.
+10. **Privilege / Docker install.** Do not call `sudo -v` unconditionally.
    Detect root / passwordless sudo / interactive elevate. Docker install must
    not require a working daemon *before* install.
 
-9. **Scripts are embedded Rust templates** staged via SFTP. Do not rely on a
+11. **Scripts are embedded Rust templates** staged via SFTP. Do not rely on a
    static repo `.sh` alone on the server until the desktop binary re-stages.
 
-10. **China mirrors before overseas downloads.** Desktop orchestration embeds
+12. **China mirrors before overseas downloads.** Desktop orchestration embeds
    `src/apps/relay-server/mirror.sh` and runs `bitfun_mirror_init` before apt
    tool install, Docker Engine install, and GitHub sync. `deploy.sh` sources
    the same file so manual and one-click paths stay aligned. Force with

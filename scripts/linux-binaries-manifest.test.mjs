@@ -109,3 +109,37 @@ test('openbitfun sync mirrors both products and their checksums', () => {
   assert.match(syncScript, /OPENBITFUN_BASE_URL/);
   assert.match(syncScript, /WEBSITE_RELEASE_DIR.*linux-binaries\.json/);
 });
+
+test('Linux archives are mirrored before the much larger Desktop packages', () => {
+  const syncScript = fs.readFileSync(
+    path.join(repoRoot, 'scripts/openbitfun-release-sync.sh'),
+    'utf8'
+  );
+
+  const linuxCall = syncScript.indexOf('\n  mirror_linux_binaries\n');
+  const desktopLoop = syncScript.indexOf('Mirroring Desktop asset');
+  assert.ok(linuxCall > 0, 'mirror_linux_binaries must be called from main');
+  assert.ok(desktopLoop > 0, 'Desktop asset mirroring must still exist');
+  assert.ok(
+    linuxCall < desktopLoop,
+    'CLI/Relay archives must be mirrored first: Desktop packages are ~700MB per ' +
+      'release, and until the Linux assets land the mirror advertises a version ' +
+      'whose CLI/Relay bytes it cannot serve'
+  );
+});
+
+test('the mirror retains enough releases for older Desktop builds', () => {
+  const syncScript = fs.readFileSync(
+    path.join(repoRoot, 'scripts/openbitfun-release-sync.sh'),
+    'utf8'
+  );
+  const keep = /^KEEP_VERSIONS=(\d+)$/m.exec(syncScript);
+  assert.ok(keep, 'KEEP_VERSIONS must be set');
+  // One-click Relay deploy asks the mirror for the version baked into the
+  // running Desktop binary; too few kept versions sends older installs into a
+  // 20-minute source rebuild.
+  assert.ok(
+    Number(keep[1]) >= 4,
+    `KEEP_VERSIONS must retain several releases, got ${keep[1]}`
+  );
+});
