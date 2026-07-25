@@ -489,6 +489,13 @@ impl BackgroundSubagentOutcomeStore {
             .await
     }
 
+    pub(crate) async fn list_records(
+        &self,
+        parent_session_id: &str,
+    ) -> BitFunResult<Vec<BackgroundTaskRecord>> {
+        self.coordination_store.list_tasks(parent_session_id).await
+    }
+
     pub(crate) async fn delete_session_references(&self, session_id: &str) -> BitFunResult<()> {
         let deleted_task_pks = self
             .coordination_store

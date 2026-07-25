@@ -5,10 +5,18 @@ use bitfun_agent_runtime::prompt_cache::prompt_cache_scope_key;
 use bitfun_core_types::{SessionContinuationPolicy, SessionModelBindingPolicy};
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::path::{Path, PathBuf};
-use std::sync::{Arc, RwLock, Weak};
+use std::sync::{Arc, Weak};
+use tokio::sync::RwLock;
 
+/// Stable prefix for external subagent runtime keys within the agent registry.
+/// External subagents are registered under this namespace to avoid collisions with
+/// built-in agents (`builtin:`, `custom:`, etc.). The module itself is intentionally
+/// minimal — routing and lifecycle logic lives in `external_subagents.rs`.
 pub(crate) const EXTERNAL_SUBAGENT_RUNTIME_KEY_PREFIX: &str = "external_subagent_runtime:";
 
+/// Formats a stable runtime key for an external subagent given its content digest.
+/// Used by `install_active_candidate` to register generation-specific agent entries
+/// without re-parsing ecosystem manifests on every restart.
 pub(crate) fn external_subagent_runtime_key(digest: &str) -> String {
     format!("{EXTERNAL_SUBAGENT_RUNTIME_KEY_PREFIX}{digest}")
 }
@@ -58,36 +66,28 @@ impl ExternalSubagentRegistryState {
 
     fn read_generations(
         &self,
-    ) -> std::sync::RwLockReadGuard<'_, HashMap<String, ExternalSubagentGenerationEntry>> {
-        self.generations
-            .read()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
+    ) -> tokio::sync::RwLockReadGuard<'_, HashMap<String, ExternalSubagentGenerationEntry>> {
+        self.generations.try_read().expect("ExternalSubagentRegistryState generations lock should not be contended")
     }
 
     fn write_generations(
         &self,
-    ) -> std::sync::RwLockWriteGuard<'_, HashMap<String, ExternalSubagentGenerationEntry>> {
-        self.generations
-            .write()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
+    ) -> tokio::sync::RwLockWriteGuard<'_, HashMap<String, ExternalSubagentGenerationEntry>> {
+        self.generations.try_write().expect("ExternalSubagentRegistryState generations lock should not be contended")
     }
 
     fn read_routes(
         &self,
-    ) -> std::sync::RwLockReadGuard<'_, HashMap<PathBuf, BTreeMap<String, ExternalSubagentRoute>>>
+    ) -> tokio::sync::RwLockReadGuard<'_, HashMap<PathBuf, BTreeMap<String, ExternalSubagentRoute>>>
     {
-        self.workspace_routes
-            .read()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
+        self.workspace_routes.try_read().expect("ExternalSubagentRegistryState workspace_routes lock should not be contended")
     }
 
     fn write_routes(
         &self,
-    ) -> std::sync::RwLockWriteGuard<'_, HashMap<PathBuf, BTreeMap<String, ExternalSubagentRoute>>>
+    ) -> tokio::sync::RwLockWriteGuard<'_, HashMap<PathBuf, BTreeMap<String, ExternalSubagentRoute>>>
     {
-        self.workspace_routes
-            .write()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
+        self.workspace_routes.try_write().expect("ExternalSubagentRegistryState workspace_routes lock should not be contended")
     }
 
     pub(super) fn find_generation_entry(&self, runtime_key: &str) -> Option<AgentEntry> {

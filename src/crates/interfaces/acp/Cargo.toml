@@ -9,6 +9,9 @@ description = "BitFun Agent Client Protocol surface"
 name = "bitfun_acp"
 
 [dependencies]
+# TODO(audit): product-full is heavyweight for an interface crate. Evaluate whether
+# the narrower features (e.g. service-integrations, runtime-services) are sufficient
+# once ACP's coordinator usage is fully enumerated.
 bitfun-core = { path = "../../assembly/core", default-features = false, features = ["product-full"] }
 bitfun-agent-runtime = { path = "../../execution/agent-runtime" }
 bitfun-agent-tools = { path = "../../execution/tool-contracts" }

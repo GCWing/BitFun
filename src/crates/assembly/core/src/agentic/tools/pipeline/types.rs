@@ -48,6 +48,7 @@ pub struct SubagentParentInfo {
     pub tool_call_id: String,
     pub session_id: String,
     pub dialog_turn_id: String,
+    pub depth: Option<u32>,
 }
 
 impl SubagentParentInfo {
@@ -70,6 +71,7 @@ impl From<SubagentParentInfo> for EventSubagentParentInfo {
             tool_call_id: info.tool_call_id,
             session_id: info.session_id,
             dialog_turn_id: info.dialog_turn_id,
+            depth: info.depth,
         }
     }
 }

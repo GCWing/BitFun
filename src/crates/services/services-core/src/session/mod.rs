@@ -5,6 +5,7 @@ mod metadata;
 mod metadata_store;
 mod migration;
 pub mod page;
+pub mod tree;
 pub mod types;
 
 pub use bitfun_core_types::SessionKind;

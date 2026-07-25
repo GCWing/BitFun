@@ -18,7 +18,8 @@ use serde::Deserialize;
 use serde_json::{json, Value};
 use std::path::Path;
 
-/// SessionMessage tool - send a message to another session via the dialog scheduler
+/// 军团通信主通道。拿到 session_id 即可跨对话收发消息。
+/// Task spawn 或 SessionControl list_tasks 获取 session_id。
 pub struct SessionMessageTool;
 
 #[derive(Debug, Clone)]
@@ -239,27 +240,35 @@ impl SessionMessageTool {
             }],
         )
     }
-}
 
-#[derive(Debug, Clone, Deserialize)]
-enum SessionMessageAgentType {
-    #[serde(rename = "agentic", alias = "Agentic", alias = "AGENTIC")]
-    Agentic,
-    #[serde(rename = "Plan", alias = "plan", alias = "PLAN")]
-    Plan,
-    #[serde(rename = "Cowork", alias = "cowork", alias = "COWORK")]
-    Cowork,
-}
-
-impl SessionMessageAgentType {
-    fn as_str(&self) -> &'static str {
-        match self {
-            Self::Agentic => "agentic",
-            Self::Plan => "Plan",
-            Self::Cowork => "Cowork",
+    async fn get_available_agent_type_ids(&self, context: Option<&ToolUseContext>) -> Vec<String> {
+        use crate::agentic::agents::{get_agent_registry, SubagentListScope, SubagentQueryContext};
+        let registry = get_agent_registry();
+        let workspace_root = context.and_then(|ctx| ctx.workspace_root());
+        registry.load_custom_agents(workspace_root).await;
+        let agents = registry
+            .get_subagents_for_query(&SubagentQueryContext {
+                parent_agent_type: context.and_then(|ctx| ctx.agent_type.as_deref()),
+                workspace_root,
+                list_scope: SubagentListScope::TaskVisible,
+                include_disabled: false,
+                external_sources_supported: context.is_none_or(|ctx| !ctx.is_remote()),
+            })
+            .await;
+        let mut ids: Vec<String> = agents.into_iter().map(|a| a.id).collect();
+        for builtin in &["agentic", "Plan", "Cowork"] {
+            let b = builtin.to_string();
+            if !ids.contains(&b) {
+                ids.push(b);
+            }
         }
+        ids.sort();
+        ids.dedup();
+        ids
     }
 }
+
+use bitfun_runtime_ports::AgentType;
 
 #[derive(Debug, Clone, Deserialize)]
 struct SessionMessageInput {
@@ -267,7 +276,7 @@ struct SessionMessageInput {
     session_id: Option<String>,
     session_name: Option<String>,
     message: String,
-    agent_type: Option<SessionMessageAgentType>,
+    agent_type: Option<AgentType>,
 }
 
 #[async_trait]
@@ -284,10 +293,11 @@ Usage:
 - Create a new session and send: omit "session_id", and provide "workspace", "session_name", "agent_type", and "message".
 - Reusing an existing session: provide "session_id" and "message". You may omit "workspace"; the tool will resolve it from the target session when possible.
 
-Allowed agent types when creating a session:
-- "agentic": Coding-focused agent for implementation, debugging, and code changes.
-- "Plan": Planning agent for clarifying requirements and producing an implementation plan before coding.
-- "Cowork": Collaborative agent for office-style work such as research, documentation, presentations, etc.
+Use SessionControl (list) to discover existing sessions before sending messages.
+Use SessionHistory to export a transcript of any session.
+Use Task to spawn subagent sessions that can receive messages.
+
+Allowed agent types when creating a session are dynamically resolved from the available agent registry (common values include "agentic", "Plan", "Cowork", and any custom/external subagent types).
 "#
                 .to_string(),
         )
@@ -323,7 +333,40 @@ Allowed agent types when creating a session:
                 },
                 "agent_type": {
                     "type": "string",
-                    "enum": ["agentic", "Plan", "Cowork"],
+                    "description": "Required when session_id is omitted. Valid values are dynamically resolved from the available agent registry."
+                }
+            },
+            "required": ["message"],
+            "additionalProperties": false
+        })
+    }
+
+    /// Dynamically resolves allowed agent_type values from the agent registry.
+    async fn input_schema_for_model_with_context(&self, context: Option<&ToolUseContext>) -> Value {
+        let agent_type_ids = self.get_available_agent_type_ids(context).await;
+        let agent_type_enum: Vec<&str> = agent_type_ids.iter().map(|s| s.as_str()).collect();
+        json!({
+            "type": "object",
+            "properties": {
+                "workspace": {
+                    "type": "string",
+                    "description": "Required absolute target workspace path when creating a new session. Optional when session_id is provided."
+                },
+                "session_id": {
+                    "type": "string",
+                    "description": "Optional target session ID. Omit it to create a new session and send the message there."
+                },
+                "session_name": {
+                    "type": "string",
+                    "description": "Required when session_id is omitted. Display name for the new session."
+                },
+                "message": {
+                    "type": "string",
+                    "description": "Message to send to the target session."
+                },
+                "agent_type": {
+                    "type": "string",
+                    "enum": agent_type_enum,
                     "description": "Required when session_id is omitted. Not allowed when sending to an existing session."
                 }
             },
@@ -846,6 +889,8 @@ mod tests {
             turn_count: 0,
             created_at_ms: 1,
             last_active_at_ms: 2,
+            parent_session_id: None,
+            status: None,
         }];
 
         assert_eq!(
@@ -866,6 +911,8 @@ mod tests {
             turn_count: 0,
             created_at_ms: 1,
             last_active_at_ms: 2,
+            parent_session_id: None,
+            status: None,
         }];
 
         assert_eq!(
