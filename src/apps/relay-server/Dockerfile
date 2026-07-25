@@ -44,18 +44,20 @@ RUN set -eux; \
           /etc/apt/sources.list.d/debian.sources; \
       fi; \
       mkdir -p /usr/local/cargo; \
+      # `[source.*]` alone is what redirects crates.io. A matching
+      # `[registries.*]` table would only matter for crates that name the
+      # registry explicitly, which none here do — and an unused named registry
+      # is something Cargo may start warning about.
+      #
+      # No `git-fetch-with-cli` either: `git` is not installed in this builder,
+      # so it would turn any future git dependency into a CN-only build failure
+      # while global builds kept working.
       printf '%s\n' \
         '[source.crates-io]' \
         'replace-with = "bitfun-rsproxy-sparse"' \
         '' \
         '[source.bitfun-rsproxy-sparse]' \
         "registry = \"${BITFUN_CARGO_SPARSE_URL}\"" \
-        '' \
-        '[registries.bitfun-rsproxy-sparse]' \
-        "index = \"${BITFUN_CARGO_SPARSE_URL}\"" \
-        '' \
-        '[net]' \
-        'git-fetch-with-cli = true' \
         > /usr/local/cargo/config.toml; \
     fi
 

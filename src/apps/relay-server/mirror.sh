@@ -147,25 +147,37 @@ bitfun_mirror_country_via_bash_tcp() {
   return 1
 }
 
+# Country lookups, HTTPS first.
+#
+# The answer decides whether this host gets Chinese apt/Docker/GitHub mirrors,
+# so an on-path attacker who can rewrite a plain-HTTP body can choose that for
+# us. The HTTP endpoints are kept only as a last resort for hosts where TLS is
+# unavailable, and the mode they produce is announced as unverified.
 bitfun_mirror_detect_country() {
-  local code=""
-  code="$(bitfun_mirror_http_body "https://ipinfo.io/country" 3 | tr -d '[:space:]' | tr '[:lower:]' '[:upper:]')"
-  if [ "${#code}" -eq 2 ]; then
-    echo "$code"
-    return 0
-  fi
+  local code="" endpoint
+  for endpoint in \
+    "https://ipinfo.io/country" \
+    "https://ifconfig.co/country-iso" \
+    "https://api.country.is/"; do
+    code="$(bitfun_mirror_http_body "$endpoint" 3 \
+      | tr -d '[:space:]' \
+      | tr '[:lower:]' '[:upper:]' \
+      | sed -n 's/.*"COUNTRY":"\([A-Z][A-Z]\)".*/\1/p;s/^\([A-Z][A-Z]\)$/\1/p' \
+      | head -n 1)"
+    if [ "${#code}" -eq 2 ]; then
+      echo "$code"
+      return 0
+    fi
+  done
   code="$(bitfun_mirror_http_body "http://ip-api.com/line/?fields=countryCode" 3 | tr -d '[:space:]' | tr '[:lower:]' '[:upper:]')"
   if [ "${#code}" -eq 2 ]; then
-    echo "$code"
-    return 0
-  fi
-  code="$(bitfun_mirror_http_body "https://ifconfig.co/country-iso" 3 | tr -d '[:space:]' | tr '[:lower:]' '[:upper:]')"
-  if [ "${#code}" -eq 2 ]; then
+    echo ">>> Region detect: only the unauthenticated HTTP lookup answered" >&2
     echo "$code"
     return 0
   fi
   code="$(bitfun_mirror_country_via_bash_tcp 2>/dev/null || true)"
   if [ "${#code}" -eq 2 ]; then
+    echo ">>> Region detect: only the unauthenticated HTTP lookup answered" >&2
     echo "$code"
     return 0
   fi
@@ -216,12 +228,39 @@ bitfun_mirror_resolve_mode() {
       ;;
   esac
 
+  # Already resolved in this shell (or exported by the caller). Detection costs
+  # up to four HTTP lookups plus two 4s probes, and mirror.sh is initialised at
+  # several points of one deploy; re-running it there is both slow and unstable,
+  # because a network blip mid-deploy could flip the mode between steps.
+  case "${BITFUN_MIRROR_MODE:-}" in
+    cn)
+      export BITFUN_USE_CN_MIRROR=1
+      return 0
+      ;;
+    global)
+      export BITFUN_USE_CN_MIRROR=0
+      return 0
+      ;;
+  esac
+
   local country=""
   country="$(bitfun_mirror_detect_country || true)"
   if [ "$country" = "CN" ]; then
     echo ">>> Region detect: public IP country=CN → China mirrors"
     export BITFUN_MIRROR_MODE=cn
     export BITFUN_USE_CN_MIRROR=1
+    return 0
+  fi
+
+  # A resolved country code is a direct answer, so stop here. The heuristics
+  # below exist for the case where there is no answer at all; letting them
+  # override one turns a transient GitHub outage on a Frankfurt VPS into
+  # rewritten apt sources, a Chinese Docker registry and GitHub traffic through
+  # a third-party proxy — because mirrors.aliyun.com answers from anywhere.
+  if [ -n "$country" ]; then
+    echo ">>> Region detect: public IP country=${country} → global mirrors"
+    export BITFUN_MIRROR_MODE=global
+    export BITFUN_USE_CN_MIRROR=0
     return 0
   fi
 
@@ -239,11 +278,7 @@ bitfun_mirror_resolve_mode() {
     return 0
   fi
 
-  if [ -n "$country" ]; then
-    echo ">>> Region detect: public IP country=${country} → global mirrors"
-  else
-    echo ">>> Region detect: inconclusive → global mirrors"
-  fi
+  echo ">>> Region detect: inconclusive → global mirrors"
   export BITFUN_MIRROR_MODE=global
   export BITFUN_USE_CN_MIRROR=0
   return 0
@@ -351,8 +386,40 @@ bitfun_mirror_file_cksum() {
     || bitfun_mirror_priv cksum "$path" 2>/dev/null | awk '{print $1 " " $2}'
 }
 
+# Scheme for the apt mirror we are about to write.
+#
+# `bitfun_mirror_init` runs before anything is installed, and minimal cloud
+# images ship without `ca-certificates` — that is precisely why their stock
+# sources are `http://`. Writing `https://` there breaks the very `apt-get
+# update` that would install the CA bundle, and it fails with a TLS error that
+# says nothing about mirrors. Package signatures are what protect apt, so http
+# costs integrity nothing; use https only when the host can actually verify it.
+bitfun_mirror_apt_scheme() {
+  if [ -n "${BITFUN_APT_SCHEME:-}" ]; then
+    printf '%s' "$BITFUN_APT_SCHEME"
+    return 0
+  fi
+  if [ -s /etc/ssl/certs/ca-certificates.crt ] \
+    || [ -s /etc/pki/tls/certs/ca-bundle.crt ]; then
+    if [ -f /usr/lib/apt/methods/https ] || [ -f /usr/libexec/apt/methods/https ]; then
+      printf 'https'
+      return 0
+    fi
+    # Modern apt has https built into the http method; only older releases ship
+    # a separate binary, so treat its absence as conclusive only there.
+    if ! command -v apt-get >/dev/null 2>&1 \
+      || apt-get --version 2>/dev/null | grep -Eq 'apt 2\.|apt 1\.[6-9]'; then
+      printf 'https'
+      return 0
+    fi
+  fi
+  printf 'http'
+}
+
 bitfun_mirror_apply_apt_debian_family() {
   local mirror="${BITFUN_APT_MIRROR:-mirrors.aliyun.com}"
+  local scheme
+  scheme="$(bitfun_mirror_apt_scheme)"
   local id="" version_codename="" id_like=""
   # shellcheck disable=SC1091
   . /etc/os-release 2>/dev/null || true
@@ -403,35 +470,57 @@ bitfun_mirror_apply_apt_debian_family() {
     ubuntu)
       cat >"$tmp" <<EOF
 # Managed by BitFun relay deploy (China mirrors). Safe to delete to revert.
-deb https://${mirror}/ubuntu/ ${version_codename} main restricted universe multiverse
-deb https://${mirror}/ubuntu/ ${version_codename}-updates main restricted universe multiverse
-deb https://${mirror}/ubuntu/ ${version_codename}-backports main restricted universe multiverse
-deb https://${mirror}/ubuntu/ ${suite_security} main restricted universe multiverse
+deb ${scheme}://${mirror}/ubuntu/ ${version_codename} main restricted universe multiverse
+deb ${scheme}://${mirror}/ubuntu/ ${version_codename}-updates main restricted universe multiverse
+deb ${scheme}://${mirror}/ubuntu/ ${version_codename}-backports main restricted universe multiverse
+deb ${scheme}://${mirror}/ubuntu/ ${suite_security} main restricted universe multiverse
 EOF
       ;;
     debian)
       cat >"$tmp" <<EOF
 # Managed by BitFun relay deploy (China mirrors). Safe to delete to revert.
-deb https://${mirror}/debian/ ${version_codename} main contrib non-free non-free-firmware
-deb https://${mirror}/debian/ ${version_codename}-updates main contrib non-free non-free-firmware
-deb https://${mirror}/debian-security ${suite_security} main contrib non-free non-free-firmware
+deb ${scheme}://${mirror}/debian/ ${version_codename} main contrib non-free non-free-firmware
+deb ${scheme}://${mirror}/debian/ ${version_codename}-updates main contrib non-free non-free-firmware
+deb ${scheme}://${mirror}/debian-security ${suite_security} main contrib non-free non-free-firmware
 EOF
       ;;
     *)
-      rm -f "$tmp"
-      # Best-effort host rewrite for existing lists.
-      if [ -f /etc/apt/sources.list ]; then
-        local rewritten
-        rewritten="$(mktemp)"
+      # Unknown distro: the suites can only come from the file that is already
+      # there. Write the rewrite into the BitFun-owned list and disable the
+      # original by rename rather than overwriting it in place — an in-place
+      # edit is invisible to `bitfun_mirror_restore_apt`, which leaves the host
+      # permanently pinned to Chinese mirrors with only a timestamped backup the
+      # operator has to find by hand.
+      if [ ! -f /etc/apt/sources.list ]; then
+        rm -f "$tmp"
+        echo ">>> apt mirror: skip (no /etc/apt/sources.list to rewrite)"
+        return 0
+      fi
+      {
+        echo "# Managed by BitFun relay deploy (China mirrors). Safe to delete to revert."
         sed -e "s|deb.debian.org/debian|${mirror}/debian|g" \
           -e "s|security.debian.org/debian-security|${mirror}/debian-security|g" \
           -e "s|archive.ubuntu.com/ubuntu|${mirror}/ubuntu|g" \
           -e "s|security.ubuntu.com/ubuntu|${mirror}/ubuntu|g" \
-          /etc/apt/sources.list >"$rewritten"
-        bitfun_mirror_priv cp "$rewritten" /etc/apt/sources.list
-        rm -f "$rewritten"
+          /etc/apt/sources.list
+      } >"$tmp"
+      bitfun_mirror_priv cp "$tmp" "$list_file"
+      rm -f "$tmp"
+      bitfun_mirror_backup_file /etc/apt/sources.list
+      if [ -e /etc/apt/sources.list.bitfun-disabled ]; then
+        # A previous deploy already saved the real upstream sources here.
+        # Overwriting it would destroy the only copy `restore_apt` can put back,
+        # so drop the current file (already mirrored, and preserved as a
+        # timestamped backup above) instead of promoting it to "the original".
+        bitfun_mirror_priv rm -f /etc/apt/sources.list 2>/dev/null || true
+      elif ! bitfun_mirror_priv mv /etc/apt/sources.list /etc/apt/sources.list.bitfun-disabled; then
+        # Could not disable the original, so both lists would be active and the
+        # overseas hosts would still be tried. Undo instead of half-applying.
+        bitfun_mirror_priv rm -f "$list_file" 2>/dev/null || true
+        echo ">>> apt mirror: could not disable /etc/apt/sources.list; left untouched" >&2
+        return 1
       fi
-      echo ">>> apt mirror: rewrote common upstream hosts → ${mirror}"
+      echo ">>> apt mirror: rewrote common upstream hosts → ${mirror} (${list_file})"
       return 0
       ;;
   esac
@@ -452,6 +541,20 @@ EOF
   echo ">>> apt mirror: enabled ${list_file} → ${mirror}"
 }
 
+# Bounded `apt-get update` against whatever sources are currently active.
+bitfun_mirror_probe_apt() {
+  local timeout_prefix=""
+  if command -v timeout >/dev/null 2>&1; then
+    timeout_prefix="timeout 180"
+  fi
+  # shellcheck disable=SC2086
+  bitfun_mirror_priv $timeout_prefix apt-get \
+    -o Acquire::Retries=1 \
+    -o Acquire::http::Timeout=15 \
+    -o Acquire::https::Timeout=15 \
+    update >/dev/null 2>&1
+}
+
 bitfun_mirror_apply_apt() {
   if ! command -v apt-get >/dev/null 2>&1; then
     return 0
@@ -459,7 +562,25 @@ bitfun_mirror_apply_apt() {
   if [ ! -f /etc/os-release ]; then
     return 0
   fi
-  bitfun_mirror_apply_apt_debian_family || echo ">>> apt mirror: apply failed (continuing)" >&2
+  if ! bitfun_mirror_apply_apt_debian_family; then
+    echo ">>> apt mirror: apply failed (continuing)" >&2
+    return 0
+  fi
+
+  # A write that succeeds still proves nothing about the mirror. Without this
+  # probe the first symptom is an `apt-get update` failure several steps later,
+  # with nothing tying it back to the sources BitFun swapped in.
+  if bitfun_mirror_probe_apt; then
+    return 0
+  fi
+  echo ">>> apt mirror: ${BITFUN_APT_MIRROR:-mirrors.aliyun.com} did not answer a test \
+apt-get update; restoring the previous sources" >&2
+  bitfun_mirror_restore_apt || true
+  if ! bitfun_mirror_probe_apt; then
+    echo ">>> apt mirror: apt-get update still fails after restoring the original \
+sources, so the failure is not the mirror" >&2
+  fi
+  return 0
 }
 
 bitfun_mirror_write_docker_daemon_json() {
@@ -895,6 +1016,16 @@ bitfun_mirror_apply_host() {
   bitfun_mirror_chown_to_home_owner "$HOME/.bitfun" "$HOME/.bitfun/mirror-mode"
 }
 
+# Undo a partially applied Aliyun docker-ce repository.
+#
+# The caller falls back to get.docker.com when this install fails, and that path
+# runs its own `apt-get update` — which would pick up a half-written docker.list
+# or an unusable docker.asc and fail on those instead, hiding the real error.
+bitfun_mirror_cleanup_docker_aliyun_apt() {
+  bitfun_mirror_priv rm -f /etc/apt/sources.list.d/docker.list /etc/apt/keyrings/docker.asc \
+    2>/dev/null || true
+}
+
 # Install Docker Engine from Aliyun docker-ce (CN). Returns 0 on success.
 bitfun_mirror_install_docker_aliyun() {
   if ! command -v apt-get >/dev/null 2>&1 && ! command -v dnf >/dev/null 2>&1 && ! command -v yum >/dev/null 2>&1; then
@@ -924,16 +1055,50 @@ bitfun_mirror_install_docker_aliyun() {
         ;;
     esac
     [ -n "$version_codename" ] || return 1
-    bitfun_mirror_priv apt-get update -y
-    bitfun_mirror_priv apt-get install -y ca-certificates curl
-    bitfun_mirror_priv install -m 0755 -d /etc/apt/keyrings
-    curl -fsSL --retry 3 "https://mirrors.aliyun.com/docker-ce/linux/${docker_ce_distro}/gpg" \
-      | bitfun_mirror_priv tee /etc/apt/keyrings/docker.asc >/dev/null
-    bitfun_mirror_priv chmod a+r /etc/apt/keyrings/docker.asc
+
+    bitfun_mirror_priv apt-get update -y || true
+    bitfun_mirror_priv apt-get install -y ca-certificates curl || {
+      echo ">>> Aliyun docker-ce: could not install ca-certificates/curl" >&2
+      return 1
+    }
+    bitfun_mirror_priv install -m 0755 -d /etc/apt/keyrings || return 1
+
+    local key_tmp
+    key_tmp="$(mktemp)"
+    if ! curl -fsSL --retry 3 "https://mirrors.aliyun.com/docker-ce/linux/${docker_ce_distro}/gpg" \
+      -o "$key_tmp" || [ ! -s "$key_tmp" ]; then
+      # An empty or missing key silently produces a repository apt can never
+      # verify, so stop before it is written anywhere.
+      rm -f "$key_tmp"
+      echo ">>> Aliyun docker-ce: GPG key download failed or was empty" >&2
+      return 1
+    fi
+    bitfun_mirror_priv cp "$key_tmp" /etc/apt/keyrings/docker.asc || {
+      rm -f "$key_tmp"
+      bitfun_mirror_cleanup_docker_aliyun_apt
+      return 1
+    }
+    rm -f "$key_tmp"
+    bitfun_mirror_priv chmod a+r /etc/apt/keyrings/docker.asc || true
     echo "deb [arch=${arch} signed-by=/etc/apt/keyrings/docker.asc] https://mirrors.aliyun.com/docker-ce/linux/${docker_ce_distro} ${version_codename} stable" \
-      | bitfun_mirror_priv tee /etc/apt/sources.list.d/docker.list >/dev/null
-    bitfun_mirror_priv apt-get update -y
-    bitfun_mirror_priv apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+      | bitfun_mirror_priv tee /etc/apt/sources.list.d/docker.list >/dev/null || {
+        bitfun_mirror_cleanup_docker_aliyun_apt
+        return 1
+      }
+    if ! bitfun_mirror_priv apt-get update -y; then
+      bitfun_mirror_cleanup_docker_aliyun_apt
+      echo ">>> Aliyun docker-ce: apt-get update failed for the docker-ce repository" >&2
+      return 1
+    fi
+    # `return 0` unconditionally here would report success on a failed install,
+    # and the caller would skip its fallback and fail later at `systemctl enable
+    # --now docker` with an error that says nothing about apt.
+    if ! bitfun_mirror_priv apt-get install -y docker-ce docker-ce-cli containerd.io \
+      docker-buildx-plugin docker-compose-plugin; then
+      bitfun_mirror_cleanup_docker_aliyun_apt
+      echo ">>> Aliyun docker-ce: package installation failed" >&2
+      return 1
+    fi
     return 0
   fi
 
@@ -948,18 +1113,111 @@ enabled=1
 gpgcheck=1
 gpgkey=https://mirrors.aliyun.com/docker-ce/linux/centos/gpg
 EOF
-    bitfun_mirror_priv "$pkg" install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+    if ! bitfun_mirror_priv "$pkg" install -y docker-ce docker-ce-cli containerd.io \
+      docker-buildx-plugin docker-compose-plugin; then
+      bitfun_mirror_priv rm -f /etc/yum.repos.d/docker-ce.repo 2>/dev/null || true
+      echo ">>> Aliyun docker-ce: package installation failed" >&2
+      return 1
+    fi
     return 0
   fi
   return 1
 }
 
-# Download get.docker.com script to $1 using CN-aware URL.
+bitfun_mirror_sha256_of() {
+  if command -v sha256sum >/dev/null 2>&1; then
+    sha256sum "$1" 2>/dev/null | awk '{print $1}'
+  elif command -v shasum >/dev/null 2>&1; then
+    shasum -a 256 "$1" 2>/dev/null | awk '{print $1}'
+  else
+    return 1
+  fi
+}
+
+# Download the Docker install script to $1 using the CN-aware URL, and prove it
+# is the upstream script before anyone runs it.
+#
+# The CN default is a jsDelivr copy of `docker/docker-install@master`: a floating
+# ref, edge-cached for hours, fetched over a third-party CDN — and the result is
+# executed as root. Nothing about that path is authenticated, so a compromise
+# anywhere along it is a root shell on every host deployed while it lasts.
+#
+# Two ways out, in order:
+#   * `BITFUN_DOCKER_INSTALL_SHA256` — an operator-pinned digest, checked exactly.
+#   * cross-origin agreement — the same script fetched from a second, independent
+#     origin must hash identically. One compromised mirror is then not enough.
+#
+# Neither is available on a host that can only reach the CN CDN, so
+# `BITFUN_DOCKER_INSTALL_ALLOW_UNVERIFIED=1` exists as a deliberate, logged
+# opt-out. It is not the default: the Aliyun docker-ce path above is GPG-verified
+# and covers Debian/Ubuntu/RHEL, so failing closed here costs little.
 bitfun_mirror_fetch_docker_install_script() {
   local dest="$1"
   local url="${BITFUN_DOCKER_GET_URL:-https://get.docker.com}"
+  local expected="${BITFUN_DOCKER_INSTALL_SHA256:-}"
+  local actual="" reference="" reference_url="" verified=0
+
   echo ">>> Fetching Docker install script: ${url}"
-  curl -fsSL --retry 3 "$url" -o "$dest"
+  curl -fsSL --retry 3 "$url" -o "$dest" || return 1
+
+  actual="$(bitfun_mirror_sha256_of "$dest" || true)"
+  if [ -z "$actual" ]; then
+    echo ">>> Docker install script: no sha256 tool available; cannot verify" >&2
+  elif [ -n "$expected" ]; then
+    if [ "$actual" = "$expected" ]; then
+      verified=1
+    else
+      echo ">>> Docker install script: sha256 ${actual} does not match the pinned \
+${expected}; refusing to run it" >&2
+      rm -f "$dest"
+      return 1
+    fi
+  else
+    local candidate
+    for candidate in \
+      "https://get.docker.com" \
+      "https://raw.githubusercontent.com/docker/docker-install/master/install.sh"; do
+      [ "$candidate" = "$url" ] && continue
+      if curl -fsSL --retry 1 --max-time 30 "$candidate" -o "${dest}.crosscheck" 2>/dev/null; then
+        reference="$(bitfun_mirror_sha256_of "${dest}.crosscheck" || true)"
+        rm -f "${dest}.crosscheck"
+        if [ -n "$reference" ] && [ "$reference" = "$actual" ]; then
+          verified=1
+          reference_url="$candidate"
+          break
+        fi
+        if [ -n "$reference" ]; then
+          echo ">>> Docker install script: ${candidate} serves different bytes \
+(${reference} vs ${actual}); refusing to run it" >&2
+          rm -f "$dest"
+          return 1
+        fi
+      fi
+      rm -f "${dest}.crosscheck"
+    done
+  fi
+
+  if [ "$verified" -eq 1 ]; then
+    if [ -n "$reference_url" ]; then
+      echo ">>> Docker install script verified against ${reference_url} (sha256 ${actual})"
+    else
+      echo ">>> Docker install script matches the pinned sha256"
+    fi
+    return 0
+  fi
+
+  if [ "${BITFUN_DOCKER_INSTALL_ALLOW_UNVERIFIED:-0}" = "1" ]; then
+    echo ">>> WARNING: running an unverified Docker install script from ${url} \
+because BITFUN_DOCKER_INSTALL_ALLOW_UNVERIFIED=1 (sha256 ${actual:-unknown})" >&2
+    return 0
+  fi
+
+  echo ">>> Docker install script from ${url} could not be verified against an \
+independent origin. Install Docker with the distribution's own packages, set \
+BITFUN_DOCKER_INSTALL_SHA256=${actual:-<sha256>} to pin this exact script, or set \
+BITFUN_DOCKER_INSTALL_ALLOW_UNVERIFIED=1 to accept the risk." >&2
+  rm -f "$dest"
+  return 1
 }
 
 bitfun_mirror_init() {
