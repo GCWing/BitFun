@@ -34,7 +34,18 @@ fi
 
 if ! command -v minisign >/dev/null 2>&1; then
   echo "[sign] Installing minisign..."
-  sudo apt-get install -y --no-install-recommends minisign >/dev/null
+  # Ubuntu's package is not available in the default repositories on every
+  # runner image (notably ubuntu-24.04-arm). Prefer it when present, then use
+  # the portable Rust distribution as a fallback.
+  if ! sudo apt-get install -y --no-install-recommends minisign >/dev/null 2>&1; then
+    if ! command -v cargo >/dev/null 2>&1; then
+      echo "[sign] ERROR: minisign is unavailable and cargo is not installed." >&2
+      exit 1
+    fi
+    MINISIGN_ROOT="${RUNNER_TEMP:-${TMPDIR:-/tmp}}/bitfun-minisign"
+    cargo install --registry crates-io --locked --root "$MINISIGN_ROOT" minisign >/dev/null
+    export PATH="$MINISIGN_ROOT/bin:$PATH"
+  fi
 fi
 
 WORK="$(mktemp -d)"

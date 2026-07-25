@@ -279,6 +279,9 @@ jobs:
             --repo "GCWing/BitFun" \
             --out linux-release-assets/linux-binaries.json
 
+      - name: Setup Rust toolchain (minisign fallback)
+        uses: dtolnay/rust-toolchain@stable
+
       # The Tauri bundler signs the five updater artifacts during `tauri build`,
       # but the installers people download by hand from the release page — dmg,
       # deb, rpm, the Windows installer and the direct AppImages — shipped with
