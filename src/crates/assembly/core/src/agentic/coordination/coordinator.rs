@@ -309,8 +309,6 @@ pub(crate) struct SubagentExecutionRequest {
     pub(crate) permission_runtime_ceiling: PermissionRuntimeCeiling,
     /// Execution policy for the child subagent session being launched.
     pub(crate) delegation_policy: DelegationPolicy,
-    /// When false, creates an ephemeral subagent session that is not persisted.
-    pub(crate) run_in_background: bool,
     /// Pins an immutable external generation from Task validation until the
     /// queued or running invocation reaches a terminal state.
     pub(crate) external_generation_lease:
@@ -11378,7 +11376,6 @@ mod tests {
             ])
             .expect("test ceiling should be valid"),
             delegation_policy: DelegationPolicy::top_level().spawn_child(),
-            run_in_background: true,
             external_generation_lease: None,
         };
 
@@ -11437,7 +11434,6 @@ mod tests {
             context: HashMap::new(),
             permission_runtime_ceiling: PermissionRuntimeCeiling::default(),
             delegation_policy: DelegationPolicy::top_level().spawn_child(),
-            run_in_background: true,
             external_generation_lease: None,
         };
 
@@ -11511,7 +11507,6 @@ mod tests {
             context: HashMap::new(),
             permission_runtime_ceiling: PermissionRuntimeCeiling::default(),
             delegation_policy: DelegationPolicy::top_level().spawn_child(),
-            run_in_background: false,
             external_generation_lease: None,
         };
 
@@ -11556,7 +11551,6 @@ mod tests {
             context: HashMap::new(),
             permission_runtime_ceiling: PermissionRuntimeCeiling::default(),
             delegation_policy: DelegationPolicy::top_level().spawn_child(),
-            run_in_background: false,
             external_generation_lease: None,
         };
 

@@ -380,6 +380,10 @@ pub enum AgenticEvent {
         /// `"model_deleted"`.
         reason: String,
     },
+
+    ReviewPropagationNeeded {
+        parent_session_id: String,
+    },
 }
 
 /// Diagnostic evidence collected for an attempt that was superseded by an

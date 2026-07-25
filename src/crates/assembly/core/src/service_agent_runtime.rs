@@ -969,6 +969,7 @@ impl CoreServiceAgentRuntime {
             thread_goal_management,
             cancellation,
             interaction_response,
+            session_tree,
         )?
         .with_session_close_port(session_close)
         .with_dialog_turn_port(dialog_turn)
@@ -1192,6 +1193,7 @@ impl CoreServiceAgentRuntime {
             thread_goal_management,
             cancellation,
             interaction_response,
+            session_tree,
         )?
         .with_session_close_port(session_close)
         .with_dialog_turn_port(dialog_turn)

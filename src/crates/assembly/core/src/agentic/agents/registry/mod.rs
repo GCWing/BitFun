@@ -15,12 +15,12 @@ use self::types::AgentEntry;
 use self::types::{AgentCategory, SubAgentSource};
 use super::Agent;
 use crate::agentic::deep_review_policy::canonical_review_worker_agent_type;
-use log::{debug, warn};
+use log::debug;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
-use std::sync::RwLock;
 use std::sync::{Arc, OnceLock};
+use tokio::sync::RwLock;
 
 pub(crate) use external::external_subagent_runtime_key;
 pub use external::{

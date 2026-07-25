@@ -30,6 +30,7 @@ use bitfun_runtime_ports::{
     SessionTranscript, SessionTranscriptReader, SessionTranscriptRequest, ThreadGoal,
 };
 use bitfun_runtime_services::RuntimeServices;
+use bitfun_services_core::session::tree::SessionTreeManager;
 
 use crate::event_source::{AgentEventReceiver, AgentEventSource, AgentSessionEventReceiver};
 use crate::permission::{PermissionRequestEventReceiver, PermissionRequestManager};
