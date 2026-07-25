@@ -1,7 +1,8 @@
 //! Workspace manager.
 
 #[cfg(feature = "service-integrations")]
-use crate::service::git::GitService;
+use super::worktree_topology::global_worktree_topology_service;
+use super::WorktreeTopologyFreshness;
 use crate::service::remote_ssh::workspace_state::{
     canonicalize_local_workspace_root, local_workspace_roots_equal,
     local_workspace_stable_storage_id, normalize_local_workspace_root_for_stable_id,
@@ -304,6 +305,21 @@ impl WorkspaceInfo {
 
     /// Creates a new workspace record.
     pub async fn new(root_path: PathBuf, options: WorkspaceOpenOptions) -> BitFunResult<Self> {
+        Self::new_inner(root_path, options, true).await
+    }
+
+    pub(crate) async fn new_without_worktree(
+        root_path: PathBuf,
+        options: WorkspaceOpenOptions,
+    ) -> BitFunResult<Self> {
+        Self::new_inner(root_path, options, false).await
+    }
+
+    async fn new_inner(
+        root_path: PathBuf,
+        options: WorkspaceOpenOptions,
+        load_worktree: bool,
+    ) -> BitFunResult<Self> {
         let default_name = root_path
             .file_name()
             .and_then(|n| n.to_str())
@@ -381,7 +397,11 @@ impl WorkspaceInfo {
             );
             workspace.detect_workspace_type().await;
             workspace.load_identity().await;
-            workspace.load_worktree().await;
+            if load_worktree {
+                workspace
+                    .load_worktree(WorktreeTopologyFreshness::Cached)
+                    .await;
+            }
 
             if options.scan_options.calculate_statistics {
                 workspace.scan_workspace(options.scan_options).await?;
@@ -422,11 +442,14 @@ impl WorkspaceInfo {
         self.identity = identity;
     }
 
-    async fn load_worktree(&mut self) {
-        self.worktree = Self::resolve_worktree_info(&self.root_path).await;
+    async fn load_worktree(&mut self, freshness: WorktreeTopologyFreshness) {
+        self.worktree = Self::resolve_worktree_info(&self.root_path, freshness).await;
     }
 
-    async fn resolve_worktree_info(workspace_root: &Path) -> Option<WorkspaceWorktreeInfo> {
+    pub(crate) async fn resolve_worktree_info(
+        workspace_root: &Path,
+        freshness: WorktreeTopologyFreshness,
+    ) -> Option<WorkspaceWorktreeInfo> {
         #[cfg(not(feature = "service-integrations"))]
         {
             let _ = workspace_root;
@@ -436,7 +459,10 @@ impl WorkspaceInfo {
         #[cfg(feature = "service-integrations")]
         {
             let normalized_workspace_path = workspace_root.to_string_lossy().replace('\\', "/");
-            let worktrees = match GitService::list_worktrees(workspace_root).await {
+            let worktrees = match global_worktree_topology_service()
+                .list_worktrees(workspace_root, freshness)
+                .await
+            {
                 Ok(worktrees) => worktrees,
                 Err(_) => return None,
             };
@@ -886,7 +912,19 @@ impl WorkspaceManager {
         path: PathBuf,
         options: WorkspaceOpenOptions,
     ) -> BitFunResult<WorkspaceInfo> {
-        self.upsert_workspace_with_options(path, options, true)
+        let worktree =
+            WorkspaceInfo::resolve_worktree_info(&path, WorktreeTopologyFreshness::Cached).await;
+        self.open_workspace_with_resolved_worktree(path, options, worktree)
+            .await
+    }
+
+    pub(crate) async fn open_workspace_with_resolved_worktree(
+        &mut self,
+        path: PathBuf,
+        options: WorkspaceOpenOptions,
+        worktree: Option<WorkspaceWorktreeInfo>,
+    ) -> BitFunResult<WorkspaceInfo> {
+        self.upsert_workspace_with_options(path, options, true, Some(worktree))
             .await
     }
 
@@ -895,8 +933,9 @@ impl WorkspaceManager {
         &mut self,
         path: PathBuf,
         options: WorkspaceOpenOptions,
+        refresh_worktree: Option<Option<WorkspaceWorktreeInfo>>,
     ) -> BitFunResult<WorkspaceInfo> {
-        self.upsert_workspace_with_options(path, options, false)
+        self.upsert_workspace_with_options(path, options, false, refresh_worktree)
             .await
     }
 
@@ -905,6 +944,7 @@ impl WorkspaceManager {
         path: PathBuf,
         options: WorkspaceOpenOptions,
         keep_opened: bool,
+        refresh_worktree: Option<Option<WorkspaceWorktreeInfo>>,
     ) -> BitFunResult<WorkspaceInfo> {
         let is_remote = options.workspace_kind == WorkspaceKind::Remote;
 
@@ -1064,8 +1104,10 @@ impl WorkspaceManager {
                         );
                     }
                 }
-                workspace.load_identity().await;
-                workspace.load_worktree().await;
+                if let Some(worktree) = refresh_worktree {
+                    workspace.load_identity().await;
+                    workspace.worktree = worktree;
+                }
             }
             if keep_opened {
                 self.ensure_workspace_open(&workspace_id);
@@ -1086,7 +1128,15 @@ impl WorkspaceManager {
             });
         }
 
-        let workspace = WorkspaceInfo::new(path, options.clone()).await?;
+        let workspace = match refresh_worktree {
+            Some(worktree) => {
+                let mut workspace =
+                    WorkspaceInfo::new_without_worktree(path, options.clone()).await?;
+                workspace.worktree = worktree;
+                workspace
+            }
+            None => WorkspaceInfo::new(path, options.clone()).await?,
+        };
         let workspace_id = workspace.id.clone();
 
         self.workspaces

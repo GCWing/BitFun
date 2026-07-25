@@ -10,6 +10,7 @@ import { useWorkspaceContext } from '@/infrastructure/contexts/WorkspaceContext'
 import {
   createWorktreeWorkspace,
   deleteWorktreeWorkspace,
+  WorktreeWorkspaceCreationError,
 } from '@/infrastructure/services/business/worktreeWorkspaceService';
 import { useNavSceneStore } from '@/app/stores/navSceneStore';
 import { useApp } from '@/app/hooks/useApp';
@@ -754,7 +755,7 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
     } catch (error) {
       notificationService.error(
         t(
-          result.openAfterCreate
+          error instanceof WorktreeWorkspaceCreationError && error.stage === 'open'
             ? 'nav.workspaces.worktreeCreateOrOpenFailed'
             : 'nav.workspaces.worktreeCreateFailed',
           {

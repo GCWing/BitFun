@@ -2,7 +2,8 @@ use super::*;
 /**
  * Git service implementation
  */
-use git2::{BranchType, Commit, Repository};
+use git2::{BranchType, Commit, ErrorCode, Repository};
+use std::io::Write;
 use std::path::Path;
 use std::time::Duration;
 use std::time::Instant;
@@ -94,6 +95,43 @@ impl GitService {
         task::spawn_blocking(move || Ok(is_git_repository(path_buf)))
             .await
             .map_err(|e| GitError::CommandFailed(format!("spawn_blocking join: {e}")))?
+    }
+
+    /// Resolves the stable repository identity shared by all worktrees without
+    /// spawning the Git CLI.
+    pub async fn resolve_worktree_repository<P: AsRef<Path>>(
+        path: P,
+    ) -> Result<GitWorktreeRepositoryInfo, GitError> {
+        let requested_path = path.as_ref().to_path_buf();
+        task::spawn_blocking(move || {
+            let repository = Repository::discover(&requested_path)
+                .map_err(|error| GitError::RepositoryNotFound(error.to_string()))?;
+            let query_path = repository
+                .workdir()
+                .map(Path::to_path_buf)
+                .unwrap_or_else(|| requested_path.clone());
+            let git_dir = repository.path().to_path_buf();
+            let common_git_dir = git_dir
+                .parent()
+                .filter(|parent| {
+                    parent
+                        .file_name()
+                        .and_then(|name| name.to_str())
+                        .map(|name| name.eq_ignore_ascii_case("worktrees"))
+                        .unwrap_or(false)
+                })
+                .and_then(Path::parent)
+                .map(Path::to_path_buf)
+                .unwrap_or(git_dir);
+
+            Ok(GitWorktreeRepositoryInfo {
+                worktree_git_marker: query_path.join(".git"),
+                query_path: std::fs::canonicalize(&query_path).unwrap_or(query_path),
+                common_git_dir: std::fs::canonicalize(&common_git_dir).unwrap_or(common_git_dir),
+            })
+        })
+        .await
+        .map_err(|error| GitError::CommandFailed(format!("spawn_blocking join: {error}")))?
     }
 
     /// Resolves a revision to an immutable commit id without changing repository state.
@@ -1338,6 +1376,36 @@ impl GitService {
         create_branch: bool,
     ) -> Result<GitWorktreeInfo, GitError> {
         let repo_path = path.as_ref().to_string_lossy();
+        let repository_path = path.as_ref().to_path_buf();
+        let repository_info = Self::resolve_worktree_repository(path.as_ref()).await?;
+
+        task::spawn_blocking(move || {
+            let repository = Repository::discover(&repository_path)
+                .map_err(|error| GitError::RepositoryNotFound(error.to_string()))?;
+            match repository.head() {
+                Ok(head) if head.target().is_some() => {}
+                Err(error) if error.code() == ErrorCode::UnbornBranch => {
+                    return Err(GitError::CommandFailed(
+                        "Cannot create a worktree before the repository has an initial commit"
+                            .to_string(),
+                    ));
+                }
+                Ok(_) => {
+                    return Err(GitError::CommandFailed(
+                        "Cannot create a worktree because the repository HEAD has no commit"
+                            .to_string(),
+                    ));
+                }
+                Err(error) => {
+                    return Err(GitError::CommandFailed(format!(
+                        "Failed to inspect repository HEAD before creating worktree: {error}"
+                    )));
+                }
+            }
+            ensure_worktree_directory_excluded(&repository_info.common_git_dir)
+        })
+        .await
+        .map_err(|error| GitError::CommandFailed(format!("spawn_blocking join: {error}")))??;
 
         let worktree_dir = path.as_ref().join(".worktrees");
         let worktree_path = worktree_dir.join(branch);
@@ -1354,17 +1422,41 @@ impl GitService {
         };
 
         execute_git_command(&repo_path, &args).await?;
-
-        let worktrees = Self::list_worktrees(&path).await?;
-
         let normalized_expected = worktree_path_str.replace("\\", "/");
-
-        worktrees
-            .into_iter()
-            .find(|wt| wt.path == normalized_expected)
-            .ok_or_else(|| {
-                GitError::CommandFailed("Failed to find newly created worktree".to_string())
+        let expected_branch = branch.to_string();
+        task::spawn_blocking(move || {
+            let repository = Repository::open(&worktree_path).map_err(|error| {
+                GitError::CommandFailed(format!(
+                    "Failed to inspect newly created worktree: {error}"
+                ))
+            })?;
+            let (branch, head) = match repository.head() {
+                Ok(head) => (
+                    head.shorthand().ok().map(str::to_string),
+                    head.target()
+                        .map(|target| target.to_string())
+                        .unwrap_or_default(),
+                ),
+                Err(error) if error.code() == ErrorCode::UnbornBranch => {
+                    (Some(expected_branch), "0".repeat(40))
+                }
+                Err(error) => {
+                    return Err(GitError::CommandFailed(format!(
+                        "Failed to resolve newly created worktree HEAD: {error}"
+                    )))
+                }
+            };
+            Ok(GitWorktreeInfo {
+                path: normalized_expected,
+                branch,
+                head,
+                is_main: false,
+                is_locked: false,
+                is_prunable: false,
             })
+        })
+        .await
+        .map_err(|error| GitError::CommandFailed(format!("spawn_blocking join: {error}")))?
     }
 
     /// Removes a worktree.
@@ -1404,6 +1496,35 @@ impl GitService {
             duration: Some(duration),
         })
     }
+}
+
+fn ensure_worktree_directory_excluded(common_git_dir: &Path) -> Result<(), GitError> {
+    const WORKTREE_EXCLUDE_PATTERN: &str = ".worktrees/";
+
+    let info_dir = common_git_dir.join("info");
+    std::fs::create_dir_all(&info_dir).map_err(GitError::IoError)?;
+    let exclude_path = info_dir.join("exclude");
+    let existing = match std::fs::read_to_string(&exclude_path) {
+        Ok(existing) => existing,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => String::new(),
+        Err(error) => return Err(GitError::IoError(error)),
+    };
+    if existing
+        .lines()
+        .any(|line| line.trim() == WORKTREE_EXCLUDE_PATTERN)
+    {
+        return Ok(());
+    }
+
+    let mut exclude = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(exclude_path)
+        .map_err(GitError::IoError)?;
+    if !existing.is_empty() && !existing.ends_with('\n') {
+        writeln!(exclude).map_err(GitError::IoError)?;
+    }
+    writeln!(exclude, "{WORKTREE_EXCLUDE_PATTERN}").map_err(GitError::IoError)
 }
 
 #[cfg(test)]
@@ -1506,5 +1627,52 @@ mod review_path_tests {
                 .collect::<Vec<_>>(),
             vec!["old commit"]
         );
+    }
+
+    #[tokio::test]
+    async fn add_worktree_returns_created_checkout_without_listing_all_worktrees() {
+        let directory = tempfile::tempdir().expect("temporary repository should be created");
+        git(directory.path(), &["init"], None);
+        commit_file(
+            directory.path(),
+            "initial\n",
+            "initial commit",
+            "2025-01-01T00:00:00Z",
+        );
+
+        let worktree = GitService::add_worktree(directory.path(), "feature-test", true)
+            .await
+            .expect("worktree should be created");
+
+        assert_eq!(worktree.branch.as_deref(), Some("feature-test"));
+        assert!(!worktree.head.is_empty());
+        assert!(!worktree.is_main);
+        assert!(Path::new(&worktree.path).is_dir());
+        let exclude = fs::read_to_string(directory.path().join(".git/info/exclude"))
+            .expect("Git exclude file should be readable");
+        assert_eq!(
+            exclude
+                .lines()
+                .filter(|line| line.trim() == ".worktrees/")
+                .count(),
+            1
+        );
+    }
+
+    #[tokio::test]
+    async fn add_worktree_rejects_repository_without_commits_before_side_effects() {
+        let directory = tempfile::tempdir().expect("temporary repository should be created");
+        git(directory.path(), &["init"], None);
+
+        let error = GitService::add_worktree(directory.path(), "unborn-test", true)
+            .await
+            .expect_err("unborn worktree creation should be rejected");
+
+        assert!(error.to_string().contains("initial commit"));
+        assert!(!directory.path().join(".worktrees").exists());
+        let worktrees = GitService::list_worktrees(directory.path())
+            .await
+            .expect("worktree list should remain readable");
+        assert_eq!(worktrees.len(), 1);
     }
 }

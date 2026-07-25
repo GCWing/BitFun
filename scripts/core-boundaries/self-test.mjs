@@ -3763,7 +3763,11 @@ export function runManifestParserSelfTest({
     },
     {
       path: 'src/crates/assembly/core/src/service/workspace/manager.rs',
-      contracts: ['feature = "service-integrations"', 'GitService', 'return None'],
+      contracts: [
+        'feature = "service-integrations"',
+        'global_worktree_topology_service',
+        'return None',
+      ],
     },
     {
       path: 'src/crates/assembly/core/src/service/workspace_runtime/service.rs',

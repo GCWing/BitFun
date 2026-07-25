@@ -46,10 +46,10 @@ use crate::external_subagents::{
 };
 use crate::external_tools::{
     begin_external_tool_workspace_recovery, external_tool_workspace_requires_recovery,
-    merge_tool_state, project_external_tools_read_only, reconcile_external_tools,
-    release_external_tool_workspace, reset_external_tool_workspace_recovery_budget,
-    workspace_route_key, ExternalToolDecisions, ExternalToolProductState,
-    TOOL_CONFLICT_RESELECTION_REQUIRED, UNRESOLVED_TOOL_CONFLICT_CHOICE,
+    invalidate_external_tool_runtime_availability, merge_tool_state,
+    project_external_tools_read_only, reconcile_external_tools, release_external_tool_workspace,
+    reset_external_tool_workspace_recovery_budget, workspace_route_key, ExternalToolDecisions,
+    ExternalToolProductState, TOOL_CONFLICT_RESELECTION_REQUIRED, UNRESOLVED_TOOL_CONFLICT_CHOICE,
 };
 use crate::service::config::{subscribe_config_updates, ConfigUpdateEvent};
 use bitfun_claude_code_adapter::{
@@ -926,6 +926,15 @@ impl WorkspaceExternalSourceService {
     async fn refresh(self: &Arc<Self>) -> Result<ExternalSourceCatalogSnapshot, String> {
         self.refresh_with_worker_recovery(WorkerRecoveryPolicy::ResetAndAttempt)
             .await
+    }
+
+    async fn refresh_with_runtime_invalidation(
+        self: &Arc<Self>,
+    ) -> Result<ExternalSourceCatalogSnapshot, String> {
+        if self.profile == ExternalSourceServiceProfile::LocalExecution {
+            invalidate_external_tool_runtime_availability().await;
+        }
+        self.refresh().await
     }
 
     async fn refresh_preserving_worker_recovery(
@@ -2140,7 +2149,7 @@ impl WorkspaceExternalSourceService {
             ExternalSourceControlActionV1::Refresh => (
                 "refresh",
                 ExternalSourceOperationStage::Discover,
-                self.refresh().await,
+                self.refresh_with_runtime_invalidation().await,
             ),
             ExternalSourceControlActionV1::SetSourceEnabled {
                 source_key,
@@ -5285,7 +5294,7 @@ pub async fn external_source_snapshot(
 ) -> Result<ExternalSourceCatalogSnapshot, String> {
     let service = service_for(workspace_root).await?;
     if force_refresh {
-        service.refresh().await
+        service.refresh_with_runtime_invalidation().await
     } else {
         service.ensure_background_refresh();
         Ok(service.snapshot())
@@ -5320,10 +5329,13 @@ pub async fn get_external_source_control_snapshot(
             .with_stage(ExternalSourceOperationStage::ProjectResponse)
     })?;
     if force_refresh {
-        service.refresh().await.map_err(|error| {
-            sanitize_external_source_operation_error(error)
-                .with_stage(ExternalSourceOperationStage::Discover)
-        })?;
+        service
+            .refresh_with_runtime_invalidation()
+            .await
+            .map_err(|error| {
+                sanitize_external_source_operation_error(error)
+                    .with_stage(ExternalSourceOperationStage::Discover)
+            })?;
     } else {
         service.ensure_background_refresh();
     }

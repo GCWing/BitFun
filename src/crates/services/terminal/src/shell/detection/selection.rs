@@ -1,16 +1,17 @@
 use std::path::PathBuf;
 
-use super::{path, DetectedShell, ShellCandidate, ShellDetector, ShellDiscoverySource, ShellType};
+use super::{
+    path, platform, DetectedShell, ShellCandidate, ShellDetector, ShellDiscoverySource, ShellType,
+};
 
 impl ShellDetector {
     /// Return the preferred local default shell for the current platform.
     pub fn get_default_shell() -> DetectedShell {
         #[cfg(windows)]
         {
-            let shells = Self::detect_available_shells();
-            return Self::find_in_detected(&shells, &ShellType::PowerShellCore)
-                .or_else(|| Self::find_in_detected(&shells, &ShellType::PowerShell))
-                .or_else(|| Self::find_in_detected(&shells, &ShellType::Cmd))
+            return Self::find_shell(&ShellType::PowerShellCore)
+                .or_else(|| Self::find_shell(&ShellType::PowerShell))
+                .or_else(|| Self::find_shell(&ShellType::Cmd))
                 .unwrap_or_else(|| {
                     DetectedShell::fallback(
                         ShellType::Cmd,
@@ -26,9 +27,8 @@ impl ShellDetector {
                     return shell;
                 }
             }
-            let shells = Self::detect_available_shells();
-            Self::find_in_detected(&shells, &ShellType::Bash)
-                .or_else(|| Self::find_in_detected(&shells, &ShellType::Sh))
+            Self::find_shell(&ShellType::Bash)
+                .or_else(|| Self::find_shell(&ShellType::Sh))
                 .unwrap_or_else(|| {
                     DetectedShell::fallback(ShellType::Sh, PathBuf::from("/bin/sh"), "sh")
                 })
@@ -36,12 +36,49 @@ impl ShellDetector {
     }
 
     pub fn find_shell(shell_type: &ShellType) -> Option<DetectedShell> {
-        Self::find_in_detected(&Self::detect_available_shells(), shell_type)
+        #[cfg(windows)]
+        {
+            if matches!(shell_type, ShellType::Bash) {
+                return platform::detect_git_bash();
+            }
+            return Self::validate_first_candidate(Self::candidates_for_shell(shell_type));
+        }
+        #[cfg(not(windows))]
+        {
+            Self::validate_first_candidate(Self::candidates_for_shell(shell_type))
+        }
     }
+
     pub fn find_shell_by_id(id: &str) -> Option<DetectedShell> {
-        Self::detect_available_shells()
+        let shell_type = id
+            .split_once(':')
+            .and_then(|(shell_type, _)| Self::shell_type_from_preference(shell_type))?;
+        #[cfg(windows)]
+        if matches!(shell_type, ShellType::Bash) {
+            return platform::detect_git_bash().filter(|shell| shell.id == id);
+        }
+        Self::validate_candidates(Self::candidates_for_shell(&shell_type))
             .into_iter()
             .find(|shell| shell.id == id)
+    }
+
+    fn candidates_for_shell(shell_type: &ShellType) -> Vec<ShellCandidate> {
+        #[cfg(windows)]
+        {
+            match shell_type {
+                ShellType::PowerShellCore => platform::windows_pwsh_candidates(),
+                ShellType::PowerShell => platform::windows_powershell_candidates(),
+                ShellType::Cmd => platform::windows_command_candidates(),
+                _ => Vec::new(),
+            }
+        }
+        #[cfg(not(windows))]
+        {
+            match shell_type {
+                ShellType::PowerShellCore => platform::non_windows_pwsh_candidates(),
+                _ => platform::posix_shell_candidates_for(shell_type),
+            }
+        }
     }
 
     pub fn resolve_explicit_shell(value: &str) -> Option<DetectedShell> {
@@ -87,12 +124,5 @@ impl ShellDetector {
             "csh" | "tcsh" => Some(ShellType::Csh),
             _ => None,
         }
-    }
-
-    fn find_in_detected(shells: &[DetectedShell], shell_type: &ShellType) -> Option<DetectedShell> {
-        shells
-            .iter()
-            .find(|shell| &shell.shell_type == shell_type)
-            .cloned()
     }
 }

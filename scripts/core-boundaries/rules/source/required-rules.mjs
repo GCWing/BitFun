@@ -3961,8 +3961,9 @@ export const requiredContentRules = [
       'workspace metadata may omit git worktree enrichment when service integrations are disabled',
     patterns: [
       {
-        regex: /#\[cfg\(feature = "service-integrations"\)\]\s*use crate::service::git::GitService\b/s,
-        message: 'GitService import must stay gated for no-default builds',
+        regex:
+          /#\[cfg\(feature = "service-integrations"\)\]\s*use super::worktree_topology::global_worktree_topology_service\b/s,
+        message: 'worktree topology owner import must stay gated for no-default builds',
       },
       {
         regex: /#\[cfg\(not\(feature = "service-integrations"\)\)\]\s*\{\s*let _ = workspace_root;\s*return None;\s*\}/s,

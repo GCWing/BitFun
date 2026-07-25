@@ -73,6 +73,10 @@ pub struct ScriptToolInvokeResponse {
 pub trait ScriptToolRuntime: Send + Sync {
     async fn availability(&self) -> ScriptToolRuntimeAvailability;
 
+    /// Clears cached executable discovery and availability probes so the next
+    /// availability check observes runtime installation changes.
+    async fn invalidate_availability(&self) {}
+
     async fn is_loaded(&self, target_id: &str) -> bool;
 
     /// Waits until the currently loaded target process exits. Implementations
