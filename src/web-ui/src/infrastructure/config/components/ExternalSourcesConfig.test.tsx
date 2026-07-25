@@ -561,7 +561,6 @@ describe('ExternalSourcesConfig', () => {
       button.textContent?.includes('OpenCode project commands'));
     expect(container.textContent).toContain('diagnostics.summary');
     expect(container.textContent).toContain('diagnostics.category.invalidSettings');
-    expect(container.textContent).toContain('One command file could not be parsed.');
     expect(candidateButton).toBeDefined();
     await act(async () => candidateButton?.click());
     expect(setConflictChoiceMock).toHaveBeenCalledWith(
@@ -1478,7 +1477,6 @@ describe('ExternalSourcesConfig', () => {
       'agentDiagnostics.ignoredSetting.reason:{"setting":"agentDiagnostics.settings.temperature"}',
     );
     expect(container.textContent).toContain('agentDiagnostics.invalidDefinition.reason');
-    expect(container.textContent).toContain('opencode_agent_definition_type_invalid');
     expect(container.textContent).toContain('agentConflicts.selectionApproves');
     expect(container.textContent).toContain('.opencode/agents/explore.md');
     expect(container.textContent).not.toContain('D:/workspace/project/.opencode/agents');

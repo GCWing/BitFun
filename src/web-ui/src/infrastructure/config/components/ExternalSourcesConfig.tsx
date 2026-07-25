@@ -50,7 +50,6 @@ import {
   type ExternalSourcePresentationGroup,
 } from '../externalSourcePresentation';
 import { externalSourceRequestScopeKey } from './externalSourceRequestScope';
-import ExternalHooksPanel from './ExternalHooksPanel';
 import './ExternalSourcesConfig.scss';
 
 const DISCOVERY_POLL_DELAYS_MS = [750, 1_500, 3_000, 5_000] as const;
@@ -286,7 +285,6 @@ const ExternalSourcesConfig: React.FC = () => {
   const peerDeviceId = peerDevice?.peerMode.active ? peerDevice.peerMode.deviceId : undefined;
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [hookRefreshEpoch, setHookRefreshEpoch] = useState(0);
   const [busyKey, setBusyKey] = useState<string | null>(null);
   const [reviewingToolKey, setReviewingToolKey] = useState<string | null>(null);
   const [reviewingAgentKey, setReviewingAgentKey] = useState<string | null>(null);
@@ -1161,7 +1159,6 @@ const ExternalSourcesConfig: React.FC = () => {
               aria-label={refreshing ? t('actions.refreshing') : t('actions.refresh')}
               disabled={refreshing || (!hostCapabilities.canRefresh && !error)}
               onClick={() => {
-                setHookRefreshEpoch((epoch) => epoch + 1);
                 void loadSnapshot(true, true);
               }}
             >
@@ -1171,11 +1168,6 @@ const ExternalSourcesConfig: React.FC = () => {
         )}
       />
       <ConfigPageContent id="external-integration-attention-region">
-        <ExternalHooksPanel
-          workspacePath={workspacePath}
-          unsupportedReason={peerDeviceId ? 'peer' : remoteWorkspace ? 'remote' : undefined}
-          refreshEpoch={hookRefreshEpoch}
-        />
         {hostUnavailable ? (
           <ConfigPageSection
             title={t('unavailable.hostTitle')}
@@ -1263,7 +1255,9 @@ const ExternalSourcesConfig: React.FC = () => {
                 ) : null}
                 <details>
                   <summary>{t('common.technicalDetails')}</summary>
-                  <div>{error.detail}</div>
+                  {error.code ? (
+                    <div>{t('operationErrors.errorCode', { code: error.code })}</div>
+                  ) : null}
                   {error.stage ? (
                     <div>{t('operationErrors.stage', { stage: error.stage })}</div>
                   ) : null}
@@ -1455,7 +1449,7 @@ const ExternalSourcesConfig: React.FC = () => {
                             <div className="bitfun-external-sources-config__policy-actions">
                               <Select
                                 size="small"
-                                value={ecosystem.mode}
+                                value={selectedPolicyEnabled ? ecosystem.mode : 'disabled'}
                                 triggerAriaLabel={t('policy.modeLabel', {
                                   ecosystem: ecosystem.descriptor.displayName,
                                 })}
@@ -1533,7 +1527,6 @@ const ExternalSourcesConfig: React.FC = () => {
                                             <details>
                                               <summary>{t('common.technicalDetails')}</summary>
                                               <code>{diagnostic.code}</code>
-                                              <div>{diagnostic.message}</div>
                                             </details>
                                           </li>
                                         ))}
@@ -1671,7 +1664,7 @@ const ExternalSourcesConfig: React.FC = () => {
                   <div className="bitfun-external-sources-config__policy-actions">
                     <Select
                       size="small"
-                      value={ecosystem.mode}
+                      value={selectedPolicyEnabled ? ecosystem.mode : 'disabled'}
                       triggerAriaLabel={t('policy.modeLabel', {
                         ecosystem: ecosystem.descriptor.displayName,
                       })}
@@ -1826,7 +1819,6 @@ const ExternalSourcesConfig: React.FC = () => {
                       <details>
                         <summary>{t('common.technicalDetails')}</summary>
                         <code>{diagnostic.code}</code>
-                        <div>{diagnostic.message}</div>
                       </details>
                     </li>
                   ))}
@@ -2260,7 +2252,6 @@ const ExternalSourcesConfig: React.FC = () => {
                   <span>· {t('mcp.emptyLocation.userGlobal')}</span>
                   <span>· {t('mcp.emptyLocation.project')}</span>
                   <span>· {t('mcp.emptyLocation.envConfig')}</span>
-                  <code>{t('mcp.emptyExample')}</code>
                 </div>
               </ConfigPageSection>
             ) : null}
@@ -2364,10 +2355,9 @@ const ExternalSourcesConfig: React.FC = () => {
                               return (
                                 <div key={diagnostic.code}>
                                   <span>{t(`agentDiagnostics.${category}.reason`, params)}</span>
-                                  <code className="bitfun-external-sources-config__diagnostic-code">
-                                    {diagnostic.code}
-                                  </code>
-                                  <span>{t(`agentDiagnostics.${category}.nextStep`, params)}</span>
+                                  {diagnostic.blocksActivation ? (
+                                    <span>{t(`agentDiagnostics.${category}.nextStep`, params)}</span>
+                                  ) : null}
                                 </div>
                               );
                             })}
@@ -2490,17 +2480,13 @@ const ExternalSourcesConfig: React.FC = () => {
                                   );
                                   return (
                                     <span key={diagnostic.code}>
-                                      {t(`agentDiagnostics.${category}.reason`, params)}{' '}
-                                      {t(`agentDiagnostics.${category}.impact`, {
-                                        impact: diagnostic.blocksActivation
-                                          ? t('agentDiagnostics.activationBlocked')
-                                          : t('agentDiagnostics.degradedOnly'),
-                                        ...params,
-                                      })}{' '}
-                                      <code className="bitfun-external-sources-config__diagnostic-code">
-                                        {diagnostic.code}
-                                      </code>{' '}
-                                      {t(`agentDiagnostics.${category}.nextStep`, params)}
+                                      {t(`agentDiagnostics.${category}.reason`, params)}
+                                      {diagnostic.blocksActivation ? (
+                                        <>
+                                          {' '}
+                                          {t(`agentDiagnostics.${category}.nextStep`, params)}
+                                        </>
+                                      ) : null}
                                     </span>
                                   );
                                 })}
@@ -2719,7 +2705,6 @@ const ExternalSourcesConfig: React.FC = () => {
                                 <details>
                                   <summary>{t('common.technicalDetails')}</summary>
                                   <code>{diagnostic.code}</code>
-                                  <div>{diagnostic.message}</div>
                                 </details>
                               </li>
                             ))}

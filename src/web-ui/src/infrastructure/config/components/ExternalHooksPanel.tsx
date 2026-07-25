@@ -77,14 +77,7 @@ function HookDiagnosticItem({ diagnostic, t }: {
 }) {
   return (
     <li>
-      <span>{t(`hooks.diagnosticCategory.${diagnosticCategory(diagnostic.code)}`, {
-        code: diagnostic.code,
-      })}</span>
-      <details className="bitfun-external-hooks__technical-detail">
-        <summary>{t('hooks.technicalDetails')}</summary>
-        <code>{diagnostic.code}</code>
-        <span>{diagnostic.message}</span>
-      </details>
+      <span>{t(`hooks.diagnosticCategory.${diagnosticCategory(diagnostic.code)}`)}</span>
     </li>
   );
 }
@@ -140,9 +133,9 @@ function HookSourceCard({
           ))}
         </ul>
       )}
-      {diagnostics.length > 0 ? (
+      {diagnostics.filter((d) => d.severity.toLowerCase() !== 'info').length > 0 ? (
         <ul className="bitfun-external-hooks__diagnostics">
-          {diagnostics.map((diagnostic) => (
+          {diagnostics.filter((d) => d.severity.toLowerCase() !== 'info').map((diagnostic) => (
             <HookDiagnosticItem
               key={`${diagnostic.code}:${diagnostic.message}`}
               diagnostic={diagnostic}
@@ -309,7 +302,6 @@ const ExternalHooksPanel: React.FC<ExternalHooksPanelProps> = ({
   const [loading, setLoading] = useState(!unsupportedReason);
   const [refreshing, setRefreshing] = useState(false);
   const [errorCode, setErrorCode] = useState<string | null>(null);
-  const [catalogDiagnosticLimit, setCatalogDiagnosticLimit] = useState(INITIAL_DIAGNOSTIC_LIMIT);
   const requestSequence = useRef(0);
 
   const loadCatalog = useCallback(async (forceRefresh: boolean, showLoading = true) => {
@@ -341,7 +333,6 @@ const ExternalHooksPanel: React.FC<ExternalHooksPanelProps> = ({
     requestSequence.current += 1;
     setSnapshot(null);
     setErrorCode(null);
-    setCatalogDiagnosticLimit(INITIAL_DIAGNOSTIC_LIMIT);
     if (unsupportedReason) {
       setLoading(false);
       setRefreshing(false);
@@ -384,11 +375,6 @@ const ExternalHooksPanel: React.FC<ExternalHooksPanelProps> = ({
     return grouped;
   }, [snapshot]);
 
-  const catalogDiagnostics = useMemo(
-    () => snapshot?.diagnostics.filter((diagnostic) => diagnostic.source === undefined) ?? [],
-    [snapshot],
-  );
-  const visibleCatalogDiagnostics = catalogDiagnostics.slice(0, catalogDiagnosticLimit);
   const busy = loading
     || refreshing
     || (Boolean(snapshot?.discoveryPending) && !errorCode);
@@ -479,33 +465,6 @@ const ExternalHooksPanel: React.FC<ExternalHooksPanelProps> = ({
                 t={t}
               />
             ))}
-            {catalogDiagnostics.length > 0 ? (
-              <div className="bitfun-external-hooks__catalog-diagnostics">
-                <div>{t('hooks.diagnostics')}</div>
-                <ul>
-                  {visibleCatalogDiagnostics.map((diagnostic) => (
-                    <HookDiagnosticItem
-                      key={`${diagnostic.code}:${diagnostic.message}`}
-                      diagnostic={diagnostic}
-                      t={t}
-                    />
-                  ))}
-                </ul>
-                {visibleCatalogDiagnostics.length < catalogDiagnostics.length ? (
-                  <Button
-                    variant="ghost"
-                    size="small"
-                    onClick={() => setCatalogDiagnosticLimit(
-                      (value) => value + DIAGNOSTIC_PAGE_SIZE,
-                    )}
-                  >
-                    {t('hooks.showMoreDiagnostics', {
-                      count: catalogDiagnostics.length - visibleCatalogDiagnostics.length,
-                    })}
-                  </Button>
-                ) : null}
-              </div>
-            ) : null}
             <div className="bitfun-external-hooks__footnote">{t('hooks.readOnly')}</div>
           </div>
         )}

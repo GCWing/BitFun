@@ -158,8 +158,7 @@ describe('ExternalHooksPanel', () => {
       await Promise.resolve();
     });
 
-    expect(container.textContent?.match(/source-only diagnostic/g)).toHaveLength(1);
-    expect(container.textContent?.match(/provider-wide diagnostic/g)).toHaveLength(1);
+    expect(container.querySelectorAll('.bitfun-external-hooks__diagnostics > li')).toHaveLength(1);
   });
 
   it('shows a remote-specific unsupported state without reading local Hooks', async () => {
@@ -302,7 +301,7 @@ describe('ExternalHooksPanel', () => {
     expect(container.textContent).not.toContain('hooks.empty');
   });
 
-  it('bounds provider and catalog diagnostics until the user asks for more', async () => {
+  it('bounds provider diagnostics until the user asks for more', async () => {
     const providerDiagnostics = Array.from({ length: 30 }, (_, index) => ({
       severity: 'warning',
       assetKind: 'hook',
@@ -310,16 +309,10 @@ describe('ExternalHooksPanel', () => {
       message: `source diagnostic ${index}`,
       source: snapshot.sources[0].key,
     }));
-    const catalogDiagnostics = Array.from({ length: 30 }, (_, index) => ({
-      severity: 'warning',
-      assetKind: 'hook',
-      code: `claude.hook.catalog_${index}`,
-      message: `catalog diagnostic ${index}`,
-    }));
     getCatalogMock.mockResolvedValue({
       ...snapshot,
       sources: [{ ...snapshot.sources[0], diagnostics: providerDiagnostics }],
-      diagnostics: [...providerDiagnostics, ...catalogDiagnostics],
+      diagnostics: providerDiagnostics,
     });
 
     await act(async () => {
@@ -328,10 +321,9 @@ describe('ExternalHooksPanel', () => {
     });
 
     expect(container.querySelectorAll('.bitfun-external-hooks__diagnostics > li')).toHaveLength(20);
-    expect(container.querySelectorAll('.bitfun-external-hooks__catalog-diagnostics li')).toHaveLength(20);
     expect(Array.from(container.querySelectorAll('button')).filter(
       (button) => button.textContent?.includes('hooks.showMoreDiagnostics'),
-    )).toHaveLength(2);
+    )).toHaveLength(1);
   });
 
   it('polls the cached snapshot until deferred discovery completes', async () => {

@@ -6,7 +6,7 @@
   "checkingNonBlocking": "正在檢查更新…",
   "hooks": {
     "title": "Hooks",
-    "description": "檢查 OpenCode、Claude Code 與 Codex 的靜態 Hook 設定。",
+    "description": "檢視 OpenCode、Claude Code 與 Codex 的 Hook 設定。BitFun 只讀取設定檔，不執行任何程式碼。",
     "refresh": "重新整理 Hooks",
     "refreshing": "正在重新整理 Hooks…",
     "showMoreSources": "再顯示 {{count}} 個來源",
@@ -16,18 +16,19 @@
     "showMoreEntriesForProvider": "再顯示 {{provider}} 的 {{count}} 個 Hook",
     "showMoreDiagnosticsForProvider": "再顯示 {{provider}} 的 {{count}} 筆診斷",
     "technicalDetails": "技術詳情",
+    "diagnosticCode": "參考編號：{{code}}",
     "loading": "正在檢查 Hook 設定…",
     "pending": "Hook 探索仍在進行，目錄會自動更新。",
-    "empty": "未發現支援的 Hook 設定。",
+    "empty": "未發現 Hook 設定。",
     "error": "Hook 設定目前無法使用（{{code}}）。",
-    "staleAfterRefresh": "重新整理失敗（{{code}}），正在顯示最近一次有效目錄。",
-    "pollInterrupted": "Hook 自動探索已中斷（{{code}}）。請重新整理重試；目前可見目錄可能來自最近一次成功檢查。",
-    "summary": "{{hooks}} 個 Hook · {{mapped}} 個等價語意涵蓋 · {{sources}} 個來源",
-    "providerEmpty": "未發現此應用的靜態 Hook 來源。",
-    "providerFailed": "此應用的靜態 Hook 探索失敗，目前沒有可用目錄。",
-    "providerStaleEmpty": "最近一次有效目錄為空，且最新重新整理失敗。",
-    "noEntries": "此來源中沒有可靜態識別的 Hook 事件。",
-    "entriesDeferred": "更多 Hook 可透過提供者區域底部的「顯示更多」查看。",
+    "staleAfterRefresh": "重新整理失敗（{{code}}），正在顯示最近一次成功讀取的結果。",
+    "pollInterrupted": "Hook 自動探索已中斷（{{code}}）。請重新整理重試；目前可見內容可能來自最近一次成功檢查。",
+    "summary": "{{hooks}} 個 Hook · {{mapped}} 個可匹配 · {{sources}} 個來源",
+    "providerEmpty": "未發現此應用的 Hook 設定。",
+    "providerFailed": "讀取此應用的 Hook 設定失敗，目前沒有可用內容。",
+    "providerStaleEmpty": "上次成功讀取時沒有發現 Hook，且最新重新整理也失敗了。",
+    "noEntries": "此來源中沒有發現 Hook 事件。",
+    "entriesDeferred": "更多 Hook 可透過下方的「顯示更多」按鈕查看。",
     "matcher": "比對條件：{{matcher}}",
     "matcherValue": {
       "all": "全部",
@@ -36,7 +37,7 @@
       "unknown": "未知"
     },
     "diagnostics": "診斷",
-    "readOnly": "僅供檢視。BitFun 不會從此目錄載入或執行處理器。",
+    "readOnly": "僅供檢視。BitFun 只展示這些設定，不會執行其中的 Hook。",
     "unsupported": {
       "remote": "目前版本暫不支援檢查遠端工作區的 Hook。",
       "peer": "目前版本暫不支援透過 Peer Device Mode 檢查 Hook。"
@@ -46,8 +47,8 @@
       "partial": "部分讀取",
       "degraded": "已降級",
       "unavailable": "無法使用",
-      "stale": "最近一次有效結果",
-      "failed": "探索失敗"
+      "stale": "上次成功讀取的結果",
+      "failed": "讀取失敗"
     },
     "handler": {
       "function": "函式",
@@ -66,21 +67,21 @@
     "activation": {
       "disabled": "已在原生設定中停用",
       "unsupported": "原生執行階段不支援",
-      "unknown": "未評估原生啟用狀態"
+      "unknown": "無法確認是否已啟用"
     },
     "diagnosticCategory": {
       "nativeDisabled": "此原生設定已停用 Hook。",
-      "activationUnknown": "信任與啟用狀態需要由來源應用程式執行階段判斷。",
-      "staticCoverage": "靜態檢查只能顯示此來源的部分資訊。",
-      "opaque": "部分註冊無法在不執行原始碼的情況下安全識別。",
+      "activationUnknown": "BitFun 只讀取了設定檔，沒有執行來源應用程式，因此無法確認這些 Hook 是否已啟用。這只是資訊提示，不影響其他功能。",
+      "staticCoverage": "BitFun 透過讀取設定檔發現了一部分 Hook。來源應用程式執行階段可能還會註冊更多 Hook，這些需要實際執行應用程式後才能看到。",
+      "opaque": "部分 Hook 註冊邏輯需要執行原始碼才能識別，BitFun 靜態檢查無法解析。",
       "inspectionLimit": "部分 Hook 設定因靜態檢查安全限制而被省略。",
       "invalidConfiguration": "部分 Hook 設定無效或無法解析。",
       "unavailable": "部分 Hook 設定無法讀取。",
-      "generic": "Hook 檢查回報了一項診斷（{{code}}）。"
+      "generic": "Hook 檢查回報了一項診斷。"
     },
     "projection": {
-      "tool_before": "等價涵蓋 BitFun 工具執行前（未連接執行階段）",
-      "tool_after": "等價涵蓋 BitFun 工具執行後（未連接執行階段）",
+      "tool_before": "對應 BitFun 工具執行前",
+      "tool_after": "對應 BitFun 工具執行後",
       "nativeOnly": "僅來源應用支援",
       "opaque": "靜態資訊不完整"
     }
@@ -207,6 +208,7 @@
     "unavailableRetry": "暫時無法使用，請稍後重試。",
     "internal": "操作失敗，請重新整理後重試。",
     "referenceId": "參考編號：{{id}}",
+    "errorCode": "錯誤編號：{{code}}",
     "stage": "處理階段：{{stage}}",
     "causationId": "關聯操作：{{id}}"
   },
@@ -277,70 +279,70 @@
     "invalid": "設定有誤"
   },
   "agentDiagnostics": {
-    "activationBlocked": "暫時無法啟用此 Agent。",
-    "degradedOnly": "部分設定在 BitFun 中不會生效。請查看說明，確認實際結果符合預期。",
+    "activationBlocked": "無法啟用此 Agent。",
+    "degradedOnly": "部分設定不會生效。",
     "configurationUnavailable": {
-      "reason": "BitFun 無法讀取模型設定。",
+      "reason": "BitFun 無法讀取模型設定，無法啟用此 Agent。",
       "impact": "{{impact}}",
-      "nextStep": "請開啟 BitFun 的模型設定，確認 BitFun 可以正常讀取與儲存設定，然後重新整理。"
+      "nextStep": "請檢查 BitFun 的模型設定後重新整理。"
     },
     "modelUnavailable": {
       "reason": "此 Agent 要求的模型在 BitFun 中不可用。",
       "impact": "{{impact}}",
-      "nextStep": "請在來源應用中改用可用模型，或在 BitFun 中設定可用的固定 Sub-Agent 模型，然後重新整理。"
+      "nextStep": "請在來源應用中更換模型，或在 BitFun 中設定可用模型後重新整理。"
     },
     "toolUnavailable": {
-      "reason": "BitFun 中不可用的工具：{{tools}}。",
+      "reason": "以下工具在 BitFun 中不可用：{{tools}}",
       "impact": "{{impact}}",
-      "nextStep": "請在來源應用中移除或替換不支援的工具，然後重新整理。"
+      "nextStep": "請在來源應用中移除或替換這些工具後重新整理。"
     },
     "promptMissing": {
       "reason": "此 Agent 缺少有效的 prompt。",
       "impact": "{{impact}}",
-      "nextStep": "請在來源應用中補上非空白 prompt，然後重新整理。"
+      "nextStep": "請在來源應用中補上 prompt 後重新整理。"
     },
     "unsupportedSetting": {
-      "reason": "BitFun 目前不支援此 Agent 的「{{setting}}」設定。",
+      "reason": "BitFun 不支援「{{setting}}」設定，無法啟用此 Agent。",
       "impact": "{{impact}}",
-      "nextStep": "請在來源應用中移除或修改「{{setting}}」，然後重新整理。"
+      "nextStep": "請在來源應用中移除該設定後重新整理。"
     },
     "ignoredSetting": {
-      "reason": "BitFun 不會套用此 Agent 的「{{setting}}」設定。",
+      "reason": "BitFun 不支援「{{setting}}」設定，會忽略它。不影響使用。",
       "impact": "{{impact}}",
-      "nextStep": "啟用前，請核對上方實際使用的模型與工具。"
+      "nextStep": ""
     },
     "settings": {
       "unknownField": "未知欄位",
       "ambientPermissions": "全域權限",
-      "permissions": "permission 權限",
-      "options": "options",
+      "permissions": "權限",
+      "options": "選項",
       "nativeAgentOverlay": "內建 Agent 覆寫",
-      "legacyPrimaryMode": "舊版 primary 模式",
-      "primaryAgentMode": "primary Agent 模式",
-      "toolPatterns": "工具萬用字元規則",
-      "defaultPermissions": "預設權限語意",
-      "variant": "模型 variant",
-      "temperature": "temperature 參數",
+      "legacyPrimaryMode": "舊版主 Agent 模式",
+      "primaryAgentMode": "主 Agent 模式",
+      "toolPatterns": "工具萬用規則",
+      "defaultPermissions": "預設權限",
+      "variant": "模型變體",
+      "temperature": "溫度參數",
       "topP": "top_p 參數",
-      "steps": "steps 步數限制",
-      "maxSteps": "maxSteps 步數限制",
+      "steps": "步數限制",
+      "maxSteps": "最大步數",
       "color": "顯示顏色",
-      "primaryFacet": "primary Agent 能力"
+      "primaryFacet": "主 Agent 能力"
     },
     "invalidDefinition": {
-      "reason": "此 Agent 的設定缺少必填內容或包含無效內容。",
+      "reason": "此 Agent 的設定有誤。",
       "impact": "{{impact}}",
-      "nextStep": "請在原應用中修正 Agent 設定，然後重新整理。"
+      "nextStep": "請在來源應用中修正設定後重新整理。"
     },
     "unsupportedBehavior": {
-      "reason": "此 Agent 需要 BitFun 目前不支援的行為或設定。",
+      "reason": "此 Agent 包含 BitFun 目前不支援的設定，無法啟用。",
       "impact": "{{impact}}",
-      "nextStep": "請在原應用程式中改用受支援的設定並補齊必填內容，然後重新整理。"
+      "nextStep": "請在來源應用中修改後重新整理。"
     },
     "ignoredOption": {
-      "reason": "BitFun 不會套用這項設定。",
+      "reason": "BitFun 不支援這項設定，會忽略它。不影響使用。",
       "impact": "{{impact}}",
-      "nextStep": "啟用前，請確認上方實際使用的模型與工具，並確認最終結果仍符合預期。"
+      "nextStep": ""
     }
   },
   "agentConflicts": {
@@ -376,7 +378,7 @@
     "enable": "啟用伺服器",
     "disable": "停用",
     "empty": "未發現 MCP 伺服器。",
-    "emptyGuidance": "BitFun 目前從 OpenCode 相容設定中發現 MCP 伺服器，支援以下設定位置：",
+    "emptyGuidance": "BitFun 從以下位置的設定中查找 MCP 伺服器，但未找到任何設定：",
     "emptyLocation": {
       "userGlobal": "使用者全域：~/.config/opencode/opencode.json",
       "project": "專案級：.opencode/opencode.json",
