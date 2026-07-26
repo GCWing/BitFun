@@ -54,70 +54,82 @@ const MAX_DEPTH: u32 = 12;
 const MAX_VISITED: usize = 3_000;
 
 unsafe fn ax_release(v: CFTypeRef) {
-    if !v.is_null() {
-        core_foundation::base::CFRelease(v);
+    unsafe {
+        if !v.is_null() {
+            core_foundation::base::CFRelease(v);
+        }
     }
 }
 
 unsafe fn ax_copy_attr(elem: AXUIElementRef, key: &str) -> Option<CFTypeRef> {
-    let mut val: CFTypeRef = std::ptr::null();
-    let k = CFString::new(key);
-    let st = AXUIElementCopyAttributeValue(elem, k.as_concrete_TypeRef(), &mut val);
-    if st != 0 || val.is_null() {
-        if !val.is_null() {
-            ax_release(val);
+    unsafe {
+        let mut val: CFTypeRef = std::ptr::null();
+        let k = CFString::new(key);
+        let st = AXUIElementCopyAttributeValue(elem, k.as_concrete_TypeRef(), &mut val);
+        if st != 0 || val.is_null() {
+            if !val.is_null() {
+                ax_release(val);
+            }
+            return None;
         }
-        return None;
+        Some(val)
     }
-    Some(val)
 }
 
 /// See `macos_ax_dump.rs::cfstring_to_string` for why the type check is
 /// mandatory before treating a CFTypeRef as a CFString.
 unsafe fn cfstring_to_string(cf: CFTypeRef) -> Option<String> {
-    if cf.is_null() || CFGetTypeID(cf) != CFStringGetTypeID() {
-        return None;
+    unsafe {
+        if cf.is_null() || CFGetTypeID(cf) != CFStringGetTypeID() {
+            return None;
+        }
+        Some(CFString::wrap_under_get_rule(cf as CFStringRef).to_string())
     }
-    Some(CFString::wrap_under_get_rule(cf as CFStringRef).to_string())
 }
 
 unsafe fn read_cf_string_attr(elem: AXUIElementRef, key: &str) -> Option<String> {
-    let v = ax_copy_attr(elem, key)?;
-    let s = cfstring_to_string(v);
-    ax_release(v);
-    s
+    unsafe {
+        let v = ax_copy_attr(elem, key)?;
+        let s = cfstring_to_string(v);
+        ax_release(v);
+        s
+    }
 }
 
 unsafe fn read_cf_bool_attr(elem: AXUIElementRef, key: &str) -> Option<bool> {
-    let v = ax_copy_attr(elem, key)?;
-    let out = if CFGetTypeID(v) == CFBooleanGetTypeID() {
-        Some(CFBooleanGetValue(v as CFBooleanRef) != 0)
-    } else {
-        None
-    };
-    ax_release(v);
-    out
+    unsafe {
+        let v = ax_copy_attr(elem, key)?;
+        let out = if CFGetTypeID(v) == CFBooleanGetTypeID() {
+            Some(CFBooleanGetValue(v as CFBooleanRef) != 0)
+        } else {
+            None
+        };
+        ax_release(v);
+        out
+    }
 }
 
 unsafe fn read_cf_number_attr(elem: AXUIElementRef, key: &str) -> Option<i64> {
-    let v = ax_copy_attr(elem, key)?;
-    let out = if CFGetTypeID(v) == CFNumberGetTypeID() {
-        let mut i: i64 = 0;
-        if CFNumberGetValue(
-            v as CFNumberRef,
-            K_CF_NUMBER_LONG_LONG_TYPE,
-            &mut i as *mut _ as *mut c_void,
-        ) != 0
-        {
-            Some(i)
+    unsafe {
+        let v = ax_copy_attr(elem, key)?;
+        let out = if CFGetTypeID(v) == CFNumberGetTypeID() {
+            let mut i: i64 = 0;
+            if CFNumberGetValue(
+                v as CFNumberRef,
+                K_CF_NUMBER_LONG_LONG_TYPE,
+                &mut i as *mut _ as *mut c_void,
+            ) != 0
+            {
+                Some(i)
+            } else {
+                None
+            }
         } else {
             None
-        }
-    } else {
-        None
-    };
-    ax_release(v);
-    out
+        };
+        ax_release(v);
+        out
+    }
 }
 
 /// Decode `AXMenuItemCmdModifiers` bitmask into canonical lowercase
@@ -425,7 +437,7 @@ fn walk(elem: AXUIElementRef, path: &[String], depth: u32, state: &mut WalkState
 /// Returns an empty result (not an error) when the app has no menu bar
 /// (e.g. background-only agents) — that is a legitimate "no shortcuts"
 /// answer, not a failure.
-pub fn dump_app_menu_shortcuts(pid: i32) -> BitFunResult<(Vec<AppMenuShortcut>, u32)> {
+pub(super) fn dump_app_menu_shortcuts(pid: i32) -> BitFunResult<(Vec<AppMenuShortcut>, u32)> {
     let app = unsafe { AXUIElementCreateApplication(pid) };
     if app.is_null() {
         return Err(BitFunError::tool(format!(

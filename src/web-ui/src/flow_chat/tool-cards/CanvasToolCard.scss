@@ -43,6 +43,11 @@
   padding: var(--flowchat-card-expanded-pad-y) var(--flowchat-card-expanded-pad-x);
 }
 
+.canvas-tool-card__source-preview {
+  width: 100%;
+  min-width: 0;
+}
+
 .canvas-tool-card__meta {
   overflow: hidden;
   text-overflow: ellipsis;

@@ -6,7 +6,8 @@ use crate::startup_trace::DesktopStartupTrace;
 use bitfun_acp::client::{
     AcpAvailableCommand, AcpClientInfo, AcpClientPermissionResponse, AcpClientRequirementProbe,
     AcpClientStreamEvent, AcpSessionOptions, CreateAcpFlowSessionRecordResponse,
-    SetAcpSessionModelRequest, SubmitAcpPermissionResponseRequest,
+    SetAcpSessionConfigOptionRequest, SetAcpSessionModelRequest,
+    SubmitAcpPermissionResponseRequest,
 };
 use serde::{Deserialize, Serialize};
 use std::time::Instant;
@@ -658,6 +659,33 @@ pub async fn set_acp_session_model(
     };
     service
         .set_session_model(request, session_storage_path)
+        .await
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn set_acp_session_config_option(
+    state: State<'_, AppState>,
+    request: SetAcpSessionConfigOptionRequest,
+) -> Result<AcpSessionOptions, String> {
+    let service = state
+        .acp_client_service
+        .as_ref()
+        .ok_or_else(|| "ACP client service not initialized".to_string())?;
+    let session_storage_path = match request.workspace_path.as_deref() {
+        Some(workspace_path) => Some(
+            desktop_effective_session_storage_path(
+                &state,
+                workspace_path,
+                request.remote_connection_id.as_deref(),
+                request.remote_ssh_host.as_deref(),
+            )
+            .await,
+        ),
+        None => None,
+    };
+    service
+        .set_session_config_option(request, session_storage_path)
         .await
         .map_err(|e| e.to_string())
 }

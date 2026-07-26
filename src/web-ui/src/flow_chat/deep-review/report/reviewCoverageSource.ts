@@ -33,6 +33,7 @@ const REVIEW_SOURCE_ALIASES: Record<string, ReviewCoverageSourceLabelKey> = {
   reviewjudge: 'qualityGate',
   reviewarbiter: 'qualityGate',
   reviewqualityinspector: 'qualityGate',
+  reviewqualitycheck: 'qualityGate',
   qualityinspector: 'qualityGate',
 };
 

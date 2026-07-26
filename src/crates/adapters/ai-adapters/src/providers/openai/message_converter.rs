@@ -195,6 +195,9 @@ impl OpenAIMessageConverter {
             .ok()?
             .as_array()?
             .clone();
+        if items.is_empty() {
+            return None;
+        }
         let text_item_type = Self::responses_text_item_type(role);
         let mut content_items = Vec::with_capacity(items.len());
 
@@ -227,6 +230,9 @@ impl OpenAIMessageConverter {
             .ok()?
             .as_array()?
             .clone();
+        if items.is_empty() {
+            return None;
+        }
         let mut content_items = Vec::with_capacity(items.len());
 
         for item in items {

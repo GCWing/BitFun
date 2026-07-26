@@ -33,6 +33,7 @@ pub(crate) async fn ensure_peer_host_ready(runtime: &CliRuntimeContext) -> Resul
 
     let state = PeerHostState {
         agent_runtime: runtime.agent_runtime().clone(),
+        local_workspace_snapshot: runtime.local_workspace_snapshot().clone(),
         compatibility: runtime.compatibility().clone(),
         agent_events: runtime.agent_events().clone(),
         turns: PeerTurnTracker::new(),

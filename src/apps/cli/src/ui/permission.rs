@@ -1,10 +1,5 @@
-/// Permission confirmation modal panel
+/// Permission request modal panel.
 ///
-/// Inspired by opencode TUI's PermissionPrompt component.
-/// Three-level permission system:
-/// - Allow once: execute this tool call only
-/// - Allow always: auto-approve this tool type until the CLI runtime exits
-/// - Reject: deny execution (optionally with a reason)
 use crossterm::event::{KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
@@ -15,175 +10,80 @@ use ratatui::{
 };
 
 use super::string_utils::truncate_str;
-use super::theme::{tool_icon, StyleKind, Theme};
+use super::theme::Theme;
+use bitfun_agent_runtime::sdk::{PermissionReply, PermissionRequest};
 
-pub(crate) const ALLOW_ALWAYS_RUNTIME_SCOPE: &str = "until this CLI runtime exits";
-
-fn allow_always_confirmation_text(tool_name: &str) -> String {
-    format!("This will auto-approve '{tool_name}' tool calls {ALLOW_ALWAYS_RUNTIME_SCOPE}.")
-}
-
-// ============ Data Types ============
-
-/// Permission prompt stage
-#[derive(Debug, Clone, PartialEq)]
-enum PermissionStage {
-    /// Main permission screen: Allow once / Allow always / Reject
-    Permission,
-    /// Confirm "Allow always" action
-    ConfirmAlways,
-    /// Reject with reason input
-    RejectWithReason,
-}
-
-/// Permission prompt state
 #[derive(Debug, Clone)]
 pub(crate) struct PermissionPrompt {
-    pub(crate) tool_id: String,
-    tool_name: String,
-    params: serde_json::Value,
-    stage: PermissionStage,
-    /// Selected option index: 0=Allow once, 1=Allow always, 2=Reject
-    selected_option: usize,
-    /// Reject reason input buffer
-    reject_reason: String,
+    pub(crate) request: PermissionRequest,
+    pub(crate) selected_option: usize,
+    reject_feedback: String,
+    editing_reject_feedback: bool,
 }
 
-/// Result of handling a key event in the permission prompt
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub(crate) enum PermissionAction {
-    /// No action, continue showing the prompt
     None,
-    /// User confirmed: allow once (with optional updated input)
-    AllowOnce,
-    /// User confirmed: allow always
-    AllowAlways,
-    /// User rejected with a reason
-    Reject(String),
+    Reply(PermissionReply),
 }
 
 impl PermissionPrompt {
-    /// Create a new permission prompt from a ConfirmationNeeded event
-    pub(crate) fn new(tool_id: String, tool_name: String, params: serde_json::Value) -> Self {
+    pub(crate) fn new(request: PermissionRequest) -> Self {
         Self {
-            tool_id,
-            tool_name,
-            params,
-            stage: PermissionStage::Permission,
+            request,
             selected_option: 0,
-            reject_reason: String::new(),
+            reject_feedback: String::new(),
+            editing_reject_feedback: false,
         }
     }
 
-    pub(crate) fn tool_name(&self) -> &str {
-        &self.tool_name
-    }
-
-    /// Handle a key event. Returns a PermissionAction if the user made a decision.
     pub(crate) fn handle_key_event(&mut self, key: KeyEvent) -> PermissionAction {
         if key.kind != KeyEventKind::Press && key.kind != KeyEventKind::Repeat {
             return PermissionAction::None;
         }
-
-        match &self.stage {
-            PermissionStage::Permission => self.handle_permission_key(key),
-            PermissionStage::ConfirmAlways => self.handle_confirm_always_key(key),
-            PermissionStage::RejectWithReason => self.handle_reject_reason_key(key),
-        }
-    }
-
-    fn handle_permission_key(&mut self, key: KeyEvent) -> PermissionAction {
-        match (key.code, key.modifiers) {
-            // Navigate options
-            (KeyCode::Left, _) | (KeyCode::Char('h'), KeyModifiers::NONE) => {
-                if self.selected_option > 0 {
-                    self.selected_option -= 1;
-                }
-                PermissionAction::None
-            }
-            (KeyCode::Right, _) | (KeyCode::Char('l'), KeyModifiers::NONE) => {
-                if self.selected_option < 2 {
-                    self.selected_option += 1;
-                }
-                PermissionAction::None
-            }
-
-            // Confirm selection
-            (KeyCode::Enter, _) => match self.selected_option {
-                0 => PermissionAction::AllowOnce,
-                1 => {
-                    self.stage = PermissionStage::ConfirmAlways;
-                    self.selected_option = 0; // Reset to "Confirm"
+        if self.editing_reject_feedback {
+            return match (key.code, key.modifiers) {
+                (KeyCode::Enter, _) => PermissionAction::Reply(PermissionReply::Reject {
+                    feedback: match self.reject_feedback.trim() {
+                        "" => None,
+                        feedback => Some(feedback.to_string()),
+                    },
+                }),
+                (KeyCode::Esc, _) => {
+                    self.editing_reject_feedback = false;
                     PermissionAction::None
                 }
-                2 => {
-                    self.stage = PermissionStage::RejectWithReason;
+                (KeyCode::Backspace, _) => {
+                    self.reject_feedback.pop();
+                    PermissionAction::None
+                }
+                (KeyCode::Char(character), KeyModifiers::NONE | KeyModifiers::SHIFT)
+                    if !character.is_control() =>
+                {
+                    self.reject_feedback.push(character);
                     PermissionAction::None
                 }
                 _ => PermissionAction::None,
-            },
-
-            // Escape = reject
-            (KeyCode::Esc, _) => PermissionAction::Reject("User dismissed".to_string()),
-
-            _ => PermissionAction::None,
+            };
         }
-    }
-
-    fn handle_confirm_always_key(&mut self, key: KeyEvent) -> PermissionAction {
-        match (key.code, key.modifiers) {
-            (KeyCode::Left, _)
-            | (KeyCode::Right, _)
-            | (KeyCode::Char('h'), KeyModifiers::NONE)
-            | (KeyCode::Char('l'), KeyModifiers::NONE) => {
-                self.selected_option = if self.selected_option == 0 { 1 } else { 0 };
+        match key.code {
+            KeyCode::Left | KeyCode::Char('h') => {
+                self.selected_option = self.selected_option.saturating_sub(1);
                 PermissionAction::None
             }
-            (KeyCode::Enter, _) => {
-                if self.selected_option == 0 {
-                    PermissionAction::AllowAlways
-                } else {
-                    // Cancel — go back to main
-                    self.stage = PermissionStage::Permission;
-                    self.selected_option = 1;
+            KeyCode::Right | KeyCode::Char('l') => {
+                self.selected_option = (self.selected_option + 1).min(2);
+                PermissionAction::None
+            }
+            KeyCode::Esc => PermissionAction::Reply(PermissionReply::Reject { feedback: None }),
+            KeyCode::Enter => match self.selected_option {
+                0 => PermissionAction::Reply(PermissionReply::Once),
+                1 => PermissionAction::Reply(PermissionReply::Always),
+                _ => {
+                    self.editing_reject_feedback = true;
                     PermissionAction::None
                 }
-            }
-            (KeyCode::Esc, _) => {
-                self.stage = PermissionStage::Permission;
-                self.selected_option = 1;
-                PermissionAction::None
-            }
-            _ => PermissionAction::None,
-        }
-    }
-
-    fn handle_reject_reason_key(&mut self, key: KeyEvent) -> PermissionAction {
-        match (key.code, key.modifiers) {
-            (KeyCode::Enter, _) => {
-                let reason = if self.reject_reason.trim().is_empty() {
-                    "User rejected".to_string()
-                } else {
-                    self.reject_reason.clone()
-                };
-                PermissionAction::Reject(reason)
-            }
-            (KeyCode::Esc, _) => {
-                self.stage = PermissionStage::Permission;
-                self.selected_option = 2;
-                self.reject_reason.clear();
-                PermissionAction::None
-            }
-            (KeyCode::Backspace, _) => {
-                self.reject_reason.pop();
-                PermissionAction::None
-            }
-            (KeyCode::Char(c), KeyModifiers::NONE | KeyModifiers::SHIFT) => {
-                if !c.is_control() {
-                    self.reject_reason.push(c);
-                }
-                PermissionAction::None
-            }
+            },
             _ => PermissionAction::None,
         }
     }
@@ -191,217 +91,139 @@ impl PermissionPrompt {
 
 // ============ Rendering ============
 
-/// Render the permission overlay on top of the message area.
-///
-/// This renders at the bottom of the given area, taking up a fixed height.
+fn permission_delegation_lines(request: &PermissionRequest) -> Option<[String; 2]> {
+    let delegation = request.delegation.as_ref()?;
+    Some([
+        format!(
+            "Subagent: {}  Child session: {}",
+            delegation.subagent_type, request.session_id
+        ),
+        format!(
+            "Parent session: {}  Task: {}",
+            delegation.parent_session_id, delegation.parent_tool_call_id
+        ),
+    ])
+}
+
+fn permission_project_display_label(request: &PermissionRequest) -> &str {
+    request
+        .project_path
+        .as_deref()
+        .map(str::trim)
+        .filter(|path| !path.is_empty())
+        .unwrap_or(&request.project_id)
+}
+
+fn permission_footer_secondary_style(theme: &Theme) -> Style {
+    Style::default()
+        .fg(theme.primary)
+        .bg(theme.background_element)
+}
+
 pub(super) fn render_permission_overlay(
     frame: &mut Frame,
     prompt: &PermissionPrompt,
     theme: &Theme,
     area: Rect,
 ) {
-    match &prompt.stage {
-        PermissionStage::Permission => render_permission_main(frame, prompt, theme, area),
-        PermissionStage::ConfirmAlways => render_confirm_always(frame, prompt, theme, area),
-        PermissionStage::RejectWithReason => render_reject_reason(frame, prompt, theme, area),
-    }
-}
-
-/// Render the main permission prompt (Allow once / Allow always / Reject)
-fn render_permission_main(frame: &mut Frame, prompt: &PermissionPrompt, theme: &Theme, area: Rect) {
-    // Calculate overlay height based on content
-    let overlay_height = 8u16.min(area.height.saturating_sub(2));
-    let overlay_area = Rect {
-        x: area.x,
-        y: area.y + area.height.saturating_sub(overlay_height),
-        width: area.width,
-        height: overlay_height,
-    };
-
-    // Clear the area
-    frame.render_widget(Clear, overlay_area);
-
-    // Split into content + button bar
-    let chunks = Layout::default()
-        .direction(Direction::Vertical)
-        .constraints([
-            Constraint::Min(3),    // content
-            Constraint::Length(2), // button bar
-        ])
-        .split(overlay_area);
-
-    // Content block with warning left border
-    let content_block = Block::default()
-        .borders(Borders::LEFT | Borders::TOP | Borders::RIGHT)
-        .border_style(Style::default().fg(theme.warning))
-        .style(Style::default().bg(theme.background_panel));
-
-    let inner = content_block.inner(chunks[0]);
-    frame.render_widget(content_block, chunks[0]);
-
-    // Build content lines
-    let mut lines = vec![
-        Line::from(vec![
-            Span::styled("\u{25b3} ", theme.style(StyleKind::Warning)), // △
-            Span::styled(
-                "Permission required",
-                Style::default()
-                    .fg(theme.warning)
-                    .add_modifier(Modifier::BOLD),
-            ),
-        ]),
-        Line::from(""),
-    ];
-
-    // Tool details
-    let icon = tool_icon(&prompt.tool_name);
-    let detail = build_tool_detail(prompt);
-    lines.push(Line::from(vec![
-        Span::styled(format!("{} ", icon), theme.style(StyleKind::Muted)),
-        Span::styled(detail, Style::default()),
-    ]));
-
-    let paragraph = Paragraph::new(lines).wrap(Wrap { trim: true });
-    frame.render_widget(paragraph, inner);
-
-    // Button bar
-    render_button_bar(
-        frame,
-        chunks[1],
-        theme,
-        &["Allow once", "Allow always", "Reject"],
-        prompt.selected_option,
-        "\u{21c6} select  Enter confirm  Esc reject",
-    );
-}
-
-/// Render the "Confirm Always" stage
-fn render_confirm_always(frame: &mut Frame, prompt: &PermissionPrompt, theme: &Theme, area: Rect) {
-    let overlay_height = 6u16.min(area.height.saturating_sub(2));
-    let overlay_area = Rect {
-        x: area.x,
-        y: area.y + area.height.saturating_sub(overlay_height),
-        width: area.width,
-        height: overlay_height,
-    };
-
-    frame.render_widget(Clear, overlay_area);
-
-    let chunks = Layout::default()
-        .direction(Direction::Vertical)
-        .constraints([Constraint::Min(2), Constraint::Length(2)])
-        .split(overlay_area);
-
-    let content_block = Block::default()
-        .borders(Borders::LEFT | Borders::TOP | Borders::RIGHT)
-        .border_style(Style::default().fg(theme.warning))
-        .style(Style::default().bg(theme.background_panel));
-
-    let inner = content_block.inner(chunks[0]);
-    frame.render_widget(content_block, chunks[0]);
-
-    let lines = vec![
-        Line::from(vec![
-            Span::styled("\u{25b3} ", theme.style(StyleKind::Warning)),
-            Span::styled(
-                "Always allow",
-                Style::default()
-                    .fg(theme.warning)
-                    .add_modifier(Modifier::BOLD),
-            ),
-        ]),
-        Line::from(""),
-        Line::from(Span::styled(
-            allow_always_confirmation_text(&prompt.tool_name),
-            theme.style(StyleKind::Muted),
-        )),
-    ];
-
-    let paragraph = Paragraph::new(lines).wrap(Wrap { trim: true });
-    frame.render_widget(paragraph, inner);
-
-    render_button_bar(
-        frame,
-        chunks[1],
-        theme,
-        &["Confirm", "Cancel"],
-        prompt.selected_option,
-        "Enter confirm  Esc cancel",
-    );
-}
-
-/// Render the "Reject with reason" stage
-fn render_reject_reason(frame: &mut Frame, prompt: &PermissionPrompt, theme: &Theme, area: Rect) {
-    let overlay_height = 7u16.min(area.height.saturating_sub(2));
-    let overlay_area = Rect {
-        x: area.x,
-        y: area.y + area.height.saturating_sub(overlay_height),
-        width: area.width,
-        height: overlay_height,
-    };
-
-    frame.render_widget(Clear, overlay_area);
-
-    let chunks = Layout::default()
-        .direction(Direction::Vertical)
-        .constraints([Constraint::Min(3), Constraint::Length(2)])
-        .split(overlay_area);
-
-    let content_block = Block::default()
-        .borders(Borders::LEFT | Borders::TOP | Borders::RIGHT)
-        .border_style(Style::default().fg(theme.error))
-        .style(Style::default().bg(theme.background_panel));
-
-    let inner = content_block.inner(chunks[0]);
-    frame.render_widget(content_block, chunks[0]);
-
-    let reason_display = if prompt.reject_reason.is_empty() {
-        "(optional reason)".to_string()
+    let overlay_height = 11u16.min(area.height.saturating_sub(2));
+    let overlay_height = if prompt.request.delegation.is_some() {
+        overlay_height.saturating_add(2)
     } else {
-        format!("{}\u{2588}", prompt.reject_reason) // cursor block
+        overlay_height
+    }
+    .min(area.height.saturating_sub(2));
+    let overlay_area = Rect {
+        x: area.x,
+        y: area.y + area.height.saturating_sub(overlay_height),
+        width: area.width,
+        height: overlay_height,
     };
+    frame.render_widget(Clear, overlay_area);
+    let chunks = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([Constraint::Min(4), Constraint::Length(2)])
+        .split(overlay_area);
+    let content_block = Block::default()
+        .borders(Borders::LEFT | Borders::TOP | Borders::RIGHT)
+        .border_style(Style::default().fg(theme.warning))
+        .style(Style::default().bg(theme.background_panel));
+    let inner = content_block.inner(chunks[0]);
+    frame.render_widget(content_block, chunks[0]);
 
-    let lines = vec![
-        Line::from(vec![
-            Span::styled("\u{25b3} ", theme.style(StyleKind::Error)),
-            Span::styled(
-                "Reject permission",
-                Style::default()
-                    .fg(theme.error)
-                    .add_modifier(Modifier::BOLD),
-            ),
-        ]),
-        Line::from(""),
+    let request = &prompt.request;
+    let resources = request
+        .resources
+        .iter()
+        .map(|resource| truncate_str(resource, 80))
+        .collect::<Vec<_>>()
+        .join(", ");
+    let save_scope = if request.save_resources.is_empty() {
+        "No remembered scope".to_string()
+    } else {
+        format!(
+            "Always saves {} project resource(s)",
+            request.save_resources.len()
+        )
+    };
+    let risk = request
+        .display_metadata
+        .get("riskDescription")
+        .or_else(|| request.display_metadata.get("risk"))
+        .and_then(serde_json::Value::as_str)
+        .unwrap_or("No additional risk information");
+    let mut lines = vec![
         Line::from(Span::styled(
-            "Tell the AI what to do differently:",
-            theme.style(StyleKind::Muted),
+            "Permission required",
+            Style::default()
+                .fg(theme.warning)
+                .add_modifier(Modifier::BOLD),
         )),
-        Line::from(Span::styled(
-            reason_display,
-            if prompt.reject_reason.is_empty() {
-                theme.style(StyleKind::Muted)
-            } else {
-                Style::default()
-            },
+        Line::from(format!(
+            "Action: {}  Source: {:?}:{}",
+            request.action, request.source.kind, request.source.identity
         )),
     ];
-
-    let paragraph = Paragraph::new(lines).wrap(Wrap { trim: true });
-    frame.render_widget(paragraph, inner);
-
-    // Bottom hint bar
-    let hint_block = Block::default().style(Style::default().bg(theme.background_element));
-    frame.render_widget(hint_block, chunks[1]);
-
-    let hint = Paragraph::new(Line::from(vec![
-        Span::raw(" "),
-        Span::styled("Enter", Style::default()),
-        Span::styled(" confirm  ", theme.style(StyleKind::Muted)),
-        Span::styled("Esc", Style::default()),
-        Span::styled(" cancel", theme.style(StyleKind::Muted)),
-    ]))
-    .style(Style::default().bg(theme.background_element));
-    frame.render_widget(hint, chunks[1]);
+    if let Some(delegation_lines) = permission_delegation_lines(request) {
+        lines.extend(delegation_lines.map(Line::from));
+    }
+    lines.extend([
+        Line::from(format!("Resources: {resources}")),
+        Line::from(format!(
+            "Project: {}  {save_scope}",
+            permission_project_display_label(request)
+        )),
+        Line::from(format!("Risk: {}", truncate_str(risk, 100))),
+        if prompt.editing_reject_feedback {
+            Line::from(format!(
+                "Rejection feedback (optional): {}_",
+                prompt.reject_feedback
+            ))
+        } else {
+            Line::from("")
+        },
+    ]);
+    frame.render_widget(Paragraph::new(lines).wrap(Wrap { trim: true }), inner);
+    render_button_bar(
+        frame,
+        chunks[1],
+        theme,
+        if prompt.editing_reject_feedback {
+            &["Submit reject"]
+        } else {
+            &["Allow once", "Always allow", "Reject"]
+        },
+        if prompt.editing_reject_feedback {
+            0
+        } else {
+            prompt.selected_option
+        },
+        if prompt.editing_reject_feedback {
+            "Enter submit  Esc back"
+        } else {
+            "\u{21c6} select  Enter confirm  Esc reject"
+        },
+    );
 }
 
 /// Render a horizontal button bar with selectable options
@@ -433,9 +255,7 @@ fn render_button_bar(
         } else {
             spans.push(Span::styled(
                 format!(" {} ", option),
-                Style::default()
-                    .fg(theme.muted)
-                    .bg(theme.background_element),
+                permission_footer_secondary_style(theme),
             ));
         }
     }
@@ -446,7 +266,10 @@ fn render_button_bar(
     if buttons_width + hint_width < area.width as usize {
         let padding = area.width as usize - buttons_width - hint_width;
         spans.push(Span::raw(" ".repeat(padding)));
-        spans.push(Span::styled(hint_text, theme.style(StyleKind::Muted)));
+        spans.push(Span::styled(
+            hint_text,
+            permission_footer_secondary_style(theme),
+        ));
     }
 
     let line = Line::from(spans);
@@ -454,124 +277,124 @@ fn render_button_bar(
     frame.render_widget(paragraph, area);
 }
 
-/// Build a tool detail string for the permission prompt body
-fn build_tool_detail(prompt: &PermissionPrompt) -> String {
-    match prompt.tool_name.as_str() {
-        "Bash" | "bash_tool" | "run_terminal_cmd" => {
-            let cmd = prompt
-                .params
-                .get("command")
-                .and_then(|v| v.as_str())
-                .unwrap_or("unknown");
-            let desc = prompt.params.get("description").and_then(|v| v.as_str());
-            match desc {
-                Some(d) => format!("{}\n$ {}", d, cmd),
-                None => format!("$ {}", cmd),
-            }
-        }
-        "Edit" | "search_replace" => {
-            let path = prompt
-                .params
-                .get("file_path")
-                .or_else(|| prompt.params.get("target_file"))
-                .and_then(|v| v.as_str())
-                .unwrap_or("unknown");
-            format!("Edit {}", path)
-        }
-        "Write" | "write_file" | "write_file_tool" => {
-            let path = prompt
-                .params
-                .get("payload")
-                .and_then(|value| value.as_str())
-                .and_then(|value| {
-                    let first_line = value.split_once('\n').map_or(value, |(path, _)| path);
-                    first_line
-                        .strip_suffix('\r')
-                        .unwrap_or(first_line)
-                        .strip_prefix("+++ ")
-                })
-                .filter(|path| !path.trim().is_empty())
-                .or_else(|| {
-                    prompt
-                        .params
-                        .get("file_path")
-                        .or_else(|| prompt.params.get("target_file"))
-                        .and_then(|value| value.as_str())
-                })
-                .unwrap_or("workspace temporary file");
-            format!("Write {}", path)
-        }
-        "Delete" => {
-            let path = prompt
-                .params
-                .get("file_path")
-                .or_else(|| prompt.params.get("path"))
-                .and_then(|v| v.as_str())
-                .unwrap_or("unknown");
-            format!("Delete {}", path)
-        }
-        "Task" => {
-            let desc = prompt
-                .params
-                .get("description")
-                .and_then(|v| v.as_str())
-                .unwrap_or("Task");
-            let subagent = prompt
-                .params
-                .get("subagent_type")
-                .and_then(|v| v.as_str())
-                .unwrap_or("unknown");
-            format!("{} Task: {}", subagent, desc)
-        }
-        _ => {
-            // Generic: show tool name + key param
-            let key_param = extract_first_param(&prompt.params);
-            if key_param.is_empty() {
-                format!("Call tool {}", prompt.tool_name)
-            } else {
-                format!("{} {}", prompt.tool_name, truncate_str(&key_param, 60))
-            }
-        }
-    }
-}
-
-/// Extract the first meaningful string parameter from JSON
-fn extract_first_param(params: &serde_json::Value) -> String {
-    if let Some(obj) = params.as_object() {
-        let priority = [
-            "command",
-            "path",
-            "file_path",
-            "query",
-            "pattern",
-            "url",
-            "description",
-        ];
-        for key in &priority {
-            if let Some(v) = obj.get(*key).and_then(|v| v.as_str()) {
-                return v.to_string();
-            }
-        }
-        for (_, value) in obj.iter() {
-            if let Some(s) = value.as_str() {
-                if s.len() < 100 {
-                    return s.to_string();
-                }
-            }
-        }
-    }
-    String::new()
-}
-
 #[cfg(test)]
 mod tests {
-    use super::allow_always_confirmation_text;
+    use super::{
+        permission_delegation_lines, permission_footer_secondary_style,
+        permission_project_display_label, PermissionAction, PermissionPrompt,
+    };
+    use crate::ui::theme::{builtin_theme_json, Appearance, EffectiveColorScheme, Theme};
+    use bitfun_agent_runtime::sdk::{
+        PermissionDelegationContext, PermissionReply, PermissionRequest, PermissionRequestSource,
+        PermissionRequestSourceKind,
+    };
+    use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+    use serde_json::Map;
+
+    fn request() -> PermissionRequest {
+        PermissionRequest {
+            request_id: "request-1".to_string(),
+            round_id: "synthetic:request-1".to_string(),
+            order: 0,
+            tool_call_id: None,
+            project_path: None,
+            project_id: "project-1".to_string(),
+            session_id: "session-1".to_string(),
+            agent_id: "agentic".to_string(),
+            action: "edit".to_string(),
+            resources: vec!["src/main.rs".to_string()],
+            save_resources: vec!["src/main.rs".to_string()],
+            source: PermissionRequestSource {
+                kind: PermissionRequestSourceKind::ToolCall,
+                identity: "write_file".to_string(),
+            },
+            delegation: None,
+            display_metadata: Map::new(),
+        }
+    }
 
     #[test]
-    fn allow_always_copy_describes_cli_runtime_lifetime() {
-        let text = allow_always_confirmation_text("run_terminal_cmd");
+    fn v2_prompt_returns_project_always_reply_without_using_legacy_runtime_scope() {
+        let mut prompt = PermissionPrompt::new(request());
+        prompt.handle_key_event(KeyEvent::new(KeyCode::Right, KeyModifiers::NONE));
 
-        assert!(text.contains("until this CLI runtime exits"));
-        assert!(!text.contains("session"));
+        assert_eq!(
+            prompt.handle_key_event(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)),
+            PermissionAction::Reply(PermissionReply::Always)
+        );
+    }
+
+    #[test]
+    fn v2_prompt_collects_optional_rejection_feedback() {
+        let mut prompt = PermissionPrompt::new(request());
+        prompt.handle_key_event(KeyEvent::new(KeyCode::Right, KeyModifiers::NONE));
+        prompt.handle_key_event(KeyEvent::new(KeyCode::Right, KeyModifiers::NONE));
+        assert_eq!(
+            prompt.handle_key_event(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)),
+            PermissionAction::None
+        );
+        for character in "read only".chars() {
+            prompt.handle_key_event(KeyEvent::new(KeyCode::Char(character), KeyModifiers::NONE));
+        }
+
+        assert_eq!(
+            prompt.handle_key_event(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)),
+            PermissionAction::Reply(PermissionReply::Reject {
+                feedback: Some("read only".to_string()),
+            })
+        );
+    }
+
+    #[test]
+    fn delegated_prompt_names_the_child_and_parent_task_context() {
+        let mut request = request();
+        request.session_id = "child-session".to_string();
+        request.agent_id = "Explore".to_string();
+        request.delegation = Some(PermissionDelegationContext {
+            parent_session_id: "parent-session".to_string(),
+            parent_dialog_turn_id: Some("parent-turn".to_string()),
+            parent_tool_call_id: "parent-task".to_string(),
+            subagent_type: "Explore".to_string(),
+        });
+
+        assert_eq!(
+            permission_delegation_lines(&request),
+            Some([
+                "Subagent: Explore  Child session: child-session".to_string(),
+                "Parent session: parent-session  Task: parent-task".to_string(),
+            ])
+        );
+    }
+
+    #[test]
+    fn permission_prompt_prefers_a_nonempty_project_path_for_display() {
+        let mut with_path = request();
+        with_path.project_path = Some("  E:/Projects/BitFun  ".to_string());
+        assert_eq!(
+            permission_project_display_label(&with_path),
+            "E:/Projects/BitFun"
+        );
+
+        let mut empty_path = request();
+        empty_path.project_path = Some("   ".to_string());
+        assert_eq!(permission_project_display_label(&empty_path), "project-1");
+    }
+
+    #[test]
+    fn permission_footer_secondary_content_remains_visible_in_ansi16_themes() {
+        for theme_id in ["bitfun-dark", "bitfun-midnight", "bitfun-tokyo-night"] {
+            let theme = Theme::dark()
+                .apply_opencode_theme_json(
+                    builtin_theme_json(theme_id).expect("built-in theme must exist"),
+                    Appearance::Dark,
+                )
+                .expect("built-in theme must resolve")
+                .with_effective_scheme(EffectiveColorScheme::Ansi16);
+            let style = permission_footer_secondary_style(&theme);
+
+            assert_eq!(style.fg, Some(theme.primary), "{theme_id}");
+            assert_eq!(style.bg, Some(theme.background_element), "{theme_id}");
+            assert_ne!(style.fg, style.bg, "{theme_id}");
+        }
     }
 }

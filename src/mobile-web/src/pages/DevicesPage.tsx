@@ -7,8 +7,11 @@
  * through the same limited command set.
  */
 
-import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { RelayHttpClient } from '../services/RelayHttpClient';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import {
+  RelayHttpClient,
+  isDelegatedIdentityChangedError,
+} from '../services/RelayHttpClient';
 import { useI18n } from '../i18n';
 import { useMobileStore } from '../services/store';
 
@@ -16,17 +19,12 @@ interface DeviceInfo {
   device_id: string;
   device_name: string;
   online: boolean;
+  last_seen_at?: number | null;
 }
 
 interface Props {
   client: RelayHttpClient;
   onBack: () => void;
-}
-
-/** Check whether an error is an HTTP 401 (token expired/unauthorized). */
-function isTokenExpiredError(e: unknown): boolean {
-  const msg = String((e as { message?: string })?.message || '');
-  return msg.includes('HTTP 401') || msg.includes('Unauthorized');
 }
 
 const BackIcon = () => (
@@ -62,7 +60,7 @@ const NoIdentityIcon = () => (
 );
 
 const DevicesPage: React.FC<Props> = ({ client, onBack }) => {
-  const { t } = useI18n();
+  const { t, formatRelativeTime } = useI18n();
   const { setControlTarget, resetForDeviceSwitch } = useMobileStore();
   const [devices, setDevices] = useState<DeviceInfo[]>([]);
   const [identityReady, setIdentityReady] = useState(client.hasDelegatedIdentity);
@@ -70,60 +68,97 @@ const DevicesPage: React.FC<Props> = ({ client, onBack }) => {
   const [loading, setLoading] = useState(false);
   const [switchingId, setSwitchingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [tokenExpired, setTokenExpired] = useState(false);
   const mountedRef = useRef(true);
+  const identityRequestRef = useRef(0);
+  const devicesRequestRef = useRef(0);
+  const switchRequestRef = useRef(0);
+  const sortedDevices = useMemo(() => [...devices].sort((left, right) => {
+    const leftCurrent = left.device_id === client.pairedDeviceId;
+    const rightCurrent = right.device_id === client.pairedDeviceId;
+    if (leftCurrent !== rightCurrent) return leftCurrent ? -1 : 1;
+    if (left.online !== right.online) return left.online ? -1 : 1;
+    return (left.device_name || left.device_id).localeCompare(right.device_name || right.device_id);
+  }), [client.pairedDeviceId, devices]);
+
+  const friendlyError = useCallback((value: unknown, fallbackKey: string) => {
+    const message = String((value as { message?: string })?.message || value);
+    if (message.includes('HTTP 401') || message.includes('No delegated identity')) {
+      return t('devices.authorizationExpired');
+    }
+    if (message.includes('HTTP 404')) return t('devices.deviceUnavailable');
+    if (message.includes('HTTP 503') || message.includes('HTTP 504')) {
+      return t('devices.deviceUnavailable');
+    }
+    return t(fallbackKey);
+  }, [t]);
 
   useEffect(() => {
     mountedRef.current = true;
     return () => {
       mountedRef.current = false;
+      identityRequestRef.current += 1;
+      devicesRequestRef.current += 1;
+      switchRequestRef.current += 1;
     };
   }, []);
 
   const refreshDevices = useCallback(async () => {
     if (!client.hasDelegatedIdentity) return;
+    const requestId = ++devicesRequestRef.current;
+    const isCurrent = () => (
+      mountedRef.current
+      && devicesRequestRef.current === requestId
+    );
     try {
       const list = await client.listDevices();
-      if (!mountedRef.current) return;
+      if (!isCurrent()) return;
       setDevices(list);
-      setTokenExpired(false);
       setError(null);
+      setIdentityReady(true);
     } catch (e: unknown) {
-      if (!mountedRef.current) return;
-      if (isTokenExpiredError(e)) {
-        setTokenExpired(true);
+      if (!isCurrent()) return;
+      // RelayHttpClient fences every response against its committed identity.
+      // A concurrent account refresh therefore makes this request stale rather
+      // than user-visible, while a successful 401 refresh + retry remains valid.
+      if (isDelegatedIdentityChangedError(e)) return;
+      const message = String((e as { message?: string })?.message || e);
+      if (message.includes('No delegated identity')) {
+        setIdentityReady(false);
+        setDevices([]);
       } else {
-        setError(String((e as { message?: string })?.message || e));
+        setError(friendlyError(e, 'devices.loadFailed'));
       }
     }
-  }, [client]);
+  }, [client, friendlyError]);
 
   // Acquire the delegated identity lazily: the desktop may have logged into
-  // its account after this mobile session was paired.
-  const ensureIdentity = useCallback(async () => {
-    if (client.hasDelegatedIdentity) {
-      setIdentityReady(true);
-      setIdentityChecking(false);
-      return true;
-    }
+  // its account after this mobile session was paired. Force-refresh so a
+  // desktop account switch is reflected without re-scanning.
+  const ensureIdentity = useCallback(async (force = false) => {
+    const requestId = ++identityRequestRef.current;
     setIdentityChecking(true);
+    setError(null);
     let granted = false;
     try {
-      granted = await client.requestDelegatedIdentity();
-    } catch {
+      granted = await client.requestDelegatedIdentity({ force: force || !client.hasDelegatedIdentity });
+    } catch (e: unknown) {
       granted = false;
+      if (mountedRef.current && identityRequestRef.current === requestId) {
+        setError(friendlyError(e, 'devices.identityFailed'));
+      }
     }
-    if (mountedRef.current) {
+    if (mountedRef.current && identityRequestRef.current === requestId) {
       setIdentityReady(granted);
       setIdentityChecking(false);
+      return granted;
     }
-    return granted;
-  }, [client]);
+    return false;
+  }, [client, friendlyError]);
 
   useEffect(() => {
     let timer: ReturnType<typeof setInterval> | undefined;
     const init = async () => {
-      const granted = await ensureIdentity();
+      const granted = await ensureIdentity(false);
       if (!granted || !mountedRef.current) return;
       setLoading(true);
       await refreshDevices();
@@ -138,7 +173,8 @@ const DevicesPage: React.FC<Props> = ({ client, onBack }) => {
 
   const handleManualRefresh = useCallback(async () => {
     if (loading || switchingId) return;
-    const granted = await ensureIdentity();
+    // Force refresh so desktop account switches are picked up immediately.
+    const granted = await ensureIdentity(true);
     if (!granted) return;
     setLoading(true);
     await refreshDevices();
@@ -148,6 +184,15 @@ const DevicesPage: React.FC<Props> = ({ client, onBack }) => {
   const selectDevice = useCallback(async (d: DeviceInfo) => {
     if (!d.online || switchingId) return;
     if (client.pairedDeviceId === d.device_id) return;
+    const requestId = ++switchRequestRef.current;
+    const accountEpoch = client.delegatedAccountEpoch;
+    let expectedTargetEpoch = client.controlTargetEpoch;
+    const isCurrent = () => (
+      mountedRef.current
+      && switchRequestRef.current === requestId
+      && client.delegatedAccountEpoch === accountEpoch
+      && client.controlTargetEpoch === expectedTargetEpoch
+    );
     setSwitchingId(d.device_id);
     setError(null);
     try {
@@ -156,11 +201,13 @@ const DevicesPage: React.FC<Props> = ({ client, onBack }) => {
         cmd: 'host_invoke',
         command: 'peer_mode_ping',
         args: {},
-      });
+      }, { retryable: true });
+      if (!isCurrent()) return;
       if (ping.resp === 'host_invoke_result' && ping.ok === false) {
         throw new Error(ping.error || t('devices.switchFailed'));
       }
-      client.pairedDeviceId = d.device_id;
+      client.setPairedDeviceId(d.device_id);
+      expectedTargetEpoch = client.controlTargetEpoch;
       resetForDeviceSwitch();
       setControlTarget({
         deviceId: d.device_id,
@@ -169,16 +216,21 @@ const DevicesPage: React.FC<Props> = ({ client, onBack }) => {
       });
       onBack();
     } catch (e: unknown) {
-      if (!mountedRef.current) return;
-      if (isTokenExpiredError(e)) {
-        setTokenExpired(true);
+      if (!isCurrent()) return;
+      if (isDelegatedIdentityChangedError(e)) return;
+      const message = String((e as { message?: string })?.message || e);
+      if (message.includes('No delegated identity')) {
+        setIdentityReady(false);
+        setDevices([]);
       } else {
-        setError(String((e as { message?: string })?.message || e) || t('devices.switchFailed'));
+        setError(friendlyError(e, 'devices.switchFailed'));
       }
     } finally {
-      if (mountedRef.current) setSwitchingId(null);
+      if (mountedRef.current && switchRequestRef.current === requestId) {
+        setSwitchingId(null);
+      }
     }
-  }, [client, onBack, resetForDeviceSwitch, setControlTarget, switchingId, t]);
+  }, [client, friendlyError, onBack, resetForDeviceSwitch, setControlTarget, switchingId, t]);
 
   const renderBody = () => {
     if (identityChecking) {
@@ -202,15 +254,6 @@ const DevicesPage: React.FC<Props> = ({ client, onBack }) => {
       );
     }
 
-    if (tokenExpired) {
-      return (
-        <div className="devices-page__empty-card">
-          <span className="devices-page__empty-icon"><NoIdentityIcon /></span>
-          <p className="devices-page__empty-text">{t('devices.tokenExpired')}</p>
-        </div>
-      );
-    }
-
     if (loading && devices.length === 0) {
       return (
         <div className="devices-page__loading">
@@ -226,7 +269,7 @@ const DevicesPage: React.FC<Props> = ({ client, onBack }) => {
 
     return (
       <div className="devices-page__list">
-        {devices.map((d) => {
+        {sortedDevices.map((d) => {
           const isCurrent = client.pairedDeviceId === d.device_id;
           const isHome = client.homeDeviceId === d.device_id;
           const isSwitching = switchingId === d.device_id;
@@ -247,7 +290,9 @@ const DevicesPage: React.FC<Props> = ({ client, onBack }) => {
               <span className="devices-page__device-icon"><DeviceIcon /></span>
               <span className="devices-page__device-copy">
                 <span className="devices-page__device-name-row">
-                  <span className="devices-page__device-name">{d.device_name}</span>
+                  <span className="devices-page__device-name">
+                    {d.device_name || t('devices.unknownDevice')}
+                  </span>
                   {isCurrent && (
                     <span className="devices-page__badge devices-page__badge--current">
                       {t('devices.current')}
@@ -261,7 +306,11 @@ const DevicesPage: React.FC<Props> = ({ client, onBack }) => {
                 </span>
                 <span className="devices-page__device-meta">
                   <span className={`devices-page__status-dot ${d.online ? 'is-online' : 'is-offline'}`} />
-                  {d.online ? t('devices.online') : t('devices.offline')}
+                  {d.online
+                    ? t('devices.online')
+                    : d.last_seen_at
+                      ? t('devices.lastSeen', { time: formatRelativeTime(d.last_seen_at * 1000) })
+                      : t('devices.offline')}
                   <span className="devices-page__device-id">{d.device_id.slice(0, 8)}</span>
                 </span>
               </span>
@@ -290,9 +339,9 @@ const DevicesPage: React.FC<Props> = ({ client, onBack }) => {
         <h2 className="devices-page__title">{t('devices.title')}</h2>
         <button
           type="button"
-          className="devices-page__refresh-btn"
+          className={`devices-page__refresh-btn ${loading || identityChecking ? 'is-loading' : ''}`}
           onClick={handleManualRefresh}
-          disabled={loading || !!switchingId}
+          disabled={loading || identityChecking || !!switchingId}
           aria-label={t('devices.refresh')}
           title={t('devices.refresh')}
         >
@@ -300,7 +349,7 @@ const DevicesPage: React.FC<Props> = ({ client, onBack }) => {
         </button>
       </div>
 
-      {error && !tokenExpired && <div className="devices-page__error">{error}</div>}
+      {error && <div className="devices-page__error">{error}</div>}
 
       <div className="devices-page__body">
         {renderBody()}

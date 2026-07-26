@@ -421,7 +421,7 @@ export const useFlowChat = () => {
     processingLock.current = false;
   }, []);
 
-  const confirmTool = useCallback((_toolId: string, _updatedInput?: any) => {
+  const confirmTool = useCallback((_toolId: string) => {
   }, []);
 
   const rejectTool = useCallback((_toolId: string) => {

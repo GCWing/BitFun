@@ -108,6 +108,10 @@ pub(crate) async fn set_config(args: &Value) -> Result<Value, String> {
         format!("Failed to set config: {e}")
     })?;
 
+    // Config changed on this host via a peer controller — schedule the cloud
+    // push so other same-account devices converge.
+    crate::account_sync::notify_local_settings_changed();
+
     Ok(json!("Configuration set successfully"))
 }
 

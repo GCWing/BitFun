@@ -36,6 +36,11 @@ memory VPS (common on arm64), use:
 RELAY_CARGO_BUILD_JOBS=1 bash deploy.sh
 ```
 
+`deploy.sh` enables Docker BuildKit so the Dockerfile can reuse Cargo
+registry/git/`target` cache mounts across redeploys. Keep BuildKit enabled
+(`DOCKER_BUILDKIT=1`, the deploy default) and avoid `docker builder prune`
+unless you intentionally want a cold rebuild.
+
 ## Two operating modes
 
 | Mode | When | What you get |
@@ -61,7 +66,20 @@ variable yourself or accounts stay disabled.
 
 Use this checklist on a machine you control (VPS, LAN server, or localhost).
 
-### 1. Deploy the relay
+### Desktop one-click deploy (preferred for end users)
+
+BitFun Desktop can SSH to your host and run the same Docker path without a
+manual clone. Entry points: Account Login → “一键部署到自己的服务器”, or
+Remote Connect → Network Relay → Self-Hosted → the same action.
+
+- Orchestration: `src/crates/services/services-integrations/src/remote_ssh/relay_deploy.rs`
+- Wizard + invariants: `src/web-ui/src/features/relay-deploy/README.md`
+
+Remote checkout path is always `~/.bitfun/relay-src` (never `$HOME/BitFun`).
+Closing the wizard cancels the remote task. Account passwords are provisioned
+locally and imported via `relay-admin import-user`.
+
+### 1. Deploy the relay (manual / server shell)
 
 ```bash
 git clone https://github.com/GCWing/BitFun
@@ -169,7 +187,7 @@ the `/relay` suffix to match the official server format
 
 **CLI**
 
-1. Run `bitfun-cli`, open `/login`.
+1. Run `bitfun`, open `/login`.
 2. Fill **Auth Server**, **Username**, **Password**, then Login.
 3. After login, the CLI can act as a **Peer Host** for same-account Desktops.
 
@@ -330,8 +348,28 @@ See `Caddyfile` for the Caddy equivalent.
 | `RELAY_PORT` | `9700` | Server listen port |
 | `RELAY_STATIC_DIR` | _(none)_ | Path to mobile web static files fallback SPA. When unset, no fallback static files are served. Docker Compose sets this to `/app/static`. |
 | `RELAY_ROOM_WEB_DIR` | `/tmp/bitfun-room-web` | Directory for per-room uploaded mobile-web files. Docker Compose uses a named volume mounted at `/app/room-web`. |
-| `RELAY_ROOM_TTL` | `3600` | Room TTL in seconds (0 = no expiry) |
+| `RELAY_ASSET_STORE_MAX_BYTES` | `1073741824` | Global content-addressed asset capacity (1 GiB by default). New uploads return HTTP 507 after the limit is reached; existing content remains readable. |
+| `RELAY_ROOM_TTL` | `300` | Idle room TTL in seconds (0 = no expiry). Active heartbeats and commands refresh activity. |
 | `RELAY_DB_PATH` | _(none)_ | SQLite path for account storage. **Unset = pure relay (no login).** Set a persistent path (Compose: `/app/data/bitfun_relay.db`) to enable login, device routing, and sync. Accounts are provisioned only via `relay-admin`. |
+| `RELAY_CORS_ALLOW_ORIGINS` | _(none)_ | Comma-separated browser origin allowlist, for example `https://remote.example.com`. Empty means same-origin only. `*` is rejected when account APIs are enabled. |
+| `RELAY_PAGE_PUBLIC_BASE_URL` | _(none)_ | Browser-visible base URL for untrusted published Page content, for example `https://pages.example.com`. Configure together with `RELAY_PAGE_AUTH_BASE_URL`. |
+| `RELAY_PAGE_AUTH_BASE_URL` | _(none)_ | Browser-visible base URL for the trusted Relay Page login UI, for example `https://relay.example.com/relay`. It must use a different browser origin from `RELAY_PAGE_PUBLIC_BASE_URL`. |
+
+Production deployments that use non-public Pages should configure both Page
+base URLs. The reverse proxy must route both hosts to this Relay and preserve
+the original `Host`; it may strip the configured path prefix before proxying.
+Relay then serves Page content only on the public origin and the account login
+UI only on the authentication origin. Login completes through a 60-second,
+single-use callback code; the callback writes an HttpOnly, Page-path-scoped
+cookie on the public origin. If the variables are omitted, same-origin login is
+kept only for local/backward-compatible deployments and the server logs a
+warning.
+
+When `RELAY_DB_PATH` is set, database open or migration failure is fatal: the
+process exits instead of silently starting without account protection. The
+`/health` response reports account capability, room/device connection counts,
+pending bridge requests, and asset-store used/capacity bytes for operational
+checks and capacity alerts.
 
 ## API Endpoints
 
@@ -354,6 +392,20 @@ limit. **No public registration endpoint.**
 | `/api/auth/login` | POST | Verify password hash and issue a token; returns `{ token, user_id }` |
 | `/api/auth/logout` | POST | Revoke the caller's token |
 | `/api/auth/delegate` | POST | Issue a delegated token for a paired client (authenticated caller) |
+
+### Published Page browser authentication
+
+Public Pages need no session. `relay` Pages accept any valid account on this
+Relay; `private` Pages accept only the owner account. The browser derives the
+same Argon2id password hash as native clients, so plaintext passwords are never
+sent to Relay.
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/api/page-auth/sign-in?state=…` | GET | Trusted Relay-hosted username/password form |
+| `/api/page-auth/login` | POST | Verify the derived password hash and issue a single-use callback code |
+| `/api/page-auth/callback?code=…` | GET | Consume the code on the Page origin and set the scoped browser session cookie |
+| `/api/page-auth/client.js` | GET | Browser Argon2id login client |
 
 ### Devices (requires `RELAY_DB_PATH` + Bearer token)
 

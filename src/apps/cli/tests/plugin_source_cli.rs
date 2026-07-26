@@ -42,7 +42,7 @@ fn write_package(workspace: &Path, source: &[u8], declared_hash: &str) {
 
 fn run_cli(workspace: &Path, user_root: &Path, home_root: &Path, args: &[&str]) -> Output {
     let config_root = user_root.join("host-config");
-    Command::new(env!("CARGO_BIN_EXE_bitfun-cli"))
+    Command::new(env!("CARGO_BIN_EXE_bitfun"))
         .args(args)
         .current_dir(workspace)
         .env_remove("BITFUN_USER_ROOT")
@@ -54,7 +54,7 @@ fn run_cli(workspace: &Path, user_root: &Path, home_root: &Path, args: &[&str]) 
         .env("XDG_CONFIG_HOME", &config_root)
         .env("HOME", home_root)
         .output()
-        .expect("run bitfun-cli")
+        .expect("run bitfun")
 }
 
 fn stdout(output: &Output) -> String {
@@ -120,7 +120,7 @@ fn plugin_source_cli_rejects_unavailable_product_paths() {
     let config_root = temp.path().join("host-config");
     std::fs::create_dir_all(&workspace).expect("create workspace");
 
-    let output = Command::new(env!("CARGO_BIN_EXE_bitfun-cli"))
+    let output = Command::new(env!("CARGO_BIN_EXE_bitfun"))
         .args(["plugins", "list"])
         .current_dir(&workspace)
         .env_remove("BITFUN_USER_ROOT")
@@ -131,7 +131,7 @@ fn plugin_source_cli_rejects_unavailable_product_paths() {
         .env("APPDATA", &config_root)
         .env("XDG_CONFIG_HOME", &config_root)
         .output()
-        .expect("run bitfun-cli");
+        .expect("run bitfun");
 
     assert!(!output.status.success());
     assert!(stderr(&output).contains("Configuration error"));
@@ -196,7 +196,7 @@ fn plugin_source_cli_lifecycle_and_doctor_exit_codes() {
     assert!(!rejected.status.success());
     assert!(stderr(&rejected).contains("does not match"));
     assert!(stderr(&rejected)
-        .contains("Re-run `bitfun-cli plugins activate acme.demo` to preview the current content"));
+        .contains("Re-run `bitfun plugins activate acme.demo` to preview the current content"));
 
     let content_hash = activation_content_hash(&preview);
 

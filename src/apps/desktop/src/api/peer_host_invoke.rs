@@ -19,6 +19,15 @@ use super::remote_connect_api::{account_app_handle, current_device_id_for_peer};
 const DEFAULT_INVOKE_TIMEOUT: Duration = Duration::from_secs(120);
 
 /// Commands that must never run on a peer on behalf of a controller.
+///
+/// Keep aligned with:
+/// - FE deny list in `src/web-ui/.../adapters/peer-device-adapter.ts`
+/// - CLI deny list in `src/apps/cli/src/peer_host/deny.rs`
+/// - invariants in `src/web-ui/src/infrastructure/peer-device/README.md`
+///
+/// Account identity + cloud session/turn APIs stay on the controller. Peer
+/// history is restored via HostInvoke (`restore_session_view`), not by
+/// forwarding `account_fetch_session_turns` to the peer host.
 static LOCAL_ONLY_COMMANDS: &[&str] = &[
     // Window / tray / process chrome
     "show_main_window",
@@ -33,6 +42,8 @@ static LOCAL_ONLY_COMMANDS: &[&str] = &[
     "install_update",
     // Account identity / peer mode control (stay on controller)
     "account_login",
+    "account_finalize_login",
+    "account_cancel_pending_login",
     "account_logout",
     "account_status",
     "account_get_credential_hint",
@@ -80,13 +91,28 @@ static LOCAL_ONLY_COMMANDS: &[&str] = &[
     // This-machine computer-use / OS permission prompts
     "computer_use_request_permissions",
     "computer_use_open_system_settings",
+    // One-click relay deploy SSHes from the controller to a user host
+    "relay_deploy_preflight",
+    "relay_deploy_install_docker",
+    "relay_deploy_start",
+    "relay_deploy_poll",
+    "relay_deploy_cancel",
+    "relay_deploy_register",
+    "relay_deploy_verify",
 ];
 
 static PENDING: OnceLock<Mutex<HashMap<String, oneshot::Sender<HostInvokeBridgeResult>>>> =
     OnceLock::new();
 
-/// Controllers currently attached for DeviceEvent fan-out (device ids).
-static CONTROL_SUBSCRIBERS: OnceLock<Mutex<HashSet<String>>> = OnceLock::new();
+#[derive(Default)]
+struct PeerControlState {
+    controllers: HashSet<String>,
+    permission_request_ids: HashSet<String>,
+}
+
+/// Controllers currently attached for DeviceEvent fan-out and the pending
+/// permission requests projected to them.
+static PEER_CONTROL_STATE: OnceLock<Mutex<PeerControlState>> = OnceLock::new();
 
 /// True while this process is acting as a Peer Mode controller (Remote: B).
 /// Used to pause cloud settings pull that would rewrite local disk mid-remote.
@@ -96,8 +122,8 @@ fn pending_map() -> &'static Mutex<HashMap<String, oneshot::Sender<HostInvokeBri
     PENDING.get_or_init(|| Mutex::new(HashMap::new()))
 }
 
-fn control_subscribers() -> &'static Mutex<HashSet<String>> {
-    CONTROL_SUBSCRIBERS.get_or_init(|| Mutex::new(HashSet::new()))
+fn peer_control_state() -> &'static Mutex<PeerControlState> {
+    PEER_CONTROL_STATE.get_or_init(|| Mutex::new(PeerControlState::default()))
 }
 
 pub fn set_peer_controller_active(active: bool) {
@@ -132,21 +158,121 @@ pub fn is_local_only_command(command: &str) -> bool {
 
 /// Register a controller device id to receive peer UI events.
 pub fn attach_controller(device_id: String) {
-    if let Ok(mut set) = control_subscribers().lock() {
-        set.insert(device_id);
+    if let Ok(mut state) = peer_control_state().lock() {
+        state.controllers.insert(device_id);
     }
 }
 
-pub fn detach_controller(device_id: &str) {
-    if let Ok(mut set) = control_subscribers().lock() {
-        set.remove(device_id);
+fn detach_from_state(state: &mut PeerControlState, device_id: &str) -> Vec<String> {
+    let removed = state.controllers.remove(device_id);
+    if removed && state.controllers.is_empty() {
+        return state.permission_request_ids.drain().collect();
+    }
+    Vec::new()
+}
+
+/// Detach one controller and return requests that must fail closed when it was
+/// the final controller.
+pub fn detach_controller(device_id: &str) -> Vec<String> {
+    let Ok(mut state) = peer_control_state().lock() else {
+        return Vec::new();
+    };
+    detach_from_state(&mut state, device_id)
+}
+
+fn retain_online_in_state(
+    state: &mut PeerControlState,
+    online_device_ids: &HashSet<String>,
+) -> Vec<String> {
+    let had_controllers = !state.controllers.is_empty();
+    state
+        .controllers
+        .retain(|device_id| online_device_ids.contains(device_id));
+    if had_controllers && state.controllers.is_empty() {
+        return state.permission_request_ids.drain().collect();
+    }
+    Vec::new()
+}
+
+/// Remove controllers missing from account presence and return requests that
+/// lost their final control surface.
+pub fn retain_online_controllers(online_device_ids: &HashSet<String>) -> Vec<String> {
+    let Ok(mut state) = peer_control_state().lock() else {
+        return Vec::new();
+    };
+    retain_online_in_state(&mut state, online_device_ids)
+}
+
+/// Clear all attached controllers after the device-routing stream closes.
+pub fn disconnect_controllers() -> Vec<String> {
+    let Ok(mut state) = peer_control_state().lock() else {
+        return Vec::new();
+    };
+    state.controllers.clear();
+    state.permission_request_ids.drain().collect()
+}
+
+pub fn track_permission_event(event: &bitfun_agent_runtime::sdk::PermissionRequestEvent) -> bool {
+    let Ok(mut state) = peer_control_state().lock() else {
+        return false;
+    };
+    match event {
+        bitfun_agent_runtime::sdk::PermissionRequestEvent::Asked { request } => {
+            if !state.controllers.is_empty() {
+                state
+                    .permission_request_ids
+                    .insert(request.request_id.clone());
+                true
+            } else {
+                false
+            }
+        }
+        bitfun_agent_runtime::sdk::PermissionRequestEvent::Replied { request_id, .. }
+        | bitfun_agent_runtime::sdk::PermissionRequestEvent::Cancelled { request_id, .. } => {
+            let was_tracked = state.permission_request_ids.remove(request_id);
+            was_tracked && !state.controllers.is_empty()
+        }
+    }
+}
+
+pub fn take_tracked_permission_requests() -> Vec<String> {
+    peer_control_state()
+        .lock()
+        .map(|mut state| state.permission_request_ids.drain().collect())
+        .unwrap_or_default()
+}
+
+pub async fn fail_closed_permission_requests(
+    request_ids: Vec<String>,
+    reason: &str,
+) -> Result<(), String> {
+    if request_ids.is_empty() {
+        return Ok(());
+    }
+    let manager = bitfun_core::product_runtime::core_permission_request_manager()?;
+    let mut failures = Vec::new();
+    for request_id in request_ids {
+        if let Err(error) = manager
+            .cancel_request(&request_id, reason.to_string())
+            .await
+        {
+            failures.push(format!("{request_id}: {error}"));
+        }
+    }
+    if failures.is_empty() {
+        Ok(())
+    } else {
+        Err(format!(
+            "Failed to cancel Peer permission requests: {}",
+            failures.join("; ")
+        ))
     }
 }
 
 pub fn attached_controllers() -> Vec<String> {
-    control_subscribers()
+    peer_control_state()
         .lock()
-        .map(|set| set.iter().cloned().collect())
+        .map(|state| state.controllers.iter().cloned().collect())
         .unwrap_or_default()
 }
 
@@ -181,8 +307,8 @@ pub async fn peer_control_attach(controller_device_id: String) -> Result<(), Str
 
 #[tauri::command]
 pub async fn peer_control_detach(controller_device_id: String) -> Result<(), String> {
-    detach_controller(&controller_device_id);
-    Ok(())
+    let request_ids = detach_controller(&controller_device_id);
+    fail_closed_permission_requests(request_ids, "Last Peer controller detached").await
 }
 
 #[tauri::command]
@@ -192,6 +318,9 @@ pub async fn peer_mode_ping() -> Result<Value, String> {
         "peer": true,
         "device_id": current_device_id_for_peer()
             .unwrap_or_else(|_| "unknown".to_string()),
+        "capabilities": {
+            "idempotent_dialog_submit": true,
+        },
     }))
 }
 
@@ -275,5 +404,51 @@ async fn bridge_via_webview(
                 DEFAULT_INVOKE_TIMEOUT.as_secs()
             ))
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn control_state(controllers: &[&str], requests: &[&str]) -> PeerControlState {
+        PeerControlState {
+            controllers: controllers.iter().map(|value| value.to_string()).collect(),
+            permission_request_ids: requests.iter().map(|value| value.to_string()).collect(),
+        }
+    }
+
+    #[tokio::test]
+    async fn peer_ping_advertises_idempotent_dialog_submission() {
+        let value = peer_mode_ping().await.expect("peer ping");
+        assert_eq!(
+            value
+                .pointer("/capabilities/idempotent_dialog_submit")
+                .and_then(Value::as_bool),
+            Some(true)
+        );
+    }
+
+    #[test]
+    fn only_the_final_detach_drains_peer_permission_requests() {
+        let mut state = control_state(&["controller-a", "controller-b"], &["request-1"]);
+
+        assert!(detach_from_state(&mut state, "controller-a").is_empty());
+        assert_eq!(
+            detach_from_state(&mut state, "controller-b"),
+            vec!["request-1".to_string()]
+        );
+    }
+
+    #[test]
+    fn presence_loss_drains_requests_only_when_every_controller_is_offline() {
+        let mut state = control_state(&["controller-a", "controller-b"], &["request-1"]);
+        let online = HashSet::from(["controller-b".to_string()]);
+        assert!(retain_online_in_state(&mut state, &online).is_empty());
+
+        assert_eq!(
+            retain_online_in_state(&mut state, &HashSet::new()),
+            vec!["request-1".to_string()]
+        );
     }
 }

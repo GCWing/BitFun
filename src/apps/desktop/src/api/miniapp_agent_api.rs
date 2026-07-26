@@ -107,6 +107,12 @@ pub struct MiniAppAgentRunRequest {
     /// instead of the user's workspace. Must be a clean relative path.
     #[serde(default)]
     pub app_data_workspace: Option<String>,
+    /// Optional model selector for the hidden Cowork session (`auto`,
+    /// `primary`, `fast`, or a concrete model config id). Applied when the
+    /// session is created, and also when an existing session is reused so the
+    /// MiniApp can switch models mid-task.
+    #[serde(default)]
+    pub model: Option<String>,
 }
 
 #[derive(Debug, Serialize)]
@@ -205,6 +211,13 @@ pub async fn miniapp_agent_run(
         request.enable_tools,
     );
 
+    let requested_model = request
+        .model
+        .as_deref()
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(str::to_string);
+
     let session_id = if let Some(existing_session_id) = submission_plan.requested_session_id.clone()
     {
         // Reuse a hidden session created by an earlier run of this MiniApp so
@@ -219,6 +232,12 @@ pub async fn miniapp_agent_run(
             &request.app_id,
             &submission_plan.workspace_path,
         )?;
+        if let Some(model_id) = requested_model.as_deref() {
+            coordinator
+                .update_session_model(&existing_session_id, model_id)
+                .await
+                .map_err(|e| format!("Failed to update MiniApp agent session model: {}", e))?;
+        }
         existing_session_id
     } else {
         // One hidden session per task keeps MiniApp work isolated and out of
@@ -228,6 +247,7 @@ pub async fn miniapp_agent_run(
             safe_mode: true,
             auto_compact: true,
             enable_context_compression: true,
+            model_id: requested_model.clone(),
             ..Default::default()
         };
         // Cowork supplies the office skill group and research/file tools when
@@ -246,8 +266,7 @@ pub async fn miniapp_agent_run(
         session.session_id
     };
 
-    let policy = DialogSubmissionPolicy::for_source(DialogTriggerSource::DesktopApi)
-        .with_skip_tool_confirmation(true);
+    let policy = DialogSubmissionPolicy::for_source(DialogTriggerSource::DesktopApi);
 
     let outcome = scheduler
         .submit(
@@ -444,6 +463,24 @@ mod tests {
             Some("decks/deck-123")
         );
         assert!(request.workspace_path.is_none());
+    }
+
+    #[test]
+    fn miniapp_agent_run_request_accepts_model_selector() {
+        let legacy: MiniAppAgentRunRequest = serde_json::from_value(json!({
+            "appId": "builtin-ppt-live",
+            "prompt": "plan"
+        }))
+        .expect("legacy MiniApp agent request should deserialize without model");
+        assert!(legacy.model.is_none());
+
+        let with_model: MiniAppAgentRunRequest = serde_json::from_value(json!({
+            "appId": "builtin-ppt-live",
+            "prompt": "plan",
+            "model": "fast"
+        }))
+        .expect("MiniApp agent request should accept model");
+        assert_eq!(with_model.model.as_deref(), Some("fast"));
     }
 
     #[test]

@@ -1,5 +1,16 @@
 use super::unified::{UnifiedResponse, UnifiedTokenUsage, UnifiedToolCall};
+use bitfun_agent_stream::ToolCallCompletion;
 use serde::Deserialize;
+
+pub(crate) fn map_anthropic_stop_reason(reason: &str) -> ToolCallCompletion {
+    match reason.trim().to_ascii_lowercase().as_str() {
+        "tool_use" => ToolCallCompletion::NormalToolUse,
+        "max_tokens" => ToolCallCompletion::OutputLimit,
+        "refusal" => ToolCallCompletion::Failed,
+        "end_turn" | "stop_sequence" | "pause_turn" => ToolCallCompletion::NormalNoToolUse,
+        _ => ToolCallCompletion::Unknown,
+    }
+}
 
 #[derive(Debug, Deserialize)]
 pub struct MessageStart {
@@ -89,6 +100,11 @@ impl From<MessageDelta> for UnifiedResponse {
             thinking_signature: None,
             tool_call: None,
             usage: value.usage.map(UnifiedTokenUsage::from),
+            tool_call_completion: value
+                .delta
+                .stop_reason
+                .as_deref()
+                .map(map_anthropic_stop_reason),
             finish_reason: value.delta.stop_reason,
             provider_metadata: None,
         }
@@ -219,6 +235,7 @@ impl From<AnthropicSSEErrorDetails> for String {
 mod tests {
     use super::*;
     use crate::stream::types::unified::UnifiedTokenUsage;
+    use bitfun_agent_stream::ToolCallCompletion;
 
     #[test]
     fn cached_content_token_count_is_reads_only_not_sum() {
@@ -245,6 +262,26 @@ mod tests {
         // Hit rate computed by downstream:
         //   30 / 150 == 20% (correct: only reads count as hits)
         // Pre-fix this would have been wrongly 50/150 == 33%.
+    }
+
+    #[test]
+    fn maps_anthropic_end_turn_as_normal_no_tool_use() {
+        assert_eq!(
+            map_anthropic_stop_reason("tool_use"),
+            ToolCallCompletion::NormalToolUse
+        );
+        assert_eq!(
+            map_anthropic_stop_reason("max_tokens"),
+            ToolCallCompletion::OutputLimit
+        );
+        assert_eq!(
+            map_anthropic_stop_reason("end_turn"),
+            ToolCallCompletion::NormalNoToolUse
+        );
+        assert_eq!(
+            map_anthropic_stop_reason("unknown_stop"),
+            ToolCallCompletion::Unknown
+        );
     }
 
     #[test]

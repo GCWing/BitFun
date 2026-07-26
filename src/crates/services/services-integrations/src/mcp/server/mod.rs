@@ -118,6 +118,13 @@ pub struct MCPServerConfig {
     pub args: Vec<String>,
     #[serde(default)]
     pub env: HashMap<String, String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub working_directory: Option<String>,
+    /// Whether a local process inherits every environment variable from the
+    /// BitFun process. `None` preserves the legacy behavior for native MCP
+    /// configurations; imported executable configuration can opt out.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub inherit_parent_environment: Option<bool>,
     /// Additional HTTP headers for remote MCP servers (Cursor-style `headers`).
     #[serde(default)]
     pub headers: HashMap<String, String>,
@@ -134,6 +141,10 @@ pub struct MCPServerConfig {
     pub settings: HashMap<String, Value>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub oauth: Option<MCPServerOAuthConfig>,
+    /// Explicit OAuth discovery policy. `None` preserves the legacy behavior
+    /// where remote servers may negotiate OAuth after an authentication error.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub oauth_enabled: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub xaa: Option<MCPServerXaaConfig>,
 }
@@ -164,6 +175,14 @@ impl fmt::Display for MCPServerConfigValidationError {
 impl std::error::Error for MCPServerConfigValidationError {}
 
 impl MCPServerConfig {
+    pub fn remote_oauth_enabled(&self) -> bool {
+        self.oauth_enabled.unwrap_or(true)
+    }
+
+    pub fn inherits_parent_environment(&self) -> bool {
+        self.inherit_parent_environment.unwrap_or(true)
+    }
+
     pub fn resolved_transport(&self) -> MCPServerTransport {
         self.transport.unwrap_or(match self.server_type {
             MCPServerType::Local => MCPServerTransport::Stdio,
@@ -187,6 +206,12 @@ impl MCPServerConfig {
         let transport = self.resolved_transport();
         match self.server_type {
             MCPServerType::Local => {
+                if self.oauth_enabled.is_some() {
+                    return Err(MCPServerConfigValidationError::new(format!(
+                        "Local MCP server '{}' cannot configure OAuth",
+                        self.id
+                    )));
+                }
                 if self.command.is_none() {
                     return Err(MCPServerConfigValidationError::new(format!(
                         "Local MCP server '{}' must have a command",
@@ -201,8 +226,28 @@ impl MCPServerConfig {
                         transport.as_str()
                     )));
                 }
+                if self.working_directory.as_deref().is_some_and(|directory| {
+                    directory.trim().is_empty() || directory.chars().any(char::is_control)
+                }) {
+                    return Err(MCPServerConfigValidationError::new(format!(
+                        "Local MCP server '{}' has an invalid working directory",
+                        self.id
+                    )));
+                }
             }
             MCPServerType::Remote => {
+                if self.inherit_parent_environment.is_some() {
+                    return Err(MCPServerConfigValidationError::new(format!(
+                        "Remote MCP server '{}' cannot configure process environment inheritance",
+                        self.id
+                    )));
+                }
+                if self.working_directory.is_some() {
+                    return Err(MCPServerConfigValidationError::new(format!(
+                        "Remote MCP server '{}' cannot set a working directory",
+                        self.id
+                    )));
+                }
                 if self.url.is_none() {
                     return Err(MCPServerConfigValidationError::new(format!(
                         "Remote MCP server '{}' must have a URL",

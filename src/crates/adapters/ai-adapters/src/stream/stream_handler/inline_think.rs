@@ -1,4 +1,5 @@
 use crate::stream::types::unified::{UnifiedResponse, UnifiedTokenUsage};
+use bitfun_agent_stream::ToolCallCompletion;
 use serde_json::Value;
 use std::mem;
 
@@ -8,6 +9,7 @@ const INLINE_THINK_CLOSE_TAG: &str = "</think>";
 #[derive(Debug, Default)]
 struct DeferredResponseMeta {
     usage: Option<UnifiedTokenUsage>,
+    tool_call_completion: Option<ToolCallCompletion>,
     finish_reason: Option<String>,
     provider_metadata: Option<Value>,
 }
@@ -16,6 +18,7 @@ impl DeferredResponseMeta {
     fn from_response(response: &mut UnifiedResponse) -> Self {
         Self {
             usage: response.usage.take(),
+            tool_call_completion: response.tool_call_completion.take(),
             finish_reason: response.finish_reason.take(),
             provider_metadata: response.provider_metadata.take(),
         }
@@ -24,6 +27,9 @@ impl DeferredResponseMeta {
     fn merge(&mut self, other: Self) {
         if other.usage.is_some() {
             self.usage = other.usage;
+        }
+        if other.tool_call_completion.is_some() {
+            self.tool_call_completion = other.tool_call_completion;
         }
         if other.finish_reason.is_some() {
             self.finish_reason = other.finish_reason;
@@ -37,6 +43,9 @@ impl DeferredResponseMeta {
         if response.usage.is_none() {
             response.usage = self.usage;
         }
+        if response.tool_call_completion.is_none() {
+            response.tool_call_completion = self.tool_call_completion;
+        }
         if response.finish_reason.is_none() {
             response.finish_reason = self.finish_reason;
         }
@@ -46,7 +55,10 @@ impl DeferredResponseMeta {
     }
 
     fn is_empty(&self) -> bool {
-        self.usage.is_none() && self.finish_reason.is_none() && self.provider_metadata.is_none()
+        self.usage.is_none()
+            && self.tool_call_completion.is_none()
+            && self.finish_reason.is_none()
+            && self.provider_metadata.is_none()
     }
 }
 
@@ -338,6 +350,7 @@ mod tests {
 
         let responses = parser.normalize_response(UnifiedResponse {
             text: Some("<think>abc</think>done".to_string()),
+            tool_call_completion: Some(bitfun_agent_stream::ToolCallCompletion::NormalToolUse),
             finish_reason: Some("stop".to_string()),
             ..Default::default()
         });
@@ -345,6 +358,10 @@ mod tests {
         assert_eq!(responses.len(), 2);
         assert_eq!(responses[0].reasoning_content.as_deref(), Some("abc"));
         assert_eq!(responses[1].text.as_deref(), Some("done"));
+        assert_eq!(
+            responses[1].tool_call_completion,
+            Some(bitfun_agent_stream::ToolCallCompletion::NormalToolUse)
+        );
         assert_eq!(responses[1].finish_reason.as_deref(), Some("stop"));
     }
 

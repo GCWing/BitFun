@@ -16,74 +16,26 @@ impl ChatMode {
             return self.dispatch_action(action, modal_state, chat_view, chat_state, rt_handle);
         }
 
-        // ── Permission prompt intercepts all keys when active ──
         if let Some(ref mut prompt) = chat_state.permission_prompt {
-            let action = prompt.handle_key_event(key);
-            match action {
-                PermissionAction::AllowOnce => {
-                    let tool_id = prompt.tool_id.clone();
-                    let agent = self.agent.clone();
-                    tracing::info!("User allowed tool once: {}", tool_id);
-                    match tokio::task::block_in_place(|| {
-                        rt_handle.block_on(agent.confirm_tool(&tool_id, None))
-                    }) {
+            match prompt.handle_key_event(key) {
+                PermissionAction::Reply(reply) => {
+                    let request_id = prompt.request.request_id.clone();
+                    let runtime = self.runtime.agent_runtime().clone();
+                    let result = tokio::task::block_in_place(|| {
+                        rt_handle.block_on(runtime.respond_permission(&request_id, reply))
+                    });
+                    match result {
                         Ok(()) => {
-                            chat_state.permission_prompt = None;
-                            chat_view.set_status(Some("Tool confirmed".to_string()));
+                            chat_state.resolve_permission_request(&request_id);
+                            chat_view.set_status(Some("Permission response sent".to_string()));
                         }
                         Err(error) => {
-                            tracing::error!("Failed to confirm tool: {}", error);
+                            tracing::error!("Failed to respond to permission request: {error}");
                             chat_view.set_status(Some(format!("Error: {error}")));
                         }
                     }
                 }
-                PermissionAction::AllowAlways => {
-                    let tool_id = prompt.tool_id.clone();
-                    let tool_name = prompt.tool_name().to_string();
-                    let agent = self.agent.clone();
-                    tracing::info!(
-                        "User allowed tool {}: tool_id={}, tool_name={}",
-                        ALLOW_ALWAYS_RUNTIME_SCOPE,
-                        tool_id,
-                        tool_name
-                    );
-                    match tokio::task::block_in_place(|| {
-                        rt_handle.block_on(agent.confirm_tool(&tool_id, None))
-                    }) {
-                        Ok(()) => {
-                            self.runtime.approval_controller().allow_always(&tool_name);
-                            chat_state.permission_prompt = None;
-                            chat_view.set_status(Some(format!(
-                                "Tool approved {ALLOW_ALWAYS_RUNTIME_SCOPE}"
-                            )));
-                        }
-                        Err(error) => {
-                            tracing::error!("Failed to confirm tool: {}", error);
-                            chat_view.set_status(Some(format!("Error: {error}")));
-                        }
-                    }
-                }
-                PermissionAction::Reject(reason) => {
-                    let tool_id = prompt.tool_id.clone();
-                    let agent = self.agent.clone();
-                    tracing::info!("User rejected tool: {}, reason: {}", tool_id, reason);
-                    let reason_clone = reason.clone();
-                    match tokio::task::block_in_place(|| {
-                        rt_handle.block_on(agent.reject_tool(&tool_id, reason_clone))
-                    }) {
-                        Ok(()) => {
-                            chat_state.permission_prompt = None;
-                            chat_view.set_status(Some(format!("Tool rejected: {}", reason)));
-                        }
-                        Err(error) => {
-                            tracing::error!("Failed to reject tool: {}", error);
-                            chat_view.set_status(Some(format!("Error: {error}")));
-                        }
-                    }
-                }
-                PermissionAction::None => {
-                    // Permission prompt consumed the key, no further action
-                }
+                PermissionAction::None => {}
             }
             return Ok(None);
         }
@@ -212,9 +164,8 @@ impl ChatMode {
                 KeyCode::Up => chat_view.agent_selector_up(),
                 KeyCode::Down => chat_view.agent_selector_down(),
                 KeyCode::Enter => {
-                    if let Some(selected) = chat_view.agent_selector_confirm() {
-                        chat_view.hide_agent_selector();
-                        self.apply_agent_selection(&selected, chat_state);
+                    if let Some(action) = chat_view.agent_selector_confirm() {
+                        self.handle_agent_selector_action(action, chat_view, chat_state, rt_handle);
                     }
                 }
                 // Note: Esc is handled globally for navigation back
@@ -275,7 +226,14 @@ impl ChatMode {
                 KeyCode::Down => chat_view.mcp_selector_down(),
                 KeyCode::Enter | KeyCode::Char(' ') => {
                     if let Some(selected) = chat_view.mcp_selector_confirm() {
-                        self.toggle_mcp_server(&selected.id, chat_view);
+                        if selected.requires_external_confirmation()
+                            && !chat_view.mcp_selector_is_confirm_external(&selected.id)
+                        {
+                            chat_view.mcp_selector_start_confirm_external(selected.id.clone());
+                        } else {
+                            chat_view.mcp_selector_cancel_confirm_external();
+                            self.activate_mcp_item(selected, chat_view, chat_state);
+                        }
                     }
                 }
                 KeyCode::Char('a') => {
@@ -285,6 +243,13 @@ impl ChatMode {
                 }
                 KeyCode::Char('d') => {
                     if let Some(selected) = chat_view.mcp_selector_confirm() {
+                        if selected.is_external() {
+                            chat_state.add_system_message(
+                                "External MCP settings are read-only in BitFun. Disable the server here or edit it in the source application."
+                                    .to_string(),
+                            );
+                            return Ok(None);
+                        }
                         // First press: enter confirm-delete mode
                         // Second press: actually delete (handled by confirm_delete state)
                         if chat_view.mcp_selector_is_confirm_delete(&selected.id) {
@@ -295,13 +260,24 @@ impl ChatMode {
                     }
                 }
                 KeyCode::Char('e') => {
-                    chat_view.hide_mcp_selector();
-                    self.open_mcp_config(chat_state);
+                    if chat_view
+                        .mcp_selector_confirm()
+                        .is_some_and(|selected| selected.is_external())
+                    {
+                        chat_state.add_system_message(
+                            "External MCP settings are read-only in BitFun. Edit them in the source application."
+                                .to_string(),
+                        );
+                    } else {
+                        chat_view.hide_mcp_selector();
+                        self.open_mcp_config(chat_state);
+                    }
                 }
                 // Note: Esc is handled globally for navigation back
                 _ => {
                     // Any other key cancels the confirm-delete state
                     chat_view.mcp_selector_cancel_confirm_delete();
+                    chat_view.mcp_selector_cancel_confirm_external();
                 }
             }
             return Ok(None);
@@ -418,6 +394,9 @@ impl ChatMode {
         } = context;
         match reason {
             ChatExitReason::SwitchSession(new_session_id) => {
+                if let Some(pending) = this.pending_mode_change.as_mut() {
+                    pending.exit_warning_shown = false;
+                }
                 match this.switch_to_session(
                     &new_session_id,
                     session_id,
@@ -433,6 +412,9 @@ impl ChatMode {
                 }
             }
             ChatExitReason::NewSession => {
+                if let Some(pending) = this.pending_mode_change.as_mut() {
+                    pending.exit_warning_shown = false;
+                }
                 match this.create_new_session(session_id, chat_state, chat_view, rt_handle) {
                     Ok(()) => tracing::info!("Created new session: {}", session_id),
                     Err(e) => {
@@ -442,9 +424,19 @@ impl ChatMode {
                     }
                 }
             }
-            other => {
+            ChatExitReason::Quit => {
+                if let Some(pending) = this.pending_mode_change.as_mut() {
+                    if !pending.exit_warning_shown {
+                        pending.exit_warning_shown = true;
+                        chat_view.set_status(Some(
+                            "Exit requested. Waiting for the agent mode change to finish; exit again to leave now. This mode change may not be saved, and the next restore will use the last successfully persisted mode."
+                                .to_string(),
+                        ));
+                        return;
+                    }
+                }
                 *should_quit = true;
-                *exit_reason = other;
+                *exit_reason = ChatExitReason::Quit;
             }
         }
     }
@@ -493,6 +485,14 @@ impl ChatMode {
                             .handle_provider_selection(selection, context.chat_view);
                     }
                 } else if context.chat_view.handle_mouse_event(&mouse) {
+                    if let Some(action) = context.chat_view.take_pending_agent_action() {
+                        context.this.handle_agent_selector_action(
+                            action,
+                            context.chat_view,
+                            context.chat_state,
+                            context.rt_handle,
+                        );
+                    }
                     if let Some(action) = context.chat_view.take_pending_skill_action() {
                         context.this.handle_skill_selector_action(
                             action,
@@ -585,10 +585,10 @@ impl ChatMode {
                         .this
                         .preview_theme_selection(&theme, context.chat_view);
                 }
-                if let Some(server_id) = context.chat_view.take_pending_mcp_toggle() {
+                if let Some(item) = context.chat_view.take_pending_mcp_toggle() {
                     context
                         .this
-                        .toggle_mcp_server(&server_id, context.chat_view);
+                        .activate_mcp_item(item, context.chat_view, context.chat_state);
                 }
                 outcome.request_redraw = true;
             }
@@ -612,5 +612,4 @@ impl ChatMode {
         }
         Ok(outcome)
     }
-
 }

@@ -38,4 +38,31 @@ describe('AgentAPI', () => {
     });
   });
 
+  it('responds to permission requests by request id', async () => {
+    await agentAPI.respondPermission('permission-1', 'reject', 'Use a read-only path');
+
+    expect(invokeMock).toHaveBeenCalledWith('respond_permission', {
+      request: {
+        requestId: 'permission-1',
+        reply: 'reject',
+        feedback: 'Use a read-only path',
+      },
+    });
+  });
+
+  it('responds to the current and following permission requests atomically', async () => {
+    invokeMock.mockResolvedValue(['permission-1', 'permission-2']);
+
+    await expect(
+      agentAPI.respondPermissionBatch('permission-1', 'always'),
+    ).resolves.toEqual(['permission-1', 'permission-2']);
+
+    expect(invokeMock).toHaveBeenCalledWith('respond_permission_batch', {
+      request: {
+        requestId: 'permission-1',
+        reply: 'always',
+      },
+    });
+  });
+
 });

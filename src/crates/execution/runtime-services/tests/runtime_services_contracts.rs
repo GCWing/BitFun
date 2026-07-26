@@ -33,7 +33,7 @@ fn fake_provider_registers_required_and_remote_services_through_registry() {
     assert!(services.has_capability(RuntimeServiceCapability::FileSystem));
     assert!(services.has_capability(RuntimeServiceCapability::Workspace));
     assert!(services.has_capability(RuntimeServiceCapability::SessionStore));
-    assert!(services.has_capability(RuntimeServiceCapability::Permission));
+    assert!(!services.has_capability(RuntimeServiceCapability::Permission));
     assert!(services.has_capability(RuntimeServiceCapability::Events));
     assert!(services.has_capability(RuntimeServiceCapability::Clock));
     assert!(services.has_capability(RuntimeServiceCapability::RemoteConnection));

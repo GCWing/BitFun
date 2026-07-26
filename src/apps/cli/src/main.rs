@@ -28,7 +28,7 @@ mod ui;
 
 use anyhow::{anyhow, Result};
 use bitfun_core::service::remote_connect::DeviceIdentity;
-use clap::{Parser, Subcommand};
+use clap::{Parser, Subcommand, ValueEnum};
 use std::sync::atomic::{AtomicU8, Ordering};
 use std::sync::OnceLock;
 
@@ -59,6 +59,13 @@ pub fn get_mcp_status_text() -> String {
         3 => "MCP: Failed".to_string(),
         _ => "MCP: Unknown".to_string(),
     }
+}
+
+fn final_change_verification_enabled(
+    verify_final_changes: bool,
+    no_verify_final_changes: bool,
+) -> bool {
+    verify_final_changes && !no_verify_final_changes
 }
 
 /// Get the global MCP service instance (if initialized)
@@ -128,6 +135,14 @@ enum Commands {
         /// Example: --output-patch or --output-patch ./result.patch
         #[arg(long, num_args = 0..=1, default_missing_value = "-")]
         output_patch: Option<String>,
+
+        /// Verify workspace changes before a successful headless exit (enabled by default)
+        #[arg(long, default_value_t = true, action = clap::ArgAction::SetTrue)]
+        verify_final_changes: bool,
+
+        /// Disable automatic final-change verification
+        #[arg(long, conflicts_with = "verify_final_changes")]
+        no_verify_final_changes: bool,
 
         /// Auto-approve tool permissions that are not explicitly denied
         #[arg(long, conflicts_with = "confirm")]
@@ -261,13 +276,13 @@ enum AcpAction {
     /// Show ACP server status and capabilities
     Status {
         /// Command name or path to show in generated examples
-        #[arg(long, default_value = "bitfun-cli")]
+        #[arg(long, default_value = "bitfun")]
         command: String,
     },
     /// Check local readiness for ACP clients
     Doctor {
         /// Command name or path to show in generated examples
-        #[arg(long, default_value = "bitfun-cli")]
+        #[arg(long, default_value = "bitfun")]
         command: String,
     },
     /// Print editor/client integration snippets
@@ -277,7 +292,7 @@ enum AcpAction {
         client: acp_cli::AcpConfigClient,
 
         /// Command name or path your editor should execute
-        #[arg(long, default_value = "bitfun-cli")]
+        #[arg(long, default_value = "bitfun")]
         command: String,
     },
     /// Manage external ACP agents that BitFun can launch
@@ -400,6 +415,78 @@ enum ConfigAction {
     Edit,
     /// Reset to default configuration
     Reset,
+    /// Inspect or change external AI application compatibility
+    External {
+        #[command(subcommand)]
+        action: ExternalConfigAction,
+    },
+}
+
+#[derive(Subcommand)]
+enum ExternalConfigAction {
+    /// Show effective global and project compatibility settings
+    Status,
+    /// Enable or disable external compatibility
+    SetEnabled {
+        enabled: bool,
+        #[arg(long, value_enum, default_value = "project")]
+        scope: ExternalPolicyScopeArg,
+    },
+    /// Select an external ecosystem compatibility mode
+    SetMode {
+        #[arg(value_enum)]
+        mode: ExternalPolicyModeArg,
+        /// Ecosystem id; optional when exactly one ecosystem is registered
+        #[arg(long)]
+        ecosystem: Option<String>,
+        #[arg(long, value_enum, default_value = "project")]
+        scope: ExternalPolicyScopeArg,
+    },
+    /// Customize one external ecosystem capability
+    SetCapability {
+        #[arg(value_enum)]
+        capability: ExternalCapabilityArg,
+        #[arg(value_enum)]
+        access: ExternalAccessArg,
+        /// Ecosystem id; optional when exactly one ecosystem is registered
+        #[arg(long)]
+        ecosystem: Option<String>,
+        #[arg(long, value_enum, default_value = "project")]
+        scope: ExternalPolicyScopeArg,
+    },
+    /// Remove this project's overrides and inherit global settings
+    ResetProject,
+    /// Back up and reset a policy written by an incompatible BitFun version
+    ResetIncompatible,
+}
+
+#[derive(Clone, Copy, Debug, ValueEnum)]
+enum ExternalPolicyScopeArg {
+    Global,
+    Project,
+}
+
+#[derive(Clone, Copy, Debug, ValueEnum)]
+enum ExternalPolicyModeArg {
+    Recommended,
+    DiscoverOnly,
+    Off,
+}
+
+#[derive(Clone, Copy, Debug, ValueEnum)]
+enum ExternalCapabilityArg {
+    Command,
+    Tool,
+    Agent,
+    Mcp,
+}
+
+#[derive(Clone, Copy, Debug, ValueEnum)]
+enum ExternalAccessArg {
+    Off,
+    Discover,
+    Ask,
+    Auto,
 }
 
 #[derive(Subcommand)]
@@ -478,6 +565,9 @@ async fn initialize_core_services(
 ) -> Result<std::sync::Arc<runtime::CliRuntimeContext>> {
     use bitfun_core::infrastructure::ai::AIClientFactory;
 
+    agent::agentic_system::select_agentic_system_profile(
+        bitfun_core::product_assembly::DeliveryProfile::Cli,
+    )?;
     bitfun_core::service::config::initialize_global_config()
         .await
         .map_err(|error| anyhow!("Failed to initialize global config service: {error}"))?;
@@ -494,9 +584,11 @@ async fn initialize_core_services(
 
     initialize_terminal_service().await;
 
-    let agentic_system = agent::agentic_system::init_agentic_system()
-        .await
-        .map_err(|error| anyhow!("Failed to initialize agentic system: {error}"))?;
+    let agentic_system = agent::agentic_system::init_agentic_system(
+        bitfun_core::product_assembly::DeliveryProfile::Cli,
+    )
+    .await
+    .map_err(|error| anyhow!("Failed to initialize agentic system: {error}"))?;
     tracing::info!("Agentic system initialized");
 
     let runtime = std::sync::Arc::new(runtime::CliRuntimeContext::build(
@@ -536,6 +628,7 @@ async fn initialize_core_services(
                 Ok(mcp_service) => {
                     let mcp_service = std::sync::Arc::new(mcp_service);
                     MCP_SERVICE.set(mcp_service.clone()).ok();
+                    bitfun_core::service::mcp::set_global_mcp_service(mcp_service.clone());
 
                     // Mark as in progress
                     get_mcp_init_status().store(1, Ordering::Relaxed);
@@ -624,6 +717,10 @@ async fn run_interactive(
             }
         }
     }
+
+    // 3.6 Continuous account settings sync (30s pull + debounced push).
+    // Safe to start before login: cycles skip while logged out.
+    account_sync::start_settings_sync_loop();
 
     // 4. Show startup page (with full command support)
     let mut startup_page = StartupPage::new(
@@ -758,6 +855,8 @@ async fn run_cli() -> Result<()> {
             fork_session,
             output_format,
             output_patch,
+            verify_final_changes,
+            no_verify_final_changes,
             auto,
             confirm,
         }) => {
@@ -783,6 +882,10 @@ async fn run_cli() -> Result<()> {
                     fork_session,
                     output_format,
                     output_patch,
+                    verify_final_changes: final_change_verification_enabled(
+                        verify_final_changes,
+                        no_verify_final_changes,
+                    ),
                     approval_mode,
                 },
             )
@@ -862,19 +965,9 @@ async fn run_cli() -> Result<()> {
         }
 
         Some(Commands::Doctor) => {
-            use std::sync::Arc;
-
-            use runtime::approval::{CliApprovalPolicy, CliPermissionService};
-            use runtime::services::{CliClock, CliRuntimeEventSink, CliRuntimeServicesProvider};
-
             let workspace = std::env::current_dir()?;
-            let services = CliRuntimeServicesProvider::new(
-                &workspace,
-                Arc::new(CliPermissionService::new(CliApprovalPolicy::Reject)),
-                Arc::new(CliRuntimeEventSink::new(16)),
-                Arc::new(CliClock),
-            )?
-            .build()?;
+            let (_, services) =
+                bitfun_core::product_runtime::build_local_runtime_services(&workspace, 16)?;
             let product_runtime = product_assembly::assemble_cli_runtime_parts(services)?;
             if !management::print_doctor(&product_runtime).await? {
                 std::process::exit(1);
@@ -882,7 +975,7 @@ async fn run_cli() -> Result<()> {
         }
 
         Some(Commands::Config { action }) => {
-            root_handlers::handle_config_action(action, &config)?;
+            root_handlers::handle_config_action(action, &config).await?;
         }
 
         Some(Commands::Health) => {
@@ -1037,7 +1130,7 @@ fn main() {
                 .expect("failed to build tokio runtime");
             runtime.block_on(run_cli())
         })
-        .expect("failed to spawn bitfun-cli worker thread");
+        .expect("failed to spawn bitfun worker thread");
 
     match worker.join() {
         Ok(Ok(())) => {}
@@ -1049,7 +1142,7 @@ fn main() {
             std::process::exit(1);
         }
         Err(_) => {
-            eprintln!("Error: bitfun-cli worker thread panicked");
+            eprintln!("Error: bitfun worker thread panicked");
             std::process::exit(1);
         }
     }
@@ -1062,15 +1155,14 @@ mod plugin_command_tests {
 
     #[test]
     fn plugin_commands_parse_list_and_source_review_actions() {
-        let list = Cli::try_parse_from(["bitfun-cli", "plugins"]).expect("parse plugin list");
+        let list = Cli::try_parse_from(["bitfun", "plugins"]).expect("parse plugin list");
         assert!(matches!(
             list.command,
             Some(Commands::Plugins { action: None })
         ));
 
-        let approval =
-            Cli::try_parse_from(["bitfun-cli", "plugins", "approve-source", "acme.demo"])
-                .expect("parse plugin source approval");
+        let approval = Cli::try_parse_from(["bitfun", "plugins", "approve-source", "acme.demo"])
+            .expect("parse plugin source approval");
         assert!(matches!(
             approval.command,
             Some(Commands::Plugins {
@@ -1078,7 +1170,7 @@ mod plugin_command_tests {
             }) if package_id == "acme.demo"
         ));
 
-        let deny = Cli::try_parse_from(["bitfun-cli", "plugins", "deny", "acme.demo"])
+        let deny = Cli::try_parse_from(["bitfun", "plugins", "deny", "acme.demo"])
             .expect("parse plugin deny");
         assert!(matches!(
             deny.command,
@@ -1087,7 +1179,7 @@ mod plugin_command_tests {
             }) if package_id == "acme.demo"
         ));
 
-        let revoke = Cli::try_parse_from(["bitfun-cli", "plugins", "revoke", "acme.demo"])
+        let revoke = Cli::try_parse_from(["bitfun", "plugins", "revoke", "acme.demo"])
             .expect("parse plugin revoke");
         assert!(matches!(
             revoke.command,
@@ -1096,7 +1188,7 @@ mod plugin_command_tests {
             }) if package_id == "acme.demo"
         ));
 
-        let preview = Cli::try_parse_from(["bitfun-cli", "plugins", "activate", "acme.demo"])
+        let preview = Cli::try_parse_from(["bitfun", "plugins", "activate", "acme.demo"])
             .expect("parse plugin activation preview");
         assert!(matches!(
             preview.command,
@@ -1109,7 +1201,7 @@ mod plugin_command_tests {
         ));
 
         let confirm = Cli::try_parse_from([
-            "bitfun-cli",
+            "bitfun",
             "plugins",
             "activate",
             "acme.demo",
@@ -1127,13 +1219,95 @@ mod plugin_command_tests {
             }) if package_id == "acme.demo" && content_hash == "sha256:previewed"
         ));
 
-        let deactivate = Cli::try_parse_from(["bitfun-cli", "plugins", "deactivate", "acme.demo"])
+        let deactivate = Cli::try_parse_from(["bitfun", "plugins", "deactivate", "acme.demo"])
             .expect("parse plugin deactivation");
         assert!(matches!(
             deactivate.command,
             Some(Commands::Plugins {
                 action: Some(PluginAction::Deactivate { package_id })
             }) if package_id == "acme.demo"
+        ));
+    }
+}
+
+#[cfg(test)]
+mod external_config_command_tests {
+    use super::{
+        Cli, Commands, ConfigAction, ExternalAccessArg, ExternalCapabilityArg,
+        ExternalConfigAction, ExternalPolicyModeArg, ExternalPolicyScopeArg,
+    };
+    use clap::Parser;
+
+    #[test]
+    fn external_config_commands_keep_scope_and_capability_explicit() {
+        let status = Cli::try_parse_from(["bitfun", "config", "external", "status"])
+            .expect("parse external status");
+        assert!(matches!(
+            status.command,
+            Some(Commands::Config {
+                action: ConfigAction::External {
+                    action: ExternalConfigAction::Status
+                }
+            })
+        ));
+
+        let mode = Cli::try_parse_from([
+            "bitfun",
+            "config",
+            "external",
+            "set-mode",
+            "discover-only",
+            "--scope",
+            "global",
+        ])
+        .expect("parse external mode");
+        assert!(matches!(
+            mode.command,
+            Some(Commands::Config {
+                action: ConfigAction::External {
+                    action: ExternalConfigAction::SetMode {
+                        mode: ExternalPolicyModeArg::DiscoverOnly,
+                        ecosystem: None,
+                        scope: ExternalPolicyScopeArg::Global,
+                    }
+                }
+            })
+        ));
+
+        let capability = Cli::try_parse_from([
+            "bitfun",
+            "config",
+            "external",
+            "set-capability",
+            "mcp",
+            "ask",
+            "--ecosystem",
+            "opencode",
+        ])
+        .expect("parse external capability");
+        assert!(matches!(
+            capability.command,
+            Some(Commands::Config {
+                action: ConfigAction::External {
+                    action: ExternalConfigAction::SetCapability {
+                        capability: ExternalCapabilityArg::Mcp,
+                        access: ExternalAccessArg::Ask,
+                        ecosystem: Some(ref ecosystem),
+                        scope: ExternalPolicyScopeArg::Project,
+                    }
+                }
+            }) if ecosystem == "opencode"
+        ));
+
+        let reset = Cli::try_parse_from(["bitfun", "config", "external", "reset-incompatible"])
+            .expect("parse incompatible policy reset");
+        assert!(matches!(
+            reset.command,
+            Some(Commands::Config {
+                action: ConfigAction::External {
+                    action: ExternalConfigAction::ResetIncompatible
+                }
+            })
         ));
     }
 }
@@ -1203,5 +1377,52 @@ mod bootstrap_profile_tests {
         .map(std::ffi::OsString::from);
 
         assert!(exec_requests_json_output(&args));
+    }
+}
+
+#[cfg(test)]
+mod final_change_verification_cli_tests {
+    use super::{final_change_verification_enabled, Cli, Commands};
+    use clap::Parser;
+
+    fn parse_flags(args: &[&str]) -> (bool, bool) {
+        let cli = Cli::try_parse_from(args).expect("exec args");
+        let Some(Commands::Exec {
+            verify_final_changes,
+            no_verify_final_changes,
+            ..
+        }) = cli.command
+        else {
+            panic!("expected exec command");
+        };
+        (verify_final_changes, no_verify_final_changes)
+    }
+
+    #[test]
+    fn verification_is_enabled_by_default_and_can_be_disabled() {
+        let (verify, disable) = parse_flags(&["bitfun", "exec", "task"]);
+        assert!(final_change_verification_enabled(verify, disable));
+
+        let (verify, disable) =
+            parse_flags(&["bitfun", "exec", "--no-verify-final-changes", "task"]);
+        assert!(!final_change_verification_enabled(verify, disable));
+    }
+}
+
+#[cfg(test)]
+mod sdk_host_command_tests {
+    use super::Cli;
+    use clap::{CommandFactory, Parser};
+
+    #[test]
+    fn sdk_host_is_not_a_cli_command() {
+        let error = match Cli::try_parse_from(["bitfun", "sdk-host"]) {
+            Ok(_) => panic!("SDK Host must be a sibling application, not a CLI subcommand"),
+            Err(error) => error,
+        };
+        assert_eq!(error.kind(), clap::error::ErrorKind::InvalidSubcommand);
+        let help = Cli::command().render_long_help().to_string();
+        assert!(!help.contains("sdk-host"));
+        assert!(!include_str!("../Cargo.toml").contains("bitfun-sdk-host"));
     }
 }

@@ -1,11 +1,12 @@
 use std::sync::Arc;
 
 use agent_client_protocol::schema::{
-    AuthenticateRequest, AuthenticateResponse, CancelNotification, InitializeRequest,
-    InitializeResponse, ListSessionsRequest, ListSessionsResponse, LoadSessionRequest,
-    LoadSessionResponse, NewSessionRequest, NewSessionResponse, PromptRequest, PromptResponse,
-    SetSessionConfigOptionRequest, SetSessionConfigOptionResponse, SetSessionModeRequest,
-    SetSessionModeResponse, SetSessionModelRequest, SetSessionModelResponse,
+    AuthenticateRequest, AuthenticateResponse, CancelNotification, CloseSessionRequest,
+    CloseSessionResponse, InitializeRequest, InitializeResponse, ListSessionsRequest,
+    ListSessionsResponse, LoadSessionRequest, LoadSessionResponse, NewSessionRequest,
+    NewSessionResponse, PromptRequest, PromptResponse, SetSessionConfigOptionRequest,
+    SetSessionConfigOptionResponse, SetSessionModeRequest, SetSessionModeResponse,
+    SetSessionModelRequest, SetSessionModelResponse,
 };
 use agent_client_protocol::{
     Agent, ByteStreams, Client, ConnectTo, ConnectionTo, Dispatch, Error, Result,
@@ -41,6 +42,10 @@ pub trait AcpRuntime: Send + Sync + 'static {
     async fn prompt(&self, request: PromptRequest) -> Result<PromptResponse>;
 
     async fn cancel(&self, notification: CancelNotification) -> Result<()>;
+
+    async fn close_session(&self, _request: CloseSessionRequest) -> Result<CloseSessionResponse> {
+        Err(Error::method_not_found().data("session/close is not implemented"))
+    }
 
     async fn set_session_mode(
         &self,
@@ -187,6 +192,21 @@ where
                     }
                 },
                 agent_client_protocol::on_receive_notification!(),
+            )
+            .on_receive_request(
+                {
+                    let runtime = runtime.clone();
+                    async move |request: CloseSessionRequest,
+                                responder,
+                                cx: ConnectionTo<Client>| {
+                        let runtime = runtime.clone();
+                        cx.spawn(async move {
+                            responder.respond_with_result(runtime.close_session(request).await)
+                        })?;
+                        Ok(())
+                    }
+                },
+                agent_client_protocol::on_receive_request!(),
             )
             .on_receive_request(
                 {

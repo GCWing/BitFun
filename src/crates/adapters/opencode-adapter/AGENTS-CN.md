@@ -2,16 +2,18 @@
 
 # OpenCode Adapter
 
-当前 crate 负责现有受管包路径使用的 P0 OpenCode 静态来源预览，以及能力专属 provider 契约的 OpenCode
-实现。它保留 OpenCode 来源发现、优先级、格式、参数展开和版本化兼容语义。共享来源目录、生命周期协调、
+当前 crate 负责现有受管包路径使用的 P0 OpenCode 静态来源预览，以及 Command、standalone Tool 和 Subagent
+能力专属 provider 契约的 OpenCode 实现。它保留 OpenCode 来源发现、优先级、格式、参数展开和版本化兼容语义。
+共享来源目录、生命周期协调、
 文件观察实现、产品策略、界面、凭据、worker 监督和最终结果写入均由其他 owner 负责。
 
 ## 产品来源边界
 
 - 当前 `load_opencode_package_adapter` 在 OC-R1/OC-R2 替换其生产角色前仍只做静态预览；不得把这一 P0
   入口继续扩成另一种 OpenCode 受管包格式。
-- 目标流程把 OpenCode 标准配置、全局/项目插件目录、工具目录和软件包 spec 作为实时来源。源文件保持只读，
-  且无需导入 BitFun。低风险声明式结果按用户的自动应用/先询问偏好处理；可执行来源首次 import 前按来源/target
+- 当前已将 OpenCode Command、standalone Tool 和 Subagent 的标准配置与目录作为只读实时来源；完整插件目录和
+  package spec 仍是后续目标，不是可执行的生产来源。源文件无需导入 BitFun。低风险声明式结果按用户的自动应用/
+  先询问偏好处理；可执行来源首次 import 前按来源/target
   决策。import 前执行包络扩大和 import 后贡献扩大是两个独立门槛，不对每个内部生命周期状态重复审批。代码
   更新只有在来源身份/完整性、来源更新策略和当前执行包络仍允许时才能自动准备。
 - 全局来源偏好按来源/target/执行域去重，但每个项目/工作区执行实例必须重新计算有效来源图、工作目录/环境、
@@ -50,6 +52,9 @@
 ## 验证
 
 - `cargo test -p bitfun-opencode-adapter --test opencode_source_adapter`
+- `cargo test -p bitfun-opencode-adapter --test opencode_command_adapter`
+- `cargo test -p bitfun-opencode-adapter --test tool_source_contracts`
+- `cargo test -p bitfun-opencode-adapter --test opencode_subagent_adapter`
 - `cargo test -p bitfun-opencode-adapter p0_c2_fixture`
 - `cargo test -p bitfun-opencode-adapter host_path_projects_trusted_custom_tool_candidate_with_permission_prompt`
 - `node scripts/check-core-boundaries.mjs`

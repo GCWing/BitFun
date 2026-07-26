@@ -37,7 +37,7 @@ unsafe extern "C" {
 /// a `BitFunError` we can return to the caller. The closure must itself
 /// return a `BitFunResult<T>` so we can flatten the two error sources
 /// (ObjC exception + Rust-side error) into one.
-pub fn run_on_main_for_enigo<F, T>(f: F) -> BitFunResult<T>
+pub(super) fn run_on_main_for_enigo<F, T>(f: F) -> BitFunResult<T>
 where
     F: FnOnce() -> BitFunResult<T> + Send,
     T: Send,
@@ -71,7 +71,7 @@ where
 ///
 /// If we're already on the main thread we run inline (avoids
 /// `dispatch_sync(main)` deadlock).
-pub fn catch_objc<F, T>(f: F) -> BitFunResult<T>
+pub(super) fn catch_objc<F, T>(f: F) -> BitFunResult<T>
 where
     F: FnOnce() -> BitFunResult<T> + Send,
     T: Send,
@@ -91,7 +91,7 @@ where
 /// non-`Send` data and that are guaranteed not to reach AppKit's
 /// main-thread-only AX callbacks (e.g. Vision OCR on an in-memory
 /// screenshot buffer).
-pub fn catch_objc_local<F, T>(f: F) -> BitFunResult<T>
+pub(super) fn catch_objc_local<F, T>(f: F) -> BitFunResult<T>
 where
     F: FnOnce() -> BitFunResult<T>,
 {
@@ -125,7 +125,7 @@ unsafe extern "C" {
 }
 
 /// Mouse location in Quartz global coordinates (same space as `CGEvent` / `CGWarpMouseCursorPosition`).
-pub fn quartz_mouse_location() -> BitFunResult<(f64, f64)> {
+pub(super) fn quartz_mouse_location() -> BitFunResult<(f64, f64)> {
     unsafe {
         let ev = CGEventCreate(std::ptr::null());
         if ev.is_null() {
@@ -139,15 +139,15 @@ pub fn quartz_mouse_location() -> BitFunResult<(f64, f64)> {
     }
 }
 
-pub fn ax_trusted() -> bool {
+pub(super) fn ax_trusted() -> bool {
     unsafe { AXIsProcessTrusted() }
 }
 
-pub fn screen_capture_preflight() -> bool {
+pub(super) fn screen_capture_preflight() -> bool {
     unsafe { CGPreflightScreenCaptureAccess() }
 }
 
-pub fn request_ax_prompt() {
+pub(super) fn request_ax_prompt() {
     let key = CFString::new("AXTrustedCheckOptionPrompt");
     let val = CFBoolean::true_value();
     let dict = CFDictionary::from_CFType_pairs(&[(key.as_CFType(), val.as_CFType())]);
@@ -156,7 +156,7 @@ pub fn request_ax_prompt() {
     }
 }
 
-pub fn request_screen_capture() -> bool {
+pub(super) fn request_screen_capture() -> bool {
     unsafe { CGRequestScreenCaptureAccess() }
 }
 
@@ -173,7 +173,7 @@ pub fn request_screen_capture() -> bool {
 /// all WebView subtree nodes."`), so each call site keeps its own precise
 /// guidance while the shared boilerplate (check + prompt + explanation)
 /// cannot drift between call sites.
-pub fn require_ax_trust_for(retry_hint: &str) -> BitFunResult<()> {
+pub(super) fn require_ax_trust_for(retry_hint: &str) -> BitFunResult<()> {
     if ax_trusted() {
         return Ok(());
     }

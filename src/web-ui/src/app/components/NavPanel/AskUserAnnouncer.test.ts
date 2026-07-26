@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { computeAnnouncementMessage } from './AskUserAnnouncer';
+import { computeAnnouncementMessage } from './askUserAnnouncement';
 
 type TFunc = (key: string, params?: Record<string, unknown>) => string;
 

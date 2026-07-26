@@ -203,9 +203,31 @@ fn file_read_freshness_facts(read_state: &FileReadState) -> FileReadFreshnessFac
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct FileRevision {
+    pub modified_ns: u128,
+    pub byte_len: u64,
+    pub content_sha256: [u8; 32],
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ReviewReadCoverage {
+    pub start_line: usize,
+    pub end_line: usize,
+    pub total_lines: usize,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct ReviewReadReceipt {
+    revision: FileRevision,
+    ranges: Vec<(usize, usize)>,
+    total_lines: usize,
+}
+
 #[derive(Default)]
 pub struct FileReadStateStore {
     session_states: Arc<DashMap<String, DashMap<String, FileReadState>>>,
+    review_read_receipts: Arc<DashMap<String, DashMap<String, ReviewReadReceipt>>>,
 }
 
 impl FileReadStateStore {
@@ -221,11 +243,15 @@ impl FileReadStateStore {
 
     pub fn delete_session(&self, session_id: &str) {
         self.session_states.remove(session_id);
+        self.review_read_receipts.remove(session_id);
     }
 
     pub fn clear_session(&self, session_id: &str) {
         if let Some(states) = self.session_states.get(session_id) {
             states.clear();
+        }
+        if let Some(receipts) = self.review_read_receipts.get(session_id) {
+            receipts.clear();
         }
     }
 
@@ -242,6 +268,83 @@ impl FileReadStateStore {
             .get(session_id)
             .and_then(|states| states.get(logical_path).map(|entry| entry.clone()))
     }
+
+    pub fn record_review_read(
+        &self,
+        session_id: &str,
+        logical_path: &str,
+        revision: FileRevision,
+        start_line: usize,
+        end_line: usize,
+        total_lines: usize,
+    ) {
+        if start_line == 0 || end_line < start_line {
+            return;
+        }
+
+        let session_receipts = self
+            .review_read_receipts
+            .entry(session_id.to_string())
+            .or_default();
+        let mut receipt = session_receipts
+            .entry(logical_path.to_string())
+            .or_insert_with(|| ReviewReadReceipt {
+                revision,
+                ranges: Vec::new(),
+                total_lines,
+            });
+        if receipt.revision != revision {
+            receipt.revision = revision;
+            receipt.ranges.clear();
+        }
+        receipt.total_lines = total_lines;
+        receipt.ranges.push((start_line, end_line));
+        receipt.ranges.sort_unstable_by_key(|range| range.0);
+
+        let mut merged = Vec::<(usize, usize)>::with_capacity(receipt.ranges.len());
+        for (start, end) in receipt.ranges.drain(..) {
+            if let Some(last) = merged.last_mut() {
+                if start <= last.1.saturating_add(1) {
+                    last.1 = last.1.max(end);
+                    continue;
+                }
+            }
+            merged.push((start, end));
+        }
+        receipt.ranges = merged;
+    }
+
+    pub fn review_read_coverage(
+        &self,
+        session_id: &str,
+        logical_path: &str,
+        revision: FileRevision,
+        start_line: usize,
+        limit: usize,
+    ) -> Option<ReviewReadCoverage> {
+        if start_line == 0 || limit == 0 {
+            return None;
+        }
+        let session_receipts = self.review_read_receipts.get(session_id)?;
+        let receipt = session_receipts.get(logical_path)?;
+        if receipt.revision != revision || start_line > receipt.total_lines {
+            return None;
+        }
+        let end_line = start_line
+            .saturating_add(limit.saturating_sub(1))
+            .min(receipt.total_lines);
+        receipt
+            .ranges
+            .iter()
+            .any(|(covered_start, covered_end)| {
+                *covered_start <= start_line && *covered_end >= end_line
+            })
+            .then_some(ReviewReadCoverage {
+                start_line,
+                end_line,
+                total_lines: receipt.total_lines,
+            })
+    }
 }
 
 #[cfg(test)]
@@ -250,7 +353,7 @@ mod tests {
         assert_file_not_unexpectedly_modified, validate_edit_content_freshness_against_read_state,
         validate_prior_read_state, validate_write_content_freshness_against_read_state,
         validate_write_mtime_freshness_against_read_state, FileMutationKind, FileReadState,
-        FileReadStateStore,
+        FileReadStateStore, FileRevision, ReviewReadCoverage,
     };
 
     fn sample_state(
@@ -318,6 +421,54 @@ mod tests {
 
         store.delete_session("session-b");
         assert!(store.get("session-b", "src/lib.rs").is_none());
+    }
+
+    #[test]
+    fn review_read_receipt_covers_only_previously_returned_lines() {
+        let store = FileReadStateStore::new();
+        let revision = FileRevision {
+            modified_ns: 100,
+            byte_len: 4096,
+            content_sha256: [1; 32],
+        };
+        store.record_review_read("review-session", "src/large.rs", revision, 1, 2000, 3000);
+
+        assert_eq!(
+            store.review_read_coverage("review-session", "src/large.rs", revision, 1403, 27,),
+            Some(ReviewReadCoverage {
+                start_line: 1403,
+                end_line: 1429,
+                total_lines: 3000,
+            })
+        );
+        assert!(store
+            .review_read_coverage("review-session", "src/large.rs", revision, 2001, 20,)
+            .is_none());
+    }
+
+    #[test]
+    fn review_read_receipt_merges_ranges_and_invalidates_on_revision_change() {
+        let store = FileReadStateStore::new();
+        let original = FileRevision {
+            modified_ns: 100,
+            byte_len: 4096,
+            content_sha256: [1; 32],
+        };
+        store.record_review_read("review-session", "src/lib.rs", original, 1, 100, 300);
+        store.record_review_read("review-session", "src/lib.rs", original, 101, 200, 300);
+
+        assert!(store
+            .review_read_coverage("review-session", "src/lib.rs", original, 50, 151)
+            .is_some());
+
+        let changed = FileRevision {
+            modified_ns: 100,
+            byte_len: 4096,
+            content_sha256: [2; 32],
+        };
+        assert!(store
+            .review_read_coverage("review-session", "src/lib.rs", changed, 50, 151)
+            .is_none());
     }
 
     #[test]

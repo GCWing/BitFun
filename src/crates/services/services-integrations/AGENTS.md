@@ -35,6 +35,11 @@ slices that are outside pure product logic but still platform-neutral.
   SFTP, remote FS, remote workspace FS/shell providers, remote terminal, remote
   ExecCommand runtime-port adapter, and manager assembly live here behind
   explicit remote SSH features.
+- One-click relay self-deploy (`remote_ssh/relay_deploy.rs`) stages embedded
+  scripts under `~/.bitfun/relay-deploy/` and clones source to
+  `~/.bitfun/relay-src/` (never `$HOME/bitfun`). Invariants:
+  `src/web-ui/src/features/relay-deploy/README.md`. Desktop Tauri wrapper:
+  `src/apps/desktop/src/api/relay_deploy_api.rs`.
 - Workspace search owns the local flashgrep daemon/session lifecycle and
   indexed-search result conversion behind `workspace-search`; product config
   and workspace bootstrap stay in the core facade as injected hooks.
@@ -70,8 +75,13 @@ slices that are outside pure product logic but still platform-neutral.
   decide approval/conflicts, register product tools, or claim OS sandboxing.
   Approved modules run in target child processes separated from the Rust host for
   failure containment, not as a security or protocol-authentication boundary.
-  Target process trees and OS resource containment remain an explicit product
-  risk until a platform process-tree boundary is implemented.
+  The shared `services-core::process_tree` boundary owns managed-descendant cleanup for
+  script workers, local stdio MCP, and other managed service children: Unix uses a dedicated process group; Windows attaches a
+  suspended child to a kill-on-close Job Object before resuming it and fails
+  closed when attachment fails. This is lifecycle containment, not an OS
+  sandbox or a CPU/memory/filesystem/network resource limit; surfaces must keep
+  those residual risks explicit. Unix descendants that deliberately create a
+  new session/process group are outside the managed boundary.
 - Announcement remote fetch/cache lives here; product assembly supplies config
   values such as endpoint, locale, version, platform, and cache path.
 - DeepResearch report IO here may own report/citation sidecar filesystem work;

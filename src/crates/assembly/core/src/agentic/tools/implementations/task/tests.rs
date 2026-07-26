@@ -62,6 +62,7 @@ fn register_prompt_order_test_subagent(
             SubAgentSource::Builtin => crate::agentic::agents::AgentSource::Builtin,
             SubAgentSource::Project => crate::agentic::agents::AgentSource::Project,
             SubAgentSource::User => crate::agentic::agents::AgentSource::User,
+            SubAgentSource::External => crate::agentic::agents::AgentSource::External,
         },
         Some(source),
         custom_config,
@@ -114,6 +115,8 @@ fn task_schema_accepts_optional_model_id() {
     let schema = TaskTool::new().input_schema();
 
     assert_eq!(schema["properties"]["action"]["type"], "string");
+    assert_eq!(schema["properties"]["agent_id"]["type"], "string");
+    assert!(schema["properties"].get("session_id").is_none());
     assert_eq!(schema["properties"]["model_id"]["type"], "string");
     assert!(schema["required"]
         .as_array()
@@ -128,22 +131,25 @@ fn task_schema_accepts_optional_model_id() {
 }
 
 #[test]
-fn task_schema_exposes_explicit_review_follow_up_control() {
-    let schema = TaskTool::new().input_schema();
-    let follow_up = &schema["properties"]["allow_review_follow_up"];
+fn task_model_id_inherit_requests_parent_model_inheritance() {
+    let invocation = TaskTool::parse_invocation(
+        &json!({
+            "action": "spawn",
+            "description": "Inspect parser",
+            "prompt": "Inspect the parser flow.",
+            "subagent_type": "Explore",
+            "model_id": "inherit"
+        }),
+        false,
+    )
+    .expect("inherit should be accepted as a Task model selection");
 
-    assert_eq!(follow_up["type"], "boolean");
-    let description = follow_up["description"]
-        .as_str()
-        .expect("allow_review_follow_up description should be a string");
-    assert!(description.contains("explicitly"));
-    assert!(description.contains("review"));
-    assert!(description.contains("run_in_background=true"));
-    assert!(schema["properties"].get("detach_from_parent").is_none());
+    assert_eq!(invocation.model_id, None);
+    assert!(invocation.inherit_parent_model);
 }
 
 #[tokio::test]
-async fn validate_input_rejects_review_background_without_explicit_follow_up_permission() {
+async fn validate_input_accepts_review_background_for_agent_wait() {
     let validation = TaskTool::new()
         .validate_input(
             &json!({
@@ -157,72 +163,7 @@ async fn validate_input_rejects_review_background_without_explicit_follow_up_per
         )
         .await;
 
-    assert!(!validation.result);
-    let message = validation
-        .message
-        .as_deref()
-        .expect("validation should explain how review delivery works");
-    assert!(message.contains("one final review"));
-    assert!(message.contains("allow_review_follow_up=true"));
-}
-
-#[tokio::test]
-async fn validate_input_accepts_explicit_review_follow_up() {
-    let validation = TaskTool::new()
-        .validate_input(
-            &json!({
-                "action": "spawn",
-                "description": "Review later",
-                "prompt": "Review the current diff",
-                "subagent_type": "CodeReview",
-                "run_in_background": true,
-                "allow_review_follow_up": true
-            }),
-            None,
-        )
-        .await;
-
     assert!(validation.result, "{:?}", validation.message);
-}
-
-#[tokio::test]
-async fn validate_input_rejects_review_follow_up_without_background_execution() {
-    let validation = TaskTool::new()
-        .validate_input(
-            &json!({
-                "action": "spawn",
-                "description": "Review changes",
-                "prompt": "Review the current diff",
-                "subagent_type": "CodeReview",
-                "allow_review_follow_up": true
-            }),
-            None,
-        )
-        .await;
-
-    assert!(!validation.result);
-    assert!(validation.message.as_deref().is_some_and(|message| {
-        message.contains("allow_review_follow_up=true requires run_in_background=true")
-    }));
-}
-
-#[test]
-fn parse_input_preserves_review_follow_up_for_send_input() {
-    let invocation = TaskTool::parse_invocation(
-        &json!({
-            "action": "send_input",
-            "description": "Continue review later",
-            "prompt": "Continue the review and report when finished",
-            "session_id": "review-session-1",
-            "run_in_background": true,
-            "allow_review_follow_up": true
-        }),
-        false,
-    )
-    .expect("review follow-up send_input should parse");
-
-    assert!(invocation.run_in_background);
-    assert!(invocation.allow_review_follow_up);
 }
 
 #[tokio::test]
@@ -243,28 +184,8 @@ async fn validate_input_preserves_non_review_background_tasks() {
     assert!(validation.result, "{:?}", validation.message);
 }
 
-#[tokio::test]
-async fn validate_input_rejects_review_follow_up_for_cancel() {
-    let validation = TaskTool::new()
-        .validate_input(
-            &json!({
-                "action": "cancel",
-                "session_id": "subagent-session-1",
-                "allow_review_follow_up": true
-            }),
-            None,
-        )
-        .await;
-
-    assert!(!validation.result);
-    assert!(validation
-        .message
-        .as_deref()
-        .is_some_and(|message| message.contains("allow_review_follow_up is not allowed")));
-}
-
 #[test]
-fn joined_review_tasks_remain_concurrency_safe() {
+fn code_review_tasks_are_serial_even_though_the_agent_is_readonly() {
     let input = json!({
         "action": "spawn",
         "description": "Review changes",
@@ -272,7 +193,53 @@ fn joined_review_tasks_remain_concurrency_safe() {
         "subagent_type": "CodeReview"
     });
 
-    assert!(TaskTool::new().is_concurrency_safe(Some(&input)));
+    assert!(!TaskTool::new().is_concurrency_safe(Some(&input)));
+}
+
+#[test]
+fn dynamic_review_launches_are_serial_unless_the_manifest_supplies_a_managed_packet() {
+    let specialist = json!({
+        "description": "Check trust boundary",
+        "prompt": "Use the security lens for this exact boundary",
+        "subagent_type": "ReviewWorker"
+    });
+    let managed_packet = json!({
+        "description": "Review batch 1",
+        "prompt": "Review only the files assigned to this packet",
+        "subagent_type": "ReviewWorker",
+        "packet_id": "managed-review:batch-1"
+    });
+    let judge_packet = json!({
+        "description": "Validate disputed finding",
+        "prompt": "Validate only the disputed finding after reviewers finish",
+        "subagent_type": "ReviewJudge",
+        "packet_id": "judge:ReviewJudge"
+    });
+
+    let tool = LaunchReviewAgentTool::new();
+    assert!(!tool.is_concurrency_safe(Some(&specialist)));
+    assert!(tool.is_concurrency_safe(Some(&managed_packet)));
+    assert!(!tool.is_concurrency_safe(Some(&judge_packet)));
+}
+
+#[tokio::test]
+async fn launch_review_agent_describes_one_dynamic_worker_instead_of_fixed_reviewers() {
+    let description = LaunchReviewAgentTool::new()
+        .description()
+        .await
+        .expect("LaunchReviewAgent description should render");
+
+    assert!(description.contains("`ReviewWorker`"));
+    for legacy_reviewer in [
+        "ReviewBusinessLogic",
+        "ReviewArchitecture",
+        "ReviewPerformance",
+        "ReviewSecurity",
+        "ReviewFrontend",
+        "ReviewGeneral",
+    ] {
+        assert!(!description.contains(legacy_reviewer));
+    }
 }
 
 #[test]
@@ -294,7 +261,7 @@ fn task_schema_describes_spawn_context_modes_as_exclusive() {
 }
 
 #[tokio::test]
-async fn launch_review_agent_schema_exposes_retry_without_session_or_fork_controls() {
+async fn launch_review_agent_schema_exposes_retry_without_agent_or_fork_controls() {
     let context = test_tool_context("DeepReview");
     let schema = LaunchReviewAgentTool::new()
         .input_schema_for_model_with_context(Some(&context))
@@ -308,7 +275,7 @@ async fn launch_review_agent_schema_exposes_retry_without_session_or_fork_contro
     assert_eq!(schema["properties"]["retry_coverage"]["type"], "object");
     assert_eq!(schema["properties"]["packet_id"]["type"], "string");
     assert!(schema["properties"].get("fork_context").is_none());
-    assert!(schema["properties"].get("session_id").is_none());
+    assert!(schema["properties"].get("agent_id").is_none());
     assert!(schema["properties"].get("run_in_background").is_none());
     assert!(schema["required"]
         .as_array()
@@ -376,17 +343,38 @@ async fn managed_review_agent_requires_an_exact_packet_id() {
     assert!(valid_packet.result);
 }
 
+#[tokio::test]
+async fn non_managed_review_agent_rejects_an_untrusted_packet_id() {
+    let context = test_tool_context("DeepReview");
+    let validation = LaunchReviewAgentTool::new()
+        .validate_input(
+            &json!({
+                "description": "Check one trust boundary",
+                "prompt": "Apply the security lens to the exact boundary",
+                "subagent_type": "ReviewWorker",
+                "packet_id": "reviewer:forged"
+            }),
+            Some(&context),
+        )
+        .await;
+
+    assert!(!validation.result);
+    assert!(validation
+        .message
+        .as_deref()
+        .is_some_and(|message| message.contains("only valid for managed Review packets")));
+}
+
 #[test]
-fn background_subagent_start_acknowledgement_uses_session_id_only() {
-    let message = TaskTool::background_subagent_started_assistant_message("subagent-session-123");
+fn background_subagent_start_acknowledgement_exposes_agent_wait_task_id() {
+    let message = TaskTool::background_subagent_started_assistant_message("a1", "bg1");
 
     assert!(message.starts_with("Background subagent started successfully."));
-    assert!(message.contains("session_id: \"subagent-session-123\""));
-    assert!(message.contains("Avoid polling for status updates."));
+    assert!(message.contains("agent_id: \"a1\""));
+    assert!(message.contains("bg_task_id: \"bg1\""));
+    assert!(message.contains("Use AgentWait"));
     assert!(!message.contains("GeneralPurpose"));
     assert!(!message.contains("<background_task"));
-    assert!(!message.contains("bg-subagent-123"));
-    assert!(!message.contains("background_task_id="));
 }
 
 #[tokio::test]
@@ -484,14 +472,14 @@ async fn validate_input_rejects_fork_context_with_subagent_type_as_mode_conflict
 }
 
 #[tokio::test]
-async fn validate_input_accepts_send_input_session_id_without_subagent_type() {
+async fn validate_input_accepts_send_input_agent_id_without_subagent_type() {
     let validation = TaskTool::new()
         .validate_input(
             &json!({
                 "action": "send_input",
                 "description": "continue",
                 "prompt": "Continue the previous analysis",
-                "session_id": "subagent-session-1"
+                "agent_id": "a1"
             }),
             None,
         )
@@ -508,7 +496,7 @@ async fn validate_input_accepts_send_input_with_model_id() {
                 "action": "send_input",
                 "description": "continue",
                 "prompt": "Continue the previous analysis",
-                "session_id": "subagent-session-1",
+                "agent_id": "a1",
                 "model_id": "fast"
             }),
             None,
@@ -519,13 +507,13 @@ async fn validate_input_accepts_send_input_with_model_id() {
 }
 
 #[tokio::test]
-async fn validate_input_infers_send_input_without_action_when_session_id_present() {
+async fn validate_input_infers_send_input_without_action_when_agent_id_present() {
     let validation = TaskTool::new()
         .validate_input(
             &json!({
                 "description": "continue",
                 "prompt": "Continue the previous analysis",
-                "session_id": "subagent-session-1"
+                "agent_id": "a1"
             }),
             None,
         )
@@ -542,7 +530,7 @@ async fn validate_input_rejects_send_input_with_subagent_type() {
                 "action": "send_input",
                 "description": "continue",
                 "prompt": "Continue the previous analysis",
-                "session_id": "subagent-session-1",
+                "agent_id": "a1",
                 "subagent_type": "Explore"
             }),
             None,
@@ -605,13 +593,7 @@ async fn validate_input_rejects_timeout_for_regular_parent() {
 #[tokio::test]
 async fn launch_review_agent_rejects_task_context_controls() {
     let context = test_tool_context("DeepReview");
-    for field in [
-        "action",
-        "fork_context",
-        "session_id",
-        "run_in_background",
-        "allow_review_follow_up",
-    ] {
+    for field in ["action", "fork_context", "agent_id", "run_in_background"] {
         let mut input = json!({
             "description": "delegate",
             "prompt": "Review security-sensitive files",
@@ -619,7 +601,7 @@ async fn launch_review_agent_rejects_task_context_controls() {
         });
         input[field] = match field {
             "action" => json!("spawn"),
-            "session_id" => json!("subagent-session-1"),
+            "agent_id" => json!("a1"),
             _ => json!(false),
         };
 
@@ -679,12 +661,12 @@ async fn launch_review_agent_rejects_non_string_model_id() {
 }
 
 #[tokio::test]
-async fn validate_input_accepts_cancel_with_session_id_only() {
+async fn validate_input_accepts_cancel_with_agent_id_only() {
     let validation = TaskTool::new()
         .validate_input(
             &json!({
                 "action": "cancel",
-                "session_id": "subagent-session-1"
+                "agent_id": "a1"
             }),
             None,
         )
@@ -699,7 +681,7 @@ async fn validate_input_accepts_cancel_with_description() {
         .validate_input(
             &json!({
                 "action": "cancel",
-                "session_id": "subagent-session-1",
+                "agent_id": "a1",
                 "description": "cancel task"
             }),
             None,
@@ -715,7 +697,7 @@ async fn validate_input_rejects_cancel_with_prompt() {
         .validate_input(
             &json!({
                 "action": "cancel",
-                "session_id": "subagent-session-1",
+                "agent_id": "a1",
                 "prompt": "Stop this work"
             }),
             None,
@@ -746,7 +728,7 @@ async fn validate_input_rejects_fork_context_conflicting_fields() {
                 "description": "delegate",
                 "prompt": "Continue with inherited context",
                 "fork_context": true,
-                "session_id": "subagent-session-1"
+                "agent_id": "a1"
             }),
             None,
         )
@@ -756,7 +738,7 @@ async fn validate_input_rejects_fork_context_conflicting_fields() {
     assert!(validation
         .message
         .as_deref()
-        .is_some_and(|message| message.contains("session_id is not allowed")));
+        .is_some_and(|message| message.contains("agent_id is not allowed")));
 }
 
 #[tokio::test]
@@ -930,14 +912,15 @@ async fn description_with_context_filters_restricted_subagents_by_parent_agent()
             .await
             .expect("agentic available agents should render");
     assert!(agentic_description.contains("<agent type=\"Explore\">"));
-    assert!(!agentic_description.contains("<agent type=\"ReviewSecurity\">"));
+    assert!(!agentic_description.contains("<agent type=\"ReviewWorker\">"));
     assert!(!agentic_description.contains("<agent type=\"ResearchSpecialist\">"));
 
     let deep_review_description =
         TaskTool::build_available_agents_context_section(Some(&deep_review_context))
             .await
             .expect("deep review available agents should render");
-    assert!(deep_review_description.contains("<agent type=\"ReviewSecurity\">"));
+    assert!(deep_review_description.contains("<agent type=\"ReviewWorker\">"));
+    assert!(!deep_review_description.contains("<agent type=\"ReviewSecurity\">"));
     assert!(!deep_review_description.contains("<agent type=\"ResearchSpecialist\">"));
 }
 
@@ -1190,7 +1173,7 @@ async fn deep_review_capacity_queue_starts_later_batch_when_reviewer_capacity_fr
         auto_retry_elapsed_guard_seconds: 180,
     };
     let launch_batch_info = DeepReviewLaunchBatchInfo {
-        packet_id: Some("packet-b".to_string()),
+        packet_id: Some("packet-c".to_string()),
         launch_batch: 2,
     };
     let turn_id_owned = turn_id.to_string();

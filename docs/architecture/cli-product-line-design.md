@@ -8,7 +8,9 @@
 布局选择和内置扩展见 [`product-customization-blueprint.md`](product-customization-blueprint.md)；HarmonyOS PC 原生
 CLI/TUI 的目标、问题和风险规约见 [`platform-portability-design.md`](platform-portability-design.md)；跨专题顺序见
 [`../plans/product-architecture-evolution-plan.md`](../plans/product-architecture-evolution-plan.md)。本文只补充
-CLI 产品入口、配置兼容、TUI 布局消费和 CLI Agent 体验，不重复定义这些文档中的通用契约或内部 ABI。
+CLI 产品入口、配置兼容、TUI 布局消费和 CLI Agent 体验，不重复定义这些文档中的通用契约或内部 ABI。公开
+BitFun Agent SDK 与 Headless CLI 的心智、能力等价和 SDK Host 边界见
+[`agent-sdk-product-architecture.md`](agent-sdk-product-architecture.md)。
 OpenCode 的完整扩展矩阵、配置资产、插件执行和 TUI Plugin 映射分别见
 [`opencode-extension-compatibility.md`](extensions/opencode-extension-compatibility.md)、
 [`opencode-config-assets-adapter-design.md`](extensions/opencode-config-assets-adapter-design.md)、
@@ -44,7 +46,8 @@ BitFun CLI 应成为可独立安装和发布的 Agent 产品，而不是 Desktop
 5. 消费已校验的产品组装结果和 TUI 布局选择，生成不同品牌和能力范围的
    CLI 产物；通用产品定制不在 CLI 入口重复实现。
 6. 以任务成功率、恢复能力、工具正确性、上下文效率和资源开销评估 Agent 能力，而不是只比较命令数量。
-7. 把 HarmonyOS PC 作为一等 CLI/TUI 目标：用户在系统真实终端中安装并执行本地 `bitfun-cli`；HAP 内终端式
+7. 把 HarmonyOS PC 作为一等 CLI/TUI 目标：用户在系统真实终端中安装并执行本地 `bitfun`；废弃兼容入口
+   `bitfun-cli` 不作为新集成入口。HAP 内终端式
    界面、`hdc shell`、移动 Remote App 和其他设备代执行均不构成该目标。
 
 ### 1.2 能力对齐口径
@@ -92,31 +95,42 @@ BitFun CLI 应成为可独立安装和发布的 Agent 产品，而不是 Desktop
 - Agent、模型、MCP、会话、用量、诊断、ACP 外部 Agent 和插件来源管理命令。
 - BitFun 原生插件目录的发现、内容校验、来源确认，以及 OpenCode custom tool 静态名称预览。
 - CLI 本地 Agent 入口以类型化 `RuntimeServices` 调用 `ProductAssembler`，选择 `DeliveryProfile::Cli`，
-  并把 `ProductRuntimeParts`、Agent Runtime SDK、事件源和调用级审批策略保存在一个 `CliRuntimeContext` 中。
-- TUI、`exec`、会话、用量和交互模式下的 Peer Host 复用同一上下文。SDK 已承接会话创建（包括
-  `exec --session-id` 和缺失后端会话通过独立固定 ID 方法按原 ID 重建）/列举/删除、轮次提交和取消；普通创建
-  DTO 保持 v1 字段集合，固定 ID 冲突返回 `InvalidRequest`。会话模型更新、工具确认/拒绝和用户问题回答也通过
-  SDK 的窄端口回到 Core owner；模型目录、模式和提供方配置仍由产品入口解释。SDK v1 尚未覆盖的恢复视图、
-  消息、分支、用量和快照由一个 Core
-  兼容门面转发给原 owner。
+  并把 `ProductRuntimeParts`、Rust Runtime SDK、本地工作区快照 owner port、事件源和调用级审批策略保存在一个 `CliRuntimeContext` 中。
+- TUI、`exec`、会话、用量和交互模式下的 Peer Host 复用同一上下文。Rust Runtime SDK 已承接会话创建（包括
+  `exec --session-id` 和缺失后端会话通过独立固定 ID 方法按原 ID 重建）/列举/删除/恢复、类型化转录、本地分支、
+  用量生成、轮次提交/取消和精确结算；普通创建
+  DTO 只增加可选工作区 ID 与模型 ID 事实，固定 ID 冲突返回 `InvalidRequest`。会话模型更新、工具确认/拒绝和用户问题回答也通过
+  Rust Runtime SDK 的窄端口回到 Core owner，TUI 与 ACP 的活动会话模式更新也复用同一窄端口；模型/模式目录和提供方配置仍由产品入口解释。
+  TUI 模式切换以异步待提交状态调用 Core，期间终端输入、resize 和重绘保持响应，新的对话提交不会消费用户输入；
+  只有 Core 校验并持久化成功后才更新本地显示，失败时保留原模式并给出可重试提示，同值选择不产生持久化写入。
+  等待期间可以切换或新建会话；只有原会话的发送继续等待。首次退出请求在持久化成功后自动退出，失败时留在界面提示重试；再次退出允许立即离开，
+  并明确提示下次恢复以 Core 的持久化模式为准。恢复主会话时，已从当前目录移除的持久化模式由 Core 迁移到可执行回退模式；
+  TUI 对比恢复前后的会话摘要并显示模式变化，如果同时携带启动输入，只预填而不自动执行，须由用户确认后发送。TUI 用量卡片通过固定语义的
+  完成态本地命令轮次端口持久化。Peer Host 的本地工作区准备、会话文件清单、类型化快照统计和工作区文件回滚通过
+  独立的本地 owner port 回到现有 Core 快照实现；该端口不进入共享 Agent Runtime API 或公开 Agent SDK，不接受远程身份，也不承载历史截断、维护锁或完整 checkpoint/rewind。
+  账号同步、富历史及 Peer Host/ACP 的其余维护缺口继续由一个 Core 兼容门面转发给原 owner。
 - Agentic Event Queue 仍是唯一事件 owner；TUI、`exec` 与 Peer Host 使用独立广播订阅，不互相消费事件。
 - 有界旧队列只承担兼容存储；达到容量时不得抑制广播。CLI 保持一个后台 drain，订阅方一旦报告 lag/closed，
   必须取消活动 turn 并显式失败，不能在状态不完整时继续报告成功。
 - 会话 ID 在进入存储路径前统一校验；运行时索引同时绑定 ID 与规范化存储路径，并以待提交 claim 计数保护
   并发恢复。同一进程不能把另一个工作区中已加载的同 ID 会话当作当前会话，单个失败恢复也不能释放其他
-  同路径恢复仍在使用的绑定；已加载会话只校验身份，不通过完整 restore 重置活动状态。删除路径不能通过
+  同路径恢复仍在使用的绑定；主会话提交不做前置完整 restore，只有 Runtime owner 返回结构化 `NotFound` 时才恢复或
+  按原 ID 重建并重试一次，其他资源缺失与后端错误原样失败。删除路径不能通过
   相对路径、绝对路径或分隔符越出 sessions 根目录。
 - TUI 终端句柄由恢复守卫持有；初始化中途失败、正常返回、错误返回或 panic 展开都会尽力退出 alternate screen、
   关闭输入捕获、关闭 raw mode 并显示光标。真实 PTY/ConPTY 启动页进程冒烟测试已验证 resize 后仍可交互、
   多行输入、空闲 Ctrl+C 和可观察的终端清理序列；Chat 活动 turn 的 resize 静默期已有状态单测，窄屏流式
-  reflow 已有 TestBackend 回归，真实 PTY 活动 turn、初始化失败与异常退出等仍需独立验收。
+  reflow 已有 TestBackend 回归，Linux PTY 与 Windows ConPTY 活动 turn 的 resize/取消已有本地确定性流式模型夹具进程测试；
+  `exec stream-json` 的 Ctrl+C 也由真实 PTY/ConPTY 进程验证断流、非零退出和单一取消终态。OS 级初始化失败与
+  异常退出仍需独立验收。
 - Startup 与 Chat 共用 CLI 私有输入读取器；一次读取同时受 256 个事件和 50ms 限制，跨批次仅延续快速文本尾部，
   短批次普通按键保持原有路由。被识别为粘贴的文本按批次写入输入缓冲，每批只刷新一次命令菜单；粘贴内容中的
   Tab 明确转换为四个空格。
 - 初始化按入口分级：交互模式启动 Peer Host 与 MCP，`exec` 只启动 MCP；本地 session 管理和 usage 查询不启动
   Peer Host/MCP。该分级不改变 Agentic/Terminal owner，也不等同于管理命令已有独立轻量 Runtime。
 - Peer Host 保持既有 HostInvoke / DeviceEvent wire schema 与 Relay 路由，但执行已接入上述调用级上下文：
-  对话提交和精确取消走 SDK，会话与快照缺口走单一 Core 兼容门面。Peer Host 只跟踪由 Peer 提交的根 turn、
+  对话提交、精确取消、会话创建/基础恢复/重命名/归档、thread-goal 查询和模型更新走 Rust Runtime SDK；本地快照文件清单、统计和文件回滚走窄 owner port；
+  富历史及其余维护缺口走单一 Core 兼容门面。Peer Host 在进入本地端口前对远程身份与远程路径返回明确不支持错误，并继续拥有回滚前取消、维护锁、历史截断、部分失败提示和事件投影。Peer Host 只跟踪由 Peer 提交的根 turn、
   其子 turn 与待确认工具；可确认工具始终由控制器确认，即使宿主全局策略跳过确认，Agent 也会暂停等待控制器。
   该 Peer 专属确认要求会沿精确后台结果 follow-up 保留。后台结果按 Core 内部元数据中的精确父 turn 与来源子 turn
   继承 ownership；仅在父 turn 仍运行时注入，否则排在
@@ -128,26 +142,26 @@ BitFun CLI 应成为可独立安装和发布的 Agent 产品，而不是 Desktop
   显示警告。不承诺本次变更范围外的 ACK、重放或重连恢复。
 - `doctor` 与 `health` 构造并校验真实 Runtime Parts，区分 assembly-ready、Core compatibility owner 和不可用扩展。
   它们证明必需能力已注册，不把 Core 的 Network/Git/MCP compatibility marker 描述为外部服务实时可用。
-- 独立 CLI 测试与打包工作流；主 CI 的三平台 workspace check 同时覆盖 `bitfun-cli` 编译，发布归档在上传前校验
-  SHA-256 摘要，并从解压后的目录执行 `--version` / `--help`。
+- 独立 CLI 测试与打包工作流；主 CI 的 Windows/macOS/Linux workspace check 同时覆盖 Cargo package
+  `bitfun-cli` 编译，原生发布归档包含主入口 `bitfun` 和废弃兼容入口 `bitfun-cli`，上传前校验 SHA-256 摘要，
+  并从解压后的目录验证两个入口及废弃告警。
 
 上述切换不等于运行时 owner 已迁移，也不表示 CLI-P0 全部完成。CLI crate 仍以 `bitfun-core/product-full`
-承载协调器、调度器、持久化、工具管线和部分 SDK v1 缺口，但 Peer Host 不再自行构造这些 owner；ACP 的 stdio、
-连接和协议投影仍由 `interfaces/acp` 持有，后端已切换至 `DeliveryProfile::Acp` 与组装后的 SDK runtime；插件命令
+承载协调器、调度器、持久化、工具管线和 Rust Runtime SDK 当前未覆盖的部分，但 Peer Host 不再自行构造这些 owner；ACP 的 stdio、
+连接和协议投影仍由 `interfaces/acp` 持有，后端已切换至 `DeliveryProfile::Acp` 与组装后的 Rust Runtime SDK；插件命令
 仍以来源管理和静态预览为主。兼容门面只转发，不重新计算或写入同一事实。
 
 目标态仍存在以下结构缺口：
 
 | 缺口 | 影响 | 本设计的处理 |
 |---|---|---|
-| CLI 已消费 Runtime Parts，但部分执行与持久化操作仍由 `bitfun-core/product-full` 兼容 owner 提供 | SDK 尚不能独立覆盖完整产品会话，过早删除兼容路径会改变行为 | 仅在稳定端口、真实嵌入方和行为等价测试齐备后迁移 owner；兼容门面保持单一且不扩展成第二套 Runtime。 |
+| CLI 主会话客户端已仅消费 Rust Runtime SDK；本地工作区快照的准备、文件清单、统计和文件回滚已有 Desktop/Peer Host 共用的窄 owner port，但快照记录/持久化/事件、账号同步、富历史及 Peer Host/ACP 的其余维护仍由现有 Core owner 提供 | 窄端口只消除重复宿主转发，不代表完整快照系统、远程快照或公开 SDK 能力已迁移；过早删除其余兼容路径会改变行为 | 保持快照实现和工具拦截在 Core，远程与历史维护留在宿主；仅在新的真实调用方、独立语义和行为等价测试齐备后继续迁移。 |
 | TUI 编排、输入、命令、副作用和渲染仍有大文件聚集 | 交互回归难以隔离，终端状态与业务状态容易耦合 | 在现有模块上增量收敛为事件、状态归约、副作用和渲染四个边界，不重写全部 TUI。 |
-| `ShortcutsConfig` 已加载，但主要按键分发仍硬编码；Slash、Palette、帮助和执行来自不同位置 | 配置可能保存却不生效，展示和真实行为会漂移 | 在 CLI 宿主建立单一 action registry 和上下文键位解析；不借机重写 renderer。 |
 | CLI 配置只覆盖入口本地选项，缺少统一层级、来源解释和兼容导入 | 用户无法安全复用其他 CLI 资产，也难以解释最终配置来源 | 建立 BitFun Canonical Config、持续来源视图和可选的显式导入报告。 |
 | OpenCode 来源发现与真实执行尚未形成完整闭环 | “来源可识别”容易被误解为“插件可执行” | 第一条闭环只完成一个无外部依赖的契约样例；取得真实 `execute` 并注册到 Tool Runtime 后才显示可用。 |
 | 当前 CLI 使用 `product-full`，OHOS target 图包含多组未验证的平台依赖 | 不能据依赖可解析、`hdc shell` 或移动 Remote App 推导 PC 本地 CLI/TUI 可用 | 问题与风险统一记录在平台规约；具体工作另立专题，HAP 不作为替代。 |
 | Product Capability 已有，但品牌、资源、默认策略和发行配置没有统一产品定义 | 白标需要修改多处常量和工作流，能力隐藏不等于后端禁用 | 产品定义只在组装/构建边界选择身份、资源、能力包、默认策略和发行事实。 |
-| CLI 已有独立 Linux 测试，参数互斥、结果/envelope 序列化、前置失败和组装有 focused contract；Linux 与 Windows 分别运行启动页 PTY/ConPTY 生命周期冒烟，发布归档上传前完成 SHA-256 与解压执行验证 | 真实模型审批/取消、真实 PTY 活动 turn 的 resize、Patch I/O 失败和终端故障注入仍可能晚于 PR 发现 | 继续补剩余进程级故障契约；避免为同一依赖图重复建立三平台编译矩阵。 |
+| CLI 已有独立 Linux 测试，参数互斥、结果/envelope 序列化、前置失败和组装有 focused contract；本地确定性模型夹具覆盖 HTTP 403 授权拒绝、流中断后的重试失败和 Patch 写入失败，真实 PTY/ConPTY 进程覆盖启动页、Chat resize/取消恢复及 `exec` Ctrl+C 的断流和单一取消终态；发布归档上传前完成 SHA-256 与解压执行验证 | 真实供应商审批交互和 OS 级终端初始化故障注入仍可能晚于 PR 发现 | 只按剩余真实故障补进程契约；避免为同一依赖图重复建立三平台编译矩阵。 |
 
 ## 3. 分阶段产品需求
 
@@ -157,19 +171,20 @@ CLI-P0 的目标是建立后续功能补齐所需的稳定边界，不改变现�
 
 CLI-P0 不是一个统一重构 PR。静态 profile、真实 Runtime Services、Runtime Parts、调用级审批、共享事件源和
 本地 Agent 纵向入口已接入；旧门面仅在后续 owner 迁移的行为等价成立后退出。配置解释、产品定制消费和 TUI
-进一步拆分仍需独立交付。CLI 托管的 ACP 服务端已独立切换到 ACP profile 与组装后的 SDK runtime；启动页
-PTY/ConPTY 生命周期冒烟测试与发布归档冒烟测试已存在；Chat 活动 turn 的 resize 静默期已有确定性状态单测，
-窄屏流式 reflow 已有 TestBackend 回归，真实模型、真实 PTY 活动 turn、终端故障注入与权限失败等完整进程级验收仍需另行完成。
+进一步拆分仍需独立交付。CLI 托管的 ACP 服务端已独立切换到 ACP profile 与组装后的 Rust Runtime SDK；启动页
+PTY/ConPTY 生命周期、Chat 活动 turn 的 resize/取消和发布归档冒烟测试已存在；resize 静默期与窄屏流式 reflow
+分别有确定性状态单测和 TestBackend 回归。真实 `stream-json` 进程已保护 Patch 写入失败、本地模型 HTTP 403 授权拒绝、
+流中断后的重试失败和 `exec` Ctrl+C 单一取消终态；真实供应商审批交互与 OS 级终端初始化故障注入仍需另行完成。
 
 其余工作独立立项，不能与 profile 迁移互相充当完成条件：
 
 | 切片 | 范围 | 退出条件 |
 |---|---|---|
 | 调用级审批 | TUI、`exec` 与 ACP 已使用各自调用级策略且不写全局配置 | Runtime-context `Allow always`、审批规划、`exec` 安全默认值和显式 `--auto` 有 focused test；真实模型/PTY 审批流与 ACP 仍需另行验收 |
-| 输出协议 | 保持通用 `text/json/stream-json` 心智，复用现有 Agentic envelope，不新建 CLI schema | 已覆盖结果/envelope 序列化、参数与前置 JSON 失败、失败完成、同会话跨 turn 隔离和 stream-json/Patch stdout 冲突；真实信号、模型权限失败与 Patch I/O 故障注入仍需进程级契约 |
+| 输出协议 | 保持通用 `text/json/stream-json` 心智，复用现有 Agentic envelope，不新建 CLI schema | 已覆盖结果/envelope 序列化、参数与前置 JSON 失败、失败完成、同会话跨 turn 隔离、stream-json/Patch stdout 冲突及 Patch 写入失败；写入失败返回非零并只发送结构化错误，不提前发送成功终态；真实 PTY/ConPTY 信号、本地模型 HTTP 403 授权拒绝和流中断后的重试失败已有进程契约，真实供应商审批交互另行验收 |
 | 配置解释 | Canonical Config 层级、全局/项目持续来源、加载状态和兼容导入 dry-run | 不自动写入；冲突、未知字段、待确认能力和凭据引用可解释 |
 | 产品定制 | 消费最小产品定义、组装结果和已注册 TUI layout/theme ID | 第二个真实 CLI 产品复用后再提升公共字段 |
-| TUI 边界 | 增量提取终端恢复守卫、命令分发和副作用边界 | 不改版视觉设计，恢复/取消回归可单独验证 |
+| TUI 边界 | 增量提取终端恢复守卫、命令分发和副作用边界 | 不改版视觉设计；Linux PTY 与 Windows ConPTY 活动 turn 的 resize/取消、恢复可编辑状态和正常退出清理可单独验证，macOS 活动 turn 与 OS 级初始化失败注入另行补齐 |
 
 CLI-P0 不包含插件 JS/TS 执行、完整 checkpoint/rewind 或大规模 TUI 重写。
 CLI-P0/P1/P2 在 Windows、macOS、Linux 完成不表示 HarmonyOS PC 已支持；HarmonyOS PC 的具体适配由未来独立专题
@@ -212,15 +227,27 @@ CLI-P1 应保证：
 |---|---|
 | `text` | 最终助手文本写 stdout；进度、思考、工具状态、日志和诊断写 stderr。显式 `--output-patch -` 是用户选择的额外 stdout 内容。 |
 | `json` | stdout 只写一个结果对象，包含 `type=result`、`subtype`、`is_error`、`result`，以及已建立时的 `session_id`/`turn_id`、本 turn 累计 `usage` 和可用的 `patch`。 |
-| `stream-json` | 每行直接序列化一个现有 `AgenticEventEnvelope`；不增加 `schema_version`、`sequence` 或第二套 CLI 事件 taxonomy。 |
+| `stream-json` | 每行直接序列化一个现有 `AgenticEventEnvelope`；不增加 `schema_version`、`sequence` 或第二套 CLI 事件 taxonomy。所有 terminal envelope 都只在精确结算和 Patch 交付完成后发布一次；结算失败优先于 Patch 失败，Patch 失败优先于 turn 终态，前两者统一改为 `SystemError` 并以非零状态退出。一次执行最多发布一个 terminal envelope 和一条 `BITFUN_EXIT` 分类。 |
 | 事件范围 | 只输出本次 session/turn 的事件，以及与其明确关联的 subagent link/tool 事件；同 session 的其他并发 turn 不得混入。 |
 | Patch | `json` 可把 `--output-patch -` 放入最终对象；`stream-json` 要求显式文件路径。Patch 是写出显式 Patch 文件前捕获的仓库 `HEAD` 相对工作区快照，包含 staged、unstaged、untracked 及命令启动前已有改动，不包含输出 artifact 本身，也不表达改动归因。 |
 | 权限 | 非交互默认拒绝并返回权限失败；`--auto` 只改变当前提交策略，不修改持久化配置。 |
 | 人工输入 | 非交互 `exec` 不暴露 `AskUserQuestion`；调用方必须在初始输入中提供完整上下文。该事实沿 Task、SessionMessage 及其自动回复链传播，避免子 Agent 或后续 turn 等待不存在的 stdin 处理器。 |
-| 终止 | terminal event 决定结果；`success=false` 不能映射为成功。`Ctrl+C` 请求取消，并在有界等待内继续转发当前 turn 的 terminal envelope 后返回取消结果。当前公开契约不新增 Agent turn 总时限参数；调用方可使用进程级期限，只有出现真实消费方时才单独设计 deadline。 |
+| 终止 | terminal event 决定结果；`success=false` 不能映射为成功。`Ctrl+C` 请求取消，终态观察与精确结算共享同一有界等待；若取消与完成/失败竞争，以实际观察到的 terminal event 为准，若结算失败则只发布替代的 `SystemError`。窗口内未观察到 terminal envelope 时发布结构化错误，不能无终态退出。当前进程仍以通用错误码 `1` 退出；只有实际取消终态使用 stderr 的 `BITFUN_EXIT: cancelled:` 稳定分类。当前公开契约不新增 Agent turn 总时限参数；调用方可使用进程级期限，只有出现真实消费方时才单独设计 deadline。 |
 
 CLI 不提供 `--output-schema v1`。Codex/Claude 同类参数表达的是调用方提供的 JSON Schema，用于约束最终模型
 响应，不是协议版本选择；如未来支持，应复用该语义并独立设计，不能借此重定义事件 envelope。
+
+#### 与公开 Agent SDK 的关系
+
+Headless CLI 和公开 Agent SDK 都调用同一 Agent Runtime API，但交付形态不同。本文件只保留 CLI 约束：
+
+- `bitfun exec` 面向 shell、CI 和一次性任务，使用 stdin/stdout/stderr、退出码与 `text/json/stream-json`。
+- `bitfun` 不承载隐藏 SDK Host 子命令，也不依赖 SDK Host 协议；独立 `bitfun-sdk-host` app 与 CLI
+  分别选择 SDK/CLI profile 和 submission source，只复用同一 Runtime owner，以及由共享产品事实生成的等价能力集合。
+- CLI 不在进程内执行 Python/TypeScript Tool、Permission 或 Hook callback。
+- 公开 SDK 不解析 `stream-json` 作为正式双向协议；它通过版本化 SDK Host 获得 callback 与连接生命周期。
+- 两者的能力对照、共同 fixture 和等价门槛以
+  [Agent SDK 产品与宿主架构第 8 节](agent-sdk-product-architecture.md#8-headless-cli-与-agent-sdk)为唯一事实源。
 
 #### 管理与诊断
 
@@ -267,10 +294,13 @@ TUI renderer、实验性接口和完整外部 Server 协议按总矩阵明确降
 | 脚本执行服务 | 物理进程健康、资源预算、进程树与句柄、类型化脚本请求和回收 | 决定工具权限、业务结果、TUI 或品牌资源 |
 | 生态配置适配器 | 解析受支持外部格式并生成导入候选/诊断 | 直接写运行时配置、读取密钥、决定最终权限 |
 
-CLI/TUI 的会话创建、列出、删除、恢复和历史转录读取通过 Runtime SDK 的类型化端口完成；TUI 只把
-`SessionTranscript` 投影为本地渲染状态，不再消费 Core `Message`。Peer Host 的对话提交、精确取消、会话模型更新和
-工具确认/拒绝通过 SDK 回到 Core owner；账户同步、会话分支、用量、快照及其他未覆盖操作仍使用经过审查的 Core
-compatibility 方法，直到各自具备明确 owner、稳定 DTO、远程语义和行为等价测试。
+CLI/TUI 的会话创建、列出、删除、恢复和历史转录读取通过 Rust Runtime SDK 的类型化端口完成；TUI 只把
+`SessionTranscript` 投影为本地渲染状态，不再消费 Core `Message`。Peer Host 的对话提交、精确取消、基础会话控制、thread-goal 查询、会话模型更新和
+工具确认/拒绝通过 Agent Runtime API 回到 Core owner；本地会话分支通过显式本地范围的内部端口完成，携带远程身份的请求返回类型化
+`NotAvailable`，本轮不扩展远程分支。TUI 用量卡片通过固定语义的完成态本地命令轮次端口持久化，不暴露通用 transcript writer。
+本地工作区快照准备、会话文件清单、类型化统计和工作区文件回滚通过 `runtime-ports` 中不属于公开 SDK 的窄 owner port 完成，
+由 Desktop 和 Peer Host 分别投影现有协议；Desktop 保留既有远程空结果，Peer Host 返回明确不支持错误，远程请求都不进入本地实现。快照记录、持久化、事件、历史截断与维护编排仍在原 owner。
+账户同步、富历史及其他未覆盖操作继续使用经过审查的 Core compatibility 方法，直到各自具备明确 owner、稳定 DTO、远程语义和行为等价测试。
 这是一条垂直链路迁移，不是删除整个兼容门面或新建 CLI 专用服务层。
 
 Runtime Configuration Service 当前由 `bitfun-core/service/config` 负责。在经评审的 port/provider
@@ -359,7 +389,7 @@ Plugin Runtime 状态。
 ### 4.6 HarmonyOS PC 原生终端产品
 
 HarmonyOS PC 复用现有 `DeliveryProfile::Cli`、action、TUI 和 Runtime 语义；平台 target 不成为新的 Delivery
-Profile。目标产物是普通用户在系统真实终端中直接执行的本地 `bitfun-cli`，不是 HAP、ArkUI/ArkWeb 终端模拟器、
+Profile。目标产物是普通用户在系统真实终端中直接执行的本地 `bitfun`，不是 HAP、ArkUI/ArkWeb 终端模拟器、
 `hdc shell` 工具或现有 HarmonyOS 手机 Remote App。
 
 问题清单、风险和旧设计闭环统一见[平台规约](platform-portability-design.md)。具体鸿蒙化工作、OpenCode 平台资格、
@@ -453,8 +483,9 @@ Plugin/Tool、可执行 Skill/Command、MCP/LSP/Formatter、远程 Reference 等
 规则文件优先复用项目已有文件，不复制出第二份内容。若不同生态规则冲突，导入报告必须展示目标文件、
 优先级和冲突段，不能自动拼接。
 
-现有对 `.claude/.codex/.opencode/.agents` Skill 根的直接发现需要补来源身份、全局/项目作用域、自动应用偏好、
-变化监听和可见性测试。OpenCode 兼容来源继续直接发现官方目录；Codex/Claude 是否增加新的持续来源另行决定。
+现有对 `.claude/.codex/.opencode/.agents` Skill 根的直接发现已经保留来源身份和全局/项目作用域，并在 GUI/TUI
+展示来源和默认覆盖状态，模式配置再展示实际采用项；固定根顺序保持为 Skill Registry 的独立回归契约。变化监听与可见性测试仍需
+后续补齐。OpenCode 兼容来源继续直接发现官方目录；Codex/Claude 是否增加新的持续来源另行决定。
 Skill 说明和索引可按 L1 处理，脚本、URL 和外部依赖按 L2 确认；显式导入仍不得复制凭据值。MCP 启用状态按
 OpenCode 来源解释，首次连接、策略限制和凭据缺失分别显示。
 
@@ -472,9 +503,9 @@ OpenCode 来源解释，首次连接、策略限制和凭据缺失分别显示�
 
 | 能力 | 入口 | 说明 |
 |---|---|---|
-| 外部 ACP 智能体 | `bitfun-cli acp ...` | 启动外部智能体进程并通过 ACP 协作。 |
-| 配置兼容与导入 | 启动时持续兼容来源；`bitfun-cli config import ...` 显式迁移 | 前者后台发现并按风险应用/确认 OpenCode 来源，后者写入 BitFun 原生配置；两者都不在解析线程执行插件。 |
-| 运行时插件 | `bitfun-cli plugins ...` | 当前只提供 BitFun 专用包的来源、启用和静态工具名称预览；目标直接运行 OpenCode 插件。 |
+| 外部 ACP 智能体 | `bitfun acp ...` | 启动外部智能体进程并通过 ACP 协作。 |
+| 配置兼容与导入 | 启动时持续兼容来源；`bitfun config import ...` 显式迁移 | 前者后台发现并按风险应用/确认 OpenCode 来源，后者写入 BitFun 原生配置；两者都不在解析线程执行插件。 |
+| 运行时插件 | `bitfun plugins ...` | 当前只提供 BitFun 专用包的来源、启用和静态工具名称预览；目标直接运行 OpenCode 插件。 |
 
 三者不能共享“已安装/已启用”状态，也不能互相推导来源确认或运行权限。
 
@@ -601,9 +632,9 @@ CLI Agent 能力加强必须落在共享 Agent Runtime、Tool Runtime 或 Harnes
 
 通用 `cargo check --workspace` 负责三平台 CLI 编译保护；独立 CLI CI 运行
 `cargo test --locked -p bitfun-cli -p bitfun-acp -p bitfun-agent-runtime`。Linux 启动页 PTY 生命周期冒烟随独立 CLI
-测试运行，Windows 启动页 ConPTY 生命周期冒烟复用通用 Windows job；发布归档在上传前完成 SHA-256 与解压执行
-验证。真实模型进程级交互、真实 PTY 中的 Chat 活动 turn resize 与故障进程矩阵仍按对应切片补入门禁，不能由序列化单测或基础冒烟
-测试代替。
+测试运行，Windows 启动页 ConPTY 生命周期冒烟复用通用 Windows job；Windows x64、macOS 和 Linux 的原生发布归档
+在上传前完成 SHA-256、双入口和解压执行验证。真实供应商模型进程级交互、macOS 活动 PTY 与 OS 级终端故障进程矩阵仍按对应切片补入门禁；Linux PTY
+与 Windows ConPTY 的 Chat 活动 turn resize/取消及 `exec` Ctrl+C 已由本地确定性流式模型夹具覆盖，不能用它替代上述验收。
 
 ### 10.2 阶段退出条件
 

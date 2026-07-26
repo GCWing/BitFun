@@ -42,7 +42,6 @@ export interface ToolInfo {
   input_schema: any;
   is_readonly: boolean;
   is_concurrency_safe: boolean;
-  needs_permissions: boolean;
   dynamic_info?: DynamicToolInfo;
 }
 

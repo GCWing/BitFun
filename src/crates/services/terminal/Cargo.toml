@@ -12,9 +12,6 @@ path = "src/lib.rs"
 [dependencies]
 bitfun-runtime-ports = { path = "../../contracts/runtime-ports" }
 
-# PTY support
-portable-pty = { workspace = true }
-
 # Async runtime
 tokio = { workspace = true }
 tokio-stream = { workspace = true }
@@ -54,6 +51,14 @@ tempfile = { workspace = true }
 [target.'cfg(windows)'.dependencies]
 # Windows process-tree ownership
 win32job = { workspace = true }
+
+# portable-pty: ohos requires 0.9 (nix 0.25 is incompatible); all other
+# platforms use 0.8 to avoid the PSEUDOCONSOLE_INHERIT_CURSOR ConPTY bug.
+[target.'cfg(not(target_env = "ohos"))'.dependencies]
+portable-pty = { workspace = true }
+
+[target.'cfg(target_env = "ohos")'.dependencies]
+portable-pty = "0.9"
 
 [lints]
 workspace = true

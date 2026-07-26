@@ -15,7 +15,7 @@ interface FlowItemRendererProps {
   item: FlowItem;
   onFileViewRequest?: (filePath: string) => void;
   onTabOpen?: (tabInfo: any) => void;
-  onConfirm?: (toolId: string, updatedInput?: any, permissionOptionId?: string, approve?: boolean) => void;
+  onConfirm?: (toolId: string, permissionOptionId?: string, approve?: boolean) => void;
   onReject?: (toolId: string, options?: ToolRejectOptions) => void;
   sessionId?: string;
 }

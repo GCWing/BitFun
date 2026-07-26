@@ -81,6 +81,29 @@
   
 }
 
+/* Permission requests can be rendered by dedicated cards that do not
+ * receive the legacy requiresConfirmation prop. Highlight their shared
+ * FlowToolCard root so every waiting tool category gets the same affordance. */
+.flow-tool-card-wrapper--permission-pending > :first-child {
+  border: 1.5px solid var(--color-warning);
+  border-radius: var(--flowchat-card-radius);
+  background: color-mix(in srgb, var(--color-warning) 5%, var(--color-bg-scene));
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--color-warning) 15%, transparent),
+    0 0 12px color-mix(in srgb, var(--color-warning) 20%, transparent),
+    inset 0 0 8px color-mix(in srgb, var(--color-warning) 5%, transparent);
+  animation: confirmationPulse 2s ease-in-out infinite;
+}
+
+.flow-tool-card-wrapper--permission-pending > :first-child:hover {
+  border-color: var(--color-warning);
+  box-shadow:
+    0 0 0 2px color-mix(in srgb, var(--color-warning) 25%, transparent),
+    0 0 20px var(--color-warning-border),
+    0 4px 20px var(--color-overlay-black-30),
+    inset 0 0 12px color-mix(in srgb, var(--color-warning) 8%, transparent);
+}
+
 /* ========== Card body ========== */
 .base-tool-card {
   cursor: pointer;

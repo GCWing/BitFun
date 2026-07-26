@@ -1,4 +1,5 @@
 use super::*;
+use crate::agentic::core::{SessionContinuationPolicy, SessionModelBindingPolicy};
 
 fn build_deep_review_subagent_context(
     role: DeepReviewSubagentRole,
@@ -29,21 +30,27 @@ fn build_deep_review_subagent_context(
     values
 }
 
-fn forward_user_input_availability(
+fn forward_subagent_invocation_context(
     context: &ToolUseContext,
     subagent_context: &mut HashMap<String, String>,
 ) {
+    use bitfun_agent_runtime::permission::AUTO_APPROVE_ASK_CONTEXT_KEY;
     use bitfun_agent_runtime::user_questions::USER_INPUT_AVAILABLE_CONTEXT_KEY;
 
-    let Some(value) = context.custom_data.get(USER_INPUT_AVAILABLE_CONTEXT_KEY) else {
-        return;
-    };
-    let value = match value {
-        Value::Bool(value) => value.to_string(),
-        Value::String(value) if matches!(value.as_str(), "true" | "false") => value.clone(),
-        _ => return,
-    };
-    subagent_context.insert(USER_INPUT_AVAILABLE_CONTEXT_KEY.to_string(), value);
+    for key in [
+        USER_INPUT_AVAILABLE_CONTEXT_KEY,
+        AUTO_APPROVE_ASK_CONTEXT_KEY,
+    ] {
+        let Some(value) = context.custom_data.get(key) else {
+            continue;
+        };
+        let value = match value {
+            Value::Bool(value) => value.to_string(),
+            Value::String(value) if matches!(value.as_str(), "true" | "false") => value.clone(),
+            _ => continue,
+        };
+        subagent_context.insert(key.to_string(), value);
+    }
 }
 
 struct BackgroundTaskStartRequest<'a> {
@@ -52,18 +59,38 @@ struct BackgroundTaskStartRequest<'a> {
     context_mode: SubagentContextMode,
     target_session_id: Option<String>,
     subagent_type: Option<String>,
+    logical_subagent_type: Option<String>,
+    continuation_policy: SessionContinuationPolicy,
+    model_binding_policy: SessionModelBindingPolicy,
     effective_workspace_path: Option<String>,
     model_id: Option<String>,
+    permission_runtime_ceiling: PermissionRuntimeCeiling,
+    inherit_parent_model: bool,
     subagent_context: Option<HashMap<String, String>>,
     prepared_prompt: String,
     timeout_seconds: Option<u64>,
-    allow_review_follow_up: bool,
     tool_call_id: String,
     session_id: String,
     dialog_turn_id: String,
+    external_generation_lease: Option<crate::agentic::agents::ExternalSubagentGenerationLease>,
 }
 
 impl TaskTool {
+    async fn derive_parent_permission_runtime_ceiling(
+        context: &ToolUseContext,
+    ) -> PermissionRuntimeCeiling {
+        let global: GlobalConfig = match GlobalConfigManager::get_service().await {
+            Ok(service) => service.get_config(None).await.unwrap_or_default(),
+            Err(_) => GlobalConfig::default(),
+        };
+        let agent_profile = context.agent_type.as_deref().and_then(|agent_type| {
+            let profile_id = crate::agentic::agents::resolve_mode_config_profile_id(agent_type);
+            global.ai.agent_profiles.get(profile_id.as_ref())
+        });
+
+        crate::agentic::permission_policy::derive_parent_permission_runtime_ceiling(agent_profile)
+    }
+
     pub(super) async fn load_configured_tool_execution_timeout() -> Option<u64> {
         let service = GlobalConfigManager::get_service().await.ok()?;
         let ai_config: AIConfig = service.get_config(Some("ai")).await.ok()?;
@@ -131,25 +158,28 @@ impl TaskTool {
         parent_session_id: &str,
         invocation: TaskInvocation,
     ) -> BitFunResult<Vec<ToolResult>> {
-        let target_session_id = invocation.target_session_id.as_deref().ok_or_else(|| {
-            BitFunError::tool("session_id is required when action is cancel".to_string())
+        let agent_id = invocation.target_agent_id.as_deref().ok_or_else(|| {
+            BitFunError::tool("agent_id is required when action is cancel".to_string())
         })?;
         let coordinator = get_global_coordinator()
             .ok_or_else(|| BitFunError::tool("coordinator not initialized".to_string()))?;
+        let target_session_id = coordinator
+            .resolve_agent_id(parent_session_id, agent_id)
+            .await?;
         let cancelled_count = coordinator
-            .cancel_background_subagents_for_parent(parent_session_id, target_session_id)
+            .cancel_background_subagents_for_parent(parent_session_id, &target_session_id)
             .await?;
 
         Ok(vec![ToolResult::Result {
             data: json!({
                 "action": "cancel",
                 "status": "cancelled",
-                "session_id": target_session_id,
+                "agent_id": agent_id,
                 "cancelled_background_tasks": cancelled_count,
             }),
             result_for_assistant: Some(format!(
-                "Cancelled {} background Task run(s) for subagent session {}.\n<background_task status=\"cancelled\" session_id=\"{}\" cancelled_count=\"{}\">Cancelled background runs will not deliver results back to you.</background_task>",
-                cancelled_count, target_session_id, target_session_id, cancelled_count
+                "Cancelled {} background Task run(s) for agent {}.\n<background_task status=\"cancelled\" agent_id=\"{}\" cancelled_count=\"{}\">Cancelled background runs will not deliver results back to you.</background_task>",
+                cancelled_count, agent_id, agent_id, cancelled_count
             )),
             image_attachments: None,
         }])
@@ -164,6 +194,8 @@ impl TaskTool {
         session_id: String,
     ) -> BitFunResult<Vec<ToolResult>> {
         Self::ensure_delegation_allowed(context)?;
+        let coordinator = get_global_coordinator()
+            .ok_or_else(|| BitFunError::tool("coordinator not initialized".to_string()))?;
 
         let description = invocation.description.clone();
         let mut prompt = invocation.prompt.clone().ok_or_else(|| {
@@ -172,16 +204,24 @@ impl TaskTool {
             )
         })?;
         let context_mode = invocation.context_mode;
-        let target_session_id = invocation.target_session_id.clone();
+        let target_session_id = match invocation.target_agent_id.as_deref() {
+            Some(agent_id) => Some(coordinator.resolve_agent_id(&session_id, agent_id).await?),
+            None => None,
+        };
         let model_id = invocation.model_id.clone();
+        let inherit_parent_model = invocation.inherit_parent_model;
         let mut timeout_seconds = invocation.timeout_seconds;
         let run_in_background = invocation.run_in_background;
-        let allow_review_follow_up = invocation.allow_review_follow_up;
         let is_retry = invocation.is_retry;
         let requested_auto_retry = invocation.requested_auto_retry;
         let is_auto_retry = is_retry && requested_auto_retry;
         let is_deep_review_parent = Self::is_deep_review_context(Some(context));
 
+        let mut external_generation_lease = None;
+        let mut supports_follow_up = true;
+        let mut logical_subagent_type = None;
+        let mut continuation_policy = SessionContinuationPolicy::Reusable;
+        let mut model_binding_policy = SessionModelBindingPolicy::Mutable;
         let subagent_type = match context_mode {
             SubagentContextMode::Fresh => {
                 if target_session_id.is_some() {
@@ -189,24 +229,52 @@ impl TaskTool {
                 } else {
                     let subagent_type = invocation.subagent_type.clone().ok_or_else(|| {
                         BitFunError::tool(
-                            "subagent_type is required when fork_context is false or omitted and session_id is not provided"
+                            "subagent_type is required when fork_context is false or omitted and agent_id is not provided"
                                 .to_string(),
                         )
                     })?;
                     let all_agent_types = self.get_agents_types(Some(context)).await;
-                    if !all_agent_types.contains(&subagent_type) {
+                    let binding = get_agent_registry()
+                        .resolve_subagent_for_fresh_invocation(
+                            &subagent_type,
+                            context.workspace_root(),
+                            !context.is_remote(),
+                        )
+                        .ok_or_else(|| {
+                            BitFunError::tool(format!(
+                                "candidate_unavailable: subagent_type {} changed before the invocation could start",
+                                subagent_type
+                            ))
+                        })?;
+                    if !all_agent_types.contains(&subagent_type)
+                        && !all_agent_types.contains(&binding.runtime_agent_key)
+                    {
                         return Err(BitFunError::tool(format!(
                             "subagent_type {} is not valid, must be one of: {}",
                             subagent_type,
                             all_agent_types.join(", ")
                         )));
                     }
-                    Some(subagent_type)
+                    supports_follow_up = binding.supports_follow_up;
+                    if !supports_follow_up && model_id.is_some() {
+                        return Err(BitFunError::tool(
+                            "external_subagent_model_override_unsupported: external subagents use the approved model binding"
+                                .to_string(),
+                        ));
+                    }
+                    logical_subagent_type = Some(binding.logical_id.clone());
+                    continuation_policy = binding.continuation_policy;
+                    model_binding_policy = binding.model_binding_policy;
+                    external_generation_lease = binding.lease;
+                    Some(binding.runtime_agent_key)
                 }
             }
             SubagentContextMode::Fork => None,
         };
-        let delegate_target_label = match subagent_type.as_deref() {
+        let delegate_target_label = match logical_subagent_type
+            .as_deref()
+            .or(subagent_type.as_deref())
+        {
             Some(subagent_type) => format!("subagent '{}'", subagent_type),
             None if target_session_id.is_some() => "existing subagent session".to_string(),
             None => "forked subagent".to_string(),
@@ -242,9 +310,6 @@ impl TaskTool {
         let mut deep_review_retry_scope_files: Option<Vec<String>> = None;
         let mut deep_review_subagent_role: Option<DeepReviewSubagentRole> = None;
         let mut deep_review_run_manifest: Option<Value> = None;
-        let coordinator = get_global_coordinator()
-            .ok_or_else(|| BitFunError::tool("coordinator not initialized".to_string()))?;
-
         if is_deep_review_parent {
             let subagent_type = subagent_type.as_deref().ok_or_else(|| {
                 BitFunError::tool("subagent_type is required for DeepReview Task calls".to_string())
@@ -492,19 +557,28 @@ impl TaskTool {
                         })?;
                 }
             }
-            record_deep_review_task_budget(&dialog_turn_id, &policy, role, subagent_type, is_retry)
-                .map_err(|violation| {
-                    if is_auto_retry {
-                        record_deep_review_runtime_auto_retry_suppressed(
-                            &dialog_turn_id,
-                            LaunchReviewAgentTool::auto_retry_suppression_reason(violation.code),
-                        );
-                    }
-                    BitFunError::tool(format!(
-                        "DeepReview Task policy violation: {}",
-                        violation.to_tool_error_message()
-                    ))
-                })?;
+            record_deep_review_task_budget(
+                &dialog_turn_id,
+                &policy,
+                role,
+                subagent_type,
+                is_retry,
+                deep_review_launch_batch_info
+                    .as_ref()
+                    .and_then(|info| info.packet_id.as_deref()),
+            )
+            .map_err(|violation| {
+                if is_auto_retry {
+                    record_deep_review_runtime_auto_retry_suppressed(
+                        &dialog_turn_id,
+                        LaunchReviewAgentTool::auto_retry_suppression_reason(violation.code),
+                    );
+                }
+                BitFunError::tool(format!(
+                    "DeepReview Task policy violation: {}",
+                    violation.to_tool_error_message()
+                ))
+            })?;
             if is_retry && role == DeepReviewSubagentRole::Reviewer {
                 if is_auto_retry {
                     record_deep_review_runtime_auto_retry(&dialog_turn_id);
@@ -536,8 +610,10 @@ impl TaskTool {
                 )
             })
             .unwrap_or_default();
-        forward_user_input_availability(context, &mut subagent_context);
+        forward_subagent_invocation_context(context, &mut subagent_context);
         let subagent_context = (!subagent_context.is_empty()).then_some(subagent_context);
+        let permission_runtime_ceiling =
+            Self::derive_parent_permission_runtime_ceiling(context).await;
         let prepared_prompt = prompt;
         if run_in_background {
             return Self::start_background_task(BackgroundTaskStartRequest {
@@ -546,15 +622,20 @@ impl TaskTool {
                 context_mode,
                 target_session_id,
                 subagent_type,
+                logical_subagent_type,
+                continuation_policy,
+                model_binding_policy,
                 effective_workspace_path,
                 model_id,
+                permission_runtime_ceiling,
+                inherit_parent_model,
                 subagent_context,
                 prepared_prompt,
                 timeout_seconds,
-                allow_review_follow_up,
                 tool_call_id,
                 session_id,
                 dialog_turn_id,
+                external_generation_lease,
             })
             .await;
         }
@@ -565,8 +646,13 @@ impl TaskTool {
             context_mode,
             target_session_id,
             subagent_type,
+            logical_subagent_type,
+            continuation_policy,
+            model_binding_policy,
             effective_workspace_path,
             model_id,
+            permission_runtime_ceiling,
+            inherit_parent_model,
             subagent_context,
             prepared_prompt,
             timeout_seconds,
@@ -583,6 +669,8 @@ impl TaskTool {
             deep_review_effective_policy,
             is_retry,
             start_time,
+            supports_follow_up,
+            external_generation_lease,
         )
         .await
     }
@@ -596,15 +684,20 @@ impl TaskTool {
             context_mode,
             target_session_id,
             subagent_type,
+            logical_subagent_type,
+            continuation_policy,
+            model_binding_policy,
             effective_workspace_path,
             model_id,
+            permission_runtime_ceiling,
+            inherit_parent_model,
             subagent_context,
             prepared_prompt,
             timeout_seconds,
-            allow_review_follow_up,
             tool_call_id,
             session_id,
             dialog_turn_id,
+            external_generation_lease,
         } = request;
         let parent_info = SubagentParentInfo {
             tool_call_id,
@@ -618,14 +711,19 @@ impl TaskTool {
                     context_mode,
                     target_session_id,
                     subagent_type,
+                    logical_subagent_type,
+                    continuation_policy,
+                    model_binding_policy,
                     workspace_path: effective_workspace_path,
                     model_id,
+                    inherit_parent_model,
                     subagent_parent_info: parent_info,
                     context: subagent_context.unwrap_or_default(),
+                    permission_runtime_ceiling,
                     delegation_policy: context.delegation_policy().spawn_child(),
+                    external_generation_lease,
                 },
                 timeout_seconds,
-                allow_review_follow_up,
             )
             .await?;
 
@@ -634,11 +732,12 @@ impl TaskTool {
                 "context_mode": context_mode.as_str(),
                 "status": "started",
                 "run_in_background": true,
-                "background_task_id": background_result.background_task_id.clone(),
-                "session_id": background_result.session_id.clone(),
+                "bg_task_id": background_result.bg_task_id.clone(),
+                "agent_id": background_result.agent_id.clone(),
             }),
             result_for_assistant: Some(Self::background_subagent_started_assistant_message(
-                &background_result.session_id,
+                &background_result.agent_id,
+                &background_result.bg_task_id,
             )),
             image_attachments: None,
         }])
@@ -651,8 +750,13 @@ impl TaskTool {
         context_mode: SubagentContextMode,
         target_session_id: Option<String>,
         subagent_type: Option<String>,
+        logical_subagent_type: Option<String>,
+        continuation_policy: SessionContinuationPolicy,
+        model_binding_policy: SessionModelBindingPolicy,
         effective_workspace_path: Option<String>,
         model_id: Option<String>,
+        permission_runtime_ceiling: PermissionRuntimeCeiling,
+        inherit_parent_model: bool,
         subagent_context: Option<HashMap<String, String>>,
         prepared_prompt: String,
         timeout_seconds: Option<u64>,
@@ -669,6 +773,8 @@ impl TaskTool {
         deep_review_effective_policy: Option<DeepReviewExecutionPolicy>,
         is_retry: bool,
         start_time: Instant,
+        supports_follow_up: bool,
+        external_generation_lease: Option<crate::agentic::agents::ExternalSubagentGenerationLease>,
     ) -> BitFunResult<Vec<ToolResult>> {
         let mut deep_review_active_guard = deep_review_active_guard;
         let mut provider_capacity_retry =
@@ -682,7 +788,7 @@ impl TaskTool {
             };
             let subagent_execution_started_at = Instant::now();
             debug!(
-                "TaskTool awaiting subagent result: parent_session_id={}, dialog_turn_id={}, tool_call_id={}, context_mode={}, delegate_target={}, timeout_seconds={:?}, workspace_path={:?}, model_id={:?}",
+                "TaskTool awaiting subagent result: parent_session_id={}, dialog_turn_id={}, tool_call_id={}, context_mode={}, delegate_target={}, timeout_seconds={:?}, workspace_path={:?}, model_id={:?}, inherit_parent_model={}",
                 session_id,
                 dialog_turn_id,
                 tool_call_id,
@@ -690,7 +796,8 @@ impl TaskTool {
                 delegate_target_label,
                 timeout_seconds,
                 effective_workspace_path,
-                model_id
+                model_id,
+                inherit_parent_model
             );
             let execution_result = coordinator
                 .execute_subagent(
@@ -699,11 +806,17 @@ impl TaskTool {
                         context_mode,
                         target_session_id: target_session_id.clone(),
                         subagent_type: subagent_type.clone(),
+                        logical_subagent_type: logical_subagent_type.clone(),
+                        continuation_policy,
+                        model_binding_policy,
                         workspace_path: effective_workspace_path.clone(),
                         model_id: model_id.clone(),
+                        inherit_parent_model,
                         subagent_parent_info: parent_info,
                         context: subagent_context.clone().unwrap_or_default(),
+                        permission_runtime_ceiling: permission_runtime_ceiling.clone(),
                         delegation_policy: context.delegation_policy().spawn_child(),
+                        external_generation_lease: external_generation_lease.clone(),
                     },
                     context.cancellation_token(),
                     timeout_seconds,
@@ -976,12 +1089,17 @@ impl TaskTool {
                 result.ledger_event_id(),
                 &retry_hint,
             );
-        if let Some(subagent_session_id) = result.session_id() {
-            data["session_id"] = json!(subagent_session_id);
-            result_for_assistant.push_str(&format!(
-                "\n<subagent_session id=\"{}\">Use this session_id to continue the same subagent session.</subagent_session>",
-                subagent_session_id
+        if supports_follow_up {
+            if let Some(subagent_session_id) = result.session_id() {
+                let agent_id = coordinator
+                    .agent_id_for_subagent_session(&session_id, subagent_session_id)
+                    .await?;
+                data["agent_id"] = json!(agent_id.clone());
+                result_for_assistant.push_str(&format!(
+                "\n<subagent id=\"{}\">Use this agent_id to continue the same subagent.</subagent>",
+                agent_id
             ));
+            }
         }
 
         Ok(vec![ToolResult::Result {
@@ -996,6 +1114,24 @@ impl TaskTool {
 mod target_context_tests {
     use super::*;
     use bitfun_agent_runtime::deep_review::{append_tool_use_context_data, ReviewTargetEvidence};
+    use bitfun_agent_runtime::permission::AUTO_APPROVE_ASK_CONTEXT_KEY;
+    use bitfun_agent_runtime::user_questions::USER_INPUT_AVAILABLE_CONTEXT_KEY;
+
+    fn parent_tool_context() -> ToolUseContext {
+        ToolUseContext {
+            tool_call_id: None,
+            agent_type: None,
+            session_id: None,
+            dialog_turn_id: None,
+            workspace: None,
+            loaded_deferred_tool_specs: Vec::new(),
+            primary_model_facts: tool_runtime::context::PrimaryModelFacts::default(),
+            custom_data: HashMap::new(),
+            computer_use_host: None,
+            runtime_tool_restrictions: Default::default(),
+            runtime_handles: bitfun_runtime_ports::ToolRuntimeHandles::default(),
+        }
+    }
 
     #[test]
     fn deep_review_child_context_preserves_target_evidence_for_tools() {
@@ -1036,27 +1172,71 @@ mod target_context_tests {
 
     #[test]
     fn child_context_preserves_non_interactive_user_input_boundary() {
-        let mut parent = ToolUseContext {
-            tool_call_id: None,
-            agent_type: None,
-            session_id: None,
-            dialog_turn_id: None,
-            workspace: None,
-            loaded_deferred_tool_specs: Vec::new(),
-            primary_model_facts: tool_runtime::context::PrimaryModelFacts::default(),
-            custom_data: HashMap::new(),
-            computer_use_host: None,
-            runtime_tool_restrictions: Default::default(),
-            runtime_handles: bitfun_runtime_ports::ToolRuntimeHandles::default(),
-        };
+        let mut parent = parent_tool_context();
         parent.custom_data.insert(
-            bitfun_agent_runtime::user_questions::USER_INPUT_AVAILABLE_CONTEXT_KEY.to_string(),
+            USER_INPUT_AVAILABLE_CONTEXT_KEY.to_string(),
             Value::Bool(false),
         );
         let mut child = HashMap::new();
 
-        forward_user_input_availability(&parent, &mut child);
+        forward_subagent_invocation_context(&parent, &mut child);
 
         assert_eq!(child["user_input_available"], "false");
+    }
+
+    #[test]
+    fn child_context_preserves_explicit_auto_approve_true_and_false() {
+        for value in [true, false] {
+            let mut parent = parent_tool_context();
+            parent
+                .custom_data
+                .insert(AUTO_APPROVE_ASK_CONTEXT_KEY.to_string(), Value::Bool(value));
+            let mut child = HashMap::new();
+
+            forward_subagent_invocation_context(&parent, &mut child);
+
+            assert_eq!(
+                child.get(AUTO_APPROVE_ASK_CONTEXT_KEY).map(String::as_str),
+                Some(if value { "true" } else { "false" })
+            );
+        }
+    }
+
+    #[test]
+    fn child_context_leaves_unset_auto_approve_for_global_fallback() {
+        let parent = parent_tool_context();
+        let mut child = HashMap::new();
+
+        forward_subagent_invocation_context(&parent, &mut child);
+
+        assert!(!child.contains_key(AUTO_APPROVE_ASK_CONTEXT_KEY));
+    }
+
+    #[test]
+    fn child_context_forwards_only_allowlisted_boolean_invocation_facts() {
+        let mut parent = parent_tool_context();
+        parent.custom_data.insert(
+            AUTO_APPROVE_ASK_CONTEXT_KEY.to_string(),
+            Value::String("true".to_string()),
+        );
+        parent.custom_data.insert(
+            USER_INPUT_AVAILABLE_CONTEXT_KEY.to_string(),
+            Value::String("invalid".to_string()),
+        );
+        parent.custom_data.insert(
+            "parent_tool_runtime_state".to_string(),
+            Value::String("must-not-propagate".to_string()),
+        );
+        let mut child = HashMap::from([(
+            "deep_review_subagent_role".to_string(),
+            "reviewer".to_string(),
+        )]);
+
+        forward_subagent_invocation_context(&parent, &mut child);
+
+        assert_eq!(child[AUTO_APPROVE_ASK_CONTEXT_KEY], "true");
+        assert!(!child.contains_key(USER_INPUT_AVAILABLE_CONTEXT_KEY));
+        assert!(!child.contains_key("parent_tool_runtime_state"));
+        assert_eq!(child["deep_review_subagent_role"], "reviewer");
     }
 }

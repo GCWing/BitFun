@@ -139,22 +139,26 @@ pub(crate) fn cached_ref_loose(pid: i32, idx: u32) -> Option<AxRef> {
 //    to keep the older locate path self-contained and untouched) ──────────
 
 unsafe fn ax_release(v: CFTypeRef) {
-    if !v.is_null() {
-        core_foundation::base::CFRelease(v);
+    unsafe {
+        if !v.is_null() {
+            core_foundation::base::CFRelease(v);
+        }
     }
 }
 
 unsafe fn ax_copy_attr(elem: AXUIElementRef, key: &str) -> Option<CFTypeRef> {
-    let mut val: CFTypeRef = std::ptr::null();
-    let k = CFString::new(key);
-    let st = AXUIElementCopyAttributeValue(elem, k.as_concrete_TypeRef(), &mut val);
-    if st != 0 || val.is_null() {
-        if !val.is_null() {
-            ax_release(val);
+    unsafe {
+        let mut val: CFTypeRef = std::ptr::null();
+        let k = CFString::new(key);
+        let st = AXUIElementCopyAttributeValue(elem, k.as_concrete_TypeRef(), &mut val);
+        if st != 0 || val.is_null() {
+            if !val.is_null() {
+                ax_release(val);
+            }
+            return None;
         }
-        return None;
+        Some(val)
     }
-    Some(val)
 }
 
 /// Safely convert a CF object to a Rust `String`. **MUST type-check first**:
@@ -169,14 +173,16 @@ unsafe fn ax_copy_attr(elem: AXUIElementRef, key: &str) -> Option<CFTypeRef> {
 /// `CFNumber`, on bool attributes is a `CFBoolean`, and on geometric
 /// attributes is an opaque `AXValueRef` — none of which are strings.
 unsafe fn cfstring_to_string(cf: CFTypeRef) -> Option<String> {
-    if cf.is_null() {
-        return None;
+    unsafe {
+        if cf.is_null() {
+            return None;
+        }
+        if CFGetTypeID(cf) != CFStringGetTypeID() {
+            return None;
+        }
+        let s = CFString::wrap_under_get_rule(cf as CFStringRef);
+        Some(s.to_string())
     }
-    if CFGetTypeID(cf) != CFStringGetTypeID() {
-        return None;
-    }
-    let s = CFString::wrap_under_get_rule(cf as CFStringRef);
-    Some(s.to_string())
 }
 
 /// Best-effort: read an attribute and coerce *whatever* CF type comes back
@@ -186,150 +192,166 @@ unsafe fn cfstring_to_string(cf: CFTypeRef) -> Option<String> {
 /// else (e.g. an AXUIElementRef returned for `AXValue` on a tab group)
 /// becomes `None` rather than blowing up.
 unsafe fn cf_to_display_string(cf: CFTypeRef) -> Option<String> {
-    if cf.is_null() {
-        return None;
-    }
-    let tid = CFGetTypeID(cf);
-    if tid == CFStringGetTypeID() {
-        let s = CFString::wrap_under_get_rule(cf as CFStringRef);
-        return Some(s.to_string());
-    }
-    if tid == CFBooleanGetTypeID() {
-        return Some(if CFBooleanGetValue(cf as CFBooleanRef) != 0 {
-            "true".to_string()
-        } else {
-            "false".to_string()
-        });
-    }
-    if tid == CFNumberGetTypeID() {
-        let nref = cf as CFNumberRef;
-        if CFNumberIsFloatType(nref) != 0 {
-            let mut d: f64 = 0.0;
-            if CFNumberGetValue(
-                nref,
-                K_CF_NUMBER_DOUBLE_TYPE,
-                &mut d as *mut _ as *mut c_void,
-            ) != 0
-            {
-                // Trim trailing zeros for cleaner display (1.0 → "1").
-                let s = format!("{}", d);
-                return Some(s);
-            }
-            return None;
-        } else {
-            let mut i: i64 = 0;
-            if CFNumberGetValue(
-                nref,
-                K_CF_NUMBER_LONG_LONG_TYPE,
-                &mut i as *mut _ as *mut c_void,
-            ) != 0
-            {
-                return Some(i.to_string());
-            }
+    unsafe {
+        if cf.is_null() {
             return None;
         }
+        let tid = CFGetTypeID(cf);
+        if tid == CFStringGetTypeID() {
+            let s = CFString::wrap_under_get_rule(cf as CFStringRef);
+            return Some(s.to_string());
+        }
+        if tid == CFBooleanGetTypeID() {
+            return Some(if CFBooleanGetValue(cf as CFBooleanRef) != 0 {
+                "true".to_string()
+            } else {
+                "false".to_string()
+            });
+        }
+        if tid == CFNumberGetTypeID() {
+            let nref = cf as CFNumberRef;
+            if CFNumberIsFloatType(nref) != 0 {
+                let mut d: f64 = 0.0;
+                if CFNumberGetValue(
+                    nref,
+                    K_CF_NUMBER_DOUBLE_TYPE,
+                    &mut d as *mut _ as *mut c_void,
+                ) != 0
+                {
+                    // Trim trailing zeros for cleaner display (1.0 → "1").
+                    let s = format!("{}", d);
+                    return Some(s);
+                }
+                return None;
+            } else {
+                let mut i: i64 = 0;
+                if CFNumberGetValue(
+                    nref,
+                    K_CF_NUMBER_LONG_LONG_TYPE,
+                    &mut i as *mut _ as *mut c_void,
+                ) != 0
+                {
+                    return Some(i.to_string());
+                }
+                return None;
+            }
+        }
+        // CGPoint / CGSize / CGRect / CFRange via AXValueRef.
+        if let Some(p) = ax_value_to_point(cf) {
+            return Some(format!("({}, {})", p.x, p.y));
+        }
+        if let Some(s) = ax_value_to_size(cf) {
+            return Some(format!("({} x {})", s.width, s.height));
+        }
+        None
     }
-    // CGPoint / CGSize / CGRect / CFRange via AXValueRef.
-    if let Some(p) = ax_value_to_point(cf) {
-        return Some(format!("({}, {})", p.x, p.y));
-    }
-    if let Some(s) = ax_value_to_size(cf) {
-        return Some(format!("({} x {})", s.width, s.height));
-    }
-    None
 }
 
 unsafe fn read_cf_string_attr(elem: AXUIElementRef, key: &str) -> Option<String> {
-    let v = ax_copy_attr(elem, key)?;
-    let s = cfstring_to_string(v);
-    ax_release(v);
-    s
+    unsafe {
+        let v = ax_copy_attr(elem, key)?;
+        let s = cfstring_to_string(v);
+        ax_release(v);
+        s
+    }
 }
 
 /// Like `read_cf_string_attr` but accepts numbers / booleans / AXValues too
 /// (used for `AXValue`, which on macOS can be almost anything depending on
 /// the role).
 unsafe fn read_cf_value_attr(elem: AXUIElementRef, key: &str) -> Option<String> {
-    let v = ax_copy_attr(elem, key)?;
-    let s = cf_to_display_string(v);
-    ax_release(v);
-    s
+    unsafe {
+        let v = ax_copy_attr(elem, key)?;
+        let s = cf_to_display_string(v);
+        ax_release(v);
+        s
+    }
 }
 
 unsafe fn read_cf_bool_attr(elem: AXUIElementRef, key: &str) -> Option<bool> {
-    let v = ax_copy_attr(elem, key)?;
-    let mut out = None;
-    if CFGetTypeID(v) == CFBooleanGetTypeID() {
-        out = Some(CFBooleanGetValue(v as CFBooleanRef) != 0);
+    unsafe {
+        let v = ax_copy_attr(elem, key)?;
+        let mut out = None;
+        if CFGetTypeID(v) == CFBooleanGetTypeID() {
+            out = Some(CFBooleanGetValue(v as CFBooleanRef) != 0);
+        }
+        ax_release(v);
+        out
     }
-    ax_release(v);
-    out
 }
 
 /// Returns `Some(point)` only if `v` is a non-null AXValueRef encoding a
 /// CGPoint. Safe to call on any CFTypeRef — non-AXValue inputs return `None`.
 unsafe fn ax_value_to_point(v: CFTypeRef) -> Option<CGPoint> {
-    if v.is_null() {
-        return None;
+    unsafe {
+        if v.is_null() {
+            return None;
+        }
+        let av = v as AXValueRef;
+        if AXValueGetType(av) != K_AX_VALUE_CGPOINT {
+            return None;
+        }
+        let mut pt = CGPoint { x: 0.0, y: 0.0 };
+        if !AXValueGetValue(av, K_AX_VALUE_CGPOINT, &mut pt as *mut _ as *mut c_void) {
+            return None;
+        }
+        Some(pt)
     }
-    let av = v as AXValueRef;
-    if AXValueGetType(av) != K_AX_VALUE_CGPOINT {
-        return None;
-    }
-    let mut pt = CGPoint { x: 0.0, y: 0.0 };
-    if !AXValueGetValue(av, K_AX_VALUE_CGPOINT, &mut pt as *mut _ as *mut c_void) {
-        return None;
-    }
-    Some(pt)
 }
 
 unsafe fn ax_value_to_size(v: CFTypeRef) -> Option<CGSize> {
-    if v.is_null() {
-        return None;
+    unsafe {
+        if v.is_null() {
+            return None;
+        }
+        let av = v as AXValueRef;
+        if AXValueGetType(av) != K_AX_VALUE_CGSIZE {
+            return None;
+        }
+        let mut sz = CGSize {
+            width: 0.0,
+            height: 0.0,
+        };
+        if !AXValueGetValue(av, K_AX_VALUE_CGSIZE, &mut sz as *mut _ as *mut c_void) {
+            return None;
+        }
+        Some(sz)
     }
-    let av = v as AXValueRef;
-    if AXValueGetType(av) != K_AX_VALUE_CGSIZE {
-        return None;
-    }
-    let mut sz = CGSize {
-        width: 0.0,
-        height: 0.0,
-    };
-    if !AXValueGetValue(av, K_AX_VALUE_CGSIZE, &mut sz as *mut _ as *mut c_void) {
-        return None;
-    }
-    Some(sz)
 }
 
 unsafe fn read_global_frame(elem: AXUIElementRef) -> Option<(f64, f64, f64, f64)> {
-    let pos = ax_copy_attr(elem, "AXPosition")?;
-    let size = ax_copy_attr(elem, "AXSize")?;
-    let pt = ax_value_to_point(pos);
-    let sz = ax_value_to_size(size);
-    ax_release(pos);
-    ax_release(size);
-    let pt = pt?;
-    let sz = sz?;
-    Some((pt.x, pt.y, sz.width, sz.height))
+    unsafe {
+        let pos = ax_copy_attr(elem, "AXPosition")?;
+        let size = ax_copy_attr(elem, "AXSize")?;
+        let pt = ax_value_to_point(pos);
+        let sz = ax_value_to_size(size);
+        ax_release(pos);
+        ax_release(size);
+        let pt = pt?;
+        let sz = sz?;
+        Some((pt.x, pt.y, sz.width, sz.height))
+    }
 }
 
 unsafe fn read_action_names(elem: AXUIElementRef) -> Vec<String> {
-    let mut names: CFArrayRef = std::ptr::null();
-    let st = AXUIElementCopyActionNames(elem, &mut names);
-    if st != 0 || names.is_null() {
-        return vec![];
-    }
-    let arr = CFArray::<*const c_void>::wrap_under_create_rule(names);
-    let mut out = Vec::with_capacity(arr.len() as usize);
-    for i in 0..arr.len() {
-        if let Some(s) = arr.get(i) {
-            let p = *s;
-            if !p.is_null() {
-                out.push(CFString::wrap_under_get_rule(p as CFStringRef).to_string());
+    unsafe {
+        let mut names: CFArrayRef = std::ptr::null();
+        let st = AXUIElementCopyActionNames(elem, &mut names);
+        if st != 0 || names.is_null() {
+            return vec![];
+        }
+        let arr = CFArray::<*const c_void>::wrap_under_create_rule(names);
+        let mut out = Vec::with_capacity(arr.len() as usize);
+        for i in 0..arr.len() {
+            if let Some(s) = arr.get(i) {
+                let p = *s;
+                if !p.is_null() {
+                    out.push(CFString::wrap_under_get_rule(p as CFStringRef).to_string());
+                }
             }
         }
+        out
     }
-    out
 }
 
 // ── Chromium AX tree enablement ───────────────────────────────────────────
@@ -360,31 +382,33 @@ fn enabled_pids() -> &'static Mutex<std::collections::HashSet<i32>> {
 /// the tree needs a settle delay). Native Cocoa apps reject the attribute
 /// and return `false` — they pay no settle cost.
 unsafe fn enable_chromium_accessibility(app_element: AXUIElementRef) -> bool {
-    // Try the modern attribute first (no screen-reader side effects).
-    let key = CFString::new("AXManualAccessibility");
-    let val = CFBoolean::true_value();
-    let st = AXUIElementSetAttributeValue(
-        app_element,
-        key.as_concrete_TypeRef(),
-        val.as_concrete_TypeRef() as CFTypeRef,
-    );
-    if st == 0 {
-        return true;
+    unsafe {
+        // Try the modern attribute first (no screen-reader side effects).
+        let key = CFString::new("AXManualAccessibility");
+        let val = CFBoolean::true_value();
+        let st = AXUIElementSetAttributeValue(
+            app_element,
+            key.as_concrete_TypeRef(),
+            val.as_concrete_TypeRef() as CFTypeRef,
+        );
+        if st == 0 {
+            return true;
+        }
+        // `kAXErrorAttributeUnsupported` = -25205. Anything other than that
+        // is a transient error (timeout / app busy) — don't bother with the
+        // legacy fallback, and don't claim enablement happened.
+        if st != -25205 {
+            return false;
+        }
+        // Legacy fallback for older Electron builds.
+        let key2 = CFString::new("AXEnhancedUserInterface");
+        let val2 = CFBoolean::true_value();
+        AXUIElementSetAttributeValue(
+            app_element,
+            key2.as_concrete_TypeRef(),
+            val2.as_concrete_TypeRef() as CFTypeRef,
+        ) == 0
     }
-    // `kAXErrorAttributeUnsupported` = -25205. Anything other than that
-    // is a transient error (timeout / app busy) — don't bother with the
-    // legacy fallback, and don't claim enablement happened.
-    if st != -25205 {
-        return false;
-    }
-    // Legacy fallback for older Electron builds.
-    let key2 = CFString::new("AXEnhancedUserInterface");
-    let val2 = CFBoolean::true_value();
-    AXUIElementSetAttributeValue(
-        app_element,
-        key2.as_concrete_TypeRef(),
-        val2.as_concrete_TypeRef() as CFTypeRef,
-    ) == 0
 }
 
 /// Briefly pump the CF run loop to let a freshly-enabled Chromium app
@@ -403,7 +427,7 @@ struct Queued {
 
 /// Configurable knobs for the dump. Defaults mirror what the dispatch layer
 /// will call with: depth 32, focus_window_only false, capped at 4000 nodes.
-pub struct DumpOpts {
+pub(super) struct DumpOpts {
     pub max_depth: u32,
     pub max_nodes: usize,
     pub focus_window_only: bool,
@@ -419,7 +443,7 @@ impl Default for DumpOpts {
     }
 }
 
-pub fn dump_app_ax(pid: i32, opts: DumpOpts) -> BitFunResult<AppStateSnapshot> {
+pub(super) fn dump_app_ax(pid: i32, opts: DumpOpts) -> BitFunResult<AppStateSnapshot> {
     let app = unsafe { AXUIElementCreateApplication(pid) };
     if app.is_null() {
         return Err(BitFunError::tool(format!(
@@ -619,16 +643,18 @@ pub fn dump_app_ax(pid: i32, opts: DumpOpts) -> BitFunResult<AppStateSnapshot> {
 /// Best-effort: prefer `AXFocusedWindow`, then `AXMainWindow`. Returns a
 /// retained ref the caller must release (or hand to the cache).
 unsafe fn try_focused_window(app: AXUIElementRef) -> Option<AXUIElementRef> {
-    for key in ["AXFocusedWindow", "AXMainWindow"] {
-        if let Some(v) = ax_copy_attr(app, key) {
-            let elem = v as AXUIElementRef;
-            if !elem.is_null() {
-                return Some(elem);
+    unsafe {
+        for key in ["AXFocusedWindow", "AXMainWindow"] {
+            if let Some(v) = ax_copy_attr(app, key) {
+                let elem = v as AXUIElementRef;
+                if !elem.is_null() {
+                    return Some(elem);
+                }
+                ax_release(v);
             }
-            ax_release(v);
         }
+        None
     }
-    None
 }
 
 /// Render a Codex-style indented tree.

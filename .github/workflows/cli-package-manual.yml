@@ -13,9 +13,10 @@ on:
           - linux-x64
           - macos-arm64
           - macos-x64
+          - windows-x64
           - all
       ubuntu_version:
-        description: "Ubuntu runner baseline for Linux builds. Ignored for macOS."
+        description: "Ubuntu runner baseline for Linux builds. Ignored for macOS and Windows."
         required: true
         default: "22.04"
         type: choice
@@ -83,19 +84,22 @@ jobs:
 
           case "${INPUT_PLATFORM}" in
             linux-arm64)
-              MATRIX="{\"platform\":[{\"os\":\"${LINUX_ARM64_RUNNER}\",\"name\":\"linux-arm64-${LINUX_NAME_SUFFIX}\",\"target\":\"aarch64-unknown-linux-gnu\",\"can_smoke_test\":true}]}"
+              MATRIX="{\"platform\":[{\"os\":\"${LINUX_ARM64_RUNNER}\",\"name\":\"linux-arm64-${LINUX_NAME_SUFFIX}\",\"target\":\"aarch64-unknown-linux-gnu\"}]}"
               ;;
             linux-x64)
-              MATRIX="{\"platform\":[{\"os\":\"${LINUX_X64_RUNNER}\",\"name\":\"linux-x64-${LINUX_NAME_SUFFIX}\",\"target\":\"x86_64-unknown-linux-gnu\",\"can_smoke_test\":true}]}"
+              MATRIX="{\"platform\":[{\"os\":\"${LINUX_X64_RUNNER}\",\"name\":\"linux-x64-${LINUX_NAME_SUFFIX}\",\"target\":\"x86_64-unknown-linux-gnu\"}]}"
               ;;
             macos-arm64)
-              MATRIX='{"platform":[{"os":"macos-15","name":"macos-arm64","target":"aarch64-apple-darwin","can_smoke_test":true}]}'
+              MATRIX='{"platform":[{"os":"macos-15","name":"macos-arm64","target":"aarch64-apple-darwin"}]}'
               ;;
             macos-x64)
-              MATRIX='{"platform":[{"os":"macos-15-intel","name":"macos-x64","target":"x86_64-apple-darwin","can_smoke_test":true}]}'
+              MATRIX='{"platform":[{"os":"macos-15-intel","name":"macos-x64","target":"x86_64-apple-darwin"}]}'
+              ;;
+            windows-x64)
+              MATRIX='{"platform":[{"os":"windows-latest","name":"windows-x64","target":"x86_64-pc-windows-msvc"}]}'
               ;;
             all)
-              MATRIX="{\"platform\":[{\"os\":\"macos-15\",\"name\":\"macos-arm64\",\"target\":\"aarch64-apple-darwin\",\"can_smoke_test\":true},{\"os\":\"macos-15-intel\",\"name\":\"macos-x64\",\"target\":\"x86_64-apple-darwin\",\"can_smoke_test\":true},{\"os\":\"${LINUX_X64_RUNNER}\",\"name\":\"linux-x64-${LINUX_NAME_SUFFIX}\",\"target\":\"x86_64-unknown-linux-gnu\",\"can_smoke_test\":true},{\"os\":\"${LINUX_ARM64_RUNNER}\",\"name\":\"linux-arm64-${LINUX_NAME_SUFFIX}\",\"target\":\"aarch64-unknown-linux-gnu\",\"can_smoke_test\":true}]}"
+              MATRIX="{\"platform\":[{\"os\":\"macos-15\",\"name\":\"macos-arm64\",\"target\":\"aarch64-apple-darwin\"},{\"os\":\"macos-15-intel\",\"name\":\"macos-x64\",\"target\":\"x86_64-apple-darwin\"},{\"os\":\"${LINUX_X64_RUNNER}\",\"name\":\"linux-x64-${LINUX_NAME_SUFFIX}\",\"target\":\"x86_64-unknown-linux-gnu\"},{\"os\":\"${LINUX_ARM64_RUNNER}\",\"name\":\"linux-arm64-${LINUX_NAME_SUFFIX}\",\"target\":\"aarch64-unknown-linux-gnu\"},{\"os\":\"windows-latest\",\"name\":\"windows-x64\",\"target\":\"x86_64-pc-windows-msvc\"}]}"
               ;;
             *)
               echo "Unsupported platform: ${INPUT_PLATFORM}" >&2
@@ -148,7 +152,8 @@ jobs:
           shared-key: "cli-manual-v1-${{ matrix.platform.name }}"
           cache-bin: false
 
-      - name: Build bitfun-cli
+      - name: Build CLI (Unix)
+        if: runner.os != 'Windows'
         shell: bash
         run: |
           set -euo pipefail
@@ -156,16 +161,30 @@ jobs:
             --target ${{ matrix.platform.target }} \
             -p bitfun-cli
 
-      - name: Smoke test (--version)
-        if: matrix.platform.can_smoke_test == true
-        shell: bash
-        run: |
-          set -euo pipefail
-          BIN="target/${{ matrix.platform.target }}/release/bitfun-cli"
-          "$BIN" --version
-          "$BIN" --help > /dev/null
+      - name: Build CLI (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        env:
+          RUSTFLAGS: -C target-feature=+crt-static
+        run: cargo build --release --target ${{ matrix.platform.target }} -p bitfun-cli
 
-      - name: Stage tarball
+      - name: Test installer (Unix)
+        if: runner.os != 'Windows'
+        shell: bash
+        env:
+          CARGO_BUILD_TARGET: ${{ matrix.platform.target }}
+        run: bash scripts/cli/test-install-unix.sh "${{ matrix.platform.target }}"
+
+      - name: Test installer (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        env:
+          CARGO_BUILD_TARGET: ${{ matrix.platform.target }}
+          RUSTFLAGS: -C target-feature=+crt-static
+        run: ./scripts/cli/test-install-windows.ps1 -Target $env:CARGO_BUILD_TARGET
+
+      - name: Package and smoke test (Unix)
+        if: runner.os != 'Windows'
         id: stage
         shell: bash
         env:
@@ -173,56 +192,17 @@ jobs:
           TARGET: ${{ matrix.platform.target }}
         run: |
           set -euo pipefail
+          bash scripts/cli/package-unix.sh "$VERSION" "$TARGET"
 
-          STAGE_DIR="$(pwd)/dist-cli/bitfun-cli-${VERSION}-${TARGET}"
-          mkdir -p "$STAGE_DIR"
-
-          cp "target/${TARGET}/release/bitfun-cli" "$STAGE_DIR/"
-          cp LICENSE "$STAGE_DIR/" || true
-          cp README.md "$STAGE_DIR/" || true
-
-          if [[ -d "src/apps/cli/themes" ]]; then
-            cp -R "src/apps/cli/themes" "$STAGE_DIR/themes"
-          fi
-          if [[ -d "src/apps/cli/prompts" ]]; then
-            cp -R "src/apps/cli/prompts" "$STAGE_DIR/prompts"
-          fi
-
-          ARCHIVE="bitfun-cli-${VERSION}-${TARGET}.tar.gz"
-          tar -C "$(dirname "$STAGE_DIR")" -czf "$ARCHIVE" "$(basename "$STAGE_DIR")"
-
-          if command -v sha256sum >/dev/null 2>&1; then
-            sha256sum "$ARCHIVE" > "${ARCHIVE}.sha256"
-          else
-            shasum -a 256 "$ARCHIVE" > "${ARCHIVE}.sha256"
-          fi
-
-          echo "archive=$ARCHIVE" >> "$GITHUB_OUTPUT"
-          echo "checksum=${ARCHIVE}.sha256" >> "$GITHUB_OUTPUT"
-
-      - name: Smoke test packaged archive
-        shell: bash
+      - name: Package and smoke test (Windows)
+        if: runner.os == 'Windows'
+        id: stage-windows
+        shell: pwsh
         env:
-          ARCHIVE: ${{ steps.stage.outputs.archive }}
-          CHECKSUM: ${{ steps.stage.outputs.checksum }}
+          VERSION: ${{ needs.prepare.outputs.version }}
+          TARGET: ${{ matrix.platform.target }}
         run: |
-          set -euo pipefail
-
-          if command -v sha256sum >/dev/null 2>&1; then
-            sha256sum -c "$CHECKSUM"
-          else
-            shasum -a 256 -c "$CHECKSUM"
-          fi
-
-          EXTRACT_DIR="$(mktemp -d)"
-          trap 'rm -rf "$EXTRACT_DIR"' EXIT
-          tar -xzf "$ARCHIVE" -C "$EXTRACT_DIR"
-
-          shopt -s nullglob
-          BIN_CANDIDATES=("$EXTRACT_DIR"/*/bitfun-cli)
-          [[ "${#BIN_CANDIDATES[@]}" -eq 1 ]]
-          "${BIN_CANDIDATES[0]}" --version
-          "${BIN_CANDIDATES[0]}" --help > /dev/null
+          ./scripts/cli/package-windows.ps1 -Version $env:VERSION -Target $env:TARGET
 
       - name: Upload artifact
         uses: actions/upload-artifact@v6
@@ -230,5 +210,5 @@ jobs:
           name: bitfun-cli-${{ needs.prepare.outputs.version }}-${{ needs.prepare.outputs.short_sha }}-${{ matrix.platform.name }}
           if-no-files-found: error
           path: |
-            ${{ steps.stage.outputs.archive }}
-            ${{ steps.stage.outputs.checksum }}
+            ${{ steps.stage.outputs.archive || steps.stage-windows.outputs.archive }}
+            ${{ steps.stage.outputs.checksum || steps.stage-windows.outputs.checksum }}

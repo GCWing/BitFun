@@ -8,7 +8,7 @@ use ratatui::{
 use std::collections::{HashMap, HashSet, VecDeque};
 use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
 
-use super::agent_selector::{AgentItem, AgentSelectorState};
+use super::agent_selector::{AgentItem, AgentSelectorAction, AgentSelectorState};
 use super::command_menu::CommandMenuState;
 use super::command_palette::{CommandPaletteState, PaletteAction};
 use super::login_form::{LoginFormAction, LoginFormState};
@@ -185,9 +185,11 @@ pub(crate) struct ChatView {
     theme_preview_original: Option<Theme>,
 
     /// Pending MCP toggle from mouse click (consumed by caller)
-    pending_mcp_toggle: Option<String>,
+    pending_mcp_toggle: Option<McpItem>,
     /// Pending skill selector action from mouse click (consumed by caller)
     pending_skill_action: Option<SkillSelectorAction>,
+    /// Pending Agent entry action from mouse click (consumed by caller)
+    pending_agent_action: Option<AgentSelectorAction>,
     /// Pending subagent selector action from mouse click (consumed by caller)
     pending_subagent_action: Option<SubagentSelectorAction>,
 
@@ -269,6 +271,7 @@ impl ChatView {
             pending_command: None,
             pending_mcp_toggle: None,
             pending_skill_action: None,
+            pending_agent_action: None,
             pending_subagent_action: None,
             pending_theme_preview: None,
             theme_preview_original: None,
@@ -300,6 +303,8 @@ impl ChatView {
 
     pub(crate) fn set_action_state(&mut self, state: ActionState, keymap: &ResolvedKeymap) {
         self.shortcut_hints = keymap.compact_hints(state);
+        self.agent_selector
+            .set_mode_switch_allowed(!state.is_processing);
         self.command_palette.set_action_state(state);
         if self.command_menu.set_action_state(state) {
             self.command_menu

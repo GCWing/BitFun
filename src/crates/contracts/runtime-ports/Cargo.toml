@@ -12,10 +12,16 @@ crate-type = ["rlib"]
 [dependencies]
 anyhow = { workspace = true }
 async-trait = { workspace = true }
+bitfun-product-domains = { path = "../product-domains", default-features = false, optional = true }
+bitfun-core-types = { path = "../core-types" }
 serde = { workspace = true }
 serde_json = { workspace = true }
 tokio = { workspace = true }
 tokio-util = { workspace = true }
+
+[features]
+default = []
+permission = ["dep:bitfun-product-domains"]
 
 [dev-dependencies]
 tokio = { workspace = true }

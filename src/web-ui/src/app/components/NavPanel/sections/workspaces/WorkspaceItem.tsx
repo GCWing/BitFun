@@ -1,9 +1,9 @@
 import React, { lazy, Suspense, useCallback, useContext, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { createPortal } from 'react-dom';
-import { Folder, FolderOpen, MoreHorizontal, FolderSearch, Plus, ChevronDown, Trash2, RotateCcw, Copy, FileText, GitBranch, Bot, Link2, ListChecks, Loader2, Clock3 } from 'lucide-react';
+import { Folder, FolderOpen, MoreHorizontal, FolderSearch, Plus, ChevronDown, Trash2, RotateCcw, Copy, FileText, GitBranch, Bot, Link2, ListChecks, Loader2, Clock3, ShieldCheck, Pencil } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { DotMatrixArrowRightIcon } from './DotMatrixArrowRightIcon';
-import { Button, ConfirmDialog, Modal, Tooltip } from '@/component-library';
+import { Button, ConfirmDialog, InputDialog, Modal, Tooltip } from '@/component-library';
 import { useI18n } from '@/infrastructure/i18n';
 import { aiExperienceConfigService } from '@/infrastructure/config/services/AIExperienceConfigService';
 import { useWorkspaceContext } from '@/infrastructure/contexts/WorkspaceContext';
@@ -47,8 +47,18 @@ import {
 } from './workspaceGitRefreshOptions';
 
 const WorkspaceRelatedPathsDialog = lazy(() => import('./WorkspaceRelatedPathsDialog'));
+const WorkspaceProjectPermissionsDialog = lazy(() => import('./WorkspaceProjectPermissionsDialog'));
 const WorkspaceSessionBatchModal = lazy(() => import('./WorkspaceSessionBatchModal'));
 const ScheduledJobsModal = lazy(() => import('@/app/components/scheduled-jobs/ScheduledJobsModal'));
+
+const MAX_WORKSPACE_NAME_CHARS = 80;
+
+function containsWorkspaceNameControlCharacter(value: string): boolean {
+  return Array.from(value).some((character) => {
+    const codePoint = character.codePointAt(0);
+    return codePoint !== undefined && (codePoint <= 0x1f || codePoint === 0x7f);
+  });
+}
 
 interface WorkspaceItemProps {
   workspace: WorkspaceInfo;
@@ -85,6 +95,7 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
     deleteAssistantWorkspace,
     deleteWorkspace,
     resetAssistantWorkspace,
+    renameWorkspace,
   } = useWorkspaceContext();
   const { switchLeftPanelTab } = useApp();
   const openNavScene = useNavSceneStore(s => s.openNavScene);
@@ -113,6 +124,7 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
   const [deleteWorkspaceDialogOpen, setDeleteWorkspaceDialogOpen] = useState(false);
   const [resetDialogOpen, setResetDialogOpen] = useState(false);
   const [relatedPathsDialogOpen, setRelatedPathsDialogOpen] = useState(false);
+  const [projectPermissionsDialogOpen, setProjectPermissionsDialogOpen] = useState(false);
   const [isDeletingAssistant, setIsDeletingAssistant] = useState(false);
   const [isDeletingWorktree, setIsDeletingWorktree] = useState(false);
   const [isDeletingWorkspace, setIsDeletingWorkspace] = useState(false);
@@ -121,6 +133,7 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
   const [searchIndexModalOpen, setSearchIndexModalOpen] = useState(false);
   const [scheduledJobsModalOpen, setScheduledJobsModalOpen] = useState(false);
   const [sessionBatchModalOpen, setSessionBatchModalOpen] = useState(false);
+  const [renameDialogOpen, setRenameDialogOpen] = useState(false);
   const [workspaceSearchEnabled, setWorkspaceSearchEnabled] = useState(
     () => aiExperienceConfigService.getSettings().enable_workspace_search,
   );
@@ -513,6 +526,49 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
     setScheduledJobsModalOpen(true);
   }, []);
 
+  const handleOpenProjectPermissions = useCallback(() => {
+    setMenuOpen(false);
+    setProjectPermissionsDialogOpen(true);
+  }, []);
+
+  const handleRequestRename = useCallback(() => {
+    setMenuOpen(false);
+    setRenameDialogOpen(true);
+  }, []);
+
+  const validateWorkspaceName = useCallback((value: string): string | null => {
+    const normalizedName = value.trim();
+    if (!normalizedName) {
+      return t('nav.workspaces.renameDialog.validation.required');
+    }
+    if (containsWorkspaceNameControlCharacter(normalizedName)) {
+      return t('nav.workspaces.renameDialog.validation.invalidCharacters');
+    }
+    if (Array.from(normalizedName).length > MAX_WORKSPACE_NAME_CHARS) {
+      return t('nav.workspaces.renameDialog.validation.tooLong', {
+        max: MAX_WORKSPACE_NAME_CHARS,
+      });
+    }
+    return null;
+  }, [t]);
+
+  const handleRenameWorkspace = useCallback(async (name: string) => {
+    const normalizedName = name.trim();
+    if (normalizedName === workspace.name) {
+      return;
+    }
+
+    try {
+      await renameWorkspace(workspace.id, normalizedName);
+      notificationService.success(t('nav.workspaces.renamed'), { duration: 2500 });
+    } catch (error) {
+      notificationService.error(
+        error instanceof Error ? error.message : t('nav.workspaces.renameFailed'),
+        { duration: 4000 }
+      );
+    }
+  }, [renameWorkspace, t, workspace.id, workspace.name]);
+
   const handleRequestDeleteAssistant = useCallback(() => {
     setMenuOpen(false);
     setDeleteDialogOpen(true);
@@ -662,13 +718,10 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
         workspaceId: workspace.id,
         activateWorkspace: setActiveWorkspace,
       });
-    } catch (error) {
-      notificationService.error(
-        error instanceof Error ? error.message : t('nav.workspaces.createSessionFailed'),
-        { duration: 4000 }
-      );
+    } catch {
+      // createAcpChatSession records the failure through the ACP notification lifecycle.
     }
-  }, [setActiveWorkspace, t, workspace]);
+  }, [setActiveWorkspace, workspace]);
 
   const handleCreateInitSession = useCallback(async () => {
     setMenuOpen(false);
@@ -902,6 +955,17 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
                     <Clock3 size={13} />
                     <span className="bitfun-nav-panel__workspace-item-menu-label">{t('nav.scheduledJobs.open')}</span>
                   </button>
+                  <button
+                    type="button"
+                    className="bitfun-nav-panel__workspace-item-menu-item"
+                    onClick={handleOpenProjectPermissions}
+                    data-testid="nav-workspace-menu-project-permissions"
+                  >
+                    <ShieldCheck size={13} />
+                    <span className="bitfun-nav-panel__workspace-item-menu-label">
+                      {t('nav.workspaces.actions.manageProjectPermissions')}
+                    </span>
+                  </button>
                   <div className="bitfun-nav-panel__workspace-item-menu-divider" />
                   <button
                     type="button"
@@ -1009,6 +1073,15 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
               title={t('nav.scheduledJobs.title')}
               targetLabel={workspaceDisplayName}
               targetDescription={workspace.rootPath}
+            />
+          </Suspense>
+        )}
+        {projectPermissionsDialogOpen && (
+          <Suspense fallback={null}>
+            <WorkspaceProjectPermissionsDialog
+              workspace={workspace}
+              isOpen={projectPermissionsDialogOpen}
+              onClose={() => setProjectPermissionsDialogOpen(false)}
             />
           </Suspense>
         )}
@@ -1320,12 +1393,34 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
                 <button
                   type="button"
                   className="bitfun-nav-panel__workspace-item-menu-item"
+                  onClick={handleOpenProjectPermissions}
+                  data-testid="nav-workspace-menu-project-permissions"
+                >
+                  <ShieldCheck size={13} />
+                  <span className="bitfun-nav-panel__workspace-item-menu-label">
+                    {t('nav.workspaces.actions.manageProjectPermissions')}
+                  </span>
+                </button>
+                <button
+                  type="button"
+                  className="bitfun-nav-panel__workspace-item-menu-item"
                   onClick={handleOpenScheduledJobs}
                 >
                   <Clock3 size={13} />
                   <span className="bitfun-nav-panel__workspace-item-menu-label">{t('nav.scheduledJobs.open')}</span>
                 </button>
                 <div className="bitfun-nav-panel__workspace-item-menu-divider" />
+                <button
+                  type="button"
+                  className="bitfun-nav-panel__workspace-item-menu-item"
+                  onClick={handleRequestRename}
+                  data-testid="nav-workspace-menu-rename"
+                >
+                  <Pencil size={13} />
+                  <span className="bitfun-nav-panel__workspace-item-menu-label">
+                    {t('nav.workspaces.actions.rename')}
+                  </span>
+                </button>
                 {isLinkedWorktree ? (
                   <button
                     type="button"
@@ -1421,6 +1516,19 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
         />
       </div>
 
+      <InputDialog
+        isOpen={renameDialogOpen}
+        onClose={() => setRenameDialogOpen(false)}
+        onConfirm={(name) => { void handleRenameWorkspace(name); }}
+        title={t('nav.workspaces.renameDialog.title')}
+        description={t('nav.workspaces.renameDialog.description')}
+        placeholder={t('nav.workspaces.renameDialog.placeholder')}
+        defaultValue={workspace.name}
+        confirmText={t('actions.save')}
+        cancelText={t('actions.cancel')}
+        validator={validateWorkspaceName}
+        required={false}
+      />
       <BranchSelectModal
         isOpen={worktreeModalOpen}
         onClose={() => setWorktreeModalOpen(false)}
@@ -1457,6 +1565,15 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
             workspace={workspace}
             isOpen={relatedPathsDialogOpen}
             onClose={() => setRelatedPathsDialogOpen(false)}
+          />
+        </Suspense>
+      )}
+      {projectPermissionsDialogOpen && (
+        <Suspense fallback={null}>
+          <WorkspaceProjectPermissionsDialog
+            workspace={workspace}
+            isOpen={projectPermissionsDialogOpen}
+            onClose={() => setProjectPermissionsDialogOpen(false)}
           />
         </Suspense>
       )}

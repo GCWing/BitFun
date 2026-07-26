@@ -21,6 +21,10 @@ static CONFIG_UPDATE_SENDER: OnceLock<tokio::sync::broadcast::Sender<ConfigUpdat
 /// Configuration update events.
 #[derive(Debug, Clone)]
 pub enum ConfigUpdateEvent {
+    /// AI model catalog, default slots, or agent-model defaults changed.
+    /// Consumers that materialize model bindings should rebuild future-use
+    /// projections without mutating already running sessions.
+    ModelConfigurationUpdated,
     /// AI model configuration updated.
     AIModelUpdated {
         model_id: String,

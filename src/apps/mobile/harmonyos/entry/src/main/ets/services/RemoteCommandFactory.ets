@@ -129,15 +129,11 @@ export class RemoteCommandFactory {
     };
   }
 
-  static confirmTool(toolId: string, updatedInput?: Object): RemoteCommand {
-    const command: RemoteCommand = {
+  static confirmTool(toolId: string): RemoteCommand {
+    return {
       cmd: 'confirm_tool',
       tool_id: toolId
     };
-    if (updatedInput) {
-      command.updated_input = updatedInput;
-    }
-    return command;
   }
 
   static rejectTool(toolId: string, reason: string): RemoteCommand {

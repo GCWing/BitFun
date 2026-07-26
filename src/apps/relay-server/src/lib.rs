@@ -4,8 +4,8 @@
 //! on that crate directly; this facade preserves the existing import paths.
 
 pub use bitfun_relay_service::{
-    admin, db, relay, routes, AppState, DiskAssetStore, MemoryAssetStore, ResponsePayload,
-    RoomManager, WebAssetStore,
+    admin, db, page_execution, relay, routes, AppState, DiskAssetStore, MemoryAssetStore,
+    ResponsePayload, RoomManager, WebAssetStore,
 };
 
 /// Builds the shared relay router using this compatibility host's version.
@@ -15,11 +15,12 @@ pub fn build_relay_router(
     start_time: std::time::Instant,
     db: Option<std::sync::Arc<db::DbPool>>,
 ) -> axum::Router {
-    bitfun_relay_service::build_relay_router(
+    bitfun_relay_service::build_relay_router_with_page_data(
         room_manager,
         asset_store,
         start_time,
         db,
         env!("CARGO_PKG_VERSION"),
+        None,
     )
 }

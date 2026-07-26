@@ -204,10 +204,13 @@ impl ChatMode {
             name: info.name,
             description: info.description,
             level: info.level.as_str().to_string(),
+            source_slot: info.source_slot,
+            source_label: info.source_label,
             enabled: true,
             selected_for_runtime: true,
             default_enabled: true,
             is_shadowed: info.is_shadowed,
+            shadowed_by_key: info.shadowed_by_key,
         }
     }
 
@@ -217,10 +220,13 @@ impl ChatMode {
             name: info.skill.name,
             description: info.skill.description,
             level: info.skill.level.as_str().to_string(),
+            source_slot: info.skill.source_slot,
+            source_label: info.skill.source_label,
             enabled: info.effective_enabled,
             selected_for_runtime: info.selected_for_runtime,
             default_enabled: info.default_enabled,
             is_shadowed: info.skill.is_shadowed,
+            shadowed_by_key: info.skill.shadowed_by_key,
         }
     }
 
@@ -249,6 +255,7 @@ impl ChatMode {
                 workspace_root: Some(workspace.as_path()),
                 list_scope: SubagentListScope::TaskVisible,
                 include_disabled: false,
+                external_sources_supported: true,
             }))
         });
 
@@ -288,16 +295,26 @@ impl ChatMode {
                 workspace_root: Some(workspace.as_path()),
                 list_scope: SubagentListScope::RegistryManagement,
                 include_disabled: true,
+                external_sources_supported: true,
             }))
         });
 
+        let has_external_subagents = subagents
+            .iter()
+            .any(|info| info.subagent_source == Some(SubAgentSource::External));
         let subagent_items: Vec<SubagentItem> = subagents
             .into_iter()
+            .filter(|info| info.subagent_source != Some(SubAgentSource::External))
             .map(Self::subagent_item_from_info)
             .collect();
 
         if subagent_items.is_empty() {
-            chat_state.add_system_message("No subagents found.".to_string());
+            chat_state.add_system_message(if has_external_subagents {
+                "No locally manageable subagents found. Open Agents from the command palette to review imported agents."
+                    .to_string()
+            } else {
+                "No subagents found.".to_string()
+            });
             return;
         }
 
@@ -305,7 +322,7 @@ impl ChatMode {
     }
 
     fn handle_subagent_selector_action(
-        &self,
+        &mut self,
         action: SubagentSelectorAction,
         chat_view: &mut ChatView,
         chat_state: &mut ChatState,
@@ -382,6 +399,7 @@ impl ChatMode {
             Some(SubAgentSource::Builtin) => "builtin",
             Some(SubAgentSource::Project) => "project",
             Some(SubAgentSource::User) => "user",
+            Some(SubAgentSource::External) => "external",
             None => "builtin",
         }
         .to_string();
@@ -395,5 +413,4 @@ impl ChatMode {
             enabled: info.effective_enabled,
         }
     }
-
 }

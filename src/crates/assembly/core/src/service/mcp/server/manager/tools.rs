@@ -8,11 +8,13 @@ impl MCPServerManager {
         connection: Arc<MCPConnection>,
     ) -> BitFunResult<usize> {
         Self::unregister_mcp_tools(server_id).await;
-        Self::register_mcp_tools(server_id, server_name, connection).await
+        self.register_mcp_tools(server_id, server_name, connection)
+            .await
     }
 
     /// Registers MCP tools into the global tool registry.
     pub(super) async fn register_mcp_tools(
+        &self,
         server_id: &str,
         server_name: &str,
         connection: Arc<MCPConnection>,
@@ -23,9 +25,21 @@ impl MCPServerManager {
         );
 
         let mut adapter = MCPToolAdapter::new();
+        let external_workspace_scope = self
+            .ephemeral_workspace_scopes
+            .read()
+            .await
+            .get(server_id)
+            .cloned();
 
         adapter
-            .load_tools_from_server(server_id, server_name, connection)
+            .load_tools_from_server(
+                server_id,
+                server_name,
+                connection,
+                external_workspace_scope,
+                Arc::clone(&self.tool_context_policy),
+            )
             .await
             .map_err(|e| {
                 error!(

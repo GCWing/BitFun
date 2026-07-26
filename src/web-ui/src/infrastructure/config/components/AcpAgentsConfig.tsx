@@ -20,6 +20,7 @@ import {
   ConfigPageHeader,
   ConfigPageLayout,
   ConfigPageSection,
+  ConfigPageSectionStack,
 } from './common';
 import {
   ACPClientAPI,
@@ -87,16 +88,16 @@ const PRESETS: AcpClientPreset[] = [
   {
     id: 'claude-code',
     name: 'Claude Code',
-    description: 'Claude Code via the Zed ACP adapter.',
+    description: 'Claude Code via the official ACP adapter.',
     command: 'npx',
-    args: ['--yes', '@zed-industries/claude-code-acp@latest'],
+    args: ['--yes', '@agentclientprotocol/claude-agent-acp@latest'],
   },
   {
     id: 'codex',
     name: 'Codex',
-    description: 'OpenAI Codex via the Zed ACP adapter.',
+    description: 'OpenAI Codex via the official ACP adapter.',
     command: 'npx',
-    args: ['--yes', '@zed-industries/codex-acp@latest'],
+    args: ['--yes', '@agentclientprotocol/codex-acp@latest'],
   },
 ];
 
@@ -908,7 +909,7 @@ const AcpAgentsConfig: React.FC = () => {
       />
 
       <ConfigPageContent>
-        <div className="bitfun-acp-agents__manager">
+        <ConfigPageSectionStack className="bitfun-acp-agents__manager">
           <div className="bitfun-acp-agents__toolbar">
             <Input
               className="bitfun-acp-agents__search"
@@ -1481,7 +1482,7 @@ const AcpAgentsConfig: React.FC = () => {
               </div>
             )}
           </ConfigPageSection>
-        </div>
+        </ConfigPageSectionStack>
       </ConfigPageContent>
     </ConfigPageLayout>
   );

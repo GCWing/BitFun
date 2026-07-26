@@ -7,9 +7,12 @@
 #
 # What it does:
 #   1. cargo build -p bitfun-cli --release (native host arch)
-#   2. Install binary to ~/.local/bin/bitfun-cli (override with BITFUN_CLI_BIN_DIR)
+#   2. Install bitfun plus the deprecated bitfun-cli compatibility entrypoint
+#      to ~/.local/bin (override with BITFUN_CLI_BIN_DIR)
 #   3. Idempotently append a PATH block to ~/.bashrc and ~/.zshrc
-#   4. Source the matching rc for the current shell when interactive
+#   4. Print explicit current-shell and new-terminal instructions
+#   5. Restart the account daemon's auto-start service when installed, so
+#      upgrades take effect (a running daemon keeps the old binary otherwise)
 #
 # Supported hosts: Linux/macOS on amd64 (x86_64) and arm64 (aarch64).
 #
@@ -96,7 +99,7 @@ ensure_bin_dir_on_path_block() {
   local bin_dir="$1"
   cat <<EOF
 ${SHELLRC_MARKER_BEGIN}
-# Added so \`bitfun-cli\` is available in new shells after install.sh.
+# Added so \`bitfun\` is available in new shells after install.sh.
 case ":\$PATH:" in
   *":${bin_dir}:"*) ;;
   *) export PATH="${bin_dir}:\$PATH" ;;
@@ -131,38 +134,130 @@ upsert_shellrc_path() {
   fi
 }
 
-maybe_source_shellrc() {
+print_path_guidance() {
   local bin_dir="$1"
-  # Always export for the remainder of this install.sh process.
-  case ":${PATH}:" in
-    *":${bin_dir}:"*) ;;
-    *) export PATH="${bin_dir}:$PATH" ;;
-  esac
+  echo "Open a new terminal, then run: bitfun"
+  echo "Current shell: export PATH=\"${bin_dir}:\$PATH\" && bitfun"
+  echo "Direct path: ${bin_dir}/bitfun"
+}
 
-  if [ ! -t 0 ] || [ ! -t 1 ]; then
-    echo "Non-interactive shell: open a new terminal, or run:"
-    echo "  export PATH=\"${bin_dir}:\$PATH\""
-    return 0
+assert_entrypoint_pair() {
+  local primary="$1"
+  local legacy="$2"
+  local stderr_file warning
+
+  "$primary" --version >/dev/null || return 1
+  stderr_file="$(mktemp)" || return 1
+  if ! "$legacy" --version >/dev/null 2>"$stderr_file"; then
+    rm -f "$stderr_file"
+    return 1
+  fi
+  warning="$(cat "$stderr_file")"
+  rm -f "$stderr_file"
+  if [ "$warning" != 'Warning: `bitfun-cli` is deprecated; use `bitfun` instead.' ]; then
+    echo "Error: deprecated bitfun-cli entrypoint emitted an unexpected warning: $warning" >&2
+    return 1
+  fi
+}
+
+install_entrypoint_pair() {
+  local primary_source="$1"
+  local legacy_source="$2"
+  local destination="$3"
+  local stage_dir staged_primary staged_legacy primary_target legacy_target
+  local primary_backup legacy_backup
+  local primary_backed_up=0 legacy_backed_up=0 primary_committed=0 legacy_committed=0
+  local failed=0
+
+  mkdir -p "$destination"
+  stage_dir="$(mktemp -d "${destination}/.bitfun-install.XXXXXX")"
+  staged_primary="${stage_dir}/bitfun"
+  staged_legacy="${stage_dir}/bitfun-cli"
+  primary_target="${destination}/bitfun"
+  legacy_target="${destination}/bitfun-cli"
+  primary_backup="${stage_dir}/previous-bitfun"
+  legacy_backup="${stage_dir}/previous-bitfun-cli"
+
+  install -m 755 "$primary_source" "$staged_primary" || failed=1
+  if [ "$failed" -eq 0 ]; then
+    install -m 755 "$legacy_source" "$staged_legacy" || failed=1
+  fi
+  if [ "$failed" -eq 0 ]; then
+    assert_entrypoint_pair "$staged_primary" "$staged_legacy" || failed=1
+  fi
+  if [ "$failed" -eq 0 ] && { [ -e "$primary_target" ] || [ -L "$primary_target" ]; }; then
+    if mv "$primary_target" "$primary_backup"; then primary_backed_up=1; else failed=1; fi
+  fi
+  if [ "$failed" -eq 0 ] && { [ -e "$legacy_target" ] || [ -L "$legacy_target" ]; }; then
+    if mv "$legacy_target" "$legacy_backup"; then legacy_backed_up=1; else failed=1; fi
+  fi
+  if [ "$failed" -eq 0 ]; then
+    if mv "$staged_primary" "$primary_target"; then primary_committed=1; else failed=1; fi
+  fi
+  if [ "$failed" -eq 0 ]; then
+    if mv "$staged_legacy" "$legacy_target"; then legacy_committed=1; else failed=1; fi
+  fi
+  if [ "$failed" -eq 0 ]; then
+    assert_entrypoint_pair "$primary_target" "$legacy_target" || failed=1
   fi
 
-  local shell_name
-  shell_name="$(basename "${SHELL:-}")"
-  case "$shell_name" in
-    zsh)
-      # shellcheck disable=SC1090
-      source "${HOME}/.zshrc" 2>/dev/null || true
-      echo "Sourced ~/.zshrc for this session."
+  if [ "$failed" -ne 0 ]; then
+    if [ "$legacy_committed" -eq 1 ]; then rm -f "$legacy_target"; fi
+    if [ "$primary_committed" -eq 1 ]; then rm -f "$primary_target"; fi
+    if [ "$legacy_backed_up" -eq 1 ]; then mv "$legacy_backup" "$legacy_target"; fi
+    if [ "$primary_backed_up" -eq 1 ]; then mv "$primary_backup" "$primary_target"; fi
+    rm -rf "$stage_dir"
+    echo "Error: CLI installation failed; the previous entrypoint pair was restored." >&2
+    return 1
+  fi
+
+  rm -rf "$stage_dir"
+}
+
+# A running daemon keeps executing the previous binary (old inode) until it is
+# restarted; `systemctl enable --now` does NOT restart an already-active
+# service either. Restart the installed auto-start service so upgrades take
+# effect. Best-effort: skips cleanly when nothing is installed.
+restart_daemon_for_upgrade() {
+  local os unit_name agent_label config_home plist uid
+  os="$(uname -s)"
+  unit_name="bitfun-cli-daemon.service"
+  agent_label="com.bitfun.cli.daemon"
+
+  case "$os" in
+    Linux)
+      config_home="${XDG_CONFIG_HOME:-$HOME/.config}"
+      if [ -f "$config_home/systemd/user/$unit_name" ]; then
+        if command -v systemctl >/dev/null 2>&1 && systemctl --user try-restart "$unit_name" 2>/dev/null; then
+          echo "Restarted $unit_name to pick up the new binary."
+        else
+          echo "Note: daemon service installed but could not be restarted from this shell."
+          echo "Run: systemctl --user restart $unit_name"
+        fi
+        return 0
+      fi
       ;;
-    bash)
-      # shellcheck disable=SC1090
-      source "${HOME}/.bashrc" 2>/dev/null || true
-      echo "Sourced ~/.bashrc for this session."
-      ;;
-    *)
-      echo "Current SHELL=${SHELL:-unknown}: PATH updated for this install process."
-      echo "For new terminals, ensure ${bin_dir} is on PATH (bashrc/zshrc were updated)."
+    Darwin)
+      plist="$HOME/Library/LaunchAgents/${agent_label}.plist"
+      if [ -f "$plist" ]; then
+        uid="$(id -u)"
+        if launchctl kickstart -k "gui/${uid}/${agent_label}" 2>/dev/null; then
+          echo "Restarted LaunchAgent ${agent_label} to pick up the new binary."
+        else
+          echo "Note: daemon LaunchAgent installed but could not be restarted."
+          echo "Run: launchctl kickstart -k gui/${uid}/${agent_label}"
+        fi
+        return 0
+      fi
       ;;
   esac
+
+  # No auto-start service installed — warn only when a manually supervised
+  # daemon is still running the old binary.
+  if "${BIN_DIR}/bitfun" daemon status 2>/dev/null | grep -q "daemon process: running"; then
+    echo "Note: a running daemon was detected (not service-managed); restart it"
+    echo "so it picks up the new binary."
+  fi
 }
 
 usage() {
@@ -172,7 +267,8 @@ BitFun CLI install script
 Usage:
   bash install.sh [--help]
 
-Builds a release bitfun-cli and installs it for interactive use.
+Builds the release CLI and installs the primary bitfun command plus the
+deprecated bitfun-cli compatibility entrypoint.
 
 Options:
   -h, --help    Show this help
@@ -215,49 +311,50 @@ require_cargo
 mkdir -p "$BIN_DIR"
 
 echo ""
-echo "[1/3] Building bitfun-cli (release)..."
+echo "[1/4] Building bitfun and the deprecated bitfun-cli entrypoint (release)..."
 cd "$REPO_ROOT"
 # Build from workspace root so path deps resolve.
 cargo build -p bitfun-cli --release
 
 TARGET_DIR="${CARGO_TARGET_DIR:-${REPO_ROOT}/target}"
-BUILT_BIN="${TARGET_DIR}/release/bitfun-cli"
-if [ ! -x "$BUILT_BIN" ]; then
-  echo "Error: built binary not found at $BUILT_BIN"
-  exit 1
+if [ -n "${CARGO_BUILD_TARGET:-}" ]; then
+  RELEASE_DIR="${TARGET_DIR}/${CARGO_BUILD_TARGET}/release"
+else
+  RELEASE_DIR="${TARGET_DIR}/release"
 fi
+BUILT_BIN="${RELEASE_DIR}/bitfun"
+BUILT_LEGACY_BIN="${RELEASE_DIR}/bitfun-cli"
+for binary in "$BUILT_BIN" "$BUILT_LEGACY_BIN"; do
+  if [ ! -x "$binary" ]; then
+    echo "Error: built binary not found at $binary"
+    exit 1
+  fi
+done
 
 echo ""
-echo "[2/3] Installing binary..."
-install -m 755 "$BUILT_BIN" "${BIN_DIR}/bitfun-cli"
-echo "Installed: ${BIN_DIR}/bitfun-cli"
-"${BIN_DIR}/bitfun-cli" --version 2>/dev/null || "${BIN_DIR}/bitfun-cli" -V 2>/dev/null || true
+echo "[2/4] Installing binaries..."
+install_entrypoint_pair "$BUILT_BIN" "$BUILT_LEGACY_BIN" "$BIN_DIR"
+echo "Installed: ${BIN_DIR}/bitfun"
+echo "Installed deprecated compatibility entrypoint: ${BIN_DIR}/bitfun-cli"
+assert_entrypoint_pair "${BIN_DIR}/bitfun" "${BIN_DIR}/bitfun-cli"
 
 echo ""
-echo "[3/3] Configuring shell PATH..."
+echo "[3/4] Configuring shell PATH..."
 if [ "${BITFUN_CLI_SKIP_SHELLRC:-0}" = "1" ]; then
   echo "Skipped shell rc edits (BITFUN_CLI_SKIP_SHELLRC=1)."
-  case ":${PATH}:" in
-    *":${BIN_DIR}:"*) ;;
-    *) export PATH="${BIN_DIR}:$PATH" ;;
-  esac
 else
   upsert_shellrc_path "${HOME}/.bashrc" "$BIN_DIR"
   upsert_shellrc_path "${HOME}/.zshrc" "$BIN_DIR"
-  maybe_source_shellrc "$BIN_DIR"
 fi
 
 echo ""
+echo "[4/4] Restarting account daemon (if installed)..."
+restart_daemon_for_upgrade
+
+echo ""
 echo "=== Install complete ==="
-echo "Run:  bitfun-cli"
+print_path_guidance "$BIN_DIR"
+echo "Deprecated compatibility command: bitfun-cli"
 echo "Login (Peer Host): open /login inside the TUI after start."
-echo "Server use: after /login, run \`bitfun-cli daemon install\` to keep this"
+echo "Server use: after /login, run \`bitfun daemon install\` to keep this"
 echo "device reachable by your account even after exit or reboot."
-if ! command -v bitfun-cli >/dev/null 2>&1; then
-  echo ""
-  echo "Note: \`bitfun-cli\` is not yet visible in this shell's command lookup."
-  echo "Use one of:"
-  echo "  hash -r && bitfun-cli"
-  echo "  export PATH=\"${BIN_DIR}:\$PATH\" && bitfun-cli"
-  echo "  ${BIN_DIR}/bitfun-cli"
-fi

@@ -157,7 +157,14 @@
       "toolTypeMcp": "MCP 工具",
       "readonlyTool": "只讀",
       "serverToolsHeading": "該服務下的工具",
-      "skillLevel": "級別 {{level}}"
+      "skillEnabledCandidates": "已啟用候選項",
+      "unknownSkillSource": "其他來源",
+      "skillScopeUser": "使用者",
+      "skillScopeProject": "專案",
+      "skillRuntimeSelected": "執行時採用",
+      "skillRuntimeCovered": "已啟用，被 {{source}} 覆蓋",
+      "skillRuntimeEnabled": "已啟用，目前未採用",
+      "skillOrigin": "來源與範圍：{{origin}}"
     },
 
     "tabs": {

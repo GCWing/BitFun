@@ -91,13 +91,12 @@ export const PREDICTIVE_TIMEOUT_BASE_SECONDS: Record<ReviewStrategyLevel, number
 export const REVIEW_TEAM_MEMBER_ACCENT_DEFAULT = UI_EXCEPTION_ACCENTS.reviewTeam.memberDefault;
 
 export const EXTRA_MEMBER_DEFAULTS = {
-  roleName: 'Additional Specialist Reviewer',
-  description:
-    'Optional specialist coverage for strict Review with its own instructions, tools, and perspective.',
+  roleName: 'Additional Review Check',
+  description: 'An optional independent check for a specific concern chosen by the user.',
   responsibilities: [
-    'Bring an extra independent review perspective into the same target scope.',
-    'Stay tightly focused on the requested diff, commit, or workspace changes.',
-    'Return concrete findings with clear fix suggestions or follow-up steps.',
+    'Add another independent view of the current change.',
+    'Check only the requested changes and selected files.',
+    'Return concrete findings with clear fixes or follow-up steps.',
   ],
   accentColor: REVIEW_TEAM_MEMBER_ACCENT_DEFAULT,
 };
@@ -112,88 +111,30 @@ export const REVIEW_WORK_PACKET_ALLOWED_TOOLS = [
 
 export const DEFAULT_REVIEW_TEAM_CORE_ROLES: ReviewTeamCoreRoleDefinition[] = [
   {
-    key: 'businessLogic',
-    subagentId: 'ReviewBusinessLogic',
-    funName: 'Logic Reviewer',
-    roleName: 'Business Logic Reviewer',
+    key: 'worker',
+    subagentId: 'ReviewWorker',
+    funName: 'Focused Review',
+    roleName: 'On-demand Review Check',
     description:
-      'A workflow sleuth that inspects business rules, state transitions, recovery paths, and real-user correctness.',
+      'A read-only check whose focus and scope are chosen for the current change when more evidence would be useful.',
     responsibilities: [
-      'Verify workflows, state transitions, and domain rules still behave correctly.',
-      'Check boundary cases, rollback paths, and data integrity assumptions.',
-      'Focus on issues that can break user outcomes or product intent.',
+      'Check only the question assigned by the main review.',
+      'Stay within the selected scope and support conclusions with concrete evidence.',
+      'Do not modify files or repeat work already completed by the main review.',
     ],
-    accentColor: UI_EXCEPTION_ACCENTS.reviewTeam.businessLogic,
-  },
-  {
-    key: 'performance',
-    subagentId: 'ReviewPerformance',
-    funName: 'Performance Reviewer',
-    roleName: 'Performance Reviewer',
-    description:
-      'A speed-focused profiler that hunts hot paths, unnecessary work, blocking calls, and scale-sensitive regressions.',
-    responsibilities: [
-      'Inspect hot paths, large loops, and unnecessary allocations or recomputation.',
-      'Flag blocking work, N+1 patterns, and wasteful data movement.',
-      'Keep performance advice practical and aligned with the existing architecture.',
-    ],
-    accentColor: UI_EXCEPTION_ACCENTS.reviewTeam.performance,
-  },
-  {
-    key: 'security',
-    subagentId: 'ReviewSecurity',
-    funName: 'Security Reviewer',
-    roleName: 'Security Reviewer',
-    description:
-      'A boundary guardian that scans for injection risks, trust leaks, privilege mistakes, and unsafe file or command handling.',
-    responsibilities: [
-      'Review trust boundaries, auth assumptions, and sensitive data handling.',
-      'Look for injection, unsafe command execution, and exposure risks.',
-      'Highlight concrete fixes that reduce risk without broad rewrites.',
-    ],
-    accentColor: UI_EXCEPTION_ACCENTS.reviewTeam.security,
-  },
-  {
-    key: 'architecture',
-    subagentId: 'ReviewArchitecture',
-    funName: 'Architecture Reviewer',
-    roleName: 'Architecture Reviewer',
-    description:
-      'A structural watchdog that checks module boundaries, dependency direction, API contract design, and abstraction integrity.',
-    responsibilities: [
-      'Detect layer boundary violations and wrong-direction imports.',
-      'Verify API contracts, tool schemas, and transport messages stay consistent.',
-      'Ensure platform-agnostic code does not leak platform-specific details.',
-    ],
-    accentColor: UI_EXCEPTION_ACCENTS.reviewTeam.architecture,
-  },
-  {
-    key: 'frontend',
-    subagentId: 'ReviewFrontend',
-    funName: 'Frontend Reviewer',
-    roleName: 'Frontend Reviewer',
-    description:
-      'A UI specialist that checks i18n synchronization, React performance patterns, accessibility, and frontend-backend contract alignment.',
-    responsibilities: [
-      'Verify i18n key completeness across all locales.',
-      'Check React performance patterns (memoization, virtualization, effect dependencies).',
-      'Flag accessibility violations and frontend-backend API contract drift.',
-    ],
-    accentColor: UI_EXCEPTION_ACCENTS.reviewTeam.frontend,
-    conditional: true,
+    accentColor: UI_EXCEPTION_ACCENTS.reviewTeam.worker,
   },
   {
     key: 'judge',
     subagentId: 'ReviewJudge',
-    funName: 'Review Arbiter',
-    roleName: 'Review Quality Inspector',
+    funName: 'Independent Review Check',
+    roleName: 'Review Quality Check',
     description:
-      'An independent third-party arbiter that validates reviewer reports for logical consistency and evidence quality. It spot-checks specific code locations only when a claim needs verification, rather than re-reviewing the codebase from scratch.',
+      'A read-only independent check used only when a serious finding, conflicting evidence, or an uncertain conclusion needs validation.',
     responsibilities: [
-      'Validate, merge, downgrade, or reject reviewer findings based on logical consistency and evidence quality.',
-      'Filter out false positives and directionally-wrong optimization advice by examining reviewer reasoning.',
-      'Spot-check specific code locations only when a reviewer claim needs verification.',
-      'Ensure every surviving issue has an actionable fix or follow-up plan.',
+      'Confirm or reject disputed findings using concrete evidence.',
+      'Check only the claims that need independent validation.',
+      'Make sure each retained issue has a safe, practical next step.',
     ],
     accentColor: UI_EXCEPTION_ACCENTS.reviewTeam.judge,
   },
@@ -202,18 +143,26 @@ export const DEFAULT_REVIEW_TEAM_CORE_ROLES: ReviewTeamCoreRoleDefinition[] = [
 export const CORE_ROLE_IDS = new Set(
   DEFAULT_REVIEW_TEAM_CORE_ROLES.map((role) => role.subagentId),
 );
+export const LEGACY_REVIEW_WORKER_AGENT_IDS = [
+  'ReviewBusinessLogic',
+  'ReviewPerformance',
+  'ReviewSecurity',
+  'ReviewArchitecture',
+  'ReviewFrontend',
+  'ReviewGeneral',
+] as const;
 export const DISALLOWED_REVIEW_TEAM_MEMBER_IDS = new Set<string>([
   ...CORE_ROLE_IDS,
   'DeepReview',
-  'ReviewGeneral',
   'ReviewFixer',
-]);
+  ...LEGACY_REVIEW_WORKER_AGENT_IDS,
+].sort());
 
 export const FALLBACK_REVIEW_TEAM_DEFINITION: ReviewTeamDefinition = {
   id: DEFAULT_REVIEW_TEAM_ID,
-  name: 'Strict Review Coverage',
+  name: 'Code Review',
   description:
-    'A strict code-review policy where the primary reviewer works directly and may request one focused specialist or a conditional quality check.',
+    'One main review that can request focused independent checks when more evidence is needed.',
   warning:
     'Strict review may take longer and usually consumes more tokens than a standard review.',
   defaultModel: DEFAULT_REVIEW_TEAM_MODEL,
@@ -226,7 +175,6 @@ export const FALLBACK_REVIEW_TEAM_DEFINITION: ReviewTeamDefinition = {
   disallowedExtraSubagentIds: [...DISALLOWED_REVIEW_TEAM_MEMBER_IDS],
   hiddenAgentIds: [
     'DeepReview',
-    'ReviewGeneral',
     ...DEFAULT_REVIEW_TEAM_CORE_ROLES.map((role) => role.subagentId),
   ],
 };

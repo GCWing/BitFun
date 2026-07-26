@@ -13,6 +13,7 @@ use crate::service::config::types::{
 };
 use crate::util::errors::*;
 use bitfun_agent_runtime::skills::normalize_user_mode_skill_overrides;
+use bitfun_runtime_ports::PermissionRule;
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 use std::collections::{HashMap, HashSet};
@@ -122,6 +123,7 @@ fn stored_agent_profile_from_tool_selection(
     disabled_user_skills: Vec<String>,
     enabled_user_skills: Vec<String>,
     subagent_overrides: ParentSubagentOverrideConfig,
+    tool_permission_rules: Vec<PermissionRule>,
     default_tools: &[String],
     valid_tools: &HashSet<String>,
 ) -> Option<AgentProfileConfig> {
@@ -151,6 +153,7 @@ fn stored_agent_profile_from_tool_selection(
         disabled_user_skills,
         enabled_user_skills,
         subagent_overrides,
+        tool_permission_rules,
         default_tools: &default_tools,
         valid_tools,
     })
@@ -163,6 +166,7 @@ struct StoredAgentProfileOverrides<'a> {
     disabled_user_skills: Vec<String>,
     enabled_user_skills: Vec<String>,
     subagent_overrides: ParentSubagentOverrideConfig,
+    tool_permission_rules: Vec<PermissionRule>,
     default_tools: &'a [String],
     valid_tools: &'a HashSet<String>,
 }
@@ -177,6 +181,7 @@ fn stored_agent_profile_from_overrides(
         disabled_user_skills,
         enabled_user_skills,
         subagent_overrides,
+        tool_permission_rules,
         default_tools,
         valid_tools,
     } = overrides;
@@ -199,6 +204,7 @@ fn stored_agent_profile_from_overrides(
         && disabled_user_skills.is_empty()
         && enabled_user_skills.is_empty()
         && subagent_overrides.is_empty()
+        && tool_permission_rules.is_empty()
     {
         return None;
     }
@@ -210,6 +216,7 @@ fn stored_agent_profile_from_overrides(
         disabled_user_skills,
         enabled_user_skills,
         subagent_overrides,
+        tool_permission_rules,
     })
 }
 
@@ -271,6 +278,7 @@ fn canonicalize_agent_profile(
             disabled_user_skills: stored.disabled_user_skills,
             enabled_user_skills: stored.enabled_user_skills,
             subagent_overrides: stored.subagent_overrides,
+            tool_permission_rules: stored.tool_permission_rules,
             default_tools,
             valid_tools,
         },
@@ -427,12 +435,35 @@ pub async fn persist_agent_profile_from_value(agent_id: &str, config: Value) -> 
             .unwrap_or_default()
     };
 
+    let tool_permission_rules = if config
+        .as_object()
+        .map(|obj| obj.contains_key("tool_permission_rules"))
+        .unwrap_or(false)
+    {
+        match config.get("tool_permission_rules") {
+            Some(Value::Null) | None => Vec::new(),
+            Some(value) => {
+                serde_json::from_value::<Vec<PermissionRule>>(value.clone()).map_err(|error| {
+                    BitFunError::config(format!(
+                        "Invalid tool_permission_rules for mode '{}': {}",
+                        agent_id, error
+                    ))
+                })?
+            }
+        }
+    } else {
+        current
+            .map(|item| item.tool_permission_rules.clone())
+            .unwrap_or_default()
+    };
+
     if let Some(canonical) = stored_agent_profile_from_tool_selection(
         agent_id,
         enabled_tools,
         disabled_user_skills,
         enabled_user_skills,
         subagent_overrides,
+        tool_permission_rules,
         default_tools,
         &valid_tools,
     ) {
@@ -458,6 +489,7 @@ pub async fn reset_agent_profile_to_default(agent_id: &str) -> BitFunResult<()> 
         if current.disabled_user_skills.is_empty()
             && current.enabled_user_skills.is_empty()
             && current.subagent_overrides.is_empty()
+            && current.tool_permission_rules.is_empty()
         {
             stored_configs.remove(&profile_id);
         }
@@ -550,6 +582,7 @@ mod tests {
         StoredAgentProfileOverrides,
     };
     use crate::service::config::types::AgentSubagentOverrideState;
+    use bitfun_runtime_ports::{PermissionEffect, PermissionRule};
     use serde_json::Value;
     use std::collections::HashSet;
 
@@ -581,6 +614,7 @@ mod tests {
             disabled_user_skills: Vec::new(),
             enabled_user_skills: vec!["user::bitfun-system::pdf".to_string()],
             subagent_overrides: Default::default(),
+            tool_permission_rules: Vec::new(),
             default_tools: &[],
             valid_tools: &valid_tools,
         })
@@ -609,6 +643,7 @@ mod tests {
             disabled_user_skills: Vec::new(),
             enabled_user_skills: Vec::new(),
             subagent_overrides: subagent_overrides.clone(),
+            tool_permission_rules: Vec::new(),
             default_tools: &[],
             valid_tools: &valid_tools,
         })
@@ -616,6 +651,47 @@ mod tests {
 
         assert_eq!(stored.profile_id, "coding_shared");
         assert_eq!(stored.subagent_overrides, subagent_overrides);
+    }
+
+    #[test]
+    fn stored_agent_profile_from_overrides_keeps_permission_rules() {
+        let valid_tools = HashSet::new();
+        let rules = vec![PermissionRule::new(
+            "read",
+            "secrets/*",
+            PermissionEffect::Deny,
+        )];
+        let stored = stored_agent_profile_from_overrides(StoredAgentProfileOverrides {
+            agent_id: "agentic",
+            added_tools: Vec::new(),
+            removed_tools: Vec::new(),
+            disabled_user_skills: Vec::new(),
+            enabled_user_skills: Vec::new(),
+            subagent_overrides: Default::default(),
+            tool_permission_rules: rules.clone(),
+            default_tools: &[],
+            valid_tools: &valid_tools,
+        })
+        .expect("permission-only profile should be retained");
+
+        assert_eq!(stored.tool_permission_rules, rules);
+    }
+
+    #[test]
+    fn canonicalize_agent_profile_preserves_permission_rules() {
+        let raw = serde_json::json!({
+            "tool_permission_rules": [{
+                "action": "edit",
+                "resource": "generated/*",
+                "effect": "allow"
+            }]
+        });
+        let canonical = canonicalize_agent_profile("agentic", Some(&raw), &[], &HashSet::new())
+            .expect("profile should canonicalize")
+            .expect("permission-only profile should be present");
+
+        assert_eq!(canonical.tool_permission_rules.len(), 1);
+        assert_eq!(canonical.tool_permission_rules[0].action, "edit");
     }
 
     #[test]

@@ -16,8 +16,8 @@ You are running the specialized pre-landing workflow. Analyze the current branch
 When this skill is invoked by BitFun Team Mode, this skill supplies the pre-landing review lens. Use existing Task sub-agents for independent diff review tracks, then consolidate findings in the main Team session.
 
 - Do not assume a Staff Engineer sub-agent exists. Choose only from the Task tool's available agents.
-- Prefer built-in review sub-agents when available: `ReviewBusinessLogic` for correctness, `ReviewPerformance` for hot paths, `ReviewSecurity` for security-sensitive diff, and `ReviewJudge` for evidence/quality inspection after reviewers return.
-- Prefer matching custom review sub-agents over generic ones. Use `Explore` only for broad read-only investigation when specialist reviewers are unavailable.
+- Use at most one built-in `CodeReview` sub-agent for an independent pass, and put the exact correctness, performance, security, or architecture question in its prompt. Broader dynamic lens selection belongs to the unified `/review` path.
+- Prefer a matching custom review sub-agent when the user configured one. Use `Explore` only for broad read-only investigation when no review sub-agent fits.
 - Keep Task work read-only. Ask for tight findings with file paths, line references if possible, severity, confidence, and why tests might miss it.
 - The main Team orchestrator owns final severity ordering, AUTO-FIX vs ASK classification, and any code changes.
 

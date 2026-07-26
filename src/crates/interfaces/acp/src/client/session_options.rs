@@ -96,6 +96,8 @@ pub struct AcpSessionOptions {
     #[serde(default)]
     pub model_config_id: Option<String>,
     #[serde(default)]
+    pub config_options: Vec<AcpSessionConfigOption>,
+    #[serde(default)]
     pub context_usage: Option<AcpSessionContextUsage>,
 }
 
@@ -108,12 +110,52 @@ pub struct AcpSessionModelOption {
     pub description: Option<String>,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AcpSessionConfigOption {
+    pub id: String,
+    pub name: String,
+    #[serde(default)]
+    pub description: Option<String>,
+    #[serde(flatten)]
+    pub kind: AcpSessionConfigKind,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(
+    tag = "type",
+    rename_all = "snake_case",
+    rename_all_fields = "camelCase"
+)]
+pub enum AcpSessionConfigKind {
+    Select {
+        current_value: String,
+        options: Vec<AcpSessionConfigSelectOption>,
+    },
+    Boolean {
+        current_value: bool,
+    },
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AcpSessionConfigSelectOption {
+    pub value: String,
+    pub name: String,
+    #[serde(default)]
+    pub description: Option<String>,
+}
+
 pub(super) fn session_options_from_state(
     models: Option<&SessionModelState>,
     config_options: &[SessionConfigOption],
     context_usage: Option<&AcpSessionContextUsage>,
 ) -> AcpSessionOptions {
     let context_usage = context_usage.cloned();
+    let session_config_options = config_options
+        .iter()
+        .filter_map(session_config_option_from_protocol)
+        .collect();
     if let Some(models) = models.filter(|models| !models.available_models.is_empty()) {
         return AcpSessionOptions {
             current_model_id: Some(models.current_model_id.to_string()),
@@ -123,6 +165,7 @@ pub(super) fn session_options_from_state(
                 .map(model_option_from_model_info)
                 .collect(),
             model_config_id: None,
+            config_options: session_config_options,
             context_usage,
         };
     }
@@ -133,13 +176,65 @@ pub(super) fn session_options_from_state(
             current_model_id,
             available_models,
             model_config_id: Some(option.id.to_string()),
+            config_options: session_config_options,
             context_usage,
         };
     }
 
     AcpSessionOptions {
+        config_options: session_config_options,
         context_usage,
         ..Default::default()
+    }
+}
+
+fn session_config_option_from_protocol(
+    option: &SessionConfigOption,
+) -> Option<AcpSessionConfigOption> {
+    let kind = match &option.kind {
+        SessionConfigKind::Select(select) => {
+            let options = match &select.options {
+                SessionConfigSelectOptions::Ungrouped(options) => options
+                    .iter()
+                    .map(session_config_select_option_from_protocol)
+                    .collect(),
+                SessionConfigSelectOptions::Grouped(groups) => groups
+                    .iter()
+                    .flat_map(|group| {
+                        group
+                            .options
+                            .iter()
+                            .map(session_config_select_option_from_protocol)
+                    })
+                    .collect(),
+                _ => Vec::new(),
+            };
+            AcpSessionConfigKind::Select {
+                current_value: select.current_value.to_string(),
+                options,
+            }
+        }
+        SessionConfigKind::Boolean(boolean) => AcpSessionConfigKind::Boolean {
+            current_value: boolean.current_value,
+        },
+        _ => return None,
+    };
+
+    Some(AcpSessionConfigOption {
+        id: option.id.to_string(),
+        name: option.name.clone(),
+        description: option.description.clone(),
+        kind,
+    })
+}
+
+fn session_config_select_option_from_protocol(
+    option: &agent_client_protocol::schema::SessionConfigSelectOption,
+) -> AcpSessionConfigSelectOption {
+    AcpSessionConfigSelectOption {
+        value: option.value.to_string(),
+        name: option.name.clone(),
+        description: option.description.clone(),
     }
 }
 
@@ -259,6 +354,50 @@ mod tests {
                 .as_ref()
                 .map(|cost| cost.currency.as_str()),
             Some("USD")
+        );
+    }
+
+    #[test]
+    fn exposes_select_and_boolean_session_config_options() {
+        let select = SessionConfigOption::select(
+            "fast-mode",
+            "Fast mode",
+            "off",
+            vec![
+                agent_client_protocol::schema::SessionConfigSelectOption::new("off", "Off"),
+                agent_client_protocol::schema::SessionConfigSelectOption::new("on", "On"),
+            ],
+        )
+        .description("1.5x speed, increased usage");
+        let boolean = SessionConfigOption::boolean("web-search", "Web search", true);
+
+        let options = session_options_from_state(None, &[select, boolean], None);
+
+        assert_eq!(options.config_options.len(), 2);
+        assert_eq!(options.config_options[0].id, "fast-mode");
+        assert_eq!(
+            options.config_options[0].kind,
+            AcpSessionConfigKind::Select {
+                current_value: "off".to_string(),
+                options: vec![
+                    AcpSessionConfigSelectOption {
+                        value: "off".to_string(),
+                        name: "Off".to_string(),
+                        description: None,
+                    },
+                    AcpSessionConfigSelectOption {
+                        value: "on".to_string(),
+                        name: "On".to_string(),
+                        description: None,
+                    },
+                ],
+            }
+        );
+        assert_eq!(
+            options.config_options[1].kind,
+            AcpSessionConfigKind::Boolean {
+                current_value: true,
+            }
         );
     }
 

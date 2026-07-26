@@ -18,6 +18,7 @@ pub const DEFAULT_CUSTOM_MODE_TOOLS: &[&str] = &[
     "WriteStdin",
     "ExecControl",
     "Task",
+    "ListModels",
     "Skill",
     "WebSearch",
     "WebFetch",

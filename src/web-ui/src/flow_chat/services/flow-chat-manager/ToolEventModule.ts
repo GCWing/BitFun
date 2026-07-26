@@ -539,6 +539,7 @@ function handleCompleted(
       result: toolEvent.result,
       success: true,
       resultForAssistant: toolEvent.result_for_assistant,
+      imageAttachments: toolEvent.image_attachments,
       duration_ms: toolEvent.duration_ms
     },
     status: 'completed' as const,
@@ -676,7 +677,6 @@ function handleConfirmationNeeded(
     },
     requiresConfirmation: true,
     status: 'pending_confirmation',
-    confirmationTimeoutAt: typeof toolEvent.timeout_at === 'number' ? toolEvent.timeout_at : undefined,
   } as any);
 
   const state = store.getState();

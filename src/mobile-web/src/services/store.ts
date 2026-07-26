@@ -26,8 +26,12 @@ interface MobileStore {
   pairedDisplayMode: 'pro' | 'assistant' | null;
   setPairedDisplayMode: (m: 'pro' | 'assistant' | null) => void;
 
+  /** Canonical account identity used for ownership checks. Never render this value. */
   authenticatedUserId: string | null;
   setAuthenticatedUserId: (userId: string | null) => void;
+  /** Username in account mode, or the user-entered pairing id in legacy mode. */
+  authenticatedUserLabel: string | null;
+  setAuthenticatedUserLabel: (label: string | null) => void;
 
   /**
    * Current same-account control target (delegated identity flow).
@@ -82,6 +86,8 @@ export const useMobileStore = create<MobileStore>((set, get) => ({
 
   authenticatedUserId: null,
   setAuthenticatedUserId: (authenticatedUserId) => set({ authenticatedUserId }),
+  authenticatedUserLabel: null,
+  setAuthenticatedUserLabel: (authenticatedUserLabel) => set({ authenticatedUserLabel }),
 
   controlTarget: null,
   setControlTarget: (controlTarget) => set({ controlTarget }),
@@ -162,6 +168,7 @@ export const useMobileStore = create<MobileStore>((set, get) => ({
       currentAssistant: null,
       pairedDisplayMode: null,
       authenticatedUserId: null,
+      authenticatedUserLabel: null,
       controlTarget: null,
       sessions: [],
       activeSessionId: null,

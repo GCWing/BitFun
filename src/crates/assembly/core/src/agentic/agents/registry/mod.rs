@@ -2,6 +2,7 @@ mod availability;
 mod builtin;
 pub(super) mod catalog;
 mod custom;
+mod external;
 mod query;
 mod resolution;
 mod support;
@@ -13,12 +14,19 @@ pub(super) mod visibility;
 use self::types::AgentEntry;
 use self::types::{AgentCategory, SubAgentSource};
 use super::Agent;
+use crate::agentic::deep_review_policy::canonical_review_worker_agent_type;
 use log::{debug, warn};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::RwLock;
 use std::sync::{Arc, OnceLock};
+
+pub(crate) use external::external_subagent_runtime_key;
+pub use external::{
+    ExternalSubagentGenerationLease, ExternalSubagentInvocationBinding,
+    ExternalSubagentModelBinding, ExternalSubagentRegistration, ExternalSubagentRoute,
+};
 
 /// Full file-backed custom agent definition for editing.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -48,6 +56,7 @@ pub struct AgentRegistry {
     /// workspace root -> (project subagent id -> agent_entry)
     project_subagents: RwLock<HashMap<PathBuf, HashMap<String, AgentEntry>>>,
     user_custom_agents_loaded: RwLock<bool>,
+    external_subagents: Arc<external::ExternalSubagentRegistryState>,
 }
 
 impl Default for AgentRegistry {
@@ -106,14 +115,27 @@ impl AgentRegistry {
         agent_type: &str,
         workspace_root: Option<&Path>,
     ) -> Option<AgentEntry> {
+        if let Some(entry) = self.external_subagents.find_generation_entry(agent_type) {
+            return Some(entry);
+        }
         if let Some(entry) = self.read_agents().get(agent_type).cloned() {
             return Some(entry);
         }
 
-        let workspace_root = workspace_root?;
-        self.read_project_subagents()
-            .get(workspace_root)
-            .and_then(|entries| entries.get(agent_type).cloned())
+        if let Some(root) = workspace_root {
+            let project_subagents = self.read_project_subagents();
+            if let Some(entry) = project_subagents
+                .get(root)
+                .and_then(|entries| entries.get(agent_type).cloned())
+            {
+                return Some(entry);
+            }
+        }
+
+        let canonical = canonical_review_worker_agent_type(agent_type);
+        (canonical != agent_type)
+            .then(|| self.read_agents().get(canonical).cloned())
+            .flatten()
     }
 
     /// Get a agent by ID (searches all categories including hidden)
@@ -128,11 +150,16 @@ impl AgentRegistry {
 
     /// Check if an agent exists
     pub fn check_agent_exists(&self, agent_type: &str) -> bool {
-        self.read_agents().contains_key(agent_type)
+        self.external_subagents.has_generation(agent_type)
+            || self.read_agents().contains_key(agent_type)
             || self
                 .read_project_subagents()
                 .values()
                 .any(|entries| entries.contains_key(agent_type))
+            || {
+                let canonical = canonical_review_worker_agent_type(agent_type);
+                canonical != agent_type && self.read_agents().contains_key(canonical)
+            }
     }
 
     /// Get a mode by ID

@@ -53,6 +53,8 @@ export interface SelectProps extends Omit<React.HTMLAttributes<HTMLDivElement>, 
   onOpenChange?: (isOpen: boolean) => void;
   triggerTestId?: string;
   dropdownTestId?: string;
+  triggerAriaLabel?: string;
+  triggerAriaLabelledBy?: string;
 }
 
 export const Select: React.FC<SelectProps> = ({
@@ -84,9 +86,14 @@ export const Select: React.FC<SelectProps> = ({
   onOpenChange,
   triggerTestId,
   dropdownTestId,
+  triggerAriaLabel,
+  triggerAriaLabelledBy,
   ...rootProps
 }) => {
   const { t } = useI18n('components');
+  const baseId = React.useId();
+  const labelId = `${baseId}-label`;
+  const listboxId = `${baseId}-listbox`;
   
   // Resolve i18n default values
   const resolvedPlaceholder = placeholder ?? t('select.placeholder');
@@ -178,6 +185,11 @@ export const Select: React.FC<SelectProps> = ({
     
     return { groups, ungrouped, hasGroups: Object.keys(groups).length > 0 };
   }, [filteredOptions]);
+
+  const displayOptions = useMemo(() => [
+    ...groupedOptions.ungrouped,
+    ...Object.values(groupedOptions.groups).flat(),
+  ], [groupedOptions]);
 
   const isSelected = useCallback((optionValue: string | number) => {
     if (multiple) {
@@ -281,6 +293,18 @@ export const Select: React.FC<SelectProps> = ({
     return true;
   }, [allowCustomValue, multiple, searchQuery, options, handleSelect, selectedValue, onChange]);
 
+  const moveHighlight = useCallback((current: number, direction: 1 | -1) => {
+    if (displayOptions.length === 0) return -1;
+    let index = current;
+    for (let count = 0; count < displayOptions.length; count += 1) {
+      index += direction;
+      if (index < 0) index = displayOptions.length - 1;
+      if (index >= displayOptions.length) index = 0;
+      if (!displayOptions[index]?.disabled) return index;
+    }
+    return -1;
+  }, [displayOptions]);
+
   const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
     if (disabled) return;
 
@@ -289,8 +313,8 @@ export const Select: React.FC<SelectProps> = ({
         e.preventDefault();
         if (!isOpen) {
           setIsOpen(true);
-        } else if (highlightedIndex >= 0 && highlightedIndex < filteredOptions.length) {
-          handleSelect(filteredOptions[highlightedIndex]);
+        } else if (highlightedIndex >= 0 && highlightedIndex < displayOptions.length) {
+          handleSelect(displayOptions[highlightedIndex]);
         } else if (allowCustomValue && searchQuery.trim()) {
           handleCustomValueSubmit();
         }
@@ -307,10 +331,9 @@ export const Select: React.FC<SelectProps> = ({
         isKeyboardNavigation.current = true;
         if (!isOpen) {
           setIsOpen(true);
+          setHighlightedIndex(moveHighlight(-1, 1));
         } else {
-          setHighlightedIndex(prev => 
-            prev < filteredOptions.length - 1 ? prev + 1 : prev
-          );
+          setHighlightedIndex((previous) => moveHighlight(previous, 1));
         }
         break;
         
@@ -318,7 +341,10 @@ export const Select: React.FC<SelectProps> = ({
         e.preventDefault();
         isKeyboardNavigation.current = true;
         if (isOpen) {
-          setHighlightedIndex(prev => prev > 0 ? prev - 1 : 0);
+          setHighlightedIndex((previous) => moveHighlight(
+            previous < 0 ? displayOptions.length : previous,
+            -1,
+          ));
         }
         break;
         
@@ -331,7 +357,8 @@ export const Select: React.FC<SelectProps> = ({
         }
         break;
     }
-  }, [disabled, isOpen, highlightedIndex, filteredOptions, handleSelect, allowCustomValue, searchQuery, handleCustomValueSubmit]);
+  }, [disabled, isOpen, highlightedIndex, displayOptions, handleSelect, allowCustomValue,
+    searchQuery, handleCustomValueSubmit, moveHighlight]);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -374,13 +401,11 @@ export const Select: React.FC<SelectProps> = ({
 
   useEffect(() => {
     if (highlightedIndex >= 0 && dropdownRef.current && isKeyboardNavigation.current) {
-      const highlightedElement = dropdownRef.current.querySelector(
-        `.select__option:nth-child(${highlightedIndex + 1})`
-      );
+      const highlightedElement = document.getElementById(`${listboxId}-option-${highlightedIndex}`);
       highlightedElement?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
       isKeyboardNavigation.current = false;
     }
-  }, [highlightedIndex]);
+  }, [highlightedIndex, listboxId]);
 
   const classNames = [
     'select',
@@ -461,12 +486,15 @@ export const Select: React.FC<SelectProps> = ({
     
     return (
       <div
+        id={`${listboxId}-option-${index}`}
         key={option.value}
         className={`select__option ${selected ? 'select__option--selected' : ''} ${
           option.disabled ? 'select__option--disabled' : ''
         } ${highlighted ? 'select__option--highlighted' : ''}`}
         onClick={() => handleSelect(option)}
-        onMouseEnter={() => setHighlightedIndex(index)}
+        onMouseEnter={() => {
+          if (!option.disabled) setHighlightedIndex(index);
+        }}
         role="option"
         aria-selected={selected}
         aria-disabled={option.disabled}
@@ -497,7 +525,7 @@ export const Select: React.FC<SelectProps> = ({
 
   return (
     <div {...rootProps} className={classNames} ref={selectRef}>
-      {label && <label className="select__label">{label}</label>}
+      {label && <div id={labelId} className="select__label">{label}</div>}
       
       <div
         className="select__trigger"
@@ -507,7 +535,13 @@ export const Select: React.FC<SelectProps> = ({
         role="combobox"
         aria-expanded={isOpen}
         aria-haspopup="listbox"
+        aria-controls={listboxId}
+        aria-activedescendant={isOpen && highlightedIndex >= 0
+          ? `${listboxId}-option-${highlightedIndex}`
+          : undefined}
         aria-disabled={disabled}
+        aria-label={triggerAriaLabel}
+        aria-labelledby={triggerAriaLabelledBy ?? (label ? labelId : undefined)}
         data-testid={triggerTestId}
       >
         {renderSelectedValue()}
@@ -531,6 +565,7 @@ export const Select: React.FC<SelectProps> = ({
 
       {isOpen && (
         <div
+          id={listboxId}
           className={`select__dropdown select__dropdown--${resolvedPlacement}`}
           ref={dropdownRef}
           role="listbox"
@@ -542,6 +577,14 @@ export const Select: React.FC<SelectProps> = ({
                 ref={searchInputRef}
                 type="text"
                 className="select__search-input"
+                role="combobox"
+                aria-label={resolvedSearchPlaceholder}
+                aria-autocomplete="list"
+                aria-expanded={isOpen}
+                aria-controls={listboxId}
+                aria-activedescendant={highlightedIndex >= 0
+                  ? `${listboxId}-option-${highlightedIndex}`
+                  : undefined}
                 placeholder={resolvedSearchPlaceholder}
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
@@ -549,8 +592,8 @@ export const Select: React.FC<SelectProps> = ({
                 onKeyDown={(e) => {
                   if (e.key === 'Enter') {
                     e.preventDefault();
-                    if (highlightedIndex >= 0 && highlightedIndex < filteredOptions.length) {
-                      handleSelect(filteredOptions[highlightedIndex]);
+                    if (highlightedIndex >= 0 && highlightedIndex < displayOptions.length) {
+                      handleSelect(displayOptions[highlightedIndex]);
                     } else if (allowCustomValue && searchQuery.trim()) {
                       handleCustomValueSubmit();
                     }
@@ -561,13 +604,14 @@ export const Select: React.FC<SelectProps> = ({
                   } else if (e.key === 'ArrowDown') {
                     e.preventDefault();
                     isKeyboardNavigation.current = true;
-                    setHighlightedIndex(prev => 
-                      prev < filteredOptions.length - 1 ? prev + 1 : prev
-                    );
+                    setHighlightedIndex((previous) => moveHighlight(previous, 1));
                   } else if (e.key === 'ArrowUp') {
                     e.preventDefault();
                     isKeyboardNavigation.current = true;
-                    setHighlightedIndex(prev => prev > 0 ? prev - 1 : 0);
+                    setHighlightedIndex((previous) => moveHighlight(
+                      previous < 0 ? displayOptions.length : previous,
+                      -1,
+                    ));
                   }
                 }}
               />
@@ -626,7 +670,12 @@ export const Select: React.FC<SelectProps> = ({
                       renderOptionItem(option, globalIndex++)
                     )}
                     {Object.entries(groupedOptions.groups).map(([groupName, groupOptions]) => (
-                      <div key={groupName} className="select__group">
+                      <div
+                        key={groupName}
+                        className="select__group"
+                        role="group"
+                        aria-label={groupName}
+                      >
                         <div className="select__group-label">{groupName}</div>
                         {groupOptions.map((option) => 
                           renderOptionItem(option, globalIndex++)

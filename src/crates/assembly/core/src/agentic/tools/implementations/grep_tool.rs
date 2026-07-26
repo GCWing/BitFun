@@ -534,10 +534,6 @@ Usage:
         true
     }
 
-    fn needs_permissions(&self, _input: Option<&Value>) -> bool {
-        false
-    }
-
     fn render_tool_use_message(
         &self,
         input: &Value,

@@ -30,7 +30,7 @@ Notes:
 | `GetToolSpec` | Direct | None | - |
 | `CallDeferredTool` | Direct | None | - |
 | `CreatePlan` | Deferred | None | - |
-| `GetFileDiff` | Deferred | `ReviewFixer`, `ReviewBusinessLogic`, `ReviewPerformance`, `ReviewSecurity`, `ReviewArchitecture`, `ReviewFrontend`, `ReviewJudge` | Direct |
+| `GetFileDiff` | Deferred | `ReviewFixer`, `ReviewWorker`, `ReviewJudge` | Direct |
 | `SessionControl` | Deferred | None | - |
 | `SessionMessage` | Deferred | None | - |
 | `SessionHistory` | Deferred | None | - |
@@ -42,7 +42,7 @@ Notes:
 | `ListMCPPrompts` | Deferred | None | - |
 | `GetMCPPrompt` | Deferred | None | - |
 | `GenerativeUI` | Deferred | None | - |
-| `Git` | Deferred | `ReviewFixer`, `ReviewBusinessLogic`, `ReviewPerformance`, `ReviewSecurity`, `ReviewArchitecture`, `ReviewFrontend`, `ReviewJudge` | Direct |
+| `Git` | Deferred | `ReviewFixer`, `ReviewWorker`, `ReviewJudge` | Direct |
 | `InitMiniApp` | Deferred | None | - |
 | `ControlHub` | Deferred | `ComputerUse` | Direct |
 | `ComputerUse` | Deferred | `ComputerUse` | Direct |
@@ -55,9 +55,5 @@ Notes:
 | `DeepResearch` | `WebSearch`, `WebFetch` |
 | `ComputerUse` | `ControlHub`, `ComputerUse` |
 | `ReviewFixer` | `GetFileDiff`, `Git` |
-| `ReviewBusinessLogic` | `GetFileDiff`, `Git` |
-| `ReviewPerformance` | `GetFileDiff`, `Git` |
-| `ReviewSecurity` | `GetFileDiff`, `Git` |
-| `ReviewArchitecture` | `GetFileDiff`, `Git` |
-| `ReviewFrontend` | `GetFileDiff`, `Git` |
+| `ReviewWorker` | `GetFileDiff`, `Git` |
 | `ReviewJudge` | `GetFileDiff`, `Git` |

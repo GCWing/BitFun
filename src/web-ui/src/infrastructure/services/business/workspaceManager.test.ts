@@ -6,6 +6,7 @@ const globalStateMocks = vi.hoisted(() => ({
   getRecentWorkspaces: vi.fn(),
   getOpenedWorkspaces: vi.fn(),
   getCurrentWorkspace: vi.fn(),
+  updateWorkspaceInfo: vi.fn(),
 }));
 
 const listenMock = vi.hoisted(() => vi.fn());
@@ -52,6 +53,7 @@ function configureGlobalState(): void {
   globalStateMocks.getRecentWorkspaces.mockResolvedValue([]);
   globalStateMocks.getOpenedWorkspaces.mockResolvedValue([]);
   globalStateMocks.getCurrentWorkspace.mockResolvedValue(null);
+  globalStateMocks.updateWorkspaceInfo.mockReset();
 }
 
 async function getFreshWorkspaceManager() {
@@ -285,6 +287,23 @@ describe('WorkspaceManager startup initialization', () => {
     expect(manager.getState().error).toBeNull();
   });
 
+  it('fails a Peer-mode rebootstrap instead of leaving workspace loading unresolved', async () => {
+    globalStateMocks.initializeWorkspaceStartupState.mockRejectedValue(
+      new Error('peer request timed out'),
+    );
+    listenMock.mockResolvedValue(() => undefined);
+    const manager = await getFreshWorkspaceManager();
+
+    await expect(manager.reinitializeForPeerModeSwitch()).rejects.toThrow(
+      'peer request timed out',
+    );
+
+    expect(manager.getState()).toMatchObject({
+      loading: false,
+      error: 'peer request timed out',
+    });
+  });
+
   it('stores the startup legacy remote workspace snapshot for one reconnect pass', async () => {
     const legacyRemoteWorkspace = {
       connectionId: 'conn-1',
@@ -312,5 +331,48 @@ describe('WorkspaceManager startup initialization', () => {
       available: false,
       workspace: null,
     });
+  });
+});
+
+describe('WorkspaceManager project rename', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    configureGlobalState();
+  });
+
+  it('updates current, opened, and recent workspace records together', async () => {
+    const workspace = {
+      id: 'project-1',
+      name: 'Original project',
+      rootPath: 'D:/workspace/project-1',
+      workspaceKind: 'normal',
+    };
+    const renamedWorkspace = {
+      ...workspace,
+      name: 'Renamed project',
+    };
+    globalStateMocks.initializeWorkspaceStartupState.mockResolvedValue({
+      cleanupRemovedCount: 0,
+      recentWorkspaces: [workspace],
+      openedWorkspaces: [workspace],
+      currentWorkspace: workspace,
+      legacyRemoteWorkspace: null,
+    });
+    globalStateMocks.updateWorkspaceInfo.mockResolvedValue(renamedWorkspace);
+    listenMock.mockResolvedValue(() => undefined);
+
+    const manager = await getFreshWorkspaceManager();
+    await manager.initialize();
+
+    await expect(manager.renameWorkspace('project-1', '  Renamed project  '))
+      .resolves.toEqual(renamedWorkspace);
+
+    expect(globalStateMocks.updateWorkspaceInfo).toHaveBeenCalledWith('project-1', {
+      name: 'Renamed project',
+    });
+    const state = manager.getState();
+    expect(state.currentWorkspace?.name).toBe('Renamed project');
+    expect(state.openedWorkspaces.get('project-1')?.name).toBe('Renamed project');
+    expect(state.recentWorkspaces[0]?.name).toBe('Renamed project');
   });
 });

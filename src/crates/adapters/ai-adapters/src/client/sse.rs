@@ -21,7 +21,18 @@ use tokio_stream::wrappers::UnboundedReceiverStream;
 use tokio_util::sync::CancellationToken;
 
 const BASE_RETRY_DELAY_MS: u64 = 500;
-/// Maximum delay applied to a `Retry-After` header value.
+/// Base delay for HTTP 429 / rate-limit retries when `Retry-After` is absent.
+///
+/// Providers frequently omit `Retry-After` (or send a useless 1s value). The
+/// previous general backoff capped at 4s (`attempt.min(3)`), so 10 attempts
+/// finished in ~90s and never waited for TPM / RPM windows to recover —
+/// especially painful when multiple subagents retry in parallel.
+const RATE_LIMIT_BASE_RETRY_DELAY_MS: u64 = 2_000;
+/// Cap for the general (non-429) exponential backoff ladder.
+const MAX_EXPONENTIAL_DELAY_MS: u64 = 30_000;
+/// Maximum exponent shift applied to retry delays (`2^n` multiplier).
+const MAX_RETRY_EXPONENT_SHIFT: u32 = 6;
+/// Maximum delay applied to a `Retry-After` header value / rate-limit backoff.
 ///
 /// Some providers (especially TPM-based rate limits on aggregator platforms
 /// like NVIDIA's integrate API) return large `Retry-After` values of 30-60
@@ -94,7 +105,21 @@ fn is_retryable_http_status(status: StatusCode) -> bool {
 }
 
 fn exponential_retry_delay_ms(attempt: usize) -> u64 {
-    BASE_RETRY_DELAY_MS * (1 << attempt.min(3))
+    let shift = u32::try_from(attempt)
+        .unwrap_or(u32::MAX)
+        .min(MAX_RETRY_EXPONENT_SHIFT);
+    BASE_RETRY_DELAY_MS
+        .saturating_mul(1u64 << shift)
+        .min(MAX_EXPONENTIAL_DELAY_MS)
+}
+
+fn rate_limit_retry_delay_ms(attempt: usize) -> u64 {
+    let shift = u32::try_from(attempt)
+        .unwrap_or(u32::MAX)
+        .min(MAX_RETRY_EXPONENT_SHIFT);
+    RATE_LIMIT_BASE_RETRY_DELAY_MS
+        .saturating_mul(1u64 << shift)
+        .min(MAX_RETRY_AFTER_DELAY_MS)
 }
 
 fn retry_after_delay_ms(headers: &HeaderMap) -> Option<u64> {
@@ -121,8 +146,22 @@ fn retry_after_delay_ms(headers: &HeaderMap) -> Option<u64> {
     .map(|delay| delay.min(MAX_RETRY_AFTER_DELAY_MS))
 }
 
-fn retry_delay_ms(attempt: usize, headers: &HeaderMap) -> u64 {
-    retry_after_delay_ms(headers).unwrap_or_else(|| exponential_retry_delay_ms(attempt))
+fn retry_delay_ms(attempt: usize, headers: &HeaderMap, status: StatusCode) -> u64 {
+    let fallback = if status == StatusCode::TOO_MANY_REQUESTS {
+        rate_limit_retry_delay_ms(attempt)
+    } else {
+        exponential_retry_delay_ms(attempt)
+    };
+
+    match retry_after_delay_ms(headers) {
+        // Honor Retry-After, but never let a tiny/zero value defeat the
+        // rate-limit ladder (common with aggregator "Retry-After: 1" responses).
+        Some(retry_after) if status == StatusCode::TOO_MANY_REQUESTS => {
+            retry_after.max(fallback).min(MAX_RETRY_AFTER_DELAY_MS)
+        }
+        Some(retry_after) if retry_after > 0 => retry_after,
+        Some(_) | None => fallback,
+    }
 }
 
 struct ManagedResponseStream {
@@ -260,7 +299,7 @@ where
                     }
 
                     if attempt < max_tries - 1 {
-                        let delay_ms = retry_delay_ms(attempt, &headers);
+                        let delay_ms = retry_delay_ms(attempt, &headers, status);
                         debug!(
                             "Retrying {} after {}ms (attempt {}, status {})",
                             label,
@@ -457,8 +496,59 @@ mod tests {
     fn retry_delay_falls_back_to_exponential_backoff() {
         let headers = HeaderMap::new();
 
-        assert_eq!(retry_delay_ms(0, &headers), 500);
-        assert_eq!(retry_delay_ms(1, &headers), 1000);
-        assert_eq!(retry_delay_ms(4, &headers), 4000);
+        assert_eq!(retry_delay_ms(0, &headers, StatusCode::BAD_GATEWAY), 500);
+        assert_eq!(retry_delay_ms(1, &headers, StatusCode::BAD_GATEWAY), 1000);
+        assert_eq!(retry_delay_ms(4, &headers, StatusCode::BAD_GATEWAY), 8_000);
+        assert_eq!(retry_delay_ms(6, &headers, StatusCode::BAD_GATEWAY), 30_000);
+        assert_eq!(retry_delay_ms(8, &headers, StatusCode::BAD_GATEWAY), 30_000);
+    }
+
+    #[test]
+    fn rate_limit_retry_uses_longer_exponential_backoff() {
+        let headers = HeaderMap::new();
+
+        assert_eq!(
+            retry_delay_ms(0, &headers, StatusCode::TOO_MANY_REQUESTS),
+            2_000
+        );
+        assert_eq!(
+            retry_delay_ms(1, &headers, StatusCode::TOO_MANY_REQUESTS),
+            4_000
+        );
+        assert_eq!(
+            retry_delay_ms(3, &headers, StatusCode::TOO_MANY_REQUESTS),
+            16_000
+        );
+        assert_eq!(
+            retry_delay_ms(5, &headers, StatusCode::TOO_MANY_REQUESTS),
+            60_000
+        );
+        assert_eq!(
+            retry_delay_ms(9, &headers, StatusCode::TOO_MANY_REQUESTS),
+            60_000
+        );
+    }
+
+    #[test]
+    fn rate_limit_retry_after_never_undercuts_exponential_floor() {
+        let mut headers = HeaderMap::new();
+        headers.insert(RETRY_AFTER, HeaderValue::from_static("1"));
+
+        // Retry-After: 1s must not collapse attempt 3 back to a 1s storm.
+        assert_eq!(
+            retry_delay_ms(3, &headers, StatusCode::TOO_MANY_REQUESTS),
+            16_000
+        );
+    }
+
+    #[test]
+    fn rate_limit_honors_longer_retry_after() {
+        let mut headers = HeaderMap::new();
+        headers.insert(RETRY_AFTER, HeaderValue::from_static("45"));
+
+        assert_eq!(
+            retry_delay_ms(0, &headers, StatusCode::TOO_MANY_REQUESTS),
+            45_000
+        );
     }
 }

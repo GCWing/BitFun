@@ -1,7 +1,11 @@
+import type { DynamicToolInfo } from '@/shared/types/agent-api';
+
 export interface SubagentEditorToolInfo {
   name: string;
   description: string;
   isReadonly: boolean;
+  needsPermissions?: boolean;
+  dynamicInfo?: DynamicToolInfo;
 }
 
 export {

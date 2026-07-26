@@ -1,3 +1,4 @@
+use crate::agentic::tools::file_permissions::file_permission_intents;
 use crate::agentic::tools::file_read_state_runtime::{
     assert_file_not_unexpectedly_modified, file_mutation_timestamp_ms, get_stored_file_read_state,
     local_file_modification_time_ms, read_current_file_content, read_state_tracking_enabled,
@@ -8,7 +9,8 @@ use crate::agentic::tools::file_tool_guidance::{
     file_tool_guidance_message, is_file_tool_guidance_message,
 };
 use crate::agentic::tools::framework::{
-    Tool, ToolPathResolution, ToolRenderOptions, ToolResult, ToolUseContext, ValidationResult,
+    PermissionIntent, Tool, ToolPathResolution, ToolRenderOptions, ToolResult, ToolUseContext,
+    ValidationResult,
 };
 use crate::agentic::tools::ToolPathOperation;
 use crate::util::errors::{BitFunError, BitFunResult};
@@ -43,7 +45,7 @@ impl<'a> ParsedWritePayload<'a> {
 }
 
 const WRITE_PAYLOAD_PATH_PREFIX: &str = "+++ ";
-const WRITE_FALLBACK_FILE_ATTEMPTS: usize = 16;
+const WRITE_FALLBACK_DIRECTORY: &str = ".bitfun/tmp";
 const LARGE_WRITE_SOFT_LINE_LIMIT: usize = 200;
 const LARGE_WRITE_SOFT_BYTE_LIMIT: usize = 20 * 1024;
 
@@ -198,20 +200,25 @@ impl FileWriteTool {
         Ok(ParsedWritePayload::Target { file_path, content })
     }
 
-    async fn unused_fallback_file_path(context: &ToolUseContext) -> BitFunResult<String> {
-        for _ in 0..WRITE_FALLBACK_FILE_ATTEMPTS {
-            let random_id = uuid::Uuid::new_v4().simple().to_string();
-            let file_path = format!("write_{}.tmp", &random_id[..6]);
-            let resolved = context.resolve_tool_path(&file_path)?;
-            context.enforce_path_operation(ToolPathOperation::Write, &resolved)?;
-            if !Self::file_exists(context, &resolved).await {
-                return Ok(file_path);
-            }
-        }
-
-        Err(BitFunError::tool(
-            "Failed to allocate a unique fallback file for Write".to_string(),
-        ))
+    fn fallback_file_path(context: &ToolUseContext) -> String {
+        let stable_id = context
+            .tool_call_id
+            .as_deref()
+            .unwrap_or("unknown")
+            .chars()
+            .rev()
+            .filter(|character| character.is_ascii_alphanumeric())
+            .take(12)
+            .collect::<String>()
+            .chars()
+            .rev()
+            .collect::<String>();
+        let stable_id = if stable_id.is_empty() {
+            "unknown"
+        } else {
+            stable_id.as_str()
+        };
+        format!("{WRITE_FALLBACK_DIRECTORY}/write_{stable_id}.tmp")
     }
 
     fn ignored_top_level_parameter_names(input: &Value) -> Vec<String> {
@@ -219,7 +226,7 @@ impl FileWriteTool {
             .as_object()
             .into_iter()
             .flat_map(|object| object.keys())
-            .filter(|name| name.as_str() != "payload")
+            .filter(|name| !matches!(name.as_str(), "payload" | "force"))
             .cloned()
             .collect::<Vec<_>>();
         parameter_names.sort();
@@ -234,7 +241,7 @@ impl FileWriteTool {
     ) -> ToolResult {
         let mut assistant_message = if missing_path_fallback {
             format!(
-                "The Write payload did not start with the required '+++ {{file_path}}' marker. The entire payload was saved to {}. Rename this temporary file to the intended path before continuing; this way, you do not need to rewrite the entire content.",
+                "The Write payload did not start with the required '+++ {{file_path}}' marker. The entire payload was saved to {}. Use your shell tool to rename this file to the intended path instead of calling Write to resubmit the same content.",
                 logical_path
             )
         } else {
@@ -288,7 +295,7 @@ Parameter: `payload` (a single string)
 - Format: `+++ {file_path}\n{file_content}`
 - This is a path-first Write payload format: the first line uses Git's `+++` marker to specify the target file, but content lines do NOT need a leading `+`. Do not include `---`, `@@`, or other Git diff headers.
 - `{file_path}` must be an absolute path or an exact `bitfun://...` URI. Everything after the first newline is the complete content to write to that file.
-- The `+++ ` marker is required. If it is missing or has no file path, the tool saves the entire `payload` unchanged to `write_{random id}.tmp` in the workspace root.
+- The `+++ ` marker is required. If it is missing or has no file path, the tool saves the entire `payload` unchanged to `.bitfun/tmp/write_{suffix}.tmp` in the workspace.
 - Do NOT pass `path`, `file_path`, or `content`, etc. They are not valid parameters for this tool. Only `payload` is accepted.
 
 Usage:
@@ -371,8 +378,17 @@ impl Tool for FileWriteTool {
         false
     }
 
-    fn needs_permissions(&self, _input: Option<&Value>) -> bool {
-        true
+    fn permission_intents(
+        &self,
+        input: &Value,
+        context: &ToolUseContext,
+    ) -> BitFunResult<Vec<PermissionIntent>> {
+        let parsed = Self::parse_payload(input).map_err(BitFunError::validation)?;
+        let file_path = match parsed {
+            ParsedWritePayload::Target { file_path, .. } => file_path.to_string(),
+            ParsedWritePayload::MissingPath { .. } => Self::fallback_file_path(context),
+        };
+        file_permission_intents("edit", [file_path.as_str()], context)
     }
 
     async fn validate_input(
@@ -403,14 +419,29 @@ impl Tool for FileWriteTool {
             None
         };
 
+        if let ParsedWritePayload::Target { file_path, .. } = &parsed {
+            let force_requested = input.get("force").and_then(Value::as_bool).unwrap_or(false);
+            if let Some(rejection) = crate::agentic::execution::edit_constraint_guard::check_write(
+                context,
+                "Write",
+                "write",
+                file_path,
+                force_requested,
+            )
+            .await
+            {
+                return rejection;
+            }
+        }
+
         if let Some(ctx) = context {
             let preflight_error = match &parsed {
                 ParsedWritePayload::Target { file_path, .. } => {
                     Self::preflight_write_error(ctx, file_path).await
                 }
                 ParsedWritePayload::MissingPath { .. } => {
-                    let fallback_path = "write_000000.tmp";
-                    match ctx.resolve_tool_path(fallback_path) {
+                    let fallback_path = Self::fallback_file_path(ctx);
+                    match ctx.resolve_tool_path(&fallback_path) {
                         Ok(resolved) => ctx
                             .enforce_path_operation(ToolPathOperation::Write, &resolved)
                             .err()
@@ -485,11 +516,9 @@ impl Tool for FileWriteTool {
             ParsedWritePayload::Target { file_path, content } => {
                 (file_path.to_string(), content.to_string(), false)
             }
-            ParsedWritePayload::MissingPath { content } => (
-                Self::unused_fallback_file_path(context).await?,
-                content.to_string(),
-                true,
-            ),
+            ParsedWritePayload::MissingPath { content } => {
+                (Self::fallback_file_path(context), content.to_string(), true)
+            }
         };
 
         let resolved = context.resolve_tool_path(&file_path)?;
@@ -527,6 +556,19 @@ impl Tool for FileWriteTool {
                 .map_err(|e| BitFunError::tool(format!("Failed to write file: {}", e)))?;
             let timestamp_ms = file_mutation_timestamp_ms(context, &resolved).await;
             update_file_read_state_after_mutation(context, &resolved, &content, timestamp_ms);
+            crate::agentic::execution::edit_constraint_guard::record_mutation_applied(
+                context,
+                "Write",
+                "write",
+                &resolved.logical_path,
+            );
+            if !file_already_exists {
+                crate::agentic::execution::edit_constraint_guard::remember_agent_created_file(
+                    context,
+                    &resolved.logical_path,
+                )
+                .await;
+            }
 
             let result = Self::write_success_result(
                 &resolved.logical_path,
@@ -549,6 +591,19 @@ impl Tool for FileWriteTool {
 
         let timestamp_ms = file_mutation_timestamp_ms(context, &resolved).await;
         update_file_read_state_after_mutation(context, &resolved, &content, timestamp_ms);
+        crate::agentic::execution::edit_constraint_guard::record_mutation_applied(
+            context,
+            "Write",
+            "write",
+            &resolved.logical_path,
+        );
+        if !file_already_exists {
+            crate::agentic::execution::edit_constraint_guard::remember_agent_created_file(
+                context,
+                &resolved.logical_path,
+            )
+            .await;
+        }
 
         let result = Self::write_success_result(
             &resolved.logical_path,
@@ -729,6 +784,30 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn validate_input_rejects_stale_force_without_runtime_context() {
+        let tool = FileWriteTool::new();
+        let validation = tool
+            .validate_input(
+                &json!({
+                    "payload": "+++ new.txt\nalpha",
+                    "force": true
+                }),
+                None,
+            )
+            .await;
+
+        assert!(!validation.result);
+        assert_eq!(validation.error_code, Some(403));
+        assert_eq!(
+            validation
+                .meta
+                .as_ref()
+                .and_then(|meta| meta["guard_decision"].as_str()),
+            Some("force_denied")
+        );
+    }
+
+    #[tokio::test]
     async fn call_impl_accepts_path_only_for_empty_file() {
         let root = std::env::temp_dir().join(format!("bitfun-write-test-{}", uuid::Uuid::new_v4()));
         std::fs::create_dir_all(&root).expect("create temp workspace");
@@ -834,32 +913,38 @@ mod tests {
         }
     }
 
+    #[test]
+    fn fallback_file_path_uses_workspace_tmp_directory_and_tool_call_id_suffix() {
+        let mut context = local_context(PathBuf::from("C:/workspace"));
+        context.tool_call_id = Some("toolcall-0123456789abcdef".to_string());
+
+        assert_eq!(
+            FileWriteTool::fallback_file_path(&context),
+            ".bitfun/tmp/write_456789abcdef.tmp"
+        );
+    }
+
     #[tokio::test]
     async fn call_impl_preserves_malformed_payload_in_workspace_temp_file() {
         let root = std::env::temp_dir().join(format!("bitfun-write-test-{}", uuid::Uuid::new_v4()));
         std::fs::create_dir_all(&root).expect("create temp workspace");
         let original_payload = "def main():\n    print(\"Hello world\")";
 
+        let mut context = local_context(root.clone());
+        context.tool_call_id = Some("fallback123".to_string());
         let results = FileWriteTool::new()
-            .call(
-                &json!({ "payload": original_payload }),
-                &local_context(root.clone()),
-            )
+            .call(&json!({ "payload": original_payload }), &context)
             .await
             .expect("malformed payload should be preserved");
 
-        let entries = std::fs::read_dir(&root)
-            .expect("read workspace root")
+        let fallback_directory = root.join(".bitfun").join("tmp");
+        let entries = std::fs::read_dir(&fallback_directory)
+            .expect("read workspace fallback directory")
             .collect::<Result<Vec<_>, _>>()
             .expect("collect workspace entries");
         assert_eq!(entries.len(), 1);
         let file_name = entries[0].file_name().to_string_lossy().into_owned();
-        assert!(file_name.starts_with("write_"));
-        assert!(file_name.ends_with(".tmp"));
-        assert_eq!(file_name.len(), "write_000000.tmp".len());
-        assert!(file_name[6..12]
-            .chars()
-            .all(|character| character.is_ascii_hexdigit()));
+        assert_eq!(file_name, "write_fallback123.tmp");
         assert_eq!(
             std::fs::read_to_string(entries[0].path()).expect("read fallback file"),
             original_payload
@@ -885,7 +970,7 @@ mod tests {
         assert!(result_for_assistant
             .as_deref()
             .unwrap_or_default()
-            .contains("Rename this temporary file"));
+            .contains("Use your shell tool to rename this file"));
 
         let _ = std::fs::remove_dir_all(&root);
     }

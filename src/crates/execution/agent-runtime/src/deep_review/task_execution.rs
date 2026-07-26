@@ -5,6 +5,7 @@
 //! TaskTool presentation facts. Product assembly/core keeps concrete
 //! task launch, event emission, queue sleeping, and runtime state mutation.
 
+use super::constants::{canonical_review_worker_agent_type, REVIEW_WORKER_AGENT_TYPE};
 use super::incremental_cache::DeepReviewIncrementalCache;
 use super::{
     classify_deep_review_capacity_error, DeepReviewCapacityFailFastReason,
@@ -689,12 +690,30 @@ fn packet_id_from_description(description: Option<&str>) -> Option<String> {
     (!packet_id.is_empty()).then(|| packet_id.to_string())
 }
 
-fn packet_belongs_to_subagent(packet: &Value, subagent_type: &str) -> bool {
+fn packet_subagent_match_rank(packet: &Value, subagent_type: &str) -> u8 {
     string_for_any_key(
         packet,
         &["subagentId", "subagent_id", "subagentType", "subagent_type"],
     )
-    .is_some_and(|value| value == subagent_type)
+    .map_or(0, |value| {
+        if value == subagent_type {
+            return 2;
+        }
+        let one_side_is_current_worker =
+            value == REVIEW_WORKER_AGENT_TYPE || subagent_type == REVIEW_WORKER_AGENT_TYPE;
+        if one_side_is_current_worker
+            && canonical_review_worker_agent_type(value)
+                == canonical_review_worker_agent_type(subagent_type)
+        {
+            1
+        } else {
+            0
+        }
+    })
+}
+
+fn packet_belongs_to_subagent(packet: &Value, subagent_type: &str) -> bool {
+    packet_subagent_match_rank(packet, subagent_type) > 0
 }
 
 fn packet_id_for_manifest_packet(packet: &Value) -> Option<&str> {
@@ -719,19 +738,22 @@ pub fn deep_review_packet_id_for_cache(
             .then_some(description_packet_id);
     }
 
-    let mut matches = packets.iter().filter_map(|packet| {
-        if packet_belongs_to_subagent(packet, subagent_type) {
-            packet_id_for_manifest_packet(packet).map(str::to_string)
-        } else {
-            None
+    for rank in [2, 1] {
+        let mut matches = packets.iter().filter_map(|packet| {
+            (packet_subagent_match_rank(packet, subagent_type) == rank)
+                .then(|| packet_id_for_manifest_packet(packet).map(str::to_string))
+                .flatten()
+        });
+        if let Some(packet_id) = matches.next() {
+            return if matches.next().is_some() {
+                None
+            } else {
+                Some(packet_id)
+            };
         }
-    });
-    let packet_id = matches.next()?;
-    if matches.next().is_some() {
-        None
-    } else {
-        Some(packet_id)
     }
+
+    None
 }
 
 pub fn attach_deep_review_cache(run_manifest: &mut Value, cache_value: Option<Value>) {
@@ -1667,6 +1689,31 @@ mod tests {
 
         assert_eq!(cache_hit.packet_id, "reviewer:ReviewBusinessLogic");
         assert_eq!(cache_hit.cached_output, "Logic finding");
+    }
+
+    #[test]
+    fn current_worker_recovers_launch_batch_metadata_from_a_historical_packet() {
+        let manifest = json!({
+            "workPackets": [{
+                "packetId": "managed-review:batch-1-of-1",
+                "phase": "reviewer",
+                "subagentId": "ReviewGeneral",
+                "launchBatch": 1
+            }]
+        });
+
+        let info = deep_review_launch_batch_for_task(
+            "ReviewWorker",
+            Some("[packet managed-review:batch-1-of-1] Review the assigned files"),
+            Some(&manifest),
+        )
+        .expect("the canonical worker should retain historical packet admission metadata");
+
+        assert_eq!(
+            info.packet_id.as_deref(),
+            Some("managed-review:batch-1-of-1")
+        );
+        assert_eq!(info.launch_batch, 1);
     }
 
     #[test]

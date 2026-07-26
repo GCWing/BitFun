@@ -11,6 +11,7 @@ pub use bitfun_core_types::SessionKind;
 pub use layout::SessionStorageLayout;
 pub use lineage::{
     apply_session_lineage, build_branched_session_metadata, collect_hidden_subagent_cascade,
+    format_branch_session_name, resolve_branch_session_lineage, BranchSessionLineage,
     BranchSessionMetadataFacts, SessionBranchRequest, SessionBranchResult,
 };
 pub use memory_workspace::{
@@ -19,11 +20,11 @@ pub use memory_workspace::{
     MemoryWorkspaceDiff, MemoryWorkspaceGitError,
 };
 pub use metadata::{
-    build_session_index_snapshot, build_session_metadata, merge_session_custom_metadata,
-    refresh_session_metadata_from_turns, remove_session_index_entry, set_deep_review_cache,
-    set_deep_review_run_manifest, set_review_target_evidence, set_session_relationship,
-    try_refresh_session_metadata_for_saved_turn, upsert_session_index_entry,
-    SessionMetadataBuildFacts,
+    build_session_index_snapshot, build_session_metadata, estimate_turn_message_count,
+    merge_session_custom_metadata, refresh_session_metadata_from_turns, remove_session_index_entry,
+    set_deep_review_cache, set_deep_review_run_manifest, set_review_target_evidence,
+    set_session_relationship, try_refresh_session_metadata_for_saved_turn,
+    upsert_session_index_entry, SessionMetadataBuildFacts,
 };
 pub use metadata_store::{SessionMetadataStore, SessionMetadataStoreError};
 pub use migration::{

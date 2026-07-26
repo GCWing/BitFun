@@ -292,13 +292,25 @@ impl PtyService {
 
     /// Shutdown a PTY process
     pub async fn shutdown(&self, id: u32, immediate: bool) -> TerminalResult<()> {
-        let process = {
-            let mut processes = self.processes.write().await;
-            processes.remove(&id)
+        let controller = {
+            let processes = self.processes.read().await;
+            processes.get(&id).map(|process| process.controller.clone())
         };
 
-        if let Some(process) = process {
-            process.controller.shutdown(immediate).await?;
+        if let Some(controller) = controller {
+            if !controller.is_running() {
+                self.processes.write().await.remove(&id);
+                return Ok(());
+            }
+            match controller.shutdown(immediate).await {
+                Ok(()) => {
+                    self.processes.write().await.remove(&id);
+                }
+                Err(TerminalError::ProcessNotRunning) if !controller.is_running() => {
+                    self.processes.write().await.remove(&id);
+                }
+                Err(error) => return Err(error),
+            }
         }
 
         Ok(())
@@ -374,5 +386,54 @@ impl PtyService {
 impl Drop for PtyService {
     fn drop(&mut self) {
         // Note: Processes should be shut down explicitly before dropping
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::PtyService;
+    use crate::config::{ShellConfig, TerminalConfig};
+    use crate::shell::ShellType;
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn shutdown_evicts_a_process_whose_controller_already_confirmed_exit() {
+        let service = PtyService::new(TerminalConfig::default());
+        let (executable, shell_type) = if cfg!(windows) {
+            ("cmd.exe", ShellType::Cmd)
+        } else {
+            ("/bin/sh", ShellType::Sh)
+        };
+        let process_id = service
+            .create_process(
+                ShellConfig {
+                    executable: executable.to_string(),
+                    ..ShellConfig::default()
+                },
+                shell_type,
+                80,
+                24,
+            )
+            .await
+            .expect("create test PTY");
+        let controller = service
+            .processes
+            .read()
+            .await
+            .get(&process_id)
+            .expect("managed process")
+            .controller
+            .clone();
+
+        controller
+            .shutdown(true)
+            .await
+            .expect("confirm child exit before service eviction");
+        assert!(service.has_process(process_id).await);
+
+        service
+            .shutdown(process_id, true)
+            .await
+            .expect("stale process eviction must be idempotent");
+        assert!(!service.has_process(process_id).await);
     }
 }

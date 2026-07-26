@@ -193,6 +193,10 @@ impl SessionEvidenceLedger {
         Self::default()
     }
 
+    pub fn delete_session(&self, session_id: &str) -> bool {
+        self.events_by_session.remove(session_id).is_some()
+    }
+
     pub fn append(&self, event: EvidenceLedgerEvent) -> EvidenceLedgerEvent {
         self.events_by_session
             .entry(event.session_id.clone())
@@ -399,6 +403,24 @@ mod tests {
         );
         assert!(ledger.events_for_turn("session-a", "other-turn").is_empty());
         assert!(ledger.events_for_turn("other-session", "turn-a").is_empty());
+    }
+
+    #[test]
+    fn deleting_a_session_releases_its_evidence_events() {
+        let ledger = SessionEvidenceLedger::new();
+        ledger.append(EvidenceLedgerEvent::new(
+            "session-a",
+            "turn-a",
+            "Task",
+            EvidenceLedgerTargetKind::Subagent,
+            "Review",
+            EvidenceLedgerEventStatus::Created,
+            "Started",
+        ));
+
+        assert!(ledger.delete_session("session-a"));
+        assert!(ledger.events_for_turn("session-a", "turn-a").is_empty());
+        assert!(!ledger.delete_session("session-a"));
     }
 
     #[test]

@@ -969,11 +969,7 @@ fn format_scheduled_job_user_input(
 }
 
 fn scheduled_job_policy() -> DialogSubmissionPolicy {
-    DialogSubmissionPolicy::new(
-        DialogTriggerSource::ScheduledJob,
-        DialogQueuePriority::Low,
-        true,
-    )
+    DialogSubmissionPolicy::new(DialogTriggerSource::ScheduledJob, DialogQueuePriority::Low)
 }
 
 fn now_ms() -> i64 {

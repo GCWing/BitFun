@@ -59,11 +59,7 @@ export const UI_EXCEPTION_ACCENTS = {
   },
   reviewTeam: {
     memberDefault: EXCEPTION_ACCENT.neutral,
-    businessLogic: EXCEPTION_ACCENT.primary,
-    performance: EXCEPTION_ACCENT.warning,
-    security: EXCEPTION_ACCENT.error,
-    architecture: EXCEPTION_ACCENT.info,
-    frontend: EXCEPTION_ACCENT.success,
+    worker: EXCEPTION_ACCENT.primary,
     judge: EXCEPTION_ACCENT.secondary,
   },
   tealAction: EXCEPTION_ACCENT.teal,

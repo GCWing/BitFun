@@ -26,10 +26,10 @@ pub use budget::{
 };
 pub use concurrency_policy::{DeepReviewConcurrencyPolicy, DeepReviewEffectiveConcurrencySnapshot};
 pub use constants::{
+    canonical_review_worker_agent_type, is_review_worker_agent_type,
     CONDITIONAL_REVIEWER_AGENT_TYPES, CORE_REVIEWER_AGENT_TYPES, DEEP_REVIEW_AGENT_TYPE,
-    REVIEWER_ARCHITECTURE_AGENT_TYPE, REVIEWER_BUSINESS_LOGIC_AGENT_TYPE,
-    REVIEWER_FRONTEND_AGENT_TYPE, REVIEWER_GENERAL_AGENT_TYPE, REVIEWER_PERFORMANCE_AGENT_TYPE,
-    REVIEWER_SECURITY_AGENT_TYPE, REVIEW_FIXER_AGENT_TYPE, REVIEW_JUDGE_AGENT_TYPE,
+    LEGACY_REVIEW_WORKER_AGENT_TYPES, REVIEW_FIXER_AGENT_TYPE, REVIEW_JUDGE_AGENT_TYPE,
+    REVIEW_WORKER_AGENT_TYPE,
 };
 pub use diagnostics::DeepReviewRuntimeDiagnostics;
 pub use execution_policy::{

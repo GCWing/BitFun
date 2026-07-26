@@ -49,6 +49,7 @@ import {
   updateImageAnalysisItem as updateImageAnalysisItemModule,
   updateSessionMetadata,
 } from './flow-chat-manager';
+import { installPeerSessionRefresh } from './flow-chat-manager/PeerSessionRefreshModule';
 
 const log = createLogger('FlowChatManager');
 
@@ -61,6 +62,7 @@ export class FlowChatManager {
   private eventListenerCleanup: (() => void) | null = null;
   private initializationRequests = new Map<string, Promise<boolean>>();
   private latestInitializationRequestKey: string | null = null;
+  private peerSessionRefreshCleanup: (() => void) | null = null;
   private disposed = false;
 
   private constructor() {
@@ -88,6 +90,7 @@ export class FlowChatManager {
     
     this.agentService = AgentService.getInstance();
     installPendingQueueDrainListener(this.context);
+    this.peerSessionRefreshCleanup = installPeerSessionRefresh(this.context);
   }
 
   /** Public hook used by the queue panel "send now" fallback to drain head item. */
@@ -322,7 +325,10 @@ export class FlowChatManager {
       return hasHistoricalSessions;
     } catch (error) {
       log.error('Initialization failed', error);
-      return false;
+      // Must not return false: callers treat false as "no history → create
+      // session", which in Peer Device Mode can create on the peer with a
+      // stale controller workspace path.
+      throw error;
     }
   }
 
@@ -383,6 +389,9 @@ export class FlowChatManager {
     this.cleanupEventListeners();
     this.initializationRequests.clear();
     this.latestInitializationRequestKey = null;
+    // Drop controller-local path so createChatSession cannot reuse a stale
+    // Windows/Mac path against the peer host after the surface switch.
+    this.context.currentWorkspacePath = null;
     const removedSessionIds = this.context.flowChatStore.clearAllSessionsForPeerSwitch();
     removedSessionIds.forEach(sessionId => {
       stateMachineManager.delete(sessionId);
@@ -408,6 +417,8 @@ export class FlowChatManager {
     this.initializationRequests.clear();
     this.latestInitializationRequestKey = null;
     this.cleanupEventListeners();
+    this.peerSessionRefreshCleanup?.();
+    this.peerSessionRefreshCleanup = null;
     this.context.eventBatcher.destroy();
   }
 
@@ -439,6 +450,7 @@ export class FlowChatManager {
       detail: { phase: 'start', clientId, action: 'create' },
     }));
 
+    let succeeded = false;
     try {
       const response = await ACPClientAPI.createFlowSession({
         clientId,
@@ -464,10 +476,11 @@ export class FlowChatManager {
         config.remoteSshHost,
       );
 
+      succeeded = true;
       return response.sessionId;
     } finally {
       window.dispatchEvent(new CustomEvent('bitfun:acp-session-creation', {
-        detail: { phase: 'finish', clientId, action: 'create' },
+        detail: { phase: 'finish', clientId, action: 'create', succeeded },
       }));
     }
   }

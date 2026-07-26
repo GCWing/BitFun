@@ -25,6 +25,7 @@ use bitfun_core::infrastructure::PathManager;
 use bitfun_core::service::config::ConfigService;
 use bitfun_core::service::remote_ssh::workspace_state::get_remote_workspace_manager;
 use bitfun_core::util::errors::{BitFunError, BitFunResult};
+use dashmap::mapref::entry::Entry;
 use dashmap::DashMap;
 use futures::io::{AsyncRead as FuturesAsyncRead, AsyncWrite as FuturesAsyncWrite};
 use log::{debug, info, warn};
@@ -34,7 +35,9 @@ use tokio::process::{Child, Command};
 use tokio::sync::{oneshot, Mutex, RwLock};
 use tokio_util::compat::{TokioAsyncReadCompatExt, TokioAsyncWriteCompatExt};
 
-use super::builtin_clients::{builtin_client_ids, default_config_for_builtin_client};
+use super::builtin_clients::{
+    builtin_client_ids, default_config_for_builtin_client, migrate_legacy_builtin_client_configs,
+};
 use super::config::{
     AcpClientConfig, AcpClientConfigFile, AcpClientInfo, AcpClientPermissionMode,
     AcpClientRequirementProbe, AcpClientStatus, RemoteAcpClientRequirementSnapshot,
@@ -102,6 +105,41 @@ pub struct SetAcpSessionModelRequest {
     #[serde(default)]
     pub remote_ssh_host: Option<String>,
     pub model_id: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SetAcpSessionConfigOptionRequest {
+    pub client_id: String,
+    pub session_id: String,
+    #[serde(default)]
+    pub workspace_path: Option<String>,
+    #[serde(default)]
+    pub remote_connection_id: Option<String>,
+    #[serde(default)]
+    pub remote_ssh_host: Option<String>,
+    pub config_id: String,
+    pub value: AcpSessionConfigValue,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(
+    tag = "type",
+    rename_all = "snake_case",
+    rename_all_fields = "camelCase"
+)]
+pub enum AcpSessionConfigValue {
+    Select { value: String },
+    Boolean { value: bool },
+}
+
+impl AcpSessionConfigValue {
+    fn into_protocol_value(self) -> SessionConfigOptionValue {
+        match self {
+            Self::Select { value } => SessionConfigOptionValue::value_id(value),
+            Self::Boolean { value } => SessionConfigOptionValue::boolean(value),
+        }
+    }
 }
 
 pub struct AcpClientService {
@@ -513,33 +551,59 @@ impl AcpClientService {
         workspace_path: Option<&str>,
         remote_connection_id: Option<&str>,
     ) -> BitFunResult<()> {
-        if let Some(existing) = self.clients.get(connection_id).map(|entry| entry.clone()) {
-            let status = *existing.status.read().await;
-            if matches!(status, AcpClientStatus::Running) {
-                return Ok(());
+        let (connection, remote_connection_id) = loop {
+            if let Some(existing) = self.clients.get(connection_id).map(|entry| entry.clone()) {
+                let status = *existing.status.read().await;
+                match status {
+                    AcpClientStatus::Running => return Ok(()),
+                    AcpClientStatus::Starting => {
+                        return wait_for_client_connection(existing, connection_id).await;
+                    }
+                    AcpClientStatus::Configured
+                    | AcpClientStatus::Stopped
+                    | AcpClientStatus::Failed => {
+                        self.clients
+                            .remove_if(connection_id, |_, current| Arc::ptr_eq(current, &existing));
+                    }
+                }
             }
-            if matches!(status, AcpClientStatus::Starting) {
-                return wait_for_client_connection(existing, connection_id).await;
+
+            let StartClientConfig {
+                remote_connection_id,
+                config,
+            } = self
+                .resolve_start_client_config(client_id, workspace_path, remote_connection_id)
+                .await?;
+            let candidate = Arc::new(AcpClientConnection::new(
+                connection_id.to_string(),
+                client_id.to_string(),
+                config,
+            ));
+
+            match claim_client_start(&self.clients, connection_id, candidate) {
+                ClientStartClaim::Owned(connection) => {
+                    break (connection, remote_connection_id);
+                }
+                ClientStartClaim::Existing(existing) => {
+                    let status = *existing.status.read().await;
+                    match status {
+                        AcpClientStatus::Running => return Ok(()),
+                        AcpClientStatus::Starting => {
+                            return wait_for_client_connection(existing, connection_id).await;
+                        }
+                        AcpClientStatus::Configured
+                        | AcpClientStatus::Stopped
+                        | AcpClientStatus::Failed => {
+                            self.clients.remove_if(connection_id, |_, current| {
+                                Arc::ptr_eq(current, &existing)
+                            });
+                        }
+                    }
+                }
             }
-        }
+        };
 
-        let StartClientConfig {
-            remote_connection_id,
-            config,
-        } = self
-            .resolve_start_client_config(client_id, workspace_path, remote_connection_id)
-            .await?;
-
-        let connection = Arc::new(AcpClientConnection::new(
-            connection_id.to_string(),
-            client_id.to_string(),
-            config,
-        ));
-        self.clients
-            .insert(connection_id.to_string(), connection.clone());
-        *connection.status.write().await = AcpClientStatus::Starting;
-
-        let (transport, child) = match remote_connection_id {
+        let transport_result = match remote_connection_id {
             Some(ref remote_connection_id) => {
                 self.open_transport_for_connection(
                     client_id,
@@ -560,10 +624,17 @@ impl AcpClientService {
                 )
                 .await
             }
-        }
-        .inspect_err(|_| {
-            self.clients.remove(connection_id);
-        })?;
+        };
+        let (transport, child) = match transport_result {
+            Ok(result) => result,
+            Err(error) => {
+                *connection.status.write().await = AcpClientStatus::Failed;
+                self.clients.remove_if(connection_id, |_, current| {
+                    Arc::ptr_eq(current, &connection)
+                });
+                return Err(error);
+            }
+        };
         *connection.child.lock().await = child;
         let service = self.clone();
         let connection_for_task = connection.clone();
@@ -1004,6 +1075,66 @@ impl AcpClientService {
         }
         Err(BitFunError::NotFound(
             "ACP session does not expose selectable models".to_string(),
+        ))
+    }
+
+    pub async fn set_session_config_option(
+        self: &Arc<Self>,
+        request: SetAcpSessionConfigOptionRequest,
+        session_storage_path: Option<PathBuf>,
+    ) -> BitFunResult<AcpSessionOptions> {
+        let resolved = self
+            .resolve_or_create_client_session(
+                &request.client_id,
+                request.workspace_path,
+                request.remote_connection_id.as_deref(),
+                &request.session_id,
+            )
+            .await?;
+
+        let mut session = resolved.session.lock().await;
+        self.ensure_remote_session(
+            &resolved.client,
+            &resolved.session_key,
+            &resolved.cwd,
+            &request.session_id,
+            session_storage_path.as_deref(),
+            &mut session,
+        )
+        .await?;
+        let active = session
+            .active
+            .as_ref()
+            .ok_or_else(|| BitFunError::service("ACP session was not initialized"))?;
+        let remote_session_id = active.session_id().to_string();
+        let connection = active.connection();
+
+        if !session
+            .config_options
+            .iter()
+            .any(|option| option.id.to_string() == request.config_id)
+        {
+            return Err(BitFunError::NotFound(format!(
+                "ACP session config option not found: {}",
+                request.config_id
+            )));
+        }
+
+        let response = connection
+            .send_request(SetSessionConfigOptionRequest::new(
+                remote_session_id,
+                request.config_id,
+                request.value.into_protocol_value(),
+            ))
+            .block_task()
+            .await
+            .map_err(protocol_error)?;
+        session.config_options = response.config_options;
+
+        Ok(session_options_from_state(
+            session.models.as_ref(),
+            &session.config_options,
+            session.context_usage.as_ref(),
         ))
     }
 
@@ -1801,7 +1932,7 @@ impl AcpClientConnection {
             id,
             client_id,
             config,
-            status: RwLock::new(AcpClientStatus::Configured),
+            status: RwLock::new(AcpClientStatus::Starting),
             connection: RwLock::new(None),
             agent_capabilities: RwLock::new(None),
             sessions: DashMap::new(),
@@ -1815,6 +1946,25 @@ impl AcpClientConnection {
         self.connection.read().await.clone().ok_or_else(|| {
             BitFunError::service(format!("ACP client is not connected: {}", self.id))
         })
+    }
+}
+
+enum ClientStartClaim {
+    Owned(Arc<AcpClientConnection>),
+    Existing(Arc<AcpClientConnection>),
+}
+
+fn claim_client_start(
+    clients: &DashMap<String, Arc<AcpClientConnection>>,
+    connection_id: &str,
+    candidate: Arc<AcpClientConnection>,
+) -> ClientStartClaim {
+    match clients.entry(connection_id.to_string()) {
+        Entry::Vacant(entry) => {
+            entry.insert(candidate.clone());
+            ClientStartClaim::Owned(candidate)
+        }
+        Entry::Occupied(entry) => ClientStartClaim::Existing(entry.get().clone()),
     }
 }
 
@@ -1845,7 +1995,7 @@ async fn wait_for_client_connection(
 }
 
 fn parse_config_value(value: serde_json::Value) -> BitFunResult<AcpClientConfigFile> {
-    if value.get("acpClients").is_some() {
+    let mut config = if value.get("acpClients").is_some() {
         serde_json::from_value(value)
             .map_err(|error| BitFunError::config(format!("Invalid ACP client config: {}", error)))
     } else if value.is_object() {
@@ -1856,7 +2006,9 @@ fn parse_config_value(value: serde_json::Value) -> BitFunResult<AcpClientConfigF
         Err(BitFunError::config(
             "ACP client config must be an object".to_string(),
         ))
-    }
+    }?;
+    migrate_legacy_builtin_client_configs(&mut config);
+    Ok(config)
 }
 
 fn build_session_key(bitfun_session_id: &str, client_id: &str, cwd: &Path) -> String {
@@ -2431,6 +2583,44 @@ fn select_permission_option_id(options: &[PermissionOption], approve: bool) -> S
 mod tests {
     use super::*;
 
+    fn test_client_connection(id: &str) -> Arc<AcpClientConnection> {
+        Arc::new(AcpClientConnection::new(
+            id.to_string(),
+            "opencode".to_string(),
+            AcpClientConfig {
+                name: Some("OpenCode".to_string()),
+                command: "opencode".to_string(),
+                args: Vec::new(),
+                env: HashMap::new(),
+                enabled: true,
+                readonly: false,
+                permission_mode: AcpClientPermissionMode::Ask,
+            },
+        ))
+    }
+
+    #[test]
+    fn claims_only_one_client_start_for_a_connection() {
+        let clients = DashMap::new();
+        let first = test_client_connection("opencode::session::s1");
+        let second = test_client_connection("opencode::session::s1");
+
+        let ClientStartClaim::Owned(owned) =
+            claim_client_start(&clients, "opencode::session::s1", first.clone())
+        else {
+            panic!("first claimant should own startup");
+        };
+        let ClientStartClaim::Existing(existing) =
+            claim_client_start(&clients, "opencode::session::s1", second)
+        else {
+            panic!("second claimant should reuse startup");
+        };
+
+        assert!(Arc::ptr_eq(&owned, &first));
+        assert!(Arc::ptr_eq(&existing, &first));
+        assert_eq!(clients.len(), 1);
+    }
+
     #[test]
     fn selects_actual_permission_option_id_for_approval() {
         let options = vec![
@@ -2457,6 +2647,21 @@ mod tests {
             startup_timeout_error_message("codex", "initialize"),
             "ACP startup timed out: client 'codex' exceeded 60s during initialize and was terminated. Please try again after the client is ready."
         );
+    }
+
+    #[test]
+    fn maps_session_config_values_to_acp_protocol_values() {
+        let select = AcpSessionConfigValue::Select {
+            value: "on".to_string(),
+        }
+        .into_protocol_value();
+        assert_eq!(
+            select.as_value_id().map(ToString::to_string).as_deref(),
+            Some("on")
+        );
+
+        let boolean = AcpSessionConfigValue::Boolean { value: true }.into_protocol_value();
+        assert_eq!(boolean.as_bool(), Some(true));
     }
 
     #[test]
@@ -2492,7 +2697,7 @@ mod tests {
                     command: "npx".to_string(),
                     args: vec![
                         "--yes".to_string(),
-                        "@zed-industries/codex-acp@latest".to_string(),
+                        "@agentclientprotocol/codex-acp@latest".to_string(),
                     ],
                     env: HashMap::from([("BASE".to_string(), "1".to_string())]),
                     enabled: true,
@@ -2508,7 +2713,7 @@ mod tests {
         assert_eq!(resolved.command, "npx");
         assert_eq!(
             resolved.args,
-            vec!["--yes", "@zed-industries/codex-acp@latest"]
+            vec!["--yes", "@agentclientprotocol/codex-acp@latest"]
         );
         assert_eq!(resolved.env.get("BASE").map(String::as_str), Some("1"));
         assert!(resolved.enabled);

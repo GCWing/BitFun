@@ -7,7 +7,9 @@ use crate::agentic::tools::ToolRuntimeRestrictions;
 use crate::agentic::workspace::WorkspaceServices;
 use crate::agentic::WorkspaceBinding;
 use bitfun_agent_tools::ResolvedToolInvocation;
-use bitfun_runtime_ports::{DelegationPolicy, RemoteExecPort, TerminalPort};
+use bitfun_runtime_ports::{
+    DelegationPolicy, PermissionDelegationContext, PermissionRule, RemoteExecPort, TerminalPort,
+};
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::SystemTime;
@@ -22,9 +24,10 @@ pub struct ToolExecutionOptions {
     pub max_retries: usize,
     /// Tool execution timeout (seconds), None means infinite waiting
     pub timeout_secs: Option<u64>,
-    pub confirm_before_run: bool,
-    /// Tool confirmation timeout (seconds), None means infinite waiting
-    pub confirmation_timeout_secs: Option<u64>,
+    /// Ordered permission rules. An unmatched resource defaults to `ask`.
+    pub permission_rules: Vec<PermissionRule>,
+    /// Automatically reply `once` to `ask` requests through the permission manager.
+    pub auto_approve_ask: bool,
 }
 
 impl Default for ToolExecutionOptions {
@@ -34,8 +37,8 @@ impl Default for ToolExecutionOptions {
             subagent_batch_execution_policy: SubagentBatchExecutionPolicy::default(),
             max_retries: 0,
             timeout_secs: None, // Default no timeout (infinite waiting)
-            confirm_before_run: true,
-            confirmation_timeout_secs: None, // Default no timeout (infinite waiting)
+            permission_rules: Vec::new(),
+            auto_approve_ask: false,
         }
     }
 }
@@ -45,6 +48,20 @@ pub struct SubagentParentInfo {
     pub tool_call_id: String,
     pub session_id: String,
     pub dialog_turn_id: String,
+}
+
+impl SubagentParentInfo {
+    pub(crate) fn permission_delegation_context(
+        &self,
+        subagent_type: &str,
+    ) -> PermissionDelegationContext {
+        PermissionDelegationContext {
+            parent_session_id: self.session_id.clone(),
+            parent_dialog_turn_id: Some(self.dialog_turn_id.clone()),
+            parent_tool_call_id: self.tool_call_id.clone(),
+            subagent_type: subagent_type.to_string(),
+        }
+    }
 }
 
 impl From<SubagentParentInfo> for EventSubagentParentInfo {
@@ -70,6 +87,7 @@ pub struct ToolExecutionContext {
     pub primary_model_facts: PrimaryModelFacts,
     pub context_vars: HashMap<String, String>,
     pub subagent_parent_info: Option<SubagentParentInfo>,
+    pub permission_delegation: Option<PermissionDelegationContext>,
     pub(crate) delegation_policy: DelegationPolicy,
     pub deferred_tools: Vec<String>,
     pub loaded_deferred_tool_specs: Vec<bitfun_agent_tools::LoadedDeferredToolSpec>,
@@ -90,6 +108,9 @@ pub struct ToolExecutionContext {
 #[derive(Debug, Clone)]
 pub struct ToolTask {
     pub tool_call: ToolCall,
+    /// Position of this call in the model's tool-call array for the current
+    /// round. Permission requests inherit this value as their order key.
+    pub tool_call_order: u32,
     pub invocation: ResolvedToolInvocation,
     pub invocation_resolution_error: Option<String>,
     pub context: ToolExecutionContext,
@@ -122,6 +143,7 @@ impl ToolTask {
     ) -> Self {
         Self {
             tool_call,
+            tool_call_order: 0,
             invocation,
             invocation_resolution_error,
             context,
@@ -139,12 +161,6 @@ impl ToolTask {
 
     pub fn effective_arguments(&self) -> &serde_json::Value {
         &self.invocation.effective_arguments
-    }
-
-    pub fn update_effective_arguments(&mut self, arguments: serde_json::Value) {
-        self.invocation
-            .replace_effective_arguments(arguments.clone());
-        self.tool_call.arguments = self.invocation.wire_arguments.clone();
     }
 }
 

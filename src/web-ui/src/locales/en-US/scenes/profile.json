@@ -157,7 +157,14 @@
       "toolTypeMcp": "MCP tool",
       "readonlyTool": "Read-only",
       "serverToolsHeading": "Tools on this server",
-      "skillLevel": "Level {{level}}"
+      "skillEnabledCandidates": "Enabled candidates",
+      "unknownSkillSource": "Other source",
+      "skillScopeUser": "User",
+      "skillScopeProject": "Project",
+      "skillRuntimeSelected": "Used at runtime",
+      "skillRuntimeCovered": "Enabled, covered by {{source}}",
+      "skillRuntimeEnabled": "Enabled, not currently selected",
+      "skillOrigin": "Source and scope: {{origin}}"
     },
 
     "tabs": {

@@ -61,6 +61,8 @@ export const WorkspaceProvider: React.FC<WorkspaceProviderProps> = ({ children }
           workspaceId: string,
           relatedPaths: WorkspaceInfo['relatedPaths']
         ) => workspaceManager.updateWorkspaceRelatedPaths(workspaceId, relatedPaths),
+        renameWorkspace: async (workspaceId: string, name: string) =>
+          workspaceManager.renameWorkspace(workspaceId, name),
         scanWorkspaceInfo: async () => workspaceManager.scanWorkspaceInfo(),
         refreshRecentWorkspaces: async () => workspaceManager.refreshRecentWorkspaces(),
         removeWorkspaceFromRecent: async (workspaceId: string) =>
@@ -111,6 +113,8 @@ export const WorkspaceProvider: React.FC<WorkspaceProviderProps> = ({ children }
           workspaceId: string,
           relatedPaths: WorkspaceInfo['relatedPaths']
         ) => workspaceManager.updateWorkspaceRelatedPaths(workspaceId, relatedPaths),
+        renameWorkspace: async (workspaceId: string, name: string) =>
+          workspaceManager.renameWorkspace(workspaceId, name),
         scanWorkspaceInfo: async () => workspaceManager.scanWorkspaceInfo(),
         refreshRecentWorkspaces: async () => workspaceManager.refreshRecentWorkspaces(),
         removeWorkspaceFromRecent: async (workspaceId: string) =>
@@ -276,6 +280,13 @@ export const WorkspaceProvider: React.FC<WorkspaceProviderProps> = ({ children }
     return await workspaceManager.updateWorkspaceRelatedPaths(workspaceId, relatedPaths);
   }, []);
 
+  const renameWorkspace = useCallback(async (
+    workspaceId: string,
+    name: string
+  ): Promise<WorkspaceInfo> => {
+    return await workspaceManager.renameWorkspace(workspaceId, name);
+  }, []);
+
   const refreshRecentWorkspaces = useCallback(async (): Promise<void> => {
     return await workspaceManager.refreshRecentWorkspaces();
   }, []);
@@ -309,6 +320,7 @@ export const WorkspaceProvider: React.FC<WorkspaceProviderProps> = ({ children }
       setActiveWorkspace,
       reorderOpenedWorkspacesInSection,
       updateWorkspaceRelatedPaths,
+      renameWorkspace,
       scanWorkspaceInfo,
       refreshRecentWorkspaces,
       removeWorkspaceFromRecent,
@@ -329,6 +341,7 @@ export const WorkspaceProvider: React.FC<WorkspaceProviderProps> = ({ children }
     setActiveWorkspace,
     reorderOpenedWorkspacesInSection,
     updateWorkspaceRelatedPaths,
+    renameWorkspace,
     scanWorkspaceInfo,
     refreshRecentWorkspaces,
     removeWorkspaceFromRecent,

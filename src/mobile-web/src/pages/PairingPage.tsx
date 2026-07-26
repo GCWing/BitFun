@@ -30,7 +30,43 @@ const USER_ID_LOCKOUT_MS = 60_000;
 
 function isProtectedUserIdError(message: string): boolean {
   return message.includes('This remote URL is already protected')
-    || message.includes('This mobile device must continue using the previously confirmed user ID');
+    || message.includes('This mobile device must continue using the previously confirmed user ID')
+    || message.includes('Invalid username or password')
+    || message.includes('Missing password')
+    || message.includes('Missing username')
+    || message.includes('Too many pairing attempts');
+}
+
+function normalizeRelayUrl(value: string): string | null {
+  try {
+    const normalized = value
+      .replace(/^wss:\/\//, 'https://')
+      .replace(/^ws:\/\//, 'http://')
+      .replace(/\/ws\/?$/, '')
+      .replace(/\/$/, '');
+    const url = new URL(normalized);
+    if (!['http:', 'https:'].includes(url.protocol)
+      || !url.hostname
+      || url.username
+      || url.password
+      || url.search
+      || url.hash) {
+      return null;
+    }
+    return url.toString().replace(/\/$/, '');
+  } catch {
+    return null;
+  }
+}
+
+function validPairingSecret(room: string | null, publicKey: string | null): boolean {
+  return !!room
+    && room.length <= 128
+    && /^[A-Za-z0-9_-]+$/.test(room)
+    && !['_store', 'page-data', 'pages'].includes(room)
+    && !!publicKey
+    && publicKey.length <= 512
+    && /^[A-Za-z0-9+/=_-]+$/.test(publicKey);
 }
 
 function generateInstallId(): string {
@@ -48,22 +84,28 @@ function getOrCreateInstallId(): string {
   return created;
 }
 
-function resolveRelayBaseUrl(): { room: string | null; pk: string | null; httpBaseUrl: string } {
+function resolvePairingTarget(): {
+  room: string | null;
+  pk: string | null;
+  httpBaseUrl: string;
+  accountAuth: boolean;
+  accountUsername: string | null;
+} {
   const hash = window.location.hash;
   const params = new URLSearchParams(hash.replace(/^#\/pair\?/, ''));
   const room = params.get('room');
   const pk = params.get('pk');
   const relayParam = params.get('relay');
+  const accountAuth = params.get('auth') === 'account';
+  const accountUsername = params.get('user')?.trim() || null;
 
   if (relayParam) {
     return {
       room,
       pk,
-      httpBaseUrl: relayParam
-        .replace(/^wss:\/\//, 'https://')
-        .replace(/^ws:\/\//, 'http://')
-        .replace(/\/ws\/?$/, '')
-        .replace(/\/$/, ''),
+      httpBaseUrl: normalizeRelayUrl(relayParam) ?? '',
+      accountAuth,
+      accountUsername,
     };
   }
 
@@ -75,6 +117,8 @@ function resolveRelayBaseUrl(): { room: string | null; pk: string | null; httpBa
     room,
     pk,
     httpBaseUrl: origin + pathname,
+    accountAuth,
+    accountUsername,
   };
 }
 
@@ -87,18 +131,29 @@ const PairingPage: React.FC<PairingPageProps> = ({ onPaired }) => {
     setError,
     error,
     setAuthenticatedUserId,
+    setAuthenticatedUserLabel,
   } = useMobileStore();
   const [userId, setUserId] = useState('');
-  const [mobileInstallId, setMobileInstallId] = useState('');
+  const [password, setPassword] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [failureCount, setFailureCount] = useState(0);
   const [lockUntil, setLockUntil] = useState<number | null>(null);
   const [now, setNow] = useState(() => Date.now());
-  const autoReconnectAttemptedRef = useRef(false);
   const failureCountRef = useRef(0);
   const lockUntilRef = useRef<number | null>(null);
+  // Generation token so a superseded or unmounted pairing attempt cannot
+  // overwrite UI after a later bootstrap/manual attempt owns the page.
+  const pairAttemptGenerationRef = useRef(0);
+  const attemptPairRef = useRef<(
+    providedUserId: string,
+    providedPassword: string,
+    options?: { autoReconnect?: boolean; installId?: string },
+  ) => Promise<void>>(async () => {});
+  const onPairedRef = useRef(onPaired);
+  onPairedRef.current = onPaired;
 
-  const pairingTarget = useMemo(() => resolveRelayBaseUrl(), []);
+  const pairingTarget = useMemo(() => resolvePairingTarget(), []);
+  const requiresAccountAuth = pairingTarget.accountAuth;
   const isLocked = !!lockUntil && lockUntil > now;
   const remainingLockSeconds = isLocked
     ? Math.max(1, Math.ceil((lockUntil - now) / 1000))
@@ -106,51 +161,91 @@ const PairingPage: React.FC<PairingPageProps> = ({ onPaired }) => {
 
   const attemptPair = useCallback(async (
     providedUserId: string,
+    providedPassword: string,
     options?: { autoReconnect?: boolean; installId?: string },
   ) => {
+    const roomId = pairingTarget.room;
+    const desktopPublicKey = pairingTarget.pk;
     const userIdValue = providedUserId.trim();
+    // Passwords are opaque credentials: preserve intentional leading or
+    // trailing spaces exactly as entered.
+    const passwordValue = providedPassword;
     const autoReconnect = options?.autoReconnect === true;
-    const currentInstallId = options?.installId || mobileInstallId || getOrCreateInstallId();
+    // Prefer the explicit installId from the caller; fall back to the stable
+    // localStorage-backed id. Do not close over React state here — that used
+    // to recreate this callback and re-trigger bootstrap side effects.
+    const currentInstallId = options?.installId || getOrCreateInstallId();
     const activeLockUntil = lockUntilRef.current;
     const lockActive = !!activeLockUntil && activeLockUntil > Date.now();
     const currentRemainingLockSeconds = lockActive
       ? Math.max(1, Math.ceil((activeLockUntil - Date.now()) / 1000))
       : 0;
-    if (!pairingTarget.room || !pairingTarget.pk) {
+    const attemptGeneration = ++pairAttemptGenerationRef.current;
+    const isCurrentAttempt = () => pairAttemptGenerationRef.current === attemptGeneration;
+
+    if (!roomId
+      || !desktopPublicKey
+      || !validPairingSecret(roomId, desktopPublicKey)
+      || !pairingTarget.httpBaseUrl) {
+      if (!isCurrentAttempt()) return;
       setError(t('pairing.invalidQrCode'));
       setConnectionStatus('error');
       return;
     }
     if (!userIdValue) {
-      setError(t('pairing.userIdRequired'));
+      if (!isCurrentAttempt()) return;
+      setError(requiresAccountAuth ? t('pairing.usernameRequired') : t('pairing.userIdRequired'));
+      setConnectionStatus('error');
+      return;
+    }
+    if (userIdValue.length > 128 || passwordValue.length > 1024) {
+      if (!isCurrentAttempt()) return;
+      setError(t('pairing.fieldsTooLong'));
+      setConnectionStatus('error');
+      return;
+    }
+    if (requiresAccountAuth && !passwordValue) {
+      if (!isCurrentAttempt()) return;
+      setError(t('pairing.passwordRequired'));
       setConnectionStatus('error');
       return;
     }
     if (!autoReconnect && lockActive) {
+      if (!isCurrentAttempt()) return;
       setError(t('pairing.tooManyAttempts', { seconds: currentRemainingLockSeconds }));
       setConnectionStatus('error');
       return;
     }
 
-    setMobileInstallId(currentInstallId);
     setSubmitting(true);
+    setError(null);
+    setConnectionStatus('pairing');
 
-    const client = new RelayHttpClient(pairingTarget.httpBaseUrl, pairingTarget.room);
+    const client = new RelayHttpClient(pairingTarget.httpBaseUrl, roomId);
 
     try {
-      setError(null);
-      setConnectionStatus('pairing');
-      const initialSync = await client.pair(pairingTarget.pk, {
+      const initialSync = await client.pair(desktopPublicKey, {
         userId: userIdValue,
         mobileInstallId: currentInstallId,
+        password: requiresAccountAuth ? passwordValue : undefined,
       });
+      if (!isCurrentAttempt()) return;
+
       setConnectionStatus('paired');
       localStorage.setItem(MOBILE_USER_ID_KEY, userIdValue);
       localStorage.removeItem(MOBILE_FAILURE_COUNT_KEY);
       localStorage.removeItem(MOBILE_LOCK_UNTIL_KEY);
       setFailureCount(0);
       setLockUntil(null);
-      setAuthenticatedUserId(initialSync.authenticated_user_id ?? userIdValue);
+      setPassword('');
+      // `authenticated_user_id` is the canonical account UUID used for
+      // ownership checks. The submitted value is the verified username in
+      // account mode and is the appropriate user-facing label.
+      setAuthenticatedUserId(
+        initialSync.authenticated_user_id
+        ?? (requiresAccountAuth ? null : userIdValue),
+      );
+      setAuthenticatedUserLabel(userIdValue);
 
       const sessionMgr = new RemoteSessionManager(client);
       const store = useMobileStore.getState();
@@ -192,12 +287,20 @@ const PairingPage: React.FC<PairingPageProps> = ({ onPaired }) => {
             window.setTimeout(() => resolve(false), 10_000);
           }),
         ]);
+        if (!isCurrentAttempt()) return;
         const homeDeviceId = client.homeDeviceId;
         if (delegated && homeDeviceId) {
           store.setControlTarget({ deviceId: homeDeviceId, deviceName: null, isHome: true });
+          const accountEpoch = client.delegatedAccountEpoch;
+          const target = client.getControlTargetSnapshot();
           void client
             .listDevices()
             .then((devices) => {
+              if (
+                client.delegatedAccountEpoch !== accountEpoch
+                || !client.isControlTargetCurrent(target)
+                || client.pairedDeviceId !== homeDeviceId
+              ) return;
               const home = devices.find((d) => d.device_id === homeDeviceId);
               if (home) {
                 useMobileStore.getState().setControlTarget({
@@ -216,9 +319,20 @@ const PairingPage: React.FC<PairingPageProps> = ({ onPaired }) => {
         // single-device pairing; continue without device switching.
       }
 
-      onPaired(client, sessionMgr);
+      if (!isCurrentAttempt()) return;
+      onPairedRef.current(client, sessionMgr);
     } catch (e: any) {
-      const errorMessage = e?.message || t('pairing.pairingFailed');
+      if (!isCurrentAttempt()) return;
+      const rawErrorMessage = e?.message || '';
+      const errorMessage = rawErrorMessage.includes('timed out')
+        ? t('pairing.requestTimedOut')
+        : rawErrorMessage.includes('HTTP 404')
+          ? t('pairing.qrExpired')
+          : rawErrorMessage.includes('HTTP 429')
+            ? t('pairing.rateLimited')
+            : rawErrorMessage.includes('HTTP 503') || rawErrorMessage.includes('HTTP 504')
+              ? t('pairing.relayUnavailable')
+              : rawErrorMessage || t('pairing.pairingFailed');
       if (!autoReconnect && isProtectedUserIdError(errorMessage)) {
         const nextFailureCount = failureCountRef.current + 1;
         const shouldLock = nextFailureCount >= MAX_FAILED_USER_ID_ATTEMPTS;
@@ -234,19 +348,41 @@ const PairingPage: React.FC<PairingPageProps> = ({ onPaired }) => {
         setError(
           shouldLock
             ? t('pairing.tooManyAttempts', { seconds: Math.ceil(USER_ID_LOCKOUT_MS / 1000) })
-            : errorMessage,
+            : rawErrorMessage.includes('Too many pairing attempts')
+              ? t('pairing.rateLimited')
+              : t('pairing.credentialsRejected'),
         );
       } else {
         setError(errorMessage);
       }
       setConnectionStatus('error');
     } finally {
-      setSubmitting(false);
+      if (isCurrentAttempt()) {
+        setSubmitting(false);
+      }
     }
-  }, [mobileInstallId, pairingTarget.httpBaseUrl, pairingTarget.pk, pairingTarget.room, setAuthenticatedUserId, setConnectionStatus, setError, t]);
+  }, [
+    pairingTarget.httpBaseUrl,
+    pairingTarget.pk,
+    pairingTarget.room,
+    requiresAccountAuth,
+    setAuthenticatedUserId,
+    setAuthenticatedUserLabel,
+    setConnectionStatus,
+    setError,
+    t,
+  ]);
 
+  attemptPairRef.current = attemptPair;
+
+  // Mount-once bootstrap: restore form fields and optionally auto-reconnect.
+  // Must NOT depend on `attemptPair` identity — a later callback recreation
+  // used to reset status to `pairing` without starting a new request, which
+  // left the page spinning forever after a fast reconnect failure.
   useEffect(() => {
     const savedUserId = localStorage.getItem(MOBILE_USER_ID_KEY)?.trim() ?? '';
+    const qrUsername = pairingTarget.accountUsername?.trim() ?? '';
+    const prefilledUserId = qrUsername || savedUserId;
     const currentInstallId = getOrCreateInstallId();
     const persistedFailureCount = Number(localStorage.getItem(MOBILE_FAILURE_COUNT_KEY) || '0');
     const persistedLockUntil = Number(localStorage.getItem(MOBILE_LOCK_UNTIL_KEY) || '0');
@@ -255,18 +391,37 @@ const PairingPage: React.FC<PairingPageProps> = ({ onPaired }) => {
       localStorage.removeItem(MOBILE_LOCK_UNTIL_KEY);
       localStorage.removeItem(MOBILE_FAILURE_COUNT_KEY);
     }
-    const shouldAutoReconnect = !!savedUserId && !!currentInstallId && !!pairingTarget.room && !!pairingTarget.pk;
-    setUserId(savedUserId);
-    setMobileInstallId(currentInstallId);
+    // Account mode always needs a password — never auto-reconnect without it.
+    const shouldAutoReconnect = !requiresAccountAuth
+      && !!savedUserId
+      && !!currentInstallId
+      && !!pairingTarget.room
+      && !!pairingTarget.pk;
+    setUserId(prefilledUserId);
     setFailureCount(normalizedLockUntil ? persistedFailureCount : 0);
     setLockUntil(normalizedLockUntil);
-    setConnectionStatus(shouldAutoReconnect ? 'pairing' : 'idle');
     setError(null);
-    if (shouldAutoReconnect && !autoReconnectAttemptedRef.current) {
-      autoReconnectAttemptedRef.current = true;
-      void attemptPair(savedUserId, { autoReconnect: true, installId: currentInstallId });
+
+    if (shouldAutoReconnect) {
+      // Show the spinner immediately; attemptPair also sets pairing when the
+      // network attempt actually starts (after validation).
+      setConnectionStatus('pairing');
+      void attemptPairRef.current(savedUserId, '', {
+        autoReconnect: true,
+        installId: currentInstallId,
+      });
+    } else {
+      setConnectionStatus('idle');
     }
-  }, [attemptPair, pairingTarget.pk, pairingTarget.room, setConnectionStatus, setError]);
+
+    return () => {
+      // Invalidate in-flight pairing so unmount / StrictMode remount cannot
+      // apply stale success/error onto the next page instance.
+      pairAttemptGenerationRef.current += 1;
+    };
+    // pairingTarget is resolved once from the URL hash on mount.
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- mount-once bootstrap
+  }, []);
 
   useEffect(() => {
     failureCountRef.current = failureCount;
@@ -296,12 +451,13 @@ const PairingPage: React.FC<PairingPageProps> = ({ onPaired }) => {
   }, [lockUntil]);
 
   const handleConnect = async () => {
-    autoReconnectAttemptedRef.current = true;
-    await attemptPair(userId, { autoReconnect: false });
+    await attemptPair(userId, password, { autoReconnect: false });
   };
 
   const stateLabels: Record<string, string> = {
-    idle: t('pairing.enterUserIdToContinue'),
+    idle: requiresAccountAuth
+      ? t('pairing.enterAccountToContinue')
+      : t('pairing.enterUserIdToContinue'),
     pairing: t('pairing.connectingAndPairing'),
     paired: t('pairing.pairedLoadingSessions'),
     error: t('pairing.connectionError'),
@@ -335,21 +491,43 @@ const PairingPage: React.FC<PairingPageProps> = ({ onPaired }) => {
       {showForm && (
         <div className="pairing-page__form">
           <label className="pairing-page__field">
-            <span className="pairing-page__field-label">{t('pairing.fieldLabel')}</span>
+            <span className="pairing-page__field-label">
+              {requiresAccountAuth ? t('pairing.usernameLabel') : t('pairing.fieldLabel')}
+            </span>
             <input
               className="pairing-page__input"
               type="text"
               value={userId}
               onChange={(e) => setUserId(e.target.value)}
-              placeholder={t('pairing.placeholder')}
+              placeholder={
+                requiresAccountAuth
+                  ? t('pairing.usernamePlaceholder')
+                  : t('pairing.placeholder')
+              }
               autoCapitalize="off"
               autoCorrect="off"
               autoComplete="username"
+              maxLength={128}
               disabled={submitting || isLocked}
             />
           </label>
+          {requiresAccountAuth && (
+            <label className="pairing-page__field">
+              <span className="pairing-page__field-label">{t('pairing.passwordLabel')}</span>
+              <input
+                className="pairing-page__input"
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder={t('pairing.passwordPlaceholder')}
+                autoComplete="current-password"
+                maxLength={1024}
+                disabled={submitting || isLocked}
+              />
+            </label>
+          )}
           <p className="pairing-page__note">
-            {t('pairing.note')}
+            {requiresAccountAuth ? t('pairing.accountNote') : t('pairing.note')}
           </p>
           <button
             className="pairing-page__retry"

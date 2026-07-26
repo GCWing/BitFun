@@ -7,22 +7,52 @@
 //! 4. Provide global singleton access
 
 use crate::infrastructure::ai::{build_stream_options_for_model, AIClient};
-use crate::infrastructure::cli_credentials::{
-    self, codex::CodexResolver, gemini::GeminiResolver, CredentialResolver,
+use crate::infrastructure::subscription_auth::{self, SubscriptionProvider as AdapterProvider};
+use crate::service::config::types::{
+    model_runtime_binding_fingerprint, AuthConfig, SubscriptionProvider,
 };
-use crate::service::config::types::AuthConfig;
 use crate::service::config::{get_global_config_service, ConfigService};
 use crate::util::errors::{BitFunError, BitFunResult};
 use crate::util::types::AIConfig;
 use anyhow::{anyhow, Result};
-use bitfun_ai_adapters::{resolve_cache_model_selector, resolve_required_model_selector};
+use bitfun_ai_adapters::resolve_required_model_selector;
 use log::{debug, info, warn};
 use std::collections::HashMap;
 use std::sync::{Arc, OnceLock, RwLock};
 
 pub struct AIClientFactory {
     config_service: Arc<ConfigService>,
-    client_cache: RwLock<HashMap<String, Arc<AIClient>>>,
+    client_cache: RwLock<HashMap<String, CachedAIClient>>,
+}
+
+struct CachedAIClient {
+    configuration_fingerprint: String,
+    client: Arc<AIClient>,
+    /// Unix seconds when the resolved subscription credential expires;
+    /// `None` for API-key auth or non-expiring credentials.
+    credential_expires_at: Option<i64>,
+}
+
+/// Once a cached subscription credential is within this window of expiry, the
+/// client is rebuilt so `apply_subscription_auth` refreshes the token. Kept
+/// equal to the providers' refresh leeway so the rebuilt client always gets a
+/// fresh token.
+const SUBSCRIPTION_CREDENTIAL_STALE_LEEWAY_SECS: i64 = 5 * 60;
+
+fn now_unix_secs() -> i64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs() as i64)
+        .unwrap_or(0)
+}
+
+fn subscription_credential_stale(auth: &AuthConfig, cached: &CachedAIClient) -> bool {
+    if !matches!(auth, AuthConfig::Subscription { .. }) {
+        return false;
+    }
+    cached.credential_expires_at.is_some_and(|expires_at| {
+        expires_at <= now_unix_secs() + SUBSCRIPTION_CREDENTIAL_STALE_LEEWAY_SECS
+    })
 }
 
 fn functional_agent_model_selector<'a>(
@@ -55,7 +85,18 @@ impl AIClientFactory {
     }
 
     pub async fn get_client_by_id(&self, model_id: &str) -> Result<Arc<AIClient>> {
-        self.get_or_create_client(model_id).await
+        self.get_or_create_client(model_id, None).await
+    }
+
+    /// Resolves an immutable concrete model id only when its current runtime
+    /// identity still matches the user-approved binding.
+    pub async fn get_client_by_approved_binding(
+        &self,
+        model_id: &str,
+        configuration_fingerprint: &str,
+    ) -> Result<Arc<AIClient>> {
+        self.get_or_create_client(model_id, Some(configuration_fingerprint))
+            .await
     }
 
     /// Get a client (supports resolving primary/fast)
@@ -69,7 +110,7 @@ impl AIClientFactory {
         )
         .map_err(|error| anyhow!(error.to_string()))?;
 
-        self.get_or_create_client(&resolved_model_id).await
+        self.get_or_create_client(&resolved_model_id, None).await
     }
 
     pub fn invalidate_cache(&self) {
@@ -109,14 +150,17 @@ impl AIClientFactory {
         }
     }
 
-    async fn get_or_create_client(&self, model_id: &str) -> Result<Arc<AIClient>> {
+    async fn get_or_create_client(
+        &self,
+        model_id: &str,
+        expected_configuration_fingerprint: Option<&str>,
+    ) -> Result<Arc<AIClient>> {
         let global_config: crate::service::config::GlobalConfig =
             self.config_service.get_config(None).await?;
-        let normalized_model_id = resolve_cache_model_selector(
-            model_id,
-            |selector| global_config.ai.resolve_model_selection(selector),
-            |model_ref| global_config.ai.resolve_model_reference(model_ref),
-        );
+        let normalized_model_id = model_id.trim().to_string();
+        if normalized_model_id.is_empty() {
+            return Err(anyhow!("Model configuration id is empty"));
+        }
         if global_config
             .ai
             .models
@@ -129,21 +173,6 @@ impl AIClientFactory {
                 "Multiple model configurations use the same ID: {}",
                 normalized_model_id
             ));
-        }
-
-        {
-            let cache = match self.client_cache.read() {
-                Ok(cache) => cache,
-                Err(poisoned) => {
-                    warn!(
-                        "AI client cache read lock poisoned during get_or_create_client, recovering"
-                    );
-                    poisoned.into_inner()
-                }
-            };
-            if let Some(client) = cache.get(&normalized_model_id) {
-                return Ok(client.clone());
-            }
         }
 
         debug!("Creating new AI client: model_id={}", normalized_model_id);
@@ -170,9 +199,39 @@ impl AIClientFactory {
             ));
         }
 
+        let configuration_fingerprint = model_runtime_binding_fingerprint(model_config);
+        if expected_configuration_fingerprint
+            .is_some_and(|expected| expected != configuration_fingerprint)
+        {
+            return Err(anyhow!(
+                "Approved model binding changed for configuration id: {}",
+                normalized_model_id
+            ));
+        }
+
+        {
+            let cache = match self.client_cache.read() {
+                Ok(cache) => cache,
+                Err(poisoned) => {
+                    warn!(
+                        "AI client cache read lock poisoned during get_or_create_client, recovering"
+                    );
+                    poisoned.into_inner()
+                }
+            };
+            if let Some(cached) = cache.get(&normalized_model_id) {
+                if cached.configuration_fingerprint == configuration_fingerprint
+                    && !subscription_credential_stale(&model_config.auth, cached)
+                {
+                    return Ok(cached.client.clone());
+                }
+            }
+        }
+
         let mut ai_config = AIConfig::try_from(model_config.clone())
             .map_err(|e| anyhow!("AI configuration conversion failed: {}", e))?;
-        apply_cli_credential(&model_config.auth, &mut ai_config).await?;
+        let credential_expires_at =
+            apply_subscription_auth(&model_config.auth, &mut ai_config).await?;
 
         let proxy_config = if global_config.ai.proxy.enabled {
             Some(global_config.ai.proxy.clone())
@@ -197,7 +256,14 @@ impl AIClientFactory {
                     poisoned.into_inner()
                 }
             };
-            cache.insert(model_config.id.clone(), client.clone());
+            cache.insert(
+                model_config.id.clone(),
+                CachedAIClient {
+                    configuration_fingerprint,
+                    client: client.clone(),
+                    credential_expires_at,
+                },
+            );
         }
 
         debug!(
@@ -280,13 +346,35 @@ pub async fn initialize_global_ai_client_factory() -> BitFunResult<()> {
     AIClientFactory::initialize_global().await
 }
 
-/// Resolve a CLI-credential `AuthConfig` and overlay it onto the runtime
-/// `AIConfig`. No-op when `auth == AuthConfig::ApiKey`.
-pub async fn apply_cli_credential(auth: &AuthConfig, ai_config: &mut AIConfig) -> Result<()> {
+fn to_adapter_provider(provider: SubscriptionProvider) -> AdapterProvider {
+    match provider {
+        SubscriptionProvider::Codex => AdapterProvider::Codex,
+        SubscriptionProvider::Antigravity => AdapterProvider::Antigravity,
+        SubscriptionProvider::Opencode => AdapterProvider::Opencode,
+    }
+}
+
+/// Resolve a subscription `AuthConfig` and overlay it onto the runtime
+/// `AIConfig`. No-op when `auth == AuthConfig::ApiKey`. Returns the resolved
+/// credential's expiry (Unix seconds) so callers can invalidate cached
+/// clients before the token goes stale.
+pub async fn apply_subscription_auth(
+    auth: &AuthConfig,
+    ai_config: &mut AIConfig,
+) -> Result<Option<i64>> {
     let resolved = match auth {
-        AuthConfig::ApiKey => return Ok(()),
-        AuthConfig::CodexCli => CodexResolver.resolve().await?,
-        AuthConfig::GeminiCli => GeminiResolver.resolve().await?,
+        AuthConfig::ApiKey => return Ok(None),
+        AuthConfig::Subscription { provider } => {
+            subscription_auth::resolve(to_adapter_provider(*provider))
+                .await
+                .map_err(|e| {
+                    anyhow!(
+                        "Failed to resolve {provider:?} subscription credential: {e:#}. \
+                     Subscription logins are stored on the local machine and are not \
+                     available in remote workspaces."
+                    )
+                })?
+        }
     };
 
     ai_config.api_key = resolved.api_key;
@@ -316,17 +404,19 @@ pub async fn apply_cli_credential(auth: &AuthConfig, ai_config: &mut AIConfig) -
             ai_config.custom_headers_mode = Some("merge".to_string());
         }
     }
-    Ok(())
+    Ok(resolved.expires_at)
 }
 
-/// Discover all locally-available CLI credentials (Codex, Gemini, ...).
-pub async fn discover_cli_credentials() -> Vec<cli_credentials::DiscoveredCredential> {
-    cli_credentials::discover_all().await
+/// List subscription accounts (Codex / Antigravity / OpenCode).
+pub async fn list_subscription_accounts() -> Vec<subscription_auth::SubscriptionAccount> {
+    subscription_auth::list_accounts().await
 }
 
 #[cfg(test)]
 mod tests {
-    use crate::service::config::types::{AIModelConfig, GlobalConfig};
+    use crate::service::config::types::{
+        model_runtime_binding_fingerprint, AIModelConfig, GlobalConfig,
+    };
     use bitfun_ai_adapters::{
         classify_model_selector, resolve_required_model_selector, ModelSelectorKind,
     };
@@ -364,6 +454,37 @@ mod tests {
             "claude-sonnet-4.5-duplicate",
         ));
         assert_eq!(config.ai.resolve_model_reference("model-123"), None);
+    }
+
+    #[test]
+    fn concrete_reserved_model_ids_remain_exact_config_references() {
+        let mut config = GlobalConfig::default();
+        config.ai.models = ["inherit", "primary", "fast", "auto", "default"]
+            .into_iter()
+            .map(|id| build_model(id, id, &format!("runtime-{id}")))
+            .collect();
+
+        for id in ["inherit", "primary", "fast", "auto", "default"] {
+            assert_eq!(
+                config.ai.resolve_model_reference(id),
+                Some(id.to_string()),
+                "approved concrete ids must bypass selector classification"
+            );
+        }
+    }
+
+    #[test]
+    fn runtime_binding_fingerprint_tracks_identity_but_not_secret_rotation() {
+        let mut model = build_model("model-123", "Provider", "runtime-model");
+        model.base_url = "https://models.example/v1".to_string();
+        model.api_key = "secret-one".to_string();
+        let first = model_runtime_binding_fingerprint(&model);
+
+        model.api_key = "secret-two".to_string();
+        assert_eq!(model_runtime_binding_fingerprint(&model), first);
+
+        model.base_url = "https://models.example/v2".to_string();
+        assert_ne!(model_runtime_binding_fingerprint(&model), first);
     }
 
     #[test]

@@ -1,6 +1,18 @@
 use crate::stream::types::unified::{UnifiedResponse, UnifiedTokenUsage, UnifiedToolCall};
+use bitfun_agent_stream::ToolCallCompletion;
 use serde::Deserialize;
 use serde_json::{json, Value};
+
+pub(crate) fn map_gemini_finish_reason(reason: &str) -> ToolCallCompletion {
+    match reason.trim().to_ascii_uppercase().as_str() {
+        "STOP" => ToolCallCompletion::NormalNoToolUse,
+        "MAX_TOKENS" => ToolCallCompletion::OutputLimit,
+        "SAFETY" | "RECITATION" | "BLOCKLIST" | "PROHIBITED_CONTENT" | "SPII" => {
+            ToolCallCompletion::ContentFiltered
+        }
+        _ => ToolCallCompletion::Unknown,
+    }
+}
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -368,6 +380,7 @@ impl GeminiSSEData {
                             arguments_is_snapshot: true,
                         }),
                         usage: usage.take(),
+                        tool_call_completion: None,
                         finish_reason: None,
                         provider_metadata: None,
                     });
@@ -382,6 +395,7 @@ impl GeminiSSEData {
                             thinking_signature,
                             tool_call: None,
                             usage: usage.take(),
+                            tool_call_completion: None,
                             finish_reason: None,
                             provider_metadata: None,
                         });
@@ -399,6 +413,7 @@ impl GeminiSSEData {
                             thinking_signature,
                             tool_call: None,
                             usage: usage.take(),
+                            tool_call_completion: None,
                             finish_reason: None,
                             provider_metadata: None,
                         });
@@ -413,6 +428,7 @@ impl GeminiSSEData {
                         thinking_signature,
                         tool_call: None,
                         usage: usage.take(),
+                        tool_call_completion: None,
                         finish_reason: None,
                         provider_metadata: None,
                     });
@@ -426,6 +442,7 @@ impl GeminiSSEData {
                         thinking_signature,
                         tool_call: None,
                         usage: usage.take(),
+                        tool_call_completion: None,
                         finish_reason: None,
                         provider_metadata: None,
                     });
@@ -460,6 +477,7 @@ impl GeminiSSEData {
                 thinking_signature: None,
                 tool_call: None,
                 usage: usage.take(),
+                tool_call_completion: None,
                 finish_reason: None,
                 provider_metadata: Some(provider_metadata),
             });
@@ -467,12 +485,14 @@ impl GeminiSSEData {
 
         if let Some(finish_reason) = finish_reason {
             if let Some(last_response) = responses.last_mut() {
+                last_response.tool_call_completion = Some(map_gemini_finish_reason(&finish_reason));
                 last_response.finish_reason = Some(finish_reason);
                 return responses;
             }
 
             responses.push(UnifiedResponse {
                 usage,
+                tool_call_completion: Some(map_gemini_finish_reason(&finish_reason)),
                 finish_reason: Some(finish_reason),
                 ..Default::default()
             });
@@ -493,7 +513,24 @@ impl GeminiSSEData {
 
 #[cfg(test)]
 mod tests {
-    use super::GeminiSSEData;
+    use super::{map_gemini_finish_reason, GeminiSSEData};
+    use bitfun_agent_stream::ToolCallCompletion;
+
+    #[test]
+    fn maps_gemini_output_limit_and_safety_finishes() {
+        assert_eq!(
+            map_gemini_finish_reason("MAX_TOKENS"),
+            ToolCallCompletion::OutputLimit
+        );
+        assert_eq!(
+            map_gemini_finish_reason("SAFETY"),
+            ToolCallCompletion::ContentFiltered
+        );
+        assert_eq!(
+            map_gemini_finish_reason("unexpected"),
+            ToolCallCompletion::Unknown
+        );
+    }
 
     #[test]
     fn converts_text_thought_and_usage() {

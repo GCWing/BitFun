@@ -14,8 +14,8 @@ use bitfun_agent_tools::{
     build_tool_runtime_artifact_reference, build_tool_session_runtime_artifact_reference,
     call_deferred_tool_description, call_deferred_tool_input_schema,
     collect_loaded_deferred_tool_specs, effective_tool_invocation, get_tool_spec_input_schema,
-    get_tool_spec_is_concurrency_safe, get_tool_spec_is_readonly, get_tool_spec_needs_permissions,
-    get_tool_spec_short_description, is_bitfun_runtime_uri, is_remote_posix_path_within_root,
+    get_tool_spec_is_concurrency_safe, get_tool_spec_is_readonly, get_tool_spec_short_description,
+    is_bitfun_runtime_uri, is_remote_posix_path_within_root,
     is_tool_path_allowed_by_resolved_roots, normalize_host_path, normalize_runtime_relative_path,
     parse_bitfun_current_session_uri, parse_bitfun_runtime_uri, posix_resolve_path_with_workspace,
     posix_style_path_is_absolute, render_get_tool_spec_tool_use_message,
@@ -38,14 +38,13 @@ use bitfun_agent_tools::{
     ToolWorkspaceKind, ValidationResult, CALL_DEFERRED_TOOL_NAME, GET_TOOL_SPEC_TOOL_NAME,
 };
 use bitfun_agent_tools::{
-    build_invalid_tool_call_error_message, build_tool_call_truncation_recovery_notice,
-    build_tool_confirmation_timeout_presentation, build_tool_execution_error_presentation,
+    build_invalid_tool_call_error_message, build_normal_tool_json_repair_notice,
+    build_permission_denied_tool_presentation, build_tool_execution_error_presentation,
     build_user_rejected_tool_presentation, build_user_rejected_tool_presentation_with_instruction,
     build_user_steering_interrupted_presentation, is_write_like_tool_name,
     render_tool_result_for_assistant, truncate_raw_tool_arguments_preview_to,
-    truncate_tool_arguments_preview, TOOL_CONFIRMATION_TIMEOUT_MESSAGE,
-    TOOL_ERROR_ARGUMENTS_PREVIEW_BYTES, USER_REJECTED_TOOL_MESSAGE,
-    USER_STEERING_INTERRUPTED_MESSAGE,
+    truncate_tool_arguments_preview, TOOL_ERROR_ARGUMENTS_PREVIEW_BYTES,
+    USER_REJECTED_TOOL_MESSAGE, USER_STEERING_INTERRUPTED_MESSAGE,
 };
 use bitfun_agent_tools::{
     build_mcp_tool_bridge_definition, build_mcp_tool_bridge_name, build_mcp_tool_bridge_result,
@@ -505,28 +504,6 @@ fn steering_interrupted_presentation_preserves_current_contract() {
 }
 
 #[test]
-fn tool_confirmation_timeout_presentation_is_not_an_execution_failure() {
-    let presentation = build_tool_confirmation_timeout_presentation("ExecCommand");
-
-    assert_eq!(presentation.result_json["status"], "cancelled");
-    assert_eq!(presentation.result_json["category"], "confirmation_timeout");
-    assert_eq!(presentation.result_json["tool_name"], "ExecCommand");
-    assert_eq!(
-        presentation.result_json["message"],
-        TOOL_CONFIRMATION_TIMEOUT_MESSAGE
-    );
-    assert!(presentation.result_json["provided_arguments"].is_null());
-    assert_eq!(
-        presentation.result_for_assistant,
-        TOOL_CONFIRMATION_TIMEOUT_MESSAGE
-    );
-    assert!(!presentation.result_for_assistant.contains("failed"));
-    assert!(!presentation
-        .result_for_assistant
-        .contains("Provided arguments"));
-}
-
-#[test]
 fn tool_execution_timeout_presentation_includes_timeout_seconds() {
     let presentation = build_tool_execution_timeout_presentation("ExecCommand", Some(120));
 
@@ -583,6 +560,27 @@ fn user_rejected_tool_presentation_is_not_an_argument_error() {
 }
 
 #[test]
+fn permission_denied_tool_presentation_is_not_a_user_rejection() {
+    let presentation = build_permission_denied_tool_presentation(
+        "ExecCommand",
+        "Global permission policy denies bash commands.",
+    );
+
+    assert_eq!(presentation.result_json["status"], "rejected");
+    assert_eq!(presentation.result_json["category"], "permission_denied");
+    assert_eq!(presentation.result_json["tool_name"], "ExecCommand");
+    assert_eq!(
+        presentation.result_json["reason"],
+        "Global permission policy denies bash commands."
+    );
+    assert_eq!(
+        presentation.result_for_assistant,
+        "This tool call was blocked by the current permission policy: \"Global permission policy denies bash commands.\". Do not retry it. If you cannot complete the task without running this tool call, stop and ask the user how to proceed."
+    );
+    assert!(!presentation.result_for_assistant.contains("user rejected"));
+}
+
+#[test]
 fn invalid_tool_call_error_message_preserves_current_contract() {
     let message =
         build_invalid_tool_call_error_message("", true, false, Some("{\"path\"".to_string()));
@@ -605,27 +603,29 @@ fn invalid_tool_call_error_message_preserves_current_contract() {
 }
 
 #[test]
-fn truncation_recovery_notice_preserves_write_like_guidance() {
+fn write_tail_closure_notice_preserves_write_like_guidance() {
     assert!(is_write_like_tool_name("Write"));
     assert!(is_write_like_tool_name("file_write"));
     assert!(is_write_like_tool_name("write_notebook"));
     assert!(!is_write_like_tool_name("Read"));
 
-    let notice = build_tool_call_truncation_recovery_notice("Write");
+    let notice = bitfun_agent_tools::build_write_tail_closure_notice("Write");
 
     assert!(notice.contains("latest Read result"));
     assert!(notice.contains("use Edit to add only the missing continuation"));
     assert!(notice.contains("stop tool-calling and tell the user"));
+    assert!(!notice.contains("max_tokens"));
     assert!(!notice.contains("`mode`"));
     assert!(notice.ends_with("Original tool result follows.\n\n"));
 }
 
 #[test]
-fn truncation_recovery_notice_preserves_non_write_guidance() {
-    let notice = build_tool_call_truncation_recovery_notice("AskUserQuestion");
+fn normal_tool_json_repair_notice_identifies_the_opt_in_repair_policy() {
+    let notice = build_normal_tool_json_repair_notice("AskUserQuestion");
 
-    assert!(notice.contains("repaired, potentially incomplete arguments"));
+    assert!(notice.contains("provider completed tool use normally"));
     assert!(notice.contains("issue a fresh complete AskUserQuestion call"));
+    assert!(!notice.contains("max_tokens"));
     assert!(!notice.contains("ONE Edit call"));
 }
 
@@ -1881,9 +1881,6 @@ fn get_tool_spec_contract_preserves_static_metadata_and_use_message() {
     assert!(get_tool_spec_is_concurrency_safe(Some(&json!({
         "tool_name": "WebFetch"
     }))));
-    assert!(!get_tool_spec_needs_permissions(Some(&json!({
-        "tool_name": "WebFetch"
-    }))));
     assert_eq!(
         render_get_tool_spec_tool_use_message(&json!({ "tool_name": "Git" })),
         "Reading tool spec for 'Git'."
@@ -2129,15 +2126,6 @@ impl ToolRegistryItem for InputSensitiveEffectTool {
 
     fn is_readonly(&self) -> bool {
         false
-    }
-
-    fn needs_permissions(&self, input: Option<&serde_json::Value>) -> bool {
-        !matches!(
-            input
-                .and_then(|value| value.get("action"))
-                .and_then(serde_json::Value::as_str),
-            Some("status")
-        )
     }
 
     fn is_concurrency_safe(&self, input: Option<&serde_json::Value>) -> bool {
@@ -3249,7 +3237,6 @@ fn get_tool_spec_runtime_facade_owns_static_tool_surface() {
     assert_eq!(runtime.input_schema(), get_tool_spec_input_schema());
     assert!(runtime.is_readonly());
     assert!(runtime.is_concurrency_safe(None));
-    assert!(!runtime.needs_permissions(None));
     assert_eq!(
         runtime.render_tool_use_message(&json!({ "tool_name": "WebFetch" })),
         "Reading tool spec for 'WebFetch'."
@@ -3457,10 +3444,9 @@ async fn generic_tool_registry_snapshot_preserves_static_provider_identity_after
 }
 
 #[tokio::test]
-async fn generic_tool_registry_snapshot_labels_effects_as_no_input_defaults() {
+async fn generic_tool_registry_snapshot_labels_execution_effects_as_no_input_defaults() {
     let mut registry: ToolRegistry<dyn ToolRegistryItem> = ToolRegistry::new();
     let tool = Arc::new(InputSensitiveEffectTool);
-    assert!(!tool.needs_permissions(Some(&json!({ "action": "status" }))));
     assert!(tool.is_concurrency_safe(Some(&json!({ "action": "status" }))));
 
     registry.register_tool(tool);
@@ -3475,7 +3461,6 @@ async fn generic_tool_registry_snapshot_labels_effects_as_no_input_defaults() {
 
     assert_eq!(tool.effects.source, ToolEffectFactsSource::NoInputDefault);
     assert!(!tool.effects.readonly_by_default);
-    assert!(tool.effects.needs_permissions_by_default);
     assert!(!tool.effects.concurrency_safe_by_default);
 }
 

@@ -34,6 +34,21 @@ function shouldEstimateApiPayloadBytes(): boolean {
   return globalThis.__BITFUN_PERF_TRACE_ENABLED__ === true;
 }
 
+function apiErrorCause(error: unknown): unknown {
+  if (!(error instanceof Error)) {
+    return error;
+  }
+  const transportError = error as Error & { code?: unknown; data?: unknown };
+  if (transportError.code === undefined && transportError.data === undefined) {
+    return error.message;
+  }
+  return {
+    message: error.message,
+    ...(transportError.code !== undefined ? { code: transportError.code } : {}),
+    ...(transportError.data !== undefined ? { data: transportError.data } : {}),
+  };
+}
+
 function isOptionalConfigNotFoundCommand(config: TauriCommandConfig, error: unknown): boolean {
   if (config.command !== 'get_config') {
     return false;
@@ -517,7 +532,7 @@ export class ApiClient implements IApiClient {
     
     if (originalError) {
       apiError.details = {
-        originalError: originalError.message || originalError,
+        originalError: apiErrorCause(originalError),
         stack: originalError.stack
       };
     }

@@ -1,14 +1,15 @@
-# BitFun 能力装配、SDK 与外部宿主集成设计
+# BitFun 能力装配、导入导出与外部宿主集成设计
 
 本文定义 BitFun 如何把记忆、上下文、工作流、Subagent、工具和调度策略做成可装配能力，以及这些能力如何在
 不修改外部产品内核的前提下接入 OpenCode、Claude Code、Codex、Trae 等宿主。本文同时约束反向路径：外部
 配置、插件和能力如何进入 BitFun。
 
-仓库级依赖方向、接口切面和产品形态以[产品运行时架构](../product-architecture.md)为准；Agent Runtime SDK、
+仓库级依赖方向、接口切面和产品形态以[产品运行时架构](../product-architecture.md)为准；共享 Agent Runtime API、
 运行时服务、工具和工作流归属见[智能体内核与运行时服务](../agent-runtime-services-design.md)；第三方进程可靠性见
 [插件运行时主机](plugin-runtime-host-design.md)；外部来源的发现、确认和产品体验见
 [外部 AI 工作内容](external-ai-work-sources-design.md)；OpenCode 的具体兼容承诺见
-[OpenCode 扩展兼容总览](opencode-extension-compatibility.md)。
+[OpenCode 扩展兼容总览](opencode-extension-compatibility.md)。公开 BitFun Agent SDK 的产品心智、SDK Host 和
+各入口关系见[Agent SDK 产品与宿主架构](../agent-sdk-product-architecture.md)。
 
 本文是目标设计和演进约束，不表示已存在一个通用 `CapabilityRuntime` crate、稳定公共 SDK、跨宿主插件包或下文
 所有 Provider 接口。只有真实消费方、独立版本边界和端到端验证同时成立的接口才能进入公开面。
@@ -19,7 +20,8 @@ BitFun 采用“一个能力核心，多种宿主适配”的方向，而不是�
 
 1. **BitFun 内部装配**：产品组装选择已编译能力、Provider/factory 和能力上限；运行时能力 owner 消费不可变静态组装结果，并维护自己的不可变 Resolution Generation。
 2. **外部能力进入 BitFun**：生态 adapter 保留外部来源、顺序和行为，再转换成 BitFun 能力专属贡献。
-3. **BitFun 能力进入外部产品**：对外能力门面暴露窄用例，MCP、Skill、Plugin、Hook 或 SDK adapter 再映射到具体宿主。
+3. **BitFun 能力进入外部产品**：对外能力门面暴露窄用例，MCP、Skill、Plugin 或 Hook adapter 再映射到具体宿主；
+   这条“能力导出”路径不同于使用公开 BitFun Agent SDK 构建完整 Agent 应用。
 4. **以外部 Runtime 组装新产品**：Claude Agent SDK、Codex App Server、OpenCode Server 等可成为新产品的执行内核，
    但这不等于替换原 Claude Code、Codex 或 OpenCode 产品中的内核模块。
 
@@ -40,6 +42,24 @@ BitFun 采用“一个能力核心，多种宿主适配”的方向，而不是�
 - 不承诺跨宿主完整迁移私有 transcript、文件系统快照、凭据、进程、终端或未文档化状态。
 - 不复制完整 OpenCode Server、Claude Code 或 Codex 产品协议来证明插件兼容。
 - 不为了覆盖竞品矩阵同时实现全部 Memory、Workflow、Hook、Subagent、Server 和 Remote 能力。
+
+### 当前 Hook 合同切片边界
+
+本 PR 只为现有 managed-package `.js` / `.ts` 只读 source projection 增加 OpenCode tool Hook 的 typed 静态映射；不新增
+TypeScript bridge/runtime，不执行 TypeScript，不新增插件发现、加载、激活或 dispatch 路径。adapter 复用 workspace 已锁定的
+OXC parse-only profile，只从受 managed-package 文件大小与数量限制的固定 source bytes 中提取 exported plugin return object 的静态顶层
+属性名；OXC 不解释 OpenCode 语义，OpenCode adapter 只映射明确的 `tool.execute.before` / `tool.execute.after`。解析在 package
+load 时每份源码执行一次，read projection 不重复解析，动态属性、spread 内容和普通字符串引用均不推断为 Hook。映射结果只通过既有
+`read_plugins` 诊断链声明 `tool.execute.before` / `tool.execute.after` 已被静态识别、风险事实仍不完整且执行不可用；
+`@opencode-ai/plugin` `Hooks` 接口中其他静态顶层属性继续使用通用 projection-only 诊断，`tool` 则由既有 custom-tool
+projection 负责；event-bus 的具体事件类型只属于顶层 `event` Hook 的 payload，不作为 Hook 属性。OXC 解析失败使用稳定的
+`opencode.hook_projection_parse_failed` 诊断，不等同于“没有 Hook”，也不猜测贡献。Hook runtime、顺序解析、启停策略、
+产品 UI 与 metric backend 均延期。
+OpenCode 映射只接受 `opencode.plugins` 来源，异常和诊断使用稳定低基数代码；source、稳定 contribution 和既有
+`PluginSourceRef.content_hash` 保留审计关联身份，不作为 metric label。纯映射函数自身不记录日志，既有只读投影负责
+用户可见诊断，后续 runtime owner 再统一负责脱敏日志与指标投影，避免在 adapter/DTO 层形成第二套观测链路。
+当前公共合同只保留该生产投影实际消费的 identity、Hook point 与 safety facts；不预置 resolver、terminal decision、
+排序、冲突或 override 公共面，也不使用 dead module 或测试替身宣称产品能力。
 
 ## 2. 能力分类与可替换边界
 
@@ -62,7 +82,8 @@ BitFun 采用“一个能力核心，多种宿主适配”的方向，而不是�
 |---|---|---|
 | `exclusive` | 主 Session Store、最终 Compactor 等只能有一个 active owner 的能力 | 组装时选出一个 Provider；运行时不允许两个实现双写。 |
 | `ordered-chain` | Context Transformer、Prompt/Tool Hook、验证器 | 顺序由能力 owner 或生态 adapter 明确；每步校验，失败策略类型化。 |
-| `namespace-union` | Tools、Skills、Commands、Agents | 先按来源限定身份保留候选，再按名称和作用域解析；同名不静默跨生态覆盖。 |
+| `namespace-union` | Tools、Commands、Agents | 先按来源限定身份保留候选，再按名称和作用域解析；同名不静默跨生态覆盖。冲突界面先列 BitFun、再按稳定 provider 身份列其他生态，但展示顺序不自动决定胜者。 |
+| `ordered-namespace` | 现有 Skill 根 | 保留来源限定身份并按 Skill Registry 已发布的根顺序解析同名项；被覆盖项继续可见。来源元数据只用于解释结果，不参与重新排序。 |
 | `fallback` | Memory Retriever、模型 Provider、外部服务 | 只对声明为可恢复的错误切换；权限拒绝、取消和副作用不自动 fallback。 |
 | `fan-out` | 只读事件 Observer、运维遥测 | Observer 互相隔离；不能阻塞或改变权威业务结果。 |
 
@@ -100,7 +121,7 @@ flowchart LR
 
   subgraph Export["BitFun 能力进入外部宿主"]
     Facade["对外能力门面"]
-    HostAdapter["MCP / Skill / Plugin / Hook / SDK Adapter"]
+    HostAdapter["MCP / Skill / Plugin / Hook Adapter"]
     Host["OpenCode / Claude Code / Codex / Trae"]
     Providers --> Facade --> HostAdapter --> Host
   end
@@ -109,8 +130,10 @@ flowchart LR
 
 上图是职责关系，不要求新增一个大而全的运行时服务。对应职责继续分布在现有 owner：
 
-BitFun 自身 GUI、TUI/CLI、Server、Remote 和 Agent Runtime SDK 继续消费产品组装后的能力服务、只读视图或
-Runtime 接口，不经过对外能力门面。只有某个具体 DTO 同时出现真实内外部消费者并满足独立版本要求时，才评审
+当前 GUI、TUI/CLI、Server 和 Remote 通过各自 adapter 消费产品组装后的 Agent Runtime API、能力服务、只读视图或
+Runtime 接口，不经过对外能力门面，也不经过公开语言 SDK package。公开 SDK 尚未交付；目标态由 SDK Host adapter
+调用同一 Agent Runtime API，而不是让现有入口改为依赖 Python/TypeScript package。
+只有某个具体 DTO 同时出现真实内外部消费者并满足独立版本要求时，才评审
 共享该 DTO；不能让内部入口与外部宿主共享整个 facade。
 
 | 部分 | 负责 | 不负责 |
@@ -123,8 +146,26 @@ Runtime 接口，不经过对外能力门面。只有某个具体 DTO 同时出�
 | 对外能力门面 | 暴露真实消费者需要的窄用例、只读状态、事件和类型化错误 | 暴露内部 manager、插件 Host ABI、任意服务查找或产品 UI。 |
 | Host Adapter | 把门面映射为某宿主的 MCP、Skill、Plugin、Hook、SDK 或 Server 调用 | 声称突破宿主未提供的生命周期、状态或替换能力。 |
 
-对外能力门面不等于 Agent Runtime SDK 的全部接口。SDK 可以包含构建与运行 Agent 所需的底层能力；宿主 adapter
-只消费当前场景需要的最小子集。外部产品只需要调用一个 BitFun workflow 时，不应被迫嵌入完整 Agent Runtime。
+当前外部 Subagent 输入切片落实了上述边界：`contracts/product-domains` 只定义来源无关的 Subagent contribution、
+provenance、兼容状态、摘要和冲突契约；OpenCode adapter 独立维护本生态来源与字段语义；生命周期协调器隔离 provider
+失败并发布不可变候选；现有 AgentRegistry/Task owner 再解析模型、工具、权限上限和同名路由。产品主体不读取
+OpenCode 类型，也不通过统一 agent JSON 理解未来 Codex/Claude Code。
+
+fresh external invocation 在 admission 前绑定逻辑名到 runtime generation，并把 generation lease 传入前台或后台
+调度请求。来源更新或撤下只改变后续 admission，不修改已接受调用的 prompt/model/tool 绑定；安全策略收紧仍由现有
+owner 按原规则优先执行。当前外部 Subagent 不支持 session follow-up，结果与管理 surface 必须明确标为 single-run，
+不能用持久化 session 绕过重新审批或 generation 解析。
+
+当前外部来源控制切片进一步落实了内部宿主共享边界：Command、Tool、Subagent、MCP 的 payload、审批与冲突仍归各自
+owner，`ExternalSourceControlPlane` 只收敛 bounded discovery、provider 隔离和 generation fencing；
+`ExternalSourceControlSnapshotV1` 则只投影 discovery/desired/review/runtime/support、Host 能力、诊断和恢复动作。
+Desktop、TUI 和 Peer 发送同一闭合控制动作，Server 只返回相同 DTO 的 read-only 投影。该 DTO 是当前产品宿主契约，
+不是公共插件 SDK；没有独立仓库外消费方和版本策略前，不向 Host Adapter facade 扩张。
+
+对外能力门面不等于公开 BitFun Agent SDK。前者只为一个外部宿主暴露当前场景需要的最小能力子集；后者提供
+`query()`、Session、Tool/MCP、Permission、Hook 和 Event/Result 等完整 Agent 应用心智，并通过 SDK Host
+调用同一 Agent Runtime API。外部产品只需要调用一个 BitFun workflow 时，不应被迫嵌入完整 Agent Runtime
+或公开 SDK。
 
 ### 3.1 宿主 adapter 的产品交付生命周期
 
@@ -269,6 +310,9 @@ Host Adapter 必须把宿主 `AbortSignal`、turn interruption 或 session stop 
 内容版本、执行域或权限包络变化后重新求值。产品保护项只限身份、数据隔离、权限入口、故障恢复、升级/卸载完整性
 和法律要求，不能把所有内置能力设成不可覆盖。
 
+同名候选在 GUI/TUI 中固定先展示 BitFun 来源，其余生态按稳定 `provider_id` 排序，同一生态内部沿用 adapter 的
+正式来源顺序。这个顺序只用于减少阅读成本；用户未选择时仍保持冲突未决，不能把“BitFun 排在第一”误实现为静默激活。
+
 ## 7. 权限、信任与执行边界
 
 权限检查分成五个不同阶段：
@@ -315,6 +359,10 @@ Host Adapter 必须把宿主 `AbortSignal`、turn interruption 或 session stop 
 - outcome、类型化错误、是否可重试、是否可能已产生副作用。
 - payload 或 artifact reference，以及隐私/脱敏分类。
 
+外部来源控制错误已经统一提供 `code/stage/retryable/correlation/causation/recoveryActions`，供 GUI、TUI、
+Peer 和 Server 做一致映射；用户文案仍归各宿主，不能解析 `detail` 控制流程。当前实现只使用有界结构化日志，不据此
+宣称公共事件或完整产品分析打点已经冻结；后续指标应复用 operation/generation/stage 身份叠加 observer，不能另建状态 owner。
+
 投递按 at-least-once 和可去重设计；不承诺跨进程、网络和第三方宿主 exactly-once。Observer 失败只影响观测，不
 回滚业务结果。外部宿主事件转换必须记录 loss/degradation，例如“宿主没有 queue-wait 事件”或“只能观察
 PostToolUse，无法观察 admission”。
@@ -354,21 +402,26 @@ adapter 一律保持 `experimental/unsupported`，不能据本表标记产品可
 | 宿主 | 不改内核入口 | Memory / Context / 压缩上限 | Workflow / Subagent 上限 | Tool / Hook 上限 | 当前证据与稳妥结论 |
 |---|---|---|---|---|---|
 | Claude Code | Plugin、Skill、Agent、Hook、MCP | `degraded`：可在生命周期注入上下文、观察压缩，不能替换历史或 Compactor owner | `translated`：可定义 Agent/Subagent 和 Hook，不能替换 Agent Loop 或全局调度 | `translated`：可增加工具并按 Hook 规则修改/拒绝；多个匹配 Hook 并行，最终权限仍属宿主 | 官方滚动文档核对；完整 Provider 替换 `unsupported`，父子权限、Hook 并发和 transcript/文件系统 fork 差异需冻结样例。[Hooks](https://code.claude.com/docs/en/hooks) |
-| Codex | Plugin、Skill、Hook、MCP | `degraded`：`SessionStart`/`UserPromptSubmit` 可增加上下文；Compact Hook 只能观察或阻止当前压缩，不能替换历史或 Compactor owner | `translated`：支持 Subagent 和生命周期 Hook，不能通过普通插件替换调度内核 | `degraded`：MCP 可增加工具；Hook 对 Bash、`apply_patch` 和 MCP 提供有限拦截，不是全部内置 Tool 的 enforcement boundary；多个匹配命令 Hook 并发 | 官方滚动文档核对；现有产品扩展以有限生命周期拦截为上限，完整 Provider/权限替换 `unsupported`。[Hooks](https://learn.chatgpt.com/docs/hooks) |
-| OpenCode | 配置、Agent、Skill、Plugin、Custom Tool、MCP | `degraded`：Plugin 可变换消息/参数，实验 Hook 可影响压缩 Prompt，不能替换会话内核 | `translated`：Primary/Subagent/Task/子会话可组合，插件不能替换 scheduler | `translated`：Hook 顺序执行；同名插件 Tool 可覆盖内置 Tool，是局部正式替换点 | 具体冻结版本、提交和样例见 [OpenCode 专项文档](opencode-extension-compatibility.md#1-基线与判断方法)；风险是实验 Hook 漂移、加载顺序、Bun/npm 供应链和任意脚本副作用。[Plugins](https://opencode.ai/docs/plugins/) |
+| Codex | Plugin、Skill、Hook、MCP | `degraded`：`SessionStart`/`UserPromptSubmit` 可增加上下文；Compact Hook 只能观察或阻止当前压缩，不能替换历史或 Compactor owner | `translated`：支持 Subagent 和生命周期 Hook，不能通过普通插件替换调度内核 | `degraded`：MCP 可增加工具；Hook 对 Bash、`apply_patch` 和 MCP 提供有限拦截，不是全部内置 Tool 的 enforcement boundary；多个匹配命令 Hook 并发 | 官方滚动文档核对；现有产品扩展以有限生命周期拦截为上限，完整 Provider/权限替换 `unsupported`。[Hooks](https://github.com/openai/codex/blob/main/docs/hooks.md) |
+| OpenCode | 配置、Agent、Skill、Plugin、Custom Tool、MCP | `degraded`：Plugin 可变换消息/参数，实验 Hook 可影响压缩 Prompt，不能替换会话内核 | `translated`：Primary/Subagent/Task/子会话可组合，插件不能替换 scheduler | `translated`：Hook 顺序执行；同名插件 Tool 可覆盖内置 Tool，是局部正式替换点 | 具体冻结版本、提交和样例见 [OpenCode 专项文档](opencode-extension-compatibility.md#1-基线与判断方法)；风险是实验 Hook 漂移、加载顺序、Bun/Node/npm 供应链和任意脚本副作用。[Plugins](https://opencode.ai/docs/plugins/) |
 | Trae | Rules、Skills、Memory、Custom Agent、MCP、Hooks | `degraded`：可贡献上下文，尚无公开稳定的压缩/Context Provider 契约 | `translated` 候选：Custom Agent 可独立或作为 Subagent；调度和任务状态仍由宿主持有 | `experimental`：MCP 可调用；2026-06 新增 Hooks，但公开事件、顺序和错误契约不足 | 官方滚动 Changelog 核对，尚无冻结版本样例；近期只评估 Rules/Skill/MCP/Custom Agent，Hook 深适配及状态/压缩/调度替换保持 `unsupported`。[Changelog](https://www.trae.ai/changelog) |
 
-### 9.2 使用 SDK/Server 组装新的 BitFun 宿主
+### 9.2 使用其他产品的 SDK/Server 组装新宿主
 
 | Runtime 控制面 | 可获得的控制 | 不能据此宣称 |
 |---|---|---|
-| Claude Agent SDK | session、外部 Session Store、Hook、Subagent、取消和 OTel 等嵌入式能力 | 已替换 Claude Code 产品内核，或其 transcript/文件系统 fork 与 BitFun 等价。[Session Store](https://code.claude.com/docs/en/agent-sdk/session-storage)、[Observability](https://code.claude.com/docs/en/agent-sdk/observability) |
-| Codex App Server / SDK | thread/turn/item、fork/resume/cancel、审批和事件；schema 随版本生成 | 已在现有 Codex 产品中替换 Memory、Compactor、Scheduler 或 Tool owner；WebSocket 仍是实验且不受支持的传输。[App Server](https://learn.chatgpt.com/docs/app-server)、[SDK](https://learn.chatgpt.com/docs/codex-sdk) |
+| Claude Agent SDK | `query()`、session、外部 Session Store、函数 Tool、Permission、Hook、Subagent、MCP、取消和 OTel 等嵌入式能力 | 已替换 Claude Code 产品内核，或其 transcript/文件系统 fork 与 BitFun 等价。[Overview](https://code.claude.com/docs/en/agent-sdk/overview)、[Session Store](https://code.claude.com/docs/en/agent-sdk/session-storage)、[Observability](https://code.claude.com/docs/en/agent-sdk/observability) |
+| Codex App Server / SDK | thread/turn/item、fork/resume/cancel、审批和事件；本地 Runtime 与 schema 随版本绑定 | 已在现有 Codex 产品中替换 Memory、Compactor、Scheduler 或 Tool owner；App Server 的实验传输/方法也不自动成为稳定能力。[App Server](https://github.com/openai/codex/blob/main/codex-rs/app-server/README.md)、[TypeScript SDK](https://github.com/openai/codex/blob/main/sdk/typescript/README.md)、[Python SDK](https://github.com/openai/codex/tree/main/sdk/python) |
 | OpenCode Server / SDK | HTTP/OpenAPI、Session API、Abort 和 SSE，可用于新客户端控制面 | Plugin 已拥有内部队列/调度，或 Server 暴露可跳过认证和网络隔离。[SDK](https://opencode.ai/docs/sdk/)、[Server](https://opencode.ai/docs/server/) |
 | Trae | 尚无已验证的同等级通用 Agent Server/SDK | 在公开稳定控制面出现前，不进入新宿主控制面的交付承诺。 |
 
 两张表分别验收，不能用 SDK/Server 的控制能力抬高现有产品插件覆盖率。无论哪种路径，都不使用“覆盖竞品完整
 能力”描述部分 Hook 或 MCP 集成。
+
+BitFun 自身公开 SDK 不直接选择上述三种形态之一：公开心智采用 Claude Agent SDK 已形成的
+`query/session/tool/MCP/permission/hook` 模型；本地宿主采用 Codex App Server 式的版本、schema、双向请求、
+能力协商和背压纪律；默认 managed SDK Host/显式 client-only 选择参考 OpenCode。最终结构和等价门槛以
+[`agent-sdk-product-architecture.md`](../agent-sdk-product-architecture.md) 为准。
 
 ## 10. 产品体验要求
 
@@ -399,13 +452,14 @@ adapter 一律保持 `experimental/unsupported`，不能据本表标记产品可
 | A1 内部装配 | 已有 owner 和第二个真实实现 | 只为一个能力增加一个 Slot，证明不可变 Resolution Generation、状态和 fallback | 同时拆 Memory/Context/Workflow/Subagent/Scheduler | 两个真实 Provider 可替换，入口行为等价，只有一个状态 owner。 |
 | B1 能力导出 | 具名试点消费者、具体用例、验收 owner、冻结宿主版本 | 一个窄用例通过 MCP/Skill/sidecar 或最小 adapter 接入一个宿主，并完成安装到卸载闭环 | 完整 SDK、全部宿主插件、通用 Hook ABI | 仓库外消费者真实使用；注册、启停、调用、权限、取消、事件、降级、卸载和恢复均有端到端证据。 |
 | B2 生命周期导出 | B1 的真实用例被一个生命周期缺口阻塞 | 只增加该用例需要的一个 Host Hook/Plugin adapter | 全事件镜像、多个宿主并行铺开 | 宿主顺序、失败、并发、权限合并和卸载残留有冻结样例；适配损失可查询。 |
-| C1 外部能力导入 | 既有 OpenCode 专项前置条件 | 完成一个真实 standalone Tool，再按阻塞样例增加 package/Hook | 全量 config、TUI renderer、Server、Remote plugin | 一个外部能力完成发现、确认、执行、取消、故障、更新和 UX 闭环。 |
-| D1 SDK 发布 | 已有非 `bitfun-core` 嵌入方真实使用 B1 或现有 Runtime 能力 | 为已被消费的最小 API 冻结版本和迁移策略 | 发布 `product-full`、manager、Host ABI 或空 profile | 最小依赖、兼容测试、示例、升级路径和独立版本边界同时成立。 |
+| C1 外部能力导入 | 既有 OpenCode 专项前置条件 | 已完成 Prompt Command、standalone Tool、Subagent、MCP 的真实纵向切片与跨产品宿主控制面；下一步只按阻塞样例增加 package/Hook | 全量 config、TUI renderer、OpenCode Server、SSH Remote plugin | 一个外部能力完成发现、确认、执行、取消、故障、更新和 UX 闭环，且 Desktop/TUI/Peer 不出现第二状态 owner。 |
+| D1 SDK 发布 | 已有具名 design partner、冻结的 Session/Turn fixture，且 Agent Runtime owner 明确 | 按 Agent SDK 专题的最多三个纵向 PR 建立 SDK Host、`query()`/Session 和 callback 等价闭环 | 发布 `product-full`、manager、Plugin Host ABI、内部 port 或空 profile | 冻结 Claude Agent SDK 对比版本的稳定核心能力无静默缺口；两个语言包、匹配 SDK Host、升级路径和仓库外消费者同时成立。 |
 | X1 单项扩大 | 对应轨道前一切片稳定且有新真实需求 | 每次只增加一个宿主或一个能力类别 | 追求矩阵全绿 | 新切片通过自己的兼容、产品、生命周期和故障验收。 |
 
-近期唯一已承诺实现方向是 C1 的 OpenCode Prompt Command / standalone Tool 纵向路线。A1、B1 和 D1 在各自
-启动门槛满足前只允许收集具名需求和冻结证据，不创建公共接口或并行铺开；Trae 在公开稳定 Hook/SDK 契约不足时
-继续保持研究状态。
+C1 的 OpenCode Hook/插件纵向路线与 D1 的 Agent SDK 路线可以在独立 adapter、SDK Host、语言包、文档和
+fixture 上并行；两者都必须消费同一个 Tool/MCP/Permission/Hook owner。SDK Hook callback 的最终接入等待公共
+Hook Coordinator 合并，不能先建 SDK 私有 HookBus；若两条分支同时修改 owner 合同或权威状态，停止并行并先串行
+冻结合同。A1、B1 和 D1 在各自启动门槛满足前不创建空公共接口；Trae 在公开稳定 Hook/SDK 契约不足时继续保持研究状态。
 
 暂停扩大当前轨道的条件：
 

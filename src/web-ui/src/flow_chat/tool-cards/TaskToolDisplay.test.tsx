@@ -32,6 +32,12 @@ vi.mock('react-i18next', () => {
     if (key === 'toolCards.taskTool.defaultAgentKind') {
       return 'Sub-agent';
     }
+    if (key === 'toolCards.taskTool.reviewCoverageLabel') {
+      return 'Review check';
+    }
+    if (key === 'toolCards.taskTool.reviewCoverageDescription') {
+      return 'Checking review coverage';
+    }
     if (key === 'toolCards.taskTool.cancelSession') {
       return `Cancel session: ${options?.sessionId}`;
     }
@@ -116,6 +122,13 @@ vi.mock('../store/FlowChatStore', () => ({
           remoteConnectionId: 'remote-1',
           remoteSshHost: 'host-1',
           config: { agentType: 'agentic' },
+        }],
+        ['deep-review-parent-session', {
+          sessionId: 'deep-review-parent-session',
+          workspacePath: 'D:\\workspace\\repo',
+          remoteConnectionId: 'remote-1',
+          remoteSshHost: 'host-1',
+          config: { agentType: 'DeepReview' },
         }],
         ['subagent-session-1', {
           sessionId: 'subagent-session-1',
@@ -365,7 +378,7 @@ describeWithJsdom('TaskToolDisplay', () => {
     expect(taskCollapseStateManager.isCollapsed('task-tool-1')).toBe(true);
   });
 
-  it('keeps inline CodeReview tasks collapsed without exposing the internal agent name', async () => {
+  it('keeps ordinary CodeReview tasks collapsed while preserving their identity', async () => {
     await act(async () => {
       root.render(
         <TaskToolDisplay
@@ -377,7 +390,7 @@ describeWithJsdom('TaskToolDisplay', () => {
     });
 
     expect(taskCollapseStateManager.isCollapsed('task-tool-1')).toBe(true);
-    expect(container.textContent).not.toContain('CodeReview');
+    expect(container.textContent).toContain('CodeReview');
     expect(container.textContent).toContain('Review completed work');
   });
 
@@ -389,7 +402,7 @@ describeWithJsdom('TaskToolDisplay', () => {
         id: 'launch-review-call-1',
         input: {
           packet_id: 'managed-review:batch-1-of-4',
-          description: '[packet managed-review:batch-1-of-4] Review web UI changes',
+          description: '[packet managed-review:batch-1-of-4] Review batch 1',
           prompt: 'Internal worker prompt',
           subagent_type: 'ReviewGeneral',
         },
@@ -402,7 +415,8 @@ describeWithJsdom('TaskToolDisplay', () => {
       );
     });
 
-    expect(container.textContent).toContain('Review web UI changes');
+    expect(container.textContent).toContain('Checking review coverage');
+    expect(container.textContent).not.toContain('Review batch 1');
     expect(container.textContent).not.toContain('LaunchReviewAgent');
     expect(container.textContent).not.toContain('ReviewGeneral');
     expect(container.textContent).not.toContain('managed-review:batch-1-of-4');
@@ -660,6 +674,119 @@ describeWithJsdom('TaskToolDisplay', () => {
       remoteSshHost: 'host-1',
       includeInternal: true,
     });
+  });
+
+  it('opens an ordinary CodeReview subagent instead of treating it as Deep Review coverage', async () => {
+    const toolItem: FlowToolItem = {
+      ...reviewTaskItem('completed', 'CodeReview', 'Review completed work'),
+      subagentSessionId: 'code-review-session-1',
+    };
+
+    await act(async () => {
+      root.render(
+        <TaskToolDisplay
+          toolItem={toolItem}
+          config={config}
+          sessionId="parent-session"
+        />,
+      );
+    });
+
+    const openButton = container.querySelector<HTMLButtonElement>('.task-header-rail__hit');
+    expect(openButton).toBeTruthy();
+
+    await act(async () => {
+      openButton!.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true }));
+    });
+
+    expect(mocks.openBtwSessionInAuxPane).toHaveBeenCalledWith(
+      expect.objectContaining({
+        childSessionId: 'code-review-session-1',
+        parentSessionId: 'parent-session',
+        agentType: 'CodeReview',
+        subagentType: 'CodeReview',
+        includeInternal: true,
+      }),
+    );
+  });
+
+  it('keeps historical fixed-reviewer tasks in the Deep Review coverage view', async () => {
+    const toolItem: FlowToolItem = {
+      ...reviewTaskItem('completed', 'ReviewSecurity', 'Review authentication changes'),
+      subagentSessionId: 'legacy-review-security-session',
+    };
+
+    await act(async () => {
+      root.render(
+        <TaskToolDisplay
+          toolItem={toolItem}
+          config={config}
+          sessionId="deep-review-parent-session"
+        />,
+      );
+    });
+
+    const openButton = container.querySelector<HTMLButtonElement>('.task-header-rail__hit');
+    expect(openButton).toBeTruthy();
+
+    await act(async () => {
+      openButton!.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true }));
+    });
+
+    expect(mocks.openBtwSessionInAuxPane).not.toHaveBeenCalled();
+  });
+
+  it('keeps a historical packetless ReviewJudge task in the coverage view', async () => {
+    const toolItem: FlowToolItem = {
+      ...reviewTaskItem('completed', 'ReviewJudge', 'Validate disputed findings'),
+      subagentSessionId: 'legacy-review-judge-session',
+    };
+
+    await act(async () => {
+      root.render(
+        <TaskToolDisplay
+          toolItem={toolItem}
+          config={config}
+          sessionId="deep-review-parent-session"
+        />,
+      );
+    });
+
+    const openButton = container.querySelector<HTMLButtonElement>('.task-header-rail__hit');
+    await act(async () => {
+      openButton!.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true }));
+    });
+
+    expect(mocks.openBtwSessionInAuxPane).not.toHaveBeenCalled();
+  });
+
+  it('does not apply the historical reviewer fallback outside Deep Review', async () => {
+    const toolItem: FlowToolItem = {
+      ...reviewTaskItem('completed', 'ReviewSecurity', 'Run a custom security task'),
+      subagentSessionId: 'custom-review-security-session',
+    };
+
+    await act(async () => {
+      root.render(
+        <TaskToolDisplay
+          toolItem={toolItem}
+          config={config}
+          sessionId="parent-session"
+        />,
+      );
+    });
+
+    const openButton = container.querySelector<HTMLButtonElement>('.task-header-rail__hit');
+    await act(async () => {
+      openButton!.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true }));
+    });
+
+    expect(mocks.openBtwSessionInAuxPane).toHaveBeenCalledWith(
+      expect.objectContaining({
+        childSessionId: 'custom-review-security-session',
+        parentSessionId: 'parent-session',
+      }),
+    );
   });
 
   it('renders spawn task cards from the result subagent session metadata', async () => {

@@ -3,7 +3,7 @@
  * Used to render Markdown-formatted text
  */
 
-import React, { useState, useMemo, useCallback, useEffect, useLayoutEffect, Component, type ReactNode } from 'react';
+import React, { useState, useMemo, useCallback, useEffect, useLayoutEffect, useRef, Component, type ReactNode } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import rehypeRaw from 'rehype-raw';
@@ -20,6 +20,7 @@ import { getPrismLanguageFromAlias } from '@/infrastructure/language-detection';
 import { useTheme } from '@/infrastructure/theme';
 import { contextMenuController } from '@/shared/context-menu-system/core/ContextMenuController';
 import { ContextType, type CustomContext, type MenuItem } from '@/shared/context-menu-system/types';
+import { createTab } from '@/shared/utils/tabUtils';
 import { createLogger } from '@/shared/utils/logger';
 import {
   isStartupRenderTraceEnabled,
@@ -797,6 +798,11 @@ export const Markdown = React.memo<MarkdownProps>(({
 }) => {
   const { isLight } = useTheme();
   const [currentWorkspacePath, setCurrentWorkspacePath] = useState('');
+  // Keep streaming flag out of `components` memo deps so flipping streaming
+  // mode does not rebuild the entire ReactMarkdown component map (that remount
+  // looked like the chat pane refreshed when a turn finished).
+  const isStreamingRef = useRef(isStreaming);
+  isStreamingRef.current = isStreaming;
   
   const syntaxTheme = useMemo(() => buildMarkdownPrismStyle(isLight), [isLight]);
   
@@ -974,19 +980,17 @@ export const Markdown = React.memo<MarkdownProps>(({
       return;
     }
 
-    window.dispatchEvent(new CustomEvent('agent-create-tab', {
-      detail: {
-        type: 'browser',
-        title: translateMarkdownLabel('markdown.openInBuiltInBrowser'),
-        data: { url },
-        metadata: {
-          duplicateCheckKey: `browser-panel:${url}`,
-        },
-        checkDuplicate: true,
-        duplicateCheckKey: `browser-panel:${url}`,
-        replaceExisting: false,
-      },
-    }));
+    const duplicateCheckKey = `browser-panel:${url}`;
+    createTab({
+      type: 'browser',
+      title: translateMarkdownLabel('markdown.openInBuiltInBrowser'),
+      data: { url },
+      metadata: { duplicateCheckKey },
+      checkDuplicate: true,
+      duplicateCheckKey,
+      replaceExisting: false,
+      mode: 'agent',
+    });
   }, []);
 
   const handleLocalFileContextMenu = useCallback((
@@ -1017,7 +1021,18 @@ export const Markdown = React.memo<MarkdownProps>(({
 
   const handleWebLinkContextMenu = useCallback((event: React.MouseEvent<HTMLElement>, url: string) => {
     const targetElement = event.currentTarget;
-    const items: MenuItem[] = [
+    const items: MenuItem[] = [];
+
+    if (canOpenInBuiltInBrowser(targetElement)) {
+      items.push({
+        id: 'markdown-open-in-built-in-browser',
+        label: translateMarkdownLabel('markdown.openInBuiltInBrowser'),
+        icon: 'PanelRightOpen',
+        onClick: () => handleOpenBuiltInBrowserLink(url),
+      });
+    }
+
+    items.push(
       {
         id: 'markdown-open-in-browser',
         label: translateMarkdownLabel('markdown.openInBrowser'),
@@ -1030,16 +1045,7 @@ export const Markdown = React.memo<MarkdownProps>(({
         icon: 'Copy',
         onClick: () => void handleCopyLink(url),
       },
-    ];
-
-    if (canOpenInBuiltInBrowser(targetElement)) {
-      items.splice(1, 0, {
-        id: 'markdown-open-in-built-in-browser',
-        label: translateMarkdownLabel('markdown.openInBuiltInBrowser'),
-        icon: 'PanelRightOpen',
-        onClick: () => handleOpenBuiltInBrowserLink(url),
-      });
-    }
+    );
 
     showLinkContextMenu(event, items, 'markdown-web-link', { url });
   }, [
@@ -1067,11 +1073,13 @@ export const Markdown = React.memo<MarkdownProps>(({
         );
       }
       
+      const streaming = isStreamingRef.current;
+
       if (language.toLowerCase().startsWith('mermaid')) {
         return (
           <MermaidBlock
             code={code}
-            isStreaming={isStreaming}
+            isStreaming={streaming}
           />
         );
       }
@@ -1097,23 +1105,12 @@ export const Markdown = React.memo<MarkdownProps>(({
             <CopyButton code={code} />
           </div>
           <div className="code-block-body">
-          {isStreaming ? (
-            // While the text is still streaming, skip the heavy Prism
-            // tokenization on every tick (it re-highlights the entire
-            // code each frame, which is the main source of code-block
-            // jitter in the chat). Render a lightweight, line-numbered
-            // <pre> that matches Prism's `showLineNumbers` layout so the
-            // gutter width and line indentation stay visually stable
-            // across the eventual fallback -> Prism swap when streaming
-            // completes.
-            <CodeBlockFallback
-              code={code}
-              language={normalizedLang}
-              bodyStyle={codeBodyStyle}
-              codeTagStyle={codeTagStyle}
-              gutterColor={gutterColor}
-            />
-          ) : (
+            {/*
+              Always mount AsyncPrismSyntaxHighlighter. While streaming,
+              preferFallback keeps the lightweight line-numbered pre so we do
+              not remount Fallback ↔ Prism when the turn finishes (that remount
+              flashed the chat pane).
+            */}
             <AsyncPrismSyntaxHighlighter
               language={normalizedLang}
               style={syntaxTheme}
@@ -1127,6 +1124,7 @@ export const Markdown = React.memo<MarkdownProps>(({
                 userSelect: 'none',
                 minWidth: '3em'
               }}
+              preferFallback={streaming}
               fallback={CodeBlockFallback}
               fallbackProps={{
                 code,
@@ -1139,7 +1137,6 @@ export const Markdown = React.memo<MarkdownProps>(({
             >
               {code}
             </AsyncPrismSyntaxHighlighter>
-          )}
           </div>
         </div>
       );
@@ -1295,6 +1292,11 @@ export const Markdown = React.memo<MarkdownProps>(({
               if (onHttpLinkClick?.(hrefValue, e)) {
                 return;
               }
+              const hasExternalOpenModifier = e.metaKey || e.ctrlKey || e.shiftKey || e.altKey;
+              if (canOpenInBuiltInBrowser(e.currentTarget) && !hasExternalOpenModifier) {
+                handleOpenBuiltInBrowserLink(hrefValue);
+                return;
+              }
               try {
                 await systemAPI.openExternal(hrefValue);
               } catch (error) {
@@ -1387,12 +1389,13 @@ export const Markdown = React.memo<MarkdownProps>(({
     basePath,
     remoteConnectionId,
     expandDetailsByDefault,
-    isStreaming,
     markdownContent,
     handleFileViewRequest,
     handleRevealInExplorer,
     handleLocalFileContextMenu,
     handleWebLinkContextMenu,
+    canOpenInBuiltInBrowser,
+    handleOpenBuiltInBrowserLink,
     handleOpenVisualization,
     handleTabOpen,
     onHttpLinkClick,

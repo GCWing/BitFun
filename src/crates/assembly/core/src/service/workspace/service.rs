@@ -29,6 +29,8 @@ use std::sync::Arc;
 use tokio::fs;
 use tokio::sync::RwLock;
 
+const MAX_WORKSPACE_NAME_CHARS: usize = 80;
+
 /// Workspace service.
 pub struct WorkspaceService {
     manager: Arc<RwLock<WorkspaceManager>>,
@@ -103,6 +105,28 @@ struct AssistantWorkspaceDescriptor {
 }
 
 impl WorkspaceService {
+    fn normalize_workspace_name(name: String) -> BitFunResult<String> {
+        let name = name.trim();
+
+        if name.is_empty() {
+            return Err(BitFunError::service("Workspace name cannot be empty"));
+        }
+
+        if name.chars().any(char::is_control) {
+            return Err(BitFunError::service(
+                "Workspace name cannot contain control characters",
+            ));
+        }
+
+        if name.chars().count() > MAX_WORKSPACE_NAME_CHARS {
+            return Err(BitFunError::service(format!(
+                "Workspace name cannot exceed {MAX_WORKSPACE_NAME_CHARS} characters"
+            )));
+        }
+
+        Ok(name.to_string())
+    }
+
     fn collect_startup_restored_workspaces(manager: &WorkspaceManager) -> Vec<WorkspaceInfo> {
         let mut targets = Vec::new();
         let mut seen_workspace_ids = HashSet::new();
@@ -1093,6 +1117,11 @@ impl WorkspaceService {
             related_paths,
         } = updates;
 
+        let normalized_name = match name {
+            Some(name) => Some(Self::normalize_workspace_name(name)?),
+            None => None,
+        };
+
         let existing_workspace = {
             let manager = self.manager.read().await;
             manager
@@ -1121,7 +1150,7 @@ impl WorkspaceService {
                     BitFunError::service(format!("Workspace not found: {}", workspace_id))
                 })?;
 
-            if let Some(name) = name {
+            if let Some(name) = normalized_name {
                 workspace.name = name;
             }
 
@@ -2574,6 +2603,59 @@ mod tests {
                 .contains("not a known remote SSH workspace"),
             "unexpected error: {error}"
         );
+    }
+
+    #[tokio::test]
+    async fn update_workspace_info_normalizes_and_validates_project_name() {
+        let env = TestEnvironment::new();
+        let service = build_test_workspace_service(env.path_manager.clone()).await;
+        let workspace_root = env.create_workspace_dir("rename-project");
+        let workspace = service
+            .open_workspace(workspace_root)
+            .await
+            .expect("workspace should open");
+
+        let renamed = service
+            .update_workspace_info(
+                &workspace.id,
+                WorkspaceInfoUpdates {
+                    name: Some("  Renamed project  ".to_string()),
+                    description: None,
+                    tags: None,
+                    related_paths: None,
+                },
+            )
+            .await
+            .expect("valid project name should be accepted");
+        assert_eq!(renamed.name, "Renamed project");
+        assert_eq!(
+            service
+                .get_workspace(&workspace.id)
+                .await
+                .expect("renamed workspace should remain available")
+                .name,
+            "Renamed project"
+        );
+
+        for invalid_name in [
+            "   ".to_string(),
+            "Project\nName".to_string(),
+            "x".repeat(MAX_WORKSPACE_NAME_CHARS + 1),
+        ] {
+            let error = service
+                .update_workspace_info(
+                    &workspace.id,
+                    WorkspaceInfoUpdates {
+                        name: Some(invalid_name),
+                        description: None,
+                        tags: None,
+                        related_paths: None,
+                    },
+                )
+                .await
+                .expect_err("invalid project name should be rejected");
+            assert!(error.to_string().contains("Workspace name"));
+        }
     }
 
     #[test]

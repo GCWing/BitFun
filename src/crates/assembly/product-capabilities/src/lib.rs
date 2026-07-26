@@ -257,7 +257,7 @@ const PRODUCT_DELIVERY_PROFILE_ENTRIES: &[ProductDeliveryProfileEntry] = &[
     ),
     ProductDeliveryProfileEntry::new(
         DeliveryProfile::Sdk,
-        ProductCoreDependencyMode::NoDirectCoreDependency,
+        ProductCoreDependencyMode::ProductFullCompatibility,
     ),
 ];
 
@@ -944,7 +944,6 @@ const CODE_AGENT_SERVICES: &[RuntimeServiceCapability] = &[
     RuntimeServiceCapability::FileSystem,
     RuntimeServiceCapability::Workspace,
     RuntimeServiceCapability::SessionStore,
-    RuntimeServiceCapability::Permission,
     RuntimeServiceCapability::Events,
     RuntimeServiceCapability::Clock,
     RuntimeServiceCapability::Terminal,
@@ -952,19 +951,16 @@ const CODE_AGENT_SERVICES: &[RuntimeServiceCapability] = &[
 const DEEP_REVIEW_SERVICES: &[RuntimeServiceCapability] = &[
     RuntimeServiceCapability::Workspace,
     RuntimeServiceCapability::Git,
-    RuntimeServiceCapability::Permission,
     RuntimeServiceCapability::Events,
 ];
 const DEEP_RESEARCH_SERVICES: &[RuntimeServiceCapability] = &[
     RuntimeServiceCapability::Workspace,
     RuntimeServiceCapability::Network,
-    RuntimeServiceCapability::Permission,
     RuntimeServiceCapability::Events,
 ];
 const MINIAPP_SERVICES: &[RuntimeServiceCapability] = &[
     RuntimeServiceCapability::FileSystem,
     RuntimeServiceCapability::Workspace,
-    RuntimeServiceCapability::Permission,
     RuntimeServiceCapability::Events,
 ];
 const CANVAS_SERVICES: &[RuntimeServiceCapability] = &[
@@ -1045,12 +1041,16 @@ const DEFAULT_PRODUCT_CAPABILITY_PACKS: &[ProductCapabilityPack] = &[
         INTEGRATION_TOOL_GROUPS,
         MINIAPP_HARNESS_PROVIDERS,
     ),
-    ProductCapabilityPack::new(
-        ProductCapabilityId::Canvas,
-        CANVAS_SERVICES,
-        CANVAS_TOOL_GROUPS,
-        NO_HARNESS_PROVIDERS,
-    ),
+    // Canvas pack disabled: canvas-runtime cannot be compiled on the OHOS
+    // target (oxc dependency), and the core.canvas provider group would
+    // trigger materialization panics. Re-enable when canvas-runtime is
+    // available on all supported targets.
+    // ProductCapabilityPack::new(
+    //     ProductCapabilityId::Canvas,
+    //     CANVAS_SERVICES,
+    //     CANVAS_TOOL_GROUPS,
+    //     NO_HARNESS_PROVIDERS,
+    // ),
 ];
 const EMPTY_PRODUCT_CAPABILITY_PACKS: &[ProductCapabilityPack] = &[];
 
@@ -1085,11 +1085,13 @@ fn product_capability_registry_for_profile(profile: DeliveryProfile) -> ProductC
         DeliveryProfile::ProductFull
         | DeliveryProfile::Desktop
         | DeliveryProfile::Cli
-        | DeliveryProfile::Acp => default_product_capability_registry(),
+        | DeliveryProfile::Acp
+        | DeliveryProfile::Sdk => default_product_capability_registry(),
         DeliveryProfile::Server
         | DeliveryProfile::Remote
         | DeliveryProfile::Web
-        | DeliveryProfile::MobileWeb
-        | DeliveryProfile::Sdk => ProductCapabilityRegistry::new(EMPTY_PRODUCT_CAPABILITY_PACKS),
+        | DeliveryProfile::MobileWeb => {
+            ProductCapabilityRegistry::new(EMPTY_PRODUCT_CAPABILITY_PACKS)
+        }
     }
 }

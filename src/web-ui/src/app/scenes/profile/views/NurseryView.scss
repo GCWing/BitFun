@@ -2032,6 +2032,17 @@ $nursery-scene-gutter: clamp(40px, 6vw, 80px);
     background: var(--element-bg-subtle);
   }
 
+  &--covered {
+    .tc-skill-row__name {
+      color: var(--color-text-muted);
+      text-decoration: line-through;
+    }
+
+    .tc-skill-row__state {
+      color: var(--color-warning);
+    }
+  }
+
   &__hit {
     flex: 1;
     min-width: 0;
@@ -2069,9 +2080,42 @@ $nursery-scene-gutter: clamp(40px, 6vw, 80px);
     font-weight: $font-weight-medium;
   }
 
+  &__state {
+    flex-shrink: 1;
+    min-width: 72px;
+    max-width: 220px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 10px;
+    color: var(--color-text-muted);
+  }
+
   .bitfun-switch {
     flex-shrink: 0;
     margin-right: $size-gap-2;
+  }
+}
+
+@media (max-width: 720px) {
+  .tc-skill-row {
+    &__hit {
+      align-items: flex-start;
+      flex-wrap: wrap;
+    }
+
+    &__name {
+      flex: 1 1 140px;
+    }
+
+    &__state {
+      flex: 1 1 100%;
+      min-width: 0;
+      max-width: none;
+      overflow: visible;
+      text-overflow: clip;
+      white-space: normal;
+    }
   }
 }
 

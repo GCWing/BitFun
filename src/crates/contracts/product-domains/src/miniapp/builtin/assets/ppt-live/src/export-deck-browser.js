@@ -1,9 +1,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 // PPTX / PDF / PNG Export Functions
 //
-// exportPptxPrepared() — builds a PPTX deck from prepared slideData + raster
-//   backgrounds (the main export path for HTML-based slides).
-// exportPptxFromDeck() — builds a PPTX from element-model slides (no HTML).
+// exportEditablePptx() — the only EditableSlideScene → PPTX serializer entry.
 // exportPdfFromBase64Pages() — merges rendered PDF pages.
 // exportPngZipFromPages() — zips rendered PNG slides.
 //
@@ -12,22 +10,12 @@
 import { PDFDocument } from 'pdf-lib';
 import JSZip from 'jszip';
 import {
-  buildSlideFromExtracted,
+  buildSlideFromScene,
   buildSpeakerNotes,
   createPptxDeck,
 } from './pptx-html-build.js';
-import { exportElementDeckToPptx } from './pptx-element-export.js';
 
 const MIME_PPTX = 'application/vnd.openxmlformats-officedocument.presentationml.presentation';
-
-const RASTER_TEXT_TYPES = new Set(['p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'text', 'list', 'merged-text']);
-
-function filterSlideDataForRasterBackdrop(slideData) {
-  return {
-    ...slideData,
-    elements: (slideData.elements || []).filter((el) => RASTER_TEXT_TYPES.has(el.type)),
-  };
-}
 
 function uint8ToBase64(bytes) {
   const chunk = 0x8000;
@@ -51,44 +39,47 @@ async function pptxToExportResult(pptx, deck) {
   };
 }
 
-export async function exportPptxFromDeck(deck) {
-  const slides = Array.isArray(deck?.slides) ? deck.slides : [];
-  if (slides.some((slide) => slide?.html)) {
-    throw new Error('HTML slides must use the WebView prepare export path.');
-  }
-  const pptx = await exportElementDeckToPptx(deck);
-  return pptxToExportResult(pptx, deck);
-}
-
-export async function exportPptxPrepared(deck, preparedSlides) {
-  const prepared = Array.isArray(preparedSlides) ? preparedSlides : [];
-  if (!prepared.length) throw new Error('No prepared slides to export');
+/**
+ * Serialize every scene. A slide whose scene fails OOXML serialization is
+ * replaced with a blank slide instead of aborting the whole deck export; the
+ * degradation is reported through `options.onDegrade`.
+ */
+export async function exportEditablePptx(deck, scenes, options = {}) {
+  const prepared = Array.isArray(scenes) ? scenes : [];
+  if (!prepared.length) throw new Error('No editable slide scenes to export');
   const pptx = createPptxDeck(deck);
   const slides = Array.isArray(deck?.slides) ? deck.slides : [];
-  for (const item of prepared) {
-    const sourceSlide = slides[item.index] || item.notes || {};
-    let slideData = item.slideData;
-    if (item.rasterBase64) {
-      const raw = String(item.rasterBase64).replace(/^data:.*;base64,/, '');
-      if (item.rasterOnly) {
-        slideData = {
-          ...slideData,
-          elements: (slideData.elements || []).filter((el) => !RASTER_TEXT_TYPES.has(el.type)),
-          background: { type: 'image', path: `data:image/png;base64,${raw}` },
-        };
-      } else {
-        slideData = filterSlideDataForRasterBackdrop(slideData);
-        slideData = {
-          ...slideData,
-          background: { type: 'image', path: `data:image/png;base64,${raw}` },
-        };
-      }
+  for (const [index, scene] of prepared.entries()) {
+    const sourceSlide = slides[index] || {};
+    let result;
+    try {
+      result = await buildSlideFromScene(scene, pptx);
+    } catch (error) {
+      options.onDegrade?.({
+        severity: 'degrade',
+        slideNumber: scene?.slideNumber || index + 1,
+        sourceId: error?.sourceId || error?.diagnostic?.sourceId || `slide-${index + 1}`,
+        code: 'slide_simplified',
+        message: 'The slide could not be serialized and was replaced with a blank slide.',
+      });
+      result = await buildSlideFromScene({
+        slideNumber: scene?.slideNumber || index + 1,
+        width: scene?.width || 13.333,
+        height: scene?.height || 7.5,
+        nodes: [{
+          type: 'shape',
+          shapeType: 'rect',
+          sourceId: `slide-${index + 1}-blank-background`,
+          x: 0,
+          y: 0,
+          w: scene?.width || 13.333,
+          h: scene?.height || 7.5,
+          paintOrder: 0,
+          subOrder: 0,
+          style: { fill: 'FFFFFF', line: null },
+        }],
+      }, pptx);
     }
-    const result = await buildSlideFromExtracted(
-      slideData,
-      item.bodyDimensions,
-      pptx,
-    );
     const notes = buildSpeakerNotes(sourceSlide);
     if (notes && result?.slide && typeof result.slide.addNotes === 'function') {
       result.slide.addNotes(notes);

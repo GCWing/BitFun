@@ -106,6 +106,7 @@ bitfun-services-core = { path = "../../services/services-core", default-features
     "lsp",
     "markdown",
     "workspace-runtime",
+    "permission",
 ] }
 
 # Integration service owner crate
@@ -139,17 +140,16 @@ tokio-tungstenite = { workspace = true, optional = true }
 # SSH - Remote SSH support (optional feature)
 russh = { workspace = true, optional = true }
 
-# Relay runtime shared by embedded and standalone application hosts.
-bitfun-relay-service = { path = "../../services/relay-service", optional = true }
-
 # Event layer dependency (lowest layer)
 bitfun-core-types = { path = "../../contracts/core-types" }
 bitfun-events = { path = "../../contracts/events" }
-bitfun-runtime-ports = { path = "../../contracts/runtime-ports" }
+bitfun-runtime-ports = { path = "../../contracts/runtime-ports", features = ["permission"] }
 bitfun-runtime-services = { path = "../../execution/runtime-services" }
 
 # Reviewed product-full plugin composition root.
 bitfun-opencode-adapter = { path = "../../adapters/opencode-adapter", optional = true }
+bitfun-claude-code-adapter = { path = "../../adapters/claude-code-adapter", optional = true }
+bitfun-codex-adapter = { path = "../../adapters/codex-adapter", optional = true }
 bitfun-plugin-runtime-host = { path = "../../execution/plugin-runtime-host", optional = true }
 
 # Transport layer dependency
@@ -188,6 +188,8 @@ product-full = [
     "dep:globset",
     "dep:include_dir",
     "dep:bitfun-opencode-adapter",
+    "dep:bitfun-claude-code-adapter",
+    "dep:bitfun-codex-adapter",
     "dep:bitfun-external-sources",
     "dep:bitfun-plugin-runtime-host",
     "dep:indexmap",
@@ -203,7 +205,7 @@ product-full = [
 ]
 ai-adapter-runtime = [
     "dep:bitfun-ai-adapters",
-    "bitfun-ai-adapters/cli-credentials",
+    "bitfun-ai-adapters/subscription-auth",
     "dep:reqwest",
 ]
 product-capabilities = ["dep:bitfun-product-capabilities"]
@@ -226,7 +228,6 @@ runtime-services = []
 service-integrations = [
     "dep:aes-gcm",
     "dep:axum",
-    "dep:bitfun-relay-service",
     "dep:git2",
     "dep:image",
     "dep:md5",

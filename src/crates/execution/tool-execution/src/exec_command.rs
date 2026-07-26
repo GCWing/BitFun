@@ -111,6 +111,7 @@ pub struct ExecCommandShellMetadata {
     pub kind: String,
     pub path: String,
     pub invocation: String,
+    pub pipeline_failure_policy: String,
     pub remote_env_snapshot_applied: Option<bool>,
 }
 
@@ -184,6 +185,10 @@ impl ExecCommandShellKind {
                 | Self::Csh
                 | Self::Custom(_)
         )
+    }
+
+    fn supports_pipefail(&self) -> bool {
+        matches!(self, Self::Bash | Self::Zsh | Self::Ksh)
     }
 }
 
@@ -293,7 +298,14 @@ pub fn exec_command_argv_for_shell(
 ) -> Vec<String> {
     let shell = shell_path.into();
     if shell_kind.uses_posix_invocation() {
-        return vec![shell, "-lc".to_string(), cmd.to_string()];
+        let mut argv = vec![shell];
+        argv.extend(
+            exec_command_posix_shell_args(&shell_kind)
+                .iter()
+                .map(|arg| (*arg).to_string()),
+        );
+        argv.push(cmd.to_string());
+        return argv;
     }
 
     match shell_kind {
@@ -321,7 +333,10 @@ pub fn exec_command_shell_invocation_for_model(
     shell_kind: ExecCommandShellKind,
 ) -> String {
     if shell_kind.uses_posix_invocation() {
-        return format!("`{shell_path} -lc <cmd>`");
+        return format!(
+            "`{shell_path} {} <cmd>`",
+            exec_command_posix_shell_args(&shell_kind).join(" ")
+        );
     }
 
     match shell_kind {
@@ -337,10 +352,11 @@ pub fn remote_exec_login_shell_command(
     workdir: &str,
     cmd: &str,
     shell_path: &str,
+    shell_kind: ExecCommandShellKind,
     env_snapshot: Option<&ExecCommandRemoteEnvSnapshot>,
 ) -> String {
     let env_words = remote_command_env_words(merged_remote_exec_env(env_snapshot));
-    let shell_args = remote_exec_shell_login_args().join(" ");
+    let shell_args = remote_exec_shell_login_args(&shell_kind).join(" ");
 
     format!(
         "cd {} && env {} {} {} {}",
@@ -352,16 +368,21 @@ pub fn remote_exec_login_shell_command(
     )
 }
 
-pub fn remote_exec_non_tty_control_wrapper(cmd: &str, shell_path: &str) -> String {
+pub fn remote_exec_non_tty_control_wrapper(
+    cmd: &str,
+    shell_path: &str,
+    shell_kind: ExecCommandShellKind,
+) -> String {
     let escaped_shell = exec_command_shell_escape(shell_path);
     let escaped_cmd = exec_command_shell_escape(cmd);
+    let shell_args = remote_exec_shell_login_args(&shell_kind).join(" ");
     format!(
         r#"__bitfun_shell={escaped_shell}
 __bitfun_cmd={escaped_cmd}
 if command -v setsid >/dev/null 2>&1; then
-  setsid "$__bitfun_shell" -lc "$__bitfun_cmd" &
+  setsid "$__bitfun_shell" {shell_args} "$__bitfun_cmd" &
 else
-  "$__bitfun_shell" -lc "$__bitfun_cmd" &
+  "$__bitfun_shell" {shell_args} "$__bitfun_cmd" &
 fi
 __bitfun_child=$!
 __bitfun_pgid=$__bitfun_child
@@ -415,8 +436,24 @@ pub fn fallback_remote_exec_shell() -> ExecCommandRemoteShell {
     }
 }
 
-pub fn remote_exec_shell_login_args() -> &'static [&'static str] {
-    &["-lc"]
+pub fn exec_command_posix_shell_args(shell_kind: &ExecCommandShellKind) -> &'static [&'static str] {
+    if shell_kind.supports_pipefail() {
+        &["-o", "pipefail", "-lc"]
+    } else {
+        &["-lc"]
+    }
+}
+
+pub fn exec_command_pipeline_failure_policy(shell_kind: &ExecCommandShellKind) -> &'static str {
+    if shell_kind.supports_pipefail() {
+        "pipefail"
+    } else {
+        "last_command"
+    }
+}
+
+pub fn remote_exec_shell_login_args(shell_kind: &ExecCommandShellKind) -> &'static [&'static str] {
+    exec_command_posix_shell_args(shell_kind)
 }
 
 pub fn remote_exec_env_snapshot_capture_policy() -> ExecCommandRemoteEnvSnapshotCapturePolicy {
@@ -635,6 +672,7 @@ pub fn exec_command_shell_metadata_value(metadata: ExecCommandShellMetadata) -> 
         "type": metadata.kind,
         "path": metadata.path,
         "invocation": metadata.invocation,
+        "pipeline_failure_policy": metadata.pipeline_failure_policy,
     });
     if let Some(remote_env_snapshot_applied) = metadata.remote_env_snapshot_applied {
         value["remote_env_snapshot_applied"] = json!(remote_env_snapshot_applied);
@@ -1084,6 +1122,61 @@ mod tests {
     }
 
     #[test]
+    fn supported_posix_shells_enable_pipefail() {
+        for shell_kind in [
+            ExecCommandShellKind::Bash,
+            ExecCommandShellKind::Zsh,
+            ExecCommandShellKind::Ksh,
+        ] {
+            let argv =
+                exec_command_argv_for_shell("/bin/shell", shell_kind.clone(), "false | tail -n 1");
+            assert_eq!(
+                argv,
+                ["/bin/shell", "-o", "pipefail", "-lc", "false | tail -n 1"]
+            );
+            assert_eq!(
+                exec_command_pipeline_failure_policy(&shell_kind),
+                "pipefail"
+            );
+        }
+    }
+
+    #[test]
+    fn unsupported_posix_shells_keep_last_command_pipeline_status() {
+        let argv =
+            exec_command_argv_for_shell("/bin/sh", ExecCommandShellKind::Sh, "false | tail -n 1");
+
+        assert_eq!(argv, ["/bin/sh", "-lc", "false | tail -n 1"]);
+        assert_eq!(
+            exec_command_pipeline_failure_policy(&ExecCommandShellKind::Sh),
+            "last_command"
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn bash_pipefail_preserves_pipeline_success_and_failure() {
+        for (command, expected_success) in [
+            ("printf 'ok\\n' | tail -n 1", true),
+            ("false | tail -n 1", false),
+            ("true | false | tail -n 1", false),
+        ] {
+            let argv =
+                exec_command_argv_for_shell("/bin/bash", ExecCommandShellKind::Bash, command);
+            let status = std::process::Command::new(&argv[0])
+                .args(&argv[1..])
+                .status()
+                .expect("bash pipeline should execute");
+
+            assert_eq!(
+                status.success(),
+                expected_success,
+                "unexpected status for {command:?}: {status:?}"
+            );
+        }
+    }
+
+    #[test]
     fn remote_login_shell_command_applies_snapshot_then_tool_env() {
         let snapshot = ExecCommandRemoteEnvSnapshot {
             env: HashMap::from([
@@ -1096,6 +1189,7 @@ mod tests {
             "/home/me/project",
             "node --version",
             "/bin/bash",
+            ExecCommandShellKind::Bash,
             Some(&snapshot),
         );
 
@@ -1103,14 +1197,18 @@ mod tests {
         assert!(command.contains("'PATH=/home/me/.nvm/bin:/usr/bin'"));
         assert!(command.contains("'TERM=dumb'"));
         assert!(!command.contains("'TERM=xterm-256color'"));
-        assert!(command.ends_with(" '/bin/bash' -lc 'node --version'"));
+        assert!(command.ends_with(" '/bin/bash' -o pipefail -lc 'node --version'"));
     }
 
     #[test]
     fn remote_non_tty_control_wrapper_preserves_interrupt_cleanup_contract() {
-        let wrapper = remote_exec_non_tty_control_wrapper("python3 -c 'print(1)'", "/bin/bash");
+        let wrapper = remote_exec_non_tty_control_wrapper(
+            "python3 -c 'print(1)'",
+            "/bin/bash",
+            ExecCommandShellKind::Bash,
+        );
 
-        assert!(wrapper.contains("setsid \"$__bitfun_shell\" -lc \"$__bitfun_cmd\" &"));
+        assert!(wrapper.contains("setsid \"$__bitfun_shell\" -o pipefail -lc \"$__bitfun_cmd\" &"));
         assert!(wrapper.contains("trap '__bitfun_stop INT 130 2' INT"));
         assert!(wrapper.contains("trap '__bitfun_stop KILL 137 0' TERM"));
         assert!(wrapper.contains("__bitfun_grace=${3:-2}"));
@@ -1316,6 +1414,7 @@ mod tests {
                 kind: "powershell_core".to_string(),
                 path: "pwsh".to_string(),
                 invocation: "`pwsh -Command <cmd>`".to_string(),
+                pipeline_failure_policy: "last_command".to_string(),
                 remote_env_snapshot_applied: None,
             },
         });
@@ -1339,7 +1438,8 @@ mod tests {
                     "name": "PowerShell Core",
                     "type": "powershell_core",
                     "path": "pwsh",
-                    "invocation": "`pwsh -Command <cmd>`"
+                    "invocation": "`pwsh -Command <cmd>`",
+                    "pipeline_failure_policy": "last_command"
                 }
             })
         );

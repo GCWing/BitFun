@@ -10,14 +10,14 @@ use log::warn;
 use serde_json::Value;
 
 pub use bitfun_agent_runtime::deep_review::{
-    apply_deep_review_queue_control, classify_deep_review_capacity_error,
-    clear_deep_review_queue_control_for_tool, deep_review_active_reviewer_count,
-    deep_review_capacity_skip_count, deep_review_concurrency_cap_rejection_count,
-    deep_review_effective_concurrency_snapshot, deep_review_effective_parallel_instances,
-    deep_review_has_judge_been_launched, deep_review_max_retries_per_role,
-    deep_review_queue_control_snapshot, deep_review_retries_used,
+    apply_deep_review_queue_control, canonical_review_worker_agent_type,
+    classify_deep_review_capacity_error, clear_deep_review_queue_control_for_tool,
+    deep_review_active_reviewer_count, deep_review_capacity_skip_count,
+    deep_review_concurrency_cap_rejection_count, deep_review_effective_concurrency_snapshot,
+    deep_review_effective_parallel_instances, deep_review_has_judge_been_launched,
+    deep_review_max_retries_per_role, deep_review_queue_control_snapshot, deep_review_retries_used,
     deep_review_runtime_diagnostics_snapshot, deep_review_shared_context_measurement_snapshot,
-    deep_review_turn_elapsed_seconds, default_review_team_definition,
+    deep_review_turn_elapsed_seconds, default_review_team_definition, is_review_worker_agent_type,
     record_deep_review_capacity_skip, record_deep_review_capacity_skip_for_reason,
     record_deep_review_concurrency_cap_rejection,
     record_deep_review_effective_concurrency_capacity_error,
@@ -40,9 +40,8 @@ pub use bitfun_agent_runtime::deep_review::{
     DeepReviewSharedContextMeasurementSnapshot, DeepReviewStrategyLevel, DeepReviewSubagentRole,
     ReviewStrategyManifestProfile, ReviewTeamDefinition, ReviewTeamExecutionPolicyDefinition,
     ReviewTeamRoleDefinition, CONDITIONAL_REVIEWER_AGENT_TYPES, CORE_REVIEWER_AGENT_TYPES,
-    DEEP_REVIEW_AGENT_TYPE, REVIEWER_ARCHITECTURE_AGENT_TYPE, REVIEWER_BUSINESS_LOGIC_AGENT_TYPE,
-    REVIEWER_FRONTEND_AGENT_TYPE, REVIEWER_GENERAL_AGENT_TYPE, REVIEWER_PERFORMANCE_AGENT_TYPE,
-    REVIEWER_SECURITY_AGENT_TYPE, REVIEW_FIXER_AGENT_TYPE, REVIEW_JUDGE_AGENT_TYPE,
+    DEEP_REVIEW_AGENT_TYPE, LEGACY_REVIEW_WORKER_AGENT_TYPES, REVIEW_FIXER_AGENT_TYPE,
+    REVIEW_JUDGE_AGENT_TYPE, REVIEW_WORKER_AGENT_TYPE,
 };
 
 const DEFAULT_REVIEW_TEAM_CONFIG_PATH: &str = "ai.review_teams.default";
@@ -90,7 +89,7 @@ mod tests {
     use super::{
         default_review_team_definition, is_missing_default_review_team_config_error,
         DeepReviewBudgetTracker, DeepReviewExecutionPolicy, DeepReviewRunManifestGate,
-        DeepReviewStrategyLevel, DeepReviewSubagentRole, REVIEWER_SECURITY_AGENT_TYPE,
+        DeepReviewStrategyLevel, DeepReviewSubagentRole, REVIEW_WORKER_AGENT_TYPE,
     };
     use crate::util::errors::BitFunError;
     use serde_json::json;
@@ -117,14 +116,14 @@ mod tests {
         let policy = DeepReviewExecutionPolicy::from_config_value(Some(&json!({
             "strategy_level": "deep",
             "member_strategy_overrides": {
-                "ReviewSecurity": "quick"
+                "ReviewWorker": "quick"
             }
         })));
         assert_eq!(policy.strategy_level, DeepReviewStrategyLevel::Deep);
         assert_eq!(
             policy
                 .member_strategy_overrides
-                .get(REVIEWER_SECURITY_AGENT_TYPE),
+                .get(REVIEW_WORKER_AGENT_TYPE),
             Some(&DeepReviewStrategyLevel::Quick)
         );
 
@@ -134,22 +133,22 @@ mod tests {
                 "facade-turn",
                 &DeepReviewExecutionPolicy::default(),
                 DeepReviewSubagentRole::Reviewer,
-                REVIEWER_SECURITY_AGENT_TYPE,
+                REVIEW_WORKER_AGENT_TYPE,
                 false,
             )
             .expect("facade runtime budget export");
 
         let manifest = json!({
             "reviewMode": "deep",
-            "workPackets": [{ "subagentId": "ReviewSecurity" }]
+            "coreReviewers": [{ "subagentId": "ReviewWorker" }]
         });
         let gate = DeepReviewRunManifestGate::from_value(&manifest).expect("manifest gate");
-        assert!(gate.ensure_active("ReviewSecurity").is_ok());
+        assert!(gate.ensure_active("ReviewWorker").is_ok());
 
         let team = default_review_team_definition();
         assert!(team
             .core_roles
             .iter()
-            .any(|reviewer| reviewer.subagent_id == REVIEWER_SECURITY_AGENT_TYPE));
+            .any(|reviewer| reviewer.subagent_id == REVIEW_WORKER_AGENT_TYPE));
     }
 }

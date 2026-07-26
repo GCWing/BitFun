@@ -364,3 +364,253 @@ async fn desired_file_content(
 ) -> BitFunResult<Vec<u8>> {
     Ok(file.contents().to_vec())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::{collect_files, BUILTIN_SKILLS_DIR};
+
+    fn embedded_skill_text(path: &str) -> &'static str {
+        BUILTIN_SKILLS_DIR
+            .get_file(path)
+            .unwrap_or_else(|| panic!("Missing embedded built-in skill file: {path}"))
+            .contents_utf8()
+            .unwrap_or_else(|| panic!("Built-in skill file is not UTF-8: {path}"))
+    }
+
+    fn gstack_skill_texts() -> Vec<(String, &'static str)> {
+        BUILTIN_SKILLS_DIR
+            .dirs()
+            .filter_map(|dir| {
+                let name = dir.path().file_name()?.to_str()?;
+                if !name.starts_with("gstack-") {
+                    return None;
+                }
+                let file = dir.files().find(|file| {
+                    file.path().file_name().and_then(|name| name.to_str()) == Some("SKILL.md")
+                })?;
+                Some((
+                    name.to_string(),
+                    file.contents_utf8()
+                        .unwrap_or_else(|| panic!("{name}/SKILL.md is not UTF-8")),
+                ))
+            })
+            .collect()
+    }
+
+    #[test]
+    fn gstack_direct_skill_paths_resolve_to_bundled_skills() {
+        for (source, text) in gstack_skill_texts() {
+            for token in text.split(|ch: char| {
+                !(ch.is_ascii_alphanumeric() || matches!(ch, '-' | '_' | '/' | '.' | ':'))
+            }) {
+                if let Some(path) = token.strip_suffix("/SKILL.md") {
+                    let target = path.rsplit('/').next().unwrap_or(path);
+                    assert!(
+                        BUILTIN_SKILLS_DIR.get_dir(target).is_some(),
+                        "{source}/SKILL.md references missing built-in skill {target}/SKILL.md"
+                    );
+                }
+                if let Some(target) = token.strip_prefix("user::bitfun-system::") {
+                    assert!(
+                        BUILTIN_SKILLS_DIR.get_dir(target).is_some(),
+                        "{source}/SKILL.md references missing stable skill key {token}"
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn gstack_does_not_emit_pseudo_bitfun_browser_commands() {
+        const STALE_BROWSER_GUIDANCE: [&str; 5] = [
+            "BitFun browser/computer-use",
+            "BitFun built-in browser/computer-use",
+            "external browse binary",
+            "use `ComputerUse` for browser inspection",
+            "use `ComputerUse` for browser/desktop testing",
+        ];
+
+        for (source, text) in gstack_skill_texts() {
+            let lowercase = text.to_ascii_lowercase();
+            for stale in STALE_BROWSER_GUIDANCE {
+                assert!(
+                    !text.contains(stale),
+                    "{source}/SKILL.md still contains stale browser guidance: {stale}"
+                );
+            }
+            assert!(
+                !text.contains("agent-browser fill @e4 \"[REDACTED]\""),
+                "{source}/SKILL.md still places a password placeholder in a logged command"
+            );
+            assert!(
+                !text.contains("agent-browser state load cookies.json"),
+                "{source}/SKILL.md treats a cookie file as agent-browser storage state"
+            );
+            assert!(
+                !text.contains("auth save qa-target") && !text.contains("auth login qa-target"),
+                "{source}/SKILL.md reuses a global auth profile across unrelated targets"
+            );
+            assert!(
+                !text.contains("CDP_MODE=true"),
+                "{source}/SKILL.md still infers agent-browser state from the legacy CDP mode"
+            );
+            if text.contains("cookie file or Copy-as-cURL export") {
+                assert!(
+                    text.contains("agent-browser cookies set --curl cookies.json"),
+                    "{source}/SKILL.md does not import cookie files with the supported command"
+                );
+            }
+            assert!(
+                !text.contains("Ask the user to enter it through stdin"),
+                "{source}/SKILL.md asks for interactive stdin in a non-interactive tool command"
+            );
+            if text.contains("--password-stdin") {
+                assert!(
+                    text.contains("own interactive terminal"),
+                    "{source}/SKILL.md must route password-stdin setup to the user's terminal"
+                );
+            }
+            if text.contains("agent-browser open") || text.contains("agent-browser get url") {
+                assert!(
+                    text.contains("agent-browser --version")
+                        && text.contains("agent-browser skills get core")
+                        && lowercase.contains("once per skill invocation")
+                        && lowercase.contains("before the first browser command"),
+                    "{source}/SKILL.md must verify the CLI and load version-matched guidance"
+                );
+            }
+            if text.contains("SKETCH_URI") {
+                assert!(
+                    text.contains("tempfile.mkstemp")
+                        && text.contains(".resolve().as_uri()")
+                        && text.contains("agent-browser --allow-file-access open")
+                        && lowercase.contains("once per skill invocation")
+                        && lowercase.contains("before the first browser command"),
+                    "{source}/SKILL.md does not open local HTML portably and explicitly"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn gstack_does_not_route_to_unbundled_workflows() {
+        const ABSENT_WORKFLOWS: [&str; 6] = [
+            "plan-devex-review",
+            "/design-shotgun",
+            "/design-html",
+            "/setup-browser-cookies",
+            "qa/templates/qa-report-template.md",
+            "qa/references/issue-taxonomy.md",
+        ];
+
+        for (source, text) in gstack_skill_texts() {
+            for absent in ABSENT_WORKFLOWS {
+                assert!(
+                    !text.contains(absent),
+                    "{source}/SKILL.md routes to unbundled workflow {absent}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn agent_browser_uses_dynamic_cli_documentation_only() {
+        let text = embedded_skill_text("agent-browser/SKILL.md");
+        assert!(text.contains("agent-browser skills get core"));
+        assert!(text.contains("agent-browser skills get core --full"));
+        assert!(text.contains("agent-browser skills list"));
+        assert!(text.contains("agent-browser skills get electron"));
+        assert!(text.contains("agent-browser skills get dogfood"));
+        assert!(text.contains("npm i -g agent-browser@0.32.3"));
+        assert!(text.contains("Install only after user approval"));
+        assert!(text.contains("do not silently switch tools"));
+        assert!(text.contains("native Rust"));
+        assert!(!text.contains("npx playwright install-deps"));
+
+        let dir = BUILTIN_SKILLS_DIR
+            .get_dir("agent-browser")
+            .expect("agent-browser directory should be embedded");
+        assert!(
+            dir.dirs().next().is_none(),
+            "dynamic agent-browser stub must not retain static reference/template directories"
+        );
+    }
+
+    #[test]
+    fn office_helpers_use_validated_archive_extraction() {
+        for skill in ["docx", "pptx", "xlsx"] {
+            let helper_path = format!("{skill}/scripts/office/helpers/__init__.py");
+            let helper = embedded_skill_text(&helper_path);
+            assert!(
+                helper.contains("def safe_extract("),
+                "{helper_path} lacks safe_extract"
+            );
+            assert!(
+                helper.contains("stat.S_ISLNK"),
+                "{helper_path} lacks symlink rejection"
+            );
+            assert!(
+                helper.contains("MAX_ARCHIVE_TOTAL_SIZE")
+                    && helper.contains("MAX_ARCHIVE_COMPRESSION_RATIO")
+                    && helper.contains("duplicate archive entry"),
+                "{helper_path} lacks bounded, collision-safe extraction"
+            );
+
+            let dir = BUILTIN_SKILLS_DIR
+                .get_dir(skill)
+                .unwrap_or_else(|| panic!("Missing embedded Office skill {skill}"));
+            let mut files = Vec::new();
+            collect_files(dir, &mut files);
+            for file in files {
+                let text = file.contents_utf8().unwrap_or("");
+                assert!(
+                    !text.contains(".extractall("),
+                    "{} still uses unrestricted ZipFile.extractall",
+                    file.path().display()
+                );
+            }
+
+            assert!(dir
+                .get_file(format!("{skill}/scripts/office/pack.py"))
+                .is_none());
+            assert!(dir
+                .get_file(format!("{skill}/scripts/office/unpack.py"))
+                .is_none());
+
+            if matches!(skill, "docx" | "pptx") {
+                let skill_text = embedded_skill_text(&format!("{skill}/SKILL.md"));
+                assert!(
+                    skill_text.contains("safe_extract") && skill_text.contains("rezip"),
+                    "{skill}/SKILL.md must use the cross-platform safe archive helpers"
+                );
+                assert!(
+                    !skill_text.contains("unzip -q") && !skill_text.contains("zip -Xr"),
+                    "{skill}/SKILL.md still recommends unsafe or non-portable archive commands"
+                );
+            }
+        }
+
+        let comment = embedded_skill_text("docx/scripts/comment.py");
+        assert!(comment.contains("author: str = \"BitFun\""));
+        assert!(comment.contains("initials: str = \"B\""));
+        assert!(comment.contains("default=\"BitFun\""));
+        assert!(comment.contains("default=\"B\""));
+
+        let docx_skill = embedded_skill_text("docx/SKILL.md");
+        assert!(docx_skill.contains(
+            "Use \"BitFun\" as the author for tracked changes and comments unless the user explicitly requests a different name."
+        ));
+
+        let xlsx_skill = embedded_skill_text("xlsx/SKILL.md");
+        assert!(xlsx_skill.contains("years as text (`\"2026\"`, never `2,026`)"));
+
+        let docx_helper = embedded_skill_text("docx/scripts/office/helpers/__init__.py");
+        for skill in ["pptx", "xlsx"] {
+            assert_eq!(
+                docx_helper,
+                embedded_skill_text(&format!("{skill}/scripts/office/helpers/__init__.py")),
+                "Office safe extraction helpers drifted between bundled skills"
+            );
+        }
+    }
+}

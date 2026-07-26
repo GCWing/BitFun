@@ -20,7 +20,6 @@ pub(crate) fn tool_task_state_kind(state: &ToolExecutionState) -> ToolTaskStateK
         ToolExecutionState::Waiting { .. } => ToolTaskStateKind::Waiting,
         ToolExecutionState::Running { .. } => ToolTaskStateKind::Running,
         ToolExecutionState::Streaming { .. } => ToolTaskStateKind::Streaming,
-        ToolExecutionState::AwaitingConfirmation { .. } => ToolTaskStateKind::AwaitingConfirmation,
         ToolExecutionState::Completed { .. } => ToolTaskStateKind::Completed,
         ToolExecutionState::Failed { .. } => ToolTaskStateKind::Failed,
         ToolExecutionState::Rejected { .. } => ToolTaskStateKind::Rejected,
@@ -92,19 +91,6 @@ impl ToolStateManager {
         self.tasks.get(tool_id).map(|t| t.clone())
     }
 
-    /// Update task arguments
-    pub fn update_task_arguments(&self, tool_id: &str, new_arguments: serde_json::Value) {
-        if let Some(mut task) = self.tasks.get_mut(tool_id) {
-            debug!(
-                "Updated tool arguments: tool_id={}, old_args={:?}, new_args={:?}",
-                tool_id,
-                task.effective_arguments(),
-                new_arguments
-            );
-            task.update_effective_arguments(new_arguments);
-        }
-    }
-
     /// Get all tasks of a session
     pub fn get_session_tasks(&self, session_id: &str) -> Vec<ToolTask> {
         self.tasks
@@ -162,25 +148,6 @@ impl ToolStateManager {
             } => ToolStateEventKind::Streaming {
                 chunks_received: *chunks_received,
             },
-            ToolExecutionState::AwaitingConfirmation {
-                params: _,
-                timeout_at,
-            } => {
-                let confirmation_timeout_secs = task
-                    .options
-                    .confirmation_timeout_secs
-                    .filter(|seconds| *seconds > 0);
-                ToolStateEventKind::AwaitingConfirmation {
-                    params: task.invocation.wire_arguments.clone(),
-                    timeout_at: confirmation_timeout_secs.map(|_| {
-                        timeout_at
-                            .duration_since(std::time::SystemTime::UNIX_EPOCH)
-                            .unwrap_or_default()
-                            .as_millis()
-                            .min(u128::from(u64::MAX)) as u64
-                    }),
-                }
-            }
             ToolExecutionState::Completed {
                 result,
                 duration_ms,
@@ -195,6 +162,13 @@ impl ToolStateManager {
                         result_for_assistant,
                         ..
                     } => result_for_assistant.clone(),
+                    _ => None,
+                },
+                image_attachments: match result {
+                    crate::agentic::tools::framework::ToolResult::Result {
+                        image_attachments,
+                        ..
+                    } => image_attachments.clone(),
                     _ => None,
                 },
                 duration_ms: *duration_ms,
@@ -268,7 +242,6 @@ impl ToolStateManager {
             waiting: counts.waiting,
             running: counts.running,
             streaming: counts.streaming,
-            awaiting_confirmation: counts.awaiting_confirmation,
             completed: counts.completed,
             failed: counts.failed,
             rejected: counts.rejected,
@@ -327,7 +300,9 @@ mod tests {
                 arguments: serde_json::json!({}),
                 raw_arguments: None,
                 is_error: false,
+                parse_error: None,
                 recovered_from_truncation: false,
+                repair_kind: Default::default(),
             },
             ToolExecutionContext {
                 session_id: "session-1".to_string(),
@@ -340,6 +315,7 @@ mod tests {
                 primary_model_facts: tool_runtime::context::PrimaryModelFacts::default(),
                 context_vars: HashMap::new(),
                 subagent_parent_info: None,
+                permission_delegation: None,
                 delegation_policy: bitfun_runtime_ports::DelegationPolicy::top_level(),
                 deferred_tools: Vec::new(),
                 loaded_deferred_tool_specs: Vec::new(),
@@ -452,7 +428,6 @@ pub struct ToolStats {
     pub waiting: usize,
     pub running: usize,
     pub streaming: usize,
-    pub awaiting_confirmation: usize,
     pub completed: usize,
     pub failed: usize,
     pub rejected: usize,

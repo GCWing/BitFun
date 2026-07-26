@@ -39,7 +39,7 @@ export struct ChatView {
   onBack: () => void = () => {};
   onStop: () => void = () => {};
   onLoadOlder: () => void = () => {};
-  onApproveTool: (toolId: string, updatedInput?: Object) => void = (_toolId: string, _updatedInput?: Object) => {};
+  onApproveTool: (toolId: string) => void = (_toolId: string) => {};
   onRejectTool: (toolId: string) => void = (_toolId: string) => {};
   onCancelTool: (toolId: string) => void = (_toolId: string) => {};
   onAnswerQuestion: (toolId: string, answers: RemoteQuestionAnswerPayload) => void =
@@ -123,8 +123,8 @@ export struct ChatView {
       onLoadOlder: () => {
         this.onLoadOlder();
       },
-      onApproveTool: (toolId: string, updatedInput?: Object) => {
-        this.onApproveTool(toolId, updatedInput);
+      onApproveTool: (toolId: string) => {
+        this.onApproveTool(toolId);
       },
       onRejectTool: (toolId: string) => {
         this.onRejectTool(toolId);

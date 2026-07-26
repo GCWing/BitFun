@@ -8,7 +8,10 @@ import type {
   SessionKind,
   SessionTitleSource,
 } from '@/shared/types/session-history';
+import type { AiErrorDetail } from '@/shared/ai-errors/aiErrorPresenter';
 import type { ReviewTargetEvidence, ReviewTeamRunManifest } from '@/shared/services/reviewTeamService';
+
+export type ModelRoundAttemptDiagnostic = import('@/shared/types/session-history').ModelRoundAttemptDiagnostic;
 
 // Base type for streaming items.
 export interface FlowItem {
@@ -64,6 +67,10 @@ export interface FlowToolItem extends FlowItem {
     result: any;
     success: boolean;
     resultForAssistant?: string;
+    imageAttachments?: Array<{
+      mime_type: string;
+      data_base64: string;
+    }>;
     error?: string;
     duration_ms?: number;
   };
@@ -88,7 +95,6 @@ export interface FlowToolItem extends FlowItem {
   };
   aiIntent?: string; // AI rationale for calling the tool.
   startTime?: number;  // Tool start time.
-  confirmationTimeoutAt?: number;
   endTime?: number;    // Tool end time.
   durationMs?: number;
   queueWaitMs?: number;
@@ -164,6 +170,7 @@ export interface ModelRoundAttempt {
   index: number;
   status: 'streaming' | 'completed' | 'superseded' | 'failed' | 'cancelled';
   items: AnyFlowItem[];
+  diagnostic?: ModelRoundAttemptDiagnostic;
 }
 
 // Model round: output from a single model call.
@@ -187,6 +194,7 @@ export interface ModelRound {
   firstVisibleOutputMs?: number;
   streamDurationMs?: number;
   attemptCount?: number;
+  attemptDiagnostics?: ModelRoundAttemptDiagnostic[];
   failureCategory?: string;
   tokenDetails?: unknown;
   error?: string;
@@ -251,6 +259,7 @@ export interface DialogTurn {
   startTime: number;
   endTime?: number;
   error?: string;
+  errorDetail?: AiErrorDetail;
   tokenUsage?: TokenUsage;
   todos?: TodoItem[];
   backendTurnIndex?: number;
@@ -518,6 +527,8 @@ export interface QueuedMessage {
   /** Image / attachment payloads forwarded to `start_dialog_turn` when drained. */
   imageContexts?: unknown[];
   imageDisplayData?: unknown[];
+  /** Structured metadata forwarded to `start_dialog_turn` when drained. */
+  userMessageMetadata?: Record<string, unknown>;
   localDialogTurnId?: string;
 }
 
@@ -586,7 +597,7 @@ export interface FlowChatActions {
   sendMessage: (message: string, sessionId?: string) => Promise<void>;
   createSession: (config?: Partial<SessionConfig>) => Promise<string>;
   switchSession: (sessionId: string) => void;
-  confirmTool: (toolId: string, updatedInput?: any) => void;
+  confirmTool: (toolId: string) => void;
   rejectTool: (toolId: string) => void;
   clearSession: (sessionId?: string) => void;
   deleteSession: (sessionId: string) => Promise<void>; // Now async.

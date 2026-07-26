@@ -1,7 +1,8 @@
 //! Built-in MCP resource/prompt tools.
 
 use crate::agentic::tools::framework::{
-    Tool, ToolExposure, ToolRenderOptions, ToolResult, ToolUseContext, ValidationResult,
+    PermissionIntent, Tool, ToolExposure, ToolRenderOptions, ToolResult, ToolUseContext,
+    ValidationResult,
 };
 use crate::service::mcp::adapter::PromptAdapter;
 use crate::service::mcp::get_global_mcp_service;
@@ -64,8 +65,17 @@ async fn list_prompts_for_server(
 async fn ensure_mcp_server_available_for_context(
     manager: &Arc<MCPServerManager>,
     server_id: &str,
-    _context: &ToolUseContext,
+    context: &ToolUseContext,
 ) -> BitFunResult<()> {
+    if !manager
+        .server_available_for_context(server_id, context.workspace_root(), context.is_remote())
+        .await
+    {
+        return Err(tool_error(format!(
+            "MCP server is unavailable in the current workspace: {}",
+            server_id
+        )));
+    }
     manager
         .get_connection(server_id)
         .await
@@ -90,6 +100,19 @@ fn validate_required_string(input: &Value, field_name: &str) -> ValidationResult
             meta: None,
         },
     }
+}
+
+fn mcp_input_string<'a>(input: &'a Value, field_name: &str) -> &'a str {
+    input
+        .get(field_name)
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .unwrap_or("unknown")
+}
+
+fn mcp_permission_intent(resource: String) -> Vec<PermissionIntent> {
+    vec![PermissionIntent::new("mcp", vec![resource])]
 }
 
 fn render_resource_catalog(resources: &[MCPResource]) -> String {
@@ -270,8 +293,15 @@ impl Tool for ListMCPResourcesTool {
         true
     }
 
-    fn needs_permissions(&self, _input: Option<&Value>) -> bool {
-        false
+    fn permission_intents(
+        &self,
+        input: &Value,
+        _context: &ToolUseContext,
+    ) -> BitFunResult<Vec<PermissionIntent>> {
+        Ok(mcp_permission_intent(format!(
+            "{}:list_resources",
+            mcp_input_string(input, "server_id")
+        )))
     }
 
     async fn validate_input(
@@ -387,8 +417,16 @@ impl Tool for ReadMCPResourceTool {
         true
     }
 
-    fn needs_permissions(&self, _input: Option<&Value>) -> bool {
-        false
+    fn permission_intents(
+        &self,
+        input: &Value,
+        _context: &ToolUseContext,
+    ) -> BitFunResult<Vec<PermissionIntent>> {
+        Ok(mcp_permission_intent(format!(
+            "{}:{}",
+            mcp_input_string(input, "server_id"),
+            mcp_input_string(input, "uri")
+        )))
     }
 
     async fn validate_input(
@@ -510,8 +548,15 @@ impl Tool for ListMCPPromptsTool {
         true
     }
 
-    fn needs_permissions(&self, _input: Option<&Value>) -> bool {
-        false
+    fn permission_intents(
+        &self,
+        input: &Value,
+        _context: &ToolUseContext,
+    ) -> BitFunResult<Vec<PermissionIntent>> {
+        Ok(mcp_permission_intent(format!(
+            "{}:list_prompts",
+            mcp_input_string(input, "server_id")
+        )))
     }
 
     async fn validate_input(
@@ -634,8 +679,16 @@ impl Tool for GetMCPPromptTool {
         true
     }
 
-    fn needs_permissions(&self, _input: Option<&Value>) -> bool {
-        false
+    fn permission_intents(
+        &self,
+        input: &Value,
+        _context: &ToolUseContext,
+    ) -> BitFunResult<Vec<PermissionIntent>> {
+        Ok(mcp_permission_intent(format!(
+            "{}:prompt:{}",
+            mcp_input_string(input, "server_id"),
+            mcp_input_string(input, "name")
+        )))
     }
 
     async fn validate_input(
@@ -752,5 +805,57 @@ impl Tool for GetMCPPromptTool {
             }),
             Some(rendered),
         )])
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{GetMCPPromptTool, ListMCPPromptsTool, ListMCPResourcesTool, ReadMCPResourceTool};
+    use crate::agentic::tools::framework::{Tool, ToolUseContext};
+    use serde_json::json;
+
+    #[test]
+    fn builtin_mcp_tools_emit_server_scoped_v2_resources() {
+        let context = ToolUseContext::for_tool_listing(None, None);
+        let list_resources = ListMCPResourcesTool::new();
+        let read_resource = ReadMCPResourceTool::new();
+        let list_prompts = ListMCPPromptsTool::new();
+        let get_prompt = GetMCPPromptTool::new();
+        let cases: Vec<(&dyn Tool, serde_json::Value, &str)> = vec![
+            (
+                &list_resources,
+                json!({ "server_id": "docs" }),
+                "docs:list_resources",
+            ),
+            (
+                &read_resource,
+                json!({ "server_id": "docs", "uri": "docs://permission/v2" }),
+                "docs:docs://permission/v2",
+            ),
+            (
+                &list_prompts,
+                json!({ "server_id": "docs" }),
+                "docs:list_prompts",
+            ),
+            (
+                &get_prompt,
+                json!({ "server_id": "docs", "name": "review" }),
+                "docs:prompt:review",
+            ),
+        ];
+
+        for (tool, input, expected_resource) in cases {
+            let intents = tool
+                .permission_intents(&input, &context)
+                .expect("permission intent");
+            assert_eq!(intents.len(), 1, "{}", tool.name());
+            assert_eq!(intents[0].action, "mcp", "{}", tool.name());
+            assert_eq!(
+                intents[0].resources,
+                [expected_resource.to_string()],
+                "{}",
+                tool.name()
+            );
+        }
     }
 }

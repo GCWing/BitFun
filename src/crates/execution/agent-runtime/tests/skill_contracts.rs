@@ -20,6 +20,8 @@ fn builtin_skill(dir_name: &str) -> SkillInfo {
         path: format!("/tmp/{}", dir_name),
         level: SkillLocation::User,
         source_slot: "bitfun-system".to_string(),
+        source_id: "bitfun".to_string(),
+        source_label: "BitFun".to_string(),
         dir_name: dir_name.to_string(),
         is_builtin: true,
         group_key: builtin_skill_group_key(dir_name).map(str::to_string),
@@ -36,6 +38,8 @@ fn custom_user_skill(dir_name: &str) -> SkillInfo {
         path: format!("/tmp/{}", dir_name),
         level: SkillLocation::User,
         source_slot: "bitfun".to_string(),
+        source_id: "bitfun".to_string(),
+        source_label: "BitFun".to_string(),
         dir_name: dir_name.to_string(),
         is_builtin: false,
         group_key: None,
@@ -52,6 +56,8 @@ fn project_skill(dir_name: &str) -> SkillInfo {
         path: format!("/workspace/.bitfun/skills/{}", dir_name),
         level: SkillLocation::Project,
         source_slot: "bitfun".to_string(),
+        source_id: "bitfun".to_string(),
+        source_label: "BitFun".to_string(),
         dir_name: dir_name.to_string(),
         is_builtin: false,
         group_key: None,
@@ -122,27 +128,58 @@ fn skill_discovery_root_facts_are_runtime_owned() {
     assert_eq!(BITFUN_SYSTEM_SKILL_SLOT, "bitfun-system");
     assert_eq!(BITFUN_SYSTEM_SKILL_DIR, ".system");
 
-    assert!(PROJECT_SKILL_ROOTS
+    let project_roots = PROJECT_SKILL_ROOTS
         .iter()
-        .any(|root| root.parent == ".bitfun" && root.subdir == "skills" && root.slot == "bitfun"));
-    assert!(PROJECT_SKILL_ROOTS
+        .map(|root| (root.parent, root.slot, root.source_id, root.source_label))
+        .collect::<Vec<_>>();
+    assert_eq!(
+        project_roots,
+        [
+            (".bitfun", "bitfun", "bitfun", "BitFun"),
+            (".claude", "claude", "claude-code", "Claude Code"),
+            (".codex", "codex", "codex", "Codex"),
+            (".cursor", "cursor", "cursor", "Cursor"),
+            (".opencode", "opencode", "opencode", "OpenCode"),
+            (".agents", "agents", "agent-skills", "Agent Skills"),
+        ]
+    );
+
+    let user_home_roots = USER_HOME_SKILL_ROOTS
         .iter()
-        .any(|root| root.parent == ".opencode"));
-    assert!(USER_HOME_SKILL_ROOTS
-        .iter()
-        .any(|root| root.parent == ".codex" && root.slot == "home.codex"));
-    assert!(USER_HOME_SKILL_ROOTS
-        .iter()
-        .any(|root| root.parent == ".opencode" && root.slot == "home.opencode"));
-    assert!(USER_HOME_SKILL_ROOTS
-        .iter()
-        .any(|root| root.parent == ".agents" && root.slot == "home.agents"));
-    assert!(USER_CONFIG_SKILL_ROOTS
-        .iter()
-        .any(|root| root.parent == "opencode" && root.slot == "config.opencode"));
+        .map(|root| (root.parent, root.slot, root.source_id, root.source_label))
+        .collect::<Vec<_>>();
+    assert_eq!(
+        user_home_roots,
+        [
+            (".claude", "home.claude", "claude-code", "Claude Code"),
+            (".codex", "home.codex", "codex", "Codex"),
+            (".cursor", "home.cursor", "cursor", "Cursor"),
+            (".opencode", "home.opencode", "opencode", "OpenCode"),
+            (".agents", "home.agents", "agent-skills", "Agent Skills"),
+        ]
+    );
+    assert_eq!(
+        USER_CONFIG_SKILL_ROOTS
+            .iter()
+            .map(|root| (root.parent, root.slot, root.source_id, root.source_label))
+            .collect::<Vec<_>>(),
+        [("opencode", "config.opencode", "opencode", "OpenCode")]
+    );
     assert!(!USER_CONFIG_SKILL_ROOTS
         .iter()
         .any(|root| root.parent == "agents"));
+}
+
+#[test]
+fn skill_source_identity_is_serialized_without_changing_slot_identity() {
+    let mut info = project_skill("pdf");
+    info.source_id = "bitfun".to_string();
+    info.source_label = "BitFun".to_string();
+
+    let value = serde_json::to_value(info).expect("skill info should serialize");
+    assert_eq!(value["sourceSlot"], "bitfun");
+    assert_eq!(value["sourceId"], "bitfun");
+    assert_eq!(value["sourceLabel"], "BitFun");
 }
 
 #[test]
@@ -276,7 +313,8 @@ Use the pdf workflow.
         false,
     )
     .expect("valid built-in skill markdown should parse");
-    let candidate = SkillCandidate::from_data(data, "bitfun-system", "user", 10, true);
+    let candidate =
+        SkillCandidate::from_data(data, "bitfun-system", "bitfun", "BitFun", "user", 10, true);
 
     assert_eq!(candidate.info.key, "user::bitfun-system::pdf");
     assert_eq!(candidate.info.source_slot, "bitfun-system");
@@ -300,6 +338,46 @@ Use the pdf workflow.
         user_pdf.shadowed_by_key.as_deref(),
         Some("project::bitfun::pdf")
     );
+}
+
+#[test]
+fn shadow_annotations_use_the_same_level_tiebreaker_as_runtime_resolution() {
+    let mut user_info = custom_user_skill("pdf");
+    user_info.key = "user::home.claude::pdf".to_string();
+    user_info.source_slot = "home.claude".to_string();
+    user_info.source_id = "claude-code".to_string();
+    user_info.source_label = "Claude Code".to_string();
+    let user_candidate = SkillCandidate {
+        info: user_info,
+        priority: 0,
+    };
+    let project_candidate = SkillCandidate {
+        info: project_skill("pdf"),
+        priority: 0,
+    };
+
+    let runtime_winner =
+        resolve_visible_skills(vec![user_candidate.clone(), project_candidate.clone()]);
+    assert_eq!(runtime_winner[0].key, project_candidate.info.key);
+
+    let annotated =
+        annotate_shadowed_skills(vec![user_candidate.clone(), project_candidate.clone()]);
+    let user = annotated
+        .iter()
+        .find(|skill| skill.key == user_candidate.info.key)
+        .expect("user candidate should remain visible");
+    let project = annotated
+        .iter()
+        .find(|skill| skill.key == project_candidate.info.key)
+        .expect("project candidate should remain visible");
+
+    assert!(user.is_shadowed);
+    assert_eq!(
+        user.shadowed_by_key.as_deref(),
+        Some(project_candidate.info.key.as_str())
+    );
+    assert!(!project.is_shadowed);
+    assert_eq!(project.shadowed_by_key, None);
 }
 
 #[test]
@@ -357,6 +435,79 @@ fn mode_skill_candidate_filtering_and_info_are_runtime_owned() {
     assert_eq!(
         custom.state_reason,
         ModeSkillStateReason::CustomUserDefaultEnabled
+    );
+}
+
+#[test]
+fn mode_skill_info_reports_the_actual_runtime_winner_after_filtering() {
+    let project_pdf = SkillCandidate {
+        info: project_skill("pdf"),
+        priority: 0,
+    };
+    let mut codex_pdf_info = custom_user_skill("pdf");
+    codex_pdf_info.key = "user::home.codex::pdf".to_string();
+    codex_pdf_info.source_slot = "home.codex".to_string();
+    codex_pdf_info.source_id = "codex".to_string();
+    codex_pdf_info.source_label = "Codex".to_string();
+    let codex_pdf = SkillCandidate {
+        info: codex_pdf_info,
+        priority: 10,
+    };
+    let mut opencode_pdf_info = custom_user_skill("pdf");
+    opencode_pdf_info.key = "user::home.opencode::pdf".to_string();
+    opencode_pdf_info.source_slot = "home.opencode".to_string();
+    opencode_pdf_info.source_id = "opencode".to_string();
+    opencode_pdf_info.source_label = "OpenCode".to_string();
+    let opencode_pdf = SkillCandidate {
+        info: opencode_pdf_info,
+        priority: 11,
+    };
+    let candidates = vec![project_pdf.clone(), codex_pdf.clone(), opencode_pdf.clone()];
+    let mut disabled_project = HashSet::new();
+    disabled_project.insert(project_pdf.info.key.clone());
+
+    let filtered = filter_candidates_for_mode(
+        candidates.clone(),
+        "agentic",
+        &UserModeSkillOverrides::default(),
+        &disabled_project,
+    );
+    let resolved = resolve_visible_skills(filtered);
+    let infos = build_mode_skill_infos(
+        sort_skills(annotate_shadowed_skills(candidates)),
+        resolved,
+        "agentic",
+        &UserModeSkillOverrides::default(),
+        &disabled_project,
+    );
+
+    let project = infos
+        .iter()
+        .find(|skill| skill.skill.key == project_pdf.info.key)
+        .expect("disabled project skill should stay visible");
+    assert!(!project.effective_enabled);
+    assert!(!project.selected_for_runtime);
+    assert!(!project.skill.is_shadowed);
+    assert_eq!(project.skill.shadowed_by_key, None);
+
+    let codex = infos
+        .iter()
+        .find(|skill| skill.skill.key == codex_pdf.info.key)
+        .expect("selected Codex skill should stay visible");
+    assert!(codex.effective_enabled);
+    assert!(codex.selected_for_runtime);
+    assert!(!codex.skill.is_shadowed);
+
+    let opencode = infos
+        .iter()
+        .find(|skill| skill.skill.key == opencode_pdf.info.key)
+        .expect("covered OpenCode skill should stay visible");
+    assert!(opencode.effective_enabled);
+    assert!(!opencode.selected_for_runtime);
+    assert!(opencode.skill.is_shadowed);
+    assert_eq!(
+        opencode.skill.shadowed_by_key.as_deref(),
+        Some(codex_pdf.info.key.as_str())
     );
 }
 

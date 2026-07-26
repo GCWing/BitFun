@@ -10,6 +10,7 @@ pub mod global;
 pub mod manager;
 #[cfg(feature = "product-full")]
 pub mod mode_config_canonicalizer;
+pub mod project_permission_store;
 pub mod providers;
 pub mod service;
 pub mod types;

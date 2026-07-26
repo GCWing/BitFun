@@ -7,7 +7,7 @@ without the full product runtime. This includes generic filesystem/search/JSON
 IO helpers, LSP package/protocol/watch/process primitives, session metadata
 storage helpers, and local OS action primitives such as command lookup,
 clipboard, file/url opening, script execution, workspace runtime FS/shell
-providers, and system facts. Product crates may layer routing, policy,
+providers, managed process-tree lifecycle, and system facts. Product crates may layer routing, policy,
 capability selection, event emission, or legacy error mapping outside this
 crate.
 
@@ -31,6 +31,14 @@ crate.
   globals, or product runtime bindings to `filesystem`; keep those in core or a
   reviewed adapter/provider.
 - Preserve legacy core imports with facade/re-export code when ownership moves.
+- `process_tree` is the single reusable owner for supervised child-process
+  lifecycle. Unix implementations use a dedicated process group; Windows must
+  attach a suspended child to a kill-on-close Job Object before resuming and
+  fail closed if attachment fails. Consumers own protocol shutdown; this owner
+  owns cleanup for managed descendants and does not claim sandbox or
+  resource-limit safety. Unix descendants that deliberately create a new
+  session/process group are outside this boundary and must be treated as a
+  disclosed residual risk until a platform supervisor is introduced.
 
 ## Verification
 

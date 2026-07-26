@@ -81,6 +81,14 @@ export type VirtualItem =
     }
   | { type: 'explore-group'; data: ExploreGroupData; turnId: string }
   | { type: 'turn-completion-notice'; data: TurnCompletionNotice; turnId: string }
+  | {
+      type: 'turn-failure-notice';
+      data: {
+        error: string;
+        errorDetail?: DialogTurn['errorDetail'];
+      };
+      turnId: string;
+    }
   | { type: 'image-analyzing'; turnId: string };
 
 /**
@@ -208,7 +216,15 @@ function shouldSplitModelRoundForVirtualItems(
   round: ModelRound,
   isTurnComplete: boolean,
   nowMs: number,
+  isLastRound: boolean,
 ): boolean {
+  // Never split the turn-tail round on completion: replacing one Virtuoso key
+  // with N segment keys remounts the visible assistant message and flashes the
+  // chat pane. Older non-tail rounds may still split for virtualization.
+  if (isLastRound) {
+    return false;
+  }
+
   return (
     isTurnComplete &&
     isTerminalRoundStatus(round.status) &&
@@ -225,8 +241,9 @@ function splitModelRoundForVirtualItems(
   round: ModelRound,
   isTurnComplete: boolean,
   nowMs: number,
+  isLastRound: boolean,
 ): ModelRoundVirtualChunk[] {
-  if (!shouldSplitModelRoundForVirtualItems(round, isTurnComplete, nowMs)) {
+  if (!shouldSplitModelRoundForVirtualItems(round, isTurnComplete, nowMs, isLastRound)) {
     return [{ round }];
   }
 
@@ -541,7 +558,7 @@ export function sessionToVirtualItems(session: Session | null): VirtualItem[] {
           groupIndex++;
         } else {
           const isLastRound = roundIndex === rounds.length - 1;
-          const roundChunks = splitModelRoundForVirtualItems(round, isTurnComplete, nowMs);
+          const roundChunks = splitModelRoundForVirtualItems(round, isTurnComplete, nowMs, isLastRound);
           roundChunks.forEach((chunk, chunkIndex) => {
             items.push({
               type: 'model-round',
@@ -594,6 +611,17 @@ export function sessionToVirtualItems(session: Session | null): VirtualItem[] {
         type: 'turn-completion-notice',
         turnId: turn.id,
         data: completionNotice,
+      });
+    }
+
+    if (turn.status === 'error' && (turn.error || turn.errorDetail)) {
+      items.push({
+        type: 'turn-failure-notice',
+        turnId: turn.id,
+        data: {
+          error: turn.error ?? turn.errorDetail?.providerMessage ?? '',
+          errorDetail: turn.errorDetail,
+        },
       });
     }
 

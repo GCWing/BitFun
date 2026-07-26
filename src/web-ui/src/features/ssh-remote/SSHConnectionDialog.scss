@@ -216,7 +216,14 @@
     display: flex;
     flex-direction: column;
     gap: 12px;
-    padding: 0 16px;
+    padding: 8px 16px;
+    border-radius: 8px;
+    scroll-margin-top: 8px;
+    transition: background-color var(--motion-fast) var(--easing-standard);
+
+    &--highlighted {
+      animation: ssh-connection-form-reveal 1.2s ease-out;
+    }
   }
 
   &__row {
@@ -274,6 +281,18 @@
   &__spinner {
     animation: spin 1s linear infinite;
     margin-right: 6px;
+  }
+}
+
+@keyframes ssh-connection-form-reveal {
+  0% {
+    background: color-mix(in srgb, var(--color-accent-500) 14%, transparent);
+  }
+  40% {
+    background: color-mix(in srgb, var(--color-accent-500) 8%, transparent);
+  }
+  100% {
+    background: transparent;
   }
 }
 

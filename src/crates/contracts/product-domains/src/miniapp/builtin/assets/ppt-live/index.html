@@ -94,8 +94,12 @@
           </div>
           <label class="onebox-label">
             <span class="sr-only" data-i18n="topicLabel">Goal</span>
-            <textarea id="topicInput" class="onebox-input" rows="6" data-i18n-placeholder="oneBoxPlaceholder"></textarea>
+            <textarea id="topicInput" class="onebox-input" rows="4" data-i18n-placeholder="oneBoxPlaceholder"></textarea>
           </label>
+          <div class="onebox-model">
+            <label class="property-label" for="modelSelect" data-i18n="propertiesModel">Model</label>
+            <select id="modelSelect" data-i18n-aria="propertiesModel"></select>
+          </div>
           <button id="sendPrompt" class="btn btn-primary onebox-submit" type="button" data-i18n="sendPrompt">Send</button>
         </section>
 
@@ -164,6 +168,16 @@
             <button type="button" class="sidebar-tab" data-sidebar-tab="outline" data-i18n="outlineTitle">Outline</button>
           </div>
           <div class="sidebar-tab-panel is-active" data-sidebar-panel="process">
+            <div id="generationProgress" class="generation-progress" hidden>
+              <div class="generation-progress__meta">
+                <span id="generationProgressLabel" class="generation-progress__label"></span>
+                <span id="generationProgressCount" class="generation-progress__count"></span>
+              </div>
+              <div class="generation-progress__track" aria-hidden="true">
+                <div id="generationProgressFill" class="generation-progress__fill"></div>
+              </div>
+              <ol id="generationPhaseList" class="generation-phase-list"></ol>
+            </div>
             <ol id="generationSteps" class="generation-steps"></ol>
           </div>
           <div class="sidebar-tab-panel" data-sidebar-panel="outline">
@@ -199,12 +213,6 @@
         <span id="slidePosition">1 / 1</span>
       </div>
       <div class="statusbar-right">
-        <div class="statusbar-zoom">
-          <button class="statusbar-zoom-btn" id="statusZoomOut" title="Zoom out" aria-label="Zoom out">−</button>
-          <span class="statusbar-zoom-value" id="statusZoomValue">100%</span>
-          <button class="statusbar-zoom-btn" id="statusZoomIn" title="Zoom in" aria-label="Zoom in">+</button>
-        </div>
-        <span class="statusbar-divider" aria-hidden="true"></span>
         <span id="exportStatus" class="statusbar-meta" data-i18n="exportReady">HTML and PPTX export ready after generation.</span>
       </div>
     </footer>

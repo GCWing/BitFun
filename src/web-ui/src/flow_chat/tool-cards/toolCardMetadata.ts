@@ -321,6 +321,26 @@ export const TOOL_CARD_CONFIGS: Record<string, ToolCardConfig> = {
     displayMode: 'standard',
     primaryColor: UI_EXCEPTION_ACCENTS.miniApp
   },
+  'PageDeploy': {
+    toolName: 'PageDeploy',
+    displayName: 'Deploy Page',
+    icon: 'WEB',
+    requiresConfirmation: false,
+    resultDisplayType: 'detailed',
+    description: 'Deploy a saved BitFun Page version to production',
+    displayMode: 'standard',
+    primaryColor: UI_EXCEPTION_ACCENTS.toolIdentity.terminal
+  },
+  'PagePublish': {
+    toolName: 'PagePublish',
+    displayName: 'Publish Page',
+    icon: 'WEB',
+    requiresConfirmation: true,
+    resultDisplayType: 'detailed',
+    description: 'Publish BitFun Page content (upload, save version, deploy)',
+    displayMode: 'standard',
+    primaryColor: UI_EXCEPTION_ACCENTS.toolIdentity.terminal
+  },
   'GenerativeUI': {
     toolName: 'GenerativeUI',
     displayName: 'Generative UI',
@@ -339,6 +359,17 @@ export const TOOL_CARD_CONFIGS: Record<string, ToolCardConfig> = {
     requiresConfirmation: false,
     resultDisplayType: 'summary',
     description: 'Screen capture, mouse/keyboard, and accessibility control of the desktop',
+    displayMode: 'compact',
+    primaryColor: 'var(--color-accent-600)'
+  },
+
+  'view_image': {
+    toolName: 'view_image',
+    displayName: 'view_image',
+    icon: 'IMG',
+    requiresConfirmation: false,
+    resultDisplayType: 'detailed',
+    description: '',
     displayMode: 'compact',
     primaryColor: 'var(--color-accent-600)'
   },

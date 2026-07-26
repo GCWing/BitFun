@@ -18,15 +18,17 @@
 
 ---
 
-## Local AI Workbench Built Around the Code Agent
+## A New-Generation Foundation for Agentic Applications
 
-BitFun is a local AI workbench built around a Code Agent designed for long-horizon tasks, engineering execution, and token economy.
+BitFun puts the engineering capabilities of the Code Agent at its core and brings together Co-work and Claw (Assistant Agent) for coding, office work, and more real-world scenarios—creating a local-first, new-generation foundation for agentic applications, powered by a Rust-built Agent Runtime and a polished desktop app experience.
 
-It can understand complex context, call tools, wait for results, correct deviations, and keep long-horizon tasks moving until they reach a deliverable state. Coding, research, office work, documents, desktop operations, and extensible workflows all happen in the same local desktop environment.
+- **Lights-Out Factory** (In Progress): Design during the day, let tasks flow to the server and run through the night, then review the results in the morning.
+- **Infinite Radius** (In Progress): Extending from desktop and browser to mobile, wearables, and more devices, so work stays accessible and continuous.
+- **App Evolution**: Build tailored workflows with custom Agents, MCP, Skills, Mini Apps, or source-level customization. **Community contributors have already created specialized versions for short-form drama, media, and more**.
+- **Better, Faster, Cheaper**: Pursue greater efficiency, better results, and lower cost.
+- **Ultimate Desktop**: Continuously refine an easier-to-use, more capable, and more beautiful desktop experience.
 
-Core goal: move AI from iterative Agent Loop execution into a productivity system that can autonomously complete long-horizon work.
-
-![readme_hero](./png/readme_hero_CN.png)
+![readme_hero](./png/readme_hero.png)
 
 ---
 
@@ -48,13 +50,13 @@ Benchmark references: [SWE-Bench-Pro](https://labs.scale.com/leaderboard/swe_ben
 
 Agent economy needs to be evaluated across end-to-end token consumption, execution time, and KV Cache reuse. The current snapshot first covers KV Cache behavior from the same SWE-Bench-Pro round: BitFun's average KV Cache hit rate was **98.67%**. The follow-up full benchmark report will add the broader cost and latency metrics.
 
-![KV Cache hit rate distribution](./png/kv_cache_hit_rate.svg)
+![KV Cache hit rate distribution](./png/kv_cache_hit_rate.png)
 
 ### 3. Other Experience Metrics
 
 Beyond cost, Agent experience also depends on how quickly it can retrieve context in very large engineering projects. For tens-of-millions-line repositories such as Chromium, BitFun uses **flashgrep** to reduce search time by up to about **94.6%**, with an average speedup of about **36.1x**.
 
-![flashgrep search speed](./png/flashgrep_search_speed.svg)
+![flashgrep search speed](./png/flashgrep_search_speed.png)
 
 ---
 

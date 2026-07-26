@@ -59,6 +59,19 @@ fn named_invoke_request(operation_id: &str, revision: &str) -> ScriptToolInvokeR
 }
 
 #[tokio::test]
+async fn runtime_availability_reports_the_probed_node_version() {
+    let runtime = NodeScriptToolRuntime::discover();
+
+    if let ScriptToolRuntimeAvailability::Available { version, .. } = runtime.availability().await {
+        assert!(
+            version.starts_with('v'),
+            "unexpected Node.js version: {version}"
+        );
+        assert!(version[1..].split('.').count() >= 2);
+    }
+}
+
+#[tokio::test]
 async fn node_worker_loads_invokes_updates_and_disposes_a_target() {
     let runtime = NodeScriptToolRuntime::discover();
     if matches!(

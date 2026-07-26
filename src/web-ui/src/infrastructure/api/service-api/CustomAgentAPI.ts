@@ -1,7 +1,7 @@
 import { api } from './ApiClient';
 import { globalEventBus } from '@/infrastructure/event-bus';
 
-export type AgentSource = 'builtin' | 'project' | 'user';
+export type AgentSource = 'builtin' | 'project' | 'user' | 'external';
 export type CustomAgentKind = 'mode' | 'subagent';
 export type CustomAgentLevel = 'user' | 'project';
 export type UserContextSection =
@@ -99,11 +99,11 @@ export const CustomAgentAPI = {
     });
   },
 
-  async deleteCustomAgent(agentId: string): Promise<void> {
+  async deleteCustomAgent(agentId: string, workspacePath?: string): Promise<void> {
     await api.invoke('delete_custom_agent', {
-      request: { agentId },
+      request: { agentId, workspacePath },
     });
-    emitCustomAgentCatalogUpdated({ agentId });
+    emitCustomAgentCatalogUpdated({ agentId, workspacePath });
   },
 
   async reloadCustomAgents(workspacePath?: string): Promise<void> {

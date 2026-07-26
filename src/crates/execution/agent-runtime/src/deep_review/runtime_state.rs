@@ -26,13 +26,15 @@ pub fn record_deep_review_task_budget(
     role: DeepReviewSubagentRole,
     subagent_type: &str,
     is_retry: bool,
+    packet_id: Option<&str>,
 ) -> Result<(), DeepReviewPolicyViolation> {
-    GLOBAL_DEEP_REVIEW_BUDGET_TRACKER.record_task(
+    GLOBAL_DEEP_REVIEW_BUDGET_TRACKER.record_task_for_packet(
         parent_dialog_turn_id,
         policy,
         role,
         subagent_type,
         is_retry,
+        packet_id,
     )
 }
 

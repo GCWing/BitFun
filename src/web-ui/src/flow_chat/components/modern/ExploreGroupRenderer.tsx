@@ -307,9 +307,9 @@ const ExploreItemRenderer = React.memo<ExploreItemRendererProps>(({ item, turnId
     sessionId,
   } = useFlowChatContext();
   
-  const handleConfirm = useCallback(async (toolId: string, updatedInput?: any, permissionOptionId?: string, approve?: boolean) => {
+  const handleConfirm = useCallback(async (toolId: string, permissionOptionId?: string, approve?: boolean) => {
     if (onToolConfirm) {
-      await onToolConfirm(toolId, updatedInput, permissionOptionId, approve);
+      await onToolConfirm(toolId, permissionOptionId, approve);
     }
   }, [onToolConfirm]);
   

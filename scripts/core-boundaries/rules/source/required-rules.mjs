@@ -1451,8 +1451,8 @@ export const requiredContentRules = [
       },
       {
         regex:
-          /\bsdk_delivery_profile_builds_minimal_agent_runtime_without_product_full_capabilities\b/,
-        message: 'missing SDK delivery profile minimal runtime smoke',
+          /\bsdk_delivery_profile_builds_shared_runtime_owner_ceiling_without_bitfun_core\b/,
+        message: 'missing SDK delivery profile identity and shared runtime-owner ceiling smoke',
       },
       {
         regex: /\bProductAssembler::new\(\)/,
@@ -1472,7 +1472,38 @@ export const requiredContentRules = [
       },
       {
         regex: /\bDeliveryProfile::Sdk\b/,
-        message: 'product SDK smoke must cover the no-direct-core SDK delivery profile',
+        message: 'product SDK smoke must cover the distinct SDK delivery profile',
+      },
+    ],
+  },
+  {
+    path: 'src/apps/sdk-host/src/runtime.rs',
+    reason:
+      'the standalone SDK Host must inject its selected delivery profile into the Core tool owner before agentic system construction',
+    patterns: [
+      {
+        regex: /\binit_agentic_system_for_profile\b/,
+        message: 'SDK Host runtime must initialize Core with its selected delivery profile',
+      },
+      {
+        regex: /\bselect_agentic_system_profile\b/,
+        message:
+          'SDK Host runtime must select its profile before configuration can read the global tool owner',
+      },
+      {
+        regex: /\bDeliveryProfile::Sdk\b/,
+        message: 'SDK Host runtime must retain a distinct SDK delivery profile',
+      },
+    ],
+  },
+  {
+    path: 'src/apps/sdk-host/src/main.rs',
+    reason:
+      'the SDK Host composition root must select its delivery profile before global configuration canonicalization',
+    patterns: [
+      {
+        regex: /\bselect_process_profile\b/,
+        message: 'SDK Host process startup must select its delivery profile first',
       },
     ],
   },
@@ -1823,69 +1854,6 @@ export const requiredContentRules = [
     ],
   },
   {
-    path: 'src/crates/execution/agent-runtime/src/tool_confirmation.rs',
-    reason:
-      'agent-runtime must own portable tool confirmation planning, failure mapping, and wait-channel lifecycle state',
-    patterns: [
-      {
-        regex: /\bpub struct ToolConfirmationRequestFacts\b/,
-        message: 'missing tool confirmation request facts',
-      },
-      {
-        regex: /\bpub struct ToolConfirmationGateFacts\b/,
-        message: 'missing tool confirmation gate facts',
-      },
-      {
-        regex: /\bpub enum ToolConfirmationGatePlan\b/,
-        message: 'missing tool confirmation gate plan',
-      },
-      {
-        regex: /\bpub enum ToolConfirmationPlan\b/,
-        message: 'missing tool confirmation plan contract',
-      },
-      {
-        regex: /\bpub enum ToolConfirmationOutcome\b/,
-        message: 'missing tool confirmation outcome contract',
-      },
-      {
-        regex: /\bpub enum ToolConfirmationWaitResult\b/,
-        message: 'missing tool confirmation wait-result contract',
-      },
-      {
-        regex: /\bpub enum ToolConfirmationResponse\b/,
-        message: 'missing tool confirmation channel response',
-      },
-      {
-        regex: /\bpub enum ConfirmationFailureKind\b/,
-        message: 'missing tool confirmation failure kind',
-      },
-      {
-        regex: /\bpub struct ToolConfirmationChannelStore\b/,
-        message: 'missing tool confirmation channel store',
-      },
-      {
-        regex: /\bpub fn resolve_tool_confirmation_plan\b/,
-        message: 'missing tool confirmation plan resolver',
-      },
-      {
-        regex: /\bpub fn resolve_tool_confirmation_gate\b/,
-        message: 'missing tool confirmation gate resolver',
-      },
-      {
-        regex: /\bpub fn resolve_confirmation_failure\b/,
-        message: 'missing tool confirmation failure resolver',
-      },
-      {
-        regex: /\bpub fn resolve_confirmation_wait_result\b/,
-        message: 'missing tool confirmation wait-result resolver',
-      },
-      {
-        regex: /\bconfirmation_channel_store_delivers_confirmation_once\b/,
-        message: 'missing confirmation channel delivery regression',
-      },
-    ],
-  },
-  {
     path: 'src/crates/execution/agent-runtime/src/checkpoint.rs',
     reason:
       'agent-runtime must own provider-neutral light-checkpoint summary policy while core keeps concrete Git/session IO',
@@ -1905,37 +1873,6 @@ export const requiredContentRules = [
       {
         regex: /\bpub fn build_light_checkpoint\b/,
         message: 'missing light checkpoint builder',
-      },
-    ],
-  },
-  {
-    path: 'src/crates/execution/agent-runtime/tests/tool_confirmation_contracts.rs',
-    reason:
-      'agent-runtime tool confirmation owner must keep behavior-equivalence contracts for legacy permission planning and failures',
-    patterns: [
-      {
-        regex: /\bconfirmation_plan_requires_permission_only_when_both_flags_are_true\b/,
-        message: 'missing tool confirmation gate regression',
-      },
-      {
-        regex: /\bconfirmation_gate_preserves_skip_policy_precedence\b/,
-        message: 'missing tool confirmation skip-policy regression',
-      },
-      {
-        regex: /\bconfirmation_gate_requires_confirmation_only_for_permissioned_tools\b/,
-        message: 'missing tool confirmation permissioned-tool regression',
-      },
-      {
-        regex: /\bconfirmation_plan_preserves_legacy_no_timeout_one_year_deadline\b/,
-        message: 'missing tool confirmation no-timeout regression',
-      },
-      {
-        regex: /\bconfirmation_failure_mapping_preserves_legacy_reasons_and_errors\b/,
-        message: 'missing tool confirmation failure mapping regression',
-      },
-      {
-        regex: /\bconfirmation_wait_result_mapping_preserves_legacy_timeout_and_rejection\b/,
-        message: 'missing tool confirmation wait-result mapping regression',
       },
     ],
   },
@@ -2791,27 +2728,15 @@ export const requiredContentRules = [
   {
     path: 'src/crates/assembly/core/src/agentic/tools/pipeline/tool_pipeline.rs',
     reason:
-      'core tool pipeline must delegate portable confirmation planning, failure mapping, and channel ownership to agent-runtime while retaining state/event/tool execution wiring',
+      'core tool pipeline must delegate portable cancellation and retry policy while retaining state/event/tool execution wiring',
     patterns: [
       {
-        regex: /\bresolve_tool_confirmation_plan\b/,
-        message: 'missing tool confirmation plan delegation',
+        regex: /\bremote_workspace_route_root_isolated_from_same_local_path\b/,
+        message: 'missing remote workspace permission identity isolation regression',
       },
       {
-        regex: /\bresolve_confirmation_failure\b/,
-        message: 'missing tool confirmation failure mapping delegation',
-      },
-      {
-        regex: /\bresolve_confirmation_wait_result\b/,
-        message: 'missing tool confirmation wait-result mapping delegation',
-      },
-      {
-        regex: /\bToolConfirmationPlan::Await\b/,
-        message: 'missing tool confirmation await-plan handling',
-      },
-      {
-        regex: /\bToolConfirmationChannelStore\b/,
-        message: 'missing tool confirmation channel owner delegation',
+        regex: /\bonce_and_always_replies_control_execution_and_remembered_grants\b/,
+        message: 'missing permission project and remote grant isolation regression',
       },
       {
         regex: /\bToolCancellationTokenStore\b/,
@@ -3453,19 +3378,23 @@ export const requiredContentRules = [
   {
     path: 'src/crates/assembly/core/src/agentic/tools/pipeline/tool_pipeline.rs',
     reason:
-      'core tool pipeline must preserve latest-main truncation behavior through agent-tools delegation and keep per-tool denial behavior until tool runtime ownership migrates',
+      'core tool pipeline must preserve explicit Write-tail and opt-in normal-completion JSON-repair behavior through agent-tools delegation and keep per-tool denial behavior until tool runtime ownership migrates',
     patterns: [
       {
-        regex: /\bbuild_tool_call_truncation_recovery_notice\b/,
-        message: 'missing tool-call truncation recovery notice owner delegation',
+        regex: /\bbuild_normal_tool_json_repair_notice\b/,
+        message: 'missing normal-completion JSON repair notice owner delegation',
       },
       {
-        regex: /\btruncation_notice_for_interactive_tools_does_not_claim_file_write\b/,
-        message: 'missing interactive-tool truncation recovery regression',
+        regex: /\bbuild_write_tail_closure_notice\b/,
+        message: 'missing Write-tail closure notice owner delegation',
       },
       {
-        regex: /\btruncation_notice_for_write_tools_keeps_write_continuation_guidance\b/,
-        message: 'missing write-tool truncation recovery regression',
+        regex: /\bnormal_json_repair_notice_for_interactive_tools_does_not_claim_file_write\b/,
+        message: 'missing normal-completion JSON repair regression',
+      },
+      {
+        regex: /\bwrite_tail_closure_notice_keeps_write_continuation_guidance\b/,
+        message: 'missing Write-tail closure recovery regression',
       },
       {
         regex: /\bdenied_tool_messages\b/,
@@ -3957,8 +3886,8 @@ export const requiredContentRules = [
         message: 'AI client runtime must stay behind ai-adapter-runtime',
       },
       {
-        regex: /#\[cfg\(feature = "ai-adapter-runtime"\)\]\s*pub mod cli_credentials\b/s,
-        message: 'AI CLI credential runtime must stay behind ai-adapter-runtime',
+        regex: /#\[cfg\(feature = "ai-adapter-runtime"\)\]\s*pub mod subscription_auth\b/s,
+        message: 'AI subscription auth runtime must stay behind ai-adapter-runtime',
       },
       {
         regex: /#\[cfg\(feature = "product-full"\)\]\s*pub mod debug_log\b/s,
@@ -5355,10 +5284,6 @@ export const requiredContentRules = [
         message: 'missing pure GetToolSpec concurrency metadata contract',
       },
       {
-        regex: /\bpub fn get_tool_spec_needs_permissions\b/,
-        message: 'missing pure GetToolSpec permission metadata contract',
-      },
-      {
         regex: /\bpub fn validate_get_tool_spec_input\b/,
         message: 'missing pure GetToolSpec input validation contract',
       },
@@ -5735,8 +5660,12 @@ export const requiredContentRules = [
         message: 'missing write-like tool classification helper',
       },
       {
-        regex: /\bpub fn build_tool_call_truncation_recovery_notice\b/,
-        message: 'missing truncation recovery notice helper',
+        regex: /\bpub fn build_normal_tool_json_repair_notice\b/,
+        message: 'missing normal-completion JSON repair notice helper',
+      },
+      {
+        regex: /\bpub fn build_write_tail_closure_notice\b/,
+        message: 'missing Write-tail closure notice helper',
       },
     ],
   },
@@ -6627,10 +6556,6 @@ export const requiredContentRules = [
         regex: /\bremote_poll_handler_preserves_missing_workspace_error\b/,
         message: 'missing remote poll missing-workspace regression',
       },
-      {
-        regex: /\bremote_interaction_handler_preserves_default_reject_reason\b/,
-        message: 'missing remote interaction default reject regression',
-      },
     ],
   },
   {
@@ -6950,12 +6875,8 @@ export const requiredContentRules = [
   {
     path: 'src/crates/assembly/core/src/agentic/coordination/scheduler.rs',
     reason:
-      'core scheduler keeps remote queue policy semantics until agent-runtime migration is reviewed',
+      'core scheduler must keep dialog lifecycle and requester-aware cancellation adapters',
     patterns: [
-      {
-        regex: /\bremote_queue_policy_preserves_confirmation_boundary\b/,
-        message: 'missing remote queue policy regression',
-      },
       {
         regex: /\bimpl AgentDialogTurnPort for DialogScheduler\b/,
         message: 'missing dialog lifecycle port implementation',
@@ -7080,7 +7001,7 @@ export const requiredContentRules = [
       },
       {
         regex: /\bDeliveryProfile::Sdk\b/,
-        message: 'product tool runtime no-direct-core regression must cover SDK profile',
+        message: 'product tool runtime explicit profile regression must cover SDK profile',
       },
     ],
   },
@@ -7674,8 +7595,8 @@ export const requiredContentRules = [
         message: 'missing invalid tool call presentation owner delegation',
       },
       {
-        regex: /\bbuild_tool_call_truncation_recovery_notice\b/,
-        message: 'missing truncation recovery notice owner delegation',
+        regex: /\bbuild_normal_tool_json_repair_notice\b/,
+        message: 'missing normal-completion JSON repair notice owner delegation',
       },
     ],
   },
@@ -7888,15 +7809,15 @@ export const requiredContentRules = [
         message: 'missing background subagent launch path',
       },
       {
-        regex: /\bbackground_task_id\b/,
-        message: 'missing background task id result contract',
+        regex: /\bbg_task_id\b/,
+        message: 'missing parent-scoped background task id result contract',
       },
     ],
   },
   {
     path: 'src/crates/assembly/core/src/agentic/tools/implementations/task/background.rs',
     reason:
-      'core Task background acknowledgement must remain assistant-visible and not expose internal background task ids',
+      'core Task background acknowledgement must remain assistant-visible and expose the task id needed for explicit result collection',
     patterns: [
       {
         regex: /Background subagent started successfully/,
@@ -7910,7 +7831,7 @@ export const requiredContentRules = [
       'core Task tests must preserve background acknowledgement shape',
     patterns: [
       {
-        regex: /\bbackground_subagent_start_acknowledgement_uses_session_id_only\b/,
+        regex: /\bbackground_subagent_start_acknowledgement_exposes_agent_wait_task_id\b/,
         message: 'missing background task start acknowledgement regression',
       },
       {

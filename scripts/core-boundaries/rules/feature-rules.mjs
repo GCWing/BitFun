@@ -2,6 +2,20 @@
 
 export const optionalDependencyFeatureOwnerRules = [
   {
+    crateName: 'services-core',
+    reason:
+      'services-core workspace runtime dependencies must stay behind the explicit workspace-runtime feature',
+    dependencies: [{ depName: 'dunce', ownerFeatures: ['workspace-runtime'] }],
+  },
+  {
+    crateName: 'runtime-ports',
+    reason:
+      'runtime-ports may expose product-domain permission ports only through the explicit permission contract slice',
+    dependencies: [
+      { depName: 'bitfun-product-domains', ownerFeatures: ['permission'] },
+    ],
+  },
+  {
     crateName: 'core',
     reason:
       'bitfun-core product/runtime optional dependencies must stay owned by explicit feature gates',
@@ -11,7 +25,6 @@ export const optionalDependencyFeatureOwnerRules = [
       { depName: 'bitfun-ai-adapters', ownerFeatures: ['ai-adapter-runtime'] },
       { depName: 'bitfun-product-capabilities', ownerFeatures: ['product-capabilities'] },
       { depName: 'bitfun-product-domains', ownerFeatures: ['product-domains'] },
-      { depName: 'bitfun-relay-service', ownerFeatures: ['service-integrations'] },
       { depName: 'bitfun-tool-packs', ownerFeatures: ['tool-packs'] },
       { depName: 'chrono-tz', ownerFeatures: ['product-full'] },
       { depName: 'cron', ownerFeatures: ['product-full'] },
@@ -59,7 +72,7 @@ export const optionalDependencyFeatureOwnerRules = [
       { depName: 'bitfun-runtime-ports', ownerFeatures: ['remote-connect', 'remote-ssh', 'remote-ssh-concrete', 'script-tool-runtime'] },
       {
         depName: 'bitfun-services-core',
-        ownerFeatures: ['browser-control', 'git', 'mcp', 'miniapp-runtime', 'remote-connect', 'review-platform', 'workspace-search'],
+        ownerFeatures: ['browser-control', 'git', 'mcp', 'miniapp-runtime', 'process-tree', 'remote-connect', 'review-platform', 'workspace-search'],
       },
       { depName: 'chrono', ownerFeatures: ['debug-log', 'git', 'remote-connect', 'remote-ssh-concrete', 'review-platform'] },
       { depName: 'dirs', ownerFeatures: ['browser-control', 'miniapp-runtime', 'remote-connect', 'remote-ssh-concrete'] },
@@ -108,8 +121,8 @@ export const optionalDependencyFeatureOwnerRules = [
     dependencies: [
       { depName: 'dirs', ownerFeatures: ['miniapp'] },
       { depName: 'log', ownerFeatures: ['function-agents'] },
-      { depName: 'hex', ownerFeatures: ['plugin-source'] },
-      { depName: 'sha2', ownerFeatures: ['miniapp', 'plugin-source'] },
+      { depName: 'hex', ownerFeatures: ['external-sources', 'plugin-source'] },
+      { depName: 'sha2', ownerFeatures: ['external-sources', 'miniapp', 'plugin-source'] },
       { depName: 'which', ownerFeatures: ['miniapp'] },
     ],
   },
@@ -127,6 +140,18 @@ export const productCoreFeatureAssemblyRules = [
     dependencyName: 'bitfun-core',
     requiredFeatures: ['product-full'],
     reason: 'CLI must explicitly assemble the full bitfun-core product runtime',
+  },
+  {
+    manifestPath: 'src/apps/sdk-host/Cargo.toml',
+    dependencyName: 'bitfun-core',
+    requiredFeatures: ['product-full'],
+    reason: 'SDK Host must explicitly assemble the full bitfun-core product runtime',
+  },
+  {
+    manifestPath: 'src/apps/server/Cargo.toml',
+    dependencyName: 'bitfun-core',
+    requiredFeatures: ['product-full'],
+    reason: 'Server must explicitly assemble the full bitfun-core product runtime',
   },
   {
     manifestPath: 'src/crates/interfaces/acp/Cargo.toml',

@@ -1,4 +1,6 @@
-use crate::agentic::tools::framework::{Tool, ToolExposure, ToolResult, ToolUseContext};
+use crate::agentic::tools::framework::{
+    PermissionIntent, Tool, ToolExposure, ToolResult, ToolUseContext,
+};
 use crate::util::errors::{BitFunError, BitFunResult};
 use async_trait::async_trait;
 use bitfun_services_integrations::web_tools::{ExaSearchRequest, WebToolNetworkProvider};
@@ -176,8 +178,21 @@ Advanced features:
         true
     }
 
-    fn needs_permissions(&self, _input: Option<&Value>) -> bool {
-        false
+    fn permission_intents(
+        &self,
+        input: &Value,
+        _context: &ToolUseContext,
+    ) -> BitFunResult<Vec<PermissionIntent>> {
+        let query = input
+            .get("query")
+            .and_then(Value::as_str)
+            .map(str::trim)
+            .filter(|query| !query.is_empty())
+            .ok_or_else(|| BitFunError::validation("query is required".to_string()))?;
+        Ok(vec![PermissionIntent::new(
+            "websearch",
+            vec![query.to_string()],
+        )])
     }
 
     async fn call_impl(

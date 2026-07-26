@@ -13,12 +13,12 @@ impl From<ToolRestrictionError> for BitFunError {
 }
 
 pub fn is_local_path_within_root(path: &Path, root: &Path) -> BitFunResult<bool> {
-    let canonical_path = canonicalize_best_effort(path)?;
-    let canonical_root = canonicalize_best_effort(root)?;
+    let canonical_path = canonicalize_local_path_best_effort(path)?;
+    let canonical_root = canonicalize_local_path_best_effort(root)?;
     Ok(canonical_path == canonical_root || canonical_path.starts_with(&canonical_root))
 }
 
-fn canonicalize_best_effort(path: &Path) -> BitFunResult<PathBuf> {
+pub(crate) fn canonicalize_local_path_best_effort(path: &Path) -> BitFunResult<PathBuf> {
     if path.exists() {
         return dunce::canonicalize(path).map_err(|err| {
             BitFunError::validation(format!(

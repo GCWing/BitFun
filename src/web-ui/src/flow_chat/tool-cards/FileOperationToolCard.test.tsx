@@ -28,6 +28,26 @@ const mocks = vi.hoisted(() => ({
   useGitState: vi.fn(() => ({
     isRepository: false,
   })),
+  typewriterMode: 'passthrough' as 'passthrough' | 'partial',
+}));
+
+vi.mock('../hooks/useTypewriter', () => ({
+  useTypewriter: (targetText: string, animate: boolean) => {
+    if (mocks.typewriterMode === 'partial' && animate) {
+      return {
+        displayText: targetText.slice(0, Math.max(0, Math.floor(targetText.length / 2))),
+        isRevealing: true,
+      };
+    }
+    return {
+      displayText: targetText,
+      isRevealing: false,
+    };
+  },
+}));
+
+vi.mock('../hooks/typewriterRevealGateContext', () => ({
+  useReportTypewriterReveal: vi.fn(),
 }));
 
 vi.mock('react-i18next', () => ({
@@ -145,6 +165,7 @@ describe('FileOperationToolCard', () => {
     mocks.openFile.mockReset();
     mocks.codePreviewProps = [];
     mocks.inlineDiffPreviewProps = [];
+    mocks.typewriterMode = 'passthrough';
     mocks.useGitState.mockClear();
     mocks.useGitState.mockReturnValue({
       isRepository: false,
@@ -743,6 +764,61 @@ describe('FileOperationToolCard', () => {
       isStreaming: true,
       autoScrollToBottom: false,
     });
+  });
+
+  it('applies typewriter reveal to write streaming content preview', async () => {
+    mocks.typewriterMode = 'partial';
+    const fullContent = 'const value = 1;\nconst value2 = 2;\nconst value3 = 3;';
+    const toolItem: FlowToolItem = {
+      id: 'tool-1',
+      type: 'tool',
+      toolName: 'Write',
+      status: 'streaming',
+      isParamsStreaming: true,
+      toolCall: {
+        id: 'call-1',
+        name: 'Write',
+        input: {
+          file_path: 'src/generated.ts',
+          content: fullContent,
+        },
+      },
+      partialParams: {
+        file_path: 'src/generated.ts',
+        content: fullContent,
+      },
+    } as FlowToolItem;
+
+    const config: ToolCardConfig = {
+      toolName: 'Write',
+      displayName: 'Write',
+      icon: 'WRITE',
+      requiresConfirmation: false,
+      resultDisplayType: 'detailed',
+      description: 'Write a file',
+      displayMode: 'standard',
+    };
+
+    await act(async () => {
+      root.render(
+        <FileOperationToolCard
+          toolItem={toolItem}
+          config={config}
+          sessionId="session-1"
+        />
+      );
+    });
+
+    expect(mocks.codePreviewProps).toHaveLength(1);
+    const previewContent = String(mocks.codePreviewProps[0].content ?? '');
+    expect(previewContent.length).toBeGreaterThan(0);
+    expect(previewContent.length).toBeLessThan(fullContent.length);
+    expect(mocks.codePreviewProps[0]).toMatchObject({
+      isStreaming: true,
+      autoScrollToBottom: false,
+    });
+    // Status still reflects received bytes, not only revealed characters.
+    expect(container.textContent).toContain(`${fullContent.length} chars received`);
   });
 
   it('keeps completed write preview compact while auto-collapsing from streaming', async () => {

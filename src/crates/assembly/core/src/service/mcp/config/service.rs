@@ -141,6 +141,8 @@ mod tests {
             command: command.map(str::to_string),
             args: Vec::new(),
             env: HashMap::new(),
+            working_directory: None,
+            inherit_parent_environment: None,
             headers: HashMap::new(),
             url: url.map(str::to_string),
             auto_start: true,
@@ -149,6 +151,7 @@ mod tests {
             capabilities: Vec::new(),
             settings: Default::default(),
             oauth: None,
+            oauth_enabled: None,
             xaa: None,
         }
     }

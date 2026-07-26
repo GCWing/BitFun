@@ -1,7 +1,6 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
 import {
   __test_only__,
-  formatDialogErrorForNotification,
   handleDialogTurnComplete,
   handleSessionStateChanged,
   insertSteeringItemIfAbsent,
@@ -11,20 +10,9 @@ import {
 import { stateMachineManager } from '../../state-machine';
 import { SessionExecutionEvent, SessionExecutionState } from '../../state-machine/types';
 import { FlowChatStore } from '../../store/FlowChatStore';
+import { notificationService } from '../../../shared/notification-system/services/NotificationService';
 import type { DialogTurn, FlowToolItem, FlowUserSteeringItem, ModelRound, Session } from '../../types/flow-chat';
 import type { FlowChatContext } from './types';
-
-vi.mock('@/infrastructure/i18n/core/I18nService', () => ({
-  i18nService: {
-    t: (key: string) => ({
-      'errors:ai.unknown.title': 'AI request failed',
-      'errors:ai.unknown.message': 'The model stopped before returning a usable response. Try again or switch models.',
-      'errors:ai.invalidRequest.title': 'Model request invalid',
-      'errors:ai.invalidRequest.message': 'The provider rejected the request format, parameters, model name, or payload size. Adjust the request or choose another model.',
-      'errors:ai.actions.copyDiagnostics': 'Copy diagnostics',
-    }[key] ?? key),
-  },
-}));
 
 vi.mock('../../../shared/notification-system/services/NotificationService', () => ({
   notificationService: {
@@ -359,24 +347,59 @@ describe('shouldProcessEvent', () => {
   });
 });
 
-describe('formatDialogErrorForNotification', () => {
-  it('shows friendly copy while preserving raw error details for diagnostics', () => {
-    const rawError = 'Provider error: code=invalid_request_error, request_id=req-1, message=bad payload';
-    const formatted = formatDialogErrorForNotification(rawError, {
-      category: 'invalid_request',
-      provider: 'openai',
-      providerCode: 'invalid_request_error',
-      requestId: 'req-1',
-      rawMessage: rawError,
+describe('handleDialogTurnFailed', () => {
+  beforeEach(() => {
+    resetFlowChatStore();
+    stateMachineManager.clear();
+    vi.clearAllMocks();
+  });
+
+  afterEach(() => {
+    resetFlowChatStore();
+    stateMachineManager.clear();
+  });
+
+  it('keeps a zero-round turn and records the terminal provider error', () => {
+    createSessionWithTurn({
+      id: 'turn-1',
+      sessionId: 'session-1',
+      userMessage: {
+        id: 'user-1',
+        content: 'Initial request',
+        timestamp: 900,
+      },
+      modelRounds: [],
+      status: 'processing',
+      startTime: 900,
+    });
+    const context = createFlowChatContext();
+
+    __test_only__.handleDialogTurnFailed(context, {
+      sessionId: 'session-1',
+      turnId: 'turn-1',
+      error: 'OpenAI Streaming API failed after 10 attempts: connection refused',
+      errorDetail: {
+        category: 'network',
+        provider: 'openai',
+      },
     });
 
-    expect(formatted.type).toBe('error');
-    expect(formatted.title).toBe('Model request invalid');
-    expect(formatted.message).not.toContain('Provider error');
-    expect(formatted.rawError).toBe(rawError);
-    expect(formatted.metadata?.aiError?.rawError).toBe(rawError);
-    expect(formatted.metadata?.aiError?.diagnostics).toContain('code=invalid_request_error');
-    expect(formatted.actions?.map((action) => action.label)).toContain('Copy diagnostics');
+    const turn = FlowChatStore.getInstance()
+      .getState()
+      .sessions.get('session-1')
+      ?.dialogTurns.find(item => item.id === 'turn-1');
+
+    expect(turn).toMatchObject({
+      status: 'error',
+      error: 'OpenAI Streaming API failed after 10 attempts: connection refused',
+      errorDetail: {
+        category: 'network',
+        provider: 'openai',
+      },
+      modelRounds: [],
+    });
+    expect(notificationService.error).not.toHaveBeenCalled();
+    expect(notificationService.warning).not.toHaveBeenCalled();
   });
 });
 

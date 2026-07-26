@@ -117,7 +117,6 @@ export interface RemoteCommand {
   model_id?: string;
   reason?: string;
   answers?: Object;
-  updated_input?: Object;
   image_contexts?: RemoteImageContext[];
   images?: ImageAttachment[];
 }

@@ -77,7 +77,10 @@ export interface AiChatStartedResult {
 
 export interface AiModelInfo {
   id: string;
+  /** User-defined configuration name. */
   name: string;
+  /** Actual model identifier shown in the host chat model picker. */
+  modelName: string;
   provider: string;
   isDefault: boolean;
 }
@@ -96,6 +99,11 @@ export interface AgentRunOptions {
    * the agent workspace (file-protocol apps keep agent outputs there).
    */
   appDataWorkspace?: string;
+  /**
+   * Model selector for the hidden Cowork session (`auto` / `primary` / `fast`
+   * or a concrete model config id). Applied on create and on session reuse.
+   */
+  model?: string;
 }
 
 export interface AgentRunStartedResult {
@@ -662,6 +670,7 @@ export class MiniAppAPI {
           enableTools: options?.enableTools,
           sessionId: options?.sessionId,
           appDataWorkspace: options?.appDataWorkspace,
+          model: options?.model,
         }
       });
     } catch (error) {

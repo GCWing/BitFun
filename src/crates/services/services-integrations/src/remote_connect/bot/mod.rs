@@ -12,6 +12,7 @@ pub mod telegram;
 pub mod weixin;
 
 use serde::{Deserialize, Serialize};
+use std::sync::{Mutex as StdMutex, OnceLock};
 
 pub use command::{parse_command, BotCommand};
 pub use feishu::{FeishuBotApi, FeishuConfig};
@@ -486,6 +487,14 @@ pub fn auto_push_failed_message(language: BotLanguage, file_name: &str, err: &st
 
 const REMOTE_CONNECT_PERSISTENCE_FILENAME: &str = "remote_connect_persistence.json";
 const LEGACY_BOT_PERSISTENCE_FILENAME: &str = "bot_connections.json";
+static BOT_PERSISTENCE_LOCK: OnceLock<StdMutex<()>> = OnceLock::new();
+
+fn bot_persistence_lock() -> std::sync::MutexGuard<'static, ()> {
+    BOT_PERSISTENCE_LOCK
+        .get_or_init(|| StdMutex::new(()))
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+}
 
 fn bot_persistence_path() -> Option<std::path::PathBuf> {
     dirs::home_dir().map(|home| {
@@ -494,17 +503,31 @@ fn bot_persistence_path() -> Option<std::path::PathBuf> {
     })
 }
 
+fn bot_persistence_backup_path(path: &std::path::Path) -> std::path::PathBuf {
+    let file_name = path
+        .file_name()
+        .map(|name| name.to_string_lossy().to_string())
+        .unwrap_or_else(|| REMOTE_CONNECT_PERSISTENCE_FILENAME.to_string());
+    path.with_file_name(format!("{file_name}.bak"))
+}
+
 fn legacy_bot_persistence_path() -> Option<std::path::PathBuf> {
     dirs::home_dir().map(|home| home.join(".bitfun").join(LEGACY_BOT_PERSISTENCE_FILENAME))
 }
 
-pub fn load_bot_persistence() -> BotPersistenceData {
+fn load_bot_persistence_unlocked() -> BotPersistenceData {
     let Some(path) = bot_persistence_path() else {
         return BotPersistenceData::default();
     };
     match std::fs::read_to_string(&path) {
         Ok(data) => serde_json::from_str(&data).unwrap_or_default(),
         Err(_) => {
+            // A backup without the canonical file means the process stopped
+            // during the Windows replace dance. Fail closed instead of
+            // restoring the legacy file or a pre-clear account context.
+            if bot_persistence_backup_path(&path).exists() {
+                return BotPersistenceData::default();
+            }
             let Some(legacy_path) = legacy_bot_persistence_path() else {
                 return BotPersistenceData::default();
             };
@@ -516,23 +539,128 @@ pub fn load_bot_persistence() -> BotPersistenceData {
     }
 }
 
-pub fn save_bot_persistence(data: &BotPersistenceData) {
+fn write_bot_persistence_atomic(path: &std::path::Path, json: &[u8]) -> std::io::Result<()> {
+    use std::io::Write;
+
+    let parent = path.parent().ok_or_else(|| {
+        std::io::Error::new(
+            std::io::ErrorKind::InvalidInput,
+            "bot persistence path has no parent directory",
+        )
+    })?;
+    std::fs::create_dir_all(parent)?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(parent, std::fs::Permissions::from_mode(0o700))?;
+    }
+
+    let file_name = path
+        .file_name()
+        .map(|name| name.to_string_lossy().to_string())
+        .unwrap_or_else(|| REMOTE_CONNECT_PERSISTENCE_FILENAME.to_string());
+    let nonce = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_nanos();
+    let temp_path = parent.join(format!(".{file_name}.{}.{}.tmp", std::process::id(), nonce));
+    let backup_path = bot_persistence_backup_path(path);
+
+    let write_result = (|| -> std::io::Result<()> {
+        let mut options = std::fs::OpenOptions::new();
+        options.write(true).create_new(true);
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::OpenOptionsExt;
+            options.mode(0o600);
+        }
+        let mut temp = options.open(&temp_path)?;
+        temp.write_all(json)?;
+        temp.sync_all()?;
+        drop(temp);
+
+        // POSIX rename replaces atomically. On Windows std::fs::rename does
+        // not replace an existing destination, so retain the old file as a
+        // rollback backup until the new file is installed.
+        if std::fs::rename(&temp_path, path).is_ok() {
+            let _ = std::fs::remove_file(&backup_path);
+            return Ok(());
+        }
+
+        if !path.exists() {
+            return std::fs::rename(&temp_path, path);
+        }
+        if backup_path.exists() {
+            std::fs::remove_file(&backup_path)?;
+        }
+        std::fs::rename(path, &backup_path)?;
+        match std::fs::rename(&temp_path, path) {
+            Ok(()) => {
+                let _ = std::fs::remove_file(&backup_path);
+                Ok(())
+            }
+            Err(install_error) => {
+                let _ = std::fs::rename(&backup_path, path);
+                Err(install_error)
+            }
+        }
+    })();
+
+    if write_result.is_err() {
+        let _ = std::fs::remove_file(&temp_path);
+    }
+    write_result
+}
+
+fn save_bot_persistence_unlocked(data: &BotPersistenceData) {
     let Some(path) = bot_persistence_path() else {
         return;
     };
-    if let Some(parent) = path.parent() {
-        let _ = std::fs::create_dir_all(parent);
-    }
     if let Ok(json) = serde_json::to_string_pretty(data) {
-        if let Err(e) = std::fs::write(&path, json) {
+        if let Err(e) = write_bot_persistence_atomic(&path, json.as_bytes()) {
             log::error!("Failed to save bot persistence: {e}");
         }
     }
 }
 
+pub fn load_bot_persistence() -> BotPersistenceData {
+    let _persistence = bot_persistence_lock();
+    load_bot_persistence_unlocked()
+}
+
+pub fn save_bot_persistence(data: &BotPersistenceData) {
+    let _persistence = bot_persistence_lock();
+    save_bot_persistence_unlocked(data);
+}
+
+/// Apply one read-modify-write transaction to the shared bot persistence
+/// document. Individual platform loops run concurrently, so separate
+/// `load`/`save` calls can otherwise overwrite another bot's update.
+pub fn update_bot_persistence<R>(update: impl FnOnce(&mut BotPersistenceData) -> R) -> R {
+    let _persistence = bot_persistence_lock();
+    let mut data = load_bot_persistence_unlocked();
+    let result = update(&mut data);
+    save_bot_persistence_unlocked(&data);
+    result
+}
+
+/// Remove persisted account-device context for every bot connection. This is
+/// called as part of the desktop account epoch transition even when a bot is
+/// between stop/restore and therefore has no live chat-state map to clear.
+pub fn clear_persisted_bot_account_contexts() {
+    update_bot_persistence(|data| {
+        for connection in &mut data.connections {
+            connection.chat_state.clear_delegated_identity();
+        }
+    });
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{collect_auto_push_files, extract_downloadable_file_paths, resolve_workspace_path};
+    use super::{
+        bot_persistence_backup_path, collect_auto_push_files, extract_downloadable_file_paths,
+        resolve_workspace_path, write_bot_persistence_atomic,
+    };
 
     fn make_temp_workspace() -> (std::path::PathBuf, std::path::PathBuf, std::path::PathBuf) {
         let base = std::env::temp_dir().join(format!(
@@ -545,6 +673,34 @@ mod tests {
         std::fs::create_dir_all(&artifacts).unwrap();
         std::fs::write(&report, b"ppt").unwrap();
         (base, workspace, report)
+    }
+
+    #[test]
+    fn bot_persistence_replaces_existing_file_via_same_directory_temp() {
+        let root = tempfile::tempdir().expect("temporary persistence directory");
+        let path = root.path().join("remote_connect_persistence.json");
+        write_bot_persistence_atomic(&path, br#"{"version":1}"#)
+            .expect("initial persistence write");
+        write_bot_persistence_atomic(&path, br#"{"version":2}"#)
+            .expect("replacement persistence write");
+
+        assert_eq!(
+            std::fs::read_to_string(&path).expect("read installed persistence"),
+            r#"{"version":2}"#
+        );
+        assert!(!bot_persistence_backup_path(&path).exists());
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            assert_eq!(
+                std::fs::metadata(&path)
+                    .expect("persistence metadata")
+                    .permissions()
+                    .mode()
+                    & 0o777,
+                0o600
+            );
+        }
     }
 
     #[test]

@@ -1,6 +1,8 @@
 //! Types for session persistence
 
-use bitfun_core_types::SessionKind;
+use bitfun_core_types::ToolImageAttachment;
+use bitfun_core_types::{AiErrorDetail, SessionContinuationPolicy, SessionKind};
+use bitfun_events::ModelRoundAttemptDiagnostic;
 use serde::{Deserialize, Serialize};
 
 pub const SESSION_STORAGE_SCHEMA_VERSION: u32 = 2;
@@ -56,6 +58,8 @@ pub struct SessionRelationship {
         alias = "subagent_type"
     )]
     pub subagent_type: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub continuation_policy: Option<SessionContinuationPolicy>,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
@@ -416,6 +420,18 @@ pub struct DialogTurnData {
     )]
     pub has_final_response: Option<bool>,
 
+    /// Terminal error message when the turn failed.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub error: Option<String>,
+
+    /// Structured provider diagnostics for a failed turn.
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        alias = "error_detail"
+    )]
+    pub error_detail: Option<AiErrorDetail>,
+
     /// Turn status
     pub status: TurnStatus,
 }
@@ -545,6 +561,12 @@ pub struct ModelRoundData {
         alias = "attempt_count"
     )]
     pub attempt_count: Option<u32>,
+    #[serde(
+        default,
+        skip_serializing_if = "Vec::is_empty",
+        alias = "attempt_diagnostics"
+    )]
+    pub attempt_diagnostics: Vec<ModelRoundAttemptDiagnostic>,
     #[serde(
         default,
         skip_serializing_if = "Option::is_none",
@@ -755,6 +777,12 @@ pub struct ToolResultData {
         alias = "result_for_assistant"
     )]
     pub result_for_assistant: Option<String>,
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        alias = "image_attachments"
+    )]
+    pub image_attachments: Option<Vec<ToolImageAttachment>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub error: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none", alias = "duration_ms")]
@@ -987,6 +1015,8 @@ impl DialogTurnData {
             token_usage: None,
             finish_reason: None,
             has_final_response: None,
+            error: None,
+            error_detail: None,
             status: TurnStatus::InProgress,
         }
     }
@@ -1019,7 +1049,7 @@ mod tests {
         SessionRelationship, SessionRelationshipKind, TextItemData, ThinkingItemData, ToolItemData,
         UserMessageData,
     };
-    use bitfun_core_types::SessionKind;
+    use bitfun_core_types::{SessionContinuationPolicy, SessionKind};
 
     #[test]
     fn dialog_turn_kind_defaults_to_user_dialog_for_legacy_payloads() {
@@ -1216,6 +1246,7 @@ mod tests {
             parent_turn_index: Some(2),
             parent_tool_call_id: None,
             subagent_type: None,
+            continuation_policy: Some(SessionContinuationPolicy::FreshOnly),
         });
 
         let json = serde_json::to_value(&metadata).expect("metadata should serialize");

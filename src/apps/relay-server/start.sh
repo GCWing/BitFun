@@ -57,6 +57,6 @@ compose up -d
 
 echo ""
 echo "Relay service started."
-echo "Relay endpoint: http://<this-server-ip>:9700"
+echo "Relay endpoint: http://<this-server-ip>:${RELAY_PORT:-9700}"
 echo "Check status:  ${COMPOSE[*]} ps"
 echo "View logs:     ${COMPOSE[*]} logs -f relay-server"

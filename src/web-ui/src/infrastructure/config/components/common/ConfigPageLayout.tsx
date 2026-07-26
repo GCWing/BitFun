@@ -29,18 +29,43 @@ export interface ConfigPageContentProps {
   children: React.ReactNode;
    
   className?: string;
+  id?: string;
 }
 
  
 export const ConfigPageContent: React.FC<ConfigPageContentProps> = ({
   children,
   className = '',
+  id,
 }) => {
   return (
-    <div className={`bitfun-config-page-content ${className}`}>
+    <div id={id} className={`bitfun-config-page-content ${className}`}>
       <div className="bitfun-config-page-content__inner">
         {children}
       </div>
+    </div>
+  );
+};
+
+export interface ConfigPageSectionStackProps extends React.HTMLAttributes<HTMLDivElement> {
+  children: React.ReactNode;
+}
+
+/**
+ * Keeps the standard page-level spacing when sections need a shared wrapper
+ * for state, test hooks, or adjacent page controls.
+ */
+export const ConfigPageSectionStack: React.FC<ConfigPageSectionStackProps> = ({
+  children,
+  className = '',
+  ...props
+}) => {
+  return (
+    <div
+      {...props}
+      className={`bitfun-config-page-section-stack ${className}`.trim()}
+    >
+      {children}
     </div>
   );
 };
@@ -135,10 +160,11 @@ export const ConfigPageRow: React.FC<ConfigPageRowProps> = ({
   return (
     <div className={cls} style={gridStyle}>
       <div className="bitfun-config-page-row__meta">
-        <p className="bitfun-config-page-row__label">{label}</p>
-        {description && (
-          <p className="bitfun-config-page-row__description">{description}</p>
-        )}
+        {/* div (not p): label may contain buttons; button-in-p freezes React event path */}
+        <div className="bitfun-config-page-row__label">{label}</div>
+        {description ? (
+          <div className="bitfun-config-page-row__description">{description}</div>
+        ) : null}
       </div>
       <div className="bitfun-config-page-row__control">
         {children}
@@ -148,6 +174,5 @@ export const ConfigPageRow: React.FC<ConfigPageRowProps> = ({
 };
 
 export default ConfigPageLayout;
-
 
 

@@ -55,6 +55,8 @@ fn make_mcp_config(
         command: command.map(str::to_string),
         args: Vec::new(),
         env: HashMap::new(),
+        working_directory: None,
+        inherit_parent_environment: None,
         headers: HashMap::new(),
         url: url.map(str::to_string),
         auto_start: true,
@@ -63,6 +65,7 @@ fn make_mcp_config(
         capabilities: Vec::new(),
         settings: Default::default(),
         oauth: None,
+        oauth_enabled: None,
         xaa: None,
     }
 }
@@ -1571,6 +1574,8 @@ fn mcp_server_config_preserves_transport_defaults_and_validation_contract() {
         command: Some("npx".to_string()),
         args: vec!["server".to_string()],
         env: Default::default(),
+        working_directory: None,
+        inherit_parent_environment: None,
         headers: Default::default(),
         url: None,
         auto_start: true,
@@ -1579,6 +1584,7 @@ fn mcp_server_config_preserves_transport_defaults_and_validation_contract() {
         capabilities: Vec::new(),
         settings: Default::default(),
         oauth: None,
+        oauth_enabled: None,
         xaa: None,
     };
     assert_eq!(local.resolved_transport(), MCPServerTransport::Stdio);
@@ -1603,6 +1609,86 @@ fn mcp_server_config_preserves_transport_defaults_and_validation_contract() {
     remote
         .validate()
         .expect("remote streamable-http config is valid");
+}
+
+#[test]
+fn mcp_server_config_preserves_an_optional_local_working_directory() {
+    let config: MCPServerConfig = serde_json::from_value(serde_json::json!({
+        "id": "external-local",
+        "name": "External local",
+        "type": "local",
+        "command": "node",
+        "args": ["server.js"],
+        "workingDirectory": "C:/workspace/project",
+        "autoStart": true,
+        "enabled": true,
+        "location": "built-in",
+        "capabilities": [],
+        "settings": {}
+    }))
+    .unwrap();
+
+    assert_eq!(
+        config.working_directory.as_deref(),
+        Some("C:/workspace/project")
+    );
+    assert_eq!(
+        serde_json::to_value(config).unwrap()["workingDirectory"],
+        "C:/workspace/project"
+    );
+}
+
+#[test]
+fn remote_mcp_oauth_can_be_explicitly_disabled_without_changing_legacy_default() {
+    let disabled: MCPServerConfig = serde_json::from_value(serde_json::json!({
+        "id": "remote-static-auth",
+        "name": "Remote static auth",
+        "type": "remote",
+        "transport": "streamable-http",
+        "url": "https://example.test/mcp",
+        "oauthEnabled": false,
+        "location": "built-in"
+    }))
+    .unwrap();
+    assert!(!disabled.remote_oauth_enabled());
+
+    let legacy: MCPServerConfig = serde_json::from_value(serde_json::json!({
+        "id": "remote-legacy",
+        "name": "Remote legacy",
+        "type": "remote",
+        "transport": "streamable-http",
+        "url": "https://example.test/mcp",
+        "location": "user"
+    }))
+    .unwrap();
+    assert!(legacy.remote_oauth_enabled());
+}
+
+#[test]
+fn local_mcp_can_disable_parent_environment_inheritance_without_changing_legacy_default() {
+    let restricted: MCPServerConfig = serde_json::from_value(serde_json::json!({
+        "id": "external-local",
+        "name": "External local",
+        "type": "local",
+        "command": "node",
+        "args": [],
+        "env": {"ALLOWED_TOKEN": "explicit"},
+        "inheritParentEnvironment": false,
+        "autoStart": true,
+        "enabled": true,
+        "location": "built-in"
+    }))
+    .unwrap();
+    assert!(!restricted.inherits_parent_environment());
+
+    let legacy = make_mcp_config(
+        "legacy-local",
+        ConfigLocation::User,
+        MCPServerType::Local,
+        Some("node"),
+        None,
+    );
+    assert!(legacy.inherits_parent_environment());
 }
 
 #[test]
@@ -1677,6 +1763,8 @@ fn mcp_cursor_format_helpers_preserve_cursor_compatibility_contract() {
         command: None,
         args: Vec::new(),
         env: Default::default(),
+        working_directory: None,
+        inherit_parent_environment: None,
         headers: std::collections::HashMap::from([(
             "Authorization".to_string(),
             "Bearer token".to_string(),
@@ -1688,6 +1776,7 @@ fn mcp_cursor_format_helpers_preserve_cursor_compatibility_contract() {
         capabilities: Vec::new(),
         settings: Default::default(),
         oauth: None,
+        oauth_enabled: None,
         xaa: None,
     };
 

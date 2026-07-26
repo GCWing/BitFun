@@ -76,10 +76,6 @@ The terminal_session_id is returned inside <terminal_session_id>...</terminal_se
         true
     }
 
-    fn needs_permissions(&self, _input: Option<&Value>) -> bool {
-        false
-    }
-
     async fn is_available_in_context(&self, context: Option<&ToolUseContext>) -> bool {
         !context.map(|ctx| ctx.is_remote()).unwrap_or(false)
     }

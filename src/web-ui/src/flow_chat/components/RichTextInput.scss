@@ -45,6 +45,14 @@
     border: none !important;
     box-shadow: none !important;
   }
+
+  // The global focus ring (`.bitfun-app-layout *:focus-visible`) adds
+  // border-radius for its outline. This input suppresses the ring, and the
+  // leftover radius clips the caret where overflow is hidden (capsule mode).
+  // Doubled class beats that rule's specificity regardless of load order.
+  &.rich-text-input:focus-visible {
+    border-radius: 0;
+  }
   
   &[contenteditable="false"] {
     opacity: 0.6;

@@ -5,6 +5,76 @@ enum ModelSelectionApplyOutcome {
     },
 }
 
+enum ModeSelectionApplyOutcome {
+    SessionUpdateFailed(String),
+    Applied,
+}
+
+enum ModeChangePollOutcome {
+    NoChange,
+    Redraw,
+    ExitAfterSave,
+}
+
+fn previous_session_mode_change_status(
+    mode_id: &str,
+    outcome: &ModeSelectionApplyOutcome,
+) -> String {
+    match outcome {
+        ModeSelectionApplyOutcome::Applied => format!(
+            "The previous session mode was changed to {mode_id}; the current session was not modified."
+        ),
+        ModeSelectionApplyOutcome::SessionUpdateFailed(error) => format!(
+            "The previous session mode change to {mode_id} failed: {error}. Return to that session to retry."
+        ),
+    }
+}
+
+fn mode_change_completion_should_exit(exit_requested: bool, applied: bool) -> bool {
+    exit_requested && applied
+}
+
+fn apply_agent_mode_feedback(
+    current_mode: &mut String,
+    chat_state: &mut ChatState,
+    selected_mode: &str,
+    outcome: ModeSelectionApplyOutcome,
+) -> bool {
+    match outcome {
+        ModeSelectionApplyOutcome::SessionUpdateFailed(error) => {
+            tracing::error!(
+                "Failed to switch agent mode to {}: {}",
+                selected_mode,
+                error
+            );
+            chat_state.add_system_message(format!(
+                "Agent mode was not changed: {error}. Please retry."
+            ));
+            false
+        }
+        ModeSelectionApplyOutcome::Applied => {
+            *current_mode = selected_mode.to_string();
+            chat_state.agent_type = selected_mode.to_string();
+            tracing::info!("Agent mode switched to: {}", selected_mode);
+            true
+        }
+    }
+}
+
+fn usage_report_metadata(report: &SessionUsageReport) -> Result<serde_json::Value> {
+    let usage_report = serde_json::to_value(report)
+        .map_err(|error| anyhow!("Failed to serialize usage report: {error}"))?;
+    Ok(serde_json::json!({
+        "localCommandKind": "usage_report",
+        "reportId": report.report_id,
+        "schemaVersion": report.schema_version,
+        "generatedAt": report.generated_at,
+        "modelVisible": false,
+        "usageReport": usage_report,
+        "usageReportStatus": "completed",
+    }))
+}
+
 fn apply_model_selection_feedback(
     chat_state: &mut ChatState,
     selected_display_name: &str,
@@ -80,19 +150,21 @@ impl ChatMode {
             .or_else(|| self.workspace.clone())
             .or_else(|| Some(self.agent.workspace_path_string()));
         let agent = self.agent.clone();
+        let runtime = Arc::clone(&self.runtime);
 
         let report_result: Result<bitfun_core::service::session_usage::SessionUsageReport> =
             tokio::task::block_in_place(|| {
                 let session_id = session_id.clone();
                 let workspace_path = workspace_path.clone();
                 let agent = agent.clone();
+                let runtime = Arc::clone(&runtime);
                 rt_handle.block_on(async move {
                     let workspace_path = workspace_path
                         .filter(|path| !path.trim().is_empty())
                         .ok_or_else(|| anyhow!("Workspace path is required for usage reports"))?;
 
                     let report = agent
-                        .generate_session_usage_report(SessionUsageReportRequest {
+                        .generate_session_usage_report(AgentSessionUsageRequest {
                             session_id: session_id.clone(),
                             workspace_path: Some(workspace_path),
                             remote_connection_id: None,
@@ -103,28 +175,20 @@ impl ChatMode {
 
                     let markdown = render_usage_report_markdown(&report);
                     let generated_at = u64::try_from(report.generated_at).unwrap_or_default();
-                    let usage_report = serde_json::to_value(&report)
-                        .map_err(|error| anyhow!("Failed to serialize usage report: {}", error))?;
-                    let metadata = serde_json::json!({
-                        "localCommandKind": "usage_report",
-                        "reportId": report.report_id.clone(),
-                        "schemaVersion": report.schema_version,
-                        "generatedAt": report.generated_at,
-                        "modelVisible": false,
-                        "usageReport": usage_report,
-                        "usageReportStatus": "completed",
-                    });
-
-                    agent
-                        .append_completed_local_command_turn(
-                            &session_id,
-                            markdown,
-                            Some(format!("local-usage-{}", report.report_id)),
-                            Some(generated_at),
-                            Some(metadata),
-                        )
+                    let metadata = usage_report_metadata(&report)?;
+                    runtime
+                        .agent_runtime()
+                        .record_completed_local_command_turn(AgentLocalCommandTurnRecordRequest {
+                            session_id,
+                            content: markdown,
+                            turn_id: Some(format!("local-usage-{}", report.report_id)),
+                            timestamp_ms: Some(generated_at),
+                            metadata: metadata.as_object().cloned().ok_or_else(|| {
+                                anyhow!("Usage report metadata must be an object")
+                            })?,
+                        })
                         .await
-                        .map_err(|error| anyhow!(error.to_string()))?;
+                        .map_err(|error| anyhow!(error.into_message()))?;
 
                     Ok(report)
                 })
@@ -257,10 +321,17 @@ impl ChatMode {
     fn switch_agent_by_offset(
         &mut self,
         offset: isize,
-        _chat_view: &mut ChatView,
+        chat_view: &mut ChatView,
         chat_state: &mut ChatState,
         rt_handle: &tokio::runtime::Handle,
     ) {
+        if !agent_mode_switch_allowed(chat_state.is_processing, self.pending_mode_change.is_some())
+        {
+            chat_view.set_status(Some(mode_switch_unavailable_message(
+                chat_state.is_processing,
+            )));
+            return;
+        }
         let modes = self.get_mode_agents(rt_handle);
         if modes.len() <= 1 {
             return;
@@ -275,8 +346,11 @@ impl ChatMode {
         let next_idx = ((current_idx as isize + offset) % len + len) % len;
         let next = &modes[next_idx as usize];
 
-        self.agent_type = next.id.clone();
-        chat_state.agent_type = next.id.clone();
+        let selected = AgentItem {
+            id: next.id.clone(),
+            description: next.description.clone(),
+        };
+        self.apply_agent_selection(&selected, chat_view, chat_state, rt_handle);
     }
 
     /// Load current model name from global config for display
@@ -430,18 +504,15 @@ impl ChatMode {
                     };
                 }
 
+                crate::account_sync::notify_local_settings_changed();
+
                 ModelSelectionApplyOutcome::Applied {
                     default_persist_error: None,
                 }
             })
         });
 
-        apply_model_selection_feedback(
-            chat_state,
-            &selected_display_name,
-            &selected_id,
-            outcome,
-        );
+        apply_model_selection_feedback(chat_state, &selected_display_name, &selected_id, outcome);
     }
 
     /// Show agent selector popup with all available agent modes
@@ -453,8 +524,9 @@ impl ChatMode {
     ) {
         let modes = self.get_mode_agents(rt_handle);
         if modes.is_empty() {
-            chat_state.add_system_message("No mode agents available".to_string());
-            return;
+            chat_view.set_status(Some(
+                "Main agent modes are unavailable; agent management remains available.".to_string(),
+            ));
         }
 
         let agent_items: Vec<AgentItem> = modes
@@ -465,19 +537,143 @@ impl ChatMode {
             })
             .collect();
 
-        chat_view.show_agent_selector(agent_items, Some(self.agent_type.clone()));
+        chat_view.show_agent_selector(
+            agent_items,
+            Some(self.agent_type.clone()),
+            true,
+            agent_mode_switch_allowed(chat_state.is_processing, self.pending_mode_change.is_some()),
+        );
+    }
+
+    fn handle_agent_selector_action(
+        &mut self,
+        action: AgentSelectorAction,
+        chat_view: &mut ChatView,
+        chat_state: &mut ChatState,
+        rt_handle: &tokio::runtime::Handle,
+    ) {
+        match action {
+            AgentSelectorAction::SwitchMode(selected) => {
+                if !agent_mode_switch_allowed(
+                    chat_state.is_processing,
+                    self.pending_mode_change.is_some(),
+                ) {
+                    chat_view.set_status(Some(mode_switch_unavailable_message(
+                        chat_state.is_processing,
+                    )));
+                    return;
+                }
+                chat_view.hide_agent_selector();
+                self.apply_agent_selection(&selected, chat_view, chat_state, rt_handle);
+            }
+            AgentSelectorAction::ManageSubagents => {
+                self.show_subagent_selector(chat_view, chat_state, rt_handle);
+            }
+            AgentSelectorAction::ReviewExternalSources => {
+                chat_view.hide_agent_selector();
+                self.handle_external_agent_review("", chat_view, chat_state, rt_handle);
+            }
+        }
     }
 
     /// Apply agent selection: switch agent type
-    fn apply_agent_selection(&mut self, selected: &AgentItem, chat_state: &mut ChatState) {
+    fn apply_agent_selection(
+        &mut self,
+        selected: &AgentItem,
+        chat_view: &mut ChatView,
+        chat_state: &mut ChatState,
+        rt_handle: &tokio::runtime::Handle,
+    ) {
         if selected.id == self.agent_type {
             return;
         }
-        self.agent_type = selected.id.clone();
-        chat_state.agent_type = selected.id.clone();
-        tracing::info!("Switched to agent: {}", selected.id);
 
-        if selected.id == "HarmonyOSDev" {
+        if self.pending_mode_change.is_some() {
+            chat_view.set_status(Some(
+                "An agent mode change is already in progress. Please wait.".to_string(),
+            ));
+            return;
+        }
+
+        let session_id = chat_state.core_session_id.clone();
+        let mode_id = selected.id.clone();
+        let task_mode_id = mode_id.clone();
+        let agent = self.agent.clone();
+        chat_view.set_status(Some(format!("Switching agent mode to {mode_id}...")));
+        let task_session_id = session_id.clone();
+        let handle = rt_handle.spawn(async move {
+            agent
+                .update_session_mode(&task_session_id, &task_mode_id)
+                .await
+        });
+        self.pending_mode_change = Some(PendingModeChange {
+            session_id,
+            mode_id,
+            started_at: Instant::now(),
+            slow_notice_shown: false,
+            exit_warning_shown: false,
+            handle,
+        });
+    }
+
+    fn poll_mode_change_completion(
+        &mut self,
+        chat_view: &mut ChatView,
+        chat_state: &mut ChatState,
+        rt_handle: &tokio::runtime::Handle,
+    ) -> ModeChangePollOutcome {
+        let Some(pending) = self.pending_mode_change.as_mut() else {
+            return ModeChangePollOutcome::NoChange;
+        };
+        if !pending.handle.is_finished() {
+            if !pending.slow_notice_shown && pending.started_at.elapsed() >= MODE_CHANGE_SLOW_NOTICE
+            {
+                pending.slow_notice_shown = true;
+                if !pending.exit_warning_shown {
+                    chat_view.set_status(Some(
+                        "The agent mode change is still being saved. You can edit or switch sessions; sending in this session waits."
+                            .to_string(),
+                    ));
+                }
+                return ModeChangePollOutcome::Redraw;
+            }
+            return ModeChangePollOutcome::NoChange;
+        }
+        let pending = self
+            .pending_mode_change
+            .take()
+            .expect("finished mode task should remain present");
+        let outcome = match tokio::task::block_in_place(|| rt_handle.block_on(pending.handle)) {
+            Ok(Ok(())) => ModeSelectionApplyOutcome::Applied,
+            Ok(Err(error)) => ModeSelectionApplyOutcome::SessionUpdateFailed(error.to_string()),
+            Err(error) => ModeSelectionApplyOutcome::SessionUpdateFailed(format!(
+                "mode update task failed: {error}"
+            )),
+        };
+        if chat_state.core_session_id != pending.session_id {
+            if let ModeSelectionApplyOutcome::SessionUpdateFailed(error) = &outcome {
+                tracing::error!(
+                    "Failed to switch previous session {} to agent mode {}: {}",
+                    pending.session_id,
+                    pending.mode_id,
+                    error
+                );
+            }
+            chat_view.set_status(Some(previous_session_mode_change_status(
+                &pending.mode_id,
+                &outcome,
+            )));
+            return ModeChangePollOutcome::Redraw;
+        }
+        let applied =
+            apply_agent_mode_feedback(&mut self.agent_type, chat_state, &pending.mode_id, outcome);
+        if applied {
+            chat_view.set_status(Some(format!("Agent mode set to {}", pending.mode_id)));
+        } else {
+            chat_view.set_status(Some("Agent mode change failed. Please retry.".to_string()));
+        }
+
+        if applied && pending.mode_id == "HarmonyOSDev" {
             let deveco_home = std::env::var("DEVECO_HOME").ok();
             let missing = deveco_home
                 .as_deref()
@@ -490,8 +686,54 @@ impl ChatMode {
                 );
             }
         }
+        if mode_change_completion_should_exit(pending.exit_warning_shown, applied) {
+            ModeChangePollOutcome::ExitAfterSave
+        } else {
+            ModeChangePollOutcome::Redraw
+        }
     }
 
     // ============ MCP management ============
+}
 
+fn agent_mode_switch_allowed(is_processing: bool, mode_change_pending: bool) -> bool {
+    !is_processing && !mode_change_pending
+}
+
+fn mode_switch_unavailable_message(is_processing: bool) -> String {
+    if is_processing {
+        "Agent mode cannot be changed during the current turn. Subagent and external source management remain available."
+            .to_string()
+    } else {
+        "An agent mode change is already in progress. Please wait.".to_string()
+    }
+}
+
+#[cfg(test)]
+mod usage_metadata_tests {
+    use super::{agent_mode_switch_allowed, usage_report_metadata, SessionUsageReport};
+
+    #[test]
+    fn mode_switch_is_rechecked_when_an_idle_popup_outlives_turn_start() {
+        assert!(agent_mode_switch_allowed(false, false));
+        assert!(!agent_mode_switch_allowed(true, false));
+        assert!(!agent_mode_switch_allowed(false, true));
+    }
+
+    #[test]
+    fn usage_metadata_preserves_the_existing_tui_transcript_schema() {
+        let mut report = SessionUsageReport::partial_unavailable("session-1", 1_778_347_200_000);
+        report.report_id = "usage-session-1-1778347200000".to_string();
+
+        let metadata = usage_report_metadata(&report).expect("usage metadata");
+
+        assert_eq!(metadata["localCommandKind"], "usage_report");
+        assert_eq!(metadata["reportId"], report.report_id);
+        assert_eq!(metadata["schemaVersion"], report.schema_version);
+        assert_eq!(metadata["generatedAt"], report.generated_at);
+        assert_eq!(metadata["modelVisible"], false);
+        assert_eq!(metadata["usageReportStatus"], "completed");
+        assert_eq!(metadata["usageReport"]["sessionId"], "session-1");
+        assert_eq!(metadata.as_object().map(serde_json::Map::len), Some(7));
+    }
 }

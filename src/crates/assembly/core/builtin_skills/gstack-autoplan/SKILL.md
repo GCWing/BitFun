@@ -180,12 +180,12 @@ Then prepend a one-line HTML comment to the plan file:
   on top of) or if an AI agent is the primary user (OpenClaw actions, BitFun skills,
   MCP servers).
 
-### Step 3: Load skill files from disk
+### Step 3: Load review skills
 
-Read each file using the Read tool:
-- `the bundled plan-ceo-review skill via the Skill tool`
-- `the bundled plan-design-review skill via the Skill tool` (only if UI scope detected)
-- `the bundled plan-eng-review skill via the Skill tool`
+Load each stable key with the Skill tool:
+- `user::bitfun-system::gstack-plan-ceo-review`
+- `user::bitfun-system::gstack-plan-design-review` (only if UI scope detected)
+- `user::bitfun-system::gstack-plan-eng-review`
 - `the relevant built-in developer-experience review methodology, if present` (only if DX scope detected)
 
 **Section skip list — when following a loaded skill file, SKIP these sections
@@ -212,7 +212,7 @@ Loaded review skills from disk. Starting full review pipeline with auto-decision
 
 ## Phase 1: CEO Review (Strategy & Scope)
 
-Follow plan-ceo-review/SKILL.md — all sections, full depth.
+Load `user::bitfun-system::gstack-plan-ceo-review` with the Skill tool and follow all sections at full depth.
 Override: every AskUserQuestion → auto-decide using the 6 principles.
 
 **Override rules:**
@@ -331,7 +331,7 @@ and the premise gate has been passed.
 
 ## Phase 2: Design Review (conditional — skip if no UI scope)
 
-Follow plan-design-review/SKILL.md — all 7 dimensions, full depth.
+Load `user::bitfun-system::gstack-plan-design-review` with the Skill tool and follow all 7 dimensions at full depth.
 Override: every AskUserQuestion → auto-decide using the 6 principles.
 
 **Override rules:**
@@ -409,7 +409,7 @@ Do NOT begin Phase 3 until all Phase 2 outputs (if run) are written to the plan 
 
 ## Phase 3: Eng Review + Dual Voices
 
-Follow plan-eng-review/SKILL.md — all sections, full depth.
+Load `user::bitfun-system::gstack-plan-eng-review` with the Skill tool and follow all sections at full depth.
 Override: every AskUserQuestion → auto-decide using the 6 principles.
 
 **Override rules:**
@@ -514,7 +514,7 @@ Missing voice = N/A (not CONFIRMED). Single critical finding from one voice = fl
 
 ## Phase 3.5: DX Review (conditional — skip if no developer-facing scope)
 
-Follow plan-devex-review/SKILL.md — all 8 DX dimensions, full depth.
+Use the self-contained checklist below — all 8 DX dimensions, full depth.
 Override: every AskUserQuestion → auto-decide using the 6 principles.
 
 **Skip condition:** If DX scope was NOT detected in Phase 0, skip this phase entirely.

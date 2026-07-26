@@ -75,12 +75,9 @@ pub fn extract_markdown_with_text_fallback(
     // article, documentation, wiki, and forum pages showed `legible` gives the
     // best current quality/latency balance, with readability-js as fallback.
     #[cfg(not(target_env = "ohos"))]
-    let extractors: [ExtractorFn; 2] = [
-        attempt_legible as ExtractorFn,
-        attempt_readability_js as ExtractorFn,
-    ];
+    let extractors: &[ExtractorFn] = &[attempt_legible as ExtractorFn, attempt_readability_js as ExtractorFn];
     #[cfg(target_env = "ohos")]
-    let extractors: [ExtractorFn; 1] = [attempt_legible as ExtractorFn];
+    let extractors: &[ExtractorFn] = &[attempt_legible as ExtractorFn];
 
     for extractor in extractors {
         let Ok(candidate) = extractor(html, base_url) else {

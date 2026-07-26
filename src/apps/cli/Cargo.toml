@@ -4,10 +4,16 @@ version.workspace = true
 authors.workspace = true
 edition.workspace = true
 description = "BitFun CLI - Terminal User Interface"
+default-run = "bitfun"
+autobins = false
+
+[[bin]]
+name = "bitfun"
+path = "src/main.rs"
 
 [[bin]]
 name = "bitfun-cli"
-path = "src/main.rs"
+path = "src/bin/bitfun_cli_compat.rs"
 
 [dependencies]
 # Internal crates
@@ -18,6 +24,7 @@ bitfun-agent-runtime = { path = "../../crates/execution/agent-runtime" }
 bitfun-runtime-ports = { path = "../../crates/contracts/runtime-ports" }
 bitfun-runtime-services = { path = "../../crates/execution/runtime-services" }
 bitfun-agent-tools = { path = "../../crates/execution/tool-contracts" }
+bitfun-product-domains = { path = "../../crates/contracts/product-domains", default-features = false, features = ["external-sources"] }
 
 # CLI framework
 clap = { workspace = true }
@@ -75,7 +82,17 @@ tracing-subscriber = { workspace = true }
 tempfile = "3"
 sha2 = { workspace = true }
 hex = { workspace = true }
+
+[target.'cfg(windows)'.dependencies]
+windows = { workspace = true, features = ["Win32_Foundation", "Win32_System_Console"] }
+
+# portable-pty: ohos requires 0.9 (nix 0.25 is incompatible); all other
+# platforms use 0.8 to avoid the PSEUDOCONSOLE_INHERIT_CURSOR ConPTY bug.
+[target.'cfg(not(target_env = "ohos"))'.dev-dependencies]
 portable-pty = { workspace = true }
+
+[target.'cfg(target_env = "ohos")'.dev-dependencies]
+portable-pty = "0.9"
 
 [features]
 default = []

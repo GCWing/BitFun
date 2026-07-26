@@ -1,10 +1,7 @@
-//! Dialog / tool confirmation HostInvoke handlers.
+//! Dialog HostInvoke handlers.
 
 use serde_json::{json, Value};
 
-use bitfun_agent_runtime::sdk::{
-    AgentToolConfirmationRequest, AgentToolRejectionRequest, RuntimeError,
-};
 use bitfun_runtime_ports::{
     AgentDialogTurnRequest, AgentSubmissionSource, AgentTurnCancellationRequest,
     DialogSubmissionPolicy, DialogTriggerSource,
@@ -13,17 +10,6 @@ use bitfun_runtime_ports::{
 use crate::peer_host::args::{get_string, optional_string, request_value};
 use crate::peer_host::control::{attached_controller_lease, is_controller_lease_current};
 use crate::peer_host::state::{PeerHostState, PeerTurnKey};
-
-fn restore_confirmation_after_runtime_error(
-    turns: &crate::peer_host::state::PeerTurnTracker,
-    tool_id: String,
-    ownership: PeerTurnKey,
-    action: &str,
-    error: RuntimeError,
-) -> String {
-    turns.restore_confirmation(tool_id, ownership);
-    format!("{action} tool failed: {}", error.into_message())
-}
 
 fn peer_dialog_metadata(request: &Value) -> Result<serde_json::Map<String, Value>, String> {
     let mut metadata = match request.get("userMessageMetadata") {
@@ -38,10 +24,10 @@ fn peer_dialog_metadata(request: &Value) -> Result<serde_json::Map<String, Value
         "parentDialogTurnId",
         "subagentSessionId",
         "subagentDialogTurnId",
+        "require_tool_confirmation",
     ] {
         metadata.remove(reserved_key);
     }
-    metadata.insert("require_tool_confirmation".to_string(), Value::Bool(true));
     Ok(metadata)
 }
 
@@ -157,91 +143,14 @@ pub(crate) async fn cancel_dialog_turn(
     Ok(json!({ "success": true }))
 }
 
-pub(crate) async fn confirm_tool_execution(
-    state: &PeerHostState,
-    args: &Value,
-) -> Result<Value, String> {
-    let request = request_value(args);
-    let tool_id = get_string(request, "toolId")?;
-    let ownership = state
-        .turns
-        .claim_confirmation(&tool_id)
-        .ok_or_else(|| "Tool confirmation is not owned by an active Peer turn".to_string())?;
-    if optional_string(request, "sessionId")
-        .is_some_and(|value| value.as_str() != ownership.session_id.as_str())
-        || optional_string(request, "dialogTurnId")
-            .is_some_and(|value| value.as_str() != ownership.turn_id.as_str())
-    {
-        state.turns.restore_confirmation(tool_id, ownership);
-        return Err("Tool confirmation session or turn does not match its Peer owner".to_string());
-    }
-    let updated_input = request.get("updatedInput").cloned();
-    if let Err(error) = state
-        .agent_runtime
-        .confirm_tool(AgentToolConfirmationRequest {
-            tool_id: tool_id.clone(),
-            updated_input,
-        })
-        .await
-    {
-        return Err(restore_confirmation_after_runtime_error(
-            &state.turns,
-            tool_id,
-            ownership,
-            "Confirm",
-            error,
-        ));
-    }
-    Ok(Value::Null)
-}
-
-pub(crate) async fn reject_tool_execution(
-    state: &PeerHostState,
-    args: &Value,
-) -> Result<Value, String> {
-    let request = request_value(args);
-    let tool_id = get_string(request, "toolId")?;
-    let ownership = state
-        .turns
-        .claim_confirmation(&tool_id)
-        .ok_or_else(|| "Tool confirmation is not owned by an active Peer turn".to_string())?;
-    if optional_string(request, "sessionId")
-        .is_some_and(|value| value.as_str() != ownership.session_id.as_str())
-        || optional_string(request, "dialogTurnId")
-            .is_some_and(|value| value.as_str() != ownership.turn_id.as_str())
-    {
-        state.turns.restore_confirmation(tool_id, ownership);
-        return Err("Tool confirmation session or turn does not match its Peer owner".to_string());
-    }
-    let reason = optional_string(request, "reason").unwrap_or_else(|| "User rejected".to_string());
-    if let Err(error) = state
-        .agent_runtime
-        .reject_tool(AgentToolRejectionRequest {
-            tool_id: tool_id.clone(),
-            reason,
-        })
-        .await
-    {
-        return Err(restore_confirmation_after_runtime_error(
-            &state.turns,
-            tool_id,
-            ownership,
-            "Reject",
-            error,
-        ));
-    }
-    Ok(Value::Null)
-}
-
 #[cfg(test)]
 mod tests {
     use serde_json::json;
 
-    use super::{peer_dialog_metadata, restore_confirmation_after_runtime_error};
-    use crate::peer_host::state::{PeerTurnKey, PeerTurnTracker};
+    use super::peer_dialog_metadata;
 
     #[test]
-    fn peer_metadata_forces_confirmation_and_cannot_claim_acp_transport() {
+    fn peer_metadata_removes_reserved_runtime_fields() {
         let metadata = peer_dialog_metadata(&json!({
             "userMessageMetadata": {
                 "acp_transport": true,
@@ -258,10 +167,7 @@ mod tests {
         }))
         .expect("metadata");
 
-        assert_eq!(
-            metadata.get("require_tool_confirmation"),
-            Some(&json!(true))
-        );
+        assert!(!metadata.contains_key("require_tool_confirmation"));
         assert!(!metadata.contains_key("acp_transport"));
         for reserved_key in [
             "backgroundTaskId",
@@ -275,34 +181,6 @@ mod tests {
         assert_eq!(metadata.get("kind"), Some(&json!("background_result")));
         assert_eq!(metadata.get("sourceKind"), Some(&json!("subagent")));
         assert_eq!(metadata.get("caller"), Some(&json!("desktop")));
-    }
-
-    #[test]
-    fn runtime_failure_restores_the_exact_peer_confirmation_claim() {
-        let turns = PeerTurnTracker::new();
-        turns.mark_event_stream_ready();
-        let owner = PeerTurnKey::new("session-1", "turn-1");
-        turns.register_root(owner.clone()).expect("register turn");
-        turns
-            .record_confirmation(&owner, "tool-1".to_string())
-            .expect("record confirmation");
-        let claimed = turns
-            .claim_confirmation("tool-1")
-            .expect("claim confirmation");
-
-        let message = restore_confirmation_after_runtime_error(
-            &turns,
-            "tool-1".to_string(),
-            claimed,
-            "Confirm",
-            bitfun_agent_runtime::sdk::RuntimeError::MissingInteractionResponsePort,
-        );
-
-        assert_eq!(
-            message,
-            "Confirm tool failed: agent interaction response port is not registered"
-        );
-        assert_eq!(turns.claim_confirmation("tool-1"), Some(owner));
     }
 
     #[test]

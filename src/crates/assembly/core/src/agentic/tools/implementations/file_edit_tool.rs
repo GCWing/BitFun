@@ -1,3 +1,4 @@
+use crate::agentic::tools::file_permissions::file_permission_intents;
 use crate::agentic::tools::file_read_state_runtime::{
     assert_file_not_unexpectedly_modified, file_mutation_timestamp_ms, get_stored_file_read_state,
     local_file_modification_time_ms, read_current_file_content, read_state_tracking_enabled,
@@ -6,7 +7,7 @@ use crate::agentic::tools::file_read_state_runtime::{
 };
 use crate::agentic::tools::file_tool_guidance::file_tool_guidance_message;
 use crate::agentic::tools::framework::{
-    Tool, ToolPathResolution, ToolResult, ToolUseContext, ValidationResult,
+    PermissionIntent, Tool, ToolPathResolution, ToolResult, ToolUseContext, ValidationResult,
 };
 use crate::agentic::tools::ToolPathOperation;
 use crate::util::errors::{BitFunError, BitFunResult};
@@ -157,8 +158,16 @@ impl Tool for FileEditTool {
         false
     }
 
-    fn needs_permissions(&self, _input: Option<&Value>) -> bool {
-        true
+    fn permission_intents(
+        &self,
+        input: &Value,
+        context: &ToolUseContext,
+    ) -> BitFunResult<Vec<PermissionIntent>> {
+        let file_path = input
+            .get("file_path")
+            .and_then(Value::as_str)
+            .ok_or_else(|| BitFunError::validation("file_path is required".to_string()))?;
+        file_permission_intents("edit", [file_path], context)
     }
 
     async fn validate_input(
@@ -194,6 +203,16 @@ impl Tool for FileEditTool {
                 error_code: Some(400),
                 meta: None,
             };
+        }
+
+        let force = input
+            .get("force")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false);
+        if let Some(rejection) = crate::agentic::execution::edit_constraint_guard::check_edit(
+            context, "Edit", "edit", file_path, force,
+        ) {
+            return rejection;
         }
 
         let old_string = input
@@ -352,6 +371,12 @@ impl Tool for FileEditTool {
                 &edit_result.new_content,
                 timestamp_ms,
             );
+            crate::agentic::execution::edit_constraint_guard::record_mutation_applied(
+                context,
+                "Edit",
+                "edit",
+                &resolved.logical_path,
+            );
 
             let result = ToolResult::Result {
                 data: json!({
@@ -400,6 +425,12 @@ impl Tool for FileEditTool {
             &resolved,
             &edit_result.new_content,
             timestamp_ms,
+        );
+        crate::agentic::execution::edit_constraint_guard::record_mutation_applied(
+            context,
+            "Edit",
+            "edit",
+            &resolved.logical_path,
         );
 
         let result = ToolResult::Result {
@@ -480,6 +511,7 @@ mod tests {
             .get("old_string")
             .and_then(|value| value.get("minLength"))
             .is_none());
+        assert!(properties.get("force").is_none());
     }
 
     #[test]

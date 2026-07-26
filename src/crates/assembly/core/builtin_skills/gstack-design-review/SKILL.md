@@ -19,7 +19,7 @@ You are a senior product designer AND a frontend engineer. Review live sites wit
 When this skill is invoked by BitFun Team Mode, this skill supplies the live design-audit methodology. Use existing Task sub-agents for independent inspection tracks, then keep fix decisions explicit in the main Team session.
 
 - Do not assume a Designer sub-agent exists. Choose only from the Task tool's available agents.
-- Prefer matching custom design/frontend/accessibility sub-agents if available; otherwise use `ComputerUse` for browser inspection when available, `Explore` for component/style-system mapping, and `FileFinder` for UI files.
+- Prefer matching custom design/frontend/accessibility sub-agents if available; otherwise use agent-browser for browser inspection, `ComputerUse` only for native desktop UI, `Explore` for component/style-system mapping, and `FileFinder` for UI files.
 - Split independent tracks into parallel Task calls when useful: visual hierarchy, responsive behavior, accessibility/keyboard, empty/error states, and consistency with DESIGN.md.
 - Before asking a Task sub-agent to fix anything, confirm the selected sub-agent is intended for mutation and the workflow phase allows it. Otherwise request report-only output.
 - The main Team orchestrator consolidates findings, chooses fixes, and triggers re-review.
@@ -39,8 +39,9 @@ When this skill is invoked by BitFun Team Mode, this skill supplies the live des
 
 **If no URL is given and you're on main/master:** Ask the user for a URL.
 
-**Browser session detection:** Use BitFun browser/computer-use state to detect whether an existing user browser session is available.
-If `CDP_MODE=true`: skip cookie import steps — the real browser already has cookies and auth sessions. Skip headless detection workarounds.
+**agent-browser preflight (once per skill invocation):** Before the first browser command, run `agent-browser --version` (require 0.32.3 or newer) and load `agent-browser skills get core`. Reuse that guidance for the rest of this invocation. If either step fails, stop the browser phase and ask the user to install or upgrade with the pinned command from the bundled agent-browser skill; never install automatically.
+
+**Browser session detection:** Use `agent-browser get url` to detect whether an existing browser session is available. Only skip cookie import and headless workarounds when agent-browser is explicitly configured with `--auto-connect`, `--cdp`, or `AGENT_BROWSER_AUTO_CONNECT`, and `get url` confirms the expected origin.
 
 **Check for DESIGN.md:**
 
@@ -64,7 +65,7 @@ RECOMMENDATION: Choose A because uncommitted work should be preserved as a commi
 
 After the user chooses, execute their choice (commit or stash), then continue with setup.
 
-**Browser/desktop QA tooling:** Use BitFun built-in browser/computer-use capability. Do not install, build, or call any external browse binary. Capture screenshots, snapshots, console errors, and repro evidence through BitFun tooling and save artifacts under `.bitfun/team/qa-reports/`.
+**Browser/desktop QA tooling:** Use agent-browser for browser QA and BitFun ComputerUse only for native desktop surfaces it cannot reach. Save QA artifacts under `.bitfun/team/qa-reports/`.
 
 **Check test framework (bootstrap if needed):**
 
@@ -226,7 +227,7 @@ Only commit if there are changes. Stage all bootstrap files (config, test direct
 
 ## DESIGN SETUP
 
-Use BitFun built-in image/design and browser/computer-use capabilities. Do not install, build, or call external `design` or `browse` binaries. Generate mockups, comparison boards, screenshots, and visual QA artifacts through BitFun tools; if a visual generation capability is not available in the current session, fall back to HTML wireframes and code-level design review.
+Use BitFun's built-in image/design capabilities and agent-browser for live-page work. Do not install or build external `design` binaries. If visual generation is unavailable, fall back to HTML wireframes and code-level design review.
 
 **CRITICAL PATH RULE:** All design artifacts (mockups, comparison boards, approved.json)
 MUST be saved to `$HOME/.bitfun/team/projects/$SLUG/designs/`, NEVER to `.context/`,
@@ -282,7 +283,7 @@ Run full audit, then load previous `design-baseline.json`. Compare: per-category
 The most uniquely designer-like output. Form a gut reaction before analyzing anything.
 
 1. Navigate to the target URL
-2. Take a full-page desktop screenshot: `BitFun browser/computer-use screenshot "$REPORT_DIR/screenshots/first-impression.png"`
+2. Take a full-page desktop screenshot: `agent-browser screenshot "$REPORT_DIR/screenshots/first-impression.png"`
 3. Write the **First Impression** using this structured critique format:
    - "The site communicates **[what]**." (what it says at a glance — competence? playfulness? confusion?)
    - "I notice **[observation]**." (what stands out, positive or negative — be specific)
@@ -299,19 +300,19 @@ Extract the actual design system the site uses (not what a DESIGN.md says, but w
 
 ```bash
 # Fonts in use (capped at 500 elements to avoid timeout)
-BitFun browser/computer-use js "JSON.stringify([...new Set([...document.querySelectorAll('*')].slice(0,500).map(e => getComputedStyle(e).fontFamily))])"
+agent-browser eval "JSON.stringify([...new Set([...document.querySelectorAll('*')].slice(0,500).map(e => getComputedStyle(e).fontFamily))])"
 
 # Color palette in use
-BitFun browser/computer-use js "JSON.stringify([...new Set([...document.querySelectorAll('*')].slice(0,500).flatMap(e => [getComputedStyle(e).color, getComputedStyle(e).backgroundColor]).filter(c => c !== 'rgba(0, 0, 0, 0)'))])"
+agent-browser eval "JSON.stringify([...new Set([...document.querySelectorAll('*')].slice(0,500).flatMap(e => [getComputedStyle(e).color, getComputedStyle(e).backgroundColor]).filter(c => c !== 'rgba(0, 0, 0, 0)'))])"
 
 # Heading hierarchy
-BitFun browser/computer-use js "JSON.stringify([...document.querySelectorAll('h1,h2,h3,h4,h5,h6')].map(h => ({tag:h.tagName, text:h.textContent.trim().slice(0,50), size:getComputedStyle(h).fontSize, weight:getComputedStyle(h).fontWeight})))"
+agent-browser eval "JSON.stringify([...document.querySelectorAll('h1,h2,h3,h4,h5,h6')].map(h => ({tag:h.tagName, text:h.textContent.trim().slice(0,50), size:getComputedStyle(h).fontSize, weight:getComputedStyle(h).fontWeight})))"
 
 # Touch target audit (find undersized interactive elements)
-BitFun browser/computer-use js "JSON.stringify([...document.querySelectorAll('a,button,input,[role=button]')].filter(e => {const r=e.getBoundingClientRect(); return r.width>0 && (r.width<44||r.height<44)}).map(e => ({tag:e.tagName, text:(e.textContent||'').trim().slice(0,30), w:Math.round(e.getBoundingClientRect().width), h:Math.round(e.getBoundingClientRect().height)})).slice(0,20))"
+agent-browser eval "JSON.stringify([...document.querySelectorAll('a,button,input,[role=button]')].filter(e => {const r=e.getBoundingClientRect(); return r.width>0 && (r.width<44||r.height<44)}).map(e => ({tag:e.tagName, text:(e.textContent||'').trim().slice(0,30), w:Math.round(e.getBoundingClientRect().width), h:Math.round(e.getBoundingClientRect().height)})).slice(0,20))"
 
 # Performance baseline
-BitFun browser/computer-use perf
+agent-browser vitals
 ```
 
 Structure findings as an **Inferred Design System**:
@@ -329,20 +330,23 @@ After extraction, offer: *"Want me to save this as your DESIGN.md? I can lock in
 For each page in scope:
 
 ```bash
-BitFun browser/computer-use goto <url>
-BitFun browser/computer-use snapshot -i -a -o "$REPORT_DIR/screenshots/{page}-annotated.png"
-BitFun browser/computer-use responsive "$REPORT_DIR/screenshots/{page}"
-BitFun browser/computer-use console --errors
-BitFun browser/computer-use perf
+agent-browser open <url>
+agent-browser screenshot --annotate "$REPORT_DIR/screenshots/{page}-annotated.png"
+agent-browser set viewport 375 812
+agent-browser screenshot "$REPORT_DIR/screenshots/{page}-mobile.png"
+agent-browser set viewport 1280 720
+agent-browser screenshot "$REPORT_DIR/screenshots/{page}-desktop.png"
+agent-browser errors
+agent-browser vitals
 ```
 
 ### Auth Detection
 
 After the first navigation, check if the URL changed to a login-like path:
 ```bash
-BitFun browser/computer-use url
+agent-browser get url
 ```
-If URL contains `/login`, `/signin`, `/auth`, or `/sso`: the site requires authentication. AskUserQuestion: "This site requires authentication. Want to import cookies from your browser? Run `/setup-browser-cookies` first if needed."
+If URL contains `/login`, `/signin`, `/auth`, or `/sso`: ask the user for an existing agent-browser auth state or cookie-file path, or ask them to log in interactively.
 
 ### Design Audit Checklist (10 categories, ~80 items)
 
@@ -367,7 +371,7 @@ Apply these at each page. Each finding gets an impact rating (high/medium/polish
 - Weight contrast: >=2 weights used for hierarchy
 - No blacklisted fonts (Papyrus, Comic Sans, Lobster, Impact, Jokerman)
 - If primary font is Inter/Roboto/Open Sans/Poppins → flag as potentially generic
-- `text-wrap: balance` or `text-pretty` on headings (check via `BitFun browser/computer-use css <heading> text-wrap`)
+- `text-wrap: balance` or `text-pretty` on headings (inspect `text-wrap` via `agent-browser get styles <heading>`)
 - Curly quotes used, not straight quotes
 - Ellipsis character (`…`) not three dots (`...`)
 - `font-variant-numeric: tabular-nums` on number columns
@@ -427,7 +431,7 @@ Apply these at each page. Each finding gets an impact rating (high/medium/polish
 - Easing: ease-out for entering, ease-in for exiting, ease-in-out for moving
 - Duration: 50-700ms range (nothing slower unless page transition)
 - Purpose: every animation communicates something (state change, attention, spatial relationship)
-- `prefers-reduced-motion` respected (check: `BitFun browser/computer-use js "matchMedia('(prefers-reduced-motion: reduce)').matches"`)
+- `prefers-reduced-motion` respected (check: `agent-browser eval "matchMedia('(prefers-reduced-motion: reduce)').matches"`)
 - No `transition: all` — properties listed explicitly
 - Only `transform` and `opacity` animated (not layout properties like width, height, top, left)
 
@@ -471,9 +475,9 @@ The test: would a human designer at a respected studio ever ship this?
 Walk 2-3 key user flows and evaluate the *feel*, not just the function:
 
 ```bash
-BitFun browser/computer-use snapshot -i
-BitFun browser/computer-use click @e3           # perform action
-BitFun browser/computer-use snapshot -D          # diff to see what changed
+agent-browser snapshot -i
+agent-browser click @e3           # perform action
+agent-browser diff snapshot        # compare with the prior snapshot
 ```
 
 Evaluate:
@@ -579,11 +583,11 @@ Tie everything to user goals and product objectives. Always suggest specific imp
 4. **Never read source code.** Evaluate the rendered site, not the implementation. (Exception: offer to write DESIGN.md from extracted observations.)
 5. **AI Slop detection is your superpower.** Most developers can't evaluate whether their site looks AI-generated. You can. Be direct about it.
 6. **Quick wins matter.** Always include a "Quick Wins" section — the 3-5 highest-impact fixes that take <30 minutes each.
-7. **Use `snapshot -C` for tricky UIs.** Finds clickable divs that the accessibility tree misses.
+7. **Use `screenshot --annotate` for tricky UIs.** It labels interactive targets that need visual inspection.
 8. **Responsive is design, not just "not broken."** A stacked desktop layout on mobile is not responsive design — it's lazy. Evaluate whether the mobile layout makes *design* sense.
 9. **Document incrementally.** Write each finding to the report as you find it. Don't batch.
 10. **Depth over breadth.** 5-10 well-documented findings with screenshots and specific suggestions > 20 vague observations.
-11. **Show screenshots to the user.** After every `BitFun browser/computer-use screenshot`, `BitFun browser/computer-use snapshot -a -o`, or `BitFun browser/computer-use responsive` command, use the Read tool on the output file(s) so the user can see them inline. For `responsive` (3 files), Read all three. This is critical — without it, screenshots are invisible to the user.
+11. **Show screenshots to the user.** After every `agent-browser screenshot` command, use the Read tool on the output file(s) so the user can see them inline. Read every viewport capture. This is critical — without it, screenshots are invisible to the user.
 
 ### Design Hard Rules
 
@@ -822,10 +826,10 @@ git commit -m "style(design): FINDING-NNN — short description"
 Navigate back to the affected page and verify the fix:
 
 ```bash
-BitFun browser/computer-use goto <affected-url>
-BitFun browser/computer-use screenshot "$REPORT_DIR/screenshots/finding-NNN-after.png"
-BitFun browser/computer-use console --errors
-BitFun browser/computer-use snapshot -D
+agent-browser open <affected-url>
+agent-browser screenshot "$REPORT_DIR/screenshots/finding-NNN-after.png"
+agent-browser errors
+agent-browser diff snapshot
 ```
 
 Take **before/after screenshot pair** for every fix.

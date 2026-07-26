@@ -83,14 +83,13 @@ impl MCPServerRegistry {
     /// Unregisters a server.
     pub async fn unregister(&self, server_id: &str) -> MCPRuntimeResult<()> {
         let _lifecycle_guard = self.lifecycle_lock.lock().await;
-        let process = {
-            let mut servers = self.servers.write().await;
-            servers.remove(server_id)
-        };
+        let process = self.servers.read().await.get(server_id).cloned();
 
         if let Some(process) = process {
             let mut proc = process.write().await;
             proc.stop().await?;
+            drop(proc);
+            self.servers.write().await.remove(server_id);
             info!("Unregistered MCP server: id={}", server_id);
             Ok(())
         } else {
@@ -151,17 +150,32 @@ impl MCPServerRegistry {
     /// Clears the registry.
     pub async fn clear(&self) -> MCPRuntimeResult<()> {
         let _lifecycle_guard = self.lifecycle_lock.lock().await;
-        let processes = {
-            let mut servers = self.servers.write().await;
-            servers
-                .drain()
-                .map(|(_, process)| process)
-                .collect::<Vec<_>>()
-        };
+        let processes = self
+            .servers
+            .read()
+            .await
+            .iter()
+            .map(|(server_id, process)| (server_id.clone(), process.clone()))
+            .collect::<Vec<_>>();
+        let mut first_error = None;
 
-        for process in processes {
+        for (server_id, process) in processes {
             let mut proc = process.write().await;
-            let _ = proc.stop().await;
+            match proc.stop().await {
+                Ok(()) => {
+                    drop(proc);
+                    self.servers.write().await.remove(&server_id);
+                }
+                Err(error) => {
+                    if first_error.is_none() {
+                        first_error = Some(error);
+                    }
+                }
+            }
+        }
+
+        if let Some(error) = first_error {
+            return Err(error);
         }
 
         info!("Cleared MCP server registry");
@@ -192,6 +206,8 @@ mod tests {
             command: Some("node".to_string()),
             args: Vec::new(),
             env: HashMap::new(),
+            working_directory: None,
+            inherit_parent_environment: None,
             headers: HashMap::new(),
             url: None,
             auto_start: false,
@@ -200,6 +216,7 @@ mod tests {
             capabilities: Vec::new(),
             settings: HashMap::new(),
             oauth: None,
+            oauth_enabled: None,
             xaa: None,
         }
     }
@@ -219,6 +236,61 @@ mod tests {
 
         registry.unregister("test").await.unwrap();
         assert!(!registry.contains("test").await);
+    }
+
+    #[tokio::test]
+    async fn failed_unregister_retains_process_ownership_for_retry() {
+        let registry = MCPServerRegistry::new();
+        let config = local_config("retryable-stop");
+        registry.register(&config).await.unwrap();
+        let process = registry
+            .get_process(&config.id)
+            .await
+            .expect("registered process should exist");
+        process.write().await.fail_next_stop_for_test();
+
+        let error = registry
+            .unregister(&config.id)
+            .await
+            .expect_err("injected stop failure must propagate");
+
+        assert_eq!(error.kind(), MCPRuntimeErrorKind::Process);
+        assert!(registry.contains(&config.id).await);
+        registry
+            .unregister(&config.id)
+            .await
+            .expect("retained process should be retryable");
+        assert!(!registry.contains(&config.id).await);
+    }
+
+    #[tokio::test]
+    async fn failed_clear_retains_only_processes_that_still_need_cleanup() {
+        let registry = MCPServerRegistry::new();
+        let retryable = local_config("retryable-clear");
+        let stoppable = local_config("stoppable-clear");
+        registry.register(&retryable).await.unwrap();
+        registry.register(&stoppable).await.unwrap();
+        registry
+            .get_process(&retryable.id)
+            .await
+            .expect("retryable process")
+            .write()
+            .await
+            .fail_next_stop_for_test();
+
+        let error = registry
+            .clear()
+            .await
+            .expect_err("one failed stop must fail registry clear");
+
+        assert_eq!(error.kind(), MCPRuntimeErrorKind::Process);
+        assert!(registry.contains(&retryable.id).await);
+        assert!(!registry.contains(&stoppable.id).await);
+        registry
+            .clear()
+            .await
+            .expect("retained process should retry");
+        assert!(registry.get_all_server_ids().await.is_empty());
     }
 
     #[tokio::test]

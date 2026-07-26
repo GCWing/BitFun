@@ -5,7 +5,6 @@ use crate::agentic::insights::html::generate_html;
 use crate::agentic::insights::prompt_context::{
     aggregate_stats_json_for_prompt, friction_block, summaries_block, user_instructions_block,
 };
-use crate::agentic::insights::session_paths::collect_effective_session_storage_roots;
 use crate::agentic::insights::types::*;
 use crate::infrastructure::ai::get_global_ai_client_factory;
 use crate::infrastructure::ai::AIClient;
@@ -15,11 +14,11 @@ use crate::service::config::get_global_config_service;
 use crate::service::config::AppConfig;
 use crate::service::i18n::LocaleId;
 use crate::util::errors::{BitFunError, BitFunResult};
-use crate::util::types::Message;
+use crate::util::types::{GeminiResponse, GeminiUsage, Message, ToolDefinition};
 use log::{debug, info, warn};
 use serde_json::Value;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use tokio::sync::Semaphore;
 use tokio_util::sync::CancellationToken;
@@ -36,9 +35,95 @@ const FUN_ENDING_PROMPT_TEMPLATE: &str = include_str!("prompts/fun_ending.md");
 
 const MAX_CONCURRENT_FACET_EXTRACTIONS: usize = 5;
 
+#[derive(Clone)]
+struct TrackedAIClient {
+    client: Arc<AIClient>,
+    usage: GenerationUsageTracker,
+}
+
+impl TrackedAIClient {
+    fn new(client: Arc<AIClient>, usage: GenerationUsageTracker) -> Self {
+        Self { client, usage }
+    }
+
+    async fn send_message(
+        &self,
+        messages: Vec<Message>,
+        tools: Option<Vec<ToolDefinition>>,
+    ) -> anyhow::Result<GeminiResponse> {
+        self.usage.record_model_call();
+        let response = self.client.send_message(messages, tools).await?;
+        self.usage.record_reported_usage(response.usage.as_ref());
+        Ok(response)
+    }
+}
+
+#[derive(Clone, Default)]
+struct GenerationUsageTracker {
+    usage: Arc<Mutex<InsightsGenerationUsage>>,
+}
+
+impl GenerationUsageTracker {
+    fn with_usage<R>(&self, update: impl FnOnce(&mut InsightsGenerationUsage) -> R) -> R {
+        let mut usage = self
+            .usage
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        update(&mut usage)
+    }
+
+    fn record_model_call(&self) {
+        self.with_usage(|usage| {
+            usage.model_calls = usage.model_calls.saturating_add(1);
+        });
+    }
+
+    fn record_reported_usage(&self, reported: Option<&GeminiUsage>) {
+        let Some(reported) = reported else {
+            return;
+        };
+
+        self.with_usage(|usage| {
+            usage.input_tokens = usage
+                .input_tokens
+                .saturating_add(reported.prompt_token_count as u64);
+            usage.output_tokens = usage
+                .output_tokens
+                .saturating_add(reported.candidates_token_count as u64);
+            usage.total_tokens = usage
+                .total_tokens
+                .saturating_add(reported.total_token_count as u64);
+            usage.reasoning_tokens = usage
+                .reasoning_tokens
+                .saturating_add(reported.reasoning_token_count.unwrap_or_default() as u64);
+            usage.cached_input_tokens = usage
+                .cached_input_tokens
+                .saturating_add(reported.cached_content_token_count.unwrap_or_default() as u64);
+            usage.cache_creation_input_tokens = usage
+                .cache_creation_input_tokens
+                .saturating_add(reported.cache_creation_token_count.unwrap_or_default() as u64);
+            usage.reported_model_calls = usage.reported_model_calls.saturating_add(1);
+        });
+    }
+
+    fn snapshot(&self) -> InsightsGenerationUsage {
+        self.with_usage(|usage| usage.clone())
+    }
+}
+
 pub struct InsightsService;
 
 impl InsightsService {
+    fn validate_days(days: u32) -> BitFunResult<()> {
+        if (1..=3650).contains(&days) {
+            Ok(())
+        } else {
+            Err(BitFunError::validation(
+                "Insights range must be between 1 and 3650 days",
+            ))
+        }
+    }
+
     async fn get_user_language() -> String {
         match get_global_config_service().await {
             Ok(config_service) => match config_service.get_config::<AppConfig>(Some("app")).await {
@@ -79,10 +164,15 @@ impl InsightsService {
     }
 
     /// Main entry: run the full insights pipeline
-    pub async fn generate(days: u32) -> BitFunResult<InsightsReport> {
-        let token = cancellation::register().await;
-        let result = Self::generate_inner(days, &token).await;
-        cancellation::unregister().await;
+    pub async fn generate(
+        days: u32,
+        model_selector: Option<String>,
+    ) -> BitFunResult<InsightsReport> {
+        Self::validate_days(days)?;
+        let registration = cancellation::register().await;
+        let result =
+            Self::generate_inner(days, model_selector.as_deref(), &registration.token).await;
+        cancellation::unregister(registration.id).await;
         result
     }
 
@@ -91,7 +181,11 @@ impl InsightsService {
         cancellation::cancel().await
     }
 
-    async fn generate_inner(days: u32, token: &CancellationToken) -> BitFunResult<InsightsReport> {
+    async fn generate_inner(
+        days: u32,
+        model_selector: Option<&str>,
+        token: &CancellationToken,
+    ) -> BitFunResult<InsightsReport> {
         let user_lang = Self::get_user_language().await;
         let lang_instruction = Self::build_language_instruction(&user_lang);
         debug!("Insights generation using language: {}", user_lang);
@@ -118,19 +212,44 @@ impl InsightsService {
         let ai_factory = get_global_ai_client_factory()
             .await
             .map_err(|e| BitFunError::service(format!("Failed to get AI client factory: {}", e)))?;
-        let ai_client_fast = ai_factory
-            .get_client_resolved("fast")
-            .await
-            .map_err(|e| BitFunError::service(format!("Failed to resolve fast model: {}", e)))?;
+        let explicit_model = model_selector
+            .map(str::trim)
+            .filter(|selector| !selector.is_empty() && *selector != "auto");
+        let (ai_client_fast, ai_client_primary) = if let Some(selector) = explicit_model {
+            let client = ai_factory
+                .get_client_resolved(selector)
+                .await
+                .map_err(|e| {
+                    BitFunError::service(format!(
+                        "Failed to resolve selected insights model '{}': {}",
+                        selector, e
+                    ))
+                })?;
+            (client.clone(), client)
+        } else {
+            let fast = ai_factory.get_client_resolved("fast").await.map_err(|e| {
+                BitFunError::service(format!("Failed to resolve fast model: {}", e))
+            })?;
 
-        // Primary model for analysis stages — falls back to fast if not configured
-        let ai_client_primary = match ai_factory.get_client_resolved("primary").await {
-            Ok(client) => client,
-            Err(_) => {
-                warn!("Primary model not configured, falling back to fast model for analysis");
-                ai_client_fast.clone()
-            }
+            // Primary model for analysis stages — falls back to fast if not configured.
+            let primary = match ai_factory.get_client_resolved("primary").await {
+                Ok(client) => client,
+                Err(_) => {
+                    warn!("Primary model not configured, falling back to fast model for analysis");
+                    fast.clone()
+                }
+            };
+            (fast, primary)
         };
+
+        let mut generation_models = vec![ai_client_fast.config.model.clone()];
+        if ai_client_primary.config.model != ai_client_fast.config.model {
+            generation_models.push(ai_client_primary.config.model.clone());
+        }
+
+        let usage_tracker = GenerationUsageTracker::default();
+        let ai_client_fast = TrackedAIClient::new(ai_client_fast, usage_tracker.clone());
+        let ai_client_primary = TrackedAIClient::new(ai_client_primary, usage_tracker.clone());
 
         let facets =
             Self::extract_facets_adaptive(&ai_client_fast, &transcripts, &lang_instruction, token)
@@ -183,6 +302,8 @@ impl InsightsService {
             at_a_glance,
             horizon,
             fun_ending,
+            usage_tracker.snapshot(),
+            generation_models,
         );
 
         let report = Self::save_report(report, &user_lang).await?;
@@ -204,7 +325,7 @@ impl InsightsService {
     // ============ Stage 2: Facet Extraction ============
 
     async fn extract_facets_adaptive(
-        ai_client: &Arc<AIClient>,
+        ai_client: &TrackedAIClient,
         transcripts: &[SessionTranscript],
         lang_instruction: &str,
         token: &CancellationToken,
@@ -337,7 +458,7 @@ impl InsightsService {
     }
 
     async fn extract_single_facet(
-        ai_client: &Arc<AIClient>,
+        ai_client: &TrackedAIClient,
         transcript: &SessionTranscript,
         lang_instruction: &str,
     ) -> BitFunResult<SessionFacet> {
@@ -419,7 +540,7 @@ impl InsightsService {
     // ============ Stage 4a: Parallel Analysis ============
 
     async fn generate_analysis_parallel(
-        ai_client: &Arc<AIClient>,
+        ai_client: &TrackedAIClient,
         aggregate: &InsightsAggregate,
         lang_instruction: &str,
     ) -> (
@@ -685,7 +806,7 @@ impl InsightsService {
     // ============ Stage 4b: Synthesis ============
 
     async fn generate_synthesis(
-        ai_client: &Arc<AIClient>,
+        ai_client: &TrackedAIClient,
         aggregate: &InsightsAggregate,
         suggestions: &InsightsSuggestions,
         areas: &[ProjectArea],
@@ -729,7 +850,7 @@ impl InsightsService {
     // ============ Individual Analysis Methods ============
 
     async fn generate_suggestions(
-        ai_client: &Arc<AIClient>,
+        ai_client: &TrackedAIClient,
         aggregate: &InsightsAggregate,
         lang_instruction: &str,
     ) -> BitFunResult<InsightsSuggestions> {
@@ -861,7 +982,7 @@ impl InsightsService {
     }
 
     async fn identify_areas(
-        ai_client: &Arc<AIClient>,
+        ai_client: &TrackedAIClient,
         aggregate: &InsightsAggregate,
         lang_instruction: &str,
     ) -> BitFunResult<Vec<ProjectArea>> {
@@ -911,7 +1032,7 @@ impl InsightsService {
     }
 
     async fn analyze_wins(
-        ai_client: &Arc<AIClient>,
+        ai_client: &TrackedAIClient,
         aggregate_json: &str,
         summaries: &str,
         lang_instruction: &str,
@@ -962,7 +1083,7 @@ impl InsightsService {
     }
 
     async fn analyze_friction(
-        ai_client: &Arc<AIClient>,
+        ai_client: &TrackedAIClient,
         aggregate_json: &str,
         summaries: &str,
         friction_details: &str,
@@ -1024,7 +1145,7 @@ impl InsightsService {
     }
 
     async fn analyze_interaction_style(
-        ai_client: &Arc<AIClient>,
+        ai_client: &TrackedAIClient,
         aggregate_json: &str,
         summaries: &str,
         lang_instruction: &str,
@@ -1071,7 +1192,7 @@ impl InsightsService {
     }
 
     async fn generate_at_a_glance(
-        ai_client: &Arc<AIClient>,
+        ai_client: &TrackedAIClient,
         aggregate_json: &str,
         areas_text: &str,
         suggestions_text: &str,
@@ -1126,7 +1247,7 @@ impl InsightsService {
     }
 
     async fn generate_horizon(
-        ai_client: &Arc<AIClient>,
+        ai_client: &TrackedAIClient,
         aggregate_json: &str,
         summaries: &str,
         friction_details: &str,
@@ -1183,7 +1304,7 @@ impl InsightsService {
     }
 
     async fn generate_fun_ending(
-        ai_client: &Arc<AIClient>,
+        ai_client: &TrackedAIClient,
         aggregate_json: &str,
         summaries: &str,
         lang_instruction: &str,
@@ -1241,6 +1362,8 @@ impl InsightsService {
         at_a_glance: AtAGlance,
         horizon: HorizonResult,
         fun_ending: Option<FunEnding>,
+        generation_usage: InsightsGenerationUsage,
+        generation_models: Vec<String>,
     ) -> InsightsReport {
         let days_covered =
             if !aggregate.date_range.start.is_empty() && !aggregate.date_range.end.is_empty() {
@@ -1254,7 +1377,11 @@ impl InsightsService {
                     parse(&aggregate.date_range.end),
                 ) {
                     (Some(start), Some(end)) => {
-                        end.signed_duration_since(start).num_days().unsigned_abs() as u32
+                        end.date_naive()
+                            .signed_duration_since(start.date_naive())
+                            .num_days()
+                            .unsigned_abs() as u32
+                            + 1
                     }
                     _ => 1,
                 }
@@ -1273,6 +1400,9 @@ impl InsightsService {
             analyzed_sessions: aggregate.analyzed,
             total_messages: aggregate.messages,
             days_covered,
+            session_usage: aggregate.session_usage.clone(),
+            generation_usage,
+            generation_models,
             stats: InsightsStats {
                 total_hours: aggregate.hours,
                 msgs_per_day: aggregate.msgs_per_day,
@@ -1375,23 +1505,36 @@ impl InsightsService {
     }
 
     pub async fn has_data(days: u32) -> BitFunResult<bool> {
-        let path_manager = get_path_manager_arc();
-        let pm = PersistenceManager::new(path_manager)?;
-        let cutoff = SystemTime::now() - std::time::Duration::from_secs(days as u64 * 86400);
-
-        for ws_path in collect_effective_session_storage_roots().await {
-            if let Ok(sessions) = pm.list_sessions(&ws_path).await {
-                if sessions.iter().any(|s| s.last_activity_at >= cutoff) {
-                    return Ok(true);
-                }
-            }
-        }
-
-        Ok(false)
+        Self::validate_days(days)?;
+        let (_, transcripts) = InsightsCollector::collect(days).await?;
+        Ok(!transcripts.is_empty())
     }
 
     pub async fn load_report(path: &str) -> BitFunResult<InsightsReport> {
-        let json_str = tokio::fs::read_to_string(path)
+        let path_manager = get_path_manager_arc();
+        let usage_dir = path_manager.user_data_dir().join("usage-data");
+        let requested_path = std::path::PathBuf::from(path);
+        let valid_name = requested_path
+            .file_name()
+            .and_then(|name| name.to_str())
+            .is_some_and(|name| name.starts_with("insights-") && name.ends_with(".json"));
+        if !valid_name {
+            return Err(BitFunError::validation("Invalid insights report path"));
+        }
+
+        let canonical_usage_dir = tokio::fs::canonicalize(&usage_dir)
+            .await
+            .map_err(|e| BitFunError::io(format!("Failed to resolve insights directory: {}", e)))?;
+        let canonical_path = tokio::fs::canonicalize(&requested_path)
+            .await
+            .map_err(|e| BitFunError::io(format!("Failed to resolve insights report: {}", e)))?;
+        if !canonical_path.starts_with(&canonical_usage_dir) {
+            return Err(BitFunError::validation(
+                "Insights report path is outside the report directory",
+            ));
+        }
+
+        let json_str = tokio::fs::read_to_string(&canonical_path)
             .await
             .map_err(|e| BitFunError::io(format!("Failed to read report file: {}", e)))?;
         let report: InsightsReport = serde_json::from_str(&json_str)
@@ -1453,6 +1596,9 @@ impl InsightsService {
                             total_hours: report.stats.total_hours,
                             top_goals,
                             languages,
+                            session_usage: report.session_usage,
+                            generation_usage: report.generation_usage,
+                            generation_models: report.generation_models,
                         });
                     }
                     Err(e) => {
@@ -1485,8 +1631,6 @@ impl InsightsService {
         }
     }
 }
-
-use crate::agentic::persistence::PersistenceManager;
 
 // ============ Intermediate result types (internal to service) ============
 
@@ -1649,5 +1793,42 @@ fn json_value_to_string(value: &Value) -> String {
             .collect::<Vec<_>>()
             .join(" "),
         _ => String::new(),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn generation_usage_tracker_aggregates_reported_calls_and_preserves_coverage() {
+        let tracker = GenerationUsageTracker::default();
+        let reported = GeminiUsage {
+            prompt_token_count: 120,
+            candidates_token_count: 30,
+            total_token_count: 150,
+            reasoning_token_count: Some(12),
+            cached_content_token_count: Some(80),
+            cache_creation_token_count: Some(10),
+        };
+
+        tracker.record_model_call();
+        tracker.record_reported_usage(Some(&reported));
+        tracker.record_model_call();
+        tracker.record_reported_usage(None);
+
+        assert_eq!(
+            tracker.snapshot(),
+            InsightsGenerationUsage {
+                input_tokens: 120,
+                output_tokens: 30,
+                total_tokens: 150,
+                reasoning_tokens: 12,
+                cached_input_tokens: 80,
+                cache_creation_input_tokens: 10,
+                model_calls: 2,
+                reported_model_calls: 1,
+            }
+        );
     }
 }

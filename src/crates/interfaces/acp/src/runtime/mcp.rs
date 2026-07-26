@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
 use agent_client_protocol::schema::{McpServer, McpServerSse, McpServerStdio};
@@ -8,37 +8,103 @@ use bitfun_core::service::mcp::{
     get_global_mcp_service, set_global_mcp_service, ConfigLocation, MCPServerConfig,
     MCPServerManager, MCPServerTransport, MCPServerType, MCPService,
 };
+use sha2::{Digest, Sha256};
 
 use super::BitfunAcpRuntime;
 
 impl BitfunAcpRuntime {
+    pub(super) fn validate_mcp_servers(&self, servers: &[McpServer]) -> Result<()> {
+        let configs = acp_mcp_server_configs("validation", servers.iter().cloned())?;
+        ensure_unique_server_ids(&configs)
+    }
+
     pub(super) async fn provision_mcp_servers(
         &self,
         acp_session_id: &str,
         servers: Vec<McpServer>,
+        cleanup_recovery_action: &'static str,
     ) -> Result<Vec<String>> {
         if servers.is_empty() {
             return Ok(Vec::new());
         }
 
         let manager = mcp_server_manager().await?;
-        let mut server_ids: Vec<String> = Vec::with_capacity(servers.len());
+        let configs = acp_mcp_server_configs(acp_session_id, servers)?;
+        ensure_unique_server_ids(&configs)?;
+        let mut server_ids: Vec<String> = Vec::with_capacity(configs.len());
 
-        for server in servers {
-            let config = acp_mcp_server_config(acp_session_id, server)?;
+        for config in configs {
             let server_id = config.id.clone();
+            // Claim cleanup responsibility before startup. Registration can
+            // succeed before handshake/start later fails, so the current ID
+            // must participate in compensation as well as earlier servers.
+            server_ids.push(server_id.clone());
 
             if let Err(error) = manager.add_ephemeral_server(config).await {
-                for provisioned_id in &server_ids {
-                    let _ = manager.remove_ephemeral_server(provisioned_id).await;
+                if let Err(cleanup_error) = self.release_mcp_servers(&server_ids).await {
+                    log::warn!(
+                        "Failed to clean up ACP MCP servers after provisioning error: session_id={}, error={}",
+                        acp_session_id,
+                        cleanup_error
+                    );
+                    return Err(Self::cleanup_required_error(
+                        acp_session_id,
+                        "MCP provisioning",
+                        &["ephemeralMcp"],
+                        false,
+                        cleanup_recovery_action,
+                    ));
                 }
                 return Err(Self::internal_error(error));
             }
-
-            server_ids.push(server_id);
         }
 
         Ok(server_ids)
+    }
+
+    pub(super) async fn release_mcp_servers(&self, server_ids: &[String]) -> Result<()> {
+        if server_ids.is_empty() {
+            return Ok(());
+        }
+
+        let manager = mcp_server_manager().await?;
+        let mut first_error = None;
+        for server_id in server_ids {
+            if let Err(error) = manager.remove_ephemeral_server(server_id).await {
+                log::warn!(
+                    "Failed to remove ephemeral ACP MCP server: server_id={}, error={}",
+                    server_id,
+                    error
+                );
+                if first_error.is_none() {
+                    first_error = Some(error);
+                }
+            }
+        }
+
+        match first_error {
+            Some(error) => Err(Self::internal_error(error)),
+            None => Ok(()),
+        }
+    }
+}
+
+fn acp_mcp_server_configs(
+    acp_session_id: &str,
+    servers: impl IntoIterator<Item = McpServer>,
+) -> Result<Vec<MCPServerConfig>> {
+    servers
+        .into_iter()
+        .map(|server| acp_mcp_server_config(acp_session_id, server))
+        .collect()
+}
+
+fn ensure_unique_server_ids(configs: &[MCPServerConfig]) -> Result<()> {
+    let mut ids = HashSet::with_capacity(configs.len());
+    if configs.iter().all(|config| ids.insert(config.id.clone())) {
+        Ok(())
+    } else {
+        Err(Error::invalid_params().data("MCP server names must be unique within a session"))
     }
 }
 
@@ -85,6 +151,8 @@ fn stdio_server_config(acp_session_id: &str, server: McpServerStdio) -> Result<M
             .into_iter()
             .map(|env| (env.name, env.value))
             .collect(),
+        working_directory: None,
+        inherit_parent_environment: None,
         headers: HashMap::new(),
         url: None,
         auto_start: true,
@@ -93,6 +161,7 @@ fn stdio_server_config(acp_session_id: &str, server: McpServerStdio) -> Result<M
         capabilities: Vec::new(),
         settings: HashMap::new(),
         oauth: None,
+        oauth_enabled: None,
         xaa: None,
     })
 }
@@ -123,6 +192,8 @@ fn remote_server_config(
         command: None,
         args: Vec::new(),
         env: HashMap::new(),
+        working_directory: None,
+        inherit_parent_environment: None,
         headers,
         url: Some(url),
         auto_start: true,
@@ -131,6 +202,7 @@ fn remote_server_config(
         capabilities: Vec::new(),
         settings: HashMap::new(),
         oauth: None,
+        oauth_enabled: None,
         xaa: None,
     })
 }
@@ -151,23 +223,27 @@ fn clean_server_name(name: &str) -> Result<String> {
 }
 
 fn ephemeral_server_id(acp_session_id: &str, server_name: &str) -> String {
-    format!(
-        "acp-{}-{}",
-        sanitize_id_part(acp_session_id),
-        sanitize_id_part(server_name)
-    )
+    let mut digest = Sha256::new();
+    for value in [acp_session_id, server_name] {
+        digest.update((value.len() as u64).to_le_bytes());
+        digest.update(value.as_bytes());
+    }
+    format!("acp-{:x}", digest.finalize())
 }
 
-fn sanitize_id_part(value: &str) -> String {
-    let sanitized = value
-        .chars()
-        .map(|ch| {
-            if ch.is_ascii_alphanumeric() || ch == '-' || ch == '_' {
-                ch
-            } else {
-                '-'
-            }
-        })
-        .collect::<String>();
-    sanitized.trim_matches('-').to_string()
+#[cfg(test)]
+mod tests {
+    use super::ephemeral_server_id;
+
+    #[test]
+    fn ephemeral_server_ids_do_not_collapse_distinct_session_or_server_names() {
+        assert_ne!(
+            ephemeral_server_id("foo:bar", "tools"),
+            ephemeral_server_id("foo bar", "tools")
+        );
+        assert_ne!(
+            ephemeral_server_id("session", "tools:read"),
+            ephemeral_server_id("session", "tools read")
+        );
+    }
 }

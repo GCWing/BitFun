@@ -1,9 +1,8 @@
 use std::sync::Arc;
 
 use bitfun_runtime_ports::{
-    ClockPort, FileSystemPort, GitPort, McpCatalogPort, NetworkPort, PermissionDecision,
-    PermissionPort, PermissionRequest, PortError, PortErrorKind, PortResult,
-    RemoteAssistantWorkspaceFacts, RemoteCapabilityPort, RemoteConnectionPort,
+    ClockPort, FileSystemPort, GitPort, McpCatalogPort, NetworkPort, PortError, PortErrorKind,
+    PortResult, RemoteAssistantWorkspaceFacts, RemoteCapabilityPort, RemoteConnectionPort,
     RemoteExecCommandRequest, RemoteExecCommandResponse, RemoteExecControlRequest,
     RemoteExecOneShotCommandRequest, RemoteExecOneShotCommandResponse, RemoteExecPort,
     RemoteExecStreamingOutputSink, RemoteProjectionPort, RemoteRecentWorkspaceFacts,
@@ -232,16 +231,6 @@ impl RemoteWorkspaceFileRuntimeHost for FakeRuntimePort {
     }
 }
 
-#[async_trait::async_trait]
-impl PermissionPort for FakeRuntimePort {
-    async fn request_permission(
-        &self,
-        _request: PermissionRequest,
-    ) -> PortResult<PermissionDecision> {
-        Ok(PermissionDecision::Allow)
-    }
-}
-
 impl ClockPort for FakeRuntimePort {
     fn now_unix_millis(&self) -> i64 {
         0
@@ -296,8 +285,6 @@ impl RuntimeServicesProvider for FakeRuntimeServicesProvider {
             Arc::new(FakeRuntimePort::new(RuntimeServiceCapability::Workspace));
         let session_store: Arc<dyn SessionStorePort> =
             Arc::new(FakeRuntimePort::new(RuntimeServiceCapability::SessionStore));
-        let permission: Arc<dyn PermissionPort> =
-            Arc::new(FakeRuntimePort::new(RuntimeServiceCapability::Permission));
         let events: Arc<dyn RuntimeEventSink> = Arc::new(FakeRuntimeEventSink);
         let clock: Arc<dyn ClockPort> =
             Arc::new(FakeRuntimePort::new(RuntimeServiceCapability::Clock));
@@ -306,7 +293,6 @@ impl RuntimeServicesProvider for FakeRuntimeServicesProvider {
             .with_filesystem(filesystem)
             .with_workspace(workspace)
             .with_session_store(session_store)
-            .with_permission(permission)
             .with_events(events)
             .with_clock(clock);
 

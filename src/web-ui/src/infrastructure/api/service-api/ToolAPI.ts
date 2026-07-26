@@ -61,48 +61,6 @@ export class ToolAPI {
   }
 
    
-  async confirmToolExecution(request: any): Promise<any> {
-    try {
-      const action = request.action || 'confirm';
-      
-      if (action === 'confirm') {
-        
-        const confirmRequest = {
-          sessionId: request.sessionId,
-          toolId: request.toolId,
-          updatedInput: request.updatedInput || null
-        };
-        
-        const result = await api.invoke('confirm_tool_execution', { request: confirmRequest });
-        return result;
-      } else if (action === 'reject') {
-        
-        const rejectRequest = {
-          sessionId: request.sessionId,
-          toolId: request.toolId,
-          reason: request.rejectReason || 'User rejected'
-        };
-        
-        const result = await api.invoke('reject_tool_execution', { request: rejectRequest });
-        return result;
-      } else {
-        throw new Error(`Unknown action type: ${action}`);
-      }
-    } catch (error) {
-      log.error('Tool confirmation/rejection failed', { 
-        action: request.action, 
-        sessionId: request.sessionId, 
-        toolId: request.toolId,
-        error
-      });
-      throw createTauriCommandError(
-        request.action === 'reject' ? 'reject_tool_execution' : 'confirm_tool_execution', 
-        error, 
-        request
-      );
-    }
-  }
-
   /**
    * Submit user answers.
    */

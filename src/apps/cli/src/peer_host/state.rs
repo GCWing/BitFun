@@ -4,6 +4,7 @@ use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, Mutex, OnceLock};
 
 use bitfun_agent_runtime::sdk::AgentRuntime;
+use bitfun_agent_runtime::sdk::PermissionRequest;
 use bitfun_core::product_runtime::CoreAgentRuntimeCompatibility;
 use bitfun_core::service::filesystem::FileSystemService;
 use bitfun_core::service::workspace::WorkspaceService;
@@ -11,10 +12,9 @@ use bitfun_runtime_ports::{AgentSubmissionSource, AgentTurnCancellationRequest};
 
 use crate::runtime::events::CliAgentEventSource;
 
-const MAX_TRACKED_PEER_TURNS: usize = 256;
-const MAX_BACKGROUND_PEER_AUTHORIZATIONS: usize = 256;
-const MAX_PENDING_PEER_TASK_CANCELLATIONS: usize = 256;
-const MAX_PENDING_PEER_CONFIRMATIONS: usize = 512;
+const MAX_TRACKED_PEER_TURNS: usize = i32::MAX as usize;
+const MAX_BACKGROUND_PEER_AUTHORIZATIONS: usize = i32::MAX as usize;
+const MAX_PENDING_PEER_TASK_CANCELLATIONS: usize = i32::MAX as usize;
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub(crate) struct PeerTurnKey {
@@ -65,7 +65,6 @@ struct PeerTurnTrackerInner {
     background_follow_ups: HashSet<PeerTurnKey>,
     early_background_follow_ups: HashSet<PeerTurnKey>,
     completed_background_sources: HashMap<PeerTurnKey, PeerTurnKey>,
-    confirmations: HashMap<String, PeerTurnKey>,
 }
 
 #[derive(Default)]
@@ -97,7 +96,6 @@ impl PeerTurnTracker {
                 background_follow_ups: HashSet::new(),
                 early_background_follow_ups: HashSet::new(),
                 completed_background_sources: HashMap::new(),
-                confirmations: HashMap::new(),
             })),
         }
     }
@@ -408,6 +406,14 @@ impl PeerTurnTracker {
             .unwrap_or(false)
     }
 
+    pub(crate) fn owns_permission_request(&self, request: &PermissionRequest) -> bool {
+        self.owns(&request.session_id, None)
+            || request
+                .delegation
+                .as_ref()
+                .is_some_and(|delegation| self.owns(&delegation.parent_session_id, None))
+    }
+
     pub(crate) fn mark_started(&self, key: &PeerTurnKey) -> bool {
         self.inner
             .lock()
@@ -419,48 +425,6 @@ impl PeerTurnTracker {
                 true
             })
             .unwrap_or(false)
-    }
-
-    pub(crate) fn record_confirmation(
-        &self,
-        key: &PeerTurnKey,
-        tool_id: String,
-    ) -> Result<(), String> {
-        let mut inner = self
-            .inner
-            .lock()
-            .map_err(|_| "Peer turn tracker is unavailable".to_string())?;
-        if !inner.active.contains(key) {
-            return Err("Tool confirmation does not belong to a Peer-owned turn".to_string());
-        }
-        if let Some(existing_key) = inner.confirmations.get(&tool_id) {
-            if existing_key == key {
-                return Ok(());
-            }
-            return Err("Tool confirmation is already owned by another Peer turn".to_string());
-        }
-        if inner.confirmations.len() >= MAX_PENDING_PEER_CONFIRMATIONS {
-            return Err("Peer tool confirmation capacity is exhausted".to_string());
-        }
-        inner.confirmations.insert(tool_id, key.clone());
-        Ok(())
-    }
-
-    pub(crate) fn claim_confirmation(&self, tool_id: &str) -> Option<PeerTurnKey> {
-        self.inner
-            .lock()
-            .ok()
-            .and_then(|mut inner| inner.confirmations.remove(tool_id))
-    }
-
-    pub(crate) fn restore_confirmation(&self, tool_id: String, key: PeerTurnKey) {
-        if let Ok(mut inner) = self.inner.lock() {
-            if inner.active.contains(&key)
-                && inner.confirmations.len() < MAX_PENDING_PEER_CONFIRMATIONS
-            {
-                inner.confirmations.insert(tool_id, key);
-            }
-        }
     }
 
     pub(crate) fn finish_turn(&self, key: &PeerTurnKey) {
@@ -602,7 +566,6 @@ fn drain_peer_turns(inner: &mut PeerTurnTrackerInner) -> PeerTurnDrain {
     inner.background_follow_ups.clear();
     inner.early_background_follow_ups.clear();
     inner.completed_background_sources.clear();
-    inner.confirmations.clear();
     drain
 }
 
@@ -649,10 +612,6 @@ fn finish_turn_locked(inner: &mut PeerTurnTrackerInner, key: &PeerTurnKey) {
     if let Some(root) = root_for(inner, key).or_else(|| parent.clone()) {
         prune_idle_tree(inner, &root);
     }
-    let owned = inner.active.clone();
-    inner
-        .confirmations
-        .retain(|_, confirmation_key| owned.contains(confirmation_key));
 }
 
 fn bind_background_source_task(inner: &mut PeerTurnTrackerInner, call_key: &(PeerTurnKey, String)) {
@@ -891,7 +850,6 @@ fn remove_tracked_turns(inner: &mut PeerTurnTrackerInner, removed: &HashSet<Peer
     inner
         .early_background_follow_ups
         .retain(|key| !removed.contains(key));
-    inner.confirmations.retain(|_, key| !removed.contains(key));
 }
 
 fn prune_completed_branch(inner: &mut PeerTurnTrackerInner, key: &PeerTurnKey) {
@@ -943,6 +901,7 @@ fn prune_idle_tree(inner: &mut PeerTurnTrackerInner, key: &PeerTurnKey) {
 #[derive(Clone)]
 pub(crate) struct PeerHostState {
     pub(crate) agent_runtime: AgentRuntime,
+    pub(crate) local_workspace_snapshot: Arc<dyn bitfun_runtime_ports::LocalWorkspaceSnapshotPort>,
     pub(crate) compatibility: CoreAgentRuntimeCompatibility,
     pub(crate) agent_events: CliAgentEventSource,
     pub(crate) turns: PeerTurnTracker,
@@ -968,7 +927,7 @@ impl PeerHostState {
         drain: PeerTurnDrain,
         reason: &'static str,
     ) -> Result<(), String> {
-        const MAX_CONCURRENT_CANCELLATIONS: usize = 32;
+        const MAX_CONCURRENT_CANCELLATIONS: usize = i32::MAX as usize;
 
         let mut failure_count = 0usize;
         let mut pending_background = drain.background_subagents.into_iter();
@@ -1117,6 +1076,11 @@ fn spawn_turn_cancellation(
 mod tests {
     use std::collections::HashSet;
 
+    use bitfun_agent_runtime::sdk::{
+        PermissionDelegationContext, PermissionRequest, PermissionRequestSource,
+        PermissionRequestSourceKind,
+    };
+
     use super::{aggregate_cancellation_results, PeerTurnKey, PeerTurnTracker};
 
     fn register_background_child(
@@ -1131,6 +1095,33 @@ mod tests {
         assert!(tracker
             .register_linked_child(parent, child, &tool_call_id)
             .expect("register background child"));
+    }
+
+    fn permission_request(session_id: &str, parent_session_id: Option<&str>) -> PermissionRequest {
+        PermissionRequest {
+            request_id: format!("request-{session_id}"),
+            round_id: format!("synthetic:request-{session_id}"),
+            order: 0,
+            tool_call_id: Some("tool-call".to_string()),
+            project_path: None,
+            project_id: "project".to_string(),
+            session_id: session_id.to_string(),
+            agent_id: "Explore".to_string(),
+            action: "read".to_string(),
+            resources: vec!["README.md".to_string()],
+            save_resources: Vec::new(),
+            source: PermissionRequestSource {
+                kind: PermissionRequestSourceKind::ToolCall,
+                identity: "Read".to_string(),
+            },
+            delegation: parent_session_id.map(|parent_session_id| PermissionDelegationContext {
+                parent_session_id: parent_session_id.to_string(),
+                parent_dialog_turn_id: Some("parent-turn".to_string()),
+                parent_tool_call_id: "parent-task".to_string(),
+                subagent_type: "Explore".to_string(),
+            }),
+            display_metadata: serde_json::Map::new(),
+        }
     }
 
     #[test]
@@ -1164,7 +1155,24 @@ mod tests {
     }
 
     #[test]
-    fn finishing_a_root_preserves_an_active_child_and_its_confirmation() {
+    fn permission_ownership_includes_delegated_child_requests_without_leaking_unrelated_sessions() {
+        let tracker = PeerTurnTracker::new();
+        tracker.mark_event_stream_ready();
+        let root = PeerTurnKey::new("parent-session", "parent-turn");
+        tracker.register_root(root.clone()).expect("register root");
+        assert!(tracker.mark_started(&root));
+
+        assert!(tracker.owns_permission_request(&permission_request("parent-session", None)));
+        assert!(tracker
+            .owns_permission_request(
+                &permission_request("child-session", Some("parent-session"),)
+            ));
+        assert!(!tracker
+            .owns_permission_request(&permission_request("other-child", Some("other-parent"),)));
+    }
+
+    #[test]
+    fn finishing_a_root_preserves_an_active_child() {
         let tracker = PeerTurnTracker::new();
         tracker.mark_event_stream_ready();
         let root = PeerTurnKey::new("session-1", "turn-1");
@@ -1173,35 +1181,10 @@ mod tests {
         assert!(tracker
             .register_child(&root, child.clone())
             .expect("register child"));
-        tracker
-            .record_confirmation(&child, "tool-1".to_string())
-            .expect("record confirmation");
-
         tracker.finish_turn(&root);
 
         assert!(!tracker.owns("session-1", Some("turn-1")));
         assert!(tracker.owns("session-2", Some("turn-2")));
-        assert_eq!(tracker.claim_confirmation("tool-1"), Some(child));
-    }
-
-    #[test]
-    fn confirmation_claim_is_bound_to_the_exact_turn_and_can_be_restored() {
-        let tracker = PeerTurnTracker::new();
-        tracker.mark_event_stream_ready();
-        let turn = PeerTurnKey::new("session-1", "turn-1");
-        tracker.register_root(turn.clone()).expect("register turn");
-        tracker
-            .record_confirmation(&turn, "tool-1".to_string())
-            .expect("record confirmation");
-
-        let claimed = tracker
-            .claim_confirmation("tool-1")
-            .expect("claim confirmation");
-        assert_eq!(claimed, turn);
-        assert!(tracker.claim_confirmation("tool-1").is_none());
-
-        tracker.restore_confirmation("tool-1".to_string(), claimed);
-        assert_eq!(tracker.claim_confirmation("tool-1"), Some(turn));
     }
 
     #[test]
@@ -1376,10 +1359,20 @@ mod tests {
     }
 
     #[test]
+    fn peer_tracking_capacities_are_effectively_unbounded() {
+        assert_eq!(super::MAX_TRACKED_PEER_TURNS, i32::MAX as usize);
+        assert_eq!(super::MAX_BACKGROUND_PEER_AUTHORIZATIONS, i32::MAX as usize);
+        assert_eq!(
+            super::MAX_PENDING_PEER_TASK_CANCELLATIONS,
+            i32::MAX as usize
+        );
+    }
+
+    #[test]
     fn completed_background_authorizations_do_not_reduce_live_turn_capacity() {
         let tracker = PeerTurnTracker::new();
         tracker.mark_event_stream_ready();
-        for index in 0..super::MAX_BACKGROUND_PEER_AUTHORIZATIONS {
+        for index in 0..16 {
             let root = PeerTurnKey::new(format!("parent-{index}"), format!("root-{index}"));
             let child = PeerTurnKey::new(format!("child-{index}"), format!("child-turn-{index}"));
             tracker.register_root(root.clone()).expect("register root");
@@ -1388,8 +1381,7 @@ mod tests {
             tracker.finish_turn(&root);
         }
 
-        let mut live_roots = Vec::new();
-        for index in 0..super::MAX_TRACKED_PEER_TURNS {
+        for index in 0..16 {
             let root = PeerTurnKey::new(
                 format!("live-session-{index}"),
                 format!("live-turn-{index}"),
@@ -1397,50 +1389,25 @@ mod tests {
             tracker
                 .register_root(root.clone())
                 .expect("background history must not reduce live capacity");
-            live_roots.push(root);
-        }
-        assert!(tracker
-            .record_background_task_call(&live_roots[0], "overflow-task".to_string())
-            .expect_err("the next background authorization must fail closed")
-            .contains("background authorization capacity"));
-    }
-
-    #[test]
-    fn active_capacity_rejects_a_new_root_without_requesting_a_reset() {
-        let tracker = PeerTurnTracker::new();
-        tracker.mark_event_stream_ready();
-        for index in 0..super::MAX_TRACKED_PEER_TURNS {
             tracker
-                .register_root(PeerTurnKey::new(
-                    format!("session-{index}"),
-                    format!("turn-{index}"),
-                ))
-                .expect("register active root");
+                .record_background_task_call(&root, format!("live-task-{index}"))
+                .expect("live background authorization must remain available");
         }
-
-        assert!(tracker
-            .register_root(PeerTurnKey::new("overflow-session", "overflow-turn"))
-            .expect_err("live capacity must reject one more root")
-            .contains("capacity is exhausted"));
     }
 
     #[test]
-    fn unlinked_background_and_cancellation_task_markers_are_bounded() {
+    fn unlinked_background_and_cancellation_task_markers_accept_many_entries() {
         let tracker = PeerTurnTracker::new();
         tracker.mark_event_stream_ready();
         let root = PeerTurnKey::new("session", "turn");
         tracker.register_root(root.clone()).expect("register root");
-        for index in 0..super::MAX_BACKGROUND_PEER_AUTHORIZATIONS {
+        for index in 0..64 {
             tracker
                 .record_background_task_call(&root, format!("background-{index}"))
                 .expect("reserve background authorization");
         }
-        assert!(tracker
-            .record_background_task_call(&root, "background-overflow".to_string())
-            .expect_err("unlinked background calls must be bounded")
-            .contains("background authorization capacity"));
 
-        for index in 0..super::MAX_PENDING_PEER_TASK_CANCELLATIONS {
+        for index in 0..64 {
             tracker
                 .record_background_task_cancellation(
                     &root,
@@ -1449,21 +1416,13 @@ mod tests {
                 )
                 .expect("track Task cancellation");
         }
-        assert!(tracker
-            .record_background_task_cancellation(
-                &root,
-                "cancel-overflow".to_string(),
-                "subagent-overflow".to_string(),
-            )
-            .expect_err("Task cancellation markers must be bounded")
-            .contains("cancellation tracking capacity"));
     }
 
     #[test]
     fn foreground_children_do_not_consume_background_lineage_capacity() {
         let tracker = PeerTurnTracker::new();
         tracker.mark_event_stream_ready();
-        for index in 0..(super::MAX_TRACKED_PEER_TURNS * 2) {
+        for index in 0..64 {
             let root = PeerTurnKey::new(format!("parent-{index}"), format!("root-{index}"));
             let child = PeerTurnKey::new(format!("child-{index}"), format!("child-turn-{index}"));
             tracker.register_root(root.clone()).expect("register root");
@@ -1775,7 +1734,7 @@ mod tests {
             .register_root(parent.clone())
             .expect("register parent");
 
-        for index in 0..(super::MAX_BACKGROUND_PEER_AUTHORIZATIONS * 2) {
+        for index in 0..64 {
             let tool_call_id = format!("task-tool-{index}");
             let background_task_id = format!("background-task-{index}");
             let source = PeerTurnKey::new("subagent-session", format!("subagent-turn-{index}"));
@@ -1801,7 +1760,7 @@ mod tests {
         tracker.interrupt_event_stream(false);
         tracker.mark_event_stream_ready();
 
-        for index in 0..super::MAX_TRACKED_PEER_TURNS {
+        for index in 0..64 {
             tracker
                 .register_root(PeerTurnKey::new(
                     format!("session-{index}"),

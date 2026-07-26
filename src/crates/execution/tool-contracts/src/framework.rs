@@ -426,10 +426,6 @@ pub fn get_tool_spec_is_concurrency_safe(_input: Option<&Value>) -> bool {
     true
 }
 
-pub fn get_tool_spec_needs_permissions(_input: Option<&Value>) -> bool {
-    false
-}
-
 pub fn render_get_tool_spec_tool_use_message(input: &Value) -> String {
     let tool_name = input
         .get("tool_name")
@@ -694,10 +690,6 @@ pub trait ToolRegistryItem: Send + Sync {
 
     fn is_concurrency_safe(&self, _input: Option<&Value>) -> bool {
         self.is_readonly()
-    }
-
-    fn needs_permissions(&self, _input: Option<&Value>) -> bool {
-        !self.is_readonly()
     }
 
     fn manages_own_execution_timeout(&self) -> bool {
@@ -1042,10 +1034,6 @@ impl<'a, Tool: ?Sized, Context, Provider: ?Sized> GetToolSpecRuntime<'a, Tool, C
 
     pub fn is_concurrency_safe(&self, input: Option<&Value>) -> bool {
         get_tool_spec_is_concurrency_safe(input)
-    }
-
-    pub fn needs_permissions(&self, input: Option<&Value>) -> bool {
-        get_tool_spec_needs_permissions(input)
     }
 
     pub fn render_tool_use_message(&self, input: &Value) -> String {

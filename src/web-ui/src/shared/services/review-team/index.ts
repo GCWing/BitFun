@@ -9,8 +9,6 @@ import {
 import {
   classifyReviewTargetFromFiles,
   createUnknownReviewTargetClassification,
-  shouldRunReviewerForTarget,
-  type ReviewDomainTag,
   type ReviewTargetClassification,
 } from '../reviewTargetClassifier';
 import { evaluateReviewSubagentToolReadiness } from '../reviewSubagentCapabilities';
@@ -27,6 +25,7 @@ import {
   DISALLOWED_REVIEW_TEAM_MEMBER_IDS,
   EXTRA_MEMBER_DEFAULTS,
   FALLBACK_REVIEW_TEAM_DEFINITION,
+  LEGACY_REVIEW_WORKER_AGENT_IDS,
   MAX_AUTO_RETRY_ELAPSED_GUARD_SECONDS,
   MAX_PARALLEL_REVIEWER_INSTANCES,
   MAX_QUEUE_WAIT_SECONDS,
@@ -59,7 +58,6 @@ import {
   resolveMaxExtraReviewers,
 } from './workPackets';
 import { buildReviewTeamPromptBlockContent } from './promptBlock';
-import { isSecuritySensitiveReviewPath } from './pathMetadata';
 import type {
   ReviewMemberStrategyLevel,
   ReviewModelFallbackReason,
@@ -707,6 +705,44 @@ function resolveMemberStrategy(
   };
 }
 
+function migrateLegacyWorkerStrategyOverride(
+  storedConfig: ReviewTeamStoredConfig,
+  subagentsById: ReadonlyMap<string, SubagentInfo>,
+  definition: ReviewTeamDefinition,
+): ReviewTeamStoredConfig {
+  const overrides = storedConfig.member_strategy_overrides;
+  if (
+    overrides.ReviewWorker ||
+    !definition.coreRoles.some((role) => role.subagentId === 'ReviewWorker')
+  ) {
+    return storedConfig;
+  }
+
+  const definedRoleIds = new Set(definition.coreRoles.map((role) => role.subagentId));
+  const legacyStrategies = LEGACY_REVIEW_WORKER_AGENT_IDS
+    .filter((id) => !subagentsById.has(id) && !definedRoleIds.has(id))
+    .map((id) => overrides[id])
+    .filter((level): level is ReviewStrategyLevel => Boolean(level));
+  if (legacyStrategies.length === 0) {
+    return storedConfig;
+  }
+
+  // Several historical roles can collapse into one worker. Preserve the
+  // strongest requested coverage level instead of depending on object order.
+  const workerStrategy = legacyStrategies.reduce((strongest, candidate) =>
+    REVIEW_STRATEGY_LEVELS.indexOf(candidate) > REVIEW_STRATEGY_LEVELS.indexOf(strongest)
+      ? candidate
+      : strongest
+  );
+  return {
+    ...storedConfig,
+    member_strategy_overrides: {
+      ...overrides,
+      ReviewWorker: workerStrategy,
+    },
+  };
+}
+
 function resolveMemberModel(
   configuredModel: string | undefined,
   strategyLevel: ReviewStrategyLevel,
@@ -944,6 +980,11 @@ export function resolveDefaultReviewTeam(
 ): ReviewTeam {
   const definition = options.definition ?? FALLBACK_REVIEW_TEAM_DEFINITION;
   const byId = new Map(subagents.map((subagent) => [subagent.id, subagent]));
+  const effectiveStoredConfig = migrateLegacyWorkerStrategyOverride(
+    storedConfig,
+    byId,
+    definition,
+  );
   const availableModelIds = options.availableModelIds
     ? new Set(options.availableModelIds)
     : undefined;
@@ -951,26 +992,26 @@ export function resolveDefaultReviewTeam(
     buildCoreMember(
       roleDefinition,
       byId.get(roleDefinition.subagentId),
-      storedConfig,
+      effectiveStoredConfig,
       availableModelIds,
       definition.strategyProfiles,
     ),
   );
   const disallowedExtraSubagentIds = new Set(definition.disallowedExtraSubagentIds);
-  const extraMembers = storedConfig.extra_subagent_ids
+  const extraMembers = effectiveStoredConfig.extra_subagent_ids
     .filter((subagentId) => !disallowedExtraSubagentIds.has(subagentId))
     .map((subagentId) => {
     const subagent = byId.get(subagentId);
     if (!subagent) {
       return buildUnavailableExtraMember(
         subagentId,
-        storedConfig,
+        effectiveStoredConfig,
         availableModelIds,
         definition.strategyProfiles,
       );
     }
     if (!hasReviewTeamExtraMemberShape(subagent)) {
-      return buildExtraMember(subagent, storedConfig, availableModelIds, {
+      return buildExtraMember(subagent, effectiveStoredConfig, availableModelIds, {
         available: false,
         skipReason: 'invalid_tooling',
         strategyProfiles: definition.strategyProfiles,
@@ -981,7 +1022,7 @@ export function resolveDefaultReviewTeam(
     );
     return buildExtraMember(
       subagent,
-      storedConfig,
+      effectiveStoredConfig,
       availableModelIds,
       toolingReadiness.readiness === 'invalid'
         ? {
@@ -998,10 +1039,10 @@ export function resolveDefaultReviewTeam(
     name: definition.name,
     description: definition.description,
     warning: definition.warning,
-    strategyLevel: storedConfig.strategy_level,
-    memberStrategyOverrides: storedConfig.member_strategy_overrides,
-    executionPolicy: executionPolicyFromStoredConfig(storedConfig),
-    concurrencyPolicy: concurrencyPolicyFromStoredConfig(storedConfig),
+    strategyLevel: effectiveStoredConfig.strategy_level,
+    memberStrategyOverrides: effectiveStoredConfig.member_strategy_overrides,
+    executionPolicy: executionPolicyFromStoredConfig(effectiveStoredConfig),
+    concurrencyPolicy: concurrencyPolicyFromStoredConfig(effectiveStoredConfig),
     definition,
     members: [...coreMembers, ...extraMembers],
     coreMembers,
@@ -1066,33 +1107,9 @@ function resolveReviewWorkPacketAllowedTools(defaultTools?: string[]): string[] 
 
 function coreReviewerPriority(
   member: ReviewTeamMember,
-  target: ReviewTargetClassification,
+  _target: ReviewTargetClassification,
 ): number {
-  const hasSecuritySensitiveFile = target.files.some((file) =>
-    !file.excluded && isSecuritySensitiveReviewPath(file.normalizedPath)
-  );
-  const hasContractSurface = target.tags.some((tag) => [
-    'frontend_contract',
-    'desktop_contract',
-    'web_server_contract',
-    'api_layer',
-    'transport',
-  ].includes(tag));
-
-  switch (member.definitionKey) {
-    case 'businessLogic':
-      return 100;
-    case 'frontend':
-      return 90;
-    case 'security':
-      return hasSecuritySensitiveFile ? 95 : 55;
-    case 'architecture':
-      return hasContractSurface ? 85 : 60;
-    case 'performance':
-      return 70;
-    default:
-      return 0;
-  }
+  return member.definitionKey === 'worker' ? 100 : 0;
 }
 
 function hasExplicitReviewTarget(filePaths?: string[]): boolean {
@@ -1113,30 +1130,12 @@ function resolveReviewTargetForOptions(
   return createUnknownReviewTargetClassification(fallbackSource);
 }
 
-function isCoreMemberApplicableForLaunch(
-  member: ReviewTeamMember,
-  options: ReviewTeamLaunchOptions,
-): boolean {
-  return shouldRunCoreReviewerForTarget(
-    member,
-    resolveReviewTargetForOptions(
-      options.target,
-      options.reviewTargetFilePaths,
-      'unknown',
-    ),
-  );
-}
-
 export async function prepareDefaultReviewTeamForLaunch(
   workspacePath?: string,
-  options: ReviewTeamLaunchOptions = {},
+  _options: ReviewTeamLaunchOptions = {},
 ): Promise<ReviewTeam> {
   const team = await loadDefaultReviewTeam(workspacePath);
-  const missingCoreMembers = team.coreMembers.filter(
-    (member) =>
-      !member.available &&
-      isCoreMemberApplicableForLaunch(member, options),
-  );
+  const missingCoreMembers = team.coreMembers.filter((member) => !member.available);
 
   if (missingCoreMembers.length > 0) {
     throw new Error(
@@ -1147,10 +1146,7 @@ export async function prepareDefaultReviewTeamForLaunch(
   }
 
   const coreMembersToEnable = team.coreMembers.filter(
-    (member) =>
-      member.available &&
-      !member.enabled &&
-      isCoreMemberApplicableForLaunch(member, options),
+    (member) => member.available && !member.enabled,
   );
 
   if (coreMembersToEnable.length > 0) {
@@ -1181,79 +1177,12 @@ export async function prepareDefaultReviewTeamForLaunch(
   return team;
 }
 
-function shouldRunCoreReviewerForTarget(
-  member: ReviewTeamMember,
-  target: ReviewTargetClassification,
-): boolean {
-  return shouldRunReviewerForTarget(member.subagentId, target);
-}
-
-const QUICK_SECURITY_TAGS = new Set<ReviewDomainTag>([
-  'api_layer',
-  'ai_adapter',
-  'config',
-  'desktop_contract',
-  'transport',
-  'web_server_contract',
-]);
-
-const QUICK_ARCHITECTURE_TAGS = new Set<ReviewDomainTag>([
-  'api_layer',
-  'desktop_contract',
-  'frontend_contract',
-  'transport',
-  'web_server_contract',
-]);
-
-function targetHasAnyTag(
-  target: ReviewTargetClassification,
-  tags: Set<ReviewDomainTag>,
-): boolean {
-  return target.tags.some((tag) => tags.has(tag));
-}
-
-function isReviewTargetOnlyLowSignalFiles(target: ReviewTargetClassification): boolean {
-  const includedFiles = target.files.filter((file) => !file.excluded);
-  return includedFiles.length > 0 &&
-    includedFiles.every((file) =>
-      file.tags.every((tag) => tag === 'docs' || tag === 'generated_or_lock')
-    );
-}
-
 function shouldRunCoreReviewerForStrategy(
-  member: ReviewTeamMember,
-  target: ReviewTargetClassification,
-  strategyLevel: ReviewStrategyLevel,
+  _member: ReviewTeamMember,
+  _target: ReviewTargetClassification,
+  _strategyLevel: ReviewStrategyLevel,
 ): boolean {
-  if (!shouldRunCoreReviewerForTarget(member, target)) {
-    return false;
-  }
-  if (strategyLevel !== 'quick') {
-    return true;
-  }
-  if (target.resolution === 'unknown') {
-    return member.definitionKey === 'businessLogic' ||
-      member.definitionKey === 'security' ||
-      member.definitionKey === 'architecture' ||
-      member.definitionKey === 'frontend';
-  }
-
-  switch (member.definitionKey) {
-    case 'businessLogic':
-      return !isReviewTargetOnlyLowSignalFiles(target);
-    case 'security':
-      return targetHasAnyTag(target, QUICK_SECURITY_TAGS) ||
-        target.files.some((file) =>
-          !file.excluded && isSecuritySensitiveReviewPath(file.normalizedPath)
-        );
-    case 'architecture':
-      return targetHasAnyTag(target, QUICK_ARCHITECTURE_TAGS);
-    case 'frontend':
-      return shouldRunCoreReviewerForTarget(member, target);
-    case 'performance':
-    default:
-      return false;
-  }
+  return true;
 }
 
 export function buildEffectiveReviewTeamManifest(

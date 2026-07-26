@@ -9,6 +9,7 @@ use bitfun_agent_tools::{
     DynamicToolDescriptor, DynamicToolProvider, PortResult, ToolDecoratorRef,
     ToolRegistry as AgentToolRegistry,
 };
+use bitfun_product_capabilities::DeliveryProfile;
 use log::{debug, info, trace, warn};
 use std::sync::Arc;
 
@@ -32,6 +33,10 @@ impl ToolRegistry {
     /// Create a new tool registry
     pub fn new() -> Self {
         ProductToolRuntime::default().create_registry()
+    }
+
+    pub(in crate::agentic) fn for_profile(profile: DeliveryProfile) -> Self {
+        ProductToolRuntime::for_profile(profile).create_registry()
     }
 
     /// Create a registry with an injected decoration boundary.
@@ -238,15 +243,55 @@ pub fn create_tool_registry() -> ToolRegistry {
 use std::sync::OnceLock;
 use tokio::sync::RwLock as TokioRwLock;
 
-static GLOBAL_TOOL_REGISTRY: OnceLock<Arc<TokioRwLock<ToolRegistry>>> = OnceLock::new();
+struct GlobalToolRegistry {
+    profile: DeliveryProfile,
+    registry: Arc<TokioRwLock<ToolRegistry>>,
+}
+
+static GLOBAL_TOOL_REGISTRY: OnceLock<GlobalToolRegistry> = OnceLock::new();
+
+pub(in crate::agentic) fn initialize_global_tool_registry_for_profile(
+    profile: DeliveryProfile,
+) -> Result<Arc<TokioRwLock<ToolRegistry>>, String> {
+    if let Some(global) = GLOBAL_TOOL_REGISTRY.get() {
+        return if global.profile == profile {
+            Ok(global.registry.clone())
+        } else {
+            Err(format!(
+                "Global tool registry already uses delivery profile {}; cannot replace it with {}",
+                global.profile, profile
+            ))
+        };
+    }
+
+    let candidate = GlobalToolRegistry {
+        profile,
+        registry: Arc::new(TokioRwLock::new(ToolRegistry::for_profile(profile))),
+    };
+    let _ = GLOBAL_TOOL_REGISTRY.set(candidate);
+    let global = GLOBAL_TOOL_REGISTRY
+        .get()
+        .expect("global tool registry must be initialized");
+    if global.profile != profile {
+        return Err(format!(
+            "Global tool registry concurrently selected delivery profile {}; requested {}",
+            global.profile, profile
+        ));
+    }
+    Ok(global.registry.clone())
+}
 
 /// Get global tool registry
 pub fn get_global_tool_registry() -> Arc<TokioRwLock<ToolRegistry>> {
     GLOBAL_TOOL_REGISTRY
         .get_or_init(|| {
             info!("Initializing global tool registry");
-            Arc::new(TokioRwLock::new(ToolRegistry::new()))
+            GlobalToolRegistry {
+                profile: DeliveryProfile::ProductFull,
+                registry: Arc::new(TokioRwLock::new(ToolRegistry::new())),
+            }
         })
+        .registry
         .clone()
 }
 
@@ -465,7 +510,9 @@ mod tests {
             "WriteStdin",
             "ExecControl",
             "GetTime",
+            "ListModels",
             "Task",
+            "AgentWait",
             "LaunchReviewAgent",
             "Skill",
             "AskUserQuestion",
@@ -496,6 +543,8 @@ mod tests {
             "Git",
             "ReviewPlatform",
             "InitMiniApp",
+            "PageDeploy",
+            "PagePublish",
             "ControlHub",
             "ComputerUse",
             "Playbook",
@@ -643,6 +692,7 @@ mod tests {
 
         assert!(registry.is_tool_deferred("WebFetch"));
         assert!(registry.is_tool_deferred("GetFileDiff"));
+        assert!(registry.is_tool_deferred("ListModels"));
         assert!(!registry.is_tool_deferred("GetToolSpec"));
         assert!(registry.is_tool_deferred("Git"));
         assert!(registry.is_tool_deferred("ReviewPlatform"));
@@ -656,6 +706,7 @@ mod tests {
         assert_eq!(
             registry.get_deferred_tool_names(),
             vec![
+                "ListModels",
                 "CreatePlan",
                 "GetFileDiff",
                 "SessionControl",
@@ -698,6 +749,7 @@ mod tests {
                 "Glob",
                 "Grep",
                 "GetTime",
+                "ListModels",
                 "Skill",
                 "AskUserQuestion",
                 "TodoWrite",

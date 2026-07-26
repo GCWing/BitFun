@@ -4,8 +4,6 @@ pub const TOOL_ERROR_ARGUMENTS_PREVIEW_BYTES: usize = 1024;
 pub const USER_STEERING_INTERRUPTED_MESSAGE: &str = "Tool execution skipped because the user sent a new steering message for the running turn. Stop the remaining old tool plan and handle the new user message next.";
 pub const USER_REJECTED_TOOL_MESSAGE: &str =
     "The user rejected this tool call. Do not retry it unless the user explicitly asks you to. If you cannot complete the task without running this tool call, stop and ask the user how to proceed.";
-pub const TOOL_CONFIRMATION_TIMEOUT_MESSAGE: &str =
-    "The tool confirmation window expired before the user responded. Do not retry the same tool call unless the user explicitly asks you to. If you still need this tool to complete the task, stop and ask the user how to proceed.";
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct ToolExecutionErrorPresentation {
@@ -25,16 +23,32 @@ pub fn is_write_like_tool_name(tool_name: &str) -> bool {
     matches!(tool_name, "Write" | "file_write" | "write_notebook")
 }
 
-pub fn build_tool_call_truncation_recovery_notice(tool_name: &str) -> String {
+pub fn build_write_tail_closure_notice(tool_name: &str) -> String {
     if is_write_like_tool_name(tool_name) {
         return format!(
-            "[Your previous {tool_name} call was truncated mid-stream by max_tokens and was auto-repaired before execution; the file may have been written with partial content. Use the latest Read result for that file (or call Read once if no current Read result is available) to inspect what is on disk. To finish it, use Edit to add only the missing continuation. If you do not have a concrete plan for the continuation, stop tool-calling and tell the user the output was truncated (suggest raising max_tokens).]\n\nOriginal tool result follows.\n\n"
+            "[Your previous {tool_name} call had incomplete JSON arguments and its completed payload prefix was closed before execution; the file may have been written with partial content. Use the latest Read result for that file (or call Read once if no current Read result is available) to inspect what is on disk. To finish it, use Edit to add only the missing continuation. If you do not have a concrete plan for the continuation, stop tool-calling and tell the user the write may be incomplete.]\n\nOriginal tool result follows.\n\n"
         );
     }
 
     format!(
-        "[Your previous {tool_name} call was truncated mid-stream by max_tokens and was auto-repaired before execution. The tool ran with the repaired, potentially incomplete arguments. Review the tool result and continue normally; if important information is missing, issue a fresh complete {tool_name} call rather than trying to continue a file write.]\n\nOriginal tool result follows.\n\n"
+        "[Your previous {tool_name} call had incomplete JSON arguments and was closed before execution. The tool ran with the repaired, potentially incomplete arguments. Review the tool result and continue normally; if important information is missing, issue a fresh complete {tool_name} call.]\n\nOriginal tool result follows.\n\n"
     )
+}
+
+/// Inform the model that the opt-in, broad JSON repair policy changed a
+/// non-Write call after the provider explicitly completed tool use. This is a
+/// syntax recovery fact, not evidence that an output limit was reached.
+pub fn build_normal_tool_json_repair_notice(tool_name: &str) -> String {
+    format!(
+        "[Your previous {tool_name} call contained malformed JSON arguments. After the provider completed tool use normally, the explicitly enabled JSON-repair policy produced valid arguments and the tool was executed. Review the result carefully; if the repaired arguments may not match your intent, issue a fresh complete {tool_name} call.]\n\nOriginal tool result follows.\n\n"
+    )
+}
+
+/// Backward-compatible name for call sites that only understand the legacy
+/// truncation flag. New code should use repair provenance and call the
+/// specific presentation helper above.
+pub fn build_tool_call_truncation_recovery_notice(tool_name: &str) -> String {
+    build_write_tail_closure_notice(tool_name)
 }
 
 pub fn truncate_tool_arguments_preview(value: &Value) -> String {
@@ -102,20 +116,6 @@ pub fn build_user_steering_interrupted_presentation(
     }
 }
 
-pub fn build_tool_confirmation_timeout_presentation(
-    tool_name: &str,
-) -> ToolExecutionErrorPresentation {
-    ToolExecutionErrorPresentation {
-        result_json: serde_json::json!({
-            "status": "cancelled",
-            "category": "confirmation_timeout",
-            "tool_name": tool_name,
-            "message": TOOL_CONFIRMATION_TIMEOUT_MESSAGE,
-        }),
-        result_for_assistant: TOOL_CONFIRMATION_TIMEOUT_MESSAGE.to_string(),
-    }
-}
-
 pub fn build_tool_execution_timeout_presentation(
     tool_name: &str,
     timeout_secs: Option<u64>,
@@ -172,6 +172,27 @@ pub fn build_user_rejected_tool_presentation_with_instruction(
 
     ToolExecutionErrorPresentation {
         result_json,
+        result_for_assistant: message,
+    }
+}
+
+pub fn build_permission_denied_tool_presentation(
+    tool_name: &str,
+    reason: &str,
+) -> ToolExecutionErrorPresentation {
+    let reason = reason.trim();
+    let message = format!(
+        "This tool call was blocked by the current permission policy: \"{reason}\". Do not retry it. If you cannot complete the task without running this tool call, stop and ask the user how to proceed."
+    );
+
+    ToolExecutionErrorPresentation {
+        result_json: serde_json::json!({
+            "status": "rejected",
+            "category": "permission_denied",
+            "tool_name": tool_name,
+            "reason": reason,
+            "message": message,
+        }),
         result_for_assistant: message,
     }
 }

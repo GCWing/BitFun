@@ -287,6 +287,8 @@
     position: relative;
     display: inline-grid;
     place-items: center;
+    justify-items: center;
+    align-items: center;
     width: 16px;
     height: 16px;
     padding: 0;
@@ -295,10 +297,19 @@
     background: color-mix(in srgb, var(--color-success) 12%, var(--element-bg-soft));
     color: color-mix(in srgb, var(--color-success) 76%, var(--color-text-primary));
     overflow: hidden;
+    // Kill the inline strut so the 16x16 circle stays optically centered against the title.
+    line-height: 0;
+    vertical-align: middle;
   }
 
   &__inline-item-background-subagent-icon {
     grid-area: 1 / 1;
+    place-self: center;
+    display: block;
+    width: 10px;
+    height: 10px;
+    flex-shrink: 0;
+    transform-origin: center center;
     transition: opacity $motion-fast $easing-standard, transform $motion-fast $easing-standard;
 
     &.is-bot {
@@ -762,6 +773,7 @@
 
     &.is-bot {
       opacity: 1;
+      transform: none;
     }
 
     &.is-loader {

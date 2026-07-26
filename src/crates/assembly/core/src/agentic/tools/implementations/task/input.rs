@@ -40,14 +40,14 @@ impl TaskAction {
             return None;
         }
 
-        let has_session_id = value.get("session_id").is_some();
+        let has_agent_id = value.get("agent_id").is_some();
         let has_subagent_type = value.get("subagent_type").is_some();
         let has_fork_context = value.get("fork_context").is_some();
 
-        if !has_session_id && (has_subagent_type || has_fork_context) {
+        if !has_agent_id && (has_subagent_type || has_fork_context) {
             return Some(Self::Spawn);
         }
-        if has_session_id && !has_subagent_type && !has_fork_context {
+        if has_agent_id && !has_subagent_type && !has_fork_context {
             return Some(Self::SendInput);
         }
 
@@ -69,12 +69,12 @@ pub(super) struct TaskInvocation {
     pub(super) description: Option<String>,
     pub(super) prompt: Option<String>,
     pub(super) context_mode: SubagentContextMode,
-    pub(super) target_session_id: Option<String>,
+    pub(super) target_agent_id: Option<String>,
     pub(super) subagent_type: Option<String>,
     pub(super) model_id: Option<String>,
+    pub(super) inherit_parent_model: bool,
     pub(super) timeout_seconds: Option<u64>,
     pub(super) run_in_background: bool,
-    pub(super) allow_review_follow_up: bool,
     pub(super) is_retry: bool,
     pub(super) requested_auto_retry: bool,
 }
@@ -97,12 +97,7 @@ impl TaskTool {
                     "action is not supported for DeepReview Task calls".to_string(),
                 ));
             }
-            for field in [
-                "fork_context",
-                "session_id",
-                "run_in_background",
-                "allow_review_follow_up",
-            ] {
+            for field in ["fork_context", "agent_id", "run_in_background"] {
                 if input.get(field).is_some() {
                     return Err(BitFunError::tool(format!(
                         "{field} is not allowed for DeepReview Task calls"
@@ -110,17 +105,19 @@ impl TaskTool {
                 }
             }
 
+            let (model_id, inherit_parent_model) = Self::optional_model_id(input)?;
+
             return Ok(TaskInvocation {
                 action: TaskAction::Spawn,
                 description: Self::string_field(input, "description", "DeepReview Task calls")?,
                 prompt: Self::string_field(input, "prompt", "DeepReview Task calls")?,
                 context_mode: SubagentContextMode::Fresh,
-                target_session_id: None,
+                target_agent_id: None,
                 subagent_type: Self::string_field(input, "subagent_type", "DeepReview Task calls")?,
-                model_id: Self::optional_trimmed_string(input, "model_id")?,
+                model_id,
+                inherit_parent_model,
                 timeout_seconds: Self::optional_timeout_seconds(input)?,
                 run_in_background: false,
-                allow_review_follow_up: false,
                 is_retry: input.get("retry").and_then(Value::as_bool).unwrap_or(false),
                 requested_auto_retry: input
                     .get("auto_retry")
@@ -141,21 +138,14 @@ impl TaskTool {
             ));
         }
         let run_in_background = Self::optional_bool(input, "run_in_background")?.unwrap_or(false);
-        let allow_review_follow_up =
-            Self::optional_bool(input, "allow_review_follow_up")?.unwrap_or(false);
-        if action != TaskAction::Cancel && allow_review_follow_up && !run_in_background {
-            return Err(BitFunError::tool(
-                "allow_review_follow_up=true requires run_in_background=true".to_string(),
-            ));
-        }
 
         match action {
             TaskAction::Spawn => {
                 let description = Self::required_string_for_action(input, "description", action)?;
                 let prompt = Self::required_string_for_action(input, "prompt", action)?;
-                if input.get("session_id").is_some() {
+                if input.get("agent_id").is_some() {
                     return Err(BitFunError::tool(
-                        "session_id is not allowed when action is spawn".to_string(),
+                        "agent_id is not allowed when action is spawn".to_string(),
                     ));
                 }
                 let context_mode = Self::context_mode_from_input(input)?;
@@ -183,24 +173,25 @@ impl TaskTool {
                     }
                 }
 
+                let (model_id, inherit_parent_model) = Self::optional_model_id(input)?;
+
                 Ok(TaskInvocation {
                     action,
                     description,
                     prompt,
                     context_mode,
-                    target_session_id: None,
+                    target_agent_id: None,
                     subagent_type: Self::optional_trimmed_string(input, "subagent_type")?,
-                    model_id: Self::optional_trimmed_string(input, "model_id")?,
+                    model_id,
+                    inherit_parent_model,
                     timeout_seconds: None,
                     run_in_background,
-                    allow_review_follow_up,
                     is_retry: false,
                     requested_auto_retry: false,
                 })
             }
             TaskAction::SendInput => {
-                let target_session_id =
-                    Self::required_string_for_action(input, "session_id", action)?;
+                let target_agent_id = Self::required_string_for_action(input, "agent_id", action)?;
                 let description = Self::required_string_for_action(input, "description", action)?;
                 let prompt = Self::required_string_for_action(input, "prompt", action)?;
                 Self::ensure_fields_absent(
@@ -215,24 +206,25 @@ impl TaskTool {
                     action,
                 )?;
 
+                let (model_id, inherit_parent_model) = Self::optional_model_id(input)?;
+
                 Ok(TaskInvocation {
                     action,
                     description,
                     prompt,
                     context_mode: SubagentContextMode::Fresh,
-                    target_session_id,
+                    target_agent_id,
                     subagent_type: None,
-                    model_id: Self::optional_trimmed_string(input, "model_id")?,
+                    model_id,
+                    inherit_parent_model,
                     timeout_seconds: None,
                     run_in_background,
-                    allow_review_follow_up,
                     is_retry: false,
                     requested_auto_retry: false,
                 })
             }
             TaskAction::Cancel => {
-                let target_session_id =
-                    Self::required_string_for_action(input, "session_id", action)?;
+                let target_agent_id = Self::required_string_for_action(input, "agent_id", action)?;
                 Self::ensure_fields_absent(
                     input,
                     &[
@@ -241,7 +233,6 @@ impl TaskTool {
                         "subagent_type",
                         "model_id",
                         "run_in_background",
-                        "allow_review_follow_up",
                         "retry",
                         "auto_retry",
                         "retry_coverage",
@@ -254,12 +245,12 @@ impl TaskTool {
                     description: None,
                     prompt: None,
                     context_mode: SubagentContextMode::Fresh,
-                    target_session_id,
+                    target_agent_id,
                     subagent_type: None,
                     model_id: None,
+                    inherit_parent_model: false,
                     timeout_seconds: None,
                     run_in_background: false,
-                    allow_review_follow_up: false,
                     is_retry: false,
                     requested_auto_retry: false,
                 })
@@ -276,19 +267,7 @@ impl TaskTool {
             Ok(invocation) => invocation,
             Err(error) => return Self::invalid_input(error.to_string()),
         };
-        if invocation.action == TaskAction::Spawn && invocation.run_in_background {
-            if let Some(subagent_type) = invocation.subagent_type.as_deref() {
-                if let Err(error) = validate_background_subagent_delivery(
-                    subagent_type,
-                    workspace_root,
-                    invocation.allow_review_follow_up,
-                )
-                .await
-                {
-                    return Self::invalid_input(error.to_string());
-                }
-            }
-        }
+        let _ = workspace_root;
         if invocation.action != TaskAction::Cancel {
             if let Some(result) = Self::validate_prompt_size(input) {
                 return result;
@@ -350,6 +329,13 @@ impl TaskTool {
                 let value = value.trim();
                 Ok((!value.is_empty()).then(|| value.to_string()))
             }
+        }
+    }
+
+    fn optional_model_id(input: &Value) -> BitFunResult<(Option<String>, bool)> {
+        match Self::optional_trimmed_string(input, "model_id")? {
+            Some(model_id) if model_id == "inherit" => Ok((None, true)),
+            model_id => Ok((model_id, false)),
         }
     }
 

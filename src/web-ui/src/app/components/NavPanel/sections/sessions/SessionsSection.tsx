@@ -187,12 +187,14 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
     nextCursor?: string;
     hasMore: boolean;
     isLoading: boolean;
+    loadError: boolean;
   }>({
     totalTopLevelCount: null,
     syncedTopLevelCount: null,
     nextCursor: undefined,
     hasMore: false,
     isLoading: false,
+    loadError: false,
   });
   const [openMenuSessionId, setOpenMenuSessionId] = useState<string | null>(null);
   const [sessionMenuPosition, setSessionMenuPosition] = useState<{ top: number; left: number } | null>(null);
@@ -291,6 +293,7 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
       nextCursor: undefined,
       hasMore: false,
       isLoading: false,
+      loadError: false,
     });
   }, [workspaceId, workspacePath, remoteConnectionId, remoteSshHost]);
 
@@ -302,7 +305,11 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
 
       const requestId = metadataLoadRequestIdRef.current + 1;
       metadataLoadRequestIdRef.current = requestId;
-      setMetadataPageState(prev => ({ ...prev, isLoading: true }));
+      setMetadataPageState(prev => ({
+        ...prev,
+        isLoading: true,
+        loadError: false,
+      }));
 
       try {
         const page = await flowChatStore.loadSessionMetadataPage(
@@ -326,12 +333,17 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
             nextCursor: page.nextCursor,
             hasMore: page.hasMore,
             isLoading: false,
+            loadError: false,
           });
         }
         return page;
       } catch (error) {
         if (metadataLoadRequestIdRef.current === requestId) {
-          setMetadataPageState(prev => ({ ...prev, isLoading: false }));
+          setMetadataPageState(prev => ({
+            ...prev,
+            isLoading: false,
+            loadError: true,
+          }));
         }
         log.warn('Failed to load visible session metadata page', { error, workspacePath, cursor, limit });
         return null;
@@ -445,6 +457,7 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
         nextCursor: undefined,
         hasMore: false,
         isLoading: false,
+        loadError: false,
       });
       if (isVisible && workspacePath) {
         void loadMetadataPage(SESSIONS_LEVEL_0, undefined, 'sessions_nav_post_archive');
@@ -930,6 +943,21 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
             <Loader2 size={12} />
             <span>{t('nav.sessions.loading')}</span>
           </div>
+        </div>
+      );
+    }
+    if (metadataPageState.loadError) {
+      return (
+        <div className="bitfun-nav-panel__inline-list">
+          <button
+            type="button"
+            className="bitfun-nav-panel__inline-action"
+            onClick={() => {
+              void loadInitialMetadataPage('sessions_nav_manual_retry');
+            }}
+          >
+            <span>{t('nav.sessions.loadFailedRetry')}</span>
+          </button>
         </div>
       );
     }

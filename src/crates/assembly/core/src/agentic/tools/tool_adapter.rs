@@ -56,10 +56,6 @@ impl ToolRegistryItem for dyn Tool {
         Tool::is_concurrency_safe(self, input)
     }
 
-    fn needs_permissions(&self, input: Option<&Value>) -> bool {
-        Tool::needs_permissions(self, input)
-    }
-
     fn manages_own_execution_timeout(&self) -> bool {
         Tool::manages_own_execution_timeout(self)
     }

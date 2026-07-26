@@ -5,6 +5,7 @@ pub mod api;
 #[cfg(not(target_env = "ohos"))]
 pub mod computer_use;
 pub mod crash_diagnostics;
+mod embedded_relay_host;
 pub mod logging;
 pub mod macos_menubar;
 pub mod runtime;
@@ -28,6 +29,8 @@ use std::sync::{
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use tauri::Emitter;
 use tauri::Manager;
+#[cfg(not(target_env = "ohos"))]
+use tauri_plugin_window_state::{AppHandleExt, StateFlags};
 
 // Re-export API
 pub use api::*;
@@ -49,6 +52,7 @@ use api::custom_agent_api::{
     update_custom_agent,
 };
 use api::diff_api::*;
+use api::external_hooks_api::*;
 use api::external_sources_api::*;
 use api::git_agent_api::*;
 use api::git_api::*;
@@ -265,6 +269,20 @@ fn handle_secondary_launch(app: &tauri::AppHandle) {
     }
 }
 
+#[cfg(not(target_env = "ohos"))]
+fn main_window_state_flags() -> StateFlags {
+    StateFlags::SIZE | StateFlags::POSITION | StateFlags::MAXIMIZED | StateFlags::FULLSCREEN
+}
+
+pub(crate) fn save_main_window_state(app: &tauri::AppHandle) {
+    #[cfg(not(target_env = "ohos"))]
+    {
+        if let Err(error) = app.save_window_state(main_window_state_flags()) {
+            log::warn!("Failed to save main window state: {}", error);
+        }
+    }
+}
+
 #[tauri::command]
 async fn webdriver_bridge_result(request: WebdriverBridgeResultRequest) -> Result<(), String> {
     log::debug!("webdriver_bridge_result command invoked");
@@ -435,14 +453,20 @@ pub async fn _run() {
     startup_trace.record_elapsed_step("native_pre_tauri", "initialize_app_state", step_started);
 
     let step_started = Instant::now();
-    let desktop_runtime =
-        match runtime::DesktopRuntimeContext::build(coordinator.clone(), scheduler.clone()) {
-            Ok(runtime) => runtime,
-            Err(error) => {
-                log::error!("Failed to initialize Desktop Agent Runtime: {}", error);
-                return;
-            }
-        };
+    let desktop_runtime = match runtime::DesktopRuntimeContext::build(
+        coordinator.clone(),
+        scheduler.clone(),
+        app_state.token_usage_service.clone(),
+        app_state.workspace_service.clone(),
+        app_state.ssh_manager.clone(),
+        app_state.acp_client_service.clone(),
+    ) {
+        Ok(runtime) => runtime,
+        Err(error) => {
+            log::error!("Failed to initialize Desktop Agent Runtime: {}", error);
+            return;
+        }
+    };
     startup_timings.record_elapsed("initialize_desktop_agent_runtime", step_started);
     startup_trace.record_elapsed_step(
         "native_pre_tauri",
@@ -855,6 +879,12 @@ pub async fn _run() {
         })
         .on_window_event({
             move |window, event| {
+                if window.label() == "main"
+                    && matches!(event, tauri::WindowEvent::CloseRequested { .. })
+                {
+                    save_main_window_state(window.app_handle());
+                }
+
                 if let tauri::WindowEvent::CloseRequested { api: _api, .. } = event {
                     if window.label() == "main" {
                         #[cfg(target_os = "macos")]
@@ -944,8 +974,16 @@ pub async fn _run() {
             webdriver_bridge_result,
             get_startup_native_trace,
             api::agentic_api::list_sessions,
-            api::agentic_api::confirm_tool_execution,
-            api::agentic_api::reject_tool_execution,
+            api::agentic_api::list_pending_permission_requests,
+            api::agentic_api::subscribe_permission_requests,
+            api::agentic_api::respond_permission,
+            api::agentic_api::respond_permission_batch,
+            api::agentic_api::list_project_permission_grants,
+            api::agentic_api::remove_project_permission_grant,
+            api::agentic_api::clear_project_permission_grants,
+            api::agentic_api::list_project_permission_audit,
+            api::agentic_api::get_project_permission_rules,
+            api::agentic_api::save_project_permission_rules,
             api::agentic_api::cancel_tool,
             api::agentic_api::generate_session_title,
             api::agentic_api::get_available_modes,
@@ -954,11 +992,20 @@ pub async fn _run() {
             api::btw_api::btw_cancel,
             api::editor_ai_api::editor_ai_stream,
             api::editor_ai_api::editor_ai_cancel,
+            get_external_hook_catalog,
             get_external_source_snapshot,
+            reveal_external_source_location,
+            get_external_source_control_snapshot,
+            apply_external_source_control_action_command,
+            update_external_integration_policy_command,
             set_external_source_enabled_command,
             set_external_source_conflict_choice_command,
             set_external_tool_target_decision_command,
             set_external_tool_conflict_choice_command,
+            set_external_subagent_activation_command,
+            choose_external_subagent_conflict_command,
+            set_external_mcp_server_decision_command,
+            choose_external_mcp_conflict_command,
             api::context_upload_api::upload_image_contexts,
             get_all_tools_info,
             get_readonly_tools_info,
@@ -974,8 +1021,12 @@ pub async fn _run() {
             test_ai_connection,
             test_ai_config_connection,
             list_ai_models_by_config,
-            discover_cli_credentials,
-            refresh_cli_credential,
+            list_subscription_accounts,
+            start_subscription_login,
+            get_subscription_login_status,
+            cancel_subscription_login,
+            logout_subscription_account,
+            refresh_subscription_account,
             initialize_ai,
             refresh_model_client,
             get_app_state,
@@ -1152,6 +1203,7 @@ pub async fn _run() {
             initialize_project_storage,
             // Session persistence API
             list_persisted_sessions,
+            search_referenceable_sessions,
             list_persisted_sessions_page,
             load_session_turns,
             get_session_usage_report,
@@ -1205,6 +1257,7 @@ pub async fn _run() {
             get_acp_session_options,
             get_acp_session_commands,
             set_acp_session_model,
+            set_acp_session_config_option,
             lsp_initialize,
             lsp_start_server_for_file,
             lsp_stop_server,
@@ -1328,6 +1381,8 @@ pub async fn _run() {
             api::remote_connect_api::remote_connect_set_bot_verbose_mode,
             // Account API
             api::remote_connect_api::account_login,
+            api::remote_connect_api::account_finalize_login,
+            api::remote_connect_api::account_cancel_pending_login,
             api::remote_connect_api::account_status,
             api::remote_connect_api::account_logout,
             api::remote_connect_api::account_connect_devices,
@@ -1350,6 +1405,17 @@ pub async fn _run() {
             api::remote_connect_api::account_delete_device,
             api::remote_connect_api::account_device_rpc,
             api::remote_connect_api::account_delegate_to_paired,
+            // BitFun Page API
+            api::pages_api::page_publish,
+            api::pages_api::page_save_version,
+            api::pages_api::page_list,
+            api::pages_api::page_list_versions,
+            api::pages_api::page_create_open_link,
+            api::pages_api::page_deploy,
+            api::pages_api::page_delete_version,
+            api::pages_api::page_update,
+            api::pages_api::page_unpublish,
+            api::pages_api::page_delete,
             api::peer_host_invoke::peer_host_invoke_complete,
             api::peer_host_invoke::peer_control_attach,
             api::peer_host_invoke::peer_control_detach,
@@ -1370,10 +1436,6 @@ pub async fn _run() {
             api::miniapp_api::miniapp_runtime_status,
             api::miniapp_api::miniapp_worker_call,
             api::miniapp_api::miniapp_host_call,
-            api::canvas_api::load_canvas_artifact,
-            api::canvas_api::load_canvas_state,
-            api::canvas_api::report_canvas_runtime_error,
-            api::canvas_api::save_canvas_state,
             api::miniapp_api::miniapp_worker_stop,
             api::miniapp_api::miniapp_worker_list_running,
             api::miniapp_api::miniapp_install_deps,
@@ -1451,6 +1513,14 @@ pub async fn _run() {
             api::ssh_api::remote_close_workspace,
             api::ssh_api::remote_remove_workspace,
             api::ssh_api::remote_get_workspace_info,
+            // Relay self-deploy API
+            api::relay_deploy_api::relay_deploy_preflight,
+            api::relay_deploy_api::relay_deploy_install_docker,
+            api::relay_deploy_api::relay_deploy_start,
+            api::relay_deploy_api::relay_deploy_poll,
+            api::relay_deploy_api::relay_deploy_cancel,
+            api::relay_deploy_api::relay_deploy_register,
+            api::relay_deploy_api::relay_deploy_verify,
             // Announcement / feature-demo / tips API
             api::announcement_api::get_pending_announcements,
             api::announcement_api::mark_announcement_seen,
@@ -1535,14 +1605,20 @@ async fn init_agentic_system() -> anyhow::Result<(
 
     let tool_registry = tools::registry::get_global_tool_registry();
     let tool_state_manager = Arc::new(tools::pipeline::ToolStateManager::new(event_queue.clone()));
+    let permission_request_manager =
+        bitfun_core::product_runtime::core_permission_request_manager()
+            .map_err(anyhow::Error::msg)?;
 
     set_computer_use_desktop_available(false);
 
-    let tool_pipeline = Arc::new(tools::pipeline::ToolPipeline::new(
-        tool_registry,
-        tool_state_manager,
-        None,
-    ));
+    let tool_pipeline = Arc::new(
+        tools::pipeline::ToolPipeline::new(
+            tool_registry,
+            tool_state_manager,
+            None,
+        )
+        .with_permission_request_manager(permission_request_manager),
+    );
 
     let stream_processor = Arc::new(execution::StreamProcessor::new(event_queue.clone()));
     let round_executor = Arc::new(execution::RoundExecutor::new(

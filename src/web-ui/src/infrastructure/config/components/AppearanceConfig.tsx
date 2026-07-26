@@ -16,6 +16,7 @@ import {
   ConfigPageHeader,
   ConfigPageLayout,
   ConfigPageSection,
+  ConfigPageSectionStack,
   ConfigPageRow,
 } from './common';
 import './AppearanceConfig.scss';
@@ -395,10 +396,10 @@ const AppearanceConfig: React.FC = () => {
     <ConfigPageLayout className="bitfun-appearance-config">
       <ConfigPageHeader title={t('title')} subtitle={t('subtitle')} />
       <ConfigPageContent className="bitfun-appearance-config__content">
-        <div data-testid="appearance-config">
+        <ConfigPageSectionStack data-testid="appearance-config">
           <AppearanceThemeSection />
           <FontPreferencePanel />
-        </div>
+        </ConfigPageSectionStack>
       </ConfigPageContent>
     </ConfigPageLayout>
   );

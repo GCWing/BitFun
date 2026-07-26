@@ -1,7 +1,7 @@
 //! Runtime helpers for session-scoped file read state used by Read/Edit/Write tools.
 
 use crate::agentic::coordination::get_global_coordinator;
-use crate::agentic::session::FileReadState;
+use crate::agentic::session::{FileReadState, FileRevision, ReviewReadCoverage};
 use crate::agentic::tools::framework::ToolPathResolution;
 use crate::agentic::tools::tool_context_runtime::ToolUseContext;
 use crate::util::errors::BitFunResult;
@@ -14,6 +14,8 @@ use bitfun_agent_runtime::file_read_state::{
     validate_write_content_freshness_against_read_state,
     validate_write_mtime_freshness_against_read_state, FileMutationKind,
 };
+use sha2::{Digest, Sha256};
+use std::io::Read as _;
 use std::path::Path;
 use std::time::{SystemTime, UNIX_EPOCH};
 use tool_runtime::fs::read_file::ReadFileResult;
@@ -67,6 +69,87 @@ pub fn record_file_read_state(
         session_id,
         &resolved.logical_path,
         state,
+    );
+}
+
+pub fn review_read_receipts_enabled(context: &ToolUseContext) -> bool {
+    context.custom_data.contains_key("deep_review_run_manifest")
+        || context.agent_type.as_deref().is_some_and(|agent_type| {
+            matches!(
+                agent_type,
+                "CodeReview" | "DeepReview" | "ReviewWorker" | "ReviewJudge"
+            )
+        })
+}
+
+pub fn local_file_revision(path: &Path) -> Option<FileRevision> {
+    let mut file = std::fs::File::open(path).ok()?;
+    let metadata = file.metadata().ok()?;
+    let modified_ns = metadata
+        .modified()
+        .ok()?
+        .duration_since(UNIX_EPOCH)
+        .ok()?
+        .as_nanos();
+    let mut hasher = Sha256::new();
+    let mut buffer = [0_u8; 64 * 1024];
+    loop {
+        let read = file.read(&mut buffer).ok()?;
+        if read == 0 {
+            break;
+        }
+        hasher.update(&buffer[..read]);
+    }
+    Some(FileRevision {
+        modified_ns,
+        byte_len: metadata.len(),
+        content_sha256: hasher.finalize().into(),
+    })
+}
+
+pub fn get_review_read_coverage(
+    context: &ToolUseContext,
+    resolved: &ToolPathResolution,
+    revision: FileRevision,
+    start_line: usize,
+    limit: usize,
+) -> Option<ReviewReadCoverage> {
+    if resolved.uses_remote_workspace_backend() || !review_read_receipts_enabled(context) {
+        return None;
+    }
+    let session_id = context.session_id.as_deref()?;
+    let coordinator = get_global_coordinator()?;
+    coordinator.get_session_manager().review_read_coverage(
+        session_id,
+        &resolved.logical_path,
+        revision,
+        start_line,
+        limit,
+    )
+}
+
+pub fn record_review_read_receipt(
+    context: &ToolUseContext,
+    resolved: &ToolPathResolution,
+    revision: FileRevision,
+    read_result: &ReadFileResult,
+) {
+    if resolved.uses_remote_workspace_backend() || !review_read_receipts_enabled(context) {
+        return;
+    }
+    let Some(session_id) = context.session_id.as_deref() else {
+        return;
+    };
+    let Some(coordinator) = get_global_coordinator() else {
+        return;
+    };
+    coordinator.get_session_manager().record_review_read(
+        session_id,
+        &resolved.logical_path,
+        revision,
+        read_result.start_line,
+        read_result.end_line,
+        read_result.total_lines,
     );
 }
 
@@ -326,5 +409,41 @@ mod tests {
 
         // Without a coordinator this stays permissive in unit tests.
         assert!(validate_edit_has_prior_read(&context, &resolution).is_none());
+    }
+
+    #[test]
+    fn local_file_revision_detects_same_size_content_changes_with_restored_mtime() {
+        let temp = tempfile::tempdir().expect("temp dir");
+        let path = temp.path().join("review.txt");
+        std::fs::write(&path, b"alpha").expect("write original");
+        let original_mtime = filetime::FileTime::from_last_modification_time(
+            &std::fs::metadata(&path).expect("original metadata"),
+        );
+        let original = local_file_revision(&path).expect("original revision");
+
+        std::fs::write(&path, b"bravo").expect("write replacement");
+        filetime::set_file_mtime(&path, original_mtime).expect("restore mtime");
+        let replacement = local_file_revision(&path).expect("replacement revision");
+
+        assert_eq!(original.modified_ns, replacement.modified_ns);
+        assert_eq!(original.byte_len, replacement.byte_len);
+        assert_ne!(original.content_sha256, replacement.content_sha256);
+        assert_ne!(original, replacement);
+    }
+
+    #[test]
+    fn review_read_receipts_do_not_treat_a_custom_legacy_name_as_a_builtin_worker() {
+        let mut custom = test_context(Some("session-1"), PathBuf::from("/tmp"));
+        custom.agent_type = Some("ReviewSecurity".to_string());
+        assert!(!review_read_receipts_enabled(&custom));
+
+        custom
+            .custom_data
+            .insert("deep_review_run_manifest".to_string(), serde_json::json!({}));
+        assert!(review_read_receipts_enabled(&custom));
+
+        let mut worker = test_context(Some("session-2"), PathBuf::from("/tmp"));
+        worker.agent_type = Some("ReviewWorker".to_string());
+        assert!(review_read_receipts_enabled(&worker));
     }
 }

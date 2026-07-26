@@ -167,6 +167,10 @@
     &--folder {
       color: color-mix(in srgb, var(--color-warning) 85%, transparent);
     }
+
+    &--session {
+      color: color-mix(in srgb, var(--color-success) 85%, transparent);
+    }
   }
   
   &__item-name {
@@ -178,6 +182,16 @@
     overflow: hidden;
     text-overflow: ellipsis;
     line-height: var(--flowchat-support-line-height);
+  }
+
+  &__item-detail {
+    flex-shrink: 1;
+    max-width: 42%;
+    color: var(--color-text-muted);
+    font-size: var(--flowchat-font-size-xs);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
   
   &__expand-icon {

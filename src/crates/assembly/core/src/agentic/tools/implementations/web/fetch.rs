@@ -3,7 +3,7 @@ use super::readable::{
     RequestedFormat,
 };
 use crate::agentic::tools::framework::{
-    Tool, ToolExposure, ToolResult, ToolUseContext, ValidationResult,
+    PermissionIntent, Tool, ToolExposure, ToolResult, ToolUseContext, ValidationResult,
 };
 use crate::util::errors::{BitFunError, BitFunResult};
 use async_trait::async_trait;
@@ -87,8 +87,21 @@ Example usage:
         true
     }
 
-    fn needs_permissions(&self, _input: Option<&Value>) -> bool {
-        false
+    fn permission_intents(
+        &self,
+        input: &Value,
+        _context: &ToolUseContext,
+    ) -> BitFunResult<Vec<PermissionIntent>> {
+        let url = input
+            .get("url")
+            .and_then(Value::as_str)
+            .map(str::trim)
+            .filter(|url| !url.is_empty())
+            .ok_or_else(|| BitFunError::validation("url is required".to_string()))?;
+        Ok(vec![PermissionIntent::new(
+            "webfetch",
+            vec![url.to_string()],
+        )])
     }
 
     async fn validate_input(

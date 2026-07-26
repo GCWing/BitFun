@@ -1,6 +1,7 @@
 import React, { useCallback, memo } from 'react';
 import { Download, Copy, X, AlertCircle } from 'lucide-react';
-import { MarkdownRenderer, IconButton } from '@/component-library';
+import { IconButton } from '@/component-library';
+import { Markdown as MarkdownRenderer } from '@/component-library/components/Markdown/Markdown';
 import { useI18n } from '@/infrastructure/i18n';
 import { createLogger } from '@/shared/utils/logger';
 import { globalEventBus } from '@/infrastructure/event-bus';

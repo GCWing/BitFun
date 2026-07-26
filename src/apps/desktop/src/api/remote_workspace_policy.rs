@@ -117,6 +117,14 @@ pub const REMOTE_WORKSPACE_COMMAND_POLICIES: &[(&str, RemoteWorkspacePolicy)] = 
         RemoteWorkspacePolicy::WorkspaceAgnostic,
     ),
     ("account_login", RemoteWorkspacePolicy::WorkspaceAgnostic),
+    (
+        "account_finalize_login",
+        RemoteWorkspacePolicy::WorkspaceAgnostic,
+    ),
+    (
+        "account_cancel_pending_login",
+        RemoteWorkspacePolicy::WorkspaceAgnostic,
+    ),
     ("account_logout", RemoteWorkspacePolicy::WorkspaceAgnostic),
     (
         "account_online_devices",
@@ -145,6 +153,10 @@ pub const REMOTE_WORKSPACE_COMMAND_POLICIES: &[(&str, RemoteWorkspacePolicy)] = 
     ),
     ("add_skill", RemoteWorkspacePolicy::LegacyUnaudited),
     ("analyze_work_state", RemoteWorkspacePolicy::LegacyUnaudited),
+    (
+        "apply_external_source_control_action_command",
+        RemoteWorkspacePolicy::RemoteUnsupported,
+    ),
     ("apply_patch", RemoteWorkspacePolicy::LegacyUnaudited),
     (
         "archive_all_sessions",
@@ -186,7 +198,7 @@ pub const REMOTE_WORKSPACE_COMMAND_POLICIES: &[(&str, RemoteWorkspacePolicy)] = 
     ("cancel_dialog_turn", RemoteWorkspacePolicy::LegacyUnaudited),
     (
         "cancel_insights_generation",
-        RemoteWorkspacePolicy::LegacyUnaudited,
+        RemoteWorkspacePolicy::LocalOnly,
     ),
     (
         "cancel_mcp_remote_oauth",
@@ -194,6 +206,10 @@ pub const REMOTE_WORKSPACE_COMMAND_POLICIES: &[(&str, RemoteWorkspacePolicy)] = 
     ),
     ("cancel_search", RemoteWorkspacePolicy::LegacyUnaudited),
     ("cancel_session", RemoteWorkspacePolicy::LegacyUnaudited),
+    (
+        "cancel_subscription_login",
+        RemoteWorkspacePolicy::LocalOnly,
+    ),
     ("cancel_tool", RemoteWorkspacePolicy::LegacyUnaudited),
     ("cancel_transfer", RemoteWorkspacePolicy::LegacyUnaudited),
     (
@@ -218,6 +234,14 @@ pub const REMOTE_WORKSPACE_COMMAND_POLICIES: &[(&str, RemoteWorkspacePolicy)] = 
     ),
     ("check_path_exists", RemoteWorkspacePolicy::LegacyUnaudited),
     (
+        "choose_external_mcp_conflict_command",
+        RemoteWorkspacePolicy::RemoteUnsupported,
+    ),
+    (
+        "choose_external_subagent_conflict_command",
+        RemoteWorkspacePolicy::RemoteUnsupported,
+    ),
+    (
         "cleanup_invalid_workspaces",
         RemoteWorkspacePolicy::LegacyUnaudited,
     ),
@@ -236,7 +260,7 @@ pub const REMOTE_WORKSPACE_COMMAND_POLICIES: &[(&str, RemoteWorkspacePolicy)] = 
     ),
     ("close_workspace", RemoteWorkspacePolicy::LegacyUnaudited),
     ("compact_session", RemoteWorkspacePolicy::LegacyUnaudited),
-    ("compress_path", RemoteWorkspacePolicy::LegacyUnaudited),
+    ("compress_path", RemoteWorkspacePolicy::RemoteRouted),
     ("compute_diff", RemoteWorkspacePolicy::LegacyUnaudited),
     ("computer_use_get_status", RemoteWorkspacePolicy::LocalOnly),
     (
@@ -246,10 +270,6 @@ pub const REMOTE_WORKSPACE_COMMAND_POLICIES: &[(&str, RemoteWorkspacePolicy)] = 
     (
         "computer_use_request_permissions",
         RemoteWorkspacePolicy::LocalOnly,
-    ),
-    (
-        "confirm_tool_execution",
-        RemoteWorkspacePolicy::LegacyUnaudited,
     ),
     (
         "control_background_command",
@@ -281,7 +301,7 @@ pub const REMOTE_WORKSPACE_COMMAND_POLICIES: &[(&str, RemoteWorkspacePolicy)] = 
     ("debug_devtools_available", RemoteWorkspacePolicy::LocalOnly),
     ("debug_element_picked", RemoteWorkspacePolicy::LocalOnly),
     ("debug_open_devtools", RemoteWorkspacePolicy::LocalOnly),
-    ("decompress_path", RemoteWorkspacePolicy::LegacyUnaudited),
+    ("decompress_path", RemoteWorkspacePolicy::RemoteRouted),
     (
         "delete_agent_companion_pet_package",
         RemoteWorkspacePolicy::LegacyUnaudited,
@@ -310,10 +330,6 @@ pub const REMOTE_WORKSPACE_COMMAND_POLICIES: &[(&str, RemoteWorkspacePolicy)] = 
     ("delete_session", RemoteWorkspacePolicy::LegacyUnaudited),
     ("delete_skill", RemoteWorkspacePolicy::LegacyUnaudited),
     ("delete_subagent", RemoteWorkspacePolicy::LegacyUnaudited),
-    (
-        "discover_cli_credentials",
-        RemoteWorkspacePolicy::LegacyUnaudited,
-    ),
     (
         "dismiss_announcement",
         RemoteWorkspacePolicy::WorkspaceAgnostic,
@@ -371,7 +387,7 @@ pub const REMOTE_WORKSPACE_COMMAND_POLICIES: &[(&str, RemoteWorkspacePolicy)] = 
         "generate_greeting_only",
         RemoteWorkspacePolicy::LegacyUnaudited,
     ),
-    ("generate_insights", RemoteWorkspacePolicy::LegacyUnaudited),
+    ("generate_insights", RemoteWorkspacePolicy::RemoteRouted),
     (
         "generate_session_title",
         RemoteWorkspacePolicy::LegacyUnaudited,
@@ -443,7 +459,19 @@ pub const REMOTE_WORKSPACE_COMMAND_POLICIES: &[(&str, RemoteWorkspacePolicy)] = 
         RemoteWorkspacePolicy::LegacyUnaudited,
     ),
     (
+        "get_external_hook_catalog",
+        RemoteWorkspacePolicy::RemoteUnsupported,
+    ),
+    (
         "get_external_source_snapshot",
+        RemoteWorkspacePolicy::RemoteUnsupported,
+    ),
+    (
+        "reveal_external_source_location",
+        RemoteWorkspacePolicy::RemoteUnsupported,
+    ),
+    (
+        "get_external_source_control_snapshot",
         RemoteWorkspacePolicy::RemoteUnsupported,
     ),
     (
@@ -469,10 +497,7 @@ pub const REMOTE_WORKSPACE_COMMAND_POLICIES: &[(&str, RemoteWorkspacePolicy)] = 
         "get_health_status",
         RemoteWorkspacePolicy::WorkspaceAgnostic,
     ),
-    (
-        "get_latest_insights",
-        RemoteWorkspacePolicy::LegacyUnaudited,
-    ),
+    ("get_latest_insights", RemoteWorkspacePolicy::LocalOnly),
     ("get_mcp_prompt", RemoteWorkspacePolicy::LegacyUnaudited),
     (
         "get_mcp_remote_oauth_session",
@@ -581,6 +606,10 @@ pub const REMOTE_WORKSPACE_COMMAND_POLICIES: &[(&str, RemoteWorkspacePolicy)] = 
         "get_subagent_detail",
         RemoteWorkspacePolicy::LegacyUnaudited,
     ),
+    (
+        "get_subscription_login_status",
+        RemoteWorkspacePolicy::LocalOnly,
+    ),
     ("get_system_info", RemoteWorkspacePolicy::WorkspaceAgnostic),
     ("get_tool_info", RemoteWorkspacePolicy::LegacyUnaudited),
     ("get_turn_files", RemoteWorkspacePolicy::LegacyUnaudited),
@@ -636,7 +665,7 @@ pub const REMOTE_WORKSPACE_COMMAND_POLICIES: &[(&str, RemoteWorkspacePolicy)] = 
         "grant_miniapp_workspace",
         RemoteWorkspacePolicy::LegacyUnaudited,
     ),
-    ("has_insights_data", RemoteWorkspacePolicy::LegacyUnaudited),
+    ("has_insights_data", RemoteWorkspacePolicy::RemoteRouted),
     (
         "hide_agent_companion_desktop_pet",
         RemoteWorkspacePolicy::LocalOnly,
@@ -718,6 +747,26 @@ pub const REMOTE_WORKSPACE_COMMAND_POLICIES: &[(&str, RemoteWorkspacePolicy)] = 
         "list_background_command_activities",
         RemoteWorkspacePolicy::LegacyUnaudited,
     ),
+    (
+        "list_pending_permission_requests",
+        RemoteWorkspacePolicy::WorkspaceAgnostic,
+    ),
+    (
+        "list_project_permission_grants",
+        RemoteWorkspacePolicy::WorkspaceAgnostic,
+    ),
+    (
+        "list_project_permission_audit",
+        RemoteWorkspacePolicy::WorkspaceAgnostic,
+    ),
+    (
+        "get_project_permission_rules",
+        RemoteWorkspacePolicy::RemoteRouted,
+    ),
+    (
+        "save_project_permission_rules",
+        RemoteWorkspacePolicy::RemoteRouted,
+    ),
     ("list_cron_jobs", RemoteWorkspacePolicy::LegacyUnaudited),
     (
         "list_directory_files",
@@ -725,7 +774,7 @@ pub const REMOTE_WORKSPACE_COMMAND_POLICIES: &[(&str, RemoteWorkspacePolicy)] = 
     ),
     (
         "list_manageable_subagents",
-        RemoteWorkspacePolicy::LegacyUnaudited,
+        RemoteWorkspacePolicy::RemoteRouted,
     ),
     ("list_mcp_prompts", RemoteWorkspacePolicy::LegacyUnaudited),
     ("list_mcp_resources", RemoteWorkspacePolicy::LegacyUnaudited),
@@ -740,10 +789,14 @@ pub const REMOTE_WORKSPACE_COMMAND_POLICIES: &[(&str, RemoteWorkspacePolicy)] = 
     ),
     ("list_sessions", RemoteWorkspacePolicy::LegacyUnaudited),
     ("list_skill_market", RemoteWorkspacePolicy::LegacyUnaudited),
-    ("list_subagents", RemoteWorkspacePolicy::LegacyUnaudited),
+    ("list_subagents", RemoteWorkspacePolicy::RemoteRouted),
+    (
+        "list_subscription_accounts",
+        RemoteWorkspacePolicy::LocalOnly,
+    ),
     (
         "list_visible_subagents",
-        RemoteWorkspacePolicy::LegacyUnaudited,
+        RemoteWorkspacePolicy::RemoteRouted,
     ),
     (
         "load_acp_json_config",
@@ -758,10 +811,7 @@ pub const REMOTE_WORKSPACE_COMMAND_POLICIES: &[(&str, RemoteWorkspacePolicy)] = 
         "load_git_repo_history",
         RemoteWorkspacePolicy::LegacyUnaudited,
     ),
-    (
-        "load_insights_report",
-        RemoteWorkspacePolicy::LegacyUnaudited,
-    ),
+    ("load_insights_report", RemoteWorkspacePolicy::LocalOnly),
     (
         "load_mcp_json_config",
         RemoteWorkspacePolicy::LegacyUnaudited,
@@ -771,6 +821,10 @@ pub const REMOTE_WORKSPACE_COMMAND_POLICIES: &[(&str, RemoteWorkspacePolicy)] = 
         RemoteWorkspacePolicy::LegacyUnaudited,
     ),
     ("load_session_turns", RemoteWorkspacePolicy::LegacyUnaudited),
+    (
+        "logout_subscription_account",
+        RemoteWorkspacePolicy::LocalOnly,
+    ),
     (
         "lsp_change_document",
         RemoteWorkspacePolicy::LegacyUnaudited,
@@ -1023,6 +1077,25 @@ pub const REMOTE_WORKSPACE_COMMAND_POLICIES: &[(&str, RemoteWorkspacePolicy)] = 
     ),
     ("open_remote_workspace", RemoteWorkspacePolicy::RemoteRouted),
     ("open_workspace", RemoteWorkspacePolicy::LegacyUnaudited),
+    (
+        "page_create_open_link",
+        RemoteWorkspacePolicy::WorkspaceAgnostic,
+    ),
+    ("page_delete", RemoteWorkspacePolicy::WorkspaceAgnostic),
+    (
+        "page_delete_version",
+        RemoteWorkspacePolicy::WorkspaceAgnostic,
+    ),
+    ("page_deploy", RemoteWorkspacePolicy::WorkspaceAgnostic),
+    ("page_list", RemoteWorkspacePolicy::WorkspaceAgnostic),
+    (
+        "page_list_versions",
+        RemoteWorkspacePolicy::WorkspaceAgnostic,
+    ),
+    ("page_publish", RemoteWorkspacePolicy::LocalOnly),
+    ("page_save_version", RemoteWorkspacePolicy::LocalOnly),
+    ("page_unpublish", RemoteWorkspacePolicy::WorkspaceAgnostic),
+    ("page_update", RemoteWorkspacePolicy::WorkspaceAgnostic),
     ("paste_files", RemoteWorkspacePolicy::LegacyUnaudited),
     (
         "peer_control_attach",
@@ -1070,18 +1143,30 @@ pub const REMOTE_WORKSPACE_COMMAND_POLICIES: &[(&str, RemoteWorkspacePolicy)] = 
     ("read_mcp_resource", RemoteWorkspacePolicy::LegacyUnaudited),
     ("record_file_change", RemoteWorkspacePolicy::LegacyUnaudited),
     (
-        "refresh_cli_credential",
+        "refresh_model_client",
         RemoteWorkspacePolicy::LegacyUnaudited,
     ),
     (
-        "refresh_model_client",
-        RemoteWorkspacePolicy::LegacyUnaudited,
+        "refresh_subscription_account",
+        RemoteWorkspacePolicy::LocalOnly,
     ),
     ("reject_file", RemoteWorkspacePolicy::LegacyUnaudited),
     ("reject_operation", RemoteWorkspacePolicy::LegacyUnaudited),
     (
-        "reject_tool_execution",
-        RemoteWorkspacePolicy::LegacyUnaudited,
+        "respond_permission",
+        RemoteWorkspacePolicy::WorkspaceAgnostic,
+    ),
+    (
+        "respond_permission_batch",
+        RemoteWorkspacePolicy::WorkspaceAgnostic,
+    ),
+    (
+        "remove_project_permission_grant",
+        RemoteWorkspacePolicy::WorkspaceAgnostic,
+    ),
+    (
+        "clear_project_permission_grants",
+        RemoteWorkspacePolicy::WorkspaceAgnostic,
     ),
     ("reload_config", RemoteWorkspacePolicy::LegacyUnaudited),
     (
@@ -1093,6 +1178,37 @@ pub const REMOTE_WORKSPACE_COMMAND_POLICIES: &[(&str, RemoteWorkspacePolicy)] = 
         RemoteWorkspacePolicy::LegacyUnaudited,
     ),
     ("reload_subagents", RemoteWorkspacePolicy::LegacyUnaudited),
+    // One-click self-hosted relay (SSH to user host). WorkspaceAgnostic: uses
+    // an SSH connection id, not the open project workspace. See
+    // src/web-ui/src/features/relay-deploy/README.md.
+    (
+        "relay_deploy_cancel",
+        RemoteWorkspacePolicy::WorkspaceAgnostic,
+    ),
+    (
+        "relay_deploy_install_docker",
+        RemoteWorkspacePolicy::WorkspaceAgnostic,
+    ),
+    (
+        "relay_deploy_poll",
+        RemoteWorkspacePolicy::WorkspaceAgnostic,
+    ),
+    (
+        "relay_deploy_preflight",
+        RemoteWorkspacePolicy::WorkspaceAgnostic,
+    ),
+    (
+        "relay_deploy_register",
+        RemoteWorkspacePolicy::WorkspaceAgnostic,
+    ),
+    (
+        "relay_deploy_start",
+        RemoteWorkspacePolicy::WorkspaceAgnostic,
+    ),
+    (
+        "relay_deploy_verify",
+        RemoteWorkspacePolicy::WorkspaceAgnostic,
+    ),
     (
         "remote_close_workspace",
         RemoteWorkspacePolicy::RemoteRouted,
@@ -1321,6 +1437,10 @@ pub const REMOTE_WORKSPACE_COMMAND_POLICIES: &[(&str, RemoteWorkspacePolicy)] = 
     ("search_filenames", RemoteWorkspacePolicy::LegacyUnaudited),
     ("search_files", RemoteWorkspacePolicy::LegacyUnaudited),
     (
+        "search_referenceable_sessions",
+        RemoteWorkspacePolicy::WorkspaceAgnostic,
+    ),
+    (
         "search_get_repo_status",
         RemoteWorkspacePolicy::RemoteRouted,
     ),
@@ -1339,6 +1459,10 @@ pub const REMOTE_WORKSPACE_COMMAND_POLICIES: &[(&str, RemoteWorkspacePolicy)] = 
     ),
     ("send_system_notification", RemoteWorkspacePolicy::LocalOnly),
     (
+        "set_acp_session_config_option",
+        RemoteWorkspacePolicy::RemoteRouted,
+    ),
+    (
         "set_acp_session_model",
         RemoteWorkspacePolicy::LegacyUnaudited,
     ),
@@ -1351,6 +1475,10 @@ pub const REMOTE_WORKSPACE_COMMAND_POLICIES: &[(&str, RemoteWorkspacePolicy)] = 
         RemoteWorkspacePolicy::LegacyUnaudited,
     ),
     ("set_config", RemoteWorkspacePolicy::LegacyUnaudited),
+    (
+        "set_external_mcp_server_decision_command",
+        RemoteWorkspacePolicy::RemoteUnsupported,
+    ),
     (
         "set_external_source_conflict_choice_command",
         RemoteWorkspacePolicy::RemoteUnsupported,
@@ -1365,6 +1493,10 @@ pub const REMOTE_WORKSPACE_COMMAND_POLICIES: &[(&str, RemoteWorkspacePolicy)] = 
     ),
     (
         "set_external_tool_target_decision_command",
+        RemoteWorkspacePolicy::RemoteUnsupported,
+    ),
+    (
+        "set_external_subagent_activation_command",
         RemoteWorkspacePolicy::RemoteUnsupported,
     ),
     ("set_macos_edit_menu_mode", RemoteWorkspacePolicy::LocalOnly),
@@ -1434,6 +1566,10 @@ pub const REMOTE_WORKSPACE_COMMAND_POLICIES: &[(&str, RemoteWorkspacePolicy)] = 
         RemoteWorkspacePolicy::LegacyUnaudited,
     ),
     ("start_dialog_turn", RemoteWorkspacePolicy::LegacyUnaudited),
+    (
+        "subscribe_permission_requests",
+        RemoteWorkspacePolicy::WorkspaceAgnostic,
+    ),
     ("start_file_watch", RemoteWorkspacePolicy::LegacyUnaudited),
     (
         "start_mcp_remote_oauth",
@@ -1448,6 +1584,7 @@ pub const REMOTE_WORKSPACE_COMMAND_POLICIES: &[(&str, RemoteWorkspacePolicy)] = 
         "start_search_filenames_stream",
         RemoteWorkspacePolicy::LegacyUnaudited,
     ),
+    ("start_subscription_login", RemoteWorkspacePolicy::LocalOnly),
     ("startup_window_control", RemoteWorkspacePolicy::LocalOnly),
     ("steer_dialog_turn", RemoteWorkspacePolicy::LegacyUnaudited),
     ("stop_acp_client", RemoteWorkspacePolicy::LegacyUnaudited),
@@ -1522,6 +1659,10 @@ pub const REMOTE_WORKSPACE_COMMAND_POLICIES: &[(&str, RemoteWorkspacePolicy)] = 
     (
         "update_custom_agent",
         RemoteWorkspacePolicy::LegacyUnaudited,
+    ),
+    (
+        "update_external_integration_policy_command",
+        RemoteWorkspacePolicy::RemoteUnsupported,
     ),
     (
         "update_mcp_remote_auth",
@@ -1641,6 +1782,23 @@ mod tests {
         );
     }
 
+    #[test]
+    fn external_source_control_web_command_is_registered() {
+        const COMMAND: &str = "get_external_source_control_snapshot";
+        let web_api = include_str!(
+            "../../../../web-ui/src/infrastructure/api/service-api/ExternalSourcesAPI.ts"
+        );
+
+        assert!(
+            web_api.contains(&format!("invokeSurfaceSnapshot('{COMMAND}'")),
+            "Web UI must invoke the stable external-source control command"
+        );
+        assert!(
+            registered_commands().contains(COMMAND),
+            "Desktop must register the external-source control command invoked by Web UI"
+        );
+    }
+
     /// `LegacyUnaudited` is a frozen backlog: commands may graduate out of it
     /// once their remote workspace behavior is audited, but no command may be
     /// added to it. Do not append to this list; give new commands a real
@@ -1697,7 +1855,6 @@ mod tests {
         "compact_session",
         "compress_path",
         "compute_diff",
-        "confirm_tool_execution",
         "control_background_command",
         "control_deep_review_queue",
         "create_acp_flow_session",
@@ -1723,7 +1880,6 @@ mod tests {
         "delete_session",
         "delete_skill",
         "delete_subagent",
-        "discover_cli_credentials",
         "download_skill_market",
         "editor_ai_cancel",
         "editor_ai_stream",
@@ -1931,11 +2087,9 @@ mod tests {
         "read_file_content",
         "read_mcp_resource",
         "record_file_change",
-        "refresh_cli_credential",
         "refresh_model_client",
         "reject_file",
         "reject_operation",
-        "reject_tool_execution",
         "reload_config",
         "reload_custom_agents",
         "reload_global_config",
@@ -1972,6 +2126,7 @@ mod tests {
         "search_file_contents",
         "search_filenames",
         "search_files",
+        "search_referenceable_sessions",
         "search_skill_market",
         "send_background_command_input",
         "send_mcp_app_message",
