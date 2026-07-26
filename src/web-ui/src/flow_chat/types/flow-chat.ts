@@ -469,6 +469,9 @@ export interface Session {
   /** Per-run reviewer manifest for Deep Review child sessions. */
   deepReviewRunManifest?: ReviewTeamRunManifest;
 
+  /** Runtime-admitted live projection of a focused Review label. */
+  focusedReviewDisplayLabel?: string;
+
   /** Immutable target identity used to associate Review results with a PR or Git target. */
   reviewTargetEvidence?: ReviewTargetEvidence;
 

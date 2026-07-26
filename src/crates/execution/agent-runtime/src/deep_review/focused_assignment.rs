@@ -6,6 +6,10 @@ use std::collections::HashSet;
 
 const ASSIGNMENT_TEXT_LIMIT: usize = 1_000;
 const ASSIGNMENT_PATH_LIMIT: usize = 128;
+const PUBLIC_DISPLAY_LABEL_CHAR_LIMIT: usize = 80;
+const PUBLIC_DISPLAY_LABEL_WORD_LIMIT: usize = 8;
+const INTERNAL_DISPLAY_LABEL_TERMS: [&str; 3] =
+    ["launchreviewagent", "reviewjudge", "reviewworker"];
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum FocusedReviewPathAccess {
@@ -18,6 +22,8 @@ pub enum FocusedReviewPathAccess {
 #[serde(rename_all = "camelCase")]
 pub struct FocusedReviewAssignment {
     question_id: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    display_label: Option<String>,
     question: String,
     independent_value: String,
     target_fingerprint: String,
@@ -61,6 +67,7 @@ impl FocusedReviewAssignment {
         let expected_evidence =
             bounded_string(object.get("expected_evidence"), "expected_evidence")?;
         let capability_key = bounded_string(object.get("capability_key"), "capability_key")?;
+        let display_label = parse_public_display_label(object.get("display_label"));
         let capability_fingerprint = bounded_string(
             object.get("capability_fingerprint"),
             "capability_fingerprint",
@@ -108,6 +115,7 @@ impl FocusedReviewAssignment {
         let question_id = derive_question_id(&question, &target_fingerprint);
         Ok(Self {
             question_id,
+            display_label,
             question,
             independent_value,
             target_fingerprint,
@@ -125,12 +133,16 @@ impl FocusedReviewAssignment {
         else {
             return Ok(None);
         };
-        let assignment = serde_json::from_value::<Self>(raw.clone()).map_err(|_| {
+        let mut assignment = serde_json::from_value::<Self>(raw.clone()).map_err(|_| {
             violation(
                 "focused_review_assignment_invalid",
                 "focusedAssignment is malformed",
             )
         })?;
+        assignment.display_label = assignment
+            .display_label
+            .as_deref()
+            .and_then(sanitize_public_display_label);
         let evidence = ReviewTargetEvidence::from_manifest(manifest)
             .map_err(|error| violation("focused_review_target_invalid", error.to_string()))?
             .ok_or_else(|| {
@@ -161,6 +173,10 @@ impl FocusedReviewAssignment {
 
     pub fn question_id(&self) -> &str {
         &self.question_id
+    }
+
+    pub fn display_label(&self) -> Option<&str> {
+        self.display_label.as_deref()
     }
 
     pub fn question(&self) -> &str {
@@ -261,6 +277,118 @@ fn bounded_string(
                 "focused_review_assignment_invalid",
                 format!("focused_assignment.{field} must be a bounded non-empty string"),
             )
+        })
+}
+
+fn parse_public_display_label(raw: Option<&Value>) -> Option<String> {
+    raw.and_then(Value::as_str)
+        .and_then(sanitize_public_display_label)
+}
+
+fn sanitize_public_display_label(value: &str) -> Option<String> {
+    let normalized = value.split_whitespace().collect::<Vec<_>>().join(" ");
+    let words = normalized.split_whitespace().collect::<Vec<_>>();
+    let is_plain_label = (2..=PUBLIC_DISPLAY_LABEL_CHAR_LIMIT)
+        .contains(&normalized.chars().count())
+        && !words.is_empty()
+        && words.len() <= PUBLIC_DISPLAY_LABEL_WORD_LIMIT
+        && normalized.chars().all(|character| {
+            character.is_alphanumeric()
+                || character.is_whitespace()
+                || matches!(
+                    character,
+                    '-' | '.' | ',' | '\'' | '’' | '&' | '+' | '(' | ')'
+                )
+        });
+    let terms = normalized
+        .split(|character: char| !character.is_alphanumeric())
+        .filter(|term| !term.is_empty())
+        .collect::<Vec<_>>();
+    let contains_internal_term = terms.iter().any(|term| {
+        INTERNAL_DISPLAY_LABEL_TERMS
+            .iter()
+            .any(|reserved| term.eq_ignore_ascii_case(reserved))
+    }) || terms.windows(2).any(|window| {
+        (window[0].eq_ignore_ascii_case("review")
+            && (window[1].eq_ignore_ascii_case("worker")
+                || window[1].eq_ignore_ascii_case("judge")))
+            || (window[0].eq_ignore_ascii_case("packet")
+                && window[1]
+                    .chars()
+                    .all(|character| character.is_ascii_digit()))
+    }) || terms.windows(3).any(|window| {
+        window[0].eq_ignore_ascii_case("launch")
+            && window[1].eq_ignore_ascii_case("review")
+            && window[2].eq_ignore_ascii_case("agent")
+    });
+    let contains_structured_identifier = terms.iter().any(|term| {
+        let mut previous_was_lowercase = false;
+        let mut lowercase_to_uppercase_transitions = 0;
+        for character in term.chars() {
+            if previous_was_lowercase && character.is_ascii_uppercase() {
+                lowercase_to_uppercase_transitions += 1;
+            }
+            previous_was_lowercase = character.is_ascii_lowercase();
+        }
+        let long_hex =
+            term.len() >= 16 && term.chars().all(|character| character.is_ascii_hexdigit());
+        lowercase_to_uppercase_transitions >= 2 || long_hex
+    }) || contains_uuid(&normalized);
+
+    (is_plain_label
+        && !terms.is_empty()
+        && !contains_internal_term
+        && !contains_structured_identifier)
+        .then_some(normalized)
+}
+
+/// Re-admits the only focused-check field that crosses from a persisted run
+/// manifest into product UI. Other execution metadata is preserved verbatim.
+pub fn sanitize_focused_review_public_metadata(manifest: &mut Value) {
+    let assignment_key = if manifest.get("focusedAssignment").is_some() {
+        "focusedAssignment"
+    } else {
+        "focused_assignment"
+    };
+    let Some(assignment) = manifest
+        .get_mut(assignment_key)
+        .and_then(Value::as_object_mut)
+    else {
+        return;
+    };
+
+    for key in ["displayLabel", "display_label"] {
+        if !assignment.contains_key(key) {
+            continue;
+        }
+        let admitted = assignment
+            .get(key)
+            .and_then(Value::as_str)
+            .and_then(sanitize_public_display_label);
+        if let Some(label) = admitted {
+            assignment.insert(key.to_string(), Value::String(label));
+        } else {
+            assignment.remove(key);
+        }
+    }
+}
+
+fn contains_uuid(value: &str) -> bool {
+    value
+        .split(|character: char| !(character.is_ascii_hexdigit() || character == '-'))
+        .filter(|token| !token.is_empty())
+        .any(|token| {
+            let segments = token.split('-').collect::<Vec<_>>();
+            segments.len() == 5
+                && segments
+                    .iter()
+                    .zip([8, 4, 4, 4, 12])
+                    .all(|(segment, expected_len)| {
+                        segment.len() == expected_len
+                            && segment
+                                .chars()
+                                .all(|character| character.is_ascii_hexdigit())
+                    })
         })
 }
 
@@ -389,6 +517,7 @@ mod tests {
         let assignment = FocusedReviewAssignment::from_input(
             &manifest(),
             &json!({
+                "display_label": "Rename discovery boundary",
                 "question": "Could the rename break module discovery?",
                 "independent_value": "The primary review found an unresolved rename boundary.",
                 "target_fingerprint": "target-12345678",
@@ -401,6 +530,14 @@ mod tests {
         )
         .expect("assignment should be valid");
 
+        assert_eq!(
+            assignment.display_label(),
+            Some("Rename discovery boundary")
+        );
+        assert_eq!(
+            assignment.to_value()["displayLabel"],
+            "Rename discovery boundary"
+        );
         assert_eq!(assignment.allowed_changed_paths(), &["src/new.rs"]);
         let evidence = ReviewTargetEvidence::from_manifest(&manifest())
             .expect("evidence should parse")
@@ -424,6 +561,7 @@ mod tests {
         let error = FocusedReviewAssignment::from_input(
             &manifest(),
             &json!({
+                "display_label": "Missing path boundary",
                 "question": "Is this safe?",
                 "independent_value": "The primary review needs independent evidence.",
                 "target_fingerprint": "target-12345678",
@@ -449,6 +587,7 @@ mod tests {
         let assignment = FocusedReviewAssignment::from_input(
             &manifest,
             &json!({
+                "display_label": "Exact path handling",
                 "question": "Is this path handled exactly?",
                 "independent_value": "The path boundary needs independent evidence.",
                 "target_fingerprint": "target-12345678",
@@ -474,6 +613,7 @@ mod tests {
         let assignment = FocusedReviewAssignment::from_input(
             &manifest,
             &json!({
+                "display_label": "Renamed caller boundary",
                 "question": "Could the renamed implementation break callers?",
                 "independent_value": "The renamed implementation needs isolated evidence.",
                 "target_fingerprint": "target-12345678",
@@ -499,6 +639,7 @@ mod tests {
     fn question_identity_is_stable_across_disjoint_target_scopes() {
         let input_for = |path: &str, capability: &str| {
             json!({
+                "display_label": "Caller contract boundary",
                 "question": "Could this contract break callers?",
                 "independent_value": "The same question needs evidence from disjoint packets.",
                 "target_fingerprint": "target-12345678",
@@ -522,5 +663,119 @@ mod tests {
         .expect("second scope should be valid");
 
         assert_eq!(first.question_id(), second.question_id());
+    }
+
+    #[test]
+    fn assignment_drops_internal_coordination_from_the_optional_display_label() {
+        for display_label in [
+            "ReviewWorker packet-7",
+            "Review Worker boundary",
+            "Review-Judge result",
+            "Launch Review Agent check",
+            "Focused packet-7 boundary",
+            "CodeReviewTesting",
+            "abcdef0123456789",
+            "Check 550e8400-e29b-41d4-a716-446655440000",
+            "Check g550e8400-e29b-41d4-a716-446655440000z",
+            "--",
+        ] {
+            let assignment = FocusedReviewAssignment::from_input(
+                &manifest(),
+                &json!({
+                    "display_label": display_label,
+                    "question": "Could this contract break callers?",
+                    "independent_value": "The primary review needs independent evidence.",
+                    "target_fingerprint": "target-12345678",
+                    "allowed_changed_paths": ["src/new.rs"],
+                    "expected_evidence": "A concrete call path.",
+                    "capability_key": "builtin::review-worker",
+                    "capability_fingerprint": "capability-12345678"
+                }),
+                None,
+            )
+            .expect("an optional display label must not block the focused check");
+
+            assert_eq!(assignment.display_label(), None, "label: {display_label}");
+        }
+    }
+
+    #[test]
+    fn assignment_accepts_plain_domain_language_in_the_display_label() {
+        for display_label in [
+            "Cross-workspace OAuth 2.0 boundary",
+            "OAuth token refresh",
+            "Path traversal boundary",
+            "Data model migration",
+            "Testing concern",
+            "iOS authentication",
+            "GitHub OAuth",
+            "OpenAI client timeout",
+            "GraphQL schema",
+        ] {
+            let assignment = FocusedReviewAssignment::from_input(
+                &manifest(),
+                &json!({
+                    "display_label": display_label,
+                    "question": "Could this contract break callers?",
+                    "independent_value": "The primary review needs independent evidence.",
+                    "target_fingerprint": "target-12345678",
+                    "allowed_changed_paths": ["src/new.rs"],
+                    "expected_evidence": "A concrete call path.",
+                    "capability_key": "skill:project::custom::code-review-testing",
+                    "capability_fingerprint": "capability-12345678"
+                }),
+                None,
+            )
+            .expect("plain domain language should be accepted");
+
+            assert_eq!(assignment.display_label(), Some(display_label));
+        }
+    }
+
+    #[test]
+    fn restored_assignment_drops_an_unsafe_persisted_display_label() {
+        let mut child_manifest = manifest();
+        let assignment = FocusedReviewAssignment::from_input(
+            &child_manifest,
+            &json!({
+                "display_label": "Authentication boundary",
+                "question": "Could this contract break callers?",
+                "independent_value": "The primary review needs independent evidence.",
+                "target_fingerprint": "target-12345678",
+                "allowed_changed_paths": ["src/new.rs"],
+                "expected_evidence": "A concrete call path.",
+                "capability_key": "builtin::review-worker",
+                "capability_fingerprint": "capability-12345678"
+            }),
+            None,
+        )
+        .expect("assignment should be valid");
+        child_manifest["focusedAssignment"] = assignment.to_value();
+        child_manifest["focusedAssignment"]["displayLabel"] = json!("ReviewWorker packet 7");
+
+        let restored = FocusedReviewAssignment::from_manifest(&child_manifest)
+            .expect("restored assignment should remain usable")
+            .expect("focused assignment should exist");
+
+        assert_eq!(restored.display_label(), None);
+    }
+
+    #[test]
+    fn public_metadata_sanitizer_preserves_manifest_and_drops_only_an_unsafe_label() {
+        let mut manifest = json!({
+            "reviewMode": "deep",
+            "focusedAssignment": {
+                "displayLabel": "Review Worker packet 7",
+                "question": "Could this contract break callers?"
+            }
+        });
+
+        sanitize_focused_review_public_metadata(&mut manifest);
+
+        assert!(manifest["focusedAssignment"].get("displayLabel").is_none());
+        assert_eq!(
+            manifest["focusedAssignment"]["question"],
+            "Could this contract break callers?"
+        );
     }
 }

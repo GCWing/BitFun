@@ -239,6 +239,27 @@
     background: rgba(var(--task-failed-badge-rgb), 0.15);
   }
 
+  .task-review-outcome {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.1rem var(--flowchat-inline-gap);
+    border-radius: 3px;
+    font-size: var(--flowchat-font-size-xxs);
+    font-weight: 500;
+    flex-shrink: 0;
+    color: var(--color-text-muted);
+    background: var(--element-bg-soft);
+
+    &--partial-timeout {
+      color: var(--color-warning);
+      background: var(--color-warning-bg);
+    }
+
+    &--timed-out {
+      color: var(--color-error);
+    }
+  }
+
   .task-subagent-stop-button {
     width: 22px;
     height: 22px;

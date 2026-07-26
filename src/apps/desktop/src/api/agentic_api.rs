@@ -14,6 +14,7 @@ use crate::runtime::{
     DesktopRuntimeContext, DesktopSessionApplicationError, DesktopSessionScopeRequest,
 };
 use crate::startup_trace::DesktopStartupTrace;
+use bitfun_agent_runtime::deep_review::sanitize_focused_review_public_metadata;
 use bitfun_agent_runtime::sdk::{
     AgentDialogTurnRequest, AgentInputAttachment, AgentSessionModelUpdateRequest,
     AgentSubmissionSource, AgentTurnCancellationRequest, PermissionAuditRecord, PermissionGrant,
@@ -685,6 +686,19 @@ pub struct CancelSessionRequest {
     pub session_id: String,
 }
 
+fn sanitize_create_session_review_metadata(request: &mut CreateSessionRequest) {
+    if let Some(manifest) = request.deep_review_run_manifest.as_mut() {
+        sanitize_focused_review_public_metadata(manifest);
+    }
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CancelSessionResponse {
+    pub cancelled: bool,
+    pub dialog_turn_id: Option<String>,
+}
+
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CancelToolRequest {
@@ -1184,11 +1198,12 @@ pub struct GenerateSessionTitleRequest {
 pub async fn create_session(
     coordinator: State<'_, Arc<ConversationCoordinator>>,
     app_state: State<'_, AppState>,
-    request: CreateSessionRequest,
+    mut request: CreateSessionRequest,
 ) -> Result<CreateSessionResponse, String> {
     fn norm_conn(s: Option<String>) -> Option<String> {
         s.map(|x| x.trim().to_string()).filter(|x| !x.is_empty())
     }
+    sanitize_create_session_review_metadata(&mut request);
     let wp = request.workspace_path.clone();
     let remote_conn = norm_conn(request.remote_connection_id.clone()).or_else(|| {
         request
@@ -2159,8 +2174,8 @@ pub async fn control_deep_review_queue(
 pub async fn cancel_session(
     coordinator: State<'_, Arc<ConversationCoordinator>>,
     request: CancelSessionRequest,
-) -> Result<(), String> {
-    coordinator
+) -> Result<CancelSessionResponse, String> {
+    let dialog_turn_id = coordinator
         .cancel_active_turn_for_session(&request.session_id, std::time::Duration::from_secs(5))
         .await
         .map_err(|e| {
@@ -2172,7 +2187,10 @@ pub async fn cancel_session(
             format!("Failed to cancel session: {}", e)
         })?;
 
-    Ok(())
+    Ok(CancelSessionResponse {
+        cancelled: dialog_turn_id.is_some(),
+        dialog_turn_id,
+    })
 }
 
 #[derive(Debug, Deserialize)]
@@ -3042,6 +3060,24 @@ mod tests {
             review_target_evidence: None,
             config: None,
         }
+    }
+
+    #[test]
+    fn create_session_recovery_sanitizes_focused_review_public_metadata() {
+        let mut request = idempotent_create_request();
+        request.deep_review_run_manifest = Some(json!({
+            "reviewMode": "deep",
+            "focusedAssignment": {
+                "displayLabel": "Review Worker packet 7",
+                "question": "Could this contract break callers?"
+            }
+        }));
+
+        sanitize_create_session_review_metadata(&mut request);
+
+        let assignment = &request.deep_review_run_manifest.as_ref().unwrap()["focusedAssignment"];
+        assert!(assignment.get("displayLabel").is_none());
+        assert_eq!(assignment["question"], "Could this contract break callers?");
     }
 
     #[test]

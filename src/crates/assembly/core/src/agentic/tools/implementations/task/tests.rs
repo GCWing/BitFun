@@ -285,6 +285,21 @@ async fn launch_review_agent_schema_exposes_retry_without_agent_or_fork_controls
     assert_eq!(schema["properties"]["retry_coverage"]["type"], "object");
     assert_eq!(schema["properties"]["packet_id"]["type"], "string");
     assert_eq!(schema["properties"]["focused_assignment"]["type"], "object");
+    assert_eq!(
+        schema["properties"]["focused_assignment"]["properties"]["display_label"]["type"],
+        "string"
+    );
+    let display_label_description = schema["properties"]["focused_assignment"]["properties"]
+        ["display_label"]["description"]
+        .as_str()
+        .expect("display_label description should be a string");
+    assert!(display_label_description.contains("file paths"));
+    assert!(!display_label_description.contains("packet, path, model"));
+    assert!(!schema["properties"]["focused_assignment"]["required"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|value| value.as_str() == Some("display_label")));
     assert!(schema["properties"].get("fork_context").is_none());
     assert!(schema["properties"].get("agent_id").is_none());
     assert!(schema["properties"].get("run_in_background").is_none());

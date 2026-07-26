@@ -462,7 +462,11 @@ export const TaskDetailPanel: React.FC<TaskDetailPanelProps> = ({ data }) => {
     setStopError(null);
 
     try {
-      await agentAPI.cancelSession(subagentSessionId);
+      const result = await agentAPI.cancelSession(subagentSessionId);
+      if (!result.cancelled) {
+        setStopError(t('toolCards.taskDetailPanel.stopSubagentFailed'));
+        setStoppingSubagent(false);
+      }
     } catch (error) {
       const message = error instanceof Error
         ? error.message

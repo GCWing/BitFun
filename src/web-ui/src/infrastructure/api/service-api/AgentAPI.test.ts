@@ -27,6 +27,33 @@ describe('AgentAPI', () => {
     });
   });
 
+  it('returns whether session cancellation was accepted for an active turn', async () => {
+    invokeMock.mockResolvedValueOnce({
+      cancelled: true,
+      dialogTurnId: 'turn-1',
+    });
+
+    await expect(agentAPI.cancelSession('subagent-session')).resolves.toEqual({
+      cancelled: true,
+      dialogTurnId: 'turn-1',
+    });
+    expect(invokeMock).toHaveBeenCalledWith('cancel_session', {
+      request: { sessionId: 'subagent-session' },
+    });
+  });
+
+  it('preserves a no-active-turn cancellation response', async () => {
+    invokeMock.mockResolvedValueOnce({
+      cancelled: false,
+      dialogTurnId: null,
+    });
+
+    await expect(agentAPI.cancelSession('idle-session')).resolves.toEqual({
+      cancelled: false,
+      dialogTurnId: null,
+    });
+  });
+
   it('sends subagent timeout extensions with seconds in the action payload', async () => {
     await agentAPI.setSubagentTimeout('subagent-session', { type: 'extend', seconds: 300 });
 

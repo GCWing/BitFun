@@ -98,6 +98,7 @@ pub fn project_agentic_frontend_event(event: AgenticEvent) -> Option<AgenticFron
             parent_tool_call_id,
             agent_type,
             model_id,
+            focused_review_display_label,
         } => Some(AgenticFrontendEvent::new(
             "agentic://subagent-session-linked",
             json!({
@@ -108,6 +109,7 @@ pub fn project_agentic_frontend_event(event: AgenticEvent) -> Option<AgenticFron
                 "parentToolCallId": parent_tool_call_id,
                 "agentType": agent_type,
                 "modelId": model_id,
+                "focusedReviewDisplayLabel": focused_review_display_label,
             }),
         )),
         AgenticEvent::ModelRoundStarted {
@@ -493,12 +495,17 @@ mod tests {
             parent_tool_call_id: "task-tool".to_string(),
             agent_type: Some("Explore".to_string()),
             model_id: Some("fast".to_string()),
+            focused_review_display_label: Some("Authentication boundary".to_string()),
         })
         .expect("projected");
 
         assert_eq!(projected.event_name, "agentic://subagent-session-linked");
         assert_eq!(projected.payload["sessionId"], "child-session");
         assert_eq!(projected.payload["modelId"], "fast");
+        assert_eq!(
+            projected.payload["focusedReviewDisplayLabel"],
+            "Authentication boundary"
+        );
     }
 
     #[test]

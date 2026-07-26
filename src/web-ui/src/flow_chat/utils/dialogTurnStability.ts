@@ -33,6 +33,21 @@ export function isTransientToolStatus(status: unknown): boolean {
   return typeof status === 'string' && TRANSIENT_TOOL_STATUSES.has(status);
 }
 
+export function isTransientTurnStatus(status: unknown): boolean {
+  return typeof status === 'string' && TRANSIENT_TURN_STATUSES.has(status);
+}
+
+export function normalizeRecoveredTurnFinishReason(
+  status: unknown,
+  finishReason: unknown,
+): string | undefined {
+  if (typeof finishReason === 'string' && finishReason.trim()) {
+    return finishReason;
+  }
+
+  return isTransientTurnStatus(status) ? 'interrupted' : undefined;
+}
+
 function isTerminalTurnStatus(status: DialogTurn['status']): boolean {
   return status === 'completed' || status === 'cancelled' || status === 'error';
 }
@@ -49,7 +64,7 @@ export function normalizeRecoveredTurnStatus(
     return status;
   }
 
-  if (typeof status === 'string' && TRANSIENT_TURN_STATUSES.has(status)) {
+  if (isTransientTurnStatus(status)) {
     return getTurnFallbackStatus(turn);
   }
 

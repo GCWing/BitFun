@@ -474,12 +474,15 @@ pub async fn dispatch(
         "cancel_session" => {
             let request = extract_request(&params)?;
             let session_id = get_string(&request, "sessionId")?;
-            state
+            let dialog_turn_id = state
                 .coordinator
                 .cancel_active_turn_for_session(&session_id, Duration::from_secs(5))
                 .await
                 .map_err(|e| anyhow!("{}", e))?;
-            Ok(serde_json::Value::Null)
+            Ok(serde_json::json!({
+                "cancelled": dialog_turn_id.is_some(),
+                "dialogTurnId": dialog_turn_id,
+            }))
         }
         "get_session_messages" => {
             let request = params.get("request").unwrap_or(&params);

@@ -380,6 +380,7 @@ export interface SubagentSessionLinkedEvent extends AgenticEvent {
   parentToolCallId: string;
   agentType?: string;
   modelId?: string;
+  focusedReviewDisplayLabel?: string;
 }
 
 export type DeepReviewQueueStatus =
@@ -1121,9 +1122,15 @@ export class AgentAPI {
     return api.listen<SessionTitleGeneratedEvent>('session_title_generated', callback);
   }
 
-  async cancelSession(sessionId: string): Promise<void> {
+  async cancelSession(sessionId: string): Promise<{
+    cancelled: boolean;
+    dialogTurnId: string | null;
+  }> {
     try {
-      await api.invoke<void>('cancel_session', {
+      return await api.invoke<{
+        cancelled: boolean;
+        dialogTurnId: string | null;
+      }>('cancel_session', {
         request: { sessionId }
       });
     } catch (error) {

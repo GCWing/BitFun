@@ -65,6 +65,7 @@ use crate::service::workspace::{
 };
 use crate::service_agent_runtime::CoreServiceAgentRuntime;
 use crate::util::errors::{BitFunError, BitFunResult};
+use bitfun_agent_runtime::deep_review::FocusedReviewAssignment;
 use bitfun_agent_runtime::output_surface::{
     supports_inline_markdown_images_for_source, TOOL_CONTEXT_INLINE_MARKDOWN_IMAGE_DISPLAY_KEY,
 };
@@ -5432,6 +5433,17 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             external_generation_lease: _external_generation_lease,
         } = request;
         let prepared_target_session_id = target_session_id.clone();
+        let deep_review_run_manifest = context
+            .get("deep_review_run_manifest")
+            .and_then(|raw| serde_json::from_str::<serde_json::Value>(raw).ok());
+        let focused_review_display_label = deep_review_run_manifest
+            .as_ref()
+            .and_then(|manifest| {
+                FocusedReviewAssignment::from_manifest(manifest)
+                    .ok()
+                    .flatten()
+            })
+            .and_then(|assignment| assignment.display_label().map(str::to_string));
         let continuation_policy = session_config.continuation_policy;
 
         let requested_timeout_seconds = timeout_seconds.filter(|seconds| *seconds > 0);
@@ -5649,6 +5661,18 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             .await;
             return Err(error);
         }
+        if let Some(manifest) = deep_review_run_manifest.as_ref() {
+            if let Err(error) = self
+                .session_manager
+                .set_session_deep_review_run_manifest(&session_id, Some(manifest.clone()))
+                .await
+            {
+                warn!(
+                    "Failed to persist Review manifest for linked subagent session: session_id={}, error={}",
+                    session_id, error
+                );
+            }
+        }
         if let Some(source_session_id) = prompt_cache_source_session_id.as_deref() {
             self.session_manager
                 .seed_forked_edit_constraints(source_session_id, &session_id)
@@ -5761,6 +5785,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                         .session_manager
                         .get_session(&session_id)
                         .and_then(|session| session.config.model_id.clone()),
+                    focused_review_display_label: focused_review_display_label.clone(),
                 })
                 .await;
             }

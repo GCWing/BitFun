@@ -65,8 +65,13 @@ impl LaunchReviewAgentTool {
                 },
                 "focused_assignment": {
                     "type": "object",
-                    "description": "A target-bound question for ReviewWorker. Required for adaptive non-packet checks; managed packets may attach a question without repeating their packet file scope.",
+                    "description": "A target-bound question for ReviewWorker. Required for adaptive non-packet checks; managed packets may attach a question without repeating their packet file scope. A safe display_label may be shown after runtime validation.",
                     "properties": {
+                        "display_label": {
+                            "type": "string",
+                            "maxLength": 80,
+                            "description": "Optional short plain-language label for the concern, using at most eight words. Do not include internal coordination values such as agent or skill names, packet IDs, file paths, or model IDs. Unsafe labels are ignored and never block the check."
+                        },
                         "question": { "type": "string" },
                         "independent_value": { "type": "string" },
                         "target_fingerprint": { "type": "string" },
@@ -210,7 +215,7 @@ Built-in review agent types:
 - `ReviewWorker`: one read-only worker whose bounded prompt supplies the dynamic review lens, concrete question, file or packet scope, and expected evidence. It may cover a narrow specialist uncertainty or a managed file packet, but must not widen its assignment.
 - `ReviewJudge`: final quality-inspector pass after reviewer outputs are available.
 
-The capability catalog below contains short descriptions only. For an adaptive ReviewWorker call, copy the selected key and fingerprint into `focused_assignment`; full guidance is loaded only after runtime admission. Outside a manifest-declared work-packet plan, do not split files, launch routine parallel coverage, or repeat the primary review.
+The capability catalog below contains short descriptions only. For an adaptive ReviewWorker call, copy the selected key and fingerprint into `focused_assignment`; full guidance is loaded only after runtime admission. When possible, give each focused assignment a short plain-language `display_label` that describes the user-visible concern without internal coordination values such as agent or skill names, packet IDs, file paths, or model IDs. The runtime ignores an unsafe label without blocking the check. Outside a manifest-declared work-packet plan, do not split files, launch routine parallel coverage, or repeat the primary review.
 
 For a managed packet, pass its exact manifest `packet_id` in the top-level `packet_id` field. Runtime rejects missing or unknown managed packet ids.
 

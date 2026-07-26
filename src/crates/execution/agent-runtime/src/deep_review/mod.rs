@@ -39,8 +39,8 @@ pub use execution_policy::{
     DeepReviewStrategyLevel, DeepReviewSubagentRole,
 };
 pub use focused_assignment::{
-    adaptive_review_max_focused_calls, is_adaptive_review_manifest, FocusedReviewAssignment,
-    FocusedReviewPathAccess,
+    adaptive_review_max_focused_calls, is_adaptive_review_manifest,
+    sanitize_focused_review_public_metadata, FocusedReviewAssignment, FocusedReviewPathAccess,
 };
 pub use incremental_cache::DeepReviewIncrementalCache;
 pub use manifest::DeepReviewRunManifestGate;

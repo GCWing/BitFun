@@ -7,6 +7,7 @@ import type { FlowToolItem, ToolCardConfig } from '../types/flow-chat';
 
 const mocks = vi.hoisted(() => ({
   openBtwSessionInAuxPane: vi.fn(),
+  loadBtwSessionHistory: vi.fn(() => Promise.resolve()),
   cancelSession: vi.fn(),
   notificationError: vi.fn(),
   flowChatListeners: new Set<() => void>(),
@@ -43,6 +44,15 @@ vi.mock('react-i18next', () => {
     }
     if (key === 'toolCards.taskTool.reviewCheckUnavailable') {
       return 'This check could not be completed. The main review can continue.';
+    }
+    if (key === 'toolCards.taskTool.reviewPartialTimeout') {
+      return 'Timed out after returning partial details';
+    }
+    if (key === 'toolCards.taskTool.reviewTimedOut') {
+      return 'Timed out';
+    }
+    if (key === 'toolCards.taskTool.reviewStopped') {
+      return 'Stopped';
     }
     if (key === 'toolCards.taskTool.cancelSession') {
       return `Cancel session: ${options?.sessionId}`;
@@ -84,16 +94,19 @@ vi.mock('@/shared/services/reviewTeamService', () => ({
 
 vi.mock('./ToolTimeoutIndicator', () => ({
   ToolTimeoutIndicator: ({
+    isRunning,
     completedStatus,
     completedDurationMs,
     completedFailureReason,
   }: {
+    isRunning?: boolean;
     completedStatus?: string;
     completedDurationMs?: number;
     completedFailureReason?: string;
   }) => (
     <span
       data-testid="tool-timeout-indicator"
+      data-is-running={String(Boolean(isRunning))}
       data-completed-status={completedStatus}
       data-completed-duration={completedDurationMs}
       data-completed-failure-reason={completedFailureReason}
@@ -103,6 +116,7 @@ vi.mock('./ToolTimeoutIndicator', () => ({
 
 vi.mock('../services/btwSessionPane', () => ({
   openBtwSessionInAuxPane: (...args: unknown[]) => mocks.openBtwSessionInAuxPane(...args),
+  loadBtwSessionHistory: (...args: unknown[]) => mocks.loadBtwSessionHistory(...args),
 }));
 
 vi.mock('@/infrastructure/api/service-api/AgentAPI', () => ({
@@ -155,6 +169,27 @@ vi.mock('../store/FlowChatStore', () => ({
             startTime: 1000,
           }],
         }],
+        ['review-session-focused', {
+          sessionId: 'review-session-focused',
+          mode: 'CodeReview',
+          config: { agentType: 'CodeReview', modelName: 'fast' },
+          focusedReviewDisplayLabel: 'Authentication boundary',
+          dialogTurns: [{
+            id: 'review-turn-focused',
+            status: 'processing',
+            startTime: 1000,
+          }],
+        }],
+        ['review-session-unsafe-label', {
+          sessionId: 'review-session-unsafe-label',
+          mode: 'CodeReview',
+          config: { agentType: 'CodeReview', modelName: 'fast' },
+          dialogTurns: [{
+            id: 'review-turn-unsafe-label',
+            status: 'processing',
+            startTime: 1000,
+          }],
+        }],
         ['review-session-error', {
           sessionId: 'review-session-error',
           mode: 'CodeReview',
@@ -174,6 +209,17 @@ vi.mock('../store/FlowChatStore', () => ({
           dialogTurns: [{
             id: 'review-turn-cancelled',
             status: 'cancelled',
+            startTime: 1000,
+            endTime: 1800,
+          }],
+        }],
+        ['review-session-completed', {
+          sessionId: 'review-session-completed',
+          mode: 'CodeReview',
+          config: { agentType: 'CodeReview', modelName: 'fast' },
+          dialogTurns: [{
+            id: 'review-turn-completed',
+            status: 'completed',
             startTime: 1000,
             endTime: 1800,
           }],
@@ -431,10 +477,11 @@ describeWithJsdom('TaskToolDisplay', () => {
     expect(container.textContent).not.toContain('managed-review:batch-1-of-4');
   });
 
-  it('shows safe additional-check progress without projecting model-controlled identifiers', async () => {
+  it('shows the admitted public label without projecting model-controlled identifiers', async () => {
     const toolItem: FlowToolItem = {
       ...reviewTaskItem('running', 'ReviewWorker'),
       toolName: 'LaunchReviewAgent',
+      subagentSessionId: 'review-session-focused',
       toolCall: {
         id: 'launch-review-call-focused',
         input: {
@@ -457,13 +504,51 @@ describeWithJsdom('TaskToolDisplay', () => {
       );
     });
 
-    expect(container.textContent).toContain('Checking a specific concern');
+    expect(container.textContent).toContain('Authentication boundary');
+    expect(container.textContent).not.toContain('Check boundary');
     expect(container.textContent).not.toMatch(/\bagent\b/i);
     expect(container.textContent).not.toContain('ReviewWorker');
     expect(container.textContent).not.toContain('packet-7');
     expect(container.textContent).not.toContain('code-review-testing');
     expect(container.textContent).not.toContain('internal-fingerprint');
     expect(container.textContent).not.toContain('src/internal.ts');
+  });
+
+  it('falls back to a generic title when a focused-check description contains structured identifiers', async () => {
+    const toolItem: FlowToolItem = {
+      ...reviewTaskItem('running', 'ReviewWorker'),
+      toolName: 'LaunchReviewAgent',
+      subagentSessionId: 'review-session-unsafe-label',
+      toolCall: {
+        id: 'launch-review-call-internal-label',
+        input: {
+          description: 'ReviewWorker skill:private packet-7 src/auth.ts',
+          prompt: 'Internal worker prompt',
+          subagent_type: 'ReviewWorker',
+          focused_assignment: {
+            question: 'Is authentication enforced?',
+            independent_value: 'Independent validation',
+            target_fingerprint: 'fingerprint',
+            expected_evidence: 'Authentication checks',
+            capability_key: 'skill:private',
+            capability_fingerprint: 'internal-fingerprint',
+            allowed_changed_paths: ['src/auth.ts'],
+          },
+        },
+      },
+    };
+
+    await act(async () => {
+      root.render(
+        <TaskToolDisplay toolItem={toolItem} config={config} sessionId="parent-session" />,
+      );
+    });
+
+    expect(container.textContent).toContain('Checking a specific concern');
+    expect(container.textContent).not.toContain('ReviewWorker');
+    expect(container.textContent).not.toContain('skill:private');
+    expect(container.textContent).not.toContain('packet-7');
+    expect(container.textContent).not.toContain('src/auth.ts');
   });
 
   it('hides internal additional-check failure details', async () => {
@@ -501,6 +586,155 @@ describeWithJsdom('TaskToolDisplay', () => {
     expect(container.textContent).toContain('Checking a specific concern');
     expect(container.textContent).not.toContain('skill:private');
     expect(container.textContent).not.toContain('src/private.ts');
+  });
+
+  it('shows partial-timeout Review results without exposing partial output', async () => {
+    const toolItem: FlowToolItem = {
+      ...reviewTaskItem('completed', 'ReviewWorker'),
+      toolName: 'LaunchReviewAgent',
+      toolResult: {
+        success: true,
+        result: {
+          duration: 31_000,
+          status: 'partial_timeout',
+          partial_output: 'private partial findings from src/private.ts',
+        },
+      },
+    };
+
+    await act(async () => {
+      root.render(
+        <TaskToolDisplay toolItem={toolItem} config={config} sessionId="parent-session" />,
+      );
+    });
+
+    expect(container.textContent).toContain('Timed out after returning partial details');
+    expect(container.textContent).not.toContain('private partial findings');
+    expect(container.textContent).not.toContain('src/private.ts');
+    expect(container.querySelector('.task-failed-badge')).toBeNull();
+  });
+
+  it('shows a safe timeout outcome for a Review check', async () => {
+    const toolItem: FlowToolItem = {
+      ...reviewTaskItem('error', 'ReviewWorker'),
+      toolName: 'LaunchReviewAgent',
+      toolResult: {
+        success: false,
+        result: null,
+        error: 'provider timeout while reading src/private.ts',
+        duration_ms: 30_000,
+      },
+    };
+
+    await act(async () => {
+      root.render(
+        <TaskToolDisplay toolItem={toolItem} config={config} sessionId="parent-session" />,
+      );
+    });
+
+    expect(container.textContent).toContain('Timed out');
+    expect(container.textContent).not.toContain('provider timeout');
+    expect(container.textContent).not.toContain('src/private.ts');
+    expect(container.querySelector('[data-completed-failure-reason="Timed out"]')).toBeTruthy();
+    expect(container.querySelector('.task-failed-badge')).toBeNull();
+  });
+
+  it('shows a stopped outcome for a cancelled Review check', async () => {
+    const toolItem: FlowToolItem = {
+      ...reviewTaskItem('completed', 'ReviewWorker'),
+      toolName: 'LaunchReviewAgent',
+      toolResult: {
+        success: true,
+        result: {
+          duration: 2_000,
+          status: 'cancelled',
+          reason: 'private cancellation detail',
+        },
+      },
+    };
+
+    await act(async () => {
+      root.render(
+        <TaskToolDisplay toolItem={toolItem} config={config} sessionId="parent-session" />,
+      );
+    });
+
+    expect(container.textContent).toContain('Stopped');
+    expect(container.textContent).not.toContain('private cancellation detail');
+    expect(container.querySelector('.task-failed-badge')).toBeNull();
+  });
+
+  it.each([
+    { status: 'partial_timeout', label: 'Timed out after returning partial details' },
+    { status: 'timed_out', label: 'Timed out' },
+    { status: 'cancelled', label: 'Stopped' },
+  ])('prefers a live child over a stale parent $status outcome', async ({ status, label }) => {
+    const toolItem: FlowToolItem = {
+      ...reviewTaskItem('completed', 'ReviewWorker', 'Check authentication'),
+      toolName: 'LaunchReviewAgent',
+      subagentSessionId: 'review-session-running',
+      toolCall: {
+        id: 'launch-review-live-child',
+        input: {
+          description: 'Check authentication',
+          prompt: 'Internal worker prompt',
+          subagent_type: 'ReviewWorker',
+          focused_assignment: { question: 'Is authentication enforced?' },
+        },
+      },
+      toolResult: {
+        success: status === 'partial_timeout',
+        result: { status, duration: 30_000 },
+        error: status === 'timed_out' ? 'request timed out' : undefined,
+        duration_ms: 30_000,
+      },
+    };
+
+    await act(async () => {
+      root.render(
+        <TaskToolDisplay toolItem={toolItem} config={config} sessionId="parent-session" />,
+      );
+    });
+
+    expect(container.querySelector('[data-testid="cube-loading"]')).toBeTruthy();
+    expect(container.querySelector('.task-subagent-stop-button')).toBeTruthy();
+    expect(container.querySelector('.task-review-outcome')).toBeNull();
+    expect(container.querySelector('.task-failed-badge')).toBeNull();
+    expect(container.textContent).not.toContain(label);
+    const indicator = container.querySelector('[data-testid="tool-timeout-indicator"]');
+    expect(indicator?.getAttribute('data-completed-status')).toBeNull();
+    expect(indicator?.getAttribute('data-completed-duration')).toBeNull();
+  });
+
+  it.each([
+    { childSessionId: 'review-session-completed' },
+    { childSessionId: 'review-session-error' },
+    { childSessionId: 'review-session-cancelled' },
+  ])('does not keep running controls after child $childSessionId is terminal', async ({ childSessionId }) => {
+    const toolItem: FlowToolItem = {
+      ...reviewTaskItem('running', 'ReviewWorker', 'Check authentication'),
+      subagentSessionId: childSessionId,
+      toolCall: {
+        id: `task-${childSessionId}`,
+        input: {
+          description: 'Check authentication',
+          prompt: 'Internal worker prompt',
+          subagent_type: 'ReviewWorker',
+          packet_id: 'reviewer:security:group-1-of-1',
+        },
+      },
+    };
+
+    await act(async () => {
+      root.render(
+        <TaskToolDisplay toolItem={toolItem} config={config} sessionId="parent-session" />,
+      );
+    });
+
+    expect(container.querySelector('[data-testid="cube-loading"]')).toBeNull();
+    expect(container.querySelector('.task-subagent-stop-button')).toBeNull();
+    expect(container.querySelector('[data-testid="tool-timeout-indicator"]')
+      ?.getAttribute('data-is-running')).toBe('false');
   });
 
   it('shows a background review as running while its child session is still processing', async () => {
@@ -791,7 +1025,7 @@ describeWithJsdom('TaskToolDisplay', () => {
     );
   });
 
-  it('keeps historical fixed-reviewer tasks in the Deep Review coverage view', async () => {
+  it('opens historical fixed-reviewer details in the real child session', async () => {
     const toolItem: FlowToolItem = {
       ...reviewTaskItem('completed', 'ReviewSecurity', 'Review authentication changes'),
       subagentSessionId: 'legacy-review-security-session',
@@ -814,10 +1048,20 @@ describeWithJsdom('TaskToolDisplay', () => {
       openButton!.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true }));
     });
 
-    expect(mocks.openBtwSessionInAuxPane).not.toHaveBeenCalled();
+    expect(mocks.openBtwSessionInAuxPane).toHaveBeenCalledWith(
+      expect.objectContaining({
+        childSessionId: 'legacy-review-security-session',
+        parentSessionId: 'deep-review-parent-session',
+        sessionKind: 'subagent',
+        agentType: 'ReviewSecurity',
+        subagentType: 'ReviewSecurity',
+        viewKind: 'review-check',
+        includeInternal: true,
+      }),
+    );
   });
 
-  it('keeps a historical packetless ReviewJudge task in the coverage view', async () => {
+  it('opens a historical packetless ReviewJudge in the real child session', async () => {
     const toolItem: FlowToolItem = {
       ...reviewTaskItem('completed', 'ReviewJudge', 'Validate disputed findings'),
       subagentSessionId: 'legacy-review-judge-session',
@@ -838,7 +1082,17 @@ describeWithJsdom('TaskToolDisplay', () => {
       openButton!.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true }));
     });
 
-    expect(mocks.openBtwSessionInAuxPane).not.toHaveBeenCalled();
+    expect(mocks.openBtwSessionInAuxPane).toHaveBeenCalledWith(
+      expect.objectContaining({
+        childSessionId: 'legacy-review-judge-session',
+        parentSessionId: 'deep-review-parent-session',
+        sessionKind: 'subagent',
+        agentType: 'ReviewJudge',
+        subagentType: 'ReviewJudge',
+        viewKind: 'review-check',
+        includeInternal: true,
+      }),
+    );
   });
 
   it('does not apply the historical reviewer fallback outside Deep Review', async () => {
@@ -946,7 +1200,7 @@ describeWithJsdom('TaskToolDisplay', () => {
   });
 
   it('stops a running foreground subagent from the task header', async () => {
-    mocks.cancelSession.mockResolvedValueOnce(undefined);
+    mocks.cancelSession.mockResolvedValueOnce({ cancelled: true, dialogTurnId: 'turn-1' });
 
     const toolItem: FlowToolItem = {
       ...reviewTaskItem('running', 'Explore', 'Investigate task card behavior'),
@@ -971,6 +1225,187 @@ describeWithJsdom('TaskToolDisplay', () => {
     });
 
     expect(mocks.cancelSession).toHaveBeenCalledWith('subagent-session-1');
+  });
+
+  it.each(['preparing', 'streaming'] as const)(
+    'keeps ordinary foreground work stoppable while it is %s',
+    async (status) => {
+      const toolItem: FlowToolItem = {
+        ...reviewTaskItem(status, 'Explore', 'Investigate task state'),
+        subagentSessionId: 'subagent-session-1',
+      };
+
+      await act(async () => {
+        root.render(
+          <TaskToolDisplay toolItem={toolItem} config={config} sessionId="parent-session" />,
+        );
+      });
+
+      expect(container.querySelector('[data-testid="cube-loading"]')).toBeTruthy();
+      expect(container.querySelector('.task-subagent-stop-button')).toBeTruthy();
+      expect(container.querySelector('[data-testid="tool-timeout-indicator"]')
+        ?.getAttribute('data-is-running')).toBe('true');
+    },
+  );
+
+  it('clears ordinary foreground stopping state when cancellation is not confirmed', async () => {
+    mocks.cancelSession.mockResolvedValueOnce({ cancelled: false, dialogTurnId: null });
+    const toolItem: FlowToolItem = {
+      ...reviewTaskItem('running', 'Explore', 'Investigate task state'),
+      subagentSessionId: 'subagent-session-1',
+    };
+
+    await act(async () => {
+      root.render(
+        <TaskToolDisplay toolItem={toolItem} config={config} sessionId="parent-session" />,
+      );
+    });
+
+    const stopButton = container.querySelector<HTMLButtonElement>('.task-subagent-stop-button')!;
+    await act(async () => {
+      stopButton.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true }));
+      await Promise.resolve();
+    });
+
+    expect(stopButton.disabled).toBe(false);
+    expect(mocks.notificationError).toHaveBeenCalledWith(
+      'toolCards.taskDetailPanel.stopSubagentFailed',
+      { duration: 5000 },
+    );
+  });
+
+  it('refreshes a stopped Review check only after cancellation is confirmed', async () => {
+    let resolveCancel!: (result: { cancelled: boolean; dialogTurnId?: string }) => void;
+    const cancelRequest = new Promise<{ cancelled: boolean; dialogTurnId?: string }>((resolve) => {
+      resolveCancel = resolve;
+    });
+    mocks.cancelSession.mockReturnValueOnce(cancelRequest);
+
+    const toolItem: FlowToolItem = {
+      ...reviewTaskItem('running', 'ReviewWorker', 'Check authentication changes'),
+      subagentSessionId: 'review-session-running',
+      toolCall: {
+        id: 'task-call-review-stop',
+        input: {
+          description: 'Check authentication changes',
+          prompt: 'Review the authentication changes',
+          subagent_type: 'ReviewWorker',
+          packet_id: 'reviewer:security:group-1-of-1',
+        },
+      },
+    };
+
+    await act(async () => {
+      root.render(
+        <TaskToolDisplay toolItem={toolItem} config={config} sessionId="parent-session" />,
+      );
+    });
+
+    const stopButton = container.querySelector<HTMLButtonElement>('.task-subagent-stop-button');
+    expect(stopButton).toBeTruthy();
+
+    await act(async () => {
+      stopButton!.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true }));
+      await Promise.resolve();
+    });
+
+    expect(mocks.cancelSession).toHaveBeenCalledWith('review-session-running');
+    expect(mocks.loadBtwSessionHistory).not.toHaveBeenCalled();
+
+    await act(async () => {
+      resolveCancel({ cancelled: true, dialogTurnId: 'turn-running' });
+      await cancelRequest;
+    });
+
+    expect(mocks.loadBtwSessionHistory).toHaveBeenCalledWith({
+      childSessionId: 'review-session-running',
+      workspacePath: 'D:\\workspace\\repo',
+      remoteConnectionId: 'remote-1',
+      remoteSshHost: 'host-1',
+    });
+  });
+
+  it('keeps a Review check running locally when cancellation cannot be confirmed', async () => {
+    mocks.cancelSession.mockResolvedValueOnce({ cancelled: false, dialogTurnId: null });
+    const toolItem: FlowToolItem = {
+      ...reviewTaskItem('running', 'ReviewWorker', 'Check authentication changes'),
+      subagentSessionId: 'review-session-running',
+      toolCall: {
+        id: 'task-call-review-stop-failed',
+        input: {
+          description: 'Check authentication changes',
+          prompt: 'Review the authentication changes',
+          subagent_type: 'ReviewWorker',
+          packet_id: 'reviewer:security:group-1-of-1',
+        },
+      },
+    };
+
+    await act(async () => {
+      root.render(
+        <TaskToolDisplay toolItem={toolItem} config={config} sessionId="parent-session" />,
+      );
+    });
+
+    const stopButton = container.querySelector<HTMLButtonElement>('.task-subagent-stop-button');
+    expect(stopButton).toBeTruthy();
+
+    await act(async () => {
+      stopButton!.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true }));
+      await Promise.resolve();
+    });
+
+    expect(mocks.notificationError).toHaveBeenCalledWith(
+      'toolCards.taskDetailPanel.stopReviewWorkFailed',
+      { duration: 5000 },
+    );
+    expect(mocks.loadBtwSessionHistory).toHaveBeenCalledWith({
+      childSessionId: 'review-session-running',
+      workspacePath: 'D:\\workspace\\repo',
+      remoteConnectionId: 'remote-1',
+      remoteSshHost: 'host-1',
+    });
+  });
+
+  it('does not report a stop failure when the Review check already completed', async () => {
+    mocks.cancelSession.mockResolvedValueOnce({ cancelled: false, dialogTurnId: null });
+    mocks.loadBtwSessionHistory.mockImplementationOnce(async () => {
+      mocks.dynamicReviewTurn.status = 'completed';
+      mocks.dynamicReviewTurn.endTime = 2200;
+    });
+    const toolItem: FlowToolItem = {
+      ...reviewTaskItem('running', 'ReviewWorker', 'Check authentication changes'),
+      subagentSessionId: 'review-session-dynamic',
+      toolCall: {
+        id: 'task-call-review-stop-race',
+        input: {
+          description: 'Check authentication changes',
+          prompt: 'Review the authentication changes',
+          subagent_type: 'ReviewWorker',
+          packet_id: 'reviewer:security:group-1-of-1',
+        },
+      },
+    };
+
+    await act(async () => {
+      root.render(
+        <TaskToolDisplay toolItem={toolItem} config={config} sessionId="parent-session" />,
+      );
+    });
+
+    await act(async () => {
+      container.querySelector<HTMLButtonElement>('.task-subagent-stop-button')!
+        .dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true }));
+      await Promise.resolve();
+    });
+
+    expect(mocks.loadBtwSessionHistory).toHaveBeenCalledWith({
+      childSessionId: 'review-session-dynamic',
+      workspacePath: 'D:\\workspace\\repo',
+      remoteConnectionId: 'remote-1',
+      remoteSshHost: 'host-1',
+    });
+    expect(mocks.notificationError).not.toHaveBeenCalled();
   });
 
   it('does not show the foreground stop button for background subagents', async () => {

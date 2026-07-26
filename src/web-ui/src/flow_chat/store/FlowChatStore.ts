@@ -54,6 +54,7 @@ import {
   normalizeRecoveredTextStatus,
   normalizeRecoveredThinkingStatus,
   normalizeRecoveredToolStatus,
+  normalizeRecoveredTurnFinishReason,
   normalizeRecoveredTurnStatus,
   settleInterruptedDialogTurn,
 } from '../utils/dialogTurnStability';
@@ -1839,6 +1840,7 @@ export class FlowChatStore {
       isTransient?: boolean;
       agentBackedTransient?: boolean;
       deepReviewRunManifest?: Session['deepReviewRunManifest'];
+      focusedReviewDisplayLabel?: Session['focusedReviewDisplayLabel'];
       reviewTargetEvidence?: Session['reviewTargetEvidence'];
       reviewTargetFilePaths?: Session['reviewTargetFilePaths'];
     },
@@ -1885,6 +1887,7 @@ export class FlowChatStore {
         btwThreads: [],
         btwOrigin: relationship.btwOrigin,
         deepReviewRunManifest: meta?.deepReviewRunManifest,
+        focusedReviewDisplayLabel: meta?.focusedReviewDisplayLabel,
         reviewTargetEvidence: meta?.reviewTargetEvidence,
         reviewTargetFilePaths: meta?.reviewTargetFilePaths,
         isTransient: meta?.isTransient ?? false,
@@ -2094,6 +2097,21 @@ export class FlowChatStore {
         ...prev,
         sessions: newSessions,
       };
+    });
+  }
+
+  public updateSessionFocusedReviewDisplayLabel(
+    sessionId: string,
+    focusedReviewDisplayLabel: Session['focusedReviewDisplayLabel'],
+  ): void {
+    if (!focusedReviewDisplayLabel) return;
+    this.setState(prev => {
+      const session = prev.sessions.get(sessionId);
+      if (!session || session.focusedReviewDisplayLabel === focusedReviewDisplayLabel) return prev;
+
+      const newSessions = new Map(prev.sessions);
+      newSessions.set(sessionId, { ...session, focusedReviewDisplayLabel });
+      return { ...prev, sessions: newSessions };
     });
   }
 
@@ -4888,6 +4906,12 @@ export class FlowChatStore {
       const normalizedTurnStatus = isLiveTurn
         ? normalizeLiveTurnStatus(turn.status)
         : normalizeRecoveredTurnStatus(turn.status, { error: undefined });
+      const persistedFinishReason =
+        typeof turn.finishReason === 'string'
+          ? turn.finishReason
+          : typeof turn.finish_reason === 'string'
+            ? turn.finish_reason
+            : undefined;
       const rawTokenUsage = turn.tokenUsage ?? turn.token_usage;
 
       return {
@@ -5029,12 +5053,9 @@ export class FlowChatStore {
       }),
       timestamp: turn.timestamp,
       status: normalizedTurnStatus,
-      finishReason:
-        typeof turn.finishReason === 'string'
-          ? turn.finishReason
-          : typeof turn.finish_reason === 'string'
-            ? turn.finish_reason
-            : undefined,
+      finishReason: isLiveTurn
+        ? persistedFinishReason
+        : normalizeRecoveredTurnFinishReason(turn.status, persistedFinishReason),
       hasFinalResponse:
         typeof turn.hasFinalResponse === 'boolean'
           ? turn.hasFinalResponse

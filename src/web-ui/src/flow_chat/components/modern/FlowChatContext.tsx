@@ -27,6 +27,8 @@ export interface FlowChatContextValue {
   activeSessionOverride?: Session | null;
   allowUserMessageRollback?: boolean;
   allowUserMessageEdit?: boolean;
+  /** Hides transcript actions when the visible projection omits internal turn input. */
+  allowTranscriptExport?: boolean;
 
   // Config
   config?: FlowChatConfig;

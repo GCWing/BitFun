@@ -326,6 +326,27 @@ questions and real states without Skill names, agent ids, packet ids, or budgets
 A child with no loaded transcript renders preparing, loading, or load-failed
 state rather than a title over an empty body.
 
+Focused-check titles cross one narrow public boundary:
+
+```mermaid
+flowchart LR
+    Assignment["Focused question"] --> Admission["Runtime admission"]
+    Admission --> Label["Public label"]
+    Label --> Card["Card"]
+    Label --> Detail["Detail"]
+    Assignment -. "internal fields" .-> Execution["Execution only"]
+```
+
+The label is short, plain-language metadata stored in the admitted child
+manifest. Cards and detail tabs read only that label; they never derive titles
+from the model prompt, capability key, path scope, or other launch arguments.
+Missing or unsafe labels use a generic localized title and never block the
+check. Linking projects only the admitted public label; the existing manifest
+is persisted for recovery. Both representations come from the same admitted
+assignment, without sending internal manifest fields through the UI event.
+Session reconstruction re-admits that label through the same runtime function
+before restored metadata is persisted.
+
 ### Execution detail and recovery projection
 
 Execution outcome and transcript availability are separate facts. A Review can

@@ -164,12 +164,41 @@
 
   &__empty-state {
     display: flex;
+    flex-direction: column;
     align-items: center;
     justify-content: center;
+    gap: 8px;
     min-height: 120px;
+    padding: 24px 16px;
+    box-sizing: border-box;
     color: var(--color-text-muted);
     font-size: var(--tool-card-action-font-size);
     text-align: center;
+
+    &--with-content {
+      min-height: 0;
+      padding: 10px 16px;
+      border-bottom: 1px solid var(--border-subtle);
+    }
+  }
+
+  &__stop-spinner {
+    animation: btw-session-panel-stop-spin 0.9s linear infinite;
+  }
+
+  &__empty-retry {
+    padding: 5px 10px;
+    border: 1px solid var(--border-base);
+    border-radius: 6px;
+    background: var(--color-bg-secondary);
+    color: var(--color-text-secondary);
+    font: inherit;
+    cursor: pointer;
+
+    &:hover {
+      background: var(--element-bg-hover);
+      color: var(--color-text-primary);
+    }
   }
 
   &__scroll-to-bottom {
@@ -233,5 +262,17 @@
     color: var(--color-text-secondary);
     font-variant-numeric: tabular-nums;
     flex-shrink: 0;
+  }
+}
+
+@keyframes btw-session-panel-stop-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .btw-session-panel__stop-spinner {
+    animation: none;
   }
 }

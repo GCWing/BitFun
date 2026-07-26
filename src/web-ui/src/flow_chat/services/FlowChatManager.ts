@@ -23,11 +23,17 @@ import {
 } from '../utils/sessionOrdering';
 import { resolveSessionRelationship } from '../utils/sessionMetadata';
 
-import type { FlowChatContext, SessionConfig, DialogTurn } from './flow-chat-manager/types';
+import type {
+  FlowChatContext,
+  SessionConfig,
+  DialogTurn,
+  SessionHistoryHydrationLocation,
+} from './flow-chat-manager/types';
 import {
   saveAllInProgressTurns,
   immediateSaveDialogTurn,
   createChatSession as createChatSessionModule,
+  hydrateSessionHistoryForDetail as hydrateSessionHistoryForDetailModule,
   preloadHistoricalSessionForOpen as preloadHistoricalSessionForOpenModule,
   switchChatSession as switchChatSessionModule,
   deleteChatSession as deleteChatSessionModule,
@@ -75,6 +81,7 @@ export class FlowChatManager {
       }),
       pendingTurnCompletions: new Map(),
       pendingHistoryLoads: new Map(),
+      pendingHistoryLoadCapabilities: new Map(),
       pendingContextRestores: new Map(),
       contentBuffers: new Map(),
       activeTextItems: new Map(),
@@ -492,6 +499,13 @@ export class FlowChatManager {
 
   preloadHistoricalSessionForOpen(sessionId: string): void {
     preloadHistoricalSessionForOpenModule(this.context, sessionId);
+  }
+
+  async hydrateSessionHistoryForDetail(
+    sessionId: string,
+    location?: SessionHistoryHydrationLocation,
+  ): Promise<void> {
+    await hydrateSessionHistoryForDetailModule(this.context, sessionId, location);
   }
 
   async deleteChatSession(sessionId: string): Promise<void> {

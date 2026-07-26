@@ -874,7 +874,8 @@
   "childSession": {
     "stopReview": "中止審核",
     "stoppingReview": "正在中止審核...",
-    "stopReviewFailed": "中止審核會話失敗。",
+    "stopReviewFailed": "無法確認審核是否已停止，它可能仍在執行。",
+    "backToReview": "返回審核",
     "kinds": {
       "btw": {
         "short": "側問",
@@ -901,6 +902,19 @@
         "title": "子智能體會話",
         "origin": "子智能體"
       }
+    },
+    "reviewDetail": {
+      "loading": "正在載入已儲存的詳情...",
+      "loadFailed": "無法載入詳情。",
+      "unavailable": "沒有可用於這項檢查的已儲存詳情。",
+      "retryLoad": "重新載入",
+      "preparing": "{{label}}正在準備...",
+      "completedEmpty": "{{label}}已結束，沒有更多詳情。",
+      "partialTimedOut": "這項檢查已逾時，但傳回了部分詳情。",
+      "stopped": "{{label}}已停止，尚未產生可查看的詳情。",
+      "interrupted": "{{label}}已中斷。可返回審核繼續。",
+      "timedOut": "{{label}}已逾時，尚未產生可查看的詳情。",
+      "failed": "{{label}}未能完成。"
     }
   },
   "deepReviewActionBar": {
@@ -1748,7 +1762,10 @@
       "reviewCoverageLabel": "補充檢查",
       "reviewCoverageDescription": "正在補充審核證據",
       "reviewFocusedDescription": "正在核查一個具體問題",
-      "reviewCheckUnavailable": "這項補充檢查未能完成，主要審核仍可繼續。"
+      "reviewCheckUnavailable": "這項補充檢查未能完成，主要審核仍可繼續。",
+      "reviewPartialTimeout": "已逾時，但傳回了部分詳情",
+      "reviewTimedOut": "已逾時",
+      "reviewStopped": "已停止"
     },
     "taskDetailPanel": {
       "untitled": "未命名任務",
@@ -1774,6 +1791,8 @@
       "loadingMore": "正在載入更多輸出...",
       "loading": "正在載入任務詳情...",
       "stopReviewWork": "停止此檢查",
+      "stoppingReviewWork": "正在停止此檢查...",
+      "stopReviewWorkFailed": "無法確認這項檢查是否已停止，它可能仍在執行。",
       "stopReviewWorkHint": "僅取消這個檢查項目，整體審核仍可繼續並產生摘要。"
     },
     "timeout": {

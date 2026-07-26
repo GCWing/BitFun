@@ -33,10 +33,11 @@ import { useToolCardHeightContract } from './useToolCardHeightContract';
 import { ToolTimeoutIndicator } from './ToolTimeoutIndicator';
 import { getReviewerContextBySubagentId } from '@/shared/services/reviewTeamService';
 import type { ReviewerContext } from '@/shared/services/reviewTeamService';
-import { openBtwSessionInAuxPane } from '../services/btwSessionPane';
+import { loadBtwSessionHistory, openBtwSessionInAuxPane } from '../services/btwSessionPane';
 import { flowChatStore } from '../store/FlowChatStore';
 import { useSessionGoalModeActive } from '../hooks/useSessionGoalModeActive';
 import { deriveSubagentExecutionStatus } from '../utils/subagentProjection';
+import { deriveReviewTaskOutcome } from '../utils/reviewTaskOutcome';
 import { agentAPI } from '@/infrastructure/api/service-api/AgentAPI';
 import { notificationService } from '@/shared/notification-system/services/NotificationService';
 import './TaskToolDisplay.scss';
@@ -180,6 +181,8 @@ function readLinkedSubagentSnapshot(sessionId: string): string {
     session?.mode ?? '',
     session?.config?.agentType ?? '',
     session?.config?.modelName ?? '',
+    session?.focusedReviewDisplayLabel ?? '',
+    session?.deepReviewRunManifest?.focusedAssignment?.displayLabel ?? '',
     turn?.id ?? '',
     turn?.status ?? '',
     turn?.startTime ?? null,
@@ -187,6 +190,17 @@ function readLinkedSubagentSnapshot(sessionId: string): string {
     turn?.error ?? '',
     turn?.modelRounds?.some((round) => round.isStreaming) ?? false,
   ]);
+}
+
+function readFocusedReviewDisplayLabel(sessionId: string): string {
+  if (!sessionId) {
+    return '';
+  }
+  const session = flowChatStore.getState().sessions.get(sessionId);
+  return readStringValue(
+    session?.focusedReviewDisplayLabel
+      ?? session?.deepReviewRunManifest?.focusedAssignment?.displayLabel,
+  );
 }
 
 const LEGACY_DEEP_REVIEWER_TYPES = new Set([
@@ -355,6 +369,27 @@ export const TaskToolDisplay: React.FC<ToolCardProps> = ({
   const linkedSubagentSession = linkedSubagentSessionId
     ? flowChatStore.getState().sessions.get(linkedSubagentSessionId)
     : undefined;
+  const loadLinkedReviewHistory = useCallback(async () => {
+    if (!linkedSubagentSessionId) {
+      return;
+    }
+    const sessions = flowChatStore.getState().sessions;
+    const latestChild = sessions.get(linkedSubagentSessionId);
+    const latestParent = sessionId ? sessions.get(sessionId) : undefined;
+    const fallbackWorkspacePath = latestChild?.workspacePath
+      ? undefined
+      : latestParent?.workspacePath;
+    await loadBtwSessionHistory({
+      childSessionId: linkedSubagentSessionId,
+      ...(fallbackWorkspacePath
+        ? {
+            workspacePath: fallbackWorkspacePath,
+            remoteConnectionId: latestParent?.remoteConnectionId,
+            remoteSshHost: latestParent?.remoteSshHost,
+          }
+        : {}),
+    });
+  }, [linkedSubagentSessionId, sessionId]);
 
   const getTaskInput = () => {
     if (!toolCall?.input) return null;
@@ -388,9 +423,12 @@ export const TaskToolDisplay: React.FC<ToolCardProps> = ({
         || readStringValue(toolCall.input.packetId);
       const isFocusedReview = hasFocusedReviewAssignment(toolCall.input)
         || (toolItem.toolName?.toLowerCase() === 'launchreviewagent' && !packetId);
+      const focusedDisplayLabel = isFocusedReview
+        ? readFocusedReviewDisplayLabel(linkedSubagentSessionId)
+        : '';
       return {
         description: isFocusedReview
-          ? t('toolCards.taskTool.reviewFocusedDescription')
+          ? focusedDisplayLabel || t('toolCards.taskTool.reviewFocusedDescription')
           : t('toolCards.taskTool.reviewCoverageDescription'),
         prompt: 'Not provided',
         agentType: t('toolCards.taskTool.reviewCoverageLabel'),
@@ -453,38 +491,65 @@ export const TaskToolDisplay: React.FC<ToolCardProps> = ({
   const linkedSubagentTurn = linkedSubagentSession?.dialogTurns?.[
     linkedSubagentSession.dialogTurns.length - 1
   ];
-  const backgroundSubagentStatus = isBackgroundTask
+  const projectedSubagentStatus = isBackgroundTask || isReviewCoverageTask
     ? deriveSubagentExecutionStatus(linkedSubagentTurn)
     : null;
-  const backgroundSubagentIsRunning = backgroundSubagentStatus === 'running';
-  const isCancelledResult = readTaskWasCancelled(status, toolResult);
-  const displayStatus = isCancelledResult
+  const projectedSubagentIsRunning = projectedSubagentStatus === 'running';
+  const reviewTaskOutcome = isReviewCoverageTask && !projectedSubagentIsRunning
+    ? deriveReviewTaskOutcome(toolItem)
+    : null;
+  const isReviewPartialTimeout = reviewTaskOutcome === 'partial-timeout';
+  const rawTaskErrorMessage = readTaskErrorMessage(toolResult);
+  const isReviewTimeout = reviewTaskOutcome === 'timed-out';
+  const isCancelledResult = !projectedSubagentIsRunning && (
+    readTaskWasCancelled(status, toolResult) || reviewTaskOutcome === 'stopped'
+  );
+  const displayStatus = projectedSubagentIsRunning
+    ? 'running'
+    : isCancelledResult
     ? 'cancelled'
-    : backgroundSubagentStatus ?? status;
-  const isFailed =
+    : projectedSubagentStatus ?? status;
+  const effectiveIsRunning = projectedSubagentStatus == null
+    ? isRunning
+    : projectedSubagentIsRunning;
+  const isFailed = !projectedSubagentIsRunning && (
     displayStatus === 'error' || (
-    !isCancelledResult &&
-    (status === 'error' ||
-    (toolResult != null &&
-      'success' in toolResult &&
-      toolResult.success === false)));
-  const backgroundSubagentDurationMs = isBackgroundTask &&
+      !isCancelledResult &&
+      (status === 'error' ||
+      (toolResult != null &&
+        'success' in toolResult &&
+        toolResult.success === false))
+    )
+  );
+  const hasFailedOutcome = isFailed || isReviewTimeout;
+  const projectedSubagentDurationMs = (isBackgroundTask || isReviewCoverageTask) &&
     linkedSubagentTurn?.endTime != null &&
     linkedSubagentTurn.startTime != null
     ? Math.max(0, linkedSubagentTurn.endTime - linkedSubagentTurn.startTime)
     : undefined;
-  const taskDurationMs = isBackgroundTask
-    ? backgroundSubagentDurationMs
+  const taskDurationMs = projectedSubagentIsRunning
+    ? undefined
+    : isBackgroundTask || isReviewCoverageTask
+    ? projectedSubagentDurationMs ?? readTaskDurationMs(toolResult)
     : readTaskDurationMs(toolResult);
   const taskErrorMessage = displayStatus === 'error'
-    ? linkedSubagentTurn?.error || readTaskErrorMessage(toolResult)
-    : readTaskErrorMessage(toolResult);
-  const visibleTaskErrorMessage = isReviewCoverageTask && taskErrorMessage
-    ? t('toolCards.taskTool.reviewCheckUnavailable')
+    ? linkedSubagentTurn?.error || rawTaskErrorMessage
+    : rawTaskErrorMessage;
+  const visibleTaskErrorMessage = isReviewTimeout
+    ? t('toolCards.taskTool.reviewTimedOut')
+    : isReviewCoverageTask && taskErrorMessage
+      ? t('toolCards.taskTool.reviewCheckUnavailable')
     : taskErrorMessage;
+  const reviewOutcome = isReviewPartialTimeout
+    ? { key: 'toolCards.taskTool.reviewPartialTimeout', kind: 'partial-timeout' }
+    : isReviewTimeout
+      ? { key: 'toolCards.taskTool.reviewTimedOut', kind: 'timed-out' }
+      : isReviewCoverageTask && isCancelledResult
+        ? { key: 'toolCards.taskTool.reviewStopped', kind: 'stopped' }
+        : null;
   const completedDurationStatus = isCancelledResult || displayStatus === 'cancelled'
     ? 'cancelled'
-    : isFailed
+    : hasFailedOutcome
       ? 'error'
       : status === 'cancelled' || status === 'rejected'
       ? 'cancelled'
@@ -505,18 +570,23 @@ export const TaskToolDisplay: React.FC<ToolCardProps> = ({
       || Boolean(resolvedSubagentModel)
       || isRunning
     );
+  const stableSubagentType = readTaskSubagentType(toolCall?.input)
+    || readStringValue(linkedSubagentSession?.subagentType);
+  const stableAgentType = readStringValue(linkedSubagentSession?.mode)
+    || readStringValue(linkedSubagentSession?.config?.agentType)
+    || stableSubagentType;
   const canStopSyncSubagent =
-    isTaskTool &&
-    isRunning &&
+    (isTaskTool || isReviewCoverageTask) &&
+    effectiveIsRunning &&
     !isCancelAction &&
     !isBackgroundTask &&
     Boolean(linkedSubagentSessionId);
 
   useEffect(() => {
-    if (!isRunning || !linkedSubagentSessionId) {
+    if (!effectiveIsRunning || !linkedSubagentSessionId) {
       setIsStoppingSubagent(false);
     }
-  }, [isRunning, linkedSubagentSessionId]);
+  }, [effectiveIsRunning, linkedSubagentSessionId]);
 
   const handleStopSyncSubagent = useCallback(async (event: React.MouseEvent<HTMLButtonElement>) => {
     event.stopPropagation();
@@ -525,15 +595,40 @@ export const TaskToolDisplay: React.FC<ToolCardProps> = ({
     }
 
     setIsStoppingSubagent(true);
-    try {
-      await agentAPI.cancelSession(linkedSubagentSessionId);
-    } catch (_error) {
+    const reportStopFailure = async () => {
+      if (isReviewCoverageTask) {
+        await loadLinkedReviewHistory().catch(() => undefined);
+        const latestSession = flowChatStore.getState().sessions.get(linkedSubagentSessionId);
+        const latestTurn = latestSession?.dialogTurns[latestSession.dialogTurns.length - 1];
+        if (deriveSubagentExecutionStatus(latestTurn) !== 'running') {
+          setIsStoppingSubagent(false);
+          return;
+        }
+      }
       setIsStoppingSubagent(false);
-      notificationService.error(t('toolCards.taskDetailPanel.stopSubagentFailed'), {
+      notificationService.error(t(isReviewCoverageTask
+        ? 'toolCards.taskDetailPanel.stopReviewWorkFailed'
+        : 'toolCards.taskDetailPanel.stopSubagentFailed'), {
         duration: 5000,
       });
+    };
+    try {
+      const result = await agentAPI.cancelSession(linkedSubagentSessionId);
+      if (isReviewCoverageTask && !result.cancelled) {
+        await reportStopFailure();
+      } else if (isReviewCoverageTask) {
+        await loadLinkedReviewHistory().catch(() => undefined);
+        setIsStoppingSubagent(false);
+      } else if (!result.cancelled) {
+        setIsStoppingSubagent(false);
+        notificationService.error(t('toolCards.taskDetailPanel.stopSubagentFailed'), {
+          duration: 5000,
+        });
+      }
+    } catch (_error) {
+      await reportStopFailure();
     }
-  }, [isStoppingSubagent, linkedSubagentSessionId, t]);
+  }, [isReviewCoverageTask, isStoppingSubagent, linkedSubagentSessionId, loadLinkedReviewHistory, t]);
 
   const handleCardClick = useCallback((e: React.MouseEvent) => {
     const target = e.target as HTMLElement;
@@ -552,7 +647,7 @@ export const TaskToolDisplay: React.FC<ToolCardProps> = ({
   }, [isExpanded, updateCardExpandedState]);
 
   const showHeaderExpandHint = !isCancelAction && (
-    isFailed ||
+    hasFailedOutcome ||
     hasInterruptionNote ||
     hasRealPrompt ||
     needsConfirmation ||
@@ -595,7 +690,7 @@ export const TaskToolDisplay: React.FC<ToolCardProps> = ({
         return;
       }
 
-      if (linkedSubagentSessionId && sessionId && !isReviewCoverageTask) {
+      if (linkedSubagentSessionId && sessionId) {
         const parentSession = flowChatStore.getState().sessions.get(sessionId);
         openBtwSessionInAuxPane({
           childSessionId: linkedSubagentSessionId,
@@ -603,12 +698,13 @@ export const TaskToolDisplay: React.FC<ToolCardProps> = ({
           workspacePath: parentSession?.workspacePath,
           sessionKind: 'subagent',
           sessionTitle: taskHeaderLine,
-          agentType: taskInput?.agentType,
+          agentType: stableAgentType || undefined,
           parentToolCallId: toolCall?.id || toolItem.id,
-          subagentType: taskInput?.agentType,
+          subagentType: stableSubagentType || undefined,
           remoteConnectionId: parentSession?.remoteConnectionId,
           remoteSshHost: parentSession?.remoteSshHost,
           includeInternal: true,
+          ...(isReviewCoverageTask ? { viewKind: 'review-check' as const } : {}),
         });
         return;
       }
@@ -626,7 +722,7 @@ export const TaskToolDisplay: React.FC<ToolCardProps> = ({
         window.dispatchEvent(new CustomEvent('agent-create-tab', { detail: tabInfo }));
       }
     },
-    [isCancelAction, isReviewCoverageTask, linkedSubagentSessionId, onOpenInPanel, sessionId, taskInput, toolCall?.id, toolItem, taskHeaderLine],
+    [isCancelAction, isReviewCoverageTask, linkedSubagentSessionId, onOpenInPanel, sessionId, stableAgentType, stableSubagentType, taskInput, toolCall?.id, toolItem, taskHeaderLine],
   );
 
   const renderToolIcon = () => {
@@ -637,7 +733,7 @@ export const TaskToolDisplay: React.FC<ToolCardProps> = ({
     <div className="task-header-wrapper">
       <ToolCardIconSlot
         icon={renderToolIcon()}
-        iconClassName={`task-icon ${isRunning ? 'is-running' : ''}`}
+        iconClassName={`task-icon ${effectiveIsRunning ? 'is-running' : ''}`}
         expandable={showHeaderExpandHint}
         affordanceKind="expand"
         isExpanded={displayIsExpanded}
@@ -647,7 +743,7 @@ export const TaskToolDisplay: React.FC<ToolCardProps> = ({
       <div className="task-content-wrapper">
         <div className="task-body-columns">
           <div className="task-body-main">
-            <div className={`task-header-main ${isFailed ? 'task-header-main--failed' : ''}`}>
+            <div className={`task-header-main ${hasFailedOutcome ? 'task-header-main--failed' : ''}`}>
               <span className="task-action">
                 {showSubagentExecModel && resolvedSubagentModel ? (
                   <>
@@ -660,7 +756,7 @@ export const TaskToolDisplay: React.FC<ToolCardProps> = ({
               <div className="task-header-meta">
                 <ToolTimeoutIndicator
                   startTime={toolItem.startTime}
-                  isRunning={isRunning || backgroundSubagentIsRunning}
+                  isRunning={effectiveIsRunning}
                   timeoutMs={
                     typeof toolCall?.timeout_seconds === 'number' && toolCall.timeout_seconds > 0
                       ? toolCall.timeout_seconds * 1000
@@ -673,10 +769,19 @@ export const TaskToolDisplay: React.FC<ToolCardProps> = ({
                   defaultTimeoutDisabled={defaultTimeoutDisabled}
                   completedDurationMs={taskDurationMs}
                   completedStatus={completedDurationStatus}
-                  completedFailureReason={isFailed ? visibleTaskErrorMessage ?? undefined : undefined}
+                  completedFailureReason={hasFailedOutcome ? visibleTaskErrorMessage ?? undefined : undefined}
                 />
-                {isFailed && (
+                {hasFailedOutcome && !reviewOutcome && (
                   <span className="task-failed-badge">{t('toolCards.taskTool.failed')}</span>
+                )}
+                {reviewOutcome && (
+                  <span
+                    className={`task-review-outcome task-review-outcome--${reviewOutcome.kind}`}
+                    role="status"
+                    aria-live="polite"
+                  >
+                    {t(reviewOutcome.key)}
+                  </span>
                 )}
                 {canStopSyncSubagent && (
                   <button
@@ -686,14 +791,18 @@ export const TaskToolDisplay: React.FC<ToolCardProps> = ({
                     disabled={isStoppingSubagent}
                     aria-label={
                       isStoppingSubagent
-                        ? t('toolCards.taskDetailPanel.stoppingSubagent')
+                        ? t(isReviewCoverageTask
+                          ? 'toolCards.taskDetailPanel.stoppingReviewWork'
+                          : 'toolCards.taskDetailPanel.stoppingSubagent')
                         : isReviewCoverageTask
                           ? t('toolCards.taskDetailPanel.stopReviewWork')
                           : t('toolCards.taskDetailPanel.stopSubagent')
                     }
                     title={
                       isStoppingSubagent
-                        ? t('toolCards.taskDetailPanel.stoppingSubagent')
+                        ? t(isReviewCoverageTask
+                          ? 'toolCards.taskDetailPanel.stoppingReviewWork'
+                          : 'toolCards.taskDetailPanel.stoppingSubagent')
                         : isReviewCoverageTask
                           ? t('toolCards.taskDetailPanel.stopReviewWork')
                           : t('toolCards.taskDetailPanel.stopSubagent')
@@ -719,7 +828,7 @@ export const TaskToolDisplay: React.FC<ToolCardProps> = ({
                 title={t('toolCards.taskTool.openInPanel')}
               />
               <div className="task-header-rail__visual" aria-hidden>
-                <ChevronRight size={16} strokeWidth={2} absoluteStrokeWidth />{isRunning || backgroundSubagentIsRunning ? (
+                <ChevronRight size={16} strokeWidth={2} absoluteStrokeWidth />{effectiveIsRunning ? (
                   <ToolCardStatusIcon
                     icon={<CubeLoading size="small" />}
                     className="task-status-icon--rail"
@@ -735,7 +844,7 @@ export const TaskToolDisplay: React.FC<ToolCardProps> = ({
 
   const renderExpandedContent = () => {
     /* Failure only in header badge; do not keep prompt/confirm in expanded body. */
-    if (isFailed) {
+    if (hasFailedOutcome) {
       return null;
     }
 
@@ -837,7 +946,7 @@ export const TaskToolDisplay: React.FC<ToolCardProps> = ({
         header={renderHeader()}
         expandedContent={isCancelAction ? null : renderExpandedContent()}
         headerExpandAffordance={showHeaderExpandHint}
-        isFailed={isFailed}
+        isFailed={hasFailedOutcome}
         requiresConfirmation={needsConfirmation}
       />
     </div>

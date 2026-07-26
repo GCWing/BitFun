@@ -541,6 +541,9 @@ export const ExportImageButton: React.FC<ExportImageButtonProps> = ({
         className={`model-round-item__action-btn model-round-item__export-btn ${className}`}
         onClick={handleExport}
         disabled={isExporting}
+        aria-label={isExporting
+          ? i18nService.t('flow-chat:exportImage.exporting')
+          : i18nService.t('flow-chat:exportImage.exportToImage')}
       >
         {isExporting ? <Loader2 size={14} className="spinning" /> : <Image size={14} />}
       </button>

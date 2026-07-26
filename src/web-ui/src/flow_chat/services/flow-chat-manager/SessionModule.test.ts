@@ -4,6 +4,7 @@ import {
   createChatSession,
   deleteChatSession,
   ensureBackendSession,
+  hydrateSessionHistoryForDetail,
   preloadHistoricalSessionForOpen,
   retryCreateBackendSession,
   resolveAgentTypeForSessionCreation,
@@ -612,6 +613,116 @@ describe('SessionModule historical session coordination', () => {
 
     load.resolve();
     await load.promise;
+  });
+
+  it('deduplicates concurrent detail hydration and includes internal child output', async () => {
+    const load = createDeferred<void>();
+    const { context, flowChatStore } = createContext(createSession({
+      isHistorical: false,
+      historyState: 'new',
+      sessionKind: 'subagent',
+    }));
+    flowChatStore.loadSessionHistory.mockReturnValueOnce(load.promise);
+
+    const first = hydrateSessionHistoryForDetail(context, 'history-1');
+    const second = hydrateSessionHistoryForDetail(context, 'history-1');
+    await Promise.resolve();
+
+    expect(flowChatStore.loadSessionHistory).toHaveBeenCalledTimes(1);
+    expect(flowChatStore.loadSessionHistory).toHaveBeenCalledWith(
+      'history-1',
+      'D:/workspace/BitFun',
+      undefined,
+      undefined,
+      undefined,
+      { includeInternal: true, deferFullHistoryUntilActive: false },
+    );
+
+    load.resolve();
+    await Promise.all([first, second]);
+  });
+
+  it('uses the owning panel scope when a legacy child is missing its workspace location', async () => {
+    const { context, flowChatStore } = createContext(createSession({
+      workspacePath: undefined,
+      remoteConnectionId: undefined,
+      remoteSshHost: undefined,
+      sessionKind: 'subagent',
+    }));
+
+    await hydrateSessionHistoryForDetail(context, 'history-1', {
+      workspacePath: 'D:/workspace/BitFun',
+      remoteConnectionId: 'remote-current',
+      remoteSshHost: 'host-current',
+    });
+
+    expect(flowChatStore.loadSessionHistory).toHaveBeenCalledWith(
+      'history-1',
+      'D:/workspace/BitFun',
+      undefined,
+      'remote-current',
+      'host-current',
+      { includeInternal: true, deferFullHistoryUntilActive: false },
+    );
+  });
+
+  it('retries with a stronger location after a reused weak hydrate fails', async () => {
+    const { context, flowChatStore } = createContext(createSession({
+      workspacePath: undefined,
+      remoteConnectionId: undefined,
+      remoteSshHost: undefined,
+      sessionKind: 'subagent',
+    }));
+
+    const weakHydrate = hydrateSessionHistoryForDetail(context, 'history-1');
+    const strongHydrate = hydrateSessionHistoryForDetail(context, 'history-1', {
+      workspacePath: 'D:/workspace/BitFun',
+      remoteConnectionId: 'remote-current',
+      remoteSshHost: 'host-current',
+    });
+
+    await expect(weakHydrate).rejects.toThrow('Workspace path is required');
+    await expect(strongHydrate).resolves.toBeUndefined();
+    expect(flowChatStore.loadSessionHistory).toHaveBeenCalledTimes(1);
+    expect(flowChatStore.loadSessionHistory).toHaveBeenCalledWith(
+      'history-1',
+      'D:/workspace/BitFun',
+      undefined,
+      'remote-current',
+      'host-current',
+      { includeInternal: true, deferFullHistoryUntilActive: false },
+    );
+  });
+
+  it('upgrades a weaker in-flight preload before showing subagent details', async () => {
+    const preload = createDeferred<void>();
+    const { context, flowChatStore } = createContext(createSession({
+      sessionKind: 'subagent',
+    }));
+    context.pendingHistoryLoads.set('history-other', Promise.resolve());
+    flowChatStore.loadSessionHistory
+      .mockReturnValueOnce(preload.promise)
+      .mockResolvedValueOnce(undefined);
+
+    preloadHistoricalSessionForOpen(context, 'history-1');
+    await Promise.resolve();
+    const detailHydrate = hydrateSessionHistoryForDetail(context, 'history-1');
+
+    expect(flowChatStore.loadSessionHistory).toHaveBeenCalledTimes(1);
+
+    preload.resolve();
+    await detailHydrate;
+
+    expect(flowChatStore.loadSessionHistory).toHaveBeenCalledTimes(2);
+    expect(flowChatStore.loadSessionHistory).toHaveBeenNthCalledWith(
+      2,
+      'history-1',
+      'D:/workspace/BitFun',
+      undefined,
+      undefined,
+      undefined,
+      { includeInternal: true, deferFullHistoryUntilActive: false },
+    );
   });
 
   it('retries a reused preload that stale-skipped after explicit activation', async () => {

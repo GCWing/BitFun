@@ -874,7 +874,8 @@
   "childSession": {
     "stopReview": "中止审核",
     "stoppingReview": "正在中止审核...",
-    "stopReviewFailed": "中止审核会话失败。",
+    "stopReviewFailed": "无法确认审核是否已停止，它可能仍在运行。",
+    "backToReview": "返回审核",
     "kinds": {
       "btw": {
         "short": "侧问",
@@ -901,6 +902,19 @@
         "title": "子智能体会话",
         "origin": "子智能体"
       }
+    },
+    "reviewDetail": {
+      "loading": "正在加载已保存的详情...",
+      "loadFailed": "无法加载详情。",
+      "unavailable": "没有可用于这项检查的已保存详情。",
+      "retryLoad": "重新加载",
+      "preparing": "{{label}}正在准备...",
+      "completedEmpty": "{{label}}已结束，没有更多详情。",
+      "partialTimedOut": "这项检查已超时，但返回了部分详情。",
+      "stopped": "{{label}}已停止，尚未产生可查看的详情。",
+      "interrupted": "{{label}}已中断。可返回审核继续。",
+      "timedOut": "{{label}}已超时，尚未产生可查看的详情。",
+      "failed": "{{label}}未能完成。"
     }
   },
   "deepReviewActionBar": {
@@ -1748,7 +1762,10 @@
       "reviewCoverageLabel": "补充检查",
       "reviewCoverageDescription": "正在补充审核证据",
       "reviewFocusedDescription": "正在核查一个具体问题",
-      "reviewCheckUnavailable": "这项补充检查未能完成，主审核仍可继续。"
+      "reviewCheckUnavailable": "这项补充检查未能完成，主审核仍可继续。",
+      "reviewPartialTimeout": "已超时，但返回了部分详情",
+      "reviewTimedOut": "已超时",
+      "reviewStopped": "已停止"
     },
     "taskDetailPanel": {
       "untitled": "未命名任务",
@@ -1774,6 +1791,8 @@
       "loadingMore": "正在加载更多输出...",
       "loading": "正在加载任务详情...",
       "stopReviewWork": "停止此检查",
+      "stoppingReviewWork": "正在停止此检查...",
+      "stopReviewWorkFailed": "无法确认这项检查是否已停止，它可能仍在运行。",
       "stopReviewWorkHint": "仅取消这个检查项，整体审核仍可继续并生成摘要。"
     },
     "timeout": {

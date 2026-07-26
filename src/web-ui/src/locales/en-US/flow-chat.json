@@ -874,7 +874,21 @@
   "childSession": {
     "stopReview": "Stop review",
     "stoppingReview": "Stopping review...",
-    "stopReviewFailed": "Failed to stop the review session.",
+    "stopReviewFailed": "Could not confirm that Review stopped. It may still be running.",
+    "backToReview": "Back to Review",
+    "reviewDetail": {
+      "loading": "Loading saved details...",
+      "loadFailed": "Details could not be loaded.",
+      "unavailable": "No saved details are available for this check.",
+      "retryLoad": "Try loading again",
+      "preparing": "{{label}} is preparing...",
+      "completedEmpty": "{{label}} finished without additional details.",
+      "partialTimedOut": "This check timed out after returning partial details.",
+      "stopped": "{{label}} stopped before producing details.",
+      "interrupted": "{{label}} was interrupted. Return to Review to continue.",
+      "timedOut": "{{label}} timed out before producing details.",
+      "failed": "{{label}} could not be completed."
+    },
     "kinds": {
       "btw": {
         "short": "Side",
@@ -1748,7 +1762,10 @@
       "reviewCoverageLabel": "Additional check",
       "reviewCoverageDescription": "Checking additional review evidence",
       "reviewFocusedDescription": "Checking a specific concern",
-      "reviewCheckUnavailable": "This additional check could not be completed. The main review can continue."
+      "reviewCheckUnavailable": "This additional check could not be completed. The main review can continue.",
+      "reviewPartialTimeout": "Timed out after returning partial details",
+      "reviewTimedOut": "Timed out",
+      "reviewStopped": "Stopped"
     },
     "taskDetailPanel": {
       "untitled": "Untitled Task",
@@ -1774,6 +1791,8 @@
       "loadingMore": "Loading more output...",
       "loading": "Loading task details...",
       "stopReviewWork": "Stop this check",
+      "stoppingReviewWork": "Stopping this check...",
+      "stopReviewWorkFailed": "Could not confirm that this check stopped. It may still be running.",
       "stopReviewWorkHint": "Cancels only this check. The overall Review can keep going and still produce a summary."
     },
     "timeout": {

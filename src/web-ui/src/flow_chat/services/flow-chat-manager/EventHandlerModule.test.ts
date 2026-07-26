@@ -137,6 +137,50 @@ describe('subagent parent helpers', () => {
         toolCallId: 'task-2',
       });
   });
+
+  it('projects a linked Review manifest into the live child session', () => {
+    const task = makeTaskTool('task-review');
+    FlowChatStore.getInstance().setState(() => ({
+      sessions: new Map([[
+        'parent-session',
+        {
+          sessionId: 'parent-session',
+          title: 'Parent Session',
+          dialogTurns: [{
+            id: 'parent-turn',
+            sessionId: 'parent-session',
+            userMessage: { id: 'user-1', content: 'Review', timestamp: 900 },
+            modelRounds: [makeRound('round-1', [task])],
+            status: 'processing',
+            startTime: 900,
+          }],
+          status: 'idle',
+          config: { agentType: 'CodeReview' },
+          createdAt: 800,
+          lastActiveAt: 1000,
+          error: null,
+          sessionKind: 'normal',
+          workspacePath: 'D:\\workspace\\repo',
+        } as Session,
+      ]]),
+      activeSessionId: 'parent-session',
+    }));
+    __test_only__.handleSubagentSessionLinked(
+      { currentWorkspacePath: 'D:\\workspace\\repo' } as FlowChatContext,
+      {
+        sessionId: 'review-child',
+        parentSessionId: 'parent-session',
+        parentDialogTurnId: 'parent-turn',
+        parentToolCallId: 'task-review',
+        agentType: 'ReviewWorker',
+        focusedReviewDisplayLabel: 'Authentication boundary',
+      },
+    );
+
+    expect(
+      FlowChatStore.getInstance().getState().sessions.get('review-child')?.focusedReviewDisplayLabel,
+    ).toBe('Authentication boundary');
+  });
 });
 
 describe('shouldProcessEvent', () => {

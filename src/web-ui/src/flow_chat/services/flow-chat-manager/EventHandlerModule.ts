@@ -153,6 +153,7 @@ export const __test_only__ = {
   mergeParamsPartialEventData,
   findSubagentParentInfoByRound,
   handleDialogTurnFailed,
+  handleSubagentSessionLinked,
 };
 
 function shouldMarkUnreadCompletion(sessionId: string): boolean {
@@ -396,6 +397,7 @@ function ensureSubagentSession(
   subagentSessionId: string,
   event?: Record<string, unknown>,
   explicitSubagentType?: string,
+  focusedReviewDisplayLabel?: SubagentSessionLinkedEvent['focusedReviewDisplayLabel'],
 ): void {
   const store = FlowChatStore.getInstance();
   const existing = store.getState().sessions.get(subagentSessionId);
@@ -414,6 +416,7 @@ function ensureSubagentSession(
         subagentType: subagentType || undefined,
       });
     }
+    store.updateSessionFocusedReviewDisplayLabel(subagentSessionId, focusedReviewDisplayLabel);
     return;
   }
 
@@ -438,6 +441,7 @@ function ensureSubagentSession(
           ? parentTurnIndex + 1
           : undefined,
       },
+      focusedReviewDisplayLabel,
     },
     parentSession?.remoteConnectionId || extractEventRemoteConnectionId(event),
     parentSession?.remoteSshHost || extractEventRemoteSshHost(event),
@@ -487,6 +491,11 @@ function handleSubagentSessionLinked(
     event?.subagentDialogTurnId ?? (event as any)?.subagent_dialog_turn_id;
   const agentType = event?.agentType ?? (event as any)?.agent_type;
   const modelId = event?.modelId ?? (event as any)?.model_id;
+  const rawFocusedReviewDisplayLabel = event?.focusedReviewDisplayLabel
+    ?? (event as any)?.focused_review_display_label;
+  const focusedReviewDisplayLabel = typeof rawFocusedReviewDisplayLabel === 'string'
+    ? rawFocusedReviewDisplayLabel
+    : undefined;
 
   if (!childSessionId || !parentSessionId || !parentDialogTurnId || !parentToolCallId) {
     log.warn('SubagentSessionLinked missing required fields', { event });
@@ -500,7 +509,14 @@ function handleSubagentSessionLinked(
   };
 
   attachSubagentSessionToParentTool(parentInfo, childSessionId, subagentDialogTurnId);
-  ensureSubagentSession(context, parentInfo, childSessionId, event as Record<string, unknown>, agentType);
+  ensureSubagentSession(
+    context,
+    parentInfo,
+    childSessionId,
+    event as Record<string, unknown>,
+    agentType,
+    focusedReviewDisplayLabel,
+  );
   if (typeof modelId === 'string' && modelId.trim()) {
     FlowChatStore.getInstance().updateSessionModelName(childSessionId, modelId.trim());
   }

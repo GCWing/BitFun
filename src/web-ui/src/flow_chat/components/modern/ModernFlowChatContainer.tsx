@@ -1264,7 +1264,18 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
     }
 
     try {
-      await agentAPI.cancelSession(subagent.sessionId);
+      const result = await agentAPI.cancelSession(subagent.sessionId);
+      if (!result.cancelled) {
+        setStoppingBackgroundSubagentIds((previous) => {
+          const next = new Set(previous);
+          next.delete(subagent.sessionId);
+          return next;
+        });
+        notificationService.error(
+          t('flowChatHeader.backgroundSubagentStopFailed'),
+          { duration: 5000 },
+        );
+      }
     } catch (_error) {
       setStoppingBackgroundSubagentIds((previous) => {
         const next = new Set(previous);

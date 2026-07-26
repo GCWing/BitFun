@@ -136,6 +136,9 @@ pub enum AgenticEvent {
         /// Resolved model selector stored on the child session.
         #[serde(skip_serializing_if = "Option::is_none")]
         model_id: Option<String>,
+        /// Runtime-admitted public label for a focused Review child.
+        #[serde(skip_serializing_if = "Option::is_none")]
+        focused_review_display_label: Option<String>,
     },
 
     DialogTurnCompleted {
@@ -930,6 +933,7 @@ mod tests {
             parent_tool_call_id: "tool-1".to_string(),
             agent_type: Some("GeneralPurpose".to_string()),
             model_id: Some("fast".to_string()),
+            focused_review_display_label: Some("Authentication boundary".to_string()),
         };
 
         assert_eq!(event.session_id(), Some("child-session"));
@@ -944,5 +948,9 @@ mod tests {
         assert_eq!(serialized["parent_tool_call_id"], "tool-1");
         assert_eq!(serialized["agent_type"], "GeneralPurpose");
         assert_eq!(serialized["model_id"], "fast");
+        assert_eq!(
+            serialized["focused_review_display_label"],
+            "Authentication boundary"
+        );
     }
 }

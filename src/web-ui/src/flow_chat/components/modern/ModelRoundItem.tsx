@@ -366,7 +366,7 @@ export const ModelRoundItem = React.memo<ModelRoundItemProps>(
   }) => {
     const { t } = useTranslation('flow-chat');
     const { formatDate, formatNumber } = useI18n('flow-chat');
-    const { sessionId } = useFlowChatContext();
+    const { sessionId, allowTranscriptExport = true } = useFlowChatContext();
     const typewriterRevealGate = useCreateTypewriterRevealGate();
     // Capture mount-time streaming state once: history rounds may fade in,
     // but a round that started as streaming must never replay fadeIn when it
@@ -877,7 +877,7 @@ export const ModelRoundItem = React.memo<ModelRoundItemProps>(
 
             <ForkSessionButton sessionId={sessionId} turnId={turnId} />
 
-            <div className="model-round-item__copy-menu-anchor">
+            {allowTranscriptExport && <div className="model-round-item__copy-menu-anchor">
               <Tooltip content={copied ? t('modelRound.copiedDialog') : t('modelRound.copyDialog')} placement="top">
                 <button
                   ref={copyButtonRef}
@@ -887,6 +887,7 @@ export const ModelRoundItem = React.memo<ModelRoundItemProps>(
                   disabled={!shouldRevealFooter}
                   aria-haspopup="menu"
                   aria-expanded={isCopyMenuOpen}
+                  aria-label={copied ? t('modelRound.copiedDialog') : t('modelRound.copyDialog')}
                   data-testid="model-round-copy-btn"
                 >
                   {copied ? <Check size={14} /> : <Copy size={14} />}
@@ -920,9 +921,9 @@ export const ModelRoundItem = React.memo<ModelRoundItemProps>(
                   </button>
                 </div>
               )}
-            </div>
+            </div>}
 
-            <ExportImageButton turnId={turnId} />
+            {allowTranscriptExport && <ExportImageButton turnId={turnId} />}
           </div>
         )}
       </div>

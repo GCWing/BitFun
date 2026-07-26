@@ -23,6 +23,13 @@ export interface FlowChatContext {
   }>;
   /** In-flight historical session hydration: sessionId -> promise */
   pendingHistoryLoads: Map<string, Promise<void>>;
+  /** Capabilities of each in-flight hydrate, used to avoid reusing a weaker preload. */
+  pendingHistoryLoadCapabilities?: Map<string, {
+    promise: Promise<void>;
+    includeInternal: boolean;
+    deferFullHistoryUntilActive: boolean;
+    locationKey: string;
+  }>;
   /** In-flight backend context restore for view-restored historical sessions. */
   pendingContextRestores?: Map<string, Promise<void>>;
   /** Content buffers: sessionId -> (roundId -> content) */
@@ -52,6 +59,13 @@ export interface FlowChatContext {
    */
   handledTerminalTurnEvents: Set<string>;
   currentWorkspacePath: string | null;
+}
+
+/** Current owner scope used only when a restored child lacks saved location metadata. */
+export interface SessionHistoryHydrationLocation {
+  workspacePath?: string;
+  remoteConnectionId?: string;
+  remoteSshHost?: string;
 }
 
 /**

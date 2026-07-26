@@ -8,6 +8,13 @@ import { useReviewActionBarStore } from '../../store/deepReviewActionBarStore';
 import { loadPersistedReviewState } from '../../services/ReviewActionBarPersistenceService';
 import type { FlowChatState, Session } from '../../types/flow-chat';
 
+const panelMocks = vi.hoisted(() => ({
+  cancelSession: vi.fn(),
+  hydrateSessionHistoryForDetail: vi.fn(),
+  notificationError: vi.fn(),
+  virtualItems: [] as unknown[],
+}));
+
 let flowChatState: FlowChatState;
 const translate = (_key: string, options?: Record<string, unknown> & { defaultValue?: string }) => (
   options?.defaultValue ?? _key
@@ -23,9 +30,19 @@ vi.mock('react-i18next', () => ({
   }),
 }));
 
-vi.mock('../modern/VirtualItemRenderer', () => ({
-  VirtualItemRenderer: () => <div />,
-}));
+vi.mock('../modern/VirtualItemRenderer', async () => {
+  const ReactModule = await import('react');
+  const { useFlowChatContext } = await import('../modern/FlowChatContext');
+  return {
+    VirtualItemRenderer: () => {
+      const { allowTranscriptExport } = useFlowChatContext();
+      return ReactModule.createElement('div', {
+        'data-testid': 'virtual-item-renderer',
+        'data-allow-transcript-export': String(allowTranscriptExport),
+      });
+    },
+  };
+});
 
 vi.mock('../modern/ProcessingIndicator', () => ({
   ProcessingIndicator: () => <div />,
@@ -58,11 +75,26 @@ vi.mock('@/component-library', () => ({
   IconButton: ({
     children,
     onClick,
+    disabled,
+    className,
+    'data-testid': testId,
+    'aria-label': ariaLabel,
   }: {
     children: React.ReactNode;
     onClick?: () => void;
+    disabled?: boolean;
+    className?: string;
+    'data-testid'?: string;
+    'aria-label'?: string;
   }) => (
-    <button type="button" onClick={onClick}>
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      className={className}
+      data-testid={testId}
+      aria-label={ariaLabel}
+    >
       {children}
     </button>
   ),
@@ -80,7 +112,7 @@ vi.mock('@/shared/utils/tabUtils', () => ({
 
 vi.mock('@/infrastructure/api', () => ({
   agentAPI: {
-    cancelSession: vi.fn(),
+    cancelSession: (...args: unknown[]) => panelMocks.cancelSession(...args),
   },
 }));
 
@@ -92,7 +124,7 @@ vi.mock('@/infrastructure/event-bus', () => ({
 
 vi.mock('@/shared/notification-system', () => ({
   notificationService: {
-    error: vi.fn(),
+    error: (...args: unknown[]) => panelMocks.notificationError(...args),
   },
 }));
 
@@ -110,22 +142,23 @@ vi.mock('../../store/FlowChatStore', () => ({
     getInstance: () => ({
       getState: () => flowChatState,
       subscribe: () => () => {},
-      loadSessionHistory: vi.fn(),
     }),
   },
   flowChatStore: {
     getState: () => flowChatState,
     subscribe: () => () => {},
-    loadSessionHistory: vi.fn(),
+  },
+}));
+
+vi.mock('../../services/FlowChatManager', () => ({
+  flowChatManager: {
+    hydrateSessionHistoryForDetail: (...args: unknown[]) =>
+      panelMocks.hydrateSessionHistoryForDetail(...args),
   },
 }));
 
 vi.mock('../../store/modernFlowChatStore', () => ({
-  sessionToVirtualItems: () => [],
-}));
-
-vi.mock('../../utils/reviewSessionStop', () => ({
-  settleStoppedReviewSessionState: vi.fn(),
+  sessionToVirtualItems: () => panelMocks.virtualItems,
 }));
 
 vi.mock('../../services/ReviewActionBarPersistenceService', () => ({
@@ -181,6 +214,24 @@ function createReviewSession(): Session {
     sessionKind: 'deep_review',
     parentSessionId: 'parent-session',
     workspacePath: 'D:/workspace/project',
+  } as Session;
+}
+
+function createEmptyReviewCheckSession(overrides: Partial<Session> = {}): Session {
+  return {
+    sessionId: 'review-check-child',
+    title: 'Internal reviewer title',
+    dialogTurns: [],
+    status: 'idle',
+    config: {},
+    createdAt: 1,
+    lastActiveAt: 1,
+    error: null,
+    sessionKind: 'subagent',
+    parentSessionId: 'parent-session',
+    workspacePath: 'D:/workspace/project',
+    historyState: 'ready',
+    ...overrides,
   } as Session;
 }
 
@@ -402,6 +453,11 @@ describe('BtwSessionPanel review action bar integration', () => {
   beforeEach(() => {
     (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
     useReviewActionBarStore.getState().reset();
+    panelMocks.cancelSession.mockReset();
+    panelMocks.hydrateSessionHistoryForDetail.mockReset();
+    panelMocks.hydrateSessionHistoryForDetail.mockResolvedValue(undefined);
+    panelMocks.notificationError.mockReset();
+    panelMocks.virtualItems = [];
     container = document.createElement('div');
     document.body.appendChild(container);
     root = createRoot(container);
@@ -435,6 +491,530 @@ describe('BtwSessionPanel review action bar integration', () => {
     });
     container.remove();
     useReviewActionBarStore.getState().reset();
+  });
+
+  it('shows a Review-check loading state instead of an empty thread', async () => {
+    flowChatState = {
+      ...flowChatState,
+      sessions: new Map([
+        ['review-check-child', createEmptyReviewCheckSession({
+          isHistorical: true,
+          historyState: 'metadata-only',
+        })],
+        ['parent-session', flowChatState.sessions.get('parent-session')!],
+      ]),
+    } as FlowChatState;
+
+    await act(async () => {
+      root.render(
+        <BtwSessionPanel
+          childSessionId="review-check-child"
+          parentSessionId="parent-session"
+          workspacePath="D:/workspace/project"
+          viewKind="review-check"
+        />,
+      );
+    });
+
+    expect(container.textContent).toContain('toolCards.taskTool.reviewCoverageLabel');
+    expect(container.textContent).toContain('childSession.reviewDetail.loading');
+    expect(container.textContent).not.toContain('session.empty');
+  });
+
+  it('does not start a second Review-check history load while hydration is in progress', async () => {
+    flowChatState = {
+      ...flowChatState,
+      sessions: new Map([
+        ['review-check-child', createEmptyReviewCheckSession({
+          isHistorical: true,
+          historyState: 'hydrating',
+        })],
+        ['parent-session', flowChatState.sessions.get('parent-session')!],
+      ]),
+    } as FlowChatState;
+
+    await act(async () => {
+      root.render(
+        <BtwSessionPanel
+          childSessionId="review-check-child"
+          parentSessionId="parent-session"
+          workspacePath="D:/workspace/project"
+          viewKind="review-check"
+        />,
+      );
+    });
+
+    expect(panelMocks.hydrateSessionHistoryForDetail).not.toHaveBeenCalled();
+    expect(container.textContent).toContain('childSession.reviewDetail.loading');
+  });
+
+  it('offers a load-only retry after Review-check history hydration fails', async () => {
+    flowChatState = {
+      ...flowChatState,
+      sessions: new Map([
+        ['review-check-child', createEmptyReviewCheckSession({
+          isHistorical: true,
+          historyState: 'failed',
+        })],
+        ['parent-session', flowChatState.sessions.get('parent-session')!],
+      ]),
+    } as FlowChatState;
+
+    await act(async () => {
+      root.render(
+        <BtwSessionPanel
+          childSessionId="review-check-child"
+          parentSessionId="parent-session"
+          workspacePath="D:/workspace/project"
+          viewKind="review-check"
+        />,
+      );
+    });
+    panelMocks.hydrateSessionHistoryForDetail.mockClear();
+
+    const retryButton = Array.from(container.querySelectorAll('button'))
+      .find((button) => button.textContent?.includes('childSession.reviewDetail.retryLoad'));
+    expect(retryButton).toBeTruthy();
+
+    await act(async () => {
+      retryButton!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+
+    expect(panelMocks.hydrateSessionHistoryForDetail).toHaveBeenCalledWith('review-check-child');
+    expect(panelMocks.cancelSession).not.toHaveBeenCalled();
+  });
+
+  it('uses the parent workspace when retrying a legacy child without saved location', async () => {
+    flowChatState = {
+      ...flowChatState,
+      sessions: new Map([
+        ['review-check-child', createEmptyReviewCheckSession({
+          workspacePath: undefined,
+          isHistorical: true,
+          historyState: 'failed',
+        })],
+        ['parent-session', {
+          ...flowChatState.sessions.get('parent-session')!,
+          workspacePath: 'D:/workspace/parent',
+          remoteConnectionId: 'remote-current',
+          remoteSshHost: 'host-current',
+        }],
+      ]),
+    } as FlowChatState;
+
+    await act(async () => {
+      root.render(
+        <BtwSessionPanel
+          childSessionId="review-check-child"
+          parentSessionId="parent-session"
+          viewKind="review-check"
+        />,
+      );
+    });
+
+    const retryButton = Array.from(container.querySelectorAll('button'))
+      .find((button) => button.textContent?.includes('childSession.reviewDetail.retryLoad'));
+    expect(retryButton).toBeTruthy();
+
+    await act(async () => {
+      retryButton!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+
+    expect(panelMocks.hydrateSessionHistoryForDetail).toHaveBeenCalledWith(
+      'review-check-child',
+      {
+        workspacePath: 'D:/workspace/parent',
+        remoteConnectionId: 'remote-current',
+        remoteSshHost: 'host-current',
+      },
+    );
+  });
+
+  it('offers a load-only retry when legacy Review-check details are unavailable', async () => {
+    flowChatState = {
+      ...flowChatState,
+      sessions: new Map([
+        ['review-check-child', createEmptyReviewCheckSession({ historyState: 'ready' })],
+        ['parent-session', flowChatState.sessions.get('parent-session')!],
+      ]),
+    } as FlowChatState;
+
+    await act(async () => {
+      root.render(
+        <BtwSessionPanel
+          childSessionId="review-check-child"
+          parentSessionId="parent-session"
+          workspacePath="D:/workspace/project"
+          viewKind="review-check"
+        />,
+      );
+    });
+
+    expect(container.textContent).toContain('childSession.reviewDetail.unavailable');
+    expect(container.textContent).toContain('childSession.reviewDetail.retryLoad');
+    expect(panelMocks.hydrateSessionHistoryForDetail).not.toHaveBeenCalled();
+  });
+
+  it('uses the parent Task partial-timeout outcome for empty Review-check details', async () => {
+    const reviewCheck = createEmptyReviewCheckSession({
+      parentToolCallId: 'review-task-call',
+      dialogTurns: [{
+        id: 'turn-completed',
+        sessionId: 'review-check-child',
+        userMessage: { id: 'user-completed', content: 'internal launch prompt', timestamp: 1 },
+        modelRounds: [],
+        status: 'completed',
+        startTime: 1,
+      }],
+    });
+    const parentSession = {
+      ...flowChatState.sessions.get('parent-session')!,
+      dialogTurns: [{
+        id: 'parent-turn',
+        sessionId: 'parent-session',
+        userMessage: { id: 'parent-user', content: 'review', timestamp: 1 },
+        modelRounds: [{
+          id: 'parent-round',
+          index: 0,
+          isStreaming: false,
+          isComplete: true,
+          status: 'completed',
+          startTime: 1,
+          items: [{
+            id: 'review-task',
+            type: 'tool',
+            timestamp: 1,
+            status: 'completed',
+            toolName: 'LaunchReviewAgent',
+            toolCall: { id: 'review-task-call', input: {} },
+            toolResult: {
+              success: true,
+              result: { status: 'partial_timeout', partial_output: 'private details' },
+            },
+          }],
+        }],
+        status: 'completed',
+        startTime: 1,
+      }],
+    } as Session;
+    flowChatState = {
+      ...flowChatState,
+      sessions: new Map([
+        ['review-check-child', reviewCheck],
+        ['parent-session', parentSession],
+      ]),
+    } as FlowChatState;
+
+    await act(async () => {
+      root.render(
+        <BtwSessionPanel
+          childSessionId="review-check-child"
+          parentSessionId="parent-session"
+          workspacePath="D:/workspace/project"
+          viewKind="review-check"
+          displayTitle="Checking a specific concern"
+        />,
+      );
+    });
+
+    expect(container.textContent).toContain('childSession.reviewDetail.partialTimedOut');
+    expect(container.textContent).toContain('Checking a specific concern');
+    expect(container.textContent).not.toContain('Internal reviewer title');
+    expect(container.querySelector('[data-testid="btw-session-panel-origin-button"]')).toBeTruthy();
+  });
+
+  it('disables transcript export actions for the filtered Review-check projection', async () => {
+    panelMocks.virtualItems = [{ type: 'model-round', turnId: 'turn-1' }];
+    flowChatState = {
+      ...flowChatState,
+      sessions: new Map([
+        ['review-check-child', createEmptyReviewCheckSession({
+          dialogTurns: [{
+            id: 'turn-1',
+            sessionId: 'review-check-child',
+            userMessage: { id: 'internal-user', content: 'internal launch prompt', timestamp: 1 },
+            modelRounds: [],
+            status: 'completed',
+            startTime: 1,
+          }],
+        })],
+        ['parent-session', flowChatState.sessions.get('parent-session')!],
+      ]),
+    } as FlowChatState;
+
+    await act(async () => {
+      root.render(
+        <BtwSessionPanel
+          childSessionId="review-check-child"
+          parentSessionId="parent-session"
+          workspacePath="D:/workspace/project"
+          viewKind="review-check"
+        />,
+      );
+    });
+
+    expect(container.querySelector('[data-testid="virtual-item-renderer"]')
+      ?.getAttribute('data-allow-transcript-export')).toBe('false');
+  });
+
+  it.each([
+    {
+      name: 'stopped',
+      session: createEmptyReviewCheckSession({
+        dialogTurns: [{
+          id: 'turn-stopped',
+          sessionId: 'review-check-child',
+          userMessage: { id: 'user-stopped', content: 'review', timestamp: 1 },
+          modelRounds: [],
+          status: 'cancelled',
+          startTime: 1,
+        }],
+      }),
+      expectedKey: 'childSession.reviewDetail.stopped',
+    },
+    {
+      name: 'interrupted',
+      session: createEmptyReviewCheckSession({
+        dialogTurns: [{
+          id: 'turn-interrupted',
+          sessionId: 'review-check-child',
+          userMessage: { id: 'user-interrupted', content: 'review', timestamp: 1 },
+          modelRounds: [{
+            id: 'round-interrupted',
+            index: 0,
+            isStreaming: false,
+            isComplete: true,
+            status: 'cancelled',
+            startTime: 1,
+            items: [{
+              id: 'tool-interrupted',
+              type: 'tool',
+              toolName: 'read_file',
+              timestamp: 1,
+              status: 'cancelled',
+              interruptionReason: 'app_restart',
+            }],
+          }],
+          status: 'cancelled',
+          startTime: 1,
+        }],
+      }),
+      expectedKey: 'childSession.reviewDetail.interrupted',
+    },
+    {
+      name: 'timed out',
+      session: createEmptyReviewCheckSession({
+        dialogTurns: [{
+          id: 'turn-timeout',
+          sessionId: 'review-check-child',
+          userMessage: { id: 'user-timeout', content: 'review', timestamp: 1 },
+          modelRounds: [],
+          status: 'error',
+          startTime: 1,
+          errorDetail: { category: 'timeout', rawMessage: 'private timeout detail' },
+        }],
+      }),
+      expectedKey: 'childSession.reviewDetail.timedOut',
+    },
+    {
+      name: 'model access failed',
+      session: createEmptyReviewCheckSession({
+        dialogTurns: [{
+          id: 'turn-failed',
+          sessionId: 'review-check-child',
+          userMessage: { id: 'user-failed', content: 'review', timestamp: 1 },
+          modelRounds: [],
+          status: 'error',
+          startTime: 1,
+          error: 'private provider error',
+        }],
+      }),
+      expectedKey: 'childSession.reviewDetail.failed',
+    },
+  ])('shows a safe empty state when a Review check is $name', async ({ session, expectedKey }) => {
+    flowChatState = {
+      ...flowChatState,
+      sessions: new Map([
+        ['review-check-child', session],
+        ['parent-session', flowChatState.sessions.get('parent-session')!],
+      ]),
+    } as FlowChatState;
+
+    await act(async () => {
+      root.render(
+        <BtwSessionPanel
+          childSessionId="review-check-child"
+          parentSessionId="parent-session"
+          workspacePath="D:/workspace/project"
+          viewKind="review-check"
+        />,
+      );
+    });
+
+    expect(container.textContent).toContain(expectedKey);
+    expect(container.textContent).not.toContain('private provider error');
+    expect(container.textContent).not.toContain('private timeout detail');
+    expect(container.textContent).not.toContain('session.empty');
+  });
+
+  it('refreshes a stopped Review check only after cancellation is confirmed', async () => {
+    let resolveCancel!: (result: { cancelled: boolean; dialogTurnId?: string }) => void;
+    const cancelRequest = new Promise<{ cancelled: boolean; dialogTurnId?: string }>((resolve) => {
+      resolveCancel = resolve;
+    });
+    panelMocks.cancelSession.mockReturnValueOnce(cancelRequest);
+    flowChatState = {
+      ...flowChatState,
+      sessions: new Map([
+        ['review-check-child', createEmptyReviewCheckSession({
+          status: 'running',
+          dialogTurns: [{
+            id: 'turn-running',
+            sessionId: 'review-check-child',
+            userMessage: { id: 'user-running', content: 'review', timestamp: 1 },
+            modelRounds: [],
+            status: 'processing',
+            startTime: 1,
+          }],
+        })],
+        ['parent-session', flowChatState.sessions.get('parent-session')!],
+      ]),
+    } as FlowChatState;
+
+    await act(async () => {
+      root.render(
+        <BtwSessionPanel
+          childSessionId="review-check-child"
+          parentSessionId="parent-session"
+          workspacePath="D:/workspace/project"
+          viewKind="review-check"
+        />,
+      );
+    });
+
+    const stopButton = container.querySelector<HTMLButtonElement>(
+      '[data-testid="btw-session-panel-stop-review"]',
+    );
+    expect(stopButton).toBeTruthy();
+    expect(stopButton?.getAttribute('aria-label')).toBe('toolCards.taskDetailPanel.stopReviewWork');
+
+    await act(async () => {
+      stopButton!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      await Promise.resolve();
+    });
+
+    expect(panelMocks.cancelSession).toHaveBeenCalledWith('review-check-child');
+    expect(panelMocks.hydrateSessionHistoryForDetail).not.toHaveBeenCalled();
+    expect(container.querySelector('[data-testid="btw-session-panel-stop-spinner"]')).toBeTruthy();
+
+    await act(async () => {
+      resolveCancel({ cancelled: true, dialogTurnId: 'turn-running' });
+      await cancelRequest;
+    });
+
+    expect(panelMocks.hydrateSessionHistoryForDetail).toHaveBeenCalledWith('review-check-child');
+  });
+
+  it('keeps a Review check running locally when cancellation cannot be confirmed', async () => {
+    panelMocks.cancelSession.mockResolvedValueOnce({ cancelled: false, dialogTurnId: null });
+    flowChatState = {
+      ...flowChatState,
+      sessions: new Map([
+        ['review-check-child', createEmptyReviewCheckSession({
+          status: 'running',
+          dialogTurns: [{
+            id: 'turn-running',
+            sessionId: 'review-check-child',
+            userMessage: { id: 'user-running', content: 'review', timestamp: 1 },
+            modelRounds: [],
+            status: 'processing',
+            startTime: 1,
+          }],
+        })],
+        ['parent-session', flowChatState.sessions.get('parent-session')!],
+      ]),
+    } as FlowChatState;
+
+    await act(async () => {
+      root.render(
+        <BtwSessionPanel
+          childSessionId="review-check-child"
+          parentSessionId="parent-session"
+          workspacePath="D:/workspace/project"
+          viewKind="review-check"
+        />,
+      );
+    });
+
+    const stopButton = container.querySelector<HTMLButtonElement>(
+      '[data-testid="btw-session-panel-stop-review"]',
+    );
+    expect(stopButton).toBeTruthy();
+
+    await act(async () => {
+      stopButton!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      await Promise.resolve();
+    });
+
+    expect(panelMocks.notificationError).toHaveBeenCalledWith(
+      'toolCards.taskDetailPanel.stopReviewWorkFailed',
+    );
+    expect(panelMocks.hydrateSessionHistoryForDetail).toHaveBeenCalledWith('review-check-child');
+  });
+
+  it('does not report a stop failure when the check completed before cancellation arrived', async () => {
+    panelMocks.cancelSession.mockResolvedValueOnce({ cancelled: false, dialogTurnId: null });
+    const runningChild = createEmptyReviewCheckSession({
+      status: 'running',
+      dialogTurns: [{
+        id: 'turn-running',
+        sessionId: 'review-check-child',
+        userMessage: { id: 'user-running', content: 'review', timestamp: 1 },
+        modelRounds: [],
+        status: 'processing',
+        startTime: 1,
+      }],
+    });
+    flowChatState = {
+      ...flowChatState,
+      sessions: new Map([
+        ['review-check-child', runningChild],
+        ['parent-session', flowChatState.sessions.get('parent-session')!],
+      ]),
+    } as FlowChatState;
+    panelMocks.hydrateSessionHistoryForDetail.mockImplementationOnce(async () => {
+      flowChatState = {
+        ...flowChatState,
+        sessions: new Map(flowChatState.sessions).set('review-check-child', {
+          ...runningChild,
+          dialogTurns: [{
+            ...runningChild.dialogTurns[0],
+            status: 'completed',
+            endTime: 2,
+          }],
+        }),
+      } as FlowChatState;
+    });
+
+    await act(async () => {
+      root.render(
+        <BtwSessionPanel
+          childSessionId="review-check-child"
+          parentSessionId="parent-session"
+          workspacePath="D:/workspace/project"
+          viewKind="review-check"
+        />,
+      );
+    });
+
+    await act(async () => {
+      container.querySelector<HTMLButtonElement>('[data-testid="btw-session-panel-stop-review"]')!
+        .dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      await Promise.resolve();
+    });
+
+    expect(panelMocks.hydrateSessionHistoryForDetail).toHaveBeenCalledWith('review-check-child');
+    expect(panelMocks.notificationError).not.toHaveBeenCalled();
   });
 
   it('shows the completed Deep Review action bar even when the report has no remediation items', async () => {
