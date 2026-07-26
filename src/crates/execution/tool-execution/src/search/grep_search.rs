@@ -1022,6 +1022,39 @@ mod tests {
     }
 
     #[test]
+    fn multiline_matches_paginate_by_physical_line() {
+        // A multiline match reaches the sink as one entry spanning several
+        // physical lines; head_limit/offset must still paginate by physical
+        // line, not by match block.
+        let root = make_temp_dir("multiline-head-limit");
+        let file_path = root.join("sample.txt");
+        fs::write(&file_path, "alpha\nbeta\nnoise\nalpha\nbeta\n").unwrap();
+
+        let result = grep_search(
+            GrepOptions::new("alpha\\nbeta", root.to_string_lossy().to_string())
+                .multiline(true)
+                .output_mode(OutputMode::Content)
+                .show_line_numbers(true)
+                .head_limit(3),
+            None,
+            None,
+        )
+        .unwrap();
+
+        let lines: Vec<&str> = result.result_text.lines().collect();
+        assert_eq!(
+            lines.len(),
+            3,
+            "head_limit must count physical lines, got {lines:?}"
+        );
+        assert!(lines[0].ends_with(":1:alpha"), "got {lines:?}");
+        assert_eq!(lines[1], "beta", "got {lines:?}");
+        assert!(lines[2].ends_with(":4:alpha"), "got {lines:?}");
+
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
     fn exact_exclusions_remove_unassigned_files_from_results() {
         let root = make_temp_dir("excluded");
         let included = root.join("included.txt");

@@ -6,10 +6,34 @@ import { bitfunCanvasRuntimeBundlePlugin } from "./vite.config.canvas-runtime-pl
 
 const host = process.env.TAURI_DEV_HOST;
 
+/**
+ * Native fs events do not work reliably on UNC network shares (\\server\...,
+ * including \\wsl$ / \\wsl.localhost) or on WSL drvfs mounts (/mnt/<drive>).
+ * Users upgrading from the polling-based watcher would silently lose HMR
+ * there, so print a one-line hint pointing at the VITE_USE_POLLING escape
+ * hatch.
+ */
+function warnIfNativeWatchUnreliable(): void {
+  const cwd = process.cwd();
+  const looksLikeNetworkOrWslMount =
+    cwd.startsWith("\\\\") || /^\/mnt\/[a-z]\//i.test(cwd);
+  if (looksLikeNetworkOrWslMount) {
+    console.warn(
+      `[bitfun] Project path "${cwd}" looks like a network share or WSL mount; ` +
+        "native file watching may miss changes here. " +
+        "Set VITE_USE_POLLING=1 to restore polling-based HMR.",
+    );
+  }
+}
+
 // https://vite.dev/config/
 export default defineConfig(({ mode, command }) => {
   const isProduction = mode === 'production' || (command === 'build' && mode !== 'development');
-  
+
+  if (command === 'serve' && !process.env.VITE_USE_POLLING) {
+    warnIfNativeWatchUnreliable();
+  }
+
   return {
     plugins: [
       react(),

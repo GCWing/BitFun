@@ -26,8 +26,10 @@ function ensureObserver(): ResizeObserver | null {
         // other observed element.
         try {
           callbacksByElement.get(entry.target)?.(entry);
-        } catch {
-          // Ignore: a single subscriber's failure is not the observer's problem.
+        } catch (error) {
+          // Report but keep going: swallowing silently would hide real
+          // subscriber bugs behind the shared observer.
+          console.error('[sharedResizeObserver] subscriber callback threw', error);
         }
       }
     });
