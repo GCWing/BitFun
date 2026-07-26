@@ -90,6 +90,44 @@ describe('FlowChatHeader', () => {
       root.unmount();
     });
     container.remove();
+    vi.restoreAllMocks();
+  });
+
+  it('reserves the larger action group width on both sides of the centered title', () => {
+    vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (
+      this: HTMLElement,
+    ) {
+      const width = this.classList.contains('flowchat-header__actions--left')
+        ? 32
+        : this.classList.contains('flowchat-header__actions')
+          ? 196
+          : 0;
+
+      return {
+        x: 0,
+        y: 0,
+        width,
+        height: 36,
+        top: 0,
+        right: width,
+        bottom: 36,
+        left: 0,
+        toJSON: () => ({}),
+      };
+    });
+
+    act(() => {
+      root.render(<FlowChatHeader {...createProps()} visible={false} totalTurns={0} />);
+    });
+
+    expect(container.querySelector('.flowchat-header')).toBeNull();
+
+    act(() => {
+      root.render(<FlowChatHeader {...createProps()} />);
+    });
+
+    const header = container.querySelector<HTMLElement>('.flowchat-header');
+    expect(header?.style.getPropertyValue('--flowchat-header-side-width')).toBe('196px');
   });
 
   it('closes the turn list as soon as a different turn selection is accepted', () => {

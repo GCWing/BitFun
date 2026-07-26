@@ -140,12 +140,16 @@ $_tab-v-margin: 6px;   // symmetric top/bottom gap inside SceneBar
     gap: $size-gap-2;
     min-width: 0;
     overflow: hidden;
-    padding: 0 $size-gap-3;
-    // Reserve right space so close button doesn't overlap text
-    padding-right: calc(#{$size-gap-3} + 20px);
+    // Keep the content group centered in the full tab. Closable tabs reserve
+    // the close-button footprint on both sides so the right-side control does
+    // not shift the visible title group away from the geometric center.
+    padding: 0 calc(#{$size-gap-3} + 20px);
   }
 
-  // pinned only affects auto-eviction; all tabs have close button so no special padding needed
+  // Pinned tabs have no close button, so they need no mirrored reservation.
+  &--pinned &__content {
+    padding-inline: $size-gap-3;
+  }
 
   &__icon {
     flex-shrink: 0;

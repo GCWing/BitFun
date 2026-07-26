@@ -4,7 +4,7 @@
  * Height matches side panel headers (40px).
  */
 
-import React, { useEffect, useMemo, useRef, useState, useCallback } from 'react';
+import React, { useEffect, useLayoutEffect, useMemo, useRef, useState, useCallback } from 'react';
 import { Activity, Bot, ChevronDown, ChevronUp, GitPullRequest, Keyboard, List, MoreHorizontal, Search, Square, Terminal, X } from 'lucide-react';
 import { Tooltip, IconButton, Input } from '@/component-library';
 import { useTranslation } from 'react-i18next';
@@ -140,6 +140,9 @@ export const FlowChatHeader: React.FC<FlowChatHeaderProps> = ({
   const [openBackgroundSubagentMenuId, setOpenBackgroundSubagentMenuId] = useState<string | null>(null);
   const [openBackgroundCommandMenuId, setOpenBackgroundCommandMenuId] = useState<string | null>(null);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
+  const headerRef = useRef<HTMLDivElement | null>(null);
+  const leftActionsRef = useRef<HTMLDivElement | null>(null);
+  const rightActionsRef = useRef<HTMLDivElement | null>(null);
   const turnListRef = useRef<HTMLDivElement | null>(null);
   const backgroundActivityPanelRef = useRef<HTMLDivElement | null>(null);
   const activeTurnItemRef = useRef<HTMLButtonElement | null>(null);
@@ -262,6 +265,34 @@ export const FlowChatHeader: React.FC<FlowChatHeaderProps> = ({
       cancelAnimationFrame(frameId);
     };
   }, [currentTurn, displayTurns.length, isTurnListOpen]);
+
+  useLayoutEffect(() => {
+    const header = headerRef.current;
+    const leftActions = leftActionsRef.current;
+    const rightActions = rightActionsRef.current;
+    if (!header || !leftActions || !rightActions) return;
+
+    const updateSideWidth = () => {
+      const sideWidth = Math.ceil(Math.max(
+        leftActions.getBoundingClientRect().width,
+        rightActions.getBoundingClientRect().width,
+      ));
+      header.style.setProperty('--flowchat-header-side-width', `${sideWidth}px`);
+    };
+
+    updateSideWidth();
+
+    if (typeof ResizeObserver === 'undefined') {
+      window.addEventListener('resize', updateSideWidth);
+      return () => window.removeEventListener('resize', updateSideWidth);
+    }
+
+    const observer = new ResizeObserver(updateSideWidth);
+    observer.observe(leftActions);
+    observer.observe(rightActions);
+
+    return () => observer.disconnect();
+  }, [isSearchOpen, totalTurns, visible]);
 
   const handleOpenSearch = useCallback(() => {
     setIsSearchOpen(true);
@@ -533,8 +564,11 @@ export const FlowChatHeader: React.FC<FlowChatHeaderProps> = ({
   }
 
   return (
-    <div className="flowchat-header">
-      <div className="flowchat-header__actions flowchat-header__actions--left">
+    <div className="flowchat-header" ref={headerRef}>
+      <div
+        className="flowchat-header__actions flowchat-header__actions--left"
+        ref={leftActionsRef}
+      >
         <SessionFilesBadge sessionId={sessionId} />
       </div>
 
@@ -563,7 +597,7 @@ export const FlowChatHeader: React.FC<FlowChatHeaderProps> = ({
         </div>
       </Tooltip>
 
-      <div className="flowchat-header__actions">
+      <div className="flowchat-header__actions" ref={rightActionsRef}>
         <div className="flowchat-header__background-activity-nav" ref={backgroundActivityPanelRef}>
           <IconButton
             className={[

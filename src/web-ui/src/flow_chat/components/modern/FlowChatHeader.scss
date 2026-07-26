@@ -581,7 +581,9 @@
 
   // ==================== Center message ====================
   &__message {
-    flex: 1;
+    position: absolute;
+    left: calc(var(--flowchat-header-side-width, 0px) + #{$size-gap-5});
+    right: calc(var(--flowchat-header-side-width, 0px) + #{$size-gap-5});
     min-width: 0;
     padding: 0 $size-gap-3;
     display: flex;
@@ -630,14 +632,14 @@
 
   // ==================== Actions ====================
   &__actions {
+    position: relative;
+    z-index: 2;
     display: flex;
     align-items: center;
     gap: $size-gap-1;
     flex-shrink: 0;
 
     &--left {
-      position: relative;
-      z-index: 2;
       margin-right: $size-gap-2;
       overflow: visible;
     }
@@ -650,4 +652,3 @@
     }
   }
 }
-
