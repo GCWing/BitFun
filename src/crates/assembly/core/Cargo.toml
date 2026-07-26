@@ -226,6 +226,7 @@ canvas-runtime = [
 ]
 runtime-services = []
 service-integrations = [
+    "dep:tauri",
     "dep:aes-gcm",
     "dep:axum",
     "dep:git2",
