@@ -51,7 +51,7 @@ export const PROVIDER_TEMPLATES: Record<string, ProviderTemplate> = {
     descriptionKey: 'model.providers.gemini.description',
     baseUrl: 'https://generativelanguage.googleapis.com',
     format: 'gemini',
-    models: ['gemini-3.1-pro-preview', 'gemini-3.1-flash-lite-preview'],
+    models: ['gemini-3.1-pro-preview', 'gemini-3.6-flash', 'gemini-3.5-flash-lite'],
     helpUrl: 'https://aistudio.google.com/app/apikey',
   },
   anthropic: {
@@ -60,7 +60,7 @@ export const PROVIDER_TEMPLATES: Record<string, ProviderTemplate> = {
     descriptionKey: 'model.providers.anthropic.description',
     baseUrl: 'https://api.anthropic.com',
     format: 'anthropic',
-    models: ['claude-opus-4-6', 'claude-sonnet-4-6'],
+    models: ['claude-opus-5', 'claude-fable-5', 'claude-sonnet-5', 'claude-haiku-4-5'],
     helpUrl: 'https://console.anthropic.com/',
   },
   minimax: {
@@ -69,7 +69,7 @@ export const PROVIDER_TEMPLATES: Record<string, ProviderTemplate> = {
     descriptionKey: 'model.providers.minimax.description',
     baseUrl: 'https://api.minimaxi.com/anthropic',
     format: 'anthropic',
-    models: ['MiniMax-M2.7-highspeed', 'MiniMax-M2.5-highspeed'],
+    models: ['MiniMax-M3', 'MiniMax-M2.7', 'MiniMax-M2.7-highspeed'],
     helpUrl: 'https://platform.minimax.io/',
     baseUrlOptions: [
       {
@@ -82,6 +82,16 @@ export const PROVIDER_TEMPLATES: Record<string, ProviderTemplate> = {
         format: 'openai',
         noteKey: 'model.providers.minimax.urlOptions.openai',
       },
+      {
+        url: 'https://api.minimax.io/anthropic',
+        format: 'anthropic',
+        noteKey: 'model.providers.minimax.urlOptions.intl',
+      },
+      {
+        url: 'https://api.minimax.io/v1',
+        format: 'openai',
+        noteKey: 'model.providers.minimax.urlOptions.intlOpenai',
+      },
     ],
   },
   moonshot: {
@@ -90,8 +100,35 @@ export const PROVIDER_TEMPLATES: Record<string, ProviderTemplate> = {
     descriptionKey: 'model.providers.moonshot.description',
     baseUrl: 'https://api.moonshot.cn/v1',
     format: 'openai',
-    models: ['kimi-k2.5', 'kimi-k2', 'kimi-k2-thinking'],
+    models: ['kimi-k3', 'kimi-k2.7-code', 'kimi-k2.6', 'kimi-for-coding'],
     helpUrl: 'https://platform.moonshot.ai/console',
+    baseUrlOptions: [
+      {
+        url: 'https://api.moonshot.cn/v1',
+        format: 'openai',
+        noteKey: 'model.providers.moonshot.urlOptions.default',
+      },
+      {
+        url: 'https://api.moonshot.cn/anthropic',
+        format: 'anthropic',
+        noteKey: 'model.providers.moonshot.urlOptions.anthropic',
+      },
+      {
+        url: 'https://api.moonshot.ai/v1',
+        format: 'openai',
+        noteKey: 'model.providers.moonshot.urlOptions.intl',
+      },
+      {
+        url: 'https://api.moonshot.ai/anthropic',
+        format: 'anthropic',
+        noteKey: 'model.providers.moonshot.urlOptions.intlAnthropic',
+      },
+      {
+        url: 'https://api.kimi.com/coding',
+        format: 'anthropic',
+        noteKey: 'model.providers.moonshot.urlOptions.kimiForCoding',
+      },
+    ],
   },
   deepseek: {
     id: 'deepseek',
@@ -101,6 +138,18 @@ export const PROVIDER_TEMPLATES: Record<string, ProviderTemplate> = {
     format: 'openai',
     models: ['deepseek-v4-flash', 'deepseek-v4-pro'],
     helpUrl: 'https://platform.deepseek.com/api_keys',
+    baseUrlOptions: [
+      {
+        url: 'https://api.deepseek.com/v1',
+        format: 'openai',
+        noteKey: 'model.providers.deepseek.urlOptions.default',
+      },
+      {
+        url: 'https://api.deepseek.com/anthropic',
+        format: 'anthropic',
+        noteKey: 'model.providers.deepseek.urlOptions.anthropic',
+      },
+    ],
   },
   zhipu: {
     id: 'zhipu',
@@ -108,7 +157,7 @@ export const PROVIDER_TEMPLATES: Record<string, ProviderTemplate> = {
     descriptionKey: 'model.providers.zhipu.description',
     baseUrl: 'https://open.bigmodel.cn/api/paas/v4',
     format: 'openai',
-    models: ['glm-5', 'glm-4.7'],
+    models: ['glm-5.2', 'glm-5.1', 'glm-5'],
     helpUrl: 'https://open.bigmodel.cn/usercenter/apikeys',
     baseUrlOptions: [
       {
@@ -126,6 +175,21 @@ export const PROVIDER_TEMPLATES: Record<string, ProviderTemplate> = {
         format: 'openai',
         noteKey: 'model.providers.zhipu.urlOptions.codingPlan',
       },
+      {
+        url: 'https://api.z.ai/api/paas/v4',
+        format: 'openai',
+        noteKey: 'model.providers.zhipu.urlOptions.intl',
+      },
+      {
+        url: 'https://api.z.ai/api/anthropic',
+        format: 'anthropic',
+        noteKey: 'model.providers.zhipu.urlOptions.intlAnthropic',
+      },
+      {
+        url: 'https://api.z.ai/api/coding/paas/v4',
+        format: 'openai',
+        noteKey: 'model.providers.zhipu.urlOptions.intlCodingPlan',
+      },
     ],
   },
   qwen: {
@@ -134,13 +198,18 @@ export const PROVIDER_TEMPLATES: Record<string, ProviderTemplate> = {
     descriptionKey: 'model.providers.qwen.description',
     baseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
     format: 'openai',
-    models: ['Qwen3.5-Plus', 'Qwen3.5-Flash'],
+    models: ['qwen3.7-plus', 'qwen3.7-max', 'qwen3.6-flash'],
     helpUrl: 'https://dashscope.console.aliyun.com/apiKey',
     baseUrlOptions: [
       {
         url: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
         format: 'openai',
         noteKey: 'model.providers.qwen.urlOptions.default',
+      },
+      {
+        url: 'https://dashscope-intl.aliyuncs.com/compatible-mode/v1',
+        format: 'openai',
+        noteKey: 'model.providers.qwen.urlOptions.intl',
       },
       {
         url: 'https://coding.dashscope.aliyuncs.com/v1',
@@ -152,6 +221,11 @@ export const PROVIDER_TEMPLATES: Record<string, ProviderTemplate> = {
         format: 'anthropic',
         noteKey: 'model.providers.qwen.urlOptions.codingPlanAnthropic',
       },
+      {
+        url: 'https://coding-intl.dashscope.aliyuncs.com/v1',
+        format: 'openai',
+        noteKey: 'model.providers.qwen.urlOptions.intlCodingPlan',
+      },
     ],
   },
   volcengine: {
@@ -160,8 +234,25 @@ export const PROVIDER_TEMPLATES: Record<string, ProviderTemplate> = {
     descriptionKey: 'model.providers.volcengine.description',
     baseUrl: 'https://ark.cn-beijing.volces.com/api/v3',
     format: 'openai',
-    models: ['doubao-seed-2-0-code-preview-260215', 'doubao-seed-2-0-pro-260215'],
+    models: ['doubao-seed-2-1-pro-260628', 'doubao-seed-2-0-code-preview-260215', 'doubao-seed-2-0-pro-260215'],
     helpUrl: 'https://console.volcengine.com/ark/',
+    baseUrlOptions: [
+      {
+        url: 'https://ark.cn-beijing.volces.com/api/v3',
+        format: 'openai',
+        noteKey: 'model.providers.volcengine.urlOptions.default',
+      },
+      {
+        url: 'https://ark.cn-beijing.volces.com/api/coding/v3',
+        format: 'openai',
+        noteKey: 'model.providers.volcengine.urlOptions.codingPlan',
+      },
+      {
+        url: 'https://ark.ap-southeast.bytepluses.com/api/v3',
+        format: 'openai',
+        noteKey: 'model.providers.volcengine.urlOptions.intl',
+      },
+    ],
   },
   siliconflow: {
     id: 'siliconflow',
@@ -169,7 +260,7 @@ export const PROVIDER_TEMPLATES: Record<string, ProviderTemplate> = {
     descriptionKey: 'model.providers.siliconflow.description',
     baseUrl: 'https://api.siliconflow.cn/v1',
     format: 'openai',
-    models: [],
+    models: ['zai-org/GLM-5.2', 'deepseek-ai/DeepSeek-V4-Pro', 'deepseek-ai/DeepSeek-V4-Flash'],
     helpUrl: 'https://cloud.siliconflow.cn/account/ak',
     baseUrlOptions: [
       {
@@ -181,6 +272,11 @@ export const PROVIDER_TEMPLATES: Record<string, ProviderTemplate> = {
         url: 'https://api.siliconflow.cn/v1/messages',
         format: 'anthropic',
         noteKey: 'model.providers.siliconflow.urlOptions.anthropic',
+      },
+      {
+        url: 'https://api.siliconflow.com/v1',
+        format: 'openai',
+        noteKey: 'model.providers.siliconflow.urlOptions.intl',
       },
     ],
   },

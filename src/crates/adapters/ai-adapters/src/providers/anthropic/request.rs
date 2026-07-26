@@ -62,7 +62,7 @@ fn parse_claude_model_version(model_name: &str, family: &str) -> Option<ClaudeMo
 }
 
 fn anthropic_thinking_capability(model_name: &str) -> AnthropicThinkingCapability {
-    if model_name.starts_with("claude-mythos") {
+    if model_name.starts_with("claude-mythos") || model_name.starts_with("claude-fable") {
         return AnthropicThinkingCapability::AdaptiveDefaultNoDisabled;
     }
 

@@ -147,39 +147,72 @@
     },
     "minimax": {
       "name": "MiniMax",
-      "description": "MiniMax series models"
+      "description": "MiniMax series models",
+      "urlOptions": {
+        "default": "China - Anthropic Format - Default",
+        "openai": "China - OpenAI Compatible",
+        "intl": "Global - Anthropic Format",
+        "intlOpenai": "Global - OpenAI Compatible"
+      }
     },
     "moonshot": {
       "name": "Moonshot AI",
-      "description": "Moonshot Kimi series models"
+      "description": "Moonshot Kimi series models",
+      "urlOptions": {
+        "default": "China - OpenAI Format - Default",
+        "anthropic": "China - Anthropic Format",
+        "intl": "Global - OpenAI Format",
+        "intlAnthropic": "Global - Anthropic Format",
+        "kimiForCoding": "Kimi For Coding Plan"
+      }
     },
     "deepseek": {
       "name": "DeepSeek",
-      "description": "DeepSeek series models"
+      "description": "DeepSeek series models",
+      "urlOptions": {
+        "default": "OpenAI Format - Default",
+        "anthropic": "Anthropic Format"
+      }
     },
     "zhipu": {
       "name": "Zhipu AI",
       "description": "Zhipu AI GLM series models",
       "urlOptions": {
-        "default": "OpenAI Format - Default",
-        "anthropic": "Anthropic Format",
-        "codingPlan": "OpenAI Format - CodingPlan"
+        "default": "China - OpenAI Format - Default",
+        "anthropic": "China - Anthropic Format",
+        "codingPlan": "China - Coding Plan",
+        "intl": "Global (Z.AI) - OpenAI Format",
+        "intlAnthropic": "Global (Z.AI) - Anthropic Format",
+        "intlCodingPlan": "Global (Z.AI) - Coding Plan"
       }
     },
     "qwen": {
       "name": "Qwen",
-      "description": "Alibaba Cloud Bailian Model Platform"
+      "description": "Alibaba Cloud Bailian Model Platform",
+      "urlOptions": {
+        "default": "China - OpenAI Format - Default",
+        "intl": "Global (International) - OpenAI Format",
+        "codingPlan": "China - Coding Plan",
+        "codingPlanAnthropic": "China - Coding Plan - Anthropic Format",
+        "intlCodingPlan": "Global - Coding Plan"
+      }
     },
     "volcengine": {
       "name": "Volcano Engine",
-      "description": "ByteDance Volcano Engine Model Platform"
+      "description": "ByteDance Volcano Engine Model Platform",
+      "urlOptions": {
+        "default": "China - Default",
+        "codingPlan": "China - Coding Plan",
+        "intl": "Global (BytePlus)"
+      }
     },
     "siliconflow": {
       "name": "SiliconFlow",
       "description": "SiliconFlow Model Platform",
       "urlOptions": {
-        "default": "OpenAI Format - Default",
-        "anthropic": "Anthropic Format"
+        "default": "China - OpenAI Format - Default",
+        "anthropic": "China - Anthropic Format",
+        "intl": "Global - OpenAI Format"
       }
     },
     "nvidia": {

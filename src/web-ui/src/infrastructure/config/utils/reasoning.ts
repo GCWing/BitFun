@@ -29,7 +29,12 @@ export function supportsAnthropicReasoning(provider?: string): boolean {
 export function supportsAnthropicAdaptive(modelName?: string): boolean {
   const normalized = (modelName || '').trim().toLowerCase();
   return normalized.startsWith('claude-opus-4-6')
+    || normalized.startsWith('claude-opus-4-7')
+    || normalized.startsWith('claude-opus-4-8')
+    || normalized.startsWith('claude-opus-5')
     || normalized.startsWith('claude-sonnet-4-6')
+    || normalized.startsWith('claude-sonnet-5')
+    || normalized.startsWith('claude-fable')
     || normalized.startsWith('claude-mythos');
 }
 

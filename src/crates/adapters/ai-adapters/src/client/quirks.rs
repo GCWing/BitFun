@@ -1,11 +1,11 @@
 use crate::types::ReasoningMode;
 
 pub(crate) fn is_dashscope_url(url: &str) -> bool {
-    url.contains("dashscope.aliyuncs.com")
+    url.contains("dashscope.aliyuncs.com") || url.contains("dashscope-intl.aliyuncs.com")
 }
 
 pub(crate) fn is_siliconflow_url(url: &str) -> bool {
-    url.contains("api.siliconflow.cn")
+    url.contains("api.siliconflow.cn") || url.contains("api.siliconflow.com")
 }
 
 pub(crate) fn is_deepseek_url(url: &str) -> bool {
@@ -48,7 +48,7 @@ pub(crate) fn parse_glm_major_minor(model_name: &str) -> Option<(u32, u32)> {
 }
 
 pub(crate) fn should_append_tool_stream(url: &str, model_name: &str) -> bool {
-    if url.contains("bigmodel.cn") {
+    if url.contains("bigmodel.cn") || url.contains("api.z.ai") {
         return true;
     }
 

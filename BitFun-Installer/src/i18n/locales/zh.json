@@ -70,46 +70,70 @@
         "name": "MiniMax",
         "description": "MiniMax 系列模型",
         "urlOptions": {
-          "default": "Anthropic格式-默认",
-          "openai": "OpenAI兼容格式"
+          "default": "国内-Anthropic格式-默认",
+          "openai": "国内-OpenAI兼容格式",
+          "intl": "海外-Anthropic格式",
+          "intlOpenai": "海外-OpenAI兼容格式"
         }
       },
       "moonshot": {
         "name": "月之暗面",
-        "description": "月之暗面 Kimi 系列模型"
+        "description": "月之暗面 Kimi 系列模型",
+        "urlOptions": {
+          "default": "国内-OpenAI格式-默认",
+          "anthropic": "国内-Anthropic格式",
+          "intl": "海外-OpenAI格式",
+          "intlAnthropic": "海外-Anthropic格式",
+          "kimiForCoding": "Kimi For Coding 套餐"
+        }
       },
       "deepseek": {
         "name": "DeepSeek",
-        "description": "DeepSeek 系列模型"
+        "description": "DeepSeek 系列模型",
+        "urlOptions": {
+          "default": "OpenAI格式-默认",
+          "anthropic": "Anthropic格式"
+        }
       },
       "zhipu": {
         "name": "智谱AI",
         "description": "智谱AI GLM 系列模型",
         "urlOptions": {
-          "default": "OpenAI格式-默认",
-          "anthropic": "Anthropic格式",
-          "codingPlan": "OpenAI格式-CodingPlan"
+          "default": "国内-OpenAI格式-默认",
+          "anthropic": "国内-Anthropic格式",
+          "codingPlan": "国内-Coding Plan",
+          "intl": "海外(Z.AI)-OpenAI格式",
+          "intlAnthropic": "海外(Z.AI)-Anthropic格式",
+          "intlCodingPlan": "海外(Z.AI)-Coding Plan"
         }
       },
       "qwen": {
         "name": "通义千问",
         "description": "阿里云百炼大模型平台",
         "urlOptions": {
-          "default": "OpenAI格式-默认",
-          "codingPlan": "OpenAI格式-Coding Plan",
-          "codingPlanAnthropic": "Anthropic格式-Coding Plan"
+          "default": "国内-OpenAI格式-默认",
+          "codingPlan": "国内-Coding Plan",
+          "codingPlanAnthropic": "国内-Coding Plan-Anthropic格式",
+          "intl": "海外(国际站)-OpenAI格式",
+          "intlCodingPlan": "海外-Coding Plan"
         }
       },
       "volcengine": {
         "name": "火山引擎",
-        "description": "字节跳动火山引擎大模型平台"
+        "description": "字节跳动火山引擎大模型平台",
+        "urlOptions": {
+          "default": "国内-默认",
+          "codingPlan": "国内-Coding Plan",
+          "intl": "海外(BytePlus)"
+        }
       },
       "siliconflow": {
         "name": "硅基流动",
         "description": "硅基流动大模型平台",
         "urlOptions": {
-          "default": "OpenAI格式-默认",
-          "anthropic": "Anthropic格式"
+          "default": "国内-OpenAI格式-默认",
+          "anthropic": "国内-Anthropic格式",
+          "intl": "海外-OpenAI格式"
         }
       },
       "nvidia": {
@@ -139,7 +163,8 @@
       "provider": "请求格式",
       "providerPlaceholder": "选择请求格式",
       "modelSelection": "选择模型",
-      "resolvedUrlLabel": "实际请求地址："
+      "resolvedUrlLabel": "实际请求地址：",
+      "modelName": "模型名称"
     },
     "formats": {
       "openaiCompatible": "OpenAI 兼容",
@@ -148,7 +173,20 @@
       "geminiApi": "Gemini GenerateContent API"
     },
     "showSecret": "显示",
-    "hideSecret": "隐藏"
+    "hideSecret": "隐藏",
+    "getApiKey": "获取 API Key",
+    "modelNoResults": "没有匹配的模型",
+    "customRequestBodyPlaceholder": "例如：\n{\n  \"temperature\": 0.8,\n  \"top_p\": 0.9\n}",
+    "jsonValid": "JSON格式有效",
+    "jsonInvalid": "JSON格式错误，请检查语法",
+    "skipSslVerify": "跳过SSL证书验证",
+    "customHeadersModeMerge": "合并",
+    "customHeadersModeReplace": "替换",
+    "addHeader": "添加字段",
+    "headerKey": "key",
+    "headerValue": "value",
+    "advancedShow": "Show advanced settings",
+    "advancedHide": "Hide advanced settings"
   },
   "progress": {
     "title": "安装中",

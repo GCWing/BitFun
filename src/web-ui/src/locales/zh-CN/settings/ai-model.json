@@ -147,39 +147,72 @@
     },
     "minimax": {
       "name": "MiniMax",
-      "description": "MiniMax 系列模型"
+      "description": "MiniMax 系列模型",
+      "urlOptions": {
+        "default": "国内-Anthropic格式-默认",
+        "openai": "国内-OpenAI兼容格式",
+        "intl": "海外-Anthropic格式",
+        "intlOpenai": "海外-OpenAI兼容格式"
+      }
     },
     "moonshot": {
       "name": "月之暗面",
-      "description": "月之暗面 Kimi 系列模型"
+      "description": "月之暗面 Kimi 系列模型",
+      "urlOptions": {
+        "default": "国内-OpenAI格式-默认",
+        "anthropic": "国内-Anthropic格式",
+        "intl": "海外-OpenAI格式",
+        "intlAnthropic": "海外-Anthropic格式",
+        "kimiForCoding": "Kimi For Coding 套餐"
+      }
     },
     "deepseek": {
       "name": "DeepSeek",
-      "description": "DeepSeek 系列模型"
+      "description": "DeepSeek 系列模型",
+      "urlOptions": {
+        "default": "OpenAI格式-默认",
+        "anthropic": "Anthropic格式"
+      }
     },
     "zhipu": {
       "name": "智谱AI",
       "description": "智谱AI GLM 系列模型",
       "urlOptions": {
-        "default": "OpenAI格式-默认",
-        "anthropic": "Anthropic格式",
-        "codingPlan": "OpenAI格式-CodingPlan"
+        "default": "国内-OpenAI格式-默认",
+        "anthropic": "国内-Anthropic格式",
+        "codingPlan": "国内-Coding Plan",
+        "intl": "海外(Z.AI)-OpenAI格式",
+        "intlAnthropic": "海外(Z.AI)-Anthropic格式",
+        "intlCodingPlan": "海外(Z.AI)-Coding Plan"
       }
     },
     "qwen": {
       "name": "通义千问",
-      "description": "阿里云百炼大模型平台"
+      "description": "阿里云百炼大模型平台",
+      "urlOptions": {
+        "default": "国内-OpenAI格式-默认",
+        "intl": "海外(国际站)-OpenAI格式",
+        "codingPlan": "国内-Coding Plan",
+        "codingPlanAnthropic": "国内-Coding Plan-Anthropic格式",
+        "intlCodingPlan": "海外-Coding Plan"
+      }
     },
     "volcengine": {
       "name": "火山引擎",
-      "description": "字节跳动火山引擎大模型平台"
+      "description": "字节跳动火山引擎大模型平台",
+      "urlOptions": {
+        "default": "国内-默认",
+        "codingPlan": "国内-Coding Plan",
+        "intl": "海外(BytePlus)"
+      }
     },
     "siliconflow": {
       "name": "硅基流动",
       "description": "硅基流动大模型平台",
       "urlOptions": {
-        "default": "OpenAI格式-默认",
-        "anthropic": "Anthropic格式"
+        "default": "国内-OpenAI格式-默认",
+        "anthropic": "国内-Anthropic格式",
+        "intl": "海外-OpenAI格式"
       }
     },
     "nvidia": {
