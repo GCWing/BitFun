@@ -1102,36 +1102,36 @@
     "windowTitle": "审核方案",
     "eyebrow": "审核方案",
     "title": "开始本次审核？",
-    "body": "BitFun 会先直接审核本次变更，仅在证据确实需要时增加独立检查。继续前可确认目标范围、预计耗时和只读边界。",
+    "body": "BitFun 会先直接审核本次变更，仅在证据确实需要时增加补充检查。继续前可确认目标范围、预计耗时和只读边界。",
     "readonlyLabel": "只读",
-    "readonly": "审核者不会修改文件。",
+    "readonly": "审核不会修改文件。",
     "sessionConcurrencyTitle": "当前会话较忙",
     "sessionConcurrencyBody": "目标会话已有 {{count}} 个审核工作在运行，继续后将共享当前可用的审核容量。",
     "costLabel": "审核深度",
-    "cost": "本次审核会更深入地调查目标，只在确有帮助时增加独立检查。",
+    "cost": "本次审核会更深入地调查目标，只在确有帮助时增加补充检查。",
     "timeLabel": "耗时",
     "time": "后台运行，可能需要更久。",
     "cancel": "取消",
     "confirm": "开始审核",
     "runStrategy": "运行策略：{{strategy}}",
     "strategyLabels": {
-      "quick": "聚焦",
+      "quick": "快速",
       "normal": "标准",
       "deep": "全面"
     },
     "strategySummaries": {
-      "quick": "聚焦审核会检查当前目标最相关的风险。",
-      "normal": "标准审核会更深入地检查当前目标，并在确有帮助时按需增加独立检查。",
-      "deep": "全面审核会检查所有适用的高风险领域，并在证据需要验证时按需增加检查。"
+      "quick": "快速审核会检查当前目标最相关的风险。",
+      "normal": "标准审核会更深入地检查当前目标，只在确有帮助时增加补充检查。",
+      "deep": "全面审核会检查所有适用的高风险领域，只在证据需要时增加独立验证。"
     },
     "summaryTitle": "审核方案",
     "targetFiles": "{{count}} 个文件",
     "targetFiles_one": "{{count}} 个文件",
     "targetFiles_other": "{{count}} 个文件",
-    "skippedReviewers": "{{count}} 个可选检查未纳入",
-    "skippedReviewers_one": "{{count}} 个可选检查未纳入",
-    "skippedReviewers_other": "{{count}} 个可选检查未纳入",
-    "skippedGroupTitle": "已选择审核范围",
+    "skippedReviewers": "{{count}} 项可选审核工作未运行",
+    "skippedReviewers_one": "{{count}} 项可选审核工作未运行",
+    "skippedReviewers_other": "{{count}} 项可选审核工作未运行",
+    "skippedGroupTitle": "未运行的审核工作",
     "targetSource": {
       "manualPrompt": "给定内容",
       "workspaceDiff": "工作区改动",
@@ -1139,9 +1139,9 @@
       "selectedContext": "已选上下文",
       "reviewTarget": "审核目标"
     },
-    "skippedSummary": "BitFun 已选择适用于此目标的检查。{{count}} 个可选检查不在本次运行中。",
-    "skippedSummary_one": "BitFun 已选择适用于此目标的检查。{{count}} 个可选检查不在本次运行中。",
-    "skippedSummary_other": "BitFun 已选择适用于此目标的检查。{{count}} 个可选检查不在本次运行中。"
+    "skippedSummary": "{{count}} 项可选审核工作未运行；本次结果仅反映已完成的审核范围。",
+    "skippedSummary_one": "{{count}} 项可选审核工作未运行；本次结果仅反映已完成的审核范围。",
+    "skippedSummary_other": "{{count}} 项可选审核工作未运行；本次结果仅反映已完成的审核范围。"
   },
   "flowChatHeader": {
     "turnList": "轮次列表",
@@ -1745,10 +1745,10 @@
       "collapseDetails": "收起详情",
       "expandDetails": "展开详情",
       "openInPanel": "在面板中打开详情",
-      "reviewCoverageLabel": "审核检查",
+      "reviewCoverageLabel": "补充检查",
       "reviewCoverageDescription": "正在补充审核证据",
       "reviewFocusedDescription": "正在核查一个具体问题",
-      "reviewCheckUnavailable": "这项检查未能完成，主审核可以继续。"
+      "reviewCheckUnavailable": "这项补充检查未能完成，主审核仍可继续。"
     },
     "taskDetailPanel": {
       "untitled": "未命名任务",
@@ -2042,12 +2042,12 @@
         },
         "target": "目标",
         "budget": "预算",
-        "estimatedCalls": "预计审核检查",
-        "activeGroupTitle": "已覆盖",
-        "skippedGroupTitle": "已选择审核范围",
-        "reducedCoverageSummary": "BitFun 已为此目标选择最相关的检查。{{count}} 个可选检查因适用性、配置或预算未纳入本次运行。",
-        "reducedCoverageSummary_one": "BitFun 已为此目标选择最相关的检查。{{count}} 个可选检查因适用性、配置或预算未纳入本次运行。",
-        "reducedCoverageSummary_other": "BitFun 已为此目标选择最相关的检查。{{count}} 个可选检查因适用性、配置或预算未纳入本次运行。"
+        "estimatedCalls": "预计审核工作项",
+        "activeGroupTitle": "已完成的审核工作",
+        "skippedGroupTitle": "未运行的审核工作",
+        "reducedCoverageSummary": "{{count}} 项可选审核工作未运行；本次结果仅反映已完成的审核范围。",
+        "reducedCoverageSummary_one": "{{count}} 项可选审核工作未运行；本次结果仅反映已完成的审核范围。",
+        "reducedCoverageSummary_other": "{{count}} 项可选审核工作未运行；本次结果仅反映已完成的审核范围。"
       },
       "sectionItemCount": "{{count}} 项",
       "remediationPlan": "修复计划",
@@ -2055,7 +2055,7 @@
         "title": "审核状态",
         "context_pressure": {
           "label": "上下文压力上升",
-          "detail": "大型或受限目标预计需要 {{count}} 项审核检查。"
+          "detail": "大型或受限目标已规划 {{count}} 项审核工作。"
         },
         "compression_preserved": {
           "label": "压缩已保留关键事实",
@@ -2078,8 +2078,8 @@
           "detail": "{{count}} 个审核结果是部分结果，可信度有限。"
         },
         "reduced_scope": {
-          "label": "聚焦审核范围",
-          "detail": "本次审核使用了聚焦范围配置。"
+          "label": "审核范围受限",
+          "detail": "本次审核只覆盖有限范围。"
         },
         "target_evidence_limited": {
           "label": "目标证据受限",
@@ -2091,11 +2091,11 @@
         },
         "skipped_reviewers": {
           "label": "审核范围已匹配",
-          "detail": "{{count}} 个可选检查因适用性、配置或预算未纳入本次运行。"
+          "detail": "未运行的可选审核工作：{{count}} 项（适用性、配置或预算限制）。"
         },
         "token_budget_limited": {
           "label": "Token 预算限制了审核覆盖",
-          "detail": "Token 预算模式将 {{count}} 个可选检查保留在本次范围之外。"
+          "detail": "因 Token 预算未运行的可选审核工作：{{count}} 项。"
         },
         "user_decision": {
           "label": "需要用户决策",
@@ -2129,7 +2129,7 @@
         "security": "安全覆盖",
         "architecture": "架构覆盖",
         "frontend": "前端覆盖",
-        "focusedCheck": "专项检查",
+        "focusedCheck": "补充检查",
         "qualityGate": "质量检查"
       },
       "report": {

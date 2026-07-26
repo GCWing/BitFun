@@ -1102,36 +1102,36 @@
     "windowTitle": "Review plan",
     "eyebrow": "Review plan",
     "title": "Start this review?",
-    "body": "BitFun reviews this change directly and may add focused independent checks only when the evidence needs them. Confirm the target, expected time, and read-only boundary before continuing.",
+    "body": "BitFun reviews this change directly and adds additional checks only when the evidence needs them. Confirm the target, expected time, and read-only boundary before continuing.",
     "readonlyLabel": "Read-only",
-    "readonly": "Reviewers do not modify files.",
+    "readonly": "The review does not modify files.",
     "sessionConcurrencyTitle": "Active session is busy",
     "sessionConcurrencyBody": "The target session already has {{count}} review tasks running. Continuing will share the available review capacity.",
     "costLabel": "Review depth",
-    "cost": "This review investigates the target more thoroughly and adds independent checks only when they are useful.",
+    "cost": "This review investigates the target more thoroughly and adds additional checks only when they are useful.",
     "timeLabel": "Time",
     "time": "Runs in background and may take longer.",
     "cancel": "Cancel",
     "confirm": "Start review",
     "runStrategy": "Run strategy: {{strategy}}",
     "strategyLabels": {
-      "quick": "Focused",
+      "quick": "Quick",
       "normal": "Standard",
       "deep": "Extensive"
     },
     "strategySummaries": {
-      "quick": "Focused review checks the most relevant risks for the selected target.",
-      "normal": "Standard review examines the selected target in more depth and may add independent checks when useful.",
-      "deep": "Extensive review examines all applicable high-risk areas and may add independent validation when the evidence needs it."
+      "quick": "Quick review checks the most relevant risks for the selected target.",
+      "normal": "Standard review examines the selected target in more depth and adds additional checks only when useful.",
+      "deep": "Extensive review examines all applicable high-risk areas and adds independent validation only when the evidence needs it."
     },
     "summaryTitle": "Review plan",
     "targetFiles": "{{count}} files",
     "targetFiles_one": "{{count}} file",
     "targetFiles_other": "{{count}} files",
-    "skippedReviewers": "{{count}} optional checks not needed",
-    "skippedReviewers_one": "{{count}} optional check not needed",
-    "skippedReviewers_other": "{{count}} optional checks not needed",
-    "skippedGroupTitle": "Review scope selected",
+    "skippedReviewers": "{{count}} optional review work items not run",
+    "skippedReviewers_one": "{{count}} optional review work item not run",
+    "skippedReviewers_other": "{{count}} optional review work items not run",
+    "skippedGroupTitle": "Review work not run",
     "targetSource": {
       "manualPrompt": "Provided context",
       "workspaceDiff": "Workspace changes",
@@ -1139,9 +1139,9 @@
       "selectedContext": "Selected context",
       "reviewTarget": "Review target"
     },
-    "skippedSummary": "BitFun selected the checks that apply to this target. {{count}} optional checks are not part of this run.",
-    "skippedSummary_one": "BitFun selected the checks that apply to this target. {{count}} optional check is not part of this run.",
-    "skippedSummary_other": "BitFun selected the checks that apply to this target. {{count}} optional checks are not part of this run."
+    "skippedSummary": "{{count}} optional review work items were not run. This result reflects only the completed review scope.",
+    "skippedSummary_one": "{{count}} optional review work item was not run. This result reflects only the completed review scope.",
+    "skippedSummary_other": "{{count}} optional review work items were not run. This result reflects only the completed review scope."
   },
   "flowChatHeader": {
     "turnList": "Turn list",
@@ -1745,10 +1745,10 @@
       "collapseDetails": "Collapse details",
       "expandDetails": "Expand details",
       "openInPanel": "Open details in panel",
-      "reviewCoverageLabel": "Review check",
-      "reviewCoverageDescription": "Checking review coverage",
+      "reviewCoverageLabel": "Additional check",
+      "reviewCoverageDescription": "Checking additional review evidence",
       "reviewFocusedDescription": "Checking a specific concern",
-      "reviewCheckUnavailable": "This check could not be completed. The main review can continue."
+      "reviewCheckUnavailable": "This additional check could not be completed. The main review can continue."
     },
     "taskDetailPanel": {
       "untitled": "Untitled Task",
@@ -2042,12 +2042,12 @@
         },
         "target": "Target",
         "budget": "Budget",
-        "estimatedCalls": "Estimated review checks",
-        "activeGroupTitle": "Coverage included",
-        "skippedGroupTitle": "Review scope selected",
-        "reducedCoverageSummary": "BitFun selected the most relevant checks for this target. {{count}} optional checks were outside this run because of applicability, configuration, or budget.",
-        "reducedCoverageSummary_one": "BitFun selected the most relevant checks for this target. {{count}} optional check was outside this run because of applicability, configuration, or budget.",
-        "reducedCoverageSummary_other": "BitFun selected the most relevant checks for this target. {{count}} optional checks were outside this run because of applicability, configuration, or budget."
+        "estimatedCalls": "Estimated review work items",
+        "activeGroupTitle": "Completed review work",
+        "skippedGroupTitle": "Review work not run",
+        "reducedCoverageSummary": "{{count}} optional review work items were not run. This result reflects only the completed review scope.",
+        "reducedCoverageSummary_one": "{{count}} optional review work item was not run. This result reflects only the completed review scope.",
+        "reducedCoverageSummary_other": "{{count}} optional review work items were not run. This result reflects only the completed review scope."
       },
       "sectionItemCount": "{{count}} items",
       "remediationPlan": "Remediation Plan",
@@ -2055,7 +2055,7 @@
         "title": "Review status",
         "context_pressure": {
           "label": "Context pressure rising",
-          "detail": "{{count}} review checks planned for a large or constrained target."
+          "detail": "A large or constrained target has {{count}} planned review work items."
         },
         "compression_preserved": {
           "label": "Compression preserved key facts",
@@ -2078,8 +2078,8 @@
           "detail": "{{count}} review result is partial; confidence is limited."
         },
         "reduced_scope": {
-          "label": "Focused review scope",
-          "detail": "This review used a focused scope profile."
+          "label": "Limited review scope",
+          "detail": "This review used a limited scope."
         },
         "target_evidence_limited": {
           "label": "Target evidence limited",
@@ -2091,11 +2091,11 @@
         },
         "skipped_reviewers": {
           "label": "Review scope tailored",
-          "detail": "{{count}} optional check was outside this run because of applicability, configuration, or budget."
+          "detail": "Optional review work not run: {{count}} (applicability, configuration, or budget)."
         },
         "token_budget_limited": {
           "label": "Token budget limited review coverage",
-          "detail": "Token budget mode kept {{count}} optional check outside this run."
+          "detail": "Optional review work not run due to token budget: {{count}}."
         },
         "user_decision": {
           "label": "User decision needed",
@@ -2129,7 +2129,7 @@
         "security": "Security coverage",
         "architecture": "Architecture coverage",
         "frontend": "Frontend coverage",
-        "focusedCheck": "Focused check",
+        "focusedCheck": "Additional check",
         "qualityGate": "Quality check"
       },
       "report": {

@@ -1102,36 +1102,36 @@
     "windowTitle": "審核方案",
     "eyebrow": "審核方案",
     "title": "開始本次審核？",
-    "body": "BitFun 會先直接審核本次變更，只在證據顯示有必要時增加獨立檢查。繼續前可確認目標範圍、預計耗時與唯讀邊界。",
+    "body": "BitFun 會先直接審核本次變更，只在證據顯示有必要時增加補充檢查。繼續前可確認目標範圍、預計耗時與唯讀邊界。",
     "readonlyLabel": "唯讀",
-    "readonly": "審核者不會修改檔案。",
+    "readonly": "審核不會修改檔案。",
     "sessionConcurrencyTitle": "目前會話較忙",
     "sessionConcurrencyBody": "目標會話已有 {{count}} 個審核工作在執行，繼續後將共享目前可用的審核容量。",
     "costLabel": "審核深度",
-    "cost": "本次審核會更深入調查目標，只在確有幫助時增加獨立檢查。",
+    "cost": "本次審核會更深入調查目標，只在確有幫助時增加補充檢查。",
     "timeLabel": "耗時",
     "time": "背景執行，可能需要更久。",
     "cancel": "取消",
     "confirm": "開始審核",
     "runStrategy": "運行策略：{{strategy}}",
     "strategyLabels": {
-      "quick": "聚焦",
+      "quick": "快速",
       "normal": "標準",
       "deep": "全面"
     },
     "strategySummaries": {
-      "quick": "聚焦審核會檢查目前目標最相關的風險。",
-      "normal": "標準審核會更深入檢查目前目標，並在確有幫助時增加獨立檢查。",
-      "deep": "全面審核會檢查所有適用的高風險領域，並在證據需要驗證時增加檢查。"
+      "quick": "快速審核會檢查目前目標最相關的風險。",
+      "normal": "標準審核會更深入檢查目前目標，只在確有幫助時增加補充檢查。",
+      "deep": "全面審核會檢查所有適用的高風險領域，只在證據需要時增加獨立驗證。"
     },
     "summaryTitle": "審核方案",
     "targetFiles": "{{count}} 個檔案",
     "targetFiles_one": "{{count}} 個檔案",
     "targetFiles_other": "{{count}} 個檔案",
-    "skippedReviewers": "{{count}} 個可選檢查未納入",
-    "skippedReviewers_one": "{{count}} 個可選檢查未納入",
-    "skippedReviewers_other": "{{count}} 個可選檢查未納入",
-    "skippedGroupTitle": "已選擇審核範圍",
+    "skippedReviewers": "{{count}} 項可選審核工作未執行",
+    "skippedReviewers_one": "{{count}} 項可選審核工作未執行",
+    "skippedReviewers_other": "{{count}} 項可選審核工作未執行",
+    "skippedGroupTitle": "未執行的審核工作",
     "targetSource": {
       "manualPrompt": "給定內容",
       "workspaceDiff": "工作區改動",
@@ -1139,9 +1139,9 @@
       "selectedContext": "已選上下文",
       "reviewTarget": "審核目標"
     },
-    "skippedSummary": "BitFun 已選擇適用於此目標的檢查。{{count}} 個可選檢查不在本次執行中。",
-    "skippedSummary_one": "BitFun 已選擇適用於此目標的檢查。{{count}} 個可選檢查不在本次執行中。",
-    "skippedSummary_other": "BitFun 已選擇適用於此目標的檢查。{{count}} 個可選檢查不在本次執行中。"
+    "skippedSummary": "{{count}} 項可選審核工作未執行；本次結果僅反映已完成的審核範圍。",
+    "skippedSummary_one": "{{count}} 項可選審核工作未執行；本次結果僅反映已完成的審核範圍。",
+    "skippedSummary_other": "{{count}} 項可選審核工作未執行；本次結果僅反映已完成的審核範圍。"
   },
   "flowChatHeader": {
     "turnList": "輪次列表",
@@ -1745,10 +1745,10 @@
       "collapseDetails": "收起詳情",
       "expandDetails": "展開詳情",
       "openInPanel": "在面板中開啟詳情",
-      "reviewCoverageLabel": "審核檢查",
+      "reviewCoverageLabel": "補充檢查",
       "reviewCoverageDescription": "正在補充審核證據",
       "reviewFocusedDescription": "正在核查一個具體問題",
-      "reviewCheckUnavailable": "這項檢查未能完成，主要審核可以繼續。"
+      "reviewCheckUnavailable": "這項補充檢查未能完成，主要審核仍可繼續。"
     },
     "taskDetailPanel": {
       "untitled": "未命名任務",
@@ -2042,12 +2042,12 @@
         },
         "target": "目標",
         "budget": "預算",
-        "estimatedCalls": "預計審核檢查",
-        "activeGroupTitle": "已覆蓋",
-        "skippedGroupTitle": "已選擇審核範圍",
-        "reducedCoverageSummary": "BitFun 已為此目標選擇最相關的檢查。{{count}} 個可選檢查因適用性、設定或預算未納入本次執行。",
-        "reducedCoverageSummary_one": "BitFun 已為此目標選擇最相關的檢查。{{count}} 個可選檢查因適用性、設定或預算未納入本次執行。",
-        "reducedCoverageSummary_other": "BitFun 已為此目標選擇最相關的檢查。{{count}} 個可選檢查因適用性、設定或預算未納入本次執行。"
+        "estimatedCalls": "預計審核工作項",
+        "activeGroupTitle": "已完成的審核工作",
+        "skippedGroupTitle": "未執行的審核工作",
+        "reducedCoverageSummary": "{{count}} 項可選審核工作未執行；本次結果僅反映已完成的審核範圍。",
+        "reducedCoverageSummary_one": "{{count}} 項可選審核工作未執行；本次結果僅反映已完成的審核範圍。",
+        "reducedCoverageSummary_other": "{{count}} 項可選審核工作未執行；本次結果僅反映已完成的審核範圍。"
       },
       "sectionItemCount": "{{count}} 項",
       "remediationPlan": "修復計劃",
@@ -2055,7 +2055,7 @@
         "title": "審核狀態",
         "context_pressure": {
           "label": "上下文壓力上升",
-          "detail": "大型或受限目標預計需要 {{count}} 項審核檢查。"
+          "detail": "大型或受限目標已規劃 {{count}} 項審核工作。"
         },
         "compression_preserved": {
           "label": "壓縮已保留關鍵事實",
@@ -2078,8 +2078,8 @@
           "detail": "{{count}} 個審核結果是部分結果，可信度有限。"
         },
         "reduced_scope": {
-          "label": "聚焦審核範圍",
-          "detail": "本次審核使用了聚焦範圍設定。"
+          "label": "審核範圍受限",
+          "detail": "本次審核只涵蓋有限範圍。"
         },
         "target_evidence_limited": {
           "label": "目標證據受限",
@@ -2091,11 +2091,11 @@
         },
         "skipped_reviewers": {
           "label": "審核範圍已匹配",
-          "detail": "{{count}} 個可選檢查因適用性、設定或預算未納入本次執行。"
+          "detail": "未執行的可選審核工作：{{count}} 項（適用性、設定或預算限制）。"
         },
         "token_budget_limited": {
           "label": "Token 預算限制了審核覆蓋",
-          "detail": "Token 預算模式將 {{count}} 個可選檢查保留在本次範圍之外。"
+          "detail": "因 Token 預算未執行的可選審核工作：{{count}} 項。"
         },
         "user_decision": {
           "label": "需要使用者決策",
@@ -2129,7 +2129,7 @@
         "security": "安全覆蓋",
         "architecture": "架構覆蓋",
         "frontend": "前端覆蓋",
-        "focusedCheck": "專項檢查",
+        "focusedCheck": "補充檢查",
         "qualityGate": "品質檢查"
       },
       "report": {

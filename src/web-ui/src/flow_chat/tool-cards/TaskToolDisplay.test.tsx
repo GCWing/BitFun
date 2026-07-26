@@ -33,7 +33,7 @@ vi.mock('react-i18next', () => {
       return 'Sub-agent';
     }
     if (key === 'toolCards.taskTool.reviewCoverageLabel') {
-      return 'Review check';
+      return 'Additional check';
     }
     if (key === 'toolCards.taskTool.reviewCoverageDescription') {
       return 'Checking review coverage';
@@ -431,7 +431,7 @@ describeWithJsdom('TaskToolDisplay', () => {
     expect(container.textContent).not.toContain('managed-review:batch-1-of-4');
   });
 
-  it('shows safe focused progress without projecting model-controlled identifiers', async () => {
+  it('shows safe additional-check progress without projecting model-controlled identifiers', async () => {
     const toolItem: FlowToolItem = {
       ...reviewTaskItem('running', 'ReviewWorker'),
       toolName: 'LaunchReviewAgent',
@@ -466,7 +466,7 @@ describeWithJsdom('TaskToolDisplay', () => {
     expect(container.textContent).not.toContain('src/internal.ts');
   });
 
-  it('hides internal focused-check failure details', async () => {
+  it('hides internal additional-check failure details', async () => {
     const toolItem: FlowToolItem = {
       ...reviewTaskItem('error', 'ReviewWorker'),
       toolName: 'LaunchReviewAgent',

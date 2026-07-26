@@ -292,15 +292,15 @@
       "createSuccess": "Created agent \"{{name}}\"",
       "createFailed": "Create failed: ",
       "review": "Review",
-      "reviewToolsHint": "Review checks can only use read-only tools."
+      "reviewToolsHint": "Additional checks use only read-only tools."
     }
   },
   "reviewTeams": {
     "members": {
       "worker": {
-        "funName": "Focused Review",
-        "role": "On-demand Review Check",
-        "description": "A read-only check whose focus and scope are chosen for the current change when more evidence would be useful.",
+        "funName": "Additional check",
+        "role": "On-demand check",
+        "description": "A read-only check used when the main review needs more evidence for a specific concern.",
         "responsibilities": [
           "Check only the question assigned by the main review.",
           "Stay within the selected scope and support conclusions with concrete evidence.",
@@ -308,8 +308,8 @@
         ]
       },
       "judge": {
-        "funName": "Independent Review Check",
-        "role": "Review Quality Check",
+        "funName": "Independent validation",
+        "role": "Quality check",
         "description": "A read-only independent check used only when a serious finding, conflicting evidence, or an uncertain conclusion needs validation.",
         "responsibilities": [
           "Confirm or reject disputed findings using concrete evidence.",
@@ -319,10 +319,10 @@
       }
     },
     "extraReviewer": {
-      "role": "Additional Review Check",
-      "description": "An optional independent check for a specific concern chosen by the user.",
+      "role": "User-requested check",
+      "description": "A read-only check for a specific concern chosen by the user.",
       "responsibilities": [
-        "Add another independent view of the current change.",
+        "Check the concern requested by the user.",
         "Check only the requested changes and selected files.",
         "Return concrete findings with clear fixes or follow-up steps."
       ]

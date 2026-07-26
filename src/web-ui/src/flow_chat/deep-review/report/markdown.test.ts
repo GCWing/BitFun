@@ -41,7 +41,7 @@ describe('markdown', () => {
     expect(markdown).not.toContain('ReviewSecurity');
   });
 
-  it('does not claim a focused check for an ordinary primary-review source', () => {
+  it('does not claim an additional check for an ordinary primary-review source', () => {
     const markdown = formatCodeReviewReportMarkdown({
       review_mode: 'standard',
       summary: {
@@ -58,7 +58,7 @@ describe('markdown', () => {
     });
 
     expect(markdown).not.toContain('- Source:');
-    expect(markdown).not.toContain('Focused check');
+    expect(markdown).not.toContain('Additional check');
     expect(markdown).not.toContain('Primary review');
   });
 });

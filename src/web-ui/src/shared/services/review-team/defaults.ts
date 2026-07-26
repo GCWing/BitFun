@@ -91,10 +91,10 @@ export const PREDICTIVE_TIMEOUT_BASE_SECONDS: Record<ReviewStrategyLevel, number
 export const REVIEW_TEAM_MEMBER_ACCENT_DEFAULT = UI_EXCEPTION_ACCENTS.reviewTeam.memberDefault;
 
 export const EXTRA_MEMBER_DEFAULTS = {
-  roleName: 'Additional Review Check',
-  description: 'An optional independent check for a specific concern chosen by the user.',
+  roleName: 'User-requested check',
+  description: 'A read-only check for a specific concern chosen by the user.',
   responsibilities: [
-    'Add another independent view of the current change.',
+    'Check the concern requested by the user.',
     'Check only the requested changes and selected files.',
     'Return concrete findings with clear fixes or follow-up steps.',
   ],
@@ -113,10 +113,10 @@ export const DEFAULT_REVIEW_TEAM_CORE_ROLES: ReviewTeamCoreRoleDefinition[] = [
   {
     key: 'worker',
     subagentId: 'ReviewWorker',
-    funName: 'Focused Review',
-    roleName: 'On-demand Review Check',
+    funName: 'Additional check',
+    roleName: 'On-demand check',
     description:
-      'A read-only check whose focus and scope are chosen for the current change when more evidence would be useful.',
+      'A read-only check used when the main review needs more evidence for a specific concern.',
     responsibilities: [
       'Check only the question assigned by the main review.',
       'Stay within the selected scope and support conclusions with concrete evidence.',
@@ -127,8 +127,8 @@ export const DEFAULT_REVIEW_TEAM_CORE_ROLES: ReviewTeamCoreRoleDefinition[] = [
   {
     key: 'judge',
     subagentId: 'ReviewJudge',
-    funName: 'Independent Review Check',
-    roleName: 'Review Quality Check',
+    funName: 'Independent validation',
+    roleName: 'Quality check',
     description:
       'A read-only independent check used only when a serious finding, conflicting evidence, or an uncertain conclusion needs validation.',
     responsibilities: [
@@ -162,7 +162,7 @@ export const FALLBACK_REVIEW_TEAM_DEFINITION: ReviewTeamDefinition = {
   id: DEFAULT_REVIEW_TEAM_ID,
   name: 'Code Review',
   description:
-    'One main review that can request focused independent checks when more evidence is needed.',
+    'One review that can add checks when a specific concern needs more evidence.',
   warning:
     'Strict review may take longer and usually consumes more tokens than a standard review.',
   defaultModel: DEFAULT_REVIEW_TEAM_MODEL,

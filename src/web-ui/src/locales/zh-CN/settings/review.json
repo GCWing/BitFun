@@ -12,10 +12,10 @@
   },
   "capacity": {
     "title": "容量",
-    "description": "选择审核检查逐项或两路运行，并设置等待供应商容量的时长。",
+    "description": "选择补充审核工作逐项或两路运行，并设置等待供应商容量的时长。",
     "maxParallelReviewers": {
-      "label": "审核检查并行数",
-      "description": "控制专项检查和大目标分批审核逐项或两路运行；此设置不会增加检查或分批数量。"
+      "label": "审核并行数",
+      "description": "控制补充审核工作逐项或两路运行；只改变并行方式，不改变审核范围。"
     },
     "maxQueueWaitSeconds": {
       "label": "容量等待窗口",

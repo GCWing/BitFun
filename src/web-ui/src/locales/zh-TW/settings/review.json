@@ -12,10 +12,10 @@
   },
   "capacity": {
     "title": "容量",
-    "description": "選擇審核檢查逐項或兩路執行，並設定等待供應商容量的時長。",
+    "description": "選擇補充審核工作逐項或兩路執行，並設定等待供應商容量的時長。",
     "maxParallelReviewers": {
-      "label": "審核檢查並行數",
-      "description": "控制專項檢查和大型目標的分批審核逐項或兩路執行；此設定不會增加檢查或分批數量。"
+      "label": "審核並行數",
+      "description": "控制補充審核工作逐項或兩路執行；只改變並行方式，不改變審核範圍。"
     },
     "maxQueueWaitSeconds": {
       "label": "容量等待視窗",

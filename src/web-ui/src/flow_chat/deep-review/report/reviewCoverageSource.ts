@@ -16,7 +16,7 @@ export const DEFAULT_REVIEW_COVERAGE_SOURCE_LABELS: Record<
   security: 'Security coverage',
   architecture: 'Architecture coverage',
   frontend: 'Frontend coverage',
-  focusedCheck: 'Focused check',
+  focusedCheck: 'Additional check',
   qualityGate: 'Quality check',
 };
 
@@ -71,7 +71,7 @@ export function formatReviewCoverageSource(
 
   // Keep the known remediation identity, but never project arbitrary model
   // prose, Skill names, or custom-agent names into the product report. Only
-  // the structured ReviewWorker runtime identity proves a focused check ran.
+  // the structured ReviewWorker runtime identity proves an additional check ran.
   return normalizeReviewSource(normalized) === 'reviewfixer'
     ? normalized
     : null;

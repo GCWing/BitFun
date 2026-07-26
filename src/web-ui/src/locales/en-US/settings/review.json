@@ -12,10 +12,10 @@
   },
   "capacity": {
     "title": "Capacity",
-    "description": "Choose whether Review checks run one or two at a time, and how long they may wait for provider capacity.",
+    "description": "Choose whether additional Review work runs one or two at a time, and how long it may wait for provider capacity.",
     "maxParallelReviewers": {
-      "label": "Parallel Review checks",
-      "description": "Controls whether focused checks and large-review batches run one or two at a time. This setting does not add checks or batches."
+      "label": "Review parallelism",
+      "description": "Controls whether additional review work runs one or two at a time. It changes concurrency, not review scope."
     },
     "maxQueueWaitSeconds": {
       "label": "Capacity wait window",

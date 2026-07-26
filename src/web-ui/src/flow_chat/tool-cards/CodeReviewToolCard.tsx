@@ -126,7 +126,7 @@ function getCoverageSourceLabel(sourceReviewer: string | undefined, t: Translate
       defaultValue: 'Frontend coverage',
     }),
     focusedCheck: t('toolCards.codeReview.coverageSources.focusedCheck', {
-      defaultValue: 'Focused check',
+      defaultValue: 'Additional check',
     }),
     qualityGate: t('toolCards.codeReview.coverageSources.qualityGate', {
       defaultValue: 'Quality check',
@@ -155,7 +155,7 @@ function getReliabilityNoticeLabel(notice: ReviewReliabilityNotice, t: Translate
       concurrency_limited: 'Review launch was concurrency-limited',
       partial_reviewer: 'Review returned partial result',
       target_evidence_limited: 'Target evidence limited',
-      reduced_scope: 'Focused review scope',
+      reduced_scope: 'Limited review scope',
       retry_guidance: 'Retry guidance emitted',
       skipped_reviewers: 'Review scope tailored',
       token_budget_limited: 'Token budget limited review coverage',
@@ -172,17 +172,17 @@ function getReliabilityNoticeDetail(notice: ReviewReliabilityNotice, t: Translat
   return t(`toolCards.codeReview.reliabilityStatus.${notice.kind}.detail`, {
     count: notice.count ?? 0,
     defaultValue: {
-      context_pressure: '{{count}} review checks planned for a large or constrained target.',
+      context_pressure: 'A large or constrained target has {{count}} planned review work items.',
       compression_preserved: 'Coverage notes include preserved context from compression.',
       cache_hit: '{{count}} previous review result reused matching cached output.',
       cache_miss: '{{count}} review result ran fresh or refreshed stale cache.',
       concurrency_limited: '{{count}} review launch hit a concurrency cap.',
       partial_reviewer: '{{count}} review result is partial; confidence is limited.',
       target_evidence_limited: 'Prepared target evidence could not safely cover every requested change.',
-      reduced_scope: 'This review used a focused scope profile.',
+      reduced_scope: 'This review used a limited scope.',
       retry_guidance: '{{count}} retry guidance item was emitted for partial review coverage.',
-      skipped_reviewers: '{{count}} optional check was outside this run because of applicability, configuration, or budget.',
-      token_budget_limited: 'Token budget mode kept {{count}} optional check outside this run.',
+      skipped_reviewers: 'Optional review work not run: {{count}} (applicability, configuration, or budget).',
+      token_budget_limited: 'Optional review work not run due to token budget: {{count}}.',
       user_decision: '{{count}} review item needs your decision before fixing.',
     }[notice.kind],
   });

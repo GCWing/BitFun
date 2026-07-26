@@ -12,8 +12,8 @@ describe('formatReviewCoverageSource', () => {
     expect(formatReviewCoverageSource('ReviewFixer')).toBe('ReviewFixer');
   });
 
-  it('projects the structured worker identity as one generic product label', () => {
-    expect(formatReviewCoverageSource('ReviewWorker')).toBe('Focused check');
+  it('projects the structured worker identity as a subordinate product label', () => {
+    expect(formatReviewCoverageSource('ReviewWorker')).toBe('Additional check');
   });
 
   it('does not mislabel primary-review prose or leak capability identities', () => {

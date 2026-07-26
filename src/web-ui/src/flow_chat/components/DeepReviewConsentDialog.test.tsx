@@ -295,8 +295,10 @@ describeWithJsdom('DeepReviewConsentDialog', () => {
     expect(container.querySelector('[role="dialog"]')?.getAttribute('aria-modal')).toBe('true');
     expect(container.querySelector('[role="dialog"]')?.getAttribute('aria-label')).toBe('Review plan');
     expect(container.textContent).toContain('1 file');
-    expect(container.textContent).toContain('2 optional checks not needed');
-    expect(container.textContent).toContain('BitFun selected the checks that apply to this target.');
+    expect(container.textContent).toContain('2 optional review work items not run');
+    expect(container.textContent).toContain(
+      '2 optional review work items were not run. This result reflects only the completed review scope.',
+    );
     expect(container.textContent).not.toContain('Estimated reviewer prompt input');
     expect(container.textContent).not.toContain('Reviewer prompt input only');
     expect(container.textContent).not.toContain('Maximum checks:');
@@ -306,7 +308,7 @@ describeWithJsdom('DeepReviewConsentDialog', () => {
     expect(container.textContent).not.toContain('Do not show this again');
     expect(container.textContent).not.toContain('Risk areas: Backend core');
     expect(container.textContent).toContain(
-      'This review investigates the target more thoroughly and adds independent checks only when they are useful.',
+      'This review investigates the target more thoroughly and adds additional checks only when they are useful.',
     );
     expect(container.textContent).not.toContain('token');
     expect(container.textContent).not.toContain('request');
@@ -373,7 +375,7 @@ describeWithJsdom('DeepReviewConsentDialog', () => {
     expect(container.textContent).not.toContain('0 files');
     expect(container.textContent).not.toContain('Risk areas:');
     expect(container.textContent).toContain(
-      'This review investigates the target more thoroughly and adds independent checks only when they are useful.',
+      'This review investigates the target more thoroughly and adds additional checks only when they are useful.',
     );
   });
 
@@ -457,7 +459,7 @@ describeWithJsdom('DeepReviewConsentDialog', () => {
     expect(container.textContent).not.toContain('Quick is narrower');
     expect(container.textContent).not.toContain('Risk areas: Backend core');
     expect(container.textContent).toContain(
-      'This review investigates the target more thoroughly and adds independent checks only when they are useful.',
+      'This review investigates the target more thoroughly and adds additional checks only when they are useful.',
     );
     expect(container.textContent).not.toContain('1 extra specialist');
     expect(container.textContent).not.toContain('Expected cost:');
@@ -467,7 +469,7 @@ describeWithJsdom('DeepReviewConsentDialog', () => {
     expect(container.querySelectorAll('.deep-review-consent__strategy-option--active')).toHaveLength(0);
     expect(container.textContent).not.toContain('Team default');
     expect(container.textContent).toContain(
-      'Standard review examines the selected target in more depth and may add independent checks when useful.',
+      'Standard review examines the selected target in more depth and adds additional checks only when useful.',
     );
     expect(container.querySelectorAll('.deep-review-consent__strategy-option-summary')).toHaveLength(0);
 

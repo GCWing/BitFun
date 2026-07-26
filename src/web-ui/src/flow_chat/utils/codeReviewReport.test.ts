@@ -546,7 +546,7 @@ describe('codeReviewReport', () => {
     expect(markdown).toContain('- Token budget limited review coverage [warning/manifest]: Count: 1');
   });
 
-  it('surfaces focused scope profile in reliability notices and markdown export', () => {
+  it('surfaces limited scope in reliability notices and markdown export', () => {
     const report = {
       summary: {
         overall_assessment: 'No blocking issues found in the high-risk pass.',
@@ -572,7 +572,7 @@ describe('codeReviewReport', () => {
     expect(markdown).not.toContain('- Review depth:');
     expect(markdown).not.toContain('- Coverage expectation:');
     expect(markdown).toContain(
-      '- Focused review scope [info/manifest]: High-risk-only pass; changed files remain visible.',
+      '- Limited review scope [info/manifest]: High-risk-only pass; changed files remain visible.',
     );
   });
 
@@ -844,7 +844,7 @@ describe('codeReviewReport', () => {
     expect(markdown).not.toContain('## Review Coverage And Cost');
     expect(markdown).not.toContain('- Target: frontend');
     expect(markdown).not.toContain('- Budget: balanced');
-    expect(markdown).not.toContain('- Estimated review checks: 3');
+    expect(markdown).not.toContain('- Estimated review work items: 3');
     expect(markdown).not.toContain('- Recommended strategy: Deep');
     expect(markdown).not.toContain('- Recommendation score: 24');
     expect(markdown).not.toContain('- Recommendation rationale: Large/high-risk change');

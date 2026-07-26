@@ -27,7 +27,7 @@ vi.mock('react-i18next', () => ({
         'toolCards.codeReview.export.copyMarkdown': 'Copy Markdown',
         'toolCards.codeReview.export.openMarkdown': 'Open as Markdown',
         'toolCards.codeReview.export.saveMarkdown': 'Save Markdown',
-        'toolCards.codeReview.coverageSources.focusedCheck': '专项检查',
+        'toolCards.codeReview.coverageSources.focusedCheck': '补充检查',
       };
       return labels[key] ?? key;
     },
@@ -146,7 +146,7 @@ describe('CodeReviewReportExportActions', () => {
     );
   });
 
-  it('passes the localized focused-check label into Markdown formatting', () => {
+  it('passes the localized additional-check label into Markdown formatting', () => {
     renderToStaticMarkup(
       <CodeReviewReportExportActions reviewData={{ summary: { recommended_action: 'approve' } }} />,
     );
@@ -154,7 +154,7 @@ describe('CodeReviewReportExportActions', () => {
     expect(formatCodeReviewReportMarkdownMock).toHaveBeenLastCalledWith(
       { summary: { recommended_action: 'approve' } },
       expect.objectContaining({
-        coverageSourceLabels: expect.objectContaining({ focusedCheck: '专项检查' }),
+        coverageSourceLabels: expect.objectContaining({ focusedCheck: '补充检查' }),
       }),
       { runManifest: undefined },
     );

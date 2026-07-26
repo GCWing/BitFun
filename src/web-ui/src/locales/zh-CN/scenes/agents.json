@@ -292,15 +292,15 @@
       "createSuccess": "已创建 Agent「{{name}}」",
       "createFailed": "创建失败：",
       "review": "评审",
-      "reviewToolsHint": "审核检查只能使用只读工具。"
+      "reviewToolsHint": "补充检查仅使用只读工具。"
     }
   },
   "reviewTeams": {
     "members": {
       "worker": {
-        "funName": "按需审核",
-        "role": "按需审核检查",
-        "description": "一项只读检查；只有在需要补充证据时，才会根据当前变更确定检查重点和范围。",
+        "funName": "补充检查",
+        "role": "按需检查",
+        "description": "主审核只在具体问题需要更多证据时使用的只读检查。",
         "responsibilities": [
           "只检查主审核指定的问题。",
           "不超出已确定的范围，并用具体证据说明结论。",
@@ -308,8 +308,8 @@
         ]
       },
       "judge": {
-        "funName": "独立复核",
-        "role": "审核质量复核",
+        "funName": "独立验证",
+        "role": "质量检查",
         "description": "只在严重问题、证据冲突或结论明显不确定时启用的只读独立复核。",
         "responsibilities": [
           "根据具体证据确认或驳回有争议的发现。",
@@ -319,10 +319,10 @@
       }
     },
     "extraReviewer": {
-      "role": "额外审核检查",
-      "description": "用户可按具体关注点添加的独立检查。",
+      "role": "用户指定的检查",
+      "description": "用户可针对具体关注点请求的只读检查。",
       "responsibilities": [
-        "从额外的独立角度检查当前变更。",
+        "检查用户指定的关注点。",
         "只检查用户指定的改动和文件。",
         "提供有具体依据的问题、修复建议或后续步骤。"
       ]

@@ -292,15 +292,15 @@
       "createSuccess": "已建立 Agent「{{name}}」",
       "createFailed": "建立失敗：",
       "review": "審查",
-      "reviewToolsHint": "審核檢查只能使用唯讀工具。"
+      "reviewToolsHint": "補充檢查僅使用唯讀工具。"
     }
   },
   "reviewTeams": {
     "members": {
       "worker": {
-        "funName": "視需要審核",
-        "role": "視需要審核檢查",
-        "description": "一項唯讀檢查；只有在需要補充證據時，才會依目前變更決定檢查重點與範圍。",
+        "funName": "補充檢查",
+        "role": "視需要檢查",
+        "description": "主要審核只在具體問題需要更多證據時使用的唯讀檢查。",
         "responsibilities": [
           "只檢查主要審核指定的問題。",
           "不超出已確定的範圍，並以具體證據說明結論。",
@@ -308,8 +308,8 @@
         ]
       },
       "judge": {
-        "funName": "獨立複核",
-        "role": "審核品質複核",
+        "funName": "獨立驗證",
+        "role": "品質檢查",
         "description": "只在嚴重問題、證據衝突或結論明顯不確定時啟用的唯讀獨立複核。",
         "responsibilities": [
           "根據具體證據確認或駁回有爭議的發現。",
@@ -319,10 +319,10 @@
       }
     },
     "extraReviewer": {
-      "role": "額外審核檢查",
-      "description": "使用者可依具體關注點新增的獨立檢查。",
+      "role": "使用者指定的檢查",
+      "description": "使用者可針對具體關注點請求的唯讀檢查。",
       "responsibilities": [
-        "從額外的獨立角度檢查目前變更。",
+        "檢查使用者指定的關注點。",
         "只檢查使用者指定的變更和檔案。",
         "提供有具體依據的問題、修正建議或後續步驟。"
       ]

@@ -32,7 +32,12 @@ Current execution and later lifecycle work must remain distinguishable:
 | Strict Review | One primary reviewer with zero to three spawned calls; a conditional Judge uses the same allowance | Preserve revisions, freshness, and finding continuity |
 | Large ordinary Review | Deterministic packets, at most two concurrent; questions attach to existing packets | Project the same Review record into task and pull-request surfaces |
 | Capability sources | Built-in fallback, compatible Skills, and configured read-only review agents | Keep source names out of the default product presentation |
-| User presentation | One Review child/result with plain-language focused-check progress | One durable card with explicit loading and historical revisions |
+| User presentation | One Review child/result with plain-language additional-check progress | One durable card with explicit loading and historical revisions |
+
+Product surfaces call optional worker activity an **Additional check**
+(`补充检查`). It remains subordinate to one Review and is never presented as a
+separate mode, fixed domain, or reviewer team. This document uses *focused
+check* only as the internal execution term.
 
 The current implementation has four layers:
 
