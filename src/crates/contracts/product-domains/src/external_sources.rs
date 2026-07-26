@@ -813,6 +813,182 @@ pub struct PreparedExternalMcpServer {
     pub transport: PreparedExternalMcpTransport,
 }
 
+/// Private, provider-owned projection for copying a supported external MCP
+/// declaration into native user configuration. It is intentionally not
+/// serializable so command arguments and URLs cannot cross the product API.
+#[derive(Clone, PartialEq, Eq)]
+pub enum PreparedExternalMcpImportTransport {
+    Local { command: String, args: Vec<String> },
+    Remote { url: String },
+}
+
+impl fmt::Debug for PreparedExternalMcpImportTransport {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Local { args, .. } => formatter
+                .debug_struct("Local")
+                .field("command", &"[REDACTED]")
+                .field("argument_count", &args.len())
+                .finish(),
+            Self::Remote { .. } => formatter
+                .debug_struct("Remote")
+                .field("url", &"[REDACTED]")
+                .finish(),
+        }
+    }
+}
+
+#[derive(Clone, PartialEq, Eq)]
+pub struct PreparedExternalMcpImportServer {
+    pub id: SourceQualifiedMcpServerId,
+    pub behavior_version: String,
+    pub transport: PreparedExternalMcpImportTransport,
+}
+
+impl fmt::Debug for PreparedExternalMcpImportServer {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("PreparedExternalMcpImportServer")
+            .field("id", &self.id)
+            .field("behavior_version", &self.behavior_version)
+            .field("transport", &self.transport)
+            .finish()
+    }
+}
+
+impl PreparedExternalMcpImportServer {
+    pub fn validate(&self) -> Result<(), ExternalSourceContractError> {
+        validate_text(
+            &self.behavior_version,
+            "prepared MCP import behavior version",
+        )?;
+        match &self.transport {
+            PreparedExternalMcpImportTransport::Local { command, args } => {
+                validate_text(command, "prepared MCP import command")?;
+                if args.len() > 256 {
+                    return Err(ExternalSourceContractError::InvalidIdentifier(
+                        "prepared MCP import argument count",
+                    ));
+                }
+                for argument in args {
+                    validate_text(argument, "prepared MCP import argument")?;
+                }
+            }
+            PreparedExternalMcpImportTransport::Remote { url } => {
+                validate_text(url, "prepared MCP import URL")?;
+            }
+        }
+        Ok(())
+    }
+}
+
+pub const EXTERNAL_MCP_IMPORT_SCHEMA_V1: u16 = 1;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ExternalMcpImportDispositionV1 {
+    Eligible,
+    AutomaticRename,
+    AlreadyImported,
+    Unavailable,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ExternalMcpImportPlanItemV1 {
+    pub candidate_id: String,
+    pub display_name: String,
+    pub transport: ExternalMcpTransportKind,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub proposed_native_id: Option<String>,
+    pub disposition: ExternalMcpImportDispositionV1,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub reason_code: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ExternalMcpImportPlanV1 {
+    pub schema_version: u16,
+    pub plan_fingerprint: String,
+    pub items: Vec<ExternalMcpImportPlanItemV1>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ExternalMcpImportSelectionV1 {
+    pub candidate_id: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub requested_native_id: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ExternalMcpImportApplyRequestV1 {
+    pub schema_version: u16,
+    pub plan_fingerprint: String,
+    pub selections: Vec<ExternalMcpImportSelectionV1>,
+}
+
+impl ExternalMcpImportApplyRequestV1 {
+    pub fn validate(&self) -> Result<(), ExternalSourceContractError> {
+        if self.schema_version != EXTERNAL_MCP_IMPORT_SCHEMA_V1
+            || self.selections.is_empty()
+            || self.selections.len() > 256
+        {
+            return Err(ExternalSourceContractError::InvalidIdentifier(
+                "external MCP import request",
+            ));
+        }
+        validate_text(
+            &self.plan_fingerprint,
+            "external MCP import plan fingerprint",
+        )?;
+        let mut candidate_ids = BTreeSet::new();
+        for selection in &self.selections {
+            validate_text(&selection.candidate_id, "external MCP import candidate id")?;
+            if !candidate_ids.insert(&selection.candidate_id) {
+                return Err(ExternalSourceContractError::InvalidIdentifier(
+                    "external MCP import selection",
+                ));
+            }
+            if let Some(native_id) = &selection.requested_native_id {
+                validate_text(native_id, "external MCP native id")?;
+            }
+        }
+        Ok(())
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ExternalMcpImportedItemV1 {
+    pub candidate_id: String,
+    pub native_id: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(
+    tag = "status",
+    rename_all = "snake_case",
+    rename_all_fields = "camelCase"
+)]
+pub enum ExternalMcpImportApplyOutcomeV1 {
+    Applied {
+        imported: Vec<ExternalMcpImportedItemV1>,
+    },
+    Stale {
+        refreshed_plan: ExternalMcpImportPlanV1,
+    },
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ExternalMcpImportApplyResultV1 {
+    pub schema_version: u16,
+    pub outcome: ExternalMcpImportApplyOutcomeV1,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct ExternalMcpProviderIdentity {
@@ -902,6 +1078,19 @@ pub trait ExternalMcpSourceProvider: Send + Sync {
         server_id: &SourceQualifiedMcpServerId,
         expected_behavior_version: &str,
     ) -> Result<PreparedExternalMcpServer, ExternalSourceProviderError>;
+
+    fn prepare_import(
+        &self,
+        _input: &ExternalMcpDiscoveryInput,
+        _server_id: &SourceQualifiedMcpServerId,
+        _expected_behavior_version: &str,
+    ) -> Result<PreparedExternalMcpImportServer, ExternalSourceProviderError> {
+        Err(ExternalSourceProviderError::new(
+            "external_mcp.import_unsupported",
+            "This MCP provider does not expose an import-safe projection",
+            false,
+        ))
+    }
 
     fn watch_roots(&self, context: &ExternalSourceContext) -> Vec<ExternalWatchRoot>;
 }

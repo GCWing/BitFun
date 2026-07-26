@@ -183,6 +183,7 @@ const McpToolsConfig: React.FC = () => {
   const [serverLoadFailed, setServerLoadFailed] = useState(false);
   const [showJsonEditor, setShowJsonEditor] = useState(false);
   const [jsonConfig, setJsonConfig] = useState('');
+  const [jsonConfigFingerprint, setJsonConfigFingerprint] = useState('');
   const [jsonLoading, setJsonLoading] = useState(true);
   const [jsonLoadFailed, setJsonLoadFailed] = useState(false);
   const [authDialogServer, setAuthDialogServer] = useState<MCPServerInfo | null>(null);
@@ -281,7 +282,8 @@ const McpToolsConfig: React.FC = () => {
       ) {
         return false;
       }
-      setJsonConfig(config);
+      setJsonConfig(config.jsonConfig);
+      setJsonConfigFingerprint(config.fingerprint);
       setJsonLoadFailed(false);
       return true;
     } catch (error) {
@@ -385,6 +387,7 @@ const McpToolsConfig: React.FC = () => {
       setMcpLoading(false);
       setServerLoadFailed(false);
       setShowJsonEditor(false);
+      setJsonConfigFingerprint('');
       setJsonLoading(false);
       setJsonLoadFailed(false);
       setAuthDialogServer(null);
@@ -467,7 +470,10 @@ const McpToolsConfig: React.FC = () => {
       if (typeof parsedConfig.mcpServers !== 'object' || Array.isArray(parsedConfig.mcpServers))
         throw new Error(tMcp('errors.mcpServersMustBeObject'));
 
-      await MCPAPI.saveMCPJsonConfig(jsonConfig);
+      if (!jsonConfigFingerprint) {
+        throw new Error('MCP configuration snapshot is unavailable; reload before saving');
+      }
+      await MCPAPI.saveMCPJsonConfig(jsonConfig, jsonConfigFingerprint);
       if (!capabilityIsCurrent(capabilityEpoch)) return;
       notification.success(tMcp('messages.saveSuccess'), {
         title: tMcp('notifications.saveSuccess'),

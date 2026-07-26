@@ -64,11 +64,13 @@ pnpm run type-check:web
 pnpm --dir src/mobile-web run type-check
 pnpm run i18n:contract:test          # 仅 i18n contract / resources
 pnpm run i18n:audit                  # 仅 i18n contract / resources
+pnpm run product:check               # 默认产品定义
 pnpm run check:repo-hygiene
 pnpm run check:github-config
 cargo check --workspace
 
 # 测试（本地优先用精确测试路径；大范围测试由 CI 兜底）
+pnpm run product:test
 pnpm --dir src/web-ui run test:run      # 大范围测试；本地优先用精确测试路径
 cargo test --workspace                  # 大范围测试；CI 兜底
 
@@ -250,6 +252,7 @@ OpenCode 兼容或目标项目治理的变更，先阅读
 | Locale contract 或 shared terms | `pnpm run i18n:generate && pnpm run i18n:contract:test && pnpm run i18n:audit` |
 | Web UI i18n runtime、namespace loading 或直接 `i18nService.t(...)` 调用 | `pnpm run i18n:contract:test && pnpm run type-check:web && pnpm --dir src/web-ui run test:run src/infrastructure/i18n/core/I18nService.test.ts` |
 | Mobile web UI、状态、配对、断开或重连行为 | `pnpm --dir src/mobile-web run type-check`；行为变化还需要在 PR 中说明手动配对 / 重连验证 |
+| 产品定义、schema、resolver 或 Desktop/CLI 产品构建 adapter | `pnpm run product:test`，并对默认定义运行 `pnpm run product:check` |
 | `core`、`transport`、adapter 或共享服务中的 Rust 逻辑 | `cargo check --workspace`；行为变化时再加最近的 focused `cargo test` |
 | 桌面端集成、Tauri API、browser/computer-use 或桌面专属行为 | `cargo check -p bitfun-desktop`；行为变化时再加 focused desktop tests |
 | 被桌面端 smoke/functional 流覆盖的行为 | 优先运行最近的 focused E2E/smoke check；除非改动影响构建，否则 broad build/test 交给 CI |

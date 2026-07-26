@@ -178,6 +178,26 @@ X-Env = "CODEX_MCP_MISSING_HEADER"
 }
 
 #[test]
+fn native_import_remains_explicitly_unsupported_for_codex_in_c0a() {
+    let fixture = Fixture::new();
+    write(
+        fixture.codex_home.join("config.toml"),
+        r#"[mcp_servers.docs]
+command = "docs-mcp"
+"#,
+    );
+    let provider = fixture.provider();
+    let input = fixture.input();
+    let snapshot = provider.discover(&input).unwrap();
+    let server = &snapshot.servers[0];
+
+    let error = provider
+        .prepare_import(&input, &server.id, &server.behavior_version)
+        .unwrap_err();
+    assert_eq!(error.code, "external_mcp.import_unsupported");
+}
+
+#[test]
 fn unsupported_runtime_controls_block_but_required_only_warns() {
     let fixture = Fixture::new();
     write(

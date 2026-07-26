@@ -330,13 +330,13 @@ export class MCPAPI {
   }
 
    
-  static async loadMCPJsonConfig(): Promise<string> {
+  static async loadMCPJsonConfig(): Promise<{ jsonConfig: string; fingerprint: string }> {
     return api.invoke('load_mcp_json_config');
   }
 
    
-  static async saveMCPJsonConfig(jsonConfig: string): Promise<void> {
-    return api.invoke('save_mcp_json_config', { jsonConfig });
+  static async saveMCPJsonConfig(jsonConfig: string, expectedFingerprint: string): Promise<void> {
+    return api.invoke('save_mcp_json_config', { jsonConfig, expectedFingerprint });
   }
 
   /**

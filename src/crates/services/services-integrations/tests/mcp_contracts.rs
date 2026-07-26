@@ -10,7 +10,7 @@ use bitfun_services_integrations::mcp::config::{
     get_mcp_remote_authorization_value, has_mcp_remote_authorization, has_mcp_remote_oauth,
     has_mcp_remote_xaa, merge_mcp_server_config_sources, normalize_mcp_authorization_value,
     parse_cursor_format, remove_mcp_authorization_keys, validate_mcp_json_config, MCPConfigService,
-    MCPConfigStore,
+    MCPConfigStore, MCPImportError, MCPImportServer, MCPImportTransport,
 };
 use bitfun_services_integrations::mcp::protocol::{
     create_initialize_request, create_mcp_client_info, create_ping_request,
@@ -99,6 +99,20 @@ impl MCPConfigStore for InMemoryMCPConfigStore {
         self.values.lock().await.insert(key.to_string(), value);
         Ok(())
     }
+
+    async fn compare_and_set_config_value(
+        &self,
+        key: &str,
+        expected: Option<serde_json::Value>,
+        replacement: serde_json::Value,
+    ) -> MCPRuntimeResult<bool> {
+        let mut values = self.values.lock().await;
+        if values.get(key).cloned() != expected {
+            return Ok(false);
+        }
+        values.insert(key.to_string(), replacement);
+        Ok(true)
+    }
 }
 
 struct FailingMCPConfigStore;
@@ -114,6 +128,19 @@ impl MCPConfigStore for FailingMCPConfigStore {
     }
 
     async fn set_config_value(&self, key: &str, _value: serde_json::Value) -> MCPRuntimeResult<()> {
+        Err(
+            bitfun_services_integrations::mcp::MCPRuntimeError::configuration(format!(
+                "backend unavailable for {key}"
+            )),
+        )
+    }
+
+    async fn compare_and_set_config_value(
+        &self,
+        key: &str,
+        _expected: Option<serde_json::Value>,
+        _replacement: serde_json::Value,
+    ) -> MCPRuntimeResult<bool> {
         Err(
             bitfun_services_integrations::mcp::MCPRuntimeError::configuration(format!(
                 "backend unavailable for {key}"
@@ -1003,6 +1030,110 @@ async fn mcp_config_service_orchestration_preserves_load_save_delete_contract() 
         .unwrap()
         .get("remote-docs")
         .is_none());
+}
+
+#[tokio::test]
+async fn external_mcp_import_is_atomic_disabled_and_idempotence_visible() {
+    let store = Arc::new(InMemoryMCPConfigStore::default());
+    let service = MCPConfigService::new(store.clone());
+    let snapshot = service.user_import_snapshot().await.unwrap();
+    service
+        .apply_user_import(
+            &snapshot.fingerprint,
+            vec![MCPImportServer {
+                native_id: "docs".to_string(),
+                candidate_id: "opencode:mcp:docs".to_string(),
+                behavior_version: "sha256:behavior-v1".to_string(),
+                display_name: "Docs".to_string(),
+                transport: MCPImportTransport::Local {
+                    command: "docs-mcp".to_string(),
+                    args: vec!["--stdio".to_string()],
+                },
+            }],
+        )
+        .await
+        .unwrap();
+
+    let stored = store.values.lock().await["mcp_servers"].clone();
+    assert_eq!(stored["mcpServers"]["docs"]["enabled"], false);
+    assert_eq!(stored["mcpServers"]["docs"]["autoStart"], false);
+    assert_eq!(
+        stored["mcpServers"]["docs"]["_bitfunImport"]["sourceCandidateId"],
+        "opencode:mcp:docs"
+    );
+    assert!(stored.get("_bitfunImportJournal").is_none());
+
+    let refreshed = service.user_import_snapshot().await.unwrap();
+    assert_eq!(refreshed.imports.len(), 1);
+    assert_eq!(refreshed.imports[0].native_id, "docs");
+    let stale = service
+        .apply_user_import(
+            &snapshot.fingerprint,
+            vec![MCPImportServer {
+                native_id: "other".to_string(),
+                candidate_id: "opencode:mcp:other".to_string(),
+                behavior_version: "sha256:behavior-v1".to_string(),
+                display_name: "Other".to_string(),
+                transport: MCPImportTransport::Remote {
+                    url: "https://example.com/mcp".to_string(),
+                },
+            }],
+        )
+        .await
+        .unwrap_err();
+    assert!(matches!(stale, MCPImportError::StaleConfiguration));
+}
+
+#[tokio::test]
+async fn stale_full_json_save_cannot_overwrite_a_concurrent_import() {
+    let store = Arc::new(InMemoryMCPConfigStore::default());
+    let service = MCPConfigService::new(store.clone());
+    let editor_snapshot = service.user_json_config_snapshot().await.unwrap();
+    let import_snapshot = service.user_import_snapshot().await.unwrap();
+
+    service
+        .apply_user_import(
+            &import_snapshot.fingerprint,
+            vec![MCPImportServer {
+                native_id: "docs".to_string(),
+                candidate_id: "opencode:mcp:docs".to_string(),
+                behavior_version: "sha256:behavior-v1".to_string(),
+                display_name: "Docs".to_string(),
+                transport: MCPImportTransport::Local {
+                    command: "private-command".to_string(),
+                    args: vec!["private-argument".to_string()],
+                },
+            }],
+        )
+        .await
+        .unwrap();
+
+    let replacement = serde_json::from_str(&editor_snapshot.json_config).unwrap();
+    let error = service
+        .replace_user_json_config(&editor_snapshot.fingerprint, replacement)
+        .await
+        .unwrap_err();
+    assert!(matches!(error, MCPImportError::StaleConfiguration));
+    assert!(store.values.lock().await["mcp_servers"]["mcpServers"]["docs"].is_object());
+}
+
+#[test]
+fn import_debug_output_redacts_private_transport_values() {
+    let import = MCPImportServer {
+        native_id: "docs".to_string(),
+        candidate_id: "opencode:mcp:docs".to_string(),
+        behavior_version: "sha256:behavior-v1".to_string(),
+        display_name: "Docs".to_string(),
+        transport: MCPImportTransport::Local {
+            command: "private-command".to_string(),
+            args: vec!["private-argument".to_string()],
+        },
+    };
+
+    let rendered = format!("{import:?}");
+    assert!(!rendered.contains("private-command"));
+    assert!(!rendered.contains("private-argument"));
+    assert!(rendered.contains("argument_count"));
 }
 
 #[tokio::test]

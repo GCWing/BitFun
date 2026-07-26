@@ -6,8 +6,7 @@ use crate::service::mcp::server::MCPServerConfig;
 use crate::util::errors::BitFunResult;
 
 pub struct MCPConfigService {
-    pub(super) config_service: Arc<ConfigService>,
-    inner: bitfun_services_integrations::mcp::config::MCPConfigService,
+    pub(super) inner: bitfun_services_integrations::mcp::config::MCPConfigService,
 }
 
 struct CoreMCPConfigStore {
@@ -26,7 +25,12 @@ impl bitfun_services_integrations::mcp::config::MCPConfigStore for CoreMCPConfig
             .await
         {
             Ok(value) => Ok(Some(value)),
-            Err(_) => Ok(None),
+            Err(crate::util::errors::BitFunError::NotFound(_)) => Ok(None),
+            Err(error) => Err(
+                bitfun_services_integrations::mcp::MCPRuntimeError::configuration(
+                    error.to_string(),
+                ),
+            ),
         }
     }
 
@@ -40,6 +44,20 @@ impl bitfun_services_integrations::mcp::config::MCPConfigStore for CoreMCPConfig
             .await
             .map_err(|e| {
                 bitfun_services_integrations::mcp::MCPRuntimeError::configuration(e.to_string())
+            })
+    }
+
+    async fn compare_and_set_config_value(
+        &self,
+        key: &str,
+        expected: Option<serde_json::Value>,
+        replacement: serde_json::Value,
+    ) -> bitfun_services_integrations::mcp::MCPRuntimeResult<bool> {
+        self.config_service
+            .compare_and_set_json_config(key, expected, replacement)
+            .await
+            .map_err(|error| {
+                bitfun_services_integrations::mcp::MCPRuntimeError::configuration(error.to_string())
             })
     }
 }
@@ -72,11 +90,8 @@ impl MCPConfigService {
     }
 
     pub fn new(config_service: Arc<ConfigService>) -> BitFunResult<Self> {
-        let store = Arc::new(CoreMCPConfigStore {
-            config_service: config_service.clone(),
-        });
+        let store = Arc::new(CoreMCPConfigStore { config_service });
         Ok(Self {
-            config_service,
             inner: bitfun_services_integrations::mcp::config::MCPConfigService::new(store),
         })
     }
@@ -116,6 +131,25 @@ impl MCPConfigService {
 
     pub async fn delete_server_config(&self, server_id: &str) -> BitFunResult<()> {
         Ok(self.inner.delete_server_config(server_id).await?)
+    }
+
+    pub async fn user_import_snapshot(
+        &self,
+    ) -> Result<
+        bitfun_services_integrations::mcp::config::MCPUserImportSnapshot,
+        bitfun_services_integrations::mcp::config::MCPImportError,
+    > {
+        self.inner.user_import_snapshot().await
+    }
+
+    pub async fn apply_user_import(
+        &self,
+        expected_fingerprint: &str,
+        imports: Vec<bitfun_services_integrations::mcp::config::MCPImportServer>,
+    ) -> Result<(), bitfun_services_integrations::mcp::config::MCPImportError> {
+        self.inner
+            .apply_user_import(expected_fingerprint, imports)
+            .await
     }
 }
 

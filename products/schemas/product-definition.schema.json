@@ -1,0 +1,51 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://openbitfun.com/schemas/product-definition-v1.json",
+  "title": "BitFun product definition C0a",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "localeRoot", "members"],
+  "properties": {
+    "$schema": { "type": "string" },
+    "schemaVersion": { "const": 1 },
+    "localeRoot": { "type": "string", "minLength": 1 },
+    "members": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["desktop", "cli"],
+      "properties": {
+        "desktop": { "$ref": "#/$defs/desktopMember" },
+        "cli": { "$ref": "#/$defs/commonMember" }
+      }
+    }
+  },
+  "$defs": {
+    "binaryName": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9](?:[A-Za-z0-9._-]{0,62}[A-Za-z0-9_-])?$"
+    },
+    "bundleId": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9-]+(\\.[A-Za-z0-9-]+)+$"
+    },
+    "commonMember": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["displayNameKey", "binaryName"],
+      "properties": {
+        "displayNameKey": { "type": "string", "minLength": 1 },
+        "binaryName": { "$ref": "#/$defs/binaryName" }
+      }
+    },
+    "desktopMember": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["displayNameKey", "binaryName", "bundleId"],
+      "properties": {
+        "displayNameKey": { "type": "string", "minLength": 1 },
+        "binaryName": { "$ref": "#/$defs/binaryName" },
+        "bundleId": { "$ref": "#/$defs/bundleId" }
+      }
+    }
+  }
+}

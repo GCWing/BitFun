@@ -16,6 +16,9 @@ import {
 } from 'fs';
 import { ensureOpenSslWindows } from './ensure-openssl-windows.mjs';
 import { ensureFlashgrepBinary } from './prepare-flashgrep-resource.mjs';
+import { extractProductConfigArg } from './product-customization/cli.mjs';
+import { productBuildEnvironment } from './product-customization/projections.mjs';
+import { resolveProductDefinition } from './product-customization/resolver.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(__dirname, '..');
@@ -37,7 +40,10 @@ function tauriBuildArgsFromArgv() {
 }
 
 async function main() {
-  const forward = tauriBuildArgsFromArgv();
+  const { productConfig, forwardArgs: forward } = extractProductConfigArg(tauriBuildArgsFromArgv());
+  const resolution = resolveProductDefinition({ rootDir: ROOT, productConfig, member: 'desktop' });
+  Object.assign(process.env, productBuildEnvironment(resolution));
+  console.log(`[product] ${resolution.assembly.member} ${resolution.assembly.assemblyDigest}`);
 
   await ensureOpenSslWindows();
   const flashgrepBinary = ensureFlashgrepBinary();
@@ -50,6 +56,7 @@ async function main() {
   const tauriConfig = prepareTauriConfig(join(desktopDir, 'tauri.conf.json'), {
     desktopDir,
     flashgrepBinary,
+    resolution,
   });
   const tauriBin = join(ROOT, 'node_modules', '.bin', 'tauri');
   const tauriArgs = ['build', '--config', tauriConfig, ...forward];
@@ -164,8 +171,19 @@ function optionValue(args, option) {
   return undefined;
 }
 
-function prepareTauriConfig(baseConfigPath, { desktopDir, flashgrepBinary }) {
+export function prepareTauriConfig(
+  baseConfigPath,
+  { desktopDir, flashgrepBinary, resolution }
+) {
   const config = JSON.parse(readFileSync(baseConfigPath, 'utf8'));
+  if (resolution) {
+    const productName =
+      resolution.productNames[resolution.assembly.fallbackLocale]
+      ?? resolution.productNames[resolution.assembly.defaultLocale];
+    config.productName = productName;
+    config.mainBinaryName = resolution.assembly.binaryName;
+    config.identifier = resolution.assembly.bundleId;
+  }
   injectTargetFlashgrepResource(config, desktopDir, flashgrepBinary);
 
   const enabled = ['1', 'true', 'yes'].includes(
@@ -214,7 +232,12 @@ function prepareTauriConfig(baseConfigPath, { desktopDir, flashgrepBinary }) {
 
   const generatedDir = join(desktopDir, 'gen');
   mkdirSync(generatedDir, { recursive: true });
-  const generatedConfig = join(generatedDir, 'tauri.generated.conf.json');
+  const generatedConfig = join(
+    generatedDir,
+    resolution
+      ? `tauri.${resolution.assembly.assemblyDigest}.generated.conf.json`
+      : 'tauri.generated.conf.json',
+  );
   writeFileSync(generatedConfig, `${JSON.stringify(config, null, 2)}\n`, 'utf8');
   return generatedConfig;
 }

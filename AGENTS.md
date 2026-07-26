@@ -67,11 +67,13 @@ pnpm run type-check:web
 pnpm --dir src/mobile-web run type-check
 pnpm run i18n:contract:test          # i18n contract / resources only
 pnpm run i18n:audit                  # i18n contract / resources only
+pnpm run product:check               # default product definition
 pnpm run check:repo-hygiene
 pnpm run check:github-config
 cargo check --workspace
 
 # Test (prefer focused paths locally; broad suites are CI-backed)
+pnpm run product:test
 pnpm --dir src/web-ui run test:run      # broad suite; prefer focused paths locally
 cargo test --workspace                  # broad suite; CI-backed
 
@@ -281,6 +283,7 @@ change directly affects build, packaging, or CI cannot protect the path.
 | Locale contract or shared terms | `pnpm run i18n:generate && pnpm run i18n:contract:test && pnpm run i18n:audit` |
 | Web UI i18n runtime, namespace loading, or direct `i18nService.t(...)` usage | `pnpm run i18n:contract:test && pnpm run type-check:web && pnpm --dir src/web-ui run test:run src/infrastructure/i18n/core/I18nService.test.ts` |
 | Mobile web UI, state, pairing, disconnect, or reconnect behavior | `pnpm --dir src/mobile-web run type-check`; include manual pairing / reconnect notes when behavior changes |
+| Product definition, schema, resolver, or Desktop/CLI product build adapter | `pnpm run product:test`, plus `pnpm run product:check` for the default definition |
 | Shared Rust logic in `core`, `transport`, adapters, or services | `cargo check --workspace`, plus the nearest focused `cargo test` when behavior changed |
 | Desktop integration, Tauri APIs, browser/computer-use, or desktop-only behavior | `cargo check -p bitfun-desktop`, plus focused desktop tests when behavior changed |
 | Behavior covered by desktop smoke/functional flows | Prefer the nearest focused E2E/smoke check; rely on CI for broad build/test coverage unless build behavior changed |

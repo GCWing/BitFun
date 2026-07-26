@@ -67,6 +67,13 @@ pub fn config_to_cursor_format(config: &MCPServerConfig) -> serde_json::Value {
         cursor_config.insert("command".to_string(), serde_json::json!(command));
     }
 
+    if let Some(inherit) = config.inherit_parent_environment {
+        cursor_config.insert(
+            "inheritParentEnvironment".to_string(),
+            serde_json::json!(inherit),
+        );
+    }
+
     if !config.args.is_empty() {
         cursor_config.insert("args".to_string(), serde_json::json!(config.args));
     }
@@ -212,6 +219,10 @@ pub fn parse_cursor_format(config: &serde_json::Value) -> Vec<MCPServerConfig> {
                     .and_then(|v| v.as_bool())
                     .unwrap_or(true);
 
+                let inherit_parent_environment = obj
+                    .get("inheritParentEnvironment")
+                    .and_then(|value| value.as_bool());
+
                 let server_config = MCPServerConfig {
                     id: server_id.clone(),
                     name,
@@ -221,7 +232,7 @@ pub fn parse_cursor_format(config: &serde_json::Value) -> Vec<MCPServerConfig> {
                     args,
                     env,
                     working_directory: None,
-                    inherit_parent_environment: None,
+                    inherit_parent_environment,
                     headers,
                     url,
                     auto_start,

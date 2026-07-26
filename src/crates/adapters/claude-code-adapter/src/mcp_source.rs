@@ -4,8 +4,8 @@ use bitfun_product_domains::external_sources::{
     ExternalMcpStaticStatus, ExternalMcpTransportKind, ExternalSourceAssetKind,
     ExternalSourceContext, ExternalSourceDiagnostic, ExternalSourceHealth,
     ExternalSourceProviderError, ExternalSourceRecord, ExternalSourceScope, ExternalWatchRoot,
-    PreparedExternalMcpServer, PreparedExternalMcpTransport, SecretValue, SourceKey,
-    SourceQualifiedMcpServerId,
+    PreparedExternalMcpImportServer, PreparedExternalMcpImportTransport, PreparedExternalMcpServer,
+    PreparedExternalMcpTransport, SecretValue, SourceKey, SourceQualifiedMcpServerId,
 };
 use bitfun_static_hook_support::{
     read_bounded_text, redacted_executable_preview, resolve_bounded_regular_file,
@@ -236,6 +236,64 @@ impl ClaudeCodeMcpProvider {
             .map_err(|error| provider_error("snapshot_invalid", &error.to_string(), false))?;
         Ok(MaterializedSnapshot { snapshot, prepared })
     }
+
+    fn current_preparation(
+        &self,
+        input: &ExternalMcpDiscoveryInput,
+        server_id: &SourceQualifiedMcpServerId,
+        expected_behavior_version: &str,
+    ) -> Result<(ExternalMcpServerDefinition, PreparedTransportTemplate), ExternalSourceProviderError>
+    {
+        if server_id.source.provider_id.as_str() != PROVIDER_ID {
+            return Err(provider_error(
+                "identity_mismatch",
+                "MCP server is not owned by the Claude Code MCP provider",
+                false,
+            ));
+        }
+        let materialized = self.materialize(input)?;
+        let definition = materialized
+            .snapshot
+            .servers
+            .iter()
+            .find(|definition| &definition.id == server_id)
+            .cloned()
+            .ok_or_else(|| {
+                provider_error(
+                    "stale_revision",
+                    "MCP server is no longer available at the requested revision",
+                    true,
+                )
+            })?;
+        if definition.behavior_version != expected_behavior_version {
+            return Err(provider_error(
+                "stale_revision",
+                "MCP server behavior changed before preparation",
+                true,
+            ));
+        }
+        if !definition.source_enabled
+            || !matches!(definition.static_status, ExternalMcpStaticStatus::Ready)
+        {
+            return Err(provider_error(
+                "not_activatable",
+                "MCP server is disabled or unsupported",
+                false,
+            ));
+        }
+        let prepared = materialized
+            .prepared
+            .get(&server_id.stable_key())
+            .cloned()
+            .ok_or_else(|| {
+                provider_error(
+                    "preparation_missing",
+                    "MCP preparation is unavailable",
+                    false,
+                )
+            })?;
+        Ok((definition, prepared))
+    }
 }
 
 impl Default for ClaudeCodeMcpProvider {
@@ -263,52 +321,20 @@ impl ExternalMcpSourceProvider for ClaudeCodeMcpProvider {
         server_id: &SourceQualifiedMcpServerId,
         expected_behavior_version: &str,
     ) -> Result<PreparedExternalMcpServer, ExternalSourceProviderError> {
-        if server_id.source.provider_id.as_str() != PROVIDER_ID {
-            return Err(provider_error(
-                "identity_mismatch",
-                "MCP server is not owned by the Claude Code MCP provider",
-                false,
-            ));
-        }
-        let materialized = self.materialize(input)?;
-        let definition = materialized
-            .snapshot
-            .servers
-            .iter()
-            .find(|definition| &definition.id == server_id)
-            .ok_or_else(|| {
-                provider_error(
-                    "stale_revision",
-                    "MCP server is no longer available at the requested revision",
-                    true,
-                )
-            })?;
-        if definition.behavior_version != expected_behavior_version {
-            return Err(provider_error(
-                "stale_revision",
-                "MCP server behavior changed before activation",
-                true,
-            ));
-        }
-        if !matches!(definition.static_status, ExternalMcpStaticStatus::Ready) {
-            return Err(provider_error(
-                "not_activatable",
-                "MCP server is unsupported or invalid",
-                false,
-            ));
-        }
-        let template = materialized
-            .prepared
-            .get(&server_id.stable_key())
-            .cloned()
-            .ok_or_else(|| {
-                provider_error(
-                    "preparation_missing",
-                    "MCP runtime preparation is unavailable",
-                    false,
-                )
-            })?;
+        let (_, template) =
+            self.current_preparation(input, server_id, expected_behavior_version)?;
         prepare_transport(template, server_id.clone(), expected_behavior_version)
+    }
+
+    fn prepare_import(
+        &self,
+        input: &ExternalMcpDiscoveryInput,
+        server_id: &SourceQualifiedMcpServerId,
+        expected_behavior_version: &str,
+    ) -> Result<PreparedExternalMcpImportServer, ExternalSourceProviderError> {
+        let (definition, template) =
+            self.current_preparation(input, server_id, expected_behavior_version)?;
+        prepare_import_projection(definition, template)
     }
 
     fn watch_roots(&self, context: &ExternalSourceContext) -> Vec<ExternalWatchRoot> {
@@ -855,6 +881,47 @@ fn prepare_transport(
     })
 }
 
+fn prepare_import_projection(
+    definition: ExternalMcpServerDefinition,
+    template: PreparedTransportTemplate,
+) -> Result<PreparedExternalMcpImportServer, ExternalSourceProviderError> {
+    let transport = match template {
+        PreparedTransportTemplate::Local {
+            command,
+            args,
+            environment,
+            working_directory,
+        } if environment.is_empty() && working_directory.is_none() => {
+            PreparedExternalMcpImportTransport::Local { command, args }
+        }
+        PreparedTransportTemplate::Remote { url, headers }
+            if headers.is_empty() && import_safe_https_url(&url) =>
+        {
+            PreparedExternalMcpImportTransport::Remote { url }
+        }
+        _ => {
+            return Err(ExternalSourceProviderError::new(
+                "external_mcp.import_setup_required",
+                "MCP declaration contains fields that cannot be imported safely",
+                false,
+            ));
+        }
+    };
+    let prepared = PreparedExternalMcpImportServer {
+        id: definition.id,
+        behavior_version: definition.behavior_version,
+        transport,
+    };
+    prepared.validate().map_err(|_| {
+        ExternalSourceProviderError::new(
+            "external_mcp.import_setup_required",
+            "MCP declaration contains fields that cannot be imported safely",
+            false,
+        )
+    })?;
+    Ok(prepared)
+}
+
 fn string_array(value: Option<&Value>) -> Result<Vec<String>, String> {
     let Some(value) = value else {
         return Ok(Vec::new());
@@ -974,6 +1041,17 @@ fn sanitized_https_origin(value: &str) -> Result<String, String> {
     url.set_query(None);
     url.set_fragment(None);
     Ok(url.to_string())
+}
+
+fn import_safe_https_url(value: &str) -> bool {
+    url::Url::parse(value).is_ok_and(|url| {
+        url.scheme() == "https"
+            && url.host_str().is_some()
+            && url.username().is_empty()
+            && url.password().is_none()
+            && url.query().is_none()
+            && url.fragment().is_none()
+    })
 }
 
 fn provider_error(suffix: &str, message: &str, transient: bool) -> ExternalSourceProviderError {

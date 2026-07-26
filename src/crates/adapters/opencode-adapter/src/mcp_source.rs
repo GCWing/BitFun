@@ -4,8 +4,8 @@ use bitfun_product_domains::external_sources::{
     ExternalMcpStaticStatus, ExternalMcpTransportKind, ExternalSourceAssetKind,
     ExternalSourceContext, ExternalSourceDiagnostic, ExternalSourceHealth,
     ExternalSourceProviderError, ExternalSourceRecord, ExternalSourceScope, ExternalWatchRoot,
-    PreparedExternalMcpServer, PreparedExternalMcpTransport, SecretValue, SourceKey,
-    SourceQualifiedMcpServerId,
+    PreparedExternalMcpImportServer, PreparedExternalMcpImportTransport, PreparedExternalMcpServer,
+    PreparedExternalMcpTransport, SecretValue, SourceKey, SourceQualifiedMcpServerId,
 };
 use bitfun_static_hook_support::{read_bounded_text, BoundedTextRead};
 use serde_json::{Map, Value};
@@ -21,6 +21,15 @@ const MAX_MCP_SERVERS: usize = 256;
 const MAX_COMMAND_PARTS: usize = 256;
 const MAX_MAP_ENTRIES: usize = 128;
 const MAX_RUNTIME_TEXT_BYTES: usize = 64 * 1024;
+const LOCAL_FIELDS: &[&str] = &[
+    "type",
+    "command",
+    "environment",
+    "enabled",
+    "timeout",
+    "cwd",
+];
+const REMOTE_FIELDS: &[&str] = &["type", "url", "headers", "oauth", "enabled", "timeout"];
 
 #[derive(Debug, Clone)]
 pub struct OpenCodeMcpProviderOptions {
@@ -269,6 +278,64 @@ impl OpenCodeMcpProvider {
         })?;
         Ok(MaterializedMcpSnapshot { snapshot, prepared })
     }
+
+    fn current_preparation(
+        &self,
+        input: &ExternalMcpDiscoveryInput,
+        server_id: &SourceQualifiedMcpServerId,
+        expected_behavior_version: &str,
+    ) -> Result<(ExternalMcpServerDefinition, PreparedTransportTemplate), ExternalSourceProviderError>
+    {
+        if server_id.source.provider_id.as_str() != PROVIDER_ID {
+            return Err(ExternalSourceProviderError::new(
+                "opencode.mcp.identity_mismatch",
+                "MCP server is not owned by the OpenCode MCP provider",
+                false,
+            ));
+        }
+        let materialized = self.materialize(input)?;
+        let definition = materialized
+            .snapshot
+            .servers
+            .iter()
+            .find(|definition| &definition.id == server_id)
+            .cloned()
+            .ok_or_else(|| {
+                ExternalSourceProviderError::new(
+                    "opencode.mcp.stale_revision",
+                    "MCP server is no longer available at the requested revision",
+                    true,
+                )
+            })?;
+        if definition.behavior_version != expected_behavior_version {
+            return Err(ExternalSourceProviderError::new(
+                "opencode.mcp.stale_revision",
+                "MCP server behavior changed before preparation",
+                true,
+            ));
+        }
+        if !definition.source_enabled
+            || !matches!(definition.static_status, ExternalMcpStaticStatus::Ready)
+        {
+            return Err(ExternalSourceProviderError::new(
+                "opencode.mcp.not_activatable",
+                "MCP server is disabled or unsupported",
+                false,
+            ));
+        }
+        let prepared = materialized
+            .prepared
+            .get(&server_id.stable_key())
+            .cloned()
+            .ok_or_else(|| {
+                ExternalSourceProviderError::new(
+                    "opencode.mcp.preparation_missing",
+                    "MCP preparation is unavailable",
+                    false,
+                )
+            })?;
+        Ok((definition, prepared))
+    }
 }
 
 impl Default for OpenCodeMcpProvider {
@@ -297,54 +364,20 @@ impl ExternalMcpSourceProvider for OpenCodeMcpProvider {
         server_id: &SourceQualifiedMcpServerId,
         expected_behavior_version: &str,
     ) -> Result<PreparedExternalMcpServer, ExternalSourceProviderError> {
-        if server_id.source.provider_id.as_str() != PROVIDER_ID {
-            return Err(ExternalSourceProviderError::new(
-                "opencode.mcp.identity_mismatch",
-                "MCP server is not owned by the OpenCode MCP provider",
-                false,
-            ));
-        }
-        let materialized = self.materialize(input)?;
-        let definition = materialized
-            .snapshot
-            .servers
-            .iter()
-            .find(|definition| &definition.id == server_id)
-            .ok_or_else(|| {
-                ExternalSourceProviderError::new(
-                    "opencode.mcp.stale_revision",
-                    "MCP server is no longer available at the requested revision",
-                    true,
-                )
-            })?;
-        if definition.behavior_version != expected_behavior_version {
-            return Err(ExternalSourceProviderError::new(
-                "opencode.mcp.stale_revision",
-                "MCP server behavior changed before activation",
-                true,
-            ));
-        }
-        if !definition.source_enabled
-            || !matches!(definition.static_status, ExternalMcpStaticStatus::Ready)
-        {
-            return Err(ExternalSourceProviderError::new(
-                "opencode.mcp.not_activatable",
-                "MCP server is disabled or unsupported",
-                false,
-            ));
-        }
-        let prepared = materialized
-            .prepared
-            .get(&server_id.stable_key())
-            .cloned()
-            .ok_or_else(|| {
-                ExternalSourceProviderError::new(
-                    "opencode.mcp.preparation_missing",
-                    "MCP runtime preparation is unavailable",
-                    false,
-                )
-            })?;
+        let (_, prepared) =
+            self.current_preparation(input, server_id, expected_behavior_version)?;
         resolve_runtime_values(prepared, server_id.clone(), expected_behavior_version)
+    }
+
+    fn prepare_import(
+        &self,
+        input: &ExternalMcpDiscoveryInput,
+        server_id: &SourceQualifiedMcpServerId,
+        expected_behavior_version: &str,
+    ) -> Result<PreparedExternalMcpImportServer, ExternalSourceProviderError> {
+        let (definition, prepared) =
+            self.current_preparation(input, server_id, expected_behavior_version)?;
+        prepare_import_projection(definition, prepared)
     }
 
     fn watch_roots(&self, context: &ExternalSourceContext) -> Vec<ExternalWatchRoot> {
@@ -389,6 +422,7 @@ enum PreparedTransportTemplate {
         args: Vec<String>,
         environment: BTreeMap<String, String>,
         working_directory: Option<PathBuf>,
+        working_directory_explicit: bool,
     },
     Remote {
         url: String,
@@ -481,6 +515,7 @@ fn materialize_server(
                     args: Vec::new(),
                     environment: BTreeMap::new(),
                     working_directory: None,
+                    working_directory_explicit: false,
                 },
             })
         }
@@ -497,10 +532,8 @@ fn materialize_local_server(
     behavior_version: String,
 ) -> Result<MaterializedServer, ExternalSourceProviderError> {
     let command_parts = string_array(object.get("command"));
-    let mut reason = command_parts
-        .as_ref()
-        .err()
-        .cloned()
+    let mut reason = unsupported_field_reason(object, LOCAL_FIELDS)
+        .or_else(|| command_parts.as_ref().err().cloned())
         .or_else(|| timeout_unsupported_reason(object))
         .or_else(|| unsupported_variable_reason(object));
     let command_parts = command_parts.unwrap_or_default();
@@ -523,6 +556,7 @@ fn materialize_local_server(
         reason.get_or_insert(error.clone());
     }
     let environment_reference_names = environment_reference_names.unwrap_or_default();
+    let working_directory_explicit = object.contains_key("cwd");
     let cwd = match object.get("cwd") {
         None => context
             .workspace_root
@@ -591,6 +625,7 @@ fn materialize_local_server(
             args,
             environment,
             working_directory: cwd,
+            working_directory_explicit,
         },
     })
 }
@@ -608,8 +643,9 @@ fn materialize_remote_server(
         .and_then(Value::as_str)
         .unwrap_or_default()
         .to_string();
-    let mut reason =
-        timeout_unsupported_reason(object).or_else(|| unsupported_variable_reason(object));
+    let mut reason = unsupported_field_reason(object, REMOTE_FIELDS)
+        .or_else(|| timeout_unsupported_reason(object))
+        .or_else(|| unsupported_variable_reason(object));
     let preview_url = match sanitized_https_url(&raw_url) {
         Ok(url) => url,
         Err(error) => {
@@ -698,6 +734,7 @@ fn resolve_runtime_values(
             args,
             environment,
             working_directory,
+            working_directory_explicit: _,
         } => {
             let command = expand_environment_references(&command)?;
             let args = args
@@ -777,6 +814,50 @@ fn resolve_runtime_values(
     })
 }
 
+fn prepare_import_projection(
+    definition: ExternalMcpServerDefinition,
+    template: PreparedTransportTemplate,
+) -> Result<PreparedExternalMcpImportServer, ExternalSourceProviderError> {
+    let transport = match template {
+        PreparedTransportTemplate::Local {
+            command,
+            args,
+            environment,
+            working_directory: _,
+            working_directory_explicit,
+        } if environment.is_empty() && !working_directory_explicit => {
+            PreparedExternalMcpImportTransport::Local { command, args }
+        }
+        PreparedTransportTemplate::Remote {
+            url,
+            headers,
+            oauth_enabled,
+        } if headers.is_empty() && oauth_enabled && import_safe_https_url(&url) => {
+            PreparedExternalMcpImportTransport::Remote { url }
+        }
+        _ => {
+            return Err(ExternalSourceProviderError::new(
+                "external_mcp.import_setup_required",
+                "MCP declaration contains fields that cannot be imported safely",
+                false,
+            ));
+        }
+    };
+    let prepared = PreparedExternalMcpImportServer {
+        id: definition.id,
+        behavior_version: definition.behavior_version,
+        transport,
+    };
+    prepared.validate().map_err(|_| {
+        ExternalSourceProviderError::new(
+            "external_mcp.import_setup_required",
+            "MCP declaration contains fields that cannot be imported safely",
+            false,
+        )
+    })?;
+    Ok(prepared)
+}
+
 fn replace_environment_references(
     value: &str,
     mut resolve: impl FnMut(&str) -> Result<String, ExternalSourceProviderError>,
@@ -852,6 +933,20 @@ fn timeout_unsupported_reason(object: &Map<String, Value>) -> Option<String> {
             Some("Custom OpenCode MCP initialization timeout is not supported yet".to_string())
         }
     }
+}
+
+fn unsupported_field_reason(object: &Map<String, Value>, supported: &[&str]) -> Option<String> {
+    let fields = object
+        .keys()
+        .filter(|field| !supported.contains(&field.as_str()))
+        .cloned()
+        .collect::<Vec<_>>();
+    (!fields.is_empty()).then(|| {
+        format!(
+            "OpenCode MCP fields are not supported: {}",
+            fields.join(", ")
+        )
+    })
 }
 
 fn unsupported_variable_reason(object: &Map<String, Value>) -> Option<String> {
@@ -931,6 +1026,17 @@ fn sanitized_https_url(value: &str) -> Result<String, String> {
     url.set_query(None);
     url.set_fragment(None);
     Ok(url.to_string())
+}
+
+fn import_safe_https_url(value: &str) -> bool {
+    url::Url::parse(value).is_ok_and(|url| {
+        url.scheme() == "https"
+            && url.host_str().is_some()
+            && url.username().is_empty()
+            && url.password().is_none()
+            && url.query().is_none()
+            && url.fragment().is_none()
+    })
 }
 
 struct ConfigLayer {

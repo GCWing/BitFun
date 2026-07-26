@@ -13,6 +13,8 @@ pub mod external_hooks;
 mod external_hooks_tests;
 #[cfg(feature = "product-full")]
 mod external_mcp;
+#[cfg(feature = "product-full")]
+pub mod external_mcp_import;
 #[cfg(all(test, feature = "product-full"))]
 mod external_mcp_tests;
 #[cfg(feature = "product-full")]

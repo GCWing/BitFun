@@ -16,6 +16,9 @@ use bitfun_core::external_sources::{
     NativePromptCommandDescriptor,
 };
 use bitfun_core::service::remote_ssh::workspace_state::is_remote_path;
+use bitfun_product_domains::external_sources::{
+    ExternalMcpImportApplyRequestV1, ExternalMcpImportApplyResultV1, ExternalMcpImportPlanV1,
+};
 use serde::{Deserialize, Serialize};
 use std::path::Path;
 
@@ -163,10 +166,44 @@ pub struct ChooseExternalMcpConflictRequest {
     pub expected_preference_revision: u64,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct PlanExternalMcpImportRequest {
+    pub workspace_path: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ApplyExternalMcpImportRequest {
+    pub workspace_path: Option<String>,
+    pub import_request: ExternalMcpImportApplyRequestV1,
+}
+
 pub type ExternalSourceSnapshotResponse = ExternalSourcePublicSnapshot;
 pub type ExternalSourceControlResponse = ExternalSourceSurfaceSnapshotV1;
 pub type ExpandExternalPromptCommandResponse = ExpandedPromptCommand;
 pub type NativePromptCommandConflictsResponse = NativePromptCommandConflictSnapshot;
+
+#[tauri::command]
+pub async fn plan_external_mcp_import_command(
+    request: PlanExternalMcpImportRequest,
+) -> ExternalSourceOperationResult<ExternalMcpImportPlanV1> {
+    let workspace = require_local_workspace(request.workspace_path.as_deref())
+        .await?
+        .map(Path::to_path_buf);
+    bitfun_core::external_mcp_import::plan_external_mcp_import(workspace).await
+}
+
+#[tauri::command]
+pub async fn apply_external_mcp_import_command(
+    request: ApplyExternalMcpImportRequest,
+) -> ExternalSourceOperationResult<ExternalMcpImportApplyResultV1> {
+    let workspace = require_local_workspace(request.workspace_path.as_deref())
+        .await?
+        .map(Path::to_path_buf);
+    bitfun_core::external_mcp_import::apply_external_mcp_import(workspace, request.import_request)
+        .await
+}
 
 pub(super) async fn require_local_workspace(
     workspace_path: Option<&str>,
@@ -514,6 +551,37 @@ mod tests {
                 "arguments": "",
                 "candidateId": "claude-code.commands:project:review",
                 "expectedContentVersion": "behavior-v1"
+            }))
+            .is_err()
+        );
+    }
+
+    #[test]
+    fn desktop_external_mcp_import_requests_use_structured_sanitized_shapes() {
+        let plan: PlanExternalMcpImportRequest = serde_json::from_value(serde_json::json!({
+            "workspacePath": "D:/workspace/project"
+        }))
+        .unwrap();
+        assert_eq!(plan.workspace_path.as_deref(), Some("D:/workspace/project"));
+
+        let apply: ApplyExternalMcpImportRequest = serde_json::from_value(serde_json::json!({
+            "workspacePath": null,
+            "importRequest": {
+                "schemaVersion": 1,
+                "planFingerprint": "sha256:plan-v1",
+                "selections": [{
+                    "candidateId": "external_mcp:17:opencode.commands6:global4:docs",
+                    "requestedNativeId": "docs"
+                }]
+            }
+        }))
+        .unwrap();
+        assert_eq!(apply.import_request.selections.len(), 1);
+
+        assert!(
+            serde_json::from_value::<PlanExternalMcpImportRequest>(serde_json::json!({
+                "workspacePath": null,
+                "rawSource": { "args": ["secret"] }
             }))
             .is_err()
         );

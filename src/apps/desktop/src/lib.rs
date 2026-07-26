@@ -1171,6 +1171,8 @@ pub async fn run() {
             api::editor_ai_api::editor_ai_cancel,
             get_external_hook_catalog,
             get_external_source_snapshot,
+            plan_external_mcp_import_command,
+            apply_external_mcp_import_command,
             reveal_external_source_location,
             get_external_source_control_snapshot,
             apply_external_source_control_action_command,

@@ -8,12 +8,14 @@ import { usePeerDeviceModeOptional } from '@/infrastructure/peer-device/peerDevi
 import {
   type ExternalMcpActivation,
   type ExternalMcpCatalogEntry,
+  type ExternalMcpImportPlanV1,
   ExternalSourceApiError,
   type ExternalSourceCatalogSnapshot,
   type ExternalSourceScope,
   externalSourcesAPI,
 } from '@/infrastructure/api/service-api/ExternalSourcesAPI';
 import { createLogger } from '@/shared/utils/logger';
+import { WorkspaceKind } from '@/shared/types/global-state';
 import { ConfigCollectionItem, ConfigPageSection } from './common';
 import { externalSourceRequestScopeKey } from './externalSourceRequestScope';
 
@@ -114,7 +116,9 @@ const ExternalMcpOverview: React.FC = () => {
   const peerDevice = usePeerDeviceModeOptional();
   const setSettingsTab = useSettingsStore((state) => state.setActiveTab);
   const requestIdRef = useRef(0);
+  const importRequestIdRef = useRef(0);
   const peerDeviceId = peerDevice?.peerMode.active ? peerDevice.peerMode.deviceId : undefined;
+  const importSupported = !peerDeviceId && workspace?.workspaceKind !== WorkspaceKind.Remote;
   const requestScope = externalSourceRequestScopeKey({
     peerDeviceId,
     workspaceId: workspace?.id,
@@ -129,6 +133,9 @@ const ExternalMcpOverview: React.FC = () => {
   } | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadFailed, setLoadFailed] = useState(false);
+  const [importPlan, setImportPlan] = useState<ExternalMcpImportPlanV1 | null>(null);
+  const [importBusy, setImportBusy] = useState(false);
+  const [importNotice, setImportNotice] = useState<'applied' | 'stale' | 'empty' | 'failed' | null>(null);
   const snapshot = snapshotState?.scope === requestScope ? snapshotState.snapshot : null;
   const scopedLoading = loading || snapshotState?.scope !== requestScope;
 
@@ -164,6 +171,13 @@ const ExternalMcpOverview: React.FC = () => {
       requestIdRef.current += 1;
     };
   }, [loadSnapshot]);
+
+  useEffect(() => {
+    importRequestIdRef.current += 1;
+    setImportPlan(null);
+    setImportNotice(null);
+    setImportBusy(false);
+  }, [requestScope]);
 
   useEffect(() => {
     if (!snapshot?.discoveryPending) return undefined;
@@ -223,6 +237,59 @@ const ExternalMcpOverview: React.FC = () => {
     diagnostic.severity !== 'info'
     && (!diagnostic.assetKind || diagnostic.assetKind === 'source' || diagnostic.assetKind === 'mcp')
   ));
+  const eligibleImportItems = (importPlan?.items ?? []).filter((item) => (
+    item.disposition === 'eligible' || item.disposition === 'automatic_rename'
+  ));
+
+  const previewImport = async () => {
+    if (!importSupported) return;
+    const requestId = ++importRequestIdRef.current;
+    setImportBusy(true);
+    setImportNotice(null);
+    try {
+      const plan = await externalSourcesAPI.planMcpImport(workspacePath || undefined);
+      if (requestId !== importRequestIdRef.current) return;
+      const hasEligible = plan.items.some((item) => (
+        item.disposition === 'eligible' || item.disposition === 'automatic_rename'
+      ));
+      setImportPlan(hasEligible ? plan : null);
+      if (!hasEligible) setImportNotice('empty');
+    } catch (error) {
+      if (requestId !== importRequestIdRef.current) return;
+      setImportNotice('failed');
+      log.warn('Failed to preview external MCP import', safeLoadErrorFacts(error));
+    } finally {
+      if (requestId === importRequestIdRef.current) setImportBusy(false);
+    }
+  };
+
+  const applyImport = async () => {
+    if (!importSupported || !importPlan || eligibleImportItems.length === 0) return;
+    const requestId = ++importRequestIdRef.current;
+    setImportBusy(true);
+    setImportNotice(null);
+    try {
+      const result = await externalSourcesAPI.applyMcpImport(
+        workspacePath || undefined,
+        importPlan,
+        eligibleImportItems.map((item) => ({ candidateId: item.candidateId })),
+      );
+      if (requestId !== importRequestIdRef.current) return;
+      if (result.outcome.status === 'stale') {
+        setImportPlan(result.outcome.refreshedPlan);
+        setImportNotice('stale');
+      } else {
+        setImportPlan(null);
+        setImportNotice('applied');
+      }
+    } catch (error) {
+      if (requestId !== importRequestIdRef.current) return;
+      setImportNotice('failed');
+      log.warn('Failed to apply external MCP import', safeLoadErrorFacts(error));
+    } finally {
+      if (requestId === importRequestIdRef.current) setImportBusy(false);
+    }
+  };
 
   const scopeLabel = (scope: ExternalSourceScope | undefined): string => {
     switch (scope) {
@@ -364,6 +431,35 @@ const ExternalMcpOverview: React.FC = () => {
         </>
       )}
     >
+      {entries.length > 0 && !hostReadOnly && importSupported ? (
+        <div className="bitfun-mcp-tools__import" data-testid="external-mcp-import">
+          {importPlan ? (
+            <>
+              <p>{t('external.import.confirm', { count: eligibleImportItems.length })}</p>
+              <ul>
+                {eligibleImportItems.map((item) => (
+                  <li key={item.candidateId}>
+                    {item.displayName} → {item.proposedNativeId}
+                  </li>
+                ))}
+              </ul>
+              <div className="bitfun-mcp-tools__import-actions">
+                <button type="button" disabled={importBusy || eligibleImportItems.length === 0} onClick={() => void applyImport()}>
+                  {t('external.import.apply')}
+                </button>
+                <button type="button" disabled={importBusy} onClick={() => setImportPlan(null)}>
+                  {t('external.import.cancel')}
+                </button>
+              </div>
+            </>
+          ) : (
+            <button type="button" disabled={importBusy} onClick={() => void previewImport()}>
+              {t('external.import.preview')}
+            </button>
+          )}
+          {importNotice ? <p role="status">{t(`external.import.${importNotice}`)}</p> : null}
+        </div>
+      ) : null}
       {scopedLoading && !snapshot ? (
         <div className="bitfun-collection-empty"><p>{t('external.loading')}</p></div>
       ) : loadFailed && !snapshot ? (

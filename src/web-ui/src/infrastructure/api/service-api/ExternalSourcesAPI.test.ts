@@ -87,6 +87,28 @@ describe('ExternalSourcesAPI', () => {
     });
   });
 
+  it('sends only typed selection intent when applying an MCP import plan', async () => {
+    const plan = {
+      schemaVersion: 1 as const,
+      planFingerprint: 'sha256:plan-v1',
+      items: [],
+    };
+    await externalSourcesAPI.applyMcpImport('D:/workspace/project', plan, [{
+      candidateId: 'opencode:mcp:docs',
+    }]);
+
+    expect(invokeMock).toHaveBeenCalledWith('apply_external_mcp_import_command', {
+      request: {
+        workspacePath: 'D:/workspace/project',
+        importRequest: {
+          schemaVersion: 1,
+          planFingerprint: 'sha256:plan-v1',
+          selections: [{ candidateId: 'opencode:mcp:docs' }],
+        },
+      },
+    });
+  });
+
   it('reveals a source by stable identity without sending its display location', async () => {
     await externalSourcesAPI.revealSourceLocation(
       'D:/workspace/project',

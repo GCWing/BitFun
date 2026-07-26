@@ -9,6 +9,8 @@ const peerState = vi.hoisted(() => ({ active: true }));
 const runtimeState = vi.hoisted(() => ({ desktop: true }));
 const getServersMock = vi.hoisted(() => vi.fn());
 const loadJsonConfigMock = vi.hoisted(() => vi.fn());
+const saveJsonConfigMock = vi.hoisted(() => vi.fn());
+const initializeServersMock = vi.hoisted(() => vi.fn());
 const startServerMock = vi.hoisted(() => vi.fn());
 const notificationMocks = vi.hoisted(() => ({
   success: vi.fn(),
@@ -37,6 +39,8 @@ vi.mock('../../api/service-api/MCPAPI', () => ({
   MCPAPI: {
     getServers: getServersMock,
     loadMCPJsonConfig: loadJsonConfigMock,
+    saveMCPJsonConfig: saveJsonConfigMock,
+    initializeServers: initializeServersMock,
     startServer: startServerMock,
   },
 }));
@@ -56,7 +60,12 @@ describe('McpToolsConfig remote behavior', () => {
     peerState.active = true;
     runtimeState.desktop = true;
     getServersMock.mockReset().mockResolvedValue([]);
-    loadJsonConfigMock.mockReset().mockResolvedValue('{"mcpServers":{}}');
+    loadJsonConfigMock.mockReset().mockResolvedValue({
+      jsonConfig: '{"mcpServers":{}}',
+      fingerprint: 'sha256:test',
+    });
+    saveJsonConfigMock.mockReset().mockResolvedValue(undefined);
+    initializeServersMock.mockReset().mockResolvedValue(undefined);
     startServerMock.mockReset().mockResolvedValue(undefined);
     notificationMocks.success.mockReset();
     notificationMocks.warning.mockReset();
@@ -183,6 +192,28 @@ describe('McpToolsConfig remote behavior', () => {
     expect(loadJsonConfigMock).toHaveBeenCalledTimes(2);
     expect(container.textContent).not.toContain('jsonEditor.loadFailed');
     expect(container.querySelector('.bitfun-mcp-tools__json-textarea')).not.toBeNull();
+  });
+
+  it('saves the JSON editor against the fingerprint that was loaded with it', async () => {
+    peerState.active = false;
+    await act(async () => {
+      root.render(<McpToolsConfig />);
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    await act(async () => {
+      (container.querySelector('[aria-label="actions.jsonConfig"]') as HTMLButtonElement).click();
+    });
+    const saveButton = Array.from(container.querySelectorAll('button')).find(
+      (button) => button.textContent === 'actions.saveConfig',
+    );
+    await act(async () => {
+      saveButton?.click();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(saveJsonConfigMock).toHaveBeenCalledWith('{"mcpServers":{}}', 'sha256:test');
   });
 
   it('does not notify or reload after a pending start loses desktop capability', async () => {

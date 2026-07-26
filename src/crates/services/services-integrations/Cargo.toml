@@ -59,6 +59,7 @@ tokio-util = { workspace = true, optional = true }
 tokio-tungstenite = { workspace = true, optional = true }
 urlencoding = { workspace = true, optional = true }
 uuid = { workspace = true, optional = true }
+url = { workspace = true, optional = true }
 which = { workspace = true, optional = true }
 dirs = { workspace = true, optional = true }
 russh = { workspace = true, optional = true }
@@ -109,11 +110,14 @@ mcp = [
     "bitfun-agent-tools",
     "bitfun-services-core",
     "futures",
+    "hex",
     "rand",
     "reqwest",
     "rmcp",
     "rmcp/transport-streamable-http-client-reqwest",
+    "sha2",
     "sse-stream",
+    "url",
     "process-tree",
 ]
 miniapp-runtime = [

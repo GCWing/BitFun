@@ -20,9 +20,21 @@ bitfun sessions list
 bitfun usage
 bitfun doctor
 bitfun health
+bitfun mcp import                       # preview safe OpenCode / Claude Code MCP declarations
+bitfun mcp import --apply               # copy eligible declarations as disabled native entries
+bitfun mcp import --apply --candidate <candidate-id>  # repeat to select a subset
+bitfun mcp import --apply --candidate <candidate-id> --native-id <native-id>
+bitfun mcp import --format json         # versioned machine-readable plan/result
 bitfun update                           # GitHub first, openbitfun.com fallback
 bitfun update --check                   # report only; do not install
 ```
+
+`bitfun mcp import` is an explicit snapshot operation, not continuous sync. It
+does not copy credentials, headers, environment values, or working directories,
+and Codex MCP import is not supported in the current slice. Apply revalidates the
+preview and never overwrites an existing native entry; imported entries remain
+disabled until reviewed and enabled through the existing MCP manager. Use
+`--format json` for the versioned machine-readable plan or result.
 
 Official Linux archive installations check for updates before interactive TUI
 startup at most once every six hours. That check only fetches the release
@@ -246,3 +258,19 @@ pnpm run cli:dev      # cargo run
 pnpm run cli:build    # cargo build --release
 pnpm run cli:install  # dispatch to install.ps1 on Windows or install.sh on macOS/Linux
 ```
+
+Default builds require no product argument. Product-author and CI builds may
+select one validated definition explicitly:
+
+```bash
+pnpm run cli:build -- --product-config path/to/product.jsonc
+```
+
+Standard Cargo `--target` triples are supported. The wrapper owns the final
+target-directory layout; set `CARGO_TARGET_DIR` before invoking the build rather
+than passing `--target-dir` or `--config build.target-dir=...`.
+
+The current customization slice changes only the localized CLI name, binary
+name, and build-output isolation. It does not customize installation, user-data
+paths, layouts, themes, bundled plugins, updates, or signing; see the
+[product customization architecture](../../../docs/architecture/product-customization-blueprint.md).

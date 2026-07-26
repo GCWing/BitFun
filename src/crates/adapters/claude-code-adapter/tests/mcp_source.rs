@@ -2,7 +2,7 @@ use bitfun_claude_code_adapter::{ClaudeCodeMcpProvider, ClaudeCodeMcpProviderOpt
 use bitfun_product_domains::external_sources::{
     ExecutionDomainId, ExternalMcpDiscoveryInput, ExternalMcpRevisionKey,
     ExternalMcpSourceProvider, ExternalMcpStaticStatus, ExternalMcpTransportKind,
-    ExternalSourceContext, ExternalSourceScope,
+    ExternalSourceContext, ExternalSourceScope, PreparedExternalMcpImportTransport,
 };
 use std::collections::BTreeSet;
 use std::fs;
@@ -185,6 +185,81 @@ fn discovery_is_static_and_public_projection_redacts_runtime_values() {
         .prepare_server(&fixture.input(), &local.id, &local.behavior_version)
         .unwrap_err();
     assert_eq!(error.code, "claude.mcp.environment_missing");
+}
+
+#[test]
+fn safe_servers_have_a_native_import_projection_and_unsafe_fields_require_setup() {
+    let fixture = Fixture::new();
+    write(
+        &fixture.user_config,
+        r#"{"mcpServers":{
+          "local":{"command":"docs-mcp"},
+          "remote":{"type":"http","url":"https://docs.example.test/mcp"},
+          "args":{"command":"docs-mcp","args":["--stdio"]},
+          "env":{"command":"docs-mcp","env":{"TOKEN":"secret"}},
+          "cwd":{"command":"docs-mcp","cwd":"tools"},
+          "query":{"type":"http","url":"https://docs.example.test/mcp?token=secret"},
+          "headers":{"type":"http","url":"https://docs.example.test/mcp","headers":{"Authorization":"secret"}}
+        }}"#,
+    );
+    let provider = fixture.provider();
+    let input = fixture.input();
+    let snapshot = provider.discover(&input).unwrap();
+
+    let local = snapshot
+        .servers
+        .iter()
+        .find(|server| server.name == "local")
+        .unwrap();
+    let prepared_local = provider
+        .prepare_import(&input, &local.id, &local.behavior_version)
+        .unwrap();
+    assert!(matches!(
+        prepared_local.transport,
+        PreparedExternalMcpImportTransport::Local { ref command, ref args }
+            if command == "docs-mcp" && args.is_empty()
+    ));
+
+    let remote = snapshot
+        .servers
+        .iter()
+        .find(|server| server.name == "remote")
+        .unwrap();
+    let prepared_remote = provider
+        .prepare_import(&input, &remote.id, &remote.behavior_version)
+        .unwrap();
+    assert!(matches!(
+        prepared_remote.transport,
+        PreparedExternalMcpImportTransport::Remote { ref url }
+            if url == "https://docs.example.test/mcp"
+    ));
+
+    let args = snapshot
+        .servers
+        .iter()
+        .find(|server| server.name == "args")
+        .unwrap();
+    let prepared_args = provider
+        .prepare_import(&input, &args.id, &args.behavior_version)
+        .unwrap();
+    assert!(matches!(
+        prepared_args.transport,
+        PreparedExternalMcpImportTransport::Local { ref args, .. }
+            if args == &["--stdio"]
+    ));
+
+    for name in ["env", "cwd", "query", "headers"] {
+        let server = snapshot
+            .servers
+            .iter()
+            .find(|server| server.name == name)
+            .unwrap();
+        let error = provider
+            .prepare_import(&input, &server.id, &server.behavior_version)
+            .unwrap_err();
+        assert_eq!(error.code, "external_mcp.import_setup_required");
+        assert!(!error.message.contains("secret"));
+    }
 }
 
 #[test]

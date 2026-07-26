@@ -154,6 +154,10 @@ pub const REMOTE_WORKSPACE_COMMAND_POLICIES: &[(&str, RemoteWorkspacePolicy)] = 
     ("add_skill", RemoteWorkspacePolicy::LegacyUnaudited),
     ("analyze_work_state", RemoteWorkspacePolicy::LegacyUnaudited),
     (
+        "apply_external_mcp_import_command",
+        RemoteWorkspacePolicy::RemoteUnsupported,
+    ),
+    (
         "apply_external_source_control_action_command",
         RemoteWorkspacePolicy::RemoteUnsupported,
     ),
@@ -1127,6 +1131,10 @@ pub const REMOTE_WORKSPACE_COMMAND_POLICIES: &[(&str, RemoteWorkspacePolicy)] = 
     ),
     ("peer_mode_ping", RemoteWorkspacePolicy::WorkspaceAgnostic),
     (
+        "plan_external_mcp_import_command",
+        RemoteWorkspacePolicy::RemoteUnsupported,
+    ),
+    (
         "predownload_acp_client_adapter",
         RemoteWorkspacePolicy::LegacyUnaudited,
     ),
@@ -1836,6 +1844,20 @@ mod tests {
             stale.is_empty(),
             "remote workspace policies declared for commands that are no longer registered: {stale:?}"
         );
+    }
+
+    #[test]
+    fn external_mcp_import_commands_explicitly_reject_remote_workspaces() {
+        for command in [
+            "plan_external_mcp_import_command",
+            "apply_external_mcp_import_command",
+        ] {
+            assert_eq!(
+                remote_workspace_policy(command),
+                Some(RemoteWorkspacePolicy::RemoteUnsupported),
+                "{command} must never fall back to the controller's local MCP config"
+            );
+        }
     }
 
     #[test]

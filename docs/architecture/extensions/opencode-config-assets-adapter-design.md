@@ -40,7 +40,12 @@ JSON/JSONC/Markdown 解析、参数展开、运行时刷新和冲突选择，也
 | 方式 | 写入位置 | 是否立即生效 / 是否执行代码 | 停用或撤销 | 来源变化后 |
 |---|---|---|---|---|
 | 兼容来源 | 不写 BitFun 配置，也不写回源文件 | OC-R1 的 L1 内容按用户偏好自动应用或先询问；L2/L3 内容只发现，首次启用、更新策略要求或能力扩大时确认 | 按当前项目或执行域抑制来源/资产，或分别停用 server/tui 入口；watcher 更新不得绕过该偏好重新应用 | 重新解析候选；低风险变化自动切换，能力/权限扩大等待确认，失败时保留仍合规的上一结果 |
-| 显式导入 | 用户选择的 BitFun 用户层、项目层或更窄工作区层 | 写入成功后由目标层正常生效；首期只导入非执行配置，Plugin/Tool 不经导入执行 | 按字段撤销；冲突字段先预览，不自动覆盖后续修改 | 只提示重新导入，不双向写回，也不自动覆盖 BitFun 值 |
+| 显式导入（目标） | 用户选择的 BitFun 用户层、项目层或更窄工作区层 | 写入成功后由目标层正常生效；Plugin/Tool 不经导入执行 | 按字段撤销；冲突字段先预览，不自动覆盖后续修改 | 只提示重新导入，不双向写回，也不自动覆盖 BitFun 值 |
+
+当前显式导入仅落地 MCP C0a 窄切片：复用现有来源解析，在 Desktop 与 `bitfun mcp import` 中预览
+OpenCode / Claude Code 的等价安全声明；显式 apply 只向现有用户级 MCP 配置原子写入 disabled 条目。它不复制
+header、env、cwd 或凭据，不支持 Codex 投影、通用目标层选择、逐字段导入记录或 undo。下述通用导入与撤销语义
+仍是目标设计，不能由 MCP C0a 推导为已实现。
 
 “只读”只表示源文件不被 BitFun 改写，不表示结果仅供预览。兼容来源不是 BitFun 内部权威模型，但它是合法
 运行输入；达到对应阶段后，适配器把有效值映射到归属模块，归属模块仍负责最终持久化、运行时状态和错误语义。
@@ -189,7 +194,7 @@ OpenCode adapter 在来源发现、解析和审批前不 import module、不读�
 | Skills | `.opencode/.claude/.agents` 项目与用户根、`SKILL.md`、`skills.paths/urls` | Skill 归属模块复用按需加载并补齐规则顺序 | 说明和索引按需加载；URL、脚本或外部依赖按 L2 确认 | URL 或可执行资源失败只降级对应 Skill。 |
 | References | `references` / 旧 `reference`，本地 path 或 Git repository/branch/description/hidden | **基础能力缺失**：先补 Workspace Reference 的异步准备与 `@alias` 消费接口 | 本地引用保留相对来源；Git 拉取按 L2 确认并保留缓存/隐藏语义 | 拉取失败不阻止项目，外部目录仍遵守工具权限。 |
 | Commands | JSON/JSONC、Markdown、`$ARGUMENTS`、位置参数、`@file`、`!shell`、agent/model/variant/subtask | Prompt Command 专属契约；OpenCode adapter 保留发现、覆盖、解析和参数展开语义，交互式 TUI（ChatMode）只消费中立定义与展开结果 | 当前支持 prompt-only 模板，用户显式选择或输入即确认本次发送；未接通的文件、shell、agent/model/variant/subtask 标为部分受限且不做部分执行 | 已知命令文件无效只回退该命令；稳定删除撤下新调用；目录枚举未知时回退对应目录来源，不能把未知当空目录。 |
-| MCP | local 的 command/environment/cwd/timeout，remote 的 URL/headers/oauth/timeout，Agent 选择 | MCP 归属模块创建兼容配置视图 | 当前支持 local stdio 和 HTTPS remote 的静态发现、首次/行为变化审批、冲突选择与 workspace 隔离的运行期接纳；外部本地进程只继承系统启动基线和显式环境 | `{env:NAME}` 当前只允许用于 environment/Header 值；SSE、OpenCode OAuth client 配置、完整 timeout/Agent 范围与 Remote 执行域保持明确不支持；凭据或网络失败只影响单个 Server。 |
+| MCP | local 的 command/environment/cwd/timeout，remote 的 URL/headers/oauth/timeout，Agent 选择 | MCP 归属模块创建兼容配置视图 | 当前支持 local stdio 和 HTTPS remote 的静态发现、首次/行为变化审批、冲突选择与 workspace 隔离的运行期接纳；C0a 快照导入只复制无 env/cwd 的 local command/args 或无 header/query/fragment 的 HTTPS remote，并保持 disabled | `{env:NAME}` 当前只允许用于运行期兼容来源的 environment/Header 值，不进入 C0a 快照；SSE、OpenCode OAuth client 配置、完整 timeout/Agent 范围与 Remote 执行域保持明确不支持；凭据或网络失败只影响单个 Server。 |
 | LSP | command、extensions、env、initialization | LSP 归属模块注册兼容实例 | 首次确认外部进程和使用范围后按文件类型启动 | 自定义 Server 缺少 extensions 或启动失败时只禁用该项。 |
 | Formatters | command、environment、extensions、`$FILE` | **基础能力缺失**：先补文件写入后的 Formatter 执行消费点，再做格式转换 | 首次确认命令后执行匹配 Formatter | 超时后标记未格式化，文件写入结果保留。 |
 | Themes | builtin/user/project/cwd JSON | **部分已有**：GUI Theme 已有；TUI 主题消费边界在终端阶段补齐 | 保留覆盖顺序和语义角色 | 颜色能力不支持时做可见降级。 |

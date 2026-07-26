@@ -71,8 +71,9 @@ use bitfun_product_domains::external_integration_policy::{
     EXTERNAL_INTEGRATION_POLICY_SCHEMA_MAJOR,
 };
 use bitfun_product_domains::external_sources::{
-    ExecutionDomainId, ExternalMcpRevisionKey, ExternalMcpSourceProvider, ExternalSourceContext,
-    ExternalSourceScope, ExternalToolSourceProvider, PromptCommandSourceProvider,
+    ExecutionDomainId, ExternalMcpRevisionKey, ExternalMcpSourceProvider, ExternalMcpStaticStatus,
+    ExternalSourceContext, ExternalSourceScope, ExternalToolSourceProvider,
+    PromptCommandSourceProvider,
 };
 use bitfun_product_domains::external_subagents::ExternalSubagentSourceProvider;
 use bitfun_services_core::json_store::JsonFileStore;
@@ -3531,6 +3532,51 @@ async fn service_for(
     workspace_root: Option<&Path>,
 ) -> Result<Arc<WorkspaceExternalSourceService>, String> {
     service_for_profile(workspace_root, ExternalSourceServiceProfile::LocalExecution).await
+}
+
+pub(crate) async fn collect_external_mcp_import_candidates(
+    workspace_root: Option<&Path>,
+) -> Result<Vec<crate::external_mcp_import::ExternalMcpImportCandidate>, String> {
+    let service = read_only_service_for(workspace_root).await?;
+    service.refresh().await?;
+    let coordinator = lock_mcp_coordinator(&service.control_plane);
+    let snapshot = coordinator.snapshot();
+    let input_candidates = snapshot
+        .servers
+        .iter()
+        .cloned()
+        .map(|definition| {
+            let ecosystem_id = coordinator
+                .ecosystem_for_provider(&definition.id.source.provider_id)
+                .ok_or_else(|| "External MCP provider ecosystem is unavailable".to_string())?;
+            let preparation = if definition.source_enabled
+                && matches!(definition.static_status, ExternalMcpStaticStatus::Ready)
+            {
+                match coordinator
+                    .prepare_import_guarded(&definition.id, &definition.behavior_version)
+                {
+                    Ok(prepared) => {
+                        crate::external_mcp_import::ExternalMcpImportPreparation::Prepared(prepared)
+                    }
+                    Err(error) => {
+                        crate::external_mcp_import::ExternalMcpImportPreparation::Unavailable(
+                            error.code,
+                        )
+                    }
+                }
+            } else {
+                crate::external_mcp_import::ExternalMcpImportPreparation::Unavailable(
+                    "external_mcp.import_candidate_unsupported".to_string(),
+                )
+            };
+            Ok(crate::external_mcp_import::ExternalMcpImportCandidate {
+                definition,
+                ecosystem_id,
+                preparation,
+            })
+        })
+        .collect::<Result<Vec<_>, String>>()?;
+    Ok(input_candidates)
 }
 
 async fn read_only_service_for(

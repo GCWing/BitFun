@@ -354,6 +354,37 @@ export interface ExternalMcpCatalogEntry {
   activationState: ExternalMcpActivation;
 }
 
+export type ExternalMcpImportDispositionV1 =
+  | 'eligible'
+  | 'automatic_rename'
+  | 'already_imported'
+  | 'unavailable';
+
+export interface ExternalMcpImportPlanV1 {
+  schemaVersion: 1;
+  planFingerprint: string;
+  items: Array<{
+    candidateId: string;
+    displayName: string;
+    transport: 'local_stdio' | 'streamable_http';
+    proposedNativeId?: string;
+    disposition: ExternalMcpImportDispositionV1;
+    reasonCode?: string;
+  }>;
+}
+
+export interface ExternalMcpImportSelectionV1 {
+  candidateId: string;
+  requestedNativeId?: string;
+}
+
+export interface ExternalMcpImportApplyResultV1 {
+  schemaVersion: 1;
+  outcome:
+    | { status: 'applied'; imported: Array<{ candidateId: string; nativeId: string }> }
+    | { status: 'stale'; refreshedPlan: ExternalMcpImportPlanV1 };
+}
+
 export interface ExternalMcpApprovalRequest {
   candidateId: string;
   approvalKey: string;
@@ -1108,6 +1139,33 @@ function controlRequest(
 }
 
 export const externalSourcesAPI = {
+  planMcpImport(workspacePath?: string) {
+    return invokeExternalSourceCommand<ExternalMcpImportPlanV1>(
+      'plan_external_mcp_import_command',
+      { request: { workspacePath: normalizeOptionalWorkspacePath(workspacePath) } },
+    );
+  },
+
+  applyMcpImport(
+    workspacePath: string | undefined,
+    plan: ExternalMcpImportPlanV1,
+    selections: ExternalMcpImportSelectionV1[],
+  ) {
+    return invokeExternalSourceCommand<ExternalMcpImportApplyResultV1>(
+      'apply_external_mcp_import_command',
+      {
+        request: {
+          workspacePath: normalizeOptionalWorkspacePath(workspacePath),
+          importRequest: {
+            schemaVersion: 1,
+            planFingerprint: plan.planFingerprint,
+            selections,
+          },
+        },
+      },
+    );
+  },
+
   async getControlSnapshot(workspacePath?: string, forceRefresh = false) {
     return invokeCompatibleSurfaceSnapshot({
       request: { workspacePath: normalizeOptionalWorkspacePath(workspacePath), forceRefresh },

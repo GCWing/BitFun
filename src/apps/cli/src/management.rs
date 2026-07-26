@@ -207,9 +207,14 @@ pub(crate) async fn print_mcp_json_config() -> Result<()> {
     let config_service = ensure_global_config_service().await?;
     let mcp_service = bitfun_core::service::mcp::MCPService::new(config_service.clone())
         .map_err(|error| anyhow!(error.to_string()))?;
-    let json = mcp_service.config_service().load_mcp_json_config().await?;
-    println!("{}", json);
+    let snapshot = mcp_service.config_service().load_mcp_json_config().await?;
+    println!("{}", snapshot.json_config);
     Ok(())
+}
+
+pub(crate) async fn run_mcp_import(command: crate::mcp_import::McpImportCommand) -> Result<()> {
+    let _config_service = ensure_global_config_service().await?;
+    crate::mcp_import::execute(command).await
 }
 
 fn validate_usage_session_id(session_id: &str) -> Result<()> {

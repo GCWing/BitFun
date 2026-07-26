@@ -117,6 +117,28 @@ impl ConfigService {
         Ok(())
     }
 
+    /// Atomically replaces one JSON configuration value when its current value
+    /// still matches the caller's snapshot. The read, comparison, and persisted
+    /// write share the existing manager write lock.
+    pub(crate) async fn compare_and_set_json_config(
+        &self,
+        path: &str,
+        expected: Option<serde_json::Value>,
+        replacement: serde_json::Value,
+    ) -> BitFunResult<bool> {
+        let mut manager = self.manager.write().await;
+        let current = match manager.get::<serde_json::Value>(path) {
+            Ok(value) => Some(value),
+            Err(BitFunError::NotFound(_)) => None,
+            Err(error) => return Err(error),
+        };
+        if current != expected {
+            return Ok(false);
+        }
+        manager.set(path, replacement).await?;
+        Ok(true)
+    }
+
     fn path_touches_models(path: &str) -> bool {
         path == "ai"
             || path.starts_with("ai.models")
@@ -703,6 +725,33 @@ mod tests {
         .expect("config service");
 
         (service, dir)
+    }
+
+    #[tokio::test]
+    async fn compare_and_set_json_config_rejects_a_stale_snapshot() {
+        let (service, _dir) = test_service("config-cas").await;
+        assert!(service
+            .compare_and_set_json_config(
+                "mcp_servers",
+                None,
+                serde_json::json!({ "mcpServers": { "first": {} } }),
+            )
+            .await
+            .unwrap());
+        assert!(!service
+            .compare_and_set_json_config(
+                "mcp_servers",
+                None,
+                serde_json::json!({ "mcpServers": { "stale": {} } }),
+            )
+            .await
+            .unwrap());
+        let current = service
+            .get_config::<serde_json::Value>(Some("mcp_servers"))
+            .await
+            .unwrap();
+        assert!(current["mcpServers"].get("first").is_some());
+        assert!(current["mcpServers"].get("stale").is_none());
     }
 
     #[tokio::test]

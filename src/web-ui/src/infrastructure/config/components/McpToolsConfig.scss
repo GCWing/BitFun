@@ -199,3 +199,32 @@
     }
   }
 }
+.bitfun-mcp-tools__import {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  margin-bottom: 8px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+
+  p {
+    margin: 0;
+  }
+
+  ul {
+    max-height: 120px;
+    margin: 0;
+    overflow: auto;
+  }
+
+  button {
+    padding: 5px 10px;
+  }
+}
+
+.bitfun-mcp-tools__import-actions {
+  display: flex;
+  gap: 8px;
+}

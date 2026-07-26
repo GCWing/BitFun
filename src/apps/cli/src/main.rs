@@ -20,6 +20,7 @@ mod daemon;
 mod diagnostics;
 mod logging;
 mod management;
+mod mcp_import;
 mod model_selection;
 mod modes;
 mod peer_host;
@@ -33,11 +34,12 @@ mod ui;
 
 use anyhow::{anyhow, Result};
 use bitfun_core::service::remote_connect::DeviceIdentity;
-use clap::{Parser, Subcommand, ValueEnum};
+use clap::{CommandFactory, FromArgMatches, Parser, Subcommand, ValueEnum};
 use std::sync::atomic::{AtomicU8, Ordering};
 use std::sync::OnceLock;
 
 use config::CliConfig;
+use mcp_import::{McpImportCommand, McpImportOutputFormat};
 use modes::chat::ChatMode;
 use modes::exec::{ExecApprovalMode, ExecOutputFormat};
 
@@ -258,6 +260,21 @@ enum McpAction {
     },
     /// Print the stored MCP JSON config
     Config,
+    /// Preview or explicitly import external MCP declarations
+    Import {
+        /// Apply the current plan; without this flag the command is read-only
+        #[arg(long)]
+        apply: bool,
+        /// Import only this eligible candidate; repeat to select multiple
+        #[arg(long, action = clap::ArgAction::Append, requires = "apply")]
+        candidate: Vec<String>,
+        /// Override the native ID; requires exactly one candidate
+        #[arg(long, requires = "candidate")]
+        native_id: Option<String>,
+        /// Output format for automation
+        #[arg(long, value_enum, default_value_t = McpImportOutputFormat::Text)]
+        format: McpImportOutputFormat,
+    },
 }
 
 #[derive(Subcommand)]
@@ -796,7 +813,17 @@ impl std::error::Error for ReportedCliError {}
 
 async fn run_cli() -> Result<()> {
     let raw_args = std::env::args_os().collect::<Vec<_>>();
-    let cli = match Cli::try_parse_from(&raw_args) {
+    let product_binary_name = option_env!("BITFUN_PRODUCT_BINARY_NAME").unwrap_or("bitfun");
+    let product_display_name = option_env!("BITFUN_PRODUCT_DISPLAY_NAME").unwrap_or("BitFun CLI");
+    let parsed = Cli::command()
+        .name(product_binary_name)
+        .bin_name(product_binary_name)
+        .about(format!(
+            "{product_display_name} - AI agent-driven command-line programming assistant"
+        ))
+        .try_get_matches_from(&raw_args)
+        .and_then(|matches| Cli::from_arg_matches(&matches));
+    let cli = match parsed {
         Ok(cli) => cli,
         Err(error)
             if exec_requests_json_output(&raw_args)
@@ -938,6 +965,20 @@ async fn run_cli() -> Result<()> {
             }
             Some(McpAction::Config) => {
                 management::print_mcp_json_config().await?;
+            }
+            Some(McpAction::Import {
+                apply,
+                candidate,
+                native_id,
+                format,
+            }) => {
+                management::run_mcp_import(McpImportCommand {
+                    apply,
+                    candidates: candidate,
+                    native_id,
+                    format,
+                })
+                .await?;
             }
         },
 

@@ -19,6 +19,16 @@
     "loading": "正在檢查外部 MCP 來源...",
     "unavailable": "外部 MCP 暫時無法使用。",
     "empty": "未發現外部 MCP。",
+    "import": {
+      "preview": "匯入到 BitFun",
+      "confirm": "將 {{count}} 個受支援的伺服器作為停用的原生設定匯入？",
+      "apply": "匯入",
+      "cancel": "取消",
+      "applied": "已匯入。請在 MCP 設定中檢查並按需啟用。",
+      "stale": "來源或目標設定已變更，請檢查重新整理後的方案。",
+      "empty": "目前沒有可匯入的受支援伺服器。",
+      "failed": "暫時無法匯入。"
+    },
     "unknown": "未知",
     "scope": {
       "userGlobal": "全域",

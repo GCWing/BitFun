@@ -5,8 +5,62 @@
 [OpenCode 扩展兼容总览](extensions/opencode-extension-compatibility.md)和
 [插件运行时与 Plugin Host](extensions/plugin-runtime-design.md)。
 
-本文是目标设计，不表示相关构建任务或配置格式已实现。设计只保留已有或近期有明确消费方的概念，不建立通用
-白标平台、构建脚本运行时或跨 GUI/TUI 的组件协议。
+本文同时记录长期目标边界与最小架构切片。设计只保留已有或近期有明确消费方的概念，不建立通用
+白标平台、构建脚本运行时或跨 GUI/TUI 的组件协议；未在“当前实现”中列出的对象只是后续边界，不应被视为已支持能力。
+
+## 0. 当前实现（C0a）
+
+C0a 实现一个构建期 JSONC 产品定义、严格解析器和确定性解析摘要，入口位于 `products/` 与
+`scripts/product-customization/`。默认命令不需要参数；只有多产品仓库、CI 矩阵或外部定义文件需要显式传入
+`--product-config <path>`。不存在产品 ID 注册表、运行时主选择器或用于选源的环境变量。
+
+当前真实消费者只有：
+
+- Desktop build adapter：从解析结果覆盖 Tauri `productName`、`mainBinaryName` 与 bundle identifier；
+- CLI dev/build wrapper：从同一解析结果设置命令名、隔离定制构建缓存，并按成员 `binaryName` 暂存构建产物；
+
+`product:check` / `product:explain` 只是构建作者的校验与解释工具，不计作产品字段的生产消费者。C0a 不生成无人读取的
+通用产品 manifest 或 locale projection；Desktop 与 CLI build adapter 直接消费同一次内存解析结果。
+
+产品定义 v1 仅包含已被这些消费者读取的字段，未知字段一律拒绝。localized 名称独立于技术 ID，并按共享 locale contract
+校验后交给各自 build adapter。
+
+C0a 不声称生成可独立发行的完整品牌产品。品牌资产、GUI/TUI 布局、插件/内置扩展选择、Installer/Store target、
+用户数据隔离、更新与签名、运行时全量品牌替换均延期；每一项必须在出现真实 owner 和消费者后独立扩展 schema 与组装结果。
+
+### 0.1 当前定义与解析契约
+
+产品定义描述一个 family，其中 Desktop 与 CLI 是分别命名、分别消费的成员；Installer 与 Store 是可能的 Desktop
+交付目标，不是独立成员，当前也没有对应实现。schema v1 只接受以下已消费字段：
+
+```jsonc
+{
+  "$schema": "../schemas/product-definition.schema.json",
+  "schemaVersion": 1,
+  "localeRoot": "./locales",
+  "members": {
+    "desktop": {
+      "displayNameKey": "product.desktop.name",
+      "binaryName": "acme-desktop",
+      "bundleId": "com.acme.desktop"
+    },
+    "cli": {
+      "displayNameKey": "product.cli.name",
+      "binaryName": "acme"
+    }
+  }
+}
+```
+
+解析器先校验完整 family、双方 locale key、owned path 与技术 ID，再选择命令对应成员；digest-bearing `assembly`
+只携带 schema/source digest、成员、display-name key、binary/bundle identity、locale contract facts 与 assembly digest。
+构建 adapter 所需的源路径、localized 名称、输出目录和 default-product 标记保留在外围 build context，不扩展成通用
+manifest。相同输入必须产生相同摘要；非默认产品使用 digest-scoped Cargo target 目录，避免复用其他产品的编译期身份。
+
+默认构建不需要选择参数。构建作者与 CI 只通过
+`--product-config <path>` 指向定义；`product:check` 校验完整 family 并报告选定成员 assembly，`product:explain`
+解释来源、localized 名称、技术 identity 与摘要。binary/bundle identity 不作为可见名称，产品 locale 必须符合共享
+i18n locale 集合和 key parity。
 
 ## 1. 设计结论
 

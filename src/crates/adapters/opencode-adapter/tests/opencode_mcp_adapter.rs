@@ -2,7 +2,8 @@ use bitfun_opencode_adapter::{OpenCodeMcpProvider, OpenCodeMcpProviderOptions};
 use bitfun_product_domains::external_sources::{
     ExecutionDomainId, ExternalMcpDiscoveryInput, ExternalMcpRevisionKey,
     ExternalMcpSourceProvider, ExternalMcpStaticStatus, ExternalMcpTransportKind,
-    ExternalSourceContext, ExternalSourceScope, PreparedExternalMcpTransport,
+    ExternalSourceContext, ExternalSourceScope, PreparedExternalMcpImportTransport,
+    PreparedExternalMcpTransport,
 };
 use std::collections::BTreeSet;
 use std::fs;
@@ -184,6 +185,135 @@ fn local_server_without_cwd_uses_the_workspace_like_opencode() {
             working_directory, ..
         } => assert_eq!(working_directory.as_deref(), Some(project.as_path())),
         other => panic!("expected local transport, got {other:?}"),
+    }
+}
+
+#[test]
+fn safe_user_servers_have_a_native_import_projection_without_runtime_resolution() {
+    let temp = TempDir::new().unwrap();
+    let user = temp.path().join("user");
+    let project = temp.path().join("project");
+    fs::create_dir_all(&user).unwrap();
+    fs::create_dir_all(project.join(".git")).unwrap();
+    fs::write(
+        user.join("opencode.json"),
+        r#"{"mcp":{
+          "local":{"type":"local","command":["docs-mcp","--stdio"]},
+          "remote":{"type":"remote","url":"https://docs.example.test/mcp"}
+        }}"#,
+    )
+    .unwrap();
+
+    let provider = OpenCodeMcpProvider::new(options(user));
+    let input = ExternalMcpDiscoveryInput {
+        context: context(project),
+        suppressed_sources: BTreeSet::new(),
+        revision_key: revision_key(),
+    };
+    let snapshot = provider.discover(&input).unwrap();
+    let local = snapshot
+        .servers
+        .iter()
+        .find(|server| server.name == "local")
+        .unwrap();
+    let remote = snapshot
+        .servers
+        .iter()
+        .find(|server| server.name == "remote")
+        .unwrap();
+
+    let prepared_local = provider
+        .prepare_import(&input, &local.id, &local.behavior_version)
+        .unwrap();
+    match prepared_local.transport {
+        PreparedExternalMcpImportTransport::Local { command, args } => {
+            assert_eq!(command, "docs-mcp");
+            assert_eq!(args, ["--stdio"]);
+        }
+        other => panic!("expected local import, got {other:?}"),
+    }
+    let prepared_remote = provider
+        .prepare_import(&input, &remote.id, &remote.behavior_version)
+        .unwrap();
+    match prepared_remote.transport {
+        PreparedExternalMcpImportTransport::Remote { url } => {
+            assert_eq!(url, "https://docs.example.test/mcp");
+        }
+        other => panic!("expected remote import, got {other:?}"),
+    }
+}
+
+#[test]
+fn unsafe_user_servers_require_setup_instead_of_copying_opaque_fields() {
+    let temp = TempDir::new().unwrap();
+    let user = temp.path().join("user");
+    let project = temp.path().join("project");
+    fs::create_dir_all(&user).unwrap();
+    fs::create_dir_all(project.join(".git")).unwrap();
+    fs::write(
+        user.join("opencode.json"),
+        r#"{"mcp":{
+          "env":{"type":"local","command":["docs-mcp"],"environment":{"TOKEN":"secret"}},
+          "cwd":{"type":"local","command":["docs-mcp"],"cwd":"tools"},
+          "query":{"type":"remote","url":"https://docs.example.test/mcp?token=secret"},
+          "headers":{"type":"remote","url":"https://docs.example.test/mcp","headers":{"Authorization":"secret"}},
+          "no-oauth":{"type":"remote","url":"https://docs.example.test/mcp","oauth":false}
+        }}"#,
+    )
+    .unwrap();
+
+    let provider = OpenCodeMcpProvider::new(options(user));
+    let input = ExternalMcpDiscoveryInput {
+        context: context(project),
+        suppressed_sources: BTreeSet::new(),
+        revision_key: revision_key(),
+    };
+    let snapshot = provider.discover(&input).unwrap();
+
+    for server in &snapshot.servers {
+        let error = provider
+            .prepare_import(&input, &server.id, &server.behavior_version)
+            .unwrap_err();
+        assert_eq!(error.code, "external_mcp.import_setup_required");
+        assert!(!error.message.contains("secret"));
+        assert!(!error.message.contains("--opaque"));
+    }
+}
+
+#[test]
+fn unknown_local_and_remote_fields_fail_closed_before_import() {
+    let temp = TempDir::new().unwrap();
+    let user = temp.path().join("user");
+    let project = temp.path().join("project");
+    fs::create_dir_all(&user).unwrap();
+    fs::create_dir_all(project.join(".git")).unwrap();
+    fs::write(
+        user.join("opencode.json"),
+        r#"{"mcp":{
+          "local":{"type":"local","command":["docs-mcp"],"providerMode":"opaque"},
+          "remote":{"type":"remote","url":"https://docs.example.test/mcp","providerMode":"opaque"}
+        }}"#,
+    )
+    .unwrap();
+
+    let provider = OpenCodeMcpProvider::new(options(user));
+    let input = ExternalMcpDiscoveryInput {
+        context: context(project),
+        suppressed_sources: BTreeSet::new(),
+        revision_key: revision_key(),
+    };
+    let snapshot = provider.discover(&input).unwrap();
+
+    for server in &snapshot.servers {
+        assert!(matches!(
+            server.static_status,
+            ExternalMcpStaticStatus::Unsupported { .. }
+        ));
+        let error = provider
+            .prepare_import(&input, &server.id, &server.behavior_version)
+            .unwrap_err();
+        assert_eq!(error.code, "opencode.mcp.not_activatable");
+        assert!(!error.message.contains("opaque"));
     }
 }
 

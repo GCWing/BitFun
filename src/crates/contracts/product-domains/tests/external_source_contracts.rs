@@ -15,20 +15,21 @@ use bitfun_product_domains::external_sources::{
     external_tool_conflict_key, prompt_command_conflict_key, EcosystemId, ExecutionDomainId,
     ExpandedPromptCommand, ExternalIntegrationCapabilityId, ExternalMcpActivationState,
     ExternalMcpApprovalRequest, ExternalMcpCatalogEntry, ExternalMcpConflict,
-    ExternalMcpConflictCandidate, ExternalMcpDiscoveryInput, ExternalMcpProviderIdentity,
-    ExternalMcpProviderSnapshot, ExternalMcpRevisionKey, ExternalMcpServerDefinition,
-    ExternalMcpStaticStatus, ExternalMcpTransportKind, ExternalSourceAssetKind,
-    ExternalSourceCatalogEntry, ExternalSourceCatalogSnapshot, ExternalSourceContext,
-    ExternalSourceDiagnostic, ExternalSourceHealth, ExternalSourceHostCapabilities,
-    ExternalSourceLifecycleState, ExternalSourceOperationError, ExternalSourceOperationErrorCode,
-    ExternalSourceProviderError, ExternalSourcePublicSnapshot, ExternalSourceRecord,
-    ExternalSourceScope, ExternalToolCapability, ExternalToolDefinition, ExternalToolRuntimeKind,
+    ExternalMcpConflictCandidate, ExternalMcpDiscoveryInput, ExternalMcpImportApplyRequestV1,
+    ExternalMcpImportSelectionV1, ExternalMcpProviderIdentity, ExternalMcpProviderSnapshot,
+    ExternalMcpRevisionKey, ExternalMcpServerDefinition, ExternalMcpStaticStatus,
+    ExternalMcpTransportKind, ExternalSourceAssetKind, ExternalSourceCatalogEntry,
+    ExternalSourceCatalogSnapshot, ExternalSourceContext, ExternalSourceDiagnostic,
+    ExternalSourceHealth, ExternalSourceHostCapabilities, ExternalSourceLifecycleState,
+    ExternalSourceOperationError, ExternalSourceOperationErrorCode, ExternalSourceProviderError,
+    ExternalSourcePublicSnapshot, ExternalSourceRecord, ExternalSourceScope,
+    ExternalToolCapability, ExternalToolDefinition, ExternalToolRuntimeKind,
     ExternalToolStaticStatus, ExternalWatchRoot, NativePromptCommandDescriptor,
-    PreparedExternalMcpServer, PreparedExternalMcpTransport, PromptCommandAvailability,
-    PromptCommandCatalogEntry, PromptCommandDefinition, PromptCommandProviderIdentity,
-    PromptCommandProviderSnapshot, PromptCommandSourceProvider, SecretValue, SourceKey,
-    SourceQualifiedCommandId, SourceQualifiedMcpServerId, SourceQualifiedToolId,
-    SourceQualifiedToolTargetId,
+    PreparedExternalMcpImportServer, PreparedExternalMcpImportTransport, PreparedExternalMcpServer,
+    PreparedExternalMcpTransport, PromptCommandAvailability, PromptCommandCatalogEntry,
+    PromptCommandDefinition, PromptCommandProviderIdentity, PromptCommandProviderSnapshot,
+    PromptCommandSourceProvider, SecretValue, SourceKey, SourceQualifiedCommandId,
+    SourceQualifiedMcpServerId, SourceQualifiedToolId, SourceQualifiedToolTargetId,
 };
 use bitfun_product_domains::external_subagents::{
     external_subagent_approval_key, external_subagent_candidate_id, external_subagent_conflict_key,
@@ -52,6 +53,36 @@ fn native_prompt_command_descriptors_reject_external_candidate_namespaces() {
     };
 
     assert!(descriptor.validate().is_err());
+}
+
+#[test]
+fn external_mcp_import_contract_keeps_private_values_out_of_debug_and_requests() {
+    let source = SourceKey::new("opencode.mcp", "user-config").unwrap();
+    let prepared = PreparedExternalMcpImportServer {
+        id: SourceQualifiedMcpServerId::new(source, "docs").unwrap(),
+        behavior_version: "sha256:behavior-v1".to_string(),
+        transport: PreparedExternalMcpImportTransport::Local {
+            command: "secret-command".to_string(),
+            args: vec!["secret-argument".to_string()],
+        },
+    };
+    let debug = format!("{prepared:?}");
+    assert!(!debug.contains("secret-command"));
+    assert!(!debug.contains("secret-argument"));
+    prepared.validate().unwrap();
+
+    let request = ExternalMcpImportApplyRequestV1 {
+        schema_version: 1,
+        plan_fingerprint: "sha256:plan-v1".to_string(),
+        selections: vec![ExternalMcpImportSelectionV1 {
+            candidate_id: "opencode:mcp:docs".to_string(),
+            requested_native_id: None,
+        }],
+    };
+    request.validate().unwrap();
+    let encoded = serde_json::to_string(&request).unwrap();
+    assert!(!encoded.contains("command"));
+    assert!(!encoded.contains("argument"));
 }
 
 fn source(provider_id: &str, ecosystem_id: &str, source_id: &str) -> ExternalSourceRecord {

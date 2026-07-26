@@ -475,7 +475,9 @@ pub async fn get_mcp_server_status(
 }
 
 #[tauri::command]
-pub async fn load_mcp_json_config(state: State<'_, AppState>) -> Result<String, String> {
+pub async fn load_mcp_json_config(
+    state: State<'_, AppState>,
+) -> Result<bitfun_core::service::mcp::config::MCPJsonConfigSnapshot, String> {
     let mcp_service = state
         .mcp_service
         .as_ref()
@@ -492,6 +494,7 @@ pub async fn load_mcp_json_config(state: State<'_, AppState>) -> Result<String, 
 pub async fn save_mcp_json_config(
     state: State<'_, AppState>,
     json_config: String,
+    expected_fingerprint: String,
 ) -> Result<(), String> {
     let mcp_service = state
         .mcp_service
@@ -500,7 +503,7 @@ pub async fn save_mcp_json_config(
 
     mcp_service
         .config_service()
-        .save_mcp_json_config(&json_config)
+        .save_mcp_json_config(&json_config, &expected_fingerprint)
         .await
         .map_err(|e| e.to_string())
 }

@@ -5,8 +5,8 @@ use bitfun_product_domains::external_sources::{
     ExternalMcpSourceProvider, ExternalMcpStaticStatus, ExternalMcpTransportKind,
     ExternalSourceContext, ExternalSourceHealth, ExternalSourceLifecycleState,
     ExternalSourceProviderError, ExternalSourceRecord, ExternalSourceScope, ExternalWatchRoot,
-    PreparedExternalMcpServer, PreparedExternalMcpTransport, ProviderId, SourceKey,
-    SourceQualifiedMcpServerId,
+    PreparedExternalMcpImportServer, PreparedExternalMcpImportTransport, PreparedExternalMcpServer,
+    PreparedExternalMcpTransport, ProviderId, SourceKey, SourceQualifiedMcpServerId,
 };
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::PathBuf;
@@ -140,6 +140,21 @@ impl ExternalMcpSourceProvider for FakeProvider {
         })
     }
 
+    fn prepare_import(
+        &self,
+        _input: &ExternalMcpDiscoveryInput,
+        server_id: &SourceQualifiedMcpServerId,
+        expected_behavior_version: &str,
+    ) -> Result<PreparedExternalMcpImportServer, ExternalSourceProviderError> {
+        Ok(PreparedExternalMcpImportServer {
+            id: server_id.clone(),
+            behavior_version: expected_behavior_version.to_string(),
+            transport: PreparedExternalMcpImportTransport::Remote {
+                url: "https://example.test/mcp".to_string(),
+            },
+        })
+    }
+
     fn watch_roots(&self, _context: &ExternalSourceContext) -> Vec<ExternalWatchRoot> {
         vec![
             ExternalWatchRoot {
@@ -224,6 +239,36 @@ fn coordinator_passes_suppression_to_the_provider_and_guards_preparation_revisio
     coordinator
         .prepare_server_guarded(&server.id, "behavior-v1")
         .expect("current approved revision can be prepared");
+}
+
+#[test]
+fn coordinator_guards_import_preparation_by_current_revision_and_availability() {
+    let provider = Arc::new(FakeProvider::new(snapshot("project", "behavior-v1")));
+    let provider_trait: Arc<dyn ExternalMcpSourceProvider> = provider.clone();
+    let mut coordinator =
+        ExternalMcpCoordinator::new(context(), revision_key(), vec![provider_trait]).unwrap();
+    let first = coordinator.refresh();
+    let server = first.servers[0].clone();
+    let source_key = first.sources[0].stable_key.clone();
+
+    let stale = coordinator
+        .prepare_import_guarded(&server.id, "behavior-v0")
+        .unwrap_err();
+    assert_eq!(stale.code, "external_mcp.stale_revision");
+
+    coordinator.set_source_enabled(&source_key, false).unwrap();
+    let unavailable = coordinator
+        .prepare_import_guarded(&server.id, &server.behavior_version)
+        .unwrap_err();
+    assert_eq!(unavailable.code, "external_mcp.stale_revision");
+
+    coordinator.set_source_enabled(&source_key, true).unwrap();
+    coordinator.refresh();
+    let prepared = coordinator
+        .prepare_import_guarded(&server.id, &server.behavior_version)
+        .expect("current import revision can be prepared");
+    assert_eq!(prepared.id, server.id);
+    assert_eq!(prepared.behavior_version, server.behavior_version);
 }
 
 #[test]

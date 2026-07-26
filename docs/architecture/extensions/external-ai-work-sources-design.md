@@ -22,6 +22,41 @@ MCP 安全子集，以及 Codex Subagent、MCP 安全子集；三种生态使用
 但各自在 sibling adapter 内保留原生来源与覆盖语义。完整 TypeScript/Bun、包依赖、package plugin 执行、
 Codex/Claude Code 运行时适配、primary agent 替换和外部 Subagent 续接仍属于后续阶段，不能因来源被识别就宣称已经可用。OpenCode、Claude Code 与 Codex 的本地 Hook 静态目录
 已作为独立只读切片接入；它只证明来源和声明能够安全展示，不证明 handler 已加载、获得权限或可以执行。
+独立的 MCP C0a 快照导入复用上述来源与现有 MCP 配置 owner：Desktop 和根 CLI 可预览 OpenCode / Claude Code
+中语义等价的安全声明，并在用户显式确认后原子写入 disabled 原生条目。Codex 导入投影、凭据/header/env/cwd
+迁移、通用导入记录、undo、Peer/Remote 写入均未实现；这不改变外部 MCP 持续兼容来源的运行路径。
+
+## 0. 当前 MCP 快照导入契约（C0a）
+
+快照导入是显式复制，不是持续同步，也不改变现有外部 MCP 兼容来源。Desktop 与根 CLI 只负责展示脱敏预览并发送
+typed intent；OpenCode / Claude Code sibling adapter 复用各自已合并的解析结果生成私有安全投影，外部来源协调器固定
+当前 candidate 与行为版本，core 负责重新规划，最终仍由唯一 MCP 配置 service 校验并写入 `mcp_servers`。
+Codex 继续参与现有只读发现，但当前没有导入投影。
+
+公开的 versioned plan/apply DTO 只包含 schema version、plan fingerprint、candidate ID、display name、transport、建议
+native ID、disposition 和稳定 reason code，不包含 command arguments、URL、原始 JSON、凭据、environment/header 值或
+`MCPServerConfig`。provider 私有投影不可序列化且使用 redacted `Debug`；plan/request 最多包含 256 个 candidate，未知请求
+字段与重复选择直接拒绝。
+
+当前只复制能够与原生配置保持等价语义的声明：
+
+- 无显式 environment/cwd 的 local stdio command 与 adapter 已解析 arguments；
+- 无 userinfo、query、fragment、header 或 provider OAuth 变化的 HTTPS streamable HTTP URL。
+
+environment 值或引用、header/authorization、cwd、未知字段和其他 transport 不猜测、不复制、不记录。导入条目始终为
+`enabled: false` 与 `autoStart: false`；local 条目不继承完整父进程环境，只保留 MCP runtime owner 提供的安全环境。
+
+native ID 优先使用外部 logical name，再使用稳定生态后缀和最小可用数字后缀；超长名称使用 bounded digest，已有条目
+永不覆盖。plan fingerprint 同时绑定脱敏 plan、私有投影和当前原生 MCP 配置摘要。apply 会重新发现并重建 plan；来源或
+目标内容变化时返回刷新后的脱敏 plan，且不写入；fingerprint 不绑定 coordinator refresh generation，因此内容未变的刷新
+不会让 plan stale。配置 service 通过同一 JSON key 的 compare-and-set mutation lane
+一次提交全部选中条目或全部不提交，并在 `_bitfunImport` 中只保留 source-qualified candidate ID 与 behavior version。
+普通 MCP 编辑保留这段 provenance，删除条目时随条目一并移除。
+
+根 CLI 的 `bitfun mcp import` 默认只预览，`--apply` 导入全部 eligible 项；重复 `--candidate` 可缩小集合，单一选择可用
+`--native-id` 指定目标 ID，`--format json` 输出 versioned plan/result。当前没有 TUI/Mobile/Server/Peer/Remote/ACP/SDK
+写入口、导入 journal、tombstone、undo、外部应用回写或插件安装/激活策略；导入后仍由既有 MCP manager 完成复核、编辑、
+启用和删除。
 
 ## 1. 产品判断与竞品启示
 
