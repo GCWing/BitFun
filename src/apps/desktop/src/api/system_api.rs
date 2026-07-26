@@ -164,6 +164,7 @@ async fn probe_endpoint_throughput(client: &reqwest::Client, url: &str) -> u64 {
 
 /// Build an updater whose endpoints are ordered by measured throughput.
 /// Falls back to the bundled configuration if the builder rejects them.
+#[cfg(not(target_env = "ohos"))]
 async fn ranked_updater(app: &AppHandle) -> Result<tauri_plugin_updater::Updater, String> {
     let endpoints = endpoints_fastest_first().await;
     let builder = app.updater_builder();

@@ -51,7 +51,6 @@ rmcp = { workspace = true, optional = true }
 rustls = { workspace = true, optional = true }
 rustls-native-certs = { version = "0.8", optional = true }
 sha2 = { workspace = true, optional = true }
-sherpa-onnx = { workspace = true, optional = true }
 sse-stream = { workspace = true, optional = true }
 thiserror = { workspace = true, optional = true }
 tar = { workspace = true, optional = true }
@@ -72,6 +71,10 @@ tauri = { workspace = true, optional = true }
 
 [target.'cfg(not(windows))'.dependencies]
 git2 = { workspace = true, features = ["vendored-openssl"], optional = true }
+
+[target.'cfg(not(target_env = "ohos"))'.dependencies]
+# sherpa-onnx cannot build on the OHOS target; only available elsewhere.
+sherpa-onnx = { workspace = true, optional = true }
 
 [target.'cfg(windows)'.dependencies]
 schannel = { version = "0.1", optional = true }

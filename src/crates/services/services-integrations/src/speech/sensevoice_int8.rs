@@ -3,6 +3,7 @@ use super::recognizer::{SpeechRecognizer, SpeechRecognizerWarmupRequest};
 use super::types::{SpeechTranscribeRequest, SpeechTranscriptionResult};
 use super::{BitFunError, BitFunResult};
 use async_trait::async_trait;
+#[cfg(not(target_env = "ohos"))]
 use sherpa_onnx::{OfflineRecognizer, OfflineRecognizerConfig, OfflineSenseVoiceModelConfig};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
@@ -13,6 +14,7 @@ pub(super) struct SenseVoiceInt8Recognizer {
     cache: Arc<Mutex<Option<CachedSenseVoiceRecognizer>>>,
 }
 
+#[cfg(not(target_env = "ohos"))]
 struct CachedSenseVoiceRecognizer {
     model_path: PathBuf,
     tokens_path: PathBuf,
@@ -20,12 +22,16 @@ struct CachedSenseVoiceRecognizer {
     recognizer: OfflineRecognizer,
 }
 
+#[cfg(target_env = "ohos")]
+struct CachedSenseVoiceRecognizer;
+
 impl SenseVoiceInt8Recognizer {
     pub(super) fn new() -> Self {
         Self::default()
     }
 }
 
+#[cfg(not(target_env = "ohos"))]
 #[async_trait]
 impl SpeechRecognizer for SenseVoiceInt8Recognizer {
     async fn warmup(&self, request: SpeechRecognizerWarmupRequest) -> BitFunResult<()> {
@@ -70,6 +76,30 @@ impl SpeechRecognizer for SenseVoiceInt8Recognizer {
     }
 }
 
+#[cfg(target_env = "ohos")]
+#[async_trait]
+impl SpeechRecognizer for SenseVoiceInt8Recognizer {
+    async fn warmup(&self, _request: SpeechRecognizerWarmupRequest) -> BitFunResult<()> {
+        Err(BitFunError::service(
+            "SenseVoice speech recognition is not supported on this platform",
+        ))
+    }
+
+    async fn unload(&self) -> BitFunResult<()> {
+        Ok(())
+    }
+
+    async fn transcribe(
+        &self,
+        _request: SpeechTranscribeRequest,
+    ) -> BitFunResult<SpeechTranscriptionResult> {
+        Err(BitFunError::service(
+            "SenseVoice speech recognition is not supported on this platform",
+        ))
+    }
+}
+
+#[cfg(not(target_env = "ohos"))]
 fn transcribe_blocking(
     request: SpeechTranscribeRequest,
     cache: Arc<Mutex<Option<CachedSenseVoiceRecognizer>>>,
@@ -115,6 +145,7 @@ fn transcribe_blocking(
     })
 }
 
+#[cfg(not(target_env = "ohos"))]
 fn ensure_model_files(model_path: &Path, tokens_path: &Path) -> BitFunResult<()> {
     if !model_path.is_file() || !tokens_path.is_file() {
         return Err(BitFunError::NotFound(
@@ -124,6 +155,7 @@ fn ensure_model_files(model_path: &Path, tokens_path: &Path) -> BitFunResult<()>
     Ok(())
 }
 
+#[cfg(not(target_env = "ohos"))]
 fn ensure_cached_recognizer(
     cache: &mut Option<CachedSenseVoiceRecognizer>,
     model_path: PathBuf,
@@ -151,6 +183,7 @@ fn ensure_cached_recognizer(
         .ok_or_else(|| BitFunError::service("Speech recognizer cache is empty"))
 }
 
+#[cfg(not(target_env = "ohos"))]
 fn create_recognizer(
     model_path: &Path,
     tokens_path: &Path,

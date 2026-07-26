@@ -16,7 +16,7 @@ import React, {
 import { useSettingsStore } from './settingsStore';
 import type { ConfigTab } from './settingsConfig';
 import {
-  AcpAgentsConfig,
+  // AcpAgentsConfig, // temporarily hidden from config center
   AIModelConfig,
   AppearanceConfig,
   ArchivedSessionsConfig,
@@ -62,7 +62,7 @@ function resolveSettingsContent(tab: ConfigTab): React.ComponentType | null {
     case 'memories':                return MemoriesConfig;
     case 'mcp-tools':               return McpToolsConfig;
     case 'external-sources':        return ExternalSourcesConfig;
-    case 'acp-agents':              return AcpAgentsConfig;
+    // case 'acp-agents':              return AcpAgentsConfig; // temporarily hidden from config center
     case 'editor':                  return EditorConfig;
     case 'keyboard':                return KeyboardShortcutsTab;
     default:                        return null;

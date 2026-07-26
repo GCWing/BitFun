@@ -221,7 +221,7 @@ pub fn spawn_config_listener(app: AppHandle) {
     let config_service = app_state.config_service.clone();
     let sleep_prevention = app.state::<SleepPreventionState>().inner().clone();
 
-    tokio::spawn(async move {
+    tauri::async_runtime::spawn(async move {
         let Some(mut receiver) = subscribe_config_updates() else {
             log::warn!("Config update subscription unavailable for sleep-prevention listener");
             sync_from_config(&config_service, &sleep_prevention).await;

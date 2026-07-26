@@ -191,6 +191,12 @@ export class SystemAPI {
     }
   }
 
+  /** Desktop only: whether the app is registered to launch at OS login. */
+  async getLaunchAtLoginEnabled(): Promise<boolean> {
+    // Autostart plugin (@tauri-apps/plugin-autostart) is not available in this build.
+    return false;
+  }
+
   /** Desktop only: send an OS-level desktop notification. */
   async sendSystemNotification(title: string, body?: string): Promise<void> {
     if (typeof window === 'undefined' || !('__TAURI__' in window)) {
@@ -211,11 +217,12 @@ export class SystemAPI {
       return;
     }
     try {
-      if (enabled) {
-        await autostartEnable();
-      } else {
-        await autostartDisable();
-      }
+      // Autostart plugin (@tauri-apps/plugin-autostart) is not available in this build.
+      // if (enabled) {
+      //   await autostartEnable();
+      // } else {
+      //   await autostartDisable();
+      // }
     } catch (error) {
       log.error('Failed to set launch-at-login', { enabled, error });
       throw createTauriCommandError('autostart_set', error, { enabled });

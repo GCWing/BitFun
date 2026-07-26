@@ -53,7 +53,7 @@ const SETTINGS_CONTENT_LOADERS: Partial<Record<ConfigTab, () => Promise<unknown>
   memories: loadMemoriesConfig,
   'mcp-tools': loadMcpToolsConfig,
   'external-sources': loadExternalSourcesConfig,
-  'acp-agents': loadAcpAgentsConfig,
+  // 'acp-agents': loadAcpAgentsConfig, // temporarily hidden from config center
   editor: loadEditorConfig,
   keyboard: loadKeyboardShortcutsTab,
 };
