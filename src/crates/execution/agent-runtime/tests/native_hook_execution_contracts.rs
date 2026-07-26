@@ -401,6 +401,31 @@ async fn a_hook_that_never_reads_a_large_payload_still_times_out() {
 }
 
 #[tokio::test]
+async fn a_hook_that_echoes_a_large_payload_does_not_deadlock() {
+    // `cat` reads stdin and writes it straight back. With a payload larger
+    // than the pipe buffer in both directions, a sequential write-then-wait
+    // would deadlock: the parent blocks writing stdin while the child blocks
+    // writing stdout. The write and the wait must be driven concurrently.
+    let engine = engine(
+        r#"{"hooks":{"SessionStart":[{"hooks":[{"type":"command","command":"cat","timeout":20}]}]}}"#,
+    );
+    let mut payload = session_start_payload();
+    payload.event = AgentHookEventPayload::SessionStart {
+        source: "x".repeat(512 * 1024),
+    };
+
+    let started = std::time::Instant::now();
+    let outcome = dispatch(&engine, &payload).await;
+
+    assert!(
+        started.elapsed() < std::time::Duration::from_secs(15),
+        "dispatch deadlocked between the stdin write and the child's stdout"
+    );
+    assert_eq!(outcome.executed_handlers, 1);
+    assert!(outcome.warnings.is_empty(), "{:?}", outcome.warnings);
+}
+
+#[tokio::test]
 async fn a_hook_that_exits_without_reading_stdin_still_succeeds() {
     // The write fails with EPIPE; that must not turn into a warning or block.
     let engine = engine(
