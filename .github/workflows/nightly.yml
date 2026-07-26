@@ -195,6 +195,16 @@ jobs:
           echo "package.json version: $(jq -r '.version' package.json)"
           echo "Cargo.toml version:   $(grep 'x-release-please-version' Cargo.toml)"
 
+      - name: Run Windows CLI terminal contracts
+        if: runner.os == 'Windows'
+        env:
+          CARGO_INCREMENTAL: "0"
+          CARGO_PROFILE_DEV_DEBUG: "0"
+          CARGO_PROFILE_TEST_DEBUG: "0"
+        run: |
+          cargo generate-lockfile
+          cargo test --locked -p bitfun-cli --test terminal_process_contracts
+
       - name: Build desktop app
         run: ${{ matrix.platform.build_command }}
 
