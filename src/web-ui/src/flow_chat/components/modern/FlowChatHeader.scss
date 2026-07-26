@@ -582,8 +582,8 @@
   // ==================== Center message ====================
   &__message {
     position: absolute;
-    left: calc(var(--flowchat-header-side-width, 0px) + #{$size-gap-5});
-    right: calc(var(--flowchat-header-side-width, 0px) + #{$size-gap-5});
+    left: calc(var(--flowchat-header-side-width) + #{$size-gap-5});
+    right: calc(var(--flowchat-header-side-width) + #{$size-gap-5});
     min-width: 0;
     padding: 0 $size-gap-3;
     display: flex;
