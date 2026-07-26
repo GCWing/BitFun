@@ -448,7 +448,7 @@ fn product_assembly_plan_follows_core_dependency_matrix() {
 }
 
 #[test]
-fn product_assembly_plan_keeps_plugin_runtime_disabled_until_explicit_host_binding() {
+fn product_assembly_plan_keeps_plugin_runtime_disabled_until_explicit_client_binding() {
     for profile in DeliveryProfile::all_current_product_profiles() {
         let extension_capabilities = product_assembly_plan_for_profile(*profile)
             .extension_capabilities()
@@ -667,7 +667,7 @@ fn product_assembler_rejects_executable_plugin_runtime_binding_for_non_p0_profil
                 PluginRuntimeBinding::client(Arc::new(AvailablePluginRuntimeClient)),
             ),
         )
-        .expect_err("ACP must not inherit executable P0 plugin host binding");
+        .expect_err("ACP must not inherit an executable P0 plugin runtime client");
 
     assert_eq!(
         error,

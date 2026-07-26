@@ -2,10 +2,12 @@
 
 本文定义 BitFun Agent SDK 的公开产品心智、与 GUI/TUI/Headless CLI/ACP/Server 的关系、内部 SDK Host
 边界，以及对外发布前必须满足的能力和兼容性门槛。智能体内核和 Rust crate 归属继续由
-[`agent-runtime-services-design.md`](agent-runtime-services-design.md) 定义；产品级接口切面由
+[`agent-runtime-services-design.md`](agent-runtime-services-design.md) 定义；产品级接口边界由
 [`product-architecture.md`](product-architecture.md) 定义；CLI/TUI 体验由
 [`cli-product-line-design.md`](cli-product-line-design.md) 定义；扩展能力导入和宿主适配由
-[`capability-runtime-integration-design.md`](extensions/capability-runtime-integration-design.md) 定义。
+[`capability-runtime-integration-design.md`](extensions/capability-runtime-integration-design.md) 定义；多个第一方界面与 SDK/CLI
+并存时的 Local Agent Host、共享和进程隔离由
+[`local-agent-host-multi-instance-design.md`](local-agent-host-multi-instance-design.md) 定义。
 
 本文只记录长期产品心智、架构边界和发布门槛。当前代码中的
 `agent-runtime::sdk` 是供 BitFun 内部入口和受控 Rust 嵌入使用的低层 Rust Runtime SDK；
@@ -27,7 +29,7 @@ BitFun 不选择“复制 Claude”“复制 OpenCode”或“复制 Codex”中
 
 一句话定义：
 
-> BitFun Agent SDK 是同一 BitFun Agent Runtime 面向应用开发者的公开语言门面；它不是新的 Runtime，
+> BitFun Agent SDK 是同一 BitFun Agent Runtime 面向应用开发者的公开开发接口；它不是新的 Runtime，
 > 不是 CLI/Server 的别名，也不是 GUI/TUI 的底层依赖。
 
 最终只向普通用户和外部开发者呈现三种产品选择：
@@ -49,7 +51,7 @@ ACP、Server、SDK Host、跨进程协议（wire protocol）和 Rust Runtime SDK
 [`2ea4bb793e`](https://github.com/anomalyco/opencode/tree/2ea4bb793ec9240251b39706fb5564039023fd79)，
 Codex 代码基线为
 [`f61b51ddd9`](https://github.com/openai/codex/tree/f61b51ddd924643514b33234816a8a2772b1aec7)。
-滚动版本的新能力不自动进入 BitFun 稳定承诺；发布前必须冻结对比版本和 fixture。
+滚动版本的新能力不自动进入 BitFun 稳定承诺；发布前必须固定对比版本和 fixture。
 
 ### 2.1 产品与生态对比
 
@@ -78,7 +80,7 @@ Codex 代码基线为
 
 “至少与 Claude Agent SDK 等价”是 GA 的能力下限之一，但不是架构只能以 Claude 为中心。BitFun 使用三组相互独立的门槛：
 
-1. **Agent 能力门槛**：冻结一个 Claude Agent SDK 稳定版本，核心稳定能力不得静默缺失。
+1. **Agent 能力门槛**：固定一个 Claude Agent SDK 稳定版本，核心稳定能力不得静默缺失。
 2. **协议与多客户端门槛**：采用 Codex/Copilot 式初始化、能力协商、schema、稳定/实验和跨语言一致性检查。
 3. **定制化门槛**：参考 OpenCode 和 Vercel，允许应用与界面定制，但不把内部 Server API 或第一方 UI 固化成 SDK ABI。
 
@@ -96,7 +98,7 @@ flowchart LR
 ```
 
 这张图表达的是决策证据来源，而不是把多个竞品 API 拼成一个超集。能力、协议和界面定制分别取证，
-最终仍收敛为一套 BitFun 语义和一个公开 SDK。
+最终仍统一为一套 BitFun 语义和一个公开 SDK。
 
 对标状态只使用以下三个词：
 
@@ -115,9 +117,9 @@ flowchart LR
 | Agent | 模型、指令、工具、权限上限和可选 Subagent 的组合 | 具体 Provider、页面或进程 |
 | Session | 可连续工作并按能力持久化、恢复或分支的上下文 | SDK 连接或单次命令 |
 | Turn | Session 中一次执行的只读身份与事实；一个 Turn 可包含多个 Model Round | SDK 中另一个可操作运行句柄 |
-| Query | 一次 Turn 的唯一实时控制句柄，承载消息流、取消、交互和终态 | 第二种 Session、另一套 Agent Loop 或只读 Turn 事实 |
+| Query | 一次 Turn 的唯一实时控制句柄，承载消息流、取消、交互和最终状态 | 第二种 Session、另一套 Agent Loop 或只读 Turn 事实 |
 | Message / Event | 输入、输出、增量、工具/权限请求和生命周期通知 | 内部事件总线 payload |
-| Result | Turn 的终态、输出、结构化结果、用量和错误摘要 | stdout 文本本身 |
+| Result | Turn 的最终状态、输出、结构化结果、用量和错误摘要 | stdout 文本本身 |
 | Tool | 内置工具、SDK 函数 Tool 或 MCP Tool | 绕过权限和审计的任意函数 |
 | Permission | 副作用前的 allow/deny/ask 决策 | SDK 调用方扩大 Host 策略上限的开关 |
 | Hook | 在明确生命周期点执行的检查、变换或观察 callback | 通用事件总线或工作流编排 DSL |
@@ -126,20 +128,20 @@ flowchart LR
 | Skill / Plugin | 可复用说明、资源和经策略启用的扩展包 | 自动受信任的任意代码 |
 
 公开文档不要求用户理解 `SDK Host`、SDK Host protocol、`RuntimeServices`、`DeliveryProfile`、
-Rust port/provider、Product Assembly、Tauri adapter 或 Capability Resolution Generation。这些词只出现在贡献者文档和高级诊断中。
+Rust port/provider、Product Assembly、Tauri adapter 或能力版本。这些词只出现在贡献者文档和高级诊断中。
 
 ### 3.2 只有一个公开 SDK
 
 ```mermaid
 flowchart TB
-  Client["AgentClient\n连接、配置与能力入口"]
-  Ephemeral["SDK-owned ephemeral Session\nclient.query() 使用"]
-  Session["Caller-owned explicit Session\n可恢复的连续上下文"]
-  Query["Query\n唯一实时运行句柄"]
-  Turn["Turn\n只读身份与已提交事实"]
-  Stream["Message / Event stream"]
-  Result["Result\n唯一终态"]
-  Callback["Tool / Permission / Hook / UserInput callback"]
+  Client["AgentClient"]
+  Ephemeral["Managed Session"]
+  Session["Explicit Session"]
+  Query["Query · live handle"]
+  Turn["Turn · read-only"]
+  Stream["Message / Event"]
+  Result["Result"]
+  Callback["Callbacks"]
 
   Client --> Ephemeral
   Client --> Session
@@ -166,46 +168,30 @@ Python SDK、TypeScript SDK、managed Host 和连接预启动 Host 不是四种 
 
 ## 4. 产品视图：一个 Runtime，多种入口
 
+### 4.1 产品入口
+
 ```mermaid
-flowchart TB
-  subgraph Public["用户产品选择"]
-    GUI["Desktop / Web GUI"]
-    TUI["Interactive TUI"]
-    CLI["Headless CLI\nbitfun exec"]
-    SDK["BitFun Agent SDK\nPython / TypeScript"]
-  end
-
-  subgraph Interop["协议与互操作入口（不是首次使用的产品选项）"]
-    ACP["ACP"]
-    Remote["Server / Remote"]
-  end
-
-  subgraph Adapters["同级 Adapter"]
-    UIA["GUI / TUI adapters"]
-    CLIA["CLI adapter"]
-    SDKA["SDK Host adapter"]
-    ACPA["ACP adapter"]
-    RemoteA["HTTP / WebSocket / Remote adapter"]
-  end
-
-  API["Shared Agent Runtime API"]
-  Owners["Single owners\nSession · Tool · MCP · Permission · Hook · Event"]
-
-  GUI --> UIA
-  TUI --> UIA
-  CLI --> CLIA
-  SDK --> SDKA
-  ACP --> ACPA
-  Remote --> RemoteA
-  UIA --> API
+flowchart LR
+  GUI["GUI / TUI"] --> UIA["UI adapter"]
+  CLI["bitfun exec"] --> CLIA["CLI adapter"]
+  SDK["Agent SDK"] --> SDKA["SDK Host"]
+  UIA --> API["Runtime API"]
   CLIA --> API
   SDKA --> API
-  ACPA --> API
-  RemoteA --> API
-  API --> Owners
+  API --> Runtime["Shared Runtime"]
 ```
 
-该图冻结四条架构结论：
+### 4.2 互操作入口
+
+```mermaid
+flowchart LR
+  ACP["ACP"] --> ACPA["ACP adapter"]
+  Remote["Server / Remote"] --> RemoteA["Remote adapter"]
+  ACPA --> API["Runtime API"]
+  RemoteA --> API
+```
+
+以上两图固定四条架构结论：
 
 - GUI/TUI/CLI 同样使用 Query、MCP、Permission 和 Hook，但它们直接经过各自 adapter 调用共享 Runtime API，
   不依赖 Python/TypeScript SDK，也不依赖 SDK Host。
@@ -213,14 +199,18 @@ flowchart TB
 - 各入口共享业务事实和 owner，不共享 renderer、命令行参数、wire protocol 或平台生命周期。
 - 增加 SDK 不得让 CLI、GUI/TUI 或 Server 的底层依赖变深；它只增加一个同级入口。
 
-### 4.1 各形态能做什么
+该图表达逻辑依赖，不要求所有入口位于同一进程。目标部署中，GUI/TUI/本机 Remote 可以连接第一方 Local Agent Host；
+一次性 Headless CLI 继续 Embedded；公开 SDK 默认连接私有 SDK Host。Local Agent Host 和 SDK Host 都是 Rust 产品进程，
+与运行第三方 JS/TS 的 Node/Bun Plugin Host 不同；三者不能共享名称或业务归属。
+
+### 4.3 各形态能做什么
 
 | 形态 | 最适合 | 共享能力 | 形态特有职责 |
 |---|---|---|---|
 | GUI | 日常交互、审批、设置、诊断和可视化 | Session、Tool/MCP、Permission、Hook 结果、用量与事件 | React/Tauri/Web 渲染、窗口和平台生命周期 |
 | TUI | 终端内持续交互 | 与 GUI 相同的业务事实和控制动作 | 终端渲染、键位和终端恢复 |
 | Headless CLI | shell、一次性任务、普通 CI、简单脚本 | Query、结构化输出、取消、非交互权限策略 | flags、stdin/stdout/stderr、退出码、JSON/JSONL |
-| Agent SDK | 应用、服务、IDE、复杂自动化和语言内扩展 | CLI 的 Agent 能力，加 typed objects、并发 Session 和 callback | Python/TypeScript API、Host 生命周期、函数 Tool/Permission/Hook callback |
+| Agent SDK | 应用、服务、IDE、复杂自动化和语言内扩展 | CLI 的 Agent 能力，加类型明确的对象、并发 Session 和 callback | Python/TypeScript API、Host 生命周期、函数 Tool/Permission/Hook callback |
 | ACP | 编辑器与 Agent 的标准互操作 | ACP 稳定规范能表达的 Session/Tool/Permission/Event 子集 | ACP 协议、兼容映射和降级 |
 | Server/Remote | 远程控制、多设备和服务化接入 | Host capability 与远程策略允许的共享用例 | 认证、网络、执行域、断线恢复和远程策略 |
 
@@ -246,71 +236,72 @@ flowchart LR
 |---|---|---|
 | `bitfun` CLI | 依赖共享 Runtime/Application 能力 | 依赖 SDK Host app、SDK protocol 或公开语言包 |
 | GUI/TUI | 依赖共享应用用例和各自平台 adapter | 经公开 SDK 绕行 Runtime；共享 renderer/protocol |
-| `bitfun-sdk-host` | 独立 composition root，选择 SDK profile | 依赖 CLI crate；成为第二个 Server 或 Runtime |
-| SDK Host adapter | 协议、能力协商、连接/Query 资源租约（lease）和 DTO 映射 | stdin/stdout 入口、Agent 业务状态、Tool/MCP registry |
+| `bitfun-sdk-host` | 独立组装入口，选择 SDK profile | 依赖 CLI crate；成为第二个 Server 或 Runtime |
+| SDK Host adapter | 协议、能力协商、连接/Query 资源清理责任和 DTO 转换 | stdin/stdout 入口、Agent 业务状态、Tool/MCP 注册表 |
 | Python/TypeScript SDK | 管理或连接匹配 Host，提供一致公开 API | 要求用户安装 `bitfun` CLI；暴露内部 wire DTO |
 
 ### 5.2 一次 Query 的运行时序
 
 ```mermaid
 sequenceDiagram
-  participant App as Developer application
-  participant SDK as Agent SDK
-  participant Host as SDK Host
-  participant API as Agent Runtime API
-  participant Owners as Runtime owners
+  participant App
+  participant SDK
+  participant Host
+  participant API
+  participant Runtime
 
-  App->>SDK: client.query(input, options)
-  SDK->>Host: initialize once, negotiate capabilities
-  SDK->>Host: session/create or resume + turn/start
-  Host->>API: typed request
-  API->>Owners: run through existing owners
-  Owners-->>API: event / permission / tool / hook request
-  API-->>Host: typed event or callback request
-  Host-->>SDK: ordered message
-  SDK-->>App: async Message / Event
-  App-->>SDK: callback result when requested
-  SDK-->>Host: typed callback response
-  Host->>API: resume exact pending operation
-  Owners-->>API: final fact, result and usage
-  API-->>Host: turn terminal result
-  Host-->>SDK: turn/completed
+  App->>SDK: query()
+  SDK->>Host: initialize
+  SDK->>Host: create / resume Session
+  Host->>API: start Turn
+  API->>Runtime: run Turn
+  Runtime-->>API: events / requests
+  API-->>Host: events / requests
+  Host-->>SDK: messages
+  SDK-->>App: messages
+  App-->>SDK: callback response
+  SDK-->>Host: callback response
+  Host->>API: callback response
+  API->>Runtime: resume operation
+  Runtime-->>API: result
+  API-->>Host: Turn completed
+  Host-->>SDK: Result
   SDK-->>App: Result
 ```
 
-SDK 连接、Query、Session 和 callback invocation 使用不同的资源租约；租约只表示谁负责回收资源，不是另一套业务状态。
-`Query.cancel()` 幂等地请求 Runtime 取消，Runtime 已结算的终态以 `Result` 为准。`Query.close()` 在 Query 活跃时执行取消、
-有界等待结算并释放 stream/callback 注册；终态后只释放资源。各语言的 dispose/context-manager 语法映射到同一 `close()`。
+SDK 连接、Query、Session 和 callback invocation 分别记录由谁负责清理资源；这只是资源回收责任，不是另一套业务状态。
+重复调用 `Query.cancel()` 不会产生额外取消动作，Runtime 已结算的最终状态以 `Result` 为准。`Query.close()` 在 Query 活跃时执行取消、
+有界等待结算并释放 stream/callback 注册；最终状态后只释放资源。各语言的 dispose/context-manager 语法映射到同一 `close()`。
 
 `client.query()` 创建的临时 Session 由 Query 持有，Query 结算并关闭后随之释放；显式 `Session` 由调用方持有，
-其 Query 关闭不会关闭 Session。`Session.close()` 停止新 Turn，取消并结算其活动 Query，再释放 Session-scoped lease；
+其 Query 关闭不会关闭 Session。`Session.close()` 停止新 Turn，取消并结算其活动 Query，再释放该 Session 的资源；
 它不关闭共享的 AgentClient/Host connection，也不等于删除或归档持久化 Session。只有 `AgentClient.close()` 才关闭连接并按
-同一规则清理其活动 Session/Query。`client.query()` 与 `session.startTurn()` 是异步准入方法；Turn 被 Runtime 接受前的
-启动失败直接返回 Operation Error，不产生 Query。接受后，Runtime 能确认的完成、失败和取消收敛为同一个 `Result`；
-transport 丢失或清理超时而无法确认 Runtime 终态时，以 `outcome_certainty=unknown` 的 Operation Error 结束本地等待，
-不得伪造 `Result`。迟到 callback 必须由 operation/generation identity 拒绝，不能重新激活已结算 Turn。
+同一规则清理其活动 Session/Query。`client.query()` 与 `session.startTurn()` 是异步启动方法；Turn 被 Runtime 接受前的
+启动失败直接返回 Operation Error，不产生 Query。接受后，Runtime 能确认的完成、失败和取消都返回同一个 `Result`。
+如果连接丢失或清理超时导致 Runtime 的最终状态无法确认，则返回“结果是否生效未知”
+（`outcome_certainty=unknown`）的 Operation Error，不伪造 `Result`。已取消或已结束 Turn 的迟到 callback 必须被拒绝。
 
 ### 5.3 Host 流与 callback 不变量
 
 | 主题 | 必须保持的不变量 |
 |---|---|
 | 身份 | connection、Session、Query、Turn、operation 和 callback invocation 使用不同的稳定身份；transport request id 不能代替 operation id |
-| 顺序 | 每个 Query 的 Message/Event 使用严格递增 sequence；不承诺不同 Query 之间的全局顺序 |
-| 终态屏障 | Runtime 已结算时，`Result` 恰好产生一次并成为最后一项；无法确认结算时以 Operation Error 结束本地流且不伪造 `Result`，两者之后都不得再发送事件或 callback |
-| 背压 | 读写队列同时受条目数和字节数约束；overflow、写入 deadline 或输出失联触发 Query/connection 取消、结算和类型化错误，禁止静默丢事件 |
-| 重连与重放 | 首个本地协议不透明重放旧 Query；断连后恢复 Session 并读取已知 Turn 事实，operation identity 只用于幂等、审计和恢复关联，不承诺通用 operation 查询 API |
-| 连接清理 | 非显式 detach 的活动 Query 在断连时取消并有界等待结算后才释放租约；detach 不进入首个稳定 API |
-| 清理超时 | 返回 `cleanup_incomplete`、`outcome_certainty=unknown`，保留 operation fence/tombstone，将 Session 和连接标记为不可复用；managed Host 由 supervisor 终止并回收，重新连接后先对账已知 Turn 事实 |
+| 顺序 | 每个 Query 的 Message/Event 使用严格递增序号；不承诺不同 Query 之间的全局顺序 |
+| 最终状态屏障 | Runtime 已结算时，`Result` 恰好产生一次并成为最后一项；无法确认结算时以 Operation Error 结束本地流且不伪造 `Result`，两者之后都不得再发送事件或 callback |
+| 流量控制 | 读写队列同时受条目数和字节数约束；队列溢出、写入超时或连接丢失会触发 Query/connection 取消、结算和明确错误，禁止静默丢事件 |
+| 重连与重放 | 首个本地协议不自动重放旧 Query；断连后恢复 Session 并读取已知 Turn 结果，请求身份只用于去重、审计和恢复关联，不承诺通用 operation 查询 API |
+| 连接清理 | 活动 Query 在断连时取消，并在有限时间内等待结算后再释放资源；首个稳定 API 不支持 detach |
+| 清理超时 | 返回 `cleanup_incomplete` 和 `outcome_certainty=unknown`；保留操作终止记录以拒绝迟到响应，并将 Session 和连接标记为不可复用。managed Host 由进程监督模块终止并回收；重新连接后先核对已知 Turn 事实 |
 
 | Callback 不变量 | 规则 |
 |---|---|
-| 调用身份 | 每次请求携带 invocation、Query、Turn、operation、generation 和 deadline；只接受一次响应 |
+| 调用身份 | 每次请求携带唯一 callback invocation id、Query、Turn、operation 和期限；invocation 必须属于当前 operation，且只接受一次响应 |
 | 迟到与重复 | 重复、过期或已取消响应返回稳定错误，不能再次提交 Runtime 状态 |
-| Permission / Before Hook | handler 异常、超时、取消或连接丢失时 fail closed；不能扩大产品/组织/Host 策略上限 |
+| Permission / Before Hook | handler 异常、超时、取消或连接丢失时拒绝执行；不能扩大产品、组织或 Host 的策略上限 |
 | After Hook | handler 失败时保留真实 Tool 结果和副作用事实，只增加诊断；绝不重放 Tool |
-| 函数 Tool | handler 失败形成类型化 Tool failure；只有 owner 明确证明安全时才允许重试，不能重放整个 Turn |
+| 函数 Tool | handler 失败形成明确的 Tool failure；只有归属模块明确证明安全时才允许重试，不能重放整个 Turn |
 | UserInput | 单次响应受 schema、大小和 deadline 约束；超时、异常或断连不提供默认答案，以类型化 `input_unavailable` 结束当前交互并按 Runtime 策略结算 Turn |
-| Query 取消 | 取消向所有待处理 callback 传播；callback 清理完成或 deadline 到达后再发布 Query 终态 |
+| Query 取消 | 取消向所有待处理 callback 传播；callback 清理完成或 deadline 到达后再发布 Query 最终状态 |
 
 每一种 callback kind 单独参与 capability negotiation；不能因为 Permission callback 可用，就推断 UserInput、Tool 或 Hook
 callback 也可用。
@@ -330,7 +321,7 @@ await using query = await client.query({
   allowedTools: ["Read", "Edit", "Bash"],
 });
 for await (const message of query) {
-  // typed Message / Event / Result
+  // Message / Event / Result
 }
 const quickResult = await query.result(); // cached terminal Result from the stream
 
@@ -344,9 +335,9 @@ const result = await review.result(); // same terminal Result emitted by the str
 ```
 
 Python 提供同一对象关系和生命周期。字段遵循各语言惯例，但能力、默认值、错误码、事件顺序和资源关闭语义必须一致。
-自然消费到 `Result` 会释放 Runtime 的 active-query lease，`result()` 返回同一个缓存终态；调用方仍使用语言的
+自然消费到 `Result` 会释放 Runtime 中该 Query 占用的资源，`result()` 返回同一个缓存最终状态；调用方仍使用语言的
 dispose/context-manager 语法关闭本地句柄，提前离开流则按 `close()` 的取消与结算语义处理。
-示例冻结的是对象关系和职责，不提前冻结 package path、所有方法签名或字段；任何签名进入 preview 前都需通过双语言 fixture。
+示例固定的是对象关系和职责，不提前固定 package path、所有方法签名或字段；任何签名进入 preview 前都需通过双语言 fixture。
 
 为降低第一次使用成本，可以在 preview 后评估顶层 `query()` 便捷函数；它只能是创建短生命周期 client 并调用
 `client.query()` 的薄封装，不能拥有第二套配置、Session 或错误语义。正式签名前需由 Python/TypeScript 两个真实消费者验证。
@@ -355,19 +346,19 @@ dispose/context-manager 语法关闭本地句柄，提前离开流则按 `close(
 
 | 能力类别 | 公开目标 | 单一 owner / 约束 |
 |---|---|---|
-| Query 与异步流 | typed Message/Event/Result、cancel/close/result、交互控制和唯一终态 | Agent Runtime / Event owner；唯一实时运行句柄 |
-| Session 与 Turn | Session create/resume/fork/close；按 id 读取已知 Turn 的只读身份与已提交事实 | Session owner；close 不等于 delete/archive，也不构成通用 operation 查询 API |
+| Query 与异步流 | 类型明确的 Message/Event/Result、cancel/close/result、交互控制和唯一最终状态 | Agent Runtime / Event 模块；唯一实时运行句柄 |
+| Session 与 Turn | Session create/resume/fork/close；按 id 读取已知 Turn 的只读身份与已提交事实 | Session 模块；close 不等于 delete/archive，也不构成通用 operation 查询 API |
 | 执行上下文 | cwd/workspace、agent/model、预算/deadline、配置来源 | Product policy；凭据不进入普通 wire/log |
-| 内置 Tool | 与 GUI/TUI/CLI 相同 catalog、权限和审计 | Tool owner |
+| 内置 Tool | 与 GUI/TUI/CLI 相同 catalog、权限和审计 | Tool 归属模块 |
 | 自定义函数 Tool | Python/TS callback、schema、deadline、取消和大小限制 | 作为 Tool provider 注册；不创建 SDK Tool Runtime |
-| MCP | 配置、ready/pending/failed 状态、catalog generation | 既有 MCP lifecycle owner；不创建 SDK 专用连接池 |
-| Permission | allow/deny/ask callback 和类型化恢复 | Permission owner 保留最终上限；超时 fail closed |
+| MCP | 配置、ready/pending/failed 状态、目录版本 | 既有 MCP 生命周期模块；不创建 SDK 专用连接池 |
+| Permission | allow/deny/ask callback 和明确的恢复状态 | Permission 归属模块保留最终上限；超时后拒绝执行 |
 | Hook | 稳定生命周期 callback、确定顺序、阻止/变换/观察 | 唯一 Hook Coordinator；不创建 SDK HookBus |
-| UserInput | typed question/answer callback、schema/大小/deadline、取消和 unavailable 终态 | Agent Runtime interaction owner；不提供默认答案，不与 Permission 混用 |
-| Subagent | 定义、委派、父子事件、权限和预算收紧 | Runtime/Subagent owner；父子取消可验证 |
+| UserInput | 类型明确的 question/answer callback、schema、大小、期限、取消和 unavailable 最终状态 | Agent Runtime 交互模块；不提供默认答案，不与 Permission 混用 |
+| Subagent | 定义、委派、父子事件、权限和预算收紧 | Runtime/Subagent 模块；父子取消可验证 |
 | Skill/Plugin/来源 | 显式选择可信来源并报告实际状态 | External Source control；不输出生态原始对象 |
 | Structured output | JSON Schema、验证失败与重试事实 | 与 CLI/Runtime 使用同一结果合同 |
-| Usage/Trace | token、cost、cache、duration、correlation | Event/usage owner；低基数和默认脱敏 |
+| Usage/Trace | token、cost、cache、duration、调用关联 | Event/usage 模块；低基数和默认脱敏 |
 
 Goal、Deep Review、Harness、Remote execution 和 Mini App 可以作为 additive 能力出现，但不能替代上表的基础能力，
 也不能迫使第一次使用 SDK 的用户先学习 BitFun 特有概念。
@@ -398,11 +389,11 @@ flowchart LR
 
 - BFF 指面向该界面的开发者后端（Backend for Frontend），不是 BitFun 新增的公共服务。
 - 浏览器不直接启动或连接本机 SDK Host，不持有 Provider/MCP/BitFun Host 凭据。
-- 开发者后端负责用户认证、租户隔离、速率限制和把公开 SDK 事件投影为自己的前端协议。
+- 开发者后端负责用户认证、租户隔离、速率限制，并把公开 SDK 事件转换为自己的前端协议。
 - BitFun SDK 负责 Agent 能力；它不负责 React 状态、路由、主题、组件或业务认证。
 - 第一方 `src/web-ui` 不作为 npm SDK 发布；它包含 Desktop/Server 产品假设和内部命令，直接复用会固化私有 ABI。
 
-SDK Preview 提供最小参考应用，证明浏览器认证后端、流式 Query、取消和 `action_required` 的 fail-closed 展示；
+SDK Preview 提供最小参考应用，证明浏览器认证后端、流式 Query、取消，以及无法继续时显示 `action_required`；
 Beta 再扩展 Permission callback、审批提交和断线/Host 崩溃恢复。参考应用是示例而不是稳定 UI ABI。
 只有出现至少两个仓库外 UI 消费者后，才允许从重复需求中抽取独立、可选的 UI 工具层：
 
@@ -439,7 +430,7 @@ flowchart LR
   Catalog["Tool provider catalog"] --> Initial
   Builtin["Built-in Tool"] -. "register" .-> Catalog
   SDKTool["SDK function Tool"] -. "register" .-> Catalog
-  MCP["MCP lifecycle owner"] -. "typed provider" .-> Catalog
+  MCP["MCP lifecycle"] -. "provider" .-> Catalog
   GUI["GUI / TUI decision"] -.-> Permission
   CLI["CLI policy"] -.-> Permission
   SDK["SDK callback"] -.-> Permission
@@ -453,7 +444,7 @@ flowchart LR
 - MCP 配置可来自产品设置、项目文件、CLI 或 SDK，但连接、认证、健康、重连和回收只有一个 lifecycle owner。
 - SDK Hook 与 OpenCode/Claude/Codex adapter 共享 Hook Coordinator；adapter 只解释来源语义。
 - Before Hook 修改参数后必须重新校验 schema 与权限；After Hook 不能覆盖真实副作用、成功/失败或审计事实。
-- Safe Mode、Host capability 或 execution domain 不允许时，所有入口统一 fail closed；SDK 不回退本机。
+- Safe Mode、Host capability 或 execution domain 不允许时，所有入口统一拒绝执行；SDK 不回退本机。
 
 ## 9. Headless CLI 与 Agent SDK
 
@@ -462,25 +453,27 @@ CLI 和 SDK 共享能力事实，但不是上下层关系：
 | 需求 | `bitfun exec` | Agent SDK |
 |---|---|---|
 | 一次性命令、shell 管道 | 首选 | 可用，但增加语言和 Host 生命周期 |
-| 普通 CI | 首选：稳定退出码、JSON/JSONL、进程级 deadline | 只有需要 typed callback、并发 Session 或应用内状态时选择 |
-| text/json/JSONL | 原生输出 | typed object / async iterator |
+| 普通 CI | 首选：稳定退出码、JSON/JSONL、进程级期限 | 只有需要类型明确的 callback、并发 Session 或应用内状态时选择 |
+| text/json/JSONL | 原生输出 | 类型明确的对象 / async iterator |
 | 多轮 Session | ID/flag 恢复，适合脚本 | Session object 与长连接更自然 |
-| 权限 | flag/配置/非交互 fail-closed | typed callback，加同一策略上限 |
-| 自定义函数 Tool | 不把 shell callback 冻结为稳定 ABI | Python/TS function callback |
-| Hook | 配置来源和可选事件投影 | typed callback |
+| 权限 | flag/配置；非交互时拒绝需要确认的操作 | 类型明确的 callback，加同一策略上限 |
+| 自定义函数 Tool | 不把 shell callback 固定为稳定 ABI | Python/TS function callback |
+| Hook | 配置来源和可选事件显示 | 类型明确的 callback |
 | 并发 | 多进程，由调用方管理 | 一个受控 client/Host 上并发多个 Session |
-| 资源关闭 | 进程终态和退出 | 显式 close/dispose、断连和 callback 清理 |
+| 资源关闭 | 进程最终状态和退出 | 显式 close/dispose、断连和 callback 清理 |
 
 因此：
 
 - CLI 不默认依赖 SDK Host，也不通过 SDK package 运行。
+- 一次性 `bitfun exec` 默认使用 Embedded Runtime；只有恢复或控制 Local Agent Host 中的共享 Session 时，才使用第一方
+  client adapter attach，且不经过 SDK Host。
 - SDK 不解析 CLI `stream-json` 作为正式双向协议。
 - 普通脚本/CI 不需要为了“架构统一”改写成 SDK；复杂生产自动化才选择 SDK。
-- 两者使用共同 behavior fixture 验证相同配置、权限和 Tool 结果，但 flags、事件投影和 transport 可以不同。
+- 两者使用共同的行为样例验证相同配置、权限和 Tool 结果，但 flags、事件格式和传输方式可以不同。
 
 ## 10. 合同、版本与发布视图
 
-### 10.1 一份语义，多种投影
+### 10.1 一套业务含义，多种输出格式
 
 ```mermaid
 flowchart LR
@@ -489,8 +482,8 @@ flowchart LR
   HostSchema --> PyClient["generated internal Python wire client"]
   TSClient --> TSApi["curated TypeScript public API"]
   PyClient --> PyApi["curated Python public API"]
-  Runtime --> CLIProjection["CLI JSON / JSONL projection"]
-  Runtime --> UIProjection["GUI / TUI projection"]
+  Runtime --> CLIProjection["CLI JSON / JSONL"]
+  Runtime --> UIProjection["GUI / TUI views"]
 
   Fixtures["shared semantic fixtures"] --> Runtime
   Fixtures --> TSApi
@@ -500,11 +493,11 @@ flowchart LR
 
 生成的 wire 类型保持 SDK 内部；公开 API 必须经过人工策划，不能把协议 DTO 原样暴露给用户。
 
-### 10.2 防止持续迭代造成漂移
+### 10.2 防止持续迭代造成不一致
 
 | 机制 | 作用 |
 |---|---|
-| 单一 Runtime owner | 能力新增只实现一次，入口只做投影和 callback bridge |
+| 单一 Runtime 归属 | 业务事实只实现一次；可替换 Provider 仍通过同一归属接口接入，入口只转换输出格式并转发 callback |
 | 单一 Host schema | Python/TS 不各自手写 wire 类型和错误 |
 | Schema drift CI | 代码生成结果有差异即失败，禁止忘记更新某个绑定 |
 | Capability negotiation | 新旧 Host/SDK 明确知道哪些能力可用；不按版本号猜测 |
@@ -529,7 +522,7 @@ flowchart LR
   Range --> Negotiate
   Runtime["Runtime capability set"] --> Negotiate
   Negotiate -->|"range overlaps"| Ready["Typed capabilities\nenabled per feature"]
-  Negotiate -->|"no overlap"| Reject["Typed version or capability error\nfail closed"]
+  Negotiate -->|"no overlap"| Reject["Version or capability error\nreject"]
 ```
 
 语言包版本、Host 协议版本和 Runtime 能力版本不能互相替代。握手先验证协议范围，再报告实际 capability；
@@ -552,7 +545,7 @@ SDK 安装后必须能定位匹配 Host。TypeScript 可使用平台可选包，
 
 公开 SDK 与 SDK Host 共享稳定错误信封，至少包含 `code`、`stage`、`retryable`、`message`、`operation_id`、
 `causation_id`、不透明 `correlation_id`、`outcome_certainty`、最小可见身份和可选 recovery action。
-调用方不得解析 message 驱动控制流。transport request id 只负责协议配对，不能代替跨重连保留、仅用于幂等、审计和
+调用方不得解析 message 驱动控制流。transport request id 只负责协议配对，不能代替跨重连保留的请求身份；后者只用于去重、审计和
 恢复关联的 operation identity。
 
 `outcome_certainty` 是封闭事实：
@@ -560,8 +553,8 @@ SDK 安装后必须能定位匹配 Host。TypeScript 可使用平台可选包，
 | 值 | 含义 | 调用方动作 |
 |---|---|---|
 | `not_started` | 权威 owner 保证操作未被接受且没有副作用 | 只有 `retryable=true` 时才可用同一 operation identity 安全重试 |
-| `committed` | owner 已记录权威终态；错误携带结果引用或 `resume_session` / `read_turn` recovery action | 读取已知 Turn/结果事实，不重新执行 |
-| `unknown` | 连接/进程故障后无法证明是否已产生副作用 | 非幂等操作禁止自动重试；恢复 Session 读取已知 Turn，仍未知时人工对账 |
+| `committed` | owner 已记录权威最终状态；错误携带结果引用或 `resume_session` / `read_turn` recovery action | 读取已知 Turn/结果事实，不重新执行 |
+| `unknown` | 连接/进程故障后无法证明是否已产生副作用 | 可能重复产生副作用的操作禁止自动重试；恢复 Session 读取已知 Turn，仍未知时人工对账 |
 
 `retryable=true` 只表示协议和 owner 能证明使用同一 operation identity 重试安全；它不是“建议再试一次”。
 写入、发送、删除、外部 Tool 或结果未知的 callback 默认不可重放。
@@ -583,10 +576,10 @@ SDK 安装后必须能定位匹配 Host。TypeScript 可使用平台可选包，
 | prompt、Tool 参数、模型/Tool 结果 | 默认不进入任何可观测 surface；显式调试也必须按策略授权、限时和脱敏 | schema 名、大小、内容摘要或受控 artifact 引用 |
 | 本机路径、用户/Session/插件身份 | 最小化并按可见范围脱敏；不得成为 metric label | 不透明 ID、路径类别或受控 hash |
 | correlation/operation/causation identity | 必须不透明、不可由内容推导，不包含路径或用户输入 | 稳定随机标识 |
-| Audit 事实 | 记录决策、owner、稳定 ID、摘要和时间，不保存原始敏感 payload | 内容指纹和受访问控制的 artifact ref |
+| Audit 事实 | 记录决策、owner、稳定 ID、摘要和时间，不保存原始敏感 payload | 内容摘要和受访问控制的 artifact ref |
 
 日志、trace 和 audit 必须有明确访问边界、保留期与删除策略；含 secret/path/prompt 的跨语言 fixture 是发布门禁，
-不能只验证 Rust Host 的序列化结果。
+不能只验证 Rust 侧协议实现的序列化结果。
 
 安全边界：
 
@@ -615,15 +608,15 @@ flowchart LR
 
 | 边界 | 负责 | 不负责 |
 |---|---|---|
-| Agent SDK | 公开对象、语言绑定、Host 生命周期、协议投影和 callback transport | 生态配置解析、第一方 UI、Runtime 业务状态 |
+| Agent SDK | 公开对象、语言绑定、Host 生命周期、协议转换和 callback 传输 | 生态配置解析、第一方 UI、Runtime 业务状态 |
 | 生态 adapter | 来源发现、宿主语义映射、兼容诊断和 fixture | 公开 SDK transport、通用 Hook 调度、Runtime owner |
 | 外部应用/BFF | 认证、租户、应用策略、界面状态和自定义交互 | 直连本机 Host、复制 Agent loop、保存 BitFun 凭据 |
 | Agent Runtime API | 跨入口共享的 Query/Session/Turn 应用用例 | 语言包、renderer、生态私有 payload |
 | Tool/MCP/Permission/Hook owner | 最终业务事实、顺序、权限、审计和生命周期 | 为某一 SDK 或生态复制专用实现 |
-| UserInput interaction owner | 问题身份、可见范围、回答提交、取消和终态 | 把输入 callback 当作 Permission 或提供默认答案 |
+| UserInput interaction owner | 问题身份、可见范围、回答提交、取消和最终状态 | 把输入 callback 当作 Permission 或提供默认答案 |
 
-外部 Hook adapter 负责来源与语义映射，SDK 负责语言 callback transport；二者最终汇入同一个 Hook Coordinator。
-任何跨边界能力都必须先确定唯一 owner、稳定事实和失败语义，不得通过复制类型、私有 registry、平行 HookBus，
+外部 Hook adapter 负责来源与语义映射，SDK 负责语言 callback 通信；二者最终汇入同一个 Hook Coordinator。
+任何跨边界能力都必须先确定唯一归属模块、稳定事实和失败语义，不得通过复制类型、私有注册表、平行 HookBus，
 或按 ecosystem ID 在 Core 分支来规避边界。
 
 ## 13. 成熟度与发布门槛
@@ -632,12 +625,12 @@ flowchart LR
 |---|---|---|
 | Internal | Host/protocol 候选可供仓库内验证 | 可安装 Agent SDK、跨语言兼容 |
 | Preview | Python/TS 可安装，核心 Query/Session/取消/错误有真实样例 | Claude 核心能力等价、生产稳定 |
-| Beta | Tool/MCP/Permission/Hook/UserInput callback 和升级/崩溃恢复闭环 | 长期兼容或全部 additive 能力 |
-| GA | 冻结能力矩阵、协议/语言一致性、全平台生命周期和外部消费者通过 | 对未来竞品滚动版本自动等价 |
+| Beta | Tool/MCP/Permission/Hook/UserInput callback 和升级/崩溃恢复完整流程 | 长期兼容或全部 additive 能力 |
+| GA | 固定能力矩阵、协议/语言一致性、全平台生命周期和外部消费者通过 | 对未来竞品滚动版本自动等价 |
 
 GA 必须同时满足：
 
-- 冻结版本的 Claude Agent SDK 稳定核心能力无静默缺口；每项标记 native/translated/additive。
+- 固定版本的 Claude Agent SDK 稳定核心能力无静默缺口；每项标记 native/translated/additive。
 - TypeScript 和 Python 至少各有一个仓库外真实消费者，并通过同一 conformance suite。
 - SDK/Host 安装、升级、版本不匹配、崩溃、取消和完整进程树回收通过 Windows/macOS/Linux 验证。
 - Session resume/fork、structured output、usage、Tool/MCP/Permission/Hook/UserInput callback 有端到端样例。

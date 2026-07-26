@@ -97,7 +97,7 @@ fn baseline_services() -> bitfun_runtime_services::RuntimeServices {
 }
 
 #[test]
-fn p0_plugin_host_is_executable_only_for_product_full_desktop_and_cli() {
+fn executable_plugin_runtime_is_limited_to_product_full_desktop_and_cli() {
     for profile in [
         DeliveryProfile::ProductFull,
         DeliveryProfile::Desktop,
@@ -109,7 +109,7 @@ fn p0_plugin_host_is_executable_only_for_product_full_desktop_and_cli() {
                     PluginRuntimeBinding::client(Arc::new(AvailablePluginRuntimeClient)),
                 ),
             )
-            .expect("P0 host-capable profiles should accept an executable host binding");
+            .expect("P0 plugin-capable profiles should accept an executable client binding");
 
         assert_eq!(parts.plan().profile(), profile);
         assert_eq!(
@@ -124,7 +124,7 @@ fn p0_plugin_host_is_executable_only_for_product_full_desktop_and_cli() {
 }
 
 #[test]
-fn p0_plugin_host_binding_builds_agent_runtime_parts() {
+fn executable_plugin_runtime_client_builds_agent_runtime_parts() {
     let parts = ProductAssembler::new()
         .assemble(
             ProductAssemblyInput::new(DeliveryProfile::Cli, product_full_services())
@@ -132,7 +132,7 @@ fn p0_plugin_host_binding_builds_agent_runtime_parts() {
                     AvailablePluginRuntimeClient,
                 ))),
         )
-        .expect("CLI should accept explicit executable host binding");
+        .expect("CLI should accept an explicit executable plugin client");
 
     let (services, harness_registry, plugin_runtime) = parts.into_runtime_parts();
     let runtime = AgentRuntimeBuilder::new()
@@ -141,7 +141,7 @@ fn p0_plugin_host_binding_builds_agent_runtime_parts() {
         .with_harness_registry(Arc::new(harness_registry))
         .with_plugin_runtime(plugin_runtime)
         .build()
-        .expect("P0 host-capable assembly parts should build an agent runtime");
+        .expect("P0 plugin-capable assembly parts should build an agent runtime");
 
     assert_eq!(
         runtime.plugin_runtime().availability(),
@@ -150,7 +150,7 @@ fn p0_plugin_host_binding_builds_agent_runtime_parts() {
 }
 
 #[test]
-fn non_p0_surfaces_cannot_inherit_executable_plugin_host() {
+fn non_p0_surfaces_cannot_inherit_executable_plugin_runtime() {
     for profile in [
         DeliveryProfile::Server,
         DeliveryProfile::Remote,
@@ -170,7 +170,7 @@ fn non_p0_surfaces_cannot_inherit_executable_plugin_host() {
                     PluginRuntimeBinding::client(Arc::new(AvailablePluginRuntimeClient)),
                 ),
             )
-            .expect_err("non-P0 surfaces must not silently inherit executable plugin host");
+            .expect_err("non-P0 surfaces must not silently inherit executable plugin runtime");
 
         assert_eq!(
             error,
@@ -191,7 +191,7 @@ fn default_product_shapes_expose_only_disabled_plugin_availability() {
 
         assert!(
             !availability.is_executable(),
-            "{profile} must not imply executable plugin support without a host binding"
+            "{profile} must not imply executable plugin support without a client binding"
         );
         let expected_reason = if matches!(
             profile,

@@ -3,12 +3,12 @@
 //! This module is the stable entrypoint for embedding the portable agent
 //! runtime with caller-provided ports. Concrete product assembly remains
 //! outside this crate. The SDK facade exposes stable agent/session/event ports;
-//! product assembly owns plugin-host handoff through the internal runtime
+//! product assembly owns plugin-client injection through the internal runtime
 //! builder, not through this SDK surface.
 
 use std::sync::Arc;
 
-pub const AGENT_RUNTIME_SDK_API_VERSION: u32 = 1;
+pub const AGENT_RUNTIME_SDK_API_VERSION: u32 = 2;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[non_exhaustive]

@@ -2,13 +2,13 @@
 //!
 //! The adapter covers real OpenCode input shapes: `opencode.json` npm plugin
 //! entries and project-local `.opencode/plugins/*.ts` source files. It does not
-//! execute JavaScript, install packages, or become the runtime host.
+//! execute JavaScript, install packages, or become the runtime client.
 
 use crate::hook_contributions::{
     map_hook_contributions, OpenCodeHookDescriptor, OPENCODE_PLUGIN_PROVIDER_ID,
 };
 use async_trait::async_trait;
-use bitfun_plugin_runtime_host::PluginHostAdapter;
+use bitfun_plugin_runtime_client::PluginRuntimeAdapter;
 use bitfun_product_domains::external_hook_contributions::{
     ExternalHookContributionDeclaration, ExternalHookPoint, ExternalHookRiskCapability,
 };
@@ -109,7 +109,7 @@ impl OpenCodeAdapterError {
     }
 }
 
-struct OpenCodePluginHostAdapter {
+struct OpenCodePluginRuntimeAdapter {
     projections: Vec<OpenCodeProjection>,
     observed_at_ms: u64,
     activation: Option<OpenCodeActivationContext>,
@@ -121,7 +121,7 @@ struct OpenCodeActivationContext {
     activation_epoch: u64,
 }
 
-impl OpenCodePluginHostAdapter {
+impl OpenCodePluginRuntimeAdapter {
     fn from_package(input: PluginPackageInput, observed_at_ms: u64) -> PortResult<Self> {
         let (manifest, source, files) = input.into_parts();
         if manifest.adapter != "opencode_compatible" {
@@ -438,9 +438,13 @@ impl OpenCodePluginHostAdapter {
 }
 
 #[async_trait]
-impl PluginHostAdapter for OpenCodePluginHostAdapter {
+impl PluginRuntimeAdapter for OpenCodePluginRuntimeAdapter {
     fn adapter_id(&self) -> &str {
         OPENCODE_ADAPTER_ID
+    }
+
+    fn availability(&self) -> PluginRuntimeAvailability {
+        PluginRuntimeAvailability::projection_only(PluginRuntimeUnavailableReason::HostUnavailable)
     }
 
     async fn read_plugins(
@@ -511,7 +515,7 @@ pub fn load_opencode_package_adapter(
     activation: Option<PluginActivationAuthority>,
     observed_at_ms: u64,
 ) -> PortResult<(
-    Arc<dyn PluginHostAdapter>,
+    Arc<dyn PluginRuntimeAdapter>,
     Vec<(
         PluginSourceRef,
         String,
@@ -521,9 +525,9 @@ pub fn load_opencode_package_adapter(
 )> {
     let adapter = match activation {
         Some(authority) => {
-            OpenCodePluginHostAdapter::from_activated_package(input, authority, observed_at_ms)?
+            OpenCodePluginRuntimeAdapter::from_activated_package(input, authority, observed_at_ms)?
         }
-        None => OpenCodePluginHostAdapter::from_package(input, observed_at_ms)?,
+        None => OpenCodePluginRuntimeAdapter::from_package(input, observed_at_ms)?,
     };
     let targets = adapter.custom_tool_dispatch_targets();
     Ok((Arc::new(adapter), targets))
@@ -2445,7 +2449,7 @@ fn audit_ref(envelope: &PluginDispatchEnvelope) -> PluginAuditRef {
 #[cfg(test)]
 mod opencode_projection_contracts {
     use super::*;
-    use bitfun_plugin_runtime_host::PluginRuntimeHost;
+    use bitfun_plugin_runtime_client::DefaultPluginRuntimeClient;
     use bitfun_runtime_ports::{
         PermissionPromptDenyState, PermissionPromptEffectKind, PluginPayloadRedaction,
         PluginPayloadRef, PluginRuntimeClient, PluginRuntimeEpochs,
@@ -2738,21 +2742,22 @@ export const DemoPlugin = async () => ({
     }
 
     #[tokio::test]
-    async fn host_path_projects_trusted_custom_tool_candidate_with_permission_prompt() {
+    async fn client_path_projects_trusted_custom_tool_candidate_with_permission_prompt() {
         let adapter = adapter(PluginTrustLevel::Trusted);
         let plugin_id = adapter.source.plugin_id.clone();
         let dispatch = envelope(&adapter, CUSTOM_TOOL_EXTENSION_POINT);
-        let host_adapter: Arc<dyn PluginHostAdapter> = Arc::new(OpenCodePluginHostAdapter {
-            projections: vec![OpenCodeProjection::Local(adapter)],
-            observed_at_ms: 1_720_000_001,
-            activation: None,
-        });
-        let host = PluginRuntimeHost::new(host_adapter);
+        let runtime_adapter: Arc<dyn PluginRuntimeAdapter> =
+            Arc::new(OpenCodePluginRuntimeAdapter {
+                projections: vec![OpenCodeProjection::Local(adapter)],
+                observed_at_ms: 1_720_000_001,
+                activation: None,
+            });
+        let client = DefaultPluginRuntimeClient::new(runtime_adapter);
 
-        let response = host
+        let response = client
             .dispatch(dispatch)
             .await
-            .expect("host dispatch should preserve trusted custom tool candidate");
+            .expect("client dispatch should preserve trusted custom tool candidate");
 
         assert_eq!(response.adapter_id, OPENCODE_ADAPTER_ID);
         assert_eq!(response.plugin_id.as_deref(), Some(plugin_id.as_str()));
@@ -2794,21 +2799,22 @@ export const DemoPlugin = async () => ({
     }
 
     #[tokio::test]
-    async fn host_path_rejects_mismatched_custom_tool_capability_without_effect() {
+    async fn client_path_rejects_mismatched_custom_tool_capability_without_effect() {
         let adapter = adapter(PluginTrustLevel::Trusted);
         let mut dispatch = envelope(&adapter, CUSTOM_TOOL_EXTENSION_POINT);
         dispatch.declared_capability.capability_id = "opencode.permission_hook".to_string();
-        let host_adapter: Arc<dyn PluginHostAdapter> = Arc::new(OpenCodePluginHostAdapter {
-            projections: vec![OpenCodeProjection::Local(adapter)],
-            observed_at_ms: 1_720_000_001,
-            activation: None,
-        });
-        let host = PluginRuntimeHost::new(host_adapter);
+        let runtime_adapter: Arc<dyn PluginRuntimeAdapter> =
+            Arc::new(OpenCodePluginRuntimeAdapter {
+                projections: vec![OpenCodeProjection::Local(adapter)],
+                observed_at_ms: 1_720_000_001,
+                activation: None,
+            });
+        let client = DefaultPluginRuntimeClient::new(runtime_adapter);
 
-        let response = host
+        let response = client
             .dispatch(dispatch)
             .await
-            .expect("host dispatch should reject mismatched custom tool capability");
+            .expect("client dispatch should reject mismatched custom tool capability");
 
         assert!(response.effects.is_empty());
         assert_eq!(
@@ -2826,24 +2832,25 @@ export const DemoPlugin = async () => ({
     }
 
     #[tokio::test]
-    async fn host_path_rejects_custom_tool_capability_owner_mismatch_without_quarantine() {
+    async fn client_path_rejects_custom_tool_capability_owner_mismatch_without_quarantine() {
         let adapter = adapter(PluginTrustLevel::Trusted);
         let mut dispatch = envelope(&adapter, CUSTOM_TOOL_EXTENSION_POINT);
         dispatch.declared_capability.owner = PluginOwnerRef {
             kind: PluginOwnerKind::ExtensionContract,
             id: "opencode.wrong-owner".to_string(),
         };
-        let host_adapter: Arc<dyn PluginHostAdapter> = Arc::new(OpenCodePluginHostAdapter {
-            projections: vec![OpenCodeProjection::Local(adapter.clone())],
-            observed_at_ms: 1_720_000_001,
-            activation: None,
-        });
-        let host = PluginRuntimeHost::new(host_adapter);
+        let runtime_adapter: Arc<dyn PluginRuntimeAdapter> =
+            Arc::new(OpenCodePluginRuntimeAdapter {
+                projections: vec![OpenCodeProjection::Local(adapter.clone())],
+                observed_at_ms: 1_720_000_001,
+                activation: None,
+            });
+        let client = DefaultPluginRuntimeClient::new(runtime_adapter);
 
-        let response = host
+        let response = client
             .dispatch(dispatch)
             .await
-            .expect("host dispatch should reject full capability ref mismatch");
+            .expect("client dispatch should reject full capability ref mismatch");
 
         assert!(response.effects.is_empty());
         assert_eq!(
@@ -2854,7 +2861,7 @@ export const DemoPlugin = async () => ({
             response.diagnostics[0].message,
             "OpenCode custom tool dispatch requires expected capability opencode.custom_tool owned by extension_contract/opencode.custom-tools; actual capability opencode.custom_tool owned by extension_contract/opencode.wrong-owner"
         );
-        let follow_up = host
+        let follow_up = client
             .dispatch(envelope(&adapter, CUSTOM_TOOL_EXTENSION_POINT))
             .await
             .expect("capability mismatch diagnostic should not quarantine the plugin");
@@ -2862,24 +2869,25 @@ export const DemoPlugin = async () => ({
     }
 
     #[tokio::test]
-    async fn host_path_rejects_custom_tool_capability_owner_kind_mismatch_without_quarantine() {
+    async fn client_path_rejects_custom_tool_capability_owner_kind_mismatch_without_quarantine() {
         let adapter = adapter(PluginTrustLevel::Trusted);
         let mut dispatch = envelope(&adapter, CUSTOM_TOOL_EXTENSION_POINT);
         dispatch.declared_capability.owner = PluginOwnerRef {
             kind: PluginOwnerKind::ProductFeature,
             id: CUSTOM_TOOL_CAPABILITY_OWNER_ID.to_string(),
         };
-        let host_adapter: Arc<dyn PluginHostAdapter> = Arc::new(OpenCodePluginHostAdapter {
-            projections: vec![OpenCodeProjection::Local(adapter.clone())],
-            observed_at_ms: 1_720_000_001,
-            activation: None,
-        });
-        let host = PluginRuntimeHost::new(host_adapter);
+        let runtime_adapter: Arc<dyn PluginRuntimeAdapter> =
+            Arc::new(OpenCodePluginRuntimeAdapter {
+                projections: vec![OpenCodeProjection::Local(adapter.clone())],
+                observed_at_ms: 1_720_000_001,
+                activation: None,
+            });
+        let client = DefaultPluginRuntimeClient::new(runtime_adapter);
 
-        let response = host
+        let response = client
             .dispatch(dispatch)
             .await
-            .expect("host dispatch should reject capability owner kind mismatch");
+            .expect("client dispatch should reject capability owner kind mismatch");
 
         assert!(response.effects.is_empty());
         assert_eq!(
@@ -2890,7 +2898,7 @@ export const DemoPlugin = async () => ({
             response.diagnostics[0].message,
             "OpenCode custom tool dispatch requires expected capability opencode.custom_tool owned by extension_contract/opencode.custom-tools; actual capability opencode.custom_tool owned by product_feature/opencode.custom-tools"
         );
-        let follow_up = host
+        let follow_up = client
             .dispatch(envelope(&adapter, CUSTOM_TOOL_EXTENSION_POINT))
             .await
             .expect("owner kind mismatch diagnostic should not quarantine the plugin");
@@ -2898,19 +2906,20 @@ export const DemoPlugin = async () => ({
     }
 
     #[tokio::test]
-    async fn host_path_accepts_source_identity_with_different_read_model_fields() {
+    async fn client_path_accepts_source_identity_with_different_read_model_fields() {
         let adapter = adapter(PluginTrustLevel::Trusted);
         let mut dispatch = envelope(&adapter, CUSTOM_TOOL_EXTENSION_POINT);
         dispatch.source.trust_level = PluginTrustLevel::Unknown;
         dispatch.source.manifest = None;
-        let host_adapter: Arc<dyn PluginHostAdapter> = Arc::new(OpenCodePluginHostAdapter {
-            projections: vec![OpenCodeProjection::Local(adapter)],
-            observed_at_ms: 1_720_000_001,
-            activation: None,
-        });
-        let host = PluginRuntimeHost::new(host_adapter);
+        let runtime_adapter: Arc<dyn PluginRuntimeAdapter> =
+            Arc::new(OpenCodePluginRuntimeAdapter {
+                projections: vec![OpenCodeProjection::Local(adapter)],
+                observed_at_ms: 1_720_000_001,
+                activation: None,
+            });
+        let client = DefaultPluginRuntimeClient::new(runtime_adapter);
 
-        let response = host
+        let response = client
             .dispatch(dispatch.clone())
             .await
             .expect("read-model-only source fields should not break dispatch routing");
@@ -2926,20 +2935,21 @@ export const DemoPlugin = async () => ({
     }
 
     #[tokio::test]
-    async fn host_path_revoked_source_snapshot_overrides_stale_dispatch_source_without_quarantine()
-    {
+    async fn client_path_revoked_source_snapshot_overrides_stale_dispatch_source_without_quarantine(
+    ) {
         let adapter = adapter(PluginTrustLevel::Revoked);
         let mut dispatch = envelope(&adapter, CUSTOM_TOOL_EXTENSION_POINT);
         dispatch.source.trust_level = PluginTrustLevel::Trusted;
         dispatch.source.manifest = None;
-        let host_adapter: Arc<dyn PluginHostAdapter> = Arc::new(OpenCodePluginHostAdapter {
-            projections: vec![OpenCodeProjection::Local(adapter.clone())],
-            observed_at_ms: 1_720_000_001,
-            activation: None,
-        });
-        let host = PluginRuntimeHost::new(host_adapter);
+        let runtime_adapter: Arc<dyn PluginRuntimeAdapter> =
+            Arc::new(OpenCodePluginRuntimeAdapter {
+                projections: vec![OpenCodeProjection::Local(adapter.clone())],
+                observed_at_ms: 1_720_000_001,
+                activation: None,
+            });
+        let client = DefaultPluginRuntimeClient::new(runtime_adapter);
 
-        let response = host
+        let response = client
             .dispatch(dispatch.clone())
             .await
             .expect("revoked trust snapshot should project a typed diagnostic");
@@ -2952,7 +2962,7 @@ export const DemoPlugin = async () => ({
         assert_eq!(response.diagnostics[0].source, dispatch.source);
         assert_eq!(response.plugin_statuses[0].source, dispatch.source);
 
-        let follow_up = host
+        let follow_up = client
             .dispatch(dispatch)
             .await
             .expect("revoked trust diagnostic should not quarantine the plugin");
@@ -2960,21 +2970,22 @@ export const DemoPlugin = async () => ({
     }
 
     #[tokio::test]
-    async fn host_path_rejects_stale_source_ref_without_quarantine() {
+    async fn client_path_rejects_stale_source_ref_without_quarantine() {
         let adapter = adapter(PluginTrustLevel::Trusted);
         let mut dispatch = envelope(&adapter, CUSTOM_TOOL_EXTENSION_POINT);
         dispatch.source.content_hash = "sha256:stale".to_string();
-        let host_adapter: Arc<dyn PluginHostAdapter> = Arc::new(OpenCodePluginHostAdapter {
-            projections: vec![OpenCodeProjection::Local(adapter.clone())],
-            observed_at_ms: 1_720_000_001,
-            activation: None,
-        });
-        let host = PluginRuntimeHost::new(host_adapter);
+        let runtime_adapter: Arc<dyn PluginRuntimeAdapter> =
+            Arc::new(OpenCodePluginRuntimeAdapter {
+                projections: vec![OpenCodeProjection::Local(adapter.clone())],
+                observed_at_ms: 1_720_000_001,
+                activation: None,
+            });
+        let client = DefaultPluginRuntimeClient::new(runtime_adapter);
 
-        let response = host
+        let response = client
             .dispatch(dispatch.clone())
             .await
-            .expect("host dispatch should convert stale source refs into diagnostics");
+            .expect("client dispatch should convert stale source refs into diagnostics");
 
         assert!(response.effects.is_empty());
         assert_eq!(response.diagnostics[0].code, "opencode.source_mismatch");
@@ -2987,7 +2998,7 @@ export const DemoPlugin = async () => ({
             }
         );
 
-        let follow_up = host
+        let follow_up = client
             .dispatch(envelope(&adapter, CUSTOM_TOOL_EXTENSION_POINT))
             .await
             .expect("stale source diagnostic should not quarantine the plugin");
@@ -2995,19 +3006,20 @@ export const DemoPlugin = async () => ({
     }
 
     #[tokio::test]
-    async fn host_path_projects_unsupported_hook_diagnostic_without_quarantine() {
+    async fn client_path_projects_unsupported_hook_diagnostic_without_quarantine() {
         let adapter = adapter(PluginTrustLevel::Trusted);
-        let host_adapter: Arc<dyn PluginHostAdapter> = Arc::new(OpenCodePluginHostAdapter {
-            projections: vec![OpenCodeProjection::Local(adapter.clone())],
-            observed_at_ms: 1_720_000_001,
-            activation: None,
-        });
-        let host = PluginRuntimeHost::new(host_adapter);
+        let runtime_adapter: Arc<dyn PluginRuntimeAdapter> =
+            Arc::new(OpenCodePluginRuntimeAdapter {
+                projections: vec![OpenCodeProjection::Local(adapter.clone())],
+                observed_at_ms: 1_720_000_001,
+                activation: None,
+            });
+        let client = DefaultPluginRuntimeClient::new(runtime_adapter);
 
-        let response = host
+        let response = client
             .dispatch(envelope(&adapter, "tool.execute.before"))
             .await
-            .expect("host dispatch should preserve unsupported hook diagnostic");
+            .expect("client dispatch should preserve unsupported hook diagnostic");
 
         assert!(response.effects.is_empty());
         assert_eq!(response.diagnostics.len(), 1);
@@ -3020,7 +3032,7 @@ export const DemoPlugin = async () => ({
             Some("event-tool.execute.before")
         );
 
-        let follow_up = host
+        let follow_up = client
             .dispatch(envelope(&adapter, CUSTOM_TOOL_EXTENSION_POINT))
             .await
             .expect("unsupported hook diagnostic should not quarantine the plugin");

@@ -13,9 +13,9 @@ port-backed `sdk` / `AgentRuntime` facade that can be built and tested without
   concrete service crates, or product-domain implementations.
 - The `sdk` module may re-export only stable runtime request/response types,
   runtime-port contracts, and the service/tool/harness registry types needed
-  for dependency injection. It must not re-export Plugin Runtime Host ABI types
-  such as plugin runtime bindings, dispatch/read envelopes, status snapshots,
-  quarantine state, or host clients; Product Assembly uses the internal runtime
+  for dependency injection. It must not re-export raw PluginRuntimeClient types
+  such as plugin runtime bindings, dispatch/read request types, status snapshots,
+  plugin fault diagnostics, or host clients; Product Assembly uses the internal runtime
   builder when it needs to inject a plugin runtime.
 - `AgentRuntime` may depend on stable ports plus injected `RuntimeServices`,
   tool registry, harness registry, and hook registry. Product assembly owns

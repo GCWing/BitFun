@@ -585,7 +585,7 @@ impl fmt::Display for ProductAssemblyError {
             } => {
                 write!(
                     f,
-                    "delivery profile {profile} does not support executable P0 plugin runtime host binding: {availability:?}"
+                    "delivery profile {profile} does not support an executable P0 plugin runtime client: {availability:?}"
                 )
             }
         }
@@ -635,7 +635,7 @@ impl ProductAssembler {
             });
         }
         if (is_plugin_client || plugin_runtime_availability.is_executable())
-            && !delivery_profile_supports_p0_plugin_host(input.profile)
+            && !delivery_profile_supports_executable_plugin_runtime(input.profile)
         {
             return Err(ProductAssemblyError::UnsupportedPluginRuntime {
                 profile: input.profile,
@@ -658,7 +658,7 @@ impl ProductAssembler {
     }
 }
 
-const fn delivery_profile_supports_p0_plugin_host(profile: DeliveryProfile) -> bool {
+const fn delivery_profile_supports_executable_plugin_runtime(profile: DeliveryProfile) -> bool {
     matches!(
         profile,
         DeliveryProfile::ProductFull | DeliveryProfile::Desktop | DeliveryProfile::Cli

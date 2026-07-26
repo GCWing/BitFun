@@ -74,7 +74,7 @@ flag maps to the safe default and should not be used in new automation.
 |---|---|
 | `text` | Assistant text. Progress, tool status, logs, and diagnostics use stderr. |
 | `json` | One final result object with status and result, plus session/turn identity once established, turn-accumulated usage, and available Patch facts. |
-| `stream-json` | JSONL containing existing `AgenticEventEnvelope` values; no separate CLI event schema. |
+| `stream-json` | JSONL containing existing Agent event values; no separate CLI event schema. |
 
 Select a format with `--output-format text|json|stream-json`. When `--output-patch -` is used with
 `json`, the Patch is included in the final object. For `stream-json`, write the Patch to an explicit
@@ -83,7 +83,7 @@ workspace snapshot captured before an explicit Patch artifact is written. It inc
 unstaged, untracked, and pre-existing changes, excludes the output artifact itself, and does not
 attribute changes to this invocation.
 
-`Ctrl+C` requests cancellation of the active turn and briefly drains its terminal envelope before
+`Ctrl+C` requests cancellation of the active turn and briefly drains its terminal events before
 returning. Cancellation, an unsuccessful completion event,
 and a requested Patch that cannot be generated or written are error outcomes. An explicit Patch
 file is created even when the diff is empty.

@@ -143,7 +143,7 @@ bitfun-runtime-services = { path = "../../execution/runtime-services" }
 bitfun-opencode-adapter = { path = "../../adapters/opencode-adapter", optional = true }
 bitfun-claude-code-adapter = { path = "../../adapters/claude-code-adapter", optional = true }
 bitfun-codex-adapter = { path = "../../adapters/codex-adapter", optional = true }
-bitfun-plugin-runtime-host = { path = "../../execution/plugin-runtime-host", optional = true }
+bitfun-plugin-runtime-client = { path = "../../execution/plugin-runtime-client", optional = true }
 
 # Transport layer dependency
 bitfun-transport = { path = "../../adapters/transport" }
@@ -182,7 +182,7 @@ product-full = [
     "dep:bitfun-claude-code-adapter",
     "dep:bitfun-codex-adapter",
     "dep:bitfun-external-sources",
-    "dep:bitfun-plugin-runtime-host",
+    "dep:bitfun-plugin-runtime-client",
     "dep:indexmap",
     "dep:md5",
     "dep:similar",

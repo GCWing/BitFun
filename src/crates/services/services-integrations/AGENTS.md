@@ -50,10 +50,10 @@ slices that are outside pure product logic but still platform-neutral.
   provider boundary.
 - Browser-control owns provider-neutral browser detection, CDP endpoint HTTP
   probing/page creation, and CDP launch process handling behind
-  `browser-control`; product profile paths and tool envelopes stay in higher
+  `browser-control`; product profile paths and tool request/result types stay in higher
   layers.
 - Web tool network providers own concrete HTTP/Exa requests behind `web-tools`;
-  product validation, readable extraction, and tool result envelopes stay in
+  product validation, readable extraction, and tool result types stay in
   higher layers.
 - Debug log file append, redaction, default path/env config, and optional HTTP
   dispatch live behind `debug-log`; core only keeps ingest-server and product
@@ -70,12 +70,12 @@ slices that are outside pure product logic but still platform-neutral.
   integrity checks, fixed package input reads, no-follow path handling,
   trust-file locking, and atomic persistence. Product path selection stays in
   assembly; ecosystem parsing and
-  Plugin Runtime Host behavior stay in their adapter and execution owners.
+  PluginRuntimeClient behavior stays in its adapter and execution modules.
 - Script-tool runtime integration owns provider-neutral process supervision,
-  bounded framing/output, target load/invoke/cancel/dispose, timeout, and worker
+  bounded framing/output, script load/invoke/cancel/dispose, timeout, and worker
   health behind `script-tool-runtime`. It must not parse OpenCode source paths,
   decide approval/conflicts, register product tools, or claim OS sandboxing.
-  Approved modules run in target child processes separated from the Rust host for
+  Approved modules run in dedicated child processes separated from the Rust application process for
   failure containment, not as a security or protocol-authentication boundary.
   The shared `services-core::process_tree` boundary owns managed-descendant cleanup for
   script workers, local stdio MCP, and other managed service children: Unix uses a dedicated process group; Windows attaches a

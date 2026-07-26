@@ -320,7 +320,7 @@ impl LocalWorkspaceSnapshotPort for CoreLocalWorkspaceSnapshot {
 ///
 /// Concrete coordinator and scheduler ownership remains in Core. Product
 /// surfaces receive only the SDK runtime assembled from validated services and
-/// harnesses; plugin-host bindings are deliberately not part of this API.
+/// harnesses; plugin runtime bindings are deliberately not part of this API.
 pub struct CoreProductAgentRuntime;
 
 impl CoreProductAgentRuntime {

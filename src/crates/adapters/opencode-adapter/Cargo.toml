@@ -11,7 +11,7 @@ crate-type = ["rlib"]
 
 [dependencies]
 async-trait = { workspace = true }
-bitfun-plugin-runtime-host = { path = "../../execution/plugin-runtime-host" }
+bitfun-plugin-runtime-client = { path = "../../execution/plugin-runtime-client" }
 bitfun-product-domains = { path = "../../contracts/product-domains", default-features = false, features = ["external-sources", "plugin-source"] }
 bitfun-runtime-ports = { path = "../../contracts/runtime-ports" }
 bitfun-services-core = { path = "../../services/services-core", default-features = false, features = ["markdown"] }

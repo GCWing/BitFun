@@ -1,12 +1,14 @@
-//! Workspace-scoped managed plugin composition.
+//! Managed plugin composition.
 //!
 //! This is the only product-full root that selects the OpenCode-compatible
-//! adapter and Plugin Runtime Host. It projects candidates for product
-//! surfaces; it does not register tools or execute plugin code.
+//! adapter and PluginRuntimeClient. Workspace identity here scopes source,
+//! approval, and logical client state; it is not a process ownership boundary.
+//! This module projects candidates for product surfaces; it does not register
+//! tools or execute plugin code.
 
 use async_trait::async_trait;
 use bitfun_opencode_adapter::load_opencode_package_adapter;
-use bitfun_plugin_runtime_host::PluginRuntimeHost;
+use bitfun_plugin_runtime_client::DefaultPluginRuntimeClient;
 use bitfun_product_domains::plugin_source::{
     PluginActivationAuthority, PluginPackageInput, PluginPackageSourceIdentity,
 };
@@ -113,7 +115,7 @@ async fn preview_with_service(
     let source = input.clone().into_parts().1;
     let (adapter, dispatch_targets) = load_opencode_package_adapter(input, None, current_time_ms())
         .map_err(|error| invalid_package(package_id, error.to_string()))?;
-    let binding = PluginRuntimeBinding::client(Arc::new(PluginRuntimeHost::new(adapter)));
+    let binding = PluginRuntimeBinding::client(Arc::new(DefaultPluginRuntimeClient::new(adapter)));
     let response = binding
         .as_client()
         .read_plugins(read_request(PREVIEW_PROJECT_ID, PREVIEW_WORKSPACE_ID, 1))
@@ -324,10 +326,10 @@ fn activated_binding(
     let (adapter, dispatch_targets) =
         load_opencode_package_adapter(input, Some(authority.clone()), current_time_ms())
             .map_err(|error| invalid_package(package_id, error.to_string()))?;
-    let host: Arc<dyn PluginRuntimeClient> = Arc::new(PluginRuntimeHost::new(adapter));
+    let client: Arc<dyn PluginRuntimeClient> = Arc::new(DefaultPluginRuntimeClient::new(adapter));
     Ok((
         PluginRuntimeBinding::client(Arc::new(ActivationGatedPluginRuntimeClient {
-            inner: host,
+            inner: client,
             service,
             workspace: workspace.to_path_buf(),
             package_id: package_id.to_string(),
@@ -934,7 +936,7 @@ export const WorkspaceToolsPlugin: Plugin = async () => ({
         let started = Arc::new(Notify::new());
         let release = Arc::new(Notify::new());
         let inner: Arc<dyn PluginRuntimeClient> = Arc::new(BlockingDispatchClient {
-            inner: Arc::new(PluginRuntimeHost::new(adapter)),
+            inner: Arc::new(DefaultPluginRuntimeClient::new(adapter)),
             started: Arc::clone(&started),
             release: Arc::clone(&release),
         });

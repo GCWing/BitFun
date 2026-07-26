@@ -1,4 +1,4 @@
-//! Minimal Plugin Runtime Host boundary.
+//! Default implementation of the portable `PluginRuntimeClient` boundary.
 
 mod adapter;
 
@@ -16,21 +16,21 @@ use std::collections::{HashMap, HashSet, VecDeque};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
-pub use adapter::PluginHostAdapter;
+pub use adapter::PluginRuntimeAdapter;
 
-type HostClock = Arc<dyn Fn() -> u64 + Send + Sync>;
+type ClientClock = Arc<dyn Fn() -> u64 + Send + Sync>;
 const MAX_CACHED_DISPATCHES: usize = 256;
 
 #[derive(Clone)]
-pub struct PluginRuntimeHost {
-    adapter: Arc<dyn PluginHostAdapter>,
-    clock: HostClock,
+pub struct DefaultPluginRuntimeClient {
+    adapter: Arc<dyn PluginRuntimeAdapter>,
+    clock: ClientClock,
     dispatch_locks: Arc<Mutex<HashMap<PluginDispatchLockKey, Arc<tokio::sync::Mutex<()>>>>>,
-    state: Arc<Mutex<PluginRuntimeHostState>>,
+    state: Arc<Mutex<DefaultPluginRuntimeClientState>>,
 }
 
 #[derive(Default)]
-struct PluginRuntimeHostState {
+struct DefaultPluginRuntimeClientState {
     cached_dispatches: HashMap<DispatchCacheKey, PluginResponseEnvelope>,
     cached_dispatch_order: VecDeque<DispatchCacheKey>,
     disposed_domains: HashSet<ExecutionDomainKey>,
@@ -64,10 +64,6 @@ impl ExecutionDomainKey {
             envelope.project_domain_id.clone(),
             envelope.workspace_id.clone(),
         )
-    }
-
-    fn matches_parts(&self, project_domain_id: &str, workspace_id: &str) -> bool {
-        self.project_domain_id == project_domain_id && self.workspace_id == workspace_id
     }
 }
 
@@ -198,12 +194,12 @@ struct StoredQuarantine {
     key: QuarantineCacheKey,
 }
 
-impl PluginRuntimeHost {
-    pub fn new(adapter: Arc<dyn PluginHostAdapter>) -> Self {
+impl DefaultPluginRuntimeClient {
+    pub fn new(adapter: Arc<dyn PluginRuntimeAdapter>) -> Self {
         Self::with_clock(adapter, current_unix_ms)
     }
 
-    fn with_clock<F>(adapter: Arc<dyn PluginHostAdapter>, clock: F) -> Self
+    fn with_clock<F>(adapter: Arc<dyn PluginRuntimeAdapter>, clock: F) -> Self
     where
         F: Fn() -> u64 + Send + Sync + 'static,
     {
@@ -211,7 +207,7 @@ impl PluginRuntimeHost {
             adapter,
             clock: Arc::new(clock),
             dispatch_locks: Arc::new(Mutex::new(HashMap::new())),
-            state: Arc::new(Mutex::new(PluginRuntimeHostState::default())),
+            state: Arc::new(Mutex::new(DefaultPluginRuntimeClientState::default())),
         }
     }
 
@@ -222,60 +218,18 @@ impl PluginRuntimeHost {
     ) {
         self.state
             .lock()
-            .expect("plugin host state poisoned")
+            .expect("plugin client state poisoned")
             .disposed_domains
             .insert(ExecutionDomainKey::new(project_domain_id, workspace_id));
     }
 
-    pub fn restart(&self, project_domain_id: impl Into<String>, workspace_id: impl Into<String>) {
-        let domain = ExecutionDomainKey::new(project_domain_id, workspace_id);
-        {
-            let mut state = self.state.lock().expect("plugin host state poisoned");
-            state
-                .cached_dispatches
-                .retain(|key, _| !domain.matches_parts(&key.project_domain_id, &key.workspace_id));
-            state
-                .cached_dispatch_order
-                .retain(|key| !domain.matches_parts(&key.project_domain_id, &key.workspace_id));
-
-            let removed_diagnostic_ids = state
-                .quarantines
-                .values()
-                .filter(|stored| {
-                    domain.matches_parts(&stored.key.project_domain_id, &stored.key.workspace_id)
-                })
-                .flat_map(|stored| stored.state.diagnostic_ids.iter().cloned())
-                .collect::<HashSet<_>>();
-            state.quarantines.retain(|_, stored| {
-                !domain.matches_parts(&stored.key.project_domain_id, &stored.key.workspace_id)
-            });
-            let retained_diagnostic_ids = state
-                .quarantines
-                .values()
-                .flat_map(|stored| stored.state.diagnostic_ids.iter().cloned())
-                .collect::<HashSet<_>>();
-            for diagnostic_id in removed_diagnostic_ids {
-                if !retained_diagnostic_ids.contains(&diagnostic_id) {
-                    state.diagnostics.remove(&diagnostic_id);
-                }
-            }
-        }
-        self.dispatch_locks
-            .lock()
-            .expect("plugin host dispatch locks poisoned")
-            .retain(|key, lock| {
-                !domain.matches_parts(&key.project_domain_id, &key.workspace_id)
-                    || Arc::strong_count(lock) > 1
-            });
-    }
-
-    fn overlay_host_quarantines(
+    fn overlay_client_quarantines(
         &self,
         request: &PluginRuntimeReadRequest,
         response: &mut PluginRuntimeReadResponse,
     ) {
         let mut quarantines = {
-            let state = self.state.lock().expect("plugin host state poisoned");
+            let state = self.state.lock().expect("plugin client state poisoned");
             state
                 .quarantines
                 .values()
@@ -356,7 +310,7 @@ impl PluginRuntimeHost {
     ) -> Option<PluginQuarantineState> {
         self.state
             .lock()
-            .expect("plugin host state poisoned")
+            .expect("plugin client state poisoned")
             .quarantines
             .values()
             .filter(|stored| {
@@ -375,13 +329,13 @@ impl PluginRuntimeHost {
     fn is_domain_disposed(&self, domain: &ExecutionDomainKey) -> bool {
         self.state
             .lock()
-            .expect("plugin host state poisoned")
+            .expect("plugin client state poisoned")
             .disposed_domains
             .contains(domain)
     }
 
     fn cached_response(&self, key: &DispatchCacheKey) -> Option<PluginResponseEnvelope> {
-        let mut state = self.state.lock().expect("plugin host state poisoned");
+        let mut state = self.state.lock().expect("plugin client state poisoned");
         let cached = state.cached_dispatches.get(key).cloned();
         if cached.is_some() {
             state
@@ -395,7 +349,7 @@ impl PluginRuntimeHost {
     fn dispatch_lock(&self, key: &PluginDispatchLockKey) -> Arc<tokio::sync::Mutex<()>> {
         self.dispatch_locks
             .lock()
-            .expect("plugin host dispatch locks poisoned")
+            .expect("plugin client dispatch locks poisoned")
             .entry(key.clone())
             .or_insert_with(|| Arc::new(tokio::sync::Mutex::new(())))
             .clone()
@@ -409,7 +363,7 @@ impl PluginRuntimeHost {
         let mut locks = self
             .dispatch_locks
             .lock()
-            .expect("plugin host dispatch locks poisoned");
+            .expect("plugin client dispatch locks poisoned");
         if Arc::strong_count(lock) == 2 {
             if let Some(stored) = locks.get(key) {
                 if Arc::ptr_eq(stored, lock) {
@@ -420,7 +374,7 @@ impl PluginRuntimeHost {
     }
 
     fn cache_response(&self, key: DispatchCacheKey, response: PluginResponseEnvelope) {
-        let mut state = self.state.lock().expect("plugin host state poisoned");
+        let mut state = self.state.lock().expect("plugin client state poisoned");
         if state.cached_dispatches.contains_key(&key) {
             state
                 .cached_dispatch_order
@@ -474,7 +428,7 @@ impl PluginRuntimeHost {
             retryable: false,
         };
         {
-            let mut state = self.state.lock().expect("plugin host state poisoned");
+            let mut state = self.state.lock().expect("plugin client state poisoned");
             state
                 .diagnostics
                 .insert(diagnostic.diagnostic_id.clone(), diagnostic.clone());
@@ -515,8 +469,8 @@ impl PluginRuntimeHost {
             return Ok(self.quarantine_response(
                 envelope,
                 PluginQuarantineReason::HostFailure,
-                "plugin_host.invalid_dispatch_envelope",
-                format!("Plugin host dispatch envelope is invalid: {message}"),
+                "plugin_client.invalid_dispatch_envelope",
+                format!("Plugin client dispatch envelope is invalid: {message}"),
                 PluginDiagnosticDetail::HostLifecycle {
                     phase: PluginHostLifecyclePhase::Dispatch,
                 },
@@ -528,7 +482,7 @@ impl PluginRuntimeHost {
             return Err(PortError::new(
                 PortErrorKind::NotAvailable,
                 format!(
-                    "plugin runtime host project workspace is disposed: {}/{}",
+                    "plugin runtime client project workspace is disposed: {}/{}",
                     envelope.project_domain_id, envelope.workspace_id
                 ),
             ));
@@ -554,8 +508,8 @@ impl PluginRuntimeHost {
             let response = self.quarantine_response(
                 envelope,
                 PluginQuarantineReason::DeadlineExceeded,
-                "plugin_host.deadline_exceeded",
-                "Plugin host dispatch deadline was already expired".to_string(),
+                "plugin_client.deadline_exceeded",
+                "Plugin client dispatch deadline was already expired".to_string(),
                 PluginDiagnosticDetail::Deadline {
                     deadline_ms: 0,
                     elapsed_ms: 0,
@@ -581,9 +535,9 @@ impl PluginRuntimeHost {
                     self.quarantine_response(
                         envelope,
                         PluginQuarantineReason::AdapterFailure,
-                        "plugin_host.invalid_response",
+                        "plugin_client.invalid_response",
                         format!(
-                            "Plugin host adapter returned an invalid response: {}",
+                            "Plugin client adapter returned an invalid response: {}",
                             error.message
                         ),
                         PluginDiagnosticDetail::Adapter {
@@ -597,8 +551,8 @@ impl PluginRuntimeHost {
             Ok(Err(error)) => self.quarantine_response(
                 envelope,
                 PluginQuarantineReason::AdapterFailure,
-                "plugin_host.adapter_failure",
-                format!("Plugin host adapter failed: {}", error.message),
+                "plugin_client.adapter_failure",
+                format!("Plugin client adapter failed: {}", error.message),
                 PluginDiagnosticDetail::Adapter {
                     adapter_id: self.adapter.adapter_id().to_string(),
                 },
@@ -606,8 +560,8 @@ impl PluginRuntimeHost {
             Err(_) => self.quarantine_response(
                 envelope,
                 PluginQuarantineReason::DeadlineExceeded,
-                "plugin_host.deadline_exceeded",
-                "Plugin host dispatch exceeded its deadline".to_string(),
+                "plugin_client.deadline_exceeded",
+                "Plugin client dispatch exceeded its deadline".to_string(),
                 PluginDiagnosticDetail::Deadline {
                     deadline_ms,
                     elapsed_ms: deadline_ms,
@@ -621,9 +575,9 @@ impl PluginRuntimeHost {
 }
 
 #[async_trait]
-impl PluginRuntimeClient for PluginRuntimeHost {
+impl PluginRuntimeClient for DefaultPluginRuntimeClient {
     fn availability(&self) -> PluginRuntimeAvailability {
-        PluginRuntimeAvailability::Available
+        self.adapter.availability()
     }
 
     async fn read_plugins(
@@ -635,7 +589,7 @@ impl PluginRuntimeClient for PluginRuntimeHost {
             return Err(PortError::new(
                 PortErrorKind::NotAvailable,
                 format!(
-                    "plugin runtime host project workspace is disposed: {}/{}",
+                    "plugin runtime client project workspace is disposed: {}/{}",
                     request.project_domain_id, request.workspace_id
                 ),
             ));
@@ -661,7 +615,7 @@ impl PluginRuntimeClient for PluginRuntimeHost {
                     .iter()
                     .any(|status| status.source == diagnostic.source)
         });
-        self.overlay_host_quarantines(&request, &mut response);
+        self.overlay_client_quarantines(&request, &mut response);
         validate_plugin_runtime_read_response(&request, &response)?;
         Ok(response)
     }
@@ -723,7 +677,7 @@ fn active_quarantine_error(
     PortError::new(
         PortErrorKind::NotAvailable,
         format!(
-            "plugin runtime host has active quarantine {} for plugin {}",
+            "plugin runtime client has active quarantine {} for plugin {}",
             quarantine.quarantine_id, envelope.source.plugin_id
         ),
     )

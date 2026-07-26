@@ -2,26 +2,26 @@
 
 export const forbiddenContentRules = [
   {
-    path: 'src/crates/execution/plugin-runtime-host/src/adapter.rs',
-    reason: 'plugin-runtime-host adapter trait method surface must stay narrow',
+    path: 'src/crates/execution/plugin-runtime-client/src/adapter.rs',
+    reason: 'plugin-runtime-client adapter trait method surface must stay narrow',
     patterns: [
       {
-        regex: /^\s*(?:async\s+)?fn\s+(?!(?:adapter_id|read_plugins|dispatch)\b)[A-Za-z_][A-Za-z0-9_]*\b/,
+        regex: /^\s*(?:async\s+)?fn\s+(?!(?:adapter_id|availability|read_plugins|dispatch)\b)[A-Za-z_][A-Za-z0-9_]*\b/,
         message:
-          'unexpected PluginHostAdapter trait method; update the reviewed adapter method budget before exposing more Host API',
+          'unexpected PluginRuntimeAdapter trait method; update the reviewed adapter method budget before exposing more client API',
       },
     ],
   },
   {
-    path: 'src/crates/execution/plugin-runtime-host/src/lib.rs',
+    path: 'src/crates/execution/plugin-runtime-client/src/lib.rs',
     reason:
-      'plugin-runtime-host public Host method surface must stay narrow and must not expose status-write or test-helper side channels',
+      'plugin-runtime-client public method surface must stay narrow and must not expose status-write or test-helper side channels',
     patterns: [
       {
         regex:
-          /\bpub\s+(?:async\s+)?fn\s+(?!(?:new|dispose_project|restart)\b)[A-Za-z_][A-Za-z0-9_]*\b/,
+          /\bpub\s+(?:async\s+)?fn\s+(?!(?:new|dispose_project)\b)[A-Za-z_][A-Za-z0-9_]*\b/,
         message:
-          'unexpected public PluginRuntimeHost method; update the reviewed method budget before exposing more Host API',
+          'unexpected public DefaultPluginRuntimeClient method; update the reviewed method budget before exposing more client API',
       },
     ],
   },
@@ -83,7 +83,7 @@ export const forbiddenContentRules = [
       {
         regex: /\bpub\s+(?:\w+\s+)*payload\s*:\s*serde_json::Value\b/,
         message:
-          'PluginDispatchEnvelope must not regress to raw payload transport across the Host boundary',
+          'PluginDispatchEnvelope must not regress to raw payload transport across the plugin runtime boundary',
       },
       {
         regex: /\bpub\s+accepted\s*:\s*bool\b/,
@@ -177,7 +177,7 @@ export const forbiddenContentRules = [
         regex:
           /\b(?:PluginRuntime[A-Za-z0-9_]*|PluginDispatchEnvelope|PluginResponseEnvelope|PluginRuntimeReadRequest|PluginRuntimeReadResponse|PluginStatusSnapshot|PluginQuarantineState|PluginHostLifecycle[A-Za-z0-9_]*)\b/,
         message:
-          'SDK facade must not expose raw Plugin Runtime Host ABI; use product assembly or Server/API projection instead',
+          'SDK facade must not expose raw plugin runtime client contracts; use product assembly or Server/API projection instead',
       },
     ],
   },
@@ -4043,65 +4043,65 @@ export const forbiddenContentUnderRules = [
   {
     path: 'src/apps',
     reason:
-      'product entrypoints must consume capability-surface projections instead of raw Plugin Runtime Host ABI',
+      'product entrypoints must consume capability-surface projections instead of raw plugin runtime client contracts',
     patterns: [
       {
         regex:
-          /\b(?:PluginRuntimeReadResponse|PluginStatusSnapshot|PluginResponseEnvelope|PluginDispatchEnvelope|PluginEffectCandidate|PluginQuarantineState|PluginRuntimeClient|PluginRuntimeBinding|bitfun_plugin_runtime_host|bitfun_agent_runtime::runtime)\b/,
+          /\b(?:PluginRuntimeReadResponse|PluginStatusSnapshot|PluginResponseEnvelope|PluginDispatchEnvelope|PluginEffectCandidate|PluginQuarantineState|PluginRuntimeClient|PluginRuntimeBinding|bitfun_plugin_runtime_client|bitfun_agent_runtime::runtime)\b/,
         message:
-          'product entrypoints must not consume raw Plugin Runtime Host ABI; project through the capability surface contract first',
+          'product entrypoints must not consume raw plugin runtime client contracts; project through the capability surface contract first',
       },
     ],
   },
   {
     path: 'src/crates/interfaces',
     reason:
-      'Server/API interface crates must expose projected DTOs instead of raw Plugin Runtime Host ABI',
+      'Server/API interface crates must expose projected DTOs instead of raw plugin runtime client contracts',
     patterns: [
       {
         regex:
-          /\b(?:PluginRuntimeReadResponse|PluginStatusSnapshot|PluginResponseEnvelope|PluginDispatchEnvelope|PluginEffectCandidate|PluginQuarantineState|PluginRuntimeClient|PluginRuntimeBinding|bitfun_plugin_runtime_host|bitfun_agent_runtime::runtime)\b/,
+          /\b(?:PluginRuntimeReadResponse|PluginStatusSnapshot|PluginResponseEnvelope|PluginDispatchEnvelope|PluginEffectCandidate|PluginQuarantineState|PluginRuntimeClient|PluginRuntimeBinding|bitfun_plugin_runtime_client|bitfun_agent_runtime::runtime)\b/,
         message:
-          'Server/API interfaces must not consume raw Plugin Runtime Host ABI; define a projected contract first',
+          'Server/API interfaces must not consume raw plugin runtime client contracts; define a projected contract first',
       },
     ],
   },
   {
     path: 'src/web-ui',
     reason:
-      'frontend surfaces must consume capability-surface projections instead of raw Plugin Runtime Host ABI',
+      'frontend surfaces must consume capability-surface projections instead of raw plugin runtime client contracts',
     patterns: [
       {
         regex:
-          /\b(?:PluginRuntimeReadResponse|PluginStatusSnapshot|PluginResponseEnvelope|PluginDispatchEnvelope|PluginEffectCandidate|PluginQuarantineState|PluginRuntimeClient|PluginRuntimeBinding|bitfun_plugin_runtime_host|bitfun_agent_runtime::runtime)\b/,
+          /\b(?:PluginRuntimeReadResponse|PluginStatusSnapshot|PluginResponseEnvelope|PluginDispatchEnvelope|PluginEffectCandidate|PluginQuarantineState|PluginRuntimeClient|PluginRuntimeBinding|bitfun_plugin_runtime_client|bitfun_agent_runtime::runtime)\b/,
         message:
-          'frontend surfaces must not consume raw Plugin Runtime Host ABI; project through the capability surface contract first',
+          'frontend surfaces must not consume raw plugin runtime client contracts; project through the capability surface contract first',
       },
     ],
   },
   {
     path: 'src/mobile-web',
     reason:
-      'mobile surfaces must consume capability-surface projections instead of raw Plugin Runtime Host ABI',
+      'mobile surfaces must consume capability-surface projections instead of raw plugin runtime client contracts',
     patterns: [
       {
         regex:
-          /\b(?:PluginRuntimeReadResponse|PluginStatusSnapshot|PluginResponseEnvelope|PluginDispatchEnvelope|PluginEffectCandidate|PluginQuarantineState|PluginRuntimeClient|PluginRuntimeBinding|bitfun_plugin_runtime_host|bitfun_agent_runtime::runtime)\b/,
+          /\b(?:PluginRuntimeReadResponse|PluginStatusSnapshot|PluginResponseEnvelope|PluginDispatchEnvelope|PluginEffectCandidate|PluginQuarantineState|PluginRuntimeClient|PluginRuntimeBinding|bitfun_plugin_runtime_client|bitfun_agent_runtime::runtime)\b/,
         message:
-          'mobile surfaces must not consume raw Plugin Runtime Host ABI; project through the capability surface contract first',
+          'mobile surfaces must not consume raw plugin runtime client contracts; project through the capability surface contract first',
       },
     ],
   },
   {
     path: 'BitFun-Installer',
     reason:
-      'installer surfaces must consume capability-surface projections instead of raw Plugin Runtime Host ABI',
+      'installer surfaces must consume capability-surface projections instead of raw plugin runtime client contracts',
     patterns: [
       {
         regex:
-          /\b(?:PluginRuntimeReadResponse|PluginStatusSnapshot|PluginResponseEnvelope|PluginDispatchEnvelope|PluginEffectCandidate|PluginQuarantineState|PluginRuntimeClient|PluginRuntimeBinding|bitfun_plugin_runtime_host|bitfun_agent_runtime::runtime)\b/,
+          /\b(?:PluginRuntimeReadResponse|PluginStatusSnapshot|PluginResponseEnvelope|PluginDispatchEnvelope|PluginEffectCandidate|PluginQuarantineState|PluginRuntimeClient|PluginRuntimeBinding|bitfun_plugin_runtime_client|bitfun_agent_runtime::runtime)\b/,
         message:
-          'installer surfaces must not consume raw Plugin Runtime Host ABI; project through the capability surface contract first',
+          'installer surfaces must not consume raw plugin runtime client contracts; project through the capability surface contract first',
       },
     ],
   },
@@ -4138,7 +4138,7 @@ export const forbiddenContentUnderRules = [
         regex:
           /\b(?:use\s+bitfun_opencode_adapter\b|extern\s+crate\s+bitfun_opencode_adapter\b|bitfun_opencode_adapter::)/,
         message:
-          'only a reviewed product composition root may import bitfun-opencode-adapter and inject it into Plugin Runtime Host',
+          'only a reviewed product composition root may import bitfun-opencode-adapter and inject it into PluginRuntimeClient',
       },
     ],
   },

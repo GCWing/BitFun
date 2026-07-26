@@ -2,7 +2,7 @@
 
 # Execution Primitives Layer
 
-This layer owns reusable agent, harness, stream, Plugin Runtime Host, typed-service, and tool
+This layer owns reusable agent, harness, stream, plugin runtime client, typed-service, and tool
 execution primitives. It is not the complete Agent Runtime SDK and not the
 assembled product runtime. Product assembly decides which primitives, tool
 provider groups, harness providers, adapters, and services are active for a
@@ -16,15 +16,15 @@ delivery form.
 | `agent-stream` | Provider-neutral stream DTOs, tool-call accumulation, and replay contracts | [AGENTS.md](agent-stream/AGENTS.md) |
 | `tool-contracts` | Tool contracts, execution gates, input validation, and result presentation contracts. Cargo package remains `bitfun-agent-tools`. | [AGENTS.md](tool-contracts/AGENTS.md) |
 | `harness` | Harness workflow contracts and registry primitives | [AGENTS.md](harness/AGENTS.md) |
-| `plugin-runtime-host` | Minimal Plugin Runtime Host boundary for dispatch, lifecycle, idempotency, diagnostics, and quarantine; does not own JS/TS execution units or concrete ecosystem adapters | [AGENTS.md](plugin-runtime-host/AGENTS.md) |
+| `plugin-runtime-client` | Default `PluginRuntimeClient` implementation for dispatch, duplicate-request results, and fault diagnostics; the JS/TS Plugin Host remains a child process managed through service ports | [AGENTS.md](plugin-runtime-client/AGENTS.md) |
 | `runtime-services` | Typed runtime service assembly and service availability facts | [AGENTS.md](runtime-services/AGENTS.md) |
 | `tool-provider-groups` | Tool provider group facts and product-full tool group composition. Cargo package remains `bitfun-tool-packs`. | [AGENTS.md](tool-provider-groups/AGENTS.md) |
 | `tool-execution` | Low-level file/search/tool IO helpers, ExecCommand presentation facts, Computer Use loop/retry policies, prompt-safe tool context facts, and provider-neutral tool runtime policies. Cargo package remains `tool-runtime`. | [AGENTS.md](tool-execution/AGENTS.md) |
 
 ## Placement Rules
 
-- Put portable execution orchestration, agent lifecycle contracts, Plugin
-  Runtime Host boundary logic, tool contracts, provider-neutral stream
+- Put portable execution orchestration, agent lifecycle contracts,
+  `PluginRuntimeClient` reliability logic, tool contracts, provider-independent stream
   contracts, and execution facts here.
 - Keep concrete filesystem, git, terminal, MCP server, remote SSH, and OS
   behavior in `services` unless the code is a pure low-level tool primitive.

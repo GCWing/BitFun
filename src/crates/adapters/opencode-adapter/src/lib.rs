@@ -1,8 +1,8 @@
 //! OpenCode-compatible plugin adapter.
 //!
 //! The production surface is intentionally small: load OpenCode-compatible
-//! managed package content and optional activation authority as a Plugin Runtime
-//! Host adapter, typed dispatch targets, and runtime-free Hook descriptor
+//! managed package content and optional activation authority as a plugin runtime
+//! adapter, typed dispatch targets, and runtime-free Hook descriptor
 //! mapping. The adapter does not execute JavaScript, install npm packages, or
 //! depend on a user-local `opencode` CLI.
 

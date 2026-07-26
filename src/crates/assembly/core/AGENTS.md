@@ -63,12 +63,12 @@ SessionManager -> Session -> DialogTurn -> ModelRound
   owner design says otherwise.
 - `plugin_source` may inject product-owned paths and keep compatibility exports;
   concrete managed-package discovery and trust persistence stay in
-  `services-integrations`, while ecosystem parsing and Plugin Runtime Host
+  `services-integrations`, while ecosystem parsing and PluginRuntimeClient
   behavior remain in their adapter and execution owners.
 - `plugin_runtime` and `external_sources` are the reviewed product-full
   composition files allowed to select ecosystem adapters for their respective
   capability contracts. Product surfaces consume product-level views and must
-  not import adapter or Host ABI types.
+  not import adapter or raw plugin runtime client types.
 - External-source Desktop, TUI, Peer, and Server surfaces share the versioned
   product-domain control DTO and closed generic actions. Capability-specific
   approvals and conflict choices remain typed owner operations; do not add a

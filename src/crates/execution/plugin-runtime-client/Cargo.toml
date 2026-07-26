@@ -1,12 +1,12 @@
 [package]
-name = "bitfun-plugin-runtime-host"
+name = "bitfun-plugin-runtime-client"
 version.workspace = true
 authors.workspace = true
 edition.workspace = true
-description = "Plugin Runtime Host boundary for BitFun extension execution"
+description = "Default PluginRuntimeClient implementation for BitFun extension execution"
 
 [lib]
-name = "bitfun_plugin_runtime_host"
+name = "bitfun_plugin_runtime_client"
 crate-type = ["rlib"]
 
 [dependencies]

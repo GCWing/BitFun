@@ -1,5 +1,5 @@
 use async_trait::async_trait;
-use bitfun_plugin_runtime_host::{PluginHostAdapter, PluginRuntimeHost};
+use bitfun_plugin_runtime_client::{DefaultPluginRuntimeClient, PluginRuntimeAdapter};
 use bitfun_runtime_ports::{
     PermissionPromptDenyState, PermissionPromptDescriptor, PermissionPromptEffectKind,
     PluginAuditRef, PluginCapabilityRef, PluginDataClassification, PluginDispatchEnvelope,
@@ -53,9 +53,13 @@ impl Default for CrossKeyQuarantineRaceAdapter {
 }
 
 #[async_trait]
-impl PluginHostAdapter for CrossKeyQuarantineRaceAdapter {
+impl PluginRuntimeAdapter for CrossKeyQuarantineRaceAdapter {
     fn adapter_id(&self) -> &str {
         "opencode-compatible"
+    }
+
+    fn availability(&self) -> PluginRuntimeAvailability {
+        PluginRuntimeAvailability::Available
     }
 
     async fn read_plugins(
@@ -120,9 +124,13 @@ impl PluginHostAdapter for CrossKeyQuarantineRaceAdapter {
 }
 
 #[async_trait]
-impl PluginHostAdapter for CountingAdapter {
+impl PluginRuntimeAdapter for CountingAdapter {
     fn adapter_id(&self) -> &str {
         "opencode-compatible"
+    }
+
+    fn availability(&self) -> PluginRuntimeAvailability {
+        PluginRuntimeAvailability::Available
     }
 
     async fn read_plugins(
@@ -451,14 +459,14 @@ fn scoped_status_with_quarantine(
 }
 
 #[tokio::test]
-async fn host_dispatches_candidates() {
+async fn client_dispatches_candidates() {
     let adapter = Arc::new(CountingAdapter::default());
-    let host = PluginRuntimeHost::new(adapter.clone());
+    let client = DefaultPluginRuntimeClient::new(adapter.clone());
 
-    let response = host
+    let response = client
         .dispatch(envelope("event-1"))
         .await
-        .expect("host dispatch should return adapter candidates");
+        .expect("client dispatch should return adapter candidates");
 
     assert_eq!(response.effects.len(), 1);
     assert_eq!(response.adapter_id, "opencode-compatible");
@@ -466,16 +474,16 @@ async fn host_dispatches_candidates() {
 }
 
 #[tokio::test]
-async fn host_replays_idempotent_dispatch_without_recalling_adapter() {
+async fn client_replays_idempotent_dispatch_without_recalling_adapter() {
     let adapter = Arc::new(CountingAdapter::default());
-    let host = PluginRuntimeHost::new(adapter.clone());
+    let client = DefaultPluginRuntimeClient::new(adapter.clone());
     let request = envelope("event-2");
 
-    let first = host
+    let first = client
         .dispatch(request.clone())
         .await
         .expect("first dispatch");
-    let second = host.dispatch(request).await.expect("idempotent replay");
+    let second = client.dispatch(request).await.expect("idempotent replay");
 
     assert_eq!(first.request_event_id, second.request_event_id);
     assert_eq!(first.effects[0].effect_id, second.effects[0].effect_id);
@@ -489,17 +497,22 @@ async fn host_replays_idempotent_dispatch_without_recalling_adapter() {
 #[tokio::test]
 async fn idempotent_dispatch_cache_evicts_old_entries() {
     let adapter = Arc::new(CountingAdapter::default());
-    let host = PluginRuntimeHost::new(adapter.clone());
+    let client = DefaultPluginRuntimeClient::new(adapter.clone());
 
     let first = envelope("event-cache-evict-0");
-    host.dispatch(first.clone()).await.expect("first dispatch");
+    client
+        .dispatch(first.clone())
+        .await
+        .expect("first dispatch");
     for index in 1..=300 {
-        host.dispatch(envelope(&format!("event-cache-evict-{index}")))
+        client
+            .dispatch(envelope(&format!("event-cache-evict-{index}")))
             .await
             .expect("bounded cache fill dispatch");
     }
 
-    host.dispatch(first)
+    client
+        .dispatch(first)
         .await
         .expect("evicted dispatch should call adapter again");
 
@@ -516,10 +529,10 @@ async fn concurrent_idempotent_dispatch_reuses_in_flight_response() {
         delay_ms: 50,
         ..Default::default()
     });
-    let host = PluginRuntimeHost::new(adapter.clone());
+    let client = DefaultPluginRuntimeClient::new(adapter.clone());
     let request = envelope("event-concurrent-idempotent");
 
-    let (first, second) = tokio::join!(host.dispatch(request.clone()), host.dispatch(request));
+    let (first, second) = tokio::join!(client.dispatch(request.clone()), client.dispatch(request));
     let first = first.expect("first dispatch");
     let second = second.expect("second dispatch");
 
@@ -535,11 +548,11 @@ async fn concurrent_idempotent_dispatch_reuses_in_flight_response() {
 #[tokio::test]
 async fn concurrent_cross_key_dispatch_observes_active_quarantine_before_success() {
     let adapter = Arc::new(CrossKeyQuarantineRaceAdapter::default());
-    let host = PluginRuntimeHost::new(adapter.clone());
-    let failing_host = host.clone();
+    let client = DefaultPluginRuntimeClient::new(adapter.clone());
+    let failing_client = client.clone();
 
     let failing_dispatch = tokio::spawn(async move {
-        failing_host
+        failing_client
             .dispatch(envelope("event-cross-quarantine-fail"))
             .await
     });
@@ -548,7 +561,7 @@ async fn concurrent_cross_key_dispatch_observes_active_quarantine_before_success
         tokio::time::sleep(Duration::from_millis(1)).await;
     }
 
-    let blocked = host
+    let blocked = client
         .dispatch(envelope("event-cross-quarantine-success"))
         .await
         .expect_err("active quarantine must block concurrent cross-key success");
@@ -580,7 +593,7 @@ async fn concurrent_cross_key_dispatch_observes_active_quarantine_before_success
 #[tokio::test]
 async fn idempotent_dispatch_cache_does_not_replay_across_events() {
     let adapter = Arc::new(CountingAdapter::default());
-    let host = PluginRuntimeHost::new(adapter.clone());
+    let client = DefaultPluginRuntimeClient::new(adapter.clone());
     let mut first = envelope("event-cache-1");
     first.idempotency_key = "shared-event-idempotency".to_string();
     let mut second = first.clone();
@@ -590,8 +603,8 @@ async fn idempotent_dispatch_cache_does_not_replay_across_events() {
     second.correlation_id = "corr-2".to_string();
     second.causation_id = Some("event-cache-1".to_string());
 
-    let first_response = host.dispatch(first).await.expect("first dispatch");
-    let second_response = host.dispatch(second).await.expect("second dispatch");
+    let first_response = client.dispatch(first).await.expect("first dispatch");
+    let second_response = client.dispatch(second).await.expect("second dispatch");
 
     assert_eq!(first_response.request_event_id, "event-cache-1");
     assert_eq!(second_response.request_event_id, "event-cache-2");
@@ -612,19 +625,19 @@ async fn idempotent_dispatch_cache_does_not_replay_across_events() {
 #[tokio::test]
 async fn zero_deadline_quarantines_without_adapter_dispatch() {
     let adapter = Arc::new(CountingAdapter::default());
-    let host = PluginRuntimeHost::new(adapter.clone());
+    let client = DefaultPluginRuntimeClient::new(adapter.clone());
     let mut request = envelope("event-3");
     request.deadline_ms = 0;
 
-    let response = host
+    let response = client
         .dispatch(request)
         .await
-        .expect("deadline failure should be a typed host response");
+        .expect("deadline failure should be a typed client response");
 
     assert!(response.effects.is_empty());
     assert_eq!(
         response.diagnostics[0].code,
-        "plugin_host.deadline_exceeded"
+        "plugin_client.deadline_exceeded"
     );
     assert_eq!(
         response.quarantine.as_ref().expect("quarantine").reason,
@@ -646,19 +659,19 @@ async fn zero_deadline_quarantines_without_adapter_dispatch() {
 #[tokio::test]
 async fn malformed_dispatch_envelope_quarantines_without_adapter_dispatch() {
     let adapter = Arc::new(CountingAdapter::default());
-    let host = PluginRuntimeHost::new(adapter.clone());
+    let client = DefaultPluginRuntimeClient::new(adapter.clone());
     let mut request = envelope("event-empty-idempotency");
     request.idempotency_key.clear();
 
-    let response = host
+    let response = client
         .dispatch(request)
         .await
-        .expect("invalid dispatch envelope should become a typed host response");
+        .expect("invalid dispatch envelope should become a typed client response");
 
     assert!(response.effects.is_empty());
     assert_eq!(
         response.diagnostics[0].code,
-        "plugin_host.invalid_dispatch_envelope"
+        "plugin_client.invalid_dispatch_envelope"
     );
     assert!(response.diagnostics[0]
         .message
@@ -673,14 +686,14 @@ async fn malformed_dispatch_envelope_quarantines_without_adapter_dispatch() {
 #[tokio::test]
 async fn malformed_dispatch_with_missing_identity_observes_active_quarantine() {
     let adapter = Arc::new(CountingAdapter::default());
-    let host = PluginRuntimeHost::new(adapter.clone());
+    let client = DefaultPluginRuntimeClient::new(adapter.clone());
     let mut first = envelope("event-missing-plugin-1");
     first.source.plugin_id.clear();
 
-    let response = host
+    let response = client
         .dispatch(first)
         .await
-        .expect("missing plugin identity should become a typed host response");
+        .expect("missing plugin identity should become a typed client response");
     let quarantine_id = response
         .quarantine
         .as_ref()
@@ -690,10 +703,10 @@ async fn malformed_dispatch_with_missing_identity_observes_active_quarantine() {
 
     let mut second = envelope("event-missing-plugin-2");
     second.source.plugin_id.clear();
-    let error = host
+    let error = client
         .dispatch(second)
         .await
-        .expect_err("missing identity must not bypass active host quarantine");
+        .expect_err("missing identity must not bypass active client quarantine");
 
     assert_eq!(error.kind, PortErrorKind::NotAvailable);
     assert!(error.message.contains(&quarantine_id));
@@ -709,15 +722,18 @@ async fn adapter_failure_quarantines_without_writing_success() {
         fail: true,
         ..Default::default()
     });
-    let host = PluginRuntimeHost::new(adapter);
+    let client = DefaultPluginRuntimeClient::new(adapter);
 
-    let response = host
+    let response = client
         .dispatch(envelope("event-4"))
         .await
         .expect("adapter failures should become typed diagnostics");
 
     assert!(response.effects.is_empty());
-    assert_eq!(response.diagnostics[0].code, "plugin_host.adapter_failure");
+    assert_eq!(
+        response.diagnostics[0].code,
+        "plugin_client.adapter_failure"
+    );
     assert_eq!(
         response.quarantine.as_ref().expect("quarantine").reason,
         PluginQuarantineReason::AdapterFailure
@@ -725,14 +741,14 @@ async fn adapter_failure_quarantines_without_writing_success() {
 }
 
 #[tokio::test]
-async fn active_quarantine_blocks_new_dispatches_until_host_restart() {
+async fn active_quarantine_blocks_new_dispatches_until_declared_recovery() {
     let adapter = Arc::new(CountingAdapter {
         fail: true,
         ..Default::default()
     });
-    let host = PluginRuntimeHost::new(adapter.clone());
+    let client = DefaultPluginRuntimeClient::new(adapter.clone());
 
-    let first = host
+    let first = client
         .dispatch(envelope("event-active-quarantine-1"))
         .await
         .expect("adapter failure should quarantine the plugin");
@@ -742,7 +758,7 @@ async fn active_quarantine_blocks_new_dispatches_until_host_restart() {
     );
     assert_eq!(adapter.calls.lock().unwrap().len(), 1);
 
-    let replay = host
+    let replay = client
         .dispatch(envelope("event-active-quarantine-1"))
         .await
         .expect("same idempotency key should replay the original quarantine response");
@@ -756,7 +772,7 @@ async fn active_quarantine_blocks_new_dispatches_until_host_restart() {
         "quarantine replay must not call the adapter again"
     );
 
-    let error = host
+    let error = client
         .dispatch(envelope("event-active-quarantine-2"))
         .await
         .expect_err("active quarantine must block follow-up dispatch");
@@ -776,9 +792,9 @@ async fn active_quarantine_blocks_malformed_follow_up_without_new_quarantine() {
         fail: true,
         ..Default::default()
     });
-    let host = PluginRuntimeHost::new(adapter.clone());
+    let client = DefaultPluginRuntimeClient::new(adapter.clone());
 
-    let first = host
+    let first = client
         .dispatch(envelope("event-active-quarantine-malformed-1"))
         .await
         .expect("adapter failure should quarantine the plugin");
@@ -791,7 +807,7 @@ async fn active_quarantine_blocks_malformed_follow_up_without_new_quarantine() {
 
     let mut malformed = envelope("event-active-quarantine-malformed-2");
     malformed.idempotency_key.clear();
-    let error = host
+    let error = client
         .dispatch(malformed)
         .await
         .expect_err("active quarantine must block malformed follow-up dispatch");
@@ -804,7 +820,7 @@ async fn active_quarantine_blocks_malformed_follow_up_without_new_quarantine() {
         "malformed follow-up must not call the adapter or create a new adapter failure"
     );
 
-    let read = host
+    let read = client
         .read_plugins(PluginRuntimeReadRequest {
             request_id: "read-active-quarantine-malformed".to_string(),
             project_domain_id: "project-1".to_string(),
@@ -827,17 +843,17 @@ async fn active_quarantine_blocks_malformed_follow_up_without_new_quarantine() {
 }
 
 #[tokio::test]
-async fn host_owned_quarantine_is_visible_in_read_model_with_diagnostics() {
+async fn client_owned_quarantine_is_visible_in_read_model_with_diagnostics() {
     let adapter = Arc::new(CountingAdapter::default());
-    let host = PluginRuntimeHost::new(adapter);
+    let client = DefaultPluginRuntimeClient::new(adapter);
     let mut request = envelope("event-8");
     request.deadline_ms = 0;
-    let response = host.dispatch(request).await.expect("deadline quarantine");
+    let response = client.dispatch(request).await.expect("deadline quarantine");
     let quarantine = response.quarantine.expect("quarantine");
 
-    let read = host
+    let read = client
         .read_plugins(PluginRuntimeReadRequest {
-            request_id: "read-host-quarantine".to_string(),
+            request_id: "read-client-quarantine".to_string(),
             project_domain_id: "project-1".to_string(),
             workspace_id: "workspace-1".to_string(),
             plugin_ids: vec!["opencode.example".to_string()],
@@ -845,7 +861,7 @@ async fn host_owned_quarantine_is_visible_in_read_model_with_diagnostics() {
             epochs: epochs(),
         })
         .await
-        .expect("host-owned quarantine should be projected");
+        .expect("client-owned quarantine should be projected");
     assert_eq!(read.sources[0].plugin_id, "opencode.example");
     assert_eq!(
         read.plugin_statuses[0].status,
@@ -871,49 +887,7 @@ async fn host_owned_quarantine_is_visible_in_read_model_with_diagnostics() {
         read.diagnostics[0].diagnostic_id,
         read.plugin_statuses[0].diagnostic_ids[0]
     );
-    assert_eq!(read.diagnostics[0].code, "plugin_host.deadline_exceeded");
-}
-
-#[tokio::test]
-async fn host_restart_clears_domain_quarantine_and_cached_dispatch() {
-    let adapter = Arc::new(CountingAdapter::default());
-    let host = PluginRuntimeHost::new(adapter.clone());
-    let mut request = envelope("event-restart-clear");
-    request.deadline_ms = 0;
-    let quarantine_response = host
-        .dispatch(request)
-        .await
-        .expect("deadline failure should quarantine");
-    assert!(quarantine_response.quarantine.is_some());
-
-    host.restart("project-1", "workspace-1");
-
-    let read = host
-        .read_plugins(PluginRuntimeReadRequest {
-            request_id: "read-restarted-host".to_string(),
-            project_domain_id: "project-1".to_string(),
-            workspace_id: "workspace-1".to_string(),
-            plugin_ids: vec!["opencode.example".to_string()],
-            include_config_validation: true,
-            epochs: epochs(),
-        })
-        .await
-        .expect("restart should leave read model available");
-    assert!(
-        read.plugin_statuses.is_empty(),
-        "HostRestarted must clear host-owned quarantine projection"
-    );
-
-    let retry = host
-        .dispatch(envelope("event-restart-clear"))
-        .await
-        .expect("restart must clear cached quarantine response");
-    assert_eq!(retry.effects.len(), 1);
-    assert_eq!(
-        adapter.calls.lock().unwrap().len(),
-        1,
-        "retry after restart should reach adapter instead of replaying cached quarantine"
-    );
+    assert_eq!(read.diagnostics[0].code, "plugin_client.deadline_exceeded");
 }
 
 #[tokio::test]
@@ -924,8 +898,8 @@ async fn disposed_project_rejects_dispatch_and_read_model_reports_statuses() {
         .lock()
         .unwrap()
         .push(scoped_status("project-1", "workspace-1", source_ref()));
-    let host = PluginRuntimeHost::new(adapter.clone());
-    let read = host
+    let client = DefaultPluginRuntimeClient::new(adapter.clone());
+    let read = client
         .read_plugins(PluginRuntimeReadRequest {
             request_id: "read-1".to_string(),
             project_domain_id: "project-1".to_string(),
@@ -935,13 +909,13 @@ async fn disposed_project_rejects_dispatch_and_read_model_reports_statuses() {
             epochs: epochs(),
         })
         .await
-        .expect("host read model should return status projection");
+        .expect("client read model should return status projection");
 
     assert_eq!(read.sources[0].plugin_id, "opencode.example");
     assert_eq!(read.plugin_statuses[0].source.plugin_id, "opencode.example");
 
-    host.dispose_project("project-1", "workspace-1");
-    let error = host
+    client.dispose_project("project-1", "workspace-1");
+    let error = client
         .dispatch(envelope("event-5"))
         .await
         .expect_err("disposed projects must not dispatch to adapter");
@@ -951,7 +925,7 @@ async fn disposed_project_rejects_dispatch_and_read_model_reports_statuses() {
 
     let mut other_workspace = envelope("event-5-other-workspace");
     other_workspace.workspace_id = "workspace-2".to_string();
-    let other_response = host
+    let other_response = client
         .dispatch(other_workspace)
         .await
         .expect("dispose should stay scoped to the project workspace");
@@ -962,7 +936,7 @@ async fn disposed_project_rejects_dispatch_and_read_model_reports_statuses() {
 #[tokio::test]
 async fn idempotent_dispatch_cache_is_scoped_by_project_workspace_and_source() {
     let adapter = Arc::new(CountingAdapter::default());
-    let host = PluginRuntimeHost::new(adapter.clone());
+    let client = DefaultPluginRuntimeClient::new(adapter.clone());
     let mut first = envelope("event-6");
     first.idempotency_key = "shared-idempotency".to_string();
     let mut second = first.clone();
@@ -976,10 +950,10 @@ async fn idempotent_dispatch_cache_is_scoped_by_project_workspace_and_source() {
     fourth.source.source = "file:///plugins/other-opencode-example".to_string();
     fourth.source.content_hash = "sha256:def456".to_string();
 
-    let first_response = host.dispatch(first).await.expect("first dispatch");
-    let second_response = host.dispatch(second).await.expect("second dispatch");
-    let third_response = host.dispatch(third).await.expect("third dispatch");
-    let fourth_response = host.dispatch(fourth).await.expect("fourth dispatch");
+    let first_response = client.dispatch(first).await.expect("first dispatch");
+    let second_response = client.dispatch(second).await.expect("second dispatch");
+    let third_response = client.dispatch(third).await.expect("third dispatch");
+    let fourth_response = client.dispatch(fourth).await.expect("fourth dispatch");
 
     assert_eq!(first_response.project_domain_id, "project-1");
     assert_eq!(first_response.workspace_id, "workspace-1");
@@ -1000,14 +974,14 @@ async fn idempotent_dispatch_cache_is_scoped_by_project_workspace_and_source() {
 #[tokio::test]
 async fn idempotent_dispatch_cache_is_scoped_by_epoch_changes() {
     let adapter = Arc::new(CountingAdapter::default());
-    let host = PluginRuntimeHost::new(adapter.clone());
+    let client = DefaultPluginRuntimeClient::new(adapter.clone());
     let mut first = envelope("event-10");
     first.idempotency_key = "shared-epoch-idempotency".to_string();
     let mut second = first.clone();
     second.epochs.policy_epoch += 1;
 
-    let first_response = host.dispatch(first).await.expect("first dispatch");
-    let second_response = host.dispatch(second).await.expect("second dispatch");
+    let first_response = client.dispatch(first).await.expect("first dispatch");
+    let second_response = client.dispatch(second).await.expect("second dispatch");
 
     assert_ne!(
         first_response.observed_epochs.policy_epoch,
@@ -1029,9 +1003,9 @@ async fn read_model_is_scoped_by_project_and_workspace() {
         scoped_status("project-1", "workspace-1", source_ref()),
         scoped_status("project-2", "workspace-2", project_2_source),
     ]);
-    let host = PluginRuntimeHost::new(adapter);
+    let client = DefaultPluginRuntimeClient::new(adapter);
 
-    let read = host
+    let read = client
         .read_plugins(PluginRuntimeReadRequest {
             request_id: "read-project-1".to_string(),
             project_domain_id: "project-1".to_string(),
@@ -1053,9 +1027,9 @@ async fn read_model_rejects_wrong_workspace_response() {
         invalid_workspace_read_response: true,
         ..Default::default()
     });
-    let host = PluginRuntimeHost::new(adapter);
+    let client = DefaultPluginRuntimeClient::new(adapter);
 
-    let error = host
+    let error = client
         .read_plugins(PluginRuntimeReadRequest {
             request_id: "read-wrong-workspace".to_string(),
             project_domain_id: "project-1".to_string(),
@@ -1077,15 +1051,18 @@ async fn malformed_adapter_success_quarantines_without_effects() {
         invalid_project_response: true,
         ..Default::default()
     });
-    let host = PluginRuntimeHost::new(adapter);
+    let client = DefaultPluginRuntimeClient::new(adapter);
 
-    let response = host
+    let response = client
         .dispatch(envelope("event-8"))
         .await
         .expect("malformed adapter success should become typed quarantine response");
 
     assert!(response.effects.is_empty());
-    assert_eq!(response.diagnostics[0].code, "plugin_host.invalid_response");
+    assert_eq!(
+        response.diagnostics[0].code,
+        "plugin_client.invalid_response"
+    );
     assert_eq!(
         response.quarantine.as_ref().expect("quarantine").reason,
         PluginQuarantineReason::AdapterFailure
@@ -1098,15 +1075,18 @@ async fn permission_prompt_target_mismatch_quarantines_without_effects() {
         invalid_permission_prompt: true,
         ..Default::default()
     });
-    let host = PluginRuntimeHost::new(adapter);
+    let client = DefaultPluginRuntimeClient::new(adapter);
 
-    let response = host
+    let response = client
         .dispatch(envelope("event-11"))
         .await
         .expect("prompt mismatch should become typed quarantine response");
 
     assert!(response.effects.is_empty());
-    assert_eq!(response.diagnostics[0].code, "plugin_host.invalid_response");
+    assert_eq!(
+        response.diagnostics[0].code,
+        "plugin_client.invalid_response"
+    );
     assert!(response.diagnostics[0]
         .message
         .contains("permission prompt target mismatch"));
@@ -1118,15 +1098,18 @@ async fn permission_prompt_authority_mismatch_quarantines_without_effects() {
         invalid_permission_authority: true,
         ..Default::default()
     });
-    let host = PluginRuntimeHost::new(adapter);
+    let client = DefaultPluginRuntimeClient::new(adapter);
 
-    let response = host
+    let response = client
         .dispatch(envelope("event-18"))
         .await
         .expect("prompt authority mismatch should become typed quarantine response");
 
     assert!(response.effects.is_empty());
-    assert_eq!(response.diagnostics[0].code, "plugin_host.invalid_response");
+    assert_eq!(
+        response.diagnostics[0].code,
+        "plugin_client.invalid_response"
+    );
     assert!(response.diagnostics[0]
         .message
         .contains("permission prompt owner mismatch"));
@@ -1138,9 +1121,9 @@ async fn final_policy_decision_from_adapter_fails_closed() {
         final_policy_decision: true,
         ..Default::default()
     });
-    let host = PluginRuntimeHost::new(adapter);
+    let client = DefaultPluginRuntimeClient::new(adapter);
 
-    let response = host
+    let response = client
         .dispatch(envelope("event-14"))
         .await
         .expect("adapter policy outcome should become typed quarantine response");
@@ -1157,7 +1140,7 @@ async fn adapter_id_or_quarantine_with_effects_mismatch_fails_closed() {
         wrong_adapter_id: true,
         ..Default::default()
     });
-    let wrong_adapter_response = PluginRuntimeHost::new(wrong_adapter)
+    let wrong_adapter_response = DefaultPluginRuntimeClient::new(wrong_adapter)
         .dispatch(envelope("event-12"))
         .await
         .expect("wrong adapter id should become typed quarantine response");
@@ -1170,7 +1153,7 @@ async fn adapter_id_or_quarantine_with_effects_mismatch_fails_closed() {
         success_quarantine_with_effects: true,
         ..Default::default()
     });
-    let mixed_response = PluginRuntimeHost::new(quarantine_with_effects)
+    let mixed_response = DefaultPluginRuntimeClient::new(quarantine_with_effects)
         .dispatch(envelope("event-13"))
         .await
         .expect("success effects mixed with quarantine should fail closed");
@@ -1186,9 +1169,9 @@ async fn status_quarantine_with_success_effects_fails_closed() {
         status_quarantine_with_effects: true,
         ..Default::default()
     });
-    let host = PluginRuntimeHost::new(adapter);
+    let client = DefaultPluginRuntimeClient::new(adapter);
 
-    let response = host
+    let response = client
         .dispatch(envelope("event-16"))
         .await
         .expect("status quarantine mixed with effects should fail closed");
@@ -1205,19 +1188,19 @@ async fn nonzero_deadline_timeout_quarantines_without_success_effects() {
         delay_ms: 50,
         ..Default::default()
     });
-    let host = PluginRuntimeHost::new(adapter.clone());
+    let client = DefaultPluginRuntimeClient::new(adapter.clone());
     let mut request = envelope("event-9");
     request.deadline_ms = 1;
 
-    let response = host
+    let response = client
         .dispatch(request)
         .await
-        .expect("timeout should return typed host response");
+        .expect("timeout should return typed client response");
 
     assert!(response.effects.is_empty());
     assert_eq!(
         response.diagnostics[0].code,
-        "plugin_host.deadline_exceeded"
+        "plugin_client.deadline_exceeded"
     );
     assert_eq!(adapter.calls.lock().unwrap().len(), 1);
 }

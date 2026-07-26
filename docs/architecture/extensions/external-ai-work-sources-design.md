@@ -3,22 +3,22 @@
 本文定义 BitFun 如何发现、展示和消费 OpenCode、Codex、Claude Code 等外部 AI 应用留下的工作内容。OpenCode
 是第一条完整兼容来源；其他生态只在有稳定格式和真实消费方时接入。各生态的解析、加载顺序和运行语义仍由对应
 适配器负责，本文不建立跨生态通用配置格式或脚本 SDK。BitFun 自身能力如何通过 MCP、Skill、Plugin、Hook、
-SDK 或 Server 输出到外部宿主，以及内部 Provider Slot、状态、事件和并发边界，见
-[`capability-runtime-integration-design.md`](capability-runtime-integration-design.md)；两条方向共用适用的身份事实和能力 owner，
+SDK 或 Server 输出到外部宿主，以及内部能力组合、状态、事件和并发边界，见
+[`capability-runtime-integration-design.md`](capability-runtime-integration-design.md)；两条方向共用适用的身份事实和能力归属模块，
 但不共用一个大一统 adapter 或状态模型。
 
-本文同时记录当前可用纵向切片与目标架构。当前 BitFun 已具备通用外部来源目录、四条能力专属发现通道和单一
-`ExternalSourceControlPlane` 生命周期 owner；`contracts/product-domains` 提供版本化控制事实、闭合动作与错误语义，
-Desktop、交互式 TUI、Peer Host 和只读 Server 只做宿主投影，不再各自派生另一套状态机。OpenCode Prompt Command
+本文同时记录当前可用端到端能力与目标架构。当前 BitFun 已具备通用外部来源目录、四条能力专属发现通道和单一
+`ExternalSourceControlPlane` 负责生命周期；`contracts/product-domains` 提供版本化控制事实、固定动作与错误语义，
+Desktop、交互式 TUI、Peer Host 和只读 Server 只显示宿主所需状态，不再各自派生另一套状态机。OpenCode Prompt Command
 适配器已接入本地用户全局/项目来源；Desktop 可查看、刷新、抑制和处理跨来源冲突，交互式 TUI（ChatMode）可列出并执行
-prompt-only Command。第二条纵向切片已让受支持的单文件 OpenCode `.js` standalone Tool 经静态
+prompt-only Command。第二条端到端能力已让受支持的单文件 OpenCode `.js` standalone Tool 经静态
 预览、来源/能力确认和同名冲突选择后进入现有 Tool Runtime；Desktop 与交互式 TUI（ChatMode）使用同一决策状态。第三条纵向
-切片已把 OpenCode 全局/项目 Subagent 的安全子集通过独立 provider 契约接入现有 Subagent owner：首次启用与
-同名冲突使用非阻塞决策，fresh 调用固定不可变 generation，更新和撤下不会静默切换到同名实现。第四条纵向切片
-已把 OpenCode 用户/项目 MCP 的 local stdio 与 HTTPS remote 安全子集接入现有 MCP owner，沿用显式审批、冲突、
-工作区隔离和失败回推；现有 Skill Registry 另行展示来源、用户/项目作用域和固定优先级产生的覆盖结果，不并入上述
-可执行来源选择规则。第五条纵向切片在不增加 Runtime Host 的前提下接入 Claude Code 的 legacy Command、Subagent、
-MCP 安全子集，以及 Codex Subagent、MCP 安全子集；三种生态使用相同的控制面、审批、冲突、刷新和故障隔离事实，
+切片已把 OpenCode 全局/项目 Subagent 的安全子集通过独立 provider 契约接入现有 Subagent 归属模块：首次启用与
+同名冲突使用非阻塞决策，fresh 调用持续使用启动时选定的版本，更新和撤下不会静默切换到同名实现。第四条端到端能力
+已把 OpenCode 用户/项目 MCP 的 local stdio 与 HTTPS remote 安全子集接入现有 MCP 归属模块，沿用显式审批、冲突、
+工作区隔离和失败反馈；现有 Skill 加载模块另行展示来源、用户/项目范围和固定优先级产生的覆盖结果，不并入上述
+可执行来源选择规则。第五条端到端能力在不增加新的 Rust Runtime 进程的前提下接入 Claude Code 的 legacy Command、Subagent、
+MCP 安全子集，以及 Codex Subagent、MCP 安全子集；三种生态使用同一个来源管理模块，并共享审批、冲突、刷新和故障隔离规则，
 但各自在 sibling adapter 内保留原生来源与覆盖语义。完整 TypeScript/Bun、包依赖、package plugin 执行、
 Codex/Claude Code 运行时适配、primary agent 替换和外部 Subagent 续接仍属于后续阶段，不能因来源被识别就宣称已经可用。OpenCode、Claude Code 与 Codex 的本地 Hook 静态目录
 已作为独立只读切片接入；它只证明来源和声明能够安全展示，不证明 handler 已加载、获得权限或可以执行。
@@ -29,9 +29,9 @@ Codex/Claude Code 运行时适配、primary agent 替换和外部 Subagent 续�
 
 | 产品 | 已验证的交互 | 对 BitFun 的启示 |
 |---|---|---|
-| [Codex 从其他智能体导入](https://learn.chatgpt.com/docs/import.md) | 设置中同时检测用户级与所选项目级内容，支持全部导入或自定义选择；插件和连接需要后续设置时显示状态卡 | 先给用户完整资产清单和作用域，再把需要授权的内容留在非阻塞的后续任务中。 |
+| [Codex 从其他智能体导入](https://learn.chatgpt.com/docs/import.md) | 设置中同时检测用户级与所选项目级内容，支持全部导入或自定义选择；插件和连接需要后续设置时显示状态卡 | 先给用户完整资产清单和使用范围，再把需要授权的内容留在非阻塞的后续任务中。 |
 | [Cursor 从 VS Code 迁移](https://docs.cursor.com/get-started/migrate-from-vs-code) | 一键迁移扩展、主题、设置和快捷键 | 对来源高度相似、风险可控的内容提供低摩擦默认路径，不要求逐项理解内部格式。 |
-| [VS Code Profiles](https://code.visualstudio.com/docs/configure/profiles) | 可按类别选择、浏览内容、预览后创建，并把 Profile 与文件夹或工作区关联 | 作用域、内容预览和工作区关联应是一等信息；用户不需要先提交变更才能理解结果。 |
+| [VS Code Profiles](https://code.visualstudio.com/docs/configure/profiles) | 可按类别选择、浏览内容、预览后创建，并把 Profile 与文件夹或工作区关联 | 使用范围、内容预览和工作区关联应是一等信息；用户不需要先提交变更才能理解结果。 |
 | [Claude Code 导入 Claude Desktop MCP](https://docs.anthropic.com/en/docs/claude-code/mcp) | 命令启动后交互选择 MCP Server，并可在导入后通过列表验证 | 高副作用连接适合选择性启用和可验证完成状态，不能因为识别成功就宣称可用。 |
 | [OpenCode 配置](https://opencode.ai/docs/config/) | 用户级、项目级、环境指定和目录资产按固定顺序实时成为运行输入 | 对已有 OpenCode 项目应保留持续关联，不把一次性复制作为可用前提。 |
 
@@ -49,10 +49,10 @@ Codex/Claude Code 运行时适配、primary agent 替换和外部 Subagent 续�
    静默选择胜者。现有 Skill 根继续按已发布顺序解析，但必须展示来源和默认覆盖状态；带模式的管理界面再展示
    应用模式开关后的实际采用项。
 3. 插件、Hook、Command、MCP 等可执行或有外部副作用的内容先发现，首次启用或能力扩大时再由用户确认。
-4. 运行中感知来源修改、升级、删除和重新出现；成功更新安全切换，失败时优雅保留仍合规的上一有效代次。
+4. 运行中感知来源修改、升级、删除和重新出现；静态准备失败时保留仍合规的旧进程，旧进程停止后的失败只从完整旧文件重启。
 5. 用户始终能解释“发现了什么、来自哪里、当前是否生效、为何降级、下一步能做什么”。
 6. 产品体验可复用于未来生态，但解析、优先级、权限和运行语义不被抽象成最低公分母。
-7. 冲突选择按“能力 + 逻辑名称 + 全部候选身份与内容版本”形成指纹；同一指纹只询问一次，任一候选更新后才重新询问。
+7. 冲突选择按“能力 + 逻辑名称 + 全部候选身份与内容版本”形成内容摘要；同一内容摘要只询问一次，任一候选更新后才重新询问。
 
 非目标：
 
@@ -88,29 +88,29 @@ Codex/Claude Code 运行时适配、primary agent 替换和外部 Subagent 续�
 - 当前阶段范围外的 TypeScript、依赖型 Tool 和 package plugin 只进入“已发现，静态预览”清单，不进入模型可调用
   集合；受支持 JS Tool 也必须在明确启用前保持同一状态。
 - 外部 Subagent 即使只是声明文件，也会把 prompt、模型和工具集合带入一次独立 agent 调用，因此按当前行为与能力
-  包络确认；列表和 IPC 只显示描述、来源、模型、工具和诊断摘要，不传输 prompt 正文。
+  能力范围确认；列表和 IPC 只显示描述、来源、模型、工具和诊断摘要，不传输 prompt 正文。
 - 全局来源首次在当前执行域识别时提示一次；项目来源按工作区提示。相同全局来源不能在每个项目重复轰炸用户。
 - “撤销已应用内容”对持续兼容来源表示在用户选择的当前项目或当前执行域内抑制对应来源/资产并重新计算下一
   来源或产品默认；后续 watcher 更新不得绕过该偏好重新应用。该操作不写回外部文件，也不同于显式导入的字段级撤销。
 
 ### 3.2 外部 AI 应用设置页
 
-设置中提供统一的“外部 AI 应用”入口，先按来源产品和作用域分组，再展示资产：
+设置中提供统一的“外部 AI 应用”入口，先按来源产品和使用范围分组，再展示资产：
 
 | 信息 | 产品要求 |
 |---|---|
-| 来源 | 产品、规范化位置、用户全局/项目/工作区作用域、实际执行域；Agent 普通视图只接收 `<workspace>/…`、`~/.config/…` 或 `<remote>/…` 等安全标签，不传绝对用户路径。 |
+| 来源 | 产品、规范化位置、用户全局/项目/工作区使用范围、实际执行域；Agent 普通视图只接收 `<workspace>/…`、`~/.config/…` 或 `<remote>/…` 等安全标签，不传绝对用户路径。 |
 | 内容 | 配置、Rules、Agents、Skills、Commands、MCP、Hooks、插件、工具等类别与数量。 |
 | 状态 | 已发现、已应用、可用、需确认、更新中、沿用上一版本、部分受限、暂时过期、已移除/已停用或不可用。 |
 | 变化 | 最近成功读取时间、候选摘要、已应用摘要、权限或能力变化。 |
-| 操作 | 查看详情、应用/启用、按项目或执行域抑制/恢复兼容来源、进入/退出 Safe Mode、停用执行 target、撤销显式导入、重新加载、低风险/代码更新改为先询问、显式导入为 BitFun 配置。 |
+| 操作 | 查看详情、应用/启用、按项目或执行域抑制/恢复兼容来源、进入/退出 Safe Mode、停用插件执行、撤销显式导入、重新加载、低风险/代码更新改为先询问、显式导入为 BitFun 配置。 |
 
 默认视图只展示用户需要处理的事项和聚合结果；文件级诊断、字段来源、依赖和执行身份进入详情。来源删除或更新
 失败不要求用户阅读日志才能理解结果。
 
 Safe Mode 是执行域/工作区实例内的易失控制状态，不写入来源偏好，也不把来源伪装成 `disabled`。进入后继续发现和
 展示 Command、Tool、Subagent 与 MCP，但立即撤下外部 Tool、Subagent 和 MCP 的新调用路由；Prompt Command 作为
-静态模板继续可见。退出后基于当前来源 generation 重新协调，不能恢复已删除、已撤销或已过期审批的旧路由。
+静态模板继续可见。退出后基于当前来源版本重新协调，不能恢复已删除、已撤销或已过期审批的旧路由。
 GUI 和 TUI 都通过同一个 `SetSafeMode` 动作请求该变化，Peer Host 在事实所在 Host 执行；只读 Server 通过
 `hostCapabilities` 明确拒绝变更。所有偏好写操作携带 `expectedPreferenceRevision`，旧视图必须得到 `stale_revision`
 并重新读取，不能用界面本地状态覆盖并发进程的新决定。
@@ -127,7 +127,7 @@ GUI 和 TUI 都通过同一个 `SetSafeMode` 动作请求该变化，Peer Host �
 
 ### 3.4 静态 Hook 目录
 
-Hook 首先以独立、只读的 `ExternalHookCatalogSnapshotV1` 展示，而不进入可执行来源控制面。Desktop 设置页的
+Hook 首先以独立、只读的 `ExternalHookCatalogSnapshotV1` 展示，而不进入可执行来源管理模块。Desktop 设置页的
 “外部 AI 应用 → Hooks”和交互式 TUI 的 `/hooks` 消费同一份 Rust 快照；`/help hooks`、`/hooks -h` 与 `/hooks --help` 提供说明，不增加快捷键、
 命名空间变体或生态专用命令。`/hooks` 与其他内置命令采用同一套既有冲突策略：无冲突时使用普通命令名；发生
 同名冲突时由现有命令菜单展示来源限定项，静态 Hook 目录不增加另一套保留字或路由规则。
@@ -137,22 +137,22 @@ Hook 首先以独立、只读的 `ExternalHookCatalogSnapshotV1` 展示，而不
 | 生态 | 当前静态来源 | 当前可见事实 | 明确不做 |
 |---|---|---|---|
 | OpenCode | 用户、legacy、项目祖先 `.opencode` 与显式配置目录中的 `plugin/`、`plugins/`；相同层级的 JSON/JSONC `plugin` 声明 | 以稳定、确定的 adapter 顺序展示每个具名导出的静态对象属性、未知属性和动态注册提示；相同事件在不同具名导出中保留独立注册身份；软件包声明只显示“已声明、未解析”；显式配置目录保持原生的末级优先顺序 | 不安装依赖、不解析软件包导出、不 import JS/TS、不执行 handler；类型声明 `.d.ts` 不作为运行时插件源；不把项目根下任意 `plugin(s)/` 当成 OpenCode 目录。 |
-| Claude Code | 用户 `~/.claude/settings.json`，以及从项目根到当前工作区的 `.claude/settings.json`、`.claude/settings.local.json` | Hook 事件、matcher、`command/http/mcp_tool/prompt/agent` handler 类型；先合并已观察设置层，再把有效 `disableAllHooks=true` 投影为 disabled | 不复制 managed Hook 例外或运行时信任判断；任一参与层无效或超限时不猜测有效激活状态；不传输 command、prompt、URL、server/tool 参数或其他 handler 正文。 |
+| Claude Code | 用户 `~/.claude/settings.json`，以及从项目根到当前工作区的 `.claude/settings.json`、`.claude/settings.local.json` | Hook 事件、matcher、`command/http/mcp_tool/prompt/agent` handler 类型；先合并已观察设置层，再把有效 `disableAllHooks=true` 显示为 disabled | 不复制 managed Hook 例外或运行时信任判断；任一参与层无效或超限时不猜测有效激活状态；不传输 command、prompt、URL、server/tool 参数或其他 handler 正文。 |
 | Codex | 用户与按持久 `project_root_markers` 有界的项目祖先 `hooks.json`、`config.toml`；linked worktree 的 `hooks.json` 和 `config.toml` 中整个 `[hooks]` 表均映射到主 checkout 对应目录 | 展示固定 schema 中的 Hook 事件与 command handler；非原生 prompt/agent 声明只标为 unsupported；User state/feature 仍可能被未观察的 SessionFlags 覆盖，项目声明还受 trust 约束，因此 command handler 的有效激活统一保持 unknown | 不把 Claude Code 的 matcher 或全局禁用字段套用到 Codex；不猜测插件、托管层、会话注入、state/feature 合并或 trust-gated 项目激活来源，这些未观察来源以覆盖诊断明确显示。 |
 
 只有语义完全一致的 `PreToolUse`/`PostToolUse` 和 OpenCode `tool.execute.before`/`tool.execute.after` 分别映射到
 BitFun 已有 `ToolBefore`/`ToolAfter` 契约。其他原生事件仍可见，但标为 `native_only`；静态分析不能安全确定的注册
-标为 `opaque`，不得猜测映射。目录 DTO 只包含 provider 身份与稳定 adapter 顺序、来源、作用域、脱敏位置、matcher 摘要、
-handler 类型、原生激活状态、覆盖投影状态和固定诊断，不包含 handler body、命令、prompt、URL、环境变量、凭据
-或任意执行 payload。`content_version` 仅指纹化这些已脱敏语义事实，原始文件字节和敏感正文不进入版本值。
+标为 `opaque`，不得猜测映射。目录 DTO 只包含 provider 身份与稳定 adapter 顺序、来源、使用范围、脱敏位置、matcher 摘要、
+handler 类型、原生激活状态、覆盖后的显示状态和固定诊断，不包含 handler body、命令、prompt、URL、环境变量、凭据
+或任意执行 payload。`content_version` 仅内容摘要化这些已脱敏语义事实，原始文件字节和敏感正文不进入版本值。
 
 发现按文件、目录项、软件包声明、handler 和总目录条目设置硬上限；单个文件或 provider 失败只产生 Hook 资产诊断，
 健康 provider 仍然发布。刷新失败时协调器保留该 provider 的最后有效静态结果并显式标记 stale；首次失败使用独立
 provider 失败事实，避免在空目录界面中伪装成“成功但没有来源”，错误正文仍只保留在共享诊断中。Desktop 和 TUI
 只按需刷新，并复用已有类型化 Discovery Lane 的 provider 级合并、超时和延后结果机制，不建立第二套 watcher、
 任务调度器或状态机。同一工作区有发现仍在运行时，后续 Desktop/TUI 刷新只读取共享 pending 快照，不再排队第二代
-发现；超时后的终态在既有 refresh gate 内原子完成、发布。Desktop 轮询同一缓存快照直至 pending 结束，TUI 在单次
-命令内等待该快照收敛。GUI 对每个 provider 的来源、条目、诊断以及目录级诊断分别使用共享分页预算，TUI 对来源、
+发现；超时后的最终状态在既有 refresh gate 内一次完成、发布。Desktop 轮询同一缓存快照直至 pending 结束，TUI 在单次
+命令内等待该快照完成。GUI 对每个 provider 的来源、条目、诊断以及目录级诊断分别使用共享分页预算，TUI 对来源、
 条目和诊断设置输出上限，避免大型目录一次挂载或打印数千项。Git/worktree 服务只提供当前 checkout 边界与主 checkout 身份；adapter
 在最多 32 层的边界内解释各生态祖先规则，无法确认 Git 边界时只读取当前工作区，不向任意父目录扩散。当前只允许
 本机执行域：Remote workspace 和 Peer Device Mode 显示明确不支持，绝不
@@ -160,9 +160,9 @@ provider 失败事实，避免在空目录界面中伪装成“成功但没有�
 
 ## 4. 来源、资产与加载策略
 
-### 4.1 来源身份与作用域
+### 4.1 来源身份与使用范围
 
-来源身份至少包含生态、来源类型、规范化位置、作用域和执行域。作用域必须明确区分：
+来源身份至少包含生态、来源类型、规范化位置、使用范围和执行域。使用范围必须明确区分：
 
 - 本地用户全局来源：可影响本地多个项目，决定只记录一次；项目可以单独停用或覆盖。
 - 项目来源：随仓库共享，只影响按该生态规则命中的项目树。
@@ -170,7 +170,7 @@ provider 失败事实，避免在空目录界面中伪装成“成功但没有�
 - 远端用户或项目来源：在远端执行域发现和决策，不把本地同名路径或选择静默复制过去。
 
 “全局来源只提示一次”只表示来源级加载偏好在同一执行域去重，不表示首个项目的工作目录、环境、凭据或策略
-结论自动授权其他项目。全局来源可以共享原始文件解析、内容摘要和精确物化缓存；候选准备、import、健康和切换
+结论自动授权其他项目。全局来源可以共享原始文件解析、内容摘要和内容一致的完整文件缓存；静态准备、Host 加载和健康
 必须按“有效来源图 + 项目/工作区实例 + 执行域 + 工作目录/环境”分别计算。一个项目失败不能把同一全局来源在
 其他项目中的健康状态覆盖成失败。Remote 使用独立来源偏好和实例结论，不静默继承本机选择。
 
@@ -182,36 +182,36 @@ provider 失败事实，避免在空目录界面中伪装成“成功但没有�
 |---|---|---|
 | L0 仅清单 | 尚未支持的字段、静态插件/工具名称、来源元数据 | 自动发现和展示，绝不宣称已经应用或可执行。 |
 | L1 被动声明 | 本地 Rules、Instructions、纯声明配置、Skill 的说明和索引 | 校验后默认自动应用；显示一次可撤销摘要。不得启动进程、读取凭据或主动联网。 |
-| L2 受归属模块保护的外部能力 | 可执行 Skill/Command、远程 Reference、MCP、LSP、Formatter、Provider 连接 | 发现后进入“需确认”；由真实归属模块展示命令、网络、凭据和作用域后启用。 |
-| L3 任意第三方代码 | JS/TS Tool、服务插件、Hook、TUI target、动态 import | 发现但不 import；首次按来源/target 启用时说明执行用户、工作目录和直接文件/网络/进程的粗粒度执行包络，不能承诺 import 前已知全部动态贡献。 |
+| L2 受归属模块保护的外部能力 | 可执行 Skill/Command、远程 Reference、MCP、LSP、Formatter、Provider 连接 | 发现后进入“需确认”；由真实归属模块展示命令、网络、凭据和使用范围后启用。 |
+| L3 任意第三方代码 | JS/TS Tool、服务插件、Hook、TUI 插件入口、动态 import | 发现但不 import；首次按来源、插件身份和执行域启用时说明 OS 用户、工作目录，以及文件、网络和进程权限；不能承诺 import 前已知全部动态贡献。 |
 
-OpenCode Subagent 属于 L2：adapter 只读取声明，不执行外部代码；激活仍需确认实际模型、工具、执行域和来源谱系。
-仅 description 等 catalog 文案变化不扩大包络，不重复询问；prompt 行为、provenance、模型或工具变化必须重新确认。
-生态 adapter 只提交类型化的模型请求，不能把 `provider/model` 等来源语法交给通用 owner 解析。Subagent owner 在审批
-前将请求物化为唯一、已启用的具体模型，并形成“配置 ID + 运行配置指纹”的不可变绑定；`inherit`、`primary`、`fast`、
+OpenCode Subagent 属于 L2：adapter 只读取声明，不执行外部代码；激活仍需确认实际模型、工具、执行域和来源关系。
+仅 description 等 catalog 文案变化不会扩大运行权限，因此不重复询问；prompt 行为、来源、模型或工具变化必须重新确认。
+生态 adapter 只提交类型明确的模型请求，不能把 `provider/model` 等来源语法交给通用模块解析。Subagent 归属模块在审批
+前把请求解析并固定到一个当前可用的具体模型，形成“配置 ID + 运行配置内容摘要”的不可变绑定；`inherit`、`primary`、`fast`、
 `auto`、`default` 等字符串在此绑定中都是普通配置 ID，不能再次经过模型选择器解释。无法唯一确定时保持不可用。provider、
-模型名、endpoint 或其他影响运行身份的配置在同一 ID 下变化，也会重建未来 generation 并产生新的审批决策；generation
-lease 保留旧绑定事实，执行入口若发现当前配置与旧指纹不一致则安全失败，不能静默改用新配置或父会话模型。
+模型名、endpoint 或其他影响运行身份的配置在同一 ID 下变化，也会生成新的配置版本并产生新的审批决策。运行中的调用
+继续使用启动时绑定的版本；执行入口若发现当前配置与旧内容摘要不一致，则拒绝执行，不能静默改用新配置或父会话模型。
 
-确认结果分成两层：来源级加载偏好按“来源限定身份 + target + 执行域 + 更新策略”保存，并明确作用于当前项目
-还是当前执行域内所有已通过来源校验的项目；项目/工作区实例只作为“有效来源图 + 粗粒度执行包络 + 已知贡献
-摘要”的重新求值上下文，不形成第二个确认键。选择全局作用域后，跨项目本身不重复询问；只有新实例使执行包络、
-凭据或能力扩大时才进入“需确认”。工作目录仍在当前已校验项目根和已批准包络内时，子目录变化也不重复询问。
+确认结果分成两层：来源级加载偏好按“来源限定身份 + 插件身份 + 执行域 + 更新策略”保存，并明确作用于当前项目
+还是当前执行位置内所有已通过来源校验的项目；项目/工作区实例只用于重新检查有效来源、运行条件和已知贡献，
+不形成第二个确认键。选择全局使用范围后，跨项目本身不重复询问；只有新实例扩大工作目录、文件/网络/进程权限、
+凭据或能力时才进入“需确认”。工作目录仍在当前已校验项目根和用户已经确认的范围内时，子目录变化也不重复询问。
 
 普通配置更新在摘要未扩大时可自动切换。L3 代码内容变化只有同时满足来源身份/完整性可验证、来源更新策略允许，
-且 import 前的执行用户、工作目录、直接文件/网络/进程包络、凭据范围和安装行为未扩大时，才允许在原批准包络内
-准备隔离候选。已激活项目中的同一份本地源码可以按持续重载偏好自动准备；软件包版本/完整性或远程内容变化默认
+且 import 前的 OS 用户、工作目录、文件/网络/进程权限、凭据范围、环境变量和安装行为未扩大时，才允许按用户已经确认的条件
+完成不执行代码的静态检查和依赖准备。已激活项目中的同一份本地源码可以按持续重载偏好自动准备；软件包版本/完整性或远程内容变化默认
 先询问，除非用户或组织明确允许该来源自动更新。用户始终可以改为“每次代码更新先询问”。
 
-动态工具和 Hook 可能只有在 module import 后才可知。候选 worker 必须与激活 worker 隔离，import 后先返回真实
-贡献差异，不立即注册；新增受 BitFun owner 管理的工具、Hook 或界面贡献需要确认时，候选保持待确认，旧代次继续
-服务。由于候选 import 已可能在原批准包络内产生直接文件、网络或进程副作用，产品只能承诺“不激活新贡献”，
-不能把后置确认描述成能够撤销 import 副作用。
+动态工具和 Hook 可能只有在 module import 后才可知。新 Host 必须在旧进程树确认退出后加载，并先返回真实贡献差异；
+新增受 BitFun 归属模块管理的工具、Hook 或界面贡献需要确认时，停止新 Host、显示差异并等待处理。由于 import 已可能
+在用户确认的运行条件内产生文件、网络或进程副作用，产品不能把后置确认描述成能够撤销这些副作用。只有保存了完整、
+校验通过的旧版本文件时，才可以按同一停机顺序重新启动旧版本。
 
 ### 4.3 当前声明式适配范围
 
 本节只记录已经进入产品链路的能力，不把目标设计当成完成状态。OpenCode 是跨生态交互的首要基线：自定义命令继续
-使用普通 `/name`，候选列表显示来源；跨 provider 或与 BitFun 原生命令同名时由共享控制面保存版本化选择，不增加
+使用普通 `/name`，候选列表显示来源；跨 provider 或与 BitFun 原生命令同名时由共享来源管理模块保存版本化选择，不增加
 `/builtin:`、`/external:` 或生态前缀。管理入口使用 OpenCode 当前的单数 `/agent` 和 `/mcp`，分别保留 BitFun 既有
 `/agents`、`/mcps` 作为兼容别名，不为 Claude Code 或 Codex 增加平行命令。Claude Code 与 Codex 的原生覆盖只在各自 adapter 内计算，不能提升为跨生态
 数值优先级。上游语义以 OpenCode [Commands](https://opencode.ai/docs/commands/)、[Agents](https://opencode.ai/docs/agents/)
@@ -224,11 +224,11 @@ lease 保留旧绑定事实，执行入口若发现当前配置与旧指纹不�
 
 | 能力 | OpenCode | Claude Code | Codex | 当前边界 |
 |---|---|---|---|---|
-| Prompt Command | JSON/JSONC、Markdown 的 prompt-only 安全子集 | legacy `commands/**/*.md` 的 prompt-only 安全子集；Skills 仍由 Skill owner 处理 | 没有稳定、独立于 Skills 的声明式 Command 来源，因此不伪造 provider | `$ARGUMENTS`/位置参数可展开；shell、文件动态引用、指定 Agent/模型等未接通语义整体受限，不做部分执行。 |
-| Subagent | 用户/项目声明的安全子集 | 用户/项目 `agents/**/*.md` 的安全子集 | 用户/项目 `[agents]`、角色文件与安全配置层子集 | prompt、描述、精确模型和可表达工具请求进入既有 owner；权限、私有 MCP/Hook、推理/并发等无等价 owner 的字段 fail closed。 |
+| Prompt Command | JSON/JSONC、Markdown 的 prompt-only 安全子集 | legacy `commands/**/*.md` 的 prompt-only 安全子集；Skills 仍由 Skill 归属模块处理 | 没有稳定、独立于 Skills 的声明式 Command 来源，因此不伪造 provider | `$ARGUMENTS`/位置参数可展开；shell、文件动态引用、指定 Agent/模型等未接通语义整体受限，不做部分执行。 |
+| Subagent | 用户/项目声明的安全子集 | 用户/项目 `agents/**/*.md` 的安全子集 | 用户/项目 `[agents]`、角色文件与安全配置层子集 | prompt、描述、精确模型和可表达工具请求进入既有归属模块；权限、私有 MCP/Hook、推理/并发等没有对应实现的字段会阻止激活。 |
 | MCP | 用户/显式目录/项目配置的安全子集 | user/project/local 原生层的安全子集 | 用户与项目 `config.toml` 原生层的安全子集 | 支持可表达的 stdio 与 HTTPS Streamable HTTP；发现不启动 Server，首次激活继续经 BitFun MCP 审批。OAuth、remote executor、per-tool policy 等不完整语义明确降级。 |
-| Standalone Tool | 已有单文件 JavaScript 子集 | 无稳定的 runtime-free standalone Tool 来源 | 无稳定的 runtime-free standalone Tool 来源 | TypeScript、package/plugin Tool 与动态工具注册依赖独立 Runtime Host，不在声明式 adapter 中猜测。 |
-| Skill | 由既有 Skill Registry 发现 `.opencode` 等标准根 | 由既有 Skill Registry 发现 `.claude` 标准根 | 由既有 Skill Registry 发现 `.codex`、`.agents` 标准根 | Skill 的加载、覆盖、模式开关与执行仍由唯一 Skill owner 负责，不复制进 External Source Control Plane。 |
+| Standalone Tool | 已有单文件 JavaScript 子集 | 无稳定的 runtime-free standalone Tool 来源 | 无稳定的 runtime-free standalone Tool 来源 | TypeScript、package/plugin Tool 与动态工具注册依赖独立 Plugin Host，不在声明式 adapter 中猜测。 |
+| Skill | 由现有 Skill 加载模块发现 `.opencode` 等标准根 | 由现有 Skill 加载模块发现 `.claude` 标准根 | 由现有 Skill 加载模块发现 `.codex`、`.agents` 标准根 | Skill 的加载、覆盖、模式开关与执行仍由同一个 Skill 模块负责，不复制进外部来源管理模块。 |
 | Hook | 静态目录 | 静态目录 | 静态目录 | 只展示脱敏声明与等价 Hook point 覆盖；不 import、不执行 handler。 |
 
 生态原生语义由各 adapter 以契约测试固定，不抽象成全局优先级：
@@ -240,24 +240,24 @@ lease 保留旧绑定事实，执行入口若发现当前配置与旧指纹不�
 - Claude Subagent 扫描用户与逐层项目 `.claude/agents/**/*.md`，近工作目录定义整项覆盖；Claude MCP 保留
   `local > project > user` 的整项覆盖，local 只读取与规范化当前工作区严格匹配的项目项。
 - Codex Subagent 从用户与逐层项目 `[agents]`、角色文件合并，缺失字段按 Codex 层级继承；`enabled`、默认模型等已支持
-  控制字段进入行为版本，推理、权限、私有 MCP/Hook、并发等无等价 owner 的字段阻止激活。Codex MCP 按原生层级逐字段
+  控制字段进入行为版本，推理、权限、私有 MCP/Hook、并发等没有对应实现的字段阻止激活。Codex MCP 按原生层级逐字段
   覆盖；任一未被用户显式停用的必需 `config.toml` 层读取或解析失败时，本次 MCP/Subagent provider 发现整体失败并交由
-  coordinator 的 last-valid/fail-closed 策略处理，不能继续激活后续项目层；`required` 只诊断，不能使 BitFun 启动或聊天失败。
-- 同一 provider 先完成原生覆盖，再把一个 effective candidate 交给产品控制面；跨 provider 或 BitFun-native 同名才生成
+  coordinator 的规则处理：保留上一有效结果，并阻止继续激活后续项目层；`required` 只诊断，不能使 BitFun 启动或聊天失败。
+- 同一 provider 先完成原生覆盖，再把一个 effective candidate 交给产品管理模块；跨 provider 或 BitFun-native 同名才生成
   用户冲突。选择绑定参与者与行为版本，仅展示变化不重问，候选删除或不可用不静默回退。
 
 该矩阵不是“除 Runtime 外全部兼容”的声明。Rules/Instructions、References、模型/Provider 配置、LSP、Formatter、
 Theme、Keybind、完整插件清单，以及各生态新增的 managed/session/plugin 配置层仍需按具名消费场景逐项评估；其中能够
-安全静态解析的部分也尚未全部实现。后续不得为了填满矩阵建立通用配置 DTO 或第二套 owner，应继续以端到端收益和
+安全静态解析的部分也尚未全部实现。后续不得为了填满矩阵建立通用配置 DTO 或第二套归属模块，应继续以端到端收益和
 真实消费方为前提扩展现有能力契约。
 
 声明式 adapter 共同遵守以下边界：
 
 - 仅扫描已知 root；配置文件、角色文件和符号链接在读取前 canonicalize，越出声明来源 root、循环或非普通文件即拒绝。
-- 高优先级层整体无效且无法确定具体身份时，provider discovery 失败并沿用控制面的 last-valid；能够确定身份时以
-  unavailable/invalid tombstone 遮蔽低层同名定义，绝不静默重新启用低层实现。
-- 已知展示字段可以降级；未知或无等价 owner 的行为字段阻止激活。支持的控制字段和所有阻止原因都进入行为版本。
-- 公共快照只投影 executable basename、参数数量、环境/Header 名和 HTTPS origin 等安全摘要；原始命令、Prompt、
+- 高优先级层整体无效且无法确定具体身份时，provider discovery 失败并沿用来源管理模块保存的上一有效结果；能够确定身份时以
+  unavailable/invalid 标记遮蔽低层同名定义，绝不静默重新启用低层实现。
+- 已知展示字段可以降级；未知或没有对应实现的行为字段阻止激活。支持的控制字段和所有阻止原因都进入行为版本。
+- 公共快照只显示 executable basename、参数数量、环境/Header 名和 HTTPS origin 等安全摘要；原始命令、Prompt、
   凭据、绝对 home path 与 URL query 只留在受保护的准备数据中。
 
 声明式 adapter 的定量安全基线也属于稳定契约：单个 JSON/TOML 配置文件最多 1 MiB，单个 Command/Agent/role
@@ -268,21 +268,21 @@ Theme、Keybind、完整插件清单，以及各生态新增的 managed/session/
 
 ## 5. 运行中变化与优雅降级
 
-每次来源解析产生不可变候选代次。已经生效的结果使用激活代次；不得在原对象上边读边改：
+每次来源解析产生一个不可变候选版本。已经生效的结果使用当前启用版本；不得在原对象上边读边改：
 
 ```text
 发现变化
-  -> 解析并校验候选代次
-  -> import 前比较来源、执行包络、凭据与依赖行为
-  -> 自动准备或先等待确认
-  -> 隔离候选 import，取得真实贡献差异
-  -> 自动切换或在注册前等待确认
-  -> 在安全边界原子提交新代次
+  -> 解析并校验候选版本
+  -> import 前比较来源、运行条件、凭据与依赖行为
+  -> 静态检查、依赖准备或先等待确认
+  -> 停止并确认旧 Plugin Host
+  -> 新 Host import，取得真实贡献差异
+  -> 归属模块校验并发布
 ```
 
-在途调用固定使用发起时的激活代次。新调用只在切换完成后使用新代次；旧代次的迟到响应和贡献引用在退出后失效。
-Subagent 通过随调度请求传递的 generation lease 实现这一点；路由撤下后有 lease 的精确运行定义保留到调用结束，
-无 route 且无 lease 的旧定义立即回收。该机制不允许新调用使用已删除或已撤销的来源。
+正在执行的调用继续使用启动时的版本。新调用只在切换完成后使用新版本；旧版本的迟到响应和贡献引用在退出后失效。
+运行中的 Subagent 调用持续引用启动时的定义；路由撤下后，旧定义保留到这些调用结束。没有路由且没有运行中调用时，
+立即回收旧定义。新调用不能使用已经删除或撤销的来源。
 
 文件观察事件不是业务事实。协调器先按来源聚合连续 create/rename/write/remove 事件，并在可配置的文件稳定窗口后
 重新扫描完整来源图；编辑器的原子保存不能被误判成删除后重装。用户显式停用、组织策略收紧或安全撤销不等待
@@ -291,90 +291,99 @@ Subagent 通过随调度请求传递的 generation lease 实现这一点；路�
 | 变化 | 目标行为 |
 |---|---|
 | L1 内容有效更新 | 后台解析并原子应用；合并到一次变更摘要，不打断当前任务。 |
-| 已启用 L2/L3 内容更新，来源更新策略允许，且 import 前包络与 import 后贡献均未扩大 | 在原批准包络内后台准备并于安全边界切换；执行中的旧调用按原期限完成或被用户取消。 |
-| import 前发现执行包络、凭据范围、依赖安装行为或执行域扩大 | 不 import 候选；显示差异并等待确认。健康且仍合规的旧代次可继续服务。 |
-| 候选 import 后发现新的 owner 管理贡献 | 不注册新贡献；显示真实差异并等待确认。候选 import 已可能产生的直接副作用不可伪装成已撤销。 |
-| 候选解析、依赖准备或健康检查失败 | 保留仍合规的上一有效代次，状态显示“更新失败，仍使用上一版本”；首次加载则只禁用该资产。 |
+| 已启用 L2/L3 内容更新，来源更新策略允许，且 import 前可见的运行条件未扩大 | 后台完成静态准备，再停止旧 Host 并加载新版本；执行中的旧调用按原期限完成或被用户取消。 |
+| import 前发现工作目录、文件/网络/进程权限、凭据范围、环境变量、依赖安装行为或执行位置扩大 | 不加载新代码；显示差异并等待确认。健康且仍合规的旧版本可继续服务。 |
+| 新 Host import 后发现新的归属模块管理贡献 | 停止新 Host，不注册贡献并显示真实差异；import 已可能产生的直接副作用不可伪装成已撤销。 |
+| 静态解析或依赖准备失败 | 保留仍合规的上一有效版本；首次加载则只禁用该资产。 |
+| 旧 Host 停止后加载或健康检查失败 | 保持不可用；只有完整、校验通过的旧版本文件可以按同一停机顺序重启。 |
 | 暂时不可读或远程断线 | 标记“暂时过期”。仅允许无安全影响且仍可验证的上一结果在有界宽限期内继续；恢复后重新协商。 |
-| 稳定重扫确认删除、显式停用、来源撤销、权限收紧或策略失效 | 阻止新调用并撤下相关贡献；在期限内完成或取消在途调用，不能用缓存绕过当前事实。声明式配置重新计算并回退到下一来源或产品默认。显式停用和安全撤销立即生效。 |
+| 稳定重扫确认删除、显式停用、来源撤销、权限收紧或策略失效 | 阻止新调用，停止并确认共享 Host 进程树退出，再撤下相关贡献；只恢复仍合规的插件。在期限内完成或取消在途调用，不能用缓存绕过当前事实。声明式配置重新计算并回退到下一来源或产品默认。显式停用和安全撤销立即生效。 |
 | 来源重新出现 | 作为新候选重新验证。身份、内容和能力摘要未变化且策略允许时可自动恢复，否则重新确认。 |
 
-“上一有效代次”是可校验的物化结果，不是从已变化源文件重新构造的想象版本。旧代码不存在精确物化内容时，
+“上一有效版本”必须有内容摘要匹配的完整文件副本，不能从已经变化的源文件重新拼出。旧代码不存在完整副本时，
 必须显示“上一版本不可恢复”。缓存只用于可靠性，不能改变删除、撤销和权限收紧的语义。
 
 ## 6. 架构与职责
 
+### 6.1 发现来源
+
 ```mermaid
 flowchart LR
-  Sources["用户全局 / 项目 / 工作区外部来源"]
-  Adapters["同级生态适配器：OpenCode / Codex / Claude Code"]
-  Ports["能力专属 provider 契约"]
-  Catalog["外部来源目录"]
-  Watch["文件观察与外部变化事实"]
-  Coordinator["ExternalSourceControlPlane：四条 typed discovery lanes"]
-  Projection["v1 控制事实 + 公共 catalog"]
-  Policy["激活策略与各能力 owner"]
-  Config["Runtime Configuration Service"]
-  Host["Plugin Runtime Host"]
-  Owners["Command / Skill / MCP / Tool / Config / Subagent 等归属模块"]
-  Surface["Desktop / TUI / Peer / read-only Server"]
+  Sources["外部来源"] --> Adapters["生态 adapter"]
+  Watch["文件变化"] --> Control["Source control"]
+  Adapters --> Provider["能力接口"]
+  Control --> Provider
+  Provider --> Catalog["来源目录"]
+```
 
-  Sources --> Adapters
-  Adapters --> Ports
-  Watch --> Coordinator
-  Coordinator --> Ports
-  Ports --> Catalog
-  Catalog --> Projection
-  Coordinator --> Projection
-  Projection --> Surface
-  Coordinator --> Policy
-  Policy --> Config
-  Policy --> Host
-  Config --> Owners
-  Host --> Owners
-  Owners --> Catalog
+### 6.2 展示
+
+```mermaid
+flowchart LR
+  Catalog["来源目录"] --> View["状态视图"] --> Surface["Desktop · TUI · Peer"]
+```
+
+### 6.3 启用
+
+```mermaid
+flowchart LR
+  Control["Source control"] --> Policy["确认与启用"]
+  Policy --> Assets["配置内容"] --> Config["配置服务"]
+  Policy --> Calls["Command · Tool · Subagent · MCP"] --> Owners["能力归属模块"]
+  Policy --> Plugin["Plugin"] --> Client["PluginRuntimeClient"]
+```
+
+### 6.4 执行插件
+
+```mermaid
+flowchart LR
+  Runtime["能力模块"] <--> Client["PluginRuntimeClient"]
+  Client <--> Adapter["生态 adapter"]
+  Adapter <--> Service["Process service"]
+  Service <--> Host["Plugin Host"]
 ```
 
 | 部分 | 负责 | 不能承担 |
 |---|---|---|
-| 外部来源目录 | 聚合来源身份、作用域、资产清单、用户处理偏好和可读状态 | 解释所有生态格式、保存凭据、授予脚本权限或管理 worker。 |
+| 外部来源目录 | 聚合来源身份、使用范围、资产清单、用户处理偏好和可读状态 | 解释所有生态格式、保存凭据、授予脚本权限或管理 worker。 |
 | 生态发现与解析适配器 | 发现本生态标准来源，保留真实优先级、格式、参数展开和诊断，并通过能力专属 provider 输出 | 写 BitFun 配置、依赖兄弟生态 adapter、执行其他生态语义或创建跨生态最低公分母。 |
-| 能力专属 provider 契约 | 用来源限定身份交付 Command、Tool、Subagent 等类型化定义与调用/展开结果 | 携带任意 payload 的通用资产对象，或让一种能力的新增字段污染其他能力。 |
-| 静态 Hook provider 与目录协调器 | 通过 runtime-free 契约聚合 OpenCode、Claude Code、Codex 的脱敏声明；隔离 provider 失败、保留最后有效结果并向 Desktop/TUI 投影 | import handler、选择脚本运行时、授予执行权限、复用可执行来源审批 DTO，或把静态映射宣称为运行时兼容。 |
+| 能力专属 provider 契约 | 用来源限定身份交付 Command、Tool、Subagent 等类型明确的定义与调用/展开结果 | 携带任意数据的通用资产对象，或让一种能力的新增字段污染其他能力。 |
+| 静态 Hook provider 与目录协调器 | 聚合 OpenCode、Claude Code、Codex 的脱敏声明；隔离 provider 失败、保留最后有效结果，并向 Desktop/TUI 生成只读视图 | import handler、选择脚本运行时、授予执行权限、复用可执行来源审批 DTO，或把静态映射宣称为运行时兼容。 |
 | 文件观察服务 | 提供可订阅、去抖的文件变化事实 | 解释生态路径、决定优先级、提交业务状态。 |
-| 本地 JSON 存储服务 | 提供跨进程锁、锁内读改写和严格同卷原子替换等通用文件能力；替换失败时保留旧文件 | 定义外部来源偏好 schema、冲突策略或生态语义。 |
-| 共享生命周期协调器 | 由单一 `ExternalSourceControlPlane` 持有 Command、Tool、Subagent、MCP 四个 typed coordinator 和四条 discovery lane；按 provider 复用唯一 in-flight 请求、隔离超时和失败、以 generation fencing 拒绝迟到结果，再请求能力 owner 切换 | 按生态 ID 分支业务行为、把四类 payload 合并为通用资产、解析生态文件、直接提交配置、工具、权限或界面状态。 |
-| 版本化控制投影 | 以正交的 discovery/desired/review/runtime/support 事实推导一级状态；向宿主提供同 generation 的 control/catalog、`hostCapabilities`、恢复动作和闭合通用操作 | 保存第二份权威状态、携带 Prompt/凭据/可执行 payload、替代能力专属审批和冲突 DTO，或让 GUI/TUI 自行推导生命周期。 |
-| 产品展示投影 | 按作用域、工作区或用户目录关系统一生成安全来源位置，清理可见诊断文本中的已知绝对路径，并按 `Source / Command / Tool / Subagent` 资源类型路由诊断 | 让 GUI/TUI 解析 provider 诊断码前缀、识别 `.opencode`、`.claude` 等私有目录结构，或接收原始用户/工作区路径。 |
-| 冲突解析 | 对独立 provider 或产品本地可执行能力的同名候选建立版本敏感指纹；未选择时不激活，选择后只在指纹不变时复用。现有 Skill 固定根顺序由 Skill owner 独立维护 | 用 adapter 优先级静默覆盖另一生态或本地可执行能力，或把选择写回外部文件。 |
-| 激活策略与各能力 owner | 根据风险、用户选择、组织上限和执行域决定自动应用、等待确认或限制 | 修改生态加载顺序或把策略拒绝伪装成解析失败。 |
+| 本地 JSON 存储服务 | 提供跨进程锁、锁内读改写和同卷原子替换；替换失败时保留旧文件 | 定义外部来源偏好 schema、冲突策略或生态语义。 |
+| `ExternalSourceControlPlane` | 四类来源分别刷新；同一 provider 同一时间只扫描一次；超时只影响该 provider；旧结果不能覆盖新刷新；确认最新结果后，再通知对应能力模块切换 | 按生态 ID 分支业务行为、把四类数据合并为通用资产、解析生态文件、直接提交配置、工具、权限或界面状态。 |
+| 版本化控制状态视图 | 根据 discovery/desired/review/runtime/support 事实生成一级状态；向宿主提供同一版本的 control/catalog、`hostCapabilities`、恢复动作和固定通用操作 | 保存第二份权威状态、携带 Prompt/凭据/可执行数据、替代能力专属审批和冲突 DTO，或让 GUI/TUI 自行推导生命周期。 |
+| 界面状态 | 按使用范围、工作区或用户目录关系统一生成安全来源位置，清理诊断文本中的已知绝对路径，并按 `Source / Command / Tool / Subagent` 资源类型路由诊断 | 让 GUI/TUI 解析 provider 诊断码前缀、识别 `.opencode`、`.claude` 等私有目录结构，或接收原始用户/工作区路径。 |
+| 冲突解析 | 对独立 provider 或产品本地可执行能力的同名候选建立版本敏感内容摘要；未选择时不激活，选择后只在内容摘要不变时复用。现有 Skill 固定根顺序由 Skill 归属模块独立维护 | 用 adapter 优先级静默覆盖另一生态或本地可执行能力，或把选择写回外部文件。 |
+| 激活策略与能力归属模块 | 根据风险、用户选择、组织上限和执行位置决定自动应用、等待确认或限制 | 修改生态加载顺序或把策略拒绝伪装成解析失败。 |
 | Runtime Configuration Service | 应用兼容配置视图，执行显式导入、冲突预览、原子写入和撤销 | 读取凭据值或加载插件代码。 |
-| Plugin Runtime Host / 执行服务 | 准备代次、监督进程、期限、取消、背压、健康和贡献生命周期 | 决定来源优先级、产品提示策略或最终业务状态。 |
+| `PluginRuntimeClient` | 当前路由调用并管理期限、同一插件串行调用、重复请求结果、响应校验与故障诊断；目标再增加队列上限、取消后的结果失效和旧连接结果拒绝 | 执行第三方代码、成为物理进程或插件生命周期归属模块，或决定来源优先级和最终业务状态。 |
+| `ScriptToolRuntime` 与 Plugin Host | services 实现管理物理进程事实；Plugin Host 子进程加载并执行已批准的 JS/TS 插件 | 把 Rust 侧实现命名为 Host、把工作区当作默认进程边界，或为每个插件建立强隔离。详细生命周期见[插件运行时设计](plugin-runtime-design.md)。 |
 | 产品入口 | 展示统一状态并发起用户操作 | 直接扫描目录、同步安装依赖或依赖生态原始对象。 |
 
-来源目录是产品级只读聚合视图，不是新的配置 owner、权限 owner 或插件管理器。实现时先复用现有 Config、Skill、
+来源目录是产品级只读聚合视图，不是新的配置、权限归属模块或插件管理器。实现时先复用现有 Config、Skill、
 MCP、Tool、Permission 和 Plugin Runtime 边界；不得建立同时扫描目录、写配置、下载依赖、执行命令和注册贡献的
 “大导入器”。
 
 `ecosystem_id`、来源类型和执行域 ID 是开放且可校验的标识，不是 core 中持续扩大的枚举分支。只有 Product
-Assembly 知道当前构建注册了哪些具体 adapter；产品入口、目录、协调器和能力 owner 不得导入 OpenCode、Codex
+Assembly 知道当前构建注册了哪些具体 adapter；产品入口、目录、协调器和能力归属模块不得导入 OpenCode、Codex
 或 Claude Code 的私有类型。新增生态通过同级 adapter 与现有能力契约接入，不能修改另一个生态 adapter。
 
 provider discovery 必须是可独立调度的 request/result，不在协调器锁内串行扫描。产品组装为每个 provider 设定期限，
-超时后只沿用该 provider 的上一有效结果；健康兄弟 provider 继续更新。同一 provider 同时最多保留一个 in-flight
-discovery；期间到达的新刷新只合并最新 request，并把旧完成标记为不可发布，随后立即执行新 generation。同步文件适配器
+超时后只沿用该 provider 的上一有效结果；健康兄弟 provider 继续更新。同一 provider 同时最多执行一次扫描；
+期间到达的新刷新只保留最新 request，并让较早完成的结果失效，随后立即执行最新刷新。同步文件适配器
 超时后底层阻塞任务未必可取消，因此进程级 discovery budget 固定为 8，后台等待最多 30 秒；超限后报告隔离状态，
-但同一 provider 保留 generation tombstone 直到真实 worker 退出，期间只合并最新 request、不得重复占用线程或 permit。
-未来网络 provider 仍应实现协作式 deadline/cancel，
+但同一 provider 在真实 worker 退出前仍占用名额；期间只保留最新 request，不得重复占用线程或并发名额。
+未来网络 provider 仍应实现协作式超时和取消，
 但不改变目录、冲突或产品入口契约。
 
 控制请求的通用动作固定为 `Refresh`、`SetSourceEnabled` 和 `SetSafeMode`。能力专属的审批、冲突选择和执行参数继续由
-各 owner 的类型化契约承担，不能为了“一个 API”塞入任意 payload。错误以 `code + stage + retryable +
+各归属模块的类型明确契约承担，不能为了“一个 API”塞入任意数据。错误以 `code + stage + retryable +
 correlationId/causationId + recoveryActions` 表达；`detail` 只用于有界诊断，界面和远端协议不得解析文本
 决定控制流。日志只记录动作、阶段、关联 ID、错误类别和脱敏对象身份；产品打点可在同一结果上叠加，但不得反向改变状态。
 
 来源降级必须区分粒度：整个配置/目录状态未知时回退对应来源；能确定身份的单个 Command 读取或解析失败时只回退该
-Command；明确缺失且未被标记失败的 Command 是稳定删除。产品调用在刷新后还要校验先前投影的候选 ID 与内容版本，
+Command；明确缺失且未被标记失败的 Command 是稳定删除。产品调用在刷新后还要校验先前显示的候选 ID 与内容版本，
 否则菜单展示旧版本、执行新版本会绕过冲突重新确认。
 
 ## 7. 状态与提示规则
@@ -389,7 +398,7 @@ Command；明确缺失且未被标记失败的 Command 是稳定删除。产品�
 | 可用 | 可执行能力已完成确认、准备和真实注册。 |
 | 需确认 | 首次启用、能力扩大、凭据或执行域变化等待用户处理。 |
 | 更新中 | 候选正在后台解析、准备或健康检查，当前任务不被阻塞。 |
-| 沿用上一版本 | 候选失败，但上一有效代次仍符合当前策略。 |
+| 沿用上一版本 | 候选失败，但上一有效版本仍符合当前策略。 |
 | 部分受限 | 某些字段、能力或平台不支持，其他内容仍可用。 |
 | 暂时过期 | 来源暂时不可达，正在有界等待恢复。 |
 | 已移除 / 已停用 | 新调用和贡献已经撤下。 |
@@ -405,9 +414,9 @@ Command；明确缺失且未被标记失败的 Command 是稳定删除。产品�
 
 ## 8. 分阶段落地与验收
 
-第一阶段以 Prompt Command 做第一个可用纵向切片：
+第一阶段以 Prompt Command 做第一个可用端到端能力：
 
-1. 建立共享来源目录、生命周期协调器、开放生态 ID 和 Prompt Command 专属契约；用第二个 fake adapter 证明
+1. 建立共享来源目录、`ExternalSourceControlPlane`、开放生态 ID 和 Prompt Command 专属契约；用第二个 fake adapter 证明
    provider 更新、失败和删除彼此隔离。
 2. 发现 OpenCode 当前支持的用户全局和项目 Command 来源，建立来源限定身份、生态内覆盖关系和聚合清单；
    OpenCode 自身定义的项目/用户优先级仍由 adapter 解释，跨 provider 或与 BitFun 本地 Command 的同名冲突进入待选择状态。
@@ -415,21 +424,21 @@ Command；明确缺失且未被标记失败的 Command 是稳定删除。产品�
 4. 含 `!shell`、`@file`、`{env:...}`、`{file:...}`、`agent`、`model`、`variant` 或 `subtask` 等未接通语义的命令标记为“部分受限”，不做
    静默忽略后的部分执行。
 5. Desktop 提供统一来源状态、刷新、按执行域抑制/恢复和冲突候选选择；首次 provider 扫描完成前显示中性检查状态，
-   不把暂时空目录误报为最终空结果；已经选择且指纹未变化的冲突退出待处理区。交互式 TUI（ChatMode）使用同一目录列出和执行
-   Command；跨 provider 候选由现有命令菜单按来源、作用域和兼容状态展示，并通过内部稳定 candidate ID 选择，同次选择也解析本地同名冲突。发现或确认不阻塞
+   不把暂时空目录误报为最终空结果；已经选择且内容摘要未变化的冲突退出待处理区。交互式 TUI（ChatMode）使用同一目录列出和执行
+   Command；跨 provider 候选由现有命令菜单按来源、使用范围和兼容状态展示，并通过内部稳定 candidate ID 选择，同次选择也解析本地同名冲突。发现或确认不阻塞
    普通聊天输入；发现未完成或冲突未解决时普通 `/name` 不猜测结果，非交互入口返回结构化冲突，交互入口引导到候选菜单。不得公开 `/builtin:<name>`、`/external:<name>` 或生态专用命令。执行域全局偏好
-   使用独立偏好文件、跨进程锁和严格原子替换，并在查询、刷新和执行前重新读取，使并行 Desktop/CLI 进程不会继续使用
+   使用独立偏好文件、跨进程锁和同卷原子替换，并在查询、刷新和执行前重新读取，使并行 Desktop/CLI 进程不会继续使用
    另一进程已停用的来源或丢失并发选择。Desktop IPC 仅返回设置页所需摘要，不携带 Prompt Command 模板正文。
-6. 完成来源变化、无效候选、稳定删除、重新出现、偏好保持和去重提示，为后续能力 owner 提供稳定基线。
+6. 完成来源变化、无效候选、稳定删除、重新出现、偏好保持和去重提示，为后续能力归属模块提供稳定基线。
 
 第二阶段以 OpenCode standalone Tool 验证可执行内容的完整产品边界：
 
 1. Tool provider 契约与脚本运行时端口独立于 Prompt Command；OpenCode adapter 负责全局/项目 `{tool,tools}`
    来源与格式，Core 激活策略负责审批/冲突，脚本服务负责 Node worker，现有 Tool Runtime 负责最终模型暴露和调用。
-2. 发现只读取静态摘要，不 import；首次启用显示来源文件、工作目录与直接文件/网络/环境/进程能力。确认按 target、
+2. 发现只读取静态摘要，不 import；首次启用显示来源文件、工作目录与直接文件/网络/环境/进程能力。确认按插件身份、
    执行域、runtime 和能力集合记忆，内容更新不扩大能力时不重复询问；用户拒绝在内容更新前不再主动提示，但可在
    设置页主动重新审核。
-3. 内置、MCP 与外部同名 Tool 使用包含候选身份和内容版本的指纹；选择前保留已有本地实现，不按注册顺序静默覆盖。
+3. 内置、MCP 与外部同名 Tool 使用包含候选身份和内容版本的内容摘要；选择前保留已有本地实现，不按注册顺序静默覆盖。
    候选集合由已识别定义而非成功加载结果计算；候选更新、暂不可用或删除后重新选择，已选外部实现失效时保持
    unavailable，不静默回退同名本地实现。其他无关 Tool 和生态不受影响。
 4. Desktop 提供完整审核卡、主动停用/重新审核和冲突候选；交互式 TUI（ChatMode）状态栏只做非阻塞提示，`/extensions`
@@ -440,37 +449,37 @@ Command；明确缺失且未被标记失败的 Command 是稳定删除。产品�
    不新增生态前缀或 `external-*` 命令，也不借兼容接入重定义既有命令职责。
    普通聊天输入和无关会话不等待用户处理；活动 turn 期间入口仍可查看和管理，但主 Agent 切换单独禁用并说明原因，
    不改变正在执行的 session。
-5. 每个 target 使用一个持久 Node worker，支持 load/invoke、`AbortSignal` 取消、500 ms 宽限后的 target 级硬终止、
-   30 秒请求期限和 dispose；产品配置的更短外层期限丢弃调用 future 时也会终止 worker，并在终止完成前保持 target
+5. 每个 standalone Tool 使用一个持久 Node worker，支持 load/invoke、`AbortSignal` 取消、500 ms 宽限后的进程级硬终止、
+   30 秒请求期限和 dispose；产品配置的更短外层期限丢弃调用 future 时也会终止 worker，并在终止完成前保持脚本
    串行许可。输出限制为 1 MiB，协议帧限制为 8 MiB。稳定删除、抑制或撤销先撤下新调用；更新加载
-   失败在没有精确物化旧源码的 PR2 中 fail-closed，不冒充沿用上一版本。worker 崩溃会立即撤下该 target 的全部
-   路由并显示失败；空闲退出由 runtime health 事件主动上报，事件携带独立加载代次，旧 worker 的迟到事件不能撤下
-   同版本的新实例。调用不自动重放；下一次模型 Tool Catalog 暴露前只尝试恢复一次，之后依赖显式刷新或来源变化，
+   当前 standalone Tool 路径没有保存完整旧源码副本；更新失败时会撤下该脚本，不冒充沿用上一版本。worker 崩溃会立即撤下该脚本的全部
+   路由并显示失败；空闲退出由 worker 状态事件主动上报，事件只在产生它的进程连接内生效，已关闭连接的迟到事件不能撤下
+   新 worker。调用不自动重放；下一次模型 Tool Catalog 暴露前只尝试恢复一次，之后依赖显式刷新或来源变化，
    不形成循环重启。某个全局、项目、legacy 或显式目录不可读时只降级该目录，其他健康目录继续发现和运行。
 6. `.ts`、依赖型 `.js`、`metadata`/`ask`、附件、package plugin、Hook、TUI plugin renderer 和 Remote worker 明确
    延后；本机 Node 进程不是 OS 沙箱，VM realm 与隐藏响应令牌只保护协议稳健性。脚本继承当前用户的文件、网络、
    环境与进程权限。脚本 worker 与 local stdio MCP 通过同一进程树边界启动：Unix 使用独立 process group 并在宽限后
-   升级终止，Windows 在恢复子进程前先加入 kill-on-close Job Object；附着失败时 fail closed。该机制回收已纳管后代；
+   升级终止，Windows 在恢复子进程前先加入 kill-on-close Job Object；附着失败时拒绝继续。该机制回收已纳管后代；
    Unix 主动创建新 session/process group 的逃逸进程不在该边界内。它也不限制文件/网络权限、CPU/内存消耗，
    因此仍须明确显示残余风险，不能称为沙箱。
 
 第三阶段以 OpenCode MCP 配置来源验证声明式外部连接的接纳与生命周期：
 
-1. OpenCode adapter 按冻结版本解释用户全局、自定义文件/目录和项目 JSON/JSONC 的 MCP 合并顺序，只输出脱敏静态
+1. OpenCode adapter 按固定版本解释用户全局、自定义文件/目录和项目 JSON/JSONC 的 MCP 合并顺序，只输出脱敏静态
    候选；远程地址只展示 HTTPS origin，环境变量只展示变量名，值只在确认后的准备阶段解析。为避免一次确认在环境变化后
    改写可执行文件、参数、工作目录或网络目标，本阶段只允许 `{env:NAME}` 出现在显式 environment 或 Header 值中；其他
    位置明确标记不支持。展开后再次执行大小、HTTPS 与契约校验。
 2. MCP coordinator 与 Command、Tool、Subagent 平行，负责 provider 隔离、last-success、稳定删除和 watcher roots；
-   审批、同名冲突和 BitFun 原生优先级由产品组装层决定，具体进程、连接、工具注册和回收仍由 MCP owner 负责。
+   审批、同名冲突和 BitFun 原生优先级由产品组装层决定，具体进程、连接、工具注册和回收仍由 MCP 归属模块负责。
 3. 首次启用或命令、参数、工作目录、环境声明、URL origin、Header 名、认证方式等行为变化后重新确认；拒绝在行为变化前不重复
    提示。MCP 的公开 `content_version`/`behavior_version` 使用 host 私有且本机持久化的 key 生成 HMAC-SHA256
    不透明版本：敏感配置变化仍使旧审批失效，但公开 DTO 不能成为低熵凭据的离线枚举 oracle；key 不进入日志、IPC 或
    public snapshot。首次升级到该版本或 key 丢失后，已有 MCP 审批需要一次重新确认；正常重启不改变版本。同名候选未选择时
    保留 BitFun 当前实现，不把显示顺序当成用户决定，也不在外部失效时静默切换。
 4. Desktop 在“外部 AI 应用”设置页显示安全摘要、状态、审批和冲突；交互式 TUI 以行业通用的 `/mcp` 为主要入口并保留 `/mcps` 兼容别名，在同一列表中用来源
-   标签区分 BitFun 与外部候选，不新增 `external-*` 命令。两端使用同一 generation、preference revision 和操作接口。
-5. 已确认候选按规范化 workspace 建立独立运行实例；工具包装器同时校验当前 workspace route，Remote owner 未实现前直接
-   fail-closed。同名冲突选择外部候选时，只在当前 workspace 隐藏对应 BitFun 原生工具，不停止其他 workspace 的原生实例。
+   标签区分 BitFun 与外部候选，不新增 `external-*` 命令。两端使用同一 MCP 当前版本、偏好版本和操作接口。
+5. 已确认候选按规范化 workspace 建立独立运行实例；工具包装器同时校验当前 workspace route。Remote 归属模块未实现前，
+   返回“不支持”且不回退本机。同名冲突选择外部候选时，只在当前 workspace 隐藏对应 BitFun 原生工具，不停止其他 workspace 的原生实例。
 6. 更新、停用、空闲回收或稳定删除先撤下 workspace route 和新工具入口，再有界等待在途连接释放；慢启动在发布连接、
    工具和目录前再次检查撤销标记，不能在撤销后重新发布。第三方启动、握手和回收在后台有界执行，不要求全量重启
    MCP 或 BitFun，也不中断无关 session。
@@ -480,9 +489,9 @@ Command；明确缺失且未被标记失败的 Command 是稳定删除。产品�
    留待后续 PR，不能改变“先撤 route、禁止新调用”的运行语义。
 8. 外部本地进程不继承 BitFun 的完整父进程环境，只保留启动所需的系统基线和配置显式声明的变量；这仍不是 OS
    沙箱，进程继续拥有当前用户的文件、网络和子进程权限。Remote 执行域、OpenCode OAuth client 配置、SSE、完整
-   `timeout`/Agent 范围和通用凭据 owner 明确延后。
-9. 本阶段只把外部 MCP 的 Tool 目录接入 Agent Tool owner。通用 Resource/Prompt/MCP App Desktop 接口不接受无工作区
-   上下文的外部 runtime id；外部服务器发起的 roots、sampling 和 elicitation 请求也 fail-closed，防止跨工作区读取或借用
+   `timeout`/Agent 范围和通用凭据归属模块明确延后。
+9. 本阶段只把外部 MCP 的 Tool 目录接入 Agent Tool 归属模块。通用 Resource/Prompt/MCP App Desktop 接口不接受无工作区
+   上下文的外部 runtime id；外部服务器发起的 roots、sampling 和 elicitation 请求也一律拒绝，防止跨工作区读取或借用
    BitFun 宿主能力。后续若接入这些能力，必须先补独立契约、工作区路由与权限交互，不能复用全局连接绕过当前边界。
 
 独立的静态 Hook 目录切片不依赖上述运行时阶段：
@@ -490,9 +499,9 @@ Command；明确缺失且未被标记失败的 Command 是稳定删除。产品�
 1. `product-domains` 只定义 runtime-free DTO 和 capability-specific provider port；三个生态 adapter 各自解释来源，
    `assembly/external-sources` 负责 provider 聚合与 last-valid，`assembly/core` 只负责本地产品装配、Git/worktree 边界
    解析，以及在既有 refresh gate 内按工作区串行完成发现与发布。
-2. Desktop/Web UI 与交互式 TUI 只消费共享快照；无 Server、Remote、Peer、Mobile、SDK 或运行时投影。
+2. Desktop/Web UI 与交互式 TUI 只消费共享快照；不额外提供 Server、Remote、Peer、Mobile、SDK 或运行时视图。
 3. 验收覆盖脱敏序列化、部分失败、首次失败与空目录区分、非法/过大输入、有界枚举、provider 身份冲突、刷新竞态、stale 结果、保留命令、
-   `/help hooks`、GUI 空/错/刷新/不支持状态，以及 Host 返回未知 v1 枚举或可执行字段时 fail closed。
+   `/help hooks`、GUI 空/错/刷新/不支持状态；Host 返回未知 v1 枚举或可执行字段时明确拒绝。
 4. 后续覆盖率、版本差异和冲突分析在此目录之上增加只读派生事实；Hook 执行 Host、权限、顺序、取消与故障恢复必须
    另立运行时切片，不能通过扩展本目录 DTO 偷渡执行语义。
 
@@ -501,22 +510,24 @@ Command；明确缺失且未被标记失败的 Command 是稳定删除。产品�
 - 项目打开和无关会话不会因发现、解析、依赖准备或确认等待被阻塞。
 - 非交互操作只会被自身实际依赖的待确认资产阻止，无关来源待办不改变操作结果。
 - 用户级与项目级来源、覆盖关系、执行域和实际生效结果可以解释。
-- 任意可执行副作用发生前已经完成对应来源/target 确认和 import 前策略重算。
-- 已批准代码更新的来源身份/完整性、更新策略、import 前包络和 import 后真实贡献分别比较；后置确认不被宣传为
-  能撤销候选 import 副作用。
-- 有效更新原子切换；失败更新、明确删除、权限收紧和暂时不可达的行为彼此不同。
+- 任意可执行副作用发生前已经完成对应来源、插件身份和执行域确认，并在 import 前重新计算策略。
+- 已批准代码更新的来源身份/完整性、更新策略、import 前可见的运行条件和 import 后真实贡献分别比较；后置确认不被宣传为
+  能撤销 import 副作用。
+- 插件更新按“静态检查、停止旧 Host、加载新 Host、各归属模块发布贡献”的顺序完成；失败更新、明确删除、权限收紧和
+  暂时不可达的行为彼此不同。
 - 原子保存、连续 watcher 事件和真实删除不会造成重复停用/重载或通知风暴。
 - 全局来源变化不会造成多项目重复提示或把单项目失败传播为全局失败。
-- 全局来源偏好与项目执行实例策略分开；跨项目只重新求值而不重复提示，跨执行域或新实例扩大执行包络时不会
+- 全局来源偏好与项目执行实例策略分开；跨项目只重新检查而不重复提示，跨执行位置或新实例扩大运行权限时不会
   错误继承确认。
 - 持续来源撤销后不会被下一次 watcher 更新重新应用；当前项目与整个执行域的抑制范围可验证。
 - 同名外部候选和产品本地能力在用户选择前均不会被静默覆盖；选择在候选内容版本和参与集合不变时不重复询问，
   任一候选更新、删除或参与集合变化后重新进入待选择，即使变化后只剩一个实现也不静默切换。
-- 冲突谱系对 0/1/N 个当前参与者都生成当前指纹；自动更新谱系或将旧选择改为“需重选”时，与用户选择一样原子推进
+- 冲突族（代码字段 `conflict_lineage`）把同一执行位置和逻辑名下、随参与者变化的冲突归为一组。它对 0/1/N 个当前参与者
+  都生成当前内容摘要；自动更新冲突族或将旧选择改为“需重选”时，与用户选择一样原子推进
   `preference_revision`。跨进程旧 revision 的操作必须返回 stale，不得重新写入旧授权或旧候选。
 - GUI/TUI 的外部 Agent 冲突选择在同一上下文中展示将被原子批准的模型、工具、执行域、安全来源、兼容影响和恢复动作；
   同工作区决策串行化，成功后读取权威快照，不以较旧整表覆盖无关的 Command/Tool 新状态。
-- 冲突偏好按执行域与命令族只保留当前指纹，并以去重候选身份标记曾发生冲突；连续内容更新不会按历史指纹线性膨胀。
+- 冲突偏好按执行域与命令族只保留当前内容摘要，并以去重候选身份标记曾发生冲突；连续内容更新不会按历史内容摘要线性膨胀。
 - 显式导入的字段级预览、冲突、撤销和凭据脱敏可验证。
 - 当前只支持静态预览的资产不会被产品文案误报为已应用或可执行；支持子集与完整 OpenCode 兼容不会混写。
 

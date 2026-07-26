@@ -1,12 +1,14 @@
 use async_trait::async_trait;
 use bitfun_runtime_ports::{
-    PluginDispatchEnvelope, PluginResponseEnvelope, PluginRuntimeReadRequest,
-    PluginRuntimeReadResponse, PortResult,
+    PluginDispatchEnvelope, PluginResponseEnvelope, PluginRuntimeAvailability,
+    PluginRuntimeReadRequest, PluginRuntimeReadResponse, PortResult,
 };
 
 #[async_trait]
-pub trait PluginHostAdapter: Send + Sync {
+pub trait PluginRuntimeAdapter: Send + Sync {
     fn adapter_id(&self) -> &str;
+
+    fn availability(&self) -> PluginRuntimeAvailability;
 
     async fn read_plugins(
         &self,

@@ -57,8 +57,8 @@ export const pluginRuntimePublicApiEntries = [
     pluginRuntimeEntry(
       symbol,
       'plugin discovery, status, and config-validation projection',
-      'Plugin Runtime Host read model and product assembly plugin status projection',
-      'runtime-ports read-model contract tests, OpenCode fixture projection tests, and plugin-runtime-host read-model tests',
+      'PluginRuntimeClient read model and product assembly plugin status projection',
+      'runtime-ports read-model contract tests, OpenCode fixture projection tests, and plugin-runtime-client read-model tests',
       contractSlices.bitfunPluginExtension,
     ),
   ),
@@ -85,8 +85,8 @@ export const pluginRuntimePublicApiEntries = [
     pluginRuntimeEntry(
       symbol,
       'plugin permission, effect-preview, and provider handoff',
-      'Plugin Runtime Host, tool ABI integration, and security-control candidate validation',
-      'runtime-ports candidate-effect contract tests and plugin-runtime-host permission/effect validation tests',
+      'PluginRuntimeClient, tool ABI integration, and security-control candidate validation',
+      'runtime-ports candidate-effect contract tests and plugin-runtime-client permission/effect validation tests',
       contractSlices.bitfunPluginExtension,
     ),
   ),
@@ -102,8 +102,8 @@ export const pluginRuntimePublicApiEntries = [
     pluginRuntimeEntry(
       symbol,
       'plugin diagnostics and quarantine read-model projection',
-      'Plugin Runtime Host read model and capability-service diagnostics projection',
-      'runtime-ports diagnostics tests and plugin-runtime-host quarantine/read-model owner tests',
+      'PluginRuntimeClient read model and capability-service diagnostics projection',
+      'runtime-ports diagnostics tests and plugin-runtime-client quarantine/read-model owner tests',
       contractSlices.bitfunPluginExtension,
     ),
   ),
@@ -126,9 +126,9 @@ export const pluginRuntimePublicApiEntries = [
   ].map((symbol) =>
     pluginRuntimeEntry(
       symbol,
-      'plugin host boundary, lifecycle, and execution availability',
-      'Product assembly host handoff and Agent Runtime plugin binding',
-      'runtime-ports contract tests and plugin-runtime-host owner validation',
+      'plugin runtime boundary, lifecycle facts, and execution availability',
+      'Product assembly client injection and Agent Runtime plugin binding',
+      'runtime-ports contract tests and plugin-runtime-client owner validation',
       contractSlices.pluginRuntimeInternalAbi,
     ),
   ),
@@ -138,29 +138,29 @@ export const pluginRuntimePublicApiSymbols = pluginRuntimePublicApiEntries.map(
   (entry) => entry.symbol,
 );
 
-function pluginRuntimeHostEntry(symbol, consumer) {
+function pluginRuntimeClientEntry(symbol, consumer) {
   return {
     symbol,
-    owner: 'plugin-runtime-host owner',
+    owner: 'plugin-runtime-client owner',
     consumer,
-    verification: 'plugin-runtime-host owner tests and product assembly host binding checks',
-    p0: 'Plugin Runtime Host executable boundary for the OpenCode-compatible P0 vertical slice',
+    verification: 'plugin-runtime-client owner tests and product assembly binding checks',
+    p0: 'PluginRuntimeClient executable boundary for the OpenCode-compatible P0 vertical slice',
     contractSlice: contractSlices.pluginRuntimeInternalAbi,
     wireImpact: false,
     rationale:
-      'P0 host execution needs a narrow injected adapter boundary without exposing concrete plugin runtimes',
-    exit: 'remove only if Host ownership moves to a reviewed replacement crate with equivalent boundary tests',
+      'P0 execution needs a narrow injected adapter boundary without exposing concrete plugin runtimes',
+    exit: 'remove only if the client implementation moves to a reviewed replacement crate with equivalent boundary tests',
   };
 }
 
-export const pluginRuntimeHostPublicApiEntries = [
-  pluginRuntimeHostEntry(
-    'PluginHostAdapter',
-    'PluginRuntimeHost::new injected adapter boundary and plugin-runtime-host owner tests',
+export const pluginRuntimeClientPublicApiEntries = [
+  pluginRuntimeClientEntry(
+    'PluginRuntimeAdapter',
+    'DefaultPluginRuntimeClient::new injected adapter boundary and plugin-runtime-client owner tests',
   ),
-  pluginRuntimeHostEntry(
-    'PluginRuntimeHost',
-    'Product Assembly host binding, AgentRuntimeBuilder runtime handoff, and plugin-runtime-host contract tests',
+  pluginRuntimeClientEntry(
+    'DefaultPluginRuntimeClient',
+    'Product Assembly runtime binding, AgentRuntimeBuilder handoff, and plugin-runtime-client contract tests',
   ),
 ];
 
@@ -170,14 +170,14 @@ function opencodeAdapterEntry(symbol, consumer) {
     owner: 'opencode-adapter owner',
     consumer,
     verification:
-      'opencode-adapter source adapter tests, PluginRuntimeHost integration path, and core-boundary public API budget checks',
+      'opencode-adapter source adapter tests, DefaultPluginRuntimeClient integration path, and core-boundary public API budget checks',
     p0: 'OpenCode-compatible P0-C.1 source discovery/read model and P0-C.2 custom tool candidate mapping',
     contractSlice: contractSlices.opencodeAdapterBoundary,
     wireImpact: false,
     rationale:
-      'P0-C needs one adapter factory that consumes fixed BitFun-managed package content and returns the existing PluginHostAdapter boundary',
+      'P0-C needs one adapter factory that consumes fixed BitFun-managed package content and returns the existing PluginRuntimeAdapter boundary',
     exit:
-      'remove only if source discovery moves behind a reviewed product source registry with equivalent host tests',
+      'remove only if source discovery moves behind a reviewed product source registry with equivalent client tests',
   };
 }
 
@@ -201,7 +201,7 @@ function opencodeHookAdapterEntry(symbol, consumer) {
 export const opencodeAdapterPublicApiEntries = [
   opencodeAdapterEntry(
     'load_opencode_package_adapter',
-    'bitfun-core managed plugin composition root and PluginRuntimeHost integration tests',
+    'bitfun-core managed plugin composition root and DefaultPluginRuntimeClient integration tests',
   ),
   opencodeAdapterEntry(
     'OpenCodeCommandProvider',
@@ -939,7 +939,7 @@ function pluginSourceEntry(symbol, owner, consumer, verification, wireImpact) {
     contractSlice: contractSlices.bitfunPluginExtension,
     wireImpact,
     rationale:
-      'P0-C needs one ecosystem-neutral package identity, review, and fixed-content boundary without exposing adapter or Host ABI types',
+      'P0-C needs one ecosystem-neutral package identity, review, and fixed-content boundary without exposing adapter or plugin-internal ABI types',
     exit:
       'remove only after a reviewed package-source owner migration with equivalent CLI and trust-state tests',
   };
@@ -1035,7 +1035,7 @@ export const publicApiAllowlistRules = [
   {
     path: 'src/crates/adapters/opencode-adapter/src/lib.rs',
     reason:
-      'OpenCode adapter public API must stay limited to source and candidate mapping through the Plugin Runtime Host adapter boundary',
+      'OpenCode adapter public API must stay limited to source and candidate mapping through the PluginRuntimeClient adapter boundary',
     allowedSymbolEntries: opencodeAdapterPublicApiEntries,
   },
   {
@@ -1054,10 +1054,10 @@ export const publicApiAllowlistRules = [
     allowedSymbolEntries: staticHookSupportPublicApiEntries,
   },
   {
-    path: 'src/crates/execution/plugin-runtime-host/src/lib.rs',
+    path: 'src/crates/execution/plugin-runtime-client/src/lib.rs',
     reason:
-      'Plugin Runtime Host public API must stay limited to the injected adapter trait and host boundary type',
-    allowedSymbolEntries: pluginRuntimeHostPublicApiEntries,
+      'PluginRuntimeClient public API must stay limited to the injected adapter trait and client boundary type',
+    allowedSymbolEntries: pluginRuntimeClientPublicApiEntries,
   },
   {
     path: 'src/crates/contracts/product-domains/src/plugin_source.rs',

@@ -1198,21 +1198,25 @@ export function runManifestParserSelfTest({
   ) {
     throw new Error('managed plugin activation API budget must stay limited to six product-facing symbols');
   }
-  const appHostAbiRule = forbiddenContentUnderRules.find((rule) => rule.path === 'src/apps');
-  if (!appHostAbiRule) {
-    throw new Error('product app entrypoints must have a Host ABI import guard');
+  const appPluginRuntimeContractRule = forbiddenContentUnderRules.find(
+    (rule) => rule.path === 'src/apps',
+  );
+  if (!appPluginRuntimeContractRule) {
+    throw new Error('product app entrypoints must have a plugin runtime contract import guard');
   }
-  const appHostAbiRuleText = appHostAbiRule.patterns
+  const appPluginRuntimeContractRuleText = appPluginRuntimeContractRule.patterns
     .map((pattern) => pattern.regex.source)
     .join('\n');
-  for (const forbiddenHostAbi of [
+  for (const forbiddenPluginRuntimeContract of [
     'PluginRuntimeReadResponse',
     'PluginStatusSnapshot',
     'PluginResponseEnvelope',
     'PluginRuntimeBinding',
   ]) {
-    if (!appHostAbiRuleText.includes(forbiddenHostAbi)) {
-      throw new Error(`product app entrypoint Host ABI guard must forbid: ${forbiddenHostAbi}`);
+    if (!appPluginRuntimeContractRuleText.includes(forbiddenPluginRuntimeContract)) {
+      throw new Error(
+        `product app entrypoint plugin runtime contract guard must forbid: ${forbiddenPluginRuntimeContract}`,
+      );
     }
   }
   const opencodeManifestRule = forbiddenManifestDependencyRules.find((rule) =>
@@ -1313,13 +1317,13 @@ export function runManifestParserSelfTest({
     throw new Error('runtime-services dependency profile must forbid tool runtime implementations');
   }
   if (
-    crateLayoutRules.find((rule) => rule.crateName === 'plugin-runtime-host')?.path !==
-    'src/crates/execution/plugin-runtime-host'
+    crateLayoutRules.find((rule) => rule.crateName === 'plugin-runtime-client')?.path !==
+    'src/crates/execution/plugin-runtime-client'
   ) {
-    throw new Error('plugin-runtime-host must be registered in the execution crate layout');
+    throw new Error('plugin-runtime-client must be registered in the execution crate layout');
   }
-  if (!noCoreDependencyCrates.includes('plugin-runtime-host')) {
-    throw new Error('plugin-runtime-host must be covered by the no-core dependency guard');
+  if (!noCoreDependencyCrates.includes('plugin-runtime-client')) {
+    throw new Error('plugin-runtime-client must be covered by the no-core dependency guard');
   }
   for (const adapterCrate of ['claude-code-adapter', 'codex-adapter', 'static-hook-support']) {
     if (crateLayoutRules.find((rule) => rule.crateName === adapterCrate)?.layer !== 'adapters') {
@@ -1329,53 +1333,54 @@ export function runManifestParserSelfTest({
       throw new Error(`${adapterCrate} must be covered by the no-core dependency guard`);
     }
   }
-  const pluginRuntimeHostRule = lightweightBoundaryRules.find(
-    (rule) => rule.crateName === 'plugin-runtime-host',
+  const pluginRuntimeClientRule = lightweightBoundaryRules.find(
+    (rule) => rule.crateName === 'plugin-runtime-client',
   );
-  if (!pluginRuntimeHostRule?.forbiddenDeps.includes('bitfun-core')) {
-    throw new Error('plugin-runtime-host lightweight boundary must forbid bitfun-core');
+  if (!pluginRuntimeClientRule?.forbiddenDeps.includes('bitfun-core')) {
+    throw new Error('plugin-runtime-client lightweight boundary must forbid bitfun-core');
   }
-  if (!pluginRuntimeHostRule?.forbiddenDeps.includes('bitfun-opencode-adapter')) {
-    throw new Error('plugin-runtime-host must not depend on the OpenCode fixture adapter');
+  if (!pluginRuntimeClientRule?.forbiddenDeps.includes('bitfun-opencode-adapter')) {
+    throw new Error('plugin-runtime-client must not depend on the OpenCode fixture adapter');
   }
-  if (!pluginRuntimeHostRule?.forbiddenDeps.includes('bitfun-services-integrations')) {
-    throw new Error('plugin-runtime-host must not depend on concrete service integrations');
+  if (!pluginRuntimeClientRule?.forbiddenDeps.includes('bitfun-services-integrations')) {
+    throw new Error('plugin-runtime-client must not depend on concrete service integrations');
   }
-  const pluginRuntimeHostProfile = dependencyProfileRules.find(
-    (rule) => rule.crateName === 'plugin-runtime-host',
+  const pluginRuntimeClientProfile = dependencyProfileRules.find(
+    (rule) => rule.crateName === 'plugin-runtime-client',
   );
-  if (!pluginRuntimeHostProfile?.forbiddenNonOptionalDeps.includes('tauri')) {
-    throw new Error('plugin-runtime-host dependency profile must forbid product surfaces');
+  if (!pluginRuntimeClientProfile?.forbiddenNonOptionalDeps.includes('tauri')) {
+    throw new Error('plugin-runtime-client dependency profile must forbid product surfaces');
   }
-  const pluginRuntimeHostPublicApiRule = publicApiAllowlistRules.find(
-    (rule) => rule.path === 'src/crates/execution/plugin-runtime-host/src/lib.rs',
+  const pluginRuntimeClientPublicApiRule = publicApiAllowlistRules.find(
+    (rule) => rule.path === 'src/crates/execution/plugin-runtime-client/src/lib.rs',
   );
-  const hostPublicSymbols = (pluginRuntimeHostPublicApiRule?.allowedSymbolEntries || []).map(
+  const clientPublicSymbols = (pluginRuntimeClientPublicApiRule?.allowedSymbolEntries || []).map(
     (entry) => entry.symbol,
   );
-  if (hostPublicSymbols.join(',') !== 'PluginHostAdapter,PluginRuntimeHost') {
-    throw new Error('plugin-runtime-host public API budget must stay narrow');
+  if (clientPublicSymbols.join(',') !== 'PluginRuntimeAdapter,DefaultPluginRuntimeClient') {
+    throw new Error('plugin-runtime-client public API budget must stay narrow');
   }
-  const hasPluginRuntimeHostMethodBudgetRule = forbiddenContentRules.some(
+  const hasPluginRuntimeClientMethodBudgetRule = forbiddenContentRules.some(
     (rule) =>
-      rule.path === 'src/crates/execution/plugin-runtime-host/src/lib.rs' &&
+      rule.path === 'src/crates/execution/plugin-runtime-client/src/lib.rs' &&
       rule.patterns.some((pattern) =>
-        pattern.message.includes('unexpected public PluginRuntimeHost method') &&
-        pattern.regex.test('pub fn restart(&self)') === false,
+        pattern.message.includes('unexpected public DefaultPluginRuntimeClient method') &&
+        pattern.regex.test('pub fn dispose_project(&self)') === false &&
+        pattern.regex.test('pub fn restart(&self)') === true,
       ),
   );
-  if (!hasPluginRuntimeHostMethodBudgetRule) {
-    throw new Error('plugin-runtime-host public method budget forbidden rule is missing');
+  if (!hasPluginRuntimeClientMethodBudgetRule) {
+    throw new Error('plugin-runtime-client public method budget forbidden rule is missing');
   }
-  const hasPluginHostAdapterMethodBudgetRule = forbiddenContentRules.some(
+  const hasPluginRuntimeAdapterMethodBudgetRule = forbiddenContentRules.some(
     (rule) =>
-      rule.path === 'src/crates/execution/plugin-runtime-host/src/adapter.rs' &&
+      rule.path === 'src/crates/execution/plugin-runtime-client/src/adapter.rs' &&
       rule.patterns.some((pattern) =>
-        pattern.message.includes('unexpected PluginHostAdapter trait method'),
+        pattern.message.includes('unexpected PluginRuntimeAdapter trait method'),
       ),
   );
-  if (!hasPluginHostAdapterMethodBudgetRule) {
-    throw new Error('plugin-runtime-host adapter method budget forbidden rule is missing');
+  if (!hasPluginRuntimeAdapterMethodBudgetRule) {
+    throw new Error('plugin-runtime-client adapter method budget forbidden rule is missing');
   }
   const agentRuntimeRule = lightweightBoundaryRules.find(
     (rule) => rule.crateName === 'agent-runtime',
@@ -2697,18 +2702,18 @@ export function runManifestParserSelfTest({
     {
       path: 'src/crates/assembly/product-capabilities/tests/plugin_product_shape.rs',
       contracts: [
-        'p0_plugin_host_is_executable_only_for_product_full_desktop_and_cli',
-        'p0_plugin_host_binding_builds_agent_runtime_parts',
-        'non_p0_surfaces_cannot_inherit_executable_plugin_host',
+        'executable_plugin_runtime_is_limited_to_product_full_desktop_and_cli',
+        'executable_plugin_runtime_client_builds_agent_runtime_parts',
+        'non_p0_surfaces_cannot_inherit_executable_plugin_runtime',
         'default_product_shapes_expose_only_disabled_plugin_availability',
         'default_assembled_product_shapes_keep_profile_specific_plugin_availability',
       ],
     },
     {
-      path: 'src/crates/execution/plugin-runtime-host/tests/plugin_runtime_host.rs',
+      path: 'src/crates/execution/plugin-runtime-client/tests/plugin_runtime_client.rs',
       contracts: [
-        'host_dispatches_candidates',
-        'host_replays_idempotent_dispatch_without_recalling_adapter',
+        'client_dispatches_candidates',
+        'client_replays_idempotent_dispatch_without_recalling_adapter',
         'concurrent_idempotent_dispatch_reuses_in_flight_response',
         'concurrent_cross_key_dispatch_observes_active_quarantine_before_success',
         'idempotent_dispatch_cache_is_scoped_by_project_workspace_and_source',
@@ -2717,11 +2722,10 @@ export function runManifestParserSelfTest({
         'idempotent_dispatch_cache_evicts_old_entries',
         'read_model_is_scoped_by_project_and_workspace',
         'read_model_rejects_wrong_workspace_response',
-        'active_quarantine_blocks_new_dispatches_until_host_restart',
+        'active_quarantine_blocks_new_dispatches_until_declared_recovery',
         'active_quarantine_blocks_malformed_follow_up_without_new_quarantine',
         'malformed_dispatch_with_missing_identity_observes_active_quarantine',
-        'host_owned_quarantine_is_visible_in_read_model_with_diagnostics',
-        'host_restart_clears_domain_quarantine_and_cached_dispatch',
+        'client_owned_quarantine_is_visible_in_read_model_with_diagnostics',
         'zero_deadline_quarantines_without_adapter_dispatch',
         'malformed_dispatch_envelope_quarantines_without_adapter_dispatch',
         'nonzero_deadline_timeout_quarantines_without_success_effects',

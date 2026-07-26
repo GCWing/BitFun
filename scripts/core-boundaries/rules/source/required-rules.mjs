@@ -1416,19 +1416,19 @@ export const requiredContentRules = [
   {
     path: 'src/crates/assembly/product-capabilities/tests/plugin_product_shape.rs',
     reason:
-      'product-capabilities plugin shape tests must protect P0 host-capable profiles, non-P0 rejection, default availability reasons, and runtime handoff',
+      'product-capabilities plugin shape tests must protect P0 plugin-capable profiles, non-P0 rejection, default availability reasons, and runtime handoff',
     patterns: [
       {
-        regex: /\bp0_plugin_host_is_executable_only_for_product_full_desktop_and_cli\b/,
-        message: 'missing P0 host-capable profile regression',
+        regex: /\bexecutable_plugin_runtime_is_limited_to_product_full_desktop_and_cli\b/,
+        message: 'missing P0 executable plugin runtime profile regression',
       },
       {
-        regex: /\bp0_plugin_host_binding_builds_agent_runtime_parts\b/,
+        regex: /\bexecutable_plugin_runtime_client_builds_agent_runtime_parts\b/,
         message: 'missing ProductAssembler to AgentRuntimeBuilder host handoff regression',
       },
       {
-        regex: /\bnon_p0_surfaces_cannot_inherit_executable_plugin_host\b/,
-        message: 'missing non-P0 executable plugin host rejection regression',
+        regex: /\bnon_p0_surfaces_cannot_inherit_executable_plugin_runtime\b/,
+        message: 'missing non-P0 executable plugin runtime rejection regression',
       },
       {
         regex: /\bdefault_product_shapes_expose_only_disabled_plugin_availability\b/,
@@ -4621,7 +4621,7 @@ export const requiredContentRules = [
   {
     path: 'src/crates/contracts/runtime-ports/src/plugin.rs',
     reason:
-      'runtime-ports plugin module must own typed Plugin Runtime Contract DTOs and host boundary client traits',
+      'runtime-ports plugin module must own typed Plugin Runtime Contract DTOs and client boundary traits',
     patterns: [
       {
         regex: /\bpub trait PluginRuntimeClient\b/,
@@ -4647,7 +4647,7 @@ export const requiredContentRules = [
       'runtime-ports plugin contract tests must cover typed envelopes, candidate effects, and disabled/projection-only behavior',
     patterns: [
       {
-        regex: /\bdispatch_envelope_serializes_typed_host_boundary_without_raw_payload\b/,
+        regex: /\bdispatch_envelope_serializes_typed_runtime_boundary_without_raw_payload\b/,
         message: 'missing typed dispatch envelope regression',
       },
       {
@@ -4671,7 +4671,7 @@ export const requiredContentRules = [
         message: 'missing disabled runtime binding regression',
       },
       {
-        regex: /\bprojection_only_plugin_runtime_rejects_dispatch_without_host\b/,
+        regex: /\bprojection_only_plugin_runtime_rejects_dispatch_when_unavailable\b/,
         message: 'missing projection-only runtime binding regression',
       },
       {
@@ -4699,9 +4699,9 @@ export const requiredContentRules = [
     ],
   },
   {
-    path: 'src/crates/contracts/runtime-ports/tests/plugin_runtime_host_contracts.rs',
+    path: 'src/crates/contracts/runtime-ports/tests/plugin_runtime_diagnostics_contracts.rs',
     reason:
-      'runtime-ports plugin host contract tests must cover permission prompts, diagnostics, and quarantine facts',
+      'runtime-ports plugin diagnostics contract tests must cover permission prompts, diagnostics, and quarantine facts',
     patterns: [
       {
         regex: /\bpermission_prompt_descriptor_contains_minimum_user_decision_facts\b/,
@@ -4714,21 +4714,21 @@ export const requiredContentRules = [
     ],
   },
   {
-    path: 'src/crates/execution/plugin-runtime-host/tests/plugin_runtime_host.rs',
+    path: 'src/crates/execution/plugin-runtime-client/tests/plugin_runtime_client.rs',
     reason:
-      'plugin-runtime-host owner tests must cover dispatch, idempotency, deadline quarantine, adapter failure quarantine, and disposed project behavior',
+      'plugin-runtime-client owner tests must cover dispatch, idempotency, deadline quarantine, adapter failure quarantine, and disposed project behavior',
     patterns: [
       {
-        regex: /\bhost_dispatches_candidates\b/,
-        message: 'missing host dispatch regression',
+        regex: /\bclient_dispatches_candidates\b/,
+        message: 'missing client dispatch regression',
       },
       {
-        regex: /\bhost_replays_idempotent_dispatch_without_recalling_adapter\b/,
-        message: 'missing host idempotency regression',
+        regex: /\bclient_replays_idempotent_dispatch_without_recalling_adapter\b/,
+        message: 'missing client idempotency regression',
       },
       {
         regex: /\bconcurrent_idempotent_dispatch_reuses_in_flight_response\b/,
-        message: 'missing concurrent host idempotency regression',
+        message: 'missing concurrent client idempotency regression',
       },
       {
         regex:
@@ -4737,30 +4737,30 @@ export const requiredContentRules = [
       },
       {
         regex: /\bidempotent_dispatch_cache_is_scoped_by_project_workspace_and_source\b/,
-        message: 'missing host execution-domain scoped idempotency regression',
+        message: 'missing client execution-domain scoped idempotency regression',
       },
       {
         regex: /\bidempotent_dispatch_cache_does_not_replay_across_events\b/,
-        message: 'missing host event-scoped idempotency regression',
+        message: 'missing client event-scoped idempotency regression',
       },
       {
         regex: /\bidempotent_dispatch_cache_is_scoped_by_epoch_changes\b/,
-        message: 'missing host epoch-scoped idempotency regression',
+        message: 'missing client epoch-scoped idempotency regression',
       },
       {
         regex: /\bidempotent_dispatch_cache_evicts_old_entries\b/,
-        message: 'missing host bounded idempotency cache regression',
+        message: 'missing client bounded idempotency cache regression',
       },
       {
         regex: /\bread_model_is_scoped_by_project_and_workspace\b/,
-        message: 'missing host read-model execution-domain isolation regression',
+        message: 'missing client read-model execution-domain isolation regression',
       },
       {
         regex: /\bread_model_rejects_wrong_workspace_response\b/,
-        message: 'missing host wrong-workspace read-model rejection regression',
+        message: 'missing client wrong-workspace read-model rejection regression',
       },
       {
-        regex: /\bactive_quarantine_blocks_new_dispatches_until_host_restart\b/,
+        regex: /\bactive_quarantine_blocks_new_dispatches_until_declared_recovery\b/,
         message: 'missing active quarantine dispatch blocking regression',
       },
       {
@@ -4772,56 +4772,52 @@ export const requiredContentRules = [
         message: 'missing malformed dispatch missing-identity quarantine regression',
       },
       {
-        regex: /\bhost_owned_quarantine_is_visible_in_read_model_with_diagnostics\b/,
-        message: 'missing host-owned quarantine diagnostic read-model projection regression',
-      },
-      {
-        regex: /\bhost_restart_clears_domain_quarantine_and_cached_dispatch\b/,
-        message: 'missing host restart quarantine/cache cleanup regression',
+        regex: /\bclient_owned_quarantine_is_visible_in_read_model_with_diagnostics\b/,
+        message: 'missing client-owned quarantine diagnostic read-model projection regression',
       },
       {
         regex: /\bzero_deadline_quarantines_without_adapter_dispatch\b/,
-        message: 'missing host deadline quarantine regression',
+        message: 'missing client deadline quarantine regression',
       },
       {
         regex: /\bmalformed_dispatch_envelope_quarantines_without_adapter_dispatch\b/,
-        message: 'missing host dispatch request preflight regression',
+        message: 'missing client dispatch request preflight regression',
       },
       {
         regex: /\bnonzero_deadline_timeout_quarantines_without_success_effects\b/,
-        message: 'missing host nonzero timeout regression',
+        message: 'missing client nonzero timeout regression',
       },
       {
         regex: /\badapter_failure_quarantines_without_writing_success\b/,
-        message: 'missing host adapter failure quarantine regression',
+        message: 'missing client adapter failure quarantine regression',
       },
       {
         regex: /\bmalformed_adapter_success_quarantines_without_effects\b/,
-        message: 'missing host malformed adapter success quarantine regression',
+        message: 'missing client malformed adapter success quarantine regression',
       },
       {
         regex: /\bpermission_prompt_target_mismatch_quarantines_without_effects\b/,
-        message: 'missing host permission prompt/effect mismatch regression',
+        message: 'missing client permission prompt/effect mismatch regression',
       },
       {
         regex: /\bpermission_prompt_authority_mismatch_quarantines_without_effects\b/,
-        message: 'missing host permission authority mismatch regression',
+        message: 'missing client permission authority mismatch regression',
       },
       {
         regex: /\bfinal_policy_decision_from_adapter_fails_closed\b/,
-        message: 'missing host final policy outcome rejection regression',
+        message: 'missing client final policy outcome rejection regression',
       },
       {
         regex: /\badapter_id_or_quarantine_with_effects_mismatch_fails_closed\b/,
-        message: 'missing host adapter id and mixed quarantine/effects regression',
+        message: 'missing client adapter id and mixed quarantine/effects regression',
       },
       {
         regex: /\bstatus_quarantine_with_success_effects_fails_closed\b/,
-        message: 'missing host nested status quarantine/effects rejection regression',
+        message: 'missing client nested status quarantine/effects rejection regression',
       },
       {
         regex: /\bdisposed_project_rejects_dispatch_and_read_model_reports_statuses\b/,
-        message: 'missing host dispose/read-model regression',
+        message: 'missing client dispose/read-model regression',
       },
     ],
   },

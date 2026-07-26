@@ -8,7 +8,7 @@ export const noCoreDependencyCrates = [
   'tool-call-jsonrepair',
   'agent-runtime',
   'harness',
-  'plugin-runtime-host',
+  'plugin-runtime-client',
   'product-capabilities',
   'runtime-ports',
   'runtime-services',
@@ -255,9 +255,9 @@ export const lightweightBoundaryRules = [
     ],
   },
   {
-    crateName: 'plugin-runtime-host',
+    crateName: 'plugin-runtime-client',
     reason:
-      'plugin-runtime-host must own portable Host boundary logic without concrete ecosystem, product, or platform implementations',
+      'plugin-runtime-client must implement the portable PluginRuntimeClient boundary without concrete ecosystem, product, or platform implementations',
     forbiddenDeps: [
       'bitfun-core',
       'bitfun-ai-adapters',
@@ -500,10 +500,10 @@ export const dependencyProfileRules = [
     ],
   },
   {
-    crateName: 'plugin-runtime-host',
-    profileName: 'default plugin host boundary profile',
+    crateName: 'plugin-runtime-client',
+    profileName: 'default plugin runtime client boundary profile',
     reason:
-      'plugin-runtime-host default profile must not compile concrete plugin execution or product-surface implementations',
+      'plugin-runtime-client default profile must not compile concrete plugin execution or product-surface implementations',
     forbiddenNonOptionalDeps: [
       'bitfun-core',
       'bitfun-ai-adapters',

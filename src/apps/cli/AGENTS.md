@@ -50,7 +50,7 @@ before product-definition, TUI layout, branding, packaging, runtime, or plugin a
   non-executable until their own reviewed capability slice lands.
 - OpenCode external subagents may execute only through the shared source
   decision and existing Subagent owner. TUI consumes typed summaries and
-  generation-checked actions; it must not parse agent files, inject source
+  actions checked against the current Subagent and preference revisions; it must not parse agent files, inject source
   prompts directly, invent model fallbacks, or offer follow-up for the current
   fresh single-run compatibility slice.
 - The managed-package OpenCode adapter remains a static-preview path. Other
@@ -61,10 +61,10 @@ before product-definition, TUI layout, branding, packaging, runtime, or plugin a
   sources, and credentials as separate asset classes. Importing non-executable
   config must not establish executable-source policy. CLI consumes the external
   source status and typed actions; it must not add another activation layer on top
-  of the source/target decision or claim that post-import confirmation can undo
+  of the source/plugin decision or claim that post-import confirmation can undo
   candidate-module side effects.
 - CLI plugin screens consume capability services, read-only status, and typed
-  diagnostics. They must not depend on Plugin Runtime Host ABI or raw ecosystem
+  diagnostics. They must not depend on raw PluginRuntimeClient contracts or raw ecosystem
   payloads.
 - Non-interactive commands return `action-required` only when the current operation
   actually depends on a pending external asset. Unrelated confirmations remain in

@@ -2,7 +2,7 @@
 //!
 //! This module is intentionally port-backed for product assembly and internal
 //! runtime owners. Client-facing SDK consumers should use `crate::sdk`, which
-//! does not expose Plugin Runtime Host ABI.
+//! does not expose raw PluginRuntimeClient contracts.
 
 use std::path::Path;
 use std::sync::{Arc, Mutex};
@@ -40,8 +40,8 @@ use bitfun_runtime_ports::{PermissionReply, PermissionReplySource, PermissionReq
 pub enum RuntimeBuildError {
     #[error("agent submission port is required")]
     MissingSubmissionPort,
-    #[error("plugin runtime client binding must report executable host availability")]
-    UnsupportedPluginRuntimeHostBinding,
+    #[error("plugin runtime client binding must report executable availability")]
+    UnsupportedPluginRuntimeClientAvailability,
     #[error("permission request manager is unavailable: {0}")]
     PermissionRequestManagerUnavailable(String),
 }
@@ -574,7 +574,7 @@ impl AgentRuntimeBuilder {
         } = self;
 
         if plugin_runtime.is_client_binding() && !plugin_runtime.availability().is_executable() {
-            return Err(RuntimeBuildError::UnsupportedPluginRuntimeHostBinding);
+            return Err(RuntimeBuildError::UnsupportedPluginRuntimeClientAvailability);
         }
 
         Ok(AgentRuntime {
@@ -1811,7 +1811,10 @@ mod tests {
             .build()
             .unwrap_err();
 
-        assert_eq!(err, RuntimeBuildError::UnsupportedPluginRuntimeHostBinding);
+        assert_eq!(
+            err,
+            RuntimeBuildError::UnsupportedPluginRuntimeClientAvailability
+        );
     }
 
     #[tokio::test]

@@ -20,35 +20,39 @@ Product-source boundary:
   are current read-only live sources. Full plugin directories and package specs
   remain target work rather than executable production sources. Source files need
   no BitFun import. Low-risk declarative results follow the
-  user's auto-apply/ask preference; executable sources require a source/target
-  decision before first import. Pre-import execution-envelope expansion and
+  user's auto-apply/ask preference; executable sources require a source, plugin,
+  and execution-domain
+  decision before first import. Broader pre-import execution permissions and
   post-import contribution expansion are separate gates, not repeated approval
   for every internal lifecycle state. Code updates may prepare automatically only
   when source identity/integrity, the source update policy, and the current
-  execution envelope still allow it.
-- A global source preference is deduplicated by source/target/execution domain, but
-  each project/workspace execution instance recomputes its effective source graph,
-  working directory/environment, credentials, and policy. Raw parsing and exact
-  materialization caches may be shared; candidate workers and health may not be
-  treated as one global result. Crossing projects alone does not prompt again;
-  only an expanded execution envelope, credential scope, or capability does.
-- The shared source coordinator owns candidate generations and atomic provider
+  execution conditions still allow it.
+- A global source preference is deduplicated by source/plugin/execution domain, but
+  every activation/import recomputes its effective source graph, working
+  directory/environment, credentials, and policy. Workspace participates only when
+  the owning config or logical plugin instance has workspace-specific state. Raw parsing
+  and exact materialization caches may be shared; physical health follows the actual
+  process grouping and is not keyed globally or by workspace by default. Crossing projects alone does not prompt again;
+  only broader execution permissions, credential scope, or capability does.
+- `ExternalSourceControlPlane` owns candidate versions and atomic provider
   replacement. This adapter supplies OpenCode-qualified source identity/order and
   watch roots through narrow provider contracts; the reusable file-watch service
-  supplies change facts. Config owners provide normalized config snapshots; the script
-  execution service owns dependencies, workers, process trees, and physical
-  health; Plugin Runtime Host owns logical target state and contribution registration.
+  supplies change facts. Config modules provide normalized config snapshots; the services
+  implementation behind `ScriptToolRuntime` owns dependencies, workers, process trees,
+  and physical health; `PluginRuntimeClient` currently owns request reliability,
+  diagnostics and fault status while consuming lifecycle facts from their responsible modules;
+  capability modules register contributions.
 - Effective policy and safe-start mode must be recomputed before third-party
-  module import from the source, target, actual execution domain/user,
+  module import from the source, plugin identity, actual execution domain/user,
   product/organization policy bounds, credential scope, and environment scope.
   Discovery or config-import approval is not an execution decision. The product
-  source experience and existing capability owners provide the source/target
+  source experience and existing capability owners provide the source/plugin
   decision; this adapter consumes it but does not own prompts or trust state.
   After activation, the default local runtime policy is compatibility mode.
 - Final tool creation, permission decisions, authoritative state, and audit facts
   stay in their tool, permission, product, and runtime owner paths.
 - Standalone-tool preparation may return only a version-checked, bounded module
-  for an already approved target. It must not spawn a process, install a package,
+  for an already approved script. It must not spawn a process, install a package,
   persist approval, or interpret another ecosystem. Static import restrictions
   describe the current compatibility subset; they are not a security sandbox.
 - The user's local `opencode` CLI installation is unrelated to loading
@@ -58,11 +62,11 @@ Product-source boundary:
 ## Boundary Rules
 
 - Depend on stable contracts such as `bitfun-runtime-ports` and the
-  `PluginHostAdapter` boundary trait, not `bitfun-core`, app crates, Tauri
+  `PluginRuntimeAdapter` boundary trait, not `bitfun-core`, app crates, Tauri
   APIs, product UI, or concrete service managers.
 - Keep OpenCode config JSON, source ordering, loader compatibility, and argument
   expansion inside this crate. Cross-crate outputs use typed source snapshots,
-  adapter bindings, and Plugin Runtime Host DTOs; do not expose raw OpenCode JSON
+  adapter bindings, and PluginRuntimeClient DTOs; do not expose raw OpenCode JSON
   or source syntax as product contracts.
 - Current source inspection recognizes only the tested declarative subset. The
   adapter may reuse the workspace-pinned parse-only OXC profile for syntax-safe static
@@ -81,8 +85,8 @@ Product-source boundary:
   and diagnostics with incomplete safety. Parse failures must remain explicit
   diagnostics, while event payload types must not be treated as Hook properties.
   The adapter must not load handlers, dispatch Hooks, or imply executable support.
-- The reviewed product composition root selects and constructs the compiled
-  OpenCode adapter/provider and injects it into Plugin Runtime Host. It does not
+- The reviewed product assembly entrypoint selects and constructs the compiled
+  OpenCode adapter/provider and injects it into PluginRuntimeClient. It does not
   discover dynamic sources, prepare dependencies, or import plugin modules.
 - Product Assembly may consume this crate only from reviewed composition modules
   such as `bitfun-core/plugin_runtime` or `bitfun-core/external_sources`; boundary
@@ -101,5 +105,5 @@ Product-source boundary:
 - `cargo test -p bitfun-opencode-adapter --test tool_source_contracts`
 - `cargo test -p bitfun-opencode-adapter --test opencode_subagent_adapter`
 - `cargo test -p bitfun-opencode-adapter p0_c2_fixture`
-- `cargo test -p bitfun-opencode-adapter host_path_projects_trusted_custom_tool_candidate_with_permission_prompt`
+- `cargo test -p bitfun-opencode-adapter client_path_projects_trusted_custom_tool_candidate_with_permission_prompt`
 - `node scripts/check-core-boundaries.mjs`
