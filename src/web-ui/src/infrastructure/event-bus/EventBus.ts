@@ -36,8 +36,7 @@ export interface EventMetadata {
  * only the event name / timestamp / sender are kept so the last MAX_HISTORY
  * payloads (which can include large state snapshots) stay collectable by GC.
  */
-const EVENT_HISTORY_KEEPS_PAYLOAD =
-  typeof process !== 'undefined' && process.env?.NODE_ENV === 'development';
+const EVENT_HISTORY_KEEPS_PAYLOAD = import.meta.env.DEV;
 
 export class EventBus {
   private listeners = new Map<string, Set<EventHandler>>();

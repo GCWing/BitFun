@@ -9,7 +9,7 @@ import React, { useEffect, useState, useCallback, useRef, useMemo } from 'react'
 import { AlertCircle } from 'lucide-react';
 import type * as monaco from 'monaco-editor';
 import { monacoInitManager } from '../services/MonacoInitManager';
-import { monacoApi } from '../services/monacoRuntime';
+import { getMonacoRuntime, monacoApi } from '../services/monacoRuntime';
 import { monacoModelManager } from '../services/MonacoModelManager';
 import { activeEditTargetService, createMonacoEditTarget } from '../services/ActiveEditTargetService';
 import { 
@@ -2454,7 +2454,7 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
         <LanguagePopover
           anchorRect={statusBarAnchorRect}
           currentLanguageId={detectedLanguage}
-          languages={monacoApi.languages.getLanguages()}
+          languages={getMonacoRuntime()?.languages.getLanguages() ?? []}
           onConfirm={handleLanguageConfirm}
           onClose={closeStatusBarPopover}
         />

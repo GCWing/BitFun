@@ -355,15 +355,19 @@ export const AgentCompanionDesktopPet: React.FC = () => {
     };
   }, [hasTypingOutput]);
 
+  // Bumped whenever dock layout may have changed; lets the pointer poll reuse
+  // cached getBoundingClientRect results between layout changes.
+  const layoutEpochRef = useRef(0);
+
   useLayoutEffect(() => {
+    // Typewriter output grows the bubbles (and shifts the ones below them), so
+    // any cached bubble rect must be invalidated on every typed-output flush.
+    layoutEpochRef.current += 1;
     outputRefs.current.forEach(element => {
       element.scrollTop = element.scrollHeight;
     });
   }, [typedOutputBySessionId]);
 
-  // Bumped whenever dock layout may have changed; lets the pointer poll reuse
-  // cached getBoundingClientRect results between layout changes.
-  const layoutEpochRef = useRef(0);
   const visibleTaskCountRef = useRef(0);
   visibleTaskCountRef.current = visibleTasks.length;
 

@@ -209,6 +209,7 @@
     border-radius: $size-radius-sm;
     transition: opacity $motion-base $easing-standard,
                 background-color $motion-base $easing-standard,
+                box-shadow $motion-base $easing-standard,
                 transform $motion-base $easing-standard;
     opacity: 0;
     pointer-events: none;
@@ -362,6 +363,7 @@
     border-radius: $size-radius-sm;
     transition: opacity $motion-base $easing-standard,
                 background-color $motion-base $easing-standard,
+                box-shadow $motion-base $easing-standard,
                 transform $motion-base $easing-standard;
     opacity: 0;
     pointer-events: none;

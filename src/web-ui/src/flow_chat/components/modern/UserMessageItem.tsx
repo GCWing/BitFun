@@ -219,7 +219,12 @@ export const UserMessageItem = React.memo<UserMessageItemProps>(
       checkOverflow();
 
       return observeElementResize(element, checkOverflow);
-    }, [composerPresentation, displayText, expanded]);
+      // `isEditing` / `isFailed` swap which DOM node `contentRef` points at, and
+      // the observed element is captured by this effect (unlike the previous
+      // window-resize handler, which re-read the ref lazily on every event), so
+      // the effect must re-run on those transitions or it keeps observing a
+      // detached node and never observes the live one.
+    }, [composerPresentation, displayText, expanded, isEditing, isFailed]);
     
     // Copy the user message.
     const handleCopy = useCallback(async (e: React.MouseEvent) => {

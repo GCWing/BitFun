@@ -21,7 +21,14 @@ function ensureObserver(): ResizeObserver | null {
   if (!sharedObserver) {
     sharedObserver = new ResizeObserver((entries) => {
       for (const entry of entries) {
-        callbacksByElement.get(entry.target)?.(entry);
+        // Isolate subscribers: this observer is shared, so a throwing callback
+        // must not abort the batch and silently stop resize handling for every
+        // other observed element.
+        try {
+          callbacksByElement.get(entry.target)?.(entry);
+        } catch {
+          // Ignore: a single subscriber's failure is not the observer's problem.
+        }
       }
     });
   }

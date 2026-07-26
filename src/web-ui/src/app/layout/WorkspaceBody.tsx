@@ -108,6 +108,14 @@ const WorkspaceBody: React.FC<WorkspaceBodyProps> = ({
         cancelAnimationFrame(frameId);
         frameId = null;
       }
+      // Flush the final width synchronously, while `bitfun-is-resizing-nav`
+      // still suppresses the width transition. Without this, a drop that lands
+      // between two animation frames leaves the DOM at the last painted width:
+      // React only rewrites the inline var when `navWidth` actually changes, so
+      // ending a drag back on the previous width would strand the DOM out of
+      // sync with state, and any other drop would glide to its final width
+      // ($motion-base) while the divider's `left` jumps instantly.
+      applyWidth();
       document.body.classList.remove('bitfun-is-dragging-nav-collapse');
       document.body.classList.remove('bitfun-is-resizing-nav');
       window.removeEventListener('mousemove', handleMouseMove);
