@@ -29,7 +29,12 @@ function foldTextWithOriginalOffsets(text: string): {
   text: string;
   offsets: FoldedTextOffset[];
 } {
-  const foldedText = text.toLowerCase();
+  // Built from the same per-character foldings the offsets are built from.
+  // Lowercasing the whole string separately is not guaranteed to produce the
+  // same length as concatenating per-character results, and any divergence
+  // leaves holes in `offsets` — the lookup then returns undefined and a real
+  // match is silently dropped.
+  const foldedParts: string[] = [];
   const offsets: FoldedTextOffset[] = [];
   let originalOffset = 0;
   let foldedOffset = 0;
@@ -37,19 +42,20 @@ function foldTextWithOriginalOffsets(text: string): {
   for (const character of text) {
     const start = originalOffset;
     originalOffset += character.length;
-    const foldedLength = character.toLowerCase().length;
+    const folded = character.toLowerCase();
+    foldedParts.push(folded);
 
-    for (let index = 0; index < foldedLength; index += 1) {
+    for (let index = 0; index < folded.length; index += 1) {
       offsets[foldedOffset + index] = {
         start,
         end: originalOffset,
       };
     }
-    foldedOffset += foldedLength;
+    foldedOffset += folded.length;
   }
 
   return {
-    text: foldedText,
+    text: foldedParts.join(''),
     offsets,
   };
 }

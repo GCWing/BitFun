@@ -15,6 +15,7 @@ use bitfun_core::service::remote_ssh::{
     build_remote_git_command as build_remote_git_command_shared, lookup_remote_connection,
     normalize_remote_workspace_path,
 };
+use bitfun_core::service::workspace::WorktreeTopologyFreshness;
 use log::{error, info};
 use serde::{Deserialize, Serialize};
 use std::time::Instant;
@@ -1260,7 +1261,7 @@ pub async fn git_cherry_pick_continue(
 
 #[tauri::command]
 pub async fn git_list_worktrees(
-    _state: State<'_, AppState>,
+    state: State<'_, AppState>,
     request: GitRepositoryRequest,
 ) -> Result<Vec<bitfun_core::service::git::GitWorktreeInfo>, String> {
     info!("Listing worktrees for '{}'", request.repository_path);
@@ -1272,7 +1273,12 @@ pub async fn git_list_worktrees(
         return Err("Git worktrees are not supported for remote SSH workspaces yet".to_string());
     }
 
-    GitService::list_worktrees(&request.repository_path)
+    state
+        .workspace_service
+        .list_worktrees(
+            std::path::Path::new(&request.repository_path),
+            WorktreeTopologyFreshness::ForceRefresh,
+        )
         .await
         .map_err(|e| {
             error!(
@@ -1285,7 +1291,7 @@ pub async fn git_list_worktrees(
 
 #[tauri::command]
 pub async fn git_add_worktree(
-    _state: State<'_, AppState>,
+    state: State<'_, AppState>,
     request: GitAddWorktreeRequest,
 ) -> Result<bitfun_core::service::git::GitWorktreeInfo, String> {
     let create_branch = request.create_branch.unwrap_or(false);
@@ -1301,20 +1307,26 @@ pub async fn git_add_worktree(
         return Err("Git worktrees are not supported for remote SSH workspaces yet".to_string());
     }
 
-    GitService::add_worktree(&request.repository_path, &request.branch, create_branch)
-        .await
-        .map_err(|e| {
-            error!(
-                "Failed to add worktree: path={}, branch={}, create_branch={}, error={}",
-                request.repository_path, request.branch, create_branch, e
-            );
-            format!("Failed to add worktree: {}", e)
-        })
+    let worktree =
+        GitService::add_worktree(&request.repository_path, &request.branch, create_branch)
+            .await
+            .map_err(|e| {
+                error!(
+                    "Failed to add worktree: path={}, branch={}, create_branch={}, error={}",
+                    request.repository_path, request.branch, create_branch, e
+                );
+                format!("Failed to add worktree: {}", e)
+            })?;
+    state
+        .workspace_service
+        .invalidate_worktree_topology(std::path::Path::new(&request.repository_path))
+        .await;
+    Ok(worktree)
 }
 
 #[tauri::command]
 pub async fn git_remove_worktree(
-    _state: State<'_, AppState>,
+    state: State<'_, AppState>,
     request: GitRemoveWorktreeRequest,
 ) -> Result<GitOperationResult, String> {
     let force = request.force.unwrap_or(false);
@@ -1330,15 +1342,21 @@ pub async fn git_remove_worktree(
         return Err("Git worktrees are not supported for remote SSH workspaces yet".to_string());
     }
 
-    GitService::remove_worktree(&request.repository_path, &request.worktree_path, force)
-        .await
-        .map_err(|e| {
-            error!(
-                "Failed to remove worktree: path={}, worktree_path={}, force={}, error={}",
-                request.repository_path, request.worktree_path, force, e
-            );
-            format!("Failed to remove worktree: {}", e)
-        })
+    let result =
+        GitService::remove_worktree(&request.repository_path, &request.worktree_path, force)
+            .await
+            .map_err(|e| {
+                error!(
+                    "Failed to remove worktree: path={}, worktree_path={}, force={}, error={}",
+                    request.repository_path, request.worktree_path, force, e
+                );
+                format!("Failed to remove worktree: {}", e)
+            })?;
+    state
+        .workspace_service
+        .invalidate_worktree_topology(std::path::Path::new(&request.repository_path))
+        .await;
+    Ok(result)
 }
 
 // MARK: Git Repo History

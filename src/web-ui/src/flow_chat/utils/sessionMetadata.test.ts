@@ -9,6 +9,7 @@ vi.mock('@/infrastructure/i18n/core/I18nService', () => ({
 }));
 
 import {
+  buildCreateSessionRelationship,
   buildSessionMetadata,
   deriveLastFinishedAtFromMetadata,
   deriveSessionRelationshipFromMetadata,
@@ -132,6 +133,20 @@ describe('sessionMetadata', () => {
     expect(metadata.toolCallCount).toBe(99);
     expect(metadata.customMetadata).toEqual({
       unrelated: 'preserved',
+    });
+    expect(metadata.relationship).toMatchObject({
+      kind: 'btw',
+      parentSessionId: 'parent-1',
+      parentRequestId: 'req-1',
+      parentDialogTurnId: 'turn-9',
+      parentTurnIndex: 9,
+    });
+    expect(buildCreateSessionRelationship(session)).toMatchObject({
+      kind: 'btw',
+      parentSessionId: 'parent-1',
+      parentRequestId: 'req-1',
+      parentDialogTurnId: 'turn-9',
+      parentTurnIndex: 9,
     });
     expect(metadata.lastFinishedAt).toBeNull();
   });

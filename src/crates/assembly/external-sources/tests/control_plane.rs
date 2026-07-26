@@ -1,5 +1,7 @@
 use bitfun_external_sources::ExternalSourceControlPlane;
-use bitfun_product_domains::external_sources::{ExecutionDomainId, ExternalSourceContext};
+use bitfun_product_domains::external_sources::{
+    ExecutionDomainId, ExternalMcpRevisionKey, ExternalSourceContext,
+};
 use std::collections::BTreeSet;
 
 fn context() -> ExternalSourceContext {
@@ -9,11 +11,21 @@ fn context() -> ExternalSourceContext {
     }
 }
 
+fn revision_key() -> ExternalMcpRevisionKey {
+    ExternalMcpRevisionKey::new([7; 32])
+}
+
 #[test]
 fn control_plane_owns_all_typed_coordinator_snapshots() {
-    let plane =
-        ExternalSourceControlPlane::new(context(), Vec::new(), Vec::new(), Vec::new(), Vec::new())
-            .unwrap();
+    let plane = ExternalSourceControlPlane::new(
+        context(),
+        revision_key(),
+        Vec::new(),
+        Vec::new(),
+        Vec::new(),
+        Vec::new(),
+    )
+    .unwrap();
 
     assert!(plane.commands(|coordinator| coordinator.snapshot().sources.is_empty()));
     assert!(plane.tools(|coordinator| coordinator.snapshot().sources.is_empty()));
@@ -23,9 +35,15 @@ fn control_plane_owns_all_typed_coordinator_snapshots() {
 
 #[test]
 fn suppression_replacement_is_applied_to_every_typed_coordinator() {
-    let plane =
-        ExternalSourceControlPlane::new(context(), Vec::new(), Vec::new(), Vec::new(), Vec::new())
-            .unwrap();
+    let plane = ExternalSourceControlPlane::new(
+        context(),
+        revision_key(),
+        Vec::new(),
+        Vec::new(),
+        Vec::new(),
+        Vec::new(),
+    )
+    .unwrap();
     let suppressed = ["source-key".to_string()]
         .into_iter()
         .collect::<BTreeSet<_>>();

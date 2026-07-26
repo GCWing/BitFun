@@ -36,6 +36,32 @@ memory VPS (common on arm64), use:
 RELAY_CARGO_BUILD_JOBS=1 bash deploy.sh
 ```
 
+### Mainland China hosts
+
+`deploy.sh` (and Desktop one-click deploy) auto-detects mainland China and
+configures host mirrors for apt, Docker Hub, and GitHub source retrieval plus
+a build-local Cargo/crates.io mirror. Docker Engine installation also uses a
+mainland mirror. Override when needed:
+
+```bash
+BITFUN_MIRROR=cn bash deploy.sh          # force China mirrors
+BITFUN_MIRROR=global bash deploy.sh      # restore BitFun-managed upstream sources
+bash deploy.sh --cn-mirror
+bash deploy.sh --global-mirror
+```
+
+Defaults (overridable via env): Aliyun apt, Docker registry mirrors
+(`docker.1ms.run` / `dockerproxy.net` / `docker.m.daocloud.io`),
+rsproxy Cargo sparse index, `ghfast.top` GitHub prefix, Aliyun docker-ce
+for Engine install (fallback: jsDelivr docker-install). See `mirror.sh`
+for the full list (`BITFUN_APT_MIRROR`, `BITFUN_DOCKER_REGISTRY_MIRRORS`,
+`BITFUN_CARGO_SPARSE_URL`, `BITFUN_GITHUB_PROXY`, …).
+
+China mode does not modify the SSH user's global `~/.cargo/config.toml`; Cargo
+mirroring is scoped to the relay image build. Switching to `global` restores
+apt files disabled by BitFun and removes only Docker registry mirrors recorded
+as BitFun additions.
+
 `deploy.sh` enables Docker BuildKit so the Dockerfile can reuse Cargo
 registry/git/`target` cache mounts across redeploys. Keep BuildKit enabled
 (`DOCKER_BUILDKIT=1`, the deploy default) and avoid `docker builder prune`
@@ -69,15 +95,46 @@ Use this checklist on a machine you control (VPS, LAN server, or localhost).
 ### Desktop one-click deploy (preferred for end users)
 
 BitFun Desktop can SSH to your host and run the same Docker path without a
-manual clone. Entry points: Account Login → “一键部署到自己的服务器”, or
+manual clone. It first downloads the matching checksum-verified GitHub Release
+archive for Linux amd64/arm64, falls back to the versioned openbitfun.com mirror,
+and builds only a small runtime image around the published binaries. If both
+binary sources, checksum verification, image creation, startup, or health
+validation fail, it restores the previous healthy container and automatically
+falls back to the source Docker build. Entry points: Account Login →
+“一键部署到自己的服务器”, or
 Remote Connect → Network Relay → Self-Hosted → the same action.
 
 - Orchestration: `src/crates/services/services-integrations/src/remote_ssh/relay_deploy.rs`
 - Wizard + invariants: `src/web-ui/src/features/relay-deploy/README.md`
 
-Remote checkout path is always `~/.bitfun/relay-src` (never `$HOME/BitFun`).
-Closing the wizard cancels the remote task. Account passwords are provisioned
-locally and imported via `relay-admin import-user`.
+Release runtime state lives under `~/.bitfun/relay-release`; fallback source
+checkout is always `~/.bitfun/relay-src` (never `$HOME/BitFun`). Closing the
+wizard cancels the remote task. Account passwords are provisioned locally and
+imported via `relay-admin import-user`.
+
+### Release artifact verification
+
+Every published archive carries a `.sha256` and a `.sig` (minisign, base64 of the
+signature file — the same key and format the Desktop updater uses). The `.sha256`
+files are signed as well, which is what lets the one-click deploy verify a
+signature on the user's own machine and hand the server a trusted hash: a relay
+host has no minisign and no trust root of its own.
+
+Verifying an archive by hand:
+
+```bash
+BASE=https://github.com/GCWing/BitFun/releases/latest/download
+ASSET=bitfun-relay-server-x86_64-unknown-linux-gnu.tar.gz
+curl -fsSLO "$BASE/$ASSET" -O "$BASE/$ASSET.sig" -O "$BASE/minisign.pub"
+base64 -d <"$ASSET.sig" >"$ASSET.minisig"
+minisign -Vm "$ASSET" -p minisign.pub -x "$ASSET.minisig"
+```
+
+`minisign.pub` is published with every release and is the same key the Desktop
+updater trusts, so it can also be pinned out-of-band once and reused.
+
+Note this is not OS-level code signing: macOS Gatekeeper and Windows SmartScreen
+need Apple/Authenticode certificates, which the project does not currently hold.
 
 ### 1. Deploy the relay (manual / server shell)
 

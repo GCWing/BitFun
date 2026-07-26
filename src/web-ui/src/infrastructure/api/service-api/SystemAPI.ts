@@ -205,6 +205,45 @@ export class SystemAPI {
     }
   }
 
+  /** Desktop only: register or unregister launch at OS login. */
+  async setLaunchAtLoginEnabled(enabled: boolean): Promise<void> {
+    if (typeof window === 'undefined' || !('__TAURI__' in window)) {
+      return;
+    }
+    try {
+      if (enabled) {
+        await autostartEnable();
+      } else {
+        await autostartDisable();
+      }
+    } catch (error) {
+      log.error('Failed to set launch-at-login', { enabled, error });
+      throw createTauriCommandError('autostart_set', error, { enabled });
+    }
+  }
+
+  /** Desktop only: whether BitFun should keep the local computer awake. */
+  async getPreventSleepEnabled(): Promise<boolean> {
+    try {
+      return await api.invoke('get_prevent_sleep_enabled', {
+        request: {}
+      });
+    } catch (error) {
+      throw createTauriCommandError('get_prevent_sleep_enabled', error);
+    }
+  }
+
+  /** Desktop only: apply and persist the app-wide sleep-prevention preference. */
+  async setPreventSleepEnabled(enabled: boolean): Promise<void> {
+    try {
+      await api.invoke('set_prevent_sleep_enabled', {
+        request: { enabled }
+      });
+    } catch (error) {
+      throw createTauriCommandError('set_prevent_sleep_enabled', error, { enabled });
+    }
+  }
+
   // ─── Window / Tray behavior ────────────────────────────────────────────────
 
   /** Desktop only: immediately quit the application. */

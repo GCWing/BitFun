@@ -24,6 +24,10 @@
       "label": "在會話中使用記憶",
       "description": "新會話會讀取已整理的記憶摘要作為上下文。"
     },
+    "generateForBtwSessions": {
+      "label": "從 BTW 會話生成記憶",
+      "description": "允許新建立的持久化 BTW 會話貢獻全域記憶，需同時開啟自動生成記憶。"
+    },
     "externalContextPolicy": {
       "label": "外部上下文處理",
       "description": "選擇記憶抽取如何處理使用過 Web 搜尋、網頁讀取等工具的會話。"

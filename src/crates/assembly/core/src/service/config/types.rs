@@ -110,6 +110,8 @@ pub struct AppConfig {
     pub startup_behavior: String,
     pub confirm_on_exit: bool,
     pub restore_windows: bool,
+    /// Keep the local computer awake while the desktop application is running.
+    pub prevent_sleep: bool,
     pub zoom_level: f64,
     #[serde(default)]
     pub logging: AppLoggingConfig,
@@ -248,6 +250,31 @@ pub struct AiExperienceQuickAction {
     pub enabled: bool,
 }
 
+/// Local voice input preferences for the chat composer.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
+pub struct VoiceInputConfig {
+    pub enabled: bool,
+    pub provider: String,
+    pub model_id: String,
+    pub default_language: String,
+    pub max_recording_seconds: u32,
+    pub microphone_device_id: String,
+}
+
+impl Default for VoiceInputConfig {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            provider: "local".to_string(),
+            model_id: "sensevoice-small-int8".to_string(),
+            default_language: "auto".to_string(),
+            max_recording_seconds: 60,
+            microphone_device_id: String::new(),
+        }
+    }
+}
+
 /// AI experience configuration.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default)]
@@ -270,6 +297,8 @@ pub struct AIExperienceConfig {
     pub agent_companion_pet: Option<AgentCompanionPetSelection>,
     /// Whether to enable flashgrep-backed accelerated workspace search.
     pub enable_workspace_search: bool,
+    /// Local speech-to-text settings for the chat composer.
+    pub voice_input: VoiceInputConfig,
     /// User-defined quick actions (post-coding menu); persisted for the web UI.
     #[serde(default)]
     pub quick_actions: Vec<AiExperienceQuickAction>,
@@ -759,6 +788,8 @@ pub enum MemoryExternalContextPolicy {
 pub struct MemoriesConfig {
     /// Enables automatic Phase 1 extraction and Phase 2 consolidation.
     pub generate_memories: bool,
+    /// Allows persistent BTW sessions to become memory-generation sources.
+    pub generate_for_btw_sessions: bool,
     /// Enables prompt injection of the consolidated memory summary.
     pub use_memories: bool,
     /// Controls how sessions that used external context tools are handled.
@@ -1589,6 +1620,7 @@ impl Default for AppConfig {
             startup_behavior: "lastWorkspace".to_string(),
             confirm_on_exit: true,
             restore_windows: true,
+            prevent_sleep: false,
             zoom_level: 1.0,
             logging: AppLoggingConfig::default(),
             sidebar: SidebarConfig {
@@ -1645,6 +1677,7 @@ impl Default for AIExperienceConfig {
             agent_companion_display_mode: "desktop".to_string(),
             agent_companion_pet: default_agent_companion_pet(),
             enable_workspace_search: false,
+            voice_input: VoiceInputConfig::default(),
             quick_actions: Vec::new(),
         }
     }
@@ -1773,6 +1806,7 @@ impl Default for MemoriesConfig {
     fn default() -> Self {
         Self {
             generate_memories: false,
+            generate_for_btw_sessions: false,
             use_memories: false,
             external_context_policy: MemoryExternalContextPolicy::ClearToolResults,
             max_raw_memories_for_consolidation: default_memory_max_raw_memories_for_consolidation(),
@@ -2002,11 +2036,20 @@ impl AIModelConfig {
 mod tests {
     use super::{
         AIConfig, AIExperienceConfig, AIModelConfig, AgentModelDefaultsConfig, AgentProfileConfig,
-        AgentProfileView, AppLoggingConfig, GlobalConfig, MemoryExternalContextPolicy,
+        AgentProfileView, AppConfig, AppLoggingConfig, GlobalConfig, MemoryExternalContextPolicy,
         ModelExchangeTracingMode, ReasoningMode, SubagentBatchExecutionPolicy,
         SubagentModelSelection, UserSkillGroupsConfig, UserToolGroupsConfig,
     };
     use bitfun_runtime_ports::ToolPermissionConfig;
+
+    #[test]
+    fn prevent_sleep_defaults_to_disabled() {
+        assert!(!AppConfig::default().prevent_sleep);
+
+        let config: AppConfig =
+            serde_json::from_value(serde_json::json!({})).expect("empty app config should default");
+        assert!(!config.prevent_sleep);
+    }
 
     #[test]
     fn agent_profile_defaults_keep_all_collections_empty() {
@@ -2512,6 +2555,7 @@ mod tests {
         let config = GlobalConfig::default();
 
         assert!(!config.memories.generate_memories);
+        assert!(!config.memories.generate_for_btw_sessions);
         assert!(!config.memories.use_memories);
         assert_eq!(
             config.memories.external_context_policy,
@@ -2538,6 +2582,7 @@ mod tests {
         let config: GlobalConfig = serde_json::from_value(serde_json::json!({
             "memories": {
                 "generate_memories": false,
+                "generate_for_btw_sessions": true,
                 "use_memories": false,
                 "external_context_policy": "skip_session",
                 "max_raw_memories_for_consolidation": 12,
@@ -2559,6 +2604,7 @@ mod tests {
         .expect("global config with memories section should deserialize");
 
         assert!(!config.memories.generate_memories);
+        assert!(config.memories.generate_for_btw_sessions);
         assert!(!config.memories.use_memories);
         assert_eq!(
             config.memories.external_context_policy,

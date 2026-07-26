@@ -47,6 +47,265 @@
   }
 }
 
+.bitfun-chat-input__voice-cluster {
+  display: inline-flex;
+  align-items: center;
+  gap: $size-gap-1;
+  flex-shrink: 0;
+  min-width: 24px;
+
+  &--recording {
+    min-width: 270px;
+  }
+}
+
+.bitfun-chat-input__voice-control.icon-btn {
+  width: 24px;
+  height: 24px;
+  min-width: 24px;
+  min-height: 24px;
+  border-radius: 50%;
+  color: var(--color-text-secondary);
+  flex-shrink: 0;
+
+  &:not(:disabled):hover {
+    color: var(--color-text-primary);
+  }
+}
+
+.bitfun-chat-input__voice-spinner {
+  animation: bitfun-voice-input-spin 0.9s linear infinite;
+}
+
+.bitfun-chat-input__voice-pill {
+  display: inline-flex;
+  align-items: center;
+  width: clamp(270px, 27vw, 320px);
+  max-width: 100%;
+  min-width: 270px;
+  height: 32px;
+  padding: 0 2px 0 9px;
+  gap: 5px;
+  border: 1px solid var(--border-base);
+  border-radius: $size-radius-full;
+  background: color-mix(in srgb, var(--color-bg-elevated) 94%, var(--element-bg-base));
+  box-shadow:
+    0 1px 4px var(--color-overlay-black-12),
+    inset 0 1px 0 var(--color-overlay-white-04);
+  animation: bitfun-voice-pill-in 220ms cubic-bezier(0.18, 0.9, 0.3, 1.18) both;
+}
+
+.bitfun-chat-input__voice-pill-status {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 12px;
+  height: 12px;
+  flex: 0 0 12px;
+  color: var(--color-error);
+}
+
+.bitfun-chat-input__voice-pill-recording-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--color-error);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-error) 9%, transparent);
+  animation: bitfun-voice-recording-dot 1.6s ease-in-out infinite;
+}
+
+.bitfun-chat-input__voice-low-volume {
+  color: var(--color-warning);
+  animation: bitfun-voice-low-volume 1.2s ease-in-out infinite;
+}
+
+.bitfun-chat-input__voice-pill-time {
+  min-width: 36px;
+  color: var(--color-text-primary);
+  font-size: 12px;
+  font-weight: 550;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+
+.bitfun-chat-input__voice-pill-timeline {
+  position: relative;
+  display: grid;
+  grid-template-columns: repeat(32, minmax(1px, 1fr));
+  align-items: center;
+  flex: 1 1 auto;
+  min-width: 78px;
+  height: 18px;
+  gap: 2px;
+  overflow: hidden;
+  color: var(--color-text-secondary);
+  pointer-events: none;
+
+  &--paused { opacity: 0.58; }
+}
+
+.bitfun-chat-input__voice-pill-timeline-bar {
+  justify-self: center;
+  width: min(2px, 100%);
+  height: 18px;
+  border-radius: $size-radius-full;
+  background: currentColor;
+  transform: scaleY(0.12);
+  transform-origin: center;
+  transition: transform 72ms linear, opacity 72ms linear;
+}
+
+.bitfun-chat-input__voice-pill-divider {
+  width: 1px;
+  height: 16px;
+  flex: 0 0 1px;
+  background: var(--border-subtle);
+}
+
+.bitfun-chat-input__voice-pill-action.icon-btn {
+  width: 24px;
+  height: 24px;
+  min-width: 24px;
+  min-height: 24px;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--color-text-muted);
+  box-shadow: none;
+  flex-shrink: 0;
+  transition:
+    color 150ms ease,
+    background-color 150ms ease,
+    transform 180ms cubic-bezier(0.18, 0.9, 0.3, 1.24);
+
+  &:not(:disabled):hover {
+    border: none;
+    background: var(--element-bg-soft);
+    color: var(--color-text-primary);
+    transform: scale(1.08);
+  }
+
+  &:active:not(:disabled) {
+    transform: scale(0.9);
+  }
+
+  &.bitfun-chat-input__voice-pill-action--transcribe {
+    color: var(--color-text-secondary);
+  }
+}
+
+.bitfun-chat-input__voice-pill-send.icon-btn {
+  width: 28px;
+  height: 28px;
+  min-width: 28px;
+  min-height: 28px;
+  border: 1px solid transparent;
+  border-radius: 50%;
+  background: rgba(var(--private-chat-input-send-surface-rgb), 0.96);
+  color: rgb(var(--private-chat-input-send-dark-icon-rgb));
+  box-shadow: none;
+  flex: 0 0 28px;
+  transition:
+    background-color 150ms ease,
+    box-shadow 150ms ease,
+    transform 190ms cubic-bezier(0.18, 0.9, 0.3, 1.28);
+
+  &:not(:disabled):hover {
+    border: 1px solid rgba(var(--color-static-white-rgb), 0.52);
+    background: linear-gradient(
+      165deg,
+      var(--color-static-white) 0%,
+      rgba(var(--private-chat-input-send-surface-hover-rgb), 0.99) 100%
+    );
+    color: rgb(var(--private-chat-input-send-dark-icon-strong-rgb));
+    box-shadow:
+      0 0 0 1px rgba(var(--color-static-black-rgb), 0.32),
+      0 6px 14px rgba(var(--color-static-black-rgb), 0.28);
+    transform: scale(1.05);
+  }
+
+  &:active:not(:disabled) {
+    transform: scale(0.9);
+  }
+
+  &:disabled {
+    border: 1px solid transparent;
+    background: rgba(var(--private-chat-input-send-surface-disabled-rgb), 0.18);
+    color: rgba(var(--private-chat-input-send-dark-icon-rgb), 0.38);
+    opacity: 1;
+    box-shadow: none;
+  }
+}
+
+:root[data-theme="light"] .bitfun-chat-input__voice-pill-send.icon-btn,
+:root[data-theme-type="light"] .bitfun-chat-input__voice-pill-send.icon-btn,
+.light .bitfun-chat-input__voice-pill-send.icon-btn {
+  &:not(:disabled) {
+    background: linear-gradient(
+      165deg,
+      rgb(var(--private-chat-input-send-inverse-surface-start-rgb)) 0%,
+      rgb(var(--private-chat-input-send-inverse-surface-end-rgb)) 100%
+    );
+    color: rgb(var(--private-chat-input-send-inverse-text-rgb));
+  }
+
+  &:hover:not(:disabled) {
+    border-color: rgba(var(--color-static-black-rgb), 0.58);
+    background: linear-gradient(
+      165deg,
+      rgb(var(--private-chat-input-send-inverse-hover-start-rgb)) 0%,
+      rgb(var(--private-chat-input-send-inverse-hover-end-rgb)) 100%
+    );
+    color: rgb(var(--private-chat-input-send-inverse-hover-text-rgb));
+    box-shadow:
+      0 0 0 1px rgba(var(--color-static-white-rgb), 0.28),
+      0 6px 14px var(--color-overlay-black-20);
+  }
+
+  &:disabled {
+    background: rgba(var(--private-chat-input-send-inverse-disabled-bg-rgb), 0.18);
+    color: rgba(var(--private-chat-input-send-inverse-disabled-text-rgb), 0.8);
+  }
+}
+
+@keyframes bitfun-voice-input-spin { to { transform: rotate(360deg); } }
+@keyframes bitfun-voice-pill-in {
+  from { opacity: 0; transform: scaleX(0.94) scaleY(0.88); }
+  to { opacity: 1; transform: scale(1); }
+}
+@keyframes bitfun-voice-recording-dot {
+  0%, 100% { transform: scale(0.92); opacity: 0.76; }
+  50% { transform: scale(1.08); opacity: 1; }
+}
+@keyframes bitfun-voice-low-volume {
+  50% { opacity: 0.55; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bitfun-chat-input__voice-spinner,
+  .bitfun-chat-input__voice-pill,
+  .bitfun-chat-input__voice-pill-recording-dot,
+  .bitfun-chat-input__voice-low-volume {
+    animation: none;
+  }
+}
+
+@media (max-width: 640px) {
+  .bitfun-chat-input__voice-cluster--recording {
+    min-width: 220px;
+  }
+
+  .bitfun-chat-input__voice-pill {
+    width: min(100%, 240px);
+    min-width: 220px;
+  }
+
+  .bitfun-chat-input__voice-pill-timeline {
+    min-width: 28px;
+    gap: 1px;
+  }
+}
+
 .bitfun-chat-input {
   --private-chat-input-capsule-bg-rgb: 18, 18, 28;
   --private-chat-input-capsule-hover-rgb: 25, 25, 40;
@@ -1456,8 +1715,8 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    // Must fit IconButton small (28px); fixed 20px caused vertical overflow into the input above
-    min-height: 28px;
+    // Must fit the expanded voice-input pill without overlapping the input above.
+    min-height: 34px;
     margin-top: 4px;
     padding: 0 0 $size-gap-2;
   }

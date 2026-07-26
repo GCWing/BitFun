@@ -12,6 +12,8 @@ import type {
   SSHConfigLookupResult,
   SSHConfigEntry,
   ServerInfo,
+  DockerContainerInfo,
+  ConnectionTestReport,
 } from './types';
 
 // API adapter for Tauri/Server Mode compatibility
@@ -53,6 +55,21 @@ export const sshApi = {
    */
   async connect(config: SSHConnectionConfig): Promise<SSHConnectionResult> {
     return api.invoke<SSHConnectionResult>('ssh_connect', { config });
+  },
+
+  /**
+   * Test every configured hop and resolve the effective container transport
+   * without persisting or activating the connection.
+   */
+  async testConnection(config: SSHConnectionConfig): Promise<ConnectionTestReport> {
+    return api.invoke<ConnectionTestReport>('ssh_test_connection', { config });
+  },
+
+  /**
+   * List Docker containers on either the local machine or the configured SSH host.
+   */
+  async listDockerContainers(config: SSHConnectionConfig): Promise<DockerContainerInfo[]> {
+    return api.invoke<DockerContainerInfo[]>('ssh_list_docker_containers', { config });
   },
 
   /**

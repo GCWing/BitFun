@@ -2,19 +2,9 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { cancelSessionTask, syncSessionModelSelection } from './MessageModule';
 import { SessionExecutionEvent } from '../../state-machine/types';
 
-const mockCancelTransientBtwSession = vi.fn();
 const mockTransition = vi.fn();
 const mockUpdateSessionModel = vi.fn();
 const mockGetConfigs = vi.fn();
-
-vi.mock('../BtwThreadService', () => ({
-  cancelTransientBtwSession: (...args: any[]) => mockCancelTransientBtwSession(...args),
-  isTransientBtwSession: (session: any) =>
-    session?.isTransient === true &&
-    session?.sessionKind === 'btw' &&
-    session?.agentBackedTransient !== true,
-  sendMessageToTransientBtwSession: vi.fn(),
-}));
 
 vi.mock('../../state-machine', () => ({
   SessionExecutionEvent: {
@@ -55,16 +45,14 @@ vi.mock('../../../shared/notification-system', () => ({
 describe('MessageModule cancellation', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mockCancelTransientBtwSession.mockResolvedValue(true);
     mockTransition.mockResolvedValue(true);
   });
 
-  it('cancels transient /btw sessions locally and through the /btw API path', async () => {
+  it('cancels persistent /btw sessions through the ordinary dialog-turn path', async () => {
     const session = {
       sessionId: 'btw-child',
-      isTransient: true,
+      isTransient: false,
       sessionKind: 'btw',
-      agentBackedTransient: false,
       dialogTurns: [],
       config: {},
     };
@@ -93,12 +81,11 @@ describe('MessageModule cancellation', () => {
 
     await expect(cancelSessionTask(context, 'btw-child')).resolves.toBe(true);
 
-    expect(mockStoreCancelSessionTask).toHaveBeenCalledWith('btw-child');
     expect(mockTransition).toHaveBeenCalledWith(
       'btw-child',
-      SessionExecutionEvent.FINISHING_SETTLED,
+      SessionExecutionEvent.USER_CANCEL,
     );
-    expect(mockCancelTransientBtwSession).toHaveBeenCalledWith('btw-child');
+    expect(mockStoreCancelSessionTask).not.toHaveBeenCalled();
     expect(context.userCancelledSessionIds.has('btw-child')).toBe(true);
     expect(contentBuffers.has('btw-child')).toBe(false);
     expect(activeTextItems.has('btw-child')).toBe(false);

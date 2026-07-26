@@ -1,0 +1,198 @@
+{
+  "title": "语音输入",
+  "subtitle": "管理语音输入、本地模型和云端转写模型选择。",
+  "loading": "正在加载语音输入设置...",
+  "sections": {
+    "composer": "Composer",
+    "diagnostics": "输入与识别测试",
+    "model": "本地模型",
+    "cloudModel": "云端转写模型"
+  },
+  "languages": {
+    "auto": "自动",
+    "zh": "中文",
+    "yue": "粤语",
+    "en": "English",
+    "ja": "日本語",
+    "ko": "한국어",
+    "ar": "العربية",
+    "de": "Deutsch",
+    "fr": "Français",
+    "es": "Español",
+    "pt": "Português",
+    "id": "Bahasa Indonesia",
+    "it": "Italiano",
+    "ru": "Русский",
+    "th": "ไทย",
+    "vi": "Tiếng Việt",
+    "tr": "Türkçe",
+    "hi": "हिन्दी",
+    "ms": "Bahasa Melayu",
+    "nl": "Nederlands",
+    "sv": "Svenska",
+    "da": "Dansk",
+    "fi": "Suomi",
+    "pl": "Polski",
+    "cs": "Čeština",
+    "fil": "Filipino",
+    "fa": "فارسی",
+    "el": "Ελληνικά",
+    "hu": "Magyar",
+    "mk": "Македонски",
+    "ro": "Română"
+  },
+  "composer": {
+    "enabled": {
+      "label": "显示语音输入",
+      "description": "在 composer 中显示麦克风操作。"
+    },
+    "provider": {
+      "label": "转写位置",
+      "description": "选择使用已下载的本地模型，或使用本页配置的云端 ASR 模型。",
+      "local": "本地",
+      "cloud": "云端"
+    },
+    "model": {
+      "label": "转写模型",
+      "description": "录音结束后使用的识别模型。",
+      "localDescription": "录音结束后使用的本地识别模型。",
+      "cloudDescription": "录音结束后使用的云端 ASR 模型。",
+      "cloudActiveDescription": "录音结束后使用下方配置的云端 ASR 模型。",
+      "cloudPlaceholder": "先在下方保存云端模型"
+    },
+    "cloud": {
+      "keyManaged": "云端模型已配置。",
+      "empty": "先在下方保存一个云端转写模型。"
+    },
+    "language": {
+      "label": "识别语言",
+      "description": "本地转写默认使用的语言。"
+    },
+    "maxRecording": {
+      "label": "录音上限",
+      "description": "单次语音输入允许的最长秒数。"
+    }
+  },
+  "diagnostics": {
+    "microphone": {
+      "label": "输入设备",
+      "description": "语音输入使用的麦克风。",
+      "systemDefault": "系统默认",
+      "unnamed": "麦克风 {{index}}",
+      "refresh": "刷新麦克风列表"
+    },
+    "level": {
+      "label": "麦克风电平",
+      "description": "只检查所选设备，不运行语音识别。",
+      "start": "测试麦克风",
+      "stop": "停止测试"
+    },
+    "recognition": {
+      "label": "识别测试",
+      "description": "使用所选麦克风和已安装的本地模型完成一次真实识别。",
+      "start": "开始识别测试",
+      "finish": "结束并转写",
+      "modelRequired": "安装本地模型后才能测试识别。",
+      "timing": "推理耗时 {{duration}} 毫秒"
+    },
+    "messages": {
+      "deviceDisconnected": "所选麦克风已断开连接。",
+      "microphoneFailed": "无法打开所选麦克风。",
+      "recognitionFailed": "识别测试失败。",
+      "noSpeech": "没有识别到语音。"
+    }
+  },
+  "states": {
+    "not_installed": "未安装",
+    "downloading": "下载中",
+    "installed": "已安装",
+    "verifying": "校验中",
+    "corrupt": "需要修复",
+    "deleting": "删除中",
+    "error": "错误"
+  },
+  "model": {
+    "refresh": "刷新",
+    "version": "版本 {{version}}",
+    "size": "{{size}}",
+    "progress": "{{percent}}% · {{downloaded}} / {{total}}",
+    "download": "下载",
+    "downloading": "下载中",
+    "downloaded": "已下载",
+    "select": "使用",
+    "selected": "正在使用",
+    "cancel": "取消",
+    "cancelling": "取消中",
+    "openFolder": "打开位置",
+    "verify": "校验",
+    "verifying": "校验中",
+    "delete": "删除",
+    "deleting": "删除中",
+    "keep": "保留",
+    "deleteConfirmTitle": "删除本地语音模型？",
+    "deleteConfirmMessage": "{{name}} 将从本地存储中移除。",
+    "empty": "没有可用的语音模型。",
+    "resourceHints": {
+      "sensevoice": "轻量默认模型，占用较低，适合日常短语音输入。",
+      "qwen3": "高质量多语种模型，下载约 838 MiB，运行内存约 2.3 GiB。",
+      "default": "本地模型会占用磁盘空间和运行内存。"
+    }
+  },
+  "cloudConfig": {
+    "inUse": "当前云端模型",
+    "save": "保存并使用",
+    "note": "密钥随云端模型配置保存；语音输入只记录当前选择的模型。",
+    "defaults": {
+      "providerName": "云端 ASR"
+    },
+    "presets": {
+      "qwen": "Qwen3-ASR-Flash",
+      "custom": "OpenAI-compatible"
+    },
+    "preset": {
+      "label": "服务商",
+      "description": "选择内置 Qwen ASR 预设，或配置兼容 OpenAI 转写接口的服务。"
+    },
+    "providerName": {
+      "label": "配置名称",
+      "description": "用于在本页的云端模型选择中显示。",
+      "placeholder": "例如 Qwen ASR"
+    },
+    "baseUrl": {
+      "label": "Base URL",
+      "description": "兼容 OpenAI 的接口根地址；转写会使用 /audio/transcriptions。",
+      "placeholder": "https://dashscope.aliyuncs.com/compatible-mode/v1"
+    },
+    "modelName": {
+      "label": "模型 ID",
+      "description": "云端转写接口使用的模型名称。",
+      "placeholder": "qwen3-asr-flash"
+    },
+    "apiKey": {
+      "label": "API Key",
+      "description": "用于调用云端转写服务。",
+      "placeholder": "输入 API Key"
+    },
+    "messages": {
+      "fillRequired": "请填写服务商、Base URL、模型 ID 和 API Key",
+      "invalidBaseUrl": "Base URL 必须以 http:// 或 https:// 开头",
+      "saveSuccess": "云端转写模型已保存",
+      "saveFailed": "保存云端转写模型失败"
+    }
+  },
+  "messages": {
+    "unsupported": "语音输入仅在 BitFun 桌面端中可用。",
+    "loadFailed": "加载语音输入设置失败",
+    "saveSuccess": "语音输入设置已保存",
+    "saveFailed": "保存语音输入设置失败",
+    "downloadSuccess": "语音模型已下载",
+    "downloadFailed": "下载语音模型失败",
+    "downloadCancelled": "语音模型下载已取消",
+    "cancelFailed": "取消下载失败",
+    "openFolderFailed": "打开语音模型位置失败",
+    "verifySuccess": "语音模型校验通过",
+    "verifyFailed": "校验语音模型失败",
+    "deleteSuccess": "语音模型已删除",
+    "deleteFailed": "删除语音模型失败"
+  }
+}

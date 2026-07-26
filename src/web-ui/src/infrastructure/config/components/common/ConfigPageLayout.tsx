@@ -106,7 +106,7 @@ export const ConfigPageSection: React.FC<ConfigPageSectionProps> = ({
           </div>
         )}
       </div>
-      <div className="bitfun-config-page-section__body">
+      <div className="bitfun-config-page-section__body" data-mouse-glow-surface="">
         {children}
       </div>
     </section>
@@ -174,5 +174,4 @@ export const ConfigPageRow: React.FC<ConfigPageRowProps> = ({
 };
 
 export default ConfigPageLayout;
-
 

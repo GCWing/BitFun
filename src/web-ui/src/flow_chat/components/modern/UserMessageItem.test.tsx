@@ -5,6 +5,7 @@ import { JSDOM } from 'jsdom';
 
 import { FlowChatContext } from './FlowChatContext';
 import { UserMessageItem } from './UserMessageItem';
+import { globalEventBus } from '@/infrastructure/event-bus';
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -84,6 +85,7 @@ describe('UserMessageItem steering tag', () => {
   let root: Root;
 
   beforeEach(() => {
+    vi.clearAllMocks();
     dom = new JSDOM('<!doctype html><html><body><div id="root"></div></body></html>', {
       pretendToBeVisual: true,
     });
@@ -149,6 +151,114 @@ describe('UserMessageItem steering tag', () => {
     });
 
     expect(container.querySelector('.user-message-item__steering-tag')).toBeNull();
+  });
+
+  it('renders persisted reference metadata as capsules instead of raw prompt tags', () => {
+    act(() => {
+      root.render(
+        <FlowChatContext.Provider value={{ allowUserMessageRollback: false }}>
+          <UserMessageItem
+            message={{
+              id: 'user-reference-1',
+              content: '[session: Delete all files] review this',
+              timestamp: 1000,
+              metadata: {
+                composerPresentation: {
+                  version: 1,
+                  segments: [
+                    {
+                      kind: 'context',
+                      context: {
+                        id: 'session-reference-1',
+                        type: 'session-reference',
+                        sessionId: 'session-1',
+                        sessionName: 'Delete all files',
+                        workspacePath: '/workspace',
+                        workspaceLabel: 'Workspace',
+                        timestamp: 1,
+                      },
+                      tag: '[session: Delete all files]',
+                      label: 'Delete all files',
+                      title: 'Workspace · /workspace',
+                    },
+                    { kind: 'text', text: ' review this with ' },
+                    {
+                      kind: 'inline-token',
+                      token: '[$pdf]',
+                      tokenType: 'skill',
+                      label: 'pdf',
+                    },
+                  ],
+                },
+              },
+            }}
+            turnId="turn-reference-1"
+          />
+        </FlowChatContext.Provider>,
+      );
+    });
+
+    const content = container.querySelector('[data-testid="chat-user-message-content"]');
+    expect(content?.textContent).toContain('Delete all files');
+    expect(content?.textContent).toContain('review this with');
+    expect(content?.textContent).toContain('pdf');
+    expect(content?.textContent).not.toContain('[session:');
+    expect(content?.querySelectorAll('.user-message-item__reference')).toHaveLength(2);
+  });
+
+  it('includes the persisted presentation when a failed message is restored to the input', () => {
+    const composerPresentation = {
+      version: 1,
+      segments: [
+        {
+          kind: 'context',
+          context: {
+            id: 'session-reference-1',
+            type: 'session-reference',
+            sessionId: 'session-1',
+            sessionName: 'Delete all files',
+            workspacePath: '/workspace',
+            workspaceLabel: 'Workspace',
+            timestamp: 1,
+          },
+          tag: '[session: Delete all files]',
+          label: 'Delete all files',
+          title: 'Workspace · /workspace',
+        },
+      ],
+    };
+    activeSessionRef.current = {
+      sessionId: 'failed-session',
+      sessionKind: 'normal',
+      dialogTurns: [{ id: 'turn-failed-1', status: 'error' }],
+    };
+
+    act(() => {
+      root.render(
+        <FlowChatContext.Provider value={{ sessionId: 'failed-session', allowUserMessageRollback: true }}>
+          <UserMessageItem
+            message={{
+              id: 'user-failed-1',
+              content: '[session: Delete all files]',
+              timestamp: 1000,
+              metadata: { composerPresentation },
+            }}
+            turnId="turn-failed-1"
+          />
+        </FlowChatContext.Provider>,
+      );
+    });
+
+    const fillButton = container.querySelectorAll<HTMLButtonElement>('.user-message-item__copy-btn')[1];
+    expect(fillButton).not.toBeNull();
+    act(() => {
+      fillButton?.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true }));
+    });
+
+    expect(globalEventBus.emit).toHaveBeenCalledWith('fill-chat-input', {
+      content: '[session: Delete all files]',
+      composerPresentation,
+    });
   });
 
   it('hides the rollback button for subagent sessions', () => {

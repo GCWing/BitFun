@@ -18,9 +18,9 @@ export struct ConnectView {
   private scannerStarted: boolean = false;
   private scanCompleted: boolean = false;
   private scanStartRetryCount: number = 0;
-  @Link remoteUrl: string;
-  @Link userId: string;
-  @Link showRemoteUrlInput: boolean;
+  @Prop remoteUrl: string = '';
+  @Prop userId: string = '';
+  @Prop showRemoteUrlInput: boolean = false;
   @Prop statusText: string = RemoteI18n.t('status.waitingConnection');
   @Prop connectionState: string = 'idle';
   @Prop connectionFailureKind: string = '';
@@ -29,16 +29,22 @@ export struct ConnectView {
   @Prop desktopName: string = 'MacBook Pro';
   @Prop desktopId: string = '';
   @Prop deviceId: string = '';
+  @Prop requiresAccountAuth: boolean = false;
+  @Prop accountUsername: string = '';
   onBack: () => void = () => {};
-  onConnect: () => void = () => {};
+  onConnect: (password?: string) => void = (_password?: string) => {};
   onClearPairing: () => void = () => {};
   onRemoteUrlChange: (value: string) => void = (_value: string) => {};
+  onUserIdChange: (value: string) => void = (_value: string) => {};
+  onRemoteUrlDetected: (value: string) => boolean = (_value: string) => false;
+  onRemoteUrlInputVisibleChange: (visible: boolean) => void = (_visible: boolean) => {};
   onPasteRemoteUrl: () => void = () => {};
   onScanRemoteUrl: () => void = () => {};
   @State showHelp: boolean = false;
   @State pairingStep: string = 'intro';
   @State showManualPairing: boolean = false;
   @State inlineScanError: string = '';
+  @State accountPassword: string = '';
   @State cameraPermissionReady: boolean = false;
   @State requestingCameraPermission: boolean = false;
 
@@ -119,7 +125,7 @@ export struct ConnectView {
           .onClick(() => {
             this.stopInlineScan();
             this.showManualPairing = true;
-            this.showRemoteUrlInput = true;
+            this.onRemoteUrlInputVisibleChange(true);
           })
       }
       if (this.shouldShowStatusStrip()) {
@@ -178,7 +184,7 @@ export struct ConnectView {
         .onClick(() => {
           this.stopInlineScan();
           this.showManualPairing = true;
-          this.showRemoteUrlInput = true;
+          this.onRemoteUrlInputVisibleChange(true);
         })
     }
     .width('100%')
@@ -354,12 +360,12 @@ export struct ConnectView {
         })
 
       Column({ space: 20 }) {
-        Text(RemoteI18n.t('connect.manualPair'))
+        Text(this.requiresAccountAuth ? RemoteI18n.t('connect.accountPairTitle') : RemoteI18n.t('connect.manualPair'))
           .fontSize(24)
           .fontWeight(FontWeight.Bold)
           .fontColor(INK)
           .width('100%')
-        Text(RemoteI18n.t('connect.manualPairBody'))
+        Text(this.requiresAccountAuth ? RemoteI18n.t('connect.accountPairIntro') : RemoteI18n.t('connect.manualPairBody'))
           .fontSize(17)
           .lineHeight(24)
           .fontColor(MUTED)
@@ -373,9 +379,36 @@ export struct ConnectView {
           .padding({ left: 20, right: 20 })
           .defaultFocus(true)
           .onChange((value: string) => {
-            this.remoteUrl = value;
             this.onRemoteUrlChange(value);
           })
+        if (this.requiresAccountAuth) {
+          TextInput({ placeholder: RemoteI18n.t('connect.accountUsernamePlaceholder'), text: this.displayUserIdInput() })
+            .height(56)
+            .fontSize(18)
+            .fontColor(INK)
+            .backgroundColor('#ECEBE8')
+            .borderRadius(28)
+            .padding({ left: 20, right: 20 })
+            .onChange((value: string) => {
+              this.onUserIdChange(value);
+            })
+          TextInput({ placeholder: RemoteI18n.t('connect.accountPasswordPlaceholder'), text: this.accountPassword })
+            .height(56)
+            .fontSize(18)
+            .fontColor(INK)
+            .backgroundColor('#ECEBE8')
+            .borderRadius(28)
+            .padding({ left: 20, right: 20 })
+            .type(InputType.Password)
+            .onChange((value: string) => {
+              this.accountPassword = value;
+            })
+          Text(RemoteI18n.t('connect.accountPairBody'))
+            .fontSize(13)
+            .lineHeight(18)
+            .fontColor(MUTED)
+            .width('100%')
+        }
         Row({ space: 12 }) {
           Button(RemoteI18n.t('common.cancel'))
             .layoutWeight(1)
@@ -402,7 +435,7 @@ export struct ConnectView {
               this.ensureUserId();
               this.stopInlineScan();
               this.showManualPairing = false;
-              this.onConnect();
+              this.onConnect(this.accountPassword);
             })
         }
         .width('100%')
@@ -532,9 +565,9 @@ export struct ConnectView {
           .fontColor(MUTED)
           .onClick(() => {
             if (this.remoteUrl.trim().length > 0 || this.showRemoteUrlInput) {
-              this.showRemoteUrlInput = !this.showRemoteUrlInput;
+              this.onRemoteUrlInputVisibleChange(!this.showRemoteUrlInput);
             } else {
-              this.showRemoteUrlInput = true;
+              this.onRemoteUrlInputVisibleChange(true);
               this.onPasteRemoteUrl();
             }
           })
@@ -550,7 +583,7 @@ export struct ConnectView {
         .border({ width: 1, color: LINE })
         .defaultFocus(false)
         .onChange((value: string) => {
-          this.userId = value;
+          this.onUserIdChange(value);
         })
 
       if (this.showRemoteUrlInput) {
@@ -563,7 +596,6 @@ export struct ConnectView {
           .border({ width: 1, color: LINE })
           .defaultFocus(false)
           .onChange((value: string) => {
-            this.remoteUrl = value;
             this.onRemoteUrlChange(value);
           })
       }
@@ -742,6 +774,9 @@ export struct ConnectView {
   }
 
   private displayUserIdInput(): string {
+    if (this.requiresAccountAuth && this.accountUsername.length > 0 && this.userId.trim().length === 0) {
+      return this.accountUsername;
+    }
     if (this.remoteUrl.trim().length === 0 && (this.userId === this.deviceId || this.userId.indexOf('harmony-') === 0)) {
       return '';
     }
@@ -771,18 +806,29 @@ export struct ConnectView {
       return;
     }
     if (this.remoteUrl.trim().length > 0) {
+      if (this.requiresAccountAuth && this.accountPassword.length === 0) {
+        this.showManualPairing = true;
+        this.onRemoteUrlInputVisibleChange(true);
+        return;
+      }
       this.ensureUserId();
-      this.onConnect();
+      this.onConnect(this.accountPassword);
       return;
     }
-    this.showRemoteUrlInput = true;
+    this.onRemoteUrlInputVisibleChange(true);
     this.stopInlineScan();
     this.showManualPairing = true;
     this.pairingStep = 'scan';
   }
 
   private canConnect(): boolean {
-    return this.remoteUrl.trim().length > 0 && !this.isBusy;
+    if (this.remoteUrl.trim().length === 0 || this.isBusy) {
+      return false;
+    }
+    if (!this.requiresAccountAuth) {
+      return true;
+    }
+    return this.displayUserIdInput().trim().length > 0 && this.accountPassword.length > 0;
   }
 
   private currentStep(): string {
@@ -808,8 +854,15 @@ export struct ConnectView {
   }
 
   private ensureUserId(): void {
+    if (this.requiresAccountAuth) {
+      const username = this.displayUserIdInput().trim();
+      if (username.length > 0 && this.userId.trim().length === 0) {
+        this.onUserIdChange(username);
+      }
+      return;
+    }
     if (this.userId.trim().length === 0) {
-      this.userId = this.deviceId;
+      this.onUserIdChange(this.deviceId);
     }
   }
 
@@ -865,10 +918,15 @@ export struct ConnectView {
           return;
         }
         this.scanCompleted = true;
-        this.remoteUrl = text;
-        this.onRemoteUrlChange(text);
-        this.ensureUserId();
         this.stopInlineScan();
+        const shouldPrompt = this.onRemoteUrlDetected(text);
+        if (shouldPrompt) {
+          this.showManualPairing = true;
+          this.onRemoteUrlInputVisibleChange(true);
+          this.pairingStep = 'scan';
+          return;
+        }
+        this.ensureUserId();
         this.onConnect();
       });
     } catch (_err) {

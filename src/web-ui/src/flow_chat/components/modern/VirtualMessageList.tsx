@@ -3639,6 +3639,13 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
 
     let attempts = 0;
     let revealedCollapsedContent = false;
+    // Scroll position the previous successful pass settled on. Expanding
+    // collapsed content reflows everything below it, so one more pass is needed
+    // after the expansion — but only until the answer stops moving. Re-arming
+    // unconditionally kept re-running the full tree-walk, re-highlight and
+    // ancestor `getComputedStyle` scan for all 24 attempts, roughly 22 of them
+    // recomputing a position that had already converged.
+    let lastResolvedScrollTop: number | null = null;
     const resolveExactTextPosition = () => {
       if (searchNavigationRequestIdRef.current !== requestId) {
         return;
@@ -3773,7 +3780,16 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
       previousScrollTopRef.current = scroller.scrollTop;
       recordScrollerGeometry(scroller);
       scheduleVisibleTurnMeasure(2);
-      if (revealedCollapsedContent && attempts < SEARCH_NAVIGATION_MAX_ATTEMPTS) {
+
+      const settled =
+        lastResolvedScrollTop !== null
+        && Math.abs(scroller.scrollTop - lastResolvedScrollTop) <= 1;
+      lastResolvedScrollTop = scroller.scrollTop;
+      if (
+        revealedCollapsedContent
+        && !settled
+        && attempts < SEARCH_NAVIGATION_MAX_ATTEMPTS
+      ) {
         requestAnimationFrame(resolveExactTextPosition);
       }
     };

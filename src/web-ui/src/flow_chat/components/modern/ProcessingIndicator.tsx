@@ -1,6 +1,6 @@
 /**
  * Processing indicator.
- * After 1s of continuous processing, shows a 3×3 Rubik-style dot matrix and
+ * After 1s of continuous processing, shows a compact 3×3 Rubik-style dot matrix and
  * rotating fun hint text together (matrix on the left).
  * reserveSpace keeps layout height even when hidden.
  */
@@ -69,7 +69,7 @@ export const ProcessingIndicator: React.FC<ProcessingIndicatorProps> = ({ visibl
       >
         {showHint && hints.length > 0 && (
           <>
-            <DotMatrixLoader size="medium" />
+            <DotMatrixLoader size="small" />
             <span key={hintIndex} className="processing-indicator__hint">
               {hints[hintIndex]}
             </span>

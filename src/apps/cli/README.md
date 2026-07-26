@@ -20,7 +20,39 @@ bitfun sessions list
 bitfun usage
 bitfun doctor
 bitfun health
+bitfun update                           # GitHub first, openbitfun.com fallback
+bitfun update --check                   # report only; do not install
 ```
+
+Official Linux archive installations check for updates before interactive TUI
+startup at most once every six hours. That check only fetches the release
+manifest — a few KB, bounded at ten seconds — and hands the actual archive to a
+detached background process, so launch never waits on a download. Set
+`behavior.auto_update = false` in the CLI config or export
+`BITFUN_CLI_DISABLE_AUTO_UPDATE=1` to disable automatic checks. Development and
+nightly binaries are never replaced by the stable automatic updater.
+
+Both GitHub and `https://openbitfun.com/release/linux-binaries.json` are read,
+and whichever advertises the newer version decides what gets installed. When
+both carry it, each is probed with a short ranged request and the archive is
+downloaded from whichever is measurably faster — a source that is merely slow
+rather than broken no longer holds the update hostage. Downloads resume rather
+than restart, across a switch of source and across runs (a background install
+killed at 90% picks up where it stopped). Concurrent updates are serialised by
+`update.lock` in the CLI config directory.
+
+Two checks run before anything is replaced:
+
+- **Checksum**, fetched from the canonical GitHub URL even when the archive came
+  from a mirror. A `.sha256` served by the same host as the archive only proves
+  the transfer was intact — whoever serves one serves the other. Falling back to
+  the origin's own checksum happens only when GitHub is wholly unreachable, and
+  says so.
+- **Signature** (`.sig`, minisign), verified against the release key compiled
+  into official builds — the same trust root the Desktop updater uses. This is
+  the check a mirror or third-party proxy cannot forge. Official builds refuse
+  to install an unsigned release; builds without the key (local, forks) fall
+  back to checksum-only.
 
 `bitfun-cli` is a deprecated compatibility entrypoint. It writes
 `Warning: \`bitfun-cli\` is deprecated; use \`bitfun\` instead.` to stderr; new scripts and
@@ -172,6 +204,14 @@ macOS/Linux or `.\bitfun.exe` in PowerShell, then add that directory to `PATH` i
 Do not copy only `bitfun-cli` from an archive. The deprecated command is intentionally a thin
 launcher for its sibling `bitfun`; if the sibling is missing, it reports an incomplete installation
 with recovery guidance instead of attempting another lookup.
+
+Every archive ships an adjacent `<archive>.sha256` — the complete verification surface across all
+platforms and both the stable and nightly channels. The release also carries a `SHA256SUMS`
+aggregate, but it covers only the macOS and Windows archives: Linux archives are published by
+`.github/workflows/linux-binaries.yml` in a separate workflow run (the only producer that also
+covers nightly, and the one that must hold the CLI and Relay archives together to emit
+`linux-binaries.json`), so they cannot be folded into that file deterministically. Verify Linux
+downloads with their `.sha256` sidecar.
 
 On a server that should stay reachable for account multi-device access, continue with the
 [daemon section](#always-on-account-device-host-daemon) above after `/login`.

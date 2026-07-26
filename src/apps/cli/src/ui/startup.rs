@@ -194,7 +194,7 @@ pub(crate) struct StartupPage {
     compatibility: CoreAgentRuntimeCompatibility,
 
     // ── State ──
-    /// Selected agent type (can be changed via /agents or Tab)
+    /// Selected agent type (can be changed via /agent or Tab)
     agent_type: String,
     /// Display name of selected model
     model_display_name: String,
@@ -999,7 +999,7 @@ impl StartupPage {
             ActionHandler::Skills => self.show_skill_selector(),
             ActionHandler::McpServers => {
                 return Some(StartupResult::NewSession {
-                    prompt: Some("/mcps".to_string()),
+                    prompt: Some("/mcp".to_string()),
                 });
             }
             ActionHandler::AcpHelp => {

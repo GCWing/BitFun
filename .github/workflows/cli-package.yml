@@ -80,6 +80,11 @@ jobs:
     runs-on: ${{ matrix.platform.os }}
     needs: prepare
 
+    # Linux x86_64/aarch64 are intentionally absent. They are built and published
+    # by .github/workflows/linux-binaries.yml, which is the only producer that
+    # also covers nightly and which must hold the CLI and Relay archives together
+    # to emit linux-binaries.json. Adding them back here would upload identical
+    # asset names from two workflows racing on the same `release: published`.
     strategy:
       fail-fast: false
       matrix:
@@ -90,12 +95,6 @@ jobs:
           - os: macos-15-intel
             name: macos-x64
             target: x86_64-apple-darwin
-          - os: ubuntu-latest
-            name: linux-x64
-            target: x86_64-unknown-linux-gnu
-          - os: ubuntu-24.04-arm
-            name: linux-arm64
-            target: aarch64-unknown-linux-gnu
           - os: windows-latest
             name: windows-x64
             target: x86_64-pc-windows-msvc
@@ -105,20 +104,6 @@ jobs:
         uses: actions/checkout@v5
         with:
           ref: ${{ needs.prepare.outputs.checkout_ref }}
-
-      - name: Install Linux system dependencies
-        if: runner.os == 'Linux'
-        shell: bash
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends \
-            pkg-config \
-            build-essential \
-            libssl-dev \
-            libxcb1-dev \
-            libxcb-render0-dev \
-            libxcb-shape0-dev \
-            libxcb-xfixes0-dev
 
       - name: Setup Rust toolchain
         uses: dtolnay/rust-toolchain@stable
@@ -214,11 +199,16 @@ jobs:
           echo "CLI release assets:"
           find cli-release-assets -type f | sort
 
-      - name: Generate combined SHA256SUMS
+      - name: Generate SHA256SUMS for macOS and Windows archives
         working-directory: cli-release-assets
         run: |
           set -euo pipefail
-          # Sort for reproducibility; include Unix tarballs and the Windows zip.
+          # Scope note: Linux archives are published by linux-binaries.yml in a
+          # different workflow run that finishes after this one, so they cannot
+          # be folded in here deterministically. Every archive on the release —
+          # Linux included — still ships its own `<archive>.sha256` sidecar, which
+          # is the complete and uniform verification surface. Keep this file's
+          # contents deterministic rather than dependent on cross-workflow timing.
           mapfile -t archives < <(
             find . -maxdepth 1 -type f \
               \( -name 'bitfun-cli-*.tar.gz' -o -name 'bitfun-cli-*.zip' \) \

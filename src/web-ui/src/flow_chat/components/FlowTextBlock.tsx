@@ -50,7 +50,7 @@ const RuntimeStatusBlock: React.FC<Pick<FlowTextBlockProps, 'textItem' | 'classN
       data-testid={testId}
       {...testAttributes}
     >
-      <DotMatrixLoader size="medium" className="flow-text-block__runtime-status-icon" />
+      <DotMatrixLoader size="small" className="flow-text-block__runtime-status-icon" />
       {hint && <span className="flow-text-block__runtime-status-text">{hint}</span>}
     </div>
   );

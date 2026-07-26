@@ -25,6 +25,7 @@ import { useSettingsStore } from './settingsStore';
 import { SETTINGS_CATEGORIES } from './settingsConfig';
 import type { ConfigTab } from './settingsConfig';
 import { SETTINGS_TAB_SEARCH_CONTENT } from './settingsTabSearchContent';
+import { preloadSettingsTabContent } from './settingsContentRegistry';
 import './SettingsNav.scss';
 
 const SEARCH_DEBOUNCE_MS = 150;
@@ -146,6 +147,7 @@ function useSettingsNav() {
   const searchInputRef = useRef<HTMLInputElement>(null);
   const [highlightedIndex, setHighlightedIndex] = useState(-1);
   const resultsRef = useRef<HTMLDivElement>(null);
+  const activationRequestRef = useRef(0);
 
   useEffect(() => {
     const id = window.setTimeout(() => {
@@ -180,18 +182,33 @@ function useSettingsNav() {
 
   const activateTab = useCallback(
     (tab: ConfigTab) => {
-      setActiveTab(tab);
-      clearSearch();
+      const requestId = ++activationRequestRef.current;
+      const commit = () => {
+        if (activationRequestRef.current !== requestId) return;
+        setActiveTab(tab);
+        clearSearch();
+      };
+      void preloadSettingsTabContent(tab).then(commit, commit);
     },
     [setActiveTab, clearSearch]
   );
 
   const handleTabClick = useCallback(
     (tab: ConfigTab) => {
-      setActiveTab(tab);
+      const requestId = ++activationRequestRef.current;
+      const commit = () => {
+        if (activationRequestRef.current === requestId) {
+          setActiveTab(tab);
+        }
+      };
+      void preloadSettingsTabContent(tab).then(commit, commit);
     },
     [setActiveTab]
   );
+
+  const preloadTab = useCallback((tab: ConfigTab) => {
+    void preloadSettingsTabContent(tab).catch(() => {});
+  }, []);
 
   const handleSearchKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -253,6 +270,7 @@ function useSettingsNav() {
     t,
     activeTab,
     handleTabClick,
+    preloadTab,
     draftQuery,
     setDraftQuery,
     searchInputRef,
@@ -274,6 +292,7 @@ const SettingsNav: React.FC = () => {
     t,
     activeTab,
     handleTabClick,
+    preloadTab,
     draftQuery,
     setDraftQuery,
     searchInputRef,
@@ -355,7 +374,11 @@ const SettingsNav: React.FC = () => {
                         .filter(Boolean)
                         .join(' ')}
                       onClick={() => activateTab(row.tabId)}
-                      onMouseEnter={() => setHighlightedIndex(index)}
+                      onMouseEnter={() => {
+                        setHighlightedIndex(index);
+                        preloadTab(row.tabId);
+                      }}
+                      onFocus={() => preloadTab(row.tabId)}
                     >
                       <span className="bitfun-settings-nav__search-result-line">
                         {highlightFirstMatch(line, displayQuery)}
@@ -394,6 +417,8 @@ const SettingsNav: React.FC = () => {
                       .filter(Boolean)
                       .join(' ')}
                     onClick={() => handleTabClick(tabDef.id)}
+                    onPointerEnter={() => preloadTab(tabDef.id)}
+                    onFocus={() => preloadTab(tabDef.id)}
                   >
                     <span className="bitfun-settings-nav__item-label">
                       {t(tabDef.labelKey, { defaultValue: tabDef.id })}

@@ -31,7 +31,12 @@ export class ConnectionErrorPolicy {
 
   static protectedUserIdError(message: string): boolean {
     return message.indexOf('This remote URL is already protected') >= 0 ||
-      message.indexOf('This mobile device must continue using the previously confirmed user ID') >= 0;
+      message.indexOf('This mobile device must continue using the previously confirmed user ID') >= 0 ||
+      message.indexOf('Invalid username or password') >= 0 ||
+      message.indexOf('Missing password') >= 0 ||
+      message.indexOf('Missing username') >= 0 ||
+      message.indexOf(RemoteI18n.t('errors.accountPasswordRequired')) >= 0 ||
+      message.indexOf(RemoteI18n.t('errors.accountUsernameRequired')) >= 0;
   }
 
   static async connectionErrorResult(
@@ -98,6 +103,8 @@ export class ConnectionErrorPolicy {
     const text = raw.toLowerCase();
     if (raw === RemoteI18n.t('errors.remoteUrlRequired') ||
       raw === RemoteI18n.t('errors.remoteUrlMissingParams') ||
+      raw === RemoteI18n.t('errors.accountPasswordRequired') ||
+      raw === RemoteI18n.t('errors.accountUsernameRequired') ||
       raw === RemoteI18n.t('errors.userIdRequired')) {
       return raw;
     }

@@ -49,6 +49,7 @@ import {
   updateImageAnalysisItem as updateImageAnalysisItemModule,
   updateSessionMetadata,
 } from './flow-chat-manager';
+import { ensureBackendSession } from './flow-chat-manager/SessionModule';
 import { installPeerSessionRefresh } from './flow-chat-manager/PeerSessionRefreshModule';
 
 const log = createLogger('FlowChatManager');
@@ -510,6 +511,11 @@ export class FlowChatManager {
       cleanupSessionBuffers(this.context, id);
     });
     return removedSessionIds;
+  }
+
+  /** Restores a persisted session into the coordinator before a non-message workflow uses it. */
+  public async ensureBackendSession(sessionId: string): Promise<void> {
+    await ensureBackendSession(this.context, sessionId);
   }
 
   public discardLocalSessionsForWorkspace(

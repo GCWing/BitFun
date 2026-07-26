@@ -7,11 +7,14 @@ use super::manager::{
     WorkspaceManagerConfig, WorkspaceManagerStatistics, WorkspaceOpenOptions, WorkspaceStatus,
     WorkspaceSummary, WorkspaceType,
 };
+use super::WorktreeTopologyFreshness;
 use crate::infrastructure::storage::{PersistenceService, StorageOptions};
 use crate::infrastructure::{try_get_path_manager_arc, PathManager};
 use crate::service::bootstrap::{
     ensure_workspace_gitignore_ignores_bitfun, initialize_workspace_persona_files,
 };
+#[cfg(feature = "service-integrations")]
+use crate::service::git::{GitError, GitWorktreeInfo};
 use crate::service::remote_ssh::workspace_state::{
     canonicalize_local_workspace_root, get_remote_workspace_manager, init_remote_workspace_manager,
     local_workspace_roots_equal, normalize_remote_workspace_path, remote_workspace_stable_id,
@@ -58,6 +61,12 @@ pub struct WorkspaceCreateOptions {
     pub remote_ssh_host: Option<String>,
     /// Deterministic id for [`WorkspaceKind::Remote`] (host + remote path hash).
     pub stable_workspace_id: Option<String>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum WorkspaceActivityMode {
+    TouchOnly,
+    RefreshMetadata,
 }
 
 impl Default for WorkspaceCreateOptions {
@@ -344,10 +353,16 @@ impl WorkspaceService {
         options: WorkspaceCreateOptions,
     ) -> BitFunResult<WorkspaceInfo> {
         let options = self.normalize_workspace_options_for_path(&path, options);
+        let worktree =
+            WorkspaceInfo::resolve_worktree_info(&path, WorktreeTopologyFreshness::Cached).await;
         let result = {
             let mut manager = self.manager.write().await;
             manager
-                .open_workspace_with_options(path, Self::to_manager_open_options(&options))
+                .open_workspace_with_resolved_worktree(
+                    path,
+                    Self::to_manager_open_options(&options),
+                    worktree,
+                )
                 .await
         };
 
@@ -532,13 +547,25 @@ impl WorkspaceService {
         &self,
         path: PathBuf,
         options: WorkspaceCreateOptions,
+        mode: WorkspaceActivityMode,
     ) -> BitFunResult<WorkspaceInfo> {
         let mut options = self.normalize_workspace_options_for_path(&path, options);
         options.auto_set_current = false;
+        let refresh_worktree = match mode {
+            WorkspaceActivityMode::TouchOnly => None,
+            WorkspaceActivityMode::RefreshMetadata => Some(
+                WorkspaceInfo::resolve_worktree_info(&path, WorktreeTopologyFreshness::Cached)
+                    .await,
+            ),
+        };
         let result = {
             let mut manager = self.manager.write().await;
             manager
-                .track_workspace_with_options(path, Self::to_manager_open_options(&options))
+                .track_workspace_with_options(
+                    path,
+                    Self::to_manager_open_options(&options),
+                    refresh_worktree,
+                )
                 .await
         };
 
@@ -557,6 +584,24 @@ impl WorkspaceService {
         }
 
         result
+    }
+
+    #[cfg(feature = "service-integrations")]
+    pub async fn list_worktrees(
+        &self,
+        path: &Path,
+        freshness: WorktreeTopologyFreshness,
+    ) -> Result<Vec<GitWorktreeInfo>, GitError> {
+        super::worktree_topology::global_worktree_topology_service()
+            .list_worktrees(path, freshness)
+            .await
+    }
+
+    #[cfg(feature = "service-integrations")]
+    pub async fn invalidate_worktree_topology(&self, path: &Path) {
+        super::worktree_topology::global_worktree_topology_service()
+            .invalidate(path)
+            .await;
     }
 
     /// Quickly opens a workspace (using default options).
@@ -989,7 +1034,12 @@ impl WorkspaceService {
                 workspace_id
             )));
         };
-        let new_workspace = WorkspaceInfo::new(
+        let worktree = WorkspaceInfo::resolve_worktree_info(
+            &workspace_path,
+            WorktreeTopologyFreshness::ForceRefresh,
+        )
+        .await;
+        let new_workspace = WorkspaceInfo::new_without_worktree(
             workspace_path,
             WorkspaceOpenOptions {
                 scan_options: ScanOptions::default(),
@@ -1012,6 +1062,7 @@ impl WorkspaceService {
         )
         .await?;
         let mut new_workspace = new_workspace;
+        new_workspace.worktree = worktree;
         new_workspace.id = existing_workspace.id.clone();
         new_workspace.opened_at = existing_workspace.opened_at;
         new_workspace.description = existing_workspace.description.clone();
@@ -2274,6 +2325,7 @@ mod tests {
     use crate::agentic::persistence::PersistenceManager;
     use crate::infrastructure::storage::{PersistenceService, StorageOptions};
     use crate::service::session::SessionMetadata;
+    use crate::service::workspace::WorkspaceWorktreeInfo;
     use std::collections::HashMap;
     use uuid::Uuid;
 
@@ -2487,7 +2539,11 @@ mod tests {
         let workspace_root = env.create_workspace_dir("tracked-workspace");
 
         let tracked = service
-            .track_workspace_activity(workspace_root.clone(), WorkspaceCreateOptions::default())
+            .track_workspace_activity(
+                workspace_root.clone(),
+                WorkspaceCreateOptions::default(),
+                WorkspaceActivityMode::RefreshMetadata,
+            )
             .await
             .expect("workspace tracking should succeed");
 
@@ -2512,6 +2568,47 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn touch_only_workspace_activity_preserves_worktree_metadata() {
+        let env = TestEnvironment::new();
+        let service = build_test_workspace_service(env.path_manager.clone()).await;
+        let workspace_root = env.create_workspace_dir("touch-only-workspace");
+
+        let tracked = service
+            .track_workspace_activity(
+                workspace_root.clone(),
+                WorkspaceCreateOptions::default(),
+                WorkspaceActivityMode::RefreshMetadata,
+            )
+            .await
+            .expect("workspace tracking should succeed");
+        let expected_worktree = WorkspaceWorktreeInfo {
+            path: workspace_root.to_string_lossy().replace('\\', "/"),
+            branch: Some("cached-branch".to_string()),
+            main_repo_path: workspace_root.to_string_lossy().replace('\\', "/"),
+            is_main: true,
+        };
+        {
+            let mut manager = service.manager.write().await;
+            manager
+                .get_workspaces_mut()
+                .get_mut(&tracked.id)
+                .expect("tracked workspace should exist")
+                .worktree = Some(expected_worktree.clone());
+        }
+
+        let touched = service
+            .track_workspace_activity(
+                workspace_root,
+                WorkspaceCreateOptions::default(),
+                WorkspaceActivityMode::TouchOnly,
+            )
+            .await
+            .expect("touch-only tracking should succeed");
+
+        assert_eq!(touched.worktree, Some(expected_worktree));
+    }
+
+    #[tokio::test]
     async fn track_workspace_activity_assigns_stable_remote_workspace_id() {
         let env = TestEnvironment::new();
         let service = build_test_workspace_service(env.path_manager.clone()).await;
@@ -2526,6 +2623,7 @@ mod tests {
                     remote_ssh_host: Some("example-host".to_string()),
                     ..Default::default()
                 },
+                WorkspaceActivityMode::RefreshMetadata,
             )
             .await
             .expect("remote workspace tracking should succeed");
@@ -2554,6 +2652,7 @@ mod tests {
                     display_name: Some("repos".to_string()),
                     ..Default::default()
                 },
+                WorkspaceActivityMode::RefreshMetadata,
             )
             .await
             .expect("remote workspace should be remembered");

@@ -9,6 +9,8 @@ export interface BtwAskStreamRequest {
   modelId?: string;
   childSessionId: string;
   childSessionName?: string;
+  parentDialogTurnId?: string;
+  parentTurnIndex?: number;
   imageContexts?: ImageInputContextData[];
 }
 

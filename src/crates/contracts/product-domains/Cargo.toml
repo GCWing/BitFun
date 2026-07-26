@@ -36,6 +36,7 @@ dirs = { workspace = true, optional = true }
 log = { workspace = true, optional = true }
 sha2 = { workspace = true, optional = true }
 hex = { workspace = true, optional = true }
+hmac = { workspace = true, optional = true }
 which = { workspace = true, optional = true }
 
 [features]
@@ -43,7 +44,7 @@ default = []
 plugin-source = ["hex", "sha2"]
 miniapp = ["dirs", "sha2", "which"]
 function-agents = ["log"]
-external-sources = ["hex", "sha2"]
+external-sources = ["hex", "hmac", "sha2"]
 product-full = ["plugin-source", "miniapp", "function-agents", "external-sources"]
 
 [dev-dependencies]

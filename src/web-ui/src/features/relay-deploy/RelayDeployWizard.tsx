@@ -414,7 +414,19 @@ export const RelayDeployWizard: React.FC<RelayDeployWizardProps> = ({
     setError(null);
     const auth: SSHAuthMethod = conn.authType.type === 'Password'
       ? { type: 'Password', password: '' }
-      : { type: 'PrivateKey', keyPath: conn.authType.keyPath };
+      : conn.authType.type === 'PrivateKey'
+        ? {
+            type: 'PrivateKey',
+            keyPath: conn.authType.keyPath,
+            certificatePath: conn.authType.certificatePath,
+          }
+        : conn.authType.type === 'Agent'
+          ? {
+              type: 'Agent',
+              keyFingerprint: conn.authType.keyFingerprint,
+              fallbackKeyPath: conn.authType.fallbackKeyPath,
+            }
+          : { type: 'KeyboardInteractive', responses: [] };
     try {
       const result = await sshApi.connect({
         id: conn.id,
@@ -426,8 +438,8 @@ export const RelayDeployWizard: React.FC<RelayDeployWizardProps> = ({
       });
       onConnected(result.connectionId || conn.id, conn.host, conn.name);
     } catch (e) {
-      if (conn.authType.type === 'Password') {
-        // No stored password in the vault — prompt for credentials.
+      if (conn.authType.type !== 'Agent') {
+        // Runtime-only credentials may be unavailable — prompt for them.
         setCredentialsPrompt(conn);
       } else {
         setError(errMsg(e));
@@ -1352,7 +1364,25 @@ export const RelayDeployWizard: React.FC<RelayDeployWizardProps> = ({
         <SSHAuthPromptDialog
           open
           targetDescription={`${credentialsPrompt.username}@${credentialsPrompt.host}:${credentialsPrompt.port}`}
-          defaultAuthMethod="password"
+          defaultAuthMethod={
+            credentialsPrompt.authType.type === 'KeyboardInteractive'
+              ? 'keyboardInteractive'
+              : credentialsPrompt.authType.type === 'Agent'
+                ? 'agent'
+                : credentialsPrompt.authType.type === 'PrivateKey'
+                  ? 'privateKey'
+                  : 'password'
+          }
+          defaultKeyPath={
+            credentialsPrompt.authType.type === 'PrivateKey'
+              ? credentialsPrompt.authType.keyPath
+              : '~/.ssh/id_rsa'
+          }
+          defaultCertificatePath={
+            credentialsPrompt.authType.type === 'PrivateKey'
+              ? credentialsPrompt.authType.certificatePath
+              : undefined
+          }
           initialUsername={credentialsPrompt.username}
           lockUsername
           onSubmit={handleCredentialsSubmit}

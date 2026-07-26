@@ -1,18 +1,23 @@
 //! Shell discovery facade and shared candidate metadata.
 
 use std::collections::{HashMap, HashSet};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 
 use super::ShellType;
 
+mod cache;
 mod path;
 mod platform;
 mod probe;
 mod selection;
 
 const VERSION_PROBE_TIMEOUT_MS: u64 = 750;
+
+pub(crate) fn invalidate_cached_executable(path: &Path) {
+    cache::invalidate_path(path);
+}
 
 /// The source that produced a shell candidate.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -111,19 +116,38 @@ impl ShellDetector {
             .collect()
     }
 
+    fn validate_first_candidate(candidates: Vec<ShellCandidate>) -> Option<DetectedShell> {
+        let mut seen = HashSet::new();
+        candidates
+            .into_iter()
+            .filter(|candidate| seen.insert(path::candidate_identity(candidate)))
+            .find_map(Self::validate_candidate)
+    }
+
     fn validate_candidate(candidate: ShellCandidate) -> Option<DetectedShell> {
-        if !path::is_regular_file(&candidate.path) {
-            return None;
-        }
-        let version = match candidate.shell_type {
-            ShellType::PowerShellCore => Some(Self::probe_powershell_version(&candidate.path)?),
-            ShellType::Bash
-            | ShellType::Zsh
-            | ShellType::Fish
-            | ShellType::Sh
-            | ShellType::Ksh
-            | ShellType::Csh => Self::probe_shell_version(&candidate.path),
-            ShellType::PowerShell | ShellType::Cmd | ShellType::Custom(_) => None,
+        let outcome =
+            cache::probe_candidate(&candidate.shell_type, &candidate.path, || match &candidate
+                .shell_type
+            {
+                ShellType::PowerShellCore => Self::probe_powershell_version(&candidate.path)
+                    .map(|version| cache::CandidateProbeOutcome::Available(Some(version)))
+                    .unwrap_or(cache::CandidateProbeOutcome::Unavailable),
+                ShellType::Bash
+                | ShellType::Zsh
+                | ShellType::Fish
+                | ShellType::Sh
+                | ShellType::Ksh
+                | ShellType::Csh => Self::probe_shell_version(&candidate.path)
+                    .map(|version| cache::CandidateProbeOutcome::Available(Some(version)))
+                    .unwrap_or(cache::CandidateProbeOutcome::AvailableWithProbeFailure),
+                ShellType::PowerShell | ShellType::Cmd | ShellType::Custom(_) => {
+                    cache::CandidateProbeOutcome::Available(None)
+                }
+            });
+        let version = match outcome {
+            cache::CandidateProbeOutcome::Available(version) => version,
+            cache::CandidateProbeOutcome::AvailableWithProbeFailure => None,
+            cache::CandidateProbeOutcome::Unavailable => return None,
         };
         Some(DetectedShell::new(
             candidate.shell_type,

@@ -182,7 +182,7 @@ export const PROVIDER_TEMPLATES: Record<string, ProviderTemplate> = {
     name: t('settings/ai-model:providers.qwen.name'),
     baseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
     format: 'openai',
-    models: ['Qwen3.5-Plus', 'Qwen3.5-Flash'],
+    models: ['Qwen3.5-Plus', 'Qwen3.5-Flash', 'qwen3-asr-flash'],
     requiresApiKey: true,
     description: t('settings/ai-model:providers.qwen.description'),
     helpUrl: 'https://dashscope.console.aliyun.com/apiKey',

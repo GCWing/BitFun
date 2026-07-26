@@ -6,7 +6,9 @@ pub(crate) enum MouseGestureOutcome {
 
 impl ChatView {
     /// Take the pending command (set by mouse click on command menu)
-    pub(crate) fn take_pending_command(&mut self) -> Option<String> {
+    pub(crate) fn take_pending_command(
+        &mut self,
+    ) -> Option<crate::ui::command_menu::CommandMenuSelection> {
         self.pending_command.take()
     }
 
@@ -68,7 +70,7 @@ impl ChatView {
             return true;
         }
         if self.command_menu.captures_mouse(mouse) {
-            if let Some(cmd) = self.command_menu.handle_mouse_event(mouse) {
+            if let Some(cmd) = self.command_menu.handle_mouse_event_with_name(mouse) {
                 self.text_input.clear();
                 self.refresh_command_menu();
                 self.pending_command = Some(cmd);

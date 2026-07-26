@@ -8,6 +8,7 @@ pub mod integration;
 mod profiles;
 mod scripts_manager;
 
+pub(crate) use detection::invalidate_cached_executable;
 pub use detection::{DetectedShell, ShellDetector, ShellDiscoverySource};
 pub use integration::{
     get_injection_command, get_integration_script_content, get_integration_script_path,

@@ -760,8 +760,24 @@ fn port_error_kind(kind: Option<&str>) -> PortErrorKind {
     }
 }
 
+#[derive(Clone)]
+struct CachedNodeAvailability {
+    executable: PathBuf,
+    version: String,
+}
+
+impl CachedNodeAvailability {
+    fn to_runtime_availability(&self) -> ScriptToolRuntimeAvailability {
+        ScriptToolRuntimeAvailability::Available {
+            executable: self.executable.to_string_lossy().into_owned(),
+            version: self.version.clone(),
+        }
+    }
+}
+
 pub struct NodeScriptToolRuntime {
     executable: RwLock<Option<PathBuf>>,
+    availability_cache: Mutex<Option<CachedNodeAvailability>>,
     workers: RwLock<HashMap<String, Arc<NodeWorker>>>,
     load_gate: Mutex<()>,
 }
@@ -776,6 +792,7 @@ impl NodeScriptToolRuntime {
     pub fn discover() -> Self {
         Self {
             executable: RwLock::new(which::which("node").ok()),
+            availability_cache: Mutex::new(None),
             workers: RwLock::new(HashMap::new()),
             load_gate: Mutex::new(()),
         }
@@ -817,18 +834,34 @@ impl NodeScriptToolRuntime {
 #[async_trait]
 impl ScriptToolRuntime for NodeScriptToolRuntime {
     async fn availability(&self) -> ScriptToolRuntimeAvailability {
-        match self.resolve_executable().await {
+        let mut cache = self.availability_cache.lock().await;
+        if let Some(availability) = cache.as_ref() {
+            return availability.to_runtime_availability();
+        }
+
+        let availability = match self.resolve_executable().await {
             Some(executable) => match probe_node_version(&executable).await {
-                Ok(version) => ScriptToolRuntimeAvailability::Available {
-                    executable: executable.to_string_lossy().into_owned(),
-                    version,
-                },
+                Ok(version) => {
+                    let cached = CachedNodeAvailability {
+                        executable,
+                        version,
+                    };
+                    let availability = cached.to_runtime_availability();
+                    *cache = Some(cached);
+                    availability
+                }
                 Err(reason) => ScriptToolRuntimeAvailability::Unavailable { reason },
             },
             None => ScriptToolRuntimeAvailability::Unavailable {
                 reason: "BitFun could not find Node.js for external tools".to_string(),
             },
-        }
+        };
+        availability
+    }
+
+    async fn invalidate_availability(&self) {
+        *self.availability_cache.lock().await = None;
+        *self.executable.write().await = None;
     }
 
     async fn is_loaded(&self, target_id: &str) -> bool {
@@ -1051,7 +1084,8 @@ async fn probe_node_version(executable: &PathBuf) -> Result<String, String> {
 
 #[cfg(test)]
 mod tests {
-    use super::NodeScriptToolRuntime;
+    use super::{CachedNodeAvailability, NodeScriptToolRuntime};
+    use bitfun_runtime_ports::{ScriptToolRuntime, ScriptToolRuntimeAvailability};
     use std::path::PathBuf;
     use tokio::sync::{Mutex, RwLock};
 
@@ -1059,6 +1093,7 @@ mod tests {
     async fn missing_node_path_can_recover_without_replacing_the_runtime() {
         let runtime = NodeScriptToolRuntime {
             executable: RwLock::new(None),
+            availability_cache: Mutex::new(None),
             workers: RwLock::new(Default::default()),
             load_gate: Mutex::new(()),
         };
@@ -1071,5 +1106,44 @@ mod tests {
             Some(discovered.clone())
         );
         assert_eq!(*runtime.executable.read().await, Some(discovered));
+    }
+
+    #[tokio::test]
+    async fn cached_success_is_reused_until_runtime_availability_is_invalidated() {
+        let cached = CachedNodeAvailability {
+            executable: PathBuf::from("cached-node"),
+            version: "v22.12.0".to_string(),
+        };
+        let availability = cached.to_runtime_availability();
+        let runtime = NodeScriptToolRuntime {
+            executable: RwLock::new(Some(PathBuf::from("stale-node"))),
+            availability_cache: Mutex::new(Some(cached)),
+            workers: RwLock::new(Default::default()),
+            load_gate: Mutex::new(()),
+        };
+
+        assert_eq!(runtime.availability().await, availability);
+
+        runtime.invalidate_availability().await;
+        assert!(runtime.availability_cache.lock().await.is_none());
+        assert!(runtime.executable.read().await.is_none());
+    }
+
+    #[tokio::test]
+    async fn unavailable_result_is_not_cached() {
+        let runtime = NodeScriptToolRuntime {
+            executable: RwLock::new(Some(PathBuf::from(
+                "definitely-missing-node-for-availability-cache-test",
+            ))),
+            availability_cache: Mutex::new(None),
+            workers: RwLock::new(Default::default()),
+            load_gate: Mutex::new(()),
+        };
+
+        assert!(matches!(
+            runtime.availability().await,
+            ScriptToolRuntimeAvailability::Unavailable { .. }
+        ));
+        assert!(runtime.availability_cache.lock().await.is_none());
     }
 }

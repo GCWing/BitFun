@@ -14,11 +14,21 @@ import type { SceneTabId } from '../components/SceneBar/types';
 
 type LazyNavComponent = ReturnType<typeof lazy<ComponentType>>;
 
+const loadSettingsNav = () => import('./settings/SettingsNav');
+const loadFileViewerNav = () => import('./file-viewer/FileViewerNav');
+const loadShellNav = () => import('./shell/ShellNav');
+
 const SCENE_NAV_REGISTRY: Partial<Record<SceneTabId, LazyNavComponent>> = {
-  settings: lazy(() => import('./settings/SettingsNav')),
-  'file-viewer': lazy(() => import('./file-viewer/FileViewerNav')),
-  shell: lazy(() => import('./shell/ShellNav')),
+  settings: lazy(loadSettingsNav),
+  'file-viewer': lazy(loadFileViewerNav),
+  shell: lazy(loadShellNav),
   // terminal: lazy(() => import('./terminal/TerminalNav')),
+};
+
+const SCENE_NAV_LOADERS: Partial<Record<SceneTabId, () => Promise<unknown>>> = {
+  settings: loadSettingsNav,
+  'file-viewer': loadFileViewerNav,
+  shell: loadShellNav,
 };
 
 /**
@@ -27,4 +37,8 @@ const SCENE_NAV_REGISTRY: Partial<Record<SceneTabId, LazyNavComponent>> = {
  */
 export function getSceneNav(sceneId: SceneTabId): LazyNavComponent | null {
   return SCENE_NAV_REGISTRY[sceneId] ?? null;
+}
+
+export async function preloadSceneNav(sceneId: SceneTabId): Promise<void> {
+  await SCENE_NAV_LOADERS[sceneId]?.();
 }

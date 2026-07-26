@@ -193,8 +193,8 @@ static ACTION_SPECS: &[ActionSpec] = &[
     },
     ActionSpec {
         id: "switch_agent",
-        name: "Agents",
-        aliases: &["/agents"],
+        name: "Agent",
+        aliases: &["/agent", "/agents"],
         description: "Switch modes and manage agents",
         contexts: BOTH,
         availability: ActionAvailability::Always,
@@ -344,7 +344,7 @@ static ACTION_SPECS: &[ActionSpec] = &[
     ActionSpec {
         id: "mcp_servers",
         name: "MCP servers",
-        aliases: &["/mcps"],
+        aliases: &["/mcp", "/mcps"],
         description: "Manage MCP servers",
         contexts: BOTH,
         availability: ActionAvailability::Always,
@@ -1712,8 +1712,12 @@ mod tests {
 
     #[test]
     fn agent_selector_and_agent_cycle_are_distinct_actions() {
-        let slash = action_for_alias("/agents", ActionContext::Chat).unwrap();
+        let slash = action_for_alias("/agent", ActionContext::Chat).unwrap();
         assert_eq!(slash.handler, ActionHandler::OpenAgentSelector);
+        assert_eq!(
+            action_for_alias("/agents", ActionContext::Chat).unwrap().id,
+            slash.id
+        );
 
         let keymap = ResolvedKeymap::new(&ShortcutsConfig::default());
         assert_eq!(
@@ -1743,7 +1747,7 @@ mod tests {
         let extensions = action_for_alias("/extensions", ActionContext::Chat).unwrap();
         assert_eq!(extensions.handler, ActionHandler::Extensions);
         assert!(extensions.description.contains("Safe Mode"));
-        let agents = action_for_alias("/agents", ActionContext::Chat).unwrap();
+        let agents = action_for_alias("/agent", ActionContext::Chat).unwrap();
         assert_eq!(agents.handler, ActionHandler::OpenAgentSelector);
         assert_eq!(agents.description, "Switch modes and manage agents");
         assert!(agents.available(ActionState::chat(true, false)));

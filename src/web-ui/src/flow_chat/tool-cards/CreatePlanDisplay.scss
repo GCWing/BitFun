@@ -130,6 +130,13 @@
       flex-shrink: 0;
     }
 
+    .create-plan-header-actions {
+      display: inline-flex;
+      align-items: center;
+      flex-shrink: 0;
+      gap: var(--flowchat-inline-gap);
+    }
+
     .create-plan-header-folder-btn {
       display: inline-flex;
       align-items: center;
@@ -154,6 +161,15 @@
       &:disabled {
         opacity: 0.45;
         cursor: default;
+      }
+
+      &--success {
+        color: var(--color-success);
+
+        &:disabled {
+          color: var(--color-success);
+          opacity: 1;
+        }
       }
     }
 

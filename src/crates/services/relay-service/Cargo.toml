@@ -1,6 +1,6 @@
 [package]
 name = "bitfun-relay-service"
-version = "0.2.13"
+version = "0.2.14"
 authors = ["BitFun Team"]
 edition = "2021"
 description = "Reusable relay runtime for BitFun Remote Connect"

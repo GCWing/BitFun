@@ -15,6 +15,16 @@ export interface CreateWorktreeWorkspaceResult {
   openedWorkspace?: WorkspaceInfo;
 }
 
+export class WorktreeWorkspaceCreationError extends Error {
+  constructor(
+    public readonly stage: 'create' | 'open',
+    error: unknown,
+  ) {
+    super(error instanceof Error ? error.message : String(error));
+    this.name = 'WorktreeWorkspaceCreationError';
+  }
+}
+
 export interface DeleteWorktreeWorkspaceOptions {
   workspace: WorkspaceInfo;
   closeWorkspaceById: (workspaceId: string) => Promise<void>;
@@ -23,17 +33,27 @@ export interface DeleteWorktreeWorkspaceOptions {
 export async function createWorktreeWorkspace(
   options: CreateWorktreeWorkspaceOptions,
 ): Promise<CreateWorktreeWorkspaceResult> {
-  const worktree = await gitAPI.addWorktree(
-    options.repositoryPath,
-    options.branch,
-    options.isNew,
-  );
+  let worktree: GitWorktreeInfo;
+  try {
+    worktree = await gitAPI.addWorktree(
+      options.repositoryPath,
+      options.branch,
+      options.isNew,
+    );
+  } catch (error) {
+    throw new WorktreeWorkspaceCreationError('create', error);
+  }
 
   if (!options.openAfterCreate) {
     return { worktree };
   }
 
-  const openedWorkspace = await options.openWorkspace(worktree.path);
+  let openedWorkspace: WorkspaceInfo;
+  try {
+    openedWorkspace = await options.openWorkspace(worktree.path);
+  } catch (error) {
+    throw new WorktreeWorkspaceCreationError('open', error);
+  }
   return {
     worktree,
     openedWorkspace,

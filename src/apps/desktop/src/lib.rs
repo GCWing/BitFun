@@ -1,5 +1,24 @@
+#![recursion_limit = "256"]
 #![allow(non_snake_case)]
 //! BitFun Desktop - Tauri-based desktop application with TransportAdapter architecture
+//!
+//! The reqwest HTTP/2 and MCP transport type graph exceeds rustc's default
+//! trait-evaluation recursion budget when desktop tasks require `Send`.
+//!
+//! Concretely, dropping the limit back to 128 fails with `overflow evaluating
+//! the requirement Vec<slab::Entry<h2::…::Slot<h2::…::recv::Event>>>: Send`.
+//! The chain runs ~15 frames through h2's own internals (`Slab` → `Buffer` →
+//! `Recv` → `Actions` → `Inner` → `Arc<Mutex<_>>` → `RecvStream` → hyper's
+//! `Incoming`), into the MCP remote transport, then out through roughly ten
+//! nested `async fn` bodies from `agentic::coordination::scheduler` to the
+//! `tokio::spawn` in `api::remote_connect_api`.
+//!
+//! Most of that depth is in third-party types, so `Box::pin`-ing one of our own
+//! futures does not collapse it; only erasing a mid-chain future to
+//! `Pin<Box<dyn Future + Send>>` would, at the cost of an allocation and dynamic
+//! dispatch on the dialog-turn path. Raising the budget is the mechanism rustc
+//! itself suggests, costs nothing at runtime, and is re-checked whenever this
+//! attribute is touched.
 
 pub mod api;
 #[cfg(not(target_env = "ohos"))]
@@ -9,6 +28,7 @@ mod embedded_relay_host;
 pub mod logging;
 pub mod macos_menubar;
 pub mod runtime;
+pub mod sleep_prevention;
 pub mod startup_trace;
 pub mod theme;
 #[cfg(not(target_env = "ohos"))]
@@ -66,6 +86,7 @@ use api::search_api::*;
 use api::session_api::*;
 use api::skill_api::*;
 use api::snapshot_service::*;
+use api::speech_api::*;
 use api::startchat_agent_api::*;
 use api::storage_commands::*;
 use api::subagent_api::*;
@@ -493,6 +514,7 @@ pub async fn _run() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_fs::init())
         .manage(app_state)
+        .manage(sleep_prevention::SleepPreventionState::default())
         .manage(desktop_runtime)
         .manage(coordinator_state)
         .manage(scheduler_state)
@@ -851,6 +873,7 @@ pub async fn _run() {
             let step_started = Instant::now();
             init_services(app_handle.clone(), startup_log_level);
             api::remote_connect_api::set_account_app_handle(app_handle.clone());
+            sleep_prevention::spawn_config_listener(app_handle.clone());
             startup_trace.record_elapsed_step("native_setup", "init_services", step_started);
 
             let step_started = Instant::now();
@@ -1000,6 +1023,9 @@ pub async fn _run() {
             update_external_integration_policy_command,
             set_external_source_enabled_command,
             set_external_source_conflict_choice_command,
+            get_native_prompt_command_conflicts_command,
+            set_native_prompt_command_conflict_choice_command,
+            expand_external_prompt_command_command,
             set_external_tool_target_decision_command,
             set_external_tool_conflict_choice_command,
             set_external_subagent_activation_command,
@@ -1092,6 +1118,15 @@ pub async fn _run() {
             get_runtime_logging_info,
             export_diagnostics_bundle,
             get_runtime_capabilities,
+            speech_list_models,
+            speech_download_model,
+            speech_cancel_model_download,
+            speech_delete_model,
+            speech_verify_model,
+            speech_start_input_session,
+            speech_append_audio_chunk,
+            speech_finish_input_session,
+            speech_cancel_input_session,
             get_agent_profile_configs,
             get_agent_profile_config,
             set_agent_profile_config,
@@ -1353,6 +1388,8 @@ pub async fn _run() {
             api::system_api::initialize_tray_after_startup,
             api::system_api::startup_window_control,
             api::system_api::toggle_main_window_fullscreen,
+            sleep_prevention::get_prevent_sleep_enabled,
+            sleep_prevention::set_prevent_sleep_enabled,
             check_command_exists,
             check_commands_exist,
             run_system_command,
@@ -1491,6 +1528,8 @@ pub async fn _run() {
             api::ssh_api::ssh_delete_connection,
             api::ssh_api::ssh_has_stored_password,
             api::ssh_api::ssh_connect,
+            api::ssh_api::ssh_test_connection,
+            api::ssh_api::ssh_list_docker_containers,
             api::ssh_api::ssh_disconnect,
             api::ssh_api::ssh_disconnect_all,
             api::ssh_api::ssh_is_connected,

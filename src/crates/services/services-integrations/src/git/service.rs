@@ -2,7 +2,8 @@ use super::*;
 /**
  * Git service implementation
  */
-use git2::{BranchType, Commit, Repository};
+use git2::{BranchType, Commit, ErrorCode, Repository};
+use std::io::Write;
 use std::path::Path;
 use std::time::Duration;
 use std::time::Instant;
@@ -27,6 +28,66 @@ fn review_path_has_parent_traversal(path: &str, windows: bool) -> bool {
     }
 }
 
+/// `git rev-parse` on a date string is a pure local parse, so anything slower
+/// than this is a stuck process, not a slow one.
+const APPROXIDATE_TIMEOUT: Duration = Duration::from_secs(5);
+
+/// Resolve a `since`/`until` value through Git's own approxidate parser.
+///
+/// Note the semantics this inherits: approxidate never rejects input. A typo
+/// like `--since=lst week` parses as "now", producing a filter that matches
+/// almost nothing and an empty, successful result. That is Git's documented
+/// behaviour and callers are matched to it deliberately, so unparseable input is
+/// logged rather than turned into an error — but it is why an empty commit list
+/// is worth double-checking against the filter that produced it.
+fn resolve_git_approxidate(repo_path: &Path, option: &str, value: &str) -> Result<i64, GitError> {
+    let argument = format!("{option}={value}");
+    let output = execute_git_command_sync_with_timeout(
+        repo_path.to_string_lossy().as_ref(),
+        &["rev-parse", argument.as_str()],
+        APPROXIDATE_TIMEOUT,
+    )
+    .map_err(|error| {
+        GitError::CommandFailed(format!(
+            "Failed to parse Git date filter '{argument}': {error}"
+        ))
+    })?;
+    let timestamp = output
+        .trim()
+        .split_once('=')
+        .map(|(_, timestamp)| timestamp)
+        .ok_or_else(|| {
+            GitError::CommandFailed(format!(
+                "Git returned an invalid date filter for '{argument}': {}",
+                output.trim()
+            ))
+        })?;
+    let timestamp = timestamp.parse::<i64>().map_err(|error| {
+        GitError::CommandFailed(format!(
+            "Git returned an invalid timestamp for '{argument}': {error}"
+        ))
+    })?;
+
+    // Approxidate falls back to "now" for anything it cannot read, so a value
+    // that lands on the current second is the one signal that the input was
+    // probably a typo. Not an error — "now" and "today" are legitimate — but
+    // worth a line when the query then comes back empty.
+    let now = chrono::Utc::now().timestamp();
+    if (now - timestamp).abs() <= 1
+        && !matches!(
+            value.trim().to_ascii_lowercase().as_str(),
+            "now" | "today" | ""
+        )
+    {
+        log::warn!(
+            "Git date filter '{argument}' resolved to the current time; \
+             approxidate could not parse it and the result will be nearly empty"
+        );
+    }
+
+    Ok(timestamp)
+}
+
 impl GitService {
     /// Checks whether the path is a Git repository.
     pub async fn is_repository<P: AsRef<Path>>(path: P) -> Result<bool, GitError> {
@@ -34,6 +95,43 @@ impl GitService {
         task::spawn_blocking(move || Ok(is_git_repository(path_buf)))
             .await
             .map_err(|e| GitError::CommandFailed(format!("spawn_blocking join: {e}")))?
+    }
+
+    /// Resolves the stable repository identity shared by all worktrees without
+    /// spawning the Git CLI.
+    pub async fn resolve_worktree_repository<P: AsRef<Path>>(
+        path: P,
+    ) -> Result<GitWorktreeRepositoryInfo, GitError> {
+        let requested_path = path.as_ref().to_path_buf();
+        task::spawn_blocking(move || {
+            let repository = Repository::discover(&requested_path)
+                .map_err(|error| GitError::RepositoryNotFound(error.to_string()))?;
+            let query_path = repository
+                .workdir()
+                .map(Path::to_path_buf)
+                .unwrap_or_else(|| requested_path.clone());
+            let git_dir = repository.path().to_path_buf();
+            let common_git_dir = git_dir
+                .parent()
+                .filter(|parent| {
+                    parent
+                        .file_name()
+                        .and_then(|name| name.to_str())
+                        .map(|name| name.eq_ignore_ascii_case("worktrees"))
+                        .unwrap_or(false)
+                })
+                .and_then(Path::parent)
+                .map(Path::to_path_buf)
+                .unwrap_or(git_dir);
+
+            Ok(GitWorktreeRepositoryInfo {
+                worktree_git_marker: query_path.join(".git"),
+                query_path: std::fs::canonicalize(&query_path).unwrap_or(query_path),
+                common_git_dir: std::fs::canonicalize(&common_git_dir).unwrap_or(common_git_dir),
+            })
+        })
+        .await
+        .map_err(|error| GitError::CommandFailed(format!("spawn_blocking join: {error}")))?
     }
 
     /// Resolves a revision to an immutable commit id without changing repository state.
@@ -571,52 +669,39 @@ impl GitService {
         task::spawn_blocking(move || {
             let repo = Repository::open(&path_buf)
                 .map_err(|e| GitError::RepositoryNotFound(e.to_string()))?;
+            let since_timestamp = params
+                .since
+                .as_deref()
+                .filter(|value| !value.trim().is_empty())
+                .map(|value| resolve_git_approxidate(&path_buf, "--since", value))
+                .transpose()?;
+            let until_timestamp = params
+                .until
+                .as_deref()
+                .filter(|value| !value.trim().is_empty())
+                .map(|value| resolve_git_approxidate(&path_buf, "--until", value))
+                .transpose()?;
 
             let mut revwalk = repo
                 .revwalk()
                 .map_err(|e| GitError::CommandFailed(e.to_string()))?;
 
-            // Support commit range via since..until or since..HEAD semantics.
-            let has_range = params.since.is_some() || params.until.is_some();
-            if let Some(until_ref) = &params.until {
-                let until_oid = repo
-                    .revparse_single(until_ref)
-                    .map_err(|e| {
-                        GitError::CommandFailed(format!("Failed to resolve 'until' ref: {e}"))
-                    })?
-                    .id();
-                revwalk
-                    .push(until_oid)
-                    .map_err(|e| GitError::CommandFailed(e.to_string()))?;
-            } else {
-                revwalk
-                    .push_head()
-                    .map_err(|e| GitError::CommandFailed(e.to_string()))?;
-            }
-
-            if let Some(since_ref) = &params.since {
-                let since_oid = repo
-                    .revparse_single(since_ref)
-                    .map_err(|e| {
-                        GitError::CommandFailed(format!("Failed to resolve 'since' ref: {e}"))
-                    })?
-                    .id();
-                revwalk
-                    .hide(since_oid)
-                    .map_err(|e| GitError::CommandFailed(e.to_string()))?;
-            }
+            revwalk
+                .push_head()
+                .map_err(|e| GitError::CommandFailed(e.to_string()))?;
 
             // Safety valve: maximum revwalk steps for filtered queries.
             const MAX_REVWALK_STEPS: usize = 500;
             let has_filter = params.author.is_some() || params.grep.is_some();
-            let step_limit = if has_range || has_filter {
+            let has_time_filter = since_timestamp.is_some() || until_timestamp.is_some();
+            let step_limit = if has_time_filter || has_filter {
                 MAX_REVWALK_STEPS
             } else {
                 usize::MAX
             };
 
             let mut commits = Vec::new();
-            let mut count = 0;
+            let mut matched_count = 0;
             let skip = params.skip.unwrap_or(0);
             let max_count = params.max_count.unwrap_or(50);
             let mut walk_steps = 0;
@@ -625,10 +710,6 @@ impl GitService {
                 walk_steps += 1;
                 if walk_steps > step_limit {
                     break;
-                }
-                if count < skip as usize {
-                    count += 1;
-                    continue;
                 }
 
                 if commits.len() >= max_count as usize {
@@ -643,19 +724,29 @@ impl GitService {
 
                 let author = commit.author();
                 let message = commit.message().unwrap_or("").to_string();
+                let commit_timestamp = commit.time().seconds();
+
+                if since_timestamp.is_some_and(|threshold| commit_timestamp < threshold)
+                    || until_timestamp.is_some_and(|threshold| commit_timestamp > threshold)
+                {
+                    continue;
+                }
 
                 if let Some(author_filter) = &params.author {
                     if !author.name().unwrap_or("").contains(author_filter) {
-                        count += 1;
                         continue;
                     }
                 }
 
                 if let Some(grep_filter) = &params.grep {
                     if !message.contains(grep_filter) {
-                        count += 1;
                         continue;
                     }
+                }
+
+                if matched_count < skip as usize {
+                    matched_count += 1;
+                    continue;
                 }
 
                 let parents: Vec<String> = commit.parent_ids().map(|id| id.to_string()).collect();
@@ -679,7 +770,7 @@ impl GitService {
                     files_changed,
                 });
 
-                count += 1;
+                matched_count += 1;
             }
 
             Ok(commits)
@@ -1285,6 +1376,36 @@ impl GitService {
         create_branch: bool,
     ) -> Result<GitWorktreeInfo, GitError> {
         let repo_path = path.as_ref().to_string_lossy();
+        let repository_path = path.as_ref().to_path_buf();
+        let repository_info = Self::resolve_worktree_repository(path.as_ref()).await?;
+
+        task::spawn_blocking(move || {
+            let repository = Repository::discover(&repository_path)
+                .map_err(|error| GitError::RepositoryNotFound(error.to_string()))?;
+            match repository.head() {
+                Ok(head) if head.target().is_some() => {}
+                Err(error) if error.code() == ErrorCode::UnbornBranch => {
+                    return Err(GitError::CommandFailed(
+                        "Cannot create a worktree before the repository has an initial commit"
+                            .to_string(),
+                    ));
+                }
+                Ok(_) => {
+                    return Err(GitError::CommandFailed(
+                        "Cannot create a worktree because the repository HEAD has no commit"
+                            .to_string(),
+                    ));
+                }
+                Err(error) => {
+                    return Err(GitError::CommandFailed(format!(
+                        "Failed to inspect repository HEAD before creating worktree: {error}"
+                    )));
+                }
+            }
+            ensure_worktree_directory_excluded(&repository_info.common_git_dir)
+        })
+        .await
+        .map_err(|error| GitError::CommandFailed(format!("spawn_blocking join: {error}")))??;
 
         let worktree_dir = path.as_ref().join(".worktrees");
         let worktree_path = worktree_dir.join(branch);
@@ -1301,17 +1422,41 @@ impl GitService {
         };
 
         execute_git_command(&repo_path, &args).await?;
-
-        let worktrees = Self::list_worktrees(&path).await?;
-
         let normalized_expected = worktree_path_str.replace("\\", "/");
-
-        worktrees
-            .into_iter()
-            .find(|wt| wt.path == normalized_expected)
-            .ok_or_else(|| {
-                GitError::CommandFailed("Failed to find newly created worktree".to_string())
+        let expected_branch = branch.to_string();
+        task::spawn_blocking(move || {
+            let repository = Repository::open(&worktree_path).map_err(|error| {
+                GitError::CommandFailed(format!(
+                    "Failed to inspect newly created worktree: {error}"
+                ))
+            })?;
+            let (branch, head) = match repository.head() {
+                Ok(head) => (
+                    head.shorthand().ok().map(str::to_string),
+                    head.target()
+                        .map(|target| target.to_string())
+                        .unwrap_or_default(),
+                ),
+                Err(error) if error.code() == ErrorCode::UnbornBranch => {
+                    (Some(expected_branch), "0".repeat(40))
+                }
+                Err(error) => {
+                    return Err(GitError::CommandFailed(format!(
+                        "Failed to resolve newly created worktree HEAD: {error}"
+                    )))
+                }
+            };
+            Ok(GitWorktreeInfo {
+                path: normalized_expected,
+                branch,
+                head,
+                is_main: false,
+                is_locked: false,
+                is_prunable: false,
             })
+        })
+        .await
+        .map_err(|error| GitError::CommandFailed(format!("spawn_blocking join: {error}")))?
     }
 
     /// Removes a worktree.
@@ -1353,9 +1498,74 @@ impl GitService {
     }
 }
 
+fn ensure_worktree_directory_excluded(common_git_dir: &Path) -> Result<(), GitError> {
+    const WORKTREE_EXCLUDE_PATTERN: &str = ".worktrees/";
+
+    let info_dir = common_git_dir.join("info");
+    std::fs::create_dir_all(&info_dir).map_err(GitError::IoError)?;
+    let exclude_path = info_dir.join("exclude");
+    let existing = match std::fs::read_to_string(&exclude_path) {
+        Ok(existing) => existing,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => String::new(),
+        Err(error) => return Err(GitError::IoError(error)),
+    };
+    if existing
+        .lines()
+        .any(|line| line.trim() == WORKTREE_EXCLUDE_PATTERN)
+    {
+        return Ok(());
+    }
+
+    let mut exclude = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(exclude_path)
+        .map_err(GitError::IoError)?;
+    if !existing.is_empty() && !existing.ends_with('\n') {
+        writeln!(exclude).map_err(GitError::IoError)?;
+    }
+    writeln!(exclude, "{WORKTREE_EXCLUDE_PATTERN}").map_err(GitError::IoError)
+}
+
 #[cfg(test)]
 mod review_path_tests {
-    use super::review_path_has_parent_traversal;
+    use super::{review_path_has_parent_traversal, GitLogParams, GitService};
+    use std::{fs, path::Path, process::Command};
+
+    fn git(root: &Path, args: &[&str], commit_date: Option<&str>) {
+        let mut command = Command::new("git");
+        command.current_dir(root).args(args);
+        if let Some(commit_date) = commit_date {
+            command
+                .env("GIT_AUTHOR_DATE", commit_date)
+                .env("GIT_COMMITTER_DATE", commit_date);
+        }
+        let output = command.output().expect("git should be available for tests");
+        assert!(
+            output.status.success(),
+            "git {:?} failed: {}",
+            args,
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+
+    fn commit_file(root: &Path, contents: &str, message: &str, commit_date: &str) {
+        fs::write(root.join("tracked.txt"), contents).expect("fixture should be written");
+        git(root, &["add", "--", "tracked.txt"], None);
+        git(
+            root,
+            &[
+                "-c",
+                "user.name=BitFun Tests",
+                "-c",
+                "user.email=bitfun@example.com",
+                "commit",
+                "-m",
+                message,
+            ],
+            Some(commit_date),
+        );
+    }
 
     #[test]
     fn parent_traversal_uses_platform_path_separators() {
@@ -1365,5 +1575,104 @@ mod review_path_tests {
             false,
         ));
         assert!(review_path_has_parent_traversal(r"src\..\outside.rs", true,));
+    }
+
+    #[tokio::test]
+    async fn commit_date_filters_use_git_approxidates_instead_of_revision_names() {
+        let directory = tempfile::tempdir().expect("temporary repository should be created");
+        git(directory.path(), &["init"], None);
+        commit_file(
+            directory.path(),
+            "old\n",
+            "old commit",
+            "2020-01-01T00:00:00Z",
+        );
+        commit_file(
+            directory.path(),
+            "new\n",
+            "new commit",
+            "2030-01-01T00:00:00Z",
+        );
+
+        let recent = GitService::get_commits(
+            directory.path(),
+            GitLogParams {
+                since: Some("2025-01-01".to_string()),
+                ..Default::default()
+            },
+        )
+        .await
+        .expect("since date should be accepted");
+        assert_eq!(
+            recent
+                .iter()
+                .map(|commit| commit.message.trim())
+                .collect::<Vec<_>>(),
+            vec!["new commit"]
+        );
+
+        let older = GitService::get_commits(
+            directory.path(),
+            GitLogParams {
+                until: Some("2025-01-01".to_string()),
+                ..Default::default()
+            },
+        )
+        .await
+        .expect("until date should be accepted");
+        assert_eq!(
+            older
+                .iter()
+                .map(|commit| commit.message.trim())
+                .collect::<Vec<_>>(),
+            vec!["old commit"]
+        );
+    }
+
+    #[tokio::test]
+    async fn add_worktree_returns_created_checkout_without_listing_all_worktrees() {
+        let directory = tempfile::tempdir().expect("temporary repository should be created");
+        git(directory.path(), &["init"], None);
+        commit_file(
+            directory.path(),
+            "initial\n",
+            "initial commit",
+            "2025-01-01T00:00:00Z",
+        );
+
+        let worktree = GitService::add_worktree(directory.path(), "feature-test", true)
+            .await
+            .expect("worktree should be created");
+
+        assert_eq!(worktree.branch.as_deref(), Some("feature-test"));
+        assert!(!worktree.head.is_empty());
+        assert!(!worktree.is_main);
+        assert!(Path::new(&worktree.path).is_dir());
+        let exclude = fs::read_to_string(directory.path().join(".git/info/exclude"))
+            .expect("Git exclude file should be readable");
+        assert_eq!(
+            exclude
+                .lines()
+                .filter(|line| line.trim() == ".worktrees/")
+                .count(),
+            1
+        );
+    }
+
+    #[tokio::test]
+    async fn add_worktree_rejects_repository_without_commits_before_side_effects() {
+        let directory = tempfile::tempdir().expect("temporary repository should be created");
+        git(directory.path(), &["init"], None);
+
+        let error = GitService::add_worktree(directory.path(), "unborn-test", true)
+            .await
+            .expect_err("unborn worktree creation should be rejected");
+
+        assert!(error.to_string().contains("initial commit"));
+        assert!(!directory.path().join(".worktrees").exists());
+        let worktrees = GitService::list_worktrees(directory.path())
+            .await
+            .expect("worktree list should remain readable");
+        assert_eq!(worktrees.len(), 1);
     }
 }

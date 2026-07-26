@@ -8,12 +8,12 @@ use bitfun_services_integrations::remote_ssh::{
     sanitize_remote_mirror_path_component, sanitize_ssh_connection_id_for_local_dir,
     sanitize_ssh_hostname_for_mirror, unresolved_remote_session_storage_dir,
     unresolved_remote_session_storage_key, workspace_logical_key, workspace_session_identity,
-    RemoteWorkspace, RemoteWorkspaceRegistry, SSHAuthMethod, SSHConnectionConfig, SavedAuthType,
-    SavedConnection, LOCAL_WORKSPACE_SSH_HOST,
+    ContainerAccess, ContainerWorkspaceConfig, RemoteWorkspace, RemoteWorkspaceRegistry,
+    SSHAuthMethod, SSHConnectionConfig, SavedAuthType, SavedConnection, LOCAL_WORKSPACE_SSH_HOST,
 };
 
 #[test]
-fn remote_ssh_legacy_agent_auth_maps_to_default_private_key() {
+fn remote_ssh_legacy_agent_auth_keeps_default_private_key_fallback() {
     let config: SSHConnectionConfig = serde_json::from_value(serde_json::json!({
         "id": "conn-1",
         "name": "dev",
@@ -26,15 +26,21 @@ fn remote_ssh_legacy_agent_auth_maps_to_default_private_key() {
     .unwrap();
 
     match config.auth {
-        SSHAuthMethod::PrivateKey {
-            key_path,
-            passphrase,
+        SSHAuthMethod::Agent {
+            key_fingerprint,
+            fallback_key_path,
         } => {
-            assert_eq!(key_path, "~/.ssh/id_rsa");
-            assert_eq!(passphrase, None);
+            assert_eq!(key_fingerprint, None);
+            assert_eq!(fallback_key_path.as_deref(), Some("~/.ssh/id_rsa"));
         }
-        SSHAuthMethod::Password { .. } => panic!("legacy agent auth must map to private key"),
+        _ => panic!("legacy agent auth must remain agent-compatible"),
     }
+    assert_eq!(config.proxy_jump, None);
+    assert_eq!(config.container, None);
+    assert_eq!(config.options.connect_timeout_secs, 30);
+    assert_eq!(config.options.auth_timeout_secs, 60);
+    assert_eq!(config.options.auth_attempts, 3);
+    assert_eq!(config.options.connect_attempts, 1);
 
     let saved: SavedConnection = serde_json::from_value(serde_json::json!({
         "id": "conn-1",
@@ -48,10 +54,57 @@ fn remote_ssh_legacy_agent_auth_maps_to_default_private_key() {
     }))
     .unwrap();
 
-    match saved.auth_type {
-        SavedAuthType::PrivateKey { key_path } => assert_eq!(key_path, "~/.ssh/id_rsa"),
-        SavedAuthType::Password => panic!("legacy agent auth type must map to private key"),
-    }
+    assert!(matches!(
+        saved.auth_type,
+        SavedAuthType::Agent {
+            key_fingerprint: None,
+            ref fallback_key_path,
+        } if fallback_key_path.as_deref() == Some("~/.ssh/id_rsa")
+    ));
+    assert_eq!(saved.proxy_jump, None);
+    assert_eq!(saved.container, None);
+    assert_eq!(saved.options.connect_timeout_secs, 30);
+    assert_eq!(saved.options.auth_timeout_secs, 60);
+    assert_eq!(saved.options.auth_attempts, 3);
+    assert_eq!(saved.options.connect_attempts, 1);
+}
+
+#[test]
+fn remote_target_contract_uses_proxy_jump_and_kebab_case_container_access() {
+    let config = SSHConnectionConfig {
+        id: "conn-1".to_string(),
+        name: "train".to_string(),
+        host: "train.internal".to_string(),
+        port: 22,
+        username: "trainer".to_string(),
+        auth: SSHAuthMethod::PrivateKey {
+            key_path: "~/.ssh/train".to_string(),
+            passphrase: None,
+            certificate_path: None,
+        },
+        default_workspace: Some("/workspace".to_string()),
+        proxy_jump: Some("jump1,jump2".to_string()),
+        container: Some(ContainerWorkspaceConfig {
+            name: "trainer-dev".to_string(),
+            access: ContainerAccess::DockerExec,
+            local: false,
+            docker_path: "docker".to_string(),
+            shell: "/bin/bash".to_string(),
+            user: Some("trainer".to_string()),
+            interactive: true,
+        }),
+        options: Default::default(),
+    };
+
+    let json = serde_json::to_value(&config).unwrap();
+    assert_eq!(json["proxyJump"], "jump1,jump2");
+    assert_eq!(json["container"]["access"], "docker-exec");
+    assert_eq!(json["container"]["dockerPath"], "docker");
+    let round_trip: SSHConnectionConfig = serde_json::from_value(json).unwrap();
+    assert_eq!(
+        round_trip.container.unwrap().access,
+        ContainerAccess::DockerExec
+    );
 }
 
 #[test]
@@ -89,8 +142,28 @@ fn remote_workspace_path_helpers_preserve_current_identity_contract() {
         sanitize_ssh_connection_id_for_local_dir("ssh-root@1.95.50.146:22"),
         "ssh-root@1.95.50.146:22"
     );
+    assert_eq!(
+        sanitize_ssh_connection_id_for_local_dir("../unsafe/id"),
+        "..-unsafe-id"
+    );
+    assert_eq!(sanitize_ssh_connection_id_for_local_dir(".."), "_dotdot_");
 
     assert_eq!(sanitize_remote_mirror_path_component(""), "_");
+    assert_eq!(sanitize_remote_mirror_path_component("."), "_dot_");
+    assert_eq!(sanitize_remote_mirror_path_component(".."), "_dotdot_");
+    assert!(remote_root_to_mirror_subpath("/../../escape")
+        .components()
+        .all(|component| !matches!(component, std::path::Component::ParentDir)));
+    assert_eq!(
+        remote_root_to_mirror_subpath("/home/user/../project"),
+        std::path::PathBuf::from("home").join("project"),
+        "safe legacy dot segments must keep their previous effective mirror path"
+    );
+    #[cfg(windows)]
+    {
+        assert_eq!(sanitize_remote_mirror_path_component("CON"), "_CON");
+        assert_eq!(sanitize_remote_mirror_path_component("report. "), "report");
+    }
     assert_eq!(
         sanitize_ssh_hostname_for_mirror(" Example.COM "),
         "example.com"

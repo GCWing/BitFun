@@ -50,7 +50,8 @@
       "lsp": "語言服務與代碼智能。",
       "keyboard": "快捷鍵與鍵位。",
       "archivedSessions": "檢視、恢復或永久刪除已歸檔的會話。",
-      "quickActions": "程式碼完成後的一鍵 AI 動作，支援內建和自訂指令。"
+      "quickActions": "程式碼完成後的一鍵 AI 動作，支援內建和自訂指令。",
+      "voiceInput": "本地麥克風輸入與語音轉文字模型。"
     },
     "categories": {
       "general": "通用",
@@ -74,7 +75,8 @@
       "lsp": "語言服務",
       "keyboard": "快捷鍵",
       "archivedSessions": "已歸檔會話",
-      "quickActions": "快捷動作"
+      "quickActions": "快捷動作",
+      "voiceInput": "語音輸入"
     }
   },
   "general": {

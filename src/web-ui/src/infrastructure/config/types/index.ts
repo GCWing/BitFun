@@ -39,6 +39,7 @@ export type MemoryExternalContextPolicy = 'clear_tool_results' | 'allow' | 'skip
 
 export interface MemoriesConfig {
   generate_memories: boolean;
+  generate_for_btw_sessions: boolean;
   use_memories: boolean;
   external_context_policy: MemoryExternalContextPolicy;
   max_raw_memories_for_consolidation: number;
@@ -159,18 +160,31 @@ export interface AIExperienceConfig {
 
   /** Whether to enable flashgrep-backed accelerated workspace search for local workspaces. */
   enable_workspace_search: boolean;
+  /** Local speech-to-text settings for the chat composer. */
+  voice_input: VoiceInputSettings;
   /** User-defined quick actions shown in the post-coding actions menu. */
   quick_actions?: Array<{ id: string; label: string; prompt: string; enabled: boolean }>;
+}
+
+export interface VoiceInputSettings {
+  enabled: boolean;
+  provider: string;
+  model_id: string;
+  default_language: string;
+  max_recording_seconds: number;
+  microphone_device_id: string;
 }
 
 export type ModelCapability =
   | 'text_chat'
   | 'function_calling'
-  | 'image_understanding';
+  | 'image_understanding'
+  | 'speech_recognition';
 
 export type ModelCategory =
   | 'general_chat'
-  | 'multimodal';
+  | 'multimodal'
+  | 'speech_recognition';
 
 export type ReasoningMode =
   | 'default'
@@ -187,12 +201,14 @@ export interface ModelMetadata {
 
 export const CATEGORY_LABELS: Record<ModelCategory, string> = {
   general_chat: t('settings/ai-model:category.general_chat'),
-  multimodal: t('settings/ai-model:category.multimodal')
+  multimodal: t('settings/ai-model:category.multimodal'),
+  speech_recognition: t('settings/ai-model:category.speech_recognition')
 };
 
 export const CATEGORY_ICONS: Record<ModelCategory, string> = {
   general_chat: t('settings/ai-model:categoryIcons.general_chat'),
-  multimodal: t('settings/ai-model:categoryIcons.multimodal')
+  multimodal: t('settings/ai-model:categoryIcons.multimodal'),
+  speech_recognition: t('settings/ai-model:categoryIcons.speech_recognition')
 };
 
 export type CustomHeadersMode = 'replace' | 'merge';
@@ -253,6 +269,7 @@ export interface DefaultModelsConfig {
   primary?: string | null;
   fast?: string | null;
   image_understanding?: string | null;
+  speech_recognition?: string | null;
 }
 
 export type SubagentModelSelection =
@@ -687,6 +704,7 @@ export interface DefaultModels {
   primary: string | null;
   fast: string | null;
   image_understanding?: string | null;
+  speech_recognition?: string | null;
 }
 
 export type OptionalCapabilityModels = Record<string, never>;

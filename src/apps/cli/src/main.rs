@@ -1,3 +1,7 @@
+// Trait resolution for this crate's async call graph (reqwest/h2 futures behind
+// several layers of `async fn`) exceeds the default depth.
+#![recursion_limit = "256"]
+
 /// BitFun CLI
 ///
 /// Command-line interface version, supports:
@@ -24,6 +28,7 @@ mod product_assembly;
 mod prompts;
 mod root_handlers;
 mod runtime;
+mod self_update;
 mod ui;
 
 use anyhow::{anyhow, Result};
@@ -199,6 +204,13 @@ enum Commands {
 
     /// Health check
     Health,
+
+    /// Check for and install the latest official Linux CLI release
+    Update {
+        /// Only report whether a newer version exists
+        #[arg(long)]
+        check: bool,
+    },
 
     /// Manage the always-on account device host daemon
     ///
@@ -838,6 +850,9 @@ async fn run_cli() -> Result<()> {
         }
         CliConfig::default()
     });
+    if is_tui_mode && config.behavior.auto_update {
+        self_update::maybe_run_automatic().await;
+    }
 
     match cli.command {
         Some(Commands::Chat { agent }) => {
@@ -980,6 +995,10 @@ async fn run_cli() -> Result<()> {
 
         Some(Commands::Health) => {
             root_handlers::handle_health_command()?;
+        }
+
+        Some(Commands::Update { check }) => {
+            self_update::run_manual(check).await?;
         }
 
         Some(Commands::Daemon { action }) => match action {

@@ -12,6 +12,8 @@ pub use bitfun_product_domains::external_hook_catalog::{
 pub use bitfun_product_domains::external_sources::{ExecutionDomainId, ExternalSourceContext};
 
 use crate::external_sources::{host_execution_domain_id, normalize_workspace_root};
+#[cfg(feature = "service-integrations")]
+use crate::service::workspace::{global_worktree_topology_service, WorktreeTopologyFreshness};
 use bitfun_claude_code_adapter::{ClaudeCodeHookProvider, ClaudeCodeHookProviderOptions};
 use bitfun_codex_adapter::{CodexHookProvider, CodexHookProviderOptions};
 use bitfun_external_sources::ExternalHookCatalogCoordinator;
@@ -20,8 +22,6 @@ use bitfun_product_domains::external_hook_catalog::ExternalHookSourceProvider;
 use bitfun_product_domains::external_sources::{
     ExternalSourceOperationError, ExternalSourceOperationErrorCode, ExternalSourceOperationResult,
 };
-#[cfg(feature = "service-integrations")]
-use bitfun_services_integrations::git::GitService;
 use std::collections::BTreeMap;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -248,7 +248,10 @@ async fn hook_project_topology(
     workspace_root: Option<&std::path::Path>,
 ) -> Option<HookProjectTopology> {
     let workspace_root = workspace_root?;
-    let worktrees = GitService::list_worktrees(workspace_root).await.ok()?;
+    let worktrees = global_worktree_topology_service()
+        .list_worktrees(workspace_root, WorktreeTopologyFreshness::Cached)
+        .await
+        .ok()?;
     resolve_hook_project_topology(
         workspace_root,
         &worktrees

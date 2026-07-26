@@ -11,6 +11,7 @@ export * from './service-api/AIApi';
 export * from './service-api/CronAPI';
 export * from './service-api/PermissionAPI';
 export * from './service-api/PageAPI';
+export * from './service-api/SpeechAPI';
 
 // Import API modules
 import { workspaceAPI } from './service-api/WorkspaceAPI';
@@ -37,9 +38,10 @@ import { btwAPI } from './service-api/BtwAPI';
 import { editorAiAPI } from './service-api/EditorAiAPI';
 import { reviewPlatformAPI } from './service-api/ReviewPlatformAPI';
 import { insightsApi } from './insightsApi';
+import { speechAPI } from './service-api/SpeechAPI';
 
 // Export API modules
-export { workspaceAPI, configAPI, aiApi, toolAPI, agentAPI, systemAPI, projectAPI, diffAPI, snapshotAPI, globalAPI, contextAPI, cronAPI, permissionAPI, pageAPI, gitAPI, gitAgentAPI, gitRepoHistoryAPI, startchatAgentAPI, sessionAPI, i18nAPI, btwAPI, editorAiAPI, reviewPlatformAPI, insightsApi };
+export { workspaceAPI, configAPI, aiApi, toolAPI, agentAPI, systemAPI, projectAPI, diffAPI, snapshotAPI, globalAPI, contextAPI, cronAPI, permissionAPI, pageAPI, gitAPI, gitAgentAPI, gitRepoHistoryAPI, startchatAgentAPI, sessionAPI, i18nAPI, btwAPI, editorAiAPI, reviewPlatformAPI, insightsApi, speechAPI };
 export * from './service-api/ReviewPlatformAPI';
 
 // Export types
@@ -72,6 +74,7 @@ export const bitfunAPI = {
   editorAi: editorAiAPI,
   reviewPlatform: reviewPlatformAPI,
   insights: insightsApi,
+  speech: speechAPI,
 };
 
 // Default export

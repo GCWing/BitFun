@@ -93,7 +93,10 @@ const ReviewConfig: React.FC = () => {
   if (loading) {
     return (
       <ConfigPageLayout>
-        <ConfigPageLoading text={t('loading')} />
+        <ConfigPageHeader title={t('title')} subtitle={t('subtitle')} />
+        <ConfigPageContent>
+          <ConfigPageLoading text={t('loading')} />
+        </ConfigPageContent>
       </ConfigPageLayout>
     );
   }

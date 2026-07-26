@@ -324,7 +324,7 @@ impl MemoryPhase1Service {
                     );
                     continue;
                 }
-                if metadata.session_kind != SessionKind::Standard {
+                if phase1_session_kind_gate_skips(&metadata) {
                     debug!(
                         "Memory phase1 candidate skipped by session kind: session_id={}, workspace_path={}, session_storage_path={}, session_kind={:?}",
                         metadata.session_id,
@@ -334,7 +334,7 @@ impl MemoryPhase1Service {
                     );
                     continue;
                 }
-                if metadata.memory_mode != SessionMemoryMode::Enabled {
+                if phase1_memory_mode_gate_skips(&metadata) {
                     debug!(
                         "Memory phase1 candidate skipped by memory mode: session_id={}, workspace_path={}, session_storage_path={}, memory_mode={:?}",
                         metadata.session_id,
@@ -679,6 +679,14 @@ fn phase1_time_gate_skips(last_finished_at: u64, cutoff_idle_ms: u64, cutoff_age
 
 fn phase1_status_gate_skips(metadata: &SessionMetadata) -> bool {
     metadata.status == SessionStatus::Archived
+}
+
+fn phase1_session_kind_gate_skips(metadata: &SessionMetadata) -> bool {
+    metadata.session_kind != SessionKind::Standard
+}
+
+fn phase1_memory_mode_gate_skips(metadata: &SessionMetadata) -> bool {
+    metadata.memory_mode != SessionMemoryMode::Enabled
 }
 
 fn build_prompt(source: &MemorySourceSession, transcript: &str) -> String {
@@ -1104,6 +1112,24 @@ mod tests {
 
         metadata.status = SessionStatus::Completed;
         assert!(!phase1_status_gate_skips(&metadata));
+    }
+
+    #[test]
+    fn phase1_memory_mode_gate_excludes_disabled_standard_btw_sessions() {
+        let mut metadata = SessionMetadata::new(
+            "btw-session".to_string(),
+            "Side thread".to_string(),
+            "agentic".to_string(),
+            "model".to_string(),
+        );
+        metadata.session_kind = SessionKind::Standard;
+        metadata.memory_mode = SessionMemoryMode::Disabled;
+
+        assert!(!phase1_session_kind_gate_skips(&metadata));
+        assert!(phase1_memory_mode_gate_skips(&metadata));
+
+        metadata.memory_mode = SessionMemoryMode::Enabled;
+        assert!(!phase1_memory_mode_gate_skips(&metadata));
     }
 
     fn gemini_response(text: &str) -> bitfun_ai_adapters::GeminiResponse {

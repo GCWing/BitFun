@@ -37,22 +37,30 @@ pub fn normalize_remote_workspace_path(path: &str) -> String {
     s.trim_end_matches('/').to_string()
 }
 
-/// Characters invalid in a single Windows path component.
+/// Connection id as one safe local path component.
 pub fn sanitize_ssh_connection_id_for_local_dir(connection_id: &str) -> String {
+    if connection_id == "." {
+        return "_dot_".to_string();
+    }
+    if connection_id == ".." {
+        return "_dotdot_".to_string();
+    }
     #[cfg(windows)]
     {
-        connection_id
-            .chars()
-            .map(|c| match c {
-                '<' | '>' | '"' | ':' | '/' | '\\' | '|' | '?' | '*' => '-',
-                c if c.is_control() => '-',
-                _ => c,
-            })
-            .collect()
+        sanitize_windows_path_component(connection_id)
     }
     #[cfg(not(windows))]
     {
-        connection_id.to_string()
+        connection_id
+            .chars()
+            .map(|character| {
+                if character == '/' || character == '\0' {
+                    '-'
+                } else {
+                    character
+                }
+            })
+            .collect()
     }
 }
 
@@ -62,15 +70,15 @@ pub fn sanitize_remote_mirror_path_component(component: &str) -> String {
     if t.is_empty() {
         return "_".to_string();
     }
+    if t == "." {
+        return "_dot_".to_string();
+    }
+    if t == ".." {
+        return "_dotdot_".to_string();
+    }
     #[cfg(windows)]
     {
-        t.chars()
-            .map(|c| match c {
-                '<' | '>' | '"' | ':' | '/' | '\\' | '|' | '?' | '*' => '-',
-                c if c.is_control() => '-',
-                _ => c,
-            })
-            .collect()
+        sanitize_windows_path_component(t)
     }
     #[cfg(not(windows))]
     {
@@ -78,6 +86,59 @@ pub fn sanitize_remote_mirror_path_component(component: &str) -> String {
             .map(|c| if c == '/' || c == '\0' { '-' } else { c })
             .collect()
     }
+}
+
+#[cfg(windows)]
+fn sanitize_windows_path_component(component: &str) -> String {
+    let mut sanitized: String = component
+        .chars()
+        .map(|c| match c {
+            '<' | '>' | '"' | ':' | '/' | '\\' | '|' | '?' | '*' => '-',
+            c if c.is_control() => '-',
+            _ => c,
+        })
+        .collect();
+    while sanitized.ends_with('.') || sanitized.ends_with(' ') {
+        sanitized.pop();
+    }
+    if sanitized.is_empty() {
+        return "_".to_string();
+    }
+
+    let stem = sanitized
+        .split('.')
+        .next()
+        .unwrap_or_default()
+        .to_ascii_uppercase();
+    let reserved = matches!(
+        stem.as_str(),
+        "CON"
+            | "PRN"
+            | "AUX"
+            | "NUL"
+            | "COM1"
+            | "COM2"
+            | "COM3"
+            | "COM4"
+            | "COM5"
+            | "COM6"
+            | "COM7"
+            | "COM8"
+            | "COM9"
+            | "LPT1"
+            | "LPT2"
+            | "LPT3"
+            | "LPT4"
+            | "LPT5"
+            | "LPT6"
+            | "LPT7"
+            | "LPT8"
+            | "LPT9"
+    );
+    if reserved {
+        sanitized.insert(0, '_');
+    }
+    sanitized
 }
 
 /// SSH host or alias as a single directory name under `remote_ssh/`.
@@ -94,6 +155,16 @@ pub fn remote_root_to_mirror_subpath(remote_root_norm: &str) -> PathBuf {
     }
     for seg in remote_root_norm.trim_start_matches('/').split('/') {
         if seg.is_empty() {
+            continue;
+        }
+        if seg == "." {
+            continue;
+        }
+        if seg == ".." {
+            // Match the effective local path produced by the legacy
+            // `PathBuf::push("..")` mapping without allowing the result to
+            // escape the host mirror root.
+            pb.pop();
             continue;
         }
         pb.push(sanitize_remote_mirror_path_component(seg));

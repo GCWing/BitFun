@@ -559,9 +559,10 @@ impl ChatMode {
                         _ => {}
                     }
                 }
-                if let Some(action_id) = context.chat_view.take_pending_command() {
+                if let Some(selection) = context.chat_view.take_pending_command() {
                     if let Some(reason) = context.this.handle_action_id(
-                        &action_id,
+                        &selection.action_id,
+                        Some(&selection.command_name),
                         context.chat_view,
                         context.chat_state,
                         context.rt_handle,

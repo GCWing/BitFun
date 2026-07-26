@@ -6,6 +6,10 @@ use bitfun_product_domains::external_sources::{
     PromptCommandSourceProvider, SourceKey, SourceQualifiedCommandId,
 };
 use bitfun_services_core::markdown::FrontMatterMarkdown;
+use bitfun_static_hook_support::{
+    collect_bounded_regular_files, read_bounded_text, BoundedDirectoryWalkError,
+    BoundedDirectoryWalkLimits, BoundedTextRead,
+};
 use regex::Regex;
 use serde::Deserialize;
 use sha2::{Digest, Sha256};
@@ -17,9 +21,9 @@ use std::sync::OnceLock;
 const PROVIDER_ID: &str = "opencode.commands";
 const ECOSYSTEM_ID: &str = "opencode";
 const MAX_COMMAND_FILES: usize = 2048;
-const MAX_COMMAND_FILE_BYTES: u64 = 256 * 1024;
+const MAX_COMMAND_FILE_BYTES: usize = 256 * 1024;
 const MAX_COMMAND_TEMPLATE_BYTES: usize = 8 * 1024 * 1024;
-const MAX_CONFIG_FILE_BYTES: u64 = 1024 * 1024;
+const MAX_CONFIG_FILE_BYTES: usize = 1024 * 1024;
 
 #[derive(Debug, Clone)]
 pub struct OpenCodeCommandProviderOptions {
@@ -326,19 +330,39 @@ impl PromptCommandSourceProvider for OpenCodeCommandProvider {
 
     fn resolve_commands(
         &self,
-        commands: &[PromptCommandDefinition],
+        snapshot: &PromptCommandProviderSnapshot,
         enabled_sources: &BTreeSet<SourceKey>,
     ) -> Result<Vec<PromptCommandDefinition>, ExternalSourceProviderError> {
-        let mut effective = BTreeMap::new();
-        for command in commands
+        let mut effective = BTreeMap::<String, Option<PromptCommandDefinition>>::new();
+        for source in snapshot
+            .sources
             .iter()
-            .filter(|command| enabled_sources.contains(&command.id.source))
+            .filter(|source| enabled_sources.contains(&source.key))
         {
-            // Discovery preserves OpenCode's low-to-high source order. A later
-            // candidate replaces an earlier same-name definition.
-            effective.insert(command.name.to_ascii_lowercase(), command.clone());
+            for command in snapshot
+                .commands
+                .iter()
+                .filter(|command| command.id.source == source.key)
+            {
+                // Discovery preserves OpenCode's low-to-high source order. A
+                // later candidate replaces an earlier same-name definition.
+                effective.insert(command.name.to_ascii_lowercase(), Some(command.clone()));
+            }
+            for unavailable in snapshot
+                .unavailable_command_ids
+                .iter()
+                .filter(|command| command.source == source.key)
+            {
+                let retained = snapshot
+                    .commands
+                    .iter()
+                    .any(|command| command.id == *unavailable);
+                if !retained {
+                    effective.insert(unavailable.local_id.as_str().to_ascii_lowercase(), None);
+                }
+            }
         }
-        Ok(effective.into_values().collect())
+        Ok(effective.into_values().flatten().collect())
     }
 
     fn watch_roots(&self, context: &ExternalSourceContext) -> Vec<ExternalWatchRoot> {
@@ -520,37 +544,8 @@ struct ParsedLayer {
 }
 
 fn parse_config_file(path: &Path) -> ParsedLayer {
-    match fs::metadata(path) {
-        Ok(metadata) if metadata.len() > MAX_CONFIG_FILE_BYTES => {
-            return ParsedLayer {
-                commands: BTreeMap::new(),
-                unavailable_command_names: BTreeSet::new(),
-                diagnostics: vec![ExternalSourceDiagnostic::error(
-                    "opencode.command.config_too_large",
-                    "OpenCode config exceeds the 1 MiB compatibility limit",
-                    None,
-                )],
-                content_version: format!("too-large:{}", metadata.len()),
-                fatal: true,
-            };
-        }
-        Ok(_) => {}
-        Err(error) => {
-            return ParsedLayer {
-                commands: BTreeMap::new(),
-                unavailable_command_names: BTreeSet::new(),
-                diagnostics: vec![ExternalSourceDiagnostic::error(
-                    "opencode.command.config_unreadable",
-                    format!("Failed to inspect OpenCode command config: {error}"),
-                    None,
-                )],
-                content_version: "unreadable".to_string(),
-                fatal: true,
-            };
-        }
-    }
-    match fs::read_to_string(path) {
-        Ok(content) => {
+    match read_bounded_text(path, MAX_CONFIG_FILE_BYTES) {
+        Ok(BoundedTextRead::Content(content)) => {
             let content_version = content_version([(path, content.as_bytes())]);
             match parse_config_document(&content) {
                 Ok(document) => ParsedLayer {
@@ -573,6 +568,28 @@ fn parse_config_file(path: &Path) -> ParsedLayer {
                 },
             }
         }
+        Ok(BoundedTextRead::TooLarge) => ParsedLayer {
+            commands: BTreeMap::new(),
+            unavailable_command_names: BTreeSet::new(),
+            diagnostics: vec![ExternalSourceDiagnostic::error(
+                "opencode.command.config_too_large",
+                "OpenCode config exceeds the 1 MiB compatibility limit",
+                None,
+            )],
+            content_version: "too-large".to_string(),
+            fatal: true,
+        },
+        Ok(BoundedTextRead::InvalidUtf8) => ParsedLayer {
+            commands: BTreeMap::new(),
+            unavailable_command_names: BTreeSet::new(),
+            diagnostics: vec![ExternalSourceDiagnostic::error(
+                "opencode.command.config_invalid_utf8",
+                "OpenCode command config must be valid UTF-8",
+                None,
+            )],
+            content_version: "invalid-utf8".to_string(),
+            fatal: true,
+        },
         Err(error) => ParsedLayer {
             commands: BTreeMap::new(),
             unavailable_command_names: BTreeSet::new(),
@@ -589,38 +606,64 @@ fn parse_config_file(path: &Path) -> ParsedLayer {
 
 fn parse_command_directory(directory: &Path) -> ParsedLayer {
     let mut files = Vec::new();
-    let mut visited = BTreeSet::new();
     let mut scan_diagnostics = Vec::new();
     let mut scan_failed = false;
     for name in ["command", "commands"] {
-        scan_failed |= collect_markdown_files(
-            &directory.join(name),
-            &mut files,
-            &mut visited,
-            &mut scan_diagnostics,
-        );
+        let root = directory.join(name);
+        match fs::symlink_metadata(&root) {
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => continue,
+            Err(error) => {
+                scan_failed = true;
+                scan_diagnostics.push(ExternalSourceDiagnostic::error(
+                    "opencode.command.directory_unreadable",
+                    format!("Failed to inspect an OpenCode command directory: {error}"),
+                    None,
+                ));
+                break;
+            }
+            Ok(metadata) if !metadata.is_dir() || metadata.file_type().is_symlink() => {
+                scan_failed = true;
+                scan_diagnostics.push(ExternalSourceDiagnostic::error(
+                    "opencode.command.directory_invalid",
+                    "An OpenCode command directory path is not a regular directory",
+                    None,
+                ));
+                break;
+            }
+            Ok(_) => {}
+        }
+        let remaining = MAX_COMMAND_FILES.saturating_sub(files.len());
+        match collect_bounded_regular_files(
+            &root,
+            BoundedDirectoryWalkLimits::for_file_limit(remaining),
+            |path| {
+                path.extension()
+                    .and_then(|extension| extension.to_str())
+                    .is_some_and(|extension| extension.eq_ignore_ascii_case("md"))
+            },
+        ) {
+            Ok(mut discovered) => files.append(&mut discovered),
+            Err(error) => {
+                scan_failed = true;
+                let code = if matches!(error, BoundedDirectoryWalkError::LimitExceeded(_)) {
+                    "opencode.command.file_limit"
+                } else {
+                    "opencode.command.directory_unreadable"
+                };
+                scan_diagnostics.push(ExternalSourceDiagnostic::error(
+                    code,
+                    format!("Failed to safely scan an OpenCode command directory: {error}"),
+                    None,
+                ));
+                break;
+            }
+        }
     }
     files.sort();
-    let truncated_files = if files.len() > MAX_COMMAND_FILES {
-        files.split_off(MAX_COMMAND_FILES)
-    } else {
-        Vec::new()
-    };
-    let truncated = !truncated_files.is_empty();
 
     let mut commands = BTreeMap::new();
-    let mut unavailable_command_names = truncated_files
-        .iter()
-        .filter_map(|path| command_name(directory, path))
-        .collect::<BTreeSet<_>>();
+    let mut unavailable_command_names = BTreeSet::new();
     let mut diagnostics = scan_diagnostics;
-    if truncated {
-        diagnostics.push(ExternalSourceDiagnostic::warning(
-            "opencode.command.file_limit",
-            format!("OpenCode command directory exceeds the {MAX_COMMAND_FILES} file limit"),
-            None,
-        ));
-    }
     let mut version_hasher = Sha256::new();
     let mut total_template_bytes = 0usize;
     let mut template_budget_exhausted = false;
@@ -632,31 +675,28 @@ fn parse_command_directory(directory: &Path) -> ParsedLayer {
             unavailable_command_names.insert(name);
             continue;
         }
-        let metadata = match fs::metadata(path) {
-            Ok(metadata) => metadata,
-            Err(error) => {
+        let content = match read_bounded_text(path, MAX_COMMAND_FILE_BYTES) {
+            Ok(BoundedTextRead::Content(content)) => content,
+            Ok(BoundedTextRead::TooLarge) => {
                 commands.remove(&name);
                 unavailable_command_names.insert(name);
                 diagnostics.push(ExternalSourceDiagnostic::warning(
-                    "opencode.command.file_unreadable",
-                    format!("Failed to inspect command file: {error}"),
+                    "opencode.command.file_too_large",
+                    "OpenCode command file exceeds the 256 KiB compatibility limit",
                     None,
                 ));
                 continue;
             }
-        };
-        if metadata.len() > MAX_COMMAND_FILE_BYTES {
-            commands.remove(&name);
-            unavailable_command_names.insert(name);
-            diagnostics.push(ExternalSourceDiagnostic::warning(
-                "opencode.command.file_too_large",
-                "OpenCode command file exceeds the 256 KiB compatibility limit",
-                None,
-            ));
-            continue;
-        }
-        let content = match fs::read_to_string(path) {
-            Ok(content) => content,
+            Ok(BoundedTextRead::InvalidUtf8) => {
+                commands.remove(&name);
+                unavailable_command_names.insert(name);
+                diagnostics.push(ExternalSourceDiagnostic::warning(
+                    "opencode.command.file_invalid_utf8",
+                    "OpenCode command files must be valid UTF-8",
+                    None,
+                ));
+                continue;
+            }
             Err(error) => {
                 commands.remove(&name);
                 unavailable_command_names.insert(name);
@@ -705,95 +745,8 @@ fn parse_command_directory(directory: &Path) -> ParsedLayer {
         unavailable_command_names,
         diagnostics,
         content_version: format!("sha256:{}", hex::encode(version_hasher.finalize())),
-        fatal: scan_failed || truncated || template_budget_exhausted,
+        fatal: scan_failed || template_budget_exhausted,
     }
-}
-
-fn collect_markdown_files(
-    directory: &Path,
-    files: &mut Vec<PathBuf>,
-    visited: &mut BTreeSet<PathBuf>,
-    diagnostics: &mut Vec<ExternalSourceDiagnostic>,
-) -> bool {
-    if files.len() > MAX_COMMAND_FILES {
-        return false;
-    }
-    match fs::metadata(directory) {
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return false,
-        Err(error) => {
-            diagnostics.push(ExternalSourceDiagnostic::error(
-                "opencode.command.directory_unreadable",
-                format!("Failed to inspect an OpenCode command directory: {error}"),
-                None,
-            ));
-            return true;
-        }
-        Ok(metadata) if !metadata.is_dir() => {
-            diagnostics.push(ExternalSourceDiagnostic::error(
-                "opencode.command.directory_invalid",
-                "An OpenCode command directory path is not a directory",
-                None,
-            ));
-            return true;
-        }
-        Ok(_) => {}
-    }
-    let canonical = match dunce::canonicalize(directory) {
-        Ok(canonical) => canonical,
-        Err(error) => {
-            diagnostics.push(ExternalSourceDiagnostic::error(
-                "opencode.command.directory_unreadable",
-                format!("Failed to resolve an OpenCode command directory: {error}"),
-                None,
-            ));
-            return true;
-        }
-    };
-    if !visited.insert(canonical) {
-        return false;
-    }
-    let entries = match fs::read_dir(directory) {
-        Ok(entries) => entries,
-        Err(error) => {
-            diagnostics.push(ExternalSourceDiagnostic::error(
-                "opencode.command.directory_unreadable",
-                format!("Failed to read an OpenCode command directory: {error}"),
-                None,
-            ));
-            return true;
-        }
-    };
-    let mut failed = false;
-    let mut paths = Vec::new();
-    for entry in entries {
-        match entry {
-            Ok(entry) => paths.push(entry.path()),
-            Err(error) => {
-                failed = true;
-                diagnostics.push(ExternalSourceDiagnostic::error(
-                    "opencode.command.directory_unreadable",
-                    format!("Failed to enumerate an OpenCode command directory: {error}"),
-                    None,
-                ));
-            }
-        }
-    }
-    paths.sort();
-    for path in paths {
-        if files.len() > MAX_COMMAND_FILES {
-            break;
-        }
-        if path.is_dir() {
-            failed |= collect_markdown_files(&path, files, visited, diagnostics);
-        } else if path
-            .extension()
-            .and_then(|extension| extension.to_str())
-            .is_some_and(|extension| extension.eq_ignore_ascii_case("md"))
-        {
-            files.push(path);
-        }
-    }
-    failed
 }
 
 fn command_name(directory: &Path, path: &Path) -> Option<String> {

@@ -21,5 +21,5 @@ export type {
   ConfigPageSectionProps,
   ConfigPageRowProps,
 } from './ConfigPageLayout';
-
-
+export { ConfigPageLoading, ConfigPageMessage } from '@/component-library';
+export type { ConfigPageMessageData } from '@/component-library';
