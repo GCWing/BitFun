@@ -144,10 +144,17 @@ pub struct ComputerUsePermissionSnapshot {
 /// Frontmost application (for Computer use tool JSON).
 #[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq, Eq)]
 pub struct ComputerUseForegroundApplication {
+    /// Human-readable label for the frontmost app. On Windows this is the
+    /// window *title*, so it carries page/document text and must never be
+    /// pattern-matched to identify the application itself.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub name: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub bundle_id: Option<String>,
+    /// Executable basename (Windows) or process name (macOS) of the frontmost
+    /// app — the only stable identity signal across platforms.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub process_name: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub process_id: Option<i32>,
 }

@@ -9,7 +9,7 @@ hidden: true
 
 Fast browser automation CLI for AI agents. Chrome/Chromium via CDP with accessibility-tree snapshots and compact `@eN` element refs.
 
-Prefer BitFun's `ControlHub` browser domain when it is available; use this skill only when `ControlHub` is unavailable. The two stacks use separate browser instances, element refs, and login state, so do not mix them within one task.
+`ControlHub`'s browser domain is BitFun's default path for ordinary web pages, so this skill is opt-in and you are reading it because it was invoked explicitly — proceed with agent-browser for this task. It is the right tool for Electron desktop apps, Slack workspace automation, and cloud browsers, which `ControlHub` does not cover. The two stacks use separate browser instances, element refs, and login state, so do not mix them within one task.
 
 Install only after user approval: `npm i -g agent-browser@0.32.3 && agent-browser install`
 

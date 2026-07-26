@@ -141,7 +141,7 @@ impl ComputerUseTool {
 The **primary model cannot consume images** in tool results — **do not** use **`screenshot`**.\n\
 **OBSERVE & VERIFY (text-only):** Use **`describe_screen`** as your eyes — it returns a text snapshot (frontmost app + AX tree `ax_tree_text` with `node_idx`s + `ui_tree_text` + pointer) with NO image. Call it before acting when UI state is unknown, and after an action to verify the `ax_state_digest` changed. This replaces the `screenshot` observe→act→verify loop for text-only models.\n\
 **ACTION PRIORITY (CRITICAL):** Always think in this order:\n\
-1. **Terminal/CLI/System commands first** — Use Bash tool for terminal commands, system scripts (e.g., macOS `osascript`), shell automation. Most efficient.\n\
+1. **Terminal/CLI/System commands first** — Use the **`ExecCommand`** tool for terminal commands, system scripts (e.g., macOS `osascript`), shell automation. Most efficient.\n\
 2. **Keyboard shortcuts second** — Use **`key_chord`** / **`type_text`** for system/app shortcuts, navigation keys. Unsure what shortcut a target app registers for a function (e.g. \"Save\")? Call **`get_app_shortcuts`** first instead of guessing or clicking through menus.\n\
 3. **Precise UI control last** — Only when above fail: **`click_target`** / **`move_to_target`** (AX → OCR → screen coords in one call) → lower-level **`click_element`** / **`move_to_text`** → **`mouse_move`** + **`click`**.\n\
 **Rhythm:** one action at a time; use **`wait`** when UI animates. Observe **`interaction_state`** and **`computer_use_context`** in tool JSON.\n\
@@ -219,7 +219,6 @@ The **primary model cannot consume images** in tool results — **do not** use *
             "target": { "type": "object", "description": "For `app_click`: click target such as `{ \"node_idx\": 3 }`, image/screen coordinates, or OCR text." },
             "focus": { "type": ["object", "null"], "description": "For app-scoped text/scroll actions: optional focus target." },
             "predicate": { "type": "object", "description": "For `app_wait_for`: wait predicate." },
-            "i": { "type": ["integer", "null"], "description": "For interactive/visual actions: element or mark index from the latest view." },
             "dx": { "type": "integer", "description": "For app/interactive scroll actions: horizontal delta." },
             "dy": { "type": "integer", "description": "For app/interactive scroll actions: vertical delta." },
             "mouse_button": { "type": "string", "enum": ["left", "right", "middle"], "description": "For app/interactive/visual click actions." },
@@ -251,8 +250,8 @@ The **primary model cannot consume images** in tool results — **do not** use *
         let properties = Self::merge_with_shared_properties(json!({
             "action": {
                 "type": "string",
-                "enum": ["click_target", "move_to_target", "click_element", "move_to_text", "click", "mouse_move", "scroll", "drag", "locate", "key_chord", "type_text", "pointer_move_rel", "wait", "list_displays", "focus_display", "paste", "list_apps", "get_app_state", "get_app_shortcuts", "describe_screen", "app_click", "app_type_text", "app_scroll", "app_key_chord", "app_wait_for", "interactive_type_text", "interactive_scroll", "open_app", "open_url", "open_file", "clipboard_get", "clipboard_set", "run_script", "run_apple_script", "get_os_info"],
-                "description": "The action to perform. **Primary model is text-only — no `screenshot`.** **ACTION PRIORITY:** 1) Use Bash tool for CLI/terminal/system commands first. 2) **`open_app`** to launch apps. **`run_apple_script`** for AppleScript (macOS). 3) Prefer `key_chord` for shortcuts/navigation. Before guessing a shortcut, call **`get_app_shortcuts`** to look up what a target app actually has registered (e.g. \"what triggers Save in this app?\"), then fire it with `key_chord` / `app_key_chord` — avoids trial-and-error mouse clicks. 4) Only when above fail: `click_target` / `move_to_target` (AX → OCR → screen coords in one call), then lower-level `click_element`, `move_to_text`, or `mouse_move` + `click`. Never guess coordinates. **`describe_screen`** is the text-only equivalent of `screenshot`: it returns a structured text snapshot (frontmost app + AX tree + UI tree text + pointer + window geometry) with NO image — use it to observe and verify state when the primary model cannot view screenshots."
+                "enum": ["click_target", "move_to_target", "click_element", "move_to_text", "click", "mouse_move", "scroll", "drag", "locate", "key_chord", "type_text", "pointer_move_rel", "wait", "list_displays", "focus_display", "paste", "list_apps", "get_app_state", "get_app_shortcuts", "describe_screen", "app_click", "app_type_text", "app_scroll", "app_key_chord", "app_wait_for", "open_app", "open_url", "open_file", "clipboard_get", "clipboard_set", "run_script", "run_apple_script", "get_os_info"],
+                "description": "The action to perform. **Primary model is text-only — no `screenshot`.** **Browser boundary:** no input action here may drive a Chromium-family browser (Chrome/Edge/Brave/Arc) — use ControlHub domain=\"browser\" for those; switching focus away with `key_chord` [\"alt\",\"tab\"] / [\"command\",\"tab\"] or `open_app` is always allowed. **ACTION PRIORITY:** 1) Use the `ExecCommand` tool for CLI/terminal/system commands first. 2) **`open_app`** to launch apps. **`run_apple_script`** for AppleScript (macOS). 3) Prefer `key_chord` for shortcuts/navigation. Before guessing a shortcut, call **`get_app_shortcuts`** to look up what a target app actually has registered (e.g. \"what triggers Save in this app?\"), then fire it with `key_chord` / `app_key_chord` — avoids trial-and-error mouse clicks. 4) Only when above fail: `click_target` / `move_to_target` (AX → OCR → screen coords in one call), then lower-level `click_element`, `move_to_text`, or `mouse_move` + `click`. Never guess coordinates. **`describe_screen`** is the text-only equivalent of `screenshot`: it returns a structured text snapshot (frontmost app + AX tree + UI tree text + pointer + window geometry) with NO image — use it to observe and verify state when the primary model cannot view screenshots."
             },
             "use_screen_coordinates": { "type": "boolean", "description": "For `mouse_move`, `drag`: **must be true** — global display coordinates from `move_to_text`, `locate`, AX, or `pointer_global`. **Not** for `click`." },
             "delta_x": { "type": "integer", "description": "For `pointer_move_rel`: horizontal delta (negative=left); also accepted as `dx`. For `scroll`: horizontal wheel delta." },
@@ -1020,13 +1019,13 @@ impl Tool for ComputerUseTool {
         Ok(format!(
             "Desktop automation (host OS: {}). {} All actions in one tool. Send only parameters that apply to the chosen `action`. \
 **ACTION PRIORITY (CRITICAL):** Always think in this order before choosing an action:\n\
-1. **Terminal/CLI/System commands first** — Use Bash tool for terminal commands, system scripts (e.g., macOS `osascript`, AppleScript), shell automation. This is the MOST EFFICIENT approach.\n\
+1. **Terminal/CLI/System commands first** — Use the **`ExecCommand`** tool for terminal commands, system scripts (e.g., macOS `osascript`, AppleScript), shell automation. This is the MOST EFFICIENT approach.\n\
 2. **Keyboard shortcuts second** — Use **`key_chord`** for system shortcuts, app shortcuts, navigation keys (Enter, Escape, Tab, Space, Arrow keys). Prefer over mouse when equivalent. Don't know the shortcut for a target app's function? Call **`get_app_shortcuts`** to read its registered menu shortcuts (macOS `AXMenuBar`, Windows UIA menu tree), then fire it with `key_chord` / `app_key_chord` instead of clicking through menus.\n\
 3. **Precise UI control last** — Only when above methods fail: prefer **`click_target`** / **`move_to_target`** (AX → OCR → screen coords in one call). Use lower-level **`click_element`**, **`move_to_text`**, or **`mouse_move`** + **`click`** only when you need manual disambiguation.\n\
 **Screenshot usage:** **`screenshot`** is ONLY for observing/confirming UI state and extracting text/information — NEVER use screenshot coordinates to control mouse movement. Always use precise methods (AX, OCR, system coordinates) for targeting.\n\
 **Cowork-style loop:** **`screenshot`** (observe) → **one** action → **`screenshot`** (verify). Use **`wait`** if UI animates. When **`interaction_state.recommend_screenshot_to_verify_last_action`** is true, call **`screenshot`** next. \
 **`click_target` / `move_to_target`:** Unified target resolver. In one call it tries AX (`node_idx`, `text_contains`, `title_contains`, `role_substring`, `identifier_contains`, or `target_text`) first, then OCR (`target_text` / `text_query`), then explicit global `x`/`y` with `use_screen_coordinates: true`. `click_target` moves and clicks authoritatively, avoiding the multi-step locate → move → screenshot → click loop for common targets. \
-**`click_element`:** Lower-level Accessibility tree (AX/UIA/AT-SPI) locate + click. Provide `title_contains` / `role_substring` / `identifier_contains`. On macOS, **`TextArea`** and **`TextField`** match both `AXTextArea` and `AXTextField` (many chat apps use TextField for compose). If several text fields match, the host deprioritizes known **search** controls (e.g. WeChat `_SC_SEARCH_FIELD`) and prefers **lower** on-screen fields (composer). Bypasses coordinate screenshot guard. \
+**`click_element`:** Lower-level Accessibility tree (AX/UIA/AT-SPI) locate + click. Provide `title_contains` / `role_substring` / `identifier_contains`. On macOS, **`TextArea`** and **`TextField`** match both `AXTextArea` and `AXTextField` (many chat apps use TextField for compose). If several text fields match, the host deprioritizes known **search** controls (e.g. WeChat `_SC_SEARCH_FIELD`) and prefers **lower** on-screen fields (composer). Bypasses coordinate screenshot guard — but **not** the browser boundary: no ComputerUse input action (including `app_click` / `interactive_click` / `visual_click`) may drive a Chromium-family browser; use ControlHub domain=\"browser\" instead. \
 **`move_to_text`:** OCR-match visible text (`text_query`) and **move the pointer** to it (no click, no keys); **no prior `screenshot` required for targeting** (host captures **raw** pixels for Vision — no agent screenshot overlays; on macOS defaults to the **frontmost window** unless **`ocr_region_native`** overrides). Matching **strips whitespace** between CJK glyphs and allows **small edit distance** when Vision mis-reads one character. The host **trusts** the resulting globals — **next `click`** does **not** require an extra `screenshot` (same as AX). If **several** hits match, the host returns **preview JPEGs + accessibility** per candidate — pick **`move_to_text_match_index`** (1-based) and call **`move_to_text` again** with the same query/region, or narrow with **`ocr_region_native`**. Use **`click`** afterward if you need a mouse press. Prefer after `click_element` misses when text is visible. \
 **`click`:** Press at **current pointer only** — **never** pass `x`, `y`, `coordinate_mode`, or `use_screen_coordinates`. Position first with **`move_to_text`**, **`mouse_move`** (**globals only**), or **`click_element`**. After pointer moves, **`screenshot`** again before the next guarded **`click`** when the host requires it. \
 **`mouse_move` / `drag`:** **`use_screen_coordinates`: true** required — global coordinates from **`move_to_text`**, **`locate`**, AX, or **`pointer_global`**; never JPEG pixel guesses. \
@@ -1065,7 +1064,7 @@ impl Tool for ComputerUseTool {
             "action": {
                 "type": "string",
                 "enum": ["screenshot", "describe_screen", "click_target", "move_to_target", "click_element", "move_to_text", "click", "mouse_move", "scroll", "drag", "locate", "key_chord", "type_text", "pointer_move_rel", "wait", "list_displays", "focus_display", "paste", "list_apps", "get_app_state", "get_app_shortcuts", "app_click", "app_type_text", "app_scroll", "app_key_chord", "app_wait_for", "build_interactive_view", "interactive_click", "interactive_type_text", "interactive_scroll", "build_visual_mark_view", "visual_click", "open_app", "open_url", "open_file", "clipboard_get", "clipboard_set", "run_script", "run_apple_script", "get_os_info"],
-                "description": "The action to perform. **ACTION PRIORITY:** 1) Use Bash tool for CLI/terminal/system commands (most efficient). 2) **`open_app`** to launch apps by name. **`run_apple_script`** to run AppleScript (macOS). 3) Prefer **`key_chord`** for shortcuts/navigation keys over mouse. Not sure what shortcut a target app uses? Call **`get_app_shortcuts`** first to read its registered menu shortcuts, then fire the winner with `key_chord` / `app_key_chord` instead of clicking through menus. 4) Only when above fail: `click_target` / `move_to_target` (AX → OCR → screen coords in one call) before lower-level `click_element`, `move_to_text`, or `mouse_move` + `click`. **`screenshot`** is for observation/confirmation ONLY — never derive mouse coordinates from screenshots. `click` = press at **current pointer only** (no x/y params). `scroll` supports optional position (`scroll_x`/`scroll_y`). `type_text`, `drag`, `pointer_move_rel`, `wait`, `locate` = standard actions."
+                "description": "The action to perform. **Browser boundary:** no input action here may drive a Chromium-family browser (Chrome/Edge/Brave/Arc) — use ControlHub domain=\"browser\" for those; switching focus away with `key_chord` [\"alt\",\"tab\"] / [\"command\",\"tab\"] or `open_app` is always allowed. **ACTION PRIORITY:** 1) Use the `ExecCommand` tool for CLI/terminal/system commands (most efficient). 2) **`open_app`** to launch apps by name. **`run_apple_script`** to run AppleScript (macOS). 3) Prefer **`key_chord`** for shortcuts/navigation keys over mouse. Not sure what shortcut a target app uses? Call **`get_app_shortcuts`** first to read its registered menu shortcuts, then fire the winner with `key_chord` / `app_key_chord` instead of clicking through menus. 4) Only when above fail: `click_target` / `move_to_target` (AX → OCR → screen coords in one call) before lower-level `click_element`, `move_to_text`, or `mouse_move` + `click`. **`screenshot`** is for observation/confirmation ONLY — never derive mouse coordinates from screenshots. `click` = press at **current pointer only** (no x/y params). `scroll` supports optional position (`scroll_x`/`scroll_y`). `type_text`, `drag`, `pointer_move_rel`, `wait`, `locate` = standard actions."
             },
             "use_screen_coordinates": { "type": "boolean", "description": "For `mouse_move`, `drag`: **must be true** — global display coordinates (e.g. macOS points) from `move_to_text`, `locate`, AX, or `pointer_global`. **Not** for `click`." },
             "delta_x": { "type": "integer", "description": "For `pointer_move_rel`: horizontal delta (negative=left); also accepted as `dx`. **Not** allowed as the first move after `screenshot` (host). For `scroll`: horizontal wheel delta." },
@@ -1096,6 +1095,7 @@ impl Tool for ComputerUseTool {
             "app_name": { "type": "string", "description": "For `open_app`: the application name to launch (e.g. \"Safari\", \"WeChat\", \"Visual Studio Code\")." },
             "script": { "type": "string", "description": "For `run_apple_script`: the AppleScript code to execute via `osascript`. macOS only." },
             "opts": { "type": "object", "description": "For `build_interactive_view` / `build_visual_mark_view`: optional view options." },
+            "i": { "type": ["integer", "null"], "description": "For interactive/visual actions: element or mark index from the latest view." },
             "scroll_x": { "type": "integer", "description": "For `scroll`: optional global X coordinate to move pointer before scrolling. Use with `scroll_y`. Requires `use_screen_coordinates`: true." },
             "scroll_y": { "type": "integer", "description": "For `scroll`: optional global Y coordinate to move pointer before scrolling. Use with `scroll_x`. Requires `use_screen_coordinates`: true." }
         }));
@@ -1177,7 +1177,7 @@ impl Tool for ComputerUseTool {
         // desktop side — the ControlHub browser domain owns that surface.
         // Read-only observation actions pass through.
         if let Some(err) = super::computer_use_actions::ComputerUseActions::new()
-            .desktop_action_targets_browser(action, context)
+            .desktop_action_targets_browser(action, input, context)
             .await
         {
             return Ok(err_response("computer_use", action, err));
@@ -2226,9 +2226,10 @@ mod tests {
         }
     }
 
-    /// Visual-only actions (their results are marked-up screenshots) must not
-    /// be advertised to text-only models; their view-options parameter goes
-    /// with them.
+    /// Visual-only actions must not be advertised to text-only models: their
+    /// results are marked-up screenshots, and `interactive_type_text` /
+    /// `interactive_scroll` address elements by the `i` index of a view only a
+    /// vision-capable model can build. Their parameters go with them.
     #[test]
     fn visual_only_actions_are_absent_from_text_only_schema() {
         let full_actions = action_enum(&ComputerUseTool::new().input_schema());
@@ -2238,6 +2239,8 @@ mod tests {
             "interactive_click",
             "build_visual_mark_view",
             "visual_click",
+            "interactive_type_text",
+            "interactive_scroll",
         ] {
             assert!(
                 full_actions.iter().any(|a| a == action),
@@ -2253,7 +2256,39 @@ mod tests {
             !text_only_keys.contains("opts"),
             "`opts` only configures the removed view-building actions"
         );
-        assert!(property_keys(&ComputerUseTool::new().input_schema()).contains("opts"));
+        assert!(
+            !text_only_keys.contains("i"),
+            "`i` indexes a view no text-only action can build"
+        );
+        let full_keys = property_keys(&ComputerUseTool::new().input_schema());
+        assert!(full_keys.contains("opts"));
+        assert!(full_keys.contains("i"));
+    }
+
+    /// The `Bash` tool is not registered in the product tool registry
+    /// (`ExecCommand` is), so naming it as the top-priority action sends the
+    /// model at a tool that does not exist.
+    #[tokio::test]
+    async fn descriptions_and_schemas_never_reference_a_nonexistent_bash_tool() {
+        let full_description = ComputerUseTool::new()
+            .description()
+            .await
+            .expect("description");
+        let text_only_description = ComputerUseTool::description_text_only();
+        let full_schema = ComputerUseTool::new().input_schema().to_string();
+        let text_only_schema = ComputerUseTool::input_schema_text_only().to_string();
+        for blob in [
+            full_description.as_str(),
+            text_only_description.as_str(),
+            full_schema.as_str(),
+            text_only_schema.as_str(),
+        ] {
+            assert!(
+                !blob.contains("Bash"),
+                "ComputerUse text must not name the unregistered Bash tool"
+            );
+            assert!(blob.contains("ExecCommand"));
+        }
     }
 
     /// Minimal host whose only signal is a Chromium-family frontmost app;
@@ -2317,6 +2352,7 @@ mod tests {
                 foreground_application: Some(ComputerUseForegroundApplication {
                     name: Some("Google Chrome".to_string()),
                     bundle_id: Some("com.google.Chrome".to_string()),
+                    process_name: Some("Google Chrome".to_string()),
                     process_id: Some(4242),
                 }),
                 pointer_global: None,
@@ -2347,6 +2383,91 @@ mod tests {
             error_text.contains("browser"),
             "guard error should redirect to the ControlHub browser domain: {error_text}"
         );
+    }
+
+    /// Renaming the same physical input must not get through the boundary: the
+    /// app-scoped and interactive/visual variants are guarded too.
+    #[tokio::test]
+    async fn app_scoped_input_is_rejected_while_chromium_browser_is_frontmost() {
+        let mut context = ToolUseContext::for_tool_listing(None, None);
+        context.computer_use_host = Some(std::sync::Arc::new(ChromeForegroundHost));
+        for action in [
+            "app_click",
+            "app_type_text",
+            "app_scroll",
+            "app_key_chord",
+            "interactive_click",
+            "interactive_type_text",
+            "interactive_scroll",
+            "visual_click",
+        ] {
+            let results = ComputerUseTool::new()
+                .call_impl(&json!({ "action": action }), &context)
+                .await
+                .expect("guard rejection is a structured envelope");
+            assert_eq!(
+                results[0].content().get("ok").and_then(Value::as_bool),
+                Some(false),
+                "`{action}` must be guarded"
+            );
+        }
+    }
+
+    /// An explicit browser selector is rejected on its own evidence, without
+    /// asking the host what is frontmost.
+    #[tokio::test]
+    async fn app_selector_naming_chromium_is_rejected_without_a_foreground_signal() {
+        let context = ToolUseContext::for_tool_listing(None, None);
+        let results = ComputerUseTool::new()
+            .call_impl(
+                &json!({
+                    "action": "app_click",
+                    "app": { "name": "Google Chrome" },
+                    "target": { "node_idx": 12 }
+                }),
+                &context,
+            )
+            .await
+            .expect("guard rejection is a structured envelope");
+        assert_eq!(
+            results[0].content().get("ok").and_then(Value::as_bool),
+            Some(false)
+        );
+    }
+
+    /// The guard is positional, not task-related: a task whose target is not
+    /// the browser must keep a way to reach it while the browser is frontmost.
+    /// Both escape routes must therefore pass the guard untouched.
+    #[tokio::test]
+    async fn guard_leaves_an_escape_route_for_non_browser_targets() {
+        let mut context = ToolUseContext::for_tool_listing(None, None);
+        context.computer_use_host = Some(std::sync::Arc::new(ChromeForegroundHost));
+        let actions = super::super::computer_use_actions::ComputerUseActions::new();
+        for input in [
+            // App switcher: the only keyboard way off a browser window.
+            json!({ "action": "key_chord", "keys": ["command", "tab"] }),
+            json!({ "action": "key_chord", "keys": ["alt", "tab"] }),
+            // App-scoped input aimed at a different app.
+            json!({ "action": "app_type_text", "app": { "name": "WeChat" }, "text": "hi" }),
+        ] {
+            let action = input.get("action").and_then(Value::as_str).expect("action");
+            assert!(
+                actions
+                    .desktop_action_targets_browser(action, &input, &context)
+                    .await
+                    .is_none(),
+                "{input} must not be guarded"
+            );
+        }
+        // A normal chord in the browser is still rejected.
+        assert!(actions
+            .desktop_action_targets_browser(
+                "key_chord",
+                &json!({ "action": "key_chord", "keys": ["command", "t"] }),
+                &context
+            )
+            .await
+            .is_some());
     }
 
     /// The `action` enum, description, and a handful of other fields are

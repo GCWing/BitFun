@@ -177,6 +177,15 @@ mod tests {
         assert!(description.contains("ControlHub domain=\"browser\""));
         assert!(description.contains("login session"));
         assert!(description.contains("browser.fetch"));
+        // browser.fetch runs inside the already-connected page, so it must be
+        // described as a same-origin follow-up rather than a standalone
+        // alternative to connect -> navigate -> snapshot.
+        assert!(description.contains("connect -> navigate -> snapshot"));
+        assert!(description.contains("same-origin"));
+        assert!(description.contains("CORS"));
+        // connect drives BitFun's managed profile, not the user's everyday
+        // browser, so the description must not promise their login state.
+        assert!(description.contains("managed browser profile"));
     }
 
     #[test]

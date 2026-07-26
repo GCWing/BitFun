@@ -169,7 +169,7 @@ unsafe extern "system" fn enum_windows_cb(hwnd: HWND, lparam: LPARAM) -> BOOL {
 }
 
 /// Resolve the full image path of `pid` and return its `.exe` basename.
-fn exe_basename_for_pid(pid: u32) -> Option<String> {
+pub(super) fn exe_basename_for_pid(pid: u32) -> Option<String> {
     let handle = unsafe { OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, 0, pid) };
     if handle.is_null() {
         return None;

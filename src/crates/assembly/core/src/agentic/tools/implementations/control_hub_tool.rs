@@ -22,6 +22,7 @@ use crate::agentic::tools::framework::{
 use crate::infrastructure::events::{get_global_event_system, BackendEvent};
 use crate::service::config::{get_global_config_service, GlobalConfig};
 use crate::util::errors::{BitFunError, BitFunResult};
+use crate::util::types::ToolImageAttachment;
 use async_trait::async_trait;
 use bitfun_services_core::system::{truncate_with_marker, LocalSystemProvider};
 use serde_json::{json, Value};
@@ -38,6 +39,18 @@ static BROWSER_SESSIONS: std::sync::OnceLock<Arc<BrowserSessionRegistry>> =
     std::sync::OnceLock::new();
 
 const OPEN_BUILT_IN_BROWSER_EVENT: &str = "agentic://open-built-in-browser";
+
+/// `connect { mode: "headless" }` only attaches, it never launches. It must
+/// therefore not default to the port the `default` mode's managed browser
+/// occupies: otherwise a session that already ran `connect { mode: "default" }`
+/// can never reach a headless browser, because `verify_headless_cdp_browser`
+/// hard-rejects the headed browser sitting on that port.
+const DEFAULT_HEADLESS_CDP_PORT: u16 = DEFAULT_CDP_PORT + 1;
+
+/// Computer Use is an independent switch from browser control (`ai.computer_use_enabled`
+/// defaults to off, and there is no desktop host outside the desktop app), so ControlHub
+/// must never route recovery through a tool that is absent from the agent's tool list.
+const COMPUTER_USE_UNAVAILABLE_HINT: &str = "Desktop automation is unavailable in this session (Computer Use is off in Settings, or there is no desktop host). Do not call ComputerUse — it is not in your tool list. Use ControlHub browser.open_builtin for http(s) URLs and ExecCommand for local files and scripts; ask the user to enable Computer Use in Settings if desktop control is genuinely required.";
 
 fn browser_sessions() -> Arc<BrowserSessionRegistry> {
     BROWSER_SESSIONS
@@ -69,7 +82,7 @@ impl ControlHubTool {
     fn default_browser_connect_hints(kind: &BrowserKind, port: u16) -> Vec<String> {
         let exe = BrowserLauncher::browser_executable(kind);
         vec![
-            "For login/cookies/extensions, use the user's default browser via CDP — never fall back to desktop mouse/keyboard automation.".to_string(),
+            "Drive pages over CDP rather than desktop mouse/keyboard automation. Note this is BitFun's managed browser profile, not the user's everyday profile: it keeps its own cookies and logins across runs, so on a login wall ask the user to sign in once in that window instead of retrying or typing credentials.".to_string(),
             format!(
                 "If CDP is not ready on test port {}, retry browser.connect — it starts \"{}\" against BitFun's managed profile with CDP enabled. Do not ask the user to enable a debug port on their everyday browser profile.",
                 port, exe
@@ -82,11 +95,28 @@ impl ControlHubTool {
         vec![
             "For project Web UI testing that does not depend on user login state, use the dedicated headless browser flow instead of the user's browser.".to_string(),
             format!(
-                "Start or attach a headless test browser on the test port {} and then drive it through browser DOM actions only.",
+                "browser.connect {{ mode: \"headless\" }} only attaches — it never starts a browser. Start one first, e.g. \"{}\" --headless=new --remote-debugging-port={} --user-data-dir=<disposable profile dir>, then retry.",
+                BrowserLauncher::browser_executable(&BrowserKind::Chrome),
+                port
+            ),
+            format!(
+                "If your headless browser listens elsewhere, pass the port explicitly: browser.connect {{ mode: \"headless\", port: <your port> }} (default headless test port is {}).",
                 port
             ),
             "Do not switch to desktop mouse/keyboard browser control in headless mode.".to_string(),
         ]
+    }
+
+    /// Whether the `ComputerUse` tool is actually present in this session's
+    /// tool list. Computer Use and browser control are independent switches,
+    /// so ControlHub stays fully usable while Computer Use is off — but any
+    /// hint that tells the agent to "use ComputerUse" must be gated on this,
+    /// otherwise the agent burns turns calling a tool it does not have.
+    async fn computer_use_available(context: &ToolUseContext) -> bool {
+        use super::computer_use_tool::ComputerUseTool;
+        ComputerUseTool::new()
+            .is_available_in_context(Some(context))
+            .await
     }
 
     /// `connect { mode: "headless" }` cannot launch a headless browser yet —
@@ -118,7 +148,10 @@ impl ControlHubTool {
         ))
     }
 
-    fn normalize_builtin_browser_url(raw_url: &str) -> Result<String, ControlHubError> {
+    fn normalize_builtin_browser_url(
+        raw_url: &str,
+        computer_use_available: bool,
+    ) -> Result<String, ControlHubError> {
         let trimmed = raw_url.trim();
         if trimmed.is_empty() {
             return Err(ControlHubError::new(
@@ -142,7 +175,11 @@ impl ControlHubTool {
                 ErrorCode::InvalidParams,
                 "Only http and https URLs can be opened in the built-in browser.",
             )
-            .with_hint("Use WebFetch/WebSearch for reading content, or ComputerUse for local files and OS-level URL opening."));
+            .with_hint(if computer_use_available {
+                "Use WebFetch/WebSearch for reading content, or ComputerUse for local files and OS-level URL opening."
+            } else {
+                "Use WebFetch/WebSearch for reading content; local files must be handled with ExecCommand or opened by the user (ComputerUse is not available in this session)."
+            }));
         }
 
         Ok(normalized)
@@ -162,15 +199,16 @@ Use this tool via `{ domain, action, params }` for browser automation, terminal 
 - UI action:
   * `open_builtin { url, title?, replace_existing? }` — open an http(s) URL in BitFun's built-in right-side browser panel. This changes the BitFun UI only; it does not fetch page text for reasoning. The panel is display-only for the user — the agent cannot snapshot, read, or interact with it; use `connect` + `snapshot` when page content is needed.
 - Automation modes (external managed browser):
-  * `connect { mode: "default" }` (default) — start or attach the stable managed browser profile with CDP enabled.
-  * `connect { mode: "headless" }` — start or attach the stable managed headless browser profile for project Web UI testing that does not depend on user login state.
+  * `connect { mode: "default" }` (default) — start or attach BitFun's managed browser profile with CDP enabled on port 9222.
+  * `connect { mode: "headless" }` — attach to an already-running headless browser on the headless test port 9223. This mode never starts a browser; when nothing is listening it returns `NOT_AVAILABLE` together with the exact launch command.
+  * `params.port` overrides the CDP port for `connect` and for every other CDP action; after `connect`, actions reuse the connected session's port automatically.
 - Actions: open_builtin, connect, tab_new, navigate, back, forward, reload, snapshot, click, hover, fill, type, check, uncheck, select, press_key, scroll, auto_scroll, wait, get, get_text, get_url, get_title, get_html, screenshot, evaluate, fetch, cookies, set_cookies, set_file_input_files, cdp, network, console, errors, trace, dialog, read_article, close, list_pages, tab_query, switch_page, list_sessions.
-- Automation workflow: connect -> navigate -> snapshot (returns @e1, @e2 ... refs) -> click/fill using refs.
-- Take a fresh snapshot after any DOM mutation; stale refs return `error.code = STALE_REF`.
+- Automation workflow: connect -> navigate -> snapshot (returns @e1, @e2 ... refs) -> click/fill with `{ "selector": "@e1" }` (the key `ref` is accepted too).
+- Take a fresh snapshot after any DOM mutation; a stale `@eN` ref returns `error.code = STALE_REF`, while a selector that matches nothing returns `NOT_FOUND`.
 
 ### domain: "terminal"
 - list_sessions, kill (`terminal_session_id`), interrupt (`terminal_session_id`).
-- Use the `Bash` tool to run new commands; this domain only signals existing terminal sessions.
+- Use the `ExecCommand` tool to run new commands (stop those with `ExecControl`); this domain only signals pre-existing UI terminal sessions, not `ExecCommand` sessions.
 
 ### domain: "meta"
 - `capabilities` — returns `{ domains: { browser, terminal, meta }, local_client: { os, arch }, workspace_execution: { is_remote }, schema_version }`.
@@ -201,6 +239,8 @@ Branch on `ok` and `error.code`, not on English messages.
             "desktop" => {
                 let hint = if context.is_remote() {
                     "Desktop automation (screenshots, OCR, mouse, keyboard) is not available in remote workspace sessions. Use ExecCommand for shell-based alternatives on the remote SSH host."
+                } else if !Self::computer_use_available(context).await {
+                    COMPUTER_USE_UNAVAILABLE_HINT
                 } else {
                     "Use the dedicated ComputerUse tool/agent for screenshots, OCR, mouse, keyboard, and desktop app control."
                 };
@@ -214,11 +254,13 @@ Branch on `ok` and `error.code`, not on English messages.
                     .with_hint(hint),
                 ))
             }
-            "browser" => self.handle_browser(action, params).await,
+            "browser" => self.handle_browser(action, params, context).await,
             "terminal" => self.handle_terminal(action, params, context).await,
             "system" => {
                 let hint = if context.is_remote() {
                     "System actions (open_app, open_url, clipboard, OS info, local scripts) are not available in remote workspace sessions. Use ExecCommand for shell-based alternatives on the remote SSH host."
+                } else if !Self::computer_use_available(context).await {
+                    COMPUTER_USE_UNAVAILABLE_HINT
                 } else {
                     "Use the dedicated ComputerUse tool/agent for open_app, open_url, open_file, clipboard, OS info, and local scripts."
                 };
@@ -233,10 +275,28 @@ Branch on `ok` and `error.code`, not on English messages.
                 ))
             }
             "meta" => self.handle_meta(action, params, context).await,
-            other => Err(BitFunError::tool(format!(
-                "Unknown domain: '{}'. Valid ControlHub domains: browser, terminal, meta. Use ComputerUse for desktop/system actions.",
-                other
-            ))),
+            // Structured rather than `Err`: `map_dispatch_error`'s keyword
+            // classifier matches nothing in this message and would report a
+            // routing mistake as INTERNAL, which the model cannot recover from.
+            other => {
+                let hint = if !Self::computer_use_available(context).await {
+                    COMPUTER_USE_UNAVAILABLE_HINT
+                } else {
+                    "Use the dedicated ComputerUse tool/agent for desktop and OS-level actions."
+                };
+                Ok(err_response(
+                    other,
+                    action,
+                    ControlHubError::new(
+                        ErrorCode::UnknownDomain,
+                        format!(
+                            "Unknown domain: '{}'. Valid ControlHub domains: browser, terminal, meta.",
+                            other
+                        ),
+                    )
+                    .with_hint(hint),
+                ))
+            }
         }
     }
 
@@ -302,6 +362,7 @@ Branch on `ok` and `error.code`, not on English messages.
                     })
                 };
 
+                let computer_use = Self::computer_use_available(context).await;
                 let body = json!({
                     "domains": {
                         "browser":  {
@@ -326,12 +387,24 @@ Branch on `ok` and `error.code`, not on English messages.
                         "desktop_environment": desktop_env,
                     },
                     "workspace_execution": workspace_execution,
-                    "schema_version": "1.3",
+                    "computer_use": {
+                        "available": computer_use,
+                        "reason": if computer_use {
+                            Value::Null
+                        } else if is_remote {
+                            json!("Not available in remote workspace sessions")
+                        } else {
+                            json!("Computer Use is disabled (ai.computer_use_enabled = false) or no desktop host is present")
+                        },
+                    },
+                    "schema_version": "1.4",
                 });
-                Ok(vec![ToolResult::ok(
-                    body,
-                    Some("ControlHub capabilities snapshot".to_string()),
-                )])
+                // The value of a capability probe is entirely in the field
+                // values, so the assistant-visible text must be the payload
+                // itself — a one-line summary tells the model nothing.
+                let assistant = serde_json::to_string_pretty(&body)
+                    .unwrap_or_else(|_| body.to_string());
+                Ok(vec![ToolResult::ok(body, Some(assistant))])
             }
             "route_hint" => {
                 // Best-effort heuristic mapping a free-form intent to one
@@ -345,12 +418,19 @@ Branch on `ok` and `error.code`, not on English messages.
                     })?;
                 let lower = intent.to_lowercase();
 
-                let mut suggestions: Vec<(&'static str, u32, &'static str)> = vec![];
-                let push = |s: &mut Vec<(&'static str, u32, &'static str)>,
+                // `domain` here is always a real ControlHub domain (or the
+                // sentinel "unavailable"). A tool name such as ComputerUse is
+                // reported separately as `tool`, because a model that copies
+                // `suggested_domain` back into `{ domain: ... }` would
+                // otherwise send an unroutable request.
+                let mut suggestions: Vec<(&'static str, Option<&'static str>, u32, &'static str)> =
+                    vec![];
+                let push = |s: &mut Vec<(&'static str, Option<&'static str>, u32, &'static str)>,
                             domain: &'static str,
+                            tool: Option<&'static str>,
                             score: u32,
                             why: &'static str| {
-                    s.push((domain, score, why));
+                    s.push((domain, tool, score, why));
                 };
 
                 let browser_kw = [
@@ -397,6 +477,7 @@ Branch on `ok` and `error.code`, not on English messages.
                         push(
                             &mut suggestions,
                             "browser",
+                            None,
                             85,
                             "Matches browser/URL keywords; default to browser.open_builtin for opening or showing URLs, and use browser.connect only when DOM reading or interaction is required",
                         );
@@ -404,21 +485,32 @@ Branch on `ok` and `error.code`, not on English messages.
                     }
                 }
                 let is_remote = context.is_remote();
+                let computer_use = Self::computer_use_available(context).await;
                 for kw in desktop_kw {
                     if lower.contains(kw) {
                         if is_remote {
                             push(
                                 &mut suggestions,
                                 "unavailable",
+                                None,
                                 75,
                                 "Desktop automation is not available in remote workspace sessions. Use ExecCommand for shell-based alternatives on the remote SSH host.",
+                            );
+                        } else if !computer_use {
+                            push(
+                                &mut suggestions,
+                                "unavailable",
+                                None,
+                                75,
+                                "Matches local desktop keywords, but Computer Use is off in this session and ComputerUse is not in your tool list. Use ExecCommand for local work, or ask the user to enable Computer Use in Settings.",
                             );
                         } else {
                             push(
                                 &mut suggestions,
-                                "ComputerUse",
+                                "unavailable",
+                                Some("ComputerUse"),
                                 75,
-                                "Matches local desktop/system keywords; use the ComputerUse tool/agent",
+                                "Matches local desktop/system keywords; this is not a ControlHub domain — call the ComputerUse tool instead",
                             );
                         }
                         break;
@@ -429,6 +521,7 @@ Branch on `ok` and `error.code`, not on English messages.
                         push(
                             &mut suggestions,
                             "terminal",
+                            None,
                             80,
                             "Matches terminal-signal keywords",
                         );
@@ -441,37 +534,53 @@ Branch on `ok` and `error.code`, not on English messages.
                             push(
                                 &mut suggestions,
                                 "unavailable",
+                                None,
                                 70,
                                 "System actions (open_app, clipboard, OS info, local scripts) are not available in remote workspace sessions. Use ExecCommand for shell-based alternatives on the remote SSH host.",
+                            );
+                        } else if !computer_use {
+                            push(
+                                &mut suggestions,
+                                "unavailable",
+                                None,
+                                70,
+                                "Matches OS/launch keywords, but Computer Use is off in this session and ComputerUse is not in your tool list. Use ExecCommand for local scripts and file handling, or ask the user to enable Computer Use in Settings.",
                             );
                         } else {
                             push(
                                 &mut suggestions,
-                                "ComputerUse",
+                                "unavailable",
+                                Some("ComputerUse"),
                                 70,
-                                "Matches OS/launch keywords; use the ComputerUse tool/agent",
+                                "Matches OS/launch keywords; this is not a ControlHub domain — call the ComputerUse tool instead",
                             );
                         }
                         break;
                     }
                 }
-                suggestions.sort_by_key(|suggestion| std::cmp::Reverse(suggestion.1));
+                suggestions.sort_by_key(|suggestion| std::cmp::Reverse(suggestion.2));
 
                 let ranked: Vec<Value> = suggestions
                     .iter()
-                    .map(|(d, score, why)| json!({ "domain": d, "score": score, "why": why }))
+                    .map(|(d, tool, score, why)| {
+                        json!({ "domain": d, "tool": tool, "score": score, "why": why })
+                    })
                     .collect();
-                let suggested = suggestions.first().map(|(d, _, _)| (*d).to_string());
+                let top = suggestions.first().copied();
+                let suggested = top.map(|(d, _, _, _)| d.to_string());
+                let suggested_tool = top.and_then(|(_, tool, _, _)| tool);
                 Ok(vec![ToolResult::ok(
                     json!({
                         "intent": intent,
                         "suggested_domain": suggested,
+                        "suggested_tool": suggested_tool,
                         "ranked": ranked,
-                        "note": "Heuristic only — confirm by reading meta.capabilities and the domain-specific docs.",
+                        "note": "Heuristic only — confirm by reading meta.capabilities and the domain-specific docs. `suggested_domain` is always a ControlHub domain (or \"unavailable\"); a separate tool to call, if any, is in `suggested_tool`.",
                     }),
-                    Some(match &suggested {
-                        Some(d) => format!("Best guess: domain={}", d),
-                        None => "No confident routing match".to_string(),
+                    Some(match (&suggested, suggested_tool) {
+                        (Some(d), Some(t)) => format!("Best guess: domain={} tool={}", d, t),
+                        (Some(d), None) => format!("Best guess: domain={}", d),
+                        (None, _) => "No confident routing match".to_string(),
                     }),
                 )])
             }
@@ -508,22 +617,42 @@ Branch on `ok` and `error.code`, not on English messages.
         )
     }
 
-    async fn handle_browser(&self, action: &str, params: &Value) -> BitFunResult<Vec<ToolResult>> {
-        let port = params
-            .get("port")
-            .and_then(|v| v.as_u64())
-            .map(|p| p as u16)
-            .unwrap_or(DEFAULT_CDP_PORT);
-
+    async fn handle_browser(
+        &self,
+        action: &str,
+        params: &Value,
+        context: &ToolUseContext,
+    ) -> BitFunResult<Vec<ToolResult>> {
         let session_id_param = params
             .get("session_id")
             .and_then(|v| v.as_str())
             .map(str::to_string);
 
+        let port = match params.get("port").and_then(|v| v.as_u64()) {
+            Some(p) => p as u16,
+            None if action == "connect" => {
+                if Self::browser_connect_mode_from_params(params) == "headless" {
+                    DEFAULT_HEADLESS_CDP_PORT
+                } else {
+                    DEFAULT_CDP_PORT
+                }
+            }
+            // Port-addressed actions after `connect` (list_pages / tab_query /
+            // tab_new / switch_page) must reuse the connected session's port,
+            // otherwise a headless session's follow-up calls fall back to the
+            // headed browser's port.
+            None => browser_sessions()
+                .get(session_id_param.as_deref())
+                .await
+                .map(|s| s.port)
+                .unwrap_or(DEFAULT_CDP_PORT),
+        };
+
         match action {
             "open_builtin" => {
                 let raw_url = params.get("url").and_then(Value::as_str).unwrap_or("");
-                let url = match Self::normalize_builtin_browser_url(raw_url) {
+                let computer_use = Self::computer_use_available(context).await;
+                let url = match Self::normalize_builtin_browser_url(raw_url, computer_use) {
                     Ok(url) => url,
                     Err(error) => return Ok(err_response("browser", "open_builtin", error)),
                 };
@@ -815,7 +944,11 @@ Branch on `ok` and `error.code`, not on English messages.
                         "pages": summary,
                         "default_session_id": default_id,
                     }),
-                    Some(format!("{} page(s) found", pages.len())),
+                    Some(format!(
+                        "{} page(s) found (id | title | url):\n{}",
+                        summary.len(),
+                        page_table(&summary)
+                    )),
                 )])
             }
 
@@ -883,7 +1016,12 @@ Branch on `ok` and `error.code`, not on English messages.
                         "total": total,
                         "default_session_id": default_id,
                     }),
-                    Some(format!("{} of {} page(s) matched", matched, total)),
+                    Some(format!(
+                        "{} of {} page(s) matched (id | title | url):\n{}",
+                        matched,
+                        total,
+                        page_table(&filtered)
+                    )),
                 )])
             }
 
@@ -1024,7 +1162,12 @@ Branch on `ok` and `error.code`, not on English messages.
                                 "sessions": ids,
                                 "default_session_id": default,
                             }),
-                            Some(format!("{} session(s) tracked", ids.len())),
+                            Some(format!(
+                                "{} session(s) tracked (default={}):\n{}",
+                                ids.len(),
+                                default.as_deref().unwrap_or("-"),
+                                ids.join("\n")
+                            )),
                         )])
                     }
                     "network" | "network_requests" => {
@@ -1052,7 +1195,11 @@ Branch on `ok` and `error.code`, not on English messages.
                                         "total_events": total,
                                         "requests": requests,
                                     }),
-                                    Some(format!("Network summary: {} total events", total)),
+                                    Some(format!(
+                                        "Network summary: {} total events\n{}",
+                                        total,
+                                        event_list(&requests)
+                                    )),
                                 )])
                             }
                             _ => {
@@ -1076,7 +1223,11 @@ Branch on `ok` and `error.code`, not on English messages.
                                 };
                                 Ok(vec![ToolResult::ok(
                                     json!({ "events": events, "count": events.len() }),
-                                    Some(format!("{} network event(s)", events.len())),
+                                    Some(format!(
+                                        "{} network event(s):\n{}",
+                                        events.len(),
+                                        event_list(&events)
+                                    )),
                                 )])
                             }
                         }
@@ -1099,7 +1250,11 @@ Branch on `ok` and `error.code`, not on English messages.
                         let events = state.query_console(filter, since, limit).await;
                         Ok(vec![ToolResult::ok(
                             json!({ "events": events, "count": events.len() }),
-                            Some(format!("{} console event(s)", events.len())),
+                            Some(format!(
+                                "{} console event(s):\n{}",
+                                events.len(),
+                                event_list(&events)
+                            )),
                         )])
                     }
                     "errors" => {
@@ -1120,7 +1275,11 @@ Branch on `ok` and `error.code`, not on English messages.
                         let events = state.query_errors(filter, since, limit).await;
                         Ok(vec![ToolResult::ok(
                             json!({ "events": events, "count": events.len() }),
-                            Some(format!("{} JS error event(s)", events.len())),
+                            Some(format!(
+                                "{} JS error event(s):\n{}",
+                                events.len(),
+                                event_list(&events)
+                            )),
                         )])
                     }
                     "trace" => {
@@ -1204,18 +1363,26 @@ Branch on `ok` and `error.code`, not on English messages.
                             .and_then(|v| v.as_array())
                             .map(|a| a.len())
                             .unwrap_or(0);
-                        Ok(vec![ToolResult::ok(
-                            result,
-                            Some(format!("Snapshot: {} interactive elements", el_count)),
-                        )])
+                        // The whole `@eN` workflow lives in the rendered
+                        // snapshot text; a bare element count leaves the model
+                        // with no ref to click or fill.
+                        let snapshot_text =
+                            result.get("snapshot").and_then(|v| v.as_str()).unwrap_or("");
+                        let url = result.get("url").and_then(|v| v.as_str()).unwrap_or("");
+                        let title = result.get("title").and_then(|v| v.as_str()).unwrap_or("");
+                        let assistant = format!(
+                            "Snapshot ({} interactive elements)\nurl: {}\ntitle: {}\n{}",
+                            el_count, url, title, snapshot_text
+                        );
+                        Ok(vec![ToolResult::ok(result, Some(assistant))])
                     }
                     "click" => {
-                        let selector = params
-                            .get("selector")
-                            .and_then(|v| v.as_str())
-                            .ok_or_else(|| {
-                                BitFunError::tool("click requires 'selector'".to_string())
-                            })?;
+                        let selector = match selector_param(params) {
+                            Some(s) => s,
+                            None => {
+                                return Ok(missing_selector_response("click"));
+                            }
+                        };
                         let result = actions.click(selector).await?;
                         Ok(vec![ToolResult::ok(
                             result,
@@ -1223,13 +1390,12 @@ Branch on `ok` and `error.code`, not on English messages.
                         )])
                     }
                     "fill" => {
-                        let selector = params
-                            .get("selector")
-                            .or_else(|| params.get("ref"))
-                            .and_then(|v| v.as_str())
-                            .ok_or_else(|| {
-                                BitFunError::tool("fill requires 'selector'".to_string())
-                            })?;
+                        let selector = match selector_param(params) {
+                            Some(s) => s,
+                            None => {
+                                return Ok(missing_selector_response("fill"));
+                            }
+                        };
                         let value = params
                             .get("value")
                             .and_then(|v| v.as_str())
@@ -1253,12 +1419,12 @@ Branch on `ok` and `error.code`, not on English messages.
                         Ok(vec![ToolResult::ok(result, Some("Typed text".to_string()))])
                     }
                     "select" => {
-                        let selector = params
-                            .get("selector")
-                            .and_then(|v| v.as_str())
-                            .ok_or_else(|| {
-                                BitFunError::tool("select requires 'selector'".to_string())
-                            })?;
+                        let selector = match selector_param(params) {
+                            Some(s) => s,
+                            None => {
+                                return Ok(missing_selector_response("select"));
+                            }
+                        };
                         let option_text = params
                             .get("option_text")
                             .and_then(|v| v.as_str())
@@ -1275,7 +1441,7 @@ Branch on `ok` and `error.code`, not on English messages.
                             let lowered = err_msg.to_lowercase();
                             let (code, hint) = if lowered.contains("select not found") {
                                 (
-                                    ErrorCode::NotFound,
+                                    unresolved_selector_code(selector),
                                     format!(
                                         "No <select> matched '{}'. Take a fresh snapshot and verify the selector.",
                                         selector
@@ -1337,12 +1503,12 @@ Branch on `ok` and `error.code`, not on English messages.
                         Ok(vec![ToolResult::ok(result, Some("Wait completed".to_string()))])
                     }
                     "get_text" => {
-                        let selector = params
-                            .get("selector")
-                            .and_then(|v| v.as_str())
-                            .ok_or_else(|| {
-                                BitFunError::tool("get_text requires 'selector'".to_string())
-                            })?;
+                        let selector = match selector_param(params) {
+                            Some(s) => s,
+                            None => {
+                                return Ok(missing_selector_response("get_text"));
+                            }
+                        };
                         match actions.get_text(selector).await? {
                             Some(text) => Ok(vec![ToolResult::ok(
                                 json!({ "text": text, "found": true }),
@@ -1352,7 +1518,7 @@ Branch on `ok` and `error.code`, not on English messages.
                                 "browser",
                                 "get_text",
                                 ControlHubError::new(
-                                    ErrorCode::NotFound,
+                                    unresolved_selector_code(selector),
                                     format!("No element matched selector '{}'", selector),
                                 )
                                 .with_hint(
@@ -1376,6 +1542,32 @@ Branch on `ok` and `error.code`, not on English messages.
                         )])
                     }
                     "screenshot" => {
+                        // Gate before the CDP round-trip: when images cannot
+                        // reach the model, a "success" carrying base64 the
+                        // model never sees just invites endless retries with
+                        // different params. Soft-degrade inside the envelope
+                        // rather than erroring, so the turn is not broken.
+                        let text_only = !context.primary_model_supports_image_understanding();
+                        let no_multimodal_tool_output = !context
+                            .primary_model_facts()
+                            .multimodal_tool_output_supported();
+                        if text_only || no_multimodal_tool_output {
+                            let reason = if text_only {
+                                "primary_model_is_text_only"
+                            } else {
+                                "provider_no_multimodal_tool_output"
+                            };
+                            return Ok(vec![ToolResult::ok(
+                                json!({
+                                    "success": true,
+                                    "action": "screenshot",
+                                    "screenshot_unavailable": true,
+                                    "reason": reason,
+                                    "instruction": "Screenshots cannot reach the model in this session. Use `snapshot` (page text with @eN refs) plus `get_text` / `get_html` / `get_title` / `get_url` to observe the page, then act by @eN ref. Do not retry `screenshot`.",
+                                }),
+                                Some("screenshot unavailable in this session: use snapshot / get_text to observe the page.".to_string()),
+                            )]);
+                        }
                         let format = params
                             .get("format")
                             .and_then(|v| v.as_str())
@@ -1393,16 +1585,51 @@ Branch on `ok` and `error.code`, not on English messages.
                             .or_else(|| params.get("fullPage"))
                             .and_then(|v| v.as_bool())
                             .unwrap_or(false);
-                        let result = actions
+                        let mut result = actions
                             .screenshot_with_options_ext(format, quality, from_surface, full_page)
                             .await?;
                         let data_len = result
                             .get("data_length")
                             .and_then(|v| v.as_u64())
                             .unwrap_or(0);
-                        Ok(vec![ToolResult::ok(
+                        // Move the base64 out of `data` into the image
+                        // attachment: leaving it in `data` would duplicate the
+                        // whole image and, on any fallback that serializes
+                        // `data`, flood the context window.
+                        let (mime_type, data_base64) = {
+                            let obj = result.as_object_mut().ok_or_else(|| {
+                                BitFunError::tool(
+                                    "screenshot returned a non-object result".to_string(),
+                                )
+                            })?;
+                            let normalized = obj
+                                .get("format")
+                                .and_then(|v| v.as_str())
+                                .unwrap_or("jpeg")
+                                .to_string();
+                            obj.remove("data_url");
+                            let data = obj
+                                .remove("base64_data")
+                                .and_then(|v| v.as_str().map(str::to_string))
+                                .unwrap_or_default();
+                            (format!("image/{}", normalized), data)
+                        };
+                        if data_base64.is_empty() {
+                            return Ok(vec![ToolResult::ok(
+                                result,
+                                Some("Screenshot returned no image data.".to_string()),
+                            )]);
+                        }
+                        Ok(vec![ToolResult::ok_with_images(
                             result,
-                            Some(format!("Screenshot captured ({} bytes base64)", data_len)),
+                            Some(format!(
+                                "Screenshot captured ({} bytes base64), attached as an image.",
+                                data_len
+                            )),
+                            vec![ToolImageAttachment {
+                                mime_type,
+                                data_base64,
+                            }],
                         )])
                     }
                     "evaluate" => {
@@ -1470,35 +1697,32 @@ Branch on `ok` and `error.code`, not on English messages.
                         Ok(vec![ToolResult::ok(result, Some("Page reloaded".to_string()))])
                     }
                     "hover" => {
-                        let selector = params
-                            .get("selector")
-                            .or_else(|| params.get("ref"))
-                            .and_then(|v| v.as_str())
-                            .ok_or_else(|| {
-                                BitFunError::tool("hover requires 'selector'".to_string())
-                            })?;
+                        let selector = match selector_param(params) {
+                            Some(s) => s,
+                            None => {
+                                return Ok(missing_selector_response("hover"));
+                            }
+                        };
                         let result = actions.hover(selector).await?;
                         Ok(vec![ToolResult::ok(result, Some(format!("Hovered {}", selector)))])
                     }
                     "check" | "uncheck" => {
-                        let selector = params
-                            .get("selector")
-                            .or_else(|| params.get("ref"))
-                            .and_then(|v| v.as_str())
-                            .ok_or_else(|| {
-                                BitFunError::tool("check/uncheck requires 'selector'".to_string())
-                            })?;
+                        let selector = match selector_param(params) {
+                            Some(s) => s,
+                            None => {
+                                return Ok(missing_selector_response(action));
+                            }
+                        };
                         let result = actions.set_checked(selector, action == "check").await?;
                         Ok(vec![ToolResult::ok(result, Some(format!("Set checked on {}", selector)))])
                     }
                     "get" => {
-                        let selector = params
-                            .get("selector")
-                            .or_else(|| params.get("ref"))
-                            .and_then(|v| v.as_str())
-                            .ok_or_else(|| {
-                                BitFunError::tool("get requires 'selector'".to_string())
-                            })?;
+                        let selector = match selector_param(params) {
+                            Some(s) => s,
+                            None => {
+                                return Ok(missing_selector_response("get"));
+                            }
+                        };
                         let attribute = params
                             .get("attribute")
                             .and_then(|v| v.as_str())
@@ -1515,7 +1739,7 @@ Branch on `ok` and `error.code`, not on English messages.
                                 "browser",
                                 "get",
                                 ControlHubError::new(
-                                    ErrorCode::NotFound,
+                                    unresolved_selector_code(selector),
                                     format!("No element matched selector '{}'", selector),
                                 )
                                 .with_hint("Take a fresh snapshot and verify the @ref / CSS selector"),
@@ -1523,9 +1747,7 @@ Branch on `ok` and `error.code`, not on English messages.
                         }
                     }
                     "get_html" | "content" => {
-                        let selector = params
-                            .get("selector")
-                            .and_then(|v| v.as_str());
+                        let selector = selector_param(params);
                         let result = if let Some(sel) = selector {
                             actions.get_attribute(sel, "html").await?
                         } else {
@@ -1534,9 +1756,10 @@ Branch on `ok` and `error.code`, not on English messages.
                         match result {
                             Some(value) => {
                                 let html = value.as_str().unwrap_or("").to_string();
+                                let assistant = clip_for_assistant(&html);
                                 Ok(vec![ToolResult::ok(
                                     json!({ "html": html, "found": true }),
-                                    Some(format!("HTML: {} chars", html.len())),
+                                    Some(assistant),
                                 )])
                             }
                             None => {
@@ -1547,9 +1770,10 @@ Branch on `ok` and `error.code`, not on English messages.
                                     .and_then(|r| r.get("value"))
                                     .and_then(|v| v.as_str())
                                     .unwrap_or("");
+                                let assistant = clip_for_assistant(html);
                                 Ok(vec![ToolResult::ok(
                                     json!({ "html": html, "found": true }),
-                                    Some(format!("HTML: {} chars", html.len())),
+                                    Some(assistant),
                                 )])
                             }
                         }
@@ -1591,7 +1815,40 @@ Branch on `ok` and `error.code`, not on English messages.
                             .get("body")
                             .and_then(|v| v.as_str());
                         let result = actions.fetch(url, method, headers, body).await?;
-                        Ok(vec![ToolResult::ok(result, Some(format!("Fetched {}", url)))])
+                        // The in-page fetch reports transport/CORS failures as
+                        // `{ error }` and HTTP failures as `ok: false`. Both
+                        // used to be wrapped in a "Fetched <url>" success line,
+                        // so the model read a CORS rejection as a fetched page.
+                        if let Some(message) = result.get("error").and_then(|v| v.as_str()) {
+                            return Ok(err_response(
+                                "browser",
+                                "fetch",
+                                ControlHubError::new(
+                                    ErrorCode::NotAvailable,
+                                    format!("browser.fetch failed for {}: {}", url, message),
+                                )
+                                .with_hints([
+                                    "browser.fetch runs inside the connected page, so it is bound by that page's CORS policy — it only reaches URLs same-origin with the current page.",
+                                    "For a different origin, navigate to it first (browser.navigate) and then read the page with snapshot / get_text / read_article, or use WebFetch when no login session is needed.",
+                                ]),
+                            ));
+                        }
+                        // An HTTP error status is a real response, not a tool
+                        // failure: keep the body (it usually explains why) and
+                        // put the status in the summary so it cannot be missed.
+                        let summary = match result.get("status").and_then(|v| v.as_u64()) {
+                            Some(code) => {
+                                let status_text = result
+                                    .get("status_text")
+                                    .and_then(|v| v.as_str())
+                                    .unwrap_or("");
+                                format!("Fetched {url} — HTTP {code} {status_text}")
+                                    .trim_end()
+                                    .to_string()
+                            }
+                            None => format!("Fetched {url}"),
+                        };
+                        Ok(vec![ToolResult::ok(result, Some(summary))])
                     }
                     "cookies" | "get_cookies" => {
                         let urls = params
@@ -1599,15 +1856,15 @@ Branch on `ok` and `error.code`, not on English messages.
                             .and_then(|v| v.as_array())
                             .map(|a| a.iter().filter_map(|v| v.as_str().map(str::to_string)).collect());
                         let result = actions.get_cookies(urls).await?;
-                        let cookies = result
-                            .get("cookies")
-                            .and_then(|v| v.as_array())
-                            .map(|a| a.len())
-                            .unwrap_or(0);
-                        Ok(vec![ToolResult::ok(
-                            result,
-                            Some(format!("{} cookie(s)", cookies)),
-                        )])
+                        let cookie_list = result.get("cookies").cloned().unwrap_or(json!([]));
+                        let cookies = cookie_list.as_array().map(|a| a.len()).unwrap_or(0);
+                        let assistant = format!(
+                            "{} cookie(s):\n{}",
+                            cookies,
+                            serde_json::to_string_pretty(&cookie_list)
+                                .unwrap_or_else(|_| cookie_list.to_string())
+                        );
+                        Ok(vec![ToolResult::ok(result, Some(assistant))])
                     }
                     "set_cookies" => {
                         let cookies = params
@@ -1624,9 +1881,7 @@ Branch on `ok` and `error.code`, not on English messages.
                         )])
                     }
                     "set_file_input_files" | "file_upload" => {
-                        let selector = params
-                            .get("selector")
-                            .and_then(|v| v.as_str());
+                        let selector = selector_param(params);
                         let files: Vec<String> = params
                             .get("files")
                             .and_then(|v| v.as_array())
@@ -2025,6 +2280,93 @@ impl Tool for ControlHubTool {
     }
 }
 
+/// Render page records as `id | title | url` lines. The model needs the raw
+/// `id` verbatim to call `switch_page`, so it must reach the assistant text —
+/// a bare count leaves it unable to act on the result.
+fn page_table(pages: &[Value]) -> String {
+    let field = |page: &Value, key: &str| {
+        page.get(key)
+            .and_then(|v| v.as_str())
+            .unwrap_or("")
+            .to_string()
+    };
+    pages
+        .iter()
+        .map(|page| {
+            format!(
+                "{} | {} | {}",
+                field(page, "id"),
+                field(page, "title"),
+                field(page, "url")
+            )
+        })
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
+/// Render captured network/console/error events as compact JSON lines. Event
+/// payloads vary by domain, so the whole record is serialized rather than
+/// projected onto fixed columns.
+fn event_list(events: &[Value]) -> String {
+    events
+        .iter()
+        .map(|event| serde_json::to_string(event).unwrap_or_else(|_| event.to_string()))
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
+/// Accept either `selector` or `ref` for element-targeting actions. Half the
+/// actions used to take only `selector`, so a model that had just learned
+/// `ref` from a sibling action got an opaque failure.
+fn selector_param(params: &Value) -> Option<&str> {
+    ["selector", "ref"]
+        .iter()
+        .find_map(|key| params.get(*key).and_then(|v| v.as_str()))
+        .map(str::trim)
+        .filter(|selector| !selector.is_empty())
+}
+
+/// An `@eN` ref that no longer resolves means the snapshot it came from is
+/// stale, which the model recovers from by re-snapshotting; a CSS selector
+/// that matches nothing is simply not found.
+fn unresolved_selector_code(selector: &str) -> ErrorCode {
+    if selector.trim_start().starts_with('@') {
+        ErrorCode::StaleRef
+    } else {
+        ErrorCode::NotFound
+    }
+}
+
+/// Cap oversized text (page HTML) before it reaches the model, keeping the head
+/// where document structure lives and saying explicitly that the tail was cut —
+/// a silent truncation reads as a complete document.
+fn clip_for_assistant(text: &str) -> String {
+    const MAX_ASSISTANT_CHARS: usize = 20_000;
+    if text.chars().count() <= MAX_ASSISTANT_CHARS {
+        return text.to_string();
+    }
+    let head: String = text.chars().take(MAX_ASSISTANT_CHARS).collect();
+    format!(
+        "{head}\n… (truncated, {} chars total; narrow the request with a `selector` or use browser.get_text / read_article)",
+        text.chars().count()
+    )
+}
+
+fn missing_selector_response(action: &str) -> Vec<ToolResult> {
+    err_response(
+        "browser",
+        action,
+        ControlHubError::new(
+            ErrorCode::InvalidParams,
+            format!(
+                "browser.{} requires a target element: pass `selector` (CSS) or `ref` (an @eN reference from `snapshot`).",
+                action
+            ),
+        )
+        .with_hint("Call browser.snapshot first, then pass one of its @eN refs."),
+    )
+}
+
 /// Re-wrap each [`ToolResult`] returned by a legacy handler into the unified
 /// `{ ok: true, domain, action, data }` envelope so the model gets a consistent
 /// shape across every domain. Image attachments are preserved.
@@ -2148,18 +2490,33 @@ mod control_hub_tests {
     async fn unknown_domain_is_rejected_with_message_listing_valid_domains() {
         let tool = ControlHubTool::new();
         let ctx = empty_context();
-        let err = tool
+        // Surfaced as a structured `ok: false` envelope rather than a raised
+        // error, so the model can branch on `error.code`.
+        let results = tool
             .dispatch("nope", "any", &json!({}), &ctx)
             .await
-            .expect_err("unknown domain must error");
-        let msg = err.to_string();
+            .expect("unknown domain is reported in-band");
+        let payload = results.first().unwrap().content();
+        assert_eq!(payload.get("ok").and_then(|v| v.as_bool()), Some(false));
+        let error = payload.get("error").expect("error envelope");
+        assert_eq!(
+            error.get("code").and_then(|v| v.as_str()),
+            Some("UNKNOWN_DOMAIN")
+        );
+        let msg = error
+            .get("message")
+            .and_then(|v| v.as_str())
+            .unwrap_or_default();
         assert!(msg.contains("Unknown domain"), "got: {msg}");
-        for d in ["browser", "terminal", "meta", "ComputerUse"] {
-            assert!(
-                msg.contains(d),
-                "valid domain {d} missing from error: {msg}"
-            );
+        for d in ["browser", "terminal", "meta"] {
+            assert!(msg.contains(d), "valid domain {d} missing from error: {msg}");
         }
+        // ComputerUse is a separate tool, not a ControlHub domain — listing it
+        // as one sent models chasing a domain that never existed.
+        assert!(
+            !msg.contains("ComputerUse"),
+            "ComputerUse must not be advertised as a ControlHub domain: {msg}"
+        );
     }
 
     #[tokio::test]
@@ -2603,7 +2960,7 @@ mod control_hub_tests {
     #[test]
     fn browser_open_builtin_normalizes_domain_url() {
         assert_eq!(
-            ControlHubTool::normalize_builtin_browser_url("example.com").unwrap(),
+            ControlHubTool::normalize_builtin_browser_url("example.com", true).unwrap(),
             "https://example.com"
         );
     }
@@ -2672,8 +3029,20 @@ mod control_hub_tests {
         // schema_version must have been bumped since we added new fields.
         assert_eq!(
             payload.get("schema_version").and_then(|v| v.as_str()),
-            Some("1.3"),
-            "schema_version must be bumped to 1.3: {payload}"
+            Some("1.4"),
+            "schema_version must be bumped to 1.4: {payload}"
+        );
+
+        // Computer Use availability is reported here because ControlHub stays
+        // usable while it is off — the model needs to know before it is told
+        // to fall back to desktop control.
+        assert!(
+            payload
+                .get("computer_use")
+                .and_then(|c| c.get("available"))
+                .and_then(|v| v.as_bool())
+                .is_some(),
+            "computer_use.available must be reported: {payload}"
         );
 
         assert!(
