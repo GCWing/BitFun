@@ -180,7 +180,7 @@ jobs:
       # crate fail on Windows independently of this branch (walk-root
       # derivation treats separators differently) and need their own fix.
       - name: Run search tool tests
-        run: cargo test --locked -p tool-runtime search::
+        run: "cargo test --locked -p tool-runtime search::"
 
   # ── Frontend: build ────────────────────────────────────────────────
   frontend-build:
