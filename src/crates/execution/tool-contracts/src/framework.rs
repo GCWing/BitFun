@@ -2266,18 +2266,6 @@ pub fn miniapp_headless_agent_tool_restrictions() -> ToolRuntimeRestrictions {
             "ComputerUse is unavailable in MiniApp headless agent runs.",
         ),
         (
-            "ComputerUseMouseClick",
-            "ComputerUseMouseClick is unavailable in MiniApp headless agent runs.",
-        ),
-        (
-            "ComputerUseMouseStep",
-            "ComputerUseMouseStep is unavailable in MiniApp headless agent runs.",
-        ),
-        (
-            "ComputerUseMousePrecise",
-            "ComputerUseMousePrecise is unavailable in MiniApp headless agent runs.",
-        ),
-        (
             "ReviewPlatform",
             "ReviewPlatform is unavailable in MiniApp headless agent runs.",
         ),

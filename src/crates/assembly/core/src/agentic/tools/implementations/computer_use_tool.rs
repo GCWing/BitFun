@@ -1,7 +1,7 @@
 //! Desktop automation (Computer use).
 
 use super::computer_use_locate::execute_computer_use_locate;
-use super::control_hub::{coded_tool_error, ErrorCode};
+use super::control_hub::{coded_tool_error, err_response, ErrorCode};
 use crate::agentic::tools::computer_use_capability::computer_use_desktop_available;
 use crate::agentic::tools::computer_use_host::{
     AppSelector, ComputerScreenshot, ComputerUseHost, ComputerUseNavigateQuadrant, OcrRegionNative,
@@ -110,8 +110,14 @@ pub(crate) async fn computer_use_augment_result_json(
 }
 
 /// On-disk copy of each Computer use screenshot (pointer overlay included) for debugging.
+/// Opt-in: only written when [`COMPUTER_USE_DEBUG_SCREENSHOTS_ENV`] is set to `1`;
+/// the directory is pruned to the newest [`COMPUTER_USE_DEBUG_MAX_FILES`] files after each write.
 /// Filenames: `cu_<ms>_full.jpg` (whole display) or `cu_<ms>_crop_<x>_<y>.jpg` when a point crop was requested.
 const COMPUTER_USE_DEBUG_SUBDIR: &str = ".bitfun/computer_use_debug";
+/// Set to `1` to enable on-disk debug copies of Computer use screenshots.
+const COMPUTER_USE_DEBUG_SCREENSHOTS_ENV: &str = "BITFUN_COMPUTER_USE_DEBUG_SCREENSHOTS";
+/// Newest debug screenshots retained in [`COMPUTER_USE_DEBUG_SUBDIR`]; older files are deleted.
+const COMPUTER_USE_DEBUG_MAX_FILES: usize = 20;
 
 pub struct ComputerUseTool;
 
@@ -213,7 +219,6 @@ The **primary model cannot consume images** in tool results — **do not** use *
             "target": { "type": "object", "description": "For `app_click`: click target such as `{ \"node_idx\": 3 }`, image/screen coordinates, or OCR text." },
             "focus": { "type": ["object", "null"], "description": "For app-scoped text/scroll actions: optional focus target." },
             "predicate": { "type": "object", "description": "For `app_wait_for`: wait predicate." },
-            "opts": { "type": "object", "description": "For `build_interactive_view` / `build_visual_mark_view`: optional view options." },
             "i": { "type": ["integer", "null"], "description": "For interactive/visual actions: element or mark index from the latest view." },
             "dx": { "type": "integer", "description": "For app/interactive scroll actions: horizontal delta." },
             "dy": { "type": "integer", "description": "For app/interactive scroll actions: vertical delta." },
@@ -246,7 +251,7 @@ The **primary model cannot consume images** in tool results — **do not** use *
         let properties = Self::merge_with_shared_properties(json!({
             "action": {
                 "type": "string",
-                "enum": ["click_target", "move_to_target", "click_element", "move_to_text", "click", "mouse_move", "scroll", "drag", "locate", "key_chord", "type_text", "pointer_move_rel", "wait", "list_displays", "focus_display", "paste", "list_apps", "get_app_state", "get_app_shortcuts", "describe_screen", "app_click", "app_type_text", "app_scroll", "app_key_chord", "app_wait_for", "build_interactive_view", "interactive_click", "interactive_type_text", "interactive_scroll", "build_visual_mark_view", "visual_click", "open_app", "open_url", "open_file", "clipboard_get", "clipboard_set", "run_script", "run_apple_script", "get_os_info"],
+                "enum": ["click_target", "move_to_target", "click_element", "move_to_text", "click", "mouse_move", "scroll", "drag", "locate", "key_chord", "type_text", "pointer_move_rel", "wait", "list_displays", "focus_display", "paste", "list_apps", "get_app_state", "get_app_shortcuts", "describe_screen", "app_click", "app_type_text", "app_scroll", "app_key_chord", "app_wait_for", "interactive_type_text", "interactive_scroll", "open_app", "open_url", "open_file", "clipboard_get", "clipboard_set", "run_script", "run_apple_script", "get_os_info"],
                 "description": "The action to perform. **Primary model is text-only — no `screenshot`.** **ACTION PRIORITY:** 1) Use Bash tool for CLI/terminal/system commands first. 2) **`open_app`** to launch apps. **`run_apple_script`** for AppleScript (macOS). 3) Prefer `key_chord` for shortcuts/navigation. Before guessing a shortcut, call **`get_app_shortcuts`** to look up what a target app actually has registered (e.g. \"what triggers Save in this app?\"), then fire it with `key_chord` / `app_key_chord` — avoids trial-and-error mouse clicks. 4) Only when above fail: `click_target` / `move_to_target` (AX → OCR → screen coords in one call), then lower-level `click_element`, `move_to_text`, or `mouse_move` + `click`. Never guess coordinates. **`describe_screen`** is the text-only equivalent of `screenshot`: it returns a structured text snapshot (frontmost app + AX tree + UI tree text + pointer + window geometry) with NO image — use it to observe and verify state when the primary model cannot view screenshots."
             },
             "use_screen_coordinates": { "type": "boolean", "description": "For `mouse_move`, `drag`: **must be true** — global display coordinates from `move_to_text`, `locate`, AX, or `pointer_global`. **Not** for `click`." },
@@ -768,12 +773,16 @@ The **primary model cannot consume images** in tool results — **do not** use *
     }
 
     /// Writes the exact JPEG sent to the model (including pointer overlay) under the workspace for debugging.
+    /// No-op unless [`COMPUTER_USE_DEBUG_SCREENSHOTS_ENV`] is set to `1`.
     async fn try_save_screenshot_for_debug(
         bytes: &[u8],
         context: &ToolUseContext,
         crop: Option<ScreenshotCropCenter>,
         nav_label: Option<&str>,
     ) -> Option<String> {
+        if std::env::var(COMPUTER_USE_DEBUG_SCREENSHOTS_ENV).as_deref() != Ok("1") {
+            return None;
+        }
         let root = context.workspace_root()?;
         let dir = root.join(COMPUTER_USE_DEBUG_SUBDIR);
         if let Err(e) = tokio::fs::create_dir_all(&dir).await {
@@ -815,11 +824,43 @@ The **primary model cannot consume images** in tool results — **do not** use *
                 path.display()
             ),
         }
+        Self::prune_debug_screenshots(&dir).await;
         Some(format!(
             "{}/{}",
             COMPUTER_USE_DEBUG_SUBDIR.replace('\\', "/"),
             fname
         ))
+    }
+
+    /// Keeps only the newest [`COMPUTER_USE_DEBUG_MAX_FILES`] files (by mtime) in the debug dir.
+    async fn prune_debug_screenshots(dir: &std::path::Path) {
+        let Ok(mut entries) = tokio::fs::read_dir(dir).await else {
+            return;
+        };
+        let mut files: Vec<(std::time::SystemTime, std::path::PathBuf)> = Vec::new();
+        while let Ok(Some(entry)) = entries.next_entry().await {
+            let Ok(meta) = entry.metadata().await else {
+                continue;
+            };
+            if !meta.is_file() {
+                continue;
+            }
+            let modified = meta.modified().unwrap_or(std::time::UNIX_EPOCH);
+            files.push((modified, entry.path()));
+        }
+        if files.len() <= COMPUTER_USE_DEBUG_MAX_FILES {
+            return;
+        }
+        files.sort_by(|a, b| b.0.cmp(&a.0));
+        for (_, path) in files.into_iter().skip(COMPUTER_USE_DEBUG_MAX_FILES) {
+            if let Err(e) = tokio::fs::remove_file(&path).await {
+                warn!(
+                    "computer_use debug screenshot prune {}: {}",
+                    path.display(),
+                    e
+                );
+            }
+        }
     }
 
     /// Build tool JSON + one JPEG attachment + assistant hint from an already-captured [`ComputerScreenshot`].
@@ -989,7 +1030,7 @@ impl Tool for ComputerUseTool {
 **`move_to_text`:** OCR-match visible text (`text_query`) and **move the pointer** to it (no click, no keys); **no prior `screenshot` required for targeting** (host captures **raw** pixels for Vision — no agent screenshot overlays; on macOS defaults to the **frontmost window** unless **`ocr_region_native`** overrides). Matching **strips whitespace** between CJK glyphs and allows **small edit distance** when Vision mis-reads one character. The host **trusts** the resulting globals — **next `click`** does **not** require an extra `screenshot` (same as AX). If **several** hits match, the host returns **preview JPEGs + accessibility** per candidate — pick **`move_to_text_match_index`** (1-based) and call **`move_to_text` again** with the same query/region, or narrow with **`ocr_region_native`**. Use **`click`** afterward if you need a mouse press. Prefer after `click_element` misses when text is visible. \
 **`click`:** Press at **current pointer only** — **never** pass `x`, `y`, `coordinate_mode`, or `use_screen_coordinates`. Position first with **`move_to_text`**, **`mouse_move`** (**globals only**), or **`click_element`**. After pointer moves, **`screenshot`** again before the next guarded **`click`** when the host requires it. \
 **`mouse_move` / `drag`:** **`use_screen_coordinates`: true** required — global coordinates from **`move_to_text`**, **`locate`**, AX, or **`pointer_global`**; never JPEG pixel guesses. \
-**`scroll` / `type_text` / `pointer_move_rel` / `wait` / `locate`:** No mandatory pre-screenshot by themselves. **`pointer_move_rel`** (and **ComputerUseMouseStep**) are **blocked immediately after `screenshot`** until **`move_to_text`**, **`mouse_move`** (globals), or **`click_element`** — do not nudge from the JPEG. \
+**`scroll` / `type_text` / `pointer_move_rel` / `wait` / `locate`:** No mandatory pre-screenshot by themselves. **`pointer_move_rel`** is **blocked immediately after `screenshot`** until **`move_to_text`**, **`mouse_move`** (globals), or **`click_element`** — do not nudge from the JPEG. \
 **`key_chord`:** Press key combination; prefer over **`click`** when shortcuts or **Enter**/**Escape**/**Tab** suffice. **Mandatory fresh screenshot only** when chord includes Return/Enter. \
 **`screenshot`:** JPEG for **confirmation** (optional pointer overlay). When the host requires a fresh capture before **`click`** or Enter **`key_chord`**, a bare `screenshot` is **~500×500** around the **mouse** or **caret** (also during quadrant drill). Use **`screenshot_reset_navigation`**: true to force **full-screen** for wide context. \
 **`type_text`:** Type text; prefer clipboard for long content. Does **not** move the pointer — **Enter** **`key_chord`** may follow without a mandatory `screenshot` unless you moved the pointer since the last capture. If **`screenshot`** shows the correct chat is already open and the input may be focused, **try `type_text` first** before spending steps on `click_element` / `move_to_text`.",
@@ -1054,6 +1095,7 @@ impl Tool for ComputerUseTool {
             "screenshot_implicit_center": { "type": "string", "enum": ["mouse", "text_caret"], "description": "For `screenshot` when `requires_fresh_screenshot_before_click` / `requires_fresh_screenshot_before_enter` is true: center the implicit ~500×500 on the mouse (`mouse`, default) or on the focused text control (`text_caret`, macOS AX; falls back to mouse). Applies to the **first** confirmation capture too. Ignored when you set `screenshot_crop_center_*` / `screenshot_navigate_quadrant` / `screenshot_reset_navigation`." },
             "app_name": { "type": "string", "description": "For `open_app`: the application name to launch (e.g. \"Safari\", \"WeChat\", \"Visual Studio Code\")." },
             "script": { "type": "string", "description": "For `run_apple_script`: the AppleScript code to execute via `osascript`. macOS only." },
+            "opts": { "type": "object", "description": "For `build_interactive_view` / `build_visual_mark_view`: optional view options." },
             "scroll_x": { "type": "integer", "description": "For `scroll`: optional global X coordinate to move pointer before scrolling. Use with `scroll_y`. Requires `use_screen_coordinates`: true." },
             "scroll_y": { "type": "integer", "description": "For `scroll`: optional global Y coordinate to move pointer before scrolling. Use with `scroll_x`. Requires `use_screen_coordinates`: true." }
         }));
@@ -1129,6 +1171,17 @@ impl Tool for ComputerUseTool {
             .get("action")
             .and_then(|v| v.as_str())
             .ok_or_else(|| BitFunError::tool("action is required".to_string()))?;
+
+        // Browser-boundary guard: physical input actions (click/type/scroll/…)
+        // must not drive a CDP-drivable (Chromium-family) browser from the
+        // desktop side — the ControlHub browser domain owns that surface.
+        // Read-only observation actions pass through.
+        if let Some(err) = super::computer_use_actions::ComputerUseActions::new()
+            .desktop_action_targets_browser(action, context)
+            .await
+        {
+            return Ok(err_response("computer_use", action, err));
+        }
 
         match action {
             "open_url" | "open_file" | "clipboard_get" | "clipboard_set" | "run_script"
@@ -1529,7 +1582,7 @@ impl Tool for ComputerUseTool {
                 Ok(vec![ToolResult::ok(body, Some(summary))])
             }
 
-            // ---- NEW: mouse_move (absolute pointer move, consolidated from ComputerUseMousePrecise) ----
+            // ---- mouse_move (absolute pointer move in global screen coordinates) ----
             "mouse_move" => {
                 ensure_pointer_move_uses_screen_coordinates_only(input)?;
                 let x = req_i32(input, "x")?;
@@ -1568,7 +1621,7 @@ impl Tool for ComputerUseTool {
                 Ok(vec![ToolResult::ok(body, Some(summary))])
             }
 
-            // ---- NEW: scroll (consolidated from ComputerUseMouseClick wheel action) ----
+            // ---- scroll (mouse wheel; optional scroll_x/scroll_y move the pointer first) ----
             "scroll" => {
                 let dx = input.get("delta_x").and_then(|v| v.as_i64()).unwrap_or(0) as i32;
                 let dy = input.get("delta_y").and_then(|v| v.as_i64()).unwrap_or(0) as i32;
@@ -1581,7 +1634,11 @@ impl Tool for ComputerUseTool {
                 let scroll_pos_x = input.get("scroll_x").and_then(|v| v.as_i64());
                 let scroll_pos_y = input.get("scroll_y").and_then(|v| v.as_i64());
                 if let (Some(sx), Some(sy)) = (scroll_pos_x, scroll_pos_y) {
-                    host_ref.mouse_move_global_f64(sx as f64, sy as f64).await?;
+                    let (gx, gy) = (sx as f64, sy as f64);
+                    // Same display-bounds guard as mouse_move/drag: reject
+                    // image-pixel coordinates passed as globals.
+                    ensure_global_xy_on_display(host_ref, gx, gy).await?;
+                    host_ref.mouse_move_global_f64(gx, gy).await?;
                     host_ref.wait_ms(30).await?;
                 }
                 host_ref.scroll(dx, dy).await?;
@@ -2018,7 +2075,12 @@ fn req_i32(input: &Value, key: &str) -> BitFunResult<i32> {
 #[cfg(test)]
 mod tests {
     use super::ComputerUseTool;
+    use crate::agentic::tools::computer_use_host::{
+        ComputerScreenshot, ComputerUseForegroundApplication, ComputerUseHost,
+        ComputerUsePermissionSnapshot, ComputerUseScreenshotParams, ComputerUseSessionSnapshot,
+    };
     use crate::agentic::tools::framework::{Tool, ToolUseContext};
+    use crate::util::errors::{BitFunError, BitFunResult};
     use serde_json::{json, Value};
 
     #[test]
@@ -2162,6 +2224,129 @@ mod tests {
                 "text-only schema should NOT contain `{field}`"
             );
         }
+    }
+
+    /// Visual-only actions (their results are marked-up screenshots) must not
+    /// be advertised to text-only models; their view-options parameter goes
+    /// with them.
+    #[test]
+    fn visual_only_actions_are_absent_from_text_only_schema() {
+        let full_actions = action_enum(&ComputerUseTool::new().input_schema());
+        let text_only_actions = action_enum(&ComputerUseTool::input_schema_text_only());
+        for action in [
+            "build_interactive_view",
+            "interactive_click",
+            "build_visual_mark_view",
+            "visual_click",
+        ] {
+            assert!(
+                full_actions.iter().any(|a| a == action),
+                "full schema should list `{action}`"
+            );
+            assert!(
+                !text_only_actions.iter().any(|a| a == action),
+                "text-only schema should NOT list `{action}`"
+            );
+        }
+        let text_only_keys = property_keys(&ComputerUseTool::input_schema_text_only());
+        assert!(
+            !text_only_keys.contains("opts"),
+            "`opts` only configures the removed view-building actions"
+        );
+        assert!(property_keys(&ComputerUseTool::new().input_schema()).contains("opts"));
+    }
+
+    /// Minimal host whose only signal is a Chromium-family frontmost app;
+    /// every input primitive fails loudly so the test proves the browser
+    /// guard rejects `click` before any physical input is attempted.
+    #[derive(Debug)]
+    struct ChromeForegroundHost;
+
+    fn not_expected<T>() -> BitFunResult<T> {
+        Err(BitFunError::tool(
+            "not expected to be called in this test".to_string(),
+        ))
+    }
+
+    #[async_trait::async_trait]
+    impl ComputerUseHost for ChromeForegroundHost {
+        async fn permission_snapshot(&self) -> BitFunResult<ComputerUsePermissionSnapshot> {
+            not_expected()
+        }
+        async fn request_accessibility_permission(&self) -> BitFunResult<()> {
+            not_expected()
+        }
+        async fn request_screen_capture_permission(&self) -> BitFunResult<()> {
+            not_expected()
+        }
+        async fn screenshot_display(
+            &self,
+            _params: ComputerUseScreenshotParams,
+        ) -> BitFunResult<ComputerScreenshot> {
+            not_expected()
+        }
+        fn map_image_coords_to_pointer(&self, _x: i32, _y: i32) -> BitFunResult<(i32, i32)> {
+            not_expected()
+        }
+        fn map_normalized_coords_to_pointer(&self, _x: i32, _y: i32) -> BitFunResult<(i32, i32)> {
+            not_expected()
+        }
+        async fn mouse_move(&self, _x: i32, _y: i32) -> BitFunResult<()> {
+            not_expected()
+        }
+        async fn pointer_move_relative(&self, _dx: i32, _dy: i32) -> BitFunResult<()> {
+            not_expected()
+        }
+        async fn mouse_click(&self, _button: &str) -> BitFunResult<()> {
+            not_expected()
+        }
+        async fn scroll(&self, _delta_x: i32, _delta_y: i32) -> BitFunResult<()> {
+            not_expected()
+        }
+        async fn key_chord(&self, _keys: Vec<String>) -> BitFunResult<()> {
+            not_expected()
+        }
+        async fn type_text(&self, _text: &str) -> BitFunResult<()> {
+            not_expected()
+        }
+        async fn wait_ms(&self, _ms: u64) -> BitFunResult<()> {
+            not_expected()
+        }
+        async fn computer_use_session_snapshot(&self) -> ComputerUseSessionSnapshot {
+            ComputerUseSessionSnapshot {
+                foreground_application: Some(ComputerUseForegroundApplication {
+                    name: Some("Google Chrome".to_string()),
+                    bundle_id: Some("com.google.Chrome".to_string()),
+                    process_id: Some(4242),
+                }),
+                pointer_global: None,
+            }
+        }
+    }
+
+    /// The browser-boundary guard must be reachable from `call_impl`: a
+    /// physical input action while a Chromium-family browser is frontmost is
+    /// rejected with the ControlHub browser-domain redirect instead of
+    /// clicking into the page.
+    #[tokio::test]
+    async fn click_is_rejected_while_chromium_browser_is_frontmost() {
+        let mut context = ToolUseContext::for_tool_listing(None, None);
+        context.computer_use_host = Some(std::sync::Arc::new(ChromeForegroundHost));
+        let results = ComputerUseTool::new()
+            .call_impl(&json!({ "action": "click" }), &context)
+            .await
+            .expect("guard rejection is a structured envelope, not a hard error");
+        let body = results[0].content();
+        assert_eq!(
+            body.get("ok").and_then(Value::as_bool),
+            Some(false),
+            "guarded click should return an error envelope: {body}"
+        );
+        let error_text = body.get("error").map(Value::to_string).unwrap_or_default();
+        assert!(
+            error_text.contains("browser"),
+            "guard error should redirect to the ControlHub browser domain: {error_text}"
+        );
     }
 
     /// The `action` enum, description, and a handful of other fields are

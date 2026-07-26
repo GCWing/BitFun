@@ -107,6 +107,7 @@ import {
   normalizeToolPermissionConfig,
   permissionConfigService,
 } from '@/infrastructure/config';
+import { useComputerUseEnabled } from '@/infrastructure/config/hooks/useComputerUseEnabled';
 import type { ToolPermissionConfig } from '@/infrastructure/config/types';
 import type { ModeSkillInfo } from '@/infrastructure/config/types';
 import { SubagentAPI, type SubagentInfo } from '@/infrastructure/api/service-api/SubagentAPI';
@@ -869,24 +870,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   const [targetModeEnabledTools, setTargetModeEnabledTools] = useState<string[] | null>(null);
   const [userDefaultModeId, setUserDefaultModeId] = useState<string | null>(null);
   const [defaultModeSavingId, setDefaultModeSavingId] = useState<string | null>(null);
-  const [computerUseEnabled, setComputerUseEnabled] = useState(true);
-
-  useEffect(() => {
-    let cancelled = false;
-    const loadComputerUseEnabled = () => {
-      void configManager.getConfig<boolean>('ai.computer_use_enabled').then((enabled) => {
-        if (!cancelled) setComputerUseEnabled(enabled ?? false);
-      });
-    };
-    loadComputerUseEnabled();
-    const unsubscribe = configManager.onConfigChange((path) => {
-      if (path === 'ai.computer_use_enabled' || path === 'ai') loadComputerUseEnabled();
-    });
-    return () => {
-      cancelled = true;
-      unsubscribe();
-    };
-  }, []);
+  const { computerUseEnabled } = useComputerUseEnabled();
 
   const [skillsFlyoutOpen, setSkillsFlyoutOpen] = useState(false);
   const [skillsFlyoutLeft, setSkillsFlyoutLeft] = useState(false);
@@ -3779,6 +3763,11 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   }, [effectiveTargetSessionId, externalPromptCommandsIssue, t, workspacePath]);
 
   const selectSlashCommandMode = useCallback((modeId: string) => {
+    // Same gating as the mode dropdown; slash commands must not bypass it.
+    if (modeId === 'ComputerUse' && !computerUseEnabled) {
+      notificationService.warning(t('chatInput.computerUseDisabled'));
+      return;
+    }
     const operationGeneration = ++nativePromptModeSelectionGenerationRef.current;
     const operationIsCurrent = () => (
       nativePromptModeSelectionGenerationRef.current === operationGeneration
@@ -3832,7 +3821,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
         selectedIndex: 0,
       });
     })();
-  }, [dispatchInput, getSlashPickerItems, inlineTriggerState, persistExplicitNativePromptCommandChoice, requestModeChange]);
+  }, [computerUseEnabled, dispatchInput, getSlashPickerItems, inlineTriggerState, persistExplicitNativePromptCommandChoice, requestModeChange, t]);
 
   const selectSlashCommandAction = useCallback((actionId: SlashActionId) => {
     const raw = inputState.value || '';

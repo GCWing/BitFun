@@ -53,7 +53,7 @@ import {
   isLocallyManageableSubagent,
 } from './agentVisibility';
 import { CustomAgentAPI } from '@/infrastructure/api/service-api/CustomAgentAPI';
-import { configManager } from '@/infrastructure/config/services/ConfigManager';
+import { useComputerUseEnabled } from '@/infrastructure/config/hooks/useComputerUseEnabled';
 import type { ModeSkillInfo, SubagentModelSelection } from '@/infrastructure/config/types';
 import {
   buildSkillCoverageSourceMap,
@@ -197,7 +197,7 @@ const AgentsHomeView: React.FC = () => {
   const [savingSkills, setSavingSkills] = React.useState(false);
   const [savingSubagents, setSavingSubagents] = React.useState(false);
   const [savingSubagentModel, setSavingSubagentModel] = React.useState(false);
-  const [computerUseEnabled, setComputerUseEnabled] = useState(true);
+  const { computerUseEnabled } = useComputerUseEnabled();
   const { buildModelOption, renderModelOption, renderModelValue } = useModelSelectPresentation();
   const {
     groups: userToolGroups,
@@ -241,23 +241,6 @@ const AgentsHomeView: React.FC = () => {
       void loadAgents();
     },
   });
-
-  useEffect(() => {
-    let cancelled = false;
-    const loadComputerUseEnabled = () => {
-      void configManager.getConfig<boolean>('ai.computer_use_enabled').then((enabled) => {
-        if (!cancelled) setComputerUseEnabled(enabled ?? false);
-      });
-    };
-    loadComputerUseEnabled();
-    const unsubscribe = configManager.onConfigChange((path) => {
-      if (path === 'ai.computer_use_enabled' || path === 'ai') loadComputerUseEnabled();
-    });
-    return () => {
-      cancelled = true;
-      unsubscribe();
-    };
-  }, []);
 
   const coreAgentMeta = useMemo((): Record<string, CoreAgentMeta> => ({
     agentic: {

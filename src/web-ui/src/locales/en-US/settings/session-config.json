@@ -125,7 +125,7 @@
     "sectionTitle": "Computer use (desktop)",
     "sectionDescription": "In the BitFun desktop app, the assistant can capture the screen and control the mouse and keyboard; requires a multimodal model for vision.",
     "enable": "Enable Computer use",
-    "enableDesc": "When off, the ComputerUse tool stays disabled in every session mode.",
+    "enableDesc": "When off, the ComputerUse tool stays disabled in every session mode. Browser control (ControlHub) is not yet gated by this switch.",
     "accessibility": "Accessibility",
     "accessibilityDesc": "macOS: lets BitFun read on-screen UI elements and send mouse/keyboard input to other apps. Not applicable on Windows; on Linux this requires an X11 session.",
     "screenCapture": "Screen recording",

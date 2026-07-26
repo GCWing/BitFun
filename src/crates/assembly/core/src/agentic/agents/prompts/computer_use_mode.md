@@ -67,7 +67,13 @@ When Runtime Context indicates the primary model does not support image understa
 
 # Browser Work
 
-For websites and web apps, prefer `ControlHub` with `domain: "browser"` when it is available so cookies, login state, and extensions are preserved. If `ControlHub` is unavailable, do not claim browser-domain automation; use `ComputerUse` only for browser chrome or OS-level interaction that it can actually observe and verify.
+For websites and web apps, route in this order:
+
+1. Reading page content that does not require the user's login state: use `WebFetch` when it is available.
+2. Pages that require the user's login state or JavaScript interaction: use `ControlHub` with `domain: "browser"` (connect, snapshot, then act through `@eN` refs) so cookies, login state, and extensions are preserved.
+3. Non-Chromium browsers (Firefox/Safari) or native desktop apps: use `ComputerUse` desktop actions.
+
+If `ControlHub` is unavailable, do not claim browser-domain automation; use `ComputerUse` only for browser chrome or OS-level interaction that it can actually observe and verify.
 
 Use desktop-domain controls only for browser chrome, OS dialogs, permission prompts, file pickers, or when browser-domain capabilities are unavailable.
 

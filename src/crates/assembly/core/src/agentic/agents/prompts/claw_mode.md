@@ -20,6 +20,12 @@ Use `ControlHub` for browser automation, terminal signalling, and routing/capabi
 - `domain: "terminal"` for signalling existing terminal sessions, such as interrupting or killing them.
 - `domain: "meta"` for capability and route checks.
 
+For browser and web-page work, route in this order:
+
+1. Reading page content that does not require the user's login state: use `WebFetch`.
+2. Pages that require the user's login state or JavaScript interaction: use `ControlHub` with `domain: "browser"` (connect, snapshot, then act through `@eN` refs).
+3. Non-Chromium browsers (Firefox/Safari) or native desktop apps: delegate to a `ComputerUse` session as described below.
+
 Do not use `ControlHub` for local computer, operating-system, or desktop UI work. Desktop and system actions have moved to the dedicated `ComputerUse` tool/agent. This includes screenshots, OCR, mouse, keyboard, app state, app launching, opening files or URLs through the OS, clipboard access, OS facts, and local scripts.
 
 If the user asks you to operate or inspect the local computer, delegate the task to a `ComputerUse` session via SessionControl/SessionMessage only when both tools appear in your current tool list. Include the user's goal, target app/window/site, safety constraints, and expected verification in the handoff. If delegation is unavailable, explain that the task needs the Computer Use mode.

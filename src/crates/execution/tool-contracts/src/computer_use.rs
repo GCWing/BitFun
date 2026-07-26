@@ -227,7 +227,7 @@ pub struct ComputerScreenshot {
     /// When true (desktop), `click` is allowed on this frame without an extra ~500×500 point crop — region is small enough for pointer positioning + `click`.
     #[serde(default, skip_serializing_if = "is_false")]
     pub quadrant_navigation_click_ready: bool,
-    /// Screen capture rectangle in JPEG pixel coordinates (offset zero when there is no frame padding); `ComputerUseMousePrecise` maps this rect to the display.
+    /// Screen capture rectangle in JPEG pixel coordinates (offset zero when there is no frame padding); the host maps this rect to the display.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub image_content_rect: Option<ComputerUseImageContentRect>,
     /// Approximate global screen rectangle represented by the screenshot. Use
@@ -1211,7 +1211,7 @@ pub fn ensure_pointer_move_uses_screen_coordinates_only(
         return Ok(());
     }
     Err(ComputerUseContractError::tool(
-        "Positioning from screenshot pixels (coordinate_mode image/normalized) is disabled: do not guess coordinates from vision. Set use_screen_coordinates: true with global display coordinates from move_to_text (global_center_x/y), locate, click_element, or pointer_image_x/y from the last screenshot JSON; or use move_to_text, click_element, pointer_move_rel, ComputerUseMouseStep. Screenshots are for confirmation only.".to_string(),
+        "Positioning from screenshot pixels (coordinate_mode image/normalized) is disabled: do not guess coordinates from vision. Set use_screen_coordinates: true with global display coordinates from move_to_text (global_center_x/y), locate, click_element, or pointer_image_x/y from the last screenshot JSON; or use move_to_text, click_element, pointer_move_rel. Screenshots are for confirmation only.".to_string(),
     ))
 }
 
@@ -1476,7 +1476,7 @@ pub fn build_screenshot_tool_body_and_hint(
     });
     let shortcut_policy = format!(
         "**Verify step:** after **`click`**, **`key_chord`**, **`type_text`**, **`scroll`**, or **`drag`**, check **`interaction_state.recommend_screenshot_to_verify_last_action`** — when true, call **`screenshot`** next to confirm UI state (Cowork-style). \
-**Targeting priority:** `click_element` → **`move_to_text`** (OCR + move; no prior `screenshot` for targeting) → **`screenshot`** (confirm / drill) + **`mouse_move`** (**`use_screen_coordinates`: true only**) + **`click`** last. **Screenshots are for confirmation and navigation — do not guess move targets from JPEG pixels.** **`click`** never moves the pointer. **Host-only mandatory screenshot:** before **`click`** or Enter **`key_chord`** when the pointer changed since the last capture — **not** before `mouse_move`, `scroll`, `type_text`, `locate`, `wait`, or non-Enter `key_chord`. **Valid basis for a guarded `click`:** `FullDisplay`, `quadrant_navigation_click_ready`, or point crop; or bare **`screenshot`** after a pointer-changing action (**~500×500** implicit confirmation around mouse/caret). **`mouse_move`** must use **global** coordinates (from `move_to_text` global_center_*, `locate`, AX, or `pointer_global`). **Bare confirmation `screenshot`:** whenever the host still requires a capture before **`click`** or Enter **`key_chord`** (`requires_fresh_screenshot_*`), a bare `screenshot` (no crop / no reset) is **~500×500** centered on **mouse** (`screenshot_implicit_center` default `mouse`) — **including during quadrant drill** and the **first** such capture in a session. Before Enter in a text field, set **`screenshot_implicit_center`: `text_caret`**. Use **`screenshot_reset_navigation`**: true for a **full-screen** capture instead. **If AX failed:** try **`move_to_text`** before a long screenshot drill. **Optional refinement** for tiny targets: `screenshot_navigate_quadrant` until `quadrant_navigation_click_ready` (long edge < {} px) or point crop. Small moves: **ComputerUseMouseStep** over tiny **ComputerUseMousePrecise** (screen globals only).",
+**Targeting priority:** `click_element` → **`move_to_text`** (OCR + move; no prior `screenshot` for targeting) → **`screenshot`** (confirm / drill) + **`mouse_move`** (**`use_screen_coordinates`: true only**) + **`click`** last. **Screenshots are for confirmation and navigation — do not guess move targets from JPEG pixels.** **`click`** never moves the pointer. **Host-only mandatory screenshot:** before **`click`** or Enter **`key_chord`** when the pointer changed since the last capture — **not** before `mouse_move`, `scroll`, `type_text`, `locate`, `wait`, or non-Enter `key_chord`. **Valid basis for a guarded `click`:** `FullDisplay`, `quadrant_navigation_click_ready`, or point crop; or bare **`screenshot`** after a pointer-changing action (**~500×500** implicit confirmation around mouse/caret). **`mouse_move`** must use **global** coordinates (from `move_to_text` global_center_*, `locate`, AX, or `pointer_global`). **Bare confirmation `screenshot`:** whenever the host still requires a capture before **`click`** or Enter **`key_chord`** (`requires_fresh_screenshot_*`), a bare `screenshot` (no crop / no reset) is **~500×500** centered on **mouse** (`screenshot_implicit_center` default `mouse`) — **including during quadrant drill** and the **first** such capture in a session. Before Enter in a text field, set **`screenshot_implicit_center`: `text_caret`**. Use **`screenshot_reset_navigation`**: true for a **full-screen** capture instead. **If AX failed:** try **`move_to_text`** before a long screenshot drill. **Optional refinement** for tiny targets: `screenshot_navigate_quadrant` until `quadrant_navigation_click_ready` (long edge < {} px) or point crop. Small moves: prefer **`pointer_move_rel`** over tiny **`mouse_move`** adjustments (screen globals only).",
         COMPUTER_USE_QUADRANT_CLICK_READY_MAX_LONG_EDGE
     );
     let region_crop_size_note = shot
@@ -1504,7 +1504,7 @@ pub fn build_screenshot_tool_body_and_hint(
             "phase": "quadrant_terminal",
             "image_is_crop_only": true,
             "shortcut_policy": shortcut_policy,
-            "instruction": "Region is small enough for precise pointer: **`quadrant_navigation_click_ready`** is true. **Do not** use **`ComputerUseMouseStep`** / **`pointer_move_rel`** immediately after a **`screenshot`** (host blocks — vision nudges are wrong). First **`move_to_text`**, **`mouse_move`** (`use_screen_coordinates`: true), or **`click_element`**, then optional **`ComputerUseMouseStep`** / **`ComputerUseMousePrecise`**. Then **`ComputerUseMouseClick`** (`action`: click). Host requires a **fresh** screenshot before the next **`click`** or Enter **`key_chord`** if pointer state changed since last capture (see shortcut_policy)."
+            "instruction": "Region is small enough for precise pointer: **`quadrant_navigation_click_ready`** is true. **Do not** use **`pointer_move_rel`** immediately after a **`screenshot`** (host blocks — vision nudges are wrong). First **`move_to_text`**, **`mouse_move`** (`use_screen_coordinates`: true), or **`click_element`**, then optional **`pointer_move_rel`**. Then **`click`**. Host requires a **fresh** screenshot before the next **`click`** or Enter **`key_chord`** if pointer state changed since last capture (see shortcut_policy)."
         })
     } else if !screenshot_covers_full_display(shot) {
         json!({
@@ -1554,7 +1554,7 @@ pub fn build_screenshot_tool_body_and_hint(
     }
     let pointer_line = match (shot.pointer_image_x, shot.pointer_image_y) {
         (Some(px), Some(py)) => format!(
-            " TRUE POINTER: **red cursor with gray border** (tip = hotspot) in the JPEG at image x={}, y={} — **confirmation only**; use **`mouse_move`** with **`use_screen_coordinates`: true** using globals from tool JSON (`pointer_global`, `move_to_text`, `locate`), then **`click`**. **Do not** use **`pointer_move_rel`** / **ComputerUseMouseStep** as the next action after this **`screenshot`** (host blocks). Prior screenshot is stale after **ComputerUseMousePrecise** / **ComputerUseMouseStep** / `pointer_move_rel` until you screenshot again.",
+            " TRUE POINTER: **red cursor with gray border** (tip = hotspot) in the JPEG at image x={}, y={} — **confirmation only**; use **`mouse_move`** with **`use_screen_coordinates`: true** using globals from tool JSON (`pointer_global`, `move_to_text`, `locate`), then **`click`**. **Do not** use **`pointer_move_rel`** as the next action after this **`screenshot`** (host blocks). Prior screenshot is stale after **`mouse_move`** / **`pointer_move_rel`** until you screenshot again.",
             px, py
         ),
         _ => " TRUE POINTER: not on this capture (pointer_image_x/y null). No red synthetic cursor — OS mouse may be on another display; use use_screen_coordinates with global coords or bring the pointer here and re-screenshot."
@@ -1581,7 +1581,7 @@ pub fn build_screenshot_tool_body_and_hint(
         )
     } else if shot.quadrant_navigation_click_ready {
         format!(
-            "Quadrant terminal {}x{} (native region {:?}). **`quadrant_navigation_click_ready`**: align with **ComputerUseMouseStep** / **`mouse_move`** (**`use_screen_coordinates`: true** only) / **ComputerUseMousePrecise**, then **`ComputerUseMouseClick`** (`action`: click) — **`click`** has no coordinates.{}.{}",
+            "Quadrant terminal {}x{} (native region {:?}). **`quadrant_navigation_click_ready`**: align with **`mouse_move`** (**`use_screen_coordinates`: true** only) or **`pointer_move_rel`**, then **`click`** — **`click`** has no coordinates.{}.{}",
             shot.image_width,
             shot.image_height,
             shot.navigation_native_rect,

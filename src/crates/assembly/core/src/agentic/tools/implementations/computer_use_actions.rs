@@ -22,8 +22,8 @@ use super::control_hub::{coded_tool_error, err_response, ControlHubError, ErrorC
 /// Key = target PID, value = `(target_signature, before_digest, count)`.
 /// When the same `(action,target)` lands on an unchanged digest twice in a
 /// row the dispatcher injects an `app_state.loop_warning` so the model is
-/// forced off the failing path on its **next** turn (`/Screenshot policy/
-/// Mandatory screenshot moments` in `claw_mode.md`).
+/// forced off the failing path on its **next** turn (see the observe → act →
+/// verify guidance in `computer_use_mode.md`).
 type AppLoopTracker =
     std::sync::OnceLock<std::sync::Mutex<std::collections::HashMap<i32, (String, String, u32)>>>;
 
@@ -107,7 +107,7 @@ impl ComputerUseActions {
         ControlHubError::new(
             ErrorCode::GuardRejected,
             format!(
-                "desktop.{} is blocked while {} is frontmost. Use ControlHub domain=\"browser\" for all browser interaction; desktop mouse/keyboard browser control is forbidden.",
+                "ComputerUse `{}` is blocked while {} is frontmost. Use ControlHub domain=\"browser\" for all browser interaction; desktop mouse/keyboard browser control is forbidden.",
                 action, app_name
             ),
         )
@@ -130,26 +130,21 @@ impl ComputerUseActions {
             .unwrap_or("")
             .to_ascii_lowercase();
 
-        const NAME_HINTS: &[&str] = &[
-            "chrome",
-            "chromium",
-            "edge",
-            "brave",
-            "arc",
-            "firefox",
-            "safari",
-            "browser",
-            "浏览器",
-        ];
-        const BUNDLE_HINTS: &[&str] = &[
-            "chrome", "chromium", "edge", "brave", "arc", "firefox", "safari", "browser",
-        ];
+        // Only Chromium-family browsers are guarded: they are the only ones the
+        // ControlHub browser domain can drive over CDP. Firefox/Safari (and other
+        // non-Chromium browsers) have no CDP path, so desktop control must stay
+        // allowed for them — blocking both surfaces would leave no control path.
+        const NAME_HINTS: &[&str] = &["chrome", "chromium", "edge", "brave", "arc"];
+        const BUNDLE_HINTS: &[&str] = &["chrome", "chromium", "edge", "brave", "arc"];
 
         NAME_HINTS.iter().any(|hint| name.contains(hint))
             || BUNDLE_HINTS.iter().any(|hint| bundle.contains(hint))
     }
 
-    async fn desktop_action_targets_browser(
+    /// Rejects physical input actions while a CDP-drivable browser is frontmost.
+    /// Read-only observation actions (`screenshot`, `locate`, `describe_screen`, …)
+    /// stay allowed. Called by `ComputerUseTool::call_impl` before dispatch.
+    pub(crate) async fn desktop_action_targets_browser(
         &self,
         action: &str,
         context: &ToolUseContext,
@@ -166,7 +161,6 @@ impl ComputerUseActions {
             "key_chord",
             "type_text",
             "paste",
-            "locate",
             "move_to_text",
         ];
         if !guarded_actions.contains(&action) {
@@ -354,10 +348,6 @@ impl ComputerUseActions {
                 )]);
             }
             _ => {}
-        }
-
-        if let Some(err) = self.desktop_action_targets_browser(action, context).await {
-            return Ok(err_response("desktop", action, err));
         }
 
         // UX shortcut: every screen-coordinate action accepts an optional
@@ -835,6 +825,26 @@ impl ComputerUseActions {
                 .and_then(|v| v.screenshot.as_ref())
                 .or(res.snapshot.screenshot.as_ref());
             result_with_optional_screenshot(data, summary, shot_opt)
+        }
+
+        // These actions only make sense with a marked-up screenshot the model
+        // can look at; text-only models are steered to the AX/OCR text paths.
+        if text_only
+            && matches!(
+                action,
+                "build_interactive_view"
+                    | "interactive_click"
+                    | "build_visual_mark_view"
+                    | "visual_click"
+            )
+        {
+            return Err(coded_tool_error(
+                ErrorCode::NotAvailable,
+                format!(
+                    "`{}` requires a vision-capable primary model (its result is a marked-up screenshot). Use `describe_screen` or `get_app_state` to observe as text, then act with `app_click`, `click_target`, `move_to_text`, or `key_chord`.",
+                    action
+                ),
+            ));
         }
 
         let bg = host.supports_background_input();
@@ -1591,6 +1601,8 @@ fn error_code_from_local(code: &str) -> ErrorCode {
 #[cfg(test)]
 mod tests {
     use super::loop_tracker_observe;
+    use super::ComputerUseActions;
+    use crate::agentic::tools::computer_use_host::ComputerUseForegroundApplication;
 
     // A unique PID avoids interference with the shared APP_LOOP_TRACKER state
     // across tests in the same process.
@@ -1634,6 +1646,37 @@ mod tests {
             "visual loop warning should still offer screenshot recovery: {}",
             warning
         );
+    }
+
+    fn foreground(name: &str, bundle_id: &str) -> ComputerUseForegroundApplication {
+        ComputerUseForegroundApplication {
+            name: Some(name.to_string()),
+            bundle_id: Some(bundle_id.to_string()),
+            process_id: Some(1),
+        }
+    }
+
+    /// Only Chromium-family browsers are CDP-drivable via the ControlHub
+    /// browser domain. Firefox/Safari must NOT trip the desktop browser guard
+    /// or the user would have no control path at all.
+    #[test]
+    fn browser_guard_matches_only_chromium_family() {
+        assert!(ComputerUseActions::is_probably_browser_app(&foreground(
+            "Google Chrome",
+            "com.google.Chrome"
+        )));
+        assert!(ComputerUseActions::is_probably_browser_app(&foreground(
+            "Microsoft Edge",
+            "com.microsoft.edgemac"
+        )));
+        assert!(!ComputerUseActions::is_probably_browser_app(&foreground(
+            "Firefox",
+            "org.mozilla.firefox"
+        )));
+        assert!(!ComputerUseActions::is_probably_browser_app(&foreground(
+            "Safari",
+            "com.apple.Safari"
+        )));
     }
 
     /// A genuine tree mutation (digest changes) must NOT trigger the warning,

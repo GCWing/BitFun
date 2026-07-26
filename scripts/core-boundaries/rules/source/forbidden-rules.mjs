@@ -2150,26 +2150,6 @@ export const forbiddenContentRules = [
     ],
   },
   {
-    path: 'src/crates/assembly/core/src/agentic/tools/computer_use_verification.rs',
-    patterns: [
-      {
-        regex: /\bpub struct VerificationResult\b/,
-        message:
-          'core Computer Use verification facade must not own verification contracts; use tool-runtime computer_use',
-      },
-      {
-        regex: /\bpub struct RetryStrategy\b/,
-        message:
-          'core Computer Use verification facade must not own retry strategy state; use tool-runtime computer_use',
-      },
-      {
-        regex: /\bpub fn detect_visual_change\b/,
-        message:
-          'core Computer Use verification facade must not own visual-change logic; use tool-runtime computer_use',
-      },
-    ],
-  },
-  {
     path: 'src/crates/assembly/core/src/agentic/session/turn_skill_agent_snapshot_store.rs',
     patterns: [
       {

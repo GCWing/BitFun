@@ -12,7 +12,7 @@ use crate::agentic::tools::browser_control::actions::BrowserActions;
 use crate::agentic::tools::browser_control::browser_launcher::{
     BrowserKind, BrowserLauncher, LaunchResult, DEFAULT_CDP_PORT,
 };
-use crate::agentic::tools::browser_control::cdp_client::CdpClient;
+use crate::agentic::tools::browser_control::cdp_client::{CdpClient, CdpVersionInfo};
 use crate::agentic::tools::browser_control::session_registry::{
     BrowserSession, BrowserSessionRegistry, BrowserSessionState, DialogHandler,
 };
@@ -71,8 +71,8 @@ impl ControlHubTool {
         vec![
             "For login/cookies/extensions, use the user's default browser via CDP — never fall back to desktop mouse/keyboard automation.".to_string(),
             format!(
-                "If CDP is not ready, restart the browser with the test port enabled: \"{}\" --remote-debugging-port={}",
-                exe, port
+                "If CDP is not ready on test port {}, retry browser.connect — it starts \"{}\" against BitFun's managed profile with CDP enabled. Do not ask the user to enable a debug port on their everyday browser profile.",
+                port, exe
             ),
             "After the browser is listening on the test port, use browser.connect / snapshot / click / fill to drive the DOM directly.".to_string(),
         ]
@@ -87,6 +87,35 @@ impl ControlHubTool {
             ),
             "Do not switch to desktop mouse/keyboard browser control in headless mode.".to_string(),
         ]
+    }
+
+    /// `connect { mode: "headless" }` cannot launch a headless browser yet —
+    /// it only attaches to whatever is already listening on the CDP port,
+    /// which may be the user's real logged-in browser. Verify from the
+    /// /json/version handshake that the endpoint reports itself as headless
+    /// (Chromium reports e.g. "HeadlessChrome/126.0") before the session is
+    /// labelled a disposable test browser; mislabelling the user's default
+    /// browser invites destructive automation on their real profile.
+    fn verify_headless_cdp_browser(
+        version: &CdpVersionInfo,
+        port: u16,
+    ) -> Result<(), ControlHubError> {
+        let browser = version.browser.as_deref().unwrap_or("");
+        if browser.to_ascii_lowercase().contains("headless") {
+            return Ok(());
+        }
+        let reported = if browser.is_empty() { "unknown" } else { browser };
+        Err(ControlHubError::new(
+            ErrorCode::NotAvailable,
+            format!(
+                "The browser on test port {} reports as '{}', which is not a headless browser. Headless mode requires a real headless browser instance and must never attach to the user's default browser.",
+                port, reported
+            ),
+        )
+        .with_hints(Self::headless_browser_connect_hints(port))
+        .with_hint(
+            "Use connect { mode: \"default\" } to drive the BitFun-managed browser profile instead.",
+        ))
     }
 
     fn normalize_builtin_browser_url(raw_url: &str) -> Result<String, ControlHubError> {
@@ -599,6 +628,12 @@ Branch on `ok` and `error.code`, not on English messages.
 
                 match &launch_result {
                     LaunchResult::AlreadyConnected | LaunchResult::Launched => {
+                        let version = CdpClient::get_version(port).await?;
+                        if mode == "headless" {
+                            if let Err(error) = Self::verify_headless_cdp_browser(&version, port) {
+                                return Ok(err_response("browser", "connect", error));
+                            }
+                        }
                         let pages = CdpClient::list_pages(port).await?;
                         let connected_browser = if mode == "headless" {
                             "Headless test browser".to_string()
@@ -664,7 +699,6 @@ Branch on `ok` and `error.code`, not on English messages.
                             BitFunError::tool("Page has no WebSocket debugger URL".to_string())
                         })?;
                         let client = CdpClient::connect(ws_url).await?;
-                        let version = CdpClient::get_version(port).await?;
                         let session = BrowserSession {
                             session_id: page.id.clone(),
                             port,
@@ -2452,6 +2486,65 @@ mod control_hub_tests {
                 .any(|v| v.as_str().unwrap_or("").contains("headless")),
             "expected headless guidance in hints: {}",
             payload
+        );
+    }
+
+    #[test]
+    fn headless_connect_rejects_non_headless_cdp_endpoint() {
+        // The port may be occupied by the user's real logged-in browser;
+        // labelling that session "Headless test browser" would invite
+        // destructive automation on their real profile.
+        for reported in [Some("Chrome/126.0.6478.127"), None] {
+            let version = CdpVersionInfo {
+                browser: reported.map(str::to_string),
+                protocol_version: None,
+                web_socket_debugger_url: None,
+            };
+            let err = ControlHubTool::verify_headless_cdp_browser(&version, 9222)
+                .expect_err("non-headless endpoint must be rejected in headless mode");
+            assert!(matches!(err.code, ErrorCode::NotAvailable));
+            assert!(
+                err.message
+                    .contains("must never attach to the user's default browser"),
+                "error must forbid attaching the user's default browser: {}",
+                err.message
+            );
+            assert!(
+                err.hints.iter().any(|h| h.contains("mode: \"default\"")),
+                "hints must offer the default managed-profile mode: {:?}",
+                err.hints
+            );
+        }
+    }
+
+    #[test]
+    fn headless_connect_accepts_headless_cdp_endpoint() {
+        // "Headless" matching must be case-insensitive across Chromium's
+        // historical spellings.
+        for reported in ["HeadlessChrome/126.0.6478.127", "headlesschrome/1.0"] {
+            let version = CdpVersionInfo {
+                browser: Some(reported.to_string()),
+                protocol_version: None,
+                web_socket_debugger_url: None,
+            };
+            assert!(
+                ControlHubTool::verify_headless_cdp_browser(&version, 9222).is_ok(),
+                "endpoint '{reported}' must be accepted as headless"
+            );
+        }
+    }
+
+    #[test]
+    fn default_connect_hints_point_to_managed_profile_not_user_debug_port() {
+        let hints = ControlHubTool::default_browser_connect_hints(&BrowserKind::Chrome, 9222);
+        let joined = hints.join(" | ");
+        assert!(
+            joined.contains("managed profile"),
+            "hints must guide toward BitFun's managed profile launch: {joined}"
+        );
+        assert!(
+            !joined.contains("--remote-debugging-port"),
+            "hints must not teach enabling a raw debug port on the user's everyday browser: {joined}"
         );
     }
 

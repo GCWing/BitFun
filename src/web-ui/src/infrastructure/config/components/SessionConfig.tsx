@@ -28,6 +28,7 @@ import {
   type AgentCompanionPetPackage,
 } from '../services/AgentCompanionPetService';
 import { configManager } from '../services/ConfigManager';
+import { useComputerUseEnabled } from '../hooks/useComputerUseEnabled';
 import {
   DEFAULT_TOOL_PERMISSION_CONFIG,
   normalizeToolPermissionConfig,
@@ -132,7 +133,7 @@ const SessionSettingsPanels: React.FC<SessionSettingsPanelsProps> = ({ variant }
   const [permissionModeControlVisibilitySaving, setPermissionModeControlVisibilitySaving] = useState(false);
   const [isGlobalPermissionRulesDialogOpen, setIsGlobalPermissionRulesDialogOpen] = useState(false);
 
-  const [computerUseEnabled, setComputerUseEnabled] = useState(false);
+  const { computerUseEnabled, setComputerUseEnabled } = useComputerUseEnabled();
   const [computerUseAccess, setComputerUseAccess] = useState(false);
   const [computerUseScreen, setComputerUseScreen] = useState(false);
   const [computerUseBusy, setComputerUseBusy] = useState(false);
