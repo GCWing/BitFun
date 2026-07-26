@@ -176,7 +176,7 @@ const SessionSettingsPanels: React.FC<SessionSettingsPanelsProps> = ({ variant }
     } finally {
       setComputerUseStatusLoading(false);
     }
-  }, []);
+  }, [setComputerUseEnabled]);
 
   const refreshBrowserControlStatus = useCallback(async () => {
     if (!IS_TAURI_DESKTOP) return;
@@ -220,7 +220,7 @@ const SessionSettingsPanels: React.FC<SessionSettingsPanelsProps> = ({ variant }
     void systemAPI.getSystemInfo()
       .then((info) => setPlatform(info.platform || ''))
       .catch((error) => log.warn('getSystemInfo failed', error));
-  }, [refreshComputerUseStatus, refreshBrowserControlStatus]);
+  }, [refreshComputerUseStatus, refreshBrowserControlStatus, setComputerUseEnabled]);
 
   const loadAllData = useCallback(async () => {
     setIsLoading(true);
