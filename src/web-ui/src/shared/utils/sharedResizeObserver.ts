@@ -1,0 +1,56 @@
+/**
+ * Shared ResizeObserver.
+ *
+ * A single module-level ResizeObserver multiplexed across many elements.
+ * Prefer this over registering one `window.addEventListener('resize', ...)`
+ * per component instance: observer callbacks run after layout in a single
+ * batch, so per-element measurement reads do not force synchronous layout,
+ * and long lists do not accumulate N window listeners.
+ */
+
+type ResizeCallback = (entry: ResizeObserverEntry) => void;
+
+const callbacksByElement = new Map<Element, ResizeCallback>();
+
+let sharedObserver: ResizeObserver | null = null;
+
+function ensureObserver(): ResizeObserver | null {
+  if (typeof ResizeObserver === 'undefined') {
+    return null;
+  }
+  if (!sharedObserver) {
+    sharedObserver = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        callbacksByElement.get(entry.target)?.(entry);
+      }
+    });
+  }
+  return sharedObserver;
+}
+
+/**
+ * Observe size changes of `element` via the shared observer.
+ * Only one callback per element is supported; a second call for the same
+ * element replaces the previous callback.
+ *
+ * @returns cleanup function that stops observing the element.
+ */
+export function observeElementResize(
+  element: Element,
+  callback: ResizeCallback,
+): () => void {
+  const observer = ensureObserver();
+  if (!observer) {
+    return () => {};
+  }
+
+  callbacksByElement.set(element, callback);
+  observer.observe(element);
+
+  return () => {
+    if (callbacksByElement.get(element) === callback) {
+      callbacksByElement.delete(element);
+      observer.unobserve(element);
+    }
+  };
+}

@@ -466,17 +466,27 @@ export class WorkspaceAPI {
       throw new DOMException('Search aborted', 'AbortError');
     }
 
-    return await Promise.race([
-      resultPromise,
-      new Promise<T>((_, reject) => {
-        const handleAbort = () => {
-          void this.cancelSearch(searchId);
-          reject(new DOMException(`${commandName} aborted`, 'AbortError'));
-        };
+    // Remove the abort listener once the race settles, so a long-lived
+    // AbortSignal does not keep accumulating dead handlers (mirrors the
+    // cleanup pattern in runSearchStream below).
+    let handleAbort: (() => void) | null = null;
 
-        signal.addEventListener('abort', handleAbort, { once: true });
-      })
-    ]);
+    const abortPromise = new Promise<T>((_, reject) => {
+      handleAbort = () => {
+        void this.cancelSearch(searchId);
+        reject(new DOMException(`${commandName} aborted`, 'AbortError'));
+      };
+      signal.addEventListener('abort', handleAbort, { once: true });
+    });
+
+    try {
+      return await Promise.race([resultPromise, abortPromise]);
+    } finally {
+      // No-op if the listener already fired ({ once: true }).
+      if (handleAbort) {
+        signal.removeEventListener('abort', handleAbort);
+      }
+    }
   }
 
   private supportsSearchStreamEvents(): boolean {

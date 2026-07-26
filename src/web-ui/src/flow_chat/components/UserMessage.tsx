@@ -8,6 +8,7 @@ import { File, Folder, Code, Image, Terminal, GitBranch, Link, FileText, GitPull
 import { Tag } from '@/component-library';
 import { useI18n } from '@/infrastructure/i18n';
 import { shouldIgnoreCardToggleClick } from '@/shared/utils/textSelection';
+import { observeElementResize } from '@/shared/utils/sharedResizeObserver';
 import { SnapshotRollbackButton } from './SnapshotRollbackButton';
 import './UserMessage.scss';
 
@@ -142,25 +143,24 @@ export const UserMessage: React.FC<UserMessageProps> = React.memo(({
   const messageRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
   
+  // Shared ResizeObserver instead of a per-message window resize listener:
+  // observer callbacks run after layout, avoiding forced reflow per message.
   useEffect(() => {
+    const element = contentRef.current;
+    if (!element || isExpanded) {
+      setHasOverflow(false);
+      return;
+    }
+
     const checkOverflow = () => {
-      if (contentRef.current && !isExpanded) {
-        const element = contentRef.current;
-        const isOverflowing = element.scrollHeight > element.clientHeight || 
-                              element.scrollWidth > element.clientWidth;
-        setHasOverflow(isOverflowing);
-      } else {
-        setHasOverflow(false);
-      }
+      const isOverflowing = element.scrollHeight > element.clientHeight ||
+                            element.scrollWidth > element.clientWidth;
+      setHasOverflow(isOverflowing);
     };
-    
+
     checkOverflow();
-    
-    window.addEventListener('resize', checkOverflow);
-    
-    return () => {
-      window.removeEventListener('resize', checkOverflow);
-    };
+
+    return observeElementResize(element, checkOverflow);
   }, [messageContent, isExpanded]);
   
   const toggleExpand = (e: React.MouseEvent) => {

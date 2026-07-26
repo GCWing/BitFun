@@ -180,9 +180,11 @@
     background: transparent;
   }
 
-  transition: all $motion-base $easing-standard,
-              width $motion-base $easing-standard,
-              opacity $motion-base $easing-standard;
+  // Explicit property list (no `transition: all`): only the collapse width
+  // and cheap paint properties animate; hover feedback uses transform below.
+  transition: width $motion-base $easing-standard,
+              opacity $motion-base $easing-standard,
+              background-color $motion-base $easing-standard;
 
   &--collapsed {
     width: 0;
@@ -198,12 +200,16 @@
     position: absolute;
     left: 50%;
     top: 50%;
-    transform: translate(-50%, -50%);
-    width: 1px;
-    height: 36px;
+    // Final size is fixed; hover/drag feedback scales via transform so no
+    // layout work happens while the pointer sweeps across the divider.
+    transform: translate(-50%, -50%) scaleY(0.72);
+    width: 2px;
+    height: 50px;
     background: transparent;
     border-radius: $size-radius-sm;
-    transition: all $motion-base $easing-standard;
+    transition: opacity $motion-base $easing-standard,
+                background-color $motion-base $easing-standard,
+                transform $motion-base $easing-standard;
     opacity: 0;
     pointer-events: none;
   }
@@ -233,8 +239,7 @@
         rgba(var(--private-session-pane-resizer-accent-rgb), 0.4) 80%,
         transparent 100%
       );
-      width: 2px;
-      height: 50px;
+      transform: translate(-50%, -50%) scaleY(1);
       opacity: 1;
     }
     .bitfun-pane-resizer__handle { opacity: 1; }
@@ -251,8 +256,7 @@
         transparent 100%
       );
       box-shadow: 0 0 12px rgba(var(--private-session-pane-resizer-accent-rgb), 0.5);
-      width: 2px;
-      height: 60px;
+      transform: translate(-50%, -50%) scaleY(1.2);
       opacity: 1;
     }
     .bitfun-pane-resizer__handle { opacity: 1; }
@@ -270,8 +274,7 @@
         transparent 100%
       );
       box-shadow: 0 0 8px rgba(var(--private-session-pane-resizer-accent-rgb), 0.4);
-      width: 2px;
-      height: 55px;
+      transform: translate(-50%, -50%) scaleY(1.1);
       opacity: 1;
     }
     .bitfun-pane-resizer__handle { opacity: 1; }
@@ -321,9 +324,10 @@
   user-select: none;
   z-index: $z-sticky;
   background: var(--border-subtle);
-  transition: all $motion-base $easing-standard,
-              height $motion-base $easing-standard,
-              opacity $motion-base $easing-standard;
+  // Explicit property list (no `transition: all`).
+  transition: height $motion-base $easing-standard,
+              opacity $motion-base $easing-standard,
+              background-color $motion-base $easing-standard;
 
   &::before {
     content: '';
@@ -349,12 +353,16 @@
     position: absolute;
     left: 50%;
     top: 50%;
-    transform: translate(-50%, -50%);
-    width: 50px;
-    height: 1px;
+    // Final size is fixed; hover/drag feedback scales via transform so no
+    // layout work happens while the pointer sweeps across the divider.
+    transform: translate(-50%, -50%) scaleX(0.7);
+    width: 72px;
+    height: 2px;
     background: transparent;
     border-radius: $size-radius-sm;
-    transition: all $motion-base $easing-standard;
+    transition: opacity $motion-base $easing-standard,
+                background-color $motion-base $easing-standard,
+                transform $motion-base $easing-standard;
     opacity: 0;
     pointer-events: none;
   }
@@ -384,8 +392,7 @@
         rgba(var(--private-session-pane-resizer-accent-rgb), 0.4) 80%,
         transparent 100%
       );
-      height: 2px;
-      width: 72px;
+      transform: translate(-50%, -50%) scaleX(1);
       opacity: 1;
     }
     .bitfun-bottom-pane-resizer__handle { opacity: 1; }
@@ -402,8 +409,7 @@
         transparent 100%
       );
       box-shadow: 0 0 12px rgba(var(--private-session-pane-resizer-accent-rgb), 0.5);
-      height: 2px;
-      width: 86px;
+      transform: translate(-50%, -50%) scaleX(1.19);
       opacity: 1;
     }
     .bitfun-bottom-pane-resizer__handle { opacity: 1; }
@@ -421,8 +427,7 @@
         transparent 100%
       );
       box-shadow: 0 0 8px rgba(var(--private-session-pane-resizer-accent-rgb), 0.4);
-      height: 2px;
-      width: 80px;
+      transform: translate(-50%, -50%) scaleX(1.11);
       opacity: 1;
     }
     .bitfun-bottom-pane-resizer__handle { opacity: 1; }

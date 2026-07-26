@@ -32,17 +32,16 @@ export const MissionControl: React.FC<MissionControlProps> = ({
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedGroups, setSelectedGroups] = useState<Set<EditorGroupId>>(new Set(['primary', 'secondary', 'tertiary']));
   const [, setDraggingTabId] = useState<string | null>(null);
-  const {
-    primaryGroup,
-    secondaryGroup,
-    tertiaryGroup,
-    activeGroupId,
-    layout,
-    switchToTab,
-    closeTab,
-    togglePinTab,
-    setSplitMode,
-  } = useCanvasStore();
+  // Fine-grained selectors so unrelated store changes do not re-render.
+  const primaryGroup = useCanvasStore(state => state.primaryGroup);
+  const secondaryGroup = useCanvasStore(state => state.secondaryGroup);
+  const tertiaryGroup = useCanvasStore(state => state.tertiaryGroup);
+  const activeGroupId = useCanvasStore(state => state.activeGroupId);
+  const layout = useCanvasStore(state => state.layout);
+  const switchToTab = useCanvasStore(state => state.switchToTab);
+  const closeTab = useCanvasStore(state => state.closeTab);
+  const togglePinTab = useCanvasStore(state => state.togglePinTab);
+  const setSplitMode = useCanvasStore(state => state.setSplitMode);
   useDismissibleLayer({
     enabled: isOpen,
     scope: 'canvas',

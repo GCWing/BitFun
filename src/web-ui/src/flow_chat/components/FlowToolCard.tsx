@@ -13,7 +13,7 @@ import { useTranslation } from 'react-i18next';
 import { getToolInterruptionNote } from '../utils/toolInterruption';
 import { ToolApprovalBar } from './ToolApprovalBar';
 import { projectEffectiveToolItem } from '../utils/toolInvocationIdentity';
-import { useFlowChatContext } from './modern/FlowChatContext';
+import { useFlowChatVolatileContext } from './modern/FlowChatContext';
 
 const log = createLogger('FlowToolCard');
 
@@ -43,7 +43,7 @@ export const FlowToolCard: React.FC<FlowToolCardProps> = React.memo(({
 }) => {
   const { t } = useTranslation('flow-chat');
   const effectiveToolItem = projectEffectiveToolItem(toolItem);
-  const { pendingPermissionToolCallIds } = useFlowChatContext();
+  const { pendingPermissionToolCallIds } = useFlowChatVolatileContext();
   const config = getToolCardConfig(effectiveToolItem.toolName);
   const CardComponent = getToolCardComponent(effectiveToolItem.toolName);
   const interruptionNote = getToolInterruptionNote(effectiveToolItem, t);

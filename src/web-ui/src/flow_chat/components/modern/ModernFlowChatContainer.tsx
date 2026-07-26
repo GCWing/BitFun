@@ -22,7 +22,12 @@ import {
 import { BackgroundCommandInputDialog } from '../background-command/BackgroundCommandInputDialog';
 import { WelcomePanel } from '../WelcomePanel';
 import { HistorySessionPlaceholder } from './HistorySessionPlaceholder';
-import { FlowChatContext, FlowChatContextValue } from './FlowChatContext';
+import {
+  FlowChatContext,
+  FlowChatContextValue,
+  FlowChatVolatileContext,
+  FlowChatVolatileContextValue,
+} from './FlowChatContext';
 import { useExploreGroupState } from './useExploreGroupState';
 import { useFlowChatFileActions } from './useFlowChatFileActions';
 import { useFlowChatNavigation } from './useFlowChatNavigation';
@@ -403,6 +408,42 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
     showHistoryPlaceholder,
   ]);
 
+  // Scalar session facts for the stable context. Depending on scalars (not the
+  // session object) keeps the context value referentially stable across
+  // streaming flushes, which produce a new session object ~30x/second.
+  const activeSessionId = activeSession?.sessionId;
+  const activeSessionWorkspacePath = activeSession?.workspacePath
+    || activeSession?.config?.workspacePath;
+  const activeSessionRemoteConnectionId = activeSession?.remoteConnectionId
+    || activeSession?.config?.remoteConnectionId;
+  const activeSessionIsHistorical = activeSession?.isHistorical === true;
+  const activeSessionContextRestoreState = activeSession?.contextRestoreState;
+
+  // Reuse the previous Set when the pending permission tool-call ids are
+  // content-equal so consumers do not re-render on identity-only changes.
+  const pendingPermissionToolCallIdsRef = useRef<ReadonlySet<string>>(new Set());
+  const pendingPermissionToolCallIds = useMemo(() => {
+    const next = pendingPermissionToolCallIdsForSession(
+      permissionRequests,
+      activeSessionId,
+    );
+    const previous = pendingPermissionToolCallIdsRef.current;
+    if (previous.size === next.size) {
+      let contentEqual = true;
+      for (const id of next) {
+        if (!previous.has(id)) {
+          contentEqual = false;
+          break;
+        }
+      }
+      if (contentEqual) {
+        return previous;
+      }
+    }
+    pendingPermissionToolCallIdsRef.current = next;
+    return next;
+  }, [permissionRequests, activeSessionId]);
+
   const contextValue: FlowChatContextValue = useMemo(() => ({
     onFileViewRequest: handleFileViewRequest,
     onTabOpen,
@@ -411,12 +452,11 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
     onSwitchToChatPanel,
     onToolConfirm: handleToolConfirm,
     onToolReject: handleToolReject,
-    pendingPermissionToolCallIds: pendingPermissionToolCallIdsForSession(
-      permissionRequests,
-      activeSession?.sessionId,
-    ),
-    sessionId: activeSession?.sessionId,
-    activeSessionOverride: activeSession,
+    sessionId: activeSessionId,
+    workspacePath: activeSessionWorkspacePath,
+    remoteConnectionId: activeSessionRemoteConnectionId,
+    isHistoricalSession: activeSessionIsHistorical,
+    contextRestoreState: activeSessionContextRestoreState,
     allowUserMessageRollback,
     config: {
       enableMarkdown: true,
@@ -427,14 +467,10 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
       theme: 'dark',
       ...config,
     },
-    exploreGroupStates,
     onExploreGroupToggle: handleExploreGroupToggle,
     onExpandGroup: handleExpandGroup,
     onExpandAllInTurn: handleExpandAllInTurn,
     onCollapseGroup: handleCollapseGroup,
-    searchQuery,
-    searchMatchIndices,
-    searchCurrentMatchVirtualIndex,
   }), [
     handleFileViewRequest,
     onTabOpen,
@@ -443,15 +479,28 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
     onSwitchToChatPanel,
     handleToolConfirm,
     handleToolReject,
-    permissionRequests,
-    activeSession,
+    activeSessionId,
+    activeSessionWorkspacePath,
+    activeSessionRemoteConnectionId,
+    activeSessionIsHistorical,
+    activeSessionContextRestoreState,
     allowUserMessageRollback,
     config,
-    exploreGroupStates,
     handleExploreGroupToggle,
     handleExpandGroup,
     handleExpandAllInTurn,
     handleCollapseGroup,
+  ]);
+
+  const volatileContextValue: FlowChatVolatileContextValue = useMemo(() => ({
+    pendingPermissionToolCallIds,
+    exploreGroupStates,
+    searchQuery,
+    searchMatchIndices,
+    searchCurrentMatchVirtualIndex,
+  }), [
+    pendingPermissionToolCallIds,
+    exploreGroupStates,
     searchQuery,
     searchMatchIndices,
     searchCurrentMatchVirtualIndex,
@@ -1485,6 +1534,7 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
 
   return (
     <FlowChatContext.Provider value={contextValue}>
+      <FlowChatVolatileContext.Provider value={volatileContextValue}>
       <div
         ref={chatScopeRef}
         className={`modern-flowchat-container flow-chat-typography ${className}`}
@@ -1625,6 +1675,7 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
           </>
         </div>
       </div>
+      </FlowChatVolatileContext.Provider>
     </FlowChatContext.Provider>
   );
 };

@@ -100,8 +100,9 @@ export const useWindowControls = (options?: { isToolbarMode?: boolean }) => {
   useEffect(() => {
     if (!canUseNativeWindowControls) return;
 
+    let disposed = false;
     let unlistenResized: (() => void) | undefined;
-    
+
     // Debounce timer
     let resizeTimer: NodeJS.Timeout | null = null;
 
@@ -171,7 +172,7 @@ export const useWindowControls = (options?: { isToolbarMode?: boolean }) => {
         await restoreMacOSOverlayTitlebar(appWindow);
         
         // Listen for resize (with debounce and visibility checks)
-        unlistenResized = await appWindow.onResized(async () => {
+        const resolvedUnlistenResized = await appWindow.onResized(async () => {
           // Skip resize handling while a window state transition is in flight.
           if (shouldSkipStateUpdate.current) {
             return;
@@ -188,7 +189,16 @@ export const useWindowControls = (options?: { isToolbarMode?: boolean }) => {
             await restoreMacOSOverlayTitlebar(appWindow);
           }, 300); // 300ms debounce covers window change duration
         });
-        
+
+        // Cleanup may have run while awaiting registration: unlisten
+        // immediately instead of leaking the resized callback (and its
+        // debounce timer) against an unmounted tree.
+        if (disposed) {
+          resolvedUnlistenResized();
+          return;
+        }
+        unlistenResized = resolvedUnlistenResized;
+
         // Add page visibility listener
         document.addEventListener('visibilitychange', handleVisibilityChange);
       } catch (error) {
@@ -199,6 +209,7 @@ export const useWindowControls = (options?: { isToolbarMode?: boolean }) => {
     setupListener();
     
     return () => {
+      disposed = true;
       if (resizeTimer) {
         clearTimeout(resizeTimer);
       }

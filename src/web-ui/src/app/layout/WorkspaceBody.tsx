@@ -10,7 +10,7 @@
  *     SceneViewport (flex:1 — active scene content)
  */
 
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useCurrentWorkspace } from '../../infrastructure/contexts/WorkspaceContext';
 import { NavBar } from '../components/NavBar';
 import NavPanel from '../components/NavPanel/NavPanel';
@@ -49,6 +49,16 @@ const WorkspaceBody: React.FC<WorkspaceBodyProps> = ({
   const { state, toggleLeftPanel } = useApp();
   const isNavCollapsed = state.layout.leftPanelCollapsed;
   const [navWidth, setNavWidth] = useState(NAV_DEFAULT_WIDTH);
+  const navAreaRef = useRef<HTMLDivElement>(null);
+  const navDividerRef = useRef<HTMLDivElement>(null);
+  // Active drag cleanup, so window listeners never leak if we unmount mid-drag.
+  const dragCleanupRef = useRef<(() => void) | null>(null);
+
+  useEffect(() => {
+    return () => {
+      dragCleanupRef.current?.();
+    };
+  }, []);
 
   const handleNavCollapseDragStart = useCallback((event: React.MouseEvent<HTMLDivElement>) => {
     if (event.button !== 0 || isNavCollapsed) return;
@@ -56,10 +66,22 @@ const WorkspaceBody: React.FC<WorkspaceBodyProps> = ({
 
     const startX = event.clientX;
     const startWidth = navWidth;
+    let latestWidth = startWidth;
     let hasCollapsed = false;
+    let frameId: number | null = null;
 
     document.body.classList.add('bitfun-is-dragging-nav-collapse');
     document.body.classList.add('bitfun-is-resizing-nav');
+
+    // During the drag we bypass React entirely: write the --nav-width CSS
+    // variable straight to the two elements that consume it (rAF-merged).
+    // React state is committed once on mouseup.
+    const applyWidth = () => {
+      frameId = null;
+      const value = `${latestWidth}px`;
+      navAreaRef.current?.style.setProperty('--nav-width', value);
+      navDividerRef.current?.style.setProperty('--nav-width', value);
+    };
 
     const handleMouseMove = (moveEvent: MouseEvent) => {
       if (hasCollapsed) return;
@@ -73,21 +95,31 @@ const WorkspaceBody: React.FC<WorkspaceBodyProps> = ({
         cleanup();
         return;
       }
-      const newWidth = Math.min(NAV_MAX_WIDTH, Math.max(NAV_MIN_WIDTH, rawWidth));
-      setNavWidth(newWidth);
+      latestWidth = Math.min(NAV_MAX_WIDTH, Math.max(NAV_MIN_WIDTH, rawWidth));
+      if (frameId === null) {
+        frameId = requestAnimationFrame(applyWidth);
+      }
     };
 
     const handleMouseUp = () => cleanup();
 
     function cleanup() {
+      if (frameId !== null) {
+        cancelAnimationFrame(frameId);
+        frameId = null;
+      }
       document.body.classList.remove('bitfun-is-dragging-nav-collapse');
       document.body.classList.remove('bitfun-is-resizing-nav');
       window.removeEventListener('mousemove', handleMouseMove);
       window.removeEventListener('mouseup', handleMouseUp);
+      dragCleanupRef.current = null;
+      // Commit the final width through React once.
+      setNavWidth(latestWidth);
     }
 
     window.addEventListener('mousemove', handleMouseMove);
     window.addEventListener('mouseup', handleMouseUp);
+    dragCleanupRef.current = cleanup;
   }, [isNavCollapsed, navWidth, toggleLeftPanel]);
 
   return (
@@ -100,6 +132,7 @@ const WorkspaceBody: React.FC<WorkspaceBodyProps> = ({
 
       {/* Left: nav history bar + navigation sidebar — always rendered for slide animation */}
       <div
+        ref={navAreaRef}
         className={`bitfun-workspace-body__nav-area${isNavCollapsed ? ' is-collapsed' : ''}`}
         style={isNavCollapsed ? undefined : { '--nav-width': `${navWidth}px` } as React.CSSProperties}
       >
@@ -110,6 +143,7 @@ const WorkspaceBody: React.FC<WorkspaceBodyProps> = ({
       {/* Resize divider — placed at workspace-body level to avoid overflow:hidden clipping */}
       {!isNavCollapsed && (
         <div
+          ref={navDividerRef}
           className="bitfun-workspace-body__nav-divider"
           style={{ '--nav-width': `${navWidth}px` } as React.CSSProperties}
           onMouseDown={handleNavCollapseDragStart}

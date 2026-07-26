@@ -2,7 +2,7 @@ import React, {useCallback, useEffect, useMemo, useRef, useState} from 'react';
 import {useTranslation} from 'react-i18next';
 import path from 'path-browserify';
 import {CornerUpLeft, Link2, Loader2, Square, Sparkles} from 'lucide-react';
-import {FlowChatContext} from '../modern/FlowChatContext';
+import {FlowChatContext, FlowChatVolatileContext} from '../modern/FlowChatContext';
 import {VirtualItemRenderer} from '../modern/VirtualItemRenderer';
 import {ProcessingIndicator} from '../modern/ProcessingIndicator';
 import {
@@ -350,7 +350,6 @@ export const BtwSessionPanel: React.FC<BtwSessionPanelProps> = ({
     allowUserMessageEdit: false,
     allowTranscriptExport: viewKind !== 'review-check',
     config: PANEL_CONFIG,
-    exploreGroupStates,
     onExploreGroupToggle,
     onExpandGroup,
     onExpandAllInTurn,
@@ -360,13 +359,16 @@ export const BtwSessionPanel: React.FC<BtwSessionPanelProps> = ({
     childSessionId,
     handleFileViewRequest,
     handleTabOpen,
-    exploreGroupStates,
     onExploreGroupToggle,
     onExpandGroup,
     onExpandAllInTurn,
     onCollapseGroup,
     viewKind,
   ]);
+
+  const volatileContextValue = useMemo(() => ({
+    exploreGroupStates,
+  }), [exploreGroupStates]);
 
   const lastDialogTurn = childSession?.dialogTurns[childSession.dialogTurns.length - 1];
   const lastModelRound = lastDialogTurn?.modelRounds[lastDialogTurn.modelRounds.length - 1];
@@ -1001,6 +1003,7 @@ export const BtwSessionPanel: React.FC<BtwSessionPanelProps> = ({
 
   return (
     <FlowChatContext.Provider value={contextValue}>
+      <FlowChatVolatileContext.Provider value={volatileContextValue}>
       <div className={`btw-session-panel${showReviewActionBar ? ' btw-session-panel--has-action-bar' : ''}`}>
         <div className="btw-session-panel__header">
           <div className="btw-session-panel__header-left">
@@ -1145,6 +1148,7 @@ export const BtwSessionPanel: React.FC<BtwSessionPanelProps> = ({
           </div>
         )}
       </div>
+      </FlowChatVolatileContext.Provider>
     </FlowChatContext.Provider>
   );
 };

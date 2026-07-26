@@ -4,7 +4,7 @@
  * batched EventBatcher text updates. Supports a streaming cursor indicator.
  */
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { MarkdownRenderer } from '@/component-library';
 import { DotMatrixLoader } from '@/component-library';
@@ -74,11 +74,20 @@ export const FlowTextBlock = React.memo<FlowTextBlockProps>(({
     onHttpLinkClick,
     onOpenVisualization,
     activeSessionOverride,
+    workspacePath: contextWorkspacePath,
+    remoteConnectionId: contextRemoteConnectionId,
   } = useFlowChatContext();
   const markdownBasePath = activeSessionOverride?.workspacePath
-    || activeSessionOverride?.config?.workspacePath;
+    || activeSessionOverride?.config?.workspacePath
+    || contextWorkspacePath;
   const markdownRemoteConnectionId = activeSessionOverride?.remoteConnectionId
-    || activeSessionOverride?.config?.remoteConnectionId;
+    || activeSessionOverride?.config?.remoteConnectionId
+    || contextRemoteConnectionId;
+  // Stable callback so the memoized Markdown component is not re-rendered
+  // (and re-parsed) just because this block re-rendered.
+  const handleOpenVisualization = useCallback((visualization: any) => {
+    onOpenVisualization?.(visualization?.type, visualization?.data);
+  }, [onOpenVisualization]);
 
   // Normalize content to a string.
   const content = typeof textItem.content === 'string'
@@ -185,9 +194,7 @@ export const FlowTextBlock = React.memo<FlowTextBlockProps>(({
           onFileViewRequest={onFileViewRequest}
           onTabOpen={onTabOpen}
           onHttpLinkClick={onHttpLinkClick}
-          onOpenVisualization={(visualization) => {
-            onOpenVisualization?.(visualization?.type, visualization?.data);
-          }}
+          onOpenVisualization={handleOpenVisualization}
           traceContext={markdownTraceContext}
         />
       ) : (

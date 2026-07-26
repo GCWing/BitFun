@@ -151,16 +151,28 @@ export const FileOperationToolCard: React.FC<FileOperationToolCardProps> = ({
   } = useSnapshotState(sessionId);
   const eventBus = SnapshotEventBus.getInstance();
   const { workspace: currentWorkspace } = useOptionalCurrentWorkspace();
-  const { activeSessionOverride } = useFlowChatContext();
+  const {
+    activeSessionOverride,
+    sessionId: contextSessionId,
+    isHistoricalSession,
+    contextRestoreState,
+  } = useFlowChatContext();
   const historySessionOpenTransition = useSyncExternalStore(
     subscribeHistorySessionOpenTransition,
     getHistorySessionOpenTransitionSnapshot,
     getHistorySessionOpenTransitionSnapshot,
   );
-  const isHistoricalRestorePending =
-    activeSessionOverride?.sessionId === sessionId &&
-    activeSessionOverride?.isHistorical === true &&
-    activeSessionOverride?.contextRestoreState === 'pending';
+  const isHistoricalRestorePending = activeSessionOverride
+    ? (
+      activeSessionOverride.sessionId === sessionId &&
+      activeSessionOverride.isHistorical === true &&
+      activeSessionOverride.contextRestoreState === 'pending'
+    )
+    : (
+      contextSessionId === sessionId &&
+      isHistoricalSession === true &&
+      contextRestoreState === 'pending'
+    );
   const allowPassiveGitRefresh =
     historySessionOpenTransition === null &&
     displayContext !== 'subagent-projection' &&

@@ -99,14 +99,36 @@ const ScrollBreadcrumb: React.FC<ScrollBreadcrumbProps> = ({ containerRef, works
         setVisiblePath(null);
       }
     };
-    
+
     detectCurrentDirectory();
-    
+
+    // rAF-merge the raw scroll events: the detection walks every expanded
+    // directory node and reads two rects per node, so run it at most once
+    // per frame instead of per scroll event.
+    let frameId: number | null = null;
+    const handleScroll = () => {
+      if (frameId !== null) return;
+      frameId = requestAnimationFrame(() => {
+        frameId = null;
+        detectCurrentDirectory();
+      });
+    };
+
     const treeContainer = container.querySelector('.bitfun-file-explorer__tree');
     if (treeContainer) {
-      treeContainer.addEventListener('scroll', detectCurrentDirectory, { passive: true });
-      return () => treeContainer.removeEventListener('scroll', detectCurrentDirectory);
+      treeContainer.addEventListener('scroll', handleScroll, { passive: true });
+      return () => {
+        treeContainer.removeEventListener('scroll', handleScroll);
+        if (frameId !== null) {
+          cancelAnimationFrame(frameId);
+        }
+      };
     }
+    return () => {
+      if (frameId !== null) {
+        cancelAnimationFrame(frameId);
+      }
+    };
   }, [containerRef]);
   
   if (!visiblePath) return null;

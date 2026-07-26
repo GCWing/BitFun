@@ -648,11 +648,13 @@ function App() {
   }, []);
 
   useEffect(() => {
+    let disposed = false;
     let unlisten: (() => void) | null = null;
     void import('@tauri-apps/api/event')
       .then(({ listen }) => listen<{ sessionId?: string }>(
         'agent-companion://open-session',
         async event => {
+          if (disposed) return;
           const sessionId = event.payload?.sessionId;
           if (!sessionId) return;
 
@@ -671,23 +673,32 @@ function App() {
         },
       ))
       .then(removeListener => {
+        if (disposed) {
+          removeListener();
+          return;
+        }
         unlisten = removeListener;
       })
       .catch(error => {
-        log.warn('Failed to listen for Agent companion session open events', error);
+        if (!disposed) {
+          log.warn('Failed to listen for Agent companion session open events', error);
+        }
       });
 
     return () => {
+      disposed = true;
       unlisten?.();
     };
   }, []);
 
   useEffect(() => {
+    let disposed = false;
     let unlisten: (() => void) | null = null;
     void import('@tauri-apps/api/event')
       .then(({ listen }) => listen<AgentCompanionPetCommand>(
         'agent-companion://pet-command',
         async event => {
+          if (disposed) return;
           try {
             const { handleAgentCompanionPetCommand } = await import('./services/agentCompanionPetCommands');
             await handleAgentCompanionPetCommand(event.payload);
@@ -700,13 +711,20 @@ function App() {
         },
       ))
       .then(removeListener => {
+        if (disposed) {
+          removeListener();
+          return;
+        }
         unlisten = removeListener;
       })
       .catch(error => {
-        log.warn('Failed to listen for Agent companion pet commands', error);
+        if (!disposed) {
+          log.warn('Failed to listen for Agent companion pet commands', error);
+        }
       });
 
     return () => {
+      disposed = true;
       unlisten?.();
     };
   }, []);

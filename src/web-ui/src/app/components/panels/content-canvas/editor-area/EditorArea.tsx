@@ -33,30 +33,30 @@ export const EditorArea: React.FC<EditorAreaProps> = ({
   const containerRef = useRef<HTMLDivElement>(null);
   const topRowRef = useRef<HTMLDivElement>(null);
 
-  const {
-    primaryGroup,
-    secondaryGroup,
-    tertiaryGroup,
-    activeGroupId,
-    layout,
-    draggingTabId,
-    draggingFromGroupId,
-    switchToTab,
-    closeTab,
-    closeAllTabs,
-    promoteTab,
-    togglePinTab,
-    startDrag,
-    endDrag,
-    reorderTab,
-    handleDrop,
-    setSplitRatio,
-    setSplitRatio2,
-    setActiveGroup,
-    updateTabContent,
-    setTabDirty,
-    setTabFileDeletedFromDisk,
-  } = useCanvasStore();
+  // Fine-grained selectors: subscribe to each slice/action individually so
+  // unrelated store changes do not re-render the editor area.
+  const primaryGroup = useCanvasStore(state => state.primaryGroup);
+  const secondaryGroup = useCanvasStore(state => state.secondaryGroup);
+  const tertiaryGroup = useCanvasStore(state => state.tertiaryGroup);
+  const activeGroupId = useCanvasStore(state => state.activeGroupId);
+  const layout = useCanvasStore(state => state.layout);
+  const draggingTabId = useCanvasStore(state => state.draggingTabId);
+  const draggingFromGroupId = useCanvasStore(state => state.draggingFromGroupId);
+  const switchToTab = useCanvasStore(state => state.switchToTab);
+  const closeTab = useCanvasStore(state => state.closeTab);
+  const closeAllTabs = useCanvasStore(state => state.closeAllTabs);
+  const promoteTab = useCanvasStore(state => state.promoteTab);
+  const togglePinTab = useCanvasStore(state => state.togglePinTab);
+  const startDrag = useCanvasStore(state => state.startDrag);
+  const endDrag = useCanvasStore(state => state.endDrag);
+  const reorderTab = useCanvasStore(state => state.reorderTab);
+  const handleDrop = useCanvasStore(state => state.handleDrop);
+  const setSplitRatio = useCanvasStore(state => state.setSplitRatio);
+  const setSplitRatio2 = useCanvasStore(state => state.setSplitRatio2);
+  const setActiveGroup = useCanvasStore(state => state.setActiveGroup);
+  const updateTabContent = useCanvasStore(state => state.updateTabContent);
+  const setTabDirty = useCanvasStore(state => state.setTabDirty);
+  const setTabFileDeletedFromDisk = useCanvasStore(state => state.setTabFileDeletedFromDisk);
 
   const handleTabClick = useCallback((groupId: EditorGroupId) => (tabId: string) => {
     switchToTab(tabId, groupId);

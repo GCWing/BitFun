@@ -43,7 +43,8 @@ const permissionContextMock = vi.hoisted(() => ({
 }));
 
 vi.mock('./modern/FlowChatContext', () => ({
-  useFlowChatContext: () => permissionContextMock,
+  useFlowChatContext: () => ({}),
+  useFlowChatVolatileContext: () => permissionContextMock,
 }));
 
 import { FlowToolCard } from './FlowToolCard';

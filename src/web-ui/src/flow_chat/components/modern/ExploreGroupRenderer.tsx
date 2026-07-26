@@ -16,7 +16,7 @@ import { FlowTextBlock } from '../FlowTextBlock';
 import { FlowToolCard } from '../FlowToolCard';
 import { ModelThinkingDisplay } from '../../tool-cards/ModelThinkingDisplay';
 import { useToolCardHeightContract } from '../../tool-cards/useToolCardHeightContract';
-import { useFlowChatContext } from './FlowChatContext';
+import { useFlowChatContext, useFlowChatVolatileContext } from './FlowChatContext';
 import { SmoothHeightCollapse } from './SmoothHeightCollapse';
 import './ExploreRegion.scss';
 
@@ -54,11 +54,11 @@ export const ExploreGroupRenderer: React.FC<ExploreGroupRendererProps> = React.m
   const containerRef = useRef<HTMLDivElement>(null);
   const [scrollState, setScrollState] = useState({ hasScroll: false, atTop: true, atBottom: true });
   
-  const { 
-    exploreGroupStates, 
-    onExploreGroupToggle, 
-    onCollapseGroup 
+  const {
+    onExploreGroupToggle,
+    onCollapseGroup,
   } = useFlowChatContext();
+  const { exploreGroupStates } = useFlowChatVolatileContext();
   
   const { 
     groupId, 
@@ -98,11 +98,36 @@ export const ExploreGroupRenderer: React.FC<ExploreGroupRendererProps> = React.m
       return;
     }
 
-    setScrollState({
+    const next = {
       hasScroll: el.scrollHeight > el.clientHeight + 1,
       atTop: el.scrollTop <= 5,
       atBottom: el.scrollTop + el.clientHeight >= el.scrollHeight - 5,
+    };
+    // Shallow-compare so unchanged scroll edges do not trigger a re-render.
+    setScrollState(prev => (
+      prev.hasScroll === next.hasScroll &&
+      prev.atTop === next.atTop &&
+      prev.atBottom === next.atBottom
+        ? prev
+        : next
+    ));
+  }, []);
+
+  // rAF-merge the raw scroll events; only one state check per frame.
+  const scrollFrameRef = useRef<number | null>(null);
+  const handleContentScroll = useCallback(() => {
+    if (scrollFrameRef.current !== null) {
+      return;
+    }
+    scrollFrameRef.current = requestAnimationFrame(() => {
+      scrollFrameRef.current = null;
+      checkScrollState();
     });
+  }, [checkScrollState]);
+  useEffect(() => () => {
+    if (scrollFrameRef.current !== null) {
+      cancelAnimationFrame(scrollFrameRef.current);
+    }
   }, []);
 
   // One-shot auto-collapse: fires exactly once when the group transitions from
@@ -269,7 +294,7 @@ export const ExploreGroupRenderer: React.FC<ExploreGroupRendererProps> = React.m
         <div
           ref={containerRef}
           className="explore-region__content"
-          onScroll={checkScrollState}
+          onScroll={handleContentScroll}
           data-testid="chat-explore-group-content"
           data-group-kind={groupKind}
           data-expanded={isExpanded ? 'true' : 'false'}

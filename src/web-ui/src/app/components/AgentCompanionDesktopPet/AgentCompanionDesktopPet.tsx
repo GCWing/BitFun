@@ -305,14 +305,31 @@ export const AgentCompanionDesktopPet: React.FC = () => {
     });
   }, [visibleTasks]);
 
+  // rAF-driven typewriter. The effect only depends on the derived boolean
+  // "is anything still typing", so the ticking loop is NOT torn down and
+  // rebuilt on every tick (the previous interval version re-ran the effect
+  // ~36x/second because it depended on the state it was writing).
+  const hasTypingOutput = useMemo(
+    () => Object.values(typedOutputBySessionId)
+      .some(output => output.visible !== output.target),
+    [typedOutputBySessionId],
+  );
+
   useEffect(() => {
-    const hasTypingOutput = Object.values(typedOutputBySessionId)
-      .some(output => output.visible !== output.target);
     if (!hasTypingOutput) {
       return;
     }
 
-    const intervalId = window.setInterval(() => {
+    let frameId: number | null = null;
+    let lastTickAt = 0;
+
+    const tick = (now: number) => {
+      frameId = requestAnimationFrame(tick);
+      if (now - lastTickAt < BUBBLE_OUTPUT_TYPEWRITER_INTERVAL_MS) {
+        return;
+      }
+      lastTickAt = now;
+
       setTypedOutputBySessionId(previous => {
         let changed = false;
         const next: Record<string, TypewriterOutputState> = {};
@@ -327,10 +344,16 @@ export const AgentCompanionDesktopPet: React.FC = () => {
 
         return changed ? next : previous;
       });
-    }, BUBBLE_OUTPUT_TYPEWRITER_INTERVAL_MS);
+    };
 
-    return () => window.clearInterval(intervalId);
-  }, [typedOutputBySessionId]);
+    frameId = requestAnimationFrame(tick);
+
+    return () => {
+      if (frameId !== null) {
+        cancelAnimationFrame(frameId);
+      }
+    };
+  }, [hasTypingOutput]);
 
   useLayoutEffect(() => {
     outputRefs.current.forEach(element => {
@@ -338,7 +361,14 @@ export const AgentCompanionDesktopPet: React.FC = () => {
     });
   }, [typedOutputBySessionId]);
 
+  // Bumped whenever dock layout may have changed; lets the pointer poll reuse
+  // cached getBoundingClientRect results between layout changes.
+  const layoutEpochRef = useRef(0);
+  const visibleTaskCountRef = useRef(0);
+  visibleTaskCountRef.current = visibleTasks.length;
+
   useLayoutEffect(() => {
+    layoutEpochRef.current += 1;
     const bubbleCount = visibleTasks.length;
     const bubbleElements = Array.from(bubblesRef.current?.children ?? [])
       .slice(0, MAX_VISIBLE_BUBBLES);
@@ -441,6 +471,36 @@ export const AgentCompanionDesktopPet: React.FC = () => {
       log.warn('Failed to listen for Agent companion scale changes', error);
     });
 
+    // Rect cache: getBoundingClientRect results are reused until the dock
+    // layout changes (layoutEpochRef bump) or the window resizes, instead of
+    // re-reading layout on every 120ms poll tick.
+    let rectCacheEpoch = -1;
+    let cachedHitboxRect: DOMRect | null = null;
+    let cachedBubbleRects: Array<{ sessionId: string | null; rect: DOMRect }> = [];
+
+    const invalidateRectCache = () => {
+      rectCacheEpoch = -1;
+    };
+    window.addEventListener('resize', invalidateRectCache);
+
+    const refreshRectCacheIfNeeded = () => {
+      if (rectCacheEpoch === layoutEpochRef.current) {
+        return;
+      }
+      const dock = dockRef.current;
+      const hitbox = dock?.querySelector<HTMLElement>('.bitfun-agent-companion-window__pet-hitbox') ?? null;
+      cachedHitboxRect = hitbox?.getBoundingClientRect() ?? null;
+      cachedBubbleRects = visibleTaskCountRef.current > 0
+        ? Array.from(
+          dock?.querySelectorAll<HTMLElement>('[data-agent-companion-session-id]') ?? [],
+        ).map(element => ({
+          sessionId: element.dataset.agentCompanionSessionId ?? null,
+          rect: element.getBoundingClientRect(),
+        }))
+        : [];
+      rectCacheEpoch = layoutEpochRef.current;
+    };
+
     const pollPointerHover = async () => {
       if (pointerPollInFlight) {
         return;
@@ -456,30 +516,25 @@ export const AgentCompanionDesktopPet: React.FC = () => {
           return;
         }
 
-        const dock = dockRef.current;
-        const hitbox = dock?.querySelector<HTMLElement>('.bitfun-agent-companion-window__pet-hitbox');
-        if (!hitbox) {
+        refreshRectCacheIfNeeded();
+        if (!cachedHitboxRect) {
           setIsHoveringPet(false);
         }
 
         const safeScaleFactor = Number.isFinite(scaleFactor) && scaleFactor > 0 ? scaleFactor : 1;
         const pointerX = (pointer.x - windowPosition.x) / safeScaleFactor;
         const pointerY = (pointer.y - windowPosition.y) / safeScaleFactor;
-        const isPointerInsideHitbox = hitbox
-          ? rectContainsPoint(hitbox.getBoundingClientRect(), pointerX, pointerY)
+        const isPointerInsideHitbox = cachedHitboxRect
+          ? rectContainsPoint(cachedHitboxRect, pointerX, pointerY)
           : false;
-        const hoveredBubble = Array.from(
-          dock?.querySelectorAll<HTMLElement>('[data-agent-companion-session-id]') ?? [],
-        ).find(element => rectContainsPoint(
-          element.getBoundingClientRect(),
+        const hoveredBubble = cachedBubbleRects.find(({ rect }) => rectContainsPoint(
+          rect,
           pointerX,
           pointerY,
         ));
 
         setIsHoveringPet(isPointerInsideHitbox);
-        setHoveredBubbleSessionId(
-          hoveredBubble?.dataset.agentCompanionSessionId ?? null,
-        );
+        setHoveredBubbleSessionId(hoveredBubble?.sessionId ?? null);
       } catch (error) {
         log.warn('Failed to poll Agent companion pointer hover state', error);
       } finally {
@@ -488,6 +543,10 @@ export const AgentCompanionDesktopPet: React.FC = () => {
     };
 
     const intervalId = window.setInterval(() => {
+      // Pause the IPC poll while the pet window is not visible.
+      if (document.visibilityState === 'hidden') {
+        return;
+      }
       void pollPointerHover();
     }, POINTER_HOVER_POLL_INTERVAL_MS);
     void pollPointerHover();
@@ -495,6 +554,7 @@ export const AgentCompanionDesktopPet: React.FC = () => {
     return () => {
       disposed = true;
       window.clearInterval(intervalId);
+      window.removeEventListener('resize', invalidateRectCache);
       removeWindowMovedListener?.();
       removeScaleChangedListener?.();
     };

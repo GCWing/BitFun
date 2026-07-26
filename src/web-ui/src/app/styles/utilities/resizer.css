@@ -1,5 +1,13 @@
 /* Unified Panel Resizer styles */
 
+/*
+ * Performance notes:
+ * - No `transition: all` — only cheap paint/composite properties animate.
+ * - Hover/drag width feedback uses `transform: scaleX` instead of animating
+ *   `width`, so adjacent flex panels are never re-laid-out on pointer sweep.
+ * - box-shadow states apply instantly (not transitioned).
+ */
+
 .u-panel-resizer {
   width: 2px;
   background: linear-gradient(180deg,
@@ -12,7 +20,10 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: all var(--motion-base) var(--easing-standard);
+  transition:
+    opacity var(--motion-base) var(--easing-standard),
+    background-color var(--motion-base) var(--easing-standard),
+    transform var(--motion-base) var(--easing-standard);
   border: none;
   flex-shrink: 0;
   opacity: 0.2;
@@ -21,7 +32,6 @@
 }
 
 .u-panel-resizer:hover {
-  width: 3px;
   background: linear-gradient(180deg,
     var(--color-accent-100) 0%,
     color-mix(in srgb, var(--color-purple-500) 12%, transparent) 50%,
@@ -31,11 +41,10 @@
     0 0 6px color-mix(in srgb, var(--color-accent-500) 5%, transparent),
     0 0 12px color-mix(in srgb, var(--color-purple-500) 8%, transparent),
     inset 0 0 3px var(--color-overlay-white-04);
-  transform: scaleY(1.02);
+  transform: scaleX(1.5) scaleY(1.02);
 }
 
 .u-panel-resizer.dragging {
-  width: 4px;
   background: linear-gradient(180deg,
     color-mix(in srgb, var(--color-accent-500) 30%, transparent) 0%,
     color-mix(in srgb, var(--color-purple-500) 50%, transparent) 50%,
@@ -45,7 +54,7 @@
     0 0 12px color-mix(in srgb, var(--color-accent-500) 20%, transparent),
     0 0 24px var(--color-purple-200),
     inset 0 0 6px var(--color-overlay-white-08);
-  transform: scaleY(1.15);
+  transform: scaleX(2) scaleY(1.15);
 }
 
 .u-resizer-line {
@@ -53,24 +62,23 @@
   height: 20px;
   background: var(--color-overlay-white-12);
   border-radius: var(--size-radius-sm);
-  transition: all var(--motion-base);
+  transition:
+    opacity var(--motion-base),
+    background-color var(--motion-base),
+    transform var(--motion-base);
   opacity: 0.2;
 }
 
 .u-panel-resizer:hover .u-resizer-line {
-  width: 1px;
-  height: 25px;
   background: var(--color-overlay-white-20);
   opacity: 0.4;
-  transform: scaleY(1.05);
+  transform: scaleY(1.3);
 }
 
 .u-panel-resizer.dragging .u-resizer-line {
-  width: 1px;
-  height: 30px;
   background: color-mix(in srgb, var(--color-static-white) 30%, transparent);
   opacity: 0.6;
-  transform: scaleY(1.1);
+  transform: scaleY(1.65);
 }
 
 /* Mobile adjustments */
@@ -80,6 +88,6 @@
   }
 
   .u-panel-resizer:hover {
-    width: 5px;
+    transform: scaleX(1.67) scaleY(1.02);
   }
 }

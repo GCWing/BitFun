@@ -469,7 +469,7 @@ const ReportNav: React.FC<{ report: InsightsReport; scrollContainerRef: React.Re
     const container = scrollContainerRef.current;
     if (!container) return;
 
-    const handleScroll = () => {
+    const detectActiveSection = () => {
       const scrollTop = container.scrollTop;
       const containerTop = container.getBoundingClientRect().top;
       const sections = container.querySelectorAll('[data-section]');
@@ -484,12 +484,28 @@ const ReportNav: React.FC<{ report: InsightsReport; scrollContainerRef: React.Re
         }
       });
 
+      // setState with the same string is a no-op re-render-wise.
       setActiveSection(current);
     };
 
+    // rAF-merge scroll events: the detection reads one rect per section.
+    let frameId: number | null = null;
+    const handleScroll = () => {
+      if (frameId !== null) return;
+      frameId = requestAnimationFrame(() => {
+        frameId = null;
+        detectActiveSection();
+      });
+    };
+
     container.addEventListener('scroll', handleScroll, { passive: true });
-    handleScroll();
-    return () => container.removeEventListener('scroll', handleScroll);
+    detectActiveSection();
+    return () => {
+      container.removeEventListener('scroll', handleScroll);
+      if (frameId !== null) {
+        cancelAnimationFrame(frameId);
+      }
+    };
   }, [scrollContainerRef]);
 
   const scrollToSection = (id: string) => {

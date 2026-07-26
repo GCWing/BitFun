@@ -155,15 +155,21 @@ export const Tooltip: React.FC<TooltipProps> = ({
   interactive = false,
 }) => {
   const [visible, setVisible] = useState(false);
-  const [position, setPosition] = useState({ top: 0, left: 0 });
-  const [positionReady, setPositionReady] = useState(false);
-  const [actualPlacement, setActualPlacement] = useState<TooltipPlacement>(placement);
+  // Single layout state (position + placement + ready) so one recalculation
+  // commits at most one re-render instead of three.
+  const [layout, setLayout] = useState<{
+    top: number;
+    left: number;
+    placement: TooltipPlacement;
+    ready: boolean;
+  }>({ top: 0, left: 0, placement, ready: false });
   const [mousePosition, setMousePosition] = useState<{ x: number; y: number } | null>(null);
   const triggerRef = useRef<HTMLElement | null>(null);
   const tooltipRef = useRef<HTMLDivElement>(null);
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const hideTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const latestMousePositionRef = useRef<{ x: number; y: number } | null>(null);
+  const recalcFrameRef = useRef<number | null>(null);
 
   const gap = 8;
   const viewportPadding = 8;
@@ -177,9 +183,7 @@ export const Tooltip: React.FC<TooltipProps> = ({
       const left = mousePosition.x + CURSOR_OFFSET_X;
       const top = mousePosition.y + CURSOR_OFFSET_Y;
       const pos = applyBoundaryConstraints({ top, left }, tooltipRect, viewportPadding);
-      setActualPlacement('bottom');
-      setPosition(pos);
-      setPositionReady(true);
+      setLayout({ top: pos.top, left: pos.left, placement: 'bottom', ready: true });
       return;
     }
 
@@ -199,10 +203,18 @@ export const Tooltip: React.FC<TooltipProps> = ({
 
     pos = applyBoundaryConstraints(pos, tooltipRect, viewportPadding);
 
-    setActualPlacement(bestPlacement);
-    setPosition(pos);
-    setPositionReady(true);
+    setLayout({ top: pos.top, left: pos.left, placement: bestPlacement, ready: true });
   }, [placement, followCursor, mousePosition]);
+
+  // rAF-merged recalculation for scroll/resize storms: at most one
+  // getBoundingClientRect pass per frame.
+  const scheduleCalculatePosition = useCallback(() => {
+    if (recalcFrameRef.current !== null) return;
+    recalcFrameRef.current = requestAnimationFrame(() => {
+      recalcFrameRef.current = null;
+      calculatePosition();
+    });
+  }, [calculatePosition]);
 
   const showTooltip = (e?: React.MouseEvent) => {
     if (disabled) return;
@@ -221,7 +233,7 @@ export const Tooltip: React.FC<TooltipProps> = ({
       if (followCursor) {
         setMousePosition(latestMousePositionRef.current);
       }
-      setPositionReady(false);
+      setLayout(prev => (prev.ready ? { ...prev, ready: false } : prev));
       setVisible(true);
     }, delay);
   };
@@ -236,7 +248,7 @@ export const Tooltip: React.FC<TooltipProps> = ({
       hideTimeoutRef.current = null;
     }
     setVisible(false);
-    setPositionReady(false);
+    setLayout(prev => (prev.ready ? { ...prev, ready: false } : prev));
     if (followCursor) {
       latestMousePositionRef.current = null;
       setMousePosition(null);
@@ -273,7 +285,7 @@ export const Tooltip: React.FC<TooltipProps> = ({
   );
 
   useEffect(() => {
-    setActualPlacement(placement);
+    setLayout(prev => (prev.placement === placement ? prev : { ...prev, placement }));
   }, [placement]);
 
   // When the tooltip becomes disabled (e.g. parent opens a menu/popover that
@@ -287,21 +299,23 @@ export const Tooltip: React.FC<TooltipProps> = ({
 
   useEffect(() => {
     if (visible) {
-      requestAnimationFrame(() => {
-        calculatePosition();
-      });
+      scheduleCalculatePosition();
       if (!followCursor) {
-        window.addEventListener('scroll', calculatePosition, true);
+        window.addEventListener('scroll', scheduleCalculatePosition, { capture: true, passive: true });
       }
-      window.addEventListener('resize', calculatePosition);
+      window.addEventListener('resize', scheduleCalculatePosition, { passive: true });
       return () => {
         if (!followCursor) {
-          window.removeEventListener('scroll', calculatePosition, true);
+          window.removeEventListener('scroll', scheduleCalculatePosition, { capture: true });
         }
-        window.removeEventListener('resize', calculatePosition);
+        window.removeEventListener('resize', scheduleCalculatePosition);
+        if (recalcFrameRef.current !== null) {
+          cancelAnimationFrame(recalcFrameRef.current);
+          recalcFrameRef.current = null;
+        }
       };
     }
-  }, [visible, followCursor, calculatePosition]);
+  }, [visible, followCursor, scheduleCalculatePosition]);
 
   useEffect(() => {
     return () => {
@@ -381,8 +395,8 @@ export const Tooltip: React.FC<TooltipProps> = ({
 
   const tooltipClass = [
     'bitfun-tooltip',
-    `bitfun-tooltip--${actualPlacement}`,
-    visible && positionReady && 'bitfun-tooltip--visible',
+    `bitfun-tooltip--${layout.placement}`,
+    visible && layout.ready && 'bitfun-tooltip--visible',
     interactive && 'bitfun-tooltip--interactive',
     className
   ].filter(Boolean).join(' ');
@@ -403,8 +417,8 @@ export const Tooltip: React.FC<TooltipProps> = ({
           onMouseLeave={interactive ? scheduleHideTooltip : undefined}
           style={{
             position: 'fixed',
-            top: `${position.top}px`,
-            left: `${position.left}px`,
+            top: `${layout.top}px`,
+            left: `${layout.left}px`,
             zIndex: 9999,
           }}
         >

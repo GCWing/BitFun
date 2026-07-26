@@ -63,6 +63,7 @@ export class ToolExecutionService {
   private processedEvents: Set<string> = new Set(); 
   private listenersSetup: boolean = false;
   private cleanupIntervalId: ReturnType<typeof setInterval> | null = null;
+  private unlistenFns: Array<() => void> = [];
 
   static getInstance(): ToolExecutionService {
     if (!ToolExecutionService.instance) {
@@ -86,6 +87,17 @@ export class ToolExecutionService {
       clearInterval(this.cleanupIntervalId);
       this.cleanupIntervalId = null;
     }
+    // Detach backend event listeners so a destroy → getInstance cycle does
+    // not accumulate duplicate registrations.
+    for (const unlisten of this.unlistenFns) {
+      try {
+        unlisten();
+      } catch (error) {
+        log.warn('Failed to remove tool execution listener', error);
+      }
+    }
+    this.unlistenFns = [];
+    this.listenersSetup = false;
     this.eventHandlers.clear();
     this.activeExecutions.clear();
     this.processedEvents.clear();
@@ -100,24 +112,24 @@ export class ToolExecutionService {
     try {
       
       // Listen for tool execution started events
-      api.listen<ToolExecutionStartedEvent>('backend-event-toolexecutionstarted', (payload) => {
+      this.unlistenFns.push(api.listen<ToolExecutionStartedEvent>('backend-event-toolexecutionstarted', (payload) => {
         this.handleToolExecutionStarted(payload);
-      });
+      }));
 
       // Listen for tool execution progress events
-      api.listen<ToolExecutionProgressEvent>('backend-event-toolexecutionprogress', (payload) => {
+      this.unlistenFns.push(api.listen<ToolExecutionProgressEvent>('backend-event-toolexecutionprogress', (payload) => {
         this.handleToolExecutionProgress(payload);
-      });
+      }));
 
       // Listen for tool execution completed events
-      api.listen<ToolExecutionCompletedEvent>('backend-event-toolexecutioncompleted', (payload) => {
+      this.unlistenFns.push(api.listen<ToolExecutionCompletedEvent>('backend-event-toolexecutioncompleted', (payload) => {
         this.handleToolExecutionCompleted(payload);
-      });
+      }));
 
       // Listen for tool execution error events
-      api.listen<ToolExecutionErrorEvent>('backend-event-toolexecutionerror', (payload) => {
+      this.unlistenFns.push(api.listen<ToolExecutionErrorEvent>('backend-event-toolexecutionerror', (payload) => {
         this.handleToolExecutionError(payload);
-      });
+      }));
 
       this.listenersSetup = true;
     } catch (error) {

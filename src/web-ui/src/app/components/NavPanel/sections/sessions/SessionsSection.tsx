@@ -76,6 +76,9 @@ const ScheduledJobsModal = lazy(() => import('@/app/components/scheduled-jobs/Sc
 type SessionMode = 'code' | 'cowork' | 'claw';
 type HistoryOpenIntentDispatchResult = 'none' | 'dispatched' | 'already-pending';
 
+/** Page size for the fully-expanded (level 2) session list. */
+const SESSIONS_LEVEL_2_PAGE = 200;
+
 const escapeRegExp = (value: string): string =>
   value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
@@ -183,6 +186,15 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
   const [editingSessionId, setEditingSessionId] = useState<string | null>(null);
   const [editingTitle, setEditingTitle] = useState('');
   const [expandLevel, setExpandLevel] = useState<0 | 1 | 2>(0);
+  // Level-2 ("show all") renders in pages of 200 rows so a huge session
+  // history cannot mount thousands of un-virtualized rows at once.
+  const [level2DisplayCount, setLevel2DisplayCount] = useState(SESSIONS_LEVEL_2_PAGE);
+
+  useEffect(() => {
+    if (expandLevel !== 2) {
+      setLevel2DisplayCount(SESSIONS_LEVEL_2_PAGE);
+    }
+  }, [expandLevel]);
   const [metadataPageState, setMetadataPageState] = useState<{
     totalTopLevelCount: number | null;
     syncedTopLevelCount: number | null;
@@ -590,10 +602,11 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
 
   const sessionDisplayLimit = useMemo(() => {
     const total = topLevelSessions.length;
-    if (expandLevel === 2 || total <= SESSIONS_LEVEL_0) return total;
+    if (expandLevel === 2) return Math.min(total, level2DisplayCount);
+    if (total <= SESSIONS_LEVEL_0) return total;
     if (expandLevel === 1) return Math.min(total, SESSIONS_LEVEL_1);
     return SESSIONS_LEVEL_0;
-  }, [topLevelSessions.length, expandLevel]);
+  }, [topLevelSessions.length, expandLevel, level2DisplayCount]);
 
   const totalTopLevelSessionCount = getEffectiveTopLevelSessionCount(
     metadataPageState.totalTopLevelCount,
@@ -1417,6 +1430,22 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
             </Tooltip>
           );
         })}
+
+      {expandLevel === 2 && topLevelSessions.length > sessionDisplayLimit && (
+        <button
+          type="button"
+          className="bitfun-nav-panel__inline-toggle"
+          data-testid="nav-session-list-load-more"
+          onClick={() => setLevel2DisplayCount(prev => prev + SESSIONS_LEVEL_2_PAGE)}
+        >
+          <span className="bitfun-nav-panel__inline-toggle-dots">···</span>
+          <span>
+            {t('nav.sessions.showMore', {
+              count: topLevelSessions.length - sessionDisplayLimit,
+            })}
+          </span>
+        </button>
+      )}
 
       {expandToggleState.shouldRender && (
         <button

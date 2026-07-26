@@ -17,6 +17,7 @@ import { useI18n } from '@/infrastructure/i18n';
 import { notificationService } from '@/shared/notification-system';
 import { globalEventBus } from '@/infrastructure/event-bus';
 import { shouldIgnoreCardToggleClick } from '@/shared/utils/textSelection';
+import { observeElementResize } from '@/shared/utils/sharedResizeObserver';
 import { formatContextForPrompt } from '@/shared/utils/contextPrompt';
 import { Tooltip, confirmDanger, ToolProcessingDots } from '@/component-library';
 import { ReproductionStepsBlock } from '@/component-library/components/Markdown/ReproductionStepsBlock';
@@ -97,15 +98,15 @@ export const UserMessageItem = React.memo<UserMessageItemProps>(
     const [hasOverflow, setHasOverflow] = useState(false);
     const [isRollingBack, setIsRollingBack] = useState(false);
     const [lightboxImage, setLightboxImage] = useState<string | null>(null);
-    const {
-      editingTurnId,
-      draft: editDraft,
-      isSubmitting: isEditSubmitting,
-      beginEdit,
-      cancelEdit,
-      setDraft: setEditDraft,
-      setSubmitting: setEditSubmitting,
-    } = useMessageEditStore();
+    // Fine-grained selectors: only the message being edited re-renders on
+    // draft keystrokes; other list items subscribe to booleans that rarely flip.
+    const isEditing = useMessageEditStore(s => s.editingTurnId === turnId);
+    const editDraft = useMessageEditStore(s => (s.editingTurnId === turnId ? s.draft : ''));
+    const isEditSubmitting = useMessageEditStore(s => s.isSubmitting);
+    const beginEdit = useMessageEditStore(s => s.beginEdit);
+    const cancelEdit = useMessageEditStore(s => s.cancelEdit);
+    const setEditDraft = useMessageEditStore(s => s.setDraft);
+    const setEditSubmitting = useMessageEditStore(s => s.setSubmitting);
     const containerRef = useRef<HTMLDivElement>(null);
     const contentRef = useRef<HTMLDivElement>(null);
     const messageContent = typeof message?.content === 'string' ? message.content : String(message?.content || '');
@@ -136,7 +137,6 @@ export const UserMessageItem = React.memo<UserMessageItemProps>(
     const turnIndex = currentSession?.dialogTurns.findIndex(t => t.id === turnId) ?? -1;
     const dialogTurn = turnIndex >= 0 ? currentSession?.dialogTurns[turnIndex] : null;
     const isFailed = dialogTurn?.status === 'error';
-    const isEditing = editingTurnId === turnId;
     const resolvedSessionId = sessionId ?? currentSession?.sessionId;
     const historyActionsBlockedByPartialRestore = currentSession?.isPartial === true;
     const isSystemTriggered = Boolean(
@@ -199,27 +199,26 @@ export const UserMessageItem = React.memo<UserMessageItemProps>(
       ? composerPresentationToAccessibleText(composerPresentation)
       : messageContent;
     
-    // Check whether content overflows.
+    // Check whether content overflows. Uses the shared ResizeObserver instead
+    // of a per-message window resize listener: observer callbacks run after
+    // layout, so the scrollHeight/clientHeight reads do not force reflow.
     useEffect(() => {
+      const element = contentRef.current;
+      if (!element || expanded) {
+        setHasOverflow(false);
+        return;
+      }
+
       const checkOverflow = () => {
-        if (contentRef.current && !expanded) {
-          const element = contentRef.current;
-          // Detect truncated text.
-          const isOverflowing = element.scrollHeight > element.clientHeight || 
-                                element.scrollWidth > element.clientWidth;
-          setHasOverflow(isOverflowing);
-        } else {
-          setHasOverflow(false);
-        }
+        // Detect truncated text.
+        const isOverflowing = element.scrollHeight > element.clientHeight ||
+                              element.scrollWidth > element.clientWidth;
+        setHasOverflow(isOverflowing);
       };
-      
+
       checkOverflow();
-      
-      window.addEventListener('resize', checkOverflow);
-      
-      return () => {
-        window.removeEventListener('resize', checkOverflow);
-      };
+
+      return observeElementResize(element, checkOverflow);
     }, [composerPresentation, displayText, expanded]);
     
     // Copy the user message.
