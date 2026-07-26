@@ -3,6 +3,7 @@
  * worker.call → JS Worker, dialog.open/save/message → Tauri dialog,
  * ai.* → Host AI client, agent.* → Host agent bridge (hidden subagent runs),
  * deck.renderPage → hidden host WebView slide rasterization (export),
+ * chat.* → floating session bubble composer claims and session focus,
  * clipboard.* → Host navigator.clipboard.
  * Also handles bitfun/request-theme and pushes theme changes to the iframe.
  */
@@ -18,6 +19,13 @@ import { useI18n } from '@/infrastructure/i18n';
 import type { MiniAppRunScope } from '../customization/miniAppCustomizationTypes';
 import { systemAPI } from '@/infrastructure/api/service-api/SystemAPI';
 import { workspaceAPI } from '@/infrastructure/api';
+import {
+  useMiniAppStore,
+  MINIAPP_COMPOSER_MESSAGE_EVENT,
+  MINIAPP_COMPOSER_DRAFT_EVENT,
+} from '../miniAppStore';
+import { flowChatStore } from '@/flow_chat/store/FlowChatStore';
+import { syncSessionToModernStore } from '@/flow_chat/services/storeSync';
 
 interface JSONRPC {
   jsonrpc?: string;
@@ -32,6 +40,9 @@ interface AiStreamPayload {
   type: 'chunk' | 'done' | 'error';
   data: Record<string, unknown>;
 }
+
+/** Distinguishes runners of the same app (installed app vs. draft preview). */
+let composerTokenSeq = 0;
 
 export function useMiniAppBridge(
   iframeRef: RefObject<HTMLIFrameElement>,
@@ -68,6 +79,15 @@ export function useMiniAppBridge(
   // Hidden agent sessions started by this iframe; used to filter the global
   // agentic:// event stream before forwarding events into the iframe.
   const agentSessionIdsRef = useRef<Set<string>>(new Set());
+
+  // This runner's identity for bubble composer claims, and the pending
+  // chat.focusSession retries, which must not outlive the iframe.
+  const composerTokenRef = useRef<string>('');
+  if (!composerTokenRef.current) {
+    composerTokenSeq += 1;
+    composerTokenRef.current = `${app.id}#${composerTokenSeq}`;
+  }
+  const focusRetryTimersRef = useRef<number[]>([]);
 
   useLayoutEffect(() => {
     const handler = async (event: MessageEvent) => {
@@ -294,6 +314,86 @@ export function useMiniAppBridge(
           return;
         }
 
+        // ── Floating bubble chat commands ────────────────────────────────────
+        // Gated on agent permission: the composer claim exists so agentic
+        // MiniApps can reuse the bubble as their input surface, and
+        // focusSession only ever exposes sessions the MiniApp itself started.
+        if (method.startsWith('chat.')) {
+          if (!agentEnabledRef.current) {
+            replyError(`MiniApp '${appId}' does not have agent permission (permissions.agent.enabled).`);
+            return;
+          }
+          if (method === 'chat.claimComposer') {
+            useMiniAppStore.getState().claimComposer(appId, {
+              token: composerTokenRef.current,
+              placeholder: typeof params.placeholder === 'string' ? params.placeholder : undefined,
+            });
+            reply(null);
+            return;
+          }
+          if (method === 'chat.releaseComposer') {
+            useMiniAppStore.getState().releaseComposer(appId, composerTokenRef.current);
+            reply(null);
+            return;
+          }
+          if (method === 'chat.setComposerDraft') {
+            // Only the runner that currently holds the composer may pop the
+            // bubble open — a background runner must not steal focus.
+            const claim = useMiniAppStore.getState().composerClaims[appId];
+            if (claim?.token !== composerTokenRef.current) {
+              replyError('chat.setComposerDraft: this MiniApp does not hold the bubble composer.');
+              return;
+            }
+            window.dispatchEvent(
+              new CustomEvent(MINIAPP_COMPOSER_DRAFT_EVENT, {
+                detail: { token: composerTokenRef.current, text: String(params.text ?? '') },
+              }),
+            );
+            reply(null);
+            return;
+          }
+          if (method === 'chat.focusSession') {
+            const sessionId = String(params.sessionId ?? '');
+            if (!sessionId || !agentSessionIdsRef.current.has(sessionId)) {
+              replyError(
+                'chat.focusSession: unknown session. Only sessions this MiniApp started via agent.run can be focused.',
+              );
+              return;
+            }
+            // The MiniApp calls this right after agent.run resolves, but the
+            // session only lands in the store on its first dialog-turn-started
+            // event — retry briefly instead of silently losing the focus.
+            const trySwitch = () => {
+              if (!flowChatStore.getState().sessions.has(sessionId)) return false;
+              if (flowChatStore.getState().activeSessionId !== sessionId) {
+                flowChatStore.switchSession(sessionId);
+              }
+              syncSessionToModernStore(sessionId);
+              return true;
+            };
+            if (!trySwitch()) {
+              let attempts = 0;
+              const timer = window.setInterval(() => {
+                attempts += 1;
+                // Stop once the iframe is gone: switching the user's session
+                // after they closed the MiniApp would be a stray navigation.
+                const abandoned = !iframeRef.current?.contentWindow;
+                if (abandoned || trySwitch() || attempts >= 20) {
+                  window.clearInterval(timer);
+                  focusRetryTimersRef.current = focusRetryTimersRef.current.filter(
+                    (id) => id !== timer,
+                  );
+                }
+              }, 250);
+              focusRetryTimersRef.current.push(timer);
+            }
+            reply(null);
+            return;
+          }
+          replyError(`Unknown chat method: ${method}`);
+          return;
+        }
+
         // ── Deck export commands ─────────────────────────────────────────────
         if (method === 'deck.renderPage') {
           const result = await miniAppAPI.renderSlidePage(appId, {
@@ -394,6 +494,39 @@ export function useMiniAppBridge(
       '*',
     );
   }, [currentLanguage, iframeRef]);
+
+  // Forward user messages typed in the floating bubble composer (dispatched by
+  // FloatingMiniChat while this MiniApp holds a composer claim) into the
+  // iframe as 'chat:userMessage' (consumed via app.chat.onUserMessage).
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const detail = (e as CustomEvent<{ token?: string; text?: string }>).detail;
+      // Match on the claim token, not the app ID: the installed app and its
+      // draft preview share an ID, and both listen here.
+      if (!detail || detail.token !== composerTokenRef.current) return;
+      if (typeof detail.text !== 'string') return;
+      iframeRef.current?.contentWindow?.postMessage(
+        { type: 'bitfun:event', event: 'chat:userMessage', payload: { text: detail.text } },
+        '*',
+      );
+    };
+    window.addEventListener(MINIAPP_COMPOSER_MESSAGE_EVENT, handler);
+    return () => {
+      window.removeEventListener(MINIAPP_COMPOSER_MESSAGE_EVENT, handler);
+    };
+  }, [iframeRef]);
+
+  // Neither a composer claim nor a pending focus retry may outlive the iframe.
+  useEffect(() => {
+    const currentAppId = app.id;
+    const token = composerTokenRef.current;
+    const timers = focusRetryTimersRef;
+    return () => {
+      useMiniAppStore.getState().releaseComposer(currentAppId, token);
+      timers.current.forEach((id) => window.clearInterval(id));
+      timers.current = [];
+    };
+  }, [app.id]);
 
   // Listen for AI stream events from Tauri and forward them to the iframe.
   useEffect(() => {

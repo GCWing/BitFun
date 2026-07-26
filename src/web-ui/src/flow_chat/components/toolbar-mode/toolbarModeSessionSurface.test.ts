@@ -28,10 +28,12 @@ describe.each(SURFACES)('$name session surface', ({ path }) => {
     expect(source).toContain('showChatInput');
   });
 
-  it('keeps no private conversation view or composer of its own', () => {
+  it('keeps no private conversation view or session composer of its own', () => {
     expect(source).not.toContain('ModernFlowChatContainer');
     expect(source).not.toContain('<input');
     expect(source).not.toContain('toolbar-send-message');
+    // Nothing here may submit into the host session: that is ChatInput's job.
+    expect(source).not.toContain('sendMessage');
   });
 
   it('takes its session affordances from the shared SessionMenu', () => {
@@ -55,5 +57,33 @@ describe('session surface composition', () => {
       "from '../../../flow_chat/components/modern/ModernFlowChatContainer'"
     );
     expect(chatPaneSource).toContain("from '../../../flow_chat/components/ChatInput'");
+  });
+});
+
+/**
+ * The one composer the bubble may own is the MiniApp composer: an Agentic
+ * MiniApp (PPT Live) claims the bubble as its input surface, so what the user
+ * types is handed to that MiniApp instead of being submitted into the host
+ * session. It is not a second chat composer — it never talks to FlowChat — and
+ * it exists only while a claim is active.
+ */
+describe('floating mini chat bubble MiniApp composer', () => {
+  const source = readSource('../../../app/layout/FloatingMiniChat.tsx');
+
+  it('swaps out the session composer only while a MiniApp holds a claim', () => {
+    expect(source).toContain('showChatInput={!activeComposerClaim}');
+    expect(source).toContain('activeComposerClaim && (');
+  });
+
+  it('hands input to the MiniApp rather than to the session', () => {
+    expect(source).toContain('MINIAPP_COMPOSER_MESSAGE_EVENT');
+    // Routing is keyed by claim token, never by app id: one app can have two
+    // live runners (installed app + draft preview) and only one owns the input.
+    expect(source).toContain('detail: { token, text }');
+  });
+
+  it('prefills without sending when a MiniApp offers an example prompt', () => {
+    expect(source).toContain('MINIAPP_COMPOSER_DRAFT_EVENT');
+    expect(source).toContain('setComposerPrefill');
   });
 });

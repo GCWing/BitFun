@@ -193,6 +193,9 @@ MiniApp 框架**只暴露下列能力**，没有任何"通用 BitFun 后端通�
 | AI | `app.ai.complete / chat / cancel / getModels` | 复用宿主 AIClient，受 `permissions.ai`（含 `allowed_models` / 速率限制） |
 | 对话框 | `app.dialog.open/save/message` | Tauri dialog 插件 |
 | 剪贴板 | `app.clipboard.readText/writeText` | 宿主 navigator.clipboard |
+| Agent 会话 | `app.agent.run / cancel / turnText / cancelStaleRuns / onEvent` | 受 `permissions.agent.enabled` 限制；启动小应用自己的隐藏 agent 回合，事件只回流到发起的小应用 |
+| 悬浮会话气泡 | `app.chat.claimComposer / releaseComposer / focusSession / setComposerDraft / onUserMessage` | 受 `permissions.agent.enabled` 限制；把右下角悬浮会话气泡认领为小应用的输入框与过程展示（Agentic MiniApp 模式，样板间：`builtin-ppt-live`） |
+| 幻灯片栅格化 | `app.deck.renderPage` | 在隐藏宿主 WebView 中渲染单页 HTML，返回 base64 PNG/PDF（导出用） |
 | 自定义后端 | `app.call('xxx', …)` + `worker.js` | 仅 `node.enabled = true` 时可用，自己实现业务逻辑 |
 | 主题 / i18n | `app.theme` / `app.locale` / `app.onThemeChange` / `app.onLocaleChange` / `app.t(...)` | 见对应章节 |
 
@@ -203,7 +206,7 @@ MiniApp 框架**只暴露下列能力**，没有任何"通用 BitFun 后端通�
 - WorkspaceService（结构化工作区索引、统一搜索）
 - GitService（结构化 status / diff / blame，区别于裸 `git` 命令）
 - TerminalService（创建/读写交互式终端）
-- Session / AgenticSystem（启动 Agent 会话、消费工具调用与流式事件）
+- Session / AgenticSystem 的**通用**会话管理（任意会话的创建、接管、读写）——小应用只能通过 `app.agent.*` 启动**自己的**隐藏会话并消费其事件，再通过 `app.chat.*` 借用悬浮会话气泡做输入与过程展示；不能访问其他会话
 - LSP / Snapshot / Mermaid / Skills / Browser API / Computer Use / Config 等
 
 需要这类能力时的合规姿势：
@@ -227,6 +230,8 @@ MiniApp UI 内通过 **window.app** 访问：
 | `app.os.*` | 同上 |
 | `app.storage.*` | 同上 |
 | `app.dialog.open/save/message` | 由 Bridge 转 Tauri dialog 插件 |
+| `app.agent.*` | 隐藏 agent 回合（`permissions.agent.enabled`），事件经 `app.agent.onEvent` 回流 |
+| `app.chat.*` | 悬浮会话气泡集成：`claimComposer({ placeholder })` 认领气泡输入框（当前 tab 为本小应用时，用户输入经 `onUserMessage` 送达）、`focusSession(sessionId)` 让气泡展示本小应用的 agent 会话、`setComposerDraft(text)` 展开气泡并预填输入（不发送，供示例 prompt 使用）|
 | 生命周期 / 事件 | 见 bridge_builder 生成的适配器 |
 
 ## 主题集成

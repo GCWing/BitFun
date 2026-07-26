@@ -1,7 +1,7 @@
 {
   "id": "builtin-ppt-live",
   "name": "PPT Live",
-  "description": "AI deck studio for PPT generation and editing: create an outline, generate designed slides, refine page content, preview, and export editable PPTX or shareable HTML.",
+  "description": "AI deck studio for PPT generation and editing: describe your deck in the floating session bubble, watch designed slides land on the canvas, refine page content, preview, and export editable PPTX or shareable HTML.",
   "icon": "Presentation",
   "category": "productivity",
   "tags": [
@@ -10,7 +10,7 @@
     "ppt",
     "ai"
   ],
-  "version": 252,
+  "version": 253,
   "created_at": 0,
   "updated_at": 0,
   "permissions": {
@@ -52,7 +52,7 @@
     "locales": {
       "zh-CN": {
         "name": "PPT 工作台",
-        "description": "AI PPT 工作台：生成大纲、生成设计页面、局部优化、演示预览，并导出可编辑 PPTX 或 HTML 演示稿。",
+        "description": "AI PPT 工作台：在右下角悬浮会话气泡中描述需求，设计页面实时上屏；支持局部优化、演示预览，并导出可编辑 PPTX 或 HTML 演示稿。",
         "tags": [
           "内置",
           "演示",
@@ -62,7 +62,7 @@
       },
       "en-US": {
         "name": "PPT Live",
-        "description": "AI deck studio for PPT generation and editing: create an outline, generate designed slides, refine page content, preview, and export editable PPTX or shareable HTML.",
+        "description": "AI deck studio for PPT generation and editing: describe your deck in the floating session bubble, watch designed slides land on the canvas, refine page content, preview, and export editable PPTX or shareable HTML.",
         "tags": [
           "built-in",
           "presentation",

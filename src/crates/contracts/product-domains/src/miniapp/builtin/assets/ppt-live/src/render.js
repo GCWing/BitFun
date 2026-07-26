@@ -847,9 +847,8 @@ export function syncDensitySlider(density = 'standard') {
 }
 
 export function syncInputs(state) {
-  const promptDraft = typeof state.promptDraft === 'string' ? state.promptDraft : '';
-  const hasDeck = Array.isArray(state.slides) && state.slides.length > 0;
-  value('topicInput', hasDeck ? promptDraft : (promptDraft || state.brief.topic));
+  // No prompt field to mirror: input lives in the host's floating session
+  // bubble, which owns its own draft.
   text('deckTitle', state.title || t('defaultDeckTitle'));
   text('deckMeta', t('slidesMeta', { count: state.slides.length }));
   text('currentSlideIndex', String(getActiveIndex(state) + 1));
@@ -889,8 +888,10 @@ export function syncStylePanelFromState(state) {
 export function readInputs(state, options = {}) {
   const includeTopic = options.includeTopic !== false;
   if (includeTopic) {
-    state.brief.topic = val('topicInput');
-    state.promptDraft = state.brief.topic;
+    // PPT Live has no topic input of its own: the instruction arrives from the
+    // floating session bubble and is stored on `state.promptDraft` before this
+    // runs (see submitInstruction in ui.js).
+    state.brief.topic = String(state.promptDraft || '').trim();
     inferBriefFromPrompt(state);
   }
 }
@@ -1126,7 +1127,7 @@ export function renderSlideCanvas(state, handlers) {
     canvas.innerHTML = isGenerating
       ? `<div class="slide-empty-state"><span aria-hidden="true">PL</span><strong>${escapeHtml(t('generationAgentWorking'))}</strong><p>${escapeHtml(t('agentWorkingDetail'))}</p></div>`
       : `<div class="welcome-hero"><span class="welcome-hero__icon" aria-hidden="true">PL</span><h2>${escapeHtml(t('welcomeTitle'))}</h2><p>${escapeHtml(t('welcomeSubcopy'))}</p><div class="welcome-hero__tips"><button type="button" class="welcome-tip" data-welcome-prompt="${escapeHtml(t('welcomeTip1'))}">${escapeHtml(t('welcomeTip1'))}</button><button type="button" class="welcome-tip" data-welcome-prompt="${escapeHtml(t('welcomeTip2'))}">${escapeHtml(t('welcomeTip2'))}</button><button type="button" class="welcome-tip" data-welcome-prompt="${escapeHtml(t('welcomeTip3'))}">${escapeHtml(t('welcomeTip3'))}</button></div></div>`;
-    bindWelcomeTips(canvas);
+    bindWelcomeTips(canvas, handlers);
     applySlideCanvasBackground(canvas, null);
     fitSlideCanvas();
     return;
@@ -1146,7 +1147,7 @@ export function renderSlideCanvas(state, handlers) {
         </div>
       </div>
     `;
-    bindWelcomeTips(canvas);
+    bindWelcomeTips(canvas, handlers);
     applySlideCanvasBackground(canvas, null);
     fitSlideCanvas();
     return;
@@ -1357,13 +1358,12 @@ function slideQualityBadge(slide) {
   return `<div class="slide-quality-badge" data-severity="${highCount ? 'high' : 'medium'}">${escapeHtml(label)}</div>`;
 }
 
-function bindWelcomeTips(canvas) {
+// Example prompts are seeds the user still edits, so a tip prefills the
+// floating bubble composer (PPT Live's only input) instead of submitting.
+function bindWelcomeTips(canvas, handlers) {
   canvas.querySelectorAll('[data-welcome-prompt]').forEach((node) => {
     node.addEventListener('click', () => {
-      const input = byId('topicInput');
-      if (!input) return;
-      input.value = node.dataset.welcomePrompt || node.textContent || '';
-      input.focus();
+      handlers?.useWelcomePrompt?.(node.dataset.welcomePrompt || node.textContent || '');
     });
   });
 }
@@ -1456,15 +1456,6 @@ export function normalizeSlideDocument(html) {
 
 function byId(id) {
   return document.getElementById(id);
-}
-
-function value(id, next) {
-  const node = byId(id);
-  if (node && document.activeElement !== node) node.value = next ?? '';
-}
-
-function val(id) {
-  return byId(id)?.value || '';
 }
 
 function text(id, value) {

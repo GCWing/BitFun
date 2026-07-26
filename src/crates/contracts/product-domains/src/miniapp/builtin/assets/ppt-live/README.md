@@ -2,6 +2,43 @@
 
 PPT Live 是 BitFun 的内置 MiniApp，用于 AI 驱动的 PPT 生成、编辑和导出。
 
+## Agentic MiniApp 样板间：复用悬浮会话气泡
+
+PPT Live 同时是 BitFun **Agentic MiniApp** 的样板间：它自己**没有输入框，也没有
+过程显示**——右侧栏只有样式设置和一张引导卡。用户在右下角的悬浮会话气泡里描述
+需求，链路如下：
+
+```
+用户在悬浮气泡输入
+  → FloatingMiniChat 检测到当前 tab 的 MiniApp 持有 composer claim
+  → window CustomEvent 'miniapp-composer-message'
+  → useMiniAppBridge 转成 iframe 事件 'chat:userMessage'
+  → ui.js submitInstruction(text)：包装 ppt-design 协议 prompt，走原有
+    app.agent.run 隐藏会话（首轮建会话，后续编辑复用同一 sessionId）
+  → executeBackendTurn 拿到 sessionId 后调用 app.chat.focusSession(sessionId)
+  → 气泡的 ChatPane 切到该会话——agent 的执行过程直接显示在气泡里
+  → agent 按文件协议写 project.json / slides/*.html，PPT Live 渐进式读文件上屏
+```
+
+涉及的 `app.chat.*` API（`bridge_builder.rs` 生成，宿主端在
+`web-ui/src/app/scenes/miniapps/hooks/useMiniAppBridge.ts`，需要
+`permissions.agent.enabled = true`）：
+
+| API | 作用 |
+|-----|------|
+| `app.chat.claimComposer({ placeholder })` | 认领气泡输入框；本应用 tab 激活时用户输入改送本应用。幂等 upsert，locale 变更时重调可更新占位文案 |
+| `app.chat.onUserMessage(fn)` | 接收气泡输入，payload 为 `{ text }` |
+| `app.chat.focusSession(sessionId)` | 让气泡的会话面板展示本应用自己的 agent 会话（仅限本应用 `agent.run` 启动的会话） |
+| `app.chat.setComposerDraft(text)` | 展开气泡并预填输入框，**不发送**——欢迎页的示例 prompt 用它，用户仍可编辑后再发 |
+| `app.chat.releaseComposer()` | 主动释放；iframe 卸载时宿主自动释放 |
+
+> 认领是按 **runner 实例**（token）而不是 appId 记账的：AI 定制时同一个 appId 会同时挂载
+> 已安装实例和草稿预览实例，若按 appId 路由，一条气泡消息会让两个 iframe 各跑一次 agent。
+
+为什么这是好实践：PPT Live 在用户输入需求后本来就是启动一个 agent 会话去完成
+任务——与其在 MiniApp 里再造一套输入框和过程流水线，不如把输入和过程都交给宿主
+现成的会话表面，MiniApp 只专注于自己的领域视图（画布、样式、导出）。
+
 ## 目录结构
 
 ```

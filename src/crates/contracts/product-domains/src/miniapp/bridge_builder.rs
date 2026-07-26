@@ -5,7 +5,7 @@ use serde_json;
 
 /// Build the Runtime Adapter script (JS) to inject into the iframe.
 /// Exposes window.app with call(), fs.*, shell.*, net.*, os.*, storage.*, dialog.*,
-/// ai.*, agent.*, deck.*, clipboard.*, lifecycle, events.
+/// ai.*, agent.*, deck.*, chat.*, clipboard.*, lifecycle, events.
 pub fn build_bridge_script(
     app_id: &str,
     app_data_dir: &str,
@@ -133,6 +133,24 @@ pub fn build_bridge_script(
     // page-by-page export rasterization.
     deck: {{
       renderPage: (opts) => _rpc('deck.renderPage', opts || {{}}),
+    }},
+
+    // Chat namespace — floating session bubble integration for agentic
+    // MiniApps. While this MiniApp's tab is active, `claimComposer` routes the
+    // bubble composer to the MiniApp: user messages arrive via
+    // 'chat:userMessage' instead of being sent to the host chat session, and
+    // `focusSession` shows one of the MiniApp's own agent.run sessions in the
+    // bubble so agent progress renders on the shared chat surface.
+    // Requires manifest permissions.agent.enabled = true; enforced host-side.
+    chat: {{
+      claimComposer:   (opts) => _rpc('chat.claimComposer', opts || {{}}),
+      releaseComposer: () => _rpc('chat.releaseComposer', {{}}),
+      focusSession:    (sessionId) => _rpc('chat.focusSession', {{ sessionId }}),
+      // Opens the bubble and prefills its composer without sending, so the
+      // MiniApp can offer example prompts the user still edits and submits.
+      setComposerDraft: (text) => _rpc('chat.setComposerDraft', {{ text }}),
+      onUserMessage:   (fn) => app.on('chat:userMessage', fn),
+      offUserMessage:  (fn) => app.off('chat:userMessage', fn),
     }},
 
     // Clipboard namespace — proxies to host navigator.clipboard (bypasses sandbox restriction).

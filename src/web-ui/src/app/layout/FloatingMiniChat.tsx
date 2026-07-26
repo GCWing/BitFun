@@ -11,7 +11,7 @@
 
 import React, { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import { MessageSquare, X } from 'lucide-react';
+import { MessageSquare, Send, X } from 'lucide-react';
 import { flowChatStore } from '../../flow_chat/store/FlowChatStore';
 import { syncSessionToModernStore } from '../../flow_chat/services/storeSync';
 import ChatPane from '@/app/scenes/session/ChatPane';
@@ -19,7 +19,12 @@ import { Tooltip } from '@/component-library';
 import { useCurrentWorkspace } from '@/infrastructure/contexts/WorkspaceContext';
 import { SessionMenu, useFlowChatSessions } from '../../flow_chat/components/session-menu';
 import { useSceneStore } from '@/app/stores/sceneStore';
-import { useMiniAppStore } from '@/app/scenes/miniapps/miniAppStore';
+import {
+  useMiniAppStore,
+  MINIAPP_COMPOSER_MESSAGE_EVENT,
+  MINIAPP_COMPOSER_DRAFT_EVENT,
+} from '@/app/scenes/miniapps/miniAppStore';
+import { pickLocalizedString } from '@/app/scenes/miniapps/utils/pickLocalizedString';
 import './FloatingMiniChat.scss';
 
 /**
@@ -33,14 +38,89 @@ type PanelPhase = 'closed' | 'opening' | 'open';
  *  transition). Must stay >= $fmc-open-duration in FloatingMiniChat.scss. */
 const PANEL_OPEN_SETTLE_MS = 600;
 
-export const FloatingMiniChat: React.FC = () => {
+/**
+ * Replacement composer shown when the active MiniApp has claimed the bubble
+ * composer (`app.chat.claimComposer`). Instead of submitting a turn into the
+ * host chat session, the text is handed to the MiniApp, which wraps it in its
+ * own protocol prompt and runs its own agent session — the session the bubble
+ * then displays via `app.chat.focusSession`.
+ */
+const MiniAppComposer: React.FC<{
+  token: string;
+  appName: string;
+  placeholder?: string;
+  disabled: boolean;
+  /** Prefill pushed by the MiniApp; a new object marks a new request. */
+  prefill: { text: string } | null;
+}> = ({ token, appName, placeholder, disabled, prefill }) => {
   const { t } = useTranslation('flow-chat');
+  const [draft, setDraft] = useState('');
+  const inputRef = useRef<HTMLTextAreaElement>(null);
+
+  useEffect(() => {
+    if (!prefill) return;
+    setDraft(prefill.text);
+    inputRef.current?.focus();
+  }, [prefill]);
+
+  const send = useCallback(() => {
+    const text = draft.trim();
+    if (!text || disabled) return;
+    window.dispatchEvent(
+      new CustomEvent(MINIAPP_COMPOSER_MESSAGE_EVENT, { detail: { token, text } })
+    );
+    setDraft('');
+  }, [draft, disabled, token]);
+
+  const handleKeyDown = useCallback(
+    (e: React.KeyboardEvent) => {
+      if (e.key !== 'Enter' || e.shiftKey || e.nativeEvent.isComposing) return;
+      e.preventDefault();
+      send();
+    },
+    [send]
+  );
+
+  return (
+    <div className="bitfun-fmc__miniapp-composer">
+      <div className="bitfun-fmc__miniapp-composer-hint">
+        {t('miniAppComposer.hint', { app: appName })}
+      </div>
+      <div className="bitfun-fmc__miniapp-composer-row">
+        <textarea
+          ref={inputRef}
+          className="bitfun-fmc__miniapp-composer-input"
+          rows={2}
+          value={draft}
+          placeholder={placeholder || t('miniAppComposer.placeholder', { app: appName })}
+          onChange={(e) => setDraft(e.target.value)}
+          onKeyDown={handleKeyDown}
+        />
+        <button
+          type="button"
+          className="bitfun-fmc__miniapp-composer-send"
+          onClick={send}
+          disabled={disabled || !draft.trim()}
+          aria-label={t('miniAppComposer.send')}
+        >
+          <Send size={14} />
+        </button>
+      </div>
+    </div>
+  );
+};
+
+export const FloatingMiniChat: React.FC = () => {
+  const { t, i18n } = useTranslation('flow-chat');
   const activeTabId = useSceneStore((state) => state.activeTabId);
   const customizingAppIds = useMiniAppStore((state) => state.customizingAppIds);
+  const composerClaims = useMiniAppStore((state) => state.composerClaims);
+  const apps = useMiniAppStore((state) => state.apps);
   const { workspacePath } = useCurrentWorkspace();
 
   const [phase, setPhase] = useState<PanelPhase>('closed');
   const [surfaceMounted, setSurfaceMounted] = useState(false);
+  const [composerPrefill, setComposerPrefill] = useState<{ text: string } | null>(null);
   const isOpen = phase !== 'closed';
   const panelRef = useRef<HTMLDivElement>(null);
 
@@ -68,6 +148,17 @@ export const FloatingMiniChat: React.FC = () => {
     activeMiniAppId && customizingAppIds.includes(activeMiniAppId)
   );
 
+  // When the active MiniApp has claimed the bubble composer, the bubble stays
+  // the single conversation surface but input is routed to the MiniApp instead
+  // of the host chat session (BitFun's Agentic MiniApp pattern — see PPT Live).
+  const activeComposerClaim = activeMiniAppId ? composerClaims[activeMiniAppId] : undefined;
+  const activeMiniAppName = useMemo(() => {
+    if (!activeMiniAppId) return '';
+    const meta = apps.find((app) => app.id === activeMiniAppId);
+    if (!meta) return activeMiniAppId;
+    return pickLocalizedString(meta, i18n.language, 'name') || activeMiniAppId;
+  }, [apps, activeMiniAppId, i18n.language]);
+
   // Idempotent so it is safe to fire from several input paths at once, and so a
   // repeat press during the open animation can never toggle the panel back.
   //
@@ -82,6 +173,24 @@ export const FloatingMiniChat: React.FC = () => {
   const handleClose = useCallback(() => {
     setPhase('closed');
   }, []);
+
+  // A MiniApp holding the composer can hand it a prepared prompt (PPT Live's
+  // welcome examples). Open the bubble so the user sees what landed there and
+  // can edit before sending — this never submits on its own.
+  useEffect(() => {
+    const claimToken = activeComposerClaim?.token;
+    if (!claimToken) return;
+    const handler = (e: Event) => {
+      const detail = (e as CustomEvent<{ token?: string; text?: string }>).detail;
+      if (!detail || detail.token !== claimToken || typeof detail.text !== 'string') return;
+      setComposerPrefill({ text: detail.text });
+      handleOpen();
+    };
+    window.addEventListener(MINIAPP_COMPOSER_DRAFT_EVENT, handler);
+    return () => {
+      window.removeEventListener(MINIAPP_COMPOSER_DRAFT_EVENT, handler);
+    };
+  }, [activeComposerClaim?.token, handleOpen]);
 
   // Open on pointer press, not on click. A click only fires when pointerdown
   // and pointerup land on the same element, so anything that moves or replaces
@@ -229,7 +338,16 @@ export const FloatingMiniChat: React.FC = () => {
               isFullscreen={false}
               isSceneActive
               workspacePath={workspacePath}
-              showChatInput
+              showChatInput={!activeComposerClaim}
+            />
+          )}
+          {surfaceMounted && activeComposerClaim && (
+            <MiniAppComposer
+              token={activeComposerClaim.token}
+              appName={activeMiniAppName}
+              placeholder={activeComposerClaim.placeholder}
+              disabled={isStreaming}
+              prefill={composerPrefill}
             />
           )}
         </div>

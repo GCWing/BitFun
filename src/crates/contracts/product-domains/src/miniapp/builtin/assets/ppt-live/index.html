@@ -85,22 +85,19 @@
 
       <!-- Right: Agent Sidebar -->
       <aside id="agentSidebar" class="agent-sidebar" aria-label="PPT Live agent">
-        <section class="agent-card agent-card--prompt">
-          <div class="agent-card__header">
-            <div>
-              <h2 data-i18n="agentCommandTitle">Create or edit by prompt</h2>
-            </div>
-            <span id="aiStatusPill" class="pill" data-i18n="statusPillReady">Ready</span>
+        <!-- Agentic MiniApp showcase: PPT Live has no composer of its own.
+             Requests are typed into BitFun's floating session bubble
+             (bottom-right); the bubble routes them here via app.chat, and the
+             agent run itself is displayed on the shared chat surface. -->
+        <section class="agent-card agent-card--bubble-hint">
+          <div class="bubble-hint__icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+            </svg>
           </div>
-          <label class="onebox-label">
-            <span class="sr-only" data-i18n="topicLabel">Goal</span>
-            <textarea id="topicInput" class="onebox-input" rows="4" data-i18n-placeholder="oneBoxPlaceholder"></textarea>
-          </label>
-          <div class="onebox-model">
-            <label class="property-label" for="modelSelect" data-i18n="propertiesModel">Model</label>
-            <select id="modelSelect" data-i18n-aria="propertiesModel"></select>
-          </div>
-          <button id="sendPrompt" class="btn btn-primary onebox-submit" type="button" data-i18n="sendPrompt">Send</button>
+          <h2 data-i18n="bubbleHintTitle">Talk to the session bubble</h2>
+          <p data-i18n="bubbleHintBody">Describe the deck you want — or the edit you need — in the floating chat bubble at the bottom-right. The agent's progress shows up there too, and slides land on this canvas as they are written.</p>
+          <p class="bubble-hint__pointer" aria-hidden="true"><span data-i18n="bubbleHintPointer">Floating bubble</span> <span class="bubble-hint__arrow">↘</span></p>
         </section>
 
         <!-- Collapsible Property Panels -->
@@ -128,6 +125,10 @@
                   <button type="button" class="font-toggle__btn is-active" data-color-mode="light" data-i18n="colorModeLight">Light</button>
                   <button type="button" class="font-toggle__btn" data-color-mode="dark" data-i18n="colorModeDark">Dark</button>
                 </div>
+              </div>
+              <div class="property-row is-stack">
+                <span class="property-label" data-i18n="propertiesModel">Model</span>
+                <select id="modelSelect" data-i18n-aria="propertiesModel"></select>
               </div>
             </div>
           </div>
@@ -162,28 +163,6 @@
           </div>
         </section>
 
-        <section class="agent-card agent-card--tabs">
-          <div class="sidebar-tabs" role="tablist">
-            <button type="button" class="sidebar-tab is-active" data-sidebar-tab="process" data-i18n="processTitle">Process</button>
-            <button type="button" class="sidebar-tab" data-sidebar-tab="outline" data-i18n="outlineTitle">Outline</button>
-          </div>
-          <div class="sidebar-tab-panel is-active" data-sidebar-panel="process">
-            <div id="generationProgress" class="generation-progress" hidden>
-              <div class="generation-progress__meta">
-                <span id="generationProgressLabel" class="generation-progress__label"></span>
-                <span id="generationProgressCount" class="generation-progress__count"></span>
-              </div>
-              <div class="generation-progress__track" aria-hidden="true">
-                <div id="generationProgressFill" class="generation-progress__fill"></div>
-              </div>
-              <ol id="generationPhaseList" class="generation-phase-list"></ol>
-            </div>
-            <ol id="generationSteps" class="generation-steps"></ol>
-          </div>
-          <div class="sidebar-tab-panel" data-sidebar-panel="outline">
-            <ol id="outlineList" class="outline-list"></ol>
-          </div>
-        </section>
       </aside>
 
       <aside id="historyDrawer" class="history-drawer" hidden aria-label="History">
@@ -198,8 +177,6 @@
       <div id="elementInspector" hidden></div>
       <button id="deleteElement" type="button" tabindex="-1" hidden>Delete element</button>
       <button id="exportHtml" type="button" tabindex="-1" hidden>HTML</button>
-      <button id="generateOutline" type="button" tabindex="-1" hidden>Outline</button>
-      <button id="generateDeck" type="button" tabindex="-1" hidden>Generate deck</button>
       <button id="previewDeck" type="button" tabindex="-1" hidden>Preview</button>
       <button id="addOutlineItem" type="button" tabindex="-1" hidden>Add outline item</button>
       <button id="syncSlidesFromOutline" type="button" tabindex="-1" hidden>Sync slides</button>

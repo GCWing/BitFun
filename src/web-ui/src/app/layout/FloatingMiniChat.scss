@@ -282,6 +282,80 @@ $panel-height: 680px;
   }
 }
 
+// ─── MiniApp composer ──────────────────────────────────────
+// Shown instead of the session composer when the active MiniApp has claimed
+// the bubble (`app.chat.claimComposer`): input goes to the MiniApp, which runs
+// its own agent session that the conversation surface above then displays.
+.bitfun-fmc__miniapp-composer {
+  flex: 0 0 auto;
+  padding: 8px 10px 10px;
+  border-top: 1px solid var(--border-subtle);
+  background: var(--color-bg-secondary);
+}
+
+.bitfun-fmc__miniapp-composer-hint {
+  padding: 0 2px 6px;
+  color: var(--color-text-muted);
+  font-size: var(--flowchat-font-size-xs);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.bitfun-fmc__miniapp-composer-row {
+  display: flex;
+  align-items: flex-end;
+  gap: 6px;
+}
+
+.bitfun-fmc__miniapp-composer-input {
+  flex: 1;
+  min-width: 0;
+  resize: none;
+  padding: 6px 8px;
+  box-sizing: border-box;
+  border: 1px solid var(--border-base);
+  border-radius: var(--size-radius-sm);
+  background: var(--color-bg-primary);
+  color: var(--color-text-primary);
+  font-family: inherit;
+  font-size: var(--flowchat-font-size-sm);
+  line-height: 1.45;
+
+  &:focus {
+    outline: none;
+    border-color: var(--color-accent-500);
+  }
+
+  &::placeholder {
+    color: var(--color-text-muted);
+  }
+}
+
+.bitfun-fmc__miniapp-composer-send {
+  flex-shrink: 0;
+  width: 30px;
+  height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: var(--size-radius-sm);
+  background: var(--color-accent-600);
+  color: var(--color-static-white, #fff);
+  cursor: pointer;
+  transition: background 0.15s ease, opacity 0.15s ease;
+
+  &:hover:not(:disabled) {
+    background: var(--color-accent-500);
+  }
+
+  &:disabled {
+    opacity: 0.45;
+    cursor: default;
+  }
+}
+
 @media (max-width: 900px) {
   .bitfun-fmc--miniapp-customizing {
     right: $button-offset;

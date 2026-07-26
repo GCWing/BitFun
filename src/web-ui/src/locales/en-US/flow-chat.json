@@ -2454,5 +2454,10 @@
   },
   "actions": {
     "send": "Send"
+  },
+  "miniAppComposer": {
+    "placeholder": "Send a request to {{app}}…",
+    "send": "Send",
+    "hint": "Messages are handled by {{app}}"
   }
 }

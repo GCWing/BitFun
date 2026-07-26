@@ -151,7 +151,7 @@ pub const BUILTIN_APPS: &[BuiltinMiniAppBundle] = &[
     },
     BuiltinMiniAppBundle {
         id: "builtin-ppt-live",
-        version: 252,
+        version: 253,
         meta_json: include_str!("builtin/assets/ppt-live/meta.json"),
         html: include_str!("builtin/assets/ppt-live/index.html"),
         css: include_str!("builtin/assets/ppt-live/style.css"),

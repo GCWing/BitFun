@@ -2454,5 +2454,10 @@
   },
   "actions": {
     "send": "发送"
+  },
+  "miniAppComposer": {
+    "placeholder": "把需求发给 {{app}}…",
+    "send": "发送",
+    "hint": "消息将由 {{app}} 处理"
   }
 }

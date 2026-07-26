@@ -306,11 +306,6 @@ function setBusy(nextBusy, message) {
     if (node.id === 'newDeck') return;
     node.disabled = busy;
   });
-  const pill = $('aiStatusPill');
-  if (pill) {
-    pill.textContent = busy ? t('statusPillBusy') : t('statusPillReady');
-    pill.classList.toggle('is-busy', busy);
-  }
   if (message) setStatus(message);
 }
 
@@ -436,8 +431,10 @@ function updateBriefFromInputs(options = {}) {
   state = ensureState(state);
 }
 
+// The last instruction the user sent from the floating session bubble. PPT Live
+// has no input of its own, so slide-level actions build on this.
 function promptValue() {
-  return $('topicInput')?.value.trim() || '';
+  return String(state.promptDraft || '').trim();
 }
 
 function isDefaultDraft() {
@@ -465,23 +462,17 @@ function hasUsableDeckForRevision() {
     && !isRecoverableWorkingOnlyState(state);
 }
 
-async function generateOutline() {
-  await handlePromptSubmit();
-}
-
-async function generateDeck() {
-  await handlePromptSubmit();
-}
-
-async function generateDeckFromPrompt() {
-  await handlePromptSubmit();
-}
-
-async function handlePromptSubmit() {
+/**
+ * Run one generation/edit request. The instruction text arrives from the
+ * floating session bubble (`app.chat.onUserMessage`) — PPT Live has no
+ * composer of its own; this is the single entry point either way.
+ */
+async function submitInstruction(rawInstruction) {
   if (promptSubmitGuard || backendRunInFlight) {
+    setStatus(t('bubbleBusy'));
     return;
   }
-  const instruction = promptValue();
+  const instruction = String(rawInstruction || '').trim();
   if (!instruction) {
     setStatus(t('promptRequired'));
     return;
@@ -1104,6 +1095,9 @@ async function executeBackendTurn(requestInput, hooks = {}, options = {}) {
     turnId = result?.turnId || result?.actionRunId || null;
     if (!sessionId || !turnId) throw new Error('PPT Live backend did not return sessionId/turnId');
     trackBackendRun(sessionId, turnId);
+    // Show this agent run on the floating bubble's chat surface — the bubble
+    // is PPT Live's process display (Agentic MiniApp showcase pattern).
+    void host.chat?.focusSession?.(sessionId)?.catch?.(() => {});
     if (isDeckEpochStale(runEpoch)) throw new Error('Generation stopped');
 
     const waitForResult = new Promise((resolve, reject) => {
@@ -2900,6 +2894,20 @@ async function executeExport(format) {
 let exportInFlight = false;
 
 const handlers = {
+  // Welcome-screen example: hand it to the bubble composer for the user to
+  // edit and send. PPT Live never submits on their behalf here.
+  useWelcomePrompt(text) {
+    const prompt = String(text || '').trim();
+    if (!prompt) return;
+    const setDraft = runtime().chat?.setComposerDraft;
+    if (!setDraft) {
+      setStatus(t('bubbleUnavailable'));
+      return;
+    }
+    void setDraft(prompt)?.catch?.((error) => {
+      runtime().log?.warn?.('PPT Live could not prefill the bubble composer', { error: String(error) });
+    });
+  },
   updateOutline(index, value) {
     state.outline[index] = value;
     if (state.slides[index]) state.slides[index].title = value;
@@ -3130,33 +3138,8 @@ function bindEvents() {
     const drawer = $('historyDrawer');
     if (drawer) drawer.hidden = true;
   });
-  document.querySelectorAll('[data-sidebar-tab]').forEach((button) => {
-    button.addEventListener('click', () => {
-      const tab = button.dataset.sidebarTab;
-      document.querySelectorAll('[data-sidebar-tab]').forEach((node) => {
-        node.classList.toggle('is-active', node.dataset.sidebarTab === tab);
-      });
-      document.querySelectorAll('[data-sidebar-panel]').forEach((node) => {
-        node.classList.toggle('is-active', node.dataset.sidebarPanel === tab);
-      });
-    });
-  });
-
-  $('topicInput')?.addEventListener('input', () => {
-    const reviseExistingDeck = hasUsableDeckForRevision();
-    if (reviseExistingDeck) {
-      state.promptDraft = $('topicInput')?.value || '';
-      void persist(true);
-      return;
-    }
-    updateBriefFromInputs({ includeTopic: true });
-    void persist(true);
-  });
   $('newDeck')?.addEventListener('click', () => void newDeck());
   $('cancelGeneration')?.addEventListener('click', () => void stopBackendRun(false));
-  $('sendPrompt')?.addEventListener('click', () => void handlePromptSubmit());
-  $('generateOutline')?.addEventListener('click', () => void generateOutline());
-  $('generateDeck')?.addEventListener('click', () => void generateDeckFromPrompt());
   $('addOutlineItem')?.addEventListener('click', () => {
     state.outline.push(t('newSlideTitle'));
     rerender();
@@ -3774,9 +3757,19 @@ function syncLocale() {
   renderStylePresetOptions();
   renderModelOptions([]);
   void loadModelOptions();
-  const pill = $('aiStatusPill');
-  if (pill) pill.textContent = busy ? t('statusPillBusy') : t('statusPillReady');
+  syncComposerClaim();
   rerender();
+}
+
+/**
+ * Claim the floating session bubble as PPT Live's composer. Re-claimed on
+ * every locale change so the bubble placeholder stays localized. Idempotent —
+ * the host treats repeated claims as an upsert.
+ */
+function syncComposerClaim() {
+  void runtime().chat?.claimComposer?.({ placeholder: t('bubblePlaceholder') })?.catch?.((error) => {
+    runtime().log?.warn?.('PPT Live could not claim the bubble composer', { error: String(error) });
+  });
 }
 
 async function init() {
@@ -3800,4 +3793,11 @@ async function init() {
 bindEvents();
 observeThumbPreviews();
 runtime().onLocaleChange?.(() => syncLocale());
+// Requests arrive from the floating session bubble: the host routes composer
+// input here while PPT Live's claim is active (see syncComposerClaim).
+runtime().chat?.onUserMessage?.((payload) => {
+  const text = String(payload?.text || '').trim();
+  if (!text) return;
+  void submitInstruction(text);
+});
 init();
