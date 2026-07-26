@@ -497,9 +497,10 @@
     "copySelection": "复制选中内容",
     "copyFullContent": "复制完整内容",
     "copyContent": "复制内容",
-    "copyDialog": "复制整个对话",
     "copyToolInput": "复制工具输入",
-    "copyToolOutput": "复制工具输出"
+    "copyToolOutput": "复制工具输出",
+    "copyDialogFull": "复制整个对话（完整过程）",
+    "copyDialogResult": "复制整个对话（仅结果）"
   },
   "widgetContextMenu": {
     "addToInput": "把选中元素加入输入框",
@@ -535,7 +536,23 @@
     "spaceToActivate": "按<space>空格键</space>快速键入",
     "assistantPlaceholder": "给 {{name}} 发送消息...",
     "sendHint": "Enter 发送 / Ctrl+Enter 或 Shift+Enter 换行",
-    "voiceInput": { "start": "开始语音输入", "stop": "停止录音", "preparing": "正在准备麦克风", "transcribing": "正在转写", "disabled": "语音输入已关闭", "unsupported": "当前无法使用麦克风", "modelMissing": "请先下载本地语音模型", "cloudPending": "云端转写已配置，但转写通路尚未接入", "permissionDenied": "麦克风权限被拒绝", "deviceDisconnected": "所选麦克风已断开连接", "lowVolume": "没有检测到声音，请检查所选麦克风。", "failed": "语音输入失败", "empty": "没有识别到语音", "transcribeOnly": "插入转写文本", "transcribeAndSend": "转写并发送" }
+    "voiceInput": {
+      "start": "开始语音输入",
+      "stop": "停止录音",
+      "preparing": "正在准备麦克风",
+      "transcribing": "正在转写",
+      "disabled": "语音输入已关闭",
+      "unsupported": "当前无法使用麦克风",
+      "modelMissing": "请先下载本地语音模型",
+      "cloudPending": "云端转写已配置，但转写通路尚未接入",
+      "permissionDenied": "麦克风权限被拒绝",
+      "deviceDisconnected": "所选麦克风已断开连接",
+      "lowVolume": "没有检测到声音，请检查所选麦克风。",
+      "failed": "语音输入失败",
+      "empty": "没有识别到语音",
+      "transcribeOnly": "插入转写文本",
+      "transcribeAndSend": "转写并发送"
+    }
   },
   "workspaceStrip": {
     "branchTooltipUnavailable": "非 Git 仓库或当前无分支"
@@ -790,6 +807,30 @@
     "aiReply": "AI回复 {{timestamp}}",
     "toolCall": "🔧 工具调用: {{name}}",
     "unknownTool": "未知工具"
+  },
+  "transcriptExport": {
+    "copyFull": "拷贝完整过程",
+    "copyResult": "拷贝结果",
+    "copyEmpty": "该对话没有可复制的内容",
+    "exportEmpty": "该会话没有可导出的内容",
+    "exportSuccess": "会话已导出：{{filePath}}",
+    "exportFailed": "导出会话失败",
+    "saveDialogTitle": "导出会话为 Markdown",
+    "scopeFull": "完整过程",
+    "scopeResult": "仅结果",
+    "metaSessionId": "会话 ID",
+    "metaExportedAt": "导出时间",
+    "metaTurnCount": "对话轮数",
+    "metaScope": "导出范围",
+    "turnHeading": "第 {{index}} 轮",
+    "userHeading": "👤 用户",
+    "assistantHeading": "🤖 助手",
+    "toolHeading": "工具 · {{name}}",
+    "thinking": "思考",
+    "toolInput": "输入",
+    "toolResult": "结果",
+    "toolError": "错误",
+    "empty": "（空）"
   },
   "smartRecommendations": {
     "title": "💡 智能推荐",

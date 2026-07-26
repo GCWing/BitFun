@@ -497,9 +497,10 @@
     "copySelection": "複製選中內容",
     "copyFullContent": "複製完整內容",
     "copyContent": "複製內容",
-    "copyDialog": "複製整個對話",
     "copyToolInput": "複製工具輸入",
-    "copyToolOutput": "複製工具輸出"
+    "copyToolOutput": "複製工具輸出",
+    "copyDialogFull": "複製整個對話（完整過程）",
+    "copyDialogResult": "複製整個對話（僅結果）"
   },
   "widgetContextMenu": {
     "addToInput": "把選中元素加入輸入框",
@@ -535,7 +536,23 @@
     "spaceToActivate": "按<space>空格鍵</space>快速鍵入",
     "assistantPlaceholder": "傳訊息給 {{name}}...",
     "sendHint": "Enter 傳送 / Ctrl+Enter 或 Shift+Enter 換行",
-    "voiceInput": { "start": "開始語音輸入", "stop": "停止錄音", "preparing": "正在準備麥克風", "transcribing": "正在轉寫", "disabled": "語音輸入已關閉", "unsupported": "目前無法使用麥克風", "modelMissing": "請先下載本地語音模型", "cloudPending": "雲端轉寫已設定，但轉寫通路尚未接入", "permissionDenied": "麥克風權限被拒絕", "deviceDisconnected": "所選麥克風已中斷連線", "lowVolume": "沒有偵測到聲音，請檢查所選麥克風。", "failed": "語音輸入失敗", "empty": "沒有辨識到語音", "transcribeOnly": "插入轉寫文字", "transcribeAndSend": "轉寫並傳送" }
+    "voiceInput": {
+      "start": "開始語音輸入",
+      "stop": "停止錄音",
+      "preparing": "正在準備麥克風",
+      "transcribing": "正在轉寫",
+      "disabled": "語音輸入已關閉",
+      "unsupported": "目前無法使用麥克風",
+      "modelMissing": "請先下載本地語音模型",
+      "cloudPending": "雲端轉寫已設定，但轉寫通路尚未接入",
+      "permissionDenied": "麥克風權限被拒絕",
+      "deviceDisconnected": "所選麥克風已中斷連線",
+      "lowVolume": "沒有偵測到聲音，請檢查所選麥克風。",
+      "failed": "語音輸入失敗",
+      "empty": "沒有辨識到語音",
+      "transcribeOnly": "插入轉寫文字",
+      "transcribeAndSend": "轉寫並傳送"
+    }
   },
   "workspaceStrip": {
     "branchTooltipUnavailable": "非 Git 存放庫或目前無分支"
@@ -790,6 +807,30 @@
     "aiReply": "AI回覆 {{timestamp}}",
     "toolCall": "🔧 工具調用: {{name}}",
     "unknownTool": "未知工具"
+  },
+  "transcriptExport": {
+    "copyFull": "拷貝完整過程",
+    "copyResult": "拷貝結果",
+    "copyEmpty": "該對話沒有可複製的內容",
+    "exportEmpty": "該工作階段沒有可匯出的內容",
+    "exportSuccess": "工作階段已匯出：{{filePath}}",
+    "exportFailed": "匯出工作階段失敗",
+    "saveDialogTitle": "將工作階段匯出為 Markdown",
+    "scopeFull": "完整過程",
+    "scopeResult": "僅結果",
+    "metaSessionId": "工作階段 ID",
+    "metaExportedAt": "匯出時間",
+    "metaTurnCount": "對話輪數",
+    "metaScope": "匯出範圍",
+    "turnHeading": "第 {{index}} 輪",
+    "userHeading": "👤 使用者",
+    "assistantHeading": "🤖 助理",
+    "toolHeading": "工具 · {{name}}",
+    "thinking": "思考",
+    "toolInput": "輸入",
+    "toolResult": "結果",
+    "toolError": "錯誤",
+    "empty": "（空）"
   },
   "smartRecommendations": {
     "title": "💡 智能推薦",

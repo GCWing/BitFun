@@ -81,12 +81,26 @@ export class FlowChatMenuProvider implements IMenuProvider {
       
       items.push({
         id: 'flowchat-copy-dialog',
-        label: i18nService.t('flow-chat:contextMenu.copyDialog'),
+        label: i18nService.t('flow-chat:contextMenu.copyDialogFull'),
         icon: 'MessageSquare',
         onClick: () => {
-          globalEventBus.emit('flowchat:copy-dialog', { 
-            dialogTurn, 
-            context: flowChatContext 
+          globalEventBus.emit('flowchat:copy-dialog', {
+            dialogTurn,
+            scope: 'full',
+            context: flowChatContext
+          });
+        }
+      });
+
+      items.push({
+        id: 'flowchat-copy-dialog-result',
+        label: i18nService.t('flow-chat:contextMenu.copyDialogResult'),
+        icon: 'MessageSquare',
+        onClick: () => {
+          globalEventBus.emit('flowchat:copy-dialog', {
+            dialogTurn,
+            scope: 'result',
+            context: flowChatContext
           });
         }
       });

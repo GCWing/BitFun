@@ -61,6 +61,7 @@ import type { WorkspaceInfo } from '@/shared/types';
 import { sessionBelongsToWorkspaceNavRow } from '../utils/sessionOrdering';
 import { sessionMatchesWorkspace } from '../utils/workspaceScope';
 import { resolveThreadGoalUserMessageDisplay } from '../utils/threadGoalDisplay';
+import { cleanRemoteUserInput } from '../utils/userInputText';
 import { useBackgroundSubagentActivityStore } from './backgroundSubagentActivityStore';
 import { sessionComposerStore } from './sessionComposerStore';
 import { recordHistorySessionDiagnosticEvent } from '../services/historySessionDiagnostics';
@@ -4852,21 +4853,6 @@ export class FlowChatStore {
   }
 
   /**
-   * Strip agent-internal XML wrapper tags from persisted user inputs.
-   */
-  private cleanRemoteUserInput(raw: string): string {
-    const s = raw.trim();
-    const userQueryMatch = s.match(/<user_query>\s*([\s\S]*?)\s*<\/user_query>/);
-    if (userQueryMatch) {
-      return userQueryMatch[1].trim();
-    }
-
-    return s
-      .replace(/<system(?:_|-)reminder>[\s\S]*?<\/system(?:_|-)reminder>/g, '')
-      .trim();
-  }
-
-  /**
    * Convert DialogTurnData to FlowChat DialogTurn format
    */
   private convertToDialogTurns(
@@ -4894,7 +4880,7 @@ export class FlowChatStore {
           || metadata?.threadGoalObjectiveUpdated
           || metadata?.threadGoalContinuation
           ? turn.userMessage.content
-          : metadata?.original_text || this.cleanRemoteUserInput(turn.userMessage.content);
+          : metadata?.original_text || cleanRemoteUserInput(turn.userMessage.content);
       const displayContent = resolveThreadGoalUserMessageDisplay(
         rawDisplay,
         metadata as Record<string, unknown> | undefined

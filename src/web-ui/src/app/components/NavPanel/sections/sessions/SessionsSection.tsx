@@ -7,7 +7,7 @@
 
 import React, { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { Pencil, Trash2, Check, X, Bot, Code2, ClipboardList, Panda, MoreHorizontal, Loader2, Archive, Clock3, Copy, CircleHelp } from 'lucide-react';
+import { Pencil, Trash2, Check, X, Bot, Code2, ClipboardList, Panda, MoreHorizontal, Loader2, Archive, Clock3, Copy, CircleHelp, FileDown, ChevronLeft } from 'lucide-react';
 import { IconButton, Input, Tooltip } from '@/component-library';
 import { useI18n } from '@/infrastructure/i18n';
 import { flowChatStore } from '../../../../../flow_chat/store/FlowChatStore';
@@ -48,6 +48,8 @@ import type {
   BackgroundSubagentActivityItem,
 } from '@/flow_chat/utils/backgroundSubagentActivity';
 import { computeFixedPopoverPosition } from '@/shared/utils/fixedPopoverViewport';
+import { exportSessionToMarkdown } from '@/flow_chat/services/sessionMarkdownExport';
+import type { TranscriptExportScope } from '@/flow_chat/utils/dialogTranscriptExport';
 import { confirmWarning } from '@/component-library/components/ConfirmDialog/confirmService';
 import { notificationService } from '@/shared/notification-system';
 import { copyTextToClipboard } from '@/shared/utils/textSelection';
@@ -198,6 +200,9 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
   });
   const [openMenuSessionId, setOpenMenuSessionId] = useState<string | null>(null);
   const [sessionMenuPosition, setSessionMenuPosition] = useState<{ top: number; left: number } | null>(null);
+  /** Second level of the session menu: pick what a Markdown export includes. */
+  const [isExportScopeMenu, setIsExportScopeMenu] = useState(false);
+  const [exportingSessionId, setExportingSessionId] = useState<string | null>(null);
   const [runningSessionIds, setRunningSessionIds] = useState<Set<string>>(new Set());
   const [scheduledJobsSessionId, setScheduledJobsSessionId] = useState<string | null>(null);
   const editInputRef = useRef<HTMLInputElement>(null);
@@ -467,17 +472,22 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
     return () => window.removeEventListener('bitfun:session-archived', handler);
   }, [isVisible, workspacePath, loadMetadataPage]);
 
+  const closeSessionMenu = useCallback(() => {
+    setOpenMenuSessionId(null);
+    setSessionMenuPosition(null);
+    setIsExportScopeMenu(false);
+  }, []);
+
   useEffect(() => {
     if (!openMenuSessionId) return;
     const handleOutside = (event: MouseEvent) => {
       if (!sessionMenuPopoverRef.current?.contains(event.target as Node)) {
-        setOpenMenuSessionId(null);
-        setSessionMenuPosition(null);
+        closeSessionMenu();
       }
     };
     document.addEventListener('mousedown', handleOutside);
     return () => document.removeEventListener('mousedown', handleOutside);
-  }, [openMenuSessionId]);
+  }, [closeSessionMenu, openMenuSessionId]);
 
   const updateSessionMenuPosition = useCallback(() => {
     const anchor = sessionMenuAnchorRef.current;
@@ -502,6 +512,7 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
   useEffect(() => {
     if (!openMenuSessionId) return;
 
+    // The second menu level has a different height; re-anchor on switch.
     updateSessionMenuPosition();
 
     const handleViewportChange = () => updateSessionMenuPosition();
@@ -512,7 +523,7 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
       window.removeEventListener('resize', handleViewportChange);
       window.removeEventListener('scroll', handleViewportChange, true);
     };
-  }, [openMenuSessionId, updateSessionMenuPosition]);
+  }, [isExportScopeMenu, openMenuSessionId, updateSessionMenuPosition]);
 
   // Clear unread completion mark after the switched session renders
   useEffect(() => {
@@ -789,17 +800,51 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
     (e: React.MouseEvent, sessionId: string) => {
       e.stopPropagation();
       if (openMenuSessionId === sessionId) {
-        setOpenMenuSessionId(null);
-        setSessionMenuPosition(null);
+        closeSessionMenu();
         return;
       }
       const btn = e.currentTarget as HTMLElement;
       const rect = btn.getBoundingClientRect();
       const { top, left } = computeFixedPopoverPosition(rect, 160, 120, 4, 8);
       setSessionMenuPosition({ top, left });
+      setIsExportScopeMenu(false);
       setOpenMenuSessionId(sessionId);
     },
-    [openMenuSessionId]
+    [closeSessionMenu, openMenuSessionId]
+  );
+
+  const handleExportMarkdown = useCallback(
+    async (e: React.MouseEvent, session: Session, scope: TranscriptExportScope) => {
+      e.stopPropagation();
+      closeSessionMenu();
+      if (exportingSessionId) return;
+
+      setExportingSessionId(session.sessionId);
+      try {
+        await exportSessionToMarkdown(
+          {
+            sessionId: session.sessionId,
+            title: resolveSessionTitle(session),
+            workspacePath: session.workspacePath || workspacePath,
+            // The nav row carries the workspace's current connection; a session's
+            // stored ids can be stale (e.g. after an SSH port change).
+            remoteConnectionId: remoteConnectionId ?? session.remoteConnectionId,
+            remoteSshHost: remoteSshHost ?? session.remoteSshHost,
+          },
+          scope
+        );
+      } finally {
+        setExportingSessionId(null);
+      }
+    },
+    [
+      closeSessionMenu,
+      exportingSessionId,
+      remoteConnectionId,
+      remoteSshHost,
+      resolveSessionTitle,
+      workspacePath,
+    ]
   );
 
   const handleDelete = useCallback(
@@ -1248,61 +1293,117 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
                       data-testid="nav-session-menu"
                       data-session-id={session.sessionId}
                     >
-                      <button
-                        type="button"
-                        className="bitfun-nav-panel__inline-item-menu-item"
-                        onClick={e => { setOpenMenuSessionId(null); handleStartEdit(e, session); }}
-                        data-testid="nav-session-menu-rename"
-                        data-session-id={session.sessionId}
-                      >
-                        <Pencil size={13} />
-                        <span>{t('nav.sessions.rename')}</span>
-                      </button>
-                      <button
-                        type="button"
-                        className="bitfun-nav-panel__inline-item-menu-item"
-                        onClick={e => { setOpenMenuSessionId(null); void handleCopySessionId(e, session.sessionId); }}
-                        data-testid="nav-session-menu-copy-id"
-                        data-session-id={session.sessionId}
-                      >
-                        <Copy size={13} />
-                        <span>{t('nav.sessions.copySessionId')}</span>
-                      </button>
-                      <button
-                        type="button"
-                        className="bitfun-nav-panel__inline-item-menu-item"
-                        onClick={e => {
-                          e.stopPropagation();
-                          setOpenMenuSessionId(null);
-                          setScheduledJobsSessionId(session.sessionId);
-                        }}
-                        disabled={!workspacePath}
-                        data-testid="nav-session-menu-scheduled-jobs"
-                        data-session-id={session.sessionId}
-                      >
-                        <Clock3 size={13} />
-                        <span>{t('nav.scheduledJobs.open')}</span>
-                      </button>
-                      <button
-                        type="button"
-                        className="bitfun-nav-panel__inline-item-menu-item"
-                        onClick={e => { setOpenMenuSessionId(null); void handleArchive(e, session.sessionId); }}
-                        data-testid="nav-session-menu-archive"
-                        data-session-id={session.sessionId}
-                      >
-                        <Archive size={13} />
-                        <span>{t('nav.sessions.archive')}</span>
-                      </button>
-                      <button
-                        type="button"
-                        className="bitfun-nav-panel__inline-item-menu-item is-danger"
-                        onClick={e => { setOpenMenuSessionId(null); void handleDelete(e, session.sessionId); }}
-                        data-testid="nav-session-menu-delete"
-                        data-session-id={session.sessionId}
-                      >
-                        <Trash2 size={13} />
-                        <span>{t('nav.sessions.delete')}</span>
-                      </button>
+                      {isExportScopeMenu ? (
+                        <>
+                          <button
+                            type="button"
+                            className="bitfun-nav-panel__inline-item-menu-item"
+                            onClick={e => {
+                              e.stopPropagation();
+                              setIsExportScopeMenu(false);
+                            }}
+                            data-testid="nav-session-menu-export-back"
+                            data-session-id={session.sessionId}
+                          >
+                            <ChevronLeft size={13} />
+                            <span>{t('nav.sessions.exportMarkdown')}</span>
+                          </button>
+                          <button
+                            type="button"
+                            className="bitfun-nav-panel__inline-item-menu-item"
+                            onClick={e => { void handleExportMarkdown(e, session, 'full'); }}
+                            data-testid="nav-session-menu-export-full"
+                            data-session-id={session.sessionId}
+                          >
+                            <FileDown size={13} />
+                            <span>{t('nav.sessions.exportMarkdownFull')}</span>
+                          </button>
+                          <button
+                            type="button"
+                            className="bitfun-nav-panel__inline-item-menu-item"
+                            onClick={e => { void handleExportMarkdown(e, session, 'result'); }}
+                            data-testid="nav-session-menu-export-result"
+                            data-session-id={session.sessionId}
+                          >
+                            <FileDown size={13} />
+                            <span>{t('nav.sessions.exportMarkdownResult')}</span>
+                          </button>
+                        </>
+                      ) : (
+                        <>
+                          <button
+                            type="button"
+                            className="bitfun-nav-panel__inline-item-menu-item"
+                            onClick={e => { closeSessionMenu(); handleStartEdit(e, session); }}
+                            data-testid="nav-session-menu-rename"
+                            data-session-id={session.sessionId}
+                          >
+                            <Pencil size={13} />
+                            <span>{t('nav.sessions.rename')}</span>
+                          </button>
+                          <button
+                            type="button"
+                            className="bitfun-nav-panel__inline-item-menu-item"
+                            onClick={e => { closeSessionMenu(); void handleCopySessionId(e, session.sessionId); }}
+                            data-testid="nav-session-menu-copy-id"
+                            data-session-id={session.sessionId}
+                          >
+                            <Copy size={13} />
+                            <span>{t('nav.sessions.copySessionId')}</span>
+                          </button>
+                          <button
+                            type="button"
+                            className="bitfun-nav-panel__inline-item-menu-item"
+                            onClick={e => {
+                              e.stopPropagation();
+                              setIsExportScopeMenu(true);
+                            }}
+                            disabled={exportingSessionId === session.sessionId}
+                            data-testid="nav-session-menu-export-markdown"
+                            data-session-id={session.sessionId}
+                          >
+                            {exportingSessionId === session.sessionId
+                              ? <Loader2 size={13} className="bitfun-nav-panel__inline-toggle-spinner" />
+                              : <FileDown size={13} />}
+                            <span>{t('nav.sessions.exportMarkdown')}</span>
+                          </button>
+                          <button
+                            type="button"
+                            className="bitfun-nav-panel__inline-item-menu-item"
+                            onClick={e => {
+                              e.stopPropagation();
+                              closeSessionMenu();
+                              setScheduledJobsSessionId(session.sessionId);
+                            }}
+                            disabled={!workspacePath}
+                            data-testid="nav-session-menu-scheduled-jobs"
+                            data-session-id={session.sessionId}
+                          >
+                            <Clock3 size={13} />
+                            <span>{t('nav.scheduledJobs.open')}</span>
+                          </button>
+                          <button
+                            type="button"
+                            className="bitfun-nav-panel__inline-item-menu-item"
+                            onClick={e => { closeSessionMenu(); void handleArchive(e, session.sessionId); }}
+                            data-testid="nav-session-menu-archive"
+                            data-session-id={session.sessionId}
+                          >
+                            <Archive size={13} />
+                            <span>{t('nav.sessions.archive')}</span>
+                          </button>
+                          <button
+                            type="button"
+                            className="bitfun-nav-panel__inline-item-menu-item is-danger"
+                            onClick={e => { closeSessionMenu(); void handleDelete(e, session.sessionId); }}
+                            data-testid="nav-session-menu-delete"
+                            data-session-id={session.sessionId}
+                          >
+                            <Trash2 size={13} />
+                            <span>{t('nav.sessions.delete')}</span>
+                          </button>
+                        </>
+                      )}
                     </div>,
                     document.body
                   )}

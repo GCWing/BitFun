@@ -497,9 +497,10 @@
     "copySelection": "Copy Selection",
     "copyFullContent": "Copy Full Content",
     "copyContent": "Copy Content",
-    "copyDialog": "Copy Entire Dialog",
     "copyToolInput": "Copy Tool Input",
-    "copyToolOutput": "Copy Tool Output"
+    "copyToolOutput": "Copy Tool Output",
+    "copyDialogFull": "Copy Entire Dialog (Full Process)",
+    "copyDialogResult": "Copy Entire Dialog (Result Only)"
   },
   "widgetContextMenu": {
     "addToInput": "Add selected element to input",
@@ -535,7 +536,23 @@
     "spaceToActivate": "Press <space>Space</space> to type",
     "assistantPlaceholder": "Message {{name}}...",
     "sendHint": "Enter to send / Ctrl+Enter or Shift+Enter for new line",
-    "voiceInput": { "start": "Start voice input", "stop": "Stop recording", "preparing": "Preparing microphone", "transcribing": "Transcribing", "disabled": "Voice input is disabled", "unsupported": "Microphone capture is unavailable", "modelMissing": "Download the local speech model first", "cloudPending": "Cloud transcription is configured but not connected yet", "permissionDenied": "Microphone permission was denied", "deviceDisconnected": "The selected microphone was disconnected", "lowVolume": "No voice detected. Check the selected microphone.", "failed": "Voice input failed", "empty": "No speech was recognized", "transcribeOnly": "Insert transcription", "transcribeAndSend": "Transcribe and send" }
+    "voiceInput": {
+      "start": "Start voice input",
+      "stop": "Stop recording",
+      "preparing": "Preparing microphone",
+      "transcribing": "Transcribing",
+      "disabled": "Voice input is disabled",
+      "unsupported": "Microphone capture is unavailable",
+      "modelMissing": "Download the local speech model first",
+      "cloudPending": "Cloud transcription is configured but not connected yet",
+      "permissionDenied": "Microphone permission was denied",
+      "deviceDisconnected": "The selected microphone was disconnected",
+      "lowVolume": "No voice detected. Check the selected microphone.",
+      "failed": "Voice input failed",
+      "empty": "No speech was recognized",
+      "transcribeOnly": "Insert transcription",
+      "transcribeAndSend": "Transcribe and send"
+    }
   },
   "workspaceStrip": {
     "branchTooltipUnavailable": "Not a git repository or no current branch"
@@ -790,6 +807,30 @@
     "aiReply": "AI Reply {{timestamp}}",
     "toolCall": "🔧 Tool call: {{name}}",
     "unknownTool": "Unknown tool"
+  },
+  "transcriptExport": {
+    "copyFull": "Copy full process",
+    "copyResult": "Copy result",
+    "copyEmpty": "Nothing to copy in this dialog",
+    "exportEmpty": "This session has nothing to export",
+    "exportSuccess": "Session exported: {{filePath}}",
+    "exportFailed": "Failed to export the session",
+    "saveDialogTitle": "Export session as Markdown",
+    "scopeFull": "Full process",
+    "scopeResult": "Result only",
+    "metaSessionId": "Session ID",
+    "metaExportedAt": "Exported at",
+    "metaTurnCount": "Turns",
+    "metaScope": "Scope",
+    "turnHeading": "Turn {{index}}",
+    "userHeading": "👤 User",
+    "assistantHeading": "🤖 Assistant",
+    "toolHeading": "Tool · {{name}}",
+    "thinking": "Thinking",
+    "toolInput": "Input",
+    "toolResult": "Result",
+    "toolError": "Error",
+    "empty": "(empty)"
   },
   "smartRecommendations": {
     "title": "💡 Smart Recommendations",

@@ -20,9 +20,8 @@ import { useCreateTypewriterRevealGate } from '../../hooks/typewriterRevealGateC
 import { getModelRoundItemClassName } from './modelRoundItemClassName';
 import { isCollapsibleTool } from '../../tool-cards/toolCardMetadata';
 import { useFlowChatContext } from './FlowChatContext';
-import { FlowChatStore } from '../../store/FlowChatStore';
 import { taskCollapseStateManager } from '../../store/TaskCollapseStateManager';
-import { getEffectiveToolName, projectEffectiveToolItem } from '../../utils/toolInvocationIdentity';
+import { getEffectiveToolName } from '../../utils/toolInvocationIdentity';
 import { ExportImageButton } from './ExportImageButton';
 import { ForkSessionButton } from './ForkSessionButton';
 import {
@@ -40,6 +39,7 @@ import {
   getVisibleModelRoundGroupStartIndex,
 } from './modelRoundProgressiveRender';
 import { Tooltip } from '@/component-library';
+import { notificationService } from '@/shared/notification-system';
 import { createLogger } from '@/shared/utils/logger';
 import {
   isStartupRenderTraceEnabled,
@@ -47,8 +47,10 @@ import {
   startupTrace,
 } from '@/shared/utils/startupTrace';
 import { SubagentProjectionView } from '../subagent/SubagentProjectionView';
-import { formatSessionViewPreviewText } from '../../utils/sessionViewPreview';
 import { buildModelRoundUsageMeta } from '../../utils/tokenUsageDisplay';
+import { buildDialogTurnCopyText } from '../../utils/dialogTurnCopy';
+import type { TranscriptExportScope } from '../../utils/dialogTranscriptExport';
+import { buildTranscriptExportLabels } from '../../utils/transcriptExportLabels';
 import './ModelRoundItem.scss';
 import './SubagentItems.scss';
 
@@ -374,24 +376,44 @@ export const ModelRoundItem = React.memo<ModelRoundItemProps>(
     const [showRetryHistory, setShowRetryHistory] = useState(false);
     const [showRoundHistory, setShowRoundHistory] = useState(false);
     const [openHistoryRoundAttemptIds, setOpenHistoryRoundAttemptIds] = useState<Record<string, boolean>>({});
+    const [isCopyMenuOpen, setIsCopyMenuOpen] = useState(false);
     const copyButtonRef = useRef<HTMLButtonElement>(null);
+    const copyMenuRef = useRef<HTMLDivElement>(null);
     const renderTraceEnabled = isStartupRenderTraceEnabled();
     const renderTraceStartedAtMs = renderTraceEnabled ? performance.now() : null;
-    
+
     useEffect(() => {
-      if (!copied) return;
-      
+      if (!copied && !isCopyMenuOpen) return;
+
       const handleClickOutside = (event: MouseEvent) => {
-        if (copyButtonRef.current && !copyButtonRef.current.contains(event.target as Node)) {
-          setCopied(false);
+        const target = event.target as Node;
+        if (copyButtonRef.current?.contains(target) || copyMenuRef.current?.contains(target)) {
+          return;
         }
+        setCopied(false);
+        setIsCopyMenuOpen(false);
       };
-      
+
       document.addEventListener('mousedown', handleClickOutside);
       return () => {
         document.removeEventListener('mousedown', handleClickOutside);
       };
-    }, [copied]);
+    }, [copied, isCopyMenuOpen]);
+
+    useEffect(() => {
+      if (!isCopyMenuOpen) return;
+
+      const handleKeyDown = (event: KeyboardEvent) => {
+        if (event.key === 'Escape') {
+          setIsCopyMenuOpen(false);
+        }
+      };
+
+      document.addEventListener('keydown', handleKeyDown);
+      return () => {
+        document.removeEventListener('keydown', handleKeyDown);
+      };
+    }, [isCopyMenuOpen]);
 
     const attempts = useMemo(
       () => sortRoundAttempts(round.attempts ?? []),
@@ -613,89 +635,27 @@ export const ModelRoundItem = React.memo<ModelRoundItemProps>(
       })
     ), [sessionId, transientNowMs, turnId]);
 
-    const extractDialogTurnContent = useCallback(() => {
-      const flowChatStore = FlowChatStore.getInstance();
-      const state = flowChatStore.getState();
-      
-      let targetSession = null;
-      for (const [, session] of state.sessions) {
-        if (session.dialogTurns.some((turn: any) => turn.id === turnId)) {
-          targetSession = session;
-          break;
-        }
-      }
-      
-      if (!targetSession) return '';
-      
-      const dialogTurn = targetSession.dialogTurns.find((turn: any) => turn.id === turnId);
-      if (!dialogTurn) return '';
-      
-      const contentParts: string[] = [];
-      
-      if (dialogTurn.userMessage?.content) {
-        contentParts.push(`${t('modelRound.userLabel')}\n${dialogTurn.userMessage.content}`);
-      }
-      
-      dialogTurn.modelRounds.forEach((modelRound: any) => {
-        const roundContent: string[] = [];
-        
-        modelRound.items.forEach((item: any) => {
-          if (item.type === 'text' && item.content?.trim()) {
-            roundContent.push(item.content.trim());
-          } else if (item.type === 'thinking' && item.content?.trim()) {
-            roundContent.push(`[Thinking]\n${item.content.trim()}`);
-          } else if (item.type === 'tool' && item.toolCall) {
-            const effectiveItem = projectEffectiveToolItem(item);
-            const toolName = effectiveItem.toolName || t('copyOutput.unknownTool');
-            let toolContent = t('modelRound.toolCallLabel', { name: toolName }) + '\n';
-            
-            if (effectiveItem.toolCall.input) {
-              const inputStr = typeof effectiveItem.toolCall.input === 'string'
-                ? effectiveItem.toolCall.input
-                : JSON.stringify(effectiveItem.toolCall.input, null, 2);
-              toolContent += `\n[Input]\n\`\`\`json\n${inputStr}\n\`\`\`\n`;
-            }
-            
-            if (item.toolResult) {
-              if (item.toolResult.error) {
-                toolContent += `\n[Error]\n${item.toolResult.error}\n`;
-              } else if (item.toolResult.result !== undefined) {
-                const resultStr = typeof item.toolResult.result === 'string'
-                  ? item.toolResult.result
-                  : JSON.stringify(item.toolResult.result, null, 2);
-                toolContent += `\n[Result]\n\`\`\`\n${formatSessionViewPreviewText(resultStr)}\n\`\`\`\n`;
-              }
-            }
-            
-            roundContent.push(toolContent.trim());
-          }
-        });
-        
-        if (roundContent.length > 0) {
-          contentParts.push(roundContent.join('\n\n'));
-        }
-      });
-      
-      return contentParts.join('\n\n---\n\n');
-    }, [t, turnId]);
-    
-    const handleCopy = useCallback(async () => {
+    const handleCopyScope = useCallback(async (scope: TranscriptExportScope) => {
+      setIsCopyMenuOpen(false);
       try {
-        const content = extractDialogTurnContent();
-        
+        const content = buildDialogTurnCopyText(turnId, scope, buildTranscriptExportLabels(t));
+
         if (!content.trim()) {
-          log.warn('No content to copy');
+          // Result-only copy on a turn that produced no prose lands here.
+          log.warn('No content to copy', { turnId, scope });
+          notificationService.warning(t('transcriptExport.copyEmpty'));
           return;
         }
-        
+
         await navigator.clipboard.writeText(content);
         setCopied(true);
         setTimeout(() => setCopied(false), 2000);
       } catch (error) {
         log.error('Failed to copy', error);
+        notificationService.error(t('errors:general.copyFailed'));
       }
-    }, [extractDialogTurnContent]);
-    
+    }, [t, turnId]);
+
     const hasContent = sortedItems.some(item => 
       (item.type === 'text' && (item as FlowTextItem).content.trim()) ||
       (item.type === 'tool' && (item as FlowToolItem).toolCall)
@@ -917,18 +877,51 @@ export const ModelRoundItem = React.memo<ModelRoundItemProps>(
 
             <ForkSessionButton sessionId={sessionId} turnId={turnId} />
 
-            <Tooltip content={copied ? t('modelRound.copiedDialog') : t('modelRound.copyDialog')} placement="top">
-              <button
-                ref={copyButtonRef}
-                className={`model-round-item__action-btn model-round-item__copy-btn ${copied ? 'copied' : ''}`}
-                onClick={handleCopy}
-                tabIndex={shouldRevealFooter ? 0 : -1}
-                disabled={!shouldRevealFooter}
-              >
-                {copied ? <Check size={14} /> : <Copy size={14} />}
-              </button>
-            </Tooltip>
-            
+            <div className="model-round-item__copy-menu-anchor">
+              <Tooltip content={copied ? t('modelRound.copiedDialog') : t('modelRound.copyDialog')} placement="top">
+                <button
+                  ref={copyButtonRef}
+                  className={`model-round-item__action-btn model-round-item__copy-btn ${copied ? 'copied' : ''}`}
+                  onClick={() => setIsCopyMenuOpen(current => !current)}
+                  tabIndex={shouldRevealFooter ? 0 : -1}
+                  disabled={!shouldRevealFooter}
+                  aria-haspopup="menu"
+                  aria-expanded={isCopyMenuOpen}
+                  data-testid="model-round-copy-btn"
+                >
+                  {copied ? <Check size={14} /> : <Copy size={14} />}
+                </button>
+              </Tooltip>
+
+              {isCopyMenuOpen && (
+                <div
+                  ref={copyMenuRef}
+                  className="model-round-item__copy-menu"
+                  role="menu"
+                  data-testid="model-round-copy-menu"
+                >
+                  <button
+                    type="button"
+                    role="menuitem"
+                    className="model-round-item__copy-menu-item"
+                    onClick={() => void handleCopyScope('full')}
+                    data-testid="model-round-copy-full"
+                  >
+                    {t('transcriptExport.copyFull')}
+                  </button>
+                  <button
+                    type="button"
+                    role="menuitem"
+                    className="model-round-item__copy-menu-item"
+                    onClick={() => void handleCopyScope('result')}
+                    data-testid="model-round-copy-result"
+                  >
+                    {t('transcriptExport.copyResult')}
+                  </button>
+                </div>
+              )}
+            </div>
+
             <ExportImageButton turnId={turnId} />
           </div>
         )}
