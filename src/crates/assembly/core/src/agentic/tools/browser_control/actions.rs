@@ -836,7 +836,17 @@ impl<'a> BrowserActions<'a> {
                 }}
                 let blockedBy = null;
                 try {{
-                    const hit = el.ownerDocument.elementFromPoint(localX, localY);
+                    let hit = el.ownerDocument.elementFromPoint(localX, localY);
+                    // Document-level elementFromPoint stops at a shadow host,
+                    // and host.contains(shadowChild) is false — without
+                    // descending, every element inside an open shadow root
+                    // (which resolve/snapshot deliberately support) would be
+                    // misreported as occluded by its own host.
+                    while (hit && hit.shadowRoot) {{
+                        const inner = hit.shadowRoot.elementFromPoint(localX, localY);
+                        if (!inner || inner === hit) break;
+                        hit = inner;
+                    }}
                     if (!hit) {{
                         blockedBy = 'nothing (the point is outside the viewport)';
                     }} else if (hit !== el && !el.contains(hit) && !hit.contains(el)) {{
