@@ -369,9 +369,11 @@ export const AgentCompanionDesktopPet: React.FC = () => {
   }, [typedOutputBySessionId]);
 
   const visibleTaskCountRef = useRef(0);
-  visibleTaskCountRef.current = visibleTasks.length;
 
   useLayoutEffect(() => {
+    // Written here (not during render) so an abandoned/double render cannot
+    // leave the count out of sync with the committed layout epoch.
+    visibleTaskCountRef.current = visibleTasks.length;
     layoutEpochRef.current += 1;
     const bubbleCount = visibleTasks.length;
     const bubbleElements = Array.from(bubblesRef.current?.children ?? [])

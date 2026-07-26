@@ -6,11 +6,6 @@ static FRONT_MATTER_REGEX: LazyLock<regex::Regex> = LazyLock::new(|| {
     regex::Regex::new(r"(?s)^---\r?\n(.*?)\r?\n---").expect("front matter regex pattern is valid")
 });
 
-/// Returns the shared compiled front-matter regex (`^---\n...\n---`).
-pub fn front_matter_regex() -> &'static regex::Regex {
-    &FRONT_MATTER_REGEX
-}
-
 /// Parses and writes Markdown files with YAML front matter.
 pub struct FrontMatterMarkdown;
 
@@ -22,7 +17,7 @@ impl FrontMatterMarkdown {
     }
 
     pub fn load_str(content: &str) -> Result<(Value, String), String> {
-        let caps = front_matter_regex()
+        let caps = FRONT_MATTER_REGEX
             .captures(content)
             .ok_or_else(|| "Failed to capture content".to_string())?;
 

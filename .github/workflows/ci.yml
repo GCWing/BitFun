@@ -162,6 +162,18 @@ jobs:
       - name: Run subscription authentication tests
         run: cargo test --locked -p bitfun-ai-adapters --features subscription-auth subscription_auth
 
+      # File watching is backed by a different OS API on every platform
+      # (ReadDirectoryChangesW / FSEvents / inotify), so watch registration
+      # regressions surface per-OS. The suite is behind a non-default feature
+      # and would otherwise never run.
+      - name: Run file watch contract tests
+        run: cargo test --locked -p bitfun-services-integrations --features file-watch
+
+      # Search tools resolve paths and symlinks directly, which also differs
+      # across platforms.
+      - name: Run search tool tests
+        run: cargo test --locked -p tool-runtime
+
   # ── Frontend: build ────────────────────────────────────────────────
   frontend-build:
     name: Frontend Build

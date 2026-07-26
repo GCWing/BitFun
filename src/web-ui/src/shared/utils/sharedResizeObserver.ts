@@ -8,6 +8,10 @@
  * and long lists do not accumulate N window listeners.
  */
 
+import { createLogger } from './logger';
+
+const log = createLogger('sharedResizeObserver');
+
 type ResizeCallback = (entry: ResizeObserverEntry) => void;
 
 const callbacksByElement = new Map<Element, ResizeCallback>();
@@ -29,7 +33,7 @@ function ensureObserver(): ResizeObserver | null {
         } catch (error) {
           // Report but keep going: swallowing silently would hide real
           // subscriber bugs behind the shared observer.
-          console.error('[sharedResizeObserver] subscriber callback threw', error);
+          log.error('Subscriber callback threw', error);
         }
       }
     });

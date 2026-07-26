@@ -1,3 +1,6 @@
+import { readdirSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { afterEach, describe, expect, it } from 'vitest';
 import type * as Monaco from 'monaco-editor';
 import {
@@ -8,6 +11,27 @@ import {
 } from './monacoRuntime';
 
 const globalRef = globalThis as { monaco?: typeof Monaco };
+
+const SRC_ROOT = fileURLToPath(new URL('../../../', import.meta.url));
+
+/**
+ * `import * as x from 'monaco-editor'` / `import x from 'monaco-editor'` — but not
+ * `import type ...`. Anchored to the start of a line so prose inside doc comments
+ * (which mentions the very import forms this guards) is not mistaken for code.
+ */
+const MONACO_VALUE_IMPORT = /^\s*import\s+(?!type\b)[^;\n]*from\s+['"]monaco-editor['"]/m;
+
+function collectSourceFiles(dir: string, out: string[] = []): string[] {
+  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    const fullPath = join(dir, entry.name);
+    if (entry.isDirectory()) {
+      collectSourceFiles(fullPath, out);
+    } else if (/\.tsx?$/.test(entry.name) && !/\.test\.tsx?$/.test(entry.name)) {
+      out.push(fullPath);
+    }
+  }
+  return out;
+}
 
 function clearRuntime(): void {
   setMonacoRuntime(null);
@@ -66,5 +90,16 @@ describe('monacoRuntime', () => {
     delete globalRef.monaco;
     setMonacoRuntime(null);
     expect(getMonacoRuntime()).toBeNull();
+  });
+
+  // The whole point of this module: Monaco is loaded at runtime through the AMD
+  // loader, so a single value-import anywhere in src/ silently bundles a second
+  // ESM copy of Monaco into the JS chunks. Guard the invariant repo-wide.
+  it('is the only way source files reach the Monaco runtime (no value imports)', () => {
+    const offenders = collectSourceFiles(SRC_ROOT).filter(file =>
+      MONACO_VALUE_IMPORT.test(readFileSync(file, 'utf8'))
+    );
+
+    expect(offenders.map(file => file.slice(SRC_ROOT.length).replace(/\\/g, '/'))).toEqual([]);
   });
 });

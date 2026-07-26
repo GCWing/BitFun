@@ -875,9 +875,9 @@ impl WorkspaceLspManager {
         let _language_clone4 = language.to_string();
         let workspace_path4 = self.workspace_path.clone();
         let emitter_for_diagnostics = self.emitter.clone();
-        // Grab the dedicated cache handle once so the hot diagnostics path
-        // never takes the lsp_manager lock (avoids contention with
-        // start_server's write lock and holding a read lock across awaits).
+        // Grab the dedicated cache handle once so the per-publishDiagnostics
+        // path never takes the outer `lsp_manager` lock, and never holds a
+        // read guard across the emitter await.
         let diagnostics_cache = {
             let lsp = self.lsp_manager.read().await;
             lsp.diagnostics_cache_handle()

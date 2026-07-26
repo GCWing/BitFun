@@ -758,9 +758,10 @@ async function main() {
       await ensureDesktopOpenSslIfNeeded();
       const desktopDir = path.join(ROOT_DIR, 'src/apps/desktop');
       const tauriConfig = path.join(desktopDir, 'tauri.dev.conf.json');
-      // Match the fast-build env used by the desktop-preview path
-      // (rebuildDesktopDebugBinary): more codegen units means more parallel
-      // codegen for dev-profile rebuilds. An explicitly set
+      // Pin the same codegen-unit count the desktop-preview path uses
+      // (rebuildDesktopDebugBinary). 256 is already cargo's dev default when
+      // incremental compilation is on; pinning it keeps parallel codegen even
+      // when CARGO_INCREMENTAL=0 drops the default to 16. An explicitly set
       // CARGO_PROFILE_DEV_CODEGEN_UNITS in the caller's environment wins.
       const tauriDevEnv = {
         ...process.env,
