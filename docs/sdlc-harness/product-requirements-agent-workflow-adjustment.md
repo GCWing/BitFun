@@ -12,19 +12,20 @@
 
 权威边界：本文是候选产品调整提案，不替代 [product-requirements.md](product-requirements.md)、[implementation-plan.md](implementation-plan.md)、[governance/metrics-spec.md](governance/metrics-spec.md) 或 QDP 事件注册表。任何条目被采纳前，必须回填到对应权威文档；未回填前不得作为正式 PRD、阶段承诺、门禁规则或指标口径执行。
 
-2026-07-24 状态说明：
+2026-07-26 状态说明：
 
 - 已采纳并合入：统一 Review 主入口、DeepReview / ReviewTeam 内部化、小目标普通 Review 单 reviewer、大目标普通 Review 有界受管分批、显式 Strict Review、只读 Reviewer 与 ReviewFixer 分离、同侧栏修复和 follow-up Review。
 - 已采纳并实现：移除 PR Review MiniApp 独立路径，PR 面板以固定 provider identity/base/head 和按需 diff 启动统一 Review，并按精确 revision 投影进度、结果和过期状态。
 - 已采纳设计、尚未全部实现：一个 Review 记录承载多次修订，后台启动不强制打开内部 child，父任务与 PR 面板读取有界结果投影，问题“本轮是否观察到”和“用户是否处理”保持分离。当前实现仍以 child session 为主要结果身份，不能把目标设计描述成已交付能力。
-- 部分采纳：显式 Strict Review 已有范围、最多一次按需专家和一次条件质量检查、耗时倾向及只读边界说明，但不再弹例行启动确认；可靠的实际成本反馈仍需产品优化，不展示无法证明的 Token 估算。
+- 已采纳设计、尚未实现：普通与严格 Review 都改为由具体未解决问题驱动有界专项复核；内置规则、Skills 和用户配置的只读审核能力属于同一个内部能力池，用户仍只看到一个 Review。当前与目标执行额度见第 4 节和 [DeepReview 架构](../architecture/deep-review.md)。
+- 已采纳设计、尚未实现：专项复核必须获得明确问题、改动文件范围和证据预期；大目标文件分包与审核维度不得成倍扩张。现有日志用于离线验证 token、耗时和覆盖，不新增 Review 专用遥测平台。
 - 尚未采纳：通用动态 Workflow、CI / 测试失败队列、PR 自动复审策略、自动/inline 评论发布、大规模任务控制台、独立 Verify 产品化和组织级 Review 分析。
 
 ## 1. 核心结论
 
 BitFun 后续不应把 dynamic workflow 理解成一个需要用户学习的新模式，也不应把 DeepReview 做成独立且默认沉重的高级入口。更好的产品方向是：
 
-1. **保持默认执行轻量**：低风险和高风险普通任务都不因启发式风险规则自动增加 agent；小目标普通 Review 使用一个只读 reviewer，大目标或 provider 证据不完整时才启用有界受管工作包。显式 Strict Review 由一个主审直接完成，只在具体不确定性确实需要独立视角时按需调用专家。
+1. **保持默认执行轻量，同时保留完整审核能力**：普通 Review 先由一个只读主审理解改动；只有具体未解决问题才触发有界专项复核。大目标或 provider 证据不完整时仍使用受管工作包，但文件分包与审核维度不得相乘。
 2. **把并发能力做成 GUI 中的单一任务控制台**：用户看到的是一个任务、一个进度、一组阶段和异常，而不是 64 个窗口、64 个聊天或 64 条不可理解的日志。
 3. **把审查和工作流从概念上后台化**：用户不需要理解 subagent、workflow、evidence pack、artifact graph。Review 默认留在当前任务并形成一个可恢复的结果记录；内部 child 只在查看执行详情或排障时出现。
 4. **把完成率、token、耗时做成产品级预算选择**：显式进入严格审查或并发执行时说明预估收益和成本；自动化不能让 token 在用户无感知时暴涨。
@@ -37,6 +38,7 @@ BitFun 后续不应把 dynamic workflow 理解成一个需要用户学习的新�
 |---|---|---|---|
 | Bun Rust 迁移 | 用动态工作流把超大迁移拆成规则生成、任务队列、并发执行、独立审查、修复回路和强测试 oracle | BitFun 应学习“失败队列化、审查隔离、过程修复、测试真实性确认”，不是只学习并发数量 | 不应鼓励普通任务默认启动大量 agent，也不应把大规模迁移经验泛化到所有改动 |
 | Claude Code dynamic workflows | workflow 可由脚本或 SDK 编排，适合批量、动态、可恢复任务 | BitFun 可以把工作流变成后台执行策略，而不是新的用户心智负担 | 不应让用户手写 workflow 才能获得价值 |
+| OpenAI Codex Review、Skills 与 subagents | `/review` 提供专用 reviewer；detached review 使用内置 `review-agent`；Skills 可隐式启用；Codex 仓库的 `code-review` 会按可用 `code-review-*` 能力委派独立复核 | 竞品能力应按用户最终获得的组合效果评估，不能只看核心命令。BitFun 应让内置、Skill 和用户审核能力在统一 Review 中按需发挥作用 | 不应把每项能力都默认变成一次完整 Diff 重读，也不应把 Skill 或代理身份暴露为用户必须理解的产品概念 |
 | GitHub Copilot cloud agent | 从 issue、dashboard、PR、CI 失败等入口异步启动任务，完成后创建或更新 PR，并请求人工 review | BitFun 应支持从任务、PR、CI、审查意见自然进入后台执行，并保留用户审核点 | 不应把 PR 作为所有任务的默认终点，个人本地任务仍要轻量 |
 | GitHub Copilot code review | 自动 PR review、review effort level、可配置自动请求审查 | BitFun 可学习目标集成和人工审核点，但普通 Review 不复制基于启发式风险的多 reviewer 升级 | 不应把“自动审查”误做成无差别门禁或默认 token 放大 |
 | Cursor Background Agent / Bugbot | 云端后台 agent、PR 自动审查、发现问题后回到编辑器修复、用 dashboard 展示用量 | BitFun 的 GUI 应围绕“后台任务控制台、异常优先、回到编辑器修复、成本可见”设计 | 不应在 GUI 上复制多终端或多聊天窗口 |
@@ -73,7 +75,7 @@ BitFun 后续不应把 dynamic workflow 理解成一个需要用户学习的新�
 
 用户可以用自然语言表达“更快”“更稳”或“只看安全”等关注点。当前严格审查只识别 `/review strict`、历史 `/DeepReview` alias 和内部显式 strict follow-up；自然语言 strict 映射若未来接入，必须仍由用户明确表达严格意图，不能由风险启发式规则代替。
 
-上述渐进升级适用于批量执行、失败队列和验证策略。普通 Review 不因风险启发式增加专家 reviewer；仅当目标超过单 reviewer 边界或 provider 证据不完整时，才自动启用有界 `ReviewWorker` 工作包。严格主审按实际变更或用户指定关注点动态生成 worker 的具体 lens、问题和范围，不再通过固定 reviewer 身份表达审核维度。团队策略当前只能提示严格审查，不能自动启动。
+上述渐进升级适用于批量执行、失败队列和验证策略。普通 Review 不依据静态风险分数、文件类型或角色表机械增加 reviewer；主审只有在能说明具体未解决问题、预期审核增益和有限证据范围时，才按需调用最多两个专项复核。严格主审遵循同一原则，但最多三个专项复核。用户指定的安全、性能、测试或其他重点优先占用额度。目标超过单 reviewer 证据边界或 provider 证据不完整时，仍使用有界 `ReviewWorker` 工作包；审核重点附着到文件包，不再为每个文件包复制一组专项代理。
 
 ### 4.2 DeepReview 收敛为显式 Strict Review
 
@@ -81,10 +83,10 @@ BitFun 后续不应把 dynamic workflow 理解成一个需要用户学习的新�
 
 | 内部档位 | 触发条件 | 用户看到什么 |
 |---|---|---|
-| L1 | 普通 `Review`；小目标单 reviewer，大目标内部受管分批 | 一个聚合后的问题清单、证据状态、实际覆盖和残余风险 |
-| L3 | `/review strict`、历史 `/DeepReview` alias 或内部显式 strict follow-up | 一个严格主审直接检查；必要时最多一个专家和一个条件质量检查；无需例行启动确认 |
+| L1 | 普通 `Review`；主审按具体问题有界复核，大目标内部受管分批 | 一个聚合后的问题清单、证据状态、实际覆盖和残余风险 |
+| L3 | `/review strict`、历史 `/DeepReview` alias 或内部显式 strict follow-up | 更完整的调查，必要时使用独立复核；展示覆盖和残余风险，无需例行启动确认 |
 
-L2 只保留历史 manifest 的读取与运行时校验兼容，不产生新的 Review 启动。安全、性能、架构、前端体验、跨模块或验证缺口等信号交给主审决定调查重点，不自动增加专家 reviewer。新 Strict Review 不预生成 work packets、不做同角色文件分片、不默认运行 Judge。普通 L1 仅在目标超过单 reviewer 边界或 provider 证据不完整时生成受时长、批次数和并发约束的 `ReviewWorker` 工作包；所有 worker 都由所属 Review 回合前台等待并聚合，未纳入本轮预算的范围必须标为 deferred coverage。固定的业务逻辑、性能、安全、架构和前端 reviewer id 仅作为历史配置与会话兼容别名保留，不再进入新 manifest 或 Agent 列表。
+L2 只保留历史 manifest 的读取与运行时校验兼容，不产生新的 Review 启动。安全、性能、架构、前端体验、跨模块或验证缺口等能力由主审根据实际问题或用户指定重点动态选择，不通过固定 reviewer 身份表达。文件包只用于超出单主审证据边界的目标，审核重点附着到既有文件包，不复制执行；具体额度、并发和兼容约束由 [DeepReview 架构](../architecture/deep-review.md) 统一定义。
 
 迁移/兼容规则：
 
@@ -99,10 +101,10 @@ TUI 用户能接受多个 terminal、多个进程、多个日志，因为核心�
 
 | 并发表达 | TUI 中合理 | GUI 中应如何表达 |
 |---|---|---|
-| 多个 agent 实例 | 多个 pane、多个命令、多个日志流 | 单一任务卡，内部显示 N 个 worker 正在处理 |
+| 多个 agent 实例 | 多个 pane、多个命令、多个日志流 | 单一任务卡，显示有多少并行任务正在处理 |
 | 大量任务输出 | 用户自己 grep 或翻日志 | 默认聚合，只展示异常、阻塞、关键成果和成本 |
 | 任务队列 | 文本列表或脚本输出 | 进度条 + 阶段 lane + 异常卡 + 可下钻任务表 |
-| 冲突处理 | 命令行提示或手动 resolve | 明确显示冲突文件、占用 agent、推荐动作 |
+| 冲突处理 | 命令行提示或手动 resolve | 明确显示冲突文件、受影响的并行任务和推荐动作 |
 | 成本 | 用户看 provider usage 或终端统计 | 任务头常驻 token/time/并发预算 |
 | 审查结果 | 固定角色输出拼接 | 主审结论；只有实际委派时才补充独立验证、分歧和未覆盖范围 |
 | 手动控制 | kill process、改脚本、重跑 | 暂停、调整范围、停止、保留核心检查、追加预算 |
@@ -114,7 +116,7 @@ TUI 用户能接受多个 terminal、多个进程、多个日志，因为核心�
 ```text
 任务标题：迁移 100 个 crates 到新接口
 状态：运行中，42/100 完成，3 个阻塞，预计剩余 18 分钟
-执行域：本地工作区 · 写入沙箱 ask · 网络 deny · 远程未启用
+执行域：本地工作区 · 写入前询问 · 网络已禁用 · 远程未启用
 预算：已用 210k / 500k token，已用 34 / 90 分钟，并发 8 / 12
 
 阶段：
@@ -140,9 +142,9 @@ GUI 的默认层级应是：
 3. **阶段摘要**：发现、执行、审查、验证、收敛。
 4. **异常优先**：冲突、失败、越权、预算不足、覆盖不足。
 5. **成本与预算**：token、耗时、并发、剩余额度。
-6. **下钻详情**：每个 worker 的输入、范围、输出、证据和日志。
+6. **下钻详情**：每个并行任务的输入、范围、输出、证据和日志。
 
-不要默认展示所有 agent 的推理和完整日志。默认展示完整日志会把 GUI 退化成终端。
+不要默认展示内部协作过程的推理和完整日志。默认展示完整日志会把 GUI 退化成终端。
 
 ## 6. 工作流应服务哪些场景
 
@@ -173,7 +175,7 @@ workflow 不应成为通用默认。它适合满足以下条件的任务：
 | 用户表达 | BitFun 自动映射 |
 |---|---|
 | “快点改完这个” | 低成本策略，少审查，任务结束给未验证项 |
-| “稳一点” | 保持单 reviewer，强调更完整调查和验证；不自动扩展 reviewer 数量 |
+| “稳一点” | 强调更完整调查和验证；仅当主审形成具体未解决问题时才按普通 Review 额度调用专项复核 |
 | “帮我把这批都迁掉” | 先样本迁移和规则确认，再提示是否进入批量 workflow |
 | “这个 PR 发出去前严格看一下” | 显式 L3 Strict Review，输出 PR 就绪摘要 |
 | “修 CI” | 解析 CI 失败，形成失败队列，逐项修复和验证 |
@@ -196,7 +198,7 @@ BitFun 不能把“任务完成率最高”作为唯一目标。用户通常需�
 | 用户表达或任务事实 | 用户心智 | 产品行为 |
 |---|---|---|
 | 快速 | 先给我一个可用结果 | 单 agent 为主，少量验证，明确未验证项 |
-| 平衡 | 不要太慢，也别太冒险 | 默认单 agent；显式 Review 使用一个只读 reviewer |
+| 平衡 | 不要太慢，也别太冒险 | 默认单 agent；显式 Review 使用一个只读主审，只在具体问题需要独立确认时专项复核 |
 | 稳妥 | 这个改动重要，宁愿慢一点 | 更完整验证、更强 review、更保守合并 |
 | 批量 | 我有大量相似工作 | 队列、并发、抽样、预算面板 |
 | 受限 | token 或时间有限 | 限制并发，优先高风险或高价值 item |
@@ -248,10 +250,10 @@ BitFun 不能把“任务完成率最高”作为唯一目标。用户通常需�
 |---|---|---|
 | 上下文隔离 | reviewer 不被实现者思路带偏 | “已做独立审查” |
 | 权限隔离 | reviewer 不能边审边改，降低误操作 | “审查只读，修复需确认” |
-| 执行隔离 | 多个 worker 不互相踩文件或状态 | “无冲突 / 有冲突待处理” |
+| 执行隔离 | 多个并行任务不互相踩文件或状态 | “无冲突 / 有冲突待处理” |
 | 模型或角色隔离 | 高风险时获得不受主审结论影响的独立视角 | “主审与独立复核是否一致” |
 
-用户可以手动触发 Review；需要更高检查强度时再显式请求 Strict Review。系统也可以在准备 PR、风险升高、验证失败或团队规则命中时建议合适强度，但不能据此自动增加 reviewer。
+用户可以手动触发 Review；需要更高检查强度时再显式请求 Strict Review。系统也可以在准备 PR、风险升高、验证失败或团队规则命中时建议合适强度，但静态标签和建议本身不能直接增加 reviewer。普通主审只有形成具体未解决问题、有限证据范围和明确审核增益后，才可以在额度内请求专项复核。
 
 ## 10. DeepReview 与普通 Review 合并后的体验
 
@@ -259,17 +261,19 @@ BitFun 不能把“任务完成率最高”作为唯一目标。用户通常需�
 
 保留一个主入口：`Review`。
 
-GUI 只提供 `Review` 主动作。普通目标由一个只读主审负责；目标超出单主审边界或 provider 证据不完整时，内部受管工作包仍汇总为同一个 Review 结果。用户通过自然语言补充“更快”或“只看安全/性能/架构/前端”等目标时，由同一个主审调整调查重点；当前只有 `/review strict`、历史 `/DeepReview` alias 或内部显式 strict follow-up 进入严格主审路径，但也不自动形成多 reviewer，不新增可见档位菜单。
+GUI 只提供 `Review` 主动作。普通目标由一个只读主审负责；具体未解决问题需要独立确认时才专项复核。大目标或 provider 证据不完整时，内部受管执行仍汇总为同一个 Review 结果。用户通过自然语言补充“更快”或“只看安全/性能/架构/前端”等目标时，指定重点优先；当前只有 `/review strict`、历史 `/DeepReview` alias 或内部显式 strict follow-up 进入严格主审路径，不新增可见档位菜单。
 
 ```mermaid
-flowchart LR
+flowchart TD
     Entry["Review 主入口"] --> Record["一个 Review 记录"]
-    Record --> R1["修订 1"]
-    Record --> R2["修订 2"]
-    R1 --> Child1["内部只读执行"]
-    R2 --> Child2["内部只读执行"]
-    Child1 --> Result["统一结果与问题视图"]
-    Child2 --> Result
+    Legacy["/DeepReview 兼容输入"] --> Strict["明确的严格审查意图"]
+    Strict --> Record
+    Record --> Revision["当前修订"]
+    Revision --> Progress["审查进度"]
+    Progress --> Result["一个结果"]
+    Again["再次审查 / 修复后复审"] --> Next["同一记录的新修订"]
+    Next --> Progress
+    Progress -. "可选" .-> Detail["执行详情"]
 ```
 
 用户明确再次审查或完成修复后复审时，应在同一个 Review 记录下新增修订，而不是再制造一个互不关联的结果入口。修订必须重新确认目标和覆盖范围；系统不得仅凭文件列表相似就自动合并两次独立 Review。
@@ -316,12 +320,12 @@ flowchart LR
 
 ### 10.3 范围收敛要求
 
-普通 Review 不根据规模或风险升级检查强度。系统准备可靠的目标证据，并让一个主审决定调查深度；只有目标超出单主审证据边界时，才用有界内部工作包补齐覆盖：
+普通 Review 不根据静态规模、风险分数或文件类型机械增加审核维度。系统准备可靠的目标证据，并让一个主审决定调查深度；主审只有形成具体问题、有限范围和明确预期增益时才调用专项复核。目标超出单主审证据边界时，用有界内部工作包补齐覆盖：
 
-- 小目标由一个 `CodeReview` 主审完成；大目标或 provider 证据不完整时可以使用受管 `ReviewWorker` 工作包，但对外仍是一个 L1 Review 记录和一个聚合结果。
+- 小目标由一个主审负责，必要时专项复核；大目标或 provider 证据不完整时使用有界内部工作包。两者的选择门槛和执行上限由 [DeepReview 架构](../architecture/deep-review.md) 定义，对外始终是一个 Review 记录和一个聚合结果。
 - 缺少足够上下文或 oracle 时明确限制结论，不用额外 reviewer 掩盖证据不足。
 - provider 容量不足时不静默增加重试或 reviewer。
-- 用户显式选择严格审查后，展示当前已有的范围、一次计划主审、最多三次审查代理执行的硬上限、运行时倾向和只读边界；底层模型请求与 Token 不做估算，范围调整与停止选项保留为候选需求。
+- 用户显式选择严格审查后，展示更完整覆盖、必要独立复核、通常更长耗时和只读边界；内部调用额度不作为普通用户必须理解的产品概念，底层模型请求与 Token 不做估算，范围调整与停止选项保留为候选需求。
 - 本地修复范围能够被可靠归因时，复审可以检查原范围与实际改动文件；命令或 Git 操作导致变更来源不确定时，必须明确回退到当前工作区完整目标。
 - PR provider 当前只能可靠给出重新确认后的完整 base/head 目标，因此 PR 复审应检查当前完整 PR，再比较相邻修订的问题结果；在没有跨 provider 的任意 revision delta 契约前，不得宣传为节省 Token 的增量 diff 审查。
 
@@ -332,7 +336,7 @@ BitFun 的优势不应表现为“每一步都有重流程”，而应表现为�
 ### 11.1 不应默认做的事
 
 - 不应默认为每个任务生成完整 evidence pack。
-- 不应因风险标签默认启动多个 reviewer；有界受管工作包只用于超出单主审证据边界的目标。
+- 不应因风险标签、文件类型或可用能力数量默认启动多个 reviewer；专项复核必须对应具体问题和有限范围，有界受管工作包只用于超出单主审证据边界的目标。
 - 不应默认把所有任务都推到 PR 或云端。
 - 不应默认暴露 artifact graph、policy profile、workflow DSL。
 - 不应把模型建议升级成阻断。
@@ -390,6 +394,12 @@ BitFun 的优势不应表现为“每一步都有重流程”，而应表现为�
 
 - [Bun: Rewriting Bun in Rust](https://bun.com/blog/bun-in-rust)
 - [Claude Code workflows](https://code.claude.com/docs/en/workflows)
+- [OpenAI Codex code review](https://learn.chatgpt.com/docs/code-review)
+- [OpenAI Codex skills](https://learn.chatgpt.com/docs/build-skills)
+- [OpenAI Codex review task implementation](https://github.com/openai/codex/blob/61a44880a85d2fd0d8770908dea5733495e571c8/codex-rs/core/src/tasks/review.rs)
+- [OpenAI Codex detached review request path](https://github.com/openai/codex/blob/61a44880a85d2fd0d8770908dea5733495e571c8/codex-rs/app-server/src/request_processors/turn_processor.rs)
+- [OpenAI Codex bundled review-agent Skill](https://github.com/openai/codex/blob/61a44880a85d2fd0d8770908dea5733495e571c8/codex-rs/skills/src/assets/samples/review-agent/SKILL.md)
+- [OpenAI Codex repository review orchestrator](https://github.com/openai/codex/blob/61a44880a85d2fd0d8770908dea5733495e571c8/.codex/skills/code-review/SKILL.md)
 - [GitHub Copilot cloud agent: starting sessions](https://docs.github.com/en/copilot/how-tos/use-copilot-agents/cloud-agent/start-copilot-sessions)
 - [GitHub Copilot cloud agent on GitHub](https://docs.github.com/en/copilot/how-tos/use-copilot-agents/cloud-agent/use-cloud-agent-on-github)
 - [GitHub Copilot automatic code review](https://docs.github.com/en/copilot/how-tos/copilot-on-github/set-up-copilot/configure-automatic-review)

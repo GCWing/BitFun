@@ -32,7 +32,7 @@ BitFun 不需要把 dynamic workflow 做成一个新的主产品模式。用户�
 |---|---|---|---|
 | S1 低风险 bugfix / 文档 / 小 UI 调整 | SDLC P0 | 快速完成，并知道未验证项 | 单 agent，短摘要，不显示 workflow UI |
 | S2a 本地显式审查 | SDLC P0/P1 | 用户主动要求提交前快速看一眼 | 可选 L1 快审；不自动进入 PR/团队流程 |
-| S2b PR / 受保护分支 / 团队规则审查 | SDLC P2 | 发 PR 或进入受管路径前减少明显问题 | 默认单 reviewer；团队策略可提示严格审查，但当前仍需用户显式启动 |
+| S2b PR / 受保护分支 / 团队规则审查 | SDLC P2 | 发 PR 或进入受管路径前减少明显问题 | 当前默认单 reviewer；目标行为只按具体问题有界复核；团队策略可提示严格审查，但仍需用户显式启动 |
 | S3 CI / 测试失败收敛 | SDLC P1/P2 | 找到失败原因并修复 | 先单 agent 诊断；多失败再聚类为队列 |
 | S4 PR review comments 批量修复 | SDLC P2 | 快速处理可机械修复的意见 | 按评论/文件分组，修复后快速复核 |
 | S5 大规模迁移 / 审计 | SDLC P3 | 高完成率且风险可控 | 先样本 gate，再预算确认，再批量执行 |
@@ -57,30 +57,30 @@ BitFun 不需要把 dynamic workflow 做成一个新的主产品模式。用户�
 |---|---|
 | 本地显式入口 | 用户在普通任务或提交前明确要求 review，可使用 L1 只读快审 |
 | PR/团队入口 | 准备 PR、受保护分支、CODEOWNERS、团队策略或发布路径命中；归入既有 P2 PR/团队治理场景 |
-| 默认执行 | 先固定当前修改或明确 Git range 的 base/head、文件状态和完整度；本地显式审查只做一个只读 reviewer；PR/团队路径按规则给 Review 面板和就绪度摘要 |
-| 风险信号 | 安全、性能、架构、跨模块、关键 UI 流程或验证缺口只用于指导同一个 reviewer 的关注点，不自动扩展 reviewer 数量 |
+| 默认执行 | 先固定当前修改或明确 Git range 的 base/head、文件状态和完整度；当前本地显式审查使用一个只读 reviewer，采纳方向允许主审仅为具体未解决问题发起有界专项复核；PR/团队路径按规则给 Review 面板和就绪度摘要 |
+| 风险信号 | 安全、性能、架构、跨模块、关键 UI 流程或验证缺口用于形成具体审核问题，不按标签、文件类型或能力数量机械增加 reviewer |
 | 严格审查条件 | 当前由 `/review strict`、历史 `/DeepReview` alias 或内部显式 strict follow-up 启动；大型 PR、风险标签和团队策略本身不自动触发 |
 | GUI | 一个 Review 面板，按问题优先级合并输出 |
-| 成本 | 显式严格审查前显示范围、一次计划主审、最多三次审查代理执行的硬上限、耗时倾向和只读边界；不估算底层模型请求或 Token，也不声称提供尚未实现的范围调整 |
+| 成本 | 严格审查显示更完整覆盖、必要独立复核、通常更长耗时和只读边界；不把内部调用额度作为普通用户概念，不估算底层模型请求或 Token，也不声称提供尚未实现的范围调整 |
 | 完成标准 | 必须修复、建议确认、已覆盖、未覆盖、下一步清楚 |
 | 禁止 | 把 PR 审查压进 P0 默认体验，或把 DeepReview 作为普通 review 默认入口 |
 
-当前产品落点：
+当前基线与采纳方向：
 
 - 文件变更菜单和命令面板只提供 `Review`，不让用户先选“普通/严格”。
-- `/review` 始终启动一个只读 reviewer，并由模型根据目标证据决定检查深度；`/review strict` 表达用户明确要求严格主审，但不自动增加 reviewer。主审仅在具体不确定性确实需要独立视角时调用一个专家，`/DeepReview` 仅保留历史兼容。
+- 当前 `/review` 启动一个只读 reviewer；当前 `/review strict` 允许最多一个专家和一次条件质量检查，`/DeepReview` 仅保留历史兼容。采纳方向让普通主审按具体问题调用零到两个专项复核、严格主审调用零到三个且质量检查共用额度，同时最多运行两个；这不是静态风险升级规则。
 - 目标证据先于 Review 决策：当前工作区使用一次有界 `HEAD -> worktree` 取证，但没有 immutable snapshot，因此最终 evidence status 始终为 `limited`；显式 Git range 由目标准备层固定 base/head，完整且无遗漏、workspace binding 为 matching_clean 时 evidence status 才可为 `complete`。Reviewer 不自行猜 ref，缺失、截断或预算耗尽必须进入覆盖说明，但不改写模型 recommendation。
-- PR1 保留只读 Reviewer 现有的 `Git` 暴露以避免旧 PR/历史诊断场景先发生能力回退，但 prepared target evidence 不把它作为 changed-code 证据，也不新增多操作 Git 工具。prepared target 只通过有界 `GetFileDiff` 消费目标 diff；只有本地仓库与目标 head 匹配且整个工作区干净时，现有 Read/Grep/Glob/LS 才补充 live context。不做逐工具全仓重验、任意 shell、fetch、checkout 或仓库状态写入。
-- 显式严格审查前展示单一 Review 方案确认，包括范围、一次计划主审、最多三次审查代理执行的硬上限、耗时倾向和只读边界；不估算底层模型请求或 token。
+- 只读 Reviewer 不获得通用 `Git` 或 shell 工具；Git 操作留在目标准备层。Reviewer 只通过有界 `GetFileDiff` 消费目标 diff；只有本地仓库与目标 head 匹配且整个工作区干净时，现有 Read/Grep/Glob/LS 才补充 live context。不做逐工具全仓重验、fetch、checkout 或仓库状态写入。
+- Strict Review 直接启动；运行状态和结果说明范围、实际覆盖、通常更长耗时和只读边界，不显示内部调用额度，也不估算底层模型请求或 token。
 - 修复不新开第二套产品界面：同一 Review 侧栏先把选中项交给 `ReviewFixer`；“审核修复”能精确归因时按原审核文件与 Fixer 直接改动文件的并集重新统计和决策，命令型修改无法可靠归因时明确提示并回退当前工作区 diff，在同一侧栏位置切换到新的隔离 Review 子会话。Fixer 基线和选中项在修复前持久化；follow-up 预留、relationship metadata 和后端 session id 复用同一 request id。启动确认不确定时保留稳定 turn 和已创建子会话、显示明确提示，不自动或在重启后重发启动消息；侧栏显示进行中和查看结果，只有明确失败的操作才提供重试。旧会话缺少范围信息时采用同样的显式工作区回退。
-- PR 面板是唯一内置 PR Review 入口：adapter 固定 provider identity、base/head 和按需远程 diff，启动同一套单 reviewer Review，并按精确 PR revision 投影进行中、结果和过期状态。已移除 PR Review MiniApp 及其独立强度和 AI 草稿路径；平台 CI/审批/mergeability 事实仍与 AI Review 建议分层。本轮不自动触发 Review，不生成或发布 inline comment，也不增加 approve、merge、checkout、缓存或 Finding 生命周期。
+- PR 面板是唯一内置 PR Review 入口：adapter 固定 provider identity、base/head 和按需远程 diff，启动同一套 Review，并按精确 PR revision 投影进行中、结果和过期状态。已移除 PR Review MiniApp 及其独立强度和 AI 草稿路径；平台 CI/审批/mergeability 事实仍与 AI Review 建议分层。当前不自动触发 Review，不生成或发布 inline comment，也不增加 approve、merge、checkout、缓存或 Finding 生命周期。
 
 2026-07-10 合入后产品复盘：
 
 - 统一入口、普通 Review 单 reviewer、显式 Strict Review、只读 Reviewer、独立 ReviewFixer 和同侧栏 follow-up 已形成可用基线，不再新增 Review 执行分支。
-- 当前闭合 workspace / Git range / provider PR 三类目标证据，但仍只有一套 Review 执行链路。该 PR 不新增长期目标数据库、合成 diff 引用、增量缓存计划、Finding 生命周期、自动评论或结果动作。
-- 后续首先观察目标解析失败率、provider diff 缺失率、limited evidence 比例、diff 预算耗尽率、Review 成功率和 token 变化；没有指标证明收益前，不新增 PR3 默认范围。
-- PR 自动审查、跨 Review 增量对照、反馈学习、完整远程 checkout 和大规模任务控制台均不进入本轮；完成后先观察目标正确率、覆盖缺口和用户决策时间。
+- 当前闭合 workspace / Git range / provider PR 三类目标证据，但仍只有一套 Review 执行链路。采纳方向不新增长期目标数据库、合成 diff 引用、跨 reviewer 内容缓存、Finding 生命周期、自动评论或结果动作。
+- 性能与质量先使用固定回放集和现有日志离线比较；没有稳定基准证明收益前，不新增 Review 专用遥测平台或默认执行分支。
+- PR 自动审查、跨 Review 增量对照、反馈学习、完整远程 checkout 和大规模任务控制台均不进入当前采纳范围；后续决策先看目标正确率、覆盖缺口和用户决策时间。
 
 ### 4.3 S3：CI / 测试失败收敛
 
@@ -126,12 +126,12 @@ BitFun 不需要把 dynamic workflow 做成一个新的主产品模式。用户�
 | 强度 | 用户表达 | 默认触发 | 成本倾向 |
 |---|---|---|---|
 | L0（后续探索） | 快速检查 | 等待 Verify evidence 设计，不在当前生产策略中触发 | 默认最低成本 |
-| L1 | 独立审查 | 普通 `/review`、提交前或 PR 前检查 | 固定一个只读 reviewer，不因规模或风险自动扩展 |
-| L3 | 严格审查 | `/review strict`、`/DeepReview` 兼容输入或内部显式 strict follow-up | 启动前确认计划覆盖、调用数、耗时倾向和只读边界 |
+| L1 | 独立审查 | 普通 `/review`、提交前或 PR 前检查 | 当前为一个只读 reviewer；目标行为仅按具体问题使用零到两个专项复核 |
+| L3 | 严格审查 | `/review strict`、`/DeepReview` 兼容输入或内部显式 strict follow-up | 更完整覆盖、必要独立复核、通常更长耗时和只读边界 |
 
 原则：
 
-- 默认任务不启动 reviewer；显式 Review 固定为 L1。L2 只保留历史 manifest 兼容，不产生新启动；L3 只服务当前可识别的显式 strict 意图。团队策略只能提示，不自动启动。
+- 默认任务不启动 reviewer；显式 Review 固定为 L1。L2 只保留历史 manifest 兼容，不产生新启动；L3 只服务当前可识别的显式 strict 意图。团队策略只能提示，不自动启动，静态风险也不能直接增加专项复核。
 - reviewer 默认只读；修复必须进入用户批准的执行阶段。
 - 两轮审查没有新增有效问题时，应建议停止或保留核心检查。
 - 缺少上下文或 oracle 时，先提问或诊断，不启动 L3。
@@ -141,7 +141,7 @@ BitFun 不需要把 dynamic workflow 做成一个新的主产品模式。用户�
 | 决策点 | 默认倾向 |
 |---|---|
 | 小任务 | 优先首个有用结果时间，牺牲部分覆盖但明确未验证项 |
-| 中风险任务 | 优先一个 L1 reviewer 和最近验证，不默认批量并发 |
+| 中风险任务 | 优先一个 L1 主审和最近验证；只有具体未解决问题才使用有界专项复核 |
 | 多失败任务 | 优先失败聚类和可运行 oracle，再决定是否队列化 |
 | 大规模任务 | 优先样本成功率和可收敛性，再考虑并发 |
 | 预算不足 | 优先高风险/高价值 item，跳过低风险二次审查 |
@@ -187,7 +187,7 @@ P3/P4 再按需补充队列阻塞率、工作流回退率、后续返工率和�
 | [product-requirements.md](product-requirements.md) | 继承快速开发、上下文保障、团队治理、执行安全和合规/发布路径 |
 | [implementation-plan.md](implementation-plan.md) | 复用既有阶段路线，不新增 workflow 专属 P0-P4 |
 | [architecture/agent-workflow-design.md](architecture/agent-workflow-design.md) | 仅作为交互和边界补充，不定义独立核心架构 |
-| [../architecture/deep-review.md](../architecture/deep-review.md) | 仅在 L3 严格审查中复用 DeepReview 主审、按需专家、历史队列兼容和 action surface；通用任务生命周期、scheduler 和队列状态归 Agent Kernel，Harness 只通过 provider/plan/step 参与编排 |
+| [../architecture/deep-review.md](../architecture/deep-review.md) | 普通与严格 Review 都复用既有目标证据、主审、ReviewWorker、历史队列兼容和 action surface；通用任务生命周期、scheduler 和队列状态归 Agent Kernel，Harness 只通过 provider/plan/step 参与编排 |
 | [architecture/quality-data-plane.md](architecture/quality-data-plane.md) | 复用既有最小事件和指标口径，不新增 P0 默认事件 |
 
 ## 10. 参考资料

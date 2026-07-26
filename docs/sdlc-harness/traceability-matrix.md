@@ -15,6 +15,7 @@
 | 团队配置治理 | PRD-05、PRD-06 | 配置层级、组织策略优先级 | 配置化策略画像、PR 门禁 | P2 | `.bitfun`、AGENTS、CODEOWNERS、CI、路径规则冲突用例；验证来源、优先级和覆盖限制 |
 | PR 就绪度 | PRD-07 | 证据按需投影、PR 场景显露 | PR 门禁、证据包 | P1、P2 | P1 可 shadow/advisory 生成就绪度摘要；P2 回放准备 PR、受保护分支、不可运行 CI 用例，验证就绪度摘要、未验证项、证据引用和非默认阻断 |
 | 版本化 Review 生命周期 | PRD-21 | [Review 生命周期架构](../architecture/review-lifecycle.md) | session-history 记录锚点与有界摘要查询、既有 Review 目标证据与只读执行链路 | P2 | 回放后台启动、元数据恢复、同记录复审、终态后新修订、limited 与 stale 同时保留、问题与覆盖正交、记录级归档/删除、断链只读降级、本轮未观察到与用户处置分离、remote persistence 和未加载 session 查询 |
+| Review 按问题有界协作 | PRD-22 | [Review 执行架构](../architecture/deep-review.md) | 既有 Review 目标证据、LaunchReviewAgent admission、ReviewWorker 只读工具边界和聚合报告 | P2 | 覆盖普通零到两个、严格零到三个且 Judge 共用额度；验证 typed assignment 的目标指纹与路径拒绝、Skill/自定义审核指引的工具降权、最多两路并发、文件包不与审核维度相乘、失败不自动重试、覆盖降级和根因去重；固定回放集比较输入 token、耗时和已知问题保留情况 |
 | 复杂项目追溯 | PRD-08 | 交付物图谱、证据可追溯 | 证据包、交付物图谱、需求影响分析 | P3 | 需求变更、发布、事故复盘用例；验证链接来源、新鲜度、人工确认和过期处理 |
 | Harness 主动配置审核 | PRD-09 | 项目知识与 Harness 可执行配置分层 | 安全边界、配置化策略画像 | P0、P2 | Harness 项目脚本、自定义工具和工作流配置用例；验证来源、hash、权限、执行域、审核与撤销；不复制外部 owner 的激活或授权状态 |
 | 扩展能力消费 | PRD-16 | Harness 复用类型化工具、Hook、事件、权限结果和诊断；权威状态保持原 owner | OpenCode 扩展消费、质量数据面 | 产品架构独立阶段、SDLC P1 | 产品架构验证真实插件生产入口；SDLC P1 回放不可用、策略限制、过期诊断和重复事件，确认无关任务及权威状态不受影响 |
@@ -32,6 +33,6 @@
 | [implementation-plan.md](implementation-plan.md) | 阶段用户收益、必要技术前置、延期边界、验收条件和过程风险 | 不替代产品需求或模块契约 |
 | [../architecture/review-lifecycle.md](../architecture/review-lifecycle.md) | Review 记录、修订、结果投影、问题连续性、持久化查询和复审边界 | 不替代 Review 目标证据、执行器、修复动作或通用数据面 |
 | [product-requirements-agent-workflow-adjustment.md](product-requirements-agent-workflow-adjustment.md) | 记录 workflow、Review、并发 GUI 和成本控制的已采纳方向与剩余候选议题 | 不自行创建正式 PRD 编号、指标口径、阶段承诺或门禁规则；新增采纳项必须回填到权威文档 |
-| [agent-workflow-staged-plan.md](agent-workflow-staged-plan.md) | 将 workflow、审查、并发和成本控制映射到真实用户场景 | 不定义独立阶段路线，不定义新的核心对象模型；通用任务生命周期、scheduler 和队列状态归 Agent Kernel，Harness 只通过 provider/plan/step 参与编排；DeepReview 的主审与按需专家只服务 L3 严格审查 |
+| [agent-workflow-staged-plan.md](agent-workflow-staged-plan.md) | 将 workflow、审查、并发和成本控制映射到真实用户场景 | 不定义独立阶段路线，不定义新的核心对象模型；通用任务生命周期、scheduler 和队列状态归 Agent Kernel，Harness 只通过 provider/plan/step 参与编排；普通与严格 Review 的有界复核都复用既有 Review 执行 owner |
 | 子模块文档 | 单模块输入、输出、状态、边界场景和成功标准 | 不重新定义产品定位 |
 | [governance/metrics-spec.md](governance/metrics-spec.md) | 指标公式、分母、窗口、负责人和解释边界 | 不直接作为阻断策略 |

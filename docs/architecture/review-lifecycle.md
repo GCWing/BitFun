@@ -157,19 +157,29 @@ and target freshness are independent facts. They must not be collapsed into one
 state enum: a stale Review may still contain important findings, and a Review
 with limited coverage may still need immediate attention.
 
+First compose the independent facts:
+
 ```mermaid
 flowchart LR
-    Revision["Review revision"] --> Execution["Execution phase<br/>preparing · running · completed · failed · cancelled"]
-    Revision --> Availability["Result availability<br/>pending · available · missing · invalid"]
-    Revision --> Findings["Finding conclusion<br/>needs attention · no findings · unknown"]
-    Revision --> Coverage["Evidence coverage<br/>complete · limited · failed · unknown"]
-    Revision --> Freshness["Target freshness<br/>current · stale · unknown"]
+    Revision["Review revision"] --> Phase["Phase"]
+    Revision --> Availability["Availability"]
+    Revision --> Findings["Findings"]
+    Revision --> Coverage["Coverage"]
+    Revision --> Freshness["Freshness"]
+    Phase --> View["Review presentation"]
+    Availability --> View
+    Findings --> View
+    Coverage --> View
+    Freshness --> View
+```
 
-    Execution --> Surface["Composed Review presentation"]
-    Availability --> Surface
-    Findings --> Surface
-    Coverage --> Surface
-    Freshness --> Surface
+Then project the same Review into product surfaces:
+
+```mermaid
+flowchart LR
+    View["Review presentation"] --> Parent["Parent task"]
+    View --> PR["Pull request"]
+    View -. "optional" .-> Detail["Execution detail"]
 ```
 
 Only execution phase is a lifecycle state machine:
@@ -257,12 +267,15 @@ natural-language descriptions are semantically identical.
 ## Execution and re-review boundaries
 
 Review strength remains controlled by explicit intent. Ordinary Review keeps
-ordinary strength: bounded targets use one `CodeReview` child, while a large or
-provider-limited target may use bounded managed packets without becoming a
-different user-facing mode. Strict Review may select a concrete independent
-lens from the actual change or a focus named by the user. Fixed architecture,
-frontend, performance, product, or security agents are not exposed as required
-user choices.
+ordinary strength. The current implementation uses one `CodeReview` child for
+bounded targets, while a large or provider-limited target may use bounded
+managed packets without becoming a different user-facing mode. The adopted
+execution target in [deep-review.md](deep-review.md) allows the ordinary primary
+reviewer to request zero to two focused checks for concrete unresolved questions
+and Strict Review to request zero to three; a conditional quality check consumes
+the same allowance. This target does not change Review strength, expose fixed
+architecture, frontend, performance, product, or security agents as required
+user choices, or turn every available capability into a model call.
 
 Starting Review creates the durable revision before sending the first reviewer
 turn. It leaves the user in the parent task by default. Opening execution detail
@@ -304,13 +317,15 @@ The same record is projected into two existing product surfaces:
 
 | Surface | Primary content | Secondary detail |
 |---|---|---|
-| Parent task | target, latest revision, freshness, coverage, findings, next action | open the structured Review result |
+| Parent task | target, latest revision, freshness, coverage, findings, next action | open the structured Review result or execution detail |
 | Pull-request panel | latest matching record for verified provider identity and base/head | older revisions and stale-result history |
 
 Starting a Review does not force-open an internal child pane. The Review card is
-available immediately and remains useful after restart. Opening the card shows
-the structured result and remediation actions; raw execution messages are a
-diagnostic view, not the product's main result.
+available immediately and remains useful after restart; raw execution messages
+are diagnostic detail, not the product result. Detail shows plain-language
+questions and real states without Skill names, agent ids, packet ids, or budgets.
+A child with no loaded transcript renders preparing, loading, or load-failed
+state rather than a title over an empty body.
 
 The pull-request surface continues to use exact provider identity and verified
 base/head freshness. A stale record offers “Review current version” and creates
@@ -396,6 +411,15 @@ evidence:
 - record projection adds no model call and no duplicate content read;
 - Review remains read-only, and remediation still requires the separate
   user-approved fixer path.
+- a single-domain ordinary Review does not launch a focused check merely because
+  matching capabilities are installed;
+- focused checks cannot read changed files outside their assigned scope;
+- large-target file packets and review capabilities do not create multiplicative
+  fan-out;
+- findings are deduplicated by changed location and root cause instead of being
+  grouped by reviewer;
+- existing runtime logs support offline token, returned-character, round, and
+  wall-time comparison without a Review-specific telemetry store.
 
 If the shared Quality Data Plane gains a production producer, Review may emit
 only registered lifecycle and explicit feedback facts with defined retention,
@@ -408,6 +432,8 @@ introduce another Review runtime or persistence owner.
 - Automatic comment publishing, approval, merge, or gate enforcement.
 - A generic workflow or agent-orchestration framework.
 - A user-visible roster of fixed specialist agents.
+- Launching one full-diff reviewer for every available built-in, Skill, or user
+  review capability.
 - Fuzzy semantic finding closure or model-driven disposition changes.
 - Reusing a local result for a pull request without exact repository, target,
   content, policy, and context equivalence.

@@ -6,7 +6,9 @@ DeepReview is the compatibility runtime for `Review: Strict` and the internal ma
 
 This document owns the current Review execution architecture: target evidence,
 read-only roles, managed packets, strict delegation, admission, queueing, and
-report submission. The adopted user-facing record, revision, freshness, and
+report submission. The section explicitly labelled as an adopted target records
+the approved adaptive-capability direction without presenting it as implemented.
+The adopted user-facing record, revision, freshness, and
 re-review model is defined separately in
 [review-lifecycle.md](review-lifecycle.md). That lifecycle sits above the
 existing child executions; it does not create another runtime or move target
@@ -23,6 +25,20 @@ Product-facing guardrails are summarized here:
 - A child session is one execution revision, not the durable product identity;
   the target Review lifecycle groups revisions without merging independent
   Review requests heuristically.
+
+Current and adopted target behavior must remain distinguishable:
+
+| Area | Current implementation | Adopted target |
+|---|---|---|
+| Bounded ordinary Review | One isolated `CodeReview` child with no reviewer-delegation tool | One primary reviewer with zero to two focused review capabilities when concrete unresolved questions justify them |
+| Strict Review | One primary `DeepReview`, at most one specialist, and one conditional Judge | One primary reviewer with zero to three focused review capabilities; a Judge consumes the same allowance |
+| Large ordinary Review | Deterministic `ReviewWorker` file packets, at most two concurrent | Keep bounded packets, but attach selected review questions to those packets instead of multiplying packets by review capability |
+| Capability sources | Current core/extra reviewer manifest | Existing built-in review guidance, compatible Skills, and configured read-only review agents discovered through their existing registries |
+| User presentation | One Review child/result, with internal execution detail available | One Review record, plain-language focused-check progress, and one root-cause-deduplicated result |
+
+Until the adaptive target is implemented and verified, current limits and tool
+availability remain authoritative. In particular, the ordinary `CodeReview`
+agent currently cannot launch review workers.
 
 The current implementation has four layers:
 
@@ -46,7 +62,7 @@ The backend does not resolve the review target or build the launch manifest. The
 - `ReviewWorker`
 - `ReviewJudge`
 
-`ReviewWorker` is an optional capability, not a fixed domain lane. The owning `DeepReview` agent selects a concrete lens from the actual change or the user's requested focus, then supplies the exact question, scope, and evidence expectation in the launch prompt. A new strict run may launch at most one such worker for a concrete uncertainty. The retired `ReviewBusinessLogic`, `ReviewPerformance`, `ReviewSecurity`, `ReviewArchitecture`, `ReviewFrontend`, and `ReviewGeneral` ids remain non-discoverable compatibility aliases for stored configuration, historical manifests, and their direct task invocations; they resolve to `ReviewWorker` under the same DeepReview visibility, manifest, read-only, and budget gates, but are not registered or emitted for new runs. The existing generic Git exposure remains for legacy compatibility, but it is not authorized as prepared changed-code evidence. Prepared `GetFileDiff` is the source of truth for changed code; when the local binding is `matching_clean`, existing Read/Grep/Glob/LS tools may supplement it with repository context. `ReviewJudge` is a conditional quality check used only for a high-severity finding, conflicting evidence, or a materially low-confidence conclusion; it does not perform a full independent review pass.
+`ReviewWorker` is an optional capability, not a fixed domain lane. The owning `DeepReview` agent selects a concrete lens from the actual change or the user's requested focus, then supplies the exact question, scope, and evidence expectation in the launch prompt. A new strict run may launch at most one such worker for a concrete uncertainty. The retired `ReviewBusinessLogic`, `ReviewPerformance`, `ReviewSecurity`, `ReviewArchitecture`, `ReviewFrontend`, and `ReviewGeneral` ids remain non-discoverable compatibility aliases for stored configuration, historical manifests, and their direct task invocations; they resolve to `ReviewWorker` under the same DeepReview visibility, manifest, read-only, and budget gates, but are not registered or emitted for new runs. Review identities do not receive a generic Git tool. Prepared `GetFileDiff` is the source of truth for changed code; when the local binding is `matching_clean`, existing Read/Grep/Glob/LS tools may supplement it with repository context. `ReviewJudge` is a conditional quality check used only for a high-severity finding, conflicting evidence, or a materially low-confidence conclusion; it does not perform a full independent review pass.
 
 `ReviewFixer` is the separate writable remediation identity. DeepReview runtime policy rejects it during review execution. The frontend action surface invokes it only after user approval, and a new read-only Review run checks the fix when requested.
 
@@ -96,7 +112,7 @@ requires a lossless contract change: report enrichment must preserve coverage
 and freshness independently, or emit independent structured reason codes. The
 UI must not guess the overwritten dimension from one combined label.
 
-Prepared Review target evidence uses bounded `GetFileDiff` pages as changed-code evidence. Local ranges read exact Git revisions; PR targets read provider diffs on demand and revalidate base/head before each file. The parent Review has a 240,000-character aggregate allowance and admits at most 128 provider diff acquisitions before provider I/O; one acquisition normally performs one file-page request and one detail request. Repeating the same page for the same reviewer returns a compact already-served result instead of the diff again. Exhaustion and stale target bindings return structured limited evidence. Existing generic Git exposure remains for legacy compatibility but does not authorize ref guessing or scope widening; Read/Grep/Glob/LS are supplemental only for a matching clean Git-range binding, never for a provider-only PR target.
+Prepared Review target evidence uses bounded `GetFileDiff` pages as changed-code evidence. Local ranges read exact Git revisions; PR targets read provider diffs on demand and revalidate base/head before each file. The parent Review has a 240,000-character aggregate allowance and admits at most 128 provider diff acquisitions before provider I/O; one acquisition normally performs one file-page request and one detail request. Repeating the same page for the same reviewer returns a compact already-served result instead of the diff again. Exhaustion and stale target bindings return structured limited evidence. Git operations remain in the target-preparation owner; Review identities cannot guess refs or widen scope. Read/Grep/Glob/LS are supplemental only for a matching clean Git-range binding, never for a provider-only PR target.
 
 Local Review `Read` calls also keep a session-scoped, metadata-only receipt of returned line ranges keyed by logical path, nanosecond mtime, byte length, and a streamed SHA-256 content digest. A fully covered repeat on the unchanged revision returns a compact already-served result; changed files, remote workspaces, tail reads, partial overlaps, and non-Review agents continue through the normal read path. Digest work is restricted to receipt-enabled Review agents. Replacing or compacting model context clears these receipts so the runtime never suppresses content that is no longer present in context.
 
@@ -116,6 +132,156 @@ The default strict-review contract is mirrored in Rust and TypeScript. New stric
 The runtime enforces the one-specialist budget even if a weak model ignores the prompt. This is a resource ceiling, not a keyword or risk-score workflow rule. The model decides whether delegation is useful from the actual evidence and task, while the manifest limits which read-only agents it may call.
 
 Historical configuration fields for reviewer timeouts, file-split thresholds, same-role instances, retries, concurrency, and queue behavior remain readable so stored sessions can recover honestly. New strict manifests override split, same-role, retry, and specialist-call values to the bounded policy above. Extra reviewers must still be enabled subagents with read-only review tooling. `DeepReview` and `ReviewFixer` remain disallowed.
+
+## Adopted Adaptive Review Capability Direction
+
+> Status: approved architecture direction, not current behavior. Implementation
+> must reuse the current Review launch, manifest, admission, task, evidence, and
+> report owners. It must not introduce another Review runtime or a generic
+> orchestration Harness.
+
+The product comparison boundary is the complete Review outcome available to a
+user, not the internal location of a capability. A built-in reviewer, a Skill,
+and a configured read-only review agent are implementation sources for the same
+product capability when the unified Review can use them. Their names and
+packaging are not separate user-facing Review products.
+
+#### 1. Decide whether a focused check is justified
+
+```mermaid
+flowchart LR
+    Evidence["Target evidence"] --> Primary["Primary review"]
+    Primary --> Question{"Open question?"}
+    Question -->|"No"| Continue["Continue"]
+    Question -->|"Yes"| Value{"Independent value?"}
+    Value -->|"No"| Continue
+    Value -->|"Yes"| Select["Select guidance"]
+    Select --> Scope["Bind scope"]
+    Scope --> Gate{"Admitted?"}
+    Gate -->|"No"| Fallback["Primary check or limited"]
+    Gate -->|"Yes"| Ready["Ready"]
+```
+
+#### 2. Map one admitted question to one execution shape
+
+```mermaid
+flowchart LR
+    Ready["Admitted question"] --> Size{"Target size"}
+    Size -->|"Bounded"| Check["Focused check"]
+    Size -->|"Large"| Attach["Attach to packet"]
+    Attach --> Packets["Run packets once"]
+    Check --> Return["Cited result"]
+    Packets --> Return
+    Return --> Merge["One Review result"]
+```
+
+### Capability selection contract
+
+The primary reviewer may launch a focused check only when its assignment states:
+
+- one concrete unresolved question;
+- why an independent capability can materially improve the conclusion;
+- the changed files or packet covered by the check;
+- the evidence expected from the check.
+
+File type, a static risk label, capability availability, or the idea that an
+extra reviewer might be safer is insufficient. User-requested focuses take
+priority within the same allowance. Registry implementations may parse or cache
+full source files during discovery, but the normal Review model context receives
+only concise Skill and review-agent descriptions. Full selected guidance enters
+model context only after admission, so a large capability inventory does not
+inflate every Review turn.
+
+The existing manifest and backend admission path gain one small typed
+`focused_assignment` projection: question id, target fingerprint, allowed
+changed paths or packet id, expected evidence, capability key, and capability
+fingerprint. Admission resolves the capability once and derives a child-scoped
+target view. `GetFileDiff` rejects changed-file access outside that view. This is
+an execution constraint on the existing target owner, not another target model.
+The same scoped read policy receives the prepared target's complete changed-path
+inventory: `Read` rejects an unassigned changed path, while `Grep` filters matches
+from unassigned changed paths. Unchanged dependencies remain available as bounded
+supplemental context. All comparisons use the target owner's normalized logical
+paths so path aliases cannot bypass the assignment.
+
+Every selected source is normalized into the existing `ReviewWorker` execution
+envelope. Built-in guidance, a Skill, or a configured read-only review agent may
+contribute instructions and an allowed model preference, but never its own tool,
+delegation, permission, or network policy. Review policy and assignment scope
+override selected guidance. The backend—not frontend `allowedTools` metadata—
+enforces the exact focused-check envelope: `GetFileDiff`, `Read`, `Grep`, `Glob`,
+and `LS`, plus the bounded result return. Selected content is always treated as
+plain review guidance, not as a capability-effects declaration. An instruction
+that cannot run inside this envelope is ignored and, when material to the
+assigned question, produces limited coverage; it never grants another effect.
+
+Call accounting is deterministic:
+
+| Target path | Owning Review execution | Spawned calls, excluding the owner | Total review-agent executions |
+|---|---|---|---|
+| Bounded ordinary | Primary reviews directly | Zero to two focused `ReviewWorker` calls | One to three |
+| Bounded Strict | Primary reviews directly | Zero to three calls; a conditional `ReviewJudge` consumes one remaining call | One to four |
+| Managed large ordinary | Primary owns aggregation | Existing disjoint packet count, currently at most eight; zero to two admitted questions attach before launch and create no additional call | One plus packet count |
+
+At most two spawned calls run concurrently; the owning Review execution waits
+and aggregates rather than consuming one of those two worker slots. No Judge
+slot is reserved: if Strict Review spends its allowance, a later conflict is
+reported as uncertainty. Strict-plus-managed-packet execution is not authorized
+by this direction and requires a separate design if a real target demands it.
+
+### Evidence ownership and context isolation
+
+```mermaid
+flowchart LR
+    Target["Changed paths"] --> Gate["Scoped read policy"]
+    Scope["Assigned scope"] --> Gate
+    Gate --> Diff["Assigned diff"]
+    Gate --> Context["Bounded context"]
+    Diff --> Worker["ReviewWorker"]
+    Context --> Worker
+    Other["Other changed files"] -. "blocked" .-> Worker
+    History["Parent / peer history"] -. "excluded" .-> Worker
+    Worker --> Result["Cited result"]
+    Result --> Primary["Primary review"]
+```
+
+Supplemental context locates exact call sites, definitions, configuration, and
+unchanged dependencies; it does not replace prepared `GetFileDiff`. Review
+guidance prefers one complete bounded symbol block over speculative whole-file
+reads. Same-reviewer diff-page suppression and local Read receipts remain the
+only content-read optimizations. The primary rereads focused evidence only for a
+high-severity finding, material conflict, or materially low confidence.
+
+### Stopping and failure behavior
+
+No focused check is admitted without a concrete non-duplicate question, a valid
+scope, remaining allowance, and plausible conclusion benefit. A previous
+no-finding result for the same capability, question, and scope also stops repeat
+delegation.
+
+A failed or timed-out check is not retried automatically: the primary either
+uses a bounded read or reports limited coverage. A changed target stops stale
+execution. Material conflict may consume a remaining Judge call; otherwise the
+result preserves the uncertainty.
+
+### Product projection and quality evidence
+
+The default UI shows one Review with preparing, reviewing, checking a specific
+concern, and consolidating phases. Optional detail uses plain-language questions
+such as “check permission boundaries” rather than Skill names, agent ids, packet
+ids, or internal budgets. The final report is organized by severity and root cause,
+with explicit coverage and residual risk; it is never grouped by reviewer count
+or presented with an invented aggregate quality score.
+
+This direction does not require a Review telemetry service, hit-rate database,
+adaptive scoring engine, content cache, dashboard, scheduler, or retry state
+machine. Deterministic contract tests and offline comparisons using existing
+logs are sufficient initial evidence. A reproducible benchmark artifact created
+with implementation must record fixtures, base commit, model/provider, sample
+count, environment, and comparison method before setting numerical gates. The
+architecture requires lower input tokens and wall time on the fixed repeated-read
+set without losing seeded known findings; it does not embed an environment-bound
+percentage target.
 
 ## Manifest Shape
 
@@ -295,7 +461,7 @@ invariants.
   Review action owner. Neither record nor revision metadata may become a second
   target resolver, report store, content cache, or execution runtime.
 - Managed/historical work packets and current evidence packs are metadata only; they must not embed file contents or full diffs.
-- Existing reviewer Git exposure remains unchanged for legacy compatibility, but prepared target evidence does not authorize it as changed-code evidence and no dedicated multi-operation Git tool is added. Prepared `GetFileDiff` must be bounded and disable external diff/text conversion; live repository reads are supplemental and require a deterministic clean local binding.
+- Review identities receive no generic Git or shell tool. Git operations stay in target preparation, prepared `GetFileDiff` remains bounded and disables external diff/text conversion, and live repository reads are supplemental only under a deterministic clean local binding.
 
 ## Change Checklist
 
