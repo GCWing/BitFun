@@ -11,8 +11,9 @@ use crate::api::app_state::SSHServiceError;
 use crate::startup_trace::DesktopStartupTrace;
 use crate::AppState;
 use bitfun_core::service::remote_ssh::{
-    RemoteTreeNode, SSHAuthMethod, SSHConfigEntry, SSHConfigLookupResult, SSHConnectionConfig,
-    SSHConnectionResult, SavedConnection, ServerInfo,
+    ConnectionTestReport, DockerContainerInfo, RemoteTreeNode, SSHAuthMethod, SSHConfigEntry,
+    SSHConfigLookupResult, SSHConnectionConfig, SSHConnectionManager, SSHConnectionResult,
+    SavedConnection, ServerInfo,
 };
 
 impl From<SSHServiceError> for String {
@@ -22,6 +23,35 @@ impl From<SSHServiceError> for String {
 }
 
 // === SSH Connection Management ===
+
+async fn hydrate_stored_password(
+    manager: &SSHConnectionManager,
+    config: &mut SSHConnectionConfig,
+) -> Result<(), String> {
+    // Local Docker Exec/Auto profiles do not require SSH credentials. Older
+    // saved profiles may therefore legitimately contain an empty Password
+    // auth placeholder with no vault entry.
+    if config.uses_local_docker() {
+        return Ok(());
+    }
+    if let SSHAuthMethod::Password { ref password } = config.auth {
+        if password.is_empty() {
+            match manager.load_stored_password(&config.id).await {
+                Ok(Some(password)) => {
+                    config.auth = SSHAuthMethod::Password { password };
+                }
+                Ok(None) => {
+                    return Err(
+                        "SSH password is required (no saved password for this connection)"
+                            .to_string(),
+                    );
+                }
+                Err(error) => return Err(error.to_string()),
+            }
+        }
+    }
+    Ok(())
+}
 
 #[tauri::command]
 pub async fn ssh_list_saved_connections(
@@ -109,22 +139,7 @@ pub async fn ssh_connect(
         }
     };
 
-    if let SSHAuthMethod::Password { ref password } = config.auth {
-        if password.is_empty() {
-            match manager.load_stored_password(&config.id).await {
-                Ok(Some(pwd)) => {
-                    config.auth = SSHAuthMethod::Password { password: pwd };
-                }
-                Ok(None) => {
-                    return Err(
-                        "SSH password is required (no saved password for this connection)"
-                            .to_string(),
-                    );
-                }
-                Err(e) => return Err(e.to_string()),
-            }
-        }
-    }
+    hydrate_stored_password(&manager, &mut config).await?;
 
     log::info!("ssh_connect: about to establish connection");
     let config_to_save = config.clone();
@@ -142,6 +157,29 @@ pub async fn ssh_connect(
     }
     log::info!("ssh_connect result: {:?}", result);
     result
+}
+
+#[tauri::command]
+pub async fn ssh_test_connection(
+    state: State<'_, AppState>,
+    mut config: SSHConnectionConfig,
+) -> Result<ConnectionTestReport, String> {
+    let manager = state.get_ssh_manager_async().await?;
+    hydrate_stored_password(&manager, &mut config).await?;
+    Ok(manager.test_connection(&config).await)
+}
+
+#[tauri::command]
+pub async fn ssh_list_docker_containers(
+    state: State<'_, AppState>,
+    mut config: SSHConnectionConfig,
+) -> Result<Vec<DockerContainerInfo>, String> {
+    let manager = state.get_ssh_manager_async().await?;
+    hydrate_stored_password(&manager, &mut config).await?;
+    manager
+        .list_docker_containers_for_config(&config)
+        .await
+        .map_err(|error| error.to_string())
 }
 
 #[tauri::command]
@@ -440,6 +478,77 @@ pub async fn remote_download_to_local_path(
     .map_err(|e| e.to_string())?
 }
 
+fn validate_remote_name_for_local_download(name: &str) -> Result<(), String> {
+    if name.is_empty() || matches!(name, "." | "..") || name.contains('/') || name.contains('\0') {
+        return Err(format!(
+            "Remote entry name cannot be represented as a local path component: {:?}",
+            name
+        ));
+    }
+    #[cfg(windows)]
+    {
+        if name.chars().any(|character| {
+            matches!(character, '<' | '>' | '"' | ':' | '\\' | '|' | '?' | '*')
+                || character.is_control()
+        }) || name.ends_with('.')
+            || name.ends_with(' ')
+        {
+            return Err(format!(
+                "Remote entry name is not supported by Windows filesystems: {:?}",
+                name
+            ));
+        }
+        let stem = name
+            .split('.')
+            .next()
+            .unwrap_or_default()
+            .to_ascii_uppercase();
+        if matches!(
+            stem.as_str(),
+            "CON"
+                | "PRN"
+                | "AUX"
+                | "NUL"
+                | "COM1"
+                | "COM2"
+                | "COM3"
+                | "COM4"
+                | "COM5"
+                | "COM6"
+                | "COM7"
+                | "COM8"
+                | "COM9"
+                | "LPT1"
+                | "LPT2"
+                | "LPT3"
+                | "LPT4"
+                | "LPT5"
+                | "LPT6"
+                | "LPT7"
+                | "LPT8"
+                | "LPT9"
+        ) {
+            return Err(format!(
+                "Remote entry name is reserved by Windows: {:?}",
+                name
+            ));
+        }
+    }
+    Ok(())
+}
+
+fn local_download_name_key(name: &str) -> String {
+    #[cfg(any(windows, target_os = "macos"))]
+    {
+        name.trim_end_matches(|character| character == '.' || character == ' ')
+            .to_lowercase()
+    }
+    #[cfg(not(any(windows, target_os = "macos")))]
+    {
+        name.to_string()
+    }
+}
+
 /// Recursively download a remote directory to a local path.
 ///
 /// Pre-scans the remote tree to determine total file size, then walks the tree
@@ -474,6 +583,13 @@ async fn download_directory_from_remote(
             .await
             .map_err(|e| e.to_string())?;
         for entry in entries {
+            validate_remote_name_for_local_download(&entry.name)?;
+            if entry.is_symlink {
+                return Err(format!(
+                    "Symbolic links are not supported in directory downloads: '{}'",
+                    entry.path
+                ));
+            }
             if entry.is_dir {
                 scan_stack.push(entry.path);
             } else if let Some(size) = entry.size {
@@ -498,8 +614,22 @@ async fn download_directory_from_remote(
             .read_dir(connection_id, &remote_current)
             .await
             .map_err(|e| e.to_string())?;
+        let mut local_name_keys = std::collections::HashSet::new();
 
         for entry in entries {
+            validate_remote_name_for_local_download(&entry.name)?;
+            if entry.is_symlink {
+                return Err(format!(
+                    "Symbolic links are not supported in directory downloads: '{}'",
+                    entry.path
+                ));
+            }
+            if !local_name_keys.insert(local_download_name_key(&entry.name)) {
+                return Err(format!(
+                    "Remote directory contains names that collide on the local filesystem: {:?}",
+                    entry.name
+                ));
+            }
             let remote_child = entry.path;
             let local_child = local_current.join(&entry.name);
 
@@ -585,22 +715,41 @@ pub struct UploadProgressPayload {
 /// Recursively scan a local directory and return the total size of all
 /// regular files in bytes. Used for pre-scanning before directory upload
 /// so that overall progress can be reported.
-fn scan_directory_total_size(dir: &std::path::Path) -> u64 {
+fn scan_directory_total_size(dir: &std::path::Path) -> Result<u64, String> {
     let mut total: u64 = 0;
     let mut stack = vec![dir.to_path_buf()];
     while let Some(current) = stack.pop() {
-        if let Ok(entries) = std::fs::read_dir(&current) {
-            for entry in entries.flatten() {
-                let path = entry.path();
-                if path.is_dir() {
-                    stack.push(path);
-                } else if let Ok(meta) = path.metadata() {
-                    total += meta.len();
-                }
+        let entries = std::fs::read_dir(&current).map_err(|error| {
+            format!(
+                "Failed to scan local upload directory '{}': {}",
+                current.display(),
+                error
+            )
+        })?;
+        for entry in entries {
+            let entry = entry.map_err(|error| error.to_string())?;
+            let path = entry.path();
+            let file_type = entry.file_type().map_err(|error| error.to_string())?;
+            if file_type.is_symlink() {
+                return Err(format!(
+                    "Symbolic links are not supported in directory uploads: '{}'",
+                    path.display()
+                ));
+            }
+            if file_type.is_dir() {
+                stack.push(path);
+            } else if file_type.is_file() {
+                total = total
+                    .saturating_add(entry.metadata().map_err(|error| error.to_string())?.len());
+            } else {
+                return Err(format!(
+                    "Unsupported local entry type in directory upload: '{}'",
+                    path.display()
+                ));
             }
         }
     }
-    total
+    Ok(total)
 }
 
 /// Upload a local file or directory tree to a remote path via SFTP.
@@ -625,6 +774,25 @@ pub async fn remote_upload_from_local_path(
     transfer_id: String,
 ) -> Result<RemoteUploadResult, String> {
     let local_path = std::path::Path::new(&local_path);
+    let local_metadata = std::fs::symlink_metadata(local_path).map_err(|error| {
+        format!(
+            "Failed to inspect local upload path '{}': {}",
+            local_path.display(),
+            error
+        )
+    })?;
+    if local_metadata.file_type().is_symlink() {
+        return Err(format!(
+            "Symbolic links are not supported for upload: '{}'",
+            local_path.display()
+        ));
+    }
+    if !local_metadata.is_dir() && !local_metadata.is_file() {
+        return Err(format!(
+            "Unsupported local upload path type: '{}'",
+            local_path.display()
+        ));
+    }
 
     // Register a cancellation flag for this transfer.
     let cancel_flag = std::sync::Arc::new(AtomicBool::new(false));
@@ -730,7 +898,7 @@ async fn upload_directory_to_remote(
     let total_bytes =
         tokio::task::spawn_blocking(move || scan_directory_total_size(&local_dir_owned))
             .await
-            .map_err(|e| e.to_string())?;
+            .map_err(|e| e.to_string())??;
 
     let mut uploaded: u64 = 0;
     let mut last_emit = Instant::now();
@@ -752,24 +920,36 @@ async fn upload_directory_to_remote(
         .map_err(|e| e.to_string())??;
 
         for entry in entries {
+            if cancel_flag.load(Ordering::Relaxed) {
+                return Err("Transfer cancelled".to_string());
+            }
             let entry_path = entry.path();
-            let file_name = match entry.file_name().into_string() {
-                Ok(name) => name,
-                Err(_) => continue,
-            };
+            let file_name = entry.file_name().into_string().map_err(|name| {
+                format!(
+                    "Local entry name is not valid UTF-8 and cannot be represented in a remote workspace: {:?}",
+                    name
+                )
+            })?;
+            let file_type = entry.file_type().map_err(|error| error.to_string())?;
+            if file_type.is_symlink() {
+                return Err(format!(
+                    "Symbolic links are not supported in directory uploads: '{}'",
+                    entry_path.display()
+                ));
+            }
             let remote_child = if remote_current.ends_with('/') {
                 format!("{}{}", remote_current, file_name)
             } else {
                 format!("{}/{}", remote_current, file_name)
             };
 
-            if entry_path.is_dir() {
+            if file_type.is_dir() {
                 remote_fs
                     .create_dir_all(connection_id, &remote_child)
                     .await
                     .map_err(|e| e.to_string())?;
                 stack.push((entry_path, remote_child));
-            } else {
+            } else if file_type.is_file() {
                 let local_file = entry_path.clone();
                 let bytes = tokio::task::spawn_blocking(move || {
                     std::fs::read(&local_file).map_err(|e| e.to_string())
@@ -806,6 +986,11 @@ async fn upload_directory_to_remote(
                     .await
                     .map_err(|e| e.to_string())?;
                 uploaded += file_size;
+            } else {
+                return Err(format!(
+                    "Unsupported local entry type in directory upload: '{}'",
+                    entry_path.display()
+                ));
             }
         }
     }
@@ -934,4 +1119,77 @@ pub async fn remote_get_workspace_info(
     log::info!("remote_get_workspace_info: returning {:?}", workspace);
     startup_trace.record_tauri_command_elapsed("remote_get_workspace_info", None, trace_started);
     Ok(workspace)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{
+        hydrate_stored_password, local_download_name_key, validate_remote_name_for_local_download,
+    };
+
+    #[test]
+    fn download_names_cannot_escape_the_selected_local_directory() {
+        for name in ["", ".", "..", "nested/name", "nul\0name"] {
+            assert!(validate_remote_name_for_local_download(name).is_err());
+        }
+        assert!(validate_remote_name_for_local_download("目录.txt").is_ok());
+    }
+
+    #[tokio::test]
+    async fn local_docker_profiles_do_not_require_a_legacy_password_vault_entry() {
+        use bitfun_core::service::remote_ssh::{
+            ContainerAccess, ContainerWorkspaceConfig, SSHAuthMethod, SSHConnectionConfig,
+            SSHConnectionManager,
+        };
+
+        let data_dir = tempfile::tempdir().unwrap();
+        let manager = SSHConnectionManager::new(data_dir.path().to_path_buf());
+        let mut config = SSHConnectionConfig {
+            id: "docker-local-legacy".to_string(),
+            name: "local container".to_string(),
+            host: String::new(),
+            port: 22,
+            username: String::new(),
+            auth: SSHAuthMethod::Password {
+                password: String::new(),
+            },
+            default_workspace: Some("/workspace".to_string()),
+            proxy_jump: None,
+            container: Some(ContainerWorkspaceConfig {
+                name: "dev".to_string(),
+                access: ContainerAccess::DockerExec,
+                local: true,
+                docker_path: "docker".to_string(),
+                shell: "/bin/sh".to_string(),
+                user: None,
+                interactive: true,
+            }),
+            options: Default::default(),
+        };
+
+        hydrate_stored_password(&manager, &mut config)
+            .await
+            .expect("local Docker must not require an SSH password");
+        assert!(matches!(
+            config.auth,
+            SSHAuthMethod::Password { ref password } if password.is_empty()
+        ));
+    }
+
+    #[cfg(any(windows, target_os = "macos"))]
+    #[test]
+    fn download_collision_keys_are_case_insensitive_on_common_local_filesystems() {
+        assert_eq!(
+            local_download_name_key("Readme.md"),
+            local_download_name_key("README.md")
+        );
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn download_names_reject_windows_reserved_components() {
+        for name in ["CON", "nul.txt", "bad:name", "trailing."] {
+            assert!(validate_remote_name_for_local_download(name).is_err());
+        }
+    }
 }

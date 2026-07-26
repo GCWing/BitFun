@@ -5148,6 +5148,17 @@ impl SessionManager {
         .await
     }
 
+    pub async fn set_persisted_session_memory_mode(
+        &self,
+        session_id: &str,
+        mode: SessionMemoryMode,
+    ) -> BitFunResult<()> {
+        self.update_persisted_session_metadata(session_id, |metadata| {
+            metadata.memory_mode = mode;
+        })
+        .await
+    }
+
     pub async fn mark_session_memory_mode_polluted(
         &self,
         workspace_path: &Path,

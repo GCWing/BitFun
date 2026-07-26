@@ -534,7 +534,8 @@
     "openWorkspaceFolderFailed": "Failed to open workspace folder: {{error}}",
     "spaceToActivate": "Press <space>Space</space> to type",
     "assistantPlaceholder": "Message {{name}}...",
-    "sendHint": "Enter to send / Ctrl+Enter or Shift+Enter for new line"
+    "sendHint": "Enter to send / Ctrl+Enter or Shift+Enter for new line",
+    "voiceInput": { "start": "Start voice input", "stop": "Stop recording", "preparing": "Preparing microphone", "transcribing": "Transcribing", "disabled": "Voice input is disabled", "unsupported": "Microphone capture is unavailable", "modelMissing": "Download the local speech model first", "cloudPending": "Cloud transcription is configured but not connected yet", "permissionDenied": "Microphone permission was denied", "deviceDisconnected": "The selected microphone was disconnected", "lowVolume": "No voice detected. Check the selected microphone.", "failed": "Voice input failed", "empty": "No speech was recognized", "transcribeOnly": "Insert transcription", "transcribeAndSend": "Transcribe and send" }
   },
   "workspaceStrip": {
     "branchTooltipUnavailable": "Not a git repository or no current branch"
@@ -605,22 +606,22 @@
       "changeFailed": "Failed to change the permission mode.",
       "ask": {
         "label": "Ask",
-        "description": "Low-risk reads, browsing, Task, and Skill are allowed automatically; file changes and commands require approval."
+        "description": "External access, file changes, and command execution require confirmation."
       },
       "auto": {
         "label": "Auto approve",
-        "description": "Automatically approves Ask requests; explicit denies still apply."
+        "description": "Automatically approve requests that require confirmation."
       },
       "fullAccess": {
         "label": "Full access",
-        "description": "Allows tools by default; product restrictions and OS permissions still apply."
+        "description": "Tools are allowed by default without confirmation."
       },
       "acp": {
         "label": "ACP controlled",
         "tooltip": "Permissions for this session are controlled by the ACP client."
       },
       "fullAccessWarningTitle": "Enable full access?",
-      "fullAccessWarningMessage": "Full access allows tools to read and write files, run commands, and call integrations without asking each time. Explicit deny rules, product restrictions, and operating system permissions still apply.",
+      "fullAccessWarningMessage": "Full access allows tools by default without asking each time.",
       "fullAccessConfirm": "Enable full access",
       "cancel": "Cancel"
     },
@@ -704,6 +705,8 @@
     "currentMode": "Current mode: {{mode}}",
     "noMatchingMode": "No matching mode",
     "noMatchingCommand": "No matching command",
+    "nativeCommandChoiceNotSaved": "This command will run once, but your conflict choice could not be saved.",
+    "nativeCommandReconfirmationRequired": "The external command you previously chose is no longer available. Choose the BitFun command from the slash menu to run it.",
     "selectHint": "↑↓ Select · Enter Confirm · Esc Cancel",
     "current": "Current",
     "computerUseDisabled": "Computer Use is disabled in Settings → Session permissions",
@@ -743,7 +746,10 @@
     "switchWorkspaceFailed": "Failed to switch workspace: {{error}}",
     "mcpPromptMissingArgs": "This MCP prompt requires arguments: {{args}}",
     "mcpPromptFailed": "MCP prompt failed",
-    "loadingMcpPrompts": "Loading MCP prompts..."
+    "loadingMcpPrompts": "Loading MCP prompts...",
+    "externalCommandsLoading": "Loading compatible commands...",
+    "externalCommandsHostUnavailable": "External commands are not available on this host.",
+    "externalCommandsLoadFailed": "External commands could not be loaded. Reopen the command picker to retry."
   },
   "planner": {
     "title": "Task Planning",
@@ -1534,6 +1540,11 @@
       "loadingPlan": "Loading plan...",
       "generating": "Generating...",
       "clickToOpenPlan": "Click to open plan file",
+      "saveToProject": "Save to Project",
+      "savingToProject": "Saving plan to project...",
+      "saveToProjectUnavailable": "A workspace is required to save the plan",
+      "saveToProjectSuccess": "Plan saved to .bitfun/plans",
+      "saveToProjectFailed": "Failed to save plan to project",
       "revealPlanInExplorer": "Reveal plan file in file manager",
       "revealPlanUnavailable": "Plan files can only be revealed for local workspaces",
       "remainingTodos": "{{count}} Remaining To-dos",

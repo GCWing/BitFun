@@ -101,8 +101,10 @@ impl ChatView {
         self.command_menu.move_down();
     }
 
-    pub(crate) fn apply_command_menu_selection(&mut self) -> Option<String> {
-        let cmd = self.command_menu.apply_selection()?;
+    pub(crate) fn apply_command_menu_selection(
+        &mut self,
+    ) -> Option<crate::ui::command_menu::CommandMenuSelection> {
+        let cmd = self.command_menu.apply_selection_with_name()?;
         self.text_input.clear();
         self.refresh_command_menu();
         Some(cmd)

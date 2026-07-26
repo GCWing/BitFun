@@ -240,6 +240,7 @@ where
             StreamSendOutcome::Response(resp) => {
                 let connect_time = elapsed_ms_u64(request_start_time);
                 let status = resp.status();
+                let http_version = resp.version();
                 let headers = resp.headers().clone();
 
                 if status.is_client_error() && !is_retryable_http_status(status) {
@@ -262,10 +263,11 @@ where
 
                 if status.is_success() {
                     debug!(
-                        "{} request connected: {}ms, status: {}, attempt: {}/{}",
+                        "{} request connected: {}ms, status: {}, protocol: {:?}, attempt: {}/{}",
                         label,
                         connect_time,
                         status,
+                        http_version,
                         attempt + 1,
                         max_tries
                     );

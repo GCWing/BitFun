@@ -101,6 +101,93 @@ describe('ExternalSourcesAPI', () => {
     });
   });
 
+  it('expands a prompt command only with the selected candidate and behavior version', async () => {
+    invokeMock.mockResolvedValueOnce({ content: 'expanded prompt' });
+
+    await externalSourcesAPI.expandPromptCommand(
+      'D:/workspace/project',
+      'review',
+      'focus on auth',
+      'claude-code.commands:project:review',
+      'behavior-v1',
+      [{
+        commandName: 'review',
+        candidateId: 'bitfun.desktop:action:review',
+        behaviorVersion: 'action:review:v1',
+      }],
+      {
+        conflictKey: 'native:prompt_command:local-user:review:v1',
+        expectedPreferenceRevision: 7,
+      },
+    );
+
+    expect(invokeMock).toHaveBeenCalledWith('expand_external_prompt_command_command', {
+      request: {
+        workspacePath: 'D:/workspace/project',
+        name: 'review',
+        arguments: 'focus on auth',
+        nativeCommands: [{
+          commandName: 'review',
+          candidateId: 'bitfun.desktop:action:review',
+          behaviorVersion: 'action:review:v1',
+        }],
+        candidateId: 'claude-code.commands:project:review',
+        expectedContentVersion: 'behavior-v1',
+        expectedNativeConflictKey: 'native:prompt_command:local-user:review:v1',
+        expectedPreferenceRevision: 7,
+      },
+    });
+  });
+
+  it('projects native prompt command conflicts through the shared control plane', async () => {
+    invokeMock.mockResolvedValueOnce({ preferenceRevision: 3, conflicts: [] });
+    const nativeCommands = [{
+      commandName: 'review',
+      candidateId: 'bitfun.desktop:action:review',
+      behaviorVersion: 'action:review:v1',
+    }];
+
+    await externalSourcesAPI.getNativePromptCommandConflicts(
+      'D:/workspace/project',
+      nativeCommands,
+    );
+
+    expect(invokeMock).toHaveBeenCalledWith('get_native_prompt_command_conflicts_command', {
+      request: {
+        workspacePath: 'D:/workspace/project',
+        nativeCommands,
+      },
+    });
+  });
+
+  it('persists a native prompt command choice with optimistic concurrency', async () => {
+    invokeMock.mockResolvedValueOnce({ preferenceRevision: 4, conflicts: [] });
+    const nativeCommands = [{
+      commandName: 'review',
+      candidateId: 'bitfun.desktop:action:review',
+      behaviorVersion: 'action:review:v1',
+    }];
+
+    await externalSourcesAPI.setNativePromptCommandConflictChoice(
+      'D:/workspace/project',
+      nativeCommands,
+      'bitfun.desktop:action:review',
+      3,
+    );
+
+    expect(invokeMock).toHaveBeenCalledWith(
+      'set_native_prompt_command_conflict_choice_command',
+      {
+        request: {
+          workspacePath: 'D:/workspace/project',
+          nativeCommands,
+          selectedCandidateId: 'bitfun.desktop:action:review',
+          expectedPreferenceRevision: 3,
+        },
+      },
+    );
+  });
+
   it('falls back to the legacy read path for an older Peer Host', async () => {
     invokeMock
       .mockRejectedValueOnce(

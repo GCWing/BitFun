@@ -17,6 +17,7 @@ import { useI18n } from '@/infrastructure/i18n';
 import { notificationService } from '@/shared/notification-system';
 import { globalEventBus } from '@/infrastructure/event-bus';
 import { shouldIgnoreCardToggleClick } from '@/shared/utils/textSelection';
+import { formatContextForPrompt } from '@/shared/utils/contextPrompt';
 import { Tooltip, confirmDanger, ToolProcessingDots } from '@/component-library';
 import { ReproductionStepsBlock } from '@/component-library/components/Markdown/ReproductionStepsBlock';
 import { UserMessageEditComposer } from './UserMessageEditComposer';
@@ -30,6 +31,17 @@ import { SessionUsageReportCard } from '../usage/SessionUsageReportCard';
 import type { SessionUsagePanelTab } from '../usage/sessionUsagePanelTypes';
 import { coerceSessionUsageReport } from '../usage/usageReportUtils';
 import { resolveSessionRelationship } from '../../utils/sessionMetadata';
+import {
+  composerPresentationToAccessibleText,
+  composerPresentationContexts,
+  composerPresentationSessionReferences,
+  composerPresentationToEditorText,
+  composerPresentationToModelText,
+  hasComposerPresentationReferences,
+  parseComposerPresentation,
+  type ComposerPresentation,
+} from '../../utils/composerPresentation';
+import { UserMessagePresentationContent } from './UserMessagePresentationContent';
 import './UserMessageItem.scss';
 
 const log = createLogger('UserMessageItem');
@@ -38,6 +50,34 @@ interface UserMessageItemProps {
   message: DialogTurn['userMessage'];
   turnId: string;
   steeringStatus?: FlowUserSteeringItem['status'];
+}
+
+function buildPresentationRerunPayload(presentation: ComposerPresentation): {
+  message: string;
+  displayMessage: string;
+  userMessageMetadata: Record<string, unknown>;
+} {
+  const modelText = composerPresentationToModelText(presentation);
+  const contextSection = composerPresentationContexts(presentation)
+    .filter(context => context.type !== 'session-reference')
+    .map(formatContextForPrompt)
+    .filter(Boolean)
+    .join('\n');
+  const sessionReferences = composerPresentationSessionReferences(presentation).map(context => ({
+    sessionId: context.sessionId,
+    workspacePath: context.workspacePath,
+    remoteConnectionId: context.remoteConnectionId,
+    remoteSshHost: context.remoteSshHost,
+  }));
+
+  return {
+    message: contextSection ? `${contextSection}\n\n${modelText}` : modelText,
+    displayMessage: composerPresentationToEditorText(presentation),
+    userMessageMetadata: {
+      composerPresentation: presentation,
+      ...(sessionReferences.length > 0 ? { sessionReferences } : {}),
+    },
+  };
 }
 
 export const UserMessageItem = React.memo<UserMessageItemProps>(
@@ -69,6 +109,10 @@ export const UserMessageItem = React.memo<UserMessageItemProps>(
     const containerRef = useRef<HTMLDivElement>(null);
     const contentRef = useRef<HTMLDivElement>(null);
     const messageContent = typeof message?.content === 'string' ? message.content : String(message?.content || '');
+    const composerPresentation = useMemo(() => {
+      const presentation = parseComposerPresentation(message?.metadata?.composerPresentation);
+      return hasComposerPresentationReferences(presentation) ? presentation : null;
+    }, [message?.metadata?.composerPresentation]);
     const messageImages = useMemo(() => message?.images ?? [], [message?.images]);
     const isUsageReportMessage = message?.metadata?.localCommandKind === 'usage_report';
     const isGoalLoadingMessage = Boolean(message?.metadata?.threadGoalKickoff);
@@ -151,6 +195,9 @@ export const UserMessageItem = React.memo<UserMessageItemProps>(
 
       return { displayText: cleaned, reproductionSteps: reproduction };
     }, [isThreadGoalContinuationCheck, messageContent, messageImages]);
+    const copyText = composerPresentation
+      ? composerPresentationToAccessibleText(composerPresentation)
+      : messageContent;
     
     // Check whether content overflows.
     useEffect(() => {
@@ -173,19 +220,19 @@ export const UserMessageItem = React.memo<UserMessageItemProps>(
       return () => {
         window.removeEventListener('resize', checkOverflow);
       };
-    }, [displayText, expanded]);
+    }, [composerPresentation, displayText, expanded]);
     
     // Copy the user message.
     const handleCopy = useCallback(async (e: React.MouseEvent) => {
       e.stopPropagation(); // Prevent toggle via bubbling.
       try {
-        await navigator.clipboard.writeText(messageContent);
+        await navigator.clipboard.writeText(copyText);
         setCopied(true);
         setTimeout(() => setCopied(false), 2000);
       } catch (error) {
         log.error('Failed to copy', error);
       }
-    }, [messageContent]);
+    }, [copyText]);
 
     const handleRollback = useCallback(async (e: React.MouseEvent) => {
       e.stopPropagation();
@@ -226,6 +273,7 @@ export const UserMessageItem = React.memo<UserMessageItemProps>(
         if (messageContent.trim().length > 0) {
           globalEventBus.emit('fill-chat-input', {
             content: messageContent,
+            ...(composerPresentation ? { composerPresentation } : {}),
           });
         }
 
@@ -236,7 +284,7 @@ export const UserMessageItem = React.memo<UserMessageItemProps>(
       } finally {
         setIsRollingBack(false);
       }
-    }, [canRollback, resolvedSessionId, t, turnIndex, messageContent]);
+    }, [canRollback, composerPresentation, resolvedSessionId, t, turnIndex, messageContent]);
 
     const handleBeginEdit = useCallback((e: React.MouseEvent) => {
       e.stopPropagation();
@@ -244,10 +292,13 @@ export const UserMessageItem = React.memo<UserMessageItemProps>(
       beginEdit(turnId, messageContent);
     }, [beginEdit, canEdit, messageContent, turnId]);
 
-    const handleSubmitEdit = useCallback(async () => {
+    const handleSubmitEdit = useCallback(async (submittedPresentation?: ComposerPresentation) => {
       if (!resolvedSessionId || turnIndex < 0 || isEditSubmitting) return;
 
-      const editedContent = editDraft.trim();
+      const editedPresentation = submittedPresentation ?? composerPresentation;
+      const editedContent = editedPresentation
+        ? composerPresentationToEditorText(editedPresentation)
+        : editDraft.trim();
       if (!editedContent || editedContent === messageContent.trim()) {
         cancelEdit();
         return;
@@ -279,12 +330,26 @@ export const UserMessageItem = React.memo<UserMessageItemProps>(
           originalContent: messageContent,
           editedContent,
           agentType: currentSession?.mode,
-          rerun: (content, agentType) => flowChatManager.sendMessage(
-            content,
-            resolvedSessionId,
-            undefined,
-            agentType,
-          ),
+          rerun: (content, agentType) => {
+            if (!editedPresentation) {
+              return flowChatManager.sendMessage(
+                content,
+                resolvedSessionId,
+                undefined,
+                agentType,
+              );
+            }
+
+            const payload = buildPresentationRerunPayload(editedPresentation);
+            return flowChatManager.sendMessage(
+              payload.message,
+              resolvedSessionId,
+              payload.displayMessage,
+              agentType,
+              undefined,
+              { userMessageMetadata: payload.userMessageMetadata },
+            );
+          },
         });
         cancelEdit();
         notificationService.success(t('message.editSuccess'));
@@ -296,6 +361,7 @@ export const UserMessageItem = React.memo<UserMessageItemProps>(
       }
     }, [
       cancelEdit,
+      composerPresentation,
       currentSession?.mode,
       editDraft,
       isEditSubmitting,
@@ -324,9 +390,10 @@ export const UserMessageItem = React.memo<UserMessageItemProps>(
     const handleFillToInput = useCallback((e: React.MouseEvent) => {
       e.stopPropagation();
       globalEventBus.emit('fill-chat-input', {
-        content: messageContent
+        content: messageContent,
+        ...(composerPresentation ? { composerPresentation } : {}),
       });
-    }, [messageContent]);
+    }, [composerPresentation, messageContent]);
 
     const handleOpenUsageReport = useCallback((report: SessionUsageReport, initialTab?: SessionUsagePanelTab) => {
       void import('../../services/openSessionUsageReport').then(({ openSessionUsagePanel }) => {
@@ -415,6 +482,9 @@ export const UserMessageItem = React.memo<UserMessageItemProps>(
             onChange={setEditDraft}
             onSubmit={handleSubmitEdit}
             onCancel={cancelEdit}
+            presentation={composerPresentation}
+            workspacePath={currentSession?.workspacePath}
+            excludeSessionId={resolvedSessionId}
           />
         ) : (
           <div className="user-message-item__main">
@@ -443,7 +513,9 @@ export const UserMessageItem = React.memo<UserMessageItemProps>(
                     cursor: (hasOverflow || expanded) ? 'pointer' : 'text',
                   }}
                 >
-                  {displayText}
+                  {composerPresentation ? (
+                    <UserMessagePresentationContent presentation={composerPresentation} />
+                  ) : displayText}
                 </div>
                 {steeringTag && (
                   <div className={`user-message-item__steering-tag ${steeringTag.className}`}>
@@ -464,7 +536,9 @@ export const UserMessageItem = React.memo<UserMessageItemProps>(
                     cursor: (hasOverflow || expanded) ? 'pointer' : 'text',
                   }}
                 >
-                  {displayText}
+                  {composerPresentation ? (
+                    <UserMessagePresentationContent presentation={composerPresentation} />
+                  ) : displayText}
                 </div>
                 {steeringTag && (
                   <div className={`user-message-item__steering-tag ${steeringTag.className}`}>

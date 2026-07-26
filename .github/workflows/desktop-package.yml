@@ -84,6 +84,10 @@ jobs:
       BITFUN_ENABLE_UPDATER_ARTIFACTS: ${{ needs.prepare.outputs.upload_to_release }}
       TAURI_UPDATER_ENDPOINT: https://github.com/GCWing/BitFun/releases/latest/download/latest.json
       TAURI_UPDATER_PUBKEY: ${{ secrets.TAURI_UPDATER_PUBKEY }}
+      # Same trust root, compiled into the Desktop binary so one-click relay
+      # deploy can verify the signed checksum locally and hand the remote host
+      # a hash it does not have to trust the mirror for.
+      BITFUN_RELEASE_PUBKEY: ${{ secrets.TAURI_UPDATER_PUBKEY }}
       TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
       TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
 
@@ -239,10 +243,23 @@ jobs:
             src/apps/desktop/target/release/bundle
             BitFun-Installer/src-tauri/target/release/bitfun-installer.exe
 
+  linux-binaries:
+    name: Linux CLI and Relay Server
+    needs: prepare
+    uses: ./.github/workflows/linux-binaries.yml
+    secrets:
+      release_signing_key: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+      release_signing_password: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+      release_pubkey: ${{ secrets.TAURI_UPDATER_PUBKEY }}
+    with:
+      checkout_ref: ${{ needs.prepare.outputs.checkout_ref }}
+      version: ${{ needs.prepare.outputs.version }}
+      artifact_prefix: ${{ needs.prepare.outputs.release_tag }}
+
   # ── Upload assets to GitHub Release ────────────────────────────────
   upload-release-assets:
     name: Upload Release Assets
-    needs: [prepare, package]
+    needs: [prepare, package, linux-binaries]
     if: needs.prepare.outputs.upload_to_release == 'true'
     runs-on: ubuntu-latest
     env:
@@ -259,10 +276,19 @@ jobs:
           path: release-assets
           merge-multiple: true
 
+      - name: Download Linux binary artifacts
+        uses: actions/download-artifact@v7
+        with:
+          pattern: bitfun-linux-${{ needs.prepare.outputs.release_tag }}-*
+          path: linux-release-assets
+          merge-multiple: true
+
       - name: List release assets
         run: |
           echo "Release assets:"
           find release-assets -type f | sort
+          echo "Linux CLI and Relay Server assets:"
+          find linux-release-assets -type f | sort
 
       - name: Collect updater assets
         run: |
@@ -289,6 +315,47 @@ jobs:
             --version "${{ needs.prepare.outputs.version }}" \
             --required-platforms "${REQUIRED_UPDATER_PLATFORMS}"
 
+      - name: Generate Linux binaries manifest
+        run: |
+          node scripts/generate-linux-binaries-manifest.mjs \
+            --assets-dir linux-release-assets \
+            --version "${{ needs.prepare.outputs.version }}" \
+            --tag "${{ needs.prepare.outputs.release_tag }}" \
+            --repo "GCWing/BitFun" \
+            --out linux-release-assets/linux-binaries.json
+
+      - name: Setup Rust toolchain (minisign fallback)
+        uses: dtolnay/rust-toolchain@stable
+
+      # The Tauri bundler signs the five updater artifacts during `tauri build`,
+      # but the installers people download by hand from the release page — dmg,
+      # deb, rpm, the Windows installer and the direct AppImages — shipped with
+      # no signature at all. Sign them with the same key so every published
+      # artifact is verifiable. (This is not OS-level code signing: Gatekeeper
+      # and SmartScreen still need Apple/Authenticode certificates.)
+      - name: Sign installer packages
+        shell: bash
+        env:
+          BITFUN_SIGNING_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          BITFUN_SIGNING_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          BITFUN_SIGNING_PUBKEY: ${{ secrets.TAURI_UPDATER_PUBKEY }}
+        run: |
+          set -euo pipefail
+          mapfile -t assets < <(
+            find release-assets -type f \
+              \( -name '*.AppImage' -o -name '*.deb' -o -name '*.rpm' \
+                 -o -name '*.dmg' -o -name '*bitfun-installer.exe' \) | sort
+          )
+          if [[ "${#assets[@]}" -eq 0 ]]; then
+            echo "No installer packages found to sign."
+            exit 0
+          fi
+          bash scripts/sign-release-assets.sh "${assets[@]}"
+
+          # Publish the public key alongside the signatures: a signature nobody
+          # can fetch a key for is not verifiable.
+          printf '%s' "${BITFUN_SIGNING_PUBKEY}" | base64 -d >release-assets/minisign.pub
+
       - name: Upload to release
         uses: softprops/action-gh-release@v3
         with:
@@ -301,6 +368,14 @@ jobs:
             release-assets/**/*.dmg
             release-assets/**/*.rpm
             release-assets/**/*bitfun-installer.exe
+            release-assets/**/*.sig
+            release-assets/minisign.pub
+            linux-release-assets/bitfun-cli-*.tar.gz
+            linux-release-assets/bitfun-cli-*.tar.gz.sha256
+            linux-release-assets/bitfun-relay-server-*.tar.gz
+            linux-release-assets/bitfun-relay-server-*.tar.gz.sha256
+            linux-release-assets/*.tar.gz.sig
+            linux-release-assets/linux-binaries.json
           fail_on_unmatched_files: true
 
       - name: Verify published updater manifest
@@ -313,3 +388,32 @@ jobs:
             --version "${{ needs.prepare.outputs.version }}" \
             --required-platforms "${REQUIRED_UPDATER_PLATFORMS}" \
             --check-urls true
+
+      - name: Verify published Linux binaries manifest
+        run: |
+          curl -fsSL --retry 5 --retry-delay 3 \
+            "https://github.com/GCWing/BitFun/releases/download/${{ needs.prepare.outputs.release_tag }}/linux-binaries.json" \
+            -o linux-binaries.published.json
+          test "$(jq -r '.version' linux-binaries.published.json)" = "${{ needs.prepare.outputs.version }}"
+
+      # Nudge the openbitfun.com mirror to sync now instead of on its next
+      # 10-minute cron tick. Until the mirror has these bytes, CN clients have
+      # only the GitHub origin to fall back to. Best effort: the cron run is
+      # still the source of truth, so a failed or unconfigured ping never fails
+      # the release. Receiver setup: scripts/openbitfun-release-sync.sh.
+      - name: Request openbitfun mirror sync
+        continue-on-error: true
+        env:
+          SYNC_WEBHOOK_URL: ${{ secrets.OPENBITFUN_SYNC_WEBHOOK_URL }}
+          RELEASE_TAG: ${{ needs.prepare.outputs.release_tag }}
+        run: |
+          set -euo pipefail
+          if [[ -z "${SYNC_WEBHOOK_URL:-}" ]]; then
+            echo "OPENBITFUN_SYNC_WEBHOOK_URL is not configured; the mirror will pick this up on its next cron run."
+            exit 0
+          fi
+          curl -fsSL -X POST --retry 3 --retry-delay 5 --max-time 30 \
+            -H 'Content-Type: application/json' \
+            -d "{\"tag\":\"${RELEASE_TAG}\"}" \
+            "${SYNC_WEBHOOK_URL}" >/dev/null
+          echo "Mirror sync requested for ${RELEASE_TAG}."

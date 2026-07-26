@@ -13,6 +13,7 @@ export type ConfigTab =
   | 'session-personalization'
   | 'session-permissions'
   | 'quick-actions'
+  | 'voice-input'
   | 'review'
   | 'memories'
   | 'mcp-tools'
@@ -182,6 +183,12 @@ export const SETTINGS_CATEGORIES: ConfigCategoryDef[] = [
           'post-coding',
           'shortcut',
         ],
+      },
+      {
+        id: 'voice-input',
+        labelKey: 'configCenter.tabs.voiceInput',
+        descriptionKey: 'configCenter.tabDescriptions.voiceInput',
+        keywords: ['voice', 'speech', 'microphone', 'dictation', 'transcription', 'audio'],
       },
       {
         id: 'review',

@@ -4,24 +4,28 @@
 
 use crate::remote_ssh::password_vault::SSHPasswordVault;
 use crate::remote_ssh::types::{
-    SSHAuthMethod, SSHCommandOptions, SSHCommandResult, SSHConfigEntry, SSHConfigLookupResult,
-    SSHConnectionConfig, SSHConnectionResult, SavedConnection, ServerInfo,
+    ConnectionTestReport, ConnectionTestStage, ContainerAccess, ContainerWorkspaceConfig,
+    DockerContainerInfo, SSHAuthMethod, SSHCommandOptions, SSHCommandResult, SSHConfigEntry,
+    SSHConfigLookupResult, SSHConnectionConfig, SSHConnectionResult, SavedConnection, ServerInfo,
 };
 use anyhow::{anyhow, Context};
 use async_trait::async_trait;
 use russh::client::{DisconnectReason, Handle, Handler, Msg};
 use russh::Sig;
-use russh_keys::key::PublicKey;
+use russh_keys::key::{KeyPair, PublicKey};
 use russh_keys::PublicKeyBase64;
 use russh_sftp::client::fs::ReadDir;
 use russh_sftp::client::SftpSession;
 #[cfg(feature = "ssh_config")]
 use ssh_config::SSHConfig;
 use std::collections::HashMap;
+use std::process::Stdio;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::sync::Once;
+use tokio::io::{AsyncRead, AsyncWrite};
 use tokio::net::TcpStream;
+use tokio::process::Command;
 use tokio::time::{Duration, Instant};
 
 const SSH_COMMAND_WAIT_POLL_INTERVAL: Duration = Duration::from_millis(100);
@@ -75,6 +79,14 @@ fn parse_ssh_config_value(value: &str) -> Option<&str> {
     value.split_whitespace().next()
 }
 
+#[cfg(feature = "ssh_config")]
+fn strip_utf8_bom(content: String) -> String {
+    content
+        .strip_prefix('\u{feff}')
+        .unwrap_or(&content)
+        .to_string()
+}
+
 /// Manually parse `~/.ssh/config` content into Host blocks with their direct settings.
 ///
 /// This is a fallback for when `SSHConfig::parse_str` fails — which happens when the
@@ -94,6 +106,8 @@ fn parse_ssh_config_manually(content: &str) -> Vec<SSHConfigEntry> {
     let mut block_port: Option<u16> = None;
     let mut block_user: Option<String> = None;
     let mut block_identity_file: Option<String> = None;
+    let mut block_certificate_file: Option<String> = None;
+    let mut block_proxy_jump: Option<String> = None;
 
     for line in content.lines() {
         let line = line.trim();
@@ -115,7 +129,9 @@ fn parse_ssh_config_manually(content: &str) -> Vec<SSHConfigEntry> {
                     port: block_port.take(),
                     user: block_user.take(),
                     identity_file: block_identity_file.take(),
-                    agent: None,
+                    agent: Some(true),
+                    certificate_file: block_certificate_file.take(),
+                    proxy_jump: block_proxy_jump.take(),
                 });
             }
 
@@ -125,6 +141,8 @@ fn parse_ssh_config_manually(content: &str) -> Vec<SSHConfigEntry> {
             block_port = None;
             block_user = None;
             block_identity_file = None;
+            block_certificate_file = None;
+            block_proxy_jump = None;
         } else if current_host.is_some() {
             // Track details within the current Host block
             if keyword.eq_ignore_ascii_case("HostName") {
@@ -136,6 +154,11 @@ fn parse_ssh_config_manually(content: &str) -> Vec<SSHConfigEntry> {
             } else if keyword.eq_ignore_ascii_case("IdentityFile") {
                 block_identity_file =
                     parse_ssh_config_value(value).map(|s| shellexpand::tilde(s).to_string());
+            } else if keyword.eq_ignore_ascii_case("CertificateFile") {
+                block_certificate_file =
+                    parse_ssh_config_value(value).map(|s| shellexpand::tilde(s).to_string());
+            } else if keyword.eq_ignore_ascii_case("ProxyJump") {
+                block_proxy_jump = parse_ssh_config_value(value).map(ToOwned::to_owned);
             }
         }
     }
@@ -148,7 +171,9 @@ fn parse_ssh_config_manually(content: &str) -> Vec<SSHConfigEntry> {
             port: block_port,
             user: block_user,
             identity_file: block_identity_file,
-            agent: None,
+            agent: Some(true),
+            certificate_file: block_certificate_file,
+            proxy_jump: block_proxy_jump,
         });
     }
 
@@ -167,8 +192,15 @@ pub struct KnownHostEntry {
 
 /// Active SSH connection
 struct ActiveConnection {
-    handle: Arc<Handle<SSHHandler>>,
+    /// Absent only for a local Docker container workspace.
+    handle: Option<Arc<Handle<SSHHandler>>>,
+    /// Keep every preceding hop alive while the final transport is using its
+    /// direct-tcpip channel as the underlying stream.
+    jump_handles: Vec<Arc<Handle<SSHHandler>>>,
+    /// User-authored/persisted configuration used for drift detection.
     config: SSHConnectionConfig,
+    /// Runtime target after resolving `containerAccess: auto`.
+    effective_config: SSHConnectionConfig,
     server_info: Option<ServerInfo>,
     sftp_session: Arc<tokio::sync::RwLock<Option<Arc<SftpSession>>>>,
     #[allow(dead_code)]
@@ -177,9 +209,61 @@ struct ActiveConnection {
     /// Allows `is_connected` and SFTP/exec entry points to detect a dead session
     /// without waiting for the next failed I/O.
     alive: Arc<AtomicBool>,
-    /// Per-connection lock to serialize transparent reconnect attempts and
-    /// avoid stampedes when multiple SFTP/exec calls hit a dead session at once.
-    reconnect_lock: Arc<tokio::sync::Mutex<()>>,
+}
+
+struct EstablishedSession {
+    handle: Option<Handle<SSHHandler>>,
+    jump_handles: Vec<Handle<SSHHandler>>,
+    alive: Arc<AtomicBool>,
+    server_info: Option<ServerInfo>,
+    effective_config: SSHConnectionConfig,
+}
+
+/// Which stage of the connection chain an error came from.
+///
+/// `test_connection` needs this to attribute a failure exactly; matching on
+/// message text cannot, because two jump hosts may share a `user@host:port`
+/// label and the first match then always wins.
+///
+/// Deliberately *not* an `anyhow` context: a context replaces the error's
+/// `Display`, so tagging this way would turn every SSH error the user sees into
+/// "connection stage 'target'". This wrapper is transparent instead — `Display`
+/// and `source` both delegate, so `{}`, `{:#}` and `chain()` all read exactly as
+/// they did before the tag existed.
+#[derive(Debug)]
+struct StagedError {
+    stage: String,
+    inner: anyhow::Error,
+}
+
+impl std::fmt::Display for StagedError {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        std::fmt::Display::fmt(&self.inner, formatter)
+    }
+}
+
+impl std::error::Error for StagedError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        self.inner.source()
+    }
+}
+
+/// Per-handle ceiling for the goodbye packet. Generous for a local channel
+/// send, short enough that a chain of dead hops cannot stall shutdown.
+const SSH_DISCONNECT_TIMEOUT: Duration = Duration::from_secs(1);
+
+fn tag_failed_stage(stage: &str, error: anyhow::Error) -> anyhow::Error {
+    anyhow::Error::new(StagedError {
+        stage: stage.to_string(),
+        inner: error,
+    })
+}
+
+/// Outermost stage tag in an error's chain, if any.
+fn failed_stage_of(error: &anyhow::Error) -> Option<&str> {
+    error
+        .downcast_ref::<StagedError>()
+        .map(|staged| staged.stage.as_str())
 }
 
 /// SSH client handler with host key verification
@@ -412,10 +496,973 @@ impl Handler for SSHHandler {
     }
 }
 
+fn connection_label(config: &SSHConnectionConfig) -> String {
+    format!("{}@{}:{}", config.username, config.host, config.port)
+}
+
+fn local_username() -> Option<String> {
+    std::env::var("USER")
+        .ok()
+        .or_else(|| std::env::var("USERNAME").ok())
+        .map(|value| value.trim().to_string())
+        .filter(|value| !value.is_empty())
+}
+
+fn parse_proxy_jump_token(value: &str) -> anyhow::Result<(Option<String>, String, Option<u16>)> {
+    let (user, address) = match value.rsplit_once('@') {
+        Some((user, address)) if !user.trim().is_empty() => {
+            (Some(user.trim().to_string()), address.trim())
+        }
+        _ => (None, value.trim()),
+    };
+    if address.is_empty() {
+        anyhow::bail!("Invalid ProxyJump entry '{}': host is empty", value);
+    }
+
+    if let Some(rest) = address.strip_prefix('[') {
+        let close = rest
+            .find(']')
+            .ok_or_else(|| anyhow!("Invalid ProxyJump entry '{}': missing closing ']'", value))?;
+        let host = &rest[..close];
+        let suffix = &rest[close + 1..];
+        let port = if suffix.is_empty() {
+            None
+        } else {
+            let port = suffix.strip_prefix(':').ok_or_else(|| {
+                anyhow!(
+                    "Invalid ProxyJump entry '{}': expected :port after ']'",
+                    value
+                )
+            })?;
+            Some(
+                port.parse::<u16>()
+                    .with_context(|| format!("Invalid ProxyJump port in '{}'", value))?,
+            )
+        };
+        return Ok((user, host.to_string(), port));
+    }
+
+    let colon_count = address.bytes().filter(|byte| *byte == b':').count();
+    let (host, port) = if colon_count == 1 {
+        let (host, port) = address
+            .rsplit_once(':')
+            .expect("one colon must be splittable");
+        match port.parse::<u16>() {
+            Ok(port) => (host.to_string(), Some(port)),
+            Err(_) => (address.to_string(), None),
+        }
+    } else {
+        (address.to_string(), None)
+    };
+    if host.trim().is_empty() {
+        anyhow::bail!("Invalid ProxyJump entry '{}': host is empty", value);
+    }
+    Ok((user, host, port))
+}
+
+fn load_key_pair(auth: &SSHAuthMethod) -> anyhow::Result<Option<KeyPair>> {
+    let SSHAuthMethod::PrivateKey {
+        key_path,
+        passphrase,
+        ..
+    } = auth
+    else {
+        return Ok(None);
+    };
+
+    let expanded = shellexpand::tilde(key_path);
+    let key_content = match std::fs::read_to_string(expanded.as_ref()) {
+        Ok(content) => content,
+        Err(primary_error) => {
+            let default_key = dirs::home_dir()
+                .map(|home| home.join(".ssh").join("id_rsa"))
+                .ok_or_else(|| {
+                    anyhow!(
+                        "Failed to read private key '{}': {}, and could not determine the home directory",
+                        key_path,
+                        primary_error
+                    )
+                })?;
+            std::fs::read_to_string(&default_key).map_err(|fallback_error| {
+                anyhow!(
+                    "Failed to read private key '{}' ({}) and fallback key '{}' ({})",
+                    key_path,
+                    primary_error,
+                    default_key.display(),
+                    fallback_error
+                )
+            })?
+        }
+    };
+    russh_keys::decode_secret_key(&key_content, passphrase.as_deref())
+        .map(Some)
+        .map_err(|error| anyhow!("Failed to decode private key '{}': {}", key_path, error))
+}
+
+fn build_ssh_client_config() -> Arc<russh::client::Config> {
+    Arc::new(russh::client::Config {
+        inactivity_timeout: Some(Duration::from_secs(180)),
+        keepalive_interval: Some(Duration::from_secs(30)),
+        keepalive_max: 6,
+        preferred: russh::Preferred {
+            kex: std::borrow::Cow::Owned(vec![
+                russh::kex::CURVE25519,
+                russh::kex::CURVE25519_PRE_RFC_8731,
+                russh::kex::DH_G16_SHA512,
+                russh::kex::DH_G14_SHA256,
+                russh::kex::DH_G14_SHA1,
+                russh::kex::DH_G1_SHA1,
+                russh::kex::EXTENSION_SUPPORT_AS_CLIENT,
+                russh::kex::EXTENSION_OPENSSH_STRICT_KEX_AS_CLIENT,
+            ]),
+            key: std::borrow::Cow::Owned(vec![
+                russh_keys::key::ED25519,
+                russh_keys::key::ECDSA_SHA2_NISTP256,
+                russh_keys::key::ECDSA_SHA2_NISTP521,
+                russh_keys::key::RSA_SHA2_256,
+                russh_keys::key::RSA_SHA2_512,
+                russh_keys::key::SSH_RSA,
+            ]),
+            ..russh::Preferred::DEFAULT
+        },
+        ..Default::default()
+    })
+}
+
+async fn authenticate_agent_client<R>(
+    handle: &mut Handle<SSHHandler>,
+    config: &SSHConnectionConfig,
+    stage: &str,
+    fingerprint: Option<&str>,
+    mut agent: russh_keys::agent::client::AgentClient<R>,
+) -> anyhow::Result<bool>
+where
+    R: AsyncRead + AsyncWrite + Unpin + Send + 'static,
+{
+    let keys = agent
+        .request_identities()
+        .await
+        .with_context(|| format!("{} could not list SSH agent identities", stage))?;
+    let mut matched = 0usize;
+    for key in keys {
+        if fingerprint.is_some_and(|expected| expected != key.fingerprint()) {
+            continue;
+        }
+        matched += 1;
+        let (returned_agent, result) = handle
+            .authenticate_future(&config.username, key, agent)
+            .await;
+        agent = returned_agent;
+        if result.with_context(|| format!("{} SSH agent signing failed", stage))? {
+            return Ok(true);
+        }
+    }
+    if matched == 0 {
+        if let Some(fingerprint) = fingerprint {
+            anyhow::bail!(
+                "{} SSH agent has no identity with fingerprint '{}'",
+                stage,
+                fingerprint
+            );
+        }
+    }
+    Ok(false)
+}
+
+#[cfg(unix)]
+async fn authenticate_with_agent(
+    handle: &mut Handle<SSHHandler>,
+    config: &SSHConnectionConfig,
+    stage: &str,
+    fingerprint: Option<&str>,
+) -> anyhow::Result<bool> {
+    let agent = russh_keys::agent::client::AgentClient::connect_env()
+        .await
+        .with_context(|| format!("{} could not connect to SSH_AUTH_SOCK", stage))?;
+    authenticate_agent_client(handle, config, stage, fingerprint, agent).await
+}
+
+#[cfg(windows)]
+async fn authenticate_with_agent(
+    handle: &mut Handle<SSHHandler>,
+    config: &SSHConnectionConfig,
+    stage: &str,
+    fingerprint: Option<&str>,
+) -> anyhow::Result<bool> {
+    use tokio::net::windows::named_pipe::ClientOptions;
+
+    let pipe = std::env::var("SSH_AUTH_SOCK")
+        .ok()
+        .filter(|value| !value.trim().is_empty())
+        .unwrap_or_else(|| r"\\.\pipe\openssh-ssh-agent".to_string());
+    let stream = ClientOptions::new()
+        .open(&pipe)
+        .with_context(|| format!("{} could not connect to SSH agent pipe '{}'", stage, pipe))?;
+    let agent = russh_keys::agent::client::AgentClient::connect(stream);
+    authenticate_agent_client(handle, config, stage, fingerprint, agent).await
+}
+
+async fn authenticate_keyboard_interactive(
+    handle: &mut Handle<SSHHandler>,
+    config: &SSHConnectionConfig,
+    stage: &str,
+    responses: &[String],
+) -> anyhow::Result<bool> {
+    use russh::client::KeyboardInteractiveAuthResponse;
+
+    let max_rounds = usize::from(config.options.auth_attempts.max(1));
+    let future = async {
+        let mut response = handle
+            .authenticate_keyboard_interactive_start(&config.username, None)
+            .await
+            .with_context(|| {
+                format!(
+                    "{} could not start keyboard-interactive authentication",
+                    stage
+                )
+            })?;
+        let mut cursor = 0usize;
+        for round in 0..max_rounds {
+            match response {
+                KeyboardInteractiveAuthResponse::Success => return Ok(true),
+                KeyboardInteractiveAuthResponse::Failure => return Ok(false),
+                KeyboardInteractiveAuthResponse::InfoRequest { prompts, .. } => {
+                    let count = prompts.len();
+                    if cursor + count > responses.len() {
+                        let labels = prompts
+                            .iter()
+                            .map(|prompt| prompt.prompt.trim())
+                            .filter(|prompt| !prompt.is_empty())
+                            .collect::<Vec<_>>()
+                            .join(", ");
+                        anyhow::bail!(
+                            "{} keyboard-interactive challenge requires {} more response(s){}",
+                            stage,
+                            count,
+                            if labels.is_empty() {
+                                String::new()
+                            } else {
+                                format!(" for: {}", labels)
+                            }
+                        );
+                    }
+                    let answers = responses[cursor..cursor + count].to_vec();
+                    cursor += count;
+                    response = handle
+                        .authenticate_keyboard_interactive_respond(answers)
+                        .await
+                        .with_context(|| {
+                            format!("{} keyboard-interactive round {} failed", stage, round + 1)
+                        })?;
+                }
+            }
+        }
+        anyhow::bail!(
+            "{} keyboard-interactive authentication exceeded {} challenge round(s)",
+            stage,
+            max_rounds
+        )
+    };
+    tokio::time::timeout(
+        Duration::from_secs(config.options.auth_timeout_secs.max(1)),
+        future,
+    )
+    .await
+    .map_err(|_| {
+        anyhow!(
+            "{} authentication timed out after {} seconds",
+            stage,
+            config.options.auth_timeout_secs.max(1)
+        )
+    })?
+}
+
+async fn authenticate_handle(
+    handle: &mut Handle<SSHHandler>,
+    config: &SSHConnectionConfig,
+    stage: &str,
+) -> anyhow::Result<()> {
+    let authenticate = async {
+        Ok::<bool, anyhow::Error>(match &config.auth {
+            SSHAuthMethod::Password { password } => handle
+                .authenticate_password(&config.username, password.clone())
+                .await
+                .map_err(|error| {
+                    anyhow!("{} password authentication failed: {:?}", stage, error)
+                })?,
+            SSHAuthMethod::PrivateKey {
+                certificate_path, ..
+            } => {
+                let key_pair = load_key_pair(&config.auth)?
+                    .ok_or_else(|| anyhow!("{} private key was not loaded", stage))?;
+                if let Some(certificate_path) = certificate_path
+                    .as_deref()
+                    .map(str::trim)
+                    .filter(|value| !value.is_empty())
+                {
+                    let expanded = shellexpand::tilde(certificate_path);
+                    let certificate = russh_keys::load_openssh_certificate(expanded.as_ref())
+                        .with_context(|| {
+                            format!(
+                                "{} failed to load OpenSSH certificate '{}'",
+                                stage, certificate_path
+                            )
+                        })?;
+                    handle
+                        .authenticate_openssh_cert(
+                            &config.username,
+                            Arc::new(key_pair),
+                            certificate,
+                        )
+                        .await
+                        .map_err(|error| {
+                            anyhow!("{} certificate authentication failed: {:?}", stage, error)
+                        })?
+                } else {
+                    handle
+                        .authenticate_publickey(&config.username, Arc::new(key_pair))
+                        .await
+                        .map_err(|error| {
+                            anyhow!("{} public key authentication failed: {:?}", stage, error)
+                        })?
+                }
+            }
+            SSHAuthMethod::Agent {
+                key_fingerprint,
+                fallback_key_path,
+            } => match authenticate_with_agent(handle, config, stage, key_fingerprint.as_deref())
+                .await
+            {
+                Ok(true) => true,
+                Ok(false) | Err(_) if fallback_key_path.is_some() => {
+                    let fallback = SSHAuthMethod::PrivateKey {
+                        key_path: fallback_key_path
+                            .clone()
+                            .expect("guarded by fallback_key_path.is_some"),
+                        passphrase: None,
+                        certificate_path: None,
+                    };
+                    let key_pair = load_key_pair(&fallback)?
+                        .ok_or_else(|| anyhow!("{} fallback private key was not loaded", stage))?;
+                    handle
+                        .authenticate_publickey(&config.username, Arc::new(key_pair))
+                        .await
+                        .map_err(|error| {
+                            anyhow!(
+                                "{} SSH agent and fallback key authentication failed: {:?}",
+                                stage,
+                                error
+                            )
+                        })?
+                }
+                Ok(false) => false,
+                Err(error) => return Err(error),
+            },
+            SSHAuthMethod::KeyboardInteractive { responses } => {
+                authenticate_keyboard_interactive(handle, config, stage, responses).await?
+            }
+        })
+    };
+    let authenticated = tokio::time::timeout(
+        Duration::from_secs(config.options.auth_timeout_secs.max(1)),
+        authenticate,
+    )
+    .await
+    .map_err(|_| {
+        anyhow!(
+            "{} authentication timed out after {} seconds",
+            stage,
+            config.options.auth_timeout_secs.max(1)
+        )
+    })??;
+    if !authenticated {
+        anyhow::bail!(
+            "{} authentication was rejected for user '{}'",
+            stage,
+            config.username
+        );
+    }
+    Ok(())
+}
+
+fn validate_container_config(container: &ContainerWorkspaceConfig) -> anyhow::Result<()> {
+    if container.name.trim().is_empty() {
+        anyhow::bail!("Container name or ID is required");
+    }
+    if container.docker_path.trim().is_empty() {
+        anyhow::bail!("Docker executable path is required");
+    }
+    if container.shell.trim().is_empty() {
+        anyhow::bail!("Container shell is required");
+    }
+    if container.local && matches!(container.access, ContainerAccess::Sshd) {
+        anyhow::bail!(
+            "A local Docker container cannot use sshd access; choose docker-exec or auto instead. \
+             To reach a container over SSH, configure it as a remote SSH host."
+        );
+    }
+    Ok(())
+}
+
+fn docker_exec_args(container: &ContainerWorkspaceConfig, command: &str, tty: bool) -> Vec<String> {
+    let mut args = vec!["exec".to_string()];
+    if container.interactive || tty {
+        args.push("-i".to_string());
+    }
+    if tty {
+        args.push("-t".to_string());
+    }
+    if let Some(user) = container
+        .user
+        .as_deref()
+        .map(str::trim)
+        .filter(|user| !user.is_empty())
+    {
+        args.push("--user".to_string());
+        args.push(user.to_string());
+    }
+    args.push(container.name.clone());
+    args.push(container.shell.clone());
+    args.push("-lc".to_string());
+    args.push(command.to_string());
+    args
+}
+
+fn docker_exec_host_command(
+    container: &ContainerWorkspaceConfig,
+    command: &str,
+    tty: bool,
+) -> String {
+    let mut parts = vec![container.docker_path.clone()];
+    parts.extend(docker_exec_args(container, command, tty));
+    parts
+        .iter()
+        .map(String::as_str)
+        .map(crate::remote_ssh::shell::quote_arg)
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
+fn server_info_from_container_probe(
+    container: &ContainerWorkspaceConfig,
+    result: SSHCommandResult,
+) -> anyhow::Result<ServerInfo> {
+    if result.exit_code != 0 {
+        anyhow::bail!(
+            "Docker container '{}' is unavailable or could not start shell '{}': {}",
+            container.name,
+            container.shell,
+            result.stderr.trim()
+        );
+    }
+    let mut lines = result.stdout.lines();
+    let os_type = lines.next().unwrap_or("unknown").trim().to_string();
+    let hostname = lines.next().unwrap_or(&container.name).trim().to_string();
+    let home_dir = lines.next().unwrap_or("/").trim().to_string();
+    Ok(ServerInfo {
+        os_type,
+        hostname: if hostname.is_empty() {
+            container.name.clone()
+        } else {
+            hostname
+        },
+        home_dir: if home_dir.is_empty() {
+            "/".to_string()
+        } else {
+            home_dir
+        },
+    })
+}
+
+fn parse_docker_published_endpoint(output: &str) -> Option<(String, u16)> {
+    output.lines().find_map(|line| {
+        let line = line.trim();
+        let (host, port) = if let Some(rest) = line.strip_prefix('[') {
+            let close = rest.find(']')?;
+            let host = &rest[..close];
+            let port = rest[close + 1..].strip_prefix(':')?;
+            (host, port)
+        } else {
+            line.rsplit_once(':')?
+        };
+        let port = port.trim().parse::<u16>().ok()?;
+        let host = match host.trim() {
+            "" | "0.0.0.0" | "::" => "127.0.0.1",
+            host => host,
+        };
+        Some((host.to_string(), port))
+    })
+}
+
+fn parse_docker_container_list(output: &str) -> anyhow::Result<Vec<DockerContainerInfo>> {
+    output
+        .lines()
+        .filter(|line| !line.trim().is_empty())
+        .map(|line| {
+            let mut fields = line.split('\t');
+            let id = fields.next().unwrap_or_default().to_string();
+            let name = fields.next().unwrap_or_default().to_string();
+            let image = fields.next().unwrap_or_default().to_string();
+            let status = fields.next().unwrap_or_default().to_string();
+            let state = fields.next().unwrap_or_default().to_string();
+            if id.is_empty() || name.is_empty() || fields.next().is_some() {
+                anyhow::bail!("Docker returned a malformed container list entry");
+            }
+            Ok(DockerContainerInfo {
+                id,
+                name,
+                image,
+                status,
+                state,
+            })
+        })
+        .collect()
+}
+
+fn resolved_container_config(
+    config: &SSHConnectionConfig,
+    access: ContainerAccess,
+) -> SSHConnectionConfig {
+    let mut resolved = config.clone();
+    if let Some(container) = resolved.container.as_mut() {
+        container.access = access;
+        if matches!(container.access, ContainerAccess::Sshd) {
+            container.local = false;
+        }
+    }
+    resolved
+}
+
+fn workspace_command(config: &SSHConnectionConfig, command: &str, tty: bool) -> String {
+    match config.container.as_ref() {
+        Some(container)
+            if matches!(
+                container.access,
+                ContainerAccess::DockerExec | ContainerAccess::Auto
+            ) =>
+        {
+            docker_exec_host_command(container, command, tty)
+        }
+        _ => command.to_string(),
+    }
+}
+
+/// Shell prelude that removes orphaned upload temporaries.
+///
+/// The `trap cleanup EXIT` in the command below covers an orderly exit, but a
+/// dropped SSH channel (network failure, laptop lid) kills the remote shell
+/// without ever running it, so a long-lived host slowly accumulates orphans.
+///
+/// A day is the bound because the only thing distinguishing an orphan from a
+/// live upload is age, and the cost of guessing wrong is a corrupted transfer
+/// in another session. No real upload runs for 24 hours; plenty run for one.
+fn stale_upload_sweep(quoted_dir: &str) -> String {
+    format!(
+        "if command -v find >/dev/null 2>&1; then \
+           find {quoted_dir} -maxdepth 1 -name '.bitfun-upload-*.tmp' -mmin +1440 \
+             -exec rm -f -- {{}} \\; 2>/dev/null || true; \
+         fi; "
+    )
+}
+
+/// Shell prelude that removes pid files whose process is gone.
+///
+/// Liveness rather than age: a supervised command may legitimately run for
+/// hours, and deleting its pid file would silently break cancellation for that
+/// session — the pid file is how interrupt/kill finds the process. `kill -0`
+/// answers the question exactly, so nothing live is ever touched.
+///
+/// The empty-file case is the one exception. `supervised_container_command`
+/// creates the file before writing the pid into it, so an empty file may belong
+/// to a command that is starting right now; those are only removed once they
+/// are far too old for that to be true.
+fn stale_pid_file_sweep() -> String {
+    "for stale_pid_file in /tmp/.bitfun-exec-*.pid; do \
+       [ -e \"$stale_pid_file\" ] || continue; \
+       if [ ! -s \"$stale_pid_file\" ]; then \
+         if command -v find >/dev/null 2>&1; then \
+           find \"$stale_pid_file\" -mmin +60 -exec rm -f -- {} \\; 2>/dev/null || true; \
+         fi; \
+         continue; \
+       fi; \
+       stale_pid=$(cat \"$stale_pid_file\" 2>/dev/null || true); \
+       case \"$stale_pid\" in \
+         ''|*[!0-9]*) rm -f -- \"$stale_pid_file\" 2>/dev/null || true; continue;; \
+       esac; \
+       kill -0 \"$stale_pid\" 2>/dev/null || rm -f -- \"$stale_pid_file\" 2>/dev/null || true; \
+     done; \
+     unset stale_pid_file stale_pid 2>/dev/null || true; "
+        .to_string()
+}
+
+fn supervised_container_command(
+    container: &ContainerWorkspaceConfig,
+    command: &str,
+) -> (String, String) {
+    let pid_file = format!("/tmp/.bitfun-exec-{}.pid", uuid::Uuid::new_v4());
+    let wrapped = supervised_container_command_with_pid_file(container, command, &pid_file);
+    (wrapped, pid_file)
+}
+
+/// Wrap `command` so it can be tracked and signalled from a separate channel.
+///
+/// `setsid` gives the command its own process group, which is what makes the
+/// `kill -- -$pid` group signal reach the whole tree. Where it is missing the
+/// child stays in this shell's group, so a group signal would either fail or
+/// hit the supervisor itself; both `terminate_child` here and
+/// [`container_signal_command`] therefore fall back to `pkill -P` plus a direct
+/// `kill`, which reaches one generation instead of all of them.
+fn supervised_container_command_with_pid_file(
+    container: &ContainerWorkspaceConfig,
+    command: &str,
+    pid_file: &str,
+) -> String {
+    let quoted_pid_file = crate::remote_ssh::shell::quote_arg(&pid_file);
+    let quoted_command = crate::remote_ssh::shell::quote_arg(command);
+    let quoted_shell = crate::remote_ssh::shell::quote_arg(&container.shell);
+    let sweep = stale_pid_file_sweep();
+    format!(
+        "{sweep}\
+         pid_file={quoted_pid_file}; \
+         child=; \
+         tracking=1; \
+         (umask 077; : > \"$pid_file\") 2>/dev/null || tracking=0; \
+         remove_pid_file() {{ rm -f -- \"$pid_file\" 2>/dev/null || true; }}; \
+         terminate_child() {{ \
+           [ -n \"$child\" ] || return 0; \
+           if kill -TERM -- \"-$child\" 2>/dev/null; then return 0; fi; \
+           if command -v pkill >/dev/null 2>&1; then \
+             pkill -TERM -P \"$child\" 2>/dev/null || true; \
+           fi; \
+           kill -TERM \"$child\" 2>/dev/null || true; \
+         }}; \
+         trap remove_pid_file EXIT; \
+         trap 'terminate_child; exit 143' HUP TERM; \
+         if command -v setsid >/dev/null 2>&1; then \
+           setsid {quoted_shell} -lc {quoted_command} <&0 & \
+         else \
+           {quoted_shell} -lc {quoted_command} <&0 & \
+         fi; \
+         child=$!; \
+         if [ \"$tracking\" -eq 1 ]; then \
+           printf '%s' \"$child\" > \"$pid_file\" || tracking=0; \
+         fi; \
+         wait \"$child\"; status=$?; \
+         child=; trap - EXIT HUP TERM; remove_pid_file; exit \"$status\""
+    )
+}
+
+fn container_signal_command(
+    pid_file: &str,
+    signal: crate::remote_ssh::WorkspaceProcessSignal,
+) -> String {
+    let signal_name = match signal {
+        crate::remote_ssh::WorkspaceProcessSignal::Interrupt => "INT",
+        crate::remote_ssh::WorkspaceProcessSignal::Kill => "KILL",
+    };
+    let quoted_pid_file = crate::remote_ssh::shell::quote_arg(pid_file);
+    format!(
+        "pid_file={quoted_pid_file}; \
+         attempt=0; \
+         while [ ! -s \"$pid_file\" ] && [ \"$attempt\" -lt 20 ]; do \
+           attempt=$((attempt + 1)); sleep 0.05; \
+         done; \
+         [ -s \"$pid_file\" ] || exit 75; \
+         pid=$(cat \"$pid_file\" 2>/dev/null) || exit 75; \
+         case \"$pid\" in ''|*[!0-9]*) exit 75;; esac; \
+         if kill -{signal_name} -- \"-$pid\" 2>/dev/null; then :; else \
+           if command -v pkill >/dev/null 2>&1; then \
+             pkill -{signal_name} -P \"$pid\" 2>/dev/null || true; \
+           fi; \
+           kill -{signal_name} \"$pid\" 2>/dev/null || true; \
+         fi"
+    )
+}
+
+fn local_container_signal_hook(
+    container: ContainerWorkspaceConfig,
+    pid_file: String,
+) -> crate::remote_ssh::transport::WorkspaceSignalHook {
+    Arc::new(move |signal| {
+        let container = container.clone();
+        let pid_file = pid_file.clone();
+        Box::pin(async move {
+            let command = container_signal_command(&pid_file, signal);
+            let output = tokio::time::timeout(
+                Duration::from_secs(3),
+                Command::new(&container.docker_path)
+                    .args(docker_exec_args(&container, &command, false))
+                    .stdin(Stdio::null())
+                    .stdout(Stdio::null())
+                    .stderr(Stdio::piped())
+                    .output(),
+            )
+            .await
+            .map_err(|_| anyhow!("Timed out signalling the Docker container process"))?
+            .with_context(|| {
+                format!(
+                    "Failed to start Docker executable '{}' for process control",
+                    container.docker_path
+                )
+            })?;
+            if !output.status.success() {
+                anyhow::bail!(
+                    "Docker container process control failed: {}",
+                    String::from_utf8_lossy(&output.stderr).trim()
+                );
+            }
+            Ok(())
+        })
+    })
+}
+
+fn remote_container_signal_hook(
+    handle: Arc<Handle<SSHHandler>>,
+    container: ContainerWorkspaceConfig,
+    pid_file: String,
+) -> crate::remote_ssh::transport::WorkspaceSignalHook {
+    Arc::new(move |signal| {
+        let handle = handle.clone();
+        let container = container.clone();
+        let pid_file = pid_file.clone();
+        Box::pin(async move {
+            let signal_command = container_signal_command(&pid_file, signal);
+            let host_command = docker_exec_host_command(&container, &signal_command, false);
+            let result = SSHConnectionManager::execute_command_internal(
+                &handle,
+                &host_command,
+                SSHCommandOptions {
+                    timeout_ms: Some(3_000),
+                    cancellation_token: None,
+                },
+            )
+            .await?;
+            if result.exit_code != 0 {
+                anyhow::bail!(
+                    "Remote Docker container process control failed: {}",
+                    result.stderr.trim()
+                );
+            }
+            Ok(())
+        })
+    })
+}
+
+async fn collect_workspace_command_result(
+    transport: crate::remote_ssh::WorkspaceStdio,
+    options: SSHCommandOptions,
+) -> anyhow::Result<SSHCommandResult> {
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+
+    let (mut stdin, mut stdout, mut stderr, control, completion) = transport.into_parts();
+    let _ = stdin.shutdown().await;
+    let stdout_task = tokio::spawn(async move {
+        let mut bytes = Vec::new();
+        stdout.read_to_end(&mut bytes).await.map(|_| bytes)
+    });
+    let stderr_task = tokio::spawn(async move {
+        let mut bytes = Vec::new();
+        stderr.read_to_end(&mut bytes).await.map(|_| bytes)
+    });
+    let mut completion_task = tokio::spawn(completion.wait());
+
+    let cancellation = options.cancellation_token.clone();
+    let cancelled = async move {
+        match cancellation {
+            Some(token) => token.cancelled().await,
+            None => std::future::pending::<()>().await,
+        }
+    };
+    tokio::pin!(cancelled);
+    let timeout = async move {
+        match options.timeout_ms {
+            Some(timeout_ms) => tokio::time::sleep(Duration::from_millis(timeout_ms)).await,
+            None => std::future::pending::<()>().await,
+        }
+    };
+    tokio::pin!(timeout);
+
+    let mut interrupted = false;
+    let mut timed_out = false;
+    let mut fallback_exit_code = -1;
+    let exit = tokio::select! {
+        result = &mut completion_task => result.ok(),
+        _ = &mut cancelled => {
+            interrupted = true;
+            fallback_exit_code = 130;
+            let _ = control.interrupt().await;
+            match tokio::time::timeout(SSH_COMMAND_INTERRUPT_DRAIN_GRACE, &mut completion_task).await {
+                Ok(result) => result.ok(),
+                Err(_) => {
+                    let _ = control.kill().await;
+                    match tokio::time::timeout(Duration::from_secs(3), &mut completion_task).await {
+                        Ok(result) => result.ok(),
+                        Err(_) => {
+                            completion_task.abort();
+                            None
+                        }
+                    }
+                }
+            }
+        }
+        _ = &mut timeout => {
+            timed_out = true;
+            fallback_exit_code = 124;
+            let _ = control.interrupt().await;
+            match tokio::time::timeout(SSH_COMMAND_INTERRUPT_DRAIN_GRACE, &mut completion_task).await {
+                Ok(result) => result.ok(),
+                Err(_) => {
+                    let _ = control.kill().await;
+                    match tokio::time::timeout(Duration::from_secs(3), &mut completion_task).await {
+                        Ok(result) => result.ok(),
+                        Err(_) => {
+                            completion_task.abort();
+                            None
+                        }
+                    }
+                }
+            }
+        }
+    };
+    let stdout = collect_workspace_reader(
+        stdout_task,
+        "Workspace command stdout reader task failed",
+        interrupted || timed_out,
+    )
+    .await?;
+    let stderr = collect_workspace_reader(
+        stderr_task,
+        "Workspace command stderr reader task failed",
+        interrupted || timed_out,
+    )
+    .await?;
+    Ok(SSHCommandResult {
+        stdout: String::from_utf8_lossy(&stdout).into_owned(),
+        stderr: String::from_utf8_lossy(&stderr).into_owned(),
+        exit_code: exit
+            .and_then(|exit| exit.exit_code)
+            .unwrap_or(fallback_exit_code),
+        interrupted,
+        timed_out,
+    })
+}
+
+async fn collect_workspace_reader(
+    mut task: tokio::task::JoinHandle<std::io::Result<Vec<u8>>>,
+    task_error: &'static str,
+    allow_incomplete: bool,
+) -> anyhow::Result<Vec<u8>> {
+    match tokio::time::timeout(Duration::from_secs(3), &mut task).await {
+        Ok(result) => Ok(result.context(task_error)??),
+        Err(_) if allow_incomplete => {
+            task.abort();
+            Ok(Vec::new())
+        }
+        Err(_) => {
+            task.abort();
+            anyhow::bail!("Workspace command output stream did not close")
+        }
+    }
+}
+
+type ContainerEntryFields = (
+    String,
+    String,
+    String,
+    Option<u64>,
+    Option<u64>,
+    Option<String>,
+);
+
+fn split_container_entry_fields<'a>(
+    mut fields: impl Iterator<Item = &'a str>,
+) -> anyhow::Result<ContainerEntryFields> {
+    let name = fields.next().unwrap_or_default().to_string();
+    let path = fields.next().unwrap_or_default().to_string();
+    let kind = fields.next().unwrap_or_default().to_string();
+    let size = fields
+        .next()
+        .filter(|value| !value.is_empty())
+        .and_then(|value| value.trim().parse::<u64>().ok());
+    let modified = fields
+        .next()
+        .filter(|value| !value.is_empty())
+        .and_then(|value| value.trim().parse::<u64>().ok())
+        .map(|seconds| seconds.saturating_mul(1000));
+    let permissions = fields
+        .next()
+        .filter(|value| !value.is_empty())
+        .map(|value| value.trim().to_string());
+    if name.is_empty() || path.is_empty() || !matches!(kind.as_str(), "d" | "f" | "l") {
+        anyhow::bail!("Container directory listing returned a malformed entry");
+    }
+    Ok((name, path, kind, size, modified, permissions))
+}
+
+fn parse_container_dir_output(
+    output: &str,
+) -> anyhow::Result<Vec<crate::remote_ssh::types::RemoteDirEntry>> {
+    let mut fields = output.split('\0').collect::<Vec<_>>();
+    while fields.last().is_some_and(|field| field.is_empty()) {
+        fields.pop();
+    }
+    if fields.len() % 6 != 0 {
+        anyhow::bail!("Container directory listing returned a malformed record");
+    }
+    fields
+        .chunks(6)
+        .map(|record| {
+            let fields = split_container_entry_fields(record.iter().copied())?;
+            Ok(crate::remote_ssh::types::RemoteDirEntry {
+                name: fields.0,
+                path: fields.1,
+                is_dir: fields.2 == "d",
+                is_file: fields.2 == "f",
+                is_symlink: fields.2 == "l",
+                size: fields.3,
+                modified: fields.4,
+                permissions: fields.5,
+            })
+        })
+        .collect()
+}
+
+fn parse_container_file_output(
+    output: &str,
+) -> anyhow::Result<Option<crate::remote_ssh::types::RemoteFileEntry>> {
+    let mut fields = output.split('\0').collect::<Vec<_>>();
+    while fields.last().is_some_and(|field| field.is_empty()) {
+        fields.pop();
+    }
+    if fields.is_empty() {
+        return Ok(None);
+    }
+    if fields.len() != 6 {
+        anyhow::bail!("Container stat returned a malformed record");
+    }
+    let fields = split_container_entry_fields(fields.into_iter())?;
+    Ok(Some(crate::remote_ssh::types::RemoteFileEntry {
+        name: fields.0,
+        path: fields.1,
+        is_dir: fields.2 == "d",
+        is_file: fields.2 == "f",
+        is_symlink: fields.2 == "l",
+        size: fields.3,
+        modified: fields.4,
+        permissions: fields.5,
+    }))
+}
+
 /// SSH Connection Manager
 #[derive(Clone)]
 pub struct SSHConnectionManager {
     connections: Arc<tokio::sync::RwLock<HashMap<String, ActiveConnection>>>,
+    /// Reconnect serialization, keyed by connection id and deliberately held
+    /// *outside* `ActiveConnection`. Reconnect replaces the map entry wholesale,
+    /// so a lock stored inside it would be orphaned mid-flight: waiters would
+    /// hold a mutex nobody else takes and re-run the reconnect they were queued
+    /// behind.
+    reconnect_locks: Arc<tokio::sync::RwLock<HashMap<String, Arc<tokio::sync::Mutex<()>>>>>,
     saved_connections: Arc<tokio::sync::RwLock<Vec<SavedConnection>>>,
     config_path: std::path::PathBuf,
     /// Known hosts storage
@@ -436,6 +1483,7 @@ impl SSHConnectionManager {
         let password_vault = std::sync::Arc::new(SSHPasswordVault::new(data_dir));
         Self {
             connections: Arc::new(tokio::sync::RwLock::new(HashMap::new())),
+            reconnect_locks: Arc::new(tokio::sync::RwLock::new(HashMap::new())),
             saved_connections: Arc::new(tokio::sync::RwLock::new(Vec::new())),
             config_path,
             known_hosts: Arc::new(tokio::sync::RwLock::new(HashMap::new())),
@@ -557,6 +1605,33 @@ impl SSHConnectionManager {
                 })
                 .context("Failed to parse remote workspace(s)")?;
 
+        // Saved connection IDs used to include the SSH port. The saved-profile
+        // loader migrates those IDs before workspace records are loaded, so
+        // migrate the corresponding workspace references here as well. Without
+        // this, startup pruning would treat a valid legacy workspace as orphaned.
+        let saved_ids: Vec<String> = self
+            .saved_connections
+            .read()
+            .await
+            .iter()
+            .map(|connection| connection.id.clone())
+            .collect();
+        let mut migrated_connection_ids = 0;
+        for workspace in &mut workspaces {
+            let Some(stable_id) = Self::migrate_connection_id(&workspace.connection_id) else {
+                continue;
+            };
+            if saved_ids.iter().any(|saved_id| saved_id == &stable_id) {
+                log::info!(
+                    "Migrating remote workspace connection ID: {} -> {}",
+                    workspace.connection_id,
+                    stable_id
+                );
+                workspace.connection_id = stable_id;
+                migrated_connection_ids += 1;
+            }
+        }
+
         let before = workspaces.len();
         workspaces.retain(|w| !w.connection_id.is_empty() && !w.remote_path.is_empty());
         if workspaces.len() < before {
@@ -568,6 +1643,11 @@ impl SSHConnectionManager {
 
         let mut guard = self.remote_workspaces.write().await;
         *guard = workspaces;
+        drop(guard);
+
+        if migrated_connection_ids > 0 {
+            self.save_remote_workspaces().await?;
+        }
 
         Ok(())
     }
@@ -699,7 +1779,7 @@ impl SSHConnectionManager {
         }
 
         let config_content = match tokio::fs::read_to_string(&ssh_config_path).await {
-            Ok(c) => c,
+            Ok(c) => strip_utf8_bom(c),
             Err(e) => {
                 log::warn!("Failed to read SSH config: {:?}", e);
                 return SSHConfigLookupResult {
@@ -731,7 +1811,10 @@ impl SSHConnectionManager {
                 let port = ssh_cfg_get(&host_settings, "Port").and_then(|s| s.parse::<u16>().ok());
                 let identity_file = ssh_cfg_get(&host_settings, "IdentityFile")
                     .map(|f| shellexpand::tilde(f).to_string());
+                let certificate_file = ssh_cfg_get(&host_settings, "CertificateFile")
+                    .map(|f| shellexpand::tilde(f).to_string());
                 let has_proxy_command = ssh_cfg_has(&host_settings, "ProxyCommand");
+                let proxy_jump = ssh_cfg_get(&host_settings, "ProxyJump").map(ToOwned::to_owned);
 
                 return SSHConfigLookupResult {
                     found: true,
@@ -742,6 +1825,8 @@ impl SSHConnectionManager {
                         user,
                         identity_file,
                         agent: if has_proxy_command { None } else { Some(true) },
+                        certificate_file,
+                        proxy_jump,
                     }),
                 };
             }
@@ -785,7 +1870,7 @@ impl SSHConnectionManager {
         }
 
         let config_content = match tokio::fs::read_to_string(&ssh_config_path).await {
-            Ok(c) => c,
+            Ok(c) => strip_utf8_bom(c),
             Err(e) => {
                 log::warn!("Failed to read SSH config: {:?}", e);
                 return Vec::new();
@@ -824,6 +1909,12 @@ impl SSHConnectionManager {
                     if let Some(f) = ssh_cfg_get(&settings, "IdentityFile") {
                         entry.identity_file = Some(shellexpand::tilde(f).to_string());
                     }
+                    if let Some(f) = ssh_cfg_get(&settings, "CertificateFile") {
+                        entry.certificate_file = Some(shellexpand::tilde(f).to_string());
+                    }
+                    if let Some(proxy_jump) = ssh_cfg_get(&settings, "ProxyJump") {
+                        entry.proxy_jump = Some(proxy_jump.to_string());
+                    }
                 }
             }
         }
@@ -835,6 +1926,206 @@ impl SSHConnectionManager {
     #[cfg(not(feature = "ssh_config"))]
     pub async fn list_ssh_config_hosts(&self) -> Vec<SSHConfigEntry> {
         Vec::new()
+    }
+
+    /// List containers on the Docker host described by a connection form.
+    ///
+    /// Remote targets establish a temporary SSH/jump-chain session without
+    /// saving or activating it. Local targets invoke the configured Docker CLI
+    /// directly.
+    pub async fn list_docker_containers_for_config(
+        &self,
+        config: &SSHConnectionConfig,
+    ) -> anyhow::Result<Vec<DockerContainerInfo>> {
+        let container = config
+            .container
+            .as_ref()
+            .ok_or_else(|| anyhow!("Container configuration is required"))?;
+        let format = "{{.ID}}\t{{.Names}}\t{{.Image}}\t{{.Status}}\t{{.State}}";
+        let output = if container.local {
+            tokio::time::timeout(
+                Duration::from_secs(config.options.connect_timeout_secs.max(1)),
+                Command::new(&container.docker_path)
+                    .args(["ps", "-a", "--format", format])
+                    .output(),
+            )
+            .await
+            .map_err(|_| anyhow!("Local Docker container listing timed out"))?
+            .with_context(|| {
+                format!(
+                    "Failed to start local Docker executable '{}'",
+                    container.docker_path
+                )
+            })?
+        } else {
+            let mut host_config = config.clone();
+            host_config.container = None;
+            let established = self
+                .establish_session_with_retries(
+                    &host_config,
+                    host_config.options.connect_timeout_secs.max(1),
+                )
+                .await
+                .context("Could not connect to the Docker host")?;
+            // This session is never published to the connections map, so nothing
+            // else will ever close it: every exit below has to run through the
+            // shutdown, or listing containers leaks one server-side session per
+            // hop each time the connection dialog refreshes.
+            let outcome = match established.handle.as_ref() {
+                Some(handle) => {
+                    let command = format!(
+                        "{} ps -a --format {}",
+                        crate::remote_ssh::shell::quote_arg(&container.docker_path),
+                        crate::remote_ssh::shell::quote_arg(format)
+                    );
+                    Self::execute_command_internal(
+                        handle,
+                        &command,
+                        SSHCommandOptions {
+                            timeout_ms: Some(config.options.connect_timeout_secs.max(1) * 1000),
+                            cancellation_token: None,
+                        },
+                    )
+                    .await
+                }
+                None => Err(anyhow!("Docker host SSH handle is unavailable")),
+            };
+            Self::shutdown_established_session(established).await;
+
+            let result = outcome?;
+            if result.exit_code != 0 {
+                anyhow::bail!(
+                    "Docker container listing failed on SSH host: {}",
+                    result.stderr.trim()
+                );
+            }
+            return parse_docker_container_list(&result.stdout);
+        };
+        if !output.status.success() {
+            anyhow::bail!(
+                "Docker container listing failed: {}",
+                String::from_utf8_lossy(&output.stderr).trim()
+            );
+        }
+        parse_docker_container_list(&String::from_utf8_lossy(&output.stdout))
+    }
+
+    /// Test a connection without saving it and return a stable staged report
+    /// suitable for the connection dialog.
+    pub async fn test_connection(&self, config: &SSHConnectionConfig) -> ConnectionTestReport {
+        let mut stages = Vec::new();
+        if config.uses_local_docker() {
+            stages.push(ConnectionTestStage {
+                id: "docker-host".to_string(),
+                label: "local".to_string(),
+                success: false,
+                error: None,
+            });
+        } else {
+            match self.resolve_proxy_jump_chain(config).await {
+                Ok(jumps) => {
+                    for (index, jump) in jumps.iter().enumerate() {
+                        stages.push(ConnectionTestStage {
+                            id: format!("jump-{}", index + 1),
+                            label: connection_label(jump),
+                            success: false,
+                            error: None,
+                        });
+                    }
+                }
+                Err(error) => {
+                    return ConnectionTestReport {
+                        success: false,
+                        stages: vec![ConnectionTestStage {
+                            id: "configuration".to_string(),
+                            label: "ProxyJump".to_string(),
+                            success: false,
+                            error: Some(error.to_string()),
+                        }],
+                        server_info: None,
+                        resolved_container_access: None,
+                    };
+                }
+            }
+            stages.push(ConnectionTestStage {
+                id: "target".to_string(),
+                label: connection_label(config),
+                success: false,
+                error: None,
+            });
+        }
+        if let Some(container) = config.container.as_ref() {
+            if !matches!(container.access, ContainerAccess::Sshd) || container.local {
+                stages.push(ConnectionTestStage {
+                    id: "container".to_string(),
+                    label: container.name.clone(),
+                    success: false,
+                    error: None,
+                });
+            }
+        }
+
+        match self
+            .establish_session_with_retries(config, config.options.connect_timeout_secs.max(1))
+            .await
+        {
+            Ok(established) => {
+                for stage in &mut stages {
+                    stage.success = true;
+                }
+                let server_info = established.server_info.clone();
+                let resolved_container_access = established
+                    .effective_config
+                    .container
+                    .as_ref()
+                    .map(|container| container.access.clone());
+                // A test connection is never registered, so this is the only
+                // place that can close it. Without this the dialog's "Test"
+                // button leaks one server-side session per hop, per click.
+                Self::shutdown_established_session(established).await;
+                ConnectionTestReport {
+                    success: true,
+                    stages,
+                    server_info,
+                    resolved_container_access,
+                }
+            }
+            Err(error) => {
+                let error_text = error.to_string();
+                let reported_stage = failed_stage_of(&error);
+                let failing_index = stages
+                    .iter()
+                    .position(|stage| match reported_stage {
+                        // The chain marker is authoritative: it survives two hops
+                        // sharing a label, which text matching does not.
+                        Some(reported) => stage.id == reported,
+                        None => {
+                            (stage.id.starts_with("jump-") && error_text.contains(&stage.label))
+                                || (stage.id == "container"
+                                    && (error_text.to_ascii_lowercase().contains("docker container")
+                                        || error_text
+                                            .to_ascii_lowercase()
+                                            .contains("container sshd")))
+                                || (stage.id == "docker-host"
+                                    && error_text.to_ascii_lowercase().contains("docker")
+                                    && !error_text.to_ascii_lowercase().contains("container"))
+                        }
+                    })
+                    .unwrap_or_else(|| stages.len().saturating_sub(1));
+                for stage in stages.iter_mut().take(failing_index) {
+                    stage.success = true;
+                }
+                if let Some(stage) = stages.get_mut(failing_index) {
+                    stage.error = Some(error_text);
+                }
+                ConnectionTestReport {
+                    success: false,
+                    stages,
+                    server_info: None,
+                    resolved_container_access: None,
+                }
+            }
+        }
     }
 
     /// Load saved connections from disk
@@ -890,11 +2181,11 @@ impl SSHConnectionManager {
             drop(guard);
         }
 
-        let removed = self.prune_saved_connections_without_credentials().await?;
-        if !removed.is_empty() {
+        let unavailable = self.saved_connections_without_credentials().await;
+        if !unavailable.is_empty() {
             log::warn!(
-                "Removed {} saved SSH connection(s) with unavailable local credentials during load",
-                removed.len()
+                "Retained {} saved SSH connection(s) that require credential re-entry",
+                unavailable.len()
             );
         }
 
@@ -950,63 +2241,42 @@ impl SSHConnectionManager {
 
     /// Get list of saved connections
     pub async fn get_saved_connections(&self) -> Vec<SavedConnection> {
-        if let Err(e) = self.prune_saved_connections_without_credentials().await {
-            log::warn!("Failed to prune unavailable saved SSH connections: {}", e);
-        }
         self.saved_connections.read().await.clone()
     }
 
-    /// Remove saved profiles that cannot reconnect without user input, plus their
-    /// persisted remote-workspace restore records. Passwords from older clients
-    /// may not have a vault entry after an upgrade; keeping those profiles causes
-    /// startup restore loops and hides matching SSH config hosts in the dialog.
-    pub async fn prune_saved_connections_without_credentials(&self) -> anyhow::Result<Vec<String>> {
+    /// Return password profiles that need the user to re-enter credentials.
+    ///
+    /// Profile and workspace metadata are deliberately retained: an unavailable
+    /// vault entry can be caused by an upgrade, keychain reset, or temporary
+    /// decryption failure and must never turn startup recovery into data loss.
+    async fn saved_connections_without_credentials(&self) -> Vec<String> {
         let saved_snapshot = self.saved_connections.read().await.clone();
-        let mut removed_ids = Vec::new();
+        let mut unavailable_ids = Vec::new();
         for conn in saved_snapshot {
             if !matches!(
                 conn.auth_type,
                 crate::remote_ssh::types::SavedAuthType::Password
-            ) {
+            ) || conn
+                .container
+                .as_ref()
+                .is_some_and(|container| container.local)
+            {
                 continue;
             }
             match self.password_vault.load(&conn.id).await {
                 Ok(Some(_)) => {}
-                Ok(None) => removed_ids.push(conn.id),
+                Ok(None) => unavailable_ids.push(conn.id),
                 Err(e) => {
                     log::warn!(
-                        "Treating saved SSH password profile as unavailable: id={}, error={}",
+                        "Saved SSH password is unavailable; retaining profile for credential re-entry: id={}, error={}",
                         conn.id,
                         e
                     );
-                    removed_ids.push(conn.id);
+                    unavailable_ids.push(conn.id);
                 }
             }
         }
-
-        if removed_ids.is_empty() {
-            return Ok(Vec::new());
-        }
-
-        let removed_ids = {
-            let mut guard = self.saved_connections.write().await;
-            guard.retain(|conn| !removed_ids.iter().any(|id| id == &conn.id));
-            removed_ids
-        };
-
-        for id in &removed_ids {
-            if let Err(e) = self.password_vault.remove(id).await {
-                log::warn!(
-                    "Failed to remove SSH password vault entry for {}: {}",
-                    id,
-                    e
-                );
-            }
-        }
-        self.remove_remote_workspaces_for_connections(&removed_ids)
-            .await?;
-        self.save_connections().await?;
-        Ok(removed_ids)
+        unavailable_ids
     }
 
     /// SSH `host` field from the saved profile with this `connection_id` (works when not connected).
@@ -1026,8 +2296,11 @@ impl SSHConnectionManager {
 
     /// Save a connection configuration
     pub async fn save_connection(&self, config: &SSHConnectionConfig) -> anyhow::Result<()> {
-        match &config.auth {
-            SSHAuthMethod::Password { password } => {
+        match (&config.auth, config.uses_local_docker()) {
+            (_, true) => {
+                self.password_vault.remove(&config.id).await?;
+            }
+            (SSHAuthMethod::Password { password }, false) => {
                 if password.is_empty() && self.password_vault.load(&config.id).await?.is_none() {
                     anyhow::bail!(
                         "Cannot save password SSH connection without a password or stored vault entry"
@@ -1040,7 +2313,10 @@ impl SSHConnectionManager {
                         .with_context(|| format!("store ssh password vault for {}", config.id))?;
                 }
             }
-            SSHAuthMethod::PrivateKey { .. } => {
+            (SSHAuthMethod::PrivateKey { .. }, false) => {
+                self.password_vault.remove(&config.id).await?;
+            }
+            (SSHAuthMethod::Agent { .. } | SSHAuthMethod::KeyboardInteractive { .. }, false) => {
                 self.password_vault.remove(&config.id).await?;
             }
         }
@@ -1051,7 +2327,10 @@ impl SSHConnectionManager {
         // Using host+username (without port) so that changing the port replaces
         // the old entry instead of creating a duplicate.
         guard.retain(|c| {
-            c.id != config.id && !(c.host == config.host && c.username == config.username)
+            c.id != config.id
+                && !(c.host == config.host
+                    && c.username == config.username
+                    && c.container == config.container)
         });
 
         // Add new entry
@@ -1063,14 +2342,30 @@ impl SSHConnectionManager {
             username: config.username.clone(),
             auth_type: match &config.auth {
                 SSHAuthMethod::Password { .. } => crate::remote_ssh::types::SavedAuthType::Password,
-                SSHAuthMethod::PrivateKey { key_path, .. } => {
-                    crate::remote_ssh::types::SavedAuthType::PrivateKey {
-                        key_path: key_path.clone(),
-                    }
+                SSHAuthMethod::PrivateKey {
+                    key_path,
+                    certificate_path,
+                    ..
+                } => crate::remote_ssh::types::SavedAuthType::PrivateKey {
+                    key_path: key_path.clone(),
+                    certificate_path: certificate_path.clone(),
+                },
+                SSHAuthMethod::Agent {
+                    key_fingerprint,
+                    fallback_key_path,
+                } => crate::remote_ssh::types::SavedAuthType::Agent {
+                    key_fingerprint: key_fingerprint.clone(),
+                    fallback_key_path: fallback_key_path.clone(),
+                },
+                SSHAuthMethod::KeyboardInteractive { .. } => {
+                    crate::remote_ssh::types::SavedAuthType::KeyboardInteractive
                 }
             },
             default_workspace: config.default_workspace.clone(),
             last_connected: Some(chrono::Utc::now().timestamp() as u64),
+            proxy_jump: config.proxy_jump.clone(),
+            container: config.container.clone(),
+            options: config.options.clone(),
         });
 
         drop(guard);
@@ -1140,7 +2435,8 @@ impl SSHConnectionManager {
         &self,
         config: SSHConnectionConfig,
     ) -> anyhow::Result<SSHConnectionResult> {
-        self.connect_with_timeout(config, 30).await
+        let timeout_secs = config.options.connect_timeout_secs.max(1);
+        self.connect_with_timeout(config, timeout_secs).await
     }
 
     /// Connect with custom timeout
@@ -1149,23 +2445,34 @@ impl SSHConnectionManager {
         config: SSHConnectionConfig,
         timeout_secs: u64,
     ) -> anyhow::Result<SSHConnectionResult> {
-        let (handle, alive, server_info) = self.establish_session(&config, timeout_secs).await?;
+        let established = self
+            .establish_session_with_retries(&config, timeout_secs)
+            .await?;
 
         let connection_id = config.id.clone();
+        let server_info = established.server_info.clone();
 
-        let mut guard = self.connections.write().await;
-        guard.insert(
-            connection_id.clone(),
-            ActiveConnection {
-                handle: Arc::new(handle),
-                config,
-                server_info: server_info.clone(),
-                sftp_session: Arc::new(tokio::sync::RwLock::new(None)),
-                server_key: None,
-                alive,
-                reconnect_lock: Arc::new(tokio::sync::Mutex::new(())),
-            },
-        );
+        let replaced = {
+            let mut guard = self.connections.write().await;
+            guard.insert(
+                connection_id.clone(),
+                ActiveConnection {
+                    handle: established.handle.map(Arc::new),
+                    jump_handles: established.jump_handles.into_iter().map(Arc::new).collect(),
+                    config,
+                    effective_config: established.effective_config,
+                    server_info: server_info.clone(),
+                    sftp_session: Arc::new(tokio::sync::RwLock::new(None)),
+                    server_key: None,
+                    alive: established.alive,
+                },
+            )
+        };
+        // Reconnecting under an id that is still live would otherwise strand the
+        // previous session (plus one per jump host) on the server.
+        if let Some(previous) = replaced {
+            Self::shutdown_active_connection(previous).await;
+        }
 
         Ok(SSHConnectionResult {
             success: true,
@@ -1175,242 +2482,615 @@ impl SSHConnectionManager {
         })
     }
 
-    /// Build a fresh SSH session (handshake + auth + server info probe) without
-    /// touching the connection map. Reused by both [`Self::connect_with_timeout`]
-    /// and the transparent reconnect path in [`Self::ensure_alive_or_reconnect`].
+    /// Build the effective connection: local Docker, direct SSH, or an SSH
+    /// session carried over one or more direct-tcpip jump channels.
     async fn establish_session(
         &self,
         config: &SSHConnectionConfig,
         timeout_secs: u64,
-    ) -> anyhow::Result<(Handle<SSHHandler>, Arc<AtomicBool>, Option<ServerInfo>)> {
-        let addr = format!("{}:{}", config.host, config.port);
+    ) -> anyhow::Result<EstablishedSession> {
+        if config.uses_local_docker() {
+            if config
+                .container
+                .as_ref()
+                .is_some_and(|container| matches!(container.access, ContainerAccess::Auto))
+            {
+                if let Some(session) = self
+                    .try_establish_local_container_sshd(config, timeout_secs)
+                    .await
+                {
+                    return Ok(session);
+                }
+            }
+            // Left untagged on purpose: this one call can fail as either stage
+            // (missing `docker` binary vs. a container that will not start), and
+            // the message-based fallback in `test_connection` already tells them
+            // apart. A blanket marker would make it always report "container".
+            let server_info = self.probe_local_container(config, timeout_secs).await?;
+            return Ok(EstablishedSession {
+                handle: None,
+                jump_handles: Vec::new(),
+                alive: Arc::new(AtomicBool::new(true)),
+                server_info: Some(server_info),
+                effective_config: resolved_container_config(config, ContainerAccess::DockerExec),
+            });
+        }
 
-        // Connect to the server with timeout
-        let stream = tokio::time::timeout(
-            std::time::Duration::from_secs(timeout_secs),
-            TcpStream::connect(&addr),
+        let jumps = self
+            .resolve_proxy_jump_chain(config)
+            .await
+            .map_err(|error| tag_failed_stage("configuration", error))?;
+        if jumps.is_empty() {
+            let (handle, alive, mut server_info) = self
+                .establish_direct_session(config, timeout_secs)
+                .await
+                .map_err(|error| tag_failed_stage("target", error))?;
+            if config
+                .container
+                .as_ref()
+                .is_some_and(|container| matches!(container.access, ContainerAccess::Auto))
+            {
+                if let Some((container_handle, container_alive, container_info, effective_config)) =
+                    self.try_establish_remote_container_sshd(&handle, config, timeout_secs)
+                        .await
+                {
+                    return Ok(EstablishedSession {
+                        handle: Some(container_handle),
+                        jump_handles: vec![handle],
+                        alive: container_alive,
+                        server_info: container_info,
+                        effective_config,
+                    });
+                }
+            }
+            if config.uses_docker_exec() {
+                server_info = self
+                    .probe_remote_container(&handle, config, timeout_secs)
+                    .await
+                    .map(Some)
+                    .map_err(|error| tag_failed_stage("container", error))?;
+            }
+            return Ok(EstablishedSession {
+                handle: Some(handle),
+                jump_handles: Vec::new(),
+                alive,
+                server_info,
+                effective_config: if config
+                    .container
+                    .as_ref()
+                    .is_some_and(|container| matches!(container.access, ContainerAccess::Auto))
+                {
+                    resolved_container_config(config, ContainerAccess::DockerExec)
+                } else {
+                    config.clone()
+                },
+            });
+        }
+
+        let first = jumps
+            .first()
+            .expect("non-empty jump chain must have a first hop");
+        let (first_handle, _, _) = self
+            .establish_direct_session(first, timeout_secs)
+            .await
+            .with_context(|| {
+                format!(
+                    "Jump 1 ({}) connection or authentication failed",
+                    connection_label(first)
+                )
+            })
+            .map_err(|error| tag_failed_stage("jump-1", error))?;
+        let mut jump_handles = vec![first_handle];
+
+        for (index, hop) in jumps.iter().enumerate().skip(1) {
+            let previous = jump_handles
+                .last()
+                .expect("jump handle must exist for the preceding hop");
+            let channel = previous
+                .channel_open_direct_tcpip(&hop.host, hop.port as u32, "127.0.0.1", 0)
+                .await
+                .with_context(|| {
+                    format!(
+                        "Jump {} ({}) could not be reached through jump {}",
+                        index + 1,
+                        connection_label(hop),
+                        index
+                    )
+                })
+                .map_err(|error| tag_failed_stage(&format!("jump-{}", index + 1), error))?;
+            let (handle, _, _) = self
+                .establish_stream_session(
+                    hop,
+                    channel.into_stream(),
+                    timeout_secs,
+                    &format!("jump {} ({})", index + 1, connection_label(hop)),
+                )
+                .await
+                .with_context(|| {
+                    format!(
+                        "Jump {} ({}) SSH handshake or authentication failed",
+                        index + 1,
+                        connection_label(hop)
+                    )
+                })
+                .map_err(|error| tag_failed_stage(&format!("jump-{}", index + 1), error))?;
+            jump_handles.push(handle);
+        }
+
+        let last_jump = jump_handles
+            .last()
+            .expect("jump handle must exist for final target");
+        let channel = last_jump
+            .channel_open_direct_tcpip(&config.host, config.port as u32, "127.0.0.1", 0)
+            .await
+            .with_context(|| {
+                format!(
+                    "Final target {} could not be reached through jump {}",
+                    connection_label(config),
+                    jump_handles.len()
+                )
+            })
+            .map_err(|error| tag_failed_stage("target", error))?;
+        let (handle, alive, mut server_info) = self
+            .establish_stream_session(
+                config,
+                channel.into_stream(),
+                timeout_secs,
+                &format!("final target {}", connection_label(config)),
+            )
+            .await
+            .with_context(|| {
+                format!(
+                    "Final target {} SSH handshake or authentication failed",
+                    connection_label(config)
+                )
+            })
+            .map_err(|error| tag_failed_stage("target", error))?;
+        if config
+            .container
+            .as_ref()
+            .is_some_and(|container| matches!(container.access, ContainerAccess::Auto))
+        {
+            if let Some((container_handle, container_alive, container_info, effective_config)) =
+                self.try_establish_remote_container_sshd(&handle, config, timeout_secs)
+                    .await
+            {
+                jump_handles.push(handle);
+                return Ok(EstablishedSession {
+                    handle: Some(container_handle),
+                    jump_handles,
+                    alive: container_alive,
+                    server_info: container_info,
+                    effective_config,
+                });
+            }
+        }
+        if config.uses_docker_exec() {
+            server_info = self
+                .probe_remote_container(&handle, config, timeout_secs)
+                .await
+                .map(Some)?;
+        }
+
+        Ok(EstablishedSession {
+            handle: Some(handle),
+            jump_handles,
+            alive,
+            server_info,
+            effective_config: if config
+                .container
+                .as_ref()
+                .is_some_and(|container| matches!(container.access, ContainerAccess::Auto))
+            {
+                resolved_container_config(config, ContainerAccess::DockerExec)
+            } else {
+                config.clone()
+            },
+        })
+    }
+
+    async fn establish_session_with_retries(
+        &self,
+        config: &SSHConnectionConfig,
+        timeout_secs: u64,
+    ) -> anyhow::Result<EstablishedSession> {
+        let attempts = config.options.connect_attempts.max(1);
+        let mut last_error = None;
+        for attempt in 1..=attempts {
+            match self.establish_session(config, timeout_secs).await {
+                Ok(session) => return Ok(session),
+                Err(error) if attempt < attempts => {
+                    log::warn!(
+                        "Workspace connection attempt {}/{} failed for {}: {}",
+                        attempt,
+                        attempts,
+                        connection_label(config),
+                        error
+                    );
+                    last_error = Some(error);
+                    tokio::time::sleep(Duration::from_millis(
+                        250u64.saturating_mul(u64::from(attempt)),
+                    ))
+                    .await;
+                }
+                Err(error) => return Err(error),
+            }
+        }
+        Err(last_error.unwrap_or_else(|| anyhow!("Workspace connection failed")))
+    }
+
+    async fn try_establish_local_container_sshd(
+        &self,
+        config: &SSHConnectionConfig,
+        timeout_secs: u64,
+    ) -> Option<EstablishedSession> {
+        let container = config.container.as_ref()?;
+        let output = tokio::time::timeout(
+            Duration::from_secs(timeout_secs),
+            Command::new(&container.docker_path)
+                .args(["port", &container.name, "22/tcp"])
+                .output(),
         )
         .await
-        .map_err(|_| anyhow!("Connection timeout after {} seconds", timeout_secs))?
-        .map_err(|e| anyhow!("Failed to connect to {}: {}", addr, e))?;
-
-        // Create SSH transport config
-        let key_pair = match &config.auth {
-            SSHAuthMethod::Password { .. } => None,
-            SSHAuthMethod::PrivateKey {
-                key_path,
-                passphrase,
-            } => {
+        .ok()?
+        .ok()?;
+        if !output.status.success() {
+            return None;
+        }
+        let (host, port) =
+            parse_docker_published_endpoint(&String::from_utf8_lossy(&output.stdout))?;
+        let mut effective_config = resolved_container_config(config, ContainerAccess::Sshd);
+        effective_config.host = host.clone();
+        effective_config.port = port;
+        match self
+            .establish_direct_session(&effective_config, timeout_secs)
+            .await
+        {
+            Ok((handle, alive, server_info)) => {
                 log::info!(
-                    "Attempting private key auth with key_path: {}, passphrase provided: {}",
-                    key_path,
-                    passphrase.is_some()
+                    "Container auto access selected sshd: container={}, endpoint={}:{}",
+                    container.name,
+                    host,
+                    port
                 );
-                // Try to read the specified key file
-                let expanded = shellexpand::tilde(key_path);
-                log::info!("Expanded key path: {}", expanded);
-                let key_content = match std::fs::read_to_string(expanded.as_ref()) {
-                    Ok(content) => {
-                        log::info!("Successfully read {} bytes from key file", content.len());
-                        content
-                    }
-                    Err(e) => {
-                        // If specified key fails, try default ~/.ssh/id_rsa
-                        log::warn!(
-                            "Failed to read private key at '{}': {}, trying default ~/.ssh/id_rsa",
-                            expanded,
-                            e
-                        );
-                        if let Ok(home) = std::env::var("HOME") {
-                            let default_key = format!("{}/.ssh/id_rsa", home);
-                            log::info!("Trying default key at: {}", default_key);
-                            std::fs::read_to_string(&default_key).map_err(|e| {
-                                anyhow!(
-                                    "Failed to read private key '{}' and default key '{}': {}",
-                                    key_path,
-                                    default_key,
-                                    e
-                                )
-                            })?
-                        } else {
-                            return Err(anyhow!(
-                                "Failed to read private key '{}': {}, and could not determine home directory",
-                                key_path,
-                                e
-                            ));
-                        }
-                    }
-                };
-                log::info!("Decoding private key...");
-                let key_pair = russh_keys::decode_secret_key(
-                    &key_content,
-                    passphrase.as_ref().map(|s| s.as_str()),
-                )
-                .map_err(|e| anyhow!("Failed to decode private key: {}", e))?;
-                log::info!("Successfully decoded private key");
-                Some(key_pair)
+                Some(EstablishedSession {
+                    handle: Some(handle),
+                    jump_handles: Vec::new(),
+                    alive,
+                    server_info,
+                    effective_config,
+                })
             }
+            Err(error) => {
+                log::info!(
+                    "Container sshd probe failed; falling back to docker exec: container={}, error={}",
+                    container.name,
+                    error
+                );
+                None
+            }
+        }
+    }
+
+    async fn try_establish_remote_container_sshd(
+        &self,
+        docker_host: &Handle<SSHHandler>,
+        config: &SSHConnectionConfig,
+        timeout_secs: u64,
+    ) -> Option<(
+        Handle<SSHHandler>,
+        Arc<AtomicBool>,
+        Option<ServerInfo>,
+        SSHConnectionConfig,
+    )> {
+        let container = config.container.as_ref()?;
+        let command = format!(
+            "{} port {} 22/tcp",
+            crate::remote_ssh::shell::quote_arg(&container.docker_path),
+            crate::remote_ssh::shell::quote_arg(&container.name)
+        );
+        let result = Self::execute_command_internal(
+            docker_host,
+            &command,
+            SSHCommandOptions {
+                timeout_ms: Some(timeout_secs.saturating_mul(1000)),
+                cancellation_token: None,
+            },
+        )
+        .await
+        .ok()?;
+        if result.exit_code != 0 {
+            return None;
+        }
+        let (published_host, port) = parse_docker_published_endpoint(&result.stdout)?;
+        let channel = docker_host
+            .channel_open_direct_tcpip(&published_host, port as u32, "127.0.0.1", 0)
+            .await
+            .ok()?;
+        let mut effective_config = resolved_container_config(config, ContainerAccess::Sshd);
+        effective_config.host = format!("{}#{}", config.host, container.name);
+        effective_config.port = port;
+        match self
+            .establish_stream_session(
+                &effective_config,
+                channel.into_stream(),
+                timeout_secs,
+                &format!("container sshd {}:{}", container.name, port),
+            )
+            .await
+        {
+            Ok((handle, alive, server_info)) => {
+                log::info!(
+                    "Container auto access selected sshd: container={}, endpoint={}:{}",
+                    container.name,
+                    published_host,
+                    port
+                );
+                Some((handle, alive, server_info, effective_config))
+            }
+            Err(error) => {
+                log::info!(
+                    "Container sshd probe failed; falling back to docker exec: container={}, error={}",
+                    container.name,
+                    error
+                );
+                None
+            }
+        }
+    }
+
+    async fn resolve_proxy_jump_chain(
+        &self,
+        config: &SSHConnectionConfig,
+    ) -> anyhow::Result<Vec<SSHConnectionConfig>> {
+        let Some(proxy_jump) = config
+            .proxy_jump
+            .as_deref()
+            .map(str::trim)
+            .filter(|value| !value.is_empty() && !value.eq_ignore_ascii_case("none"))
+        else {
+            return Ok(Vec::new());
         };
 
-        let ssh_config = Arc::new(russh::client::Config {
-            // Tolerate brief network blips (NAT timeouts, Wi-Fi roaming) by
-            // widening the inactivity window and allowing more missed keepalives
-            // before declaring the session dead. Combined with transparent
-            // reconnect, this prevents the user-visible "early eof" cascade
-            // while idly browsing the remote file picker.
-            inactivity_timeout: Some(std::time::Duration::from_secs(180)),
-            keepalive_interval: Some(std::time::Duration::from_secs(30)),
-            keepalive_max: 6,
-            // Broad algorithm list for compatibility with both modern and legacy SSH servers.
-            // Modern algorithms first (preferred), legacy ones appended as fallback.
-            preferred: russh::Preferred {
-                // KEX: modern curve25519 first, then older DH groups for legacy servers
-                kex: std::borrow::Cow::Owned(vec![
-                    russh::kex::CURVE25519,
-                    russh::kex::CURVE25519_PRE_RFC_8731,
-                    russh::kex::DH_G16_SHA512,
-                    russh::kex::DH_G14_SHA256,
-                    russh::kex::DH_G14_SHA1, // legacy servers
-                    russh::kex::DH_G1_SHA1,  // very old servers
-                    russh::kex::EXTENSION_SUPPORT_AS_CLIENT,
-                    russh::kex::EXTENSION_OPENSSH_STRICT_KEX_AS_CLIENT,
-                ]),
-                // Host key algorithms: include ssh-rsa for older servers
-                key: std::borrow::Cow::Owned(vec![
-                    russh_keys::key::ED25519,
-                    russh_keys::key::ECDSA_SHA2_NISTP256,
-                    russh_keys::key::ECDSA_SHA2_NISTP521,
-                    russh_keys::key::RSA_SHA2_256,
-                    russh_keys::key::RSA_SHA2_512,
-                    russh_keys::key::SSH_RSA, // legacy servers that only advertise ssh-rsa
-                ]),
-                ..russh::Preferred::DEFAULT
-            },
-            ..Default::default()
-        });
+        let mut result = Vec::new();
+        for (index, value) in proxy_jump.split(',').map(str::trim).enumerate() {
+            if value.is_empty() {
+                anyhow::bail!("ProxyJump entry {} is empty", index + 1);
+            }
+            let (user_override, host_token, port_override) = parse_proxy_jump_token(value)?;
+            let lookup = self.get_ssh_config(&host_token).await;
+            let entry = lookup.config;
+            let host = entry
+                .as_ref()
+                .and_then(|entry| entry.hostname.clone())
+                .unwrap_or_else(|| host_token.clone());
+            let username = user_override
+                .or_else(|| entry.as_ref().and_then(|entry| entry.user.clone()))
+                .or_else(local_username)
+                .ok_or_else(|| {
+                    anyhow!(
+                        "ProxyJump entry '{}' has no user; add user@host or User in ~/.ssh/config",
+                        value
+                    )
+                })?;
+            let port = port_override
+                .or_else(|| entry.as_ref().and_then(|entry| entry.port))
+                .unwrap_or(22);
+            let identity_file = entry.as_ref().and_then(|entry| entry.identity_file.clone());
+            let auth = if identity_file.is_some() {
+                SSHAuthMethod::PrivateKey {
+                    key_path: identity_file.expect("identity_file.is_some was checked"),
+                    passphrase: None,
+                    certificate_path: entry
+                        .as_ref()
+                        .and_then(|entry| entry.certificate_file.clone()),
+                }
+            } else if matches!(&config.auth, SSHAuthMethod::KeyboardInteractive { .. }) {
+                // Keyboard-interactive answers are one host's challenge/response
+                // exchange — an OTP accepted by the bastion is not an OTP for the
+                // next hop. Replaying the same vector would fail at hop 2 with an
+                // opaque auth error, so say what is actually missing instead.
+                anyhow::bail!(
+                    "ProxyJump entry '{}' has no IdentityFile in ~/.ssh/config, and \
+                     keyboard-interactive responses cannot be reused across hops. \
+                     Add an IdentityFile for this jump host (or load its key into the \
+                     SSH agent) and try again.",
+                    value
+                );
+            } else if matches!(&config.auth, SSHAuthMethod::Password { .. }) {
+                // Falling back to the target's password is the only thing left
+                // when a bastion has no key configured, but it does hand that
+                // password to every hop — the UI warns about this.
+                log::warn!(
+                    "ProxyJump entry '{}' has no IdentityFile; reusing the target's password \
+                     for this hop. Configure a per-host IdentityFile to avoid sending the \
+                     password to the bastion.",
+                    value
+                );
+                config.auth.clone()
+            } else {
+                SSHAuthMethod::Agent {
+                    key_fingerprint: None,
+                    fallback_key_path: Some("~/.ssh/id_rsa".to_string()),
+                }
+            };
+            result.push(SSHConnectionConfig {
+                id: format!("{}-jump-{}", config.id, index + 1),
+                name: value.to_string(),
+                host,
+                port,
+                username,
+                auth,
+                default_workspace: None,
+                proxy_jump: None,
+                container: None,
+                options: config.options.clone(),
+            });
+        }
+        Ok(result)
+    }
 
-        // Create handler with known_hosts for verification
+    async fn establish_stream_session<R>(
+        &self,
+        config: &SSHConnectionConfig,
+        stream: R,
+        timeout_secs: u64,
+        stage: &str,
+    ) -> anyhow::Result<(Handle<SSHHandler>, Arc<AtomicBool>, Option<ServerInfo>)>
+    where
+        R: AsyncRead + AsyncWrite + Unpin + Send + 'static,
+    {
+        let ssh_config = build_ssh_client_config();
         let (handler, disconnect_reason, alive) = SSHHandler::with_known_hosts(
             config.host.clone(),
             config.port,
             self.known_hosts.clone(),
         );
-
-        // SSH handshake with timeout
-        log::info!("Starting SSH handshake to {}", addr);
         let connect_result = tokio::time::timeout(
-            std::time::Duration::from_secs(timeout_secs),
+            Duration::from_secs(timeout_secs),
             russh::client::connect_stream(ssh_config, stream, handler),
         )
         .await
-        .map_err(|_| anyhow!("SSH handshake timeout after {} seconds", timeout_secs))?;
-
-        let mut handle = connect_result.map_err(|e| {
-            // Try to surface the real disconnect reason captured in the handler.
-            // russh's run() absorbs errors; our disconnected() callback stores them.
+        .map_err(|_| {
+            anyhow!(
+                "{} SSH handshake timed out after {} seconds",
+                stage,
+                timeout_secs
+            )
+        })?;
+        let mut handle = connect_result.map_err(|error| {
             let real_reason = disconnect_reason
                 .lock()
                 .ok()
-                .and_then(|g| g.clone());
-            if let Some(reason) = real_reason {
-                anyhow!("SSH handshake failed: {}", reason)
-            } else {
-                // HandlerError("Disconnect") with no stored reason means the server
-                // closed the TCP connection before sending any SSH banner.
-                // This typically means: sshd is not running, max connections reached,
-                // or a firewall/IP ban is in effect.
-                let e_dbg = format!("{:?}", e);
-                if e_dbg.contains("Disconnect") {
-                    anyhow!(
-                        "SSH connection refused: server {}:{} closed the connection without sending an SSH banner. \
-                         Check that sshd is running and accepting connections.",
-                        config.host, config.port
-                    )
-                } else {
-                    anyhow!("Failed to establish SSH connection: {:?}", e)
-                }
+                .and_then(|guard| guard.clone());
+            match real_reason {
+                Some(reason) => anyhow!("{} SSH handshake failed: {}", stage, reason),
+                None => anyhow!("{} SSH handshake failed: {:?}", stage, error),
             }
         })?;
-        log::info!("SSH handshake completed successfully");
-
-        // Authenticate based on auth method
-        log::info!("Starting authentication for user {}", config.username);
-        let auth_success: bool = match &config.auth {
-            SSHAuthMethod::Password { password } => {
-                log::debug!("Using password authentication");
-                handle
-                    .authenticate_password(&config.username, password.clone())
-                    .await
-                    .map_err(|e| anyhow!("Password authentication failed: {:?}", e))?
-            }
-            SSHAuthMethod::PrivateKey {
-                key_path,
-                passphrase: _,
-            } => {
-                log::info!("Using public key authentication with key: {}", key_path);
-                if let Some(ref key) = key_pair {
-                    log::info!(
-                        "Attempting to authenticate user '{}' with public key",
-                        config.username
-                    );
-                    let result = handle
-                        .authenticate_publickey(&config.username, Arc::new(key.clone()))
-                        .await;
-                    log::info!("Public key auth result: {:?}", result);
-                    match result {
-                        Ok(true) => {
-                            log::info!("Public key authentication successful");
-                            true
-                        }
-                        Ok(false) => {
-                            log::warn!(
-                                "Public key authentication rejected by server for user '{}'",
-                                config.username
-                            );
-                            false
-                        }
-                        Err(e) => {
-                            log::error!("Public key authentication error: {:?}", e);
-                            return Err(anyhow!("Public key authentication failed: {:?}", e));
-                        }
-                    }
-                } else {
-                    return Err(anyhow!("Failed to load private key"));
-                }
-            }
-        };
-
-        if !auth_success {
-            log::warn!("Authentication returned false for user {}", config.username);
-            return Err(anyhow!(
-                "Authentication failed for user {}",
-                config.username
-            ));
-        }
-        log::info!("Authentication successful for user {}", config.username);
-
-        // Resolve remote home to an absolute path (SFTP does not expand `~`; never rely on literal `~` in UI).
+        authenticate_handle(&mut handle, config, stage).await?;
         let mut server_info = Self::get_server_info_internal(&handle).await;
         if server_info
             .as_ref()
-            .map(|s| s.home_dir.trim().is_empty())
+            .map(|info| info.home_dir.trim().is_empty())
             .unwrap_or(true)
         {
-            if let Some(home) = Self::probe_remote_home_dir(&handle).await {
-                match &mut server_info {
-                    Some(si) => si.home_dir = home,
+            if let Some(home_dir) = Self::probe_remote_home_dir(&handle).await {
+                match server_info.as_mut() {
+                    Some(info) => info.home_dir = home_dir,
                     None => {
                         server_info = Some(ServerInfo {
                             os_type: "unknown".to_string(),
                             hostname: "unknown".to_string(),
-                            home_dir: home,
+                            home_dir,
                         });
                     }
                 }
             }
         }
-
         Ok((handle, alive, server_info))
+    }
+
+    /// Build a fresh direct SSH session (handshake + auth + server info probe)
+    /// without touching the connection map.
+    async fn establish_direct_session(
+        &self,
+        config: &SSHConnectionConfig,
+        timeout_secs: u64,
+    ) -> anyhow::Result<(Handle<SSHHandler>, Arc<AtomicBool>, Option<ServerInfo>)> {
+        let addr = format!("{}:{}", config.host, config.port);
+        let stream =
+            tokio::time::timeout(Duration::from_secs(timeout_secs), TcpStream::connect(&addr))
+                .await
+                .map_err(|_| anyhow!("Connection timeout after {} seconds", timeout_secs))?
+                .map_err(|e| anyhow!("Failed to connect to {}: {}", addr, e))?;
+        self.establish_stream_session(
+            config,
+            stream,
+            timeout_secs,
+            &format!("target {}", connection_label(config)),
+        )
+        .await
+    }
+
+    async fn probe_remote_container(
+        &self,
+        handle: &Handle<SSHHandler>,
+        config: &SSHConnectionConfig,
+        timeout_secs: u64,
+    ) -> anyhow::Result<ServerInfo> {
+        let container = config
+            .container
+            .as_ref()
+            .ok_or_else(|| anyhow!("Container configuration is missing"))?;
+        validate_container_config(container)?;
+        let probe = docker_exec_host_command(
+            container,
+            "printf '%s\\n' \"$(uname -s 2>/dev/null || printf unknown)\" \"$(hostname 2>/dev/null || printf unknown)\" \"$HOME\"",
+            false,
+        );
+        let result = Self::execute_command_internal(
+            handle,
+            &probe,
+            SSHCommandOptions {
+                timeout_ms: Some(timeout_secs.saturating_mul(1000)),
+                cancellation_token: None,
+            },
+        )
+        .await
+        .with_context(|| {
+            format!(
+                "Docker container '{}' could not be entered on SSH host {}",
+                container.name,
+                connection_label(config)
+            )
+        })?;
+        server_info_from_container_probe(container, result)
+    }
+
+    async fn probe_local_container(
+        &self,
+        config: &SSHConnectionConfig,
+        timeout_secs: u64,
+    ) -> anyhow::Result<ServerInfo> {
+        let container = config
+            .container
+            .as_ref()
+            .ok_or_else(|| anyhow!("Local Docker configuration is missing"))?;
+        validate_container_config(container)?;
+        let args = docker_exec_args(
+            container,
+            "printf '%s\\n' \"$(uname -s 2>/dev/null || printf unknown)\" \"$(hostname 2>/dev/null || printf unknown)\" \"$HOME\"",
+            false,
+        );
+        let output = tokio::time::timeout(
+            Duration::from_secs(timeout_secs),
+            Command::new(&container.docker_path).args(args).output(),
+        )
+        .await
+        .map_err(|_| {
+            anyhow!(
+                "Local Docker container '{}' probe timed out after {} seconds",
+                container.name,
+                timeout_secs
+            )
+        })?
+        .with_context(|| {
+            format!(
+                "Failed to start local Docker executable '{}'",
+                container.docker_path
+            )
+        })?;
+        server_info_from_container_probe(
+            container,
+            SSHCommandResult {
+                stdout: String::from_utf8_lossy(&output.stdout).to_string(),
+                stderr: String::from_utf8_lossy(&output.stderr).to_string(),
+                exit_code: output.status.code().unwrap_or(-1),
+                interrupted: false,
+                timed_out: false,
+            },
+        )
     }
 
     /// Get server information (partial lines allowed so we can still fill `home_dir` via [`Self::probe_remote_home_dir`]).
@@ -1496,8 +3176,11 @@ impl SSHConnectionManager {
         let mut session = handle.channel_open_session().await?;
         session.exec(true, command).await?;
 
-        let mut stdout = String::new();
-        let mut stderr = String::new();
+        // Keep bytes intact until the channel closes. SSH packets may split a
+        // valid UTF-8 code point at any byte boundary; decoding each packet
+        // independently would corrupt otherwise valid non-ASCII output.
+        let mut stdout = Vec::new();
+        let mut stderr = Vec::new();
         let mut exit_status: Option<i32> = None;
         let mut interrupted = false;
         let mut timed_out = false;
@@ -1582,7 +3265,7 @@ impl SSHConnectionManager {
                             command_preview
                         );
                     });
-                    stdout.push_str(&String::from_utf8_lossy(data));
+                    stdout.extend_from_slice(data);
                 }
                 Some(russh::ChannelMsg::ExtendedData { ref data, .. }) => {
                     stderr_first_chunk_once.call_once(|| {
@@ -1594,7 +3277,7 @@ impl SSHConnectionManager {
                             command_preview
                         );
                     });
-                    stderr.push_str(&String::from_utf8_lossy(data));
+                    stderr.extend_from_slice(data);
                 }
                 Some(russh::ChannelMsg::ExitStatus {
                     exit_status: status,
@@ -1659,8 +3342,8 @@ impl SSHConnectionManager {
         }
 
         let result = SSHCommandResult {
-            stdout,
-            stderr,
+            stdout: String::from_utf8_lossy(&stdout).into_owned(),
+            stderr: String::from_utf8_lossy(&stderr).into_owned(),
             exit_code: match exit_status {
                 Some(exit_code) => exit_code,
                 None if timed_out => 124,
@@ -1684,17 +3367,114 @@ impl SSHConnectionManager {
         Ok(result)
     }
 
+    /// Per-connection reconnect mutex, created on first use.
+    async fn reconnect_lock_for(&self, connection_id: &str) -> Arc<tokio::sync::Mutex<()>> {
+        if let Some(lock) = self.reconnect_locks.read().await.get(connection_id) {
+            return lock.clone();
+        }
+        self.reconnect_locks
+            .write()
+            .await
+            .entry(connection_id.to_string())
+            .or_insert_with(|| Arc::new(tokio::sync::Mutex::new(())))
+            .clone()
+    }
+
+    /// Send SSH_MSG_DISCONNECT before letting a handle drop.
+    ///
+    /// Dropping a russh `Handle` only closes the socket. The server has no way
+    /// to tell that from a network partition, so it keeps the session — and its
+    /// PTYs, forwardings and `MaxSessions` slot — until its own timeout fires.
+    async fn shutdown_handle(handle: &Handle<SSHHandler>) {
+        // Bounded: `disconnect` queues onto the session loop's channel, and a
+        // loop wedged on an unwritable socket would never drain it. This runs on
+        // app shutdown and on every reconnect, neither of which may block on a
+        // peer that has stopped reading. A missed goodbye packet costs one
+        // server-side session until its timeout — the status quo — while a hang
+        // here costs the whole shutdown.
+        match tokio::time::timeout(
+            SSH_DISCONNECT_TIMEOUT,
+            handle.disconnect(russh::Disconnect::ByApplication, "client closing", "en"),
+        )
+        .await
+        {
+            Ok(Ok(())) => {}
+            Ok(Err(error)) => {
+                log::debug!("SSH disconnect message could not be sent: {}", error)
+            }
+            Err(_) => log::debug!(
+                "SSH disconnect message timed out after {:?}; dropping the transport",
+                SSH_DISCONNECT_TIMEOUT
+            ),
+        }
+    }
+
+    /// Tear down a whole hop chain, target first.
+    ///
+    /// Order matters with ProxyJump: every hop carries the next one's stream, so
+    /// closing hop 1 first would cut the channel the later disconnects still
+    /// have to travel over and turn an orderly shutdown back into N abandoned
+    /// sessions.
+    async fn shutdown_handle_chain(handles: Vec<&Handle<SSHHandler>>) {
+        for handle in handles {
+            Self::shutdown_handle(handle).await;
+        }
+    }
+
+    /// Ordered handle chain of an `ActiveConnection`: target, then jump hosts
+    /// from the last hop backwards.
+    fn active_handle_chain(connection: &ActiveConnection) -> Vec<&Handle<SSHHandler>> {
+        let mut chain: Vec<&Handle<SSHHandler>> = Vec::with_capacity(
+            connection.jump_handles.len() + usize::from(connection.handle.is_some()),
+        );
+        chain.extend(connection.handle.as_deref());
+        chain.extend(connection.jump_handles.iter().rev().map(Arc::as_ref));
+        chain
+    }
+
+    /// Same ordering for a session that was never published to the map.
+    fn established_handle_chain(session: &EstablishedSession) -> Vec<&Handle<SSHHandler>> {
+        let mut chain: Vec<&Handle<SSHHandler>> =
+            Vec::with_capacity(session.jump_handles.len() + usize::from(session.handle.is_some()));
+        chain.extend(session.handle.as_ref());
+        chain.extend(session.jump_handles.iter().rev());
+        chain
+    }
+
+    async fn shutdown_active_connection(connection: ActiveConnection) {
+        Self::shutdown_handle_chain(Self::active_handle_chain(&connection)).await;
+    }
+
+    async fn shutdown_established_session(session: EstablishedSession) {
+        Self::shutdown_handle_chain(Self::established_handle_chain(&session)).await;
+    }
+
     /// Disconnect from a server
     pub async fn disconnect(&self, connection_id: &str) -> anyhow::Result<()> {
-        let mut guard = self.connections.write().await;
-        guard.remove(connection_id);
+        // Drop the map lock before the network round-trip: the disconnect below
+        // awaits, and holding the write lock across it would block every other
+        // connection's exec/SFTP entry point.
+        let removed = {
+            let mut guard = self.connections.write().await;
+            guard.remove(connection_id)
+        };
+        self.reconnect_locks.write().await.remove(connection_id);
+        if let Some(connection) = removed {
+            Self::shutdown_active_connection(connection).await;
+        }
         Ok(())
     }
 
     /// Disconnect all connections
     pub async fn disconnect_all(&self) {
-        let mut guard = self.connections.write().await;
-        guard.clear();
+        let removed: Vec<ActiveConnection> = {
+            let mut guard = self.connections.write().await;
+            guard.drain().map(|(_, connection)| connection).collect()
+        };
+        self.reconnect_locks.write().await.clear();
+        for connection in removed {
+            Self::shutdown_active_connection(connection).await;
+        }
     }
 
     /// Check if connected.
@@ -1705,11 +3485,36 @@ impl SSHConnectionManager {
     /// the entry has not yet been pruned, so the UI cannot mistakenly believe
     /// the session is healthy.
     pub async fn is_connected(&self, connection_id: &str) -> bool {
-        let guard = self.connections.read().await;
-        guard
-            .get(connection_id)
-            .map(|c| c.alive.load(Ordering::SeqCst))
-            .unwrap_or(false)
+        let (alive, config) = {
+            let guard = self.connections.read().await;
+            let Some(connection) = guard.get(connection_id) else {
+                return false;
+            };
+            (
+                connection.alive.load(Ordering::SeqCst),
+                connection.effective_config.clone(),
+            )
+        };
+        if !alive {
+            return false;
+        }
+        if !config.uses_local_docker() {
+            return true;
+        }
+        let Some(container) = config.container.as_ref() else {
+            return false;
+        };
+        matches!(
+            tokio::time::timeout(
+                Duration::from_secs(3),
+                Command::new(&container.docker_path)
+                    .args(["inspect", "--format", "{{.State.Running}}", &container.name])
+                    .output(),
+            )
+            .await,
+            Ok(Ok(output)) if output.status.success()
+                && String::from_utf8_lossy(&output.stdout).trim() == "true"
+        )
     }
 
     async fn load_connection_config_from_saved(
@@ -1725,21 +3530,42 @@ impl SSHConnectionManager {
             return Ok(None);
         };
 
+        let local_docker = saved
+            .container
+            .as_ref()
+            .is_some_and(|container| container.local);
         let auth = match saved.auth_type {
             crate::remote_ssh::types::SavedAuthType::Password => {
-                let password =
+                let password = if local_docker {
+                    String::new()
+                } else {
                     self.password_vault.load(connection_id).await?.ok_or_else(|| {
                         anyhow!(
                             "Saved SSH connection {} requires a password, but no stored vault entry is available",
                             connection_id
                         )
-                    })?;
+                    })?
+                };
                 SSHAuthMethod::Password { password }
             }
-            crate::remote_ssh::types::SavedAuthType::PrivateKey { key_path } => {
-                SSHAuthMethod::PrivateKey {
-                    key_path,
-                    passphrase: None,
+            crate::remote_ssh::types::SavedAuthType::PrivateKey {
+                key_path,
+                certificate_path,
+            } => SSHAuthMethod::PrivateKey {
+                key_path,
+                passphrase: None,
+                certificate_path,
+            },
+            crate::remote_ssh::types::SavedAuthType::Agent {
+                key_fingerprint,
+                fallback_key_path,
+            } => SSHAuthMethod::Agent {
+                key_fingerprint,
+                fallback_key_path,
+            },
+            crate::remote_ssh::types::SavedAuthType::KeyboardInteractive => {
+                SSHAuthMethod::KeyboardInteractive {
+                    responses: Vec::new(),
                 }
             }
         };
@@ -1752,6 +3578,9 @@ impl SSHConnectionManager {
             username: saved.username,
             auth,
             default_workspace: saved.default_workspace,
+            proxy_jump: saved.proxy_jump,
+            container: saved.container,
+            options: saved.options,
         }))
     }
 
@@ -1774,20 +3603,13 @@ impl SSHConnectionManager {
             .load_connection_config_from_saved(connection_id)
             .await?;
 
-        let (alive_flag, reconnect_lock, active_config) = {
+        let reconnect_lock = self.reconnect_lock_for(connection_id).await;
+        let (alive_flag, active_config) = {
             let guard = self.connections.read().await;
             if let Some(conn) = guard.get(connection_id) {
-                (
-                    conn.alive.clone(),
-                    conn.reconnect_lock.clone(),
-                    Some(conn.config.clone()),
-                )
+                (conn.alive.clone(), Some(conn.config.clone()))
             } else {
-                (
-                    Arc::new(AtomicBool::new(false)),
-                    Arc::new(tokio::sync::Mutex::new(())),
-                    None,
-                )
+                (Arc::new(AtomicBool::new(false)), None)
             }
         };
 
@@ -1817,18 +3639,25 @@ impl SSHConnectionManager {
 
         // Serialize concurrent reconnect attempts for the same connection.
         let _guard = reconnect_lock.lock().await;
-        // Re-check under lock; another task may have already restored the session.
-        if alive_flag.load(Ordering::SeqCst) {
-            // Re-check config drift under lock as well.
-            if let Some(ref saved) = saved_config {
-                let guard = self.connections.read().await;
-                if let Some(conn) = guard.get(connection_id) {
-                    if saved.connection_params_equal(&conn.config) {
-                        return Ok(());
+        // Re-check under lock; another task may have already restored the
+        // session. The flag has to be re-read from the map, not from the Arc
+        // captured above: a successful reconnect installs a *new* `alive` Arc,
+        // leaving the captured one false forever. Trusting it would make every
+        // waiter queued behind the lock reconnect all over again — the exact
+        // stampede this lock exists to prevent.
+        {
+            let guard = self.connections.read().await;
+            if let Some(conn) = guard.get(connection_id) {
+                if conn.alive.load(Ordering::SeqCst) {
+                    match saved_config {
+                        Some(ref saved) if saved.connection_params_equal(&conn.config) => {
+                            return Ok(())
+                        }
+                        None => return Ok(()),
+                        // Still drifted: fall through and reconnect.
+                        Some(_) => {}
                     }
                 }
-            } else {
-                return Ok(());
             }
         }
 
@@ -1863,56 +3692,92 @@ impl SSHConnectionManager {
         // Refresh the password from the encrypted vault if password auth was
         // configured but the in-memory copy is empty (defensive — covers cases
         // where callers cleared it intentionally).
-        if let SSHAuthMethod::Password { ref password } = config.auth {
-            if password.is_empty() {
-                match self.password_vault.load(connection_id).await {
-                    Ok(Some(pwd)) => {
-                        config.auth = SSHAuthMethod::Password { password: pwd };
-                    }
-                    Ok(None) => {
-                        return Err(anyhow!(
+        if !config.uses_local_docker() {
+            if let SSHAuthMethod::Password { ref password } = config.auth {
+                if password.is_empty() {
+                    match self.password_vault.load(connection_id).await {
+                        Ok(Some(pwd)) => {
+                            config.auth = SSHAuthMethod::Password { password: pwd };
+                        }
+                        Ok(None) => {
+                            return Err(anyhow!(
                             "SSH session {} is dead and no stored password is available for reconnect",
                             connection_id
                         ));
-                    }
-                    Err(e) => {
-                        return Err(anyhow!("Failed to load stored SSH password: {}", e));
+                        }
+                        Err(e) => {
+                            return Err(anyhow!("Failed to load stored SSH password: {}", e));
+                        }
                     }
                 }
             }
         }
 
-        let (handle, alive, server_info) = self.establish_session(&config, 30).await?;
+        let established = self
+            .establish_session_with_retries(&config, config.options.connect_timeout_secs.max(1))
+            .await?;
+        let server_info = established.server_info.clone();
 
         // Replace the handle, update the config to the latest saved version,
         // and clear the cached SFTP session so subsequent operations open a
         // fresh channel on the new transport.
-        {
+        // Handles the reconnect displaces still have to be told goodbye: the
+        // session is usually dead, but "usually" covers neither config drift
+        // (where the old session is perfectly healthy) nor a half-open link the
+        // server still counts against its session limit.
+        let (stale_handle, stale_jump_handles) = {
             let mut guard = self.connections.write().await;
             if let Some(conn) = guard.get_mut(connection_id) {
-                conn.handle = Arc::new(handle);
+                let stale_handle = conn.handle.take();
+                let stale_jump_handles = std::mem::take(&mut conn.jump_handles);
+                conn.handle = established.handle.map(Arc::new);
+                conn.jump_handles = established.jump_handles.into_iter().map(Arc::new).collect();
                 conn.config = config;
-                conn.alive = alive;
+                conn.effective_config = established.effective_config;
+                conn.alive = established.alive;
                 if let Some(si) = server_info.as_ref() {
                     conn.server_info = Some(si.clone());
                 }
                 let mut sftp_guard = conn.sftp_session.write().await;
                 *sftp_guard = None;
+                (stale_handle, stale_jump_handles)
             } else {
-                guard.insert(
+                let replaced = guard.insert(
                     connection_id.to_string(),
                     ActiveConnection {
-                        handle: Arc::new(handle),
+                        handle: established.handle.map(Arc::new),
+                        jump_handles: established.jump_handles.into_iter().map(Arc::new).collect(),
                         config,
+                        effective_config: established.effective_config,
                         server_info,
                         sftp_session: Arc::new(tokio::sync::RwLock::new(None)),
                         server_key: None,
-                        alive,
-                        reconnect_lock: Arc::new(tokio::sync::Mutex::new(())),
+                        alive: established.alive,
                     },
                 );
+                match replaced {
+                    Some(previous) => (previous.handle, previous.jump_handles),
+                    None => (None, Vec::new()),
+                }
             }
-        }
+        };
+        // Skip any handle another task still holds. Reconnect is automatic and
+        // can fire on config drift while the *old* session is perfectly healthy
+        // and carrying an in-flight exec or PTY; sending a goodbye there would
+        // kill that command. Those handles simply drop when their user finishes,
+        // which is the pre-existing behaviour. An explicit `disconnect()` has no
+        // such guard — ending in-flight work is what the user asked for.
+        let unused = |handle: &&Arc<Handle<SSHHandler>>| Arc::strong_count(handle) == 1;
+        let mut stale_chain: Vec<&Handle<SSHHandler>> = Vec::new();
+        stale_chain.extend(stale_handle.iter().filter(unused).map(Arc::as_ref));
+        stale_chain.extend(
+            stale_jump_handles
+                .iter()
+                .rev()
+                .filter(|handle| Arc::strong_count(handle) == 1)
+                .map(Arc::as_ref),
+        );
+        Self::shutdown_handle_chain(stale_chain).await;
 
         log::info!("SSH session {} reconnected successfully", connection_id);
         Ok(())
@@ -1946,18 +3811,27 @@ impl SSHConnectionManager {
         options: SSHCommandOptions,
     ) -> anyhow::Result<SSHCommandResult> {
         self.ensure_alive_or_reconnect(connection_id).await?;
-        let handle = {
+        let (handle, config) = {
             let guard = self.connections.read().await;
-            guard
+            let connection = guard
                 .get(connection_id)
-                .ok_or_else(|| anyhow!("Connection {} not found", connection_id))?
-                .handle
-                .clone()
+                .ok_or_else(|| anyhow!("Connection {} not found", connection_id))?;
+            (
+                connection.handle.clone(),
+                connection.effective_config.clone(),
+            )
         };
 
-        Self::execute_command_internal(&handle, command, options)
+        if config.uses_docker_exec() {
+            let transport = self.open_workspace_stdio(connection_id, command).await?;
+            return collect_workspace_command_result(transport, options).await;
+        }
+        let handle =
+            handle.ok_or_else(|| anyhow!("SSH handle is unavailable for {}", connection_id))?;
+        let command = workspace_command(&config, command, false);
+        Self::execute_command_internal(&handle, &command, options)
             .await
-            .map_err(|e| anyhow!("Command execution failed: {}", e))
+            .map_err(|error| anyhow!("Command execution failed: {}", error))
     }
 
     /// Open a long-lived non-PTY exec channel for streaming stdin/stdout protocols.
@@ -1967,24 +3841,95 @@ impl SSHConnectionManager {
         command: &str,
     ) -> anyhow::Result<russh::Channel<Msg>> {
         self.ensure_alive_or_reconnect(connection_id).await?;
-        let handle = {
+        let (handle, config) = {
             let guard = self.connections.read().await;
-            guard
+            let connection = guard
                 .get(connection_id)
-                .ok_or_else(|| anyhow!("Connection {} not found", connection_id))?
-                .handle
-                .clone()
+                .ok_or_else(|| anyhow!("Connection {} not found", connection_id))?;
+            (
+                connection.handle.clone(),
+                connection.effective_config.clone(),
+            )
         };
+        if config.uses_local_docker() {
+            anyhow::bail!("Local Docker execution does not use an SSH channel");
+        }
+        let handle =
+            handle.ok_or_else(|| anyhow!("SSH handle is unavailable for {}", connection_id))?;
+        let command = workspace_command(&config, command, false);
 
         let channel = handle
             .channel_open_session()
             .await
             .map_err(|e| anyhow!("Failed to open SSH exec channel: {}", e))?;
         channel
-            .exec(true, command)
+            .exec(true, command.as_str())
             .await
             .map_err(|e| anyhow!("Failed to start remote command: {}", e))?;
         Ok(channel)
+    }
+
+    /// Open a transport-neutral, long-lived stdio process in the effective
+    /// workspace target.
+    ///
+    /// SSH hosts and remote Docker containers are backed by an SSH channel.
+    /// Local Docker containers are backed by a supervised local `docker exec`
+    /// child. Callers receive the same stdin/stdout/stderr/control/completion
+    /// contract for either target.
+    pub async fn open_workspace_stdio(
+        &self,
+        connection_id: &str,
+        command: &str,
+    ) -> anyhow::Result<crate::remote_ssh::WorkspaceStdio> {
+        self.ensure_alive_or_reconnect(connection_id).await?;
+        let (handle, config) = {
+            let guard = self.connections.read().await;
+            let connection = guard
+                .get(connection_id)
+                .ok_or_else(|| anyhow!("Connection {} not found", connection_id))?;
+            (
+                connection.handle.clone(),
+                connection.effective_config.clone(),
+            )
+        };
+        if config.uses_docker_exec() {
+            let container = config
+                .container
+                .as_ref()
+                .ok_or_else(|| anyhow!("Docker container configuration is missing"))?;
+            validate_container_config(container)?;
+            let (supervised_command, pid_file) = supervised_container_command(container, command);
+            if config.uses_local_docker() {
+                let signal_hook = local_container_signal_hook(container.clone(), pid_file);
+                return crate::remote_ssh::WorkspaceStdio::spawn_local_process_with_signal_hook(
+                    &container.docker_path,
+                    &docker_exec_args(container, &supervised_command, false),
+                    Some(signal_hook),
+                );
+            }
+
+            let handle =
+                handle.ok_or_else(|| anyhow!("SSH handle is unavailable for {}", connection_id))?;
+            let host_command = docker_exec_host_command(container, &supervised_command, false);
+            let channel = handle
+                .channel_open_session()
+                .await
+                .map_err(|error| anyhow!("Failed to open SSH exec channel: {}", error))?;
+            channel
+                .exec(true, host_command.as_str())
+                .await
+                .map_err(|error| anyhow!("Failed to start remote Docker command: {}", error))?;
+            let signal_hook = remote_container_signal_hook(handle, container.clone(), pid_file);
+            return Ok(
+                crate::remote_ssh::WorkspaceStdio::from_ssh_channel_with_signal_hook(
+                    channel,
+                    Some(signal_hook),
+                ),
+            );
+        }
+
+        let channel = self.open_exec_channel(connection_id, command).await?;
+        Ok(crate::remote_ssh::WorkspaceStdio::from_ssh_channel(channel))
     }
 
     /// Open a long-lived exec channel with a PTY attached.
@@ -2000,14 +3945,22 @@ impl SSHConnectionManager {
         rows: u32,
     ) -> anyhow::Result<russh::Channel<Msg>> {
         self.ensure_alive_or_reconnect(connection_id).await?;
-        let handle = {
+        let (handle, config) = {
             let guard = self.connections.read().await;
-            guard
+            let connection = guard
                 .get(connection_id)
-                .ok_or_else(|| anyhow!("Connection {} not found", connection_id))?
-                .handle
-                .clone()
+                .ok_or_else(|| anyhow!("Connection {} not found", connection_id))?;
+            (
+                connection.handle.clone(),
+                connection.effective_config.clone(),
+            )
         };
+        if config.uses_local_docker() {
+            anyhow::bail!("Local Docker execution does not use an SSH channel");
+        }
+        let handle =
+            handle.ok_or_else(|| anyhow!("SSH handle is unavailable for {}", connection_id))?;
+        let command = workspace_command(&config, command, true);
 
         let channel = handle
             .channel_open_session()
@@ -2018,7 +3971,7 @@ impl SSHConnectionManager {
             .await
             .map_err(|e| anyhow!("Failed to request PTY for remote command: {}", e))?;
         channel
-            .exec(true, command)
+            .exec(true, command.as_str())
             .await
             .map_err(|e| anyhow!("Failed to start remote PTY command: {}", e))?;
         Ok(channel)
@@ -2046,13 +3999,16 @@ impl SSHConnectionManager {
         if !need_probe {
             return self.get_server_info(connection_id).await;
         }
-        let handle = {
-            let guard = self.connections.read().await;
-            guard.get(connection_id)?.handle.clone()
-        };
-        let Some(home) = Self::probe_remote_home_dir(&handle).await else {
+        let Ok((output, _, status)) = self
+            .execute_command(connection_id, "printf '%s' \"$HOME\"")
+            .await
+        else {
             return self.get_server_info(connection_id).await;
         };
+        let home = output.trim().to_string();
+        if status != 0 || home.is_empty() || home == "~" {
+            return self.get_server_info(connection_id).await;
+        }
         {
             let mut guard = self.connections.write().await;
             if let Some(conn) = guard.get_mut(connection_id) {
@@ -2075,6 +4031,432 @@ impl SSHConnectionManager {
     pub async fn get_connection_config(&self, connection_id: &str) -> Option<SSHConnectionConfig> {
         let guard = self.connections.read().await;
         guard.get(connection_id).map(|c| c.config.clone())
+    }
+
+    pub async fn get_effective_connection_config(
+        &self,
+        connection_id: &str,
+    ) -> Option<SSHConnectionConfig> {
+        let guard = self.connections.read().await;
+        guard
+            .get(connection_id)
+            .map(|connection| connection.effective_config.clone())
+    }
+
+    pub async fn is_local_container_connection(&self, connection_id: &str) -> bool {
+        self.get_effective_connection_config(connection_id)
+            .await
+            .is_some_and(|config| config.uses_local_docker())
+    }
+
+    pub async fn is_container_workspace(&self, connection_id: &str) -> bool {
+        self.get_effective_connection_config(connection_id)
+            .await
+            .is_some_and(|config| config.uses_docker_exec())
+    }
+
+    pub async fn local_container_exec_spec(
+        &self,
+        connection_id: &str,
+        command: &str,
+        tty: bool,
+    ) -> anyhow::Result<Option<(String, Vec<String>)>> {
+        let Some(config) = self.get_effective_connection_config(connection_id).await else {
+            anyhow::bail!("Connection {} not found", connection_id);
+        };
+        if !config.uses_local_docker() {
+            return Ok(None);
+        }
+        let container = config
+            .container
+            .as_ref()
+            .ok_or_else(|| anyhow!("Local Docker configuration is missing"))?;
+        validate_container_config(container)?;
+        Ok(Some((
+            container.docker_path.clone(),
+            docker_exec_args(container, command, tty),
+        )))
+    }
+
+    pub async fn local_container_shell_spec(
+        &self,
+        connection_id: &str,
+        cwd: Option<&str>,
+    ) -> anyhow::Result<Option<(String, Vec<String>)>> {
+        let Some(config) = self.get_effective_connection_config(connection_id).await else {
+            anyhow::bail!("Connection {} not found", connection_id);
+        };
+        if !config.uses_local_docker() {
+            return Ok(None);
+        }
+        let container = config
+            .container
+            .as_ref()
+            .ok_or_else(|| anyhow!("Local Docker configuration is missing"))?;
+        validate_container_config(container)?;
+        let mut args = vec!["exec".to_string(), "-i".to_string(), "-t".to_string()];
+        if let Some(user) = container
+            .user
+            .as_deref()
+            .map(str::trim)
+            .filter(|user| !user.is_empty())
+        {
+            args.push("--user".to_string());
+            args.push(user.to_string());
+        }
+        if let Some(cwd) = cwd.map(str::trim).filter(|cwd| !cwd.is_empty()) {
+            args.push("--workdir".to_string());
+            args.push(cwd.to_string());
+        }
+        args.push(container.name.clone());
+        args.push(container.shell.clone());
+        Ok(Some((container.docker_path.clone(), args)))
+    }
+
+    async fn execute_workspace_bytes(
+        &self,
+        connection_id: &str,
+        command: &str,
+    ) -> anyhow::Result<(Vec<u8>, Vec<u8>, i32)> {
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+
+        let transport = self.open_workspace_stdio(connection_id, command).await?;
+        let (mut stdin, mut stdout, mut stderr, _control, completion) = transport.into_parts();
+        let _ = stdin.shutdown().await;
+        let stdout_task = tokio::spawn(async move {
+            let mut bytes = Vec::new();
+            stdout.read_to_end(&mut bytes).await.map(|_| bytes)
+        });
+        let stderr_task = tokio::spawn(async move {
+            let mut bytes = Vec::new();
+            stderr.read_to_end(&mut bytes).await.map(|_| bytes)
+        });
+        let exit = completion.wait().await;
+        let stdout = stdout_task
+            .await
+            .context("Workspace stdout reader task failed")??;
+        let stderr = stderr_task
+            .await
+            .context("Workspace stderr reader task failed")??;
+        Ok((stdout, stderr, exit.exit_code.unwrap_or(-1)))
+    }
+
+    pub async fn container_read_file(
+        &self,
+        connection_id: &str,
+        path: &str,
+    ) -> anyhow::Result<Vec<u8>> {
+        self.container_read_file_with_progress(connection_id, path, &mut |_, _| true)
+            .await
+    }
+
+    pub async fn container_read_file_with_progress(
+        &self,
+        connection_id: &str,
+        path: &str,
+        on_progress: &mut impl FnMut(u64, u64) -> bool,
+    ) -> anyhow::Result<Vec<u8>> {
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+
+        let path = self.resolve_sftp_path(connection_id, path).await?;
+        let total = self
+            .container_stat(connection_id, &path)
+            .await?
+            .and_then(|entry| entry.size)
+            .unwrap_or(0);
+        if !on_progress(0, total) {
+            anyhow::bail!("Transfer cancelled");
+        }
+
+        let command = format!("cat -- {}", crate::remote_ssh::shell::quote_arg(&path));
+        let transport = self.open_workspace_stdio(connection_id, &command).await?;
+        let (mut stdin, mut stdout, mut stderr, control, completion) = transport.into_parts();
+        let _ = stdin.shutdown().await;
+        let stderr_task = tokio::spawn(async move {
+            let mut bytes = Vec::new();
+            let _ = stderr.read_to_end(&mut bytes).await;
+            bytes
+        });
+        let mut content = Vec::new();
+        let mut chunk = vec![0u8; 256 * 1024];
+        loop {
+            let read = stdout
+                .read(&mut chunk)
+                .await
+                .with_context(|| format!("Failed to read container file '{}'", path))?;
+            if read == 0 {
+                break;
+            }
+            content.extend_from_slice(&chunk[..read]);
+            if !on_progress(content.len() as u64, total) {
+                let _ = control.kill().await;
+                let _ = completion.wait().await;
+                anyhow::bail!("Transfer cancelled");
+            }
+        }
+        let stderr = stderr_task.await.unwrap_or_default();
+        let exit = completion.wait().await;
+        if exit.exit_code.unwrap_or(-1) != 0 {
+            anyhow::bail!(
+                "Failed to read container file '{}': {}",
+                path,
+                String::from_utf8_lossy(&stderr).trim()
+            );
+        }
+        let _ = on_progress(content.len() as u64, total);
+        Ok(content)
+    }
+
+    pub async fn container_write_file(
+        &self,
+        connection_id: &str,
+        path: &str,
+        content: &[u8],
+    ) -> anyhow::Result<()> {
+        self.container_write_file_with_progress(connection_id, path, content, &mut |_, _| true)
+            .await
+    }
+
+    pub async fn container_write_file_with_progress(
+        &self,
+        connection_id: &str,
+        path: &str,
+        content: &[u8],
+        on_progress: &mut impl FnMut(u64, u64) -> bool,
+    ) -> anyhow::Result<()> {
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+
+        let path = self.resolve_sftp_path(connection_id, path).await?;
+        let parent = path
+            .rsplit_once('/')
+            .map(|(parent, _)| if parent.is_empty() { "/" } else { parent })
+            .unwrap_or(".");
+        let temporary = format!(
+            "{}/.bitfun-upload-{}.tmp",
+            parent.trim_end_matches('/'),
+            uuid::Uuid::new_v4()
+        );
+        let quoted_temporary = crate::remote_ssh::shell::quote_arg(&temporary);
+        let quoted_path = crate::remote_ssh::shell::quote_arg(&path);
+        let quoted_parent = crate::remote_ssh::shell::quote_arg(parent);
+        let expected_size = content.len();
+        let sweep = stale_upload_sweep(&quoted_parent);
+        let command = format!(
+            "{sweep} \
+             tmp={quoted_temporary}; target={quoted_path}; expected={expected_size}; \
+             cleanup() {{ rm -f -- \"$tmp\"; }}; trap cleanup EXIT HUP INT TERM; \
+             umask 077; status=0; cat > \"$tmp\" || status=$?; \
+             if [ \"$status\" -eq 0 ]; then \
+               actual=$(wc -c < \"$tmp\" 2>/dev/null) || status=$?; \
+               if [ \"$status\" -eq 0 ]; then \
+                 if [ \"$actual\" -eq \"$expected\" ]; then \
+                   mv -f -- \"$tmp\" \"$target\" || status=$?; \
+                 else status=65; fi; \
+               fi; \
+             fi; \
+             trap - EXIT; cleanup; exit \"$status\""
+        );
+        let transport = self.open_workspace_stdio(connection_id, &command).await?;
+        let (mut stdin, mut stdout, mut stderr, control, completion) = transport.into_parts();
+        let stdout_task = tokio::spawn(async move {
+            let mut bytes = Vec::new();
+            let _ = stdout.read_to_end(&mut bytes).await;
+            bytes
+        });
+        let stderr_task = tokio::spawn(async move {
+            let mut bytes = Vec::new();
+            let _ = stderr.read_to_end(&mut bytes).await;
+            bytes
+        });
+        let total = content.len() as u64;
+        if !on_progress(0, total) {
+            let _ = control.kill().await;
+            let _ = completion.wait().await;
+            anyhow::bail!("Transfer cancelled");
+        }
+
+        let mut written = 0u64;
+        for chunk in content.chunks(256 * 1024) {
+            if let Err(error) = stdin.write_all(chunk).await {
+                let _ = control.kill().await;
+                let _ = completion.wait().await;
+                anyhow::bail!("Failed to stream container file '{}': {}", path, error);
+            }
+            written += chunk.len() as u64;
+            if !on_progress(written, total) {
+                let _ = control.kill().await;
+                let _ = completion.wait().await;
+                anyhow::bail!("Transfer cancelled");
+            }
+        }
+        stdin
+            .shutdown()
+            .await
+            .with_context(|| format!("Failed to finish container file upload '{}'", path))?;
+        let exit = completion.wait().await;
+        let _stdout = stdout_task.await.unwrap_or_default();
+        let stderr = stderr_task.await.unwrap_or_default();
+        if exit.exit_code.unwrap_or(-1) != 0 {
+            anyhow::bail!(
+                "Failed to atomically write container file '{}': {}",
+                path,
+                String::from_utf8_lossy(&stderr).trim()
+            );
+        }
+        Ok(())
+    }
+
+    pub async fn container_read_dir(
+        &self,
+        connection_id: &str,
+        path: &str,
+    ) -> anyhow::Result<Vec<crate::remote_ssh::types::RemoteDirEntry>> {
+        let path = self.resolve_sftp_path(connection_id, path).await?;
+        let quoted = crate::remote_ssh::shell::quote_arg(&path);
+        let script = format!(
+            "dir={quoted}; \
+             for item in \"$dir\"/.[!.]* \"$dir\"/..?* \"$dir\"/*; do \
+               [ -e \"$item\" ] || [ -L \"$item\" ] || continue; \
+               name=${{item##*/}}; \
+               if [ -d \"$item\" ]; then kind=d; size=; \
+               elif [ -L \"$item\" ]; then kind=l; size=$(wc -c < \"$item\" 2>/dev/null || true); \
+               else kind=f; size=$(wc -c < \"$item\" 2>/dev/null || true); fi; \
+               mtime=$(stat -c %Y \"$item\" 2>/dev/null || stat -f %m \"$item\" 2>/dev/null || true); \
+               mode=$(stat -c %a \"$item\" 2>/dev/null || stat -f %Lp \"$item\" 2>/dev/null || true); \
+               printf '%s\\0%s\\0%s\\0%s\\0%s\\0%s\\0' \"$name\" \"$item\" \"$kind\" \"$size\" \"$mtime\" \"$mode\"; \
+             done"
+        );
+        let (stdout, stderr, status) = self.execute_workspace_bytes(connection_id, &script).await?;
+        if status != 0 {
+            anyhow::bail!(
+                "Failed to list container directory '{}': {}",
+                path,
+                String::from_utf8_lossy(&stderr).trim()
+            );
+        }
+        let stdout = String::from_utf8(stdout).with_context(|| {
+            format!(
+                "Container directory '{}' contains a filename that is not valid UTF-8",
+                path
+            )
+        })?;
+        parse_container_dir_output(&stdout)
+    }
+
+    pub async fn container_exists(&self, connection_id: &str, path: &str) -> anyhow::Result<bool> {
+        let path = self.resolve_sftp_path(connection_id, path).await?;
+        let command = format!(
+            "test -e {0} || test -L {0}",
+            crate::remote_ssh::shell::quote_arg(&path)
+        );
+        let (_, _, status) = self.execute_command(connection_id, &command).await?;
+        Ok(status == 0)
+    }
+
+    pub async fn container_mkdir(
+        &self,
+        connection_id: &str,
+        path: &str,
+        recursive: bool,
+    ) -> anyhow::Result<()> {
+        let path = self.resolve_sftp_path(connection_id, path).await?;
+        let flag = if recursive { "-p " } else { "" };
+        self.run_container_fs_command(
+            connection_id,
+            &format!("mkdir {flag}{}", crate::remote_ssh::shell::quote_arg(&path)),
+            "create directory",
+            &path,
+        )
+        .await
+    }
+
+    pub async fn container_remove(
+        &self,
+        connection_id: &str,
+        path: &str,
+        directory: bool,
+    ) -> anyhow::Result<()> {
+        let path = self.resolve_sftp_path(connection_id, path).await?;
+        let command = if directory {
+            format!("rmdir {}", crate::remote_ssh::shell::quote_arg(&path))
+        } else {
+            format!("rm -- {}", crate::remote_ssh::shell::quote_arg(&path))
+        };
+        self.run_container_fs_command(connection_id, &command, "remove", &path)
+            .await
+    }
+
+    pub async fn container_rename(
+        &self,
+        connection_id: &str,
+        old_path: &str,
+        new_path: &str,
+    ) -> anyhow::Result<()> {
+        let old_path = self.resolve_sftp_path(connection_id, old_path).await?;
+        let new_path = self.resolve_sftp_path(connection_id, new_path).await?;
+        let command = format!(
+            "mv -- {} {}",
+            crate::remote_ssh::shell::quote_arg(&old_path),
+            crate::remote_ssh::shell::quote_arg(&new_path)
+        );
+        self.run_container_fs_command(connection_id, &command, "rename", &old_path)
+            .await
+    }
+
+    pub async fn container_stat(
+        &self,
+        connection_id: &str,
+        path: &str,
+    ) -> anyhow::Result<Option<crate::remote_ssh::types::RemoteFileEntry>> {
+        let path = self.resolve_sftp_path(connection_id, path).await?;
+        let quoted = crate::remote_ssh::shell::quote_arg(&path);
+        let script = format!(
+            "item={quoted}; [ -e \"$item\" ] || [ -L \"$item\" ] || exit 44; \
+             name=${{item##*/}}; \
+             if [ -d \"$item\" ]; then kind=d; size=; \
+             elif [ -L \"$item\" ]; then kind=l; size=$(wc -c < \"$item\" 2>/dev/null || true); \
+             else kind=f; size=$(wc -c < \"$item\" 2>/dev/null || true); fi; \
+             mtime=$(stat -c %Y \"$item\" 2>/dev/null || stat -f %m \"$item\" 2>/dev/null || true); \
+             mode=$(stat -c %a \"$item\" 2>/dev/null || stat -f %Lp \"$item\" 2>/dev/null || true); \
+             printf '%s\\0%s\\0%s\\0%s\\0%s\\0%s\\0' \"$name\" \"$item\" \"$kind\" \"$size\" \"$mtime\" \"$mode\""
+        );
+        let (stdout, stderr, status) = self.execute_workspace_bytes(connection_id, &script).await?;
+        if status == 44 {
+            return Ok(None);
+        }
+        if status != 0 {
+            anyhow::bail!(
+                "Failed to stat container path '{}': {}",
+                path,
+                String::from_utf8_lossy(&stderr).trim()
+            );
+        }
+        let stdout = String::from_utf8(stdout).with_context(|| {
+            format!(
+                "Container path '{}' is not representable as a UTF-8 workspace path",
+                path
+            )
+        })?;
+        parse_container_file_output(&stdout)
+    }
+
+    async fn run_container_fs_command(
+        &self,
+        connection_id: &str,
+        command: &str,
+        operation: &str,
+        path: &str,
+    ) -> anyhow::Result<()> {
+        let (_, stderr, status) = self.execute_command(connection_id, command).await?;
+        if status != 0 {
+            anyhow::bail!(
+                "Failed to {} container path '{}': {}",
+                operation,
+                path,
+                stderr.trim()
+            );
+        }
+        Ok(())
     }
 
     // ============================================================================
@@ -2145,7 +4527,14 @@ impl SSHConnectionManager {
             let conn = guard
                 .get(connection_id)
                 .ok_or_else(|| anyhow!("Connection {} not found", connection_id))?;
-            conn.handle.clone()
+            if conn.effective_config.uses_docker_exec() {
+                anyhow::bail!(
+                    "SFTP is unavailable for Docker container workspaces; use workspace file operations"
+                );
+            }
+            conn.handle
+                .clone()
+                .ok_or_else(|| anyhow!("SSH handle is unavailable for {}", connection_id))?
         };
 
         // Open a channel and request SFTP subsystem
@@ -2475,7 +4864,7 @@ impl SSHConnectionManager {
         cols: u32,
         rows: u32,
     ) -> anyhow::Result<PTYSession> {
-        let handle = {
+        let (handle, config) = {
             let guard = self.connections.read().await;
             let conn = guard
                 .get(connection_id)
@@ -2483,7 +4872,12 @@ impl SSHConnectionManager {
             if !conn.alive.load(Ordering::SeqCst) {
                 return Err(anyhow!("Connection {} is not alive", connection_id));
             }
-            conn.handle.clone()
+            (
+                conn.handle
+                    .clone()
+                    .ok_or_else(|| anyhow!("SSH handle is unavailable for {}", connection_id))?,
+                conn.effective_config.clone(),
+            )
         };
 
         // Open a session channel
@@ -2498,16 +4892,36 @@ impl SSHConnectionManager {
             .await
             .map_err(|e| anyhow!("Failed to request PTY: {}", e))?;
 
-        // Start shell — `false` = don't wait for reply
-        channel
-            .request_shell(false)
-            .await
-            .map_err(|e| anyhow!("Failed to start shell: {}", e))?;
+        if config.uses_docker_exec() {
+            let container = config
+                .container
+                .as_ref()
+                .expect("docker exec connection must have container config");
+            // `<shell> -lc <shell>` looks like a shell inside a shell, but the
+            // outer one execs the inner as the final simple command of `-c`, so
+            // one process ends up on the PTY — with the login profile already
+            // sourced, which a bare `docker exec -it … sh` would skip.
+            let command = docker_exec_host_command(container, &container.shell, true);
+            channel
+                .exec(false, command)
+                .await
+                .map_err(|e| anyhow!("Failed to start Docker container shell: {}", e))?;
+        } else {
+            // Start shell — `false` = don't wait for reply
+            channel
+                .request_shell(false)
+                .await
+                .map_err(|e| anyhow!("Failed to start shell: {}", e))?;
+        }
 
         let still_connected = {
             let guard = self.connections.read().await;
             guard.get(connection_id).is_some_and(|conn| {
-                conn.alive.load(Ordering::SeqCst) && Arc::ptr_eq(&conn.handle, &handle)
+                conn.alive.load(Ordering::SeqCst)
+                    && conn
+                        .handle
+                        .as_ref()
+                        .is_some_and(|active| Arc::ptr_eq(active, &handle))
             })
         };
         if !still_connected {
@@ -2827,8 +5241,22 @@ fn sftp_mkdir_all_prefixes(path: &str) -> Vec<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::remote_ssh::types::{RemoteWorkspace, SavedAuthType, SavedConnection};
+    use crate::remote_ssh::types::RemoteWorkspace;
     use std::time::{SystemTime, UNIX_EPOCH};
+
+    #[test]
+    #[cfg(feature = "ssh_config")]
+    fn ssh_config_fallback_accepts_utf8_bom_and_defaults_to_agent() {
+        let content = strip_utf8_bom(
+            "\u{feff}Host 跳板\n  HostName jump.example.com\n  User 构建\n".to_string(),
+        );
+        let entries = parse_ssh_config_manually(&content);
+
+        assert_eq!(entries.len(), 1);
+        assert_eq!(entries[0].host, "跳板");
+        assert_eq!(entries[0].user.as_deref(), Some("构建"));
+        assert_eq!(entries[0].agent, Some(true));
+    }
 
     fn test_data_dir(name: &str) -> std::path::PathBuf {
         let nanos = SystemTime::now()
@@ -2843,32 +5271,412 @@ mod tests {
         ))
     }
 
+    #[test]
+    fn parses_proxy_jump_alias_user_port_and_ipv6() {
+        assert_eq!(
+            parse_proxy_jump_token("jump-a").unwrap(),
+            (None, "jump-a".to_string(), None)
+        );
+        assert_eq!(
+            parse_proxy_jump_token("ops@jump.example:2222").unwrap(),
+            (
+                Some("ops".to_string()),
+                "jump.example".to_string(),
+                Some(2222)
+            )
+        );
+        assert_eq!(
+            parse_proxy_jump_token("root@[2001:db8::10]:2200").unwrap(),
+            (
+                Some("root".to_string()),
+                "2001:db8::10".to_string(),
+                Some(2200)
+            )
+        );
+    }
+
+    #[test]
+    fn parses_docker_published_ipv4_and_ipv6_endpoints() {
+        assert_eq!(
+            parse_docker_published_endpoint("0.0.0.0:22022\n[::]:22022\n"),
+            Some(("127.0.0.1".to_string(), 22022))
+        );
+        assert_eq!(
+            parse_docker_published_endpoint("192.168.50.2:22023\n"),
+            Some(("192.168.50.2".to_string(), 22023))
+        );
+        assert_eq!(
+            parse_docker_published_endpoint("[fd00::10]:22024\n"),
+            Some(("fd00::10".to_string(), 22024))
+        );
+    }
+
+    #[test]
+    fn docker_exec_command_quotes_all_user_controlled_values() {
+        let container = ContainerWorkspaceConfig {
+            name: "dev container".to_string(),
+            access: ContainerAccess::DockerExec,
+            local: false,
+            docker_path: "/opt/docker cli".to_string(),
+            shell: "/bin/bash".to_string(),
+            user: Some("build user".to_string()),
+            interactive: true,
+        };
+
+        assert_eq!(
+            docker_exec_host_command(&container, "printf '%s' \"$HOME\"", false),
+            "'/opt/docker cli' 'exec' '-i' '--user' 'build user' 'dev container' '/bin/bash' '-lc' 'printf '\\''%s'\\'' \"$HOME\"'"
+        );
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn pid_file_sweep_spares_processes_that_are_still_running() {
+        // The whole point of the pid file is cancellation, so removing one that
+        // is still in use silently breaks interrupt/kill for a command that may
+        // legitimately run for hours. Liveness, never age.
+        let live = format!("/tmp/.bitfun-exec-live-{}.pid", uuid::Uuid::new_v4());
+        let dead = format!("/tmp/.bitfun-exec-dead-{}.pid", uuid::Uuid::new_v4());
+        std::fs::write(&live, std::process::id().to_string()).expect("write live pid file");
+        // Reaped immediately, so its pid is guaranteed not to be running.
+        let mut corpse = std::process::Command::new("true")
+            .spawn()
+            .expect("spawn short-lived process");
+        let dead_pid = corpse.id();
+        corpse.wait().expect("reap");
+        std::fs::write(&dead, dead_pid.to_string()).expect("write dead pid file");
+
+        let output = std::process::Command::new("sh")
+            .args(["-lc", &stale_pid_file_sweep()])
+            .output()
+            .expect("run sweep");
+
+        assert!(output.status.success());
+        let live_exists = std::path::Path::new(&live).exists();
+        let dead_exists = std::path::Path::new(&dead).exists();
+        let _ = std::fs::remove_file(&live);
+        let _ = std::fs::remove_file(&dead);
+        assert!(live_exists, "a running command's pid file must survive");
+        assert!(!dead_exists, "an orphaned pid file must be removed");
+    }
+
+    #[test]
+    fn stage_tagging_is_readable_without_changing_the_error_text() {
+        let original = anyhow!("Jump 1 (deploy@bastion:22) connection or authentication failed")
+            .context("Could not connect to the Docker host");
+        let expected_display = format!("{original}");
+        let expected_alternate = format!("{original:#}");
+
+        let tagged = tag_failed_stage("jump-1", original);
+
+        // The tag exists only for attribution. An anyhow *context* would have
+        // replaced the message the user sees with "connection stage 'jump-1'".
+        assert_eq!(failed_stage_of(&tagged), Some("jump-1"));
+        assert_eq!(format!("{tagged}"), expected_display);
+        assert_eq!(format!("{tagged:#}"), expected_alternate);
+
+        // Still findable once a caller layers its own context on top.
+        let wrapped = tagged.context("Workspace connection failed");
+        assert_eq!(failed_stage_of(&wrapped), Some("jump-1"));
+        assert_eq!(format!("{wrapped}"), "Workspace connection failed");
+    }
+
+    #[test]
+    fn supervised_container_command_tracks_and_signals_the_container_process_group() {
+        let container = ContainerWorkspaceConfig {
+            name: "dev".to_string(),
+            access: ContainerAccess::DockerExec,
+            local: true,
+            docker_path: "docker".to_string(),
+            shell: "/bin/bash".to_string(),
+            user: None,
+            interactive: true,
+        };
+        let (wrapped, pid_file) =
+            supervised_container_command(&container, "printf '路径'; sleep 30");
+        let signal =
+            container_signal_command(&pid_file, crate::remote_ssh::WorkspaceProcessSignal::Kill);
+
+        assert!(pid_file.starts_with("/tmp/.bitfun-exec-"));
+        assert!(wrapped.contains("setsid '/bin/bash' -lc"));
+        assert!(wrapped.contains("|| tracking=0"));
+        assert!(wrapped.contains("printf '%s' \"$child\" > \"$pid_file\""));
+        assert!(signal.contains("[ -s \"$pid_file\" ] || exit 75"));
+        assert!(signal.contains("kill -KILL -- \"-$pid\""));
+        assert!(signal.contains("kill -KILL \"$pid\""));
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn supervised_container_command_keeps_working_without_a_writable_pid_location() {
+        let container = ContainerWorkspaceConfig {
+            name: "dev".to_string(),
+            access: ContainerAccess::DockerExec,
+            local: true,
+            docker_path: "docker".to_string(),
+            shell: "/bin/sh".to_string(),
+            user: None,
+            interactive: true,
+        };
+        let wrapped = supervised_container_command_with_pid_file(
+            &container,
+            "printf 'compatible'",
+            "/dev/null/bitfun-exec.pid",
+        );
+        let output = std::process::Command::new("sh")
+            .args(["-lc", &wrapped])
+            .output()
+            .unwrap();
+
+        assert!(output.status.success());
+        assert_eq!(output.stdout, b"compatible");
+        assert!(
+            String::from_utf8_lossy(&output.stderr).trim().is_empty(),
+            "process-control fallback must not add command stderr"
+        );
+    }
+
+    #[test]
+    fn parses_container_directory_entry_with_newline_and_unit_separator() {
+        let entries = parse_container_dir_output(
+            "src\n\u{1f}name\0/workspace/src\n\u{1f}name\0d\0\01720000000\0755\0",
+        )
+        .unwrap();
+        let entry = &entries[0];
+
+        assert_eq!(entry.name, "src\n\u{1f}name");
+        assert_eq!(entry.path, "/workspace/src\n\u{1f}name");
+        assert!(entry.is_dir);
+        assert_eq!(entry.modified, Some(1_720_000_000_000));
+        assert_eq!(entry.permissions.as_deref(), Some("755"));
+    }
+
     #[tokio::test]
-    async fn prunes_password_connection_without_vault_entry() {
-        let dir = test_data_dir("missing-vault");
+    #[ignore = "requires BITFUN_TEST_DOCKER_CONTAINER to name a running container"]
+    async fn local_docker_workspace_round_trip() {
+        let Ok(container_name) = std::env::var("BITFUN_TEST_DOCKER_CONTAINER") else {
+            return;
+        };
+        let dir = test_data_dir("local-docker-round-trip");
+        tokio::fs::create_dir_all(&dir).await.unwrap();
+        let manager = SSHConnectionManager::new(dir.clone());
+        let connection_id = "docker-local-contract";
+
+        manager
+            .connect(SSHConnectionConfig {
+                id: connection_id.to_string(),
+                name: container_name.clone(),
+                host: String::new(),
+                port: 22,
+                username: String::new(),
+                auth: SSHAuthMethod::PrivateKey {
+                    key_path: String::new(),
+                    passphrase: None,
+                    certificate_path: None,
+                },
+                default_workspace: Some("/tmp/bitfun-remote-workspace".to_string()),
+                proxy_jump: None,
+                container: Some(ContainerWorkspaceConfig {
+                    name: container_name,
+                    access: ContainerAccess::DockerExec,
+                    local: true,
+                    docker_path: "docker".to_string(),
+                    shell: "/bin/sh".to_string(),
+                    user: None,
+                    interactive: true,
+                }),
+                options: Default::default(),
+            })
+            .await
+            .unwrap();
+
+        {
+            use tokio::io::{AsyncReadExt, AsyncWriteExt};
+
+            let transport = manager
+                .open_workspace_stdio(
+                    connection_id,
+                    "read value; printf 'stdout:%s' \"$value\"; printf 'stderr:%s' \"$value\" >&2; exit 7",
+                )
+                .await
+                .unwrap();
+            let (mut stdin, mut stdout, mut stderr, _control, completion) = transport.into_parts();
+            stdin.write_all(b"transport-contract\n").await.unwrap();
+            stdin.shutdown().await.unwrap();
+            let mut stdout_bytes = Vec::new();
+            let mut stderr_bytes = Vec::new();
+            stdout.read_to_end(&mut stdout_bytes).await.unwrap();
+            stderr.read_to_end(&mut stderr_bytes).await.unwrap();
+            let exit = completion.wait().await;
+            assert_eq!(stdout_bytes, b"stdout:transport-contract");
+            assert_eq!(stderr_bytes, b"stderr:transport-contract");
+            assert_eq!(exit.exit_code, Some(7));
+        }
+
+        manager
+            .container_mkdir(connection_id, "/tmp/bitfun-remote-workspace", true)
+            .await
+            .unwrap();
+        let cancellation = tokio_util::sync::CancellationToken::new();
+        let cancel_after_start = cancellation.clone();
+        tokio::spawn(async move {
+            tokio::time::sleep(Duration::from_millis(100)).await;
+            cancel_after_start.cancel();
+        });
+        let cancelled_command = manager
+            .execute_command_with_options(
+                connection_id,
+                "trap '' INT; sleep 30; touch /tmp/bitfun-remote-workspace/cancel-leaked",
+                SSHCommandOptions {
+                    timeout_ms: Some(5_000),
+                    cancellation_token: Some(cancellation),
+                },
+            )
+            .await
+            .unwrap();
+        assert!(cancelled_command.interrupted);
+        tokio::time::sleep(Duration::from_millis(200)).await;
+        assert!(
+            !manager
+                .container_exists(connection_id, "/tmp/bitfun-remote-workspace/cancel-leaked")
+                .await
+                .unwrap(),
+            "cancelled Docker command must not continue inside the container"
+        );
+        let original = b"BitFun container workspace\0binary";
+        manager
+            .container_write_file(
+                connection_id,
+                "/tmp/bitfun-remote-workspace/source.bin",
+                original,
+            )
+            .await
+            .unwrap();
+        assert_eq!(
+            manager
+                .container_read_file(connection_id, "/tmp/bitfun-remote-workspace/source.bin")
+                .await
+                .unwrap(),
+            original
+        );
+        manager
+            .container_write_file(
+                connection_id,
+                "/tmp/bitfun-remote-workspace/atomic.bin",
+                original,
+            )
+            .await
+            .unwrap();
+        let replacement = vec![b'x'; 600_000];
+        let cancelled = manager
+            .container_write_file_with_progress(
+                connection_id,
+                "/tmp/bitfun-remote-workspace/atomic.bin",
+                &replacement,
+                &mut |written, _| written < 262_144,
+            )
+            .await;
+        assert!(cancelled.is_err());
+        tokio::time::sleep(Duration::from_millis(200)).await;
+        assert_eq!(
+            manager
+                .container_read_file(connection_id, "/tmp/bitfun-remote-workspace/atomic.bin")
+                .await
+                .unwrap(),
+            original,
+            "cancelled upload must not replace the existing destination"
+        );
+        manager
+            .container_rename(
+                connection_id,
+                "/tmp/bitfun-remote-workspace/source.bin",
+                "/tmp/bitfun-remote-workspace/renamed.bin",
+            )
+            .await
+            .unwrap();
+        let entries = manager
+            .container_read_dir(connection_id, "/tmp/bitfun-remote-workspace")
+            .await
+            .unwrap();
+        assert!(entries.iter().any(|entry| entry.name == "renamed.bin"));
+        assert_eq!(
+            manager
+                .container_stat(connection_id, "/tmp/bitfun-remote-workspace/renamed.bin")
+                .await
+                .unwrap()
+                .and_then(|entry| entry.size),
+            Some(original.len() as u64)
+        );
+        manager
+            .container_remove(
+                connection_id,
+                "/tmp/bitfun-remote-workspace/renamed.bin",
+                false,
+            )
+            .await
+            .unwrap();
+        assert!(!manager
+            .container_exists(connection_id, "/tmp/bitfun-remote-workspace/renamed.bin")
+            .await
+            .unwrap());
+
+        manager.disconnect(connection_id).await.unwrap();
+        let _ = tokio::fs::remove_dir_all(&dir).await;
+    }
+
+    #[tokio::test]
+    async fn retains_legacy_password_connection_and_workspace_without_vault_entry() {
+        let dir = test_data_dir("legacy-missing-vault");
         tokio::fs::create_dir_all(&dir).await.unwrap();
         let manager = SSHConnectionManager::new(dir.clone());
 
-        let saved = vec![SavedConnection {
-            id: "ssh-root@example.com:22".to_string(),
-            name: "root@example.com".to_string(),
-            host: "example.com".to_string(),
-            port: 22,
-            username: "root".to_string(),
-            auth_type: SavedAuthType::Password,
-            default_workspace: None,
-            last_connected: Some(1),
-        }];
         tokio::fs::write(
             dir.join("ssh_connections.json"),
-            serde_json::to_string_pretty(&saved).unwrap(),
+            serde_json::to_string_pretty(&serde_json::json!([{
+                "id": "ssh-root@example.com:22",
+                "name": "root@example.com",
+                "host": "example.com",
+                "port": 22,
+                "username": "root",
+                "authType": { "type": "Password" },
+                "defaultWorkspace": "/root/project",
+                "lastConnected": 1
+            }]))
+            .unwrap(),
+        )
+        .await
+        .unwrap();
+        tokio::fs::write(
+            dir.join("remote_workspace.json"),
+            serde_json::to_string_pretty(&serde_json::json!([{
+                "connectionId": "ssh-root@example.com:22",
+                "remotePath": "/root/project",
+                "connectionName": "root@example.com",
+                "sshHost": "example.com"
+            }]))
+            .unwrap(),
         )
         .await
         .unwrap();
 
         manager.load_saved_connections().await.unwrap();
+        manager.load_remote_workspace().await.unwrap();
+        let removed = manager
+            .prune_remote_workspaces_without_saved_connections()
+            .await
+            .unwrap();
 
-        assert!(manager.get_saved_connections().await.is_empty());
+        let saved = manager.get_saved_connections().await;
+        assert_eq!(saved.len(), 1);
+        assert_eq!(saved[0].id, "ssh-root@example.com");
+        assert_eq!(saved[0].default_workspace.as_deref(), Some("/root/project"));
+        assert!(saved[0].proxy_jump.is_none());
+        assert!(saved[0].container.is_none());
+        assert!(removed.is_empty());
+        let workspaces = manager.get_remote_workspaces().await;
+        assert_eq!(workspaces.len(), 1);
+        assert_eq!(workspaces[0].connection_id, "ssh-root@example.com");
+        assert_eq!(workspaces[0].remote_path, "/root/project");
         let _ = tokio::fs::remove_dir_all(&dir).await;
     }
 
@@ -2889,6 +5697,9 @@ mod tests {
                     password: String::new(),
                 },
                 default_workspace: None,
+                proxy_jump: None,
+                container: None,
+                options: Default::default(),
             })
             .await;
 
@@ -2914,6 +5725,9 @@ mod tests {
                     password: "secret".to_string(),
                 },
                 default_workspace: Some("/root/project".to_string()),
+                proxy_jump: Some("jump-a,jump-b".to_string()),
+                container: None,
+                options: Default::default(),
             })
             .await
             .unwrap();
@@ -2927,11 +5741,143 @@ mod tests {
         assert_eq!(restored.host, "example.com");
         assert_eq!(restored.username, "root");
         assert_eq!(restored.default_workspace.as_deref(), Some("/root/project"));
+        assert_eq!(restored.proxy_jump.as_deref(), Some("jump-a,jump-b"));
         match restored.auth {
             SSHAuthMethod::Password { password } => assert_eq!(password, "secret"),
             other => panic!("expected password auth, got {:?}", other),
         }
 
+        let _ = tokio::fs::remove_dir_all(&dir).await;
+    }
+
+    #[tokio::test]
+    async fn restores_legacy_local_docker_profile_without_password_vault_entry() {
+        let dir = test_data_dir("legacy-local-docker-password-placeholder");
+        tokio::fs::create_dir_all(&dir).await.unwrap();
+        let manager = SSHConnectionManager::new(dir.clone());
+
+        tokio::fs::write(
+            dir.join("ssh_connections.json"),
+            serde_json::to_string_pretty(&serde_json::json!([{
+                "id": "docker-local-legacy",
+                "name": "local container",
+                "host": "",
+                "port": 22,
+                "username": "",
+                "authType": { "type": "Password" },
+                "defaultWorkspace": "/workspace",
+                "lastConnected": 1,
+                "container": {
+                    "name": "dev",
+                    "access": "docker-exec",
+                    "local": true
+                }
+            }]))
+            .unwrap(),
+        )
+        .await
+        .unwrap();
+
+        manager.load_saved_connections().await.unwrap();
+        let restored = manager
+            .load_connection_config_from_saved("docker-local-legacy")
+            .await
+            .unwrap()
+            .expect("legacy local Docker profile must remain restorable");
+
+        assert!(restored.uses_local_docker());
+        assert!(matches!(
+            restored.auth,
+            SSHAuthMethod::Password { ref password } if password.is_empty()
+        ));
+        assert_eq!(
+            restored.options,
+            crate::remote_ssh::types::SSHConnectionOptions::default()
+        );
+        let _ = tokio::fs::remove_dir_all(&dir).await;
+    }
+
+    #[tokio::test]
+    async fn saved_interactive_profile_never_persists_challenge_responses() {
+        let dir = test_data_dir("interactive-secrets");
+        tokio::fs::create_dir_all(&dir).await.unwrap();
+        let manager = SSHConnectionManager::new(dir.clone());
+
+        manager
+            .save_connection(&SSHConnectionConfig {
+                id: "ssh-alice@example.com".to_string(),
+                name: "interactive".to_string(),
+                host: "example.com".to_string(),
+                port: 22,
+                username: "alice".to_string(),
+                auth: SSHAuthMethod::KeyboardInteractive {
+                    responses: vec!["password-secret".to_string(), "123456".to_string()],
+                },
+                default_workspace: Some("/workspace".to_string()),
+                proxy_jump: Some("jump.example.com".to_string()),
+                container: None,
+                options: Default::default(),
+            })
+            .await
+            .unwrap();
+
+        let persisted = tokio::fs::read_to_string(dir.join("ssh_connections.json"))
+            .await
+            .unwrap();
+        assert!(persisted.contains("KeyboardInteractive"));
+        assert!(!persisted.contains("password-secret"));
+        assert!(!persisted.contains("123456"));
+
+        let restored = manager
+            .load_connection_config_from_saved("ssh-alice@example.com")
+            .await
+            .unwrap()
+            .unwrap();
+        assert!(matches!(
+            restored.auth,
+            SSHAuthMethod::KeyboardInteractive { ref responses } if responses.is_empty()
+        ));
+        let _ = tokio::fs::remove_dir_all(&dir).await;
+    }
+
+    #[tokio::test]
+    async fn saved_agent_profile_preserves_identity_selection() {
+        let dir = test_data_dir("agent-profile");
+        tokio::fs::create_dir_all(&dir).await.unwrap();
+        let manager = SSHConnectionManager::new(dir.clone());
+
+        manager
+            .save_connection(&SSHConnectionConfig {
+                id: "ssh-agent@example.com".to_string(),
+                name: "agent".to_string(),
+                host: "example.com".to_string(),
+                port: 22,
+                username: "agent".to_string(),
+                auth: SSHAuthMethod::Agent {
+                    key_fingerprint: Some("SHA256:test-fingerprint".to_string()),
+                    fallback_key_path: Some("~/.ssh/custom-fallback".to_string()),
+                },
+                default_workspace: None,
+                proxy_jump: None,
+                container: None,
+                options: Default::default(),
+            })
+            .await
+            .unwrap();
+
+        let restored = manager
+            .load_connection_config_from_saved("ssh-agent@example.com")
+            .await
+            .unwrap()
+            .unwrap();
+        assert!(matches!(
+            restored.auth,
+            SSHAuthMethod::Agent {
+                ref key_fingerprint,
+                ref fallback_key_path,
+            } if key_fingerprint.as_deref() == Some("SHA256:test-fingerprint")
+                && fallback_key_path.as_deref() == Some("~/.ssh/custom-fallback")
+        ));
         let _ = tokio::fs::remove_dir_all(&dir).await;
     }
 

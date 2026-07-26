@@ -7,6 +7,35 @@ import { createPortal } from 'react-dom';
 import { useI18n } from '@/infrastructure/i18n';
 import './Modal.scss';
 
+// Keep in sync with modal-overlay-exit/modal-dialog-exit in Modal.scss.
+const MODAL_EXIT_DURATION_MS = 180;
+
+/**
+ * Ref-counted `body` scroll lock, shared by every Modal instance.
+ *
+ * Modals stack — a dialog opening a confirmation on top of itself is routine —
+ * and each one clearing `overflow` on its own would unlock the page while the
+ * others are still open. The 180 ms exit delay widens that window: the inner
+ * modal's cleanup lands well after it has visually gone.
+ */
+let bodyScrollLockCount = 0;
+
+function lockBodyScroll(): () => void {
+  bodyScrollLockCount += 1;
+  document.body.style.overflow = 'hidden';
+  let released = false;
+  return () => {
+    if (released) {
+      return;
+    }
+    released = true;
+    bodyScrollLockCount = Math.max(0, bodyScrollLockCount - 1);
+    if (bodyScrollLockCount === 0) {
+      document.body.style.overflow = '';
+    }
+  };
+}
+
 export interface ModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -54,6 +83,7 @@ export const Modal: React.FC<ModalProps> = ({
   ariaLabelledBy,
 }) => {
   const { t } = useI18n('components');
+  const [isPresent, setIsPresent] = useState(isOpen);
   const [position, setPosition] = useState<{ x: number; y: number } | null>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
@@ -65,18 +95,32 @@ export const Modal: React.FC<ModalProps> = ({
   const headerRef = useRef<HTMLDivElement>(null);
   const previousFocusRef = useRef<HTMLElement | null>(null);
   const generatedTitleId = useId();
-  
+  const isExiting = !isOpen && isPresent;
+
   useEffect(() => {
     if (isOpen) {
-      document.body.style.overflow = 'hidden';
-    } else {
-      document.body.style.overflow = '';
+      setIsPresent(true);
+      return;
     }
 
-    return () => {
-      document.body.style.overflow = '';
-    };
-  }, [isOpen]);
+    if (!isPresent) {
+      return;
+    }
+
+    const exitTimer = window.setTimeout(() => {
+      setIsPresent(false);
+    }, MODAL_EXIT_DURATION_MS);
+
+    return () => window.clearTimeout(exitTimer);
+  }, [isOpen, isPresent]);
+
+  useEffect(() => {
+    if (!isOpen && !isPresent) {
+      return;
+    }
+
+    return lockBodyScroll();
+  }, [isOpen, isPresent]);
 
   useEffect(() => {
     const handleEscape = (e: KeyboardEvent) => {
@@ -202,11 +246,11 @@ export const Modal: React.FC<ModalProps> = ({
           height: modalHeight
         });
       }
-    } else if (!isOpen) {
+    } else if (!isOpen && !isPresent) {
       setPosition(null);
       setDimensions(null);
     }
-  }, [isOpen, draggable, resizable]);
+  }, [isOpen, isPresent, draggable, resizable]);
 
   const handleResizeStart = useCallback((e: React.MouseEvent, direction: string) => {
     if (!resizable || !modalRef.current) return;
@@ -297,7 +341,7 @@ export const Modal: React.FC<ModalProps> = ({
     }
   }, [isResizing, handleResizeMove, handleResizeEnd]);
 
-  if (!isOpen) return null;
+  if (!isOpen && !isPresent) return null;
 
   const appliedStyle = (draggable || resizable) && position ? {
     position: 'fixed' as const,
@@ -313,16 +357,18 @@ export const Modal: React.FC<ModalProps> = ({
       className={[
         'modal-overlay',
         placement !== 'center' ? `modal-overlay--${placement}` : '',
+        isExiting ? 'modal-overlay--exiting' : '',
         overlayClassName ?? '',
       ]
         .filter(Boolean)
         .join(' ')}
-      onClick={closeOnOverlayClick ? onClose : undefined}
+      onClick={!isExiting && closeOnOverlayClick ? onClose : undefined}
     >
       <div
         ref={modalRef}
         role="dialog"
         aria-modal="true"
+        aria-hidden={isExiting || undefined}
         aria-label={ariaLabel}
         aria-labelledby={ariaLabelledBy ?? (title ? generatedTitleId : undefined)}
         tabIndex={-1}
@@ -333,6 +379,7 @@ export const Modal: React.FC<ModalProps> = ({
           isDragging ? 'modal--dragging' : '',
           resizable ? 'modal--resizable' : '',
           isResizing ? 'modal--resizing' : '',
+          isExiting ? 'modal--exiting' : '',
           contentInset ? 'modal--content-inset' : '',
           showCloseButton ? 'modal--with-close' : '',
         ]

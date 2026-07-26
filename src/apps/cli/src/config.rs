@@ -47,6 +47,8 @@ pub(crate) struct BehaviorConfig {
     pub confirm_dangerous: bool,
     /// Default Agent
     pub default_agent: String,
+    /// Check the official Linux release and fallback mirror for CLI updates.
+    pub auto_update: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -90,6 +92,7 @@ impl Default for BehaviorConfig {
             auto_save: true,
             confirm_dangerous: true,
             default_agent: "agentic".to_string(),
+            auto_update: true,
         }
     }
 }
@@ -203,6 +206,7 @@ mod tests {
         assert!(config.behavior.auto_save);
         assert!(config.behavior.confirm_dangerous);
         assert_eq!(config.behavior.default_agent, "agentic");
+        assert!(config.behavior.auto_update);
         assert_eq!(config.workspace.default_path, ".");
         assert_eq!(
             config.workspace.exclude_patterns,

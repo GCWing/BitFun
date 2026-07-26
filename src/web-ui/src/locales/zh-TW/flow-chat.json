@@ -534,7 +534,8 @@
     "openWorkspaceFolderFailed": "開啟工作區資料夾失敗：{{error}}",
     "spaceToActivate": "按<space>空格鍵</space>快速鍵入",
     "assistantPlaceholder": "傳訊息給 {{name}}...",
-    "sendHint": "Enter 傳送 / Ctrl+Enter 或 Shift+Enter 換行"
+    "sendHint": "Enter 傳送 / Ctrl+Enter 或 Shift+Enter 換行",
+    "voiceInput": { "start": "開始語音輸入", "stop": "停止錄音", "preparing": "正在準備麥克風", "transcribing": "正在轉寫", "disabled": "語音輸入已關閉", "unsupported": "目前無法使用麥克風", "modelMissing": "請先下載本地語音模型", "cloudPending": "雲端轉寫已設定，但轉寫通路尚未接入", "permissionDenied": "麥克風權限被拒絕", "deviceDisconnected": "所選麥克風已中斷連線", "lowVolume": "沒有偵測到聲音，請檢查所選麥克風。", "failed": "語音輸入失敗", "empty": "沒有辨識到語音", "transcribeOnly": "插入轉寫文字", "transcribeAndSend": "轉寫並傳送" }
   },
   "workspaceStrip": {
     "branchTooltipUnavailable": "非 Git 存放庫或目前無分支"
@@ -605,22 +606,22 @@
       "changeFailed": "切換權限模式失敗。",
       "ask": {
         "label": "需要確認",
-        "description": "低風險讀取、瀏覽、Task 和 Skill 自動允許；修改檔案和執行命令需要確認。"
+        "description": "外部存取、修改檔案和執行命令需要確認。"
       },
       "auto": {
         "label": "自動批准",
-        "description": "自動批准需要確認的請求；明確拒絕仍然生效。"
+        "description": "自動批准需要確認的請求。"
       },
       "fullAccess": {
         "label": "完全存取",
-        "description": "預設允許工具執行；產品限制和系統權限仍然生效。"
+        "description": "預設允許工具執行，無需確認。"
       },
       "acp": {
         "label": "ACP 控制",
         "tooltip": "此工作階段的權限由 ACP 用戶端控制。"
       },
       "fullAccessWarningTitle": "啟用完全存取？",
-      "fullAccessWarningMessage": "完全存取會允許工具讀取和寫入檔案、執行命令及調用整合，不再逐次詢問。明確拒絕規則、產品限制和作業系統權限仍然生效。",
+      "fullAccessWarningMessage": "完全存取會預設允許工具執行，不再逐次確認。",
       "fullAccessConfirm": "啟用完全存取",
       "cancel": "取消"
     },
@@ -698,6 +699,8 @@
     "currentMode": "目前模式: {{mode}}",
     "noMatchingMode": "沒有匹配的模式",
     "noMatchingCommand": "沒有匹配的命令",
+    "nativeCommandChoiceNotSaved": "本次仍會執行該命令，但未能儲存這次衝突選擇。",
+    "nativeCommandReconfirmationRequired": "先前選擇的外部命令已無法使用。請從斜線選單中選擇 BitFun 命令後再執行。",
     "selectHint": "↑↓ 選擇 · Enter 確認 · Esc 取消",
     "current": "目前",
     "computerUseDisabled": "已在「設定 → 工作階段權限」中停用 Computer Use",
@@ -743,7 +746,10 @@
     "usageFailed": "用量報告產生失敗",
     "mcpPromptMissingArgs": "此 MCP 提示詞需要參數：{{args}}",
     "mcpPromptFailed": "MCP 提示詞執行失敗",
-    "loadingMcpPrompts": "正在載入 MCP 提示詞..."
+    "loadingMcpPrompts": "正在載入 MCP 提示詞...",
+    "externalCommandsLoading": "正在載入相容命令...",
+    "externalCommandsHostUnavailable": "目前主機不支援外部命令。",
+    "externalCommandsLoadFailed": "外部命令載入失敗，請重新開啟命令選擇器重試。"
   },
   "planner": {
     "title": "任務規劃",
@@ -1534,6 +1540,11 @@
       "loadingPlan": "正在載入計劃...",
       "generating": "生成中...",
       "clickToOpenPlan": "點擊開啟計劃檔案",
+      "saveToProject": "儲存到專案",
+      "savingToProject": "正在儲存計劃到專案...",
+      "saveToProjectUnavailable": "需要工作區才能儲存計劃",
+      "saveToProjectSuccess": "計劃已儲存至 .bitfun/plans",
+      "saveToProjectFailed": "儲存計劃到專案失敗",
       "revealPlanInExplorer": "在檔案管理器中定位計劃檔案",
       "revealPlanUnavailable": "僅本機工作區支援在檔案管理器中定位計劃檔案",
       "remainingTodos": "剩餘 {{count}} 個待辦",

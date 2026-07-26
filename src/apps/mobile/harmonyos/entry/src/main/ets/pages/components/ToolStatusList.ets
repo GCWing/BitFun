@@ -53,7 +53,8 @@ interface ToolRenderEntry {
 export struct ToolStatusList {
   @Prop tools: RemoteToolStatusResponse[] = [];
   @Prop isBusy: boolean = false;
-  onApproveTool: (toolId: string) => void = (_toolId: string) => {};
+  onApproveTool: (toolId: string, updatedInput?: Object) => void =
+    (_toolId: string, _updatedInput?: Object) => {};
   onRejectTool: (toolId: string) => void = (_toolId: string) => {};
   onCancelTool: (toolId: string) => void = (_toolId: string) => {};
   onAnswerQuestion: (toolId: string, answers: RemoteQuestionAnswerPayload) => void =

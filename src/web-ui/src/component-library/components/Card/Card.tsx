@@ -41,6 +41,7 @@ export const Card = forwardRef<HTMLDivElement, CardProps>(({
   return (
     <div
       ref={ref}
+      data-mouse-glow-surface=""
       className={classNames}
       {...props}
     >

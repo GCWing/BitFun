@@ -45,7 +45,7 @@ resolver = "2"
 
 # Shared package metadata — single source of truth for version
 [workspace.package]
-version = "0.2.13" # x-release-please-version
+version = "0.2.14" # x-release-please-version
 authors = ["BitFun Team"]
 edition = "2021"
 
@@ -111,6 +111,7 @@ dashmap = "6"
 indexmap = "2"
 include_dir = "0.7"
 aes = "0.8"
+hmac = "0.12"
 hex = "0.4"
 chardetng = "0.1.17"
 encoding_rs = "0.8.35"
@@ -118,6 +119,7 @@ url = "2"
 
 # HTTP client
 reqwest = { version = "0.12", default-features = false, features = ["native-tls", "rustls-tls-native-roots", "json", "stream", "multipart"] }
+#reqwest = { version = "0.13.4", default-features = false, features = ["native-tls", "rustls", "http2", "json", "stream", "multipart", "query", "form"] }
 
 # Debug Log HTTP Server
 axum = { version = "0.8", features = ["json", "ws"] }
@@ -191,6 +193,7 @@ tauri-build = { git = "https://github.com/richerfu/tauri", branch = "feat/open-h
 tauri-plugin-global-shortcut = "2.3"
 napi-ohos = { version = "1.1" }
 napi-derive-ohos = { version = "1.1" }
+keepawake = "0.6.0"
 
 # Desktop support
 screenshots = "0.8"
@@ -242,6 +245,9 @@ qrcode = "0.14"
 # WebSocket client
 tokio-tungstenite = { version = "0.29", features = ["rustls-tls-native-roots"] }
 
+# Local speech recognition
+sherpa-onnx = "1.13.4"
+
 # MCP and remote runtimes
 rmcp = { version = "1.7", default-features = false, features = [
     "auth",
@@ -249,6 +255,7 @@ rmcp = { version = "1.7", default-features = false, features = [
     "client",
     "elicitation",
     "macros",
+    #"reqwest",
     "schemars",
     "server",
 ] }
@@ -259,6 +266,18 @@ russh-keys = "0.45"
 shellexpand = "3"
 ssh_config = "0.1"
 rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12"] }
+
+[patch.crates-io]
+# tao 0.35.3 can re-enter its Windows window callback while holding input locks.
+# Use the upstream fix until it is included in a crates.io release.
+wry = { git = "https://github.com/richerfu/wry"}
+tao = { git = "https://github.com/richerfu/tao", branch = "feat-ohos-webview"}
+openharmony-ability = {git = "https://github.com/harmony-contrib/openharmony-ability.git"}
+openharmony-ability-derive = {git = "https://github.com/harmony-contrib/openharmony-ability.git"}
+tauri = { git = "https://github.com/richerfu/tauri", branch = "feat/open-harmony"}
+tauri-runtime = { git = "https://github.com/richerfu/tauri", branch = "feat/open-harmony"}
+tauri-macros = { git = "https://github.com/richerfu/tauri", branch = "feat/open-harmony"}
+tauri-runtime-wry = { git = "https://github.com/richerfu/tauri", branch = "feat/open-harmony"}
 
 [profile.dev]
 incremental = true
@@ -275,13 +294,3 @@ lto = false
 codegen-units = 16
 strip = false
 incremental = true
-
-[patch.crates-io]
-wry = { git = "https://github.com/richerfu/wry"}
-tao = { git = "https://github.com/richerfu/tao", branch = "feat-ohos-webview"}
-openharmony-ability = {git = "https://github.com/harmony-contrib/openharmony-ability.git"}
-openharmony-ability-derive = {git = "https://github.com/harmony-contrib/openharmony-ability.git"}
-tauri = { git = "https://github.com/richerfu/tauri", branch = "feat/open-harmony"}
-tauri-runtime = { git = "https://github.com/richerfu/tauri", branch = "feat/open-harmony"}
-tauri-macros = { git = "https://github.com/richerfu/tauri", branch = "feat/open-harmony"}
-tauri-runtime-wry = { git = "https://github.com/richerfu/tauri", branch = "feat/open-harmony"}

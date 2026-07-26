@@ -7,6 +7,7 @@ export * from './core';
 
 // Types
 export * from './types';
+export * from './hooks';
 
 // Services
 export * from './services/ConfigManager';

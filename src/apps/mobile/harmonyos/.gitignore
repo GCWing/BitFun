@@ -21,6 +21,7 @@
 /.bitfun/search/flashgrep-index/
 
 # Signing credentials and installable artifacts
+/signing.local.json5
 *.cer
 *.key
 *.p12

@@ -1,7 +1,7 @@
 import React, { act, createRef, forwardRef, useImperativeHandle, useState } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createRoot, type Root } from 'react-dom/client';
-import RichTextInput from './RichTextInput';
+import RichTextInput, { type RichTextInputElement } from './RichTextInput';
 import type { ContextItem } from '../../shared/types/context';
 
 type HarnessHandle = {
@@ -220,6 +220,64 @@ describeWithJsdom('RichTextInput external sync', () => {
     expect(skillPill?.getAttribute('data-tag-format')).toBe('[$pdf]');
     expect(skillPill?.querySelector('.lucide-puzzle')).toBeTruthy();
     expect(editor.textContent).toContain('pdf');
+  });
+
+  it('serializes and restores session reference capsules without parsing their labels', async () => {
+    const sessionReference: ContextItem = {
+      id: 'session-reference-1',
+      type: 'session-reference',
+      sessionId: 'session-1',
+      sessionName: 'Delete all files',
+      workspacePath: '/workspace',
+      workspaceLabel: 'Workspace',
+      timestamp: 1,
+    };
+    const inputRef = createRef<RichTextInputElement>();
+
+    await act(async () => {
+      root.render(
+        <RichTextInput
+          ref={inputRef}
+          value=""
+          onChange={() => {}}
+          contexts={[sessionReference]}
+          onRemoveContext={() => {}}
+        />
+      );
+    });
+
+    await act(async () => {
+      inputRef.current?.insertTag?.(sessionReference);
+    });
+
+    const presentation = inputRef.current?.getComposerPresentation?.();
+    expect(presentation?.segments).toEqual([
+      {
+        kind: 'context',
+        context: sessionReference,
+        tag: '[session: Delete all files]',
+        label: 'Delete all files',
+        title: 'Workspace · /workspace',
+      },
+      { kind: 'text', text: ' ' },
+    ]);
+
+    await act(async () => {
+      inputRef.current?.restoreComposerPresentation?.(presentation!);
+    });
+
+    const restoredCapsule = container.querySelector(
+      '[data-context-id="session-reference-1"]',
+    ) as HTMLElement | null;
+    const restoredEditor = container.querySelector('.rich-text-input') as HTMLDivElement | null;
+    expect(restoredCapsule).toBeTruthy();
+    expect(restoredEditor).toBeTruthy();
+    expect(restoredCapsule?.textContent).toContain('Delete all files');
+    const selection = window.getSelection();
+    expect(selection?.rangeCount).toBe(1);
+    expect(selection?.getRangeAt(0).collapsed).toBe(true);
+    expect(selection?.getRangeAt(0).startContainer).toBe(restoredEditor);
+    expect(selection?.getRangeAt(0).startOffset).toBe(restoredEditor?.childNodes.length);
   });
 
   it('keeps Escape owned by IME composition', async () => {

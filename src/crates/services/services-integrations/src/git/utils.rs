@@ -376,6 +376,69 @@ pub fn execute_git_command_sync_raw(
     })
 }
 
+/// Executes a Git command synchronously, giving up after `timeout`.
+///
+/// Only for commands whose output is a handful of bytes: stdout and stderr are
+/// piped and drained after exit, so a command that filled a pipe buffer while
+/// still running would deadlock against this poll loop rather than time out.
+///
+/// On expiry the child is killed and reaped, so nothing is left behind to hold
+/// the repository lock or a worker thread.
+pub fn execute_git_command_sync_with_timeout(
+    repo_path: &str,
+    args: &[&str],
+    timeout: std::time::Duration,
+) -> Result<String, GitError> {
+    use std::process::Stdio;
+
+    let mut child = process_manager::create_command("git")
+        .current_dir(repo_path)
+        .args(args)
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .map_err(|e| GitError::CommandFailed(format!("Failed to execute git command: {}", e)))?;
+
+    let deadline = std::time::Instant::now() + timeout;
+    loop {
+        match child.try_wait() {
+            Ok(Some(_)) => break,
+            Ok(None) => {}
+            Err(e) => {
+                return Err(GitError::CommandFailed(format!(
+                    "Failed to wait for git command: {}",
+                    e
+                )))
+            }
+        }
+        if std::time::Instant::now() >= deadline {
+            let _ = child.kill();
+            let _ = child.wait();
+            return Err(GitError::CommandFailed(format!(
+                "git {} timed out after {:?}",
+                args.join(" "),
+                timeout
+            )));
+        }
+        std::thread::sleep(std::time::Duration::from_millis(5));
+    }
+
+    let output = child
+        .wait_with_output()
+        .map_err(|e| GitError::CommandFailed(format!("Failed to read git output: {}", e)))?;
+    if output.status.success() {
+        return Ok(String::from_utf8_lossy(&output.stdout).to_string());
+    }
+    let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
+    let stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();
+    Err(GitError::CommandFailed(if stderr.is_empty() {
+        stdout
+    } else {
+        stderr
+    }))
+}
+
 /// Executes a Git command synchronously.
 pub fn execute_git_command_sync(repo_path: &str, args: &[&str]) -> Result<String, GitError> {
     let result = execute_git_command_sync_raw(repo_path, args)?;

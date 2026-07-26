@@ -1,7 +1,6 @@
 //! One-click relay server self-deploy orchestration over an existing SSH connection.
 //!
-//! Drives the open-source relay-server deployment (`src/apps/relay-server/deploy.sh`)
-//! on a user-owned server:
+//! Drives the open-source relay-server deployment on a user-owned server:
 //!
 //! 1. `run_preflight` — probe OS/arch, Docker access mode, memory, port, existing installs.
 //! 2. `start_task` — stage an interactive driver script (run inside a remote PTY so sudo
@@ -12,16 +11,20 @@
 //!    best-effort compose teardown for in-progress deploys).
 //! 5. `import_account` — hand a locally-provisioned account to `relay-admin import-user`.
 //!
-//! Remote deploy state lives under `~/.bitfun/relay-deploy/`; the cloned source
-//! tree lives under `~/.bitfun/relay-src/` (never `$HOME/bitfun`, which may be
-//! the user's own project).
+//! Remote deploy state lives under `~/.bitfun/relay-deploy/`. Published binaries
+//! are staged under `~/.bitfun/relay-release/`; only the automatic fallback clones
+//! source under `~/.bitfun/relay-src/` (never `$HOME/bitfun`, which may be the
+//! user's own project).
 //!
 //! Product / regression invariants (wizard + entry points):
 //! `src/web-ui/src/features/relay-deploy/README.md`. Do not change clone destination,
 //! password handoff, or “already deployed” semantics without updating that doc.
+//! China mirror helpers live in `src/apps/relay-server/mirror.sh` and are embedded
+//! here so detection/apply runs before GitHub/Docker downloads.
 
 use anyhow::{anyhow, Result};
 use serde::{Deserialize, Serialize};
+use std::time::Duration;
 
 use super::manager::SSHConnectionManager;
 use super::remote_git::shell_quote_posix;
@@ -47,6 +50,46 @@ const REPO_GIT_URL: &str = "https://github.com/GCWing/BitFun.git";
 const REPO_GIT_BRANCH: &str = "main";
 /// Tarball fallback when git is unavailable or clone/fetch fails.
 const REPO_TARBALL_URL: &str = "https://github.com/GCWing/BitFun/archive/refs/heads/main.tar.gz";
+/// Release asset base. Asset names are stable across tags so the embedded
+/// Desktop version can address its matching server build without a GitHub API call.
+const RELEASE_BASE: &str = "https://github.com/GCWing/BitFun/releases";
+const OPENBITFUN_RELEASE_BASE: &str = "https://openbitfun.com/release";
+const RELEASE_VERSION: &str = env!("CARGO_PKG_VERSION");
+/// Ranked-source download tuning, shared with the CLI self-updater
+/// (`src/apps/cli/src/self_update.rs`) so both paths behave the same on a slow
+/// link. Each candidate gets a fixed-length ranged request; bytes delivered in
+/// that window is the throughput estimate used to rank sources.
+const SOURCE_PROBE_SECONDS: u64 = 10;
+const SOURCE_PROBE_BYTES: u64 = 4 * 1024 * 1024;
+/// A source at or above this is used without hesitation.
+const HEALTHY_THROUGHPUT_BYTES_PER_SEC: u64 = 128 * 1024;
+/// Below this for `STALL_WINDOW_SECONDS` the source counts as dead and we fail
+/// over. Deliberately far under the healthy bar: a genuinely slow but only
+/// available link must still be allowed to finish rather than loop forever.
+const STALL_THROUGHPUT_BYTES_PER_SEC: u64 = 8 * 1024;
+const STALL_WINDOW_SECONDS: u64 = 30;
+/// Free space the source-build fallback needs under `$HOME` (Cargo registry,
+/// target dir and Docker layers). Checked before the build rather than
+/// discovered as an opaque compiler failure part-way through.
+const SOURCE_BUILD_FREE_KB: u64 = 6 * 1024 * 1024;
+/// Trust root for published relay archives, injected at build time from the
+/// same `TAURI_UPDATER_PUBKEY` the Desktop updater uses. Absent in local and
+/// fork builds, which then fall back to the cross-origin checksum.
+const RELEASE_PUBKEY: Option<&str> = option_env!("BITFUN_RELEASE_PUBKEY");
+/// Targets a published relay archive exists for.
+const RELEASE_TARGETS: [&str; 2] = ["x86_64-unknown-linux-gnu", "aarch64-unknown-linux-gnu"];
+/// Canonical China-mirror helper (shared with `src/apps/relay-server/deploy.sh`).
+/// Embedded so Desktop orchestration can apply mirrors before the git clone.
+const RELAY_MIRROR_SH: &str = include_str!(concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/../../../apps/relay-server/mirror.sh"
+));
+/// Published-binary download + runtime deploy (shared with `deploy.sh`, so the
+/// manual and one-click paths run the same code).
+const RELAY_RELEASE_DOWNLOAD_SH: &str = include_str!(concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/../../../apps/relay-server/release-download.sh"
+));
 /// Remote directory (relative to the SSH user's home) holding deploy state.
 const DEPLOY_STATE_DIR: &str = ".bitfun/relay-deploy";
 /// BitFun-managed source checkout (relative to home). Must stay under `.bitfun/`
@@ -54,6 +97,14 @@ const DEPLOY_STATE_DIR: &str = ".bitfun/relay-deploy";
 const SOURCE_DIR: &str = ".bitfun/relay-src";
 /// Line printed by task scripts on success; polled to detect completion.
 const TASK_DONE_MARKER: &str = "RELAY_TASK_DONE";
+
+fn release_tag_for_version(version: &str) -> String {
+    if version.contains("-nightly.") {
+        "nightly".to_string()
+    } else {
+        format!("v{}", version.split('+').next().unwrap_or(version))
+    }
+}
 
 /// Long-running remote operations that run detached and are polled.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -112,6 +163,10 @@ pub struct RelayPreflight {
     /// `sudo` exists but `sudo -n` fails (password required).
     pub sudo_needs_password: bool,
     pub mem_total_mb: u64,
+    /// Free space under `$HOME` in MB (archive staging + source checkout).
+    pub home_free_mb: u64,
+    /// Free space on Docker's data root in MB (images and layers).
+    pub docker_free_mb: u64,
     /// Selected listen port already bound by another process.
     pub port_busy: bool,
     /// Port that was probed (`port_busy` / selected-port health).
@@ -194,6 +249,13 @@ if [ ! -e "$HOME/.docker" ]; then echo "docker_home_writable=1"
 elif [ -w "$HOME/.docker" ] && {{ [ ! -e "$HOME/.docker/buildx" ] || [ -w "$HOME/.docker/buildx" ]; }}; then echo "docker_home_writable=1"
 else echo "docker_home_writable=0"; fi
 echo "mem_kb=$(awk '/MemTotal/ {{print $2}}' /proc/meminfo 2>/dev/null || echo 0)"
+# Free space where the work actually lands: ~/.bitfun holds the downloaded
+# archive and the source checkout, Docker's data root holds images and layers.
+echo "home_free_kb=$(df -Pk "$HOME" 2>/dev/null | awk 'NR==2 {{print $4}}' || echo 0)"
+DOCKER_ROOT=$(docker info -f '{{{{.DockerRootDir}}}}' 2>/dev/null \
+  || sudo -n docker info -f '{{{{.DockerRootDir}}}}' 2>/dev/null || echo /var/lib/docker)
+[ -d "$DOCKER_ROOT" ] || DOCKER_ROOT=/var
+echo "docker_free_kb=$(df -Pk "$DOCKER_ROOT" 2>/dev/null | awk 'NR==2 {{print $4}}' || echo 0)"
 if command -v ss >/dev/null 2>&1; then PORTS=$(ss -ltn 2>/dev/null); else PORTS=$(netstat -ltn 2>/dev/null); fi
 if printf '%s\n' "$PORTS" | awk '{{print $4}}' | grep -q ":${{PORT}}$"; then echo "port_busy=1"; else echo "port_busy=0"; fi
 # Prefer a docker CLI that can talk to the daemon (plain or passwordless sudo).
@@ -262,6 +324,8 @@ fn parse_preflight(out: &str, fallback_port: u16) -> RelayPreflight {
     let arch_supported = os == "Linux"
         && (arch == "x86_64" || arch == "amd64" || arch == "aarch64" || arch == "arm64");
     let mem_kb: u64 = get("mem_kb").parse().unwrap_or(0);
+    let home_free_kb: u64 = get("home_free_kb").parse().unwrap_or(0);
+    let docker_free_kb: u64 = get("docker_free_kb").parse().unwrap_or(0);
     let docker_installed = get("docker") == "1";
     let active_has_docker_group = get("active_docker_group") == "1";
     let in_docker_group_file = get("in_docker_group_file") == "1";
@@ -308,6 +372,8 @@ fn parse_preflight(out: &str, fallback_port: u16) -> RelayPreflight {
         sudo_available,
         sudo_needs_password,
         mem_total_mb: mem_kb / 1024,
+        home_free_mb: home_free_kb / 1024,
+        docker_free_mb: docker_free_kb / 1024,
         port_busy: get("port_busy") == "1",
         probed_port,
         port_owned_by_relay: get("port_owned") == "1",
@@ -387,7 +453,13 @@ pub async fn start_task(
 
     let body = match task {
         RelayDeployTask::InstallDocker => install_docker_body_script(),
-        RelayDeployTask::Deploy => deploy_body_script(port),
+        RelayDeployTask::Deploy => {
+            // Verify the signed checksums here, where a trust root exists; the
+            // relay host has none.
+            let verified =
+                verified_release_checksums(&release_tag_for_version(RELEASE_VERSION)).await;
+            deploy_body_script_with_checksums(port, &verified_checksum_exports(&verified))
+        }
     };
     let driver = match task {
         RelayDeployTask::InstallDocker => interactive_driver_script(stem, "install"),
@@ -773,8 +845,17 @@ async fn exec_ok(manager: &SSHConnectionManager, connection_id: &str, command: &
 }
 
 /// Shared interactive prepare helpers embedded in driver scripts.
-fn prepare_helpers_bash() -> &'static str {
-    r#"
+fn prepare_helpers_bash() -> String {
+    // Mirror helpers first so prepare/install/deploy can call bitfun_mirror_init
+    // before apt/git/docker downloads.
+    format!(
+        r#"
+# --- begin BitFun relay mirror.sh (embedded) ---
+{mirror}
+# --- end BitFun relay mirror.sh ---
+"#,
+        mirror = RELAY_MIRROR_SH
+    ) + r#"
 # Privilege helpers:
 # - Never use `sudo -v` when NOPASSWD is set — on many cloud images `sudo -v`
 #   still demands a password even though `sudo -n true` works.
@@ -919,6 +1000,8 @@ bitfun_docker() {
 bitfun_run_deploy_sh() {
   local dir="$1"
   local port="${RELAY_PORT:-9700}"
+  # Prefer already-resolved mirror mode so deploy.sh does not re-probe.
+  local mirror_mode="${BITFUN_MIRROR:-${BITFUN_MIRROR_MODE:-auto}}"
   # DOCKER_BUILDKIT is required for Dockerfile cargo registry/git/target mounts.
   case "${BITFUN_DOCKER_MODE:-direct}" in
     sudo)
@@ -926,20 +1009,38 @@ bitfun_run_deploy_sh() {
         sudo -n -E env RELAY_PORT="$port" RELAY_CARGO_BUILD_JOBS="${RELAY_CARGO_BUILD_JOBS:-}" \
           DOCKER_BUILDKIT=1 COMPOSE_DOCKER_CLI_BUILD=1 BUILDKIT_PROGRESS=plain \
           DOCKER_CONFIG="${DOCKER_CONFIG:-}" \
+          BITFUN_MIRROR="$mirror_mode" \
+          BITFUN_USE_CN_MIRROR="${BITFUN_USE_CN_MIRROR:-0}" \
+          BITFUN_APT_MIRROR="${BITFUN_APT_MIRROR:-}" \
+          BITFUN_CARGO_SPARSE_URL="${BITFUN_CARGO_SPARSE_URL:-}" \
+          BITFUN_DOCKER_REGISTRY_MIRRORS="${BITFUN_DOCKER_REGISTRY_MIRRORS:-}" \
+          BITFUN_GITHUB_PROXY="${BITFUN_GITHUB_PROXY:-}" \
           bash "$dir/deploy.sh"
       else
         sudo -E env RELAY_PORT="$port" RELAY_CARGO_BUILD_JOBS="${RELAY_CARGO_BUILD_JOBS:-}" \
           DOCKER_BUILDKIT=1 COMPOSE_DOCKER_CLI_BUILD=1 BUILDKIT_PROGRESS=plain \
           DOCKER_CONFIG="${DOCKER_CONFIG:-}" \
+          BITFUN_MIRROR="$mirror_mode" \
+          BITFUN_USE_CN_MIRROR="${BITFUN_USE_CN_MIRROR:-0}" \
+          BITFUN_APT_MIRROR="${BITFUN_APT_MIRROR:-}" \
+          BITFUN_CARGO_SPARSE_URL="${BITFUN_CARGO_SPARSE_URL:-}" \
+          BITFUN_DOCKER_REGISTRY_MIRRORS="${BITFUN_DOCKER_REGISTRY_MIRRORS:-}" \
+          BITFUN_GITHUB_PROXY="${BITFUN_GITHUB_PROXY:-}" \
           bash "$dir/deploy.sh"
       fi
       ;;
     sg)
-      sg docker -c "env RELAY_PORT='$port' RELAY_CARGO_BUILD_JOBS='${RELAY_CARGO_BUILD_JOBS:-}' DOCKER_BUILDKIT=1 COMPOSE_DOCKER_CLI_BUILD=1 BUILDKIT_PROGRESS=plain DOCKER_CONFIG='${DOCKER_CONFIG:-}' bash '$dir/deploy.sh'"
+      sg docker -c "env RELAY_PORT='$port' RELAY_CARGO_BUILD_JOBS='${RELAY_CARGO_BUILD_JOBS:-}' DOCKER_BUILDKIT=1 COMPOSE_DOCKER_CLI_BUILD=1 BUILDKIT_PROGRESS=plain DOCKER_CONFIG='${DOCKER_CONFIG:-}' BITFUN_MIRROR='$mirror_mode' BITFUN_USE_CN_MIRROR='${BITFUN_USE_CN_MIRROR:-0}' BITFUN_APT_MIRROR='${BITFUN_APT_MIRROR:-}' BITFUN_CARGO_SPARSE_URL='${BITFUN_CARGO_SPARSE_URL:-}' BITFUN_DOCKER_REGISTRY_MIRRORS='${BITFUN_DOCKER_REGISTRY_MIRRORS:-}' BITFUN_GITHUB_PROXY='${BITFUN_GITHUB_PROXY:-}' bash '$dir/deploy.sh'"
       ;;
     *)
       env RELAY_PORT="$port" RELAY_CARGO_BUILD_JOBS="${RELAY_CARGO_BUILD_JOBS:-}" \
         DOCKER_BUILDKIT=1 COMPOSE_DOCKER_CLI_BUILD=1 BUILDKIT_PROGRESS=plain \
+        BITFUN_MIRROR="$mirror_mode" \
+        BITFUN_USE_CN_MIRROR="${BITFUN_USE_CN_MIRROR:-0}" \
+        BITFUN_APT_MIRROR="${BITFUN_APT_MIRROR:-}" \
+        BITFUN_CARGO_SPARSE_URL="${BITFUN_CARGO_SPARSE_URL:-}" \
+        BITFUN_DOCKER_REGISTRY_MIRRORS="${BITFUN_DOCKER_REGISTRY_MIRRORS:-}" \
+        BITFUN_GITHUB_PROXY="${BITFUN_GITHUB_PROXY:-}" \
         bash "$dir/deploy.sh"
       ;;
   esac
@@ -988,6 +1089,10 @@ touch "$PREPARE_FLAG"
 echo ">>> prepare starting (uid=$(id -u) home=$HOME)" | tee -a "$LOG"
 cleanup_prepare() {{ rm -f "$PREPARE_FLAG"; }}
 trap cleanup_prepare EXIT
+# Region/mirrors before apt tool install and Docker/GitHub downloads.
+export BITFUN_REPO_GIT_URL="{REPO_GIT_URL}"
+export BITFUN_REPO_TARBALL_URL="{REPO_TARBALL_URL}"
+bitfun_mirror_init
 bitfun_ensure_tools
 export DOCKER_CONFIG="${{DOCKER_CONFIG:-$HOME/.bitfun/docker-config}}"
 mkdir -p "$DOCKER_CONFIG"
@@ -1024,9 +1129,13 @@ if [ "{kind}" = "install" ]; then
   export BITFUN_KEEP_HOME="${{BITFUN_KEEP_HOME:-$HOME}}"
   set +e
   if command -v stdbuf >/dev/null 2>&1; then
-    stdbuf -oL -eL env BITFUN_KEEP_HOME="$BITFUN_KEEP_HOME" bash "$BODY" 2>&1 | tee -a "$LOG"
+    stdbuf -oL -eL env BITFUN_KEEP_HOME="$BITFUN_KEEP_HOME" \
+      BITFUN_MIRROR="${{BITFUN_MIRROR:-${{BITFUN_MIRROR_MODE:-auto}}}}" \
+      bash "$BODY" 2>&1 | tee -a "$LOG"
   else
-    env BITFUN_KEEP_HOME="$BITFUN_KEEP_HOME" bash "$BODY" 2>&1 | tee -a "$LOG"
+    env BITFUN_KEEP_HOME="$BITFUN_KEEP_HOME" \
+      BITFUN_MIRROR="${{BITFUN_MIRROR:-${{BITFUN_MIRROR_MODE:-auto}}}}" \
+      bash "$BODY" 2>&1 | tee -a "$LOG"
   fi
   code=${{PIPESTATUS[0]}}
   set -e
@@ -1045,6 +1154,14 @@ echo ">>> Starting background task (log: $LOG)" | tee -a "$LOG"
 nohup env BITFUN_DOCKER_MODE="$BITFUN_DOCKER_MODE" DOCKER_CONFIG="$DOCKER_CONFIG" \
   RELAY_CARGO_BUILD_JOBS="${{RELAY_CARGO_BUILD_JOBS:-}}" \
   DOCKER_BUILDKIT=1 COMPOSE_DOCKER_CLI_BUILD=1 BUILDKIT_PROGRESS=plain \
+  BITFUN_MIRROR="${{BITFUN_MIRROR:-${{BITFUN_MIRROR_MODE:-auto}}}}" \
+  BITFUN_USE_CN_MIRROR="${{BITFUN_USE_CN_MIRROR:-0}}" \
+  BITFUN_APT_MIRROR="${{BITFUN_APT_MIRROR:-}}" \
+  BITFUN_CARGO_SPARSE_URL="${{BITFUN_CARGO_SPARSE_URL:-}}" \
+  BITFUN_DOCKER_REGISTRY_MIRRORS="${{BITFUN_DOCKER_REGISTRY_MIRRORS:-}}" \
+  BITFUN_GITHUB_PROXY="${{BITFUN_GITHUB_PROXY:-}}" \
+  BITFUN_REPO_GIT_URL="${{BITFUN_REPO_GIT_URL:-}}" \
+  BITFUN_REPO_TARBALL_URL="${{BITFUN_REPO_TARBALL_URL:-}}" \
   "${{RUNNER[@]}}" "$BODY" >"$LOG" 2>&1 < /dev/null &
 echo $! >"$PIDF"
 rm -f "$PREPARE_FLAG"
@@ -1056,6 +1173,8 @@ exec tail -n +1 -f "$LOG"
         stem = stem,
         kind = kind,
         helpers = helpers,
+        REPO_GIT_URL = REPO_GIT_URL,
+        REPO_TARBALL_URL = REPO_TARBALL_URL,
     )
 }
 
@@ -1080,18 +1199,39 @@ fi
 if [ -z "$DEPLOY_USER" ] || [ "$DEPLOY_USER" = "root" ]; then
   DEPLOY_USER="$(id -un)"
 fi
-echo ">>> Installing Docker (get.docker.com) as uid=$(id -u) for user=$DEPLOY_USER ..."
-curl -fsSL --retry 3 https://get.docker.com -o /tmp/bitfun-get-docker.sh
+export BITFUN_REPO_GIT_URL="{REPO_GIT_URL}"
+export BITFUN_REPO_TARBALL_URL="{REPO_TARBALL_URL}"
+bitfun_mirror_init
+echo ">>> Installing Docker as uid=$(id -u) for user=$DEPLOY_USER (mirror_mode=${{BITFUN_MIRROR_MODE:-global}}) ..."
+INSTALLED=0
+if [ "${{BITFUN_MIRROR_MODE:-}}" = "cn" ]; then
+  if bitfun_mirror_install_docker_aliyun; then
+    INSTALLED=1
+  else
+    echo ">>> Aliyun docker-ce install failed; falling back to get.docker.com mirror..."
+  fi
+fi
+if [ "$INSTALLED" != "1" ]; then
+  bitfun_mirror_fetch_docker_install_script /tmp/bitfun-get-docker.sh \
+    || curl -fsSL --retry 3 https://get.docker.com -o /tmp/bitfun-get-docker.sh
+  if [ "$(id -u)" = "0" ]; then
+    sh /tmp/bitfun-get-docker.sh
+  else
+    bitfun_priv sh /tmp/bitfun-get-docker.sh
+  fi
+  rm -f /tmp/bitfun-get-docker.sh
+fi
 if [ "$(id -u)" = "0" ]; then
-  sh /tmp/bitfun-get-docker.sh
   systemctl enable --now docker
   usermod -aG docker "$DEPLOY_USER" || true
 else
-  bitfun_priv sh /tmp/bitfun-get-docker.sh
   bitfun_priv systemctl enable --now docker
   bitfun_priv usermod -aG docker "$DEPLOY_USER"
 fi
-rm -f /tmp/bitfun-get-docker.sh
+# Re-apply Docker registry mirrors after engine install (daemon.json may be new).
+if [ "${{BITFUN_MIRROR_MODE:-}}" = "cn" ]; then
+  bitfun_mirror_apply_docker_daemon || true
+fi
 bitfun_fix_docker_home
 # Verify without relying on a new login session
 if docker info >/dev/null 2>&1 \
@@ -1106,6 +1246,8 @@ else
 fi
 "#,
         helpers = helpers,
+        REPO_GIT_URL = REPO_GIT_URL,
+        REPO_TARBALL_URL = REPO_TARBALL_URL,
         TASK_DONE_MARKER = TASK_DONE_MARKER,
     )
 }
@@ -1122,9 +1264,11 @@ bitfun_sync_source() {{
   # `git clone <url>` without a path would create ./BitFun — we always pass "$src".
   # Tarball extracts BitFun-main/; we use --strip-components=1 into "$src".
   local src="$1"
-  local git_url="{REPO_GIT_URL}"
+  local git_upstream="{REPO_GIT_URL}"
+  local tarball_upstream="{REPO_TARBALL_URL}"
+  local git_url="${{BITFUN_GITHUB_GIT_URL:-$git_upstream}}"
+  local tarball_url="${{BITFUN_GITHUB_TARBALL_URL:-$tarball_upstream}}"
   local branch="{REPO_GIT_BRANCH}"
-  local tarball_url="{REPO_TARBALL_URL}"
   local managed_prefix="$HOME/.bitfun/"
   local relay_deploy_sh="src/apps/relay-server/deploy.sh"
 
@@ -1173,13 +1317,14 @@ bitfun_sync_source() {{
   }}
 
   bitfun_fetch_tarball() {{
-    echo ">>> Downloading BitFun source (tarball fallback)..."
+    local url="$1"
+    echo ">>> Downloading BitFun source (tarball): $url"
     command -v curl >/dev/null 2>&1 || bitfun_ensure_tools
     command -v tar >/dev/null 2>&1 || bitfun_ensure_tools
     bitfun_replace_managed_src
     mkdir -p "$src"
     # Archive root is BitFun-main/; strip so files land directly in "$src".
-    curl -fsSL --retry 3 "$tarball_url" | tar xz -C "$src" --strip-components=1
+    curl -fsSL --retry 3 "$url" | tar xz -C "$src" --strip-components=1
     bitfun_assert_source_layout
   }}
 
@@ -1189,7 +1334,7 @@ bitfun_sync_source() {{
 
   if command -v git >/dev/null 2>&1; then
     if [ -d "$src/.git" ]; then
-      echo ">>> Updating BitFun source (git fetch)..."
+      echo ">>> Updating BitFun source (git fetch via $git_url)..."
       git -C "$src" remote set-url origin "$git_url" 2>/dev/null || true
       if git -C "$src" fetch --depth 1 origin "$branch" \
         && git -C "$src" checkout -f -B "$branch" "origin/$branch" \
@@ -1198,13 +1343,24 @@ bitfun_sync_source() {{
         echo ">>> Source updated to $(git -C "$src" rev-parse --short HEAD 2>/dev/null || echo unknown)"
         return 0
       fi
+      if [ "$git_url" != "$git_upstream" ]; then
+        echo ">>> git update via mirror failed; retrying upstream..."
+        git -C "$src" remote set-url origin "$git_upstream" 2>/dev/null || true
+        if git -C "$src" fetch --depth 1 origin "$branch" \
+          && git -C "$src" checkout -f -B "$branch" "origin/$branch" \
+          && git -C "$src" clean -fd \
+          && bitfun_assert_source_layout; then
+          echo ">>> Source updated to $(git -C "$src" rev-parse --short HEAD 2>/dev/null || echo unknown)"
+          return 0
+        fi
+      fi
       echo ">>> git update failed; recloning managed source..."
       bitfun_replace_managed_src
     elif [ -e "$src" ]; then
       echo ">>> Managed source exists but is not a git checkout; replacing..."
       bitfun_replace_managed_src
     fi
-    echo ">>> Cloning into $src (explicit path; not default BitFun/)..."
+    echo ">>> Cloning into $src via $git_url ..."
     mkdir -p "$(dirname "$src")"
     # Explicit destination avoids creating $PWD/BitFun from the repo name.
     if git clone --depth 1 --branch "$branch" "$git_url" "$src" \
@@ -1212,11 +1368,27 @@ bitfun_sync_source() {{
       echo ">>> Source cloned at $(git -C "$src" rev-parse --short HEAD 2>/dev/null || echo unknown)"
       return 0
     fi
+    if [ "$git_url" != "$git_upstream" ]; then
+      echo ">>> git clone via mirror failed; retrying upstream $git_upstream ..."
+      bitfun_replace_managed_src
+      mkdir -p "$(dirname "$src")"
+      if git clone --depth 1 --branch "$branch" "$git_upstream" "$src" \
+        && bitfun_assert_source_layout; then
+        echo ">>> Source cloned at $(git -C "$src" rev-parse --short HEAD 2>/dev/null || echo unknown)"
+        return 0
+      fi
+    fi
     echo ">>> git clone failed; falling back to tarball"
   else
     echo ">>> git unavailable; using tarball fallback"
   fi
-  bitfun_fetch_tarball
+  if bitfun_fetch_tarball "$tarball_url"; then
+    return 0
+  fi
+  if [ "$tarball_url" != "$tarball_upstream" ]; then
+    echo ">>> tarball mirror failed; retrying upstream..."
+    bitfun_fetch_tarball "$tarball_upstream"
+  fi
 }}
 "#,
         REPO_GIT_URL = REPO_GIT_URL,
@@ -1225,15 +1397,150 @@ bitfun_sync_source() {{
     )
 }
 
+/// Preamble + shared script that downloads the matching published Relay archive
+/// and builds a small runtime image around it. The container name, volumes,
+/// ports and relay-admin path stay identical to the source-compose deployment.
+///
+/// The body lives in `src/apps/relay-server/release-download.sh` so the manual
+/// `deploy.sh` path runs exactly the same code, the same way `mirror.sh` is
+/// shared. Only the configuration differs: Desktop pins the release tag to its
+/// own version, the manual path tracks `latest`.
+fn release_binary_deploy_bash() -> String {
+    format!(
+        r#"
+export BITFUN_RELEASE_TAG="{release_tag}"
+export BITFUN_GITHUB_RELEASE_BASE="{RELEASE_BASE}"
+export BITFUN_OPENBITFUN_RELEASE_BASE="{OPENBITFUN_RELEASE_BASE}"
+export BITFUN_PROBE_SECONDS="{probe_seconds}"
+export BITFUN_PROBE_BYTES="{probe_bytes}"
+export BITFUN_HEALTHY_BPS="{healthy_floor}"
+export BITFUN_STALL_BPS="{stall_floor}"
+export BITFUN_STALL_SECONDS="{stall_seconds}"
+# --- begin BitFun relay release-download.sh ---
+{release_download}
+# --- end BitFun relay release-download.sh ---
+"#,
+        release_tag = release_tag_for_version(RELEASE_VERSION),
+        RELEASE_BASE = RELEASE_BASE,
+        OPENBITFUN_RELEASE_BASE = OPENBITFUN_RELEASE_BASE,
+        probe_seconds = SOURCE_PROBE_SECONDS,
+        probe_bytes = SOURCE_PROBE_BYTES,
+        healthy_floor = HEALTHY_THROUGHPUT_BYTES_PER_SEC,
+        stall_floor = STALL_THROUGHPUT_BYTES_PER_SEC,
+        stall_seconds = STALL_WINDOW_SECONDS,
+        release_download = RELAY_RELEASE_DOWNLOAD_SH,
+    )
+}
+
+/// Checksums for the published relay archives, each proven by a signature this
+/// machine verified.
+///
+/// A relay host is an arbitrary user server with no minisign and no trust root,
+/// so it cannot check a signature itself. It does not have to: the signature
+/// covers the `.sha256` file, which is a couple of hundred bytes, so Desktop
+/// verifies that here and sends the resulting hash down with the deploy script.
+/// The server then needs nothing but `sha256sum`.
+///
+/// Best effort by design — an empty map simply leaves the remote on the
+/// cross-origin checksum path.
+async fn verified_release_checksums(release_tag: &str) -> std::collections::HashMap<String, String> {
+    let mut verified = std::collections::HashMap::new();
+    let Some(pubkey) = RELEASE_PUBKEY.filter(|key| !key.trim().is_empty()) else {
+        return verified;
+    };
+    let Ok(client) = reqwest::Client::builder()
+        .connect_timeout(Duration::from_secs(8))
+        .timeout(Duration::from_secs(30))
+        .build()
+    else {
+        return verified;
+    };
+
+    for target in RELEASE_TARGETS {
+        let checksum_url =
+            format!("{RELEASE_BASE}/download/{release_tag}/bitfun-relay-server-{target}.tar.gz.sha256");
+        let Some(checksum) = fetch_text(&client, &checksum_url).await else {
+            continue;
+        };
+        let Some(signature) = fetch_text(&client, &format!("{checksum_url}.sig")).await else {
+            continue;
+        };
+        if let Err(error) = verify_minisign(checksum.as_bytes(), &signature, pubkey) {
+            log::warn!("Relay checksum signature for {target} did not verify: {error}");
+            continue;
+        }
+        let Some(hash) = checksum
+            .split_whitespace()
+            .next()
+            .filter(|value| value.len() == 64 && value.chars().all(|c| c.is_ascii_hexdigit()))
+        else {
+            continue;
+        };
+        verified.insert(target.to_string(), hash.to_ascii_lowercase());
+    }
+    verified
+}
+
+async fn fetch_text(client: &reqwest::Client, url: &str) -> Option<String> {
+    client
+        .get(url)
+        .send()
+        .await
+        .ok()?
+        .error_for_status()
+        .ok()?
+        .text()
+        .await
+        .ok()
+}
+
+/// Verify a Tauri-format `.sig` (base64 of a minisign signature file) over
+/// `data`, using the base64-wrapped public key.
+fn verify_minisign(data: &[u8], signature_b64: &str, pubkey_b64: &str) -> Result<()> {
+    use base64::Engine as _;
+    let decode = |value: &str, what: &str| -> Result<String> {
+        let bytes = base64::engine::general_purpose::STANDARD
+            .decode(value.trim().as_bytes())
+            .map_err(|error| anyhow!("decode {what}: {error}"))?;
+        String::from_utf8(bytes).map_err(|error| anyhow!("decode {what} as UTF-8: {error}"))
+    };
+    let public_key = minisign_verify::PublicKey::decode(&decode(pubkey_b64, "public key")?)
+        .map_err(|error| anyhow!("invalid release public key: {error}"))?;
+    let signature = minisign_verify::Signature::decode(&decode(signature_b64, "signature")?)
+        .map_err(|error| anyhow!("invalid release signature: {error}"))?;
+    public_key
+        .verify(data, &signature, false)
+        .map_err(|error| anyhow!("signature does not match: {error}"))
+}
+
+/// Shell assignments exporting the verified hashes the remote script consumes.
+fn verified_checksum_exports(verified: &std::collections::HashMap<String, String>) -> String {
+    let mut exports = String::new();
+    for target in RELEASE_TARGETS {
+        if let Some(hash) = verified.get(target) {
+            exports.push_str(&format!(
+                "export BITFUN_EXPECTED_SHA256_{}=\"{hash}\"\n",
+                target.replace(['-', '.'], "_").to_uppercase()
+            ));
+        }
+    }
+    exports
+}
+
 /// Non-interactive body for deploy (runs under nohup after prepare).
-fn deploy_body_script(port: u16) -> String {
+///
+/// `verified_checksums` carries hashes this device proved by signature; empty
+/// leaves the remote on the cross-origin checksum path.
+fn deploy_body_script_with_checksums(port: u16, verified_checksums: &str) -> String {
     let helpers = prepare_helpers_bash();
     let sync = sync_source_bash();
+    let release_binary_deploy = release_binary_deploy_bash();
     format!(
         r#"#!/usr/bin/env bash
 set -euo pipefail
 {helpers}
 {sync}
+{verified_checksums}{release_binary_deploy}
 export DOCKER_CONFIG="${{DOCKER_CONFIG:-$HOME/.bitfun/docker-config}}"
 export DOCKER_BUILDKIT=1
 export COMPOSE_DOCKER_CLI_BUILD=1
@@ -1250,6 +1557,24 @@ fi
 RELAY_PORT="${{RELAY_PORT:-{port}}}"
 export RELAY_PORT
 echo ">>> Using RELAY_PORT=$RELAY_PORT"
+export BITFUN_REPO_GIT_URL="{REPO_GIT_URL}"
+export BITFUN_REPO_TARBALL_URL="{REPO_TARBALL_URL}"
+bitfun_mirror_init
+if bitfun_try_release_deploy; then
+  echo {TASK_DONE_MARKER}
+  exit 0
+fi
+echo ">>> Release binary path did not complete; starting source-build fallback."
+# Compiling the relay pulls a Cargo registry, a target dir and Docker layers.
+# Running out of disk halfway through surfaces as an opaque compiler or BuildKit
+# error, so refuse up front with something the user can act on.
+SRC_FREE_KB=$(df -Pk "$HOME" 2>/dev/null | awk 'NR==2 {{print $4}}' || echo 0)
+if [ "${{SRC_FREE_KB:-0}}" -lt {source_build_free_kb} ]; then
+  echo ">>> ERROR: the source build needs about {source_build_free_gb} GB free under $HOME,"
+  echo ">>>        but only $(( SRC_FREE_KB / 1024 )) MB is available."
+  echo ">>>        Free up space, or install a published Relay binary manually."
+  exit 1
+fi
 SRC="$HOME/{SOURCE_DIR}"
 bitfun_sync_source "$SRC"
 cd "$SRC/src/apps/relay-server"
@@ -1275,19 +1600,282 @@ echo {TASK_DONE_MARKER}
 "#,
         helpers = helpers,
         sync = sync,
+        verified_checksums = verified_checksums,
+        release_binary_deploy = release_binary_deploy,
         DEPLOY_STATE_DIR = DEPLOY_STATE_DIR,
         SOURCE_DIR = SOURCE_DIR,
         port = port,
         TASK_DONE_MARKER = TASK_DONE_MARKER,
+        REPO_GIT_URL = REPO_GIT_URL,
+        REPO_TARBALL_URL = REPO_TARBALL_URL,
+        source_build_free_kb = SOURCE_BUILD_FREE_KB,
+        source_build_free_gb = SOURCE_BUILD_FREE_KB / 1024 / 1024,
     )
 }
 
 #[cfg(test)]
 mod tests {
     use super::{
-        classify_docker_access, decide_task_status, parse_preflight, split_poll_stdout,
-        DockerAccessMode, RelayTaskStatus,
+        classify_docker_access, decide_task_status, deploy_body_script_with_checksums,
+        parse_preflight,
+        prepare_helpers_bash, release_binary_deploy_bash, release_tag_for_version,
+        split_poll_stdout, sync_source_bash, verified_checksum_exports,
+        verified_release_checksums, verify_minisign, DockerAccessMode, RelayTaskStatus,
+        RELAY_MIRROR_SH, RELEASE_PUBKEY,
     };
+
+    #[test]
+    fn embedded_mirror_script_exposes_init_and_cn_defaults() {
+        assert!(
+            RELAY_MIRROR_SH.contains("bitfun_mirror_init"),
+            "mirror.sh must define bitfun_mirror_init"
+        );
+        assert!(
+            RELAY_MIRROR_SH.contains("rsproxy.cn"),
+            "mirror.sh must default cargo to rsproxy"
+        );
+        assert!(
+            RELAY_MIRROR_SH.contains("ghfast.top"),
+            "mirror.sh must default GitHub proxy"
+        );
+        assert!(
+            RELAY_MIRROR_SH.contains("bitfun_mirror_country_via_bash_tcp"),
+            "mirror.sh must keep a country fallback for minimal hosts without curl"
+        );
+        assert!(
+            RELAY_MIRROR_SH.contains("bitfun_mirror_restore_host"),
+            "mirror.sh must support switching a managed host back to global mode"
+        );
+        assert!(
+            !RELAY_MIRROR_SH.contains("data[\"bitfun-cn-mirror\"]"),
+            "daemon.json must contain only dockerd-supported directives"
+        );
+        assert!(
+            !RELAY_MIRROR_SH.contains("bitfun_mirror_apply_cargo_config"),
+            "relay deploy must not rewrite the SSH user's global Cargo config"
+        );
+        let helpers = prepare_helpers_bash();
+        assert!(
+            helpers.contains("bitfun_mirror_init"),
+            "prepare helpers must embed mirror.sh"
+        );
+        assert!(
+            helpers.contains("bitfun_run_deploy_sh"),
+            "prepare helpers must keep deploy runner"
+        );
+    }
+
+    #[test]
+    fn sync_source_uses_mirror_url_env_with_upstream_fallback() {
+        let sync = sync_source_bash();
+        assert!(sync.contains("BITFUN_GITHUB_GIT_URL"));
+        assert!(sync.contains("BITFUN_GITHUB_TARBALL_URL"));
+        assert!(sync.contains("retrying upstream"));
+    }
+
+    #[test]
+    fn release_tag_tracks_stable_and_nightly_channels() {
+        assert_eq!(release_tag_for_version("0.2.13"), "v0.2.13");
+        assert_eq!(
+            release_tag_for_version("0.2.14-nightly.20260724+abc123"),
+            "nightly"
+        );
+    }
+
+    #[test]
+    fn release_binary_deploy_verifies_assets_and_preserves_container_contract() {
+        let script = release_binary_deploy_bash();
+        assert!(script.contains("bitfun-relay-server-${target}.tar.gz"));
+        assert!(script.contains("sha256sum -c"));
+        assert!(script.contains("https://openbitfun.com/release"));
+        assert!(script.contains("no Rust/Cargo compilation"));
+        assert!(script.contains("--name bitfun-relay"));
+        assert!(script.contains("relay-server_relay-db:/app/data"));
+        assert!(script.contains("/app/relay-admin"));
+        assert!(script.contains("falling back to source build"));
+        assert!(script.contains("bitfun_restore_previous_relay"));
+        // Wizard-close must not leave the relay stopped under its backup name.
+        assert!(script.contains("trap 'bitfun_restore_previous_relay"));
+        assert!(script.contains("name=^bitfun-relay-before-release-"));
+        // Port publishing keeps compose's configurable bind address.
+        assert!(script
+            .contains("${RELAY_HOST_BIND_IP:-0.0.0.0}:${RELAY_PORT:-9700}:${RELAY_PORT:-9700}"));
+
+        // Slow-link contract. A wall-clock ceiling alone made a 20 KB/s link
+        // fail forever: each attempt timed out mid-archive and restarted from
+        // zero. Throughput floor + resume + ranking replace that.
+        assert!(script.contains("--speed-limit"));
+        assert!(script.contains("--speed-time"));
+        assert!(script.contains("-C -"));
+        assert!(script.contains("--retry-max-time"));
+        assert!(script.contains("bitfun_probe_source"));
+        assert!(script.contains("sort -rn -k1,1"));
+        // The mirror URL must come from the mirror's manifest, never a pinned
+        // /<version>/ path that 404s for older Desktop builds.
+        assert!(script.contains("linux-binaries.json"));
+        assert!(!script.contains("release/0.2"));
+        // Checksums bind to a canonical GitHub URL, so a compromised mirror or
+        // third-party proxy cannot serve matching bytes and checksum together.
+        assert!(script.contains("bitfun_canonical_checksum_url"));
+        // The shared file backs both this path and deploy.sh.
+        assert!(script.contains("release-download.sh"));
+        assert!(script.contains("export BITFUN_RELEASE_TAG=\"v0.2"));
+    }
+
+    /// `bash -n` only proves the generated script parses. This runs its source
+    /// ranking and download loop against a stubbed curl so the slow-link
+    /// behaviour is actually exercised.
+    /// Same fixture as the CLI updater, produced with the real `minisign` CLI.
+    /// A relay host cannot check a signature itself, so this is the check that
+    /// stands between a hostile mirror and the user's server.
+    const FIXTURE_PUBKEY: &str = "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXkgRTNFMDg3NENFQzFDMjJDMwpSV1RESWh6c1RJZmc0MXcyR3dpZWkwek5ES2FMWW05ZFFWcEVXTlEvVWxweXQybWJTMkpFMVUyTQo=";
+    const FIXTURE_SIGNATURE: &str = "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIG1pbmlzaWduIHNlY3JldCBrZXkKUlVUREloenNUSWZnNDBMTitwb25aT3RCVy9VYmJtNWhkR1poM0lCb3IwUDBKaVZmZmM1cFJaNlZSNUpaSzNUUm1yWWpYMXFLQ2svWTdZUDhHdkRZT3YvanVoZlpnZmhyWEFRPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzg0OTUxOTM1CWZpbGU6YXJjaGl2ZS50YXIuZ3oJaGFzaGVkCjhWL21EUVAwZGdlZXVNU1lxWlpsOWdFSGUwOTJQTk9yRG1BMUV6ZHNQOUlEYkcyT1dneTFsQ1puUDBJaFIwQnJpMFBCeENRcUdDR2dpb0l0UGtSMUN3PT0K";
+    const FIXTURE_DATA: &[u8] = b"hello-bitfun\n";
+
+    #[test]
+    fn checksum_signature_verifies_and_rejects_tampering() {
+        verify_minisign(FIXTURE_DATA, FIXTURE_SIGNATURE, FIXTURE_PUBKEY)
+            .expect("minisign signature in Tauri's base64 wrapper must verify");
+        assert!(verify_minisign(b"tampered\n", FIXTURE_SIGNATURE, FIXTURE_PUBKEY).is_err());
+        assert!(verify_minisign(FIXTURE_DATA, "bm90LWEtc2ln", FIXTURE_PUBKEY).is_err());
+    }
+
+    #[test]
+    fn verified_checksums_reach_the_remote_script_as_exports() {
+        let mut verified = std::collections::HashMap::new();
+        verified.insert("x86_64-unknown-linux-gnu".to_string(), "a".repeat(64));
+        let exports = verified_checksum_exports(&verified);
+        assert!(exports.contains(&format!(
+            "export BITFUN_EXPECTED_SHA256_X86_64_UNKNOWN_LINUX_GNU=\"{}\"",
+            "a".repeat(64)
+        )));
+        // No entry for a target we could not verify: the remote must fall back
+        // rather than trust an unverified hash.
+        assert!(!exports.contains("AARCH64"));
+
+        // The generated script must consume exactly those names.
+        let script = deploy_body_script_with_checksums(9700, &exports);
+        assert!(script.contains("BITFUN_EXPECTED_SHA256_X86_64_UNKNOWN_LINUX_GNU"));
+        assert!(script.contains("BITFUN_EXPECTED_SHA256_AARCH64_UNKNOWN_LINUX_GNU"));
+    }
+
+    /// Without a trust root there is nothing to verify against, so no hash may
+    /// be asserted to the remote.
+    #[tokio::test]
+    async fn unsigned_builds_supply_no_checksums() {
+        assert!(RELEASE_PUBKEY.is_none() || RELEASE_PUBKEY == Some(""));
+        assert!(verified_release_checksums("v0.0.0").await.is_empty());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn release_download_picks_the_fastest_working_source() {
+        let dir = tempfile::tempdir().expect("temp dir");
+        let script = dir.path().join("release.sh");
+        std::fs::write(&script, release_binary_deploy_bash()).expect("write script");
+
+        let harness = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../../../scripts/relay/release-download-harness.sh");
+        let output = std::process::Command::new("bash")
+            .arg(&harness)
+            .arg(&script)
+            .output()
+            .expect("run release download harness");
+        assert!(
+            output.status.success(),
+            "release download harness failed:\n{}\n{}",
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn generated_deploy_script_is_valid_bash() {
+        let script = deploy_body_script_with_checksums(9700, "");
+        let output = std::process::Command::new("bash")
+            .args(["-n", "-c", &script])
+            .output()
+            .expect("parse generated deploy script");
+        assert!(
+            output.status.success(),
+            "generated deploy script is invalid:\n{}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn mirror_docker_config_round_trip_preserves_unmanaged_settings() {
+        use std::{fs, process::Command};
+
+        let temp = tempfile::tempdir().expect("create mirror test dir");
+        let mirror_path = temp.path().join("mirror.sh");
+        let daemon_path = temp.path().join("etc/docker/daemon.json");
+        fs::create_dir_all(daemon_path.parent().expect("daemon parent"))
+            .expect("create daemon dir");
+        fs::write(&mirror_path, RELAY_MIRROR_SH).expect("write embedded mirror script");
+        fs::write(
+            &daemon_path,
+            r#"{
+  "debug": true,
+  "registry-mirrors": ["https://user.example"]
+}
+"#,
+        )
+        .expect("write initial daemon config");
+
+        let output = Command::new("bash")
+            .arg("-c")
+            .arg(
+                r#"
+set -euo pipefail
+export HOME="$2/home"
+export BITFUN_DOCKER_DAEMON_JSON="$2/etc/docker/daemon.json"
+mkdir -p "$HOME"
+source "$1"
+bitfun_mirror_priv() { "$@"; }
+bitfun_mirror_backup_file() { :; }
+bitfun_mirror_restart_docker_if_needed() { :; }
+bitfun_mirror_write_docker_daemon_json \
+  "https://docker.1ms.run https://dockerproxy.net"
+python3 - "$BITFUN_DOCKER_DAEMON_JSON" <<'PY'
+import json, sys
+with open(sys.argv[1], encoding="utf-8") as f:
+    data = json.load(f)
+assert data["debug"] is True
+assert data["registry-mirrors"] == [
+    "https://user.example",
+    "https://docker.1ms.run",
+    "https://dockerproxy.net",
+]
+assert "bitfun-cn-mirror" not in data
+PY
+bitfun_mirror_remove_docker_daemon
+python3 - "$BITFUN_DOCKER_DAEMON_JSON" <<'PY'
+import json, sys
+with open(sys.argv[1], encoding="utf-8") as f:
+    data = json.load(f)
+assert data == {
+    "debug": True,
+    "registry-mirrors": ["https://user.example"],
+}
+PY
+"#,
+            )
+            .arg("mirror-round-trip")
+            .arg(&mirror_path)
+            .arg(temp.path())
+            .output()
+            .expect("run mirror round-trip test");
+
+        assert!(
+            output.status.success(),
+            "mirror round trip failed:\nstdout:\n{}\nstderr:\n{}",
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
 
     #[test]
     fn decide_status_pending_before_pty_is_running() {
@@ -1371,6 +1959,8 @@ active_docker_group=0
 in_docker_group_file=1
 docker_home_writable=0
 mem_kb=2097152
+home_free_kb=12582912
+docker_free_kb=8388608
 port_busy=0
 container=1
 container_running=1
@@ -1391,5 +1981,7 @@ port_owned=0
         assert_eq!(pf.existing_relay_port, 9700);
         assert!(pf.relay_healthy);
         assert!(!pf.port_owned_by_relay);
+        assert_eq!(pf.home_free_mb, 12288);
+        assert_eq!(pf.docker_free_mb, 8192);
     }
 }

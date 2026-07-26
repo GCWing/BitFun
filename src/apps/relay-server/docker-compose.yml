@@ -7,6 +7,10 @@ services:
         # Pass through optional parallelism limit for low-memory hosts:
         #   RELAY_CARGO_BUILD_JOBS=1 docker compose build
         CARGO_BUILD_JOBS: ${RELAY_CARGO_BUILD_JOBS:-}
+        # China mirror switch (set by deploy.sh / BITFUN_MIRROR=cn):
+        BITFUN_USE_CN_MIRROR: ${BITFUN_USE_CN_MIRROR:-0}
+        BITFUN_APT_MIRROR: ${BITFUN_APT_MIRROR:-mirrors.aliyun.com}
+        BITFUN_CARGO_SPARSE_URL: ${BITFUN_CARGO_SPARSE_URL:-sparse+https://rsproxy.cn/index/}
     # Intentionally no `platform:` pin — build/run for the host CPU
     # (linux/amd64 on x86_64, linux/arm64 on aarch64).
     container_name: bitfun-relay

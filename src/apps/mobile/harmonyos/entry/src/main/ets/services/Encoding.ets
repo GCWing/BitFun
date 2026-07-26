@@ -23,7 +23,8 @@ export class Encoding {
 
   static randomBytes(size: number): Uint8Array {
     const random = cryptoFramework.createRandom();
-    return random.generateRandomSync(size).data;
+    const data = random.generateRandomSync(size).data;
+    return Encoding.copyRandomData(data, size);
   }
 
   static randomId(prefix: string): string {
@@ -53,5 +54,35 @@ export class Encoding {
       copy[index] = value[index];
     }
     return copy;
+  }
+
+  private static copyRandomData(value: Uint8Array | ArrayBuffer, expectedSize: number): Uint8Array {
+    const bytes = value as Uint8Array;
+    if (bytes.length === expectedSize) {
+      return Encoding.copyBytes(bytes);
+    }
+
+    const rawBuffer = value as ArrayBuffer;
+    if (rawBuffer.byteLength === expectedSize) {
+      return Encoding.copyBytes(new Uint8Array(rawBuffer));
+    }
+
+    return Encoding.randomBytesFromUuid(expectedSize);
+  }
+
+  private static randomBytesFromUuid(size: number): Uint8Array {
+    const out = new Uint8Array(size);
+    let offset = 0;
+    while (offset < size) {
+      const uuid = util.generateRandomUUID(false).replace(/-/g, '');
+      if (uuid.length < 2) {
+        throw new Error(`Expected ${size} random bytes.`);
+      }
+      for (let index = 0; index + 1 < uuid.length && offset < size; index += 2) {
+        out[offset] = Number.parseInt(uuid.slice(index, index + 2), 16);
+        offset += 1;
+      }
+    }
+    return out;
   }
 }

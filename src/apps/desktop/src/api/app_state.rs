@@ -15,6 +15,7 @@ use bitfun_core::service::remote_ssh::{
 };
 use bitfun_core::service::{announcement, config, filesystem, mcp, search, token_usage, workspace};
 use bitfun_core::util::errors::*;
+use bitfun_services_integrations::speech::{SpeechService, SpeechStoragePaths};
 
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -72,6 +73,7 @@ pub struct AppState {
     pub config_service: Arc<config::ConfigService>,
     pub filesystem_service: Arc<filesystem::FileSystemService>,
     pub workspace_search_service: Arc<search::WorkspaceSearchService>,
+    pub speech_service: Arc<SpeechService>,
     pub agent_registry: Arc<agents::AgentRegistry>,
     pub mcp_service: Option<Arc<mcp::MCPService>>,
     pub acp_client_service: Option<Arc<bitfun_acp::AcpClientService>>,
@@ -189,6 +191,11 @@ impl AppState {
                 std::path::PathBuf::from("/data/storage/el2/base/files").join("woker_host.js")
             }
         };
+        let speech_service = Arc::new(SpeechService::new(SpeechStoragePaths::new(
+            path_manager.speech_models_dir(),
+            path_manager.speech_model_downloads_dir(),
+            path_manager.speech_input_temp_dir(),
+        )));
         let js_worker_pool = JsWorkerPool::new(path_manager, worker_host_path)
             .ok()
             .map(Arc::new);
@@ -237,15 +244,11 @@ impl AppState {
         // Load persisted remote workspaces (may be multiple)
         match manager.load_remote_workspace().await {
             Ok(_) => {
-                if let Err(e) = manager
-                    .prune_remote_workspaces_without_saved_connections()
-                    .await
-                {
-                    log::warn!(
-                        "Failed to prune stale persisted remote workspaces on startup: {}",
-                        e
-                    );
-                }
+                // Do not prune restore metadata on startup. A saved connection
+                // may be temporarily unavailable because an older profile needs
+                // migration, its password vault cannot be decrypted, or its
+                // config failed to load. Explicit connection deletion already
+                // removes the corresponding workspace records.
                 let workspaces = manager.get_remote_workspaces().await;
                 if !workspaces.is_empty() {
                     log::info!("Loaded {} persisted remote workspace(s)", workspaces.len());
@@ -297,6 +300,7 @@ impl AppState {
             config_service,
             filesystem_service,
             workspace_search_service,
+            speech_service,
             agent_registry,
             mcp_service,
             acp_client_service,

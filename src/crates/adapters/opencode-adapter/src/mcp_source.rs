@@ -7,6 +7,7 @@ use bitfun_product_domains::external_sources::{
     PreparedExternalMcpServer, PreparedExternalMcpTransport, SecretValue, SourceKey,
     SourceQualifiedMcpServerId,
 };
+use bitfun_static_hook_support::{read_bounded_text, BoundedTextRead};
 use serde_json::{Map, Value};
 use sha2::{Digest, Sha256};
 use std::collections::{BTreeMap, BTreeSet};
@@ -15,7 +16,7 @@ use std::path::{Path, PathBuf};
 
 const PROVIDER_ID: &str = "opencode.mcp";
 const ECOSYSTEM_ID: &str = "opencode";
-const MAX_CONFIG_FILE_BYTES: u64 = 1024 * 1024;
+const MAX_CONFIG_FILE_BYTES: usize = 1024 * 1024;
 const MAX_MCP_SERVERS: usize = 256;
 const MAX_COMMAND_PARTS: usize = 256;
 const MAX_MAP_ENTRIES: usize = 128;
@@ -166,7 +167,7 @@ impl OpenCodeMcpProvider {
 
         for layer in self.discover_layers(&input.context) {
             let key = source_key(&layer);
-            let parsed = parse_config_layer(&layer.path);
+            let parsed = parse_config_layer(&input.revision_key, &layer.path);
             let mut layer_diagnostics = parsed
                 .diagnostics
                 .into_iter()
@@ -234,6 +235,7 @@ impl OpenCodeMcpProvider {
             };
             match materialize_server(
                 &input.context,
+                &input.revision_key,
                 effective_source,
                 server_provenance,
                 name,
@@ -402,12 +404,13 @@ struct MaterializedServer {
 
 fn materialize_server(
     context: &ExternalSourceContext,
+    revision_key: &bitfun_product_domains::external_sources::ExternalMcpRevisionKey,
     effective_source: SourceKey,
     provenance: Vec<SourceKey>,
     name: String,
     value: Value,
 ) -> Result<MaterializedServer, ExternalSourceProviderError> {
-    let behavior_version = behavior_version(&name, &value);
+    let behavior_version = behavior_version(revision_key, &name, &value);
     let object = value.as_object().ok_or_else(|| {
         ExternalSourceProviderError::new(
             "opencode.mcp.server_invalid",
@@ -568,11 +571,9 @@ fn materialize_local_server(
             provenance,
             name,
             transport: ExternalMcpTransportKind::LocalStdio,
-            command_preview: Some(if command.is_empty() {
-                "unsupported".to_string()
-            } else {
-                command.clone()
-            }),
+            command_preview: Some(bitfun_static_hook_support::redacted_executable_preview(
+                &command,
+            )),
             argument_count: args.len(),
             working_directory: cwd
                 .as_ref()
@@ -945,9 +946,12 @@ struct ParsedConfigLayer {
     fatal: bool,
 }
 
-fn parse_config_layer(path: &Path) -> ParsedConfigLayer {
-    match fs::metadata(path) {
-        Ok(metadata) if metadata.len() > MAX_CONFIG_FILE_BYTES => {
+fn parse_config_layer(
+    revision_key: &bitfun_product_domains::external_sources::ExternalMcpRevisionKey,
+    path: &Path,
+) -> ParsedConfigLayer {
+    match read_bounded_text(path, MAX_CONFIG_FILE_BYTES) {
+        Ok(BoundedTextRead::TooLarge) => {
             return ParsedConfigLayer {
                 servers: BTreeMap::new(),
                 diagnostics: vec![ExternalSourceDiagnostic::error(
@@ -956,28 +960,25 @@ fn parse_config_layer(path: &Path) -> ParsedConfigLayer {
                     None,
                 )
                 .with_asset_kind(ExternalSourceAssetKind::Mcp)],
-                content_version: format!("too-large:{}", metadata.len()),
+                content_version: "too-large".to_string(),
                 fatal: true,
             };
         }
-        Ok(_) => {}
-        Err(error) => {
+        Ok(BoundedTextRead::InvalidUtf8) => {
             return ParsedConfigLayer {
                 servers: BTreeMap::new(),
                 diagnostics: vec![ExternalSourceDiagnostic::error(
-                    "opencode.mcp.config_unreadable",
-                    format!("Failed to inspect OpenCode MCP config: {error}"),
+                    "opencode.mcp.config_invalid_utf8",
+                    "OpenCode config is not valid UTF-8",
                     None,
                 )
                 .with_asset_kind(ExternalSourceAssetKind::Mcp)],
-                content_version: "unreadable".to_string(),
+                content_version: "invalid-utf8".to_string(),
                 fatal: true,
             };
         }
-    }
-    match fs::read_to_string(path) {
-        Ok(content) => {
-            let content_version = content_version(path, content.as_bytes());
+        Ok(BoundedTextRead::Content(content)) => {
+            let content_version = content_version(revision_key, path, content.as_bytes());
             let value = match serde_json::from_str::<Value>(&strip_jsonc(&content)) {
                 Ok(value) => value,
                 Err(error) => {
@@ -1014,24 +1015,26 @@ fn parse_config_layer(path: &Path) -> ParsedConfigLayer {
                     };
                 }
             };
-            ParsedConfigLayer {
+            return ParsedConfigLayer {
                 servers,
                 diagnostics: Vec::new(),
                 content_version,
                 fatal: false,
-            }
+            };
         }
-        Err(error) => ParsedConfigLayer {
-            servers: BTreeMap::new(),
-            diagnostics: vec![ExternalSourceDiagnostic::error(
-                "opencode.mcp.config_unreadable",
-                format!("Failed to read OpenCode MCP config: {error}"),
-                None,
-            )
-            .with_asset_kind(ExternalSourceAssetKind::Mcp)],
-            content_version: "unreadable".to_string(),
-            fatal: true,
-        },
+        Err(error) => {
+            return ParsedConfigLayer {
+                servers: BTreeMap::new(),
+                diagnostics: vec![ExternalSourceDiagnostic::error(
+                    "opencode.mcp.config_unreadable",
+                    format!("Failed to read OpenCode MCP config: {error}"),
+                    None,
+                )
+                .with_asset_kind(ExternalSourceAssetKind::Mcp)],
+                content_version: "unreadable".to_string(),
+                fatal: true,
+            };
+        }
     }
 }
 
@@ -1051,20 +1054,27 @@ fn deep_merge(current: &mut Value, patch: Value) {
     }
 }
 
-fn behavior_version(name: &str, value: &Value) -> String {
-    let mut hasher = Sha256::new();
-    hasher.update(name.as_bytes());
-    hasher.update([0]);
-    hasher.update(serde_json::to_vec(value).unwrap_or_default());
-    format!("sha256:{}", hex::encode(hasher.finalize()))
+fn behavior_version(
+    revision_key: &bitfun_product_domains::external_sources::ExternalMcpRevisionKey,
+    name: &str,
+    value: &Value,
+) -> String {
+    let encoded = serde_json::to_vec(value).unwrap_or_default();
+    revision_key.opaque_revision(
+        "opencode.mcp.behavior.v1",
+        [name.as_bytes(), encoded.as_slice()],
+    )
 }
 
-fn content_version(path: &Path, content: &[u8]) -> String {
-    let mut hasher = Sha256::new();
-    hasher.update(path.to_string_lossy().as_bytes());
-    hasher.update([0]);
-    hasher.update(content);
-    format!("sha256:{}", hex::encode(hasher.finalize()))
+fn content_version(
+    revision_key: &bitfun_product_domains::external_sources::ExternalMcpRevisionKey,
+    path: &Path,
+    content: &[u8],
+) -> String {
+    revision_key.opaque_revision(
+        "opencode.mcp.content.v1",
+        [path.to_string_lossy().as_bytes(), content],
+    )
 }
 
 fn source_key(layer: &ConfigLayer) -> SourceKey {

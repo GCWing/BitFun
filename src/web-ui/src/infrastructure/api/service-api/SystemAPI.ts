@@ -191,6 +191,12 @@ export class SystemAPI {
     }
   }
 
+  /** Desktop only: whether the app is registered to launch at OS login. */
+  async getLaunchAtLoginEnabled(): Promise<boolean> {
+    // Autostart plugin (@tauri-apps/plugin-autostart) is not available in this build.
+    return false;
+  }
+
   /** Desktop only: send an OS-level desktop notification. */
   async sendSystemNotification(title: string, body?: string): Promise<void> {
     if (typeof window === 'undefined' || !('__TAURI__' in window)) {
@@ -202,6 +208,46 @@ export class SystemAPI {
       });
     } catch (error) {
       log.warn('Failed to send system notification', { title, error });
+    }
+  }
+
+  /** Desktop only: register or unregister launch at OS login. */
+  async setLaunchAtLoginEnabled(enabled: boolean): Promise<void> {
+    if (typeof window === 'undefined' || !('__TAURI__' in window)) {
+      return;
+    }
+    try {
+      // Autostart plugin (@tauri-apps/plugin-autostart) is not available in this build.
+      // if (enabled) {
+      //   await autostartEnable();
+      // } else {
+      //   await autostartDisable();
+      // }
+    } catch (error) {
+      log.error('Failed to set launch-at-login', { enabled, error });
+      throw createTauriCommandError('autostart_set', error, { enabled });
+    }
+  }
+
+  /** Desktop only: whether BitFun should keep the local computer awake. */
+  async getPreventSleepEnabled(): Promise<boolean> {
+    try {
+      return await api.invoke('get_prevent_sleep_enabled', {
+        request: {}
+      });
+    } catch (error) {
+      throw createTauriCommandError('get_prevent_sleep_enabled', error);
+    }
+  }
+
+  /** Desktop only: apply and persist the app-wide sleep-prevention preference. */
+  async setPreventSleepEnabled(enabled: boolean): Promise<void> {
+    try {
+      await api.invoke('set_prevent_sleep_enabled', {
+        request: { enabled }
+      });
+    } catch (error) {
+      throw createTauriCommandError('set_prevent_sleep_enabled', error, { enabled });
     }
   }
 

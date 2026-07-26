@@ -20,6 +20,8 @@ const LOCAL_ONLY_COMMANDS = new Set([
   'initialize_tray_after_startup',
   'startup_window_control',
   'toggle_main_window_fullscreen',
+  'get_prevent_sleep_enabled',
+  'set_prevent_sleep_enabled',
   'restart_app',
   'check_for_updates',
   'install_update',
@@ -79,6 +81,15 @@ const LOCAL_ONLY_COMMANDS = new Set([
   'relay_deploy_cancel',
   'relay_deploy_register',
   'relay_deploy_verify',
+  'speech_list_models',
+  'speech_download_model',
+  'speech_cancel_model_download',
+  'speech_delete_model',
+  'speech_verify_model',
+  'speech_start_input_session',
+  'speech_append_audio_chunk',
+  'speech_finish_input_session',
+  'speech_cancel_input_session',
 ]);
 
 /**

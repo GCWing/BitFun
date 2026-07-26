@@ -1,10 +1,9 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Archive, FolderOpen, Plus, Trash2, Upload } from 'lucide-react';
+import { Archive, FolderOpen } from 'lucide-react';
 import {
   Alert,
   Button,
-  Input,
   Select,
   Switch,
   Tooltip,
@@ -13,7 +12,8 @@ import {
   ConfigPageMessage,
 } from '@/component-library';
 import { configAPI, workspaceAPI } from '@/infrastructure/api';
-// import type { CloseBehavior } from '@/infrastructure/api/service-api/SystemAPI';
+import { systemAPI } from '@/infrastructure/api/service-api/SystemAPI';
+import type { CloseBehavior } from '@/infrastructure/api/service-api/SystemAPI';
 import {
   getTerminalService,
   refreshTerminalPanelPosition,
@@ -45,6 +45,103 @@ type TerminalShellOption = SelectOption & {
 
 const formatShellLabel = (shell: ShellInfo): string =>
   `${shell.name}${shell.version ? ` (${shell.version})` : ''}`;
+
+function BasicsLaunchAtLoginSection() {
+  const { t } = useTranslation('settings/basics');
+  const isTauri = typeof window !== 'undefined' && '__TAURI__' in window;
+  const [enabled, setEnabled] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [message, setMessage] = useState<{ type: 'success' | 'error' | 'info'; text: string } | null>(null);
+
+  const showMessage = useCallback((type: 'success' | 'error' | 'info', text: string) => {
+    setMessage({ type, text });
+    setTimeout(() => setMessage(null), 3000);
+  }, []);
+
+  useEffect(() => {
+    if (!isTauri) {
+      setLoading(false);
+      return;
+    }
+
+    let cancelled = false;
+    void (async () => {
+      try {
+        setLoading(true);
+        const v = await systemAPI.getLaunchAtLoginEnabled();
+        if (!cancelled) {
+          setEnabled(v);
+        }
+      } catch (error) {
+        log.error('Failed to load launch-at-login state', error);
+        if (!cancelled) {
+          showMessage('error', t('launchAtLogin.messages.loadFailed'));
+        }
+      } finally {
+        if (!cancelled) {
+          setLoading(false);
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [isTauri, showMessage, t]);
+
+  const handleToggle = useCallback(
+    async (next: boolean) => {
+      const previous = enabled;
+      setEnabled(next);
+      setSaving(true);
+      try {
+        await systemAPI.setLaunchAtLoginEnabled(next);
+      } catch (error) {
+        setEnabled(previous);
+        log.error('Failed to set launch-at-login', { next, error });
+        showMessage('error', t('launchAtLogin.messages.saveFailed'));
+      } finally {
+        setSaving(false);
+      }
+    },
+    [enabled, showMessage, t]
+  );
+
+  if (!isTauri) {
+    return null;
+  }
+
+  if (loading) {
+    return <ConfigPageLoading text={t('launchAtLogin.messages.loading')} />;
+  }
+
+  return (
+    <div className="bitfun-launch-at-login-config">
+      <div className="bitfun-launch-at-login-config__content">
+        <ConfigPageMessage message={message} />
+        <ConfigPageSection
+          title={t('launchAtLogin.sections.title')}
+          description={t('launchAtLogin.sections.hint')}
+        >
+          <ConfigPageRow
+            label={t('launchAtLogin.toggleLabel')}
+            description={t('launchAtLogin.toggleDescription')}
+            align="center"
+          >
+            <Switch
+              checked={enabled}
+              onChange={(e) => {
+                void handleToggle(e.target.checked);
+              }}
+              disabled={saving}
+            />
+          </ConfigPageRow>
+        </ConfigPageSection>
+      </div>
+    </div>
+  );
+}
 
 function BasicsAutoUpdateSection() {
   const { t } = useTranslation('settings/basics');
@@ -143,6 +240,100 @@ function BasicsAutoUpdateSection() {
   );
 }
 
+function BasicsPreventSleepSection() {
+  const { t } = useTranslation('settings/basics');
+  const isTauri = typeof window !== 'undefined' && '__TAURI__' in window;
+  const [enabled, setEnabled] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [message, setMessage] = useState<{ type: 'success' | 'error' | 'info'; text: string } | null>(null);
+
+  const showMessage = useCallback((type: 'success' | 'error' | 'info', text: string) => {
+    setMessage({ type, text });
+    setTimeout(() => setMessage(null), 3000);
+  }, []);
+
+  useEffect(() => {
+    if (!isTauri) {
+      setLoading(false);
+      return;
+    }
+
+    let cancelled = false;
+    void (async () => {
+      try {
+        setLoading(true);
+        const value = await systemAPI.getPreventSleepEnabled();
+        if (!cancelled) {
+          setEnabled(value);
+        }
+      } catch (error) {
+        log.error('Failed to load prevent-sleep preference', error);
+        if (!cancelled) {
+          showMessage('error', t('preventSleep.messages.loadFailed'));
+        }
+      } finally {
+        if (!cancelled) {
+          setLoading(false);
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [isTauri, showMessage, t]);
+
+  const handleToggle = useCallback(
+    async (next: boolean) => {
+      const previous = enabled;
+      setEnabled(next);
+      setSaving(true);
+      try {
+        await systemAPI.setPreventSleepEnabled(next);
+        showMessage('success', t('preventSleep.messages.saved'));
+      } catch (error) {
+        setEnabled(previous);
+        log.error('Failed to set prevent-sleep preference', { next, error });
+        showMessage('error', t('preventSleep.messages.saveFailed'));
+      } finally {
+        setSaving(false);
+      }
+    },
+    [enabled, showMessage, t]
+  );
+
+  if (!isTauri) {
+    return null;
+  }
+
+  if (loading) {
+    return <ConfigPageLoading text={t('preventSleep.messages.loading')} />;
+  }
+
+  return (
+    <ConfigPageSection
+      title={t('preventSleep.sections.title')}
+      description={t('preventSleep.sections.hint')}
+    >
+      <ConfigPageMessage message={message} />
+      <ConfigPageRow
+        label={t('preventSleep.toggleLabel')}
+        description={t('preventSleep.toggleDescription')}
+        align="center"
+      >
+        <Switch
+          checked={enabled}
+          onChange={(event) => {
+            void handleToggle(event.target.checked);
+          }}
+          disabled={saving}
+        />
+      </ConfigPageRow>
+    </ConfigPageSection>
+  );
+}
+
 function BasicsLoggingSection() {
   const { t } = useTranslation('settings/basics');
   const [configLevel, setConfigLevel] = useState<BackendLogLevel>('info');
@@ -153,14 +344,6 @@ function BasicsLoggingSection() {
   const [openingFolder, setOpeningFolder] = useState(false);
   const [exportingDiagnostics, setExportingDiagnostics] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error' | 'info'; text: string } | null>(null);
-
-  const getFormattedLogPath = useCallback(() => {
-    if (!runtimeInfo?.sessionLogDir) return '';
-    return runtimeInfo.sessionLogDir.replace(
-      '/data/storage/el2/base/files/bitfun',
-      '/storage/Users/currentUser/appdata/el2/base/com.develop.opensource.ohpcd.bitfun/files/bitfun'
-    );
-  }, [runtimeInfo?.sessionLogDir]);
 
   const levelOptions = useMemo(
     () => [
@@ -251,7 +434,7 @@ function BasicsLoggingSection() {
   );
 
   const handleOpenFolder = useCallback(async () => {
-    const folder = getFormattedLogPath();
+    const folder = runtimeInfo?.sessionLogDir;
     if (!folder) {
       showMessage('error', t('logging.messages.pathUnavailable'));
       return;
@@ -266,7 +449,7 @@ function BasicsLoggingSection() {
     } finally {
       setOpeningFolder(false);
     }
-  }, [getFormattedLogPath, showMessage, t]);
+  }, [runtimeInfo?.sessionLogDir, showMessage, t]);
 
   const handleExportDiagnostics = useCallback(async () => {
     try {
@@ -347,7 +530,7 @@ function BasicsLoggingSection() {
           >
             <div className="bitfun-logging-config__path-row">
               <div className="bitfun-logging-config__path-box">
-                {getFormattedLogPath() || '-'}
+                {runtimeInfo?.sessionLogDir || '-'}
               </div>
               <Tooltip content={t('logging.actions.openFolderTooltip')} placement="top">
                 <button
@@ -600,103 +783,103 @@ function BasicsTerminalSection() {
   );
 }
 
-// function BasicsWindowBehaviorSection() {
-//   const { t } = useTranslation('settings/basics');
-//   const isTauri = typeof window !== 'undefined' && '__TAURI__' in window;
-//   const [behavior, setBehavior] = useState<CloseBehavior>('quit');
-//   const [loading, setLoading] = useState(true);
-//   const [saving, setSaving] = useState(false);
-//   const [message, setMessage] = useState<{ type: 'success' | 'error' | 'info'; text: string } | null>(null);
+function BasicsWindowBehaviorSection() {
+  const { t } = useTranslation('settings/basics');
+  const isTauri = typeof window !== 'undefined' && '__TAURI__' in window;
+  const [behavior, setBehavior] = useState<CloseBehavior>('quit');
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [message, setMessage] = useState<{ type: 'success' | 'error' | 'info'; text: string } | null>(null);
 
-//   const showMessage = useCallback((type: 'success' | 'error' | 'info', text: string) => {
-//     setMessage({ type, text });
-//     setTimeout(() => setMessage(null), 3000);
-//   }, []);
+  const showMessage = useCallback((type: 'success' | 'error' | 'info', text: string) => {
+    setMessage({ type, text });
+    setTimeout(() => setMessage(null), 3000);
+  }, []);
 
-//   const behaviorOptions = useMemo(
-//     () => [
-//       { value: 'quit', label: t('windowBehavior.options.quit') },
-//       { value: 'minimize_to_tray', label: t('windowBehavior.options.minimizeToTray') },
-//       { value: 'ask', label: t('windowBehavior.options.ask') },
-//     ],
-//     [t]
-//   );
+  const behaviorOptions = useMemo(
+    () => [
+      { value: 'quit', label: t('windowBehavior.options.quit') },
+      { value: 'minimize_to_tray', label: t('windowBehavior.options.minimizeToTray') },
+      { value: 'ask', label: t('windowBehavior.options.ask') },
+    ],
+    [t]
+  );
 
-//   useEffect(() => {
-//     if (!isTauri) {
-//       setLoading(false);
-//       return;
-//     }
-//     let cancelled = false;
-//     void (async () => {
-//       try {
-//         setLoading(true);
-//         const v = await configManager.getConfig<CloseBehavior>('app.close_button_behavior');
-//         if (!cancelled) setBehavior(v ?? 'minimize_to_tray');
-//       } catch {
-//         // Key absent on first launch — fall back to default silently.
-//         if (!cancelled) setBehavior('minimize_to_tray');
-//       } finally {
-//         if (!cancelled) setLoading(false);
-//       }
-//     })();
-//     return () => { cancelled = true; };
-//   }, [isTauri, showMessage, t]);
+  useEffect(() => {
+    if (!isTauri) {
+      setLoading(false);
+      return;
+    }
+    let cancelled = false;
+    void (async () => {
+      try {
+        setLoading(true);
+        const v = await configManager.getConfig<CloseBehavior>('app.close_button_behavior');
+        if (!cancelled) setBehavior(v ?? 'minimize_to_tray');
+      } catch {
+        // Key absent on first launch — fall back to default silently.
+        if (!cancelled) setBehavior('minimize_to_tray');
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [isTauri, showMessage, t]);
 
-//   const handleChange = useCallback(
-//     async (value: string) => {
-//       const previous = behavior;
-//       const next = value as CloseBehavior;
-//       setBehavior(next);
-//       setSaving(true);
-//       try {
-//         await configManager.setConfig('app.close_button_behavior', next);
-//         configManager.clearCache();
-//         showMessage('success', t('windowBehavior.messages.saved'));
-//       } catch (error) {
-//         setBehavior(previous);
-//         log.error('Failed to save close behavior', { next, error });
-//         showMessage('error', t('windowBehavior.messages.saveFailed'));
-//       } finally {
-//         setSaving(false);
-//       }
-//     },
-//     [behavior, showMessage, t]
-//   );
+  const handleChange = useCallback(
+    async (value: string) => {
+      const previous = behavior;
+      const next = value as CloseBehavior;
+      setBehavior(next);
+      setSaving(true);
+      try {
+        await configManager.setConfig('app.close_button_behavior', next);
+        configManager.clearCache();
+        showMessage('success', t('windowBehavior.messages.saved'));
+      } catch (error) {
+        setBehavior(previous);
+        log.error('Failed to save close behavior', { next, error });
+        showMessage('error', t('windowBehavior.messages.saveFailed'));
+      } finally {
+        setSaving(false);
+      }
+    },
+    [behavior, showMessage, t]
+  );
 
-//   if (!isTauri) return null;
+  if (!isTauri) return null;
 
-//   if (loading) {
-//     return <ConfigPageLoading text={t('windowBehavior.messages.loading')} />;
-//   }
+  if (loading) {
+    return <ConfigPageLoading text={t('windowBehavior.messages.loading')} />;
+  }
 
-//   return (
-//     <div className="bitfun-window-behavior-config">
-//       <div className="bitfun-window-behavior-config__content">
-//         <ConfigPageMessage message={message} />
-//         <ConfigPageSection
-//           title={t('windowBehavior.sections.title')}
-//           description={t('windowBehavior.sections.hint')}
-//         >
-//           <ConfigPageRow
-//             label={t('windowBehavior.closeButtonLabel')}
-//             description={t('windowBehavior.closeButtonDescription')}
-//             align="center"
-//           >
-//             <div className="bitfun-window-behavior-config__select-wrapper">
-//               <Select
-//                 value={behavior}
-//                 onChange={(v) => { void handleChange(v as string); }}
-//                 options={behaviorOptions}
-//                 disabled={saving}
-//               />
-//             </div>
-//           </ConfigPageRow>
-//         </ConfigPageSection>
-//       </div>
-//     </div>
-//   );
-// }
+  return (
+    <div className="bitfun-window-behavior-config">
+      <div className="bitfun-window-behavior-config__content">
+        <ConfigPageMessage message={message} />
+        <ConfigPageSection
+          title={t('windowBehavior.sections.title')}
+          description={t('windowBehavior.sections.hint')}
+        >
+          <ConfigPageRow
+            label={t('windowBehavior.closeButtonLabel')}
+            description={t('windowBehavior.closeButtonDescription')}
+            align="center"
+          >
+            <div className="bitfun-window-behavior-config__select-wrapper">
+              <Select
+                value={behavior}
+                onChange={(v) => { void handleChange(v as string); }}
+                options={behaviorOptions}
+                disabled={saving}
+              />
+            </div>
+          </ConfigPageRow>
+        </ConfigPageSection>
+      </div>
+    </div>
+  );
+}
 
 function BasicsNotificationsSection() {  const { t } = useTranslation('settings/basics');
   const [dialogNotify, setDialogNotify] = useState(true);
@@ -778,274 +961,6 @@ function BasicsNotificationsSection() {  const { t } = useTranslation('settings/
   );
 }
 
-interface EnvVarRow {
-  id: string;
-  key: string;
-  value: string;
-}
-
-let envVarRowSeq = 0;
-const newEnvVarRowId = (): string => `envvar-${Date.now()}-${envVarRowSeq++}`;
-
-/**
- * Parse environment-variable text (e.g. a `.env` file) into a key/value map.
- * Supports `KEY=VALUE`, `export KEY=VALUE`, and `KEY: VALUE` lines. Skips blank
- * and `#`-comment lines, strips surrounding quotes, and reports unparseable lines.
- */
-function parseEnvText(text: string): { parsed: Record<string, string>; skipped: number } {
-  const parsed: Record<string, string> = {};
-  let skipped = 0;
-  for (const rawLine of text.split(/\r?\n/)) {
-    const line = rawLine.trim();
-    if (line === '' || line.startsWith('#')) continue;
-    let work = line;
-    if (/^export\s+/.test(work)) {
-      work = work.replace(/^export\s+/, '');
-    }
-    const match = work.match(/^([^=:]+)[=:](.*)$/);
-    if (!match) {
-      skipped += 1;
-      continue;
-    }
-    const key = match[1].trim();
-    let value = match[2].trim();
-    if (
-      (value.startsWith('"') && value.endsWith('"')) ||
-      (value.startsWith("'") && value.endsWith("'"))
-    ) {
-      value = value.slice(1, -1);
-    }
-    if (key === '') {
-      skipped += 1;
-      continue;
-    }
-    if (key.toUpperCase() === 'PATH') {
-      skipped += 1;
-      continue;
-    }
-    parsed[key] = value;
-  }
-  return { parsed, skipped };
-}
-
-function BasicsEnvVarsSection() {
-  const { t } = useTranslation('settings/basics');
-  const isTauri = typeof window !== 'undefined' && '__TAURI__' in window;
-  const [rows, setRows] = useState<EnvVarRow[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [message, setMessage] = useState<{ type: 'success' | 'error' | 'info'; text: string } | null>(null);
-
-  const showMessage = useCallback((type: 'success' | 'error' | 'info', text: string) => {
-    setMessage({ type, text });
-    setTimeout(() => setMessage(null), 3000);
-  }, []);
-
-  const loadData = useCallback(async () => {
-    try {
-      setLoading(true);
-      const terminalConfig = await configManager.getConfig<TerminalSettings>('terminal');
-      const envVars = terminalConfig?.env_vars ?? {};
-      const next: EnvVarRow[] = Object.keys(envVars)
-        .sort((a, b) => a.localeCompare(b))
-        .map((key) => ({ id: newEnvVarRowId(), key, value: envVars[key] ?? '' }));
-      setRows(next);
-    } catch (error) {
-      log.error('Failed to load terminal env vars', error);
-      showMessage('error', t('terminal.envVars.messages.loadFailed'));
-    } finally {
-      setLoading(false);
-    }
-  }, [showMessage, t]);
-
-  useEffect(() => {
-    void loadData();
-  }, [loadData]);
-
-  const handleAddRow = useCallback(() => {
-    setRows((prev) => [...prev, { id: newEnvVarRowId(), key: '', value: '' }]);
-  }, []);
-
-  const handleRemoveRow = useCallback((id: string) => {
-    setRows((prev) => prev.filter((r) => r.id !== id));
-  }, []);
-
-  const handleRowChange = useCallback((id: string, field: 'key' | 'value', val: string) => {
-    setRows((prev) => prev.map((r) => (r.id === id ? { ...r, [field]: val } : r)));
-  }, []);
-
-  const buildRecord = useCallback((source: EnvVarRow[]): Record<string, string> => {
-    const record: Record<string, string> = {};
-    for (const row of source) {
-      const key = row.key.trim();
-      if (key === '') continue;
-      record[key] = row.value;
-    }
-    return record;
-  }, []);
-
-  const persist = useCallback(
-    async (source: EnvVarRow[]): Promise<void> => {
-      const record = buildRecord(source);
-      await configManager.setConfig<Record<string, string>>('terminal.env_vars', record);
-      configManager.clearCache();
-    },
-    [buildRecord]
-  );
-
-  const handleSave = useCallback(async () => {
-    try {
-      setSaving(true);
-      await persist(rows);
-      showMessage('success', t('terminal.envVars.messages.saved'));
-    } catch (error) {
-      log.error('Failed to save terminal env vars', error);
-      showMessage('error', t('terminal.envVars.messages.saveFailed'));
-    } finally {
-      setSaving(false);
-    }
-  }, [persist, rows, showMessage, t]);
-
-  const handleImportFile = useCallback(async () => {
-    try {
-      const filePath = await workspaceAPI.open_oh_file_dialog({ directory: false });
-      if (typeof filePath !== 'string') return;
-      const text = await workspaceAPI.readFileContent(filePath);
-      const { parsed, skipped } = parseEnvText(text);
-      const parsedCount = Object.keys(parsed).length;
-      if (parsedCount === 0) {
-        showMessage('error', t('terminal.envVars.messages.importFailed'));
-        return;
-      }
-      const merged = (() => {
-        const byKey = new Map<string, EnvVarRow>();
-        for (const r of rows) byKey.set(r.key.trim(), r);
-        for (const [k, v] of Object.entries(parsed)) {
-          const existing = byKey.get(k);
-          if (existing) {
-            existing.value = v;
-          } else {
-            byKey.set(k, { id: newEnvVarRowId(), key: k, value: v });
-          }
-        }
-        return Array.from(byKey.values()).sort((a, b) => a.key.localeCompare(b.key));
-      })();
-      setRows(merged);
-      await persist(merged);
-      showMessage(
-        'success',
-        skipped > 0
-          ? t('terminal.envVars.messages.importedWithSkipped', { count: parsedCount, skipped })
-          : t('terminal.envVars.messages.imported', { count: parsedCount })
-      );
-    } catch (error) {
-      log.error('Failed to import env vars from file', error);
-      showMessage('error', t('terminal.envVars.messages.importFailed'));
-    }
-  }, [persist, rows, showMessage, t]);
-
-  if (!isTauri) return null;
-
-  if (loading) {
-    return <ConfigPageLoading text={t('terminal.envVars.messages.loading')} />;
-  }
-
-  return (
-    <div className="bitfun-env-vars-config">
-      <div className="bitfun-env-vars-config__content">
-        <ConfigPageMessage message={message} />
-        <ConfigPageSection
-          title={t('terminal.envVars.title')}
-          description={t('terminal.envVars.hint')}
-          extra={
-            <div className="bitfun-env-vars-config__actions">
-              <Button
-                variant="secondary"
-                size="small"
-                onClick={() => { void handleImportFile(); }}
-                disabled={saving}
-              >
-                <Upload size={14} />
-                <span>{t('terminal.envVars.importFile.button')}</span>
-              </Button>
-              <Button
-                variant="primary"
-                size="small"
-                onClick={() => { void handleSave(); }}
-                disabled={saving}
-              >
-                {t('terminal.envVars.save')}
-              </Button>
-            </div>
-          }
-        >
-          {rows.length === 0 ? (
-            <div className="bitfun-env-vars-config__empty">{t('terminal.envVars.empty')}</div>
-          ) : (
-            <div className="bitfun-env-vars-config__table">
-              <div className="bitfun-env-vars-config__row bitfun-env-vars-config__row--header">
-                <div className="bitfun-env-vars-config__cell bitfun-env-vars-config__cell--key">
-                  {t('terminal.envVars.columns.key')}
-                </div>
-                <div className="bitfun-env-vars-config__cell bitfun-env-vars-config__cell--value">
-                  {t('terminal.envVars.columns.value')}
-                </div>
-                <div className="bitfun-env-vars-config__cell bitfun-env-vars-config__cell--action" />
-              </div>
-              {rows.map((row) => (
-                <div className="bitfun-env-vars-config__row" key={row.id}>
-                  <div className="bitfun-env-vars-config__cell bitfun-env-vars-config__cell--key">
-                    <Input
-                      value={row.key}
-                      onChange={(e) => handleRowChange(row.id, 'key', e.target.value)}
-                      placeholder={t('terminal.envVars.columns.keyPlaceholder')}
-                      disabled={saving}
-                      inputSize="small"
-                    />
-                  </div>
-                  <div className="bitfun-env-vars-config__cell bitfun-env-vars-config__cell--value">
-                    <Input
-                      value={row.value}
-                      onChange={(e) => handleRowChange(row.id, 'value', e.target.value)}
-                      placeholder={t('terminal.envVars.columns.valuePlaceholder')}
-                      disabled={saving}
-                      inputSize="small"
-                    />
-                  </div>
-                  <div className="bitfun-env-vars-config__cell bitfun-env-vars-config__cell--action">
-                    <Tooltip content={t('terminal.envVars.actions.delete')}>
-                      <Button
-                        variant="ghost"
-                        size="small"
-                        onClick={() => handleRemoveRow(row.id)}
-                        disabled={saving}
-                        aria-label={t('terminal.envVars.actions.delete')}
-                      >
-                        <Trash2 size={14} />
-                      </Button>
-                    </Tooltip>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-          <div className="bitfun-env-vars-config__footer">
-            <Button
-              variant="ghost"
-              size="small"
-              onClick={handleAddRow}
-              disabled={saving}
-            >
-              <Plus size={14} />
-              <span>{t('terminal.envVars.actions.addRow')}</span>
-            </Button>
-          </div>
-        </ConfigPageSection>
-      </div>
-    </div>
-  );
-}
-
 const BasicsConfig: React.FC = () => {
   const { t } = useTranslation('settings/basics');
 
@@ -1053,11 +968,12 @@ const BasicsConfig: React.FC = () => {
     <ConfigPageLayout className="bitfun-basics-config">
       <ConfigPageHeader title={t('title')} subtitle={t('subtitle')} />
       <ConfigPageContent className="bitfun-basics-config__content">
+        <BasicsLaunchAtLoginSection />
+        <BasicsPreventSleepSection />
         <BasicsAutoUpdateSection />
-        {/* <BasicsWindowBehaviorSection /> */}
+        <BasicsWindowBehaviorSection />
         <BasicsLoggingSection />
         <BasicsTerminalSection />
-        <BasicsEnvVarsSection />
         <BasicsNotificationsSection />
       </ConfigPageContent>
     </ConfigPageLayout>

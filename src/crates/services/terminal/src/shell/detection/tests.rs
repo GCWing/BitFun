@@ -92,6 +92,31 @@ fn detected_shell_id_is_stable_for_the_same_path() {
 }
 
 #[test]
+fn cached_validation_keeps_the_current_discovery_source() {
+    let path = std::env::current_exe().expect("current test executable");
+    let shell_type = ShellType::Custom("cached-source-test".to_string());
+    let from_path = ShellDetector::validate_candidate(ShellCandidate::new(
+        path.clone(),
+        shell_type.clone(),
+        ShellDiscoverySource::Path,
+    ))
+    .expect("candidate discovered from PATH");
+    let from_system = ShellDetector::validate_candidate(ShellCandidate::new(
+        path,
+        shell_type,
+        ShellDiscoverySource::SystemInstall,
+    ))
+    .expect("candidate discovered from system install");
+
+    assert_eq!(from_path.discovery_source, ShellDiscoverySource::Path);
+    assert_eq!(
+        from_system.discovery_source,
+        ShellDiscoverySource::SystemInstall
+    );
+    assert_eq!(from_path.id, from_system.id);
+}
+
+#[test]
 fn normalized_identity_uses_canonical_path_when_available() {
     assert!(!path::normalized_path_identity(
         &std::env::current_exe().expect("current test executable")

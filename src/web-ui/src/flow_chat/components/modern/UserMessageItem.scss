@@ -114,6 +114,38 @@
   transition: all 0.2s ease;
 }
 
+.user-message-item__reference {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.28rem;
+  max-width: min(100%, 18rem);
+  margin: 0.08rem 0.14rem;
+  padding: 0.08rem 0.38rem;
+  vertical-align: text-bottom;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--size-radius-sm);
+  background: var(--element-bg-hover);
+  color: var(--color-text-secondary);
+  font-size: calc(var(--flowchat-font-size-base) * 0.9);
+  font-weight: 500;
+  line-height: 1.35;
+  white-space: nowrap;
+  user-select: none;
+
+  svg {
+    flex: 0 0 auto;
+  }
+}
+
+.user-message-item__reference--session-reference {
+  color: var(--color-text-primary);
+}
+
+.user-message-item__reference-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 // Expanded state (outer scroll area).
 .user-message-item--expanded {
   max-height: 60vh;
@@ -287,6 +319,31 @@
     font-size: var(--flowchat-font-size-base);
     line-height: var(--flowchat-text-line-height);
     resize: vertical;
+  }
+}
+
+.user-message-edit-composer__rich-input {
+  position: relative;
+  min-height: 5.5rem;
+  max-height: 45vh;
+  overflow-y: auto;
+  padding: 0.45rem 0.6rem;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--size-radius-sm);
+  background: var(--element-bg-subtle);
+
+  .rich-text-input {
+    min-height: 4.4rem;
+    padding: 0;
+    border: none;
+    background: transparent;
+    box-shadow: none;
+    font-size: var(--flowchat-font-size-base);
+    line-height: var(--flowchat-text-line-height);
+  }
+
+  &:focus-within {
+    border-color: var(--color-accent-500);
   }
 }
 

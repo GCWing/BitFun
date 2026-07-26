@@ -173,7 +173,8 @@ fn capability_packs_describe_service_tool_and_harness_requirements() {
             "deep-review",
             "deep-research",
             "miniapp",
-            "canvas"
+            "canvas",
+            "voice-input"
         ]
     );
 
@@ -222,7 +223,7 @@ fn capability_packs_describe_service_tool_and_harness_requirements() {
 
 #[test]
 fn product_assembly_plan_keeps_full_capabilities_only_for_core_compatibility_profiles() {
-    let expected_capabilities = vec![
+    let shared_capabilities = vec![
         "code-agent",
         "deep-review",
         "deep-research",
@@ -237,11 +238,36 @@ fn product_assembly_plan_keeps_full_capabilities_only_for_core_compatibility_pro
         "core.integration",
     ];
 
+    for profile in [DeliveryProfile::ProductFull, DeliveryProfile::Desktop] {
+        let plan = product_assembly_plan_for_profile(profile);
+        let mut expected_capabilities = shared_capabilities.clone();
+        expected_capabilities.push("voice-input");
+
+        assert_eq!(plan.profile(), profile);
+        assert_eq!(
+            plan.capability_set()
+                .ids()
+                .iter()
+                .map(|capability_id| capability_id.id())
+                .collect::<Vec<_>>(),
+            expected_capabilities,
+            "{profile} must include the desktop voice-input capability"
+        );
+        assert_eq!(
+            plan.capability_assembly()
+                .tool_provider_group_plan()
+                .iter()
+                .map(|group| group.provider_id())
+                .collect::<Vec<_>>(),
+            expected_tool_groups,
+            "{profile} must preserve current tool provider groups"
+        );
+    }
+
     for profile in [
-        DeliveryProfile::ProductFull,
-        DeliveryProfile::Desktop,
         DeliveryProfile::Cli,
         DeliveryProfile::Acp,
+        DeliveryProfile::Sdk,
     ] {
         let plan = product_assembly_plan_for_profile(profile);
 
@@ -252,8 +278,8 @@ fn product_assembly_plan_keeps_full_capabilities_only_for_core_compatibility_pro
                 .iter()
                 .map(|capability_id| capability_id.id())
                 .collect::<Vec<_>>(),
-            expected_capabilities,
-            "{profile} must preserve the current product-full capability set until explicit trimming is proven"
+            shared_capabilities,
+            "{profile} must not select desktop-only voice input"
         );
         assert_eq!(
             plan.capability_assembly()
@@ -756,7 +782,8 @@ fn default_capability_assembly_keeps_service_tool_and_harness_facts_together() {
             "deep-review",
             "deep-research",
             "miniapp",
-            "canvas"
+            "canvas",
+            "voice-input"
         ]
     );
 

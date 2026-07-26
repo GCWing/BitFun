@@ -1221,6 +1221,25 @@ export function runManifestParserSelfTest({
   if (!opencodeManifestRule) {
     throw new Error('OpenCode adapter must have a forbidden manifest dependency rule');
   }
+  const speechEngineManifestRule = forbiddenManifestDependencyRules.find((rule) =>
+    rule.dependencyNames?.includes('sherpa-onnx'),
+  );
+  if (!speechEngineManifestRule) {
+    throw new Error('speech engine must have a forbidden manifest dependency rule');
+  }
+  if (!speechEngineManifestRule.allowManifestPaths?.includes(
+    'src/crates/services/services-integrations/Cargo.toml',
+  )) {
+    throw new Error('speech engine manifest guard must allow only its integration service owner');
+  }
+  const coreSpeechOwnerRule = forbiddenContentUnderRules.find(
+    (rule) => rule.path === 'src/crates/assembly/core/src/service',
+  );
+  if (!coreSpeechOwnerRule || !coreSpeechOwnerRule.patterns.some(
+    (pattern) => pattern.regex.source.includes('mod\\s+speech'),
+  )) {
+    throw new Error('core speech ownership guard must forbid a speech service module');
+  }
   for (const dependencyName of [
     'bitfun-claude-code-adapter',
     'bitfun-codex-adapter',
@@ -3643,7 +3662,7 @@ export function runManifestParserSelfTest({
     },
     {
       path: 'src/crates/assembly/core/src/service/search/remote.rs',
-      contracts: ['ServiceRemoteWorkspaceSearchService', 'impl RemoteWorkspaceSearchProvider for CoreRemoteWorkspaceSearchProvider', 'lookup_remote_connection_with_hint', 'open_exec_channel', 'RemoteWorkspaceSearchStdioProtocol'],
+      contracts: ['ServiceRemoteWorkspaceSearchService', 'impl RemoteWorkspaceSearchProvider for CoreRemoteWorkspaceSearchProvider', 'lookup_remote_connection_with_hint', 'open_workspace_stdio', 'RemoteWorkspaceSearchStdioProtocol'],
     },
     {
       path: 'src/crates/services/services-integrations/src/remote_ssh/workspace_search/mod.rs',
@@ -3744,7 +3763,11 @@ export function runManifestParserSelfTest({
     },
     {
       path: 'src/crates/assembly/core/src/service/workspace/manager.rs',
-      contracts: ['feature = "service-integrations"', 'GitService', 'return None'],
+      contracts: [
+        'feature = "service-integrations"',
+        'global_worktree_topology_service',
+        'return None',
+      ],
     },
     {
       path: 'src/crates/assembly/core/src/service/workspace_runtime/service.rs',
@@ -4006,7 +4029,12 @@ export function runManifestParserSelfTest({
     },
     {
       path: 'src/crates/services/services-integrations/src/remote_ssh/manager.rs',
-      contracts: ['SSHConnectionManager', 'russh::client::connect_stream', 'SftpSession', 'prunes_password_connection_without_vault_entry'],
+      contracts: [
+        'SSHConnectionManager',
+        'russh::client::connect_stream',
+        'SftpSession',
+        'retains_legacy_password_connection_and_workspace_without_vault_entry',
+      ],
     },
     {
       path: 'src/crates/services/services-integrations/src/remote_ssh/remote_exec.rs',

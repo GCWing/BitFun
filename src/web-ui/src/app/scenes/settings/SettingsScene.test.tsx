@@ -42,6 +42,10 @@ vi.mock('../../../infrastructure/config/components/QuickActionsConfig', () => ({
   default: () => <div data-testid="quick-actions-config" />,
 }));
 
+vi.mock('../../../infrastructure/config/components/VoiceInputConfig', () => ({
+  default: () => <div data-testid="voice-input-config" />,
+}));
+
 vi.mock('../../../infrastructure/config/components/SessionConfig', () => ({
   SessionPersonalizationConfig: () => <div data-testid="session-personalization-config" />,
   SessionPermissionsConfig: () => <div data-testid="session-permissions-config" />,
@@ -71,9 +75,12 @@ describe('SettingsScene lazy tab routing', () => {
       root.unmount();
     });
     container.remove();
+    vi.useRealTimers();
   });
 
-  async function renderActiveTab(tab: 'mcp-tools' | 'acp-agents' | 'external-sources') {
+  async function renderActiveTab(
+    tab: 'mcp-tools' | 'acp-agents' | 'external-sources' | 'voice-input'
+  ) {
     useSettingsStore.setState({ activeTab: tab });
     await act(async () => {
       root.render(<SettingsScene />);
@@ -96,5 +103,38 @@ describe('SettingsScene lazy tab routing', () => {
     await renderActiveTab('external-sources');
 
     expect(container.querySelector('[data-testid="external-sources-config"]')).not.toBeNull();
+  });
+
+  it('renders the lazy voice input config tab', async () => {
+    await renderActiveTab('voice-input');
+
+    expect(container.querySelector('[data-testid="voice-input-config"]')).not.toBeNull();
+  });
+
+  it('keeps the previous settings page mounted through the local transition', async () => {
+    vi.useFakeTimers();
+    await act(async () => {
+      root.render(<SettingsScene />);
+    });
+
+    await act(async () => {
+      useSettingsStore.setState({ activeTab: 'appearance' });
+      await Promise.resolve();
+    });
+
+    const activePanel = container.querySelector('[data-settings-panel-active="true"]');
+    const outgoingPanel = container.querySelector('.bitfun-settings-scene__content-wrapper--outgoing');
+    expect(activePanel?.getAttribute('data-settings-panel')).toBe('appearance');
+    expect(outgoingPanel?.getAttribute('data-settings-panel')).toBe('basics');
+
+    act(() => {
+      vi.advanceTimersByTime(179);
+    });
+    expect(container.querySelector('[data-settings-panel="basics"]')).not.toBeNull();
+
+    act(() => {
+      vi.advanceTimersByTime(1);
+    });
+    expect(container.querySelector('[data-settings-panel="basics"]')).toBeNull();
   });
 });

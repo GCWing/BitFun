@@ -9,7 +9,7 @@ use std::collections::{HashMap, HashSet, VecDeque};
 use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
 
 use super::agent_selector::{AgentItem, AgentSelectorAction, AgentSelectorState};
-use super::command_menu::CommandMenuState;
+use super::command_menu::{CommandMenuSelection, CommandMenuState};
 use super::command_palette::{CommandPaletteState, PaletteAction};
 use super::login_form::{LoginFormAction, LoginFormState};
 use super::markdown::MarkdownRenderer;
@@ -178,7 +178,7 @@ pub(crate) struct ChatView {
 
     // -- Mouse click tracking --
     /// Pending command from mouse click on command menu (consumed by caller)
-    pending_command: Option<String>,
+    pending_command: Option<CommandMenuSelection>,
     /// Pending theme preview selection (consumed by caller)
     pending_theme_preview: Option<ThemeItem>,
     /// Original theme before entering theme preview mode

@@ -20,6 +20,10 @@ import type {
 import { createLogger } from '@/shared/utils/logger';
 import { formatContextForPrompt } from '@/shared/utils/contextPrompt';
 import { buildImagePayload } from '../utils/imagePayload';
+import {
+  composerPresentationSessionReferences,
+  type ComposerPresentation,
+} from '../utils/composerPresentation';
 
 const log = createLogger('FlowChat');
 
@@ -44,6 +48,7 @@ interface UseMessageSenderReturn {
     message: string,
     options?: {
       displayMessage?: string;
+      composerPresentation?: ComposerPresentation | null;
     }
   ) => Promise<void>;
   /** Whether a send is in progress */
@@ -64,6 +69,7 @@ export function useMessageSender(props: UseMessageSenderProps): UseMessageSender
     message: string,
     options?: {
       displayMessage?: string;
+      composerPresentation?: ComposerPresentation | null;
     }
   ) => {
     if (!message.trim()) {
@@ -112,14 +118,28 @@ export function useMessageSender(props: UseMessageSenderProps): UseMessageSender
       }
 
       const imageContexts = contexts.filter(ctx => ctx.type === 'image') as ImageContext[];
-      const sessionReferences = contexts
+      const presentationSessionReferences = options?.composerPresentation
+        ? composerPresentationSessionReferences(options.composerPresentation)
+        : [];
+      const sessionReferenceContexts = presentationSessionReferences.length > 0
+        ? presentationSessionReferences
+        : contexts
         .filter((context): context is SessionReferenceContext => context.type === 'session-reference')
-        .map((context) => ({
+      const sessionReferences = sessionReferenceContexts.map((context) => ({
           sessionId: context.sessionId,
           workspacePath: context.workspacePath,
           remoteConnectionId: context.remoteConnectionId,
           remoteSshHost: context.remoteSshHost,
         }));
+      const userMessageMetadata =
+        options?.composerPresentation || sessionReferences.length > 0
+          ? {
+              ...(options?.composerPresentation
+                ? { composerPresentation: options.composerPresentation }
+                : {}),
+              ...(sessionReferences.length > 0 ? { sessionReferences } : {}),
+            }
+          : undefined;
       let imagePayload: Awaited<ReturnType<typeof buildImagePayload>>;
       try {
         imagePayload = await buildImagePayload(imageContexts);
@@ -162,9 +182,7 @@ export function useMessageSender(props: UseMessageSenderProps): UseMessageSender
         undefined,
         {
           ...(imagePayload ?? {}),
-          ...(sessionReferences.length > 0
-            ? { userMessageMetadata: { sessionReferences } }
-            : {}),
+          ...(userMessageMetadata ? { userMessageMetadata } : {}),
         }
       );
 

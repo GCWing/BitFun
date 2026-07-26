@@ -1,12 +1,17 @@
 import { AssistantEntry, AssistantListResponse, ChatMessageItemResponse, ChatMessageResponse, CommandStatusResponse, CreateSessionOptions, CreateSessionResponse, FileInfo, FileInfoResponse, InitialSyncResult, ModelCatalogResponse, PollSessionResponse, PollSessionResult, ReadFileChunkResponse, ReadFileResult, RecentWorkspaceEntry, RecentWorkspaceListResponse, RemoteCommand, RemoteDescriptor, RemoteImageContext, RemoteModelCatalog, RemoteQuestionAnswerPayload, RemoteSession, SendMessageResponse, SessionListResponse, SessionListResult, SessionMessagesResponse, SessionMessagesResult, SessionSummary, SetAssistantResponse, SetSessionModelResponse, SetWorkspaceResponse, WorkspaceInfo, WorkspaceInfoResponse } from '../model/RemoteModels';
 import { Encoding } from './Encoding';
-import { RelayHttpClient } from './RelayHttpClient';
+import { PairIdentity, RelayHttpClient } from './RelayHttpClient';
 import { RemoteCommandFactory } from './RemoteCommandFactory';
 import { RemoteCrypto } from './RemoteCrypto';
+import { RemoteChatCommandClient } from './RemoteChatCommandController';
+import { RemoteFileDownloadClient } from './RemoteFileDownloadController';
 import { RemoteLogger } from './RemoteLogger';
+import { RemoteModelClient } from './RemoteModelController';
 import { RemoteResponseMapper } from './RemoteResponseMapper';
+import { RemoteSessionClient } from './RemoteSessionController';
+import { RemoteToolActionClient } from './RemoteToolActionController';
 
-export class RemoteSessionManager {
+export class RemoteSessionManager implements RemoteChatCommandClient, RemoteFileDownloadClient, RemoteModelClient, RemoteSessionClient, RemoteToolActionClient {
   private readonly client: RelayHttpClient = new RelayHttpClient();
   private crypto?: RemoteCrypto;
   private workspace?: WorkspaceInfo;
@@ -17,10 +22,11 @@ export class RemoteSessionManager {
     this.client.reset();
   }
 
-  async connect(descriptor: RemoteDescriptor, userId: string, deviceId: string): Promise<InitialSyncResult> {
+  async connect(descriptor: RemoteDescriptor, identity: PairIdentity, deviceId: string): Promise<InitialSyncResult> {
     this.crypto = new RemoteCrypto();
     this.client.bind(descriptor, this.crypto);
-    const initialSync = await this.client.pair(deviceId, userId);
+    const initialSync = await this.client.pair(deviceId, identity);
+    await this.client.requestDelegatedIdentity();
     this.workspace = RemoteResponseMapper.workspaceFromInitialSync(initialSync);
     return {
       workspace: this.workspace,
@@ -64,6 +70,17 @@ export class RemoteSessionManager {
   async listRecentSessions(): Promise<RemoteSession[]> {
     const result = await this.listSessions(8, 0, '', '');
     return result.sessions;
+  }
+
+  async listSessionsForWorkspace(workspacePath: string, limit: number = 50): Promise<RemoteSession[]> {
+    const path = workspacePath.trim();
+    if (path.length === 0) {
+      return [];
+    }
+    const response = await this.send<SessionListResponse>(
+      RemoteCommandFactory.listSessions(path, limit, 0, '')
+    );
+    return RemoteResponseMapper.sessions(response.sessions || []);
   }
 
   async listSessions(limit: number, offset: number, query: string, agentType: string): Promise<SessionListResult> {

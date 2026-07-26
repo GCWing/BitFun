@@ -182,5 +182,15 @@ export const SETTINGS_TAB_SEARCH_CONTENT: Record<ConfigTab, readonly SettingsTab
     { ns: 'settings/quick-actions', key: 'sections.custom.title' },
   ],
 
+  'voice-input': [
+    { ns: 'settings/voice-input', key: 'title' },
+    { ns: 'settings/voice-input', key: 'subtitle' },
+    { ns: 'settings/voice-input', key: 'sections.composer' },
+    { ns: 'settings/voice-input', key: 'sections.model' },
+    { ns: 'settings/voice-input', key: 'composer.enabled.label' },
+    { ns: 'settings/voice-input', key: 'composer.language.label' },
+    { ns: 'settings/voice-input', key: 'model.download' },
+  ],
+
   // lsp: [ ... ], // nav entry temporarily hidden; omit from search index
 };

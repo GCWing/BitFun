@@ -4,14 +4,14 @@
 //! `exec_command` starts a fresh local process; a session id is only retained
 //! while that process is still running so later calls can poll or write stdin.
 
-use crate::{TerminalError, TerminalResult};
+use crate::{shell::invalidate_cached_executable, TerminalError, TerminalResult};
 use chardetng::EncodingDetector;
 use encoding_rs::{Encoding, IBM866, WINDOWS_1252};
 use portable_pty::{native_pty_system, CommandBuilder, MasterPty, PtySize, SlavePty};
 use rand::Rng;
 use std::collections::{HashMap, VecDeque};
 use std::io::{ErrorKind, Read, Write};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::Stdio;
 use std::sync::{Arc, Mutex as StdMutex, OnceLock};
 use std::time::Duration;
@@ -1009,7 +1009,13 @@ async fn spawn_pty_process(request: &ExecCommandRequest) -> TerminalResult<ExecP
         command.arg(arg);
     }
 
-    let mut child = pair.slave.spawn_command(command)?;
+    let mut child = match pair.slave.spawn_command(command) {
+        Ok(child) => child,
+        Err(error) => {
+            invalidate_cached_executable(Path::new(&request.argv[0]));
+            return Err(error.into());
+        }
+    };
     let killer = child.clone_killer();
     let output = Arc::new(OutputState::new(request.output_capture_tx.clone()));
     let mut reader = pair.master.try_clone_reader()?;
@@ -1130,7 +1136,13 @@ async fn spawn_pipe_process(request: &ExecCommandRequest) -> TerminalResult<Exec
     configure_pipe_window_visibility(&mut command);
     command.kill_on_drop(true);
 
-    let mut child = command.spawn()?;
+    let mut child = match command.spawn() {
+        Ok(child) => child,
+        Err(error) => {
+            invalidate_cached_executable(Path::new(&request.argv[0]));
+            return Err(error.into());
+        }
+    };
     #[cfg(windows)]
     let pipe_job = create_windows_pipe_job(&child)?;
     #[cfg(windows)]

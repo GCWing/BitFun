@@ -1,4 +1,12 @@
 {
   "title": "Appearance",
-  "subtitle": "Interface language, theme, and global font size"
+  "subtitle": "Interface language, theme, global font size, and motion effects",
+  "effects": {
+    "title": "Motion effects",
+    "hint": "Control visual feedback across the interface.",
+    "mouseGlow": {
+      "label": "Pointer-follow glow",
+      "description": "Adds a soft spotlight that follows the pointer along card edges. Pauses when reduced motion is enabled."
+    }
+  }
 }

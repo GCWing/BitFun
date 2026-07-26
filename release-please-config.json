@@ -21,6 +21,10 @@
         {
           "type": "generic",
           "path": "Cargo.toml"
+        },
+        {
+          "type": "generic",
+          "path": "src/apps/relay-server/Cargo.toml"
         }
       ]
     }

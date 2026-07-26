@@ -1,60 +1,81 @@
 import { ChatMessage, ChatMessageItemResponse, RemoteQuestionAnswerPayload } from '../../model/RemoteModels';
 import { RemoteI18n } from '../../i18n/RemoteI18n';
 import { ChatTimelineItem } from '../../services/ChatTimelineProjector';
+import { ChatSurface } from './ChatSurface';
 import { CARD, INK, LINE, MUTED, RED } from './Theme';
 import { ChatMessageBubble } from './ChatMessageBubble';
+import { RemoteLogger } from '../../services/RemoteLogger';
 
-@Component
+@ComponentV2
 export struct ChatTimeline {
-  @Prop timelineItems: ChatTimelineItem[] = [];
-  @Prop hasMoreMessages: boolean = false;
-  @Prop isBusy: boolean = false;
-  @Prop connectionState: string = 'connected';
-  @Prop statusText: string = '';
-  @Prop downloadingFilePath: string = '';
-  @Prop downloadedFilePath: string = '';
-  @Prop fileDownloadStatus: string = '';
-  onLoadOlder: () => void = () => {};
-  onApproveTool: (toolId: string) => void = (_toolId: string) => {};
-  onRejectTool: (toolId: string) => void = (_toolId: string) => {};
-  onCancelTool: (toolId: string) => void = (_toolId: string) => {};
-  onAnswerQuestion: (toolId: string, answers: RemoteQuestionAnswerPayload) => void =
+  private readonly listScroller: Scroller = new Scroller();
+  @Param surface: ChatSurface = ChatSurface.Remote;
+  @Param timelineItems: ChatTimelineItem[] = [];
+  @Param timelineRevision: number = 0;
+  @Param hasMoreMessages: boolean = false;
+  @Param isBusy: boolean = false;
+  @Param connectionState: string = 'connected';
+  @Param statusText: string = '';
+  @Param downloadingFilePath: string = '';
+  @Param downloadedFilePath: string = '';
+  @Param fileDownloadStatus: string = '';
+  @Event onLoadOlder: () => void = () => {};
+  @Event onApproveTool: (toolId: string, updatedInput?: Object) => void =
+    (_toolId: string, _updatedInput?: Object) => {};
+  @Event onRejectTool: (toolId: string) => void = (_toolId: string) => {};
+  @Event onCancelTool: (toolId: string) => void = (_toolId: string) => {};
+  @Event onAnswerQuestion: (toolId: string, answers: RemoteQuestionAnswerPayload) => void =
     (_toolId: string, _answers: RemoteQuestionAnswerPayload) => {};
-  onCopyMessage: (text: string) => void = (_text: string) => {};
-  onRetryMessage: (text: string) => void = (_text: string) => {};
-  onDownloadFile: (path: string) => void = (_path: string) => {};
+  @Event onCopyMessage: (text: string) => void = (_text: string) => {};
+  @Event onRetryMessage: (text: string) => void = (_text: string) => {};
+  @Event onDownloadFile: (path: string) => void = (_path: string) => {};
 
   build() {
-    List({ space: 12 }) {
-      if (this.hasMoreMessages) {
-        ListItem() {
-          Text(this.isBusy ? RemoteI18n.t('common.loading') : RemoteI18n.t('chat.loadOlder'))
-            .fontSize(13)
-            .fontColor(MUTED)
-            .textAlign(TextAlign.Center)
-            .width('100%')
-            .padding({ top: 10, bottom: 10 })
-            .onClick(() => {
-              this.onLoadOlder();
-            })
+    Stack({ alignContent: Alignment.Bottom }) {
+      List({ space: 12, scroller: this.listScroller }) {
+        if (this.hasMoreMessages) {
+          ListItem() {
+            Text(this.isBusy ? RemoteI18n.t('common.loading') : RemoteI18n.t('chat.loadOlder'))
+              .fontSize(13)
+              .fontColor(MUTED)
+              .textAlign(TextAlign.Center)
+              .width('100%')
+              .padding({ top: 10, bottom: 10 })
+              .onClick(() => {
+                this.onLoadOlder();
+              })
+          }
         }
+        ForEach(this.timelineItems, (item: ChatTimelineItem) => {
+          this.TimelineItem(item)
+        }, (item: ChatTimelineItem) => `${this.timelineRevision}-${item.id}`)
       }
-      ForEach(this.timelineItems, (item: ChatTimelineItem) => {
-        if (item.type === 'empty_state') {
-          ListItem() {
-            this.EmptyChatState()
-          }
-        } else if (item.message && this.shouldRenderMessage(item.message)) {
-          ListItem() {
-            this.MessageBubble(item)
-          }
+      .width('100%')
+      .height('100%')
+      .padding({ left: 20, right: 20, top: 0, bottom: 12 })
+      .stackFromEnd(true)
+      .scrollBar(BarState.Off)
+
+      if (this.surface === ChatSurface.Remote && this.timelineItems.length > 2) {
+        Stack({ alignContent: Alignment.Center }) {
+          Image($r('app.media.remote_ref_down'))
+            .width(18)
+            .height(18)
+            .objectFit(ImageFit.Contain)
         }
-      }, (item: ChatTimelineItem) => item.id)
+        .width(42)
+        .height(42)
+        .backgroundColor(CARD)
+        .borderRadius(21)
+        .shadow({ radius: 14, color: '#14000000', offsetY: 5 })
+        .margin({ bottom: 4 })
+        .onClick(() => {
+          this.listScroller.scrollEdge(Edge.Bottom);
+        })
+      }
     }
     .layoutWeight(1)
-    .padding({ left: 20, right: 20, top: 0, bottom: 12 })
-    .stackFromEnd(true)
-    .scrollBar(BarState.Off)
+    .width('100%')
   }
 
   @Builder
@@ -90,6 +111,30 @@ export struct ChatTimeline {
   }
 
   @Builder
+  TimelineItem(item: ChatTimelineItem) {
+    if (item.type === 'empty_state') {
+      ListItem() {
+        this.EmptyChatState()
+      }
+      .onAppear(() => {
+        this.logRenderedItem(item);
+      })
+    } else if (item.message && this.shouldRenderMessage(item.message)) {
+      ListItem() {
+        this.MessageBubble(item)
+      }
+      .onAppear(() => {
+        this.logRenderedItem(item);
+      })
+    }
+  }
+
+  private logRenderedItem(item: ChatTimelineItem): void {
+    const message = item.message;
+    RemoteLogger.info(`chat timeline item appear revision=${this.timelineRevision} type=${item.type} id=${item.id} status=${message ? message.status : ''} textLength=${message ? message.text.length : 0}`);
+  }
+
+  @Builder
   MessageBubble(item: ChatTimelineItem) {
     ChatMessageBubble({
       item: item.message as ChatMessage,
@@ -99,8 +144,8 @@ export struct ChatTimeline {
       downloadingFilePath: this.downloadingFilePath,
       downloadedFilePath: this.downloadedFilePath,
       fileDownloadStatus: this.fileDownloadStatus,
-      onApproveTool: (toolId: string) => {
-        this.onApproveTool(toolId);
+      onApproveTool: (toolId: string, updatedInput?: Object) => {
+        this.onApproveTool(toolId, updatedInput);
       },
       onRejectTool: (toolId: string) => {
         this.onRejectTool(toolId);

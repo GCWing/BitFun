@@ -1798,8 +1798,8 @@ impl AcpClientService {
         let ssh_manager = remote_manager.get_ssh_manager().await.ok_or_else(|| {
             BitFunError::service("SSH manager is not available for remote ACP".to_string())
         })?;
-        let channel = ssh_manager
-            .open_exec_channel(remote_connection_id, &command)
+        let transport = ssh_manager
+            .open_workspace_stdio(remote_connection_id, &command)
             .await
             .map_err(|error| {
                 BitFunError::service(format!(
@@ -1807,8 +1807,11 @@ impl AcpClientService {
                     client_id, error
                 ))
             })?;
-        let stream = channel.into_stream();
-        let (reader, writer) = tokio::io::split(stream);
+        let (writer, reader, mut stderr, _control, _completion) = transport.into_parts();
+        tokio::spawn(async move {
+            let mut sink = tokio::io::sink();
+            let _ = tokio::io::copy(&mut stderr, &mut sink).await;
+        });
         Ok(ByteStreams::new(
             Box::pin(writer.compat_write()),
             Box::pin(reader.compat()),

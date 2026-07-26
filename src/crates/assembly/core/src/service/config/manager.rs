@@ -1121,6 +1121,7 @@ mod tests {
     fn persistence_keeps_only_non_default_memories_fields() {
         let mut config = GlobalConfig::default();
         config.memories.generate_memories = false;
+        config.memories.generate_for_btw_sessions = true;
         config.memories.max_rollouts_per_startup = 12;
 
         let value =
@@ -1134,6 +1135,7 @@ mod tests {
         assert_eq!(
             value.get("memories"),
             Some(&serde_json::json!({
+                "generate_for_btw_sessions": true,
                 "max_rollouts_per_startup": 12
             }))
         );

@@ -384,20 +384,38 @@ describe('startup performance contract', () => {
   });
 
   it('keeps settings config panels lazy by active tab', () => {
-    const source = readSource('../scenes/settings/SettingsScene.tsx');
+    const sceneSource = readSource('../scenes/settings/SettingsScene.tsx');
+    const registrySource = readSource('../scenes/settings/settingsContentRegistry.ts');
+    const lazyPanelSpecifiers = [
+      '../../../infrastructure/config/components/AIModelConfig',
+      '../../../infrastructure/config/components/McpToolsConfig',
+      '../../../infrastructure/config/components/AcpAgentsConfig',
+      '../../../infrastructure/config/components/ExternalSourcesConfig',
+      '../../../infrastructure/config/components/EditorConfig',
+      '../../../infrastructure/config/components/BasicsConfig',
+      '../../../infrastructure/config/components/AppearanceConfig',
+      '../../../infrastructure/config/components/ReviewConfig',
+      '../../../infrastructure/config/components/MemoriesConfig',
+      '../../../infrastructure/config/components/QuickActionsConfig',
+      '../../../infrastructure/config/components/VoiceInputConfig',
+      '../../../infrastructure/config/components/SessionConfig',
+      './components/ArchivedSessionsConfig',
+      './components/KeyboardShortcutsTab',
+    ];
+    const sceneImports = staticImportSpecifiers(sceneSource);
+    const registryImports = staticImportSpecifiers(registrySource);
 
-    expect(source).not.toMatch(/import\s+AIModelConfig\s+from/);
-    expect(source).not.toMatch(/import\s+McpToolsConfig\s+from/);
-    expect(source).not.toMatch(/import\s+AcpAgentsConfig\s+from/);
-    expect(source).not.toMatch(/import\s+EditorConfig\s+from/);
-    expect(source).not.toMatch(/import\s+BasicsConfig\s+from/);
-    expect(source).not.toMatch(/import\s+AppearanceConfig\s+from/);
-    expect(source).not.toMatch(/import\s+ReviewConfig\s+from/);
-    expect(source).not.toMatch(/import\s+QuickActionsConfig\s+from/);
-    expect(source).toContain("lazy(() => import('../../../infrastructure/config/components/AIModelConfig'))");
-    expect(source).toContain("lazy(() => import('../../../infrastructure/config/components/BasicsConfig'))");
-    expect(source).toContain("lazy(() => import('./components/ArchivedSessionsConfig'))");
-    expect(source).toContain('<Suspense');
+    expect(sceneImports).toContain('./settingsContentRegistry');
+    expect(sceneSource).toContain('<Suspense');
+    expect(dynamicImportSpecifiers(registrySource)).toEqual(
+      expect.arrayContaining(lazyPanelSpecifiers)
+    );
+    for (const panelSpecifier of lazyPanelSpecifiers) {
+      expect(sceneImports).not.toContain(panelSpecifier);
+      expect(registryImports).not.toContain(panelSpecifier);
+    }
+    expect(registrySource).toContain('export const AIModelConfig = lazy(loadAIModelConfig)');
+    expect(registrySource).toContain('basics: loadBasicsConfig');
   });
 
   it('keeps tool-card metadata separate from heavy card implementations', () => {

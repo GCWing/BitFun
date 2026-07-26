@@ -3961,8 +3961,9 @@ export const requiredContentRules = [
       'workspace metadata may omit git worktree enrichment when service integrations are disabled',
     patterns: [
       {
-        regex: /#\[cfg\(feature = "service-integrations"\)\]\s*use crate::service::git::GitService\b/s,
-        message: 'GitService import must stay gated for no-default builds',
+        regex:
+          /#\[cfg\(feature = "service-integrations"\)\]\s*use super::worktree_topology::global_worktree_topology_service\b/s,
+        message: 'worktree topology owner import must stay gated for no-default builds',
       },
       {
         regex: /#\[cfg\(not\(feature = "service-integrations"\)\)\]\s*\{\s*let _ = workspace_root;\s*return None;\s*\}/s,
@@ -4555,8 +4556,8 @@ export const requiredContentRules = [
         message: 'missing SFTP session owner path',
       },
       {
-        regex: /\bprunes_password_connection_without_vault_entry\b/,
-        message: 'missing saved credential pruning regression',
+        regex: /\bretains_legacy_password_connection_and_workspace_without_vault_entry\b/,
+        message: 'missing saved credential retention regression',
       },
     ],
   },
@@ -8116,7 +8117,7 @@ export const requiredContentRules = [
   {
     path: 'src/crates/assembly/core/src/service/search/remote.rs',
     reason:
-      'core remote search runtime must remain a compatibility facade over services-integrations while retaining concrete SSH/russh bridge adapters',
+      'core remote search runtime must remain a compatibility facade over services-integrations while retaining the transport-neutral workspace stdio bridge adapter',
     patterns: [
       {
         regex: /\bServiceRemoteWorkspaceSearchService\b/,
@@ -8131,8 +8132,8 @@ export const requiredContentRules = [
         message: 'missing preferred remote connection lookup adapter',
       },
       {
-        regex: /\bopen_exec_channel\b/,
-        message: 'missing SSH stdio bridge adapter',
+        regex: /\bopen_workspace_stdio\b/,
+        message: 'missing transport-neutral workspace stdio bridge adapter',
       },
       {
         regex: /\bRemoteWorkspaceSearchStdioProtocol\b/,

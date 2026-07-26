@@ -189,8 +189,8 @@ pub const REMOTE_WORKSPACE_COMMAND_POLICIES: &[(&str, RemoteWorkspacePolicy)] = 
         "browser_webview_set_bounds",
         RemoteWorkspacePolicy::LocalOnly,
     ),
-    ("btw_ask_stream", RemoteWorkspacePolicy::LegacyUnaudited),
-    ("btw_cancel", RemoteWorkspacePolicy::LegacyUnaudited),
+    ("btw_ask_stream", RemoteWorkspacePolicy::RemoteRouted),
+    ("btw_cancel", RemoteWorkspacePolicy::RemoteRouted),
     (
         "cancel_acp_dialog_turn",
         RemoteWorkspacePolicy::LegacyUnaudited,
@@ -350,6 +350,10 @@ pub const REMOTE_WORKSPACE_COMMAND_POLICIES: &[(&str, RemoteWorkspacePolicy)] = 
     ),
     ("execute_tool", RemoteWorkspacePolicy::LegacyUnaudited),
     (
+        "expand_external_prompt_command_command",
+        RemoteWorkspacePolicy::RemoteUnsupported,
+    ),
+    (
         "explorer_get_children",
         RemoteWorkspacePolicy::LegacyUnaudited,
     ),
@@ -464,6 +468,10 @@ pub const REMOTE_WORKSPACE_COMMAND_POLICIES: &[(&str, RemoteWorkspacePolicy)] = 
     ),
     (
         "get_external_source_snapshot",
+        RemoteWorkspacePolicy::RemoteUnsupported,
+    ),
+    (
+        "get_native_prompt_command_conflicts_command",
         RemoteWorkspacePolicy::RemoteUnsupported,
     ),
     (
@@ -608,6 +616,10 @@ pub const REMOTE_WORKSPACE_COMMAND_POLICIES: &[(&str, RemoteWorkspacePolicy)] = 
     ),
     (
         "get_subscription_login_status",
+        RemoteWorkspacePolicy::LocalOnly,
+    ),
+    (
+        "get_prevent_sleep_enabled",
         RemoteWorkspacePolicy::LocalOnly,
     ),
     ("get_system_info", RemoteWorkspacePolicy::WorkspaceAgnostic),
@@ -1484,6 +1496,10 @@ pub const REMOTE_WORKSPACE_COMMAND_POLICIES: &[(&str, RemoteWorkspacePolicy)] = 
         RemoteWorkspacePolicy::RemoteUnsupported,
     ),
     (
+        "set_native_prompt_command_conflict_choice_command",
+        RemoteWorkspacePolicy::RemoteUnsupported,
+    ),
+    (
         "set_external_source_enabled_command",
         RemoteWorkspacePolicy::RemoteUnsupported,
     ),
@@ -1500,6 +1516,10 @@ pub const REMOTE_WORKSPACE_COMMAND_POLICIES: &[(&str, RemoteWorkspacePolicy)] = 
         RemoteWorkspacePolicy::RemoteUnsupported,
     ),
     ("set_macos_edit_menu_mode", RemoteWorkspacePolicy::LocalOnly),
+    (
+        "set_prevent_sleep_enabled",
+        RemoteWorkspacePolicy::LocalOnly,
+    ),
     (
         "set_miniapp_draft_storage",
         RemoteWorkspacePolicy::LegacyUnaudited,
@@ -1529,6 +1549,30 @@ pub const REMOTE_WORKSPACE_COMMAND_POLICIES: &[(&str, RemoteWorkspacePolicy)] = 
         RemoteWorkspacePolicy::LocalOnly,
     ),
     ("show_main_window", RemoteWorkspacePolicy::LocalOnly),
+    (
+        "speech_append_audio_chunk",
+        RemoteWorkspacePolicy::LocalOnly,
+    ),
+    (
+        "speech_cancel_input_session",
+        RemoteWorkspacePolicy::LocalOnly,
+    ),
+    (
+        "speech_cancel_model_download",
+        RemoteWorkspacePolicy::LocalOnly,
+    ),
+    ("speech_delete_model", RemoteWorkspacePolicy::LocalOnly),
+    ("speech_download_model", RemoteWorkspacePolicy::LocalOnly),
+    (
+        "speech_finish_input_session",
+        RemoteWorkspacePolicy::LocalOnly,
+    ),
+    ("speech_list_models", RemoteWorkspacePolicy::LocalOnly),
+    (
+        "speech_start_input_session",
+        RemoteWorkspacePolicy::LocalOnly,
+    ),
+    ("speech_verify_model", RemoteWorkspacePolicy::LocalOnly),
     ("ssh_connect", RemoteWorkspacePolicy::WorkspaceAgnostic),
     (
         "ssh_delete_connection",
@@ -1554,11 +1598,19 @@ pub const REMOTE_WORKSPACE_COMMAND_POLICIES: &[(&str, RemoteWorkspacePolicy)] = 
         RemoteWorkspacePolicy::WorkspaceAgnostic,
     ),
     (
+        "ssh_list_docker_containers",
+        RemoteWorkspacePolicy::WorkspaceAgnostic,
+    ),
+    (
         "ssh_list_saved_connections",
         RemoteWorkspacePolicy::WorkspaceAgnostic,
     ),
     (
         "ssh_save_connection",
+        RemoteWorkspacePolicy::WorkspaceAgnostic,
+    ),
+    (
+        "ssh_test_connection",
         RemoteWorkspacePolicy::WorkspaceAgnostic,
     ),
     (
@@ -1831,8 +1883,6 @@ mod tests {
         "apply_patch",
         "archive_all_sessions",
         "archive_session",
-        "btw_ask_stream",
-        "btw_cancel",
         "cancel_acp_dialog_turn",
         "cancel_dialog_turn",
         "cancel_insights_generation",

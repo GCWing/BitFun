@@ -1,4 +1,4 @@
-use crate::agentic::tools::file_permissions::file_permission_intents;
+use crate::agentic::tools::file_permissions::file_permission_intents_allowing_managed_plan_edits;
 use crate::agentic::tools::file_read_state_runtime::{
     assert_file_not_unexpectedly_modified, file_mutation_timestamp_ms, get_stored_file_read_state,
     local_file_modification_time_ms, read_current_file_content, read_state_tracking_enabled,
@@ -167,7 +167,7 @@ impl Tool for FileEditTool {
             .get("file_path")
             .and_then(Value::as_str)
             .ok_or_else(|| BitFunError::validation("file_path is required".to_string()))?;
-        file_permission_intents("edit", [file_path], context)
+        file_permission_intents_allowing_managed_plan_edits("edit", [file_path], context)
     }
 
     async fn validate_input(

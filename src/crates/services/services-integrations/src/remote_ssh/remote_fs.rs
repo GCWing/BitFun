@@ -27,6 +27,20 @@ fn should_skip_dir_in_prompt_preview(name: &str) -> bool {
     )
 }
 
+/// Extract a basename using remote POSIX semantics on every client platform.
+///
+/// `std::path::Path` uses host semantics and would treat `\` as a separator on
+/// Windows even though it is a valid character in a Unix remote filename.
+fn remote_posix_basename(path: &str) -> String {
+    let trimmed = path.trim_end_matches('/');
+    trimmed
+        .rsplit('/')
+        .next()
+        .filter(|name| !name.is_empty())
+        .unwrap_or(path)
+        .to_string()
+}
+
 /// Remote file service using SFTP protocol
 #[derive(Clone)]
 pub struct RemoteFileService {
@@ -55,6 +69,9 @@ impl RemoteFileService {
     /// Read a file from the remote server via SFTP
     pub async fn read_file(&self, connection_id: &str, path: &str) -> anyhow::Result<Vec<u8>> {
         let manager = self.get_manager(connection_id).await?;
+        if manager.is_container_workspace(connection_id).await {
+            return manager.container_read_file(connection_id, path).await;
+        }
         manager.sftp_read(connection_id, path).await
     }
 
@@ -68,6 +85,11 @@ impl RemoteFileService {
         on_progress: &mut impl FnMut(u64, u64) -> bool,
     ) -> anyhow::Result<Vec<u8>> {
         let manager = self.get_manager(connection_id).await?;
+        if manager.is_container_workspace(connection_id).await {
+            return manager
+                .container_read_file_with_progress(connection_id, path, on_progress)
+                .await;
+        }
         manager
             .sftp_read_with_progress(connection_id, path, 262_144, on_progress)
             .await
@@ -81,6 +103,11 @@ impl RemoteFileService {
         content: &[u8],
     ) -> anyhow::Result<()> {
         let manager = self.get_manager(connection_id).await?;
+        if manager.is_container_workspace(connection_id).await {
+            return manager
+                .container_write_file(connection_id, path, content)
+                .await;
+        }
         manager.sftp_write(connection_id, path, content).await
     }
 
@@ -95,6 +122,11 @@ impl RemoteFileService {
         on_progress: &mut impl FnMut(u64, u64) -> bool,
     ) -> anyhow::Result<()> {
         let manager = self.get_manager(connection_id).await?;
+        if manager.is_container_workspace(connection_id).await {
+            return manager
+                .container_write_file_with_progress(connection_id, path, content, on_progress)
+                .await;
+        }
         manager
             .sftp_write_with_progress(connection_id, path, content, 262_144, on_progress)
             .await
@@ -103,6 +135,9 @@ impl RemoteFileService {
     /// Check if a remote path exists
     pub async fn exists(&self, connection_id: &str, path: &str) -> anyhow::Result<bool> {
         let manager = self.get_manager(connection_id).await?;
+        if manager.is_container_workspace(connection_id).await {
+            return manager.container_exists(connection_id, path).await;
+        }
         manager.sftp_exists(connection_id, path).await
     }
 
@@ -129,6 +164,9 @@ impl RemoteFileService {
         path: &str,
     ) -> anyhow::Result<Vec<RemoteDirEntry>> {
         let manager = self.get_manager(connection_id).await?;
+        if manager.is_container_workspace(connection_id).await {
+            return manager.container_read_dir(connection_id, path).await;
+        }
         let path_resolved = manager.resolve_sftp_path(connection_id, path).await?;
         let mut entries = manager.sftp_read_dir(connection_id, path).await?;
 
@@ -197,10 +235,7 @@ impl RemoteFileService {
         path: &str,
     ) -> anyhow::Result<RemoteTreeNode> {
         const MAX_ENTRIES: usize = 80;
-        let name = std::path::Path::new(path)
-            .file_name()
-            .map(|n| n.to_string_lossy().to_string())
-            .unwrap_or_else(|| path.to_string());
+        let name = remote_posix_basename(path);
 
         let mut entries = self.read_dir(connection_id, path).await?;
         entries.retain(|e| {
@@ -242,10 +277,7 @@ impl RemoteFileService {
         current_depth: u32,
         max_depth: u32,
     ) -> anyhow::Result<RemoteTreeNode> {
-        let name = std::path::Path::new(path)
-            .file_name()
-            .map(|n| n.to_string_lossy().to_string())
-            .unwrap_or_else(|| path.to_string());
+        let name = remote_posix_basename(path);
 
         // Check if this is a directory
         let is_dir: bool = self.exists(connection_id, path).await.unwrap_or_default();
@@ -323,18 +355,27 @@ impl RemoteFileService {
     /// Create a directory on the remote server via SFTP
     pub async fn create_dir(&self, connection_id: &str, path: &str) -> anyhow::Result<()> {
         let manager = self.get_manager(connection_id).await?;
+        if manager.is_container_workspace(connection_id).await {
+            return manager.container_mkdir(connection_id, path, false).await;
+        }
         manager.sftp_mkdir(connection_id, path).await
     }
 
     /// Create directory and all parent directories via SFTP
     pub async fn create_dir_all(&self, connection_id: &str, path: &str) -> anyhow::Result<()> {
         let manager = self.get_manager(connection_id).await?;
+        if manager.is_container_workspace(connection_id).await {
+            return manager.container_mkdir(connection_id, path, true).await;
+        }
         manager.sftp_mkdir_all(connection_id, path).await
     }
 
     /// Remove a file from the remote server via SFTP
     pub async fn remove_file(&self, connection_id: &str, path: &str) -> anyhow::Result<()> {
         let manager = self.get_manager(connection_id).await?;
+        if manager.is_container_workspace(connection_id).await {
+            return manager.container_remove(connection_id, path, false).await;
+        }
         manager.sftp_remove(connection_id, path).await
     }
 
@@ -348,20 +389,34 @@ impl RemoteFileService {
                     Box::pin(self.remove_dir_all(connection_id, &entry_path)).await?;
                 } else {
                     let manager = self.get_manager(connection_id).await?;
-                    manager.sftp_remove(connection_id, &entry_path).await?;
+                    if manager.is_container_workspace(connection_id).await {
+                        manager
+                            .container_remove(connection_id, &entry_path, false)
+                            .await?;
+                    } else {
+                        manager.sftp_remove(connection_id, &entry_path).await?;
+                    }
                 }
             }
         }
 
         // Then remove the directory itself
         let manager = self.get_manager(connection_id).await?;
-        manager.sftp_rmdir(connection_id, path).await
+        if manager.is_container_workspace(connection_id).await {
+            manager.container_remove(connection_id, path, true).await
+        } else {
+            manager.sftp_rmdir(connection_id, path).await
+        }
     }
 
     /// Remove an empty directory via SFTP (non-recursive; fails if not empty)
     pub async fn remove_dir(&self, connection_id: &str, path: &str) -> anyhow::Result<()> {
         let manager = self.get_manager(connection_id).await?;
-        manager.sftp_rmdir(connection_id, path).await
+        if manager.is_container_workspace(connection_id).await {
+            manager.container_remove(connection_id, path, true).await
+        } else {
+            manager.sftp_rmdir(connection_id, path).await
+        }
     }
 
     /// Rename/move a remote file or directory via SFTP
@@ -372,6 +427,11 @@ impl RemoteFileService {
         new_path: &str,
     ) -> anyhow::Result<()> {
         let manager = self.get_manager(connection_id).await?;
+        if manager.is_container_workspace(connection_id).await {
+            return manager
+                .container_rename(connection_id, old_path, new_path)
+                .await;
+        }
         manager.sftp_rename(connection_id, old_path, new_path).await
     }
 
@@ -382,13 +442,13 @@ impl RemoteFileService {
         path: &str,
     ) -> anyhow::Result<Option<RemoteFileEntry>> {
         let manager = self.get_manager(connection_id).await?;
+        if manager.is_container_workspace(connection_id).await {
+            return manager.container_stat(connection_id, path).await;
+        }
 
         match manager.sftp_stat(connection_id, path).await {
             Ok(attrs) => {
-                let name = std::path::Path::new(path)
-                    .file_name()
-                    .map(|n| n.to_string_lossy().to_string())
-                    .unwrap_or_else(|| path.to_string());
+                let name = remote_posix_basename(path);
 
                 let is_dir = attrs.is_dir();
                 let is_symlink = attrs.is_symlink();
@@ -449,4 +509,19 @@ fn format_permissions(mode: Option<u32>) -> String {
         .collect();
 
     format!("{}{}", file_type, perm_str)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::remote_posix_basename;
+
+    #[test]
+    fn remote_basename_never_uses_host_path_separators() {
+        assert_eq!(
+            remote_posix_basename("/workspace/目录/name\\with\\slashes.txt"),
+            "name\\with\\slashes.txt"
+        );
+        assert_eq!(remote_posix_basename("/workspace/目录/"), "目录");
+        assert_eq!(remote_posix_basename("/"), "/");
+    }
 }

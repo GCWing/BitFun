@@ -86,6 +86,7 @@ struct ResolvedExternalCandidate {
     model_label: String,
     model_configuration_fingerprint: String,
     tools: Vec<ResolvedToolFact>,
+    unavailable_tool_labels: Vec<String>,
     readonly: bool,
     activation_envelope: String,
     approval_key: String,
@@ -675,6 +676,7 @@ fn resolve_external_candidate(
     };
 
     let mut tools = Vec::new();
+    let mut unavailable_tool_labels = Vec::new();
     for selector in definition
         .requested_tools
         .selectors
@@ -689,6 +691,7 @@ fn resolve_external_candidate(
             Some(tool) => tools.push(tool.clone()),
             None => {
                 compatibility = ExternalSubagentCompatibilityState::Blocked;
+                unavailable_tool_labels.push(name.to_string());
                 diagnostics.push(ExternalSubagentDiagnosticSummary {
                     code: "external_subagent.tool_unavailable".to_string(),
                     blocks_activation: true,
@@ -698,6 +701,8 @@ fn resolve_external_candidate(
     }
     tools.sort_by(|left, right| left.name.cmp(&right.name));
     tools.dedup_by(|left, right| left.name == right.name);
+    unavailable_tool_labels.sort();
+    unavailable_tool_labels.dedup();
     diagnostics.sort_by(|left, right| left.code.cmp(&right.code));
     diagnostics.dedup_by(|left, right| left.code == right.code);
     let readonly = tools.iter().all(|tool| tool.readonly);
@@ -779,6 +784,7 @@ fn resolve_external_candidate(
         model_label: model.display_label,
         model_configuration_fingerprint: model.configuration_fingerprint,
         tools,
+        unavailable_tool_labels,
         readonly,
         activation_envelope,
         approval_key,
@@ -1002,6 +1008,7 @@ fn summary_for(
             .iter()
             .map(|tool| tool.name.clone())
             .collect(),
+        unavailable_tool_labels: candidate.unavailable_tool_labels.clone(),
         supports_follow_up: false,
         compatibility_state: candidate.compatibility,
         diagnostics: candidate.diagnostics.clone(),
@@ -1417,6 +1424,40 @@ mod tests {
             ExternalSubagentActivationState::Active
         );
         assert_eq!(recovered.registrations.len(), 1);
+    }
+
+    #[test]
+    fn unavailable_tool_labels_are_preserved_for_product_diagnostics() {
+        let empty_set = BTreeSet::new();
+        let empty_map = BTreeMap::new();
+        let mut definition_snapshot = snapshot("behavior-v1", "catalog-v1");
+        definition_snapshot.definitions[0]
+            .requested_tools
+            .selectors
+            .push(ExternalSubagentToolSelector {
+                source_name: "shell".to_string(),
+                canonical_host_name: Some("Shell".to_string()),
+                allowed: true,
+            });
+
+        let state = reconcile_with_facts(
+            Some(Path::new("C:/repo")),
+            "local-user",
+            &definition_snapshot,
+            ExternalSubagentDecisions {
+                active_ecosystems: test_active_ecosystems(),
+                approved_envelopes: &empty_set,
+                declined_decisions: &empty_map,
+                conflict_choices: &empty_map,
+                conflict_lineage_current_keys: &empty_map,
+            },
+            &facts(),
+        );
+
+        assert_eq!(state.summaries[0].unavailable_tool_labels, ["Shell"]);
+        assert!(state.summaries[0].diagnostics.iter().any(|diagnostic| {
+            diagnostic.code == "external_subagent.tool_unavailable" && diagnostic.blocks_activation
+        }));
     }
 
     #[test]

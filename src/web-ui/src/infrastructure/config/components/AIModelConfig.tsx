@@ -542,6 +542,7 @@ const AIModelConfig: React.FC = () => {
     () => [
       { label: t('category.general_chat'), value: 'general_chat' },
       { label: t('category.multimodal'), value: 'multimodal' },
+      { label: t('category.speech_recognition'), value: 'speech_recognition' },
     ],
     [t]
   );
@@ -550,6 +551,7 @@ const AIModelConfig: React.FC = () => {
     () => ({
       general_chat: t('categoryIcons.general_chat'),
       multimodal: t('categoryIcons.multimodal'),
+      speech_recognition: t('categoryIcons.speech_recognition'),
     }),
     [t]
   );
@@ -1656,7 +1658,7 @@ const AIModelConfig: React.FC = () => {
       const nextDefaultModels = { ...currentDefaultModels };
       let defaultModelsChanged = false;
 
-      for (const key of ['primary', 'fast', 'image_understanding']) {
+      for (const key of ['primary', 'fast', 'image_understanding', 'speech_recognition']) {
         if (nextDefaultModels[key] === id) {
           nextDefaultModels[key] = null;
           defaultModelsChanged = true;

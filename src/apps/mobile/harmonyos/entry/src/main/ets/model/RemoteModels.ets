@@ -2,6 +2,8 @@ export interface RemoteDescriptor {
   relayUrl: string;
   roomId: string;
   publicKey: string;
+  accountAuth: boolean;
+  accountUsername: string;
 }
 
 export interface PairState {
@@ -50,6 +52,8 @@ export interface RemoteSession {
   messageCount: number;
   workspacePath?: string;
   workspaceName?: string;
+  pinned?: boolean;
+  titleGenerated?: boolean;
 }
 
 export interface ChatMessage {
@@ -88,11 +92,12 @@ export interface PairRequest {
 }
 
 export interface ChallengeCommand {
-  challenge_echo: Object;
+  challenge_echo: string;
   device_id: string;
   device_name: string;
   mobile_install_id: string;
   user_id: string;
+  password?: string;
 }
 
 export interface RemoteCommand {
@@ -122,7 +127,7 @@ export interface RemoteCommand {
 }
 
 export interface PairChallengeResponse {
-  challenge: Object;
+  challenge: string;
 }
 
 export interface CommandStatusResponse {
@@ -228,6 +233,13 @@ export interface InitialSyncResponse extends CommandStatusResponse {
   sessions?: SessionItemResponse[];
   has_more_sessions?: boolean;
   authenticated_user_id?: string;
+}
+
+export interface DelegatedIdentityResponse extends CommandStatusResponse {
+  token?: string;
+  user_id?: string;
+  master_key?: string;
+  device_id?: string;
 }
 
 export interface SessionListResult {

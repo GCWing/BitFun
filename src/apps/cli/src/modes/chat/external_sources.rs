@@ -20,7 +20,7 @@ fn parse_external_tool_review_action(
     };
     if command.eq_ignore_ascii_case("refresh") {
         if parts.next().is_some() {
-            return Err("usage: /builtin:tools refresh".to_string());
+            return Err("usage: /tools refresh".to_string());
         }
         return Ok(ExternalToolReviewAction::Refresh);
     }
@@ -32,17 +32,17 @@ fn parse_external_tool_review_action(
     // so a changed target fails closed instead of reusing the same number for
     // a different tool after a watcher refresh.
     let snapshot = reviewed_snapshot.or(current_snapshot).ok_or_else(|| {
-        "BitFun has not finished checking external tools; run /builtin:tools refresh".to_string()
+        "BitFun has not finished checking external tools; run /tools refresh".to_string()
     })?;
     if command.eq_ignore_ascii_case("enable") || command.eq_ignore_ascii_case("disable") {
         let index = parse_positive_index(parts.next(), "tool number")?;
         if parts.next().is_some() {
-            return Err(format!("usage: /builtin:tools {command} <tool-number>"));
+            return Err(format!("usage: /tools {command} <tool-number>"));
         }
         let targets = external_tool_target_summaries(snapshot);
-        let target = targets.get(index).ok_or_else(|| {
-            "that tool is no longer available; run /builtin:tools refresh".to_string()
-        })?;
+        let target = targets
+            .get(index)
+            .ok_or_else(|| "that tool is no longer available; run /tools refresh".to_string())?;
         let approved = command.eq_ignore_ascii_case("enable");
         let allowed = if approved {
             external_tool_can_enable(target.activation())
@@ -51,7 +51,7 @@ fn parse_external_tool_review_action(
         };
         if !allowed {
             return Err(format!(
-                "tool {} is {}; run /builtin:tools refresh for its next step",
+                "tool {} is {}; run /tools refresh for its next step",
                 index + 1,
                 external_tool_activation_label(target.activation())
             ));
@@ -67,9 +67,7 @@ fn parse_external_tool_review_action(
         let conflict_index = parse_positive_index(parts.next(), "conflict number")?;
         let candidate_index = parse_positive_index(parts.next(), "choice number")?;
         if parts.next().is_some() {
-            return Err(
-                "usage: /builtin:tools choose <conflict-number> <choice-number>".to_string(),
-            );
+            return Err("usage: /tools choose <conflict-number> <choice-number>".to_string());
         }
         let conflict = snapshot
             .tool_conflicts
@@ -83,17 +81,18 @@ fn parse_external_tool_review_action(
             )
             .nth(conflict_index)
             .ok_or_else(|| {
-                "that conflict is no longer available; run /builtin:tools refresh".to_string()
+                "that conflict is no longer available; run /tools refresh".to_string()
             })?;
-        let candidate = conflict.candidates.get(candidate_index).ok_or_else(|| {
-            "that choice is no longer available; run /builtin:tools refresh".to_string()
-        })?;
+        let candidate = conflict
+            .candidates
+            .get(candidate_index)
+            .ok_or_else(|| "that choice is no longer available; run /tools refresh".to_string())?;
         return Ok(ExternalToolReviewAction::Choose {
             conflict_key: conflict.conflict_key.clone(),
             candidate_id: candidate.candidate_id.clone(),
         });
     }
-    Err("usage: /builtin:tools [refresh | enable <number> | disable <number> | choose <conflict-number> <choice-number>]".to_string())
+    Err("usage: /tools [refresh | enable <number> | disable <number> | choose <conflict-number> <choice-number>]".to_string())
 }
 
 fn external_tool_mutation_result_label(
@@ -116,7 +115,7 @@ fn external_tool_mutation_result_label(
                 .map(|tool| &tool.activation)
                 .collect::<Vec<_>>();
             if activations.is_empty() {
-                "External tool confirmation saved; run /builtin:tools refresh to review the changed tool"
+                "External tool confirmation saved; run /tools refresh to review the changed tool"
                     .to_string()
             } else if activations
                 .iter()
@@ -141,7 +140,7 @@ fn external_tool_mutation_result_label(
             {
                 "External tool enabled".to_string()
             } else {
-                "External tool confirmation saved; run /builtin:tools refresh to review its current state"
+                "External tool confirmation saved; run /tools refresh to review its current state"
                     .to_string()
             }
         }
@@ -158,7 +157,7 @@ fn external_tool_mutation_result_label(
             if disabled {
                 "External tool disabled".to_string()
             } else {
-                "External tool choice saved; run /builtin:tools refresh to review the changed tool"
+                "External tool choice saved; run /tools refresh to review the changed tool"
                     .to_string()
             }
         }
@@ -173,8 +172,7 @@ fn external_tool_mutation_result_label(
             if selected {
                 "External tool source selected".to_string()
             } else {
-                "External tool choices changed; run /builtin:tools refresh before choosing"
-                    .to_string()
+                "External tool choices changed; run /tools refresh before choosing".to_string()
             }
         }
         ExternalToolReviewAction::Show => "External tools".to_string(),
@@ -182,9 +180,26 @@ fn external_tool_mutation_result_label(
 }
 
 struct BuiltinCommandReconfirmation {
-    conflict_key: String,
+    command_name: String,
     candidate_id: String,
     confirmed: bool,
+}
+
+fn cli_native_prompt_command_descriptors(command_name: &str) -> Vec<NativePromptCommandDescriptor> {
+    slash_actions(ActionState::chat(false, false))
+        .into_iter()
+        .filter(|action| {
+            action
+                .name
+                .trim_start_matches('/')
+                .eq_ignore_ascii_case(command_name)
+        })
+        .map(|action| NativePromptCommandDescriptor {
+            command_name: command_name.to_ascii_lowercase(),
+            candidate_id: format!("bitfun.cli:{}", action.id),
+            behavior_version: action_conflict_behavior_version(action.id).to_string(),
+        })
+        .collect()
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -218,7 +233,7 @@ impl
 
 fn builtin_command_reconfirmation(
     action_id: &str,
-    action_name: &str,
+    command_name: &str,
     preferences: &ExternalSourceConflictPreferences,
 ) -> Option<BuiltinCommandReconfirmation> {
     let candidate_id = format!("bitfun.cli:{action_id}");
@@ -226,8 +241,8 @@ fn builtin_command_reconfirmation(
     if !participated_in_conflict {
         return None;
     }
-    let command_name = action_name.trim_start_matches('/');
-    let conflict_key = native_command_conflict_key(
+    let command_name = command_name.trim_start_matches('/');
+    let conflict_key = native_prompt_command_conflict_key(
         "local-user",
         command_name,
         [(
@@ -237,7 +252,7 @@ fn builtin_command_reconfirmation(
     );
     let confirmed = preferences.choices.get(&conflict_key) == Some(&candidate_id);
     Some(BuiltinCommandReconfirmation {
-        conflict_key,
+        command_name: command_name.to_ascii_lowercase(),
         candidate_id,
         confirmed,
     })
@@ -257,76 +272,35 @@ fn builtin_reconfirmation_names(
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum CommandQualifier {
-    Unqualified,
-    Builtin,
-    External,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum CommandRoute {
     Builtin,
     External,
     AskForCollisionChoice,
     WaitForDiscovery,
-    UnknownBuiltin,
-}
-
-fn parse_command_token(token: &str) -> (CommandQualifier, &str) {
-    let requested_name = token.trim_start_matches('/');
-    let Some((qualifier, command_name)) = requested_name.split_once(':') else {
-        return (CommandQualifier::Unqualified, requested_name);
-    };
-    if qualifier.eq_ignore_ascii_case("builtin") {
-        (CommandQualifier::Builtin, command_name)
-    } else if qualifier.eq_ignore_ascii_case("external") {
-        (CommandQualifier::External, command_name)
-    } else {
-        (CommandQualifier::Unqualified, requested_name)
-    }
 }
 
 fn command_route(
-    qualifier: CommandQualifier,
     has_builtin: bool,
     external: Option<&ExternalCommandProjection>,
     discovery_pending: bool,
     builtin_reconfirmation_required: bool,
 ) -> CommandRoute {
-    match qualifier {
-        CommandQualifier::Builtin => {
-            if has_builtin {
-                CommandRoute::Builtin
-            } else {
-                CommandRoute::UnknownBuiltin
-            }
-        }
-        CommandQualifier::External => CommandRoute::External,
-        CommandQualifier::Unqualified => {
-            if builtin_reconfirmation_required {
-                return CommandRoute::AskForCollisionChoice;
-            }
-            if discovery_pending {
-                return CommandRoute::WaitForDiscovery;
-            }
-            if let Some(collision) = external.and_then(|command| command.native_collision.as_ref())
-            {
-                return match collision.selected_candidate_id.as_deref() {
-                    Some(selected) if selected == collision.external_candidate_id => {
-                        CommandRoute::External
-                    }
-                    Some(selected) if selected == collision.native_candidate_id => {
-                        CommandRoute::Builtin
-                    }
-                    _ => CommandRoute::AskForCollisionChoice,
-                };
-            }
-            if has_builtin {
-                CommandRoute::Builtin
-            } else {
-                CommandRoute::External
-            }
-        }
+    if builtin_reconfirmation_required {
+        return CommandRoute::AskForCollisionChoice;
+    }
+    if let Some(collision) = external.and_then(|command| command.native_collision.as_ref()) {
+        return match collision.selected_candidate_id.as_deref() {
+            Some(selected) if selected == collision.external_candidate_id => CommandRoute::External,
+            Some(selected) if selected == collision.native_candidate_id => CommandRoute::Builtin,
+            _ => CommandRoute::AskForCollisionChoice,
+        };
+    }
+    if has_builtin {
+        CommandRoute::Builtin
+    } else if discovery_pending {
+        CommandRoute::WaitForDiscovery
+    } else {
+        CommandRoute::External
     }
 }
 
@@ -382,7 +356,7 @@ impl ChatMode {
             None
         } else {
             Some(format!(
-                "Tools from external AI applications need attention: {approvals} approvals, {conflicts} name conflicts, {diagnostics} diagnostics - run /builtin:tools refresh"
+                "Tools from external AI applications need attention: {approvals} approvals, {conflicts} name conflicts, {diagnostics} diagnostics - run /tools refresh"
             ))
         }
     }
@@ -492,7 +466,7 @@ impl ChatMode {
             Some(Err(MpscTryRecvError::Disconnected)) => {
                 self.external_control_mutation_rx = None;
                 chat_view.set_status(Some(
-                    "External integration status stopped before returning a result; retry /builtin:extensions status."
+                    "External integration status stopped before returning a result; retry /extensions status."
                         .to_string(),
                 ));
                 return true;
@@ -642,7 +616,7 @@ impl ChatMode {
             Some(Err(MpscTryRecvError::Disconnected)) => {
                 self.external_tool_mutation_rx = None;
                 chat_view.set_status(Some(
-                    "External tool update stopped before returning a result; run /builtin:tools refresh and retry."
+                    "External tool update stopped before returning a result; run /tools refresh and retry."
                         .to_string(),
                 ));
                 return true;
@@ -673,7 +647,7 @@ impl ChatMode {
                     chat_view.set_status(Some(result_label));
                 } else {
                     chat_view.set_status(Some(format!(
-                        "{result_label}; {approvals} approvals and {conflicts} conflicts remain - run /builtin:tools refresh"
+                        "{result_label}; {approvals} approvals and {conflicts} conflicts remain - run /tools refresh"
                     )));
                 }
             }
@@ -724,7 +698,7 @@ impl ChatMode {
                 details.push(format!("{} issues", attention.diagnostics));
             }
             Some(format!(
-                "Agents from external AI applications need attention: {} - run /builtin:agents refresh",
+                "Agents from external AI applications need attention: {} - run /agent refresh",
                 details.join(", ")
             ))
         }
@@ -839,7 +813,7 @@ impl ChatMode {
             Some(Err(MpscTryRecvError::Disconnected)) => {
                 self.external_agent_mutation_rx = None;
                 chat_view.set_status(Some(
-                    "External agent update stopped before returning a result; run /builtin:agents refresh."
+                    "External agent update stopped before returning a result; run /agent refresh."
                         .to_string(),
                 ));
                 return true;
@@ -875,7 +849,7 @@ impl ChatMode {
                     chat_view.set_status(Some(result_label));
                 } else {
                     chat_view.set_status(Some(format!(
-                        "{result_label}; {confirmations} confirmations and {conflicts} conflicts remain - run /builtin:agents refresh"
+                        "{result_label}; {confirmations} confirmations and {conflicts} conflicts remain - run /agent refresh"
                     )));
                 }
             }

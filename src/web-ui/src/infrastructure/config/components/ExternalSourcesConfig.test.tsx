@@ -284,6 +284,33 @@ describe('ExternalSourcesConfig', () => {
     vi.clearAllMocks();
   });
 
+  it('keeps the shared page frame while the initial snapshot is loading', async () => {
+    let resolveSnapshot: ((value: typeof snapshot) => void) | undefined;
+    getSnapshotMock.mockImplementationOnce(
+      () => new Promise((resolve) => {
+        resolveSnapshot = resolve;
+      }),
+    );
+
+    await act(async () => {
+      root.render(<ExternalSourcesConfig />);
+      await Promise.resolve();
+    });
+
+    const page = container.querySelector(
+      '.bitfun-config-page-layout.bitfun-external-sources-config',
+    );
+    expect(page?.querySelector('.bitfun-config-page-header__title')?.textContent).toBe('title');
+    expect(page?.querySelector(
+      '.bitfun-config-page-content .bitfun-config-page-loading',
+    )?.textContent).toBe('loading');
+
+    await act(async () => {
+      resolveSnapshot?.(snapshot);
+      await Promise.resolve();
+    });
+  });
+
   it('keeps compatibility controls compact and applies the safe OpenCode defaults', async () => {
     const policySnapshot = {
       ...snapshot,
@@ -496,6 +523,33 @@ describe('ExternalSourcesConfig', () => {
     expect(toolRow?.textContent).not.toContain('policy.access.auto');
   });
 
+  it('fails closed when an older host omits the stored enabled flag', async () => {
+    getSnapshotMock.mockResolvedValue({
+      ...snapshot,
+      integrationPolicy: {
+        ...integrationPolicy,
+        userDefaults: {
+          ...integrationPolicy.userDefaults,
+          enabled: undefined,
+        },
+        workspaceOverride: {
+          enabled: undefined,
+          ecosystems: {},
+        },
+      },
+    });
+
+    await act(async () => {
+      root.render(<ExternalSourcesConfig />);
+      await Promise.resolve();
+    });
+
+    const policyToggle = container.querySelector(
+      '.bitfun-external-sources-config__policy-card input[type="checkbox"]',
+    ) as HTMLInputElement;
+    expect(policyToggle.checked).toBe(false);
+  });
+
   it('requires one explicit conflict choice and persists source toggles', async () => {
     await act(async () => {
       root.render(<ExternalSourcesConfig />);
@@ -507,7 +561,6 @@ describe('ExternalSourcesConfig', () => {
       button.textContent?.includes('OpenCode project commands'));
     expect(container.textContent).toContain('diagnostics.summary');
     expect(container.textContent).toContain('diagnostics.category.invalidSettings');
-    expect(container.textContent).toContain('One command file could not be parsed.');
     expect(candidateButton).toBeDefined();
     await act(async () => candidateButton?.click());
     expect(setConflictChoiceMock).toHaveBeenCalledWith(
@@ -726,6 +779,27 @@ describe('ExternalSourcesConfig', () => {
           behaviorVersion: 'behavior-v1',
           staticStatus: { state: 'ready' },
         },
+      }, {
+        candidateId: 'external-mcp-docs',
+        approvalKey: 'mcp-approval-v2',
+        decisionKey: 'mcp-decision-v2',
+        definition: {
+          id: {
+            source: { providerId: 'opencode.mcp', sourceId: 'project' },
+            localId: 'docs',
+          },
+          provenance: [{ providerId: 'opencode.mcp', sourceId: 'project' }],
+          name: 'docs',
+          transport: 'streamable_http',
+          remoteUrlPreview: 'https://mcp.example.test',
+          argumentCount: 0,
+          environmentKeys: [],
+          environmentReferenceNames: [],
+          headerNames: [],
+          sourceEnabled: true,
+          behaviorVersion: 'behavior-v2',
+          staticStatus: { state: 'ready' },
+        },
       }],
       mcpConflicts: [{
         conflictKey: 'mcp-conflict-v1',
@@ -770,6 +844,45 @@ describe('ExternalSourcesConfig', () => {
     expect(container.textContent).toContain('mcp.workingDirectory:{"location":"<workspace>"}');
     expect(container.textContent).toContain('GITHUB_TOKEN');
     expect(container.textContent).toContain('OPENCODE_TOKEN');
+
+    const approvalDetails = container.querySelector(
+      '.bitfun-external-sources-config__review-details',
+    ) as HTMLDetailsElement;
+    const approvalCard = approvalDetails.closest(
+      '.bitfun-external-sources-config__tool-card',
+    ) as HTMLElement;
+    const alwaysVisibleSummary = approvalCard.querySelector(
+      '.bitfun-external-sources-config__review-summary',
+    ) as HTMLElement;
+    const alwaysVisibleRisk = approvalCard.querySelector(
+      '.bitfun-external-sources-config__review-risk',
+    ) as HTMLElement;
+    expect(approvalDetails.open).toBe(false);
+    expect(alwaysVisibleSummary.textContent).toContain('mcp.command:{"command":"npx"}');
+    expect(alwaysVisibleRisk.textContent).toContain('mcpApprovals.compactWarning');
+    expect(approvalDetails.contains(alwaysVisibleSummary)).toBe(false);
+    expect(approvalDetails.contains(alwaysVisibleRisk)).toBe(false);
+    const approvalEnable = Array.from(approvalCard.querySelectorAll('button')).find((button) =>
+      button.textContent?.includes('mcpApprovals.enable')) as HTMLButtonElement;
+    expect(alwaysVisibleRisk.id).toBe('mcp-review-risk-mcp-decision-v1');
+    expect(approvalEnable.getAttribute('aria-describedby')).toBe(alwaysVisibleRisk.id);
+    const remoteSummary = Array.from(approvalCard.parentElement?.querySelectorAll(
+      '.bitfun-external-sources-config__review-summary',
+    ) ?? []).find((candidate) => candidate.textContent?.includes('mcp.url')) as HTMLElement;
+    const remoteDetails = remoteSummary.closest(
+      '.bitfun-external-sources-config__tool-card',
+    )?.querySelector('.bitfun-external-sources-config__review-details') as HTMLDetailsElement;
+    expect(remoteSummary.textContent).toContain(
+      'mcp.url:{"url":"https://mcp.example.test"}',
+    );
+    expect(remoteDetails.textContent).not.toContain(
+      'mcp.url:{"url":"https://mcp.example.test"}',
+    );
+    expect(approvalDetails.querySelector('summary')?.textContent)
+      .toContain('mcpApprovals.showDetails');
+    expect(container.textContent).toContain('mcpApprovals.enable');
+    await act(async () => approvalDetails.querySelector('summary')?.click());
+    expect(approvalDetails.open).toBe(true);
 
     const externalConflictCandidate = Array.from(
       container.querySelectorAll('.bitfun-external-sources-config__candidate'),
@@ -1256,13 +1369,23 @@ describe('ExternalSourcesConfig', () => {
         sourceCount: 1,
         effectiveModelLabel: 'fast',
         effectiveToolLabels: ['Read', 'Grep'],
+        unavailableToolLabels: ['Shell', 'Write'],
         supportsFollowUp: false,
         compatibilityState: 'ready',
         diagnostics: [{
           code: 'opencode_agent_prompt_not_imported',
           blocksActivation: true,
         }, {
+          code: 'external_subagent.tool_unavailable',
+          blocksActivation: true,
+        }, {
+          code: 'opencode_agent_permission_not_imported',
+          blocksActivation: true,
+        }, {
           code: 'opencode_default_permission_semantics_not_imported',
+          blocksActivation: false,
+        }, {
+          code: 'opencode_agent_temperature_not_imported',
           blocksActivation: false,
         }, {
           code: 'opencode_agent_definition_type_invalid',
@@ -1340,8 +1463,19 @@ describe('ExternalSourcesConfig', () => {
     expect(container.textContent).toContain('fast');
     expect(container.textContent).toContain('Read, Grep');
     expect(container.textContent).toContain('agents.executionDomain');
-    expect(container.textContent).toContain('agentDiagnostics.unsupportedBehavior.reason');
-    expect(container.textContent).toContain('agentDiagnostics.ignoredOption.reason');
+    expect(container.textContent).toContain(
+      'agentDiagnostics.toolUnavailable.reason:{"tools":"Shell, Write"}',
+    );
+    expect(container.textContent).toContain('agentDiagnostics.promptMissing.reason');
+    expect(container.textContent).toContain(
+      'agentDiagnostics.unsupportedSetting.reason:{"setting":"agentDiagnostics.settings.permissions"}',
+    );
+    expect(container.textContent).toContain(
+      'agentDiagnostics.ignoredSetting.reason:{"setting":"agentDiagnostics.settings.defaultPermissions"}',
+    );
+    expect(container.textContent).toContain(
+      'agentDiagnostics.ignoredSetting.reason:{"setting":"agentDiagnostics.settings.temperature"}',
+    );
     expect(container.textContent).toContain('agentDiagnostics.invalidDefinition.reason');
     expect(container.textContent).toContain('agentConflicts.selectionApproves');
     expect(container.textContent).toContain('.opencode/agents/explore.md');

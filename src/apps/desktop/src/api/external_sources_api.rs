@@ -2,16 +2,18 @@
 
 use bitfun_core::external_sources::{
     apply_external_source_control_action, choose_external_mcp_conflict,
-    choose_external_subagent_conflict, external_source_location_for_host_action,
-    external_source_snapshot,
+    choose_external_subagent_conflict, expand_external_prompt_command,
+    external_source_location_for_host_action, external_source_snapshot,
     get_external_source_control_snapshot as core_get_external_source_control_snapshot,
-    set_external_mcp_server_decision, set_external_prompt_command_conflict_choice,
-    set_external_source_enabled, set_external_subagent_activation,
-    set_external_tool_conflict_choice, set_external_tool_target_decision,
-    update_external_integration_policy, ExternalIntegrationPolicyMutation,
+    native_prompt_command_conflicts, set_external_mcp_server_decision,
+    set_external_prompt_command_conflict_choice, set_external_source_enabled,
+    set_external_subagent_activation, set_external_tool_conflict_choice,
+    set_external_tool_target_decision, set_native_prompt_command_conflict_choice,
+    update_external_integration_policy, ExpandedPromptCommand, ExternalIntegrationPolicyMutation,
     ExternalSourceControlRequestV1, ExternalSourceHostCapabilities, ExternalSourceOperationError,
     ExternalSourceOperationErrorCode, ExternalSourceOperationResult, ExternalSourcePublicSnapshot,
-    ExternalSourceSurfaceSnapshotV1,
+    ExternalSourceSurfaceSnapshotV1, NativePromptCommandConflictSnapshot,
+    NativePromptCommandDescriptor,
 };
 use bitfun_core::service::remote_ssh::workspace_state::is_remote_path;
 use serde::{Deserialize, Serialize};
@@ -62,6 +64,38 @@ pub struct SetExternalSourceConflictChoiceRequest {
     pub conflict_key: String,
     pub candidate_id: String,
     pub expected_preference_revision: u64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct NativePromptCommandConflictsRequest {
+    pub workspace_path: Option<String>,
+    pub native_commands: Vec<NativePromptCommandDescriptor>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct SetNativePromptCommandConflictChoiceRequest {
+    pub workspace_path: Option<String>,
+    pub native_commands: Vec<NativePromptCommandDescriptor>,
+    pub selected_candidate_id: String,
+    pub expected_preference_revision: u64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ExpandExternalPromptCommandRequest {
+    pub workspace_path: Option<String>,
+    pub name: String,
+    #[serde(default)]
+    pub arguments: String,
+    pub native_commands: Vec<NativePromptCommandDescriptor>,
+    pub candidate_id: String,
+    pub expected_content_version: String,
+    #[serde(default)]
+    pub expected_native_conflict_key: Option<String>,
+    #[serde(default)]
+    pub expected_preference_revision: Option<u64>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -131,6 +165,8 @@ pub struct ChooseExternalMcpConflictRequest {
 
 pub type ExternalSourceSnapshotResponse = ExternalSourcePublicSnapshot;
 pub type ExternalSourceControlResponse = ExternalSourceSurfaceSnapshotV1;
+pub type ExpandExternalPromptCommandResponse = ExpandedPromptCommand;
+pub type NativePromptCommandConflictsResponse = NativePromptCommandConflictSnapshot;
 
 pub(super) async fn require_local_workspace(
     workspace_path: Option<&str>,
@@ -238,6 +274,50 @@ pub async fn set_external_source_conflict_choice_command(
     )
     .await
     .map(Into::into)
+    .map_err(bitfun_core::external_sources::sanitize_external_source_operation_error)
+}
+
+#[tauri::command]
+pub async fn get_native_prompt_command_conflicts_command(
+    request: NativePromptCommandConflictsRequest,
+) -> ExternalSourceOperationResult<NativePromptCommandConflictsResponse> {
+    let workspace = require_local_workspace(request.workspace_path.as_deref()).await?;
+    native_prompt_command_conflicts(workspace, request.native_commands)
+        .await
+        .map_err(bitfun_core::external_sources::sanitize_external_source_operation_error)
+}
+
+#[tauri::command]
+pub async fn set_native_prompt_command_conflict_choice_command(
+    request: SetNativePromptCommandConflictChoiceRequest,
+) -> ExternalSourceOperationResult<NativePromptCommandConflictsResponse> {
+    let workspace = require_local_workspace(request.workspace_path.as_deref()).await?;
+    set_native_prompt_command_conflict_choice(
+        workspace,
+        request.native_commands,
+        &request.selected_candidate_id,
+        request.expected_preference_revision,
+    )
+    .await
+    .map_err(bitfun_core::external_sources::sanitize_external_source_operation_error)
+}
+
+#[tauri::command]
+pub async fn expand_external_prompt_command_command(
+    request: ExpandExternalPromptCommandRequest,
+) -> ExternalSourceOperationResult<ExpandExternalPromptCommandResponse> {
+    let workspace = require_local_workspace(request.workspace_path.as_deref()).await?;
+    expand_external_prompt_command(
+        workspace,
+        &request.name,
+        &request.arguments,
+        request.native_commands,
+        Some(&request.candidate_id),
+        Some(&request.expected_content_version),
+        request.expected_native_conflict_key.as_deref(),
+        request.expected_preference_revision,
+    )
+    .await
     .map_err(bitfun_core::external_sources::sanitize_external_source_operation_error)
 }
 
@@ -379,6 +459,10 @@ mod tests {
 
         let value = serde_json::to_value(ExternalSourceSnapshotResponse::from(snapshot)).unwrap();
 
+        assert_eq!(
+            value["commands"][0]["candidateId"],
+            "17:opencode.commands6:global6:review"
+        );
         assert_eq!(value["commands"][0]["definition"]["name"], "review");
         assert!(value["commands"][0]["definition"].get("template").is_none());
     }
@@ -401,5 +485,37 @@ mod tests {
             request.control.action,
             ExternalSourceControlActionV1::SetSafeMode { enabled: true }
         ));
+    }
+
+    #[test]
+    fn desktop_prompt_expansion_request_requires_guarded_candidate_identity() {
+        let request: ExpandExternalPromptCommandRequest =
+            serde_json::from_value(serde_json::json!({
+                "workspacePath": "D:/workspace/project",
+                "name": "review",
+                "arguments": "focus on auth",
+                "nativeCommands": [{
+                    "commandName": "review",
+                    "candidateId": "bitfun.desktop:action:review",
+                    "behaviorVersion": "action:review:v1"
+                }],
+                "candidateId": "claude-code.commands:project:review",
+                "expectedContentVersion": "behavior-v1"
+            }))
+            .unwrap();
+
+        assert_eq!(request.name, "review");
+        assert_eq!(request.arguments, "focus on auth");
+        assert_eq!(request.native_commands.len(), 1);
+        assert_eq!(request.candidate_id, "claude-code.commands:project:review");
+        assert!(
+            serde_json::from_value::<ExpandExternalPromptCommandRequest>(serde_json::json!({
+                "name": "review",
+                "arguments": "",
+                "candidateId": "claude-code.commands:project:review",
+                "expectedContentVersion": "behavior-v1"
+            }))
+            .is_err()
+        );
     }
 }

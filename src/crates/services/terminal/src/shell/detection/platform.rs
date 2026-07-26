@@ -105,28 +105,37 @@ pub(super) fn windows_pwsh_location_candidates(
 
 #[cfg(not(windows))]
 pub(super) fn posix_shell_candidates() -> Vec<ShellCandidate> {
-    let mut candidates = Vec::new();
-    for shell_type in [
+    [
         ShellType::Bash,
         ShellType::Zsh,
         ShellType::Fish,
         ShellType::Sh,
-    ] {
-        let executable = shell_type.default_executable();
-        candidates.extend(
-            ShellDetector::find_all_in_path(executable)
-                .into_iter()
-                .map(|path| {
-                    ShellCandidate::new(path, shell_type.clone(), ShellDiscoverySource::Path)
-                }),
-        );
-        for directory in ["/usr/local/bin", "/usr/bin", "/bin"] {
-            candidates.push(ShellCandidate::new(
-                PathBuf::from(directory).join(executable),
-                shell_type.clone(),
-                ShellDiscoverySource::SystemInstall,
-            ));
-        }
+    ]
+    .into_iter()
+    .flat_map(|shell_type| posix_shell_candidates_for(&shell_type))
+    .collect()
+}
+
+#[cfg(not(windows))]
+pub(super) fn posix_shell_candidates_for(shell_type: &ShellType) -> Vec<ShellCandidate> {
+    if !matches!(
+        shell_type,
+        ShellType::Bash | ShellType::Zsh | ShellType::Fish | ShellType::Sh
+    ) {
+        return Vec::new();
+    }
+
+    let executable = shell_type.default_executable();
+    let mut candidates = ShellDetector::find_all_in_path(executable)
+        .into_iter()
+        .map(|path| ShellCandidate::new(path, shell_type.clone(), ShellDiscoverySource::Path))
+        .collect::<Vec<_>>();
+    for directory in ["/usr/local/bin", "/usr/bin", "/bin"] {
+        candidates.push(ShellCandidate::new(
+            PathBuf::from(directory).join(executable),
+            shell_type.clone(),
+            ShellDiscoverySource::SystemInstall,
+        ));
     }
     candidates
 }

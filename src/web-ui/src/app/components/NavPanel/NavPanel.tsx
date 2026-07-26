@@ -14,10 +14,17 @@
  * MainNav is always mounted so its state is preserved across transitions.
  */
 
-import React, { Suspense, useState, useEffect, useRef, useCallback } from 'react';
+import React, {
+  Suspense,
+  startTransition,
+  useState,
+  useEffect,
+  useRef,
+  useCallback,
+} from 'react';
 import { useI18n } from '@/infrastructure/i18n';
 import { useNavSceneStore } from '../../stores/navSceneStore';
-import { getSceneNav } from '../../scenes/nav-registry';
+import { getSceneNav, preloadSceneNav } from '../../scenes/nav-registry';
 import type { SceneTabId } from '../SceneBar/types';
 import MainNav from './MainNav';
 import PersistentFooterActions from './components/PersistentFooterActions';
@@ -40,13 +47,28 @@ const NavPanel: React.FC<NavPanelProps> = ({ className = '' }) => {
   const navSceneId = useNavSceneStore(s => s.navSceneId);
 
   const [mountedSceneId, setMountedSceneId] = useState<SceneTabId | null>(navSceneId);
+  const sceneRequestRef = useRef(0);
   useEffect(() => {
-    if (navSceneId) setMountedSceneId(navSceneId);
+    const requestId = ++sceneRequestRef.current;
+    if (!navSceneId) return;
+
+    const commit = () => {
+      if (sceneRequestRef.current !== requestId) return;
+      // React keeps the currently painted navigation visible if the cached
+      // lazy component still suspends for a final promise microtask.
+      startTransition(() => setMountedSceneId(navSceneId));
+    };
+    void preloadSceneNav(navSceneId).then(commit, commit);
   }, [navSceneId]);
 
   const SceneNavComponent = mountedSceneId ? getSceneNav(mountedSceneId) : null;
 
-  const useSplitOpen = !!(showSceneNav && mountedSceneId && SPLIT_OPEN_SCENES.has(mountedSceneId));
+  const hasMountedSceneNav = showSceneNav && mountedSceneId !== null;
+  const useSplitOpen = !!(
+    hasMountedSceneNav
+    && mountedSceneId
+    && SPLIT_OPEN_SCENES.has(mountedSceneId)
+  );
 
   const contentRef = useRef<HTMLDivElement>(null);
 
@@ -72,13 +94,13 @@ const NavPanel: React.FC<NavPanelProps> = ({ className = '' }) => {
 
   const contentCls = [
     'bitfun-nav-panel__content',
-    showSceneNav && 'is-scene',
+    hasMountedSceneNav && 'is-scene',
     useSplitOpen && 'is-split-open',
   ].filter(Boolean).join(' ');
 
   const sceneCls = [
     'bitfun-nav-panel__layer bitfun-nav-panel__layer--scene',
-    showSceneNav && 'is-active',
+    hasMountedSceneNav && 'is-active',
   ].filter(Boolean).join(' ');
 
   return (
@@ -95,7 +117,7 @@ const NavPanel: React.FC<NavPanelProps> = ({ className = '' }) => {
         {SceneNavComponent && (
           <div className={sceneCls}>
             <Suspense fallback={null}>
-              <div key={mountedSceneId} className="bitfun-nav-panel__scene-inner">
+              <div className="bitfun-nav-panel__scene-inner">
                 <SceneNavComponent />
               </div>
             </Suspense>

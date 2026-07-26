@@ -991,6 +991,10 @@ impl ExternalToolRuntimeManager {
         self.runtime.availability().await
     }
 
+    async fn invalidate_availability(&self) {
+        self.runtime.invalidate_availability().await;
+    }
+
     async fn mark_worker_lost(
         &self,
         workspace_key: &str,
@@ -1301,6 +1305,10 @@ pub(super) async fn reset_external_tool_workspace_recovery_budget(workspace_root
     runtime_manager()
         .reset_workspace_recovery_budget(&workspace_route_key(workspace_root))
         .await;
+}
+
+pub(super) async fn invalidate_external_tool_runtime_availability() {
+    runtime_manager().invalidate_availability().await;
 }
 
 pub(super) async fn release_external_tool_workspace(workspace_root: Option<&Path>) {

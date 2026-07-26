@@ -7,6 +7,10 @@
 #   downloaded crates and compiled dependency objects across builds.
 # - Binaries are copied out of the target cache mount into /out within the same
 #   RUN (cache mounts are not part of the image filesystem).
+#
+# China mirrors (optional):
+#   docker compose build --build-arg BITFUN_USE_CN_MIRROR=1
+#   Also: BITFUN_APT_MIRROR, BITFUN_CARGO_SPARSE_URL
 
 # Pin a minor toolchain so floating `rust:1-bookworm` updates do not bust the
 # entire builder cache on every upstream image refresh.
@@ -18,9 +22,44 @@ WORKDIR /build/src/apps/relay-server
 #   docker compose build --build-arg CARGO_BUILD_JOBS=1
 # Note: empty value must NOT be set as ENV — cargo chokes on empty string.
 ARG CARGO_BUILD_JOBS=
+ARG BITFUN_USE_CN_MIRROR=0
+ARG BITFUN_APT_MIRROR=mirrors.aliyun.com
+ARG BITFUN_CARGO_SPARSE_URL=sparse+https://rsproxy.cn/index/
+
 ENV DEBIAN_FRONTEND=noninteractive \
     CARGO_TERM_COLOR=always \
     CARGO_REGISTRIES_CRATES_IO_PROTOCOL=sparse
+
+# Configure apt + cargo mirrors inside the builder when deploying from China.
+RUN set -eux; \
+    if [ "${BITFUN_USE_CN_MIRROR}" = "1" ]; then \
+      sed -i \
+        -e "s|deb.debian.org/debian|${BITFUN_APT_MIRROR}/debian|g" \
+        -e "s|security.debian.org/debian-security|${BITFUN_APT_MIRROR}/debian-security|g" \
+        /etc/apt/sources.list 2>/dev/null || true; \
+      if [ -f /etc/apt/sources.list.d/debian.sources ]; then \
+        sed -i \
+          -e "s|deb.debian.org/debian|${BITFUN_APT_MIRROR}/debian|g" \
+          -e "s|security.debian.org/debian-security|${BITFUN_APT_MIRROR}/debian-security|g" \
+          /etc/apt/sources.list.d/debian.sources; \
+      fi; \
+      mkdir -p /usr/local/cargo; \
+      # `[source.*]` alone is what redirects crates.io. A matching
+      # `[registries.*]` table would only matter for crates that name the
+      # registry explicitly, which none here do — and an unused named registry
+      # is something Cargo may start warning about.
+      #
+      # No `git-fetch-with-cli` either: `git` is not installed in this builder,
+      # so it would turn any future git dependency into a CN-only build failure
+      # while global builds kept working.
+      printf '%s\n' \
+        '[source.crates-io]' \
+        'replace-with = "bitfun-rsproxy-sparse"' \
+        '' \
+        '[source.bitfun-rsproxy-sparse]' \
+        "registry = \"${BITFUN_CARGO_SPARSE_URL}\"" \
+        > /usr/local/cargo/config.toml; \
+    fi
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
@@ -88,9 +127,25 @@ RUN --mount=type=cache,id=bitfun-relay-cargo-registry,target=/usr/local/cargo/re
 
 FROM debian:bookworm-slim
 
+ARG BITFUN_USE_CN_MIRROR=0
+ARG BITFUN_APT_MIRROR=mirrors.aliyun.com
+
 ENV DEBIAN_FRONTEND=noninteractive
 
-RUN apt-get update \
+RUN set -eux; \
+    if [ "${BITFUN_USE_CN_MIRROR}" = "1" ]; then \
+      sed -i \
+        -e "s|deb.debian.org/debian|${BITFUN_APT_MIRROR}/debian|g" \
+        -e "s|security.debian.org/debian-security|${BITFUN_APT_MIRROR}/debian-security|g" \
+        /etc/apt/sources.list 2>/dev/null || true; \
+      if [ -f /etc/apt/sources.list.d/debian.sources ]; then \
+        sed -i \
+          -e "s|deb.debian.org/debian|${BITFUN_APT_MIRROR}/debian|g" \
+          -e "s|security.debian.org/debian-security|${BITFUN_APT_MIRROR}/debian-security|g" \
+          /etc/apt/sources.list.d/debian.sources; \
+      fi; \
+    fi; \
+    apt-get update \
     && apt-get install -y --no-install-recommends ca-certificates curl \
     && rm -rf /var/lib/apt/lists/*
 

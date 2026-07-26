@@ -31,4 +31,22 @@ describe('WorkspaceAPI', () => {
       },
     });
   });
+
+  it('writes text through the registered command with remote routing context', async () => {
+    await workspaceAPI.writeFileContent(
+      '/workspace',
+      '/workspace/.bitfun/plans/refactor.plan.md',
+      '# Plan',
+      'remote-connection-1',
+    );
+
+    expect(invokeMock).toHaveBeenCalledWith('write_file_content', {
+      request: {
+        workspacePath: '/workspace',
+        filePath: '/workspace/.bitfun/plans/refactor.plan.md',
+        content: '# Plan',
+        remoteConnectionId: 'remote-connection-1',
+      },
+    });
+  });
 });
