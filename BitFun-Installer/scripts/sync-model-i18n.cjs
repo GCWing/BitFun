@@ -163,8 +163,8 @@ function buildModelPatch(settingsAiModel, languageTag, components) {
     testing: isZh ? '测试中...' : 'Testing...',
     testSuccess: get(settingsAiModel, 'messages.testSuccess', 'Connection successful'),
     testFailed: get(settingsAiModel, 'messages.testFailed', 'Connection failed'),
-    advancedShow: 'Show advanced settings',
-    advancedHide: 'Hide advanced settings',
+    advancedShow: isZh ? '显示高级设置' : 'Show advanced settings',
+    advancedHide: isZh ? '隐藏高级设置' : 'Hide advanced settings',
     providers: buildProviderPatch(settingsAiModel),
   };
 }

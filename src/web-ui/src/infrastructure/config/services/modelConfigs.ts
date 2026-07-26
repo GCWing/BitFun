@@ -146,7 +146,7 @@ export const PROVIDER_TEMPLATES: Record<string, ProviderTemplate> = {
     name: t('settings/ai-model:providers.moonshot.name'),
     baseUrl: 'https://api.moonshot.cn/v1',
     format: 'openai',
-    models: ['kimi-k3', 'kimi-k2.7-code', 'kimi-k2.6', 'kimi-for-coding'],
+    models: ['kimi-k3', 'kimi-k2.7-code', 'kimi-k2.6'],
     requiresApiKey: true,
     description: t('settings/ai-model:providers.moonshot.description'),
     helpUrl: 'https://platform.moonshot.ai/console',

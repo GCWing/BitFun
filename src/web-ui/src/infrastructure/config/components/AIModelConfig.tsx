@@ -2572,7 +2572,7 @@ const AIModelConfig: React.FC = () => {
                             : [String(value)];
                           syncSelectedModelDrafts(nextModelNames, editingConfig, !!editingConfig.id);
                         }}
-                        placeholder="glm-4.7"
+                        placeholder="glm-5.2"
                         options={availableModelOptions}
                         searchable
                         multiple={!editingConfig.id}

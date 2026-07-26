@@ -28,6 +28,17 @@ struct ClaudeModelVersion {
     minor: u32,
 }
 
+/// Anthropic-compatible endpoints whose vendors document `Authorization: Bearer`
+/// (ANTHROPIC_AUTH_TOKEN) instead of `x-api-key`: Zhipu bigmodel.cn / Z.AI,
+/// Moonshot's /anthropic gateway, and Kimi For Coding.
+fn wants_bearer_auth(url: &str) -> bool {
+    url.contains("bigmodel.cn")
+        || url.contains("api.z.ai")
+        || url.contains("api.kimi.com")
+        || ((url.contains("api.moonshot.cn") || url.contains("api.moonshot.ai"))
+            && url.contains("/anthropic"))
+}
+
 pub(crate) fn apply_headers(
     client: &AIClient,
     builder: RequestBuilder,
@@ -36,7 +47,7 @@ pub(crate) fn apply_headers(
     shared::apply_header_policy(client, builder, |mut builder| {
         builder = builder.header("Content-Type", "application/json");
 
-        if url.contains("bigmodel.cn") {
+        if wants_bearer_auth(url) {
             builder = builder.header("Authorization", format!("Bearer {}", client.config.api_key));
         } else {
             builder = builder

@@ -88,7 +88,8 @@ function isQwenAsrConfig(model?: AIModelConfig | null): boolean {
   if (!model) return true;
   return (
     model.model_name === QWEN_ASR_FLASH_MODEL_ID ||
-    model.base_url.includes('dashscope.aliyuncs.com/compatible-mode')
+    model.base_url.includes('dashscope.aliyuncs.com/compatible-mode') ||
+    model.base_url.includes('dashscope-intl.aliyuncs.com/compatible-mode')
   );
 }
 
