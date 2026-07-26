@@ -34,7 +34,7 @@ struct ClaudeModelVersion {
 fn wants_bearer_auth(url: &str) -> bool {
     url.contains("bigmodel.cn")
         || url.contains("api.z.ai")
-        || url.contains("api.kimi.com")
+        || url.contains("api.kimi.com/coding")
         || ((url.contains("api.moonshot.cn") || url.contains("api.moonshot.ai"))
             && url.contains("/anthropic"))
 }
@@ -49,6 +49,11 @@ pub(crate) fn apply_headers(
 
         if wants_bearer_auth(url) {
             builder = builder.header("Authorization", format!("Bearer {}", client.config.api_key));
+            // Keep bigmodel.cn exactly as it shipped (no version header); the other
+            // bearer gateways follow the Anthropic protocol, which requires it.
+            if !url.contains("bigmodel.cn") {
+                builder = builder.header("anthropic-version", "2023-06-01");
+            }
         } else {
             builder = builder
                 .header("x-api-key", &client.config.api_key)
