@@ -22,3 +22,44 @@ pub use write_file::{
     write_file_success_outcome, write_local_file, write_same_content_outcome,
     WriteLocalFileOutcome, WriteLocalFileRequest, WriteLocalFileStatus,
 };
+
+/// Returns whether a regular filesystem entry has more than one hard link.
+/// Callers that use paths as a security boundary can reject such aliases.
+pub fn path_has_multiple_hard_links(path: &std::path::Path) -> std::io::Result<bool> {
+    let metadata = std::fs::metadata(path)?;
+    if metadata.is_dir() {
+        return Ok(false);
+    }
+
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::MetadataExt;
+        return Ok(metadata.nlink() > 1);
+    }
+
+    #[cfg(windows)]
+    {
+        use std::os::windows::io::AsRawHandle;
+        use windows::Win32::Foundation::HANDLE;
+        use windows::Win32::Storage::FileSystem::{
+            GetFileInformationByHandle, BY_HANDLE_FILE_INFORMATION,
+        };
+
+        let file = std::fs::File::open(path)?;
+        let mut information = BY_HANDLE_FILE_INFORMATION::default();
+        unsafe {
+            GetFileInformationByHandle(HANDLE(file.as_raw_handle()), &mut information)
+                .map_err(|error| std::io::Error::other(error.to_string()))?;
+        }
+        return Ok(information.nNumberOfLinks > 1);
+    }
+
+    #[cfg(not(any(unix, windows)))]
+    {
+        let _ = (path, metadata);
+        Err(std::io::Error::new(
+            std::io::ErrorKind::Unsupported,
+            "hard-link identity checks are unavailable on this platform",
+        ))
+    }
+}

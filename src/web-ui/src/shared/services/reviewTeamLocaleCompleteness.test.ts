@@ -40,7 +40,6 @@ const REVIEW_TEAM_FLOW_CHAT_KEYS = [
   'deepReviewConsent.strategyLabels.quick',
   'deepReviewConsent.strategyLabels.normal',
   'deepReviewConsent.strategyLabels.deep',
-  'deepReviewConsent.callLimit',
   'toolCards.taskTool.reviewCoverageLabel',
   'toolCards.taskTool.reviewCoverageDescription',
   'toolCards.codeReview.runManifest.recommendedStrategy',
@@ -64,32 +63,32 @@ const REVIEW_COPY_EXPECTATIONS: Record<
     extraReviewRole: string;
     forbiddenConsentPhrases: string[];
     reviewConsentTitle: string;
-    reviewBudgetLabel: string;
+    reviewDepthLabel: string;
   }
 > = {
   'en-US': {
     conditionalJudgeMarker: 'only when',
-    dynamicConsentMarkers: ['may add', 'review budget'],
+    dynamicConsentMarkers: ['may add', 'evidence'],
     extraReviewRole: 'Additional Review Check',
     forbiddenConsentPhrases: ['selected additional independent checks', 'review agent run'],
     reviewConsentTitle: 'Start this review?',
-    reviewBudgetLabel: 'Review budget',
+    reviewDepthLabel: 'Review depth',
   },
   'zh-CN': {
     conditionalJudgeMarker: '只在',
-    dynamicConsentMarkers: ['按需', '审核预算'],
+    dynamicConsentMarkers: ['增加', '证据'],
     extraReviewRole: '额外审核检查',
     forbiddenConsentPhrases: ['选择了额外的独立检查', '审查代理'],
     reviewConsentTitle: '开始本次审核？',
-    reviewBudgetLabel: '审核预算',
+    reviewDepthLabel: '审核深度',
   },
   'zh-TW': {
     conditionalJudgeMarker: '只在',
-    dynamicConsentMarkers: ['視需要', '審核預算'],
+    dynamicConsentMarkers: ['增加', '證據'],
     extraReviewRole: '額外審核檢查',
     forbiddenConsentPhrases: ['選擇了額外的獨立檢查', '審查代理'],
     reviewConsentTitle: '開始本次審核？',
-    reviewBudgetLabel: '審核預算',
+    reviewDepthLabel: '審核深度',
   },
 };
 
@@ -187,7 +186,6 @@ describe('review team locale completeness', () => {
       const consentCopy = [
         'deepReviewConsent.body',
         'deepReviewConsent.cost',
-        'deepReviewConsent.callLimit',
         'deepReviewConsent.strategySummaries.normal',
         'deepReviewConsent.strategySummaries.deep',
       ].map((path) => String(getPathValue(flowChat, path) ?? '')).join('\n');
@@ -197,7 +195,7 @@ describe('review team locale completeness', () => {
         expectation.reviewConsentTitle,
       );
       expect(getPathValue(flowChat, 'deepReviewConsent.costLabel')).toBe(
-        expectation.reviewBudgetLabel,
+        expectation.reviewDepthLabel,
       );
       for (const marker of expectation.dynamicConsentMarkers) {
         expect(consentCopy).toContain(marker);

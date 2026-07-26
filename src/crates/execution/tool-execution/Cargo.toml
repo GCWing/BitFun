@@ -27,6 +27,12 @@ tokio = { workspace = true }
 tokio-util = { workspace = true }
 vte = { workspace = true, features = ["ansi"] }
 
+[target.'cfg(windows)'.dependencies]
+windows = { workspace = true, features = [
+  "Win32_Foundation",
+  "Win32_Storage_FileSystem",
+] }
+
 [target.'cfg(not(target_env = "ohos"))'.dependencies]
 readability-js = { version = "0.1.5", optional = true }
 

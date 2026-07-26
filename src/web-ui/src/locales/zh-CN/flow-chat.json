@@ -1102,18 +1102,17 @@
     "windowTitle": "审核方案",
     "eyebrow": "审核方案",
     "title": "开始本次审核？",
-    "body": "BitFun 会先直接审核本次变更，仅在证据确实需要时按需增加独立检查。继续前可确认目标范围、审核预算、预计耗时和只读边界。",
+    "body": "BitFun 会先直接审核本次变更，仅在证据确实需要时增加独立检查。继续前可确认目标范围、预计耗时和只读边界。",
     "readonlyLabel": "只读",
     "readonly": "审核者不会修改文件。",
     "sessionConcurrencyTitle": "当前会话较忙",
     "sessionConcurrencyBody": "目标会话已有 {{count}} 个审核工作在运行，继续后将共享当前可用的审核容量。",
-    "costLabel": "审核预算",
-    "cost": "审核预算用于按需的独立检查；实际调用次数和模型用量取决于审核中发现的证据。",
+    "costLabel": "审核深度",
+    "cost": "本次审核会更深入地调查目标，只在确有帮助时增加独立检查。",
     "timeLabel": "耗时",
     "time": "后台运行，可能需要更久。",
     "cancel": "取消",
     "confirm": "开始审核",
-    "callLimit": "检查上限：{{count}}。实际工作量取决于审核目标和发现的证据。",
     "runStrategy": "运行策略：{{strategy}}",
     "strategyLabels": {
       "quick": "聚焦",
@@ -1140,9 +1139,9 @@
       "selectedContext": "已选上下文",
       "reviewTarget": "审核目标"
     },
-    "skippedSummary": "BitFun 已为此目标选择最相关的检查。{{count}} 个可选检查因适用性、配置或预算未纳入本次运行。",
-    "skippedSummary_one": "BitFun 已为此目标选择最相关的检查。{{count}} 个可选检查因适用性、配置或预算未纳入本次运行。",
-    "skippedSummary_other": "BitFun 已为此目标选择最相关的检查。{{count}} 个可选检查因适用性、配置或预算未纳入本次运行。"
+    "skippedSummary": "BitFun 已选择适用于此目标的检查。{{count}} 个可选检查不在本次运行中。",
+    "skippedSummary_one": "BitFun 已选择适用于此目标的检查。{{count}} 个可选检查不在本次运行中。",
+    "skippedSummary_other": "BitFun 已选择适用于此目标的检查。{{count}} 个可选检查不在本次运行中。"
   },
   "flowChatHeader": {
     "turnList": "轮次列表",
@@ -1747,7 +1746,9 @@
       "expandDetails": "展开详情",
       "openInPanel": "在面板中打开详情",
       "reviewCoverageLabel": "审核检查",
-      "reviewCoverageDescription": "正在补充审核证据"
+      "reviewCoverageDescription": "正在补充审核证据",
+      "reviewFocusedDescription": "正在核查一个具体问题",
+      "reviewCheckUnavailable": "这项检查未能完成，主审核可以继续。"
     },
     "taskDetailPanel": {
       "untitled": "未命名任务",
@@ -2128,6 +2129,7 @@
         "security": "安全覆盖",
         "architecture": "架构覆盖",
         "frontend": "前端覆盖",
+        "focusedCheck": "专项检查",
         "qualityGate": "质量检查"
       },
       "report": {

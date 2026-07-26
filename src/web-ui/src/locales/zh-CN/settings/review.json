@@ -12,10 +12,10 @@
   },
   "capacity": {
     "title": "容量",
-    "description": "限制 Review 的并行工作数量以及等待供应商容量的时长。",
+    "description": "选择审核检查逐项或两路运行，并设置等待供应商容量的时长。",
     "maxParallelReviewers": {
-      "label": "最大并行审核工作",
-      "description": "严格 Review 同时运行的审核工作上限。调高后可能并行启动更多模型请求，更早触发供应商限流，并增加 Token 消耗。"
+      "label": "审核检查并行数",
+      "description": "控制专项检查和大目标分批审核逐项或两路运行；此设置不会增加检查或分批数量。"
     },
     "maxQueueWaitSeconds": {
       "label": "容量等待窗口",

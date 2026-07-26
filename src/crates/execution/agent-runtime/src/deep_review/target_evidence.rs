@@ -99,11 +99,6 @@ impl ReviewTargetEvidenceFile {
     pub fn completeness(&self) -> &str {
         &self.completeness
     }
-
-    fn matches_path(&self, path: &str) -> bool {
-        let path = normalize_path(path);
-        self.path == path || self.previous_path.as_deref() == Some(path.as_str())
-    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -386,20 +381,31 @@ impl ReviewTargetEvidence {
     }
 
     pub fn contains_file(&self, path: &str) -> bool {
-        self.files.iter().any(|file| file.matches_path(path))
+        self.file_for_path(path).is_some()
+    }
+
+    /// Returns the current target path for either a current or previous path.
+    /// This keeps rename handling owned by the target-evidence contract instead
+    /// of reimplementing path normalization in review tools.
+    pub fn canonical_file_path_for_path<'a>(&'a self, path: &str) -> Option<&'a str> {
+        self.file_for_path(path).map(ReviewTargetEvidenceFile::path)
+    }
+
+    /// Applies local-host path semantics without changing provider or remote
+    /// target identity. Windows local reads are case-insensitive; prepared
+    /// target paths remain exact everywhere else.
+    pub fn canonical_file_path_for_local_path<'a>(&'a self, path: &str) -> Option<&'a str> {
+        self.file_index_for_path_with_case(path, cfg!(windows))
+            .map(|index| self.files[index].path())
     }
 
     pub fn file_status_for_path(&self, path: &str) -> Option<&str> {
-        self.files
-            .iter()
-            .find(|file| file.matches_path(path))
+        self.file_for_path(path)
             .map(ReviewTargetEvidenceFile::status)
     }
 
     pub fn file_completeness_for_path(&self, path: &str) -> Option<&str> {
-        self.files
-            .iter()
-            .find(|file| file.matches_path(path))
+        self.file_for_path(path)
             .map(ReviewTargetEvidenceFile::completeness)
     }
 
@@ -407,7 +413,7 @@ impl ReviewTargetEvidence {
         if page_size == 0 {
             return None;
         }
-        let index = self.files.iter().position(|file| file.matches_path(path))?;
+        let index = self.file_index_for_path(path)?;
         u32::try_from(index / page_size + 1).ok()
     }
 
@@ -425,7 +431,7 @@ impl ReviewTargetEvidence {
     }
 
     pub fn diff_paths_for_path(&self, path: &str) -> Vec<String> {
-        let Some(file) = self.files.iter().find(|file| file.matches_path(path)) else {
+        let Some(file) = self.file_for_path(path) else {
             return Vec::new();
         };
         let mut paths = Vec::with_capacity(2);
@@ -436,6 +442,43 @@ impl ReviewTargetEvidence {
             paths.push(file.path().to_string());
         }
         paths
+    }
+
+    fn file_for_path(&self, path: &str) -> Option<&ReviewTargetEvidenceFile> {
+        self.file_index_for_path(path)
+            .map(|index| &self.files[index])
+    }
+
+    fn file_index_for_path(&self, path: &str) -> Option<usize> {
+        self.file_index_for_path_with_case(path, false)
+    }
+
+    fn file_index_for_path_with_case(&self, path: &str, case_insensitive: bool) -> Option<usize> {
+        let path = normalize_path(path);
+        self.files
+            .iter()
+            .position(|file| file.path() == path)
+            .or_else(|| {
+                case_insensitive.then(|| {
+                    self.files
+                        .iter()
+                        .position(|file| review_path_eq(file.path(), &path))
+                })?
+            })
+            .or_else(|| {
+                self.files.iter().position(|file| {
+                    file.previous_path()
+                        .is_some_and(|previous| previous == path)
+                })
+            })
+            .or_else(|| {
+                case_insensitive.then(|| {
+                    self.files.iter().position(|file| {
+                        file.previous_path()
+                            .is_some_and(|previous| review_path_eq(previous, &path))
+                    })
+                })?
+            })
     }
 
     pub fn allows_live_repository_context(&self) -> bool {
@@ -784,6 +827,10 @@ fn normalize_path(path: &str) -> String {
     path.trim_start_matches("./").to_string()
 }
 
+fn review_path_eq(left: &str, right: &str) -> bool {
+    left.to_lowercase() == right.to_lowercase()
+}
+
 fn is_full_commit_id(value: &str) -> bool {
     value.len() == 40 && value.bytes().all(|byte| byte.is_ascii_hexdigit())
 }
@@ -836,6 +883,87 @@ mod tests {
                 }
             }
         })
+    }
+
+    #[test]
+    fn canonical_file_path_maps_rename_aliases_to_the_current_target_path() {
+        let mut manifest = manifest();
+        manifest["evidencePack"]["reviewTarget"]["files"] = json!([{
+            "path": "src/new.rs",
+            "previousPath": "src/old.rs",
+            "status": "renamed",
+            "diffRef": "git-range:abc:1",
+            "completeness": "complete"
+        }]);
+        let evidence = ReviewTargetEvidence::from_manifest(&manifest)
+            .expect("evidence should parse")
+            .expect("manifest should contain evidence");
+
+        assert_eq!(
+            evidence.canonical_file_path_for_path("src/old.rs"),
+            Some("src/new.rs")
+        );
+        assert_eq!(
+            evidence.canonical_file_path_for_path("src/new.rs"),
+            Some("src/new.rs")
+        );
+        assert_eq!(evidence.canonical_file_path_for_path("README.md"), None);
+    }
+
+    #[test]
+    fn current_path_wins_when_a_rename_source_is_recreated() {
+        let mut manifest = manifest();
+        manifest["evidencePack"]["reviewTarget"]["files"] = json!([
+            {
+                "path": "src/new.rs",
+                "previousPath": "src/old.rs",
+                "status": "renamed",
+                "completeness": "complete"
+            },
+            {
+                "path": "src/old.rs",
+                "status": "added",
+                "completeness": "complete"
+            }
+        ]);
+        let evidence = ReviewTargetEvidence::from_manifest(&manifest)
+            .expect("evidence should parse")
+            .expect("manifest should contain evidence");
+
+        assert_eq!(
+            evidence.canonical_file_path_for_path("src/old.rs"),
+            Some("src/old.rs")
+        );
+        assert_eq!(
+            evidence.canonical_file_path_for_path("src/new.rs"),
+            Some("src/new.rs")
+        );
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn target_paths_match_windows_case_insensitively() {
+        let mut manifest = manifest();
+        manifest["evidencePack"]["reviewTarget"]["files"] = json!([
+            { "path": "src/lib.rs", "status": "modified", "completeness": "complete" },
+            { "path": "SRC/LIB.RS", "status": "modified", "completeness": "complete" }
+        ]);
+        let evidence = ReviewTargetEvidence::from_manifest(&manifest)
+            .expect("evidence should parse")
+            .expect("manifest should contain evidence");
+
+        assert_eq!(
+            evidence.canonical_file_path_for_local_path("Src/Lib.Rs"),
+            Some("src/lib.rs")
+        );
+        assert_eq!(
+            evidence.canonical_file_path_for_local_path("SRC/LIB.RS"),
+            Some("SRC/LIB.RS")
+        );
+        assert_eq!(
+            evidence.canonical_file_path_for_path("SRC/LIB.RS"),
+            Some("SRC/LIB.RS")
+        );
     }
 
     fn scoped_manifest() -> Value {

@@ -34,11 +34,11 @@ First inspect the prepared execution plan:
 - If `active_packets` is non-empty, it is a prepared managed or historical packet plan. Execute only those packets within their declared capacity groups, scopes, tools, timeouts, and retry limits. Prefer ascending `launch_batch`, but treat it as a concurrency grouping rather than a runtime completion barrier. Multiple reviewer packets, same-role shards, or a Judge packet are allowed only when already present. Do not invent additional packets.
 - If `active_packets` is empty, it is a new strict run. Apply the bounded specialist and quality-check rules below.
 
-## Optional specialist for a new strict run
+## Focused checks for a new strict run
 
-You may call `LaunchReviewAgent` for **at most one** manifest-approved specialist, and only when a concrete uncertainty would materially benefit from an isolated fresh perspective. Good reasons include a difficult security boundary, a plausible performance regression requiring focused analysis, or an unfamiliar framework contract.
+You may call `LaunchReviewAgent` only when a concrete unresolved question would materially benefit from isolated evidence. Strict Review allows at most three spawned calls total, including any ReviewJudge. The capability catalog is dynamic and concise; choose only a capability that adds independent value, then pass its exact key and fingerprint with a target-bound `focused_assignment`.
 
-Do not delegate merely because a specialist exists. Do not split files, launch parallel role coverage, repeat the whole review, or retry a specialist. Give the specialist the exact target, the narrow question, relevant evidence status, and a read-only requirement. Treat its output as advisory and verify any surviving claim yourself.
+Do not delegate merely because a capability exists. Do not split files, launch parallel role coverage, repeat the whole review, or retry a focused check. Give the worker the narrow question and expected evidence. Treat its output as advisory and verify only high-severity, conflicting, or low-confidence claims yourself.
 
 ## Conditional quality check for a new strict run
 

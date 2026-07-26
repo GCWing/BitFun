@@ -438,6 +438,25 @@ impl AgentRegistry {
         Ok(detail)
     }
 
+    pub async fn get_custom_subagent_detail_by_key(
+        &self,
+        agent_key: &str,
+        workspace_root: Option<&Path>,
+    ) -> BitFunResult<CustomAgentDetail> {
+        self.ensure_user_custom_agents_loaded().await;
+        if let Some(root) = workspace_root {
+            self.load_custom_agents(Some(root)).await;
+        }
+        let detail = self.get_custom_agent_detail_by_key_inner(agent_key, workspace_root)?;
+        if detail.kind != "subagent" {
+            return Err(BitFunError::agent(format!(
+                "Agent '{}' is not a subagent",
+                agent_key
+            )));
+        }
+        Ok(detail)
+    }
+
     fn get_custom_agent_detail_inner(
         &self,
         agent_id: &str,
@@ -446,6 +465,44 @@ impl AgentRegistry {
         let entry = self
             .find_agent_entry(agent_id, workspace_root)
             .ok_or_else(|| BitFunError::agent(format!("Agent not found: {}", agent_id)))?;
+        Self::custom_agent_detail_from_entry(agent_id, entry)
+    }
+
+    pub(super) fn get_custom_agent_detail_by_key_inner(
+        &self,
+        agent_key: &str,
+        workspace_root: Option<&Path>,
+    ) -> BitFunResult<CustomAgentDetail> {
+        let entry = {
+            let agents = self.read_agents();
+            agents
+                .values()
+                .find(|entry| {
+                    subagent_key_for(entry.subagent_source, entry.agent.as_ref()).as_deref()
+                        == Some(agent_key)
+                })
+                .cloned()
+        }
+        .or_else(|| {
+            let root = workspace_root?;
+            self.read_project_subagents()
+                .get(root)
+                .and_then(|entries| {
+                    entries.values().find(|entry| {
+                        subagent_key_for(entry.subagent_source, entry.agent.as_ref()).as_deref()
+                            == Some(agent_key)
+                    })
+                })
+                .cloned()
+        })
+        .ok_or_else(|| BitFunError::agent(format!("Agent not found: {}", agent_key)))?;
+        Self::custom_agent_detail_from_entry(agent_key, entry)
+    }
+
+    fn custom_agent_detail_from_entry(
+        agent_id: &str,
+        entry: AgentEntry,
+    ) -> BitFunResult<CustomAgentDetail> {
         if entry.source == AgentSource::Builtin {
             return Err(BitFunError::agent(
                 "Built-in agents cannot be edited here".to_string(),

@@ -48,7 +48,7 @@ impl Agent for DeepReviewAgent {
     }
 
     fn description(&self) -> &str {
-        r#"Read-only strict reviewer for substantial changes. It reviews the prepared target directly, may request one focused specialist or conditional quality check, and submits an evidence-backed report. A separate ReviewFixer owns approved remediation."#
+        r#"Read-only strict reviewer for substantial changes. It reviews the prepared target directly, may spend its bounded shared allowance on focused checks or a conditional quality check, and submits one evidence-backed report. A separate ReviewFixer owns approved remediation."#
     }
 
     fn prompt_template_name(&self, _model_name: Option<&str>) -> &str {

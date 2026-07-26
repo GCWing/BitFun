@@ -9,10 +9,13 @@ use crate::agentic::deep_review_policy::{
 };
 use crate::agentic::tools::framework::{Tool, ToolResult, ToolUseContext};
 use crate::agentic::tools::ToolRuntimeRestrictions;
+use crate::agentic::WorkspaceBinding;
+use crate::service::remote_ssh::workspace_state::WorkspaceSessionIdentity;
 use async_trait::async_trait;
 use bitfun_runtime_ports::DelegationPolicy;
 use serde_json::json;
 use std::collections::HashMap;
+use std::path::PathBuf;
 use std::sync::Arc;
 
 struct PromptOrderTestAgent {
@@ -197,7 +200,7 @@ fn code_review_tasks_are_serial_even_though_the_agent_is_readonly() {
 }
 
 #[test]
-fn dynamic_review_launches_are_serial_unless_the_manifest_supplies_a_managed_packet() {
+fn only_scoped_review_workers_are_concurrency_safe() {
     let specialist = json!({
         "description": "Check trust boundary",
         "prompt": "Use the security lens for this exact boundary",
@@ -209,6 +212,12 @@ fn dynamic_review_launches_are_serial_unless_the_manifest_supplies_a_managed_pac
         "subagent_type": "ReviewWorker",
         "packet_id": "managed-review:batch-1"
     });
+    let focused_check = json!({
+        "description": "Check trust boundary",
+        "prompt": "Use the selected guidance for this exact boundary",
+        "subagent_type": "ReviewWorker",
+        "focused_assignment": { "question": "Can this boundary be bypassed?" }
+    });
     let judge_packet = json!({
         "description": "Validate disputed finding",
         "prompt": "Validate only the disputed finding after reviewers finish",
@@ -219,6 +228,7 @@ fn dynamic_review_launches_are_serial_unless_the_manifest_supplies_a_managed_pac
     let tool = LaunchReviewAgentTool::new();
     assert!(!tool.is_concurrency_safe(Some(&specialist)));
     assert!(tool.is_concurrency_safe(Some(&managed_packet)));
+    assert!(tool.is_concurrency_safe(Some(&focused_check)));
     assert!(!tool.is_concurrency_safe(Some(&judge_packet)));
 }
 
@@ -274,6 +284,7 @@ async fn launch_review_agent_schema_exposes_retry_without_agent_or_fork_controls
     assert_eq!(schema["properties"]["auto_retry"]["type"], "boolean");
     assert_eq!(schema["properties"]["retry_coverage"]["type"], "object");
     assert_eq!(schema["properties"]["packet_id"]["type"], "string");
+    assert_eq!(schema["properties"]["focused_assignment"]["type"], "object");
     assert!(schema["properties"].get("fork_context").is_none());
     assert!(schema["properties"].get("agent_id").is_none());
     assert!(schema["properties"].get("run_in_background").is_none());
@@ -282,6 +293,86 @@ async fn launch_review_agent_schema_exposes_retry_without_agent_or_fork_controls
         .unwrap()
         .iter()
         .any(|value| value.as_str() == Some("subagent_type")));
+}
+
+#[tokio::test]
+async fn code_review_delegation_requires_an_explicit_adaptive_manifest() {
+    let tool = LaunchReviewAgentTool::new();
+    let direct_context = test_tool_context("CodeReview");
+    assert!(!tool.is_available_in_context(Some(&direct_context)).await);
+
+    let mut prepared_context = test_tool_context("CodeReview");
+    prepared_context.custom_data.insert(
+        "deep_review_run_manifest".to_string(),
+        json!({
+            "reviewMode": "deep",
+            "adaptiveReview": { "version": 1, "maxFocusedCalls": 2 }
+        }),
+    );
+    assert!(tool.is_available_in_context(Some(&prepared_context)).await);
+}
+
+#[tokio::test]
+async fn adaptive_code_review_worker_is_admitted_by_the_task_runtime() {
+    let direct_context = test_tool_context("CodeReview");
+    let direct_types = TaskTool::new()
+        .get_agents_types(Some(&direct_context))
+        .await;
+    assert!(!direct_types.iter().any(|agent| agent == "ReviewWorker"));
+
+    let mut prepared_context = test_tool_context("CodeReview");
+    prepared_context.custom_data.insert(
+        "deep_review_run_manifest".to_string(),
+        json!({
+            "reviewMode": "deep",
+            "adaptiveReview": { "version": 1, "maxFocusedCalls": 2 }
+        }),
+    );
+    let prepared_types = TaskTool::new()
+        .get_agents_types(Some(&prepared_context))
+        .await;
+    assert!(prepared_types.iter().any(|agent| agent == "ReviewWorker"));
+}
+
+#[tokio::test]
+async fn adaptive_review_delegation_is_hidden_for_remote_workspaces() {
+    let tool = LaunchReviewAgentTool::new();
+    let mut context = test_tool_context("CodeReview");
+    context.workspace = Some(WorkspaceBinding::new_remote(
+        None,
+        PathBuf::from("/workspace/project"),
+        "connection-1".to_string(),
+        "remote".to_string(),
+        WorkspaceSessionIdentity {
+            hostname: "remote.example".to_string(),
+            logical_workspace_path: "/workspace/project".to_string(),
+            remote_connection_id: Some("connection-1".to_string()),
+        },
+    ));
+    context.custom_data.insert(
+        "deep_review_run_manifest".to_string(),
+        json!({
+            "reviewMode": "deep",
+            "adaptiveReview": { "version": 1, "maxFocusedCalls": 2 }
+        }),
+    );
+
+    assert!(!tool.is_available_in_context(Some(&context)).await);
+
+    context.custom_data.insert(
+        "deep_review_run_manifest".to_string(),
+        json!({
+            "reviewMode": "deep",
+            "adaptiveReview": { "version": 1, "maxFocusedCalls": 2 },
+            "managedReviewPlan": { "version": 1, "maxBatches": 2 }
+        }),
+    );
+    assert!(tool.is_available_in_context(Some(&context)).await);
+    let description = tool
+        .description_with_context(Some(&context))
+        .await
+        .expect("managed remote description should render");
+    assert!(!description.contains("<review_capabilities>"));
 }
 
 fn managed_review_tool_context() -> ToolUseContext {

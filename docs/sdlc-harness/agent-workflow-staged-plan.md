@@ -57,7 +57,7 @@ BitFun 不需要把 dynamic workflow 做成一个新的主产品模式。用户�
 |---|---|
 | 本地显式入口 | 用户在普通任务或提交前明确要求 review，可使用 L1 只读快审 |
 | PR/团队入口 | 准备 PR、受保护分支、CODEOWNERS、团队策略或发布路径命中；归入既有 P2 PR/团队治理场景 |
-| 默认执行 | 先固定当前修改或明确 Git range 的 base/head、文件状态和完整度；当前本地显式审查使用一个只读 reviewer，采纳方向允许主审仅为具体未解决问题发起有界专项复核；PR/团队路径按规则给 Review 面板和就绪度摘要 |
+| 默认执行 | 先固定当前修改或明确 Git range 的 base/head、文件状态和完整度；一个只读主审先完成审查，仅为具体未解决问题发起有界专项复核；PR/团队路径按规则给 Review 面板和就绪度摘要 |
 | 风险信号 | 安全、性能、架构、跨模块、关键 UI 流程或验证缺口用于形成具体审核问题，不按标签、文件类型或能力数量机械增加 reviewer |
 | 严格审查条件 | 当前由 `/review strict`、历史 `/DeepReview` alias 或内部显式 strict follow-up 启动；大型 PR、风险标签和团队策略本身不自动触发 |
 | GUI | 一个 Review 面板，按问题优先级合并输出 |
@@ -65,10 +65,10 @@ BitFun 不需要把 dynamic workflow 做成一个新的主产品模式。用户�
 | 完成标准 | 必须修复、建议确认、已覆盖、未覆盖、下一步清楚 |
 | 禁止 | 把 PR 审查压进 P0 默认体验，或把 DeepReview 作为普通 review 默认入口 |
 
-当前基线与采纳方向：
+当前基线：
 
 - 文件变更菜单和命令面板只提供 `Review`，不让用户先选“普通/严格”。
-- 当前 `/review` 启动一个只读 reviewer；当前 `/review strict` 允许最多一个专家和一次条件质量检查，`/DeepReview` 仅保留历史兼容。采纳方向让普通主审按具体问题调用零到两个专项复核、严格主审调用零到三个且质量检查共用额度，同时最多运行两个；这不是静态风险升级规则。
+- 当前 `/review` 启动一个只读主审，并可按具体问题调用零到两个专项复核；`/review strict` 可调用零到三个，条件质量检查占用同一额度，同时最多运行两个。`/DeepReview` 仅保留历史兼容。这不是静态风险升级规则；普通零复核路径不加载能力目录。远程工作区禁用自适应专项复核，但保留历史受管文件包的兼容执行。
 - 目标证据先于 Review 决策：当前工作区使用一次有界 `HEAD -> worktree` 取证，但没有 immutable snapshot，因此最终 evidence status 始终为 `limited`；显式 Git range 由目标准备层固定 base/head，完整且无遗漏、workspace binding 为 matching_clean 时 evidence status 才可为 `complete`。Reviewer 不自行猜 ref，缺失、截断或预算耗尽必须进入覆盖说明，但不改写模型 recommendation。
 - 只读 Reviewer 不获得通用 `Git` 或 shell 工具；Git 操作留在目标准备层。Reviewer 只通过有界 `GetFileDiff` 消费目标 diff；只有本地仓库与目标 head 匹配且整个工作区干净时，现有 Read/Grep/Glob/LS 才补充 live context。不做逐工具全仓重验、fetch、checkout 或仓库状态写入。
 - Strict Review 直接启动；运行状态和结果说明范围、实际覆盖、通常更长耗时和只读边界，不显示内部调用额度，也不估算底层模型请求或 token。
@@ -78,7 +78,7 @@ BitFun 不需要把 dynamic workflow 做成一个新的主产品模式。用户�
 2026-07-10 合入后产品复盘：
 
 - 统一入口、普通 Review 单 reviewer、显式 Strict Review、只读 Reviewer、独立 ReviewFixer 和同侧栏 follow-up 已形成可用基线，不再新增 Review 执行分支。
-- 当前闭合 workspace / Git range / provider PR 三类目标证据，但仍只有一套 Review 执行链路。采纳方向不新增长期目标数据库、合成 diff 引用、跨 reviewer 内容缓存、Finding 生命周期、自动评论或结果动作。
+- 当前闭合 workspace / Git range / provider PR 三类目标证据，并保持一套 Review 执行链路。按问题协作不新增长期目标数据库、合成 diff 引用、跨 reviewer 内容缓存、Finding 生命周期、自动评论或结果动作。
 - 性能与质量先使用固定回放集和现有日志离线比较；没有稳定基准证明收益前，不新增 Review 专用遥测平台或默认执行分支。
 - PR 自动审查、跨 Review 增量对照、反馈学习、完整远程 checkout 和大规模任务控制台均不进入当前采纳范围；后续决策先看目标正确率、覆盖缺口和用户决策时间。
 

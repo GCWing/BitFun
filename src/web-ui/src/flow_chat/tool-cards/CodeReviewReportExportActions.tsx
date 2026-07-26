@@ -72,6 +72,7 @@ export const CodeReviewReportExportActions: React.FC<CodeReviewReportExportActio
       architecture: t('toolCards.codeReview.coverageSources.architecture'),
       frontend: t('toolCards.codeReview.coverageSources.frontend'),
       qualityGate: t('toolCards.codeReview.coverageSources.qualityGate'),
+      focusedCheck: t('toolCards.codeReview.coverageSources.focusedCheck'),
     },
     groupTitles: {
       must_fix: t('toolCards.codeReview.groups.must_fix'),
@@ -106,7 +107,7 @@ export const CodeReviewReportExportActions: React.FC<CodeReviewReportExportActio
     () => formatCodeReviewReportMarkdown(
       reviewData,
       markdownLabels,
-      { runManifest },
+      { runManifest: reviewData.review_mode === 'deep' ? runManifest : undefined },
     ),
     [markdownLabels, reviewData, runManifest],
   );

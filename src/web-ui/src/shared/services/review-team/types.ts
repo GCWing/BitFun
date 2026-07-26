@@ -473,6 +473,10 @@ export interface ReviewTeamManifestMember {
 
 export interface ReviewTeamRunManifest {
   reviewMode: 'deep';
+  adaptiveReview?: {
+    version: 1;
+    maxFocusedCalls: number;
+  };
   workspacePath?: string;
   policySource: 'default-review-team-config';
   target: ReviewTargetClassification;

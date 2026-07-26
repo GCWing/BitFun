@@ -1102,18 +1102,17 @@
     "windowTitle": "Review plan",
     "eyebrow": "Review plan",
     "title": "Start this review?",
-    "body": "BitFun reviews this change directly and may add focused independent checks only when the evidence needs them. Confirm the target, review budget, expected time, and read-only boundary before continuing.",
+    "body": "BitFun reviews this change directly and may add focused independent checks only when the evidence needs them. Confirm the target, expected time, and read-only boundary before continuing.",
     "readonlyLabel": "Read-only",
     "readonly": "Reviewers do not modify files.",
     "sessionConcurrencyTitle": "Active session is busy",
     "sessionConcurrencyBody": "The target session already has {{count}} review tasks running. Continuing will share the available review capacity.",
-    "costLabel": "Review budget",
-    "cost": "The review budget allows optional independent checks. Actual requests and token use depend on the evidence found.",
+    "costLabel": "Review depth",
+    "cost": "This review investigates the target more thoroughly and adds independent checks only when they are useful.",
     "timeLabel": "Time",
     "time": "Runs in background and may take longer.",
     "cancel": "Cancel",
     "confirm": "Start review",
-    "callLimit": "Maximum checks: {{count}}. Actual work depends on the review target and the evidence found.",
     "runStrategy": "Run strategy: {{strategy}}",
     "strategyLabels": {
       "quick": "Focused",
@@ -1140,9 +1139,9 @@
       "selectedContext": "Selected context",
       "reviewTarget": "Review target"
     },
-    "skippedSummary": "BitFun selected the most relevant checks for this target. {{count}} optional checks were outside this run because of applicability, configuration, or budget.",
-    "skippedSummary_one": "BitFun selected the most relevant checks for this target. {{count}} optional check was outside this run because of applicability, configuration, or budget.",
-    "skippedSummary_other": "BitFun selected the most relevant checks for this target. {{count}} optional checks were outside this run because of applicability, configuration, or budget."
+    "skippedSummary": "BitFun selected the checks that apply to this target. {{count}} optional checks are not part of this run.",
+    "skippedSummary_one": "BitFun selected the checks that apply to this target. {{count}} optional check is not part of this run.",
+    "skippedSummary_other": "BitFun selected the checks that apply to this target. {{count}} optional checks are not part of this run."
   },
   "flowChatHeader": {
     "turnList": "Turn list",
@@ -1747,7 +1746,9 @@
       "expandDetails": "Expand details",
       "openInPanel": "Open details in panel",
       "reviewCoverageLabel": "Review check",
-      "reviewCoverageDescription": "Checking review coverage"
+      "reviewCoverageDescription": "Checking review coverage",
+      "reviewFocusedDescription": "Checking a specific concern",
+      "reviewCheckUnavailable": "This check could not be completed. The main review can continue."
     },
     "taskDetailPanel": {
       "untitled": "Untitled Task",
@@ -2128,6 +2129,7 @@
         "security": "Security coverage",
         "architecture": "Architecture coverage",
         "frontend": "Frontend coverage",
+        "focusedCheck": "Focused check",
         "qualityGate": "Quality check"
       },
       "report": {

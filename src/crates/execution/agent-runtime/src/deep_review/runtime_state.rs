@@ -1,5 +1,6 @@
 use super::budget::{
-    DeepReviewActiveReviewerGuard, DeepReviewBudgetTracker, ReviewDiffBudgetAdmission,
+    DeepReviewActiveReviewerGuard, DeepReviewBudgetTracker, FocusedReviewBudgetClaim,
+    ReviewDiffBudgetAdmission,
 };
 use super::concurrency_policy::DeepReviewEffectiveConcurrencySnapshot;
 use super::constants::DEFAULT_MAX_RETRIES_PER_ROLE;
@@ -35,6 +36,26 @@ pub fn record_deep_review_task_budget(
         subagent_type,
         is_retry,
         packet_id,
+    )
+}
+
+pub fn record_deep_review_task_budget_with_focus(
+    parent_dialog_turn_id: &str,
+    policy: &DeepReviewExecutionPolicy,
+    role: DeepReviewSubagentRole,
+    subagent_type: &str,
+    is_retry: bool,
+    packet_id: Option<&str>,
+    focused_claim: Option<FocusedReviewBudgetClaim<'_>>,
+) -> Result<(), DeepReviewPolicyViolation> {
+    GLOBAL_DEEP_REVIEW_BUDGET_TRACKER.record_task_for_packet_with_focus(
+        parent_dialog_turn_id,
+        policy,
+        role,
+        subagent_type,
+        is_retry,
+        packet_id,
+        focused_claim,
     )
 }
 

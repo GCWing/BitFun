@@ -396,6 +396,9 @@ export const TaskDetailPanel: React.FC<TaskDetailPanelProps> = ({ data }) => {
   }, [visibleSubagentCount, subagentItems.length]);
 
   const getErrorMessage = () => {
+    if (isReviewCoverageTask) {
+      return t('toolCards.taskTool.reviewCheckUnavailable');
+    }
     if (toolResult && 'error' in toolResult) {
       return toolResult.error as string;
     }

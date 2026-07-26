@@ -1507,6 +1507,10 @@ Usage:
 
         let relative_path =
             Self::workspace_relative_path(Path::new(&resolved.resolved_path), context);
+        crate::agentic::deep_review::scope::ensure_focused_review_path_allowed(
+            context,
+            relative_path.as_deref().unwrap_or(file_path),
+        )?;
         let prepared_evidence = Self::target_evidence(context)?;
         if let Some(evidence) = prepared_evidence.as_ref() {
             if resolved.uses_remote_workspace_backend() {

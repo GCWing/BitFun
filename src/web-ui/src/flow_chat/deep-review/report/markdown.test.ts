@@ -40,4 +40,25 @@ describe('markdown', () => {
     expect(markdown).toContain('- Source: Security coverage');
     expect(markdown).not.toContain('ReviewSecurity');
   });
+
+  it('does not claim a focused check for an ordinary primary-review source', () => {
+    const markdown = formatCodeReviewReportMarkdown({
+      review_mode: 'standard',
+      summary: {
+        risk_level: 'low',
+        recommended_action: 'approve',
+      },
+      issues: [{
+        severity: 'medium',
+        certainty: 'likely',
+        title: 'Primary finding',
+        description: 'Found by the primary review.',
+        source_reviewer: 'Primary review',
+      }],
+    });
+
+    expect(markdown).not.toContain('- Source:');
+    expect(markdown).not.toContain('Focused check');
+    expect(markdown).not.toContain('Primary review');
+  });
 });

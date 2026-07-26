@@ -27,6 +27,7 @@ vi.mock('react-i18next', () => ({
         'toolCards.codeReview.export.copyMarkdown': 'Copy Markdown',
         'toolCards.codeReview.export.openMarkdown': 'Open as Markdown',
         'toolCards.codeReview.export.saveMarkdown': 'Save Markdown',
+        'toolCards.codeReview.coverageSources.focusedCheck': '专项检查',
       };
       return labels[key] ?? key;
     },
@@ -101,15 +102,61 @@ describe('CodeReviewReportExportActions', () => {
 
     renderToStaticMarkup(
       <CodeReviewReportExportActions
-        reviewData={{ summary: { recommended_action: 'approve' } }}
+        reviewData={{
+          review_mode: 'deep',
+          summary: { recommended_action: 'approve' },
+        }}
         runManifest={runManifest as unknown as ReviewTeamRunManifest}
       />,
     );
 
     expect(formatCodeReviewReportMarkdownMock).toHaveBeenCalledWith(
-      { summary: { recommended_action: 'approve' } },
+      {
+        review_mode: 'deep',
+        summary: { recommended_action: 'approve' },
+      },
       expect.any(Object),
       { runManifest },
+    );
+  });
+
+  it('does not project a Deep Review manifest into a standard Review export', () => {
+    const runManifest = {
+      strategyLevel: 'quick',
+      skippedReviewers: [],
+    };
+
+    renderToStaticMarkup(
+      <CodeReviewReportExportActions
+        reviewData={{
+          review_mode: 'standard',
+          summary: { recommended_action: 'approve' },
+        }}
+        runManifest={runManifest as unknown as ReviewTeamRunManifest}
+      />,
+    );
+
+    expect(formatCodeReviewReportMarkdownMock).toHaveBeenLastCalledWith(
+      {
+        review_mode: 'standard',
+        summary: { recommended_action: 'approve' },
+      },
+      expect.any(Object),
+      { runManifest: undefined },
+    );
+  });
+
+  it('passes the localized focused-check label into Markdown formatting', () => {
+    renderToStaticMarkup(
+      <CodeReviewReportExportActions reviewData={{ summary: { recommended_action: 'approve' } }} />,
+    );
+
+    expect(formatCodeReviewReportMarkdownMock).toHaveBeenLastCalledWith(
+      { summary: { recommended_action: 'approve' } },
+      expect.objectContaining({
+        coverageSourceLabels: expect.objectContaining({ focusedCheck: '专项检查' }),
+      }),
+      { runManifest: undefined },
     );
   });
 });

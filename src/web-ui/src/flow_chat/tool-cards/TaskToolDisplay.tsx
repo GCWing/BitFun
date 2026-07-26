@@ -119,6 +119,14 @@ function readTaskSubagentType(input: unknown): string {
   );
 }
 
+function hasFocusedReviewAssignment(input: unknown): boolean {
+  if (!input || typeof input !== 'object') {
+    return false;
+  }
+  const assignment = (input as Record<string, unknown>).focused_assignment;
+  return !!assignment && typeof assignment === 'object';
+}
+
 function readTaskRunInBackground(input: unknown, toolResult: FlowToolItem['toolResult'] | undefined): boolean {
   if (input && typeof input === 'object') {
     const value = (input as Record<string, unknown>).run_in_background;
@@ -378,11 +386,12 @@ export const TaskToolDisplay: React.FC<ToolCardProps> = ({
     if (isReviewCoverageTask) {
       const packetId = readStringValue(toolCall.input.packet_id)
         || readStringValue(toolCall.input.packetId);
-      const reviewDescription = /^managed-review:/i.test(packetId)
-        ? ''
-        : readStringValue(description).replace(/^\[packet\s+[^\]]+\]\s*/i, '');
+      const isFocusedReview = hasFocusedReviewAssignment(toolCall.input)
+        || (toolItem.toolName?.toLowerCase() === 'launchreviewagent' && !packetId);
       return {
-        description: reviewDescription || t('toolCards.taskTool.reviewCoverageDescription'),
+        description: isFocusedReview
+          ? t('toolCards.taskTool.reviewFocusedDescription')
+          : t('toolCards.taskTool.reviewCoverageDescription'),
         prompt: 'Not provided',
         agentType: t('toolCards.taskTool.reviewCoverageLabel'),
         modelName,
@@ -470,6 +479,9 @@ export const TaskToolDisplay: React.FC<ToolCardProps> = ({
   const taskErrorMessage = displayStatus === 'error'
     ? linkedSubagentTurn?.error || readTaskErrorMessage(toolResult)
     : readTaskErrorMessage(toolResult);
+  const visibleTaskErrorMessage = isReviewCoverageTask && taskErrorMessage
+    ? t('toolCards.taskTool.reviewCheckUnavailable')
+    : taskErrorMessage;
   const completedDurationStatus = isCancelledResult || displayStatus === 'cancelled'
     ? 'cancelled'
     : isFailed
@@ -565,10 +577,12 @@ export const TaskToolDisplay: React.FC<ToolCardProps> = ({
       agentTypeLabel = t('toolCards.taskTool.defaultAgentKind');
     }
     return {
-      taskHeaderLine: t('toolCards.taskTool.headerLine', {
-        agentType: agentTypeLabel,
-        description: desc,
-      }),
+      taskHeaderLine: taskInput?.isReviewCoverageTask
+        ? desc
+        : t('toolCards.taskTool.headerLine', {
+          agentType: agentTypeLabel,
+          description: desc,
+        }),
       taskAgentTypeLabel: agentTypeLabel,
       taskDesc: desc,
     };
@@ -659,7 +673,7 @@ export const TaskToolDisplay: React.FC<ToolCardProps> = ({
                   defaultTimeoutDisabled={defaultTimeoutDisabled}
                   completedDurationMs={taskDurationMs}
                   completedStatus={completedDurationStatus}
-                  completedFailureReason={isFailed ? taskErrorMessage ?? undefined : undefined}
+                  completedFailureReason={isFailed ? visibleTaskErrorMessage ?? undefined : undefined}
                 />
                 {isFailed && (
                   <span className="task-failed-badge">{t('toolCards.taskTool.failed')}</span>

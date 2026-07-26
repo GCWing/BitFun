@@ -95,12 +95,71 @@ fn test_project_custom_entry(id: &str, review: bool) -> AgentEntry {
     }
 }
 
+fn test_source_custom_entry(id: &str, prompt: &str, kind: CustomSubagentKind) -> AgentEntry {
+    let source = match kind {
+        CustomSubagentKind::Project => AgentSource::Project,
+        CustomSubagentKind::User => AgentSource::User,
+    };
+    let subagent_source = subagent_source_from_custom_kind(kind);
+    let agent = CustomSubagent::new(
+        id.to_string(),
+        format!("{id} description"),
+        vec!["Read".to_string()],
+        prompt.to_string(),
+        true,
+        format!("{id}.md"),
+        kind,
+    );
+    AgentEntry {
+        category: AgentCategory::SubAgent,
+        source,
+        subagent_source: Some(subagent_source),
+        agent: Arc::new(agent),
+        visibility_policy: SubagentVisibilityPolicy::public(),
+        custom_config: Some(CustomSubagentConfig {
+            model: "fast".to_string(),
+            model_is_explicit: true,
+        }),
+    }
+}
+
 fn insert_project_subagent(registry: &AgentRegistry, workspace: &Path, id: &str, model: &str) {
     let mut entries = HashMap::new();
     entries.insert(id.to_string(), test_project_entry(id, model));
     registry
         .write_project_subagents()
         .insert(workspace.to_path_buf(), entries);
+}
+
+#[test]
+fn source_qualified_key_resolves_the_matching_custom_subagent() {
+    let registry = AgentRegistry::new();
+    let workspace = PathBuf::from("source-qualified-review-workspace");
+    let id = "SameNamedReviewer";
+    registry.write_agents().insert(
+        id.to_string(),
+        test_source_custom_entry(id, "user review guidance", CustomSubagentKind::User),
+    );
+    registry.write_project_subagents().insert(
+        workspace.clone(),
+        HashMap::from([(
+            id.to_string(),
+            test_source_custom_entry(id, "project review guidance", CustomSubagentKind::Project),
+        )]),
+    );
+
+    let project = registry
+        .get_custom_agent_detail_by_key_inner(
+            "project::bitfun::SameNamedReviewer",
+            Some(&workspace),
+        )
+        .expect("project key should select the project definition");
+    let user = registry
+        .get_custom_agent_detail_by_key_inner("user::bitfun::SameNamedReviewer", Some(&workspace))
+        .expect("user key should select the user definition");
+
+    assert_eq!(project.prompt, "project review guidance");
+    assert_eq!(user.prompt, "user review guidance");
 }
 
 #[tokio::test]

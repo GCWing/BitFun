@@ -216,7 +216,7 @@ P-1 是内部跑道，不应作为用户可见“新能力”发布。它的价�
 
 ### 8.4 Review 演进边界
 
-Review 继续使用同一套目标准备和只读执行链路。已合入能力与已采纳但尚未实现的设计必须分开陈述，避免把未来生命周期描述为当前产品事实。
+Review 继续使用同一套目标准备和只读执行链路。当前按问题有界协作与尚未实现的版本化生命周期必须分开陈述，避免把未来记录、修订和恢复能力描述为当前产品事实。
 
 #### 已合入基线：目标证据正确
 
@@ -230,6 +230,10 @@ Review 继续使用同一套目标准备和只读执行链路。已合入能力�
 | 风险前置 | 删除、重命名、二进制和超大文件；dirty workspace 污染；prepare 后工作区或 PR head 变化；provider diff 缺失/截断；文件名 prompt injection；Git 外部 diff/textconv 副作用 |
 | 验证 | Rust contract/tool policy tests；真实临时 Git 仓库的新增/删除/rename-with-edit/超限/分页/预算测试；`targetResolver` 当前修改/range/remote/显式文件和目录测试；越界路径不可达、fail-closed 报告、uncertain launch、普通 Agent 隔离测试；Web type-check 与 i18n audit |
 | 回退 | 目标不能证明时回退为明确的 `partial`/`unknown` 并阻止完整覆盖文案；不得回退到 Reviewer 猜 ref，也不得把既有 Git 当作 prepared target 的替代证据 |
+
+#### 当前实现：按问题有界协作
+
+权威执行设计见 [../architecture/deep-review.md](../architecture/deep-review.md)。普通主审最多请求两个专项复核，严格主审最多花费三个共享调用额度；条件质量检查使用同一额度，最多两个专项调用并发。能力目录复用现有 Skill 与只读审核代理注册表，完整指引只在精确 key、正文指纹和目标范围通过准入后加载。专项 worker 不能读取未分配的改动文件，不能再委派或自动重试；远程工作区当前不暴露该能力。大目标继续复用既有受管文件包，不按审核维度复制文件包，也不新增 Review 专用遥测、缓存或调度运行时。
 
 #### 已采纳设计、尚未实现：版本化 Review 生命周期
 

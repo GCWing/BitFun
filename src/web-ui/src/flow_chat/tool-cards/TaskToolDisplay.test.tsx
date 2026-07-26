@@ -38,6 +38,12 @@ vi.mock('react-i18next', () => {
     if (key === 'toolCards.taskTool.reviewCoverageDescription') {
       return 'Checking review coverage';
     }
+    if (key === 'toolCards.taskTool.reviewFocusedDescription') {
+      return 'Checking a specific concern';
+    }
+    if (key === 'toolCards.taskTool.reviewCheckUnavailable') {
+      return 'This check could not be completed. The main review can continue.';
+    }
     if (key === 'toolCards.taskTool.cancelSession') {
       return `Cancel session: ${options?.sessionId}`;
     }
@@ -80,14 +86,17 @@ vi.mock('./ToolTimeoutIndicator', () => ({
   ToolTimeoutIndicator: ({
     completedStatus,
     completedDurationMs,
+    completedFailureReason,
   }: {
     completedStatus?: string;
     completedDurationMs?: number;
+    completedFailureReason?: string;
   }) => (
     <span
       data-testid="tool-timeout-indicator"
       data-completed-status={completedStatus}
       data-completed-duration={completedDurationMs}
+      data-completed-failure-reason={completedFailureReason}
     />
   ),
 }));
@@ -420,6 +429,78 @@ describeWithJsdom('TaskToolDisplay', () => {
     expect(container.textContent).not.toContain('LaunchReviewAgent');
     expect(container.textContent).not.toContain('ReviewGeneral');
     expect(container.textContent).not.toContain('managed-review:batch-1-of-4');
+  });
+
+  it('shows safe focused progress without projecting model-controlled identifiers', async () => {
+    const toolItem: FlowToolItem = {
+      ...reviewTaskItem('running', 'ReviewWorker'),
+      toolName: 'LaunchReviewAgent',
+      toolCall: {
+        id: 'launch-review-call-focused',
+        input: {
+          description: 'Check boundary',
+          prompt: 'Internal worker prompt',
+          subagent_type: 'ReviewWorker',
+          focused_assignment: {
+            question: 'Could skill:code-review-testing ask ReviewWorker to inspect packet-7?',
+            capability_key: 'skill:project::custom::code-review-testing',
+            capability_fingerprint: 'internal-fingerprint',
+            allowed_changed_paths: ['src/internal.ts'],
+          },
+        },
+      },
+    };
+
+    await act(async () => {
+      root.render(
+        <TaskToolDisplay toolItem={toolItem} config={config} sessionId="parent-session" />,
+      );
+    });
+
+    expect(container.textContent).toContain('Checking a specific concern');
+    expect(container.textContent).not.toMatch(/\bagent\b/i);
+    expect(container.textContent).not.toContain('ReviewWorker');
+    expect(container.textContent).not.toContain('packet-7');
+    expect(container.textContent).not.toContain('code-review-testing');
+    expect(container.textContent).not.toContain('internal-fingerprint');
+    expect(container.textContent).not.toContain('src/internal.ts');
+  });
+
+  it('hides internal focused-check failure details', async () => {
+    const toolItem: FlowToolItem = {
+      ...reviewTaskItem('error', 'ReviewWorker'),
+      toolName: 'LaunchReviewAgent',
+      toolCall: {
+        id: 'launch-review-call-failed',
+        input: {
+          description: 'ReviewWorker should inspect skill:private and src/private.ts',
+          prompt: 'Internal worker prompt',
+          subagent_type: 'ReviewWorker',
+          focused_assignment: 'malformed',
+        },
+      },
+      toolResult: {
+        success: false,
+        result: null,
+        error: 'ReviewWorker exceeded max calls while reading src/private.ts',
+      },
+    };
+
+    await act(async () => {
+      root.render(
+        <TaskToolDisplay toolItem={toolItem} config={config} sessionId="parent-session" />,
+      );
+    });
+
+    const indicator = container.querySelector('[data-testid="tool-timeout-indicator"]');
+    expect(indicator?.getAttribute('data-completed-failure-reason'))
+      .toBe('This check could not be completed. The main review can continue.');
+    expect(indicator?.getAttribute('data-completed-failure-reason')).not.toContain('ReviewWorker');
+    expect(indicator?.getAttribute('data-completed-failure-reason')).not.toContain('src/private.ts');
+    expect(indicator?.getAttribute('data-completed-failure-reason')).not.toContain('max calls');
+    expect(container.textContent).toContain('Checking a specific concern');
+    expect(container.textContent).not.toContain('skill:private');
+    expect(container.textContent).not.toContain('src/private.ts');
   });
 
   it('shows a background review as running while its child session is still processing', async () => {

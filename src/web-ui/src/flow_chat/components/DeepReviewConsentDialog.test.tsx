@@ -296,20 +296,21 @@ describeWithJsdom('DeepReviewConsentDialog', () => {
     expect(container.querySelector('[role="dialog"]')?.getAttribute('aria-label')).toBe('Review plan');
     expect(container.textContent).toContain('1 file');
     expect(container.textContent).toContain('2 optional checks not needed');
-    expect(container.textContent).toContain('BitFun selected the most relevant checks for this target.');
+    expect(container.textContent).toContain('BitFun selected the checks that apply to this target.');
     expect(container.textContent).not.toContain('Estimated reviewer prompt input');
     expect(container.textContent).not.toContain('Reviewer prompt input only');
-    expect(container.textContent).toContain(
-      'Maximum checks: 4. Actual work depends on the review target and the evidence found.',
-    );
+    expect(container.textContent).not.toContain('Maximum checks:');
     expect(container.textContent).not.toContain('Expected checks:');
     expect(container.textContent).not.toContain('up to 4 initial calls');
     expect(container.textContent).toContain('Run strategy: Standard');
     expect(container.textContent).not.toContain('Do not show this again');
     expect(container.textContent).not.toContain('Risk areas: Backend core');
     expect(container.textContent).toContain(
-      'The review budget allows optional independent checks. Actual requests and token use depend on the evidence found.',
+      'This review investigates the target more thoroughly and adds independent checks only when they are useful.',
     );
+    expect(container.textContent).not.toContain('token');
+    expect(container.textContent).not.toContain('request');
+    expect(container.textContent).not.toContain('review budget');
     expect(container.textContent).not.toContain('1 extra specialist');
     expect(container.textContent).not.toContain('Review depth: Risk-expanded');
     expect(container.textContent).not.toContain('Frontend reviewer');
@@ -320,7 +321,7 @@ describeWithJsdom('DeepReviewConsentDialog', () => {
     expect(container.textContent).not.toContain('Custom security reviewer');
   });
 
-  it('keeps a single-check limit grammatically readable', async () => {
+  it('does not expose the internal check allowance', async () => {
     const result = vi.fn();
     const basePreview = buildPreviewWithoutSkippedReviewers();
     const preview: ReviewTeamRunManifest = {
@@ -339,9 +340,7 @@ describeWithJsdom('DeepReviewConsentDialog', () => {
       container.querySelector('button')?.dispatchEvent(new window.Event('click', { bubbles: true }));
     });
 
-    expect(container.textContent).toContain(
-      'Maximum checks: 1. Actual work depends on the review target and the evidence found.',
-    );
+    expect(container.textContent).not.toContain('Maximum checks:');
     expect(container.textContent).not.toContain('1 checks');
   });
 
@@ -374,7 +373,7 @@ describeWithJsdom('DeepReviewConsentDialog', () => {
     expect(container.textContent).not.toContain('0 files');
     expect(container.textContent).not.toContain('Risk areas:');
     expect(container.textContent).toContain(
-      'The review budget allows optional independent checks. Actual requests and token use depend on the evidence found.',
+      'This review investigates the target more thoroughly and adds independent checks only when they are useful.',
     );
   });
 
@@ -458,7 +457,7 @@ describeWithJsdom('DeepReviewConsentDialog', () => {
     expect(container.textContent).not.toContain('Quick is narrower');
     expect(container.textContent).not.toContain('Risk areas: Backend core');
     expect(container.textContent).toContain(
-      'The review budget allows optional independent checks. Actual requests and token use depend on the evidence found.',
+      'This review investigates the target more thoroughly and adds independent checks only when they are useful.',
     );
     expect(container.textContent).not.toContain('1 extra specialist');
     expect(container.textContent).not.toContain('Expected cost:');

@@ -13,6 +13,7 @@ impl CodeReviewAgent {
     pub fn new() -> Self {
         let mut tool_exposure_overrides = AgentToolPolicyOverrides::default();
         tool_exposure_overrides.insert("GetFileDiff".to_string(), ToolExposure::Direct);
+        tool_exposure_overrides.insert("LaunchReviewAgent".to_string(), ToolExposure::Deferred);
 
         Self {
             default_tools: vec![
@@ -21,6 +22,7 @@ impl CodeReviewAgent {
                 "Glob".to_string(),
                 "LS".to_string(),
                 "GetFileDiff".to_string(),
+                "LaunchReviewAgent".to_string(),
                 "submit_code_review".to_string(),
             ],
             tool_exposure_overrides,
@@ -89,9 +91,14 @@ mod tests {
         assert!(tools.contains(&"Read".to_string()));
         assert!(tools.contains(&"Grep".to_string()));
         assert!(tools.contains(&"GetFileDiff".to_string()));
+        assert!(tools.contains(&"LaunchReviewAgent".to_string()));
         assert_eq!(
             agent.tool_exposure_overrides().get("GetFileDiff"),
             Some(&ToolExposure::Direct),
+        );
+        assert_eq!(
+            agent.tool_exposure_overrides().get("LaunchReviewAgent"),
+            Some(&ToolExposure::Deferred),
         );
         assert!(tools.contains(&"submit_code_review".to_string()));
         assert!(agent.description().contains("one isolated instance"));

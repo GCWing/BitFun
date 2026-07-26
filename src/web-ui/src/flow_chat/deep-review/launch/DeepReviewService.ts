@@ -72,6 +72,7 @@ export interface DeepReviewLaunchBuildOptions {
   maxExtraReviewers?: number;
   includeQualityGate?: boolean;
   managedBatching?: boolean;
+  maxFocusedCalls?: number;
 }
 
 export interface DeepReviewLaunchPrompt {
@@ -197,6 +198,9 @@ export async function buildDeepReviewLaunchFromSessionFiles(
     ...(options.managedBatching !== undefined
       ? { managedBatching: options.managedBatching }
       : {}),
+    ...(options.maxFocusedCalls !== undefined
+      ? { maxFocusedCalls: options.maxFocusedCalls }
+      : {}),
   });
   const prompt = formatSessionFilesLaunchPrompt({
     extraContext,
@@ -268,6 +272,9 @@ export async function buildDeepReviewLaunchFromSlashCommand(
       : {}),
     ...(options.managedBatching !== undefined
       ? { managedBatching: options.managedBatching }
+      : {}),
+    ...(options.maxFocusedCalls !== undefined
+      ? { maxFocusedCalls: options.maxFocusedCalls }
       : {}),
   });
   const prompt = formatSlashCommandLaunchPrompt({

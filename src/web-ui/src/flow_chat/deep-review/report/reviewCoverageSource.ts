@@ -4,6 +4,7 @@ export type ReviewCoverageSourceLabelKey =
   | 'security'
   | 'architecture'
   | 'frontend'
+  | 'focusedCheck'
   | 'qualityGate';
 
 export const DEFAULT_REVIEW_COVERAGE_SOURCE_LABELS: Record<
@@ -15,10 +16,12 @@ export const DEFAULT_REVIEW_COVERAGE_SOURCE_LABELS: Record<
   security: 'Security coverage',
   architecture: 'Architecture coverage',
   frontend: 'Frontend coverage',
+  focusedCheck: 'Focused check',
   qualityGate: 'Quality check',
 };
 
 const REVIEW_SOURCE_ALIASES: Record<string, ReviewCoverageSourceLabelKey> = {
+  reviewworker: 'focusedCheck',
   reviewbusinesslogic: 'businessLogic',
   logicreviewer: 'businessLogic',
   businesslogicreviewer: 'businessLogic',
@@ -66,5 +69,10 @@ export function formatReviewCoverageSource(
     return labels[labelKey];
   }
 
-  return normalized;
+  // Keep the known remediation identity, but never project arbitrary model
+  // prose, Skill names, or custom-agent names into the product report. Only
+  // the structured ReviewWorker runtime identity proves a focused check ran.
+  return normalizeReviewSource(normalized) === 'reviewfixer'
+    ? normalized
+    : null;
 }

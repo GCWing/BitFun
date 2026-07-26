@@ -69,7 +69,7 @@ export const REVIEW_STRATEGY_RUNTIME_BUDGETS: Record<
   },
 };
 export const DEFAULT_REVIEW_TEAM_CONCURRENCY_POLICY = {
-  maxParallelInstances: 4,
+  maxParallelInstances: 2,
   staggerSeconds: 0,
   maxQueueWaitSeconds: 1200,
   batchExtrasSeparately: true,
@@ -78,7 +78,7 @@ export const DEFAULT_REVIEW_TEAM_CONCURRENCY_POLICY = {
   autoRetryElapsedGuardSeconds: 180,
 } as const;
 export const MAX_PREDICTIVE_TIMEOUT_SECONDS = 3600;
-export const MAX_PARALLEL_REVIEWER_INSTANCES = 16;
+export const MAX_PARALLEL_REVIEWER_INSTANCES = 2;
 export const MAX_QUEUE_WAIT_SECONDS = 3600;
 export const MAX_AUTO_RETRY_ELAPSED_GUARD_SECONDS = 900;
 export const PREDICTIVE_TIMEOUT_PER_FILE_SECONDS = 15;

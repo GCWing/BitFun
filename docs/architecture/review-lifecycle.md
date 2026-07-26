@@ -269,11 +269,10 @@ natural-language descriptions are semantically identical.
 Review strength remains controlled by explicit intent. Ordinary Review keeps
 ordinary strength. The current implementation uses one `CodeReview` child for
 bounded targets, while a large or provider-limited target may use bounded
-managed packets without becoming a different user-facing mode. The adopted
-execution target in [deep-review.md](deep-review.md) allows the ordinary primary
-reviewer to request zero to two focused checks for concrete unresolved questions
-and Strict Review to request zero to three; a conditional quality check consumes
-the same allowance. This target does not change Review strength, expose fixed
+managed packets without becoming a different user-facing mode. The primary
+reviewer may request zero to two focused checks for concrete unresolved questions;
+Strict Review may spend up to three spawned calls shared with a conditional
+quality check. This behavior does not change Review strength, expose fixed
 architecture, frontend, performance, product, or security agents as required
 user choices, or turn every available capability into a model call.
 
@@ -414,6 +413,8 @@ evidence:
 - a single-domain ordinary Review does not launch a focused check merely because
   matching capabilities are installed;
 - focused checks cannot read changed files outside their assigned scope;
+- remote Review does not expose a focused-check action until the same scope
+  guarantees are available through remote file access;
 - large-target file packets and review capabilities do not create multiplicative
   fan-out;
 - findings are deduplicated by changed location and root cause instead of being

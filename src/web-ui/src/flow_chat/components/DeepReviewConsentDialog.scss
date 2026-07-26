@@ -195,34 +195,6 @@
   }
 }
 
-.deep-review-consent__token-estimate {
-  display: grid;
-  gap: 3px;
-  padding: 9px 10px;
-  border: 1px solid color-mix(in srgb, var(--deep-review-accent) 18%, var(--border-subtle));
-  border-radius: 6px;
-  background: color-mix(in srgb, var(--deep-review-accent) 6%, var(--color-bg-elevated));
-
-  strong,
-  span {
-    min-width: 0;
-    overflow-wrap: anywhere;
-  }
-
-  strong {
-    color: var(--color-text-primary);
-    font-size: var(--tool-card-action-font-size);
-    font-weight: 720;
-    line-height: var(--flowchat-compact-line-height);
-  }
-
-  span {
-    color: var(--color-text-secondary);
-    font-size: var(--flowchat-font-size-xs);
-    line-height: var(--flowchat-support-line-height);
-  }
-}
-
 .deep-review-consent__reviewer-group {
   display: flex;
   flex-direction: column;

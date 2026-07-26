@@ -125,6 +125,9 @@ function getCoverageSourceLabel(sourceReviewer: string | undefined, t: Translate
     frontend: t('toolCards.codeReview.coverageSources.frontend', {
       defaultValue: 'Frontend coverage',
     }),
+    focusedCheck: t('toolCards.codeReview.coverageSources.focusedCheck', {
+      defaultValue: 'Focused check',
+    }),
     qualityGate: t('toolCards.codeReview.coverageSources.qualityGate', {
       defaultValue: 'Quality check',
     }),

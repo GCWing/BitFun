@@ -54,10 +54,17 @@ impl TaskTool {
     }
 
     pub(super) fn is_deep_review_context(context: Option<&ToolUseContext>) -> bool {
-        context
-            .and_then(|context| context.agent_type.as_deref())
-            .map(str::trim)
-            .is_some_and(|agent_type| agent_type == DEEP_REVIEW_AGENT_TYPE)
+        let Some(context) = context else {
+            return false;
+        };
+        match context.agent_type.as_deref().map(str::trim) {
+            Some(DEEP_REVIEW_AGENT_TYPE) => true,
+            Some("CodeReview") => context
+                .custom_data
+                .get("deep_review_run_manifest")
+                .is_some_and(is_adaptive_review_manifest),
+            _ => false,
+        }
     }
 
     pub(super) fn has_deep_review_retry_fields(input: &Value) -> bool {

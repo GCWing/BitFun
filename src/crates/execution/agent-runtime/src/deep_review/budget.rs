@@ -48,6 +48,8 @@ struct DeepReviewTurnBudget {
     active_reviewer_launch_batches: BTreeMap<u64, usize>,
     active_reviewer_packet_ids: HashSet<String>,
     initial_reviewer_packet_ids: HashSet<String>,
+    focused_question_ids: HashSet<String>,
+    focused_assignment_keys: HashSet<String>,
     concurrency_cap_rejections: usize,
     capacity_skips: usize,
     shared_context_uses: HashMap<DeepReviewSharedContextKey, DeepReviewSharedContextUseRecord>,
@@ -74,6 +76,8 @@ impl DeepReviewTurnBudget {
             active_reviewer_launch_batches: BTreeMap::new(),
             active_reviewer_packet_ids: HashSet::new(),
             initial_reviewer_packet_ids: HashSet::new(),
+            focused_question_ids: HashSet::new(),
+            focused_assignment_keys: HashSet::new(),
             concurrency_cap_rejections: 0,
             capacity_skips: 0,
             shared_context_uses: HashMap::new(),
@@ -126,6 +130,13 @@ impl Drop for DeepReviewActiveReviewerGuard<'_> {
 pub struct DeepReviewBudgetTracker {
     turns: DashMap<String, DeepReviewTurnBudget>,
     last_pruned_at: Mutex<Instant>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct FocusedReviewBudgetClaim<'a> {
+    pub question_id: &'a str,
+    pub scope_paths: &'a [String],
+    pub max_distinct_questions: usize,
 }
 
 impl Default for DeepReviewBudgetTracker {
@@ -523,6 +534,27 @@ impl DeepReviewBudgetTracker {
         is_retry: bool,
         packet_id: Option<&str>,
     ) -> Result<(), DeepReviewPolicyViolation> {
+        self.record_task_for_packet_with_focus(
+            parent_dialog_turn_id,
+            policy,
+            role,
+            subagent_type,
+            is_retry,
+            packet_id,
+            None,
+        )
+    }
+
+    pub fn record_task_for_packet_with_focus(
+        &self,
+        parent_dialog_turn_id: &str,
+        policy: &DeepReviewExecutionPolicy,
+        role: DeepReviewSubagentRole,
+        subagent_type: &str,
+        is_retry: bool,
+        packet_id: Option<&str>,
+        focused_claim: Option<FocusedReviewBudgetClaim<'_>>,
+    ) -> Result<(), DeepReviewPolicyViolation> {
         let now = Instant::now();
         if let Ok(last_pruned) = self.last_pruned_at.lock() {
             if now.saturating_duration_since(*last_pruned) >= PRUNE_INTERVAL {
@@ -539,6 +571,12 @@ impl DeepReviewBudgetTracker {
         match role {
             DeepReviewSubagentRole::Reviewer => {
                 let subagent_type = normalize_budget_subagent_type(subagent_type)?;
+                if is_retry && focused_claim.is_some() {
+                    return Err(DeepReviewPolicyViolation::new(
+                        "focused_review_retry_disallowed",
+                        "Focused Review checks do not retry automatically",
+                    ));
+                }
                 if is_retry {
                     if policy.max_retries_per_role == 0 {
                         return Err(DeepReviewPolicyViolation::new(
@@ -580,6 +618,9 @@ impl DeepReviewBudgetTracker {
                 }
 
                 let packet_id = packet_id.map(str::trim).filter(|id| !id.is_empty());
+                let focused_claim = focused_claim
+                    .map(|claim| validate_focused_claim(&budget, claim, packet_id))
+                    .transpose()?;
                 if let Some(packet_id) = packet_id {
                     if budget.initial_reviewer_packet_ids.contains(packet_id) {
                         return Err(DeepReviewPolicyViolation::new(
@@ -593,9 +634,18 @@ impl DeepReviewBudgetTracker {
                 }
 
                 let max_reviewer_calls = policy.max_reviewer_calls;
-                if budget.reviewer_calls >= max_reviewer_calls {
+                let used_calls = if policy.shared_spawned_review_budget {
+                    budget.reviewer_calls.saturating_add(budget.judge_calls)
+                } else {
+                    budget.reviewer_calls
+                };
+                if used_calls >= max_reviewer_calls {
                     return Err(DeepReviewPolicyViolation::new(
-                        "deep_review_reviewer_budget_exhausted",
+                        if policy.shared_spawned_review_budget {
+                            "deep_review_spawned_budget_exhausted"
+                        } else {
+                            "deep_review_reviewer_budget_exhausted"
+                        },
                         format!(
                             "Reviewer launch budget exhausted for this DeepReview turn (max calls: {})",
                             max_reviewer_calls
@@ -606,6 +656,10 @@ impl DeepReviewBudgetTracker {
                     budget
                         .initial_reviewer_packet_ids
                         .insert(packet_id.to_string());
+                }
+                if let Some((question_id, assignment_key)) = focused_claim {
+                    budget.focused_question_ids.insert(question_id);
+                    budget.focused_assignment_keys.insert(assignment_key);
                 }
                 budget.reviewer_calls += 1;
                 *budget
@@ -620,7 +674,25 @@ impl DeepReviewBudgetTracker {
                         "ReviewJudge retry is not covered by the reviewer retry budget",
                     ));
                 }
+                if focused_claim.is_some() {
+                    return Err(DeepReviewPolicyViolation::new(
+                        "focused_review_role_invalid",
+                        "Focused Review assignments may only launch ReviewWorker",
+                    ));
+                }
                 let max_judge_calls = 1;
+                if policy.shared_spawned_review_budget
+                    && budget.reviewer_calls.saturating_add(budget.judge_calls)
+                        >= policy.max_reviewer_calls
+                {
+                    return Err(DeepReviewPolicyViolation::new(
+                        "deep_review_spawned_budget_exhausted",
+                        format!(
+                            "Spawned Review call budget exhausted for this turn (max calls: {})",
+                            policy.max_reviewer_calls
+                        ),
+                    ));
+                }
                 if budget.judge_calls >= max_judge_calls {
                     return Err(DeepReviewPolicyViolation::new(
                         "deep_review_judge_budget_exhausted",
@@ -1014,6 +1086,51 @@ impl DeepReviewBudgetTracker {
     }
 }
 
+fn validate_focused_claim(
+    budget: &DeepReviewTurnBudget,
+    claim: FocusedReviewBudgetClaim<'_>,
+    packet_id: Option<&str>,
+) -> Result<(String, String), DeepReviewPolicyViolation> {
+    let question_id = claim.question_id.trim();
+    if question_id.is_empty() || claim.max_distinct_questions == 0 {
+        return Err(DeepReviewPolicyViolation::new(
+            "focused_review_budget_invalid",
+            "Focused Review budget claims require a question id and a positive question limit",
+        ));
+    }
+    let scope_key = match packet_id {
+        Some(packet_id) => format!("packet:{packet_id}"),
+        None if !claim.scope_paths.is_empty() => {
+            format!("paths:{}", claim.scope_paths.join("\0"))
+        }
+        None => {
+            return Err(DeepReviewPolicyViolation::new(
+                "focused_review_budget_invalid",
+                "Focused Review budget claims require an explicit path or packet scope",
+            ));
+        }
+    };
+    let assignment_key = format!("{question_id}\0{scope_key}");
+    if budget.focused_assignment_keys.contains(&assignment_key) {
+        return Err(DeepReviewPolicyViolation::new(
+            "focused_review_assignment_already_launched",
+            "The same focused Review question has already covered this scope",
+        ));
+    }
+    if !budget.focused_question_ids.contains(question_id)
+        && budget.focused_question_ids.len() >= claim.max_distinct_questions
+    {
+        return Err(DeepReviewPolicyViolation::new(
+            "focused_review_question_budget_exhausted",
+            format!(
+                "Focused Review question budget exhausted for this turn (max distinct questions: {})",
+                claim.max_distinct_questions
+            ),
+        ));
+    }
+    Ok((question_id.to_string(), assignment_key))
+}
+
 fn normalize_budget_subagent_type(
     subagent_type: &str,
 ) -> Result<String, DeepReviewPolicyViolation> {
@@ -1240,6 +1357,107 @@ mod tests {
                 .reviewer_calls,
             2
         );
+    }
+
+    #[test]
+    fn adaptive_budget_shares_three_spawned_calls_between_workers_and_judge() {
+        let tracker = DeepReviewBudgetTracker::default();
+        let policy = DeepReviewExecutionPolicy {
+            max_reviewer_calls: 3,
+            shared_spawned_review_budget: true,
+            ..DeepReviewExecutionPolicy::default()
+        };
+        let scopes = [
+            vec!["src/one.rs".to_string()],
+            vec!["src/two.rs".to_string()],
+        ];
+        for (question, scope) in ["focus-one", "focus-two"].into_iter().zip(&scopes) {
+            tracker
+                .record_task_for_packet_with_focus(
+                    "turn-adaptive-shared",
+                    &policy,
+                    DeepReviewSubagentRole::Reviewer,
+                    "ReviewWorker",
+                    false,
+                    None,
+                    Some(FocusedReviewBudgetClaim {
+                        question_id: question,
+                        scope_paths: scope,
+                        max_distinct_questions: 3,
+                    }),
+                )
+                .expect("focused worker should fit the shared budget");
+        }
+        tracker
+            .record_task_for_packet_with_focus(
+                "turn-adaptive-shared",
+                &policy,
+                DeepReviewSubagentRole::Judge,
+                "ReviewJudge",
+                false,
+                None,
+                None,
+            )
+            .expect("judge should consume the final shared slot");
+        let third_scope = vec!["src/three.rs".to_string()];
+        let exhausted = tracker
+            .record_task_for_packet_with_focus(
+                "turn-adaptive-shared",
+                &policy,
+                DeepReviewSubagentRole::Reviewer,
+                "ReviewWorker",
+                false,
+                None,
+                Some(FocusedReviewBudgetClaim {
+                    question_id: "focus-three",
+                    scope_paths: &third_scope,
+                    max_distinct_questions: 3,
+                }),
+            )
+            .expect_err("a fourth spawned call must be rejected");
+        assert_eq!(exhausted.code, "deep_review_spawned_budget_exhausted");
+    }
+
+    #[test]
+    fn focused_question_budget_counts_distinct_questions_and_rejects_duplicate_scope() {
+        let tracker = DeepReviewBudgetTracker::default();
+        let policy = DeepReviewExecutionPolicy {
+            max_reviewer_calls: 4,
+            ..DeepReviewExecutionPolicy::default()
+        };
+        for (question, packet) in [("focus-one", "packet-a"), ("focus-one", "packet-b")] {
+            tracker
+                .record_task_for_packet_with_focus(
+                    "turn-focused-questions",
+                    &policy,
+                    DeepReviewSubagentRole::Reviewer,
+                    "ReviewWorker",
+                    false,
+                    Some(packet),
+                    Some(FocusedReviewBudgetClaim {
+                        question_id: question,
+                        scope_paths: &[],
+                        max_distinct_questions: 2,
+                    }),
+                )
+                .expect("one question may cover separate managed packets");
+        }
+        let duplicate = tracker
+            .record_task_for_packet_with_focus(
+                "turn-focused-questions",
+                &policy,
+                DeepReviewSubagentRole::Reviewer,
+                "ReviewWorker",
+                false,
+                Some("packet-a"),
+                Some(FocusedReviewBudgetClaim {
+                    question_id: "focus-one",
+                    scope_paths: &[],
+                    max_distinct_questions: 2,
+                }),
+            )
+            .expect_err("the same question and scope must not be launched twice");
+        assert_eq!(duplicate.code, "focused_review_assignment_already_launched");
     }
 
     #[test]

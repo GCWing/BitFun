@@ -275,6 +275,10 @@ pub struct GrepOptions {
     pub file_type: Option<String>,
     /// Prefer displaying paths relative to this base when possible
     pub display_base: Option<String>,
+    /// Exact files omitted from this search by the caller's scope policy.
+    pub excluded_paths: Vec<String>,
+    /// Reject linked file entries when the caller requires workspace identity.
+    pub reject_linked_files: bool,
 }
 
 impl Default for GrepOptions {
@@ -294,6 +298,8 @@ impl Default for GrepOptions {
             globs: Vec::new(),
             file_type: None,
             display_base: None,
+            excluded_paths: Vec::new(),
+            reject_linked_files: false,
         }
     }
 }
@@ -459,6 +465,16 @@ impl GrepOptions {
     /// Set whether to show line numbers
     pub fn show_line_numbers(mut self, value: bool) -> Self {
         self.show_line_numbers = value;
+        self
+    }
+
+    pub fn excluded_paths(mut self, paths: Vec<String>) -> Self {
+        self.excluded_paths = paths;
+        self
+    }
+
+    pub fn reject_linked_files(mut self, reject: bool) -> Self {
+        self.reject_linked_files = reject;
         self
     }
 
@@ -761,6 +777,27 @@ pub fn grep_search(
                     continue;
                 }
 
+                // Focused Review supplies exclusions. In that mode, linked
+                // file entries are never valid unchanged dependencies because
+                // their target identity can escape or alias the assigned scope.
+                let path_is_symlink = entry
+                    .file_type()
+                    .is_some_and(|file_type| file_type.is_symlink());
+                let path_has_multiple_hard_links = options.reject_linked_files
+                    && crate::fs::path_has_multiple_hard_links(path).unwrap_or(true);
+                if options.reject_linked_files && (path_is_symlink || path_has_multiple_hard_links)
+                {
+                    continue;
+                }
+
+                if options
+                    .excluded_paths
+                    .iter()
+                    .any(|excluded| paths_equal_for_exclusion(path, excluded))
+                {
+                    continue;
+                }
+
                 if is_vcs_path(path) {
                     continue;
                 }
@@ -902,9 +939,28 @@ pub fn grep_search(
     })
 }
 
+fn paths_equal_for_exclusion(path: &Path, excluded: &str) -> bool {
+    let path = path.to_string_lossy().replace('\\', "/");
+    let excluded = excluded.replace('\\', "/");
+    if path == excluded {
+        return true;
+    }
+    let needs_identity_check = cfg!(windows) && path.eq_ignore_ascii_case(&excluded);
+    if !needs_identity_check {
+        return false;
+    }
+    let Ok(path) = std::fs::canonicalize(path) else {
+        return false;
+    };
+    let Ok(excluded) = std::fs::canonicalize(excluded) else {
+        return false;
+    };
+    path == excluded
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{grep_search, GrepOptions, OutputMode};
+    use super::{grep_search, paths_equal_for_exclusion, GrepOptions, OutputMode};
     use std::fs;
     use std::path::PathBuf;
     use std::time::{SystemTime, UNIX_EPOCH};
@@ -917,6 +973,17 @@ mod tests {
         let dir = std::env::temp_dir().join(format!("bitfun-grep-search-{name}-{unique}"));
         fs::create_dir_all(&dir).unwrap();
         dir
+    }
+
+    #[cfg(unix)]
+    fn create_file_symlink(target: &std::path::Path, alias: &std::path::Path) -> bool {
+        std::os::unix::fs::symlink(target, alias).expect("file symlink should be available");
+        true
+    }
+
+    #[cfg(windows)]
+    fn create_file_symlink(target: &std::path::Path, alias: &std::path::Path) -> bool {
+        std::os::windows::fs::symlink_file(target, alias).is_ok()
     }
 
     #[test]
@@ -939,5 +1006,113 @@ mod tests {
         assert!(result.result_text.contains("[truncated]"));
 
         let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn exact_exclusions_remove_unassigned_files_from_results() {
+        let root = make_temp_dir("excluded");
+        let included = root.join("included.txt");
+        let excluded = root.join("excluded.txt");
+        fs::write(&included, "review-token\n").unwrap();
+        fs::write(&excluded, "review-token\n").unwrap();
+
+        let result = grep_search(
+            GrepOptions::new("review-token", root.to_string_lossy().to_string())
+                .output_mode(OutputMode::FilesWithMatches)
+                .excluded_paths(vec![excluded.to_string_lossy().to_string()]),
+            None,
+            None,
+        )
+        .unwrap();
+
+        assert!(result.result_text.contains("included.txt"));
+        assert!(!result.result_text.contains("excluded.txt"));
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn exclusion_comparison_does_not_merge_distinct_path_spelling() {
+        assert!(!paths_equal_for_exclusion(
+            PathBuf::from("src/CaseSensitive.rs").as_path(),
+            "src/casesensitive.rs",
+        ));
+    }
+
+    #[test]
+    fn exact_exclusions_block_file_symlink_aliases() {
+        let root = make_temp_dir("excluded-symlink");
+        let excluded = root.join("excluded.txt");
+        let alias = root.join("alias.txt");
+        fs::write(&excluded, "linked-review-token\n").unwrap();
+
+        if !create_file_symlink(&excluded, &alias) {
+            let _ = fs::remove_dir_all(root);
+            return;
+        }
+
+        let result = grep_search(
+            GrepOptions::new("linked-review-token", root.to_string_lossy().to_string())
+                .output_mode(OutputMode::FilesWithMatches)
+                .excluded_paths(vec![excluded.to_string_lossy().to_string()])
+                .reject_linked_files(true),
+            None,
+            None,
+        )
+        .unwrap();
+
+        assert!(!result.result_text.contains("alias.txt"));
+        assert_eq!(result.file_count, 0);
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn exact_exclusions_block_file_hard_link_aliases() {
+        let root = make_temp_dir("excluded-hard-link");
+        let excluded = root.join("excluded.txt");
+        let alias = root.join("alias.txt");
+        fs::write(&excluded, "linked-review-token\n").unwrap();
+        fs::hard_link(&excluded, &alias).unwrap();
+
+        let result = grep_search(
+            GrepOptions::new("linked-review-token", root.to_string_lossy().to_string())
+                .output_mode(OutputMode::FilesWithMatches)
+                .excluded_paths(vec![excluded.to_string_lossy().to_string()])
+                .reject_linked_files(true),
+            None,
+            None,
+        )
+        .unwrap();
+
+        assert!(!result.result_text.contains("alias.txt"));
+        assert_eq!(result.file_count, 0);
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn exact_exclusions_block_file_symlinks_outside_the_search_root() {
+        let root = make_temp_dir("excluded-outside-link");
+        let outside = make_temp_dir("outside-link-target");
+        let alias = root.join("outside-alias.txt");
+        let secret = outside.join("secret.txt");
+        fs::write(&secret, "outside-review-token\n").unwrap();
+        if !create_file_symlink(&secret, &alias) {
+            let _ = fs::remove_dir_all(root);
+            let _ = fs::remove_dir_all(outside);
+            return;
+        }
+
+        let result = grep_search(
+            GrepOptions::new("outside-review-token", root.to_string_lossy().to_string())
+                .output_mode(OutputMode::FilesWithMatches)
+                .reject_linked_files(true),
+            None,
+            None,
+        )
+        .unwrap();
+
+        assert_eq!(result.file_count, 0);
+        assert!(!result.result_text.contains("outside-alias.txt"));
+        let _ = fs::remove_dir_all(root);
+        let _ = fs::remove_dir_all(outside);
     }
 }

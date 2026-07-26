@@ -11,4 +11,15 @@ describe('formatReviewCoverageSource', () => {
   it('does not hide Review-prefixed remediation sources', () => {
     expect(formatReviewCoverageSource('ReviewFixer')).toBe('ReviewFixer');
   });
+
+  it('projects the structured worker identity as one generic product label', () => {
+    expect(formatReviewCoverageSource('ReviewWorker')).toBe('Focused check');
+  });
+
+  it('does not mislabel primary-review prose or leak capability identities', () => {
+    expect(formatReviewCoverageSource('Primary review')).toBeNull();
+    expect(formatReviewCoverageSource('主审核')).toBeNull();
+    expect(formatReviewCoverageSource('code-review-testing')).toBeNull();
+    expect(formatReviewCoverageSource('My custom review agent')).toBeNull();
+  });
 });

@@ -5,10 +5,8 @@
 DeepReview is the compatibility runtime for `Review: Strict` and the internal managed-batch executor for scale-limited ordinary Review targets. It remains a read-only child session and must not be presented as a second product entry next to Review. A strict run is reviewed directly by the child; a managed large run executes a deterministic bounded packet plan and returns one aggregate Review result.
 
 This document owns the current Review execution architecture: target evidence,
-read-only roles, managed packets, strict delegation, admission, queueing, and
-report submission. The section explicitly labelled as an adopted target records
-the approved adaptive-capability direction without presenting it as implemented.
-The adopted user-facing record, revision, freshness, and
+read-only roles, managed packets, adaptive focused checks, admission, queueing,
+and report submission. The future user-facing record, revision, freshness, and
 re-review model is defined separately in
 [review-lifecycle.md](review-lifecycle.md). That lifecycle sits above the
 existing child executions; it does not create another runtime or move target
@@ -26,19 +24,15 @@ Product-facing guardrails are summarized here:
   the target Review lifecycle groups revisions without merging independent
   Review requests heuristically.
 
-Current and adopted target behavior must remain distinguishable:
+Current execution and later lifecycle work must remain distinguishable:
 
-| Area | Current implementation | Adopted target |
+| Area | Current implementation | Later lifecycle target |
 |---|---|---|
-| Bounded ordinary Review | One isolated `CodeReview` child with no reviewer-delegation tool | One primary reviewer with zero to two focused review capabilities when concrete unresolved questions justify them |
-| Strict Review | One primary `DeepReview`, at most one specialist, and one conditional Judge | One primary reviewer with zero to three focused review capabilities; a Judge consumes the same allowance |
-| Large ordinary Review | Deterministic `ReviewWorker` file packets, at most two concurrent | Keep bounded packets, but attach selected review questions to those packets instead of multiplying packets by review capability |
-| Capability sources | Current core/extra reviewer manifest | Existing built-in review guidance, compatible Skills, and configured read-only review agents discovered through their existing registries |
-| User presentation | One Review child/result, with internal execution detail available | One Review record, plain-language focused-check progress, and one root-cause-deduplicated result |
-
-Until the adaptive target is implemented and verified, current limits and tool
-availability remain authoritative. In particular, the ordinary `CodeReview`
-agent currently cannot launch review workers.
+| Bounded ordinary Review | One primary reviewer with zero to two focused checks for concrete unresolved questions | Preserve the latest result as one durable Review record |
+| Strict Review | One primary reviewer with zero to three spawned calls; a conditional Judge uses the same allowance | Preserve revisions, freshness, and finding continuity |
+| Large ordinary Review | Deterministic packets, at most two concurrent; questions attach to existing packets | Project the same Review record into task and pull-request surfaces |
+| Capability sources | Built-in fallback, compatible Skills, and configured read-only review agents | Keep source names out of the default product presentation |
+| User presentation | One Review child/result with plain-language focused-check progress | One durable card with explicit loading and historical revisions |
 
 The current implementation has four layers:
 
@@ -62,7 +56,7 @@ The backend does not resolve the review target or build the launch manifest. The
 - `ReviewWorker`
 - `ReviewJudge`
 
-`ReviewWorker` is an optional capability, not a fixed domain lane. The owning `DeepReview` agent selects a concrete lens from the actual change or the user's requested focus, then supplies the exact question, scope, and evidence expectation in the launch prompt. A new strict run may launch at most one such worker for a concrete uncertainty. The retired `ReviewBusinessLogic`, `ReviewPerformance`, `ReviewSecurity`, `ReviewArchitecture`, `ReviewFrontend`, and `ReviewGeneral` ids remain non-discoverable compatibility aliases for stored configuration, historical manifests, and their direct task invocations; they resolve to `ReviewWorker` under the same DeepReview visibility, manifest, read-only, and budget gates, but are not registered or emitted for new runs. Review identities do not receive a generic Git tool. Prepared `GetFileDiff` is the source of truth for changed code; when the local binding is `matching_clean`, existing Read/Grep/Glob/LS tools may supplement it with repository context. `ReviewJudge` is a conditional quality check used only for a high-severity finding, conflicting evidence, or a materially low-confidence conclusion; it does not perform a full independent review pass.
+`ReviewWorker` is an optional capability, not a fixed domain lane. The owning reviewer selects a concrete question from the actual change or the user's requested focus, then supplies the exact scope and evidence expectation. Bounded ordinary Review may launch at most two focused workers; Strict Review may spend at most three spawned calls shared by workers and a conditional Judge. The retired `ReviewBusinessLogic`, `ReviewPerformance`, `ReviewSecurity`, `ReviewArchitecture`, `ReviewFrontend`, and `ReviewGeneral` ids remain non-discoverable compatibility aliases for stored configuration, historical manifests, and their direct task invocations; they resolve to `ReviewWorker` under the same visibility, manifest, read-only, and budget gates, but are not registered or emitted for new runs. Review identities do not receive a generic Git tool. Prepared `GetFileDiff` is the source of truth for changed code; when the local binding is `matching_clean`, existing Read/Grep/Glob/LS tools may supplement it with repository context. `ReviewJudge` is used only for a high-severity finding, conflicting evidence, or a materially low-confidence conclusion; it does not perform a routine full review pass.
 
 `ReviewFixer` is the separate writable remediation identity. DeepReview runtime policy rejects it during review execution. The frontend action surface invokes it only after user approval, and a new read-only Review run checks the fix when requested.
 
@@ -123,22 +117,22 @@ Deleted, renamed, binary, oversized, conflicted, or unavailable files remain vis
 The default strict-review contract is mirrored in Rust and TypeScript. New strict launches use the following fixed boundary:
 
 - the `DeepReview` child performs the primary full review itself;
-- applicable core and explicitly configured extra reviewers form an allowed specialist pool;
-- at most one specialist may be launched for a concrete unresolved question;
+- concise descriptors from compatible review capabilities form a selection catalog;
+- zero to three focused workers may be launched for concrete unresolved questions;
 - `ReviewJudge` is available only as a conditional quality check;
 - automatic file splitting, same-role fan-out, and reviewer retry are disabled;
-- the run uses one primary review-agent execution, with at most one specialist execution and one quality-inspector execution.
+- workers and the Judge share one three-call allowance and at most two run concurrently.
 
-The runtime enforces the one-specialist budget even if a weak model ignores the prompt. This is a resource ceiling, not a keyword or risk-score workflow rule. The model decides whether delegation is useful from the actual evidence and task, while the manifest limits which read-only agents it may call.
+The runtime enforces the shared allowance even if a weak model ignores the prompt. This is a resource ceiling, not a keyword or risk-score workflow rule. The model decides whether another check is useful from the actual evidence and task; the manifest and backend limit which read-only capability, target scope, and question it may use. The Review capacity setting may lower focused checks and managed large-target batches to one-at-a-time execution, but it cannot raise the two-way ceiling or create additional work.
 
-Historical configuration fields for reviewer timeouts, file-split thresholds, same-role instances, retries, concurrency, and queue behavior remain readable so stored sessions can recover honestly. New strict manifests override split, same-role, retry, and specialist-call values to the bounded policy above. Extra reviewers must still be enabled subagents with read-only review tooling. `DeepReview` and `ReviewFixer` remain disallowed.
+Historical configuration fields for reviewer timeouts, file-split thresholds, same-role instances, retries, concurrency, and queue behavior remain readable so stored sessions can recover honestly. New adaptive manifests override split, same-role, retry, concurrency, and call values to the bounded policy above. Configured review agents must be file-backed and read-only. `DeepReview` and `ReviewFixer` remain disallowed.
 
-## Adopted Adaptive Review Capability Direction
+## Adaptive Review Capability
 
-> Status: approved architecture direction, not current behavior. Implementation
-> must reuse the current Review launch, manifest, admission, task, evidence, and
-> report owners. It must not introduce another Review runtime or a generic
-> orchestration Harness.
+> Status: current execution behavior for newly prepared Review manifests. It
+> reuses the existing Review launch, manifest, admission, task, evidence, and
+> report owners; there is no second Review runtime or generic orchestration
+> Harness.
 
 The product comparison boundary is the complete Review outcome available to a
 user, not the internal location of a capability. A built-in reviewer, a Skill,
@@ -188,9 +182,10 @@ File type, a static risk label, capability availability, or the idea that an
 extra reviewer might be safer is insufficient. User-requested focuses take
 priority within the same allowance. Registry implementations may parse or cache
 full source files during discovery, but the normal Review model context receives
-only concise Skill and review-agent descriptions. Full selected guidance enters
-model context only after admission, so a large capability inventory does not
-inflate every Review turn.
+only concise Skill and review-agent descriptions. Ordinary Review keeps this
+catalog behind a deferred tool specification, so a direct primary review pays
+no catalog input cost. Full selected guidance enters model context only after
+admission.
 
 The existing manifest and backend admission path gain one small typed
 `focused_assignment` projection: question id, target fingerprint, allowed
@@ -202,7 +197,14 @@ The same scoped read policy receives the prepared target's complete changed-path
 inventory: `Read` rejects an unassigned changed path, while `Grep` filters matches
 from unassigned changed paths. Unchanged dependencies remain available as bounded
 supplemental context. All comparisons use the target owner's normalized logical
-paths so path aliases cannot bypass the assignment.
+paths and local filesystem identity. Current paths take precedence over rename
+aliases. Exact path spellings win; alternate casing is accepted only when it
+resolves to the same local file, and linked aliases fail closed.
+
+Adaptive focused checks are not exposed for remote workspaces in this slice.
+The primary reviewer still completes the prepared review, but the product does
+not spend a worker call where local path identity and the restricted Read/Grep
+envelope cannot yet be guaranteed. Managed packet compatibility remains separate.
 
 Every selected source is normalized into the existing `ReviewWorker` execution
 envelope. Built-in guidance, a Skill, or a configured read-only review agent may
@@ -256,7 +258,7 @@ high-severity finding, material conflict, or materially low confidence.
 
 No focused check is admitted without a concrete non-duplicate question, a valid
 scope, remaining allowance, and plausible conclusion benefit. A previous
-no-finding result for the same capability, question, and scope also stops repeat
+no-finding result for the same question and scope also stops repeat
 delegation.
 
 A failed or timed-out check is not retried automatically: the primary either
@@ -266,39 +268,40 @@ result preserves the uncertainty.
 
 ### Product projection and quality evidence
 
-The default UI shows one Review with preparing, reviewing, checking a specific
-concern, and consolidating phases. Optional detail uses plain-language questions
-such as “check permission boundaries” rather than Skill names, agent ids, packet
-ids, or internal budgets. The final report is organized by severity and root cause,
+The default UI shows one Review, a generic progress card only when a focused
+check actually runs, and one final report. Focused progress deliberately uses a
+plain-language label rather than projecting model-controlled questions, Skill
+names, agent ids, packet ids, paths, fingerprints, or internal budgets. The final
+report is organized by severity and root cause,
 with explicit coverage and residual risk; it is never grouped by reviewer count
 or presented with an invented aggregate quality score.
 
-This direction does not require a Review telemetry service, hit-rate database,
+This implementation does not require a Review telemetry service, hit-rate database,
 adaptive scoring engine, content cache, dashboard, scheduler, or retry state
 machine. Deterministic contract tests and offline comparisons using existing
-logs are sufficient initial evidence. A reproducible benchmark artifact created
-with implementation must record fixtures, base commit, model/provider, sample
-count, environment, and comparison method before setting numerical gates. The
-architecture requires lower input tokens and wall time on the fixed repeated-read
-set without losing seeded known findings; it does not embed an environment-bound
-percentage target.
+logs are sufficient initial evidence. Before setting numerical gates, a future
+comparison must record fixtures, base commit, model/provider, sample count,
+environment, and method. The architecture requires lower input tokens and wall
+time on a fixed repeated-read set without losing seeded known findings; it does
+not embed an environment-bound percentage target or claim an unrecorded result.
 
 ## Manifest Shape
 
-`buildEffectiveReviewTeamManifest` in `src/web-ui/src/shared/services/review-team/index.ts` builds the launch manifest. The manifest keeps `reviewMode: 'deep'`, resolved target evidence, strategy/scope metadata, execution policy, specialist pool, optional quality-inspector identity, skipped members, and token/call budget facts.
+`buildEffectiveReviewTeamManifest` in `src/web-ui/src/shared/services/review-team/index.ts` builds strict and managed manifests. `buildAdaptiveStandardReviewManifest` builds the bounded ordinary manifest without loading Review Team configuration. Every new manifest carries `adaptiveReview.version: 1`, resolved target evidence, strategy/scope metadata, execution policy, and bounded call facts.
 
 For new strict launches:
 
-- `coreReviewers` and `enabledExtraReviewers` describe agents the primary reviewer may choose from; they are not scheduled calls;
+- the backend supplies a bounded descriptor catalog from compatible Skills and configured read-only review agents; full guidance is loaded only for an admitted exact key and fingerprint;
 - `qualityGateReviewer` identifies the available conditional inspector and does not require it to run;
 - `workPackets` is empty;
-- `executionPolicy.maxReviewerCalls` is `1`;
+- `executionPolicy.maxReviewerCalls` and `adaptiveReview.maxFocusedCalls` are `3`;
 - file splitting and retries are disabled;
-- the launch preview reports one planned primary review-agent execution and a maximum of three review-agent executions; it does not claim a bound on underlying model requests.
+- the primary plus spawned-call ceiling is four review-agent executions; it does not claim a bound on underlying provider requests.
 
 For managed large L1 launches:
 
 - `workPackets` contains only deterministic `ReviewWorker` file batches;
+- up to two admitted questions attach to existing packets and do not create more packets;
 - packet calls are foreground-waited and may never be converted to background `Task` calls;
 - `managedReviewPlan` records total, planned, and deferred file counts plus batch, concurrency, and timeout bounds;
 - the final report must mark deferred, provider-omitted, timed-out, or unavailable scope as limited coverage;
@@ -308,7 +311,7 @@ The evidence pack remains metadata-only. It lists changed file paths, aggregate 
 
 ## Strategies and Scope
 
-Small ordinary Review remains one `CodeReview` child. Managed large Review reuses the deep runtime profile only as an execution budget capable of bounded work packets; it remains user-facing L1 Review. A new explicit strict request selects the deep profile for evidence depth, not maximum fan-out.
+Small ordinary Review remains one `CodeReview` child whose primary reviewer may request zero to two focused checks. Managed large Review reuses the deep runtime profile only as an execution budget capable of bounded work packets; it remains user-facing L1 Review. A new explicit strict request selects the deep profile for evidence depth, not maximum fan-out.
 
 `quick` and `normal` strategy values, legacy work packets, and older L2 manifests remain readable for stored-session recovery. They do not create new production Review launches. New L3 validation requires the deep strategy but no longer requires every core reviewer or a Judge call. If a quality-gate member is present, it must be `ReviewJudge`.
 
@@ -318,13 +321,13 @@ Review launches start directly without routine confirmation. Exceptional states 
 
 New strict reviews do not generate work packets or module-aware reviewer shards. New managed large L1 reviews generate only bounded `ReviewWorker` packets. Stored manifests may also contain historical fixed reviewer ids, reviewer/judge packets, launch batches, packet ids, assigned scopes, and retry metadata. Runtime parsing, report enrichment, recovery UI, and target-evidence validation distinguish the new managed plan from historical manifests.
 
-Packet support is not a general fan-out policy. New packets are admitted only when `managedReviewPlan` is present; strict specialist policy remains unchanged. Packet-specific queue and retry behavior applies only when the prepared manifest actually contains those packets.
+Packet support is not a general fan-out policy. New packets are admitted only when `managedReviewPlan` is present; focused questions attach to those packets rather than multiplying them. Packet-specific queue and retry behavior applies only when the prepared manifest actually contains those packets.
 
 ## Backend Policy and Admission
 
-`DeepReviewExecutionPolicy` parses runtime policy and the per-turn specialist-call ceiling. `DeepReviewRunManifestGate` admits the dynamic `ReviewWorker`, explicitly configured custom specialists, and the optional `ReviewJudge`; worker packets require a prepared bounded managed plan. It rejects `ReviewFixer`, nested `DeepReview`, skipped members, and unconfigured agents.
+`DeepReviewExecutionPolicy` parses runtime policy and the per-turn spawned-call ceiling. `DeepReviewRunManifestGate` admits `ReviewWorker` and the optional `ReviewJudge`; managed worker packets require a prepared bounded plan, while adaptive workers require a target-bound `focused_assignment`. It rejects `ReviewFixer`, nested `DeepReview`, skipped members, stale capability fingerprints, duplicate questions on the same scope, and scope outside the prepared target.
 
-`DeepReviewBudgetTracker` separately permits at most one initial specialist and one Judge call for a new strict turn. This keeps the safety boundary deterministic without hard-coding which domain deserves delegation.
+`DeepReviewBudgetTracker` shares one allowance between focused workers and the Judge. This keeps the safety boundary deterministic without hard-coding which domain deserves delegation.
 
 ## Task Execution and Queue State
 
@@ -341,7 +344,7 @@ DeepReview task execution uses the manifest and tool context to:
 
 - identify an optional specialist, quality-inspector, managed packet, or historical packet id
 - read historical incremental-cache metadata when present, without creating cache plans for new runs
-- enforce the new specialist-call ceiling and historical retry coverage
+- enforce the adaptive shared-call ceiling and historical retry coverage
 - cap active optional reviewers
 - enforce the global concurrency ceiling for managed and historical packet manifests; `launch_batch` remains a preferred launch grouping, not a runtime completion barrier
 - wait for transient capacity when allowed

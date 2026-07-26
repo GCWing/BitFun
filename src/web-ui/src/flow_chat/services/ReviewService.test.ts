@@ -169,6 +169,13 @@ describe('ReviewService', () => {
     expect(prepared.level).toBe('l1');
     expect(prepared.prompt).toContain('independent adversarial review');
     expect(prepared.prompt).toContain('src/small.ts');
+    expect(prepared.runManifest).toMatchObject({
+      adaptiveReview: { version: 1, maxFocusedCalls: 2 },
+      concurrencyPolicy: { maxParallelInstances: 2 },
+      executionPolicy: { maxReviewerCalls: 2, maxRetriesPerRole: 0 },
+      enabledExtraReviewers: [],
+      workPackets: [],
+    });
     expect(mocks.buildDeepReviewLaunchFromSessionFiles).not.toHaveBeenCalled();
   });
 
@@ -563,6 +570,7 @@ describe('ReviewService', () => {
       childSessionName: 'Review',
       requestId: 'review-follow-up-1',
       reviewTargetEvidence: prepared.targetEvidence,
+      deepReviewRunManifest: prepared.runManifest,
     }));
     expect(mocks.sendMessage).toHaveBeenCalledWith(
       expect.any(String),

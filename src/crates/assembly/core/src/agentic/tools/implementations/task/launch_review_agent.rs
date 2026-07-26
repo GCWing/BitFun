@@ -12,6 +12,7 @@ struct LaunchReviewAgentInvocation {
     timeout_seconds: Option<u64>,
     is_retry: bool,
     requested_auto_retry: bool,
+    focused_assignment: Option<Value>,
 }
 
 impl Default for LaunchReviewAgentTool {
@@ -61,6 +62,31 @@ impl LaunchReviewAgentTool {
                 "auto_retry": {
                     "type": "boolean",
                     "description": "True only for backend-owned bounded automatic retries. Requires Review Team auto retry opt-in and retry=true. User/model-issued retry actions must omit this field or set it to false."
+                },
+                "focused_assignment": {
+                    "type": "object",
+                    "description": "A target-bound question for ReviewWorker. Required for adaptive non-packet checks; managed packets may attach a question without repeating their packet file scope.",
+                    "properties": {
+                        "question": { "type": "string" },
+                        "independent_value": { "type": "string" },
+                        "target_fingerprint": { "type": "string" },
+                        "allowed_changed_paths": {
+                            "type": "array",
+                            "items": { "type": "string" }
+                        },
+                        "expected_evidence": { "type": "string" },
+                        "capability_key": { "type": "string" },
+                        "capability_fingerprint": { "type": "string" }
+                    },
+                    "required": [
+                        "question",
+                        "independent_value",
+                        "target_fingerprint",
+                        "expected_evidence",
+                        "capability_key",
+                        "capability_fingerprint"
+                    ],
+                    "additionalProperties": false
                 },
                 "retry_coverage": {
                     "type": "object",
@@ -169,6 +195,7 @@ impl LaunchReviewAgentTool {
                 .get("auto_retry")
                 .and_then(Value::as_bool)
                 .unwrap_or(false),
+            focused_assignment: input.get("focused_assignment").cloned(),
         })
     }
 
@@ -177,17 +204,17 @@ impl LaunchReviewAgentTool {
 
 When the prepared manifest contains active work packets, launch only those packets in declared batch order. Manifest-declared managed Review packets may use bounded same-role file shards; every call blocks the owning Review turn until its result, timeout, or cancellation is recorded. Never convert a packet to a background Task.
 
-When active work packets are empty, the DeepReview agent is the primary reviewer. Use this tool only when a concrete uncertainty needs one focused fresh perspective, or when a high-severity, conflicting, or low-confidence conclusion needs ReviewJudge validation. New strict runs allow at most one specialist and one ReviewJudge call.
+When active work packets are empty, the owning Review agent is the primary reviewer. Use this tool only when a concrete unresolved question has independent value, or when a high-severity, conflicting, or low-confidence conclusion needs ReviewJudge validation. Adaptive ordinary runs allow at most two focused checks. Adaptive strict runs allow at most three spawned calls total, including ReviewJudge.
 
 Built-in review agent types:
 - `ReviewWorker`: one read-only worker whose bounded prompt supplies the dynamic review lens, concrete question, file or packet scope, and expected evidence. It may cover a narrow specialist uncertainty or a managed file packet, but must not widen its assignment.
 - `ReviewJudge`: final quality-inspector pass after reviewer outputs are available.
 
-Extra active reviewers may be provided by the run manifest. Use only a `subagent_type` active for this run. Outside a manifest-declared work-packet plan, do not split files, launch routine parallel coverage, or repeat the primary review.
+The capability catalog below contains short descriptions only. For an adaptive ReviewWorker call, copy the selected key and fingerprint into `focused_assignment`; full guidance is loaded only after runtime admission. Outside a manifest-declared work-packet plan, do not split files, launch routine parallel coverage, or repeat the primary review.
 
 For a managed packet, pass its exact manifest `packet_id` in the top-level `packet_id` field. Runtime rejects missing or unknown managed packet ids.
 
-Do not put `subagent_type`, `packet_id`, `description`, `model_id`, `timeout_seconds`, `retry`, `auto_retry`, or `retry_coverage` inside the prompt string.
+Do not put `subagent_type`, `packet_id`, `description`, `model_id`, `timeout_seconds`, `retry`, `auto_retry`, `retry_coverage`, or `focused_assignment` inside the prompt string.
 
 Retry rules:
 - Set `retry=true` only when re-dispatching the same reviewer after `partial_timeout` or a transient capacity skip in the current turn.
@@ -215,13 +242,64 @@ Retry rules:
         input: &Value,
         context: &ToolUseContext,
     ) -> BitFunResult<Vec<ToolResult>> {
+        if Self::is_unsupported_adaptive_remote_context(context) {
+            return Err(BitFunError::tool(
+                "Focused Review checks are unavailable for remote workspaces; continue with the primary review"
+                    .to_string(),
+            ));
+        }
         if !TaskTool::is_deep_review_context(Some(context)) {
             return Err(BitFunError::tool(
-                "LaunchReviewAgent is only available in DeepReview context".to_string(),
+                "LaunchReviewAgent requires a prepared Review run manifest".to_string(),
             ));
         }
         let invocation = Self::parse_invocation(input)?;
+        if context.is_remote() && invocation.focused_assignment.is_some() {
+            return Err(BitFunError::tool(
+                "Focused Review checks are unavailable for remote workspaces; continue with the primary review"
+                    .to_string(),
+            ));
+        }
         let description = Self::bound_packet_description(&invocation, context)?;
+        let mut launch_context = context.clone();
+        if let Some(manifest) = context.custom_data.get("deep_review_run_manifest") {
+            let managed = manifest
+                .get("managedReviewPlan")
+                .or_else(|| manifest.get("managed_review_plan"))
+                .is_some();
+            let adaptive = is_adaptive_review_manifest(manifest);
+            let is_worker = is_review_worker_agent_type(&invocation.subagent_type);
+            if invocation.focused_assignment.is_some() && !is_worker {
+                return Err(BitFunError::tool(
+                    "focused_assignment may only launch ReviewWorker".to_string(),
+                ));
+            }
+            if adaptive && is_worker && !managed && invocation.focused_assignment.is_none() {
+                return Err(BitFunError::tool(
+                    "focused_assignment is required for adaptive ReviewWorker checks".to_string(),
+                ));
+            }
+            if let Some(raw_assignment) = invocation.focused_assignment.as_ref() {
+                if invocation.is_retry || invocation.requested_auto_retry {
+                    return Err(BitFunError::tool(
+                        "Focused Review checks do not retry automatically".to_string(),
+                    ));
+                }
+                let assignment = FocusedReviewAssignment::from_input(
+                    manifest,
+                    raw_assignment,
+                    invocation.packet_id.as_deref(),
+                )
+                .map_err(|violation| BitFunError::tool(violation.to_tool_error_message()))?;
+                let mut child_manifest = manifest.clone();
+                if let Some(object) = child_manifest.as_object_mut() {
+                    object.insert("focusedAssignment".to_string(), assignment.to_value());
+                }
+                launch_context
+                    .custom_data
+                    .insert("deep_review_run_manifest".to_string(), child_manifest);
+            }
+        }
         let task_input = json!({
             "description": description,
             "prompt": invocation.prompt,
@@ -253,7 +331,7 @@ Retry rules:
         }
 
         TaskTool::new()
-            .call_deep_review_task_impl(&task_input, context)
+            .call_deep_review_task_impl(&task_input, &launch_context)
             .await
     }
 
@@ -296,6 +374,20 @@ Retry rules:
         }
         Ok(description)
     }
+
+    fn is_unsupported_adaptive_remote_context(context: &ToolUseContext) -> bool {
+        context.is_remote()
+            && context
+                .custom_data
+                .get("deep_review_run_manifest")
+                .is_some_and(|manifest| {
+                    is_adaptive_review_manifest(manifest)
+                        && manifest
+                            .get("managedReviewPlan")
+                            .or_else(|| manifest.get("managed_review_plan"))
+                            .is_none()
+                })
+    }
 }
 
 #[async_trait]
@@ -312,8 +404,32 @@ impl Tool for LaunchReviewAgentTool {
         Ok(Self::render_description())
     }
 
+    async fn description_with_context(
+        &self,
+        context: Option<&ToolUseContext>,
+    ) -> BitFunResult<String> {
+        let mut description = Self::render_description();
+        if let Some(context) = context.filter(|context| {
+            !context.is_remote()
+                && context
+                    .custom_data
+                    .get("deep_review_run_manifest")
+                    .is_some_and(is_adaptive_review_manifest)
+        }) {
+            description.push_str("\n\n");
+            description.push_str(
+                &crate::agentic::deep_review::capabilities::review_capability_catalog_for_context(
+                    context,
+                )
+                .await,
+            );
+        }
+        Ok(description)
+    }
+
     async fn is_available_in_context(&self, context: Option<&ToolUseContext>) -> bool {
         TaskTool::is_deep_review_context(context)
+            && !context.is_some_and(Self::is_unsupported_adaptive_remote_context)
     }
 
     fn short_description(&self) -> String {
@@ -339,14 +455,20 @@ impl Tool for LaunchReviewAgentTool {
                 let packet_id = packet_id.trim().to_ascii_lowercase();
                 packet_id.starts_with("reviewer:") || packet_id.starts_with("managed-review:")
             });
-        if !has_parallel_reviewer_packet {
+        let has_focused_scope = input
+            .get("focused_assignment")
+            .is_some_and(Value::is_object);
+        if !has_parallel_reviewer_packet && !has_focused_scope {
             return false;
         }
         let subagent_type = input.get("subagent_type").and_then(Value::as_str);
         match subagent_type {
-            Some(id) => get_agent_registry()
-                .get_subagent_is_readonly(id)
-                .unwrap_or(false),
+            Some(id) => {
+                (!has_focused_scope || is_review_worker_agent_type(id))
+                    && get_agent_registry()
+                        .get_subagent_is_readonly(id)
+                        .unwrap_or(false)
+            }
             None => false,
         }
     }
@@ -378,8 +500,48 @@ impl Tool for LaunchReviewAgentTool {
         match Self::parse_invocation(input) {
             Ok(invocation) => {
                 if let Some(context) = context {
+                    if Self::is_unsupported_adaptive_remote_context(context) {
+                        return TaskTool::invalid_input(
+                            "Focused Review checks are unavailable for remote workspaces; continue with the primary review",
+                        );
+                    }
+                    if context.is_remote() && invocation.focused_assignment.is_some() {
+                        return TaskTool::invalid_input(
+                            "Focused Review checks are unavailable for remote workspaces; continue with the primary review",
+                        );
+                    }
                     if let Err(error) = Self::bound_packet_description(&invocation, context) {
                         return TaskTool::invalid_input(error.to_string());
+                    }
+                    if let Some(manifest) = context.custom_data.get("deep_review_run_manifest") {
+                        let managed = manifest
+                            .get("managedReviewPlan")
+                            .or_else(|| manifest.get("managed_review_plan"))
+                            .is_some();
+                        let is_worker = is_review_worker_agent_type(&invocation.subagent_type);
+                        if invocation.focused_assignment.is_some() && !is_worker {
+                            return TaskTool::invalid_input(
+                                "focused_assignment may only launch ReviewWorker",
+                            );
+                        }
+                        if is_adaptive_review_manifest(manifest)
+                            && is_worker
+                            && !managed
+                            && invocation.focused_assignment.is_none()
+                        {
+                            return TaskTool::invalid_input(
+                                "focused_assignment is required for adaptive ReviewWorker checks",
+                            );
+                        }
+                        if let Some(raw_assignment) = invocation.focused_assignment.as_ref() {
+                            if let Err(violation) = FocusedReviewAssignment::from_input(
+                                manifest,
+                                raw_assignment,
+                                invocation.packet_id.as_deref(),
+                            ) {
+                                return TaskTool::invalid_input(violation.to_tool_error_message());
+                            }
+                        }
                     }
                 }
                 if let Some(result) = TaskTool::validate_prompt_size(input) {

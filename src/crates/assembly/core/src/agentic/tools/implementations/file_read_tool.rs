@@ -486,6 +486,10 @@ Usage:
             .unwrap_or(self.default_max_lines_to_read as u64) as usize;
 
         let resolved = context.resolve_tool_path(file_path)?;
+        crate::agentic::deep_review::scope::ensure_focused_review_resolved_path_allowed(
+            context,
+            &resolved.resolved_path,
+        )?;
         let revision_before_read = if resolved.uses_remote_workspace_backend()
             || tail
             || !review_read_receipts_enabled(context)

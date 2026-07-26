@@ -580,6 +580,12 @@ Usage:
         // Remote workspace: use shell-based grep/rg
         let search_path = input.get("path").and_then(|v| v.as_str()).unwrap_or(".");
         let resolved = context.resolve_tool_path(search_path)?;
+        crate::agentic::deep_review::scope::ensure_focused_review_resolved_path_allowed(
+            context,
+            &resolved.resolved_path,
+        )?;
+        let focused_excluded_paths =
+            crate::agentic::deep_review::scope::focused_review_excluded_changed_paths(context)?;
 
         if resolved.uses_remote_workspace_backend() {
             if workspace_search_feature_enabled().await {
@@ -671,7 +677,7 @@ Usage:
             return self.call_remote(input, context).await;
         }
 
-        if workspace_search_runtime_available().await {
+        if focused_excluded_paths.is_none() && workspace_search_runtime_available().await {
             if let Some(search_service) = get_global_workspace_search_service() {
                 let (request, output_mode, show_line_numbers, offset, head_limit) =
                     self.build_workspace_search_request(input, context)?;
@@ -733,7 +739,17 @@ Usage:
             }
         }
 
-        let grep_options = self.build_grep_options(input, context)?;
+        let mut grep_options = self.build_grep_options(input, context)?;
+        if let Some(excluded_paths) = focused_excluded_paths {
+            grep_options = grep_options
+                .excluded_paths(
+                    excluded_paths
+                        .into_iter()
+                        .map(|path| path.to_string_lossy().into_owned())
+                        .collect(),
+                )
+                .reject_linked_files(true);
+        }
         let pattern = grep_options.pattern.clone();
         let path = resolved.logical_path.clone();
         let output_mode = grep_options.output_mode.to_string();
