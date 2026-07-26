@@ -57,12 +57,12 @@ export const SETTINGS_TAB_SEARCH_CONTENT: Record<ConfigTab, readonly SettingsTab
     { ns: 'common', key: 'nav.sessions.deleteAllArchived' },
   ],
 
-  'session-personalization': [
-    { ns: 'settings/session-config', key: 'personalizationPage.title' },
-    { ns: 'settings/session-config', key: 'personalizationPage.subtitle' },
-    { ns: 'settings/session-config', key: 'features.agentCompanion.title' },
-    { ns: 'settings/session-config', key: 'features.agentCompanion.subtitle' },
-  ],
+  // 'session-personalization': [
+  //   { ns: 'settings/session-config', key: 'personalizationPage.title' },
+  //   { ns: 'settings/session-config', key: 'personalizationPage.subtitle' },
+  //   { ns: 'settings/session-config', key: 'features.agentCompanion.title' },
+  //   { ns: 'settings/session-config', key: 'features.agentCompanion.subtitle' },
+  // ],
 
   'session-permissions': [
     { ns: 'settings/session-config', key: 'permissionsPage.title' },
@@ -128,14 +128,14 @@ export const SETTINGS_TAB_SEARCH_CONTENT: Record<ConfigTab, readonly SettingsTab
     { ns: 'settings/mcp', key: 'section.serverList.description' },
   ],
 
-  'external-sources': [
-    { ns: 'settings/external-sources', key: 'title' },
-    { ns: 'settings/external-sources', key: 'subtitle' },
-    { ns: 'settings/external-sources', key: 'sources.title' },
-    { ns: 'settings/external-sources', key: 'sources.description' },
-    { ns: 'settings/external-sources', key: 'conflicts.title' },
-    { ns: 'settings/external-sources', key: 'conflicts.description' },
-  ],
+  // 'external-sources': [
+  //   { ns: 'settings/external-sources', key: 'title' },
+  //   { ns: 'settings/external-sources', key: 'subtitle' },
+  //   { ns: 'settings/external-sources', key: 'sources.title' },
+  //   { ns: 'settings/external-sources', key: 'sources.description' },
+  //   { ns: 'settings/external-sources', key: 'conflicts.title' },
+  //   { ns: 'settings/external-sources', key: 'conflicts.description' },
+  // ],
 
   // 'acp-agents': [
   //   { ns: 'settings/acp-agents', key: 'title' },
@@ -182,15 +182,15 @@ export const SETTINGS_TAB_SEARCH_CONTENT: Record<ConfigTab, readonly SettingsTab
     { ns: 'settings/quick-actions', key: 'sections.custom.title' },
   ],
 
-  'voice-input': [
-    { ns: 'settings/voice-input', key: 'title' },
-    { ns: 'settings/voice-input', key: 'subtitle' },
-    { ns: 'settings/voice-input', key: 'sections.composer' },
-    { ns: 'settings/voice-input', key: 'sections.model' },
-    { ns: 'settings/voice-input', key: 'composer.enabled.label' },
-    { ns: 'settings/voice-input', key: 'composer.language.label' },
-    { ns: 'settings/voice-input', key: 'model.download' },
-  ],
+  // 'voice-input': [
+  //   { ns: 'settings/voice-input', key: 'title' },
+  //   { ns: 'settings/voice-input', key: 'subtitle' },
+  //   { ns: 'settings/voice-input', key: 'sections.composer' },
+  //   { ns: 'settings/voice-input', key: 'sections.model' },
+  //   { ns: 'settings/voice-input', key: 'composer.enabled.label' },
+  //   { ns: 'settings/voice-input', key: 'composer.language.label' },
+  //   { ns: 'settings/voice-input', key: 'model.download' },
+  // ],
 
   // lsp: [ ... ], // nav entry temporarily hidden; omit from search index
 };

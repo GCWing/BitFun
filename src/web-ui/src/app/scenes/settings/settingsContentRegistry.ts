@@ -45,14 +45,14 @@ const SETTINGS_CONTENT_LOADERS: Partial<Record<ConfigTab, () => Promise<unknown>
   appearance: loadAppearanceConfig,
   models: loadAIModelConfig,
   'archived-sessions': loadArchivedSessionsConfig,
-  'session-personalization': loadSessionConfig,
+  // 'session-personalization': loadSessionConfig, // temporarily hidden from config center
   'session-permissions': loadSessionConfig,
   'quick-actions': loadQuickActionsConfig,
-  'voice-input': loadVoiceInputConfig,
+  // 'voice-input': loadVoiceInputConfig, // temporarily hidden from config center
   review: loadReviewConfig,
   memories: loadMemoriesConfig,
   'mcp-tools': loadMcpToolsConfig,
-  'external-sources': loadExternalSourcesConfig,
+  // 'external-sources': loadExternalSourcesConfig, // temporarily hidden from config center
   // 'acp-agents': loadAcpAgentsConfig, // temporarily hidden from config center
   editor: loadEditorConfig,
   keyboard: loadKeyboardShortcutsTab,

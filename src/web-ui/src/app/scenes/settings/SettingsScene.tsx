@@ -22,15 +22,15 @@ import {
   ArchivedSessionsConfig,
   BasicsConfig,
   EditorConfig,
-  ExternalSourcesConfig,
+  // ExternalSourcesConfig, // temporarily hidden from config center
   KeyboardShortcutsTab,
   McpToolsConfig,
   MemoriesConfig,
   QuickActionsConfig,
   ReviewConfig,
   SessionPermissionsConfig,
-  SessionPersonalizationConfig,
-  VoiceInputConfig,
+  // SessionPersonalizationConfig, // temporarily hidden from config center
+  // VoiceInputConfig, // temporarily hidden from config center
 } from './settingsContentRegistry';
 import './SettingsScene.scss';
 
@@ -54,14 +54,14 @@ function resolveSettingsContent(tab: ConfigTab): React.ComponentType | null {
     case 'appearance':              return AppearanceConfig;
     case 'models':                  return AIModelConfig;
     case 'archived-sessions':       return ArchivedSessionsConfig;
-    case 'session-personalization': return SessionPersonalizationConfig;
+    // case 'session-personalization': return SessionPersonalizationConfig; // temporarily hidden
     case 'session-permissions':     return SessionPermissionsConfig;
     case 'quick-actions':           return QuickActionsConfig;
-    case 'voice-input':             return VoiceInputConfig;
+    // case 'voice-input':             return VoiceInputConfig; // temporarily hidden
     case 'review':                  return ReviewConfig;
     case 'memories':                return MemoriesConfig;
     case 'mcp-tools':               return McpToolsConfig;
-    case 'external-sources':        return ExternalSourcesConfig;
+    // case 'external-sources':        return ExternalSourcesConfig; // temporarily hidden
     // case 'acp-agents':              return AcpAgentsConfig; // temporarily hidden from config center
     case 'editor':                  return EditorConfig;
     case 'keyboard':                return KeyboardShortcutsTab;
@@ -74,14 +74,14 @@ const SettingsScene: React.FC = () => {
   const setActiveTab = useSettingsStore(s => s.setActiveTab);
 
   const resolvedTab: ConfigTab =
-    (activeTab as string) === 'session-config' ? 'session-personalization' : activeTab;
+    (activeTab as string) === 'session-config' ? 'session-permissions' : activeTab;
   const [outgoingTab, setOutgoingTab] = useState<ConfigTab | null>(null);
   const previousTabRef = useRef<ConfigTab>(resolvedTab);
 
   useEffect(() => {
     /** Legacy merged session settings tab removed in favor of two panels. */
     if ((activeTab as string) === 'session-config') {
-      setActiveTab('session-personalization');
+      setActiveTab('session-permissions');
     }
   }, [activeTab, setActiveTab]);
 

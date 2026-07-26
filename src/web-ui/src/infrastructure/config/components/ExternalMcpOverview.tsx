@@ -355,7 +355,7 @@ const ExternalMcpOverview: React.FC = () => {
           <IconButton
             variant="ghost"
             size="small"
-            onClick={() => setSettingsTab('external-sources')}
+            onClick={() => setSettingsTab('mcp-tools')}
             tooltip={t('external.manage')}
             aria-label={t('external.manage')}
           >
