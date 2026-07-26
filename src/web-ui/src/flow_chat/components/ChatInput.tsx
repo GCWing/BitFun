@@ -4325,24 +4325,6 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     });
   }, []);
 
-  // Space-to-focus: when no editable element is focused, Space key focuses the input.
-  useEffect(() => {
-    const handleGlobalKeyDown = (e: KeyboardEvent) => {
-      if (e.key !== ' ') return;
-      const target = e.target as HTMLElement;
-      const isEditable =
-        target.tagName === 'INPUT' ||
-        target.tagName === 'TEXTAREA' ||
-        target.isContentEditable ||
-        target.closest('[contenteditable="true"]') !== null;
-      if (isEditable) return;
-      e.preventDefault();
-      focusRichTextInputSoon();
-    };
-    document.addEventListener('keydown', handleGlobalKeyDown, true);
-    return () => document.removeEventListener('keydown', handleGlobalKeyDown, true);
-  }, [focusRichTextInputSoon]);
-
   const insertSkillIntoInput = useCallback(
     (skillName: string) => {
       dispatchInput({ type: 'ACTIVATE' });
