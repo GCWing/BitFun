@@ -1297,7 +1297,7 @@ const AgentsHomeView: React.FC = () => {
                     variant="secondary"
                     size="small"
                     onClick={() => {
-                      setSettingsTab('external-sources');
+                      setSettingsTab('mcp-tools');
                       closeAgentDetails();
                       openScene('settings');
                     }}

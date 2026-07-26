@@ -1,12 +1,6 @@
 @use '../../../component-library/styles/tokens' as *;
 
 .bitfun-mcp-tools {
-  .bitfun-config-page-section__body {
-    border: 0;
-    border-radius: 0;
-    background: transparent;
-  }
-
   .bitfun-config-page-row {
     padding: $size-gap-3 0;
   }

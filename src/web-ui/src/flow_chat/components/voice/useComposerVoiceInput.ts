@@ -9,7 +9,6 @@ import {
 import { useAIExperienceSettings } from '@/infrastructure/config/hooks';
 import { isTauriRuntime } from '@/infrastructure/runtime';
 import { useSceneStore } from '@/app/stores/sceneStore';
-import { useSettingsStore } from '@/app/scenes/settings/settingsStore';
 import { notificationService } from '@/shared/notification-system';
 import { createLogger } from '@/shared/utils/logger';
 import {
@@ -116,7 +115,7 @@ export function useComposerVoiceInput({
   }, []);
 
   const openVoiceInputSettings = useCallback(() => {
-    useSettingsStore.getState().setActiveTab('voice-input');
+    // voice-input settings tab is temporarily hidden; open default settings tab.
     useSceneStore.getState().openScene('settings');
   }, []);
 

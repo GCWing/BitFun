@@ -10,14 +10,14 @@ export type ConfigTab =
   | 'appearance'
   | 'models'
   | 'archived-sessions'
-  | 'session-personalization'
+  // | 'session-personalization' // temporarily hidden from config center
   | 'session-permissions'
   | 'quick-actions'
-  | 'voice-input'
+  // | 'voice-input' // temporarily hidden from config center
   | 'review'
   | 'memories'
   | 'mcp-tools'
-  | 'external-sources'
+  // | 'external-sources' // temporarily hidden from config center
   // | 'acp-agents' // temporarily hidden from config center
   // | 'lsp' // temporarily hidden from config center
   | 'editor'
@@ -133,19 +133,20 @@ export const SETTINGS_CATEGORIES: ConfigCategoryDef[] = [
     id: 'smartCapabilities',
     nameKey: 'configCenter.categories.smartCapabilities',
     tabs: [
-      {
-        id: 'session-personalization',
-        labelKey: 'configCenter.tabs.sessionPersonalization',
-        descriptionKey: 'configCenter.tabDescriptions.sessionPersonalization',
-        keywords: [
-          'session',
-          'companion',
-          'agent',
-          'pixel',
-          'pet',
-          'partner',
-        ],
-      },
+      // session-personalization temporarily hidden from config center
+      // {
+      //   id: 'session-personalization',
+      //   labelKey: 'configCenter.tabs.sessionPersonalization',
+      //   descriptionKey: 'configCenter.tabDescriptions.sessionPersonalization',
+      //   keywords: [
+      //     'session',
+      //     'companion',
+      //     'agent',
+      //     'pixel',
+      //     'pet',
+      //     'partner',
+      //   ],
+      // },
       {
         id: 'session-permissions',
         labelKey: 'configCenter.tabs.sessionPermissions',
@@ -184,12 +185,13 @@ export const SETTINGS_CATEGORIES: ConfigCategoryDef[] = [
           'shortcut',
         ],
       },
-      {
-        id: 'voice-input',
-        labelKey: 'configCenter.tabs.voiceInput',
-        descriptionKey: 'configCenter.tabDescriptions.voiceInput',
-        keywords: ['voice', 'speech', 'microphone', 'dictation', 'transcription', 'audio'],
-      },
+      // voice-input temporarily hidden from config center
+      // {
+      //   id: 'voice-input',
+      //   labelKey: 'configCenter.tabs.voiceInput',
+      //   descriptionKey: 'configCenter.tabDescriptions.voiceInput',
+      //   keywords: ['voice', 'speech', 'microphone', 'dictation', 'transcription', 'audio'],
+      // },
       {
         id: 'review',
         labelKey: 'configCenter.tabs.review',
@@ -221,22 +223,23 @@ export const SETTINGS_CATEGORIES: ConfigCategoryDef[] = [
           'knowledge',
         ],
       },
-      {
-        id: 'external-sources',
-        labelKey: 'configCenter.tabs.externalSources',
-        descriptionKey: 'configCenter.tabDescriptions.externalSources',
-        beta: true,
-        keywords: [
-          'external ai applications',
-          'import work',
-          'extensions',
-          'commands',
-          'opencode',
-          'claude code',
-          'codex',
-          'compatibility',
-        ],
-      },
+      // external-sources temporarily hidden from config center
+      // {
+      //   id: 'external-sources',
+      //   labelKey: 'configCenter.tabs.externalSources',
+      //   descriptionKey: 'configCenter.tabDescriptions.externalSources',
+      //   beta: true,
+      //   keywords: [
+      //     'external ai applications',
+      //     'import work',
+      //     'extensions',
+      //     'commands',
+      //     'opencode',
+      //     'claude code',
+      //     'codex',
+      //     'compatibility',
+      //   ],
+      // },
       {
         id: 'mcp-tools',
         labelKey: 'configCenter.tabs.mcpTools',
@@ -299,7 +302,7 @@ export function normalizeSettingsTab(section: string): ConfigTab {
   if (section === 'theme' || section === 'font' || section === 'fonts') return 'appearance';
   if (section === 'logging' || section === 'terminal') return 'basics';
   if (section === 'lsp') return DEFAULT_SETTINGS_TAB;
-  if (section === 'session-config') return 'session-personalization';
+  if (section === 'session-config') return 'session-permissions';
   if (section === 'deep-review' || section === 'code-review' || section === 'review-team') return 'review';
   if (section === 'shortcuts' || section === 'keybindings' || section === 'hotkeys') return 'keyboard';
   if ((KNOWN_TABS as readonly string[]).includes(section)) return section as ConfigTab;
