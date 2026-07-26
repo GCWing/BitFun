@@ -94,7 +94,7 @@ impl FileWatchService {
             return Err("Path does not exist".to_string());
         }
 
-        let (recursive, is_new, mode_upgraded) = {
+        let (recursive, is_new) = {
             let mut watched_paths = write_watched_paths(&self.watched_paths);
             let config = config.unwrap_or_else(|| self.config.clone());
             match watched_paths.entry(path_buf.clone()) {
@@ -103,7 +103,6 @@ impl FileWatchService {
                     // narrower observer must not silently downgrade an existing
                     // recursive or hidden-file-aware watch.
                     let existing = entry.get_mut();
-                    let was_recursive = existing.watch_recursively;
                     existing.watch_recursively |= config.watch_recursively;
                     existing.ignore_hidden_files &= config.ignore_hidden_files;
                     existing.debounce_interval_ms = existing
@@ -112,16 +111,12 @@ impl FileWatchService {
                     existing.max_events_per_interval = existing
                         .max_events_per_interval
                         .max(config.max_events_per_interval);
-                    (
-                        existing.watch_recursively,
-                        false,
-                        existing.watch_recursively != was_recursive,
-                    )
+                    (existing.watch_recursively, false)
                 }
                 Entry::Vacant(entry) => {
                     let recursive = config.watch_recursively;
                     entry.insert(config);
-                    (recursive, true, false)
+                    (recursive, true)
                 }
             }
         };
@@ -131,19 +126,26 @@ impl FileWatchService {
         let mut watcher_guard = self.watcher.lock().await;
         match watcher_guard.as_mut() {
             Some(watcher) => {
-                if is_new || mode_upgraded {
-                    let mode = if recursive {
-                        RecursiveMode::Recursive
-                    } else {
-                        RecursiveMode::NonRecursive
-                    };
-                    if mode_upgraded {
-                        let _ = watcher.unwatch(&path_buf);
-                    }
-                    watcher.watch(&path_buf, mode).map_err(|e| {
-                        format!("Failed to watch path {}: {}", path_buf.display(), e)
-                    })?;
+                let mode = if recursive {
+                    RecursiveMode::Recursive
+                } else {
+                    RecursiveMode::NonRecursive
+                };
+                // A repeat registration must always re-register with the OS
+                // watcher, not just when the recursion mode changed: the path
+                // may have been absent when the watcher was built (missing
+                // paths are skipped), or removed and recreated since, leaving a
+                // stale/absent OS-level watch. `ensure_watch_roots` relies on
+                // exactly this to resume watching a root that reappeared, and
+                // the pre-incremental implementation got it for free by
+                // rebuilding the whole watcher on every call.
+                if !is_new {
+                    // May never have been registered; ignore unwatch failures.
+                    let _ = watcher.unwatch(&path_buf);
                 }
+                watcher
+                    .watch(&path_buf, mode)
+                    .map_err(|e| format!("Failed to watch path {}: {}", path_buf.display(), e))?;
                 Ok(())
             }
             None => {

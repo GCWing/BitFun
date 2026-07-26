@@ -836,9 +836,21 @@ pub fn grep_search(
                     total_matches += file_matches;
                     match output_mode {
                         OutputMode::Content => {
-                            let mut lines = sink.take_output_lines();
-                            lines.retain(|line| !line.is_empty());
-                            content_lines.append(&mut lines);
+                            for line in sink.take_output_lines() {
+                                // In multi-line mode a single sink write can
+                                // span several physical lines; keep one entry
+                                // per physical line so head_limit/offset still
+                                // paginate by line.
+                                if line.contains('\n') {
+                                    content_lines.extend(
+                                        line.lines()
+                                            .filter(|part| !part.is_empty())
+                                            .map(str::to_string),
+                                    );
+                                } else if !line.is_empty() {
+                                    content_lines.push(line);
+                                }
+                            }
                         }
                         OutputMode::FilesWithMatches => {
                             matched_files_with_mtime.push((

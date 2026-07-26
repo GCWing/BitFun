@@ -106,6 +106,51 @@ async fn a_removed_root_does_not_block_registering_another_root() {
 }
 
 #[tokio::test]
+async fn re_registering_a_recreated_root_resumes_watching() {
+    // `ensure_watch_roots` never unwatches a root that merely disappeared: it
+    // just re-calls `watch_path` once the root exists again. The service must
+    // therefore re-register the path with the OS watcher on a repeat
+    // registration, not treat it as a no-op because the config is unchanged.
+    let temp = tempfile::tempdir().expect("tempdir");
+    let root = temp.path().join("root");
+    fs::create_dir_all(&root).expect("root directory");
+    let mut config = FileWatcherConfig::default();
+    config.debounce_interval_ms = 40;
+    config.ignore_hidden_files = false;
+    let service = FileWatchService::new(config.clone());
+    let mut events = service.subscribe();
+    service
+        .watch_path(root.to_str().unwrap(), Some(config.clone()))
+        .await
+        .expect("initial watch");
+
+    fs::remove_dir_all(&root).expect("remove watched root");
+    fs::create_dir_all(&root).expect("recreate watched root");
+
+    service
+        .watch_path(root.to_str().unwrap(), Some(config))
+        .await
+        .expect("re-registration of a recreated root");
+
+    let file = root.join("command.md");
+    fs::write(&file, "created").expect("file in recreated root");
+
+    let deadline = tokio::time::Instant::now() + Duration::from_secs(10);
+    loop {
+        let batch = tokio::time::timeout_at(deadline, events.recv())
+            .await
+            .expect("recreated root should still emit events")
+            .expect("watch broadcast remains open");
+        if batch
+            .iter()
+            .any(|event| event.path == file.to_string_lossy())
+        {
+            break;
+        }
+    }
+}
+
+#[tokio::test]
 async fn atomic_rename_keeps_the_non_temporary_destination_path() {
     let temp = tempfile::tempdir().expect("tempdir");
     let mut config = FileWatcherConfig::default();

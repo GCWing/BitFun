@@ -2486,6 +2486,119 @@ print("parent_exit", flush=True)"#;
         assert_eq!(buffer.render(), "abcdefghijklmnop");
     }
 
+    /// Char-by-char reference implementation, mirroring the original
+    /// `VecDeque<char>` ring buffer. The byte-based ring buffer must stay
+    /// observationally identical to it.
+    fn head_tail_reference(max_chars: usize, chunks: &[&str]) -> (String, usize, usize) {
+        let head_budget = max_chars / 2;
+        let tail_budget = max_chars.saturating_sub(head_budget);
+        let mut head = String::new();
+        let mut tail: std::collections::VecDeque<char> = std::collections::VecDeque::new();
+        let mut head_chars = 0usize;
+        let mut tail_chars = 0usize;
+        let mut omitted_chars = 0usize;
+        let mut total_chars = 0usize;
+
+        for text in chunks {
+            for ch in text.chars() {
+                total_chars += 1;
+                if max_chars == 0 {
+                    omitted_chars += 1;
+                    continue;
+                }
+                if head_chars < head_budget {
+                    head.push(ch);
+                    head_chars += 1;
+                    continue;
+                }
+                if tail_budget == 0 {
+                    omitted_chars += 1;
+                    continue;
+                }
+                tail.push_back(ch);
+                tail_chars += 1;
+                if tail_chars > tail_budget {
+                    tail.pop_front();
+                    tail_chars -= 1;
+                    omitted_chars += 1;
+                }
+            }
+        }
+
+        let mut output = head;
+        if omitted_chars != 0 {
+            output.push_str("\n... [truncated, middle omitted] ...\n");
+        }
+        output.extend(tail);
+        (output, total_chars, omitted_chars)
+    }
+
+    #[test]
+    fn head_tail_text_matches_char_reference_for_multibyte_input() {
+        let chunk_sets: &[&[&str]] = &[
+            &["abcdefghijklmnop"],
+            &["小游戏平台推荐给所有人"],
+            &["ab", "小游戏", "cd", "平台推荐", "ef"],
+            &["🎮🎲🎯🎰🎳", "🚀🛰️🌌", "end"],
+            &["混合ascii与🎮emoji以及中文字符的长文本内容"],
+            &["a", "", "中", "🎮", "z"],
+        ];
+
+        for max_chars in [0usize, 1, 2, 3, 5, 8, 10, 17, 64, 1024] {
+            for chunks in chunk_sets {
+                let mut buffer = HeadTailText::new(max_chars);
+                for chunk in *chunks {
+                    buffer.push_str(chunk);
+                }
+                let total = buffer.total_chars;
+                let omitted = buffer.omitted_chars;
+                let rendered = buffer.render();
+
+                let (expected, expected_total, expected_omitted) =
+                    head_tail_reference(max_chars, chunks);
+
+                assert_eq!(
+                    rendered, expected,
+                    "render mismatch: max_chars={max_chars} chunks={chunks:?}"
+                );
+                assert_eq!(
+                    total, expected_total,
+                    "total_chars mismatch: max_chars={max_chars} chunks={chunks:?}"
+                );
+                assert_eq!(
+                    omitted, expected_omitted,
+                    "omitted_chars mismatch: max_chars={max_chars} chunks={chunks:?}"
+                );
+                assert!(
+                    !rendered.contains('\u{FFFD}'),
+                    "tail ring buffer split a multi-byte char: max_chars={max_chars} chunks={chunks:?}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn head_tail_text_keeps_multibyte_chars_intact_under_pressure() {
+        // Every char is 3 bytes; a byte-granular ring buffer would corrupt them.
+        let text: String = "中".repeat(500);
+        let mut buffer = HeadTailText::new(10);
+        for chunk in text.as_bytes().chunks(3) {
+            buffer.push_str(std::str::from_utf8(chunk).expect("aligned chunk"));
+        }
+
+        assert_eq!(buffer.total_chars, 500);
+        let rendered = buffer.render();
+        assert!(!rendered.contains('\u{FFFD}'));
+        assert!(rendered.starts_with("中中中中中"));
+        assert!(rendered.ends_with("中中中中中"));
+        assert!(rendered.contains("truncated"));
+        // 5 head + 5 tail chars plus the truncation marker.
+        assert_eq!(
+            rendered.chars().count(),
+            10 + "\n... [truncated, middle omitted] ...\n".chars().count()
+        );
+    }
+
     #[test]
     fn smart_decode_preserves_utf8() {
         assert_eq!(bytes_to_string_smart("小游戏平台".as_bytes()), "小游戏平台");

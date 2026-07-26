@@ -182,7 +182,16 @@ impl TranscriptRecorder {
             return Ok(());
         }
 
-        self.with_store(|store| store.append(session_id, data))
+        self.with_store(|store| store.append(session_id, data, false))
+    }
+
+    /// Records a structured `[bitfun: ...]` marker. Markers are the anchors
+    /// readers navigate by (command boundaries, exit codes, cwd changes), so
+    /// they are flushed to disk immediately: a crash or force-quit must not be
+    /// able to leave a command's output on disk without its exit code, nor a
+    /// prompt-less tail of raw text.
+    fn record_marker(&self, session_id: &str, data: &str) -> io::Result<()> {
+        self.with_store(|store| store.append(session_id, data, true))
     }
 
     pub(crate) fn record_command(&self, session_id: &str, command: &str) -> io::Result<()> {
@@ -190,18 +199,18 @@ impl TranscriptRecorder {
             return Ok(());
         }
 
-        self.record_output(
+        self.record_marker(
             session_id,
             &format!("\n[bitfun: command={}]\n", one_line(command)),
         )
     }
 
     pub(crate) fn record_exit_code(&self, session_id: &str, exit_code: i32) -> io::Result<()> {
-        self.record_output(session_id, &format!("\n[bitfun: exit_code={exit_code}]\n"))
+        self.record_marker(session_id, &format!("\n[bitfun: exit_code={exit_code}]\n"))
     }
 
     pub(crate) fn record_cwd_changed(&self, session_id: &str, cwd: &str) -> io::Result<()> {
-        self.record_output(session_id, &format!("\n[bitfun: cwd={cwd}]\n"))
+        self.record_marker(session_id, &format!("\n[bitfun: cwd={cwd}]\n"))
     }
 
     pub(crate) fn finish_session(
@@ -418,7 +427,7 @@ impl TranscriptStore {
         self.write_index()
     }
 
-    fn append(&mut self, session_id: &str, data: &str) -> io::Result<()> {
+    fn append(&mut self, session_id: &str, data: &str, flush: bool) -> io::Result<()> {
         if !self.sessions.contains_key(session_id) {
             return Ok(());
         }
@@ -431,7 +440,7 @@ impl TranscriptStore {
             return Ok(());
         }
 
-        let result = self.append_inner(session_id, data);
+        let result = self.append_inner(session_id, data, flush);
         match result {
             Ok(()) => {
                 if let Some(error) = self.recovered_write_errors.remove(session_id) {
@@ -439,7 +448,7 @@ impl TranscriptStore {
                         "\n[bitfun: recorder_recovered_after_error={}]\n",
                         one_line(&error)
                     );
-                    self.append_inner(session_id, &recovery_marker)?;
+                    self.append_inner(session_id, &recovery_marker, true)?;
                 }
                 Ok(())
             }
@@ -451,7 +460,7 @@ impl TranscriptStore {
         }
     }
 
-    fn append_inner(&mut self, session_id: &str, data: &str) -> io::Result<()> {
+    fn append_inner(&mut self, session_id: &str, data: &str, flush: bool) -> io::Result<()> {
         let data_len = data.len() as u64;
         let rotate_before_write = {
             let writer = self.ensure_writer(session_id)?;
@@ -470,7 +479,7 @@ impl TranscriptStore {
         let writer = self.ensure_writer(session_id)?;
         writer.file.write_all(data.as_bytes())?;
         writer.current_segment_bytes = writer.current_segment_bytes.saturating_add(data_len);
-        if writer.last_flush.elapsed() >= TRANSCRIPT_FLUSH_INTERVAL {
+        if flush || writer.last_flush.elapsed() >= TRANSCRIPT_FLUSH_INTERVAL {
             writer.file.flush()?;
             writer.last_flush = Instant::now();
         }
@@ -504,7 +513,7 @@ impl TranscriptStore {
             Some(code) => format!("\n[bitfun: session_closed exit_code={code}]\n"),
             None => "\n[bitfun: session_closed]\n".to_string(),
         };
-        self.append(session_id, &marker)?;
+        self.append(session_id, &marker, true)?;
 
         if let Some(session) = self.sessions.get_mut(session_id) {
             session.state = TranscriptSessionState::Closed;
@@ -1031,6 +1040,38 @@ mod tests {
 
         assert!(segment.contains("[bitfun: command=echo hello]\nhello\n"));
         assert_eq!(segment.matches("[bitfun: command=").count(), 1);
+    }
+
+    #[test]
+    fn structured_markers_reach_disk_without_an_explicit_flush() {
+        // Bulk output is buffered for throughput, but the structured
+        // `[bitfun: ...]` anchors must be durable immediately: a crash or
+        // force-quit must never leave output on disk without its exit code.
+        let temp_dir = TempDir::new().expect("temporary directory should create");
+        let mut transcript_config = config(&temp_dir);
+        transcript_config.segment_size_bytes = 1024 * 1024;
+        let recorder = TranscriptRecorder::from_config(&transcript_config)
+            .expect("recorder should be configured");
+        let session = session("manual-1");
+
+        recorder
+            .start_session(&session)
+            .expect("session transcript should start");
+        recorder
+            .record_output(&session.id, "hello\n")
+            .expect("output should append");
+        recorder
+            .record_exit_code(&session.id, 0)
+            .expect("exit code should append");
+
+        let root = temp_dir.path().join("terminals");
+        let transcript_id = transcript_id_for(&root, &session.id);
+        let segment = fs::read_to_string(root.join(transcript_id).join("000001.log"))
+            .expect("segment should be readable");
+
+        // Flushing the marker also flushes everything buffered before it.
+        assert!(segment.contains("hello\n"));
+        assert!(segment.contains("[bitfun: exit_code=0]"));
     }
 
     #[test]
