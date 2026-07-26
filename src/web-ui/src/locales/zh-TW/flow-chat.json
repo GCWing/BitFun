@@ -411,6 +411,17 @@
       "completed": "已完成",
       "failed": "執行失敗",
       "interrupted": "已中斷"
+    },
+    "menu": {
+      "closePet": "關閉寵物",
+      "closeBubble": "關閉該氣泡"
+    },
+    "composer": {
+      "openTitle": "傳送訊息到該工作階段",
+      "ariaLabel": "傳送訊息到該工作階段",
+      "placeholder": "輸入訊息，Enter 送出",
+      "cancel": "取消",
+      "send": "傳送"
     }
   },
   "session": {

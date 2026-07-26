@@ -32,10 +32,33 @@
   background: transparent;
   user-select: none;
 
-  &__dock {
+  /* Holds the dock anchored bottom-right, above the click-away backdrop. */
+  &__stack {
     position: absolute;
     right: 0;
     bottom: 0;
+    z-index: 2;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    justify-content: flex-end;
+    max-width: 100vw;
+    max-height: 100vh;
+    min-height: 0;
+    pointer-events: none;
+  }
+
+  &__backdrop {
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    background: transparent;
+  }
+
+  &__dock {
+    position: relative;
+    flex: 0 1 auto;
+    min-height: 0;
     display: flex;
     flex-direction: row;
     align-items: center;
@@ -44,6 +67,143 @@
     width: max-content;
     max-height: 100vh;
     pointer-events: none;
+  }
+
+  /* While a menu is open every click outside it must reach the backdrop. The
+     bubble composer is excluded: it lives inside a bubble and stays usable. */
+  &--menu-open &__pet-hitbox,
+  &--menu-open &__bubbles {
+    pointer-events: none;
+  }
+
+  &--menu-open &__bubble-compose {
+    pointer-events: none;
+  }
+
+  &__overlay {
+    box-sizing: border-box;
+    width: max-content;
+    max-width: min(240px, 100vw);
+    padding: 5px;
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    border: 1px solid var(--color-overlay-slate-12);
+    border-radius: 10px;
+    /* Intentionally no backdrop-filter: adding a blurred layer on right-click
+       re-composites the other blurred surfaces and flashes the whole window. */
+    background: var(--color-overlay-white-95);
+    color: var(--bitfun-agent-companion-bubble-fg);
+    box-shadow: 0 6px 18px rgba(var(--color-overlay-slate-rgb), 0.18);
+    pointer-events: auto;
+
+    /* Context menus are placed at the cursor. */
+    &--anchored {
+      position: absolute;
+      z-index: 3;
+    }
+  }
+
+  &__menu {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  &__menu-item {
+    appearance: none;
+    width: 100%;
+    box-sizing: border-box;
+    padding: 5px 8px;
+    border: 0;
+    border-radius: 6px;
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    font-size: 11px;
+    line-height: 1.3;
+    text-align: left;
+    /* Wrap rather than spill: the window can be as narrow as the pet sprite. */
+    white-space: normal;
+    overflow-wrap: anywhere;
+    cursor: pointer;
+
+    &:hover {
+      background: var(--color-overlay-slate-08);
+    }
+
+    &:focus-visible {
+      outline: 2px solid color-mix(in srgb, var(--color-accent-600) 70%, transparent);
+      outline-offset: -2px;
+    }
+  }
+
+  /* Input bar shown inside the bubble the user replied from. */
+  &__bubble-composer {
+    flex: 0 0 auto;
+    align-self: stretch;
+    width: 100%;
+    margin-top: 5px;
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 4px;
+  }
+
+  &__bubble-composer-input {
+    appearance: none;
+    -webkit-appearance: none;
+    flex: 1 1 auto;
+    min-width: 0;
+    height: 21px;
+    box-sizing: border-box;
+    padding: 2px 5px;
+    border: 1px solid var(--color-overlay-slate-12);
+    border-radius: 5px;
+    background: var(--color-overlay-white-95);
+    color: inherit;
+    font: inherit;
+    font-size: 10px;
+    line-height: 1.3;
+    user-select: text;
+    -webkit-user-select: text;
+
+    &:focus,
+    &:focus-visible {
+      outline: none;
+      outline-offset: 0;
+      box-shadow: none;
+    }
+  }
+
+  &__bubble-composer-send,
+  &__bubble-composer-cancel {
+    appearance: none;
+    flex-shrink: 0;
+    width: 21px;
+    height: 21px;
+    padding: 0;
+    display: grid;
+    place-items: center;
+    border: 1px solid var(--color-overlay-slate-12);
+    border-radius: 5px;
+    background: var(--color-overlay-slate-04);
+    color: inherit;
+    cursor: pointer;
+
+    &:hover:not(:disabled) {
+      background: var(--color-overlay-slate-08);
+    }
+
+    &:disabled {
+      opacity: 0.45;
+      cursor: default;
+    }
+
+    &:focus-visible {
+      outline: 2px solid color-mix(in srgb, var(--color-accent-600) 70%, transparent);
+      outline-offset: 1px;
+    }
   }
 
   &__pet {
@@ -93,8 +253,9 @@
   &__bubbles {
     position: relative;
     flex-shrink: 0;
-    width: 146px;
-    max-width: 146px;
+    width: 180px;
+    max-width: 180px;
+    min-height: 0;
     max-height: 100vh;
     display: flex;
     flex-direction: column;
@@ -121,11 +282,66 @@
     }
   }
 
+  /* Wraps one bubble so the hover compose button can sit on top of it without
+     nesting a button inside the bubble button. */
+  &__bubble-shell {
+    position: relative;
+    isolation: isolate;
+    flex-shrink: 0;
+    width: 180px;
+    max-width: 100%;
+
+    &--single {
+      height: min(var(--bitfun-agent-companion-pet-height), 100vh);
+    }
+  }
+
+  &__bubble-compose {
+    appearance: none;
+    position: absolute;
+    z-index: 2;
+    right: 5px;
+    bottom: 5px;
+    width: 18px;
+    height: 18px;
+    padding: 0;
+    display: grid;
+    place-items: center;
+    border: 1px solid var(--color-overlay-slate-12);
+    border-radius: 50%;
+    background: var(--color-overlay-white-95);
+    color: var(--bitfun-agent-companion-bubble-fg);
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+    transition:
+      opacity 120ms ease,
+      visibility 0s linear 120ms;
+    cursor: pointer;
+
+    &:hover {
+      background: var(--color-overlay-slate-08);
+    }
+
+    &:focus-visible {
+      outline: 2px solid color-mix(in srgb, var(--color-accent-600) 70%, transparent);
+      outline-offset: 1px;
+    }
+  }
+
+  &--native-hover &__bubble-shell:hover &__bubble-compose,
+  &__bubble-shell--hovered &__bubble-compose {
+    opacity: 1;
+    visibility: visible;
+    pointer-events: auto;
+    transition-delay: 0s;
+  }
+
   &__bubble {
     appearance: none;
     text-align: left;
     font: inherit;
-    width: 146px;
+    width: 180px;
     max-width: 100%;
     box-sizing: border-box;
     padding: 7px 10px;
@@ -136,6 +352,7 @@
     backdrop-filter: blur(10px);
     cursor: pointer;
     position: relative;
+    z-index: 0;
 
     &:hover {
       transform: translateY(-1px);
@@ -151,6 +368,33 @@
       display: flex;
       flex-direction: column;
       overflow: hidden;
+    }
+
+    /* Replying turns the bubble into its own composer, so it must not react to
+       hover like a clickable bubble any more. */
+    &--composing {
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      cursor: default;
+
+      &:hover {
+        transform: none;
+      }
+
+      /* Only the output yields space to the input row; letting the title and
+         status shrink too would clip their glyphs. */
+      .bitfun-agent-companion-window__bubble-title,
+      .bitfun-agent-companion-window__bubble-status {
+        flex: 0 0 auto;
+      }
+
+      /* Two whole lines: a flexible height would leave a half-clipped line
+         under the input row. */
+      .bitfun-agent-companion-window__bubble-output {
+        flex: 0 0 calc(12px * 2);
+        height: calc(12px * 2);
+      }
     }
   }
 

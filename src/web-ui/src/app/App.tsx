@@ -26,6 +26,7 @@ import {
   isStartupOverlayPresent,
 } from './startup/startupOverlay';
 import { ToolbarModeProvider } from '../flow_chat/components/toolbar-mode/ToolbarModeProvider';
+import type { AgentCompanionPetCommand } from './services/agentCompanionPetCommands';
 import AskUserAnnouncer from './components/NavPanel/AskUserAnnouncer';
 
 const log = createLogger('App');
@@ -674,6 +675,35 @@ function App() {
       })
       .catch(error => {
         log.warn('Failed to listen for Agent companion session open events', error);
+      });
+
+    return () => {
+      unlisten?.();
+    };
+  }, []);
+
+  useEffect(() => {
+    let unlisten: (() => void) | null = null;
+    void import('@tauri-apps/api/event')
+      .then(({ listen }) => listen<AgentCompanionPetCommand>(
+        'agent-companion://pet-command',
+        async event => {
+          try {
+            const { handleAgentCompanionPetCommand } = await import('./services/agentCompanionPetCommands');
+            await handleAgentCompanionPetCommand(event.payload);
+          } catch (error) {
+            log.warn('Failed to handle Agent companion pet command', {
+              commandType: event.payload?.type,
+              error,
+            });
+          }
+        },
+      ))
+      .then(removeListener => {
+        unlisten = removeListener;
+      })
+      .catch(error => {
+        log.warn('Failed to listen for Agent companion pet commands', error);
       });
 
     return () => {

@@ -411,6 +411,17 @@
       "completed": "Completed",
       "failed": "Failed",
       "interrupted": "Interrupted"
+    },
+    "menu": {
+      "closePet": "Close pet",
+      "closeBubble": "Close this bubble"
+    },
+    "composer": {
+      "openTitle": "Send a message to this session",
+      "ariaLabel": "Send a message to this session",
+      "placeholder": "Type a message, Enter to send",
+      "cancel": "Cancel",
+      "send": "Send"
     }
   },
   "session": {

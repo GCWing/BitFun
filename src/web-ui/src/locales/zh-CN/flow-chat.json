@@ -411,6 +411,17 @@
       "completed": "已完成",
       "failed": "执行失败",
       "interrupted": "已中断"
+    },
+    "menu": {
+      "closePet": "关闭宠物",
+      "closeBubble": "关闭该气泡"
+    },
+    "composer": {
+      "openTitle": "发送消息到该会话",
+      "ariaLabel": "发送消息到该会话",
+      "placeholder": "输入消息，回车发送",
+      "cancel": "取消",
+      "send": "发送"
     }
   },
   "session": {
