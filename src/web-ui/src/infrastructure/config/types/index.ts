@@ -113,6 +113,7 @@ export interface AppLoggingConfig {
 
 export interface AppFlowChatConfig {
   default_mode_id?: string | null;
+  show_permission_mode_control?: boolean;
 }
 
 export interface SidebarConfig {
@@ -652,6 +653,7 @@ export type ConfigPath =
   | 'app.telemetry'
   | 'app.flow_chat'
   | 'app.flow_chat.default_mode_id'
+  | 'app.flow_chat.show_permission_mode_control'
   | 'app.sidebar'
   | 'app.sidebar.width'
   | 'app.sidebar.collapsed'

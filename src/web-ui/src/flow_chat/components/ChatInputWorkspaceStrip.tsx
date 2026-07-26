@@ -4,7 +4,7 @@
 
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Activity, Check, GitBranch, Shield, ShieldAlert, ShieldCheck } from 'lucide-react';
+import { Activity, Check, EyeOff, GitBranch, Shield, ShieldAlert, ShieldCheck } from 'lucide-react';
 import { ThreadGoalStripButton } from './thread-goal/ThreadGoalStripButton';
 import type { ThreadGoalSnapshot } from '../services/goalService';
 import { Tooltip, IconButton } from '@/component-library';
@@ -32,6 +32,7 @@ export interface ChatInputWorkspaceStripProps {
     mode: ChatInputPermissionMode;
     saving?: boolean;
     onChange?: (mode: Exclude<ChatInputPermissionMode, 'acp'>) => void | Promise<void>;
+    onHide?: () => void | Promise<void>;
   };
   /** Keep the strip on cached Git state while historical content is still restoring. */
   deferPassiveGitRefresh?: boolean;
@@ -268,6 +269,25 @@ export const ChatInputWorkspaceStrip: React.FC<ChatInputWorkspaceStripProps> = (
                       );
                     })}
                   </div>
+                  {permissionControl.onHide ? (
+                    <>
+                      <div className="bitfun-chat-input-workspace-strip__permission-menu-divider" role="separator" />
+                      <button
+                        type="button"
+                        role="menuitem"
+                        className="bitfun-chat-input-workspace-strip__permission-visibility-action"
+                        data-testid="chat-input-permission-hide-control"
+                        onClick={event => {
+                          event.stopPropagation();
+                          setPermissionMenuOpen(false);
+                          void permissionControl.onHide?.();
+                        }}
+                      >
+                        <EyeOff size={14} strokeWidth={2} aria-hidden />
+                        <span>{t('chatInput.permissionMode.hideControl')}</span>
+                      </button>
+                    </>
+                  ) : null}
                 </div>
               ) : null}
             </div>

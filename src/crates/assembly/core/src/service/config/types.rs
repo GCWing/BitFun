@@ -233,12 +233,38 @@ pub struct ModelExchangeTracingConfig {
 }
 
 /// FlowChat UI preferences.
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default)]
 pub struct AppFlowChatConfig {
     /// Optional user override for the default ChatInput mode id.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub default_mode_id: Option<String>,
+    /// Whether the chat input exposes the global permission-mode shortcut.
+    ///
+    /// The default is visible, but that value is omitted from persisted config
+    /// so existing config files remain unchanged until the user hides it.
+    #[serde(
+        default = "default_show_permission_mode_control",
+        skip_serializing_if = "is_permission_mode_control_visible"
+    )]
+    pub show_permission_mode_control: bool,
+}
+
+fn default_show_permission_mode_control() -> bool {
+    true
+}
+
+fn is_permission_mode_control_visible(value: &bool) -> bool {
+    *value
+}
+
+impl Default for AppFlowChatConfig {
+    fn default() -> Self {
+        Self {
+            default_mode_id: None,
+            show_permission_mode_control: default_show_permission_mode_control(),
+        }
+    }
 }
 
 /// A user-defined quick action for the FlowChat post-coding actions menu.
@@ -2392,6 +2418,40 @@ mod tests {
         assert_eq!(
             serialized["app"]["flow_chat"]["default_mode_id"],
             "PlannerPlus"
+        );
+    }
+
+    #[test]
+    fn app_flow_chat_permission_mode_control_defaults_to_visible_without_persisting_default() {
+        let default_config: GlobalConfig = serde_json::from_value(serde_json::json!({
+            "app": {
+                "flow_chat": {}
+            }
+        }))
+        .expect("flow chat config without visibility preference should deserialize");
+
+        assert!(default_config.app.flow_chat.show_permission_mode_control);
+        let default_serialized =
+            serde_json::to_value(&default_config).expect("config should serialize");
+        assert!(default_serialized["app"]["flow_chat"]
+            .get("show_permission_mode_control")
+            .is_none());
+
+        let hidden_config: GlobalConfig = serde_json::from_value(serde_json::json!({
+            "app": {
+                "flow_chat": {
+                    "show_permission_mode_control": false
+                }
+            }
+        }))
+        .expect("flow chat config with hidden permission control should deserialize");
+
+        assert!(!hidden_config.app.flow_chat.show_permission_mode_control);
+        let hidden_serialized =
+            serde_json::to_value(&hidden_config).expect("config should serialize");
+        assert_eq!(
+            hidden_serialized["app"]["flow_chat"]["show_permission_mode_control"],
+            false
         );
     }
 

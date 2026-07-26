@@ -621,6 +621,8 @@
       "globalScope": "全域",
       "current": "權限：{{mode}}",
       "changeFailed": "切換權限模式失敗。",
+      "hideControl": "隱藏權限模式選擇器",
+      "hideControlFailed": "隱藏權限模式選擇器失敗。",
       "ask": {
         "label": "需要確認",
         "description": "外部存取、修改檔案和執行命令需要確認。"

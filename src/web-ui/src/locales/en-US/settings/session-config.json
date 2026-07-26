@@ -59,6 +59,8 @@
     "cancel": "Cancel",
     "autoApprove": "Auto approve",
     "autoApproveDescription": "Automatically approve requests that require confirmation.",
+    "showInChatInput": "Show permission mode selector",
+    "showInChatInputDescription": "Show the selector below the chat input. Hiding it does not change the current permission mode.",
     "globalRules": "Global rules",
     "globalRulesDescription": "Define user-level rules that apply after the selected mode and before project and Agent rules.",
     "manageGlobalRules": "Manage rules",

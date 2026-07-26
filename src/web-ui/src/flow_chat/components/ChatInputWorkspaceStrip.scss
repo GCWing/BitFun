@@ -209,6 +209,12 @@
     gap: 2px;
   }
 
+  &__permission-menu-divider {
+    height: 1px;
+    margin: 6px 2px;
+    background: var(--border-subtle);
+  }
+
   &__permission-option {
     display: grid;
     grid-template-columns: minmax(0, 1fr) 16px;
@@ -266,6 +272,31 @@
     font-weight: 400;
     line-height: 1.35;
     white-space: normal;
+  }
+
+  &__permission-visibility-action {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    width: 100%;
+    min-height: 32px;
+    padding: 6px 8px;
+    border: 0;
+    border-radius: $size-radius-sm;
+    background: transparent;
+    color: var(--color-text-secondary);
+    font: inherit;
+    font-size: var(--flowchat-font-size-xs);
+    letter-spacing: 0;
+    text-align: left;
+    cursor: pointer;
+
+    &:hover,
+    &:focus-visible {
+      background: var(--element-bg-medium);
+      color: var(--color-text-primary);
+      outline: none;
+    }
   }
 
   &__goal-btn.icon-btn {

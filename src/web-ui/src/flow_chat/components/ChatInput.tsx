@@ -394,6 +394,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     DEFAULT_TOOL_PERMISSION_CONFIG,
   );
   const [permissionModeSaving, setPermissionModeSaving] = useState(false);
+  const [showPermissionModeControl, setShowPermissionModeControl] = useState(true);
   const { addMessage: addToHistory, getSessionHistory } = useInputHistoryStore();
   
   const contexts = useContextStore(state => state.contexts);
@@ -1688,6 +1689,35 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   }, []);
 
   React.useEffect(() => {
+    const configPath = 'app.flow_chat.show_permission_mode_control';
+    let cancelled = false;
+    const applyVisibility = (value: unknown) => {
+      if (!cancelled) {
+        setShowPermissionModeControl(value !== false);
+      }
+    };
+    const loadVisibility = async () => {
+      try {
+        applyVisibility(await configManager.getConfig<boolean | undefined>(configPath));
+      } catch (error) {
+        log.warn('Failed to load permission mode control visibility preference', error);
+        applyVisibility(true);
+      }
+    };
+
+    void loadVisibility();
+    const unsubscribe = configManager.onConfigChange((path, _oldValue, value) => {
+      if (path === configPath) {
+        applyVisibility(value);
+      }
+    });
+    return () => {
+      cancelled = true;
+      unsubscribe();
+    };
+  }, []);
+
+  React.useEffect(() => {
     let cancelled = false;
     const applyConfig = (config: ToolPermissionConfig) => {
       if (!cancelled) {
@@ -1753,6 +1783,15 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       setPermissionModeSaving(false);
     }
   }, [isAcpTargetSession, permissionModeSaving, t, toolPermissionConfig]);
+
+  const handleHidePermissionModeControl = useCallback(async () => {
+    try {
+      await configManager.setConfig('app.flow_chat.show_permission_mode_control', false);
+    } catch (error) {
+      log.error('Failed to hide permission mode control', error);
+      notificationService.error(t('chatInput.permissionMode.hideControlFailed'));
+    }
+  }, [t]);
 
   React.useEffect(() => {
     if (!slashCommandState.isActive || slashCommandState.kind !== 'all' || derivedState?.isProcessing) {
@@ -5176,11 +5215,12 @@ export const ChatInput: React.FC<ChatInputProps> = ({
         repositoryPath={chatStripRepositoryPath}
         workspaceLabel={chatStripWorkspaceLabel}
         deferPassiveGitRefresh={deferChatStripPassiveGitRefresh}
-        permissionControl={{
+        permissionControl={showPermissionModeControl ? {
           mode: permissionMode,
           saving: permissionModeSaving,
           onChange: isAcpTargetSession ? undefined : handlePermissionModeChange,
-        }}
+          onHide: isAcpTargetSession ? undefined : handleHidePermissionModeControl,
+        } : undefined}
         usageReport={
           effectiveTargetSessionId && effectiveTargetSession
             ? { visible: true, onOpen: handleToolbarUsageReport }

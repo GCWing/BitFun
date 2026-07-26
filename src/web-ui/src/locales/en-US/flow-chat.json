@@ -621,6 +621,8 @@
       "globalScope": "Global",
       "current": "Permissions: {{mode}}",
       "changeFailed": "Failed to change the permission mode.",
+      "hideControl": "Hide permission mode selector",
+      "hideControlFailed": "Failed to hide the permission mode selector.",
       "ask": {
         "label": "Ask",
         "description": "External access, file changes, and command execution require confirmation."

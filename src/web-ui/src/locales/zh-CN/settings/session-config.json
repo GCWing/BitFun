@@ -59,6 +59,8 @@
     "cancel": "取消",
     "autoApprove": "自动批准",
     "autoApproveDescription": "自动批准需要确认的请求。",
+    "showInChatInput": "显示权限模式选择器",
+    "showInChatInputDescription": "在聊天输入框下方显示权限模式选择器。隐藏它不会更改当前权限模式。",
     "globalRules": "全局规则",
     "globalRulesDescription": "定义用户级规则；它们在所选模式之后、项目和 Agent 规则之前应用。",
     "manageGlobalRules": "管理规则",

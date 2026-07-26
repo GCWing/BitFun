@@ -100,12 +100,13 @@ describe('ChatInputWorkspaceStrip git refresh behavior', () => {
 
   it('keeps an ask-mode permission entry visible and switches from its menu', async () => {
     const onChange = vi.fn();
+    const onHide = vi.fn();
     await act(async () => {
       root.render(
         <ChatInputWorkspaceStrip
           repositoryPath=""
           workspaceLabel=""
-          permissionControl={{ mode: 'ask', onChange }}
+          permissionControl={{ mode: 'ask', onChange, onHide }}
         />
       );
     });
@@ -125,6 +126,17 @@ describe('ChatInputWorkspaceStrip git refresh behavior', () => {
         ?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
     expect(onChange).toHaveBeenCalledWith('auto');
+    expect(container.querySelector('[data-testid="chat-input-permission-menu"]')).toBeNull();
+
+    await act(async () => {
+      trigger?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    await act(async () => {
+      container
+        .querySelector<HTMLButtonElement>('[data-testid="chat-input-permission-hide-control"]')
+        ?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    expect(onHide).toHaveBeenCalledOnce();
     expect(container.querySelector('[data-testid="chat-input-permission-menu"]')).toBeNull();
   });
 

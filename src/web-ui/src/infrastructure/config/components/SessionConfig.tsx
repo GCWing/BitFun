@@ -83,6 +83,7 @@ type ToolPermissionMode = 'ask' | 'auto' | 'full_access';
 
 const DEFAULT_SUBAGENT_BATCH_EXECUTION_POLICY: SubagentBatchExecutionPolicy = 'force_parallel';
 const DEFAULT_SUBAGENT_MAX_CONCURRENCY = 5;
+const SHOW_PERMISSION_MODE_CONTROL_CONFIG_PATH = 'app.flow_chat.show_permission_mode_control';
 
 function normalizeSubagentBatchExecutionPolicy(value: unknown): SubagentBatchExecutionPolicy {
   return value === 'force_parallel' || value === 'serial' || value === 'safe_only'
@@ -127,6 +128,8 @@ const SessionSettingsPanels: React.FC<SessionSettingsPanelsProps> = ({ variant }
   const [deferredToolLoadingConfigSaving, setDeferredToolLoadingConfigSaving] = useState(false);
   const [toolPermissionConfig, setToolPermissionConfig] = useState<ToolPermissionConfig>(DEFAULT_TOOL_PERMISSION_CONFIG);
   const [permissionConfigSaving, setPermissionConfigSaving] = useState(false);
+  const [showPermissionModeControl, setShowPermissionModeControl] = useState(true);
+  const [permissionModeControlVisibilitySaving, setPermissionModeControlVisibilitySaving] = useState(false);
   const [isGlobalPermissionRulesDialogOpen, setIsGlobalPermissionRulesDialogOpen] = useState(false);
 
   const [computerUseEnabled, setComputerUseEnabled] = useState(false);
@@ -231,6 +234,7 @@ const SessionSettingsPanels: React.FC<SessionSettingsPanelsProps> = ({ variant }
         computerUseCfg,
         browserControlPreferredBrowser,
         loadedToolPermissionConfig,
+        loadedPermissionModeControlVisibility,
         loadedCompanionPets,
       ] = await Promise.all([
         aiExperienceConfigService.getSettingsAsync(),
@@ -242,6 +246,7 @@ const SessionSettingsPanels: React.FC<SessionSettingsPanelsProps> = ({ variant }
         configManager.getConfig<boolean>('ai.computer_use_enabled'),
         configManager.getConfig<string>('ai.browser_control_preferred_browser'),
         permissionConfigService.getConfig(),
+        configManager.getConfig<boolean | undefined>(SHOW_PERMISSION_MODE_CONTROL_CONFIG_PATH),
         listAgentCompanionPets(),
       ]);
 
@@ -256,6 +261,7 @@ const SessionSettingsPanels: React.FC<SessionSettingsPanelsProps> = ({ variant }
       if (debugConfigData) setDebugConfig(debugConfigData);
       setPreferredBrowser(browserControlPreferredBrowser || DEFAULT_BROWSER_CONTROL_BROWSER);
       setToolPermissionConfig(normalizeToolPermissionConfig(loadedToolPermissionConfig));
+      setShowPermissionModeControl(loadedPermissionModeControlVisibility !== false);
 
       refreshDesktopStatus(computerUseCfg);
     } catch (error) {
@@ -330,6 +336,22 @@ const SessionSettingsPanels: React.FC<SessionSettingsPanelsProps> = ({ variant }
       { ...previousConfig, policy: { ...previousConfig.policy, rules } },
       previousConfig,
     );
+  };
+
+  const handlePermissionModeControlVisibilityChange = async (visible: boolean) => {
+    const previousVisibility = showPermissionModeControl;
+    setShowPermissionModeControl(visible);
+    setPermissionModeControlVisibilitySaving(true);
+    try {
+      await configManager.setConfig(SHOW_PERMISSION_MODE_CONTROL_CONFIG_PATH, visible);
+      notificationService.success(t('messages.saveSuccess'), { duration: 2000 });
+    } catch (error) {
+      log.error('Failed to save permission mode control visibility', error);
+      setShowPermissionModeControl(previousVisibility);
+      notificationService.error(t('messages.saveFailed'));
+    } finally {
+      setPermissionModeControlVisibilitySaving(false);
+    }
   };
 
   useEffect(() => {
@@ -1104,6 +1126,20 @@ const SessionSettingsPanels: React.FC<SessionSettingsPanelsProps> = ({ variant }
                 ]}
                 disabled={permissionConfigSaving}
                 onChange={handlePermissionModeChange}
+              />
+            </div>
+          </ConfigPageRow>
+          <ConfigPageRow
+            label={t('permissionPolicy.showInChatInput')}
+            description={t('permissionPolicy.showInChatInputDescription')}
+            align="center"
+          >
+            <div className="bitfun-func-agent-config__row-control">
+              <Switch
+                checked={showPermissionModeControl}
+                disabled={permissionModeControlVisibilitySaving}
+                onChange={event => void handlePermissionModeControlVisibilityChange(event.target.checked)}
+                size="small"
               />
             </div>
           </ConfigPageRow>
