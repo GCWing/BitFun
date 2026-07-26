@@ -851,6 +851,7 @@ describe('ModernFlowChatContainer historical empty state', () => {
       virtualItemIndex: 0,
       turnId: 'turn-1',
       type: 'user-message',
+      occurrenceIndex: 0,
     }];
     searchStateMock.currentMatchIndex = 0;
     searchStateMock.currentMatchVirtualIndex = 0;
@@ -864,6 +865,7 @@ describe('ModernFlowChatContainer historical empty state', () => {
       virtualItemIndex: 0,
       query: 'search',
       flowItemId: undefined,
+      occurrenceIndex: 0,
       expandableIds: undefined,
     });
 
@@ -878,6 +880,7 @@ describe('ModernFlowChatContainer historical empty state', () => {
       virtualItemIndex: 0,
       query: 'searchable',
       flowItemId: undefined,
+      occurrenceIndex: 0,
       expandableIds: undefined,
     });
   });

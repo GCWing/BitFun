@@ -334,6 +334,7 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
   const searchCurrentMatchFlowItemId = searchCurrentMatch?.flowItemId;
   const searchCurrentMatchTurnId = searchCurrentMatch?.turnId;
   const searchCurrentMatchVirtualItemIndex = searchCurrentMatch?.virtualItemIndex ?? -1;
+  const searchCurrentMatchOccurrenceIndex = searchCurrentMatch?.occurrenceIndex ?? 0;
   const searchCurrentMatchExpandableKey = searchCurrentMatch?.expandableIds?.join('\u0000') ?? '';
 
   useFlowChatSync();
@@ -1085,6 +1086,7 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
         virtualItemIndex: searchCurrentMatchVirtualItemIndex,
         query: searchQuery,
         flowItemId: searchCurrentMatchFlowItemId,
+        occurrenceIndex: searchCurrentMatchOccurrenceIndex,
         expandableIds: searchCurrentMatchExpandableKey
           ? searchCurrentMatchExpandableKey.split('\u0000')
           : undefined,
@@ -1098,6 +1100,7 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
     searchCurrentMatchTurnId,
     searchCurrentMatchExpandableKey,
     searchCurrentMatchVirtualItemIndex,
+    searchCurrentMatchOccurrenceIndex,
     searchQuery,
   ]);
 

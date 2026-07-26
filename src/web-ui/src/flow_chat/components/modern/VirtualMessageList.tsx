@@ -55,7 +55,7 @@ import {
 } from './historyProjectionHandoff';
 import {
   findElementWithDataValue,
-  findFlowChatSearchTextRange,
+  findFlowChatSearchTextRanges,
   getFlowChatSearchTextRoot,
   setFlowChatSearchHighlight,
 } from './flowChatSearchDom';
@@ -110,6 +110,7 @@ export interface VirtualMessageListRef {
     virtualItemIndex: number;
     query: string;
     flowItemId?: string;
+    occurrenceIndex?: number;
     expandableIds?: readonly string[];
   }) => void;
   clearSearchMatch: () => void;
@@ -3606,6 +3607,7 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
     virtualItemIndex: number;
     query: string;
     flowItemId?: string;
+    occurrenceIndex?: number;
     expandableIds?: readonly string[];
   }) => {
     const query = target.query.trim();
@@ -3735,15 +3737,19 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
         return;
       }
 
-      const range = findFlowChatSearchTextRange(textRoot, query);
-      if (!range) {
+      const ranges = findFlowChatSearchTextRanges(textRoot, query);
+      if (ranges.length === 0) {
         if (attempts < SEARCH_NAVIGATION_MAX_ATTEMPTS) {
           requestAnimationFrame(resolveExactTextPosition);
         }
         return;
       }
 
-      setFlowChatSearchHighlight(range);
+      // Markdown syntax can make the raw-content occurrence count exceed the
+      // rendered one; clamping still lands navigation on a real occurrence.
+      const rangeIndex = Math.min(Math.max(target.occurrenceIndex ?? 0, 0), ranges.length - 1);
+      const range = ranges[rangeIndex];
+      setFlowChatSearchHighlight(range, ranges.filter((_, index) => index !== rangeIndex));
 
       let ancestor = range.startContainer.parentElement;
       while (ancestor && ancestor !== scroller && wrapper.contains(ancestor)) {

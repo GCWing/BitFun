@@ -1,4 +1,5 @@
-const SEARCH_HIGHLIGHT_NAME = 'bitfun-flowchat-search-current';
+const SEARCH_HIGHLIGHT_CURRENT_NAME = 'bitfun-flowchat-search-current';
+const SEARCH_HIGHLIGHT_MATCH_NAME = 'bitfun-flowchat-search-match';
 
 type HighlightRegistryLike = {
   set: (name: string, highlight: unknown) => void;
@@ -61,13 +62,14 @@ function foldTextWithOriginalOffsets(text: string): {
 }
 
 /**
- * Finds a case-insensitive query even when Markdown splits it across adjacent
- * text nodes (for example, around inline emphasis or code spans).
+ * Finds every non-overlapping case-insensitive occurrence of the query, even
+ * when Markdown splits it across adjacent text nodes (for example, around
+ * inline emphasis or code spans). Ranges are returned in document order.
  */
-export function findFlowChatSearchTextRange(root: HTMLElement, query: string): Range | null {
+export function findFlowChatSearchTextRanges(root: HTMLElement, query: string): Range[] {
   const trimmedQuery = query.trim();
   if (!trimmedQuery) {
-    return null;
+    return [];
   }
 
   const ownerDocument = root.ownerDocument;
@@ -91,31 +93,48 @@ export function findFlowChatSearchTextRange(root: HTMLElement, query: string): R
 
   const folded = foldTextWithOriginalOffsets(combinedText);
   const foldedQuery = trimmedQuery.toLowerCase();
-  const foldedMatchStart = folded.text.indexOf(foldedQuery);
-  if (foldedMatchStart < 0) {
-    return null;
-  }
+  const ranges: Range[] = [];
+  let searchFrom = 0;
 
-  const foldedMatchEnd = foldedMatchStart + foldedQuery.length;
-  const matchStart = folded.offsets[foldedMatchStart]?.start;
-  const matchEnd = folded.offsets[foldedMatchEnd - 1]?.end;
-  if (matchStart === undefined || matchEnd === undefined) {
-    return null;
-  }
+  for (;;) {
+    const foldedMatchStart = folded.text.indexOf(foldedQuery, searchFrom);
+    if (foldedMatchStart < 0) {
+      return ranges;
+    }
+    searchFrom = foldedMatchStart + foldedQuery.length;
 
-  const startEntry = textNodes.find(entry => matchStart >= entry.start && matchStart < entry.end);
-  const endEntry = textNodes.find(entry => matchEnd > entry.start && matchEnd <= entry.end);
-  if (!startEntry || !endEntry) {
-    return null;
-  }
+    const foldedMatchEnd = foldedMatchStart + foldedQuery.length;
+    const matchStart = folded.offsets[foldedMatchStart]?.start;
+    const matchEnd = folded.offsets[foldedMatchEnd - 1]?.end;
+    if (matchStart === undefined || matchEnd === undefined) {
+      continue;
+    }
 
-  const range = ownerDocument.createRange();
-  range.setStart(startEntry.node, matchStart - startEntry.start);
-  range.setEnd(endEntry.node, matchEnd - endEntry.start);
-  return range;
+    const startEntry = textNodes.find(entry => matchStart >= entry.start && matchStart < entry.end);
+    const endEntry = textNodes.find(entry => matchEnd > entry.start && matchEnd <= entry.end);
+    if (!startEntry || !endEntry) {
+      continue;
+    }
+
+    const range = ownerDocument.createRange();
+    range.setStart(startEntry.node, matchStart - startEntry.start);
+    range.setEnd(endEntry.node, matchEnd - endEntry.start);
+    ranges.push(range);
+  }
 }
 
-export function setFlowChatSearchHighlight(range: Range | null): void {
+export function findFlowChatSearchTextRange(root: HTMLElement, query: string): Range | null {
+  return findFlowChatSearchTextRanges(root, query)[0] ?? null;
+}
+
+/**
+ * Highlights the current occurrence and, more faintly, every other occurrence
+ * in the same text root. Passing `null` clears both highlight registries.
+ */
+export function setFlowChatSearchHighlight(
+  currentRange: Range | null,
+  otherRanges: readonly Range[] = [],
+): void {
   const cssWithHighlights = globalThis.CSS as (typeof CSS & {
     highlights?: HighlightRegistryLike;
   }) | undefined;
@@ -127,11 +146,21 @@ export function setFlowChatSearchHighlight(range: Range | null): void {
     return;
   }
 
-  cssWithHighlights.highlights.delete(SEARCH_HIGHLIGHT_NAME);
-  if (range && HighlightConstructor) {
+  cssWithHighlights.highlights.delete(SEARCH_HIGHLIGHT_CURRENT_NAME);
+  cssWithHighlights.highlights.delete(SEARCH_HIGHLIGHT_MATCH_NAME);
+  if (!HighlightConstructor) {
+    return;
+  }
+  if (currentRange) {
     cssWithHighlights.highlights.set(
-      SEARCH_HIGHLIGHT_NAME,
-      new HighlightConstructor(range),
+      SEARCH_HIGHLIGHT_CURRENT_NAME,
+      new HighlightConstructor(currentRange),
+    );
+  }
+  if (otherRanges.length > 0) {
+    cssWithHighlights.highlights.set(
+      SEARCH_HIGHLIGHT_MATCH_NAME,
+      new HighlightConstructor(...otherRanges),
     );
   }
 }
