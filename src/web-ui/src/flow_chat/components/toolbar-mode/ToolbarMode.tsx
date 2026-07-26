@@ -2,41 +2,37 @@
  * Toolbar Mode component.
  * Single-window morph UI for compact toolbar view.
  *
- * Layout: two rows
- * - Row 1: + / session list only when expanded; collapsed: no left control. Right: ⋮ when expanded, expand when collapsed.
- * - Row 2: streaming content/input + controls
+ * Two window states:
+ * - Collapsed: a compact status strip (latest activity + confirm/cancel controls).
+ * - Expanded: the main window session surface verbatim — ChatPane renders the
+ *   same FlowChat conversation and ChatInput composer the session scene uses, so
+ *   this mode never drifts behind the normal chat UI and needs no parallel
+ *   conversation/composer implementation of its own.
  */
 
 import React, { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { getCurrentWindow } from '@tauri-apps/api/window';
-import { 
-  MessageSquare, 
-  Square, 
-  Check, 
-  X, 
-  ArrowUp,
+import {
+  Square,
+  Check,
+  X,
   Maximize2,
   MoreVertical,
   PanelTopOpen,
-  PanelTopClose,
-  Plus
+  PanelTopClose
 } from 'lucide-react';
 import { useToolbarModeContext } from './ToolbarModeContext';
-import { flowChatStore } from '../../store/FlowChatStore';
-import { activateMainSession } from '../../services/sessionActivation';
-import { FlowChatState, type FlowToolItem } from '../../types/flow-chat';
-import { compareSessionsForDisplay } from '../../utils/sessionOrdering';
+import { type FlowToolItem } from '../../types/flow-chat';
 import { projectEffectiveToolItem } from '../../utils/toolInvocationIdentity';
 import { createLogger } from '@/shared/utils/logger';
 import { isMacOSDesktopRuntime } from '@/infrastructure/runtime';
-import { i18nService } from '@/infrastructure/i18n';
-import { resolveSessionTitle } from '../../utils/sessionTitle';
+import { useCurrentWorkspace } from '@/infrastructure/contexts/WorkspaceContext';
+import { SessionMenu, useFlowChatSessions } from '../session-menu';
 
 const log = createLogger('ToolbarMode');
-import { ModernFlowChatContainer } from '../modern/ModernFlowChatContainer';
+import ChatPane from '@/app/scenes/session/ChatPane';
 import { Tooltip } from '@/component-library';
-import { useImeEnterGuard } from '../../hooks/useImeEnterGuard';
 import './ToolbarMode.scss';
 
 export const ToolbarMode: React.FC = () => {
@@ -49,48 +45,18 @@ export const ToolbarMode: React.FC = () => {
     toolbarState
   } = useToolbarModeContext();
   
-  const [showInput, setShowInput] = useState(false);
-  const [inputValue, setInputValue] = useState('');
-  const { isImeEnter, handleCompositionStart, handleCompositionEnd } = useImeEnterGuard();
-  const [showSessionPicker, setShowSessionPicker] = useState(false);
   const [showHeaderOverflowMenu, setShowHeaderOverflowMenu] = useState(false);
-  const [flowChatState, setFlowChatState] = useState<FlowChatState>(() => 
-    flowChatStore.getState()
-  );
-  const sessionPickerRef = useRef<HTMLDivElement>(null);
   const headerOverflowRef = useRef<HTMLDivElement>(null);
 
   const isMacOS = useMemo(() => isMacOSDesktopRuntime(), []);
+  const { workspacePath } = useCurrentWorkspace();
+  const { activeSession, sessionTitle } = useFlowChatSessions();
 
-  useEffect(() => {
-    const unsubscribe = flowChatStore.subscribe((state) => {
-      setFlowChatState(state);
-    });
-    return () => unsubscribe();
-  }, []);
-  
-  const sessionTitle = useMemo(() => {
-    const activeSession = flowChatState.activeSessionId 
-      ? flowChatState.sessions.get(flowChatState.activeSessionId)
-      : undefined;
-    return resolveSessionTitle(activeSession, (key, options) => i18nService.t(key, options));
-  }, [flowChatState]);
-  
-  const sessions = useMemo(() => {
-    return Array.from(flowChatState.sessions.values())
-      .sort(compareSessionsForDisplay)
-      .slice(0, 10); // Limit to 10.
-  }, [flowChatState]);
-  
   const lastMessageContent = useMemo(() => {
-    const activeSession = flowChatState.activeSessionId 
-      ? flowChatState.sessions.get(flowChatState.activeSessionId)
-      : undefined;
-    
     if (!activeSession || !activeSession.dialogTurns || activeSession.dialogTurns.length === 0) {
       return null;
     }
-    
+
     const lastTurn = activeSession.dialogTurns[activeSession.dialogTurns.length - 1];
     
     // Prefer the last text item in the latest model round.
@@ -108,14 +74,10 @@ export const ToolbarMode: React.FC = () => {
     
     // Fallback to the user's latest message.
     return lastTurn.userMessage?.content?.slice(0, 100) || null;
-  }, [flowChatState]);
-  
+  }, [activeSession]);
+
   // Derive current streaming state from session data.
   const currentStreamState = useMemo(() => {
-    const activeSession = flowChatState.activeSessionId 
-      ? flowChatState.sessions.get(flowChatState.activeSessionId)
-      : undefined;
-    
     if (!activeSession || !activeSession.dialogTurns || activeSession.dialogTurns.length === 0) {
       return { isStreaming: false, toolName: null, content: null };
     }
@@ -159,37 +121,13 @@ export const ToolbarMode: React.FC = () => {
     }
     
     return { isStreaming, toolName, content };
-  }, [flowChatState, t]);
+  }, [activeSession, t]);
   
   useEffect(() => {
     if (!isExpanded) {
-      setShowSessionPicker(false);
       setShowHeaderOverflowMenu(false);
     }
   }, [isExpanded]);
-  
-  useEffect(() => {
-    const handleClickOutside = (e: MouseEvent) => {
-      const target = e.target as HTMLElement;
-      if (sessionPickerRef.current?.contains(target)) {
-        return;
-      }
-      if (target.closest?.('.bitfun-toolbar-mode__session-menu-trigger')) {
-        return;
-      }
-      setShowSessionPicker(false);
-    };
-    
-    if (showSessionPicker) {
-      const timer = setTimeout(() => {
-        document.addEventListener('mousedown', handleClickOutside);
-      }, 0);
-      return () => {
-        clearTimeout(timer);
-        document.removeEventListener('mousedown', handleClickOutside);
-      };
-    }
-  }, [showSessionPicker]);
 
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
@@ -218,7 +156,7 @@ export const ToolbarMode: React.FC = () => {
     const target = e.target as HTMLElement;
     // Avoid dragging when interacting with UI controls.
     if (target.closest?.(
-      'button, input, .bitfun-toolbar-mode__session-picker, .bitfun-toolbar-mode__session-dropdown, .bitfun-toolbar-mode__overflow-menu, .bitfun-toolbar-mode__stream-content, .bitfun-toolbar-mode__session-item, .bitfun-toolbar-mode__flowchat-container'
+      'button, input, .bitfun-session-menu, .bitfun-toolbar-mode__overflow-menu, .bitfun-toolbar-mode__stream-content, .bitfun-toolbar-mode__session-surface'
     )) {
       return;
     }
@@ -233,16 +171,6 @@ export const ToolbarMode: React.FC = () => {
   const handleExpand = useCallback(async () => {
     await disableToolbarMode();
   }, [disableToolbarMode]);
-  
-  const handleSwitchSession = useCallback((e: React.MouseEvent, sessionId: string) => {
-    e.stopPropagation();
-    e.preventDefault();
-    void activateMainSession(sessionId).then((activated) => {
-      if (activated) {
-        setShowSessionPicker(false);
-      }
-    });
-  }, []);
   
   const handleCancel = useCallback(() => {
     window.dispatchEvent(new CustomEvent('toolbar-cancel-task'));
@@ -264,114 +192,15 @@ export const ToolbarMode: React.FC = () => {
     }
   }, [toolbarState.pendingToolId]);
   
-  const dispatchToolbarCreateSession = useCallback((mode: 'code' | 'cowork') => {
-    window.dispatchEvent(new CustomEvent('toolbar-create-session', { detail: { mode } }));
-    setShowSessionPicker(false);
-  }, []);
-
-  const toggleSessionMenu = useCallback(() => {
-    setShowHeaderOverflowMenu(false);
-    setShowSessionPicker(v => !v);
-  }, []);
-
   const toggleHeaderOverflowMenu = useCallback(() => {
     if (!isExpanded) return;
-    setShowSessionPicker(false);
     setShowHeaderOverflowMenu(v => !v);
   }, [isExpanded]);
-  
-  const handleSendMessage = useCallback(() => {
-    const message = inputValue.trim();
-    if (message) {
-      window.dispatchEvent(new CustomEvent('toolbar-send-message', { 
-        detail: { message, sessionId: flowChatState.activeSessionId } 
-      }));
-      setInputValue('');
-      setShowInput(false);
-    }
-  }, [inputValue, flowChatState.activeSessionId]);
-  
-  const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      if (isImeEnter(e)) return;
-      e.preventDefault();
-      handleSendMessage();
-    }
-    if (e.key === 'Escape') {
-      e.preventDefault();
-      if (showInput) {
-        setShowInput(false);
-      } else if (showHeaderOverflowMenu) {
-        setShowHeaderOverflowMenu(false);
-      } else if (showSessionPicker) {
-        setShowSessionPicker(false);
-      } else {
-        handleExpand();
-      }
-    }
-  }, [handleSendMessage, showInput, showSessionPicker, showHeaderOverflowMenu, handleExpand, isImeEnter]);
 
-  const sessionMenuContent = useMemo(
-    () => (
-      <div className="bitfun-toolbar-mode__session-menu">
-        <div className="bitfun-toolbar-mode__session-menu-actions">
-          <button
-            type="button"
-            className="bitfun-toolbar-mode__session-item bitfun-toolbar-mode__session-item--new"
-            onMouseDown={(e) => {
-              e.preventDefault();
-              e.stopPropagation();
-              dispatchToolbarCreateSession('code');
-            }}
-          >
-            <span className="bitfun-toolbar-mode__session-item-icon" aria-hidden>
-              <Plus size={13} strokeWidth={2.25} />
-            </span>
-            <span className="bitfun-toolbar-mode__session-item-label">
-              {t('toolCards.toolbar.newCodeSessionItem')}
-            </span>
-          </button>
-          <button
-            type="button"
-            className="bitfun-toolbar-mode__session-item bitfun-toolbar-mode__session-item--new"
-            onMouseDown={(e) => {
-              e.preventDefault();
-              e.stopPropagation();
-              dispatchToolbarCreateSession('cowork');
-            }}
-          >
-            <span className="bitfun-toolbar-mode__session-item-icon" aria-hidden>
-              <Plus size={13} strokeWidth={2.25} />
-            </span>
-            <span className="bitfun-toolbar-mode__session-item-label">
-              {t('toolCards.toolbar.newCoworkSessionItem')}
-            </span>
-          </button>
-          <div className="bitfun-toolbar-mode__session-list-divider" role="separator" />
-        </div>
-        <div
-          className="bitfun-toolbar-mode__session-menu-scroll"
-          role="listbox"
-          aria-label={t('session.switchSession')}
-        >
-          {sessions.map((session) => (
-            <button
-              key={session.sessionId}
-              type="button"
-              className={`bitfun-toolbar-mode__session-item ${
-                session.sessionId === flowChatState.activeSessionId ? 'bitfun-toolbar-mode__session-item--active' : ''
-              }`}
-              onMouseDown={(e) => handleSwitchSession(e, session.sessionId)}
-            >
-              {resolveSessionTitle(session, (key, options) => i18nService.t(key, options))}
-            </button>
-          ))}
-        </div>
-      </div>
-    ),
-    [sessions, flowChatState.activeSessionId, dispatchToolbarCreateSession, handleSwitchSession, t]
-  );
-  
+  const handleSessionMenuOpenChange = useCallback((open: boolean) => {
+    if (open) setShowHeaderOverflowMenu(false);
+  }, []);
+
   if (!isToolbarMode) {
     return null;
   }
@@ -389,34 +218,7 @@ export const ToolbarMode: React.FC = () => {
     <div className={containerClassName} onMouseDown={handleStartDrag}>
       <div className="bitfun-toolbar-mode__header">
         <div className="bitfun-toolbar-mode__header-left">
-          {isExpanded ? (
-            <div className="bitfun-toolbar-mode__session-menu-root">
-              <Tooltip content={t('toolCards.toolbar.openSessionMenu')}>
-                <button
-                  type="button"
-                  className={[
-                    'bitfun-toolbar-mode__create-btn',
-                    'bitfun-toolbar-mode__session-menu-trigger',
-                    showSessionPicker ? 'bitfun-toolbar-mode__session-menu-trigger--open' : '',
-                  ].filter(Boolean).join(' ')}
-                  onClick={toggleSessionMenu}
-                  aria-expanded={showSessionPicker}
-                  aria-haspopup="listbox"
-                >
-                  <Plus size={14} />
-                </button>
-              </Tooltip>
-              {showSessionPicker && (
-                <div 
-                  className="bitfun-toolbar-mode__session-dropdown" 
-                  ref={sessionPickerRef}
-                  onMouseDown={(e) => e.stopPropagation()}
-                >
-                  {sessionMenuContent}
-                </div>
-              )}
-            </div>
-          ) : null}
+          {isExpanded ? <SessionMenu onOpenChange={handleSessionMenuOpenChange} /> : null}
         </div>
 
         <div className="bitfun-toolbar-mode__title-wrapper">
@@ -504,136 +306,65 @@ export const ToolbarMode: React.FC = () => {
       </div>
       
       {isExpanded ? (
-        <>
-          <div className="bitfun-toolbar-mode__flowchat-container">
-            <ModernFlowChatContainer />
-          </div>
-          <div className="bitfun-toolbar-mode__expanded-input">
-            <input
-              type="text"
-              className="bitfun-toolbar-mode__input-field bitfun-toolbar-mode__input-field--expanded"
-              value={inputValue}
-              onChange={(e) => setInputValue(e.target.value)}
-              onKeyDown={handleKeyDown}
-              onCompositionStart={handleCompositionStart}
-              onCompositionEnd={handleCompositionEnd}
-              placeholder={currentStreamState.isStreaming ? t('toolCards.toolbar.aiProcessing') : t('toolCards.toolbar.inputMessage')}
-              disabled={currentStreamState.isStreaming}
-            />
-            {currentStreamState.isStreaming ? (
-              <Tooltip content={t('input.stop')}>
-                <button 
-                  className="toolbar-btn toolbar-btn--cancel"
-                  onClick={handleCancel}
-                >
-                  <Square size={14} />
-                </button>
-              </Tooltip>
+        /* Main window session surface, reused as-is: same conversation view and
+           same full composer, so there is nothing extra to maintain here. */
+        <div className="bitfun-toolbar-mode__session-surface">
+          <ChatPane
+            width={0}
+            isFullscreen={false}
+            isSceneActive
+            workspacePath={workspacePath}
+            showChatInput
+          />
+        </div>
+      ) : (
+        <div className="bitfun-toolbar-mode__content-row">
+          <div className="bitfun-toolbar-mode__stream-content" onClick={toggleExpanded}>
+            {currentStreamState.toolName ? (
+              <div className="bitfun-toolbar-mode__tool">
+                <span className="bitfun-toolbar-mode__tool-name">{currentStreamState.toolName}</span>
+                <span className="bitfun-toolbar-mode__tool-summary">{currentStreamState.content || t('toolCards.toolbar.executing')}</span>
+              </div>
+            ) : toolbarState.todoProgress && toolbarState.todoProgress.total > 0 ? (
+              <div className="bitfun-toolbar-mode__todo">
+                <span className="bitfun-toolbar-mode__todo-progress">
+                  {toolbarState.todoProgress.completed}/{toolbarState.todoProgress.total}
+                </span>
+                <span className="bitfun-toolbar-mode__todo-current">
+                  {toolbarState.todoProgress.current || currentStreamState.content}
+                </span>
+              </div>
             ) : (
-              <Tooltip content={t('input.send')}>
-                <button 
-                  className="toolbar-btn toolbar-btn--send"
-                  onClick={handleSendMessage}
-                  disabled={!inputValue.trim()}
-                >
-                  <ArrowUp size={16} />
+              <span className={`bitfun-toolbar-mode__text ${currentStreamState.isStreaming ? 'bitfun-toolbar-mode__text--streaming' : ''}`}>
+                {currentStreamState.content || (currentStreamState.isStreaming ? t('toolCards.toolbar.processing') : (lastMessageContent || t('toolCards.toolbar.startNewChat')))}
+              </span>
+            )}
+          </div>
+
+          <div className="bitfun-toolbar-mode__controls">
+            {toolbarState.hasPendingConfirmation && (
+              <>
+                <Tooltip content={t('toolCards.common.confirm')}>
+                  <button className="toolbar-btn toolbar-btn--confirm" onClick={handleConfirm}>
+                    <Check size={16} />
+                  </button>
+                </Tooltip>
+                <Tooltip content={t('toolCards.common.cancel')}>
+                  <button className="toolbar-btn toolbar-btn--reject" onClick={handleReject}>
+                    <X size={16} />
+                  </button>
+                </Tooltip>
+              </>
+            )}
+
+            {currentStreamState.isStreaming && !toolbarState.hasPendingConfirmation && (
+              <Tooltip content={t('planner.cancel')}>
+                <button className="toolbar-btn toolbar-btn--cancel-compact" onClick={handleCancel}>
+                  <Square size={12} />
                 </button>
               </Tooltip>
             )}
           </div>
-        </>
-      ) : (
-        <div className="bitfun-toolbar-mode__content-row">
-          {showInput ? (
-            <>
-              <input
-                type="text"
-                className="bitfun-toolbar-mode__input-field"
-                value={inputValue}
-                onChange={(e) => setInputValue(e.target.value)}
-                onKeyDown={handleKeyDown}
-                onCompositionStart={handleCompositionStart}
-                onCompositionEnd={handleCompositionEnd}
-                placeholder={t('input.placeholder')}
-                autoFocus
-              />
-              <Tooltip content={t('input.send')}>
-                <button 
-                  className="toolbar-btn toolbar-btn--send"
-                  onClick={handleSendMessage}
-                  disabled={!inputValue.trim()}
-                >
-                  <ArrowUp size={16} />
-                </button>
-              </Tooltip>
-              <Tooltip content={t('planner.cancel')}>
-                <button 
-                  className="toolbar-btn"
-                  onClick={() => setShowInput(false)}
-                >
-                  <X size={16} />
-                </button>
-              </Tooltip>
-            </>
-          ) : (
-            <>
-              <div className="bitfun-toolbar-mode__stream-content" onClick={toggleExpanded}>
-                {currentStreamState.toolName ? (
-                  <div className="bitfun-toolbar-mode__tool">
-                    <span className="bitfun-toolbar-mode__tool-name">{currentStreamState.toolName}</span>
-                    <span className="bitfun-toolbar-mode__tool-summary">{currentStreamState.content || t('toolCards.toolbar.executing')}</span>
-                  </div>
-                ) : toolbarState.todoProgress && toolbarState.todoProgress.total > 0 ? (
-                  <div className="bitfun-toolbar-mode__todo">
-                    <span className="bitfun-toolbar-mode__todo-progress">
-                      {toolbarState.todoProgress.completed}/{toolbarState.todoProgress.total}
-                    </span>
-                    <span className="bitfun-toolbar-mode__todo-current">
-                      {toolbarState.todoProgress.current || currentStreamState.content}
-                    </span>
-                  </div>
-                ) : (
-                  <span className={`bitfun-toolbar-mode__text ${currentStreamState.isStreaming ? 'bitfun-toolbar-mode__text--streaming' : ''}`}>
-                    {currentStreamState.content || (currentStreamState.isStreaming ? t('toolCards.toolbar.processing') : (lastMessageContent || t('toolCards.toolbar.startNewChat')))}
-                  </span>
-                )}
-              </div>
-              
-              <div className="bitfun-toolbar-mode__controls">
-                {toolbarState.hasPendingConfirmation && (
-                  <>
-                    <Tooltip content={t('toolCards.common.confirm')}>
-                      <button className="toolbar-btn toolbar-btn--confirm" onClick={handleConfirm}>
-                        <Check size={16} />
-                      </button>
-                    </Tooltip>
-                    <Tooltip content={t('toolCards.common.cancel')}>
-                      <button className="toolbar-btn toolbar-btn--reject" onClick={handleReject}>
-                        <X size={16} />
-                      </button>
-                    </Tooltip>
-                  </>
-                )}
-                
-                {currentStreamState.isStreaming && !toolbarState.hasPendingConfirmation && (
-                  <Tooltip content={t('planner.cancel')}>
-                    <button className="toolbar-btn toolbar-btn--cancel-compact" onClick={handleCancel}>
-                      <Square size={12} />
-                    </button>
-                  </Tooltip>
-                )}
-                
-                <Tooltip content={t('input.placeholder')}>
-                  <button 
-                    className="toolbar-btn toolbar-btn--input" 
-                    onClick={() => setShowInput(true)}
-                  >
-                    <MessageSquare size={16} />
-                  </button>
-                </Tooltip>
-              </div>
-            </>
-          )}
         </div>
       )}
     </div>

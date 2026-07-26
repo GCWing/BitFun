@@ -89,11 +89,6 @@ export const ToolbarModeProvider: React.FC<ToolbarModeProviderProps> = ({ childr
         targetSize: TOOLBAR_EXPANDED_SIZE,
         minSize: TOOLBAR_EXPANDED_MIN,
       });
-      const toolbarMinSize = {
-        width: Math.min(TOOLBAR_EXPANDED_MIN.width, geometry.width),
-        height: Math.min(TOOLBAR_EXPANDED_MIN.height, geometry.height),
-      };
-
       const toolbarWindowOps: Array<Promise<unknown>> = [
         win.setAlwaysOnTop(true),
         win.setSize(new PhysicalSize(geometry.width, geometry.height)),
@@ -111,7 +106,7 @@ export const ToolbarModeProvider: React.FC<ToolbarModeProviderProps> = ({ childr
       }
       await Promise.all(toolbarWindowOps);
 
-      await win.setMinSize(new PhysicalSize(toolbarMinSize.width, toolbarMinSize.height));
+      await win.setMinSize(new PhysicalSize(geometry.minWidth, geometry.minHeight));
     } catch (error) {
       log.error('Failed to enable toolbar mode', error);
       setIsToolbarMode(false);
@@ -218,14 +213,9 @@ export const ToolbarModeProvider: React.FC<ToolbarModeProviderProps> = ({ childr
           y: Math.max(0, currentPosition.y + currentSize.height - targetSize.height),
         },
       });
-      const toolbarMinSize = {
-        width: Math.min(minSize.width, geometry.width),
-        height: Math.min(minSize.height, geometry.height),
-      };
-
       setIsExpanded(newIsExpanded);
 
-      await win.setMinSize(new PhysicalSize(toolbarMinSize.width, toolbarMinSize.height));
+      await win.setMinSize(new PhysicalSize(geometry.minWidth, geometry.minHeight));
       await win.setSize(new PhysicalSize(geometry.width, geometry.height));
       await win.setPosition(new PhysicalPosition(geometry.x, geometry.y));
     } catch (error) {

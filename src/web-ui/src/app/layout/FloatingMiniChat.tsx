@@ -1,90 +1,62 @@
 /**
- * Floating mini chat — circular button in bottom-right that expands to an
- * always-expanded ToolbarMode-style conversation panel with FlowChat.
- * Used in non-agent scenes only; agent scene uses centered ChatInput.
+ * Floating mini chat — circular button in bottom-right that expands to a panel
+ * hosting the main window session surface. Used in non-agent scenes only; the
+ * agent scene already shows that surface as its own scene.
  *
- * When opened the button disappears and the panel springs into view;
- * closing reverses the animation and restores the button.
+ * The panel renders ChatPane verbatim — same conversation view, same full
+ * composer as the session scene — so it never lags behind the main chat UI and
+ * carries no second conversation/composer implementation of its own. Only the
+ * bubble chrome (trigger, open/close animation, session header) lives here.
  */
 
 import React, { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import {
-  MessageSquare,
-  X,
-  Check,
-  Square,
-  ArrowUp,
-  ChevronDown,
-  Plus
-} from 'lucide-react';
+import { MessageSquare, X } from 'lucide-react';
 import { flowChatStore } from '../../flow_chat/store/FlowChatStore';
 import { syncSessionToModernStore } from '../../flow_chat/services/storeSync';
-import { activateMainSession } from '../../flow_chat/services/sessionActivation';
-import { useToolbarModeContext } from '../../flow_chat/components/toolbar-mode/ToolbarModeContext';
-import type { FlowChatState } from '../../flow_chat/types/flow-chat';
-import { compareSessionsForDisplay } from '../../flow_chat/utils/sessionOrdering';
-import { ModernFlowChatContainer } from '../../flow_chat/components/modern/ModernFlowChatContainer';
-import { Tooltip, Input } from '@/component-library';
-import { useImeEnterGuard } from '../../flow_chat/hooks/useImeEnterGuard';
-import { i18nService } from '@/infrastructure/i18n';
-import { resolveSessionTitle } from '../../flow_chat/utils/sessionTitle';
+import ChatPane from '@/app/scenes/session/ChatPane';
+import { Tooltip } from '@/component-library';
+import { useCurrentWorkspace } from '@/infrastructure/contexts/WorkspaceContext';
+import { SessionMenu, useFlowChatSessions } from '../../flow_chat/components/session-menu';
 import { useSceneStore } from '@/app/stores/sceneStore';
 import { useMiniAppStore } from '@/app/scenes/miniapps/miniAppStore';
 import './FloatingMiniChat.scss';
 
+/**
+ * Panel lifecycle. `opening` covers the scale-up transition, during which the
+ * panel's hit area is still smaller than its final rect — see the backdrop
+ * below for why that distinction matters.
+ */
+type PanelPhase = 'closed' | 'opening' | 'open';
+
+/** Fallback for a transitionend that never arrives (reduced motion, interrupted
+ *  transition). Must stay >= $fmc-open-duration in FloatingMiniChat.scss. */
+const PANEL_OPEN_SETTLE_MS = 600;
+
 export const FloatingMiniChat: React.FC = () => {
   const { t } = useTranslation('flow-chat');
-  const { toolbarState } = useToolbarModeContext();
   const activeTabId = useSceneStore((state) => state.activeTabId);
   const customizingAppIds = useMiniAppStore((state) => state.customizingAppIds);
+  const { workspacePath } = useCurrentWorkspace();
 
-  const [isOpen, setIsOpen] = useState(false);
-  const [inputValue, setInputValue] = useState('');
-  const [showSessionPicker, setShowSessionPicker] = useState(false);
-  const [flowChatState, setFlowChatState] = useState<FlowChatState>(() =>
-    flowChatStore.getState()
-  );
-  const { isImeEnter, handleCompositionStart, handleCompositionEnd } = useImeEnterGuard();
+  const [phase, setPhase] = useState<PanelPhase>('closed');
+  const [surfaceMounted, setSurfaceMounted] = useState(false);
+  const isOpen = phase !== 'closed';
   const panelRef = useRef<HTMLDivElement>(null);
-  const sessionPickerRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-    const unsubscribe = flowChatStore.subscribe((state) => {
-      setFlowChatState(state);
-    });
-    return () => unsubscribe();
-  }, []);
+  const { activeSession, sessionTitle } = useFlowChatSessions();
 
-  const sessionTitle = useMemo(() => {
-    const activeSession = flowChatState.activeSessionId
-      ? flowChatState.sessions.get(flowChatState.activeSessionId)
-      : undefined;
-    return resolveSessionTitle(activeSession, (key, options) => i18nService.t(key, options));
-  }, [flowChatState]);
-
-  const sessions = useMemo(() => {
-    return Array.from(flowChatState.sessions.values())
-      .sort(compareSessionsForDisplay)
-      .slice(0, 10);
-  }, [flowChatState]);
-
-  const currentStreamState = useMemo(() => {
-    const activeSession = flowChatState.activeSessionId
-      ? flowChatState.sessions.get(flowChatState.activeSessionId)
-      : undefined;
-
+  const isStreaming = useMemo(() => {
     if (!activeSession || !activeSession.dialogTurns || activeSession.dialogTurns.length === 0) {
-      return { isStreaming: false };
+      return false;
     }
-
     const lastTurn = activeSession.dialogTurns[activeSession.dialogTurns.length - 1];
-    const isStreaming =
+    return (
       lastTurn.status === 'processing' ||
       lastTurn.status === 'finishing' ||
-      lastTurn.status === 'image_analyzing';
-    return { isStreaming };
-  }, [flowChatState]);
+      lastTurn.status === 'image_analyzing'
+    );
+  }, [activeSession]);
 
   const activeMiniAppId = useMemo(
     () => (typeof activeTabId === 'string' && activeTabId.startsWith('miniapp:')
@@ -96,113 +68,90 @@ export const FloatingMiniChat: React.FC = () => {
     activeMiniAppId && customizingAppIds.includes(activeMiniAppId)
   );
 
+  // Idempotent so it is safe to fire from several input paths at once, and so a
+  // repeat press during the open animation can never toggle the panel back.
+  //
+  // Keeping this commit cheap matters too: flipping the panel open is all it
+  // does, so the open transition is committed on the very next frame. Store
+  // sync and the session surface mount are deferred below — doing them here
+  // blocks the main thread before the browser ever starts the transition.
   const handleOpen = useCallback(() => {
-    // Sync the active session into modernFlowChatStore so the panel shows
-    // up-to-date content (it may have been streaming while the panel was closed).
-    const state = flowChatStore.getState();
-    if (state.activeSessionId) {
-      syncSessionToModernStore(state.activeSessionId);
-    }
-    setIsOpen(true);
+    setPhase((prev) => (prev === 'closed' ? 'opening' : prev));
   }, []);
 
   const handleClose = useCallback(() => {
-    setIsOpen(false);
-    setShowSessionPicker(false);
+    setPhase('closed');
   }, []);
 
-  const handleSwitchSession = useCallback((e: React.MouseEvent, sessionId: string) => {
-    e.stopPropagation();
-    e.preventDefault();
-    void activateMainSession(sessionId).then((activated) => {
-      if (activated) {
-        setShowSessionPicker(false);
-      }
-    });
-  }, []);
+  // Open on pointer press, not on click. A click only fires when pointerdown
+  // and pointerup land on the same element, so anything that moves or replaces
+  // the trigger between the two (a re-render from a streaming session, the
+  // panel animation, a stray pointer move on a trackpad) silently swallows the
+  // press — which is what made the button need several tries. onClick is kept
+  // for keyboard and assistive activation, where no pointer events fire.
+  const handleTriggerPointerDown = useCallback((e: React.PointerEvent) => {
+    if (e.button !== 0) return;
+    handleOpen();
+  }, [handleOpen]);
 
-  const handleCancel = useCallback(() => {
-    window.dispatchEvent(new CustomEvent('toolbar-cancel-task'));
-  }, []);
-
-  const handleConfirm = useCallback(() => {
-    if (toolbarState.pendingToolId) {
-      window.dispatchEvent(
-        new CustomEvent('toolbar-tool-confirm', { detail: { toolId: toolbarState.pendingToolId } })
-      );
-    }
-  }, [toolbarState.pendingToolId]);
-
-  const handleReject = useCallback(() => {
-    if (toolbarState.pendingToolId) {
-      window.dispatchEvent(
-        new CustomEvent('toolbar-tool-reject', { detail: { toolId: toolbarState.pendingToolId } })
-      );
-    }
-  }, [toolbarState.pendingToolId]);
-
-  const handleCreateSession = useCallback(() => {
-    window.dispatchEvent(new CustomEvent('toolbar-create-session'));
-  }, []);
-
-  const handleSendMessage = useCallback(() => {
-    const message = inputValue.trim();
-    if (message) {
-      window.dispatchEvent(
-        new CustomEvent('toolbar-send-message', {
-          detail: { message, sessionId: flowChatState.activeSessionId }
-        })
-      );
-      setInputValue('');
-    }
-  }, [inputValue, flowChatState.activeSessionId]);
-
-  const handleKeyDown = useCallback(
-    (e: React.KeyboardEvent) => {
-      if (e.key === 'Enter' && !e.shiftKey) {
-        if (isImeEnter(e)) return;
-        e.preventDefault();
-        handleSendMessage();
-      }
-      if (e.key === 'Escape') {
-        e.preventDefault();
-        if (showSessionPicker) {
-          setShowSessionPicker(false);
-        } else {
-          handleClose();
-        }
-      }
-    },
-    [handleSendMessage, showSessionPicker, handleClose, isImeEnter]
-  );
-
-  // Close session picker when clicking outside it
+  // Mount the session surface only once the open transition has been handed to
+  // the compositor, so ChatPane's mount cost can no longer stall the animation.
   useEffect(() => {
-    if (!isOpen || !showSessionPicker) return;
+    if (!isOpen) {
+      setSurfaceMounted(false);
+      return;
+    }
 
-    const handleClickOutside = (e: MouseEvent) => {
-      const target = e.target as HTMLElement | null;
-      if (!target) return;
-      if (sessionPickerRef.current?.contains(target)) return;
-      if (target.closest?.('.bitfun-fmc__title-btn')) return;
-      setShowSessionPicker(false);
-    };
+    let innerFrame = 0;
+    const outerFrame = requestAnimationFrame(() => {
+      innerFrame = requestAnimationFrame(() => {
+        // Sync the active session into modernFlowChatStore so the panel shows
+        // up-to-date content (it may have streamed while the panel was closed).
+        const { activeSessionId } = flowChatStore.getState();
+        if (activeSessionId) {
+          syncSessionToModernStore(activeSessionId);
+        }
+        setSurfaceMounted(true);
+      });
+    });
 
-    const timer = setTimeout(() => {
-      document.addEventListener('mousedown', handleClickOutside);
-    }, 0);
     return () => {
-      clearTimeout(timer);
-      document.removeEventListener('mousedown', handleClickOutside);
+      cancelAnimationFrame(outerFrame);
+      cancelAnimationFrame(innerFrame);
     };
-  }, [isOpen, showSessionPicker]);
+  }, [isOpen]);
+
+  // Settle `opening` → `open` once the panel reaches full size.
+  useEffect(() => {
+    if (phase !== 'opening') return;
+    const timer = window.setTimeout(() => setPhase('open'), PANEL_OPEN_SETTLE_MS);
+    return () => window.clearTimeout(timer);
+  }, [phase]);
+
+  const handlePanelTransitionEnd = useCallback((e: React.TransitionEvent) => {
+    if (e.target !== panelRef.current || e.propertyName !== 'transform') return;
+    setPhase((prev) => (prev === 'opening' ? 'open' : prev));
+  }, []);
+
+  const handlePanelKeyDown = useCallback(
+    (e: React.KeyboardEvent) => {
+      if (e.key !== 'Escape') return;
+      // Inside the reused session surface Escape belongs to the chat scope
+      // (dismiss slash/mention popups, stop generation) exactly as it does in
+      // the main window, so only bubble chrome handles it here. SessionMenu
+      // stops propagation while its dropdown is open.
+      const target = e.target as HTMLElement | null;
+      if (target?.closest?.('[data-shortcut-scope="chat"]')) return;
+      e.preventDefault();
+      handleClose();
+    },
+    [handleClose]
+  );
 
   const panelClassName = [
     'bitfun-fmc__panel',
     isOpen && 'bitfun-fmc__panel--open',
-    currentStreamState.isStreaming && 'bitfun-fmc__panel--processing',
-    toolbarState.hasError && 'bitfun-fmc__panel--error',
-    toolbarState.hasPendingConfirmation && 'bitfun-fmc__panel--confirm'
+    isStreaming && 'bitfun-fmc__panel--processing'
   ]
     .filter(Boolean)
     .join(' ');
@@ -213,97 +162,56 @@ export const FloatingMiniChat: React.FC = () => {
       isOpen && 'bitfun-fmc--open',
       shouldAvoidMiniAppCustomizer && 'bitfun-fmc--miniapp-customizing',
     ].filter(Boolean).join(' ')}>
-      {/* Fullscreen backdrop to catch outside clicks */}
+      {/* Fullscreen backdrop to catch outside clicks. It stays inert until the
+          panel has finished scaling up: until then the panel's hit area is
+          still smaller than its final rect, so a click aimed at the panel would
+          land here and close what the user just opened. Rendering it (without
+          the close handler) throughout keeps those clicks from reaching the
+          scene underneath. */}
       {isOpen && (
         <div
           className="bitfun-fmc__backdrop"
-          onMouseDown={handleClose}
+          onMouseDown={phase === 'open' ? handleClose : undefined}
         />
       )}
 
-      {/* Circular trigger button — hidden when panel is open */}
+      {/* Circular trigger — sits above the backdrop and the collapsed panel via
+          an explicit z-index, and is taken out of hit testing with
+          `visibility` (not just pointer-events) while the panel is open. */}
       <button
         type="button"
         className="bitfun-fmc__button"
+        onPointerDown={handleTriggerPointerDown}
         onClick={handleOpen}
+        aria-expanded={isOpen}
         aria-label={t('toolCards.toolbar.startNewChat')}
       >
         <MessageSquare size={20} />
       </button>
 
       {/* Expanded panel */}
-      <div ref={panelRef} className={panelClassName}>
-        {/* Header */}
+      <div
+        ref={panelRef}
+        className={panelClassName}
+        onKeyDown={handlePanelKeyDown}
+        onTransitionEnd={handlePanelTransitionEnd}
+      >
+        {/* Header — same shape as floating window mode: the "+" opens the
+            shared session menu (new code / new cowork / switch), and the title
+            is a plain display rather than a second, differently-behaved
+            switcher. */}
         <div className="bitfun-fmc__header">
-          <Tooltip content={t('session.new')}>
-            <button type="button" className="bitfun-fmc__header-btn" onClick={handleCreateSession}>
-              <Plus size={14} />
-            </button>
-          </Tooltip>
+          <SessionMenu />
 
           <div className="bitfun-fmc__title-wrapper">
-            <Tooltip content={t('session.switchSession')}>
-              <button
-                type="button"
-                className="bitfun-fmc__title-btn"
-                onClick={() => setShowSessionPicker(!showSessionPicker)}
-              >
-                <span className="bitfun-fmc__title-text">{sessionTitle}</span>
-                <ChevronDown
-                  size={12}
-                  className={`bitfun-fmc__title-chevron ${showSessionPicker ? 'bitfun-fmc__title-chevron--open' : ''}`}
-                />
-              </button>
-            </Tooltip>
-
-            {showSessionPicker && (
-              <div
-                className="bitfun-fmc__session-dropdown"
-                ref={sessionPickerRef}
-                onMouseDown={(e) => e.stopPropagation()}
-              >
-                {sessions.map((session) => (
-                  <button
-                    key={session.sessionId}
-                    type="button"
-                    className={`bitfun-fmc__session-item ${
-                      session.sessionId === flowChatState.activeSessionId
-                        ? 'bitfun-fmc__session-item--active'
-                        : ''
-                    }`}
-                    onMouseDown={(e) => handleSwitchSession(e, session.sessionId)}
-                  >
-                    {resolveSessionTitle(session, (key, options) => i18nService.t(key, options))}
-                  </button>
-                ))}
-              </div>
-            )}
+            <div className="bitfun-fmc__title-display" title={sessionTitle}>
+              <span className="bitfun-fmc__title-text">{sessionTitle}</span>
+            </div>
           </div>
 
-          {/* Confirm / reject controls inline in header */}
-          {toolbarState.hasPendingConfirmation && (
-            <>
-              <Tooltip content={t('toolCards.common.confirm')}>
-                <button type="button" className="bitfun-fmc__header-btn bitfun-fmc__header-btn--confirm" onClick={handleConfirm}>
-                  <Check size={14} />
-                </button>
-              </Tooltip>
-              <Tooltip content={t('toolCards.common.cancel')}>
-                <button type="button" className="bitfun-fmc__header-btn bitfun-fmc__header-btn--reject" onClick={handleReject}>
-                  <X size={14} />
-                </button>
-              </Tooltip>
-            </>
-          )}
-
-          {currentStreamState.isStreaming && !toolbarState.hasPendingConfirmation && (
-            <Tooltip content={t('input.stop')}>
-              <button type="button" className="bitfun-fmc__header-btn bitfun-fmc__header-btn--stop" onClick={handleCancel}>
-                <Square size={12} />
-              </button>
-            </Tooltip>
-          )}
-
+          {/* Tool confirmation and stop controls come from the reused session
+              surface (permission panel above ChatInput, ChatInput stop button),
+              so the header only owns bubble chrome. */}
           <Tooltip content={t('planner.cancel')}>
             <button type="button" className="bitfun-fmc__header-btn bitfun-fmc__header-btn--close" onClick={handleClose}>
               <X size={14} />
@@ -311,52 +219,18 @@ export const FloatingMiniChat: React.FC = () => {
           </Tooltip>
         </div>
 
-        {/* FlowChat body — only mounted while the panel is open to avoid
-            running a second VirtualMessageList and store sync in the background
-            while the agent is actively streaming in another scene. */}
+        {/* Main window session surface, reused as-is. Only mounted while the
+            panel is open to avoid running a second VirtualMessageList and store
+            sync in the background while the agent streams in another scene. */}
         <div className="bitfun-fmc__body">
-          {isOpen && <ModernFlowChatContainer />}
-        </div>
-
-        {/* Input bar */}
-        <div className="bitfun-fmc__input-bar">
-          <Input
-            variant="filled"
-            inputSize="small"
-            className="bitfun-fmc__input-wrapper"
-            value={inputValue}
-            onChange={(e) => setInputValue(e.target.value)}
-            onKeyDown={handleKeyDown}
-            onCompositionStart={handleCompositionStart}
-            onCompositionEnd={handleCompositionEnd}
-            placeholder={
-              currentStreamState.isStreaming
-                ? t('toolCards.toolbar.aiProcessing')
-                : t('toolCards.toolbar.inputMessage')
-            }
-            disabled={currentStreamState.isStreaming}
-          />
-          {currentStreamState.isStreaming ? (
-            <Tooltip content={t('input.stop')}>
-              <button
-                type="button"
-                className="bitfun-fmc__input-btn bitfun-fmc__input-btn--stop"
-                onClick={handleCancel}
-              >
-                <Square size={14} />
-              </button>
-            </Tooltip>
-          ) : (
-            <Tooltip content={t('input.send')}>
-              <button
-                type="button"
-                className="bitfun-fmc__input-btn bitfun-fmc__input-btn--send"
-                onClick={handleSendMessage}
-                disabled={!inputValue.trim()}
-              >
-                <ArrowUp size={14} />
-              </button>
-            </Tooltip>
+          {surfaceMounted && (
+            <ChatPane
+              width={0}
+              isFullscreen={false}
+              isSceneActive
+              workspacePath={workspacePath}
+              showChatInput
+            />
           )}
         </div>
       </div>

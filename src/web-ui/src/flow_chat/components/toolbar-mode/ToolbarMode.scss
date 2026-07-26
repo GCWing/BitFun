@@ -88,16 +88,6 @@ $transition-timing: cubic-bezier(0.4, 0, 0.2, 1);
   pointer-events: none;
 }
 
-.bitfun-toolbar-mode__session-menu-root {
-  position: relative;
-  pointer-events: auto;
-}
-
-.bitfun-toolbar-mode__session-menu-trigger--open {
-  background: var(--element-bg-base);
-  color: var(--color-accent-500);
-}
-
 .bitfun-toolbar-mode__header-right {
   flex: 1 1 auto;
   display: flex;
@@ -122,37 +112,6 @@ $transition-timing: cubic-bezier(0.4, 0, 0.2, 1);
   align-items: center;
   gap: 6px;
   flex-shrink: 0;
-}
-
-.bitfun-toolbar-mode__create-btn {
-  flex-shrink: 0;
-  width: 22px;
-  height: 22px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border: none;
-  background: transparent;
-  color: var(--color-text-muted);
-  border-radius: var(--size-radius-sm);
-  cursor: pointer;
-  transition: all 0.2s $transition-timing;
-  
-  &:hover:not(:disabled) {
-    background: var(--color-accent-200);
-    color: var(--color-accent-500);
-    transform: scale(1.1);
-  }
-  
-  &:active:not(:disabled) {
-    transform: scale(0.95);
-  }
-
-  &:disabled {
-    cursor: not-allowed;
-    opacity: var(--opacity-disabled);
-    transform: none;
-  }
 }
 
 .bitfun-toolbar-mode__title-wrapper {
@@ -198,171 +157,6 @@ $transition-timing: cubic-bezier(0.4, 0, 0.2, 1);
   text-overflow: ellipsis;
   white-space: nowrap;
   text-align: center;
-}
-
-.bitfun-toolbar-mode__session-menu {
-  display: flex;
-  flex-direction: column;
-  min-height: 0;
-  max-height: inherit;
-}
-
-.bitfun-toolbar-mode__session-menu-actions {
-  flex: 0 0 auto;
-}
-
-.bitfun-toolbar-mode__session-menu-scroll {
-  flex: 1 1 auto;
-  min-height: 0;
-  /* 仅列表区域限高，滚轮 / 触控板滚动 */
-  max-height: min(240px, 38vh);
-  overflow-x: hidden;
-  overflow-y: auto;
-  overscroll-behavior: contain;
-  scrollbar-gutter: stable;
-
-  scrollbar-width: thin;
-  scrollbar-color: color-mix(in srgb, var(--color-text-muted) 45%, transparent) transparent;
-  -ms-overflow-style: auto;
-
-  &::-webkit-scrollbar {
-    width: 6px;
-  }
-
-  &::-webkit-scrollbar-thumb {
-    border-radius: 999px;
-    background: color-mix(in srgb, var(--color-text-muted) 40%, transparent);
-  }
-
-  &::-webkit-scrollbar-track {
-    background: transparent;
-  }
-}
-
-.bitfun-toolbar-mode__session-dropdown {
-  position: absolute;
-  top: 100%;
-  left: 0;
-  margin-top: 4px;
-  width: max(100%, 220px);
-  max-width: min(360px, calc(100vw - 24px));
-  max-height: min(360px, calc(100vh - 80px));
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-  background: var(--color-bg-primary);
-  border: 1px solid var(--border-medium);
-  border-radius: var(--size-radius-base);
-  box-shadow: var(--shadow-xl);
-  z-index: 100;
-  animation: dropdown-appear 0.2s $transition-timing;
-  transform-origin: top left;
-
-  .bitfun-toolbar-mode__session-menu {
-    max-height: inherit;
-  }
-
-  .bitfun-toolbar-mode__session-menu-actions .bitfun-toolbar-mode__session-item--new:first-of-type {
-    border-radius: 7px 7px 0 0;
-  }
-
-  .bitfun-toolbar-mode__session-menu-scroll .bitfun-toolbar-mode__session-item:last-child {
-    border-radius: 0 0 7px 7px;
-  }
-}
-
-.bitfun-toolbar-mode__session-picker {
-  flex: 1;
-  width: 100%;
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-  overflow-x: hidden;
-  border-bottom: 1px solid var(--border-subtle);
-  animation: session-picker-expand 0.25s $transition-timing;
-
-  .bitfun-toolbar-mode__session-menu {
-    flex: 1;
-    min-height: 0;
-  }
-
-  /* 紧凑窗体：列表占剩余高度，内部滚动 */
-  .bitfun-toolbar-mode__session-menu-scroll {
-    flex: 1 1 auto;
-    min-height: 0;
-    max-height: none;
-  }
-}
-
-.bitfun-toolbar-mode__session-item {
-  display: block;
-  width: 100%;
-  box-sizing: border-box;
-  margin: 0;
-  padding: 6px 12px;
-  border: none;
-  background: transparent;
-  color: var(--color-text-secondary);
-  font-size: var(--flowchat-font-size-sm);
-  text-align: left;
-  cursor: pointer;
-  transition: background 0.1s ease;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  
-  &:hover {
-    background: var(--element-bg-soft);
-    color: var(--color-text-primary);
-  }
-  
-  &--active {
-    background: var(--color-accent-200);
-    color: var(--color-accent-500);
-  }
-
-  &--new {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    font-weight: var(--font-weight-medium);
-    color: var(--color-text-primary);
-
-    &:hover .bitfun-toolbar-mode__session-item-icon {
-      background: var(--color-accent-300);
-      color: var(--color-accent-500);
-    }
-  }
-}
-
-/* “+ 编程会话”：圆底加号，对齐侧栏顶栏 */
-.bitfun-toolbar-mode__session-item-icon {
-  flex-shrink: 0;
-  width: 20px;
-  height: 20px;
-  border-radius: 50%;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  background: var(--color-accent-200);
-  color: var(--color-accent-500);
-  transition: background 0.1s ease, color 0.1s ease;
-}
-
-.bitfun-toolbar-mode__session-item-label {
-  min-width: 0;
-  flex: 1;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.bitfun-toolbar-mode__session-list-divider {
-  height: 1px;
-  margin: 4px 8px;
-  background: var(--border-subtle);
-  flex-shrink: 0;
 }
 
 .bitfun-toolbar-mode__overflow-menu {
@@ -520,31 +314,6 @@ $transition-timing: cubic-bezier(0.4, 0, 0.2, 1);
   gap: 6px;
 }
 
-.bitfun-toolbar-mode__input-field {
-  flex: 1;
-  align-self: center;
-  height: 32px;
-  padding: 0 8px;
-  border: none;
-  border-radius: 0;
-  background: transparent;
-  color: var(--color-text-primary);
-  font-size: var(--flowchat-font-size-sm);
-  outline: none;
-  box-shadow: none;
-  cursor: text;
-  
-  &:focus {
-    border: none;
-    outline: none;
-    box-shadow: none;
-  }
-  
-  &::placeholder {
-    color: var(--color-text-disabled);
-  }
-}
-
 .toolbar-btn {
   flex-shrink: 0;
   align-self: center;
@@ -591,37 +360,6 @@ $transition-timing: cubic-bezier(0.4, 0, 0.2, 1);
     &:hover { background: var(--color-error-border); }
   }
   
-  &--cancel {
-    // Expanded-mode cancel indicator.
-    width: 12px;
-    height: 12px;
-    border-radius: 50% !important;
-    background: var(--color-warning) !important;
-    border: 1px solid var(--color-warning) !important;
-    color: white !important;
-    box-shadow: 0 0 3px var(--color-warning) !important;
-    animation: toolbar-cancel-pulse 2s ease-in-out infinite;
-    position: relative;
-    
-    // Hide icon and use a white dot.
-    svg {
-      display: none;
-    }
-    
-    &::after {
-      content: '';
-      position: absolute;
-      width: 5px;
-      height: 5px;
-      border-radius: 50%;
-      background: white;
-    }
-    
-    &:hover {
-      box-shadow: 0 0 5px var(--color-warning) !important;
-    }
-  }
-  
   &--cancel-compact {
     // Compact-mode stop button.
     width: 22px;
@@ -639,12 +377,6 @@ $transition-timing: cubic-bezier(0.4, 0, 0.2, 1);
     &:hover {
       background: var(--color-error-border) !important;
     }
-  }
-  
-  &--input {
-    background: var(--color-accent-200);
-    color: var(--color-accent-500);
-    &:hover { background: var(--color-accent-300); }
   }
   
   &--expand {
@@ -668,26 +400,6 @@ $transition-timing: cubic-bezier(0.4, 0, 0.2, 1);
       color: var(--color-text-primary);
     }
   }
-  
-  &--send {
-    background: var(--color-accent-600);
-    // Match icon color with the create-session button.
-    color: var(--color-text-muted);
-    
-    svg {
-      color: currentColor;
-    }
-    
-    &:hover:not(:disabled) {
-      background: var(--color-accent-500);
-      color: var(--color-accent-500);
-    }
-    
-    &:disabled {
-      opacity: var(--opacity-disabled);
-      cursor: default;
-    }
-  }
 }
 
 @keyframes toolbar-progress-flow {
@@ -705,21 +417,6 @@ $transition-timing: cubic-bezier(0.4, 0, 0.2, 1);
   50% { box-shadow: var(--shadow-xl), 0 0 0 2px var(--color-warning); }
 }
 
-@keyframes toolbar-slide-up {
-  from { opacity: 0; transform: translateY(4px); }
-  to { opacity: 1; transform: translateY(0); }
-}
-
-@keyframes toolbar-slide-down {
-  from { opacity: 0; transform: translateY(-4px); }
-  to { opacity: 1; transform: translateY(0); }
-}
-
-@keyframes toolbar-fade-in {
-  from { opacity: 0; }
-  to { opacity: 1; }
-}
-
 .animate-spin {
   animation: toolbar-spin 1s linear infinite;
 }
@@ -733,34 +430,30 @@ $transition-timing: cubic-bezier(0.4, 0, 0.2, 1);
   to { transform: rotate(360deg); }
 }
 
-// Cancel button pulse uses opacity only (no scale).
-@keyframes toolbar-cancel-pulse {
-  0%, 100% {
-    opacity: 1;
-  }
-  50% {
-    opacity: 0.7;
-  }
-}
-
 @keyframes toolbar-pulse {
   0%, 100% { opacity: 1; }
   50% { opacity: 0.6; }
 }
 
-.bitfun-toolbar-mode__flowchat-container {
+// Host for the reused main-window session surface (ChatPane: conversation +
+// ChatInput). Only sizing is adjusted here — the surface keeps the main
+// window's own look and behavior.
+.bitfun-toolbar-mode__session-surface {
   flex: 1;
   min-height: 0;
+  min-width: 0;
   overflow: hidden;
-  overflow-x: hidden;
   display: flex;
   flex-direction: column;
-  
+
   animation: flowchat-expand-in $transition-duration $transition-timing;
-  
-  // Reset inner FlowChat container styles.
+
+  .bitfun-chat-pane__content {
+    flex: 1;
+    min-height: 0;
+  }
+
   .modern-flowchat-container {
-    height: 100%;
     border: none;
     border-radius: 0;
     background: transparent;
@@ -770,47 +463,9 @@ $transition-timing: cubic-bezier(0.4, 0, 0.2, 1);
 
 .bitfun-toolbar-mode--expanded {
   cursor: default;
-  
+
   .bitfun-toolbar-mode__header {
     border-bottom-color: var(--border-base);
-  }
-  
-  .bitfun-toolbar-mode__content-row {
-    animation: content-row-exit $transition-duration $transition-timing forwards;
-  }
-}
-
-
-.bitfun-toolbar-mode__expanded-input {
-  flex-shrink: 0;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  
-  animation: input-slide-up $transition-duration $transition-timing;
-  padding: 8px 12px;
-  border-top: 1px solid var(--border-subtle);
-  background: var(--element-bg-subtle);
-  
-  .bitfun-toolbar-mode__input-field--expanded {
-    flex: 1;
-    height: 36px;
-    padding: 0 12px;
-    border: 1px solid var(--border-base);
-    border-radius: var(--size-radius-base);
-    background: var(--color-bg-primary);
-    color: var(--color-text-primary);
-    font-size: var(--flowchat-font-size-sm);
-    outline: none;
-    transition: border-color 0.15s ease;
-    
-    &:focus {
-      border-color: var(--color-accent-500);
-    }
-    
-    &::placeholder {
-      color: var(--color-text-disabled);
-    }
   }
 }
 
@@ -836,41 +491,6 @@ $transition-timing: cubic-bezier(0.4, 0, 0.2, 1);
     opacity: 1;
     transform: translateY(0);
     max-height: 100vh;
-  }
-}
-
-@keyframes content-row-exit {
-  from {
-    opacity: 1;
-    max-height: 100px;
-  }
-  to {
-    opacity: 0;
-    max-height: 0;
-    padding: 0;
-    overflow: hidden;
-  }
-}
-
-@keyframes input-slide-up {
-  from {
-    opacity: 0;
-    transform: translateY(10px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-@keyframes session-picker-expand {
-  from {
-    opacity: 0;
-    max-height: 0;
-  }
-  to {
-    opacity: 1;
-    max-height: 300px;
   }
 }
 

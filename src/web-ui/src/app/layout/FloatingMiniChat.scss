@@ -14,10 +14,21 @@ $fmc-close-duration: 0.25s;
 
 $button-size: 44px;
 $button-offset: 28px;
-$panel-width: 380px;
-$panel-height: 620px;
+// Sized for the full session composer (workspace strip, model/permission
+// controls, action row) rather than the single-line input it replaced.
+$panel-width: 440px;
+$panel-height: 680px;
 
 // ─── Root container ────────────────────────────────────────
+// Children opt into pointer events individually. A blanket `& > *` override
+// here used to decide, by source order alone, whether the collapsed panel or
+// the trigger under it received the press — too fragile for the one control
+// that has to work on the first try.
+//
+// Stacking inside this context, bottom to top: backdrop (0), panel (1),
+// trigger (2). The trigger therefore always sits above the collapsed panel
+// that overlaps it, and is removed from hit testing by `visibility` — not by
+// pointer-events alone — once the panel is open.
 .bitfun-fmc {
   position: fixed;
   bottom: $button-offset;
@@ -27,10 +38,6 @@ $panel-height: 620px;
   transition:
     right $motion-base $easing-decelerate,
     bottom $motion-base $easing-decelerate;
-
-  & > * {
-    pointer-events: auto;
-  }
 
   &--miniapp-customizing {
     right: calc(clamp(380px, 38vw, 560px) + #{$button-offset + 16px});
@@ -42,10 +49,14 @@ $panel-height: 620px;
   position: fixed;
   inset: 0;
   z-index: 0;
+  pointer-events: auto;
 }
 
 // ─── Circular trigger button ───────────────────────────────
 .bitfun-fmc__button {
+  position: relative;
+  z-index: 2;
+  pointer-events: auto;
   width: $button-size;
   height: $button-size;
   border-radius: 50%;
@@ -80,11 +91,18 @@ $panel-height: 620px;
     transform: scale(0.94);
   }
 
-  // Hide when panel is open
+  // Hide when the panel is open. `visibility` (delayed until the fade-out
+  // finishes) is what actually removes it from hit testing; opacity alone
+  // would leave an invisible but clickable trigger under the panel.
   .bitfun-fmc--open & {
     opacity: 0;
     transform: scale(0.5);
+    visibility: hidden;
     pointer-events: none;
+    transition:
+      transform 0.2s $fmc-ease,
+      opacity $fmc-close-duration $fmc-ease,
+      visibility 0s linear $fmc-close-duration;
   }
 }
 
@@ -109,22 +127,28 @@ $panel-height: 620px;
   flex-direction: column;
   box-sizing: border-box;
 
-  // Pre-open state: collapsed into the button position
+  // Pre-open state: collapsed into the button position. The collapsed panel
+  // still overlaps the trigger, so it is hidden outright once the close
+  // animation ends rather than relying on pointer-events alone.
   transform-origin: bottom right;
   opacity: 0;
   transform: scale(0.15);
+  visibility: hidden;
   pointer-events: none;
   transition:
     opacity $fmc-close-duration $fmc-ease,
-    transform $fmc-close-duration $fmc-ease;
+    transform $fmc-close-duration $fmc-ease,
+    visibility 0s linear $fmc-close-duration;
 
   &--open {
     opacity: 1;
     transform: scale(1);
+    visibility: visible;
     pointer-events: auto;
     transition:
       opacity $fmc-open-duration $fmc-ease,
-      transform $fmc-open-duration $fmc-ease;
+      transform $fmc-open-duration $fmc-ease,
+      visibility 0s linear 0s;
   }
 
   // ── State borders ──
@@ -151,30 +175,11 @@ $panel-height: 620px;
     }
   }
 
-  &--error {
-    border-color: var(--color-error-border);
-  }
-
-  &--confirm {
-    border-color: var(--color-warning-border);
-    animation: fmc-pulse 1s ease-in-out infinite;
-  }
 }
 
 @keyframes fmc-progress {
   0% { background-position: 200% 0; }
   100% { background-position: -200% 0; }
-}
-
-@keyframes fmc-pulse {
-  0%, 100% {
-    box-shadow: 0 4px 12px var(--color-overlay-black-30),
-      0 0 0 1px var(--color-warning-border);
-  }
-  50% {
-    box-shadow: 0 4px 12px var(--color-overlay-black-30),
-      0 0 0 2px var(--color-warning);
-  }
 }
 
 // ─── Header ────────────────────────────────────────────────
@@ -211,144 +216,61 @@ $panel-height: 620px;
     transform: scale(0.92);
   }
 
-  &--confirm {
-    color: var(--color-success);
-    &:hover { background: var(--color-success-bg); }
-  }
-
-  &--reject {
-    color: var(--color-error);
-    &:hover { background: var(--color-error-bg); }
-  }
-
-  &--stop {
-    color: var(--color-error);
-    &:hover { background: var(--color-error-bg); }
-  }
-
   &--close:hover {
     background: var(--color-error-bg);
     color: var(--color-error);
   }
 }
 
-// ─── Title / session picker ────────────────────────────────
+// ─── Title ─────────────────────────────────────────────────
+// Plain display. Session switching lives in the shared SessionMenu ("+"),
+// matching floating window mode.
 .bitfun-fmc__title-wrapper {
   flex: 1;
   min-width: 0;
-  position: relative;
 }
 
-.bitfun-fmc__title-btn {
+.bitfun-fmc__title-display {
   width: 100%;
+  min-width: 0;
   display: flex;
   align-items: center;
-  gap: 4px;
   padding: 4px 8px;
-  border: none;
-  background: transparent;
+  box-sizing: border-box;
   color: var(--color-text-primary);
-  font-size: 12px;
-  font-weight: 500;
-  cursor: pointer;
-  border-radius: 6px;
-  transition: background 0.15s ease;
-
-  &:hover {
-    background: var(--element-bg-base);
-  }
-
-  svg {
-    flex-shrink: 0;
-    color: var(--color-text-muted);
-  }
+  font-size: var(--flowchat-font-size-xs);
+  font-weight: var(--font-weight-medium);
+  border-radius: var(--size-radius-sm);
 }
 
 .bitfun-fmc__title-text {
   flex: 1;
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
   text-align: left;
-}
-
-.bitfun-fmc__title-chevron {
-  flex-shrink: 0;
-  opacity: 0;
-  transition: transform 0.2s ease, opacity 0.15s ease;
-
-  .bitfun-fmc__title-btn:hover & {
-    opacity: 1;
-  }
-
-  &--open {
-    opacity: 1;
-    transform: rotate(180deg);
-  }
-}
-
-.bitfun-fmc__session-dropdown {
-  position: absolute;
-  top: 100%;
-  left: 0;
-  right: 0;
-  margin-top: 4px;
-  max-height: 220px;
-  overflow-y: auto;
-  background: var(--color-bg-elevated);
-  border: 1px solid var(--border-medium);
-  border-radius: 8px;
-  box-shadow: 0 8px 24px var(--color-overlay-black-50);
-  z-index: 100;
-  animation: fmc-dropdown-in 0.18s $fmc-ease;
-  transform-origin: top center;
-  scrollbar-width: none;
-
-  &::-webkit-scrollbar { display: none; }
-}
-
-@keyframes fmc-dropdown-in {
-  from { opacity: 0; transform: translateY(-6px) scale(0.98); }
-  to   { opacity: 1; transform: translateY(0) scale(1); }
-}
-
-.bitfun-fmc__session-item {
-  display: block;
-  width: 100%;
-  box-sizing: border-box;
-  padding: 7px 12px;
-  border: none;
-  background: transparent;
-  color: var(--color-text-secondary);
-  font-size: 12px;
-  text-align: left;
-  cursor: pointer;
-  transition: background 0.1s ease;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-
-  &:hover {
-    background: var(--element-bg-soft);
-    color: var(--color-text-primary);
-  }
-
-  &--active {
-    background: var(--color-accent-200);
-    color: var(--color-accent-500);
-  }
 }
 
 // ─── FlowChat body ─────────────────────────────────────────
+// Host for the reused main-window session surface (ChatPane: conversation +
+// ChatInput). Only sizing is adjusted here — the surface keeps the main
+// window's own look and behavior.
 .bitfun-fmc__body {
   flex: 1;
   min-height: 0;
+  min-width: 0;
   overflow: hidden;
   display: flex;
   flex-direction: column;
 
+  .bitfun-chat-pane__content {
+    flex: 1;
+    min-height: 0;
+    background: transparent;
+  }
+
   .modern-flowchat-container {
-    height: 100%;
     border: none;
     border-radius: 0;
     background: transparent;
@@ -356,93 +278,6 @@ $panel-height: 620px;
 
     > .flowchat-header {
       display: none;
-    }
-  }
-}
-
-// ─── Input bar ─────────────────────────────────────────────
-.bitfun-fmc__input-bar {
-  flex-shrink: 0;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 8px 10px;
-  border-top: 1px solid var(--border-subtle);
-  background: var(--element-bg-subtle);
-}
-
-.bitfun-fmc__input-wrapper {
-  flex: 1;
-  min-width: 0;
-}
-
-.bitfun-fmc__input-btn {
-  flex-shrink: 0;
-  border: none;
-  outline: none;
-  cursor: pointer;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  transition: all 0.2s ease;
-
-  &--send {
-    width: 24px;
-    height: 24px;
-    border-radius: 50%;
-    border: 1px solid var(--color-accent-300);
-    background: var(--color-accent-200);
-    color: var(--color-accent-300);
-
-    &:not(:disabled) {
-      background: linear-gradient(135deg,
-        color-mix(in srgb, var(--color-accent-500) 85%, transparent),
-        color-mix(in srgb, var(--color-purple-500) 90%, transparent));
-      border: 1px solid color-mix(in srgb, var(--color-accent-500) 60%, transparent);
-      color: var(--color-static-white);
-      box-shadow:
-        0 2px 8px color-mix(in srgb, var(--color-accent-500) 40%, transparent),
-        0 0 12px color-mix(in srgb, var(--color-purple-500) 25%, transparent);
-    }
-
-    &:hover:not(:disabled) {
-      background: linear-gradient(135deg,
-        color-mix(in srgb, var(--color-accent-500) 94%, var(--color-static-white)),
-        color-mix(in srgb, var(--color-purple-500) 92%, var(--color-static-white)));
-      border-color: color-mix(in srgb, var(--color-accent-500) 80%, transparent);
-      color: var(--color-static-white);
-      transform: scale(1.12);
-      box-shadow:
-        0 6px 20px color-mix(in srgb, var(--color-accent-500) 55%, transparent),
-        0 0 24px color-mix(in srgb, var(--color-purple-500) 40%, transparent);
-    }
-
-    &:active:not(:disabled) {
-      transform: scale(0.95);
-    }
-
-    &:disabled {
-      background: var(--color-accent-100);
-      border-color: var(--color-accent-200);
-      color: var(--color-accent-400);
-      opacity: 0.35;
-      cursor: default;
-    }
-  }
-
-  &--stop {
-    width: 24px;
-    height: 24px;
-    border-radius: 50%;
-    background: var(--color-error-bg);
-    color: var(--color-error);
-
-    &:hover {
-      background: var(--color-error-border);
-    }
-
-    &:active {
-      transform: scale(0.93);
     }
   }
 }
