@@ -213,7 +213,7 @@ mod tests {
         let img = image::RgbaImage::from_pixel(100, 100, image::Rgba([255, 255, 255, 255]));
         let rgb = image::DynamicImage::ImageRgba8(img).to_rgb8();
         let mut jpeg_buf = Vec::new();
-        let encoder = image::codecs::jpeg::JpegEncoder::new_with_quality(&mut jpeg_buf, 80);
+        let mut encoder = image::codecs::jpeg::JpegEncoder::new_with_quality(&mut jpeg_buf, 80);
         encoder
             .encode(rgb.as_raw(), 100, 100, image::ExtendedColorType::Rgb8)
             .expect("JPEG encode should succeed");

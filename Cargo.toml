@@ -291,10 +291,11 @@ opt-level = 3
 lto = "thin"
 codegen-units = 1
 strip = true
-# Drop unwinding tables/landing pads (~5-10% smaller binary). The panic hook in
-# desktop lib.rs still runs; catch_unwind-based recovery paths become aborts.
-# NOTE: needs one packaging regression round (medium risk).
-panic = "abort"
+# NOTE: do not set `panic = "abort"` here. Several production paths rely on
+# `catch_unwind` to contain third-party panics instead of taking down the app:
+# `browser_api::browser_get_url` (known wry bug where WKWebView URL is nil) and
+# the relay client's TLS connector construction. Aborting would turn those
+# recoverable failures into process crashes.
 
 [profile.release-fast]
 inherits = "release"
