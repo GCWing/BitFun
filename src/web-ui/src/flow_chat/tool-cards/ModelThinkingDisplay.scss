@@ -86,6 +86,15 @@
     grid-template-rows: 1fr;
   }
 
+  /*
+   * Automatic expand/collapse must land in a single frame. Animating it drags
+   * the height change across ~15 frames that the message list's scroll anchor
+   * has to chase, which the user sees as the chat jumping by itself.
+   */
+  &--instant {
+    transition: none;
+  }
+
   > .thinking-content-wrapper {
     overflow: hidden;
   }

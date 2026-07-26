@@ -22,6 +22,12 @@ const CONTENT_IDLE_TIMEOUT = 500;
 interface FlowTextBlockProps {
   textItem: FlowTextItem;
   className?: string;
+  /**
+   * Replay the whole text through the typewriter on mount. Off by default: the
+   * message list is virtualized, so a streaming block that scrolls out and back
+   * would otherwise restart from an empty string and re-grow, which reads as the
+   * conversation refreshing itself. Only newly appended text is revealed.
+   */
   replayStreamingOnMount?: boolean;
   traceContext?: MarkdownTraceContext;
   testId?: string;
@@ -63,7 +69,7 @@ const RuntimeStatusBlock: React.FC<Pick<FlowTextBlockProps, 'textItem' | 'classN
 export const FlowTextBlock = React.memo<FlowTextBlockProps>(({
   textItem,
   className = '',
-  replayStreamingOnMount = true,
+  replayStreamingOnMount = false,
   traceContext,
   testId,
   testAttributes,

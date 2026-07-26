@@ -1,8 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import {
-  buildModelRoundItemGroups,
-  isCompletedToolInTransientWindow,
-} from './modelRoundItemGrouping';
+import { buildModelRoundItemGroups } from './modelRoundItemGrouping';
 import type { FlowTextItem, FlowToolItem, FlowUserSteeringItem } from '../../types/flow-chat';
 
 function makeTextItem(id: string): FlowTextItem {
@@ -142,7 +139,7 @@ describe('buildModelRoundItemGroups', () => {
     ]);
   });
 
-  it('keeps a just-completed collapsible tool visible before merging it', () => {
+  it('merges a completed collapsible tool without waiting on wall-clock time', () => {
     const completedTool = makeReadTool('tool-1');
     const justCompletedTool = makeReadTool('tool-2', 'completed', 10_000);
 
@@ -151,53 +148,6 @@ describe('buildModelRoundItemGroups', () => {
       isStreaming: true,
       disableExploreGrouping: false,
       isCollapsibleTool: toolName => toolName === 'Read',
-      nowMs: 10_200,
-    });
-
-    expect(groups).toEqual([
-      {
-        type: 'explore',
-        items: [completedTool],
-        isLast: false,
-      },
-      {
-        type: 'critical',
-        item: justCompletedTool,
-      },
-    ]);
-  });
-
-  it('merges a completed collapsible tool after the transition window', () => {
-    const completedTool = makeReadTool('tool-1');
-    const settledTool = makeReadTool('tool-2', 'completed', 10_000);
-
-    const groups = buildModelRoundItemGroups({
-      items: [completedTool, settledTool],
-      isStreaming: true,
-      disableExploreGrouping: false,
-      isCollapsibleTool: toolName => toolName === 'Read',
-      nowMs: 11_001,
-    });
-
-    expect(groups).toEqual([
-      {
-        type: 'explore',
-        items: [completedTool, settledTool],
-        isLast: true,
-      },
-    ]);
-  });
-
-  it('does not keep non-streaming completed tools in a time-based critical state', () => {
-    const completedTool = makeReadTool('tool-1');
-    const justCompletedTool = makeReadTool('tool-2', 'completed', 10_000);
-
-    const groups = buildModelRoundItemGroups({
-      items: [completedTool, justCompletedTool],
-      isStreaming: false,
-      disableExploreGrouping: false,
-      isCollapsibleTool: toolName => toolName === 'Read',
-      nowMs: 10_200,
     });
 
     expect(groups).toEqual([
@@ -208,32 +158,23 @@ describe('buildModelRoundItemGroups', () => {
       },
     ]);
   });
-});
 
-describe('isCompletedToolInTransientWindow', () => {
-  it('treats only freshly completed tools as transient', () => {
-    expect(isCompletedToolInTransientWindow(
-      makeReadTool('tool-1', 'completed', 10_000),
-      10_200,
-    )).toBe(true);
-    expect(isCompletedToolInTransientWindow(
-      makeReadTool('tool-2', 'completed', 10_000),
-      11_001,
-    )).toBe(false);
-  });
+  it('produces the same grouping whether or not the round is streaming', () => {
+    const items = [makeReadTool('tool-1'), makeReadTool('tool-2', 'completed', 10_000)];
 
-  it('does not classify historical or invalid completion times as transient', () => {
-    expect(isCompletedToolInTransientWindow(
-      makeReadTool('tool-1', 'completed'),
-      10_200,
-    )).toBe(false);
-    expect(isCompletedToolInTransientWindow(
-      makeReadTool('tool-2', 'completed', 12_000),
-      10_200,
-    )).toBe(false);
-    expect(isCompletedToolInTransientWindow(
-      makeReadTool('tool-3', 'running'),
-      10_200,
-    )).toBe(false);
+    const streaming = buildModelRoundItemGroups({
+      items,
+      isStreaming: true,
+      disableExploreGrouping: false,
+      isCollapsibleTool: toolName => toolName === 'Read',
+    });
+    const settled = buildModelRoundItemGroups({
+      items,
+      isStreaming: false,
+      disableExploreGrouping: false,
+      isCollapsibleTool: toolName => toolName === 'Read',
+    });
+
+    expect(streaming).toEqual(settled);
   });
 });

@@ -14,7 +14,6 @@ import {
   SEARCH_TOOL_NAMES,
   COMMAND_TOOL_NAMES,
 } from '../tool-cards/toolCardMetadata';
-import { isCompletedToolInTransientWindow } from '../components/modern/modelRoundItemGrouping';
 import { flowChatStore } from './FlowChatStore';
 import { getEffectiveToolName } from '../utils/toolInvocationIdentity';
 import {
@@ -74,10 +73,6 @@ export type VirtualItem =
       turnEndedAt?: number;
       turnDurationMs?: number;
       turnTokenUsage?: TokenUsage;
-      segmentId?: string;
-      segmentIndex?: number;
-      segmentCount?: number;
-      sourceRoundId?: string;
     }
   | { type: 'explore-group'; data: ExploreGroupData; turnId: string }
   | { type: 'turn-completion-notice'; data: TurnCompletionNotice; turnId: string }
@@ -140,12 +135,6 @@ function hasActiveTool(round: ModelRound): boolean {
   });
 }
 
-function hasRecentlyCompletedTool(round: ModelRound, nowMs: number): boolean {
-  return round.items.some(item => {
-    return isCompletedToolInTransientWindow(item, nowMs);
-  });
-}
-
 function hasTrailingVisibleText(round: ModelRound): boolean {
   for (let index = round.items.length - 1; index >= 0; index -= 1) {
     const item = round.items[index];
@@ -163,7 +152,7 @@ function hasTrailingVisibleText(round: ModelRound): boolean {
   return false;
 }
 
-function isExploreOnlyRound(round: ModelRound, nowMs: number): boolean {
+function isExploreOnlyRound(round: ModelRound): boolean {
   if (!round.items || round.items.length === 0) return false;
 
   if (round.renderHints?.disableExploreGrouping === true) {
@@ -174,7 +163,7 @@ function isExploreOnlyRound(round: ModelRound, nowMs: number): boolean {
     return false;
   }
 
-  if (hasActiveTool(round) || (round.isStreaming && hasRecentlyCompletedTool(round, nowMs))) {
+  if (hasActiveTool(round)) {
     return false;
   }
 
@@ -199,77 +188,6 @@ function isExploreOnlyRound(round: ModelRound, nowMs: number): boolean {
   });
   
   return allItemsCollapsible;
-}
-
-const MODEL_ROUND_VIRTUAL_CHUNK_ITEM_LIMIT = 4;
-const MODEL_ROUND_VIRTUAL_CHUNK_THRESHOLD = MODEL_ROUND_VIRTUAL_CHUNK_ITEM_LIMIT * 3;
-
-interface ModelRoundVirtualChunk {
-  round: ModelRound;
-  segmentId?: string;
-  segmentIndex?: number;
-  segmentCount?: number;
-  sourceRoundId?: string;
-}
-
-function shouldSplitModelRoundForVirtualItems(
-  round: ModelRound,
-  isTurnComplete: boolean,
-  nowMs: number,
-  isLastRound: boolean,
-): boolean {
-  // Never split the turn-tail round on completion: replacing one Virtuoso key
-  // with N segment keys remounts the visible assistant message and flashes the
-  // chat pane. Older non-tail rounds may still split for virtualization.
-  if (isLastRound) {
-    return false;
-  }
-
-  return (
-    isTurnComplete &&
-    isTerminalRoundStatus(round.status) &&
-    !round.isStreaming &&
-    round.isComplete !== false &&
-    round.items.length > MODEL_ROUND_VIRTUAL_CHUNK_THRESHOLD &&
-    !hasActiveTool(round) &&
-    !hasRecentlyCompletedTool(round, nowMs) &&
-    round.items.every(item => !isActiveFlowItem(item))
-  );
-}
-
-function splitModelRoundForVirtualItems(
-  round: ModelRound,
-  isTurnComplete: boolean,
-  nowMs: number,
-  isLastRound: boolean,
-): ModelRoundVirtualChunk[] {
-  if (!shouldSplitModelRoundForVirtualItems(round, isTurnComplete, nowMs, isLastRound)) {
-    return [{ round }];
-  }
-
-  const segmentCount = Math.ceil(round.items.length / MODEL_ROUND_VIRTUAL_CHUNK_ITEM_LIMIT);
-  const chunks: ModelRoundVirtualChunk[] = [];
-
-  for (let segmentIndex = 0; segmentIndex < segmentCount; segmentIndex += 1) {
-    const start = segmentIndex * MODEL_ROUND_VIRTUAL_CHUNK_ITEM_LIMIT;
-    const end = start + MODEL_ROUND_VIRTUAL_CHUNK_ITEM_LIMIT;
-    const segmentId = `${round.id}:segment:${segmentIndex}`;
-
-    chunks.push({
-      round: {
-        ...round,
-        id: segmentId,
-        items: round.items.slice(start, end),
-        historyRounds: segmentIndex === 0 ? round.historyRounds : undefined,
-      },
-      segmentId,
-      segmentIndex,
-      segmentCount,
-      sourceRoundId: round.id,
-    });
-  }
-
-  return chunks;
 }
 
 /**
@@ -394,7 +312,6 @@ export function sessionToVirtualItems(session: Session | null): VirtualItem[] {
   cachedDialogTurnsRef = session.dialogTurns;
 
   const items: VirtualItem[] = [];
-  const nowMs = Date.now();
 
   session.dialogTurns.forEach(turn => {
     const cachedItems = cachedTurnItems.get(turn);
@@ -473,7 +390,7 @@ export function sessionToVirtualItems(session: Session | null): VirtualItem[] {
       let currentGroup: TempExploreGroup | null = null;
 
       rounds.forEach((round, index) => {
-        const exploreOnly = isExploreOnlyRound(round, nowMs);
+        const exploreOnly = isExploreOnlyRound(round);
         if (exploreOnly) {
           const stats = computeRoundStats(round);
           if (currentGroup) {
@@ -557,26 +474,21 @@ export function sessionToVirtualItems(session: Session | null): VirtualItem[] {
           roundIndex = group.endIndex + 1;
           groupIndex++;
         } else {
-          const isLastRound = roundIndex === rounds.length - 1;
-          const roundChunks = splitModelRoundForVirtualItems(round, isTurnComplete, nowMs, isLastRound);
-          roundChunks.forEach((chunk, chunkIndex) => {
-            items.push({
-              type: 'model-round',
-              data: chunk.round,
-              turnId: turn.id,
-              isLastRound: isLastRound && chunkIndex === roundChunks.length - 1,
-              isTurnComplete,
-              turnStartedAt: turn.startTime,
-              turnEndedAt: turn.endTime,
-              turnDurationMs: typeof turn.endTime === 'number'
-                ? Math.max(0, turn.endTime - turn.startTime)
-                : undefined,
-              turnTokenUsage: turn.tokenUsage,
-              segmentId: chunk.segmentId,
-              segmentIndex: chunk.segmentIndex,
-              segmentCount: chunk.segmentCount,
-              sourceRoundId: chunk.sourceRoundId,
-            });
+          // One round is always exactly one virtual item. Splitting a completed
+          // round into segments swaps a single Virtuoso key for N new keys,
+          // which remounts the visible assistant message and flashes the pane.
+          items.push({
+            type: 'model-round',
+            data: round,
+            turnId: turn.id,
+            isLastRound: roundIndex === rounds.length - 1,
+            isTurnComplete,
+            turnStartedAt: turn.startTime,
+            turnEndedAt: turn.endTime,
+            turnDurationMs: typeof turn.endTime === 'number'
+              ? Math.max(0, turn.endTime - turn.startTime)
+              : undefined,
+            turnTokenUsage: turn.tokenUsage,
           });
           roundIndex++;
         }

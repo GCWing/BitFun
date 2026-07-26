@@ -439,14 +439,15 @@ describe('sessionToVirtualItems explore grouping', () => {
     });
   });
 
-  it('keeps a just-completed streaming collapsible tool as a model round before merging it', () => {
-    vi.useFakeTimers();
-    vi.setSystemTime(10_200);
-    const session = makeSession({
-      sessionId: 'just-completed-tool-session',
+  it('merges a just-completed collapsible tool immediately, with no wall-clock window', () => {
+    // The projection must not depend on Date.now(): a time-dependent
+    // classification needs a timer to re-run it, and that timer restructures
+    // and remounts the round long after the data settled.
+    const makeJustCompletedSession = (streaming: boolean) => makeSession({
+      sessionId: `just-completed-tool-session-${streaming ? 'streaming' : 'settled'}`,
       dialogTurns: [{
         id: 'turn-1',
-        sessionId: 'just-completed-tool-session',
+        sessionId: `just-completed-tool-session-${streaming ? 'streaming' : 'settled'}`,
         userMessage: {
           id: 'user-1',
           content: 'Help',
@@ -457,9 +458,9 @@ describe('sessionToVirtualItems explore grouping', () => {
           makeRound({
             id: 'round-2',
             items: [makeTool('tool-2', 'Read', 'completed', 10_000)],
-            isStreaming: true,
-            isComplete: false,
-            status: 'streaming',
+            isStreaming: streaming,
+            isComplete: !streaming,
+            status: streaming ? 'streaming' : 'completed',
           }),
         ],
         status: 'processing',
@@ -467,49 +468,14 @@ describe('sessionToVirtualItems explore grouping', () => {
       }],
     });
 
-    const items = sessionToVirtualItems(session);
-
-    expect(items.map(item => item.type)).toEqual(['user-message', 'explore-group', 'model-round']);
-    expect(items[2]).toMatchObject({
-      type: 'model-round',
-      data: {
-        id: 'round-2',
-      },
-    });
-  });
-
-  it('does not use the transient completed-tool window for non-streaming rounds', () => {
     vi.useFakeTimers();
+
+    // 200ms after the tool finished — inside the old 1s transient window.
     vi.setSystemTime(10_200);
-    const session = makeSession({
-      sessionId: 'settled-completed-tool-session',
-      dialogTurns: [{
-        id: 'turn-1',
-        sessionId: 'settled-completed-tool-session',
-        userMessage: {
-          id: 'user-1',
-          content: 'Help',
-          timestamp: 900,
-        },
-        modelRounds: [
-          makeRound({ id: 'round-1', isStreaming: false, isComplete: true }),
-          makeRound({
-            id: 'round-2',
-            items: [makeTool('tool-2', 'Read', 'completed', 10_000)],
-            isStreaming: false,
-            isComplete: true,
-            status: 'completed',
-          }),
-        ],
-        status: 'processing',
-        startTime: 900,
-      }],
-    });
+    const justFinished = sessionToVirtualItems(makeJustCompletedSession(true));
 
-    const items = sessionToVirtualItems(session);
-
-    expect(items.map(item => item.type)).toEqual(['user-message', 'explore-group']);
-    expect(items[1]).toMatchObject({
+    expect(justFinished.map(item => item.type)).toEqual(['user-message', 'explore-group']);
+    expect(justFinished[1]).toMatchObject({
       type: 'explore-group',
       data: {
         groupId: 'round-1',
@@ -520,6 +486,16 @@ describe('sessionToVirtualItems explore grouping', () => {
         ],
       },
     });
+
+    // Well past the old window: same projection, so no timer can change it.
+    vi.setSystemTime(999_999);
+    const longSettled = sessionToVirtualItems(makeJustCompletedSession(true));
+    expect(longSettled.map(item => item.type)).toEqual(justFinished.map(item => item.type));
+
+    // Streaming vs settled must not change the projection either.
+    vi.setSystemTime(10_200);
+    const notStreaming = sessionToVirtualItems(makeJustCompletedSession(false));
+    expect(notStreaming.map(item => item.type)).toEqual(justFinished.map(item => item.type));
   });
 
   it('keeps the same explore group id when a completed trailing tool is merged in', () => {
@@ -691,7 +667,7 @@ describe('sessionToVirtualItems explore grouping', () => {
     });
   });
 
-  it('splits completed large non-tail model rounds into stable virtual chunks', () => {
+  it('never splits a model round into segments (one round = one stable virtual item)', () => {
     const largeRound = makeRound({
       id: 'large-round',
       items: makeTextItems(25, 'large-text'),
@@ -724,37 +700,11 @@ describe('sessionToVirtualItems explore grouping', () => {
 
     const items = sessionToVirtualItems(session);
     const modelItems = items.filter((item): item is ModelRoundVirtualItem => item.type === 'model-round');
-    const largeChunks = modelItems.filter(item => item.sourceRoundId === 'large-round' || item.data.id.startsWith('large-round'));
 
-    expect(largeChunks.map(item => item.segmentIndex)).toEqual([0, 1, 2, 3, 4, 5, 6]);
-    expect(largeChunks.map(item => item.segmentCount)).toEqual([7, 7, 7, 7, 7, 7, 7]);
-    expect(largeChunks.map(item => item.sourceRoundId)).toEqual([
-      'large-round',
-      'large-round',
-      'large-round',
-      'large-round',
-      'large-round',
-      'large-round',
-      'large-round',
-    ]);
-    expect(largeChunks.map(item => item.data.id)).toEqual([
-      'large-round:segment:0',
-      'large-round:segment:1',
-      'large-round:segment:2',
-      'large-round:segment:3',
-      'large-round:segment:4',
-      'large-round:segment:5',
-      'large-round:segment:6',
-    ]);
-    expect(largeChunks.map(item => item.data.items.length)).toEqual([4, 4, 4, 4, 4, 4, 1]);
-    expect(largeChunks.every(item => item.isLastRound === false)).toBe(true);
-    expect(largeChunks[0].data.items[0]?.id).toBe('large-text-1');
-    expect(largeChunks[6].data.items[0]?.id).toBe('large-text-25');
-    expect(modelItems[modelItems.length - 1]).toMatchObject({
-      data: { id: 'tail-round' },
-      isLastRound: true,
-      segmentId: undefined,
-    });
+    expect(modelItems.map(item => item.data.id)).toEqual(['large-round', 'tail-round']);
+    expect(modelItems[0].data.items).toHaveLength(25);
+    expect(modelItems[0].isLastRound).toBe(false);
+    expect(modelItems[1].isLastRound).toBe(true);
   });
 
   it('does not split the turn-tail large round (avoids completion remount flash)', () => {
@@ -788,7 +738,6 @@ describe('sessionToVirtualItems explore grouping', () => {
     expect(modelItems[0]).toMatchObject({
       data: { id: 'large-tail-round' },
       isLastRound: true,
-      segmentId: undefined,
     });
     expect(modelItems[0].data.items).toHaveLength(25);
   });

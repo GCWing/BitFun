@@ -58,6 +58,13 @@ export interface BaseToolCardProps {
   headerExpandAffordance?: boolean;
   /** Hover icon: chevron-down (inline expand) vs chevron-right (open right). Default `expand`. */
   headerAffordanceKind?: ToolCardHeaderAffordanceKind;
+  /**
+   * Set for expand/collapse changes the user did not initiate. An automatic
+   * height change must land in a single frame: animating it drags the reflow
+   * across many frames that the message list's scroll anchor has to chase,
+   * which the user sees as the conversation jumping on its own.
+   */
+  disableExpandAnimation?: boolean;
 }
 
 /**
@@ -76,6 +83,7 @@ export const BaseToolCard: React.FC<BaseToolCardProps> = ({
   toggleTestId,
   headerExpandAffordance: headerExpandAffordanceProp,
   headerAffordanceKind: headerAffordanceKindProp = 'expand',
+  disableExpandAnimation = false,
 }) => {
   const handleCardClick = (event: React.MouseEvent) => {
     if (!onClick || shouldIgnoreCardToggleClick(event)) {
@@ -122,7 +130,11 @@ export const BaseToolCard: React.FC<BaseToolCardProps> = ({
         </ToolCardHeaderLayoutContext.Provider>
       </div>
       
-      <SmoothHeightCollapse isOpen={Boolean(hasExpandedContent)} className="base-tool-card-expanded-collapse">
+      <SmoothHeightCollapse
+        isOpen={Boolean(hasExpandedContent)}
+        className="base-tool-card-expanded-collapse"
+        disableAnimation={disableExpandAnimation}
+      >
         <div className="base-tool-card-expanded">
           {expandedContent}
         </div>

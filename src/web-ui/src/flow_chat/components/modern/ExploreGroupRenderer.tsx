@@ -69,6 +69,10 @@ export const ExploreGroupRenderer: React.FC<ExploreGroupRendererProps> = React.m
     wasCutByCritical,
   } = data;
   const prevWasCutRef = useRef(wasCutByCritical);
+  // Only a user-initiated toggle animates. An automatic collapse that animates
+  // spreads the height loss over many frames, which the list's scroll anchor
+  // then has to chase frame by frame — that chase is the visible jitter.
+  const [animateToggle, setAnimateToggle] = useState(false);
   const {
     cardRootRef,
     applyExpandedState,
@@ -153,6 +157,7 @@ export const ExploreGroupRenderer: React.FC<ExploreGroupRendererProps> = React.m
     log.debug('explore group cut by critical', { groupId, wasExpanded, hasExplicitState });
 
     if (wasExpanded) {
+      setAnimateToggle(false);
       applyExpandedState(true, false, () => {
         onCollapseGroup?.(groupId);
       }, {
@@ -235,6 +240,7 @@ export const ExploreGroupRenderer: React.FC<ExploreGroupRendererProps> = React.m
   }, [stats, allItems.length, t]);
   
   const handleToggle = useCallback(() => {
+    setAnimateToggle(true);
     if (isCollapsed) {
       applyExpandedState(false, true, () => {
         onExploreGroupToggle?.(groupId);
@@ -289,7 +295,7 @@ export const ExploreGroupRenderer: React.FC<ExploreGroupRendererProps> = React.m
         className="explore-region__content-wrapper"
         innerClassName="explore-region__content-inner"
         durationMs={320}
-        disableAnimation={isGroupStreaming}
+        disableAnimation={isGroupStreaming || !animateToggle}
       >
         <div
           ref={containerRef}

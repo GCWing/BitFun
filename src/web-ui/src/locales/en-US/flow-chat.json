@@ -1331,7 +1331,6 @@
     "feedbackDevVersion": "Feedback is not available in dev version",
     "userLabel": "👤 User:",
     "toolCallLabel": "🔧 Tool call: {{name}}",
-    "loadingMoreHistory": "Loading more history...",
     "roundHistoryShow": "Show {{count}} previous retry rounds",
     "roundHistoryHide": "Hide previous retry rounds",
     "roundRetryLabel": "Retry {{index}}",

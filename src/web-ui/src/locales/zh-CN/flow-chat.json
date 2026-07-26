@@ -1331,7 +1331,6 @@
     "feedbackDevVersion": "开发版本暂不提供反馈功能",
     "userLabel": "👤 用户:",
     "toolCallLabel": "🔧 工具调用: {{name}}",
-    "loadingMoreHistory": "正在加载更多历史...",
     "roundHistoryShow": "显示 {{count}} 次历史重试轮次",
     "roundHistoryHide": "隐藏历史重试轮次",
     "roundRetryLabel": "重试轮次 {{index}}",

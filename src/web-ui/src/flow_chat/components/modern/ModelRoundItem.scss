@@ -6,37 +6,21 @@
    * as inter-item gaps inside a round, so flow text → tool / tool → thinking / cross-
    * round transitions all read as one continuous, evenly-spaced text column.
    *
-   * Enter animation must NOT live on the base selector alone: rounds toggle
-   * `--streaming` → `--complete` when the typewriter finishes, and re-applying
-   * `animation: fadeIn` would replay opacity 0→1 (looks like the whole chat
-   * refreshed). Play fadeIn only for freshly mounted complete rounds via
-   * `--enter`; streaming/complete modifiers keep animation off.
+   * No mount / enter animation lives here on purpose. The list is virtualized:
+   * any animation keyed off mount replays whenever an item scrolls back into
+   * view, and any animation keyed off `--streaming` → `--complete` replays when
+   * the typewriter finishes. Both read as the whole chat refreshing.
    */
   margin-bottom: 0;
   padding: 0 var(--flowchat-content-inline-pad);
   position: relative;
   opacity: 1;
 
-  /*
-   * Freshly mounted history/complete rounds may opt into `--enter`.
-   * Rounds that began as `--streaming` omit `--enter`, so flipping to
-   * `--complete` later cannot replay fadeIn.
-   */
-  &--enter {
-    animation: fadeIn 0.4s ease;
-  }
-
   // Streaming state
   &--streaming {
     opacity: 1;
     margin-bottom: 0;
     animation: none;
-
-    .flowchat-flow-item--tool-transition:not(.flowchat-flow-item--tool-completed),
-    .flowchat-flow-item--tool-active {
-      animation: none;
-      will-change: auto;
-    }
   }
 
   // Complete state — keep opacity stable; do not attach an animation here.
@@ -121,13 +105,6 @@
   overflow: hidden;
   overflow-wrap: anywhere;
   text-overflow: ellipsis;
-}
-
-.model-round-item__history-loader {
-  color: var(--color-text-muted);
-  font-size: 12px;
-  line-height: 18px;
-  padding: var(--flowchat-inline-gap) 0;
 }
 
 .model-round-item__retry-history {
@@ -391,64 +368,14 @@
 
 // ==================== Explore region adjustments ====================
 
-.flowchat-flow-item--tool-transition {
-  overflow: hidden;
-  will-change: opacity, transform, max-height;
-}
-
-.flowchat-flow-item--tool-active {
-  animation: flow-tool-active-enter 180ms ease-out both;
-}
-
-.flowchat-flow-item--tool-completed {
-  animation: flow-tool-completed-exit 1000ms ease-in-out both;
-}
-
+/*
+ * A finished explore tool is removed from flow outright. There is no enter or
+ * exit animation: animating an item to zero height spreads the reflow over many
+ * frames, which the list's scroll-anchor machinery then has to chase — the
+ * visible result was a chat pane that jittered after every tool call.
+ */
 .flowchat-flow-item--tool-settled {
-  opacity: 0;
-  transform: translateY(-4px);
-  max-height: 0;
-  margin-bottom: 0;
-  pointer-events: none;
-}
-
-@keyframes flow-tool-active-enter {
-  from {
-    opacity: 0;
-    transform: translateY(4px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-@keyframes flow-tool-completed-exit {
-  0% {
-    opacity: 1;
-    transform: translateY(0);
-    max-height: 96px;
-    margin-bottom: var(--flowchat-flow-item-gap);
-  }
-  55% {
-    opacity: 0.72;
-    transform: translateY(-1px);
-    max-height: 96px;
-    margin-bottom: var(--flowchat-flow-item-gap);
-  }
-  100% {
-    opacity: 0;
-    transform: translateY(-4px);
-    max-height: 0;
-    margin-bottom: 0;
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .flowchat-flow-item--tool-active,
-  .flowchat-flow-item--tool-completed {
-    animation: none;
-  }
+  display: none;
 }
 
 /* Focus highlight for programmatic "jump to marker" navigation. */

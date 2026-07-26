@@ -1,8 +1,6 @@
 import type { FlowItem, FlowToolItem } from '../../types/flow-chat';
 import { getEffectiveToolName } from '../../utils/toolInvocationIdentity';
 
-export const COMPLETED_TOOL_TRANSIENT_MS = 1000;
-
 export type ModelRoundItemGroup =
   | { type: 'explore'; items: FlowItem[]; isLast: boolean }
   | { type: 'critical'; item: FlowItem };
@@ -12,7 +10,6 @@ interface BuildModelRoundItemGroupsInput {
   isStreaming: boolean;
   disableExploreGrouping: boolean;
   isCollapsibleTool: (toolName: string) => boolean;
-  nowMs?: number;
 }
 
 function hasActiveStreamingNarrative(items: FlowItem[]): boolean {
@@ -29,20 +26,17 @@ function isActiveToolItem(item: FlowItem): boolean {
   return item.status !== 'completed' && item.status !== 'cancelled' && item.status !== 'rejected' && item.status !== 'error';
 }
 
-export function isCompletedToolInTransientWindow(item: FlowItem, nowMs: number): boolean {
-  if (item.type !== 'tool' || item.status !== 'completed') return false;
-  const endTime = (item as FlowToolItem).endTime;
-  if (typeof endTime !== 'number') return false;
-  const elapsedMs = nowMs - endTime;
-  return elapsedMs >= 0 && elapsedMs < COMPLETED_TOOL_TRANSIENT_MS;
-}
-
+/**
+ * Grouping is intentionally a pure function of the round data. It must never
+ * depend on wall-clock time: a time-dependent grouping re-runs on a timer,
+ * restructures the round, and remounts cards long after the data settled —
+ * which reads as the chat pane spontaneously refreshing itself.
+ */
 export function buildModelRoundItemGroups({
   items,
   isStreaming,
   disableExploreGrouping,
   isCollapsibleTool,
-  nowMs = Date.now(),
 }: BuildModelRoundItemGroupsInput): ModelRoundItemGroup[] {
   const deferExploreGrouping = disableExploreGrouping || (isStreaming && hasActiveStreamingNarrative(items));
   const intermediateGroups: Array<{ type: 'normal'; item: FlowItem }> = items.map(item => ({
@@ -93,12 +87,9 @@ export function buildModelRoundItemGroups({
       const isExploreTool = isCollapsibleTool(toolName);
 
       if (isExploreTool) {
-        const keepTransientlyCritical =
-          deferExploreGrouping ||
-          isActiveToolItem(item) ||
-          (isStreaming && isCompletedToolInTransientWindow(item, nowMs));
+        const keepAsCritical = deferExploreGrouping || isActiveToolItem(item);
 
-        if (keepTransientlyCritical) {
+        if (keepAsCritical) {
           flushExploreBuffer(false);
           flushPendingAsCritical();
           finalGroups.push({ type: 'critical', item });
