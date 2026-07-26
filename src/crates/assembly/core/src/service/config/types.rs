@@ -136,6 +136,34 @@ pub struct AppConfig {
     /// Allowed values: "quit" | "minimize_to_tray" | "ask".
     #[serde(default = "default_close_button_behavior")]
     pub close_button_behavior: String,
+    /// Native agent lifecycle hooks (Codex-compatible hooks.json).
+    #[serde(default)]
+    pub hooks: AgentHooksConfig,
+}
+
+/// Enablement gates for native agent hooks.
+///
+/// Hook declarations themselves live in `hooks.json` documents (user scope:
+/// `config/hooks.json` next to this file; project scope:
+/// `{project}/.bitfun/config/hooks.json`), not in this settings document.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(default)]
+pub struct AgentHooksConfig {
+    /// Master switch for native agent hooks.
+    pub enabled: bool,
+    /// Whether project-scope hook files are honored. Disabled by default
+    /// because project hook files execute commands from the checked-out
+    /// repository; enable only for workspaces you trust.
+    pub project_hooks_enabled: bool,
+}
+
+impl Default for AgentHooksConfig {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            project_hooks_enabled: false,
+        }
+    }
 }
 
 /// Versioned user preference for grouping selectable Agent tools in the UI.
@@ -1666,6 +1694,7 @@ impl Default for AppConfig {
             user_tool_groups: UserToolGroupsConfig::default(),
             user_skill_groups: UserSkillGroupsConfig::default(),
             close_button_behavior: default_close_button_behavior(),
+            hooks: AgentHooksConfig::default(),
         }
     }
 }

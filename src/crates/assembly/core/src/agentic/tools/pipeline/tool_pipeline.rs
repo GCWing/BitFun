@@ -13,6 +13,7 @@ use crate::agentic::tools::registry::ToolRegistry;
 use crate::agentic::tools::tool_context_runtime;
 use crate::agentic::tools::tool_context_runtime::ToolUseContext;
 use crate::agentic::tools::tool_result_storage;
+use crate::native_hooks::{self, NativeHookSessionFacts};
 use crate::util::elapsed_ms_u64;
 use crate::util::errors::{BitFunError, BitFunResult};
 use bitfun_agent_runtime::permission::{
@@ -37,7 +38,7 @@ use bitfun_runtime_ports::{
 };
 use futures::future::join_all;
 use log::{debug, error, info, warn};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use std::time::{Instant, SystemTime};
 use tokio::sync::{Mutex as TokioMutex, RwLock as TokioRwLock};
@@ -623,6 +624,27 @@ fn permission_intent_effect(
 
 const SUBAGENT_LAUNCH_TOOL_NAME: &str = "Task";
 
+/// Native hook session facts derived from one tool task.
+fn native_hook_session_facts<'a>(
+    context: &'a ToolExecutionContext,
+    options: &ToolExecutionOptions,
+) -> NativeHookSessionFacts<'a> {
+    NativeHookSessionFacts {
+        session_id: &context.session_id,
+        turn_id: Some(&context.dialog_turn_id),
+        workspace_root: context
+            .workspace
+            .as_ref()
+            .map(|workspace| workspace.root_path()),
+        is_remote_workspace: context
+            .workspace
+            .as_ref()
+            .is_some_and(|workspace| workspace.is_remote()),
+        model: &context.primary_model_facts.model_id,
+        bypass_permissions: options.auto_approve_ask,
+    }
+}
+
 /// Tool pipeline
 #[derive(Clone)]
 pub struct ToolPipeline {
@@ -632,6 +654,9 @@ pub struct ToolPipeline {
     computer_use_host: Option<ComputerUseHostRef>,
     permission_request_manager: Option<Arc<PermissionRequestManager>>,
     permission_plans: Arc<TokioMutex<HashMap<String, PermissionExecutionPlan>>>,
+    /// Tool task ids a PreToolUse hook approved. The approval waives the
+    /// interactive permission prompt only; policy denials still apply.
+    hook_preapprovals: Arc<TokioMutex<HashSet<String>>>,
 }
 
 impl ToolPipeline {
@@ -647,6 +672,7 @@ impl ToolPipeline {
             computer_use_host,
             permission_request_manager: None,
             permission_plans: Arc::new(TokioMutex::new(HashMap::new())),
+            hook_preapprovals: Arc::new(TokioMutex::new(HashSet::new())),
         }
     }
 
@@ -714,6 +740,40 @@ impl ToolPipeline {
 
         if asks.is_empty() {
             return Ok(PermissionPlanDraft::Allowed);
+        }
+
+        // A PreToolUse hook already approved this call. The approval reaches
+        // here — after policy evaluation — precisely so that it waives only
+        // the interactive prompt: a policy Deny above has already returned.
+        if self.hook_preapprovals.lock().await.contains(&tool_call_id) {
+            return Ok(PermissionPlanDraft::Allowed);
+        }
+
+        // The tool call would prompt the user: give PermissionRequest hooks
+        // a chance to decide first. An explicit hook decision replaces the
+        // interactive prompt for this invocation.
+        if let Some(hook_decision) = native_hooks::dispatch_permission_request(
+            native_hook_session_facts(&task.context, &task.options),
+            &tool_name,
+            &task.invocation.effective_arguments,
+        )
+        .await
+        {
+            if hook_decision.allow {
+                info!(
+                    "PermissionRequest hook allowed tool call without prompting: tool_name={}",
+                    tool_name
+                );
+                return Ok(PermissionPlanDraft::Allowed);
+            }
+            let reason = hook_decision.message.unwrap_or_else(|| {
+                format!("A PermissionRequest hook denied the '{tool_name}' tool call.")
+            });
+            info!(
+                "PermissionRequest hook denied tool call: tool_name={}",
+                tool_name
+            );
+            return Ok(PermissionPlanDraft::Rejected { reason });
         }
 
         if manager.is_none() {
@@ -800,11 +860,120 @@ impl ToolPipeline {
         Ok(receivers)
     }
 
+    /// Run PreToolUse hooks for every valid task and record their decisions
+    /// as pre-seeded permission plans. `updatedInput` rewrites the stored
+    /// task arguments before validation and permission planning observe them.
+    async fn apply_pre_tool_use_hooks(&self, task_ids: &[String]) {
+        for task_id in task_ids {
+            let Some(task) = self.state_manager.get_task(task_id) else {
+                continue;
+            };
+            if task.invocation_resolution_error.is_some()
+                || task.tool_call.tool_name.is_empty()
+                || task.tool_call.is_error
+            {
+                continue;
+            }
+            let tool_name = task.invocation.effective_tool_name.clone();
+            let decision = native_hooks::dispatch_pre_tool_use(
+                native_hook_session_facts(&task.context, &task.options),
+                &tool_name,
+                &task.tool_call.tool_id,
+                &task.invocation.effective_arguments,
+            )
+            .await;
+            if let Some(updated_input) = decision.updated_input {
+                if self
+                    .state_manager
+                    .update_task_arguments(task_id, updated_input)
+                {
+                    info!(
+                        "PreToolUse hook rewrote tool arguments: tool_name={}, tool_id={}",
+                        tool_name, task_id
+                    );
+                }
+            }
+            if let Some(reason) = decision.deny_reason {
+                // A hook denial is strictly more restrictive than the
+                // permission policy, so it can short-circuit planning.
+                info!(
+                    "PreToolUse hook denied tool call: tool_name={}, tool_id={}",
+                    tool_name, task_id
+                );
+                self.permission_plans.lock().await.insert(
+                    task_id.clone(),
+                    PermissionExecutionPlan::Rejected { reason },
+                );
+            } else if decision.allow {
+                // A hook approval only waives the interactive prompt. It is
+                // recorded for the planner rather than short-circuiting it,
+                // so a policy Deny still rejects the call.
+                info!(
+                    "PreToolUse hook approved tool call without prompting: tool_name={}, tool_id={}",
+                    tool_name, task_id
+                );
+                self.hook_preapprovals.lock().await.insert(task_id.clone());
+            }
+        }
+    }
+
+    /// Run PostToolUse hooks for a completed tool call and fold blocking
+    /// feedback and additional context into the model-visible result text.
+    async fn apply_post_tool_use_hooks(
+        &self,
+        task: &ToolTask,
+        tool_name: &str,
+        tool_id: &str,
+        tool_result: &mut ModelToolResult,
+    ) {
+        let tool_response = serde_json::json!({
+            "result": match &tool_result.result_for_assistant {
+                Some(text) => serde_json::Value::String(text.clone()),
+                None => tool_result.result.clone(),
+            },
+            "is_error": tool_result.is_error,
+        });
+        let decision = native_hooks::dispatch_post_tool_use(
+            native_hook_session_facts(&task.context, &task.options),
+            tool_name,
+            tool_id,
+            &task.invocation.effective_arguments,
+            &tool_response,
+        )
+        .await;
+        let mut hook_sections = Vec::new();
+        if let Some(reason) = decision.block_reason {
+            info!(
+                "PostToolUse hook returned blocking feedback: tool_name={}, tool_id={}",
+                tool_name, tool_id
+            );
+            hook_sections.push(format!("PostToolUse hook feedback (blocking): {reason}"));
+        }
+        for context in decision.additional_context {
+            hook_sections.push(format!("PostToolUse hook context: {context}"));
+        }
+        if hook_sections.is_empty() {
+            return;
+        }
+        let original = tool_result.result_for_assistant.take().unwrap_or_default();
+        let appended = hook_sections.join("\n");
+        tool_result.result_for_assistant = Some(if original.is_empty() {
+            appended
+        } else {
+            format!("{original}\n\n{appended}")
+        });
+    }
+
     async fn prepare_permission_plans(&self, task_ids: &[String]) -> BitFunResult<()> {
         let mut drafts = Vec::with_capacity(task_ids.len());
         let mut ordered_requests = Vec::new();
 
         for task_id in task_ids {
+            // A PreToolUse hook decision already produced a plan for this
+            // task; keep it instead of drafting (and possibly prompting).
+            if self.permission_plans.lock().await.contains_key(task_id) {
+                continue;
+            }
             let Some(task) = self.state_manager.get_task(task_id) else {
                 continue;
             };
@@ -1035,6 +1204,14 @@ impl ToolPipeline {
     }
 
     async fn cleanup_permission_plans(&self, task_ids: &[String], reason: String) {
+        {
+            // Hook approvals are scoped to the batch that produced them; a
+            // later call must be evaluated on its own merits.
+            let mut preapprovals = self.hook_preapprovals.lock().await;
+            for task_id in task_ids {
+                preapprovals.remove(task_id);
+            }
+        }
         for task_id in task_ids {
             let Some(plan) = self.permission_plans.lock().await.remove(task_id) else {
                 continue;
@@ -1277,6 +1454,11 @@ impl ToolPipeline {
             let tool_id = self.state_manager.create_task(task).await;
             task_ids.push(tool_id);
         }
+
+        // PreToolUse hooks run before permission planning so a hook decision
+        // (deny / pre-approve / rewritten input) is visible to the planner
+        // and no permission prompt is raised for calls a hook already decided.
+        self.apply_pre_tool_use_hooks(&task_ids).await;
 
         if let Err(error) = self.prepare_permission_plans(&task_ids).await {
             self.cleanup_permission_plans(&task_ids, "Permission planning failed".to_string())
@@ -1755,6 +1937,9 @@ impl ToolPipeline {
                         format!("{notice}{original}")
                     });
                 }
+
+                self.apply_post_tool_use_hooks(&task, &tool_name, &tool_id, &mut tool_result)
+                    .await;
 
                 self.state_manager
                     .update_state(

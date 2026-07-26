@@ -37,6 +37,7 @@ use crate::agentic::tools::{
 };
 use crate::agentic::WorkspaceBinding;
 use crate::infrastructure::ai::get_global_ai_client_factory;
+use crate::native_hooks::{self, NativeHookSessionFacts};
 use crate::service::config::get_global_config_service;
 use crate::service::config::types::{
     automatic_max_output_tokens, model_runtime_binding_fingerprint, ModelCapability, ModelCategory,
@@ -1954,6 +1955,34 @@ impl ExecutionEngine {
         })
     }
 
+    /// Plain assistant text of a message, when it has any.
+    fn assistant_message_text(message: &Message) -> Option<&str> {
+        match &message.content {
+            MessageContent::Text(text) => Some(text.as_str()),
+            MessageContent::Multimodal { text, .. } => Some(text.as_str()),
+            _ => None,
+        }
+        .map(str::trim)
+        .filter(|text| !text.is_empty())
+    }
+
+    /// Native hook session facts for a compaction or turn-lifecycle dispatch.
+    fn native_hook_facts<'a>(
+        session_id: &'a str,
+        dialog_turn_id: &'a str,
+        workspace: Option<&'a WorkspaceBinding>,
+        model: &'a str,
+    ) -> NativeHookSessionFacts<'a> {
+        NativeHookSessionFacts {
+            session_id,
+            turn_id: Some(dialog_turn_id),
+            workspace_root: workspace.map(|workspace| workspace.root_path()),
+            is_remote_workspace: workspace.is_some_and(|workspace| workspace.is_remote()),
+            model,
+            bypass_permissions: false,
+        }
+    }
+
     /// Compress context, will emit compression events (Started, Completed, and Failed)
     #[allow(clippy::too_many_arguments)]
     async fn compress_messages(
@@ -1989,6 +2018,14 @@ impl ExecutionEngine {
 
         // Generate compression ID
         let compression_id = format!("compression_{}", uuid::Uuid::new_v4());
+        // Captured before `ai_client` is consumed by summary generation.
+        let ai_client_model = ai_client.config.model.clone();
+
+        native_hooks::dispatch_pre_compact(
+            Self::native_hook_facts(session_id, dialog_turn_id, workspace, &ai_client_model),
+            "auto",
+        )
+        .await;
 
         // Emit compression started event
         self.emit_event(
@@ -2188,6 +2225,17 @@ impl ExecutionEngine {
                 )
                 .await;
 
+                native_hooks::dispatch_post_compact(
+                    Self::native_hook_facts(
+                        session_id,
+                        dialog_turn_id,
+                        workspace,
+                        &ai_client_model,
+                    ),
+                    "auto",
+                )
+                .await;
+
                 Ok(Some((compressed_tokens, new_messages)))
             }
             Err(e) => {
@@ -2228,6 +2276,16 @@ impl ExecutionEngine {
         let scaffold = self
             .resolve_compression_runtime_scaffold(&session, &context)
             .await?;
+        native_hooks::dispatch_pre_compact(
+            Self::native_hook_facts(
+                &session_id,
+                &dialog_turn_id,
+                context.workspace.as_ref(),
+                &scaffold.ai_client.config.model,
+            ),
+            trigger,
+        )
+        .await;
         let context_window = (scaffold.ai_client.config.context_window as usize)
             .min(session.config.max_context_tokens);
         let prepended_reminders = scaffold.prepended_prompt_reminders.ordered_reminders();
@@ -2487,6 +2545,17 @@ impl ExecutionEngine {
                         },
                     },
                     EventPriority::Normal,
+                )
+                .await;
+
+                native_hooks::dispatch_post_compact(
+                    Self::native_hook_facts(
+                        &session_id,
+                        &dialog_turn_id,
+                        context.workspace.as_ref(),
+                        &scaffold.ai_client.config.model,
+                    ),
+                    trigger,
                 )
                 .await;
 
@@ -2893,6 +2962,9 @@ impl ExecutionEngine {
         // is not a stop condition.
         let mut thinking_only_rescue_attempts: usize = 0;
         let mut partial_continuation_attempts: usize = 0;
+        // Bounds how often Stop hooks may reopen a finished turn.
+        let mut stop_hook_continuations: usize = 0;
+        const MAX_STOP_HOOK_CONTINUATIONS: usize = 3;
 
         // Add detailed logging showing the execution context messages.
         debug!(
@@ -3659,7 +3731,61 @@ impl ExecutionEngine {
                             "Model round {} ended with final answer, reason: {:?}",
                             round_index, round_result.finish_reason
                         );
-                        break;
+                        // Stop hooks may block the natural end of the turn and
+                        // ask the agent to keep working. `stop_hook_active`
+                        // tells the hook it is already running inside such a
+                        // continuation so it can avoid an endless loop, and the
+                        // engine caps continuations regardless.
+                        // Subagent turns run through this same loop; their
+                        // completion is reported by SubagentStop instead, so
+                        // Stop stays a top-level-turn event as in Codex.
+                        let stop_block_reason = if context.subagent_parent_info.is_none()
+                            && stop_hook_continuations < MAX_STOP_HOOK_CONTINUATIONS
+                        {
+                            native_hooks::dispatch_stop(
+                                Self::native_hook_facts(
+                                    &context.session_id,
+                                    &context.dialog_turn_id,
+                                    context.workspace.as_ref(),
+                                    &ai_client.config.model,
+                                ),
+                                stop_hook_continuations > 0,
+                                Self::assistant_message_text(&round_result.assistant_message),
+                            )
+                            .await
+                        } else {
+                            None
+                        };
+                        if let Some(reason) = stop_block_reason {
+                            stop_hook_continuations += 1;
+                            let reminder = format!(
+                                "<system_reminder>A Stop hook blocked the end of this turn: {reason}\nAddress this before finishing, then produce your final answer.</system_reminder>"
+                            );
+                            let user_msg = Message::internal_reminder(
+                                InternalReminderKind::StopHookBlock,
+                                reminder,
+                            )
+                            .with_turn_id(context.dialog_turn_id.clone());
+                            messages.push(user_msg.clone());
+                            if let Err(e) = self
+                                .session_manager
+                                .add_message(&context.session_id, user_msg)
+                                .await
+                            {
+                                warn!("Failed to persist Stop hook reminder: {}", e);
+                            }
+                            info!(
+                                "Stop hook blocked turn completion; continuing turn #{}/{}: turn={}, round={}",
+                                stop_hook_continuations,
+                                MAX_STOP_HOOK_CONTINUATIONS,
+                                context.dialog_turn_id,
+                                round_index
+                            );
+                            // Continue into the next round so the agent can act
+                            // on the hook feedback.
+                        } else {
+                            break;
+                        }
                     }
                 } else if round_result.had_thinking_content {
                     thinking_only_rescue_attempts += 1;

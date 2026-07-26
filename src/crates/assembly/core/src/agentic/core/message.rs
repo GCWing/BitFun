@@ -110,6 +110,11 @@ pub enum InternalReminderKind {
     InterruptedContinue,
     ThinkingOnlyRescue,
     FinalizeCacheAnchor,
+    /// A Stop hook blocked the end of a turn and asked the agent to continue.
+    StopHookBlock,
+    /// Model-visible context contributed by a SessionStart or
+    /// UserPromptSubmit hook.
+    HookContext,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -140,6 +145,11 @@ impl InternalReminderKind {
                 | Self::InterruptedContinue
                 | Self::ThinkingOnlyRescue
                 | Self::FinalizeCacheAnchor
+                // Mid-turn scaffolding: the Stop hook's feedback matters only
+                // while the reopened turn is still running. HookContext is
+                // deliberately absent — it carries real context a hook asked
+                // the model to keep.
+                | Self::StopHookBlock
         )
     }
 

@@ -88,8 +88,8 @@ impl PathManager {
 
     /// Get user config root directory
     ///
-    /// - Windows: %APPDATA%\BitFun\
-    /// - macOS: ~/Library/Application Support/BitFun/
+    /// - Windows: %APPDATA%\bitfun\
+    /// - macOS: ~/Library/Application Support/bitfun/
     /// - Linux: ~/.config/bitfun/
     fn get_user_config_root() -> BitFunResult<PathBuf> {
         if let Some(path) =
@@ -223,6 +223,11 @@ impl PathManager {
     /// Get app config file path: ~/.config/bitfun/config/app.json
     pub fn app_config_file(&self) -> PathBuf {
         self.user_config_dir().join("app.json")
+    }
+
+    /// Get user agent hooks file: ~/.config/bitfun/config/hooks.json
+    pub fn user_hooks_file(&self) -> PathBuf {
+        self.user_config_dir().join("hooks.json")
     }
 
     /// Get user agent directory: ~/.config/bitfun/agents/
@@ -425,6 +430,12 @@ impl PathManager {
     pub fn project_agent_subagents_file(&self, workspace_path: &Path) -> PathBuf {
         self.project_internal_config_dir(workspace_path)
             .join("agent_subagents.json")
+    }
+
+    /// Get project agent hooks file: {project}/.bitfun/config/hooks.json
+    pub fn project_hooks_file(&self, workspace_path: &Path) -> PathBuf {
+        self.project_internal_config_dir(workspace_path)
+            .join("hooks.json")
     }
 
     /// Get project agent directory: {project}/.bitfun/agents/

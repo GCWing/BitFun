@@ -111,7 +111,7 @@ BitFun's extension paths progress continuously from light to deep customization:
 | Tier | Path | Best for |
 | --- | --- | --- |
 | **L1** | Custom Agent | Defining roles, flows, constraints, and tool bundles. |
-| **L2** | MCP / Skills | Connecting external tools, professional capabilities, and workflows. |
+| **L2** | MCP / Skills / [Hooks](docs/features/agent-hooks.md) | Connecting external tools and professional capabilities, and running your own commands at Agent lifecycle points (Codex-compatible). |
 | **L3** | Mini App | Generating dedicated interfaces, forms, panels, or visualizations for tasks. |
 | **L4** | Source-level customization | Changing tools, adapters, UI, Runtime, or product shape. |
 

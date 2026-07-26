@@ -49,6 +49,7 @@ use crate::agentic::tools::{
 };
 use crate::agentic::workspace::WorkspaceServices;
 use crate::agentic::WorkspaceBinding;
+use crate::native_hooks::{self, NativeHookSessionFacts};
 use crate::service::bootstrap::{
     ensure_workspace_persona_files_for_prompt, is_workspace_bootstrap_pending,
 };
@@ -1812,7 +1813,48 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             remote_ssh_host: session.config.remote_ssh_host.clone(),
         })
         .await;
+        Self::dispatch_session_start_hooks(&session, "startup").await;
         Ok(session)
+    }
+
+    /// Session-scope hook facts. Session-lifecycle events carry no turn id.
+    fn session_hook_facts<'a>(
+        session: &'a Session,
+        workspace_root: Option<&'a Path>,
+        is_remote_workspace: bool,
+    ) -> NativeHookSessionFacts<'a> {
+        NativeHookSessionFacts {
+            session_id: &session.session_id,
+            turn_id: None,
+            workspace_root,
+            is_remote_workspace,
+            model: session.config.model_id.as_deref().unwrap_or_default(),
+            bypass_permissions: false,
+        }
+    }
+
+    /// Whether hook dispatch for this session must be skipped as remote.
+    ///
+    /// The workspace binding is the authority — a persisted `SessionConfig`
+    /// can legitimately lose its remote connection id. A session that binds
+    /// no workspace at all is treated as remote so dispatch fails closed.
+    async fn session_hooks_are_remote(session: &Session) -> bool {
+        match Self::build_workspace_binding(&session.config).await {
+            Some(binding) => binding.is_remote(),
+            None => session.config.workspace_path.is_some(),
+        }
+    }
+
+    /// Run SessionStart hooks. `source` follows the Codex vocabulary:
+    /// `startup` | `resume` | `clear` | `compact`.
+    async fn dispatch_session_start_hooks(session: &Session, source: &str) {
+        let workspace_root = session.config.workspace_path.as_ref().map(Path::new);
+        let is_remote = Self::session_hooks_are_remote(session).await;
+        native_hooks::dispatch_session_start(
+            Self::session_hook_facts(session, workspace_root, is_remote),
+            source,
+        )
+        .await;
     }
 
     /// Create a hidden internal subagent session that is persisted but excluded
@@ -3639,6 +3681,40 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             }
         }
 
+        // UserPromptSubmit hooks run before any turn state is created, so a
+        // blocking hook rejects the prompt without leaving a partial turn.
+        // Their context (plus buffered SessionStart context) is prepended to
+        // the turn as internal reminders.
+        let hook_prompt_decision = native_hooks::dispatch_user_prompt_submit(
+            NativeHookSessionFacts {
+                turn_id: turn_id.as_deref(),
+                ..Self::session_hook_facts(
+                    &session,
+                    session.config.workspace_path.as_deref().map(Path::new),
+                    Self::session_hooks_are_remote(&session).await,
+                )
+            },
+            &user_input,
+        )
+        .await;
+        if let Some(reason) = hook_prompt_decision.block_reason {
+            info!(
+                "UserPromptSubmit hook blocked the prompt: session_id={}, reason={}",
+                session_id, reason
+            );
+            return Err(BitFunError::Validation(format!(
+                "A UserPromptSubmit hook blocked this prompt: {reason}"
+            )));
+        }
+        let mut hook_context_sections = native_hooks::take_pending_session_context(&session_id);
+        hook_context_sections.extend(hook_prompt_decision.additional_context);
+        for section in hook_context_sections {
+            additional_prepended_messages.push(Message::internal_reminder(
+                InternalReminderKind::HookContext,
+                format!("<hook_context>\n{section}\n</hook_context>"),
+            ));
+        }
+
         // Ensure session history is loaded into memory
         // Critical fix: prevent unloaded history after app restart
         let context_messages = self
@@ -4677,6 +4753,31 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
         workspace_path: &Path,
         session_id: &str,
     ) -> BitFunResult<()> {
+        // SessionEnd hooks observe the session before its state is gone.
+        // Their timeout is capped tightly so deletion cannot hang.
+        let session_hook_facts = match self.session_manager.get_session(session_id) {
+            Some(session) => Some((
+                Self::session_hooks_are_remote(&session).await,
+                session.config.model_id.clone().unwrap_or_default(),
+            )),
+            None => None,
+        };
+        if let Some((is_remote_workspace, model)) = session_hook_facts {
+            native_hooks::dispatch_session_end(
+                NativeHookSessionFacts {
+                    session_id,
+                    turn_id: None,
+                    workspace_root: Some(workspace_path),
+                    is_remote_workspace,
+                    model: &model,
+                    bypass_permissions: false,
+                },
+                "other",
+            )
+            .await;
+        } else {
+            native_hooks::clear_session_hook_state(session_id);
+        }
         self.session_manager
             .delete_session(workspace_path, session_id)
             .await?;
@@ -5861,6 +5962,35 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                 "Subagent task has been cancelled".to_string(),
             ));
         }
+        // SubagentStart hooks observe the subagent before its first round;
+        // plain stdout becomes model-visible context for the subagent.
+        // Owned copies survive `subagent_workspace` moving into the context.
+        let mut initial_messages = initial_messages;
+        let subagent_hook_workspace_root = subagent_workspace
+            .as_ref()
+            .map(|workspace| workspace.root_path().to_path_buf());
+        let subagent_hook_is_remote = subagent_workspace
+            .as_ref()
+            .is_some_and(|workspace| workspace.is_remote());
+        let subagent_hook_model = session.config.model_id.clone().unwrap_or_default();
+        let subagent_hook_facts = NativeHookSessionFacts {
+            session_id: &session_id,
+            turn_id: Some(&dialog_turn_id),
+            workspace_root: subagent_hook_workspace_root.as_deref(),
+            is_remote_workspace: subagent_hook_is_remote,
+            model: &subagent_hook_model,
+            bypass_permissions: false,
+        };
+        for section in
+            native_hooks::dispatch_subagent_start(subagent_hook_facts, &session_id, &agent_type)
+                .await
+        {
+            initial_messages.push(Message::internal_reminder(
+                InternalReminderKind::HookContext,
+                format!("<hook_context>\n{section}\n</hook_context>"),
+            ));
+        }
+
         let subagent_services = Self::build_workspace_services(&subagent_workspace).await;
         let execution_context = ExecutionContext {
             session_id: session_id.clone(),
@@ -6384,6 +6514,23 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             None,
         )
         .await;
+
+        // SubagentStop hooks observe the settled subagent turn. A blocking
+        // decision is recorded for the operator; it does not restart the
+        // subagent, because its result has already been persisted.
+        if let Some(reason) = native_hooks::dispatch_subagent_stop(
+            subagent_hook_facts,
+            &session_id,
+            &agent_type,
+            Some(response_text.as_str()).filter(|text| !text.trim().is_empty()),
+        )
+        .await
+        {
+            warn!(
+                "SubagentStop hook reported a blocking decision after the subagent settled: agent_type={}, session_id={}, reason={}",
+                agent_type, session_id, reason
+            );
+        }
 
         // Clean up subagent session resources after successful execution
         debug!(

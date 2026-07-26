@@ -18,6 +18,7 @@ pub mod event_source;
 pub mod events;
 pub mod evidence_ledger;
 pub mod file_read_state;
+pub mod native_hooks;
 pub mod output_surface;
 pub mod permission;
 pub mod post_call_hooks;
