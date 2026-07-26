@@ -3156,6 +3156,99 @@ mod tests {
         assert_eq!(results[0].result.result["category"], "permission_denied");
     }
 
+    /// A PreToolUse hook approval waives the interactive permission prompt.
+    /// It must never widen the policy: a rule that denies the call still
+    /// rejects it, and the tool never runs.
+    #[tokio::test]
+    async fn hook_approval_does_not_override_a_permission_deny_rule() {
+        let pipeline = test_tool_pipeline();
+        let calls = Arc::new(AtomicUsize::new(0));
+        register_v2_file_test_tool(
+            &pipeline,
+            vec![PermissionIntent::new(
+                "edit",
+                vec!["src/private/key.rs".to_string()],
+            )],
+            Arc::clone(&calls),
+        )
+        .await;
+
+        // Stand in for a hook that returned permissionDecision: "allow".
+        pipeline
+            .hook_preapprovals
+            .lock()
+            .await
+            .insert("hook-approved".to_string());
+
+        let mut deny_options = ToolExecutionOptions::default();
+        deny_options.permission_rules = vec![PermissionRule::new(
+            "edit",
+            "src/private/*",
+            PermissionEffect::Deny,
+        )];
+        let results = pipeline
+            .execute_tools(
+                vec![test_tool_call("hook-approved", "Write")],
+                permission_test_context(),
+                deny_options,
+            )
+            .await
+            .expect("denied tool should return a structured rejection");
+
+        assert!(matches!(
+            pipeline
+                .state_manager
+                .get_task("hook-approved")
+                .map(|task| task.state),
+            Some(ToolExecutionState::Rejected { .. })
+        ));
+        assert_eq!(results[0].result.result["category"], "permission_denied");
+        assert_eq!(
+            calls.load(Ordering::SeqCst),
+            0,
+            "a denied tool must not execute even when a hook approved it"
+        );
+    }
+
+    /// The same approval does waive an interactive prompt when the policy
+    /// only asks, so the call proceeds without a permission request.
+    #[tokio::test]
+    async fn hook_approval_waives_the_permission_prompt() {
+        let store = Arc::new(MemoryPermissionStore::default());
+        let manager = permission_test_manager(Arc::clone(&store));
+        let pipeline = test_tool_pipeline().with_permission_request_manager(Arc::clone(&manager));
+        let calls = Arc::new(AtomicUsize::new(0));
+        register_v2_file_test_tool(
+            &pipeline,
+            vec![PermissionIntent::new(
+                "edit",
+                vec!["src/main.rs".to_string()],
+            )],
+            Arc::clone(&calls),
+        )
+        .await;
+
+        pipeline
+            .hook_preapprovals
+            .lock()
+            .await
+            .insert("hook-approved".to_string());
+
+        // No rule matches, so the policy would ask; nobody answers the prompt
+        // in this test, so completing at all proves the prompt was waived.
+        let results = pipeline
+            .execute_tools(
+                vec![test_tool_call("hook-approved", "Write")],
+                permission_test_context(),
+                ToolExecutionOptions::default(),
+            )
+            .await
+            .expect("hook-approved tool should execute");
+
+        assert!(!results[0].result.is_error);
+        assert_eq!(calls.load(Ordering::SeqCst), 1);
+    }
+
     #[tokio::test]
     async fn v2_rejecting_one_parallel_tool_does_not_reject_sibling() {
         let store = Arc::new(MemoryPermissionStore::default());
