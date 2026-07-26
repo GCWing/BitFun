@@ -68,9 +68,12 @@ export default defineConfig(({ mode, command }) => {
     watch: {
       // 3. tell Vite to ignore watching `src-tauri` and `apps`
       ignored: ["**/src-tauri/**", "**/apps/**"],
-      // Increase polling interval for stability (especially on Windows)
-      usePolling: true,
-      interval: 100,
+      // Native fs events by default (polling burned CPU scanning ~1.7k files
+      // every 100ms). Escape hatch for network drives / exotic filesystems:
+      // set VITE_USE_POLLING=1 to re-enable polling.
+      ...(process.env.VITE_USE_POLLING
+        ? { usePolling: true, interval: 1000 }
+        : {}),
     },
   },
 

@@ -277,13 +277,24 @@ tauri-runtime-wry = { git = "https://github.com/tauri-apps/tauri.git", rev = "ce
 tauri-utils = { git = "https://github.com/tauri-apps/tauri.git", rev = "ce3860e84b79af0d5ee628b304399499a87328b1" }
 
 [profile.dev]
-incremental = true
+# Line tables only: keeps panic backtrace line numbers while shrinking PDB/DWARF
+# output dramatically, which speeds up the Windows link step the most.
+# Need full debug info for a debugger session? Override per-invocation with
+# CARGO_PROFILE_DEV_DEBUG=2.
+debug = "line-tables-only"
 
 [profile.release]
 opt-level = 3
-lto = true
+# Thin LTO instead of fat LTO: 30-60% faster release codegen/link for ~0-2%
+# runtime cost. This was already proven on the Linux aarch64 packaging runner.
+# NOTE: needs one packaging regression round across all platforms (medium risk).
+lto = "thin"
 codegen-units = 1
 strip = true
+# Drop unwinding tables/landing pads (~5-10% smaller binary). The panic hook in
+# desktop lib.rs still runs; catch_unwind-based recovery paths become aborts.
+# NOTE: needs one packaging regression round (medium risk).
+panic = "abort"
 
 [profile.release-fast]
 inherits = "release"

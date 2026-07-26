@@ -72,6 +72,114 @@ function runInherit(command, cwd = ROOT_DIR) {
   }
 }
 
+const MOBILE_WEB_INPUT_IGNORED_DIRS = new Set(['node_modules', 'dist']);
+
+/**
+ * Newest mtime among the mobile-web build inputs (recursively for directories).
+ * Returns null when nothing relevant exists.
+ */
+function getNewestInputMtime(entryPath) {
+  const fs = require('fs');
+  if (!fs.existsSync(entryPath)) {
+    return null;
+  }
+
+  const stat = fs.lstatSync(entryPath);
+  if (stat.isSymbolicLink()) {
+    return null;
+  }
+
+  if (stat.isFile()) {
+    return { path: entryPath, mtimeMs: stat.mtimeMs };
+  }
+
+  if (!stat.isDirectory()) {
+    return null;
+  }
+
+  let newest = null;
+  for (const entry of fs.readdirSync(entryPath, { withFileTypes: true })) {
+    if (entry.isSymbolicLink()) {
+      continue;
+    }
+    if (entry.isDirectory() && MOBILE_WEB_INPUT_IGNORED_DIRS.has(entry.name)) {
+      continue;
+    }
+    const candidate = getNewestInputMtime(path.join(entryPath, entry.name));
+    if (candidate && (!newest || candidate.mtimeMs > newest.mtimeMs)) {
+      newest = candidate;
+    }
+  }
+
+  return newest;
+}
+
+// Marker lives outside dist/ so it never ships as a bundled Tauri resource.
+function getMobileWebBuildMarkerPath(mobileWebDir) {
+  return path.join(mobileWebDir, 'node_modules', '.cache', 'bitfun-mobile-web-build-marker');
+}
+
+/**
+ * mtime-based short-circuit (same idea as dev.cjs getDesktopPreviewRebuildPlan):
+ * when dist/ exists and the build marker is newer than every input, the whole
+ * clean/install/build cycle can be skipped. Escape hatches:
+ *   --force flag / BITFUN_MOBILE_WEB_FORCE_BUILD=1 env.
+ */
+function getMobileWebRebuildPlan(mobileWebDir, force = false) {
+  const fs = require('fs');
+
+  if (force) {
+    return { shouldBuild: true, reason: 'Force rebuild requested for mobile-web' };
+  }
+
+  const markerPath = getMobileWebBuildMarkerPath(mobileWebDir);
+  if (!fs.existsSync(path.join(mobileWebDir, 'dist', 'index.html')) || !fs.existsSync(markerPath)) {
+    return { shouldBuild: true, reason: 'mobile-web dist is missing or has no build marker' };
+  }
+
+  const markerMtimeMs = fs.statSync(markerPath).mtimeMs;
+
+  const inputs = [
+    path.join(mobileWebDir, 'src'),
+    path.join(mobileWebDir, 'public'),
+    path.join(mobileWebDir, 'index.html'),
+    path.join(mobileWebDir, 'package.json'),
+    path.join(mobileWebDir, 'tsconfig.json'),
+  ];
+  for (const entry of fs.readdirSync(mobileWebDir)) {
+    if (entry.startsWith('vite.config.')) {
+      inputs.push(path.join(mobileWebDir, entry));
+    }
+  }
+
+  let newestInput = null;
+  for (const input of inputs) {
+    const candidate = getNewestInputMtime(input);
+    if (candidate && (!newestInput || candidate.mtimeMs > newestInput.mtimeMs)) {
+      newestInput = candidate;
+    }
+  }
+
+  if (newestInput && newestInput.mtimeMs > markerMtimeMs) {
+    return {
+      shouldBuild: true,
+      reason: `mobile-web inputs changed since the last build (${path.relative(ROOT_DIR, newestInput.path)})`,
+    };
+  }
+
+  return {
+    shouldBuild: false,
+    reason: 'mobile-web dist is up to date; skipping clean/install/build (use --force or BITFUN_MOBILE_WEB_FORCE_BUILD=1 to rebuild)',
+  };
+}
+
+function writeMobileWebBuildMarker(mobileWebDir) {
+  const fs = require('fs');
+  const markerPath = getMobileWebBuildMarkerPath(mobileWebDir);
+  fs.mkdirSync(path.dirname(markerPath), { recursive: true });
+  fs.writeFileSync(markerPath, `${new Date().toISOString()}\n`);
+}
+
 function cleanStaleMobileWebResources(logInfo = printInfo) {
   const fs = require('fs');
   const targetDir = path.join(ROOT_DIR, 'target');
@@ -96,12 +204,20 @@ function cleanStaleMobileWebResources(logInfo = printInfo) {
 function buildMobileWeb(options = {}) {
   const {
     install = false,
+    force = process.env.BITFUN_MOBILE_WEB_FORCE_BUILD === '1',
     logInfo = printInfo,
     logSuccess = printSuccess,
     logError = printError,
   } = options;
 
   const mobileWebDir = path.join(ROOT_DIR, 'src/mobile-web');
+
+  const rebuildPlan = getMobileWebRebuildPlan(mobileWebDir, force);
+  if (!rebuildPlan.shouldBuild) {
+    logInfo(rebuildPlan.reason);
+    return { ok: true, skipped: true };
+  }
+  logInfo(rebuildPlan.reason);
 
   cleanStaleMobileWebResources(logInfo);
 
@@ -128,12 +244,18 @@ function buildMobileWeb(options = {}) {
     return { ok: false };
   }
 
+  writeMobileWebBuildMarker(mobileWebDir);
+
   logSuccess('mobile-web build complete');
   return { ok: true };
 }
 
 if (require.main === module) {
-  const result = buildMobileWeb();
+  const args = process.argv.slice(2);
+  const result = buildMobileWeb({
+    install: args.includes('--install'),
+    force: args.includes('--force') || process.env.BITFUN_MOBILE_WEB_FORCE_BUILD === '1',
+  });
   process.exit(result.ok ? 0 : 1);
 }
 

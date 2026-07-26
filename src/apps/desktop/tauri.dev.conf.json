@@ -5,7 +5,7 @@
   "build": {
     "beforeDevCommand": "pnpm run dev:web",
     "devUrl": "http://localhost:1422",
-    "beforeBuildCommand": "pnpm run build:web && pnpm run prepare:mobile-web",
+    "beforeBuildCommand": "pnpm run frontend:build-all",
     "frontendDist": "../../../dist"
   },
   "bundle": {

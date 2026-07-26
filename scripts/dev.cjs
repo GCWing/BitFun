@@ -20,8 +20,6 @@ const {
   printComplete,
   printBlank,
 } = require('./console-style.cjs');
-const { buildMobileWeb } = require('./mobile-web-build.cjs');
-
 const ROOT_DIR = path.resolve(__dirname, '..');
 const DEV_SERVER_PORT = 1422;
 const DEV_SERVER_HOSTS = ['localhost', '127.0.0.1', '::1'];
@@ -72,24 +70,6 @@ function getDesktopBinaryPath() {
   return path.join(ROOT_DIR, 'target', 'debug', binaryName);
 }
 
-/**
- * Run command synchronously (silent mode)
- */
-function runSilent(command, cwd = ROOT_DIR) {
-  try {
-    const stdout = execSync(command, { 
-      cwd, 
-      stdio: 'pipe',
-      encoding: 'buffer'
-    });
-    return { ok: true, stdout: decodeOutput(stdout), stderr: '' };
-  } catch (error) {
-    const stdout = error.stdout ? decodeOutput(error.stdout) : '';
-    const stderr = error.stderr ? decodeOutput(error.stderr) : '';
-    return { ok: false, stdout, stderr, error };
-  }
-}
-
 function decodeOutput(output) {
   if (!output) return '';
   if (typeof output === 'string') return output;
@@ -107,28 +87,6 @@ function decodeOutput(output) {
     return gbk || utf8;
   } catch (error) {
     return utf8;
-  }
-}
-
-function tailOutput(output, maxLines = 12) {
-  if (!output) return '';
-  const lines = output
-    .split(/\r?\n/)
-    .map((line) => line.trimEnd())
-    .filter((line) => line.trim() !== '');
-  if (lines.length <= maxLines) return lines.join('\n');
-  return lines.slice(-maxLines).join('\n');
-}
-
-/**
- * Run command with inherited output
- */
-function runInherit(command, cwd = ROOT_DIR) {
-  try {
-    execSync(command, { cwd, stdio: 'inherit' });
-    return { ok: true, error: null };
-  } catch (error) {
-    return { ok: false, error };
   }
 }
 
@@ -182,6 +140,50 @@ function spawnCommand(cmd, args, cwd = ROOT_DIR, envOverrides = {}, shell = fals
     });
 
     child.on('error', reject);
+  });
+}
+
+/**
+ * Run a command asynchronously with piped output, prefixing every line so
+ * parallel preparation steps stay distinguishable. Resolves (never rejects)
+ * with { ok, code, error }.
+ */
+function runCommandPrefixed(prefix, cmd, args, cwd = ROOT_DIR, envOverrides = {}) {
+  return new Promise((resolve) => {
+    const child = spawn(cmd, args, {
+      cwd,
+      shell: process.platform === 'win32',
+      stdio: ['ignore', 'pipe', 'pipe'],
+      env: {
+        ...process.env,
+        ...envOverrides,
+      },
+    });
+
+    const forward = (stream, out) => {
+      let buffered = '';
+      stream.on('data', (chunk) => {
+        buffered += decodeOutput(chunk);
+        const lines = buffered.split(/\r?\n/);
+        buffered = lines.pop() ?? '';
+        for (const line of lines) {
+          if (line.trim() !== '') {
+            out.write(`[${prefix}] ${line}\n`);
+          }
+        }
+      });
+      stream.on('end', () => {
+        if (buffered.trim() !== '') {
+          out.write(`[${prefix}] ${buffered}\n`);
+        }
+      });
+    };
+
+    forward(child.stdout, process.stdout);
+    forward(child.stderr, process.stderr);
+
+    child.on('error', (error) => resolve({ ok: false, code: null, error }));
+    child.on('close', (code) => resolve({ ok: code === 0, code, error: null }));
   });
 }
 
@@ -661,80 +663,86 @@ async function main() {
   printHeader(`BitFun ${modeLabel} Development`);
   printBlank();
 
-  const totalSteps = desktopMode ? 5 : 3;
+  const totalSteps = 2;
   let currentStep = 1;
 
-  // Step 1: Copy resources
-  printStep(currentStep++, totalSteps, 'Copy resources');
-  const copyResult = runSilent('pnpm run copy-monaco --silent');
-  if (copyResult.ok) {
-    printSuccess('Monaco Editor resources ready');
-  } else {
-    printError('Copy resources failed');
-    const output = tailOutput(copyResult.stderr || copyResult.stdout);
-    if (output) {
-      printError(output);
-    } else if (copyResult.error) {
-      printError(copyResult.error.message);
-    }
-    if (copyResult.error && copyResult.error.status !== undefined) {
-      printError(`Exit code: ${copyResult.error.status}`);
-    }
-    printInfo('Hint: run `pnpm install` in repo root if dependencies are missing');
-    process.exit(1);
-  }
-  
-  // Step 2: Generate version info
-  printStep(currentStep++, totalSteps, 'Generate version info');
-  const versionResult = runInherit('node scripts/generate-version.cjs');
-  if (!versionResult.ok) {
-    printError('Generate version info failed');
-    if (versionResult.error && versionResult.error.message) {
-      printError(versionResult.error.message);
-    }
-    if (versionResult.error && versionResult.error.status !== undefined) {
-      printError(`Exit code: ${versionResult.error.status}`);
-    }
-    process.exit(1);
-  }
-  
-  const prepTime = ((Date.now() - startTime) / 1000).toFixed(1);
-  
-  // Step 3: Build mobile-web (desktop only)
+  // Step 1: Run all independent preparation tasks in parallel.
+  // copy-monaco / generate-version / mobile-web / flashgrep have no
+  // dependencies on each other; each task's output is line-prefixed so the
+  // interleaved logs stay attributable.
+  printStep(
+    currentStep++,
+    totalSteps,
+    desktopMode
+      ? 'Prepare resources (parallel: monaco, version, mobile-web, flashgrep)'
+      : 'Prepare resources (parallel: monaco, version)'
+  );
+
+  const prepTasks = [
+    {
+      name: 'Copy Monaco resources',
+      hint: 'Hint: run `pnpm install` in repo root if dependencies are missing',
+      promise: runCommandPrefixed('copy-monaco', 'pnpm', ['run', 'copy-monaco', '--silent']),
+    },
+    {
+      name: 'Generate version info',
+      promise: runCommandPrefixed('version', 'node', ['scripts/generate-version.cjs']),
+    },
+  ];
+
   if (desktopMode) {
-    printStep(currentStep++, totalSteps, 'Build mobile-web');
-    const mobileWebResult = buildMobileWeb({
-      install: true,
-      logInfo: printInfo,
-      logSuccess: printSuccess,
-      logError: printError,
+    prepTasks.push({
+      name: 'Build mobile-web',
+      promise: runCommandPrefixed('mobile-web', 'node', ['scripts/mobile-web-build.cjs', '--install']),
     });
-    if (!mobileWebResult.ok) {
-      process.exit(1);
-    }
+    prepTasks.push({
+      name: 'Prepare workspace search daemon',
+      promise: (async () => {
+        const flashgrepResult = ensureFlashgrepBinary();
+        if (!flashgrepResult.ok) {
+          return {
+            ok: false,
+            code: null,
+            error: flashgrepResult.error || new Error('Workspace search daemon is missing'),
+          };
+        }
+        process.env.FLASHGREP_DAEMON_BIN = flashgrepResult.binaryPath;
 
-    printStep(currentStep++, totalSteps, 'Build workspace search daemon');
-    const flashgrepResult = ensureFlashgrepBinary();
-    if (!flashgrepResult.ok) {
-      printError('Workspace search daemon is missing');
-      if (flashgrepResult.error && flashgrepResult.error.message) {
-        printError(flashgrepResult.error.message);
-      }
-      if (flashgrepResult.error && flashgrepResult.error.status !== undefined) {
-        printError(`Exit code: ${flashgrepResult.error.status}`);
-      }
-      process.exit(1);
-    }
-    process.env.FLASHGREP_DAEMON_BIN = flashgrepResult.binaryPath;
-
-    try {
-      await ensureFlashgrepBundleResource();
-    } catch (error) {
-      printError('Validate workspace search daemon failed');
-      printError(error instanceof Error ? error.message : String(error));
-      process.exit(1);
-    }
+        try {
+          await ensureFlashgrepBundleResource();
+        } catch (error) {
+          return { ok: false, code: null, error };
+        }
+        return { ok: true, code: 0, error: null };
+      })(),
+    });
   }
+
+  const prepResults = await Promise.all(prepTasks.map((task) => task.promise));
+  let prepFailed = false;
+  prepResults.forEach((result, index) => {
+    const task = prepTasks[index];
+    if (result.ok) {
+      return;
+    }
+    prepFailed = true;
+    printError(`${task.name} failed`);
+    if (result.error && result.error.message) {
+      printError(result.error.message);
+    }
+    if (result.code !== null && result.code !== undefined && result.code !== 0) {
+      printError(`Exit code: ${result.code}`);
+    }
+    if (task.hint) {
+      printInfo(task.hint);
+    }
+  });
+  if (prepFailed) {
+    process.exit(1);
+  }
+  printSuccess('Preparation tasks complete');
+
+  const prepTime = ((Date.now() - startTime) / 1000).toFixed(1);
 
   // Final step: Start dev server
   const startStepLabel = mode === 'desktop-preview'
@@ -750,16 +758,26 @@ async function main() {
       await ensureDesktopOpenSslIfNeeded();
       const desktopDir = path.join(ROOT_DIR, 'src/apps/desktop');
       const tauriConfig = path.join(desktopDir, 'tauri.dev.conf.json');
+      // Match the fast-build env used by the desktop-preview path
+      // (rebuildDesktopDebugBinary): more codegen units means more parallel
+      // codegen for dev-profile rebuilds. An explicitly set
+      // CARGO_PROFILE_DEV_CODEGEN_UNITS in the caller's environment wins.
+      const tauriDevEnv = {
+        ...process.env,
+        CARGO_PROFILE_DEV_CODEGEN_UNITS: process.env.CARGO_PROFILE_DEV_CODEGEN_UNITS || '256',
+      };
       try {
         if (process.platform === 'win32') {
           // Running the generated .cmd shim directly via spawn is flaky on Windows.
           // Use cmd.exe with an explicit args array so the desktop app directory
           // stays the Tauri project root without pnpm workspace path rewriting.
           const tauriBin = path.join(ROOT_DIR, 'node_modules', '.bin', 'tauri.cmd');
-          await runWindowsCommandArgs(tauriBin, ['dev', '--config', tauriConfig], desktopDir, process.env);
+          await runWindowsCommandArgs(tauriBin, ['dev', '--config', tauriConfig], desktopDir, tauriDevEnv);
         } else {
           const tauriBin = path.join(ROOT_DIR, 'node_modules', '.bin', 'tauri');
-          await spawnCommand(tauriBin, ['dev', '--config', tauriConfig], desktopDir);
+          await spawnCommand(tauriBin, ['dev', '--config', tauriConfig], desktopDir, {
+            CARGO_PROFILE_DEV_CODEGEN_UNITS: tauriDevEnv.CARGO_PROFILE_DEV_CODEGEN_UNITS,
+          });
         }
       } finally {
         // Option B: prune only when the desktop:dev session ends, not on each rebuild.

@@ -11,7 +11,7 @@
 #![allow(dead_code)]
 
 use bitfun_core::util::errors::{BitFunError, BitFunResult};
-use image::{ImageOutputFormat, Rgba, RgbaImage};
+use image::{Rgba, RgbaImage};
 use std::io::Cursor;
 
 /// Half-length of each crosshair arm in pixels (arm spans ±`ARM_LEN`).
@@ -106,8 +106,16 @@ pub(super) fn annotate_screenshot_with_click(
     draw_click_marker(&mut img, x, y);
 
     let mut out = Vec::with_capacity(raw.len());
-    image::DynamicImage::ImageRgba8(img)
-        .write_to(&mut Cursor::new(&mut out), ImageOutputFormat::Jpeg(80))
+    // image 0.25: JPEG has no alpha channel and the encoder rejects Rgba8
+    // input, so flatten to RGB before encoding.
+    let rgb = image::DynamicImage::ImageRgba8(img).to_rgb8();
+    image::codecs::jpeg::JpegEncoder::new_with_quality(&mut Cursor::new(&mut out), 80)
+        .encode(
+            rgb.as_raw(),
+            rgb.width(),
+            rgb.height(),
+            image::ExtendedColorType::Rgb8,
+        )
         .map_err(|e| BitFunError::tool(format!("debug_overlay: encode JPEG failed: {e}")))?;
     Ok(out)
 }
@@ -161,7 +169,7 @@ mod tests {
         let mut out = Vec::new();
         let encoder = image::codecs::jpeg::JpegEncoder::new_with_quality(&mut out, 90);
         encoder
-            .write_image(rgb.as_raw(), w, h, image::ColorType::Rgb8)
+            .write_image(rgb.as_raw(), w, h, image::ExtendedColorType::Rgb8)
             .unwrap();
         out
     }
@@ -259,7 +267,7 @@ mod tests {
         }
         let mut png = Vec::new();
         image::DynamicImage::ImageRgba8(buf)
-            .write_to(&mut Cursor::new(&mut png), ImageOutputFormat::Png)
+            .write_to(&mut Cursor::new(&mut png), image::ImageFormat::Png)
             .unwrap();
         let out = annotate_screenshot_with_click(&png, "image/png", 20, 20).expect("annotate");
         // JPEG magic: FF D8 FF.

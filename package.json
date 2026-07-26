@@ -7,7 +7,7 @@
     "node": ">=22.12.0"
   },
   "scripts": {
-    "copy-monaco": "copyfiles -u 5 \"src/web-ui/node_modules/monaco-editor/min/vs/**/*\" src/web-ui/public/monaco-editor",
+    "copy-monaco": "copyfiles -u 5 \"src/web-ui/node_modules/monaco-editor/min/vs/**/*\" src/web-ui/public/monaco-editor && node scripts/prune-monaco-nls.cjs",
     "copy-icons": "copyfiles -f \"src/apps/desktop/icons/Logo-ICON.png\" \"src/web-ui/public/\"",
     "copy-assets": "pnpm run copy-monaco && pnpm run copy-icons",
     "generate-version": "node scripts/generate-version.cjs",
@@ -46,9 +46,10 @@
     "type-check:web": "pnpm --dir src/web-ui run type-check",
     "build": "pnpm run build:web",
     "verify:monaco-assets": "node scripts/verify-monaco-assets.cjs",
-    "build:web": "pnpm run type-check:web && pnpm --dir src/web-ui build && pnpm run verify:monaco-assets",
+    "build:web": "node scripts/build-web-parallel.mjs && pnpm run verify:monaco-assets",
     "build:mobile-web": "pnpm --dir src/mobile-web build",
     "prepare:mobile-web": "node scripts/mobile-web-build.cjs",
+    "frontend:build-all": "node scripts/frontend-build-all.mjs",
     "preview": "pnpm --dir src/web-ui preview",
     "desktop:dev": "node scripts/dev.cjs desktop",
     "desktop:preview:debug": "node scripts/dev.cjs desktop-preview",

@@ -23,7 +23,7 @@
 
 use bitfun_core::agentic::tools::computer_use_host::InteractiveElement;
 use bitfun_core::util::errors::{BitFunError, BitFunResult};
-use image::{ImageOutputFormat, Rgba, RgbaImage};
+use image::{Rgba, RgbaImage};
 use std::io::Cursor;
 
 /// Render the SoM overlay onto `jpeg_bytes` and return a fresh JPEG.
@@ -108,8 +108,16 @@ pub(crate) fn render_overlay(
 
     let mut out = Vec::with_capacity(jpeg_bytes.len());
     let quality = jpeg_quality.unwrap_or(80);
-    image::DynamicImage::ImageRgba8(canvas)
-        .write_to(&mut Cursor::new(&mut out), ImageOutputFormat::Jpeg(quality))
+    // image 0.25: JPEG has no alpha channel and the encoder rejects Rgba8
+    // input, so flatten to RGB before encoding.
+    let rgb = image::DynamicImage::ImageRgba8(canvas).to_rgb8();
+    image::codecs::jpeg::JpegEncoder::new_with_quality(&mut Cursor::new(&mut out), quality)
+        .encode(
+            rgb.as_raw(),
+            rgb.width(),
+            rgb.height(),
+            image::ExtendedColorType::Rgb8,
+        )
         .map_err(|e| BitFunError::tool(format!("som_overlay: encode JPEG failed: {e}")))?;
     Ok(out)
 }
@@ -302,7 +310,7 @@ mod tests {
         let rgb = image::DynamicImage::ImageRgba8(buf).to_rgb8();
         let encoder = image::codecs::jpeg::JpegEncoder::new_with_quality(&mut out, 90);
         encoder
-            .write_image(rgb.as_raw(), w, h, image::ColorType::Rgb8)
+            .write_image(rgb.as_raw(), w, h, image::ExtendedColorType::Rgb8)
             .unwrap();
         out
     }

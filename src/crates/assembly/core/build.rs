@@ -300,7 +300,12 @@ fn generate_embedded_prompts_code(
     )?;
     writeln!(file, "    let mut map = HashMap::new();")?;
 
-    for (name, content) in prompts {
+    // Sort keys so the generated file is byte-identical across builds
+    // (HashMap iteration order is randomized; determinism keeps sccache and
+    // other build caches effective).
+    let mut sorted: Vec<(&String, &String)> = prompts.iter().collect();
+    sorted.sort_by(|a, b| a.0.cmp(b.0));
+    for (name, content) in sorted {
         writeln!(
             file,
             "    map.insert(r###\"{}\"###, r###\"{}\"###);",
@@ -426,7 +431,10 @@ fn generate_embedded_announcements_code(
     )?;
     writeln!(file, "    let mut map = HashMap::new();")?;
 
-    for (key, content) in entries {
+    // Sort keys for deterministic generated output (see prompts codegen above).
+    let mut sorted: Vec<(&String, &String)> = entries.iter().collect();
+    sorted.sort_by(|a, b| a.0.cmp(b.0));
+    for (key, content) in sorted {
         writeln!(
             file,
             "    map.insert(r###\"{}\"###, r###\"{}\"###);",

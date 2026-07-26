@@ -82,7 +82,7 @@ tower-http = { workspace = true }
 sha1 = { workspace = true }
 screenshots = { workspace = true }
 enigo = { workspace = true }
-image = { version = "0.24", default-features = false, features = ["png", "jpeg"] }
+image = { workspace = true }
 resvg = { workspace = true }
 
 [target.'cfg(target_os = "macos")'.dependencies]
