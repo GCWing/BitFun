@@ -2117,7 +2117,12 @@
     "thinkingMetric": "{{value}} 推理字元",
     "noReadonlyTools": "未使用唯讀工具",
     "selectCandidate": "選擇此答案",
-    "selectedCandidate": "已選擇"
+    "selectedCandidate": "已選擇",
+    "contextModeLabel": "上下文",
+    "contextModes": {
+      "independent": "獨立",
+      "shared": "共享"
+    }
   },
   "reasoningEffort": {
     "title": "推理深度",

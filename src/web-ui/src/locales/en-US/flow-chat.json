@@ -2117,7 +2117,12 @@
     "thinkingMetric": "{{value}} thinking chars",
     "noReadonlyTools": "No read-only tools used",
     "selectCandidate": "Select this answer",
-    "selectedCandidate": "Selected"
+    "selectedCandidate": "Selected",
+    "contextModeLabel": "Context",
+    "contextModes": {
+      "independent": "Independent",
+      "shared": "Shared"
+    }
   },
   "reasoningEffort": {
     "title": "Reasoning Effort",

@@ -7,6 +7,7 @@ import { getProviderDisplayName } from '@/infrastructure/config/services/modelCo
 import type { AIModelConfig, DefaultModelsConfig } from '@/infrastructure/config/types';
 import { Tooltip } from '@/component-library';
 import { createLogger } from '@/shared/utils/logger';
+import type { ModelBrainstormContextMode } from '../store/modelBrainstormStore';
 import {
   MODEL_BRAINSTORM_MAX_CANDIDATES,
   MODEL_BRAINSTORM_MIN_CANDIDATES,
@@ -24,9 +25,11 @@ interface BrainstormModelOption {
 interface ModelBrainstormControlProps {
   enabled: boolean;
   selectedModelIds: string[];
+  contextMode: ModelBrainstormContextMode;
   disabled?: boolean;
   onEnabledChange: (enabled: boolean) => void;
   onSelectedModelIdsChange: (modelIds: string[]) => void;
+  onContextModeChange: (contextMode: ModelBrainstormContextMode) => void;
 }
 
 function isTextChatModel(model: AIModelConfig): model is AIModelConfig & { id: string } {
@@ -74,9 +77,11 @@ function resolveDefaultSelection(
 export const ModelBrainstormControl: React.FC<ModelBrainstormControlProps> = ({
   enabled,
   selectedModelIds,
+  contextMode,
   disabled = false,
   onEnabledChange,
   onSelectedModelIdsChange,
+  onContextModeChange,
 }) => {
   const { t } = useTranslation('flow-chat');
   const [models, setModels] = useState<BrainstormModelOption[]>([]);
@@ -84,6 +89,7 @@ export const ModelBrainstormControl: React.FC<ModelBrainstormControlProps> = ({
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const hostRef = useRef<HTMLDivElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
+  const hasUserEditedSelectionRef = useRef(false);
   const [menuStyle, setMenuStyle] = useState<React.CSSProperties>({
     position: 'fixed',
     visibility: 'hidden',
@@ -130,7 +136,7 @@ export const ModelBrainstormControl: React.FC<ModelBrainstormControlProps> = ({
       return;
     }
 
-    if (selectedModelIds.length === 0) {
+    if (selectedModelIds.length === 0 && !hasUserEditedSelectionRef.current) {
       const defaults = resolveDefaultSelection(models, defaultModels);
       if (defaults.length > 0) {
         onSelectedModelIdsChange(defaults);
@@ -202,9 +208,14 @@ export const ModelBrainstormControl: React.FC<ModelBrainstormControlProps> = ({
     : enabled
       ? t('modelBrainstorm.enabledTooltip', { count: selectedCount })
       : t('modelBrainstorm.disabledTooltip');
+  const contextModeLabels: Record<ModelBrainstormContextMode, string> = {
+    independent: t('modelBrainstorm.contextModes.independent'),
+    shared: t('modelBrainstorm.contextModes.shared'),
+  };
 
   const toggleModel = useCallback((modelId: string) => {
     const isSelected = selectedAvailableModelIds.includes(modelId);
+    hasUserEditedSelectionRef.current = true;
     if (isSelected) {
       onSelectedModelIdsChange(selectedAvailableModelIds.filter(id => id !== modelId));
       return;
@@ -258,6 +269,27 @@ export const ModelBrainstormControl: React.FC<ModelBrainstormControlProps> = ({
           <div className="model-brainstorm-control__menu-header">
             <span>{t('modelBrainstorm.menuTitle')}</span>
             <span>{selectedCount}/{MODEL_BRAINSTORM_MAX_CANDIDATES}</span>
+          </div>
+          <div className="model-brainstorm-control__mode-row">
+            <span className="model-brainstorm-control__mode-label">
+              {t('modelBrainstorm.contextModeLabel')}
+            </span>
+            <div className="model-brainstorm-control__mode-switch" role="group">
+              {(['independent', 'shared'] as const).map(mode => (
+                <button
+                  key={mode}
+                  type="button"
+                  className={[
+                    'model-brainstorm-control__mode-option',
+                    contextMode === mode ? 'model-brainstorm-control__mode-option--active' : '',
+                  ].filter(Boolean).join(' ')}
+                  aria-pressed={contextMode === mode}
+                  onClick={() => onContextModeChange(mode)}
+                >
+                  {contextModeLabels[mode]}
+                </button>
+              ))}
+            </div>
           </div>
           <div className="model-brainstorm-control__list">
             {models.map(model => {

@@ -43,6 +43,7 @@ import { CHAT_INPUT_CONFIG } from '../constants/chatInputConfig';
 import { useMessageSender } from '../hooks/useMessageSender';
 import { useChatInputState } from '../store/chatInputStateStore';
 import { useInputHistoryStore } from '../store/inputHistoryStore';
+import type { ModelBrainstormContextMode } from '../store/modelBrainstormStore';
 import { startBtwThread } from '../services/BtwThreadService';
 import { runUsageReportCommand } from '../services/usageReportService';
 import { buildImagePayload } from '../utils/imagePayload';
@@ -667,14 +668,17 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   const [isModelSwitching, setIsModelSwitching] = useState(false);
   const [brainstormEnabled, setBrainstormEnabled] = useState(false);
   const [brainstormModelIds, setBrainstormModelIds] = useState<string[]>([]);
+  const [brainstormContextMode, setBrainstormContextMode] = useState<ModelBrainstormContextMode>('independent');
   const brainstormSubmitStateRef = useRef<{
     enabled: boolean;
     modelIds: string[];
     canUse: boolean;
+    contextMode: ModelBrainstormContextMode;
   }>({
     enabled: false,
     modelIds: [],
     canUse: false,
+    contextMode: 'independent',
   });
   const updateBrainstormEnabled = useCallback((enabled: boolean) => {
     brainstormSubmitStateRef.current = {
@@ -689,6 +693,13 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       modelIds,
     };
     setBrainstormModelIds(modelIds);
+  }, []);
+  const updateBrainstormContextMode = useCallback((contextMode: ModelBrainstormContextMode) => {
+    brainstormSubmitStateRef.current = {
+      ...brainstormSubmitStateRef.current,
+      contextMode,
+    };
+    setBrainstormContextMode(contextMode);
   }, []);
   const isAssistantWorkspace = useMemo(
     () => resolveSessionAssistantWorkspace({
@@ -945,8 +956,9 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       enabled: brainstormEnabled,
       modelIds: brainstormModelIds,
       canUse: canUseModelBrainstorm,
+      contextMode: brainstormContextMode,
     };
-  }, [brainstormEnabled, brainstormModelIds, canUseModelBrainstorm]);
+  }, [brainstormEnabled, brainstormModelIds, brainstormContextMode, canUseModelBrainstorm]);
 
   useEffect(() => {
     if (!canUseModelBrainstorm && brainstormEnabled) {
@@ -2909,6 +2921,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
           workspaceConfig: flowChatSessionConfigForCurrentWorkspace(workspace),
           agentType: effectiveSendAgentType,
           modelIds: modelIdsForBrainstorm,
+          contextMode: brainstormSubmitState.contextMode,
         });
         clearContexts();
         dispatchInput({ type: 'CLEAR_VALUE' });
@@ -2960,9 +2973,6 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     }
   }, [
     isModelSwitching,
-    brainstormEnabled,
-    brainstormModelIds,
-    canUseModelBrainstorm,
     getCurrentDraftValue,
     derivedState,
     handleCancelCurrentTask,
@@ -4367,9 +4377,11 @@ export const ChatInput: React.FC<ChatInputProps> = ({
                     <ModelBrainstormControl
                       enabled={brainstormEnabled}
                       selectedModelIds={brainstormModelIds}
+                      contextMode={brainstormContextMode}
                       disabled={!!derivedState?.isProcessing || isModelSwitching}
                       onEnabledChange={updateBrainstormEnabled}
                       onSelectedModelIdsChange={updateBrainstormModelIds}
+                      onContextModeChange={updateBrainstormContextMode}
                     />
                   )}
                   <ModelSelector

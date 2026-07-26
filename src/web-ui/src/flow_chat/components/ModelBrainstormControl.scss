@@ -90,6 +90,58 @@
     text-transform: uppercase;
   }
 
+  &__mode-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 10px;
+    border-bottom: 1px solid var(--border-subtle);
+  }
+
+  &__mode-label {
+    overflow: hidden;
+    color: var(--color-text-muted);
+    font-size: var(--flowchat-font-size-2xs);
+    font-weight: 600;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  &__mode-switch {
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+    padding: 2px;
+    border: 1px solid var(--border-subtle);
+    border-radius: 6px;
+    background: var(--element-bg-subtle);
+  }
+
+  &__mode-option {
+    min-width: 42px;
+    height: 22px;
+    padding: 0 8px;
+    border: 0;
+    border-radius: 4px;
+    background: transparent;
+    color: var(--color-text-muted);
+    font-size: var(--flowchat-font-size-2xs);
+    font-weight: 650;
+    line-height: 1;
+    cursor: pointer;
+
+    &:hover {
+      color: var(--color-text-primary);
+    }
+
+    &--active {
+      background: var(--color-bg-elevated);
+      color: var(--color-text-primary);
+      box-shadow: 0 1px 2px var(--color-overlay-black-18);
+    }
+  }
+
   &__list {
     max-height: 300px;
     overflow-y: auto;

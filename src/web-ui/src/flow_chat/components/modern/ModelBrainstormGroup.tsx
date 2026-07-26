@@ -180,7 +180,9 @@ export const ModelBrainstormGroup: React.FC<ModelBrainstormGroupProps> = ({ batc
 
   const projections = batch.candidates.map(candidate => projectCandidate(batch, candidate));
   const completedCount = projections.filter(projection => projection.status === 'completed').length;
-  const selectedCandidateId = batch.selectedCandidateId;
+  const selectedCandidateIds =
+    batch.selectedCandidateIds ??
+    (batch.selectedCandidateId ? [batch.selectedCandidateId] : []);
   const statusLabels: Record<CandidateProjection['status'], string> = {
     pending: t('shared:statuses.loading'),
     starting: t('shared:statuses.loading'),
@@ -197,18 +199,12 @@ export const ModelBrainstormGroup: React.FC<ModelBrainstormGroupProps> = ({ batc
     }
 
     const answer = extractAssistantAnswer(projection.turn);
-    useModelBrainstormStore.getState().selectCandidate(batch.id, projection.candidate.id);
-    if (answer) {
-      useModelBrainstormStore.getState().setPublicContextForSession(batch.sourceSessionId, {
-        sessionId: batch.sourceSessionId,
-        batchId: batch.id,
-        candidateId: projection.candidate.id,
-        modelId: projection.candidate.modelId,
-        modelLabel: projection.candidate.modelLabel,
-        answer,
-        createdAt: Date.now(),
-      });
+    if (!answer) {
+      return;
     }
+    useModelBrainstormStore
+      .getState()
+      .toggleCandidatePublicSelection(batch.id, projection.candidate.id, answer);
   };
 
   return (
@@ -232,7 +228,7 @@ export const ModelBrainstormGroup: React.FC<ModelBrainstormGroupProps> = ({ batc
 
       <div className="model-brainstorm-group__grid">
         {projections.map(projection => {
-          const selected = selectedCandidateId === projection.candidate.id;
+          const selected = selectedCandidateIds.includes(projection.candidate.id);
           const statusLabel = statusLabels[projection.status];
           const readonlyTooltip = projection.readonlyToolNames.length > 0
             ? projection.readonlyToolNames.join(', ')

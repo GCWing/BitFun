@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { useShallow } from 'zustand/react/shallow';
 
 export type ModelBrainstormCandidateStatus = 'pending' | 'starting' | 'running' | 'failed';
+export type ModelBrainstormContextMode = 'independent' | 'shared';
 
 export interface ModelBrainstormCandidate {
   id: string;
@@ -11,26 +12,31 @@ export interface ModelBrainstormCandidate {
   sessionId?: string;
   status: ModelBrainstormCandidateStatus;
   error?: string;
+  answer?: string;
+  completedAt?: number;
 }
 
-export interface ModelBrainstormBatch {
+export interface ModelBrainstormPublicSelection {
   id: string;
-  sourceSessionId: string;
-  question: string;
-  displayQuestion: string;
-  createdAt: number;
-  selectedCandidateId?: string;
-  candidates: ModelBrainstormCandidate[];
-}
-
-export interface ModelBrainstormPublicContext {
-  sessionId: string;
-  batchId: string;
   candidateId: string;
   modelId: string;
   modelLabel: string;
   answer: string;
   createdAt: number;
+}
+
+export interface ModelBrainstormBatch {
+  id: string;
+  roomId?: string;
+  sourceSessionId: string;
+  contextMode?: ModelBrainstormContextMode;
+  question: string;
+  displayQuestion: string;
+  createdAt: number;
+  selectedCandidateId?: string;
+  selectedCandidateIds?: string[];
+  publicSelections?: ModelBrainstormPublicSelection[];
+  candidates: ModelBrainstormCandidate[];
 }
 
 export interface ModelBrainstormReusableCandidateSession {
@@ -45,25 +51,46 @@ export interface ModelBrainstormReusableCandidateSession {
 interface ModelBrainstormState {
   batches: Record<string, ModelBrainstormBatch>;
   order: string[];
-  publicContexts: Record<string, ModelBrainstormPublicContext>;
   createBatch: (batch: ModelBrainstormBatch) => void;
   updateCandidate: (
     batchId: string,
     candidateId: string,
     updates: Partial<ModelBrainstormCandidate>,
   ) => void;
-  selectCandidate: (batchId: string, candidateId: string) => void;
-  setPublicContextForSession: (
-    sessionId: string,
-    context: ModelBrainstormPublicContext,
+  setCandidateAnswer: (
+    batchId: string,
+    candidateId: string,
+    answer: string,
+    completedAt?: number,
   ) => void;
-  getPublicContextForSession: (sessionId: string) => ModelBrainstormPublicContext | undefined;
-  consumePublicContextForSession: (sessionId: string) => ModelBrainstormPublicContext | undefined;
+  selectCandidate: (batchId: string, candidateId: string) => void;
+  toggleCandidatePublicSelection: (
+    batchId: string,
+    candidateId: string,
+    answer: string,
+    selected?: boolean,
+  ) => void;
+  getBatchesForSession: (sessionId: string) => ModelBrainstormBatch[];
   getReusableCandidateSessionsForSession: (
     sessionId: string,
   ) => Record<string, ModelBrainstormReusableCandidateSession>;
   removeBatchesForSession: (sessionId: string) => void;
   reset: () => void;
+}
+
+function normalizeBatch(batch: ModelBrainstormBatch): ModelBrainstormBatch {
+  const selectedCandidateIds =
+    batch.selectedCandidateIds ??
+    (batch.selectedCandidateId ? [batch.selectedCandidateId] : []);
+
+  return {
+    ...batch,
+    roomId: batch.roomId || batch.sourceSessionId,
+    contextMode: batch.contextMode || 'independent',
+    selectedCandidateIds,
+    selectedCandidateId: selectedCandidateIds[0],
+    publicSelections: batch.publicSelections ?? [],
+  };
 }
 
 function getBatchSessionIds(batch: ModelBrainstormBatch): string[] {
@@ -102,44 +129,43 @@ function getConnectedSessionIds(
   return connectedSessionIds;
 }
 
-function findPublicContextEntry(
-  state: Pick<ModelBrainstormState, 'batches' | 'publicContexts'>,
+function getRelatedBatches(
+  batches: Record<string, ModelBrainstormBatch>,
+  order: string[],
   sessionId: string,
-): [string, ModelBrainstormPublicContext] | undefined {
-  const directContext = state.publicContexts[sessionId];
-  if (directContext) {
-    return [sessionId, directContext];
+): ModelBrainstormBatch[] {
+  const seedSessionId = sessionId.trim();
+  if (!seedSessionId) {
+    return [];
   }
 
-  const connectedSessionIds = getConnectedSessionIds(state.batches, sessionId);
-  let latestEntry: [string, ModelBrainstormPublicContext] | undefined;
-  for (const [publicContextSessionId, publicContext] of Object.entries(state.publicContexts)) {
-    if (!connectedSessionIds.has(publicContextSessionId)) {
-      continue;
-    }
-
-    if (!latestEntry || publicContext.createdAt > latestEntry[1].createdAt) {
-      latestEntry = [publicContextSessionId, publicContext];
-    }
-  }
-
-  return latestEntry;
+  const connectedSessionIds = getConnectedSessionIds(batches, seedSessionId);
+  return order
+    .map(batchId => batches[batchId])
+    .filter((batch): batch is ModelBrainstormBatch => {
+      if (!batch) {
+        return false;
+      }
+      return getBatchSessionIds(batch).some(batchSessionId => connectedSessionIds.has(batchSessionId));
+    });
 }
 
 export const useModelBrainstormStore = create<ModelBrainstormState>((set, get) => ({
   batches: {},
   order: [],
-  publicContexts: {},
 
-  createBatch: (batch) => set((state) => ({
-    batches: {
-      ...state.batches,
-      [batch.id]: batch,
-    },
-    order: state.order.includes(batch.id)
-      ? state.order
-      : [...state.order, batch.id],
-  })),
+  createBatch: (batch) => set((state) => {
+    const nextBatch = normalizeBatch(batch);
+    return {
+      batches: {
+        ...state.batches,
+        [nextBatch.id]: nextBatch,
+      },
+      order: state.order.includes(nextBatch.id)
+        ? state.order
+        : [...state.order, nextBatch.id],
+    };
+  }),
 
   updateCandidate: (batchId, candidateId, updates) => set((state) => {
     const batch = state.batches[batchId];
@@ -174,6 +200,44 @@ export const useModelBrainstormStore = create<ModelBrainstormState>((set, get) =
     };
   }),
 
+  setCandidateAnswer: (batchId, candidateId, answer, completedAt) => set((state) => {
+    const batch = state.batches[batchId];
+    const trimmedAnswer = answer.trim();
+    if (!batch || !trimmedAnswer) {
+      return state;
+    }
+
+    let changed = false;
+    const candidates = batch.candidates.map(candidate => {
+      if (candidate.id !== candidateId) {
+        return candidate;
+      }
+      if (candidate.answer === trimmedAnswer && candidate.completedAt === completedAt) {
+        return candidate;
+      }
+      changed = true;
+      return {
+        ...candidate,
+        answer: trimmedAnswer,
+        completedAt: completedAt ?? candidate.completedAt ?? Date.now(),
+      };
+    });
+
+    if (!changed) {
+      return state;
+    }
+
+    return {
+      batches: {
+        ...state.batches,
+        [batchId]: {
+          ...batch,
+          candidates,
+        },
+      },
+    };
+  }),
+
   selectCandidate: (batchId, candidateId) => set((state) => {
     const batch = state.batches[batchId];
     if (!batch || !batch.candidates.some(candidate => candidate.id === candidateId)) {
@@ -186,79 +250,75 @@ export const useModelBrainstormStore = create<ModelBrainstormState>((set, get) =
         [batchId]: {
           ...batch,
           selectedCandidateId: candidateId,
+          selectedCandidateIds: [candidateId],
         },
       },
     };
   }),
 
-  setPublicContextForSession: (sessionId, context) => set((state) => ({
-    publicContexts: {
-      ...state.publicContexts,
-      [sessionId]: context,
-    },
-  })),
-
-  getPublicContextForSession: (sessionId) => {
-    const seedSessionId = sessionId.trim();
-    if (!seedSessionId) {
-      return undefined;
+  toggleCandidatePublicSelection: (batchId, candidateId, answer, selected) => set((state) => {
+    const batch = state.batches[batchId];
+    const candidate = batch?.candidates.find(item => item.id === candidateId);
+    const trimmedAnswer = answer.trim();
+    if (!batch || !candidate || !trimmedAnswer) {
+      return state;
     }
 
-    return findPublicContextEntry(get(), seedSessionId)?.[1];
-  },
+    const currentSelectedIds = batch.selectedCandidateIds ?? (batch.selectedCandidateId ? [batch.selectedCandidateId] : []);
+    const isSelected = currentSelectedIds.includes(candidateId);
+    const shouldSelect = selected ?? !isSelected;
+    const nextSelectedIds = shouldSelect
+      ? [...currentSelectedIds.filter(id => id !== candidateId), candidateId]
+      : currentSelectedIds.filter(id => id !== candidateId);
+    const currentSelections = batch.publicSelections ?? [];
+    const nextPublicSelections = shouldSelect
+      ? [
+          ...currentSelections.filter(selection => selection.candidateId !== candidateId),
+          {
+            id: `${batchId}:${candidateId}`,
+            candidateId,
+            modelId: candidate.modelId,
+            modelLabel: candidate.modelLabel,
+            answer: trimmedAnswer,
+            createdAt: Date.now(),
+          },
+        ]
+      : currentSelections.filter(selection => selection.candidateId !== candidateId);
+    const candidates = batch.candidates.map(item => item.id === candidateId
+      ? {
+          ...item,
+          answer: trimmedAnswer,
+          completedAt: item.completedAt ?? Date.now(),
+        }
+      : item);
 
-  consumePublicContextForSession: (sessionId) => {
-    const seedSessionId = sessionId.trim();
-    if (!seedSessionId) {
-      return undefined;
-    }
+    return {
+      batches: {
+        ...state.batches,
+        [batchId]: {
+          ...batch,
+          selectedCandidateId: nextSelectedIds[0],
+          selectedCandidateIds: nextSelectedIds,
+          publicSelections: nextPublicSelections,
+          candidates,
+        },
+      },
+    };
+  }),
 
-    const entry = findPublicContextEntry(get(), seedSessionId);
-    if (!entry) {
-      return undefined;
-    }
-
-    const [publicContextSessionId, context] = entry;
-    set((state) => {
-      if (!state.publicContexts[publicContextSessionId]) {
-        return state;
-      }
-
-      const nextPublicContexts = { ...state.publicContexts };
-      delete nextPublicContexts[publicContextSessionId];
-
-      return {
-        publicContexts: nextPublicContexts,
-      };
-    });
-
-    return context;
+  getBatchesForSession: (sessionId) => {
+    const state = get();
+    return getRelatedBatches(state.batches, state.order, sessionId);
   },
 
   getReusableCandidateSessionsForSession: (sessionId) => {
-    const seedSessionId = sessionId.trim();
-    if (!seedSessionId) {
-      return {};
-    }
-
     const state = get();
-    const connectedSessionIds = getConnectedSessionIds(state.batches, seedSessionId);
-
+    const relatedBatches = getRelatedBatches(state.batches, state.order, sessionId);
     const reusableSessions: Record<string, ModelBrainstormReusableCandidateSession> = {};
-    for (const batchId of state.order) {
-      const batch = state.batches[batchId];
-      if (!batch) {
-        continue;
-      }
 
-      const batchSessionIds = getBatchSessionIds(batch);
-      const isRelatedBatch = batchSessionIds.some(batchSessionId => connectedSessionIds.has(batchSessionId));
-      if (!isRelatedBatch) {
-        continue;
-      }
-
+    for (const batch of relatedBatches) {
       for (const candidate of batch.candidates) {
-        if (!candidate.sessionId || !connectedSessionIds.has(candidate.sessionId)) {
+        if (!candidate.sessionId) {
           continue;
         }
 
@@ -278,13 +338,6 @@ export const useModelBrainstormStore = create<ModelBrainstormState>((set, get) =
 
   removeBatchesForSession: (sessionId) => set((state) => {
     const nextBatches = { ...state.batches };
-    const nextPublicContexts = { ...state.publicContexts };
-    let removedPublicContext = false;
-    if (nextPublicContexts[sessionId]) {
-      delete nextPublicContexts[sessionId];
-      removedPublicContext = true;
-    }
-
     const nextOrder = state.order.filter(batchId => {
       const batch = state.batches[batchId];
       if (batch?.sourceSessionId !== sessionId) {
@@ -294,18 +347,17 @@ export const useModelBrainstormStore = create<ModelBrainstormState>((set, get) =
       return false;
     });
 
-    if (nextOrder.length === state.order.length && !removedPublicContext) {
+    if (nextOrder.length === state.order.length) {
       return state;
     }
 
     return {
       batches: nextBatches,
       order: nextOrder,
-      publicContexts: nextPublicContexts,
     };
   }),
 
-  reset: () => set({ batches: {}, order: [], publicContexts: {} }),
+  reset: () => set({ batches: {}, order: [] }),
 }));
 
 export function useModelBrainstormBatchesForSession(sessionId: string | undefined | null): ModelBrainstormBatch[] {
@@ -314,8 +366,7 @@ export function useModelBrainstormBatchesForSession(sessionId: string | undefine
       return [];
     }
 
-    return state.order
-      .map(batchId => state.batches[batchId])
-      .filter((batch): batch is ModelBrainstormBatch => batch?.sourceSessionId === sessionId);
+    return getRelatedBatches(state.batches, state.order, sessionId)
+      .filter(batch => batch.sourceSessionId === sessionId);
   }));
 }

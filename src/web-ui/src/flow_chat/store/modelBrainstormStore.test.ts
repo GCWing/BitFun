@@ -5,6 +5,7 @@ function makeBatch(): ModelBrainstormBatch {
   return {
     id: 'batch-1',
     sourceSessionId: 'source-1',
+    contextMode: 'independent',
     question: 'Question with context',
     displayQuestion: 'Question',
     createdAt: 100,
@@ -50,9 +51,11 @@ describe('modelBrainstormStore', () => {
     useModelBrainstormStore.getState().createBatch(makeBatch());
     useModelBrainstormStore.getState().selectCandidate('batch-1', 'missing');
     expect(useModelBrainstormStore.getState().batches['batch-1'].selectedCandidateId).toBeUndefined();
+    expect(useModelBrainstormStore.getState().batches['batch-1'].selectedCandidateIds).toEqual([]);
 
     useModelBrainstormStore.getState().selectCandidate('batch-1', 'candidate-b');
     expect(useModelBrainstormStore.getState().batches['batch-1'].selectedCandidateId).toBe('candidate-b');
+    expect(useModelBrainstormStore.getState().batches['batch-1'].selectedCandidateIds).toEqual(['candidate-b']);
   });
 
   it('removes batches for a source session', () => {
@@ -70,55 +73,44 @@ describe('modelBrainstormStore', () => {
     expect(useModelBrainstormStore.getState().order).toEqual(['batch-2']);
   });
 
-  it('stores selected candidate output as one-time public context', () => {
-    useModelBrainstormStore.getState().setPublicContextForSession('session-a', {
-      sessionId: 'session-a',
-      batchId: 'batch-1',
-      candidateId: 'candidate-a',
-      modelId: 'model-a',
-      modelLabel: 'Model A',
-      answer: 'Selected answer',
-      createdAt: 200,
-    });
+  it('stores completed candidate answers on the candidate ledger', () => {
+    useModelBrainstormStore.getState().createBatch(makeBatch());
+    useModelBrainstormStore.getState().setCandidateAnswer(
+      'batch-1',
+      'candidate-a',
+      ' Candidate answer ',
+      200,
+    );
 
-    expect(useModelBrainstormStore.getState().publicContexts['session-a']?.answer).toBe('Selected answer');
-
-    const context = useModelBrainstormStore.getState().consumePublicContextForSession('session-a');
-    expect(context?.answer).toBe('Selected answer');
-    expect(useModelBrainstormStore.getState().publicContexts['session-a']).toBeUndefined();
-    expect(useModelBrainstormStore.getState().consumePublicContextForSession('session-a')).toBeUndefined();
+    const candidate = useModelBrainstormStore.getState().batches['batch-1'].candidates[0];
+    expect(candidate.answer).toBe('Candidate answer');
+    expect(candidate.completedAt).toBe(200);
   });
 
-  it('finds and consumes public context across the brainstorm lineage', () => {
-    useModelBrainstormStore.getState().createBatch({
-      ...makeBatch(),
-      sourceSessionId: 'source-root',
-      candidates: [
-        {
-          id: 'candidate-a',
-          modelId: 'model-a',
-          modelLabel: 'Model A',
-          sessionId: 'session-a',
-          status: 'running',
-        },
-      ],
-    });
-    useModelBrainstormStore.getState().setPublicContextForSession('session-a', {
-      sessionId: 'session-a',
-      batchId: 'batch-1',
-      candidateId: 'candidate-a',
-      modelId: 'model-a',
-      modelLabel: 'Model A',
-      answer: 'Selected answer from candidate session',
-      createdAt: 300,
-    });
+  it('toggles multiple public selections and keeps selected answers on the ledger', () => {
+    useModelBrainstormStore.getState().createBatch(makeBatch());
+    useModelBrainstormStore
+      .getState()
+      .toggleCandidatePublicSelection('batch-1', 'candidate-a', 'Answer A');
+    useModelBrainstormStore
+      .getState()
+      .toggleCandidatePublicSelection('batch-1', 'candidate-b', 'Answer B');
 
-    expect(useModelBrainstormStore.getState().getPublicContextForSession('source-root')?.answer)
-      .toBe('Selected answer from candidate session');
+    let batch = useModelBrainstormStore.getState().batches['batch-1'];
+    expect(batch.selectedCandidateId).toBe('candidate-a');
+    expect(batch.selectedCandidateIds).toEqual(['candidate-a', 'candidate-b']);
+    expect(batch.publicSelections?.map(selection => selection.answer)).toEqual(['Answer A', 'Answer B']);
+    expect(batch.candidates[0].answer).toBe('Answer A');
+    expect(batch.candidates[1].answer).toBe('Answer B');
 
-    const context = useModelBrainstormStore.getState().consumePublicContextForSession('source-root');
-    expect(context?.candidateId).toBe('candidate-a');
-    expect(useModelBrainstormStore.getState().publicContexts['session-a']).toBeUndefined();
+    useModelBrainstormStore
+      .getState()
+      .toggleCandidatePublicSelection('batch-1', 'candidate-a', 'Answer A');
+
+    batch = useModelBrainstormStore.getState().batches['batch-1'];
+    expect(batch.selectedCandidateId).toBe('candidate-b');
+    expect(batch.selectedCandidateIds).toEqual(['candidate-b']);
+    expect(batch.publicSelections?.map(selection => selection.candidateId)).toEqual(['candidate-b']);
   });
 
   it('finds the latest reusable candidate session in the same brainstorm lineage', () => {
