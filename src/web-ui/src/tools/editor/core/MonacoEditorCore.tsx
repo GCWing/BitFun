@@ -8,9 +8,10 @@
  */
 
 import { useEffect, useRef, useCallback, useState, forwardRef, useImperativeHandle } from 'react';
-import * as monaco from 'monaco-editor';
+import type * as monaco from 'monaco-editor';
 import { createLogger } from '@/shared/utils/logger';
 import { monacoInitManager } from '../services/MonacoInitManager';
+import { monacoApi } from '../services/monacoRuntime';
 import { monacoModelManager } from '../services/MonacoModelManager';
 import { themeManager } from '../services/ThemeManager';
 import { editorExtensionManager } from '../services/EditorExtensionManager';
@@ -210,7 +211,7 @@ export const MonacoEditorCore = forwardRef<MonacoEditorCoreRef, MonacoEditorCore
             overrides,
           });
           
-          const editor = monaco.editor.create(container, {
+          const editor = monacoApi.editor.create(container, {
             ...editorOptions,
             model,
           });
@@ -237,7 +238,7 @@ export const MonacoEditorCore = forwardRef<MonacoEditorCoreRef, MonacoEditorCore
           
           registerEventListeners(editor, model);
           
-          editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, () => {
+          editor.addCommand(monacoApi.KeyMod.CtrlCmd | monacoApi.KeyCode.KeyS, () => {
             const content = model.getValue();
             onSaveRef.current?.(content);
           });
@@ -353,14 +354,14 @@ export const MonacoEditorCore = forwardRef<MonacoEditorCoreRef, MonacoEditorCore
       }
 
       if (modelRef.current.getLanguageId() !== language) {
-        monaco.editor.setModelLanguage(modelRef.current, language);
+        monacoApi.editor.setModelLanguage(modelRef.current, language);
       }
     }, [isReady, language]);
     
     useEffect(() => {
       const unsubscribe = themeManager.onThemeChange((event) => {
         if (editorRef.current) {
-          monaco.editor.setTheme(event.currentThemeId);
+          monacoApi.editor.setTheme(event.currentThemeId);
         }
       });
       

@@ -7,8 +7,9 @@
 
 import React, { useEffect, useState, useCallback, useRef, useMemo } from 'react';
 import { AlertCircle } from 'lucide-react';
-import * as monaco from 'monaco-editor';
+import type * as monaco from 'monaco-editor';
 import { monacoInitManager } from '../services/MonacoInitManager';
+import { monacoApi } from '../services/monacoRuntime';
 import { monacoModelManager } from '../services/MonacoModelManager';
 import { activeEditTargetService, createMonacoEditTarget } from '../services/ActiveEditTargetService';
 import { 
@@ -811,7 +812,7 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
           }
         };
 
-        editor = monaco.editor.create(container, editorOptions);
+        editor = monacoApi.editor.create(container, editorOptions);
         editorRef.current = editor;
         setEditorInstance(editor);
         const editTarget = createMonacoEditTarget(editor);
@@ -1003,7 +1004,7 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
             const word = model!.getWordAtPosition(e.target.position);
             if (word && word.word !== lastHoverWordRef.current) {
               lastHoverWordRef.current = word.word;
-              const range = new monaco.Range(
+              const range = new monacoApi.Range(
                 e.target.position.lineNumber,
                 word.startColumn,
                 e.target.position.lineNumber,
@@ -1139,7 +1140,7 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
     if (modelRef.current && monacoReady) {
       const currentLanguage = modelRef.current.getLanguageId();
       if (detectedLanguage !== currentLanguage) {
-        monaco.editor.setModelLanguage(modelRef.current, detectedLanguage);
+        monacoApi.editor.setModelLanguage(modelRef.current, detectedLanguage);
       }
     }
   }, [detectedLanguage, monacoReady]);
@@ -1517,7 +1518,7 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
     userLanguageOverrideRef.current = true;
     setDetectedLanguage(languageId);
     if (modelRef.current && monacoReady) {
-      monaco.editor.setModelLanguage(modelRef.current, languageId);
+      monacoApi.editor.setModelLanguage(modelRef.current, languageId);
     }
   }, [monacoReady]);
 
@@ -2453,7 +2454,7 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
         <LanguagePopover
           anchorRect={statusBarAnchorRect}
           currentLanguageId={detectedLanguage}
-          languages={monaco.languages.getLanguages()}
+          languages={monacoApi.languages.getLanguages()}
           onConfirm={handleLanguageConfirm}
           onClose={closeStatusBarPopover}
         />

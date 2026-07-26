@@ -1,6 +1,7 @@
  
 
-import * as monaco from 'monaco-editor';
+import type * as monaco from 'monaco-editor';
+import { getMonacoRuntime } from '@/tools/editor/services/monacoRuntime';
 import { createLogger } from '@/shared/utils/logger';
 
 const log = createLogger('MonacoHelper');
@@ -66,8 +67,12 @@ export class MonacoHelper {
         current = current.parentElement;
       }
 
-      
-      const allEditors = monaco.editor.getEditors();
+
+      const monacoRuntime = getMonacoRuntime();
+      if (!monacoRuntime) {
+        return null;
+      }
+      const allEditors = monacoRuntime.editor.getEditors();
 
       for (const editor of allEditors) {
         const domNode = editor.getDomNode();

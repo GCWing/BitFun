@@ -9,6 +9,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import type * as monaco from 'monaco-editor';
+import { getMonacoRuntime } from '../services/monacoRuntime';
 import { themeManager, type ThemeChangeEvent } from '../services/ThemeManager';
 
 interface UseEditorThemeOptions {
@@ -66,9 +67,7 @@ export function useEditorTheme(options: UseEditorThemeOptions = {}): UseEditorTh
   /** Sync theme when editor is available */
   useEffect(() => {
     if (editor && currentThemeId) {
-      import('monaco-editor').then((monaco) => {
-        monaco.editor.setTheme(currentThemeId);
-      });
+      getMonacoRuntime()?.editor.setTheme(currentThemeId);
     }
   }, [editor, currentThemeId]);
   

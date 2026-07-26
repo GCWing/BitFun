@@ -1,8 +1,9 @@
 /** Monaco diff editor wrapper (side-by-side/inline). */
 
 import React, { useEffect, useState, useCallback, useRef, useMemo } from 'react';
-import * as monaco from 'monaco-editor';
+import type * as monaco from 'monaco-editor';
 import { monacoInitManager } from '../services/MonacoInitManager';
+import { monacoApi } from '../services/monacoRuntime';
 import { 
   forceRegisterTheme,
   BitFunDarkTheme,
@@ -185,11 +186,11 @@ export const DiffEditor: React.FC<DiffEditorProps> = ({
         await monacoInitManager.initialize();
 
         const timestamp = Date.now();
-        const originalUri = monaco.Uri.parse(`inmemory://diff-original/${timestamp}/${filePath || 'untitled'}`);
-        const modifiedUri = monaco.Uri.parse(`inmemory://diff-modified/${timestamp}/${filePath || 'untitled'}`);
+        const originalUri = monacoApi.Uri.parse(`inmemory://diff-original/${timestamp}/${filePath || 'untitled'}`);
+        const modifiedUri = monacoApi.Uri.parse(`inmemory://diff-modified/${timestamp}/${filePath || 'untitled'}`);
 
-        const existingOriginalModel = monaco.editor.getModel(originalUri);
-        const existingModifiedModel = monaco.editor.getModel(modifiedUri);
+        const existingOriginalModel = monacoApi.editor.getModel(originalUri);
+        const existingModifiedModel = monacoApi.editor.getModel(modifiedUri);
         
         if (existingOriginalModel) {
           existingOriginalModel.dispose();
@@ -198,18 +199,18 @@ export const DiffEditor: React.FC<DiffEditorProps> = ({
           existingModifiedModel.dispose();
         }
 
-        const existingOriginal = monaco.editor.getModel(originalUri);
+        const existingOriginal = monacoApi.editor.getModel(originalUri);
         if (existingOriginal) {
           existingOriginal.dispose();
         }
 
-        const existingModified = monaco.editor.getModel(modifiedUri);
+        const existingModified = monacoApi.editor.getModel(modifiedUri);
         if (existingModified) {
           existingModified.dispose();
         }
 
-        originalModel = monaco.editor.createModel(originalContentRuntimeRef.current, detectedLanguage, originalUri);
-        modifiedModel = monaco.editor.createModel(modifiedContentRuntimeRef.current, detectedLanguage, modifiedUri);
+        originalModel = monacoApi.editor.createModel(originalContentRuntimeRef.current, detectedLanguage, originalUri);
+        modifiedModel = monacoApi.editor.createModel(modifiedContentRuntimeRef.current, detectedLanguage, modifiedUri);
 
         originalModelRef.current = originalModel;
         modifiedModelRef.current = modifiedModel;
@@ -278,7 +279,7 @@ export const DiffEditor: React.FC<DiffEditorProps> = ({
           enableSplitViewResizing: true,
         };
 
-        editor = monaco.editor.createDiffEditor(container, editorOptions);
+        editor = monacoApi.editor.createDiffEditor(container, editorOptions);
         
         editor.setModel({
           original: originalModel,
@@ -345,7 +346,7 @@ export const DiffEditor: React.FC<DiffEditorProps> = ({
             }
           });
 
-          modifiedEditor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, () => {
+          modifiedEditor.addCommand(monacoApi.KeyMod.CtrlCmd | monacoApi.KeyCode.KeyS, () => {
             const content = modifiedModel!.getValue();
             onSaveRef.current?.(content);
           });

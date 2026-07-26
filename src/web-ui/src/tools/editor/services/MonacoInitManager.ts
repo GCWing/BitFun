@@ -13,6 +13,7 @@ import type * as Monaco from 'monaco-editor';
 import { registerMermaidLanguage } from '../languages/mermaid.language';
 import { registerTomlLanguage } from '../languages/toml.language';
 import { getMonacoPath, getMonacoWorkerPath, logMonacoResourceCheck } from '../utils/monacoPathHelper';
+import { setMonacoRuntime } from './monacoRuntime';
 import { themeManager } from './ThemeManager';
 import { createLogger } from '@/shared/utils/logger';
 
@@ -72,7 +73,8 @@ class MonacoInitManager {
       this.configureLoader();
       await import('monaco-editor/min/vs/editor/editor.main.css');
       const monaco = await loader.init();
-      
+      setMonacoRuntime(monaco);
+
       this.configureTypeScriptLanguage(monaco);
       themeManager.initialize();
       this.registerCustomLanguages(monaco);
@@ -365,6 +367,7 @@ class MonacoInitManager {
   public reset(): void {
     this.initPromise = null;
     this.monaco = null;
+    setMonacoRuntime(null);
     this.editorOpenerRegistered = false;
     this.loaderConfigured = false;
     this.resourceCheckScheduled = false;

@@ -4,7 +4,8 @@
  */
 
 import React, { useRef, useState, useEffect, useCallback, useMemo } from 'react';
-import * as monaco from 'monaco-editor';
+import type * as monaco from 'monaco-editor';
+import { requireMonaco } from '@/tools/editor/services/monacoRuntime';
 import { useI18n } from '@/infrastructure/i18n';
 import { MonacoEditorCore, type MonacoEditorCoreRef } from '@/tools/editor/core';
 import type { EditorConfigPartial } from '@/tools/editor/config';
@@ -126,7 +127,7 @@ export const CodeEditor: React.FC<CodeEditorProps> = ({
     }
     
     if (onMount) {
-      onMount(editor, monaco);
+      onMount(editor, requireMonaco());
     }
   }, [value, placeholder, onMount]);
   

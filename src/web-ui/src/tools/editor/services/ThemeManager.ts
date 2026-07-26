@@ -3,7 +3,8 @@
  * Handles theme registration, switching, and change event subscription.
  */
 
-import * as monaco from 'monaco-editor';
+import type * as monaco from 'monaco-editor';
+import { monacoApi, requireMonaco } from './monacoRuntime';
 import { BitFunDarkTheme, BitFunDarkThemeMetadata } from '../themes/bitfun-dark.theme';
 import { createLogger } from '@/shared/utils/logger';
 
@@ -59,7 +60,7 @@ class ThemeManager {
     }
     
     try {
-      monaco.editor.defineTheme(id, theme);
+      monacoApi.editor.defineTheme(id, theme);
       this.registeredThemes.add(id);
       return true;
     } catch (error) {
@@ -73,7 +74,7 @@ class ThemeManager {
     theme: monaco.editor.IStandaloneThemeData
   ): void {
     try {
-      monaco.editor.defineTheme(id, theme);
+      monacoApi.editor.defineTheme(id, theme);
       this.registeredThemes.add(id);
     } catch (error) {
       log.error('Failed to force register theme', { themeId: id, error });
@@ -88,7 +89,7 @@ class ThemeManager {
     const previousThemeId = this.currentThemeId;
     
     try {
-      monaco.editor.setTheme(themeId);
+      monacoApi.editor.setTheme(themeId);
       this.currentThemeId = themeId;
       
       log.debug('Theme changed', { previousThemeId, currentThemeId: themeId });
@@ -139,7 +140,7 @@ class ThemeManager {
       const currentTheme = themeService.getCurrentTheme();
       
       if (currentTheme) {
-        this.currentThemeId = monacoThemeSync.attachMonaco(monaco, currentTheme);
+        this.currentThemeId = monacoThemeSync.attachMonaco(requireMonaco(), currentTheme);
         this.registeredThemes.add('bitfun-dark');
         this.registeredThemes.add('bitfun-light');
         if (currentTheme.monaco) {
@@ -166,7 +167,7 @@ class ThemeManager {
       
     } catch (error) {
       log.warn('Could not sync with ThemeService', error);
-      monaco.editor.setTheme(this.getDefaultThemeId());
+      monacoApi.editor.setTheme(this.getDefaultThemeId());
     }
   }
   

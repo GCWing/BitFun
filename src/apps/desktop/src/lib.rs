@@ -329,48 +329,77 @@ pub async fn run() {
     startup_timings.record_elapsed("initialize_global_config", step_started);
     startup_trace.record_elapsed_step("native_pre_tauri", "initialize_global_config", step_started);
 
-    // Initialize global I18nService so bot/remote-connect language is always in sync.
-    {
+    // The three steps below only depend on the global config service (initialized
+    // above) and write to disjoint global singletons, so they can run concurrently:
+    // - initialize_global_i18n_service: reads config, sets the global i18n singleton
+    // - resolve_runtime_log_level: reads config, returns a value
+    // - AIClientFactory::initialize_global: reads config, sets GLOBAL_AI_CLIENT_FACTORY
+    let (
+        i18n_duration_ms,
+        (startup_log_level, log_level_duration_ms),
+        (ai_factory_result, ai_factory_duration_ms),
+    ) = {
         use bitfun_core::service::config::get_global_config_service;
         use bitfun_core::service::i18n::initialize_global_i18n_service;
-        let step_started = Instant::now();
-        match get_global_config_service().await {
-            Ok(config_service) => {
-                if let Err(e) = initialize_global_i18n_service(Some(config_service)).await {
-                    log::error!("Failed to initialize global I18nService: {}", e);
+
+        // Initialize global I18nService so bot/remote-connect language is always in sync.
+        let i18n_task = async {
+            let step_started = Instant::now();
+            match get_global_config_service().await {
+                Ok(config_service) => {
+                    if let Err(e) = initialize_global_i18n_service(Some(config_service)).await {
+                        log::error!("Failed to initialize global I18nService: {}", e);
+                    }
+                }
+                Err(e) => {
+                    log::error!("Failed to get config service for I18nService init: {}", e);
                 }
             }
-            Err(e) => {
-                log::error!("Failed to get config service for I18nService init: {}", e);
-            }
-        }
-        startup_timings.record_elapsed("initialize_global_i18n_service", step_started);
-        startup_trace.record_elapsed_step(
-            "native_pre_tauri",
-            "initialize_global_i18n_service",
-            step_started,
-        );
-    }
+            elapsed_ms(step_started)
+        };
 
-    let step_started = Instant::now();
-    let startup_log_level = resolve_runtime_log_level(log_config.level).await;
-    startup_trace.record_elapsed_step(
+        let log_level_task = async {
+            let step_started = Instant::now();
+            let level = resolve_runtime_log_level(log_config.level).await;
+            (level, elapsed_ms(step_started))
+        };
+
+        let ai_factory_task = async {
+            let step_started = Instant::now();
+            let result = AIClientFactory::initialize_global().await;
+            (result, elapsed_ms(step_started))
+        };
+
+        tokio::join!(i18n_task, log_level_task, ai_factory_task)
+    };
+
+    startup_timings.push_duration("initialize_global_i18n_service", i18n_duration_ms);
+    startup_trace.record_step(
+        "native_step_end",
+        "native_pre_tauri",
+        "initialize_global_i18n_service",
+        i18n_duration_ms,
+    );
+    startup_trace.record_step(
+        "native_step_end",
         "native_pre_tauri",
         "resolve_runtime_log_level",
-        step_started,
+        log_level_duration_ms,
     );
-
-    let step_started = Instant::now();
-    if let Err(e) = AIClientFactory::initialize_global().await {
+    startup_timings.push_duration(
+        "initialize_global_ai_client_factory",
+        ai_factory_duration_ms,
+    );
+    startup_trace.record_step(
+        "native_step_end",
+        "native_pre_tauri",
+        "initialize_global_ai_client_factory",
+        ai_factory_duration_ms,
+    );
+    if let Err(e) = ai_factory_result {
         log::error!("Failed to initialize global AIClientFactory: {}", e);
         return;
     }
-    startup_timings.record_elapsed("initialize_global_ai_client_factory", step_started);
-    startup_trace.record_elapsed_step(
-        "native_pre_tauri",
-        "initialize_global_ai_client_factory",
-        step_started,
-    );
 
     let step_started = Instant::now();
     let (coordinator, scheduler, event_queue, event_router, ai_client_factory, token_usage_service) =
@@ -705,14 +734,33 @@ pub async fn run() {
                 let app_state: tauri::State<'_, api::app_state::AppState> = app.state();
                 let startup_trace_state: tauri::State<'_, startup_trace::DesktopStartupTrace> =
                     app.state();
+                // Cap how long a slow-disk workspace snapshot may delay window creation;
+                // on timeout the frontend falls back to the existing
+                // `initialize_workspace_startup_state` command path.
+                const WORKSPACE_STARTUP_SNAPSHOT_TIMEOUT: std::time::Duration =
+                    std::time::Duration::from_secs(4);
                 tokio::task::block_in_place(|| {
-                    tokio::runtime::Handle::current().block_on(
-                        prepare_workspace_startup_bootstrap_snapshot(
-                            &app_state,
-                            &app_handle,
-                            &startup_trace_state,
-                        ),
-                    )
+                    tokio::runtime::Handle::current().block_on(async {
+                        match tokio::time::timeout(
+                            WORKSPACE_STARTUP_SNAPSHOT_TIMEOUT,
+                            prepare_workspace_startup_bootstrap_snapshot(
+                                &app_state,
+                                &app_handle,
+                                &startup_trace_state,
+                            ),
+                        )
+                        .await
+                        {
+                            Ok(snapshot) => snapshot,
+                            Err(_) => {
+                                log::warn!(
+                                    "Workspace startup bootstrap snapshot timed out after {:?}; frontend will fall back to the initialize_workspace_startup_state command",
+                                    WORKSPACE_STARTUP_SNAPSHOT_TIMEOUT
+                                );
+                                None
+                            }
+                        }
+                    })
                 })
                 .and_then(|snapshot| {
                     serde_json::to_value(snapshot)

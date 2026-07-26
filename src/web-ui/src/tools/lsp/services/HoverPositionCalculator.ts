@@ -6,7 +6,8 @@
  * clamping (similar to Floating UI / VSCode hover behavior).
  */
 
-import * as monaco from 'monaco-editor';
+import type * as monaco from 'monaco-editor';
+import { monacoApi } from '@/tools/editor/services/monacoRuntime';
 
 export interface PositionResult {
   /** X in viewport coordinates. */
@@ -94,7 +95,7 @@ export class HoverPositionCalculator {
     const viewportWidth = window.innerWidth;
     const viewportHeight = window.innerHeight;
 
-    const lineHeight = this.editor.getOption(monaco.editor.EditorOption.lineHeight);
+    const lineHeight = this.editor.getOption(monacoApi.editor.EditorOption.lineHeight);
 
     const spaceBelow = viewportHeight - (cursorY + lineHeight);
     const spaceAbove = cursorY;
@@ -178,8 +179,8 @@ export class HoverPositionCalculator {
     return {
       position: position,
       preference: [
-        monaco.editor.ContentWidgetPositionPreference.BELOW,
-        monaco.editor.ContentWidgetPositionPreference.ABOVE
+        monacoApi.editor.ContentWidgetPositionPreference.BELOW,
+        monacoApi.editor.ContentWidgetPositionPreference.ABOVE
       ]
     };
   }

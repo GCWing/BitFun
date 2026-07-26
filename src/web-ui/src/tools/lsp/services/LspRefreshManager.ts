@@ -4,7 +4,7 @@
  * Keeps refreshes debounced/throttled to avoid redundant work.
  */
 
-import * as monaco from 'monaco-editor';
+import type * as monaco from 'monaco-editor';
 import { createLogger } from '@/shared/utils/logger';
 
 const log = createLogger('LspRefreshManager');

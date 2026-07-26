@@ -2,7 +2,8 @@
  * Monaco theme registry - manages theme registration and prevents duplicates
  */
 
-import * as monaco from 'monaco-editor';
+import type * as monaco from 'monaco-editor';
+import { monacoApi } from '../services/monacoRuntime';
 import { BitFunDarkTheme, BitFunDarkThemeMetadata } from './bitfun-dark.theme';
 import { createLogger } from '@/shared/utils/logger';
 
@@ -23,7 +24,7 @@ export function registerTheme(
   }
   
   try {
-    monaco.editor.defineTheme(id, theme);
+    monacoApi.editor.defineTheme(id, theme);
     registeredThemes.add(id);
     return true;
   } catch (error) {
@@ -40,7 +41,7 @@ export function forceRegisterTheme(
   theme: monaco.editor.IStandaloneThemeData
 ): void {
   try {
-    monaco.editor.defineTheme(id, theme);
+    monacoApi.editor.defineTheme(id, theme);
     registeredThemes.add(id);
   } catch (error) {
     log.error('Failed to force register theme', { themeId: id, error });
@@ -71,7 +72,7 @@ export function isThemesInitialized(): boolean {
 
 export function applyTheme(themeId: string): void {
   try {
-    monaco.editor.setTheme(themeId);
+    monacoApi.editor.setTheme(themeId);
   } catch (error) {
     log.error('Failed to apply theme', { themeId, error });
   }
