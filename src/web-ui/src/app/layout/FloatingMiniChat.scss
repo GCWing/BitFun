@@ -342,7 +342,7 @@ $panel-height: 680px;
   border: none;
   border-radius: var(--size-radius-sm);
   background: var(--color-accent-600);
-  color: var(--color-static-white, #fff);
+  color: var(--color-static-white);
   cursor: pointer;
   transition: background 0.15s ease, opacity 0.15s ease;
 
