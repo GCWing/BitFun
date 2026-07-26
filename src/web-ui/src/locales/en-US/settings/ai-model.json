@@ -163,7 +163,7 @@
         "anthropic": "China - Anthropic Format",
         "intl": "Global - OpenAI Format",
         "intlAnthropic": "Global - Anthropic Format",
-        "kimiForCoding": "Kimi For Coding Plan"
+        "kimiForCoding": "Kimi For Coding plan (models: k3 / kimi-for-coding)"
       }
     },
     "deepseek": {

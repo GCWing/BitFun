@@ -84,7 +84,7 @@
           "anthropic": "國內-Anthropic格式",
           "intl": "海外-OpenAI格式",
           "intlAnthropic": "海外-Anthropic格式",
-          "kimiForCoding": "Kimi For Coding 套餐"
+          "kimiForCoding": "Kimi For Coding 套餐（模型 k3 / kimi-for-coding）"
         }
       },
       "deepseek": {

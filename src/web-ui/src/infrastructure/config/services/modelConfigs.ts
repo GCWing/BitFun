@@ -121,7 +121,7 @@ export const PROVIDER_TEMPLATES: Record<string, ProviderTemplate> = {
     models: ['claude-opus-5', 'claude-fable-5', 'claude-sonnet-5', 'claude-haiku-4-5'],
     requiresApiKey: true,
     description: t('settings/ai-model:providers.anthropic.description'),
-    helpUrl: 'https://console.anthropic.com/'
+    helpUrl: 'https://platform.claude.com/'
   },
   
   minimax: {
@@ -149,7 +149,7 @@ export const PROVIDER_TEMPLATES: Record<string, ProviderTemplate> = {
     models: ['kimi-k3', 'kimi-k2.7-code', 'kimi-k2.6'],
     requiresApiKey: true,
     description: t('settings/ai-model:providers.moonshot.description'),
-    helpUrl: 'https://platform.moonshot.ai/console',
+    helpUrl: 'https://platform.kimi.ai/console',
     baseUrlOptions: [
       { url: 'https://api.moonshot.cn/v1', format: 'openai', note: 'default' },
       { url: 'https://api.moonshot.cn/anthropic', format: 'anthropic', note: 'anthropic' },
