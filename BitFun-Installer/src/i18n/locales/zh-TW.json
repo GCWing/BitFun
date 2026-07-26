@@ -163,7 +163,8 @@
       "provider": "請求格式",
       "providerPlaceholder": "選擇請求格式",
       "modelSelection": "選擇模型",
-      "resolvedUrlLabel": "實際請求地址："
+      "resolvedUrlLabel": "實際請求地址：",
+      "modelName": "模型名稱"
     },
     "formats": {
       "openaiCompatible": "OpenAI 兼容",
@@ -172,7 +173,20 @@
       "geminiApi": "Gemini GenerateContent API"
     },
     "showSecret": "顯示",
-    "hideSecret": "隱藏"
+    "hideSecret": "隱藏",
+    "addHeader": "新增字段",
+    "advancedShow": "Show advanced settings",
+    "advancedHide": "Hide advanced settings",
+    "customHeadersModeMerge": "合併",
+    "customHeadersModeReplace": "替換",
+    "customRequestBodyPlaceholder": "例如：\n{\n  \"temperature\": 0.8,\n  \"top_p\": 0.9\n}",
+    "getApiKey": "獲取 API Key",
+    "headerKey": "key",
+    "headerValue": "value",
+    "jsonInvalid": "JSON格式錯誤，請檢查語法",
+    "jsonValid": "JSON格式有效",
+    "modelNoResults": "沒有匹配的模型",
+    "skipSslVerify": "跳過SSL證書驗證"
   },
   "progress": {
     "title": "安裝中",
