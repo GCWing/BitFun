@@ -64,4 +64,6 @@ const failed = codes.some((code) => code !== 0);
 if (failed) {
   process.stderr.write('[build-web-parallel] build:web failed (see output above)\n');
 }
-process.exit(failed ? 1 : 0);
+// Set the code instead of calling process.exit(): stdout is a pipe under CI and
+// process.exit() would drop whatever is still queued on it.
+process.exitCode = failed ? 1 : 0;

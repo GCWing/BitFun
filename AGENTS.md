@@ -88,6 +88,20 @@ pnpm run desktop:build:nsis:fast      # Windows installer, release-fast profile
 
 For the full script list, see [`package.json`](package.json).
 
+### Build escape hatches
+
+The dev/build pipeline trades some flexibility for speed. Override when needed:
+
+| Variable / flag | Use when |
+| --- | --- |
+| `CARGO_PROFILE_DEV_DEBUG=2` | You need full debug info for breakpoints. The dev profile ships `line-tables-only` (panic backtraces keep line numbers, PDBs stay small). |
+| `BITFUN_MOBILE_WEB_FORCE_BUILD=1` or `node scripts/mobile-web-build.cjs --force` | mobile-web must rebuild even though its sources look unchanged. The build is skipped when `src/mobile-web/dist` is newer than every input. |
+| `VITE_USE_POLLING=1` | The Vite dev watcher misses changes — typically on a network drive or a WSL mount. Native file events are the default. |
+
+`pnpm run build:web` runs the type-check and the Vite build concurrently, so a
+type error and a bundling error can surface in either order; both are prefixed
+(`[type-check]` / `[vite-build]`) in the output.
+
 ## Global rules
 
 ### Internationalization

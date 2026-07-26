@@ -85,6 +85,18 @@ pnpm run desktop:build:nsis:fast      # Windows 安装器，release-fast profile
 
 完整脚本列表见 [`package.json`](package.json)。
 
+### 构建逃生口
+
+开发/构建链路以一部分灵活性换取速度,必要时可覆盖:
+
+| 变量 / 参数 | 使用场景 |
+| --- | --- |
+| `CARGO_PROFILE_DEV_DEBUG=2` | 需要完整调试信息打断点。dev profile 默认 `line-tables-only`(panic 回溯仍带行号,PDB 体积大幅减小)。 |
+| `BITFUN_MOBILE_WEB_FORCE_BUILD=1` 或 `node scripts/mobile-web-build.cjs --force` | 源码看起来没变但需要强制重建 mobile-web。当 `src/mobile-web/dist` 新于所有输入时构建会被跳过。 |
+| `VITE_USE_POLLING=1` | Vite dev 监听不到文件变化——通常发生在网络盘或 WSL 挂载上。默认使用原生文件事件。 |
+
+`pnpm run build:web` 会并发执行类型检查与 Vite 构建,因此类型错误与打包错误出现的先后顺序不固定;两者的输出都带前缀(`[type-check]` / `[vite-build]`)。
+
 ## 全局规则
 
 ### 国际化
