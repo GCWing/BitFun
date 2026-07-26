@@ -1226,6 +1226,7 @@ const SessionSettingsPanels: React.FC<SessionSettingsPanelsProps> = ({ variant }
         </ConfigPageSection>
 
         {/* ── Computer use (desktop) ─────────────────────────────── */}
+        {false && (
         <ConfigPageSection
           title={t('computerUse.sectionTitle')}
           description={
@@ -1356,8 +1357,10 @@ const SessionSettingsPanels: React.FC<SessionSettingsPanelsProps> = ({ variant }
             </>
           ) : null}
         </ConfigPageSection>
+        )}
 
         {/* ── Browser control (CDP) ──────────────────────────────── */}
+        {false && (
         <ConfigPageSection
           title={t('browserControl.sectionTitle')}
           description={
@@ -1468,8 +1471,10 @@ const SessionSettingsPanels: React.FC<SessionSettingsPanelsProps> = ({ variant }
             </>
           ) : null}
         </ConfigPageSection>
+        )}
 
         {/* ── Debug mode settings ───────────────────────────────── */}
+        {false && (
         <ConfigPageSection
           title={tDebug('sections.combined')}
           description={tDebug('sections.combinedDescription')}
@@ -1552,6 +1557,7 @@ const SessionSettingsPanels: React.FC<SessionSettingsPanelsProps> = ({ variant }
             </Button>
           </ConfigPageRow>
         </ConfigPageSection>
+        )}
 
         {/* ── Language templates modal ───────────────────────────── */}
         <Modal

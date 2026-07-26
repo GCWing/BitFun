@@ -3,7 +3,6 @@ import {
   Settings,
   Info,
   MoreVertical,
-  PictureInPicture2,
   SquareTerminal,
   Terminal,
   Smartphone,
@@ -11,6 +10,7 @@ import {
   ExternalLink,
   BarChart3,
   ChevronUp,
+  MessageSquare,
   // LogIn,
 } from 'lucide-react';
 import { systemAPI } from '@/infrastructure/api';
@@ -20,7 +20,6 @@ import { useSceneManager } from '../../../hooks/useSceneManager';
 import { useNavSceneStore } from '../../../stores/navSceneStore';
 import { useSceneStore } from '../../../stores/sceneStore';
 import { useCanvasStore } from '@/app/components/panels/content-canvas/stores';
-import { useToolbarModeContext } from '@/flow_chat/components/toolbar-mode/ToolbarModeContext';
 import { useNotification } from '@/shared/notification-system';
 import { useAccountLoginState } from '@/infrastructure/account/useAccountLoginState';
 // import { remoteConnectAPI } from '@/infrastructure/api/service-api/RemoteConnectAPI';
@@ -54,7 +53,6 @@ const PersistentFooterActions: React.FC = () => {
     const activeTab = s.primaryGroup.tabs.find((t) => t.id === s.primaryGroup.activeTabId);
     return activeTab?.content.type === 'browser';
   });
-  const { enableToolbarMode } = useToolbarModeContext();
   const { warning } = useNotification();
   const { loggedIn: accountLoggedIn, deviceName: accountDeviceName } = useAccountLoginState();
 
@@ -155,11 +153,6 @@ const PersistentFooterActions: React.FC = () => {
     void systemAPI.openExternal('https://gitcode.com/OpenHarmonyPCDeveloper/BitFun/issues');
   }, [closeMenu]);
 
-  const handleFloatingMode = () => {
-    closeMenu();
-    enableToolbarMode();
-  };
-
   // const handleAccountLogin = () => {
   //   closeMenu();
   //   setShowAccountLogin(true);
@@ -248,17 +241,6 @@ const PersistentFooterActions: React.FC = () => {
                     type="button"
                     className="bitfun-nav-panel__footer-menu-item"
                     role="menuitem"
-                    onClick={handleFloatingMode}
-                    style={{ display: 'none'}}
-                  >
-                    <PictureInPicture2 size={14} />
-                    <span>{t('header.switchToToolbar')}</span>
-                  </button>
-                  <div className="bitfun-nav-panel__footer-menu-divider" />
-                  <button
-                    type="button"
-                    className="bitfun-nav-panel__footer-menu-item"
-                    role="menuitem"
                     onClick={handleOpenInsights}
                   >
                     <BarChart3 size={14} />
@@ -280,18 +262,18 @@ const PersistentFooterActions: React.FC = () => {
                     role="menuitem"
                     onClick={handleFeedback}
                   >
-                    <Info size={14} />
-                    <span>{t('header.about')}</span>
+                    <MessageSquare size={14} />
+                    <span>{t('header.feedback')}</span>
                   </button>
-                    <button
-                        type="button"
-                        className="bitfun-nav-panel__footer-menu-item"
-                        role="menuitem"
-                        onClick={handleShowAbout}
-                    >
-                        <Info size={14} />
-                        <span>{t('header.about')}</span>
-                    </button>
+                  <button
+                      type="button"
+                      className="bitfun-nav-panel__footer-menu-item"
+                      role="menuitem"
+                      onClick={handleShowAbout}
+                  >
+                      <Info size={14} />
+                      <span>{t('header.about')}</span>
+                  </button>
                 </div>
               </>
             )}
