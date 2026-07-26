@@ -84,6 +84,22 @@ fn loop_tracker_observe(
     }
 }
 
+/// Routing note attached to successful `system.open_url` results. The URL
+/// opens in the user's default browser, which the agent can neither observe
+/// nor control — without this note models routinely follow `open_url` with
+/// desktop clicks at the browser window (exactly what the desktop browser
+/// guard rejects).
+const OPEN_URL_ROUTING_NOTE: &str = "The page is now open in the user's default browser; \
+     BitFun cannot observe or control that window. To read or interact with the page yourself, \
+     use ControlHub domain=\"browser\" instead (browser.connect, then snapshot).";
+
+/// Routing note attached to successful `system.open_file` results. The file
+/// opens in an external application window the agent cannot see from this
+/// result alone.
+const OPEN_FILE_ROUTING_NOTE: &str = "The file is now open in an external application window; \
+     this result gives no view into it. To interact with that window, use ComputerUse desktop \
+     actions (take a screenshot first to observe it).";
+
 pub(crate) struct ComputerUseActions;
 
 impl Default for ComputerUseActions {
@@ -1526,8 +1542,16 @@ impl ComputerUseActions {
                     .ok_or_else(|| BitFunError::tool("open_url requires 'url'".to_string()))?;
                 match LocalSystemProvider::new().open_url(url) {
                     Ok(outcome) => Ok(vec![ToolResult::ok(
-                        json!({ "opened": true, "url": url, "method": outcome.method }),
-                        Some(format!("Opened {} in default handler", url)),
+                        json!({
+                            "opened": true,
+                            "url": url,
+                            "method": outcome.method,
+                            "note": OPEN_URL_ROUTING_NOTE,
+                        }),
+                        Some(format!(
+                            "Opened {} in default handler. {}",
+                            url, OPEN_URL_ROUTING_NOTE
+                        )),
                     )]),
                     Err(e) => Ok(local_system_error_response("system", "open_url", e)),
                 }
@@ -1549,11 +1573,16 @@ impl ComputerUseActions {
                             "path": path_str,
                             "with_app": app_name,
                             "method": outcome.method,
+                            "note": OPEN_FILE_ROUTING_NOTE,
                         }),
-                        Some(match app_name {
-                            Some(a) => format!("Opened {} with {}", path_str, a),
-                            None => format!("Opened {} with default handler", path_str),
-                        }),
+                        Some(format!(
+                            "{}. {}",
+                            match app_name {
+                                Some(a) => format!("Opened {} with {}", path_str, a),
+                                None => format!("Opened {} with default handler", path_str),
+                            },
+                            OPEN_FILE_ROUTING_NOTE
+                        )),
                     )]),
                     Err(e) => Ok(local_system_error_response("system", "open_file", e)),
                 }
@@ -1602,6 +1631,7 @@ fn error_code_from_local(code: &str) -> ErrorCode {
 mod tests {
     use super::loop_tracker_observe;
     use super::ComputerUseActions;
+    use super::{OPEN_FILE_ROUTING_NOTE, OPEN_URL_ROUTING_NOTE};
     use crate::agentic::tools::computer_use_host::ComputerUseForegroundApplication;
 
     // A unique PID avoids interference with the shared APP_LOOP_TRACKER state
@@ -1677,6 +1707,29 @@ mod tests {
             "Safari",
             "com.apple.Safari"
         )));
+    }
+
+    /// `open_url` hands the page to the user's default browser, which the
+    /// agent can neither observe nor control. The success note must say so
+    /// and route follow-up page work to the ControlHub browser domain —
+    /// never to desktop clicks (those trip the desktop browser guard).
+    #[test]
+    fn open_url_routing_note_points_at_browser_domain() {
+        assert!(OPEN_URL_ROUTING_NOTE.contains("cannot observe or control"));
+        assert!(OPEN_URL_ROUTING_NOTE.contains("ControlHub domain=\"browser\""));
+        assert!(OPEN_URL_ROUTING_NOTE.contains("browser.connect"));
+        assert!(OPEN_URL_ROUTING_NOTE.contains("snapshot"));
+    }
+
+    /// `open_file` opens an external app window; follow-up interaction goes
+    /// through ComputerUse desktop actions (screenshot first), NOT the
+    /// browser domain.
+    #[test]
+    fn open_file_routing_note_points_at_desktop_actions() {
+        assert!(OPEN_FILE_ROUTING_NOTE.contains("external application window"));
+        assert!(OPEN_FILE_ROUTING_NOTE.contains("ComputerUse desktop"));
+        assert!(OPEN_FILE_ROUTING_NOTE.contains("screenshot"));
+        assert!(!OPEN_FILE_ROUTING_NOTE.contains("browser"));
     }
 
     /// A genuine tree mutation (digest changes) must NOT trigger the warning,

@@ -58,7 +58,9 @@ mod tests {
         let browser = builtin_skill("agent-browser");
 
         assert!(!resolve_skill_default_enabled_for_mode(&pdf, "agentic"));
-        assert!(resolve_skill_default_enabled_for_mode(&browser, "agentic"));
+        // agent-browser is opt-in everywhere: ControlHub's browser domain is
+        // the default browser-automation path.
+        assert!(!resolve_skill_default_enabled_for_mode(&browser, "agentic"));
         assert!(resolve_skill_default_enabled_for_mode(&pdf, "Cowork"));
         assert!(!resolve_skill_default_enabled_for_mode(&browser, "Cowork"));
     }

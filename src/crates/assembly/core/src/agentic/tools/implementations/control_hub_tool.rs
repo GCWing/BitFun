@@ -160,11 +160,11 @@ Use this tool via `{ domain, action, params }` for browser automation, terminal 
   * For requests that only open, show, preview, or view a URL, use `open_builtin`. This is the default browser-opening action and keeps the page inside BitFun.
   * Do not call `connect`, `tab_new`, or `navigate` merely to display a URL. Use the CDP workflow only when the agent must read page content or interact with the DOM.
 - UI action:
-  * `open_builtin { url, title?, replace_existing? }` — open an http(s) URL in BitFun's built-in right-side browser panel. This changes the BitFun UI only; it does not fetch page text for reasoning.
+  * `open_builtin { url, title?, replace_existing? }` — open an http(s) URL in BitFun's built-in right-side browser panel. This changes the BitFun UI only; it does not fetch page text for reasoning. The panel is display-only for the user — the agent cannot snapshot, read, or interact with it; use `connect` + `snapshot` when page content is needed.
 - Automation modes (external managed browser):
   * `connect { mode: "default" }` (default) — start or attach the stable managed browser profile with CDP enabled.
   * `connect { mode: "headless" }` — start or attach the stable managed headless browser profile for project Web UI testing that does not depend on user login state.
-- Actions: open_builtin, connect, tab_new, navigate, back, forward, reload, snapshot, click, hover, fill, type, check, uncheck, select, press_key, scroll, auto_scroll, wait, get, get_text, get_url, get_title, get_html, screenshot, evaluate, fetch, cookies, set_cookies, set_file_input_files, cdp, network, console, errors, trace, dialog, frame, frame_main, read_article, close, list_pages, tab_query, switch_page, list_sessions.
+- Actions: open_builtin, connect, tab_new, navigate, back, forward, reload, snapshot, click, hover, fill, type, check, uncheck, select, press_key, scroll, auto_scroll, wait, get, get_text, get_url, get_title, get_html, screenshot, evaluate, fetch, cookies, set_cookies, set_file_input_files, cdp, network, console, errors, trace, dialog, read_article, close, list_pages, tab_query, switch_page, list_sessions.
 - Automation workflow: connect -> navigate -> snapshot (returns @e1, @e2 ... refs) -> click/fill using refs.
 - Take a fresh snapshot after any DOM mutation; stale refs return `error.code = STALE_REF`.
 
@@ -560,8 +560,16 @@ Branch on `ok` and `error.code`, not on English messages.
                         "url": url,
                         "title": title,
                         "replace_existing": replace_existing,
+                        "observable_by_agent": false,
+                        "note": "The built-in browser panel is display-only for the user; the agent cannot observe or interact with its content.",
+                        "hints": [
+                            "Do not call snapshot/get_text/click against this panel — it is not a CDP session.",
+                            "To read page content or interact with the DOM, use browser.connect followed by snapshot, then click/fill via @eN refs.",
+                        ],
                     }),
-                    Some(format!("Opened {url} in the built-in browser side panel.")),
+                    Some(format!(
+                        "Opened {url} in the built-in browser side panel (display-only for the user; not observable by the agent — use browser.connect + snapshot to read or interact with a page)."
+                    )),
                 )])
             }
 
@@ -1688,48 +1696,11 @@ Branch on `ok` and `error.code`, not on English messages.
                             Some(format!("Article: {}", excerpt)),
                         )])
                     }
-                    "frame" => {
-                        let selector = params
-                            .get("selector")
-                            .and_then(|v| v.as_str())
-                            .ok_or_else(|| {
-                                BitFunError::tool("frame requires 'selector'".to_string())
-                            })?;
-                        let script = format!(
-                            r#"(function(){{
-                                const el = document.querySelector('{}');
-                                if (!el) return JSON.stringify({{ found: false }});
-                                return JSON.stringify({{ found: true, selector: '{}', name: el.name || '', url: el.src || '' }});
-                            }})()"#,
-                            selector.replace('\'', "\\'"),
-                            selector.replace('\'', "\\'"),
-                        );
-                        let result = actions.evaluate(&script).await?;
-                        let raw = result.get("result").and_then(|r| r.get("value")).and_then(|v| v.as_str()).unwrap_or("{}");
-                        let parsed: Value = serde_json::from_str(raw).unwrap_or(json!({}));
-                        if !parsed.get("found").and_then(|v| v.as_bool()).unwrap_or(false) {
-                            return Ok(err_response(
-                                "browser",
-                                "frame",
-                                ControlHubError::new(
-                                    ErrorCode::NotFound,
-                                    format!("iframe not found: {}", selector),
-                                ),
-                            ));
-                        }
-                        session.state.set_active_frame(Some(selector.to_string())).await;
-                        Ok(vec![ToolResult::ok(
-                            json!({ "frame": parsed }),
-                            Some("Frame context noted".to_string()),
-                        )])
-                    }
-                    "frame_main" => {
-                        session.state.set_active_frame(None).await;
-                        Ok(vec![ToolResult::ok(
-                            json!({ "frame": "main" }),
-                            Some("Frame context reset".to_string()),
-                        )])
-                    }
+                    // Note: the former `frame` / `frame_main` actions were
+                    // removed — they only stored an `active_frame` marker that
+                    // nothing consumed, so they never changed the execution
+                    // context of subsequent actions. Snapshot / click / fill
+                    // resolve elements across same-origin iframes directly.
                     "close" => {
                         let result = actions.close_page().await?;
                         // After a close, drop the session so subsequent calls
@@ -1738,7 +1709,7 @@ Branch on `ok` and `error.code`, not on English messages.
                         Ok(vec![ToolResult::ok(result, Some("Page closed".to_string()))])
                     }
                     other => Err(BitFunError::tool(format!(
-                        "Unknown browser action: '{}'. Valid: connect, tab_new, navigate, back, forward, reload, snapshot, click, hover, fill, type, check, uncheck, select, press_key, scroll, auto_scroll, wait, get, get_text, get_url, get_title, get_html, screenshot, evaluate, fetch, cookies, set_cookies, set_file_input_files, cdp, network, console, errors, trace, dialog, frame, frame_main, read_article, close, list_pages, tab_query, switch_page, list_sessions",
+                        "Unknown browser action: '{}'. Valid: connect, tab_new, navigate, back, forward, reload, snapshot, click, hover, fill, type, check, uncheck, select, press_key, scroll, auto_scroll, wait, get, get_text, get_url, get_title, get_html, screenshot, evaluate, fetch, cookies, set_cookies, set_file_input_files, cdp, network, console, errors, trace, dialog, read_article, close, list_pages, tab_query, switch_page, list_sessions",
                         other
                     ))),
                 }
@@ -2405,6 +2376,87 @@ mod control_hub_tests {
             map_dispatch_error("browser", "x", mk("something exploded")).code,
             ErrorCode::Internal
         ));
+    }
+
+    #[test]
+    fn map_dispatch_error_recovers_structured_browser_action_errors() {
+        use crate::agentic::tools::browser_control::actions;
+
+        // Element-not-found built at the action source arrives as a
+        // structured [NOT_FOUND] with its snapshot-recovery hint intact —
+        // no reliance on the phrase-matching fallback.
+        let err = map_dispatch_error(
+            "browser",
+            "click",
+            actions::classify_evaluate_exception("Error: Element not found: @e7"),
+        );
+        assert!(matches!(err.code, ErrorCode::NotFound));
+        assert!(
+            err.hints.iter().any(|h| h.contains("take a new snapshot")),
+            "recovery hint missing: {:?}",
+            err.hints
+        );
+
+        // Dead CDP transport maps to WRONG_TAB with a re-attach instruction.
+        let err = map_dispatch_error(
+            "browser",
+            "snapshot",
+            actions::classify_transport_error(BitFunError::tool(
+                "CDP send failed: broken pipe".to_string(),
+            )),
+        );
+        assert!(matches!(err.code, ErrorCode::WrongTab));
+        assert!(err.hints.iter().any(|h| h.contains("browser.connect")));
+
+        // Cross-origin iframe coordinate failure maps to NOT_AVAILABLE and
+        // tells the model to re-target via snapshot.
+        let err = map_dispatch_error("browser", "click", actions::cross_origin_frame_error("@e3"));
+        assert!(matches!(err.code, ErrorCode::NotAvailable));
+        assert!(err.message.contains("cross-origin iframe"));
+        assert!(err.hints.iter().any(|h| h.contains("same-origin")));
+    }
+
+    #[tokio::test]
+    async fn description_does_not_advertise_removed_frame_actions() {
+        // `frame` / `frame_main` only wrote an `active_frame` marker no code
+        // ever read — advertising them tricked the model into no-op calls.
+        let desc = ControlHubTool::new().description().await.unwrap();
+        assert!(
+            !desc.contains("frame_main"),
+            "dead frame/frame_main actions must not be advertised: {desc}"
+        );
+    }
+
+    #[tokio::test]
+    async fn browser_open_builtin_marks_panel_not_observable_by_agent() {
+        let tool = ControlHubTool::new();
+        let ctx = empty_context();
+        let results = tool
+            .dispatch(
+                "browser",
+                "open_builtin",
+                &json!({ "url": "example.com" }),
+                &ctx,
+            )
+            .await
+            .expect("open_builtin succeeds without a frontend emitter");
+        let payload = results.first().expect("one result").content();
+        assert_eq!(
+            payload
+                .get("observable_by_agent")
+                .and_then(|v| v.as_bool()),
+            Some(false),
+            "open_builtin must state the panel is not agent-observable: {payload}"
+        );
+        let text = payload.to_string();
+        assert!(
+            text.contains("display-only"),
+            "payload must say the panel is display-only: {text}"
+        );
+        assert!(
+            text.contains("browser.connect"),
+            "payload must route content reading to browser.connect + snapshot: {text}"
+        );
     }
 
     #[tokio::test]

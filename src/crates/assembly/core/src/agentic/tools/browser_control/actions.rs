@@ -1,6 +1,7 @@
 //! Atomic browser actions implemented via CDP commands.
 
 use super::cdp_client::{CdpClient, CdpEvent};
+use crate::agentic::tools::implementations::control_hub::{coded_tool_error, ErrorCode};
 use crate::util::errors::{BitFunError, BitFunResult};
 use serde_json::{json, Value};
 use std::collections::BTreeMap;
@@ -65,6 +66,87 @@ async fn wait_for_lifecycle(
         }
         return LifecycleOutcome::Reached(name.to_string());
     }
+}
+
+// ── Structured errors ──────────────────────────────────────────────────
+//
+// High-frequency failure points build the `[CODE] message\nHints: a | b`
+// wire format at the source, so ControlHub's `map_dispatch_error` recovers a
+// stable `error.code` plus recovery hints through structured parsing instead
+// of the fragile phrase-matching fallback.
+
+/// Build a structured error in the `[CODE] message\nHints: a | b` shape.
+fn structured_error(
+    code: ErrorCode,
+    message: impl std::fmt::Display,
+    hints: &[&str],
+) -> BitFunError {
+    if hints.is_empty() {
+        coded_tool_error(code, message)
+    } else {
+        coded_tool_error(code, format!("{}\nHints: {}", message, hints.join(" | ")))
+    }
+}
+
+/// Classify a JS exception reported by `Runtime.evaluate` into a structured
+/// error. `Element not found` originates from `resolve_element_js` and is by
+/// far the most common interaction failure, so it gets a dedicated
+/// `NOT_FOUND` code with a snapshot-recovery instruction for the model.
+pub(crate) fn classify_evaluate_exception(message: &str) -> BitFunError {
+    if message.contains("Element not found") {
+        structured_error(
+            ErrorCode::NotFound,
+            format!("JS error: {}", message),
+            &["Element not found — take a new snapshot and use a fresh @eN ref"],
+        )
+    } else {
+        structured_error(
+            ErrorCode::Internal,
+            format!("JS error: {}", message),
+            &["JavaScript threw during evaluation — fix the expression, or take a fresh snapshot to re-check page state"],
+        )
+    }
+}
+
+/// Classify a CDP transport failure (send/receive level). A dead WebSocket or
+/// closed target means the session is unusable and must be re-attached; a CDP
+/// timeout means the page did not answer. Anything else passes through so the
+/// heuristic fallback in `map_dispatch_error` still applies.
+pub(crate) fn classify_transport_error(err: BitFunError) -> BitFunError {
+    let raw = err.to_string();
+    let message = raw.strip_prefix("Tool error: ").unwrap_or(raw.as_str());
+    if message.contains("CDP send failed")
+        || message.contains("CDP response channel closed")
+        || message.contains("Target closed")
+    {
+        structured_error(
+            ErrorCode::WrongTab,
+            message,
+            &["The browser session is dead (tab closed or browser quit) — call browser.connect or switch_page to attach a live tab, then retry"],
+        )
+    } else if message.contains("CDP timeout") {
+        structured_error(
+            ErrorCode::Timeout,
+            message,
+            &["The page did not answer in time — take a snapshot to check its state, or reload and retry"],
+        )
+    } else {
+        err
+    }
+}
+
+/// Error for an element that resolved inside a cross-origin iframe: its
+/// coordinates cannot be translated to the top-level viewport, so
+/// coordinate-based actions (click/hover) cannot reach it.
+pub(crate) fn cross_origin_frame_error(selector: &str) -> BitFunError {
+    structured_error(
+        ErrorCode::NotAvailable,
+        format!(
+            "Element '{}' sits inside a cross-origin iframe; its coordinates cannot be mapped to the top-level viewport, so coordinate-based actions (click/hover) cannot reach it.",
+            selector
+        ),
+        &["Take a snapshot and target an element in the top document or a same-origin frame instead"],
+    )
 }
 
 /// High-level browser actions backed by CDP method calls.
@@ -549,11 +631,41 @@ impl<'a> BrowserActions<'a> {
         }))
     }
 
+    /// Resolve the element's center in **top-level viewport** coordinates.
+    ///
+    /// `getBoundingClientRect` is relative to the element's own document's
+    /// viewport. For an element inside a same-origin iframe (which
+    /// `resolve_element_js` can reach) that is the *iframe's* viewport, while
+    /// `Input.dispatchMouseEvent` expects top-level viewport coordinates — so
+    /// walk the `window.frameElement` chain upward and add each frame's own
+    /// bounding rect (plus its border via `clientLeft`/`clientTop`). A
+    /// cross-origin ancestor throws on `frameElement` access; that case is
+    /// surfaced as a structured error instead of clicking at a wrong spot.
     async fn element_center(&self, selector: &str) -> BitFunResult<(f64, f64)> {
         let js = Self::resolve_element_js(selector);
         let center_js = format!(
-            r#"(function(){{ {} el.scrollIntoView({{ block: 'center', inline: 'center', behavior: 'instant' }}); const rect = el.getBoundingClientRect(); return JSON.stringify({{ x: rect.x + rect.width / 2, y: rect.y + rect.height / 2 }}); }})()"#,
-            js
+            r#"(function(){{
+                {js}
+                el.scrollIntoView({{ block: 'center', inline: 'center', behavior: 'instant' }});
+                const rect = el.getBoundingClientRect();
+                let x = rect.x + rect.width / 2;
+                let y = rect.y + rect.height / 2;
+                try {{
+                    let win = el.ownerDocument.defaultView;
+                    while (win && win !== win.top) {{
+                        const fe = win.frameElement;
+                        if (!fe) break;
+                        const fr = fe.getBoundingClientRect();
+                        x += fr.x + fe.clientLeft;
+                        y += fr.y + fe.clientTop;
+                        win = win.parent;
+                    }}
+                }} catch (e) {{
+                    return JSON.stringify({{ error: 'cross_origin_frame' }});
+                }}
+                return JSON.stringify({{ x: x, y: y }});
+            }})()"#,
+            js = js
         );
         let result = self.evaluate(&center_js).await?;
         let coords_str = result
@@ -562,9 +674,20 @@ impl<'a> BrowserActions<'a> {
             .and_then(|v| v.as_str())
             .unwrap_or("{}");
         let coords: Value = serde_json::from_str(coords_str).unwrap_or(json!({}));
-        let x = coords.get("x").and_then(|v| v.as_f64()).unwrap_or(0.0);
-        let y = coords.get("y").and_then(|v| v.as_f64()).unwrap_or(0.0);
-        Ok((x, y))
+        if coords.get("error").and_then(|v| v.as_str()) == Some("cross_origin_frame") {
+            return Err(cross_origin_frame_error(selector));
+        }
+        match (
+            coords.get("x").and_then(|v| v.as_f64()),
+            coords.get("y").and_then(|v| v.as_f64()),
+        ) {
+            (Some(x), Some(y)) => Ok((x, y)),
+            _ => Err(structured_error(
+                ErrorCode::Internal,
+                format!("Failed to compute viewport center for '{}'", selector),
+                &["Take a fresh snapshot and retry with a new @eN ref"],
+            )),
+        }
     }
 
     pub async fn hover(&self, selector: &str) -> BitFunResult<Value> {
@@ -841,10 +964,11 @@ impl<'a> BrowserActions<'a> {
                         }
                         tokio::time::sleep(std::time::Duration::from_millis(500)).await;
                     }
-                    return Err(BitFunError::tool(format!(
-                        "Timeout waiting for element: {}",
-                        cond
-                    )));
+                    return Err(structured_error(
+                        ErrorCode::Timeout,
+                        format!("Timeout waiting for element: {}", cond),
+                        &["Wait timed out — take a snapshot to check the current page state, or wait on 'load' / 'networkidle' instead of a selector"],
+                    ));
                 }
             }
         }
@@ -979,7 +1103,7 @@ impl<'a> BrowserActions<'a> {
                             .and_then(|v| v.as_str())
                             .or_else(|| details.get("text").and_then(|v| v.as_str()))
                             .unwrap_or("Runtime.evaluate failed");
-                        return Err(BitFunError::tool(format!("JS error: {}", message)));
+                        return Err(classify_evaluate_exception(message));
                     }
                     return Ok(value);
                 }
@@ -997,7 +1121,9 @@ impl<'a> BrowserActions<'a> {
                 }
             }
         }
-        Err(last_error.unwrap_or_else(|| BitFunError::tool("Runtime.evaluate failed".to_string())))
+        Err(classify_transport_error(last_error.unwrap_or_else(|| {
+            BitFunError::tool("Runtime.evaluate failed".to_string())
+        })))
     }
 
     pub async fn get_cookies(&self, urls: Option<Vec<String>>) -> BitFunResult<Value> {
@@ -1241,5 +1367,76 @@ impl<'a> BrowserActions<'a> {
             "#,
             escaped = escaped
         )
+    }
+}
+
+#[cfg(test)]
+mod structured_error_tests {
+    use super::*;
+
+    // These errors are produced at the failure source in the `[CODE]
+    // message\nHints: …` wire format so ControlHub's `map_dispatch_error`
+    // recovers a stable `error.code` via structured parsing. The round-trip
+    // through `map_dispatch_error` itself is asserted in
+    // `control_hub_tool.rs` tests.
+
+    #[test]
+    fn classify_evaluate_exception_maps_element_not_found_to_not_found_code() {
+        let msg = classify_evaluate_exception(
+            "Error: Element not found: @e7 — take a fresh snapshot or check shadow/iframe scope",
+        )
+        .to_string();
+        assert!(msg.contains("[NOT_FOUND]"), "got: {msg}");
+        assert!(
+            msg.contains("take a new snapshot") && msg.contains("@eN"),
+            "recovery hint missing: {msg}"
+        );
+    }
+
+    #[test]
+    fn classify_evaluate_exception_defaults_to_internal() {
+        let msg = classify_evaluate_exception("TypeError: x is undefined").to_string();
+        assert!(msg.contains("[INTERNAL]"), "got: {msg}");
+        assert!(msg.contains("TypeError: x is undefined"), "got: {msg}");
+    }
+
+    #[test]
+    fn classify_transport_error_maps_dead_socket_to_wrong_tab() {
+        let msg =
+            classify_transport_error(BitFunError::tool("CDP send failed: broken pipe".to_string()))
+                .to_string();
+        assert!(msg.contains("[WRONG_TAB]"), "got: {msg}");
+        assert!(msg.contains("browser.connect"), "got: {msg}");
+    }
+
+    #[test]
+    fn classify_transport_error_maps_cdp_timeout_to_timeout() {
+        let msg = classify_transport_error(BitFunError::tool(
+            "CDP timeout for method Runtime.evaluate".to_string(),
+        ))
+        .to_string();
+        assert!(msg.contains("[TIMEOUT]"), "got: {msg}");
+    }
+
+    #[test]
+    fn classify_transport_error_passes_through_other_errors() {
+        let msg = classify_transport_error(BitFunError::tool("CDP error: some detail".to_string()))
+            .to_string();
+        assert!(msg.contains("CDP error: some detail"), "got: {msg}");
+        assert!(
+            !msg.contains("[WRONG_TAB]") && !msg.contains("[TIMEOUT]"),
+            "must not be re-coded: {msg}"
+        );
+    }
+
+    #[test]
+    fn cross_origin_frame_error_is_structured_and_actionable() {
+        let msg = cross_origin_frame_error("@e3").to_string();
+        assert!(msg.contains("[NOT_AVAILABLE]"), "got: {msg}");
+        assert!(msg.contains("cross-origin iframe"), "got: {msg}");
+        assert!(
+            msg.contains("Take a snapshot") && msg.contains("same-origin"),
+            "recovery hint missing: {msg}"
+        );
     }
 }

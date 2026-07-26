@@ -112,7 +112,7 @@ fn builtin_skill_catalog_and_mode_policy_are_runtime_owned() {
     );
     assert_eq!(
         resolve_builtin_default_enabled("agent-browser", "coding_shared"),
-        Some(true)
+        Some(false)
     );
     assert_eq!(
         resolve_builtin_default_enabled("bitfun-canvas", "agentic"),
@@ -545,4 +545,32 @@ fn explicit_invocation_hidden_builtin_fallback_is_runtime_owned() {
         ),
         ExplicitSkillInvocationResolution::NotFound
     ));
+}
+
+#[test]
+fn explicit_invocation_reaches_default_hidden_agent_browser() {
+    // agent-browser is default-off in every mode (ControlHub browser domain is
+    // the default path), but an explicit invocation must still resolve it.
+    let candidate = SkillCandidate {
+        info: builtin_skill("agent-browser"),
+        priority: 10,
+    };
+
+    for mode_id in ["agentic", "coding_shared", "Claw", "Cowork", "Team"] {
+        assert_eq!(
+            resolve_builtin_default_enabled("agent-browser", mode_id),
+            Some(false),
+            "agent-browser should be default-off for mode {mode_id}"
+        );
+        match resolve_default_hidden_builtin_for_explicit_invocation(
+            "agent-browser",
+            vec![candidate.clone()],
+            Some(mode_id),
+        ) {
+            ExplicitSkillInvocationResolution::Found(skill) => {
+                assert_eq!(skill.key, "user::bitfun-system::agent-browser");
+            }
+            other => panic!("expected hidden agent-browser fallback for mode {mode_id}, got {other:?}"),
+        }
+    }
 }

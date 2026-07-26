@@ -100,7 +100,8 @@
 ```
 ┌────────────────────────────────────────────────────────────────┐
 │ L3 模式与配置面                                                  │
-│  · 单一开关面: ai.computer_use_enabled ⊇ browser_control        │
+│  · 双独立开关: ai.computer_use_enabled (桌面) 与                  │
+│    ai.browser_control_enabled (浏览器, 默认开) 互不牵连            │
 │  · permission intents: computer_use + browser_control          │
 │  · 每回合工具组装 (仿 codex spec_plan): 按模型能力/平台/远程裁剪    │
 │  · deny 表单一真源 (Rust 导出 + contract test 三端对齐)           │
@@ -148,7 +149,7 @@
 
 **决策 7：动作即观察。** 执行器在每个 mutating 动作后：settle 延迟（桌面固定/浏览器等 network idle）→ 自动截图或快照 diff → 打包进同一 result（仿 playwright-mcp Response 聚合器 + cua post-action screenshot）。配套截图 retention（只留最近 N 张，按块修剪保护 prompt cache）。
 
-**决策 8：能力开关收敛为两级真实门控。** 删除装饰性 cargo feature 层；ControlHub 实现真实 `is_enabled()`（服从 `ai.computer_use_enabled` 或新增 `ai.browser_control_enabled`，按 DeliveryProfile/远程会话裁剪）；新增 `browser_control` permission intent 进后端枚举与 `GlobalPermissionRulesDialog.tsx`（对应 C5）。
+**决策 8：能力开关收敛为两个独立的真实门控。** 删除装饰性 cargo feature 层；桌面控制与浏览器控制是两个独立能力：`ai.computer_use_enabled` 只门控 ComputerUse 桌面工具（现状已如此）；新增独立的 `ai.browser_control_enabled`（默认开）门控 ControlHub browser 域，关闭 computer use 不影响浏览器控制（产品决策确认，2026-07-26）。ControlHub 实现真实 `is_enabled()` 服从后者，并按 DeliveryProfile/远程会话裁剪；新增 `browser_control` permission intent 进后端枚举与 `GlobalPermissionRulesDialog.tsx`（对应 C5 的可管辖性诉求）。
 
 ---
 
@@ -201,7 +202,7 @@
 ### 阶段 6：配置/权限/Peer 面（~2 周）
 
 - **文件**：`control_hub_tool.rs`（真实 `is_enabled`）、`GlobalPermissionRulesDialog.tsx` + 后端 intent 枚举（新增 `browser_control`）、`session-config.json` 文案修正、`SessionConfig.tsx`（拆 personalization/permissions 两组件、状态命令走传输适配层或标注本机/远端）、`peer-device-adapter.ts`/`peer_host_invoke.rs`/`cli/peer_host/deny.rs`（Rust 单一真源导出 + contract test，`browser_control_*` 补 deny）、`ChatInput.tsx`/`AgentsScene.tsx`（抽 `useComputerUseEnabled()` hook，slash 路径补门禁，门禁移后端 `get_available_modes`）、`agents.rs`/`agentVisibility.ts`（统一 ComputerUse 身份与命名）。
-- 风险：低中。验证：deny 表 contract test 三端对齐；Peer 场景手测开关/权限弹窗归属；关闭 computer use 后确认 ControlHub browser 域同步禁用。
+- 风险：低中。验证：deny 表 contract test 三端对齐；Peer 场景手测开关/权限弹窗归属；关闭 computer use 后确认 ControlHub browser 域**不受影响**（两开关独立），关闭 browser_control 后确认 ControlHub browser 域禁用且 ComputerUse 不受影响。
 
 ---
 

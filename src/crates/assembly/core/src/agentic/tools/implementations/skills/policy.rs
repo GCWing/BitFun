@@ -24,7 +24,7 @@ mod tests {
         );
         assert_eq!(
             resolve_builtin_default_enabled("agent-browser", "agentic"),
-            Some(true)
+            Some(false)
         );
         assert_eq!(resolve_builtin_default_enabled("pdf", "Cowork"), Some(true));
         assert_eq!(
@@ -50,12 +50,12 @@ mod tests {
         );
         assert_eq!(
             resolve_builtin_default_enabled("agent-browser", "Claw"),
-            Some(true)
+            Some(false)
         );
         assert_eq!(resolve_builtin_default_enabled("pdf", "Claw"), Some(false));
         assert_eq!(
             resolve_builtin_default_enabled("agent-browser", "coding_shared"),
-            Some(true)
+            Some(false)
         );
         assert_eq!(
             resolve_builtin_default_enabled("pdf", "coding_shared"),

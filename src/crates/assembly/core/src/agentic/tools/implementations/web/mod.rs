@@ -165,6 +165,20 @@ mod tests {
         server.await.expect("server task");
     }
 
+    /// The description must route login-gated / JS-rendered pages to the
+    /// ControlHub browser domain so models stop retrying WebFetch on pages
+    /// it structurally cannot read.
+    #[tokio::test]
+    async fn webfetch_description_routes_dynamic_pages_to_browser_domain() {
+        let description = WebFetchTool::new()
+            .description()
+            .await
+            .expect("WebFetch description should render");
+        assert!(description.contains("ControlHub domain=\"browser\""));
+        assert!(description.contains("login session"));
+        assert!(description.contains("browser.fetch"));
+    }
+
     #[test]
     fn webfetch_format_normalization_preserves_public_aliases() {
         assert!(matches!(
