@@ -188,8 +188,8 @@ Codex、Claude Code 接入同类能力时新增同级 adapter，不修改 OpenCo
    自动重放。Node 进程仍以当前用户权限运行；VM realm 和隐藏响应令牌不是安全
    沙箱。当前脚本 worker 与 local stdio MCP 已共享 Unix process group / Windows kill-on-close Job Object 进程树回收；
    它不限制文件、网络、CPU、内存或逃逸行为，产品必须持续显示残余风险。
-   worker 丢失由带独立加载版本的 runtime health 事件立即撤下路由并显示失败；旧 worker 的迟到事件不能撤下同内容
-   新实例。下一次 catalog 暴露前仅恢复一次，失败后等待显式刷新或来源变化；不回退
+   worker 丢失后，只有仍对应当前加载 worker 的运行状态事件才能撤下路由并显示失败；旧 worker 的迟到事件会被忽略，
+   不能撤下新 worker。下一次向模型暴露 Tool Catalog 前只尝试恢复一次，失败后等待显式刷新或来源变化；不回退
    同名内置/MCP 实现，也不形成自动重启循环。单个来源目录不可读只降级该目录，其他健康目录继续生效。
 5. Remote 工作区在有远端发现、偏好和 worker 归属模块前明确不支持，catalog、批处理策略和执行解析均拒绝进入本地路径，
    即使远端与本机路径文本相同也不能回退加载本机全局或项目 Tool。
