@@ -326,6 +326,109 @@ questions and real states without Skill names, agent ids, packet ids, or budgets
 A child with no loaded transcript renders preparing, loading, or load-failed
 state rather than a title over an empty body.
 
+### Execution detail and recovery projection
+
+Execution outcome and transcript availability are separate facts. A Review can
+still be running while history loading fails, and a completed Review can be
+visible before its transcript is hydrated. Card and detail surfaces therefore
+derive one presentation from existing session and Task facts instead of keeping
+a second UI-owned lifecycle.
+
+```mermaid
+flowchart LR
+    Metadata["Session metadata"] --> Content["Content state"]
+    Live["Live session"] --> Status["Execution state"]
+    Turn["Last turn"] --> Status
+    Task["Task result"] --> Status
+    Content --> View["Review view"]
+    Status --> View
+    View --> Card["Card"]
+    View --> Detail["Detail"]
+    View --> Actions["Actions"]
+```
+
+Content state has four user-visible outcomes:
+
+| Source fact | Detail body |
+|---|---|
+| new child with no turn yet | preparing |
+| metadata only, or history hydration in progress | loading |
+| hydrated transcript | transcript and result |
+| history hydration failed | load failed with a load-only retry |
+
+Reloading content never starts or continues model execution. A load failure is
+not presented as a Review failure, and an empty transcript is never rendered as
+an unexplained blank pane.
+
+Execution state is derived in this order:
+
+1. A live `Processing` session is running. Live state wins over the persisted
+   idle form while a runtime still owns the turn.
+2. A structured Task result such as `partial_timeout` or `cancelled` preserves
+   the more precise parent-visible outcome. This matters because a child with
+   partial output may have a completed persisted turn even though the bounded
+   reviewer execution timed out.
+3. The latest child turn supplies completed, error, or cancelled state.
+4. A restored idle session with an unfinished latest turn is interrupted; it is
+   not running and is not complete.
+5. Parent Task status is a compatibility fallback only when the linked child or
+   its persisted facts are unavailable.
+
+These are projection rules, not a new persisted enum or a second state machine.
+They produce the following plain-language behavior:
+
+| Execution outcome | Presentation | Allowed action |
+|---|---|---|
+| active turn | running | stop |
+| completed turn | completed | inspect result |
+| timeout with output | timed out, partial result kept | inspect partial result |
+| timeout without output | timed out | return to the owning Review |
+| model or provider failure | could not complete | return to the owning Review |
+| user-confirmed cancellation | stopped | inspect retained output |
+| runtime lost with an unfinished turn | interrupted | return to the owning Review; continue there when available |
+| incomplete legacy facts | unable to confirm | reload details; do not retry automatically |
+
+An individual focused check never exposes a direct rerun action. The owning
+Review remains responsible for bounded retries and coverage decisions, so the
+UI cannot bypass its retry budget or duplicate work. Continuation is available
+only for an interrupted, nonterminal Review at the Review-session level. It
+reuses that session and appends a turn without creating a second logical launch.
+Retry after a terminal timeout or failure remains an explicit new revision.
+Opening details, restoring a window, or restarting the application must not
+resubmit the original request.
+
+Stopping has a confirmation boundary:
+
+```mermaid
+stateDiagram-v2
+    [*] --> Running
+    Running --> Stopping: user stops
+    Stopping --> Stopped: cancellation confirmed
+    Stopping --> Running: cancellation not confirmed
+```
+
+`Stopping` is transient UI intent. The UI settles the turn as stopped only after
+the runtime accepts cancellation. If cancellation cannot be confirmed, it
+reloads the authoritative state and says that stopping could not be confirmed;
+it must not claim success or launch replacement work.
+
+Application restore follows runtime ownership rather than the last visible card:
+
+```mermaid
+flowchart TD
+    Restore["Restore"] --> LiveOwner{"Runtime active?"}
+    LiveOwner -->|Yes| Running["Running"]
+    LiveOwner -->|No| LastTurn{"Turn finished?"}
+    LastTurn -->|Yes| Terminal["Saved outcome"]
+    LastTurn -->|No| Interrupted["Interrupted"]
+    LastTurn -->|Unknown| Unknown["Unable to confirm"]
+```
+
+Persisted processing state is not revived after an application restart. If a
+remote or still-running host remains authoritative, its live state is shown;
+otherwise an unfinished turn is interrupted and waits for explicit user intent.
+Partial transcript content remains inspectable in either case.
+
 The pull-request surface continues to use exact provider identity and verified
 base/head freshness. A stale record offers “Review current version” and creates
 another revision of that record. Cached pull-request overview data is not
@@ -403,6 +506,14 @@ evidence:
 
 - launch does not force-open execution detail;
 - no Review state renders as an unexplained blank pane;
+- execution status and transcript-loading status remain independent;
+- opening or reloading detail performs no model call and creates no child turn;
+- a partial timeout keeps partial output and remains visibly distinct from a
+  successful completion;
+- user cancellation is shown as stopped only after cancellation is confirmed;
+- application restart never silently revives or duplicates an unfinished turn;
+- an interrupted Review can continue only through explicit Review-level intent;
+- an individual focused check cannot bypass the owning Review's retry policy;
 - metadata-only restore shows a useful bounded summary;
 - stale pull-request revisions cannot be presented as current;
 - re-review preserves one record and creates a distinct revision;
