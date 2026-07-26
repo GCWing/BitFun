@@ -18,6 +18,7 @@ export type ConfigTab =
   | 'memories'
   | 'mcp-tools'
   | 'external-sources'
+  | 'hooks'
   | 'acp-agents'
   // | 'lsp' // temporarily hidden from config center
   | 'editor'
@@ -235,6 +236,21 @@ export const SETTINGS_CATEGORIES: ConfigCategoryDef[] = [
           'claude code',
           'codex',
           'compatibility',
+        ],
+      },
+      {
+        id: 'hooks',
+        labelKey: 'configCenter.tabs.hooks',
+        descriptionKey: 'configCenter.tabDescriptions.hooks',
+        keywords: [
+          'hooks',
+          'hook',
+          'lifecycle',
+          'pretooluse',
+          'posttooluse',
+          'codex',
+          'automation',
+          'guardrail',
         ],
       },
       {

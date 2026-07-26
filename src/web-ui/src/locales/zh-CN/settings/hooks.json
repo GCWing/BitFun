@@ -1,0 +1,45 @@
+{
+  "title": "Agent Hooks",
+  "subtitle": "在 Agent 生命周期的固定节点运行你自己的命令 —— 工具调用前后、权限确认前后，以及会话与回合的边界。",
+  "loading": "正在加载 Hook 设置...",
+  "activation": {
+    "title": "启用",
+    "description": "每次对应事件触发时，Hook 都会以你的用户权限运行。启用任何非你本人编写的 Hook 之前，请先审阅它。"
+  },
+  "fields": {
+    "enabled": {
+      "label": "启用 Hooks",
+      "description": "总开关。关闭后，任何事件都不会运行 Hook。"
+    },
+    "projectHooks": {
+      "label": "允许项目级 Hooks",
+      "description": "读取工作区内的 Hook 文件。它执行的是仓库中的命令，请只对你信任的仓库开启。"
+    }
+  },
+  "locations": {
+    "title": "Hook 声明位置",
+    "description": "Hook 声明在 hooks.json 文件中，不在本设置文档里。两个层级是叠加关系，用户层优先执行。修改后无需重启 BitFun。",
+    "userFile": {
+      "label": "用户 Hooks",
+      "description": "BitFun 用户配置目录下的 config/hooks.json（Linux 为 ~/.config/bitfun，macOS 为 ~/Library/Application Support/bitfun，Windows 为 %APPDATA%\\bitfun）。"
+    },
+    "projectFile": {
+      "label": "项目 Hooks",
+      "description": "工作区内的 .bitfun/config/hooks.json。仅在开启“允许项目级 Hooks”时读取。"
+    }
+  },
+  "compatibility": {
+    "title": "Codex 兼容",
+    "description": "hooks.json 文档结构、事件名、stdin 上的 JSON 载荷、退出码语义以及 stdout 上的 JSON 决策结构均与 Codex Hooks 一致，因此 Codex 的 Hook 脚本可以直接在这里运行。",
+    "reference": {
+      "label": "事件与载荷参考",
+      "description": "事件名、载荷字段和决策结构以 Codex 的 Hooks 文档为准。",
+      "open": "打开 Codex Hooks 文档"
+    }
+  },
+  "messages": {
+    "saved": "Hook 设置已保存",
+    "saveFailed": "保存 Hook 设置失败",
+    "loadFailed": "加载 Hook 设置失败"
+  }
+}
