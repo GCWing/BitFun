@@ -56,7 +56,7 @@ struct GrepSink {
     head_limit: Option<usize>,
     current_file: PathBuf,
     display_base: Option<String>,
-    output: Arc<Mutex<Vec<u8>>>,
+    output: Arc<Mutex<Vec<String>>>,
     line_count: Arc<Mutex<usize>>,
     match_count: Arc<Mutex<usize>>,
     /// Last output line number, used to detect discontinuity
@@ -98,9 +98,10 @@ impl GrepSink {
         }
     }
 
-    fn get_output(&self) -> String {
-        let output = lock_recover(&self.output, "output");
-        String::from_utf8_lossy(&output).to_string()
+    /// Takes the collected output lines, avoiding a split/realloc/join round
+    /// trip at the call site.
+    fn take_output_lines(&self) -> Vec<String> {
+        std::mem::take(&mut *lock_recover(&self.output, "output"))
     }
 
     fn get_match_count(&self) -> usize {
@@ -126,11 +127,10 @@ impl GrepSink {
         }
     }
 
-    fn write_line(&self, line: &[u8]) {
+    fn write_line(&self, line: String) {
         if self.increment_line_count() {
             let mut output = lock_recover(&self.output, "output");
-            output.extend_from_slice(line);
-            output.push(b'\n');
+            output.push(line);
         }
     }
 
@@ -147,14 +147,14 @@ impl GrepSink {
             // If current line number is not continuous with previous line (difference > 1), insert separator
             if current_line > last + 1 {
                 let mut output = lock_recover(&self.output, "output");
-                output.extend_from_slice(b"--\n");
+                output.push("--".to_string());
             }
         }
         *last_line = Some(current_line);
     }
 
     /// Format output line (rg style: only show line number and content, no path)
-    fn format_line(&self, line_number: u64, line: &[u8], is_match: bool) -> Vec<u8> {
+    fn format_line(&self, line_number: u64, line: &[u8], is_match: bool) -> String {
         let mut line_str = String::from_utf8_lossy(line).trim_end().to_string();
         if line_str.chars().count() > MAX_DISPLAY_COLUMNS {
             line_str = format!(
@@ -169,9 +169,9 @@ impl GrepSink {
         let path_prefix = relativize_display_path(&self.current_file, self.display_base.as_deref());
 
         if self.show_line_numbers {
-            format!("{}{}{}:{}", path_prefix, separator, line_number, line_str).into_bytes()
+            format!("{}{}{}:{}", path_prefix, separator, line_number, line_str)
         } else {
-            format!("{}{}{}", path_prefix, separator, line_str).into_bytes()
+            format!("{}{}{}", path_prefix, separator, line_str)
         }
     }
 }
@@ -192,7 +192,7 @@ impl Sink for GrepSink {
                 // Check if separator needs to be inserted
                 self.check_and_write_separator(line_number);
                 let formatted = self.format_line(line_number, mat.bytes(), true);
-                self.write_line(&formatted);
+                self.write_line(formatted);
             }
             OutputMode::FilesWithMatches => {
                 return Ok(false); // Only need first match, then stop
@@ -222,7 +222,7 @@ impl Sink for GrepSink {
             // Check if separator needs to be inserted
             self.check_and_write_separator(line_number);
             let formatted = self.format_line(line_number, ctx.bytes(), false);
-            self.write_line(&formatted);
+            self.write_line(formatted);
         }
 
         Ok(!self.should_stop())
@@ -740,7 +740,8 @@ pub fn grep_search(
         .collect::<Result<Vec<GlobMatcher>, String>>()?;
 
     // Collect all results
-    let mut content_lines = Vec::new();
+    let mut content_lines: Vec<String> =
+        Vec::with_capacity(head_limit.map_or(256, |limit| limit.min(4096)));
     let mut total_matches = 0;
     let mut file_count = 0;
     let mut file_match_counts: Vec<(String, usize)> = Vec::new();
@@ -772,8 +773,13 @@ pub fn grep_search(
                     last_progress_time = std::time::Instant::now();
                 }
 
-                // Check if it's a file
-                if !path.is_file() {
+                // Check if it's a file. Use the walker-provided file type
+                // (free) and only fall back to a stat for symlinks.
+                let entry_file_type = entry.file_type();
+                let is_file = entry_file_type.is_some_and(|file_type| {
+                    file_type.is_file() || (file_type.is_symlink() && path.is_file())
+                });
+                if !is_file {
                     continue;
                 }
 
@@ -830,15 +836,9 @@ pub fn grep_search(
                     total_matches += file_matches;
                     match output_mode {
                         OutputMode::Content => {
-                            let output = sink.get_output();
-                            if !output.is_empty() {
-                                content_lines.extend(
-                                    output
-                                        .lines()
-                                        .filter(|line| !line.is_empty())
-                                        .map(|line| line.to_string()),
-                                );
-                            }
+                            let mut lines = sink.take_output_lines();
+                            lines.retain(|line| !line.is_empty());
+                            content_lines.append(&mut lines);
                         }
                         OutputMode::FilesWithMatches => {
                             matched_files_with_mtime.push((
@@ -872,7 +872,8 @@ pub fn grep_search(
                 return Ok(GrepSearchResult {
                     file_count,
                     total_matches,
-                    result_text: lines.join("\n").trim_end_matches('\n').to_string(),
+                    // join() never yields a trailing newline, no trim needed.
+                    result_text: lines.join("\n"),
                     applied_limit,
                     applied_offset,
                 });

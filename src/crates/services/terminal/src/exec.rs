@@ -238,7 +238,8 @@ struct HeadTailText {
     head_budget: usize,
     tail_budget: usize,
     head: String,
-    tail: VecDeque<char>,
+    /// UTF-8 bytes of the tail window; whole chars only (boundary-aligned).
+    tail: VecDeque<u8>,
     head_chars: usize,
     tail_chars: usize,
     omitted_chars: usize,
@@ -922,7 +923,7 @@ impl HeadTailText {
             max_chars,
             head_budget,
             tail_budget,
-            head: String::new(),
+            head: String::with_capacity(head_budget.min(64 * 1024)),
             tail: VecDeque::new(),
             head_chars: 0,
             tail_chars: 0,
@@ -932,43 +933,92 @@ impl HeadTailText {
     }
 
     fn push_str(&mut self, text: &str) {
-        for ch in text.chars() {
-            self.total_chars = self.total_chars.saturating_add(1);
-            if self.max_chars == 0 {
-                self.omitted_chars = self.omitted_chars.saturating_add(1);
-                continue;
-            }
-            if self.head_chars < self.head_budget {
-                self.head.push(ch);
-                self.head_chars += 1;
-                continue;
-            }
+        let incoming_chars = text.chars().count();
+        self.total_chars = self.total_chars.saturating_add(incoming_chars);
 
-            if self.tail_budget == 0 {
-                self.omitted_chars = self.omitted_chars.saturating_add(1);
-                continue;
-            }
+        if self.max_chars == 0 {
+            self.omitted_chars = self.omitted_chars.saturating_add(incoming_chars);
+            return;
+        }
 
-            self.tail.push_back(ch);
-            self.tail_chars += 1;
-            if self.tail_chars > self.tail_budget {
-                self.tail.pop_front();
-                self.tail_chars -= 1;
-                self.omitted_chars = self.omitted_chars.saturating_add(1);
+        let mut remainder = text;
+        let mut remainder_chars = incoming_chars;
+
+        // Fill the head budget with one bulk copy.
+        if self.head_chars < self.head_budget {
+            let head_room = self.head_budget - self.head_chars;
+            if remainder_chars <= head_room {
+                self.head.push_str(remainder);
+                self.head_chars += remainder_chars;
+                return;
             }
+            let split = remainder
+                .char_indices()
+                .nth(head_room)
+                .map(|(index, _)| index)
+                .unwrap_or(remainder.len());
+            self.head.push_str(&remainder[..split]);
+            self.head_chars += head_room;
+            remainder = &remainder[split..];
+            remainder_chars -= head_room;
+        }
+
+        if remainder.is_empty() {
+            return;
+        }
+
+        if self.tail_budget == 0 {
+            self.omitted_chars = self.omitted_chars.saturating_add(remainder_chars);
+            return;
+        }
+
+        if remainder_chars >= self.tail_budget {
+            // The new text alone fills the whole tail window: drop the current
+            // tail and keep only the last `tail_budget` chars.
+            self.omitted_chars = self
+                .omitted_chars
+                .saturating_add(self.tail_chars)
+                .saturating_add(remainder_chars - self.tail_budget);
+            self.tail.clear();
+            let skip = remainder_chars - self.tail_budget;
+            let start = remainder
+                .char_indices()
+                .nth(skip)
+                .map(|(index, _)| index)
+                .unwrap_or(0);
+            self.tail.extend(remainder[start..].bytes());
+            self.tail_chars = self.tail_budget;
+            return;
+        }
+
+        self.tail.extend(remainder.bytes());
+        self.tail_chars += remainder_chars;
+        while self.tail_chars > self.tail_budget {
+            self.pop_front_char();
+            self.tail_chars -= 1;
+            self.omitted_chars = self.omitted_chars.saturating_add(1);
+        }
+    }
+
+    /// Removes one whole UTF-8 char from the front of the tail ring buffer.
+    fn pop_front_char(&mut self) {
+        if self.tail.pop_front().is_none() {
+            return;
+        }
+        while matches!(self.tail.front(), Some(byte) if byte & 0b1100_0000 == 0b1000_0000) {
+            self.tail.pop_front();
         }
     }
 
     fn render(self) -> String {
-        if self.omitted_chars == 0 {
-            let mut output = self.head;
-            output.extend(self.tail);
-            return output;
-        }
+        let mut tail = self.tail;
+        let tail_text = String::from_utf8_lossy(tail.make_contiguous());
 
         let mut output = self.head;
-        output.push_str("\n... [truncated, middle omitted] ...\n");
-        output.extend(self.tail);
+        if self.omitted_chars != 0 {
+            output.push_str("\n... [truncated, middle omitted] ...\n");
+        }
+        output.push_str(&tail_text);
         output
     }
 }

@@ -353,8 +353,11 @@ fn emit_terminal_event(app_handle: &AppHandle, event: &TerminalEvent) -> bool {
             false
         }
     };
-    if let Ok(payload) = serde_json::to_value(event) {
-        super::remote_connect_api::maybe_fanout_peer_ui_event(event_name, payload);
+    // Only serialize the event for peer fanout when it will actually be sent.
+    if super::remote_connect_api::peer_ui_event_fanout_active(event_name) {
+        if let Ok(payload) = serde_json::to_value(event) {
+            super::remote_connect_api::maybe_fanout_peer_ui_event(event_name, payload);
+        }
     }
     local_emit_succeeded
 }

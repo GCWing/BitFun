@@ -42,6 +42,7 @@ use bitfun_services_core::{
 use futures::{stream, StreamExt};
 use log::{debug, info, warn};
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
+use std::borrow::Cow;
 use std::collections::HashMap;
 use std::io::ErrorKind;
 use std::path::{Path, PathBuf};
@@ -138,6 +139,17 @@ struct StoredTurnContextSnapshotFile {
     session_id: String,
     turn_index: usize,
     messages: Vec<Message>,
+}
+
+/// Borrowed write-side counterpart of [`StoredTurnContextSnapshotFile`]; lets
+/// snapshot writes serialize messages without cloning ones that need no
+/// sanitization. Field names/order must stay in sync with the stored struct.
+#[derive(Debug, Serialize)]
+struct TurnContextSnapshotWriteFile<'a> {
+    schema_version: u32,
+    session_id: &'a str,
+    turn_index: usize,
+    messages: Vec<Cow<'a, Message>>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -643,14 +655,45 @@ impl PersistenceManager {
         UNIX_EPOCH + Duration::from_millis(timestamp_ms)
     }
 
-    fn sanitize_messages_for_persistence(messages: &[Message]) -> Vec<Message> {
+    fn sanitize_messages_for_persistence(messages: &[Message]) -> Vec<Cow<'_, Message>> {
         messages
             .iter()
             .map(Self::sanitize_message_for_persistence)
             .collect()
     }
 
-    fn sanitize_message_for_persistence(message: &Message) -> Message {
+    /// Returns whether a message would be modified by
+    /// [`Self::sanitize_message_for_persistence`]. Used to avoid deep-cloning
+    /// messages that need no sanitization (the vast majority).
+    fn message_needs_persistence_sanitization(message: &Message) -> bool {
+        match &message.content {
+            MessageContent::Multimodal { images, .. } => images
+                .iter()
+                .any(|image| image.data_url.as_ref().is_some_and(|v| !v.is_empty())),
+            MessageContent::ToolResult {
+                result,
+                image_attachments,
+                ..
+            } => image_attachments.is_some() || Self::json_contains_data_url(result),
+            _ => false,
+        }
+    }
+
+    fn json_contains_data_url(value: &serde_json::Value) -> bool {
+        match value {
+            serde_json::Value::Object(map) => {
+                map.contains_key("data_url") || map.values().any(Self::json_contains_data_url)
+            }
+            serde_json::Value::Array(arr) => arr.iter().any(Self::json_contains_data_url),
+            _ => false,
+        }
+    }
+
+    fn sanitize_message_for_persistence(message: &Message) -> Cow<'_, Message> {
+        if !Self::message_needs_persistence_sanitization(message) {
+            return Cow::Borrowed(message);
+        }
+
         let mut sanitized = message.clone();
 
         match &mut sanitized.content {
@@ -686,7 +729,7 @@ impl PersistenceManager {
             _ => {}
         }
 
-        sanitized
+        Cow::Owned(sanitized)
     }
 
     fn redact_data_url_in_json(value: &mut serde_json::Value) {
@@ -1284,9 +1327,9 @@ impl PersistenceManager {
         self.ensure_snapshots_dir(workspace_path, session_id)
             .await?;
 
-        let snapshot = StoredTurnContextSnapshotFile {
+        let snapshot = TurnContextSnapshotWriteFile {
             schema_version: SESSION_STORAGE_SCHEMA_VERSION,
-            session_id: session_id.to_string(),
+            session_id,
             turn_index,
             messages: Self::sanitize_messages_for_persistence(messages),
         };

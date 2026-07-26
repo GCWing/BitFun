@@ -184,7 +184,7 @@ pub struct SessionManager {
     scripts_manager: ScriptsManager,
 
     /// Per-session output taps for real-time output streaming
-    output_taps: Arc<DashMap<String, Vec<mpsc::Sender<String>>>>,
+    output_taps: Arc<DashMap<String, Vec<mpsc::Sender<Arc<str>>>>>,
 
     /// Persistent plain-text transcripts for manually created terminal sessions.
     transcript_recorder: Option<TranscriptRecorder>,
@@ -282,7 +282,14 @@ impl SessionManager {
                     if let Some(session_id) = session_id {
                         let terminal_event = match event {
                             PtyServiceEvent::ProcessData { data, .. } => {
-                                let data_str = String::from_utf8_lossy(&data).to_string();
+                                // Zero-copy for valid UTF-8 (the common case);
+                                // fall back to lossy conversion otherwise.
+                                let data_str = match String::from_utf8(data) {
+                                    Ok(text) => text,
+                                    Err(error) => {
+                                        String::from_utf8_lossy(error.as_bytes()).into_owned()
+                                    }
+                                };
 
                                 // Update last activity and record to history.
                                 let is_manual_session = if let Some(session) =
@@ -424,9 +431,13 @@ impl SessionManager {
                                     }
                                 }
 
-                                // Fan out raw data to output taps (e.g. background session file loggers)
+                                // Fan out raw data to output taps (e.g. background session file loggers).
+                                // Share one Arc<str> allocation across all taps.
                                 if let Some(mut senders) = output_taps.get_mut(&session_id) {
-                                    senders.retain(|tx| tx.try_send(data_str.clone()).is_ok());
+                                    if !senders.is_empty() {
+                                        let shared: Arc<str> = Arc::from(data_str.as_str());
+                                        senders.retain(|tx| tx.try_send(shared.clone()).is_ok());
+                                    }
                                 }
 
                                 TerminalEvent::Data {
@@ -1600,7 +1611,7 @@ impl SessionManager {
     /// Returns a receiver that yields raw output strings as they arrive from the PTY.
     /// The receiver will return `None` (channel closed) when the session is destroyed.
     /// Multiple subscriptions to the same session are supported.
-    pub fn subscribe_session_output(&self, session_id: &str) -> mpsc::Receiver<String> {
+    pub fn subscribe_session_output(&self, session_id: &str) -> mpsc::Receiver<Arc<str>> {
         let (tx, rx) = mpsc::channel(256);
         self.output_taps
             .entry(session_id.to_string())

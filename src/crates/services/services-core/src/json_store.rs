@@ -11,7 +11,7 @@ use std::collections::HashMap;
 use std::fs::OpenOptions;
 use std::io::ErrorKind;
 use std::path::{Path, PathBuf};
-use std::sync::{Arc, OnceLock};
+use std::sync::{Arc, OnceLock, Weak};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use tokio::fs;
 use tokio::sync::Mutex;
@@ -19,7 +19,7 @@ use tokio::sync::Mutex;
 const JSON_WRITE_MAX_RETRIES: usize = 5;
 const JSON_WRITE_RETRY_BASE_DELAY_MS: u64 = 30;
 
-static JSON_FILE_WRITE_LOCKS: OnceLock<Mutex<HashMap<PathBuf, Arc<Mutex<()>>>>> = OnceLock::new();
+static JSON_FILE_WRITE_LOCKS: OnceLock<Mutex<HashMap<PathBuf, Weak<Mutex<()>>>>> = OnceLock::new();
 
 #[derive(Debug, thiserror::Error)]
 pub enum JsonFileStoreError {
@@ -208,9 +208,11 @@ impl JsonFileStore {
         value: &T,
         strict: bool,
     ) -> Result<(), JsonFileStoreError> {
-        let json = serde_json::to_string_pretty(value)
-            .map_err(|source| JsonFileStoreError::Serialize { source })?;
-        self.write_bytes_atomic_with_policy(path, json.into_bytes(), strict)
+        // Compact serialization: pretty output is 30-50% larger and hot files
+        // (turn context snapshots) are rewritten on every message append.
+        let json =
+            serde_json::to_vec(value).map_err(|source| JsonFileStoreError::Serialize { source })?;
+        self.write_bytes_atomic_with_policy(path, json, strict)
             .await
     }
 
@@ -307,10 +309,15 @@ impl JsonFileStore {
     async fn get_file_write_lock(path: &Path) -> Arc<Mutex<()>> {
         let registry = JSON_FILE_WRITE_LOCKS.get_or_init(|| Mutex::new(HashMap::new()));
         let mut registry_guard = registry.lock().await;
-        registry_guard
-            .entry(path.to_path_buf())
-            .or_insert_with(|| Arc::new(Mutex::new(())))
-            .clone()
+        if let Some(existing) = registry_guard.get(path).and_then(Weak::upgrade) {
+            return existing;
+        }
+        // Weak entries keep the map from growing without bound over the
+        // process lifetime; drop dead entries before inserting a new one.
+        registry_guard.retain(|_, weak| weak.strong_count() > 0);
+        let lock = Arc::new(Mutex::new(()));
+        registry_guard.insert(path.to_path_buf(), Arc::downgrade(&lock));
+        lock
     }
 
     async fn acquire_cross_process_lock(

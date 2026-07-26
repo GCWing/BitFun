@@ -489,7 +489,7 @@ impl TerminalApi {
     pub fn subscribe_session_output(
         &self,
         session_id: &str,
-    ) -> tokio::sync::mpsc::Receiver<String> {
+    ) -> tokio::sync::mpsc::Receiver<std::sync::Arc<str>> {
         self.session_manager.subscribe_session_output(session_id)
     }
 

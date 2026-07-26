@@ -288,9 +288,17 @@ Usage:
             return Ok(vec![result]);
         }
 
-        // Local: original implementation
-        let entries = list_directory_entries(&resolved.resolved_path, limit)
-            .map_err(|error| BitFunError::tool(error.to_string()))?;
+        // Local: original implementation. The listing does synchronous
+        // filesystem BFS, so run it on the blocking pool (same pattern as
+        // grep_tool/glob_tool) instead of parking a tokio worker.
+        let listing_path = resolved.resolved_path.clone();
+        let entries =
+            tokio::task::spawn_blocking(move || list_directory_entries(&listing_path, limit))
+                .await
+                .map_err(|error| {
+                    BitFunError::tool(format!("Directory listing task failed: {}", error))
+                })?
+                .map_err(|error| BitFunError::tool(error.to_string()))?;
 
         let entries_json = entries
             .iter()

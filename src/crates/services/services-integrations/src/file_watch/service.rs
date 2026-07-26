@@ -1,12 +1,28 @@
 use bitfun_events::EventEmitter;
 use log::{debug, error};
 use notify::{Config, Event, EventKind, RecommendedWatcher, RecursiveMode, Watcher};
+use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
-use std::sync::{Arc, Mutex as StdMutex};
-use tokio::sync::{broadcast, Mutex, RwLock};
+use std::sync::{Arc, Mutex as StdMutex, RwLock as StdRwLock};
+use tokio::sync::{broadcast, Mutex};
 
 use super::types::{FileWatchEvent, FileWatchEventKind, FileWatcherConfig};
+
+type WatchedPaths = StdRwLock<HashMap<PathBuf, FileWatcherConfig>>;
+
+fn read_watched_paths(
+    lock: &WatchedPaths,
+) -> std::sync::RwLockReadGuard<'_, HashMap<PathBuf, FileWatcherConfig>> {
+    lock.read().unwrap_or_else(|poisoned| poisoned.into_inner())
+}
+
+fn write_watched_paths(
+    lock: &WatchedPaths,
+) -> std::sync::RwLockWriteGuard<'_, HashMap<PathBuf, FileWatcherConfig>> {
+    lock.write()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+}
 
 impl From<&EventKind> for FileWatchEventKind {
     fn from(kind: &EventKind) -> Self {
@@ -23,7 +39,10 @@ impl From<&EventKind> for FileWatchEventKind {
 pub struct FileWatchService {
     emitter: Arc<Mutex<Option<Arc<dyn EventEmitter>>>>,
     watcher: Arc<Mutex<Option<RecommendedWatcher>>>,
-    watched_paths: Arc<RwLock<HashMap<PathBuf, FileWatcherConfig>>>,
+    /// Path table shared with the watcher event thread. Uses a synchronous
+    /// RwLock so per-event filtering never needs `block_on` into the async
+    /// runtime; guards are only held for short, await-free sections.
+    watched_paths: Arc<WatchedPaths>,
     event_buffer: Arc<StdMutex<Vec<FileWatchEvent>>>,
     event_sender: broadcast::Sender<Vec<FileWatchEvent>>,
     config: FileWatcherConfig,
@@ -47,7 +66,7 @@ impl FileWatchService {
         Self {
             emitter: Arc::new(Mutex::new(None)),
             watcher: Arc::new(Mutex::new(None)),
-            watched_paths: Arc::new(RwLock::new(HashMap::new())),
+            watched_paths: Arc::new(StdRwLock::new(HashMap::new())),
             event_buffer: Arc::new(StdMutex::new(Vec::new())),
             event_sender,
             config,
@@ -75,15 +94,16 @@ impl FileWatchService {
             return Err("Path does not exist".to_string());
         }
 
-        {
-            let mut watched_paths = self.watched_paths.write().await;
+        let (recursive, is_new, mode_upgraded) = {
+            let mut watched_paths = write_watched_paths(&self.watched_paths);
             let config = config.unwrap_or_else(|| self.config.clone());
-            watched_paths
-                .entry(path_buf.clone())
-                .and_modify(|existing| {
+            match watched_paths.entry(path_buf.clone()) {
+                Entry::Occupied(mut entry) => {
                     // Multiple product services may share a root. Registering a
                     // narrower observer must not silently downgrade an existing
                     // recursive or hidden-file-aware watch.
+                    let existing = entry.get_mut();
+                    let was_recursive = existing.watch_recursively;
                     existing.watch_recursively |= config.watch_recursively;
                     existing.ignore_hidden_files &= config.ignore_hidden_files;
                     existing.debounce_interval_ms = existing
@@ -92,34 +112,78 @@ impl FileWatchService {
                     existing.max_events_per_interval = existing
                         .max_events_per_interval
                         .max(config.max_events_per_interval);
-                })
-                .or_insert(config);
+                    (
+                        existing.watch_recursively,
+                        false,
+                        existing.watch_recursively != was_recursive,
+                    )
+                }
+                Entry::Vacant(entry) => {
+                    let recursive = config.watch_recursively;
+                    entry.insert(config);
+                    (recursive, true, false)
+                }
+            }
+        };
+
+        // Register incrementally on the existing watcher instead of rebuilding
+        // the whole watcher (recursive registrations are expensive on Windows).
+        let mut watcher_guard = self.watcher.lock().await;
+        match watcher_guard.as_mut() {
+            Some(watcher) => {
+                if is_new || mode_upgraded {
+                    let mode = if recursive {
+                        RecursiveMode::Recursive
+                    } else {
+                        RecursiveMode::NonRecursive
+                    };
+                    if mode_upgraded {
+                        let _ = watcher.unwatch(&path_buf);
+                    }
+                    watcher.watch(&path_buf, mode).map_err(|e| {
+                        format!("Failed to watch path {}: {}", path_buf.display(), e)
+                    })?;
+                }
+                Ok(())
+            }
+            None => {
+                drop(watcher_guard);
+                self.create_watcher().await
+            }
         }
-
-        self.create_watcher().await?;
-
-        Ok(())
     }
 
     pub async fn unwatch_path(&self, path: &str) -> Result<(), String> {
         let path_buf = PathBuf::from(path);
 
-        {
-            let mut watched_paths = self.watched_paths.write().await;
-            watched_paths.remove(&path_buf);
-        }
+        let (removed, is_empty) = {
+            let mut watched_paths = write_watched_paths(&self.watched_paths);
+            let removed = watched_paths.remove(&path_buf).is_some();
+            (removed, watched_paths.is_empty())
+        };
 
-        self.create_watcher().await?;
+        let mut watcher_guard = self.watcher.lock().await;
+        if is_empty {
+            // Dropping the watcher disconnects its channel; the event thread
+            // exits on its own.
+            *watcher_guard = None;
+        } else if removed {
+            if let Some(watcher) = watcher_guard.as_mut() {
+                // The path may never have been registered (e.g. it was missing
+                // when the watcher was created); ignore unwatch failures.
+                let _ = watcher.unwatch(&path_buf);
+            }
+        }
 
         Ok(())
     }
 
     async fn create_watcher(&self) -> Result<(), String> {
-        let watched_paths = self.watched_paths.read().await;
-
-        if watched_paths.is_empty() {
-            let mut watcher = self.watcher.lock().await;
-            *watcher = None;
+        // Keep the sync read guard scopes free of awaits: check emptiness with
+        // a short-lived guard before touching the async watcher mutex.
+        if read_watched_paths(&self.watched_paths).is_empty() {
+            let mut watcher_guard = self.watcher.lock().await;
+            *watcher_guard = None;
             return Ok(());
         }
 
@@ -127,22 +191,26 @@ impl FileWatchService {
         let mut watcher = RecommendedWatcher::new(tx, Config::default())
             .map_err(|e| format!("Failed to create watcher: {}", e))?;
 
-        for (path, config) in watched_paths.iter() {
-            // A watched source directory may be removed between events. Its
-            // stable parent watch remains active and the missing path will be
-            // re-registered when it reappears.
-            if !path.exists() {
-                continue;
-            }
-            let mode = if config.watch_recursively {
-                RecursiveMode::Recursive
-            } else {
-                RecursiveMode::NonRecursive
-            };
+        {
+            let watched_paths = read_watched_paths(&self.watched_paths);
 
-            watcher
-                .watch(path, mode)
-                .map_err(|e| format!("Failed to watch path {}: {}", path.display(), e))?;
+            for (path, config) in watched_paths.iter() {
+                // A watched source directory may be removed between events. Its
+                // stable parent watch remains active and the missing path will be
+                // re-registered when it reappears.
+                if !path.exists() {
+                    continue;
+                }
+                let mode = if config.watch_recursively {
+                    RecursiveMode::Recursive
+                } else {
+                    RecursiveMode::NonRecursive
+                };
+
+                watcher
+                    .watch(path, mode)
+                    .map_err(|e| format!("Failed to watch path {}: {}", path.display(), e))?;
+            }
         }
 
         {
@@ -152,24 +220,21 @@ impl FileWatchService {
 
         let event_buffer = self.event_buffer.clone();
         let emitter_arc = self.emitter.clone();
-        let debounce_interval_ms = watched_paths
-            .values()
-            .map(|config| config.debounce_interval_ms)
-            .min()
-            .unwrap_or(self.config.debounce_interval_ms);
+        let default_debounce_ms = self.config.debounce_interval_ms;
         let watched_paths = self.watched_paths.clone();
         let event_sender = self.event_sender.clone();
 
         tokio::task::spawn_blocking(move || {
             let rt = tokio::runtime::Handle::current();
-            let debounce = std::time::Duration::from_millis(debounce_interval_ms);
             let poll = std::time::Duration::from_millis(50);
             let mut last_event_time: Option<std::time::Instant> = None;
 
             loop {
                 match rx.recv_timeout(poll) {
                     Ok(Ok(event)) => {
-                        let file_events = rt.block_on(Self::convert_events(&event, &watched_paths));
+                        // Synchronous path-table snapshot: no block_on needed
+                        // per event.
+                        let file_events = Self::convert_events(&event, &watched_paths);
                         if !file_events.is_empty() {
                             lock_event_buffer(&event_buffer).extend(file_events);
                             last_event_time = Some(std::time::Instant::now());
@@ -181,7 +246,12 @@ impl FileWatchService {
                 }
 
                 if let Some(t) = last_event_time {
-                    if t.elapsed() >= debounce {
+                    let debounce_ms = read_watched_paths(&watched_paths)
+                        .values()
+                        .map(|config| config.debounce_interval_ms)
+                        .min()
+                        .unwrap_or(default_debounce_ms);
+                    if t.elapsed() >= std::time::Duration::from_millis(debounce_ms) {
                         rt.block_on(Self::flush_events_static(
                             &event_buffer,
                             &emitter_arc,
@@ -196,11 +266,8 @@ impl FileWatchService {
         Ok(())
     }
 
-    async fn convert_events(
-        event: &Event,
-        watched_paths: &Arc<RwLock<HashMap<PathBuf, FileWatcherConfig>>>,
-    ) -> Vec<FileWatchEvent> {
-        let paths = watched_paths.read().await;
+    fn convert_events(event: &Event, watched_paths: &WatchedPaths) -> Vec<FileWatchEvent> {
+        let paths = read_watched_paths(watched_paths);
         event
             .paths
             .iter()
@@ -371,7 +438,7 @@ impl FileWatchService {
     }
 
     pub async fn get_watched_paths(&self) -> Vec<String> {
-        let watched_paths = self.watched_paths.read().await;
+        let watched_paths = read_watched_paths(&self.watched_paths);
         watched_paths
             .keys()
             .map(|path| path.to_string_lossy().to_string())

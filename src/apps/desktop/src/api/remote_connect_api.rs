@@ -531,12 +531,17 @@ fn should_fanout_peer_ui_event(event: &str) -> bool {
     )
 }
 
+/// Whether the given UI event would currently be fanned out to attached Peer
+/// Mode controllers. Callers can use this to avoid cloning/serializing payloads
+/// when no fanout will happen.
+pub fn peer_ui_event_fanout_active(event: &str) -> bool {
+    should_fanout_peer_ui_event(event)
+        && !crate::api::peer_host_invoke::attached_controllers().is_empty()
+}
+
 /// Fan-out non-agentic UI events to attached Peer Mode controllers when needed.
 pub fn maybe_fanout_peer_ui_event(event: &str, payload: serde_json::Value) {
-    if !should_fanout_peer_ui_event(event) {
-        return;
-    }
-    if crate::api::peer_host_invoke::attached_controllers().is_empty() {
+    if !peer_ui_event_fanout_active(event) {
         return;
     }
     fanout_peer_device_event(event.to_string(), payload);
@@ -556,8 +561,14 @@ impl PeerAwareEmitter {
 #[async_trait::async_trait]
 impl bitfun_core::infrastructure::events::EventEmitter for PeerAwareEmitter {
     async fn emit(&self, event_name: &str, payload: serde_json::Value) -> anyhow::Result<()> {
-        self.inner.emit(event_name, payload.clone()).await?;
-        maybe_fanout_peer_ui_event(event_name, payload);
+        // Only clone the payload when a peer fanout will actually happen;
+        // otherwise move it into the inner emitter zero-copy.
+        if peer_ui_event_fanout_active(event_name) {
+            self.inner.emit(event_name, payload.clone()).await?;
+            fanout_peer_device_event(event_name.to_string(), payload);
+        } else {
+            self.inner.emit(event_name, payload).await?;
+        }
         Ok(())
     }
 }

@@ -2,19 +2,24 @@ use log::warn;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
-use std::sync::{Arc, LazyLock};
+use std::sync::{Arc, LazyLock, Weak};
 use tokio::fs;
 use tokio::sync::Mutex;
 
-static FILE_LOCKS: LazyLock<Mutex<HashMap<PathBuf, Arc<Mutex<()>>>>> =
+static FILE_LOCKS: LazyLock<Mutex<HashMap<PathBuf, Weak<Mutex<()>>>>> =
     LazyLock::new(|| Mutex::new(HashMap::new()));
 
 async fn get_file_lock(path: &Path) -> Arc<Mutex<()>> {
     let mut locks = FILE_LOCKS.lock().await;
-    locks
-        .entry(path.to_path_buf())
-        .or_insert_with(|| Arc::new(Mutex::new(())))
-        .clone()
+    if let Some(existing) = locks.get(path).and_then(Weak::upgrade) {
+        return existing;
+    }
+    // Weak entries keep the map from growing without bound over the process
+    // lifetime; drop dead entries before inserting a new one.
+    locks.retain(|_, weak| weak.strong_count() > 0);
+    let lock = Arc::new(Mutex::new(()));
+    locks.insert(path.to_path_buf(), Arc::downgrade(&lock));
+    lock
 }
 
 pub struct PersistenceService {

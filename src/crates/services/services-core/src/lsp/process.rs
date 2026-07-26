@@ -161,13 +161,15 @@ impl LspServerProcess {
                     Ok(Ok(message)) => {
                         consecutive_timeouts = 0;
 
-                        match &message {
+                        match message {
                             JsonRpcMessage::Response(response) => {
                                 let request_id = response.id;
                                 let mut pending = pending_requests.write().await;
 
                                 if let Some(sender) = pending.remove(&request_id) {
-                                    let _ = sender.send(response.clone());
+                                    // Move the response instead of cloning
+                                    // (responses can be MB-sized, e.g. semanticTokens).
+                                    let _ = sender.send(response);
                                 } else {
                                     warn!(
                                         "[{}] Received response for unknown request ID: {}",
@@ -175,13 +177,13 @@ impl LspServerProcess {
                                     );
                                 }
                             }
-                            JsonRpcMessage::Notification(_) => {
+                            message @ JsonRpcMessage::Notification(_) => {
                                 if let Err(e) = notification_tx.send(message) {
                                     error!("[{}] Failed to send notification: {}", id, e);
                                     break;
                                 }
                             }
-                            JsonRpcMessage::Request(_req) => {
+                            message @ JsonRpcMessage::Request(_) => {
                                 if let Err(e) = notification_tx.send(message) {
                                     error!("[{}] Failed to send request: {}", id, e);
                                     break;
@@ -368,7 +370,7 @@ impl LspServerProcess {
         tokio::spawn(async move {
             while let Some(message) = notification_rx.recv().await {
                 match message {
-                    JsonRpcMessage::Notification(notif) => match notif.method.as_str() {
+                    JsonRpcMessage::Notification(mut notif) => match notif.method.as_str() {
                         "$/progress" => {
                             if let Some(params) = &notif.params {
                                 let token = params
@@ -437,13 +439,19 @@ impl LspServerProcess {
                             }
                         }
                         "textDocument/publishDiagnostics" => {
-                            if let Some(params) = &notif.params {
-                                if let Some(uri) = params.get("uri").and_then(|u| u.as_str()) {
-                                    if let Some(diagnostics_arr) =
-                                        params.get("diagnostics").and_then(|d| d.as_array())
+                            if let Some(params) = notif.params.as_mut() {
+                                if let Some(uri) = params
+                                    .get("uri")
+                                    .and_then(|u| u.as_str())
+                                    .map(str::to_string)
+                                {
+                                    // Move the diagnostics array out of the owned
+                                    // notification instead of deep-cloning it.
+                                    if let Some(serde_json::Value::Array(diags)) = params
+                                        .get_mut("diagnostics")
+                                        .filter(|d| d.is_array())
+                                        .map(serde_json::Value::take)
                                     {
-                                        let diags: Vec<serde_json::Value> = diagnostics_arr.clone();
-
                                         debug!(
                                             "[{}] Diagnostics: {} items for {}",
                                             id,
@@ -452,7 +460,7 @@ impl LspServerProcess {
                                         );
 
                                         if let Some(callback) = &diagnostics_callback {
-                                            callback(uri.to_string(), diags);
+                                            callback(uri, diags);
                                         }
                                     }
                                 }

@@ -101,10 +101,10 @@ pub struct SkillData {
 }
 
 fn parse_front_matter_markdown(content: &str) -> Result<(Value, String), SkillParseError> {
-    let front_matter_pattern = r"(?s)^---\r?\n(.*?)\r?\n---";
-    let re = Regex::new(front_matter_pattern)
-        .map_err(|error| SkillParseError::InvalidFormat(error.to_string()))?;
-    let caps = re
+    static FRONT_MATTER_REGEX: std::sync::LazyLock<Regex> = std::sync::LazyLock::new(|| {
+        Regex::new(r"(?s)^---\r?\n(.*?)\r?\n---").expect("front matter regex pattern is valid")
+    });
+    let caps = FRONT_MATTER_REGEX
         .captures(content)
         .ok_or_else(|| SkillParseError::InvalidFormat("Failed to capture content".to_string()))?;
 
