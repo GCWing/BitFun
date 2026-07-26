@@ -28,6 +28,7 @@ import {
 import { ToolbarModeProvider } from '../flow_chat/components/toolbar-mode/ToolbarModeProvider';
 import type { AgentCompanionPetCommand } from './services/agentCompanionPetCommands';
 import AskUserAnnouncer from './components/NavPanel/AskUserAnnouncer';
+import { LearningProposalReviewHost } from '../features/learning-proposal';
 
 const log = createLogger('App');
 
@@ -828,6 +829,9 @@ function App() {
             {/* Notification system */}
             <NotificationContainer />
             <NotificationCenter />
+
+            {/* Learning proposal review */}
+            {isTauriRuntime() && <LearningProposalReviewHost />}
 
             {/* Confirm dialog */}
             <ConfirmDialogRenderer />

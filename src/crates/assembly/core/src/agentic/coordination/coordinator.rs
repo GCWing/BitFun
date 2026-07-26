@@ -300,6 +300,8 @@ pub(crate) struct InternalAgentExecutionRequest {
     pub(crate) runtime_tool_restrictions: ToolRuntimeRestrictions,
     pub(crate) session_kind: SessionKind,
     pub(crate) emit_lifecycle_events: bool,
+    pub(crate) remote_connection_id: Option<String>,
+    pub(crate) remote_ssh_host: Option<String>,
 }
 
 struct WrappedUserInputPayload {
@@ -1062,6 +1064,41 @@ impl ConversationCoordinator {
             config.remote_connection_id = Some(entry.connection_id);
             if !entry.ssh_host.trim().is_empty() {
                 config.remote_ssh_host = Some(entry.ssh_host);
+            }
+        }
+
+        config
+    }
+
+    /// Like `build_session_config_for_workspace`, but lets the caller supply
+    /// explicit remote context (e.g. when it is already known from a proposal
+    /// source). Caller-supplied values take precedence over path-based lookup.
+    async fn build_session_config_for_workspace_with_remote(
+        workspace_path: String,
+        remote_connection_id: Option<String>,
+        remote_ssh_host: Option<String>,
+        model_id: Option<String>,
+    ) -> SessionConfig {
+        let mut config = SessionConfig {
+            workspace_path: Some(workspace_path.clone()),
+            model_id,
+            ..SessionConfig::default()
+        };
+
+        if remote_connection_id.is_some() || remote_ssh_host.is_some() {
+            config.remote_connection_id = remote_connection_id;
+            config.remote_ssh_host = remote_ssh_host;
+        } else {
+            let remote_entry =
+                crate::service::remote_ssh::workspace_state::lookup_remote_connection(
+                    &workspace_path,
+                )
+                .await;
+            if let Some(entry) = remote_entry {
+                config.remote_connection_id = Some(entry.connection_id);
+                if !entry.ssh_host.trim().is_empty() {
+                    config.remote_ssh_host = Some(entry.ssh_host);
+                }
             }
         }
 
@@ -7620,8 +7657,10 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             session_name: request.session_name,
             agent_type: request.agent_type,
             logical_agent_type,
-            session_config: Self::build_session_config_for_workspace(
+            session_config: Self::build_session_config_for_workspace_with_remote(
                 request.workspace_path,
+                request.remote_connection_id,
+                request.remote_ssh_host,
                 request.model_id,
             )
             .await,
