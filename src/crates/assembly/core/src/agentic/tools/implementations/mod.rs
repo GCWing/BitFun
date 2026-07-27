@@ -4,6 +4,9 @@ pub mod agent_wait_tool;
 pub mod analyze_image_tool;
 pub mod ask_user_question_tool;
 pub mod bash_tool;
+pub mod check_arkts_files_tool;
+pub mod check_cpp_files_tool;
+pub mod switch_cwd_tool;
 #[cfg(feature = "canvas-runtime")]
 pub mod canvas_tools;
 pub mod code_review_tool;
@@ -54,6 +57,9 @@ pub use agent_wait_tool::AgentWaitTool;
 pub use analyze_image_tool::AnalyzeImageTool;
 pub use ask_user_question_tool::AskUserQuestionTool;
 pub use bash_tool::BashTool;
+pub use check_arkts_files_tool::CheckArktsFilesTool;
+pub use check_cpp_files_tool::CheckCppFilesTool;
+pub use switch_cwd_tool::SwitchCwdTool;
 #[cfg(feature = "canvas-runtime")]
 pub use canvas_tools::{CreateCanvasTool, PatchCanvasTool, ReadCanvasTool, UpdateCanvasTool};
 pub use code_review_tool::CodeReviewTool;
