@@ -19,7 +19,8 @@
     ],
     "resources": {
       "../../mobile-web/dist": "mobile-web/dist",
-      "resources/worker_host.js": "resources/worker_host.js"
+      "resources/worker_host.js": "resources/worker_host.js",
+      "resources/skills": "resources/skills"
     },
     "linux": {
       "deb": {
