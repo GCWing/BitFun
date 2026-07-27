@@ -39,10 +39,15 @@ jobs:
       fail-fast: false
       matrix:
         platform:
+          # Both arches build on 22.04 (glibc 2.35) to keep one supported floor.
+          # arm64 used to build on ubuntu-24.04-arm (glibc 2.39), which produced
+          # a relay needing GLIBC_2.38 — unable to start on Debian 12 / Ubuntu
+          # 22.04 arm64, or in the deploy runtime image. The floor is asserted
+          # below rather than left to whatever the runner image happens to ship.
           - os: ubuntu-22.04
             name: linux-x64
             target: x86_64-unknown-linux-gnu
-          - os: ubuntu-24.04-arm
+          - os: ubuntu-22.04-arm
             name: linux-arm64
             target: aarch64-unknown-linux-gnu
 
@@ -112,6 +117,20 @@ jobs:
             -p bitfun-cli \
             -p bitfun-relay-server \
             --bins
+
+      # A binary above this floor cannot start on older distributions, and the
+      # relay one-click deploy installs it into a Debian runtime image. Catch it
+      # here, where the fix is a runner label, rather than as a container that
+      # exits instantly with a loader error.
+      - name: Verify glibc floor
+        shell: bash
+        run: |
+          rel="target/${{ matrix.platform.target }}/release"
+          bash scripts/ci/check-glibc-floor.sh 2.35 \
+            "$rel/bitfun-relay-server" \
+            "$rel/relay-admin" \
+            "$rel/bitfun" \
+            "$rel/bitfun-cli"
 
       - name: Test CLI installer
         shell: bash

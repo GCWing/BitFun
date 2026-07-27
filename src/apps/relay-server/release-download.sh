@@ -390,13 +390,21 @@ bitfun_try_release_deploy() {
   mkdir -p "$context.new"
   cp "$extracted/bitfun-relay-server" "$extracted/relay-admin" "$context.new/"
   cp -R "$extracted/static" "$context.new/static"
-  # Base image glibc must be >= what the published binary was linked against.
-  # The release matrix builds x86_64 on ubuntu-22.04 (glibc 2.35) but arm64 on
-  # ubuntu-24.04-arm (glibc 2.39), and the arm64 relay needs GLIBC_2.38. On
-  # bookworm-slim (2.36) it therefore could not load at all: the container
-  # exited instantly, the loader error went to stderr, and the deploy surfaced
-  # only as a failed health check followed by a 20-minute source rebuild.
-  # trixie-slim carries glibc 2.41, which covers both with headroom.
+  # Base image glibc must be >= what the *archive being installed* was linked
+  # against — which is not the same as what CI builds today.
+  #
+  # arm64 releases up to and including v0.2.14 were built on ubuntu-24.04-arm and
+  # require GLIBC_2.38. On bookworm-slim (2.36) they could not load at all: the
+  # container exited instantly, the loader error went to stderr, and the deploy
+  # surfaced only as a failed health check followed by a 20-minute rebuild.
+  #
+  # The release matrix now pins both arches to ubuntu-22.04 (glibc 2.35, asserted
+  # by scripts/ci/check-glibc-floor.sh), but that does NOT make bookworm safe
+  # again: Desktop pins BITFUN_RELEASE_TAG to its own version, so a v0.2.14
+  # client installs the v0.2.14 archive forever, and published archives keep the
+  # floor they were built with. This base must satisfy the highest floor across
+  # every release a client in the wild might still install. trixie-slim carries
+  # glibc 2.41 and covers both 2.38 and 2.35.
   cat >"$context.new/Dockerfile" <<'DOCKERFILE'
 FROM debian:trixie-slim
 ENV DEBIAN_FRONTEND=noninteractive
