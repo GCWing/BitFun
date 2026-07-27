@@ -34,7 +34,7 @@
     "reference": {
       "label": "Event and payload reference",
       "description": "Codex's hooks documentation is the reference for event names, payload fields, and the decision schema.",
-      "open": "Open Codex hooks docs"
+      "open": "Open docs"
     }
   },
   "messages": {

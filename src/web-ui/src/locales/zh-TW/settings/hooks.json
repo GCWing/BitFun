@@ -34,7 +34,7 @@
     "reference": {
       "label": "事件與載荷參考",
       "description": "事件名稱、載荷欄位和決策結構以 Codex 的 Hooks 文件為準。",
-      "open": "開啟 Codex Hooks 文件"
+      "open": "開啟文件"
     }
   },
   "messages": {

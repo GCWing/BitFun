@@ -34,7 +34,7 @@
     "reference": {
       "label": "事件与载荷参考",
       "description": "事件名、载荷字段和决策结构以 Codex 的 Hooks 文档为准。",
-      "open": "打开 Codex Hooks 文档"
+      "open": "打开文档"
     }
   },
   "messages": {
