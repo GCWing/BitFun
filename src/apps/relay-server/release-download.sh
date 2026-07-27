@@ -390,8 +390,15 @@ bitfun_try_release_deploy() {
   mkdir -p "$context.new"
   cp "$extracted/bitfun-relay-server" "$extracted/relay-admin" "$context.new/"
   cp -R "$extracted/static" "$context.new/static"
+  # Base image glibc must be >= what the published binary was linked against.
+  # The release matrix builds x86_64 on ubuntu-22.04 (glibc 2.35) but arm64 on
+  # ubuntu-24.04-arm (glibc 2.39), and the arm64 relay needs GLIBC_2.38. On
+  # bookworm-slim (2.36) it therefore could not load at all: the container
+  # exited instantly, the loader error went to stderr, and the deploy surfaced
+  # only as a failed health check followed by a 20-minute source rebuild.
+  # trixie-slim carries glibc 2.41, which covers both with headroom.
   cat >"$context.new/Dockerfile" <<'DOCKERFILE'
-FROM debian:bookworm-slim
+FROM debian:trixie-slim
 ENV DEBIAN_FRONTEND=noninteractive
 RUN apt-get update \
     && apt-get install -y --no-install-recommends ca-certificates curl \
@@ -401,6 +408,24 @@ COPY bitfun-relay-server relay-admin /app/
 COPY static /app/static
 RUN chmod 755 /app/bitfun-relay-server /app/relay-admin \
     && mkdir -p /app/data /app/room-web
+# Fail the build, loudly and in seconds, if either binary cannot be loaded here.
+# `ldd` runs the real dynamic loader and prints the exact
+# `version 'GLIBC_x.yz' not found` line — but it still exits 0, so its *output*
+# is the gate, not its status. The relay binary itself is unusable as a probe:
+# it has no --version flag and simply starts serving. Without this check a
+# future runner bump reappears as an opaque failed health check plus a
+# 20-minute source rebuild.
+RUN set -eu; \
+    for bin in /app/bitfun-relay-server /app/relay-admin; do \
+      out="$(ldd "$bin" 2>&1)"; \
+      printf '%s\n' "$out"; \
+      case "$out" in \
+        *"not found"*) \
+          echo "ERROR: $bin cannot be loaded on this base image (see above)." >&2; \
+          echo "       The published binary needs a newer glibc than this base provides." >&2; \
+          exit 1 ;; \
+      esac; \
+    done
 HEALTHCHECK --interval=15s --timeout=5s --start-period=20s --retries=5 \
   CMD curl -fsS "http://127.0.0.1:${RELAY_PORT:-9700}/health" || exit 1
 CMD ["/app/bitfun-relay-server"]
@@ -493,7 +518,17 @@ DOCKERFILE
   done
 
   echo ">>> Published Relay binary failed its health check; restoring previous container."
-  bitfun_docker logs --tail 40 bitfun-relay 2>/dev/null || true
+  # `docker logs` relays the container's stderr on *its own* stderr, so the
+  # `2>/dev/null` that used to be here discarded exactly the output we need:
+  # the relay logs through tracing, i.e. to stderr. Keep both streams, and say
+  # whether the container died or was up but not answering — the two have
+  # completely different causes.
+  echo ">>> Container state: $(bitfun_docker inspect \
+    -f 'running={{.State.Running}} exit={{.State.ExitCode}} oom={{.State.OOMKilled}} err={{.State.Error}}' \
+    bitfun-relay 2>&1 || true)"
+  echo ">>> Probed http://${probe_host}:${RELAY_PORT:-9700}/health"
+  echo ">>> Last 40 log lines from bitfun-relay:"
+  bitfun_docker logs --tail 40 bitfun-relay 2>&1 | sed 's/^/    /' || true
   bitfun_restore_previous_relay
   trap - INT TERM
   return 1
