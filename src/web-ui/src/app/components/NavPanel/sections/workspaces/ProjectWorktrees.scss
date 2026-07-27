@@ -14,7 +14,7 @@
 .bitfun-project-worktrees__heading {
   justify-content: space-between;
   padding: 3px 4px;
-  color: var(--color-text-tertiary);
+  color: var(--color-text-muted);
   font-size: 10px;
   font-weight: 600;
   letter-spacing: 0.04em;
@@ -42,7 +42,7 @@
 
 .bitfun-project-worktrees__heading > button:hover,
 .bitfun-project-worktrees__new-session:hover:not(:disabled) {
-  background: var(--color-bg-hover);
+  background: var(--element-bg-hover);
   color: var(--color-text-primary);
 }
 
@@ -91,7 +91,7 @@
   padding: 1px 4px;
   border-radius: 8px;
   background: var(--color-bg-tertiary);
-  color: var(--color-text-tertiary);
+  color: var(--color-text-muted);
   font-size: 9px;
   text-overflow: ellipsis;
   white-space: nowrap;
