@@ -4,7 +4,8 @@ use bitfun_core::service::remote_ssh::lookup_remote_connection;
 use bitfun_core::service::worktree::{
     WorktreeCreateBranchRequest, WorktreeCreateRequest, WorktreeCreateResult, WorktreeListRequest,
     WorktreeMutationResult, WorktreePromoteRequest, WorktreeRecreateRequest, WorktreeRemoveRequest,
-    WorktreeRemoveResult, WorktreeService,
+    WorktreeRemoveResult, WorktreeService, WorktreeSessionBindingRequest,
+    WorktreeSessionBindingResult,
 };
 use bitfun_core_types::{WorktreeError, WorktreeErrorCode, WorktreeSummary};
 
@@ -65,6 +66,15 @@ pub async fn worktree_remove(
 ) -> Result<WorktreeRemoveResult, WorktreeError> {
     ensure_local(&request.project_workspace_path).await?;
     WorktreeService::remove(request).await
+}
+
+/// Toggle worktree isolation for a single session. The project path is derived
+/// from the session itself, so remote checks live in the product layer.
+#[tauri::command]
+pub async fn worktree_bind_session(
+    request: WorktreeSessionBindingRequest,
+) -> Result<WorktreeSessionBindingResult, WorktreeError> {
+    WorktreeService::bind_session(request).await
 }
 
 #[tauri::command]

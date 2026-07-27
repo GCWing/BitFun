@@ -15,8 +15,6 @@ const mocks = vi.hoisted(() => ({
     isRepository: true,
     refreshBasic: vi.fn(async () => undefined),
   })),
-  listWorktrees: vi.fn(),
-  onWorktreeChanged: vi.fn(),
 }));
 
 vi.mock('react-i18next', () => ({
@@ -33,25 +31,11 @@ vi.mock('@/component-library', () => ({
   IconButton: ({ children, onClick }: { children: React.ReactNode; onClick?: () => void }) => (
     <button type="button" onClick={onClick}>{children}</button>
   ),
-  InputDialog: ({ isOpen }: { isOpen: boolean }) => (
-    isOpen ? <div data-testid="input-dialog" /> : null
-  ),
   Tooltip: ({ children }: { children: React.ReactNode }) => <>{children}</>,
 }));
 
 vi.mock('@/tools/git/hooks/useGitState', () => ({
   useGitState: mocks.useGitState,
-}));
-
-vi.mock('@/infrastructure/api', () => ({
-  configAPI: { getConfig: vi.fn() },
-  workspaceAPI: { revealInExplorer: vi.fn() },
-  worktreeAPI: {
-    list: mocks.listWorktrees,
-    onChanged: mocks.onWorktreeChanged,
-    createBranch: vi.fn(),
-    promote: vi.fn(),
-  },
 }));
 
 describe('ChatInputWorkspaceStrip git refresh behavior', () => {
@@ -68,9 +52,6 @@ describe('ChatInputWorkspaceStrip git refresh behavior', () => {
       isRepository: true,
       refreshBasic: mocks.refreshBasic,
     });
-    mocks.listWorktrees.mockReset();
-    mocks.onWorktreeChanged.mockReset();
-    mocks.onWorktreeChanged.mockReturnValue(vi.fn());
   });
 
   afterEach(() => {
@@ -179,55 +160,122 @@ describe('ChatInputWorkspaceStrip git refresh behavior', () => {
     expect(container.querySelector('[data-testid="chat-input-permission-menu"]')).toBeNull();
   });
 
-  it('refreshes the session-bound worktree chip from worktree events', async () => {
-    let onChanged: ((event: { projectWorkspacePath: string }) => void) | undefined;
-    mocks.onWorktreeChanged.mockImplementation(callback => {
-      onChanged = callback;
-      return vi.fn();
+  it('offers the worktree toggle for a Git workspace and reports the new state', async () => {
+    const onChange = vi.fn(async () => undefined);
+    await act(async () => {
+      root.render(
+        <ChatInputWorkspaceStrip
+          repositoryPath="/repo"
+          workspaceLabel="repo"
+          worktreeControl={{ locked: false, onChange }}
+        />
+      );
     });
-    mocks.listWorktrees.mockResolvedValue([{
-      worktreeId: 'wt-1',
-      projectWorkspacePath: '/repo',
-      path: '/worktrees/wt-1',
-      head: '0123456789abcdef',
-      branch: 'bitfun/isolated',
-      lifecycle: 'permanent',
-      isMain: false,
-      dirty: false,
-      locked: false,
-      missing: false,
-      hasUnpublishedCommits: false,
-      associatedSessionCount: 1,
-      runningSessionCount: 1,
-      sessions: [],
-    }]);
 
+    const toggle = container.querySelector<HTMLButtonElement>('[data-testid="chat-input-worktree-toggle"]');
+    expect(toggle).not.toBeNull();
+    expect(toggle?.dataset.worktreeEnabled).toBe('false');
+    expect(toggle?.disabled).toBe(false);
+
+    await act(async () => {
+      toggle?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    expect(onChange).toHaveBeenCalledWith(true);
+  });
+
+  it('shows the toggle as on inside a worktree and asks to turn it off', async () => {
+    const onChange = vi.fn(async () => undefined);
     await act(async () => {
       root.render(
         <ChatInputWorkspaceStrip
           repositoryPath="/worktrees/wt-1"
           workspaceLabel="wt-1"
-          projectWorkspacePath="/repo"
           executionTarget={{
             kind: 'managedWorktree',
             worktreeId: 'wt-1',
             rootPath: '/worktrees/wt-1',
             baseCommit: '0123456789abcdef',
+            branch: 'bitfun/isolated',
             lifecycle: 'managed',
           }}
+          worktreeControl={{ locked: false, onChange }}
         />
       );
-      await Promise.resolve();
     });
 
-    expect(mocks.listWorktrees).toHaveBeenCalledWith('/repo');
+    const toggle = container.querySelector<HTMLButtonElement>('[data-testid="chat-input-worktree-toggle"]');
+    expect(toggle?.dataset.worktreeEnabled).toBe('true');
     expect(container.textContent).toContain('bitfun/isolated');
 
     await act(async () => {
-      onChanged?.({ projectWorkspacePath: '/repo' });
-      await Promise.resolve();
+      toggle?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
-    expect(mocks.listWorktrees).toHaveBeenCalledTimes(2);
+    expect(onChange).toHaveBeenCalledWith(false);
+  });
+
+  it('locks the toggle once the session has a transcript', async () => {
+    const onChange = vi.fn(async () => undefined);
+    await act(async () => {
+      root.render(
+        <ChatInputWorkspaceStrip
+          repositoryPath="/repo"
+          workspaceLabel="repo"
+          worktreeControl={{ locked: true, onChange }}
+        />
+      );
+    });
+
+    const toggle = container.querySelector<HTMLButtonElement>('[data-testid="chat-input-worktree-toggle"]');
+    expect(toggle?.disabled).toBe(true);
+
+    await act(async () => {
+      toggle?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    expect(onChange).not.toHaveBeenCalled();
+  });
+
+  it('refetches Git state when the execution root moves into a worktree', async () => {
+    const onChange = vi.fn(async () => undefined);
+    await act(async () => {
+      root.render(
+        <ChatInputWorkspaceStrip
+          repositoryPath="/repo"
+          workspaceLabel="repo"
+          worktreeControl={{ locked: false, onChange }}
+        />
+      );
+    });
+    expect(mocks.refreshBasic).not.toHaveBeenCalled();
+
+    await act(async () => {
+      root.render(
+        <ChatInputWorkspaceStrip
+          repositoryPath="/worktrees/wt-1"
+          workspaceLabel="repo"
+          executionTarget={{
+            kind: 'managedWorktree',
+            worktreeId: 'wt-1',
+            rootPath: '/worktrees/wt-1',
+            lifecycle: 'managed',
+          }}
+          worktreeControl={{ locked: false, onChange }}
+        />
+      );
+    });
+
     expect(mocks.refreshBasic).toHaveBeenCalled();
+  });
+
+  it('omits the toggle when the session cannot host a worktree', async () => {
+    await act(async () => {
+      root.render(
+        <ChatInputWorkspaceStrip
+          repositoryPath="/repo"
+          workspaceLabel="repo"
+        />
+      );
+    });
+
+    expect(container.querySelector('[data-testid="chat-input-worktree-toggle"]')).toBeNull();
   });
 });

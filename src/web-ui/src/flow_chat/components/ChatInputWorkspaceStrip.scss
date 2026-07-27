@@ -401,72 +401,57 @@
       flex: 0 1 auto;
       max-width: 35%;
       gap: 3px;
-      border: 0;
-      background: transparent;
-      color: inherit;
-      font: inherit;
+    }
 
-      &:not(:disabled) {
-        cursor: pointer;
+    /* Checkbox-style chip: reads as a control without competing with the branch. */
+    &--worktree {
+      align-items: center;
+      flex: none;
+      gap: 4px;
+      margin-left: 4px;
+      border: 1px solid var(--border-subtle);
+      background: transparent;
+      color: var(--color-text-muted);
+      font: inherit;
+      font-size: var(--flowchat-font-size-xxs);
+      line-height: 1;
+      white-space: nowrap;
+      cursor: pointer;
+
+      &:hover:not(:disabled) {
+        background: var(--element-bg-medium);
+        color: var(--color-text-secondary);
+      }
+
+      &:focus-visible {
+        outline: 2px solid var(--color-accent-500);
+        outline-offset: 1px;
       }
 
       &:disabled {
-        opacity: 1;
+        cursor: default;
+        opacity: 0.55;
+      }
+    }
+
+    &--worktree-on {
+      border-color: var(--color-accent-500);
+      color: var(--color-accent-500);
+
+      &:hover:not(:disabled) {
+        color: var(--color-accent-500);
       }
     }
   }
 
-  &__worktree {
-    position: relative;
-    display: flex;
-    min-width: 0;
-    flex: 0 1 auto;
-    max-width: 35%;
-  }
+  &__worktree-icon {
+    flex-shrink: 0;
+    width: 11px;
+    height: 11px;
+    color: inherit;
 
-  &__worktree &__chip--branch {
-    max-width: 100%;
-  }
-
-  &__worktree-menu {
-    position: absolute;
-    bottom: calc(100% + 7px);
-    left: 0;
-    z-index: 11;
-    display: flex;
-    width: max-content;
-    min-width: 180px;
-    flex-direction: column;
-    gap: 2px;
-    padding: 5px;
-    border: 1px solid var(--border-subtle);
-    border-radius: $size-radius-base;
-    background: var(--color-bg-elevated);
-    box-shadow: var(--shadow-lg);
-
-    > button {
-      display: flex;
-      align-items: center;
-      gap: 7px;
-      padding: 7px 8px;
-      border: 0;
-      border-radius: $size-radius-sm;
-      background: transparent;
-      color: var(--color-text-secondary);
-      font: inherit;
-      text-align: left;
-      cursor: pointer;
-
-      &:hover:not(:disabled),
-      &:focus-visible {
-        background: var(--element-bg-medium);
-        color: var(--color-text-primary);
-      }
-
-      &:disabled {
-        cursor: wait;
-        opacity: 0.55;
-      }
+    &.is-spinning {
+      animation: bitfun-chat-input-workspace-strip-spin 0.9s linear infinite;
     }
   }
 
@@ -521,5 +506,11 @@
     &__permission-label {
       display: none;
     }
+  }
+}
+
+@keyframes bitfun-chat-input-workspace-strip-spin {
+  to {
+    transform: rotate(360deg);
   }
 }

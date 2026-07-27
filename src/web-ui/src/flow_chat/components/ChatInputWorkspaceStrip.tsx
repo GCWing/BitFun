@@ -6,29 +6,22 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   Activity,
-  Archive,
   Check,
   EyeOff,
-  FolderOpen,
+  Loader2,
   GitBranch,
-  Settings2,
   Shield,
   ShieldAlert,
   ShieldCheck,
+  Square,
+  SquareCheck,
 } from 'lucide-react';
 import { ThreadGoalStripButton } from './thread-goal/ThreadGoalStripButton';
 import type { ThreadGoalSnapshot } from '../services/goalService';
-import { Tooltip, IconButton, InputDialog } from '@/component-library';
+import { Tooltip, IconButton } from '@/component-library';
 import { useGitState } from '@/tools/git/hooks/useGitState';
-import { configAPI, workspaceAPI, worktreeAPI } from '@/infrastructure/api';
-import type {
-  SessionExecutionTarget,
-  WorktreeSummary,
-} from '@/infrastructure/api/service-api/WorktreeAPI';
+import type { SessionExecutionTarget } from '@/infrastructure/api/service-api/WorktreeAPI';
 import { useI18n } from '@/infrastructure/i18n';
-import { notificationService } from '@/shared/notification-system';
-import { openWorktreeManager } from '@/shared/services/worktreeUIEvents';
-import { isSamePath } from '@/shared/utils/pathUtils';
 import './ChatInputWorkspaceStrip.scss';
 
 export interface ChatInputWorkspaceStripProps {
@@ -58,8 +51,15 @@ export interface ChatInputWorkspaceStripProps {
   deferPassiveGitRefresh?: boolean;
   /** Resolved target bound to the active session. */
   executionTarget?: SessionExecutionTarget;
-  /** Main project that owns the active worktree session. */
-  projectWorkspacePath?: string;
+  /**
+   * Per-session worktree isolation, rendered next to the branch for Git workspaces.
+   * Omitted when the session cannot host a worktree at all (remote, no session).
+   */
+  worktreeControl?: {
+    /** Locked once the session has a transcript — its history describes one directory. */
+    locked: boolean;
+    onChange: (enabled: boolean) => void | Promise<void>;
+  };
 }
 
 export type ChatInputPermissionMode = 'ask' | 'auto' | 'full_access' | 'acp';
@@ -78,18 +78,13 @@ export const ChatInputWorkspaceStrip: React.FC<ChatInputWorkspaceStripProps> = (
   permissionControl,
   deferPassiveGitRefresh = false,
   executionTarget,
-  projectWorkspacePath,
+  worktreeControl,
 }) => {
   const { t } = useTranslation('flow-chat');
   const { t: tWorktrees } = useI18n('worktrees');
   const permissionRootRef = useRef<HTMLDivElement>(null);
-  const worktreeRootRef = useRef<HTMLDivElement>(null);
   const [permissionMenuOpen, setPermissionMenuOpen] = useState(false);
-  const [worktreeMenuOpen, setWorktreeMenuOpen] = useState(false);
-  const [branchDialogOpen, setBranchDialogOpen] = useState(false);
-  const [branchPrefix, setBranchPrefix] = useState('bitfun/');
-  const [worktreeMutationPending, setWorktreeMutationPending] = useState(false);
-  const [liveWorktree, setLiveWorktree] = useState<WorktreeSummary | null>(null);
+  const [worktreePending, setWorktreePending] = useState(false);
   const trimmedPath = repositoryPath.trim();
   const label = workspaceLabel.trim();
 
@@ -102,14 +97,24 @@ export const ChatInputWorkspaceStrip: React.FC<ChatInputWorkspaceStripProps> = (
     debugSource: 'chat_input_workspace_strip',
   });
 
+  // Toggling worktree isolation moves the execution root under a live strip.
+  // The shared Git cache holds nothing for the new directory, and useGitState
+  // only auto-refreshes on mount, so ask for the new branch explicitly.
+  const previousRepositoryPathRef = useRef(trimmedPath);
+  useEffect(() => {
+    if (previousRepositoryPathRef.current === trimmedPath) return;
+    previousRepositoryPathRef.current = trimmedPath;
+    if (trimmedPath) {
+      void refreshBasic();
+    }
+  }, [refreshBasic, trimmedPath]);
+
   const showUsage = usageReport?.visible && !!usageReport.onOpen;
   const showGoal = threadGoal?.visible && !!threadGoal.onOpen;
   const showPermission = !!permissionControl;
   const showRightActions = showPermission || showUsage || showGoal;
   const isWorktree = !!executionTarget?.worktreeId;
-  const effectiveWorktreePath = liveWorktree?.path || executionTarget?.rootPath || trimmedPath;
-  const effectiveWorktreeLifecycle =
-    liveWorktree?.lifecycle || executionTarget?.lifecycle;
+  const showWorktreeToggle = !!worktreeControl && (isRepository || isWorktree);
   const permissionCopy = {
     ask: {
       label: t('chatInput.permissionMode.ask.label'),
@@ -130,20 +135,16 @@ export const ChatInputWorkspaceStrip: React.FC<ChatInputWorkspaceStripProps> = (
   } satisfies Record<ChatInputPermissionMode, { label: string; description: string }>;
 
   useEffect(() => {
-    if (!permissionMenuOpen && !worktreeMenuOpen) return;
+    if (!permissionMenuOpen) return;
 
     const handlePointerDown = (event: PointerEvent) => {
       if (!permissionRootRef.current?.contains(event.target as Node)) {
         setPermissionMenuOpen(false);
       }
-      if (!worktreeRootRef.current?.contains(event.target as Node)) {
-        setWorktreeMenuOpen(false);
-      }
     };
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
         setPermissionMenuOpen(false);
-        setWorktreeMenuOpen(false);
       }
     };
 
@@ -153,54 +154,7 @@ export const ChatInputWorkspaceStrip: React.FC<ChatInputWorkspaceStripProps> = (
       document.removeEventListener('pointerdown', handlePointerDown);
       document.removeEventListener('keydown', handleKeyDown);
     };
-  }, [permissionMenuOpen, worktreeMenuOpen]);
-
-  useEffect(() => {
-    if (!worktreeMenuOpen) return;
-    void configAPI
-      .getConfig('app.worktrees', { skipRetryOnNotFound: true })
-      .then(value => {
-        if (value && typeof value.branchPrefix === 'string') {
-          setBranchPrefix(value.branchPrefix);
-        }
-      })
-      .catch(() => undefined);
-  }, [worktreeMenuOpen]);
-
-  useEffect(() => {
-    const worktreeId = executionTarget?.worktreeId;
-    if (!worktreeId || !projectWorkspacePath) {
-      setLiveWorktree(null);
-      return;
-    }
-    let cancelled = false;
-    const refreshWorktree = async () => {
-      try {
-        const worktrees = await worktreeAPI.list(projectWorkspacePath);
-        if (!cancelled) {
-          setLiveWorktree(
-            worktrees.find(worktree => worktree.worktreeId === worktreeId) ?? null,
-          );
-          await refreshBasic();
-        }
-      } catch {
-        if (!cancelled) setLiveWorktree(null);
-      }
-    };
-    void refreshWorktree();
-    const unsubscribe = worktreeAPI.onChanged(event => {
-      if (
-        !event.projectWorkspacePath
-        || isSamePath(event.projectWorkspacePath, projectWorkspacePath)
-      ) {
-        void refreshWorktree();
-      }
-    });
-    return () => {
-      cancelled = true;
-      unsubscribe();
-    };
-  }, [executionTarget?.worktreeId, projectWorkspacePath, refreshBasic]);
+  }, [permissionMenuOpen]);
 
   const branchTooltipContent = useMemo(
     () =>
@@ -214,8 +168,7 @@ export const ChatInputWorkspaceStrip: React.FC<ChatInputWorkspaceStripProps> = (
     return null;
   }
 
-  const branchLabel = liveWorktree?.branch?.trim()
-    || executionTarget?.branch?.trim()
+  const branchLabel = executionTarget?.branch?.trim()
     || (isWorktree && currentBranch?.trim())
     || (isWorktree && executionTarget?.baseCommit
       ? tWorktrees('labels.detached', { commit: executionTarget.baseCommit.slice(0, 9) })
@@ -224,6 +177,12 @@ export const ChatInputWorkspaceStrip: React.FC<ChatInputWorkspaceStripProps> = (
       : '—');
 
   const workspaceTooltipContent = trimmedPath || label;
+  const worktreeToggleDisabled = !!worktreeControl?.locked || worktreePending;
+  const worktreeTooltip = worktreeControl?.locked
+    ? tWorktrees('strip.toggleLocked')
+    : isWorktree
+      ? tWorktrees('strip.toggleOnDescription', { path: trimmedPath })
+      : tWorktrees('strip.toggleOffDescription');
   const permissionMode = permissionControl?.mode ?? 'ask';
   const permissionModeLabel = permissionCopy[permissionMode].label;
   const permissionTooltip = permissionMode === 'acp'
@@ -235,6 +194,16 @@ export const ChatInputWorkspaceStrip: React.FC<ChatInputWorkspaceStripProps> = (
       ? ShieldAlert
       : Shield;
   const showPermissionLabel = permissionMode !== 'acp';
+
+  const handleWorktreeToggle = () => {
+    if (!worktreeControl || worktreeToggleDisabled) {
+      return;
+    }
+    setWorktreePending(true);
+    void Promise.resolve(worktreeControl.onChange(!isWorktree)).finally(() => {
+      setWorktreePending(false);
+    });
+  };
 
   const split = !!label && showRightActions;
   const actionsOnly = !label && showRightActions;
@@ -260,22 +229,8 @@ export const ChatInputWorkspaceStrip: React.FC<ChatInputWorkspaceStripProps> = (
           <span className="bitfun-chat-input-workspace-strip__sep" aria-hidden>
             {' / '}
           </span>
-          <Tooltip
-            content={isWorktree ? effectiveWorktreePath : branchTooltipContent}
-            placement="top"
-          >
-            <div
-              ref={worktreeRootRef}
-              className="bitfun-chat-input-workspace-strip__worktree"
-            >
-            <button
-              type="button"
-              className="bitfun-chat-input-workspace-strip__chip bitfun-chat-input-workspace-strip__chip--branch"
-              onClick={() => isWorktree && setWorktreeMenuOpen(open => !open)}
-              aria-haspopup={isWorktree ? 'menu' : undefined}
-              aria-expanded={isWorktree ? worktreeMenuOpen : undefined}
-              disabled={!isWorktree}
-            >
+          <Tooltip content={branchTooltipContent} placement="top">
+            <span className="bitfun-chat-input-workspace-strip__chip bitfun-chat-input-workspace-strip__chip--branch">
               <GitBranch
                 className="bitfun-chat-input-workspace-strip__branch-icon"
                 size={11}
@@ -283,82 +238,53 @@ export const ChatInputWorkspaceStrip: React.FC<ChatInputWorkspaceStripProps> = (
                 aria-hidden
               />
               <span className="bitfun-chat-input-workspace-strip__branch">{branchLabel}</span>
-            </button>
-            {isWorktree && worktreeMenuOpen ? (
-              <div
-                className="bitfun-chat-input-workspace-strip__worktree-menu"
-                role="menu"
-                aria-label={tWorktrees('strip.menuLabel')}
-              >
-                <button
-                  type="button"
-                  role="menuitem"
-                  onClick={() => {
-                    setWorktreeMenuOpen(false);
-                    void workspaceAPI.revealInExplorer(effectiveWorktreePath);
-                  }}
-                >
-                  <FolderOpen size={13} aria-hidden />
-                  {tWorktrees('strip.open')}
-                </button>
-                {!liveWorktree?.branch && !executionTarget.branch ? (
-                  <button
-                    type="button"
-                    role="menuitem"
-                    onClick={() => {
-                      setWorktreeMenuOpen(false);
-                      setBranchDialogOpen(true);
-                    }}
-                  >
-                    <GitBranch size={13} aria-hidden />
-                    {tWorktrees('manager.createBranch')}
-                  </button>
-                ) : null}
-                {effectiveWorktreeLifecycle === 'managed' ? (
-                  <button
-                    type="button"
-                    role="menuitem"
-                    disabled={worktreeMutationPending}
-                    onClick={() => {
-                      if (!projectWorkspacePath || !executionTarget.worktreeId) return;
-                      setWorktreeMutationPending(true);
-                      void worktreeAPI
-                        .promote(
-                          projectWorkspacePath,
-                          executionTarget.worktreeId,
-                          globalThis.crypto?.randomUUID?.() ?? `worktree-${Date.now()}`,
-                        )
-                        .then(() => notificationService.success(tWorktrees('manager.promoted')))
-                        .catch(error => notificationService.error(
-                          error instanceof Error ? error.message : String(error),
-                        ))
-                        .finally(() => {
-                          setWorktreeMutationPending(false);
-                          setWorktreeMenuOpen(false);
-                        });
-                    }}
-                  >
-                    <Archive size={13} aria-hidden />
-                    {tWorktrees('manager.keep')}
-                  </button>
-                ) : null}
-                <button
-                  type="button"
-                  role="menuitem"
-                  onClick={() => {
-                    setWorktreeMenuOpen(false);
-                    if (projectWorkspacePath) {
-                      openWorktreeManager(projectWorkspacePath);
-                    }
-                  }}
-                >
-                  <Settings2 size={13} aria-hidden />
-                  {tWorktrees('manager.title')}
-                </button>
-              </div>
-            ) : null}
-            </div>
+            </span>
           </Tooltip>
+          {showWorktreeToggle ? (
+            <Tooltip content={worktreeTooltip} placement="top">
+              <button
+                type="button"
+                role="switch"
+                aria-checked={isWorktree}
+                aria-label={tWorktrees('strip.toggleLabel')}
+                className={[
+                  'bitfun-chat-input-workspace-strip__chip',
+                  'bitfun-chat-input-workspace-strip__chip--worktree',
+                  isWorktree && 'bitfun-chat-input-workspace-strip__chip--worktree-on',
+                ]
+                  .filter(Boolean)
+                  .join(' ')}
+                disabled={worktreeToggleDisabled}
+                data-testid="chat-input-worktree-toggle"
+                data-worktree-enabled={isWorktree ? 'true' : 'false'}
+                onClick={handleWorktreeToggle}
+              >
+                {worktreePending ? (
+                  <Loader2
+                    className="bitfun-chat-input-workspace-strip__worktree-icon is-spinning"
+                    size={11}
+                    strokeWidth={2}
+                    aria-hidden
+                  />
+                ) : isWorktree ? (
+                  <SquareCheck
+                    className="bitfun-chat-input-workspace-strip__worktree-icon"
+                    size={11}
+                    strokeWidth={2}
+                    aria-hidden
+                  />
+                ) : (
+                  <Square
+                    className="bitfun-chat-input-workspace-strip__worktree-icon"
+                    size={11}
+                    strokeWidth={2}
+                    aria-hidden
+                  />
+                )}
+                <span>{tWorktrees('strip.toggleLabel')}</span>
+              </button>
+            </Tooltip>
+          ) : null}
         </div>
       ) : null}
 
@@ -497,30 +423,6 @@ export const ChatInputWorkspaceStrip: React.FC<ChatInputWorkspaceStripProps> = (
           ) : null}
         </div>
       ) : null}
-      <InputDialog
-        isOpen={branchDialogOpen}
-        onClose={() => setBranchDialogOpen(false)}
-        onConfirm={branch => {
-          if (!projectWorkspacePath || !executionTarget?.worktreeId) return;
-          setWorktreeMutationPending(true);
-          void worktreeAPI
-            .createBranch(
-              projectWorkspacePath,
-              executionTarget.worktreeId,
-              branch,
-              globalThis.crypto?.randomUUID?.() ?? `worktree-${Date.now()}`,
-            )
-            .then(() => notificationService.success(tWorktrees('manager.branchCreated')))
-            .catch(error => notificationService.error(
-              error instanceof Error ? error.message : String(error),
-            ))
-            .finally(() => setWorktreeMutationPending(false));
-        }}
-        title={tWorktrees('manager.branchDialog.title')}
-        description={tWorktrees('manager.branchDialog.description')}
-        defaultValue={`${branchPrefix}${executionTarget?.worktreeId?.slice(0, 8) ?? ''}`}
-        confirmText={tWorktrees('manager.createBranch')}
-      />
     </div>
   );
 };

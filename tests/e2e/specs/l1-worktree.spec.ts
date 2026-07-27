@@ -143,6 +143,39 @@ async function openWorkspace(workspacePath: string): Promise<void> {
   }, workspacePath);
 }
 
+/** Create a fresh Code session in the active project workspace. */
+async function createSessionThroughUI(): Promise<void> {
+  const newSessionButton = await $('[data-testid="nav-new-code-session-btn"]');
+  await newSessionButton.waitForClickable({ timeout: 15000 });
+  await newSessionButton.click();
+}
+
+/**
+ * Flip the worktree chip next to the branch in the chat input and wait for the
+ * rebind to land. The chip is the only entry point for session isolation.
+ */
+async function toggleSessionWorktree(enabled: boolean): Promise<void> {
+  const toggle = await $('[data-testid="chat-input-worktree-toggle"]');
+  await toggle.waitForClickable({ timeout: 20000 });
+  await browser.waitUntil(
+    async () => (await toggle.getAttribute('data-worktree-enabled')) === String(!enabled),
+    {
+      timeout: 20000,
+      interval: 200,
+      timeoutMsg: `Worktree toggle was not ${enabled ? 'off' : 'on'} before switching`,
+    },
+  );
+  await toggle.click();
+  await browser.waitUntil(
+    async () => (await toggle.getAttribute('data-worktree-enabled')) === String(enabled),
+    {
+      timeout: 30000,
+      interval: 250,
+      timeoutMsg: `Worktree toggle did not turn ${enabled ? 'on' : 'off'}`,
+    },
+  );
+}
+
 function errorCode(outcome: InvokeOutcome<unknown>): string | undefined {
   if (outcome.ok || !outcome.error || typeof outcome.error !== 'object') {
     return undefined;
@@ -178,22 +211,8 @@ describe('L1 managed Worktree workflow', () => {
 
   it('creates two isolated sessions from the same baseline through the UI', async () => {
     for (let expectedCount = 1; expectedCount <= 2; expectedCount += 1) {
-      const launcherButton = await $('[data-testid="nav-new-worktree-session-btn"]');
-      await launcherButton.waitForClickable({ timeout: 15000 });
-      await launcherButton.click();
-
-      const launcher = await $('[data-testid="worktree-launcher"]');
-      await launcher.waitForDisplayed({ timeout: 10000 });
-      const createButton = await launcher.$(
-        '.bitfun-worktree-launcher__footer button:last-child',
-      );
-      await browser.waitUntil(() => createButton.isEnabled(), {
-        timeout: 15000,
-        interval: 200,
-        timeoutMsg: 'Worktree launcher did not become ready',
-      });
-      await createButton.click();
-      await launcher.waitForDisplayed({ reverse: true, timeout: 30000 });
+      await createSessionThroughUI();
+      await toggleSessionWorktree(true);
 
       await browser.waitUntil(async () => {
         const worktrees = await invoke<WorktreeSummary[]>('worktree_list', {
@@ -279,17 +298,18 @@ describe('L1 managed Worktree workflow', () => {
     await waitForWorkspaceReady(repositoryPath, path.basename(repositoryPath));
 
     const worktreeIds = new Set(createdWorktrees.map(worktree => worktree.worktreeId));
+    const worktreeSessionIds = createdWorktrees.map(worktree => worktree.sessions[0].sessionId);
     await browser.waitUntil(async () => {
-      const renderedIds = await browser.execute(() => (
-        Array.from(document.querySelectorAll('[data-worktree-id]'))
-          .map(element => element.getAttribute('data-worktree-id'))
+      const renderedSessionIds = await browser.execute(() => (
+        Array.from(document.querySelectorAll('[data-testid="nav-session-item"]'))
+          .map(element => element.getAttribute('data-session-id'))
           .filter((value): value is string => Boolean(value))
       ));
-      return createdWorktrees.every(worktree => renderedIds.includes(worktree.worktreeId));
+      return worktreeSessionIds.every(sessionId => renderedSessionIds.includes(sessionId));
     }, {
       timeout: 20000,
       interval: 250,
-      timeoutMsg: 'Worktree groups were not restored after reload',
+      timeoutMsg: 'Worktree sessions were not restored under the project after reload',
     });
 
     const reconciled = await invoke<WorktreeSummary[]>('worktree_list', {

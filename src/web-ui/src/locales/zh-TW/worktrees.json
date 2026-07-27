@@ -1,121 +1,39 @@
 {
-  "actions": {
-    "cancel": "取消",
-    "close": "關閉"
-  },
-  "launcher": {
-    "title": "在 Worktree 中建立工作階段",
-    "description": "從不可變的 Git 提交建立隔離執行目錄，主專案目錄不會被修改。",
-    "mode": "工作階段模式",
-    "codeMode": "Code",
-    "coworkMode": "Cowork",
-    "baseRef": "基準分支或參照",
-    "baseRefHint": "可輸入分支、標籤或提交。",
-    "resolvedCommit": "已解析提交：{{commit}}",
-    "targetPath": "目標路徑",
-    "copyChanges": "複製本機變更",
-    "copyChangesRequiresHead": "僅當基線解析到來源 Worktree 的 HEAD 時才能複製。",
-    "copyChangesSummary": "共 {{count}} 個檔案：{{staged}} 個已暫存、{{unstaged}} 個未暫存、{{untracked}} 個未追蹤；會保留暫存狀態。",
-    "checking": "正在檢查儲存庫…",
-    "remoteUnsupported": "遠端 Workspace 暫不支援 Worktree。",
-    "notGitRepository": "目前 Workspace 不是 Git 儲存庫。",
-    "unbornRepository": "請先建立儲存庫的第一個提交，再使用 Worktree。",
-    "invalidBaseRef": "無法解析所選分支或參照。",
-    "create": "在 Worktree 中建立"
-  },
-  "sidebar": {
-    "worktrees": "Worktrees",
-    "loadFailed": "無法載入 Worktree，點選重試。",
-    "recreateRequired": "請先重建這個遺失的 Worktree。",
-    "newSession": "在此 Worktree 建立工作階段"
-  },
   "labels": {
-    "detached": "游離 {{commit}}",
-    "dirty": "有變更",
-    "missing": "路徑遺失",
-    "running": "{{count}} 個執行中",
-    "unpublished": "有未發佈提交",
-    "lifecycle": {
-      "managed": "代管",
-      "permanent": "永久保留",
-      "external": "外部"
-    }
+    "detached": "游離 {{commit}}"
   },
   "strip": {
-    "menuLabel": "Worktree 操作",
-    "open": "開啟 Worktree 資料夾"
-  },
-  "manager": {
-    "title": "Worktree 管理器",
-    "description": "集中管理目前專案的隔離工作階段目錄。",
-    "refresh": "重新整理",
-    "create": "建立 Worktree 工作階段",
-    "loading": "正在載入 Worktree…",
-    "emptyTitle": "尚無 Worktree",
-    "emptyDescription": "建立隔離工作階段即可平行工作，並保持主目錄不變。",
-    "sessionCount": "關聯 {{count}} 個工作階段",
-    "open": "開啟",
-    "newSession": "建立工作階段",
-    "createBranch": "建立分支",
-    "recreate": "重建",
-    "keep": "永久保留",
-    "remove": "刪除",
-    "recreated": "Worktree 已重建",
-    "promoted": "Worktree 已永久保留",
-    "branchCreated": "分支已建立",
-    "removed": "Worktree 已刪除",
-    "risks": {
-      "dirty": "目錄中存在本機變更。",
-      "unpublished": "游離 HEAD 包含未被其他參照包含的提交。",
-      "sessions": "仍關聯 {{count}} 個工作階段。",
-      "running": "有 {{count}} 個關聯工作階段正在執行或尚未封存。",
-      "clean": "目錄乾淨，且沒有未發佈提交。"
-    },
-    "branchDialog": {
-      "title": "建立分支",
-      "description": "將這個游離 Worktree 綁定到可發佈的分支。",
-      "required": "請輸入分支名稱。"
-    },
-    "removeDialog": {
-      "title": "刪除 Worktree？",
-      "message": "刪除目錄前請檢查以下 Worktree 狀態。",
-      "blocked": "仍有執行中或未封存的關聯工作階段，不能刪除這個 Worktree。",
-      "forceTitle": "強制刪除 Worktree？",
-      "forceMessage": "這會永久丟棄列出的本機工作，請再次確認。",
-      "forceConfirm": "強制刪除"
-    }
+    "toggleLabel": "worktree",
+    "toggleOffDescription": "讓這個工作階段在獨立的 Git worktree 中執行，多個 agent 並行執行任務時互不干擾。",
+    "toggleOnDescription": "正在隔離的 worktree 中執行：{{path}}。關閉後會回到專案目錄。",
+    "toggleLocked": "只能在工作階段送出第一則訊息之前切換 worktree 隔離。",
+    "retained": "該 worktree 仍有本機工作，已保留在 {{path}}。"
   },
   "settings": {
     "title": "Worktrees",
-    "description": "設定本機隔離工作階段的預設值。修改根目錄只影響之後建立的 Worktree。",
+    "description": "工作階段在獨立 Git worktree 中執行時使用的預設值。修改根目錄只影響之後新建的 worktree。",
     "loading": "正在載入 Worktree 設定…",
     "loadFailed": "無法載入 Worktree 設定。",
     "saveFailed": "無法儲存 Worktree 設定。",
     "saved": "Worktree 設定已儲存。",
     "required": "Worktree 根目錄和分支前綴不能為空。",
     "save": "儲存",
-    "reset": "恢復預設值",
-    "creation": {
-      "title": "工作階段建立",
-      "description": "Local 維持為快速、安全的預設路徑；新工作階段選單始終提供 Worktree 隔離選項。"
-    },
-    "defaultTarget": {
-      "label": "預設新工作階段目標",
-      "description": "控制預選目標；Code 和 Cowork 快捷按鈕仍直接建立 Local 工作階段。",
-      "local": "Local",
-      "worktree": "代管 Worktree"
+    "reset": "還原預設值",
+    "isolation": {
+      "title": "工作階段隔離",
+      "description": "工作階段預設在專案目錄中執行；分支旁的 worktree 開關可以把工作階段移到獨立的工作目錄。"
     },
     "rootPath": {
       "label": "Worktree 根目錄",
-      "description": "之後建立的代管 Worktree 會存放在此目錄下。"
+      "description": "之後新建的 worktree 會存放在此目錄下。"
     },
     "branchPrefix": {
       "label": "分支前綴",
-      "description": "為游離 Worktree 建立分支時使用的建議前綴。"
+      "description": "為游離 worktree 建立分支時使用的建議前綴。"
     },
     "copyChanges": {
       "label": "預設複製本機變更",
-      "description": "預設關閉；僅當所選基準與來源目錄 HEAD 相同時可用。"
+      "description": "預設關閉；開啟後會把專案中未提交的變更複製到新 worktree，並保留暫存狀態。"
     }
   }
 }

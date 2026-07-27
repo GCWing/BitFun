@@ -2115,6 +2115,43 @@ export class FlowChatStore {
     });
   }
 
+  /**
+   * Apply a backend session rebind (worktree isolation toggled on or off).
+   * The project root stays put; only the execution directory moves.
+   */
+  public updateSessionExecutionTarget(
+    sessionId: string,
+    binding: {
+      workspacePath: string;
+      projectWorkspacePath: string;
+      workspaceId?: string;
+      executionTarget: Session['config']['executionTarget'];
+    },
+  ): void {
+    this.setState(prev => {
+      const session = prev.sessions.get(sessionId);
+      if (!session) return prev;
+
+      const newSessions = new Map(prev.sessions);
+      newSessions.set(sessionId, {
+        ...session,
+        workspacePath: binding.workspacePath,
+        projectWorkspacePath: binding.projectWorkspacePath,
+        workspaceId: binding.workspaceId ?? session.workspaceId,
+        config: {
+          ...session.config,
+          workspacePath: binding.workspacePath,
+          projectWorkspacePath: binding.projectWorkspacePath,
+          workspaceId: binding.workspaceId ?? session.config.workspaceId,
+          executionTarget: binding.executionTarget,
+        },
+        lastActiveAt: Date.now(),
+      });
+
+      return { ...prev, sessions: newSessions };
+    });
+  }
+
   public updateSessionFocusedReviewDisplayLabel(
     sessionId: string,
     focusedReviewDisplayLabel: Session['focusedReviewDisplayLabel'],

@@ -50,6 +50,7 @@ use bitfun_services_core::session::{
     set_deep_review_run_manifest, set_review_target_evidence, set_session_relationship,
     SessionStorageLayout,
 };
+use bitfun_core_types::SessionExecutionTarget;
 use dashmap::{mapref::entry::Entry, DashMap};
 use log::{debug, error, info, warn};
 use serde::{Deserialize, Serialize};
@@ -156,6 +157,15 @@ fn current_unix_secs() -> i64 {
         .duration_since(std::time::UNIX_EPOCH)
         .map(|duration| duration.as_secs() as i64)
         .unwrap_or_default()
+}
+
+/// Where a session executes, as a single atomic rebind.
+#[derive(Debug, Clone)]
+pub struct SessionExecutionBindingUpdate {
+    pub workspace_path: String,
+    pub project_workspace_path: String,
+    pub workspace_id: Option<String>,
+    pub execution_target: SessionExecutionTarget,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -3473,6 +3483,64 @@ impl SessionManager {
         debug!(
             "Session model id updated: session_id={}, model_id={}, max_context_tokens={:?}",
             session_id, model_id, resolved_context_window
+        );
+
+        Ok(())
+    }
+
+    /// Rebind where a session executes (in-memory + persistence).
+    ///
+    /// Only the workspace roots and the resolved execution target move; session
+    /// storage stays keyed on `project_workspace_path`, so the transcript keeps
+    /// its identity when a session is moved into or out of a managed worktree.
+    pub async fn update_session_execution_binding(
+        &self,
+        session_id: &str,
+        binding: SessionExecutionBindingUpdate,
+    ) -> BitFunResult<()> {
+        // Mirrors update_session_model_id: an evicted session must be restored
+        // from its recorded storage path before the mutation permit is taken.
+        if !self.sessions.contains_key(session_id) && self.config.enable_persistence {
+            let session_storage_path = self
+                .session_storage_path_index
+                .get(session_id)
+                .map(|entry| entry.value().path.clone());
+            if let Some(session_storage_path) = session_storage_path {
+                let _ = self
+                    .restore_session_from_storage_path(&session_storage_path, session_id)
+                    .await;
+            }
+        }
+
+        let _mutation_guard = self.acquire_session_mutation(session_id).await?;
+
+        if let Some(mut session) = self.sessions.get_mut(session_id) {
+            session.config.workspace_path = Some(binding.workspace_path.clone());
+            session.config.project_workspace_path = Some(binding.project_workspace_path.clone());
+            session.config.execution_target = Some(binding.execution_target.clone());
+            session.config.workspace_id = binding.workspace_id.clone();
+            session.updated_at = SystemTime::now();
+            session.last_activity_at = SystemTime::now();
+        } else {
+            return Err(BitFunError::NotFound(format!(
+                "Session not found: {}",
+                session_id
+            )));
+        }
+
+        if self.should_persist_session_id(session_id) {
+            let effective_path = self.effective_session_storage_path(session_id).await;
+            let session_snapshot = self.sessions.get(session_id).map(|s| s.clone());
+            if let (Some(workspace_path), Some(session)) = (effective_path, session_snapshot) {
+                self.persistence_manager
+                    .save_session(&workspace_path, &session)
+                    .await?;
+            }
+        }
+
+        debug!(
+            "Session execution binding updated: session_id={}, workspace_path={}",
+            session_id, binding.workspace_path
         );
 
         Ok(())

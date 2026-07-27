@@ -226,21 +226,21 @@ describe('L1 managed Worktree desktop restart recovery', () => {
       await openWorkspace(repositoryPath);
       await waitForWorkspaceReady(repositoryPath, path.basename(repositoryPath));
 
-      const launcherButton = await $('[data-testid="nav-new-worktree-session-btn"]');
-      await launcherButton.waitForClickable({ timeout: 15000 });
-      await launcherButton.click();
-      const launcher = await $('[data-testid="worktree-launcher"]');
-      await launcher.waitForDisplayed({ timeout: 10000 });
-      const createButton = await launcher.$(
-        '.bitfun-worktree-launcher__footer button:last-child',
+      const newSessionButton = await $('[data-testid="nav-new-code-session-btn"]');
+      await newSessionButton.waitForClickable({ timeout: 15000 });
+      await newSessionButton.click();
+
+      const worktreeToggle = await $('[data-testid="chat-input-worktree-toggle"]');
+      await worktreeToggle.waitForClickable({ timeout: 20000 });
+      await worktreeToggle.click();
+      await browser.waitUntil(
+        async () => (await worktreeToggle.getAttribute('data-worktree-enabled')) === 'true',
+        {
+          timeout: 30000,
+          interval: 250,
+          timeoutMsg: 'Worktree toggle did not turn on',
+        },
       );
-      await browser.waitUntil(() => createButton.isEnabled(), {
-        timeout: 15000,
-        interval: 200,
-        timeoutMsg: 'Worktree launcher did not become ready',
-      });
-      await createButton.click();
-      await launcher.waitForDisplayed({ reverse: true, timeout: 30000 });
 
       const worktrees = await invoke<WorktreeSummary[]>('worktree_list', {
         projectWorkspacePath: repositoryPath,

@@ -142,8 +142,7 @@ Avoid adding IDs to these surfaces unless there is a clear automated workflow.
 | Workspace create ACP session | `nav-workspace-menu-create-acp-session` | Repeated item. Pair with `data-acp-client-id`. |
 | Workspace create init session | `nav-workspace-menu-create-init-session` | Starts AGENTS.md/init session. |
 | Workspace related paths | `nav-workspace-menu-related-paths` | Opens related paths dialog. |
-| Workspace new worktree | `nav-workspace-menu-new-worktree` | Opens worktree creation dialog. |
-| Workspace delete worktree | `nav-workspace-menu-delete-worktree` | Deletes linked worktree workspace. |
+| Session worktree toggle | `chat-input-worktree-toggle` | Chat input strip. Toggles worktree isolation for the current session. Pair with `data-worktree-enabled`. |
 | Workspace copy path | `nav-workspace-menu-copy-path` | Copies workspace path. |
 | Workspace reveal | `nav-workspace-menu-reveal` | Reveals workspace in file explorer. |
 | Workspace close | `nav-workspace-menu-close` | Closes workspace. |

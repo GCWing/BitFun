@@ -74,19 +74,10 @@ impl SessionExecutionTarget {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, Default)]
-#[serde(rename_all = "camelCase")]
-pub enum WorktreeDefaultTarget {
-    #[default]
-    Local,
-    ManagedWorktree,
-}
-
-/// User-level defaults for new worktrees.
+/// User-level defaults for worktrees created by session isolation.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct WorktreeSettings {
-    pub default_target: WorktreeDefaultTarget,
     pub root_path: String,
     pub branch_prefix: String,
     pub copy_local_changes: bool,
@@ -95,7 +86,6 @@ pub struct WorktreeSettings {
 impl Default for WorktreeSettings {
     fn default() -> Self {
         Self {
-            default_target: WorktreeDefaultTarget::Local,
             root_path: "~/.bitfun/worktrees".to_string(),
             branch_prefix: "bitfun/".to_string(),
             copy_local_changes: false,

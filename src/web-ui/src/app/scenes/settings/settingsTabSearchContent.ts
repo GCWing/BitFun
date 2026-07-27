@@ -52,8 +52,8 @@ export const SETTINGS_TAB_SEARCH_CONTENT: Record<ConfigTab, readonly SettingsTab
   worktrees: [
     { ns: 'worktrees', key: 'settings.title' },
     { ns: 'worktrees', key: 'settings.description' },
-    { ns: 'worktrees', key: 'settings.creation.title' },
-    { ns: 'worktrees', key: 'settings.creation.description' },
+    { ns: 'worktrees', key: 'settings.isolation.title' },
+    { ns: 'worktrees', key: 'settings.isolation.description' },
     { ns: 'worktrees', key: 'settings.rootPath.label' },
     { ns: 'worktrees', key: 'settings.branchPrefix.label' },
     { ns: 'worktrees', key: 'settings.copyChanges.label' },

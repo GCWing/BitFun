@@ -31,6 +31,6 @@ pub use surface::{
 pub use tool_image_attachment::ToolImageAttachment;
 pub use worktree::{
     SessionExecutionTarget, SessionExecutionTargetKind, SessionExecutionTargetRequest,
-    WorktreeDefaultTarget, WorktreeError, WorktreeErrorCode, WorktreeLifecycle,
+    WorktreeError, WorktreeErrorCode, WorktreeLifecycle,
     WorktreeSessionSummary, WorktreeSettings, WorktreeSummary,
 };

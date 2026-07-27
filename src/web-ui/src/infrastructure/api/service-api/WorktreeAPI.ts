@@ -6,10 +6,8 @@ export type SessionExecutionTargetRequest =
   | { kind: 'existingWorktree'; worktreeId: string };
 
 export type WorktreeLifecycle = 'managed' | 'permanent' | 'external';
-export type WorktreeDefaultTarget = 'local' | 'managedWorktree';
 
 export interface WorktreeSettings {
-  defaultTarget: WorktreeDefaultTarget;
   rootPath: string;
   branchPrefix: string;
   copyLocalChanges: boolean;
@@ -104,6 +102,16 @@ export interface WorktreeMutationResult {
 
 export interface WorktreeChangedEvent {
   projectWorkspacePath: string;
+}
+
+export interface WorktreeSessionBindingResult {
+  sessionId: string;
+  workspacePath: string;
+  projectWorkspacePath: string;
+  workspaceId?: string;
+  executionTarget: SessionExecutionTarget;
+  /** Set when a released worktree was kept because it still held local work. */
+  retainedWorktreePath?: string;
 }
 
 export function toWorktreeCommandError(error: unknown): WorktreeCommandError {
@@ -202,6 +210,18 @@ export class WorktreeAPI {
       worktreeId,
       requestId,
     });
+  }
+
+  /**
+   * Move a session into a managed worktree, or back to the project checkout.
+   * Only allowed while the session has no messages yet.
+   */
+  bindSession(
+    sessionId: string,
+    enabled: boolean,
+    requestId: string,
+  ): Promise<WorktreeSessionBindingResult> {
+    return invokeWorktree('worktree_bind_session', { sessionId, enabled, requestId });
   }
 
   onChanged(callback: (event: WorktreeChangedEvent) => void): () => void {

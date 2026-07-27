@@ -1,15 +1,12 @@
 import React, { lazy, Suspense, useCallback, useContext, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { createPortal } from 'react-dom';
-import { Folder, FolderOpen, MoreHorizontal, FolderSearch, Plus, ChevronDown, Trash2, RotateCcw, Copy, FileText, GitBranch, Bot, Link2, ListChecks, Loader2, Clock3, ShieldCheck, Pencil } from 'lucide-react';
+import { Folder, FolderOpen, MoreHorizontal, FolderSearch, Plus, ChevronDown, Trash2, RotateCcw, Copy, FileText, Bot, Link2, ListChecks, Loader2, Clock3, ShieldCheck, Pencil } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { DotMatrixArrowRightIcon } from './DotMatrixArrowRightIcon';
 import { Button, ConfirmDialog, InputDialog, Modal, Tooltip } from '@/component-library';
 import { useI18n } from '@/infrastructure/i18n';
 import { aiExperienceConfigService } from '@/infrastructure/config/services/AIExperienceConfigService';
 import { useWorkspaceContext } from '@/infrastructure/contexts/WorkspaceContext';
-import {
-  deleteWorktreeWorkspace,
-} from '@/infrastructure/services/business/worktreeWorkspaceService';
 import { useNavSceneStore } from '@/app/stores/navSceneStore';
 import { useApp } from '@/app/hooks/useApp';
 import { useGitBasicInfo } from '@/tools/git/hooks/useGitState';
@@ -27,14 +24,8 @@ import { findReusableEmptySessionId } from '@/app/utils/projectSessionWorkspace'
 import type { AcpClientInfo } from '@/infrastructure/api/service-api/ACPClientAPI';
 import { loadWorkspaceAcpMenuClients } from './workspaceAcpMenuClients';
 import SessionsSection from '../sessions/SessionsSection';
-import ProjectWorktrees from './ProjectWorktrees';
-import {
-  openWorktreeLauncher,
-  openWorktreeManager,
-} from '@/shared/services/worktreeUIEvents';
 import {
   WorkspaceKind,
-  isLinkedWorktreeWorkspace,
   isRemoteWorkspace,
   type WorkspaceInfo,
 } from '@/shared/types';
@@ -90,7 +81,6 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
   onDragEnd,
 }) => {
   const { t } = useI18n('common');
-  const { t: tWorktrees } = useI18n('worktrees');
   const { t: tFiles } = useTranslation('panels/files');
   const {
     setActiveWorkspace,
@@ -110,23 +100,13 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
     getWorkspaceGitBasicInfoOptions(workspace, isActive),
     historySessionOpenTransition !== null
   );
-  const {
-    isRepository,
-    isLoading: isGitBasicInfoLoading,
-    state: gitBasicInfoState,
-    refreshBasic: refreshGitBasicInfo,
-  } = useGitBasicInfo(
-    workspace.rootPath,
-    gitBasicInfoOptions
-  );
+  useGitBasicInfo(workspace.rootPath, gitBasicInfoOptions);
   const [menuOpen, setMenuOpen] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
-  const [deleteWorktreeDialogOpen, setDeleteWorktreeDialogOpen] = useState(false);
   const [resetDialogOpen, setResetDialogOpen] = useState(false);
   const [relatedPathsDialogOpen, setRelatedPathsDialogOpen] = useState(false);
   const [projectPermissionsDialogOpen, setProjectPermissionsDialogOpen] = useState(false);
   const [isDeletingAssistant, setIsDeletingAssistant] = useState(false);
-  const [isDeletingWorktree, setIsDeletingWorktree] = useState(false);
   const [isResettingWorkspace, setIsResettingWorkspace] = useState(false);
   const [sessionsCollapsed, setSessionsCollapsed] = useState(false);
   const [searchIndexModalOpen, setSearchIndexModalOpen] = useState(false);
@@ -153,7 +133,6 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
     workspace.workspaceKind === WorkspaceKind.Assistant
       ? workspace.identity?.name?.trim() || workspace.name
       : workspace.name;
-  const isLinkedWorktree = isLinkedWorktreeWorkspace(workspace);
   const relatedPathCount = workspace.relatedPaths?.length ?? 0;
   const workspaceIsRemote = isRemoteWorkspace(workspace);
   const canShowSearchIndex =
@@ -163,12 +142,6 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
       workspace.workspaceKind === WorkspaceKind.Normal
       || workspace.workspaceKind === WorkspaceKind.Remote
     );
-  const shouldRefreshGitBasicInfoOnMenuOpen =
-    !isActive &&
-    !workspaceIsRemote &&
-    !gitBasicInfoState &&
-    !isGitBasicInfoLoading;
-  const isWorktreeActionDisabled = isGitBasicInfoLoading || !isRepository;
   const workspaceSearchIndex = useWorkspaceSearchIndex({
     workspacePath: canShowSearchIndex ? workspace.rootPath : undefined,
     enabled: canShowSearchIndex,
@@ -383,12 +356,8 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
   }, []);
 
   const handleMenuTriggerClick = useCallback(() => {
-    const nextOpen = !menuOpen;
-    setMenuOpen(nextOpen);
-    if (nextOpen && shouldRefreshGitBasicInfoOnMenuOpen) {
-      void refreshGitBasicInfo();
-    }
-  }, [menuOpen, refreshGitBasicInfo, shouldRefreshGitBasicInfoOnMenuOpen]);
+    setMenuOpen(open => !open);
+  }, []);
 
   useEffect(() => {
     if (!menuOpen) return;
@@ -738,33 +707,6 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
     }
   }, [setActiveWorkspace, t, workspace]);
 
-  const handleRequestDeleteWorktree = useCallback(() => {
-    setMenuOpen(false);
-    setDeleteWorktreeDialogOpen(true);
-  }, []);
-
-  const handleConfirmDeleteWorktree = useCallback(async () => {
-    if (!isLinkedWorktree || isDeletingWorktree) {
-      return;
-    }
-
-    setIsDeletingWorktree(true);
-    try {
-      await deleteWorktreeWorkspace({
-        workspace,
-        closeWorkspaceById,
-      });
-      notificationService.success(t('nav.workspaces.worktreeDeleted'), { duration: 2500 });
-    } catch (error) {
-      notificationService.error(
-        error instanceof Error ? error.message : t('nav.workspaces.deleteWorktreeFailed'),
-        { duration: 4000 },
-      );
-    } finally {
-      setIsDeletingWorktree(false);
-    }
-  }, [closeWorkspaceById, isDeletingWorktree, isLinkedWorktree, t, workspace]);
-
   const handleOpenFiles = useCallback(async () => {
     try {
       await handleActivate();
@@ -894,35 +836,6 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
                   <button
                     type="button"
                     className="bitfun-nav-panel__workspace-item-menu-item"
-                    onClick={() => {
-                      setMenuOpen(false);
-                      openWorktreeLauncher(workspace.rootPath);
-                    }}
-                    disabled={isWorktreeActionDisabled || workspaceIsRemote}
-                    data-testid="nav-workspace-menu-new-worktree-session"
-                  >
-                    <GitBranch size={13} />
-                    <span className="bitfun-nav-panel__workspace-item-menu-label">
-                      {tWorktrees('launcher.create')}
-                    </span>
-                  </button>
-                  <button
-                    type="button"
-                    className="bitfun-nav-panel__workspace-item-menu-item"
-                    onClick={() => {
-                      setMenuOpen(false);
-                      openWorktreeManager(workspace.rootPath);
-                    }}
-                    disabled={isWorktreeActionDisabled || workspaceIsRemote}
-                  >
-                    <GitBranch size={13} />
-                    <span className="bitfun-nav-panel__workspace-item-menu-label">
-                      {tWorktrees('manager.title')}
-                    </span>
-                  </button>
-                  <button
-                    type="button"
-                    className="bitfun-nav-panel__workspace-item-menu-item"
                     onClick={handleOpenScheduledJobs}
                   >
                     <Clock3 size={13} />
@@ -1008,17 +921,6 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
             isActiveWorkspace={isActive}
             assistantLabel={workspaceDisplayName}
             isVisible={!sessionsCollapsed}
-            localSessionsOnly={!workspaceIsRemote && !isLinkedWorktree}
-          />
-          <ProjectWorktrees
-            projectWorkspacePath={workspace.rootPath}
-            projectWorkspaceId={workspace.id}
-            projectName={workspaceDisplayName}
-            enabled={!workspaceIsRemote && !isLinkedWorktree && isRepository}
-            remote={workspaceIsRemote}
-            isActiveWorkspace={isActive}
-            isVisible={!sessionsCollapsed}
-            onActivateProject={setActiveWorkspace}
           />
         </div>
 
@@ -1405,49 +1307,6 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
                     {t('nav.workspaces.actions.rename')}
                   </span>
                 </button>
-                {isLinkedWorktree ? (
-                  <button
-                    type="button"
-                    className="bitfun-nav-panel__workspace-item-menu-item is-danger"
-                    onClick={handleRequestDeleteWorktree}
-                    disabled={isDeletingWorktree}
-                    data-testid="nav-workspace-menu-delete-worktree"
-                  >
-                    <Trash2 size={13} />
-                    <span className="bitfun-nav-panel__workspace-item-menu-label">{t('nav.workspaces.actions.deleteWorktree')}</span>
-                  </button>
-                ) : (
-                  <button
-                    type="button"
-                    className="bitfun-nav-panel__workspace-item-menu-item"
-                    onClick={() => {
-                      setMenuOpen(false);
-                      openWorktreeLauncher(workspace.rootPath);
-                    }}
-                    disabled={isWorktreeActionDisabled}
-                    data-testid="nav-workspace-menu-new-worktree"
-                  >
-                    {isGitBasicInfoLoading ? <Loader2 size={13} /> : <GitBranch size={13} />}
-                    <span className="bitfun-nav-panel__workspace-item-menu-label">{t('nav.workspaces.actions.newWorktree')}</span>
-                  </button>
-                )}
-                {!isLinkedWorktree ? (
-                  <button
-                    type="button"
-                    className="bitfun-nav-panel__workspace-item-menu-item"
-                    onClick={() => {
-                      setMenuOpen(false);
-                      openWorktreeManager(workspace.rootPath);
-                    }}
-                    disabled={isWorktreeActionDisabled}
-                    data-testid="nav-workspace-menu-manage-worktrees"
-                  >
-                    <GitBranch size={13} />
-                    <span className="bitfun-nav-panel__workspace-item-menu-label">
-                      {tWorktrees('manager.title')}
-                    </span>
-                  </button>
-                ) : null}
                 <button
                   type="button"
                   className="bitfun-nav-panel__workspace-item-menu-item"
@@ -1505,17 +1364,6 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
           remoteSshHost={isRemoteWorkspace(workspace) ? workspace.sshHost : null}
           isActiveWorkspace={isActive}
           isVisible={!sessionsCollapsed}
-          localSessionsOnly={!workspaceIsRemote && !isLinkedWorktree}
-        />
-        <ProjectWorktrees
-          projectWorkspacePath={workspace.rootPath}
-          projectWorkspaceId={workspace.id}
-          projectName={workspaceDisplayName}
-          enabled={!workspaceIsRemote && !isLinkedWorktree && isRepository}
-          remote={workspaceIsRemote}
-          isActiveWorkspace={isActive}
-          isVisible={!sessionsCollapsed}
-          onActivateProject={setActiveWorkspace}
         />
       </div>
 
@@ -1531,17 +1379,6 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
         cancelText={t('actions.cancel')}
         validator={validateWorkspaceName}
         required={false}
-      />
-      <ConfirmDialog
-        isOpen={deleteWorktreeDialogOpen}
-        onClose={() => setDeleteWorktreeDialogOpen(false)}
-        onConfirm={() => { void handleConfirmDeleteWorktree(); }}
-        title={t('nav.workspaces.deleteWorktreeDialog.title', { name: workspaceDisplayName })}
-        message={t('nav.workspaces.deleteWorktreeDialog.message')}
-        confirmText={t('nav.workspaces.actions.deleteWorktree')}
-        cancelText={t('actions.cancel')}
-        confirmDanger
-        preview={`${t('nav.workspaces.deleteWorktreeDialog.pathLabel')}\n${workspace.rootPath}`}
       />
       {relatedPathsDialogOpen && (
         <Suspense fallback={null}>

@@ -359,12 +359,6 @@
       "acpSessionStarted": "Session started",
       "acpSessionStartFailed": "Session failed to start",
       "initSessionFailed": "Failed to start AGENTS.md initialization session",
-      "worktreeCreated": "Worktree created",
-      "worktreeCreatedAndOpened": "Worktree created and opened",
-      "worktreeCreateFailed": "Failed to create worktree: {{error}}",
-      "worktreeCreateOrOpenFailed": "Worktree was created, but opening it as a workspace failed: {{error}}",
-      "worktreeDeleted": "Worktree deleted",
-      "deleteWorktreeFailed": "Failed to delete worktree",
       "renameFailed": "Failed to rename project",
       "renamed": "Project renamed",
       "expandSessions": "Expand sessions",
@@ -383,8 +377,6 @@
         "manageRelatedPaths": "Related directories",
         "manageProjectPermissions": "Project permissions",
         "rename": "Rename project",
-        "newWorktree": "New worktree",
-        "deleteWorktree": "Delete worktree",
         "copyPath": "Copy path",
         "reveal": "Reveal in explorer",
         "close": "Close workspace"
@@ -431,11 +423,6 @@
         "title": "Reset {{name}}?",
         "message": "This will clear everything inside the workspace directory and restore the default persona files without deleting the workspace directory itself.",
         "pathLabel": "Workspace path"
-      },
-      "deleteWorktreeDialog": {
-        "title": "Delete {{name}}?",
-        "message": "This will close the workspace and remove the worktree directory.",
-        "pathLabel": "Worktree path"
       }
     },
     "agents": {

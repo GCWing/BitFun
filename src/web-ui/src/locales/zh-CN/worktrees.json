@@ -1,93 +1,17 @@
 {
-  "actions": {
-    "cancel": "取消",
-    "close": "关闭"
-  },
-  "launcher": {
-    "title": "在 Worktree 中新建会话",
-    "description": "从不可变的 Git 提交创建隔离执行目录，主项目目录不会被修改。",
-    "mode": "会话模式",
-    "codeMode": "Code",
-    "coworkMode": "Cowork",
-    "baseRef": "基线分支或引用",
-    "baseRefHint": "可输入分支、标签或提交。",
-    "resolvedCommit": "已解析提交：{{commit}}",
-    "targetPath": "目标路径",
-    "copyChanges": "复制本地改动",
-    "copyChangesRequiresHead": "仅当基线解析到源 Worktree 的 HEAD 时才能复制。",
-    "copyChangesSummary": "共 {{count}} 个文件：{{staged}} 个已暂存、{{unstaged}} 个未暂存、{{untracked}} 个未跟踪；会保留暂存状态。",
-    "checking": "正在检查仓库…",
-    "remoteUnsupported": "远程 Workspace 暂不支持 Worktree。",
-    "notGitRepository": "当前 Workspace 不是 Git 仓库。",
-    "unbornRepository": "请先创建仓库的第一个提交，再使用 Worktree。",
-    "invalidBaseRef": "无法解析所选分支或引用。",
-    "create": "在 Worktree 中新建"
-  },
-  "sidebar": {
-    "worktrees": "Worktrees",
-    "loadFailed": "无法加载 Worktree，点击重试。",
-    "recreateRequired": "请先重建这个缺失的 Worktree。",
-    "newSession": "在此 Worktree 新建会话"
-  },
   "labels": {
-    "detached": "游离 {{commit}}",
-    "dirty": "有改动",
-    "missing": "路径缺失",
-    "running": "{{count}} 个运行中",
-    "unpublished": "有未发布提交",
-    "lifecycle": {
-      "managed": "托管",
-      "permanent": "永久保留",
-      "external": "外部"
-    }
+    "detached": "游离 {{commit}}"
   },
   "strip": {
-    "menuLabel": "Worktree 操作",
-    "open": "打开 Worktree 文件夹"
-  },
-  "manager": {
-    "title": "Worktree 管理器",
-    "description": "集中管理当前项目的隔离会话目录。",
-    "refresh": "刷新",
-    "create": "新建 Worktree 会话",
-    "loading": "正在加载 Worktree…",
-    "emptyTitle": "暂无 Worktree",
-    "emptyDescription": "新建隔离会话即可并行工作，并保持主目录不变。",
-    "sessionCount": "关联 {{count}} 个会话",
-    "open": "打开",
-    "newSession": "新建会话",
-    "createBranch": "创建分支",
-    "recreate": "重建",
-    "keep": "永久保留",
-    "remove": "删除",
-    "recreated": "Worktree 已重建",
-    "promoted": "Worktree 已永久保留",
-    "branchCreated": "分支已创建",
-    "removed": "Worktree 已删除",
-    "risks": {
-      "dirty": "目录中存在本地改动。",
-      "unpublished": "游离 HEAD 包含未被其他引用包含的提交。",
-      "sessions": "仍关联 {{count}} 个会话。",
-      "running": "有 {{count}} 个关联会话正在运行或尚未归档。",
-      "clean": "目录干净，且没有未发布提交。"
-    },
-    "branchDialog": {
-      "title": "创建分支",
-      "description": "将这个游离 Worktree 绑定到可发布的分支。",
-      "required": "请输入分支名称。"
-    },
-    "removeDialog": {
-      "title": "删除 Worktree？",
-      "message": "删除目录前请检查以下 Worktree 状态。",
-      "blocked": "仍有运行中或未归档的关联会话，不能删除这个 Worktree。",
-      "forceTitle": "强制删除 Worktree？",
-      "forceMessage": "这会永久丢弃列出的本地工作，请再次确认。",
-      "forceConfirm": "强制删除"
-    }
+    "toggleLabel": "worktree",
+    "toggleOffDescription": "让这个会话在独立的 Git worktree 中执行，多个 agent 并行跑任务时互不打扰。",
+    "toggleOnDescription": "正在隔离的 worktree 中执行：{{path}}。关闭后会回到项目目录。",
+    "toggleLocked": "只能在会话发出第一条消息之前切换 worktree 隔离。",
+    "retained": "该 worktree 仍有本地工作，已保留在 {{path}}。"
   },
   "settings": {
     "title": "Worktrees",
-    "description": "设置本地隔离会话的默认值。修改根目录只影响之后新建的 Worktree。",
+    "description": "会话在独立 Git worktree 中执行时使用的默认值。修改根目录只影响之后新建的 worktree。",
     "loading": "正在加载 Worktree 设置…",
     "loadFailed": "无法加载 Worktree 设置。",
     "saveFailed": "无法保存 Worktree 设置。",
@@ -95,27 +19,21 @@
     "required": "Worktree 根目录和分支前缀不能为空。",
     "save": "保存",
     "reset": "恢复默认值",
-    "creation": {
-      "title": "会话创建",
-      "description": "Local 保持为快速、安全的默认路径；新会话菜单始终提供 Worktree 隔离选项。"
-    },
-    "defaultTarget": {
-      "label": "默认新会话目标",
-      "description": "控制预选目标；Code 和 Cowork 快捷按钮仍直接创建 Local 会话。",
-      "local": "Local",
-      "worktree": "托管 Worktree"
+    "isolation": {
+      "title": "会话隔离",
+      "description": "会话默认在项目目录中执行；分支旁的 worktree 开关可以把会话移到独立的工作目录。"
     },
     "rootPath": {
       "label": "Worktree 根目录",
-      "description": "之后新建的托管 Worktree 会存放在此目录下。"
+      "description": "之后新建的 worktree 会存放在此目录下。"
     },
     "branchPrefix": {
       "label": "分支前缀",
-      "description": "为游离 Worktree 创建分支时使用的建议前缀。"
+      "description": "为游离 worktree 创建分支时使用的建议前缀。"
     },
     "copyChanges": {
       "label": "默认复制本地改动",
-      "description": "默认关闭；仅当所选基线与源目录 HEAD 一致时可用。"
+      "description": "默认关闭；开启后会把项目中未提交的改动复制到新 worktree，并保留暂存状态。"
     }
   }
 }

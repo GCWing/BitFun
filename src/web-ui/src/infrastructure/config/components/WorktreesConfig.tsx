@@ -5,7 +5,6 @@ import {
   ConfigPageLoading,
   ConfigPageMessage,
   Input,
-  Select,
   Switch,
 } from '@/component-library';
 import { configAPI } from '@/infrastructure/api';
@@ -21,7 +20,6 @@ import {
 import './WorktreesConfig.scss';
 
 const DEFAULT_SETTINGS: WorktreeSettings = {
-  defaultTarget: 'local',
   rootPath: '~/.bitfun/worktrees',
   branchPrefix: 'bitfun/',
   copyLocalChanges: false,
@@ -94,29 +92,9 @@ const WorktreesConfig: React.FC = () => {
       <ConfigPageContent>
         <ConfigPageMessage message={message} />
         <ConfigPageSection
-          title={t('settings.creation.title')}
-          description={t('settings.creation.description')}
+          title={t('settings.isolation.title')}
+          description={t('settings.isolation.description')}
         >
-          <ConfigPageRow
-            label={t('settings.defaultTarget.label')}
-            description={t('settings.defaultTarget.description')}
-          >
-            <Select
-              value={settings.defaultTarget}
-              options={[
-                { value: 'local', label: t('settings.defaultTarget.local') },
-                {
-                  value: 'managedWorktree',
-                  label: t('settings.defaultTarget.worktree'),
-                },
-              ]}
-              onChange={value => setSettings(current => ({
-                ...current,
-                defaultTarget: value as WorktreeSettings['defaultTarget'],
-              }))}
-              disabled={saving}
-            />
-          </ConfigPageRow>
           <ConfigPageRow
             label={t('settings.rootPath.label')}
             description={t('settings.rootPath.description')}

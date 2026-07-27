@@ -47,6 +47,8 @@ import {
   type SlashActionId,
 } from '../utils/slashActionSelection';
 import { notificationService } from '@/shared/notification-system';
+import { worktreeAPI } from '@/infrastructure/api/service-api/WorktreeAPI';
+import { useI18n } from '@/infrastructure/i18n';
 import { inputReducer, initialInputState, type InputAction } from '../reducers/inputReducer';
 import { modeReducer, initialModeState } from '../reducers/modeReducer';
 import { CHAT_INPUT_CONFIG } from '../constants/chatInputConfig';
@@ -380,6 +382,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   registration,
 }) => {
   const { t } = useTranslation('flow-chat');
+  const { t: tWorktrees } = useI18n('worktrees');
   const canLaunchReview = isTauriRuntime();
   
   const [inputState, dispatchLocalInput] = useReducer(inputReducer, initialInputState);
@@ -830,13 +833,33 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       ? ''
       : (effectiveTargetSession?.workspacePath || '').trim();
     const contextPath = (workspacePath || '').trim();
+    // A managed worktree is where the session executes, not a different project.
+    // Its directory is a generated id, so keep labelling by the owning project.
+    const sessionProjectPath = hasRegisteredWorkspace
+      ? ''
+      : (
+        effectiveTargetSession?.config.projectWorkspacePath
+        || effectiveTargetSession?.projectWorkspacePath
+        || ''
+      ).trim();
+    const isWorktreeSession = !!effectiveTargetSession?.config.executionTarget?.worktreeId;
     const sessionUsesDifferentRoot = !!sessionPath
-      && (!contextPath || !isSamePath(sessionPath, contextPath));
+      && (!contextPath || !isSamePath(sessionPath, contextPath))
+      && !(
+        isWorktreeSession
+        && !!contextPath
+        && !!sessionProjectPath
+        && isSamePath(sessionProjectPath, contextPath)
+      );
     if (name && !sessionUsesDifferentRoot) return name;
+    if (isWorktreeSession && sessionProjectPath) return path.basename(sessionProjectPath);
     if (chatStripRepositoryPath) return path.basename(chatStripRepositoryPath);
     return '';
   }, [
     chatStripRepositoryPath,
+    effectiveTargetSession?.config.executionTarget?.worktreeId,
+    effectiveTargetSession?.config.projectWorkspacePath,
+    effectiveTargetSession?.projectWorkspacePath,
     effectiveTargetSession?.workspacePath,
     hasRegisteredWorkspace,
     workspaceName,
@@ -1849,6 +1872,56 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       setPermissionModeSaving(false);
     }
   }, [isAcpTargetSession, permissionModeSaving, t, toolPermissionConfig]);
+
+  /**
+   * Worktree isolation is a property of where the session runs, so it can only
+   * move while the session is still empty. Remote sessions have no worktrees.
+   */
+  const worktreeControl = useMemo(() => {
+    if (!effectiveTargetSessionId || !effectiveTargetSession) return undefined;
+    if (effectiveTargetSession.remoteConnectionId) return undefined;
+    if (isSubagentInputTarget || isAcpTargetSession) return undefined;
+
+    const locked = effectiveTargetSession.dialogTurns.length > 0
+      || effectiveTargetSession.status === 'active';
+
+    return {
+      locked,
+      onChange: async (enabled: boolean) => {
+        try {
+          const result = await worktreeAPI.bindSession(
+            effectiveTargetSessionId,
+            enabled,
+            globalThis.crypto?.randomUUID?.() ?? `worktree-${Date.now()}`,
+          );
+          FlowChatStore.getInstance().updateSessionExecutionTarget(effectiveTargetSessionId, {
+            workspacePath: result.workspacePath,
+            projectWorkspacePath: result.projectWorkspacePath,
+            workspaceId: result.workspaceId,
+            executionTarget: result.executionTarget,
+          });
+          if (result.retainedWorktreePath) {
+            notificationService.info(
+              tWorktrees('strip.retained', { path: result.retainedWorktreePath }),
+              { duration: 6000 },
+            );
+          }
+        } catch (error) {
+          log.error('Failed to toggle session worktree isolation', error);
+          notificationService.error(
+            error instanceof Error ? error.message : String(error),
+            { duration: 5000 },
+          );
+        }
+      },
+    };
+  }, [
+    effectiveTargetSession,
+    effectiveTargetSessionId,
+    isAcpTargetSession,
+    isSubagentInputTarget,
+    tWorktrees,
+  ]);
 
   const handleHidePermissionModeControl = useCallback(async () => {
     try {
@@ -5288,10 +5361,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
         repositoryPath={chatStripRepositoryPath}
         workspaceLabel={chatStripWorkspaceLabel}
         executionTarget={effectiveTargetSession?.config.executionTarget}
-        projectWorkspacePath={
-          effectiveTargetSession?.config.projectWorkspacePath
-          || effectiveTargetSession?.projectWorkspacePath
-        }
+        worktreeControl={worktreeControl}
         deferPassiveGitRefresh={deferChatStripPassiveGitRefresh}
         permissionControl={showPermissionModeControl ? {
           mode: permissionMode,

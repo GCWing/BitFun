@@ -13,7 +13,7 @@ use tokio_util::sync::CancellationToken;
 
 pub use bitfun_core_types::{
     SessionExecutionTarget, SessionExecutionTargetKind, SessionExecutionTargetRequest,
-    WorktreeDefaultTarget, WorktreeError, WorktreeErrorCode, WorktreeLifecycle, WorktreeSettings,
+    WorktreeError, WorktreeErrorCode, WorktreeLifecycle, WorktreeSettings,
     WorktreeSummary,
 };
 

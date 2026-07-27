@@ -147,10 +147,6 @@ export function isRemoteWorkspace(workspace: WorkspaceInfo | null | undefined): 
   return workspace?.workspaceKind === WorkspaceKind.Remote;
 }
 
-export function isWorktreeWorkspace(workspace: WorkspaceInfo | null | undefined): boolean {
-  return Boolean(workspace?.worktree);
-}
-
 export function isLinkedWorktreeWorkspace(workspace: WorkspaceInfo | null | undefined): boolean {
   return Boolean(workspace?.worktree && !workspace.worktree.isMain);
 }

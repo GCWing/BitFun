@@ -1354,6 +1354,7 @@ pub async fn run() {
             api::worktree_api::worktree_promote,
             api::worktree_api::worktree_remove,
             api::worktree_api::worktree_recreate,
+            api::worktree_api::worktree_bind_session,
             generate_commit_message,
             quick_commit_message,
             save_git_repo_history,

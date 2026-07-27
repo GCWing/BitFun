@@ -29,6 +29,10 @@ use uuid::Uuid;
 const WORKTREE_REGISTRY_VERSION: u32 = 1;
 const REGISTRY_FILE_NAME: &str = "worktrees.json";
 
+mod session_binding;
+
+pub use session_binding::{WorktreeSessionBindingRequest, WorktreeSessionBindingResult};
+
 static REPOSITORY_LOCKS: OnceLock<Mutex<HashMap<PathBuf, Arc<AsyncMutex<()>>>>> = OnceLock::new();
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -257,6 +261,11 @@ impl WorktreeService {
                 recovery_path: Some(record.path),
             })
         }
+    }
+
+    /// User-level worktree defaults (root directory, branch prefix, copy policy).
+    pub async fn settings() -> WorktreeSettings {
+        load_settings().await
     }
 
     pub async fn list(request: WorktreeListRequest) -> Result<Vec<WorktreeSummary>, WorktreeError> {

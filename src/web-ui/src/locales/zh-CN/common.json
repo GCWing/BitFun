@@ -359,12 +359,6 @@
       "acpSessionStarted": "会话启动完成",
       "acpSessionStartFailed": "会话启动失败",
       "initSessionFailed": "初始化 AGENTS.md 会话失败",
-      "worktreeCreated": "已创建 worktree",
-      "worktreeCreatedAndOpened": "已创建并打开 worktree",
-      "worktreeCreateFailed": "创建 worktree 失败：{{error}}",
-      "worktreeCreateOrOpenFailed": "worktree 已创建，但作为工作区打开失败：{{error}}",
-      "worktreeDeleted": "已删除 worktree",
-      "deleteWorktreeFailed": "删除 worktree 失败",
       "renameFailed": "重命名项目失败",
       "renamed": "项目已重命名",
       "expandSessions": "展开会话列表",
@@ -383,8 +377,6 @@
         "manageRelatedPaths": "关联目录",
         "manageProjectPermissions": "项目权限",
         "rename": "重命名项目",
-        "newWorktree": "新建 worktree",
-        "deleteWorktree": "删除 worktree",
         "copyPath": "复制路径",
         "reveal": "在资源管理器中打开",
         "close": "关闭工作区"
@@ -431,11 +423,6 @@
         "title": "重置 {{name}}？",
         "message": "此操作会清空该工作区目录下的所有内容，并恢复默认 persona 文件；不会删除工作区目录本身。",
         "pathLabel": "工作区路径"
-      },
-      "deleteWorktreeDialog": {
-        "title": "删除 {{name}}？",
-        "message": "此操作会关闭该工作区，并删除对应的 worktree 目录。",
-        "pathLabel": "Worktree 路径"
       }
     },
     "agents": {
