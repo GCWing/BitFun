@@ -151,7 +151,7 @@ pub const BUILTIN_APPS: &[BuiltinMiniAppBundle] = &[
     },
     BuiltinMiniAppBundle {
         id: "builtin-ppt-live",
-        version: 256,
+        version: 257,
         meta_json: include_str!("builtin/assets/ppt-live/meta.json"),
         html: include_str!("builtin/assets/ppt-live/index.html"),
         css: include_str!("builtin/assets/ppt-live/style.css"),
@@ -609,6 +609,12 @@ mod tests {
         // The single cowork agent turn loads the stable ppt-design skill key.
         assert!(prompt_source.contains("user::bitfun-system::ppt-design"));
         let ppt_live_source = include_str!("builtin/assets/ppt-live/ui.js");
+        // PPT Live registers bounded content into the host's standard floating
+        // ChatInput. It must not request a private composer layout or panel.
+        assert!(ppt_live_source.contains("claimComposer?.({"));
+        assert!(ppt_live_source.contains("placeholder: t('bubblePlaceholder')"));
+        assert!(!ppt_live_source.contains("panelSize:"));
+        assert!(!ppt_live_source.contains("rows: 3"));
         // Single-turn cowork generation: one agent turn produces the whole deck.
         assert!(ppt_live_source.contains("runCoworkDeckGeneration"));
         assert!(ppt_live_source.contains("readDeckFromProjectFiles"));

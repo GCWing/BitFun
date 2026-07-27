@@ -41181,11 +41181,8 @@ function syncLocale() {
 }
 function syncComposerClaim() {
   void runtime().chat?.claimComposer?.({
-    panelSize: "wide",
     composer: {
-      placeholder: translate("bubblePlaceholder"),
-      hint: translate("bubbleComposerHint"),
-      rows: 3
+      placeholder: translate("bubblePlaceholder")
     },
     welcome: {
       title: translate("bubbleWelcomeTitle"),

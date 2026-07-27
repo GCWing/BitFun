@@ -3835,11 +3835,8 @@ function syncLocale() {
  */
 function syncComposerClaim() {
   void runtime().chat?.claimComposer?.({
-    panelSize: 'wide',
     composer: {
       placeholder: t('bubblePlaceholder'),
-      hint: t('bubbleComposerHint'),
-      rows: 3,
     },
     welcome: {
       title: t('bubbleWelcomeTitle'),

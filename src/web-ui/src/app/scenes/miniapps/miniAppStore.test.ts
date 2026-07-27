@@ -144,9 +144,11 @@ describe('miniAppStore floating bubble composer claims', () => {
 });
 
 describe('MiniApp bubble customization contract', () => {
-  it('normalizes bounded host-rendered welcome and composer options', () => {
+  it('normalizes bounded content for the host-rendered welcome and shared composer', () => {
     const customization = normalizeMiniAppBubbleCustomization({
       title: ' PPT Live ',
+      // Shell geometry and composer layout are deliberately ignored. A
+      // MiniApp may register content, never replace or reshape ChatInput.
       panelSize: 'wide',
       composer: {
         placeholder: ' Describe a deck ',
@@ -167,11 +169,8 @@ describe('MiniApp bubble customization contract', () => {
 
     expect(customization).toEqual({
       title: 'PPT Live',
-      panelSize: 'wide',
       composer: {
         placeholder: 'Describe a deck',
-        hint: 'Messages stay with this deck',
-        rows: 4,
       },
       welcome: {
         title: 'What should we present?',
@@ -186,9 +185,13 @@ describe('MiniApp bubble customization contract', () => {
     });
   });
 
-  it('drops arbitrary panel sizes and caps suggestion count', () => {
+  it('ignores shell overrides and caps suggestion count', () => {
     const customization = normalizeMiniAppBubbleCustomization({
       panelSize: 'cover-the-screen',
+      composer: {
+        hint: 'Custom footer',
+        rows: 4,
+      },
       welcome: {
         suggestions: Array.from({ length: 9 }, (_, index) => ({
           label: `Suggestion ${index}`,
@@ -197,7 +200,7 @@ describe('MiniApp bubble customization contract', () => {
       },
     });
 
-    expect(customization?.panelSize).toBeUndefined();
+    expect(customization?.composer).toBeUndefined();
     expect(customization?.welcome?.suggestions).toHaveLength(6);
   });
 });

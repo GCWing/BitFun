@@ -159,6 +159,10 @@ import {
   type ExternalPromptCommandCatalogIssue,
   type ExternalPromptCommandItem,
 } from '../utils/externalPromptCommands';
+import {
+  submitThroughChatInputRegistration,
+  type ChatInputRegistration,
+} from './chatInputRegistration';
 import './ChatInput.scss';
 
 import { setChatPopupActive } from './chatPopupState';
@@ -169,6 +173,11 @@ export interface ChatInputProps {
   className?: string;
   onSendMessage?: (message: string) => void;
   isSceneActive?: boolean;
+  /**
+   * Optional content and transport registration for hosts that embed the
+   * standard composer. The registration never replaces ChatInput's UI.
+   */
+  registration?: ChatInputRegistration;
 }
 
 type SlashActionItem = {
@@ -367,6 +376,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   className = '',
   onSendMessage,
   isSceneActive = true,
+  registration,
 }) => {
   const { t } = useTranslation('flow-chat');
   const canLaunchReview = isTauriRuntime();
@@ -779,7 +789,23 @@ export const ChatInput: React.FC<ChatInputProps> = ({
 
   const { transition, setQueuedInput } = useSessionStateMachineActions(effectiveTargetSessionId);
 
-  const { workspace, workspacePath, workspaceName } = useCurrentWorkspace();
+  const {
+    workspace,
+    workspacePath: currentWorkspacePath,
+    workspaceName: currentWorkspaceName,
+  } = useCurrentWorkspace();
+  // A host that explicitly registers workspacePath owns the composer
+  // workspace. Even an empty registered path is intentional isolation and
+  // must not leak the user's active project into an Agentic MiniApp surface.
+  const hasRegisteredWorkspace = Boolean(
+    registration && Object.prototype.hasOwnProperty.call(registration, 'workspacePath'),
+  );
+  const workspacePath = hasRegisteredWorkspace
+    ? (registration?.workspacePath || '').trim()
+    : currentWorkspacePath;
+  const workspaceName = hasRegisteredWorkspace
+    ? (workspacePath ? path.basename(workspacePath) : '')
+    : currentWorkspaceName;
   const workspacePathRef = useRef(workspacePath || '');
   workspacePathRef.current = workspacePath || '';
   const { openedWorkspaces } = useWorkspaceContext();
@@ -1508,6 +1534,42 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   const clearPendingLargePastes = useCallback(() => {
     replacePendingLargePastes({});
   }, [replacePendingLargePastes]);
+
+  const consumedRegisteredDraftRef = useRef<{
+    registrationId?: string;
+    draftId: number;
+  } | null>(null);
+  React.useEffect(() => {
+    const draft = registration?.draft;
+    const consumed = consumedRegisteredDraftRef.current;
+    if (
+      !draft
+      || (
+        consumed
+        && consumed.registrationId === registration?.registrationId
+        && consumed.draftId === draft.id
+      )
+    ) {
+      return;
+    }
+
+    consumedRegisteredDraftRef.current = {
+      registrationId: registration?.registrationId,
+      draftId: draft.id,
+    };
+    clearPendingLargePastes();
+    replaceContexts([]);
+    dispatchInput({ type: 'ACTIVATE' });
+    dispatchInput({ type: 'SET_VALUE', payload: draft.text });
+    inputValueRef.current = draft.text;
+    richTextInputRef.current?.focus();
+    registration.onDraftConsumed?.(draft.id);
+  }, [
+    clearPendingLargePastes,
+    dispatchInput,
+    registration,
+    replaceContexts,
+  ]);
 
   const createLargePastePlaceholder = useCallback((text: string): string | null => {
     const charCount = getCharacterCount(text);
@@ -3583,10 +3645,25 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     setQueuedInput(null);
 
     try {
-      await sendMessage(message, {
-        displayMessage: originalMessage,
-        composerPresentation: persistedComposerPresentation,
-      });
+      const transport = await submitThroughChatInputRegistration(
+        registration,
+        {
+          text: message,
+          displayText: originalMessage,
+          contexts: [...contexts],
+          composerPresentation: persistedComposerPresentation,
+          sessionId: effectiveTargetSessionId || undefined,
+          workspacePath: workspacePath || undefined,
+        },
+        () => sendMessage(message, {
+          displayMessage: originalMessage,
+          composerPresentation: persistedComposerPresentation,
+        }),
+      );
+      if (transport === 'registered') {
+        clearContexts();
+        onSendMessage?.(message);
+      }
       clearPendingLargePastes();
       dispatchInput({ type: 'CLEAR_VALUE' });
       dispatchInput({ type: 'DEACTIVATE' });
@@ -3607,6 +3684,11 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     handleCancelCurrentTask,
     transition,
     sendMessage,
+    registration,
+    contexts,
+    workspacePath,
+    clearContexts,
+    onSendMessage,
     addToHistory,
     effectiveTargetSessionId,
     clearPendingLargePastes,
@@ -4629,7 +4711,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
               )}
               {showPlaceholder && (
                 <span className="bitfun-chat-input__placeholder" aria-hidden>
-                  {t('input.placeholder')}
+                  {registration?.placeholder || t('input.placeholder')}
                 </span>
               )}
               <RichTextInput

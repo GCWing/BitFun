@@ -57,34 +57,41 @@ describe('session surface composition', () => {
       "from '../../../flow_chat/components/modern/ModernFlowChatContainer'"
     );
     expect(chatPaneSource).toContain("from '../../../flow_chat/components/ChatInput'");
+    expect(chatPaneSource).toContain('registration={chatInputRegistration}');
   });
 });
 
-/**
- * The one composer the bubble may own is the MiniApp composer: an Agentic
- * MiniApp (PPT Live) claims the bubble as its input surface, so what the user
- * types is handed to that MiniApp instead of being submitted into the host
- * session. It is not a second chat composer — it never talks to FlowChat — and
- * it exists only while a claim is active.
- */
-describe('floating mini chat bubble MiniApp composer', () => {
+describe('floating mini chat bubble MiniApp registration', () => {
   const source = readSource('../../../app/layout/FloatingMiniChat.tsx');
+  const styles = readSource('../../../app/layout/FloatingMiniChat.scss');
 
-  it('swaps out the session composer only while a MiniApp holds a claim', () => {
-    expect(source).toContain('showChatInput={!activeComposerClaim}');
-    expect(source).toContain('activeComposerClaim && (');
+  it('keeps the full shared composer while a MiniApp holds a registration', () => {
+    expect(source).toContain('showChatInput');
+    expect(source).toContain('chatInputRegistration={chatInputRegistration}');
+    expect(source).not.toContain('showChatInput={!activeComposerClaim}');
+    expect(source).not.toContain('const MiniAppComposer');
+    expect(source).not.toContain('<MiniAppComposer');
+    expect(source).not.toContain('<textarea');
+    expect(source).not.toContain('miniapp-composer');
+    expect(styles).not.toContain('miniapp-composer');
+    expect(styles).not.toContain('panel--miniapp');
   });
 
-  it('hands input to the MiniApp rather than to the session', () => {
+  it('registers a token-scoped submit route without replacing ChatInput', () => {
     expect(source).toContain('MINIAPP_COMPOSER_MESSAGE_EVENT');
     // Routing is keyed by claim token, never by app id: one app can have two
     // live runners (installed app + draft preview) and only one owns the input.
-    expect(source).toContain('detail: { token, text }');
+    expect(source).toContain('token: activeComposerToken');
+    expect(source).toContain('text: submission.text');
+    expect(source).toContain('contexts: submission.contexts');
+    expect(source).toContain('registrationId: activeComposerClaim.token');
+    expect(source).toContain('onSubmit: handleMiniAppSubmit');
   });
 
   it('prefills without sending when a MiniApp offers an example prompt', () => {
     expect(source).toContain('MINIAPP_COMPOSER_DRAFT_EVENT');
-    expect(source).toContain('setComposerPrefill');
+    expect(source).toContain('setMiniAppComposerDraft');
+    expect(source).toContain('onDraftConsumed: handleMiniAppDraftConsumed');
   });
 
   it('shows only the active MiniApp topic session while its claim is active', () => {
@@ -96,7 +103,6 @@ describe('floating mini chat bubble MiniApp composer', () => {
       'surfaceMounted && (!activeComposerClaim || isMiniAppSessionReady)'
     );
     expect(source).toContain('previousHostSessionRef');
-    expect(source).toContain('disabled={!isMiniAppSessionReady || isStreaming}');
   });
 
   it('renders the MiniApp entry model against the topic session workspace', () => {

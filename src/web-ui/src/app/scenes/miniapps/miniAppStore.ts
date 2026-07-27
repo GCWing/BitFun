@@ -5,20 +5,28 @@ import { create } from 'zustand';
 import type { MiniAppMeta } from '@/infrastructure/api/service-api/MiniAppAPI';
 
 /**
- * Window event dispatched by the floating session bubble when a MiniApp has
- * claimed its composer (`app.chat.claimComposer`). Detail:
- * `{ appId, token, text }`. `useMiniAppBridge` listens for it and forwards the
- * text into the MiniApp iframe as a 'chat:userMessage' event.
+ * Window event dispatched after the shared ChatInput routes a submission to a
+ * MiniApp that registered the floating bubble (`app.chat.claimComposer`).
+ * `useMiniAppBridge` forwards the normalized payload into the owning iframe as
+ * a `chat:userMessage` event.
  */
 export const MINIAPP_COMPOSER_MESSAGE_EVENT = 'miniapp-composer-message';
+
+export interface MiniAppComposerMessageDetail {
+  token: string;
+  text: string;
+  displayText?: string;
+  contexts?: unknown[];
+  composerPresentation?: unknown;
+  sessionId?: string;
+  workspacePath?: string;
+}
 
 /**
  * Window event asking the bubble to open and prefill its composer without
  * sending (`app.chat.setComposerDraft`). Detail: `{ token, text }`.
  */
 export const MINIAPP_COMPOSER_DRAFT_EVENT = 'miniapp-composer-draft';
-
-export type MiniAppBubblePanelSize = 'compact' | 'standard' | 'wide';
 
 export interface MiniAppBubbleSuggestion {
   label: string;
@@ -28,12 +36,8 @@ export interface MiniAppBubbleSuggestion {
 export interface MiniAppBubbleCustomization {
   /** Optional title override for the bubble header. */
   title?: string;
-  /** Host-bounded panel preset; MiniApps cannot inject arbitrary dimensions. */
-  panelSize?: MiniAppBubblePanelSize;
   composer?: {
     placeholder?: string;
-    hint?: string;
-    rows?: number;
   };
   welcome?: {
     title?: string;
@@ -61,7 +65,8 @@ function asRecord(value: unknown): Record<string, unknown> {
 /**
  * Converts untrusted iframe claim options into the declarative customization
  * contract the host bubble renders. React owns all markup; MiniApps only
- * contribute bounded text, prompt values, and one of the host size presets.
+ * contribute bounded text and prompt values. The standard bubble shell,
+ * composer layout, controls, and behavior are never customizable.
  */
 export function normalizeMiniAppBubbleCustomization(
   params: Record<string, unknown>,
@@ -70,13 +75,8 @@ export function normalizeMiniAppBubbleCustomization(
   const welcomeInput = asRecord(params.welcome);
   const legacyPlaceholder = boundedText(params.placeholder, 600);
   const placeholder = boundedText(composerInput.placeholder, 600) ?? legacyPlaceholder;
-  const hint = boundedText(composerInput.hint, 180);
-  const rowsValue = Number(composerInput.rows);
-  const rows = Number.isFinite(rowsValue)
-    ? Math.min(4, Math.max(1, Math.round(rowsValue)))
-    : undefined;
-  const composer = placeholder || hint || rows
-    ? { placeholder, hint, rows }
+  const composer = placeholder
+    ? { placeholder }
     : undefined;
 
   const suggestions = Array.isArray(welcomeInput.suggestions)
@@ -103,15 +103,8 @@ export function normalizeMiniAppBubbleCustomization(
   };
   const hasWelcome = Object.values(welcome).some((value) => value !== undefined);
 
-  const requestedPanelSize = boundedText(params.panelSize, 20);
-  const panelSize = requestedPanelSize === 'compact'
-    || requestedPanelSize === 'standard'
-    || requestedPanelSize === 'wide'
-    ? requestedPanelSize
-    : undefined;
   const customization: MiniAppBubbleCustomization = {
     title: boundedText(params.title, 120),
-    panelSize,
     composer,
     welcome: hasWelcome ? welcome : undefined,
   };
@@ -121,7 +114,11 @@ export function normalizeMiniAppBubbleCustomization(
     : undefined;
 }
 
-/** A MiniApp's claim on the floating bubble composer (`app.chat.claimComposer`). */
+/**
+ * A MiniApp registration for the shared floating bubble
+ * (`app.chat.claimComposer`). The name preserves the public API; the claim
+ * supplies content/routing and never owns a separate composer component.
+ */
 export interface MiniAppComposerClaim {
   /**
    * Identifies the exact iframe holding the claim. One app ID can have several
@@ -130,7 +127,7 @@ export interface MiniAppComposerClaim {
    * by token, not by app ID, or one bubble message would start a run in both.
    */
   token: string;
-  /** Placeholder shown in the bubble composer while this MiniApp is active. */
+  /** Placeholder registered into the shared ChatInput while this MiniApp is active. */
   placeholder?: string;
   /** Declarative, host-rendered bubble presentation supplied by the MiniApp. */
   customization?: MiniAppBubbleCustomization;
@@ -147,7 +144,7 @@ interface MiniAppState {
   runningWorkerIds: string[];
   /** App IDs with an active customization surface in the MiniApp tab. */
   customizingAppIds: string[];
-  /** Floating bubble composer claims, keyed by app ID (`app.chat.claimComposer`). */
+  /** Floating bubble registrations, keyed by app ID (`app.chat.claimComposer`). */
   composerClaims: Record<string, MiniAppComposerClaim>;
 
   setApps: (apps: MiniAppMeta[]) => void;

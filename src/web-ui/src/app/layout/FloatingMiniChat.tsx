@@ -11,10 +11,14 @@
 
 import React, { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import { MessageSquare, Send, X } from 'lucide-react';
+import { MessageSquare, X } from 'lucide-react';
 import { flowChatStore } from '../../flow_chat/store/FlowChatStore';
 import { syncSessionToModernStore } from '../../flow_chat/services/storeSync';
 import ChatPane from '@/app/scenes/session/ChatPane';
+import type {
+  ChatInputRegistration,
+  ChatInputSubmission,
+} from '@/flow_chat/components/chatInputRegistration';
 import { Tooltip } from '@/component-library';
 import { useCurrentWorkspace } from '@/infrastructure/contexts/WorkspaceContext';
 import { SessionMenu, useFlowChatSessions } from '../../flow_chat/components/session-menu';
@@ -23,6 +27,7 @@ import {
   useMiniAppStore,
   MINIAPP_COMPOSER_MESSAGE_EVENT,
   MINIAPP_COMPOSER_DRAFT_EVENT,
+  type MiniAppComposerMessageDetail,
 } from '@/app/scenes/miniapps/miniAppStore';
 import { pickLocalizedString } from '@/app/scenes/miniapps/utils/pickLocalizedString';
 import { renderMiniAppIcon } from '@/app/scenes/miniapps/utils/miniAppIcons';
@@ -40,80 +45,6 @@ type PanelPhase = 'closed' | 'opening' | 'open';
  *  transition). Must stay >= $fmc-open-duration in FloatingMiniChat.scss. */
 const PANEL_OPEN_SETTLE_MS = 600;
 
-/**
- * Replacement composer shown when the active MiniApp has claimed the bubble
- * composer (`app.chat.claimComposer`). Instead of submitting a turn into the
- * host chat session, the text is handed to the MiniApp, which wraps it in its
- * own protocol prompt and runs its own agent session — the session the bubble
- * then displays via `app.chat.focusSession`.
- */
-const MiniAppComposer: React.FC<{
-  token: string;
-  appName: string;
-  placeholder?: string;
-  hint?: string;
-  rows?: number;
-  disabled: boolean;
-  /** Prefill pushed by the MiniApp; a new object marks a new request. */
-  prefill: { text: string } | null;
-}> = ({ token, appName, placeholder, hint, rows = 2, disabled, prefill }) => {
-  const { t } = useTranslation('flow-chat');
-  const [draft, setDraft] = useState('');
-  const inputRef = useRef<HTMLTextAreaElement>(null);
-
-  useEffect(() => {
-    if (!prefill) return;
-    setDraft(prefill.text);
-    inputRef.current?.focus();
-  }, [prefill]);
-
-  const send = useCallback(() => {
-    const text = draft.trim();
-    if (!text || disabled) return;
-    window.dispatchEvent(
-      new CustomEvent(MINIAPP_COMPOSER_MESSAGE_EVENT, { detail: { token, text } })
-    );
-    setDraft('');
-  }, [draft, disabled, token]);
-
-  const handleKeyDown = useCallback(
-    (e: React.KeyboardEvent) => {
-      if (e.key !== 'Enter' || e.shiftKey || e.nativeEvent.isComposing) return;
-      e.preventDefault();
-      send();
-    },
-    [send]
-  );
-
-  return (
-    <div className="bitfun-fmc__miniapp-composer">
-      <div className="bitfun-fmc__miniapp-composer-hint">
-        {hint || t('miniAppComposer.hint', { app: appName })}
-      </div>
-      <div className="bitfun-fmc__miniapp-composer-row">
-        <textarea
-          ref={inputRef}
-          className="bitfun-fmc__miniapp-composer-input"
-          rows={rows}
-          value={draft}
-          placeholder={placeholder || t('miniAppComposer.placeholder', { app: appName })}
-          onChange={(e) => setDraft(e.target.value)}
-          onKeyDown={handleKeyDown}
-        />
-        <button
-          type="button"
-          className="bitfun-fmc__miniapp-composer-send"
-          onClick={send}
-          disabled={disabled || !draft.trim()}
-          aria-label={t('miniAppComposer.send')}
-        >
-          <Send size={14} />
-        </button>
-      </div>
-    </div>
-  );
-};
-
 export const FloatingMiniChat: React.FC = () => {
   const { t, i18n } = useTranslation('flow-chat');
   const activeTabId = useSceneStore((state) => state.activeTabId);
@@ -124,7 +55,11 @@ export const FloatingMiniChat: React.FC = () => {
 
   const [phase, setPhase] = useState<PanelPhase>('closed');
   const [surfaceMounted, setSurfaceMounted] = useState(false);
-  const [composerPrefill, setComposerPrefill] = useState<{ text: string } | null>(null);
+  const [composerPrefill, setComposerPrefill] = useState<{
+    id: number;
+    text: string;
+  } | null>(null);
+  const composerPrefillIdRef = useRef(0);
   const isOpen = phase !== 'closed';
   const panelRef = useRef<HTMLDivElement>(null);
   const previousHostSessionRef = useRef<{
@@ -144,9 +79,8 @@ export const FloatingMiniChat: React.FC = () => {
     activeMiniAppId && customizingAppIds.includes(activeMiniAppId)
   );
 
-  // When the active MiniApp has claimed the bubble composer, the bubble stays
-  // the single conversation surface but input is routed to the MiniApp instead
-  // of the host chat session (BitFun's Agentic MiniApp pattern — see PPT Live).
+  // A claim registers bounded content and submission routing into the same
+  // shared bubble surface. MiniApps never replace ChatPane or ChatInput.
   const activeComposerClaim = activeMiniAppId ? composerClaims[activeMiniAppId] : undefined;
   const activeMiniApp = useMemo(
     () => apps.find((app) => app.id === activeMiniAppId),
@@ -207,9 +141,65 @@ export const FloatingMiniChat: React.FC = () => {
     setPhase('closed');
   }, []);
 
-  const handleMiniAppSuggestion = useCallback((prompt: string) => {
-    setComposerPrefill({ text: prompt });
+  const setMiniAppComposerDraft = useCallback((text: string) => {
+    composerPrefillIdRef.current += 1;
+    setComposerPrefill({
+      id: composerPrefillIdRef.current,
+      text,
+    });
   }, []);
+
+  const handleMiniAppSuggestion = useCallback((prompt: string) => {
+    setMiniAppComposerDraft(prompt);
+  }, [setMiniAppComposerDraft]);
+
+  const handleMiniAppDraftConsumed = useCallback((id: number) => {
+    setComposerPrefill((current) => (current?.id === id ? null : current));
+  }, []);
+
+  const handleMiniAppSubmit = useCallback(async (submission: ChatInputSubmission) => {
+    if (!activeComposerToken) {
+      throw new Error('The active MiniApp no longer owns the floating chat registration.');
+    }
+    const detail: MiniAppComposerMessageDetail = {
+      token: activeComposerToken,
+      text: submission.text,
+      displayText: submission.displayText,
+      contexts: submission.contexts,
+      composerPresentation: submission.composerPresentation,
+      sessionId: submission.sessionId,
+      workspacePath: submission.workspacePath,
+    };
+    window.dispatchEvent(new CustomEvent(MINIAPP_COMPOSER_MESSAGE_EVENT, { detail }));
+  }, [activeComposerToken]);
+
+  const chatInputRegistration = useMemo<ChatInputRegistration | undefined>(() => {
+    if (!activeComposerClaim) {
+      return undefined;
+    }
+    return {
+      registrationId: activeComposerClaim.token,
+      placeholder:
+        bubbleCustomization?.composer?.placeholder
+        || activeComposerClaim.placeholder
+        || t('miniAppComposer.placeholder', { app: activeMiniAppName }),
+      // Registration presence makes this an isolated workspace even when the
+      // hidden session has no path, so the normal project never leaks in.
+      workspacePath: displayedSession?.workspacePath || '',
+      draft: composerPrefill || undefined,
+      onDraftConsumed: handleMiniAppDraftConsumed,
+      onSubmit: handleMiniAppSubmit,
+    };
+  }, [
+    activeComposerClaim,
+    activeMiniAppName,
+    bubbleCustomization?.composer?.placeholder,
+    composerPrefill,
+    displayedSession?.workspacePath,
+    handleMiniAppDraftConsumed,
+    handleMiniAppSubmit,
+    t,
+  ]);
 
   useEffect(() => {
     setComposerPrefill(null);
@@ -282,14 +272,14 @@ export const FloatingMiniChat: React.FC = () => {
     const handler = (e: Event) => {
       const detail = (e as CustomEvent<{ token?: string; text?: string }>).detail;
       if (!detail || detail.token !== claimToken || typeof detail.text !== 'string') return;
-      setComposerPrefill({ text: detail.text });
+      setMiniAppComposerDraft(detail.text);
       handleOpen();
     };
     window.addEventListener(MINIAPP_COMPOSER_DRAFT_EVENT, handler);
     return () => {
       window.removeEventListener(MINIAPP_COMPOSER_DRAFT_EVENT, handler);
     };
-  }, [activeComposerClaim?.token, handleOpen]);
+  }, [activeComposerClaim?.token, handleOpen, setMiniAppComposerDraft]);
 
   // Open on pointer press, not on click. A click only fires when pointerdown
   // and pointerup land on the same element, so anything that moves or replaces
@@ -360,8 +350,6 @@ export const FloatingMiniChat: React.FC = () => {
     'bitfun-fmc__panel',
     isOpen && 'bitfun-fmc__panel--open',
     isStreaming && 'bitfun-fmc__panel--processing',
-    activeComposerClaim
-      && `bitfun-fmc__panel--miniapp-${bubbleCustomization?.panelSize || 'standard'}`,
   ]
     .filter(Boolean)
     .join(' ');
@@ -463,7 +451,8 @@ export const FloatingMiniChat: React.FC = () => {
                   ? displayedSession?.workspacePath
                   : workspacePath
               }
-              showChatInput={!activeComposerClaim}
+              showChatInput
+              chatInputRegistration={chatInputRegistration}
               emptyState={activeComposerClaim ? (
                 <MiniAppBubbleWelcome
                   appName={activeMiniAppName}
@@ -485,25 +474,9 @@ export const FloatingMiniChat: React.FC = () => {
                 {renderMiniAppIcon(activeMiniAppIcon, 22)}
               </div>
               <span>
-                {bubbleCustomization?.composer?.hint
-                  || t('miniAppComposer.hint', { app: activeMiniAppName })}
+                {t('miniAppComposer.hint', { app: activeMiniAppName })}
               </span>
             </div>
-          )}
-          {surfaceMounted && activeComposerClaim && (
-            <MiniAppComposer
-              key={`${activeComposerClaim.token}:${activeComposerSessionId || 'pending'}`}
-              token={activeComposerClaim.token}
-              appName={activeMiniAppName}
-              placeholder={
-                bubbleCustomization?.composer?.placeholder
-                || activeComposerClaim.placeholder
-              }
-              hint={bubbleCustomization?.composer?.hint}
-              rows={bubbleCustomization?.composer?.rows}
-              disabled={!isMiniAppSessionReady || isStreaming}
-              prefill={composerPrefill}
-            />
           )}
         </div>
       </div>

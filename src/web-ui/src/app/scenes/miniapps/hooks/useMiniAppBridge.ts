@@ -24,6 +24,7 @@ import {
   MINIAPP_COMPOSER_MESSAGE_EVENT,
   MINIAPP_COMPOSER_DRAFT_EVENT,
   normalizeMiniAppBubbleCustomization,
+  type MiniAppComposerMessageDetail,
 } from '../miniAppStore';
 import { flowChatStore } from '@/flow_chat/store/FlowChatStore';
 import { createLogger } from '@/shared/utils/logger';
@@ -540,18 +541,29 @@ export function useMiniAppBridge(
     );
   }, [currentLanguage, iframeRef]);
 
-  // Forward user messages typed in the floating bubble composer (dispatched by
-  // FloatingMiniChat while this MiniApp holds a composer claim) into the
-  // iframe as 'chat:userMessage' (consumed via app.chat.onUserMessage).
+  // Forward submissions from the shared floating ChatInput into the iframe as
+  // `chat:userMessage` (consumed via app.chat.onUserMessage). The MiniApp gets
+  // the standard composer's display text and contexts as well as normalized
+  // model text; it never owns a parallel input implementation.
   useEffect(() => {
     const handler = (e: Event) => {
-      const detail = (e as CustomEvent<{ token?: string; text?: string }>).detail;
+      const detail = (e as CustomEvent<MiniAppComposerMessageDetail>).detail;
       // Match on the claim token, not the app ID: the installed app and its
       // draft preview share an ID, and both listen here.
       if (!detail || detail.token !== composerTokenRef.current) return;
       if (typeof detail.text !== 'string') return;
+      const payload = {
+        text: detail.text,
+        ...(detail.displayText !== undefined ? { displayText: detail.displayText } : {}),
+        ...(detail.contexts !== undefined ? { contexts: detail.contexts } : {}),
+        ...(detail.composerPresentation !== undefined
+          ? { composerPresentation: detail.composerPresentation }
+          : {}),
+        ...(detail.sessionId !== undefined ? { sessionId: detail.sessionId } : {}),
+        ...(detail.workspacePath !== undefined ? { workspacePath: detail.workspacePath } : {}),
+      };
       iframeRef.current?.contentWindow?.postMessage(
-        { type: 'bitfun:event', event: 'chat:userMessage', payload: { text: detail.text } },
+        { type: 'bitfun:event', event: 'chat:userMessage', payload },
         '*',
       );
     };
