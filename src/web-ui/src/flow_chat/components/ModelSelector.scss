@@ -155,7 +155,9 @@
       0 8px 32px var(--color-overlay-black-50),
       0 0 1px var(--color-overlay-white-12),
       inset 0 1px 0 var(--color-overlay-white-08);
-    z-index: $z-dropdown;
+    // This menu is portaled to document.body, so it must clear overlay-hosted
+    // surfaces such as FloatingMiniChat instead of inheriting their stack.
+    z-index: $z-popover;
     animation: bitfun-model-dropdown-fade-in 0.15s ease-out;
   }
   
