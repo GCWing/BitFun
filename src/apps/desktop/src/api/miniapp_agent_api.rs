@@ -44,6 +44,7 @@ static AGENT_RUN_REGISTRY: OnceLock<MiniAppAgentRunRegistry> = OnceLock::new();
 static AGENT_RATE_LIMITER: OnceLock<MiniAppAgentRateLimiter> = OnceLock::new();
 
 static AGENT_RUN_COUNTER: AtomicU64 = AtomicU64::new(1);
+const DEFAULT_MINIAPP_AGENT_DISPLAY_TEXT: &str = "MiniApp agent run";
 
 fn agent_run_registry() -> &'static MiniAppAgentRunRegistry {
     AGENT_RUN_REGISTRY.get_or_init(MiniAppAgentRunRegistry::default)
@@ -62,6 +63,14 @@ fn now_ms() -> u64 {
 
 fn check_agent_rate_limit(app_id: &str, rate_limit_per_minute: u32) -> Result<(), String> {
     agent_rate_limiter().check(app_id, rate_limit_per_minute, now_ms())
+}
+
+fn resolve_agent_display_text(display_text: Option<&str>) -> String {
+    display_text
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .unwrap_or(DEFAULT_MINIAPP_AGENT_DISPLAY_TEXT)
+        .to_string()
 }
 
 async fn require_agent_permission(
@@ -85,6 +94,13 @@ pub struct MiniAppAgentRunRequest {
     /// Full user prompt for the agent turn. The MiniApp owns its own task
     /// protocol; the host only wraps it into a hidden agent session.
     pub prompt: String,
+    /// Optional user-facing text for the shared chat surface. This is kept
+    /// separate from `prompt` so a MiniApp can send a structured internal
+    /// protocol to the agent while preserving the user's original request in
+    /// conversation history. Legacy callers receive a neutral label rather
+    /// than exposing their internal prompt.
+    #[serde(default)]
+    pub display_text: Option<String>,
     /// Optional idempotency key reused as the turn id.
     #[serde(default)]
     pub run_id: Option<String>,
@@ -436,12 +452,13 @@ pub async fn miniapp_agent_run(
     };
 
     let policy = DialogSubmissionPolicy::for_source(DialogTriggerSource::DesktopApi);
+    let display_text = resolve_agent_display_text(request.display_text.as_deref());
 
     let outcome = scheduler
         .submit(
             session_id.clone(),
             request.prompt.clone(),
-            Some("MiniApp agent run".to_string()),
+            Some(display_text),
             Some(submission_plan.run_id.clone()),
             MINIAPP_AGENT_KIND.to_string(),
             Some(submission_plan.workspace_path.clone()),
@@ -582,7 +599,10 @@ pub async fn miniapp_agent_cancel_stale_runs(
 
 #[cfg(test)]
 mod tests {
-    use super::{MiniAppAgentEnsureSessionRequest, MiniAppAgentRunRequest};
+    use super::{
+        resolve_agent_display_text, MiniAppAgentEnsureSessionRequest, MiniAppAgentRunRequest,
+        DEFAULT_MINIAPP_AGENT_DISPLAY_TEXT,
+    };
     use bitfun_core::miniapp::agent_bridge::is_clean_relative_subdir;
     use serde_json::json;
 
@@ -596,6 +616,7 @@ mod tests {
         .expect("legacy MiniApp agent request should deserialize");
         assert!(legacy.enable_tools.unwrap_or(true));
         assert!(legacy.session_id.is_none());
+        assert!(legacy.display_text.is_none());
 
         let render: MiniAppAgentRunRequest = serde_json::from_value(json!({
             "appId": "builtin-ppt-live",
@@ -650,6 +671,38 @@ mod tests {
         }))
         .expect("MiniApp agent request should accept model");
         assert_eq!(with_model.model.as_deref(), Some("fast"));
+    }
+
+    #[test]
+    fn miniapp_agent_run_request_accepts_user_facing_display_text() {
+        let request: MiniAppAgentRunRequest = serde_json::from_value(json!({
+            "appId": "builtin-ppt-live",
+            "prompt": "internal structured prompt",
+            "displayText": "随便做几页测试页"
+        }))
+        .expect("MiniApp agent request should accept display text");
+
+        assert_eq!(request.display_text.as_deref(), Some("随便做几页测试页"));
+        assert_eq!(
+            resolve_agent_display_text(request.display_text.as_deref()),
+            "随便做几页测试页"
+        );
+    }
+
+    #[test]
+    fn miniapp_agent_display_text_uses_a_safe_legacy_fallback() {
+        assert_eq!(
+            resolve_agent_display_text(None),
+            DEFAULT_MINIAPP_AGENT_DISPLAY_TEXT
+        );
+        assert_eq!(
+            resolve_agent_display_text(Some("  ")),
+            DEFAULT_MINIAPP_AGENT_DISPLAY_TEXT
+        );
+        assert_eq!(
+            resolve_agent_display_text(Some("  Build a deck  ")),
+            "Build a deck"
+        );
     }
 
     #[test]

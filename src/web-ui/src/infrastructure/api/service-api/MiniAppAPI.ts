@@ -90,6 +90,11 @@ export interface AiModelInfo {
 export interface AgentRunOptions {
   runId?: string;
   sessionName?: string;
+  /**
+   * User-facing request shown in the shared conversation surface. The full
+   * `prompt` remains the MiniApp-owned agent protocol.
+   */
+  displayText?: string;
   /** Defaults to true host-side; only applies when a new session is created. */
   enableTools?: boolean;
   /** Reuse an existing hidden agent session from an earlier run of this app. */
@@ -704,6 +709,7 @@ export class MiniAppAPI {
           prompt,
           runId: options?.runId,
           sessionName: options?.sessionName,
+          displayText: options?.displayText,
           workspacePath,
           enableTools: options?.enableTools,
           sessionId: options?.sessionId,

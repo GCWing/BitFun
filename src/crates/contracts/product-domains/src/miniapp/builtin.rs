@@ -151,7 +151,7 @@ pub const BUILTIN_APPS: &[BuiltinMiniAppBundle] = &[
     },
     BuiltinMiniAppBundle {
         id: "builtin-ppt-live",
-        version: 257,
+        version: 258,
         meta_json: include_str!("builtin/assets/ppt-live/meta.json"),
         html: include_str!("builtin/assets/ppt-live/index.html"),
         css: include_str!("builtin/assets/ppt-live/style.css"),
@@ -586,6 +586,11 @@ mod tests {
         assert!(adapter_source.contains("protocol: 'files'"));
         assert!(adapter_source.contains("appDataWorkspace: options.appDataWorkspace"));
         assert!(adapter_source.contains("model: options.model"));
+        assert!(adapter_source.contains("displayText: options.displayText"));
+        assert!(app.ui_js.contains("payload?.displayText"));
+        assert!(app
+            .ui_js
+            .contains("displayText: options.displayText || requestInput.instruction"));
         assert!(app.ui_js.contains("project.json"));
         assert!(app.ui_js.contains("slides/slide-"));
         let ui_source = include_str!("builtin/assets/ppt-live/ui.js");

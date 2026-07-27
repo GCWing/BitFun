@@ -127,4 +127,14 @@ describe('floating mini chat bubble MiniApp registration', () => {
     expect(bridgeSource).toContain('flowChatStore.loadSessionHistory(');
     expect(bridgeSource).toContain('{ includeInternal: true }');
   });
+
+  it('forwards a MiniApp agent turn user-facing label separately from its prompt', () => {
+    const bridgeSource = readSource(
+      '../../../app/scenes/miniapps/hooks/useMiniAppBridge.ts'
+    );
+
+    expect(bridgeSource).toContain(
+      "typeof params.displayText === 'string' ? params.displayText : undefined"
+    );
+  });
 });

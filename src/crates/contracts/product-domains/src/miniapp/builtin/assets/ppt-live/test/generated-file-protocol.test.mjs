@@ -208,10 +208,11 @@ test('backend adapter ensures a topic session and forwards preferred model into 
     appDataWorkspace: 'decks/demo',
     model: 'fast',
   });
-  await app.backend.call('ppt.generate', { instruction: 'hi' }, {
+  await app.backend.call('ppt.generate', { instruction: 'internal prompt' }, {
     sessionId: 's1',
     appDataWorkspace: 'decks/demo',
     model: 'fast',
+    displayText: '随便做几页测试页',
   });
   assert.equal(ensured.sessionId, 's1');
   assert.deepEqual(ensureCalls, [{
@@ -224,12 +225,15 @@ test('backend adapter ensures a topic session and forwards preferred model into 
   assert.equal(calls[0].model, 'fast');
   assert.equal(calls[0].sessionId, 's1');
   assert.equal(calls[0].appDataWorkspace, 'decks/demo');
+  assert.equal(calls[0].displayText, '随便做几页测试页');
 });
 
 test('PPT topic lifecycle eagerly creates or rebinds its dedicated session', async () => {
   const uiSource = await readFile(new URL('../ui.js', import.meta.url), 'utf8');
 
   assert.match(uiSource, /async function ensureDeckAgentSession\(\)/);
+  assert.match(uiSource, /payload\?\.displayText/);
+  assert.match(uiSource, /displayText: options\.displayText \|\| requestInput\.instruction/);
   assert.match(
     uiSource,
     /async function restoreHistory[\s\S]*await clearFocusedDeckAgentSession\(\);[\s\S]*await ensureDeckAgentSession\(\);/,

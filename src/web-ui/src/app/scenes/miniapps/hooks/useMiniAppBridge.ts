@@ -328,6 +328,8 @@ export function useMiniAppBridge(
               {
                 runId: params.runId as string | undefined,
                 sessionName: params.sessionName as string | undefined,
+                displayText:
+                  typeof params.displayText === 'string' ? params.displayText : undefined,
                 enableTools: params.enableTools as boolean | undefined,
                 sessionId: params.sessionId as string | undefined,
                 appDataWorkspace: params.appDataWorkspace as string | undefined,

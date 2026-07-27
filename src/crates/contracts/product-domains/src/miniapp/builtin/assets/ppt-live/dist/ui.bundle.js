@@ -37478,6 +37478,7 @@ function installAgentBackend(app) {
       const result = await app.agent.run(buildAgentPrompt(input), {
         runId: options.idempotencyKey,
         sessionName: "PPT Live",
+        displayText: options.displayText || input.instruction,
         sessionId: options.sessionId,
         appDataWorkspace: options.appDataWorkspace,
         model: options.model || void 0
@@ -38445,7 +38446,7 @@ function isStarterDeck2() {
 function hasUsableDeckForRevision() {
   return Array.isArray(state.slides) && state.slides.length > 0 && !isDefaultDraft() && !isStarterDeck2() && !isRecoverableWorkingOnlyState(state);
 }
-async function submitInstruction(rawInstruction) {
+async function submitInstruction(rawInstruction, rawDisplayText = rawInstruction) {
   if (promptSubmitGuard || backendRunInFlight) {
     setStatus(translate("bubbleBusy"));
     return;
@@ -38455,6 +38456,7 @@ async function submitInstruction(rawInstruction) {
     setStatus(translate("promptRequired"));
     return;
   }
+  const displayText = String(rawDisplayText || "").trim() || instruction;
   promptSubmitGuard = true;
   const reviseExistingDeck = hasUsableDeckForRevision();
   state.promptDraft = instruction;
@@ -38464,7 +38466,8 @@ async function submitInstruction(rawInstruction) {
   try {
     await runPptLiveBackend("auto", instruction, {
       includeTopic: !reviseExistingDeck,
-      persistBeforeRun: true
+      persistBeforeRun: true,
+      displayText
     });
     return;
   } catch (error2) {
@@ -38955,7 +38958,9 @@ async function runPptLiveBackend(operation, instruction, options = {}) {
     if (options.persistBeforeRun) {
       await persist(true);
     }
-    await runCoworkDeckGeneration(operation, instruction);
+    await runCoworkDeckGeneration(operation, instruction, {
+      displayText: options.displayText
+    });
   } finally {
     backendRunInFlight = false;
   }
@@ -38985,7 +38990,8 @@ async function executeBackendTurn(requestInput, hooks = {}, options = {}) {
       idempotencyKey: `ppt-live-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
       sessionId: options.sessionId || void 0,
       appDataWorkspace: options.appDataWorkspace || void 0,
-      model: preferredModel
+      model: preferredModel,
+      displayText: options.displayText || requestInput.instruction
     });
     sessionId = result?.sessionId || null;
     turnId = result?.turnId || result?.actionRunId || null;
@@ -39240,7 +39246,7 @@ function buildBackendRequestBase(operation, instruction) {
     style: buildGenerationStyle()
   };
 }
-async function runCoworkDeckGeneration(operation, instruction) {
+async function runCoworkDeckGeneration(operation, instruction, options = {}) {
   const runEpoch = deckEpoch;
   setBusy(true, translate("working"));
   resetGeneration();
@@ -39461,7 +39467,8 @@ async function runCoworkDeckGeneration(operation, instruction) {
         }, {
           sessionId: retrySession?.id || void 0,
           appDataWorkspace: retrySession?.project?.workspaceSubdir,
-          resultKind: project ? "text" : void 0
+          resultKind: project ? "text" : void 0,
+          displayText: options.displayText || instruction
         });
         retrySession.id = sessionId || retrySession.id;
         state.agentSession = {
@@ -41223,6 +41230,7 @@ runtime().onLocaleChange?.(() => syncLocale());
 runtime().chat?.onUserMessage?.((payload) => {
   const text2 = String(payload?.text || "").trim();
   if (!text2) return;
-  void submitInstruction(text2);
+  const displayText = String(payload?.displayText || "").trim() || text2;
+  void submitInstruction(text2, displayText);
 });
 init();

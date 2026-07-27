@@ -469,7 +469,7 @@ function hasUsableDeckForRevision() {
  * floating session bubble (`app.chat.onUserMessage`) — PPT Live has no
  * composer of its own; this is the single entry point either way.
  */
-async function submitInstruction(rawInstruction) {
+async function submitInstruction(rawInstruction, rawDisplayText = rawInstruction) {
   if (promptSubmitGuard || backendRunInFlight) {
     setStatus(t('bubbleBusy'));
     return;
@@ -479,6 +479,7 @@ async function submitInstruction(rawInstruction) {
     setStatus(t('promptRequired'));
     return;
   }
+  const displayText = String(rawDisplayText || '').trim() || instruction;
   promptSubmitGuard = true;
   const reviseExistingDeck = hasUsableDeckForRevision();
   state.promptDraft = instruction;
@@ -489,6 +490,7 @@ async function submitInstruction(rawInstruction) {
     await runPptLiveBackend('auto', instruction, {
       includeTopic: !reviseExistingDeck,
       persistBeforeRun: true,
+      displayText,
     });
     return;
   } catch (error) {
@@ -1105,7 +1107,9 @@ async function runPptLiveBackend(operation, instruction, options = {}) {
     if (options.persistBeforeRun) {
       await persist(true);
     }
-    await runCoworkDeckGeneration(operation, instruction);
+    await runCoworkDeckGeneration(operation, instruction, {
+      displayText: options.displayText,
+    });
   } finally {
     backendRunInFlight = false;
   }
@@ -1154,6 +1158,7 @@ async function executeBackendTurn(requestInput, hooks = {}, options = {}) {
       sessionId: options.sessionId || undefined,
       appDataWorkspace: options.appDataWorkspace || undefined,
       model: preferredModel,
+      displayText: options.displayText || requestInput.instruction,
     });
     sessionId = result?.sessionId || null;
     turnId = result?.turnId || result?.actionRunId || null;
@@ -1447,7 +1452,7 @@ function buildBackendRequestBase(operation, instruction) {
  * applies them to the UI. Interrupted attempts retry as "continue" turns
  * inside the same agent session so the model resumes with its prior context.
  */
-async function runCoworkDeckGeneration(operation, instruction) {
+async function runCoworkDeckGeneration(operation, instruction, options = {}) {
   const runEpoch = deckEpoch;
   setBusy(true, t('working'));
   resetGeneration();
@@ -1717,6 +1722,7 @@ async function runCoworkDeckGeneration(operation, instruction) {
           sessionId: retrySession?.id || undefined,
           appDataWorkspace: retrySession?.project?.workspaceSubdir,
           resultKind: project ? 'text' : undefined,
+          displayText: options.displayText || instruction,
         });
         retrySession.id = sessionId || retrySession.id;
         state.agentSession = {
@@ -3881,6 +3887,7 @@ runtime().onLocaleChange?.(() => syncLocale());
 runtime().chat?.onUserMessage?.((payload) => {
   const text = String(payload?.text || '').trim();
   if (!text) return;
-  void submitInstruction(text);
+  const displayText = String(payload?.displayText || '').trim() || text;
+  void submitInstruction(text, displayText);
 });
 init();

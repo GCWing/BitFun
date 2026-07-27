@@ -54,6 +54,7 @@ function installAgentBackend(app) {
       const result = await app.agent.run(buildAgentPrompt(input), {
         runId: options.idempotencyKey,
         sessionName: 'PPT Live',
+        displayText: options.displayText || input.instruction,
         sessionId: options.sessionId,
         appDataWorkspace: options.appDataWorkspace,
         model: options.model || undefined,
