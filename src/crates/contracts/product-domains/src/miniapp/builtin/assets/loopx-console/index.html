@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme-type="dark">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>LoopX Console</title>
+</head>
+<body>
+  <div class="app-shell">
+    <header class="topbar">
+      <div class="brand">
+        <div class="brand-mark" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="6" cy="6" r="2.5"></circle>
+            <circle cx="18" cy="6" r="2.5"></circle>
+            <circle cx="12" cy="18" r="2.5"></circle>
+            <path d="M8.5 6h7M7.3 8.1l3.4 7.7M16.7 8.1l-3.4 7.7"></path>
+          </svg>
+        </div>
+        <div class="brand-copy">
+          <h1 id="app-title">LoopX 控制台</h1>
+          <p class="brand-meta">
+            <span id="runtime-version">LoopX</span>
+            <span class="dot" aria-hidden="true"></span>
+            <span id="updated-at">--</span>
+          </p>
+        </div>
+      </div>
+      <div class="toolbar">
+        <span class="toolbar-status"><span id="runtime-dot" class="status-dot"></span><span id="runtime-status">--</span></span>
+        <button id="refresh-button" class="icon-button" type="button" title="Refresh" aria-label="Refresh">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M20 11a8.1 8.1 0 0 0-15.5-2M4 4v5h5M4 13a8.1 8.1 0 0 0 15.5 2M20 20v-5h-5"></path>
+          </svg>
+        </button>
+      </div>
+    </header>
+
+    <div id="notice" class="notice" hidden>
+      <div id="notice-text"></div>
+      <button id="notice-retry" type="button" class="text-button">Retry</button>
+    </div>
+
+    <section class="summary-strip" aria-label="LoopX summary">
+      <div class="metric">
+        <span id="metric-goals" class="metric-value">--</span>
+        <span id="metric-goals-label" class="metric-label">Goals</span>
+      </div>
+      <div class="metric">
+        <span id="metric-progress" class="metric-value">--</span>
+        <span id="metric-progress-label" class="metric-label">Progress</span>
+      </div>
+      <div class="metric metric--attention">
+        <span id="metric-gates" class="metric-value">--</span>
+        <span id="metric-gates-label" class="metric-label">Gates</span>
+      </div>
+      <div class="metric metric--ready">
+        <span id="metric-runnable" class="metric-value">--</span>
+        <span id="metric-runnable-label" class="metric-label">Runnable</span>
+      </div>
+      <div class="metric">
+        <span id="metric-waiting" class="metric-value">--</span>
+        <span id="metric-waiting-label" class="metric-label">Waiting</span>
+      </div>
+    </section>
+
+    <section id="workspace-band" class="workspace-band">
+      <div class="workspace-main">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6.5h7l2 2h9v9H3z"></path></svg>
+        <div class="workspace-copy">
+          <span id="workspace-kicker" class="workspace-kicker">Current workspace</span>
+          <strong id="workspace-name" class="workspace-name">--</strong>
+          <span id="workspace-path" class="workspace-path">--</span>
+        </div>
+      </div>
+      <div class="workspace-action">
+        <span id="workspace-state" class="workspace-state">--</span>
+        <button id="new-goal-button" type="button" class="primary-button" hidden>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg>
+          <span id="new-goal-label">New goal</span>
+        </button>
+      </div>
+    </section>
+
+    <main class="console-grid">
+      <section class="goals-pane" aria-labelledby="goals-heading">
+        <div class="pane-header">
+          <div class="section-heading">
+            <h2 id="goals-heading">Goals</h2>
+            <span id="goal-count" class="section-count">0</span>
+          </div>
+          <div id="goal-filters" class="segments" role="group" aria-label="Goal filters">
+            <button type="button" data-filter="all" class="segment-button active">All</button>
+            <button type="button" data-filter="action" class="segment-button">Action</button>
+            <button type="button" data-filter="waiting" class="segment-button">Waiting</button>
+          </div>
+        </div>
+        <div id="goals-list" class="goal-list" aria-live="polite"></div>
+      </section>
+
+      <section class="detail-pane" aria-labelledby="detail-heading">
+        <div id="detail-empty" class="empty-state">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M12 5l7 7-7 7"></path></svg>
+          <strong id="empty-title">Select a goal</strong>
+          <span id="empty-copy">Inspect its current route and next safe action.</span>
+        </div>
+        <div id="detail-content" hidden>
+          <div class="detail-header">
+            <div class="detail-heading">
+              <h2 id="detail-heading">--</h2>
+              <div class="detail-meta"><span id="detail-current" class="detail-status" hidden>Current</span><span id="detail-repo">--</span></div>
+            </div>
+            <div class="detail-action"><button id="continue-button" type="button" class="primary-button" hidden>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"></path></svg>
+                <span id="continue-label">Continue</span>
+              </button></div>
+          </div>
+
+          <div class="detail-facts">
+            <div><span id="status-label">Status</span><strong id="detail-status">--</strong></div>
+            <div><span id="waiting-label">Waiting on</span><strong id="detail-waiting">--</strong></div>
+            <div><span id="adapter-label">Adapter</span><strong id="detail-adapter">--</strong></div>
+          </div>
+
+          <section class="detail-section next-action-section">
+            <div class="section-heading">
+              <h3 id="next-action-heading">Next safe action</h3>
+            </div>
+            <p id="next-action-text">--</p>
+          </section>
+
+          <section id="gate-section" class="detail-section" hidden>
+            <div class="section-heading">
+              <h3 id="gate-heading">User gate</h3>
+              <span id="gate-count" class="count-badge">0</span>
+            </div>
+            <div id="gate-list" class="detail-list"></div>
+          </section>
+
+          <section id="todo-section" class="detail-section" hidden>
+            <div class="section-heading">
+              <h3 id="todo-heading">Visible work</h3>
+              <span id="todo-count" class="count-badge">0</span>
+            </div>
+            <div id="todo-list" class="detail-list"></div>
+          </section>
+
+          <section class="detail-section">
+            <div class="section-heading">
+              <h3 id="handoff-heading">Agent handoff</h3>
+              <button id="reload-detail-button" type="button" class="text-button">Reload</button>
+            </div>
+            <div id="handoff-content" class="handoff-content">--</div>
+          </section>
+
+          <section id="progress-section" class="detail-section" hidden>
+            <div class="section-heading">
+              <h3 id="progress-heading">Recent progress</h3>
+            </div>
+            <div id="progress-list" class="timeline"></div>
+          </section>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <dialog id="new-goal-dialog" class="modal">
+    <form id="new-goal-form" method="dialog">
+      <div class="modal-header section-heading">
+        <h2 id="dialog-title">Start a LoopX goal</h2>
+        <button id="dialog-close" class="icon-button" type="button" aria-label="Close" title="Close">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"></path></svg>
+        </button>
+      </div>
+      <div class="modal-body">
+        <label for="goal-text" id="goal-text-label">Goal</label>
+        <textarea id="goal-text" rows="5" maxlength="2000" required></textarea>
+        <div id="dialog-workspace" class="workspace-path">--</div>
+      </div>
+      <div class="modal-actions">
+        <button id="dialog-cancel" class="secondary-button" type="button">Cancel</button>
+        <button id="dialog-submit" class="primary-button" type="submit">
+          <span id="dialog-submit-label">Start in Agent</span>
+        </button>
+      </div>
+    </form>
+  </dialog>
+</body>
+</html>

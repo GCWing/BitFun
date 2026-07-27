@@ -5,7 +5,7 @@ use serde_json;
 
 /// Build the Runtime Adapter script (JS) to inject into the iframe.
 /// Exposes window.app with call(), fs.*, shell.*, net.*, os.*, storage.*, dialog.*,
-/// ai.*, agent.*, deck.*, chat.*, clipboard.*, lifecycle, events.
+/// ai.*, agent.*, deck.*, chat.*, workspace.*, clipboard.*, lifecycle, events.
 pub fn build_bridge_script(
     app_id: &str,
     app_data_dir: &str,
@@ -74,6 +74,7 @@ pub fn build_bridge_script(
     shell: {{ exec: (cmd, opts) => _call('shell.exec', Array.isArray(cmd) ? {{ args: cmd, ...(opts||{{}}) }} : {{ command: cmd, ...(opts||{{}}) }}) }},
     net:   {{ fetch: (url, opts) => _call('net.fetch', {{ url: typeof url === 'string' ? url : (url && url.url), ...(opts||{{}}) }}) }},
     os:    {{ info: () => _call('os.info', {{}}) }},
+    workspace: {{ info: () => _rpc('workspace.info', {{}}) }},
     system: {{
       openExternal: (url) => _rpc('system.openExternal', {{ url }}),
       revealInFolder: (path) => _rpc('system.revealInFolder', {{ path }}),

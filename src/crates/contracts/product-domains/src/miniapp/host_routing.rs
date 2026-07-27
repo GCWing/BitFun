@@ -4,7 +4,12 @@ use std::path::{Path, PathBuf};
 
 const HOST_NAMESPACES: &[&str] = &["fs", "shell", "os", "net"];
 const DEFAULT_SHELL_EXEC_TIMEOUT_MS: u64 = 30_000;
-const SHELL_EXEC_DEFAULT_ENV: [(&str, &str); 2] = [("GIT_TERMINAL_PROMPT", "0"), ("LC_ALL", "C")];
+const SHELL_EXEC_DEFAULT_ENV: [(&str, &str); 4] = [
+    ("GIT_TERMINAL_PROMPT", "0"),
+    ("LC_ALL", "C"),
+    ("PYTHONUTF8", "1"),
+    ("PYTHONIOENCODING", "utf-8"),
+];
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum FsAccessMode {
@@ -432,7 +437,7 @@ pub fn shell_exec_timeout_ms(explicit_timeout_ms: Option<u64>) -> u64 {
     explicit_timeout_ms.unwrap_or(DEFAULT_SHELL_EXEC_TIMEOUT_MS)
 }
 
-pub fn shell_exec_default_env() -> [(&'static str, &'static str); 2] {
+pub fn shell_exec_default_env() -> [(&'static str, &'static str); 4] {
     SHELL_EXEC_DEFAULT_ENV
 }
 
@@ -524,7 +529,12 @@ mod tests {
         assert_eq!(shell_exec_timeout_ms(Some(8_000)), 8_000);
         assert_eq!(
             shell_exec_default_env(),
-            [("GIT_TERMINAL_PROMPT", "0"), ("LC_ALL", "C")]
+            [
+                ("GIT_TERMINAL_PROMPT", "0"),
+                ("LC_ALL", "C"),
+                ("PYTHONUTF8", "1"),
+                ("PYTHONIOENCODING", "utf-8")
+            ]
         );
     }
 
