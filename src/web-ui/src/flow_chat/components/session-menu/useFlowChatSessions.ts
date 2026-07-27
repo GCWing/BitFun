@@ -3,9 +3,11 @@
  *
  * Both the floating window mode header and the floating chat bubble header need
  * the same three things — the active session's title, the recent session list,
- * and the active session itself to derive stream state from. Keeping that in one
- * hook means one store subscription per surface and one definition of "recent
- * sessions" instead of two copies drifting apart.
+ * and the active session itself to derive stream state from. Agentic MiniApps
+ * may additionally track their bound hidden session after the normal active
+ * session is restored. Keeping both lookups in one hook means one store
+ * subscription per surface and one definition of "recent sessions" instead of
+ * two copies drifting apart.
  */
 
 import { useEffect, useMemo, useState } from 'react';
@@ -21,6 +23,8 @@ export const RECENT_SESSION_LIMIT = 10;
 export interface FlowChatSessionsSnapshot {
   activeSessionId: string | null;
   activeSession: Session | undefined;
+  /** Optional session a host surface owns even while another session is active. */
+  trackedSession: Session | undefined;
   sessionTitle: string;
   sessions: Session[];
 }
@@ -29,7 +33,9 @@ export function resolveDisplayTitle(session: Session | undefined): string {
   return resolveSessionTitle(session, (key, options) => i18nService.t(key, options));
 }
 
-export function useFlowChatSessions(): FlowChatSessionsSnapshot {
+export function useFlowChatSessions(
+  trackedSessionId?: string | null,
+): FlowChatSessionsSnapshot {
   const [state, setState] = useState<FlowChatState>(() => flowChatStore.getState());
 
   useEffect(() => {
@@ -42,6 +48,10 @@ export function useFlowChatSessions(): FlowChatSessionsSnapshot {
     () => (activeSessionId ? state.sessions.get(activeSessionId) : undefined),
     [state, activeSessionId]
   );
+  const trackedSession = useMemo(
+    () => (trackedSessionId ? state.sessions.get(trackedSessionId) : undefined),
+    [state, trackedSessionId],
+  );
 
   const sessionTitle = useMemo(() => resolveDisplayTitle(activeSession), [activeSession]);
 
@@ -53,5 +63,11 @@ export function useFlowChatSessions(): FlowChatSessionsSnapshot {
     [state]
   );
 
-  return { activeSessionId, activeSession, sessionTitle, sessions };
+  return {
+    activeSessionId,
+    activeSession,
+    trackedSession,
+    sessionTitle,
+    sessions,
+  };
 }

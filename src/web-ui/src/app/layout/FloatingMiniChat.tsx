@@ -32,6 +32,7 @@ import {
 import { pickLocalizedString } from '@/app/scenes/miniapps/utils/pickLocalizedString';
 import { renderMiniAppIcon } from '@/app/scenes/miniapps/utils/miniAppIcons';
 import MiniAppBubbleWelcome from './MiniAppBubbleWelcome';
+import { isFloatingMiniChatSessionExecuting } from './floatingMiniChatActivity';
 import './FloatingMiniChat.scss';
 
 /**
@@ -67,8 +68,6 @@ export const FloatingMiniChat: React.FC = () => {
     sessionId: string | null;
   } | null>(null);
 
-  const { activeSession, sessionTitle } = useFlowChatSessions();
-
   const activeMiniAppId = useMemo(
     () => (typeof activeTabId === 'string' && activeTabId.startsWith('miniapp:')
       ? activeTabId.slice('miniapp:'.length)
@@ -100,31 +99,33 @@ export const FloatingMiniChat: React.FC = () => {
   const bubbleCustomization = activeComposerClaim?.customization;
   const activeComposerToken = activeComposerClaim?.token;
   const activeComposerSessionId = activeComposerClaim?.sessionId;
+  const {
+    activeSession,
+    trackedSession: activeMiniAppSession,
+    sessionTitle,
+  } = useFlowChatSessions(activeComposerSessionId);
   const isMiniAppSessionReady = Boolean(
     activeComposerSessionId && activeSession?.sessionId === activeComposerSessionId
   );
   const displayedSession = activeComposerClaim
-    ? (isMiniAppSessionReady ? activeSession : undefined)
+    ? activeMiniAppSession
     : activeSession;
   const displayedTitle = activeComposerClaim
     ? (bubbleCustomization?.title || activeMiniAppName)
     : sessionTitle;
 
   const isStreaming = useMemo(() => {
-    if (
-      !displayedSession
-      || !displayedSession.dialogTurns
-      || displayedSession.dialogTurns.length === 0
-    ) {
-      return false;
-    }
-    const lastTurn = displayedSession.dialogTurns[displayedSession.dialogTurns.length - 1];
+    const lastTurn = displayedSession?.dialogTurns.at(-1);
     return (
-      lastTurn.status === 'processing' ||
-      lastTurn.status === 'finishing' ||
-      lastTurn.status === 'image_analyzing'
+      lastTurn?.status === 'processing'
+      || lastTurn?.status === 'finishing'
+      || lastTurn?.status === 'image_analyzing'
     );
   }, [displayedSession]);
+  const isMiniAppSessionExecuting = Boolean(
+    activeComposerClaim
+    && isFloatingMiniChatSessionExecuting(activeMiniAppSession),
+  );
 
   // Idempotent so it is safe to fire from several input paths at once, and so a
   // repeat press during the open animation can never toggle the panel back.
@@ -381,12 +382,20 @@ export const FloatingMiniChat: React.FC = () => {
         className={[
           'bitfun-fmc__button',
           activeComposerClaim && 'bitfun-fmc__button--miniapp',
+          isMiniAppSessionExecuting && 'bitfun-fmc__button--processing',
         ].filter(Boolean).join(' ')}
         onPointerDown={handleTriggerPointerDown}
         onClick={handleOpen}
         aria-expanded={isOpen}
+        aria-busy={isMiniAppSessionExecuting || undefined}
         aria-label={activeComposerClaim ? displayedTitle : t('toolCards.toolbar.startNewChat')}
       >
+        {isMiniAppSessionExecuting && (
+          <span
+            className="bitfun-fmc__button-activity"
+            aria-hidden="true"
+          />
+        )}
         {activeComposerClaim ? (
           <span
             className="bitfun-fmc__miniapp-trigger-icon"
