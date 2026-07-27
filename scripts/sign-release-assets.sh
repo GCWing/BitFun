@@ -36,14 +36,32 @@ if ! command -v minisign >/dev/null 2>&1; then
   echo "[sign] Installing minisign..."
   # Ubuntu's package is not available in the default repositories on every
   # runner image (notably ubuntu-24.04-arm). Prefer it when present, then use
-  # the portable Rust distribution as a fallback.
+  # the upstream portable Linux distribution as a fallback.
   if ! sudo apt-get install -y --no-install-recommends minisign >/dev/null 2>&1; then
-    if ! command -v cargo >/dev/null 2>&1; then
-      echo "[sign] ERROR: minisign is unavailable and cargo is not installed." >&2
+    if ! command -v curl >/dev/null 2>&1 || ! command -v sha256sum >/dev/null 2>&1 || ! command -v tar >/dev/null 2>&1; then
+      echo "[sign] ERROR: minisign is unavailable and the Linux fallback prerequisites are missing." >&2
       exit 1
     fi
     MINISIGN_ROOT="${RUNNER_TEMP:-${TMPDIR:-/tmp}}/bitfun-minisign"
-    cargo install --registry crates-io --locked --root "$MINISIGN_ROOT" minisign >/dev/null
+    MINISIGN_VERSION="0.12"
+    case "$(uname -m)" in
+      x86_64) MINISIGN_ARCH="x86_64" ;;
+      aarch64) MINISIGN_ARCH="aarch64" ;;
+      *)
+        echo "[sign] ERROR: unsupported Linux architecture for minisign fallback: $(uname -m)" >&2
+        exit 1
+        ;;
+    esac
+    MINISIGN_ARCHIVE="$MINISIGN_ROOT/minisign-linux.tar.gz"
+    mkdir -p "$MINISIGN_ROOT/bin"
+    curl -fsSL --retry 3 \
+      "https://github.com/jedisct1/minisign/releases/download/${MINISIGN_VERSION}/minisign-${MINISIGN_VERSION}-linux.tar.gz" \
+      -o "$MINISIGN_ARCHIVE"
+    echo "9a599b48ba6eb7b1e80f12f36b94ceca7c00b7a5173c95c3efc88d9822957e73  $MINISIGN_ARCHIVE" | sha256sum -c -
+    tar -xzf "$MINISIGN_ARCHIVE" -C "$MINISIGN_ROOT"
+    install -m 0755 \
+      "$MINISIGN_ROOT/minisign-linux/$MINISIGN_ARCH/minisign" \
+      "$MINISIGN_ROOT/bin/minisign"
     export PATH="$MINISIGN_ROOT/bin:$PATH"
   fi
 fi
