@@ -511,14 +511,25 @@ pub async fn start_task(
     Ok(RelayTaskStart { script_path })
 }
 
-/// Strip trailing CR from a file already on the relay host, in place.
+/// Strip CR from a file already on the relay host, in place.
 ///
-/// POSIX `sed` (no `-i`, whose syntax differs between GNU and BSD userlands).
-/// The rewrite drops the file's mode, so callers must `chmod` afterwards.
+/// Deliberately `tr -d '\r'` and not `sed 's/<CR>$//'`: `tr` expands the `\r`
+/// escape itself, so the command contains no raw CR byte. A raw CR would be
+/// carried through `to_unix_script` on its way out — the CR remover travelling
+/// through the CR remover — and any text-mode hop that rewrites line endings
+/// would silently turn this into a no-op. Removing every CR rather than only
+/// trailing ones is safe here because the scripts are generated bash that never
+/// contains an intentional CR (`embedded_scripts_are_lf_only` enforces that).
+///
+/// `sed -i` is avoided too: its syntax differs between GNU and BSD userlands.
+/// The rewrite replaces the file, so callers must `chmod` afterwards, and the
+/// scratch file is cleaned up even when the rewrite fails.
 fn strip_cr_command(path: &str) -> String {
     let src = shell_quote_posix(path);
     let tmp = shell_quote_posix(&format!("{path}.lf"));
-    format!("sed 's/\r$//' {src} > {tmp} && mv {tmp} {src}")
+    format!(
+        "{{ tr -d '\\r' < {src} > {tmp} && mv {tmp} {src}; }} || {{ rm -f {tmp}; false; }}"
+    )
 }
 
 /// Prepare uploaded scripts for the PTY: normalize line endings, make them
@@ -1931,6 +1942,12 @@ mod tests {
         }
         // The rewrite must not leave its scratch file behind.
         assert!(!std::path::Path::new(&format!("{script_path}.lf")).exists());
+        // No raw CR in the command itself: it would be eaten by to_unix_script
+        // or by any text-mode hop, silently disabling the strip.
+        assert!(
+            !command.contains('\r'),
+            "the CR strip must not depend on a raw CR surviving transport"
+        );
         assert!(!std::path::Path::new(&pid_path).exists(), "stale pid cleared");
         assert!(
             !std::path::Path::new(&driver_pid_path).exists(),
