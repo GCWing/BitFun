@@ -962,6 +962,7 @@ pub struct SkillSettingsConfig {
 
 /// API view of a mode configuration.
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
 #[serde(default)]
 pub struct AgentProfileView {
     pub profile_id: String,

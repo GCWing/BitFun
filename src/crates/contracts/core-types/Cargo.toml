@@ -11,6 +11,15 @@ crate-type = ["rlib"]
 [dependencies]
 serde = { workspace = true }
 serde_json = { workspace = true }
+ts-rs = { workspace = true, optional = true }
+
+[features]
+default = []
+# Derive `ts_rs::TS` on the wire types so downstream crates (runtime-ports,
+# app-server) can export TypeScript bindings for types that reference them.
+# Orthogonal to the existing serde contract; pulls no extra integration
+# dependency. Mirrors the `ts` feature in `bitfun-product-domains`.
+ts = ["dep:ts-rs"]
 
 [lints]
 workspace = true

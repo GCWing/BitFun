@@ -8,6 +8,7 @@ members = [
     "src/apps/miniapp-market-server",
     "src/apps/skin-market-server",
     "src/crates/interfaces/acp",
+    "src/crates/interfaces/app-server",
     "src/crates/interfaces/sdk-host",
     "src/crates/adapters/agent-runtime-ipc",
     "src/crates/assembly/agent-content",
@@ -86,6 +87,9 @@ futures-util = "0.3.31"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 serde_yaml = "0.9"
+
+# TypeScript binding generation (schema-first; gated by per-crate `ts` features)
+ts-rs = { version = "12", features = ["serde-json-impl", "no-serde-warnings"] }
 
 # Error handling
 anyhow = "1.0"

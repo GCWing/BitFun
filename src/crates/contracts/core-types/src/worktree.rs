@@ -26,6 +26,7 @@ pub enum SessionExecutionTargetRequest {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, Default)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
 #[serde(rename_all = "camelCase")]
 pub enum SessionExecutionTargetKind {
     #[default]
@@ -35,6 +36,7 @@ pub enum SessionExecutionTargetKind {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
 #[serde(rename_all = "camelCase")]
 pub enum WorktreeLifecycle {
     Managed,
@@ -44,6 +46,7 @@ pub enum WorktreeLifecycle {
 
 /// Resolved and persisted execution location for a session.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
 #[serde(rename_all = "camelCase")]
 pub struct SessionExecutionTarget {
     pub kind: SessionExecutionTargetKind,

@@ -10,7 +10,12 @@ use std::sync::Arc;
 use tokio::sync::RwLock;
 
 /// Shared application state for the server (mirrors Desktop's AppState).
-pub struct ServerAppState {
+///
+/// Several fields are stored to keep the corresponding services alive (they
+/// register global singletons during `initialize`), not because they are read
+/// again after initialization.
+#[allow(dead_code)]
+pub(crate) struct ServerAppState {
     pub ai_client_factory: Arc<AIClientFactory>,
     pub workspace_service: Arc<workspace::WorkspaceService>,
     pub workspace_path: Arc<RwLock<Option<std::path::PathBuf>>>,
@@ -30,7 +35,7 @@ pub struct ServerAppState {
 /// Initialize all core services and return the shared server state.
 ///
 /// The optional `workspace` path, when provided, is opened automatically.
-pub async fn initialize(workspace: Option<String>) -> anyhow::Result<Arc<ServerAppState>> {
+pub(crate) async fn initialize(workspace: Option<String>) -> anyhow::Result<Arc<ServerAppState>> {
     log::info!("Initializing BitFun server core services");
 
     // 1. Global config
@@ -137,9 +142,12 @@ pub async fn initialize(workspace: Option<String>) -> anyhow::Result<Arc<ServerA
     coordination::set_global_scheduler(scheduler.clone());
 
     // Cron service
-    let cron_service =
-        bitfun_core::service::cron::CronService::new(path_manager.clone(), scheduler.clone())
-            .await?;
+    let cron_service = bitfun_core::service::cron::CronService::new(
+        path_manager.clone(),
+        coordinator.clone(),
+        scheduler.clone(),
+    )
+    .await?;
     bitfun_core::service::cron::set_global_cron_service(cron_service.clone());
     let cron_subscriber = Arc::new(bitfun_core::service::cron::CronEventSubscriber::new(
         cron_service.clone(),

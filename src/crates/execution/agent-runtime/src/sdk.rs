@@ -53,6 +53,11 @@ pub use crate::runtime::{
 pub use crate::session_state::{session_state_label_for_state, ProcessingPhase, SessionState};
 pub use bitfun_agent_tools::{ToolRegistry, ToolRegistryItem};
 pub use bitfun_core_types::SessionUsageReport;
+// Event envelope types re-exported so protocol surfaces (e.g. `bitfun-app-server`)
+// can carry the runtime event stream over a JSON-RPC transport without depending
+// on `bitfun-events` directly. These are the exact types the runtime's event
+// subscribers receive; the app-server forwards them as `agent/event` notifications.
+pub use bitfun_events::{AgenticEvent, AgenticEventEnvelope};
 pub use bitfun_harness::{
     build_descriptor_harness_registry, HarnessCapability, HarnessProviderDescriptor,
     HarnessRegistry, HarnessWorkflow,

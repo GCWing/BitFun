@@ -20,6 +20,7 @@ futures = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 serde_yaml = { workspace = true, optional = true }
+ts-rs = { workspace = true, optional = true }
 
 anyhow = { workspace = true }
 thiserror = { workspace = true }
@@ -133,6 +134,21 @@ bitfun-transport = { path = "../../adapters/transport" }
 # construction path select stable owner features instead of inheriting this
 # union.
 default = ["product-full"]
+# Derive `ts_rs::TS` on selected wire types (e.g. `AgentProfileView`) for
+# downstream TypeScript binding export. Propagates `ts` to the upstream crates
+# whose types core re-exports (git types live in `services-integrations`,
+# permission/session types in `runtime-ports`/`product-domains`). Weak feature
+# references add the TS derives only when their optional dependencies are
+# already enabled by an owning capability, so `ts` stays orthogonal to the
+# product matrix. The other two upstream crates are non-optional and propagate
+# their `ts` features directly.
+ts = [
+    "dep:ts-rs",
+    "bitfun-core-types/ts",
+    "bitfun-services-integrations?/ts",
+    "bitfun-product-domains?/ts",
+    "bitfun-runtime-ports/ts",
+]
 product-full = [
     "agent-runtime",
     "canvas-runtime",

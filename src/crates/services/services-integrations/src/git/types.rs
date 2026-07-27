@@ -5,6 +5,7 @@ use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
 pub struct GitRepository {
     pub path: String,
     pub name: String,
@@ -15,6 +16,7 @@ pub struct GitRepository {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
 pub struct GitStatus {
     pub staged: Vec<GitFileStatus>,
     pub unstaged: Vec<GitFileStatus>,
@@ -27,6 +29,7 @@ pub struct GitStatus {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
 pub struct GitFileStatus {
     pub path: String,
     pub status: String,
@@ -35,6 +38,7 @@ pub struct GitFileStatus {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
 pub struct GitBranch {
     pub name: String,
     pub current: bool,
@@ -65,6 +69,7 @@ pub struct GitBranch {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
 pub struct GitBranchStats {
     pub commit_count: i32,
     pub contributor_count: i32,
@@ -74,6 +79,7 @@ pub struct GitBranchStats {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
 pub struct GitLinesChanged {
     pub additions: i32,
     pub deletions: i32,

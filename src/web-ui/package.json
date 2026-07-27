@@ -7,9 +7,11 @@
   "scripts": {
     "dev": "vite",
     "dev:force": "vite --force",
+    "gen:types": "cargo test --package bitfun-app-server --features ts --no-default-features export -- --nocapture && node scripts/gen-api-barrel.mjs",
     "build": "vite build",
     "build:desktop": "vite build --mode desktop",
     "build:web": "vite build --mode web",
+    "build:with-types": "npm run gen:types && npm run build",
     "preview": "vite preview",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",

@@ -36,6 +36,7 @@
       "@/styles/*": ["src/component-library/styles/*"],
       "@/types/*": ["src/shared/types/*"],
       "@/utils/*": ["src/shared/utils/*"],
+      "@/generated/*": ["src/generated/*"],
       "@components/*": ["src/component-library/components/*"]
     }
   },

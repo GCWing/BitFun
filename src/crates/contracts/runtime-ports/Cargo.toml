@@ -18,10 +18,24 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 tokio = { workspace = true, features = ["sync"] }
 tokio-util = { workspace = true }
+ts-rs = { workspace = true, optional = true }
 
 [features]
 default = []
 permission = ["dep:bitfun-product-domains"]
+# Derive `ts_rs::TS` on the wire types so downstream crates (app-server) can
+# export TypeScript bindings. The `permission` feature gates the product
+# types; enabling `ts` requires `permission` so all TS-derivable types are in
+# scope. `bitfun-product-domains?/ts` is a weak feature reference: it adds the
+# TS derive to the product-domain types only when `bitfun-product-domains` is
+# already enabled (always true here via `permission`), so `ts` cannot become an
+# undeclared owner of the optional product-domain dependency.
+ts = [
+    "dep:ts-rs",
+    "permission",
+    "bitfun-core-types/ts",
+    "bitfun-product-domains?/ts",
+]
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["macros", "rt"] }

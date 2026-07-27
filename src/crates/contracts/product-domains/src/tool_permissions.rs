@@ -312,6 +312,7 @@ pub fn resolve_child_permission_policy(
 
 /// Identifies the boundary that originated a permission request.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
 #[serde(rename_all = "snake_case")]
 pub enum PermissionRequestSourceKind {
     ToolCall,
@@ -320,6 +321,7 @@ pub enum PermissionRequestSourceKind {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
 #[serde(rename_all = "camelCase")]
 pub struct PermissionRequestSource {
     pub kind: PermissionRequestSourceKind,
@@ -333,6 +335,7 @@ pub struct PermissionRequestSource {
 /// concrete child execution. These fields only project the existing
 /// delegation relationship to interactive surfaces and audit consumers.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
 #[serde(rename_all = "camelCase")]
 pub struct PermissionDelegationContext {
     pub parent_session_id: String,
@@ -351,6 +354,7 @@ pub struct PermissionDelegationContext {
 /// presentation and audit persistence. Raw secrets and unrestricted command
 /// payloads must remain outside this DTO.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
 #[serde(rename_all = "camelCase")]
 pub struct PermissionRequest {
     pub request_id: String,
@@ -395,6 +399,7 @@ pub struct PermissionRequest {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
 #[serde(tag = "reply", rename_all = "snake_case")]
 pub enum PermissionReply {
     Once,
@@ -406,6 +411,7 @@ pub enum PermissionReply {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
 #[serde(rename_all = "snake_case")]
 pub enum PermissionReplySource {
     User,
@@ -415,6 +421,7 @@ pub enum PermissionReplySource {
 
 /// Process-local lifecycle event projected to interactive permission surfaces.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
 #[serde(
     tag = "event",
     rename_all = "snake_case",
@@ -437,6 +444,7 @@ pub enum PermissionRequestEvent {
 
 /// A remembered allow scoped by project, action, and resource.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
 #[serde(rename_all = "camelCase")]
 pub struct PermissionGrant {
     pub project_id: String,
@@ -456,6 +464,7 @@ impl PermissionGrant {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
 #[serde(rename_all = "camelCase")]
 pub struct PermissionGrantKey {
     pub project_id: String,
@@ -464,6 +473,7 @@ pub struct PermissionGrantKey {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
 #[serde(tag = "event", rename_all = "snake_case")]
 pub enum PermissionAuditEvent {
     Requested,
@@ -478,6 +488,7 @@ pub enum PermissionAuditEvent {
 
 /// An append-only audit fact containing only presentation-safe request data.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
 #[serde(rename_all = "camelCase")]
 pub struct PermissionAuditRecord {
     pub audit_id: String,

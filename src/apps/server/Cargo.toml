@@ -12,6 +12,15 @@ path = "src/main.rs"
 [dependencies]
 bitfun-core = { path = "../../crates/assembly/core", default-features = false, features = ["product-full"] }
 
+# App-server surface: an in-process JSON-RPC server/client pair over an
+# in-memory channel transport. The websocket handler routes agent kernel RPCs
+# through this client so agent interfaces uniformly go through app-server.
+bitfun-app-server = { path = "../../crates/interfaces/app-server" }
+bitfun-agent-runtime = { path = "../../crates/execution/agent-runtime" }
+bitfun-events = { path = "../../crates/contracts/events" }
+
+agent-client-protocol = { workspace = true }
+
 # Web framework
 axum = { workspace = true }
 tower-http = { workspace = true }
@@ -26,8 +35,10 @@ base64 = { workspace = true }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
 futures-util = { workspace = true }
+futures = { workspace = true }
 chrono = { workspace = true }
 dirs = { workspace = true }
+log = { workspace = true }
 
 [lints]
 workspace = true

@@ -1,64 +1,52 @@
-use anyhow::Result;
-/// WebSocket handler
-///
-/// Implements real-time bidirectional communication with frontend:
-/// - Command request/response (JSON RPC format)
-/// - Event push (streaming output, tool calls, etc.)
+//! WebSocket handler.
+//!
+//! Under browser-direct ACP-over-WS (Step 2), the browser speaks raw JSON-RPC
+//! 2.0 over the WebSocket. Each connection is handed straight to
+//! [`bitfun_app_server::BitfunAppServer::serve`] via the [`super::ws_transport`]
+//! `Lines` adapter -- no custom `{type:"request"|...}` envelope, no
+//! `route_agent_command`, no shared in-process client. The browser connects
+//! directly to the in-process app-server over native JSON-RPC; runtime and
+//! permission events are projected to the frontend shape (`agentic://<type>`,
+//! `permission://event`) and pushed by the `serve` main loop as
+//! `agent/frontendEvent` notifications.
+//!
+//! # Threat model (single-user local mode)
+//!
+//! This server targets a single-user, local-only deployment: one developer's
+//! browser connecting to a loopback Server Host. There is **no per-connection
+//! authentication, token exchange, or workspace/user/execution-domain binding**
+//! yet. Every accepted connection can access the full agent kernel control
+//! plane (sessions, turns, permissions, config, git). This is acceptable only
+//! because the origin allow-list is fail-closed and the server is expected to
+//! bind loopback. Multi-user, remote, or untrusted-network deployments require
+//! connection-level authentication and scoped authorization that are **not**
+//! implemented in this PR.
+
 use axum::{
     extract::{
-        ws::{Message, WebSocket, WebSocketUpgrade},
-        State,
+        ws::{WebSocket, WebSocketUpgrade},
+        Extension, State,
     },
     http::{header::ORIGIN, HeaderMap, StatusCode},
     response::{IntoResponse, Response},
 };
-use futures_util::{SinkExt, StreamExt};
-use serde::{Deserialize, Serialize};
+
+use bitfun_app_server::BitfunAppServer;
 
 use crate::AppState;
 
+/// Maximum accepted WS frame size (256 KiB), matching the prior envelope handler.
 const MAX_WS_TEXT_BYTES: usize = 256 * 1024;
 
-/// WebSocket message protocol (JSON RPC 2.0 style)
-#[derive(Debug, Deserialize, Serialize)]
-#[serde(tag = "type")]
-enum WsMessage {
-    /// Request message
-    #[serde(rename = "request")]
-    Request {
-        id: String,
-        method: String,
-        params: serde_json::Value,
-    },
-    /// Response message
-    #[serde(rename = "response")]
-    Response {
-        id: String,
-        #[serde(skip_serializing_if = "Option::is_none")]
-        result: Option<serde_json::Value>,
-        #[serde(skip_serializing_if = "Option::is_none")]
-        error: Option<ErrorInfo>,
-    },
-    /// Event message (no response required)
-    #[serde(rename = "event")]
-    Event {
-        event: String,
-        payload: serde_json::Value,
-    },
-}
-
-#[derive(Debug, Deserialize, Serialize)]
-struct ErrorInfo {
-    code: i32,
-    message: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    data: Option<serde_json::Value>,
-}
-
-/// WebSocket connection handler
+/// WebSocket connection handler.
+///
+/// Validates the browser origin, then upgrades the connection and runs one
+/// in-process `BitfunAppServer::serve` per connection over the WS-bridged
+/// `Lines` transport.
 pub(crate) async fn websocket_handler(
     ws: WebSocketUpgrade,
     State(state): State<AppState>,
+    Extension(bitfun_app_server): Extension<BitfunAppServer>,
     headers: HeaderMap,
 ) -> Response {
     if !browser_origin_allowed(&headers, &state) {
@@ -68,12 +56,19 @@ pub(crate) async fn websocket_handler(
     tracing::info!("New WebSocket connection");
     ws.max_message_size(MAX_WS_TEXT_BYTES)
         .max_frame_size(MAX_WS_TEXT_BYTES)
-        .on_upgrade(|socket| handle_socket(socket, state))
+        .on_upgrade(move |socket| handle_socket(socket, bitfun_app_server))
 }
 
+/// Check the browser `Origin` header against the allow-list.
+///
+/// **Fail-closed**: a missing or unparsable `Origin` header is rejected. This
+/// prevents non-browser clients (which do not send `Origin`) from silently
+/// accessing the full runtime control plane. Only exact allow-list matches
+/// pass. See the module-level threat-model note for the single-user local
+/// deployment assumption.
 fn browser_origin_allowed(headers: &HeaderMap, state: &AppState) -> bool {
     let Some(origin) = headers.get(ORIGIN) else {
-        return true;
+        return false;
     };
     let Ok(origin) = origin.to_str() else {
         return false;
@@ -82,199 +77,29 @@ fn browser_origin_allowed(headers: &HeaderMap, state: &AppState) -> bool {
         .is_ok_and(|origin| state.allowed_browser_origins.contains(&origin))
 }
 
-/// Handle a single WebSocket connection
-async fn handle_socket(socket: WebSocket, state: AppState) {
-    let (mut sender, mut receiver) = socket.split();
-
+/// Run one in-process app-server over the WebSocket for the connection's life.
+///
+/// `BitfunAppServer` is `Clone` (cheap Arc clone), so each connection gets its
+/// own `serve` task; the shared `AgentRuntime` is internally synchronized, and
+/// each connection subscribes independently to the runtime event/permission
+/// streams. The task ends when the WS transport closes.
+async fn handle_socket(socket: WebSocket, bitfun_app_server: BitfunAppServer) {
     tracing::info!("WebSocket connection established");
-
-    let welcome_msg = WsMessage::Event {
-        event: "connection_established".to_string(),
-        payload: serde_json::json!({
-            "server": "BitFun Server",
-            "version": env!("CARGO_PKG_VERSION"),
-            "timestamp": chrono::Utc::now().timestamp(),
-        }),
-    };
-
-    if let Ok(json) = serde_json::to_string(&welcome_msg) {
-        let _ = sender.send(Message::Text(json.into())).await;
-    }
-
-    while let Some(msg) = receiver.next().await {
-        match msg {
-            Ok(Message::Text(text)) => {
-                if text.len() > MAX_WS_TEXT_BYTES {
-                    tracing::warn!(
-                        message_bytes = text.len(),
-                        "Rejected oversized WebSocket message"
-                    );
-                    break;
-                }
-                if handle_text_message(&mut sender, &text, &state)
-                    .await
-                    .is_err()
-                {
-                    tracing::warn!(
-                        error_category = "message_processing",
-                        "Failed to handle WebSocket message"
-                    );
-                }
-            }
-            Ok(Message::Binary(data)) => {
-                tracing::warn!(
-                    message_bytes = data.len(),
-                    "Rejected unsupported binary WebSocket message"
-                );
-                break;
-            }
-            Ok(Message::Ping(data)) => {
-                tracing::trace!("Received Ping");
-                let _ = sender.send(Message::Pong(data)).await;
-            }
-            Ok(Message::Pong(_)) => {
-                tracing::trace!("Received Pong");
-            }
-            Ok(Message::Close(_)) => {
-                tracing::info!("Client closed connection");
-                break;
-            }
-            Err(_) => {
-                tracing::warn!(error_category = "transport", "WebSocket connection failed");
-                break;
-            }
-        }
-    }
-
-    tracing::info!("WebSocket connection closed");
-}
-
-/// Handle text message
-async fn handle_text_message(
-    sender: &mut futures_util::stream::SplitSink<WebSocket, Message>,
-    text: &str,
-    state: &AppState,
-) -> Result<()> {
-    let ws_msg: WsMessage = serde_json::from_str(text)?;
-
-    match ws_msg {
-        WsMessage::Request { id, method, params } => {
-            tracing::info!(
-                method = safe_protocol_token(&method),
-                id_kind = "string",
-                "Handling WebSocket request"
-            );
-
-            let result = handle_command(&method, params, state).await;
-
-            let response = match result {
-                Ok(data) => WsMessage::Response {
-                    id,
-                    result: Some(data),
-                    error: None,
-                },
-                Err(error) => WsMessage::Response {
-                    id,
-                    result: None,
-                    error: Some(ErrorInfo {
-                        code: json_rpc_error_code(error.code),
-                        message: error.detail.clone(),
-                        data: serde_json::to_value(error).ok(),
-                    }),
-                },
-            };
-
-            let json = serde_json::to_string(&response)?;
-            sender.send(Message::Text(json.into())).await?;
-        }
-        WsMessage::Event { event, .. } => {
-            tracing::debug!(
-                event = safe_protocol_token(&event),
-                "Received WebSocket event"
-            );
-        }
-        WsMessage::Response { .. } => {
-            tracing::warn!("Received response message (client should not send responses)");
-        }
-    }
-
-    Ok(())
-}
-
-/// Handle specific commands
-async fn handle_command(
-    method: &str,
-    params: serde_json::Value,
-    state: &AppState,
-) -> bitfun_core::external_sources::ExternalSourceOperationResult<serde_json::Value> {
-    if super::external_sources::supports(method) {
-        return super::external_sources::dispatch(method, params, state).await;
-    }
-    if super::dispatch::supports(method) {
-        return super::dispatch::dispatch(method, params, state).await;
-    }
-    match method {
-        "ping" => Ok(serde_json::json!({
-            "pong": true,
-            "timestamp": chrono::Utc::now().timestamp(),
-        })),
-        _ => {
-            tracing::warn!(
-                method = safe_protocol_token(method),
-                "Unknown Server Host command"
-            );
-            Err(bitfun_core::external_sources::ExternalSourceOperationError::host_capability_unavailable(
-                "Unknown Server Host operation",
-            ))
-        }
-    }
-}
-
-fn safe_protocol_token(value: &str) -> &str {
-    if !value.is_empty()
-        && value.len() <= 64
-        && value
-            .bytes()
-            .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'_' | b'-' | b'.'))
-    {
-        value
-    } else {
-        "<invalid>"
-    }
-}
-
-fn json_rpc_error_code(
-    code: bitfun_core::external_sources::ExternalSourceOperationErrorCode,
-) -> i32 {
-    use bitfun_core::external_sources::ExternalSourceOperationErrorCode;
-    match code {
-        ExternalSourceOperationErrorCode::InvalidRequest => -32602,
-        ExternalSourceOperationErrorCode::HostCapabilityUnavailable => -32601,
-        ExternalSourceOperationErrorCode::StaleRevision
-        | ExternalSourceOperationErrorCode::Conflict => -32009,
-        ExternalSourceOperationErrorCode::HostUnavailable
-        | ExternalSourceOperationErrorCode::Unavailable
-        | ExternalSourceOperationErrorCode::RuntimeUnavailable
-        | ExternalSourceOperationErrorCode::DependencyFailed
-        | ExternalSourceOperationErrorCode::Timeout
-        | ExternalSourceOperationErrorCode::Overloaded
-        | ExternalSourceOperationErrorCode::ProcessLost
-        | ExternalSourceOperationErrorCode::TemporarilyUnavailable => -32003,
-        ExternalSourceOperationErrorCode::Cancelled => -32800,
-        ExternalSourceOperationErrorCode::TrustRequired
-        | ExternalSourceOperationErrorCode::PolicyIncompatible
-        | ExternalSourceOperationErrorCode::PolicyLimited
-        | ExternalSourceOperationErrorCode::Unsupported
-        | ExternalSourceOperationErrorCode::IncompatibleVersion => -32010,
-        ExternalSourceOperationErrorCode::NotFound => -32004,
-        ExternalSourceOperationErrorCode::InvalidResponse
-        | ExternalSourceOperationErrorCode::Internal => -32603,
+    let lines = super::ws_transport::ws_lines(socket);
+    let result = bitfun_app_server.serve(lines).await;
+    match &result {
+        Ok(()) => tracing::info!("WebSocket app-server connection ended cleanly"),
+        Err(error) => tracing::warn!(
+            error = ?error,
+            "WebSocket app-server connection ended with error"
+        ),
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use axum::http::HeaderMap;
 
     fn state_with_allowed_origins(origins: &[&str]) -> AppState {
         AppState {
@@ -296,34 +121,7 @@ mod tests {
         let mut unknown_headers = HeaderMap::new();
         unknown_headers.insert(ORIGIN, "https://example.test".parse().unwrap());
         assert!(!browser_origin_allowed(&unknown_headers, &state));
-        assert!(browser_origin_allowed(&HeaderMap::new(), &state));
-    }
-
-    #[test]
-    fn typed_errors_keep_stable_json_rpc_categories() {
-        use bitfun_core::external_sources::ExternalSourceOperationErrorCode;
-
-        assert_eq!(
-            json_rpc_error_code(ExternalSourceOperationErrorCode::InvalidRequest),
-            -32602
-        );
-        assert_eq!(
-            json_rpc_error_code(ExternalSourceOperationErrorCode::HostCapabilityUnavailable),
-            -32601
-        );
-        assert_eq!(
-            json_rpc_error_code(ExternalSourceOperationErrorCode::PolicyLimited),
-            -32010
-        );
-    }
-
-    #[test]
-    fn client_protocol_tokens_are_bounded_before_logging() {
-        assert_eq!(
-            safe_protocol_token("get_external_source_snapshot"),
-            "get_external_source_snapshot"
-        );
-        assert_eq!(safe_protocol_token("method\nsecret"), "<invalid>");
-        assert_eq!(safe_protocol_token(&"x".repeat(65)), "<invalid>");
+        // Missing Origin must be rejected (fail-closed).
+        assert!(!browser_origin_allowed(&HeaderMap::new(), &state));
     }
 }
