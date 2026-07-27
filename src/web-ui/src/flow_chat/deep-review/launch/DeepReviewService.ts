@@ -37,6 +37,7 @@ import {
   type DeepReviewLaunchStep,
   type FailedDeepReviewCleanupResult,
 } from './launchErrors';
+import { sessionProjectWorkspacePath } from '../../utils/sessionWorkspace';
 
 export {
   DEEP_REVIEW_SLASH_COMMAND,
@@ -86,7 +87,9 @@ async function cleanupFailedDeepReviewLaunch(
 ): Promise<FailedDeepReviewCleanupResult> {
   const cleanupIssues: string[] = [];
   const childSession = flowChatStore.getState().sessions.get(childSessionId);
-  const workspacePath = childSession?.workspacePath;
+  const workspacePath = childSession
+    ? sessionProjectWorkspacePath(childSession)
+    : undefined;
   const remoteConnectionId = childSession?.remoteConnectionId;
   const remoteSshHost = childSession?.remoteSshHost;
 

@@ -1,6 +1,6 @@
 //! Agentic Events Definition
 pub use bitfun_core_types::errors::{AiErrorDetail, ErrorCategory};
-use bitfun_core_types::ToolImageAttachment;
+use bitfun_core_types::{SessionExecutionTarget, ToolImageAttachment};
 use serde::{Deserialize, Serialize};
 use std::time::SystemTime;
 
@@ -76,6 +76,15 @@ pub enum AgenticEvent {
         /// Workspace path this session belongs to. None for locally-created sessions.
         #[serde(skip_serializing_if = "Option::is_none")]
         workspace_path: Option<String>,
+        /// Main project root that owns persistence for this session.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        project_workspace_path: Option<String>,
+        /// Resolved local/worktree execution target.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        execution_target: Option<SessionExecutionTarget>,
+        /// Stable workspace registration associated with the execution root.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        workspace_id: Option<String>,
         /// Remote SSH connection identity for sessions bound to remote workspaces.
         #[serde(skip_serializing_if = "Option::is_none")]
         remote_connection_id: Option<String>,

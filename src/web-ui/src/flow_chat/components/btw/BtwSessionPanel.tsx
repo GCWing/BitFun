@@ -52,6 +52,7 @@ import {
 } from '../../store/deepReviewActionBarStore';
 import {loadPersistedReviewState} from '../../services/ReviewActionBarPersistenceService';
 import type {ReviewActionPersistedState} from '@/shared/types/session-history';
+import {sessionProjectWorkspacePath} from '../../utils/sessionWorkspace';
 import {
   collectModifiedFilePathsFromTurns,
   hasOpaqueWorkspaceMutationRisk,
@@ -780,7 +781,7 @@ export const BtwSessionPanel: React.FC<BtwSessionPanelProps> = ({
     // action state is more specific for fix/review recovery than that projection.
     if (!canReplaceDerivedReviewState && currentActionState && currentActionState.phase !== 'idle') return;
 
-    const workspacePath = childSession.workspacePath;
+    const workspacePath = sessionProjectWorkspacePath(childSession);
     if (!workspacePath) return;
 
     let cancelled = false;

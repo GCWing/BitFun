@@ -1,0 +1,12 @@
+.bitfun-worktrees-config {
+  .config-page-row__control {
+    min-width: 220px;
+  }
+
+  &__actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    padding-top: 4px;
+  }
+}

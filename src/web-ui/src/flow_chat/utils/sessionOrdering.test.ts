@@ -158,4 +158,20 @@ describe('sessionOrdering', () => {
       )
     ).toBe(true);
   });
+
+  it('groups a worktree execution session under its main project', () => {
+    const session = {
+      workspacePath: '/worktrees/project/wt-1',
+      projectWorkspacePath: '/projects/project',
+      remoteConnectionId: undefined,
+      remoteSshHost: undefined,
+    };
+
+    expect(
+      sessionBelongsToWorkspaceNavRow(session, '/projects/project')
+    ).toBe(true);
+    expect(
+      sessionBelongsToWorkspaceNavRow(session, '/projects/other')
+    ).toBe(false);
+  });
 });

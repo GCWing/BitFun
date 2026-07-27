@@ -279,6 +279,8 @@ pub(crate) async fn create_session(state: &PeerHostState, args: &Value) -> Resul
         session_name,
         agent_type,
         workspace_path: Some(workspace_path),
+        project_workspace_path: None,
+        execution_target: None,
         workspace_id,
         remote_connection_id,
         remote_ssh_host,

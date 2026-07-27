@@ -103,6 +103,11 @@ export async function createBtwChildSession(params: {
   const childSessionName = params.childSessionName.trim() || 'Side thread';
   const remoteConnectionId = parentSession?.remoteConnectionId;
   const remoteSshHost = parentSession?.remoteSshHost;
+  const projectWorkspacePath =
+    parentSession?.projectWorkspacePath
+    || parentSession?.config.projectWorkspacePath
+    || workspacePath;
+  const inheritedExecutionTarget = parentSession?.config.executionTarget;
   const relationship: SessionRelationship | undefined =
     childSessionKind === 'btw'
       ? undefined
@@ -113,13 +118,19 @@ export async function createBtwChildSession(params: {
           parentDialogTurnId,
           parentTurnIndex,
         };
-  const childSessionId = shouldPersistStandaloneSession
-    ? (
-        await agentAPI.createSession({
+  const createdSession = shouldPersistStandaloneSession
+    ? await agentAPI.createSession({
           sessionId: buildPersistentReviewSessionId(requestId),
           sessionName: childSessionName,
           agentType,
           workspacePath,
+          projectWorkspacePath,
+          executionTarget: inheritedExecutionTarget?.worktreeId
+            ? {
+                kind: 'existingWorktree',
+                worktreeId: inheritedExecutionTarget.worktreeId,
+              }
+            : { kind: 'local' },
           workspaceId: parentSession?.workspaceId,
           remoteConnectionId,
           remoteSshHost,
@@ -136,13 +147,14 @@ export async function createBtwChildSession(params: {
             remoteSshHost,
           },
         })
-      ).sessionId
-    : createBtwRequestId('btw_session');
+    : null;
+  const childSessionId = createdSession?.sessionId ?? createBtwRequestId('btw_session');
+  const childWorkspacePath = createdSession?.workspacePath || workspacePath;
   flowChatStore.addExternalSession(
     childSessionId,
     childSessionName,
     agentType,
-    workspacePath,
+    childWorkspacePath,
     {
       parentSessionId,
       sessionKind: childSessionKind,
@@ -155,6 +167,11 @@ export async function createBtwChildSession(params: {
       deepReviewRunManifest: params.deepReviewRunManifest,
       reviewTargetEvidence: params.reviewTargetEvidence,
       reviewTargetFilePaths: params.reviewTargetFilePaths,
+      projectWorkspacePath:
+        createdSession?.projectWorkspacePath || projectWorkspacePath,
+      executionTarget:
+        createdSession?.executionTarget || inheritedExecutionTarget,
+      workspaceId: createdSession?.workspaceId || parentSession?.workspaceId,
       isTransient: params.isTransient ?? false,
       agentBackedTransient: params.isTransient ?? false,
     },
@@ -222,6 +239,12 @@ export function createBtwSessionPlaceholder(params: {
       },
       isTransient: false,
       agentBackedTransient: false,
+      projectWorkspacePath:
+        parentSession.projectWorkspacePath
+        || parentSession.config.projectWorkspacePath
+        || workspacePath,
+      executionTarget: parentSession.config.executionTarget,
+      workspaceId: parentSession.workspaceId,
     },
     parentSession.remoteConnectionId,
     parentSession.remoteSshHost

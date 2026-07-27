@@ -4,6 +4,7 @@
 
 use crate::util::errors::*;
 use async_trait::async_trait;
+use bitfun_core_types::WorktreeSettings;
 use bitfun_runtime_ports::{PermissionRule, ToolPermissionConfig};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -139,6 +140,9 @@ pub struct AppConfig {
     /// Native agent lifecycle hooks (Codex-compatible hooks.json).
     #[serde(default)]
     pub hooks: AgentHooksConfig,
+    /// Defaults for opt-in managed Git worktrees.
+    #[serde(default)]
+    pub worktrees: WorktreeSettings,
 }
 
 /// Enablement gates for native agent hooks.
@@ -1695,6 +1699,7 @@ impl Default for AppConfig {
             user_skill_groups: UserSkillGroupsConfig::default(),
             close_button_behavior: default_close_button_behavior(),
             hooks: AgentHooksConfig::default(),
+            worktrees: WorktreeSettings::default(),
         }
     }
 }

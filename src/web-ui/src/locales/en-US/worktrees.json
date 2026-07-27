@@ -1,0 +1,121 @@
+{
+  "actions": {
+    "cancel": "Cancel",
+    "close": "Close"
+  },
+  "launcher": {
+    "title": "New session in a worktree",
+    "description": "Create an isolated execution directory from an immutable Git commit. Your main project stays unchanged.",
+    "mode": "Session mode",
+    "codeMode": "Code",
+    "coworkMode": "Cowork",
+    "baseRef": "Base branch or ref",
+    "baseRefHint": "Enter a branch, tag, or commit.",
+    "resolvedCommit": "Resolved commit: {{commit}}",
+    "targetPath": "Target path",
+    "copyChanges": "Copy local changes",
+    "copyChangesRequiresHead": "Choose a base that resolves to the source worktree HEAD to enable copying.",
+    "copyChangesSummary": "{{count}} files: {{staged}} staged, {{unstaged}} unstaged, {{untracked}} untracked. Staging is preserved.",
+    "checking": "Checking repository…",
+    "remoteUnsupported": "Worktrees are not supported for remote workspaces yet.",
+    "notGitRepository": "This workspace is not a Git repository.",
+    "unbornRepository": "Create the repository's first commit before using worktrees.",
+    "invalidBaseRef": "The selected branch or ref cannot be resolved.",
+    "create": "Create in worktree"
+  },
+  "sidebar": {
+    "worktrees": "Worktrees",
+    "loadFailed": "Could not load worktrees. Select to retry.",
+    "recreateRequired": "Recreate this missing worktree first.",
+    "newSession": "New session in this worktree"
+  },
+  "labels": {
+    "detached": "detached {{commit}}",
+    "dirty": "Dirty",
+    "missing": "Missing",
+    "running": "{{count}} running",
+    "unpublished": "Unpublished commits",
+    "lifecycle": {
+      "managed": "Managed",
+      "permanent": "Permanent",
+      "external": "External"
+    }
+  },
+  "strip": {
+    "menuLabel": "Worktree actions",
+    "open": "Open worktree folder"
+  },
+  "manager": {
+    "title": "Worktree Manager",
+    "description": "Manage isolated session directories owned by this project.",
+    "refresh": "Refresh",
+    "create": "New worktree session",
+    "loading": "Loading worktrees…",
+    "emptyTitle": "No worktrees yet",
+    "emptyDescription": "Create an isolated session to work in parallel without changing the main directory.",
+    "sessionCount": "{{count}} associated sessions",
+    "open": "Open",
+    "newSession": "New session",
+    "createBranch": "Create branch",
+    "recreate": "Recreate",
+    "keep": "Keep permanently",
+    "remove": "Remove",
+    "recreated": "Worktree recreated",
+    "promoted": "Worktree is now permanent",
+    "branchCreated": "Branch created",
+    "removed": "Worktree removed",
+    "risks": {
+      "dirty": "The directory contains local changes.",
+      "unpublished": "Detached HEAD contains commits not reachable from another ref.",
+      "sessions": "{{count}} sessions are still associated.",
+      "running": "{{count}} associated sessions are running or unarchived.",
+      "clean": "The directory is clean and has no unpublished commits."
+    },
+    "branchDialog": {
+      "title": "Create a branch",
+      "description": "Attach this detached worktree to a publishable branch.",
+      "required": "Enter a branch name."
+    },
+    "removeDialog": {
+      "title": "Remove worktree?",
+      "message": "Review the worktree state before removing its directory.",
+      "blocked": "This worktree cannot be removed while associated sessions are running or unarchived.",
+      "forceTitle": "Force-remove worktree?",
+      "forceMessage": "This permanently discards the listed local work. Confirm again to continue.",
+      "forceConfirm": "Force remove"
+    }
+  },
+  "settings": {
+    "title": "Worktrees",
+    "description": "Choose defaults for isolated local sessions. Changes to the root path affect new worktrees only.",
+    "loading": "Loading worktree settings…",
+    "loadFailed": "Could not load worktree settings.",
+    "saveFailed": "Could not save worktree settings.",
+    "saved": "Worktree settings saved.",
+    "required": "The root path and branch prefix are required.",
+    "save": "Save",
+    "reset": "Restore defaults",
+    "creation": {
+      "title": "Session creation",
+      "description": "Local remains the safe, fast default. Worktree isolation is always available from the new-session menu."
+    },
+    "defaultTarget": {
+      "label": "Default new-session target",
+      "description": "Controls the preselected target; quick Code and Cowork buttons still create Local sessions.",
+      "local": "Local",
+      "worktree": "Managed worktree"
+    },
+    "rootPath": {
+      "label": "Worktree root",
+      "description": "Managed worktrees created later are stored under this directory."
+    },
+    "branchPrefix": {
+      "label": "Branch prefix",
+      "description": "Suggested prefix when creating a branch for a detached worktree."
+    },
+    "copyChanges": {
+      "label": "Copy local changes by default",
+      "description": "Off by default. Only available when the chosen base matches the source HEAD."
+    }
+  }
+}

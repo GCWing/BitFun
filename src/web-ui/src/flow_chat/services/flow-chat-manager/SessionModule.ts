@@ -44,6 +44,10 @@ import {
   DEFAULT_CHAT_INPUT_MODE_CONFIG_PATH,
   normalizeUserDefaultChatInputModeId,
 } from '../../utils/chatInputMode';
+import {
+  requireSessionProjectWorkspacePath,
+  sessionProjectWorkspacePath,
+} from '../../utils/sessionWorkspace';
 
 const log = createLogger('SessionModule');
 const pendingSessionCreations = new Map<string, Promise<string>>();
@@ -640,6 +644,7 @@ export async function createChatSession(
     if (!workspacePath) {
       throw new Error('Workspace path is required to create a session');
     }
+    const projectWorkspacePath = config.projectWorkspacePath || workspacePath;
     const remoteConnectionId =
       workspace?.workspaceKind === WorkspaceKind.Remote ? workspace.connectionId : undefined;
     const remoteSshHost =
@@ -654,7 +659,11 @@ export async function createChatSession(
         : remoteConnectionId != null && remoteConnectionId !== ''
           ? `${remoteConnectionId}\n${workspacePath}`
           : workspacePath;
-    const creationKey = JSON.stringify([workspaceCreationKey, agentType]);
+    const creationKey = JSON.stringify([
+      workspaceCreationKey,
+      agentType,
+      config.executionTargetRequest ?? { kind: 'local' },
+    ]);
 
     const pendingCreation = pendingSessionCreations.get(creationKey);
     if (pendingCreation) {
@@ -694,6 +703,9 @@ export async function createChatSession(
         sessionName,
         agentType,
         workspacePath,
+        projectWorkspacePath,
+        executionTarget: config.executionTargetRequest,
+        requestId: globalThis.crypto?.randomUUID?.() ?? `worktree-${Date.now()}-${Math.random()}`,
         workspaceId: mergedConfig.workspaceId,
         remoteConnectionId,
         remoteSshHost,
@@ -709,14 +721,26 @@ export async function createChatSession(
         }
       });
 
+      const effectiveWorkspacePath =
+        response.workspacePath || response.executionTarget?.rootPath || workspacePath;
+      const effectiveProjectWorkspacePath =
+        response.projectWorkspacePath || projectWorkspacePath || workspacePath;
+      const resolvedConfig: SessionConfig = {
+        ...mergedConfig,
+        workspacePath: effectiveWorkspacePath,
+        projectWorkspacePath: effectiveProjectWorkspacePath,
+        workspaceId: response.workspaceId ?? mergedConfig.workspaceId,
+        executionTarget: response.executionTarget,
+      };
+
       context.flowChatStore.createSession(
         response.sessionId, 
-        mergedConfig, 
+        resolvedConfig,
         undefined,
         sessionName,
         maxContextTokens,
         agentType,
-        workspacePath,
+        effectiveWorkspacePath,
         remoteConnectionId,
         remoteSshHost,
         titleDescriptor,
@@ -777,7 +801,7 @@ export async function switchChatSession(
         }
         touchSessionActivity(
           sessionId,
-          latestSession.workspacePath,
+          sessionProjectWorkspacePath(latestSession),
           latestSession.remoteConnectionId,
           latestSession.remoteSshHost
         ).catch(error => {
@@ -910,7 +934,7 @@ export async function archiveChatSession(
 
     await sessionAPI.archiveSession(
       sessionId,
-      requireSessionWorkspacePath(session.workspacePath, sessionId),
+      requireSessionProjectWorkspacePath(session, sessionId),
       session.remoteConnectionId,
       session.remoteSshHost,
     );
@@ -958,7 +982,7 @@ export async function renameChatSessionTitle(
   const updatedTitle = await agentAPI.updateSessionTitle({
     sessionId,
     title: trimmedTitle,
-    workspacePath: session.workspacePath,
+    workspacePath: sessionProjectWorkspacePath(session),
     remoteConnectionId: session.remoteConnectionId,
     remoteSshHost: session.remoteSshHost,
   });
@@ -977,15 +1001,19 @@ export async function forkChatSession(
     throw new Error(`Session does not exist: ${sourceSessionId}`);
   }
 
-  const workspacePath = requireSessionWorkspacePath(
+  const executionWorkspacePath = requireSessionWorkspacePath(
     sourceSession.workspacePath,
     sourceSessionId
+  );
+  const projectWorkspacePath = requireSessionProjectWorkspacePath(
+    sourceSession,
+    sourceSessionId,
   );
 
   const response = await sessionAPI.forkSession(
     sourceSessionId,
     sourceTurnId,
-    workspacePath,
+    projectWorkspacePath,
     sourceSession.remoteConnectionId,
     sourceSession.remoteSshHost
   );
@@ -996,7 +1024,8 @@ export async function forkChatSession(
       response.sessionId,
       {
         ...sourceSession.config,
-        workspacePath,
+        workspacePath: executionWorkspacePath,
+        projectWorkspacePath,
         workspaceId: sourceSession.workspaceId,
         remoteConnectionId: sourceSession.remoteConnectionId,
         remoteSshHost: sourceSession.remoteSshHost,
@@ -1005,7 +1034,7 @@ export async function forkChatSession(
       response.sessionName,
       sourceSession.maxContextTokens,
       sourceSession.mode,
-      workspacePath,
+      executionWorkspacePath,
       sourceSession.remoteConnectionId,
       sourceSession.remoteSshHost,
       createTextSessionTitleDescriptor(response.sessionName),
@@ -1016,7 +1045,7 @@ export async function forkChatSession(
 
   await context.flowChatStore.loadSessionHistory(
     response.sessionId,
-    workspacePath,
+    projectWorkspacePath,
     undefined,
     sourceSession.remoteConnectionId,
     sourceSession.remoteSshHost,
@@ -1048,6 +1077,7 @@ export async function ensureBackendSession(
 
   const latestSession = context.flowChatStore.getState().sessions.get(sessionId) ?? session;
   const workspacePath = requireSessionWorkspacePath(latestSession.workspacePath, sessionId);
+  const projectWorkspacePath = requireSessionProjectWorkspacePath(latestSession, sessionId);
 
   // Resolve effective connection info: prefer the current workspace's
   // connection_id over the session's stored value.  When the user changes
@@ -1108,7 +1138,7 @@ export async function ensureBackendSession(
   const ensureCoordinator = async () => {
     await agentAPI.ensureCoordinatorSession({
       sessionId,
-      workspacePath,
+      workspacePath: projectWorkspacePath,
       remoteConnectionId: effectiveConnectionId,
       remoteSshHost: effectiveSshHost,
       includeInternal: latestSession.sessionKind === 'subagent',
@@ -1122,7 +1152,7 @@ export async function ensureBackendSession(
     }
     const restoreKey = [
       sessionId,
-      workspacePath,
+      projectWorkspacePath,
       effectiveConnectionId ?? '',
       effectiveSshHost ?? '',
     ].join('\u001f');
@@ -1169,6 +1199,14 @@ export async function ensureBackendSession(
         `Session ${sessionId.slice(0, 8)}`,
       agentType: latestSession.mode || 'agentic',
       workspacePath,
+      projectWorkspacePath,
+      executionTarget:
+        latestSession.config.executionTarget?.worktreeId
+          ? {
+              kind: 'existingWorktree',
+              worktreeId: latestSession.config.executionTarget.worktreeId,
+            }
+          : { kind: 'local' },
       workspaceId: latestSession.workspaceId,
       remoteConnectionId: effectiveConnectionId,
       remoteSshHost: effectiveSshHost,
@@ -1203,6 +1241,7 @@ export async function retryCreateBackendSession(
   }
 
   const workspacePath = requireSessionWorkspacePath(session.workspacePath, sessionId);
+  const projectWorkspacePath = requireSessionProjectWorkspacePath(session, sessionId);
   
   await agentAPI.createSession({
     sessionId: sessionId,
@@ -1211,6 +1250,14 @@ export async function retryCreateBackendSession(
       `Session ${sessionId.slice(0, 8)}`,
     agentType: session.mode || 'agentic',
     workspacePath,
+    projectWorkspacePath,
+    executionTarget:
+      session.config.executionTarget?.worktreeId
+        ? {
+            kind: 'existingWorktree',
+            worktreeId: session.config.executionTarget.worktreeId,
+          }
+        : { kind: 'local' },
     workspaceId: session.workspaceId,
     remoteConnectionId: session.remoteConnectionId,
     remoteSshHost: session.remoteSshHost,

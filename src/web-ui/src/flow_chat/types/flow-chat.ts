@@ -381,6 +381,9 @@ export interface Session {
   // Sessions are always kept in store for event processing; only display is filtered.
   workspacePath?: string;
 
+  /** Main project that owns this session when `workspacePath` is a linked worktree. */
+  projectWorkspacePath?: string;
+
   /** Stable backend id — always set for new sessions; do not infer workspace from path alone. */
   workspaceId?: string;
 
@@ -493,6 +496,12 @@ export interface SessionConfig {
   agentType?: string;
   context?: Record<string, string>;
   workspacePath?: string;
+  /** Main project scope used for persistence when execution happens in a worktree. */
+  projectWorkspacePath?: string;
+  /** Requested target used only while creating a new session. */
+  executionTargetRequest?: import('@/infrastructure/api/service-api/WorktreeAPI').SessionExecutionTargetRequest;
+  /** Resolved target returned and persisted by the backend. */
+  executionTarget?: import('@/infrastructure/api/service-api/WorktreeAPI').SessionExecutionTarget;
   /** Binds session to `WorkspaceInfo.id` (path alone is insufficient for remotes). */
   workspaceId?: string;
   /** Disambiguates sessions when multiple remote workspaces share the same `workspacePath`. */

@@ -31,9 +31,9 @@ pub fn parse_worktree_list(output: &str) -> Vec<GitWorktreeInfo> {
                 wt.branch = Some(branch_name);
             } else if line == "bare" {
                 wt.is_main = true;
-            } else if line == "locked" {
+            } else if line == "locked" || line.starts_with("locked ") {
                 wt.is_locked = true;
-            } else if line == "prunable" {
+            } else if line == "prunable" || line.starts_with("prunable ") {
                 wt.is_prunable = true;
             }
         }
@@ -50,4 +50,23 @@ pub fn parse_worktree_list(output: &str) -> Vec<GitWorktreeInfo> {
     }
 
     worktrees
+}
+
+#[cfg(test)]
+mod tests {
+    use super::parse_worktree_list;
+
+    #[test]
+    fn parses_lock_and_prunable_reasons() {
+        let worktrees = parse_worktree_list(
+            "worktree /repo\nHEAD 1111111111111111111111111111111111111111\nbranch refs/heads/main\n\n\
+             worktree /repo/missing\nHEAD 2222222222222222222222222222222222222222\n\
+             detached\nlocked in use\nprunable gitdir file points to non-existent location\n",
+        );
+
+        assert_eq!(worktrees.len(), 2);
+        assert!(worktrees[0].is_main);
+        assert!(worktrees[1].is_locked);
+        assert!(worktrees[1].is_prunable);
+    }
 }

@@ -54,12 +54,34 @@ use bitfun_core::service::session::{
     SessionRelationshipKind,
 };
 use bitfun_core::service::workspace::WorkspaceKind;
+use bitfun_core::service::workspace::{WorkspaceActivityMode, WorkspaceCreateOptions};
+use bitfun_core::service::worktree::{WorktreeCreateRequest, WorktreeListRequest, WorktreeService};
+use bitfun_core_types::{
+    SessionExecutionTarget, SessionExecutionTargetKind, SessionExecutionTargetRequest,
+    WorktreeError, WorktreeErrorCode,
+};
 use bitfun_product_domains::tool_permissions::PermissionRule;
 
 const SESSION_VIEW_TOOL_RESULT_TOTAL_CHAR_BUDGET: usize = 512 * 1024;
 const SESSION_VIEW_TOOL_RESULT_STRING_CHAR_LIMIT: usize = 16 * 1024;
 const SESSION_VIEW_TRUNCATED_MARKER: &str = "\n... Output truncated for session preview";
 const SESSION_VIEW_OMITTED_MARKER: &str = "Output omitted from session preview";
+
+fn encode_worktree_error(error: WorktreeError) -> String {
+    serde_json::to_string(&error).unwrap_or_else(|_| error.to_string())
+}
+
+fn worktree_error(
+    code: WorktreeErrorCode,
+    message: impl Into<String>,
+    recovery_path: Option<String>,
+) -> String {
+    encode_worktree_error(WorktreeError {
+        code,
+        message: message.into(),
+        recovery_path,
+    })
+}
 
 fn desktop_session_scope(
     workspace_path: String,
@@ -80,6 +102,16 @@ pub struct CreateSessionRequest {
     pub session_name: String,
     pub agent_type: String,
     pub workspace_path: String,
+    /// Main project scope for persistence. Legacy clients omit this and use
+    /// `workspacePath`.
+    #[serde(default)]
+    pub project_workspace_path: Option<String>,
+    /// Optional opt-in execution isolation.
+    #[serde(default)]
+    pub execution_target: Option<SessionExecutionTargetRequest>,
+    /// Idempotency key used when `executionTarget` creates a managed worktree.
+    #[serde(default)]
+    pub request_id: Option<String>,
     #[serde(default)]
     pub workspace_id: Option<String>,
     #[serde(default)]
@@ -119,6 +151,14 @@ pub struct CreateSessionResponse {
     pub session_id: String,
     pub session_name: String,
     pub agent_type: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub workspace_path: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub workspace_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub project_workspace_path: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub execution_target: Option<SessionExecutionTarget>,
 }
 
 fn existing_session_create_response(
@@ -168,6 +208,10 @@ fn existing_session_create_response(
         session_id: metadata.session_id.clone(),
         session_name: metadata.session_name.clone(),
         agent_type: metadata.agent_type.clone(),
+        workspace_path: metadata.workspace_path.clone(),
+        workspace_id: None,
+        project_workspace_path: metadata.project_workspace_path.clone(),
+        execution_target: metadata.execution_target.clone(),
     })
 }
 
@@ -1204,7 +1248,6 @@ pub async fn create_session(
         s.map(|x| x.trim().to_string()).filter(|x| !x.is_empty())
     }
     sanitize_create_session_review_metadata(&mut request);
-    let wp = request.workspace_path.clone();
     let remote_conn = norm_conn(request.remote_connection_id.clone()).or_else(|| {
         request
             .config
@@ -1218,6 +1261,187 @@ pub async fn create_session(
             .and_then(|c| norm_conn(c.remote_ssh_host.clone()))
     });
 
+    let source_workspace_path = request.workspace_path.clone();
+    let is_idempotent_managed_create = matches!(
+        request.execution_target.as_ref(),
+        Some(SessionExecutionTargetRequest::NewManagedWorktree { .. })
+    );
+    if is_idempotent_managed_create {
+        let request_id = request
+            .request_id
+            .clone()
+            .unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
+        if request.session_id.is_none() {
+            request.session_id = Some(
+                WorktreeService::session_id_for_request(&request_id)
+                    .map_err(|error| error.to_string())?,
+            );
+        }
+        request.request_id = Some(request_id);
+    }
+    let mut project_workspace_path = request
+        .project_workspace_path
+        .clone()
+        .unwrap_or_else(|| source_workspace_path.clone());
+    let requested_execution_target = request.execution_target.clone().unwrap_or_default();
+    let mut created_worktree_id = None;
+    let resolved_execution_target = match requested_execution_target {
+        SessionExecutionTargetRequest::Local => {
+            SessionExecutionTarget::local(source_workspace_path.clone())
+        }
+        SessionExecutionTargetRequest::NewManagedWorktree {
+            base_ref,
+            copy_local_changes,
+        } => {
+            if remote_conn.is_some() {
+                return Err(worktree_error(
+                    WorktreeErrorCode::RemoteUnsupported,
+                    "Managed worktrees are not supported for remote SSH workspaces yet",
+                    None,
+                ));
+            }
+            let result = WorktreeService::create(WorktreeCreateRequest {
+                request_id: request
+                    .request_id
+                    .clone()
+                    .unwrap_or_else(|| uuid::Uuid::new_v4().to_string()),
+                project_workspace_path: project_workspace_path.clone(),
+                source_workspace_path: Some(source_workspace_path.clone()),
+                base_ref,
+                copy_local_changes,
+            })
+            .await
+            .map_err(|error| serde_json::to_string(&error).unwrap_or_else(|_| error.to_string()))?;
+            project_workspace_path = result.worktree.project_workspace_path.clone();
+            request.workspace_path = result.execution_target.root_path.clone();
+            if result.created {
+                created_worktree_id = result.execution_target.worktree_id.clone();
+            }
+            result.execution_target
+        }
+        SessionExecutionTargetRequest::ExistingWorktree { worktree_id } => {
+            if remote_conn.is_some() {
+                return Err(worktree_error(
+                    WorktreeErrorCode::RemoteUnsupported,
+                    "Managed worktrees are not supported for remote SSH workspaces yet",
+                    None,
+                ));
+            }
+            let worktree = WorktreeService::list(WorktreeListRequest {
+                project_workspace_path: project_workspace_path.clone(),
+            })
+            .await
+            .map_err(|error| serde_json::to_string(&error).unwrap_or_else(|_| error.to_string()))?
+            .into_iter()
+            .find(|worktree| worktree.worktree_id == worktree_id)
+            .ok_or_else(|| {
+                worktree_error(
+                    WorktreeErrorCode::WorktreeNotFound,
+                    "The selected worktree no longer exists",
+                    None,
+                )
+            })?;
+            if worktree.missing {
+                return Err(worktree_error(
+                    WorktreeErrorCode::WorktreeNotFound,
+                    "The selected worktree directory is missing; recreate it first",
+                    Some(worktree.path),
+                ));
+            }
+            project_workspace_path = worktree.project_workspace_path.clone();
+            request.workspace_path = worktree.path.clone();
+            SessionExecutionTarget {
+                kind: SessionExecutionTargetKind::ExistingWorktree,
+                worktree_id: Some(worktree.worktree_id),
+                root_path: worktree.path,
+                base_ref: worktree.branch.clone(),
+                base_commit: Some(worktree.head),
+                branch: worktree.branch,
+                lifecycle: Some(worktree.lifecycle),
+            }
+        }
+    };
+    request.project_workspace_path = Some(project_workspace_path.clone());
+    let wp = project_workspace_path.clone();
+
+    let tracked_worktree_workspace_id = if resolved_execution_target.kind
+        != SessionExecutionTargetKind::Local
+    {
+        match app_state
+            .workspace_service
+            .track_workspace_activity(
+                PathBuf::from(&request.workspace_path),
+                WorkspaceCreateOptions::default(),
+                WorkspaceActivityMode::RefreshMetadata,
+            )
+            .await
+        {
+            Ok(workspace) => {
+                request.workspace_id = Some(workspace.id.clone());
+                Some(workspace.id)
+            }
+            Err(track_error) => {
+                if let Some(worktree_id) = created_worktree_id.as_deref() {
+                    if let Err(rollback_error) =
+                        WorktreeService::rollback_created(&project_workspace_path, worktree_id)
+                            .await
+                    {
+                        return Err(worktree_error(
+                                WorktreeErrorCode::RollbackIncomplete,
+                                format!(
+                                    "Failed to register worktree workspace: {track_error}; rollback failed: {rollback_error}"
+                                ),
+                                Some(resolved_execution_target.root_path.clone()),
+                            ));
+                    }
+                }
+                return Err(worktree_error(
+                    WorktreeErrorCode::IoFailed,
+                    format!("Failed to register worktree workspace: {track_error}"),
+                    None,
+                ));
+            }
+        }
+    } else {
+        None
+    };
+
+    if is_idempotent_managed_create {
+        let session_id = request
+            .session_id
+            .as_deref()
+            .ok_or_else(|| "Idempotent worktree session requires a session ID".to_string())?;
+        let effective_path = desktop_effective_session_storage_path(
+            &app_state,
+            &project_workspace_path,
+            remote_conn.as_deref(),
+            remote_ssh_host.as_deref(),
+        )
+        .await;
+        let existing = coordinator
+            .get_session_manager()
+            .load_session_metadata(&effective_path, session_id)
+            .await
+            .map_err(|error| format!("Failed to check existing worktree session: {error}"))?;
+        if let Some(metadata) = existing {
+            let target_matches = metadata.workspace_path.as_deref()
+                == Some(request.workspace_path.as_str())
+                && metadata
+                    .execution_target
+                    .as_ref()
+                    .and_then(|target| target.worktree_id.as_deref())
+                    == resolved_execution_target.worktree_id.as_deref();
+            if !target_matches {
+                return Err(format!(
+                    "Session ID {session_id} already exists with a different worktree target"
+                ));
+            }
+            let mut response = existing_session_create_response(&request, &metadata)?;
+            response.workspace_id = request.workspace_id.clone();
+            return Ok(response);
+        }
+    }
+
     if is_idempotent_review_create(&request) {
         let session_id = request
             .session_id
@@ -1225,7 +1449,7 @@ pub async fn create_session(
             .ok_or_else(|| "Idempotent Review session requires a session ID".to_string())?;
         let effective_path = desktop_effective_session_storage_path(
             &app_state,
-            &request.workspace_path,
+            &project_workspace_path,
             remote_conn.as_deref(),
             remote_ssh_host.as_deref(),
         )
@@ -1289,6 +1513,8 @@ pub async fn create_session(
             max_turns: c.max_turns.unwrap_or(200),
             enable_context_compression: c.enable_context_compression.unwrap_or(true),
             workspace_path: Some(request.workspace_path.clone()),
+            project_workspace_path: Some(project_workspace_path.clone()),
+            execution_target: Some(resolved_execution_target.clone()),
             workspace_id: request.workspace_id.clone(),
             remote_connection_id: remote_conn.clone(),
             remote_ssh_host: remote_ssh_host.clone(),
@@ -1297,6 +1523,8 @@ pub async fn create_session(
         })
         .unwrap_or(SessionConfig {
             workspace_path: Some(request.workspace_path.clone()),
+            project_workspace_path: Some(project_workspace_path.clone()),
+            execution_target: Some(resolved_execution_target),
             workspace_id: request.workspace_id.clone(),
             remote_connection_id: remote_conn.clone(),
             remote_ssh_host: remote_ssh_host.clone(),
@@ -1304,14 +1532,16 @@ pub async fn create_session(
         });
 
     let session_kind = request.session_kind.unwrap_or_default();
-    let session = if matches!(session_kind, SessionKind::Subagent) {
+    let execution_workspace_path = request.workspace_path.clone();
+    let worktree_recovery_path = execution_workspace_path.clone();
+    let create_result = if matches!(session_kind, SessionKind::Subagent) {
         coordinator
             .create_hidden_subagent_session_with_workspace(
                 request.session_id,
                 request.session_name.clone(),
                 request.agent_type.clone(),
                 config,
-                request.workspace_path,
+                execution_workspace_path,
                 None,
             )
             .await
@@ -1322,11 +1552,50 @@ pub async fn create_session(
                 request.session_name.clone(),
                 request.agent_type.clone(),
                 config,
-                request.workspace_path,
+                execution_workspace_path,
             )
             .await
-    }
-    .map_err(|e| format!("Failed to create session: {}", e))?;
+    };
+    let session = match create_result {
+        Ok(session) => session,
+        Err(create_error) => {
+            let mut rollback_issues = Vec::new();
+            if let Some(workspace_id) = tracked_worktree_workspace_id.as_deref() {
+                if let Err(remove_error) = app_state
+                    .workspace_service
+                    .remove_workspace(workspace_id)
+                    .await
+                {
+                    warn!(
+                        "Failed to remove rolled back worktree workspace registration: {}",
+                        remove_error
+                    );
+                    rollback_issues.push(format!(
+                        "workspace registration could not be removed: {remove_error}"
+                    ));
+                }
+            }
+            if let Some(worktree_id) = created_worktree_id.as_deref() {
+                if let Err(rollback_error) =
+                    WorktreeService::rollback_created(&project_workspace_path, worktree_id).await
+                {
+                    rollback_issues
+                        .push(format!("worktree could not be removed: {rollback_error}"));
+                }
+            }
+            if !rollback_issues.is_empty() {
+                return Err(worktree_error(
+                    WorktreeErrorCode::RollbackIncomplete,
+                    format!(
+                        "Failed to create session: {create_error}; {}",
+                        rollback_issues.join("; ")
+                    ),
+                    Some(worktree_recovery_path),
+                ));
+            }
+            return Err(format!("Failed to create session: {create_error}"));
+        }
+    };
 
     if let Some(relationship) = request.relationship {
         coordinator
@@ -1360,6 +1629,10 @@ pub async fn create_session(
         session_id: session.session_id,
         session_name: session.session_name,
         agent_type: session.agent_type,
+        workspace_path: session.config.workspace_path,
+        workspace_id: session.config.workspace_id,
+        project_workspace_path: session.config.project_workspace_path,
+        execution_target: session.config.execution_target,
     })
 }
 
@@ -3044,6 +3317,9 @@ mod tests {
             session_name: "Review fixes".to_string(),
             agent_type: "CodeReview".to_string(),
             workspace_path: "/workspace".to_string(),
+            project_workspace_path: None,
+            execution_target: None,
+            request_id: None,
             workspace_id: None,
             session_kind: None,
             remote_connection_id: None,

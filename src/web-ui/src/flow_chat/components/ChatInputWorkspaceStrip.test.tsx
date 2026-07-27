@@ -9,10 +9,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ChatInputWorkspaceStrip } from './ChatInputWorkspaceStrip';
 
 const mocks = vi.hoisted(() => ({
+  refreshBasic: vi.fn(async () => undefined),
   useGitState: vi.fn(() => ({
     currentBranch: 'main',
     isRepository: true,
+    refreshBasic: vi.fn(async () => undefined),
   })),
+  listWorktrees: vi.fn(),
+  onWorktreeChanged: vi.fn(),
 }));
 
 vi.mock('react-i18next', () => ({
@@ -29,11 +33,25 @@ vi.mock('@/component-library', () => ({
   IconButton: ({ children, onClick }: { children: React.ReactNode; onClick?: () => void }) => (
     <button type="button" onClick={onClick}>{children}</button>
   ),
+  InputDialog: ({ isOpen }: { isOpen: boolean }) => (
+    isOpen ? <div data-testid="input-dialog" /> : null
+  ),
   Tooltip: ({ children }: { children: React.ReactNode }) => <>{children}</>,
 }));
 
 vi.mock('@/tools/git/hooks/useGitState', () => ({
   useGitState: mocks.useGitState,
+}));
+
+vi.mock('@/infrastructure/api', () => ({
+  configAPI: { getConfig: vi.fn() },
+  workspaceAPI: { revealInExplorer: vi.fn() },
+  worktreeAPI: {
+    list: mocks.listWorktrees,
+    onChanged: mocks.onWorktreeChanged,
+    createBranch: vi.fn(),
+    promote: vi.fn(),
+  },
 }));
 
 describe('ChatInputWorkspaceStrip git refresh behavior', () => {
@@ -48,7 +66,11 @@ describe('ChatInputWorkspaceStrip git refresh behavior', () => {
     mocks.useGitState.mockReturnValue({
       currentBranch: 'main',
       isRepository: true,
+      refreshBasic: mocks.refreshBasic,
     });
+    mocks.listWorktrees.mockReset();
+    mocks.onWorktreeChanged.mockReset();
+    mocks.onWorktreeChanged.mockReturnValue(vi.fn());
   });
 
   afterEach(() => {
@@ -155,5 +177,57 @@ describe('ChatInputWorkspaceStrip git refresh behavior', () => {
     expect(trigger?.disabled).toBe(true);
     expect(trigger?.dataset.permissionMode).toBe('acp');
     expect(container.querySelector('[data-testid="chat-input-permission-menu"]')).toBeNull();
+  });
+
+  it('refreshes the session-bound worktree chip from worktree events', async () => {
+    let onChanged: ((event: { projectWorkspacePath: string }) => void) | undefined;
+    mocks.onWorktreeChanged.mockImplementation(callback => {
+      onChanged = callback;
+      return vi.fn();
+    });
+    mocks.listWorktrees.mockResolvedValue([{
+      worktreeId: 'wt-1',
+      projectWorkspacePath: '/repo',
+      path: '/worktrees/wt-1',
+      head: '0123456789abcdef',
+      branch: 'bitfun/isolated',
+      lifecycle: 'permanent',
+      isMain: false,
+      dirty: false,
+      locked: false,
+      missing: false,
+      hasUnpublishedCommits: false,
+      associatedSessionCount: 1,
+      runningSessionCount: 1,
+      sessions: [],
+    }]);
+
+    await act(async () => {
+      root.render(
+        <ChatInputWorkspaceStrip
+          repositoryPath="/worktrees/wt-1"
+          workspaceLabel="wt-1"
+          projectWorkspacePath="/repo"
+          executionTarget={{
+            kind: 'managedWorktree',
+            worktreeId: 'wt-1',
+            rootPath: '/worktrees/wt-1',
+            baseCommit: '0123456789abcdef',
+            lifecycle: 'managed',
+          }}
+        />
+      );
+      await Promise.resolve();
+    });
+
+    expect(mocks.listWorktrees).toHaveBeenCalledWith('/repo');
+    expect(container.textContent).toContain('bitfun/isolated');
+
+    await act(async () => {
+      onChanged?.({ projectWorkspacePath: '/repo' });
+      await Promise.resolve();
+    });
+    expect(mocks.listWorktrees).toHaveBeenCalledTimes(2);
+    expect(mocks.refreshBasic).toHaveBeenCalled();
   });
 });

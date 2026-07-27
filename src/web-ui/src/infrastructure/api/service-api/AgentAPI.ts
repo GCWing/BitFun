@@ -13,6 +13,11 @@ import type {
   ReviewTargetEvidence,
   ReviewTeamRunManifest,
 } from '@/shared/services/reviewTeamService';
+import type {
+  SessionExecutionTarget,
+  SessionExecutionTargetRequest,
+} from './WorktreeAPI';
+import { toWorktreeCommandError } from './WorktreeAPI';
 
 
 
@@ -49,6 +54,9 @@ export interface CreateSessionRequest {
   sessionName: string;
   agentType: string;
   workspacePath: string;
+  projectWorkspacePath?: string;
+  executionTarget?: SessionExecutionTargetRequest;
+  requestId?: string;
   workspaceId?: string;
   remoteConnectionId?: string;
   remoteSshHost?: string;
@@ -64,6 +72,10 @@ export interface CreateSessionResponse {
   sessionId: string;
   sessionName: string;
   agentType: string;
+  workspacePath?: string;
+  workspaceId?: string;
+  projectWorkspacePath?: string;
+  executionTarget?: SessionExecutionTarget;
 }
 
  
@@ -520,6 +532,9 @@ export class AgentAPI {
     try {
       return await api.invoke<CreateSessionResponse>('create_session', { request });
     } catch (error) {
+      if (request.executionTarget && request.executionTarget.kind !== 'local') {
+        throw toWorktreeCommandError(error);
+      }
       throw createTauriCommandError('create_session', error, request);
     }
   }

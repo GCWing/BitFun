@@ -42,6 +42,7 @@ import {
   deriveSessionRelationshipFromMetadata,
   normalizeSessionRelationship,
 } from '../utils/sessionMetadata';
+import { sessionProjectWorkspacePath } from '../utils/sessionWorkspace';
 import type { SessionTitleDescriptor } from '../utils/sessionTitle';
 import {
   deriveSessionTitleState,
@@ -1146,7 +1147,7 @@ export class FlowChatStore {
       return false;
     }
 
-    const workspacePath = session.workspacePath || session.config.workspacePath;
+    const workspacePath = sessionProjectWorkspacePath(session);
     if (!workspacePath || session.dialogTurns.length === 0) {
       return false;
     }
@@ -1799,6 +1800,7 @@ export class FlowChatStore {
         lastUserDialogMode: undefined,
         lastSubmittedMode: undefined,
         workspacePath,
+        projectWorkspacePath: config.projectWorkspacePath,
         workspaceId: config.workspaceId,
         remoteConnectionId,
         remoteSshHost,
@@ -1843,6 +1845,9 @@ export class FlowChatStore {
       focusedReviewDisplayLabel?: Session['focusedReviewDisplayLabel'];
       reviewTargetEvidence?: Session['reviewTargetEvidence'];
       reviewTargetFilePaths?: Session['reviewTargetFilePaths'];
+      projectWorkspacePath?: string;
+      executionTarget?: Session['config']['executionTarget'];
+      workspaceId?: string;
     },
     remoteConnectionId?: string,
     remoteSshHost?: string
@@ -1866,7 +1871,15 @@ export class FlowChatStore {
         titleStatus: 'generated',
         dialogTurns: [],
         status: 'idle',
-        config: { maxContextTokens: 128128, autoCompact: true, enableTools: true } as any,
+        config: {
+          maxContextTokens: 128128,
+          autoCompact: true,
+          enableTools: true,
+          workspacePath,
+          projectWorkspacePath: meta?.projectWorkspacePath,
+          executionTarget: meta?.executionTarget,
+          workspaceId: meta?.workspaceId,
+        } as any,
         createdAt: Date.now(),
         lastActiveAt: Date.now(),
         lastFinishedAt: undefined,
@@ -1878,6 +1891,8 @@ export class FlowChatStore {
         isHistorical: false,
         historyState: 'new',
         workspacePath,
+        projectWorkspacePath: meta?.projectWorkspacePath,
+        workspaceId: meta?.workspaceId,
         remoteConnectionId,
         remoteSshHost,
         parentSessionId: relationship.parentSessionId,
@@ -2304,7 +2319,7 @@ export class FlowChatStore {
       const deleteResults = await Promise.allSettled(
         sessionIdsToDelete.map(async id => {
           const sess = this.state.sessions.get(id);
-          const workspacePath = sess?.workspacePath;
+          const workspacePath = sess ? sessionProjectWorkspacePath(sess) : undefined;
           if (!workspacePath) {
             throw new Error(`Workspace path not found for session ${id}`);
           }
@@ -3475,7 +3490,7 @@ export class FlowChatStore {
         return;
       }
 
-      const workspacePath = session.workspacePath;
+      const workspacePath = sessionProjectWorkspacePath(session);
       if (!workspacePath) {
         log.warn('Workspace path not available, skipping save', { sessionId, turnId });
         return;
@@ -3794,6 +3809,9 @@ export class FlowChatStore {
             config: {
               agentType: validatedAgentType,
               modelName: metadata.modelName,
+              workspacePath: metadata.workspacePath || workspacePath,
+              projectWorkspacePath: metadata.projectWorkspacePath || workspacePath,
+              executionTarget: metadata.executionTarget,
             },
             createdAt: metadata.createdAt,
             lastActiveAt: metadata.lastActiveAt,
@@ -3807,6 +3825,7 @@ export class FlowChatStore {
             lastUserDialogMode: metadata.lastUserDialogAgentType,
             lastSubmittedMode: metadata.lastSubmittedAgentType,
             workspacePath: (metadata as any).workspacePath || workspacePath,
+            projectWorkspacePath: metadata.projectWorkspacePath || workspacePath,
             remoteConnectionId: metadata.remoteConnectionId || remoteConnectionId,
             remoteSshHost:
               metadata.remoteSshHost || metadata.workspaceHostname || remoteSshHost,
@@ -4159,6 +4178,9 @@ export class FlowChatStore {
               config: {
                 agentType: validatedAgentType,
                 modelName: metadata.modelName,
+                workspacePath: metadata.workspacePath || workspacePath,
+                projectWorkspacePath: metadata.projectWorkspacePath || workspacePath,
+                executionTarget: metadata.executionTarget,
               },
               createdAt: metadata.createdAt,
               lastActiveAt: metadata.lastActiveAt,
@@ -4172,6 +4194,7 @@ export class FlowChatStore {
               lastUserDialogMode: metadata.lastUserDialogAgentType,
               lastSubmittedMode: metadata.lastSubmittedAgentType,
               workspacePath: (metadata as any).workspacePath || workspacePath,
+              projectWorkspacePath: metadata.projectWorkspacePath || workspacePath,
               remoteConnectionId: metadata.remoteConnectionId || remoteConnectionId,
               remoteSshHost:
                 metadata.remoteSshHost || metadata.workspaceHostname || remoteSshHost,
@@ -4420,6 +4443,13 @@ export class FlowChatStore {
       sessionTraceId,
     });
     const initialSession = this.state.sessions.get(sessionId);
+    // The caller remains authoritative for legacy and remote sessions. Only a
+    // persisted dual-root binding may redirect history storage to the project
+    // root; otherwise a stale in-memory execution path can cross workspaces.
+    const storageWorkspacePath =
+      initialSession?.projectWorkspacePath
+      || initialSession?.config.projectWorkspacePath
+      || workspacePath;
     const suppressInitialHydratingState =
       !remote &&
       options?.deferFullHistoryUntilActive === true &&
@@ -4457,7 +4487,7 @@ export class FlowChatStore {
       //
       // Peer Device Mode: cloud turn fetch is paused on the controller; session
       // history must come from the peer host via restore_session_view.
-      if (!remote && workspacePath && !isPeerDeviceModeActive()) {
+      if (!remote && storageWorkspacePath && !isPeerDeviceModeActive()) {
         const relayImportStartedAt = nowMs();
         startupTrace.markPhase('historical_session_relay_import_start', {
           remote,
@@ -4470,7 +4500,7 @@ export class FlowChatStore {
           );
           const fetched = await remoteConnectAPI.accountFetchSessionTurns(
             sessionId,
-            workspacePath
+            storageWorkspacePath
           );
           startupTrace.markPhase('historical_session_relay_import_end', {
             remote,
@@ -4521,7 +4551,7 @@ export class FlowChatStore {
               try {
                 const restoredPromise = agentAPI.restoreSessionWithTurns(
                   sessionId,
-                  workspacePath,
+                  storageWorkspacePath,
                   remoteConnectionId,
                   remoteSshHost,
                   sessionTraceId,
@@ -4551,7 +4581,7 @@ export class FlowChatStore {
 
             const restoredSessionPromise = agentAPI.restoreSession(
               sessionId,
-              workspacePath,
+              storageWorkspacePath,
               remoteConnectionId,
               remoteSshHost,
               sessionTraceId,
@@ -4569,7 +4599,7 @@ export class FlowChatStore {
             try {
               const restoredPromise = agentAPI.restoreSessionView(
                 sessionId,
-                workspacePath,
+                storageWorkspacePath,
                 remoteConnectionId,
                 remoteSshHost,
                 sessionTraceId,
@@ -4642,7 +4672,7 @@ export class FlowChatStore {
         const { sessionAPI } = await import('@/infrastructure/api/service-api/SessionAPI');
         turns = await sessionAPI.loadSessionTurns(
           sessionId,
-          workspacePath,
+          storageWorkspacePath,
           limit,
           remoteConnectionId,
           remoteSshHost
@@ -4820,7 +4850,7 @@ export class FlowChatStore {
         if (!deferFullHistoryUntilActive) {
           this.scheduleCompleteSessionHistoryLoad({
             sessionId,
-            workspacePath,
+            workspacePath: storageWorkspacePath,
             remoteConnectionId,
             remoteSshHost,
             includeInternal: options?.includeInternal,

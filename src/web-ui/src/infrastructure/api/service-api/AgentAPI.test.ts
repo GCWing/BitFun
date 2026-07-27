@@ -92,4 +92,29 @@ describe('AgentAPI', () => {
     });
   });
 
+  it('preserves structured worktree errors during atomic session creation', async () => {
+    invokeMock.mockRejectedValueOnce(JSON.stringify({
+      code: 'copy_conflict',
+      message: 'A selected local file already exists in the target worktree',
+      recoveryPath: '/tmp/recover-worktree',
+    }));
+
+    await expect(agentAPI.createSession({
+      sessionName: 'Isolated task',
+      agentType: 'agentic',
+      workspacePath: '/repo',
+      projectWorkspacePath: '/repo',
+      requestId: 'request-worktree-1',
+      executionTarget: {
+        kind: 'newManagedWorktree',
+        baseRef: 'HEAD',
+        copyLocalChanges: true,
+      },
+    })).rejects.toMatchObject({
+      name: 'WorktreeCommandError',
+      code: 'copy_conflict',
+      recoveryPath: '/tmp/recover-worktree',
+    });
+  });
+
 });

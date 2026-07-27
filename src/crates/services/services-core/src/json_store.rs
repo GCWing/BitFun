@@ -97,7 +97,11 @@ impl JsonFileStoreError {
 #[derive(Debug, Default, Clone, Copy)]
 pub struct JsonFileStore;
 
-struct JsonFileCrossProcessLock(std::fs::File);
+/// Held OS advisory lock for a JSON-owned transaction.
+///
+/// Callers may use this guard when a read/modify/write transaction includes
+/// additional side effects that cannot fit inside [`JsonFileStore::update_locked`].
+pub struct JsonFileCrossProcessLock(std::fs::File);
 
 impl Drop for JsonFileCrossProcessLock {
     fn drop(&mut self) {
@@ -320,7 +324,7 @@ impl JsonFileStore {
         lock
     }
 
-    async fn acquire_cross_process_lock(
+    pub async fn acquire_cross_process_lock(
         &self,
         path: &Path,
     ) -> Result<JsonFileCrossProcessLock, JsonFileStoreError> {

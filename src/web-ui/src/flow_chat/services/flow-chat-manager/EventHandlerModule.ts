@@ -442,6 +442,12 @@ function ensureSubagentSession(
           : undefined,
       },
       focusedReviewDisplayLabel,
+      projectWorkspacePath:
+        parentSession?.projectWorkspacePath
+        || parentSession?.config.projectWorkspacePath
+        || parentSession?.workspacePath,
+      executionTarget: parentSession?.config.executionTarget,
+      workspaceId: parentSession?.workspaceId,
     },
     parentSession?.remoteConnectionId || extractEventRemoteConnectionId(event),
     parentSession?.remoteSshHost || extractEventRemoteSshHost(event),
@@ -889,6 +895,20 @@ function handleSessionCreated(context: FlowChatContext, event: any): void {
   const store = FlowChatStore.getInstance();
   const existing = store.getState().sessions.get(sessionId);
   const workspacePath = resolveExternalSessionWorkspacePath(context, event);
+  const projectWorkspacePath =
+    (typeof event.projectWorkspacePath === 'string' && event.projectWorkspacePath)
+    || (typeof event.project_workspace_path === 'string' && event.project_workspace_path)
+    || workspacePath;
+  const executionTarget =
+    event.executionTarget && typeof event.executionTarget === 'object'
+      ? event.executionTarget
+      : event.execution_target && typeof event.execution_target === 'object'
+        ? event.execution_target
+        : undefined;
+  const workspaceId =
+    (typeof event.workspaceId === 'string' && event.workspaceId)
+    || (typeof event.workspace_id === 'string' && event.workspace_id)
+    || undefined;
   const remoteConnectionId = extractEventRemoteConnectionId(event);
   const remoteSshHost = extractEventRemoteSshHost(event);
 
@@ -899,7 +919,11 @@ function handleSessionCreated(context: FlowChatContext, event: any): void {
     sessionName || 'Remote Session',
     agentType || 'agentic',
     workspacePath,
-    undefined,
+    {
+      projectWorkspacePath,
+      executionTarget,
+      workspaceId,
+    },
     remoteConnectionId,
     remoteSshHost
   );

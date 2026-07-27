@@ -29,6 +29,9 @@ pub fn project_agentic_frontend_event(event: AgenticEvent) -> Option<AgenticFron
             session_name,
             agent_type,
             workspace_path,
+            project_workspace_path,
+            execution_target,
+            workspace_id,
             remote_connection_id,
             remote_ssh_host,
         } => Some(AgenticFrontendEvent::new(
@@ -38,6 +41,9 @@ pub fn project_agentic_frontend_event(event: AgenticEvent) -> Option<AgenticFron
                 "sessionName": session_name,
                 "agentType": agent_type,
                 "workspacePath": workspace_path,
+                "projectWorkspacePath": project_workspace_path,
+                "executionTarget": execution_target,
+                "workspaceId": workspace_id,
                 "remoteConnectionId": remote_connection_id,
                 "remoteSshHost": remote_ssh_host,
             }),
@@ -466,6 +472,38 @@ mod tests {
         DeepReviewQueueReason, DeepReviewQueueState, DeepReviewQueueStatus,
         ModelRoundAttemptDiagnostic,
     };
+    use bitfun_core_types::{
+        SessionExecutionTarget, SessionExecutionTargetKind, WorktreeLifecycle,
+    };
+
+    #[test]
+    fn session_created_projects_worktree_binding_fields() {
+        let projected = project_agentic_frontend_event(AgenticEvent::SessionCreated {
+            session_id: "session-1".to_string(),
+            session_name: "Isolated task".to_string(),
+            agent_type: "agentic".to_string(),
+            workspace_path: Some("/worktrees/wt-1".to_string()),
+            project_workspace_path: Some("/repo".to_string()),
+            execution_target: Some(SessionExecutionTarget {
+                kind: SessionExecutionTargetKind::ManagedWorktree,
+                worktree_id: Some("wt-1".to_string()),
+                root_path: "/worktrees/wt-1".to_string(),
+                base_ref: Some("HEAD".to_string()),
+                base_commit: Some("0123456789abcdef".to_string()),
+                branch: None,
+                lifecycle: Some(WorktreeLifecycle::Managed),
+            }),
+            workspace_id: Some("workspace-wt-1".to_string()),
+            remote_connection_id: None,
+            remote_ssh_host: None,
+        })
+        .expect("projected");
+
+        assert_eq!(projected.payload["workspacePath"], "/worktrees/wt-1");
+        assert_eq!(projected.payload["projectWorkspacePath"], "/repo");
+        assert_eq!(projected.payload["executionTarget"]["worktreeId"], "wt-1");
+        assert_eq!(projected.payload["workspaceId"], "workspace-wt-1");
+    }
 
     #[test]
     fn thinking_chunk_projects_to_text_chunk_event() {

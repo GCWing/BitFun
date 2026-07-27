@@ -256,6 +256,25 @@ pub struct GitWorktreeInfo {
     pub is_prunable: bool,
 }
 
+/// Local changes that can be copied into a freshly-created detached worktree.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GitLocalChangeSummary {
+    pub staged: Vec<String>,
+    pub unstaged: Vec<String>,
+    pub untracked: Vec<String>,
+    pub included_ignored: Vec<String>,
+}
+
+impl GitLocalChangeSummary {
+    pub fn is_empty(&self) -> bool {
+        self.staged.is_empty()
+            && self.unstaged.is_empty()
+            && self.untracked.is_empty()
+            && self.included_ignored.is_empty()
+    }
+}
+
 /// Repository identity used to share worktree topology across linked checkouts.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GitWorktreeRepositoryInfo {

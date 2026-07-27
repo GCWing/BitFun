@@ -397,6 +397,11 @@ impl PathManager {
         self.bitfun_home_dir().join("projects")
     }
 
+    /// Default root for opt-in managed Git worktrees.
+    pub fn worktrees_root(&self) -> PathBuf {
+        self.bitfun_home_dir().join("worktrees")
+    }
+
     /// Get the runtime root for a workspace: ~/.bitfun/projects/<workspace-slug>/
     pub fn project_runtime_root(&self, workspace_path: &Path) -> PathBuf {
         self.projects_root()

@@ -14,6 +14,7 @@ const loadMemoriesConfig = () => import('../../../infrastructure/config/componen
 const loadQuickActionsConfig = () => import('../../../infrastructure/config/components/QuickActionsConfig');
 const loadVoiceInputConfig = () => import('../../../infrastructure/config/components/VoiceInputConfig');
 const loadArchivedSessionsConfig = () => import('./components/ArchivedSessionsConfig');
+const loadWorktreesConfig = () => import('../../../infrastructure/config/components/WorktreesConfig');
 const loadKeyboardShortcutsTab = () => import('./components/KeyboardShortcutsTab');
 const loadSessionConfig = () => import('../../../infrastructure/config/components/SessionConfig');
 
@@ -30,6 +31,7 @@ export const MemoriesConfig = lazy(loadMemoriesConfig);
 export const QuickActionsConfig = lazy(loadQuickActionsConfig);
 export const VoiceInputConfig = lazy(loadVoiceInputConfig);
 export const ArchivedSessionsConfig = lazy(loadArchivedSessionsConfig);
+export const WorktreesConfig = lazy(loadWorktreesConfig);
 export const KeyboardShortcutsTab = lazy(loadKeyboardShortcutsTab);
 export const SessionPersonalizationConfig = lazy(() =>
   loadSessionConfig().then((module) => ({
@@ -47,6 +49,7 @@ const SETTINGS_CONTENT_LOADERS: Partial<Record<ConfigTab, () => Promise<unknown>
   appearance: loadAppearanceConfig,
   models: loadAIModelConfig,
   'archived-sessions': loadArchivedSessionsConfig,
+  worktrees: loadWorktreesConfig,
   'session-personalization': loadSessionConfig,
   'session-permissions': loadSessionConfig,
   'quick-actions': loadQuickActionsConfig,

@@ -753,6 +753,8 @@ impl SdkHostConnection {
                         .unwrap_or_else(|| DEFAULT_SESSION_NAME.to_string()),
                     agent_type: params.agent.unwrap_or_else(|| DEFAULT_AGENT.to_string()),
                     workspace_path: Some(workspace_path.clone()),
+                    project_workspace_path: None,
+                    execution_target: None,
                     workspace_id: None,
                     remote_connection_id: None,
                     remote_ssh_host: None,
@@ -877,6 +879,8 @@ impl SdkHostConnection {
                                 .clone()
                                 .unwrap_or_else(|| DEFAULT_AGENT.to_string()),
                             workspace_path: Some(workspace_path.clone()),
+                            project_workspace_path: None,
+                            execution_target: None,
                             workspace_id: None,
                             remote_connection_id: None,
                             remote_ssh_host: None,

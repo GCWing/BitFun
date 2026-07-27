@@ -11,6 +11,12 @@ use std::sync::Arc;
 use tokio::sync::mpsc;
 use tokio_util::sync::CancellationToken;
 
+pub use bitfun_core_types::{
+    SessionExecutionTarget, SessionExecutionTargetKind, SessionExecutionTargetRequest,
+    WorktreeDefaultTarget, WorktreeError, WorktreeErrorCode, WorktreeLifecycle, WorktreeSettings,
+    WorktreeSummary,
+};
+
 mod local_workspace_snapshot;
 #[cfg(feature = "permission")]
 mod permission;
@@ -968,6 +974,10 @@ pub struct AgentSessionCreateRequest {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub workspace_path: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub project_workspace_path: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub execution_target: Option<SessionExecutionTarget>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub workspace_id: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub remote_connection_id: Option<String>,
@@ -1166,6 +1176,10 @@ pub struct AgentSessionWorkspaceBinding {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub workspace_id: Option<String>,
     pub workspace_path: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub project_workspace_path: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub execution_target: Option<SessionExecutionTarget>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub remote_connection_id: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -2347,6 +2361,8 @@ mod tests {
             session_name: "Generated session".to_string(),
             agent_type: "agentic".to_string(),
             workspace_path: Some("/workspace/project".to_string()),
+            project_workspace_path: None,
+            execution_target: None,
             workspace_id: Some("workspace-1".to_string()),
             remote_connection_id: None,
             remote_ssh_host: None,
@@ -3102,6 +3118,8 @@ mod tests {
         let workspace_binding = AgentSessionWorkspaceBinding {
             workspace_id: Some("workspace_1".to_string()),
             workspace_path: "/workspace/project".to_string(),
+            project_workspace_path: None,
+            execution_target: None,
             remote_connection_id: Some("conn-1".to_string()),
             remote_ssh_host: Some("host-1".to_string()),
         };

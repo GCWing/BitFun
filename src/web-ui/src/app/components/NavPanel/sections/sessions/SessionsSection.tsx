@@ -96,10 +96,19 @@ const countTopLevelSessionsInScope = (
   sessions: Iterable<Session>,
   workspacePath?: string,
   remoteConnectionId?: string | null,
-  remoteSshHost?: string | null
+  remoteSshHost?: string | null,
+  worktreeId?: string,
+  localSessionsOnly = false,
 ): number => {
   const scopedSessions = Array.from(sessions).filter((session: Session) => {
     if (session.isTransient || session.sessionKind === 'subagent') {
+      return false;
+    }
+    const sessionWorktreeId = session.config.executionTarget?.worktreeId;
+    if (worktreeId && sessionWorktreeId !== worktreeId) {
+      return false;
+    }
+    if (localSessionsOnly && sessionWorktreeId) {
       return false;
     }
     if (workspacePath) {
@@ -160,6 +169,10 @@ interface SessionsSectionProps {
   showSessionModeIcon?: boolean;
   /** Prevents startup metadata fetching while the surrounding section is collapsed. */
   isVisible?: boolean;
+  /** Restrict rows to one managed/external worktree under the project. */
+  worktreeId?: string;
+  /** Show only sessions that execute in the main/local checkout. */
+  localSessionsOnly?: boolean;
 }
 
 const SessionsSection: React.FC<SessionsSectionProps> = ({
@@ -171,6 +184,8 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
   assistantLabel,
   showSessionModeIcon = true,
   isVisible = true,
+  worktreeId,
+  localSessionsOnly = false,
 }) => {
   const { t } = useI18n('common');
   const { setActiveWorkspace, currentWorkspace } = useWorkspaceContext();
@@ -312,7 +327,7 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
       isLoading: false,
       loadError: false,
     });
-  }, [workspaceId, workspacePath, remoteConnectionId, remoteSshHost]);
+  }, [workspaceId, workspacePath, remoteConnectionId, remoteSshHost, worktreeId, localSessionsOnly]);
 
   const loadMetadataPage = useCallback(
     async (limit: number, cursor: string | undefined, source: string) => {
@@ -342,10 +357,13 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
             flowChatStore.getState().sessions.values(),
             workspacePath,
             remoteConnectionId,
-            remoteSshHost
+            remoteSshHost,
+            worktreeId,
+            localSessionsOnly,
           );
           setMetadataPageState({
-            totalTopLevelCount: page.totalTopLevelCount,
+            totalTopLevelCount:
+              worktreeId || localSessionsOnly ? syncedTopLevelCount : page.totalTopLevelCount,
             syncedTopLevelCount,
             nextCursor: page.nextCursor,
             hasMore: page.hasMore,
@@ -366,7 +384,7 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
         return null;
       }
     },
-    [workspacePath, remoteConnectionId, remoteSshHost]
+    [workspacePath, remoteConnectionId, remoteSshHost, worktreeId, localSessionsOnly]
   );
 
   const initialMetadataKey = useMemo(
@@ -374,8 +392,10 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
       workspacePath ?? '',
       remoteConnectionId ?? '',
       remoteSshHost ?? '',
+      worktreeId ?? '',
+      localSessionsOnly ? 'local' : 'all',
     ].join('\n'),
-    [workspacePath, remoteConnectionId, remoteSshHost],
+    [workspacePath, remoteConnectionId, remoteSshHost, worktreeId, localSessionsOnly],
   );
 
   const loadInitialMetadataPage = useCallback(
@@ -564,13 +584,20 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
           if (s.sessionKind === 'subagent') {
             return false;
           }
+          const sessionWorktreeId = s.config.executionTarget?.worktreeId;
+          if (worktreeId && sessionWorktreeId !== worktreeId) {
+            return false;
+          }
+          if (localSessionsOnly && sessionWorktreeId) {
+            return false;
+          }
           if (workspacePath) {
             return sessionBelongsToWorkspaceNavRow(s, workspacePath, remoteConnectionId, remoteSshHost);
           }
           return !s.workspacePath;
         })
         .sort(compareSessionsForNavStable),
-    [flowChatState.sessions, workspacePath, remoteConnectionId, remoteSshHost]
+    [flowChatState.sessions, workspacePath, remoteConnectionId, remoteSshHost, worktreeId, localSessionsOnly]
   );
 
   const { topLevelSessions, childrenByParent } = useMemo(() => {
@@ -838,7 +865,11 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
           {
             sessionId: session.sessionId,
             title: resolveSessionTitle(session),
-            workspacePath: session.workspacePath || workspacePath,
+            workspacePath:
+              session.projectWorkspacePath
+              || session.config.projectWorkspacePath
+              || session.workspacePath
+              || workspacePath,
             // The nav row carries the workspace's current connection; a session's
             // stored ids can be stale (e.g. after an SSH port change).
             remoteConnectionId: remoteConnectionId ?? session.remoteConnectionId,

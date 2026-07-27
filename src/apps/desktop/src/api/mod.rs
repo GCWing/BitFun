@@ -53,5 +53,6 @@ pub mod system_api;
 pub mod terminal_api;
 pub mod tool_api;
 pub mod workspace_activation;
+pub mod worktree_api;
 
 pub use app_state::{AppState, AppStatistics, HealthStatus, RemoteWorkspace};

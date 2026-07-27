@@ -6,6 +6,7 @@
 
 import type { ReviewTargetEvidence, ReviewTeamRunManifest } from '@/shared/services/reviewTeamService';
 import type { AiErrorDetail } from '@/shared/ai-errors/aiErrorPresenter';
+import type { SessionExecutionTarget } from '@/infrastructure/api/service-api/WorktreeAPI';
 
 export type SessionKind = 'normal' | 'btw' | 'review' | 'deep_review' | 'miniapp' | 'subagent';
 export type PersistedSessionKind = 'standard' | 'subagent';
@@ -77,6 +78,8 @@ export interface SessionMetadata {
   relationship?: SessionRelationship;
   todos?: any[];
   workspacePath?: string;
+  projectWorkspacePath?: string;
+  executionTarget?: SessionExecutionTarget;
   remoteConnectionId?: string;
   remoteSshHost?: string;
   /** Backend unified workspace identity field: localhost for local, SSH host for remote. */

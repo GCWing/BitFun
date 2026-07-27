@@ -1,6 +1,8 @@
 use crate::session_state::SessionState;
 pub use bitfun_core_types::SessionKind;
-pub use bitfun_core_types::{SessionContinuationPolicy, SessionModelBindingPolicy};
+pub use bitfun_core_types::{
+    SessionContinuationPolicy, SessionExecutionTarget, SessionModelBindingPolicy,
+};
 use serde::{Deserialize, Serialize};
 use std::time::SystemTime;
 use uuid::Uuid;
@@ -146,6 +148,15 @@ pub struct SessionConfig {
     /// without changing the desktop's foreground workspace.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub workspace_path: Option<String>,
+    /// Main project root used for session persistence and project-scoped
+    /// orchestration. For legacy and local sessions this is the same as
+    /// `workspace_path`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub project_workspace_path: Option<String>,
+    /// Resolved execution target. Legacy sessions omit this and are treated as
+    /// local sessions rooted at `workspace_path`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub execution_target: Option<SessionExecutionTarget>,
     /// Stable workspace id for resolving workspace-scoped metadata such as related directories.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub workspace_id: Option<String>,
@@ -191,6 +202,8 @@ impl Default for SessionConfig {
             max_turns: 200,
             enable_context_compression: true,
             workspace_path: None,
+            project_workspace_path: None,
+            execution_target: None,
             workspace_id: None,
             remote_connection_id: None,
             remote_ssh_host: None,

@@ -11,6 +11,7 @@ pub mod session_usage;
 pub mod speech;
 pub mod surface;
 pub mod tool_image_attachment;
+pub mod worktree;
 
 pub use ai::{
     AIConfig, ConnectionTestMessageCode, ConnectionTestResult, Message, ProxyConfig, ReasoningMode,
@@ -28,3 +29,8 @@ pub use surface::{
     RuntimeArtifactKind, RuntimeArtifactRef, SurfaceKind, ThreadEnvironment, ThreadEnvironmentKind,
 };
 pub use tool_image_attachment::ToolImageAttachment;
+pub use worktree::{
+    SessionExecutionTarget, SessionExecutionTargetKind, SessionExecutionTargetRequest,
+    WorktreeDefaultTarget, WorktreeError, WorktreeErrorCode, WorktreeLifecycle,
+    WorktreeSessionSummary, WorktreeSettings, WorktreeSummary,
+};

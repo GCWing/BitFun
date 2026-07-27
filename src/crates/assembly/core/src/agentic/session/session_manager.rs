@@ -766,8 +766,12 @@ impl SessionManager {
 
         let runtime_service = persistence_manager.runtime_service();
         Some(if identity.hostname == LOCAL_WORKSPACE_SSH_HOST {
+            let project_workspace_path = config
+                .project_workspace_path
+                .as_deref()
+                .unwrap_or_else(|| identity.logical_workspace_path());
             runtime_service
-                .context_for_local_workspace(Path::new(identity.logical_workspace_path()))
+                .context_for_local_workspace(Path::new(project_workspace_path))
                 .sessions_dir
         } else if identity.hostname == "_unresolved" {
             bitfun_services_integrations::remote_ssh::unresolved_remote_session_storage_dir(
@@ -1186,6 +1190,8 @@ impl SessionManager {
 
         let mut config = SessionConfig {
             workspace_path: Some(workspace_path.clone()),
+            project_workspace_path: metadata.project_workspace_path.clone(),
+            execution_target: metadata.execution_target.clone(),
             ..SessionConfig::default()
         };
 

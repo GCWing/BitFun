@@ -12,6 +12,7 @@ import {
   DEFERRED_TOOL_GATEWAY_NAME,
   effectiveToolInvocation,
 } from '../../utils/toolInvocationIdentity';
+import { requireSessionProjectWorkspacePath } from '../../utils/sessionWorkspace';
 
 const log = createLogger('PersistenceModule');
 const COALESCED_IMMEDIATE_SAVE_DELAY_MS = 500;
@@ -280,7 +281,7 @@ async function performSaveDialogTurnToDisk(
       return;
     }
 
-    const workspacePath = requireWorkspacePath(sessionId, session.workspacePath);
+    const workspacePath = requireSessionProjectWorkspacePath(session, sessionId);
     
     const dialogTurn = session.dialogTurns.find(turn => turn.id === turnId);
     if (!dialogTurn) {
@@ -521,7 +522,7 @@ export async function updateSessionMetadata(
     if (!session) return;
     if (isTransientSession(session)) return;
 
-    const workspacePath = requireWorkspacePath(sessionId, session.workspacePath);
+    const workspacePath = requireSessionProjectWorkspacePath(session, sessionId);
 
     let existingMetadata: any = null;
     try {

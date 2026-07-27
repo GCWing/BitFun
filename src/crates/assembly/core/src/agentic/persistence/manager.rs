@@ -804,6 +804,8 @@ impl PersistenceManager {
             turn_count: session.dialog_turn_ids.len(),
             snapshot_session_id: session.snapshot_session_id.as_deref(),
             workspace_path: &workspace_root,
+            project_workspace_path: session.config.project_workspace_path.as_deref(),
+            execution_target: session.config.execution_target.as_ref(),
             workspace_hostname: workspace_hostname.as_deref(),
             new_session_memory_mode: new_session_memory_mode_from_global_config().await,
             existing,

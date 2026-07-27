@@ -1040,7 +1040,11 @@ impl ConversationCoordinator {
             return Some(binding);
         }
 
-        let binding = WorkspaceBinding::new(workspace_id, path_buf);
+        let mut binding = WorkspaceBinding::new(workspace_id, path_buf);
+        if let Some(project_workspace_path) = config.project_workspace_path.as_deref() {
+            binding = binding.with_project_root_path(PathBuf::from(project_workspace_path));
+        }
+        binding = binding.with_execution_target(config.execution_target.clone());
 
         Some(binding)
     }
@@ -1809,6 +1813,9 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             session_name: session.session_name.clone(),
             agent_type: session.agent_type.clone(),
             workspace_path: Some(workspace_path),
+            project_workspace_path: session.config.project_workspace_path.clone(),
+            execution_target: session.config.execution_target.clone(),
+            workspace_id: session.config.workspace_id.clone(),
             remote_connection_id: session.config.remote_connection_id.clone(),
             remote_ssh_host: session.config.remote_ssh_host.clone(),
         })
@@ -1971,6 +1978,8 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                 review_target_evidence: None,
                 deep_review_cache: None,
                 workspace_path: Some(workspace_path.to_string()),
+                project_workspace_path: Some(workspace_path.to_string()),
+                execution_target: None,
                 workspace_hostname: None,
                 unread_completion: None,
                 needs_user_attention: None,
@@ -8352,6 +8361,8 @@ async fn create_agent_session_from_runtime_request(
             request.agent_type,
             SessionConfig {
                 workspace_path: Some(workspace_path.clone()),
+                project_workspace_path: request.project_workspace_path,
+                execution_target: request.execution_target,
                 workspace_id: request.workspace_id,
                 remote_connection_id: request.remote_connection_id,
                 remote_ssh_host: request.remote_ssh_host,
@@ -8532,6 +8543,8 @@ fn runtime_session_workspace_binding(binding: WorkspaceBinding) -> AgentSessionW
     AgentSessionWorkspaceBinding {
         workspace_id: binding.workspace_id.clone(),
         workspace_path: binding.root_path_string(),
+        project_workspace_path: Some(binding.project_root_path_string()),
+        execution_target: binding.execution_target.clone(),
         remote_connection_id: binding.connection_id().map(ToOwned::to_owned),
         remote_ssh_host: if binding.is_remote() {
             Some(binding.session_identity.hostname.clone()).filter(|value| !value.trim().is_empty())
@@ -10350,6 +10363,8 @@ mod tests {
                 session_name: "Worker".to_string(),
                 agent_type: "agentic".to_string(),
                 workspace_path: Some(workspace_path.to_string_lossy().into_owned()),
+                project_workspace_path: None,
+                execution_target: None,
                 workspace_id: Some("workspace-1".to_string()),
                 remote_connection_id: None,
                 remote_ssh_host: None,
@@ -10387,6 +10402,8 @@ mod tests {
                 session_name: "Original".to_string(),
                 agent_type: "agentic".to_string(),
                 workspace_path: Some(workspace.clone()),
+                project_workspace_path: None,
+                execution_target: None,
                 workspace_id: None,
                 remote_connection_id: None,
                 remote_ssh_host: None,
@@ -10482,6 +10499,8 @@ mod tests {
                 session_name: "Over capacity".to_string(),
                 agent_type: "agentic".to_string(),
                 workspace_path: Some(std::env::temp_dir().to_string_lossy().into_owned()),
+                project_workspace_path: None,
+                execution_target: None,
                 workspace_id: None,
                 remote_connection_id: None,
                 remote_ssh_host: None,
@@ -10511,6 +10530,8 @@ mod tests {
                 session_name: "Fixed worker".to_string(),
                 agent_type: "agentic".to_string(),
                 workspace_path: Some(workspace_path.to_string_lossy().into_owned()),
+                project_workspace_path: None,
+                execution_target: None,
                 workspace_id: None,
                 remote_connection_id: None,
                 remote_ssh_host: None,
@@ -10543,6 +10564,8 @@ mod tests {
                 session_name: "Duplicate worker".to_string(),
                 agent_type: "agentic".to_string(),
                 workspace_path: Some(workspace_path.to_string_lossy().into_owned()),
+                project_workspace_path: None,
+                execution_target: None,
                 workspace_id: None,
                 remote_connection_id: None,
                 remote_ssh_host: None,
@@ -10882,6 +10905,8 @@ mod tests {
             session_name: name.to_string(),
             agent_type: "agentic".to_string(),
             workspace_path: Some(workspace.clone()),
+            project_workspace_path: None,
+            execution_target: None,
             workspace_id: None,
             remote_connection_id: None,
             remote_ssh_host: None,
@@ -11013,6 +11038,8 @@ mod tests {
                 session_name: "Invalid worker".to_string(),
                 agent_type: "agentic".to_string(),
                 workspace_path: Some(std::env::temp_dir().to_string_lossy().into_owned()),
+                project_workspace_path: None,
+                execution_target: None,
                 workspace_id: None,
                 remote_connection_id: None,
                 remote_ssh_host: None,

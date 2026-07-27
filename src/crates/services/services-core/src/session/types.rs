@@ -1,7 +1,9 @@
 //! Types for session persistence
 
 use bitfun_core_types::ToolImageAttachment;
-use bitfun_core_types::{AiErrorDetail, SessionContinuationPolicy, SessionKind};
+use bitfun_core_types::{
+    AiErrorDetail, SessionContinuationPolicy, SessionExecutionTarget, SessionKind,
+};
 use bitfun_events::ModelRoundAttemptDiagnostic;
 use serde::{Deserialize, Serialize};
 
@@ -235,6 +237,23 @@ pub struct SessionMetadata {
     /// Workspace path this session belongs to (normalized source workspace root, not mirror dir)
     #[serde(skip_serializing_if = "Option::is_none", alias = "workspace_path")]
     pub workspace_path: Option<String>,
+
+    /// Main project path that owns this session's persisted data. Legacy
+    /// sessions omit it and use `workspace_path`.
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        alias = "project_workspace_path"
+    )]
+    pub project_workspace_path: Option<String>,
+
+    /// Concrete execution target, including managed worktree identity.
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        alias = "execution_target"
+    )]
+    pub execution_target: Option<SessionExecutionTarget>,
 
     /// Unified hostname for workspace identity: `localhost` for local workspaces,
     /// SSH host for remote workspaces.
@@ -908,6 +927,8 @@ impl SessionMetadata {
             review_target_evidence: None,
             deep_review_cache: None,
             workspace_path: None,
+            project_workspace_path: None,
+            execution_target: None,
             workspace_hostname: None,
             unread_completion: None,
             needs_user_attention: None,

@@ -336,6 +336,7 @@ export function buildSessionMetadata(
     | 'config'
     | 'createdAt'
     | 'workspacePath'
+    | 'projectWorkspacePath'
     | 'remoteConnectionId'
     | 'remoteSshHost'
     | 'todos'
@@ -410,6 +411,13 @@ export function buildSessionMetadata(
     ),
     todos: session.todos || existingMetadata?.todos || [],
     workspacePath: session.workspacePath || existingMetadata?.workspacePath,
+    projectWorkspacePath:
+      session.projectWorkspacePath
+      || session.config.projectWorkspacePath
+      || session.workspacePath
+      || existingMetadata?.projectWorkspacePath,
+    executionTarget:
+      session.config.executionTarget ?? existingMetadata?.executionTarget,
     remoteConnectionId:
       session.remoteConnectionId ?? existingMetadata?.remoteConnectionId,
     remoteSshHost: session.remoteSshHost ?? existingMetadata?.remoteSshHost,

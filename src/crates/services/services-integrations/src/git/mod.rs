@@ -6,6 +6,7 @@
 pub mod args;
 pub mod error;
 pub mod graph;
+mod managed_worktree;
 pub mod name_status;
 pub mod service;
 pub mod text;

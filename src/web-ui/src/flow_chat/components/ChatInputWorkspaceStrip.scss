@@ -401,6 +401,72 @@
       flex: 0 1 auto;
       max-width: 35%;
       gap: 3px;
+      border: 0;
+      background: transparent;
+      color: inherit;
+      font: inherit;
+
+      &:not(:disabled) {
+        cursor: pointer;
+      }
+
+      &:disabled {
+        opacity: 1;
+      }
+    }
+  }
+
+  &__worktree {
+    position: relative;
+    display: flex;
+    min-width: 0;
+    flex: 0 1 auto;
+    max-width: 35%;
+  }
+
+  &__worktree &__chip--branch {
+    max-width: 100%;
+  }
+
+  &__worktree-menu {
+    position: absolute;
+    bottom: calc(100% + 7px);
+    left: 0;
+    z-index: 11;
+    display: flex;
+    width: max-content;
+    min-width: 180px;
+    flex-direction: column;
+    gap: 2px;
+    padding: 5px;
+    border: 1px solid var(--border-subtle);
+    border-radius: $size-radius-base;
+    background: var(--color-bg-elevated);
+    box-shadow: var(--shadow-lg);
+
+    > button {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      padding: 7px 8px;
+      border: 0;
+      border-radius: $size-radius-sm;
+      background: transparent;
+      color: var(--color-text-secondary);
+      font: inherit;
+      text-align: left;
+      cursor: pointer;
+
+      &:hover:not(:disabled),
+      &:focus-visible {
+        background: var(--element-bg-medium);
+        color: var(--color-text-primary);
+      }
+
+      &:disabled {
+        cursor: wait;
+        opacity: 0.55;
+      }
     }
   }
 

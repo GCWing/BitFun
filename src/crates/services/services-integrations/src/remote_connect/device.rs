@@ -1,6 +1,7 @@
 //! Device identity for Remote Connect pairing and account device routing.
 //!
-//! `device_id` is generated once and persisted under `~/.bitfun/device_identity.json`.
+//! `device_id` is generated once and persisted under
+//! `<BITFUN_HOME>/device_identity.json` (normally `~/.bitfun/device_identity.json`).
 //! Hostname/MAC are refreshed for display only — they must not rewrite `device_id`,
 //! because macOS private Wi‑Fi addresses and interface order make MAC unstable.
 
@@ -114,8 +115,9 @@ fn identity_file_path() -> Result<PathBuf> {
         }
     }
 
-    let home = dirs::home_dir().ok_or_else(|| anyhow!("cannot determine home directory"))?;
-    Ok(home.join(".bitfun").join("device_identity.json"))
+    let home = super::bitfun_home_dir()
+        .ok_or_else(|| anyhow!("cannot determine BitFun home directory"))?;
+    Ok(home.join("device_identity.json"))
 }
 
 fn load_persisted() -> Result<Option<DeviceIdentity>> {

@@ -32,6 +32,7 @@ import {
   SessionPermissionsConfig,
   SessionPersonalizationConfig,
   VoiceInputConfig,
+  WorktreesConfig,
 } from './settingsContentRegistry';
 import './SettingsScene.scss';
 
@@ -55,6 +56,7 @@ function resolveSettingsContent(tab: ConfigTab): React.ComponentType | null {
     case 'appearance':              return AppearanceConfig;
     case 'models':                  return AIModelConfig;
     case 'archived-sessions':       return ArchivedSessionsConfig;
+    case 'worktrees':               return WorktreesConfig;
     case 'session-personalization': return SessionPersonalizationConfig;
     case 'session-permissions':     return SessionPermissionsConfig;
     case 'quick-actions':           return QuickActionsConfig;

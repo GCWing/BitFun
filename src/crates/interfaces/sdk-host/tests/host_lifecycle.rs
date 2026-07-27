@@ -387,6 +387,8 @@ impl AgentSessionManagementPort for FakeOwner {
         Ok(Some(AgentSessionWorkspaceBinding {
             workspace_id: None,
             workspace_path: "D:/workspace/project".to_string(),
+            project_workspace_path: None,
+            execution_target: None,
             remote_connection_id: None,
             remote_ssh_host: None,
         }))

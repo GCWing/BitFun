@@ -3,6 +3,8 @@ import { useI18n } from '@/infrastructure/i18n';
 import { useWorkspaceContext } from '@/infrastructure/contexts/WorkspaceContext';
 import { notificationService } from '@/shared/notification-system';
 import WorkspaceItem from './WorkspaceItem';
+import { isLinkedWorktreeWorkspace } from '@/shared/types';
+import { isSamePath } from '@/shared/utils/pathUtils';
 import './WorkspaceListSection.scss';
 
 interface WorkspaceListSectionProps {
@@ -38,9 +40,26 @@ const WorkspaceListSection: React.FC<WorkspaceListSectionProps> = ({ variant }) 
   const draggedWorkspaceIdRef = useRef<string | null>(null);
   const dropTargetRef = useRef<{ workspaceId: string; position: WorkspaceDragPosition } | null>(null);
 
-  const workspaces = variant === 'assistants'
+  const sectionWorkspaces = variant === 'assistants'
     ? assistantWorkspacesList
     : normalWorkspacesList;
+  const projectRoots = variant === 'projects'
+    ? sectionWorkspaces
+        .filter(workspace => !isLinkedWorktreeWorkspace(workspace))
+        .map(workspace => workspace.rootPath)
+    : [];
+  const workspaces = variant === 'projects'
+    ? sectionWorkspaces.filter(workspace => (
+        !isLinkedWorktreeWorkspace(workspace)
+        || !projectRoots.some(projectRoot => (
+          isSamePath(projectRoot, workspace.worktree?.mainRepoPath || '')
+        ))
+      ))
+    : sectionWorkspaces;
+  const activeWorkspace = openedWorkspacesList.find(workspace => workspace.id === activeWorkspaceId);
+  const activeProjectPath = activeWorkspace?.worktree && !activeWorkspace.worktree.isMain
+    ? activeWorkspace.worktree.mainRepoPath
+    : activeWorkspace?.rootPath;
   const emptyLabel = variant === 'assistants'
     ? t('nav.workspaces.emptyAssistants')
     : t('nav.workspaces.emptyProjects');
@@ -188,8 +207,11 @@ const WorkspaceListSection: React.FC<WorkspaceListSectionProps> = ({ variant }) 
             ) : null}
             <WorkspaceItem
               workspace={workspace}
-              isActive={workspace.id === activeWorkspaceId}
-              isSingle={openedWorkspacesList.length === 1}
+              isActive={
+                workspace.id === activeWorkspaceId ||
+                Boolean(activeProjectPath && isSamePath(workspace.rootPath, activeProjectPath))
+              }
+              isSingle={workspaces.length === 1}
               draggable={workspaces.length > 1}
               isDragging={draggedWorkspaceId === workspace.id}
               onDragStart={handleDragStart(workspace.id)}

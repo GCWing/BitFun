@@ -45,6 +45,7 @@ pub mod todo_write_tool;
 pub mod util;
 pub mod view_image_tool;
 pub mod web;
+pub mod worktree_tool;
 
 #[deprecated(note = "GetToolSpecTool is owned by the product tool runtime boundary")]
 pub use crate::agentic::tools::product_runtime::GetToolSpecTool;
@@ -90,3 +91,4 @@ pub use thread_goal_tools::{CreateGoalTool, GetGoalTool, UpdateGoalTool};
 pub use todo_write_tool::TodoWriteTool;
 pub use view_image_tool::ViewImageTool;
 pub use web::{WebFetchTool, WebSearchTool};
+pub use worktree_tool::WorktreeTool;

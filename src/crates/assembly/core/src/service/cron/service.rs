@@ -613,6 +613,8 @@ impl CronService {
                         launch.agent_type.clone(),
                         SessionConfig {
                             workspace_path: Some(workspace.workspace_path.clone()),
+                            project_workspace_path: workspace.project_workspace_path.clone(),
+                            execution_target: workspace.execution_target.clone(),
                             workspace_id: workspace.workspace_id.clone(),
                             remote_connection_id: workspace.remote_connection_id.clone(),
                             remote_ssh_host: workspace.remote_ssh_host.clone(),
@@ -801,6 +803,11 @@ fn materialize_workspace_ref(workspace: CronWorkspaceRef) -> CronWorkspaceRef {
             .map(|value| value.trim().to_string())
             .filter(|value| !value.is_empty()),
         workspace_path: normalize_workspace_path_for_matching(&workspace.workspace_path),
+        project_workspace_path: workspace
+            .project_workspace_path
+            .map(|value| normalize_workspace_path_for_matching(&value))
+            .filter(|value| !value.is_empty()),
+        execution_target: workspace.execution_target,
         remote_connection_id: workspace
             .remote_connection_id
             .map(|value| value.trim().to_string())
@@ -816,6 +823,10 @@ fn workspace_ref_from_binding(binding: &WorkspaceBinding) -> CronWorkspaceRef {
     CronWorkspaceRef {
         workspace_id: binding.workspace_id.clone(),
         workspace_path: normalize_workspace_path_for_matching(&binding.root_path_string()),
+        project_workspace_path: Some(normalize_workspace_path_for_matching(
+            &binding.project_root_path_string(),
+        )),
+        execution_target: binding.execution_target.clone(),
         remote_connection_id: binding.connection_id().map(ToOwned::to_owned),
         remote_ssh_host: if binding.is_remote() {
             Some(binding.session_identity.hostname.clone()).filter(|value| !value.trim().is_empty())
@@ -1034,6 +1045,8 @@ mod tests {
                 workspace: CronWorkspaceRef {
                     workspace_id: None,
                     workspace_path: "E:/workspace".to_string(),
+                    project_workspace_path: None,
+                    execution_target: None,
                     remote_connection_id: None,
                     remote_ssh_host: None,
                 },
@@ -1062,6 +1075,8 @@ mod tests {
         let workspace = materialize_workspace_ref(CronWorkspaceRef {
             workspace_id: None,
             workspace_path: r"c:\Users\wsp\.bitfun\personal_assistant\workspace\".to_string(),
+            project_workspace_path: None,
+            execution_target: None,
             remote_connection_id: None,
             remote_ssh_host: None,
         });
@@ -1077,6 +1092,8 @@ mod tests {
         let workspace = CronWorkspaceRef {
             workspace_id: Some("local_workspace".to_string()),
             workspace_path: r"C:\Users\wsp\.bitfun\personal_assistant\workspace".to_string(),
+            project_workspace_path: None,
+            execution_target: None,
             remote_connection_id: None,
             remote_ssh_host: None,
         };
@@ -1094,6 +1111,8 @@ mod tests {
         let workspace = CronWorkspaceRef {
             workspace_id: None,
             workspace_path: "/home/wsp/projects/test/".to_string(),
+            project_workspace_path: None,
+            execution_target: None,
             remote_connection_id: Some("ssh-1".to_string()),
             remote_ssh_host: Some("host-1".to_string()),
         };

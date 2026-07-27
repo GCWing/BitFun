@@ -1,5 +1,6 @@
 use crate::service::remote_ssh::workspace_state::WorkspaceSessionIdentity;
 use crate::service::workspace_runtime::WorkspaceRuntimeService;
+use bitfun_core_types::SessionExecutionTarget;
 pub use bitfun_runtime_ports::{
     WorkspaceCommandOptions, WorkspaceCommandResult, WorkspaceDirEntry, WorkspaceFileSystem,
     WorkspaceServices, WorkspaceShell,
@@ -29,6 +30,11 @@ pub struct WorkspaceBinding {
     /// For local workspaces this is a local path; for remote workspaces it is
     /// the path on the remote server (e.g. `/root/project`).
     pub root_path: PathBuf,
+    /// Main project root used for persistence and product-level orchestration.
+    /// It equals `root_path` for legacy, local, and remote sessions.
+    pub project_root_path: PathBuf,
+    /// Resolved execution target persisted with the session.
+    pub execution_target: Option<SessionExecutionTarget>,
     pub backend: WorkspaceBackend,
     /// Unified identity for session persistence. Local and remote workspaces
     /// share the same model; the only semantic difference is hostname.
@@ -52,6 +58,8 @@ impl WorkspaceBinding {
             });
         Self {
             workspace_id,
+            project_root_path: root_path.clone(),
+            execution_target: None,
             root_path,
             backend: WorkspaceBackend::Local,
             session_identity,
@@ -67,6 +75,8 @@ impl WorkspaceBinding {
     ) -> Self {
         Self {
             workspace_id,
+            project_root_path: root_path.clone(),
+            execution_target: None,
             root_path,
             backend: WorkspaceBackend::Remote {
                 connection_id,
@@ -82,6 +92,31 @@ impl WorkspaceBinding {
 
     pub fn root_path_string(&self) -> String {
         self.root_path.to_string_lossy().to_string()
+    }
+
+    pub fn project_root_path(&self) -> &Path {
+        &self.project_root_path
+    }
+
+    pub fn project_root_path_string(&self) -> String {
+        self.project_root_path.to_string_lossy().to_string()
+    }
+
+    /// Binds a local execution root to the main project that owns its session
+    /// data. Remote workspaces intentionally keep a single root.
+    pub fn with_project_root_path(mut self, project_root_path: PathBuf) -> Self {
+        if !self.is_remote() {
+            self.project_root_path = project_root_path;
+        }
+        self
+    }
+
+    pub fn with_execution_target(
+        mut self,
+        execution_target: Option<SessionExecutionTarget>,
+    ) -> Self {
+        self.execution_target = execution_target;
+        self
     }
 
     /// Logical workspace root used by tools, display, and workspace-bound IO.
@@ -129,7 +164,7 @@ impl WorkspaceBinding {
         }
 
         runtime_service
-            .context_for_local_workspace(self.logical_workspace_path())
+            .context_for_local_workspace(self.project_root_path())
             .sessions_dir
     }
 }
@@ -139,6 +174,10 @@ mod tests {
     use super::{WorkspaceBackend, WorkspaceBinding};
     use crate::service::remote_ssh::workspace_state::{
         remote_workspace_session_mirror_dir, workspace_session_identity,
+    };
+    use crate::service::workspace_runtime::WorkspaceRuntimeService;
+    use bitfun_core_types::{
+        SessionExecutionTarget, SessionExecutionTargetKind, WorktreeLifecycle,
     };
     use std::path::PathBuf;
 
@@ -162,6 +201,35 @@ mod tests {
         assert_eq!(
             binding.session_storage_dir(),
             remote_workspace_session_mirror_dir("127.0.0.1", "/home/wsp/projects/test")
+        );
+    }
+
+    #[test]
+    fn worktree_binding_executes_in_worktree_but_persists_in_project() {
+        let project_root = PathBuf::from("/tmp/bitfun-project");
+        let worktree_root = PathBuf::from("/tmp/bitfun-worktrees/wt-1");
+        let execution_target = SessionExecutionTarget {
+            kind: SessionExecutionTargetKind::ManagedWorktree,
+            worktree_id: Some("wt-1".to_string()),
+            root_path: worktree_root.to_string_lossy().to_string(),
+            base_ref: Some("HEAD".to_string()),
+            base_commit: Some("0123456789abcdef".to_string()),
+            branch: None,
+            lifecycle: Some(WorktreeLifecycle::Managed),
+        };
+        let binding = WorkspaceBinding::new(None, worktree_root.clone())
+            .with_project_root_path(project_root.clone())
+            .with_execution_target(Some(execution_target.clone()));
+        let runtime = WorkspaceRuntimeService::new(crate::infrastructure::get_path_manager_arc());
+
+        assert_eq!(binding.root_path(), worktree_root);
+        assert_eq!(binding.project_root_path(), project_root);
+        assert_eq!(binding.execution_target, Some(execution_target));
+        assert_eq!(
+            binding.session_storage_dir(),
+            runtime
+                .context_for_local_workspace(&project_root)
+                .sessions_dir
         );
     }
 }

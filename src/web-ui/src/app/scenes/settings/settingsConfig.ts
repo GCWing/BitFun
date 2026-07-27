@@ -9,6 +9,7 @@ export type ConfigTab =
   | 'basics'
   | 'appearance'
   | 'models'
+  | 'worktrees'
   | 'archived-sessions'
   | 'session-personalization'
   | 'session-permissions'
@@ -114,6 +115,19 @@ export const SETTINGS_CATEGORIES: ConfigCategoryDef[] = [
           'sessions',
           'restore',
           'unarchive',
+        ],
+      },
+      {
+        id: 'worktrees',
+        labelKey: 'configCenter.tabs.worktrees',
+        descriptionKey: 'configCenter.tabDescriptions.worktrees',
+        keywords: [
+          'git',
+          'worktree',
+          'isolation',
+          'parallel',
+          'branch',
+          'session',
         ],
       },
       {

@@ -43,6 +43,7 @@ export const ALL_NAMESPACES = [
   'settings/voice-input',
   'shared',
   'tools',
+  'worktrees',
 ] as const;
 
 export const WEB_UI_BOOTSTRAP_NAMESPACES = [

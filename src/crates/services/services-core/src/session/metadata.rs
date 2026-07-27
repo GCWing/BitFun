@@ -4,7 +4,7 @@ use super::types::{
     DialogTurnData, DialogTurnKind, SessionMemoryMode, SessionMetadata, SessionRelationship,
     SessionRelationshipKind, StoredSessionIndexFile, TurnStatus,
 };
-use bitfun_core_types::SessionKind;
+use bitfun_core_types::{SessionExecutionTarget, SessionKind};
 use serde_json::Value;
 
 #[derive(Debug, Clone)]
@@ -22,6 +22,8 @@ pub struct SessionMetadataBuildFacts<'a> {
     pub turn_count: usize,
     pub snapshot_session_id: Option<&'a str>,
     pub workspace_path: &'a str,
+    pub project_workspace_path: Option<&'a str>,
+    pub execution_target: Option<&'a SessionExecutionTarget>,
     pub workspace_hostname: Option<&'a str>,
     pub new_session_memory_mode: SessionMemoryMode,
     pub existing: Option<&'a SessionMetadata>,
@@ -76,6 +78,14 @@ pub fn build_session_metadata(facts: SessionMetadataBuildFacts<'_>) -> SessionMe
         review_target_evidence: existing.and_then(|value| value.review_target_evidence.clone()),
         deep_review_cache: existing.and_then(|value| value.deep_review_cache.clone()),
         workspace_path: Some(facts.workspace_path.to_string()),
+        project_workspace_path: facts
+            .project_workspace_path
+            .map(str::to_string)
+            .or_else(|| existing.and_then(|value| value.project_workspace_path.clone())),
+        execution_target: facts
+            .execution_target
+            .cloned()
+            .or_else(|| existing.and_then(|value| value.execution_target.clone())),
         workspace_hostname: facts.workspace_hostname.map(str::to_string),
         unread_completion: existing.and_then(|value| value.unread_completion.clone()),
         needs_user_attention: existing.and_then(|value| value.needs_user_attention.clone()),
@@ -367,7 +377,10 @@ fn fill_workspace_path_if_missing(metadata: &mut SessionMetadata, workspace_path
 mod tests {
     use super::*;
     use crate::session::{SessionRelationship, SessionRelationshipKind};
-    use bitfun_core_types::SessionContinuationPolicy;
+    use bitfun_core_types::{
+        SessionContinuationPolicy, SessionExecutionTarget, SessionExecutionTargetKind,
+        WorktreeLifecycle,
+    };
     use serde_json::json;
 
     fn metadata() -> SessionMetadata {
@@ -508,6 +521,8 @@ mod tests {
             turn_count: 4,
             snapshot_session_id: Some("snapshot-1"),
             workspace_path: "/workspace",
+            project_workspace_path: None,
+            execution_target: None,
             workspace_hostname: Some("host"),
             new_session_memory_mode: crate::session::SessionMemoryMode::Enabled,
             existing: Some(&existing),
@@ -563,6 +578,8 @@ mod tests {
             turn_count: 0,
             snapshot_session_id: None,
             workspace_path: "/workspace",
+            project_workspace_path: None,
+            execution_target: None,
             workspace_hostname: None,
             new_session_memory_mode: crate::session::SessionMemoryMode::Disabled,
             existing: None,
@@ -572,5 +589,42 @@ mod tests {
             built.memory_mode,
             crate::session::SessionMemoryMode::Disabled
         );
+    }
+
+    #[test]
+    fn build_session_metadata_persists_dual_roots_and_execution_target() {
+        let execution_target = SessionExecutionTarget {
+            kind: SessionExecutionTargetKind::ManagedWorktree,
+            worktree_id: Some("wt-1".to_string()),
+            root_path: "/worktrees/wt-1".to_string(),
+            base_ref: Some("main".to_string()),
+            base_commit: Some("0123456789abcdef".to_string()),
+            branch: None,
+            lifecycle: Some(WorktreeLifecycle::Managed),
+        };
+        let built = build_session_metadata(SessionMetadataBuildFacts {
+            session_id: "session-worktree",
+            session_name: "Isolated session",
+            agent_type: "agentic",
+            last_user_dialog_agent_type: None,
+            last_submitted_agent_type: None,
+            created_by: None,
+            session_kind: crate::session::SessionKind::Standard,
+            model_name: Some("gpt-test"),
+            created_at_ms: 100,
+            last_active_at_ms: 200,
+            turn_count: 0,
+            snapshot_session_id: None,
+            workspace_path: "/worktrees/wt-1",
+            project_workspace_path: Some("/repo"),
+            execution_target: Some(&execution_target),
+            workspace_hostname: None,
+            new_session_memory_mode: crate::session::SessionMemoryMode::Enabled,
+            existing: None,
+        });
+
+        assert_eq!(built.workspace_path.as_deref(), Some("/worktrees/wt-1"));
+        assert_eq!(built.project_workspace_path.as_deref(), Some("/repo"));
+        assert_eq!(built.execution_target, Some(execution_target));
     }
 }

@@ -13,7 +13,7 @@
 
 import React, { useCallback, useState, useMemo, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { Plus, FolderOpen, FolderPlus, History, Check, User, Users, Puzzle, Blocks, ChevronDown, Search } from 'lucide-react';
+import { Plus, FolderOpen, FolderPlus, History, Check, User, Users, Puzzle, Blocks, ChevronDown, Search, GitBranch } from 'lucide-react';
 // import { PanelsTopLeft } from 'lucide-react'; // temporarily hidden: Pages nav entry
 import { Tooltip } from '@/component-library';
 import { useApp } from '../../hooks/useApp';
@@ -23,6 +23,7 @@ import type { SceneTabId } from '../SceneBar/types';
 import SectionHeader from './components/SectionHeader';
 import MiniAppEntry from './components/MiniAppEntry';
 import WorkspaceListSection from './sections/workspaces/WorkspaceListSection';
+import { openWorktreeLauncher } from '@/shared/services/worktreeUIEvents';
 import SessionsSection from './sections/sessions/SessionsSection';
 import { useSceneStore } from '../../stores/sceneStore';
 import { useMyAgentStore } from '../../scenes/my-agent/myAgentStore';
@@ -76,6 +77,7 @@ const MainNav: React.FC<MainNavProps> = ({
   const activeTabId = useSceneStore(s => s.activeTabId);
   const setSelectedAssistantWorkspaceId = useMyAgentStore((s) => s.setSelectedAssistantWorkspaceId);
   const { t } = useI18n('common');
+  const { t: tWorktrees } = useI18n('worktrees');
   // const { t: tPages } = useI18n('scenes/pages'); // temporarily hidden: Pages nav entry
   const {
     currentWorkspace,
@@ -250,6 +252,21 @@ const MainNav: React.FC<MainNavProps> = ({
     setSessionMode('cowork');
     void handleCreateProjectSession('Cowork');
   }, [handleCreateProjectSession, setSessionMode]);
+
+  const handleCreateWorktreeSession = useCallback(() => {
+    const target = pickWorkspaceForProjectChatSession(currentWorkspace, normalWorkspacesList);
+    if (!target) {
+      notificationService.warning(t('nav.sessions.needProjectWorkspaceForSession'), {
+        duration: 4500,
+      });
+      return;
+    }
+    if (isRemoteWorkspace(target)) {
+      notificationService.info(tWorktrees('launcher.remoteUnsupported'), { duration: 3500 });
+      return;
+    }
+    openWorktreeLauncher(target.worktree?.mainRepoPath || target.rootPath, 'agentic');
+  }, [currentWorkspace, normalWorkspacesList, t, tWorktrees]);
 
   const handleOpenProject = useCallback(async () => {
     try {
@@ -517,6 +534,21 @@ const MainNav: React.FC<MainNavProps> = ({
               <Plus size={12} />
             </span>
             <span>{t('shared:agents.cowork')}</span>
+          </button>
+        </Tooltip>
+
+        <Tooltip content={tWorktrees('launcher.title')} placement="right" followCursor>
+          <button
+            type="button"
+            className="bitfun-nav-panel__top-action-btn"
+            onClick={handleCreateWorktreeSession}
+            aria-label={tWorktrees('launcher.title')}
+            data-testid="nav-new-worktree-session-btn"
+          >
+            <span className="bitfun-nav-panel__top-action-icon-slot" aria-hidden="true">
+              <GitBranch size={15} />
+            </span>
+            <span>{tWorktrees('sidebar.worktrees')}</span>
           </button>
         </Tooltip>
 

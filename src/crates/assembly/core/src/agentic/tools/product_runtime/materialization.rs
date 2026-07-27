@@ -64,6 +64,7 @@ impl StaticToolProviderFactory<dyn Tool> for ProductConcreteToolFactory {
             "GetMCPPrompt" => Some(Arc::new(GetMCPPromptTool::new())),
             "GenerativeUI" => Some(Arc::new(GenerativeUITool::new())),
             "Git" => Some(Arc::new(GitTool::new())),
+            "Worktree" => Some(Arc::new(WorktreeTool::new())),
             "ReviewPlatform" => Some(Arc::new(ReviewPlatformTool::new())),
             "InitMiniApp" => Some(Arc::new(InitMiniAppTool::new())),
             "PageDeploy" => Some(Arc::new(PageDeployTool::new())),

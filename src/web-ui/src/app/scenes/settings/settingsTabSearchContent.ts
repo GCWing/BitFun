@@ -49,6 +49,16 @@ export const SETTINGS_TAB_SEARCH_CONTENT: Record<ConfigTab, readonly SettingsTab
     { ns: 'settings/ai-model', key: 'proxy.enableHint' },
   ],
 
+  worktrees: [
+    { ns: 'worktrees', key: 'settings.title' },
+    { ns: 'worktrees', key: 'settings.description' },
+    { ns: 'worktrees', key: 'settings.creation.title' },
+    { ns: 'worktrees', key: 'settings.creation.description' },
+    { ns: 'worktrees', key: 'settings.rootPath.label' },
+    { ns: 'worktrees', key: 'settings.branchPrefix.label' },
+    { ns: 'worktrees', key: 'settings.copyChanges.label' },
+  ],
+
   'archived-sessions': [
     { ns: 'common', key: 'nav.sessions.archivedSessions' },
     { ns: 'common', key: 'nav.sessions.noArchivedSessions' },

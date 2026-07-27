@@ -135,6 +135,8 @@ impl CronTool {
             return Ok(CronWorkspaceRef {
                 workspace_id: None,
                 workspace_path: resolved,
+                project_workspace_path: None,
+                execution_target: None,
                 remote_connection_id: None,
                 remote_ssh_host: None,
             });
@@ -162,7 +164,10 @@ impl CronTool {
     ) -> BitFunResult<()> {
         let sessions = runtime
             .list_sessions(AgentSessionListRequest {
-                workspace_path: workspace_ref.workspace_path.clone(),
+                workspace_path: workspace_ref
+                    .project_workspace_path
+                    .clone()
+                    .unwrap_or_else(|| workspace_ref.workspace_path.clone()),
                 remote_connection_id: workspace_ref.remote_connection_id.clone(),
                 remote_ssh_host: workspace_ref.remote_ssh_host.clone(),
             })
@@ -227,6 +232,8 @@ impl CronTool {
         CronWorkspaceRef {
             workspace_id: binding.workspace_id.clone(),
             workspace_path: binding.root_path_string(),
+            project_workspace_path: Some(binding.project_root_path_string()),
+            execution_target: binding.execution_target.clone(),
             remote_connection_id: binding.connection_id().map(ToOwned::to_owned),
             remote_ssh_host: if binding.is_remote() {
                 Some(binding.session_identity.hostname.clone())
@@ -241,6 +248,8 @@ impl CronTool {
         CronWorkspaceRef {
             workspace_id: binding.workspace_id,
             workspace_path: binding.workspace_path,
+            project_workspace_path: binding.project_workspace_path,
+            execution_target: binding.execution_target,
             remote_connection_id: binding.remote_connection_id,
             remote_ssh_host: binding.remote_ssh_host,
         }
@@ -1366,6 +1375,8 @@ mod tests {
             CronTool::workspace_ref_from_agent_binding(AgentSessionWorkspaceBinding {
                 workspace_id: Some("workspace-1".to_string()),
                 workspace_path: "/home/wsp/projects/test".to_string(),
+                project_workspace_path: None,
+                execution_target: None,
                 remote_connection_id: Some("conn-1".to_string()),
                 remote_ssh_host: Some("ssh.dev".to_string()),
             });

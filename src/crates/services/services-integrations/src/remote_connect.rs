@@ -70,6 +70,14 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, RwLock};
 use tokio::io::{AsyncReadExt, AsyncSeekExt};
 
+pub(crate) fn bitfun_home_dir() -> Option<PathBuf> {
+    std::env::var_os("BITFUN_HOME")
+        .or_else(|| std::env::var_os("BITFUN_E2E_HOME"))
+        .map(PathBuf::from)
+        .filter(|path| !path.as_os_str().is_empty())
+        .or_else(|| dirs::home_dir().map(|home| home.join(".bitfun")))
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum RemoteConnectSubmissionSource {
@@ -110,6 +118,8 @@ pub fn build_remote_session_create_request(
         session_name: session_name.into(),
         agent_type: agent_type.into(),
         workspace_path: workspace_path.map(Into::into),
+        project_workspace_path: None,
+        execution_target: None,
         workspace_id: None,
         remote_connection_id: workspace_identity.remote_connection_id,
         remote_ssh_host: workspace_identity.remote_ssh_host,

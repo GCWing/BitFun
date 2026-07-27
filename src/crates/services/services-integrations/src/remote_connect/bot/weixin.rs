@@ -1342,9 +1342,9 @@ fn ensure_trailing_slash(url: &str) -> String {
 }
 
 fn sync_buf_path(bot_account_id: &str) -> PathBuf {
-    let base = dirs::home_dir().unwrap_or_else(std::env::temp_dir);
-    base.join(".bitfun")
-        .join("weixin")
+    let base =
+        super::super::bitfun_home_dir().unwrap_or_else(|| std::env::temp_dir().join(".bitfun"));
+    base.join("weixin")
         .join(format!("{bot_account_id}_get_updates_buf.txt"))
 }
 

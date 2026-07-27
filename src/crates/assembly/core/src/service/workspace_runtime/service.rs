@@ -147,7 +147,7 @@ impl WorkspaceRuntimeService {
             )
             .await
         } else {
-            self.ensure_local_workspace_runtime(workspace.root_path())
+            self.ensure_local_workspace_runtime(workspace.project_root_path())
                 .await
         }
     }
