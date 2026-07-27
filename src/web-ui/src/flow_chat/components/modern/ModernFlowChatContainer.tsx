@@ -32,6 +32,7 @@ import { useFlowChatToolActions } from './useFlowChatToolActions';
 import { useFlowChatSearch } from './useFlowChatSearch';
 import { useVirtualItems, useActiveSession, useVisibleTurnInfo, type VisibleTurnInfo } from '../../store/modernFlowChatStore';
 import { useModelBrainstormBatchesForSession } from '../../store/modelBrainstormStore';
+import { useChatInputState } from '../../store/chatInputStateStore';
 import type { FlowChatConfig, DialogTurn } from '../../types/flow-chat';
 import {
   useBackgroundCommandActivityStore,
@@ -77,6 +78,7 @@ import {
 import {
   type BackgroundSubagentActivityItem,
 } from '../../utils/backgroundSubagentActivity';
+import { computeFlowChatInputStackFooterPx } from '../../utils/flowChatScrollLayout';
 import './ModernFlowChatContainer.scss';
 
 const log = createLogger('ModernFlowChatContainer');
@@ -294,6 +296,12 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
       </div>
     ) : null
   ), [modelBrainstormBatches]);
+  const isInputActive = useChatInputState(state => state.isActive);
+  const inputHeight = useChatInputState(state => state.inputHeight);
+  const brainstormOnlyFooterHeightPx = useMemo(
+    () => computeFlowChatInputStackFooterPx(inputHeight, isInputActive),
+    [inputHeight, isInputActive],
+  );
 
   const { handleFileViewRequest } = useFlowChatFileActions({
     workspacePath,
@@ -1534,7 +1542,13 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
                   <div className="modern-flowchat-container__brainstorm-only">
                     <div className="message-list-header" />
                     {modelBrainstormFooter}
-                    <div className="message-list-footer" />
+                    <div
+                      className="message-list-footer"
+                      style={{
+                        height: `${brainstormOnlyFooterHeightPx}px`,
+                        minHeight: `${brainstormOnlyFooterHeightPx}px`,
+                      }}
+                    />
                   </div>
                 ) : (
                   <WelcomePanel
