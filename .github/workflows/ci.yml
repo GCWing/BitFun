@@ -23,13 +23,22 @@ permissions:
 jobs:
   # ── CLI: independent tests ─────────────────────────────────────────
   cli-test:
-    name: CLI Tests (ubuntu-latest)
-    runs-on: ubuntu-latest
+    name: CLI Tests (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
     timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            cache_key: ubuntu
+          - os: macos-15
+            cache_key: macos
     steps:
       - uses: actions/checkout@v5
 
       - name: Install Linux system dependencies
+        if: runner.os == 'Linux'
         shell: bash
         run: |
           sudo apt-get update
@@ -49,17 +58,24 @@ jobs:
 
       - uses: swatinem/rust-cache@v2
         with:
-          shared-key: "cli-ci-v2-ubuntu"
+          shared-key: "cli-ci-v2-${{ matrix.cache_key }}"
           cache-bin: false
           save-if: ${{ github.event_name != 'pull_request' }}
 
+      - name: Run CLI and ACP tests on macOS
+        if: runner.os == 'macOS'
+        run: cargo test --locked -p bitfun-cli -p bitfun-acp
+
       - name: Run CLI, ACP, and agent runtime tests
+        if: runner.os == 'Linux'
         run: cargo test --locked -p bitfun-cli -p bitfun-acp -p bitfun-agent-runtime
 
       - name: Run SDK Host tests
+        if: runner.os == 'Linux'
         run: cargo test --locked -p bitfun-sdk-host -p bitfun-sdk-host-app
 
       - name: Run SDK Host terminal cleanup regressions
+        if: runner.os == 'Linux'
         run: |
           cargo test --locked -p terminal-core shutdown_returns_only_after_process_exit_is_confirmed -- --test-threads=1
           cargo test --locked -p terminal-core shutdown_evicts_a_process_whose_controller_already_confirmed_exit -- --test-threads=1
