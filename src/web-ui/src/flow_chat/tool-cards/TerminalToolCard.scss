@@ -134,7 +134,7 @@
 
   &.editable {
     cursor: pointer;
-    transition: all 0.2s ease;
+    transition: color 180ms ease;
     
     &:hover {
       color: var(--color-accent-500);
@@ -160,7 +160,7 @@
   border: none !important;
   outline: none !important;
   box-shadow: none !important;
-  transition: all 0.2s ease;
+  transition: color 180ms ease;
   line-height: var(--flowchat-compact-line-height);
   box-sizing: border-box;
 
@@ -299,7 +299,11 @@
   color: var(--color-text-muted);
   cursor: pointer;
   font-size: var(--flowchat-font-size-sm);
-  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  transition:
+    color 180ms ease,
+    background-color 180ms ease,
+    transform 180ms ease,
+    opacity 180ms ease;
   padding: 0;
   position: relative;
   overflow: hidden;

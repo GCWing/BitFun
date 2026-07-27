@@ -119,6 +119,7 @@ vi.mock('../../shared/services/FileTabManager', () => ({
 vi.mock('../../infrastructure/api', () => ({
   snapshotAPI: {
     getOperationDiff: mocks.getOperationDiff,
+    getOperationSummary: vi.fn(async () => null),
   },
 }));
 
@@ -821,7 +822,7 @@ describe('FileOperationToolCard', () => {
     expect(container.textContent).toContain(`${fullContent.length} chars received`);
   });
 
-  it('keeps completed write preview compact while auto-collapsing from streaming', async () => {
+  it('retains a compact completed write preview until newer content supersedes it', async () => {
     const config: ToolCardConfig = {
       toolName: 'Write',
       displayName: 'Write',
@@ -868,10 +869,12 @@ describe('FileOperationToolCard', () => {
           toolItem={streamingToolItem}
           config={config}
           sessionId="session-1"
+          isLastItem
         />
       );
     });
 
+    mocks.codePreviewProps = [];
     mocks.inlineDiffPreviewProps = [];
 
     await act(async () => {
@@ -880,13 +883,30 @@ describe('FileOperationToolCard', () => {
           toolItem={completedToolItem}
           config={config}
           sessionId="session-1"
+          isLastItem
         />
       );
     });
 
-    expect(mocks.inlineDiffPreviewProps.length).toBeGreaterThan(0);
-    expect(mocks.inlineDiffPreviewProps.map(props => props.maxHeight)).not.toContain(330);
-    expect(mocks.inlineDiffPreviewProps.map(props => props.maxHeight)).toContain(88);
+    expect(container.querySelector('[data-testid="chat-file-change-preview"]')).not.toBeNull();
+    expect(mocks.codePreviewProps).toHaveLength(1);
+    expect(mocks.codePreviewProps[0]).toMatchObject({
+      isStreaming: false,
+      maxHeight: 88,
+    });
+
+    await act(async () => {
+      root.render(
+        <FileOperationToolCard
+          toolItem={completedToolItem}
+          config={config}
+          sessionId="session-1"
+          isLastItem={false}
+        />
+      );
+    });
+
+    expect(container.querySelector('[data-testid="chat-file-change-preview"]')).toBeNull();
   });
 
   it('uses the larger diff preview height after a completed write card is manually expanded', async () => {

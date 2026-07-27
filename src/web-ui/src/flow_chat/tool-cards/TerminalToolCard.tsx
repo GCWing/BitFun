@@ -66,8 +66,18 @@ function getInitialTerminalExpandedState(status: string): boolean {
   return !(isCollapsedTerminalStatus(status) || status === 'pending_confirmation');
 }
 
-function getAutoExpandedStateForTerminalStatus(status: string): boolean | null {
-  if (isCollapsedTerminalStatus(status) || status === 'pending_confirmation') {
+function getAutoExpandedStateForTerminalStatus(
+  status: string,
+  isLastItem: boolean | undefined,
+): boolean | null {
+  if (isCollapsedTerminalStatus(status)) {
+    // A card that was already mounted while live keeps its compact output
+    // visible at the tail. It collapses when a newer conversation item takes
+    // over, so completion itself never looks like the card blinked away.
+    return isLastItem === true ? null : false;
+  }
+
+  if (status === 'pending_confirmation') {
     return false;
   }
 
@@ -83,16 +93,24 @@ function renderTerminalExpandedContent(params: {
   liveOutput: string;
   parsedResult: ParsedTerminalResult;
   waitingMessage: string | null;
+  compactSettledPreview: boolean;
   t: (key: string, options?: Record<string, unknown>) => string;
 }): React.ReactNode {
-  const { viewState, liveOutput, parsedResult, waitingMessage, t } = params;
+  const {
+    viewState,
+    liveOutput,
+    parsedResult,
+    waitingMessage,
+    compactSettledPreview,
+    t,
+  } = params;
 
   const isStreamingPhase =
     viewState.displayPhase === 'live_output' ||
     viewState.displayPhase === 'receiving_params' ||
     viewState.displayPhase === 'executing';
 
-  const maxRows = isStreamingPhase
+  const maxRows = isStreamingPhase || compactSettledPreview
     ? TERMINAL_OUTPUT_STREAMING_MAX_ROWS
     : TERMINAL_OUTPUT_EXPANDED_MAX_ROWS;
 
@@ -224,6 +242,7 @@ export const TerminalToolCard: React.FC<TerminalToolCardProps> = ({
   toolItem,
   onExpand,
   terminalSessionId: propTerminalSessionId,
+  isLastItem,
 }) => {
   const { t } = useTranslation('flow-chat');
   const toolCall = toolItem.toolCall;
@@ -266,7 +285,7 @@ export const TerminalToolCard: React.FC<TerminalToolCardProps> = ({
 
   const toolId = toolItem.id ?? toolCall?.id;
   const [isExpanded, setIsExpandedState] = useState(() => getInitialTerminalExpandedState(status));
-  const previousStatusRef = useRef(status);
+  const userToggledRef = useRef(false);
   const {
     cardRootRef,
     applyExpandedState,
@@ -289,6 +308,7 @@ export const TerminalToolCard: React.FC<TerminalToolCardProps> = ({
   }, [applyExpandedState, isExpanded, onExpand]);
 
   const toggleExpanded = useCallback(() => {
+    userToggledRef.current = true;
     applyTerminalExpandedState(!isExpanded, { reason: 'manual' });
   }, [applyTerminalExpandedState, isExpanded]);
 
@@ -303,18 +323,15 @@ export const TerminalToolCard: React.FC<TerminalToolCardProps> = ({
   }, [status]);
 
   useLayoutEffect(() => {
-    const prevStatus = previousStatusRef.current;
-    previousStatusRef.current = status;
-
-    if (prevStatus === status) {
+    if (userToggledRef.current) {
       return;
     }
 
-    const nextExpanded = getAutoExpandedStateForTerminalStatus(status);
+    const nextExpanded = getAutoExpandedStateForTerminalStatus(status, isLastItem);
     if (nextExpanded !== null) {
       applyTerminalExpandedState(nextExpanded, { reason: 'auto' });
     }
-  }, [applyTerminalExpandedState, status]);
+  }, [applyTerminalExpandedState, isLastItem, status]);
 
   const updateCommandTruncation = useCallback(() => {
     const element = commandRef.current;
@@ -579,8 +596,20 @@ export const TerminalToolCard: React.FC<TerminalToolCardProps> = ({
       extra={renderHeaderExtra(false)}
     />
   );
+  const compactSettledPreview =
+    isExpanded &&
+    isLastItem === true &&
+    isCollapsedTerminalStatus(status) &&
+    !userToggledRef.current;
   const expandedContent = isExpanded
-    ? renderTerminalExpandedContent({ viewState, liveOutput, parsedResult, waitingMessage, t })
+    ? renderTerminalExpandedContent({
+        viewState,
+        liveOutput,
+        parsedResult,
+        waitingMessage,
+        compactSettledPreview,
+        t,
+      })
     : null;
   const errorContent = viewState.isFailed
     ? renderTerminalErrorContent(toolResult?.error || t('toolCards.terminal.executionFailed'))

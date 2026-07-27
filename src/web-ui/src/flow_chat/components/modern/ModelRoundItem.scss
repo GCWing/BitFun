@@ -368,16 +368,6 @@
 
 // ==================== Explore region adjustments ====================
 
-/*
- * A finished explore tool is removed from flow outright. There is no enter or
- * exit animation: animating an item to zero height spreads the reflow over many
- * frames, which the list's scroll-anchor machinery then has to chase — the
- * visible result was a chat pane that jittered after every tool call.
- */
-.flowchat-flow-item--tool-settled {
-  display: none;
-}
-
 /* Focus highlight for programmatic "jump to marker" navigation. */
 .flowchat-flow-item.flowchat-flow-item--focused {
   outline: 2px solid var(--border-accent);

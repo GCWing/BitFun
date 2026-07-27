@@ -43,9 +43,9 @@ export interface ExploreGroupData {
   isLastGroupInTurn: boolean;
   /**
    * True when this group is no longer the tail of the turn — a non-explore
-   * (critical) round or turn completion has ended the group. The renderer uses
-   * this to trigger a one-shot auto-collapse instead of continuously watching
-   * isGroupStreaming.
+   * (critical) round, a top-level notice, or a newer dialog turn has superseded
+   * the group. Turn completion alone does not cut the live tail. The renderer
+   * uses this to trigger one-shot auto-collapse.
    */
   wasCutByCritical: boolean;
 }
@@ -128,13 +128,6 @@ function hasActiveStreamingNarrative(round: ModelRound): boolean {
   });
 }
 
-function hasActiveTool(round: ModelRound): boolean {
-  return round.items.some(item => {
-    if (item.type !== 'tool') return false;
-    return item.status !== 'completed' && item.status !== 'cancelled' && item.status !== 'rejected' && item.status !== 'error';
-  });
-}
-
 function hasTrailingVisibleText(round: ModelRound): boolean {
   for (let index = round.items.length - 1; index >= 0; index -= 1) {
     const item = round.items[index];
@@ -160,10 +153,6 @@ function isExploreOnlyRound(round: ModelRound): boolean {
   }
 
   if (round.isStreaming && hasActiveStreamingNarrative(round)) {
-    return false;
-  }
-
-  if (hasActiveTool(round)) {
     return false;
   }
 
@@ -279,7 +268,10 @@ function isStableTurnProjection(turn: DialogTurn): boolean {
 let cachedSession: Session | null = null;
 let cachedDialogTurnsRef: DialogTurn[] | null = null;
 let cachedVirtualItems: VirtualItem[] = [];
-let cachedTurnItems = new WeakMap<DialogTurn, VirtualItem[]>();
+let cachedTurnItems = new WeakMap<
+  DialogTurn,
+  { items: VirtualItem[]; hasNewerDialogTurn: boolean }
+>();
 
 /**
  * Convert Session to virtualized render items
@@ -313,10 +305,15 @@ export function sessionToVirtualItems(session: Session | null): VirtualItem[] {
 
   const items: VirtualItem[] = [];
 
-  session.dialogTurns.forEach(turn => {
+  session.dialogTurns.forEach((turn, turnIndex) => {
+    const hasNewerDialogTurn = turnIndex < session.dialogTurns.length - 1;
     const cachedItems = cachedTurnItems.get(turn);
-    if (cachedItems && isStableTurnProjection(turn)) {
-      items.push(...cachedItems);
+    if (
+      cachedItems &&
+      cachedItems.hasNewerDialogTurn === hasNewerDialogTurn &&
+      isStableTurnProjection(turn)
+    ) {
+      items.push(...cachedItems.items);
       return;
     }
     const turnItemStart = items.length;
@@ -372,7 +369,7 @@ export function sessionToVirtualItems(session: Session | null): VirtualItem[] {
 
     const flushRoundEntries = (
       rounds: ModelRound[],
-      _options: { collapseTrailingExploreGroup: boolean },
+      options: { collapseTrailingExploreGroup: boolean },
     ) => {
       if (rounds.length === 0) return;
 
@@ -434,8 +431,12 @@ export function sessionToVirtualItems(session: Session | null): VirtualItem[] {
         const group = tempGroups[groupIndex];
 
         if (group && group.startIndex === roundIndex) {
-          const isLastGroup = groupIndex === tempGroups.length - 1;
-          const isGroupStreaming = group.rounds.some(r => r.isStreaming);
+          const isLastGroupInTurn =
+            group.endIndex === rounds.length - 1 &&
+            !options.collapseTrailingExploreGroup;
+          const isGroupStreaming = group.rounds.some(
+            r => r.isStreaming || r.items.some(isActiveFlowItem),
+          );
           // A group is "cut by critical" when it is no longer the tail of the
           // turn. Two conditions cover all cases:
           //   1. group.endIndex < rounds.length - 1: there are rounds after
@@ -446,10 +447,15 @@ export function sessionToVirtualItems(session: Session | null): VirtualItem[] {
           //      tempGroups only contains explore-only groups; a following
           //      critical round (e.g. TodoWrite) is invisible to tempGroups
           //      yet still sits after this group in the rounds array.
-          //   2. turn is complete and no round in this group is still streaming.
+          //   2. the caller knows another top-level item follows this segment
+          //      (user steering, a completion/failure notice, or a newer turn).
+          //
+          // Turn completion by itself is deliberately not a cut. The live tail
+          // keeps its final action visible; a later conversation item is what
+          // makes the group compact.
           const wasCutByCritical =
             group.endIndex < rounds.length - 1 ||
-            (isTurnComplete && !isGroupStreaming);
+            options.collapseTrailingExploreGroup;
 
           const groupId = group.rounds[0]?.id ?? `explore-group-${turn.id}-${group.startIndex}`;
 
@@ -466,7 +472,7 @@ export function sessionToVirtualItems(session: Session | null): VirtualItem[] {
                 commandCount: group.commandCount,
               },
               isGroupStreaming,
-              isLastGroupInTurn: isLastGroup,
+              isLastGroupInTurn,
               wasCutByCritical,
             },
           });
@@ -495,6 +501,8 @@ export function sessionToVirtualItems(session: Session | null): VirtualItem[] {
       }
     };
 
+    const completionNotice = getTurnCompletionNotice(turn);
+    const hasFailureNotice = turn.status === 'error' && Boolean(turn.error || turn.errorDetail);
     let pendingRounds: ModelRound[] = [];
 
     renderEntries.forEach(entry => {
@@ -515,9 +523,13 @@ export function sessionToVirtualItems(session: Session | null): VirtualItem[] {
       });
     });
 
-    flushRoundEntries(pendingRounds, { collapseTrailingExploreGroup: true });
+    flushRoundEntries(pendingRounds, {
+      collapseTrailingExploreGroup:
+        hasNewerDialogTurn ||
+        completionNotice !== null ||
+        hasFailureNotice,
+    });
 
-    const completionNotice = getTurnCompletionNotice(turn);
     if (completionNotice) {
       items.push({
         type: 'turn-completion-notice',
@@ -526,7 +538,7 @@ export function sessionToVirtualItems(session: Session | null): VirtualItem[] {
       });
     }
 
-    if (turn.status === 'error' && (turn.error || turn.errorDetail)) {
+    if (hasFailureNotice) {
       items.push({
         type: 'turn-failure-notice',
         turnId: turn.id,
@@ -538,7 +550,10 @@ export function sessionToVirtualItems(session: Session | null): VirtualItem[] {
     }
 
     if (isStableTurnProjection(turn)) {
-      cachedTurnItems.set(turn, items.slice(turnItemStart));
+      cachedTurnItems.set(turn, {
+        items: items.slice(turnItemStart),
+        hasNewerDialogTurn,
+      });
     }
   });
 

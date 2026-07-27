@@ -11,6 +11,7 @@ import { toolAPI } from '@/infrastructure/api/service-api/ToolAPI';
 import { createLogger } from '@/shared/utils/logger';
 import { Button, Tooltip } from '@/component-library';
 import { useToolCardHeightContract } from './useToolCardHeightContract';
+import { SmoothHeightCollapse } from '../components/modern/SmoothHeightCollapse';
 import './AskUserQuestionCard.scss';
 
 const log = createLogger('AskUserQuestionCard');
@@ -85,7 +86,8 @@ function isAwaitingQuestionPayload(
 }
 
 export const AskUserQuestionCard: React.FC<ToolCardProps> = ({
-  toolItem
+  toolItem,
+  isLastItem,
 }) => {
   const { t } = useTranslation('flow-chat');
   const { status, toolCall, toolResult, isParamsStreaming, partialParams } = toolItem;
@@ -113,13 +115,14 @@ export const AskUserQuestionCard: React.FC<ToolCardProps> = ({
     toolId,
     toolName: toolItem.toolName,
   });
-  const previousStatusRef = useRef(status);
 
   useLayoutEffect(() => {
-    const previousStatus = previousStatusRef.current;
-    previousStatusRef.current = status;
+    const shouldCompactCompleted =
+      status === 'completed' &&
+      isLastItem !== true &&
+      !showCompletedSummary;
 
-    if (previousStatus !== 'completed' && status === 'completed' && !showCompletedSummary) {
+    if (shouldCompactCompleted) {
       applyExpandedState(true, false, (nextExpanded) => {
         setShowCompletedSummary(!nextExpanded);
       }, {
@@ -131,7 +134,7 @@ export const AskUserQuestionCard: React.FC<ToolCardProps> = ({
     if (status !== 'completed' && showCompletedSummary) {
       setShowCompletedSummary(false);
     }
-  }, [applyExpandedState, showCompletedSummary, status]);
+  }, [applyExpandedState, isLastItem, showCompletedSummary, status]);
 
   const isAllAnswered = useCallback(() => {
     if (questions.length === 0) return false;
@@ -493,11 +496,14 @@ export const AskUserQuestionCard: React.FC<ToolCardProps> = ({
             </div>
           </div>
 
-          {isExpanded && (
+          <SmoothHeightCollapse
+            isOpen={isExpanded}
+            className="ask-user-question-card__answers-collapse"
+          >
             <div className="questions-container expanded">
               {questions.map((q, idx) => renderQuestion(q, idx))}
             </div>
-          )}
+          </SmoothHeightCollapse>
 
           {renderResult()}
         </>

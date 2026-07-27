@@ -273,7 +273,7 @@
   align-items: center;
   gap: 4px;
   color: var(--color-text-muted);
-  transition: all 0.2s ease;
+  transition: color 180ms ease, opacity 180ms ease, transform 180ms ease;
   flex-shrink: 0;
   cursor: pointer;
 

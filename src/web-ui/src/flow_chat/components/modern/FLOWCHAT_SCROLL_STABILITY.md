@@ -6,29 +6,38 @@ This document explains the scroll-stability mechanism used by `VirtualMessageLis
 
 Every rule below is compensation for content that changes size on its own. The
 cheapest way to keep the pane stable is to not generate the movement in the
-first place. Three invariants hold across the message list, and breaking any of
+first place. Four invariants hold across the message list, and breaking any of
 them reintroduces the "the chat keeps refreshing itself" report:
 
-1. **No mount-triggered animation on anything the list renders.** The list is
+1. **Keep a live action's projection identity stable.** A collapsible tool
+   belongs to its trailing `explore-group` from the first active render through
+   completion. Do not render it as a standalone `model-round` while active and
+   move it into a group when it settles; that swaps the Virtuoso key, unmounts
+   the card, and looks like a flash. Likewise, never hide the old location with
+   `display: none` as a handoff mechanism.
+2. **No mount-triggered animation on anything the list renders.** The list is
    virtualized: an item that scrolls out of view unmounts and remounts, so a
    `fadeIn` / `slideInUp` keyed off mount replays on every pass. Same for an
    animation keyed off `--streaming` → `--complete`: it replays when the
    typewriter drains. `getModelRoundItemClassName` deliberately has no `--enter`
    modifier, and `.user-message-item` deliberately has no enter animation.
-2. **No wall-clock input to projection or grouping.** `sessionToVirtualItems`
+3. **No wall-clock input to projection or grouping.** `sessionToVirtualItems`
    and `buildModelRoundItemGroups` are pure functions of the session data. A
    time-dependent classification needs a timer to re-run it, and that timer
    restructures and remounts cards seconds after the data settled. There is no
    "transient window" for recently-completed tools any more.
-3. **Automatic expand/collapse lands in one frame; only user clicks animate.**
-   An automatic collapse that animates over 250–320 ms forces the compensation
-   path below to track a moving target frame by frame — that tracking is the
-   visible jitter. `ModelThinkingDisplay`, `FileOperationToolCard` (via
-   `BaseToolCard disableExpandAnimation`) and `ExploreGroupRenderer` (via
-   `SmoothHeightCollapse disableAnimation`) all animate only when the change
-   came from a user click.
+4. **Do not compact the live tail merely because its status completed.** A
+   terminal, process, file, task, question, or thinking card that was visible
+   while running keeps a compact result preview until newer content supersedes
+   it. When superseded, automatic expand/collapse lands in one frame; only user
+   clicks animate. An automatic collapse that animates over 250–320 ms forces
+   the compensation path below to track a moving target frame by frame — that
+   tracking is the visible jitter. `ModelThinkingDisplay`,
+   `FileOperationToolCard` (via `BaseToolCard disableExpandAnimation`) and
+   `ExploreGroupRenderer` (via `SmoothHeightCollapse disableAnimation`) all
+   animate only when the change came from a user click.
 
-A fourth, related rule lives in `useTypewriter`: `replayOnMount` defaults to
+A fifth, related rule lives in `useTypewriter`: `replayOnMount` defaults to
 false, so a still-streaming block that remounts continues from its current text
 instead of resetting to an empty string and re-growing.
 
@@ -303,9 +312,9 @@ If a future collapsible component shows the same "header drops" or "flash on col
 
 Use this checklist:
 
-1. Verify bottom collapse at the end of a conversation.
+1. Verify the live tail stays expanded when a conversation ends with an action.
 2. Verify manual collapse of a completed `Write` / `Edit` tool card.
-3. Verify auto-collapse of file tool cards after streaming finishes.
+3. Verify automatic compaction only after newer content supersedes the action.
 4. Verify repeated expand/collapse near the bottom.
 5. Verify thinking / explore / other collapsible sections still schedule measurements correctly.
 6. Verify there is no visible "drop then snap back" flash.

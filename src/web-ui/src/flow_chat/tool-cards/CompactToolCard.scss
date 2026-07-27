@@ -95,13 +95,13 @@
 /* E — action + content breathe; keep tool-identifier-icon steady */
 .compact-tool-card-wrapper--loading-shimmer .compact-card-action,
 .compact-tool-card-wrapper--loading-shimmer .compact-card-content {
-  animation: tool-card-text-fade 1.6s ease-in-out infinite;
+  animation: tool-card-text-fade 2.2s ease-in-out infinite;
 }
 
 /* Legacy compact cards that still use status icon as left icon (no .tool-identifier-icon child):
    fade the icon-marks too for the original shimmer effect. */
 .compact-tool-card-wrapper--loading-shimmer .tool-card-icon-marks:not(:has(.tool-identifier-icon)) {
-  animation: tool-card-text-fade 1.6s ease-in-out infinite;
+  animation: tool-card-text-fade 2.2s ease-in-out infinite;
 }
 
 /* ========== Card body - transparent, no border ========== */
@@ -116,7 +116,7 @@
   gap: 8px;
   width: 100%;
   box-sizing: border-box;
-  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: opacity 180ms ease;
   position: relative;
 
   &.clickable:hover {
@@ -179,7 +179,7 @@
   line-height: var(--tool-card-action-line-height);
   font-weight: var(--font-weight-medium);
   color: var(--color-text-muted);
-  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: color 180ms ease, opacity 180ms ease;
   flex-shrink: 0;
 }
 
@@ -189,7 +189,7 @@
   line-height: var(--tool-card-action-line-height);
   color: var(--color-text-muted);
   min-width: 0;
-  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: color 180ms ease, opacity 180ms ease;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -197,7 +197,7 @@
   .read-file-meta {
     color: inherit;
     opacity: 0.85;
-    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    transition: opacity 180ms ease;
   }
 }
 
@@ -207,7 +207,7 @@
   color: var(--color-text-muted);
   display: flex;
   align-items: center;
-  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: color 180ms ease, opacity 180ms ease;
   flex-shrink: 0;
 
   > svg {
@@ -308,7 +308,6 @@
   box-shadow: 
     0 2px 8px var(--color-overlay-black-15),
     inset 0 1px 0 var(--color-overlay-white-04);
-  backdrop-filter: blur(8px);
   
 }
 
@@ -358,7 +357,7 @@
 .compact-expanded-result-item {
   padding: 8px;
   border-radius: 4px;
-  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: background-color 180ms ease;
 
   &:hover {
     background: var(--element-bg-soft);
@@ -374,7 +373,7 @@
   font-weight: 600;
   cursor: pointer;
   margin-bottom: 4px;
-  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: color 180ms ease;
 
   &:hover {
     color: var(--color-text-primary);
@@ -389,7 +388,7 @@
   .inline-icon {
     flex-shrink: 0;
     color: var(--color-text-muted);
-    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    transition: color 180ms ease, transform 180ms ease;
   }
 }
 
@@ -449,6 +448,6 @@
     opacity: 1;
   }
   50% {
-    opacity: 0.25;
+    opacity: 0.68;
   }
 }

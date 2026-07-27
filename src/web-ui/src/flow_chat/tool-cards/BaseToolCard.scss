@@ -15,8 +15,11 @@
   border-radius: var(--flowchat-card-radius);
   border: 1px solid var(--border-base);
   background: var(--color-bg-scene);
-  backdrop-filter: blur(10px);
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  transition:
+    border-color 180ms ease,
+    box-shadow 180ms ease,
+    background-color 180ms ease,
+    opacity 180ms ease;
   overflow: hidden;
   width: 100%;
   box-sizing: border-box;
@@ -130,7 +133,9 @@
   width: 100%;
   box-sizing: border-box;
   background: transparent;
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  transition:
+    background-color 180ms ease,
+    opacity 180ms ease;
   overflow: hidden;
 
   &::before {
@@ -166,7 +171,7 @@
   font-size: var(--tool-card-action-font-size);
   font-weight: 500;
   color: var(--color-text-primary);
-  transition: color 0.2s ease;
+  transition: color 180ms ease, opacity 180ms ease;
   letter-spacing: -0.01em;
   flex-shrink: 0;
   line-height: var(--tool-card-action-line-height);
@@ -182,7 +187,7 @@
   font-size: var(--tool-card-action-font-size);
   font-weight: 500;
   color: var(--color-text-primary);
-  transition: color 0.2s ease;
+  transition: color 180ms ease, opacity 180ms ease;
   letter-spacing: -0.01em;
   line-height: var(--tool-card-action-line-height);
   overflow: hidden;
@@ -332,7 +337,7 @@
 .base-tool-card-wrapper--loading-shimmer .tool-card-icon-marks,
 .base-tool-card-wrapper--loading-shimmer .tool-card-action,
 .base-tool-card-wrapper--loading-shimmer .tool-card-content {
-  animation: tool-card-text-fade 1.6s ease-in-out infinite;
+  animation: tool-card-text-fade 2.2s ease-in-out infinite;
 }
 
 @keyframes tool-card-text-fade {
@@ -340,6 +345,6 @@
     opacity: 1;
   }
   50% {
-    opacity: 0.25;
+    opacity: 0.68;
   }
 }

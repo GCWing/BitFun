@@ -35,7 +35,7 @@
   padding: 0.5rem 0;
 }
 
-// Hint text — same breathe rhythm as tool cards (tool-card-text-fade: 1.6s 0%→25%→0%)
+// Hint text — use the same low-contrast breathe rhythm as active tool cards.
 .processing-indicator__hint {
   font-size: 0.8125rem;
   color: var(--color-text-secondary);
@@ -43,10 +43,10 @@
   overflow: hidden;
   text-overflow: ellipsis;
   max-width: 320px;
-  // fade-in entry (0.4s) then breathe loop identical to card shimmer
+  // Fade in once, then breathe gently without making the whole row blink.
   animation:
     hint-fade-in 0.4s ease forwards,
-    hint-breathe 1.6s ease-in-out 0.4s infinite;
+    hint-breathe 2.2s ease-in-out 0.4s infinite;
 
   @media (max-width: 768px) {
     max-width: 200px;
@@ -64,12 +64,12 @@
   }
 }
 
-// Mirrors BaseToolCard's tool-card-text-fade exactly (1→0.25→1)
+// Mirrors BaseToolCard's tool-card-text-fade.
 @keyframes hint-breathe {
   0%, 100% {
     opacity: 1;
   }
   50% {
-    opacity: 0.25;
+    opacity: 0.68;
   }
 }

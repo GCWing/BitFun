@@ -37,9 +37,6 @@
   border-top: none;
   // Top corners are square to merge with the header card above.
   border-radius: 0 0 8px 8px;
-  // Match the BaseToolCard backdrop-filter for seamless visual merge.
-  backdrop-filter: blur(10px);
-
   // Keep concurrent subagents scannable; overflow keeps details reachable.
   // The detail panel remains the place for reading long subagent output.
   max-height: clamp(78px, 12vh, 118px);

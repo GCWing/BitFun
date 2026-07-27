@@ -19,13 +19,27 @@ export const SmoothHeightCollapse: React.FC<SmoothHeightCollapseProps> = ({
   durationMs = 260,
   disableAnimation = false,
 }) => {
+  const outerRef = useRef<HTMLDivElement>(null);
   const innerRef = useRef<HTMLDivElement>(null);
+  const hasMountedRef = useRef(false);
+  const previousIsOpenRef = useRef(isOpen);
   const [phase, setPhase] = useState<CollapsePhase>(() => (isOpen ? 'open' : 'closed'));
   const [height, setHeight] = useState<string>(() => (isOpen ? 'auto' : '0px'));
   const shouldRender = isOpen || phase !== 'closed';
-  const shouldAnimate = !disableAnimation && !(window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false);
+  const prefersReducedMotion =
+    typeof window !== 'undefined' &&
+    (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false);
+  const shouldAnimate = !disableAnimation && !prefersReducedMotion;
 
   useLayoutEffect(() => {
+    const previousIsOpen = previousIsOpenRef.current;
+    previousIsOpenRef.current = isOpen;
+
+    if (!hasMountedRef.current) {
+      hasMountedRef.current = true;
+      return;
+    }
+
     const inner = innerRef.current;
     if (!inner) {
       return;
@@ -34,15 +48,18 @@ export const SmoothHeightCollapse: React.FC<SmoothHeightCollapseProps> = ({
     let frameId = 0;
     let timeoutId = 0;
 
-    if (!shouldAnimate) {
+    if (!shouldAnimate || previousIsOpen === isOpen) {
       setPhase(isOpen ? 'open' : 'closed');
       setHeight(isOpen ? 'auto' : '0px');
       return;
     }
 
     if (isOpen) {
+      // Preserve the rendered height when a rapid click reverses an in-flight
+      // close. Restarting from zero makes the body visibly snap.
+      const startHeight = outerRef.current?.getBoundingClientRect().height ?? 0;
       setPhase('opening');
-      setHeight('0px');
+      setHeight(`${startHeight}px`);
       frameId = window.requestAnimationFrame(() => {
         setHeight(`${inner.scrollHeight}px`);
       });
@@ -51,7 +68,9 @@ export const SmoothHeightCollapse: React.FC<SmoothHeightCollapseProps> = ({
         setHeight('auto');
       }, durationMs);
     } else {
-      const startHeight = inner.getBoundingClientRect().height;
+      const startHeight =
+        outerRef.current?.getBoundingClientRect().height ??
+        inner.getBoundingClientRect().height;
       setPhase('closing');
       setHeight(`${startHeight}px`);
       frameId = window.requestAnimationFrame(() => {
@@ -70,25 +89,36 @@ export const SmoothHeightCollapse: React.FC<SmoothHeightCollapseProps> = ({
 
   useLayoutEffect(() => {
     const inner = innerRef.current;
-    if (!inner || phase !== 'open' || !shouldAnimate) {
+    if (
+      !inner ||
+      (phase !== 'opening' && phase !== 'open') ||
+      !shouldAnimate ||
+      typeof ResizeObserver === 'undefined'
+    ) {
       return;
     }
 
     const observer = new ResizeObserver(() => {
-      setHeight('auto');
+      setHeight(phase === 'opening' ? `${inner.scrollHeight}px` : 'auto');
     });
     observer.observe(inner);
     return () => observer.disconnect();
-  }, [phase, shouldAnimate, children]);
+  }, [phase, shouldAnimate]);
 
   return (
     <div
-      className={`smooth-height-collapse smooth-height-collapse--${phase} ${className}`.trim()}
+      ref={outerRef}
+      className={[
+        'smooth-height-collapse',
+        `smooth-height-collapse--${phase}`,
+        !shouldAnimate ? 'smooth-height-collapse--instant' : '',
+        className,
+      ].filter(Boolean).join(' ')}
       style={{
         height,
         transitionDuration: `${durationMs}ms, 180ms, ${durationMs}ms`,
       }}
-      aria-hidden={!isOpen && phase === 'closed'}
+      aria-hidden={!isOpen}
     >
       {shouldRender && (
         <div ref={innerRef} className={`smooth-height-collapse__inner ${innerClassName}`.trim()}>

@@ -115,6 +115,7 @@ export const FileOperationToolCard: React.FC<FileOperationToolCardProps> = ({
   sessionId,
   onOpenInEditor,
   displayContext,
+  isLastItem,
 }) => {
   const { t } = useTranslation('flow-chat');
   const {
@@ -134,11 +135,14 @@ export const FileOperationToolCard: React.FC<FileOperationToolCardProps> = ({
   // on completion must land in a single frame, otherwise the message list's
   // scroll anchor spends ~260ms chasing the shrink and the pane visibly jumps.
   const [animateContentToggle, setAnimateContentToggle] = useState(false);
+  const [retainLiveCompletionPreview, setRetainLiveCompletionPreview] = useState(false);
   const [operationDiffStats, setOperationDiffStats] = useState<{ additions: number; deletions: number } | null>(null);
   
   const hasInitializedCompletionEffectRef = useRef(false);
   const previousCompletionEndTimeRef = useRef<number | null>(toolItem.endTime ?? null);
-  const previousStatusRef = useRef(status);
+  const previousExpansionStatusRef = useRef(status);
+  const previousFailureStatusRef = useRef(status);
+  const userToggledContentRef = useRef(false);
   const lastStableExpandedHeightRef = useRef<number>(0);
   const {
     cardRootRef,
@@ -378,6 +382,10 @@ export const FileOperationToolCard: React.FC<FileOperationToolCardProps> = ({
     nextExpanded: boolean,
     reason: 'manual' | 'auto',
   ) => {
+    if (reason === 'manual') {
+      userToggledContentRef.current = true;
+      setRetainLiveCompletionPreview(false);
+    }
     setAnimateContentToggle(reason === 'manual');
     applyHeightContractExpandedState(
       isContentExpanded,
@@ -406,26 +414,35 @@ export const FileOperationToolCard: React.FC<FileOperationToolCardProps> = ({
     }
   }, [error, clearError, currentFilePath]);
 
-  useEffect(() => {
-    if (previousStatusRef.current !== status) {
-      if (status === 'completed' && !isFailed) {
-        applyContentExpandedState(false, 'auto');
-      } else if (status !== 'completed') {
-        applyContentExpandedState(true, 'auto');
-      }
-      previousStatusRef.current = status;
+  useLayoutEffect(() => {
+    const previousStatus = previousExpansionStatusRef.current;
+    previousExpansionStatusRef.current = status;
+
+    if (userToggledContentRef.current) {
+      return;
     }
+
+    if (status === 'completed' && !isFailed) {
+      if (isLastItem === true && isContentExpanded) {
+        if (previousStatus !== 'completed') {
+          setRetainLiveCompletionPreview(true);
+        }
+        return;
+      }
+
+      setRetainLiveCompletionPreview(false);
+      applyContentExpandedState(false, 'auto');
+      return;
+    }
+
+    setRetainLiveCompletionPreview(false);
+    applyContentExpandedState(true, 'auto');
   }, [
     applyContentExpandedState,
-    cardRootRef,
-    contentPreview,
-    currentFilePath,
     isContentExpanded,
     isFailed,
-    oldStringContent,
+    isLastItem,
     status,
-    toolId,
-    toolItem.toolName,
   ]);
 
   const localDiffStats = useMemo(() => {
@@ -500,18 +517,27 @@ export const FileOperationToolCard: React.FC<FileOperationToolCardProps> = ({
   const shouldUseExpandedDiffPreviewHeight =
     status === 'completed' &&
     isContentExpanded &&
-    previousStatusRef.current === status;
+    !retainLiveCompletionPreview;
+  const keepLiveEditPreview =
+    retainLiveCompletionPreview &&
+    toolItem.toolName === 'Edit' &&
+    Boolean(newStringContent);
+  const keepLiveWritePreview =
+    retainLiveCompletionPreview &&
+    toolItem.toolName === 'Write' &&
+    Boolean(contentPreview);
   const previewVariant = useMemo(() => {
     if (toolItem.toolName === 'Edit') {
       // Keep streaming-code until typewriter drains so completion does not snap
       // the remaining characters into the diff view.
-      if ((status !== 'completed' || editTypewriter.isRevealing) && newStringContent) {
+      if ((status !== 'completed' || editTypewriter.isRevealing || keepLiveEditPreview) && newStringContent) {
         return 'streaming-code';
       }
       if (
         status === 'completed'
         && !isParamsStreaming
         && !editTypewriter.isRevealing
+        && !keepLiveEditPreview
         && (oldStringContent || newStringContent)
       ) {
         return 'completed-diff';
@@ -519,13 +545,14 @@ export const FileOperationToolCard: React.FC<FileOperationToolCardProps> = ({
     }
 
     if (toolItem.toolName === 'Write') {
-      if ((status !== 'completed' || writeTypewriter.isRevealing) && contentPreview) {
+      if ((status !== 'completed' || writeTypewriter.isRevealing || keepLiveWritePreview) && contentPreview) {
         return 'streaming-code';
       }
       if (
         status === 'completed'
         && !isParamsStreaming
         && !writeTypewriter.isRevealing
+        && !keepLiveWritePreview
         && contentPreview
       ) {
         return 'completed-diff';
@@ -537,6 +564,8 @@ export const FileOperationToolCard: React.FC<FileOperationToolCardProps> = ({
     contentPreview,
     editTypewriter.isRevealing,
     isParamsStreaming,
+    keepLiveEditPreview,
+    keepLiveWritePreview,
     newStringContent,
     oldStringContent,
     status,
@@ -552,7 +581,8 @@ export const FileOperationToolCard: React.FC<FileOperationToolCardProps> = ({
   }, [cardRootRef, isContentExpanded, isFailed, previewVariant, status]);
 
   useLayoutEffect(() => {
-    const previousStatus = previousStatusRef.current;
+    const previousStatus = previousFailureStatusRef.current;
+    previousFailureStatusRef.current = status;
     const isNewFailure = previousStatus !== status && status === 'error';
     if (!isNewFailure || !isContentExpanded) {
       return;
@@ -901,7 +931,10 @@ export const FileOperationToolCard: React.FC<FileOperationToolCardProps> = ({
       : FILE_OPERATION_STREAMING_MAX_HEIGHT;
 
     if (toolItem.toolName === 'Edit') {
-      if ((status !== 'completed' || editTypewriter.isRevealing) && newStringContent) {
+      if (
+        (status !== 'completed' || editTypewriter.isRevealing || keepLiveEditPreview)
+        && newStringContent
+      ) {
         return (
           <div className="streaming-content-preview" data-testid="chat-file-change-preview">
             <div className="preview-text">
@@ -923,6 +956,7 @@ export const FileOperationToolCard: React.FC<FileOperationToolCardProps> = ({
         status === 'completed'
         && !isParamsStreaming
         && !editTypewriter.isRevealing
+        && !keepLiveEditPreview
         && (oldStringContent || newStringContent)
       ) {
         return (
@@ -945,7 +979,10 @@ export const FileOperationToolCard: React.FC<FileOperationToolCardProps> = ({
     }
 
     if (toolItem.toolName === 'Write') {
-      if ((status !== 'completed' || writeTypewriter.isRevealing) && contentPreview) {
+      if (
+        (status !== 'completed' || writeTypewriter.isRevealing || keepLiveWritePreview)
+        && contentPreview
+      ) {
         return (
           <div className="streaming-content-preview" data-testid="chat-file-change-preview">
             <div className="preview-text">
@@ -967,6 +1004,7 @@ export const FileOperationToolCard: React.FC<FileOperationToolCardProps> = ({
         status === 'completed'
         && !isParamsStreaming
         && !writeTypewriter.isRevealing
+        && !keepLiveWritePreview
         && contentPreview
       ) {
         return (

@@ -574,6 +574,12 @@ export interface ToolCardProps {
   sessionId?: string;
   turnId?: string;
   displayContext?: ToolCardDisplayContext;
+  /**
+   * Whether this card is the current visual tail of the conversation.
+   * Live cards use this to keep their final result visible until a newer
+   * action arrives, instead of collapsing in the same frame as completion.
+   */
+  isLastItem?: boolean;
   /** Callback for MCP App ui/message requests. Returns whether the message was handled successfully. */
   onMcpAppMessage?: (params: import('@/infrastructure/api/service-api/MCPAPI').McpUiMessageParams) => Promise<import('@/infrastructure/api/service-api/MCPAPI').McpUiMessageResult>;
 }

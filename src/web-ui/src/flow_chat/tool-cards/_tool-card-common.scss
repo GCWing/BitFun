@@ -170,7 +170,7 @@
   flex-shrink: 0;
   margin-left: 4px;
   padding-left: 4px;
-  transition: all 0.2s ease;
+  transition: color 180ms ease, opacity 180ms ease, transform 180ms ease;
 
   &.tool-card-status-icon--with-divider {
     border-left: 1px solid var(--border-base);

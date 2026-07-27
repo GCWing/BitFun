@@ -5,6 +5,7 @@
  */
 
 @use './_tool-card-common.scss';
+@use '../components/modern/SmoothHeightCollapse.scss';
 
 /* ========== Card wrapper ========== */
 .ask-user-question-card {
@@ -14,8 +15,11 @@
   border-radius: var(--size-radius-md);
   border: 1px solid var(--border-base);
   background: var(--color-bg-scene);
-  backdrop-filter: blur(10px);
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  transition:
+    border-color 180ms ease,
+    box-shadow 180ms ease,
+    background-color 180ms ease,
+    opacity 180ms ease;
   overflow: hidden;
   position: relative;
 
@@ -484,7 +488,7 @@
   gap: 12px;
   cursor: pointer;
   padding: 10px 14px;
-  transition: all 0.15s ease;
+  transition: background-color 150ms ease;
 
   &:hover {
     background: var(--element-bg-subtle);
@@ -545,7 +549,6 @@
   margin-top: 0;
   padding-top: 12px;
   border-top: 1px solid var(--border-base);
-  animation: expandDown 0.2s ease-out;
 
   .option-label {
     pointer-events: none;
@@ -580,18 +583,6 @@
   color: var(--color-error);
   text-align: center;
   padding: 12px;
-}
-
-/* ========== Animation ========== */
-@keyframes expandDown {
-  from {
-    opacity: 0;
-    transform: translateY(-4px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
 }
 
 .animate-spin {

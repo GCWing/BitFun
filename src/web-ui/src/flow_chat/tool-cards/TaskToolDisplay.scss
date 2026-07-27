@@ -546,10 +546,9 @@
   .flow-tool-card-wrapper .base-tool-card-wrapper.task-tool-display {
     margin: 0;
     /*
-     * The global BaseToolCard uses transition: all. During task/subagent merge
-     * that animates border/background/radius removal and briefly exposes a
-     * separate rounded card behind the prompt. Only keep shadow/border hover
-     * feedback in this grouped shell.
+     * Keep only shadow/border hover feedback in this grouped shell. Layout
+     * properties must not interpolate while the task and subagent surfaces
+     * merge into one card.
      */
     transition:
       box-shadow 0.18s ease,
@@ -568,7 +567,6 @@
     // The wrapper itself provides the unified card appearance.
     background: var(--color-bg-scene);
     border: 1px solid var(--border-base);
-    backdrop-filter: blur(10px);
     overflow: hidden;
     box-shadow:
       0 2px 6px var(--color-overlay-black-15),
@@ -649,7 +647,7 @@
 
 /* E — task description text fades with the card */
 .task-tool-display.base-tool-card-wrapper--loading-shimmer .task-action {
-  animation: tool-card-text-fade 1.6s ease-in-out infinite;
+  animation: tool-card-text-fade 2.2s ease-in-out infinite;
 }
 
 /* Reviewer context block — replaces raw prompt for review-team members. */

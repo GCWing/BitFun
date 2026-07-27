@@ -44,6 +44,7 @@ interface ExecProcessToolCardViewProps {
   toolItem: FlowToolItem;
   model: ExecProcessCardModel;
   onExpand?: () => void;
+  isLastItem?: boolean;
 }
 
 function isCollapsedStatus(status: string): boolean {
@@ -54,9 +55,12 @@ function getInitialExpandedState(status: string): boolean {
   return !isCollapsedStatus(status);
 }
 
-function getAutoExpandedStateForStatus(status: string): boolean | null {
+function getAutoExpandedStateForStatus(
+  status: string,
+  isLastItem: boolean | undefined,
+): boolean | null {
   if (isCollapsedStatus(status)) {
-    return false;
+    return isLastItem === true ? null : false;
   }
 
   if (status === 'preparing' || status === 'streaming' || status === 'running' || status === 'receiving') {
@@ -161,6 +165,7 @@ export const ExecProcessToolCardView: React.FC<ExecProcessToolCardViewProps> = (
   toolItem,
   model,
   onExpand,
+  isLastItem,
 }) => {
   const { t } = useTranslation('flow-chat');
   const status = toolItem.status || 'pending';
@@ -181,12 +186,11 @@ export const ExecProcessToolCardView: React.FC<ExecProcessToolCardViewProps> = (
   const cancelledStatusClassName = isUserRejectedTool(toolItem)
     ? 'status-rejected'
     : 'status-cancelled';
-  const maxRows = isRunning ? EXEC_OUTPUT_STREAMING_MAX_ROWS : EXEC_OUTPUT_EXPANDED_MAX_ROWS;
   const toolId = toolItem.id ?? toolItem.toolCall?.id;
   const icon = <Terminal size={16} className="terminal-card-icon" />;
 
   const [isExpanded, setIsExpandedState] = useState(() => getInitialExpandedState(status));
-  const previousStatusRef = useRef(status);
+  const userToggledRef = useRef(false);
   const commandRef = useRef<HTMLElement | null>(null);
   const outputRendererRef = useRef<TerminalOutputRendererHandle | null>(null);
   const [isPrimaryTextTruncated, setIsPrimaryTextTruncated] = useState(false);
@@ -210,21 +214,29 @@ export const ExecProcessToolCardView: React.FC<ExecProcessToolCardViewProps> = (
   }, [applyExpandedState, isExpanded, onExpand]);
 
   const toggleExpanded = useCallback(() => {
+    userToggledRef.current = true;
     applyExecExpandedState(!isExpanded, { reason: 'manual' });
   }, [applyExecExpandedState, isExpanded]);
 
   useLayoutEffect(() => {
-    const prevStatus = previousStatusRef.current;
-    previousStatusRef.current = status;
-    if (prevStatus === status) {
+    if (userToggledRef.current) {
       return;
     }
 
-    const nextExpanded = getAutoExpandedStateForStatus(status);
+    const nextExpanded = getAutoExpandedStateForStatus(status, isLastItem);
     if (nextExpanded !== null) {
       applyExecExpandedState(nextExpanded, { reason: 'auto' });
     }
-  }, [applyExecExpandedState, status]);
+  }, [applyExecExpandedState, isLastItem, status]);
+
+  const compactSettledPreview =
+    isExpanded &&
+    isLastItem === true &&
+    isCollapsedStatus(status) &&
+    !userToggledRef.current;
+  const maxRows = isRunning || compactSettledPreview
+    ? EXEC_OUTPUT_STREAMING_MAX_ROWS
+    : EXEC_OUTPUT_EXPANDED_MAX_ROWS;
 
   const updatePrimaryTextTruncation = useCallback(() => {
     const element = commandRef.current;

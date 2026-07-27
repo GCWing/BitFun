@@ -28,6 +28,7 @@ interface FlowToolCardProps {
   turnId?: string;
   className?: string;
   displayContext?: ToolCardDisplayContext;
+  isLastItem?: boolean;
 }
 
 export const FlowToolCard: React.FC<FlowToolCardProps> = React.memo(({
@@ -40,6 +41,7 @@ export const FlowToolCard: React.FC<FlowToolCardProps> = React.memo(({
   sessionId,
   className = '',
   displayContext = 'default',
+  isLastItem,
 }) => {
   const { t } = useTranslation('flow-chat');
   const effectiveToolItem = projectEffectiveToolItem(toolItem);
@@ -97,6 +99,7 @@ export const FlowToolCard: React.FC<FlowToolCardProps> = React.memo(({
           onExpand={handleExpand}
           sessionId={sessionId}
           displayContext={displayContext}
+          isLastItem={isLastItem}
         />
       </FlowToolCardErrorBoundary>
       <ToolApprovalBar
@@ -134,6 +137,7 @@ export const FlowToolCard: React.FC<FlowToolCardProps> = React.memo(({
     prevProps.toolItem.subagentModelId === nextProps.toolItem.subagentModelId &&
     prevProps.toolItem.subagentModelDisplayName === nextProps.toolItem.subagentModelDisplayName &&
     prevProps.displayContext === nextProps.displayContext &&
+    prevProps.isLastItem === nextProps.isLastItem &&
     prevProgress === nextProgress &&
     prevProgressLogs === nextProgressLogs &&
     prevProps.toolItem.partialParams === nextProps.toolItem.partialParams &&

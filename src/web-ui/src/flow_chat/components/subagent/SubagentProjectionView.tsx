@@ -86,7 +86,7 @@ function renderProjectedItem(
   sessionId: string | undefined,
   turnId: string | undefined,
   compactText: boolean,
-  isLastActiveItem: boolean,
+  isLastVisibleItem: boolean,
 ): React.ReactNode {
   switch (item.type) {
     case 'text':
@@ -102,7 +102,7 @@ function renderProjectedItem(
         <ModelThinkingDisplay
           key={item.id}
           thinkingItem={item as FlowThinkingItem}
-          isLastItem={isLastActiveItem}
+          isLastItem={isLastVisibleItem}
           displayContext="subagent-projection"
         />
       );
@@ -114,6 +114,7 @@ function renderProjectedItem(
             sessionId={sessionId}
             turnId={turnId}
             displayContext="subagent-projection"
+            isLastItem={isLastVisibleItem}
           />
         </div>
       );
@@ -259,22 +260,10 @@ export const SubagentProjectionView: React.FC<SubagentProjectionViewProps> = ({
     });
   }, [items.length, itemsProp, parentSessionId, parentToolIds, resolvedSubagentSessionId, sessionId]);
 
-  const lastActiveItemId = useMemo(() => {
-    for (let index = items.length - 1; index >= 0; index -= 1) {
-      const item = items[index];
-      if (item.status !== 'completed' && item.status !== 'cancelled' && item.status !== 'rejected' && item.status !== 'error') {
-        return item.id;
-      }
-      if (item.type === 'thinking' && (item as FlowThinkingItem).isStreaming) {
-        return item.id;
-      }
-      if (item.type === 'text' && (item as FlowTextItem).isStreaming) {
-        return item.id;
-      }
-    }
-
-    return items.length > 0 ? items[items.length - 1]?.id ?? null : null;
-  }, [items]);
+  // Tail position, not active status, controls live completion retention.
+  // Otherwise a newer settled action can collapse while an older item still
+  // carries a stale active status.
+  const lastVisibleItemId = items[items.length - 1]?.id;
 
   useEffect(() => {
     const container = containerRef.current;
@@ -351,7 +340,7 @@ export const SubagentProjectionView: React.FC<SubagentProjectionViewProps> = ({
               sessionId ?? resolvedSubagentSessionId,
               turnId,
               compactText,
-              item.id === lastActiveItemId,
+              item.id === lastVisibleItemId,
             ))}
           </div>
         </div>

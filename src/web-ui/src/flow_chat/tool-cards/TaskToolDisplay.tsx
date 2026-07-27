@@ -255,6 +255,7 @@ export const TaskToolDisplay: React.FC<ToolCardProps> = ({
   interruptionNote,
   onOpenInPanel,
   sessionId,
+  isLastItem,
 }) => {
   const { t } = useTranslation('flow-chat');
   const defaultTimeoutDisabled = useSessionGoalModeActive(sessionId);
@@ -285,11 +286,15 @@ export const TaskToolDisplay: React.FC<ToolCardProps> = ({
   });
   
   const prevStatusRef = useRef(status);
+  const userToggledRef = useRef(false);
 
   const updateCardExpandedState = useCallback((
     nextExpanded: boolean,
     reason: 'manual' | 'auto' = 'manual',
   ) => {
+    if (reason === 'manual') {
+      userToggledRef.current = true;
+    }
     if (nextExpanded !== isExpanded) {
       /* Sync before the next commit paints so subagent wrapper + task card merge in one frame. */
       taskCollapseStateManager.setCollapsed(toolItem.id, !nextExpanded);
@@ -307,17 +312,34 @@ export const TaskToolDisplay: React.FC<ToolCardProps> = ({
       prevStatusRef.current = status;
       return;
     }
+
+    if (userToggledRef.current) {
+      prevStatusRef.current = status;
+      return;
+    }
     
     if (prevStatus !== status) {
       prevStatusRef.current = status;
       
       if (status === 'completed') {
-        updateCardExpandedState(false, 'auto');
+        if (isLastItem !== true) {
+          updateCardExpandedState(false, 'auto');
+        }
       } else if (isRunning && !keepCollapsedWhileRunning) {
         updateCardExpandedState(true, 'auto');
       }
+    } else if (status === 'completed' && isLastItem === false && isExpanded) {
+      updateCardExpandedState(false, 'auto');
     }
-  }, [isCancelAction, isExpanded, isRunning, keepCollapsedWhileRunning, status, updateCardExpandedState]);
+  }, [
+    isCancelAction,
+    isExpanded,
+    isLastItem,
+    isRunning,
+    keepCollapsedWhileRunning,
+    status,
+    updateCardExpandedState,
+  ]);
   
   useLayoutEffect(() => {
     taskCollapseStateManager.setCollapsed(toolItem.id, isCancelAction ? true : !isExpanded);

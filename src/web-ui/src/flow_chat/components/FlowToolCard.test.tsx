@@ -13,10 +13,17 @@ vi.mock('react-i18next', () => ({
 vi.mock('../tool-cards', async () => {
   const ReactModule = await import('react');
   return {
-    getToolCardComponent: (toolName: string) => ({ toolItem }: { toolItem: FlowToolItem }) =>
+    getToolCardComponent: (toolName: string) => ({
+      toolItem,
+      isLastItem,
+    }: {
+      toolItem: FlowToolItem;
+      isLastItem?: boolean;
+    }) =>
       ReactModule.createElement('div', {
         'data-selected-card': toolName,
         'data-card-tool-name': toolItem.toolName,
+        'data-is-last-item': String(isLastItem === true),
       }),
   };
 });
@@ -151,5 +158,22 @@ describe('FlowToolCard deferred identity', () => {
 
     act(() => root.render(<FlowToolCard toolItem={tool('pending-call')} />));
     expect(container.querySelector('.flow-tool-card-wrapper--permission-pending')).not.toBeNull();
+  });
+
+  it('updates the card when it becomes or stops being the visual tail', () => {
+    const tool: FlowToolItem = {
+      id: 'tail-tool',
+      type: 'tool',
+      toolName: 'ExecCommand',
+      toolCall: { id: 'tail-tool', input: { cmd: 'cargo check' } },
+      status: 'completed',
+      timestamp: 1,
+    };
+
+    act(() => root.render(<FlowToolCard toolItem={tool} isLastItem />));
+    expect(container.querySelector('[data-is-last-item="true"]')).not.toBeNull();
+
+    act(() => root.render(<FlowToolCard toolItem={tool} isLastItem={false} />));
+    expect(container.querySelector('[data-is-last-item="false"]')).not.toBeNull();
   });
 });

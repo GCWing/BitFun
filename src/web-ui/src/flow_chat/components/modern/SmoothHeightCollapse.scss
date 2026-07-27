@@ -6,6 +6,11 @@
   transition-property: height, opacity, transform;
   transition-duration: 260ms, 180ms, 260ms;
   transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1), ease, cubic-bezier(0.4, 0, 0.2, 1);
+  will-change: auto;
+}
+
+.smooth-height-collapse--opening,
+.smooth-height-collapse--closing {
   will-change: height, opacity, transform;
 }
 
@@ -18,7 +23,6 @@
 .smooth-height-collapse--open {
   height: auto;
   overflow: visible;
-  will-change: auto;
 }
 
 .smooth-height-collapse--closing {
@@ -28,6 +32,12 @@
 
 .smooth-height-collapse__inner {
   min-height: 0;
+}
+
+.smooth-height-collapse--instant {
+  transition: none;
+  transform: none;
+  will-change: auto;
 }
 
 @media (prefers-reduced-motion: reduce) {

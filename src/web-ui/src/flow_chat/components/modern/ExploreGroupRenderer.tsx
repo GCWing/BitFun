@@ -4,7 +4,7 @@
  * Renders merged explore-only rounds as a collapsible region.
  */
 
-import React, { useRef, useMemo, useCallback, useEffect, useState } from 'react';
+import React, { useRef, useMemo, useCallback, useEffect, useLayoutEffect, useState } from 'react';
 import { ChevronRight } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import type { FlowItem, FlowToolItem, FlowTextItem, FlowThinkingItem, ToolRejectOptions } from '../../types/flow-chat';
@@ -142,31 +142,25 @@ export const ExploreGroupRenderer: React.FC<ExploreGroupRendererProps> = React.m
   // defaultExpanded = !wasCutByCritical). So `justGotCut && isExpanded` would
   // always be false and the collapse-intent would never fire.
   //
-  // Instead, reason about the state *before* the cut:
-  //   - No explicit state → group was expanded by default (it was tail).
-  //   - Explicit state = true → user had it open.
-  // Both cases mean the group WAS visually expanded before this render; we need
-  // to dispatch the height-contract event so Virtuoso can anchor-lock.
-  useEffect(() => {
+  // No explicit state means the group was expanded by the live-tail default,
+  // so dispatch the height-contract event before compacting it. An explicit
+  // state is user intent and must not be overwritten by a later auto event.
+  useLayoutEffect(() => {
     const justGotCut = wasCutByCritical && !prevWasCutRef.current;
     prevWasCutRef.current = wasCutByCritical;
 
-    if (!justGotCut) return;
+    if (!justGotCut || hasExplicitState) return;
 
-    const wasExpanded = !hasExplicitState || explicitExpanded;
-    log.debug('explore group cut by critical', { groupId, wasExpanded, hasExplicitState });
+    log.debug('explore group cut by critical', { groupId });
 
-    if (wasExpanded) {
-      setAnimateToggle(false);
-      applyExpandedState(true, false, () => {
-        onCollapseGroup?.(groupId);
-      }, {
-        reason: 'auto',
-      });
-    }
+    setAnimateToggle(false);
+    applyExpandedState(true, false, () => {
+      onCollapseGroup?.(groupId);
+    }, {
+      reason: 'auto',
+    });
   }, [
     applyExpandedState,
-    explicitExpanded,
     groupId,
     hasExplicitState,
     wasCutByCritical,
@@ -382,6 +376,7 @@ const ExploreItemRenderer = React.memo<ExploreItemRendererProps>(({ item, turnId
         <div className="flowchat-flow-item" data-flow-item-id={item.id} data-flow-item-type="tool">
           <FlowToolCard
             toolItem={item as FlowToolItem}
+            isLastItem={isLastItem}
             onConfirm={handleConfirm}
             onReject={handleReject}
             onOpenInEditor={handleOpenInEditor}

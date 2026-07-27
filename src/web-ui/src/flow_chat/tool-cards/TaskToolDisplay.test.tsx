@@ -381,6 +381,55 @@ describeWithJsdom('TaskToolDisplay', () => {
     expect(taskCollapseStateManager.isCollapsed('task-tool-1')).toBe(true);
   });
 
+  it('retains a completed tail task until newer content supersedes it', async () => {
+    await act(async () => {
+      root.render(
+        <TaskToolDisplay
+          toolItem={reviewTaskItem('pending', 'Explore', 'Investigate task behavior')}
+          config={config}
+          sessionId="parent-session"
+          isLastItem
+        />,
+      );
+    });
+
+    await act(async () => {
+      root.render(
+        <TaskToolDisplay
+          toolItem={reviewTaskItem('running', 'Explore', 'Investigate task behavior')}
+          config={config}
+          sessionId="parent-session"
+          isLastItem
+        />,
+      );
+    });
+    expect(taskCollapseStateManager.isCollapsed('task-tool-1')).toBe(false);
+
+    await act(async () => {
+      root.render(
+        <TaskToolDisplay
+          toolItem={reviewTaskItem('completed', 'Explore', 'Investigate task behavior')}
+          config={config}
+          sessionId="parent-session"
+          isLastItem
+        />,
+      );
+    });
+    expect(taskCollapseStateManager.isCollapsed('task-tool-1')).toBe(false);
+
+    await act(async () => {
+      root.render(
+        <TaskToolDisplay
+          toolItem={reviewTaskItem('completed', 'Explore', 'Investigate task behavior')}
+          config={config}
+          sessionId="parent-session"
+          isLastItem={false}
+        />,
+      );
+    });
+    expect(taskCollapseStateManager.isCollapsed('task-tool-1')).toBe(true);
+  });
+
   it('keeps Deep Review reviewer task cards collapsed when they start running', async () => {
     await act(async () => {
       root.render(

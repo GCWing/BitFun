@@ -12,7 +12,10 @@
   border-radius: 8px;
   margin: var(--flowchat-card-gap) 0;
   overflow: hidden;
-  transition: all 0.2s ease;
+  transition:
+    border-color 180ms ease,
+    box-shadow 180ms ease,
+    transform 180ms ease;
   box-sizing: border-box;
 
   &:hover {
@@ -175,7 +178,7 @@
 
     &--loading-shimmer {
       .file-name {
-        animation: tool-card-text-fade 1.6s ease-in-out infinite;
+        animation: tool-card-text-fade 2.2s ease-in-out infinite;
       }
     }
   }
@@ -466,6 +469,6 @@
     opacity: 1;
   }
   50% {
-    opacity: 0.25;
+    opacity: 0.68;
   }
 }

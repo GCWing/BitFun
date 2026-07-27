@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { ChevronDown, ChevronRight, Image as ImageIcon } from 'lucide-react';
 
 import { Modal } from '@/component-library';
@@ -66,7 +66,7 @@ export const ViewImageToolCard: React.FC<ToolCardProps> = ({ toolItem, onExpand 
     toolName: toolItem.toolName,
   });
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (!source || didAutoExpand.current) return;
     didAutoExpand.current = true;
     applyExpandedState(isExpanded, true, setIsExpanded, { reason: 'auto' });

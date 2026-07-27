@@ -452,7 +452,6 @@ export const ModelRoundItem = React.memo<ModelRoundItemProps>(
                 turnId={turnId}
                 roundId={options.roundId}
                 isLastItem={isLast && itemIdx === group.items.length - 1}
-                hideSettledExploreTool
               />
             ));
 
@@ -800,8 +799,6 @@ interface FlowItemRendererProps {
   turnId: string;
   roundId?: string;
   isLastItem?: boolean;
-  /** Hide finished explore tools instead of leaving them inline. */
-  hideSettledExploreTool?: boolean;
 }
 
 // Do not memoize: streaming content updates frequently.
@@ -810,7 +807,6 @@ const FlowItemRenderer: React.FC<FlowItemRendererProps> = ({
   turnId,
   roundId,
   isLastItem,
-  hideSettledExploreTool = false,
 }) => {
   const {
     onToolConfirm,
@@ -846,22 +842,12 @@ const FlowItemRenderer: React.FC<FlowItemRendererProps> = ({
     
     case 'tool': {
       const toolItem = item as FlowToolItem;
-      // Explore tools that already finished are hidden outright. The hidden
-      // state is derived from the item status alone — no wall-clock window and
-      // no enter/exit animation — so the round never reflows on a timer.
-      const isSettledExploreTool =
-        hideSettledExploreTool &&
-        toolItem.status === 'completed' &&
-        isCollapsibleTool(getEffectiveToolName(toolItem));
-      const toolClassName = [
-        'flowchat-flow-item',
-        isSettledExploreTool ? 'flowchat-flow-item--tool-settled' : null,
-      ].filter(Boolean).join(' ');
 
       return (
-        <div className={toolClassName} data-flow-item-id={item.id} data-flow-item-type="tool">
+        <div className="flowchat-flow-item" data-flow-item-id={item.id} data-flow-item-type="tool">
           <FlowToolCard
             toolItem={toolItem}
+            isLastItem={isLastItem}
             onConfirm={async (toolId: string, permissionOptionId?: string, approve?: boolean) => {
               if (onToolConfirm) {
                 await onToolConfirm(toolId, permissionOptionId, approve);

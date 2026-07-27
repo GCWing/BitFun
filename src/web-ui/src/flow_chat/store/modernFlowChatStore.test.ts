@@ -395,7 +395,7 @@ describe('sessionToVirtualItems explore grouping', () => {
     });
   });
 
-  it('keeps the active collapsible tool visible after a collapsed explore group', () => {
+  it('keeps an active collapsible tool in the same trailing explore group', () => {
     const session = makeSession({
       sessionId: 'active-tool-session',
       dialogTurns: [{
@@ -411,7 +411,9 @@ describe('sessionToVirtualItems explore grouping', () => {
           makeRound({
             id: 'round-2',
             items: [makeTool('tool-2', 'Read', 'running')],
-            isStreaming: true,
+            // Item status is the durable source of truth even if the round's
+            // streaming bit arrives one store update late.
+            isStreaming: false,
             isComplete: false,
             status: 'streaming',
           }),
@@ -423,18 +425,19 @@ describe('sessionToVirtualItems explore grouping', () => {
 
     const items = sessionToVirtualItems(session);
 
-    expect(items.map(item => item.type)).toEqual(['user-message', 'explore-group', 'model-round']);
+    expect(items.map(item => item.type)).toEqual(['user-message', 'explore-group']);
     expect(items[1]).toMatchObject({
       type: 'explore-group',
       data: {
         groupId: 'round-1',
-        wasCutByCritical: true,
-      },
-    });
-    expect(items[2]).toMatchObject({
-      type: 'model-round',
-      data: {
-        id: 'round-2',
+        isGroupStreaming: true,
+        isLastGroupInTurn: true,
+        wasCutByCritical: false,
+        allItems: [
+          expect.objectContaining({ id: 'text-1' }),
+          expect.objectContaining({ id: 'tool-1' }),
+          expect.objectContaining({ id: 'tool-2', status: 'running' }),
+        ],
       },
     });
   });
@@ -545,10 +548,17 @@ describe('sessionToVirtualItems explore grouping', () => {
     const activeItems = sessionToVirtualItems(activeSession);
     const completedItems = sessionToVirtualItems(completedSession);
 
+    expect(activeItems.map(item => item.type)).toEqual(['user-message', 'explore-group']);
+    expect(completedItems.map(item => item.type)).toEqual(activeItems.map(item => item.type));
     expect(activeItems[1]).toMatchObject({
       type: 'explore-group',
       data: {
         groupId: 'round-1',
+        allItems: [
+          expect.objectContaining({ id: 'text-1' }),
+          expect.objectContaining({ id: 'tool-1' }),
+          expect.objectContaining({ id: 'tool-2', status: 'running' }),
+        ],
       },
     });
     expect(completedItems[1]).toMatchObject({
@@ -564,7 +574,7 @@ describe('sessionToVirtualItems explore grouping', () => {
     });
   });
 
-  it('auto-collapses completed trailing explore groups', () => {
+  it('keeps the latest completed trailing explore group expanded', () => {
     const session = makeSession();
 
     const items = sessionToVirtualItems(session);
@@ -572,7 +582,75 @@ describe('sessionToVirtualItems explore grouping', () => {
     expect(items[1]).toMatchObject({
       type: 'explore-group',
       data: {
+        isGroupStreaming: false,
+        isLastGroupInTurn: true,
+        wasCutByCritical: false,
+      },
+    });
+  });
+
+  it('collapses a completed trailing explore group once a newer turn exists', () => {
+    const firstTurn: Session['dialogTurns'][number] = {
+      id: 'turn-1',
+      sessionId: 'session-1',
+      userMessage: {
+        id: 'user-1',
+        content: 'Inspect the file',
+        timestamp: 900,
+      },
+      modelRounds: [makeRound({ id: 'round-1' })],
+      status: 'completed',
+      startTime: 900,
+    };
+    const secondTurn: Session['dialogTurns'][number] = {
+      id: 'turn-2',
+      sessionId: 'session-1',
+      userMessage: {
+        id: 'user-2',
+        content: 'Continue',
+        timestamp: 1100,
+      },
+      modelRounds: [makeRound({ id: 'round-2' })],
+      status: 'processing',
+      startTime: 1100,
+    };
+
+    // Populate the stable-turn projection cache while this is still the tail.
+    const initialItems = sessionToVirtualItems(makeSession({
+      dialogTurns: [firstTurn],
+    }));
+    expect(initialItems[1]).toMatchObject({
+      type: 'explore-group',
+      data: {
+        wasCutByCritical: false,
+      },
+    });
+
+    // Reuse the same immutable turn object, matching the real append path. The
+    // cache must account for its new non-tail position.
+    const session = makeSession({
+      dialogTurns: [
+        firstTurn,
+        secondTurn,
+      ],
+    });
+
+    const items = sessionToVirtualItems(session);
+    const exploreGroups = items.filter(item => item.type === 'explore-group');
+
+    expect(exploreGroups).toHaveLength(2);
+    expect(exploreGroups[0]).toMatchObject({
+      turnId: 'turn-1',
+      data: {
+        isLastGroupInTurn: false,
         wasCutByCritical: true,
+      },
+    });
+    expect(exploreGroups[1]).toMatchObject({
+      turnId: 'turn-2',
+      data: {
+        isLastGroupInTurn: true,
+        wasCutByCritical: false,
       },
     });
   });
@@ -611,11 +689,13 @@ describe('sessionToVirtualItems explore grouping', () => {
     expect(exploreGroups).toHaveLength(2);
     expect(exploreGroups[0]).toMatchObject({
       data: {
+        isLastGroupInTurn: false,
         wasCutByCritical: true,
       },
     });
     expect(exploreGroups[1]).toMatchObject({
       data: {
+        isLastGroupInTurn: true,
         wasCutByCritical: false,
       },
     });

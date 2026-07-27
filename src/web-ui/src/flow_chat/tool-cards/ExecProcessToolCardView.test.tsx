@@ -165,4 +165,51 @@ describe('ExecProcessToolCardView', () => {
     expect(container.textContent).toContain('Waiting for confirmation');
     expect(container.textContent).not.toContain('Receiving parameters...');
   });
+
+  it('retains a just-completed tail result until newer content supersedes it', () => {
+    const resultModel: ExecProcessCardModel = {
+      ...model,
+      resultOutput: 'All tests passed',
+    };
+
+    act(() => {
+      root.render(
+        <ExecProcessToolCardView
+          toolItem={toolItem('running')}
+          model={resultModel}
+          isLastItem
+        />,
+      );
+    });
+
+    expect(container.querySelector('.base-tool-card')).not.toBeNull();
+    expect(container.querySelector('.compact-tool-card')).toBeNull();
+
+    act(() => {
+      root.render(
+        <ExecProcessToolCardView
+          toolItem={toolItem('completed')}
+          model={resultModel}
+          isLastItem
+        />,
+      );
+    });
+
+    expect(container.querySelector('.base-tool-card')).not.toBeNull();
+    expect(container.querySelector('.compact-tool-card')).toBeNull();
+    expect(container.textContent).toContain('All tests passed');
+
+    act(() => {
+      root.render(
+        <ExecProcessToolCardView
+          toolItem={toolItem('completed')}
+          model={resultModel}
+          isLastItem={false}
+        />,
+      );
+    });
+
+    expect(container.querySelector('.base-tool-card')).toBeNull();
+    expect(container.querySelector('.compact-tool-card')).not.toBeNull();
+  });
 });

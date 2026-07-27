@@ -7,7 +7,7 @@
  * Applies typewriter effect during streaming.
  */
 
-import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useLayoutEffect, useRef, useCallback, useMemo } from 'react';
 import { ChevronRight } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import type { FlowThinkingItem } from '../types/flow-chat';
@@ -63,7 +63,7 @@ export const ModelThinkingDisplay: React.FC<ModelThinkingDisplayProps> = ({
     },
   });
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (userToggledRef.current) return;
     if (isExpanded !== shouldDefaultExpanded) {
       setAnimateToggle(false);
