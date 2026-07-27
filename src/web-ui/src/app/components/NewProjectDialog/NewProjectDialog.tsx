@@ -17,8 +17,11 @@ import { createLogger } from '@/shared/utils/logger';
 import { Modal, Button, Input } from '@/component-library';
 import './NewProjectDialog.scss';
 import {workspaceAPI} from "@/infrastructure";
+import { notificationService } from '@/shared/notification-system';
 
 const log = createLogger('NewProjectDialog');
+
+const INVALID_NAME_CHARS = /[\/\\:*?"<>|]/;
 
 export interface NewProjectDialogProps {
   isOpen: boolean;
@@ -71,6 +74,10 @@ export const NewProjectDialog: React.FC<NewProjectDialogProps> = ({
       setError(t('newProject.errorEnterName'));
       return;
     }
+    if (INVALID_NAME_CHARS.test(projectName.trim())) {
+      notificationService.warning(t('newProject.errorInvalidName'), { duration: 4500 });
+      return;
+    }
 
     setIsCreating(true);
     setError('');
@@ -82,7 +89,9 @@ export const NewProjectDialog: React.FC<NewProjectDialogProps> = ({
       onClose();
     } catch (error) {
       log.error('Failed to create project', error);
-      setError(error instanceof Error ? error.message : t('newProject.errorCreateFailed'));
+      const message = error instanceof Error && error.message ? error.message : t('newProject.errorCreateFailed');
+      setError(message);
+      notificationService.error(message, { duration: 4500 });
     } finally {
       setIsCreating(false);
     }

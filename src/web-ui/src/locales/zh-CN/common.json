@@ -490,7 +490,8 @@
     "creating": "创建中...",
     "errorSelectParent": "请选择父目录",
     "errorEnterName": "请输入工作区名称",
-    "errorCreateFailed": "创建工作区失败"
+    "errorCreateFailed": "创建工作区失败",
+    "errorInvalidName": "工作区名称不能包含以下字符：/ \\ : * ? \" < > |"
   },
   "peerDirectoryPicker": {
     "loading": "正在加载远程目录…",
