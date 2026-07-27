@@ -168,21 +168,47 @@ describe('startup performance contract', () => {
     );
   });
 
-  it('centers the first main window and persists geometry before close handling', () => {
+  it('restores only normal main-window geometry and repairs legacy floating sizes', () => {
     const desktopThemeSource = readSource('../../../../apps/desktop/src/theme.rs');
     const desktopLibSource = readSource('../../../../apps/desktop/src/lib.rs');
+    const toolbarModeProviderSource = readSource(
+      '../../flow_chat/components/toolbar-mode/ToolbarModeProvider.tsx'
+    );
     const windowEventStart = desktopLibSource.indexOf('.on_window_event({');
     const invokeHandlerStart = desktopLibSource.indexOf('.invoke_handler(', windowEventStart);
     const windowEventSource = desktopLibSource.slice(windowEventStart, invokeHandlerStart);
 
-    expect(desktopThemeSource).toContain('.inner_size(1200.0, 800.0)\n        .center()');
+    expect(desktopThemeSource).toContain('crate::MAIN_WINDOW_DEFAULT_WIDTH');
+    expect(desktopThemeSource).toContain('crate::restore_main_window_state(&window)');
     expect(desktopThemeSource).not.toContain('windows_maximize_show_wait_action');
     expect(desktopLibSource).toContain('tauri_plugin_window_state::Builder::default()');
+    expect(desktopLibSource).toContain('.with_state_flags(StateFlags::empty())');
     expect(desktopLibSource).toContain('.with_filter(|label| label == "main")');
+    expect(desktopLibSource).toContain('Resetting undersized main window state');
+    expect(desktopLibSource).toContain('MAIN_WINDOW_USES_TRANSIENT_GEOMETRY');
+    expect(toolbarModeProviderSource).not.toContain(
+      "import { systemAPI } from '@/infrastructure/api/service-api/SystemAPI'"
+    );
+    expect(toolbarModeProviderSource).toContain(
+      "await import('@/infrastructure/api/service-api/SystemAPI')"
+    );
+    expect(toolbarModeProviderSource).toContain('win.innerSize()');
+    expect(toolbarModeProviderSource).not.toContain('win.outerSize(),');
     expect(windowEventStart).toBeGreaterThan(-1);
     expect(invokeHandlerStart).toBeGreaterThan(windowEventStart);
     expect(windowEventSource).toContain('matches!(event, tauri::WindowEvent::CloseRequested { .. })');
     expect(windowEventSource).toContain('save_main_window_state(window.app_handle())');
+    expect(toolbarModeProviderSource).toContain(
+      'setMainWindowTransientGeometry(true)'
+    );
+    expect(toolbarModeProviderSource).toContain(
+      'setMainWindowTransientGeometry(false)'
+    );
+    expect(
+      toolbarModeProviderSource.indexOf('setMainWindowTransientGeometry(true)')
+    ).toBeLessThan(
+      toolbarModeProviderSource.indexOf('win.setSize(new PhysicalSize(geometry.width')
+    );
   });
 
   it('keeps system tray creation out of the synchronous Tauri setup path', () => {

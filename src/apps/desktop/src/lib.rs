@@ -48,7 +48,7 @@ use std::sync::{
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use tauri::Emitter;
 use tauri::Manager;
-use tauri_plugin_window_state::{AppHandleExt, StateFlags};
+use tauri_plugin_window_state::{AppHandleExt, StateFlags, WindowExt};
 
 // Re-export API
 pub use api::*;
@@ -113,6 +113,15 @@ static MAIN_WINDOW_CLOSE_PENDING_ON_MACOS: AtomicBool = AtomicBool::new(false);
 const MAIN_WINDOW_CLOSE_REQUESTED_EVENT: &str = "bitfun_main_window_close_requested";
 const BROWSER_WEBVIEW_PAGE_LOAD_EVENT: &str = "browser-webview-page-load";
 const CRON_DESKTOP_START_FALLBACK_DELAY: Duration = Duration::from_secs(120);
+pub(crate) const MAIN_WINDOW_DEFAULT_WIDTH: f64 = 1200.0;
+pub(crate) const MAIN_WINDOW_DEFAULT_HEIGHT: f64 = 800.0;
+pub(crate) const MAIN_WINDOW_MIN_WIDTH: f64 = 800.0;
+pub(crate) const MAIN_WINDOW_MIN_HEIGHT: f64 = 600.0;
+
+// Toolbar mode temporarily morphs the main window into a compact floating
+// surface. Its geometry must never replace the normal main-window geometry
+// restored on the next process start.
+static MAIN_WINDOW_USES_TRANSIENT_GEOMETRY: AtomicBool = AtomicBool::new(false);
 
 #[cfg(target_os = "macos")]
 const MAIN_WINDOW_CLOSE_FALLBACK_HIDE_MS: u64 = 2_500;
@@ -277,9 +286,126 @@ fn main_window_state_flags() -> StateFlags {
     StateFlags::SIZE | StateFlags::POSITION | StateFlags::MAXIMIZED | StateFlags::FULLSCREEN
 }
 
+fn persist_main_window_state(app: &tauri::AppHandle) -> Result<(), String> {
+    app.save_window_state(main_window_state_flags())
+        .map_err(|error| error.to_string())
+}
+
 pub(crate) fn save_main_window_state(app: &tauri::AppHandle) {
-    if let Err(error) = app.save_window_state(main_window_state_flags()) {
+    if MAIN_WINDOW_USES_TRANSIENT_GEOMETRY.load(Ordering::SeqCst) {
+        log::debug!("Skipped saving transient main window geometry");
+        return;
+    }
+
+    if let Err(error) = persist_main_window_state(app) {
         log::warn!("Failed to save main window state: {}", error);
+    }
+}
+
+pub(crate) fn set_main_window_transient_geometry(
+    app: &tauri::AppHandle,
+    transient: bool,
+) -> Result<(), String> {
+    if transient {
+        if MAIN_WINDOW_USES_TRANSIENT_GEOMETRY.load(Ordering::SeqCst) {
+            return Ok(());
+        }
+
+        // Capture the latest normal bounds before toolbar mode starts resizing
+        // the shared native window.
+        persist_main_window_state(app).map_err(|error| {
+            format!(
+                "Failed to save main window state before transient geometry: {}",
+                error
+            )
+        })?;
+        MAIN_WINDOW_USES_TRANSIENT_GEOMETRY.store(true, Ordering::SeqCst);
+        return Ok(());
+    }
+
+    MAIN_WINDOW_USES_TRANSIENT_GEOMETRY.store(false, Ordering::SeqCst);
+    persist_main_window_state(app).map_err(|error| {
+        format!(
+            "Failed to save restored main window state after transient geometry: {}",
+            error
+        )
+    })
+}
+
+fn has_standard_main_window_size(width: f64, height: f64) -> bool {
+    width >= MAIN_WINDOW_MIN_WIDTH && height >= MAIN_WINDOW_MIN_HEIGHT
+}
+
+pub(crate) fn restore_main_window_state(window: &tauri::WebviewWindow) {
+    if let Err(error) = window.restore_state(main_window_state_flags()) {
+        log::warn!("Failed to restore main window state: {}", error);
+    }
+
+    let is_maximized = window.is_maximized().unwrap_or(false);
+    let is_fullscreen = window.is_fullscreen().unwrap_or(false);
+    if !is_maximized && !is_fullscreen {
+        match (window.inner_size(), window.scale_factor()) {
+            (Ok(size), Ok(scale_factor)) => {
+                let logical_size = size.to_logical::<f64>(scale_factor);
+                if !has_standard_main_window_size(logical_size.width, logical_size.height) {
+                    log::info!(
+                        "Resetting undersized main window state: width={}, height={}",
+                        logical_size.width,
+                        logical_size.height
+                    );
+
+                    let resize_result = window.set_size(tauri::LogicalSize::new(
+                        MAIN_WINDOW_DEFAULT_WIDTH,
+                        MAIN_WINDOW_DEFAULT_HEIGHT,
+                    ));
+                    let center_result = window.center();
+                    let resize_succeeded = match resize_result {
+                        Ok(()) => true,
+                        Err(error) => {
+                            log::warn!("Failed to reset main window size: {}", error);
+                            false
+                        }
+                    };
+                    if let Err(error) = center_result {
+                        log::warn!("Failed to center reset main window: {}", error);
+                    }
+                    if resize_succeeded {
+                        if let Err(error) = persist_main_window_state(window.app_handle()) {
+                            log::warn!("Failed to persist repaired main window state: {}", error);
+                        }
+                    }
+                }
+            }
+            (Err(error), _) => {
+                log::warn!("Failed to read restored main window size: {}", error);
+            }
+            (_, Err(error)) => {
+                log::warn!("Failed to read main window scale factor: {}", error);
+            }
+        }
+    }
+
+    if let Err(error) = window.set_min_size(Some(tauri::LogicalSize::new(
+        MAIN_WINDOW_MIN_WIDTH,
+        MAIN_WINDOW_MIN_HEIGHT,
+    ))) {
+        log::warn!("Failed to set main window minimum size: {}", error);
+    }
+}
+
+#[cfg(test)]
+mod main_window_geometry_tests {
+    use super::has_standard_main_window_size;
+
+    #[test]
+    fn floating_toolbar_sizes_are_not_valid_main_window_sizes() {
+        assert!(!has_standard_main_window_size(440.0, 680.0));
+        assert!(!has_standard_main_window_size(700.0, 140.0));
+    }
+
+    #[test]
+    fn default_client_size_is_a_valid_main_window_size() {
+        assert!(has_standard_main_window_size(1200.0, 800.0));
     }
 }
 
@@ -510,7 +636,12 @@ pub async fn run() {
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(
             tauri_plugin_window_state::Builder::default()
-                .with_state_flags(main_window_state_flags())
+                // Restore explicitly after the main window is built, and save
+                // explicitly at normal-geometry boundaries. Empty automatic
+                // flags keep toolbar-mode resize/move events out of the
+                // plugin cache and prevent its exit hook from overwriting the
+                // last normal main-window geometry.
+                .with_state_flags(StateFlags::empty())
                 .with_filter(|label| label == "main")
                 .build(),
         )
@@ -1406,6 +1537,7 @@ pub async fn run() {
             api::system_api::minimize_to_tray,
             api::system_api::initialize_tray_after_startup,
             api::system_api::startup_window_control,
+            api::system_api::set_main_window_transient_geometry,
             api::system_api::toggle_main_window_fullscreen,
             sleep_prevention::get_prevent_sleep_enabled,
             sleep_prevention::set_prevent_sleep_enabled,
@@ -1603,6 +1735,7 @@ pub async fn run() {
             app.run(|_app_handle, event| match event {
                 tauri::RunEvent::ExitRequested { .. } | tauri::RunEvent::Exit => {
                     crash_diagnostics::mark_clean_shutdown("tauri_run_exit");
+                    save_main_window_state(_app_handle);
                     perform_process_exit_cleanup();
                 }
                 #[cfg(target_os = "macos")]

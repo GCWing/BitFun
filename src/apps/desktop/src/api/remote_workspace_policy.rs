@@ -1517,6 +1517,10 @@ pub const REMOTE_WORKSPACE_COMMAND_POLICIES: &[(&str, RemoteWorkspacePolicy)] = 
     ),
     ("set_macos_edit_menu_mode", RemoteWorkspacePolicy::LocalOnly),
     (
+        "set_main_window_transient_geometry",
+        RemoteWorkspacePolicy::LocalOnly,
+    ),
+    (
         "set_prevent_sleep_enabled",
         RemoteWorkspacePolicy::LocalOnly,
     ),

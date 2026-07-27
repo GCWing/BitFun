@@ -20,6 +20,7 @@ const LOCAL_ONLY_COMMANDS = new Set([
   'initialize_tray_after_startup',
   'startup_window_control',
   'toggle_main_window_fullscreen',
+  'set_main_window_transient_geometry',
   'get_prevent_sleep_enabled',
   'set_prevent_sleep_enabled',
   'restart_app',

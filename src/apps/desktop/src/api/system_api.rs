@@ -133,7 +133,10 @@ async fn probe_endpoint_throughput(client: &reqwest::Client, url: &str) -> u64 {
     let started = std::time::Instant::now();
     let request = client
         .get(url)
-        .header(reqwest::header::RANGE, format!("bytes=0-{}", PROBE_BYTES - 1))
+        .header(
+            reqwest::header::RANGE,
+            format!("bytes=0-{}", PROBE_BYTES - 1),
+        )
         .send();
     let Ok(Ok(response)) = tokio::time::timeout(PROBE_WINDOW, request).await else {
         return 0;
@@ -168,7 +171,10 @@ async fn ranked_updater(app: &AppHandle) -> Result<tauri_plugin_updater::Updater
     let builder = match builder.endpoints(endpoints) {
         Ok(builder) => builder,
         Err(error) => {
-            log::warn!("Updater endpoint ranking rejected, using bundled order: {}", error);
+            log::warn!(
+                "Updater endpoint ranking rejected, using bundled order: {}",
+                error
+            );
             app.updater_builder()
         }
     };
@@ -590,12 +596,33 @@ fn read_main_window_fullscreen_response(
 
 // ─── Window / Tray behavior commands ─────────────────────────────────────────
 
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SetMainWindowTransientGeometryRequest {
+    pub transient: bool,
+}
+
+/// Mark whether the shared main window currently uses toolbar-mode geometry.
+///
+/// Entering captures the latest normal bounds before the frontend resizes the
+/// native window. Leaving persists the restored normal bounds. While transient
+/// geometry is active, all process-exit save paths retain the captured normal
+/// state instead of the floating-window state.
+#[tauri::command]
+pub async fn set_main_window_transient_geometry(
+    app: tauri::AppHandle,
+    request: SetMainWindowTransientGeometryRequest,
+) -> Result<(), String> {
+    crate::set_main_window_transient_geometry(&app, request.transient)
+}
+
 /// Immediately exit the application (used by the "ask" dialog when the user
 /// chooses to quit rather than minimize to tray).
 #[tauri::command]
 pub async fn quit_app(app: tauri::AppHandle) -> Result<(), String> {
     log::info!("Quit requested via quit_app command");
     crate::crash_diagnostics::mark_clean_shutdown("quit_app_command");
+    crate::save_main_window_state(&app);
     crate::perform_process_exit_cleanup();
     app.exit(0);
     Ok(())
@@ -667,6 +694,7 @@ pub async fn startup_window_control(
             if behavior == "quit" {
                 log::info!("Quit requested from startup window control");
                 crate::crash_diagnostics::mark_clean_shutdown("startup_window_control");
+                crate::save_main_window_state(&app);
                 crate::perform_process_exit_cleanup();
                 app.exit(0);
             } else {
@@ -843,7 +871,10 @@ mod tests {
             "unexpected updater arch segment: {arch}"
         );
         #[cfg(target_os = "macos")]
-        assert!(key.starts_with("darwin-"), "macOS must map to darwin, got {key}");
+        assert!(
+            key.starts_with("darwin-"),
+            "macOS must map to darwin, got {key}"
+        );
     }
 
     use super::*;

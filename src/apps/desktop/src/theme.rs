@@ -476,7 +476,10 @@ pub fn create_main_window(
     #[allow(unused_mut)]
     let mut builder = tauri::WebviewWindowBuilder::new(app_handle, "main", main_url)
         .title("BitFun")
-        .inner_size(1200.0, 800.0)
+        .inner_size(
+            crate::MAIN_WINDOW_DEFAULT_WIDTH,
+            crate::MAIN_WINDOW_DEFAULT_HEIGHT,
+        )
         .center()
         .resizable(true)
         .fullscreen(false)
@@ -529,6 +532,7 @@ pub fn create_main_window(
     let build_started_at = Instant::now();
     match builder.build() {
         Ok(window) => {
+            crate::restore_main_window_state(&window);
             startup_trace.record_elapsed_step("native_window", "webview_build", build_started_at);
             debug!(
                 "Main window creation step completed: step=build url_kind={} duration_ms={} total_duration_ms={}",

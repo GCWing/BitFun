@@ -23,6 +23,10 @@ describe('isPeerLocalOnlyCommand', () => {
     expect(isPeerLocalOnlyCommand('get_prevent_sleep_enabled')).toBe(true);
     expect(isPeerLocalOnlyCommand('set_prevent_sleep_enabled')).toBe(true);
   });
+
+  it('keeps native main-window geometry control on the controller computer', () => {
+    expect(isPeerLocalOnlyCommand('set_main_window_transient_geometry')).toBe(true);
+  });
 });
 
 describe('peerInvokePriorityFor', () => {

@@ -1,8 +1,10 @@
 import React, { ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { currentMonitor, getCurrentWindow } from '@tauri-apps/api/window';
-import { PhysicalPosition, PhysicalSize } from '@tauri-apps/api/dpi';
+import { LogicalSize, PhysicalPosition, PhysicalSize } from '@tauri-apps/api/dpi';
 import { createLogger } from '@/shared/utils/logger';
 import {
+  MAIN_WINDOW_DEFAULT_SIZE,
+  MAIN_WINDOW_MIN_SIZE,
   TOOLBAR_COMPACT_MIN,
   TOOLBAR_COMPACT_SIZE,
   TOOLBAR_EXPANDED_MIN,
@@ -19,6 +21,78 @@ const log = createLogger('ToolbarModeContext');
 interface ToolbarModeProviderProps {
   children: ReactNode;
 }
+
+type MainWindow = ReturnType<typeof getCurrentWindow>;
+
+const setMainWindowTransientGeometry = async (transient: boolean): Promise<void> => {
+  const { systemAPI } = await import('@/infrastructure/api/service-api/SystemAPI');
+  await systemAPI.setMainWindowTransientGeometry(transient);
+};
+
+const restoreMainWindowFromToolbarMode = async (
+  win: MainWindow,
+  saved: SavedWindowState | null,
+  isMacOS: boolean,
+): Promise<void> => {
+  // Remove the toolbar constraint before restoring the normal bounds. The
+  // standard client minimum is re-applied once restoration completes.
+  await win.setMinSize(null);
+
+  if (isMacOS) {
+    try {
+      await win.setTitleBarStyle('overlay');
+    } catch (error) {
+      log.debug('Failed to restore macOS overlay title bar (early, ignored)', error);
+    }
+  } else {
+    try {
+      await win.setDecorations(saved?.isDecorated ?? false);
+    } catch (error) {
+      log.debug('Failed to restore window decorations (ignored)', error);
+    }
+  }
+
+  await Promise.all([
+    win.setResizable(true),
+    win.setSkipTaskbar(false),
+  ]);
+
+  if (saved) {
+    await win.setSize(new PhysicalSize(saved.width, saved.height));
+    await win.setPosition(new PhysicalPosition(saved.x, saved.y));
+
+    if (saved.isMaximized) {
+      await win.maximize();
+    }
+  } else {
+    await win.setSize(new LogicalSize(
+      MAIN_WINDOW_DEFAULT_SIZE.width,
+      MAIN_WINDOW_DEFAULT_SIZE.height,
+    ));
+    await win.center();
+  }
+
+  await win.setMinSize(new LogicalSize(
+    MAIN_WINDOW_MIN_SIZE.width,
+    MAIN_WINDOW_MIN_SIZE.height,
+  ));
+
+  if (isMacOS) {
+    try {
+      await win.setTitleBarStyle('overlay');
+      await new Promise<void>((resolve) => setTimeout(resolve, 60));
+      await win.setTitleBarStyle('overlay');
+    } catch (error) {
+      log.debug('Failed to re-apply macOS overlay title bar (ignored)', error);
+    }
+  }
+
+  // Keep the native side in transient mode until all normal geometry has been
+  // restored. Turning this off persists only the final standard-client state.
+  await win.setAlwaysOnTop(false);
+  await setMainWindowTransientGeometry(false);
+  await win.setFocus();
+};
 
 export const ToolbarModeProvider: React.FC<ToolbarModeProviderProps> = ({ children }) => {
   const [isToolbarMode, setIsToolbarMode] = useState(false);
@@ -39,20 +113,22 @@ export const ToolbarModeProvider: React.FC<ToolbarModeProviderProps> = ({ childr
   const savedWindowStateRef = useRef<SavedWindowState | null>(null);
 
   const enableToolbarMode = useCallback(async () => {
+    const win = getCurrentWindow();
+    const isMacOS =
+      typeof window !== 'undefined' &&
+      '__TAURI__' in window &&
+      typeof navigator !== 'undefined' &&
+      typeof navigator.platform === 'string' &&
+      navigator.platform.toUpperCase().includes('MAC');
+
     try {
       window.dispatchEvent(new CustomEvent('toolbar-mode-activating'));
 
-      const win = getCurrentWindow();
-      const isMacOS =
-        typeof window !== 'undefined' &&
-        '__TAURI__' in window &&
-        typeof navigator !== 'undefined' &&
-        typeof navigator.platform === 'string' &&
-        navigator.platform.toUpperCase().includes('MAC');
-
       const [position, size, isMaximized, isDecorated] = await Promise.all([
         win.outerPosition(),
-        win.outerSize(),
+        // setSize restores the inner size, so capture the matching metric.
+        // Using outerSize here grows decorated windows on every mode round-trip.
+        win.innerSize(),
         win.isMaximized(),
         (async () => {
           try {
@@ -76,6 +152,8 @@ export const ToolbarModeProvider: React.FC<ToolbarModeProviderProps> = ({ childr
 
       await import('./ToolbarMode');
 
+      // Persist the current normal bounds before any compact-window mutation.
+      await setMainWindowTransientGeometry(true);
       setIsToolbarMode(true);
       setIsExpanded(true);
 
@@ -89,8 +167,10 @@ export const ToolbarModeProvider: React.FC<ToolbarModeProviderProps> = ({ childr
         targetSize: TOOLBAR_EXPANDED_SIZE,
         minSize: TOOLBAR_EXPANDED_MIN,
       });
+      await win.setMinSize(new PhysicalSize(geometry.minWidth, geometry.minHeight));
+      await win.setAlwaysOnTop(true);
+
       const toolbarWindowOps: Array<Promise<unknown>> = [
-        win.setAlwaysOnTop(true),
         win.setSize(new PhysicalSize(geometry.width, geometry.height)),
         win.setPosition(new PhysicalPosition(geometry.x, geometry.y)),
         win.setResizable(true),
@@ -105,74 +185,35 @@ export const ToolbarModeProvider: React.FC<ToolbarModeProviderProps> = ({ childr
         }
       }
       await Promise.all(toolbarWindowOps);
-
-      await win.setMinSize(new PhysicalSize(geometry.minWidth, geometry.minHeight));
     } catch (error) {
       log.error('Failed to enable toolbar mode', error);
       setIsToolbarMode(false);
+      setIsExpanded(false);
+      try {
+        await restoreMainWindowFromToolbarMode(win, savedWindowStateRef.current, isMacOS);
+        savedWindowStateRef.current = null;
+      } catch (restoreError) {
+        // The native transient flag intentionally remains active if rollback
+        // cannot finish, so a partial floating geometry is never persisted.
+        log.error('Failed to restore main window after toolbar mode activation error', restoreError);
+      }
     }
   }, []);
 
   const disableToolbarMode = useCallback(async () => {
+    const win = getCurrentWindow();
+    const isMacOS =
+      typeof window !== 'undefined' &&
+      '__TAURI__' in window &&
+      typeof navigator !== 'undefined' &&
+      typeof navigator.platform === 'string' &&
+      navigator.platform.toUpperCase().includes('MAC');
+
     try {
       setIsToolbarMode(false);
       setIsExpanded(false);
-
-      const win = getCurrentWindow();
-      const isMacOS =
-        typeof window !== 'undefined' &&
-        '__TAURI__' in window &&
-        typeof navigator !== 'undefined' &&
-        typeof navigator.platform === 'string' &&
-        navigator.platform.toUpperCase().includes('MAC');
-      const saved = savedWindowStateRef.current;
-
-      await win.setMinSize(null);
-
-      if (isMacOS) {
-        try {
-          await win.setTitleBarStyle('overlay');
-        } catch (error) {
-          log.debug('Failed to restore macOS overlay title bar (early, ignored)', error);
-        }
-      } else {
-        try {
-          const targetDecorations = saved?.isDecorated ?? false;
-          await win.setDecorations(targetDecorations);
-        } catch (error) {
-          log.debug('Failed to restore window decorations (ignored)', error);
-        }
-      }
-
-      await Promise.all([
-        win.setAlwaysOnTop(false),
-        win.setResizable(true),
-        win.setSkipTaskbar(false),
-      ]);
-
-      if (saved) {
-        await win.setSize(new PhysicalSize(saved.width, saved.height));
-        await win.setPosition(new PhysicalPosition(saved.x, saved.y));
-
-        if (saved.isMaximized) {
-          await win.maximize();
-        }
-      } else {
-        await win.setSize(new PhysicalSize(1200, 800));
-        await win.center();
-      }
-
-      if (isMacOS) {
-        try {
-          await win.setTitleBarStyle('overlay');
-          await new Promise<void>((resolve) => setTimeout(resolve, 60));
-          await win.setTitleBarStyle('overlay');
-        } catch (error) {
-          log.debug('Failed to re-apply macOS overlay title bar (ignored)', error);
-        }
-      }
-
-      await win.setFocus();
+      await restoreMainWindowFromToolbarMode(win, savedWindowStateRef.current, isMacOS);
+      savedWindowStateRef.current = null;
     } catch (error) {
       log.error('Failed to disable toolbar mode', error);
     }

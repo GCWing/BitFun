@@ -271,6 +271,20 @@ export class SystemAPI {
   }
 
   /**
+   * Desktop only: protect normal main-window geometry while toolbar mode
+   * temporarily resizes the shared native window.
+   */
+  async setMainWindowTransientGeometry(transient: boolean): Promise<void> {
+    try {
+      await api.invoke('set_main_window_transient_geometry', {
+        request: { transient }
+      });
+    } catch (error) {
+      throw createTauriCommandError('set_main_window_transient_geometry', error, { transient });
+    }
+  }
+
+  /**
    * Desktop only: toggle OS-window fullscreen for the main window.
    *
    * This is intentionally not maximize and not app panel fullscreen. The
