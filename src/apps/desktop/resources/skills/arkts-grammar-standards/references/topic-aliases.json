@@ -1,0 +1,93 @@
+{
+  "variables": [
+    "var",
+    "let",
+    "const",
+    "变量",
+    "变量声明"
+  ],
+  "destructuring": [
+    "destructuring",
+    "destructure",
+    "解构",
+    "解构赋值",
+    "解构参数"
+  ],
+  "functions": [
+    "arrow function",
+    "function expression",
+    "nested function",
+    "generator",
+    "函数表达式",
+    "箭头函数",
+    "局部函数"
+  ],
+  "classes": [
+    "class",
+    "class expression",
+    "constructor",
+    "类",
+    "构造函数"
+  ],
+  "interfaces": [
+    "interface",
+    "inline object type",
+    "structural typing",
+    "接口",
+    "结构类型"
+  ],
+  "operators": [
+    "delete",
+    "typeof",
+    "in operator",
+    "for in",
+    "catch",
+    "as",
+    "type assertion",
+    "as const",
+    "运算符",
+    "类型查询",
+    "类型断言"
+  ],
+  "object-literal": [
+    "object literal",
+    "dynamic property",
+    "indexed access",
+    "record",
+    "Record",
+    "property by index",
+    "对象字面量",
+    "动态属性",
+    "动态索引"
+  ],
+  "strings": [
+    "template literal",
+    "template string",
+    "${",
+    "string interpolation",
+    "模板字符串",
+    "字符串插值"
+  ],
+  "namespace": [
+    "namespace",
+    "namespace as value",
+    "Cannot use namespace as a value",
+    "命名空间",
+    "namespace 作为值"
+  ],
+  "sendable": [
+    "sendable",
+    "@sendable",
+    "可发送",
+    "并发类型"
+  ],
+  "typescript-diff": [
+    "typescript",
+    "ts",
+    "migration",
+    "difference",
+    "改写",
+    "迁移",
+    "差异"
+  ]
+}

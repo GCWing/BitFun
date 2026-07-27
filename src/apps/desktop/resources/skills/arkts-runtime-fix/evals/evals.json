@@ -1,0 +1,17 @@
+{
+  "skill_name": "arkts-runtime-fix",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "点击应用就闪退，没有日志",
+      "expected_output": "加载 arkts-runtime-fix；优先从用户现有证据中建立 crash anchor；若缺少可用日志，可选地先 probe-faultlogger，命中则 fetch-faultlog 再 parse-jscrash-log，仍不足时再 collect-hilog；在拿到明确 anchor 前不大范围 Read/Glob 工程",
+      "files": []
+    },
+    {
+      "id": 2,
+      "prompt": "这是 jscrash 日志：TypeError ... at entry/src/main/ets/pages/Index.ets:10:5",
+      "expected_output": "直接 node 执行 jscrash-report.mjs（--log-text）或 parse-jscrash-log.mjs（--log-file），基于现有日志建立 anchor，再定向读取 Index.ets 相关入口，不额外拉取设备日志",
+      "files": []
+    }
+  ]
+}
