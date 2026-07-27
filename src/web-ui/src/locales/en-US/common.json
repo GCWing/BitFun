@@ -490,7 +490,8 @@
     "creating": "Creating...",
     "errorSelectParent": "Please select a parent directory",
     "errorEnterName": "Please enter a project name",
-    "errorCreateFailed": "Failed to create project"
+    "errorCreateFailed": "Failed to create project",
+    "errorInvalidName": "Project name cannot contain these characters: / \\ : * ? \" < > |"
   },
   "peerDirectoryPicker": {
     "loading": "Loading remote directories…",
