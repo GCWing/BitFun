@@ -753,7 +753,25 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     }
 
     let rafId: number | null = null;
-    const observer = new ResizeObserver(() => {
+    // Only width feeds the capsule measurement, and re-measuring clones the whole
+    // composer into the document (two forced layouts). The box height animates on
+    // every capsule ↔ multi-line flip, so reacting to height would run that clone
+    // once per frame of the transition — exactly while the user is typing at the
+    // wrap boundary. Ignore entries whose width is unchanged.
+    const lastObservedWidths = new WeakMap<Element, number>();
+    const observer = new ResizeObserver(entries => {
+      let widthChanged = false;
+      for (const entry of entries) {
+        const width = entry.contentRect.width;
+        const previousWidth = lastObservedWidths.get(entry.target);
+        if (previousWidth === undefined || Math.abs(previousWidth - width) >= 0.5) {
+          widthChanged = true;
+        }
+        lastObservedWidths.set(entry.target, width);
+      }
+      if (!widthChanged) {
+        return;
+      }
       if (rafId !== null) {
         cancelAnimationFrame(rafId);
       }

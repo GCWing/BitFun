@@ -374,7 +374,6 @@
         // Match the 7px box padding so the round Plus button keeps equal
         // clearance on all four sides (top/bottom/left/right)
         margin-right: 7px;
-        animation: none;
 
         // Enlarge the Plus button to match the capsule height
         .bitfun-chat-input__agent-boost-add {
@@ -418,7 +417,6 @@
         align-items: center;
         gap: $size-gap-1;
         padding: 0;
-        animation: none;
 
         // Enlarge send/stop button to match the capsule height
         .bitfun-chat-input__send-button {
@@ -631,11 +629,16 @@
     background: var(--color-bg-scene);
     backdrop-filter: blur(16px) saturate(1.2);
     -webkit-backdrop-filter: blur(16px) saturate(1.2);
+    // `max-height` must never animate: the box height is `auto`, so an
+    // interpolating `max-height` clamps the border box below its own content
+    // while `overflow` stays visible (popovers need it) — the text and the
+    // action row then paint *outside* the rounded border for the length of the
+    // transition. Only `min-height` is animated: it can never fall below the
+    // content, so it smooths the collapse without ever clipping the card.
     transition:
       border-radius 0.32s cubic-bezier(0.4, 0, 0.2, 1),
       padding 0.32s cubic-bezier(0.4, 0, 0.2, 1),
       min-height 0.32s cubic-bezier(0.4, 0, 0.2, 1),
-      max-height 0.32s cubic-bezier(0.4, 0, 0.2, 1),
       box-shadow 0.32s cubic-bezier(0.4, 0, 0.2, 1),
       border-color 0.32s cubic-bezier(0.4, 0, 0.2, 1);
     box-shadow: 
@@ -1721,12 +1724,18 @@
     padding: 0 0 $size-gap-2;
   }
   
+  // Keep the action groups free of entrance animations. The composer mounts in
+  // capsule mode, which used to null the animation out, so a reveal here never
+  // played on mount — it only restarted on every capsule → multi-line flip, and
+  // its `both` fill held the group at `opacity: 0` through the delay. That left
+  // the plus button and the model/mic/send cluster blank for ~0.2s and still
+  // sliding ~0.45s after the box had already resized, which reads as the card
+  // and its controls desyncing on a single keystroke at the wrap boundary.
   &__actions-left {
     display: flex;
     align-items: center;
     gap: $size-gap-1;
     min-width: 0;
-    animation: bitfun-stacked-reveal 0.28s cubic-bezier(0.4, 0, 0.2, 1) 0.17s both;
   }
 
   &__model-usage-group {
@@ -1741,7 +1750,6 @@
     align-items: center;
     gap: $size-gap-1;
     height: 100%;
-    animation: bitfun-stacked-reveal 0.24s cubic-bezier(0.4, 0, 0.2, 1) 0.22s both;
   }
 
   &__split-actions {
@@ -2113,17 +2121,6 @@
   from {
     opacity: 0;
     transform: translateY(4px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-@keyframes bitfun-stacked-reveal {
-  from {
-    opacity: 0;
-    transform: translateY(6px);
   }
   to {
     opacity: 1;
