@@ -1,0 +1,32 @@
+#**
+# Line-ending policy.
+#
+# Git for Windows defaults to `core.autocrlf=true`, which rewrites every text
+# file to CRLF on checkout. Two BitFun paths break silently when that happens:
+#
+#   1. `src/apps/relay-server/*.sh` is embedded into the Desktop binary with
+#      `include_str!` and uploaded verbatim to the relay host. A CR turns each
+#      blank line into `$'\r': command not found`, and `set -e` aborts the
+#      one-click deploy on the first one.
+#   2. Rust raw string literals (`r#"..."#`) that hold remote bash carry the
+#      checkout's CRLF into the generated scripts the same way.
+#
+# Force LF for everything that has to run on a POSIX host, regardless of where
+# it was checked out. Windows-only scripts (`*.ps1`) are left alone — PowerShell
+# reads LF fine and pinning them would churn every non-Windows working tree.
+#**
+
+*.sh                text eol=lf
+*.bash              text eol=lf
+*.rs                text eol=lf
+*.py                text eol=lf
+*.mjs               text eol=lf
+*.cjs               text eol=lf
+
+Dockerfile          text eol=lf
+Dockerfile.*        text eol=lf
+*.Dockerfile        text eol=lf
+.dockerignore       text eol=lf
+docker-compose.yml  text eol=lf
+docker-compose.*.yml text eol=lf
+Caddyfile           text eol=lf

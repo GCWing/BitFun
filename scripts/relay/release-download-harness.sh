@@ -149,7 +149,16 @@ run_case() {
   fi
 }
 
-GITHUB_URL="https://github.com/GCWing/BitFun/releases/download/v0.2.13/${RELAY_ASSET}"
+# Read the tag out of the script under test rather than hardcoding one: Desktop
+# pins BITFUN_RELEASE_TAG to its own crate version, so a literal here silently
+# rots at every release bump and every `EXPECT_SOURCE="$GITHUB_URL"` case fails.
+RELEASE_TAG="$(sed -n 's/^export BITFUN_RELEASE_TAG="\(.*\)"$/\1/p' "$SCRIPT_UNDER_TEST" | head -n1)"
+RELEASE_TAG="${RELEASE_TAG:-latest}"
+if [ "$RELEASE_TAG" = "latest" ]; then
+  GITHUB_URL="https://github.com/GCWing/BitFun/releases/latest/download/${RELAY_ASSET}"
+else
+  GITHUB_URL="https://github.com/GCWing/BitFun/releases/download/${RELEASE_TAG}/${RELAY_ASSET}"
+fi
 
 # The reported case: GitHub is reachable but crawling, the mirror is fast.
 # Ranking must send the download to the mirror instead of crawling for an hour.

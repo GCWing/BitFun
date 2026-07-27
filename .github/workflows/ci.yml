@@ -21,6 +21,38 @@ permissions:
   contents: read
 
 jobs:
+  # ── Shell deploy assets: LF endings + syntax ───────────────────────
+  # Relay one-click deploy embeds these scripts into the Desktop binary and
+  # uploads them verbatim to a Linux host, where a single CR aborts the deploy
+  # with `$'\r': command not found`. .gitattributes pins LF; this is the guard.
+  shell-scripts:
+    name: Shell Deploy Scripts
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Reject CRLF in shell and deploy assets
+        run: |
+          bad=$(git ls-files -z \
+                  '*.sh' '*.bash' 'Dockerfile' 'Dockerfile.*' '*.Dockerfile' 'Caddyfile' \
+                  'docker-compose.yml' 'docker-compose.*.yml' \
+                | xargs -0 -r grep -lU $'\r' || true)
+          if [ -n "$bad" ]; then
+            echo "::error::CRLF line endings found; these must stay LF (see .gitattributes):"
+            echo "$bad"
+            exit 1
+          fi
+          echo "All shell and deploy assets are LF-only."
+
+      - name: bash -n every tracked shell script
+        run: |
+          rc=0
+          while IFS= read -r -d '' f; do
+            bash -n "$f" || { echo "::error file=$f::bash syntax error"; rc=1; }
+          done < <(git ls-files -z '*.sh' '*.bash')
+          exit "$rc"
+
   # ── CLI: independent tests ─────────────────────────────────────────
   cli-test:
     name: CLI Tests (${{ matrix.os }})

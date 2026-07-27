@@ -97,6 +97,10 @@ const DEPLOY_STATE_DIR: &str = ".bitfun/relay-deploy";
 const SOURCE_DIR: &str = ".bitfun/relay-src";
 /// Line printed by task scripts on success; polled to detect completion.
 const TASK_DONE_MARKER: &str = "RELAY_TASK_DONE";
+/// How long the seeded `preparing` flag may sit with no live driver process
+/// before the task counts as dead. Covers PTY startup and the shell prompt; an
+/// alive driver (an open sudo password prompt, say) is never bounded by this.
+const PREPARE_GRACE_SECONDS: u64 = 90;
 
 fn release_tag_for_version(version: &str) -> String {
     if version.contains("-nightly.") {
@@ -303,7 +307,7 @@ echo "port_owned=$PORT_OWNED"
 "#,
         port = port,
     );
-    let (stdout, _stderr, code) = manager.execute_command(connection_id, &script).await?;
+    let (stdout, _stderr, code) = exec_script(manager, connection_id, &script).await?;
     if code != 0 {
         return Err(anyhow!("preflight probe failed (exit {code})"));
     }
@@ -469,6 +473,9 @@ pub async fn start_task(
     let body_path = format!("{dir}/{stem}-body.sh");
     let script_path = format!("{dir}/{stem}.sh");
     let port_path = format!("{dir}/relay.port");
+    // Upload as LF-only: bash on the relay host runs a stray CR as a command.
+    let body = to_unix_script(&body);
+    let driver = to_unix_script(&driver);
     manager
         .sftp_write(connection_id, &body_path, body.as_bytes())
         .await?;
@@ -481,18 +488,21 @@ pub async fn start_task(
             .await?;
     }
     // Seed preparing flag before the PTY runs the driver so early polls do not
-    // race into "failed" (no pid / no flag yet).
+    // race into "failed" (no pid / no flag yet). Clear any driver pid from a
+    // previous attempt so a recycled pid cannot read as "still preparing".
     let prepare_flag = format!("{dir}/{stem}.preparing");
     let log_path = format!("{dir}/{stem}.log");
     let pid_path = format!("{dir}/{stem}.pid");
+    let driver_pid_path = format!("{dir}/{stem}.driver.pid");
     exec_ok(
         manager,
         connection_id,
         &format!(
-            "chmod 700 {} {} && rm -f {} {} && : > {} && touch {}",
+            "chmod 700 {} {} && rm -f {} {} {} && : > {} && touch {}",
             shell_quote_posix(&body_path),
             shell_quote_posix(&script_path),
             shell_quote_posix(&pid_path),
+            shell_quote_posix(&driver_pid_path),
             shell_quote_posix(&log_path),
             shell_quote_posix(&log_path),
             shell_quote_posix(&prepare_flag),
@@ -516,12 +526,33 @@ pub async fn poll_task(
 D="$HOME/{DEPLOY_STATE_DIR}"
 LOG="$D/{stem}.log"
 PIDF="$D/{stem}.pid"
+DRVF="$D/{stem}.driver.pid"
 PREPF="$D/{stem}.preparing"
 running=0
 if [ -f "$PIDF" ] && kill -0 "$(cat "$PIDF" 2>/dev/null)" 2>/dev/null; then running=1; fi
-# Interactive prepare phase (sudo prompts) before nohup starts.
+# Interactive prepare phase (sudo prompts) before nohup starts. The prompt can
+# sit for minutes, so an alive driver keeps "preparing" regardless of age.
 preparing=0
-if [ -f "$PREPF" ]; then preparing=1; fi
+driver_gone=0
+if [ -f "$PREPF" ]; then
+  preparing=1
+  if [ ! -f "$DRVF" ] || ! kill -0 "$(cat "$DRVF" 2>/dev/null)" 2>/dev/null; then
+    # No driver process. Either the PTY has not started it yet (normal for the
+    # first few seconds) or it died before installing its cleanup trap — a bad
+    # script upload, for instance. Without this bound the flag start_task seeded
+    # would never clear and the wizard would report "running" forever.
+    prep_age=-1
+    prep_now="$(date +%s 2>/dev/null || echo '')"
+    prep_mtime="$(stat -c %Y "$PREPF" 2>/dev/null || stat -f %m "$PREPF" 2>/dev/null || echo '')"
+    if [ -n "$prep_now" ] && [ -n "$prep_mtime" ]; then
+      prep_age=$((prep_now - prep_mtime))
+    fi
+    if [ "$prep_age" -ge {prepare_grace_seconds} ]; then
+      preparing=0
+      driver_gone=1
+    fi
+  fi
+fi
 log_exists=0
 size=0
 if [ -f "$LOG" ]; then log_exists=1; size=$(wc -c < "$LOG" | tr -d ' '); fi
@@ -531,6 +562,7 @@ if [ -f "$LOG" ] && grep -q {TASK_DONE_MARKER} "$LOG"; then marker=1; fi
 # briefly looks gone; treat a growing log without a marker as running.
 echo "running=$running"
 echo "preparing=$preparing"
+echo "driver_gone=$driver_gone"
 echo "log_exists=$log_exists"
 echo "size=$size"
 echo "marker=$marker"
@@ -538,8 +570,9 @@ echo "---"
 if [ -f "$LOG" ]; then tail -c +{from} "$LOG"; fi
 "#,
         from = cursor.saturating_add(1),
+        prepare_grace_seconds = PREPARE_GRACE_SECONDS,
     );
-    let (stdout, _stderr, code) = manager.execute_command(connection_id, &script).await?;
+    let (stdout, _stderr, code) = exec_script(manager, connection_id, &script).await?;
     if code != 0 {
         return Err(anyhow!("poll failed (exit {code})"));
     }
@@ -553,6 +586,7 @@ if [ -f "$LOG" ]; then tail -c +{from} "$LOG"; fi
     };
     let running = get("running") == "1";
     let preparing = get("preparing") == "1";
+    let driver_gone = get("driver_gone") == "1";
     let log_exists = get("log_exists") == "1";
     let marker = get("marker") == "1";
     let size: u64 = get("size").parse().unwrap_or(cursor);
@@ -560,14 +594,24 @@ if [ -f "$LOG" ]; then tail -c +{from} "$LOG"; fi
         marker,
         running,
         preparing,
+        driver_gone,
         log_exists,
         size,
         cursor,
         !output.is_empty(),
     );
+    // The driver writes its errors to the PTY, not the log, so a prepare-phase
+    // death leaves the wizard's log pane empty. Say where to look.
+    let mut output = output.to_string();
+    if status == RelayTaskStatus::Failed && driver_gone && size == 0 {
+        output.push_str(
+            "\n>>> The prepare step exited before starting the task. \
+             See the terminal above for the error.\n",
+        );
+    }
     Ok(RelayTaskPoll {
         cursor: size,
-        output: output.to_string(),
+        output,
         status,
     })
 }
@@ -626,11 +670,12 @@ STEM="{stem}"
 LOG="$D/$STEM.log"
 PIDF="$D/$STEM.pid"
 PREPF="$D/$STEM.preparing"
+DRVF="$D/$STEM.driver.pid"
 BODY="$D/$STEM-body.sh"
 mkdir -p "$D" 2>/dev/null
 was_active=0
 [ -f "$PREPF" ] && was_active=1
-rm -f "$PREPF"
+rm -f "$PREPF" "$DRVF"
 kill_tree() {{
   local p="$1"
   local sig="$2"
@@ -671,7 +716,7 @@ exit 0
         stem = stem,
         compose_teardown = compose_teardown,
     );
-    let (_stdout, stderr, code) = manager.execute_command(connection_id, &script).await?;
+    let (_stdout, stderr, code) = exec_script(manager, connection_id, &script).await?;
     if code != 0 {
         return Err(anyhow!("cancel failed (exit {code}): {stderr}"));
     }
@@ -682,10 +727,12 @@ exit 0
 ///
 /// Pending (PTY not started yet) and active prepare/build must not look like
 /// failure — the wizard polls immediately after staging scripts.
+#[allow(clippy::too_many_arguments)]
 fn decide_task_status(
     marker: bool,
     running: bool,
     preparing: bool,
+    driver_gone: bool,
     log_exists: bool,
     size: u64,
     cursor: u64,
@@ -694,7 +741,16 @@ fn decide_task_status(
     if marker {
         return RelayTaskStatus::Succeeded;
     }
-    if running || preparing || !log_exists || size == 0 {
+    if running || preparing {
+        return RelayTaskStatus::Running;
+    }
+    // The prepare step is definitively dead and never handed off to the body.
+    // Checked before the empty-log case, which would otherwise read as "still
+    // starting up" forever.
+    if driver_gone {
+        return RelayTaskStatus::Failed;
+    }
+    if !log_exists || size == 0 {
         return RelayTaskStatus::Running;
     }
     // Log still growing since last poll — keep running even if pid check flaked.
@@ -778,7 +834,7 @@ pub async fn import_account(
         name = RELAY_CONTAINER_NAME,
         db = RELAY_CONTAINER_DB,
     );
-    let (stdout, stderr, code) = manager.execute_command(connection_id, &cmd).await?;
+    let (stdout, stderr, code) = exec_script(manager, connection_id, &cmd).await?;
     if code != 0 {
         let detail = relay_admin_error(&stdout, &stderr);
         return Err(anyhow!(detail));
@@ -829,8 +885,31 @@ async fn resolve_home(manager: &SSHConnectionManager, connection_id: &str) -> Re
     Ok(home.to_string())
 }
 
+/// Strip CR from anything sent to the relay host as bash.
+///
+/// Git for Windows checks out with CRLF by default, so both `include_str!`
+/// (mirror.sh / release-download.sh) and this file's own `r#"..."#` remote
+/// scripts can carry CRLF into the generated script. Remote bash then executes
+/// the CR on the first blank line, prints `line N: $'\r': command not found`
+/// and — under `set -euo pipefail` — aborts the deploy right there. `.gitattributes`
+/// pins LF for fresh checkouts; this keeps existing CRLF working trees safe too.
+fn to_unix_script(script: &str) -> String {
+    script.replace("\r\n", "\n")
+}
+
+/// `execute_command` for remote bash, with line endings normalized first.
+async fn exec_script(
+    manager: &SSHConnectionManager,
+    connection_id: &str,
+    script: &str,
+) -> Result<(String, String, i32)> {
+    manager
+        .execute_command(connection_id, &to_unix_script(script))
+        .await
+}
+
 async fn exec_ok(manager: &SSHConnectionManager, connection_id: &str, command: &str) -> Result<()> {
-    let (stdout, stderr, code) = manager.execute_command(connection_id, command).await?;
+    let (stdout, stderr, code) = exec_script(manager, connection_id, command).await?;
     if code != 0 {
         return Err(anyhow!(
             "remote command failed (exit {code}): {}",
@@ -917,10 +996,47 @@ bitfun_ensure_tools() {
   fi
 }
 
-bitfun_fix_docker_home() {
+# Owner of $HOME — the SSH user even when this script runs elevated with their
+# HOME preserved (BITFUN_KEEP_HOME).
+bitfun_home_owner() {
+  stat -c '%U:%G' "$HOME" 2>/dev/null || stat -f '%Su:%Sg' "$HOME" 2>/dev/null || true
+}
+
+# Make DOCKER_CONFIG usable by whoever is running now.
+#
+# The Docker-install task runs as root but keeps the SSH user's HOME, so it used
+# to leave ~/.bitfun/docker-config (and its config.json) owned by root:root 0700.
+# Every later unprivileged deploy then hit
+#   WARNING: Error loading config file: .../config.json: permission denied
+# and the docker CLI misparsed the build that followed. Repair the ownership when
+# we have the rights, and otherwise move to a config dir we can actually read.
+bitfun_fix_docker_config() {
   export DOCKER_CONFIG="${DOCKER_CONFIG:-$HOME/.bitfun/docker-config}"
-  mkdir -p "$DOCKER_CONFIG"
+  mkdir -p "$DOCKER_CONFIG" 2>/dev/null || true
+  if [ "$(id -u)" = "0" ]; then
+    # Hand the tree back to the SSH user; root reads it either way.
+    local owner
+    owner="$(bitfun_home_owner)"
+    if [ -n "$owner" ] && [ "$owner" != "root:root" ]; then
+      chown -R "$owner" "$DOCKER_CONFIG" 2>/dev/null || true
+    fi
+  elif [ ! -r "$DOCKER_CONFIG" ] || [ ! -w "$DOCKER_CONFIG" ] \
+    || { [ -e "$DOCKER_CONFIG/config.json" ] && [ ! -r "$DOCKER_CONFIG/config.json" ]; }; then
+    echo ">>> $DOCKER_CONFIG is not usable by $(id -un) (left root-owned by an earlier install)."
+    bitfun_priv chown -R "$(id -un):$(id -gn)" "$DOCKER_CONFIG" 2>/dev/null || true
+    if [ ! -r "$DOCKER_CONFIG" ] || [ ! -w "$DOCKER_CONFIG" ] \
+      || { [ -e "$DOCKER_CONFIG/config.json" ] && [ ! -r "$DOCKER_CONFIG/config.json" ]; }; then
+      DOCKER_CONFIG="$HOME/.bitfun/docker-config-$(id -u)"
+      export DOCKER_CONFIG
+      mkdir -p "$DOCKER_CONFIG"
+      echo ">>> Could not repair it; using DOCKER_CONFIG=$DOCKER_CONFIG instead."
+    fi
+  fi
   chmod 700 "$DOCKER_CONFIG" 2>/dev/null || true
+}
+
+bitfun_fix_docker_home() {
+  bitfun_fix_docker_config
   if [ -e "$HOME/.docker" ] && [ ! -w "$HOME/.docker" ]; then
     echo ">>> $HOME/.docker is not writable (often root-owned buildx lock)."
     echo ">>> Fixing ownership..."
@@ -987,9 +1103,20 @@ bitfun_resolve_docker_mode() {
   return 1
 }
 
+# POSIX single-quote each argument so `sg -c` cannot re-split or glob them.
+# `sg docker -c "docker $*"` loses argument boundaries: a context path with a
+# space, or a `-f '{{.State.Running}}'` format string, arrives mangled.
+bitfun_shell_join() {
+  local out="" arg
+  for arg in "$@"; do
+    out="$out'$(printf '%s' "$arg" | sed "s/'/'\\\\''/g")' "
+  done
+  printf '%s' "$out"
+}
+
 bitfun_docker() {
   case "${BITFUN_DOCKER_MODE:-direct}" in
-    sg) sg docker -c "docker $*" ;;
+    sg) sg docker -c "$(bitfun_shell_join docker "$@")" ;;
     sudo)
       if sudo -n true >/dev/null 2>&1; then sudo -n docker "$@"; else sudo docker "$@"; fi
       ;;
@@ -1003,12 +1130,15 @@ bitfun_run_deploy_sh() {
   # Prefer already-resolved mirror mode so deploy.sh does not re-probe.
   local mirror_mode="${BITFUN_MIRROR:-${BITFUN_MIRROR_MODE:-auto}}"
   # DOCKER_BUILDKIT is required for Dockerfile cargo registry/git/target mounts.
+  # DOCKER_CONFIG is deliberately NOT forwarded to the sudo branches: root would
+  # write config.json into the SSH user's ~/.bitfun/docker-config and every later
+  # unprivileged run would then fail to read its own Docker config. Root falls
+  # back to /root/.docker, which it owns.
   case "${BITFUN_DOCKER_MODE:-direct}" in
     sudo)
       if sudo -n true >/dev/null 2>&1; then
         sudo -n -E env RELAY_PORT="$port" RELAY_CARGO_BUILD_JOBS="${RELAY_CARGO_BUILD_JOBS:-}" \
           DOCKER_BUILDKIT=1 COMPOSE_DOCKER_CLI_BUILD=1 BUILDKIT_PROGRESS=plain \
-          DOCKER_CONFIG="${DOCKER_CONFIG:-}" \
           BITFUN_MIRROR="$mirror_mode" \
           BITFUN_USE_CN_MIRROR="${BITFUN_USE_CN_MIRROR:-0}" \
           BITFUN_APT_MIRROR="${BITFUN_APT_MIRROR:-}" \
@@ -1019,7 +1149,6 @@ bitfun_run_deploy_sh() {
       else
         sudo -E env RELAY_PORT="$port" RELAY_CARGO_BUILD_JOBS="${RELAY_CARGO_BUILD_JOBS:-}" \
           DOCKER_BUILDKIT=1 COMPOSE_DOCKER_CLI_BUILD=1 BUILDKIT_PROGRESS=plain \
-          DOCKER_CONFIG="${DOCKER_CONFIG:-}" \
           BITFUN_MIRROR="$mirror_mode" \
           BITFUN_USE_CN_MIRROR="${BITFUN_USE_CN_MIRROR:-0}" \
           BITFUN_APT_MIRROR="${BITFUN_APT_MIRROR:-}" \
@@ -1061,6 +1190,10 @@ PIDF="$D/$STEM.pid"
 BODY="$D/$STEM-body.sh"
 mkdir -p "$D"
 chmod 700 "$D"
+# Claim the prepare phase before anything that can fail: poll_task treats a
+# missing/dead driver pid as "prepare died" once its grace window elapses.
+DRIVER_PIDF="$D/$STEM.driver.pid"
+echo $$ >"$DRIVER_PIDF"
 {helpers}
 
 echo ">>> BitFun relay {kind}: interactive prepare"
@@ -1078,16 +1211,19 @@ if [ -n "${{BITFUN_KEEP_HOME:-}}" ]; then
   LOG="$D/$STEM.log"
   PIDF="$D/$STEM.pid"
   BODY="$D/$STEM-body.sh"
-  PREPARE_FLAG="$D/$STEM.preparing"
+  DRIVER_PIDF="$D/$STEM.driver.pid"
 fi
 PREPARE_FLAG="$D/$STEM.preparing"
+# Re-claim the prepare phase: an elevated re-exec is a different process, and D
+# may have moved with HOME.
+echo $$ >"$DRIVER_PIDF"
 # Keep/refresh the preparing flag seeded by start_task — do not clear it first
 # or early polls can race into "failed".
 rm -f "$PIDF"
 : >"$LOG"
 touch "$PREPARE_FLAG"
 echo ">>> prepare starting (uid=$(id -u) home=$HOME)" | tee -a "$LOG"
-cleanup_prepare() {{ rm -f "$PREPARE_FLAG"; }}
+cleanup_prepare() {{ rm -f "$PREPARE_FLAG" "$DRIVER_PIDF"; }}
 trap cleanup_prepare EXIT
 # Region/mirrors before apt tool install and Docker/GitHub downloads.
 export BITFUN_REPO_GIT_URL="{REPO_GIT_URL}"
@@ -1095,7 +1231,9 @@ export BITFUN_REPO_TARBALL_URL="{REPO_TARBALL_URL}"
 bitfun_mirror_init
 bitfun_ensure_tools
 export DOCKER_CONFIG="${{DOCKER_CONFIG:-$HOME/.bitfun/docker-config}}"
-mkdir -p "$DOCKER_CONFIG"
+# May exist root-owned from an older Docker-install run; repair or relocate it
+# instead of letting an unwritable dir abort the run under `set -e`.
+bitfun_fix_docker_config
 
 # install: Docker is not present yet — do NOT resolve daemon access here.
 if [ "{kind}" = "install" ]; then
@@ -1139,7 +1277,7 @@ if [ "{kind}" = "install" ]; then
   fi
   code=${{PIPESTATUS[0]}}
   set -e
-  rm -f "$PREPARE_FLAG" "$PIDF"
+  rm -f "$PREPARE_FLAG" "$PIDF" "$DRIVER_PIDF"
   trap - EXIT
   if [ "$code" -ne 0 ]; then
     echo "ERROR: Docker install failed (exit $code)" | tee -a "$LOG"
@@ -1164,7 +1302,9 @@ nohup env BITFUN_DOCKER_MODE="$BITFUN_DOCKER_MODE" DOCKER_CONFIG="$DOCKER_CONFIG
   BITFUN_REPO_TARBALL_URL="${{BITFUN_REPO_TARBALL_URL:-}}" \
   "${{RUNNER[@]}}" "$BODY" >"$LOG" 2>&1 < /dev/null &
 echo $! >"$PIDF"
-rm -f "$PREPARE_FLAG"
+# The body pid now drives liveness; `exec tail` below would leave a stale driver
+# pid behind, so retire it here rather than in the (never-reached) EXIT trap.
+rm -f "$PREPARE_FLAG" "$DRIVER_PIDF"
 trap - EXIT
 echo ">>> Following log..."
 exec tail -n +1 -f "$LOG"
@@ -1188,7 +1328,7 @@ set -euo pipefail
 # Prefer the original SSH user's home (set by elevated driver).
 if [ -n "${{BITFUN_KEEP_HOME:-}}" ]; then export HOME="$BITFUN_KEEP_HOME"; fi
 export DOCKER_CONFIG="${{DOCKER_CONFIG:-$HOME/.bitfun/docker-config}}"
-mkdir -p "$DOCKER_CONFIG"
+mkdir -p "$DOCKER_CONFIG" 2>/dev/null || true
 # When elevated as root, add the original login user to the docker group.
 DEPLOY_USER="${{SUDO_USER:-}}"
 if [ -z "$DEPLOY_USER" ] || [ "$DEPLOY_USER" = "root" ]; then
@@ -1233,6 +1373,15 @@ if [ "${{BITFUN_MIRROR_MODE:-}}" = "cn" ]; then
   bitfun_mirror_apply_docker_daemon || true
 fi
 bitfun_fix_docker_home
+# This body runs as root but with the SSH user's HOME, so anything it created
+# under ~/.bitfun (notably docker-config/config.json) is root-owned. Left that
+# way, the next unprivileged deploy cannot read its own Docker config and the
+# build that follows fails. Hand the tree back before finishing.
+if [ "$(id -u)" = "0" ] && [ -n "$DEPLOY_USER" ] && [ "$DEPLOY_USER" != "root" ] \
+   && [ -d "$HOME/.bitfun" ]; then
+  echo ">>> Restoring ownership of $HOME/.bitfun to $DEPLOY_USER..."
+  chown -R "$DEPLOY_USER" "$HOME/.bitfun" 2>/dev/null || true
+fi
 # Verify without relying on a new login session
 if docker info >/dev/null 2>&1 \
    || sg docker -c 'docker info' >/dev/null 2>&1 \
@@ -1546,6 +1695,10 @@ export DOCKER_BUILDKIT=1
 export COMPOSE_DOCKER_CLI_BUILD=1
 export BUILDKIT_PROGRESS=plain
 BITFUN_DOCKER_MODE="${{BITFUN_DOCKER_MODE:-direct}}"
+# Repair DOCKER_CONFIG unconditionally: when the driver already resolved a
+# non-direct mode, bitfun_resolve_docker_mode (which normally does this) is
+# skipped below, and the docker CLI then fails on an unreadable config.json.
+bitfun_fix_docker_config
 if [ "$BITFUN_DOCKER_MODE" = "direct" ] && ! docker info >/dev/null 2>&1; then
   bitfun_resolve_docker_mode
 fi
@@ -1617,11 +1770,11 @@ echo {TASK_DONE_MARKER}
 mod tests {
     use super::{
         classify_docker_access, decide_task_status, deploy_body_script_with_checksums,
-        parse_preflight,
+        install_docker_body_script, interactive_driver_script, parse_preflight,
         prepare_helpers_bash, release_binary_deploy_bash, release_tag_for_version,
-        split_poll_stdout, sync_source_bash, verified_checksum_exports,
+        split_poll_stdout, sync_source_bash, to_unix_script, verified_checksum_exports,
         verified_release_checksums, verify_minisign, DockerAccessMode, RelayTaskStatus,
-        RELAY_MIRROR_SH, RELEASE_PUBKEY,
+        RELAY_MIRROR_SH, RELAY_RELEASE_DOWNLOAD_SH, RELEASE_PUBKEY,
     };
 
     #[test]
@@ -1662,6 +1815,161 @@ mod tests {
         assert!(
             helpers.contains("bitfun_run_deploy_sh"),
             "prepare helpers must keep deploy runner"
+        );
+    }
+
+    /// A CRLF checkout (Git for Windows' `core.autocrlf=true` default) used to
+    /// ship CRLF straight into the uploaded scripts, and the relay host failed
+    /// with `line 37: $'\r': command not found` — line 37 being the first blank
+    /// line of the embedded mirror.sh.
+    #[test]
+    fn embedded_scripts_are_lf_only() {
+        for (name, script) in [
+            ("mirror.sh", RELAY_MIRROR_SH),
+            ("release-download.sh", RELAY_RELEASE_DOWNLOAD_SH),
+        ] {
+            assert!(
+                !script.contains('\r'),
+                "{name} must be checked out LF-only (see .gitattributes)"
+            );
+        }
+    }
+
+    #[test]
+    fn uploaded_scripts_are_normalized_to_lf() {
+        // Simulate a CRLF working tree: every generated script must still leave
+        // this crate as LF-only bash.
+        let crlf = "#!/usr/bin/env bash\r\nset -euo pipefail\r\n\r\necho hi\r\n";
+        assert_eq!(
+            to_unix_script(crlf),
+            "#!/usr/bin/env bash\nset -euo pipefail\n\necho hi\n"
+        );
+
+        for (name, script) in [
+            ("deploy driver", interactive_driver_script("deploy", "deploy")),
+            (
+                "install driver",
+                interactive_driver_script("install-docker", "install"),
+            ),
+            ("deploy body", deploy_body_script_with_checksums(9700, "")),
+            ("install body", install_docker_body_script()),
+        ] {
+            assert!(
+                !to_unix_script(&script).contains('\r'),
+                "{name} must reach the relay host without CR"
+            );
+        }
+    }
+
+    /// `deploy.sh` on the relay host is this driver, not the repo script — it
+    /// was previously the only generated script with no syntax coverage.
+    #[cfg(unix)]
+    #[test]
+    fn generated_driver_scripts_are_valid_bash() {
+        for (stem, kind) in [("deploy", "deploy"), ("install-docker", "install")] {
+            let script = to_unix_script(&interactive_driver_script(stem, kind));
+            let output = std::process::Command::new("bash")
+                .args(["-n", "-c", &script])
+                .output()
+                .expect("parse generated driver script");
+            assert!(
+                output.status.success(),
+                "generated {kind} driver is invalid:\n{}",
+                String::from_utf8_lossy(&output.stderr)
+            );
+        }
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn generated_install_body_is_valid_bash() {
+        let script = to_unix_script(&install_docker_body_script());
+        let output = std::process::Command::new("bash")
+            .args(["-n", "-c", &script])
+            .output()
+            .expect("parse generated install script");
+        assert!(
+            output.status.success(),
+            "generated install body is invalid:\n{}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+
+    /// The Docker-install task runs as root with the SSH user's HOME, so it
+    /// creates ~/.bitfun/docker-config root-owned. Left that way, the next
+    /// unprivileged deploy hits `config.json: permission denied` and the docker
+    /// CLI mis-dispatches the runtime image build.
+    #[test]
+    fn docker_config_ownership_is_repaired_across_privilege_levels() {
+        let helpers = prepare_helpers_bash();
+        assert!(
+            helpers.contains("bitfun_fix_docker_config"),
+            "helpers must expose a DOCKER_CONFIG repair"
+        );
+
+        let install = install_docker_body_script();
+        assert!(
+            install.contains(r#"chown -R "$DEPLOY_USER" "$HOME/.bitfun""#),
+            "root install must hand ~/.bitfun back to the SSH user"
+        );
+
+        // The driver exports BITFUN_DOCKER_MODE, so the body skips
+        // bitfun_resolve_docker_mode (which is the other caller of the repair)
+        // for every non-direct mode. It has to repair the config itself.
+        let body = deploy_body_script_with_checksums(9700, "");
+        let repair = body
+            .find("bitfun_fix_docker_config")
+            .expect("deploy body must repair DOCKER_CONFIG");
+        let mode_check = body
+            .find(r#"if [ "$BITFUN_DOCKER_MODE" = "direct" ]"#)
+            .expect("deploy body must keep the direct-mode probe");
+        assert!(
+            repair < mode_check,
+            "DOCKER_CONFIG must be repaired before any docker call, not only in direct mode"
+        );
+    }
+
+    /// `sg docker -c "docker $*"` re-parsed its arguments through a second
+    /// shell, losing every boundary — paths with spaces and `-f '{{...}}'`
+    /// format strings arrived mangled.
+    #[test]
+    fn sg_docker_preserves_argument_boundaries() {
+        let helpers = prepare_helpers_bash();
+        // Match the dispatch line, not the comment above it that quotes the
+        // old form for context.
+        assert!(
+            !helpers.contains(r#"sg) sg docker -c "docker $*""#),
+            "sg path must not re-split arguments through an unquoted $*"
+        );
+        assert!(
+            helpers.contains("bitfun_shell_join"),
+            "sg path must quote each argument"
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn shell_join_round_trips_through_a_second_shell() {
+        let helpers = to_unix_script(&prepare_helpers_bash());
+        let script = format!(
+            r#"{helpers}
+sh -c "$(bitfun_shell_join printf '%s\n' 'a b' "it's" '{{{{.State.Running}}}}' '*')"
+"#
+        );
+        let output = std::process::Command::new("bash")
+            .arg("-c")
+            .arg(&script)
+            .output()
+            .expect("run shell join round trip");
+        assert!(
+            output.status.success(),
+            "shell join failed:\n{}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        assert_eq!(
+            String::from_utf8_lossy(&output.stdout),
+            "a b\nit's\n{{.State.Running}}\n*\n",
+            "each argument must survive the second shell verbatim"
         );
     }
 
@@ -1879,12 +2187,14 @@ PY
 
     #[test]
     fn decide_status_pending_before_pty_is_running() {
+        // preparing, no log yet.
         assert_eq!(
-            decide_task_status(false, false, true, true, 0, 0, false),
+            decide_task_status(false, false, true, false, true, 0, 0, false),
             RelayTaskStatus::Running
         );
+        // Nothing staged yet at all.
         assert_eq!(
-            decide_task_status(false, false, false, false, 0, 0, false),
+            decide_task_status(false, false, false, false, false, 0, 0, false),
             RelayTaskStatus::Running
         );
     }
@@ -1892,7 +2202,7 @@ PY
     #[test]
     fn decide_status_growing_log_without_pid_is_running() {
         assert_eq!(
-            decide_task_status(false, false, false, true, 1000, 100, true),
+            decide_task_status(false, false, false, false, true, 1000, 100, true),
             RelayTaskStatus::Running
         );
     }
@@ -1900,8 +2210,30 @@ PY
     #[test]
     fn decide_status_dead_pid_stale_log_is_failed() {
         assert_eq!(
-            decide_task_status(false, false, false, true, 1000, 1000, false),
+            decide_task_status(false, false, false, false, true, 1000, 1000, false),
             RelayTaskStatus::Failed
+        );
+    }
+
+    /// A driver that died before installing its cleanup trap (bad script upload,
+    /// syntax error) leaves the seeded `preparing` flag and an empty log. That
+    /// used to read as "running" forever; the wizard never surfaced the failure.
+    #[test]
+    fn decide_status_dead_driver_with_empty_log_is_failed() {
+        assert_eq!(
+            decide_task_status(false, false, false, true, true, 0, 0, false),
+            RelayTaskStatus::Failed
+        );
+        // An alive driver still outranks the grace window — a sudo password
+        // prompt can legitimately sit for minutes.
+        assert_eq!(
+            decide_task_status(false, false, true, false, true, 0, 0, false),
+            RelayTaskStatus::Running
+        );
+        // Success wins even if the prepare flag was left behind.
+        assert_eq!(
+            decide_task_status(true, false, false, true, true, 10, 0, true),
+            RelayTaskStatus::Succeeded
         );
     }
 

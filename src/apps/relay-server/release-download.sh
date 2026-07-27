@@ -44,10 +44,22 @@ BITFUN_STALL_SECONDS="${BITFUN_STALL_SECONDS:-30}"
 # Docker invocation. relay_deploy.rs and common.sh each define their own
 # privilege-aware wrapper before sourcing this file; fall back to a compatible
 # one so the file also works standalone.
+if ! declare -F bitfun_shell_join >/dev/null 2>&1; then
+  # `sg -c` re-parses a single string, so an unquoted "$*" loses argument
+  # boundaries. Single-quote each argument (POSIX-safe for any /bin/sh).
+  bitfun_shell_join() {
+    local out="" arg
+    for arg in "$@"; do
+      out="$out'$(printf '%s' "$arg" | sed "s/'/'\\\\''/g")' "
+    done
+    printf '%s' "$out"
+  }
+fi
+
 if ! declare -F bitfun_docker >/dev/null 2>&1; then
   bitfun_docker() {
     case "${BITFUN_DOCKER_MODE:-direct}" in
-      sg) sg docker -c "docker $*" ;;
+      sg) sg docker -c "$(bitfun_shell_join docker "$@")" ;;
       sudo)
         if sudo -n true >/dev/null 2>&1; then sudo -n docker "$@"; else sudo docker "$@"; fi
         ;;
@@ -98,6 +110,65 @@ bitfun_canonical_checksum_url() {
       ;;
   esac
   printf '%s.sha256\n' "$url"
+}
+
+# Build the runtime image around the published binary.
+#
+# Losing this build costs ~20 minutes: the caller falls back to compiling the
+# relay from source. Two failure modes are recoverable and worth retrying rather
+# than surrendering to that, both observed on real hosts:
+#
+#   - DOCKER_CONFIG holds a root-owned config.json from an earlier elevated run.
+#     The CLI prints `WARNING: Error loading config file: ... permission denied`
+#     and then mis-dispatches the build (`unknown shorthand flag: 't' in -t`).
+#   - BuildKit is requested through inherited DOCKER_BUILDKIT=1 but buildx is
+#     missing or broken. This image is `FROM debian` + `COPY`, so it needs none
+#     of BuildKit's cache mounts and the classic builder does just as well.
+#
+# Each attempt runs in a subshell so its env override cannot leak into the
+# source-build path that follows.
+bitfun_build_runtime_image() {
+  local image="$1" context="$2" rc=1
+
+  # A config dir this user definitely owns. Empty if it cannot be created, in
+  # which case the retries keep the inherited DOCKER_CONFIG.
+  local clean_config="$context.docker-config"
+  rm -rf "$clean_config"
+  if ! mkdir -p "$clean_config" 2>/dev/null; then
+    clean_config=""
+  fi
+
+  local attempt
+  for attempt in inherited clean-config classic-builder; do
+    case "$attempt" in
+      clean-config)
+        if [ -z "$clean_config" ]; then continue; fi
+        echo ">>> Retrying the runtime image build with a clean Docker config..."
+        ;;
+      classic-builder)
+        echo ">>> Retrying the runtime image build with the classic builder..."
+        ;;
+    esac
+    # Subshell: the env overrides must not leak into the source-build path.
+    if (
+      case "$attempt" in
+        clean-config) export DOCKER_CONFIG="$clean_config" ;;
+        classic-builder)
+          if [ -n "$clean_config" ]; then export DOCKER_CONFIG="$clean_config"; fi
+          export DOCKER_BUILDKIT=0
+          ;;
+      esac
+      bitfun_docker build -t "$image" "$context"
+    ); then
+      rc=0
+      break
+    fi
+  done
+
+  if [ -n "$clean_config" ]; then
+    rm -rf "$clean_config"
+  fi
+  return "$rc"
 }
 
 bitfun_try_release_deploy() {
@@ -340,7 +411,7 @@ DOCKERFILE
 
   image="bitfun-relay:release-${BITFUN_RELEASE_TAG}"
   echo ">>> Building lightweight Relay runtime image (no Rust/Cargo compilation)..."
-  if ! bitfun_docker build -t "$image" "$context"; then
+  if ! bitfun_build_runtime_image "$image" "$context"; then
     echo ">>> Published binary image build failed; falling back to source build."
     return 1
   fi

@@ -147,6 +147,20 @@ bash deploy.sh
 `deploy.sh` must run **on the target server** (it does not SSH elsewhere).
 Requires Docker and Docker Compose on **linux/amd64** or **linux/arm64**.
 
+Clone on the server, as above, rather than uploading a Windows checkout. Git for
+Windows rewrites these scripts to CRLF by default, and bash then fails on the
+first blank line:
+
+```
+deploy.sh: line 37: $'\r': command not found
+```
+
+If that happens, strip the CR and re-run:
+
+```bash
+sed -i 's/\r$//' *.sh && bash deploy.sh
+```
+
 After a successful start, the script runs `relay-admin list-users`. If the
 database has **no accounts**, it prints the exact `add-user` command to run
 next (account login will not work until you create at least one user).

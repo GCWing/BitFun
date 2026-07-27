@@ -98,6 +98,36 @@ Desktop Tauri surface: `src/apps/desktop/src/api/relay_deploy_api.rs`
    `daemon.json`; host Cargo config must remain untouched; global mode rolls
    back only BitFun-managed apt and Docker entries.
 
+16. **Uploaded scripts are LF-only.** `include_str!` and the `r#"..."#` remote
+   templates both inherit the checkout's line endings, and Git for Windows
+   checks out CRLF by default. Remote bash then runs the CR as a command and
+   `set -euo pipefail` aborts on the first blank line
+   (`deploy.sh: line 37: $'\r': command not found`). `.gitattributes` pins LF,
+   and `to_unix_script` normalizes everything sent over SFTP or `execute_command`.
+   Never hand a raw template to `sftp_write`.
+
+17. **`sg -c` takes a single string, so quote every argument.** `sg docker -c
+   "docker $*"` re-parses through a second shell and loses argument boundaries.
+   Use `bitfun_shell_join` (`shell_join` in `common.sh`).
+
+18. **`DOCKER_CONFIG` must be usable by whoever runs docker.** The Docker-install
+   task runs as root with the SSH user's `HOME`, so it must hand `~/.bitfun`
+   back to that user, and no `sudo` invocation may forward the user's
+   `DOCKER_CONFIG` to root. A root-owned `config.json` makes the CLI warn and
+   then mis-dispatch the build. Deploy repairs the config unconditionally — it
+   cannot rely on `bitfun_resolve_docker_mode`, which is skipped when the driver
+   already resolved a non-direct mode.
+
+19. **Losing the runtime image build costs 20 minutes.** Retry it (clean Docker
+   config, then classic builder) before falling back to a source rebuild.
+
+20. **Prepare-phase death must surface as failure.** The driver claims
+   `<stem>.driver.pid` before anything that can fail. Poll keeps reporting
+   `preparing` while that pid is alive — an open sudo prompt is unbounded — but
+   a missing/dead driver past the grace window is `failed`, not perpetual
+   "running". A dying driver writes to the PTY, not the log, so the log pane can
+   be empty.
+
 ## Related docs
 
 - Relay runtime / admin: [`src/apps/relay-server/README.md`](../../../apps/relay-server/README.md)
