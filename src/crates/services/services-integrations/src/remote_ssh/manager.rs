@@ -10,6 +10,7 @@ use crate::remote_ssh::types::{
 };
 use anyhow::{anyhow, Context};
 use async_trait::async_trait;
+use bitfun_services_core::process_manager;
 use russh::client::{DisconnectReason, Handle, Handler, Msg};
 use russh::Sig;
 use russh_keys::key::{KeyPair, PublicKey};
@@ -25,7 +26,6 @@ use std::sync::Arc;
 use std::sync::Once;
 use tokio::io::{AsyncRead, AsyncWrite};
 use tokio::net::TcpStream;
-use tokio::process::Command;
 use tokio::time::{Duration, Instant};
 
 const SSH_COMMAND_WAIT_POLL_INTERVAL: Duration = Duration::from_millis(100);
@@ -1190,7 +1190,7 @@ fn local_container_signal_hook(
             let command = container_signal_command(&pid_file, signal);
             let output = tokio::time::timeout(
                 Duration::from_secs(3),
-                Command::new(&container.docker_path)
+                process_manager::create_tokio_command(&container.docker_path)
                     .args(docker_exec_args(&container, &command, false))
                     .stdin(Stdio::null())
                     .stdout(Stdio::null())
@@ -1945,7 +1945,7 @@ impl SSHConnectionManager {
         let output = if container.local {
             tokio::time::timeout(
                 Duration::from_secs(config.options.connect_timeout_secs.max(1)),
-                Command::new(&container.docker_path)
+                process_manager::create_tokio_command(&container.docker_path)
                     .args(["ps", "-a", "--format", format])
                     .output(),
             )
@@ -2102,7 +2102,9 @@ impl SSHConnectionManager {
                         None => {
                             (stage.id.starts_with("jump-") && error_text.contains(&stage.label))
                                 || (stage.id == "container"
-                                    && (error_text.to_ascii_lowercase().contains("docker container")
+                                    && (error_text
+                                        .to_ascii_lowercase()
+                                        .contains("docker container")
                                         || error_text
                                             .to_ascii_lowercase()
                                             .contains("container sshd")))
@@ -2727,7 +2729,7 @@ impl SSHConnectionManager {
         let container = config.container.as_ref()?;
         let output = tokio::time::timeout(
             Duration::from_secs(timeout_secs),
-            Command::new(&container.docker_path)
+            process_manager::create_tokio_command(&container.docker_path)
                 .args(["port", &container.name, "22/tcp"])
                 .output(),
         )
@@ -3065,7 +3067,9 @@ impl SSHConnectionManager {
         );
         let output = tokio::time::timeout(
             Duration::from_secs(timeout_secs),
-            Command::new(&container.docker_path).args(args).output(),
+            process_manager::create_tokio_command(&container.docker_path)
+                .args(args)
+                .output(),
         )
         .await
         .map_err(|_| {
@@ -3507,7 +3511,7 @@ impl SSHConnectionManager {
         matches!(
             tokio::time::timeout(
                 Duration::from_secs(3),
-                Command::new(&container.docker_path)
+                process_manager::create_tokio_command(&container.docker_path)
                     .args(["inspect", "--format", "{{.State.Running}}", &container.name])
                     .output(),
             )

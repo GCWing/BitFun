@@ -190,6 +190,7 @@ remote-ssh-concrete = [
     "anyhow",
     "async-trait",
     "base64",
+    "bitfun-services-core",
     "bitfun-runtime-ports",
     "chrono",
     "dirs",

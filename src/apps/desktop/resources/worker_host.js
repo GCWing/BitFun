@@ -133,7 +133,11 @@ async function dispatch(method, params) {
       if (allow.length > 0 && !allow.some((a) => a.toLowerCase() === base.toLowerCase())) {
         throw new Error('Command not in allowlist');
       }
-      const opts = { cwd: params.cwd || appDir, timeout: params.timeout || 30000 };
+      const opts = {
+        cwd: params.cwd || appDir,
+        timeout: params.timeout || 30000,
+        windowsHide: process.platform === 'win32'
+      };
       const { stdout, stderr } = await execAsync(params.command || '', opts);
       return { stdout, stderr, exit_code: 0 };
     }

@@ -5,6 +5,7 @@
 //! stdin, stdout, stderr, exit status, and interrupt/kill control.
 
 use anyhow::{anyhow, Context};
+use bitfun_services_core::process_manager;
 #[cfg(feature = "remote-ssh-concrete")]
 use russh::client::Msg;
 #[cfg(feature = "remote-ssh-concrete")]
@@ -16,7 +17,6 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::task::{Context as TaskContext, Poll};
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt, DuplexStream, ReadBuf};
-use tokio::process::Command;
 use tokio::sync::{mpsc, watch};
 use tokio_util::sync::CancellationToken;
 
@@ -146,7 +146,7 @@ impl WorkspaceStdio {
         args: &[String],
         signal_hook: Option<WorkspaceSignalHook>,
     ) -> anyhow::Result<Self> {
-        let mut child = Command::new(executable)
+        let mut child = process_manager::create_tokio_command(executable)
             .args(args)
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())

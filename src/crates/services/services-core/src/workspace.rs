@@ -92,7 +92,7 @@ impl WorkspaceShell for LocalWorkspaceShell {
         use std::process::Stdio;
         use tokio::io::AsyncReadExt;
 
-        let mut cmd = tokio::process::Command::new("sh");
+        let mut cmd = crate::process_manager::create_tokio_command("sh");
         cmd.arg("-c").arg(command);
         cmd.current_dir(&self.workspace_root);
         cmd.stdout(Stdio::piped());

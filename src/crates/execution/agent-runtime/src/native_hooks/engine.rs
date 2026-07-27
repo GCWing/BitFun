@@ -181,6 +181,13 @@ async fn run_hook_command(
     if let Some(cwd) = existing_dir(cwd) {
         process.current_dir(cwd);
     }
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+
+        const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+        process.as_std_mut().creation_flags(CREATE_NO_WINDOW);
+    }
     process
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
