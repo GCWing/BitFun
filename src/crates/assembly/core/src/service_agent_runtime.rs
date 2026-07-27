@@ -1077,6 +1077,7 @@ impl CoreServiceAgentRuntime {
     pub(crate) fn product_agent_runtime(
         coordinator: Arc<ConversationCoordinator>,
         scheduler: Arc<DialogScheduler>,
+        event_source: Option<AgentEventSource>,
         session_fork: Arc<dyn AgentSessionForkPort>,
         session_usage: Arc<dyn AgentSessionUsagePort>,
         turn_settlement: Arc<dyn AgentTurnSettlementPort>,
@@ -1088,7 +1089,7 @@ impl CoreServiceAgentRuntime {
             coordinator,
             scheduler,
             dialog_turn,
-            None,
+            event_source,
             Some(session_fork),
             Some(session_usage),
             Some(turn_settlement),

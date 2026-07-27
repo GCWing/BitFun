@@ -71,14 +71,15 @@ impl Drop for ProductEventQueueDrain {
     }
 }
 
-/// Shared product-host event source that keeps the legacy queue bounded.
+/// Product-host owner that keeps the legacy event queue bounded while the
+/// assembled Agent Runtime exposes the read-only subscription surface.
 #[derive(Clone)]
-pub struct CoreProductAgentEventSource {
+pub struct CoreProductEventQueueOwner {
     source: AgentEventSource,
     _drain: Arc<ProductEventQueueDrain>,
 }
 
-impl CoreProductAgentEventSource {
+impl CoreProductEventQueueOwner {
     pub fn new(queue: Arc<EventQueue>) -> Self {
         Self {
             source: AgentEventSource::new(queue.clone()),
@@ -86,12 +87,36 @@ impl CoreProductAgentEventSource {
         }
     }
 
+    pub fn runtime_source(&self) -> AgentEventSource {
+        self.source.clone()
+    }
+}
+
+/// Compatibility wrapper for hosts that still subscribe outside `AgentRuntime`.
+///
+/// First-party hosts must retain [`CoreProductEventQueueOwner`] and subscribe
+/// through `AgentRuntime`. This wrapper remains only to avoid silently breaking
+/// existing `bitfun-core` consumers during the migration.
+#[deprecated(note = "use CoreProductEventQueueOwner and subscribe through AgentRuntime instead")]
+#[derive(Clone)]
+pub struct CoreProductAgentEventSource {
+    owner: CoreProductEventQueueOwner,
+}
+
+#[allow(deprecated)]
+impl CoreProductAgentEventSource {
+    pub fn new(queue: Arc<EventQueue>) -> Self {
+        Self {
+            owner: CoreProductEventQueueOwner::new(queue),
+        }
+    }
+
     pub fn subscribe(&self) -> AgentEventReceiver {
-        self.source.subscribe()
+        self.owner.runtime_source().subscribe()
     }
 
     pub fn runtime_source(&self) -> AgentEventSource {
-        self.source.clone()
+        self.owner.runtime_source()
     }
 }
 
@@ -344,10 +369,47 @@ impl CoreProductAgentRuntime {
         )
     }
 
+    #[deprecated(note = "use build_with_event_source for first-party product runtimes")]
     pub fn build(
         coordinator: Arc<ConversationCoordinator>,
         scheduler: Arc<DialogScheduler>,
         token_usage_service: Arc<TokenUsageService>,
+        services: RuntimeServices,
+        harness_registry: HarnessRegistry,
+    ) -> Result<AgentRuntime, String> {
+        Self::build_with_optional_event_source(
+            coordinator,
+            scheduler,
+            token_usage_service,
+            None,
+            services,
+            harness_registry,
+        )
+    }
+
+    pub fn build_with_event_source(
+        coordinator: Arc<ConversationCoordinator>,
+        scheduler: Arc<DialogScheduler>,
+        token_usage_service: Arc<TokenUsageService>,
+        event_source: AgentEventSource,
+        services: RuntimeServices,
+        harness_registry: HarnessRegistry,
+    ) -> Result<AgentRuntime, String> {
+        Self::build_with_optional_event_source(
+            coordinator,
+            scheduler,
+            token_usage_service,
+            Some(event_source),
+            services,
+            harness_registry,
+        )
+    }
+
+    fn build_with_optional_event_source(
+        coordinator: Arc<ConversationCoordinator>,
+        scheduler: Arc<DialogScheduler>,
+        token_usage_service: Arc<TokenUsageService>,
+        event_source: Option<AgentEventSource>,
         services: RuntimeServices,
         harness_registry: HarnessRegistry,
     ) -> Result<AgentRuntime, String> {
@@ -358,6 +420,7 @@ impl CoreProductAgentRuntime {
         CoreServiceAgentRuntime::product_agent_runtime(
             coordinator,
             scheduler,
+            event_source,
             session_operations.clone(),
             session_operations.clone(),
             session_operations,
@@ -1048,7 +1111,7 @@ mod tests {
     use std::sync::Arc;
     use std::time::Duration;
 
-    use bitfun_agent_runtime::sdk::AgentRuntime;
+    use bitfun_agent_runtime::sdk::{AgentEventSource, AgentRuntime};
     use bitfun_harness::HarnessRegistry;
     use bitfun_runtime_ports::{
         LocalWorkspaceSnapshotSessionRequest, LocalWorkspaceSnapshotTurnRequest,
@@ -1056,11 +1119,13 @@ mod tests {
     use bitfun_runtime_services::RuntimeServices;
     use uuid::Uuid;
 
+    #[allow(deprecated)]
+    use super::CoreProductAgentEventSource;
     use super::{
         generate_core_session_usage_report, latest_persisted_turn_id, runtime_port_error,
         validate_latest_turn_fork_scope, validate_persisted_session_id,
-        CoreAgentRuntimeCompatibility, CoreLocalWorkspaceSnapshot, CoreProductAgentEventSource,
-        CoreProductAgentRuntime, CoreSessionOperationsPort,
+        CoreAgentRuntimeCompatibility, CoreLocalWorkspaceSnapshot, CoreProductAgentRuntime,
+        CoreProductEventQueueOwner, CoreSessionOperationsPort,
     };
     use crate::agentic::coordination::{ConversationCoordinator, DialogScheduler};
     use crate::agentic::events::{EventQueue, EventQueueConfig, EventRouter};
@@ -1122,12 +1187,13 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn product_event_source_broadcasts_while_draining_the_legacy_queue() {
+    async fn product_event_queue_owner_broadcasts_while_draining_the_legacy_queue() {
         let queue = Arc::new(EventQueue::new(EventQueueConfig {
             max_queue_size: 4,
             batch_size: 2,
         }));
-        let source = CoreProductAgentEventSource::new(queue.clone());
+        let owner = CoreProductEventQueueOwner::new(queue.clone());
+        let source = owner.runtime_source();
         let mut first = source.subscribe();
         let mut second = source.subscribe();
 
@@ -1179,7 +1245,8 @@ mod tests {
 
     #[test]
     fn product_agent_runtime_exposes_reviewed_full_and_narrow_builders() {
-        fn build(
+        #[allow(deprecated)]
+        fn legacy_build(
             coordinator: Arc<ConversationCoordinator>,
             scheduler: Arc<DialogScheduler>,
             token_usage_service: Arc<TokenUsageService>,
@@ -1195,7 +1262,34 @@ mod tests {
             )
         }
 
-        let _ = build;
+        fn build_with_event_source(
+            coordinator: Arc<ConversationCoordinator>,
+            scheduler: Arc<DialogScheduler>,
+            token_usage_service: Arc<TokenUsageService>,
+            event_source: AgentEventSource,
+            services: RuntimeServices,
+            harness_registry: HarnessRegistry,
+        ) -> Result<AgentRuntime, String> {
+            CoreProductAgentRuntime::build_with_event_source(
+                coordinator,
+                scheduler,
+                token_usage_service,
+                event_source,
+                services,
+                harness_registry,
+            )
+        }
+
+        #[allow(deprecated)]
+        fn legacy_event_source_methods_are_source_compatible() {
+            let _ = CoreProductAgentEventSource::new;
+            let _ = CoreProductAgentEventSource::subscribe;
+            let _ = CoreProductAgentEventSource::runtime_source;
+        }
+
+        let _ = legacy_build;
+        let _ = build_with_event_source;
+        legacy_event_source_methods_are_source_compatible();
         let _ = CoreProductAgentRuntime::build_session_surface;
         let _ = CoreProductAgentRuntime::build_acp;
         let _ = CoreProductAgentRuntime::build_sdk_host;

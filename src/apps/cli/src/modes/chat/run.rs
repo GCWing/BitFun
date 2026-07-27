@@ -174,7 +174,10 @@ impl ChatMode {
             }
         }
 
-        let mut event_rx = self.agent.event_source().subscribe();
+        let mut event_rx = self
+            .agent
+            .subscribe_events()
+            .map_err(|error| anyhow::anyhow!(error.into_message()))?;
         let mut permission_rx = self.agent.subscribe_permission_requests().ok();
         if let Ok(pending) = self.agent.pending_permission_requests() {
             for request in pending.into_iter().filter(|request| {

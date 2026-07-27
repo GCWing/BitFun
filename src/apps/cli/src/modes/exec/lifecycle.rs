@@ -617,7 +617,10 @@ impl ExecMode {
             }
         };
         tracing::info!(session_id = %session_id, "Session ready");
-        let mut event_rx = self.agent.event_source().subscribe();
+        let mut event_rx = self
+            .agent
+            .subscribe_events()
+            .map_err(|error| anyhow::anyhow!(error.into_message()))?;
 
         self.print_text(|| {
             eprintln!("Executing: {}", self.message);

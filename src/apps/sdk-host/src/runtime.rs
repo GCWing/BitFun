@@ -5,8 +5,8 @@ use bitfun_agent_runtime::sdk::AgentRuntime;
 use bitfun_core::agentic::system::{self, AgenticSystem};
 use bitfun_core::product_assembly::{DeliveryProfile, ProductAssembler, ProductAssemblyInput};
 use bitfun_core::product_runtime::{
-    build_local_runtime_services, ensure_product_dialog_scheduler, CoreProductAgentEventSource,
-    CoreProductAgentRuntime, CoreRuntimeServicesProvider,
+    build_local_runtime_services, ensure_product_dialog_scheduler, CoreProductAgentRuntime,
+    CoreProductEventQueueOwner, CoreRuntimeServicesProvider,
 };
 
 const RUNTIME_EVENT_BUFFER: usize = 256;
@@ -15,7 +15,7 @@ const DELIVERY_PROFILE: DeliveryProfile = DeliveryProfile::Sdk;
 pub(crate) struct SdkHostRuntime {
     workspace_root: PathBuf,
     agent_runtime: AgentRuntime,
-    _agent_events: CoreProductAgentEventSource,
+    _agent_event_queue_owner: CoreProductEventQueueOwner,
 }
 
 impl SdkHostRuntime {
@@ -40,12 +40,13 @@ impl SdkHostRuntime {
         bind_core_execution_ports(&agentic_system);
         let scheduler = ensure_product_dialog_scheduler(&agentic_system);
         let (services, harness_registry, _disabled_plugin_runtime) = parts.into_runtime_parts();
-        let agent_events = CoreProductAgentEventSource::new(agentic_system.event_queue.clone());
+        let agent_event_queue_owner =
+            CoreProductEventQueueOwner::new(agentic_system.event_queue.clone());
         let agent_runtime = CoreProductAgentRuntime::build_sdk_host(
             agentic_system.coordinator,
             scheduler,
             agentic_system.token_usage_service,
-            agent_events.runtime_source(),
+            agent_event_queue_owner.runtime_source(),
             services,
             harness_registry,
         )
@@ -55,7 +56,7 @@ impl SdkHostRuntime {
         Ok(Self {
             workspace_root,
             agent_runtime,
-            _agent_events: agent_events,
+            _agent_event_queue_owner: agent_event_queue_owner,
         })
     }
 

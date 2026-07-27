@@ -10,8 +10,6 @@ use bitfun_core::service::filesystem::FileSystemService;
 use bitfun_core::service::workspace::WorkspaceService;
 use bitfun_runtime_ports::{AgentSubmissionSource, AgentTurnCancellationRequest};
 
-use crate::runtime::events::CliAgentEventSource;
-
 const MAX_TRACKED_PEER_TURNS: usize = i32::MAX as usize;
 const MAX_BACKGROUND_PEER_AUTHORIZATIONS: usize = i32::MAX as usize;
 const MAX_PENDING_PEER_TASK_CANCELLATIONS: usize = i32::MAX as usize;
@@ -903,7 +901,6 @@ pub(crate) struct PeerHostState {
     pub(crate) agent_runtime: AgentRuntime,
     pub(crate) local_workspace_snapshot: Arc<dyn bitfun_runtime_ports::LocalWorkspaceSnapshotPort>,
     pub(crate) compatibility: CoreAgentRuntimeCompatibility,
-    pub(crate) agent_events: CliAgentEventSource,
     pub(crate) turns: PeerTurnTracker,
     pub(crate) workspace_service: Arc<WorkspaceService>,
     pub(crate) filesystem_service: Arc<FileSystemService>,

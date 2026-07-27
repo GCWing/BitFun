@@ -10,7 +10,7 @@ use std::sync::{Arc, RwLock};
 use tokio::sync::Mutex;
 
 use bitfun_agent_runtime::sdk::{
-    AgentDialogTurnRequest, AgentLocalCommandTurnRecordRequest, AgentRuntime,
+    AgentDialogTurnRequest, AgentEventReceiver, AgentLocalCommandTurnRecordRequest, AgentRuntime,
     AgentSessionCreateRequest, AgentSessionDeleteRequest, AgentSessionForkRequest,
     AgentSessionForkResult, AgentSessionListRequest, AgentSessionModeUpdateRequest,
     AgentSessionModelUpdateRequest, AgentSessionRestoreRequest, AgentSessionUsageRequest,
@@ -23,7 +23,6 @@ use bitfun_agent_runtime::user_questions::USER_INPUT_AVAILABLE_CONTEXT_KEY;
 use bitfun_runtime_ports::{AgentSessionSummary, AgentSubmissionSource, DialogSubmissionPolicy};
 
 use crate::runtime::approval::CliApprovalPolicy;
-use crate::runtime::events::CliAgentEventSource;
 use crate::runtime::CliRuntimeContext;
 
 fn validated_session_summary(
@@ -99,7 +98,6 @@ fn session_mode_migration_notice(
 /// Stateless regarding agent_type; callers pass it per call.
 pub(crate) struct CliAgentRuntimeClient {
     runtime: AgentRuntime,
-    event_source: CliAgentEventSource,
     approval_policy: Arc<RwLock<CliApprovalPolicy>>,
     workspace_path: Arc<RwLock<Option<PathBuf>>>,
     /// Session ID — uses Mutex for interior mutability
@@ -112,7 +110,6 @@ impl CliAgentRuntimeClient {
     pub(crate) fn new(runtime: &CliRuntimeContext, workspace_path: Option<PathBuf>) -> Self {
         Self {
             runtime: runtime.agent_runtime().clone(),
-            event_source: runtime.agent_events().clone(),
             approval_policy: Arc::new(RwLock::new(runtime.approval_policy())),
             workspace_path: Arc::new(RwLock::new(workspace_path)),
             session_id: Arc::new(Mutex::new(None)),
@@ -120,8 +117,8 @@ impl CliAgentRuntimeClient {
         }
     }
 
-    pub(crate) fn event_source(&self) -> &CliAgentEventSource {
-        &self.event_source
+    pub(crate) fn subscribe_events(&self) -> std::result::Result<AgentEventReceiver, RuntimeError> {
+        self.runtime.subscribe_events()
     }
 
     pub(crate) fn subscribe_permission_requests(
@@ -694,6 +691,18 @@ mod tests {
 
         assert!(source.contains(&runtime_update));
         assert!(!source.contains(&compatibility_update));
+    }
+
+    #[test]
+    fn agent_events_use_the_runtime_sdk_without_a_core_event_source() {
+        let source = include_str!("runtime_client.rs").replace("\r\n", "\n");
+        let runtime_subscription = ["self.runtime", ".subscribe_events()"].concat();
+        let core_event_field = ["event_source", ": CliAgent", "EventSource"].concat();
+        let core_event_method = ["pub(crate) fn event", "_source("].concat();
+
+        assert!(source.contains(&runtime_subscription));
+        assert!(!source.contains(&core_event_field));
+        assert!(!source.contains(&core_event_method));
     }
 
     fn session_summary(session_id: &str) -> AgentSessionSummary {

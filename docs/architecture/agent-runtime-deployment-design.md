@@ -30,14 +30,15 @@ flowchart LR
 
 | 范围 | 当前状态 |
 |---|---|
-| Embedded GUI/Headless CLI/ACP/SDK Host | 保持现状；本设计没有改变其依赖或生命周期 |
-| Embedded interactive TUI | CLI crate 私有的 `CliAgentRuntimeClient` 统一暴露 Session、Turn、Permission 和事件访问；前三者使用 Rust Runtime SDK（当前 preview），事件继续复用既有 CLI event source；仍在当前 CLI 进程内运行 |
+| Embedded Desktop GUI | 继续使用现有 Desktop 事件投影和 Tauri adapter；本设计没有改变其依赖或生命周期 |
+| Embedded TUI/Headless CLI/Peer Host | Session、Turn、Permission 和事件订阅统一通过同一个 Rust Runtime SDK（当前 preview）；CLI crate 只保留第一方 adapter 和各形态自己的展示/断流策略 |
+| ACP/SDK Host | 使用同一个 Runtime 事件入口的 session-scoped 订阅；各自协议和进程生命周期保持独立 |
 | Runtime ownership | 已有可选的 Embedded 共享锁 / Shared 独占锁原语；尚未接入产品入口 |
 | Shared local IPC | 已有未发布、仅 crate 内可见的 discovery、实例锁、严格握手、Health 和 cleanup 基础；尚无生产 consumer |
 | Shared Session/Turn/Tool/Permission | 尚未设计为稳定 wire，也没有产品 consumer |
 | Shared GUI/TUI/Remote | 尚未交付，没有 `--shared` 或隐藏 Host 命令 |
 
-因此当前新增的是基础设施，不是用户可用的 Shared Runtime 产品。TUI 的私有 client 只收敛第一方调用边界，不代表事件已经迁入 Rust Runtime SDK（当前 preview），也不代表已经存在 Shared consumer。
+因此当前完成的是 Embedded 入口的调用边界收敛，不是用户可用的 Shared Runtime 产品。具体 `EventQueue` 仍由 Core 产品装配，Runtime SDK 只提供同进程订阅入口；没有 Shared event wire、事件重放或 Shared consumer。
 
 ## 2. 最少名词
 
@@ -69,6 +70,26 @@ flowchart TB
 ```
 
 复用的是 Runtime API、权威事实和 owner；不复用 renderer、CLI 参数、SDK wire、远程认证或平台窗口生命周期。任何新能力必须先进入既有 Runtime owner，再由需要它的 adapter 映射，禁止在 Shared 路径复制业务实现。
+
+### 3.1 Embedded 事件交付
+
+```mermaid
+flowchart LR
+  Queue["EventQueue"] --> Owner["Core product event queue owner"]
+  Owner -->|"injects read-only AgentEventSource"| Runtime["Agent Runtime API"]
+  Runtime --> TUI["TUI adapter"]
+  Runtime --> Exec["Headless adapter"]
+  Runtime --> Peer["Peer fanout adapter"]
+  Runtime --> ACP["ACP adapter"]
+  Runtime --> SDK["SDK Host adapter"]
+```
+
+- Core product assembly 创建事件 source，并维持旧消费队列的排空 task；第一方产品入口不再获得第二个订阅 API。
+- TUI、Headless CLI 和 Peer Host 只从 `AgentRuntime` 订阅，不能直接持有 Core-specific event source。
+- `bitfun-core` 的旧 event-source/builder API 仅保留为 deprecated 源码兼容 facade；它们委托给同一个 Core owner，不形成第二套运行时或第一方调用路径。
+- 各 adapter 继续拥有自己的失败投影：TUI 标记当前视图不可信，Headless CLI 返回非成功终态，Peer Host 中断其拥有的 turns，ACP 取消 turn 并返回协议错误，SDK Host 终结 Query 并提供 `RestartHost` recovery。
+- 有界 receiver 的 `Lagged` 或 `Closed` 是显式失败；当前没有 cursor/replay 合同，禁止伪装成透明恢复。
+- 这条链路仍全部位于当前 Embedded 进程，不增加 SDK Host、IPC 或后台进程依赖。
 
 ## 4. 当前基础架构
 
@@ -141,7 +162,8 @@ flowchart LR
 ```
 
 - CLI 不依赖 SDK Host，GUI/TUI 也不依赖公开 SDK package。
-- 交互式 TUI 的启动页和会话页复用一个 CLI 私有 Runtime client；Session、Turn 和 Permission 使用 Rust Runtime SDK（当前 preview），事件继续使用既有 CLI event source。该 client 只是第一方 adapter，不是公开 SDK 或第二套 Runtime。
+- 交互式 TUI 的启动页和会话页复用一个 CLI 私有 Runtime client；Session、Turn、Permission 和事件订阅都使用 Rust Runtime SDK（当前 preview）。该 client 只是第一方 adapter，不是公开 SDK、SDK Host client 或第二套 Runtime。
+- Headless CLI 和 Peer Host 使用同一 Runtime 订阅入口，但分别保留确定性退出与 Peer fanout 语义；共享订阅入口不等于共享 renderer 或产品生命周期。
 - TUI 不是 Server；未来是否连接 Shared deployment 是部署选择，不改变 TUI 的 renderer/键位职责。
 - Agent SDK Host 只服务外部 SDK 合同，不成为第一方 rich-client 的通用底座。
 - Headless CLI 默认继续 Embedded；CI 或测试可保持独立进程和独立 workspace，不承担后台实例成本。

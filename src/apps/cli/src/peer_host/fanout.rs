@@ -3,7 +3,7 @@
 use std::collections::HashSet;
 use std::sync::OnceLock;
 
-use bitfun_agent_runtime::sdk::PermissionRequestEvent;
+use bitfun_agent_runtime::sdk::{AgentEventReceiver, PermissionRequestEvent};
 use bitfun_agent_tools::effective_tool_invocation;
 use bitfun_core::service::remote_connect::encryption::encrypt_to_base64;
 use bitfun_core::service::remote_connect::remote_server::RemoteCommand;
@@ -85,9 +85,8 @@ fn peer_event_sender() -> &'static mpsc::Sender<QueuedPeerDeviceEvent> {
 }
 
 /// Subscribe to the invocation-scoped event source and forward only Peer-owned turns.
-pub(crate) fn start_peer_event_fanout(state: PeerHostState) {
+pub(crate) fn start_peer_event_fanout(state: PeerHostState, mut rx: AgentEventReceiver) {
     start_peer_permission_event_fanout(state.clone());
-    let mut rx = state.agent_events.subscribe();
     state.turns.mark_event_stream_ready();
     tokio::spawn(async move {
         loop {

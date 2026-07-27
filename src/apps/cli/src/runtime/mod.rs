@@ -7,7 +7,7 @@ use bitfun_core::agentic::system::AgenticSystem;
 use bitfun_core::product_assembly::{ProductAssemblyPlan, ProductServiceCapabilityAvailability};
 use bitfun_core::product_runtime::{
     build_local_runtime_services, ensure_product_dialog_scheduler, CoreAgentRuntimeCompatibility,
-    CoreLocalWorkspaceSnapshot, CoreProductAgentRuntime,
+    CoreLocalWorkspaceSnapshot, CoreProductAgentRuntime, CoreProductEventQueueOwner,
 };
 use bitfun_core::runtime_ports::PluginRuntimeAvailability;
 use bitfun_runtime_ports::LocalWorkspaceSnapshotPort;
@@ -16,10 +16,8 @@ use bitfun_runtime_services::RuntimeServices;
 use crate::product_assembly::{assemble_acp_runtime_parts, assemble_cli_runtime_parts};
 
 pub(crate) mod approval;
-pub(crate) mod events;
 
 use approval::CliApprovalPolicy;
-use events::CliAgentEventSource;
 
 const RUNTIME_EVENT_BUFFER: usize = 256;
 
@@ -55,7 +53,7 @@ pub(crate) struct CliRuntimeContext {
     agent_runtime: AgentRuntime,
     local_workspace_snapshot: Arc<dyn LocalWorkspaceSnapshotPort>,
     compatibility: CoreAgentRuntimeCompatibility,
-    agent_events: CliAgentEventSource,
+    _agent_event_queue_owner: CoreProductEventQueueOwner,
     services: RuntimeServices,
     product: CliProductRuntimeState,
     approval_policy: CliApprovalPolicy,
@@ -85,11 +83,13 @@ impl CliRuntimeContext {
                 .collect(),
         };
         let (services, harness_registry, _disabled_plugin_runtime) = parts.into_runtime_parts();
-        let agent_events = CliAgentEventSource::new(agentic_system.event_queue.clone());
-        let agent_runtime = CoreProductAgentRuntime::build(
+        let agent_event_queue_owner =
+            CoreProductEventQueueOwner::new(agentic_system.event_queue.clone());
+        let agent_runtime = CoreProductAgentRuntime::build_with_event_source(
             agentic_system.coordinator.clone(),
             scheduler.clone(),
             agentic_system.token_usage_service.clone(),
+            agent_event_queue_owner.runtime_source(),
             services.clone(),
             harness_registry,
         )
@@ -110,7 +110,7 @@ impl CliRuntimeContext {
 
         Ok(Self {
             workspace_root,
-            agent_events,
+            _agent_event_queue_owner: agent_event_queue_owner,
             agent_runtime,
             local_workspace_snapshot,
             compatibility,
@@ -136,10 +136,6 @@ impl CliRuntimeContext {
         &self.local_workspace_snapshot
     }
 
-    pub(crate) fn agent_events(&self) -> &CliAgentEventSource {
-        &self.agent_events
-    }
-
     pub(crate) fn services(&self) -> &RuntimeServices {
         &self.services
     }
@@ -155,9 +151,9 @@ impl CliRuntimeContext {
 
 #[derive(Clone)]
 pub(crate) struct AcpRuntimeContext {
-    _agent_events: CliAgentEventSource,
     agent_runtime: AgentRuntime,
     compatibility: CoreAgentRuntimeCompatibility,
+    _agent_event_queue_owner: CoreProductEventQueueOwner,
 }
 
 impl AcpRuntimeContext {
@@ -170,11 +166,12 @@ impl AcpRuntimeContext {
         let parts = assemble_acp_runtime_parts(services)
             .context("Failed to assemble ACP product runtime")?;
         let (services, harness_registry, _disabled_plugin_runtime) = parts.into_runtime_parts();
-        let agent_events = CliAgentEventSource::new(agentic_system.event_queue.clone());
+        let agent_event_queue_owner =
+            CoreProductEventQueueOwner::new(agentic_system.event_queue.clone());
         let agent_runtime = CoreProductAgentRuntime::build_acp(
             agentic_system.coordinator.clone(),
             scheduler.clone(),
-            agent_events.runtime_source(),
+            agent_event_queue_owner.runtime_source(),
             services,
             harness_registry,
         )
@@ -184,9 +181,9 @@ impl AcpRuntimeContext {
             CoreAgentRuntimeCompatibility::build(agentic_system.coordinator, scheduler);
 
         Ok(Self {
-            _agent_events: agent_events,
             agent_runtime,
             compatibility,
+            _agent_event_queue_owner: agent_event_queue_owner,
         })
     }
 
