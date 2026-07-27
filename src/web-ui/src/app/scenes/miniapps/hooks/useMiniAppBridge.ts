@@ -25,7 +25,7 @@ import {
   MINIAPP_COMPOSER_DRAFT_EVENT,
 } from '../miniAppStore';
 import { flowChatStore } from '@/flow_chat/store/FlowChatStore';
-import { syncSessionToModernStore } from '@/flow_chat/services/storeSync';
+import { createLogger } from '@/shared/utils/logger';
 
 interface JSONRPC {
   jsonrpc?: string;
@@ -43,6 +43,7 @@ interface AiStreamPayload {
 
 /** Distinguishes runners of the same app (installed app vs. draft preview). */
 let composerTokenSeq = 0;
+const log = createLogger('useMiniAppBridge');
 
 export function useMiniAppBridge(
   iframeRef: RefObject<HTMLIFrameElement>,
@@ -80,15 +81,12 @@ export function useMiniAppBridge(
   // agentic:// event stream before forwarding events into the iframe.
   const agentSessionIdsRef = useRef<Set<string>>(new Set());
 
-  // This runner's identity for bubble composer claims, and the pending
-  // chat.focusSession retries, which must not outlive the iframe.
+  // This runner's identity for bubble composer claims.
   const composerTokenRef = useRef<string>('');
   if (!composerTokenRef.current) {
     composerTokenSeq += 1;
     composerTokenRef.current = `${app.id}#${composerTokenSeq}`;
   }
-  const focusRetryTimersRef = useRef<number[]>([]);
-
   useLayoutEffect(() => {
     const handler = async (event: MessageEvent) => {
       if (!iframeRef.current || event.source !== iframeRef.current.contentWindow) return;
@@ -269,6 +267,57 @@ export function useMiniAppBridge(
             replyError(`MiniApp '${appId}' does not have agent permission (permissions.agent.enabled).`);
             return;
           }
+          if (method === 'agent.ensureSession') {
+            const result = await miniAppAPI.agentEnsureSession(appId, {
+              sessionId: params.sessionId as string | undefined,
+              sessionName: params.sessionName as string | undefined,
+              appDataWorkspace: String(params.appDataWorkspace ?? ''),
+              enableTools: params.enableTools as boolean | undefined,
+              model: typeof params.model === 'string' ? params.model : undefined,
+            });
+            agentSessionIdsRef.current.add(result.sessionId);
+            const sessionWasRegistered = flowChatStore
+              .getState()
+              .sessions
+              .has(result.sessionId);
+            if (!sessionWasRegistered) {
+              flowChatStore.addExternalSession(
+                result.sessionId,
+                typeof params.sessionName === 'string' && params.sessionName.trim()
+                  ? params.sessionName.trim()
+                  : `MiniApp: ${appId}`,
+                'agentic',
+                result.workspacePath,
+                {
+                  sessionKind: 'miniapp',
+                  isTransient: true,
+                  agentBackedTransient: true,
+                },
+              );
+              if (!result.created) {
+                try {
+                  await flowChatStore.loadSessionHistory(
+                    result.sessionId,
+                    result.workspacePath,
+                    undefined,
+                    undefined,
+                    undefined,
+                    { includeInternal: true },
+                  );
+                } catch (error) {
+                  // The binding is still valid even if UI history hydration
+                  // fails; keep the bubble on the exact topic session.
+                  log.warn('Failed to hydrate restored MiniApp agent session', {
+                    appId,
+                    sessionId: result.sessionId,
+                    error,
+                  });
+                }
+              }
+            }
+            reply(result);
+            return;
+          }
           if (method === 'agent.run') {
             const result = await miniAppAPI.agentRun(
               appId,
@@ -336,6 +385,11 @@ export function useMiniAppBridge(
             reply(null);
             return;
           }
+          if (method === 'chat.clearSession') {
+            useMiniAppStore.getState().clearComposerSession(appId, composerTokenRef.current);
+            reply(null);
+            return;
+          }
           if (method === 'chat.setComposerDraft') {
             // Only the runner that currently holds the composer may pop the
             // bubble open — a background runner must not steal focus.
@@ -360,33 +414,19 @@ export function useMiniAppBridge(
               );
               return;
             }
-            // The MiniApp calls this right after agent.run resolves, but the
-            // session only lands in the store on its first dialog-turn-started
-            // event — retry briefly instead of silently losing the focus.
-            const trySwitch = () => {
-              if (!flowChatStore.getState().sessions.has(sessionId)) return false;
-              if (flowChatStore.getState().activeSessionId !== sessionId) {
-                flowChatStore.switchSession(sessionId);
-              }
-              syncSessionToModernStore(sessionId);
-              return true;
-            };
-            if (!trySwitch()) {
-              let attempts = 0;
-              const timer = window.setInterval(() => {
-                attempts += 1;
-                // Stop once the iframe is gone: switching the user's session
-                // after they closed the MiniApp would be a stray navigation.
-                const abandoned = !iframeRef.current?.contentWindow;
-                if (abandoned || trySwitch() || attempts >= 20) {
-                  window.clearInterval(timer);
-                  focusRetryTimersRef.current = focusRetryTimersRef.current.filter(
-                    (id) => id !== timer,
-                  );
-                }
-              }, 250);
-              focusRetryTimersRef.current.push(timer);
+            const claim = useMiniAppStore.getState().composerClaims[appId];
+            if (claim?.token !== composerTokenRef.current) {
+              replyError('chat.focusSession: this MiniApp does not hold the bubble composer.');
+              return;
             }
+            // Bind the validated session to this runner's composer claim.
+            // FloatingMiniChat owns the temporary global-store switch while its
+            // panel is open, then restores the user's normal session on close.
+            useMiniAppStore.getState().setComposerSession(
+              appId,
+              composerTokenRef.current,
+              sessionId,
+            );
             reply(null);
             return;
           }
@@ -516,15 +556,12 @@ export function useMiniAppBridge(
     };
   }, [iframeRef]);
 
-  // Neither a composer claim nor a pending focus retry may outlive the iframe.
+  // A composer claim may not outlive the iframe.
   useEffect(() => {
     const currentAppId = app.id;
     const token = composerTokenRef.current;
-    const timers = focusRetryTimersRef;
     return () => {
       useMiniAppStore.getState().releaseComposer(currentAppId, token);
-      timers.current.forEach((id) => window.clearInterval(id));
-      timers.current = [];
     };
   }, [app.id]);
 

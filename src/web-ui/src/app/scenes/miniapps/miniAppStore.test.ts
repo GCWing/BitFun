@@ -58,13 +58,48 @@ describe('miniAppStore floating bubble composer claims', () => {
   });
 
   it('lets the newest runner take the claim', () => {
-    useMiniAppStore.getState().claimComposer('ppt', { token: 'ppt#1', placeholder: 'a' });
+    useMiniAppStore.getState().claimComposer('ppt', {
+      token: 'ppt#1',
+      placeholder: 'a',
+      sessionId: 'session-1',
+    });
     useMiniAppStore.getState().claimComposer('ppt', { token: 'ppt#2', placeholder: 'b' });
 
     expect(useMiniAppStore.getState().composerClaims.ppt).toEqual({
       token: 'ppt#2',
       placeholder: 'b',
     });
+  });
+
+  it('keeps a topic session when the same runner refreshes its localized claim', () => {
+    useMiniAppStore.getState().claimComposer('ppt', { token: 'ppt#1', placeholder: 'English' });
+    useMiniAppStore.getState().setComposerSession('ppt', 'ppt#1', 'session-1');
+    useMiniAppStore.getState().claimComposer('ppt', { token: 'ppt#1', placeholder: '中文' });
+
+    expect(useMiniAppStore.getState().composerClaims.ppt).toEqual({
+      token: 'ppt#1',
+      placeholder: '中文',
+      sessionId: 'session-1',
+    });
+  });
+
+  it('only lets the current runner bind its dedicated session', () => {
+    useMiniAppStore.getState().claimComposer('ppt', { token: 'ppt#2' });
+
+    useMiniAppStore.getState().setComposerSession('ppt', 'ppt#1', 'stale-session');
+    expect(useMiniAppStore.getState().composerClaims.ppt).toEqual({ token: 'ppt#2' });
+
+    useMiniAppStore.getState().setComposerSession('ppt', 'ppt#2', 'session-2');
+    expect(useMiniAppStore.getState().composerClaims.ppt).toEqual({
+      token: 'ppt#2',
+      sessionId: 'session-2',
+    });
+
+    useMiniAppStore.getState().clearComposerSession('ppt', 'ppt#1');
+    expect(useMiniAppStore.getState().composerClaims.ppt?.sessionId).toBe('session-2');
+
+    useMiniAppStore.getState().clearComposerSession('ppt', 'ppt#2');
+    expect(useMiniAppStore.getState().composerClaims.ppt).toEqual({ token: 'ppt#2' });
   });
 
   // The installed app and its draft preview run side by side during AI

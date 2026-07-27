@@ -178,11 +178,20 @@ test('prompt pins the stable skill key and workspace-relative delivery contract'
   assert.match(prompt, /禁止.*Read references\/style-presets/);
 });
 
-test('backend adapter forwards preferred model into agent.run options', async () => {
+test('backend adapter ensures a topic session and forwards preferred model into agent.run options', async () => {
   const { installBitFunBackendAdapter } = await import('../src/bitfun-backend-adapter.js');
+  const ensureCalls = [];
   const calls = [];
   const app = {
     agent: {
+      ensureSession: async (options) => {
+        ensureCalls.push(options);
+        return {
+          sessionId: options.sessionId || 's1',
+          workspacePath: '/appdata/decks/demo',
+          created: !options.sessionId,
+        };
+      },
       run: async (_prompt, options) => {
         calls.push(options);
         return { sessionId: 's1', turnId: 't1', actionRunId: 't1' };
@@ -194,15 +203,53 @@ test('backend adapter forwards preferred model into agent.run options', async ()
     },
   };
   installBitFunBackendAdapter(app);
+  const ensured = await app.backend.ensureSession({
+    sessionId: 's1',
+    appDataWorkspace: 'decks/demo',
+    model: 'fast',
+  });
   await app.backend.call('ppt.generate', { instruction: 'hi' }, {
     sessionId: 's1',
     appDataWorkspace: 'decks/demo',
     model: 'fast',
   });
+  assert.equal(ensured.sessionId, 's1');
+  assert.deepEqual(ensureCalls, [{
+    sessionName: 'PPT Live',
+    sessionId: 's1',
+    appDataWorkspace: 'decks/demo',
+    model: 'fast',
+  }]);
   assert.equal(calls.length, 1);
   assert.equal(calls[0].model, 'fast');
   assert.equal(calls[0].sessionId, 's1');
   assert.equal(calls[0].appDataWorkspace, 'decks/demo');
+});
+
+test('PPT topic lifecycle eagerly creates or rebinds its dedicated session', async () => {
+  const uiSource = await readFile(new URL('../ui.js', import.meta.url), 'utf8');
+
+  assert.match(uiSource, /async function ensureDeckAgentSession\(\)/);
+  assert.match(
+    uiSource,
+    /async function restoreHistory[\s\S]*await clearFocusedDeckAgentSession\(\);[\s\S]*await ensureDeckAgentSession\(\);/,
+  );
+  assert.match(
+    uiSource,
+    /async function newDeck[\s\S]*await clearFocusedDeckAgentSession\(\);[\s\S]*await ensureDeckAgentSession\(\);/,
+  );
+  assert.match(
+    uiSource,
+    /await recoverFromRestart\(\);[\s\S]*await ensureDeckAgentSession\(\);/,
+  );
+  assert.match(
+    uiSource,
+    /persistedSessionId[\s\S]*requestSession\(persistedSessionId\)/,
+  );
+  assert.doesNotMatch(
+    uiSource,
+    /state\.agentSession\s*=\s*\{[\s\S]{0,120}id:\s*['"]['"]/,
+  );
 });
 
 test('prompt carries a targeted contract diagnostic into same-session continuation', () => {

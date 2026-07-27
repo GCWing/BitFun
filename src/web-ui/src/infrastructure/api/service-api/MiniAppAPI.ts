@@ -113,6 +113,24 @@ export interface AgentRunStartedResult {
   status: string;
 }
 
+export interface AgentEnsureSessionOptions {
+  /** Rebind to the session already associated with this MiniApp topic. */
+  sessionId?: string;
+  sessionName?: string;
+  /** Relative workspace inside the MiniApp's own appdata directory. */
+  appDataWorkspace: string;
+  /** Defaults to true host-side and applies only when a session is created. */
+  enableTools?: boolean;
+  /** Model selector applied on create and when reusing an existing session. */
+  model?: string;
+}
+
+export interface AgentEnsureSessionResult {
+  sessionId: string;
+  workspacePath: string;
+  created: boolean;
+}
+
 export interface AgentTurnTextResult {
   text: string;
 }
@@ -652,6 +670,26 @@ export class MiniAppAPI {
   }
 
   // ─── Agent bridge commands ──────────────────────────────────────────────────
+
+  async agentEnsureSession(
+    appId: string,
+    options: AgentEnsureSessionOptions,
+  ): Promise<AgentEnsureSessionResult> {
+    try {
+      return await api.invoke('miniapp_agent_ensure_session', {
+        request: {
+          appId,
+          sessionId: options.sessionId,
+          sessionName: options.sessionName,
+          appDataWorkspace: options.appDataWorkspace,
+          enableTools: options.enableTools,
+          model: options.model,
+        }
+      });
+    } catch (error) {
+      throw createTauriCommandError('miniapp_agent_ensure_session', error, { appId });
+    }
+  }
 
   async agentRun(
     appId: string,

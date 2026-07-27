@@ -976,6 +976,10 @@ pub const REMOTE_WORKSPACE_COMMAND_POLICIES: &[(&str, RemoteWorkspacePolicy)] = 
         "miniapp_agent_cancel_stale_runs",
         RemoteWorkspacePolicy::LegacyUnaudited,
     ),
+    (
+        "miniapp_agent_ensure_session",
+        RemoteWorkspacePolicy::LocalOnly,
+    ),
     ("miniapp_agent_run", RemoteWorkspacePolicy::LegacyUnaudited),
     (
         "miniapp_agent_turn_text",

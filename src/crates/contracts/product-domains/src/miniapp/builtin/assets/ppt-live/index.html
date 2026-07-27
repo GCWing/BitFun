@@ -85,21 +85,6 @@
 
       <!-- Right: Agent Sidebar -->
       <aside id="agentSidebar" class="agent-sidebar" aria-label="PPT Live agent">
-        <!-- Agentic MiniApp showcase: PPT Live has no composer of its own.
-             Requests are typed into BitFun's floating session bubble
-             (bottom-right); the bubble routes them here via app.chat, and the
-             agent run itself is displayed on the shared chat surface. -->
-        <section class="agent-card agent-card--bubble-hint">
-          <div class="bubble-hint__icon" aria-hidden="true">
-            <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
-            </svg>
-          </div>
-          <h2 data-i18n="bubbleHintTitle">Talk to the session bubble</h2>
-          <p data-i18n="bubbleHintBody">Describe the deck you want — or the edit you need — in the floating chat bubble at the bottom-right. The agent's progress shows up there too, and slides land on this canvas as they are written.</p>
-          <p class="bubble-hint__pointer" aria-hidden="true"><span data-i18n="bubbleHintPointer">Floating bubble</span> <span class="bubble-hint__arrow">↘</span></p>
-        </section>
-
         <!-- Collapsible Property Panels -->
         <section id="propertyPanels" class="agent-card agent-card--properties">
           <div class="property-section" data-section="style">
@@ -161,6 +146,21 @@
               </div>
             </div>
           </div>
+        </section>
+
+        <!-- Agentic MiniApp showcase: PPT Live has no composer of its own.
+             Requests are typed into BitFun's floating session bubble
+             (bottom-right); the bubble routes them here via app.chat, and the
+             agent run itself is displayed on the shared chat surface. -->
+        <section class="agent-card agent-card--bubble-hint">
+          <div class="bubble-hint__icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+            </svg>
+          </div>
+          <h2 data-i18n="bubbleHintTitle">Talk to the session bubble</h2>
+          <p data-i18n="bubbleHintBody">Describe the deck you want — or the edit you need — in the floating chat bubble at the bottom-right. The agent's progress shows up there too, and slides land on this canvas as they are written.</p>
+          <p class="bubble-hint__pointer" aria-hidden="true"><span data-i18n="bubbleHintPointer">Floating bubble</span> <span class="bubble-hint__arrow">↘</span></p>
         </section>
 
       </aside>

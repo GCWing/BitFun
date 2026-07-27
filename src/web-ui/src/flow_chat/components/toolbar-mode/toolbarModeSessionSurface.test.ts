@@ -86,4 +86,26 @@ describe('floating mini chat bubble MiniApp composer', () => {
     expect(source).toContain('MINIAPP_COMPOSER_DRAFT_EVENT');
     expect(source).toContain('setComposerPrefill');
   });
+
+  it('shows only the active MiniApp topic session while its claim is active', () => {
+    expect(source).toContain('activeComposerClaim?.sessionId');
+    expect(source).toContain(
+      'activeSession?.sessionId === activeComposerSessionId'
+    );
+    expect(source).toContain(
+      'surfaceMounted && (!activeComposerClaim || isMiniAppSessionReady)'
+    );
+    expect(source).toContain('previousHostSessionRef');
+    expect(source).toContain('disabled={!isMiniAppSessionReady || isStreaming}');
+  });
+
+  it('hydrates a restored hidden topic session instead of substituting the latest chat', () => {
+    const bridgeSource = readSource(
+      '../../../app/scenes/miniapps/hooks/useMiniAppBridge.ts'
+    );
+
+    expect(bridgeSource).toContain('if (!result.created)');
+    expect(bridgeSource).toContain('flowChatStore.loadSessionHistory(');
+    expect(bridgeSource).toContain('{ includeInternal: true }');
+  });
 });

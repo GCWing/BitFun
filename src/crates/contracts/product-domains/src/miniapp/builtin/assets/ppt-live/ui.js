@@ -261,6 +261,8 @@ async function restoreHistory(id) {
   rerender();
   syncStylePanelFromState(state);
   setStatus(t('historyRestored'));
+  await clearFocusedDeckAgentSession();
+  await ensureDeckAgentSession();
   await storageSet(STORAGE_KEY, { ...state, updatedAt: Date.now() });
 }
 
@@ -798,6 +800,68 @@ function currentDeckProject() {
     workspaceSubdir,
     dir: `${runtime().appDataDir}/${workspaceSubdir}`,
   };
+}
+
+async function clearFocusedDeckAgentSession() {
+  try {
+    await runtime().chat?.clearSession?.();
+  } catch (error) {
+    runtime().log?.warn?.('PPT Live could not clear the previous topic session', {
+      error: String(error),
+    });
+  }
+}
+
+/**
+ * Every deck topic owns a hidden Agent session before the bubble can open.
+ * Existing/history topics rebind their persisted session id; a blank topic
+ * gets a fresh session in its own appdata project directory.
+ */
+async function ensureDeckAgentSession() {
+  const host = runtime();
+  if (typeof host.backend?.ensureSession !== 'function' || !host.appDataDir) {
+    const existingSessionId = String(state.agentSession?.id || '');
+    if (existingSessionId) {
+      void host.chat?.focusSession?.(existingSessionId)?.catch?.(() => {});
+    }
+    return existingSessionId || null;
+  }
+
+  const topicEpoch = deckEpoch;
+  const topicId = String(state.sessionId || '');
+  const project = currentDeckProject() || newDeckProject();
+  const requestSession = async (sessionId) => host.backend.ensureSession({
+    sessionId: sessionId || undefined,
+    appDataWorkspace: project.workspaceSubdir,
+    model: normalizePreferredModel(state.preferredModel),
+  });
+
+  let result;
+  const persistedSessionId = String(state.agentSession?.id || '');
+  try {
+    result = await requestSession(persistedSessionId);
+  } catch (error) {
+    if (!persistedSessionId || !isUnknownSessionBackendError(error)) throw error;
+    runtime().log?.warn?.('PPT Live topic session is stale; creating a replacement', {
+      sessionId: persistedSessionId,
+      error: String(error),
+    });
+    result = await requestSession('');
+  }
+
+  const sessionId = String(result?.sessionId || '');
+  if (!sessionId) throw new Error('PPT Live session initialization returned no sessionId');
+  if (deckEpoch !== topicEpoch || String(state.sessionId || '') !== topicId) {
+    return null;
+  }
+  state.agentSession = {
+    id: sessionId,
+    workspaceSubdir: project.workspaceSubdir,
+    runId: project.runId,
+    skillKey: PPT_DESIGN_SKILL_KEY,
+  };
+  await host.chat?.focusSession?.(sessionId);
+  return sessionId;
 }
 
 function deckSlideFileName(slideNumber) {
@@ -2651,6 +2715,8 @@ async function newDeck() {
   rerender();
   syncStylePanelFromState(state);
   setStatus(t('blankDeckReady'));
+  await clearFocusedDeckAgentSession();
+  await ensureDeckAgentSession();
   await persist(true);
 }
 
@@ -3373,16 +3439,17 @@ function bindPropertyPanels() {
       const selected = normalizePreferredModel(modelSelect.value);
       if (selected === state.preferredModel) return;
       state.preferredModel = selected;
-      // Drop the reused session so the next turn starts with the newly chosen model
-      // context cleanly when host-side model update is unavailable.
-      if (state.agentSession?.id) {
-        state.agentSession = {
-          ...state.agentSession,
-          id: '',
-        };
-      }
       refreshFlatSelect(modelSelect);
-      void persist(true);
+      void (async () => {
+        // Keep the topic's conversation intact; ensureSession updates the
+        // persisted session's model in place.
+        await ensureDeckAgentSession();
+        await persist(true);
+      })().catch((error) => {
+        runtime().log?.warn?.('PPT Live failed to prepare the updated model session', {
+          error: String(error),
+        });
+      });
     });
   }
 }
@@ -3778,6 +3845,7 @@ async function init() {
     await loadState();
     await recoverFromRestart();
     syncLocale();
+    await ensureDeckAgentSession();
     syncStylePanelFromState(state);
     await loadModelOptions();
     await persist(true);

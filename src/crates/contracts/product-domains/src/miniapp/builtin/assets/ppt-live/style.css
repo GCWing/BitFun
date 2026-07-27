@@ -969,13 +969,13 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 .generation-pipeline li.is-done { border-color: var(--studio-chip-done-border); }
 .generation-pipeline small { display: block; margin-top: 2px; color: var(--studio-muted); font-size: 10px; }
 
-/* Agent sidebar — bubble hint on top, style settings below.
+/* Agent sidebar — style settings on top, bubble hint anchored below.
    No composer here: requests come from the host's floating session bubble. */
 .agent-sidebar {
   min-width: 0;
   min-height: 0;
   display: grid;
-  grid-template-rows: auto minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr) auto;
   border-left: 1px solid var(--studio-line);
   background: var(--studio-sidebar-bg);
   overflow: hidden;
@@ -990,10 +990,11 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 .agent-card--bubble-hint {
   position: relative;
   z-index: 3;
+  grid-row: 2;
   display: grid;
   gap: 8px;
   padding: 16px 14px;
-  border-bottom: 1px solid var(--studio-line);
+  border-top: 1px solid var(--studio-line);
   overflow: hidden;
 }
 
@@ -1048,6 +1049,7 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 .agent-card--properties {
   position: relative;
   z-index: 1;
+  grid-row: 1;
   display: grid;
   grid-template-rows: auto;
   align-content: start;
@@ -1057,7 +1059,6 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
   /* Reserve the scrollbar track so the content width never jumps when the
      scrollbar appears or disappears (e.g. while a dropdown is open). */
   scrollbar-gutter: stable;
-  border-bottom: 1px solid var(--studio-line);
 }
 
 .pill {
@@ -3005,7 +3006,7 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
   .agent-sidebar {
     height: 100%;
     max-height: none;
-    grid-template-rows: auto minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr) auto;
     border-left: 1px solid var(--studio-line);
     border-top: 0;
   }
@@ -3039,7 +3040,8 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
   }
 
   .agent-card--bubble-hint {
-    border-bottom: 0;
+    grid-row: 1;
+    border-top: 0;
   }
 
   .onebox-input {

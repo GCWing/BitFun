@@ -29,6 +29,8 @@ export interface MiniAppComposerClaim {
   token: string;
   /** Placeholder shown in the bubble composer while this MiniApp is active. */
   placeholder?: string;
+  /** Hidden Agent session dedicated to the active MiniApp topic. */
+  sessionId?: string;
 }
 
 interface MiniAppState {
@@ -53,6 +55,10 @@ interface MiniAppState {
   markCustomizationActive: (id: string) => void;
   markCustomizationIdle: (id: string) => void;
   claimComposer: (id: string, claim: MiniAppComposerClaim) => void;
+  /** Binds the claim holder to one of its validated hidden Agent sessions. */
+  setComposerSession: (id: string, token: string, sessionId: string) => void;
+  /** Clears the topic binding while the same runner prepares another topic. */
+  clearComposerSession: (id: string, token: string) => void;
   /** Releases only if `token` still holds the claim; omit to force-release. */
   releaseComposer: (id: string, token?: string) => void;
 }
@@ -110,9 +116,40 @@ export const useMiniAppStore = create<MiniAppState>((set) => ({
       customizingAppIds: state.customizingAppIds.filter((value) => value !== id),
     })),
   claimComposer: (id, claim) =>
-    set((state) => ({
-      composerClaims: { ...state.composerClaims, [id]: claim },
-    })),
+    set((state) => {
+      const current = state.composerClaims[id];
+      const nextClaim =
+        current?.token === claim.token && claim.sessionId === undefined
+          ? { ...claim, sessionId: current.sessionId }
+          : claim;
+      return {
+        composerClaims: { ...state.composerClaims, [id]: nextClaim },
+      };
+    }),
+  setComposerSession: (id, token, sessionId) =>
+    set((state) => {
+      const current = state.composerClaims[id];
+      if (!current || current.token !== token || !sessionId.trim()) return state;
+      if (current.sessionId === sessionId) return state;
+      return {
+        composerClaims: {
+          ...state.composerClaims,
+          [id]: { ...current, sessionId },
+        },
+      };
+    }),
+  clearComposerSession: (id, token) =>
+    set((state) => {
+      const current = state.composerClaims[id];
+      if (!current || current.token !== token || current.sessionId === undefined) return state;
+      const { sessionId: _removed, ...claim } = current;
+      return {
+        composerClaims: {
+          ...state.composerClaims,
+          [id]: claim,
+        },
+      };
+    }),
   releaseComposer: (id, token) =>
     set((state) => {
       const current = state.composerClaims[id];

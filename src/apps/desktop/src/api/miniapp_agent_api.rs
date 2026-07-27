@@ -13,6 +13,7 @@
 
 use log::warn;
 use serde::{Deserialize, Serialize};
+use std::path::Path;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, OnceLock};
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -22,14 +23,16 @@ use crate::api::app_state::AppState;
 use bitfun_core::agentic::coordination::{
     ConversationCoordinator, DialogScheduler, DialogSubmissionPolicy, DialogTriggerSource,
 };
-use bitfun_core::agentic::core::{MessageContent, MessageRole, SessionConfig};
+use bitfun_core::agentic::core::{MessageContent, MessageRole, Session, SessionConfig};
 use bitfun_core::miniapp::agent_bridge::{
     agent_run_id_from_request, build_agent_submission_plan, extract_agent_turn_text,
     plan_agent_workspace, require_agent_prompt, require_enabled_agent_permissions,
     validate_reused_session, MiniAppAgentRateLimiter, MiniAppAgentRunRecord,
-    MiniAppAgentRunRegistry, MiniAppAgentTurnMessage, MiniAppAgentTurnMessageRole,
-    MINIAPP_AGENT_KIND, UNKNOWN_AGENT_RUN_MESSAGE,
+    MiniAppAgentRunRegistry, MiniAppAgentSubmissionPlan, MiniAppAgentTurnMessage,
+    MiniAppAgentTurnMessageRole, MINIAPP_AGENT_KIND, UNKNOWN_AGENT_RUN_MESSAGE,
+    UNKNOWN_AGENT_SESSION_MESSAGE,
 };
+use bitfun_core::BitFunError;
 
 // ============== Run registry ==============
 
@@ -126,6 +129,31 @@ pub struct MiniAppAgentRunResponse {
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
+pub struct MiniAppAgentEnsureSessionRequest {
+    pub app_id: String,
+    /// Rebind a topic to the hidden session that already owns its history.
+    #[serde(default)]
+    pub session_id: Option<String>,
+    #[serde(default)]
+    pub session_name: Option<String>,
+    /// Dedicated local workspace inside this MiniApp's appdata directory.
+    pub app_data_workspace: String,
+    #[serde(default)]
+    pub enable_tools: Option<bool>,
+    #[serde(default)]
+    pub model: Option<String>,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MiniAppAgentEnsureSessionResponse {
+    pub session_id: String,
+    pub workspace_path: String,
+    pub created: bool,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct MiniAppAgentCancelRequest {
     pub app_id: String,
     pub session_id: String,
@@ -159,6 +187,165 @@ pub struct MiniAppAgentCancelStaleRunsResponse {
 }
 
 // ============== Commands ==============
+
+async fn create_miniapp_agent_session(
+    coordinator: &ConversationCoordinator,
+    submission_plan: &MiniAppAgentSubmissionPlan,
+    requested_model: Option<String>,
+) -> Result<String, String> {
+    let config = SessionConfig {
+        enable_tools: submission_plan.enable_tools,
+        safe_mode: true,
+        auto_compact: true,
+        enable_context_compression: true,
+        model_id: requested_model,
+        ..Default::default()
+    };
+    let session = coordinator
+        .create_hidden_subagent_session_with_workspace(
+            None,
+            submission_plan.session_name.clone(),
+            MINIAPP_AGENT_KIND.to_string(),
+            config,
+            submission_plan.workspace_path.clone(),
+            Some(submission_plan.owner.clone()),
+        )
+        .await
+        .map_err(|e| format!("Failed to create MiniApp agent session: {}", e))?;
+    Ok(session.session_id)
+}
+
+async fn load_and_validate_miniapp_agent_session(
+    coordinator: &ConversationCoordinator,
+    session_id: &str,
+    app_id: &str,
+    workspace_path: &str,
+) -> Result<Option<Session>, String> {
+    let session = if let Some(session) = coordinator.get_session_manager().get_session(session_id) {
+        session
+    } else {
+        match coordinator
+            .restore_internal_session(Path::new(workspace_path), session_id)
+            .await
+        {
+            Ok(session) => session,
+            Err(BitFunError::NotFound(_)) => return Ok(None),
+            Err(error) => {
+                return Err(format!(
+                    "Failed to restore MiniApp agent session: {}",
+                    error
+                ));
+            }
+        }
+    };
+
+    validate_reused_session(
+        session.created_by.as_deref(),
+        session.config.workspace_path.as_deref(),
+        app_id,
+        workspace_path,
+    )?;
+    Ok(Some(session))
+}
+
+/// Ensure that one MiniApp topic has a dedicated hidden Agent session before
+/// the user opens its floating chat surface. This command intentionally accepts
+/// only an appdata-relative workspace, so it remains a local-host capability
+/// even while the product is viewing a remote workspace.
+#[tauri::command]
+pub async fn miniapp_agent_ensure_session(
+    state: State<'_, AppState>,
+    coordinator: State<'_, Arc<ConversationCoordinator>>,
+    request: MiniAppAgentEnsureSessionRequest,
+) -> Result<MiniAppAgentEnsureSessionResponse, String> {
+    let agent_perms = require_agent_permission(&state, &request.app_id).await?;
+    let app_data_dir = state
+        .miniapp_manager
+        .path_manager()
+        .miniapp_dir(&request.app_id);
+    let workspace_plan = plan_agent_workspace(
+        None,
+        Some(request.app_data_workspace.as_str()),
+        &app_data_dir,
+    )?;
+    if workspace_plan.create_if_missing {
+        std::fs::create_dir_all(&workspace_plan.path)
+            .map_err(|e| format!("Failed to create MiniApp agent workspace: {}", e))?;
+    }
+
+    let run_sequence = AGENT_RUN_COUNTER.fetch_add(1, Ordering::Relaxed);
+    let run_id = agent_run_id_from_request(&request.app_id, None, run_sequence);
+    let submission_plan = build_agent_submission_plan(
+        &request.app_id,
+        &run_id,
+        request.session_name.as_deref(),
+        request.session_id.as_deref(),
+        &workspace_plan.workspace_path,
+        request.enable_tools,
+    );
+    let requested_model = request
+        .model
+        .as_deref()
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(str::to_string);
+
+    let (session_id, created) = if let Some(existing_session_id) =
+        submission_plan.requested_session_id.clone()
+    {
+        if load_and_validate_miniapp_agent_session(
+            coordinator.inner().as_ref(),
+            &existing_session_id,
+            &request.app_id,
+            &submission_plan.workspace_path,
+        )
+        .await?
+        .is_some()
+        {
+            if let Some(model_id) = requested_model.as_deref() {
+                coordinator
+                    .update_session_model(&existing_session_id, model_id)
+                    .await
+                    .map_err(|e| format!("Failed to update MiniApp agent session model: {}", e))?;
+            }
+            (existing_session_id, false)
+        } else {
+            check_agent_rate_limit(
+                &request.app_id,
+                agent_perms.rate_limit_per_minute.unwrap_or(0),
+            )?;
+            (
+                create_miniapp_agent_session(
+                    coordinator.inner().as_ref(),
+                    &submission_plan,
+                    requested_model,
+                )
+                .await?,
+                true,
+            )
+        }
+    } else {
+        check_agent_rate_limit(
+            &request.app_id,
+            agent_perms.rate_limit_per_minute.unwrap_or(0),
+        )?;
+        (
+            create_miniapp_agent_session(
+                coordinator.inner().as_ref(),
+                &submission_plan,
+                requested_model,
+            )
+            .await?,
+            true,
+        )
+    };
+
+    Ok(MiniAppAgentEnsureSessionResponse {
+        session_id,
+        workspace_path: workspace_plan.workspace_path,
+        created,
+    })
+}
 
 /// Start a full agent turn for a MiniApp inside a hidden subagent session.
 #[tauri::command]
@@ -222,16 +409,14 @@ pub async fn miniapp_agent_run(
     {
         // Reuse a hidden session created by an earlier run of this MiniApp so
         // the new turn shares its context (skills, research, prior outputs).
-        let session = coordinator
-            .get_session_manager()
-            .get_session(&existing_session_id)
-            .ok_or("Unknown MiniApp agent session")?;
-        validate_reused_session(
-            session.created_by.as_deref(),
-            session.config.workspace_path.as_deref(),
+        load_and_validate_miniapp_agent_session(
+            coordinator.inner().as_ref(),
+            &existing_session_id,
             &request.app_id,
             &submission_plan.workspace_path,
-        )?;
+        )
+        .await?
+        .ok_or_else(|| UNKNOWN_AGENT_SESSION_MESSAGE.to_string())?;
         if let Some(model_id) = requested_model.as_deref() {
             coordinator
                 .update_session_model(&existing_session_id, model_id)
@@ -242,28 +427,12 @@ pub async fn miniapp_agent_run(
     } else {
         // One hidden session per task keeps MiniApp work isolated and out of
         // the visible session list. Follow-up turns may reuse it via sessionId.
-        let config = SessionConfig {
-            enable_tools: submission_plan.enable_tools,
-            safe_mode: true,
-            auto_compact: true,
-            enable_context_compression: true,
-            model_id: requested_model.clone(),
-            ..Default::default()
-        };
-        // Cowork supplies the office skill group and research/file tools when
-        // enabled.
-        let session = coordinator
-            .create_hidden_subagent_session_with_workspace(
-                None,
-                submission_plan.session_name.clone(),
-                MINIAPP_AGENT_KIND.to_string(),
-                config,
-                submission_plan.workspace_path.clone(),
-                Some(submission_plan.owner.clone()),
-            )
-            .await
-            .map_err(|e| format!("Failed to create MiniApp agent session: {}", e))?;
-        session.session_id
+        create_miniapp_agent_session(
+            coordinator.inner().as_ref(),
+            &submission_plan,
+            requested_model.clone(),
+        )
+        .await?
     };
 
     let policy = DialogSubmissionPolicy::for_source(DialogTriggerSource::DesktopApi);
@@ -413,7 +582,7 @@ pub async fn miniapp_agent_cancel_stale_runs(
 
 #[cfg(test)]
 mod tests {
-    use super::MiniAppAgentRunRequest;
+    use super::{MiniAppAgentEnsureSessionRequest, MiniAppAgentRunRequest};
     use bitfun_core::miniapp::agent_bridge::is_clean_relative_subdir;
     use serde_json::json;
 
@@ -481,6 +650,23 @@ mod tests {
         }))
         .expect("MiniApp agent request should accept model");
         assert_eq!(with_model.model.as_deref(), Some("fast"));
+    }
+
+    #[test]
+    fn miniapp_agent_ensure_session_request_is_appdata_scoped() {
+        let request: MiniAppAgentEnsureSessionRequest = serde_json::from_value(json!({
+            "appId": "builtin-ppt-live",
+            "sessionId": "session-1",
+            "sessionName": "PPT Live",
+            "appDataWorkspace": "decks/deck-123",
+            "model": "primary"
+        }))
+        .expect("ensure-session request should deserialize");
+
+        assert_eq!(request.session_id.as_deref(), Some("session-1"));
+        assert_eq!(request.session_name.as_deref(), Some("PPT Live"));
+        assert_eq!(request.app_data_workspace, "decks/deck-123");
+        assert_eq!(request.model.as_deref(), Some("primary"));
     }
 
     #[test]

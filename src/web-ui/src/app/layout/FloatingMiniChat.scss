@@ -222,6 +222,16 @@ $panel-height: 680px;
   }
 }
 
+.bitfun-fmc__miniapp-session-icon {
+  flex: 0 0 auto;
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--color-text-secondary);
+}
+
 // ─── Title ─────────────────────────────────────────────────
 // Plain display. Session switching lives in the shared SessionMenu ("+"),
 // matching floating window mode.
@@ -291,6 +301,20 @@ $panel-height: 680px;
   padding: 8px 10px 10px;
   border-top: 1px solid var(--border-subtle);
   background: var(--color-bg-secondary);
+}
+
+.bitfun-fmc__miniapp-session-pending {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 24px;
+  color: var(--color-text-muted);
+  font-size: var(--flowchat-font-size-sm);
+  text-align: center;
 }
 
 .bitfun-fmc__miniapp-composer-hint {

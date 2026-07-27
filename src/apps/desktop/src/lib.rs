@@ -1521,6 +1521,7 @@ pub async fn run() {
             api::miniapp_api::miniapp_ai_chat,
             api::miniapp_api::miniapp_ai_cancel,
             api::miniapp_api::miniapp_ai_list_models,
+            api::miniapp_agent_api::miniapp_agent_ensure_session,
             api::miniapp_agent_api::miniapp_agent_run,
             api::miniapp_agent_api::miniapp_agent_cancel,
             api::miniapp_agent_api::miniapp_agent_turn_text,
