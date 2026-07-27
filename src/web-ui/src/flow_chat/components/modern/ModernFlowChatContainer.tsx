@@ -91,6 +91,8 @@ interface ModernFlowChatContainerProps {
   className?: string;
   config?: Partial<FlowChatConfig>;
   permissionPanelAboveChatInput?: boolean;
+  /** Host-owned replacement for the ordinary new-session WelcomePanel. */
+  emptyState?: React.ReactNode;
 
   // Callbacks compatible with the legacy version.
   onFileViewRequest?: (filePath: string, fileName: string, lineRange?: LineRange) => void;
@@ -230,6 +232,7 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
   className = '',
   config,
   permissionPanelAboveChatInput = false,
+  emptyState,
   onFileViewRequest,
   onTabOpen,
   onOpenVisualization,
@@ -1633,16 +1636,18 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
               />
             ) : virtualItems.length === 0 ? (
               showHistoryPlaceholder || showHistoryOpenIntentOverlay ? null : (
-                <WelcomePanel
-                  key={activeSession?.sessionId ?? 'welcome'}
-                  sessionMode={activeSession?.mode}
-                  workspacePath={activeSession?.workspacePath}
-                  onQuickAction={(command) => {
-                    window.dispatchEvent(new CustomEvent('fill-chat-input', {
-                      detail: { message: command }
-                    }));
-                  }}
-                />
+                emptyState !== undefined ? emptyState : (
+                  <WelcomePanel
+                    key={activeSession?.sessionId ?? 'welcome'}
+                    sessionMode={activeSession?.mode}
+                    workspacePath={activeSession?.workspacePath}
+                    onQuickAction={(command) => {
+                      window.dispatchEvent(new CustomEvent('fill-chat-input', {
+                        detail: { message: command }
+                      }));
+                    }}
+                  />
+                )
               )
             ) : (
               <>

@@ -99,6 +99,18 @@ describe('floating mini chat bubble MiniApp composer', () => {
     expect(source).toContain('disabled={!isMiniAppSessionReady || isStreaming}');
   });
 
+  it('renders the MiniApp entry model against the topic session workspace', () => {
+    expect(source).toContain('<MiniAppBubbleWelcome');
+    expect(source).toContain('customization={bubbleCustomization}');
+    expect(source).toContain('workspacePath={displayedSession?.workspacePath}');
+    expect(source).toContain('emptyState={activeComposerClaim ? (');
+    expect(source).toContain('getMiniAppIconGradient');
+    // The ordinary project workspace remains valid only for the host session.
+    expect(source).toContain(
+      'activeComposerClaim\n                  ? displayedSession?.workspacePath\n                  : workspacePath'
+    );
+  });
+
   it('hydrates a restored hidden topic session instead of substituting the latest chat', () => {
     const bridgeSource = readSource(
       '../../../app/scenes/miniapps/hooks/useMiniAppBridge.ts'

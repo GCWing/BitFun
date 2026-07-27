@@ -252,6 +252,20 @@ test('PPT topic lifecycle eagerly creates or rebinds its dedicated session', asy
   );
 });
 
+test('PPT Live declares a localized host-rendered Agentic bubble entry', async () => {
+  const uiSource = await readFile(new URL('../ui.js', import.meta.url), 'utf8');
+  const i18nSource = await readFile(new URL('../src/i18n.js', import.meta.url), 'utf8');
+
+  assert.match(uiSource, /claimComposer\?\.\(\{\s*panelSize:\s*'wide'/);
+  assert.match(uiSource, /composer:\s*\{[\s\S]*placeholder:\s*t\('bubblePlaceholder'\)[\s\S]*rows:\s*3/);
+  assert.match(uiSource, /welcome:\s*\{[\s\S]*workspaceLabel:\s*t\('bubbleWorkspaceLabel'\)/);
+  assert.match(uiSource, /suggestions:\s*\[[\s\S]*welcomeTip1[\s\S]*welcomeTip2[\s\S]*welcomeTip3/);
+  assert.match(i18nSource, /bubbleWelcomeTitle:/);
+  assert.match(i18nSource, /bubbleWelcomeBody:/);
+  assert.match(i18nSource, /bubbleWorkspaceLabel:/);
+  assert.match(i18nSource, /bubbleSuggestionsLabel:/);
+});
+
 test('prompt carries a targeted contract diagnostic into same-session continuation', () => {
   const prompt = buildAgentPrompt({
     instruction: '继续生成',

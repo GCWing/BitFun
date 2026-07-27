@@ -142,6 +142,9 @@ pub fn build_bridge_script(
     // 'chat:userMessage' instead of being sent to the host chat session, and
     // `focusSession` shows one of the MiniApp's own ensureSession/agent.run
     // sessions in the bubble so agent progress renders on the shared surface.
+    // `claimComposer` may also provide bounded host-rendered presentation
+    // options (`title`, `panelSize`, `composer`, and `welcome`). The MiniApp
+    // contributes declarative text and prompts, never arbitrary host markup.
     // Requires manifest permissions.agent.enabled = true; enforced host-side.
     chat: {{
       claimComposer:   (opts) => _rpc('chat.claimComposer', opts || {{}}),

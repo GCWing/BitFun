@@ -25,6 +25,11 @@ import {
   MINIAPP_COMPOSER_DRAFT_EVENT,
 } from '@/app/scenes/miniapps/miniAppStore';
 import { pickLocalizedString } from '@/app/scenes/miniapps/utils/pickLocalizedString';
+import {
+  getMiniAppIconGradient,
+  renderMiniAppIcon,
+} from '@/app/scenes/miniapps/utils/miniAppIcons';
+import MiniAppBubbleWelcome from './MiniAppBubbleWelcome';
 import './FloatingMiniChat.scss';
 
 /**
@@ -49,10 +54,12 @@ const MiniAppComposer: React.FC<{
   token: string;
   appName: string;
   placeholder?: string;
+  hint?: string;
+  rows?: number;
   disabled: boolean;
   /** Prefill pushed by the MiniApp; a new object marks a new request. */
   prefill: { text: string } | null;
-}> = ({ token, appName, placeholder, disabled, prefill }) => {
+}> = ({ token, appName, placeholder, hint, rows = 2, disabled, prefill }) => {
   const { t } = useTranslation('flow-chat');
   const [draft, setDraft] = useState('');
   const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -84,13 +91,13 @@ const MiniAppComposer: React.FC<{
   return (
     <div className="bitfun-fmc__miniapp-composer">
       <div className="bitfun-fmc__miniapp-composer-hint">
-        {t('miniAppComposer.hint', { app: appName })}
+        {hint || t('miniAppComposer.hint', { app: appName })}
       </div>
       <div className="bitfun-fmc__miniapp-composer-row">
         <textarea
           ref={inputRef}
           className="bitfun-fmc__miniapp-composer-input"
-          rows={2}
+          rows={rows}
           value={draft}
           placeholder={placeholder || t('miniAppComposer.placeholder', { app: appName })}
           onChange={(e) => setDraft(e.target.value)}
@@ -144,12 +151,23 @@ export const FloatingMiniChat: React.FC = () => {
   // the single conversation surface but input is routed to the MiniApp instead
   // of the host chat session (BitFun's Agentic MiniApp pattern — see PPT Live).
   const activeComposerClaim = activeMiniAppId ? composerClaims[activeMiniAppId] : undefined;
+  const activeMiniApp = useMemo(
+    () => apps.find((app) => app.id === activeMiniAppId),
+    [activeMiniAppId, apps]
+  );
   const activeMiniAppName = useMemo(() => {
     if (!activeMiniAppId) return '';
-    const meta = apps.find((app) => app.id === activeMiniAppId);
-    if (!meta) return activeMiniAppId;
-    return pickLocalizedString(meta, i18n.language, 'name') || activeMiniAppId;
-  }, [apps, activeMiniAppId, i18n.language]);
+    if (!activeMiniApp) return activeMiniAppId;
+    return pickLocalizedString(activeMiniApp, i18n.language, 'name') || activeMiniAppId;
+  }, [activeMiniApp, activeMiniAppId, i18n.language]);
+  const activeMiniAppDescription = useMemo(() => {
+    if (!activeMiniApp) return '';
+    return pickLocalizedString(activeMiniApp, i18n.language, 'description')
+      || activeMiniApp.description;
+  }, [activeMiniApp, i18n.language]);
+  const activeMiniAppIcon = activeMiniApp?.icon || 'Box';
+  const activeMiniAppIconGradient = getMiniAppIconGradient(activeMiniAppIcon);
+  const bubbleCustomization = activeComposerClaim?.customization;
   const activeComposerToken = activeComposerClaim?.token;
   const activeComposerSessionId = activeComposerClaim?.sessionId;
   const isMiniAppSessionReady = Boolean(
@@ -158,7 +176,9 @@ export const FloatingMiniChat: React.FC = () => {
   const displayedSession = activeComposerClaim
     ? (isMiniAppSessionReady ? activeSession : undefined)
     : activeSession;
-  const displayedTitle = activeComposerClaim ? activeMiniAppName : sessionTitle;
+  const displayedTitle = activeComposerClaim
+    ? (bubbleCustomization?.title || activeMiniAppName)
+    : sessionTitle;
 
   const isStreaming = useMemo(() => {
     if (
@@ -190,6 +210,14 @@ export const FloatingMiniChat: React.FC = () => {
   const handleClose = useCallback(() => {
     setPhase('closed');
   }, []);
+
+  const handleMiniAppSuggestion = useCallback((prompt: string) => {
+    setComposerPrefill({ text: prompt });
+  }, []);
+
+  useEffect(() => {
+    setComposerPrefill(null);
+  }, [activeComposerSessionId, activeComposerToken]);
 
   // ChatPane is intentionally the shared session surface, so displaying a
   // MiniApp session temporarily switches the shared store. Capture the user's
@@ -335,7 +363,9 @@ export const FloatingMiniChat: React.FC = () => {
   const panelClassName = [
     'bitfun-fmc__panel',
     isOpen && 'bitfun-fmc__panel--open',
-    isStreaming && 'bitfun-fmc__panel--processing'
+    isStreaming && 'bitfun-fmc__panel--processing',
+    activeComposerClaim
+      && `bitfun-fmc__panel--miniapp-${bubbleCustomization?.panelSize || 'standard'}`,
   ]
     .filter(Boolean)
     .join(' ');
@@ -364,13 +394,26 @@ export const FloatingMiniChat: React.FC = () => {
           `visibility` (not just pointer-events) while the panel is open. */}
       <button
         type="button"
-        className="bitfun-fmc__button"
+        className={[
+          'bitfun-fmc__button',
+          activeComposerClaim && 'bitfun-fmc__button--miniapp',
+        ].filter(Boolean).join(' ')}
         onPointerDown={handleTriggerPointerDown}
         onClick={handleOpen}
         aria-expanded={isOpen}
-        aria-label={t('toolCards.toolbar.startNewChat')}
+        aria-label={activeComposerClaim ? displayedTitle : t('toolCards.toolbar.startNewChat')}
       >
-        <MessageSquare size={20} />
+        {activeComposerClaim ? (
+          <span
+            className="bitfun-fmc__miniapp-trigger-icon"
+            style={{ background: activeMiniAppIconGradient }}
+            aria-hidden="true"
+          >
+            {renderMiniAppIcon(activeMiniAppIcon, 20)}
+          </span>
+        ) : (
+          <MessageSquare size={20} />
+        )}
       </button>
 
       {/* Expanded panel */}
@@ -385,8 +428,12 @@ export const FloatingMiniChat: React.FC = () => {
             cannot navigate the dedicated composer back into a normal chat. */}
         <div className="bitfun-fmc__header">
           {activeComposerClaim ? (
-            <div className="bitfun-fmc__miniapp-session-icon" aria-hidden="true">
-              <MessageSquare size={14} />
+            <div
+              className="bitfun-fmc__miniapp-session-icon"
+              style={{ background: activeMiniAppIconGradient }}
+              aria-hidden="true"
+            >
+              {renderMiniAppIcon(activeMiniAppIcon, 14)}
             </div>
           ) : (
             <SessionMenu />
@@ -417,21 +464,50 @@ export const FloatingMiniChat: React.FC = () => {
               width={0}
               isFullscreen={false}
               isSceneActive
-              workspacePath={workspacePath}
+              workspacePath={
+                activeComposerClaim
+                  ? displayedSession?.workspacePath
+                  : workspacePath
+              }
               showChatInput={!activeComposerClaim}
+              emptyState={activeComposerClaim ? (
+                <MiniAppBubbleWelcome
+                  appName={activeMiniAppName}
+                  appDescription={activeMiniAppDescription}
+                  appIcon={activeMiniAppIcon}
+                  customization={bubbleCustomization}
+                  workspacePath={displayedSession?.workspacePath}
+                  onSuggestion={handleMiniAppSuggestion}
+                />
+              ) : undefined}
             />
           )}
           {surfaceMounted && activeComposerClaim && !isMiniAppSessionReady && (
             <div className="bitfun-fmc__miniapp-session-pending">
-              <MessageSquare size={22} aria-hidden="true" />
-              <span>{t('miniAppComposer.hint', { app: activeMiniAppName })}</span>
+              <div
+                className="bitfun-fmc__miniapp-session-pending-icon"
+                style={{ background: activeMiniAppIconGradient }}
+                aria-hidden="true"
+              >
+                {renderMiniAppIcon(activeMiniAppIcon, 22)}
+              </div>
+              <span>
+                {bubbleCustomization?.composer?.hint
+                  || t('miniAppComposer.hint', { app: activeMiniAppName })}
+              </span>
             </div>
           )}
           {surfaceMounted && activeComposerClaim && (
             <MiniAppComposer
+              key={`${activeComposerClaim.token}:${activeComposerSessionId || 'pending'}`}
               token={activeComposerClaim.token}
               appName={activeMiniAppName}
-              placeholder={activeComposerClaim.placeholder}
+              placeholder={
+                bubbleCustomization?.composer?.placeholder
+                || activeComposerClaim.placeholder
+              }
+              hint={bubbleCustomization?.composer?.hint}
+              rows={bubbleCustomization?.composer?.rows}
               disabled={!isMiniAppSessionReady || isStreaming}
               prefill={composerPrefill}
             />

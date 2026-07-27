@@ -18,6 +18,109 @@ export const MINIAPP_COMPOSER_MESSAGE_EVENT = 'miniapp-composer-message';
  */
 export const MINIAPP_COMPOSER_DRAFT_EVENT = 'miniapp-composer-draft';
 
+export type MiniAppBubblePanelSize = 'compact' | 'standard' | 'wide';
+
+export interface MiniAppBubbleSuggestion {
+  label: string;
+  prompt: string;
+}
+
+export interface MiniAppBubbleCustomization {
+  /** Optional title override for the bubble header. */
+  title?: string;
+  /** Host-bounded panel preset; MiniApps cannot inject arbitrary dimensions. */
+  panelSize?: MiniAppBubblePanelSize;
+  composer?: {
+    placeholder?: string;
+    hint?: string;
+    rows?: number;
+  };
+  welcome?: {
+    title?: string;
+    description?: string;
+    workspaceLabel?: string;
+    suggestionsLabel?: string;
+    suggestions?: MiniAppBubbleSuggestion[];
+  };
+}
+
+const MINIAPP_BUBBLE_MAX_SUGGESTIONS = 6;
+
+function boundedText(value: unknown, maxLength: number): string | undefined {
+  if (typeof value !== 'string') return undefined;
+  const text = value.trim();
+  return text ? text.slice(0, maxLength) : undefined;
+}
+
+function asRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : {};
+}
+
+/**
+ * Converts untrusted iframe claim options into the declarative customization
+ * contract the host bubble renders. React owns all markup; MiniApps only
+ * contribute bounded text, prompt values, and one of the host size presets.
+ */
+export function normalizeMiniAppBubbleCustomization(
+  params: Record<string, unknown>,
+): MiniAppBubbleCustomization | undefined {
+  const composerInput = asRecord(params.composer);
+  const welcomeInput = asRecord(params.welcome);
+  const legacyPlaceholder = boundedText(params.placeholder, 600);
+  const placeholder = boundedText(composerInput.placeholder, 600) ?? legacyPlaceholder;
+  const hint = boundedText(composerInput.hint, 180);
+  const rowsValue = Number(composerInput.rows);
+  const rows = Number.isFinite(rowsValue)
+    ? Math.min(4, Math.max(1, Math.round(rowsValue)))
+    : undefined;
+  const composer = placeholder || hint || rows
+    ? { placeholder, hint, rows }
+    : undefined;
+
+  const suggestions = Array.isArray(welcomeInput.suggestions)
+    ? welcomeInput.suggestions
+      .slice(0, MINIAPP_BUBBLE_MAX_SUGGESTIONS)
+      .map((item): MiniAppBubbleSuggestion | null => {
+        if (typeof item === 'string') {
+          const prompt = boundedText(item, 2000);
+          return prompt ? { label: prompt.slice(0, 100), prompt } : null;
+        }
+        const suggestion = asRecord(item);
+        const prompt = boundedText(suggestion.prompt, 2000);
+        const label = boundedText(suggestion.label, 100) ?? prompt?.slice(0, 100);
+        return prompt && label ? { label, prompt } : null;
+      })
+      .filter((item): item is MiniAppBubbleSuggestion => item !== null)
+    : undefined;
+  const welcome = {
+    title: boundedText(welcomeInput.title, 140),
+    description: boundedText(welcomeInput.description, 800),
+    workspaceLabel: boundedText(welcomeInput.workspaceLabel, 120),
+    suggestionsLabel: boundedText(welcomeInput.suggestionsLabel, 120),
+    suggestions: suggestions?.length ? suggestions : undefined,
+  };
+  const hasWelcome = Object.values(welcome).some((value) => value !== undefined);
+
+  const requestedPanelSize = boundedText(params.panelSize, 20);
+  const panelSize = requestedPanelSize === 'compact'
+    || requestedPanelSize === 'standard'
+    || requestedPanelSize === 'wide'
+    ? requestedPanelSize
+    : undefined;
+  const customization: MiniAppBubbleCustomization = {
+    title: boundedText(params.title, 120),
+    panelSize,
+    composer,
+    welcome: hasWelcome ? welcome : undefined,
+  };
+
+  return Object.values(customization).some((value) => value !== undefined)
+    ? customization
+    : undefined;
+}
+
 /** A MiniApp's claim on the floating bubble composer (`app.chat.claimComposer`). */
 export interface MiniAppComposerClaim {
   /**
@@ -29,6 +132,8 @@ export interface MiniAppComposerClaim {
   token: string;
   /** Placeholder shown in the bubble composer while this MiniApp is active. */
   placeholder?: string;
+  /** Declarative, host-rendered bubble presentation supplied by the MiniApp. */
+  customization?: MiniAppBubbleCustomization;
   /** Hidden Agent session dedicated to the active MiniApp topic. */
   sessionId?: string;
 }

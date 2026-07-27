@@ -3834,7 +3834,25 @@ function syncLocale() {
  * the host treats repeated claims as an upsert.
  */
 function syncComposerClaim() {
-  void runtime().chat?.claimComposer?.({ placeholder: t('bubblePlaceholder') })?.catch?.((error) => {
+  void runtime().chat?.claimComposer?.({
+    panelSize: 'wide',
+    composer: {
+      placeholder: t('bubblePlaceholder'),
+      hint: t('bubbleComposerHint'),
+      rows: 3,
+    },
+    welcome: {
+      title: t('bubbleWelcomeTitle'),
+      description: t('bubbleWelcomeBody'),
+      workspaceLabel: t('bubbleWorkspaceLabel'),
+      suggestionsLabel: t('bubbleSuggestionsLabel'),
+      suggestions: [
+        { label: t('welcomeTip1'), prompt: t('welcomeTip1') },
+        { label: t('welcomeTip2'), prompt: t('welcomeTip2') },
+        { label: t('welcomeTip3'), prompt: t('welcomeTip3') },
+      ],
+    },
+  })?.catch?.((error) => {
     runtime().log?.warn?.('PPT Live could not claim the bubble composer', { error: String(error) });
   });
 }

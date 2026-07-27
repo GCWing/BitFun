@@ -30,7 +30,7 @@ PPT Live 同时是 BitFun **Agentic MiniApp** 的样板间：它自己**没有�
 | API | 作用 |
 |-----|------|
 | `app.agent.ensureSession(options)` | 在主题打开时创建或重新绑定专属隐藏会话；PPT Live 用 `agentSession.id` 恢复老主题，用新的 appdata 工作目录初始化新主题 |
-| `app.chat.claimComposer({ placeholder })` | 认领气泡输入框；本应用 tab 激活时用户输入改送本应用。幂等 upsert，locale 变更时重调可更新占位文案 |
+| `app.chat.claimComposer(options)` | 认领气泡输入框；本应用 tab 激活时用户输入改送本应用。可声明 `panelSize`、`composer` 与 `welcome`（标题、说明、工作区标签、示例 prompt），由宿主按主题安全渲染。幂等 upsert，locale 变更时重调可更新文案 |
 | `app.chat.onUserMessage(fn)` | 接收气泡输入，payload 为 `{ text }` |
 | `app.chat.focusSession(sessionId)` | 把经校验的本应用 Agent 会话绑定到气泡；气泡打开时临时展示该会话，关闭后恢复用户原来的普通会话 |
 | `app.chat.clearSession()` | 新建或切换主题时先清除旧绑定，避免准备新会话期间短暂显示上一个主题 |
@@ -43,6 +43,10 @@ PPT Live 同时是 BitFun **Agentic MiniApp** 的样板间：它自己**没有�
 为什么这是好实践：PPT Live 在用户输入需求后本来就是启动一个 agent 会话去完成
 任务——与其在 MiniApp 里再造一套输入框和过程流水线，不如把输入和过程都交给宿主
 现成的会话表面，MiniApp 只专注于自己的领域视图（画布、样式、导出）。
+
+气泡空态同样属于 MiniApp 的 Agentic 入口。PPT Live 只声明文案、面板尺寸和示例
+prompt；图标、布局、主题色、交互和 HTML 始终由宿主管理。宿主使用当前主题专属
+Agent 会话的 `workspacePath`，不会泄露或展示用户普通会话的全局项目工作区。
 
 ## 目录结构
 

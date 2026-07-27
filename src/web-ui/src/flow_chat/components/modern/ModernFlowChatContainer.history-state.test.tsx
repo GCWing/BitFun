@@ -342,6 +342,25 @@ describe('ModernFlowChatContainer historical empty state', () => {
     expect(container.querySelector('[data-testid="welcome-panel"]')).toBeNull();
   });
 
+  it('renders a host-provided empty state instead of the generic welcome panel', () => {
+    stateMocks.activeSession = createSession({
+      isHistorical: false,
+      historyState: 'new',
+      dialogTurns: [],
+    } as Partial<Session>);
+
+    act(() => {
+      root.render(
+        <ModernFlowChatContainer
+          emptyState={<div data-testid="miniapp-welcome">MiniApp welcome</div>}
+        />
+      );
+    });
+
+    expect(container.querySelector('[data-testid="miniapp-welcome"]')).not.toBeNull();
+    expect(container.querySelector('[data-testid="welcome-panel"]')).toBeNull();
+  });
+
   it('reports a stalled history loading layer after the diagnostic threshold', async () => {
     vi.useFakeTimers();
     stateMocks.activeSession = createSession({

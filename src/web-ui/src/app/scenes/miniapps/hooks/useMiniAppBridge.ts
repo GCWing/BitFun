@@ -23,6 +23,7 @@ import {
   useMiniAppStore,
   MINIAPP_COMPOSER_MESSAGE_EVENT,
   MINIAPP_COMPOSER_DRAFT_EVENT,
+  normalizeMiniAppBubbleCustomization,
 } from '../miniAppStore';
 import { flowChatStore } from '@/flow_chat/store/FlowChatStore';
 import { createLogger } from '@/shared/utils/logger';
@@ -373,9 +374,13 @@ export function useMiniAppBridge(
             return;
           }
           if (method === 'chat.claimComposer') {
+            const customization = normalizeMiniAppBubbleCustomization(params);
             useMiniAppStore.getState().claimComposer(appId, {
               token: composerTokenRef.current,
-              placeholder: typeof params.placeholder === 'string' ? params.placeholder : undefined,
+              // Keep the flat placeholder for older bubble consumers while the
+              // richer host-rendered presentation lives under customization.
+              placeholder: customization?.composer?.placeholder,
+              customization,
             });
             reply(null);
             return;

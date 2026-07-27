@@ -29,6 +29,8 @@ interface ChatPaneProps {
   workspacePath?: string;
   isDragging?: boolean;
   showChatInput?: boolean;
+  /** Optional host-owned replacement for the empty-session welcome surface. */
+  emptyState?: React.ReactNode;
 }
 
 const ChatPaneInner: React.FC<ChatPaneProps> = ({
@@ -38,6 +40,7 @@ const ChatPaneInner: React.FC<ChatPaneProps> = ({
   workspacePath,
   isDragging: _isDragging = false,
   showChatInput = false,
+  emptyState,
 }) => {
   const addTab = useCanvasStore(state => state.addTab);
   const deferredTaskDetailTimersRef = useRef<number[]>([]);
@@ -149,6 +152,7 @@ const ChatPaneInner: React.FC<ChatPaneProps> = ({
       <FlowChatContainer
         className="bitfun-chat-pane__chat-container"
         permissionPanelAboveChatInput={showChatInput}
+        emptyState={emptyState}
         onOpenVisualization={(type, data) => {
           log.info('Opening visualization', { type, data });
         }}
