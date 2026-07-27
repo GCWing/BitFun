@@ -104,7 +104,8 @@ describe('floating mini chat bubble MiniApp composer', () => {
     expect(source).toContain('customization={bubbleCustomization}');
     expect(source).toContain('workspacePath={displayedSession?.workspacePath}');
     expect(source).toContain('emptyState={activeComposerClaim ? (');
-    expect(source).toContain('getMiniAppIconGradient');
+    expect(source).toContain('renderMiniAppIcon');
+    expect(source).not.toContain('getMiniAppIconGradient');
     // The ordinary project workspace remains valid only for the host session.
     expect(source).toContain(
       'activeComposerClaim\n                  ? displayedSession?.workspacePath\n                  : workspacePath'

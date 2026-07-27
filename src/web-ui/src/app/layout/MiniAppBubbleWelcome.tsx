@@ -1,10 +1,7 @@
 import React from 'react';
 import { ArrowUpRight, FolderOpen } from 'lucide-react';
 import type { MiniAppBubbleCustomization } from '@/app/scenes/miniapps/miniAppStore';
-import {
-  getMiniAppIconGradient,
-  renderMiniAppIcon,
-} from '@/app/scenes/miniapps/utils/miniAppIcons';
+import { renderMiniAppIcon } from '@/app/scenes/miniapps/utils/miniAppIcons';
 
 interface MiniAppBubbleWelcomeProps {
   appName: string;
@@ -38,7 +35,6 @@ export const MiniAppBubbleWelcome: React.FC<MiniAppBubbleWelcomeProps> = ({
     <section className="bitfun-fmc__miniapp-welcome">
       <div
         className="bitfun-fmc__miniapp-welcome-icon"
-        style={{ background: getMiniAppIconGradient(appIcon) }}
         aria-hidden="true"
       >
         {renderMiniAppIcon(appIcon, 28)}

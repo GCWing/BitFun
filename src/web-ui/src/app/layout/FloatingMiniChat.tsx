@@ -25,10 +25,7 @@ import {
   MINIAPP_COMPOSER_DRAFT_EVENT,
 } from '@/app/scenes/miniapps/miniAppStore';
 import { pickLocalizedString } from '@/app/scenes/miniapps/utils/pickLocalizedString';
-import {
-  getMiniAppIconGradient,
-  renderMiniAppIcon,
-} from '@/app/scenes/miniapps/utils/miniAppIcons';
+import { renderMiniAppIcon } from '@/app/scenes/miniapps/utils/miniAppIcons';
 import MiniAppBubbleWelcome from './MiniAppBubbleWelcome';
 import './FloatingMiniChat.scss';
 
@@ -166,7 +163,6 @@ export const FloatingMiniChat: React.FC = () => {
       || activeMiniApp.description;
   }, [activeMiniApp, i18n.language]);
   const activeMiniAppIcon = activeMiniApp?.icon || 'Box';
-  const activeMiniAppIconGradient = getMiniAppIconGradient(activeMiniAppIcon);
   const bubbleCustomization = activeComposerClaim?.customization;
   const activeComposerToken = activeComposerClaim?.token;
   const activeComposerSessionId = activeComposerClaim?.sessionId;
@@ -406,7 +402,6 @@ export const FloatingMiniChat: React.FC = () => {
         {activeComposerClaim ? (
           <span
             className="bitfun-fmc__miniapp-trigger-icon"
-            style={{ background: activeMiniAppIconGradient }}
             aria-hidden="true"
           >
             {renderMiniAppIcon(activeMiniAppIcon, 20)}
@@ -430,7 +425,6 @@ export const FloatingMiniChat: React.FC = () => {
           {activeComposerClaim ? (
             <div
               className="bitfun-fmc__miniapp-session-icon"
-              style={{ background: activeMiniAppIconGradient }}
               aria-hidden="true"
             >
               {renderMiniAppIcon(activeMiniAppIcon, 14)}
@@ -486,7 +480,6 @@ export const FloatingMiniChat: React.FC = () => {
             <div className="bitfun-fmc__miniapp-session-pending">
               <div
                 className="bitfun-fmc__miniapp-session-pending-icon"
-                style={{ background: activeMiniAppIconGradient }}
                 aria-hidden="true"
               >
                 {renderMiniAppIcon(activeMiniAppIcon, 22)}

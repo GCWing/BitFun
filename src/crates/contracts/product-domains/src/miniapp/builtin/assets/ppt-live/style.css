@@ -992,47 +992,95 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
   z-index: 3;
   grid-row: 2;
   display: grid;
-  gap: 8px;
-  padding: 16px 14px;
+  gap: 10px;
+  min-height: 184px;
+  padding: 18px 16px 76px;
+  box-sizing: border-box;
   border-top: 1px solid var(--studio-line);
+  background: linear-gradient(
+    180deg,
+    transparent,
+    color-mix(in srgb, var(--studio-text) 3%, transparent)
+  );
   overflow: hidden;
+}
+
+.bubble-hint__heading {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.bubble-hint__heading-copy {
+  min-width: 0;
+}
+
+.bubble-hint__eyebrow {
+  display: block;
+  margin-bottom: 2px;
+  color: var(--studio-muted);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  line-height: 1.2;
+  text-transform: uppercase;
 }
 
 .agent-card--bubble-hint h2 {
   margin: 0;
+  color: var(--studio-text);
   font-size: 13px;
+  line-height: 1.35;
 }
 
 .agent-card--bubble-hint p {
   margin: 0;
-  font-size: 12px;
-  line-height: 1.55;
+  font-size: 11px;
+  line-height: 1.5;
   color: var(--studio-muted);
 }
 
 .bubble-hint__icon {
+  flex: 0 0 auto;
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 34px;
-  height: 34px;
-  border-radius: 50%;
-  border: 1px solid var(--studio-chip-active-border);
-  background: var(--studio-chip-active-bg);
-  color: var(--studio-accent, currentColor);
+  width: 32px;
+  height: 32px;
+  border-radius: 9px;
+  border: 1px solid var(--studio-line);
+  background: var(--studio-control-muted);
+  color: var(--studio-soft);
+}
+
+.bubble-hint__body {
+  max-width: 34ch;
 }
 
 .bubble-hint__pointer {
+  position: absolute;
+  left: 16px;
+  right: 84px;
+  bottom: 18px;
   display: flex;
   align-items: center;
-  justify-content: flex-end;
+  justify-content: flex-start;
   gap: 6px;
-  font-size: 11px;
-  color: var(--studio-muted);
+  width: max-content;
+  max-width: calc(100% - 100px);
+  padding: 6px 9px;
+  border: 1px solid var(--studio-line);
+  border-radius: 999px;
+  background: var(--studio-control-muted);
+  color: var(--studio-soft);
+  font-weight: 650;
+  white-space: nowrap;
 }
 
 .bubble-hint__arrow {
-  font-size: 15px;
+  color: var(--studio-muted);
+  font-size: 14px;
   line-height: 1;
   animation: bubble-hint-nudge 2.2s ease-in-out infinite;
 }
@@ -2769,7 +2817,9 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
   min-height: 28px;
   min-width: 0;
   overflow: hidden;
-  padding: 0 var(--space-4);
+  /* The Agentic MiniApp launcher occupies the bottom-right corner. Keep
+     status copy out of that fixed host-owned hit area. */
+  padding: 0 84px 0 var(--space-4);
   border-top: 1px solid var(--studio-line);
   color: var(--studio-muted);
   font-size: var(--text-xs);

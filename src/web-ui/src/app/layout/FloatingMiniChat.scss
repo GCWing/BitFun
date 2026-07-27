@@ -107,7 +107,15 @@ $panel-height: 680px;
 }
 
 .bitfun-fmc__button--miniapp {
-  padding: 5px;
+  color: var(--color-text-primary);
+  background: var(--color-bg-elevated);
+  border-color: var(--border-medium);
+
+  &:hover {
+    color: var(--color-text-primary);
+    background: var(--element-bg-hover);
+    border-color: var(--border-strong);
+  }
 }
 
 .bitfun-fmc__miniapp-trigger-icon {
@@ -117,8 +125,7 @@ $panel-height: 680px;
   align-items: center;
   justify-content: center;
   border-radius: 50%;
-  color: var(--color-static-white);
-  box-shadow: inset 0 1px 0 var(--color-overlay-white-12);
+  color: inherit;
 }
 
 // ─── Panel ─────────────────────────────────────────────────
@@ -258,9 +265,10 @@ $panel-height: 680px;
   display: flex;
   align-items: center;
   justify-content: center;
-  color: var(--color-static-white);
+  color: var(--color-text-secondary);
   border-radius: 7px;
-  box-shadow: inset 0 1px 0 var(--color-overlay-white-12);
+  border: 1px solid var(--border-subtle);
+  background: var(--element-bg-subtle);
 }
 
 // ─── Title ─────────────────────────────────────────────────
@@ -354,9 +362,10 @@ $panel-height: 680px;
   display: flex;
   align-items: center;
   justify-content: center;
-  color: var(--color-static-white);
+  color: var(--color-text-primary);
   border-radius: 12px;
-  box-shadow: inset 0 1px 0 var(--color-overlay-white-12);
+  border: 1px solid var(--border-subtle);
+  background: var(--element-bg-subtle);
 }
 
 // MiniApps describe this empty state as bounded data through
@@ -390,10 +399,11 @@ $panel-height: 680px;
   display: flex;
   align-items: center;
   justify-content: center;
-  color: var(--color-static-white);
+  color: var(--color-text-primary);
   border-radius: 14px;
+  border: 1px solid var(--border-subtle);
+  background: var(--element-bg-subtle);
   box-shadow:
-    inset 0 1px 0 var(--color-overlay-white-12),
     0 10px 28px var(--color-overlay-black-20);
 }
 

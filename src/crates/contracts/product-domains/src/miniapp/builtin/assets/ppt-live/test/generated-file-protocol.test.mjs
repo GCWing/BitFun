@@ -266,6 +266,21 @@ test('PPT Live declares a localized host-rendered Agentic bubble entry', async (
   assert.match(i18nSource, /bubbleSuggestionsLabel:/);
 });
 
+test('PPT Live guides users to the host launcher without placing copy beneath it', async () => {
+  const htmlSource = await readFile(new URL('../index.html', import.meta.url), 'utf8');
+  const styleSource = await readFile(new URL('../style.css', import.meta.url), 'utf8');
+  const i18nSource = await readFile(new URL('../src/i18n.js', import.meta.url), 'utf8');
+
+  assert.match(htmlSource, /class="bubble-hint__heading"/);
+  assert.match(htmlSource, /data-i18n="bubbleHintEyebrow"/);
+  assert.match(htmlSource, /class="bubble-hint__body"/);
+  assert.match(styleSource, /\.agent-card--bubble-hint\s*\{[\s\S]*padding:\s*18px 16px 76px/);
+  assert.match(styleSource, /\.bubble-hint__pointer\s*\{[\s\S]*max-width:\s*calc\(100% - 100px\)/);
+  assert.match(styleSource, /\.statusbar\s*\{[\s\S]*padding:\s*0 84px 0 var\(--space-4\)/);
+  assert.match(i18nSource, /bubbleHintTitle:\s*'Start with the PPT Live button'/);
+  assert.match(i18nSource, /bubbleHintTitle:\s*'从 PPT Live 按钮开始'/);
+});
+
 test('prompt carries a targeted contract diagnostic into same-session continuation', () => {
   const prompt = buildAgentPrompt({
     instruction: '继续生成',

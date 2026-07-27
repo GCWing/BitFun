@@ -47,6 +47,8 @@ PPT Live 同时是 BitFun **Agentic MiniApp** 的样板间：它自己**没有�
 气泡空态同样属于 MiniApp 的 Agentic 入口。PPT Live 只声明文案、面板尺寸和示例
 prompt；图标、布局、主题色、交互和 HTML 始终由宿主管理。宿主使用当前主题专属
 Agent 会话的 `workspacePath`，不会泄露或展示用户普通会话的全局项目工作区。
+当应用持有 composer claim 时，宿主也会用 manifest 的 `icon` 替换普通聊天气泡
+图标；PPT Live 无需在宿主层复制一套品牌色或按钮样式。
 
 ## 目录结构
 
