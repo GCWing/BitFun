@@ -21,6 +21,7 @@ serde_json = { workspace = true }
 serde_yaml = { workspace = true, optional = true }
 base64 = { workspace = true }
 chrono = { workspace = true }
+git2 = { workspace = true }
 dunce = { workspace = true, optional = true }
 zip = { workspace = true, optional = true }
 thiserror = { workspace = true }
@@ -42,6 +43,10 @@ windows = { workspace = true, features = [
     "Win32_System_Diagnostics_ToolHelp",
     "Win32_System_Threading",
 ] }
+
+# Keep libgit2 self-contained on Unix, matching the product assembly dependency.
+[target.'cfg(not(windows))'.dependencies]
+git2 = { workspace = true, features = ["vendored-openssl"] }
 
 [target.'cfg(unix)'.dependencies]
 libc = { workspace = true }
