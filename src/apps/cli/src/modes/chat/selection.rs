@@ -150,14 +150,12 @@ impl ChatMode {
             .or_else(|| self.workspace.clone())
             .or_else(|| Some(self.agent.workspace_path_string()));
         let agent = self.agent.clone();
-        let runtime = Arc::clone(&self.runtime);
 
         let report_result: Result<bitfun_core::service::session_usage::SessionUsageReport> =
             tokio::task::block_in_place(|| {
                 let session_id = session_id.clone();
                 let workspace_path = workspace_path.clone();
                 let agent = agent.clone();
-                let runtime = Arc::clone(&runtime);
                 rt_handle.block_on(async move {
                     let workspace_path = workspace_path
                         .filter(|path| !path.trim().is_empty())
@@ -176,8 +174,7 @@ impl ChatMode {
                     let markdown = render_usage_report_markdown(&report);
                     let generated_at = u64::try_from(report.generated_at).unwrap_or_default();
                     let metadata = usage_report_metadata(&report)?;
-                    runtime
-                        .agent_runtime()
+                    agent
                         .record_completed_local_command_turn(AgentLocalCommandTurnRecordRequest {
                             session_id,
                             content: markdown,
@@ -187,8 +184,7 @@ impl ChatMode {
                                 anyhow!("Usage report metadata must be an object")
                             })?,
                         })
-                        .await
-                        .map_err(|error| anyhow!(error.into_message()))?;
+                        .await?;
 
                     Ok(report)
                 })

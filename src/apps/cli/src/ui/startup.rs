@@ -36,9 +36,9 @@ use ratatui::{
     widgets::{Block, Paragraph},
     Frame, Terminal,
 };
+use std::sync::Arc;
 use std::time::Duration;
 
-use bitfun_agent_runtime::sdk::AgentRuntime;
 use bitfun_core::agentic::agents::{
     get_agent_registry, AgentInfo, SubAgentSource, SubagentListScope, SubagentQueryContext,
 };
@@ -52,6 +52,8 @@ use bitfun_core::agentic::tools::implementations::skills::{
 };
 use bitfun_core::product_runtime::CoreAgentRuntimeCompatibility;
 use bitfun_core::service::config::GlobalConfigManager;
+
+use crate::agent::runtime_client::CliAgentRuntimeClient;
 
 /// Types of popups that can be shown on the startup page
 #[derive(Debug, Clone, PartialEq)]
@@ -190,7 +192,7 @@ pub(crate) struct StartupPage {
     theme_preview_original: Option<Theme>,
 
     // ── System context ──
-    agent_runtime: AgentRuntime,
+    agent: Arc<CliAgentRuntimeClient>,
     compatibility: CoreAgentRuntimeCompatibility,
 
     // ── State ──
@@ -212,7 +214,7 @@ pub(crate) struct StartupPage {
 impl StartupPage {
     pub(crate) fn new(
         config: CliConfig,
-        agent_runtime: AgentRuntime,
+        agent: Arc<CliAgentRuntimeClient>,
         compatibility: CoreAgentRuntimeCompatibility,
         default_agent: String,
         workspace: Option<String>,
@@ -267,7 +269,7 @@ impl StartupPage {
             model_config_form: ModelConfigFormState::new(),
             login_form: LoginFormState::new(),
             theme_preview_original: None,
-            agent_runtime,
+            agent,
             compatibility,
             agent_type: default_agent,
             model_display_name: String::new(),
@@ -1320,19 +1322,10 @@ impl StartupPage {
 
     fn show_session_selector(&mut self) {
         self.push_current_popup_to_stack();
-        let agent_runtime = self.agent_runtime.clone();
+        let agent = Arc::clone(&self.agent);
         let sessions = tokio::task::block_in_place(|| {
-            let workspace_path = self.workspace_path_buf();
-            tokio::runtime::Handle::current().block_on(async {
-                agent_runtime
-                    .list_sessions(bitfun_runtime_ports::AgentSessionListRequest {
-                        workspace_path: workspace_path.to_string_lossy().to_string(),
-                        remote_connection_id: None,
-                        remote_ssh_host: None,
-                    })
-                    .await
-                    .unwrap_or_default()
-            })
+            tokio::runtime::Handle::current()
+                .block_on(async { agent.list_sessions().await.unwrap_or_default() })
         });
 
         if sessions.is_empty() {
@@ -1370,21 +1363,11 @@ impl StartupPage {
     }
 
     fn handle_session_delete(&mut self, item: &SessionItem) {
-        let agent_runtime = self.agent_runtime.clone();
+        let agent = Arc::clone(&self.agent);
         let sid = item.session_id.clone();
 
         let result = tokio::task::block_in_place(|| {
-            let workspace_path = self.workspace_path_buf();
-            tokio::runtime::Handle::current().block_on(async {
-                agent_runtime
-                    .delete_session(bitfun_runtime_ports::AgentSessionDeleteRequest {
-                        workspace_path: workspace_path.to_string_lossy().to_string(),
-                        session_id: sid,
-                        remote_connection_id: None,
-                        remote_ssh_host: None,
-                    })
-                    .await
-            })
+            tokio::runtime::Handle::current().block_on(async { agent.delete_session(&sid).await })
         });
 
         match result {

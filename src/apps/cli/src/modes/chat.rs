@@ -10,7 +10,6 @@ use crossterm::event::{
     Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers, MouseButton, MouseEventKind,
 };
 use std::collections::{BTreeMap, BTreeSet, HashMap};
-use std::path::PathBuf;
 use std::sync::{
     mpsc::{self, Receiver, TryRecvError as MpscTryRecvError},
     Arc,
@@ -32,7 +31,6 @@ use crate::actions::{
 use crate::agent::runtime_client::CliAgentRuntimeClient;
 use crate::chat_state::ChatState;
 use crate::config::CliConfig;
-use crate::runtime::CliRuntimeContext;
 use crate::ui::agent_selector::{AgentItem, AgentSelectorAction};
 use crate::ui::chat::{ChatView, MouseGestureOutcome};
 use crate::ui::command_menu::{ExternalCommandProjection, NativeCommandCollisionProjection};
@@ -84,6 +82,7 @@ use bitfun_core::external_sources::{
     ExternalToolCatalogEntry, ExternalToolRuntimeKind, NativePromptCommandDescriptor,
     PromptCommandAvailability, EXTERNAL_SOURCE_CONTROL_SCHEMA_V1,
 };
+use bitfun_core::product_runtime::CoreAgentRuntimeCompatibility;
 use bitfun_core::service::config::GlobalConfigManager;
 use bitfun_core::service::session_usage::render_usage_report_markdown;
 use bitfun_product_domains::external_sources::{ExternalSourceHealth, ExternalSourceScope};
@@ -191,7 +190,7 @@ pub(crate) struct ChatMode {
     agent_type: String,
     workspace: Option<String>,
     agent: Arc<CliAgentRuntimeClient>,
-    runtime: Arc<CliRuntimeContext>,
+    compatibility: CoreAgentRuntimeCompatibility,
     /// User-level default resolved from shared config for this TUI run.
     auto_approve_ask_default: bool,
     /// Temporary override for the current session only.
@@ -241,13 +240,9 @@ impl ChatMode {
         config: CliConfig,
         agent_type: String,
         workspace: Option<String>,
-        runtime: Arc<CliRuntimeContext>,
+        agent: Arc<CliAgentRuntimeClient>,
+        compatibility: CoreAgentRuntimeCompatibility,
     ) -> Self {
-        let agent = Arc::new(CliAgentRuntimeClient::new(
-            runtime.as_ref(),
-            workspace.clone().map(PathBuf::from),
-        ));
-
         let keymap = ResolvedKeymap::new(&config.shortcuts);
         Self {
             config,
@@ -255,7 +250,7 @@ impl ChatMode {
             agent_type,
             workspace,
             agent,
-            runtime,
+            compatibility,
             auto_approve_ask_default: false,
             auto_approve_ask_override: None,
             restore_session_id: None,

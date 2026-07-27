@@ -30,13 +30,14 @@ flowchart LR
 
 | 范围 | 当前状态 |
 |---|---|
-| Embedded GUI/TUI/CLI/ACP/SDK Host | 保持现状；本设计没有改变其依赖或生命周期 |
+| Embedded GUI/Headless CLI/ACP/SDK Host | 保持现状；本设计没有改变其依赖或生命周期 |
+| Embedded interactive TUI | CLI crate 私有的 `CliAgentRuntimeClient` 统一暴露 Session、Turn、Permission 和事件访问；前三者使用 Rust Runtime SDK（当前 preview），事件继续复用既有 CLI event source；仍在当前 CLI 进程内运行 |
 | Runtime ownership | 已有可选的 Embedded 共享锁 / Shared 独占锁原语；尚未接入产品入口 |
 | Shared local IPC | 已有未发布、仅 crate 内可见的 discovery、实例锁、严格握手、Health 和 cleanup 基础；尚无生产 consumer |
 | Shared Session/Turn/Tool/Permission | 尚未设计为稳定 wire，也没有产品 consumer |
 | Shared GUI/TUI/Remote | 尚未交付，没有 `--shared` 或隐藏 Host 命令 |
 
-因此当前新增的是基础设施，不是用户可用的 Shared Runtime 产品。
+因此当前新增的是基础设施，不是用户可用的 Shared Runtime 产品。TUI 的私有 client 只收敛第一方调用边界，不代表事件已经迁入 Rust Runtime SDK（当前 preview），也不代表已经存在 Shared consumer。
 
 ## 2. 最少名词
 
@@ -140,6 +141,7 @@ flowchart LR
 ```
 
 - CLI 不依赖 SDK Host，GUI/TUI 也不依赖公开 SDK package。
+- 交互式 TUI 的启动页和会话页复用一个 CLI 私有 Runtime client；Session、Turn 和 Permission 使用 Rust Runtime SDK（当前 preview），事件继续使用既有 CLI event source。该 client 只是第一方 adapter，不是公开 SDK 或第二套 Runtime。
 - TUI 不是 Server；未来是否连接 Shared deployment 是部署选择，不改变 TUI 的 renderer/键位职责。
 - Agent SDK Host 只服务外部 SDK 合同，不成为第一方 rich-client 的通用底座。
 - Headless CLI 默认继续 Embedded；CI 或测试可保持独立进程和独立 workspace，不承担后台实例成本。
@@ -199,5 +201,6 @@ Session/Turn、事件恢复、Permission/UserInput、Controller、配置管理�
 - Client、窗口、Session 或 workspace 数量不会自动等量增加 Runtime 或 Plugin Host 进程。
 - 私有 IPC 不成为公开 SDK、Remote、Peer、HTTP 或浏览器协议。
 - 默认 GUI/TUI/Headless CLI 在 Shared 产品能力正式交付前保持现有 Embedded 行为。
+- Account/session cloud sync 仍使用既有 Core compatibility 边界，不属于 Shared Runtime 支持。
 - Remote workspace 的文件、凭据、进程和 Runtime 位于目标执行域，禁止静默回落本机。
 - 未经真实 consumer 验证的接口不进入 wire；当前唯一 operation 是 Health。

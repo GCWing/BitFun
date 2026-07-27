@@ -83,7 +83,7 @@ impl ChatMode {
     ) {
         let workspace = self.workspace_path_for_sync(chat_state);
         crate::account_sync::start_auto_sync_background(
-            self.runtime.compatibility().clone(),
+            self.compatibility.clone(),
             is_first_login,
             workspace,
         );

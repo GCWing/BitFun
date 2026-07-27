@@ -36,8 +36,9 @@ use anyhow::{anyhow, Result};
 use bitfun_core::service::remote_connect::DeviceIdentity;
 use clap::{CommandFactory, FromArgMatches, Parser, Subcommand, ValueEnum};
 use std::sync::atomic::{AtomicU8, Ordering};
-use std::sync::OnceLock;
+use std::sync::{Arc, OnceLock};
 
+use agent::runtime_client::CliAgentRuntimeClient;
 use config::CliConfig;
 use mcp_import::{McpImportCommand, McpImportOutputFormat};
 use modes::chat::ChatMode;
@@ -728,6 +729,10 @@ async fn run_interactive(
         BootstrapProfile::Interactive,
     )
     .await?;
+    let agent = Arc::new(CliAgentRuntimeClient::new(
+        runtime.as_ref(),
+        Some(workspace_path.clone()),
+    ));
     // 3.5 Restore persisted account session (if any)
     if let Some(user_id) = account::try_restore_session().await {
         tracing::info!("Restored account session for user {user_id}");
@@ -754,7 +759,7 @@ async fn run_interactive(
     // 4. Show startup page (with full command support)
     let mut startup_page = StartupPage::new(
         config,
-        runtime.agent_runtime().clone(),
+        Arc::clone(&agent),
         runtime.compatibility().clone(),
         default_agent,
         workspace.clone(),
@@ -779,7 +784,13 @@ async fn run_interactive(
     // Use the current project workspace selected at process start.
     let workspace = startup_page.workspace();
     let config = startup_page.config().clone();
-    let mut chat_mode = ChatMode::new(config, agent_type, workspace, runtime.clone());
+    let mut chat_mode = ChatMode::new(
+        config,
+        agent_type,
+        workspace,
+        agent,
+        runtime.compatibility().clone(),
+    );
     if let Some(session_id) = restore_session_id {
         chat_mode = chat_mode.with_restore_session(session_id);
     }
@@ -1143,16 +1154,13 @@ async fn run_interactive_with_session(
     let mut terminal = ui::init_terminal()?;
     ui::render_loading(&mut terminal, "Initializing system, please wait...")?;
 
-    let workspace = Some(runtime.workspace_root().to_string_lossy().to_string());
-    let sessions = runtime
-        .agent_runtime()
-        .list_sessions(bitfun_runtime_ports::AgentSessionListRequest {
-            workspace_path: runtime.workspace_root().to_string_lossy().to_string(),
-            remote_connection_id: None,
-            remote_ssh_host: None,
-        })
-        .await
-        .map_err(|error| anyhow::anyhow!(error.into_message()))?;
+    let workspace_path = runtime.workspace_root().to_path_buf();
+    let workspace = Some(workspace_path.to_string_lossy().to_string());
+    let agent = Arc::new(CliAgentRuntimeClient::new(
+        runtime.as_ref(),
+        Some(workspace_path),
+    ));
+    let sessions = agent.list_sessions().await?;
     let agent_type = sessions
         .iter()
         .find(|session| session.session_id == session_id)
@@ -1164,8 +1172,14 @@ async fn run_interactive_with_session(
             )
         })?;
 
-    let mut chat_mode = ChatMode::new(config, agent_type, workspace, runtime.clone())
-        .with_restore_session(session_id);
+    let mut chat_mode = ChatMode::new(
+        config,
+        agent_type,
+        workspace,
+        agent,
+        runtime.compatibility().clone(),
+    )
+    .with_restore_session(session_id);
     let run_result = chat_mode.run(Some(terminal));
 
     shutdown_mcp_servers().await;

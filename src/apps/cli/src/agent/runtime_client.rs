@@ -10,12 +10,14 @@ use std::sync::{Arc, RwLock};
 use tokio::sync::Mutex;
 
 use bitfun_agent_runtime::sdk::{
-    AgentDialogTurnRequest, AgentRuntime, AgentSessionCreateRequest, AgentSessionDeleteRequest,
-    AgentSessionForkRequest, AgentSessionForkResult, AgentSessionListRequest,
-    AgentSessionModeUpdateRequest, AgentSessionModelUpdateRequest, AgentSessionRestoreRequest,
-    AgentSessionUsageRequest, AgentTurnCancellationRequest, AgentTurnSettlementRequest,
-    AgentUserAnswersRequest, PortErrorKind, RuntimeError, SessionTranscript,
-    SessionTranscriptRequest, SessionUsageReport, AUTO_APPROVE_ASK_CONTEXT_KEY,
+    AgentDialogTurnRequest, AgentLocalCommandTurnRecordRequest, AgentRuntime,
+    AgentSessionCreateRequest, AgentSessionDeleteRequest, AgentSessionForkRequest,
+    AgentSessionForkResult, AgentSessionListRequest, AgentSessionModeUpdateRequest,
+    AgentSessionModelUpdateRequest, AgentSessionRestoreRequest, AgentSessionUsageRequest,
+    AgentTurnCancellationRequest, AgentTurnSettlementRequest, AgentUserAnswersRequest,
+    PermissionReply, PermissionRequest, PermissionRequestEventReceiver, PortErrorKind,
+    RuntimeError, SessionTranscript, SessionTranscriptRequest, SessionUsageReport,
+    AUTO_APPROVE_ASK_CONTEXT_KEY,
 };
 use bitfun_agent_runtime::user_questions::USER_INPUT_AVAILABLE_CONTEXT_KEY;
 use bitfun_runtime_ports::{AgentSessionSummary, AgentSubmissionSource, DialogSubmissionPolicy};
@@ -120,6 +122,39 @@ impl CliAgentRuntimeClient {
 
     pub(crate) fn event_source(&self) -> &CliAgentEventSource {
         &self.event_source
+    }
+
+    pub(crate) fn subscribe_permission_requests(
+        &self,
+    ) -> std::result::Result<PermissionRequestEventReceiver, RuntimeError> {
+        self.runtime.subscribe_permission_requests()
+    }
+
+    pub(crate) fn pending_permission_requests(
+        &self,
+    ) -> std::result::Result<Vec<PermissionRequest>, RuntimeError> {
+        self.runtime.pending_permission_requests()
+    }
+
+    pub(crate) async fn respond_permission(
+        &self,
+        request_id: &str,
+        reply: PermissionReply,
+    ) -> Result<()> {
+        self.runtime
+            .respond_permission(request_id, reply)
+            .await
+            .map_err(|error| anyhow::anyhow!(error.into_message()))
+    }
+
+    pub(crate) async fn record_completed_local_command_turn(
+        &self,
+        request: AgentLocalCommandTurnRecordRequest,
+    ) -> Result<()> {
+        self.runtime
+            .record_completed_local_command_turn(request)
+            .await
+            .map_err(|error| anyhow::anyhow!(error.into_message()))
     }
 
     pub(crate) fn set_approval_policy(&self, policy: CliApprovalPolicy) {

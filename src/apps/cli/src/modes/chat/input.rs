@@ -20,9 +20,9 @@ impl ChatMode {
             match prompt.handle_key_event(key) {
                 PermissionAction::Reply(reply) => {
                     let request_id = prompt.request.request_id.clone();
-                    let runtime = self.runtime.agent_runtime().clone();
+                    let agent = Arc::clone(&self.agent);
                     let result = tokio::task::block_in_place(|| {
-                        rt_handle.block_on(runtime.respond_permission(&request_id, reply))
+                        rt_handle.block_on(agent.respond_permission(&request_id, reply))
                     });
                     match result {
                         Ok(()) => {

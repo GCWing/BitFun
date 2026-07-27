@@ -175,12 +175,8 @@ impl ChatMode {
         }
 
         let mut event_rx = self.agent.event_source().subscribe();
-        let mut permission_rx = self
-            .runtime
-            .agent_runtime()
-            .subscribe_permission_requests()
-            .ok();
-        if let Ok(pending) = self.runtime.agent_runtime().pending_permission_requests() {
+        let mut permission_rx = self.agent.subscribe_permission_requests().ok();
+        if let Ok(pending) = self.agent.pending_permission_requests() {
             for request in pending.into_iter().filter(|request| {
                 crate::runtime::approval::permission_request_targets_session(request, &session_id)
             }) {

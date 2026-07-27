@@ -282,3 +282,62 @@ fn primary_cli_session_client_uses_only_the_runtime_sdk_boundary() {
         );
     }
 }
+
+#[test]
+fn primary_cli_runtime_client_covers_interactive_permission_and_local_turn_operations() {
+    const PRIMARY_CLIENT: &str = include_str!("../src/agent/runtime_client.rs");
+
+    for sdk_operation in [
+        "subscribe_permission_requests",
+        "pending_permission_requests",
+        "respond_permission",
+        "record_completed_local_command_turn",
+    ] {
+        assert!(
+            PRIMARY_CLIENT.contains(sdk_operation),
+            "interactive TUI operation {sdk_operation} must stay behind the existing runtime client"
+        );
+    }
+}
+
+#[test]
+fn interactive_tui_agent_operations_stay_behind_cli_runtime_client() {
+    const STARTUP_PAGE: &str = include_str!("../src/ui/startup.rs");
+    const CHAT_MODE: &str = include_str!("../src/modes/chat.rs");
+    const CHAT_RUN: &str = include_str!("../src/modes/chat/run.rs");
+    const CHAT_INPUT: &str = include_str!("../src/modes/chat/input.rs");
+    const CHAT_SELECTION: &str = include_str!("../src/modes/chat/selection.rs");
+    const CLI_MAIN: &str = include_str!("../src/main.rs");
+    const CLI_CARGO: &str = include_str!("../Cargo.toml");
+
+    assert!(
+        !STARTUP_PAGE.contains("bitfun_agent_runtime::sdk::AgentRuntime"),
+        "the startup controller must use the existing CLI runtime client instead of AgentRuntime"
+    );
+    assert!(
+        !CHAT_MODE.contains("Arc<CliRuntimeContext>"),
+        "ChatMode must not retain the whole Embedded runtime context"
+    );
+    for (path, source) in [
+        ("modes/chat/run.rs", CHAT_RUN),
+        ("modes/chat/input.rs", CHAT_INPUT),
+        ("modes/chat/selection.rs", CHAT_SELECTION),
+    ] {
+        assert!(
+            !source.contains(".agent_runtime()"),
+            "{path} must route Agent operations through CliAgentRuntimeClient"
+        );
+    }
+    assert!(
+        CHAT_MODE.contains("CliAgentRuntimeClient"),
+        "interactive chat must retain the existing app-private runtime client facade"
+    );
+    assert!(
+        !CLI_CARGO.contains("bitfun-sdk-host") && !CLI_CARGO.contains("bitfun-agent-runtime-ipc"),
+        "the CLI must not gain SDK Host or Shared IPC dependencies in this refactor"
+    );
+    assert!(
+        CLI_MAIN.contains("Cli::command()") && CLI_MAIN.contains("McpAction::Import"),
+        "interactive composition changes must preserve product-aware CLI identity and MCP import"
+    );
+}
