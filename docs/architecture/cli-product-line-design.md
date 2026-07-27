@@ -508,9 +508,16 @@ MCP C0a：发现 -> 安全投影 -> 预览 | 显式 apply -> 原子写入 disabl
 规则文件优先复用项目已有文件，不复制出第二份内容。若不同生态规则冲突，导入报告必须展示目标文件、
 优先级和冲突段，不能自动拼接。
 
+当前 Workspace Instructions 只消费真实工作区根：本地和 Remote 共用 `WorkspaceFileSystem` 读取，
+`AGENTS.override.md` 文件存在时替代同目录 `AGENTS.md`（空文件也不回退），`CLAUDE.md` 继续作为独立来源按既有顺序追加。
+运行时尚无稳定的嵌套活动目录事实，因此不声明 root-to-cwd 级联；全局规则、Claude rules/import、OpenCode
+`instructions` glob/URL、变化监听和冲突报告也不属于当前实现。
+
 现有对 `.claude/.codex/.opencode/.agents` Skill 根的直接发现已经保留来源身份和全局/项目使用范围，并在 GUI/TUI
-展示来源和默认覆盖状态，模式配置再展示实际采用项；固定根顺序保持为 Skill Registry 的独立回归契约。变化监听与可见性测试仍需
-后续补齐。OpenCode 兼容来源继续直接发现官方目录；Codex/Claude 是否增加新的持续来源另行决定。
+展示来源和默认覆盖状态，模式配置再展示实际采用项；固定根顺序保持为 Skill Registry 的独立回归契约。
+Skill Registry 还保留来源资产声明的隐式调用意图：Claude `SKILL.md` 的 `disable-model-invocation: true` 与 Codex
+`agents/openai.yaml` 的 `policy.allow_implicit_invocation: false` 都会让 Skill 不进入模型自动目录，但不影响 `/skills`、
+模式配置和显式加载。BitFun 不继承来源产品的全局启停策略，也未实现 URL/额外根和自动变化监听。
 Skill 说明和索引可按 L1 处理，脚本、URL 和外部依赖按 L2 确认；显式导入仍不得复制凭据值。MCP 启用状态按
 OpenCode 来源解释，首次连接、策略限制和凭据缺失分别显示。
 

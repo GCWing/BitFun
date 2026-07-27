@@ -62,28 +62,7 @@ pub async fn review_capability_catalog(
         BUILTIN_GUIDANCE,
     )];
 
-    let skill_registry = get_skill_registry();
-    let skills = if context.is_remote() {
-        if let Some(fs) = context.ws_fs() {
-            let root = context
-                .workspace
-                .as_ref()
-                .map(|workspace| workspace.root_path_string())
-                .unwrap_or_default();
-            skill_registry
-                .get_resolved_skills_for_remote_workspace(fs, &root, context.agent_type.as_deref())
-                .await
-        } else {
-            Vec::new()
-        }
-    } else {
-        skill_registry
-            .get_resolved_skills_for_workspace(
-                context.workspace_root(),
-                context.agent_type.as_deref(),
-            )
-            .await
-    };
+    let skills = implicitly_invocable_skills(context).await;
     let mut skills = skills
         .into_iter()
         .filter(|skill| is_compatible_review_skill(&skill.dir_name))
@@ -167,6 +146,35 @@ pub async fn review_capability_catalog(
     }
 
     descriptors
+}
+
+async fn implicitly_invocable_skills(context: &ToolUseContext) -> Vec<SkillInfo> {
+    let skill_registry = get_skill_registry();
+    if context.is_remote() {
+        if let Some(fs) = context.ws_fs() {
+            let root = context
+                .workspace
+                .as_ref()
+                .map(|workspace| workspace.root_path_string())
+                .unwrap_or_default();
+            skill_registry
+                .get_implicitly_invocable_skills_for_remote_workspace(
+                    fs,
+                    &root,
+                    context.agent_type.as_deref(),
+                )
+                .await
+        } else {
+            Vec::new()
+        }
+    } else {
+        skill_registry
+            .get_implicitly_invocable_skills_for_workspace(
+                context.workspace_root(),
+                context.agent_type.as_deref(),
+            )
+            .await
+    }
 }
 
 pub async fn review_capability_catalog_for_context(context: &ToolUseContext) -> String {
@@ -271,6 +279,14 @@ fn agent_fingerprint_material(guidance: &str, preferred_model: Option<&str>) -> 
 }
 
 async fn load_review_skill(context: &ToolUseContext, skill_key: &str) -> BitFunResult<SkillData> {
+    let still_implicitly_invocable = implicitly_invocable_skills(context)
+        .await
+        .into_iter()
+        .any(|skill| skill.key == skill_key);
+    if !still_implicitly_invocable {
+        return Err(capability_changed_error());
+    }
+
     let registry = get_skill_registry();
     if context.is_remote() {
         let fs = context.ws_fs().ok_or_else(|| {
@@ -406,6 +422,26 @@ fn xml_escape(value: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::agentic::tools::framework::ToolUseContext;
+    use crate::agentic::WorkspaceBinding;
+    use std::collections::HashMap;
+    use std::path::PathBuf;
+
+    fn local_tool_context(root: PathBuf) -> ToolUseContext {
+        ToolUseContext {
+            tool_call_id: None,
+            agent_type: None,
+            session_id: None,
+            dialog_turn_id: None,
+            workspace: Some(WorkspaceBinding::new(None, root)),
+            loaded_deferred_tool_specs: Vec::new(),
+            primary_model_facts: tool_runtime::context::PrimaryModelFacts::default(),
+            custom_data: HashMap::new(),
+            computer_use_host: None,
+            runtime_tool_restrictions: Default::default(),
+            runtime_handles: bitfun_runtime_ports::ToolRuntimeHandles::default(),
+        }
+    }
 
     #[test]
     fn compatible_skill_uses_directory_convention_not_metadata_name() {
@@ -477,5 +513,37 @@ mod tests {
         assert!(rendered.contains("Testing"));
         assert!(rendered.len() < 800);
         assert!(!rendered.contains("full guidance"));
+    }
+
+    #[tokio::test]
+    async fn resolve_rejects_skill_when_implicit_policy_changed_after_catalog() {
+        let temp = tempfile::tempdir().expect("temporary workspace");
+        let skill_dir = temp
+            .path()
+            .join(".codex")
+            .join("skills")
+            .join("code-review-policy-change");
+        std::fs::create_dir_all(skill_dir.join("agents")).expect("skill directories");
+        std::fs::write(
+            skill_dir.join("SKILL.md"),
+            "---\nname: Policy review\ndescription: Check policy changes\n---\nReview policy-sensitive behavior.\n",
+        )
+        .expect("skill markdown");
+        let context = local_tool_context(temp.path().to_path_buf());
+        let descriptor = review_capability_catalog(&context)
+            .await
+            .into_iter()
+            .find(|descriptor| descriptor.key().contains("code-review-policy-change"))
+            .expect("review skill descriptor");
+
+        std::fs::write(
+            skill_dir.join("agents").join("openai.yaml"),
+            "policy:\n  allow_implicit_invocation: false\n",
+        )
+        .expect("updated policy");
+
+        let result =
+            resolve_review_capability(&context, descriptor.key(), descriptor.fingerprint()).await;
+        assert!(result.is_err());
     }
 }

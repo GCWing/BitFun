@@ -53,6 +53,8 @@ pub struct SkillInfo {
     pub is_shadowed: bool,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub shadowed_by_key: Option<String>,
+    #[serde(default = "default_allow_implicit_invocation", skip_serializing)]
+    pub allow_implicit_invocation: bool,
 }
 
 impl SkillInfo {
@@ -98,6 +100,44 @@ pub struct SkillData {
     pub path: String,
     pub source_slot: String,
     pub dir_name: String,
+    pub allow_implicit_invocation: bool,
+}
+
+fn default_allow_implicit_invocation() -> bool {
+    true
+}
+
+fn optional_bool(metadata: &Value, field: &'static str) -> Result<Option<bool>, SkillParseError> {
+    let Some(value) = metadata.get(field) else {
+        return Ok(None);
+    };
+    value
+        .as_bool()
+        .map(Some)
+        .ok_or_else(|| SkillParseError::InvalidFormat(format!("Field '{field}' must be a boolean")))
+}
+
+fn optional_claude_bool(
+    metadata: &Value,
+    field: &'static str,
+) -> Result<Option<bool>, SkillParseError> {
+    let Some(value) = metadata.get(field) else {
+        return Ok(None);
+    };
+    let parsed = match value {
+        Value::Bool(value) => Some(*value),
+        Value::Number(value) if value.as_i64() == Some(1) => Some(true),
+        Value::Number(value) if value.as_i64() == Some(0) => Some(false),
+        Value::String(value) => match value.to_ascii_lowercase().as_str() {
+            "true" | "yes" | "on" | "1" => Some(true),
+            "false" | "no" | "off" | "0" => Some(false),
+            _ => None,
+        },
+        _ => None,
+    };
+    parsed
+        .map(Some)
+        .ok_or_else(|| SkillParseError::InvalidFormat(format!("Field '{field}' must be a boolean")))
 }
 
 fn parse_front_matter_markdown(content: &str) -> Result<(Value, String), SkillParseError> {
@@ -147,6 +187,9 @@ impl SkillData {
             .map(str::to_string)
             .ok_or(SkillParseError::MissingField("description"))?;
 
+        let allow_implicit_invocation =
+            !optional_claude_bool(&metadata, "disable-model-invocation")?.unwrap_or(false);
+
         let skill_content = if with_content { body } else { String::new() };
         let dir_name = Path::new(&path)
             .file_name()
@@ -163,7 +206,29 @@ impl SkillData {
             path,
             source_slot: String::new(),
             dir_name,
+            allow_implicit_invocation,
         })
+    }
+
+    pub fn apply_openai_yaml_policy(&mut self, content: &str) -> Result<(), SkillParseError> {
+        let metadata: Value = serde_yaml::from_str(content).map_err(|error| {
+            SkillParseError::InvalidFormat(format!("Failed to parse agents/openai.yaml: {error}"))
+        })?;
+        let Some(policy) = metadata.get("policy") else {
+            return Ok(());
+        };
+        if !policy.is_mapping() {
+            return Err(SkillParseError::InvalidFormat(
+                "Field 'policy' in agents/openai.yaml must be a mapping".to_string(),
+            ));
+        }
+        let Some(allow_implicit_invocation) = optional_bool(policy, "allow_implicit_invocation")?
+        else {
+            return Ok(());
+        };
+
+        self.allow_implicit_invocation &= allow_implicit_invocation;
+        Ok(())
     }
 }
 

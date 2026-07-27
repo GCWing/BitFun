@@ -190,6 +190,30 @@ async fn workspace_instruction_files_reads_agents_then_claude_and_skips_empty_fi
 }
 
 #[tokio::test]
+async fn workspace_instruction_override_replaces_agents_without_hiding_claude() {
+    let temp = tempfile::tempdir().expect("tempdir");
+    fs::write(temp.path().join("AGENTS.override.md"), "override rules\n").expect("override");
+    fs::write(temp.path().join("AGENTS.md"), "base rules\n").expect("agents");
+    fs::write(temp.path().join("CLAUDE.md"), "claude rules\n").expect("claude");
+
+    let files = read_workspace_instruction_files(temp.path())
+        .await
+        .expect("instruction files");
+
+    assert_eq!(files.len(), 2);
+    assert_eq!(files[0].name, "AGENTS.override.md");
+    assert_eq!(files[0].content, "override rules\n");
+    assert_eq!(files[1].name, "CLAUDE.md");
+
+    fs::write(temp.path().join("AGENTS.override.md"), "").expect("empty override");
+    let files = read_workspace_instruction_files(temp.path())
+        .await
+        .expect("instruction files");
+    assert_eq!(files.len(), 1);
+    assert_eq!(files[0].name, "CLAUDE.md");
+}
+
+#[tokio::test]
 async fn token_usage_service_persists_records_and_filters_subagents_by_default() {
     let temp = tempfile::tempdir().expect("tempdir");
     let service =

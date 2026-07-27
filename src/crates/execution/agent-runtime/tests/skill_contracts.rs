@@ -3,7 +3,8 @@ use std::path::PathBuf;
 
 use bitfun_agent_runtime::skills::{
     annotate_shadowed_skills, build_mode_skill_infos, builtin_skill_group_key,
-    filter_candidates_for_mode, render_loaded_skill_for_assistant, resolve_builtin_default_enabled,
+    filter_candidates_for_mode, filter_implicitly_invocable_skills,
+    render_loaded_skill_for_assistant, resolve_builtin_default_enabled,
     resolve_default_hidden_builtin_for_explicit_invocation, resolve_skill_default_enabled_for_mode,
     resolve_skill_state_for_mode, resolve_user_config_skill_root, resolve_visible_skills,
     sort_skills, ExplicitSkillInvocationResolution, ModeSkillStateReason, SkillCandidate,
@@ -27,6 +28,7 @@ fn builtin_skill(dir_name: &str) -> SkillInfo {
         group_key: builtin_skill_group_key(dir_name).map(str::to_string),
         is_shadowed: false,
         shadowed_by_key: None,
+        allow_implicit_invocation: true,
     }
 }
 
@@ -45,6 +47,7 @@ fn custom_user_skill(dir_name: &str) -> SkillInfo {
         group_key: None,
         is_shadowed: false,
         shadowed_by_key: None,
+        allow_implicit_invocation: true,
     }
 }
 
@@ -63,6 +66,7 @@ fn project_skill(dir_name: &str) -> SkillInfo {
         group_key: None,
         is_shadowed: false,
         shadowed_by_key: None,
+        allow_implicit_invocation: true,
     }
 }
 
@@ -295,6 +299,99 @@ Use the pdf workflow.
 
     let stable_assistant = render_loaded_skill_for_assistant(&data, true);
     assert!(stable_assistant.contains("from stable key 'project::bitfun::pdf'"));
+}
+
+#[test]
+fn claude_manual_skill_is_not_implicitly_invocable() {
+    let markdown = r#"---
+name: deploy
+description: Deploy the current project.
+disable-model-invocation: true
+---
+
+Run the deployment workflow.
+"#;
+
+    let data = SkillData::from_markdown(
+        "/workspace/.claude/skills/deploy".to_string(),
+        markdown,
+        SkillLocation::Project,
+        false,
+    )
+    .expect("valid Claude skill markdown should parse");
+
+    assert!(!data.allow_implicit_invocation);
+}
+
+#[test]
+fn claude_boolean_aliases_preserve_explicit_only_skill_visibility() {
+    for value in ["yes", "ON", "1"] {
+        let markdown = format!(
+            "---\nname: deploy\ndescription: Deploy the current project.\ndisable-model-invocation: {value}\n---\n\nRun the deployment workflow.\n"
+        );
+        let data = SkillData::from_markdown(
+            "/workspace/.claude/skills/deploy".to_string(),
+            &markdown,
+            SkillLocation::Project,
+            false,
+        )
+        .expect("Claude-compatible boolean aliases should parse");
+        assert!(!data.allow_implicit_invocation, "value={value}");
+    }
+}
+
+#[test]
+fn codex_policy_can_restrict_but_not_relax_skill_invocation() {
+    let markdown = r#"---
+name: deploy
+description: Deploy the current project.
+disable-model-invocation: true
+---
+
+Run the deployment workflow.
+"#;
+    let mut data = SkillData::from_markdown(
+        "/workspace/.codex/skills/deploy".to_string(),
+        markdown,
+        SkillLocation::Project,
+        false,
+    )
+    .expect("valid skill markdown should parse");
+
+    data.apply_openai_yaml_policy("policy:\n  allow_implicit_invocation: true\n")
+        .expect("valid Codex policy should parse");
+    assert!(!data.allow_implicit_invocation);
+
+    let permissive_markdown = r#"---
+name: review
+description: Review the current project.
+---
+
+Run the review workflow.
+"#;
+    let mut restricted = SkillData::from_markdown(
+        "/workspace/.codex/skills/review".to_string(),
+        permissive_markdown,
+        SkillLocation::Project,
+        false,
+    )
+    .expect("valid skill markdown should parse");
+    restricted
+        .apply_openai_yaml_policy("policy:\n  allow_implicit_invocation: false\n")
+        .expect("valid Codex policy should parse");
+    assert!(!restricted.allow_implicit_invocation);
+}
+
+#[test]
+fn implicit_skill_filter_keeps_explicit_only_skill_out_of_model_catalog() {
+    let visible = project_skill("review");
+    let mut explicit_only = project_skill("deploy");
+    explicit_only.allow_implicit_invocation = false;
+
+    let filtered = filter_implicitly_invocable_skills(vec![explicit_only, visible]);
+
+    assert_eq!(filtered.len(), 1);
+    assert_eq!(filtered[0].name, "review");
 }
 
 #[test]
@@ -570,7 +667,9 @@ fn explicit_invocation_reaches_default_hidden_agent_browser() {
             ExplicitSkillInvocationResolution::Found(skill) => {
                 assert_eq!(skill.key, "user::bitfun-system::agent-browser");
             }
-            other => panic!("expected hidden agent-browser fallback for mode {mode_id}, got {other:?}"),
+            other => {
+                panic!("expected hidden agent-browser fallback for mode {mode_id}, got {other:?}")
+            }
         }
     }
 }

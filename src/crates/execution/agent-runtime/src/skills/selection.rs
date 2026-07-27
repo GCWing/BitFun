@@ -45,6 +45,7 @@ impl SkillCandidate {
                 group_key,
                 is_shadowed: false,
                 shadowed_by_key: None,
+                allow_implicit_invocation: data.allow_implicit_invocation,
             },
             priority,
         }
@@ -138,6 +139,13 @@ pub fn resolve_visible_skills(candidates: Vec<SkillCandidate>) -> Vec<SkillInfo>
     sort_resolved_skill_candidates(by_name.into_values().collect())
         .into_iter()
         .map(|candidate| candidate.info)
+        .collect()
+}
+
+pub fn filter_implicitly_invocable_skills(skills: Vec<SkillInfo>) -> Vec<SkillInfo> {
+    skills
+        .into_iter()
+        .filter(|skill| skill.allow_implicit_invocation)
         .collect()
 }
 
@@ -311,6 +319,7 @@ mod tests {
                 group_key: None,
                 is_shadowed: false,
                 shadowed_by_key: None,
+                allow_implicit_invocation: true,
             },
             priority: 0,
         }

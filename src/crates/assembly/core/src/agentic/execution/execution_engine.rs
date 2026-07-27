@@ -10,6 +10,7 @@ use super::types::{ExecutionContext, ExecutionResult, RoundContext, RoundResult}
 use crate::agentic::agents::{
     build_prompt_context_for_workspace, get_agent_registry, PrependedPromptReminders,
     PromptBuilder, PromptBuilderContext, RuntimeContextNeeds, ToolListingSections,
+    UserContextPolicy, UserContextSection,
 };
 use crate::agentic::context_profile::{ContextProfilePolicy, ModelCapabilityProfile};
 use crate::agentic::core::{
@@ -41,6 +42,9 @@ use crate::native_hooks::{self, NativeHookSessionFacts};
 use crate::service::config::get_global_config_service;
 use crate::service::config::types::{
     automatic_max_output_tokens, model_runtime_binding_fingerprint, ModelCapability, ModelCategory,
+};
+use crate::service::instruction_context::{
+    build_workspace_instruction_files_context, build_workspace_instruction_files_context_with_fs,
 };
 use crate::util::errors::{BitFunError, BitFunResult};
 use crate::util::token_counter::TokenCounter;
@@ -993,16 +997,65 @@ impl ExecutionEngine {
         })
     }
 
+    async fn build_user_context_for_cache_miss(
+        workspace: Option<&WorkspaceBinding>,
+        workspace_services: Option<&crate::agentic::workspace::WorkspaceServices>,
+        mut prompt_context: PromptBuilderContext,
+        policy: &UserContextPolicy,
+    ) -> (Option<String>, bool) {
+        let mut cacheable = true;
+        if policy.includes(UserContextSection::WorkspaceInstructions) {
+            let instruction_context: BitFunResult<Option<String>> =
+                if let Some(workspace) = workspace {
+                    if let Some(services) = workspace_services {
+                        build_workspace_instruction_files_context_with_fs(
+                            services.fs.as_ref(),
+                            &workspace.root_path_string(),
+                        )
+                        .await
+                    } else if workspace.is_remote() {
+                        cacheable = false;
+                        Ok(None)
+                    } else {
+                        build_workspace_instruction_files_context(workspace.root_path()).await
+                    }
+                } else {
+                    Ok(None)
+                };
+            let instruction_context = match instruction_context {
+                Ok(instruction_context) => instruction_context,
+                Err(error) => {
+                    cacheable = false;
+                    warn!(
+                        "Failed to build workspace instruction context: path={} error={}",
+                        workspace
+                            .map(WorkspaceBinding::root_path_string)
+                            .unwrap_or_else(|| "<none>".to_string()),
+                        error
+                    );
+                    None
+                }
+            };
+            prompt_context =
+                prompt_context.with_workspace_instruction_files_context(instruction_context);
+        }
+
+        let user_context = PromptBuilder::new(prompt_context)
+            .build_user_context_reminder(policy)
+            .await;
+        (user_context, cacheable)
+    }
+
     async fn build_cached_prepended_prompt_reminders(
         &self,
-        session_id: &str,
+        execution_context: &ExecutionContext,
         current_agent: &dyn crate::agentic::agents::Agent,
         prompt_context: Option<&PromptBuilderContext>,
-        _context_vars: &HashMap<String, String>,
     ) -> PrependedPromptReminders {
         let Some(prompt_context) = prompt_context.cloned() else {
             return PrependedPromptReminders::default();
         };
+        let session_id = &execution_context.session_id;
 
         // Extract remote execution info before prompt_context is moved into PromptBuilder.
         let remote_connection_for_cache = prompt_context
@@ -1010,7 +1063,7 @@ impl ExecutionEngine {
             .as_ref()
             .map(|remote| remote.connection_display_name.replace('|', "/"));
 
-        let prompt_builder = PromptBuilder::new(prompt_context);
+        let prompt_builder = PromptBuilder::new(prompt_context.clone());
         let baseline_snapshot = if let Some(snapshot) = self
             .session_manager
             .skill_agent_baseline_override_snapshot(session_id)
@@ -1058,17 +1111,29 @@ impl ExecutionEngine {
                 "User context cache miss: session_id={}, scope_key={}",
                 session_id, user_context_identity.scope_key
             );
-            let built_user_context = prompt_builder
-                .build_user_context_reminder(&current_agent.user_context_policy())
-                .await;
-            if let Some(ref user_context) = built_user_context {
-                self.session_manager
-                    .remember_user_context(
-                        session_id,
-                        user_context_identity.clone(),
-                        user_context.clone(),
-                    )
-                    .await;
+            let user_context_policy = current_agent.user_context_policy();
+            let (built_user_context, cacheable) = Self::build_user_context_for_cache_miss(
+                execution_context.workspace.as_ref(),
+                execution_context.workspace_services.as_ref(),
+                prompt_context,
+                &user_context_policy,
+            )
+            .await;
+            if cacheable {
+                if let Some(ref user_context) = built_user_context {
+                    self.session_manager
+                        .remember_user_context(
+                            session_id,
+                            user_context_identity.clone(),
+                            user_context.clone(),
+                        )
+                        .await;
+                }
+            } else {
+                debug!(
+                    "User context was not cached after workspace instruction resolution failed: session_id={}, scope_key={}",
+                    session_id, user_context_identity.scope_key
+                );
             }
             built_user_context
         };
@@ -1145,10 +1210,9 @@ impl ExecutionEngine {
         .await;
         let prepended_prompt_reminders = self
             .build_cached_prepended_prompt_reminders(
-                &input.context.session_id,
+                input.context,
                 input.current_agent,
                 prompt_context.as_ref(),
-                &input.context.context,
             )
             .await;
         let system_prompt = self
@@ -4147,16 +4211,105 @@ impl ExecutionEngine {
 #[cfg(test)]
 mod tests {
     use super::{ContextHealthSnapshot, ExecutionEngine, TurnPromptScaffold};
-    use crate::agentic::agents::PrependedPromptReminders;
+    use crate::agentic::agents::{
+        PrependedPromptReminders, PromptBuilderContext, UserContextPolicy,
+    };
     use crate::agentic::core::{InternalReminderKind, Message, MessageRole, ToolCall, ToolResult};
     use crate::agentic::session::{TokenAnchor, TokenAnchorInput};
     use crate::agentic::tools::ToolRuntimeRestrictions;
+    use crate::agentic::workspace::{local_workspace_services, WorkspaceBinding};
     use crate::service::config::types::AIConfig;
     use crate::service::config::types::AIModelConfig;
+    use crate::service::remote_ssh::workspace_state::workspace_session_identity;
     use crate::util::types::ToolDefinition;
+    use bitfun_runtime_ports::{WorkspaceDirEntry, WorkspaceFileSystem};
     use serde_json::json;
     use sha2::{Digest, Sha256};
     use std::collections::HashMap;
+    use std::path::PathBuf;
+    use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+    use std::sync::Arc;
+
+    #[derive(Clone)]
+    struct InstructionWorkspaceFs {
+        operation_count: Arc<AtomicUsize>,
+        fail_next_probe: Arc<AtomicBool>,
+    }
+
+    impl InstructionWorkspaceFs {
+        fn recovering() -> Self {
+            Self {
+                operation_count: Arc::new(AtomicUsize::new(0)),
+                fail_next_probe: Arc::new(AtomicBool::new(true)),
+            }
+        }
+
+        fn record(&self) {
+            self.operation_count.fetch_add(1, Ordering::SeqCst);
+        }
+
+        fn operation_count(&self) -> usize {
+            self.operation_count.load(Ordering::SeqCst)
+        }
+    }
+
+    #[async_trait::async_trait]
+    impl WorkspaceFileSystem for InstructionWorkspaceFs {
+        async fn read_file(&self, path: &str) -> anyhow::Result<Vec<u8>> {
+            Ok(self.read_file_text(path).await?.into_bytes())
+        }
+
+        async fn read_file_text(&self, path: &str) -> anyhow::Result<String> {
+            self.record();
+            Ok(if path.ends_with("AGENTS.md") {
+                "Recovered workspace instructions.".to_string()
+            } else {
+                String::new()
+            })
+        }
+
+        async fn write_file(&self, _path: &str, _contents: &[u8]) -> anyhow::Result<()> {
+            anyhow::bail!("writes are not supported")
+        }
+
+        async fn exists(&self, path: &str) -> anyhow::Result<bool> {
+            self.is_file(path).await
+        }
+
+        async fn is_file(&self, path: &str) -> anyhow::Result<bool> {
+            self.record();
+            if path.ends_with("AGENTS.override.md")
+                && self.fail_next_probe.swap(false, Ordering::SeqCst)
+            {
+                anyhow::bail!("temporary workspace connection failure")
+            }
+            Ok(path.ends_with("AGENTS.md") && !path.ends_with("AGENTS.override.md"))
+        }
+
+        async fn is_dir(&self, _path: &str) -> anyhow::Result<bool> {
+            Ok(false)
+        }
+
+        async fn read_dir(&self, _path: &str) -> anyhow::Result<Vec<WorkspaceDirEntry>> {
+            Ok(Vec::new())
+        }
+    }
+
+    fn workspace_with_fs(
+        fs: Arc<dyn WorkspaceFileSystem>,
+    ) -> (
+        WorkspaceBinding,
+        crate::agentic::workspace::WorkspaceServices,
+    ) {
+        let workspace_root = PathBuf::from("/workspace");
+        let mut workspace_services =
+            local_workspace_services(workspace_root.to_string_lossy().to_string());
+        workspace_services.fs = fs;
+        (
+            WorkspaceBinding::new(None, workspace_root),
+            workspace_services,
+        )
+    }
 
     fn build_model(id: &str, name: &str, model_name: &str) -> AIModelConfig {
         AIModelConfig {
@@ -4174,6 +4327,103 @@ mod tests {
             crate::agentic::core::MessageContent::Text(text) => Some(text.as_str()),
             _ => None,
         }
+    }
+
+    #[tokio::test]
+    async fn user_context_without_instruction_policy_does_not_read_instruction_files() {
+        let fs = InstructionWorkspaceFs::recovering();
+        let (workspace, workspace_services) = workspace_with_fs(Arc::new(fs.clone()));
+        let prompt_context = PromptBuilderContext::new(
+            "/workspace".to_string(),
+            Some("session".to_string()),
+            Some("model".to_string()),
+        );
+        let (_, cacheable) = ExecutionEngine::build_user_context_for_cache_miss(
+            Some(&workspace),
+            Some(&workspace_services),
+            prompt_context,
+            &UserContextPolicy::empty().with_workspace_context(),
+        )
+        .await;
+
+        assert!(cacheable);
+        assert_eq!(fs.operation_count(), 0);
+    }
+
+    #[tokio::test]
+    async fn workspace_instruction_read_failure_is_not_cacheable_and_can_recover() {
+        let fs = InstructionWorkspaceFs::recovering();
+        let (workspace, workspace_services) = workspace_with_fs(Arc::new(fs));
+        let prompt_context = PromptBuilderContext::new(
+            "/workspace".to_string(),
+            Some("session".to_string()),
+            Some("model".to_string()),
+        );
+        let policy = UserContextPolicy::empty()
+            .with_workspace_context()
+            .with_workspace_instructions();
+
+        let (degraded_context, degraded_cacheable) =
+            ExecutionEngine::build_user_context_for_cache_miss(
+                Some(&workspace),
+                Some(&workspace_services),
+                prompt_context.clone(),
+                &policy,
+            )
+            .await;
+        assert!(!degraded_cacheable);
+        assert!(!degraded_context
+            .as_deref()
+            .unwrap_or_default()
+            .contains("Recovered workspace instructions."));
+
+        let (recovered_context, recovered_cacheable) =
+            ExecutionEngine::build_user_context_for_cache_miss(
+                Some(&workspace),
+                Some(&workspace_services),
+                prompt_context,
+                &policy,
+            )
+            .await;
+        assert!(recovered_cacheable);
+        assert!(recovered_context
+            .as_deref()
+            .unwrap_or_default()
+            .contains("Recovered workspace instructions."));
+    }
+
+    #[tokio::test]
+    async fn remote_workspace_without_services_is_not_cacheable() {
+        let identity = workspace_session_identity(
+            "/remote/workspace",
+            Some("connection-1"),
+            Some("remote-host"),
+        )
+        .expect("remote identity");
+        let workspace = WorkspaceBinding::new_remote(
+            None,
+            PathBuf::from("/remote/workspace"),
+            "connection-1".to_string(),
+            "Remote".to_string(),
+            identity,
+        );
+        let policy = UserContextPolicy::empty()
+            .with_workspace_context()
+            .with_workspace_instructions();
+
+        let (_, cacheable) = ExecutionEngine::build_user_context_for_cache_miss(
+            Some(&workspace),
+            None,
+            PromptBuilderContext::new(
+                "/remote/workspace".to_string(),
+                Some("session".to_string()),
+                Some("model".to_string()),
+            ),
+            &policy,
+        )
+        .await;
+
+        assert!(!cacheable);
     }
 
     #[test]

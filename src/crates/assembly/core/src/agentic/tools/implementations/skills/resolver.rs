@@ -31,6 +31,7 @@ mod tests {
             group_key: None,
             is_shadowed: false,
             shadowed_by_key: None,
+            allow_implicit_invocation: true,
         }
     }
 
@@ -49,6 +50,7 @@ mod tests {
             group_key: None,
             is_shadowed: false,
             shadowed_by_key: None,
+            allow_implicit_invocation: true,
         }
     }
 

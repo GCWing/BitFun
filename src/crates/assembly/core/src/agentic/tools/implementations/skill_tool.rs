@@ -321,6 +321,7 @@ mod tests {
     use crate::service::remote_ssh::workspace_state::workspace_session_identity;
     use async_trait::async_trait;
     use serde_json::json;
+    use std::fs;
     use std::path::PathBuf;
     use std::sync::Arc;
 
@@ -561,6 +562,9 @@ Use the remote project skill.
                 "/remote/project/.bitfun/skills/z-last/SKILL.md" => {
                     Ok("---\nname: z-last\ndescription: last\n---\n\nz\n".to_string())
                 }
+                "/remote/project/.bitfun/skills/z-last/agents/openai.yaml" => {
+                    Ok("policy:\n  allow_implicit_invocation: false\n".to_string())
+                }
                 "/remote/project/.bitfun/skills/a-first/SKILL.md" => {
                     Ok("---\nname: A-First\ndescription: first\n---\n\na\n".to_string())
                 }
@@ -586,6 +590,7 @@ Use the remote project skill.
             Ok(matches!(
                 path,
                 "/remote/project/.bitfun/skills/z-last/SKILL.md"
+                    | "/remote/project/.bitfun/skills/z-last/agents/openai.yaml"
                     | "/remote/project/.bitfun/skills/a-first/SKILL.md"
                     | "/remote/project/.bitfun/skills/dup-one/SKILL.md"
                     | "/remote/project/.bitfun/skills/dup-two/SKILL.md"
@@ -657,5 +662,60 @@ Use the remote project skill.
                 .map(|skill| skill.description.as_str()),
             Some("dup one")
         );
+    }
+
+    #[tokio::test]
+    async fn remote_codex_policy_hides_only_the_implicit_model_catalog() {
+        let registry = SkillRegistry::global();
+        let resolved = registry
+            .get_resolved_skills_for_remote_workspace(&OrderingRemoteFs, "/remote/project", None)
+            .await;
+        let implicit = registry
+            .get_implicitly_invocable_skills_for_remote_workspace(
+                &OrderingRemoteFs,
+                "/remote/project",
+                None,
+            )
+            .await;
+
+        assert!(resolved.iter().any(|skill| skill.name == "z-last"));
+        assert!(!implicit.iter().any(|skill| skill.name == "z-last"));
+    }
+
+    #[tokio::test]
+    async fn local_codex_policy_hides_only_the_implicit_model_catalog() {
+        let temp = tempfile::tempdir().expect("tempdir");
+        let skill_dir = temp.path().join(".codex/skills/local-explicit-only");
+        fs::create_dir_all(skill_dir.join("agents")).expect("skill directories");
+        fs::write(
+            skill_dir.join("SKILL.md"),
+            "---\nname: local-explicit-only\ndescription: explicit only\n---\n\nRun explicitly.\n",
+        )
+        .expect("skill markdown");
+        fs::write(
+            skill_dir.join("agents/openai.yaml"),
+            "policy:\n  allow_implicit_invocation: false\n",
+        )
+        .expect("skill policy");
+
+        let registry = SkillRegistry::global();
+        let resolved = registry
+            .get_resolved_skills_for_workspace(Some(temp.path()), None)
+            .await;
+        let implicit = registry
+            .get_implicitly_invocable_skills_for_workspace(Some(temp.path()), None)
+            .await;
+
+        assert!(resolved
+            .iter()
+            .any(|skill| skill.name == "local-explicit-only"));
+        assert!(!implicit
+            .iter()
+            .any(|skill| skill.name == "local-explicit-only"));
+        let loaded = registry
+            .find_and_load_skill_for_workspace("local-explicit-only", Some(temp.path()), None)
+            .await
+            .expect("explicit invocation should remain available");
+        assert_eq!(loaded.name, "local-explicit-only");
     }
 }

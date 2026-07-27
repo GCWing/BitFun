@@ -13,7 +13,8 @@ use crate::infrastructure::get_path_manager_arc;
 use crate::util::errors::{BitFunError, BitFunResult};
 use bitfun_agent_runtime::skills::{
     annotate_shadowed_skills, build_mode_skill_infos, filter_candidates_for_mode,
-    normalize_local_skill_dir_name, normalize_remote_skill_dir_name, normalize_skill_keys,
+    filter_implicitly_invocable_skills, normalize_local_skill_dir_name,
+    normalize_remote_skill_dir_name, normalize_skill_keys,
     resolve_default_hidden_builtin_for_explicit_invocation, resolve_user_config_skill_root,
     resolve_visible_skills, sort_skill_candidates_by_dir, sort_skills,
     ExplicitSkillInvocationResolution, SkillCandidate, BITFUN_SKILL_SOURCE_ID,
@@ -21,7 +22,7 @@ use bitfun_agent_runtime::skills::{
     BITFUN_USER_SKILL_SLOT, PROJECT_SKILL_KEY_PREFIX, PROJECT_SKILL_ROOTS, USER_CONFIG_SKILL_ROOTS,
     USER_HOME_SKILL_ROOTS, USER_SKILL_KEY_PREFIX,
 };
-use log::{debug, error};
+use log::{debug, error, warn};
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 use std::sync::OnceLock;
@@ -76,6 +77,68 @@ impl SkillRegistry {
 
     pub fn global() -> &'static Self {
         SKILL_REGISTRY.get_or_init(Self::new)
+    }
+
+    async fn apply_local_openai_policy(skill_data: &mut SkillData, skill_dir: &Path) {
+        let policy_path = skill_dir.join("agents").join("openai.yaml");
+        let content = match fs::read_to_string(&policy_path).await {
+            Ok(content) => content,
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => return,
+            Err(error) => {
+                warn!(
+                    "Failed to read optional skill policy {}: {}",
+                    policy_path.display(),
+                    error
+                );
+                return;
+            }
+        };
+
+        if let Err(error) = skill_data.apply_openai_yaml_policy(&content) {
+            warn!(
+                "Ignoring invalid optional skill policy {}: {}",
+                policy_path.display(),
+                error
+            );
+        }
+    }
+
+    async fn apply_remote_openai_policy(
+        skill_data: &mut SkillData,
+        fs: &dyn WorkspaceFileSystem,
+        skill_dir: &str,
+    ) {
+        let policy_path = format!("{}/agents/openai.yaml", skill_dir.trim_end_matches('/'));
+        let is_file = match fs.is_file(&policy_path).await {
+            Ok(is_file) => is_file,
+            Err(error) => {
+                warn!(
+                    "Failed to inspect optional remote skill policy {}: {}",
+                    policy_path, error
+                );
+                return;
+            }
+        };
+        if !is_file {
+            return;
+        }
+
+        let content = match fs.read_file_text(&policy_path).await {
+            Ok(content) => content,
+            Err(error) => {
+                warn!(
+                    "Failed to read optional remote skill policy {}: {}",
+                    policy_path, error
+                );
+                return;
+            }
+        };
+        if let Err(error) = skill_data.apply_openai_yaml_policy(&content) {
+            warn!(
+                "Ignoring invalid optional remote skill policy {}: {}",
+                policy_path, error
+            );
+        }
     }
 
     fn get_possible_paths_for_workspace(workspace_root: Option<&Path>) -> Vec<SkillRootEntry> {
@@ -233,6 +296,7 @@ impl SkillRegistry {
                     false,
                 ) {
                     Ok(mut skill_data) => {
+                        Self::apply_local_openai_policy(&mut skill_data, &path).await;
                         skill_data.dir_name = dir_name;
                         let key_prefix = match entry.level {
                             SkillLocation::User => USER_SKILL_KEY_PREFIX,
@@ -325,6 +389,7 @@ impl SkillRegistry {
                         false,
                     ) {
                         Ok(mut skill_data) => {
+                            Self::apply_remote_openai_policy(&mut skill_data, fs, &item.path).await;
                             skill_data.dir_name = dir_name;
                             skills.push(SkillCandidate::from_data(
                                 skill_data,
@@ -562,6 +627,29 @@ impl SkillRegistry {
         sort_skills(resolve_visible_skills(filtered))
     }
 
+    pub async fn get_implicitly_invocable_skills_for_workspace(
+        &self,
+        workspace_root: Option<&Path>,
+        agent_type: Option<&str>,
+    ) -> Vec<SkillInfo> {
+        filter_implicitly_invocable_skills(
+            self.get_resolved_skills_for_workspace(workspace_root, agent_type)
+                .await,
+        )
+    }
+
+    pub async fn get_implicitly_invocable_skills_for_remote_workspace(
+        &self,
+        fs: &dyn WorkspaceFileSystem,
+        remote_root: &str,
+        agent_type: Option<&str>,
+    ) -> Vec<SkillInfo> {
+        filter_implicitly_invocable_skills(
+            self.get_resolved_skills_for_remote_workspace(fs, remote_root, agent_type)
+                .await,
+        )
+    }
+
     pub async fn get_mode_skill_infos_for_workspace(
         &self,
         workspace_root: Option<&Path>,
@@ -775,7 +863,7 @@ impl SkillRegistry {
         workspace_root: Option<&Path>,
         agent_type: Option<&str>,
     ) -> Vec<String> {
-        self.get_resolved_skills_for_workspace(workspace_root, agent_type)
+        self.get_implicitly_invocable_skills_for_workspace(workspace_root, agent_type)
             .await
             .into_iter()
             .map(|skill| skill.to_xml_desc())
@@ -788,7 +876,7 @@ impl SkillRegistry {
         remote_root: &str,
         agent_type: Option<&str>,
     ) -> Vec<String> {
-        self.get_resolved_skills_for_remote_workspace(fs, remote_root, agent_type)
+        self.get_implicitly_invocable_skills_for_remote_workspace(fs, remote_root, agent_type)
             .await
             .into_iter()
             .map(|skill| skill.to_xml_desc())

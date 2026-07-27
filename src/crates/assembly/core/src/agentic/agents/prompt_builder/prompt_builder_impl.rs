@@ -56,6 +56,10 @@ pub struct PromptBuilderContext {
     pub remote_file_delivery_channel: bool,
     /// The active response surface can render Markdown image syntax inline.
     pub inline_markdown_image_display: bool,
+    /// Resolved through the active local or remote workspace filesystem provider.
+    pub workspace_instruction_files_context: Option<String>,
+    /// Distinguishes a resolved empty result from a caller that has not resolved instructions.
+    pub workspace_instruction_files_context_resolved: bool,
 }
 
 impl PromptBuilderContext {
@@ -76,6 +80,8 @@ impl PromptBuilderContext {
             runtime_context_needs: RuntimeContextNeeds::default(),
             remote_file_delivery_channel: false,
             inline_markdown_image_display: false,
+            workspace_instruction_files_context: None,
+            workspace_instruction_files_context_resolved: false,
         }
     }
 
@@ -116,6 +122,12 @@ impl PromptBuilderContext {
 
     pub fn with_inline_markdown_image_display(mut self, enabled: bool) -> Self {
         self.inline_markdown_image_display = enabled;
+        self
+    }
+
+    pub fn with_workspace_instruction_files_context(mut self, context: Option<String>) -> Self {
+        self.workspace_instruction_files_context = context;
+        self.workspace_instruction_files_context_resolved = true;
         self
     }
 }
@@ -325,9 +337,13 @@ impl PromptBuilder {
             additional_sections.push(self.get_workspace_context());
         }
 
-        if self.context.remote_execution.is_none() {
-            let workspace = Path::new(&self.context.workspace_path);
-            if policy.includes(UserContextSection::WorkspaceInstructions) {
+        if policy.includes(UserContextSection::WorkspaceInstructions) {
+            if let Some(prompt) = &self.context.workspace_instruction_files_context {
+                additional_sections.push(prompt.clone());
+            } else if !self.context.workspace_instruction_files_context_resolved
+                && self.context.remote_execution.is_none()
+            {
+                let workspace = Path::new(&self.context.workspace_path);
                 match build_workspace_instruction_files_context(workspace).await {
                     Ok(Some(prompt)) => additional_sections.push(prompt),
                     Ok(None) => {}
@@ -855,6 +871,47 @@ mod tests {
         assert!(runtime_context.contains("## ExecCommand Shell"));
         assert!(!runtime_context.contains("## Local Client"));
         assert!(!runtime_context.contains("Local BitFun client OS:"));
+    }
+
+    #[tokio::test]
+    async fn remote_user_context_keeps_port_resolved_workspace_instructions() {
+        let context = PromptBuilderContext::new("/workspace/project", None, None)
+            .with_remote_prompt_overlay(
+                RemoteExecutionHints {
+                    connection_display_name: "dev-server".to_string(),
+                    kernel_name: "Linux".to_string(),
+                    hostname: "devbox".to_string(),
+                },
+                None,
+            )
+            .with_workspace_instruction_files_context(Some(
+                "## Codebase and user instructions\n\n<document name=\"AGENTS.md\">\nremote rules\n</document>"
+                    .to_string(),
+            ));
+
+        let user_context = PromptBuilder::new(context)
+            .build_user_context_reminder(&UserContextPolicy::empty().with_workspace_instructions())
+            .await
+            .expect("remote instructions should be rendered");
+
+        assert!(user_context.contains("remote rules"));
+        assert!(user_context.contains("AGENTS.md"));
+    }
+
+    #[tokio::test]
+    async fn resolved_empty_instruction_context_does_not_fall_back_to_local_disk() {
+        let temp = tempfile::tempdir().expect("tempdir");
+        std::fs::write(temp.path().join("AGENTS.md"), "stale direct-disk rules\n")
+            .expect("agents file");
+        let context =
+            PromptBuilderContext::new(temp.path().to_string_lossy().to_string(), None, None)
+                .with_workspace_instruction_files_context(None);
+
+        let user_context = PromptBuilder::new(context)
+            .build_user_context_reminder(&UserContextPolicy::empty().with_workspace_instructions())
+            .await;
+
+        assert!(user_context.is_none());
     }
 
     #[tokio::test]
