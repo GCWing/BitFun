@@ -809,6 +809,8 @@ mod tests {
 
     #[test]
     fn creating_in_current_worktree_inherits_project_scope_and_target() {
+        let worktree_path = PathBuf::from("/worktrees/wt-1");
+        let project_path = PathBuf::from("/repo");
         let execution_target = SessionExecutionTarget {
             kind: SessionExecutionTargetKind::ManagedWorktree,
             worktree_id: Some("wt-1".to_string()),
@@ -818,8 +820,8 @@ mod tests {
             branch: None,
             lifecycle: Some(WorktreeLifecycle::Managed),
         };
-        let binding = WorkspaceBinding::new(None, PathBuf::from("/worktrees/wt-1"))
-            .with_project_root_path(PathBuf::from("/repo"))
+        let binding = WorkspaceBinding::new(None, worktree_path)
+            .with_project_root_path(project_path.clone())
             .with_execution_target(Some(execution_target.clone()));
         let mut context = empty_context();
         context.workspace = Some(binding);
@@ -828,7 +830,7 @@ mod tests {
             .workspace_target_from_context("/worktrees/wt-1".to_string(), &context);
 
         assert_eq!(target.workspace_path, "/worktrees/wt-1");
-        assert_eq!(target.project_workspace_path, "/repo");
+        assert_eq!(PathBuf::from(target.project_workspace_path), project_path);
         assert_eq!(target.execution_target, Some(execution_target));
     }
 
