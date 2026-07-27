@@ -1775,6 +1775,10 @@ pub const REMOTE_WORKSPACE_COMMAND_POLICIES: &[(&str, RemoteWorkspacePolicy)] = 
         "webdriver_bridge_result",
         RemoteWorkspacePolicy::LegacyUnaudited,
     ),
+    (
+        "worktree_bind_session",
+        RemoteWorkspacePolicy::RemoteUnsupported,
+    ),
     ("worktree_create", RemoteWorkspacePolicy::RemoteUnsupported),
     (
         "worktree_create_branch",
