@@ -497,20 +497,59 @@ pub async fn start_task(
     exec_ok(
         manager,
         connection_id,
-        &format!(
-            "chmod 700 {} {} && rm -f {} {} {} && : > {} && touch {}",
-            shell_quote_posix(&body_path),
-            shell_quote_posix(&script_path),
-            shell_quote_posix(&pid_path),
-            shell_quote_posix(&driver_pid_path),
-            shell_quote_posix(&log_path),
-            shell_quote_posix(&log_path),
-            shell_quote_posix(&prepare_flag),
+        &stage_scripts_command(
+            &body_path,
+            &script_path,
+            &pid_path,
+            &driver_pid_path,
+            &log_path,
+            &prepare_flag,
         ),
     )
     .await?;
 
     Ok(RelayTaskStart { script_path })
+}
+
+/// Strip trailing CR from a file already on the relay host, in place.
+///
+/// POSIX `sed` (no `-i`, whose syntax differs between GNU and BSD userlands).
+/// The rewrite drops the file's mode, so callers must `chmod` afterwards.
+fn strip_cr_command(path: &str) -> String {
+    let src = shell_quote_posix(path);
+    let tmp = shell_quote_posix(&format!("{path}.lf"));
+    format!("sed 's/\r$//' {src} > {tmp} && mv {tmp} {src}")
+}
+
+/// Prepare uploaded scripts for the PTY: normalize line endings, make them
+/// executable, and seed the liveness files `poll_task` reads.
+///
+/// The CR strip runs **on the relay host, after upload and before execution**,
+/// so a CR-free script on disk does not depend on the uploader having called
+/// `to_unix_script` (which it does — this is the second line of defence, and
+/// the one that still holds if a future upload path forgets).
+fn stage_scripts_command(
+    body_path: &str,
+    script_path: &str,
+    pid_path: &str,
+    driver_pid_path: &str,
+    log_path: &str,
+    prepare_flag: &str,
+) -> String {
+    format!(
+        "{strip_body} && {strip_driver} \
+         && chmod 700 {body} {script} \
+         && rm -f {pid} {driver_pid} {log} \
+         && : > {log} && touch {flag}",
+        strip_body = strip_cr_command(body_path),
+        strip_driver = strip_cr_command(script_path),
+        body = shell_quote_posix(body_path),
+        script = shell_quote_posix(script_path),
+        pid = shell_quote_posix(pid_path),
+        driver_pid = shell_quote_posix(driver_pid_path),
+        log = shell_quote_posix(log_path),
+        flag = shell_quote_posix(prepare_flag),
+    )
 }
 
 /// Poll a detached task: incremental log output plus liveness/completion status.
@@ -1772,7 +1811,8 @@ mod tests {
         classify_docker_access, decide_task_status, deploy_body_script_with_checksums,
         install_docker_body_script, interactive_driver_script, parse_preflight,
         prepare_helpers_bash, release_binary_deploy_bash, release_tag_for_version,
-        split_poll_stdout, sync_source_bash, to_unix_script, verified_checksum_exports,
+        split_poll_stdout, stage_scripts_command, sync_source_bash, to_unix_script,
+        verified_checksum_exports,
         verified_release_checksums, verify_minisign, DockerAccessMode, RelayTaskStatus,
         RELAY_MIRROR_SH, RELAY_RELEASE_DOWNLOAD_SH, RELEASE_PUBKEY,
     };
@@ -1833,6 +1873,70 @@ mod tests {
                 "{name} must be checked out LF-only (see .gitattributes)"
             );
         }
+    }
+
+    /// The remote-side half of the CR guarantee: whatever bytes reached the host,
+    /// the staged scripts are LF before the PTY runs them. Runs the real command
+    /// against real CRLF files rather than asserting on its text.
+    #[cfg(unix)]
+    #[test]
+    fn staging_strips_cr_on_the_host_before_execution() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let dir = tempfile::tempdir().expect("temp dir");
+        let p = |name: &str| dir.path().join(name).to_string_lossy().into_owned();
+        let (body_path, script_path) = (p("deploy-body.sh"), p("deploy.sh"));
+        let (pid_path, driver_pid_path) = (p("deploy.pid"), p("deploy.driver.pid"));
+        let (log_path, prepare_flag) = (p("deploy.log"), p("deploy.preparing"));
+
+        // Simulate an uploader that skipped normalization.
+        let crlf = "#!/usr/bin/env bash\r\nset -euo pipefail\r\n\r\necho hi\r\n";
+        std::fs::write(&body_path, crlf).expect("write body");
+        std::fs::write(&script_path, crlf).expect("write driver");
+        // Stale files from a previous attempt that staging must clear.
+        std::fs::write(&pid_path, "1234").expect("write pid");
+        std::fs::write(&driver_pid_path, "5678").expect("write driver pid");
+
+        let command = stage_scripts_command(
+            &body_path,
+            &script_path,
+            &pid_path,
+            &driver_pid_path,
+            &log_path,
+            &prepare_flag,
+        );
+        let output = std::process::Command::new("bash")
+            .args(["-c", &command])
+            .output()
+            .expect("run staging command");
+        assert!(
+            output.status.success(),
+            "staging command failed:\n{}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+
+        for path in [&body_path, &script_path] {
+            let staged = std::fs::read_to_string(path).expect("read staged script");
+            assert_eq!(
+                staged, "#!/usr/bin/env bash\nset -euo pipefail\n\necho hi\n",
+                "{path} must be LF-only on the host"
+            );
+            let mode = std::fs::metadata(path).expect("stat").permissions().mode();
+            assert_eq!(mode & 0o777, 0o700, "{path} must stay owner-only executable");
+        }
+        // The rewrite must not leave its scratch file behind.
+        assert!(!std::path::Path::new(&format!("{script_path}.lf")).exists());
+        assert!(!std::path::Path::new(&pid_path).exists(), "stale pid cleared");
+        assert!(
+            !std::path::Path::new(&driver_pid_path).exists(),
+            "stale driver pid cleared"
+        );
+        assert!(std::path::Path::new(&prepare_flag).exists(), "flag seeded");
+        assert_eq!(
+            std::fs::read_to_string(&log_path).expect("read log"),
+            "",
+            "log must be truncated for the incremental cursor"
+        );
     }
 
     #[test]

@@ -98,13 +98,19 @@ Desktop Tauri surface: `src/apps/desktop/src/api/relay_deploy_api.rs`
    `daemon.json`; host Cargo config must remain untouched; global mode rolls
    back only BitFun-managed apt and Docker entries.
 
-16. **Uploaded scripts are LF-only.** `include_str!` and the `r#"..."#` remote
-   templates both inherit the checkout's line endings, and Git for Windows
-   checks out CRLF by default. Remote bash then runs the CR as a command and
-   `set -euo pipefail` aborts on the first blank line
-   (`deploy.sh: line 37: $'\r': command not found`). `.gitattributes` pins LF,
-   and `to_unix_script` normalizes everything sent over SFTP or `execute_command`.
-   Never hand a raw template to `sftp_write`.
+16. **Scripts on the relay host are LF-only, in three independent layers.**
+   `include_str!` and the `r#"..."#` remote templates both inherit the
+   checkout's line endings, and Git for Windows checks out CRLF by default.
+   Remote bash then runs the CR as a command and `set -euo pipefail` aborts on
+   the first blank line (`deploy.sh: line 37: $'\r': command not found`).
+   - `.gitattributes` pins LF, so the binary carries no CR.
+   - `to_unix_script` normalizes everything sent over SFTP or `execute_command`,
+     so a stale CRLF working tree still builds a working client.
+   - `stage_scripts_command` strips CR **on the host, after upload and before
+     the PTY runs the driver**. This is the layer that does not depend on the
+     uploader remembering anything: a new `sftp_write` that forgets
+     `to_unix_script` is still safe. Keep it that way — do not move the strip
+     back to the client only.
 
 17. **`sg -c` takes a single string, so quote every argument.** `sg docker -c
    "docker $*"` re-parses through a second shell and loses argument boundaries.
