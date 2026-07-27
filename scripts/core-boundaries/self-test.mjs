@@ -6,6 +6,7 @@ export function runManifestParserSelfTest({
   isManifestDependencyDeclaration,
   parseManifestDependencies,
   manifestDependencyMatches,
+  matchingForbiddenDependency,
   manifestDependencyDisablesDefaultFeatures,
   parseManifestDependencyFeatureNames,
   productCoreFeatureAssemblyRules,
@@ -157,6 +158,16 @@ export function runManifestParserSelfTest({
     )
   ) {
     throw new Error('manifest parser must detect workspace aliases to forbidden packages');
+  }
+  const aliasedRuntimeDependency = parseManifestDependencies([
+    '[dependencies]',
+    'runtime = { package = "bitfun-agent-runtime", path = "../../execution/agent-runtime" }',
+  ])[0];
+  if (
+    matchingForbiddenDependency(aliasedRuntimeDependency, ['bitfun-agent-runtime']) !==
+    'bitfun-agent-runtime'
+  ) {
+    throw new Error('forbidden dependency checks must reject Cargo package aliases');
   }
 
   const productCoreRulePaths = new Set(
@@ -663,8 +674,10 @@ export function runManifestParserSelfTest({
   const servicesCoreDunceOwner = servicesCoreOptionalOwnerRule?.dependencies.find(
     (dependency) => dependency.depName === 'dunce',
   );
-  if (!servicesCoreDunceOwner?.ownerFeatures.includes('workspace-runtime')) {
-    throw new Error('services-core workspace-runtime must own optional dependency dunce');
+  for (const feature of ['runtime-ownership', 'workspace-runtime']) {
+    if (!servicesCoreDunceOwner?.ownerFeatures.includes(feature)) {
+      throw new Error(`services-core ${feature} must own optional dependency dunce`);
+    }
   }
   const servicesOptionalOwnerDeps = new Set(
     servicesOptionalOwnerRule?.dependencies.map((dependency) => dependency.depName) ?? [],
@@ -4789,5 +4802,87 @@ export function runManifestParserSelfTest({
     if (!facadePaths.has(path)) {
       throw new Error(`missing MCP runtime facade-only rule for ${path}`);
     }
+  }
+
+  if (!noCoreDependencyCrates.includes('agent-runtime-ipc')) {
+    throw new Error('agent-runtime-ipc must be covered by the no-core dependency guard');
+  }
+  const runtimeIpcBoundary = lightweightBoundaryRules.find(
+    (rule) => rule.crateName === 'agent-runtime-ipc',
+  );
+  for (const dependency of [
+    'bitfun-agent-runtime',
+    'bitfun-sdk-host',
+    'bitfun-services-core',
+    'bitfun-services-integrations',
+    'bitfun-product-domains',
+    'bitfun-transport',
+    'terminal-core',
+    'tool-runtime',
+    'tauri',
+    'reqwest',
+    'tokio-tungstenite',
+    'bitfun-cli',
+  ]) {
+    if (!runtimeIpcBoundary?.forbiddenDeps.includes(dependency)) {
+      throw new Error(`agent-runtime-ipc lightweight boundary must forbid ${dependency}`);
+    }
+  }
+  const runtimeIpcProfile = dependencyProfileRules.find(
+    (rule) => rule.crateName === 'agent-runtime-ipc',
+  );
+  for (const dependency of ['bitfun-agent-runtime', 'bitfun-services-core', 'tauri', 'reqwest']) {
+    if (!runtimeIpcProfile?.forbiddenNonOptionalDeps.includes(dependency)) {
+      throw new Error(`agent-runtime-ipc dependency profile must forbid ${dependency}`);
+    }
+  }
+  const runtimeIpcLibRule = forbiddenContentRules.find(
+    (rule) => rule.path === 'src/crates/adapters/agent-runtime-ipc/src/lib.rs',
+  );
+  const runtimeIpcPublicPattern = runtimeIpcLibRule?.patterns[0]?.regex;
+  if (
+    !runtimeIpcPublicPattern ||
+    !runtimeIpcPublicPattern.test('pub fn leaked_api() {}') ||
+    runtimeIpcPublicPattern.test('pub(crate) fn internal_api() {}')
+  ) {
+    throw new Error('agent-runtime-ipc public surface guard must allow only crate visibility');
+  }
+  const runtimeIpcOperationRule = forbiddenContentRules.find(
+    (rule) => rule.path === 'src/crates/adapters/agent-runtime-ipc/src/operation.rs',
+  );
+  const runtimeIpcOperationPattern = runtimeIpcOperationRule?.patterns[0]?.regex;
+  if (
+    !runtimeIpcOperationPattern ||
+    !runtimeIpcOperationPattern.test('    Execute,') ||
+    runtimeIpcOperationPattern.test('    Health,')
+  ) {
+    throw new Error('agent-runtime-ipc operation guard must allow only Health by structure');
+  }
+  const runtimeIpcTransportRule = forbiddenContentUnderRules.find(
+    (rule) => rule.path === 'src/crates/adapters/agent-runtime-ipc/src',
+  );
+  const runtimeIpcTransportRuleText = runtimeIpcTransportRule?.patterns
+    .map((pattern) => pattern.regex.source)
+    .join('\n') ?? '';
+  const runtimeIpcTransportPattern = runtimeIpcTransportRule?.patterns[0]?.regex;
+  for (const transport of ['TcpListener', 'TcpStream', 'TcpSocket', 'UdpSocket', 'WebSocket']) {
+    if (!runtimeIpcTransportPattern?.test(transport)) {
+      throw new Error(`agent-runtime-ipc local-only guard must forbid ${transport}`);
+    }
+  }
+  for (const dependency of ['reqwest', 'tokio_tungstenite']) {
+    if (!runtimeIpcTransportRuleText.includes(dependency)) {
+      throw new Error(`agent-runtime-ipc local-only guard must forbid ${dependency}`);
+    }
+  }
+  const privateTransportModule = 'src/crates/adapters/agent-runtime-ipc/src/tcp.rs';
+  if (
+    !runtimeIpcTransportRule ||
+    !privateTransportModule.startsWith(`${runtimeIpcTransportRule.path}/`) ||
+    !runtimeIpcTransportPattern?.test('use tokio::net::TcpListener;')
+  ) {
+    throw new Error(
+      'agent-runtime-ipc local-only guard must cover network transports in new private modules',
+    );
   }
 }

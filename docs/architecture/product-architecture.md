@@ -17,9 +17,9 @@
 可装配并双向接入 Claude Code、Codex、OpenCode、Trae 等宿主见
 [`capability-runtime-integration-design.md`](extensions/capability-runtime-integration-design.md)；公开 BitFun Agent SDK、SDK Host、
 Headless CLI 与各产品入口的统一心智见
-[`agent-sdk-product-architecture.md`](agent-sdk-product-architecture.md)；多个 GUI/TUI/Remote/CLI/SDK 实例共存时的 Local Agent Host、
+[`agent-sdk-product-architecture.md`](agent-sdk-product-architecture.md)；多个 GUI/TUI/Remote/CLI/SDK 实例共存时的 Agent Runtime 部署、
 状态共享、隔离、容量与 Plugin Host 关系见
-[`local-agent-host-multi-instance-design.md`](local-agent-host-multi-instance-design.md)。详细设计与本文件冲突时，以本文件为准。
+[`agent-runtime-deployment-design.md`](agent-runtime-deployment-design.md)。详细设计与本文件冲突时，以本文件为准。
 
 本文件只约束稳定边界，不记录单次 PR 进度，也不把未来可能支持的生态能力提前声明为公开接口。
 
@@ -62,7 +62,7 @@ BitFun 同时面向桌面 GUI、TUI/CLI、Web、ACP、Server、Remote、SDK 和�
 13. **一个 Agent Runtime，多种交付形态**：GUI、TUI、Headless CLI、公开 SDK、ACP 与 Server/Remote 都是
      同一 Agent Runtime 的 adapter。Query、Session、Tool/MCP、Permission、Hook、Event/Usage 只有一个行为
      归属模块；公开 SDK 不成为内部入口的依赖，ACP 和 Headless CLI 也不成为完整 SDK 的别名。目标部署中，第一方
-     GUI/TUI/本机 Remote 可以共享 Local Agent Host，一次性 Headless CLI 保留 Embedded，公开 SDK 默认使用私有 SDK Host；
+     GUI/TUI/本机 Remote 可以共享 Agent Runtime，一次性 Headless CLI 保留 Embedded，公开 SDK 默认使用私有 SDK Host；
      这些 Rust 部署都只通过 `PluginRuntimeClient` 和 services 归属模块管理自己的 Node/Bun Plugin Host 子进程。
 
 调用路径长度只作为工程成本处理，不作为独立架构目标。允许保留承担兼容隔离、只读视图或能力选择职责的中间层；不允许为了兼容而长期暴露没有消费方的抽象接口。
@@ -139,9 +139,9 @@ Host adapter 只负责把各自协议映射到
 **BitFun Agent SDK**，其跨进程适配器称为 **SDK Host**。该术语区分不要求机械重命名现有 crate/module，但禁止用
 Rust preview 的存在证明公开 SDK 已交付。
 
-第一方多实例目标中的 Rust 进程称为 **Local Agent Host**。它与 SDK Host、Plugin Host、Server/Relay 和 Remote
+第一方多实例目标称为 **Shared Agent Runtime deployment**。承载它的 Rust 进程与 SDK Host、Plugin Host、Server/Relay 和 Remote
 execution Host 都是不同职责；其部署与进程生命周期以
-[`local-agent-host-multi-instance-design.md`](local-agent-host-multi-instance-design.md) 为准。
+[`agent-runtime-deployment-design.md`](agent-runtime-deployment-design.md) 为准。
 
 Rust 与 TypeScript 的字段一致性以能力所有者的 DTO 为事实源，不以 Tauri command 参数为事实源。单宿主阶段由
 前端基础设施层维护对应接口，并用序列化契约测试锁定字段命名、可选字段和错误形状；达到独立版本化门槛后，才使用
@@ -410,10 +410,10 @@ flowchart LR
 | HarmonyOS PC GUI | 未实现 | 与 CLI/TUI 共享 Runtime 语义，但独立验证宿主、界面和发布 |
 | Public Agent SDK | Python/TypeScript 尚未交付；Rust Runtime SDK 是内部 preview | 一个 `AgentClient`、多个语言绑定；SDK Host 不依赖或冒充 CLI |
 
-Local Agent Host 是第一方多实例的目标部署，不是上表新增的当前产品形态。当前文档中表示“事实实际所在位置”的泛称 Host
-可能仍指 Desktop 进程、Peer、Server 或 Remote execution host，不能据此推断 Local Agent Host、多 Client Session 单写或
+Shared Agent Runtime 是第一方多实例的目标部署，不是上表新增的当前产品形态。当前文档中表示“事实实际所在位置”的泛称 Host
+可能仍指 Desktop 进程、Peer、Server 或 Remote execution host，不能据此推断 Shared deployment、多 Client Session 单写或
 跨进程重连已经交付；完成条件以
-[`local-agent-host-multi-instance-design.md`](local-agent-host-multi-instance-design.md) 为准。
+[`agent-runtime-deployment-design.md`](agent-runtime-deployment-design.md) 为准。
 
 对外一级状态统一使用[外部 AI 工作内容设计](extensions/external-ai-work-sources-design.md#7-状态与提示规则)定义的
 已发现、已应用、可用、需确认、更新中、沿用上一版本、部分受限、暂时过期、已移除/已停用和不可用，并附带

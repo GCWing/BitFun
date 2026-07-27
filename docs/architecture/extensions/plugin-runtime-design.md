@@ -6,7 +6,7 @@
 [`external-ai-work-sources-design.md`](external-ai-work-sources-design.md)。详细设计与
 [`../product-architecture.md`](../product-architecture.md) 冲突时，以产品运行时架构为准。多个 GUI/TUI/Remote/CLI/SDK
 实例并存时，Rust Runtime 部署与 Plugin Host 复用关系见
-[`../local-agent-host-multi-instance-design.md`](../local-agent-host-multi-instance-design.md)。
+[`../agent-runtime-deployment-design.md`](../agent-runtime-deployment-design.md)。
 
 本文同时区分目标设计和当前实现；目标不能被写成已经交付的能力。
 
@@ -77,7 +77,7 @@ flowchart TD
 
 workspace、session、插件和贡献数量都不是默认进程键。一个 Plugin Host 可以承载多个来源、多个
 workspace 的逻辑实例和多个 session 的调用；这些身份必须随请求显式传递，进程内状态仍按生态的真实语义分区。
-因此 Local Agent Host 中多个 GUI/TUI/Remote Client 不会各自创建 Plugin Host；一次性 Embedded CLI、私有 SDK Host 和
+因此 Shared Agent Runtime 中多个 GUI/TUI/Remote Client 不会各自创建 Plugin Host；一次性 Embedded CLI、私有 SDK Host 和
 目标机器 Runtime 则各自只管理自己的子进程树，不跨 Rust 进程或 execution domain 共享模块实例。
 
 容量压力本身不直接创建进程。只有测量证明单进程队列不足，并且待拆调用同时满足“无共享模块状态、无顺序 Hook
@@ -205,7 +205,7 @@ flowchart LR
 内存收益高于冷启动成本时，才可以增加有期限的休眠；恢复时重新读取当前插件内容，并在新连接完成初始化后接受调用。
 
 承载 RuntimeServices 的 Rust 进程退出时按以下顺序处理：停止新调用、取消可取消请求、有限等待正在执行的调用、逆序 dispose、
-终止完整进程树。Local Agent Host 的单个 Client 断线不是该生命周期事件；只要仍有活动插件实例、在途调用、事件订阅、
+终止完整进程树。Shared Agent Runtime 的单个 Client 断线不是该生命周期事件；只要仍有活动插件实例、在途调用、事件订阅、
 后台任务或其他 Client，兼容 Plugin Host 继续复用。清理超时不能阻止监督进程退出。
 
 ## 5. 状态归属与恢复

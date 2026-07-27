@@ -427,38 +427,37 @@ function checkCargoManifest(crateDir) {
 
 function checkForbiddenManifestDeps(crateDir, forbiddenDeps, messageForDep) {
   const manifestPath = join(crateDir, 'Cargo.toml');
-  const lines = readText(manifestPath).split(/\r?\n/);
-  lines.forEach((line, index) => {
-    const trimmed = line.trim();
-    if (trimmed.startsWith('#')) {
-      return;
+  const deps = parseManifestDependencies(readText(manifestPath).split(/\r?\n/));
+  for (const dep of deps) {
+    const forbidden = matchingForbiddenDependency(dep, forbiddenDeps);
+    if (forbidden) {
+      failures.push({
+        path: manifestPath,
+        line: dep.line,
+        message: messageForDep(forbidden),
+      });
     }
-    for (const dep of forbiddenDeps) {
-      if (isManifestDependencyDeclaration(trimmed, dep)) {
-        failures.push({
-          path: manifestPath,
-          line: index + 1,
-          message: messageForDep(dep),
-        });
-      }
-    }
-  });
+  }
 }
 
 function checkForbiddenNonOptionalManifestDeps(crateDir, forbiddenDeps, messageForDep) {
   const manifestPath = join(crateDir, 'Cargo.toml');
   const deps = parseManifestDependencies(readText(manifestPath).split(/\r?\n/));
   for (const dep of deps) {
-    if (!dep.optional && forbiddenDeps.includes(dep.name)) {
+    const forbidden = matchingForbiddenDependency(dep, forbiddenDeps);
+    if (!dep.optional && forbidden) {
       failures.push({
         path: manifestPath,
         line: dep.line,
-        message: messageForDep(dep.name),
+        message: messageForDep(forbidden),
       });
     }
   }
 }
 
+function matchingForbiddenDependency(dep, forbiddenDeps) {
+  return forbiddenDeps.find((dependencyName) => manifestDependencyMatches(dep, dependencyName));
+}
 function manifestDependencyMatches(dep, dependencyName) {
   const text = manifestDependencyText(dep);
   return dep.name === dependencyName || new RegExp(`\\bpackage\\s*=\\s*["']${escapeRegex(dependencyName)}["']`).test(text);
@@ -1095,6 +1094,7 @@ export function runCoreBoundaryCheck() {
       isManifestDependencyDeclaration,
       parseManifestDependencies,
       manifestDependencyMatches,
+      matchingForbiddenDependency,
       manifestDependencyDisablesDefaultFeatures,
       parseManifestDependencyFeatureNames,
       productCoreFeatureAssemblyRules,

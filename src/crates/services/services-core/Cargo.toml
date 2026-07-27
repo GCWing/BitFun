@@ -51,6 +51,7 @@ default = ["lsp"]
 lsp = ["dep:anyhow", "dep:notify", "dep:zip"]
 markdown = ["dep:serde_yaml"]
 workspace-runtime = ["dep:anyhow", "dep:async-trait", "dep:bitfun-runtime-ports", "dep:dunce"]
+runtime-ownership = ["dep:dunce"]
 permission = ["dep:async-trait", "dep:bitfun-runtime-ports", "dep:rusqlite", "bitfun-runtime-ports/permission"]
 
 [dev-dependencies]
@@ -64,6 +65,10 @@ required-features = ["markdown"]
 [[test]]
 name = "lsp_plugin_registry_contracts"
 required-features = ["lsp"]
+
+[[test]]
+name = "runtime_ownership_contracts"
+required-features = ["runtime-ownership"]
 
 [lints]
 workspace = true

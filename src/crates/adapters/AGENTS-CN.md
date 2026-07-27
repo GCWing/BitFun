@@ -8,6 +8,7 @@
 
 | Crate | 职责 | 本地文档 |
 |---|---|---|
+| `agent-runtime-ipc` | 不发布且仅 crate 内可见的本机 IPC 预集成边界，为未来第一方 Shared Agent Runtime adapter 提供当前仅 Health 的基础 | [AGENTS.md](agent-runtime-ipc/AGENTS.md) |
 | `ai-adapters` | AI provider 请求/响应 adapter 与 stream protocol glue | [AGENTS.md](ai-adapters/AGENTS.md) |
 | `opencode-adapter` | OpenCode Command、standalone Tool 和 Subagent 实时 provider 的生态语义；受管包静态预览 | [AGENTS.md](opencode-adapter/AGENTS.md) |
 | `transport` | Event transport emitter 与宿主 transport adapter | [AGENTS.md](transport/AGENTS.md) |
@@ -18,7 +19,7 @@
 - 协议序列化、transport projection、外部 provider 请求整形、宿主通信 adapter 放在这里。
 - OS、filesystem、terminal、MCP、remote、git、watch 等可复用实现放在 `services`，除非代码只是协议转换。
 - 交付 profile 选择和 adapter 注册属于 `assembly`。
-- 不要为单一宿主或未来协议预建共享 API crate。宿主协议 DTO 应留在入口，直到当前生产消费方证明需要共享且可版本化的边界。
+- 不要为单一宿主或未来协议预建共享 API crate。只有相邻设计明确首个 consumer、稳定测试合同、集成检查和删除条件时，才允许保留不发布且仅 crate 内可见的预集成边界；后续只提升真实 consumer 使用的 API。
 
 ## 依赖边界
 

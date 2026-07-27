@@ -6,8 +6,8 @@
 [`product-architecture.md`](product-architecture.md) 定义；CLI/TUI 体验由
 [`cli-product-line-design.md`](cli-product-line-design.md) 定义；扩展能力导入和宿主适配由
 [`capability-runtime-integration-design.md`](extensions/capability-runtime-integration-design.md) 定义；多个第一方界面与 SDK/CLI
-并存时的 Local Agent Host、共享和进程隔离由
-[`local-agent-host-multi-instance-design.md`](local-agent-host-multi-instance-design.md) 定义。
+并存时的 Runtime 部署、共享和进程隔离由
+[`agent-runtime-deployment-design.md`](agent-runtime-deployment-design.md) 定义。
 
 本文只记录长期产品心智、架构边界和发布门槛。当前代码中的
 `agent-runtime::sdk` 是供 BitFun 内部入口和受控 Rust 嵌入使用的低层 Rust Runtime SDK；
@@ -178,7 +178,7 @@ flowchart LR
   UIA --> API["Runtime API"]
   CLIA --> API
   SDKA --> API
-  API --> Runtime["Shared Runtime"]
+  API --> Runtime["Agent Runtime owners"]
 ```
 
 ### 4.2 互操作入口
@@ -199,9 +199,12 @@ flowchart LR
 - 各入口共享业务事实和 owner，不共享 renderer、命令行参数、wire protocol 或平台生命周期。
 - 增加 SDK 不得让 CLI、GUI/TUI 或 Server 的底层依赖变深；它只增加一个同级入口。
 
-该图表达逻辑依赖，不要求所有入口位于同一进程。目标部署中，GUI/TUI/本机 Remote 可以连接第一方 Local Agent Host；
-一次性 Headless CLI 继续 Embedded；公开 SDK 默认连接私有 SDK Host。Local Agent Host 和 SDK Host 都是 Rust 产品进程，
+该图表达逻辑依赖，不要求所有入口位于同一进程。目标部署中，GUI/TUI/本机 Remote 可以连接第一方 Shared Agent Runtime；
+一次性 Headless CLI 继续 Embedded；公开 SDK 默认连接私有 SDK Host。Shared Agent Runtime process 和 SDK Host 都是 Rust 产品进程，
 与运行第三方 JS/TS 的 Node/Bun Plugin Host 不同；三者不能共享名称或业务归属。
+
+当前代码只具备 Shared deployment 的本机 IPC、身份、握手、Health 和 ownership 基础；没有 GUI/TUI/Remote consumer，
+也没有 Shared Session/Turn 协议。图中 Shared deployment 是目标架构，不是已交付产品能力。
 
 ### 4.3 各形态能做什么
 
@@ -465,7 +468,7 @@ CLI 和 SDK 共享能力事实，但不是上下层关系：
 因此：
 
 - CLI 不默认依赖 SDK Host，也不通过 SDK package 运行。
-- 一次性 `bitfun exec` 默认使用 Embedded Runtime；只有恢复或控制 Local Agent Host 中的共享 Session 时，才使用第一方
+- 一次性 `bitfun exec` 默认使用 Embedded Runtime；只有恢复或控制 Shared Agent Runtime 中的共享 Session 时，才使用第一方
   client adapter attach，且不经过 SDK Host。
 - SDK 不解析 CLI `stream-json` 作为正式双向协议。
 - 普通脚本/CI 不需要为了“架构统一”改写成 SDK；复杂生产自动化才选择 SDK。

@@ -1,0 +1,28 @@
+[package]
+name = "bitfun-agent-runtime-ipc"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+publish = false
+description = "Private pre-integration IPC seam for a shared BitFun Agent Runtime"
+
+[lib]
+name = "bitfun_agent_runtime_ipc"
+crate-type = ["rlib"]
+
+[dependencies]
+dunce = { workspace = true }
+fs2 = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+sha2 = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true }
+uuid = { workspace = true }
+tempfile = { workspace = true }
+
+[target.'cfg(windows)'.dependencies]
+windows = { workspace = true, features = ["Win32_Storage_FileSystem"] }
+
+[lints]
+workspace = true

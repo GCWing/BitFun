@@ -2,6 +2,29 @@
 
 export const forbiddenContentRules = [
   {
+    path: 'src/crates/adapters/agent-runtime-ipc/src/lib.rs',
+    reason:
+      'agent-runtime-ipc must remain crate-internal until its first reviewed production consumer',
+    patterns: [
+      {
+        regex: /^\s*pub\s+(?!\(crate\))/,
+        message:
+          'agent-runtime-ipc must not expose any externally public Rust item before consumer review',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/adapters/agent-runtime-ipc/src/operation.rs',
+    reason: 'agent-runtime-ipc operation scope is frozen at Health',
+    patterns: [
+      {
+        regex: /^\s+(?!Health\b)[A-Z][A-Za-z0-9_]*\b/,
+        message:
+          'agent-runtime-ipc may not add operations or results beyond Health in this foundation',
+      },
+    ],
+  },
+  {
     path: 'src/crates/execution/plugin-runtime-client/src/adapter.rs',
     reason: 'plugin-runtime-client adapter trait method surface must stay narrow',
     patterns: [
@@ -4020,6 +4043,17 @@ export const forbiddenContentRules = [
 ];
 
 export const forbiddenContentUnderRules = [
+  {
+    path: 'src/crates/adapters/agent-runtime-ipc/src',
+    reason: 'agent-runtime-ipc transport is restricted to Named Pipe and Unix Domain Socket',
+    patterns: [
+      {
+        regex:
+          /\b(?:(?:Tcp|Udp)[A-Za-z0-9_]*|tokio_tungstenite|reqwest|hyper|WebSocket)\b/,
+        message: 'agent-runtime-ipc must not add network or remote transports',
+      },
+    ],
+  },
   {
     path: 'src/apps',
     reason:

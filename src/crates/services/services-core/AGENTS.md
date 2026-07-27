@@ -7,7 +7,7 @@ without the full product runtime. This includes generic filesystem/search/JSON
 IO helpers, LSP package/protocol/watch/process primitives, session metadata
 storage helpers, and local OS action primitives such as command lookup,
 clipboard, file/url opening, script execution, workspace runtime FS/shell
-providers, managed process-tree lifecycle, and system facts. Product crates may layer routing, policy,
+providers, managed process-tree lifecycle, process-level Agent Runtime ownership locks, and system facts. Product crates may layer routing, policy,
 capability selection, event emission, or legacy error mapping outside this
 crate.
 
@@ -27,6 +27,9 @@ crate.
   managers, filesystem orchestration, or product behavior stay outside this
   crate. `workspace-runtime` may implement local `bitfun-runtime-ports`
   providers, but not workspace selection or product orchestration.
+- `runtime_ownership` owns only canonical identity plus Embedded shared-lock and
+  Shared exclusive-lock primitives. It must not select workspaces, start or
+  cache Runtime instances, or define Session/Turn ownership.
 - Do not add remote SSH, MiniApp storage, tool-result persistence, `PathManager`
   globals, or product runtime bindings to `filesystem`; keep those in core or a
   reviewed adapter/provider.
@@ -45,6 +48,7 @@ crate.
 ```bash
 cargo test -p bitfun-services-core --features lsp
 cargo test -p bitfun-services-core --features workspace-runtime workspace
+cargo test -p bitfun-services-core --features runtime-ownership --test runtime_ownership_contracts
 node scripts/check-core-boundaries.mjs
 cargo check -p bitfun-core --features product-full
 ```

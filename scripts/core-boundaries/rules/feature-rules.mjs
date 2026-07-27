@@ -5,7 +5,9 @@ export const optionalDependencyFeatureOwnerRules = [
     crateName: 'services-core',
     reason:
       'services-core workspace runtime dependencies must stay behind the explicit workspace-runtime feature',
-    dependencies: [{ depName: 'dunce', ownerFeatures: ['workspace-runtime'] }],
+    dependencies: [
+      { depName: 'dunce', ownerFeatures: ['runtime-ownership', 'workspace-runtime'] },
+    ],
   },
   {
     crateName: 'runtime-ports',

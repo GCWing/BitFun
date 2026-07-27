@@ -19,6 +19,8 @@ pub mod permission_store;
 pub mod persistence;
 pub mod process_manager;
 pub mod process_tree;
+#[cfg(feature = "runtime-ownership")]
+pub mod runtime_ownership;
 pub mod session;
 pub mod session_usage;
 pub mod storage_cleanup;

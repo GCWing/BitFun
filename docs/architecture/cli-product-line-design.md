@@ -11,8 +11,8 @@ CLI/TUI 的目标、问题和风险规约见 [`platform-portability-design.md`](
 CLI 产品入口、配置兼容、TUI 布局消费和 CLI Agent 体验，不重复定义这些文档中的通用契约或内部 ABI。公开
 BitFun Agent SDK 与 Headless CLI 的产品选择、能力一致性和 SDK Host 边界见
 [`agent-sdk-product-architecture.md`](agent-sdk-product-architecture.md)；多个 GUI/TUI/Remote/CLI 实例并存时，交互式 TUI
-连接 Local Agent Host、一次性 CLI 保留 Embedded 的部署边界见
-[`local-agent-host-multi-instance-design.md`](local-agent-host-multi-instance-design.md)。
+连接 Shared Agent Runtime、一次性 CLI 保留 Embedded 的部署边界见
+[`agent-runtime-deployment-design.md`](agent-runtime-deployment-design.md)。
 OpenCode 的完整扩展矩阵、配置资产、插件执行和 TUI Plugin 映射分别见
 [`opencode-extension-compatibility.md`](extensions/opencode-extension-compatibility.md)、
 [`opencode-config-assets-adapter-design.md`](extensions/opencode-config-assets-adapter-design.md)、
@@ -305,7 +305,7 @@ flowchart LR
 ```
 
 Embedded 只意味着 Runtime 与 CLI 同进程，不意味着绕过持久化单写规则。新 Session 取得自己的写入权；恢复既有 Session 时，
-CLI 必须先取得该 Session 的写入权。如果 Local Agent Host 或另一个 `exec` 已持有，CLI 连接现有 Host 或返回明确的
+CLI 必须先取得该 Session 的写入权。如果 Shared Agent Runtime 或另一个 `exec` 已持有，CLI 连接现有 Runtime 或返回明确的
 “Session 已占用”，不能并发写入同一 Session。
 
 CLI/TUI 的会话创建、列出、删除、恢复和历史转录读取通过 Rust Runtime SDK 的类型化端口完成；TUI 只把

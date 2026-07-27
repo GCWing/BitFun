@@ -1,5 +1,46 @@
 // Boundary rules for crate dependencies and lightweight profiles.
 
+const agentRuntimeIpcForbiddenDeps = [
+  'bitfun-acp',
+  'bitfun-agent-runtime',
+  'bitfun-agent-stream',
+  'bitfun-agent-tools',
+  'bitfun-ai-adapters',
+  'bitfun-claude-code-adapter',
+  'bitfun-codex-adapter',
+  'bitfun-core',
+  'bitfun-core-types',
+  'bitfun-events',
+  'bitfun-external-sources',
+  'bitfun-harness',
+  'bitfun-opencode-adapter',
+  'bitfun-page-function-runtime',
+  'bitfun-plugin-runtime-client',
+  'bitfun-product-capabilities',
+  'bitfun-relay-service',
+  'bitfun-runtime-ports',
+  'bitfun-runtime-services',
+  'bitfun-sdk-host',
+  'bitfun-services-core',
+  'bitfun-services-integrations',
+  'bitfun-static-hook-support',
+  'bitfun-tool-call-jsonrepair',
+  'bitfun-tool-packs',
+  'bitfun-product-domains',
+  'bitfun-transport',
+  'bitfun-webdriver',
+  'terminal-core',
+  'tool-runtime',
+  'tauri',
+  'reqwest',
+  'tokio-tungstenite',
+  'bitfun-cli',
+  'ratatui',
+  'crossterm',
+  'arboard',
+  'syntect-tui',
+];
+
 export const noCoreDependencyCrates = [
   'core-types',
   'events',
@@ -7,6 +48,7 @@ export const noCoreDependencyCrates = [
   'agent-stream',
   'tool-call-jsonrepair',
   'agent-runtime',
+  'agent-runtime-ipc',
   'harness',
   'plugin-runtime-client',
   'product-capabilities',
@@ -85,6 +127,12 @@ export const forbiddenManifestDependencyRules = [
 ];
 
 export const lightweightBoundaryRules = [
+  {
+    crateName: 'agent-runtime-ipc',
+    reason:
+      'agent-runtime-ipc is a non-published Health-only local transport seam, not a Runtime, SDK Host, service, or product surface',
+    forbiddenDeps: agentRuntimeIpcForbiddenDeps,
+  },
   {
     crateName: 'core-types',
     reason: 'core-types must stay low-level DTO-only',
@@ -339,6 +387,13 @@ export const lightweightBoundaryRules = [
 ];
 
 export const dependencyProfileRules = [
+  {
+    crateName: 'agent-runtime-ipc',
+    profileName: 'private Health-only local IPC profile',
+    reason:
+      'agent-runtime-ipc must not acquire Runtime, SDK Host, service, remote transport, or product dependencies before its first reviewed consumer',
+    forbiddenNonOptionalDeps: agentRuntimeIpcForbiddenDeps,
+  },
   {
     crateName: 'core',
     profileName: 'no-default runtime-surface-light profile',

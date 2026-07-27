@@ -7,6 +7,7 @@ members = [
     "src/apps/relay-server",
     "src/crates/interfaces/acp",
     "src/crates/interfaces/sdk-host",
+    "src/crates/adapters/agent-runtime-ipc",
     "src/crates/assembly/core",
     "src/crates/assembly/external-sources",
     "src/crates/adapters/ai-adapters",

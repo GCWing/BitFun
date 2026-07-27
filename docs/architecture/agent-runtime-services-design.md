@@ -10,8 +10,8 @@ CLI Agent 体验边界见 [`cli-product-line-design.md`](cli-product-line-design
 [`capability-runtime-integration-design.md`](extensions/capability-runtime-integration-design.md)；公开 BitFun Agent SDK 的
 用户心智、SDK Host、Headless CLI/ACP/Server 关系、竞品基线和能力发布门槛见
 [`agent-sdk-product-architecture.md`](agent-sdk-product-architecture.md)；第一方 GUI/TUI/Remote 多实例、Headless CLI Embedded、
-Local Agent Host 与 Plugin Host 的进程关系见
-[`local-agent-host-multi-instance-design.md`](local-agent-host-multi-instance-design.md)。
+Shared Agent Runtime 与 Plugin Host 的进程关系见
+[`agent-runtime-deployment-design.md`](agent-runtime-deployment-design.md)。
 
 本文中的接口片段只说明依赖方向和职责，不自动构成当前 API 或实施承诺。当前接口名称、字段和消费方以代码为准；
 新增公共类型前必须有真实生产调用方、版本边界和验证路径。现有 `agent-runtime::sdk` 是
@@ -64,7 +64,7 @@ Python/TypeScript SDK 通过匹配版本的本地 SDK Host 调用共享 Agent Ru
 ACP 和 Server 使用各自 adapter，不反向依赖公开语言 package。所有 wire DTO 可序列化，运行时句柄不进入
 schema；SDK Host 不拥有 Session、Tool、MCP、Permission、Hook 或 Event 状态。
 
-Agent Runtime API 的逻辑归属与物理部署分离：相同归属模块可以嵌入入口进程，也可以组装在第一方 Local Agent Host、
+Agent Runtime API 的逻辑归属与物理部署分离：相同归属模块可以嵌入入口进程，也可以组装为第一方 Shared deployment、
 私有 SDK Host 或目标机器 Runtime 中。任何 Rust 部署都只管理自己进程树内的服务与 Node/Bun Plugin Host；不能因为多个
 GUI/TUI/Remote Client 连接就复制 Runtime 状态模块，或按 Client/Workspace 创建 Plugin Host。
 
