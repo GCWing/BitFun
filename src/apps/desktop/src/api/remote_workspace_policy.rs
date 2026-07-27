@@ -506,6 +506,10 @@ pub const REMOTE_WORKSPACE_COMMAND_POLICIES: &[(&str, RemoteWorkspacePolicy)] = 
         RemoteWorkspacePolicy::LegacyUnaudited,
     ),
     (
+        "get_global_skill_settings",
+        RemoteWorkspacePolicy::WorkspaceAgnostic,
+    ),
+    (
         "get_health_status",
         RemoteWorkspacePolicy::WorkspaceAgnostic,
     ),
@@ -1526,6 +1530,10 @@ pub const REMOTE_WORKSPACE_COMMAND_POLICIES: &[(&str, RemoteWorkspacePolicy)] = 
     (
         "set_external_subagent_activation_command",
         RemoteWorkspacePolicy::RemoteUnsupported,
+    ),
+    (
+        "set_global_skill_disabled",
+        RemoteWorkspacePolicy::WorkspaceAgnostic,
     ),
     ("set_macos_edit_menu_mode", RemoteWorkspacePolicy::LocalOnly),
     (

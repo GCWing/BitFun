@@ -149,6 +149,13 @@ pub fn filter_implicitly_invocable_skills(skills: Vec<SkillInfo>) -> Vec<SkillIn
         .collect()
 }
 
+pub fn is_skill_globally_enabled(
+    skill: &SkillInfo,
+    globally_disabled_user_skills: &HashSet<String>,
+) -> bool {
+    skill.level != SkillLocation::User || !globally_disabled_user_skills.contains(&skill.key)
+}
+
 pub fn filter_candidates_for_mode(
     candidates: Vec<SkillCandidate>,
     mode_id: &str,
@@ -206,6 +213,7 @@ pub fn build_mode_skill_infos(
     mode_id: &str,
     user_overrides: &UserModeSkillOverrides,
     disabled_project_skills: &HashSet<String>,
+    globally_disabled_user_skills: &HashSet<String>,
 ) -> Vec<ModeSkillInfo> {
     let resolved_by_name: HashMap<String, String> = resolved_skills
         .iter()
@@ -223,7 +231,8 @@ pub fn build_mode_skill_infos(
                 user_overrides,
                 disabled_project_skills,
             );
-            let selected_for_runtime = resolved_keys.contains(&skill.key);
+            let globally_enabled = is_skill_globally_enabled(&skill, globally_disabled_user_skills);
+            let selected_for_runtime = globally_enabled && resolved_keys.contains(&skill.key);
             let mode_winner_key = state
                 .effective_enabled
                 .then(|| resolved_by_name.get(&skill.name))
@@ -237,6 +246,7 @@ pub fn build_mode_skill_infos(
             ModeSkillInfo {
                 skill,
                 default_enabled: state.default_enabled,
+                globally_enabled,
                 effective_enabled: state.effective_enabled,
                 disabled_by_mode: !state.effective_enabled,
                 selected_for_runtime,

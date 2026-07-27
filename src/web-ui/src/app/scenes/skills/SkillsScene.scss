@@ -644,6 +644,16 @@
     border-color: color-mix(in srgb, var(--color-accent-500) 34%, var(--border-subtle));
     box-shadow: 0 0 0 1px color-mix(in srgb, var(--color-accent-500) 12%, transparent);
   }
+
+  &.is-globally-disabled {
+    border-color: var(--border-subtle);
+    background: var(--element-bg-subtle);
+  }
+
+  &.is-globally-disabled {
+    opacity: 0.62;
+    cursor: not-allowed;
+  }
 }
 
 .skills-suite__skill-chip-name {
@@ -749,6 +759,14 @@
   gap: 3px;
 }
 
+.skills-card__status-badges {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
 .skills-card__name {
   font-size: var(--font-size-sm);
   font-weight: $font-weight-semibold;
@@ -786,6 +804,12 @@
   justify-content: flex-end;
   gap: 8px;
   margin-top: auto;
+}
+
+.skills-card__global-toggle {
+  display: inline-flex;
+  align-items: center;
+  margin-right: auto;
 }
 
 .skills-card__delete {

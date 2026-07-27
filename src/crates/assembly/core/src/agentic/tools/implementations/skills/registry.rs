@@ -5,7 +5,7 @@
 use super::builtin::ensure_builtin_skills_installed;
 use super::mode_overrides::{
     load_disabled_mode_skills_local, load_disabled_mode_skills_remote,
-    load_user_mode_skill_overrides, UserModeSkillOverrides,
+    load_globally_disabled_user_skills, load_user_mode_skill_overrides, UserModeSkillOverrides,
 };
 use super::types::{ModeSkillInfo, SkillData, SkillInfo, SkillLocation};
 use crate::agentic::workspace::WorkspaceFileSystem;
@@ -13,7 +13,7 @@ use crate::infrastructure::get_path_manager_arc;
 use crate::util::errors::{BitFunError, BitFunResult};
 use bitfun_agent_runtime::skills::{
     annotate_shadowed_skills, build_mode_skill_infos, filter_candidates_for_mode,
-    filter_implicitly_invocable_skills, normalize_local_skill_dir_name,
+    filter_implicitly_invocable_skills, is_skill_globally_enabled, normalize_local_skill_dir_name,
     normalize_remote_skill_dir_name, normalize_skill_keys,
     resolve_default_hidden_builtin_for_explicit_invocation, resolve_user_config_skill_root,
     resolve_visible_skills, sort_skill_candidates_by_dir, sort_skills,
@@ -77,6 +77,26 @@ impl SkillRegistry {
 
     pub fn global() -> &'static Self {
         SKILL_REGISTRY.get_or_init(Self::new)
+    }
+
+    async fn globally_disabled_user_skill_keys() -> HashSet<String> {
+        load_globally_disabled_user_skills()
+            .await
+            .unwrap_or_default()
+            .into_iter()
+            .collect()
+    }
+
+    fn filter_globally_disabled_candidates(
+        candidates: Vec<SkillCandidate>,
+        globally_disabled_user_skills: &HashSet<String>,
+    ) -> Vec<SkillCandidate> {
+        candidates
+            .into_iter()
+            .filter(|candidate| {
+                is_skill_globally_enabled(&candidate.info, globally_disabled_user_skills)
+            })
+            .collect()
     }
 
     async fn apply_local_openai_policy(skill_data: &mut SkillData, skill_dir: &Path) {
@@ -431,6 +451,9 @@ impl SkillRegistry {
         workspace_root: Option<&Path>,
         agent_type: Option<&str>,
     ) -> Vec<SkillCandidate> {
+        let globally_disabled_user_skills = Self::globally_disabled_user_skill_keys().await;
+        let candidates =
+            Self::filter_globally_disabled_candidates(candidates, &globally_disabled_user_skills);
         let Some(mode_id) = agent_type.map(str::trim).filter(|value| !value.is_empty()) else {
             return candidates;
         };
@@ -458,6 +481,9 @@ impl SkillRegistry {
         remote_root: &str,
         agent_type: Option<&str>,
     ) -> Vec<SkillCandidate> {
+        let globally_disabled_user_skills = Self::globally_disabled_user_skill_keys().await;
+        let candidates =
+            Self::filter_globally_disabled_candidates(candidates, &globally_disabled_user_skills);
         let Some(mode_id) = agent_type.map(str::trim).filter(|value| !value.is_empty()) else {
             return candidates;
         };
@@ -506,6 +532,9 @@ impl SkillRegistry {
         let candidates = self
             .scan_skill_candidates_for_workspace(workspace_root)
             .await;
+        let globally_disabled_user_skills = Self::globally_disabled_user_skill_keys().await;
+        let candidates =
+            Self::filter_globally_disabled_candidates(candidates, &globally_disabled_user_skills);
         let filtered = self
             .apply_mode_filters_for_workspace(candidates.clone(), workspace_root, agent_type)
             .await;
@@ -531,6 +560,9 @@ impl SkillRegistry {
         let candidates = self
             .scan_skill_candidates_for_remote_workspace(fs, remote_root)
             .await;
+        let globally_disabled_user_skills = Self::globally_disabled_user_skill_keys().await;
+        let candidates =
+            Self::filter_globally_disabled_candidates(candidates, &globally_disabled_user_skills);
         let filtered = self
             .apply_mode_filters_for_remote_workspace(
                 candidates.clone(),
@@ -670,8 +702,11 @@ impl SkillRegistry {
         };
         let disabled_project: HashSet<String> =
             normalize_skill_keys(disabled_project).into_iter().collect();
-        let filtered =
-            filter_candidates_for_mode(candidates, mode_id, &user_overrides, &disabled_project);
+        let globally_disabled_user_skills = Self::globally_disabled_user_skill_keys().await;
+        let filtered = Self::filter_globally_disabled_candidates(
+            filter_candidates_for_mode(candidates, mode_id, &user_overrides, &disabled_project),
+            &globally_disabled_user_skills,
+        );
         let resolved = resolve_visible_skills(filtered);
 
         build_mode_skill_infos(
@@ -680,6 +715,7 @@ impl SkillRegistry {
             mode_id,
             &user_overrides,
             &disabled_project,
+            &globally_disabled_user_skills,
         )
     }
 
@@ -701,8 +737,11 @@ impl SkillRegistry {
             .unwrap_or_default();
         let disabled_project: HashSet<String> =
             normalize_skill_keys(disabled_project).into_iter().collect();
-        let filtered =
-            filter_candidates_for_mode(candidates, mode_id, &user_overrides, &disabled_project);
+        let globally_disabled_user_skills = Self::globally_disabled_user_skill_keys().await;
+        let filtered = Self::filter_globally_disabled_candidates(
+            filter_candidates_for_mode(candidates, mode_id, &user_overrides, &disabled_project),
+            &globally_disabled_user_skills,
+        );
         let resolved = resolve_visible_skills(filtered);
 
         build_mode_skill_infos(
@@ -711,6 +750,7 @@ impl SkillRegistry {
             mode_id,
             &user_overrides,
             &disabled_project,
+            &globally_disabled_user_skills,
         )
     }
 

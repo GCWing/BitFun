@@ -356,6 +356,8 @@ export interface SkillInfo {
 export interface ModeSkillInfo extends SkillInfo {
   /** True when this skill is enabled before any mode-specific override is applied. */
   defaultEnabled: boolean;
+  /** False when this user-level skill is disabled for every agent profile. */
+  globallyEnabled: boolean;
   /** True when this skill remains enabled after all mode-specific overrides are applied. */
   effectiveEnabled: boolean;
   /** Backward-compatible inverse of `effectiveEnabled`. */
@@ -371,6 +373,10 @@ export interface ModeSkillInfo extends SkillInfo {
     | 'builtin_policy_disabled'
     | 'enabled_by_user_override'
     | 'disabled_by_user_override';
+}
+
+export interface GlobalSkillSettings {
+  globallyDisabledUserSkillKeys: string[];
 }
 
 export interface SkillMarketItem {

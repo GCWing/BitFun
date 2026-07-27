@@ -753,6 +753,10 @@ pub struct AIConfig {
     #[serde(default, deserialize_with = "deserialize_agent_profiles")]
     pub agent_profiles: HashMap<String, AgentProfileConfig>,
 
+    /// User-level Skill availability shared by every agent profile.
+    #[serde(default)]
+    pub skill_settings: SkillSettingsConfig,
+
     /// Review team configuration.
     /// team_id -> ReviewTeamConfig
     #[serde(default = "default_review_team_configs")]
@@ -976,6 +980,15 @@ pub struct AgentProfileConfig {
     /// Agent-level permission rules applied after project rules.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub tool_permission_rules: Vec<PermissionRule>,
+}
+
+/// User-level Skill configuration shared by every agent profile.
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(default)]
+pub struct SkillSettingsConfig {
+    /// User-level Skill keys disabled for every agent profile.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub globally_disabled_user_skills: Vec<String>,
 }
 
 /// API view of a mode configuration.
@@ -1839,6 +1852,7 @@ impl Default for AIConfig {
             default_models: DefaultModelsConfig::default(),
             agent_model_defaults: AgentModelDefaultsConfig::default(),
             agent_profiles: std::collections::HashMap::new(),
+            skill_settings: SkillSettingsConfig::default(),
             review_teams: default_review_team_configs(),
             review_team_rate_limit_status: default_review_team_rate_limit_status(),
             subagent_max_concurrency: default_subagent_max_concurrency(),

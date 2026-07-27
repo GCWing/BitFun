@@ -5,6 +5,7 @@ import { createTauriCommandError } from '../errors/TauriCommandError';
 import type {
   AgentProfileConfigItem,
   DiagnosticsBundleInfo,
+  GlobalSkillSettings,
   ModeSkillInfo,
   RuntimeLoggingInfo,
   SkillInfo,
@@ -23,6 +24,11 @@ export interface GetModeSkillConfigsParams {
   modeId: string;
   forceRefresh?: boolean;
   workspacePath?: string;
+}
+
+export interface SetGlobalSkillDisabledParams {
+  skillKey: string;
+  disabled: boolean;
 }
 
 export interface SetModeSkillDisabledParams {
@@ -296,6 +302,27 @@ export class ConfigAPI {
       return await api.invoke('get_mode_skill_configs', { modeId, forceRefresh, workspacePath });
     } catch (error) {
       throw createTauriCommandError('get_mode_skill_configs', error, { modeId, forceRefresh, workspacePath });
+    }
+  }
+
+  async getGlobalSkillSettings(): Promise<GlobalSkillSettings> {
+    try {
+      return await api.invoke('get_global_skill_settings');
+    } catch (error) {
+      throw createTauriCommandError('get_global_skill_settings', error);
+    }
+  }
+
+  async setGlobalSkillDisabled({
+    skillKey,
+    disabled,
+  }: SetGlobalSkillDisabledParams): Promise<GlobalSkillSettings> {
+    try {
+      return await api.invoke('set_global_skill_disabled', {
+        request: { skillKey, disabled },
+      });
+    } catch (error) {
+      throw createTauriCommandError('set_global_skill_disabled', error, { skillKey, disabled });
     }
   }
 

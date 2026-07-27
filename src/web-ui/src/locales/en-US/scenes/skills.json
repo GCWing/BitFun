@@ -160,7 +160,8 @@
       "disabled": "Disabled for this mode",
       "pending": "Unsaved",
       "covered": "Covered · {{source}}",
-      "coveredDetail": "Enabled, but this mode uses the same-name skill from {{source}}."
+      "coveredDetail": "Enabled, but this mode uses the same-name skill from {{source}}.",
+      "globalDisabled": "Globally disabled"
     },
     "groupCount": "{{total}} skills",
     "messages": {
@@ -224,7 +225,10 @@
       "shadowedTooltip": "The same-name skill from {{source}} normally has higher priority.",
       "shadowedLabel": "Higher-priority source:",
       "shadowedDetail": "The same-name skill from {{source}}",
-      "unknownSource": "another source"
+      "unknownSource": "another source",
+      "globalEnabled": "Available to agents",
+      "globalDisabled": "Globally disabled",
+      "globalToggleLabel": "Toggle global availability for {{name}}"
     }
   },
   "deleteModal": {

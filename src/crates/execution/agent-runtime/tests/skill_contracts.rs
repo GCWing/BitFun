@@ -3,7 +3,7 @@ use std::path::PathBuf;
 
 use bitfun_agent_runtime::skills::{
     annotate_shadowed_skills, build_mode_skill_infos, builtin_skill_group_key,
-    filter_candidates_for_mode, filter_implicitly_invocable_skills,
+    filter_candidates_for_mode, filter_implicitly_invocable_skills, is_skill_globally_enabled,
     render_loaded_skill_for_assistant, resolve_builtin_default_enabled,
     resolve_default_hidden_builtin_for_explicit_invocation, resolve_skill_default_enabled_for_mode,
     resolve_skill_state_for_mode, resolve_user_config_skill_root, resolve_visible_skills,
@@ -510,6 +510,7 @@ fn mode_skill_candidate_filtering_and_info_are_runtime_owned() {
         "agentic",
         &UserModeSkillOverrides::default(),
         &disabled_project,
+        &HashSet::new(),
     );
 
     let project_doc = infos
@@ -576,6 +577,7 @@ fn mode_skill_info_reports_the_actual_runtime_winner_after_filtering() {
         "agentic",
         &UserModeSkillOverrides::default(),
         &disabled_project,
+        &HashSet::new(),
     );
 
     let project = infos
@@ -606,6 +608,48 @@ fn mode_skill_info_reports_the_actual_runtime_winner_after_filtering() {
         opencode.skill.shadowed_by_key.as_deref(),
         Some(codex_pdf.info.key.as_str())
     );
+}
+
+#[test]
+fn global_skill_disable_overrides_mode_selection_without_changing_mode_defaults() {
+    let skill = custom_user_skill("my-custom-skill");
+    let candidate = SkillCandidate {
+        info: skill.clone(),
+        priority: 0,
+    };
+    let mut globally_disabled = HashSet::new();
+    globally_disabled.insert(skill.key.clone());
+    assert!(!is_skill_globally_enabled(
+        &candidate.info,
+        &globally_disabled
+    ));
+
+    let infos = build_mode_skill_infos(
+        vec![skill],
+        Vec::new(),
+        "agentic",
+        &UserModeSkillOverrides::default(),
+        &HashSet::new(),
+        &globally_disabled,
+    );
+
+    let info = infos.first().expect("skill info should be present");
+    assert!(info.default_enabled);
+    assert!(!info.globally_enabled);
+    assert!(info.effective_enabled);
+    assert!(!info.selected_for_runtime);
+    assert_eq!(
+        info.state_reason,
+        ModeSkillStateReason::CustomUserDefaultEnabled
+    );
+
+    let filtered = filter_candidates_for_mode(
+        vec![candidate],
+        "agentic",
+        &UserModeSkillOverrides::default(),
+        &HashSet::new(),
+    );
+    assert_eq!(filtered.len(), 1, "mode policy itself remains unchanged");
 }
 
 #[test]

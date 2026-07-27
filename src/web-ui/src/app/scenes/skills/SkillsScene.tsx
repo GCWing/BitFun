@@ -19,7 +19,7 @@ import {
   Zap,
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { Badge, Button, ConfirmDialog, Input, Modal, Search, Select } from '@/component-library';
+import { Badge, Button, ConfirmDialog, Input, Modal, Search, Select, Switch } from '@/component-library';
 import { GalleryDetailModal } from '@/app/components';
 import type { SkillInfo, SkillLevel, SkillMarketItem } from '@/infrastructure/config/types';
 import {
@@ -156,13 +156,18 @@ const SkillsScene: React.FC = () => {
       skill.name,
       source,
       scope,
+      skill.level === 'user'
+        ? installed.globallyDisabledSkillKeys.has(skill.key)
+          ? t('list.item.globalDisabled')
+          : t('list.item.globalEnabled')
+        : null,
       skill.isShadowed
         ? t('list.item.shadowedTooltip', {
             source: coverageSourceBySkillKey.get(skill.key) ?? t('list.item.unknownSource'),
           })
         : null,
     ].filter(Boolean).join('. ');
-  }, [coverageSourceBySkillKey, market.isRemoteWorkspace, t]);
+  }, [coverageSourceBySkillKey, installed.globallyDisabledSkillKeys, market.isRemoteWorkspace, t]);
 
   const refetchSkillsScene = useCallback(async () => {
     await Promise.all([installed.loadSkills(true), market.refresh()]);
@@ -355,6 +360,9 @@ const SkillsScene: React.FC = () => {
                             className={[
                               'skills-card',
                               skill.isShadowed && 'is-shadowed',
+                              skill.level === 'user'
+                                && installed.globallyDisabledSkillKeys.has(skill.key)
+                                && 'is-globally-disabled',
                             ].filter(Boolean).join(' ')}
                             style={{ '--surface-stagger-index': index } as React.CSSProperties}
                             onClick={() => setSelectedDetail({ type: 'installed', skillKey: skill.key })}
@@ -384,12 +392,20 @@ const SkillsScene: React.FC = () => {
                                   <span className="skills-card__desc" data-testid="skill-list-item-description">{skill.description}</span>
                                 )}
                               </div>
-                              {skill.isBuiltin && (
-                                <Badge variant="accent">
-                                  <ShieldCheck size={11} />
-                                  {t('list.item.builtin')}
-                                </Badge>
-                              )}
+                              <div className="skills-card__status-badges">
+                                {skill.isBuiltin && (
+                                  <Badge variant="accent">
+                                    <ShieldCheck size={11} />
+                                    {t('list.item.builtin')}
+                                  </Badge>
+                                )}
+                                {skill.level === 'user'
+                                  && installed.globallyDisabledSkillKeys.has(skill.key) && (
+                                  <Badge variant="neutral">
+                                    {t('list.item.globalDisabled')}
+                                  </Badge>
+                                )}
+                              </div>
                             </div>
 
                             <div className="skills-card__meta">
@@ -428,6 +444,20 @@ const SkillsScene: React.FC = () => {
                               onClick={(e) => e.stopPropagation()}
                               onKeyDown={(e) => e.stopPropagation()}
                             >
+                              {skill.level === 'user' && (
+                                <div className="skills-card__global-toggle">
+                                  <Switch
+                                    size="small"
+                                    checked={!installed.globallyDisabledSkillKeys.has(skill.key)}
+                                    loading={installed.savingGlobalSkillKey === skill.key}
+                                    disabled={installed.savingGlobalSkillKey !== null}
+                                    aria-label={t('list.item.globalToggleLabel', { name: skill.name })}
+                                    onChange={(event) => {
+                                      void installed.handleGlobalSkillToggle(skill, event.target.checked);
+                                    }}
+                                  />
+                                </div>
+                              )}
                               <Button
                                 variant="ghost"
                                 size="small"

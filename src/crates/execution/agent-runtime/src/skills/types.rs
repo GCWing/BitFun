@@ -84,6 +84,7 @@ pub struct ModeSkillInfo {
     #[serde(flatten)]
     pub skill: SkillInfo,
     pub default_enabled: bool,
+    pub globally_enabled: bool,
     pub effective_enabled: bool,
     pub disabled_by_mode: bool,
     pub selected_for_runtime: bool,

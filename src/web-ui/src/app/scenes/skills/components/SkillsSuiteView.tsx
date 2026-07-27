@@ -109,7 +109,9 @@ function buildSkillTitle(
 ): string {
   return [
     skill.description || skill.name,
-    dirty
+    !skill.globallyEnabled
+      ? t('suite.skillState.globalDisabled')
+      : dirty
       ? t('suite.skillState.pending')
       : enabled
         ? t('suite.skillState.enabled')
@@ -577,11 +579,12 @@ const SkillsSuiteView: React.FC = () => {
                                 draftEnabled ? 'is-enabled' : 'is-disabled',
                                 shadowed ? 'is-shadowed' : '',
                                 dirty ? 'is-dirty' : '',
+                                !skill.globallyEnabled ? 'is-globally-disabled' : '',
                               ].filter(Boolean).join(' ')}
                               title={accessibleStatus}
                               aria-label={`${skill.name}. ${accessibleStatus}`}
                               aria-pressed={draftEnabled}
-                              disabled={isSaving}
+                              disabled={isSaving || !skill.globallyEnabled}
                               onClick={() => {
                                 setDraftEnabledKeys((prev) => {
                                   const next = new Set(prev);
@@ -608,6 +611,11 @@ const SkillsSuiteView: React.FC = () => {
                               {dirty && (
                                 <span className="skills-suite__skill-chip-status">
                                   {t('suite.skillState.pending')}
+                                </span>
+                              )}
+                              {!skill.globallyEnabled && (
+                                <span className="skills-suite__skill-chip-status">
+                                  {t('suite.skillState.globalDisabled')}
                                 </span>
                               )}
                             </button>

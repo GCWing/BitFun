@@ -160,7 +160,8 @@
       "disabled": "已为此模式禁用",
       "pending": "未保存",
       "covered": "已覆盖 · {{source}}",
-      "coveredDetail": "已启用，但此模式会使用 {{source}} 中的同名技能。"
+      "coveredDetail": "已启用，但此模式会使用 {{source}} 中的同名技能。",
+      "globalDisabled": "已全局禁用"
     },
     "groupCount": "{{total}} 个",
     "messages": {
@@ -224,7 +225,10 @@
       "shadowedTooltip": "{{source}} 中的同名技能通常具有更高优先级。",
       "shadowedLabel": "更高优先级来源:",
       "shadowedDetail": "{{source}} 中的同名技能",
-      "unknownSource": "其他来源"
+      "unknownSource": "其他来源",
+      "globalEnabled": "智能体可用",
+      "globalDisabled": "已全局禁用",
+      "globalToggleLabel": "切换 {{name}} 的全局可用状态"
     }
   },
   "deleteModal": {

@@ -28,7 +28,7 @@ pub use roots::{
 };
 pub use selection::{
     annotate_shadowed_skills, build_mode_skill_infos, filter_candidates_for_mode,
-    filter_implicitly_invocable_skills, normalize_skill_keys,
+    filter_implicitly_invocable_skills, is_skill_globally_enabled, normalize_skill_keys,
     resolve_default_hidden_builtin_for_explicit_invocation, resolve_visible_skills,
     sort_skill_candidates_by_dir, sort_skills, ExplicitSkillInvocationResolution, SkillCandidate,
 };

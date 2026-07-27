@@ -27,6 +27,8 @@ export function useInstalledSkills({
   const { workspacePath, hasWorkspace, isRemoteWorkspace } = useWorkspaceManagerSync();
 
   const [skills, setSkills] = useState<SkillInfo[]>([]);
+  const [globallyDisabledSkillKeys, setGloballyDisabledSkillKeys] = useState<Set<string>>(new Set());
+  const [savingGlobalSkillKey, setSavingGlobalSkillKey] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -68,14 +70,18 @@ export function useInstalledSkills({
     try {
       setLoading(true);
       setError(null);
-      const list = await configAPI.getSkillConfigs({
-        forceRefresh,
-        workspacePath: workspacePath || undefined,
-      });
+      const [list, globalSettings] = await Promise.all([
+        configAPI.getSkillConfigs({
+          forceRefresh,
+          workspacePath: workspacePath || undefined,
+        }),
+        configAPI.getGlobalSkillSettings(),
+      ]);
       if (requestId !== loadRequestIdRef.current || !capabilityIsCurrent(capabilityEpoch)) {
         return;
       }
       setSkills(list);
+      setGloballyDisabledSkillKeys(new Set(globalSettings.globallyDisabledUserSkillKeys));
     } catch (err) {
       if (requestId !== loadRequestIdRef.current || !capabilityIsCurrent(capabilityEpoch)) {
         return;
@@ -97,6 +103,8 @@ export function useInstalledSkills({
     setIsAdding(false);
     if (!enabled) {
       setSkills([]);
+      setGloballyDisabledSkillKeys(new Set());
+      setSavingGlobalSkillKey(null);
       setError(null);
       setLoading(false);
       return;
@@ -257,6 +265,50 @@ export function useInstalledSkills({
     }
   }, [capabilityIsCurrent, currentCapabilityEpoch, loadSkills, notification, t, workspacePath]);
 
+  const handleGlobalSkillToggle = useCallback(async (skill: SkillInfo, enabled: boolean) => {
+    const capabilityEpoch = currentCapabilityEpoch();
+    if (capabilityEpoch === null || skill.level !== 'user') {
+      return false;
+    }
+
+    setSavingGlobalSkillKey(skill.key);
+    try {
+      const settings = await configAPI.setGlobalSkillDisabled({
+        skillKey: skill.key,
+        disabled: !enabled,
+      });
+      if (!capabilityIsCurrent(capabilityEpoch)) {
+        return false;
+      }
+
+      setGloballyDisabledSkillKeys(new Set(settings.globallyDisabledUserSkillKeys));
+      const { globalEventBus } = await import('@/infrastructure/event-bus');
+      globalEventBus.emit('mode:config:updated');
+      notification.success(t('messages.toggleSuccess', {
+        name: skill.name,
+        status: enabled ? t('messages.enabled') : t('messages.disabled'),
+      }));
+      return true;
+    } catch (err) {
+      if (!capabilityIsCurrent(capabilityEpoch)) {
+        return false;
+      }
+      log.error('Failed to update global Skill availability', {
+        skillKey: skill.key,
+        enabled,
+        error: err,
+      });
+      notification.error(t('messages.toggleFailed', {
+        error: err instanceof Error ? err.message : String(err),
+      }));
+      return false;
+    } finally {
+      if (capabilityIsCurrent(capabilityEpoch)) {
+        setSavingGlobalSkillKey(null);
+      }
+    }
+  }, [capabilityIsCurrent, currentCapabilityEpoch, notification, t]);
+
   const normalizedQuery = searchQuery.trim().toLowerCase();
 
   const filteredSkills = useMemo(() => {
@@ -291,12 +343,15 @@ export function useInstalledSkills({
 
   return {
     skills,
+    globallyDisabledSkillKeys,
+    savingGlobalSkillKey,
     filteredSkills,
     counts,
     loading,
     error,
     loadSkills,
     handleDelete,
+    handleGlobalSkillToggle,
     formLevel,
     setFormLevel,
     formPath,
