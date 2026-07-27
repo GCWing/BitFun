@@ -154,6 +154,7 @@
       "miniapp": "MiniApp",
       "canvas": "画布",
       "gstack": "gstack",
+      "harmonyos": "鸿蒙",
       "other": "其他"
     },
     "skillGroupPicker": {
