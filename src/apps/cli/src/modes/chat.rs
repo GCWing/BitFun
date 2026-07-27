@@ -26,7 +26,7 @@ use resize::ResizeRedrawState;
 use crate::actions::{
     action_by_id, action_conflict_behavior_version, action_for_alias,
     removed_management_command_hint, slash_actions, ActionContext, ActionHandler, ActionSpec,
-    ActionState, ResolvedKeymap,
+    ActionState, ResolvedKeymap, SHARED_TUI_EMBEDDED_HANDOFF, SHARED_TUI_HELP_NOTE,
 };
 use crate::agent::runtime_client::CliAgentRuntimeClient;
 use crate::chat_state::ChatState;
@@ -190,7 +190,7 @@ pub(crate) struct ChatMode {
     agent_type: String,
     workspace: Option<String>,
     agent: Arc<CliAgentRuntimeClient>,
-    compatibility: CoreAgentRuntimeCompatibility,
+    compatibility: Option<CoreAgentRuntimeCompatibility>,
     /// User-level default resolved from shared config for this TUI run.
     auto_approve_ask_default: bool,
     /// Temporary override for the current session only.
@@ -241,7 +241,7 @@ impl ChatMode {
         agent_type: String,
         workspace: Option<String>,
         agent: Arc<CliAgentRuntimeClient>,
-        compatibility: CoreAgentRuntimeCompatibility,
+        compatibility: Option<CoreAgentRuntimeCompatibility>,
     ) -> Self {
         let keymap = ResolvedKeymap::new(&config.shortcuts);
         Self {
@@ -283,6 +283,10 @@ impl ChatMode {
     pub(crate) fn with_initial_prompt(mut self, prompt: String) -> Self {
         self.initial_prompt = Some(prompt);
         self
+    }
+
+    fn action_state(&self, is_processing: bool, popup_open: bool) -> ActionState {
+        ActionState::chat(is_processing, popup_open).with_shared_tui(self.agent.is_shared())
     }
 }
 

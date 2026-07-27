@@ -1,7 +1,7 @@
 use crate::{
     read_frame, write_frame, DiscoveryRecord, DiscoveryStore, RuntimeInstanceIdentity,
-    RuntimeInstanceLock, RuntimeIpcFrame, RuntimeIpcIoError, RuntimeIpcOperation, MAX_FRAME_BYTES,
-    PROTOCOL_VERSION,
+    RuntimeInstanceLock, RuntimeIpcFrame, RuntimeIpcIoError, RuntimeIpcOperation,
+    MAX_REQUEST_FRAME_BYTES, PROTOCOL_VERSION,
 };
 use tempfile::tempdir;
 use tokio::io::AsyncWriteExt;
@@ -208,7 +208,7 @@ fn discovery_is_owner_checked_and_instance_lock_is_exclusive() {
 
 #[tokio::test]
 async fn framing_round_trips_health_and_rejects_oversized_lengths() {
-    let (mut writer, mut reader) = tokio::io::duplex(MAX_FRAME_BYTES + 16);
+    let (mut writer, mut reader) = tokio::io::duplex(MAX_REQUEST_FRAME_BYTES + 16);
     let expected = RuntimeIpcFrame::Request {
         request_id: 9,
         operation: RuntimeIpcOperation::Health,
@@ -223,11 +223,38 @@ async fn framing_round_trips_health_and_rejects_oversized_lengths() {
 
     let (mut writer, mut reader) = tokio::io::duplex(8);
     writer
-        .write_u32((MAX_FRAME_BYTES + 1) as u32)
+        .write_u32((MAX_REQUEST_FRAME_BYTES + 1) as u32)
         .await
         .expect("write oversized length prefix");
     let error = read_frame(&mut reader)
         .await
         .expect_err("reject oversized frame");
     assert!(matches!(error, RuntimeIpcIoError::FrameTooLarge { .. }));
+}
+
+#[tokio::test]
+async fn request_framing_rejects_unknown_fields_inside_nested_dtos() {
+    let value = serde_json::json!({
+        "type": "request",
+        "request_id": 1,
+        "operation": {
+            "operation": "list_sessions",
+            "request": {
+                "workspacePath": "workspace",
+                "future_field": true
+            }
+        }
+    });
+    let bytes = serde_json::to_vec(&value).expect("serialize fixture");
+    let (mut writer, mut reader) = tokio::io::duplex(bytes.len() + 4);
+    writer
+        .write_u32(bytes.len() as u32)
+        .await
+        .expect("write length");
+    writer.write_all(&bytes).await.expect("write fixture");
+
+    assert!(matches!(
+        read_frame(&mut reader).await,
+        Err(RuntimeIpcIoError::UnknownField { path }) if path.ends_with("future_field")
+    ));
 }

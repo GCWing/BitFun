@@ -55,7 +55,7 @@ impl ChatMode {
         if action_id == "toggle_auto_approve" || action_id.starts_with("toggle_auto_approve:") {
             let action = action_by_id("toggle_auto_approve", ActionContext::Chat)
                 .expect("Auto mode action must remain registered");
-            let state = ActionState::chat(chat_state.is_processing, false);
+            let state = self.action_state(chat_state.is_processing, false);
             if !action.available(state) {
                 chat_view.set_status(Some(action.unavailable_message(state)));
                 return Ok(None);
@@ -147,7 +147,7 @@ impl ChatMode {
         }
         self.dispatch_action(
             action,
-            ActionState::chat(chat_state.is_processing, false),
+            self.action_state(chat_state.is_processing, false),
             chat_view,
             chat_state,
             rt_handle,
@@ -198,6 +198,21 @@ impl ChatMode {
         }
         let builtin_alias = format!("/{command_name}");
         let builtin_action = action_for_alias(&builtin_alias, ActionContext::Chat);
+        if self.agent.is_shared() {
+            if let Some(action) = builtin_action {
+                return self.dispatch_action(
+                    action,
+                    self.action_state(chat_state.is_processing, false),
+                    chat_view,
+                    chat_state,
+                    rt_handle,
+                );
+            }
+            chat_state.add_system_message(format!(
+                "External prompt command /{command_name} is unavailable in Shared TUI preview. {SHARED_TUI_EMBEDDED_HANDOFF}."
+            ));
+            return Ok(None);
+        }
         let mut external = self.external_command_projection(command_name);
         let authoritative_preferences = tokio::task::block_in_place(|| {
             rt_handle
@@ -291,7 +306,7 @@ impl ChatMode {
                 let action = builtin_action.expect("route requires an available built-in action");
                 self.dispatch_action(
                     action,
-                    ActionState::chat(chat_state.is_processing, false),
+                    self.action_state(chat_state.is_processing, false),
                     chat_view,
                     chat_state,
                     rt_handle,
@@ -606,14 +621,21 @@ impl ChatMode {
             chat_view.set_status(Some(action.unavailable_message(state)));
             return Ok(None);
         }
-
         match action.handler {
             ActionHandler::Help => {
-                chat_view.show_info_popup(self.keymap.help_text(state));
+                let mut help = self.keymap.help_text(state);
+                if self.agent.is_shared() {
+                    help.push_str("\n\n");
+                    help.push_str(SHARED_TUI_HELP_NOTE);
+                }
+                chat_view.show_info_popup(help);
             }
             ActionHandler::ClearConversation => {
                 if chat_state.is_processing {
                     self.cancel_active_turn(chat_view, rt_handle);
+                    if self.agent.is_shared() {
+                        return Ok(None);
+                    }
                 }
                 chat_state.clear_messages();
                 chat_view.clear_screen();
@@ -695,6 +717,9 @@ impl ChatMode {
             ActionHandler::Exit => {
                 if chat_state.is_processing {
                     self.cancel_active_turn(chat_view, rt_handle);
+                    if self.agent.is_shared() {
+                        return Ok(None);
+                    }
                 }
                 return Ok(Some(ChatExitReason::Quit));
             }
@@ -707,7 +732,9 @@ impl ChatMode {
             ActionHandler::SubmitInput => {
                 return self.submit_input(chat_view, chat_state, rt_handle);
             }
-            ActionHandler::Interrupt => self.cancel_active_turn(chat_view, rt_handle),
+            ActionHandler::Interrupt => {
+                self.cancel_active_turn(chat_view, rt_handle);
+            }
             ActionHandler::ClosePopups => self.close_all_popups(chat_view),
             ActionHandler::NavigateBack => self.navigate_back(chat_view),
             ActionHandler::InsertNewline => chat_view.handle_newline(),
@@ -815,17 +842,29 @@ impl ChatMode {
         Ok(None)
     }
 
-    fn cancel_active_turn(&self, chat_view: &mut ChatView, rt_handle: &tokio::runtime::Handle) {
+    fn cancel_active_turn(
+        &self,
+        chat_view: &mut ChatView,
+        rt_handle: &tokio::runtime::Handle,
+    ) -> bool {
         tracing::info!("User requested cancellation");
         let agent = self.agent.clone();
-        tokio::task::block_in_place(|| {
-            rt_handle.block_on(async move {
-                if let Err(error) = agent.cancel_current_turn().await {
-                    tracing::error!("Failed to cancel turn: {}", error);
-                }
-            })
+        let result = tokio::task::block_in_place(|| {
+            rt_handle.block_on(async move { agent.cancel_current_turn().await })
         });
-        chat_view.set_status(Some("Cancelling...".to_string()));
+        match result {
+            Ok(()) => {
+                chat_view.set_status(Some(
+                    "Cancelling... Wait for the turn to stop before retrying.".to_string(),
+                ));
+                true
+            }
+            Err(error) => {
+                tracing::error!("Failed to cancel turn: {}", error);
+                chat_view.set_status(Some(format!("Cancellation failed: {error}")));
+                false
+            }
+        }
     }
 
     fn paste_clipboard(&self, chat_view: &mut ChatView) {

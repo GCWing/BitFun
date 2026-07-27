@@ -1,0 +1,771 @@
+use crate::{
+    read_frame, write_frame, InitializeRequest, LocalIpcStream, RuntimeInstanceIdentity,
+    RuntimeIpcClient, RuntimeIpcClientError, RuntimeIpcError, RuntimeIpcErrorCode, RuntimeIpcEvent,
+    RuntimeIpcFrame, RuntimeIpcOperation, RuntimeIpcOperationResult, RuntimeIpcRequestHandler,
+    RuntimeIpcServer, RuntimeIpcServerConfig, RuntimeSessionRestoreRequest, PROTOCOL_VERSION,
+};
+use async_trait::async_trait;
+use bitfun_events::{AgenticEvent, AgenticEventEnvelope, AgenticEventPriority};
+use bitfun_runtime_ports::{
+    AgentDialogTurnRequest, AgentSessionCreateRequest, AgentSessionCreateResult,
+    AgentSessionSummary, AgentSubmissionSource, DialogSubmissionPolicy, SessionTranscript,
+};
+use serde_json::Map;
+use std::path::Path;
+use std::sync::{
+    atomic::{AtomicBool, Ordering},
+    Arc, Mutex,
+};
+use std::time::Duration;
+use tempfile::{tempdir, TempDir};
+use tokio::io::AsyncWriteExt;
+use tokio::sync::{broadcast, watch, Notify};
+type EventSubscription = Result<broadcast::Receiver<RuntimeIpcEvent>, RuntimeIpcError>;
+
+fn test_agent_event(session_id: &str, turn_id: &str) -> RuntimeIpcEvent {
+    RuntimeIpcEvent::Agent {
+        session_id: session_id.to_string(),
+        envelope: AgenticEventEnvelope::new(
+            AgenticEvent::DialogTurnCancelled {
+                session_id: session_id.to_string(),
+                turn_id: turn_id.to_string(),
+            },
+            AgenticEventPriority::Critical,
+        ),
+    }
+}
+
+struct TestServer {
+    runtime_root: TempDir,
+    workspace: TempDir,
+    endpoint: crate::LocalIpcEndpoint,
+    discovery: crate::DiscoveryRecord,
+    task: tokio::task::JoinHandle<Result<(), crate::RuntimeIpcServerError>>,
+}
+
+impl TestServer {
+    async fn start<H: RuntimeIpcRequestHandler + 'static>(
+        config: RuntimeIpcServerConfig,
+        handler: Arc<H>,
+    ) -> Self {
+        let runtime_root = tempdir().expect("runtime root");
+        let workspace = tempdir().expect("workspace");
+        let server = RuntimeIpcServer::bind_with_handler(
+            runtime_root.path(),
+            test_identity(workspace.path()),
+            config,
+            handler,
+        )
+        .await
+        .expect("bind shared server");
+        let endpoint = server.endpoint().clone();
+        let discovery = server.discovery_record().clone();
+        Self {
+            runtime_root,
+            workspace,
+            endpoint,
+            discovery,
+            task: tokio::spawn(server.serve()),
+        }
+    }
+
+    async fn connect(&self, client_id: &str) -> LocalIpcStream {
+        initialize(&self.endpoint, &self.discovery, client_id).await
+    }
+
+    async fn finish(self) {
+        self.task.await.unwrap().unwrap();
+    }
+}
+
+struct FakeHandler {
+    calls: Mutex<Vec<RuntimeIpcOperation>>,
+    delay: Option<Duration>,
+    submit_delay: Option<Duration>,
+    settle_cancel: bool,
+    events: broadcast::Sender<RuntimeIpcEvent>,
+    available: watch::Sender<bool>,
+}
+
+struct CreateRaceHandler {
+    create_started: Arc<Notify>,
+    allow_create: Arc<Notify>,
+    available: Arc<AtomicBool>,
+    events: broadcast::Sender<RuntimeIpcEvent>,
+}
+
+impl Default for FakeHandler {
+    fn default() -> Self {
+        let (events, _) = broadcast::channel(16);
+        let (available, _) = watch::channel(true);
+        Self {
+            calls: Mutex::new(Vec::new()),
+            delay: None,
+            submit_delay: None,
+            settle_cancel: true,
+            events,
+            available,
+        }
+    }
+}
+
+#[async_trait]
+impl RuntimeIpcRequestHandler for CreateRaceHandler {
+    fn ensure_available(&self) -> Result<(), RuntimeIpcError> {
+        self.available
+            .load(Ordering::SeqCst)
+            .then_some(())
+            .ok_or(RuntimeIpcError {
+                code: RuntimeIpcErrorCode::Unavailable,
+                message: "fixture event stream unavailable".to_string(),
+            })
+    }
+
+    async fn execute(
+        &self,
+        operation: RuntimeIpcOperation,
+    ) -> Result<RuntimeIpcOperationResult, RuntimeIpcError> {
+        match operation {
+            RuntimeIpcOperation::CreateSession { request: _ } => {
+                self.create_started.notify_one();
+                self.allow_create.notified().await;
+                Ok(RuntimeIpcOperationResult::SessionCreated {
+                    session: AgentSessionCreateResult {
+                        session_id: "session-a".to_string(),
+                        session_name: "Created session".to_string(),
+                        agent_type: "agentic".to_string(),
+                    },
+                })
+            }
+            RuntimeIpcOperation::RestoreSession { request } => Ok(restored(&request.session_id)),
+            _ => Ok(RuntimeIpcOperationResult::Unit),
+        }
+    }
+
+    fn subscribe_events(&self, _session_id: &str) -> EventSubscription {
+        self.ensure_available().map(|()| self.events.subscribe())
+    }
+}
+
+#[async_trait]
+impl RuntimeIpcRequestHandler for FakeHandler {
+    fn ensure_available(&self) -> Result<(), RuntimeIpcError> {
+        (*self.available.borrow())
+            .then_some(())
+            .ok_or(RuntimeIpcError {
+                code: RuntimeIpcErrorCode::Unavailable,
+                message: "fixture event stream unavailable".to_string(),
+            })
+    }
+
+    fn subscribe_availability(&self) -> Option<watch::Receiver<bool>> {
+        Some(self.available.subscribe())
+    }
+
+    async fn execute(
+        &self,
+        operation: RuntimeIpcOperation,
+    ) -> Result<RuntimeIpcOperationResult, RuntimeIpcError> {
+        self.calls
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .push(operation.clone());
+        if let Some(delay) = self.delay {
+            tokio::time::sleep(delay).await;
+        }
+        match operation {
+            RuntimeIpcOperation::RestoreSession { request } => Ok(restored(&request.session_id)),
+            RuntimeIpcOperation::SubmitTurn { request } => {
+                if let Some(delay) = self.submit_delay {
+                    tokio::time::sleep(delay).await;
+                }
+                Ok(RuntimeIpcOperationResult::TurnAccepted {
+                    session_id: request.session_id,
+                    turn_id: request.turn_id.expect("test turn id"),
+                })
+            }
+            RuntimeIpcOperation::CancelTurn { request } => {
+                if self.settle_cancel {
+                    let _ = self.events.send(test_agent_event(
+                        &request.session_id,
+                        request.turn_id.as_deref().expect("cancel turn id"),
+                    ));
+                }
+                Ok(RuntimeIpcOperationResult::TurnCancelled {
+                    cancellation: bitfun_runtime_ports::AgentTurnCancellationResult {
+                        session_id: request.session_id,
+                        turn_id: request.turn_id,
+                        requested: true,
+                    },
+                })
+            }
+            _ => Ok(RuntimeIpcOperationResult::Unit),
+        }
+    }
+
+    fn subscribe_events(&self, _session_id: &str) -> EventSubscription {
+        Ok(self.events.subscribe())
+    }
+}
+
+#[tokio::test]
+async fn authenticated_partial_frame_is_closed_at_the_request_deadline() {
+    let mut config = server_config();
+    config.request_timeout = Duration::from_millis(20);
+    let handler = Arc::new(FakeHandler::default());
+    let server = TestServer::start(config, handler.clone()).await;
+    let mut client = server.connect("partial-frame").await;
+    expect_response(
+        &mut client,
+        2,
+        restore_operation(server.workspace.path(), "session-a"),
+    )
+    .await;
+    client.write_u32(10).await.unwrap();
+    client.write_all(b"{").await.unwrap();
+    let events = handler.events.clone();
+    let emitter = tokio::spawn(async move {
+        loop {
+            let _ = events.send(test_agent_event("session-a", "turn-a"));
+            tokio::time::sleep(Duration::from_millis(5)).await;
+        }
+    });
+    assert!(tokio::time::timeout(Duration::from_millis(200), async {
+        while read_frame(&mut client).await.is_ok() {}
+    })
+    .await
+    .is_ok());
+    emitter.abort();
+    drop(client);
+    server.finish().await;
+}
+
+#[tokio::test]
+async fn startup_connection_closes_when_runtime_becomes_unavailable() {
+    let handler = Arc::new(FakeHandler::default());
+    let server = TestServer::start(server_config(), handler.clone()).await;
+    let mut client = server.connect("startup-page").await;
+    handler.available.send_replace(false);
+    assert!(
+        tokio::time::timeout(Duration::from_millis(200), read_frame(&mut client))
+            .await
+            .expect("startup connection closes")
+            .is_err()
+    );
+    drop(client);
+    server.finish().await;
+}
+
+#[tokio::test]
+async fn oversized_event_reports_typed_invalidation_before_disconnect() {
+    let handler = Arc::new(FakeHandler::default());
+    let server = TestServer::start(server_config(), handler.clone()).await;
+    let mut client = server.connect("oversized-event").await;
+    expect_response(
+        &mut client,
+        2,
+        restore_operation(server.workspace.path(), "session-a"),
+    )
+    .await;
+    handler
+        .events
+        .send(RuntimeIpcEvent::Agent {
+            session_id: "session-a".to_string(),
+            envelope: AgenticEventEnvelope::new(
+                AgenticEvent::TextChunk {
+                    session_id: "session-a".to_string(),
+                    turn_id: "turn-a".to_string(),
+                    round_id: "round-a".to_string(),
+                    attempt_id: None,
+                    attempt_index: None,
+                    text: "x".repeat(9 * 1024 * 1024),
+                },
+                AgenticEventPriority::Critical,
+            ),
+        })
+        .unwrap();
+    assert!(matches!(
+        read_frame(&mut client).await.unwrap(),
+        RuntimeIpcFrame::Event {
+            event: RuntimeIpcEvent::StreamInvalidated {
+                reason: crate::RuntimeIpcStreamInvalidationReason::FrameTooLarge,
+            }
+        }
+    ));
+    drop(client);
+    server.finish().await;
+}
+
+#[tokio::test]
+async fn first_party_timeout_reports_unknown_outcome_and_releases_the_lease() {
+    let mut config = server_config();
+    config.request_timeout = Duration::from_millis(100);
+    let handler = Arc::new(FakeHandler {
+        delay: Some(Duration::from_millis(250)),
+        ..FakeHandler::default()
+    });
+    let server = TestServer::start(config, handler.clone()).await;
+    for client_id in ["first-timeout", "second-timeout"] {
+        let client = RuntimeIpcClient::connect(
+            server.runtime_root.path(),
+            &server.discovery,
+            client_id,
+            "0.1.0",
+            Duration::from_secs(2),
+            Duration::from_millis(150),
+        )
+        .await
+        .expect("connect first-party client");
+        let restore = client
+            .request(restore_operation(server.workspace.path(), "session-a"))
+            .await;
+        assert!(
+            matches!(
+                restore,
+                Err(RuntimeIpcClientError::Remote(RuntimeIpcError {
+                    code: RuntimeIpcErrorCode::OutcomeUnknown,
+                    ..
+                }))
+            ),
+            "unexpected restore result: {restore:?}"
+        );
+    }
+    server.finish().await;
+}
+
+#[tokio::test]
+async fn generated_session_is_claimed_before_another_connection_can_restore_it() {
+    let create_started = Arc::new(Notify::new());
+    let allow_create = Arc::new(Notify::new());
+    let server = TestServer::start(
+        server_config(),
+        Arc::new(CreateRaceHandler {
+            create_started: create_started.clone(),
+            allow_create: allow_create.clone(),
+            available: Arc::new(AtomicBool::new(true)),
+            events: broadcast::channel(16).0,
+        }),
+    )
+    .await;
+    let mut creator = server.connect("creator").await;
+    let mut restorer = server.connect("restorer").await;
+    let workspace_path = server.workspace.path().to_string_lossy().to_string();
+
+    let create_task = tokio::spawn(async move {
+        request(
+            &mut creator,
+            2,
+            create_operation(Path::new(&workspace_path), "Created session"),
+        )
+        .await
+    });
+    create_started.notified().await;
+    let restore_task = tokio::spawn(async move {
+        request(
+            &mut restorer,
+            2,
+            RuntimeIpcOperation::RestoreSession {
+                request: RuntimeSessionRestoreRequest {
+                    workspace_path: "fixture-workspace".to_string(),
+                    session_id: "session-a".to_string(),
+                },
+            },
+        )
+        .await
+    });
+
+    tokio::time::sleep(Duration::from_millis(20)).await;
+    assert!(
+        !restore_task.is_finished(),
+        "restore must wait until create has claimed its generated Session"
+    );
+    allow_create.notify_one();
+    assert!(matches!(
+        create_task.await.expect("create task"),
+        RuntimeIpcFrame::Response {
+            result: RuntimeIpcOperationResult::SessionCreated { .. },
+            ..
+        }
+    ));
+    assert!(matches!(
+        restore_task.await.expect("restore task"),
+        RuntimeIpcFrame::Error { error, .. }
+            if error.code == RuntimeIpcErrorCode::SessionInUse
+    ));
+
+    server.finish().await;
+}
+
+fn summary(session_id: &str) -> AgentSessionSummary {
+    AgentSessionSummary {
+        session_id: session_id.to_string(),
+        session_name: "Shared session".to_string(),
+        agent_type: "agentic".to_string(),
+        model_id: None,
+        last_user_dialog_agent_type: None,
+        last_submitted_agent_type: None,
+        turn_count: 0,
+        created_at_ms: 1,
+        last_active_at_ms: 1,
+    }
+}
+
+fn restored(session_id: &str) -> RuntimeIpcOperationResult {
+    RuntimeIpcOperationResult::SessionRestored {
+        session: summary(session_id),
+        transcript: SessionTranscript {
+            session_id: session_id.to_string(),
+            messages: Vec::new(),
+        },
+        pending_permissions: Vec::new(),
+    }
+}
+
+fn test_identity(workspace: &Path) -> RuntimeInstanceIdentity {
+    RuntimeInstanceIdentity::for_workspace(
+        workspace,
+        "bitfun",
+        "stable",
+        "user-a",
+        PROTOCOL_VERSION,
+    )
+    .expect("runtime identity")
+}
+
+fn restore_operation(workspace: &Path, session_id: &str) -> RuntimeIpcOperation {
+    RuntimeIpcOperation::RestoreSession {
+        request: RuntimeSessionRestoreRequest {
+            workspace_path: workspace.to_string_lossy().to_string(),
+            session_id: session_id.to_string(),
+        },
+    }
+}
+
+fn create_operation(workspace: &Path, name: &str) -> RuntimeIpcOperation {
+    RuntimeIpcOperation::CreateSession {
+        request: AgentSessionCreateRequest {
+            session_name: name.to_string(),
+            agent_type: "agentic".to_string(),
+            workspace_path: Some(workspace.to_string_lossy().to_string()),
+            project_workspace_path: None,
+            execution_target: None,
+            workspace_id: None,
+            remote_connection_id: None,
+            remote_ssh_host: None,
+            model_id: None,
+            metadata: Map::new(),
+        },
+    }
+}
+
+fn submit_operation(workspace: &Path, session_id: &str, turn_id: &str) -> RuntimeIpcOperation {
+    RuntimeIpcOperation::SubmitTurn {
+        request: AgentDialogTurnRequest {
+            session_id: session_id.to_string(),
+            message: "hello".to_string(),
+            original_message: None,
+            turn_id: Some(turn_id.to_string()),
+            agent_type: "agentic".to_string(),
+            workspace_path: Some(workspace.to_string_lossy().to_string()),
+            remote_connection_id: None,
+            remote_ssh_host: None,
+            policy: DialogSubmissionPolicy::for_source(AgentSubmissionSource::Cli),
+            reply_route: None,
+            prepended_reminders: Vec::new(),
+            attachments: Vec::new(),
+            metadata: Map::new(),
+        },
+    }
+}
+
+fn server_config() -> RuntimeIpcServerConfig {
+    RuntimeIpcServerConfig {
+        server_version: "shared-controller-test".to_string(),
+        idle_timeout: Duration::from_millis(100),
+        handshake_timeout: Duration::from_secs(2),
+        request_timeout: Duration::from_secs(2),
+        max_connections: 4,
+    }
+}
+
+async fn initialize(
+    endpoint: &crate::LocalIpcEndpoint,
+    discovery: &crate::DiscoveryRecord,
+    client_id: &str,
+) -> LocalIpcStream {
+    let mut stream = endpoint
+        .connect(Duration::from_secs(2))
+        .await
+        .expect("connect local stream");
+    write_frame(
+        &mut stream,
+        &RuntimeIpcFrame::Initialize {
+            request_id: 1,
+            request: InitializeRequest {
+                protocol_version: PROTOCOL_VERSION,
+                instance_identity: discovery.instance_identity.as_str().to_string(),
+                token: discovery.token.clone(),
+                client_id: client_id.to_string(),
+                client_version: "0.1.0".to_string(),
+            },
+        },
+    )
+    .await
+    .expect("initialize request");
+    assert!(matches!(
+        read_frame(&mut stream).await.expect("initialize response"),
+        RuntimeIpcFrame::Initialized { result, .. } if result.capabilities.interactive_tui
+    ));
+    stream
+}
+
+async fn request(
+    stream: &mut LocalIpcStream,
+    request_id: u64,
+    operation: RuntimeIpcOperation,
+) -> RuntimeIpcFrame {
+    write_frame(
+        stream,
+        &RuntimeIpcFrame::Request {
+            request_id,
+            operation,
+        },
+    )
+    .await
+    .expect("write operation");
+    read_frame(stream).await.expect("read operation response")
+}
+
+async fn expect_response(
+    stream: &mut LocalIpcStream,
+    request_id: u64,
+    operation: RuntimeIpcOperation,
+) {
+    assert!(matches!(
+        request(stream, request_id, operation).await,
+        RuntimeIpcFrame::Response { .. }
+    ));
+}
+
+async fn expect_error(
+    stream: &mut LocalIpcStream,
+    request_id: u64,
+    operation: RuntimeIpcOperation,
+    expected: RuntimeIpcErrorCode,
+) {
+    assert!(matches!(
+        request(stream, request_id, operation).await,
+        RuntimeIpcFrame::Error { error, .. } if error.code == expected
+    ));
+}
+
+async fn wait_for_calls(handler: &FakeHandler, ready: impl Fn(&[RuntimeIpcOperation]) -> bool) {
+    tokio::time::timeout(Duration::from_secs(2), async {
+        loop {
+            let found = {
+                let calls = handler.calls.lock().expect("calls");
+                ready(&calls)
+            };
+            if found {
+                break;
+            }
+            tokio::task::yield_now().await;
+        }
+    })
+    .await
+    .expect("expected runtime operation");
+}
+
+#[tokio::test]
+async fn session_switching_is_exclusive_and_disconnect_releases_control() {
+    let server = TestServer::start(server_config(), Arc::new(FakeHandler::default())).await;
+    let mut first = server.connect("first-controller").await;
+    let mut second = server.connect("second-controller").await;
+    expect_response(
+        &mut first,
+        2,
+        restore_operation(server.workspace.path(), "session-a"),
+    )
+    .await;
+    expect_error(
+        &mut second,
+        2,
+        restore_operation(server.workspace.path(), "session-a"),
+        RuntimeIpcErrorCode::SessionInUse,
+    )
+    .await;
+    expect_response(
+        &mut second,
+        3,
+        restore_operation(server.workspace.path(), "session-b"),
+    )
+    .await;
+    expect_error(
+        &mut first,
+        3,
+        restore_operation(server.workspace.path(), "session-b"),
+        RuntimeIpcErrorCode::SessionInUse,
+    )
+    .await;
+    expect_response(
+        &mut first,
+        4,
+        restore_operation(server.workspace.path(), "session-a"),
+    )
+    .await;
+
+    drop(first);
+    tokio::time::sleep(Duration::from_millis(30)).await;
+    expect_response(
+        &mut second,
+        4,
+        restore_operation(server.workspace.path(), "session-a"),
+    )
+    .await;
+    drop(second);
+    server.finish().await;
+}
+
+#[tokio::test]
+async fn one_connection_rejects_a_second_turn_until_the_first_finishes() {
+    let handler = Arc::new(FakeHandler::default());
+    let server = TestServer::start(server_config(), handler.clone()).await;
+    let mut client = server.connect("controller").await;
+    expect_response(
+        &mut client,
+        2,
+        restore_operation(server.workspace.path(), "session-a"),
+    )
+    .await;
+    expect_response(
+        &mut client,
+        3,
+        submit_operation(server.workspace.path(), "session-a", "turn-a"),
+    )
+    .await;
+    expect_error(
+        &mut client,
+        4,
+        submit_operation(server.workspace.path(), "session-a", "turn-b"),
+        RuntimeIpcErrorCode::SessionInUse,
+    )
+    .await;
+    expect_error(
+        &mut client,
+        5,
+        restore_operation(server.workspace.path(), "session-b"),
+        RuntimeIpcErrorCode::SessionInUse,
+    )
+    .await;
+
+    drop(client);
+    wait_for_calls(&handler, |calls| {
+        let submitted = calls
+            .iter()
+            .filter(|call| matches!(call, RuntimeIpcOperation::SubmitTurn { .. }))
+            .count();
+        let cancelled_first = calls.iter().any(|call| {
+            matches!(
+                call,
+                RuntimeIpcOperation::CancelTurn { request }
+                    if request.session_id == "session-a"
+                        && request.turn_id.as_deref() == Some("turn-a")
+            )
+        });
+        submitted == 1 && cancelled_first
+    })
+    .await;
+    server.finish().await;
+}
+
+#[tokio::test]
+async fn timed_out_submit_closes_and_cancels_its_provisional_turn() {
+    let handler = Arc::new(FakeHandler {
+        submit_delay: Some(Duration::from_millis(100)),
+        ..FakeHandler::default()
+    });
+    let mut config = server_config();
+    config.request_timeout = Duration::from_millis(20);
+    let server = TestServer::start(config, handler.clone()).await;
+    let mut first = server.connect("first-controller").await;
+    expect_response(
+        &mut first,
+        2,
+        restore_operation(server.workspace.path(), "session-a"),
+    )
+    .await;
+    expect_error(
+        &mut first,
+        3,
+        submit_operation(server.workspace.path(), "session-a", "turn-a"),
+        RuntimeIpcErrorCode::OutcomeUnknown,
+    )
+    .await;
+
+    wait_for_calls(&handler, |calls| {
+        calls.iter().any(|call| {
+            matches!(
+                call,
+                RuntimeIpcOperation::CancelTurn { request }
+                    if request.session_id == "session-a"
+                        && request.turn_id.as_deref() == Some("turn-a")
+            )
+        })
+    })
+    .await;
+
+    let mut second = server.connect("second-controller").await;
+    expect_response(
+        &mut second,
+        2,
+        restore_operation(server.workspace.path(), "session-a"),
+    )
+    .await;
+    drop(first);
+    drop(second);
+    server.finish().await;
+}
+
+#[tokio::test]
+async fn unsettled_disconnect_cancellation_quarantines_the_session_lease() {
+    let handler = Arc::new(FakeHandler {
+        settle_cancel: false,
+        ..FakeHandler::default()
+    });
+    let server = TestServer::start(server_config(), handler.clone()).await;
+    let mut first = server.connect("first-controller").await;
+    expect_response(
+        &mut first,
+        2,
+        restore_operation(server.workspace.path(), "session-a"),
+    )
+    .await;
+    expect_response(
+        &mut first,
+        3,
+        submit_operation(server.workspace.path(), "session-a", "turn-a"),
+    )
+    .await;
+    drop(first);
+
+    tokio::time::sleep(Duration::from_millis(30)).await;
+    let mut second = server.connect("second-controller").await;
+    expect_error(
+        &mut second,
+        2,
+        restore_operation(server.workspace.path(), "session-a"),
+        RuntimeIpcErrorCode::SessionInUse,
+    )
+    .await;
+
+    handler
+        .events
+        .send(RuntimeIpcEvent::StreamInvalidated {
+            reason: crate::RuntimeIpcStreamInvalidationReason::Closed,
+        })
+        .unwrap();
+    drop(second);
+    tokio::time::timeout(Duration::from_millis(300), server.finish())
+        .await
+        .expect("stream invalidation starts the normal idle shutdown window");
+}

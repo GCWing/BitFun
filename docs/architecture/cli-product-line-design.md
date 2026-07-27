@@ -252,6 +252,17 @@ Headless CLI 和公开 Agent SDK 都调用同一 Agent Runtime API，但交付�
 - 两者的能力对照、共同 fixture 和等价门槛以
   [Agent SDK 产品与宿主架构第 9 节](agent-sdk-product-architecture.md#9-headless-cli-与-agent-sdk)为唯一事实源。
 
+交互式 TUI 另有一个显式部署选项：`bitfun --shared` 或 `bitfun chat --shared`。它通过 CLI 私有本机 IPC adapter 连接同一 Agent Runtime，不经过 SDK Host，也不改变 Headless CLI 或公开 SDK 的协议。当前范围如下：
+
+| 形态 | 默认部署 | 当前 Shared 范围 |
+|---|---|---|
+| 交互式 TUI | Embedded | 显式 `--shared` 后支持 Session list/create/restore、transcript、Turn submit/cancel、Permission 和 UserInput |
+| `bitfun exec` / CI | Embedded | 不接受 Shared；保持独立进程、stdout/stderr 和退出码语义 |
+| ACP / SDK Host / GUI / Remote / Peer | 各自既有部署 | 不消费 TUI IPC，也不因本开关改变生命周期 |
+
+Shared TUI 首版不提供 Session delete/fork、模式/模型、MCP/扩展、账号同步、用量、observer、replay 或 controller transfer；对应入口给出明确的 Embedded 恢复建议，不在 Client 进程初始化第二套 Core owner。
+Shared 模式的命令面板、快捷键帮助和底部提示使用同一能力投影：不支持的管理动作不显示为可执行入口。Session 切换失败保留原控制权，单个连接已有活动 Turn 时拒绝重复提交；事件订阅失效后当前视图立即失效并要求重启 Shared TUI。
+
 #### 管理与诊断
 
 CLI-P1 应统一以下命令的文本和结构化只读视图：
@@ -301,12 +312,17 @@ TUI renderer、实验性接口和完整外部 Server 协议按总矩阵明确降
 flowchart LR
   Exec["bitfun exec"] --> Choice{"Session"}
   Choice -->|"new / free"| Embedded["Embedded"]
-  Choice -->|"already owned"| Attach["Attach Host or reject"]
+  Choice -->|"already owned"| Reject["typed occupied error"]
+
+  TUI["bitfun chat"] --> Deploy{"deployment"}
+  Deploy -->|"default"| EmbeddedTui["Embedded"]
+  Deploy -->|"--shared"| SharedTui["private local IPC"]
+  SharedTui --> Runtime["one Shared Runtime owner"]
 ```
 
 Embedded 只意味着 Runtime 与 CLI 同进程，不意味着绕过持久化单写规则。新 Session 取得自己的写入权；恢复既有 Session 时，
-CLI 必须先取得该 Session 的写入权。如果 Shared Agent Runtime 或另一个 `exec` 已持有，CLI 连接现有 Runtime 或返回明确的
-“Session 已占用”，不能并发写入同一 Session。
+CLI 必须先取得该 Session 的写入权。如果 Shared Agent Runtime 或另一个 `exec` 已持有，Headless CLI 返回明确的
+“Session 已占用”；它不会自动切换部署。只有用户显式选择 `--shared` 的交互式 TUI 才连接 Shared Runtime，且同一 Session 同时只有一个 controller。
 
 CLI/TUI 的会话创建、列出、删除、恢复和历史转录读取通过 Rust Runtime SDK 的类型化端口完成；TUI 只把
 `SessionTranscript` 转换为本地渲染状态，不再消费 Core `Message`。Peer Host 的对话提交、精确取消、基础会话控制、thread-goal 查询、会话模型更新和

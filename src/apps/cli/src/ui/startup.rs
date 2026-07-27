@@ -16,7 +16,7 @@ use super::theme::{
 use super::theme_selector::{ThemeItem, ThemeSelectorState};
 use crate::actions::{
     action_by_id, action_for_alias, removed_management_command_hint, ActionContext, ActionHandler,
-    ActionSpec, ActionState, ResolvedKeymap,
+    ActionSpec, ActionState, ResolvedKeymap, SHARED_TUI_EMBEDDED_HANDOFF, SHARED_TUI_HELP_NOTE,
 };
 use crate::config::CliConfig;
 /// Startup page module
@@ -128,6 +128,15 @@ const TIPS: &[&str] = &[
     "Use /new to start a fresh conversation session",
 ];
 
+const SHARED_TUI_TIPS: &[&str] = &[
+    "Type /help to see the Shared TUI command scope",
+    "Use /sessions to list and continue previous conversations",
+    "Use /new to start a fresh conversation session",
+    "Press Ctrl+E to toggle browse mode for scrolling history",
+    "Press Ctrl+O to expand or collapse tool output",
+    "Use /theme to switch the CLI theme",
+];
+
 const FANCY_LOGO: [&str; 6] = [
     "  ██████╗ ██╗████████╗███████╗██╗   ██╗███╗   ██╗",
     "  ██╔══██╗██║╚══██╔══╝██╔════╝██║   ██║████╗  ██║",
@@ -193,7 +202,7 @@ pub(crate) struct StartupPage {
 
     // ── System context ──
     agent: Arc<CliAgentRuntimeClient>,
-    compatibility: CoreAgentRuntimeCompatibility,
+    compatibility: Option<CoreAgentRuntimeCompatibility>,
 
     // ── State ──
     /// Selected agent type (can be changed via /agent or Tab)
@@ -215,7 +224,7 @@ impl StartupPage {
     pub(crate) fn new(
         config: CliConfig,
         agent: Arc<CliAgentRuntimeClient>,
-        compatibility: CoreAgentRuntimeCompatibility,
+        compatibility: Option<CoreAgentRuntimeCompatibility>,
         default_agent: String,
         workspace: Option<String>,
     ) -> Self {
@@ -244,20 +253,26 @@ impl StartupPage {
             }
         };
 
+        let tips = if agent.is_shared() {
+            SHARED_TUI_TIPS
+        } else {
+            TIPS
+        };
         let tip_index = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap_or_default()
             .as_millis() as usize
-            % TIPS.len();
+            % tips.len();
 
         let keymap = ResolvedKeymap::new(&config.shortcuts);
+        let action_state = ActionState::startup(false).with_shared_tui(agent.is_shared());
         let mut page = Self {
             text_input: TextInput::new(),
             theme,
             config,
             keymap,
-            tip: TIPS[tip_index],
-            command_menu: CommandMenuState::new(ActionState::startup(false)),
+            tip: tips[tip_index],
+            command_menu: CommandMenuState::new(action_state),
             command_palette: CommandPaletteState::new(),
             model_selector: ModelSelectorState::new(),
             agent_selector: AgentSelectorState::new(),
@@ -302,6 +317,10 @@ impl StartupPage {
         } else {
             Some(self.workspace_display.clone())
         }
+    }
+
+    fn action_state(&self, popup_open: bool) -> ActionState {
+        ActionState::startup(popup_open).with_shared_tui(self.agent.is_shared())
     }
 
     /// Get the current CLI config after startup-page edits.
@@ -622,15 +641,18 @@ impl StartupPage {
 
     fn render_bottom_bar(&self, frame: &mut Frame, area: Rect) {
         let version = format!("v{}", env!("CARGO_PKG_VERSION"));
-        let mcp_status = crate::get_mcp_status_text();
-
-        // Determine MCP status color
-        let mcp_color = if mcp_status.contains("Ready") {
-            self.theme.success
-        } else if mcp_status.contains("Failed") {
-            self.theme.error
+        let (runtime_status, runtime_color) = if self.agent.is_shared() {
+            ("Runtime: Shared".to_string(), self.theme.success)
         } else {
-            self.theme.warning
+            let mcp_status = crate::get_mcp_status_text();
+            let color = if mcp_status.contains("Ready") {
+                self.theme.success
+            } else if mcp_status.contains("Failed") {
+                self.theme.error
+            } else {
+                self.theme.warning
+            };
+            (mcp_status, color)
         };
 
         // Left: workspace path
@@ -640,9 +662,9 @@ impl StartupPage {
         )));
         frame.render_widget(left, area);
 
-        // Right: MCP status | version
+        // Right: deployment/MCP status | version
         let right = Paragraph::new(Line::from(vec![
-            Span::styled(&mcp_status, Style::default().fg(mcp_color)),
+            Span::styled(&runtime_status, Style::default().fg(runtime_color)),
             Span::styled(
                 format!(" | {}  ", version),
                 Style::default().fg(self.theme.muted),
@@ -708,8 +730,7 @@ impl StartupPage {
         // Clear transient status on any key press
         self.status = None;
 
-        let modal_state =
-            ActionState::startup(self.info_popup.is_some() || self.any_popup_visible());
+        let modal_state = self.action_state(self.info_popup.is_some() || self.any_popup_visible());
         if let Some(action) = self.keymap.resolve_modal_safe(key, modal_state) {
             return self.dispatch_action(action, modal_state);
         }
@@ -722,7 +743,7 @@ impl StartupPage {
 
         // Host recovery keys win over configured actions while a popup is open.
         if self.any_popup_visible() {
-            let state = ActionState::startup(true);
+            let state = self.action_state(true);
             if let Some(action) = self.keymap.resolve_reserved(key, state) {
                 return self.dispatch_action(action, state);
             }
@@ -908,8 +929,8 @@ impl StartupPage {
 
         // ── Normal key handling ──
 
-        if let Some(action) = self.keymap.resolve(key, ActionState::startup(false)) {
-            return self.dispatch_action(action, ActionState::startup(false));
+        if let Some(action) = self.keymap.resolve(key, self.action_state(false)) {
+            return self.dispatch_action(action, self.action_state(false));
         }
 
         match (key.code, key.modifiers) {
@@ -967,7 +988,7 @@ impl StartupPage {
             self.status = Some(format!("Unknown palette action: {action_id}"));
             return None;
         };
-        self.dispatch_action(action, ActionState::startup(false))
+        self.dispatch_action(action, self.action_state(false))
     }
 
     fn dispatch_action(
@@ -979,10 +1000,14 @@ impl StartupPage {
             self.status = Some(action.unavailable_message(state));
             return None;
         }
-
         match action.handler {
             ActionHandler::Help => {
-                self.info_popup = Some(self.keymap.help_text(ActionState::startup(false)));
+                let mut help = self.keymap.help_text(self.action_state(false));
+                if self.agent.is_shared() {
+                    help.push_str("\n\n");
+                    help.push_str(SHARED_TUI_HELP_NOTE);
+                }
+                self.info_popup = Some(help);
             }
             ActionHandler::Exit => return Some(StartupResult::Exit),
             ActionHandler::NewSession => {
@@ -1024,7 +1049,7 @@ impl StartupPage {
             },
             ActionHandler::OpenPalette => {
                 self.push_current_popup_to_stack();
-                self.command_palette.show(ActionState::startup(false));
+                self.command_palette.show(self.action_state(false));
             }
             ActionHandler::SubmitInput => return self.submit_input(),
             ActionHandler::InsertNewline => {
@@ -1123,7 +1148,7 @@ impl StartupPage {
             );
             return None;
         };
-        self.dispatch_action(action, ActionState::startup(false))
+        self.dispatch_action(action, self.action_state(false))
     }
 
     // ======================== Selectors ========================
@@ -1221,12 +1246,15 @@ impl StartupPage {
     }
 
     fn start_sync_and_show_account(&mut self, is_first_login: bool) {
+        let Some(compatibility) = self.compatibility.clone() else {
+            self.open_account_panel();
+            self.status = Some(format!(
+                "Account settings sync is unavailable in Shared TUI preview. {SHARED_TUI_EMBEDDED_HANDOFF}"
+            ));
+            return;
+        };
         let workspace = self.workspace_path_for_sync();
-        crate::account_sync::start_auto_sync_background(
-            self.compatibility.clone(),
-            is_first_login,
-            workspace,
-        );
+        crate::account_sync::start_auto_sync_background(compatibility, is_first_login, workspace);
         self.open_account_panel();
         self.status = Some(if is_first_login {
             "Sync started (use local / upload settings).".to_string()
@@ -1324,9 +1352,16 @@ impl StartupPage {
         self.push_current_popup_to_stack();
         let agent = Arc::clone(&self.agent);
         let sessions = tokio::task::block_in_place(|| {
-            tokio::runtime::Handle::current()
-                .block_on(async { agent.list_sessions().await.unwrap_or_default() })
+            tokio::runtime::Handle::current().block_on(agent.list_sessions())
         });
+        let sessions = match sessions {
+            Ok(sessions) => sessions,
+            Err(error) => {
+                tracing::error!("Failed to list sessions: {error}");
+                self.status = Some(format!("Failed to load sessions: {error}"));
+                return;
+            }
+        };
 
         if sessions.is_empty() {
             self.status = Some("No sessions found.".to_string());
@@ -1359,10 +1394,17 @@ impl StartupPage {
             })
             .collect();
 
-        self.session_selector.show(session_items, None);
+        self.session_selector
+            .show(session_items, None, !self.agent.is_shared());
     }
 
     fn handle_session_delete(&mut self, item: &SessionItem) {
+        if self.agent.is_shared() {
+            self.status = Some(format!(
+                "Session deletion is unavailable in Shared TUI preview. {SHARED_TUI_EMBEDDED_HANDOFF}; then run `bitfun sessions delete`"
+            ));
+            return;
+        }
         let agent = Arc::clone(&self.agent);
         let sid = item.session_id.clone();
 

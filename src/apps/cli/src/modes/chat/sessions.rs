@@ -14,19 +14,11 @@ impl ChatMode {
         let (new_state, restored_agent_type, migration_notice) =
             tokio::task::block_in_place(|| {
                 rt_handle.block_on(async {
-                    let (session_summary, effective_workspace_path, migration_notice) =
+                    let (session_summary, effective_workspace_path, migration_notice, transcript) =
                         agent.restore_session_in_current_workspace(&sid).await?;
                     let restored_agent_type = session_summary.agent_type.clone();
                     let effective_workspace =
                         Some(effective_workspace_path.to_string_lossy().to_string());
-
-                    // Load historical messages through the runtime transcript contract.
-                    let transcript = agent.get_transcript(&sid).await.unwrap_or_else(|_| {
-                        bitfun_agent_runtime::sdk::SessionTranscript {
-                            session_id: sid.clone(),
-                            messages: Vec::new(),
-                        }
-                    });
 
                     let state = ChatState::from_session_transcript(
                         sid.clone(),
@@ -158,9 +150,15 @@ impl ChatMode {
         let agent = self.agent.clone();
         let current_session_id = chat_state.core_session_id.clone();
 
-        let sessions = tokio::task::block_in_place(|| {
-            rt_handle.block_on(async { agent.list_sessions().await.unwrap_or_default() })
-        });
+        let sessions = tokio::task::block_in_place(|| rt_handle.block_on(agent.list_sessions()));
+        let sessions = match sessions {
+            Ok(sessions) => sessions,
+            Err(error) => {
+                tracing::error!("Failed to list sessions: {error}");
+                chat_view.set_status(Some(format!("Failed to load sessions: {error}")));
+                return;
+            }
+        };
 
         if sessions.is_empty() {
             chat_state.add_system_message("No sessions found.".to_string());
@@ -193,7 +191,11 @@ impl ChatMode {
             })
             .collect();
 
-        chat_view.show_session_selector(session_items, Some(current_session_id));
+        chat_view.show_session_selector(
+            session_items,
+            Some(current_session_id),
+            !self.agent.is_shared(),
+        );
     }
 
     /// Handle session deletion from the session selector
@@ -204,6 +206,12 @@ impl ChatMode {
         chat_state: &mut ChatState,
         rt_handle: &tokio::runtime::Handle,
     ) {
+        if self.agent.is_shared() {
+            chat_view.set_status(Some(format!(
+                "Session deletion is unavailable in Shared TUI preview. {SHARED_TUI_EMBEDDED_HANDOFF}; then run `bitfun sessions delete`"
+            )));
+            return;
+        }
         // Prevent deleting the currently active session
         if item.session_id == chat_state.core_session_id {
             chat_view.set_status(Some("Cannot delete the active session".to_string()));

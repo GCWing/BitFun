@@ -4815,7 +4815,6 @@ export function runManifestParserSelfTest({
     'bitfun-sdk-host',
     'bitfun-services-core',
     'bitfun-services-integrations',
-    'bitfun-product-domains',
     'bitfun-transport',
     'terminal-core',
     'tool-runtime',
@@ -4828,6 +4827,15 @@ export function runManifestParserSelfTest({
       throw new Error(`agent-runtime-ipc lightweight boundary must forbid ${dependency}`);
     }
   }
+  for (const sharedContract of [
+    'bitfun-events',
+    'bitfun-product-domains',
+    'bitfun-runtime-ports',
+  ]) {
+    if (runtimeIpcBoundary?.forbiddenDeps.includes(sharedContract)) {
+      throw new Error(`agent-runtime-ipc must be allowed to reuse ${sharedContract}`);
+    }
+  }
   const runtimeIpcProfile = dependencyProfileRules.find(
     (rule) => rule.crateName === 'agent-runtime-ipc',
   );
@@ -4836,27 +4844,19 @@ export function runManifestParserSelfTest({
       throw new Error(`agent-runtime-ipc dependency profile must forbid ${dependency}`);
     }
   }
-  const runtimeIpcLibRule = forbiddenContentRules.find(
-    (rule) => rule.path === 'src/crates/adapters/agent-runtime-ipc/src/lib.rs',
-  );
-  const runtimeIpcPublicPattern = runtimeIpcLibRule?.patterns[0]?.regex;
-  if (
-    !runtimeIpcPublicPattern ||
-    !runtimeIpcPublicPattern.test('pub fn leaked_api() {}') ||
-    runtimeIpcPublicPattern.test('pub(crate) fn internal_api() {}')
-  ) {
-    throw new Error('agent-runtime-ipc public surface guard must allow only crate visibility');
-  }
   const runtimeIpcOperationRule = forbiddenContentRules.find(
     (rule) => rule.path === 'src/crates/adapters/agent-runtime-ipc/src/operation.rs',
   );
   const runtimeIpcOperationPattern = runtimeIpcOperationRule?.patterns[0]?.regex;
   if (
     !runtimeIpcOperationPattern ||
-    !runtimeIpcOperationPattern.test('    Execute,') ||
-    runtimeIpcOperationPattern.test('    Health,')
+    !['ReplayEvents', 'ReadTranscript', 'DetachSession'].every((name) =>
+      runtimeIpcOperationPattern.test(`    ${name},`),
+    ) ||
+    runtimeIpcOperationPattern.test('    Health,') ||
+    runtimeIpcOperationPattern.test('    SubmitTurn {')
   ) {
-    throw new Error('agent-runtime-ipc operation guard must allow only Health by structure');
+    throw new Error('agent-runtime-ipc operation guard must preserve the Shared TUI operation budget');
   }
   const runtimeIpcTransportRule = forbiddenContentUnderRules.find(
     (rule) => rule.path === 'src/crates/adapters/agent-runtime-ipc/src',

@@ -11,7 +11,7 @@ services.
 
 | Crate | Responsibility | Local doc |
 |---|---|---|
-| `agent-runtime-ipc` | Non-published, crate-internal local IPC pre-integration seam for a future first-party Shared Agent Runtime adapter; currently Health-only | [AGENTS.md](agent-runtime-ipc/AGENTS.md) |
+| `agent-runtime-ipc` | Non-published private local IPC adapter for the opt-in first-party Shared TUI Runtime; closed interactive operations only | [AGENTS.md](agent-runtime-ipc/AGENTS.md) |
 | `ai-adapters` | AI provider request/response adapters and stream protocol glue | [AGENTS.md](ai-adapters/AGENTS.md) |
 | `opencode-adapter` | OpenCode source semantics for the live Command, standalone Tool, Subagent, MCP, and static Hook providers; managed-package static preview | [AGENTS.md](opencode-adapter/AGENTS.md) |
 | `claude-code-adapter` | Runtime-free Claude Code Command, Subagent, MCP, and Hook source semantics with redacted projection | [AGENTS.md](claude-code-adapter/AGENTS.md) |

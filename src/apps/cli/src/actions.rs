@@ -21,6 +21,7 @@ pub(crate) struct ActionState {
     pub context: ActionContext,
     pub is_processing: bool,
     pub popup_open: bool,
+    shared_tui: bool,
 }
 
 impl ActionState {
@@ -29,6 +30,7 @@ impl ActionState {
             context: ActionContext::Startup,
             is_processing: false,
             popup_open,
+            shared_tui: false,
         }
     }
 
@@ -37,7 +39,18 @@ impl ActionState {
             context: ActionContext::Chat,
             is_processing,
             popup_open,
+            shared_tui: false,
         }
+    }
+
+    pub(crate) const fn with_shared_tui(mut self, shared_tui: bool) -> Self {
+        self.shared_tui = shared_tui;
+        self
+    }
+
+    #[cfg(test)]
+    pub(crate) const fn for_shared_tui(self) -> Self {
+        self.with_shared_tui(true)
     }
 }
 
@@ -94,6 +107,47 @@ pub(crate) enum ActionHandler {
     ToggleBrowse,
     ScrollUp,
     ScrollDown,
+}
+
+pub(crate) const SHARED_TUI_EMBEDDED_HANDOFF: &str =
+    "Exit all Shared TUI clients, wait up to 30 seconds for their Runtime to stop, then use default Embedded `bitfun chat`";
+pub(crate) const SHARED_TUI_HELP_NOTE: &str =
+    "Shared TUI: start with `bitfun chat --shared`. Multiple TUI processes reuse one workspace Runtime, while each TUI controls at most one Session and each Session has one controller. Session/turn interaction is available; model, agent, MCP, extension, account-sync, usage, and other management remain Embedded. Exit all Shared TUI clients and wait up to 30 seconds before returning to default Embedded `bitfun chat`.";
+
+impl ActionHandler {
+    pub(crate) const fn available_in_shared_tui_preview(self) -> bool {
+        matches!(
+            self,
+            Self::Help
+                | Self::ClearConversation
+                | Self::SelectTheme
+                | Self::NewSession
+                | Self::Sessions
+                | Self::AcpHelp
+                | Self::Init
+                | Self::History
+                | Self::ToggleAutoApprove
+                | Self::Exit
+                | Self::OpenPalette
+                | Self::SubmitInput
+                | Self::Interrupt
+                | Self::ClosePopups
+                | Self::NavigateBack
+                | Self::InsertNewline
+                | Self::Paste
+                | Self::ToggleFocusedTool
+                | Self::PreviousTool
+                | Self::NextTool
+                | Self::HistoryPrevious
+                | Self::HistoryNext
+                | Self::JumpTop
+                | Self::JumpBottom
+                | Self::ClearInput
+                | Self::ToggleBrowse
+                | Self::ScrollUp
+                | Self::ScrollDown
+        )
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -802,6 +856,9 @@ impl ActionSpec {
         if !self.supports_context(state.context) {
             return false;
         }
+        if state.shared_tui && !self.handler.available_in_shared_tui_preview() {
+            return false;
+        }
         match self.availability {
             ActionAvailability::Always => true,
             ActionAvailability::Idle => !state.is_processing,
@@ -811,6 +868,12 @@ impl ActionSpec {
     }
 
     pub(crate) fn unavailable_message(&self, state: ActionState) -> String {
+        if state.shared_tui && !self.handler.available_in_shared_tui_preview() {
+            return format!(
+                "{} is unavailable in Shared TUI preview. {}",
+                self.name, SHARED_TUI_EMBEDDED_HANDOFF
+            );
+        }
         match self.availability {
             ActionAvailability::Idle if state.is_processing => format!(
                 "{} is unavailable while a turn is processing. Use the interrupt shortcut first.",
@@ -1087,6 +1150,9 @@ struct ResolvedBinding {
 impl ResolvedBinding {
     fn available(&self, state: ActionState, above_modals: bool) -> bool {
         if !self.spec.supports_context(state.context) {
+            return false;
+        }
+        if state.shared_tui && !self.spec.handler.available_in_shared_tui_preview() {
             return false;
         }
         if state.popup_open
@@ -1670,6 +1736,59 @@ mod tests {
     use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
     use super::*;
+
+    #[test]
+    fn shared_tui_preview_keeps_management_outside_the_first_slice() {
+        assert!(ActionHandler::Sessions.available_in_shared_tui_preview());
+        assert!(ActionHandler::Interrupt.available_in_shared_tui_preview());
+        for action in [
+            ActionHandler::SelectModel,
+            ActionHandler::OpenAgentSelector,
+            ActionHandler::McpServers,
+            ActionHandler::Tools,
+            ActionHandler::Extensions,
+            ActionHandler::Hooks,
+            ActionHandler::Login,
+            ActionHandler::Usage,
+        ] {
+            assert!(!action.available_in_shared_tui_preview(), "{action:?}");
+        }
+        assert!(SHARED_TUI_HELP_NOTE.contains("bitfun chat --shared"));
+        assert!(SHARED_TUI_HELP_NOTE.contains("one Session"));
+        assert!(SHARED_TUI_HELP_NOTE.contains("remain Embedded"));
+    }
+
+    #[test]
+    fn shared_tui_projections_hide_embedded_management_actions() {
+        let state = ActionState::chat(false, false).for_shared_tui();
+        let slash_ids = slash_actions(state)
+            .into_iter()
+            .map(|action| action.id)
+            .collect::<Vec<_>>();
+        let palette_ids = palette_actions(state)
+            .into_iter()
+            .map(|action| action.id)
+            .collect::<Vec<_>>();
+
+        for unavailable in [
+            "switch_agent",
+            "select_model",
+            "skills",
+            "mcp_servers",
+            "extensions",
+            "hooks",
+            "usage",
+        ] {
+            assert!(!slash_ids.contains(&unavailable), "{unavailable}");
+            assert!(!palette_ids.contains(&unavailable), "{unavailable}");
+        }
+        for available in ["new_session", "sessions", "theme", "help", "exit"] {
+            assert!(palette_ids.contains(&available), "{available}");
+        }
+
+        let help = ResolvedKeymap::new(&ShortcutsConfig::default()).help_text(state);
+        assert!(!help.contains("Switch Agent"));
+    }
 
     fn resolve_id(
         keymap: &ResolvedKeymap,

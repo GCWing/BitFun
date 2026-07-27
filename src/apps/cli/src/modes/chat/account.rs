@@ -81,12 +81,15 @@ impl ChatMode {
         chat_state: &mut ChatState,
         rt_handle: &tokio::runtime::Handle,
     ) {
+        let Some(compatibility) = self.compatibility.clone() else {
+            self.open_account_panel(chat_view, rt_handle);
+            chat_state.add_system_message(format!(
+                "Account settings sync is unavailable in Shared TUI preview. {SHARED_TUI_EMBEDDED_HANDOFF}"
+            ));
+            return;
+        };
         let workspace = self.workspace_path_for_sync(chat_state);
-        crate::account_sync::start_auto_sync_background(
-            self.compatibility.clone(),
-            is_first_login,
-            workspace,
-        );
+        crate::account_sync::start_auto_sync_background(compatibility, is_first_login, workspace);
         self.open_account_panel(chat_view, rt_handle);
         chat_state.add_system_message(if is_first_login {
             "Sync started (use local / upload settings).".to_string()

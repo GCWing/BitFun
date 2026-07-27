@@ -2,7 +2,7 @@ use crate::{
     read_frame, write_frame, DiscoveryStore, InitializeRequest, RuntimeInstanceIdentity,
     RuntimeIpcClient, RuntimeIpcClientError, RuntimeIpcErrorCode, RuntimeIpcFrame,
     RuntimeIpcOperation, RuntimeIpcServer, RuntimeIpcServerConfig, RuntimeIpcTransportError,
-    MAX_FRAME_BYTES, PROTOCOL_VERSION,
+    MAX_REQUEST_FRAME_BYTES, PROTOCOL_VERSION,
 };
 use std::time::Duration;
 use tempfile::tempdir;
@@ -23,7 +23,8 @@ fn server_config() -> RuntimeIpcServerConfig {
     RuntimeIpcServerConfig {
         server_version: "0.2.14-test".to_string(),
         idle_timeout: Duration::from_millis(80),
-        io_timeout: Duration::from_secs(2),
+        handshake_timeout: Duration::from_secs(2),
+        request_timeout: Duration::from_secs(2),
         max_connections: 8,
     }
 }
@@ -44,11 +45,12 @@ async fn authenticated_client_can_read_health_and_idle_server_cleans_discovery()
     );
 
     let server_task = tokio::spawn(server.serve());
-    let mut client = RuntimeIpcClient::connect(
+    let client = RuntimeIpcClient::connect(
         runtime_root.path(),
         &discovery,
         "foundation-test",
         "0.1.0",
+        Duration::from_secs(2),
         Duration::from_secs(2),
     )
     .await
@@ -63,22 +65,6 @@ async fn authenticated_client_can_read_health_and_idle_server_cleans_discovery()
         .expect("server exits after idle timeout")
         .expect("server task joins")
         .expect("server exits cleanly");
-    assert_eq!(store.read().expect("read cleaned discovery"), None);
-}
-
-#[tokio::test]
-async fn dropping_a_bound_server_cleans_its_discovery_record() {
-    let runtime_root = tempdir().expect("runtime root");
-    let workspace = tempdir().expect("workspace");
-    let identity = runtime_identity(workspace.path());
-    let server = RuntimeIpcServer::bind(runtime_root.path(), identity.clone(), server_config())
-        .await
-        .expect("bind server");
-    let store = DiscoveryStore::new(runtime_root.path(), identity);
-    assert!(store.read().expect("read discovery").is_some());
-
-    drop(server);
-
     assert_eq!(store.read().expect("read cleaned discovery"), None);
 }
 
@@ -122,6 +108,7 @@ async fn handshake_rejects_bad_token_wrong_instance_and_protocol_mismatch() {
         &bad_token,
         "foundation-test",
         "0.1.0",
+        Duration::from_secs(2),
         Duration::from_secs(2),
     )
     .await
@@ -168,6 +155,7 @@ async fn handshake_rejects_bad_token_wrong_instance_and_protocol_mismatch() {
             "foundation-test",
             "0.1.0",
             Duration::from_secs(2),
+            Duration::from_secs(2),
         )
         .await,
         Err(RuntimeIpcClientError::Transport(
@@ -183,6 +171,7 @@ async fn handshake_rejects_bad_token_wrong_instance_and_protocol_mismatch() {
             &wrong_protocol,
             "foundation-test",
             "0.1.0",
+            Duration::from_secs(2),
             Duration::from_secs(2),
         )
         .await,
@@ -256,17 +245,18 @@ async fn malformed_client_is_isolated_from_later_health_clients() {
         .await
         .expect("connect malformed client");
     malformed
-        .write_u32((MAX_FRAME_BYTES + 1) as u32)
+        .write_u32((MAX_REQUEST_FRAME_BYTES + 1) as u32)
         .await
         .expect("write oversized frame prefix");
     drop(malformed);
     tokio::time::sleep(Duration::from_millis(20)).await;
 
-    let mut healthy = RuntimeIpcClient::connect(
+    let healthy = RuntimeIpcClient::connect(
         runtime_root.path(),
         &discovery,
         "foundation-test",
         "0.1.0",
+        Duration::from_secs(2),
         Duration::from_secs(2),
     )
     .await
@@ -308,17 +298,19 @@ async fn connection_limit_applies_before_authentication() {
             "bounded-client",
             "0.1.0",
             Duration::from_millis(50),
+            Duration::from_secs(2),
         )
         .await,
         Err(RuntimeIpcClientError::Timeout)
     ));
 
     drop(blocker);
-    let mut client = RuntimeIpcClient::connect(
+    let client = RuntimeIpcClient::connect(
         runtime_root.path(),
         &discovery,
         "bounded-client",
         "0.1.0",
+        Duration::from_secs(2),
         Duration::from_secs(2),
     )
     .await
@@ -360,6 +352,7 @@ async fn non_utf8_runtime_root_supports_discovery_bind_and_health() {
         &discovery,
         "non-utf8-test",
         "0.1.0",
+        Duration::from_secs(2),
         Duration::from_secs(2),
     )
     .await

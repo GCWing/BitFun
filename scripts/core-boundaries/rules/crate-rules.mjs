@@ -10,7 +10,6 @@ const agentRuntimeIpcForbiddenDeps = [
   'bitfun-codex-adapter',
   'bitfun-core',
   'bitfun-core-types',
-  'bitfun-events',
   'bitfun-external-sources',
   'bitfun-harness',
   'bitfun-opencode-adapter',
@@ -18,7 +17,6 @@ const agentRuntimeIpcForbiddenDeps = [
   'bitfun-plugin-runtime-client',
   'bitfun-product-capabilities',
   'bitfun-relay-service',
-  'bitfun-runtime-ports',
   'bitfun-runtime-services',
   'bitfun-sdk-host',
   'bitfun-services-core',
@@ -26,7 +24,6 @@ const agentRuntimeIpcForbiddenDeps = [
   'bitfun-static-hook-support',
   'bitfun-tool-call-jsonrepair',
   'bitfun-tool-packs',
-  'bitfun-product-domains',
   'bitfun-transport',
   'bitfun-webdriver',
   'terminal-core',
@@ -72,6 +69,15 @@ export const noCoreDependencyCrates = [
 ];
 
 export const forbiddenManifestDependencyRules = [
+  {
+    dependencyNames: ['bitfun-agent-runtime-ipc'],
+    scanRoots: ['src/apps', 'src/crates', 'BitFun-Installer/src-tauri'],
+    workspaceManifestPath: 'Cargo.toml',
+    allowManifestPaths: ['src/apps/cli/Cargo.toml'],
+    reason: 'the private local IPC protocol has one reviewed first-party Shared TUI consumer',
+    message:
+      'agent-runtime-ipc may only be consumed by the CLI Shared TUI adapter; SDK Host, GUI, remote, and other products require separate review',
+  },
   {
     dependencyNames: ['sherpa-onnx'],
     scanRoots: ['src/apps', 'src/crates', 'BitFun-Installer/src-tauri'],
@@ -130,7 +136,7 @@ export const lightweightBoundaryRules = [
   {
     crateName: 'agent-runtime-ipc',
     reason:
-      'agent-runtime-ipc is a non-published Health-only local transport seam, not a Runtime, SDK Host, service, or product surface',
+      'agent-runtime-ipc is the non-published local protocol for the reviewed Shared TUI adapter, not a Runtime, SDK Host, service, or remote product surface',
     forbiddenDeps: agentRuntimeIpcForbiddenDeps,
   },
   {
@@ -389,9 +395,9 @@ export const lightweightBoundaryRules = [
 export const dependencyProfileRules = [
   {
     crateName: 'agent-runtime-ipc',
-    profileName: 'private Health-only local IPC profile',
+    profileName: 'private Shared TUI local IPC profile',
     reason:
-      'agent-runtime-ipc must not acquire Runtime, SDK Host, service, remote transport, or product dependencies before its first reviewed consumer',
+      'agent-runtime-ipc may share stable event and Runtime DTO contracts but must not acquire Runtime owners, SDK Host, services, remote transports, or product implementations',
     forbiddenNonOptionalDeps: agentRuntimeIpcForbiddenDeps,
   },
   {

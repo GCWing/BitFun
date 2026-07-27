@@ -11,6 +11,10 @@ name = "bitfun_agent_runtime_ipc"
 crate-type = ["rlib"]
 
 [dependencies]
+async-trait = { workspace = true }
+bitfun-events = { path = "../../contracts/events" }
+bitfun-product-domains = { path = "../../contracts/product-domains", default-features = false }
+bitfun-runtime-ports = { path = "../../contracts/runtime-ports" }
 dunce = { workspace = true }
 fs2 = { workspace = true }
 serde = { workspace = true }

@@ -4,32 +4,30 @@
 
 Scope: `src/crates/adapters/agent-runtime-ipc`.
 
-This non-published crate is a private pre-integration seam for a future
-first-party Shared Agent Runtime adapter. It currently proves discovery,
-one-instance locking, bounded framing, authenticated initialization, Health,
-connection bounds, and cleanup. It is not a public SDK or Runtime owner, and it
-has no production consumer yet.
+This non-published crate is the private local protocol used by the first-party Shared TUI adapter.
+It provides discovery, one-instance locking, bounded framing, authenticated initialization, a closed interactive operation set,
+session controller leases, event delivery, connection bounds, and cleanup. It is not a public SDK, remote protocol, service layer, or Runtime owner.
 
 ## Pre-integration contract
 
-- First consumer: the separately reviewed first-party interactive TUI attach
-  adapter. GUI, Remote, Headless CLI, and SDK Host are not implied consumers.
-- Stable test contract: platform-local endpoint, strict initialize-first
-  handshake, 64 KiB frame limit, Health, bounded connections, and owner-checked
-  discovery cleanup.
+- Only consumer: the first-party interactive TUI adapter in `src/apps/cli`.
+  GUI, Remote, Peer, ACP, Headless CLI, and SDK Host are not implied consumers.
+- Stable test contract: platform-local endpoint, strict initialize-first handshake, separate handshake/request deadlines,
+  128 KiB request and 8 MiB response/event limits, bounded connections, one controller per Session, one active Turn per connection,
+  disconnect cancellation, sticky event-stream invalidation, 30-second idle exit, and owner-checked discovery cleanup.
 - Integration check: the consumer must reuse existing Agent Runtime owners and
   prove Embedded/Shared behavior equivalence without depending on SDK Host.
-- Removal condition: delete this seam if the first consumer chooses another
-  transport or Shared deployment is abandoned before product activation.
 
 ## Boundaries
 
-- Keep all Rust items crate-internal until the first production consumer proves
-  the exact API it needs. Do not publish this crate.
-- Health is the only operation. Do not add Session, Turn, Tool, MCP, Permission,
-  UserInput, Hook, event replay, controller lease, or product configuration.
-- Do not depend on `bitfun-core`, Agent Runtime, SDK Host, services, CLI/TUI,
-  Tauri, product domains, terminal, tool runtime, or remote transports.
+- Export only the exact workspace-private API needed by the CLI adapter. Do not
+  publish this crate or expose its wire as an SDK contract.
+- The closed operation budget is Health, Session list/create/restore (including transcript), Turn submit/cancel, pending/respond Permission,
+  and UserInput answers. Disconnect cleanup is internal lifecycle, not a detach operation. Do not add delete, fork, replay, observer,
+  controller transfer, Tool/MCP/Hook management, or product configuration incidentally.
+- Stable Event, Product Domain, and Runtime Port DTOs may be reused. Do not
+  depend on `bitfun-core`, Agent Runtime implementations, SDK Host, services,
+  Tauri, terminal, tool runtime, or remote transports.
 - Use only Windows Named Pipes or Unix Domain Sockets. Do not add TCP, HTTP,
   WebSocket, browser access, or remote fallback.
 - Treat this as same-user local isolation, not a sandbox. Product composition

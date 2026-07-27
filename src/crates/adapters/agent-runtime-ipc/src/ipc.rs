@@ -13,7 +13,7 @@ use tokio::io::{AsyncRead, AsyncWrite, ReadBuf};
 const MAX_PORTABLE_UDS_PATH_BYTES: usize = 103;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct LocalIpcEndpoint {
+pub(crate) struct LocalIpcEndpoint {
     discovery_value: String,
     #[cfg(unix)]
     path: PathBuf,
@@ -58,12 +58,12 @@ impl LocalIpcEndpoint {
         Ok(expected)
     }
 
-    pub fn discovery_value(&self) -> &str {
+    pub(crate) fn discovery_value(&self) -> &str {
         &self.discovery_value
     }
 
     #[cfg(unix)]
-    pub fn as_path(&self) -> &Path {
+    pub(crate) fn as_path(&self) -> &Path {
         &self.path
     }
 
@@ -72,7 +72,7 @@ impl LocalIpcEndpoint {
         &self.discovery_value
     }
 
-    pub async fn connect(
+    pub(crate) async fn connect(
         &self,
         deadline: Duration,
     ) -> Result<LocalIpcStream, RuntimeIpcTransportError> {
@@ -124,7 +124,7 @@ fn validate_uds_path_length(path: &Path) -> Result<(), RuntimeIpcTransportError>
     Ok(())
 }
 
-pub struct LocalIpcListener {
+pub(crate) struct LocalIpcListener {
     endpoint: LocalIpcEndpoint,
     #[cfg(windows)]
     server: Option<tokio::net::windows::named_pipe::NamedPipeServer>,
@@ -218,7 +218,7 @@ impl Drop for LocalIpcListener {
     }
 }
 
-pub enum LocalIpcStream {
+pub(crate) enum LocalIpcStream {
     #[cfg(windows)]
     WindowsClient(tokio::net::windows::named_pipe::NamedPipeClient),
     #[cfg(windows)]
@@ -293,12 +293,15 @@ impl AsyncWrite for LocalIpcStream {
 pub enum RuntimeIpcTransportError {
     #[error("runtime IPC endpoint is invalid")]
     InvalidEndpoint,
+    #[cfg(unix)]
     #[error("runtime IPC endpoint path is too long: {observed} bytes exceeds {maximum}")]
     EndpointTooLong { observed: usize, maximum: usize },
+    #[cfg(unix)]
     #[error("runtime IPC endpoint path is occupied by a non-socket entry")]
     EndpointOccupied,
     #[error("runtime IPC deadline must be greater than zero")]
     InvalidDeadline,
+    #[cfg(unix)]
     #[error("failed to canonicalize runtime IPC directory")]
     CanonicalizeRuntimeRoot(#[source] std::io::Error),
     #[error("failed to bind runtime IPC endpoint")]
@@ -307,6 +310,7 @@ pub enum RuntimeIpcTransportError {
     Accept(#[source] std::io::Error),
     #[error("failed to connect to runtime IPC endpoint")]
     Connect(#[source] std::io::Error),
+    #[cfg(unix)]
     #[error("timed out connecting to runtime IPC endpoint")]
     ConnectTimeout,
 }

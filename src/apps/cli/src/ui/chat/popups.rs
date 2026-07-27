@@ -380,8 +380,10 @@ impl ChatView {
         &mut self,
         sessions: Vec<SessionItem>,
         current_session_id: Option<String>,
+        can_delete: bool,
     ) {
-        self.session_selector.show(sessions, current_session_id);
+        self.session_selector
+            .show(sessions, current_session_id, can_delete);
         self.popup_stack.push(PopupType::SessionSelector);
     }
 

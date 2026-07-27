@@ -174,6 +174,21 @@ fn exec_json_preflight_failure_is_one_result_document() {
 }
 
 #[test]
+fn root_shared_flag_keeps_exec_json_error_contract() {
+    let output = run_cli(&["--shared", "exec", "task", "--output-format", "json"]);
+    let stdout = stdout(&output);
+
+    assert!(!output.status.success(), "{stdout}");
+    let value: serde_json::Value = serde_json::from_str(&stdout).expect("one JSON result object");
+    assert_eq!(value["type"], "result");
+    assert_eq!(value["subtype"], "error");
+    assert!(value["result"]
+        .as_str()
+        .is_some_and(|message| message.contains("interactive TUI")));
+    assert!(stderr(&output).is_empty(), "{}", stderr(&output));
+}
+
+#[test]
 fn exec_json_rejects_continue_with_an_explicit_resume() {
     let output = run_cli(&[
         "exec",

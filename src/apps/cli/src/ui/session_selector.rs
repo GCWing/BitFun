@@ -43,6 +43,7 @@ pub(super) struct SessionSelectorState {
     visible: bool,
     /// Currently active session ID (for highlighting)
     current_session_id: Option<String>,
+    can_delete: bool,
     last_area: Option<Rect>,
     /// Inline rename state
     rename_editing: bool,
@@ -57,6 +58,7 @@ impl SessionSelectorState {
             list_state: ListState::default(),
             visible: false,
             current_session_id: None,
+            can_delete: false,
             last_area: None,
             rename_editing: false,
             rename_buffer: String::new(),
@@ -65,7 +67,12 @@ impl SessionSelectorState {
     }
 
     /// Show the session selector with given session list
-    pub(super) fn show(&mut self, sessions: Vec<SessionItem>, current_session_id: Option<String>) {
+    pub(super) fn show(
+        &mut self,
+        sessions: Vec<SessionItem>,
+        current_session_id: Option<String>,
+        can_delete: bool,
+    ) {
         if sessions.is_empty() {
             return;
         }
@@ -77,6 +84,7 @@ impl SessionSelectorState {
 
         self.items = sessions;
         self.current_session_id = current_session_id;
+        self.can_delete = can_delete;
         self.list_state.select(Some(initial_idx));
         self.visible = true;
         self.rename_editing = false;
@@ -154,6 +162,9 @@ impl SessionSelectorState {
             }
             // Ctrl+D: delete selected session
             (KeyCode::Char('d'), KeyModifiers::CONTROL) => {
+                if !self.can_delete {
+                    return SessionAction::None;
+                }
                 if let Some(item) = self.selected_item().cloned() {
                     SessionAction::Delete(item)
                 } else {
@@ -347,8 +358,10 @@ impl SessionSelectorState {
             };
             let hint_text = if self.rename_editing {
                 " Enter: Save  Esc: Cancel "
-            } else {
+            } else if self.can_delete {
                 " Up/Down: Navigate  Enter: Switch  Ctrl+D: Delete  Esc: Close "
+            } else {
+                " Up/Down: Navigate  Enter: Switch  Esc: Close "
             };
             let hint = Paragraph::new(Line::from(Span::styled(
                 hint_text,

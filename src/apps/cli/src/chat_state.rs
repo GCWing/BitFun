@@ -1,4 +1,4 @@
-use std::collections::{HashMap, VecDeque};
+use std::collections::{HashMap, HashSet, VecDeque};
 /// Chat state module
 ///
 /// Pure UI rendering state for the chat interface.
@@ -445,6 +445,35 @@ impl ChatState {
         };
         self.permission_queue.remove(position);
         true
+    }
+
+    pub(crate) fn reconcile_permission_requests(
+        &mut self,
+        requests: Vec<PermissionRequest>,
+    ) -> bool {
+        let expected = requests
+            .iter()
+            .map(|request| request.request_id.clone())
+            .collect::<HashSet<_>>();
+        let stale = self
+            .permission_prompt
+            .iter()
+            .map(|prompt| prompt.request.request_id.clone())
+            .chain(
+                self.permission_queue
+                    .iter()
+                    .map(|request| request.request_id.clone()),
+            )
+            .filter(|request_id| !expected.contains(request_id))
+            .collect::<Vec<_>>();
+        let mut changed = false;
+        for request_id in stale {
+            changed |= self.resolve_permission_request(&request_id);
+        }
+        for request in requests {
+            changed |= self.enqueue_permission_request(request);
+        }
+        changed
     }
 
     /// Load historical messages from the portable runtime transcript.
@@ -1298,6 +1327,16 @@ mod tests {
         assert!(!state.resolve_permission_request("unrelated"));
         assert!(state.resolve_permission_request("request-m"));
         assert!(state.permission_prompt.is_none());
+
+        assert!(state.enqueue_permission_request(first));
+        assert!(state.reconcile_permission_requests(vec![third]));
+        assert_eq!(
+            state
+                .permission_prompt
+                .as_ref()
+                .map(|prompt| prompt.request.request_id.as_str()),
+            Some("request-m")
+        );
     }
 
     #[test]

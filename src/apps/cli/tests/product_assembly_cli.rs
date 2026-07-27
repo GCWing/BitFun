@@ -305,8 +305,11 @@ fn interactive_tui_agent_operations_stay_behind_cli_runtime_client() {
     const STARTUP_PAGE: &str = include_str!("../src/ui/startup.rs");
     const CHAT_MODE: &str = include_str!("../src/modes/chat.rs");
     const CHAT_RUN: &str = include_str!("../src/modes/chat/run.rs");
+    const CHAT_COMMANDS: &str = include_str!("../src/modes/chat/commands.rs");
     const CHAT_INPUT: &str = include_str!("../src/modes/chat/input.rs");
     const CHAT_SELECTION: &str = include_str!("../src/modes/chat/selection.rs");
+    const RUNTIME_CLIENT: &str = include_str!("../src/agent/runtime_client.rs");
+    const SHARED_RUNTIME: &str = include_str!("../src/shared_runtime.rs");
     const CLI_MAIN: &str = include_str!("../src/main.rs");
     const CLI_CARGO: &str = include_str!("../Cargo.toml");
 
@@ -333,8 +336,34 @@ fn interactive_tui_agent_operations_stay_behind_cli_runtime_client() {
         "interactive chat must retain the existing app-private runtime client facade"
     );
     assert!(
-        !CLI_CARGO.contains("bitfun-sdk-host") && !CLI_CARGO.contains("bitfun-agent-runtime-ipc"),
-        "the CLI must not gain SDK Host or Shared IPC dependencies in this refactor"
+        !CLI_CARGO.contains("bitfun-sdk-host") && CLI_CARGO.contains("bitfun-agent-runtime-ipc"),
+        "Shared TUI must use the private Runtime IPC adapter without making CLI depend on SDK Host"
+    );
+    assert!(
+        RUNTIME_CLIENT.contains("RuntimeIpcClient")
+            && !STARTUP_PAGE.contains("RuntimeIpcClient")
+            && !CHAT_MODE.contains("RuntimeIpcClient"),
+        "Shared IPC must remain behind CliAgentRuntimeClient instead of leaking into TUI controllers"
+    );
+    let shared_command_path = CHAT_COMMANDS
+        .split_once("fn handle_command(")
+        .expect("handle_command")
+        .1;
+    assert!(
+        shared_command_path
+            .find("if self.agent.is_shared()")
+            .unwrap_or(usize::MAX)
+            < shared_command_path
+                .find("external_source_conflict_choices")
+                .expect("external source call"),
+        "Shared slash commands must branch before initializing Embedded external-source owners"
+    );
+    assert!(
+        CHAT_COMMANDS.matches("if self.agent.is_shared()").count() >= 3
+            && RUNTIME_CLIENT.contains("Failed to read Embedded session transcript")
+            && SHARED_RUNTIME.contains("RuntimeDeployment::Shared")
+            && SHARED_RUNTIME.contains("process_manager::contain_current_process_tree"),
+        "Shared controls must stay terminal-safe while preserving Embedded recovery and one process Job owner"
     );
     assert!(
         CLI_MAIN.contains("Cli::command()") && CLI_MAIN.contains("McpAction::Import"),

@@ -1,4 +1,11 @@
-use crate::{InitializeRequest, RuntimeIpcFrame, RuntimeIpcOperation, PROTOCOL_VERSION};
+use crate::{
+    serialize_frame_with_limit, InitializeRequest, RuntimeIpcFrame, RuntimeIpcOperation,
+    RuntimeUserAnswersRequest, MAX_REQUEST_FRAME_BYTES, PROTOCOL_VERSION,
+};
+
+use bitfun_product_domains::tool_permissions::PermissionReply;
+use bitfun_runtime_ports::{AgentDialogTurnRequest, AgentSubmissionSource, DialogSubmissionPolicy};
+use serde_json::{json, Map};
 
 #[test]
 fn protocol_rejects_unknown_fields_and_operations() {
@@ -25,14 +32,59 @@ fn initialize_debug_redacts_the_bearer_token() {
     let debug = format!("{request:?}");
     assert!(!debug.contains("top-secret-token"));
     assert!(debug.contains("[REDACTED]"));
+}
 
+#[test]
+fn protocol_round_trips_reviewed_permission_and_user_input_operations() {
+    let operations = vec![
+        RuntimeIpcOperation::PendingPermissions {
+            session_id: "session-1".to_string(),
+        },
+        RuntimeIpcOperation::RespondPermission {
+            session_id: "session-1".to_string(),
+            request_id: "permission-1".to_string(),
+            reply: PermissionReply::Once,
+        },
+        RuntimeIpcOperation::SubmitUserAnswers {
+            request: RuntimeUserAnswersRequest {
+                session_id: "session-1".to_string(),
+                tool_id: "question-1".to_string(),
+                answers: json!({"choice": "yes"}),
+            },
+        },
+    ];
+
+    for operation in operations {
+        let encoded = serde_json::to_value(&operation).expect("serialize operation");
+        let decoded: RuntimeIpcOperation =
+            serde_json::from_value(encoded).expect("deserialize operation");
+        assert_eq!(decoded, operation);
+    }
+}
+
+#[test]
+fn submit_turn_accepts_the_existing_64_kib_tui_paste_contract() {
     let frame = RuntimeIpcFrame::Request {
-        request_id: 7,
-        operation: RuntimeIpcOperation::Health,
+        request_id: 1,
+        operation: RuntimeIpcOperation::SubmitTurn {
+            request: AgentDialogTurnRequest {
+                session_id: "session-1".to_string(),
+                message: "x".repeat(64 * 1024),
+                original_message: None,
+                turn_id: Some("turn-1".to_string()),
+                agent_type: "agentic".to_string(),
+                workspace_path: Some("D:/workspace/project".to_string()),
+                remote_connection_id: None,
+                remote_ssh_host: None,
+                policy: DialogSubmissionPolicy::for_source(AgentSubmissionSource::Cli),
+                reply_route: None,
+                prepended_reminders: Vec::new(),
+                attachments: Vec::new(),
+                metadata: Map::new(),
+            },
+        },
     };
-    let json = serde_json::to_string(&frame).expect("serialize Health frame");
-    assert_eq!(
-        json,
-        r#"{"type":"request","request_id":7,"operation":{"operation":"health"}}"#
-    );
+
+    serialize_frame_with_limit(&frame, MAX_REQUEST_FRAME_BYTES)
+        .expect("64 KiB TUI input plus its typed envelope must fit the request frame");
 }

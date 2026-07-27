@@ -11,7 +11,7 @@ impl ChatMode {
         }
 
         let modal_state =
-            ActionState::chat(chat_state.is_processing, self.any_popup_visible(chat_view));
+            self.action_state(chat_state.is_processing, self.any_popup_visible(chat_view));
         if let Some(action) = self.keymap.resolve_modal_safe(key, modal_state) {
             return self.dispatch_action(action, modal_state, chat_view, chat_state, rt_handle);
         }
@@ -47,16 +47,19 @@ impl ChatMode {
                 QuestionAction::Submit(answers) => {
                     let tool_id = prompt.tool_id.clone();
                     let agent = self.agent.clone();
-                    chat_state.question_prompt = None;
                     tracing::info!("User submitted answers for tool: {}", tool_id);
-                    tokio::task::block_in_place(|| {
-                        rt_handle.block_on(async move {
-                            if let Err(e) = agent.submit_user_answers(&tool_id, answers).await {
-                                tracing::error!("Failed to submit answers: {}", e);
-                            }
-                        })
-                    });
-                    chat_view.set_status(Some("Answers submitted".to_string()));
+                    match tokio::task::block_in_place(|| {
+                        rt_handle.block_on(agent.submit_user_answers(&tool_id, answers))
+                    }) {
+                        Ok(()) => {
+                            chat_state.question_prompt = None;
+                            chat_view.set_status(Some("Answers submitted".to_string()));
+                        }
+                        Err(error) => {
+                            tracing::error!("Failed to submit answers: {error}");
+                            chat_view.set_status(Some(format!("Error: {error}")));
+                        }
+                    }
                 }
                 QuestionAction::Reject => {
                     let tool_id = prompt.tool_id.clone();
@@ -75,7 +78,7 @@ impl ChatMode {
 
         // Host recovery keys win over configured actions while a popup is open.
         if self.any_popup_visible(chat_view) {
-            let state = ActionState::chat(chat_state.is_processing, true);
+            let state = self.action_state(chat_state.is_processing, true);
             if let Some(action) = self.keymap.resolve_reserved(key, state) {
                 return self.dispatch_action(action, state, chat_view, chat_state, rt_handle);
             }
@@ -331,11 +334,11 @@ impl ChatMode {
 
         if let Some(action) = self
             .keymap
-            .resolve(key, ActionState::chat(chat_state.is_processing, false))
+            .resolve(key, self.action_state(chat_state.is_processing, false))
         {
             return self.dispatch_action(
                 action,
-                ActionState::chat(chat_state.is_processing, false),
+                self.action_state(chat_state.is_processing, false),
                 chat_view,
                 chat_state,
                 rt_handle,

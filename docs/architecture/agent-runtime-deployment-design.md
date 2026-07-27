@@ -33,12 +33,12 @@ flowchart LR
 | Embedded Desktop GUI | 继续使用现有 Desktop 事件投影和 Tauri adapter；本设计没有改变其依赖或生命周期 |
 | Embedded TUI/Headless CLI/Peer Host | Session、Turn、Permission 和事件订阅统一通过同一个 Rust Runtime SDK（当前 preview）；CLI crate 只保留第一方 adapter 和各形态自己的展示/断流策略 |
 | ACP/SDK Host | 使用同一个 Runtime 事件入口的 session-scoped 订阅；各自协议和进程生命周期保持独立 |
-| Runtime ownership | 已有可选的 Embedded 共享锁 / Shared 独占锁原语；尚未接入产品入口 |
-| Shared local IPC | 已有未发布、仅 crate 内可见的 discovery、实例锁、严格握手、Health 和 cleanup 基础；尚无生产 consumer |
-| Shared Session/Turn/Tool/Permission | 尚未设计为稳定 wire，也没有产品 consumer |
-| Shared GUI/TUI/Remote | 尚未交付，没有 `--shared` 或隐藏 Host 命令 |
+| Runtime ownership | CLI 的 Embedded deployment 取得共享锁；Shared TUI deployment 取得独占锁，二者在同一 workspace 互斥；其他产品入口尚未接入该锁 |
+| Shared local IPC | 未发布的本机协议已有 discovery、实例锁、严格握手、Session 控制租约、有界事件流和 cleanup；唯一 consumer 是第一方交互式 TUI adapter |
+| Shared TUI | `bitfun --shared` / `bitfun chat --shared` 可列出、创建、恢复 Session，读取 transcript，提交/取消 Turn，处理 Permission 和 UserInput；默认仍是 Embedded |
+| Shared GUI/Headless/ACP/SDK Host/Remote | 未交付，也不会由 `--shared` 隐式启用；Replay、Observer、Controller transfer、Session delete/fork 同样不在当前协议中 |
 
-因此当前完成的是 Embedded 入口的调用边界收敛，不是用户可用的 Shared Runtime 产品。具体 `EventQueue` 仍由 Core 产品装配，Runtime SDK 只提供同进程订阅入口；没有 Shared event wire、事件重放或 Shared consumer。
+因此当前交付的是一条窄的、显式启用的 Shared TUI deployment，不是通用本机 Server。具体 `EventQueue` 仍由 Core 产品装配；IPC 只把当前 TUI 必需的强类型操作和事件映射到同一个 Runtime owner，没有事件重放或公开协议承诺。
 
 ## 2. 最少名词
 
@@ -64,7 +64,7 @@ flowchart TB
   end
 
   Embedded["Embedded adapter"] --> API
-  Shared["Shared local IPC adapter · future"] -.-> API
+  Shared["Shared local IPC adapter · opt-in TUI"] --> API
   SDK["SDK Host adapter"] --> API
   Remote["Remote adapter"] --> API
 ```
@@ -105,31 +105,42 @@ flowchart LR
 ```
 
 - 多个 Embedded 进程可继续并存。
-- Shared 与任何 Embedded owner 互斥，避免同一工作区出现两个 Runtime owner。
-- 当前没有入口调用该原语，所以现有产品行为不变。
+- 在当前 CLI 边界内，Shared TUI 与 Embedded CLI Runtime 互斥；多个 Embedded CLI 进程仍可并存。
+- CLI 每次初始化 Runtime 时都调用该原语；Desktop、SDK Host、Server 等入口尚未接入，也不会被误报为已共享或已互斥。
 - 该锁不选择 workspace、不启动 Runtime、不缓存实例，也不替代 Session 写入权或文件冲突控制。
 
 ### 4.2 私有本机 IPC
 
 ```mermaid
 sequenceDiagram
-  participant C as Foundation client
+  participant C as Shared TUI client
   participant D as User-private discovery
-  participant S as Foundation server
+  participant S as Shared Runtime process
 
   C->>D: read endpoint + token + identity + protocol
   C->>S: connect via Named Pipe / UDS
   C->>S: initialize(identity, protocol, token)
   alt valid
-    S-->>C: initialized(capabilities = health)
-    C->>S: health
-    S-->>C: instance identity + PID
+    S-->>C: initialized(health + interactive_tui)
+    C->>S: create or restore Session
+    S-->>C: controller lease + Session facts
+    C->>S: submit/cancel Turn or answer Permission/UserInput
+    S-->>C: Session-filtered authoritative events
   else invalid
     S-->>C: typed error and close
   end
 ```
 
-当前协议刻意只有 Health。它验证以下地基，而不提前冻结业务 wire：
+当前协议只覆盖第一个 TUI 纵向切片：
+
+| 已支持 | 明确不支持 |
+|---|---|
+| Health、Session list/create、原子 restore（含 transcript 与 pending Permission） | Session delete/fork、跨 workspace attach、transcript 分页 |
+| Turn submit/cancel | replay、cursor、resume event stream |
+| pending/respond Permission、submit UserInput answers | observer、controller transfer、多 Session multiplex |
+| 连接断开清理、Session-filtered events | detach/observer/controller transfer、SDK callbacks、GUI/Remote/Peer/ACP/Headless wire |
+
+这些操作先满足以下本机 IPC 地基，而不把协议升级为公开 SDK：
 
 - workspace、产品、release channel、用户和协议版本共同生成实例身份；
 - instance lock 而不是 PID/discovery 文件决定唯一 server owner；
@@ -137,10 +148,15 @@ sequenceDiagram
 - discovery 所在目录必须由未来 composition 选择为当前用户私有目录；
 - discovery 通过同目录临时文件原子替换；Unix endpoint 保留原生路径字节，路径过长时在 bind 前返回明确错误；
 - 第一帧必须完成 token、instance identity 和 protocol version 校验；
-- JSON frame 使用 4-byte 长度前缀，并在分配前执行 64 KiB 硬上限；
+- 未认证握手预算为 2 秒；认证后的单次操作、响应写入和断线取消预算为 120 秒，避免坏客户端长期占用连接或 Runtime handler；
+- JSON frame 使用 4-byte 长度前缀；request 在发送前执行 128 KiB 上限（覆盖 TUI 已有的 64 KiB 粘贴输入及类型化信封），response/event 在序列化时执行 8 MiB 上限。超限返回类型化错误，不能进行无界分配；超过该上限的历史 Session 暂由 Embedded TUI 打开，不在本阶段引入分页协议；
 - 未认证连接也计入有界 connection budget，单个客户端不能无限制造 server task；
 - 未知字段、未知 operation、错误身份和不兼容版本 fail closed；
-- 无连接后按调用方配置的 idle timeout 退出，并只删除自己发布的 discovery；Unix 下继任 owner 会在持有实例锁后清理同一 identity 的陈旧 socket。
+- 一个连接最多控制一个 Session、同时最多提交一个活动 Turn；一个 Session 同时只有一个 controller。create/restore 在完整结果通过大小检查后才原子切换控制权，失败时保留原 Session。活动 Turn 期间不能切换 Session。
+- Submit 使用调用方已有的 `turn_id` 标识不确定结果；若提交超时，返回 `outcome_unknown`、关闭连接并按该 ID 取消。断连取消只有得到确认后才释放 Session 租约；无法确认时租约保持隔离，直到 Runtime 进程退出。
+- Agent 事件流 lag/closed 后 fail closed；Permission lag 先从 Runtime 权威 pending 集合重建，重建失败或流关闭时取消当前 Turn 并退出。路由到父 Session 的嵌套 Permission 与 AskUserQuestion 复用现有 TUI 交互，不新增第二套 UI 状态。
+- Windows Shared Runtime 在初始化前把自身放入 kill-on-close Job；Unix 仅在应用内优雅退出路径中通过受管子进程组回收后代。Runtime 被 `SIGTERM`、`SIGKILL` 或崩溃直接终止后的 Unix 后代回收不在当前保证内。两者都只负责生命周期，不是安全沙箱。
+- 最后一个连接离开后等待 30 秒再退出；新连接会取消 idle 退出。退出只删除自己发布的 discovery；Unix 下继任 owner 会在持有实例锁后清理同一 identity 的陈旧 socket。
 
 这是一条本机同用户边界，不是沙箱、远程协议或公开兼容承诺。
 
@@ -180,7 +196,7 @@ flowchart LR
 | stable local endpoint + bearer token + owner id | endpoint 定位同一 instance；随机 token 认证本轮 server；owner id 防止旧实例误删新 discovery |
 | Session identity | 未来 Runtime 内的持久化和写入隔离；不由 IPC foundation 定义 |
 
-一个 Client 关闭不应推导 Session 或 Runtime 必须退出；真正的 Shared lifecycle 需要综合 Client、活动 Query、后台任务和 Remote 引用。当前 Health-only server 没有这些业务引用，因此只实现“无连接后 idle 退出”。后续接入 Runtime 时必须替换为 Runtime-aware drain，不能直接复用 Health server 的简单空闲条件。
+当前 Shared TUI 只有 controller，没有 observer 或 detached Query：一个 Client 关闭不会删除 Session；它会取消仍拥有的活动 Turn，只有取消得到确认才释放 Session 控制租约，否则该租约隔离到 Runtime 退出。最后一个 Client 关闭后，Runtime 进入 30 秒空闲期；期间重连可继续使用，超时后 Runtime 正常关闭。若未来增加后台任务、observer 或 Remote 引用，必须先扩展 Runtime-aware drain，不能把这些引用塞进当前简单连接计数。
 
 对普通单实例用户，未显式启用 Shared deployment 时不增加后台进程、连接、发现扫描或常驻内存。
 
@@ -200,12 +216,12 @@ Session/Turn、事件恢复、Permission/UserInput、Controller、配置管理�
 
 | 约束 | 当前决定 |
 |---|---|
-| 首个候选 consumer | 仅限另行评审的第一方交互式 TUI attach adapter；不自动包含 GUI、Headless CLI、Remote 或 SDK Host |
-| 稳定测试合同 | 本机 endpoint、initialize-first、64 KiB frame、Health、连接上限、owner-checked cleanup |
-| 接入门槛 | 必须复用既有 Runtime owners，并用同一 fixture 证明 Embedded/Shared 行为等价 |
-| 删除条件 | 若首个 consumer 选择其他 transport，或 Shared 在产品接入前取消，则直接删除该 crate，不保留“未来可能使用”的 API |
+| 当前 consumer | 仅第一方交互式 TUI adapter；不自动包含 GUI、Headless CLI、Remote 或 SDK Host |
+| 稳定测试合同 | 本机 endpoint、initialize-first、128 KiB request / 8 MiB response-event 上限、连接上限、owner-checked cleanup、原子 Session controller 切换、单连接单活动 Turn、事件流失效后 fail closed、断连取消、30 秒空闲退出 |
+| 当前业务范围 | Session/Turn/transcript/Permission/UserInput 的 TUI 必需子集；任何新增操作都需要真实 consumer 和 owner 等价测试 |
+| 协议地位 | crate 保持 `publish = false`；这是 workspace 内私有协议，不是 Agent SDK 或远程兼容承诺 |
 
-在首个 consumer 通过评审前，crate 保持 `publish = false`，所有 Rust API 保持 crate 内可见；架构守卫禁止增加 Runtime、SDK Host、services、CLI/TUI、远程网络依赖及 Health 之外的 operation。
+架构守卫只允许 CLI 消费该 crate；IPC 可以复用稳定的 Event、Product Domain 与 Runtime Port DTO，但禁止依赖 Runtime 实现、SDK Host、services、Tauri 或远程网络 transport。
 
 ## 8. 与竞品的取舍
 
@@ -222,7 +238,7 @@ Session/Turn、事件恢复、Permission/UserInput、Controller、配置管理�
 - 只有一套 Agent Runtime 业务实现；部署差异不能产生第二套 Session、Tool、Permission 或 MCP owner。
 - Client、窗口、Session 或 workspace 数量不会自动等量增加 Runtime 或 Plugin Host 进程。
 - 私有 IPC 不成为公开 SDK、Remote、Peer、HTTP 或浏览器协议。
-- 默认 GUI/TUI/Headless CLI 在 Shared 产品能力正式交付前保持现有 Embedded 行为。
+- 默认 GUI/TUI/Headless CLI 保持 Embedded；只有交互式 TUI 的显式 `--shared` 选择 Shared，当前互斥范围也只覆盖 CLI deployment。
 - Account/session cloud sync 仍使用既有 Core compatibility 边界，不属于 Shared Runtime 支持。
 - Remote workspace 的文件、凭据、进程和 Runtime 位于目标执行域，禁止静默回落本机。
-- 未经真实 consumer 验证的接口不进入 wire；当前唯一 operation 是 Health。
+- 未经真实 consumer 验证的接口不进入 wire；当前 wire 只包含表中列出的 Shared TUI 操作。

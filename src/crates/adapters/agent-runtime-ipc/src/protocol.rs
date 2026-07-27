@@ -2,10 +2,12 @@ use serde::{Deserialize, Serialize};
 use std::fmt;
 
 use crate::{RuntimeIpcOperation, RuntimeIpcOperationResult};
+use bitfun_events::AgenticEventEnvelope;
+use bitfun_product_domains::tool_permissions::PermissionRequestEvent;
 
-pub const PROTOCOL_VERSION: u32 = 1;
+pub const PROTOCOL_VERSION: u32 = 2;
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case", deny_unknown_fields)]
 pub enum RuntimeIpcFrame {
     Initialize {
@@ -28,6 +30,49 @@ pub enum RuntimeIpcFrame {
         request_id: Option<u64>,
         error: RuntimeIpcError,
     },
+    Event {
+        event: RuntimeIpcEvent,
+    },
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(
+    tag = "kind",
+    rename_all = "snake_case",
+    rename_all_fields = "camelCase",
+    deny_unknown_fields
+)]
+pub enum RuntimeIpcEvent {
+    Agent {
+        session_id: String,
+        envelope: AgenticEventEnvelope,
+    },
+    Permission {
+        session_id: String,
+        event: PermissionRequestEvent,
+    },
+    StreamInvalidated {
+        reason: RuntimeIpcStreamInvalidationReason,
+    },
+}
+
+impl RuntimeIpcEvent {
+    pub fn session_id(&self) -> Option<&str> {
+        match self {
+            Self::Agent { session_id, .. } | Self::Permission { session_id, .. } => {
+                Some(session_id)
+            }
+            Self::StreamInvalidated { .. } => None,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum RuntimeIpcStreamInvalidationReason {
+    Lagged,
+    Closed,
+    FrameTooLarge,
 }
 
 #[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -66,6 +111,8 @@ pub struct InitializeResult {
 #[serde(deny_unknown_fields)]
 pub struct RuntimeIpcCapabilities {
     pub health: bool,
+    #[serde(default)]
+    pub interactive_tui: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -82,6 +129,11 @@ pub enum RuntimeIpcErrorCode {
     IncompatibleProtocol,
     WrongInstance,
     FrameTooLarge,
+    SessionInUse,
+    ControllerRequired,
+    SessionMismatch,
+    OperationUnsupported,
+    OutcomeUnknown,
     Unavailable,
     Internal,
 }
