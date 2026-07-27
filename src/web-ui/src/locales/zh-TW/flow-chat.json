@@ -1,51 +1,4 @@
 {
-  "permission": {
-    "title": "需要授權",
-    "subagentOwner": "{{subagent}} 子 Agent",
-    "feedbackLabel": "拒絕回饋",
-    "feedbackPlaceholder": "拒絕時可選填後續建議",
-    "responseFailed": "權限回覆未能送達，請重試。",
-    "allowOnce": "允許一次",
-    "allowAlways": "始終允許",
-    "allowAlwaysTooltip": "始終允許會為 {{projectPath}} 儲存相符的存取權限。",
-    "allowAlwaysTooltipCurrentProject": "始終允許會為目前項目儲存相符的存取權限。",
-    "allowAlwaysTooltipNoGrant": "此請求沒有可儲存的存取範圍；始終允許僅套用於這次請求。",
-    "risks": {
-      "pageSave": "以{{visibility}}可見性儲存「{{slug}}」的新不可變版本，不變更目前正式版本。",
-      "pagePublish": "以{{visibility}}可見性儲存「{{slug}}」，並切換其正式版本。",
-      "pageDeploy": "將「{{slug}}」的正式流量切換到不可變版本「{{version}}」。"
-    },
-    "visibility": {
-      "private": "僅自己可見",
-      "relay": "登入使用者可見",
-      "public": "公開"
-    },
-    "reject": "拒絕",
-    "batchCount": "{{count}} 個授權請求",
-    "collapsePanel": "收起授權請求",
-    "expandPanel": "展開 {{count}} 個待處理的授權請求",
-    "current": "目前",
-    "pending": "等待中",
-    "actions": {
-      "read": "讀取檔案",
-      "edit": "編輯檔案",
-      "bash": "執行命令",
-      "git": "Git 操作",
-      "computerUse": "控制裝置",
-      "webSearch": "搜尋網路",
-      "webFetch": "存取網頁",
-      "mcp": "MCP 呼叫",
-      "task": "執行任務",
-      "skill": "執行技能",
-      "pagePublish": "儲存頁面版本",
-      "pageDeploy": "部署頁面版本",
-      "customTool": "外部工具",
-      "externalDirectory": "存取外部目錄",
-      "other": "其他操作"
-    },
-    "allowCurrentAndFollowing": "允許全部",
-    "rejectCurrentAndFollowing": "拒絕全部"
-  },
   "emptyState": {
     "welcomeBack": "歡迎回來！",
     "workingIn": "您正在 <workspace>{{workspace}}</workspace> 中",
@@ -411,17 +364,6 @@
       "completed": "已完成",
       "failed": "執行失敗",
       "interrupted": "已中斷"
-    },
-    "menu": {
-      "closePet": "關閉寵物",
-      "closeBubble": "關閉該氣泡"
-    },
-    "composer": {
-      "openTitle": "傳送訊息到該工作階段",
-      "ariaLabel": "傳送訊息到該工作階段",
-      "placeholder": "輸入訊息，Enter 送出",
-      "cancel": "取消",
-      "send": "傳送"
     }
   },
   "session": {
@@ -508,10 +450,9 @@
     "copySelection": "複製選中內容",
     "copyFullContent": "複製完整內容",
     "copyContent": "複製內容",
+    "copyDialog": "複製整個對話",
     "copyToolInput": "複製工具輸入",
-    "copyToolOutput": "複製工具輸出",
-    "copyDialogFull": "複製整個對話（完整過程）",
-    "copyDialogResult": "複製整個對話（僅結果）"
+    "copyToolOutput": "複製工具輸出"
   },
   "widgetContextMenu": {
     "addToInput": "把選中元素加入輸入框",
@@ -546,24 +487,7 @@
     "openWorkspaceFolderFailed": "開啟工作區資料夾失敗：{{error}}",
     "spaceToActivate": "按<space>空格鍵</space>快速鍵入",
     "assistantPlaceholder": "傳訊息給 {{name}}...",
-    "sendHint": "Enter 傳送 / Ctrl+Enter 或 Shift+Enter 換行",
-    "voiceInput": {
-      "start": "開始語音輸入",
-      "stop": "停止錄音",
-      "preparing": "正在準備麥克風",
-      "transcribing": "正在轉寫",
-      "disabled": "語音輸入已關閉",
-      "unsupported": "目前無法使用麥克風",
-      "modelMissing": "請先下載本地語音模型",
-      "cloudPending": "雲端轉寫已設定，但轉寫通路尚未接入",
-      "permissionDenied": "麥克風權限被拒絕",
-      "deviceDisconnected": "所選麥克風已中斷連線",
-      "lowVolume": "沒有偵測到聲音，請檢查所選麥克風。",
-      "failed": "語音輸入失敗",
-      "empty": "沒有辨識到語音",
-      "transcribeOnly": "插入轉寫文字",
-      "transcribeAndSend": "轉寫並傳送"
-    }
+    "sendHint": "Enter 傳送 / Ctrl+Enter 或 Shift+Enter 換行"
   },
   "workspaceStrip": {
     "branchTooltipUnavailable": "非 Git 存放庫或目前無分支"
@@ -627,34 +551,6 @@
   },
   "chatInput": {
     "addBoostTooltip": "智能體模式、圖片或 Skill",
-    "permissionMode": {
-      "menuLabel": "權限模式",
-      "globalScope": "全域",
-      "current": "權限：{{mode}}",
-      "changeFailed": "切換權限模式失敗。",
-      "hideControl": "隱藏權限模式選擇器",
-      "hideControlFailed": "隱藏權限模式選擇器失敗。",
-      "ask": {
-        "label": "需要確認",
-        "description": "外部存取、修改檔案和執行命令需要確認。"
-      },
-      "auto": {
-        "label": "自動批准",
-        "description": "自動批准需要確認的請求。"
-      },
-      "fullAccess": {
-        "label": "完全存取",
-        "description": "預設允許工具執行，無需確認。"
-      },
-      "acp": {
-        "label": "ACP 控制",
-        "tooltip": "此工作階段的權限由 ACP 用戶端控制。"
-      },
-      "fullAccessWarningTitle": "啟用完全存取？",
-      "fullAccessWarningMessage": "完全存取會預設允許工具執行，不再逐次確認。",
-      "fullAccessConfirm": "啟用完全存取",
-      "cancel": "取消"
-    },
     "addModeTooltip": "附加 Plan 或 Debug",
     "boostSectionAgent": "智能體",
     "boostSectionContext": "上下文",
@@ -729,8 +625,6 @@
     "currentMode": "目前模式: {{mode}}",
     "noMatchingMode": "沒有匹配的模式",
     "noMatchingCommand": "沒有匹配的命令",
-    "nativeCommandChoiceNotSaved": "本次仍會執行該命令，但未能儲存這次衝突選擇。",
-    "nativeCommandReconfirmationRequired": "先前選擇的外部命令已無法使用。請從斜線選單中選擇 BitFun 命令後再執行。",
     "selectHint": "↑↓ 選擇 · Enter 確認 · Esc 取消",
     "current": "目前",
     "computerUseDisabled": "已在「設定 → 工作階段權限」中停用 Computer Use",
@@ -776,10 +670,7 @@
     "usageFailed": "用量報告產生失敗",
     "mcpPromptMissingArgs": "此 MCP 提示詞需要參數：{{args}}",
     "mcpPromptFailed": "MCP 提示詞執行失敗",
-    "loadingMcpPrompts": "正在載入 MCP 提示詞...",
-    "externalCommandsLoading": "正在載入相容命令...",
-    "externalCommandsHostUnavailable": "目前主機不支援外部命令。",
-    "externalCommandsLoadFailed": "外部命令載入失敗，請重新開啟命令選擇器重試。"
+    "loadingMcpPrompts": "正在載入 MCP 提示詞..."
   },
   "planner": {
     "title": "任務規劃",
@@ -821,30 +712,6 @@
     "toolCall": "🔧 工具調用: {{name}}",
     "unknownTool": "未知工具"
   },
-  "transcriptExport": {
-    "copyFull": "拷貝完整過程",
-    "copyResult": "拷貝結果",
-    "copyEmpty": "該對話沒有可複製的內容",
-    "exportEmpty": "該工作階段沒有可匯出的內容",
-    "exportSuccess": "工作階段已匯出：{{filePath}}",
-    "exportFailed": "匯出工作階段失敗",
-    "saveDialogTitle": "將工作階段匯出為 Markdown",
-    "scopeFull": "完整過程",
-    "scopeResult": "僅結果",
-    "metaSessionId": "工作階段 ID",
-    "metaExportedAt": "匯出時間",
-    "metaTurnCount": "對話輪數",
-    "metaScope": "匯出範圍",
-    "turnHeading": "第 {{index}} 輪",
-    "userHeading": "👤 使用者",
-    "assistantHeading": "🤖 助理",
-    "toolHeading": "工具 · {{name}}",
-    "thinking": "思考",
-    "toolInput": "輸入",
-    "toolResult": "結果",
-    "toolError": "錯誤",
-    "empty": "（空）"
-  },
   "smartRecommendations": {
     "title": "💡 智能推薦",
     "close": "關閉"
@@ -874,8 +741,7 @@
   "childSession": {
     "stopReview": "中止審核",
     "stoppingReview": "正在中止審核...",
-    "stopReviewFailed": "無法確認審核是否已停止，它可能仍在執行。",
-    "backToReview": "返回審核",
+    "stopReviewFailed": "中止審核會話失敗。",
     "kinds": {
       "btw": {
         "short": "側問",
@@ -902,19 +768,6 @@
         "title": "子智能體會話",
         "origin": "子智能體"
       }
-    },
-    "reviewDetail": {
-      "loading": "正在載入已儲存的詳情...",
-      "loadFailed": "無法載入詳情。",
-      "unavailable": "沒有可用於這項檢查的已儲存詳情。",
-      "retryLoad": "重新載入",
-      "preparing": "{{label}}正在準備...",
-      "completedEmpty": "{{label}}已結束，沒有更多詳情。",
-      "partialTimedOut": "這項檢查已逾時，但傳回了部分詳情。",
-      "stopped": "{{label}}已停止，尚未產生可查看的詳情。",
-      "interrupted": "{{label}}已中斷。可返回審核繼續。",
-      "timedOut": "{{label}}已逾時，尚未產生可查看的詳情。",
-      "failed": "{{label}}未能完成。"
     }
   },
   "deepReviewActionBar": {
@@ -1002,7 +855,7 @@
     "copyDiagnostics": "複製排障摘要",
     "diagnosticsCopied": "已複製排障摘要",
     "diagnosticsCopyFailed": "複製排障摘要失敗",
-    "diagnosticsTitle": "嚴格審核疑難排解摘要",
+    "diagnosticsTitle": "嚴格 Review 排障摘要",
     "diagnosticsErrorType": "錯誤類型",
     "diagnosticsDescription": "錯誤描述",
     "diagnosticsSuggestedActions": "建議操作",
@@ -1031,9 +884,9 @@
     },
     "resultRecovery": {
       "title": "嚴格審核需要補全結果",
-      "missingSubmitCodeReview": "審核已結束，但 BitFun 沒有收到可確認的結構化結果。繼續會保留已完成的審核工作，並補交缺失的審核報告。",
-      "invalidSubmitCodeReview": "審核回傳了 BitFun 無法讀取的結果。繼續會保留已完成的審核工作，並修正報告。",
-      "wrongReviewMode": "審核回傳了標準審核結果。繼續會保留已完成的審核工作，並提交嚴格審核報告。"
+      "missingSubmitCodeReview": "審核已結束，但 BitFun 沒有收到可確認的結構化結果。繼續會保留已完成的審核工作，並要求 agent 補交缺失的審核報告。",
+      "invalidSubmitCodeReview": "審核回傳了 BitFun 無法讀取的結果。繼續會保留已完成的審核工作，並要求 agent 修復報告。",
+      "wrongReviewMode": "審核回傳了標準審核結果。繼續會保留已完成的審核工作，並要求 agent 提交嚴格審核報告。"
     },
     "capacityQueue": {
       "title": "審核正在等待容量",
@@ -1075,7 +928,7 @@
       "cancelQueued": "取消等待中的審核",
       "skipOptionalQueued": "保留核心檢查",
       "openReviewSettings": "開啟審核設定",
-      "controlFailed": "目前無法控制這個審核項目的容量。可停止本次審核，或等待容量狀態更新。",
+      "controlFailed": "目前無法控制這個 Review 項的容量。可使用停止來中斷 Review，或等待容量狀態刷新。",
       "controlFailedWithReason": "容量控制失敗：{{reason}}。請重試，或在審核卡住時使用停止來中斷。",
       "controlPartiallyFailedWithReason": "容量控制已部分套用；{{total}} 個審核項中有 {{failed}} 個失敗：{{reason}}。請等待容量狀態刷新後重試，或在卡住時使用停止。"
     },
@@ -1115,37 +968,39 @@
   "deepReviewConsent": {
     "windowTitle": "審核方案",
     "eyebrow": "審核方案",
-    "title": "開始本次審核？",
-    "body": "BitFun 會先直接審核本次變更，只在證據顯示有必要時增加補充檢查。繼續前可確認目標範圍、預計耗時與唯讀邊界。",
+    "title": "增加更廣的審核覆蓋？",
+    "body": "BitFun 為本次變更選擇了額外的獨立檢查。繼續前可確認目標範圍、計畫檢查、耗時傾向和唯讀邊界。",
     "readonlyLabel": "唯讀",
-    "readonly": "審核不會修改檔案。",
+    "readonly": "審核者不會修改檔案。",
     "sessionConcurrencyTitle": "目前會話較忙",
     "sessionConcurrencyBody": "目標會話已有 {{count}} 個審核工作在執行，繼續後將共享目前可用的審核容量。",
-    "costLabel": "審核深度",
-    "cost": "本次審核會更深入調查目標，只在確有幫助時增加補充檢查。",
+    "costLabel": "覆蓋",
+    "cost": "計畫的審查代理執行；此處不估算底層模型請求或 Token。",
     "timeLabel": "耗時",
     "time": "背景執行，可能需要更久。",
     "cancel": "取消",
     "confirm": "開始審核",
+    "initialCalls": "獨立檢查：計畫 {{planned}} 次審查代理執行",
+    "parallelCalls": "無需再次確認時，最多可能執行 {{count}} 次審查代理。",
     "runStrategy": "運行策略：{{strategy}}",
     "strategyLabels": {
-      "quick": "快速",
+      "quick": "聚焦",
       "normal": "標準",
       "deep": "全面"
     },
     "strategySummaries": {
-      "quick": "快速審核會檢查目前目標最相關的風險。",
-      "normal": "標準審核會更深入檢查目前目標，只在確有幫助時增加補充檢查。",
-      "deep": "全面審核會檢查所有適用的高風險領域，只在證據需要時增加獨立驗證。"
+      "quick": "聚焦審核會檢查目前目標最相關的風險。",
+      "normal": "標準審核會增加獨立覆蓋，同時保持成本合理。",
+      "deep": "全面審核會為高風險變更增加適用範圍內最廣的覆蓋。"
     },
     "summaryTitle": "審核方案",
     "targetFiles": "{{count}} 個檔案",
     "targetFiles_one": "{{count}} 個檔案",
     "targetFiles_other": "{{count}} 個檔案",
-    "skippedReviewers": "{{count}} 項可選審核工作未執行",
-    "skippedReviewers_one": "{{count}} 項可選審核工作未執行",
-    "skippedReviewers_other": "{{count}} 項可選審核工作未執行",
-    "skippedGroupTitle": "未執行的審核工作",
+    "skippedReviewers": "{{count}} 個可選檢查未納入",
+    "skippedReviewers_one": "{{count}} 個可選檢查未納入",
+    "skippedReviewers_other": "{{count}} 個可選檢查未納入",
+    "skippedGroupTitle": "已選擇 Review 範圍",
     "targetSource": {
       "manualPrompt": "給定內容",
       "workspaceDiff": "工作區改動",
@@ -1153,9 +1008,9 @@
       "selectedContext": "已選上下文",
       "reviewTarget": "審核目標"
     },
-    "skippedSummary": "{{count}} 項可選審核工作未執行；本次結果僅反映已完成的審核範圍。",
-    "skippedSummary_one": "{{count}} 項可選審核工作未執行；本次結果僅反映已完成的審核範圍。",
-    "skippedSummary_other": "{{count}} 項可選審核工作未執行；本次結果僅反映已完成的審核範圍。"
+    "skippedSummary": "BitFun 已為此目標選擇最相關的檢查。{{count}} 個可選檢查因適用性、設定或預算未納入本次執行。",
+    "skippedSummary_one": "BitFun 已為此目標選擇最相關的檢查。{{count}} 個可選檢查因適用性、設定或預算未納入本次執行。",
+    "skippedSummary_other": "BitFun 已為此目標選擇最相關的檢查。{{count}} 個可選檢查因適用性、設定或預算未納入本次執行。"
   },
   "flowChatHeader": {
     "turnList": "輪次列表",
@@ -1308,17 +1163,6 @@
     "exporting": "正在導出...",
     "exportToImage": "導出為圖片"
   },
-  "turnFailure": {
-    "showDetails": "顯示技術詳情",
-    "hideDetails": "隱藏技術詳情",
-    "provider": "服務商",
-    "errorCode": "錯誤碼",
-    "httpStatus": "HTTP 狀態",
-    "requestId": "請求 ID",
-    "providerError": "服務商錯誤",
-    "copy": "複製",
-    "copied": "已複製"
-  },
   "modelRound": {
     "copyDialog": "複製對話",
     "copiedDialog": "已複製!",
@@ -1331,6 +1175,7 @@
     "feedbackDevVersion": "開發版本暫不提供反饋功能",
     "userLabel": "👤 用戶:",
     "toolCallLabel": "🔧 工具調用: {{name}}",
+    "loadingMoreHistory": "正在載入更多歷史...",
     "roundHistoryShow": "顯示 {{count}} 次歷史重試輪次",
     "roundHistoryHide": "隱藏歷史重試輪次",
     "roundRetryLabel": "重試輪次 {{index}}",
@@ -1338,26 +1183,6 @@
     "retryHistoryHide": "隱藏重試歷史",
     "attemptLabel": "第 {{index}} 次嘗試",
     "attemptSuperseded": "已被重試接替",
-    "attemptDiagnostics": {
-      "show": "顯示本次重試診斷詳情",
-      "hide": "隱藏本次重試診斷詳情",
-      "copy": "複製",
-      "copied": "已複製",
-      "providerError": "服務商錯誤",
-      "toolArguments": "工具參數：{{name}}",
-      "rawArguments": "原始參數",
-      "validationError": "解析或驗證錯誤",
-      "unknownTool": "未知工具",
-      "categories": {
-        "transientRequestError": "請求在服務商回應前失敗",
-        "interruptedToolArguments": "工具參數輸出被中斷",
-        "partialStreamError": "串流輸出以可復原錯誤結束",
-        "invalidToolArguments": "服務商回傳了不合法的工具參數",
-        "noEffectiveOutput": "服務商未回傳可用輸出",
-        "transientStreamError": "串流輸出在產生可用內容前失敗",
-        "unknown": "重試診斷：{{category}}"
-      }
-    },
     "meta": {
       "label": "回應中繼資料",
       "completed": "完成",
@@ -1507,7 +1332,6 @@
       "deployingShort": "…",
       "untitled": "（未命名）",
       "deployFailed": "無法部署 BitFun Page 版本",
-      "openFailed": "無法為該頁面建立安全存取連結。",
       "labelSlug": "slug",
       "labelVersion": "version",
       "labelPath": "url_path",
@@ -1518,7 +1342,6 @@
       "publishingShort": "…",
       "untitled": "（未命名）",
       "publishFailed": "無法發佈 BitFun Page",
-      "openFailed": "無法為該頁面建立安全存取連結。",
       "labelSlug": "slug",
       "labelVersion": "version",
       "labelPath": "url_path",
@@ -1605,11 +1428,6 @@
       "loadingPlan": "正在載入計劃...",
       "generating": "生成中...",
       "clickToOpenPlan": "點擊開啟計劃檔案",
-      "saveToProject": "儲存到專案",
-      "savingToProject": "正在儲存計劃到專案...",
-      "saveToProjectUnavailable": "需要工作區才能儲存計劃",
-      "saveToProjectSuccess": "計劃已儲存至 .bitfun/plans",
-      "saveToProjectFailed": "儲存計劃到專案失敗",
       "revealPlanInExplorer": "在檔案管理器中定位計劃檔案",
       "revealPlanUnavailable": "僅本機工作區支援在檔案管理器中定位計劃檔案",
       "remainingTodos": "剩餘 {{count}} 個待辦",
@@ -1684,10 +1502,6 @@
       "openSettings": "打開系統設定",
       "openSettingsFailed": "無法打開系統設定"
     },
-    "viewImage": {
-      "viewing": "正在查看圖像...",
-      "viewedImages": "已查看 {{count}} 張圖像"
-    },
     "webFetch": {
       "parsingUrl": "解析連結中...",
       "readLabel": "讀取網頁:",
@@ -1758,13 +1572,8 @@
       "collapseDetails": "收起詳情",
       "expandDetails": "展開詳情",
       "openInPanel": "在面板中開啟詳情",
-      "reviewCoverageLabel": "補充檢查",
-      "reviewCoverageDescription": "正在補充審核證據",
-      "reviewFocusedDescription": "正在核查一個具體問題",
-      "reviewCheckUnavailable": "這項補充檢查未能完成，主要審核仍可繼續。",
-      "reviewPartialTimeout": "已逾時，但傳回了部分詳情",
-      "reviewTimedOut": "已逾時",
-      "reviewStopped": "已停止"
+      "reviewCoverageLabel": "Review 檢查",
+      "reviewCoverageDescription": "正在檢查 Review 覆蓋"
     },
     "taskDetailPanel": {
       "untitled": "未命名任務",
@@ -1790,9 +1599,7 @@
       "loadingMore": "正在載入更多輸出...",
       "loading": "正在載入任務詳情...",
       "stopReviewWork": "停止此檢查",
-      "stoppingReviewWork": "正在停止此檢查...",
-      "stopReviewWorkFailed": "無法確認這項檢查是否已停止，它可能仍在執行。",
-      "stopReviewWorkHint": "僅取消這個檢查項目，整體審核仍可繼續並產生摘要。"
+      "stopReviewWorkHint": "僅取消這個檢查項，整體 Review 仍可繼續並產生摘要。"
     },
     "timeout": {
       "disableTooltip": "關閉超時限制",
@@ -2052,7 +1859,7 @@
       "runManifest": {
         "recommendedStrategy": "推薦策略",
         "riskRecommendationTitle": "風險推薦",
-        "reviewDepth": "審核範圍",
+        "reviewDepth": "Review 範圍",
         "reviewDepthLabels": {
           "high_risk_only": "聚焦",
           "risk_expanded": "擴展",
@@ -2060,12 +1867,12 @@
         },
         "target": "目標",
         "budget": "預算",
-        "estimatedCalls": "預計審核工作項",
-        "activeGroupTitle": "已完成的審核工作",
-        "skippedGroupTitle": "未執行的審核工作",
-        "reducedCoverageSummary": "{{count}} 項可選審核工作未執行；本次結果僅反映已完成的審核範圍。",
-        "reducedCoverageSummary_one": "{{count}} 項可選審核工作未執行；本次結果僅反映已完成的審核範圍。",
-        "reducedCoverageSummary_other": "{{count}} 項可選審核工作未執行；本次結果僅反映已完成的審核範圍。"
+        "estimatedCalls": "預計審核檢查",
+        "activeGroupTitle": "已覆蓋",
+        "skippedGroupTitle": "已選擇 Review 範圍",
+        "reducedCoverageSummary": "BitFun 已為此目標選擇最相關的檢查。{{count}} 個可選檢查因適用性、設定或預算未納入本次執行。",
+        "reducedCoverageSummary_one": "BitFun 已為此目標選擇最相關的檢查。{{count}} 個可選檢查因適用性、設定或預算未納入本次執行。",
+        "reducedCoverageSummary_other": "BitFun 已為此目標選擇最相關的檢查。{{count}} 個可選檢查因適用性、設定或預算未納入本次執行。"
       },
       "sectionItemCount": "{{count}} 項",
       "remediationPlan": "修復計劃",
@@ -2073,7 +1880,7 @@
         "title": "審核狀態",
         "context_pressure": {
           "label": "上下文壓力上升",
-          "detail": "大型或受限目標已規劃 {{count}} 項審核工作。"
+          "detail": "大型或受限目標預計需要 {{count}} 項審核檢查。"
         },
         "compression_preserved": {
           "label": "壓縮已保留關鍵事實",
@@ -2096,8 +1903,8 @@
           "detail": "{{count}} 個審核結果是部分結果，可信度有限。"
         },
         "reduced_scope": {
-          "label": "審核範圍受限",
-          "detail": "本次審核只涵蓋有限範圍。"
+          "label": "聚焦 Review 範圍",
+          "detail": "本次 Review 使用了聚焦範圍設定。"
         },
         "target_evidence_limited": {
           "label": "目標證據受限",
@@ -2108,12 +1915,12 @@
           "detail": "{{count}} 條重試指引用於補足部分審核覆蓋。"
         },
         "skipped_reviewers": {
-          "label": "審核範圍已匹配",
-          "detail": "未執行的可選審核工作：{{count}} 項（適用性、設定或預算限制）。"
+          "label": "Review 範圍已匹配",
+          "detail": "{{count}} 個可選檢查因適用性、設定或預算未納入本次執行。"
         },
         "token_budget_limited": {
           "label": "Token 預算限制了審核覆蓋",
-          "detail": "因 Token 預算未執行的可選審核工作：{{count}} 項。"
+          "detail": "Token 預算模式將 {{count}} 個可選檢查保留在本次範圍之外。"
         },
         "user_decision": {
           "label": "需要使用者決策",
@@ -2147,7 +1954,6 @@
         "security": "安全覆蓋",
         "architecture": "架構覆蓋",
         "frontend": "前端覆蓋",
-        "focusedCheck": "補充檢查",
         "qualityGate": "品質檢查"
       },
       "report": {
@@ -2290,13 +2096,32 @@
     "autoModelDesc": "自動路由最優模型",
     "primaryModel": "Primary 模型",
     "fastModel": "Fast 模型",
-    "fastMode": "Fast 模式",
-    "fastModeDescription": "1.5 倍速度，消耗更多額度",
     "modelNotConfigured": "未設定",
     "contextUsage": {
       "agentPrompt": "上次請求輸入上下文: {{usage}}",
       "acpContext": "ACP 回報上下文: {{usage}}",
       "toolNote": "工具輸出在後續請求中可能會被摘要或截斷。"
+    }
+  },
+  "modelBrainstorm": {
+    "triggerLabel": "頭腦風暴",
+    "menuTitle": "頭腦風暴模型",
+    "disabledTooltip": "多模型頭腦風暴",
+    "enabledTooltip": "使用 {{count}} 個模型頭腦風暴",
+    "notEnoughModels": "至少需要設定兩個已啟用的聊天模型",
+    "needMoreModels": "頭腦風暴模式至少選擇 {{count}} 個模型",
+    "launchFailed": "頭腦風暴啟動失敗",
+    "groupEyebrow": "多模型頭腦風暴",
+    "progress": "{{completed}}/{{total}} 已完成",
+    "readonlyToolMetric": "{{count}} 個唯讀工具",
+    "thinkingMetric": "{{value}} 推理字元",
+    "noReadonlyTools": "未使用唯讀工具",
+    "selectCandidate": "選擇此答案",
+    "selectedCandidate": "已選擇",
+    "contextModeLabel": "上下文",
+    "contextModes": {
+      "independent": "獨立",
+      "shared": "共享"
     }
   },
   "reasoningEffort": {
@@ -2453,10 +2278,5 @@
   },
   "actions": {
     "send": "傳送"
-  },
-  "miniAppComposer": {
-    "placeholder": "把需求傳給 {{app}}…",
-    "send": "傳送",
-    "hint": "訊息將由 {{app}} 處理"
   }
 }

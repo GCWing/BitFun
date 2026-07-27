@@ -1,51 +1,4 @@
 {
-  "permission": {
-    "title": "Permission required",
-    "subagentOwner": "{{subagent}} subagent",
-    "feedbackLabel": "Rejection feedback",
-    "feedbackPlaceholder": "Optional guidance when rejecting",
-    "responseFailed": "The permission response could not be delivered. Try again.",
-    "allowOnce": "Allow once",
-    "allowAlways": "Always allow",
-    "allowAlwaysTooltip": "Always allow saves matching access for {{projectPath}}.",
-    "allowAlwaysTooltipCurrentProject": "Always allow saves matching access for the current project.",
-    "allowAlwaysTooltipNoGrant": "This request has no savable access scope; always allow applies only to this request.",
-    "risks": {
-      "pageSave": "Save a new immutable version of “{{slug}}” with {{visibility}} visibility without changing production.",
-      "pagePublish": "Save “{{slug}}” with {{visibility}} visibility and switch its production version.",
-      "pageDeploy": "Switch production traffic for “{{slug}}” to immutable version “{{version}}”."
-    },
-    "visibility": {
-      "private": "private",
-      "relay": "signed-in users",
-      "public": "public"
-    },
-    "reject": "Reject",
-    "batchCount": "{{count}} permission requests",
-    "collapsePanel": "Collapse permission requests",
-    "expandPanel": "Expand {{count}} pending permission requests",
-    "current": "Current",
-    "pending": "Pending",
-    "actions": {
-      "read": "Read files",
-      "edit": "Edit files",
-      "bash": "Run command",
-      "git": "Git action",
-      "computerUse": "Control device",
-      "webSearch": "Search web",
-      "webFetch": "Access web",
-      "mcp": "MCP tool",
-      "task": "Run task",
-      "skill": "Run skill",
-      "pagePublish": "Save page version",
-      "pageDeploy": "Deploy page version",
-      "customTool": "External tool",
-      "externalDirectory": "Access external directory",
-      "other": "Other action"
-    },
-    "allowCurrentAndFollowing": "Allow all",
-    "rejectCurrentAndFollowing": "Reject all"
-  },
   "emptyState": {
     "welcomeBack": "Welcome back!",
     "workingIn": "You are working in <workspace>{{workspace}}</workspace>",
@@ -411,17 +364,6 @@
       "completed": "Completed",
       "failed": "Failed",
       "interrupted": "Interrupted"
-    },
-    "menu": {
-      "closePet": "Close pet",
-      "closeBubble": "Close this bubble"
-    },
-    "composer": {
-      "openTitle": "Send a message to this session",
-      "ariaLabel": "Send a message to this session",
-      "placeholder": "Type a message, Enter to send",
-      "cancel": "Cancel",
-      "send": "Send"
     }
   },
   "session": {
@@ -508,10 +450,9 @@
     "copySelection": "Copy Selection",
     "copyFullContent": "Copy Full Content",
     "copyContent": "Copy Content",
+    "copyDialog": "Copy Entire Dialog",
     "copyToolInput": "Copy Tool Input",
-    "copyToolOutput": "Copy Tool Output",
-    "copyDialogFull": "Copy Entire Dialog (Full Process)",
-    "copyDialogResult": "Copy Entire Dialog (Result Only)"
+    "copyToolOutput": "Copy Tool Output"
   },
   "widgetContextMenu": {
     "addToInput": "Add selected element to input",
@@ -546,24 +487,7 @@
     "openWorkspaceFolderFailed": "Failed to open workspace folder: {{error}}",
     "spaceToActivate": "Press <space>Space</space> to type",
     "assistantPlaceholder": "Message {{name}}...",
-    "sendHint": "Enter to send / Ctrl+Enter or Shift+Enter for new line",
-    "voiceInput": {
-      "start": "Start voice input",
-      "stop": "Stop recording",
-      "preparing": "Preparing microphone",
-      "transcribing": "Transcribing",
-      "disabled": "Voice input is disabled",
-      "unsupported": "Microphone capture is unavailable",
-      "modelMissing": "Download the local speech model first",
-      "cloudPending": "Cloud transcription is configured but not connected yet",
-      "permissionDenied": "Microphone permission was denied",
-      "deviceDisconnected": "The selected microphone was disconnected",
-      "lowVolume": "No voice detected. Check the selected microphone.",
-      "failed": "Voice input failed",
-      "empty": "No speech was recognized",
-      "transcribeOnly": "Insert transcription",
-      "transcribeAndSend": "Transcribe and send"
-    }
+    "sendHint": "Enter to send / Ctrl+Enter or Shift+Enter for new line"
   },
   "workspaceStrip": {
     "branchTooltipUnavailable": "Not a git repository or no current branch"
@@ -627,34 +551,6 @@
   },
   "chatInput": {
     "addBoostTooltip": "Agent modes, image, or skills",
-    "permissionMode": {
-      "menuLabel": "Permission mode",
-      "globalScope": "Global",
-      "current": "Permissions: {{mode}}",
-      "changeFailed": "Failed to change the permission mode.",
-      "hideControl": "Hide permission mode selector",
-      "hideControlFailed": "Failed to hide the permission mode selector.",
-      "ask": {
-        "label": "Ask",
-        "description": "External access, file changes, and command execution require confirmation."
-      },
-      "auto": {
-        "label": "Auto approve",
-        "description": "Automatically approve requests that require confirmation."
-      },
-      "fullAccess": {
-        "label": "Full access",
-        "description": "Tools are allowed by default without confirmation."
-      },
-      "acp": {
-        "label": "ACP controlled",
-        "tooltip": "Permissions for this session are controlled by the ACP client."
-      },
-      "fullAccessWarningTitle": "Enable full access?",
-      "fullAccessWarningMessage": "Full access allows tools by default without asking each time.",
-      "fullAccessConfirm": "Enable full access",
-      "cancel": "Cancel"
-    },
     "addModeTooltip": "Add Plan or Debug",
     "boostSectionAgent": "Agent",
     "boostSectionContext": "Context",
@@ -735,8 +631,6 @@
     "currentMode": "Current mode: {{mode}}",
     "noMatchingMode": "No matching mode",
     "noMatchingCommand": "No matching command",
-    "nativeCommandChoiceNotSaved": "This command will run once, but your conflict choice could not be saved.",
-    "nativeCommandReconfirmationRequired": "The external command you previously chose is no longer available. Choose the BitFun command from the slash menu to run it.",
     "selectHint": "↑↓ Select · Enter Confirm · Esc Cancel",
     "current": "Current",
     "computerUseDisabled": "Computer Use is disabled in Settings → Session permissions",
@@ -776,10 +670,7 @@
     "switchWorkspaceFailed": "Failed to switch workspace: {{error}}",
     "mcpPromptMissingArgs": "This MCP prompt requires arguments: {{args}}",
     "mcpPromptFailed": "MCP prompt failed",
-    "loadingMcpPrompts": "Loading MCP prompts...",
-    "externalCommandsLoading": "Loading compatible commands...",
-    "externalCommandsHostUnavailable": "External commands are not available on this host.",
-    "externalCommandsLoadFailed": "External commands could not be loaded. Reopen the command picker to retry."
+    "loadingMcpPrompts": "Loading MCP prompts..."
   },
   "planner": {
     "title": "Task Planning",
@@ -821,30 +712,6 @@
     "toolCall": "🔧 Tool call: {{name}}",
     "unknownTool": "Unknown tool"
   },
-  "transcriptExport": {
-    "copyFull": "Copy full process",
-    "copyResult": "Copy result",
-    "copyEmpty": "Nothing to copy in this dialog",
-    "exportEmpty": "This session has nothing to export",
-    "exportSuccess": "Session exported: {{filePath}}",
-    "exportFailed": "Failed to export the session",
-    "saveDialogTitle": "Export session as Markdown",
-    "scopeFull": "Full process",
-    "scopeResult": "Result only",
-    "metaSessionId": "Session ID",
-    "metaExportedAt": "Exported at",
-    "metaTurnCount": "Turns",
-    "metaScope": "Scope",
-    "turnHeading": "Turn {{index}}",
-    "userHeading": "👤 User",
-    "assistantHeading": "🤖 Assistant",
-    "toolHeading": "Tool · {{name}}",
-    "thinking": "Thinking",
-    "toolInput": "Input",
-    "toolResult": "Result",
-    "toolError": "Error",
-    "empty": "(empty)"
-  },
   "smartRecommendations": {
     "title": "💡 Smart Recommendations",
     "close": "Close"
@@ -874,21 +741,7 @@
   "childSession": {
     "stopReview": "Stop review",
     "stoppingReview": "Stopping review...",
-    "stopReviewFailed": "Could not confirm that Review stopped. It may still be running.",
-    "backToReview": "Back to Review",
-    "reviewDetail": {
-      "loading": "Loading saved details...",
-      "loadFailed": "Details could not be loaded.",
-      "unavailable": "No saved details are available for this check.",
-      "retryLoad": "Try loading again",
-      "preparing": "{{label}} is preparing...",
-      "completedEmpty": "{{label}} finished without additional details.",
-      "partialTimedOut": "This check timed out after returning partial details.",
-      "stopped": "{{label}} stopped before producing details.",
-      "interrupted": "{{label}} was interrupted. Return to Review to continue.",
-      "timedOut": "{{label}} timed out before producing details.",
-      "failed": "{{label}} could not be completed."
-    },
+    "stopReviewFailed": "Failed to stop the review session.",
     "kinds": {
       "btw": {
         "short": "Side",
@@ -1115,37 +968,39 @@
   "deepReviewConsent": {
     "windowTitle": "Review plan",
     "eyebrow": "Review plan",
-    "title": "Start this review?",
-    "body": "BitFun reviews this change directly and adds additional checks only when the evidence needs them. Confirm the target, expected time, and read-only boundary before continuing.",
+    "title": "Add broader review coverage?",
+    "body": "BitFun selected additional independent checks for this change. Review the target scope, planned checks, runtime tendency, and read-only boundary before continuing.",
     "readonlyLabel": "Read-only",
-    "readonly": "The review does not modify files.",
+    "readonly": "Reviewers do not modify files.",
     "sessionConcurrencyTitle": "Active session is busy",
     "sessionConcurrencyBody": "The target session already has {{count}} review tasks running. Continuing will share the available review capacity.",
-    "costLabel": "Review depth",
-    "cost": "This review investigates the target more thoroughly and adds additional checks only when they are useful.",
+    "costLabel": "Coverage",
+    "cost": "Planned review agent runs; model requests and token use are not estimated here.",
     "timeLabel": "Time",
     "time": "Runs in background and may take longer.",
     "cancel": "Cancel",
     "confirm": "Start review",
+    "initialCalls": "Independent checks: {{planned}} planned review agent run",
+    "parallelCalls": "Up to {{count}} review agent runs may occur without another confirmation.",
     "runStrategy": "Run strategy: {{strategy}}",
     "strategyLabels": {
-      "quick": "Quick",
+      "quick": "Focused",
       "normal": "Standard",
       "deep": "Extensive"
     },
     "strategySummaries": {
-      "quick": "Quick review checks the most relevant risks for the selected target.",
-      "normal": "Standard review examines the selected target in more depth and adds additional checks only when useful.",
-      "deep": "Extensive review examines all applicable high-risk areas and adds independent validation only when the evidence needs it."
+      "quick": "Focused review checks the most relevant risks for the selected target.",
+      "normal": "Standard adds independent coverage while keeping cost practical.",
+      "deep": "Extensive review adds the broadest applicable coverage for high-risk changes."
     },
     "summaryTitle": "Review plan",
     "targetFiles": "{{count}} files",
     "targetFiles_one": "{{count}} file",
     "targetFiles_other": "{{count}} files",
-    "skippedReviewers": "{{count}} optional review work items not run",
-    "skippedReviewers_one": "{{count}} optional review work item not run",
-    "skippedReviewers_other": "{{count}} optional review work items not run",
-    "skippedGroupTitle": "Review work not run",
+    "skippedReviewers": "{{count}} optional checks not needed",
+    "skippedReviewers_one": "{{count}} optional check not needed",
+    "skippedReviewers_other": "{{count}} optional checks not needed",
+    "skippedGroupTitle": "Review scope selected",
     "targetSource": {
       "manualPrompt": "Provided context",
       "workspaceDiff": "Workspace changes",
@@ -1153,9 +1008,9 @@
       "selectedContext": "Selected context",
       "reviewTarget": "Review target"
     },
-    "skippedSummary": "{{count}} optional review work items were not run. This result reflects only the completed review scope.",
-    "skippedSummary_one": "{{count}} optional review work item was not run. This result reflects only the completed review scope.",
-    "skippedSummary_other": "{{count}} optional review work items were not run. This result reflects only the completed review scope."
+    "skippedSummary": "BitFun selected the most relevant checks for this target. {{count}} optional checks were outside this run because of applicability, configuration, or budget.",
+    "skippedSummary_one": "BitFun selected the most relevant checks for this target. {{count}} optional check was outside this run because of applicability, configuration, or budget.",
+    "skippedSummary_other": "BitFun selected the most relevant checks for this target. {{count}} optional checks were outside this run because of applicability, configuration, or budget."
   },
   "flowChatHeader": {
     "turnList": "Turn list",
@@ -1308,17 +1163,6 @@
     "exporting": "Exporting...",
     "exportToImage": "Export as Image"
   },
-  "turnFailure": {
-    "showDetails": "Show technical details",
-    "hideDetails": "Hide technical details",
-    "provider": "Provider",
-    "errorCode": "Error code",
-    "httpStatus": "HTTP status",
-    "requestId": "Request ID",
-    "providerError": "Provider error",
-    "copy": "Copy",
-    "copied": "Copied"
-  },
   "modelRound": {
     "copyDialog": "Copy dialog",
     "copiedDialog": "Copied!",
@@ -1331,6 +1175,7 @@
     "feedbackDevVersion": "Feedback is not available in dev version",
     "userLabel": "👤 User:",
     "toolCallLabel": "🔧 Tool call: {{name}}",
+    "loadingMoreHistory": "Loading more history...",
     "roundHistoryShow": "Show {{count}} previous retry rounds",
     "roundHistoryHide": "Hide previous retry rounds",
     "roundRetryLabel": "Retry {{index}}",
@@ -1338,26 +1183,6 @@
     "retryHistoryHide": "Hide retry history",
     "attemptLabel": "Attempt {{index}}",
     "attemptSuperseded": "superseded",
-    "attemptDiagnostics": {
-      "show": "Show retry diagnostic details",
-      "hide": "Hide retry diagnostic details",
-      "copy": "Copy",
-      "copied": "Copied",
-      "providerError": "Provider error",
-      "toolArguments": "Tool arguments: {{name}}",
-      "rawArguments": "Raw arguments",
-      "validationError": "Parser or validation error",
-      "unknownTool": "Unknown tool",
-      "categories": {
-        "transientRequestError": "Request failed before the provider responded",
-        "interruptedToolArguments": "Tool arguments were interrupted",
-        "partialStreamError": "Stream ended with a recoverable error",
-        "invalidToolArguments": "Provider returned invalid tool arguments",
-        "noEffectiveOutput": "Provider returned no usable output",
-        "transientStreamError": "Stream failed before usable output",
-        "unknown": "Retry diagnostic: {{category}}"
-      }
-    },
     "meta": {
       "label": "Response metadata",
       "completed": "Completed",
@@ -1507,7 +1332,6 @@
       "deployingShort": "…",
       "untitled": "(unnamed)",
       "deployFailed": "Could not deploy BitFun Page version",
-      "openFailed": "Could not create a secure link for this Page.",
       "labelSlug": "slug",
       "labelVersion": "version",
       "labelPath": "url_path",
@@ -1518,7 +1342,6 @@
       "publishingShort": "…",
       "untitled": "(unnamed)",
       "publishFailed": "Could not publish BitFun Page",
-      "openFailed": "Could not create a secure link for this Page.",
       "labelSlug": "slug",
       "labelVersion": "version",
       "labelPath": "url_path",
@@ -1605,11 +1428,6 @@
       "loadingPlan": "Loading plan...",
       "generating": "Generating...",
       "clickToOpenPlan": "Click to open plan file",
-      "saveToProject": "Save to Project",
-      "savingToProject": "Saving plan to project...",
-      "saveToProjectUnavailable": "A workspace is required to save the plan",
-      "saveToProjectSuccess": "Plan saved to .bitfun/plans",
-      "saveToProjectFailed": "Failed to save plan to project",
       "revealPlanInExplorer": "Reveal plan file in file manager",
       "revealPlanUnavailable": "Plan files can only be revealed for local workspaces",
       "remainingTodos": "{{count}} Remaining To-dos",
@@ -1684,10 +1502,6 @@
       "openSettings": "Open System Settings",
       "openSettingsFailed": "Could not open System Settings"
     },
-    "viewImage": {
-      "viewing": "Viewing image...",
-      "viewedImages": "Viewed {{count}} image"
-    },
     "webFetch": {
       "parsingUrl": "Parsing URL...",
       "readLabel": "Read Webpage:",
@@ -1758,13 +1572,8 @@
       "collapseDetails": "Collapse details",
       "expandDetails": "Expand details",
       "openInPanel": "Open details in panel",
-      "reviewCoverageLabel": "Additional check",
-      "reviewCoverageDescription": "Checking additional review evidence",
-      "reviewFocusedDescription": "Checking a specific concern",
-      "reviewCheckUnavailable": "This additional check could not be completed. The main review can continue.",
-      "reviewPartialTimeout": "Timed out after returning partial details",
-      "reviewTimedOut": "Timed out",
-      "reviewStopped": "Stopped"
+      "reviewCoverageLabel": "Review check",
+      "reviewCoverageDescription": "Checking review coverage"
     },
     "taskDetailPanel": {
       "untitled": "Untitled Task",
@@ -1790,8 +1599,6 @@
       "loadingMore": "Loading more output...",
       "loading": "Loading task details...",
       "stopReviewWork": "Stop this check",
-      "stoppingReviewWork": "Stopping this check...",
-      "stopReviewWorkFailed": "Could not confirm that this check stopped. It may still be running.",
       "stopReviewWorkHint": "Cancels only this check. The overall Review can keep going and still produce a summary."
     },
     "timeout": {
@@ -2060,12 +1867,12 @@
         },
         "target": "Target",
         "budget": "Budget",
-        "estimatedCalls": "Estimated review work items",
-        "activeGroupTitle": "Completed review work",
-        "skippedGroupTitle": "Review work not run",
-        "reducedCoverageSummary": "{{count}} optional review work items were not run. This result reflects only the completed review scope.",
-        "reducedCoverageSummary_one": "{{count}} optional review work item was not run. This result reflects only the completed review scope.",
-        "reducedCoverageSummary_other": "{{count}} optional review work items were not run. This result reflects only the completed review scope."
+        "estimatedCalls": "Estimated review checks",
+        "activeGroupTitle": "Coverage included",
+        "skippedGroupTitle": "Review scope selected",
+        "reducedCoverageSummary": "BitFun selected the most relevant checks for this target. {{count}} optional checks were outside this run because of applicability, configuration, or budget.",
+        "reducedCoverageSummary_one": "BitFun selected the most relevant checks for this target. {{count}} optional check was outside this run because of applicability, configuration, or budget.",
+        "reducedCoverageSummary_other": "BitFun selected the most relevant checks for this target. {{count}} optional checks were outside this run because of applicability, configuration, or budget."
       },
       "sectionItemCount": "{{count}} items",
       "remediationPlan": "Remediation Plan",
@@ -2073,7 +1880,7 @@
         "title": "Review status",
         "context_pressure": {
           "label": "Context pressure rising",
-          "detail": "A large or constrained target has {{count}} planned review work items."
+          "detail": "{{count}} review checks planned for a large or constrained target."
         },
         "compression_preserved": {
           "label": "Compression preserved key facts",
@@ -2096,8 +1903,8 @@
           "detail": "{{count}} review result is partial; confidence is limited."
         },
         "reduced_scope": {
-          "label": "Limited review scope",
-          "detail": "This review used a limited scope."
+          "label": "Focused review scope",
+          "detail": "This review used a focused scope profile."
         },
         "target_evidence_limited": {
           "label": "Target evidence limited",
@@ -2109,11 +1916,11 @@
         },
         "skipped_reviewers": {
           "label": "Review scope tailored",
-          "detail": "Optional review work not run: {{count}} (applicability, configuration, or budget)."
+          "detail": "{{count}} optional check was outside this run because of applicability, configuration, or budget."
         },
         "token_budget_limited": {
           "label": "Token budget limited review coverage",
-          "detail": "Optional review work not run due to token budget: {{count}}."
+          "detail": "Token budget mode kept {{count}} optional check outside this run."
         },
         "user_decision": {
           "label": "User decision needed",
@@ -2147,7 +1954,6 @@
         "security": "Security coverage",
         "architecture": "Architecture coverage",
         "frontend": "Frontend coverage",
-        "focusedCheck": "Additional check",
         "qualityGate": "Quality check"
       },
       "report": {
@@ -2290,13 +2096,32 @@
     "autoModelDesc": "Automatically Routing",
     "primaryModel": "Primary Model",
     "fastModel": "Fast Model",
-    "fastMode": "Fast mode",
-    "fastModeDescription": "1.5x speed with higher credit usage",
     "modelNotConfigured": "Not Configured",
     "contextUsage": {
       "agentPrompt": "Last request prompt: {{usage}}",
       "acpContext": "ACP reported context: {{usage}}",
       "toolNote": "Tool outputs may be summarized or truncated before later requests."
+    }
+  },
+  "modelBrainstorm": {
+    "triggerLabel": "Brainstorm",
+    "menuTitle": "Brainstorm models",
+    "disabledTooltip": "Multi-model brainstorm",
+    "enabledTooltip": "Brainstorm with {{count}} models",
+    "notEnoughModels": "Configure at least two enabled chat models",
+    "needMoreModels": "Select at least {{count}} models for brainstorm mode",
+    "launchFailed": "Brainstorm failed",
+    "groupEyebrow": "Multi-model brainstorm",
+    "progress": "{{completed}}/{{total}} complete",
+    "readonlyToolMetric": "{{count}} read-only tools",
+    "thinkingMetric": "{{value}} thinking chars",
+    "noReadonlyTools": "No read-only tools used",
+    "selectCandidate": "Select this answer",
+    "selectedCandidate": "Selected",
+    "contextModeLabel": "Context",
+    "contextModes": {
+      "independent": "Independent",
+      "shared": "Shared"
     }
   },
   "reasoningEffort": {
@@ -2453,10 +2278,5 @@
   },
   "actions": {
     "send": "Send"
-  },
-  "miniAppComposer": {
-    "placeholder": "Send a request to {{app}}…",
-    "send": "Send",
-    "hint": "Messages are handled by {{app}}"
   }
 }

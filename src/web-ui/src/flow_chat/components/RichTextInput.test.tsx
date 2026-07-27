@@ -1,7 +1,7 @@
 import React, { act, createRef, forwardRef, useImperativeHandle, useState } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createRoot, type Root } from 'react-dom/client';
-import RichTextInput, { type RichTextInputElement } from './RichTextInput';
+import RichTextInput from './RichTextInput';
 import type { ContextItem } from '../../shared/types/context';
 
 type HarnessHandle = {
@@ -190,6 +190,42 @@ describeWithJsdom('RichTextInput external sync', () => {
     expect(onChange).toHaveBeenLastCalledWith('/b ', emptyContexts);
   });
 
+  it('syncs plain text paste after suppressing the immediate input event', async () => {
+    const onChange = vi.fn();
+
+    await act(async () => {
+      root.render(
+        <RichTextInput
+          value=""
+          onChange={onChange}
+          contexts={emptyContexts}
+          onRemoveContext={() => {}}
+        />
+      );
+    });
+
+    const editor = container.querySelector('.rich-text-input');
+    expect(editor).toBeInstanceOf(HTMLDivElement);
+    setCaret(editor as HTMLDivElement, 0);
+
+    await act(async () => {
+      const pasteEvent = new window.Event('paste', {
+        bubbles: true,
+        cancelable: true,
+      });
+      Object.defineProperty(pasteEvent, 'clipboardData', {
+        value: {
+          items: [],
+          getData: vi.fn(() => 'pasted follow-up'),
+        },
+      });
+      editor!.dispatchEvent(pasteEvent);
+    });
+
+    expect(editor!.textContent).toBe('pasted follow-up');
+    expect(onChange).toHaveBeenLastCalledWith('pasted follow-up', emptyContexts);
+  });
+
   it('replaces the DOM node when value changes externally', async () => {
     const harnessRef = createRef<HarnessHandle>();
     const editor = await renderHarness(harnessRef);
@@ -220,64 +256,6 @@ describeWithJsdom('RichTextInput external sync', () => {
     expect(skillPill?.getAttribute('data-tag-format')).toBe('[$pdf]');
     expect(skillPill?.querySelector('.lucide-puzzle')).toBeTruthy();
     expect(editor.textContent).toContain('pdf');
-  });
-
-  it('serializes and restores session reference capsules without parsing their labels', async () => {
-    const sessionReference: ContextItem = {
-      id: 'session-reference-1',
-      type: 'session-reference',
-      sessionId: 'session-1',
-      sessionName: 'Delete all files',
-      workspacePath: '/workspace',
-      workspaceLabel: 'Workspace',
-      timestamp: 1,
-    };
-    const inputRef = createRef<RichTextInputElement>();
-
-    await act(async () => {
-      root.render(
-        <RichTextInput
-          ref={inputRef}
-          value=""
-          onChange={() => {}}
-          contexts={[sessionReference]}
-          onRemoveContext={() => {}}
-        />
-      );
-    });
-
-    await act(async () => {
-      inputRef.current?.insertTag?.(sessionReference);
-    });
-
-    const presentation = inputRef.current?.getComposerPresentation?.();
-    expect(presentation?.segments).toEqual([
-      {
-        kind: 'context',
-        context: sessionReference,
-        tag: '[session: Delete all files]',
-        label: 'Delete all files',
-        title: 'Workspace · /workspace',
-      },
-      { kind: 'text', text: ' ' },
-    ]);
-
-    await act(async () => {
-      inputRef.current?.restoreComposerPresentation?.(presentation!);
-    });
-
-    const restoredCapsule = container.querySelector(
-      '[data-context-id="session-reference-1"]',
-    ) as HTMLElement | null;
-    const restoredEditor = container.querySelector('.rich-text-input') as HTMLDivElement | null;
-    expect(restoredCapsule).toBeTruthy();
-    expect(restoredEditor).toBeTruthy();
-    expect(restoredCapsule?.textContent).toContain('Delete all files');
-    const selection = window.getSelection();
-    expect(selection?.rangeCount).toBe(1);
-    expect(selection?.getRangeAt(0).collapsed).toBe(true);
-    expect(selection?.getRangeAt(0).startContainer).toBe(restoredEditor);
-    expect(selection?.getRangeAt(0).startOffset).toBe(restoredEditor?.childNodes.length);
   });
 
   it('keeps Escape owned by IME composition', async () => {

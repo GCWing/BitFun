@@ -12,18 +12,10 @@ import { useCallback } from 'react';
 import { FlowChatManager } from '../services/FlowChatManager';
 import { flowChatSessionConfigForCurrentWorkspace } from '@/app/utils/projectSessionWorkspace';
 import { notificationService } from '@/shared/notification-system';
-import type {
-  ContextItem,
-  ImageContext,
-  SessionReferenceContext,
-} from '@/shared/types/context';
+import type { ContextItem, ImageContext } from '@/shared/types/context';
 import { createLogger } from '@/shared/utils/logger';
-import { formatContextForPrompt } from '@/shared/utils/contextPrompt';
 import { buildImagePayload } from '../utils/imagePayload';
-import {
-  composerPresentationSessionReferences,
-  type ComposerPresentation,
-} from '../utils/composerPresentation';
+import { buildPromptMessage, stripInlineImageTags } from '../utils/messagePrompt';
 
 const log = createLogger('FlowChat');
 
@@ -48,7 +40,6 @@ interface UseMessageSenderReturn {
     message: string,
     options?: {
       displayMessage?: string;
-      composerPresentation?: ComposerPresentation | null;
     }
   ) => Promise<void>;
   /** Whether a send is in progress */
@@ -69,7 +60,6 @@ export function useMessageSender(props: UseMessageSenderProps): UseMessageSender
     message: string,
     options?: {
       displayMessage?: string;
-      composerPresentation?: ComposerPresentation | null;
     }
   ) => {
     if (!message.trim()) {
@@ -83,13 +73,7 @@ export function useMessageSender(props: UseMessageSenderProps): UseMessageSender
     // below. Leaving the placeholder in the prompt misleads the model into
     // looking up a non-existent file. The display message keeps the tag so
     // the UI can still render the inline pill.
-    const stripImageTags = (text: string): string =>
-      text
-        .replace(/#img:[^\s\n]+\s?/g, '')
-        .replace(/[ \t]+\n/g, '\n')
-        .replace(/\n{3,}/g, '\n\n')
-        .trim();
-    const aiTrimmedMessage = stripImageTags(trimmedMessage);
+    const aiTrimmedMessage = stripInlineImageTags(trimmedMessage);
     let sessionId = currentSessionId;
     log.debug('Send message initiated', {
       textLength: trimmedMessage.length,
@@ -118,28 +102,6 @@ export function useMessageSender(props: UseMessageSenderProps): UseMessageSender
       }
 
       const imageContexts = contexts.filter(ctx => ctx.type === 'image') as ImageContext[];
-      const presentationSessionReferences = options?.composerPresentation
-        ? composerPresentationSessionReferences(options.composerPresentation)
-        : [];
-      const sessionReferenceContexts = presentationSessionReferences.length > 0
-        ? presentationSessionReferences
-        : contexts
-        .filter((context): context is SessionReferenceContext => context.type === 'session-reference')
-      const sessionReferences = sessionReferenceContexts.map((context) => ({
-          sessionId: context.sessionId,
-          workspacePath: context.workspacePath,
-          remoteConnectionId: context.remoteConnectionId,
-          remoteSshHost: context.remoteSshHost,
-        }));
-      const userMessageMetadata =
-        options?.composerPresentation || sessionReferences.length > 0
-          ? {
-              ...(options?.composerPresentation
-                ? { composerPresentation: options.composerPresentation }
-                : {}),
-              ...(sessionReferences.length > 0 ? { sessionReferences } : {}),
-            }
-          : undefined;
       let imagePayload: Awaited<ReturnType<typeof buildImagePayload>>;
       try {
         imagePayload = await buildImagePayload(imageContexts);
@@ -157,20 +119,8 @@ export function useMessageSender(props: UseMessageSenderProps): UseMessageSender
         throw error;
       }
 
-      let fullMessage = aiTrimmedMessage;
       const displayMessage = options?.displayMessage?.trim() || trimmedMessage;
-
-      if (contexts.length > 0) {
-        const fullContextSection = contexts
-          .filter(context => context.type !== 'session-reference')
-          .map(formatContextForPrompt)
-          .filter(Boolean)
-          .join('\n');
-
-        fullMessage = fullContextSection
-          ? `${fullContextSection}\n\n${aiTrimmedMessage}`
-          : aiTrimmedMessage;
-      }
+      const fullMessage = buildPromptMessage(aiTrimmedMessage, contexts);
 
       // Always pass imageContexts to the backend; the coordinator decides
       // whether to pre-analyse via a vision model or attach directly.
@@ -180,10 +130,7 @@ export function useMessageSender(props: UseMessageSenderProps): UseMessageSender
         displayMessage,
         agentTypeForSend,
         undefined,
-        {
-          ...(imagePayload ?? {}),
-          ...(userMessageMetadata ? { userMessageMetadata } : {}),
-        }
+        imagePayload
       );
 
       onClearContexts();

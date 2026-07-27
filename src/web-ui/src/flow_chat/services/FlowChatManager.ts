@@ -23,17 +23,11 @@ import {
 } from '../utils/sessionOrdering';
 import { resolveSessionRelationship } from '../utils/sessionMetadata';
 
-import type {
-  FlowChatContext,
-  SessionConfig,
-  DialogTurn,
-  SessionHistoryHydrationLocation,
-} from './flow-chat-manager/types';
+import type { FlowChatContext, SessionConfig, DialogTurn } from './flow-chat-manager/types';
 import {
   saveAllInProgressTurns,
   immediateSaveDialogTurn,
   createChatSession as createChatSessionModule,
-  hydrateSessionHistoryForDetail as hydrateSessionHistoryForDetailModule,
   preloadHistoricalSessionForOpen as preloadHistoricalSessionForOpenModule,
   switchChatSession as switchChatSessionModule,
   deleteChatSession as deleteChatSessionModule,
@@ -55,8 +49,6 @@ import {
   updateImageAnalysisItem as updateImageAnalysisItemModule,
   updateSessionMetadata,
 } from './flow-chat-manager';
-import { ensureBackendSession } from './flow-chat-manager/SessionModule';
-import { installPeerSessionRefresh } from './flow-chat-manager/PeerSessionRefreshModule';
 
 const log = createLogger('FlowChatManager');
 
@@ -69,7 +61,6 @@ export class FlowChatManager {
   private eventListenerCleanup: (() => void) | null = null;
   private initializationRequests = new Map<string, Promise<boolean>>();
   private latestInitializationRequestKey: string | null = null;
-  private peerSessionRefreshCleanup: (() => void) | null = null;
   private disposed = false;
 
   private constructor() {
@@ -81,7 +72,6 @@ export class FlowChatManager {
       }),
       pendingTurnCompletions: new Map(),
       pendingHistoryLoads: new Map(),
-      pendingHistoryLoadCapabilities: new Map(),
       pendingContextRestores: new Map(),
       contentBuffers: new Map(),
       activeTextItems: new Map(),
@@ -98,7 +88,6 @@ export class FlowChatManager {
     
     this.agentService = AgentService.getInstance();
     installPendingQueueDrainListener(this.context);
-    this.peerSessionRefreshCleanup = installPeerSessionRefresh(this.context);
   }
 
   /** Public hook used by the queue panel "send now" fallback to drain head item. */
@@ -425,8 +414,6 @@ export class FlowChatManager {
     this.initializationRequests.clear();
     this.latestInitializationRequestKey = null;
     this.cleanupEventListeners();
-    this.peerSessionRefreshCleanup?.();
-    this.peerSessionRefreshCleanup = null;
     this.context.eventBatcher.destroy();
   }
 
@@ -442,8 +429,15 @@ export class FlowChatManager {
     );
   }
 
-  async createChatSession(config: SessionConfig, mode?: string): Promise<string> {
-    return createChatSessionModule(this.context, config, mode);
+  async createChatSession(
+    config: SessionConfig,
+    mode?: string,
+    options?: {
+      activate?: boolean;
+      title?: string;
+    }
+  ): Promise<string> {
+    return createChatSessionModule(this.context, config, mode, options);
   }
 
   async createAcpChatSession(clientId: string, config: SessionConfig = {}): Promise<string> {
@@ -458,7 +452,6 @@ export class FlowChatManager {
       detail: { phase: 'start', clientId, action: 'create' },
     }));
 
-    let succeeded = false;
     try {
       const response = await ACPClientAPI.createFlowSession({
         clientId,
@@ -484,11 +477,10 @@ export class FlowChatManager {
         config.remoteSshHost,
       );
 
-      succeeded = true;
       return response.sessionId;
     } finally {
       window.dispatchEvent(new CustomEvent('bitfun:acp-session-creation', {
-        detail: { phase: 'finish', clientId, action: 'create', succeeded },
+        detail: { phase: 'finish', clientId, action: 'create' },
       }));
     }
   }
@@ -499,13 +491,6 @@ export class FlowChatManager {
 
   preloadHistoricalSessionForOpen(sessionId: string): void {
     preloadHistoricalSessionForOpenModule(this.context, sessionId);
-  }
-
-  async hydrateSessionHistoryForDetail(
-    sessionId: string,
-    location?: SessionHistoryHydrationLocation,
-  ): Promise<void> {
-    await hydrateSessionHistoryForDetailModule(this.context, sessionId, location);
   }
 
   async deleteChatSession(sessionId: string): Promise<void> {
@@ -525,11 +510,6 @@ export class FlowChatManager {
       cleanupSessionBuffers(this.context, id);
     });
     return removedSessionIds;
-  }
-
-  /** Restores a persisted session into the coordinator before a non-message workflow uses it. */
-  public async ensureBackendSession(sessionId: string): Promise<void> {
-    await ensureBackendSession(this.context, sessionId);
   }
 
   public discardLocalSessionsForWorkspace(

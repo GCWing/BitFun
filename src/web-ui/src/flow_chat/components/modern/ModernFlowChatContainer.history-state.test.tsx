@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createRoot, type Root } from 'react-dom/client';
 import { ModernFlowChatContainer } from './ModernFlowChatContainer';
 import type { Session } from '../../types/flow-chat';
+import { computeFlowChatInputStackFooterPx } from '../../utils/flowChatScrollLayout';
 import { flowChatStore } from '../../store/FlowChatStore';
 import {
   clearHistorySessionOpenTransition,
@@ -19,13 +20,18 @@ const stateMocks = vi.hoisted(() => ({
   virtualItems: [] as unknown[],
   visibleTurnInfo: null as unknown,
 }));
+const modelBrainstormStateMock = vi.hoisted(() => ({
+  batches: [] as Array<Record<string, unknown>>,
+}));
+const chatInputStateMock = vi.hoisted(() => ({
+  isActive: false,
+  inputHeight: 0,
+}));
 
 const switchChatSessionMock = vi.hoisted(() => vi.fn());
 const virtualListMock = vi.hoisted(() => ({
   scrollToTurn: vi.fn(),
   scrollToIndex: vi.fn(),
-  scrollToSearchMatch: vi.fn(),
-  clearSearchMatch: vi.fn(),
   scrollToPhysicalBottomAndClearPin: vi.fn(),
   scrollToTurnEndAndClearPin: vi.fn(() => true),
   scrollToLatestEndPosition: vi.fn(),
@@ -62,9 +68,6 @@ const virtualListPropsMock = vi.hoisted(() => ({
 }));
 const agentApiMock = vi.hoisted(() => ({
   listBackgroundCommandActivities: vi.fn(() => Promise.resolve({ activities: [] })),
-  onPermissionRequestEvent: vi.fn(() => vi.fn()),
-  subscribePermissionRequests: vi.fn(() => Promise.resolve()),
-  listPendingPermissionRequests: vi.fn(() => Promise.resolve([])),
 }));
 
 vi.mock('react-i18next', () => ({
@@ -128,6 +131,14 @@ vi.mock('../../store/modernFlowChatStore', () => ({
   useVisibleTurnInfo: () => stateMocks.visibleTurnInfo,
 }));
 
+vi.mock('../../store/modelBrainstormStore', () => ({
+  useModelBrainstormBatchesForSession: () => modelBrainstormStateMock.batches,
+}));
+
+vi.mock('../../store/chatInputStateStore', () => ({
+  useChatInputState: (selector: (state: typeof chatInputStateMock) => unknown) => selector(chatInputStateMock),
+}));
+
 vi.mock('./VirtualMessageList', () => ({
   VirtualMessageList: React.forwardRef((props: Record<string, unknown>, ref) => {
     virtualListPropsMock.latest = props;
@@ -158,6 +169,14 @@ vi.mock('./FlowChatHeader', () => ({
 
 vi.mock('../WelcomePanel', () => ({
   WelcomePanel: () => <div data-testid="welcome-panel">Welcome panel</div>,
+}));
+
+vi.mock('./ModelBrainstormGroup', () => ({
+  ModelBrainstormGroup: ({ batch }: { batch: { id: string } }) => (
+    <div data-testid="model-brainstorm-group" data-batch-id={batch.id}>
+      Brainstorm group
+    </div>
+  ),
 }));
 
 vi.mock('./useExploreGroupState', () => ({
@@ -271,8 +290,6 @@ describe('ModernFlowChatContainer historical empty state', () => {
     switchChatSessionMock.mockReset();
     virtualListMock.scrollToTurn.mockReset();
     virtualListMock.scrollToIndex.mockReset();
-    virtualListMock.scrollToSearchMatch.mockReset();
-    virtualListMock.clearSearchMatch.mockReset();
     virtualListMock.scrollToPhysicalBottomAndClearPin.mockReset();
     virtualListMock.scrollToTurnEndAndClearPin.mockReset();
     virtualListMock.scrollToTurnEndAndClearPin.mockReturnValue(true);
@@ -304,6 +321,9 @@ describe('ModernFlowChatContainer historical empty state', () => {
     searchStateMock.clearSearch.mockReset();
     headerPropsMock.latest = null;
     virtualListPropsMock.latest = null;
+    modelBrainstormStateMock.batches = [];
+    chatInputStateMock.isActive = false;
+    chatInputStateMock.inputHeight = 0;
     clearHistorySessionOpenTransition();
   });
 
@@ -329,6 +349,38 @@ describe('ModernFlowChatContainer historical empty state', () => {
 
     expect(container.textContent).toContain('Loading saved session');
     expect(container.querySelector('[data-testid="welcome-panel"]')).toBeNull();
+  });
+
+  it('reserves brainstorm-only footer space using the floating input height', () => {
+    chatInputStateMock.isActive = true;
+    chatInputStateMock.inputHeight = 168;
+    modelBrainstormStateMock.batches = [{
+      id: 'brainstorm-batch-1',
+      sourceSessionId: 'session-1',
+    }];
+    stateMocks.activeSession = createSession({
+      isHistorical: false,
+      historyState: 'ready',
+      dialogTurns: [],
+    } as Partial<Session>);
+
+    act(() => {
+      root.render(<ModernFlowChatContainer />);
+    });
+
+    expect(container.querySelector('[data-testid="virtual-list"]')).toBeNull();
+    expect(container.querySelector('[data-testid="welcome-panel"]')).toBeNull();
+    expect(container.querySelector('[data-testid="model-brainstorm-group"]')).not.toBeNull();
+
+    const footer = container.querySelector('.modern-flowchat-container__brainstorm-only .message-list-footer') as HTMLDivElement | null;
+    const expectedFooterHeight = computeFlowChatInputStackFooterPx(
+      chatInputStateMock.inputHeight,
+      chatInputStateMock.isActive,
+    );
+
+    expect(footer).not.toBeNull();
+    expect(footer?.style.height).toBe(`${expectedFooterHeight}px`);
+    expect(footer?.style.minHeight).toBe(`${expectedFooterHeight}px`);
   });
 
   it('keeps the loading shell while historical sessions are hydrating', () => {
@@ -835,54 +887,6 @@ describe('ModernFlowChatContainer historical empty state', () => {
 
     projectionSpy.mockRestore();
     pendingSpy.mockRestore();
-  });
-
-  it('repositions an unchanged virtual match when the search query changes', async () => {
-    stateMocks.activeSession = createSession({
-      isHistorical: false,
-      historyState: 'ready',
-      dialogTurns: [createTurn('turn-1', 'Searchable prompt')],
-    } as Partial<Session>);
-    stateMocks.virtualItems = [
-      { type: 'user-message', turnId: 'turn-1', data: { id: 'user-turn-1', content: 'Searchable prompt' } },
-    ];
-    searchStateMock.searchQuery = 'search';
-    searchStateMock.matches = [{
-      virtualItemIndex: 0,
-      turnId: 'turn-1',
-      type: 'user-message',
-      occurrenceIndex: 0,
-    }];
-    searchStateMock.currentMatchIndex = 0;
-    searchStateMock.currentMatchVirtualIndex = 0;
-
-    await act(async () => {
-      root.render(<ModernFlowChatContainer />);
-    });
-    flushAnimationFrame();
-
-    expect(virtualListMock.scrollToSearchMatch).toHaveBeenLastCalledWith({
-      virtualItemIndex: 0,
-      query: 'search',
-      flowItemId: undefined,
-      occurrenceIndex: 0,
-      expandableIds: undefined,
-    });
-
-    searchStateMock.searchQuery = 'searchable';
-    await act(async () => {
-      root.render(<ModernFlowChatContainer />);
-    });
-    flushAnimationFrame();
-
-    expect(virtualListMock.scrollToSearchMatch).toHaveBeenCalledTimes(2);
-    expect(virtualListMock.scrollToSearchMatch).toHaveBeenLastCalledWith({
-      virtualItemIndex: 0,
-      query: 'searchable',
-      flowItemId: undefined,
-      occurrenceIndex: 0,
-      expandableIds: undefined,
-    });
   });
 
   it('keeps the new-session welcome for genuinely new empty sessions', () => {

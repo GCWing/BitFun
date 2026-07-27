@@ -22,12 +22,7 @@ import {
 import { BackgroundCommandInputDialog } from '../background-command/BackgroundCommandInputDialog';
 import { WelcomePanel } from '../WelcomePanel';
 import { HistorySessionPlaceholder } from './HistorySessionPlaceholder';
-import {
-  FlowChatContext,
-  FlowChatContextValue,
-  FlowChatVolatileContext,
-  FlowChatVolatileContextValue,
-} from './FlowChatContext';
+import { FlowChatContext, FlowChatContextValue } from './FlowChatContext';
 import { useExploreGroupState } from './useExploreGroupState';
 import { useFlowChatFileActions } from './useFlowChatFileActions';
 import { useFlowChatNavigation } from './useFlowChatNavigation';
@@ -36,6 +31,8 @@ import { useFlowChatSync } from './useFlowChatSync';
 import { useFlowChatToolActions } from './useFlowChatToolActions';
 import { useFlowChatSearch } from './useFlowChatSearch';
 import { useVirtualItems, useActiveSession, useVisibleTurnInfo, type VisibleTurnInfo } from '../../store/modernFlowChatStore';
+import { useModelBrainstormBatchesForSession } from '../../store/modelBrainstormStore';
+import { useChatInputState } from '../../store/chatInputStateStore';
 import type { FlowChatConfig, DialogTurn } from '../../types/flow-chat';
 import {
   useBackgroundCommandActivityStore,
@@ -66,6 +63,7 @@ import { isRemoteTraceContext, startupTrace } from '@/shared/utils/startupTrace'
 import { scheduleAfterStartupPaint } from '@/shared/utils/startupTaskScheduling';
 import { agentAPI } from '@/infrastructure/api/service-api/AgentAPI';
 import { notificationService } from '@/shared/notification-system';
+import { ModelBrainstormGroup } from './ModelBrainstormGroup';
 import {
   clearHistorySessionOpenTransition,
   getHistorySessionOpenTransitionSnapshot,
@@ -80,17 +78,14 @@ import {
 import {
   type BackgroundSubagentActivityItem,
 } from '../../utils/backgroundSubagentActivity';
+import { computeFlowChatInputStackFooterPx } from '../../utils/flowChatScrollLayout';
 import './ModernFlowChatContainer.scss';
-import { PermissionRequestPanel } from './PermissionRequestPanel';
-import { pendingPermissionToolCallIdsForSession } from './permissionRequestRouting';
-import { usePermissionRequests } from './usePermissionRequests';
 
 const log = createLogger('ModernFlowChatContainer');
 
 interface ModernFlowChatContainerProps {
   className?: string;
   config?: Partial<FlowChatConfig>;
-  permissionPanelAboveChatInput?: boolean;
 
   // Callbacks compatible with the legacy version.
   onFileViewRequest?: (filePath: string, fileName: string, lineRange?: LineRange) => void;
@@ -126,7 +121,7 @@ const MOCK_BACKGROUND_SUBAGENTS: BackgroundSubagentSummary[] = [
     sessionId: 'mock-background-subagent-review',
     parentSessionId: 'mock-parent-session',
     title: 'Reviewing auth boundary changes',
-    agentType: 'ReviewWorker',
+    agentType: 'ReviewSecurity',
     status: 'processing',
     createdAt: Date.now() - 36_000,
     updatedAt: Date.now() - 4_000,
@@ -229,7 +224,6 @@ function backgroundCommandSummaryFromActivity(activity: BackgroundCommandActivit
 export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = ({
   className = '',
   config,
-  permissionPanelAboveChatInput = false,
   onFileViewRequest,
   onTabOpen,
   onOpenVisualization,
@@ -238,14 +232,7 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
   const { t } = useTranslation('flow-chat');
   const virtualItems = useVirtualItems();
   const activeSession = useActiveSession();
-  const {
-    requests: permissionRequests,
-    activeBatch: activePermissionBatch,
-    respond: respondPermission,
-    respondBatch: respondPermissionBatch,
-  } = usePermissionRequests(
-    activeSession?.sessionId,
-  );
+  const modelBrainstormBatches = useModelBrainstormBatchesForSession(activeSession?.sessionId);
   const visibleTurnInfo = useVisibleTurnInfo();
   const [pendingHeaderTurnId, setPendingHeaderTurnId] = useState<string | null>(null);
   const [queuedHeaderTurnPinId, setQueuedHeaderTurnPinId] = useState<string | null>(null);
@@ -300,6 +287,21 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
     onCollapseGroup: handleCollapseGroup,
   } = useExploreGroupState(virtualItems);
   const { handleToolConfirm, handleToolReject } = useFlowChatToolActions();
+  const modelBrainstormFooter = useMemo(() => (
+    modelBrainstormBatches.length > 0 ? (
+      <div className="modern-flowchat-container__brainstorm-groups">
+        {modelBrainstormBatches.map(batch => (
+          <ModelBrainstormGroup key={batch.id} batch={batch} />
+        ))}
+      </div>
+    ) : null
+  ), [modelBrainstormBatches]);
+  const isInputActive = useChatInputState(state => state.isActive);
+  const inputHeight = useChatInputState(state => state.inputHeight);
+  const brainstormOnlyFooterHeightPx = useMemo(
+    () => computeFlowChatInputStackFooterPx(inputHeight, isInputActive),
+    [inputHeight, isInputActive],
+  );
 
   const { handleFileViewRequest } = useFlowChatFileActions({
     workspacePath,
@@ -330,12 +332,6 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
     goToPrev: handleSearchPrev,
     clearSearch,
   } = useFlowChatSearch(virtualItems);
-  const searchCurrentMatch = searchMatches[searchCurrentMatchIndex];
-  const searchCurrentMatchFlowItemId = searchCurrentMatch?.flowItemId;
-  const searchCurrentMatchTurnId = searchCurrentMatch?.turnId;
-  const searchCurrentMatchVirtualItemIndex = searchCurrentMatch?.virtualItemIndex ?? -1;
-  const searchCurrentMatchOccurrenceIndex = searchCurrentMatch?.occurrenceIndex ?? 0;
-  const searchCurrentMatchExpandableKey = searchCurrentMatch?.expandableIds?.join('\u0000') ?? '';
 
   useFlowChatSync();
   useFlowChatCopyDialog();
@@ -409,42 +405,6 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
     showHistoryPlaceholder,
   ]);
 
-  // Scalar session facts for the stable context. Depending on scalars (not the
-  // session object) keeps the context value referentially stable across
-  // streaming flushes, which produce a new session object ~30x/second.
-  const activeSessionId = activeSession?.sessionId;
-  const activeSessionWorkspacePath = activeSession?.workspacePath
-    || activeSession?.config?.workspacePath;
-  const activeSessionRemoteConnectionId = activeSession?.remoteConnectionId
-    || activeSession?.config?.remoteConnectionId;
-  const activeSessionIsHistorical = activeSession?.isHistorical === true;
-  const activeSessionContextRestoreState = activeSession?.contextRestoreState;
-
-  // Reuse the previous Set when the pending permission tool-call ids are
-  // content-equal so consumers do not re-render on identity-only changes.
-  const pendingPermissionToolCallIdsRef = useRef<ReadonlySet<string>>(new Set());
-  const pendingPermissionToolCallIds = useMemo(() => {
-    const next = pendingPermissionToolCallIdsForSession(
-      permissionRequests,
-      activeSessionId,
-    );
-    const previous = pendingPermissionToolCallIdsRef.current;
-    if (previous.size === next.size) {
-      let contentEqual = true;
-      for (const id of next) {
-        if (!previous.has(id)) {
-          contentEqual = false;
-          break;
-        }
-      }
-      if (contentEqual) {
-        return previous;
-      }
-    }
-    pendingPermissionToolCallIdsRef.current = next;
-    return next;
-  }, [permissionRequests, activeSessionId]);
-
   const contextValue: FlowChatContextValue = useMemo(() => ({
     onFileViewRequest: handleFileViewRequest,
     onTabOpen,
@@ -453,11 +413,8 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
     onSwitchToChatPanel,
     onToolConfirm: handleToolConfirm,
     onToolReject: handleToolReject,
-    sessionId: activeSessionId,
-    workspacePath: activeSessionWorkspacePath,
-    remoteConnectionId: activeSessionRemoteConnectionId,
-    isHistoricalSession: activeSessionIsHistorical,
-    contextRestoreState: activeSessionContextRestoreState,
+    sessionId: activeSession?.sessionId,
+    activeSessionOverride: activeSession,
     allowUserMessageRollback,
     config: {
       enableMarkdown: true,
@@ -468,10 +425,14 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
       theme: 'dark',
       ...config,
     },
+    exploreGroupStates,
     onExploreGroupToggle: handleExploreGroupToggle,
     onExpandGroup: handleExpandGroup,
     onExpandAllInTurn: handleExpandAllInTurn,
     onCollapseGroup: handleCollapseGroup,
+    searchQuery,
+    searchMatchIndices,
+    searchCurrentMatchVirtualIndex,
   }), [
     handleFileViewRequest,
     onTabOpen,
@@ -480,28 +441,14 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
     onSwitchToChatPanel,
     handleToolConfirm,
     handleToolReject,
-    activeSessionId,
-    activeSessionWorkspacePath,
-    activeSessionRemoteConnectionId,
-    activeSessionIsHistorical,
-    activeSessionContextRestoreState,
+    activeSession,
     allowUserMessageRollback,
     config,
+    exploreGroupStates,
     handleExploreGroupToggle,
     handleExpandGroup,
     handleExpandAllInTurn,
     handleCollapseGroup,
-  ]);
-
-  const volatileContextValue: FlowChatVolatileContextValue = useMemo(() => ({
-    pendingPermissionToolCallIds,
-    exploreGroupStates,
-    searchQuery,
-    searchMatchIndices,
-    searchCurrentMatchVirtualIndex,
-  }), [
-    pendingPermissionToolCallIds,
-    exploreGroupStates,
     searchQuery,
     searchMatchIndices,
     searchCurrentMatchVirtualIndex,
@@ -1076,33 +1023,14 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
   ]);
 
   useEffect(() => {
-    if (searchCurrentMatchVirtualItemIndex < 0 || !searchQuery.trim()) {
-      virtualListRef.current?.clearSearchMatch();
-      return;
-    }
-
+    if (searchCurrentMatchVirtualIndex < 0) return;
     const frameId = requestAnimationFrame(() => {
-      virtualListRef.current?.scrollToSearchMatch({
-        virtualItemIndex: searchCurrentMatchVirtualItemIndex,
-        query: searchQuery,
-        flowItemId: searchCurrentMatchFlowItemId,
-        occurrenceIndex: searchCurrentMatchOccurrenceIndex,
-        expandableIds: searchCurrentMatchExpandableKey
-          ? searchCurrentMatchExpandableKey.split('\u0000')
-          : undefined,
-      });
+      virtualListRef.current?.scrollToIndex(searchCurrentMatchVirtualIndex);
     });
     return () => {
       cancelAnimationFrame(frameId);
     };
-  }, [
-    searchCurrentMatchFlowItemId,
-    searchCurrentMatchTurnId,
-    searchCurrentMatchExpandableKey,
-    searchCurrentMatchVirtualItemIndex,
-    searchCurrentMatchOccurrenceIndex,
-    searchQuery,
-  ]);
+  }, [searchCurrentMatchVirtualIndex]);
 
   const handleJumpToTurn = useCallback((turnId: string) => {
     if (!turnId) return false;
@@ -1316,18 +1244,7 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
     }
 
     try {
-      const result = await agentAPI.cancelSession(subagent.sessionId);
-      if (!result.cancelled) {
-        setStoppingBackgroundSubagentIds((previous) => {
-          const next = new Set(previous);
-          next.delete(subagent.sessionId);
-          return next;
-        });
-        notificationService.error(
-          t('flowChatHeader.backgroundSubagentStopFailed'),
-          { duration: 5000 },
-        );
-      }
+      await agentAPI.cancelSession(subagent.sessionId);
     } catch (_error) {
       setStoppingBackgroundSubagentIds((previous) => {
         const next = new Set(previous);
@@ -1537,7 +1454,6 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
 
   return (
     <FlowChatContext.Provider value={contextValue}>
-      <FlowChatVolatileContext.Provider value={volatileContextValue}>
       <div
         ref={chatScopeRef}
         className={`modern-flowchat-container flow-chat-typography ${className}`}
@@ -1587,17 +1503,6 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
           onSend={handleSendBackgroundCommandInput}
         />
 
-        {activePermissionBatch && (
-          <PermissionRequestPanel
-            key={`${activePermissionBatch.sessionId}:${activePermissionBatch.roundId}`}
-            requests={activePermissionBatch.requests}
-            totalPendingCount={permissionRequests.length}
-            aboveChatInput={permissionPanelAboveChatInput}
-            onRespond={respondPermission}
-            onRespondBatch={respondPermissionBatch}
-          />
-        )}
-
         <div
           className="modern-flowchat-container__messages"
           data-testid="flowchat-messages"
@@ -1633,22 +1538,37 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
               />
             ) : virtualItems.length === 0 ? (
               showHistoryPlaceholder || showHistoryOpenIntentOverlay ? null : (
-                <WelcomePanel
-                  key={activeSession?.sessionId ?? 'welcome'}
-                  sessionMode={activeSession?.mode}
-                  workspacePath={activeSession?.workspacePath}
-                  onQuickAction={(command) => {
-                    window.dispatchEvent(new CustomEvent('fill-chat-input', {
-                      detail: { message: command }
-                    }));
-                  }}
-                />
+                modelBrainstormFooter ? (
+                  <div className="modern-flowchat-container__brainstorm-only">
+                    <div className="message-list-header" />
+                    {modelBrainstormFooter}
+                    <div
+                      className="message-list-footer"
+                      style={{
+                        height: `${brainstormOnlyFooterHeightPx}px`,
+                        minHeight: `${brainstormOnlyFooterHeightPx}px`,
+                      }}
+                    />
+                  </div>
+                ) : (
+                  <WelcomePanel
+                    key={activeSession?.sessionId ?? 'welcome'}
+                    sessionMode={activeSession?.mode}
+                    workspacePath={activeSession?.workspacePath}
+                    onQuickAction={(command) => {
+                      window.dispatchEvent(new CustomEvent('fill-chat-input', {
+                        detail: { message: command }
+                      }));
+                    }}
+                  />
+                )
               )
             ) : (
               <>
                 <VirtualMessageList
                   ref={virtualListRef}
                   onUserScrollIntent={handleVirtualListUserScrollIntent}
+                  extraFooter={modelBrainstormFooter}
                 />
               </>
             )}
@@ -1678,7 +1598,6 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
           </>
         </div>
       </div>
-      </FlowChatVolatileContext.Provider>
     </FlowChatContext.Provider>
   );
 };

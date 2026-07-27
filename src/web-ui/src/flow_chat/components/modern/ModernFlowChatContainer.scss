@@ -38,6 +38,28 @@
     background: transparent;
   }
 
+  &__brainstorm-only {
+    width: 100%;
+    height: 100%;
+    overflow-y: auto;
+
+    .message-list-header {
+      height: 57px;
+      min-height: 57px;
+      flex-shrink: 0;
+    }
+
+    .message-list-footer {
+      min-height: 72px;
+      overflow-anchor: none;
+    }
+  }
+
+  &__brainstorm-groups {
+    display: grid;
+    gap: 18px;
+  }
+
   &__messages[data-history-state="ready"][data-is-partial="true"] {
     .user-message-item,
     .model-round-item {
