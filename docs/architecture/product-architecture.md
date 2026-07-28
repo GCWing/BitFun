@@ -398,7 +398,7 @@ flowchart LR
 | 当前入口 | 已有能力 | 明确边界 |
 |---|---|---|
 | Desktop | 使用 `product-full`；显示外部来源、审批、冲突、诊断和 Host 能力 | 可执行能力在事实所在 Host 运行；Safe Mode 只阻止新调用，不改来源、不取消正在运行的调用 |
-| CLI / TUI | 使用 `product-full`；提供 `/extensions`、`/hooks`、`/tools` 和 `/agents` | 不解析生态文件，不启动第二套 Agent Runtime；远程能力未接入时不回退本机 |
+| CLI / TUI | 使用 `product-full`；提供 `/extensions`、`/hooks_external`、`/tools` 和 `/agents` | 不解析生态文件，不启动第二套 Agent Runtime；远程能力未接入时不回退本机 |
 | ACP | 使用 `DeliveryProfile::Acp` 和 Runtime Parts | load 成功后才发布活动状态；close 排空后再卸载；完整历史和配置仍由 Core/ACP 管理 |
 | Peer / Server | Server 提供 control/catalog；Peer Host 执行真实工作区操作 | 控制端不替远端发现或执行；旧 Host 明确降级，SSH Remote 未接入时返回不支持 |
 | Web / Mobile Web | 依赖现有后端入口 | 不持有插件执行单元，也不能据空 profile 宣称独立能力 |

@@ -163,8 +163,11 @@ GUI 和 TUI 都通过同一个 `SetSafeMode` 动作请求该变化，Peer Host �
 ### 3.4 静态 Hook 目录
 
 Hook 首先以独立、只读的 `ExternalHookCatalogSnapshotV1` 展示，而不进入可执行来源管理模块。Desktop 设置页的
-“外部 AI 应用 → Hooks”和交互式 TUI 的 `/hooks` 消费同一份 Rust 快照；`/help hooks`、`/hooks -h` 与 `/hooks --help` 提供说明，不增加快捷键、
-命名空间变体或生态专用命令。`/hooks` 与其他内置命令采用同一套既有冲突策略：无冲突时使用普通命令名；发生
+“外部 AI 应用 → Hooks”和交互式 TUI 的 `/hooks_external`（别名 `/hooks-external`）消费同一份 Rust 快照；
+`/help hooks_external`、`/hooks_external -h` 与 `/hooks_external --help` 提供说明，不增加快捷键、
+命名空间变体或生态专用命令。TUI 的 `/hooks` 属于 BitFun 自身会执行的 Hooks（见
+[agent-hooks](../../features/agent-hooks.zh-CN.md)），与本节的静态目录是两个视图，彼此在帮助文本中互相指向。
+`/hooks_external` 与其他内置命令采用同一套既有冲突策略：无冲突时使用普通命令名；发生
 同名冲突时由现有命令菜单展示来源限定项，静态 Hook 目录不增加另一套保留字或路由规则。
 
 当前目录的来源与降级边界如下：

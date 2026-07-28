@@ -21,9 +21,9 @@ use crate::infrastructure::try_get_path_manager_arc;
 use crate::service::config::get_global_config_service;
 pub use crate::service::config::types::AgentHooksConfig;
 use bitfun_agent_runtime::native_hooks::{
-    AgentHookEngine, AgentHookEvent, AgentHookEventPayload, AgentHookOutcome, AgentHookPayload,
-    AgentHookPayloadCommon, AgentHookPermissionMode, AgentHookPermissionOutcome, AgentHookScope,
-    AgentHookSettings, AgentHookSettingsLayer, MAX_HOOKS_FILE_BYTES,
+    AgentHookEngine, AgentHookEvent, AgentHookEventPayload, AgentHookMatcher, AgentHookOutcome,
+    AgentHookPayload, AgentHookPayloadCommon, AgentHookPermissionMode, AgentHookPermissionOutcome,
+    AgentHookScope, AgentHookSettings, AgentHookSettingsLayer, MAX_HOOKS_FILE_BYTES,
 };
 use dashmap::DashMap;
 use log::{debug, info, warn};
@@ -483,20 +483,21 @@ pub(crate) fn hook_settings_paths(
     paths
 }
 
-/// Read each existing hook settings file, in the given layer order, and parse
-/// them into one engine. Unreadable or oversized files are skipped with a
-/// warning so one bad layer cannot disable the rest.
-pub(crate) fn build_engine(paths: &[(AgentHookScope, PathBuf)]) -> AgentHookEngine {
+/// Read each existing hook settings file, in the given layer order. Unreadable
+/// or oversized files are skipped and reported so one bad layer cannot disable
+/// the rest.
+fn read_layers(paths: &[(AgentHookScope, PathBuf)]) -> (Vec<AgentHookSettingsLayer>, Vec<String>) {
     let mut layers = Vec::new();
+    let mut skipped = Vec::new();
     for (scope, path) in paths {
         match std::fs::metadata(path) {
             Ok(metadata) if metadata.is_file() => {
                 if metadata.len() > MAX_HOOKS_FILE_BYTES as u64 {
-                    warn!(
+                    skipped.push(format!(
                         "Ignoring hook configuration over the {} byte limit: {}",
                         MAX_HOOKS_FILE_BYTES,
                         path.display()
-                    );
+                    ));
                     continue;
                 }
                 match std::fs::read(path) {
@@ -505,15 +506,26 @@ pub(crate) fn build_engine(paths: &[(AgentHookScope, PathBuf)]) -> AgentHookEngi
                         source: path.to_string_lossy().to_string(),
                         bytes,
                     }),
-                    Err(error) => warn!(
+                    Err(error) => skipped.push(format!(
                         "Failed to read hook configuration: path={}, error={}",
                         path.display(),
                         error
-                    ),
+                    )),
                 }
             }
             _ => {}
         }
+    }
+    (layers, skipped)
+}
+
+/// Read each existing hook settings file, in the given layer order, and parse
+/// them into one engine. Unreadable or oversized files are skipped with a
+/// warning so one bad layer cannot disable the rest.
+pub(crate) fn build_engine(paths: &[(AgentHookScope, PathBuf)]) -> AgentHookEngine {
+    let (layers, skipped) = read_layers(paths);
+    for message in &skipped {
+        warn!("{message}");
     }
     let (settings, issues) = AgentHookSettings::from_layers(&layers);
     for issue in &issues {
@@ -563,4 +575,132 @@ async fn engine_for(
         },
     );
     Some(engine)
+}
+
+/// One `type: "command"` handler as configured, for read-only display.
+#[derive(Debug, Clone)]
+pub struct NativeHookHandlerView {
+    /// The command this host would run (`commandWindows` already applied).
+    pub command: String,
+    /// Timeout actually applied, after the per-event default and cap.
+    pub timeout_seconds: u64,
+    pub status_message: Option<String>,
+}
+
+/// One matcher group as configured, for read-only display.
+#[derive(Debug, Clone)]
+pub struct NativeHookRuleView {
+    pub event: &'static str,
+    /// Matcher as written; `*` when the group matches everything.
+    pub matcher: String,
+    /// `false` when the pattern is malformed, which never matches anything.
+    pub matcher_is_valid: bool,
+    pub scope: &'static str,
+    /// The file this group came from.
+    pub source: String,
+    pub handlers: Vec<NativeHookHandlerView>,
+}
+
+/// One configuration layer, whether or not it currently contributes.
+#[derive(Debug, Clone)]
+pub struct NativeHookFileView {
+    pub scope: &'static str,
+    pub path: PathBuf,
+    pub exists: bool,
+    /// `false` when the layer is gated off, so its rules are not loaded.
+    pub loaded: bool,
+}
+
+/// Everything the hook configuration would contribute to a session in this
+/// workspace. Nothing here executes a handler.
+#[derive(Debug, Clone)]
+pub struct NativeHookOverview {
+    pub enabled: bool,
+    pub project_hooks_enabled: bool,
+    pub files: Vec<NativeHookFileView>,
+    /// Matcher groups in dispatch order, grouped by event.
+    pub rules: Vec<NativeHookRuleView>,
+    pub total_handlers: usize,
+    /// Configuration problems, in the wording used for the backend log.
+    pub issues: Vec<String>,
+}
+
+/// Read the hook configuration for a workspace without dispatching anything.
+///
+/// This is the read-only view behind the CLI `/hooks` command and any other
+/// surface that needs to show what is configured. It re-reads the files rather
+/// than consulting the dispatch cache, so it always reflects what is on disk.
+pub async fn overview(workspace_root: Option<&Path>) -> NativeHookOverview {
+    // Ask for every candidate path, then mark which layers a dispatch would
+    // actually load, so the view can show a gated-off project file.
+    build_overview(
+        hooks_config().await,
+        hook_settings_paths(workspace_root, true),
+    )
+}
+
+pub(crate) fn build_overview(
+    config: AgentHooksConfig,
+    candidates: Vec<(AgentHookScope, PathBuf)>,
+) -> NativeHookOverview {
+    let files = candidates
+        .iter()
+        .map(|(scope, path)| NativeHookFileView {
+            scope: scope.as_str(),
+            path: path.clone(),
+            exists: path.is_file(),
+            loaded: config.enabled
+                && (*scope == AgentHookScope::User || config.project_hooks_enabled),
+        })
+        .collect::<Vec<_>>();
+
+    let loaded_paths = candidates
+        .into_iter()
+        .zip(files.iter())
+        .filter(|(_, file)| file.loaded)
+        .map(|(candidate, _)| candidate)
+        .collect::<Vec<_>>();
+    let (layers, skipped) = read_layers(&loaded_paths);
+    let (settings, issues) = AgentHookSettings::from_layers(&layers);
+
+    let mut rules = Vec::new();
+    for event in AgentHookEvent::ALL {
+        for rule in settings.rules_for(event) {
+            rules.push(NativeHookRuleView {
+                event: event.as_str(),
+                matcher: rule.matcher.display().to_string(),
+                // A malformed pattern parses into `Pattern` with no compiled
+                // regex, which never matches — same practical outcome as an
+                // outright invalid matcher, so both report as invalid here.
+                matcher_is_valid: match &rule.matcher {
+                    AgentHookMatcher::Any => true,
+                    AgentHookMatcher::Pattern { regex, .. } => regex.is_some(),
+                    AgentHookMatcher::Invalid { .. } => false,
+                },
+                scope: rule.scope.as_str(),
+                source: rule.source.clone(),
+                handlers: rule
+                    .handlers
+                    .iter()
+                    .map(|handler| NativeHookHandlerView {
+                        command: handler.effective_command().to_string(),
+                        timeout_seconds: handler.effective_timeout(event).as_secs(),
+                        status_message: handler.status_message.clone(),
+                    })
+                    .collect(),
+            });
+        }
+    }
+
+    NativeHookOverview {
+        enabled: config.enabled,
+        project_hooks_enabled: config.project_hooks_enabled,
+        files,
+        total_handlers: settings.total_handlers(),
+        rules,
+        issues: skipped
+            .into_iter()
+            .chain(issues.iter().map(ToString::to_string))
+            .collect(),
+    }
 }

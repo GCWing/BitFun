@@ -82,6 +82,9 @@ use bitfun_core::external_sources::{
     ExternalToolCatalogEntry, ExternalToolRuntimeKind, NativePromptCommandDescriptor,
     PromptCommandAvailability, EXTERNAL_SOURCE_CONTROL_SCHEMA_V1,
 };
+use bitfun_core::native_hooks::{
+    overview as native_hook_overview, NativeHookOverview, NativeHookRuleView,
+};
 use bitfun_core::product_runtime::CoreAgentRuntimeCompatibility;
 use bitfun_core::service::config::GlobalConfigManager;
 use bitfun_core::service::session_usage::render_usage_report_markdown;
@@ -95,6 +98,7 @@ const RESIZE_REDRAW_DEBOUNCE_MS: u64 = 75;
 include!("chat/external_review.rs");
 include!("chat/external_sources.rs");
 include!("chat/external_hooks.rs");
+include!("chat/native_hooks.rs");
 
 fn agent_event_stream_failure(error: TryRecvError) -> Option<String> {
     match error {

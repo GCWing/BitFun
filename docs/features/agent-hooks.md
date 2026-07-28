@@ -210,6 +210,9 @@ log level.
 
 ## Related
 
-- CLI `/hooks` inspects hooks configured for *other* AI applications (Claude
-  Code, Codex, OpenCode). That view is read-only and never executes anything;
-  the hooks described here are BitFun's own and do execute.
+- CLI `/hooks` shows the hooks described here — which files they came from,
+  which layers are active, and what each matcher group would run. It reports
+  the configuration only; edit `hooks.json` to change it.
+- CLI `/hooks_external` inspects hooks configured for *other* AI applications
+  (Claude Code, Codex, OpenCode). That view is read-only and never executes
+  anything; the hooks described here are BitFun's own and do execute.

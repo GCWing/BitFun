@@ -1070,7 +1070,8 @@ impl StartupPage {
             | ActionHandler::ReloadSkills
             | ActionHandler::Tools
             | ActionHandler::Extensions
-            | ActionHandler::Hooks
+            | ActionHandler::NativeHooks
+            | ActionHandler::ExternalHooks
             | ActionHandler::History
             | ActionHandler::ToggleAutoApprove
             | ActionHandler::Interrupt

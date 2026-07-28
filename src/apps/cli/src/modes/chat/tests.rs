@@ -17,15 +17,21 @@ mod tests {
         mode_change_completion_should_exit, native_command_choice_is_active,
         native_command_reconfirmation_is_required, parse_external_agent_review_action,
         parse_external_control_action, parse_external_tool_review_action,
-        previous_session_mode_change_status, render_external_hook_catalog, CommandRoute,
+        native_hook_help_text, previous_session_mode_change_status, render_external_hook_catalog,
+        render_native_hook_overview, CommandRoute,
         ExternalAgentReviewAction, ExternalControlUiAction, ExternalSourceConflictPreferences,
         ExternalToolReviewAction, ModeSelectionApplyOutcome, ModelSelectionApplyOutcome,
     };
-    use crate::actions::{action_conflict_behavior_version, ActionState, ResolvedKeymap};
+    use crate::actions::{
+        action_conflict_behavior_version, ActionHandler, ActionState, ResolvedKeymap,
+    };
     use crate::chat_state::ChatState;
     use crate::config::ShortcutsConfig;
     use crate::ui::command_menu::{ExternalCommandProjection, NativeCommandCollisionProjection};
     use bitfun_core::external_hooks::ExternalHookCatalogSnapshotV1;
+    use bitfun_core::native_hooks::{
+        NativeHookFileView, NativeHookHandlerView, NativeHookOverview, NativeHookRuleView,
+    };
     use bitfun_core::external_sources::{
         native_prompt_command_conflict_key, ExternalSourceAssetKind, ExternalSourceCatalogSnapshot,
         ExternalSourceControlSnapshotV1, ExternalSourceDiagnostic,
@@ -654,6 +660,16 @@ mod tests {
             crate::actions::action_for_alias("/hooks", crate::actions::ActionContext::Chat)
                 .expect("/hooks must be registered");
         assert_eq!(action.id, "hooks");
+        // /hooks shows BitFun's own executable hooks; the external read-only
+        // catalog keeps its own command.
+        assert_eq!(action.handler, ActionHandler::NativeHooks);
+        for alias in ["/hooks_external", "/hooks-external"] {
+            let external =
+                crate::actions::action_for_alias(alias, crate::actions::ActionContext::Chat)
+                    .unwrap_or_else(|| panic!("{alias} must be registered"));
+            assert_eq!(external.id, "hooks_external");
+            assert_eq!(external.handler, ActionHandler::ExternalHooks);
+        }
         let collision = external_command("hooks", None);
         assert_eq!(
             command_route(true, Some(&collision), false, false),
@@ -667,6 +683,7 @@ mod tests {
         assert!(extension_command_help_request("hooks", "--help").is_some());
         assert!(extension_command_help_request("hooks", "unexpected").is_none());
         assert!(extension_command_help_request("help", "hooks").is_some());
+        assert!(extension_command_help_request("hooks_external", "--help").is_some());
         assert!(extension_command_help_request("help", "other").is_none());
         assert!(extension_command_help_request("extensions", "-h")
             .unwrap()
@@ -751,7 +768,7 @@ mod tests {
         .unwrap();
 
         let text = render_external_hook_catalog(&snapshot);
-        assert!(text.contains("Hooks (read-only)"));
+        assert!(text.contains("External Hooks (read-only)"));
         assert!(text.contains("Claude Code"));
         assert!(text.contains("PreToolUse"));
         assert!(text.contains("coverage mapped: BitFun tool before"));
@@ -762,14 +779,104 @@ mod tests {
         assert!(!text.contains("command body"));
     }
 
+    fn native_hook_overview() -> NativeHookOverview {
+        NativeHookOverview {
+            enabled: true,
+            project_hooks_enabled: false,
+            files: vec![
+                NativeHookFileView {
+                    scope: "user",
+                    path: std::path::PathBuf::from("/home/u/.config/bitfun/config/hooks.json"),
+                    exists: true,
+                    loaded: true,
+                },
+                NativeHookFileView {
+                    scope: "project",
+                    path: std::path::PathBuf::from("/ws/.bitfun/config/hooks.json"),
+                    exists: true,
+                    loaded: false,
+                },
+            ],
+            rules: vec![NativeHookRuleView {
+                event: "PreToolUse",
+                matcher: "Bash".to_string(),
+                matcher_is_valid: true,
+                scope: "user",
+                source: "/home/u/.config/bitfun/config/hooks.json".to_string(),
+                handlers: vec![NativeHookHandlerView {
+                    command: "jq -r '.tool_input.command' >> ~/log".to_string(),
+                    timeout_seconds: 600,
+                    status_message: None,
+                }],
+            }],
+            total_handlers: 1,
+            issues: vec!["Hook event 'PreTool' is not a supported event name: /ws".to_string()],
+        }
+    }
+
     #[test]
-    fn hooks_help_uses_the_established_slash_help_pattern() {
+    fn native_hook_text_reports_gating_layers_and_issues() {
+        let text = render_native_hook_overview(&native_hook_overview());
+
+        assert!(text.contains("Hooks (BitFun)"));
+        assert!(text.contains("Hooks: enabled (app.hooks.enabled)"));
+        assert!(text.contains("Project hooks: disabled (app.hooks.project_hooks_enabled)"));
+        assert!(text.contains("user [loaded; present]"));
+        assert!(text.contains("project [not loaded; present]"));
+        assert!(text.contains("PreToolUse"));
+        assert!(text.contains("matcher: Bash [user; 1 handler]"));
+        assert!(text.contains("timeout 600s"));
+        assert!(text.contains("is not a supported event name"));
+        // The external catalog stays discoverable from this view.
+        assert!(text.contains("/hooks_external"));
+    }
+
+    #[test]
+    fn native_hook_text_explains_an_empty_or_disabled_configuration() {
+        let mut overview = native_hook_overview();
+        overview.rules.clear();
+        overview.total_handlers = 0;
+        overview.issues.clear();
+        assert!(render_native_hook_overview(&overview).contains("No hooks are configured."));
+
+        overview.enabled = false;
+        let disabled = render_native_hook_overview(&overview);
+        assert!(disabled.contains("Hooks: disabled (app.hooks.enabled)"));
+        assert!(disabled.contains("set app.hooks.enabled to run them"));
+    }
+
+    #[test]
+    fn native_hook_text_flags_a_matcher_that_never_matches() {
+        let mut overview = native_hook_overview();
+        overview.rules[0].matcher = "Bash(".to_string();
+        overview.rules[0].matcher_is_valid = false;
+
+        let text = render_native_hook_overview(&overview);
+
+        assert!(text.contains("invalid pattern, never matches"));
+    }
+
+    #[test]
+    fn external_hooks_help_uses_the_established_slash_help_pattern() {
         let help = external_hook_help_text();
+        assert!(help.contains("Usage: /hooks_external"));
+        assert!(help.contains("Alias: /hooks-external"));
+        assert!(help.contains("/help hooks_external"));
+        assert!(help.contains("/hooks_external -h"));
+        assert!(help.contains("/hooks_external --help"));
+        assert!(!help.contains("/builtin:hooks"));
+    }
+
+    #[test]
+    fn native_hooks_help_uses_the_established_slash_help_pattern() {
+        let help = native_hook_help_text();
         assert!(help.contains("Usage: /hooks"));
         assert!(help.contains("/help hooks"));
         assert!(help.contains("/hooks -h"));
         assert!(help.contains("/hooks --help"));
-        assert!(!help.contains("/builtin:hooks"));
+        // The two views must stay distinguishable from their help alone.
+        assert!(help.contains("/hooks_external"));
+        assert!(!help.contains("Usage: /hooks_external"));
     }
 
     #[test]

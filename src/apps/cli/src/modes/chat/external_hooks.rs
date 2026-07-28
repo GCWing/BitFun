@@ -5,14 +5,16 @@ const MAX_TUI_HOOK_CATALOG_DIAGNOSTICS: usize = 20;
 
 fn external_hook_help_text() -> String {
     [
-        "Hooks",
+        "External Hooks",
         "",
-        "Usage: /hooks",
+        "Usage: /hooks_external",
+        "Alias: /hooks-external",
         "",
         "Shows a read-only static catalog of Hooks configured for OpenCode, Claude Code, and Codex.",
         "BitFun does not load or run handlers from this view. Coverage mapped means BitFun recognizes an equivalent reviewed Hook point; it does not mean the native handler is active.",
+        "BitFun's own Hooks, which do run, are shown by /hooks.",
         "",
-        "Help: /help hooks, /hooks -h, or /hooks --help",
+        "Help: /help hooks_external, /hooks_external -h, or /hooks_external --help",
     ]
     .join("\n")
 }
@@ -27,7 +29,8 @@ fn extension_command_help_request(command_name: &str, arguments: &str) -> Option
         return None;
     };
     match requested.to_ascii_lowercase().as_str() {
-        "hooks" => Some(external_hook_help_text()),
+        "hooks" => Some(native_hook_help_text()),
+        "hooks_external" | "hooks-external" => Some(external_hook_help_text()),
         "extensions" => Some([
             "External integrations",
             "",
@@ -72,12 +75,12 @@ fn extension_command_help_request(command_name: &str, arguments: &str) -> Option
 
 fn render_external_hook_catalog(snapshot: &ExternalHookCatalogSnapshotV1) -> String {
     let mut lines = vec![
-        "Hooks (read-only)".to_string(),
+        "External Hooks (read-only)".to_string(),
         "Static configuration only; no handler was loaded or executed.".to_string(),
         String::new(),
     ];
     if snapshot.discovery_pending {
-        lines.push("Hook discovery is still pending. Run /hooks again.".to_string());
+        lines.push("Hook discovery is still pending. Run /hooks_external again.".to_string());
         return lines.join("\n");
     }
     if snapshot.sources.is_empty()
@@ -222,7 +225,7 @@ fn render_external_hook_catalog(snapshot: &ExternalHookCatalogSnapshotV1) -> Str
     }
     lines.push(String::new());
     lines.push(
-        "Edit Hooks in the source application's configuration. Help: /help hooks, /hooks -h, or /hooks --help"
+        "Edit Hooks in the source application's configuration. BitFun's own Hooks: /hooks. Help: /help hooks_external, /hooks_external -h, or /hooks_external --help"
             .to_string(),
     );
     lines.join("\n")

@@ -194,6 +194,8 @@ Hook 是以你的用户权限运行的任意代码，且每次对应事件触发
 
 ## 相关
 
-- CLI 的 `/hooks` 用于查看*其他* AI 应用（Claude Code、Codex、OpenCode）配置的
-  Hooks。该视图只读，不会执行任何内容；本文描述的是 BitFun 自身的 Hooks，它们会
-  真正执行。
+- CLI 的 `/hooks` 展示的就是本文描述的 Hooks：来自哪些文件、哪些层级生效、每个
+  匹配组会运行什么。它只报告配置，修改请直接编辑 `hooks.json`。
+- CLI 的 `/hooks_external` 用于查看*其他* AI 应用（Claude Code、Codex、OpenCode）
+  配置的 Hooks。该视图只读，不会执行任何内容；本文描述的是 BitFun 自身的 Hooks，
+  它们会真正执行。

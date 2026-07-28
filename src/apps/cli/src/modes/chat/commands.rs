@@ -683,7 +683,10 @@ impl ChatMode {
             ActionHandler::Extensions => {
                 self.handle_external_control("", chat_view, chat_state, rt_handle);
             }
-            ActionHandler::Hooks => {
+            ActionHandler::NativeHooks => {
+                self.handle_native_hooks(chat_view, chat_state, rt_handle);
+            }
+            ActionHandler::ExternalHooks => {
                 self.handle_external_hooks(chat_view, chat_state, rt_handle);
             }
             ActionHandler::AcpHelp => {
@@ -879,7 +882,7 @@ fn action_opens_extension_management(action: &ActionSpec) -> bool {
         action.handler,
         ActionHandler::Tools
             | ActionHandler::Extensions
-            | ActionHandler::Hooks
+            | ActionHandler::ExternalHooks
             | ActionHandler::OpenAgentSelector
     )
 }
