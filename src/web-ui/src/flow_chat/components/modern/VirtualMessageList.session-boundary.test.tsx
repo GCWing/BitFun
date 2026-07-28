@@ -5,6 +5,10 @@ import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
+  VirtualMessageList,
+  type VirtualMessageListRef,
+} from './VirtualMessageList';
+import {
   consumeBottomReservationForContentGrowth,
   getCanceledUnsettledStickyPinGrowthPx,
   resolveAutoCollapseAnchorScrollTop,
@@ -13,9 +17,7 @@ import {
   shouldSyncPhysicalBottom,
   shouldSuppressFollowingTailNegativeScrollBy,
   transferCollapseReservationToPin,
-  VirtualMessageList,
-  type VirtualMessageListRef,
-} from './VirtualMessageList';
+} from './flowChatScrollStability';
 import { activeSessionHistoryProjectionHandoff } from './historyProjectionHandoff';
 import type { Session } from '../../types/flow-chat';
 import type { VirtualItem } from '../../store/modernFlowChatStore';

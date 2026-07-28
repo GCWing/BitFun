@@ -1,0 +1,220 @@
+import type { FlowChatPinTurnToTopMode } from '../../events/flowchatNavigation';
+
+export const COMPENSATION_EPSILON_PX = 0.5;
+
+type BottomReservationKind = 'collapse' | 'pin';
+
+interface BottomReservationBase {
+  kind: BottomReservationKind;
+  px: number;
+  floorPx: number;
+}
+
+interface CollapseBottomReservation extends BottomReservationBase {
+  kind: 'collapse';
+}
+
+export interface PinBottomReservation extends BottomReservationBase {
+  kind: 'pin';
+  mode: FlowChatPinTurnToTopMode;
+  targetTurnId: string | null;
+}
+
+export interface BottomReservationState {
+  collapse: CollapseBottomReservation;
+  pin: PinBottomReservation;
+}
+
+export function transferCollapseReservationToPin(
+  currentState: BottomReservationState,
+  nextPinReservation: PinBottomReservation,
+): BottomReservationState {
+  return {
+    ...currentState,
+    collapse: {
+      ...currentState.collapse,
+      px: 0,
+      floorPx: 0,
+    },
+    pin: nextPinReservation,
+  };
+}
+
+export function createInitialBottomReservationState(): BottomReservationState {
+  return {
+    collapse: {
+      kind: 'collapse',
+      px: 0,
+      floorPx: 0,
+    },
+    pin: {
+      kind: 'pin',
+      px: 0,
+      floorPx: 0,
+      mode: 'transient',
+      targetTurnId: null,
+    },
+  };
+}
+
+function sanitizeReservationPx(value: number): number {
+  return Number.isFinite(value) ? Math.max(0, value) : 0;
+}
+
+export function sanitizeBottomReservationState(state: BottomReservationState): BottomReservationState {
+  const collapsePx = sanitizeReservationPx(state.collapse.px);
+  const collapseFloorPx = Math.min(collapsePx, sanitizeReservationPx(state.collapse.floorPx));
+  const pinPx = sanitizeReservationPx(state.pin.px);
+  const pinFloorPx = Math.min(pinPx, sanitizeReservationPx(state.pin.floorPx));
+
+  return {
+    collapse: {
+      kind: 'collapse',
+      px: collapsePx,
+      floorPx: collapseFloorPx,
+    },
+    pin: {
+      kind: 'pin',
+      px: pinPx,
+      floorPx: pinFloorPx,
+      mode: state.pin.mode ?? 'transient',
+      targetTurnId: state.pin.targetTurnId ?? null,
+    },
+  };
+}
+
+export function areBottomReservationStatesEqual(
+  left: BottomReservationState,
+  right: BottomReservationState,
+): boolean {
+  return (
+    Math.abs(left.collapse.px - right.collapse.px) <= COMPENSATION_EPSILON_PX &&
+    Math.abs(left.collapse.floorPx - right.collapse.floorPx) <= COMPENSATION_EPSILON_PX &&
+    Math.abs(left.pin.px - right.pin.px) <= COMPENSATION_EPSILON_PX &&
+    Math.abs(left.pin.floorPx - right.pin.floorPx) <= COMPENSATION_EPSILON_PX &&
+    left.pin.mode === right.pin.mode &&
+    left.pin.targetTurnId === right.pin.targetTurnId
+  );
+}
+
+export function getReservationTotalPx(reservation: BottomReservationBase): number {
+  return Math.max(0, reservation.px);
+}
+
+function getReservationConsumablePx(reservation: BottomReservationBase): number {
+  return Math.max(0, reservation.px - reservation.floorPx);
+}
+
+export function consumeBottomReservationForContentGrowth(
+  state: BottomReservationState,
+  amountPx: number,
+  consumeStickyPinFloor: boolean,
+  preserveCollapseReservation = false,
+): BottomReservationState {
+  let remaining = Math.max(0, amountPx);
+
+  const collapseConsumablePx = preserveCollapseReservation
+    ? 0
+    : getReservationConsumablePx(state.collapse);
+  const collapseConsumed = Math.min(collapseConsumablePx, remaining);
+  remaining -= collapseConsumed;
+
+  const pinConsumablePx = getReservationConsumablePx(state.pin);
+  const pinConsumed = Math.min(pinConsumablePx, remaining);
+  remaining -= pinConsumed;
+
+  const stickyPinFloorConsumed = consumeStickyPinFloor && state.pin.mode === 'sticky-latest'
+    ? Math.min(state.pin.floorPx, remaining)
+    : 0;
+
+  return sanitizeBottomReservationState({
+    collapse: {
+      ...state.collapse,
+      px: state.collapse.px - collapseConsumed,
+    },
+    pin: {
+      ...state.pin,
+      px: state.pin.px - pinConsumed - stickyPinFloorConsumed,
+      floorPx: state.pin.floorPx - stickyPinFloorConsumed,
+    },
+  });
+}
+
+export function shouldSyncPhysicalBottom(options: {
+  viewportGeometryChanged: boolean;
+  collapseProtectionActive: boolean;
+  wasAtPhysicalBottom: boolean;
+  ownsElementAnchor: boolean;
+}): boolean {
+  return (
+    options.viewportGeometryChanged &&
+    !options.collapseProtectionActive &&
+    options.wasAtPhysicalBottom &&
+    !options.ownsElementAnchor
+  );
+}
+
+export function shouldSuppressFollowingTailNegativeScrollBy(options: {
+  requestedTop: number | null;
+  isFollowingOutput: boolean;
+  isStreamingOutput: boolean;
+  wasAtPhysicalBottom: boolean;
+}): boolean {
+  return (
+    options.requestedTop !== null &&
+    options.requestedTop < -COMPENSATION_EPSILON_PX &&
+    options.isFollowingOutput &&
+    options.isStreamingOutput &&
+    options.wasAtPhysicalBottom
+  );
+}
+
+export function getCanceledUnsettledStickyPinGrowthPx(options: {
+  pendingGrowthPx: number;
+  shrinkPx: number;
+  hasActiveCollapseIntent: boolean;
+}): number {
+  if (options.hasActiveCollapseIntent) {
+    return 0;
+  }
+  return Math.min(
+    sanitizeReservationPx(options.pendingGrowthPx),
+    sanitizeReservationPx(options.shrinkPx),
+  );
+}
+
+export function shouldBypassShrinkCompensationInTailFollow(options: {
+  isFollowingOutput: boolean;
+  isStreamingOutput: boolean;
+  hasActiveCollapseIntent: boolean;
+}): boolean {
+  return (
+    options.isFollowingOutput &&
+    options.isStreamingOutput &&
+    !options.hasActiveCollapseIntent
+  );
+}
+
+export function shouldPreserveCollapseReservationAfterIntent(options: {
+  isFollowingOutput: boolean;
+  isStreamingOutput: boolean;
+}): boolean {
+  return options.isFollowingOutput && options.isStreamingOutput;
+}
+
+export function resolveAutoCollapseAnchorScrollTop(options: {
+  currentScrollTop: number;
+  previousStableScrollTop: number;
+  reason: string | null | undefined;
+  isFollowingOutput: boolean;
+  isStreamingOutput: boolean;
+}): number {
+  if (
+    options.reason !== 'auto' ||
+    !options.isFollowingOutput ||
+    !options.isStreamingOutput
+  ) {
+    return options.currentScrollTop;
+  }
+  return Math.max(options.currentScrollTop, options.previousStableScrollTop);
+}
