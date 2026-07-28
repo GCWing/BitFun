@@ -1,0 +1,16 @@
+[product]
+name = "taiji-quant"
+version = "0.1.0"
+
+[tiers.standard]
+label = "标准版"
+
+[tiers.standard.features]
+"cli.analyze" = true
+"cli.signal" = true
+"cli.backtest" = true
+"cli.mcp" = true
+"cli.acp" = false
+
+[tiers.standard.data]
+sources = ["akshare", "ctp_tick"]

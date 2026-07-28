@@ -5,6 +5,11 @@
 mod background_outcomes;
 mod coordination_store;
 pub mod coordinator;
+#[cfg(feature = "taiji")]
+mod review_propagation;
+
+#[cfg(feature = "taiji")]
+pub use review_propagation::ReviewPropagationManager;
 pub mod scheduler;
 pub mod state_manager;
 pub mod turn_outcome;

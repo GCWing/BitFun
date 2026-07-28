@@ -289,13 +289,13 @@ mod tests {
             auto_continuation_count: 2,
         });
         assert!(plan.display_message.contains("completion check"));
-        assert!(plan.display_message.contains("2/100"));
+        assert!(plan.display_message.contains("2/10"));
         assert_eq!(
             plan.user_message_metadata["threadGoalContinuationCheck"],
             true
         );
         assert_eq!(plan.user_message_metadata["autoContinuationAttempt"], 2);
-        assert_eq!(plan.user_message_metadata["autoContinuationMax"], 100);
+        assert_eq!(plan.user_message_metadata["autoContinuationMax"], 10);
     }
 
     #[test]
@@ -348,8 +348,8 @@ mod tests {
 
     #[test]
     fn max_goal_continuations_matches_legacy_limit() {
-        assert_eq!(MAX_GOAL_CONTINUATIONS, 100);
-        assert_eq!(MAX_THREAD_GOAL_AUTO_CONTINUATIONS, 100);
+        assert_eq!(MAX_GOAL_CONTINUATIONS, 10);
+        assert_eq!(MAX_THREAD_GOAL_AUTO_CONTINUATIONS, 10);
     }
 
     #[test]

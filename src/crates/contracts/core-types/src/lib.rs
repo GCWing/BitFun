@@ -7,6 +7,8 @@ pub mod ai;
 pub mod errors;
 pub mod lsp;
 pub mod session;
+#[cfg(feature = "taiji")]
+pub mod session_tree;
 pub mod session_usage;
 pub mod speech;
 pub mod surface;

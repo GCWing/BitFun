@@ -84,3 +84,5 @@ external/
 /.bitfun/search/flashgrep-index/
 .agents/
 /.flashgrep-index-engine/
+/src/apps/desktop/.bitfun/search/flashgrep-index/
+/target/debug/.bitfun/search/flashgrep-index/

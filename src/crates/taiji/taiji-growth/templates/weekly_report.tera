@@ -1,0 +1,75 @@
++++
+title = "{{ instrument }} {{ date_start }} ~ {{ date }} 周度复盘"
+date = "{{ timestamp }}"
+tags = ["期货", "{{ instrument }}", "周度复盘", "技术分析"]
+categories = ["交易报告"]
+draft = false
++++
+
+# {{ instrument }} 周度复盘报告
+
+**周期**：{{ date_start }} ~ {{ date }} | **主周期**：{{ freq }}
+
+---
+
+## 一、周度行情概览
+
+| 指标 | 值 |
+|------|-----|
+| 趋势方向 | {{ trend_direction }} |
+| 趋势强度 | {{ trend_strength }} |
+| 拐点结构 | {{ pivot_structure }} |
+| 关键支撑 | {{ key_support }} |
+| 关键阻力 | {{ key_resistance }} |
+| 通道状态 | {{ channel_state }} |
+
+---
+
+## 二、共振闭环回顾
+
+| 日期 | 共振类型 | 决策动作 | 置信度 |
+|------|---------|---------|--------|
+{% for entry in weekly_entries %}
+| {{ entry.date }} | {{ entry.resonance_type }} | {{ entry.action }} | {{ entry.confidence }} |
+{% endfor %}
+
+{% if not weekly_entries %}
+暂无本周共振记录。
+{% endif %}
+
+---
+
+## 三、交易决策汇总
+
+| 指标 | 值 |
+|------|-----|
+| 本周信号总数 | {{ weekly_signal_count }} |
+| 多头信号 | {{ weekly_long_count }} |
+| 空头信号 | {{ weekly_short_count }} |
+| Hold信号 | {{ weekly_hold_count }} |
+| 平均置信度 | {{ weekly_avg_confidence }} |
+
+---
+
+## 四、风控汇总
+
+| 指标 | 值 |
+|------|-----|
+| 允许多头 | {{ risk_allow_long }} |
+| 允许空头 | {{ risk_allow_short }} |
+| 最大仓位(手) | {{ risk_max_size }} |
+| 当前ATR | {{ risk_atr }} |
+
+---
+
+## 五、周度K线数据（{{ freq }}）
+
+| 时间 | 开 | 高 | 低 | 收 | 成交量 |
+|------|------|------|------|------|----------|
+{% for bar in bars %}
+| {{ bar.dt }} | {{ bar.open }} | {{ bar.high }} | {{ bar.low }} | {{ bar.close }} | {{ bar.vol }} |
+{% endfor %}
+
+---
+
+*报告由 Taiji ReportMdGenerator 自动生成 | {{ timestamp }}*

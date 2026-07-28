@@ -1,0 +1,29 @@
+[package]
+name = "taiji-llm"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+description = "LLM client abstraction — OpenAI / Claude / DeepSeek providers with structured output parsing"
+
+[lib]
+name = "taiji_llm"
+crate-type = ["rlib"]
+
+[dependencies]
+serde = { workspace = true }
+serde_json = { workspace = true }
+tokio = { workspace = true }
+async-trait = { workspace = true }
+futures = { workspace = true }
+anyhow = { workspace = true }
+candle-core = { workspace = true, optional = true }
+bitfun-ai-adapters = { path = "../../adapters/ai-adapters" }
+bitfun-core = { path = "../../assembly/core" }
+
+[features]
+default = []
+candle = ["candle-core"]
+
+[lints]
+workspace = true

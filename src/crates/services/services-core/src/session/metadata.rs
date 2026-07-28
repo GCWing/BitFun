@@ -27,6 +27,7 @@ pub struct SessionMetadataBuildFacts<'a> {
     pub workspace_hostname: Option<&'a str>,
     pub new_session_memory_mode: SessionMemoryMode,
     pub existing: Option<&'a SessionMetadata>,
+    pub is_daemon: bool,
 }
 
 pub fn build_session_metadata(facts: SessionMetadataBuildFacts<'_>) -> SessionMetadata {
@@ -89,6 +90,10 @@ pub fn build_session_metadata(facts: SessionMetadataBuildFacts<'_>) -> SessionMe
         workspace_hostname: facts.workspace_hostname.map(str::to_string),
         unread_completion: existing.and_then(|value| value.unread_completion.clone()),
         needs_user_attention: existing.and_then(|value| value.needs_user_attention.clone()),
+        runtime_state: existing.and_then(|value| value.runtime_state.clone()),
+        is_daemon: existing
+            .map(|value| value.is_daemon)
+            .unwrap_or(facts.is_daemon),
     }
 }
 
@@ -100,7 +105,9 @@ fn build_session_relationship(
     let existing_custom_metadata = existing.and_then(|value| value.custom_metadata.as_ref());
 
     let kind = match session_kind {
-        SessionKind::Subagent => Some(SessionRelationshipKind::Subagent),
+        SessionKind::Subagent | SessionKind::EphemeralSubagent => {
+            Some(SessionRelationshipKind::Subagent)
+        }
         SessionKind::EphemeralChild => Some(SessionRelationshipKind::Btw),
         SessionKind::Standard => existing_relationship
             .as_ref()
@@ -161,6 +168,7 @@ fn build_session_relationship(
         parent_tool_call_id,
         subagent_type,
         continuation_policy,
+        depth: None,
     })
 }
 
@@ -441,6 +449,7 @@ mod tests {
             parent_tool_call_id: Some("tool".to_string()),
             subagent_type: Some("ReviewSecurity".to_string()),
             continuation_policy: Some(SessionContinuationPolicy::FreshOnly),
+            ..Default::default()
         };
 
         set_session_relationship(&mut metadata, relationship.clone());
@@ -526,6 +535,7 @@ mod tests {
             workspace_hostname: Some("host"),
             new_session_memory_mode: crate::session::SessionMemoryMode::Enabled,
             existing: Some(&existing),
+            is_daemon: false,
         });
 
         assert_eq!(built.created_at, 10);
@@ -558,6 +568,7 @@ mod tests {
                 parent_tool_call_id: Some("tool-1".to_string()),
                 subagent_type: Some("review".to_string()),
                 continuation_policy: None,
+                ..Default::default()
             })
         );
     }
@@ -583,6 +594,7 @@ mod tests {
             workspace_hostname: None,
             new_session_memory_mode: crate::session::SessionMemoryMode::Disabled,
             existing: None,
+            is_daemon: false,
         });
 
         assert_eq!(

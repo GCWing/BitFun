@@ -182,6 +182,12 @@ pub struct SessionConfig {
     /// Mutable sessions leave this unset and continue to resolve selectors.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub model_binding_fingerprint: Option<String>,
+    /// Warden daemon session marker.
+    /// Daemon sessions are invisible to SessionControl(list) and cannot be
+    /// deleted via SessionControl(delete).
+    #[cfg(feature = "taiji")]
+    #[serde(default)]
+    pub is_daemon: bool,
 }
 
 fn is_reusable_continuation_policy(policy: &SessionContinuationPolicy) -> bool {
@@ -195,7 +201,10 @@ fn is_mutable_model_binding_policy(policy: &SessionModelBindingPolicy) -> bool {
 impl Default for SessionConfig {
     fn default() -> Self {
         Self {
-            max_context_tokens: 128128,
+            #[cfg(feature = "taiji")]
+            max_context_tokens: 1_048_576,
+            #[cfg(not(feature = "taiji"))]
+            max_context_tokens: 128_128,
             auto_compact: true,
             enable_tools: true,
             safe_mode: true,
@@ -211,6 +220,8 @@ impl Default for SessionConfig {
             continuation_policy: SessionContinuationPolicy::default(),
             model_binding_policy: SessionModelBindingPolicy::default(),
             model_binding_fingerprint: None,
+            #[cfg(feature = "taiji")]
+            is_daemon: false,
         }
     }
 }
@@ -241,6 +252,14 @@ pub struct SessionSummary {
     pub created_at: SystemTime,
     pub last_activity_at: SystemTime,
     pub state: SessionState,
+    /// Optional parent session ID for tree-structured display.
+    #[cfg(feature = "taiji")]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub parent_session_id: Option<String>,
+    /// Warden daemon session marker.
+    #[cfg(feature = "taiji")]
+    #[serde(default)]
+    pub is_daemon: bool,
 }
 
 /// Persisted session state sidecar used by product session storage.
@@ -285,7 +304,12 @@ mod tests {
     fn session_config_default_preserves_existing_context_budget() {
         let config = SessionConfig::default();
 
-        assert_eq!(config.max_context_tokens, 128128);
+        let expected_context_tokens: usize = if cfg!(feature = "taiji") {
+            1_048_576
+        } else {
+            128_128
+        };
+        assert_eq!(config.max_context_tokens, expected_context_tokens);
         assert!(config.auto_compact);
         assert!(config.enable_tools);
         assert!(config.safe_mode);
@@ -396,12 +420,34 @@ mod tests {
             runtime_state: SessionState::Idle,
         };
 
-        assert_eq!(
-            serde_json::to_value(file).expect("persisted session state should serialize"),
+        let expected = if cfg!(feature = "taiji") {
             json!({
                 "schema_version": 1,
                 "config": {
-                    "max_context_tokens": 128128,
+                    "max_context_tokens": 1_048_576,
+                    "auto_compact": true,
+                    "enable_tools": true,
+                    "safe_mode": true,
+                    "max_turns": 200,
+                    "enable_context_compression": true,
+                    "workspace_path": "/workspace",
+                    "model_id": "model-a",
+                    "is_daemon": false
+                },
+                "snapshot_session_id": "snapshot-1",
+                "last_user_dialog_agent_type": "agentic",
+                "last_submitted_agent_type": "DeepReview",
+                "compression_state": {
+                    "last_compression_at": null,
+                    "compression_count": 2
+                },
+                "runtime_state": "Idle"
+            })
+        } else {
+            json!({
+                "schema_version": 1,
+                "config": {
+                    "max_context_tokens": 128_128,
                     "auto_compact": true,
                     "enable_tools": true,
                     "safe_mode": true,
@@ -419,6 +465,10 @@ mod tests {
                 },
                 "runtime_state": "Idle"
             })
+        };
+        assert_eq!(
+            serde_json::to_value(file).expect("persisted session state should serialize"),
+            expected
         );
     }
 }

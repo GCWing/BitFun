@@ -8,8 +8,6 @@ pub fn create_mcp_client_info(
 ) -> ClientInfo {
     ClientInfo::new(
         ClientCapabilities::builder()
-            .enable_roots()
-            .enable_sampling()
             .enable_elicitation()
             .build(),
         Implementation::new(client_name, client_version),

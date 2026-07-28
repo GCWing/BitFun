@@ -1,0 +1,24 @@
+[package]
+name = "taiji-alert"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+description = "Taiji alert module — multi-channel alarm notification (Feishu webhook, email, desktop)"
+
+[lib]
+name = "taiji_alert"
+crate-type = ["rlib"]
+
+[dependencies]
+serde = { workspace = true }
+serde_json = { workspace = true }
+reqwest = { workspace = true }
+tokio = { workspace = true }
+chrono = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }
+lettre = { workspace = true }
+
+[lints]
+workspace = true

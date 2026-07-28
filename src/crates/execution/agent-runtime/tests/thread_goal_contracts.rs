@@ -175,7 +175,7 @@ fn continuation_outcome_increments_active_goal_and_builds_plan() {
         .as_ref()
         .expect("active goal should schedule continuation")
         .display_message
-        .contains("1/100"));
+        .contains("1/10"));
 }
 
 #[test]
@@ -253,7 +253,7 @@ fn prompt_and_tool_response_contracts_match_thread_goal_wire_shape() {
     );
 
     let plan = build_thread_goal_continuation_plan(&goal(ThreadGoalStatus::Active));
-    assert_eq!(plan.user_message_metadata["autoContinuationMax"], 100);
+    assert_eq!(plan.user_message_metadata["autoContinuationMax"], 10);
 }
 
 #[test]
@@ -348,5 +348,5 @@ fn turn_filtering_and_retry_policies_preserve_goal_mode_semantics() {
         "insufficient_quota: billing hard limit"
     ));
     assert!(!is_usage_limit_message("tool failed"));
-    assert_eq!(MAX_GOAL_CONTINUATIONS, 100);
+    assert_eq!(MAX_GOAL_CONTINUATIONS, 10);
 }

@@ -1,0 +1,16 @@
+[product]
+name = "taiji-quant"
+version = "0.1.0"
+
+[tiers.free]
+label = "免费版"
+
+[tiers.free.features]
+"cli.analyze" = true
+"cli.signal" = true
+"cli.backtest" = false
+"cli.mcp" = false
+"cli.acp" = false
+
+[tiers.free.data]
+sources = ["akshare"]
