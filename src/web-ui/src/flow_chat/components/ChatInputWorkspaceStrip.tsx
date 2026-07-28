@@ -85,6 +85,7 @@ export const ChatInputWorkspaceStrip: React.FC<ChatInputWorkspaceStripProps> = (
   const permissionRootRef = useRef<HTMLDivElement>(null);
   const [permissionMenuOpen, setPermissionMenuOpen] = useState(false);
   const [worktreePending, setWorktreePending] = useState(false);
+  const worktreePendingRef = useRef(false);
   const trimmedPath = repositoryPath.trim();
   const label = workspaceLabel.trim();
 
@@ -196,11 +197,13 @@ export const ChatInputWorkspaceStrip: React.FC<ChatInputWorkspaceStripProps> = (
   const showPermissionLabel = permissionMode !== 'acp';
 
   const handleWorktreeToggle = () => {
-    if (!worktreeControl || worktreeToggleDisabled) {
+    if (!worktreeControl || worktreeToggleDisabled || worktreePendingRef.current) {
       return;
     }
+    worktreePendingRef.current = true;
     setWorktreePending(true);
     void Promise.resolve(worktreeControl.onChange(!isWorktree)).finally(() => {
+      worktreePendingRef.current = false;
       setWorktreePending(false);
     });
   };

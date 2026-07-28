@@ -70,22 +70,6 @@ impl ChatMode {
         chat_state: &mut ChatState,
         rt_handle: &tokio::runtime::Handle,
     ) -> Result<Option<ChatExitReason>> {
-        let action = action_by_id("toggle_worktree", ActionContext::Chat)
-            .expect("Worktree action must remain registered");
-        let state = ActionState::chat(chat_state.is_processing, false);
-        if !action.available(state) {
-            chat_view.set_status(Some(action.unavailable_message(state)));
-            return Ok(None);
-        }
-        if self.agent.is_shared() {
-            let message = format!(
-                "Worktree isolation is unavailable in Shared TUI preview. {SHARED_TUI_EMBEDDED_HANDOFF}."
-            );
-            chat_view.set_status(Some(message.clone()));
-            chat_state.add_system_message(message);
-            return Ok(None);
-        }
-
         let command = match parse_worktree_command(arguments) {
             Ok(command) => command,
             Err(usage) => {
@@ -103,6 +87,30 @@ impl ChatMode {
             return Ok(None);
         }
 
+        let action = action_by_id("toggle_worktree", ActionContext::Chat)
+            .expect("Worktree action must remain registered");
+        let state = ActionState::chat(chat_state.is_processing, false);
+        if !action.available(state) {
+            chat_view.set_status(Some(action.unavailable_message(state)));
+            return Ok(None);
+        }
+        if self.agent.is_shared() {
+            let message = format!(
+                "Worktree isolation is unavailable in Shared TUI preview. {SHARED_TUI_EMBEDDED_HANDOFF}."
+            );
+            chat_view.set_status(Some(message.clone()));
+            chat_state.add_system_message(message);
+            return Ok(None);
+        }
+        if chat_state.has_conversation_history() {
+            let message =
+                "Worktree isolation can only be changed before the session's first message"
+                    .to_string();
+            chat_view.set_status(Some(message.clone()));
+            chat_state.add_system_message(message);
+            return Ok(None);
+        }
+
         let enabled = match command {
             WorktreeCommand::Toggle => !chat_state.is_worktree_enabled(),
             WorktreeCommand::Set(enabled) => enabled,
@@ -114,11 +122,13 @@ impl ChatMode {
             "Disabling worktree isolation...".to_string()
         }));
 
+        let project_workspace_path = chat_state.project_workspace_path().map(str::to_string);
         let result = tokio::task::block_in_place(|| {
             rt_handle.block_on(WorktreeService::bind_session(
                 WorktreeSessionBindingRequest {
                     request_id: uuid::Uuid::new_v4().to_string(),
                     session_id: chat_state.core_session_id.clone(),
+                    project_workspace_path,
                     enabled,
                 },
             ))

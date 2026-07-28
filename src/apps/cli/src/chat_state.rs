@@ -419,6 +419,10 @@ impl ChatState {
             .is_some()
     }
 
+    pub(crate) fn has_conversation_history(&self) -> bool {
+        self.metadata.message_count > 0
+    }
+
     pub(crate) fn set_worktree_control_available(&mut self, available: bool) {
         self.worktree_control_available = available;
     }
@@ -1400,6 +1404,21 @@ mod tests {
             state.workspace_context_label(),
             "Branch: main | Worktree: unavailable"
         );
+    }
+
+    #[test]
+    fn worktree_binding_history_ignores_local_system_messages() {
+        let mut state = ChatState::new(
+            "session-1".to_string(),
+            "Session".to_string(),
+            "agentic".to_string(),
+            Some("/tmp/project".to_string()),
+        );
+        state.add_system_message("Worktree: off".to_string());
+        assert!(!state.has_conversation_history());
+
+        state.metadata.message_count = 1;
+        assert!(state.has_conversation_history());
     }
 
     #[test]

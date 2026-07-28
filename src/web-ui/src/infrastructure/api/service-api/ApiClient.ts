@@ -34,6 +34,30 @@ function shouldEstimateApiPayloadBytes(): boolean {
   return globalThis.__BITFUN_PERF_TRACE_ENABLED__ === true;
 }
 
+function transportErrorMessage(error: unknown): string {
+  if (error instanceof Error) {
+    return error.message;
+  }
+  if (typeof error === 'string') {
+    return error;
+  }
+  if (error && typeof error === 'object') {
+    const record = error as Record<string, unknown>;
+    for (const key of ['message', 'detail', 'error']) {
+      const value = record[key];
+      if (typeof value === 'string' && value.trim()) {
+        return value;
+      }
+    }
+    try {
+      return JSON.stringify(error) || 'Unknown command error';
+    } catch {
+      return 'Unknown command error';
+    }
+  }
+  return String(error);
+}
+
 function apiErrorCause(error: unknown): unknown {
   if (!(error instanceof Error)) {
     return error;
@@ -63,7 +87,7 @@ function isOptionalConfigNotFoundCommand(config: TauriCommandConfig, error: unkn
     return false;
   }
 
-  const errorMessage = error instanceof Error ? error.message : String(error);
+  const errorMessage = transportErrorMessage(error);
   const normalized = errorMessage.toLowerCase();
   return normalized.includes('not found') && normalized.includes('config path');
 }
@@ -421,7 +445,7 @@ export class ApiClient implements IApiClient {
         timestamp: new Date()
       };
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : String(error);
+      const errorMessage = transportErrorMessage(error);
       
       
       const isExpectedError = errorMessage.includes('not found') || 

@@ -114,14 +114,48 @@ export interface WorktreeSessionBindingResult {
   retainedWorktreePath?: string;
 }
 
+const WORKTREE_ERROR_CODES = new Set<WorktreeErrorCode>([
+  'remote_unsupported',
+  'not_git_repository',
+  'unborn_repo',
+  'invalid_base_ref',
+  'worktree_not_found',
+  'worktree_busy',
+  'worktree_locked',
+  'dirty_worktree',
+  'unpublished_commits',
+  'copy_conflict',
+  'invalid_path',
+  'branch_exists',
+  'request_conflict',
+  'rollback_incomplete',
+  'git_failed',
+  'io_failed',
+]);
+
+function isWorktreeErrorCode(value: unknown): value is WorktreeErrorCode {
+  return typeof value === 'string' && WORKTREE_ERROR_CODES.has(value as WorktreeErrorCode);
+}
+
+function fallbackErrorMessage(error: unknown): string {
+  if (error instanceof Error) return error.message;
+  if (error && typeof error === 'object') {
+    const message = (error as { message?: unknown }).message;
+    if (typeof message === 'string' && message.trim()) return message;
+    try {
+      return JSON.stringify(error) || 'Unknown worktree command error';
+    } catch {
+      return 'Unknown worktree command error';
+    }
+  }
+  return String(error);
+}
+
 export function toWorktreeCommandError(error: unknown): WorktreeCommandError {
   const candidates: unknown[] = [error];
-  if (error instanceof Error) {
-    const enriched = error as Error & { data?: unknown; cause?: unknown };
-    candidates.push(enriched.data, enriched.cause, error.message);
-  }
-  for (const candidate of candidates) {
-    let value = candidate;
+  const visited = new Set<object>();
+  while (candidates.length > 0) {
+    let value = candidates.shift();
     if (typeof value === 'string') {
       try {
         value = JSON.parse(value);
@@ -130,17 +164,31 @@ export function toWorktreeCommandError(error: unknown): WorktreeCommandError {
       }
     }
     if (value && typeof value === 'object') {
-      const payload = value as Partial<WorktreeErrorPayload>;
-      if (typeof payload.code === 'string' && typeof payload.message === 'string') {
+      if (visited.has(value)) continue;
+      visited.add(value);
+      const payload = value as Partial<WorktreeErrorPayload> & Record<string, unknown>;
+      if (isWorktreeErrorCode(payload.code) && typeof payload.message === 'string') {
         return new WorktreeCommandError(
-          payload.code as WorktreeErrorCode,
+          payload.code,
           payload.message,
           payload.recoveryPath,
         );
       }
+      const details = payload.details;
+      candidates.push(
+        payload.data,
+        payload.cause,
+        payload.originalError,
+        payload.error,
+        payload.message,
+        details && typeof details === 'object'
+          ? (details as Record<string, unknown>).originalError
+          : undefined,
+        details,
+      );
     }
   }
-  return new WorktreeCommandError('git_failed', error instanceof Error ? error.message : String(error));
+  return new WorktreeCommandError('git_failed', fallbackErrorMessage(error));
 }
 
 async function invokeWorktree<T>(command: string, request: unknown): Promise<T> {
@@ -220,8 +268,14 @@ export class WorktreeAPI {
     sessionId: string,
     enabled: boolean,
     requestId: string,
+    projectWorkspacePath: string,
   ): Promise<WorktreeSessionBindingResult> {
-    return invokeWorktree('worktree_bind_session', { sessionId, enabled, requestId });
+    return invokeWorktree('worktree_bind_session', {
+      sessionId,
+      enabled,
+      requestId,
+      projectWorkspacePath,
+    });
   }
 
   onChanged(callback: (event: WorktreeChangedEvent) => void): () => void {

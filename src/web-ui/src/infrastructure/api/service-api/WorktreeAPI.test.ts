@@ -51,6 +51,51 @@ describe('WorktreeAPI', () => {
     } satisfies Partial<WorktreeCommandError>);
   });
 
+  it('unwraps domain errors nested by ApiClient command handling', async () => {
+    const transportError = Object.assign(new Error('Session not found: history-1'), {
+      code: 'COMMAND_FAILED',
+      details: {
+        originalError: {
+          code: 'worktree_not_found',
+          message: 'Session not found: history-1',
+        },
+      },
+    });
+    invokeMock.mockRejectedValue(transportError);
+
+    await expect(
+      api.bindSession('history-1', true, 'request-3', 'D:\\workspace\\BitFun'),
+    ).rejects.toMatchObject({
+      name: 'WorktreeCommandError',
+      code: 'worktree_not_found',
+      message: 'Session not found: history-1',
+    } satisfies Partial<WorktreeCommandError>);
+  });
+
+  it('sends the project locator when binding a historical session', async () => {
+    invokeMock.mockResolvedValue({
+      sessionId: 'history-1',
+      workspacePath: '/worktrees/wt-1',
+      projectWorkspacePath: '/repo',
+      executionTarget: {
+        kind: 'managedWorktree',
+        worktreeId: 'wt-1',
+        rootPath: '/worktrees/wt-1',
+      },
+    });
+
+    await api.bindSession('history-1', true, 'request-4', '/repo');
+
+    expect(invokeMock).toHaveBeenCalledWith('worktree_bind_session', {
+      request: {
+        sessionId: 'history-1',
+        enabled: true,
+        requestId: 'request-4',
+        projectWorkspacePath: '/repo',
+      },
+    });
+  });
+
   it('subscribes to event-driven worktree updates', () => {
     const unsubscribe = vi.fn();
     const callback = vi.fn();

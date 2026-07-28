@@ -68,8 +68,9 @@ pub async fn worktree_remove(
     WorktreeService::remove(request).await
 }
 
-/// Toggle worktree isolation for a single session. The project path is derived
-/// from the session itself, so remote checks live in the product layer.
+/// Toggle worktree isolation for a single session. The optional project path
+/// lets the product layer locate view-only persisted sessions; remote checks
+/// and repository resolution remain in that shared layer.
 #[tauri::command]
 pub async fn worktree_bind_session(
     request: WorktreeSessionBindingRequest,

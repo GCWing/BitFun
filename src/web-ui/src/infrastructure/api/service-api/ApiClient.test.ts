@@ -122,6 +122,32 @@ describe('ApiClient startup trace classification', () => {
     });
   });
 
+  it('uses the message from plain structured Tauri errors', async () => {
+    const transportError = {
+      code: 'worktree_not_found',
+      message: 'Session not found: history-1',
+    };
+    adapterMocks.request.mockRejectedValueOnce(transportError);
+    const client = new ApiClient({ enableLogging: false, retries: 0 });
+
+    const error = await client.invoke('worktree_bind_session', {
+      request: { sessionId: 'history-1', enabled: true },
+    }).catch((caught: unknown) => caught as {
+      code: string;
+      message: string;
+      details?: { originalError?: unknown };
+    });
+
+    expect(error).toMatchObject({
+      code: 'COMMAND_FAILED',
+      message: 'Session not found: history-1',
+      details: {
+        originalError: transportError,
+      },
+    });
+    expect(error.message).not.toBe('[object Object]');
+  });
+
   it('keeps message-only transport errors parseable by domain adapters', async () => {
     const encoded = JSON.stringify({
       code: 'stale_revision',

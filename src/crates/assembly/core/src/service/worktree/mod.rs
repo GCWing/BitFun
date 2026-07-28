@@ -1174,10 +1174,11 @@ fn resolve_managed_root(
     path_manager: &PathManager,
 ) -> Result<PathBuf, WorktreeError> {
     let configured = settings.root_path.trim();
-    if configured.is_empty() || configured == "~/.bitfun/worktrees" {
+    let portable_configured = configured.replace('\\', "/");
+    if portable_configured.is_empty() || portable_configured == "~/.bitfun/worktrees" {
         return Ok(path_manager.worktrees_root());
     }
-    if configured == "~" {
+    if portable_configured == "~" {
         return dirs::home_dir().ok_or_else(|| {
             error(
                 WorktreeErrorCode::InvalidPath,
@@ -1185,7 +1186,7 @@ fn resolve_managed_root(
             )
         });
     }
-    if let Some(suffix) = configured.strip_prefix("~/") {
+    if let Some(suffix) = portable_configured.strip_prefix("~/") {
         return dirs::home_dir()
             .map(|home| home.join(suffix))
             .ok_or_else(|| {
@@ -1199,7 +1200,7 @@ fn resolve_managed_root(
     if !path.is_absolute() {
         return Err(error(
             WorktreeErrorCode::InvalidPath,
-            "Worktree root must be an absolute path or start with ~/",
+            "Worktree root must be an absolute path or start with ~/ (or ~\\ on Windows)",
         ));
     }
     Ok(path)
@@ -1484,6 +1485,21 @@ mod tests {
             ..WorktreeSettings::default()
         };
         assert!(resolve_managed_root(&settings, &path_manager).is_err());
+    }
+
+    #[test]
+    fn windows_style_default_root_uses_the_managed_path_contract() {
+        let user_root = std::env::temp_dir().join("bitfun-worktree-root-test");
+        let path_manager = PathManager::with_user_root_for_tests(user_root);
+        let settings = WorktreeSettings {
+            root_path: r"~\.bitfun\worktrees".to_string(),
+            ..WorktreeSettings::default()
+        };
+
+        assert_eq!(
+            resolve_managed_root(&settings, &path_manager).unwrap(),
+            path_manager.worktrees_root()
+        );
     }
 
     #[test]

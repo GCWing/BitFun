@@ -81,6 +81,10 @@ import {
 import { isReviewSlashCommand } from '../deep-review/launch/commandParser';
 import { createLogger } from '@/shared/utils/logger';
 import { isSamePath } from '@/shared/utils/pathUtils';
+import {
+  isSessionWorktreeBindingLocked,
+  sessionWorktreeBindingSubscriptionKey,
+} from '../utils/sessionWorktree';
 import { isTauriRuntime } from '@/infrastructure/runtime';
 import { Tooltip, IconButton, confirmDanger, confirmWarning } from '@/component-library';
 import { PendingQueuePanel } from './PendingQueuePanel';
@@ -833,6 +837,15 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     || workspacePath
     || ''
   ).trim();
+  const sessionProjectWorkspacePath = (
+    (!hasRegisteredWorkspace && (
+      effectiveTargetSession?.config.projectWorkspacePath
+      || effectiveTargetSession?.projectWorkspacePath
+      || effectiveTargetSession?.workspacePath
+    ))
+    || workspacePath
+    || ''
+  ).trim();
   const workspacePathRef = useRef(sessionBoundWorkspacePath);
   workspacePathRef.current = sessionBoundWorkspacePath;
   const { openedWorkspaces } = useWorkspaceContext();
@@ -1031,7 +1044,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
               `${s.remoteConnectionId ?? ''}|${s.remoteSshHost ?? ''}|${s.lastSubmittedMode ?? ''}|` +
               `${s.currentAcpContextUsage?.used ?? ''}|${s.currentAcpContextUsage?.size ?? ''}|` +
               `${s.currentTokenUsage?.inputTokens ?? ''}|${s.maxContextTokens ?? ''}|` +
-              `${s.needsUserAttention ? '1':'0'}`
+              `${s.needsUserAttention ? '1':'0'}|${sessionWorktreeBindingSubscriptionKey(s)}`
             );
           }
         }
@@ -1900,17 +1913,37 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     if (effectiveTargetSession.remoteConnectionId) return undefined;
     if (isSubagentInputTarget || isAcpTargetSession) return undefined;
 
-    const locked = effectiveTargetSession.dialogTurns.length > 0
-      || effectiveTargetSession.status === 'active';
+    const locked = isSessionWorktreeBindingLocked(
+      effectiveTargetSession,
+      !!derivedState?.isProcessing,
+    );
 
     return {
       locked,
       onChange: async (enabled: boolean) => {
+        const latestSession = FlowChatStore.getInstance()
+          .getState()
+          .sessions
+          .get(effectiveTargetSessionId);
+        if (
+          !latestSession
+          || isSessionWorktreeBindingLocked(latestSession, false)
+        ) {
+          notificationService.error(tWorktrees('strip.toggleLocked'));
+          return;
+        }
+        const latestProjectWorkspacePath = (
+          latestSession.config.projectWorkspacePath
+          || latestSession.projectWorkspacePath
+          || latestSession.workspacePath
+          || sessionProjectWorkspacePath
+        ).trim();
         try {
           const result = await worktreeAPI.bindSession(
             effectiveTargetSessionId,
             enabled,
             globalThis.crypto?.randomUUID?.() ?? `worktree-${Date.now()}`,
+            latestProjectWorkspacePath,
           );
           FlowChatStore.getInstance().updateSessionExecutionTarget(effectiveTargetSessionId, {
             workspacePath: result.workspacePath,
@@ -1936,8 +1969,10 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   }, [
     effectiveTargetSession,
     effectiveTargetSessionId,
+    derivedState?.isProcessing,
     isAcpTargetSession,
     isSubagentInputTarget,
+    sessionProjectWorkspacePath,
     tWorktrees,
   ]);
 

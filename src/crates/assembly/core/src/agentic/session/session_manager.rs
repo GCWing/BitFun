@@ -42,6 +42,7 @@ use crate::service::workspace::{get_global_workspace_service, WorkspaceInfo, Wor
 use crate::util::errors::{BitFunError, BitFunResult};
 use crate::util::sanitize_plain_model_output;
 use crate::util::timing::elapsed_ms_u64;
+use bitfun_core_types::SessionExecutionTarget;
 pub use bitfun_runtime_ports::SessionViewRestoreTiming;
 use bitfun_runtime_ports::{SessionStoragePathRequest, SessionStorePort};
 use bitfun_services_core::session::{
@@ -50,7 +51,6 @@ use bitfun_services_core::session::{
     set_deep_review_run_manifest, set_review_target_evidence, set_session_relationship,
     SessionStorageLayout,
 };
-use bitfun_core_types::SessionExecutionTarget;
 use dashmap::{mapref::entry::Entry, DashMap};
 use log::{debug, error, info, warn};
 use serde::{Deserialize, Serialize};
@@ -166,6 +166,20 @@ pub struct SessionExecutionBindingUpdate {
     pub project_workspace_path: String,
     pub workspace_id: Option<String>,
     pub execution_target: SessionExecutionTarget,
+}
+
+/// Stable failure categories for atomically moving a session execution root.
+///
+/// Worktree lifecycle maps these categories to its public structured error
+/// contract without having to inspect human-readable `BitFunError` messages.
+#[derive(Debug, thiserror::Error)]
+pub enum SessionExecutionBindingError {
+    #[error("{0}")]
+    Busy(String),
+    #[error("{0}")]
+    NotFound(String),
+    #[error(transparent)]
+    Internal(#[from] BitFunError),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -3497,24 +3511,42 @@ impl SessionManager {
         &self,
         session_id: &str,
         binding: SessionExecutionBindingUpdate,
-    ) -> BitFunResult<()> {
+    ) -> Result<(), SessionExecutionBindingError> {
         // Mirrors update_session_model_id: an evicted session must be restored
-        // from its recorded storage path before the mutation permit is taken.
+        // before the mutation permit is taken. View-only historical restores do
+        // not populate the storage-path index, so use the owning project path as
+        // the stable fallback locator.
         if !self.sessions.contains_key(session_id) && self.config.enable_persistence {
             let session_storage_path = self
                 .session_storage_path_index
                 .get(session_id)
                 .map(|entry| entry.value().path.clone());
-            if let Some(session_storage_path) = session_storage_path {
-                let _ = self
-                    .restore_session_from_storage_path(&session_storage_path, session_id)
-                    .await;
+            let restore_result = if let Some(session_storage_path) = session_storage_path {
+                self.restore_session_from_storage_path(&session_storage_path, session_id)
+                    .await
+            } else {
+                self.restore_session(Path::new(&binding.project_workspace_path), session_id)
+                    .await
+            };
+            if let Err(restore_error) = restore_result {
+                return match restore_error {
+                    BitFunError::NotFound(message) => {
+                        Err(SessionExecutionBindingError::NotFound(message))
+                    }
+                    other => Err(SessionExecutionBindingError::Internal(other)),
+                };
             }
         }
 
         let _mutation_guard = self.acquire_session_mutation(session_id).await?;
 
         if let Some(mut session) = self.sessions.get_mut(session_id) {
+            if !session.dialog_turn_ids.is_empty() || !matches!(session.state, SessionState::Idle) {
+                return Err(SessionExecutionBindingError::Busy(
+                    "Worktree isolation can only be changed before the session's first message"
+                        .to_string(),
+                ));
+            }
             session.config.workspace_path = Some(binding.workspace_path.clone());
             session.config.project_workspace_path = Some(binding.project_workspace_path.clone());
             session.config.execution_target = Some(binding.execution_target.clone());
@@ -3522,9 +3554,8 @@ impl SessionManager {
             session.updated_at = SystemTime::now();
             session.last_activity_at = SystemTime::now();
         } else {
-            return Err(BitFunError::NotFound(format!(
-                "Session not found: {}",
-                session_id
+            return Err(SessionExecutionBindingError::NotFound(format!(
+                "Session not found: {session_id}"
             )));
         }
 
@@ -6819,8 +6850,8 @@ impl SessionManager {
 #[cfg(test)]
 mod tests {
     use super::{
-        should_auto_migrate_session_model, CoreSessionStorePort, SessionManager,
-        SessionManagerConfig,
+        should_auto_migrate_session_model, CoreSessionStorePort, SessionExecutionBindingError,
+        SessionExecutionBindingUpdate, SessionManager, SessionManagerConfig,
     };
     use crate::agentic::core::{
         CompressionState, Message, MessageContent, MessageRole, ProcessingPhase, Session,
@@ -6841,6 +6872,7 @@ mod tests {
         SessionRelationship, SessionRelationshipKind, ToolCallData, ToolItemData, ToolResultData,
         TurnStatus, UserMessageData,
     };
+    use bitfun_core_types::SessionExecutionTarget;
     use bitfun_runtime_ports::SessionStoragePathRequest;
     use dashmap::{try_result::TryResult, DashMap};
     use serde_json::json;
@@ -7051,6 +7083,103 @@ mod tests {
                 prompt_cache_policy: PromptCachePolicy::default(),
             },
         )
+    }
+
+    #[tokio::test]
+    async fn execution_binding_rejects_a_session_after_its_first_turn() {
+        let manager = in_memory_test_manager();
+        let workspace = TestWorkspace::new();
+        let session = manager
+            .create_session(
+                "Binding race".to_string(),
+                "agentic".to_string(),
+                SessionConfig {
+                    workspace_path: Some(workspace.path().to_string_lossy().to_string()),
+                    ..SessionConfig::default()
+                },
+            )
+            .await
+            .expect("session should be created");
+        manager
+            .sessions
+            .get_mut(&session.session_id)
+            .expect("session should remain loaded")
+            .dialog_turn_ids
+            .push("turn-1".to_string());
+
+        let error = manager
+            .update_session_execution_binding(
+                &session.session_id,
+                SessionExecutionBindingUpdate {
+                    workspace_path: "/tmp/worktree".to_string(),
+                    project_workspace_path: workspace.path().to_string_lossy().to_string(),
+                    workspace_id: None,
+                    execution_target: SessionExecutionTarget::local("/tmp/worktree".to_string()),
+                },
+            )
+            .await
+            .expect_err("a non-empty session must not move");
+
+        assert!(matches!(error, SessionExecutionBindingError::Busy(_)));
+        assert_eq!(
+            manager
+                .get_session(&session.session_id)
+                .and_then(|session| session.config.workspace_path),
+            Some(workspace.path().to_string_lossy().to_string())
+        );
+    }
+
+    #[tokio::test]
+    async fn execution_binding_restores_a_view_only_empty_session_from_its_project() {
+        let workspace = TestWorkspace::new();
+        let persistence_manager = Arc::new(
+            PersistenceManager::new(workspace.path_manager()).expect("persistence manager"),
+        );
+        let manager = test_manager(persistence_manager);
+        let session = manager
+            .create_session(
+                "View-only binding".to_string(),
+                "agentic".to_string(),
+                SessionConfig {
+                    workspace_path: Some(workspace.path().to_string_lossy().to_string()),
+                    project_workspace_path: Some(workspace.path().to_string_lossy().to_string()),
+                    ..SessionConfig::default()
+                },
+            )
+            .await
+            .expect("session should be created");
+        assert!(manager
+            .unload_session_from_memory(&session.session_id)
+            .await
+            .expect("session should unload"));
+        manager
+            .session_storage_path_index
+            .remove(&session.session_id);
+
+        let target_path = workspace.path().join("managed-worktree");
+        manager
+            .update_session_execution_binding(
+                &session.session_id,
+                SessionExecutionBindingUpdate {
+                    workspace_path: target_path.to_string_lossy().to_string(),
+                    project_workspace_path: workspace.path().to_string_lossy().to_string(),
+                    workspace_id: Some("workspace-2".to_string()),
+                    execution_target: SessionExecutionTarget::local(
+                        target_path.to_string_lossy().to_string(),
+                    ),
+                },
+            )
+            .await
+            .expect("view-only session should restore and rebind");
+
+        let restored = manager
+            .get_session(&session.session_id)
+            .expect("session should be loaded after rebinding");
+        assert_eq!(
+            restored.config.workspace_path.as_deref(),
+            Some(target_path.to_string_lossy().as_ref())
+        );
+        assert_eq!(restored.config.workspace_id.as_deref(), Some("workspace-2"));
     }
 
     #[tokio::test]

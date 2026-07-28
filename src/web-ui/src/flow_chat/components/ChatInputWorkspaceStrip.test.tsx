@@ -183,6 +183,33 @@ describe('ChatInputWorkspaceStrip git refresh behavior', () => {
     expect(onChange).toHaveBeenCalledWith(true);
   });
 
+  it('coalesces repeated clicks while a worktree transition is pending', async () => {
+    let finishTransition!: () => void;
+    const onChange = vi.fn(() => new Promise<void>(resolve => {
+      finishTransition = resolve;
+    }));
+    await act(async () => {
+      root.render(
+        <ChatInputWorkspaceStrip
+          repositoryPath="/repo"
+          workspaceLabel="repo"
+          worktreeControl={{ locked: false, onChange }}
+        />
+      );
+    });
+
+    const toggle = container.querySelector<HTMLButtonElement>('[data-testid="chat-input-worktree-toggle"]');
+    act(() => {
+      toggle?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      toggle?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+
+    expect(onChange).toHaveBeenCalledOnce();
+    await act(async () => {
+      finishTransition();
+    });
+  });
+
   it('shows the toggle as on inside a worktree and asks to turn it off', async () => {
     const onChange = vi.fn(async () => undefined);
     await act(async () => {

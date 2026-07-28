@@ -10,7 +10,7 @@
 //! directory underneath it would silently invalidate the history.
 
 use crate::agentic::coordination::get_global_coordinator;
-use crate::agentic::session::SessionExecutionBindingUpdate;
+use crate::agentic::session::{SessionExecutionBindingError, SessionExecutionBindingUpdate};
 use crate::service::remote_ssh::lookup_remote_connection;
 use crate::service::workspace::get_global_workspace_service;
 use crate::service::worktree::{
@@ -27,6 +27,9 @@ use std::path::Path;
 pub struct WorktreeSessionBindingRequest {
     pub request_id: String,
     pub session_id: String,
+    /// Stable owner path used to locate view-only or evicted persisted sessions.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub project_workspace_path: Option<String>,
     /// `true` moves the session into a managed worktree, `false` back to the project.
     pub enabled: bool,
 }
@@ -59,47 +62,109 @@ fn error(code: WorktreeErrorCode, message: impl Into<String>) -> WorktreeError {
     }
 }
 
-async fn load_binding_context(session_id: &str) -> Result<SessionBindingContext, WorktreeError> {
+async fn load_binding_context(
+    request: &WorktreeSessionBindingRequest,
+) -> Result<SessionBindingContext, WorktreeError> {
     let coordinator = get_global_coordinator().ok_or_else(|| {
         error(
             WorktreeErrorCode::IoFailed,
             "Session coordinator is not initialized",
         )
     })?;
-    let session = coordinator
-        .get_session_manager()
-        .get_session(session_id)
-        .ok_or_else(|| {
+    let session_manager = coordinator.get_session_manager();
+    let session = session_manager.get_session(&request.session_id);
+
+    let (workspace_path, project_workspace_path, execution_target) = if let Some(session) = session
+    {
+        if !session.dialog_turn_ids.is_empty() {
+            return Err(error(
+                WorktreeErrorCode::WorktreeBusy,
+                "Worktree isolation can only be changed before the session's first message",
+            ));
+        }
+        if !matches!(session.state, crate::agentic::core::SessionState::Idle) {
+            return Err(error(
+                WorktreeErrorCode::WorktreeBusy,
+                "Worktree isolation cannot be changed while the session is processing",
+            ));
+        }
+        if session.config.remote_connection_id.is_some() {
+            return Err(error(
+                WorktreeErrorCode::RemoteUnsupported,
+                "Managed worktrees are not supported for remote SSH workspaces yet",
+            ));
+        }
+
+        let workspace_path = session.config.workspace_path.clone().ok_or_else(|| {
             error(
-                WorktreeErrorCode::WorktreeNotFound,
-                format!("Session not found: {session_id}"),
+                WorktreeErrorCode::InvalidPath,
+                "Session is not bound to a workspace",
             )
         })?;
+        let project_workspace_path = session
+            .config
+            .project_workspace_path
+            .clone()
+            .unwrap_or_else(|| workspace_path.clone());
+        let execution_target = session
+            .config
+            .execution_target
+            .clone()
+            .unwrap_or_else(|| SessionExecutionTarget::local(workspace_path.clone()));
+        (workspace_path, project_workspace_path, execution_target)
+    } else {
+        let project_workspace_path = request
+                .project_workspace_path
+                .as_deref()
+                .map(str::trim)
+                .filter(|path| !path.is_empty())
+                .ok_or_else(|| {
+                    error(
+                        WorktreeErrorCode::WorktreeNotFound,
+                        format!(
+                            "Session not found: {}. The project workspace path is required to restore historical sessions",
+                            request.session_id
+                        ),
+                    )
+                })?
+                .to_string();
+        let metadata = session_manager
+            .load_session_metadata(Path::new(&project_workspace_path), &request.session_id)
+            .await
+            .map_err(|metadata_error| {
+                error(
+                    WorktreeErrorCode::IoFailed,
+                    format!("Failed to load session metadata: {metadata_error}"),
+                )
+            })?
+            .ok_or_else(|| {
+                error(
+                    WorktreeErrorCode::WorktreeNotFound,
+                    format!("Session not found: {}", request.session_id),
+                )
+            })?;
+        if metadata.turn_count > 0 {
+            return Err(error(
+                WorktreeErrorCode::WorktreeBusy,
+                "Worktree isolation can only be changed before the session's first message",
+            ));
+        }
 
-    if !session.dialog_turn_ids.is_empty() {
-        return Err(error(
-            WorktreeErrorCode::WorktreeBusy,
-            "Worktree isolation can only be changed before the session's first message",
-        ));
-    }
-    if session.config.remote_connection_id.is_some() {
-        return Err(error(
-            WorktreeErrorCode::RemoteUnsupported,
-            "Managed worktrees are not supported for remote SSH workspaces yet",
-        ));
-    }
+        let workspace_path = metadata
+            .workspace_path
+            .clone()
+            .unwrap_or_else(|| project_workspace_path.clone());
+        let persisted_project_path = metadata
+            .project_workspace_path
+            .clone()
+            .unwrap_or(project_workspace_path);
+        let execution_target = metadata
+            .execution_target
+            .clone()
+            .unwrap_or_else(|| SessionExecutionTarget::local(workspace_path.clone()));
+        (workspace_path, persisted_project_path, execution_target)
+    };
 
-    let workspace_path = session.config.workspace_path.clone().ok_or_else(|| {
-        error(
-            WorktreeErrorCode::InvalidPath,
-            "Session is not bound to a workspace",
-        )
-    })?;
-    let project_workspace_path = session
-        .config
-        .project_workspace_path
-        .clone()
-        .unwrap_or_else(|| workspace_path.clone());
     if lookup_remote_connection(&project_workspace_path)
         .await
         .is_some()
@@ -110,11 +175,12 @@ async fn load_binding_context(session_id: &str) -> Result<SessionBindingContext,
         ));
     }
 
-    let execution_target = session
-        .config
-        .execution_target
-        .clone()
-        .unwrap_or_else(|| SessionExecutionTarget::local(workspace_path));
+    if workspace_path.trim().is_empty() {
+        return Err(error(
+            WorktreeErrorCode::InvalidPath,
+            "Session is not bound to a workspace",
+        ));
+    }
 
     Ok(SessionBindingContext {
         project_workspace_path,
@@ -154,11 +220,17 @@ async fn rebind(
             },
         )
         .await
-        .map_err(|session_error| {
-            error(
+        .map_err(|session_error| match session_error {
+            SessionExecutionBindingError::Busy(message) => {
+                error(WorktreeErrorCode::WorktreeBusy, message)
+            }
+            SessionExecutionBindingError::NotFound(message) => {
+                error(WorktreeErrorCode::WorktreeNotFound, message)
+            }
+            SessionExecutionBindingError::Internal(internal) => error(
                 WorktreeErrorCode::IoFailed,
-                format!("Failed to rebind session workspace: {session_error}"),
-            )
+                format!("Failed to rebind session workspace: {internal}"),
+            ),
         })?;
 
     Ok(WorktreeSessionBindingResult {
@@ -179,7 +251,7 @@ impl WorktreeService {
     pub async fn bind_session(
         request: WorktreeSessionBindingRequest,
     ) -> Result<WorktreeSessionBindingResult, WorktreeError> {
-        let context = load_binding_context(&request.session_id).await?;
+        let context = load_binding_context(&request).await?;
         let is_worktree = context.execution_target.worktree_id.is_some();
 
         if request.enabled == is_worktree {
@@ -306,5 +378,38 @@ impl WorktreeService {
 
         result.retained_worktree_path = Some(worktree_path);
         Ok(result)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::WorktreeSessionBindingRequest;
+
+    #[test]
+    fn binding_request_keeps_legacy_callers_compatible() {
+        let request: WorktreeSessionBindingRequest = serde_json::from_value(serde_json::json!({
+            "requestId": "request-1",
+            "sessionId": "session-1",
+            "enabled": true
+        }))
+        .expect("legacy request should deserialize");
+
+        assert_eq!(request.project_workspace_path, None);
+    }
+
+    #[test]
+    fn binding_request_uses_a_cross_platform_project_locator() {
+        let request: WorktreeSessionBindingRequest = serde_json::from_value(serde_json::json!({
+            "requestId": "request-2",
+            "sessionId": "session-2",
+            "projectWorkspacePath": "D:\\workspace\\BitFun",
+            "enabled": false
+        }))
+        .expect("request should deserialize");
+
+        assert_eq!(
+            request.project_workspace_path.as_deref(),
+            Some(r"D:\workspace\BitFun")
+        );
     }
 }
