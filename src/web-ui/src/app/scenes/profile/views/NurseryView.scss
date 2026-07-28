@@ -259,8 +259,11 @@ $nursery-gallery-gutter: clamp(24px, 4vw, 56px);
   }
 
   &__emoji {
+    max-width: 100%;
+    overflow: hidden;
     font-size: 21px;
     line-height: 1;
+    white-space: nowrap;
   }
 
   &__avatar-icon {
@@ -2697,6 +2700,191 @@ $acp-content-top: clamp(40px, 4.5vh, 52px);
   &__meta-input {
     font-size: var(--font-size-base);
     max-width: 140px;
+  }
+}
+
+.acp-avatar-picker {
+  position: relative;
+  z-index: 1;
+  flex-shrink: 0;
+
+  &__trigger {
+    position: relative;
+    display: flex;
+    width: 64px;
+    height: 64px;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    overflow: hidden;
+    border: 1px solid var(--border-subtle);
+    border-radius: $size-radius-base;
+    background: var(--element-bg-medium);
+    color: var(--color-text-secondary);
+    cursor: pointer;
+    transition:
+      border-color $motion-fast $easing-standard,
+      background $motion-fast $easing-standard,
+      box-shadow $motion-fast $easing-standard;
+
+    &:hover,
+    &.is-open {
+      border-color: color-mix(in srgb, var(--color-accent-500) 46%, var(--border-subtle));
+      background: var(--element-bg-base);
+    }
+
+    &:focus-visible {
+      outline: 2px solid color-mix(in srgb, var(--color-accent-500) 58%, transparent);
+      outline-offset: 2px;
+    }
+  }
+
+  &__value {
+    display: flex;
+    max-width: 100%;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    font-size: 31px;
+    line-height: 1;
+    white-space: nowrap;
+  }
+
+  &__edit-cue {
+    position: absolute;
+    right: 4px;
+    bottom: 4px;
+    display: flex;
+    width: 19px;
+    height: 19px;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid var(--border-subtle);
+    border-radius: $size-radius-sm;
+    background: var(--color-bg-elevated);
+    color: var(--color-text-secondary);
+    box-shadow: var(--shadow-xs);
+  }
+
+  &__popover {
+    position: absolute;
+    top: calc(100% + #{$size-gap-2});
+    left: 0;
+    z-index: $z-popover;
+    width: 328px;
+    max-width: calc(100vw - 48px);
+    padding: $size-gap-3;
+    border: 1px solid var(--border-subtle);
+    border-radius: $size-radius-lg;
+    background: var(--color-bg-elevated);
+    box-shadow: var(--shadow-lg);
+  }
+
+  &__header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: $size-gap-3;
+    margin-bottom: $size-gap-3;
+  }
+
+  &__heading {
+    display: flex;
+    min-width: 0;
+    flex-direction: column;
+    gap: 2px;
+
+    strong {
+      color: var(--color-text-primary);
+      font-size: var(--font-size-sm);
+      font-weight: $font-weight-semibold;
+      line-height: $line-height-base;
+    }
+
+    span {
+      color: var(--color-text-muted);
+      font-size: var(--font-size-2xs);
+      line-height: $line-height-relaxed;
+    }
+  }
+
+  &__grid {
+    display: grid;
+    grid-template-columns: repeat(8, 1fr);
+    gap: $size-gap-1;
+  }
+
+  &__option {
+    display: flex;
+    width: 32px;
+    height: 32px;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    border: 1px solid transparent;
+    border-radius: $size-radius-sm;
+    background: transparent;
+    font-size: 18px;
+    line-height: 1;
+    cursor: pointer;
+    transition:
+      border-color $motion-fast $easing-standard,
+      background $motion-fast $easing-standard,
+      transform $motion-fast $easing-standard;
+
+    &:hover {
+      background: var(--element-bg-soft);
+      transform: translateY(-1px);
+    }
+
+    &:focus-visible {
+      outline: 2px solid color-mix(in srgb, var(--color-accent-500) 58%, transparent);
+      outline-offset: 1px;
+    }
+
+    &.is-selected {
+      border-color: color-mix(in srgb, var(--color-accent-500) 48%, var(--border-subtle));
+      background: color-mix(in srgb, var(--color-accent-500) 12%, transparent);
+    }
+  }
+
+  &__custom {
+    display: flex;
+    align-items: center;
+    gap: $size-gap-2;
+    margin-top: $size-gap-3;
+    padding-top: $size-gap-3;
+    border-top: 1px solid var(--border-subtle);
+  }
+
+  &__custom-input {
+    min-width: 0;
+    flex: 1;
+  }
+
+  &__footer {
+    display: flex;
+    min-height: 18px;
+    align-items: center;
+    justify-content: flex-end;
+    margin-top: $size-gap-2;
+  }
+
+  &__status {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    color: var(--color-text-muted);
+    font-size: var(--font-size-2xs);
+    line-height: $line-height-base;
+
+    &.is-saved {
+      color: var(--color-success);
+    }
+
+    &.is-error {
+      color: var(--color-error);
+    }
   }
 }
 

@@ -30,6 +30,7 @@ import {
   splitMarkdownFrontmatter,
 } from '@/app/scenes/my-agent/identityDocument';
 import SessionsSection from '@/app/components/NavPanel/sections/sessions/SessionsSection';
+import AssistantAvatarPicker from './AssistantAvatarPicker';
 import AssistantQuickInput from './AssistantQuickInput';
 import { useNurseryStore } from '../nurseryStore';
 
@@ -132,6 +133,8 @@ const AssistantConfigPage: React.FC = () => {
 
   const {
     document: identityDocument,
+    error: identitySaveError,
+    saveStatus: identitySaveStatus,
     updateField: updateIdentityField,
     reload: reloadIdentityDocument,
   } = useAgentIdentityDocument(workspacePath);
@@ -146,7 +149,7 @@ const AssistantConfigPage: React.FC = () => {
     };
   }, [identityDocument, workspace?.identity]);
 
-  const [editingField, setEditingField] = useState<'name' | 'emoji' | 'creature' | 'vibe' | null>(null);
+  const [editingField, setEditingField] = useState<'name' | 'creature' | 'vibe' | null>(null);
   const [editValue, setEditValue] = useState('');
   const nameInputRef = useRef<HTMLInputElement>(null);
   const metaInputRef = useRef<HTMLInputElement>(null);
@@ -310,16 +313,14 @@ const AssistantConfigPage: React.FC = () => {
     return () => window.removeEventListener('keydown', onKey);
   }, [rightView, closePersonaDoc]);
 
-  const startEdit = useCallback((field: 'name' | 'emoji' | 'creature' | 'vibe') => {
+  const startEdit = useCallback((field: 'name' | 'creature' | 'vibe') => {
     setEditingField(field);
     setEditValue(
       field === 'name'
         ? displayIdentity.name
-        : field === 'emoji'
-          ? displayIdentity.emoji
-          : field === 'creature'
-            ? displayIdentity.creature
-            : displayIdentity.vibe,
+        : field === 'creature'
+          ? displayIdentity.creature
+          : displayIdentity.vibe,
     );
     setTimeout(() => {
       (field === 'name' ? nameInputRef : metaInputRef).current?.focus();
@@ -522,6 +523,12 @@ const AssistantConfigPage: React.FC = () => {
         <div className="acp-layout__left">
           {/* Identity header above the input */}
           <div className="acp-left-header">
+            <AssistantAvatarPicker
+              value={displayIdentity.emoji}
+              saveStatus={identitySaveStatus}
+              saveError={identitySaveError}
+              onChange={(emoji) => updateIdentityField('emoji', emoji)}
+            />
             <div className="acp-left-header__info">
               {editingField === 'name' ? (
                 <Input
