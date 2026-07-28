@@ -885,10 +885,10 @@ mod tests {
 
         assert!(manifest
             .allowed_tool_names
-            .contains(&"CreateCanvas".to_string()));
+            .contains(&"build_project".to_string()));
         assert!(manifest
             .allowed_tool_names
-            .contains(&"PatchCanvas".to_string()));
+            .contains(&"arkts_knowledge_search".to_string()));
         assert!(manifest
             .allowed_tool_names
             .contains(&"ReviewPlatform".to_string()));
@@ -898,7 +898,7 @@ mod tests {
         assert!(manifest
             .tool_definitions
             .iter()
-            .any(|tool| tool.name == "CreateCanvas"));
+            .any(|tool| tool.name == "build_project"));
     }
 
     #[tokio::test]

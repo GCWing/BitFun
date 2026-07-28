@@ -972,7 +972,7 @@ const CANVAS_SERVICES: &[RuntimeServiceCapability] = &[
     RuntimeServiceCapability::Events,
 ];
 
-const CODE_AGENT_TOOL_GROUPS: &[&str] = &["core.basic", "core.agent", "core.session"];
+const CODE_AGENT_TOOL_GROUPS: &[&str] = &["core.basic", "core.agent", "core.session", "core.openharmony"];
 const INTEGRATION_TOOL_GROUPS: &[&str] = &["core.integration"];
 const CANVAS_TOOL_GROUPS: &[&str] = &["core.canvas"];
 

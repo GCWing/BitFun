@@ -8,6 +8,7 @@ use crate::agentic::tools::framework::{
 };
 use crate::service::mcp::get_global_mcp_service;
 use crate::util::errors::{BitFunError, BitFunResult};
+use async_trait::async_trait;
 use bitfun_services_integrations::mcp::protocol::MCPToolResultContent;
 use serde_json::{json, Value};
 use std::path::Path;
