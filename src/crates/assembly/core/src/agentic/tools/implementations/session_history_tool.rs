@@ -72,6 +72,8 @@ Recommended workflow:
 Typical usage:
 - To review session history across a workspace, first use `SessionControl` to list the sessions in that workspace, then call this tool for the sessions you want to inspect.
 - To inspect the latest state of a specific session, call this tool with `turns=["-1:"]` to export only the last turn.
+- Use `Task` to spawn subagent sessions whose history you may want to inspect.
+- Use `SessionMessage` to send follow-up messages after reviewing a session's history.
 
 Minimal transcript example:
 <example>

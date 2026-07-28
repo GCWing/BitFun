@@ -111,7 +111,7 @@ pub fn memory_startup_is_eligible(request: &MemoryStartupRequest) -> bool {
     }
     if matches!(
         request.session_kind,
-        SessionKind::Subagent | SessionKind::EphemeralChild
+        SessionKind::Subagent | SessionKind::EphemeralChild | SessionKind::EphemeralSubagent
     ) {
         return false;
     }
@@ -159,6 +159,10 @@ mod tests {
         }));
         assert!(!memory_startup_is_eligible(&MemoryStartupRequest {
             session_kind: SessionKind::EphemeralChild,
+            ..request()
+        }));
+        assert!(!memory_startup_is_eligible(&MemoryStartupRequest {
+            session_kind: SessionKind::EphemeralSubagent,
             ..request()
         }));
         assert!(!memory_startup_is_eligible(&MemoryStartupRequest {

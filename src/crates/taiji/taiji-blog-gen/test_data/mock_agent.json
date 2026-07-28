@@ -1,0 +1,145 @@
+{
+  "timestamp": "2026-07-22T10:30:00Z",
+  "instrument": "ag2506",
+  "freq": "5min",
+  "structure_agent": {
+    "agent": "structure_agent",
+    "timestamp": "2026-07-22T10:30:00Z",
+    "instrument": "ag2506",
+    "freq": "5min",
+    "analysis": {
+      "trend_direction": "up",
+      "trend_strength": 0.73,
+      "pivot_structure": "higher_highs",
+      "key_support": 5610.0,
+      "key_resistance": 5650.0,
+      "channel_state": "expanding",
+      "notes": "通道扩张，趋势加速中。趋势线 Normal 状态，斜率陡峭，量价配合良好。"
+    },
+    "confidence": 0.80
+  },
+  "delta_agent": {
+    "agent": "delta_agent",
+    "timestamp": "2026-07-22T10:30:00Z",
+    "instrument": "ag2506",
+    "freq": "5min",
+    "analysis": {
+      "net_position": "long_building",
+      "delta_direction": "positive",
+      "volume_trend": "increasing",
+      "six_core_summary": {
+        "多开": 1390.0,
+        "空开": 1190.0,
+        "多平": -150.0,
+        "空平": 50.0,
+        "净多": 1540.0,
+        "净空": 860.0
+      }
+    },
+    "confidence": 0.75
+  },
+  "magnet_agent": {
+    "agent": "magnet_agent",
+    "timestamp": "2026-07-22T10:30:00Z",
+    "instrument": "ag2506",
+    "freq": "5min",
+    "analysis": {
+      "magnet_position": "above",
+      "magnet_valid": true,
+      "magnet_state": "突破",
+      "direction": "up",
+      "oi_confirmation": true,
+      "vol_confirmation": true,
+      "mm1_target": 5700.0,
+      "mm1_progress_pct": 35.0,
+      "mm2_target": 5680.0,
+      "mm2_progress_pct": 60.0,
+      "resonance_levels": [
+        {"periods": ["5min", "15min"], "overlap_range": [5620.0, 5650.0], "overlap_midline": 5635.0}
+      ],
+      "channel_state": "expanding"
+    },
+    "confidence": 0.72
+  },
+  "thrust_agent": {
+    "agent": "thrust_agent",
+    "timestamp": "2026-07-22T10:30:00Z",
+    "instrument": "ag2506",
+    "freq": "5min",
+    "analysis": {
+      "triple_push_found": true,
+      "push_count": 3,
+      "direction": "up",
+      "exhaustion": false,
+      "overshoot": false,
+      "bos_detected": true,
+      "choch_detected": true
+    },
+    "confidence": 0.82
+  },
+  "resonance_agent": {
+    "agent": "resonance_agent",
+    "timestamp": "2026-07-22T10:30:00Z",
+    "instrument": "ag2506",
+    "freq": "5min",
+    "analysis": {
+      "resonance": true,
+      "resonance_type": "bullish",
+      "aligned_agents": ["structure_agent", "delta_agent", "magnet_agent", "thrust_agent"],
+      "conflicting_agents": [],
+      "multi_tf_resonance": null
+    },
+    "confidence": 0.82,
+    "gate_trace": [
+      {"gate": 1, "passed": true, "detail": "四维 confidence 全部 > 0.5"},
+      {"gate": 2, "passed": true, "detail": "四维全向多"},
+      {"gate": 3, "passed": true, "detail": "无冲突信号"},
+      {"gate": 4, "passed": true, "detail": "单周期模式"}
+    ],
+    "decision_trace": [
+      "Step 1: Gate 1 通过。",
+      "Step 2: Gate 2 通过 — bullish resonance。"
+    ]
+  },
+  "decision_agent": {
+    "agent": "decision_agent",
+    "timestamp": "2026-07-22T10:30:00Z",
+    "instrument": "ag2506",
+    "freq": "5min",
+    "decision": {
+      "action": "Long",
+      "entry": 5625.0,
+      "stop_loss": 5595.0,
+      "take_profit": 5670.0,
+      "size_pct": 0.10,
+      "reasoning": "四维共振看多（structure 0.80, delta 0.75, magnet 0.72, thrust 0.68），风控允许做多，ATR=15.0 止损 2 倍。盈亏比 1.5:1。"
+    },
+    "confidence": 0.79,
+    "supporting_agents": {
+      "structure": 0.80,
+      "delta": 0.75,
+      "magnet": 0.72,
+      "thrust": 0.68,
+      "resonance": 0.82,
+      "risk": 1.0
+    }
+  },
+  "risk_agent": {
+    "agent": "risk_agent",
+    "timestamp": "2026-07-22T10:30:00Z",
+    "instrument": "ag2506",
+    "freq": "5min",
+    "analysis": {
+      "max_position_pct": 0.125,
+      "current_atr": 15.0,
+      "kelly_fraction": 0.25,
+      "risk_per_trade_pct": 0.02
+    },
+    "constraints": {
+      "allow_long": true,
+      "allow_short": true,
+      "max_size": 3.33,
+      "stop_distance_atr_mult": 2.0
+    }
+  }
+}

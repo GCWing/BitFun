@@ -1,0 +1,110 @@
++++
+title = "{{ instrument }} {{ date }} 每日复盘"
+date = "{{ timestamp }}"
+tags = ["期货", "{{ instrument }}", "每日复盘", "技术分析"]
+categories = ["交易报告"]
+draft = false
++++
+
+# {{ instrument }} 每日复盘报告
+
+**日期**：{{ date }} | **周期**：{{ freq }}
+
+---
+
+## 一、市场结构分析
+
+| 指标 | 值 |
+|------|-----|
+| 趋势方向 | {{ trend_direction }} |
+| 趋势强度 | {{ trend_strength }} |
+| 拐点结构 | {{ pivot_structure }} |
+| 关键支撑 | {{ key_support }} |
+| 关键阻力 | {{ key_resistance }} |
+| 通道状态 | {{ channel_state }} |
+
+{% if structure_notes %}
+> {{ structure_notes }}
+{% endif %}
+
+置信度：**{{ structure_confidence }}**
+
+---
+
+## 二、磁体定位分析
+
+| 指标 | 值 |
+|------|-----|
+| 磁体有效 | {{ magnet_valid }} |
+| 磁体位置 | {{ magnet_position }} |
+| 磁体状态 | {{ magnet_state }} |
+| 方向 | {{ magnet_direction }} |
+| 通道状态 | {{ magnet_channel_state }} |
+
+置信度：**{{ magnet_confidence }}**
+
+---
+
+## 三、三推形态分析
+
+| 指标 | 值 |
+|------|-----|
+| 三推检测 | {{ thrust_found }} |
+| 推力次数 | {{ thrust_count }} |
+| 力竭 | {{ thrust_exhaustion }} |
+| 方向 | {{ thrust_direction }} |
+
+置信度：**{{ thrust_confidence }}**
+
+---
+
+## 四、共振分析
+
+| 指标 | 值 |
+|------|-----|
+| 共振成立 | {{ resonance }} |
+| 共振类型 | {{ resonance_type }} |
+| 对齐维度 | {{ resonance_aligned }} |
+| 冲突维度 | {{ resonance_conflicting }} |
+
+置信度：**{{ resonance_confidence }}**
+
+---
+
+## 五、交易决策
+
+| 指标 | 值 |
+|------|-----|
+| 决策动作 | {{ decision_action }} |
+| 置信度 | {{ decision_confidence }} |
+
+{% if decision_reasoning %}
+> {{ decision_reasoning }}
+{% endif %}
+
+---
+
+## 六、风控评估
+
+| 指标 | 值 |
+|------|-----|
+| 允许多头 | {{ risk_allow_long }} |
+| 允许空头 | {{ risk_allow_short }} |
+| 最大仓位(手) | {{ risk_max_size }} |
+| 当前ATR | {{ risk_atr }} |
+| 凯利比例 | {{ risk_kelly }} |
+| 单笔风险 | {{ risk_per_trade_pct }} |
+
+---
+
+## 七、K线数据（{{ freq }}）
+
+| 时间 | 开 | 高 | 低 | 收 | 成交量 |
+|------|------|------|------|------|----------|
+{% for bar in bars %}
+| {{ bar.dt }} | {{ bar.open }} | {{ bar.high }} | {{ bar.low }} | {{ bar.close }} | {{ bar.vol }} |
+{% endfor %}
+
+---
+
+*报告由 Taiji ReportMdGenerator 自动生成 | {{ timestamp }}*

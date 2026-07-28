@@ -404,6 +404,7 @@ fn core_agent_runtime_builder(
     thread_goal_management: Arc<dyn AgentThreadGoalManagementPort>,
     cancellation: Arc<dyn AgentTurnCancellationPort>,
     interaction_response: Arc<dyn AgentInteractionResponsePort>,
+    session_tree: Arc<bitfun_services_core::session::tree::SessionTreeManager>,
 ) -> Result<AgentRuntimeBuilder, String> {
     let agent_registry: Arc<dyn bitfun_agent_runtime::sdk::RuntimeAgentRegistry> =
         crate::agentic::agents::get_agent_registry();
@@ -419,7 +420,8 @@ fn core_agent_runtime_builder(
         .with_cancellation_port(cancellation)
         .with_interaction_response_port(interaction_response)
         .with_permission_request_manager(crate::product_runtime::core_permission_request_manager()?)
-        .with_agent_registry(agent_registry))
+        .with_agent_registry(agent_registry)
+        .with_session_tree(session_tree))
 }
 
 #[derive(Clone)]
@@ -917,6 +919,7 @@ impl CoreServiceAgentRuntime {
             coordinator.clone();
         let thread_goal_management: Arc<dyn AgentThreadGoalManagementPort> = coordinator.clone();
         let cancellation: Arc<dyn AgentTurnCancellationPort> = coordinator.clone();
+        let session_tree = coordinator.session_tree().clone();
         let interaction_response: Arc<dyn AgentInteractionResponsePort> = coordinator;
         core_agent_runtime_builder(
             submission,
@@ -929,6 +932,7 @@ impl CoreServiceAgentRuntime {
             thread_goal_management,
             cancellation,
             interaction_response,
+            session_tree,
         )?
         .build()
         .map_err(|error| error.to_string())
@@ -950,6 +954,7 @@ impl CoreServiceAgentRuntime {
             coordinator.clone();
         let thread_goal_management: Arc<dyn AgentThreadGoalManagementPort> = coordinator.clone();
         let cancellation: Arc<dyn AgentTurnCancellationPort> = coordinator.clone();
+        let session_tree = coordinator.session_tree().clone();
         let interaction_response: Arc<dyn AgentInteractionResponsePort> = coordinator;
         let dialog_turn: Arc<dyn AgentDialogTurnPort> = scheduler.clone();
         let lifecycle_delivery: Arc<dyn AgentLifecycleDeliveryPort> = scheduler;
@@ -964,6 +969,7 @@ impl CoreServiceAgentRuntime {
             thread_goal_management,
             cancellation,
             interaction_response,
+            session_tree,
         )?
         .with_session_close_port(session_close)
         .with_dialog_turn_port(dialog_turn)
@@ -987,6 +993,7 @@ impl CoreServiceAgentRuntime {
             coordinator.clone();
         let thread_goal_management: Arc<dyn AgentThreadGoalManagementPort> = coordinator.clone();
         let cancellation: Arc<dyn AgentTurnCancellationPort> = coordinator.clone();
+        let session_tree = coordinator.session_tree().clone();
         let interaction_response: Arc<dyn AgentInteractionResponsePort> = coordinator;
         let lifecycle_delivery: Arc<dyn AgentLifecycleDeliveryPort> = scheduler;
         core_agent_runtime_builder(
@@ -1000,6 +1007,7 @@ impl CoreServiceAgentRuntime {
             thread_goal_management,
             cancellation,
             interaction_response,
+            session_tree,
         )?
         .with_lifecycle_delivery_port(lifecycle_delivery)
         .build()
@@ -1018,6 +1026,7 @@ impl CoreServiceAgentRuntime {
         let session_management =
             scheduled_session_management_port(coordinator.clone(), scheduler.clone());
         let session_model: Arc<dyn AgentSessionModelPort> = coordinator.clone();
+        let session_tree = coordinator.session_tree().clone();
         let interaction_response: Arc<dyn AgentInteractionResponsePort> = coordinator;
         let dialog_turn: Arc<dyn AgentDialogTurnPort> = scheduler.clone();
         let cancellation: Arc<dyn AgentTurnCancellationPort> = scheduler;
@@ -1031,6 +1040,7 @@ impl CoreServiceAgentRuntime {
             .with_interaction_response_port(interaction_response)
             .with_session_fork_port(session_fork)
             .with_session_usage_port(session_usage)
+            .with_session_tree(session_tree)
             .with_permission_request_manager(
                 crate::product_runtime::core_permission_request_manager()?,
             )
@@ -1052,6 +1062,7 @@ impl CoreServiceAgentRuntime {
         let transcript_reader: Arc<dyn bitfun_runtime_ports::SessionTranscriptReader> =
             coordinator.clone();
         let thread_goal_management: Arc<dyn AgentThreadGoalManagementPort> = coordinator.clone();
+        let session_tree = coordinator.session_tree().clone();
         let interaction_response: Arc<dyn AgentInteractionResponsePort> = coordinator;
         let cancellation: Arc<dyn AgentTurnCancellationPort> = scheduler.clone();
         let dialog_turn: Arc<dyn AgentDialogTurnPort> = scheduler.clone();
@@ -1067,6 +1078,7 @@ impl CoreServiceAgentRuntime {
             thread_goal_management,
             cancellation,
             interaction_response,
+            session_tree,
         )?
         .with_dialog_turn_port(dialog_turn)
         .with_lifecycle_delivery_port(lifecycle_delivery)
@@ -1166,6 +1178,7 @@ impl CoreServiceAgentRuntime {
         let transcript_reader: Arc<dyn bitfun_runtime_ports::SessionTranscriptReader> =
             coordinator.clone();
         let thread_goal_management: Arc<dyn AgentThreadGoalManagementPort> = coordinator.clone();
+        let session_tree = coordinator.session_tree().clone();
         let interaction_response: Arc<dyn AgentInteractionResponsePort> = coordinator;
         let cancellation: Arc<dyn AgentTurnCancellationPort> = scheduler.clone();
         let lifecycle_delivery: Arc<dyn AgentLifecycleDeliveryPort> = scheduler;
@@ -1181,6 +1194,7 @@ impl CoreServiceAgentRuntime {
             thread_goal_management,
             cancellation,
             interaction_response,
+            session_tree,
         )?
         .with_session_close_port(session_close)
         .with_dialog_turn_port(dialog_turn)
@@ -2057,6 +2071,9 @@ mod tests {
         assert!(!session_uses_shared_mode_default(&session));
 
         session.kind = SessionKind::EphemeralChild;
+        assert!(!session_uses_shared_mode_default(&session));
+
+        session.kind = SessionKind::EphemeralSubagent;
         assert!(!session_uses_shared_mode_default(&session));
     }
 

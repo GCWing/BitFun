@@ -1,45 +1,27 @@
-[workspace]
+﻿[workspace]
 members = [
-    "src/apps/cli",
-    "src/apps/sdk-host",
-    "src/apps/desktop",
-    "src/apps/server",
-    "src/apps/relay-server",
-    "src/crates/interfaces/acp",
-    "src/crates/interfaces/sdk-host",
-    "src/crates/adapters/agent-runtime-ipc",
-    "src/crates/assembly/core",
-    "src/crates/assembly/external-sources",
-    "src/crates/adapters/ai-adapters",
-    "src/crates/adapters/opencode-adapter",
-    "src/crates/adapters/claude-code-adapter",
-    "src/crates/adapters/codex-adapter",
-    "src/crates/adapters/static-hook-support",
-    "src/crates/adapters/webdriver",
-    "src/crates/adapters/transport",
-    "src/crates/services/services-core",
-    "src/crates/services/services-integrations",
-    "src/crates/services/relay-service",
-    "src/crates/services/page-function-runtime",
-    "src/crates/services/terminal",
-    "src/crates/assembly/product-capabilities",
-    "src/crates/contracts/product-domains",
-    "src/crates/execution/agent-runtime",
-    "src/crates/execution/agent-stream",
-    "src/crates/execution/tool-call-jsonrepair",
-    "src/crates/execution/tool-contracts",
-    "src/crates/execution/harness",
-    "src/crates/execution/plugin-runtime-client",
-    "src/crates/execution/runtime-services",
-    "src/crates/execution/tool-provider-groups",
-    "src/crates/execution/tool-execution",
-    "src/crates/contracts/core-types",
-    "src/crates/contracts/events",
-    "src/crates/contracts/runtime-ports",
-]
-
-exclude = [
-    "BitFun-Installer/src-tauri",
+    # taiji-quant 量化引擎 crates
+    "src/crates/taiji/taiji-abnormal",
+    "src/crates/taiji/taiji-alert",
+    "src/crates/taiji/taiji-backtest",
+    "src/crates/taiji/taiji-bar",
+    "src/crates/taiji/taiji-blog-gen",
+    "src/crates/taiji/taiji-cli",
+    "src/crates/taiji/taiji-content",
+    "src/crates/taiji/taiji-engine",
+    "src/crates/taiji/taiji-engine-py",
+    "src/crates/taiji/taiji-example",
+    "src/crates/taiji/taiji-executor",
+    "src/crates/taiji/taiji-growth",
+    "src/crates/taiji/taiji-knowledge-graph",
+    "src/crates/taiji/taiji-llm",
+    "src/crates/taiji/taiji-orderflow",
+    "src/crates/taiji/taiji-pattern",
+    "src/crates/taiji/taiji-publisher",
+    "src/crates/taiji/taiji-realtime",
+    "src/crates/taiji/taiji-sentiment",
+    "src/crates/taiji/taiji-strategen",
+    "src/crates/taiji/taiji-strategy-template",
 ]
 
 resolver = "2"
@@ -49,6 +31,7 @@ resolver = "2"
 version = "0.2.14" # x-release-please-version
 authors = ["BitFun Team"]
 edition = "2021"
+license = "MIT"
 
 [workspace.lints.rust]
 unsafe_op_in_unsafe_fn = "warn"
@@ -117,6 +100,21 @@ hex = "0.4"
 chardetng = "0.1.17"
 encoding_rs = "0.8.35"
 url = "2"
+
+# taiji-quant 量化引擎依赖
+rayon = "1.10"
+csv = "1.3"
+parking_lot = "0.12"
+petgraph = { version = "0.6", features = ["serde-1"] }
+jieba-rs = "0.7"
+candle-core = "0.7"
+candle-nn = "0.7"
+ndarray = { version = "0.16", features = ["serde"] }
+pyo3 = { version = "0.23", features = ["extension-module"] }
+statrs = "0.17"
+lettre = { version = "0.11", default-features = false, features = ["builder", "smtp-transport", "tokio1-rustls-tls"] }
+tera = "1.20"
+crossbeam = "0.8"
 
 # HTTP client
 reqwest = { version = "0.13.4", default-features = false, features = ["native-tls", "rustls", "http2", "json", "stream", "multipart", "query", "form"] }
@@ -260,22 +258,12 @@ rmcp = { version = "1.7", default-features = false, features = [
     "server",
 ] }
 agent-client-protocol = { version = "0.12", features = ["unstable"] }
-russh = "0.45"
+russh = "=0.45.0"
 russh-sftp = "2.1"
-russh-keys = "0.45"
+russh-keys = "=0.45.0"
 shellexpand = "3"
 ssh_config = "0.1"
 rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12"] }
-
-[patch.crates-io]
-# tao 0.35.3 can re-enter its Windows window callback while holding input locks.
-# Use the upstream fix until it is included in a crates.io release.
-tao = { git = "https://github.com/tauri-apps/tao.git", rev = "c704261c519c58cfdd0bc2d58ba24e06a0b71c92" }
-# Tauri 2.11 loses keyboard focus for child webviews after Windows reactivates
-# an `unstable` multi-webview window. Use the upstream 2.12 fix until released.
-tauri-runtime = { git = "https://github.com/tauri-apps/tauri.git", rev = "ce3860e84b79af0d5ee628b304399499a87328b1" }
-tauri-runtime-wry = { git = "https://github.com/tauri-apps/tauri.git", rev = "ce3860e84b79af0d5ee628b304399499a87328b1" }
-tauri-utils = { git = "https://github.com/tauri-apps/tauri.git", rev = "ce3860e84b79af0d5ee628b304399499a87328b1" }
 
 [profile.dev]
 # Line tables only: keeps panic backtrace line numbers while shrinking PDB/DWARF

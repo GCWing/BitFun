@@ -1,0 +1,23 @@
+[package]
+name = "taiji-backtest"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+description = "Backtest engine (MIT)"
+
+[dependencies]
+taiji-content = { path = "../taiji-content" }
+taiji-engine = { path = "../taiji-engine" }
+serde = { workspace = true }
+serde_json = { workspace = true }
+serde_yaml = { workspace = true }
+chrono = { workspace = true }
+statrs = { workspace = true }
+anyhow = { workspace = true }
+thiserror = { workspace = true }
+rayon = "1.10"
+tokio = { workspace = true }
+
+[lints]
+workspace = true

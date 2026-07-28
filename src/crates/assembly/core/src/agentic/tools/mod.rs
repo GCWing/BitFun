@@ -43,6 +43,8 @@ pub use registry::{
 };
 pub use restrictions::{
     is_miniapp_headless_agent_run, miniapp_headless_agent_tool_restrictions,
-    tool_restrictions_for_delegation_policy, ToolPathOperation, ToolPathPolicy,
-    ToolRuntimeRestrictions,
+    tool_restrictions_for_delegation_policy, AgentRole, get_default_permissions,
+    OperationClass, RolePermissionMap, ToolPathOperation, ToolPathPolicy,
+    ToolRuntimeRestrictions, ToolRuntimeRestrictionsPatch, update_restrictions,
+    get_session_restrictions,
 };

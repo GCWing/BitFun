@@ -1,0 +1,24 @@
+[package]
+name = "taiji-realtime"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+description = "Real-time market data hub — CTP data source + WebSocket bridge"
+
+[dependencies]
+serde = { workspace = true }
+serde_json = { workspace = true }
+tokio = { workspace = true }
+axum = { workspace = true }
+tokio-tungstenite = { workspace = true }
+futures-util = { workspace = true }
+crossbeam = { workspace = true }
+parking_lot = { workspace = true }
+tracing = { workspace = true }
+taiji-engine = { path = "../taiji-engine" }
+
+[dev-dependencies]
+
+[lints]
+workspace = true

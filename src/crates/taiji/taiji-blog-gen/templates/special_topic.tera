@@ -1,0 +1,138 @@
+---
+title: "专题分析：{{ instrument }} — {{ generated_at | truncate(length=10, end="") }}"
+date: {{ generated_at | replace(from="T", to=" ") | truncate(length=19, end="") }}
+tags: [{% for tag in tags %}"{{ tag | trim_start_matches(pat="#") }}"{% if not loop.last %}, {% endif %}{% endfor %}]
+categories: ["专题分析"]
+draft: false
+---
+
+# 专题分析：{{ instrument }} {{ freq }}
+
+**分析时间**：{{ generated_at | truncate(length=10, end="") }}
+
+---
+
+## 背景
+
+本期专题聚焦于 {{ instrument }} 的{{ freq }}周期市场表现，综合量价时空四维分析框架进行深度解读。
+
+---
+
+## 市场结构深度分析
+
+{% if structure is object %}
+### 趋势与拐点
+
+- **趋势方向**：{{ structure.trend_direction | default(value="未知") }}
+- **趋势强度**：{{ structure.trend_strength | default(value=0.0) }}（0-1，越高越强）
+- **拐点形态**：{{ structure.pivot_structure | default(value="—") }}
+- **通道状态**：{{ structure.channel_state | default(value="—") }}
+
+**关键价位**：
+- 支撑：{{ structure.key_support | default(value="—") }}
+- 阻力：{{ structure.key_resistance | default(value="—") }}
+
+{% if structure.notes %}
+> **结构解读**：{{ structure.notes }}
+{% endif %}
+{% endif %}
+
+---
+
+{% if delta is object %}
+## 资金深度分析
+
+### 净持仓与资金意图
+
+- **净持仓方向**：{{ delta.net_position | default(value="—") }}
+- **主动买卖**：{{ delta.delta_direction | default(value="—") }}
+- **成交量**：{{ delta.volume_trend | default(value="—") }}
+
+{% if delta.six_core_summary %}
+| 指标 | 数值 |
+|------|------|
+{% for key, value in delta.six_core_summary %}
+| {{ key }} | {{ value }} |
+{% endfor %}
+{% endif %}
+{% endif %}
+
+---
+
+{% if magnet is object %}
+## 磁体与目标区间
+
+{% if magnet.magnet_valid %}
+### 磁体概况
+
+- **位置**：{{ magnet.magnet_position | default(value="—") }}
+- **OI 确认**：{% if magnet.oi_confirmation %}是{% else %}否{% endif %}
+- **成交量确认**：{% if magnet.vol_confirmation %}是{% else %}否{% endif %}
+- **通道状态**：{{ magnet.channel_state | default(value="—") }}
+
+{% if magnet.mm1_target %}
+### MM 测量目标
+- MM1（区间突破）：{{ magnet.mm1_target }}（进度 {{ magnet.mm1_progress_pct | default(value=0) }}%）
+{% endif %}
+{% if magnet.mm2_target %}
+- MM2（波段等距）：{{ magnet.mm2_target }}（进度 {{ magnet.mm2_progress_pct | default(value=0) }}%）
+{% endif %}
+{% else %}
+本期未检测到有效磁体。
+{% endif %}
+{% endif %}
+
+---
+
+{% if thrust is object and thrust.triple_push_found %}
+## 三推形态详解
+
+- **推力次数**：{{ thrust.push_count | default(value=0) }}
+- **方向**：{{ thrust.direction | default(value="—") }}
+- **力竭状态**：{% if thrust.exhaustion %}已力竭（反转预警）{% else %}未力竭（趋势延续）{% endif %}
+- **过冲**：{% if thrust.overshoot %}是{% else %}否{% endif %}
+- **BOS**：{% if thrust.bos_detected %}结构破坏已确认{% else %}未触发{% endif %}
+- **CHoCH**：{% if thrust.choch_detected %}趋势特征已改变{% else %}未触发{% endif %}
+{% endif %}
+
+---
+
+{% if resonance is object %}
+## 四维共振闭环判定
+
+{% if resonance.resonance %}
+### {{ resonance.resonance_type | default(value="") }}共振成立
+
+对齐维度：{{ resonance.aligned_agents | default(value=[]) | join(sep=", ") }}
+
+{% if resonance.conflicting_agents | length > 0 %}
+冲突维度：{{ resonance.conflicting_agents | join(sep=", ") }}
+{% endif %}
+{% else %}
+### 共振不成立
+
+对齐维度（部分）：{{ resonance.aligned_agents | default(value=[]) | join(sep=", ") }}
+
+{% if resonance.conflicting_agents | length > 0 %}
+冲突/缺失维度：{{ resonance.conflicting_agents | join(sep=", ") }}
+{% endif %}
+
+> 需等待冲突维度解除后再评估。
+{% endif %}
+{% endif %}
+
+---
+
+## 总结
+
+| 维度 | 方向 | 置信度 |
+|------|------|--------|
+| 结构 | {{ structure.trend_direction | default(value="—") }} | {{ structure_confidence }} |
+| 资金 | {{ delta.net_position | default(value="—") }} | {{ delta_confidence }} |
+| 磁体 | {% if magnet is object and magnet.magnet_position %}{{ magnet.magnet_position }}{% else %}—{% endif %} | {{ magnet_confidence }} |
+| 三推 | {% if thrust is object and thrust.triple_push_found %}{{ thrust.direction | default(value="—") }}{% else %}无{% endif %} | {{ thrust_confidence }} |
+| 共振 | {% if resonance is object and resonance.resonance %}{{ resonance.resonance_type }}{% else %}无{% endif %} | {{ resonance_confidence }} |
+
+---
+
+*本报告由太极量化系统自动生成，仅供参考，不构成投资建议。*

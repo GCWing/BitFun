@@ -1,6 +1,6 @@
 use crate::native_hooks::{
-    build_engine, build_overview, clear_session_hook_state, dispatch_pre_tool_use,
-    hook_settings_paths, take_pending_session_context, AgentHooksConfig, NativeHookSessionFacts,
+    build_engine, clear_session_hook_state, dispatch_pre_tool_use, hook_settings_paths,
+    take_pending_session_context, AgentHooksConfig, NativeHookSessionFacts,
 };
 use bitfun_agent_runtime::native_hooks::{AgentHookEvent, AgentHookScope};
 use serde_json::json;
@@ -188,121 +188,6 @@ async fn remote_workspaces_skip_hook_dispatch() {
     assert!(decision.deny_reason.is_none());
     assert!(!decision.allow);
     assert!(decision.updated_input.is_none());
-}
-
-#[test]
-fn overview_reports_the_layers_a_dispatch_would_load() {
-    let temp = tempfile::tempdir().expect("temp dir");
-    let user = write_hooks_file(
-        temp.path(),
-        "user.json",
-        r#"{"hooks":{"PreToolUse":[{"matcher":"Bash","hooks":[{"type":"command","command":"user-hook","timeout":5}]}]}}"#,
-    );
-    let project = write_hooks_file(
-        temp.path(),
-        "project.json",
-        r#"{"hooks":{"Stop":[{"hooks":[{"type":"command","command":"project-hook"}]}]}}"#,
-    );
-    let candidates = vec![
-        (AgentHookScope::User, user),
-        (AgentHookScope::Project, project),
-    ];
-
-    let gated = build_overview(AgentHooksConfig::default(), candidates.clone());
-    assert!(gated.enabled);
-    assert!(!gated.project_hooks_enabled);
-    // The project file is listed so it stays discoverable, but its rules are
-    // not loaded while the gate is off.
-    assert_eq!(gated.files.len(), 2);
-    assert!(gated.files[0].loaded && gated.files[0].exists);
-    assert!(!gated.files[1].loaded && gated.files[1].exists);
-    assert_eq!(gated.rules.len(), 1);
-    assert_eq!(gated.rules[0].event, "PreToolUse");
-    assert_eq!(gated.rules[0].matcher, "Bash");
-    assert!(gated.rules[0].matcher_is_valid);
-    assert_eq!(gated.rules[0].scope, "user");
-    assert_eq!(gated.rules[0].handlers[0].command, "user-hook");
-    assert_eq!(gated.rules[0].handlers[0].timeout_seconds, 5);
-    assert_eq!(gated.total_handlers, 1);
-
-    let with_project = build_overview(
-        AgentHooksConfig {
-            enabled: true,
-            project_hooks_enabled: true,
-        },
-        candidates.clone(),
-    );
-    assert!(with_project.files.iter().all(|file| file.loaded));
-    assert_eq!(with_project.total_handlers, 2);
-    assert!(with_project
-        .rules
-        .iter()
-        .any(|rule| rule.event == "Stop" && rule.scope == "project"));
-
-    // A disabled master switch loads nothing, but still names both files so
-    // the reader can see what would run once it is turned back on.
-    let disabled = build_overview(
-        AgentHooksConfig {
-            enabled: false,
-            project_hooks_enabled: true,
-        },
-        candidates,
-    );
-    assert!(disabled.files.iter().all(|file| !file.loaded));
-    assert!(disabled.rules.is_empty());
-    assert_eq!(disabled.total_handlers, 0);
-}
-
-#[test]
-fn overview_surfaces_configuration_issues_and_a_never_matching_matcher() {
-    let temp = tempfile::tempdir().expect("temp dir");
-    let user = write_hooks_file(
-        temp.path(),
-        "user.json",
-        r#"{"hooks":{"PreToolUse":[{"matcher":"Bash(","hooks":[{"type":"command","command":"never-runs"}]}],"NotAnEvent":[]}}"#,
-    );
-
-    let overview = build_overview(
-        AgentHooksConfig::default(),
-        vec![(AgentHookScope::User, user)],
-    );
-
-    assert_eq!(overview.rules.len(), 1);
-    assert!(!overview.rules[0].matcher_is_valid);
-    assert!(overview
-        .issues
-        .iter()
-        .any(|issue| issue.contains("NotAnEvent")));
-    assert!(overview
-        .issues
-        .iter()
-        .any(|issue| issue.contains("not a valid pattern")));
-}
-
-#[test]
-fn overview_reports_an_oversized_file_that_dispatch_would_skip() {
-    let temp = tempfile::tempdir().expect("temp dir");
-    let padding = " ".repeat(1024 * 1024 + 1);
-    let oversized = write_hooks_file(
-        temp.path(),
-        "oversized.json",
-        &format!(
-            r#"{{"description":"{padding}","hooks":{{"Stop":[{{"hooks":[{{"type":"command","command":"too-big"}}]}}]}}}}"#
-        ),
-    );
-
-    let overview = build_overview(
-        AgentHooksConfig::default(),
-        vec![(AgentHookScope::User, oversized)],
-    );
-
-    assert!(overview.rules.is_empty());
-    // Silence here would read as "nothing is configured" instead of "your
-    // file was skipped".
-    assert!(overview
-        .issues
-        .iter()
-        .any(|issue| issue.contains("byte limit")));
 }
 
 #[test]

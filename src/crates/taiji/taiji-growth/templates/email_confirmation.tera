@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+  <meta charset="utf-8">
+  <title>确认邮件订阅</title>
+</head>
+<body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f5f5f5; padding: 20px;">
+  <div style="max-width: 480px; margin: 0 auto; background: #fff; border-radius: 8px; padding: 32px; box-shadow: 0 1px 4px rgba(0,0,0,0.08);">
+
+    <h2 style="margin: 0 0 16px 0; color: #1a1a1a;">确认您的邮件订阅</h2>
+
+    <p style="margin: 0 0 16px 0; color: #555; font-size: 15px; line-height: 1.7;">
+      感谢您订阅太极量化系统的邮件服务（{{ email }}）。
+    </p>
+
+    <p style="margin: 0 0 24px 0; color: #555; font-size: 15px; line-height: 1.7;">
+      请点击下方按钮完成订阅确认：
+    </p>
+
+    <div style="text-align: center; margin-bottom: 24px;">
+      <a href="{{ confirm_url }}"
+         style="display: inline-block; background: #2b6cb0; color: #fff; text-decoration: none; padding: 12px 32px; border-radius: 6px; font-size: 15px; font-weight: 600;">
+        确认订阅
+      </a>
+    </div>
+
+    <p style="margin: 0 0 16px 0; color: #888; font-size: 13px; line-height: 1.6;">
+      如果按钮无法点击，请复制以下链接到浏览器地址栏：
+      <br>
+      <span style="color: #2b6cb0;">{{ confirm_url }}</span>
+    </p>
+
+    <p style="margin: 0 0 24px 0; color: #888; font-size: 13px;">
+      如果您未曾订阅太极量化系统的邮件服务，请忽略此邮件。
+    </p>
+
+    <hr style="border: none; border-top: 1px solid #e8e8e8; margin-bottom: 16px;">
+
+    <p style="margin: 0; color: #aaa; font-size: 12px;">
+      <a href="{{ unsubscribe_url }}" style="color: #aaa;">退订</a>
+    </p>
+
+  </div>
+</body>
+</html>

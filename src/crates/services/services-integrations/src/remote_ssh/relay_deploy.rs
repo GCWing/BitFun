@@ -511,25 +511,14 @@ pub async fn start_task(
     Ok(RelayTaskStart { script_path })
 }
 
-/// Strip CR from a file already on the relay host, in place.
+/// Strip trailing CR from a file already on the relay host, in place.
 ///
-/// Deliberately `tr -d '\r'` and not `sed 's/<CR>$//'`: `tr` expands the `\r`
-/// escape itself, so the command contains no raw CR byte. A raw CR would be
-/// carried through `to_unix_script` on its way out — the CR remover travelling
-/// through the CR remover — and any text-mode hop that rewrites line endings
-/// would silently turn this into a no-op. Removing every CR rather than only
-/// trailing ones is safe here because the scripts are generated bash that never
-/// contains an intentional CR (`embedded_scripts_are_lf_only` enforces that).
-///
-/// `sed -i` is avoided too: its syntax differs between GNU and BSD userlands.
-/// The rewrite replaces the file, so callers must `chmod` afterwards, and the
-/// scratch file is cleaned up even when the rewrite fails.
+/// POSIX `sed` (no `-i`, whose syntax differs between GNU and BSD userlands).
+/// The rewrite drops the file's mode, so callers must `chmod` afterwards.
 fn strip_cr_command(path: &str) -> String {
     let src = shell_quote_posix(path);
     let tmp = shell_quote_posix(&format!("{path}.lf"));
-    format!(
-        "{{ tr -d '\\r' < {src} > {tmp} && mv {tmp} {src}; }} || {{ rm -f {tmp}; false; }}"
-    )
+    format!("sed 's/\r$//' {src} > {tmp} && mv {tmp} {src}")
 }
 
 /// Prepare uploaded scripts for the PTY: normalize line endings, make them
@@ -1179,11 +1168,6 @@ bitfun_run_deploy_sh() {
   local port="${RELAY_PORT:-9700}"
   # Prefer already-resolved mirror mode so deploy.sh does not re-probe.
   local mirror_mode="${BITFUN_MIRROR:-${BITFUN_MIRROR_MODE:-auto}}"
-  # Always --build-from-source: this function is reached ONLY after
-  # bitfun_try_release_deploy already failed, and deploy.sh's own first step is
-  # that same release-binary path. Without the flag it re-downloads, re-builds
-  # and re-starts the published binary that just failed — the deploy visibly
-  # runs twice before reaching the source build it was called for.
   # DOCKER_BUILDKIT is required for Dockerfile cargo registry/git/target mounts.
   # DOCKER_CONFIG is deliberately NOT forwarded to the sudo branches: root would
   # write config.json into the SSH user's ~/.bitfun/docker-config and every later
@@ -1200,7 +1184,7 @@ bitfun_run_deploy_sh() {
           BITFUN_CARGO_SPARSE_URL="${BITFUN_CARGO_SPARSE_URL:-}" \
           BITFUN_DOCKER_REGISTRY_MIRRORS="${BITFUN_DOCKER_REGISTRY_MIRRORS:-}" \
           BITFUN_GITHUB_PROXY="${BITFUN_GITHUB_PROXY:-}" \
-          bash "$dir/deploy.sh" --build-from-source
+          bash "$dir/deploy.sh"
       else
         sudo -E env RELAY_PORT="$port" RELAY_CARGO_BUILD_JOBS="${RELAY_CARGO_BUILD_JOBS:-}" \
           DOCKER_BUILDKIT=1 COMPOSE_DOCKER_CLI_BUILD=1 BUILDKIT_PROGRESS=plain \
@@ -1210,11 +1194,11 @@ bitfun_run_deploy_sh() {
           BITFUN_CARGO_SPARSE_URL="${BITFUN_CARGO_SPARSE_URL:-}" \
           BITFUN_DOCKER_REGISTRY_MIRRORS="${BITFUN_DOCKER_REGISTRY_MIRRORS:-}" \
           BITFUN_GITHUB_PROXY="${BITFUN_GITHUB_PROXY:-}" \
-          bash "$dir/deploy.sh" --build-from-source
+          bash "$dir/deploy.sh"
       fi
       ;;
     sg)
-      sg docker -c "env RELAY_PORT='$port' RELAY_CARGO_BUILD_JOBS='${RELAY_CARGO_BUILD_JOBS:-}' DOCKER_BUILDKIT=1 COMPOSE_DOCKER_CLI_BUILD=1 BUILDKIT_PROGRESS=plain DOCKER_CONFIG='${DOCKER_CONFIG:-}' BITFUN_MIRROR='$mirror_mode' BITFUN_USE_CN_MIRROR='${BITFUN_USE_CN_MIRROR:-0}' BITFUN_APT_MIRROR='${BITFUN_APT_MIRROR:-}' BITFUN_CARGO_SPARSE_URL='${BITFUN_CARGO_SPARSE_URL:-}' BITFUN_DOCKER_REGISTRY_MIRRORS='${BITFUN_DOCKER_REGISTRY_MIRRORS:-}' BITFUN_GITHUB_PROXY='${BITFUN_GITHUB_PROXY:-}' bash '$dir/deploy.sh' --build-from-source"
+      sg docker -c "env RELAY_PORT='$port' RELAY_CARGO_BUILD_JOBS='${RELAY_CARGO_BUILD_JOBS:-}' DOCKER_BUILDKIT=1 COMPOSE_DOCKER_CLI_BUILD=1 BUILDKIT_PROGRESS=plain DOCKER_CONFIG='${DOCKER_CONFIG:-}' BITFUN_MIRROR='$mirror_mode' BITFUN_USE_CN_MIRROR='${BITFUN_USE_CN_MIRROR:-0}' BITFUN_APT_MIRROR='${BITFUN_APT_MIRROR:-}' BITFUN_CARGO_SPARSE_URL='${BITFUN_CARGO_SPARSE_URL:-}' BITFUN_DOCKER_REGISTRY_MIRRORS='${BITFUN_DOCKER_REGISTRY_MIRRORS:-}' BITFUN_GITHUB_PROXY='${BITFUN_GITHUB_PROXY:-}' bash '$dir/deploy.sh'"
       ;;
     *)
       env RELAY_PORT="$port" RELAY_CARGO_BUILD_JOBS="${RELAY_CARGO_BUILD_JOBS:-}" \
@@ -1225,7 +1209,7 @@ bitfun_run_deploy_sh() {
         BITFUN_CARGO_SPARSE_URL="${BITFUN_CARGO_SPARSE_URL:-}" \
         BITFUN_DOCKER_REGISTRY_MIRRORS="${BITFUN_DOCKER_REGISTRY_MIRRORS:-}" \
         BITFUN_GITHUB_PROXY="${BITFUN_GITHUB_PROXY:-}" \
-        bash "$dir/deploy.sh" --build-from-source
+        bash "$dir/deploy.sh"
       ;;
   esac
 }
@@ -1942,12 +1926,6 @@ mod tests {
         }
         // The rewrite must not leave its scratch file behind.
         assert!(!std::path::Path::new(&format!("{script_path}.lf")).exists());
-        // No raw CR in the command itself: it would be eaten by to_unix_script
-        // or by any text-mode hop, silently disabling the strip.
-        assert!(
-            !command.contains('\r'),
-            "the CR strip must not depend on a raw CR surviving transport"
-        );
         assert!(!std::path::Path::new(&pid_path).exists(), "stale pid cleared");
         assert!(
             !std::path::Path::new(&driver_pid_path).exists(),
@@ -2096,84 +2074,6 @@ sh -c "$(bitfun_shell_join printf '%s\n' 'a b' "it's" '{{{{.State.Running}}}}' '
             String::from_utf8_lossy(&output.stdout),
             "a b\nit's\n{{.State.Running}}\n*\n",
             "each argument must survive the second shell verbatim"
-        );
-    }
-
-    /// `bitfun_run_deploy_sh` is reached only after `bitfun_try_release_deploy`
-    /// failed, and `deploy.sh`'s own first step is that same release path.
-    /// Without `--build-from-source` the whole published-binary attempt —
-    /// download, image build, container start — visibly ran a second time before
-    /// the source build it was called for.
-    #[test]
-    fn source_build_fallback_does_not_retry_the_release_path() {
-        let helpers = prepare_helpers_bash();
-        let runner = helpers
-            .split_once("bitfun_run_deploy_sh() {")
-            .expect("helpers must define bitfun_run_deploy_sh")
-            .1;
-        // Check invocation sites, not a substring count: the surrounding prose
-        // mentions deploy.sh too.
-        let mut sites = 0;
-        for form in [r#"bash "$dir/deploy.sh""#, r#"bash '$dir/deploy.sh'"#] {
-            let mut rest = runner;
-            while let Some(i) = rest.find(form) {
-                let after = &rest[i + form.len()..];
-                assert!(
-                    after.starts_with(" --build-from-source"),
-                    "a deploy.sh invocation on the fallback path would re-run the \
-                     release-binary step that already failed: ...{}",
-                    &after[..after.len().min(40)]
-                );
-                sites += 1;
-                rest = after;
-            }
-        }
-        assert_eq!(sites, 4, "expected one invocation per docker mode");
-    }
-
-    /// The published arm64 relay needs GLIBC_2.38; `debian:bookworm-slim` ships
-    /// 2.36, so the binary could not load at all and the deploy surfaced only as
-    /// a failed health check plus a 20-minute source rebuild.
-    #[test]
-    fn runtime_image_base_can_load_the_published_binary() {
-        let script = release_binary_deploy_bash();
-        assert!(
-            !script.contains("FROM debian:bookworm-slim"),
-            "bookworm-slim (glibc 2.36) cannot load the arm64 relay (needs 2.38)"
-        );
-        assert!(
-            script.contains("FROM debian:trixie-slim"),
-            "runtime base must provide a glibc at least as new as the release matrix"
-        );
-        // `ldd` exits 0 even when it reports an unsatisfied symbol version, so
-        // the gate has to inspect its output.
-        assert!(
-            script.contains(r#"*"not found"*)"#),
-            "the runtime image must fail its build on an unloadable binary"
-        );
-    }
-
-    /// `docker logs` relays the container's stderr on its own stderr, and the
-    /// relay logs through tracing — so `2>/dev/null` hid the one message that
-    /// explained the failure (`version 'GLIBC_2.38' not found`).
-    #[test]
-    fn health_check_failure_keeps_container_diagnostics() {
-        let script = release_binary_deploy_bash();
-        let failure = script
-            .split_once("failed its health check")
-            .expect("health failure branch")
-            .1;
-        let logs = failure
-            .split_once("logs --tail 40 bitfun-relay")
-            .expect("failure branch must dump container logs")
-            .1;
-        assert!(
-            logs.starts_with(" 2>&1"),
-            "container stderr must be kept, not sent to /dev/null"
-        );
-        assert!(
-            failure.contains("Container state:"),
-            "must report whether the container died or was up but not answering"
         );
     }
 

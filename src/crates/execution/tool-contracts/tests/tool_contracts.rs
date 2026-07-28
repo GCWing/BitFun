@@ -704,6 +704,8 @@ fn runtime_restrictions_keep_allow_deny_semantics_without_core_dependency() {
         denied_tool_names: ["Write"].into_iter().map(str::to_string).collect(),
         denied_tool_messages: Default::default(),
         path_policy: Default::default(),
+        allowed_operation_classes: Default::default(),
+        denied_operation_classes: Default::default(),
     };
 
     assert!(restrictions.is_tool_allowed("Read"));
