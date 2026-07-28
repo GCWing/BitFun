@@ -127,44 +127,13 @@
       margin-top: -2px;
       min-height: 24px;
       font-size: var(--font-size-xs);
-      padding-left: calc(#{$size-gap-1} + 14px);
+      padding-left: calc(16px * var(--indent-level, 1));
       position: relative;
-
-      &::before {
-        content: '';
-        position: absolute;
-        left: 8px;
-        top: 0;
-        width: 1px;
-        height: 50%;
-        background: color-mix(in srgb, var(--border-subtle) 88%, transparent);
-        opacity: 0.95;
-      }
-
-      &::after {
-        content: '';
-        position: absolute;
-        left: 8px;
-        top: 50%;
-        width: 10px;
-        height: 1px;
-        background: color-mix(in srgb, var(--border-subtle) 92%, transparent);
-        opacity: 0.95;
-        transform: translateY(-50%);
-      }
-
-      .bitfun-nav-panel__inline-item-icon {
-        opacity: 0.72;
-      }
-    }
-
-    &.is-btw-child {
-      &:hover,
-      &.is-active {
-        background: var(--element-bg-soft);
-      }
     }
   }
+
+
+
 
   &__inline-item-icon-slot {
     position: relative;

@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Flow Chat global state store
  * Prevents state loss when components remount
  */
@@ -893,6 +893,52 @@ interface SelectorListener<T = any> {
   hasLastValue: boolean;
 }
 
+export interface SessionTreeNode {
+  sessionId: string;
+  sessionName: string;
+  agentType: string;
+  agentDisplayName: string;
+  depth: number;
+  status: 'running' | 'completed' | 'error' | 'cancelled';
+  children: SessionTreeNode[];
+  isAcpExternal: boolean;
+  externalProviderLabel?: string;
+  /** �?SubAgent 的默认工具列表（�?Agent registry 获取�?*/
+  tools?: string[];
+  /** 对话轮数 */
+  turnCount?: number;
+}
+
+function sessionTreeNodeStatus(session: Session): SessionTreeNode['status'] {
+  if (session.status === 'error') return 'error';
+  if (session.persistedStatus === 'completed') return 'completed';
+  if (session.persistedStatus === 'archived') return 'completed';
+  if (session.status === 'active') return 'running';
+  return 'running';
+}
+
+const SUBAGENT_TOOLS: Record<string, string[]> = {
+  'Explore': ['Read', 'Grep', 'Glob', 'LS'],
+  'FileFinder': ['Read', 'Grep', 'Glob', 'LS'],
+  'GeneralPurpose': ['Read', 'Write', 'Edit', 'Grep', 'Glob', 'ExecCommand', 'Task'],
+  'ResearchSpecialist': ['WebSearch', 'WebFetch', 'Read'],
+  'CodeReview': ['Read', 'Grep', 'Glob', 'GetFileDiff'],
+  'ReviewSecurity': ['Read', 'Grep', 'Glob', 'GetFileDiff'],
+  'ReviewArchitecture': ['Read', 'Grep', 'Glob', 'GetFileDiff'],
+  'ReviewBusinessLogic': ['Read', 'Grep', 'Glob', 'GetFileDiff'],
+  'ReviewFrontend': ['Read', 'Grep', 'Glob', 'GetFileDiff'],
+  'ReviewPerformance': ['Read', 'Grep', 'Glob', 'GetFileDiff'],
+  'ReviewJudge': ['Read', 'Grep', 'Glob'],
+};
+
+function inferSessionTools(session: Session): string[] {
+  const type = session.subagentType || session.mode || '';
+  if (SUBAGENT_TOOLS[type]) return SUBAGENT_TOOLS[type];
+  if (type.startsWith('acp__')) return ['Read', 'Write', 'Edit', 'Grep', 'Glob', 'ExecCommand', 'Task', 'SessionControl'];
+  if (type.startsWith('Review')) return ['Read', 'Grep', 'Glob', 'GetFileDiff'];
+  return [];
+}
+
 export class FlowChatStore {
   private static instance: FlowChatStore;
   private state: FlowChatState;
@@ -1689,25 +1735,81 @@ export class FlowChatStore {
     const visited = new Set<string>();
     const orderedSessionIds: string[] = [];
 
-    const visit = (sessionId: string): void => {
+    const MAX_CASCADE_DEPTH = 256;
+    const visit = (sessionId: string, depth: number = 0): void => {
       if (visited.has(sessionId)) {
+        return;
+      }
+      if (depth > MAX_CASCADE_DEPTH) {
         return;
       }
 
       visited.add(sessionId);
       const childSessionIds = childSessionIdsByParent.get(sessionId) || [];
       childSessionIds.forEach(childSessionId => {
-        visit(childSessionId);
+        visit(childSessionId, depth + 1);
       });
       orderedSessionIds.push(sessionId);
     };
 
-    visit(rootSessionId);
+    visit(rootSessionId, 0);
     return orderedSessionIds;
   }
 
   public getCascadeSessionIds(sessionId: string): string[] {
     return this.collectCascadeSessionIds(sessionId, this.state.sessions);
+  }
+
+  // ── R-001: Legion Tree ──────────────────────────────
+
+  public getSessionTree(sessionId: string): SessionTreeNode | null {
+    const sessions = this.state.sessions;
+    const rootSession = sessions.get(sessionId);
+    if (!rootSession) return null;
+    return this.buildSessionTreeNode(sessionId, sessions, 0);
+  }
+
+  private buildSessionTreeNode(
+    sessionId: string,
+    sessions: Map<string, Session>,
+    depth: number,
+  ): SessionTreeNode {
+    const MAX_TREE_BUILD_DEPTH = 256;
+    if (depth > MAX_TREE_BUILD_DEPTH) {
+      const s = sessions.get(sessionId);
+      return {
+        sessionId,
+        sessionName: s?.title ?? sessionId,
+        agentType: s?.mode ?? 'unknown',
+        agentDisplayName: s?.subagentType ?? s?.mode ?? 'unknown',
+        depth,
+        status: 'running' as const,
+        children: [],
+        isAcpExternal: (s?.mode ?? '').startsWith('acp__'),
+        externalProviderLabel: s?.subagentType ?? undefined,
+        turnCount: s?.dialogTurns?.length ?? 0,
+        tools: s ? inferSessionTools(s) : undefined,
+      };
+    }
+
+    const session = sessions.get(sessionId)!;
+    const childIds = Array.from(sessions.values())
+      .filter(s => s.parentSessionId === sessionId)
+      .map(s => s.sessionId);
+
+    return {
+      sessionId: session.sessionId,
+      sessionName: session.title || session.sessionId,
+      agentType: session.mode || 'unknown',
+      agentDisplayName: session.subagentType || session.mode || 'unknown',
+      depth,
+      status: sessionTreeNodeStatus(session),
+      children: childIds.map(id => this.buildSessionTreeNode(id, sessions, depth + 1)),
+      isAcpExternal: (session.mode || '').startsWith('acp__'),
+      externalProviderLabel: session.subagentType ?? undefined,
+      turnCount: session.dialogTurns?.length ?? 0,
+      tools: inferSessionTools(session),
+    };
   }
 
   public subscribe(listener: (state: FlowChatState) => void): () => void {
@@ -1808,6 +1910,7 @@ export class FlowChatStore {
         sessionKind: relationship.sessionKind,
         parentToolCallId: relationship.parentToolCallId,
         subagentType: relationship.subagentType,
+        depth: relationship.depth,
         btwThreads: [],
         btwOrigin: relationship.btwOrigin,
         isTransient: false,
@@ -1839,6 +1942,7 @@ export class FlowChatStore {
       btwOrigin?: Session['btwOrigin'];
       parentToolCallId?: string;
       subagentType?: string;
+      depth?: number;
       isTransient?: boolean;
       agentBackedTransient?: boolean;
       deepReviewRunManifest?: Session['deepReviewRunManifest'];
@@ -1871,7 +1975,8 @@ export class FlowChatStore {
         titleStatus: 'generated',
         dialogTurns: [],
         status: 'idle',
-        config: {
+        
+config: {
           maxContextTokens: 128128,
           autoCompact: true,
           enableTools: true,
@@ -1899,6 +2004,7 @@ export class FlowChatStore {
         sessionKind: relationship.sessionKind,
         parentToolCallId: relationship.parentToolCallId,
         subagentType: relationship.subagentType,
+        depth: relationship.depth,
         btwThreads: [],
         btwOrigin: relationship.btwOrigin,
         deepReviewRunManifest: meta?.deepReviewRunManifest,
@@ -2196,6 +2302,7 @@ export class FlowChatStore {
           updates.subagentType !== undefined
             ? updates.subagentType
             : session.subagentType,
+        depth: session.depth,
       });
       const next: Session = {
         ...session,
@@ -2203,6 +2310,7 @@ export class FlowChatStore {
         sessionKind: relationship.sessionKind,
         parentToolCallId: relationship.parentToolCallId,
         subagentType: relationship.subagentType,
+        depth: relationship.depth,
         btwOrigin: relationship.btwOrigin,
       };
 
@@ -2226,11 +2334,13 @@ export class FlowChatStore {
         sessionKind,
         parentSessionId: origin?.parentSessionId ?? session.parentSessionId,
         btwOrigin: { ...(session.btwOrigin || {}), ...(origin || {}) },
+        depth: session.depth,
       });
       const next: Session = {
         ...session,
         parentSessionId: relationship.parentSessionId,
         sessionKind: relationship.sessionKind,
+        depth: relationship.depth,
         btwOrigin: relationship.btwOrigin,
       };
 
@@ -3870,6 +3980,7 @@ export class FlowChatStore {
             sessionKind: relationship.sessionKind,
             parentToolCallId: relationship.parentToolCallId,
             subagentType: relationship.subagentType,
+            depth: relationship.depth,
             btwThreads: [],
             btwOrigin: relationship.btwOrigin,
             hasUnreadCompletion: metadata.unreadCompletion,
@@ -4239,6 +4350,7 @@ export class FlowChatStore {
               sessionKind: relationship.sessionKind,
               parentToolCallId: relationship.parentToolCallId,
               subagentType: relationship.subagentType,
+              depth: relationship.depth,
               btwThreads: [],
               btwOrigin: relationship.btwOrigin,
               hasUnreadCompletion: metadata.unreadCompletion,

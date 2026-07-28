@@ -1805,7 +1805,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     };
     const loadVisibility = async () => {
       try {
-        applyVisibility(await configManager.getOptionalConfig<boolean>(configPath));
+        applyVisibility(await configManager.getConfig<boolean | undefined>(configPath));
       } catch (error) {
         log.warn('Failed to load permission mode control visibility preference', error);
         applyVisibility(true);
@@ -5397,6 +5397,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
             ? {
                 visible: true,
                 goal: threadGoalController.goal,
+                goalChain: threadGoalController.goalChain,
                 onOpen: () => {
                   void threadGoalController.openGoalEntry();
                 },

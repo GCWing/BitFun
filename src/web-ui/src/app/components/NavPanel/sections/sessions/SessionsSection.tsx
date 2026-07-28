@@ -99,7 +99,7 @@ const countTopLevelSessionsInScope = (
   remoteSshHost?: string | null,
 ): number => {
   const scopedSessions = Array.from(sessions).filter((session: Session) => {
-    if (session.isTransient || session.sessionKind === 'subagent') {
+    if (session.isTransient) {
       return false;
     }
     if (workspacePath) {
@@ -561,9 +561,6 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
           if (s.isTransient) {
             return false;
           }
-          if (s.sessionKind === 'subagent') {
-            return false;
-          }
           if (workspacePath) {
             return sessionBelongsToWorkspaceNavRow(s, workspacePath, remoteConnectionId, remoteSshHost);
           }
@@ -599,6 +596,8 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
       childrenByParent: childMap,
     };
   }, [sessions]);
+
+
 
   const sessionDisplayLimit = useMemo(() => {
     const total = topLevelSessions.length;
@@ -642,12 +641,17 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
 
   const visibleItems = useMemo(() => {
     const visibleParents = topLevelSessions.slice(0, sessionDisplayLimit);
-    const out: Array<{ session: Session; level: 0 | 1 }> = [];
-    for (const p of visibleParents) {
-      out.push({ session: p, level: 0 });
-      const children = childrenByParent.get(p.sessionId) || [];
-      for (const c of children) out.push({ session: c, level: 1 });
-    }
+    const out: Array<{ session: Session; depth: number }> = [];
+
+    const walk = (sessions: Session[], depth: number) => {
+      for (const s of sessions) {
+        out.push({ session: s, depth });
+        const children = childrenByParent.get(s.sessionId) || [];
+        walk(children, depth + 1);
+      }
+    };
+
+    walk(visibleParents, 0);
     return out;
   }, [childrenByParent, sessionDisplayLimit, topLevelSessions]);
 
@@ -1031,10 +1035,10 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
 
   return (
     <div className="bitfun-nav-panel__inline-list">
-      {visibleItems.map(({ session, level }) => {
+      {visibleItems.map(({ session, depth }) => {
           const isEditing = editingSessionId === session.sessionId;
           const relationship = resolveSessionRelationship(session);
-          const isChildSession = level === 1 && relationship.displayAsChild;
+          const isChildSession = depth > 0 && relationship.displayAsChild;
           const childSessionBadge = getChildSessionBadge(relationship.kind);
           const parentReviewActivity = deriveSessionReviewActivity(
             flowChatState,
@@ -1134,7 +1138,7 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
             <div
               className={[
                 'bitfun-nav-panel__inline-item',
-                level === 1 && 'is-child',
+                depth > 0 && 'is-child',
                 isChildSession && 'is-btw-child',
                 isRowActive && 'is-active',
                 isEditing && 'is-editing',
@@ -1142,10 +1146,11 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
               ]
                 .filter(Boolean)
                 .join(' ')}
+              style={depth > 0 ? { '--indent-level': depth } as React.CSSProperties : undefined}
               data-testid="nav-session-item"
               data-session-id={session.sessionId}
               data-session-kind={relationship.kind}
-              data-session-level={String(level)}
+              data-session-level={String(depth)}
               data-session-active={isRowActive ? 'true' : 'false'}
               onPointerDown={event => handleSessionOpenPointerDown(event, session)}
               onClick={() => handleSwitch(session.sessionId)}

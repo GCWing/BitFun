@@ -347,7 +347,7 @@
         "complete": "When proven, the agent calls update_goal to mark Complete"
       },
       "note": {
-        "active": "While active, each finished turn auto-continues toward the goal (up to 100 times) until the agent calls update_goal(complete) or the limit is reached.",
+        "active": "While active, each finished turn auto-continues toward the goal (up to 10 times) until the agent calls update_goal(complete) or the limit is reached.",
         "complete": "Marked complete. Edit or clear the goal to start different work.",
         "paused": "Paused — continuation and completion checks are stopped.",
         "blocked": "Blocked — resume with /goal resume after you unblock or the environment changes.",

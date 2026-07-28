@@ -13,6 +13,7 @@ import type {
   ToolEvent,
   AgenticEvent,
   SubagentSessionLinkedEvent,
+  SubagentTurnCompletedEvent,
   SessionTitleGeneratedEvent,
   SessionModelAutoMigratedEvent,
   ImageAnalysisEvent,
@@ -23,6 +24,7 @@ import type {
   DeepReviewQueueStateChangedEvent,
   AcpContextUsageUpdatedEvent,
   OpenBuiltInBrowserEvent,
+  ThreadGoalUpdatedPayload,
 } from '@/infrastructure/api/service-api/AgentAPI';
 import { createLogger } from '@/shared/utils/logger';
 
@@ -43,6 +45,7 @@ export interface AgenticEventCallbacks {
   onTextChunk?: (event: TextChunkEvent) => void;
   onToolEvent?: (event: ToolEvent) => void;
   onSubagentSessionLinked?: (event: SubagentSessionLinkedEvent) => void;
+  onSubagentTurnCompleted?: (event: SubagentTurnCompletedEvent) => void;
   onDeepReviewQueueStateChanged?: (event: DeepReviewQueueStateChangedEvent) => void;
   onDialogTurnCompleted?: (event: AgenticEvent) => void;
   onDialogTurnFailed?: (event: AgenticEvent) => void;
@@ -52,7 +55,7 @@ export interface AgenticEventCallbacks {
   onContextCompressionStarted?: (event: AgenticEvent) => void;
   onContextCompressionCompleted?: (event: AgenticEvent) => void;
   onContextCompressionFailed?: (event: AgenticEvent) => void;
-  onThreadGoalUpdated?: (event: { sessionId: string; goal?: Record<string, unknown> | null }) => void;
+  onThreadGoalUpdated?: (event: ThreadGoalUpdatedPayload) => void;
   onOpenBuiltInBrowser?: (event: OpenBuiltInBrowserEvent) => void;
   onSessionTitleGenerated?: (event: SessionTitleGeneratedEvent) => void;
   onSessionModelAutoMigrated?: (event: SessionModelAutoMigratedEvent) => void;
@@ -162,6 +165,14 @@ export class AgenticEventListener {
         const unlisten = agentAPI.onSubagentSessionLinked((event) => {
           logger.debug('Subagent session linked:', event);
           callbacks.onSubagentSessionLinked?.(event);
+        });
+        this.unlistenFunctions.push(unlisten);
+      }
+
+      if (callbacks.onSubagentTurnCompleted) {
+        const unlisten = agentAPI.onSubagentTurnCompleted((event) => {
+          logger.debug('Subagent turn completed:', event);
+          callbacks.onSubagentTurnCompleted?.(event);
         });
         this.unlistenFunctions.push(unlisten);
       }
