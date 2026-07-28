@@ -3,371 +3,277 @@
 
 // Same as GalleryLayout.scss — nursery sub-pages align with Agents / gallery lists
 $nursery-scene-gutter: clamp(40px, 6vw, 80px);
+$nursery-gallery-content-max: 1180px;
+$nursery-gallery-gutter: clamp(24px, 4vw, 56px);
 
-// ── Template hero ──────────────────────────────────────────────────────────
-// Flex row, bottom-aligned: panda (taller) + card (shorter).
-// No absolute positioning — panda simply overflows upward naturally.
+// ── Gallery overview ───────────────────────────────────────────────────────
 
-.nursery-template-hero {
-  $gutter: $nursery-scene-gutter;
+.nursery-gallery {
+  .gallery-page-header,
+  .gallery-zones {
+    width: min(100%, $nursery-gallery-content-max);
+    padding-right: $nursery-gallery-gutter;
+    padding-left: $nursery-gallery-gutter;
+  }
 
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  width: min(100%, 1480px);
-  margin: 0 auto;
-  padding: 0 $gutter $size-gap-5;
-  padding-top: 0;
-  box-sizing: border-box;
+  .gallery-page-header {
+    padding-bottom: $size-gap-4;
+  }
+
+  .gallery-zones {
+    gap: $size-gap-8;
+    padding-top: $size-gap-2;
+    padding-bottom: $size-gap-10;
+  }
+
+  .gallery-zone__subtitle {
+    color: var(--color-text-secondary);
+  }
+
+  &__create-button {
+    white-space: nowrap;
+  }
+
+  &__assistant-grid {
+    align-items: stretch;
+  }
+
+  &__empty {
+    min-height: 220px;
+    border: 1px dashed var(--border-subtle);
+    border-radius: $size-radius-lg;
+    background: var(--element-bg-subtle);
+
+    > span {
+      display: flex;
+      max-width: 420px;
+      flex-direction: column;
+      align-items: center;
+      gap: $size-gap-1;
+    }
+
+    strong {
+      color: var(--color-text-secondary);
+      font-size: var(--font-size-sm);
+      font-weight: $font-weight-semibold;
+    }
+
+    small {
+      color: var(--color-text-muted);
+      font-size: var(--font-size-xs);
+      line-height: $line-height-relaxed;
+    }
+  }
 }
 
-// ── Panda column ───────────────────────────────────────────────────────────
+// ── Assistant defaults ─────────────────────────────────────────────────────
 
-.nursery-template-panda {
-  flex-shrink: 0;
-  // 160px wide → rendered height ≈ 160×791/593 ≈ 213px; container 215px leaves ~2px gap
-  width: 160px;
-  height: 215px;
-  position: relative;
-  pointer-events: auto;   // enable own hover
-  cursor: default;
-  margin-right: 0;
-  z-index: 2;
+.nursery-defaults {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: $size-gap-4;
+  min-width: 0;
+  padding: $size-gap-4;
+  border: 1px solid var(--border-subtle);
+  border-radius: $size-radius-lg;
+  background: var(--color-bg-secondary);
+  box-shadow: 0 1px 2px var(--color-overlay-black-08);
+  animation: nursery-card-in 0.22s $easing-decelerate both;
 
-  &__img {
-    position: absolute;
-    bottom: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
+  &__avatar {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 56px;
+    height: 56px;
+    overflow: hidden;
+    border: 1px solid var(--border-subtle);
+    border-radius: $size-radius-base;
+    background: var(--element-bg-medium);
+  }
+
+  &__avatar-image {
+    width: 49px;
+    height: 49px;
     object-fit: contain;
-    object-position: bottom center;
-    transition: opacity 0.30s $easing-standard;
     user-select: none;
     -webkit-user-drag: none;
-    filter: drop-shadow(2px 6px 14px rgba(var(--color-static-black-rgb), 0.24));
-
-    &--default {
-      opacity: 1;
-    }
-
-    &--hover {
-      opacity: 0;
-    }
   }
-
-  // Panda's own hover — fade only, no movement
-  &:hover &__img--default {
-    opacity: 0;
-  }
-
-  &:hover &__img--hover {
-    opacity: 1;
-  }
-}
-
-// ── Template card ──────────────────────────────────────────────────────────
-
-.nursery-template-card {
-  flex: 1;
-  min-width: 0;
-  height: 168px;
-  display: flex;
-  align-items: stretch;
-  border-radius: 15px;
-  overflow: hidden;
-  cursor: pointer;
-  border: none;
-  background: linear-gradient(
-    135deg,
-    color-mix(in srgb, var(--color-success) 10%, transparent) 0%,
-    color-mix(in srgb, var(--color-accent-600) 7%, transparent) 55%,
-    var(--color-purple-100) 100%
-  );
-  position: relative;
-  text-align: left;
-  font-family: $font-family-sans;
-  animation: nursery-card-in 0.22s $easing-decelerate both;
-  transition:
-    transform 0.32s cubic-bezier(0.34, 1.56, 0.64, 1),
-    box-shadow 0.32s ease;
-
-  &::before {
-    content: '';
-    position: absolute;
-    inset: 0;
-    background: linear-gradient(135deg, var(--color-success-bg) 0%, var(--color-accent-100) 100%);
-    opacity: 0;
-    transition: opacity 0.32s ease;
-    pointer-events: none;
-    z-index: 0;
-  }
-
-  &:hover {
-    transform: translateY(-3px) scale(1.006);
-    box-shadow: 0 12px 32px var(--color-overlay-black-20);
-
-    &::before { opacity: 1; }
-  }
-
-  &:focus-visible {
-    outline: 2px solid var(--color-success);
-    outline-offset: 2px;
-  }
-
-  // ── Content ───────────────────────────────────────────────────────────
 
   &__content {
-    flex: 1;
     display: flex;
-    flex-direction: column;
-    justify-content: center;
-    gap: $size-gap-2;
-    padding: $size-gap-4 $size-gap-6;
-    position: relative;
-    z-index: 1;
     min-width: 0;
+    flex-direction: column;
+    gap: 3px;
   }
 
   &__title {
     margin: 0;
-    font-size: var(--font-size-xl);
-    font-weight: $font-weight-semibold;
     color: var(--color-text-primary);
-    letter-spacing: -0.02em;
-    line-height: $line-height-tight;
+    font-size: var(--font-size-sm);
+    font-weight: $font-weight-semibold;
+    line-height: $line-height-base;
   }
 
   &__subtitle {
     margin: 0;
-    font-size: var(--font-size-xs);
     color: var(--color-text-secondary);
+    font-size: var(--font-size-xs);
     line-height: $line-height-relaxed;
   }
 
-  &__action {
-    display: inline-flex;
-    align-items: center;
-    gap: 5px;
-    margin-top: 2px;
-    font-size: var(--font-size-xs);
-    font-weight: $font-weight-medium;
-    color: var(--color-success);
-    opacity: 0.72;
-    transition:
-      opacity $motion-fast $easing-standard,
-      gap $motion-fast $easing-standard;
-  }
-
-  &:hover &__action {
-    opacity: 1;
-    gap: 7px;
-  }
-
-  // ── Stat chips row ────────────────────────────────────────────────────
-
   &__stats {
     display: flex;
+    min-height: 22px;
+    align-items: center;
+    gap: $size-gap-3;
+    margin-top: $size-gap-1;
     flex-wrap: wrap;
-    gap: 5px;
-    margin-top: 1px;
   }
 
   &__stat {
     display: inline-flex;
     align-items: center;
-    gap: 4px;
-    padding: 2px 7px;
-    border-radius: $size-radius-full;
-    border: 1px solid color-mix(in srgb, var(--color-success) 18%, transparent);
-    background: color-mix(in srgb, var(--color-success) 6%, transparent);
+    gap: 5px;
+    color: var(--color-text-muted);
     font-size: var(--font-size-2xs);
     font-weight: $font-weight-medium;
-    color: var(--color-text-muted);
-    letter-spacing: 0.1px;
-    transition:
-      border-color $motion-fast $easing-standard,
-      color $motion-fast $easing-standard,
-      background $motion-fast $easing-standard;
+    white-space: nowrap;
 
-    &--accent {
-      border-color: color-mix(in srgb, var(--color-accent-500) 22%, transparent);
-      background: color-mix(in srgb, var(--color-accent-500) 7%, transparent);
+    svg {
+      color: var(--color-text-muted);
     }
 
-    &--muted {
-      border-color: var(--color-overlay-white-08);
-      background: var(--color-overlay-white-04);
-    }
-
-    &--token {
-      border-color: color-mix(in srgb, var(--color-warning) 20%, transparent);
-      background: color-mix(in srgb, var(--color-warning) 6%, transparent);
+    &--error,
+    &--error svg {
+      color: var(--color-error);
     }
   }
 
-  &:hover &__stat {
-    border-color: var(--color-success-border);
-    color: var(--color-text-secondary);
-    background: var(--color-success-bg);
+  &__stat-skeleton {
+    width: 72px;
+    height: 16px;
+    border-radius: $size-radius-sm;
+    background: var(--element-bg-medium);
+    animation: nursery-skeleton-pulse 1.2s ease-in-out infinite;
 
-    &--accent {
-      border-color: color-mix(in srgb, var(--color-accent-500) 36%, transparent);
-      background: color-mix(in srgb, var(--color-accent-500) 12%, transparent);
-    }
-
-    &--muted {
-      border-color: rgba(var(--color-static-white-rgb), 0.14);
-      background: var(--element-bg-soft);
-    }
-
-    &--token {
-      border-color: color-mix(in srgb, var(--color-warning) 36%, transparent);
-      background: color-mix(in srgb, var(--color-warning) 10%, transparent);
+    &:last-child {
+      width: 64px;
     }
   }
 
-  // ── Decorative eggs ───────────────────────────────────────────────────
+  &__action {
+    flex-shrink: 0;
 
-  &__deco {
-    position: absolute;
-    top: 0;
-    right: 0;
-    bottom: 0;
-    width: 110px;
-    pointer-events: none;
-    z-index: 0;
-    overflow: hidden;
-  }
-
-  &__deco-egg {
-    position: absolute;
-    transition: transform 0.55s $easing-standard, color 0.4s ease;
-
-    &--1 {
-      color: color-mix(in srgb, var(--color-success) 13%, transparent);
-      top: -14px;
-      right: -14px;
-      transform: rotate(18deg);
+    svg:last-child {
+      margin-left: -2px;
+      color: var(--color-text-muted);
+      transition: transform $motion-fast $easing-standard;
     }
 
-    &--2 {
-      color: color-mix(in srgb, var(--color-accent-500) 9%, transparent);
-      bottom: 4px;
-      right: 22px;
-      transform: rotate(-12deg);
+    &:hover:not(:disabled) svg:last-child {
+      transform: translateX(2px);
     }
-  }
-
-  &:hover &__deco-egg--1 {
-    transform: rotate(26deg) scale(1.1);
-    color: color-mix(in srgb, var(--color-success) 24%, transparent);
-  }
-
-  &:hover &__deco-egg--2 {
-    transform: rotate(-22deg) translateY(-5px) scale(1.1);
-    color: color-mix(in srgb, var(--color-accent-500) 18%, transparent);
   }
 }
 
-// ── Assistant card (mirrors AgentCard style) ───────────────────────────────
+// ── Assistant card ─────────────────────────────────────────────────────────
 
 .assistant-card {
-  --assistant-card-default-gradient: linear-gradient(
-    135deg,
-    color-mix(in srgb, var(--color-accent-500) 20%, transparent) 0%,
-    var(--color-purple-200) 100%
-  );
-  --assistant-card-gradient: var(--assistant-card-default-gradient);
-
-  width: 360px;
-  height: 200px;
-  border-radius: 15px;
-  background: var(--element-bg-soft);
   display: flex;
+  width: 100%;
+  min-width: 0;
+  min-height: 176px;
   flex-direction: column;
-  position: relative;
   overflow: hidden;
-  cursor: pointer;
-  border: none;
-  text-align: left;
-  font-family: $font-family-sans;
+  border: 1px solid var(--border-subtle);
+  border-radius: $size-radius-lg;
+  background: var(--color-bg-secondary);
+  box-shadow: 0 1px 2px var(--color-overlay-black-08);
   animation: nursery-card-in 0.22s $easing-decelerate both;
   @include surface-stagger.animation-delay(40ms);
   transition:
-    transform 0.35s cubic-bezier(0.34, 1.56, 0.64, 1),
-    box-shadow 0.35s ease;
-
-  // Gradient overlay that reveals on hover (covers body area above footer)
-  &::before {
-    content: '';
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 40px;
-    background: var(--assistant-card-gradient);
-    opacity: 0;
-    transition: opacity 0.35s ease;
-    pointer-events: none;
-    z-index: 0;
-  }
+    border-color $motion-fast $easing-standard,
+    box-shadow $motion-fast $easing-standard,
+    transform $motion-fast $easing-standard;
 
   &:hover {
-    transform: translateY(-4px) scale(1.02);
-    box-shadow: 0 16px 40px var(--color-overlay-black-20);
-
-    &::before {
-      opacity: 0.4;
-    }
+    border-color: color-mix(in srgb, var(--color-accent-500) 28%, var(--border-subtle));
+    box-shadow: 0 10px 24px var(--color-overlay-black-08);
+    transform: translateY(-1px);
   }
 
-  &:focus-visible {
-    outline: 2px solid var(--color-accent-500);
-    outline-offset: 2px;
+  &:focus-within {
+    border-color: color-mix(in srgb, var(--color-accent-500) 44%, var(--border-subtle));
+  }
+
+  &--busy {
+    opacity: 0.72;
+  }
+
+  &__main {
+    display: flex;
+    min-width: 0;
+    flex: 1;
+    flex-direction: column;
+    gap: $size-gap-3;
+    margin: 0;
+    padding: $size-gap-4;
+    border: 0;
+    background: transparent;
+    color: inherit;
+    font-family: $font-family-sans;
+    text-align: left;
+    cursor: pointer;
+
+    &:focus-visible {
+      outline: 2px solid color-mix(in srgb, var(--color-accent-500) 58%, transparent);
+      outline-offset: -2px;
+    }
+
+    &:disabled {
+      cursor: wait;
+    }
   }
 
   // ── Header ────────────────────────────────────────────────────────────
 
   &__header {
     display: flex;
+    min-width: 0;
     align-items: center;
     gap: $size-gap-3;
-    padding: $size-gap-3;
-    padding-bottom: 0;
-    position: relative;
-    z-index: 1;
   }
 
   &__avatar {
-    flex-shrink: 0;
     display: flex;
+    width: 42px;
+    height: 42px;
+    flex-shrink: 0;
     align-items: center;
     justify-content: center;
-    width: 40px;
-    height: 40px;
-    border-radius: 10px;
-    background: var(--color-overlay-white-12);
-    backdrop-filter: blur(8px);
-    -webkit-backdrop-filter: blur(8px);
+    border: 1px solid var(--border-subtle);
+    border-radius: $size-radius-base;
+    background: var(--element-bg-medium);
   }
 
   &__emoji {
-    font-size: 22px;
+    font-size: 21px;
     line-height: 1;
   }
 
   &__avatar-icon {
     flex-shrink: 0;
-    color: var(--color-text-primary);
+    color: var(--color-text-secondary);
   }
 
   &__header-info {
-    flex: 1;
-    min-width: 0;
     display: flex;
+    min-width: 0;
+    flex: 1;
     flex-direction: column;
-    gap: 5px;
+    gap: 4px;
   }
 
   &__title-row {
@@ -393,151 +299,141 @@ $nursery-scene-gutter: clamp(40px, 6vw, 80px);
     flex-wrap: wrap;
   }
 
-  // ── Body ──────────────────────────────────────────────────────────────
+  &__chevron {
+    flex-shrink: 0;
+    color: var(--color-text-muted);
+    transition:
+      color $motion-fast $easing-standard,
+      transform $motion-fast $easing-standard;
+  }
+
+  &__main:hover &__chevron {
+    color: var(--color-text-secondary);
+    transform: translateX(2px);
+  }
 
   &__body {
-    flex: 1;
-    padding: $size-gap-2 $size-gap-3;
     display: flex;
-    flex-direction: column;
+    min-height: 34px;
+    flex: 1;
     overflow: hidden;
-    position: relative;
-    z-index: 1;
   }
 
   &__vibe {
-    margin: 0;
+    display: -webkit-box;
+    color: var(--color-text-secondary);
     font-size: var(--font-size-xs);
     font-weight: $font-weight-normal;
-    color: var(--color-text-secondary);
     line-height: $line-height-relaxed;
-    display: -webkit-box;
-    -webkit-line-clamp: 3;
-    -webkit-box-orient: vertical;
     overflow: hidden;
     word-break: break-word;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
 
     &--empty {
       color: var(--color-text-muted);
-      font-style: italic;
     }
   }
 
-  // ── Footer ────────────────────────────────────────────────────────────
+  &__configure {
+    display: inline-flex;
+    width: fit-content;
+    align-items: center;
+    gap: 5px;
+    color: var(--color-text-muted);
+    font-size: var(--font-size-2xs);
+    font-weight: $font-weight-medium;
+    transition: color $motion-fast $easing-standard;
+  }
+
+  &__main:hover &__configure {
+    color: var(--color-text-secondary);
+  }
+
+  &__primary-badge {
+    margin-left: $size-gap-2;
+    padding: 2px 6px;
+    flex-shrink: 0;
+    border-radius: $size-radius-sm;
+    background: color-mix(in srgb, var(--color-accent-500) 12%, transparent);
+    color: var(--color-accent-400);
+    font-size: var(--font-size-2xs);
+    font-weight: $font-weight-semibold;
+    line-height: 1.25;
+    white-space: nowrap;
+  }
 
   &__footer {
     display: flex;
-    align-items: center;
-    height: 36px;
-    border-radius: 0 0 15px 15px;
-    overflow: hidden;
-    position: relative;
-    z-index: 1;
+    min-height: 42px;
     flex-shrink: 0;
-
-    // Gradient tinted footer background
-    &::after {
-      content: '';
-      position: absolute;
-      inset: 0;
-      background: var(--assistant-card-gradient);
-      opacity: 0.4;
-      transition: opacity 0.35s ease;
-      pointer-events: none;
-    }
-  }
-
-  &:hover &__footer::after {
-    opacity: 0.9;
-  }
-
-  &__footer-inner {
-    display: flex;
     align-items: center;
     justify-content: space-between;
     gap: $size-gap-2;
-    padding: 0 $size-gap-3;
-    position: relative;
-    z-index: 1;
-    height: 100%;
-    width: 100%;
-    min-width: 0;
-  }
-
-  &__footer-hint {
-    flex: 1;
-    min-width: 0;
-    font-size: var(--font-size-2xs);
-    color: var(--color-text-muted);
-    font-weight: $font-weight-medium;
-    letter-spacing: 0.2px;
-    transition: color $motion-fast $easing-standard;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
-
-  &:hover &__footer-hint {
-    color: var(--color-text-secondary);
-  }
-
-  &__footer-actions {
-    display: flex;
-    align-items: center;
-    flex-shrink: 0;
-    gap: 4px;
+    padding: 6px $size-gap-3;
+    border-top: 1px solid var(--border-subtle);
+    background: var(--element-bg-subtle);
   }
 
   &__new-session-btn {
-    display: flex;
+    display: inline-flex;
+    min-width: 0;
+    height: 28px;
     align-items: center;
     justify-content: center;
-    width: 26px;
-    height: 26px;
-    margin: 0;
-    padding: 0;
+    gap: 6px;
+    padding: 0 $size-gap-2;
     border: none;
-    border-radius: 7px;
-    background: transparent;
-    color: var(--color-text-muted);
+    border-radius: $size-radius-sm;
+    background: color-mix(in srgb, var(--color-accent-500) 10%, transparent);
+    color: var(--color-accent-400);
+    font-family: $font-family-sans;
+    font-size: var(--font-size-2xs);
+    font-weight: $font-weight-medium;
     cursor: pointer;
     transition:
-      background 0.15s ease,
-      color 0.15s ease;
+      background $motion-fast $easing-standard,
+      color $motion-fast $easing-standard,
+      transform $motion-fast $easing-standard;
 
-    &:hover {
-      background: rgba(var(--color-static-white-rgb), 0.14);
-      color: var(--color-text-primary);
+    &:hover:not(:disabled) {
+      background: color-mix(in srgb, var(--color-accent-500) 17%, transparent);
+      color: var(--color-accent-500);
+    }
+
+    &:active:not(:disabled) {
+      transform: translateY(1px);
     }
 
     &:focus-visible {
-      outline: 2px solid var(--color-accent-500);
+      outline: 2px solid color-mix(in srgb, var(--color-accent-500) 58%, transparent);
       outline-offset: 1px;
     }
-  }
 
-  &:hover &__new-session-btn {
-    color: var(--color-text-secondary);
+    &:disabled {
+      opacity: 0.56;
+      cursor: wait;
+    }
   }
 
   &__delete-btn {
     display: flex;
+    width: 28px;
+    height: 28px;
+    flex-shrink: 0;
     align-items: center;
     justify-content: center;
-    width: 26px;
-    height: 26px;
-    margin: 0;
     padding: 0;
     border: none;
-    border-radius: 7px;
+    border-radius: $size-radius-sm;
     background: transparent;
     color: var(--color-text-muted);
     cursor: pointer;
     transition:
-      background 0.15s ease,
-      color 0.15s ease;
+      background $motion-fast $easing-standard,
+      color $motion-fast $easing-standard;
 
-    &:hover {
+    &:hover:not(:disabled) {
       background: color-mix(in srgb, var(--color-error) 18%, transparent);
       color: var(--color-error);
     }
@@ -547,105 +443,11 @@ $nursery-scene-gutter: clamp(40px, 6vw, 80px);
       outline-offset: 1px;
       opacity: 1;
     }
-  }
-
-  &:hover &__delete-btn {
-    color: var(--color-text-secondary);
-  }
-
-  &__primary-badge {
-    margin-left: 6px;
-    padding: 1px 6px;
-    border-radius: 4px;
-    font-size: var(--font-size-2xs);
-    font-weight: $font-weight-semibold;
-    color: var(--color-accent-400);
-    background: color-mix(in srgb, var(--color-accent-500) 12%, transparent);
-    white-space: nowrap;
-    flex-shrink: 0;
-  }
-}
-
-// ── Delete confirmation dialog ─────────────────────────────────────────────
-
-.nursery-delete-overlay {
-  position: fixed;
-  inset: 0;
-  z-index: 1000;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  pointer-events: none;
-}
-
-.nursery-delete-dialog {
-  pointer-events: auto;
-  background: var(--color-bg-elevated);
-  border: 1px solid var(--border-subtle);
-  border-radius: 14px;
-  padding: 24px;
-  width: min(400px, calc(100vw - 40px));
-  box-shadow: 0 20px 60px rgba(var(--color-static-black-rgb), 0.35);
-
-  &__title {
-    margin: 0 0 10px;
-    font-size: var(--font-size-base);
-    font-weight: $font-weight-semibold;
-    color: var(--color-text-primary);
-  }
-
-  &__message {
-    margin: 0 0 20px;
-    font-size: var(--font-size-sm);
-    color: var(--color-text-secondary);
-    line-height: $line-height-relaxed;
-  }
-
-  &__actions {
-    display: flex;
-    justify-content: flex-end;
-    gap: 8px;
-  }
-
-  &__btn {
-    padding: 7px 16px;
-    border-radius: 8px;
-    font-size: var(--font-size-sm);
-    font-weight: $font-weight-medium;
-    cursor: pointer;
-    border: none;
-    transition: background 0.15s ease, opacity 0.15s ease;
 
     &:disabled {
       opacity: 0.5;
-      cursor: not-allowed;
+      cursor: wait;
     }
-
-    &--cancel {
-      background: var(--element-bg-soft);
-      color: var(--color-text-secondary);
-
-      &:hover:not(:disabled) {
-        background: var(--element-bg-hover);
-        color: var(--color-text-primary);
-      }
-    }
-
-    &--confirm {
-      background: var(--glass-red-hover);
-      color: var(--color-error);
-
-      &:hover:not(:disabled) {
-        background: color-mix(in srgb, var(--color-error) 25%, transparent);
-      }
-    }
-  }
-}
-
-@media (max-width: 720px) {
-  .assistant-card {
-    width: 100%;
-    min-height: 180px;
   }
 }
 
@@ -1203,12 +1005,23 @@ $nursery-scene-gutter: clamp(40px, 6vw, 80px);
 @keyframes nursery-card-in {
   from {
     opacity: 0;
-    transform: translateY(8px) scale(0.98);
+    transform: translateY(6px);
   }
 
   to {
     opacity: 1;
-    transform: translateY(0) scale(1);
+    transform: translateY(0);
+  }
+}
+
+@keyframes nursery-skeleton-pulse {
+  0%,
+  100% {
+    opacity: 0.56;
+  }
+
+  50% {
+    opacity: 1;
   }
 }
 
@@ -1218,10 +1031,17 @@ $nursery-scene-gutter: clamp(40px, 6vw, 80px);
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .nursery-card,
+  .assistant-card,
+  .nursery-defaults,
+  .nursery-defaults__stat-skeleton,
   .nursery-page,
   .tc-template-shell {
     animation: none;
+    transition: none;
+  }
+
+  .assistant-card__chevron,
+  .nursery-defaults__action svg:last-child {
     transition: none;
   }
 }
@@ -1270,17 +1090,47 @@ $nursery-scene-gutter: clamp(40px, 6vw, 80px);
     padding-inline: $size-gap-4;
   }
 
-  .nursery-template-hero {
-    padding-inline: $size-gap-4;
+  .nursery-gallery {
+    .gallery-page-header,
+    .gallery-zones {
+      padding-right: $size-gap-4;
+      padding-left: $size-gap-4;
+    }
+
+    .gallery-zone__header {
+      flex-direction: row;
+      align-items: flex-start;
+    }
+
+    .gallery-zone__tools {
+      width: auto;
+      margin-left: auto;
+      justify-content: flex-end;
+    }
   }
 
-  .nursery-template-panda {
-    width: 120px;
-    height: 160px;
+  .nursery-defaults {
+    grid-template-columns: auto minmax(0, 1fr);
+    gap: $size-gap-3;
+
+    &__avatar {
+      width: 50px;
+      height: 50px;
+    }
+
+    &__avatar-image {
+      width: 44px;
+      height: 44px;
+    }
+
+    &__action {
+      width: 100%;
+      grid-column: 1 / -1;
+    }
   }
 
-  .nursery-template-card {
-    height: 148px;
+  .assistant-card {
+    min-height: 168px;
   }
 }
 

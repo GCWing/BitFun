@@ -121,16 +121,22 @@
 
     "gallery": {
       "title":              "助理",
-      "subtitle":           "管理你的所有助理實例",
-      "newAssistant":       "新增助理",
-      "assistantsTitle":    "助理實例",
-      "assistantsSubtitle": "點擊助理卡片進行設定"
+      "subtitle":           "建立、設定助理，或隨時開始新會話",
+      "newAssistant":       "建立助理",
+      "creating":           "正在建立...",
+      "createFailed":       "無法建立助理，請稍後重試",
+      "loadFailed":         "無法載入助理",
+      "emptyTitle":         "還沒有助理",
+      "emptySubtitle":      "建立一個助理，為它設定身份、工具和個性",
+      "assistantsTitle":    "你的助理",
+      "assistantsSubtitle": "設定助理，或直接開始新會話"
     },
 
     "template": {
-      "title":        "助理配置",
-      "subtitle":     "設定助理的工具和技能",
-      "configure":    "修改配置",
+      "title":        "助理預設設定",
+      "subtitle":     "新建助理將繼承這裡啟用的工具和技能",
+      "configure":    "設定預設能力",
+      "statsUnavailable": "暫時無法取得詳情",
       "tokenTitle":   "上下文佔用估算",
       "tokenSystemPrompt": "系統提示詞",
       "tokenToolInjection": "工具描述注入",
@@ -177,11 +183,14 @@
     "card": {
       "unnamed":             "未命名助理",
       "noVibe":              "一個等待定義的助理",
-      "configure":           "點擊設定",
+      "configure":           "設定助理",
       "newSession":          "新增會話",
+      "startingSession":     "正在啟動...",
+      "newSessionFailed":    "無法新增會話，請稍後重試",
       "tokenTitle":          "上下文佔用估算",
       "primaryBadge":        "主助理",
       "delete":              "刪除助理",
+      "deleteFailed":        "無法刪除助理，請稍後重試",
       "deleteConfirmTitle":  "刪除助理",
       "deleteConfirmMessage": "確定要刪除助理「{{name}}」嗎？此操作不可撤銷。",
       "deleteConfirm":       "確認刪除",
