@@ -8,7 +8,6 @@ import {
   Activity,
   Check,
   EyeOff,
-  Loader2,
   GitBranch,
   Shield,
   ShieldAlert,
@@ -56,9 +55,11 @@ export interface ChatInputWorkspaceStripProps {
    * Omitted when the session cannot host a worktree at all (remote, no session).
    */
   worktreeControl?: {
+    /** Desired state, including an armed worktree not created until first send. */
+    enabled: boolean;
     /** Locked once the session has a transcript — its history describes one directory. */
     locked: boolean;
-    onChange: (enabled: boolean) => void | Promise<void>;
+    onChange: (enabled: boolean) => void;
   };
 }
 
@@ -84,8 +85,6 @@ export const ChatInputWorkspaceStrip: React.FC<ChatInputWorkspaceStripProps> = (
   const { t: tWorktrees } = useI18n('worktrees');
   const permissionRootRef = useRef<HTMLDivElement>(null);
   const [permissionMenuOpen, setPermissionMenuOpen] = useState(false);
-  const [worktreePending, setWorktreePending] = useState(false);
-  const worktreePendingRef = useRef(false);
   const trimmedPath = repositoryPath.trim();
   const label = workspaceLabel.trim();
 
@@ -115,7 +114,11 @@ export const ChatInputWorkspaceStrip: React.FC<ChatInputWorkspaceStripProps> = (
   const showPermission = !!permissionControl;
   const showRightActions = showPermission || showUsage || showGoal;
   const isWorktree = !!executionTarget?.worktreeId;
-  const showWorktreeToggle = !!worktreeControl && (isRepository || isWorktree);
+  const worktreeEnabled = worktreeControl?.enabled ?? isWorktree;
+  const worktreeEnabledRef = useRef(worktreeEnabled);
+  worktreeEnabledRef.current = worktreeEnabled;
+  const showWorktreeToggle =
+    !!worktreeControl && (isRepository || isWorktree || worktreeEnabled);
   const permissionCopy = {
     ask: {
       label: t('chatInput.permissionMode.ask.label'),
@@ -178,12 +181,17 @@ export const ChatInputWorkspaceStrip: React.FC<ChatInputWorkspaceStripProps> = (
       : '—');
 
   const workspaceTooltipContent = trimmedPath || label;
-  const worktreeToggleDisabled = !!worktreeControl?.locked || worktreePending;
-  const worktreeTooltip = worktreeControl?.locked
-    ? tWorktrees('strip.toggleLocked')
-    : isWorktree
-      ? tWorktrees('strip.toggleOnDescription', { path: trimmedPath })
-      : tWorktrees('strip.toggleOffDescription');
+  const worktreeToggleDisabled = !!worktreeControl?.locked;
+  let worktreeTooltip = tWorktrees('strip.toggleOffDescription');
+  if (worktreeControl?.locked) {
+    worktreeTooltip = tWorktrees('strip.toggleLocked');
+  } else if (worktreeEnabled && !isWorktree) {
+    worktreeTooltip = tWorktrees('strip.togglePendingOnDescription');
+  } else if (!worktreeEnabled && isWorktree) {
+    worktreeTooltip = tWorktrees('strip.togglePendingOffDescription');
+  } else if (isWorktree) {
+    worktreeTooltip = tWorktrees('strip.toggleOnDescription', { path: trimmedPath });
+  }
   const permissionMode = permissionControl?.mode ?? 'ask';
   const permissionModeLabel = permissionCopy[permissionMode].label;
   const permissionTooltip = permissionMode === 'acp'
@@ -197,15 +205,12 @@ export const ChatInputWorkspaceStrip: React.FC<ChatInputWorkspaceStripProps> = (
   const showPermissionLabel = permissionMode !== 'acp';
 
   const handleWorktreeToggle = () => {
-    if (!worktreeControl || worktreeToggleDisabled || worktreePendingRef.current) {
+    if (!worktreeControl || worktreeToggleDisabled) {
       return;
     }
-    worktreePendingRef.current = true;
-    setWorktreePending(true);
-    void Promise.resolve(worktreeControl.onChange(!isWorktree)).finally(() => {
-      worktreePendingRef.current = false;
-      setWorktreePending(false);
-    });
+    const nextEnabled = !worktreeEnabledRef.current;
+    worktreeEnabledRef.current = nextEnabled;
+    worktreeControl.onChange(nextEnabled);
   };
 
   const split = !!label && showRightActions;
@@ -248,28 +253,22 @@ export const ChatInputWorkspaceStrip: React.FC<ChatInputWorkspaceStripProps> = (
               <button
                 type="button"
                 role="switch"
-                aria-checked={isWorktree}
+                aria-checked={worktreeEnabled}
                 aria-label={tWorktrees('strip.toggleLabel')}
                 className={[
                   'bitfun-chat-input-workspace-strip__chip',
                   'bitfun-chat-input-workspace-strip__chip--worktree',
-                  isWorktree && 'bitfun-chat-input-workspace-strip__chip--worktree-on',
+                  worktreeEnabled && 'bitfun-chat-input-workspace-strip__chip--worktree-on',
                 ]
                   .filter(Boolean)
                   .join(' ')}
                 disabled={worktreeToggleDisabled}
                 data-testid="chat-input-worktree-toggle"
-                data-worktree-enabled={isWorktree ? 'true' : 'false'}
+                data-worktree-enabled={worktreeEnabled ? 'true' : 'false'}
+                data-worktree-materialized={isWorktree ? 'true' : 'false'}
                 onClick={handleWorktreeToggle}
               >
-                {worktreePending ? (
-                  <Loader2
-                    className="bitfun-chat-input-workspace-strip__worktree-icon is-spinning"
-                    size={11}
-                    strokeWidth={2}
-                    aria-hidden
-                  />
-                ) : isWorktree ? (
+                {worktreeEnabled ? (
                   <SquareCheck
                     className="bitfun-chat-input-workspace-strip__worktree-icon"
                     size={11}

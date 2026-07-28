@@ -104,6 +104,57 @@ const SESSION_REFERENCE_ARTIFACT_STEM_LENGTH: usize = 8;
 const SESSION_REFERENCE_ARTIFACT_STEM_EXTENSION_LENGTH: usize = 4;
 const SESSION_REFERENCE_NAME_CHAR_LIMIT: usize = 96;
 
+fn comparable_workspace_path(path: &str) -> String {
+    let path = path.trim();
+    let mut normalized = dunce::canonicalize(Path::new(path))
+        .unwrap_or_else(|_| PathBuf::from(path))
+        .to_string_lossy()
+        .replace('\\', "/");
+    while normalized.len() > 1 && normalized.ends_with('/') {
+        normalized.pop();
+    }
+    #[cfg(windows)]
+    {
+        normalized.make_ascii_lowercase();
+    }
+    normalized
+}
+
+/// Turn submission APIs historically carried a single `workspacePath`, even
+/// though a worktree session has two roots. Accept the persisted execution
+/// root as a legacy alias, but normalize it to the owning project root before
+/// any session-storage lookup. An unrelated requested workspace is preserved
+/// so the existing cross-workspace identity check still rejects it.
+pub(super) fn session_storage_workspace_locator(
+    requested_workspace_path: Option<&str>,
+    execution_workspace_path: Option<&str>,
+    project_workspace_path: Option<&str>,
+) -> Option<String> {
+    let requested_workspace_path = requested_workspace_path
+        .map(str::trim)
+        .filter(|path| !path.is_empty());
+    let execution_workspace_path = execution_workspace_path
+        .map(str::trim)
+        .filter(|path| !path.is_empty());
+    let project_workspace_path = project_workspace_path
+        .map(str::trim)
+        .filter(|path| !path.is_empty());
+
+    match requested_workspace_path {
+        Some(requested)
+            if execution_workspace_path.is_some_and(|execution| {
+                comparable_workspace_path(requested) == comparable_workspace_path(execution)
+            }) =>
+        {
+            Some(project_workspace_path.unwrap_or(requested).to_string())
+        }
+        Some(requested) => Some(requested.to_string()),
+        None => project_workspace_path
+            .or(execution_workspace_path)
+            .map(str::to_string),
+    }
+}
+
 fn trimmed_model_id(value: Option<&str>) -> Option<String> {
     value
         .map(str::trim)
@@ -3557,7 +3608,17 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
         mut additional_prepended_messages: Vec<Message>,
         suppress_session_title_generation: bool,
     ) -> BitFunResult<()> {
-        let requested_restore_path = match workspace_path.as_deref() {
+        let loaded_session = self.session_manager.get_session(&session_id);
+        let storage_workspace_path = session_storage_workspace_locator(
+            workspace_path.as_deref(),
+            loaded_session
+                .as_ref()
+                .and_then(|session| session.config.workspace_path.as_deref()),
+            loaded_session
+                .as_ref()
+                .and_then(|session| session.config.project_workspace_path.as_deref()),
+        );
+        let requested_restore_path = match storage_workspace_path.as_deref() {
             Some(workspace_path) => Some(
                 Self::resolve_session_restore_path(
                     workspace_path,
@@ -3572,7 +3633,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
         // Get latest session, restoring from persistence on demand so every entry
         // point can use the same start_dialog_turn flow. A loaded session must keep
         // the same storage identity as this invocation.
-        let session = match self.session_manager.get_session(&session_id) {
+        let session = match loaded_session {
             Some(session) => {
                 if let Some(restore_path) = requested_restore_path.as_deref() {
                     self.session_manager
@@ -3766,9 +3827,9 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             );
             let restore_workspace_path = session
                 .config
-                .workspace_path
+                .project_workspace_path
                 .as_deref()
-                .or(workspace_path.as_deref())
+                .or(storage_workspace_path.as_deref())
                 .ok_or_else(|| {
                     BitFunError::Validation(format!(
                         "workspace_path is required when restoring session: {}",
@@ -9229,9 +9290,10 @@ mod tests {
         normalize_subagent_max_concurrency, resolve_agent_session_create_created_by,
         resolve_agent_submission_turn_id, resolve_subagent_model_selection,
         runtime_port_error_preserving_message, runtime_tool_restrictions_for_session_lifetime,
-        turn_review_manifest_for_agent, BackgroundSubagentWaitMode, ConversationCoordinator,
-        SessionMemoryMode, SessionReferenceLocator, SessionRelationshipKind,
-        SubagentExecutionRequest, TEST_AGENT_MODEL_DEFAULTS,
+        session_storage_workspace_locator, turn_review_manifest_for_agent,
+        BackgroundSubagentWaitMode, ConversationCoordinator, SessionMemoryMode,
+        SessionReferenceLocator, SessionRelationshipKind, SubagentExecutionRequest,
+        TEST_AGENT_MODEL_DEFAULTS,
     };
     use crate::agentic::coordination::coordination_store::{
         BackgroundTaskRegistration, RegisteredBackgroundTask,
@@ -9271,6 +9333,41 @@ mod tests {
     use std::collections::HashMap;
     use std::sync::Arc;
     use std::time::Duration;
+
+    #[test]
+    fn worktree_execution_root_is_a_legacy_alias_for_project_storage() {
+        assert_eq!(
+            session_storage_workspace_locator(
+                Some(r"D:\worktrees\session-1"),
+                Some("D:/worktrees/session-1"),
+                Some("D:/projects/BitFun"),
+            )
+            .as_deref(),
+            Some("D:/projects/BitFun")
+        );
+        assert_eq!(
+            session_storage_workspace_locator(
+                None,
+                Some("/worktrees/session-1"),
+                Some("/projects/BitFun"),
+            )
+            .as_deref(),
+            Some("/projects/BitFun")
+        );
+    }
+
+    #[test]
+    fn unrelated_workspace_is_not_rewritten_to_the_project_storage_root() {
+        assert_eq!(
+            session_storage_workspace_locator(
+                Some("/projects/other"),
+                Some("/worktrees/session-1"),
+                Some("/projects/BitFun"),
+            )
+            .as_deref(),
+            Some("/projects/other")
+        );
+    }
 
     #[test]
     fn btw_session_memory_mode_requires_both_generation_switches() {

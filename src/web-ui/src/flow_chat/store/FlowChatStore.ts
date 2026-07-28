@@ -2152,6 +2152,35 @@ export class FlowChatStore {
     });
   }
 
+  /**
+   * Record an empty session's desired isolation state without touching Git.
+   * MessageModule materializes this preference only after the user submits the
+   * first prompt.
+   */
+  public setSessionWorktreeIsolationRequested(
+    sessionId: string,
+    requested: boolean | undefined,
+  ): void {
+    this.setState(prev => {
+      const session = prev.sessions.get(sessionId);
+      if (!session) return prev;
+
+      const newSessions = new Map(prev.sessions);
+      const config = { ...session.config };
+      if (requested === undefined) {
+        delete config.worktreeIsolationRequested;
+      } else {
+        config.worktreeIsolationRequested = requested;
+      }
+      newSessions.set(sessionId, {
+        ...session,
+        config,
+        lastActiveAt: Date.now(),
+      });
+      return { ...prev, sessions: newSessions };
+    });
+  }
+
   public updateSessionFocusedReviewDisplayLabel(
     sessionId: string,
     focusedReviewDisplayLabel: Session['focusedReviewDisplayLabel'],

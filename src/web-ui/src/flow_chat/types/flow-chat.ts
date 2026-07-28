@@ -502,6 +502,12 @@ export interface SessionConfig {
   executionTargetRequest?: import('@/infrastructure/api/service-api/WorktreeAPI').SessionExecutionTargetRequest;
   /** Resolved target returned and persisted by the backend. */
   executionTarget?: import('@/infrastructure/api/service-api/WorktreeAPI').SessionExecutionTarget;
+  /**
+   * Composer-only preference for an empty session. The concrete worktree is
+   * materialized after the first prompt is submitted, not when the checkbox
+   * is clicked.
+   */
+  worktreeIsolationRequested?: boolean;
   /** Binds session to `WorkspaceInfo.id` (path alone is insufficient for remotes). */
   workspaceId?: string;
   /** Disambiguates sessions when multiple remote workspaces share the same `workspacePath`. */

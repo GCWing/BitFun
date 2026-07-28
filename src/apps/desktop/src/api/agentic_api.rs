@@ -254,7 +254,13 @@ pub struct StartDialogTurnRequest {
     pub user_input: String,
     pub original_user_input: Option<String>,
     pub agent_type: String,
+    /// Concrete execution root retained for backward compatibility and
+    /// non-native transports.
     pub workspace_path: Option<String>,
+    /// Stable project root used to locate the session transcript when
+    /// execution happens in a managed worktree.
+    #[serde(default)]
+    pub project_workspace_path: Option<String>,
     pub remote_connection_id: Option<String>,
     pub remote_ssh_host: Option<String>,
     pub turn_id: Option<String>,
@@ -1739,6 +1745,7 @@ fn desktop_dialog_turn_request(
         original_user_input,
         agent_type,
         workspace_path,
+        project_workspace_path,
         remote_connection_id,
         remote_ssh_host,
         turn_id,
@@ -1762,7 +1769,7 @@ fn desktop_dialog_turn_request(
         original_message: original_user_input,
         turn_id,
         agent_type,
-        workspace_path,
+        workspace_path: project_workspace_path.or(workspace_path),
         remote_connection_id,
         remote_ssh_host,
         policy,
@@ -3167,7 +3174,8 @@ mod tests {
             "userInput": "resolved input",
             "originalUserInput": "original input",
             "agentType": "agentic",
-            "workspacePath": "/workspace/project",
+            "workspacePath": "/worktrees/session-1",
+            "projectWorkspacePath": "/workspace/project",
             "remoteConnectionId": "connection-1",
             "remoteSshHost": "host-1",
             "turnId": "turn-1",

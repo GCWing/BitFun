@@ -822,7 +822,9 @@ impl CliAgentRuntimeClient {
             original_message: None,
             turn_id: Some(turn_id.clone()),
             agent_type: agent_type.to_string(),
-            workspace_path: Some(self.workspace_path_string()),
+            // Dialog submission uses this path to locate persisted session
+            // state. Execution still comes from the session's resolved binding.
+            workspace_path: Some(self.project_workspace_path_string()),
             remote_connection_id: None,
             remote_ssh_host: None,
             policy: DialogSubmissionPolicy::for_source(AgentSubmissionSource::Cli),

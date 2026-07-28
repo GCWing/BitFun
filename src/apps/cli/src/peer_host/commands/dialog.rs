@@ -40,7 +40,8 @@ pub(crate) async fn start_dialog_turn(
     let user_input = get_string(request, "userInput")?;
     let original_user_input = optional_string(request, "originalUserInput");
     let agent_type = get_string(request, "agentType")?;
-    let workspace_path = optional_string(request, "workspacePath");
+    let workspace_path = optional_string(request, "projectWorkspacePath")
+        .or_else(|| optional_string(request, "workspacePath"));
     let remote_connection_id = optional_string(request, "remoteConnectionId");
     let remote_ssh_host = optional_string(request, "remoteSshHost");
     let controller_lease = attached_controller_lease()?;

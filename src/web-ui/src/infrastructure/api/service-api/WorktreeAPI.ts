@@ -261,8 +261,8 @@ export class WorktreeAPI {
   }
 
   /**
-   * Move a session into a managed worktree, or back to the project checkout.
-   * Only allowed while the session has no messages yet.
+   * Materialize an empty session's requested execution root. Composer controls
+   * call this only after the first prompt has been submitted.
    */
   bindSession(
     sessionId: string,

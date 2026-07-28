@@ -6,6 +6,8 @@
     "toggleLabel": "worktree",
     "toggleOffDescription": "Run this session in its own Git worktree so parallel agents do not disturb each other.",
     "toggleOnDescription": "Running in an isolated worktree at {{path}}. Turn off to run in the project directory.",
+    "togglePendingOnDescription": "Worktree isolation is armed. The worktree will be created after you send the first message.",
+    "togglePendingOffDescription": "Worktree isolation will be turned off after you send the first message.",
     "toggleLocked": "Worktree isolation can only be changed before the session's first message.",
     "retained": "The worktree still held local work and was kept at {{path}}."
   },

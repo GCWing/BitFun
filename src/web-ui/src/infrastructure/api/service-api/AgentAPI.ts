@@ -85,7 +85,10 @@ export interface StartDialogTurnRequest {
   originalUserInput?: string;
   turnId?: string; 
   agentType: string; 
+  /** Concrete root where this session executes. */
   workspacePath?: string;
+  /** Stable project root used to locate persistence for worktree sessions. */
+  projectWorkspacePath?: string;
   remoteConnectionId?: string;
   remoteSshHost?: string;
   /** Optional multimodal image contexts (snake_case fields, aligned with backend ImageContextData). */

@@ -6,6 +6,8 @@
     "toggleLabel": "worktree",
     "toggleOffDescription": "讓這個工作階段在獨立的 Git worktree 中執行，多個 agent 並行執行任務時互不干擾。",
     "toggleOnDescription": "正在隔離的 worktree 中執行：{{path}}。關閉後會回到專案目錄。",
+    "togglePendingOnDescription": "已開啟 worktree 隔離；傳送第一則訊息後才會建立 worktree。",
+    "togglePendingOffDescription": "已關閉 worktree 隔離；傳送第一則訊息後會回到專案目錄。",
     "toggleLocked": "只能在工作階段送出第一則訊息之前切換 worktree 隔離。",
     "retained": "該 worktree 仍有本機工作，已保留在 {{path}}。"
   },

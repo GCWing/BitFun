@@ -315,6 +315,9 @@ pub(crate) struct ChatState {
     is_git_repository: bool,
     /// Whether this runtime exposes session worktree lifecycle controls.
     worktree_control_available: bool,
+    /// Empty-session preference. The actual worktree is created only after the
+    /// user submits the first prompt.
+    worktree_isolation_requested: Option<bool>,
     /// Current model display name (shown in shortcuts bar)
     pub current_model_name: String,
     /// Effective Auto mode for permission results that evaluate to Ask.
@@ -375,6 +378,7 @@ impl ChatState {
             git_branch: None,
             is_git_repository: false,
             worktree_control_available: true,
+            worktree_isolation_requested: None,
             current_model_name: String::new(),
             auto_approve_ask: false,
             messages: Vec::new(),
@@ -411,12 +415,25 @@ impl ChatState {
         self.git_branch = branch.filter(|value| !value.trim().is_empty());
     }
 
-    pub(crate) fn is_worktree_enabled(&self) -> bool {
+    pub(crate) fn is_worktree_materialized(&self) -> bool {
         self.workspace_binding
             .as_ref()
             .and_then(|binding| binding.execution_target.as_ref())
             .and_then(|target| target.worktree_id.as_ref())
             .is_some()
+    }
+
+    pub(crate) fn is_worktree_enabled(&self) -> bool {
+        self.worktree_isolation_requested
+            .unwrap_or_else(|| self.is_worktree_materialized())
+    }
+
+    pub(crate) fn requested_worktree_enabled(&self) -> Option<bool> {
+        self.worktree_isolation_requested
+    }
+
+    pub(crate) fn set_worktree_isolation_requested(&mut self, requested: Option<bool>) {
+        self.worktree_isolation_requested = requested;
     }
 
     pub(crate) fn has_conversation_history(&self) -> bool {
@@ -445,7 +462,7 @@ impl ChatState {
             return branch.to_string();
         }
 
-        if self.is_worktree_enabled() {
+        if self.is_worktree_materialized() {
             if let Some(commit) = execution_target
                 .and_then(|target| target.base_commit.as_deref())
                 .map(str::trim)
@@ -465,6 +482,14 @@ impl ChatState {
     pub(crate) fn worktree_status_label(&self) -> &'static str {
         if !self.worktree_control_available {
             "unavailable"
+        } else if self.worktree_isolation_requested == Some(true)
+            && !self.is_worktree_materialized()
+        {
+            "pending-on"
+        } else if self.worktree_isolation_requested == Some(false)
+            && self.is_worktree_materialized()
+        {
+            "pending-off"
         } else if self.is_worktree_enabled() {
             "on"
         } else if self.is_git_repository {
@@ -1419,6 +1444,26 @@ mod tests {
 
         state.metadata.message_count = 1;
         assert!(state.has_conversation_history());
+    }
+
+    #[test]
+    fn worktree_preference_is_visible_before_materialization() {
+        let mut state = ChatState::new(
+            "session-1".to_string(),
+            "Session".to_string(),
+            "agentic".to_string(),
+            Some("/tmp/project".to_string()),
+        );
+        state.set_git_repository_status(true, Some("main".to_string()));
+        state.set_worktree_isolation_requested(Some(true));
+
+        assert!(state.is_worktree_enabled());
+        assert!(!state.is_worktree_materialized());
+        assert_eq!(state.worktree_status_label(), "pending-on");
+        assert_eq!(
+            state.workspace_context_label(),
+            "Branch: main | Worktree: pending-on"
+        );
     }
 
     #[test]

@@ -5,6 +5,7 @@
 
 import { agentAPI } from '@/infrastructure/api/service-api/AgentAPI';
 import { ACPClientAPI } from '@/infrastructure/api/service-api/ACPClientAPI';
+import { worktreeAPI } from '@/infrastructure/api/service-api/WorktreeAPI';
 import { configManager } from '@/infrastructure/config/services/ConfigManager';
 import type { AIModelConfig, AgentModelDefaultsConfig, DefaultModelsConfig } from '@/infrastructure/config/types';
 import { notificationService } from '../../../shared/notification-system';
@@ -22,6 +23,8 @@ import {
   type FlowChatPinTurnToTopRequest,
 } from '../../events/flowchatNavigation';
 import { pendingQueueManager } from './PendingQueueModule';
+import { sessionProjectWorkspacePath } from '../../utils/sessionWorkspace';
+import { sessionWorktreeMaterializationPlan } from '../../utils/sessionWorktree';
 
 const log = createLogger('MessageModule');
 
@@ -269,16 +272,46 @@ export async function sendMessage(
       throw new Error(`Session is still busy finishing the previous turn (current state: ${currentState})`);
     }
 
-    if (isFirstMessage) {
-      handleTitleGeneration(context, sessionId, message);
-    }
-
     context.processingManager.registerStatus({
       sessionId: sessionId,
       status: 'thinking',
       message: '',
       metadata: { sessionId: sessionId, dialogTurnId }
     });
+
+    if (readySession.config.worktreeIsolationRequested !== undefined) {
+      const materialization = sessionWorktreeMaterializationPlan(readySession);
+      if (materialization) {
+        log.info('Materializing requested worktree after prompt submission', {
+          sessionId,
+          enabled: materialization.enabled,
+          projectWorkspacePath: materialization.projectWorkspacePath,
+        });
+        const result = await worktreeAPI.bindSession(
+          sessionId,
+          materialization.enabled,
+          globalThis.crypto?.randomUUID?.() ?? `worktree-first-turn-${Date.now()}`,
+          materialization.projectWorkspacePath,
+        );
+        context.flowChatStore.updateSessionExecutionTarget(sessionId, {
+          workspacePath: result.workspacePath,
+          projectWorkspacePath: result.projectWorkspacePath,
+          workspaceId: result.workspaceId,
+          executionTarget: result.executionTarget,
+        });
+        if (result.retainedWorktreePath) {
+          log.warn('Released worktree retained because it contains local work', {
+            sessionId,
+            retainedWorktreePath: result.retainedWorktreePath,
+          });
+        }
+      }
+      context.flowChatStore.setSessionWorktreeIsolationRequested(sessionId, undefined);
+    }
+
+    if (isFirstMessage) {
+      handleTitleGeneration(context, sessionId, message);
+    }
 
     if (!acpClientId) {
       await syncSessionModelSelection(context, sessionId, currentAgentType);
@@ -293,6 +326,7 @@ export async function sendMessage(
     context.activeTextItems.set(sessionId, new Map());
 
     const workspacePath = updatedSession.workspacePath;
+    const projectWorkspacePath = sessionProjectWorkspacePath(updatedSession);
     
     if (acpClientId) {
       await ACPClientAPI.startDialogTurn({
@@ -317,6 +351,7 @@ export async function sendMessage(
           turnId: dialogTurnId,
           agentType: currentAgentType,
           workspacePath,
+          projectWorkspacePath,
           remoteConnectionId: updatedSession.remoteConnectionId,
           remoteSshHost: updatedSession.remoteSshHost,
           imageContexts: options?.imageContexts,
@@ -339,6 +374,7 @@ export async function sendMessage(
             turnId: dialogTurnId,
             agentType: currentAgentType,
             workspacePath,
+            projectWorkspacePath,
             remoteConnectionId: updatedSession.remoteConnectionId,
             remoteSshHost: updatedSession.remoteSshHost,
             imageContexts: options?.imageContexts,

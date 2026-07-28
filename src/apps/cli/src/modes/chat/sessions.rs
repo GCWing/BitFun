@@ -109,7 +109,7 @@ impl ChatMode {
     /// Show skill list/configuration menu.
     /// Send a message to the agent programmatically (used by slash commands like /init)
     fn send_message_to_agent(
-        &self,
+        &mut self,
         message: String,
         chat_view: &mut ChatView,
         chat_state: &mut ChatState,
@@ -127,6 +127,13 @@ impl ChatMode {
         }
         if chat_state.is_processing {
             chat_state.add_system_message("Already processing, please wait.".to_string());
+            return;
+        }
+
+        if let Err(error) = self.materialize_requested_worktree(chat_view, chat_state, rt_handle) {
+            tracing::error!("Failed to prepare worktree for submitted prompt: {error}");
+            chat_view.set_status(Some(format!("Error: {error}")));
+            chat_state.add_system_message(error);
             return;
         }
 

@@ -179,6 +179,41 @@ function resetStartupTraceEventsForTest(): void {
   trace.phaseRecords.length = 0;
 }
 
+describe('FlowChatStore lazy worktree preference', () => {
+  afterEach(() => {
+    resetStore();
+  });
+
+  it('records and clears the desired state without changing the execution root', () => {
+    const session = createSession({
+      config: {
+        workspacePath: '/repo',
+        projectWorkspacePath: '/repo',
+        executionTarget: { kind: 'local', rootPath: '/repo' },
+      },
+      workspacePath: '/repo',
+      projectWorkspacePath: '/repo',
+    });
+    flowChatStore.setState(() => ({
+      sessions: new Map([[session.sessionId, session]]),
+      activeSessionId: session.sessionId,
+    }));
+
+    flowChatStore.setSessionWorktreeIsolationRequested(session.sessionId, true);
+    expect(flowChatStore.getState().sessions.get(session.sessionId)?.config).toMatchObject({
+      workspacePath: '/repo',
+      worktreeIsolationRequested: true,
+      executionTarget: { kind: 'local', rootPath: '/repo' },
+    });
+
+    flowChatStore.setSessionWorktreeIsolationRequested(session.sessionId, undefined);
+    expect(
+      flowChatStore.getState().sessions.get(session.sessionId)?.config
+        .worktreeIsolationRequested,
+    ).toBeUndefined();
+  });
+});
+
 describe('FlowChatStore metadata persistence callbacks', () => {
   afterEach(() => {
     resetStore();

@@ -11,7 +11,8 @@
 //! - Queue cleared on unrecoverable failure
 
 use super::coordinator::{
-    ConversationCoordinator, DialogTriggerSource, HiddenSubagentExecutionRequest, SubagentResult,
+    session_storage_workspace_locator, ConversationCoordinator, DialogTriggerSource,
+    HiddenSubagentExecutionRequest, SubagentResult,
 };
 use super::turn_outcome::TurnOutcome;
 use super::turn_settlement::TurnSettlementRegistration;
@@ -988,9 +989,16 @@ impl DialogScheduler {
         &self,
         session_id: String,
         resolved_turn_id: String,
-        queued_turn: QueuedTurn,
+        mut queued_turn: QueuedTurn,
         reject_if_busy: bool,
     ) -> Result<DialogSubmitOutcome, SchedulerSubmitError> {
+        if let Some(session) = self.session_manager.get_session(&session_id) {
+            queued_turn.workspace_path = session_storage_workspace_locator(
+                queued_turn.workspace_path.as_deref(),
+                session.config.workspace_path.as_deref(),
+                session.config.project_workspace_path.as_deref(),
+            );
+        }
         if let Some(workspace_path) = queued_turn.workspace_path.as_deref() {
             let requested_storage_path = Self::resolve_session_restore_path(
                 workspace_path,

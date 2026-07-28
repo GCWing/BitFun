@@ -63,6 +63,73 @@ impl ChatMode {
         )
     }
 
+    /// Materialize the checkbox/slash-command preference only after the user
+    /// has submitted a prompt. Keeping this next to the shared binding adapter
+    /// gives interactive input, prompt commands, and future send paths one
+    /// transition implementation.
+    fn materialize_requested_worktree(
+        &mut self,
+        chat_view: &mut ChatView,
+        chat_state: &mut ChatState,
+        rt_handle: &tokio::runtime::Handle,
+    ) -> std::result::Result<(), String> {
+        let Some(enabled) = chat_state.requested_worktree_enabled() else {
+            return Ok(());
+        };
+        if enabled == chat_state.is_worktree_materialized() {
+            chat_state.set_worktree_isolation_requested(None);
+            return Ok(());
+        }
+
+        chat_view.set_status(Some(if enabled {
+            "Creating worktree after prompt submission...".to_string()
+        } else {
+            "Releasing worktree after prompt submission...".to_string()
+        }));
+        let project_workspace_path = chat_state.project_workspace_path().map(str::to_string);
+        let result = tokio::task::block_in_place(|| {
+            rt_handle.block_on(WorktreeService::bind_session(
+                WorktreeSessionBindingRequest {
+                    request_id: uuid::Uuid::new_v4().to_string(),
+                    session_id: chat_state.core_session_id.clone(),
+                    project_workspace_path,
+                    enabled,
+                },
+            ))
+        })
+        .map_err(|error| {
+            format!(
+                "Worktree isolation could not be prepared ({}): {}",
+                error.code.as_str(),
+                error.message
+            )
+        })?;
+
+        let previous_binding = chat_state.workspace_binding.as_ref();
+        let binding = AgentSessionWorkspaceBinding {
+            workspace_id: result.workspace_id,
+            workspace_path: result.workspace_path,
+            project_workspace_path: Some(result.project_workspace_path),
+            execution_target: Some(result.execution_target),
+            remote_connection_id: previous_binding
+                .and_then(|binding| binding.remote_connection_id.clone()),
+            remote_ssh_host: previous_binding.and_then(|binding| binding.remote_ssh_host.clone()),
+        };
+        self.agent.set_workspace_binding(&binding);
+        chat_state.apply_workspace_binding(binding);
+        chat_state.set_worktree_isolation_requested(None);
+        self.workspace = chat_state.workspace.clone();
+        self.refresh_workspace_git_status(chat_state, rt_handle);
+
+        if let Some(path) = result.retained_worktree_path {
+            chat_state.add_system_message(format!(
+                "The released worktree was kept because it may contain local or unpublished work: {}",
+                path
+            ));
+        }
+        Ok(())
+    }
+
     fn handle_worktree_command(
         &mut self,
         arguments: &str,
@@ -79,8 +146,8 @@ impl ChatMode {
             }
         };
 
-        self.refresh_workspace_git_status(chat_state, rt_handle);
         if command == WorktreeCommand::Status {
+            self.refresh_workspace_git_status(chat_state, rt_handle);
             let message = Self::worktree_status_message(chat_state);
             chat_view.set_status(Some(chat_state.workspace_context_label()));
             chat_state.add_system_message(message);
@@ -116,58 +183,12 @@ impl ChatMode {
             WorktreeCommand::Set(enabled) => enabled,
             WorktreeCommand::Status => unreachable!("status returned above"),
         };
-        chat_view.set_status(Some(if enabled {
-            "Enabling worktree isolation...".to_string()
-        } else {
-            "Disabling worktree isolation...".to_string()
-        }));
-
-        let project_workspace_path = chat_state.project_workspace_path().map(str::to_string);
-        let result = tokio::task::block_in_place(|| {
-            rt_handle.block_on(WorktreeService::bind_session(
-                WorktreeSessionBindingRequest {
-                    request_id: uuid::Uuid::new_v4().to_string(),
-                    session_id: chat_state.core_session_id.clone(),
-                    project_workspace_path,
-                    enabled,
-                },
-            ))
-        });
-
-        let result = match result {
-            Ok(result) => result,
-            Err(error) => {
-                let message = format!(
-                    "Worktree isolation could not be changed ({}): {}",
-                    error.code.as_str(),
-                    error.message
-                );
-                tracing::warn!("{}", message);
-                chat_view.set_status(Some(message.clone()));
-                chat_state.add_system_message(message);
-                return Ok(None);
-            }
-        };
-
-        let previous_binding = chat_state.workspace_binding.as_ref();
-        let binding = AgentSessionWorkspaceBinding {
-            workspace_id: result.workspace_id,
-            workspace_path: result.workspace_path,
-            project_workspace_path: Some(result.project_workspace_path),
-            execution_target: Some(result.execution_target),
-            remote_connection_id: previous_binding
-                .and_then(|binding| binding.remote_connection_id.clone()),
-            remote_ssh_host: previous_binding.and_then(|binding| binding.remote_ssh_host.clone()),
-        };
-        self.agent.set_workspace_binding(&binding);
-        chat_state.apply_workspace_binding(binding);
-        self.workspace = chat_state.workspace.clone();
-        self.refresh_workspace_git_status(chat_state, rt_handle);
-
+        chat_state.set_worktree_isolation_requested(Some(enabled));
         let status = if enabled {
-            "Worktree isolation enabled".to_string()
+            "Worktree isolation armed; it will be created after the first prompt is submitted"
+                .to_string()
         } else {
-            "Worktree isolation disabled".to_string()
+            "Worktree isolation disarmed; no Git work runs until a prompt is submitted".to_string()
         };
         chat_view.set_status(Some(format!(
             "{} ({})",
@@ -179,12 +200,6 @@ impl ChatMode {
             status,
             Self::worktree_status_message(chat_state)
         ));
-        if let Some(path) = result.retained_worktree_path {
-            chat_state.add_system_message(format!(
-                "The released worktree was kept because it may contain local or unpublished work: {}",
-                path
-            ));
-        }
 
         Ok(None)
     }

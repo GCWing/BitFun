@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import type { Session } from '../types/flow-chat';
 import {
+  isSessionWorktreeIsolationEnabled,
   isSessionWorktreeBindingLocked,
+  sessionWorktreeMaterializationPlan,
   sessionWorktreeBindingSubscriptionKey,
 } from './sessionWorktree';
 
@@ -34,8 +36,51 @@ describe('session worktree control', () => {
     expect(isSessionWorktreeBindingLocked(session({ totalTurnCount: 1 }), false)).toBe(true);
   });
 
+  it('shows an armed worktree before it has been materialized', () => {
+    const armed = session({
+      workspacePath: '/repo',
+      projectWorkspacePath: '/repo',
+      config: {
+        projectWorkspacePath: '/repo',
+        executionTarget: {
+          kind: 'local',
+          rootPath: '/repo',
+        },
+        worktreeIsolationRequested: true,
+      },
+    });
+
+    expect(isSessionWorktreeIsolationEnabled(armed)).toBe(true);
+    expect(sessionWorktreeMaterializationPlan(armed)).toEqual({
+      enabled: true,
+      projectWorkspacePath: '/repo',
+    });
+  });
+
+  it('does not materialize when no preference change is pending', () => {
+    expect(sessionWorktreeMaterializationPlan(session())).toBeUndefined();
+    expect(sessionWorktreeMaterializationPlan(session({
+      config: {
+        executionTarget: {
+          kind: 'local',
+          rootPath: '/repo',
+        },
+        worktreeIsolationRequested: false,
+      },
+    }))).toBeUndefined();
+  });
+
   it('invalidates the composer subscription after hydrate and rebind', () => {
     const initial = sessionWorktreeBindingSubscriptionKey(session());
+    const armed = sessionWorktreeBindingSubscriptionKey(session({
+      config: {
+        executionTarget: {
+          kind: 'local',
+          rootPath: '/repo',
+        },
+        worktreeIsolationRequested: true,
+      },
+    }));
     const hydrated = sessionWorktreeBindingSubscriptionKey(session({ totalTurnCount: 1 }));
     const rebound = sessionWorktreeBindingSubscriptionKey(session({
       workspacePath: '/worktrees/wt-1',
@@ -50,6 +95,7 @@ describe('session worktree control', () => {
       },
     }));
 
+    expect(armed).not.toBe(initial);
     expect(hydrated).not.toBe(initial);
     expect(rebound).not.toBe(initial);
   });
