@@ -1,4 +1,8 @@
 import React, { ReactNode, useLayoutEffect, useRef, useState } from 'react';
+import {
+  FLOWCHAT_COLLAPSE_DURATION_MS,
+  FLOWCHAT_COLLAPSE_EASING,
+} from './flowChatCollapseMotion';
 
 interface SmoothHeightCollapseProps {
   isOpen: boolean;
@@ -16,7 +20,7 @@ export const SmoothHeightCollapse: React.FC<SmoothHeightCollapseProps> = ({
   children,
   className = '',
   innerClassName = '',
-  durationMs = 260,
+  durationMs = FLOWCHAT_COLLAPSE_DURATION_MS,
   disableAnimation = false,
 }) => {
   const outerRef = useRef<HTMLDivElement>(null);
@@ -105,6 +109,8 @@ export const SmoothHeightCollapse: React.FC<SmoothHeightCollapseProps> = ({
     return () => observer.disconnect();
   }, [phase, shouldAnimate]);
 
+  const transitionDuration = `${durationMs}ms`;
+
   return (
     <div
       ref={outerRef}
@@ -116,7 +122,8 @@ export const SmoothHeightCollapse: React.FC<SmoothHeightCollapseProps> = ({
       ].filter(Boolean).join(' ')}
       style={{
         height,
-        transitionDuration: `${durationMs}ms, 180ms, ${durationMs}ms`,
+        transitionDuration: `${transitionDuration}, ${transitionDuration}, ${transitionDuration}`,
+        transitionTimingFunction: `${FLOWCHAT_COLLAPSE_EASING}, ${FLOWCHAT_COLLAPSE_EASING}, ${FLOWCHAT_COLLAPSE_EASING}`,
       }}
       aria-hidden={!isOpen}
     >

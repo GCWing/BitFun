@@ -86,6 +86,11 @@ import {
   FlowChatViewportCoordinator,
   type FlowChatViewportRangeHost,
 } from './FlowChatViewportCoordinator';
+import {
+  FLOWCHAT_AUTO_COLLAPSE_SETTLE_FRAMES,
+  FLOWCHAT_COLLAPSE_DURATION_MS,
+  FLOWCHAT_COLLAPSE_INTENT_TTL_MS,
+} from './flowChatCollapseMotion';
 import './VirtualMessageList.scss';
 
 const PINNED_TURN_VIEWPORT_OFFSET_PX = 57; // Keep in sync with `.message-list-header`.
@@ -104,8 +109,8 @@ const HISTORY_PROJECTION_HANDOFF_MAX_DURATION_MS = 5000;
 const SESSION_OPEN_HANDOFF_ITEM_BUDGET = 24;
 const PREVIOUS_HISTORY_BOUNDARY_STATUS_DURATION_MS = 2500;
 const SEARCH_NAVIGATION_MAX_ATTEMPTS = 24;
-const COLLAPSE_INTENT_TTL_MS = 1000;
-const AUTO_COLLAPSE_SETTLE_FRAMES = 4;
+const COLLAPSE_INTENT_TTL_MS = FLOWCHAT_COLLAPSE_INTENT_TTL_MS;
+const AUTO_COLLAPSE_SETTLE_FRAMES = FLOWCHAT_AUTO_COLLAPSE_SETTLE_FRAMES;
 const STICKY_PIN_GROWTH_SETTLE_MS = 300;
 
 type FlowChatVirtuosoContext = {
@@ -458,6 +463,7 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
     createInactiveCollapseIntentState(),
   );
   const collapseIntentFinalizeTimerRef = useRef<number | null>(null);
+  const collapseIntentAnimationTimerRef = useRef<number | null>(null);
   const collapseIntentSettleFrameRef = useRef<number | null>(null);
   const pendingStickyPinGrowthRef = useRef<{
     targetTurnId: string | null;
@@ -2120,6 +2126,10 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
       window.clearTimeout(collapseIntentFinalizeTimerRef.current);
       collapseIntentFinalizeTimerRef.current = null;
     }
+    if (collapseIntentAnimationTimerRef.current !== null) {
+      window.clearTimeout(collapseIntentAnimationTimerRef.current);
+      collapseIntentAnimationTimerRef.current = null;
+    }
     if (collapseIntentSettleFrameRef.current !== null) {
       cancelAnimationFrame(collapseIntentSettleFrameRef.current);
       collapseIntentSettleFrameRef.current = null;
@@ -2191,6 +2201,9 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
       return;
     }
 
+    // Auto collapses animate for FLOWCHAT_COLLAPSE_DURATION_MS. Finalize only
+    // after that window plus a short settle so reservation tracks the moving
+    // height instead of ending while the box is still closing.
     const settle = (remainingFrames: number) => {
       collapseIntentSettleFrameRef.current = requestAnimationFrame(() => {
         if (remainingFrames > 1) {
@@ -2203,7 +2216,10 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
         });
       });
     };
-    settle(AUTO_COLLAPSE_SETTLE_FRAMES);
+    collapseIntentAnimationTimerRef.current = window.setTimeout(() => {
+      collapseIntentAnimationTimerRef.current = null;
+      settle(AUTO_COLLAPSE_SETTLE_FRAMES);
+    }, FLOWCHAT_COLLAPSE_DURATION_MS);
   }, [clearCollapseIntentScheduling]);
 
   useEffect(() => clearCollapseIntentScheduling, [clearCollapseIntentScheduling]);
@@ -2831,44 +2847,58 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
         filePath?: string | null;
         reason?: string | null;
       }>).detail;
-      if (pendingCollapseIntentRef.current.active) {
-        finalizeCollapseIntent('collapse-intent-superseded', {
-          expectedExpiresAtMs: pendingCollapseIntentRef.current.expiresAtMs,
-          suppressHandoff: true,
-        });
+      const previousIntent = pendingCollapseIntentRef.current;
+      // Coalesce overlapping collapses instead of finalizing the previous
+      // intent. Finalizing mid-animation can briefly drop footer protection and
+      // flash the pane when several cards compact in the same stream burst.
+      if (detail?.anchorElement) {
+        viewportCoordinatorRef.current.preserveElement(detail.anchorElement);
+      } else if (!previousIntent.active) {
+        viewportCoordinatorRef.current.preserveElement(null);
       }
 
-      viewportCoordinatorRef.current.preserveElement(detail?.anchorElement);
-
-      const baseTotalCompensationPx = getTotalBottomCompensationPx();
+      const baseTotalCompensationPx = previousIntent.active
+        ? previousIntent.baseTotalCompensationPx
+        : getTotalBottomCompensationPx();
       const currentScrollTop = scrollerElement.scrollTop;
       const previousStableScrollTop = previousScrollTopRef.current;
-      const anchorScrollTop = resolveAutoCollapseAnchorScrollTop({
-        currentScrollTop,
-        previousStableScrollTop,
-        reason: detail?.reason,
-        isFollowingOutput: isFollowingOutputRef.current,
-        isStreamingOutput: isStreamingOutputRef.current,
-      });
+      const anchorScrollTop = previousIntent.active
+        ? previousIntent.anchorScrollTop
+        : resolveAutoCollapseAnchorScrollTop({
+          currentScrollTop,
+          previousStableScrollTop,
+          reason: detail?.reason,
+          isFollowingOutput: isFollowingOutputRef.current,
+          isStreamingOutput: isStreamingOutputRef.current,
+        });
       const distanceFromBottom = Math.max(
         0,
         scrollerElement.scrollHeight - scrollerElement.clientHeight - currentScrollTop
       );
-      const effectiveDistanceFromBottom = Math.max(0, distanceFromBottom - baseTotalCompensationPx);
+      const currentTotalCompensationPx = getTotalBottomCompensationPx();
+      const effectiveDistanceFromBottom = previousIntent.active
+        ? previousIntent.distanceFromBottomBeforeCollapse
+        : Math.max(0, distanceFromBottom - currentTotalCompensationPx);
       const estimatedShrink = Math.max(0, detail?.cardHeight ?? 0);
+      const cumulativeShrinkPx = previousIntent.active
+        ? previousIntent.cumulativeShrinkPx
+        : 0;
       const provisionalTotalCompensationPx = Math.max(
-        0,
-        baseTotalCompensationPx + Math.max(0, estimatedShrink - effectiveDistanceFromBottom)
+        currentTotalCompensationPx,
+        baseTotalCompensationPx + Math.max(
+          0,
+          cumulativeShrinkPx + estimatedShrink - effectiveDistanceFromBottom,
+        ),
       );
       const nextIntent: PendingCollapseIntentState = {
         active: true,
         anchorScrollTop,
-        toolId: detail?.toolId ?? null,
-        toolName: detail?.toolName ?? null,
+        toolId: detail?.toolId ?? previousIntent.toolId ?? null,
+        toolName: detail?.toolName ?? previousIntent.toolName ?? null,
         expiresAtMs: performance.now() + COLLAPSE_INTENT_TTL_MS,
         distanceFromBottomBeforeCollapse: effectiveDistanceFromBottom,
         baseTotalCompensationPx,
-        cumulativeShrinkPx: 0,
+        cumulativeShrinkPx,
       };
       pendingCollapseIntentRef.current = nextIntent;
       if (provisionalTotalCompensationPx - baseTotalCompensationPx > COMPENSATION_EPSILON_PX) {

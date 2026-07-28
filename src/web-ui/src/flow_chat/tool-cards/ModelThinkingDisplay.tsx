@@ -48,11 +48,6 @@ export const ModelThinkingDisplay: React.FC<ModelThinkingDisplayProps> = ({
 
   const [isExpanded, setIsExpanded] = useState(shouldDefaultExpanded);
   const userToggledRef = useRef(false);
-  // Only a user click animates the grid-row transition. An automatic collapse
-  // that animates spreads its height loss over ~250ms, and the message list's
-  // scroll anchor has to chase it frame by frame — that chase is what reads as
-  // the conversation jumping on its own.
-  const [animateToggle, setAnimateToggle] = useState(false);
   const { applyExpandedState } = useToolCardHeightContract({
     toolId: thinkingItem.id,
     toolName: 'thinking',
@@ -67,7 +62,6 @@ export const ModelThinkingDisplay: React.FC<ModelThinkingDisplayProps> = ({
   useLayoutEffect(() => {
     if (userToggledRef.current) return;
     if (isExpanded !== shouldDefaultExpanded) {
-      setAnimateToggle(false);
       applyExpandedState(isExpanded, shouldDefaultExpanded, setIsExpanded, {
         reason: 'auto',
       });
@@ -199,7 +193,6 @@ export const ModelThinkingDisplay: React.FC<ModelThinkingDisplayProps> = ({
   const handleToggleClick = () => {
     const nextExpanded = !isExpanded;
     userToggledRef.current = true;
-    setAnimateToggle(true);
     applyExpandedState(isExpanded, nextExpanded, setIsExpanded);
   };
 
@@ -273,7 +266,6 @@ export const ModelThinkingDisplay: React.FC<ModelThinkingDisplayProps> = ({
         className={[
           'thinking-expand-container',
           isExpanded ? 'thinking-expand-container--open' : '',
-          animateToggle ? '' : 'thinking-expand-container--instant',
         ].filter(Boolean).join(' ')}
       >
         <div className={`thinking-content-wrapper ${scrollState.hasScroll ? 'has-scroll' : ''} ${scrollState.atTop ? 'at-top' : ''} ${scrollState.atBottom ? 'at-bottom' : ''}`}>

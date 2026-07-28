@@ -17,10 +17,8 @@ import React, { useState, useRef, useCallback, useEffect, useLayoutEffect, useMe
 import { useTranslation } from 'react-i18next';
 import type { ToolCardProps } from '../types/flow-chat';
 import { Terminal, ExternalLink, Square } from 'lucide-react';
-import { ToolCardStatusSlot } from './ToolCardStatusSlot';
 import { createTerminalTab } from '@/shared/utils/tabUtils';
 import { BaseToolCard, ToolCardHeader } from './BaseToolCard';
-import { CompactToolCard, CompactToolCardHeader } from './CompactToolCard';
 import { DotMatrixLoader, IconButton } from '../../component-library';
 import { LazyTerminalOutputRenderer } from '@/tools/terminal/components/LazyTerminalOutputRenderer';
 import { createLogger } from '@/shared/utils/logger';
@@ -575,27 +573,6 @@ export const TerminalToolCard: React.FC<TerminalToolCardProps> = ({
     />
   );
 
-  const renderCompactHeader = () => (
-    <CompactToolCardHeader
-      icon={<ToolCardStatusSlot status={status} toolIcon={<Terminal size={16} className="terminal-card-icon" />} defaultIcon="tool" />}
-      action={t('toolCards.terminal.executeCommand')}
-      content={
-        <span className="terminal-compact-content">
-          {renderCommandContent('compact')}
-          {/* Hover-only inline actions — duration, status, copy, open panel */}
-          <span className="compact-extra-on-hover terminal-hover-actions">
-            {renderTimeoutIndicator()}
-            {viewState.hasHeaderExtra && renderStatusText()}
-            <ToolCardHeaderActions className="terminal-header-actions">
-              {renderCopyCommandButton()}
-              {renderOpenInPanelButton()}
-            </ToolCardHeaderActions>
-          </span>
-        </span>
-      }
-      extra={renderHeaderExtra(false)}
-    />
-  );
   const compactSettledPreview =
     isExpanded &&
     isLastItem === true &&
@@ -624,30 +601,18 @@ export const TerminalToolCard: React.FC<TerminalToolCardProps> = ({
       data-expanded={isExpanded ? 'true' : 'false'}
       data-terminal-session-id={terminalSessionId || ''}
     >
-      {isExpanded ? (
-        <BaseToolCard
-          status={status}
-          isExpanded={isExpanded}
-          onClick={handleCardClick}
-          className="terminal-tool-card"
-          header={renderHeader()}
-          expandedContent={expandedContent}
-          errorContent={errorContent}
-          isFailed={viewState.isFailed}
-          requiresConfirmation={showConfirmButtons}
-          toggleTestId="chat-shell-command-toggle"
-        />
-      ) : (
-        <CompactToolCard
-          status={status}
-          isExpanded={false}
-          onClick={handleCardClick}
-          className="terminal-tool-card terminal-tool-card--compact-collapsed"
-          clickable
-          toggleTestId="chat-shell-command-toggle"
-          header={renderCompactHeader()}
-        />
-      )}
+      <BaseToolCard
+        status={status}
+        isExpanded={isExpanded}
+        onClick={handleCardClick}
+        className={`terminal-tool-card${!isExpanded ? ' terminal-tool-card--compact-truncated' : ''}`}
+        header={renderHeader()}
+        expandedContent={expandedContent}
+        errorContent={errorContent}
+        isFailed={viewState.isFailed}
+        requiresConfirmation={showConfirmButtons}
+        toggleTestId="chat-shell-command-toggle"
+      />
     </div>
   );
 };

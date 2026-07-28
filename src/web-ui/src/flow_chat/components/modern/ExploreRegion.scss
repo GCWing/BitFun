@@ -50,13 +50,6 @@
     opacity: 0.8;
   }
 
-  .explore-region__content-wrapper {
-    transition:
-      height 0.32s cubic-bezier(0.4, 0, 0.2, 1),
-      opacity 0.18s ease,
-      transform 0.32s cubic-bezier(0.4, 0, 0.2, 1);
-  }
-
   // Inner div must have min-height: 0 for height animation clipping to work.
   .explore-region__content-inner {
     overflow: hidden;

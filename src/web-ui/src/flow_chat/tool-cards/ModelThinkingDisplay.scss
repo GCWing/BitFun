@@ -76,27 +76,24 @@
   transform: rotate(90deg);
 }
 
-/* Expand container with animation */
+/* Expand container with animation — duration matches FLOWCHAT_COLLAPSE_DURATION_MS. */
 .thinking-expand-container {
   display: grid;
   grid-template-rows: 0fr;
-  transition: grid-template-rows 0.25s ease-out;
+  transition: grid-template-rows 300ms cubic-bezier(0.4, 0, 0.2, 1);
 
   &--open {
     grid-template-rows: 1fr;
   }
 
-  /*
-   * Automatic expand/collapse must land in a single frame. Animating it drags
-   * the height change across ~15 frames that the message list's scroll anchor
-   * has to chase, which the user sees as the chat jumping by itself.
-   */
-  &--instant {
-    transition: none;
-  }
-
   > .thinking-content-wrapper {
     overflow: hidden;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .thinking-expand-container {
+    transition: none;
   }
 }
 

@@ -131,10 +131,6 @@ export const FileOperationToolCard: React.FC<FileOperationToolCardProps> = ({
   
   const [isErrorExpanded, setIsErrorExpanded] = useState(false);
   const [isContentExpanded, setIsContentExpanded] = useState(status !== 'completed');
-  // Only a user click animates the expand/collapse. The status-driven collapse
-  // on completion must land in a single frame, otherwise the message list's
-  // scroll anchor spends ~260ms chasing the shrink and the pane visibly jumps.
-  const [animateContentToggle, setAnimateContentToggle] = useState(false);
   const [retainLiveCompletionPreview, setRetainLiveCompletionPreview] = useState(false);
   const [operationDiffStats, setOperationDiffStats] = useState<{ additions: number; deletions: number } | null>(null);
   
@@ -387,7 +383,6 @@ export const FileOperationToolCard: React.FC<FileOperationToolCardProps> = ({
       userToggledContentRef.current = true;
       setRetainLiveCompletionPreview(false);
     }
-    setAnimateContentToggle(reason === 'manual');
     applyHeightContractExpandedState(
       isContentExpanded,
       nextExpanded,
@@ -1258,7 +1253,6 @@ export const FileOperationToolCard: React.FC<FileOperationToolCardProps> = ({
         toggleTestId="chat-file-change-toggle"
         headerExpandAffordance={hasExpandableContent}
         headerAffordanceKind="expand"
-        disableExpandAnimation={!animateContentToggle}
       />
     </div>
   );

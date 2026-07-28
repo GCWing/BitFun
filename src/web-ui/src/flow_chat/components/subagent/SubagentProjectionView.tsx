@@ -6,6 +6,7 @@ import { ModelThinkingDisplay } from '../../tool-cards/ModelThinkingDisplay';
 import { FlowToolCard } from '../FlowToolCard';
 import { taskCollapseStateManager } from '../../store/TaskCollapseStateManager';
 import { SmoothHeightCollapse } from '../modern/SmoothHeightCollapse';
+import { FLOWCHAT_COLLAPSE_DURATION_MS } from '../modern/flowChatCollapseMotion';
 import { FlowChatStore } from '../../store/FlowChatStore';
 import { getSubagentProjectionState } from '../../utils/subagentProjection';
 import { ensureBtwSessionAvailable } from '../../services/btwSessionPane';
@@ -328,7 +329,11 @@ export const SubagentProjectionView: React.FC<SubagentProjectionViewProps> = ({
       className={`subagent-projection-wrapper ${isCollapsed ? 'subagent-projection-wrapper--collapsed' : 'subagent-projection-wrapper--expanded'} ${className}`.trim()}
       data-subagent-session-id={resolvedSubagentSessionId}
     >
-      <SmoothHeightCollapse isOpen={!isCollapsed} className="subagent-projection-collapse">
+      <SmoothHeightCollapse
+        isOpen={!isCollapsed}
+        className="subagent-projection-collapse"
+        durationMs={FLOWCHAT_COLLAPSE_DURATION_MS}
+      >
         <div
           ref={containerRef}
           className={`subagent-projection-container ${isCollapsed ? 'subagent-projection-container--collapsed' : 'subagent-projection-container--expanded'}`}

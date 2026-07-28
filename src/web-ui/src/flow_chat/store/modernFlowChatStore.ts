@@ -115,19 +115,10 @@ interface ModernFlowChatState {
  * Pure thinking rounds (thinking without critical tools) are merged into
  * adjacent explore groups to reduce visual noise from standalone "thinking N chars" lines.
  * Pure text rounds (like final replies) should not be collapsed.
- * Keep streaming narrative visible in-place until the stream settles; otherwise
- * a mid-stream switch to explore-group remounts the text block and replays the
- * typewriter animation from the beginning.
+ * Explore-capable rounds keep explore-group identity from the first render so
+ * settling a streaming narrative cannot swap Virtuoso keys and remount the pane.
+ * Typewriter remount risk is covered by useTypewriter(replayOnMount: false).
  */
-function hasActiveStreamingNarrative(round: ModelRound): boolean {
-  return round.items.some(item => {
-    if (item.type !== 'text' && item.type !== 'thinking') return false;
-    const maybeStreaming = item as { isStreaming?: boolean; status?: string };
-    return maybeStreaming.isStreaming === true &&
-      (maybeStreaming.status === 'streaming' || maybeStreaming.status === 'running');
-  });
-}
-
 function hasTrailingVisibleText(round: ModelRound): boolean {
   for (let index = round.items.length - 1; index >= 0; index -= 1) {
     const item = round.items[index];
@@ -149,10 +140,6 @@ function isExploreOnlyRound(round: ModelRound): boolean {
   if (!round.items || round.items.length === 0) return false;
 
   if (round.renderHints?.disableExploreGrouping === true) {
-    return false;
-  }
-
-  if (round.isStreaming && hasActiveStreamingNarrative(round)) {
     return false;
   }
 

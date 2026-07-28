@@ -177,4 +177,31 @@ describe('buildModelRoundItemGroups', () => {
 
     expect(streaming).toEqual(settled);
   });
+
+  it('groups completed explore tools with streaming thinking instead of deferring', () => {
+    const thinkingItem = {
+      id: 'thinking-1',
+      type: 'thinking' as const,
+      content: 'Inspecting',
+      isStreaming: true,
+      timestamp: 999,
+      status: 'streaming' as const,
+    };
+    const toolItem = makeReadTool('tool-1');
+
+    const groups = buildModelRoundItemGroups({
+      items: [thinkingItem, toolItem],
+      isStreaming: true,
+      disableExploreGrouping: false,
+      isCollapsibleTool: toolName => toolName === 'Read',
+    });
+
+    expect(groups).toEqual([
+      {
+        type: 'explore',
+        items: [thinkingItem, toolItem],
+        isLast: true,
+      },
+    ]);
+  });
 });

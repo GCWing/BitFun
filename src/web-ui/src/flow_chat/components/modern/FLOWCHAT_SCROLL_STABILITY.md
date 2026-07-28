@@ -29,13 +29,14 @@ them reintroduces the "the chat keeps refreshing itself" report:
 4. **Do not compact the live tail merely because its status completed.** A
    terminal, process, file, task, question, or thinking card that was visible
    while running keeps a compact result preview until newer content supersedes
-   it. When superseded, automatic expand/collapse lands in one frame; only user
-   clicks animate. An automatic collapse that animates over 250–320 ms forces
-   the compensation path below to track a moving target frame by frame — that
-   tracking is the visible jitter. `ModelThinkingDisplay`,
-   `FileOperationToolCard` (via `BaseToolCard disableExpandAnimation`) and
-   `ExploreGroupRenderer` (via `SmoothHeightCollapse disableAnimation`) all
-   animate only when the change came from a user click.
+   it. When superseded, automatic expand/collapse **may animate** for
+   `FLOWCHAT_COLLAPSE_DURATION_MS` (300ms) as long as
+   `flowchat:tool-card-collapse-intent` stays active for that full window plus
+   settle frames. Instant collapse is reserved for `prefers-reduced-motion` or
+   an explicit `disableAnimation` opt-out. Height, opacity, and transform must
+   share one duration (see `flowChatCollapseMotion.ts` /
+   `SmoothHeightCollapse`). Do not hard-swap `BaseToolCard` ↔ `CompactToolCard`
+   for expand/collapse — that remounts the body with no height transition.
 
 A fifth, related rule lives in `useTypewriter`: `replayOnMount` defaults to
 false, so a still-streaming block that remounts continues from its current text
@@ -241,15 +242,15 @@ User-initiated expand/collapse still uses animated layout properties such as:
 - `height`
 - `max-height`
 
-(Automatic collapses no longer animate — see Rule Zero — so this path now only
-covers deliberate user toggles.)
+Automatic and manual collapses both animate through the shared motion contract
+unless animation is explicitly disabled.
 
 During those transitions, the DOM may report intermediate sizes for multiple frames.
 
 The collapse intent carries a hard TTL (`expiresAtMs`, currently 1000 ms), but
 its settlement is autonomous rather than scroll-driven. Automatic collapses are
-finalized after a short settle-frame window; manual or otherwise unsignaled
-intents use the TTL timer. The scroll handler keeps only a throttled-background
+finalized after `FLOWCHAT_COLLAPSE_DURATION_MS` plus a short settle-frame window;
+manual or otherwise unsignaled intents use the TTL timer. The scroll handler keeps only a throttled-background
 timer fallback for browsers that delay timers. While the intent is alive, the
 grow branch of `measureHeightChange` protects the collapse reservation, but it
 may still consume measured content growth from the sticky pin reservation.
@@ -348,8 +349,9 @@ If a future collapsible component shows the same "header drops" or "flash on col
 
 ## Common Ways To Break This
 
-- Adding a mount-triggered CSS animation to a virtualized list item, or making an
-  automatic collapse animated again (see Rule Zero).
+- Adding a mount-triggered CSS animation to a virtualized list item, or animating
+  an automatic collapse without keeping collapse-intent protection alive for the
+  full `FLOWCHAT_COLLAPSE_DURATION_MS` window (see Rule Zero).
 - Feeding `Date.now()` back into `sessionToVirtualItems` /
   `buildModelRoundItemGroups`, or splitting one `ModelRound` into several
   `model-round` virtual items — both swap stable Virtuoso keys for new ones and
@@ -357,6 +359,8 @@ If a future collapsible component shows the same "header drops" or "flash on col
 - Replacing `applyFooterCompensationNow()` with state-only rendering.
 - Measuring raw `scrollHeight` deltas without subtracting existing compensation.
 - Removing `flowchat:tool-card-collapse-intent` from a helper-backed collapsible component.
+- Finalizing an active collapse intent when a new one arrives mid-burst instead of
+  coalescing TTL / provisional shrink (drops footer protection for a frame).
 - Dispatching collapse intent after `setState` instead of before it.
 - Removing `overflow-anchor: none`.
 - Removing the intent TTL, settle-frame finalizer, or the throttled scroll

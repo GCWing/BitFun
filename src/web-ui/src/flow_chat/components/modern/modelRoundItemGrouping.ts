@@ -12,15 +12,6 @@ interface BuildModelRoundItemGroupsInput {
   isCollapsibleTool: (toolName: string) => boolean;
 }
 
-function hasActiveStreamingNarrative(items: FlowItem[]): boolean {
-  return items.some(item => {
-    if (item.type !== 'text' && item.type !== 'thinking') return false;
-    const maybeStreaming = item as { isStreaming?: boolean; status?: string };
-    return maybeStreaming.isStreaming === true &&
-      (maybeStreaming.status === 'streaming' || maybeStreaming.status === 'running');
-  });
-}
-
 function isActiveToolItem(item: FlowItem): boolean {
   if (item.type !== 'tool') return false;
   return item.status !== 'completed' && item.status !== 'cancelled' && item.status !== 'rejected' && item.status !== 'error';
@@ -31,14 +22,19 @@ function isActiveToolItem(item: FlowItem): boolean {
  * depend on wall-clock time: a time-dependent grouping re-runs on a timer,
  * restructures the round, and remounts cards long after the data settled —
  * which reads as the chat pane spontaneously refreshing itself.
+ *
+ * Streaming narrative must not defer explore grouping either: that would keep
+ * explore tools as critical model-round content and later flip them into an
+ * explore region, remounting visible cards.
  */
 export function buildModelRoundItemGroups({
   items,
-  isStreaming,
+  isStreaming: _isStreaming, // retained for call-site API stability; unused
   disableExploreGrouping,
   isCollapsibleTool,
 }: BuildModelRoundItemGroupsInput): ModelRoundItemGroup[] {
-  const deferExploreGrouping = disableExploreGrouping || (isStreaming && hasActiveStreamingNarrative(items));
+  void _isStreaming;
+  const deferExploreGrouping = disableExploreGrouping;
   const intermediateGroups: Array<{ type: 'normal'; item: FlowItem }> = items.map(item => ({
     type: 'normal',
     item,

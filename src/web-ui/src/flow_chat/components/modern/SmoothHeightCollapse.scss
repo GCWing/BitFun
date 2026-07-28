@@ -4,8 +4,9 @@
   opacity: 0;
   transform: translateY(-2px);
   transition-property: height, opacity, transform;
-  transition-duration: 260ms, 180ms, 260ms;
-  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1), ease, cubic-bezier(0.4, 0, 0.2, 1);
+  /* Duration/easing are applied inline so callers share FLOWCHAT_COLLAPSE_DURATION_MS. */
+  transition-duration: 300ms, 300ms, 300ms;
+  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1), cubic-bezier(0.4, 0, 0.2, 1), cubic-bezier(0.4, 0, 0.2, 1);
   will-change: auto;
 }
 

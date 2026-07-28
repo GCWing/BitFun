@@ -501,6 +501,73 @@ describe('sessionToVirtualItems explore grouping', () => {
     expect(notStreaming.map(item => item.type)).toEqual(justFinished.map(item => item.type));
   });
 
+  it('keeps explore-group identity while thinking narrative is still streaming', () => {
+    const streamingThinking = {
+      id: 'thinking-1',
+      type: 'thinking' as const,
+      content: 'Inspecting the codebase',
+      isStreaming: true,
+      timestamp: 1000,
+      status: 'streaming' as const,
+    };
+    const session = makeSession({
+      sessionId: 'streaming-thinking-explore-session',
+      dialogTurns: [{
+        id: 'turn-1',
+        sessionId: 'streaming-thinking-explore-session',
+        userMessage: {
+          id: 'user-1',
+          content: 'Help',
+          timestamp: 900,
+        },
+        modelRounds: [
+          makeRound({
+            id: 'round-1',
+            items: [streamingThinking, makeReadTool('tool-1')],
+            isStreaming: true,
+            isComplete: false,
+            status: 'streaming',
+          }),
+        ],
+        status: 'processing',
+        startTime: 900,
+      }],
+    });
+
+    const streamingItems = sessionToVirtualItems(session);
+    expect(streamingItems.map(item => item.type)).toEqual(['user-message', 'explore-group']);
+    expect(streamingItems[1]).toMatchObject({
+      type: 'explore-group',
+      data: { groupId: 'round-1' },
+    });
+
+    const settledSession = makeSession({
+      sessionId: 'streaming-thinking-explore-session',
+      dialogTurns: [{
+        ...session.dialogTurns[0],
+        modelRounds: [
+          makeRound({
+            id: 'round-1',
+            items: [
+              { ...streamingThinking, isStreaming: false, status: 'completed' },
+              makeReadTool('tool-1'),
+            ],
+            isStreaming: false,
+            isComplete: true,
+            status: 'completed',
+          }),
+        ],
+        status: 'completed',
+      }],
+    });
+    const settledItems = sessionToVirtualItems(settledSession);
+    expect(settledItems.map(item => item.type)).toEqual(streamingItems.map(item => item.type));
+    expect(settledItems[1]).toMatchObject({
+      type: 'explore-group',
+      data: { groupId: 'round-1' },
+    });
+  });
+
   it('keeps the same explore group id when a completed trailing tool is merged in', () => {
     const baseTurn = {
       id: 'turn-1',

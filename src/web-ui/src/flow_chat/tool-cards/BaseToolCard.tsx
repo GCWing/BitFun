@@ -5,6 +5,7 @@
 import React, { ReactNode } from 'react';
 import { shouldIgnoreCardToggleClick } from '@/shared/utils/textSelection';
 import { SmoothHeightCollapse } from '../components/modern/SmoothHeightCollapse';
+import { FLOWCHAT_COLLAPSE_DURATION_MS } from '../components/modern/flowChatCollapseMotion';
 import {
   ToolCardHeaderLayoutContext,
   useToolCardHeaderLayout,
@@ -133,6 +134,7 @@ export const BaseToolCard: React.FC<BaseToolCardProps> = ({
       <SmoothHeightCollapse
         isOpen={Boolean(hasExpandedContent)}
         className="base-tool-card-expanded-collapse"
+        durationMs={FLOWCHAT_COLLAPSE_DURATION_MS}
         disableAnimation={disableExpandAnimation}
       >
         <div className="base-tool-card-expanded">
@@ -140,7 +142,11 @@ export const BaseToolCard: React.FC<BaseToolCardProps> = ({
         </div>
       </SmoothHeightCollapse>
       
-      <SmoothHeightCollapse isOpen={Boolean(isFailed && errorContent)} className="base-tool-card-error-collapse">
+      <SmoothHeightCollapse
+        isOpen={Boolean(isFailed && errorContent)}
+        className="base-tool-card-error-collapse"
+        durationMs={FLOWCHAT_COLLAPSE_DURATION_MS}
+      >
         <div className="base-tool-card-error">
           {errorContent}
         </div>

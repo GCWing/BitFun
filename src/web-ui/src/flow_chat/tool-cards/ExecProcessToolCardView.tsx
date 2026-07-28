@@ -7,8 +7,6 @@ import {
   type TerminalOutputRendererHandle,
 } from '@/tools/terminal/components/LazyTerminalOutputRenderer';
 import { BaseToolCard, ToolCardHeader } from './BaseToolCard';
-import { CompactToolCard, CompactToolCardHeader } from './CompactToolCard';
-import { ToolCardStatusSlot } from './ToolCardStatusSlot';
 import { ToolCardCopyAction, ToolCardHeaderActions } from './ToolCardHeaderActions';
 import { ToolCommandPreview } from './ToolCommandPreview';
 import { ToolTimeoutIndicator } from './ToolTimeoutIndicator';
@@ -495,53 +493,19 @@ export const ExecProcessToolCardView: React.FC<ExecProcessToolCardViewProps> = (
     />
   );
 
-  const renderCompactHeader = () => (
-    <CompactToolCardHeader
-      icon={<ToolCardStatusSlot status={status} toolIcon={icon} defaultIcon="tool" />}
-      action={model.actionLabel}
-      content={
-        <span className="terminal-compact-content">
-          {renderPrimaryText('compact')}
-          <span className="compact-extra-on-hover terminal-hover-actions">
-            {renderTimeoutIndicator()}
-            {rejectedOrCancelled && (
-              <span className={`terminal-status-text ${cancelledStatusClassName}`}>
-                {t(cancelledStatusLabelKey)}
-              </span>
-            )}
-            <ToolCardHeaderActions className="terminal-header-actions">
-              {renderCopyButton()}
-            </ToolCardHeaderActions>
-          </span>
-        </span>
-      }
-    />
-  );
-
   return (
     <div ref={cardRootRef} data-tool-card-id={toolId ?? ''}>
-      {isExpanded ? (
-        <BaseToolCard
-          status={status}
-          isExpanded={isExpanded}
-          onClick={handleCardClick}
-          className="terminal-tool-card exec-process-tool-card"
-          header={renderHeader()}
-          expandedContent={renderExpandedContent()}
-          errorContent={renderErrorContent()}
-          isFailed={status === 'error'}
-          requiresConfirmation={status === 'pending_confirmation'}
-        />
-      ) : (
-        <CompactToolCard
-          status={status}
-          isExpanded={false}
-          onClick={handleCardClick}
-          className="terminal-tool-card terminal-tool-card--compact-collapsed exec-process-tool-card"
-          clickable
-          header={renderCompactHeader()}
-        />
-      )}
+      <BaseToolCard
+        status={status}
+        isExpanded={isExpanded}
+        onClick={handleCardClick}
+        className={`terminal-tool-card exec-process-tool-card${!isExpanded ? ' terminal-tool-card--compact-truncated' : ''}`}
+        header={renderHeader()}
+        expandedContent={isExpanded ? renderExpandedContent() : null}
+        errorContent={renderErrorContent()}
+        isFailed={status === 'error'}
+        requiresConfirmation={status === 'pending_confirmation'}
+      />
     </div>
   );
 };
