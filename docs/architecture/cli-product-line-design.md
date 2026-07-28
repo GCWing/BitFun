@@ -271,7 +271,8 @@ CLI-P1 应统一以下命令的文本和结构化只读视图：
 - Provider/认证来源的可用性、失效原因和登录/退出入口；密钥值只进入受控凭据提供方，不进入普通配置。
 - 配置来源、被覆盖项、策略拒绝、未支持能力和降级原因。
 - 外部 ACP 智能体与 OpenCode-compatible 插件必须作为两个独立能力展示。
-- CLI-P1 只允许显式应用已支持的非执行型配置候选；规则引用、Skill、MCP 启用和插件包仍按各自生命周期处理。
+- CLI-P1 的通用配置入口只允许显式应用已支持的非执行型候选；规则引用、Skill、MCP 启用和插件包仍按各自生命周期
+  处理。Claude Code/Codex 命令 Hook C0 是独立的精确审阅快照切片，不由通用配置入口取得执行资格。
 
 ### 3.3 CLI-P2：扩展、定制与差异化 Agent 能力
 
@@ -485,41 +486,43 @@ Configuration 只能覆盖产品定义明确允许的默认值；用户插件只
 外部进程、不 import 第三方 module、不读取凭据且不主动联网的 L1 字段可以按用户偏好自动应用或先询问。
 Plugin/Tool、可执行 Skill/Command、MCP/LSP/Formatter、远程 Reference 等 L2/L3 内容在 OC-R2 完成归属模块保护
 前只发现和展示；完成后仍须在首次启用或能力扩大时确认。它们无需先迁移；
-显式导入用于用户希望把资产写入 BitFun 原生配置的场景。当前已落地的窄切片只有外部 MCP 快照：Desktop 与
-`bitfun mcp import` 可以预览 OpenCode / Claude Code 中语义等价的安全声明，只有显式 `--apply` 才原子写入现有
-BitFun MCP 配置；新条目保持 disabled，之后仍由既有 MCP 管理入口复核和启用。Codex 投影、凭据、header、env、cwd、
-通用导入记录和 undo 均未实现。该切片不表示通用 Canonical Config 导入已进入 CLI-P1；其他资产在 CLI-P0 仍截止到
-Dry-run，只有各自经过评审的 apply 切片才能写入：
+显式导入用于用户希望取得 BitFun 独立管理快照的场景。当前只落地两个经过评审的窄切片：Desktop 与
+`bitfun mcp import` 可以预览 OpenCode / Claude Code 中语义等价的 MCP 安全声明，只有显式 `--apply` 才原子写入现有
+BitFun MCP 配置；`bitfun hooks` 和统一 `/hooks` 可预览 Claude Code / Codex 中受支持的同步 command Hook，并用精确
+计划指纹确认后复制到现有原生 Hook 层。两者都不写回来源文件，也不表示通用 Canonical Config 导入已进入 CLI-P1。
+MCP 的 Codex 投影、凭据、header、env、cwd、通用导入记录和 undo 均未实现；Hook 的 OpenCode、非 command 或依赖
+外部 Runtime 的 handler 仍只静态展示。其他资产在 CLI-P0 仍截止到 Dry-run，只有各自经过评审的 apply 切片才能写入：
 
 ```text
 持续兼容：后台发现 -> 解析 -> 风险分级 -> L1 自动应用/先询问 | L2/L3 待确认 -> 同一次状态提交切换
 MCP C0a：发现 -> 安全投影 -> 预览 | 显式 apply -> 原子写入 disabled 原生条目 -> 既有 MCP 管理
+Hook C0：脱敏发现 -> 精确命令预览 | 指纹确认 -> 原子发布本地快照 -> 既有 AgentHookEngine
 其他显式导入：选择来源 -> 归一化 -> 冲突分析 -> Dry-run | 后续评审切片：用户选择 -> 原子写入 BitFun 层
 ```
 
 交互式 CLI/TUI 以一条非阻塞摘要说明来源产品、全局/项目使用范围、资产数量、自动应用项和待确认项；详细内容进入
-统一来源与插件状态入口。MCP 快照入口固定为 `bitfun mcp import`，其他资产的命令名在有真实调用方时再固定。非交互命令只有在当前操作实际依赖待确认资产时才
+统一来源与插件状态入口。MCP 快照入口固定为 `bitfun mcp import`，Hook 快照入口固定为 `bitfun hooks`；其他资产的命令名在有真实调用方时再固定。非交互命令只有在当前操作实际依赖待确认资产时才
 返回类型化 `action-required`；无关待办只进入结构化状态或 `stderr` 摘要，不等待不可见输入，也不自动批准。
 当前只能静态预览的 custom tool 名称只显示“已发现，未执行”。
 
 导入预览只使用四种用户可读结论：可直接使用、需要转换、会发生功能降级、输入无效。每项同时说明是原地
 引用、写入 BitFun 配置、继续保持外部来源还是不支持；不得用“已映射”推导为已写入、已信任或已启用。
 
-兼容来源不写入 BitFun 层，也不双向修改原文件。以下分层导入记录与撤销语义是后续通用目标，不是 MCP C0a
-已实现能力：项目级来源默认写入 BitFun 项目层，用户级来源默认写入用户层；用户可以在确认时选择更窄的目标层，
+兼容来源不写入 BitFun 层，也不双向修改原文件。Hook C0 只保存用户/工作区范围的私有不可变快照，并提供启停、更新和
+删除，不实现字段级撤销。以下分层导入记录与撤销语义是后续通用目标，不是 MCP C0a 或 Hook C0 已实现能力：项目级来源默认写入 BitFun 项目层，用户级来源默认写入用户层；用户可以在确认时选择更窄的目标层，
 但不能写入组织强制策略。导入记录保留来源产品、
 来源范围、内容摘要和导入时间，并按字段保存目标层、导入前值及其版本/摘要和导入值。已导入字段以 BitFun 原生
 配置为准，不再重复应用外部值；外部来源变化时提示重新导入并展示差异，不做双向写回。撤销只自动恢复当前值
 仍等于导入值的字段；用户后续修改、来源变化或部分重新导入造成冲突时，逐字段选择“保留 BitFun / 重新导入
 外部 / 手工处理”，不得整批覆盖。
 
-下表描述目标覆盖范围；当前 MCP C0a 仅支持上文列出的 OpenCode / Claude Code 安全投影，不能由本表推导为已实现。
+下表描述目标覆盖范围；当前能力仅限上文列出的 MCP C0a 与 Hook C0，不能由本表推导出其他资产已经实现。
 
 | 来源 | 目标可导入 | 目标不导入 |
 |---|---|---|
 | OpenCode | 规则/instructions、Agent、Mode、Skill、References、Command、MCP、LSP、Formatter、模型、Theme、Keybind 和稳定配置进入兼容来源图；非执行资产可显式导入 | 凭据值双向复制、把 OpenCode 原始类型变成 BitFun 内部类型；Plugin/Tool 经来源确认后由独立 Runtime 加载，不通过配置导入执行 |
-| Codex | `AGENTS.md` 原地引用；受支持的 MCP、稳定配置和 Skill 可选择原地引用或导入 | `auth.json` 等凭据、私有/未文档化字段、Codex App Server 状态 |
-| Claude Code | `CLAUDE.md` 原地引用；受支持的 MCP、稳定设置和 Skill 可选择原地引用或导入 | OAuth/Token、插件执行、可写钩子、组织强制策略降级 |
+| Codex | `AGENTS.md` 原地引用；受支持的 MCP、稳定配置和 Skill 可选择原地引用或导入；同步 command Hook 可经精确审阅复制为 BitFun 原生层 | `auth.json` 等凭据、私有/未文档化字段、Codex App Server 状态、依赖未观察会话/信任语义的 Hook |
+| Claude Code | `CLAUDE.md` 原地引用；受支持的 MCP、稳定设置和 Skill 可选择原地引用或导入；同步 command Hook 可经精确审阅复制为 BitFun 原生层 | OAuth/Token、插件执行、非 command 或异步 Hook、managed Hook 例外、组织强制策略降级 |
 
 规则文件优先复用项目已有文件，不复制出第二份内容。若不同生态规则冲突，导入报告必须展示目标文件、
 优先级和冲突段，不能自动拼接。
@@ -568,8 +571,9 @@ OpenCode 来源解释，首次连接、策略限制和凭据缺失分别显示�
 | 执行 | 真实工具、稳定钩子、兼容 Client 和 TUI Plugin 经主机调用现有归属模块 | 插件不能直接写权限、工具结果、审计、会话或 Ratatui Frame |
 | 管理 | 查看、停用、恢复、更新和卸载；区分更新失败、暂时过期、明确删除和重新出现 | 安装成功不等于运行健康，服务入口和 TUI 入口分别管理 |
 
-OpenCode 适配器必须读取真实外部来源；来源确认后才自动准备执行环境。显式导入只用于把非执行配置迁移为
-BitFun 原生配置，不能成为运行插件的前置条件。Codex/Claude 当前只进入配置资产兼容或导入，不进入插件执行阶段。
+OpenCode 适配器必须读取真实外部来源；来源确认后才自动准备执行环境。通用配置的显式导入只用于把非执行配置迁移为
+BitFun 原生配置，不能成为运行插件的前置条件。与其分离的 Hook C0 只把用户明确审阅的 Claude Code/Codex 命令 Hook
+复制为现有 `AgentHookEngine` 的原生层；它不进入插件执行阶段，也不扩展到 OpenCode Hook 或通用 Hook Runtime。
 
 CLI 只有在后端已经从脚本进程取得真实定义和执行函数、注册到现有 Tool Runtime 且当前 worker 健康时，才显示
 “工具可用”。静态名称、准备中、制品不受支持、策略限制或执行进程不可用时，分别显示预览或具体原因，不能把

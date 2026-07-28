@@ -80,6 +80,68 @@ you trust, and re-check the file after pulling.
 Codex's `[features] hooks = false` has no BitFun equivalent — use
 `app.hooks.enabled` instead.
 
+## Importing Claude Code and Codex command hooks
+
+BitFun can take a reviewed local snapshot of compatible `type: "command"`
+hooks discovered from Claude Code or Codex. This is an explicit copy, not a
+live mount of another product's configuration:
+
+1. Open **Settings → Agent Hooks** or run `/hooks` in the TUI. Use
+   `bitfun hooks list` from the root CLI for a scriptable view.
+2. Choose a source and review every effective command, Windows override,
+   timeout, copied or external dependency, skipped item, and the plan
+   fingerprint.
+3. Confirm that exact plan. If the source changed after review, BitFun writes
+   nothing and returns a refreshed plan for another confirmation.
+
+User sources are copied to BitFun's user-managed data. Project sources are
+copied to workspace-isolated data under BitFun's project runtime area. Safe
+relative script dependencies beneath a source's `.claude/hooks` or
+`.codex/hooks` directory are copied into the immutable snapshot. Absolute
+dependencies remain external and are called out during review; moving or
+changing one can therefore change behavior without updating the snapshot.
+Dynamic paths, globs, escaping paths, links, unreadable files, and files beyond
+the fixed import limits are skipped rather than followed implicitly.
+
+An imported source can be enabled, disabled, updated, or removed independently.
+Removing it deletes only BitFun's managed copy; it never edits Claude Code or
+Codex files. Updates always require another exact-command review. Imported
+layers run in this fixed order:
+
+1. manual user `hooks.json`;
+2. enabled user imports, ordered by stable import id;
+3. manual project `hooks.json`, when project hooks are enabled;
+4. enabled project imports, ordered by stable import id.
+
+Import, update, enable, disable, and remove take effect on the next matching
+Hook event; an already running Hook finishes against the snapshot it started
+with. BitFun does not re-import on startup, poll, or watch Claude Code/Codex
+files. Use **Refresh** or `/hooks refresh` to check for source changes, then
+review an update explicitly. The management and execution paths are local-only;
+remote workspaces return unsupported instead of running local commands against
+a remote path.
+
+OpenCode plugin Hooks are intentionally excluded. Their JavaScript callbacks
+need the OpenCode plugin execution domain; the current OpenCode Hook catalog is
+still discovery/static preview and is not executable.
+
+Root CLI equivalents are:
+
+```text
+bitfun hooks list [--refresh] [--format text|json]
+bitfun hooks import --source <source-key> [--confirm <plan-fingerprint>]
+bitfun hooks update <import-id> [--confirm <plan-fingerprint>]
+bitfun hooks enable <import-id>
+bitfun hooks disable <import-id>
+bitfun hooks remove <import-id> --confirm
+bitfun hooks reset <user|project> --confirm
+```
+
+Import and update are preview-only without the matching fingerprint. TUI uses
+the same backend and keeps `/hooks_external` and `/hooks-external` as aliases
+for the unified `/hooks` management view. `reset` is available only as explicit
+recovery for a corrupt BitFun-managed index and never changes source files.
+
 ## Quick start
 
 Create `<user config dir>/config/hooks.json`:
@@ -210,9 +272,8 @@ log level.
 
 ## Related
 
-- CLI `/hooks` shows the hooks described here — which files they came from,
-  which layers are active, and what each matcher group would run. It reports
-  the configuration only; edit `hooks.json` to change it.
-- CLI `/hooks_external` inspects hooks configured for *other* AI applications
-  (Claude Code, Codex, OpenCode). That view is read-only and never executes
-  anything; the hooks described here are BitFun's own and do execute.
+- CLI `/hooks` shows manual and imported layers, discovers supported external
+  sources asynchronously, and owns the import management actions described
+  above. Edit `hooks.json` directly only for manual BitFun layers.
+- `/hooks_external` and `/hooks-external` are compatibility aliases for the
+  same view; they do not create a second import or execution path.

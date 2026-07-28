@@ -142,6 +142,16 @@ plugin-source = [
     "uuid",
     "windows",
 ]
+hook-import = [
+    "bitfun-agent-runtime",
+    "bitfun-product-domains/external-sources",
+    "bitfun-services-core",
+    "dep:bitfun-product-domains",
+    "hex",
+    "sha2",
+    "thiserror",
+    "uuid",
+]
 remote-connect = [
     "anyhow",
     "aes",
@@ -251,6 +261,7 @@ product-full = [
     "file-watch",
     "function-agents",
     "git",
+    "hook-import",
     "miniapp-runtime",
     "mcp",
     "plugin-source",

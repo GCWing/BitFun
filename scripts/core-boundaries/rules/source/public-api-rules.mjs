@@ -358,6 +358,22 @@ export const staticHookSupportPublicApiEntries = [
   'static-hook-support parser owner',
   'OpenCode, Claude Code, and Codex static Hook source adapters',
 )).concat([
+  'PreparedStaticHookCommand',
+  'StaticHookAssetError',
+  'importable_hook_matcher',
+  'required_hook_string',
+  'optional_hook_string',
+  'optional_positive_hook_u64',
+  'prepare_static_hook_command',
+  'StaticHookVisitSummary',
+  'StaticHookHandlerRef',
+  'visit_hook_document',
+  'static_hook_handler_fact',
+].map((symbol) => staticHookAdapterEntry(
+  symbol,
+  'static-hook-support command import owner',
+  'Claude Code and Codex command Hook adapters',
+))).concat([
   'BoundedFileResolveError',
   'resolve_bounded_regular_file',
   'redacted_executable_preview',

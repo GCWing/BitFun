@@ -20,8 +20,9 @@ prompt-only Command。第二条端到端能力已让受支持的单文件 OpenCo
 可执行来源选择规则。第五条端到端能力在不增加新的 Rust Runtime 进程的前提下接入 Claude Code 的 legacy Command、Subagent、
 MCP 安全子集，以及 Codex Subagent、MCP 安全子集；三种生态使用同一个来源管理模块，并共享审批、冲突、刷新和故障隔离规则，
 但各自在 sibling adapter 内保留原生来源与覆盖语义。完整 TypeScript/Bun、包依赖、package plugin 执行、
-Codex/Claude Code 运行时适配、primary agent 替换和外部 Subagent 续接仍属于后续阶段，不能因来源被识别就宣称已经可用。OpenCode、Claude Code 与 Codex 的本地 Hook 静态目录
-已作为独立只读切片接入；它只证明来源和声明能够安全展示，不证明 handler 已加载、获得权限或可以执行。
+Codex/Claude Code 运行时适配、primary agent 替换和外部 Subagent 续接仍属于后续阶段，不能因来源被识别就宣称已经可用。OpenCode、Claude Code 与 Codex 的本地 Hook 脱敏目录
+已作为独立只读切片接入；在此之上，Claude Code 与 Codex 的同步 command 子集可经精确命令审阅复制为 BitFun 管理的
+原生 Hook 层，仍由唯一 `AgentHookEngine` 执行。OpenCode handler、非 command/异步 handler 和未审阅声明仍不可执行。
 独立的 MCP C0a 快照导入复用上述来源与现有 MCP 配置 owner：Desktop 和根 CLI 可预览 OpenCode / Claude Code
 中语义等价的安全声明，并在用户显式确认后原子写入 disabled 原生条目。Codex 导入投影、凭据/header/env/cwd
 迁移、通用导入记录、undo、Peer/Remote 写入均未实现；这不改变外部 MCP 持续兼容来源的运行路径。
@@ -155,28 +156,28 @@ GUI 和 TUI 都通过同一个 `SetSafeMode` 动作请求该变化，Peer Host �
 | 方式 | 适用场景 | 来源变化后 | 写入边界 |
 |---|---|---|---|
 | 持续兼容来源（默认） | 继续使用外部应用维护的用户/项目内容 | 重新解析候选，按风险和用户策略自动切换或等待确认 | 不写 BitFun 配置，不写回外部文件。 |
-| 显式导入（可选） | 用户希望取得一份由 BitFun 独立维护的快照 | 只提示外部来源有变化，用户选择是否重新导入 | 只写用户选定的 BitFun 配置层，支持字段级预览和撤销。 |
+| 通用配置显式导入（可选） | 用户希望把受支持的非执行配置交给 BitFun 独立维护 | 只提示外部来源有变化，用户选择是否重新导入 | 只写用户选定的 BitFun 配置层，支持字段级预览和撤销。 |
+| 命令 Hook 审阅导入（C0） | 用户希望让受支持的 Claude Code/Codex 命令 Hook 由现有原生 Hook owner 执行 | 只标记可更新，用户重新审阅并应用后才改变执行 | 只写产品私有托管快照；按来源整体更新、启停、移除或损坏重置，不提供字段级撤销。 |
 
 显式导入完成后，已选字段由 BitFun 原生配置拥有，不再同时叠加外部值；未导入内容仍可继续作为兼容来源。
-插件、Tool 和 Hook 不通过配置复制获得执行资格。
+插件和 Tool 不通过配置复制获得执行资格。Claude Code/Codex command Hook 只通过下节的独立审阅快照路径进入既有
+原生 Hook owner，不复用通用配置导入或插件 Runtime。
 
-### 3.4 静态 Hook 目录
+### 3.4 Hook 脱敏目录与审阅导入
 
-Hook 首先以独立、只读的 `ExternalHookCatalogSnapshotV1` 展示，而不进入可执行来源管理模块。Desktop 设置页的
-“外部 AI 应用 → Hooks”和交互式 TUI 的 `/hooks_external`（别名 `/hooks-external`）消费同一份 Rust 快照；
-`/help hooks_external`、`/hooks_external -h` 与 `/hooks_external --help` 提供说明，不增加快捷键、
-命名空间变体或生态专用命令。TUI 的 `/hooks` 属于 BitFun 自身会执行的 Hooks（见
-[agent-hooks](../../features/agent-hooks.zh-CN.md)），与本节的静态目录是两个视图，彼此在帮助文本中互相指向。
-`/hooks_external` 与其他内置命令采用同一套既有冲突策略：无冲突时使用普通命令名；发生
-同名冲突时由现有命令菜单展示来源限定项，静态 Hook 目录不增加另一套保留字或路由规则。
+Hook 首先以独立、只读的 `ExternalHookCatalogSnapshotV1` 脱敏展示。Desktop 的 **Agent Hooks** 设置页和交互式 TUI
+统一 `/hooks` 同时展示 BitFun 原生层、外部来源和已导入快照；旧 `/hooks_external`、`/hooks-external` 仅保留为别名，
+不再形成第二套产品心智或状态 owner。Claude Code/Codex 的受支持同步 command handler 只有在用户查看精确命令、
+依赖和跳过原因并确认计划指纹后，才复制到用户或工作区私有快照；导入、更新、启停和删除都不修改来源文件。
+OpenCode 与不受支持的 handler 仍停留在脱敏目录。
 
 当前目录的来源与降级边界如下：
 
-| 生态 | 当前静态来源 | 当前可见事实 | 明确不做 |
+| 生态 | 当前来源 | 当前可见与可导入事实 | 明确不做 |
 |---|---|---|---|
 | OpenCode | 用户、legacy、项目祖先 `.opencode` 与显式配置目录中的 `plugin/`、`plugins/`；相同层级的 JSON/JSONC `plugin` 声明 | 以稳定、确定的 adapter 顺序展示每个具名导出的静态对象属性、未知属性和动态注册提示；相同事件在不同具名导出中保留独立注册身份；软件包声明只显示“已声明、未解析”；显式配置目录保持原生的末级优先顺序 | 不安装依赖、不解析软件包导出、不 import JS/TS、不执行 handler；类型声明 `.d.ts` 不作为运行时插件源；不把项目根下任意 `plugin(s)/` 当成 OpenCode 目录。 |
-| Claude Code | 用户 `~/.claude/settings.json`，以及从项目根到当前工作区的 `.claude/settings.json`、`.claude/settings.local.json` | Hook 事件、matcher、`command/http/mcp_tool/prompt/agent` handler 类型；先合并已观察设置层，再把有效 `disableAllHooks=true` 显示为 disabled | 不复制 managed Hook 例外或运行时信任判断；任一参与层无效或超限时不猜测有效激活状态；不传输 command、prompt、URL、server/tool 参数或其他 handler 正文。 |
-| Codex | 用户与按持久 `project_root_markers` 有界的项目祖先 `hooks.json`、`config.toml`；linked worktree 的 `hooks.json` 和 `config.toml` 中整个 `[hooks]` 表均映射到主 checkout 对应目录 | 展示固定 schema 中的 Hook 事件与 command handler；非原生 prompt/agent 声明只标为 unsupported；User state/feature 仍可能被未观察的 SessionFlags 覆盖，项目声明还受 trust 约束，因此 command handler 的有效激活统一保持 unknown | 不把 Claude Code 的 matcher 或全局禁用字段套用到 Codex；不猜测插件、托管层、会话注入、state/feature 合并或 trust-gated 项目激活来源，这些未观察来源以覆盖诊断明确显示。 |
+| Claude Code | 用户 `~/.claude/settings.json`，以及从项目根到当前工作区的 `.claude/settings.json`、`.claude/settings.local.json` | 目录仅展示 Hook 事件、matcher 与 handler 类型；有效 `disableAllHooks` 按所选来源层级解释。受支持的同步 command、matcher、timeout、status 和安全文件依赖可在私有准备阶段进入精确审阅计划 | 不导入 managed Hook 例外、`http`/`mcp_tool`/`prompt`/`agent`、异步或未知字段；任一参与层无效或超限时不猜测激活状态。公开目录不传输 handler 正文。 |
+| Codex | 用户与按持久 `project_root_markers` 有界的项目祖先 `hooks.json`、`config.toml`；linked worktree 映射到主 checkout 对应目录 | 目录展示固定 schema 的事件与 handler 类型；受支持的同步 command、Windows override、timeout、status 和安全文件依赖可进入精确审阅计划 | 不猜测插件、托管层、会话注入、state/feature 合并或 trust-gated 项目激活；依赖这些未观察语义的声明不导入。 |
 
 只有语义完全一致的 `PreToolUse`/`PostToolUse` 和 OpenCode `tool.execute.before`/`tool.execute.after` 分别映射到
 BitFun 已有 `ToolBefore`/`ToolAfter` 契约。其他原生事件仍可见，但标为 `native_only`；静态分析不能安全确定的注册
@@ -194,7 +195,8 @@ provider 失败事实，避免在空目录界面中伪装成“成功但没有�
 条目和诊断设置输出上限，避免大型目录一次挂载或打印数千项。Git/worktree 服务只提供当前 checkout 边界与主 checkout 身份；adapter
 在最多 32 层的边界内解释各生态祖先规则，无法确认 Git 边界时只读取当前工作区，不向任意父目录扩散。当前只允许
 本机执行域：Remote workspace 和 Peer Device Mode 显示明确不支持，绝不
-回退读取控制端本地同名配置。Server、Mobile、SDK、ACP、Host 和任何 Hook Runtime 都不属于该切片。
+回退读取控制端本地同名配置。Server、Mobile、SDK、ACP、Peer/Remote Host 不提供该管理切片；本地导入只复用既有
+原生 Hook Runtime，不新增外部 Runtime。
 
 ## 4. 来源、资产与加载策略
 
@@ -221,7 +223,7 @@ provider 失败事实，避免在空目录界面中伪装成“成功但没有�
 | L0 仅清单 | 尚未支持的字段、静态插件/工具名称、来源元数据 | 自动发现和展示，绝不宣称已经应用或可执行。 |
 | L1 被动声明 | 本地 Rules、Instructions、纯声明配置、Skill 的说明和索引 | 校验后默认自动应用；显示一次可撤销摘要。不得启动进程、读取凭据或主动联网。 |
 | L2 受归属模块保护的外部能力 | 可执行 Skill/Command、远程 Reference、MCP、LSP、Formatter、Provider 连接 | 发现后进入“需确认”；由真实归属模块展示命令、网络、凭据和使用范围后启用。 |
-| L3 任意第三方代码 | JS/TS Tool、服务插件、Hook、TUI 插件入口、动态 import | 发现但不 import；首次按来源、插件身份和执行域启用时说明 OS 用户、工作目录，以及文件、网络和进程权限；不能承诺 import 前已知全部动态贡献。 |
+| L3 任意第三方代码 | JS/TS Tool、服务插件、动态 Hook/TUI 入口、动态 import | 默认发现但不 import；只有能在执行前完整枚举命令与依赖、并由既有归属模块承担执行的窄切片可经独立设计和精确审阅启用。不能承诺动态 import 前已知全部贡献。 |
 
 OpenCode Subagent 属于 L2：adapter 只读取声明，不执行外部代码；激活仍需确认实际模型、工具、执行域和来源关系。
 仅 description 等 catalog 文案变化不会扩大运行权限，因此不重复询问；prompt 行为、来源、模型或工具变化必须重新确认。
@@ -267,7 +269,7 @@ OpenCode Subagent 属于 L2：adapter 只读取声明，不执行外部代码；
 | MCP | 用户/显式目录/项目配置的安全子集 | user/project/local 原生层的安全子集 | 用户与项目 `config.toml` 原生层的安全子集 | 支持可表达的 stdio 与 HTTPS Streamable HTTP；发现不启动 Server，首次激活继续经 BitFun MCP 审批。OAuth、remote executor、per-tool policy 等不完整语义明确降级。 |
 | Standalone Tool | 已有单文件 JavaScript 子集 | 无稳定的 runtime-free standalone Tool 来源 | 无稳定的 runtime-free standalone Tool 来源 | TypeScript、package/plugin Tool 与动态工具注册依赖独立 Plugin Host，不在声明式 adapter 中猜测。 |
 | Skill | 由现有 Skill 加载模块发现 `.opencode` 等标准根 | 由现有 Skill 加载模块发现 `.claude` 标准根 | 由现有 Skill 加载模块发现 `.codex`、`.agents` 标准根 | Skill 的加载、覆盖、模式开关与执行仍由同一个 Skill 模块负责，不复制进外部来源管理模块。 |
-| Hook | 静态目录 | 静态目录 | 静态目录 | 只展示脱敏声明与等价 Hook point 覆盖；不 import、不执行 handler。 |
+| Hook | 静态目录 | 脱敏目录；同步 command 子集可审阅导入 | 脱敏目录；同步 command 子集可审阅导入 | 仅复制到私有原生快照并由 `AgentHookEngine` 执行；OpenCode、非 command、异步、未知或依赖未观察激活语义的 handler 不导入。 |
 
 生态原生语义由各 adapter 以契约测试固定，不抽象成全局优先级：
 
@@ -386,7 +388,7 @@ flowchart LR
 | 外部来源目录 | 聚合来源身份、使用范围、资产清单、用户处理偏好和可读状态 | 解释所有生态格式、保存凭据、授予脚本权限或管理 worker。 |
 | 生态发现与解析适配器 | 发现本生态标准来源，保留真实优先级、格式、参数展开和诊断，并通过能力专属 provider 输出 | 写 BitFun 配置、依赖兄弟生态 adapter、执行其他生态语义或创建跨生态最低公分母。 |
 | 能力专属 provider 契约 | 用来源限定身份交付 Command、Tool、Subagent 等类型明确的定义与调用/展开结果 | 携带任意数据的通用资产对象，或让一种能力的新增字段污染其他能力。 |
-| 静态 Hook provider 与目录协调器 | 聚合 OpenCode、Claude Code、Codex 的脱敏声明；隔离 provider 失败、保留最后有效结果，并向 Desktop/TUI 生成只读视图 | import handler、选择脚本运行时、授予执行权限、复用可执行来源审批 DTO，或把静态映射宣称为运行时兼容。 |
+| Hook provider 与目录协调器 | 聚合三个生态的脱敏声明并隔离 provider 失败；对 Claude Code/Codex 所选来源执行版本守卫的私有 command 准备 | 执行 handler、选择脚本运行时、授予 OpenCode 执行权限，或把未导入的静态映射宣称为运行时兼容。 |
 | 文件观察服务 | 提供可订阅、去抖的文件变化事实 | 解释生态路径、决定优先级、提交业务状态。 |
 | 本地 JSON 存储服务 | 提供跨进程锁、锁内读改写和同卷原子替换；替换失败时保留旧文件 | 定义外部来源偏好 schema、冲突策略或生态语义。 |
 | `ExternalSourceControlPlane` | 四类来源分别刷新；同一 provider 同一时间只扫描一次；超时只影响该 provider；旧结果不能覆盖新刷新；确认最新结果后，再通知对应能力模块切换 | 按生态 ID 分支业务行为、把四类数据合并为通用资产、解析生态文件、直接提交配置、工具、权限或界面状态。 |
@@ -394,7 +396,7 @@ flowchart LR
 | 界面状态 | 按使用范围、工作区或用户目录关系统一生成安全来源位置，清理诊断文本中的已知绝对路径，并按 `Source / Command / Tool / Subagent` 资源类型路由诊断 | 让 GUI/TUI 解析 provider 诊断码前缀、识别 `.opencode`、`.claude` 等私有目录结构，或接收原始用户/工作区路径。 |
 | 冲突解析 | 对独立 provider 或产品本地可执行能力的同名候选建立版本敏感内容摘要；未选择时不激活，选择后只在内容摘要不变时复用。现有 Skill 固定根顺序由 Skill 归属模块独立维护 | 用 adapter 优先级静默覆盖另一生态或本地可执行能力，或把选择写回外部文件。 |
 | 激活策略与能力归属模块 | 根据风险、用户选择、组织上限和执行位置决定自动应用、等待确认或限制 | 修改生态加载顺序或把策略拒绝伪装成解析失败。 |
-| Runtime Configuration Service | 应用兼容配置视图，执行显式导入、冲突预览、原子写入和撤销 | 读取凭据值或加载插件代码。 |
+| Runtime Configuration Service | 应用兼容配置视图，执行通用配置的显式导入、冲突预览、原子写入和撤销 | 读取凭据值、加载插件代码或拥有命令 Hook C0 的私有快照。 |
 | `PluginRuntimeClient` | 当前路由调用并管理期限、同一插件串行调用、重复请求结果、响应校验与故障诊断；目标再增加队列上限、取消后的结果失效和旧连接结果拒绝 | 执行第三方代码、成为物理进程或插件生命周期归属模块，或决定来源优先级和最终业务状态。 |
 | `ScriptToolRuntime` 与 Plugin Host | services 实现管理物理进程事实；Plugin Host 子进程加载并执行已批准的 JS/TS 插件 | 把 Rust 侧实现命名为 Host、把工作区当作默认进程边界，或为每个插件建立强隔离。详细生命周期见[插件运行时设计](plugin-runtime-design.md)。 |
 | 产品入口 | 展示统一状态并发起用户操作 | 直接扫描目录、同步安装依赖或依赖生态原始对象。 |
@@ -532,16 +534,18 @@ Command；明确缺失且未被标记失败的 Command 是稳定删除。产品�
    上下文的外部 runtime id；外部服务器发起的 roots、sampling 和 elicitation 请求也一律拒绝，防止跨工作区读取或借用
    BitFun 宿主能力。后续若接入这些能力，必须先补独立契约、工作区路由与权限交互，不能复用全局连接绕过当前边界。
 
-独立的静态 Hook 目录切片不依赖上述运行时阶段：
+独立 Hook 切片不依赖 Plugin Runtime 阶段：
 
 1. `product-domains` 只定义 runtime-free DTO 和 capability-specific provider port；三个生态 adapter 各自解释来源，
-   `assembly/external-sources` 负责 provider 聚合与 last-valid，`assembly/core` 只负责本地产品装配、Git/worktree 边界
-   解析，以及在既有 refresh gate 内按工作区串行完成发现与发布。
-2. Desktop/Web UI 与交互式 TUI 只消费共享快照；不额外提供 Server、Remote、Peer、Mobile、SDK 或运行时视图。
+   `assembly/external-sources` 负责 provider 聚合、last-valid 和受版本守卫的准备入口，`assembly/core` 负责本地产品装配、
+   计划/应用 fencing、私有快照协调和向既有原生 Hook owner 投影，不解析生态格式或执行命令。
+2. Desktop/Web UI、根 CLI 与交互式 TUI 只消费共享目录、计划和管理快照；不额外提供 Server、Remote、Peer、Mobile
+   或 SDK 管理面。
 3. 验收覆盖脱敏序列化、部分失败、首次失败与空目录区分、非法/过大输入、有界枚举、provider 身份冲突、刷新竞态、stale 结果、保留命令、
    `/help hooks`、GUI 空/错/刷新/不支持状态；Host 返回未知 v1 枚举或可执行字段时明确拒绝。
-4. 后续覆盖率、版本差异和冲突分析在此目录之上增加只读派生事实；Hook 执行 Host、权限、顺序、取消与故障恢复必须
-   另立运行时切片，不能通过扩展本目录 DTO 偷渡执行语义。
+4. Claude Code/Codex 同步 command 导入通过私有准备、精确审阅、generation fencing 和不可变本地快照进入既有
+   `AgentHookEngine`；OpenCode Hook 执行、外部 Runtime、持续监听及更复杂 handler 必须另立运行时切片，不能通过扩展
+   目录 DTO 偷渡执行语义。
 
 验收至少覆盖：
 
@@ -566,7 +570,8 @@ Command；明确缺失且未被标记失败的 Command 是稳定删除。产品�
 - GUI/TUI 的外部 Agent 冲突选择在同一上下文中展示将被原子批准的模型、工具、执行域、安全来源、兼容影响和恢复动作；
   同工作区决策串行化，成功后读取权威快照，不以较旧整表覆盖无关的 Command/Tool 新状态。
 - 冲突偏好按执行域与命令族只保留当前内容摘要，并以去重候选身份标记曾发生冲突；连续内容更新不会按历史内容摘要线性膨胀。
-- 显式导入的字段级预览、冲突、撤销和凭据脱敏可验证。
+- 通用配置显式导入的字段级预览、冲突、撤销和凭据脱敏可验证；命令 Hook C0 则验证脱敏目录、精确审阅、
+  整体更新/启停/移除、并发 stale 拒绝和损坏后显式重置，不借用字段级撤销语义。
 - 当前只支持静态预览的资产不会被产品文案误报为已应用或可执行；支持子集与完整 OpenCode 兼容不会混写。
 
 具体 OpenCode 能力范围和近期顺序分别见

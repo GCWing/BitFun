@@ -471,6 +471,22 @@ pub const REMOTE_WORKSPACE_COMMAND_POLICIES: &[(&str, RemoteWorkspacePolicy)] = 
         RemoteWorkspacePolicy::RemoteUnsupported,
     ),
     (
+        "get_external_hook_import_snapshot",
+        RemoteWorkspacePolicy::RemoteUnsupported,
+    ),
+    (
+        "plan_external_hook_import_command",
+        RemoteWorkspacePolicy::RemoteUnsupported,
+    ),
+    (
+        "apply_external_hook_import_command",
+        RemoteWorkspacePolicy::RemoteUnsupported,
+    ),
+    (
+        "mutate_external_hook_import_command",
+        RemoteWorkspacePolicy::RemoteUnsupported,
+    ),
+    (
         "get_external_source_snapshot",
         RemoteWorkspacePolicy::RemoteUnsupported,
     ),
@@ -1884,6 +1900,22 @@ mod tests {
                 remote_workspace_policy(command),
                 Some(RemoteWorkspacePolicy::RemoteUnsupported),
                 "{command} must never fall back to the controller's local MCP config"
+            );
+        }
+    }
+
+    #[test]
+    fn external_hook_import_commands_explicitly_reject_remote_workspaces() {
+        for command in [
+            "get_external_hook_import_snapshot",
+            "plan_external_hook_import_command",
+            "apply_external_hook_import_command",
+            "mutate_external_hook_import_command",
+        ] {
+            assert_eq!(
+                remote_workspace_policy(command),
+                Some(RemoteWorkspacePolicy::RemoteUnsupported),
+                "{command} must never use local imported Hooks for a remote workspace"
             );
         }
     }

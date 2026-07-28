@@ -1,8 +1,9 @@
 use crate::native_hooks::{
-    build_engine, build_overview, clear_session_hook_state, dispatch_pre_tool_use,
-    hook_settings_paths, take_pending_session_context, AgentHooksConfig, NativeHookSessionFacts,
+    build_engine, build_overview, build_overview_with_imports, clear_session_hook_state,
+    dispatch_pre_tool_use, hook_settings_paths, ordered_layers, take_pending_session_context,
+    AgentHooksConfig, NativeHookSessionFacts,
 };
-use bitfun_agent_runtime::native_hooks::{AgentHookEvent, AgentHookScope};
+use bitfun_agent_runtime::native_hooks::{AgentHookEvent, AgentHookScope, AgentHookSettingsLayer};
 use serde_json::json;
 use std::path::{Path, PathBuf};
 
@@ -311,4 +312,57 @@ fn session_context_buffer_starts_empty_and_clears() {
     // Clearing an unknown session is a no-op, not an error.
     clear_session_hook_state("unknown-session");
     assert!(take_pending_session_context("unknown-session").is_empty());
+}
+
+#[test]
+fn imported_layers_share_the_existing_engine_in_the_documented_scope_order() {
+    let layer = |scope, source: &str| AgentHookSettingsLayer {
+        scope,
+        source: source.to_string(),
+        bytes: br#"{"hooks":{"Stop":[{"hooks":[{"type":"command","command":"check"}]}]}}"#.to_vec(),
+    };
+    let ordered = ordered_layers(
+        vec![
+            layer(AgentHookScope::User, "manual-user"),
+            layer(AgentHookScope::Project, "manual-project"),
+        ],
+        vec![
+            layer(AgentHookScope::User, "imported-user"),
+            layer(AgentHookScope::Project, "imported-project"),
+        ],
+    );
+
+    assert_eq!(
+        ordered
+            .iter()
+            .map(|layer| layer.source.as_str())
+            .collect::<Vec<_>>(),
+        vec![
+            "manual-user",
+            "imported-user",
+            "manual-project",
+            "imported-project"
+        ]
+    );
+}
+
+#[test]
+fn imported_project_layers_do_not_depend_on_the_manual_project_file_gate() {
+    let imported = AgentHookSettingsLayer {
+        scope: AgentHookScope::Project,
+        source: "managed-project-import".to_string(),
+        bytes: br#"{"hooks":{"Stop":[{"hooks":[{"type":"command","command":"check"}]}]}}"#.to_vec(),
+    };
+    let overview = build_overview_with_imports(
+        AgentHooksConfig {
+            enabled: true,
+            project_hooks_enabled: false,
+        },
+        Vec::new(),
+        vec![imported],
+    );
+
+    assert_eq!(overview.total_handlers, 1);
+    assert_eq!(overview.files.len(), 1);
+    assert!(overview.files[0].loaded);
 }

@@ -19,8 +19,10 @@ use bitfun_codex_adapter::{CodexHookProvider, CodexHookProviderOptions};
 use bitfun_external_sources::ExternalHookCatalogCoordinator;
 use bitfun_opencode_adapter::{OpenCodeHookProvider, OpenCodeHookProviderOptions};
 use bitfun_product_domains::external_hook_catalog::ExternalHookSourceProvider;
+use bitfun_product_domains::external_hook_import::PreparedExternalHookImport;
 use bitfun_product_domains::external_sources::{
     ExternalSourceOperationError, ExternalSourceOperationErrorCode, ExternalSourceOperationResult,
+    ExternalSourceProviderError, SourceKey,
 };
 use std::collections::BTreeMap;
 use std::path::PathBuf;
@@ -37,6 +39,16 @@ const HOOK_PROVIDER_DISCOVERY_TIMEOUT: Duration = Duration::from_millis(100);
 pub(crate) struct WorkspaceExternalHookCatalogService {
     coordinator: Arc<ExternalHookCatalogCoordinator>,
     refresh_gate: tokio::sync::Mutex<()>,
+    preparations: tokio::sync::Mutex<
+        BTreeMap<
+            (SourceKey, String),
+            Arc<
+                tokio::sync::OnceCell<
+                    Result<PreparedExternalHookImport, ExternalSourceProviderError>,
+                >,
+            >,
+        >,
+    >,
 }
 
 impl WorkspaceExternalHookCatalogService {
@@ -47,6 +59,7 @@ impl WorkspaceExternalHookCatalogService {
         Ok(Self {
             coordinator: Arc::new(ExternalHookCatalogCoordinator::new(context, providers)?),
             refresh_gate: tokio::sync::Mutex::new(()),
+            preparations: tokio::sync::Mutex::new(BTreeMap::new()),
         })
     }
 
@@ -96,6 +109,47 @@ impl WorkspaceExternalHookCatalogService {
             started.elapsed().as_millis(),
         );
         Ok(snapshot)
+    }
+
+    pub(crate) async fn prepare_import(
+        &self,
+        source: SourceKey,
+        expected_catalog_content_version: String,
+    ) -> Result<PreparedExternalHookImport, ExternalSourceProviderError> {
+        let key = (source.clone(), expected_catalog_content_version.clone());
+        let cell = {
+            let mut preparations = self.preparations.lock().await;
+            Arc::clone(
+                preparations
+                    .entry(key.clone())
+                    .or_insert_with(|| Arc::new(tokio::sync::OnceCell::new())),
+            )
+        };
+        let coordinator = Arc::clone(&self.coordinator);
+        let result = cell
+            .get_or_init(|| async move {
+                tokio::task::spawn_blocking(move || {
+                    coordinator.prepare_import(&source, &expected_catalog_content_version)
+                })
+                .await
+                .unwrap_or_else(|error| {
+                    Err(ExternalSourceProviderError::new(
+                        "external_hook.import_worker_failed",
+                        format!("Hook import preparation worker failed: {error}"),
+                        true,
+                    ))
+                })
+            })
+            .await
+            .clone();
+        let mut preparations = self.preparations.lock().await;
+        if preparations
+            .get(&key)
+            .is_some_and(|current| Arc::ptr_eq(current, &cell))
+        {
+            preparations.remove(&key);
+        }
+        result
     }
 }
 
@@ -150,7 +204,7 @@ fn next_access_tick() -> u64 {
     ACCESS_TICK.fetch_add(1, Ordering::Relaxed)
 }
 
-async fn service_for(
+pub(crate) async fn service_for(
     workspace_root: Option<&std::path::Path>,
 ) -> ExternalSourceOperationResult<Arc<WorkspaceExternalHookCatalogService>> {
     let workspace_root = normalize_workspace_root(workspace_root).map_err(|error| {

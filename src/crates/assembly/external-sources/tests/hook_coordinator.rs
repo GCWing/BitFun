@@ -6,6 +6,9 @@ use bitfun_product_domains::external_hook_catalog::{
     ExternalHookSourceKind, ExternalHookSourceProvider,
 };
 use bitfun_product_domains::external_hook_contributions::ExternalHookPoint;
+use bitfun_product_domains::external_hook_import::{
+    PreparedExternalHookHandler, PreparedExternalHookImport,
+};
 use bitfun_product_domains::external_sources::{
     EcosystemId, ExecutionDomainId, ExternalSourceContext, ExternalSourceHealth,
     ExternalSourceProviderError, ExternalSourceScope, SourceKey,
@@ -53,6 +56,40 @@ impl ExternalHookSourceProvider for FakeProvider {
     ) -> Result<ExternalHookProviderSnapshot, ExternalSourceProviderError> {
         std::thread::sleep(*self.delay.lock().unwrap());
         self.snapshot.lock().unwrap().clone()
+    }
+
+    fn prepare_import(
+        &self,
+        _context: &ExternalSourceContext,
+        source_key: &SourceKey,
+        _expected_catalog_content_version: &str,
+    ) -> Result<PreparedExternalHookImport, ExternalSourceProviderError> {
+        let snapshot = self.snapshot.lock().unwrap().clone()?;
+        let source = snapshot
+            .sources
+            .into_iter()
+            .find(|source| source.key == *source_key)
+            .ok_or_else(|| {
+                ExternalSourceProviderError::new("fake.hook.source_missing", "missing", false)
+            })?;
+        PreparedExternalHookImport::new(
+            source,
+            vec![PreparedExternalHookHandler {
+                stable_key: "fake-hook".to_string(),
+                event: "PreToolUse".to_string(),
+                matcher: None,
+                command: "check".to_string(),
+                command_windows: None,
+                timeout_seconds: None,
+                status_message: None,
+                dependencies: Vec::new(),
+            }],
+            Vec::new(),
+            Vec::new(),
+        )
+        .map_err(|error| {
+            ExternalSourceProviderError::new("fake.hook.invalid", error.to_string(), false)
+        })
     }
 }
 
@@ -107,6 +144,26 @@ async fn refresh(
         .await;
     assert!(batch.deferred.is_empty());
     coordinator.apply_discovery_results(batch.immediate)
+}
+
+#[tokio::test]
+async fn preparation_is_guarded_by_the_current_redacted_source_version() {
+    let provider = Arc::new(FakeProvider::new("codex.hooks", "codex", "PreToolUse"));
+    let coordinator =
+        ExternalHookCatalogCoordinator::new(context(), vec![provider.clone()]).unwrap();
+    let catalog = refresh(&coordinator).await;
+    let source = catalog.sources[0].clone();
+
+    assert!(coordinator
+        .prepare_import(&source.key, &source.content_version)
+        .is_ok());
+    assert_eq!(
+        coordinator
+            .prepare_import(&source.key, "stale")
+            .unwrap_err()
+            .code,
+        "external_hook.import_catalog_stale"
+    );
 }
 
 #[tokio::test]

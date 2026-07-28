@@ -1,9 +1,18 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ExternalLink } from 'lucide-react';
-import { Button, ConfigPageLoading, Switch } from '@/component-library';
+import { ExternalLink, RefreshCw } from 'lucide-react';
+import { Button, ConfigPageLoading, ConfirmDialog, Modal, Switch } from '@/component-library';
+import { useCurrentWorkspace } from '@/infrastructure/contexts/WorkspaceContext';
+import { WorkspaceKind } from '@/shared/types';
 import { useNotification } from '@/shared/notification-system';
 import { createLogger } from '@/shared/utils/logger';
+import {
+  externalHooksAPI,
+  type ExternalHookImportMutation,
+  type ExternalHookImportPlan,
+  type ExternalHookImportSnapshot,
+  type ExternalHookSource,
+} from '@/infrastructure/api/service-api/ExternalHooksAPI';
 import { systemAPI } from '@/infrastructure/api/service-api/SystemAPI';
 import { configManager } from '../services/ConfigManager';
 import {
@@ -17,6 +26,7 @@ import {
 const log = createLogger('HooksConfig');
 
 const CODEX_HOOKS_DOC_URL = 'https://learn.chatgpt.com/docs/hooks';
+const IMPORTABLE_HOOK_ECOSYSTEMS = new Set(['claude-code', 'codex']);
 
 /** Enablement gates only. Hook declarations live in hooks.json. */
 interface AgentHooksConfigShape {
@@ -41,27 +51,90 @@ function normalizeHooksConfig(
 const HooksConfig: React.FC = () => {
   const { t } = useTranslation('settings/hooks');
   const { error: notifyError, success: notifySuccess } = useNotification();
+  const { workspace, workspacePath } = useCurrentWorkspace();
+  const remoteWorkspace = workspace?.workspaceKind === WorkspaceKind.Remote
+    || Boolean(workspace?.connectionId);
 
   const [loading, setLoading] = useState(true);
   const [config, setConfig] = useState<AgentHooksConfigShape>(DEFAULT_HOOKS_CONFIG);
   const [savingKey, setSavingKey] = useState<keyof AgentHooksConfigShape | null>(null);
+  const [importSnapshot, setImportSnapshot] = useState<ExternalHookImportSnapshot | null>(null);
+  const [importLoading, setImportLoading] = useState(false);
+  const [importError, setImportError] = useState<string | null>(null);
+  const [busyKey, setBusyKey] = useState<string | null>(null);
+  const [reviewPlan, setReviewPlan] = useState<ExternalHookImportPlan | null>(null);
+  const [planNotice, setPlanNotice] = useState<string | null>(null);
+  const [confirmation, setConfirmation] = useState<
+    | { kind: 'remove'; importId: string }
+    | { kind: 'reset'; scope: ExternalHookSource['scope'] }
+    | null
+  >(null);
+  const requestSequence = useRef(0);
+  const mountedRef = useRef(true);
 
   const loadData = useCallback(async () => {
+    const sequence = ++requestSequence.current;
     setLoading(true);
-    try {
-      const loaded = await configManager.getConfig<Partial<AgentHooksConfigShape>>('app.hooks');
-      setConfig(normalizeHooksConfig(loaded));
-    } catch (error) {
-      log.error('Failed to load hooks config', error);
-      notifyError(error instanceof Error ? error.message : t('messages.loadFailed'));
-    } finally {
-      setLoading(false);
+    setImportError(null);
+    const [configResult, importResult] = await Promise.allSettled([
+      configManager.getConfig<Partial<AgentHooksConfigShape>>('app.hooks'),
+      remoteWorkspace
+        ? Promise.resolve(null)
+        : externalHooksAPI.getImportSnapshot(workspacePath || undefined, false),
+    ]);
+    if (!mountedRef.current || sequence !== requestSequence.current) return;
+    if (configResult.status === 'fulfilled') {
+      setConfig(normalizeHooksConfig(configResult.value));
+    } else {
+      log.error('Failed to load hooks config', configResult.reason);
+      notifyError(
+        configResult.reason instanceof Error
+          ? configResult.reason.message
+          : t('messages.loadFailed'),
+      );
     }
-  }, [notifyError, t]);
+    if (importResult.status === 'fulfilled') {
+      setImportSnapshot(importResult.value);
+    } else {
+      log.error('Failed to load imported Hooks', importResult.reason);
+      setImportSnapshot(null);
+      setImportError(t('imports.loadFailed'));
+    }
+    setLoading(false);
+  }, [notifyError, remoteWorkspace, t, workspacePath]);
 
   useEffect(() => {
+    mountedRef.current = true;
     void loadData();
+    return () => {
+      mountedRef.current = false;
+      requestSequence.current += 1;
+    };
   }, [loadData]);
+
+  const refreshImports = useCallback(async () => {
+    if (remoteWorkspace) return;
+    const sequence = ++requestSequence.current;
+    setImportLoading(true);
+    setImportError(null);
+    try {
+      const snapshot = await externalHooksAPI.getImportSnapshot(
+        workspacePath || undefined,
+        true,
+      );
+      if (mountedRef.current && sequence === requestSequence.current) {
+        setImportSnapshot(snapshot);
+      }
+    } catch (error) {
+      if (!mountedRef.current || sequence !== requestSequence.current) return;
+      log.error('Failed to refresh imported Hooks', error);
+      setImportError(t('imports.refreshFailed'));
+    } finally {
+      if (mountedRef.current && sequence === requestSequence.current) {
+        setImportLoading(false);
+      }
+    }
+  }, [remoteWorkspace, t, workspacePath]);
 
   const updateConfig = useCallback(
     async <K extends keyof AgentHooksConfigShape>(key: K, value: AgentHooksConfigShape[K]) => {
@@ -71,13 +144,15 @@ const HooksConfig: React.FC = () => {
       setConfig(next);
       try {
         await configManager.setConfig('app.hooks', next);
+        if (!mountedRef.current) return;
         notifySuccess(t('messages.saved'));
       } catch (error) {
+        if (!mountedRef.current) return;
         log.error('Failed to save hooks config', { key, error });
         setConfig(previous);
         notifyError(error instanceof Error ? error.message : t('messages.saveFailed'));
       } finally {
-        setSavingKey(null);
+        if (mountedRef.current) setSavingKey(null);
       }
     },
     [config, notifyError, notifySuccess, t]
@@ -88,6 +163,120 @@ const HooksConfig: React.FC = () => {
       log.error('Failed to open the Codex hooks documentation', error);
     });
   }, []);
+
+  const previewImport = useCallback(async (source: ExternalHookSource) => {
+    const key = `${source.key.providerId}:${source.key.sourceId}`;
+    setBusyKey(key);
+    setPlanNotice(null);
+    try {
+      const plan = await externalHooksAPI.planImport(workspacePath || undefined, source.key);
+      if (!mountedRef.current) return;
+      setReviewPlan(plan);
+    } catch (error) {
+      if (!mountedRef.current) return;
+      log.error('Failed to prepare Hook import review', error);
+      notifyError(t('imports.planFailed'));
+    } finally {
+      if (mountedRef.current) setBusyKey(null);
+    }
+  }, [notifyError, t, workspacePath]);
+
+  const applyReviewedPlan = useCallback(async () => {
+    if (!reviewPlan) return;
+    setBusyKey('apply');
+    try {
+      const result = await externalHooksAPI.applyImport(
+        workspacePath || undefined,
+        reviewPlan,
+      );
+      if (!mountedRef.current) return;
+      if (result.outcome.kind === 'stale') {
+        setReviewPlan(result.outcome.refreshedPlan);
+        setPlanNotice(t('imports.stale'));
+      } else {
+        setImportSnapshot(result.outcome.snapshot);
+        setReviewPlan(null);
+        setPlanNotice(null);
+        notifySuccess(t('imports.applied'));
+      }
+    } catch (error) {
+      if (!mountedRef.current) return;
+      log.error('Failed to apply reviewed Hook import', error);
+      notifyError(t('imports.applyFailed'));
+    } finally {
+      if (mountedRef.current) setBusyKey(null);
+    }
+  }, [notifyError, notifySuccess, reviewPlan, t, workspacePath]);
+
+  const mutateImport = useCallback(async (
+    action: ExternalHookImportMutation,
+    optimisticImportId?: string,
+    optimisticEnabled?: boolean,
+  ) => {
+    if (!importSnapshot) return;
+    let authoritative = importSnapshot;
+    if (optimisticImportId && optimisticEnabled !== undefined) {
+      setImportSnapshot({
+        ...importSnapshot,
+        imports: importSnapshot.imports.map((item) => (
+          item.importId === optimisticImportId
+            ? { ...item, enabled: optimisticEnabled }
+            : item
+        )),
+      });
+    }
+    setBusyKey('mutation');
+    try {
+      let next: ExternalHookImportSnapshot;
+      try {
+        next = await externalHooksAPI.mutateImport(
+          workspacePath || undefined,
+          authoritative.revision,
+          action,
+        );
+      } catch (error) {
+        if ((error as { code?: string })?.code !== 'stale_revision') throw error;
+        const refreshed = await externalHooksAPI.getImportSnapshot(
+          workspacePath || undefined,
+          false,
+        );
+        if (!mountedRef.current) return;
+        authoritative = refreshed;
+        setImportSnapshot(refreshed);
+        notifyError(t('imports.stateChanged'));
+        return;
+      }
+      if (!mountedRef.current) return;
+      setImportSnapshot(next);
+      notifySuccess(t('imports.updated'));
+    } catch (error) {
+      if (!mountedRef.current) return;
+      setImportSnapshot(authoritative);
+      log.error('Failed to update imported Hooks', error);
+      notifyError(t('imports.updateFailed'));
+    } finally {
+      if (mountedRef.current) setBusyKey(null);
+    }
+  }, [importSnapshot, notifyError, notifySuccess, t, workspacePath]);
+
+  const confirmMutation = useCallback(() => {
+    if (!confirmation) return;
+    const action: ExternalHookImportMutation = confirmation.kind === 'remove'
+      ? { kind: 'remove', importId: confirmation.importId }
+      : { kind: 'reset_corrupt_store', scope: confirmation.scope };
+    setConfirmation(null);
+    void mutateImport(action);
+  }, [confirmation, mutateImport]);
+
+  const availableSources = importSnapshot?.catalog.sources
+    .filter((source) => IMPORTABLE_HOOK_ECOSYSTEMS.has(source.ecosystemId))
+    .filter((source) => !importSnapshot.imports.some((item) => (
+      item.source.key.providerId === source.key.providerId
+      && item.source.key.sourceId === source.key.sourceId
+    ))) ?? [];
+  const corruptDiagnostics = importSnapshot?.diagnostics.filter((diagnostic) => (
+    diagnostic.code.startsWith('external_hook.import_store_corrupt.')
+  )) ?? [];
 
   if (loading) {
     return (
@@ -150,6 +339,128 @@ const HooksConfig: React.FC = () => {
         </ConfigPageSection>
 
         <ConfigPageSection
+          title={t('imports.title')}
+          description={config.enabled ? t('imports.description') : t('imports.masterDisabled')}
+          extra={remoteWorkspace ? null : (
+            <Button
+              variant="secondary"
+              size="small"
+              isLoading={importLoading}
+              disabled={busyKey !== null}
+              onClick={() => void refreshImports()}
+            >
+              <RefreshCw size={14} />
+              {t('imports.refresh')}
+            </Button>
+          )}
+        >
+          {remoteWorkspace ? (
+            <ConfigPageRow label={t('imports.remoteUnsupported')} align="center">
+              {null}
+            </ConfigPageRow>
+          ) : importError ? (
+            <ConfigPageRow label={importError} align="center">
+              {null}
+            </ConfigPageRow>
+          ) : importSnapshot ? (
+            <>
+              {importSnapshot.imports.map((item) => (
+                <ConfigPageRow
+                  key={item.importId}
+                  label={item.source.displayName}
+                  description={t(`imports.state.${item.state}`, {
+                    location: item.source.locationHint,
+                  })}
+                  align="center"
+                >
+                  <Switch
+                    aria-label={t('imports.toggle', { name: item.source.displayName })}
+                    checked={item.enabled}
+                    disabled={!config.enabled || busyKey !== null}
+                    onChange={(event) => void mutateImport(
+                      { kind: 'set_enabled', importId: item.importId, enabled: event.target.checked },
+                      item.importId,
+                      event.target.checked,
+                    )}
+                  />
+                  <Button
+                    variant="secondary"
+                    size="small"
+                    disabled={busyKey !== null || item.state === 'source_missing'}
+                    onClick={() => void previewImport(item.source)}
+                  >
+                    {t('imports.update')}
+                  </Button>
+                  <Button
+                    variant="danger"
+                    size="small"
+                    disabled={busyKey !== null}
+                    onClick={() => setConfirmation({ kind: 'remove', importId: item.importId })}
+                  >
+                    {t('imports.remove')}
+                  </Button>
+                </ConfigPageRow>
+              ))}
+
+              {availableSources.map((source) => {
+                  const key = `${source.key.providerId}:${source.key.sourceId}`;
+                  return (
+                    <ConfigPageRow
+                      key={key}
+                      label={source.displayName}
+                      description={source.locationHint}
+                      align="center"
+                    >
+                      <Button
+                        variant="secondary"
+                        size="small"
+                        isLoading={busyKey === key}
+                        disabled={busyKey !== null || source.health === 'unavailable'}
+                        onClick={() => void previewImport(source)}
+                      >
+                        {t('imports.review')}
+                      </Button>
+                    </ConfigPageRow>
+                  );
+                })}
+
+              {corruptDiagnostics.map((diagnostic) => {
+                  const scope = diagnostic.code.endsWith('.user_global')
+                    ? 'user_global'
+                    : 'project';
+                  return (
+                    <ConfigPageRow
+                      key={diagnostic.code}
+                      label={t('imports.storeInvalid')}
+                      description={diagnostic.message}
+                      align="center"
+                    >
+                      <Button
+                        variant="danger"
+                        size="small"
+                        disabled={busyKey !== null}
+                        onClick={() => setConfirmation({ kind: 'reset', scope })}
+                      >
+                        {t('imports.reset')}
+                      </Button>
+                    </ConfigPageRow>
+                  );
+                })}
+
+              {importSnapshot.imports.length === 0
+                && availableSources.length === 0
+                && corruptDiagnostics.length === 0 ? (
+                  <ConfigPageRow label={t('imports.empty')} align="center">
+                    {null}
+                  </ConfigPageRow>
+                ) : null}
+            </>
+          ) : (
+            <ConfigPageLoading text={t('imports.loading')} />
+          )}
+        </ConfigPageSection>
+
+        <ConfigPageSection
           title={t('compatibility.title')}
           description={t('compatibility.description')}
         >
@@ -165,6 +476,84 @@ const HooksConfig: React.FC = () => {
           </ConfigPageRow>
         </ConfigPageSection>
       </ConfigPageContent>
+
+      <Modal
+        isOpen={reviewPlan !== null}
+        onClose={() => {
+          if (busyKey !== 'apply') {
+            setReviewPlan(null);
+            setPlanNotice(null);
+          }
+        }}
+        title={t('imports.reviewTitle', { name: reviewPlan?.source.displayName ?? '' })}
+        size="large"
+        closeOnOverlayClick={busyKey !== 'apply'}
+      >
+        {reviewPlan ? (
+          <div>
+            {planNotice ? <p role="status">{planNotice}</p> : null}
+            <p>{t('imports.reviewWarning')}</p>
+            {reviewPlan.handlers.map((handler) => (
+              <section key={handler.stableKey}>
+                <h4>{handler.event}{handler.matcher ? ` · ${handler.matcher}` : ''}</h4>
+                <pre>{handler.command}</pre>
+                {handler.commandWindows ? <pre>{handler.commandWindows}</pre> : null}
+                <p>{t('imports.timeout', { seconds: handler.timeoutSeconds ?? 60 })}</p>
+                {handler.dependencies.map((dependency) => (
+                  <p key={`${dependency.kind}:${dependency.kind === 'managed'
+                    ? dependency.relativePath
+                    : dependency.location}`}>
+                    {t(`imports.dependency.${dependency.kind}`)}: {
+                      dependency.kind === 'managed'
+                        ? dependency.relativePath
+                        : dependency.location
+                    }
+                  </p>
+                ))}
+              </section>
+            ))}
+            {reviewPlan.skipped.map((skipped) => (
+              <p key={skipped.reasonCode}>
+                {t('imports.skipped', { reason: skipped.reasonCode, count: skipped.count })}
+              </p>
+            ))}
+            <p>{t('imports.fingerprint', { fingerprint: reviewPlan.planFingerprint })}</p>
+            <Button
+              variant="secondary"
+              disabled={busyKey === 'apply'}
+              onClick={() => {
+                setReviewPlan(null);
+                setPlanNotice(null);
+              }}
+            >
+              {t('imports.cancel')}
+            </Button>
+            <Button
+              isLoading={busyKey === 'apply'}
+              disabled={reviewPlan.handlers.length === 0}
+              onClick={() => void applyReviewedPlan()}
+            >
+              {t('imports.confirm')}
+            </Button>
+          </div>
+        ) : null}
+      </Modal>
+
+      <ConfirmDialog
+        isOpen={confirmation !== null}
+        onClose={() => setConfirmation(null)}
+        onConfirm={confirmMutation}
+        title={confirmation?.kind === 'reset'
+          ? t('imports.resetTitle')
+          : t('imports.removeTitle')}
+        message={confirmation?.kind === 'reset'
+          ? t('imports.resetWarning')
+          : t('imports.removeSourceUntouched')}
+        confirmText={confirmation?.kind === 'reset'
+          ? t('imports.resetConfirm')
+          : t('imports.removeConfirm')}
+        confirmDanger
+      />
     </ConfigPageLayout>
   );
 };

@@ -18,6 +18,7 @@ mod chat_state;
 mod config;
 mod daemon;
 mod diagnostics;
+mod hook_import;
 mod logging;
 mod management;
 mod mcp_import;
@@ -41,6 +42,7 @@ use std::sync::{Arc, OnceLock};
 
 use agent::runtime_client::CliAgentRuntimeClient;
 use config::CliConfig;
+use hook_import::HookAction;
 use mcp_import::{McpImportCommand, McpImportOutputFormat};
 use modes::chat::ChatMode;
 use modes::exec::{ExecApprovalMode, ExecOutputFormat};
@@ -216,6 +218,12 @@ enum Commands {
     Plugins {
         #[command(subcommand)]
         action: Option<PluginAction>,
+    },
+
+    /// Review and manage imported Claude Code and Codex command Hooks
+    Hooks {
+        #[command(subcommand)]
+        action: Option<HookAction>,
     },
 
     /// Usage reporting
@@ -1132,6 +1140,10 @@ async fn run_cli() -> Result<()> {
             }
         },
 
+        Some(Commands::Hooks { action }) => {
+            hook_import::run(action).await?;
+        }
+
         Some(Commands::Usage { session_id }) => {
             management::print_usage_report(session_id.as_deref()).await?;
         }
@@ -1590,6 +1602,66 @@ mod final_change_verification_cli_tests {
         let (verify, disable) =
             parse_flags(&["bitfun", "exec", "--no-verify-final-changes", "task"]);
         assert!(!final_change_verification_enabled(verify, disable));
+    }
+}
+
+#[cfg(test)]
+mod hook_import_command_tests {
+    use super::{Cli, Commands};
+    use crate::hook_import::{HookAction, HookImportOutputFormat};
+    use clap::Parser;
+
+    #[test]
+    fn hook_import_is_preview_only_without_a_fingerprint() {
+        let cli = Cli::try_parse_from([
+            "bitfun",
+            "hooks",
+            "import",
+            "--source",
+            "6:codex6:global",
+            "--format",
+            "json",
+        ])
+        .expect("parse Hook import preview");
+        assert!(matches!(
+            cli.command,
+            Some(Commands::Hooks {
+                action: Some(HookAction::Import {
+                    confirm: None,
+                    format: HookImportOutputFormat::Json,
+                    ..
+                })
+            })
+        ));
+    }
+
+    #[test]
+    fn hook_remove_requires_explicit_confirmation() {
+        assert!(Cli::try_parse_from(["bitfun", "hooks", "remove", "import-id"]).is_err());
+        let cli = Cli::try_parse_from(["bitfun", "hooks", "remove", "import-id", "--confirm"])
+            .expect("parse confirmed Hook removal");
+        assert!(matches!(
+            cli.command,
+            Some(Commands::Hooks {
+                action: Some(HookAction::Remove { .. })
+            })
+        ));
+    }
+
+    #[test]
+    fn corrupt_hook_store_reset_requires_an_explicit_scope_and_confirmation() {
+        assert!(Cli::try_parse_from(["bitfun", "hooks", "reset", "user"]).is_err());
+        let cli = Cli::try_parse_from(["bitfun", "hooks", "reset", "project", "--confirm"])
+            .expect("parse confirmed project Hook store reset");
+        assert!(matches!(
+            cli.command,
+            Some(Commands::Hooks {
+                action: Some(HookAction::Reset {
+                    scope: crate::hook_import::HookImportResetScope::Project,
+                    ..
+                })
+            })
+        ));
     }
 }
 

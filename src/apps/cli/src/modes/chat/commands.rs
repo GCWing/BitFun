@@ -287,6 +287,16 @@ impl ChatMode {
             self.handle_external_control(arguments, chat_view, chat_state, rt_handle);
             return Ok(None);
         }
+        let can_route_hook_management = builtin_action.is_some_and(|action| {
+            matches!(
+                action.handler,
+                ActionHandler::NativeHooks | ActionHandler::ExternalHooks
+            )
+        }) && native_management_available;
+        if can_route_hook_management {
+            self.handle_hook_management(arguments, chat_view, chat_state, rt_handle);
+            return Ok(None);
+        }
         if external.is_none() && !unresolved_candidates.is_empty() && !native_choice_is_active {
             let choices = unresolved_candidates
                 .iter()
@@ -686,11 +696,8 @@ impl ChatMode {
             ActionHandler::Extensions => {
                 self.handle_external_control("", chat_view, chat_state, rt_handle);
             }
-            ActionHandler::NativeHooks => {
-                self.handle_native_hooks(chat_view, chat_state, rt_handle);
-            }
-            ActionHandler::ExternalHooks => {
-                self.handle_external_hooks(chat_view, chat_state, rt_handle);
+            ActionHandler::NativeHooks | ActionHandler::ExternalHooks => {
+                self.handle_hook_management("", chat_view, chat_state, rt_handle);
             }
             ActionHandler::AcpHelp => {
                 chat_state.add_system_message(crate::acp_cli::acp_help_text("bitfun"));

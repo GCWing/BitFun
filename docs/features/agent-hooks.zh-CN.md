@@ -69,6 +69,58 @@ Codex 读 `~/.codex/hooks.json`，BitFun 改为读自己的配置目录。文件
 Codex 的 `[features] hooks = false` 在 BitFun 没有对应项，请使用
 `app.hooks.enabled`。
 
+## 导入 Claude Code 与 Codex 命令 Hooks
+
+BitFun 可以把 Claude Code 或 Codex 中兼容的 `type: "command"` Hook 保存为一份
+经审阅的本地快照。这是一次显式复制，不是实时挂载其他产品的配置：
+
+1. 打开**设置 → Agent Hooks**，或在 TUI 中运行 `/hooks`；脚本化查看可使用
+   `bitfun hooks list`。
+2. 选择来源，并审阅每条实际命令、Windows 覆盖命令、超时、复制或外部依赖、
+   跳过项以及计划指纹。
+3. 确认这份确切计划。若来源在审阅后发生变化，BitFun 不会写入，而是返回一份
+   刷新后的计划，要求再次确认。
+
+用户来源复制到 BitFun 的用户托管数据；项目来源复制到 BitFun 项目运行区内按工作区
+隔离的数据。来源 `.claude/hooks` 或 `.codex/hooks` 目录下可安全解析的相对脚本依赖
+会被复制到不可变快照。绝对路径依赖仍保留为外部依赖，并在审阅时明确显示；移动或
+修改它可能在不更新快照的情况下改变行为。动态路径、通配符、路径逃逸、链接、不可读
+文件以及超出固定导入上限的文件会被跳过，不会被隐式跟随。
+
+每个已导入来源都可单独启用、停用、更新或移除。移除只删除 BitFun 的托管副本，绝不
+修改 Claude Code 或 Codex 文件；更新始终要求重新审阅实际命令。各层按以下固定顺序
+执行：
+
+1. 手工用户级 `hooks.json`；
+2. 已启用的用户级导入，按稳定导入 ID 排序；
+3. 手工项目级 `hooks.json`（项目 Hooks 已开启时）；
+4. 已启用的项目级导入，按稳定导入 ID 排序。
+
+导入、更新、启用、停用和移除会在下一个匹配的 Hook 事件生效；已经开始运行的 Hook
+仍使用启动时捕获的快照完成。BitFun 不会在启动时重新导入，也不会轮询或监听 Claude
+Code/Codex 文件。请使用**刷新**或 `/hooks refresh` 检查来源变化，再显式审阅更新。
+管理与执行均只支持本地工作区；远程工作区会明确返回不支持，不会用本地命令处理远程
+路径。
+
+OpenCode 插件 Hooks 明确不在本次范围内。其 JavaScript 回调依赖 OpenCode 插件执行域；
+当前 OpenCode Hook 目录仍只用于发现和静态预览，不能执行。
+
+根 CLI 对应命令如下：
+
+```text
+bitfun hooks list [--refresh] [--format text|json]
+bitfun hooks import --source <source-key> [--confirm <plan-fingerprint>]
+bitfun hooks update <import-id> [--confirm <plan-fingerprint>]
+bitfun hooks enable <import-id>
+bitfun hooks disable <import-id>
+bitfun hooks remove <import-id> --confirm
+bitfun hooks reset <user|project> --confirm
+```
+
+未提供匹配指纹时，导入和更新只做预览。TUI 复用同一后端，并保留
+`/hooks_external`、`/hooks-external` 作为统一 `/hooks` 管理视图的兼容别名。
+`reset` 只用于显式恢复损坏的 BitFun 托管索引，绝不会修改来源文件。
+
 ## 快速开始
 
 创建 `<用户配置目录>/config/hooks.json`：
@@ -194,8 +246,7 @@ Hook 是以你的用户权限运行的任意代码，且每次对应事件触发
 
 ## 相关
 
-- CLI 的 `/hooks` 展示的就是本文描述的 Hooks：来自哪些文件、哪些层级生效、每个
-  匹配组会运行什么。它只报告配置，修改请直接编辑 `hooks.json`。
-- CLI 的 `/hooks_external` 用于查看*其他* AI 应用（Claude Code、Codex、OpenCode）
-  配置的 Hooks。该视图只读，不会执行任何内容；本文描述的是 BitFun 自身的 Hooks，
-  它们会真正执行。
+- CLI 的 `/hooks` 同时展示手工与导入层，异步发现受支持的外部来源，并提供上述导入
+  管理操作。只有手工 BitFun 层需要直接编辑 `hooks.json`。
+- `/hooks_external` 与 `/hooks-external` 是同一视图的兼容别名，不会形成第二套导入或
+  执行路径。

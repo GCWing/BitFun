@@ -64,8 +64,8 @@ use bitfun_core::agentic::tools::implementations::skills::{
     ModeSkillInfo, SkillInfo,
 };
 use bitfun_core::external_hooks::{
-    local_external_hook_catalog_snapshot, ExternalHookCatalogSnapshotV1,
-    ExternalHookMatcherSummary, ExternalHookNativeActivation, ExternalHookProjectionStatus,
+    ExternalHookCatalogSnapshotV1, ExternalHookMatcherSummary, ExternalHookNativeActivation,
+    ExternalHookProjectionStatus,
 };
 use bitfun_core::external_sources::{
     apply_external_source_control_action, choose_external_subagent_conflict,
@@ -88,7 +88,14 @@ use bitfun_core::native_hooks::{
 use bitfun_core::product_runtime::CoreAgentRuntimeCompatibility;
 use bitfun_core::service::config::GlobalConfigManager;
 use bitfun_core::service::session_usage::render_usage_report_markdown;
-use bitfun_product_domains::external_sources::{ExternalSourceHealth, ExternalSourceScope};
+use bitfun_product_domains::external_hook_import::{
+    ExternalHookImportApplyOutcomeV1, ExternalHookImportApplyRequestV1,
+    ExternalHookImportMutationV1, ExternalHookImportPlanV1, ExternalHookImportSnapshotV1,
+    EXTERNAL_HOOK_IMPORT_SCHEMA_V1,
+};
+use bitfun_product_domains::external_sources::{
+    ExternalSourceHealth, ExternalSourceScope, SourceKey,
+};
 
 /// Spinner/UI redraw interval while a turn is processing.
 const SPINNER_REDRAW_INTERVAL_MS: u64 = 100;
@@ -221,14 +228,16 @@ pub(crate) struct ChatMode {
     external_agent_notice_key: Option<String>,
     external_agent_review_snapshot: Option<ExternalSourceCatalogSnapshot>,
     external_agent_mutation_rx: Option<Receiver<ExternalAgentMutationResult>>,
-    external_hook_catalog_rx: Option<
+    hook_management_rx: Option<
         Receiver<
             std::result::Result<
-                ExternalHookCatalogSnapshotV1,
+                HookManagementResult,
                 bitfun_core::external_sources::ExternalSourceOperationError,
             >,
         >,
     >,
+    hook_management_snapshot: Option<HookManagementSnapshot>,
+    pending_hook_plan: Option<ExternalHookImportPlanV1>,
 }
 
 /// Map agent_type to a display name for status messages
@@ -273,7 +282,9 @@ impl ChatMode {
             external_agent_notice_key: None,
             external_agent_review_snapshot: None,
             external_agent_mutation_rx: None,
-            external_hook_catalog_rx: None,
+            hook_management_rx: None,
+            hook_management_snapshot: None,
+            pending_hook_plan: None,
         }
     }
 

@@ -7,11 +7,11 @@ fn native_hook_help_text() -> String {
     [
         "Hooks",
         "",
-        "Usage: /hooks",
+        "Usage: /hooks [refresh | import <source-number> [--confirm] | update <import-number> [--confirm] | enable <import-number> | disable <import-number> | remove <import-number> --confirm | reset <user|project> --confirm]",
         "",
-        "Shows the BitFun Hooks configured for agent lifecycle events, which files they came from, and whether each layer is active.",
-        "Hooks run your own commands, so this view only reports the configuration; edit hooks.json to change it.",
-        "Hooks configured for other AI applications are a separate read-only catalog: /hooks_external.",
+        "Shows native BitFun Hooks plus compatible Claude Code and Codex command Hooks.",
+        "Import and update are preview-only until the exact reviewed plan is confirmed. Source files are never edited.",
+        "Compatibility aliases: /hooks_external and /hooks-external.",
         "",
         "Help: /help hooks, /hooks -h, or /hooks --help",
     ]
@@ -33,7 +33,7 @@ fn truncate_hook_command(command: &str) -> String {
 fn native_hook_rule_line(rule: &NativeHookRuleView) -> String {
     format!(
         "  matcher: {} [{}; {} handler{}{}]",
-        rule.matcher,
+        crate::plugin_diagnostics::escape_terminal_text(&rule.matcher),
         rule.scope,
         rule.handlers.len(),
         plural(rule.handlers.len()),
@@ -80,7 +80,7 @@ fn render_native_hook_overview(overview: &NativeHookOverview) -> String {
                 file.scope,
                 if file.loaded { "loaded" } else { "not loaded" },
                 if file.exists { "present" } else { "missing" },
-                file.path.display(),
+                crate::plugin_diagnostics::escape_terminal_text(&file.path.to_string_lossy()),
             ));
         }
     }
@@ -103,7 +103,7 @@ fn render_native_hook_overview(overview: &NativeHookOverview) -> String {
             if rule.event != current_event {
                 current_event = rule.event;
                 lines.push(String::new());
-                lines.push(rule.event.to_string());
+                lines.push(crate::plugin_diagnostics::escape_terminal_text(rule.event));
             }
             lines.push(native_hook_rule_line(rule));
             for handler in rule
@@ -113,11 +113,15 @@ fn render_native_hook_overview(overview: &NativeHookOverview) -> String {
             {
                 lines.push(format!(
                     "    - {} [timeout {}s{}]",
-                    truncate_hook_command(&handler.command),
+                    truncate_hook_command(&crate::plugin_diagnostics::escape_terminal_text(
+                        &handler.command,
+                    )),
                     handler.timeout_seconds,
                     match handler.status_message.as_deref() {
-                        Some(message) if !message.trim().is_empty() =>
-                            format!("; status: {}", message.trim()),
+                        Some(message) if !message.trim().is_empty() => format!(
+                            "; status: {}",
+                            crate::plugin_diagnostics::escape_terminal_text(message.trim())
+                        ),
                         _ => String::new(),
                     },
                 ));
@@ -146,7 +150,10 @@ fn render_native_hook_overview(overview: &NativeHookOverview) -> String {
         lines.push(String::new());
         lines.push("Configuration issues:".to_string());
         for issue in overview.issues.iter().take(MAX_TUI_NATIVE_HOOK_ISSUES) {
-            lines.push(format!("  ! {issue}"));
+            lines.push(format!(
+                "  ! {}",
+                crate::plugin_diagnostics::escape_terminal_text(issue)
+            ));
         }
         if overview.issues.len() > MAX_TUI_NATIVE_HOOK_ISSUES {
             lines.push(format!(
@@ -157,33 +164,6 @@ fn render_native_hook_overview(overview: &NativeHookOverview) -> String {
     }
 
     lines.push(String::new());
-    lines.push(
-        "Edit hooks.json to change this. Hooks configured for other AI applications: /hooks_external. Help: /help hooks, /hooks -h, or /hooks --help"
-            .to_string(),
-    );
+    lines.push("Manual Hooks remain editable in hooks.json. Imported Hooks are managed through /hooks. Help: /help hooks, /hooks -h, or /hooks --help".to_string());
     lines.join("\n")
-}
-
-impl ChatMode {
-    fn handle_native_hooks(
-        &mut self,
-        chat_view: &mut ChatView,
-        chat_state: &mut ChatState,
-        rt_handle: &tokio::runtime::Handle,
-    ) {
-        let workspace_root = self.workspace_path_for_sync(chat_state);
-        let overview = tokio::task::block_in_place(|| {
-            rt_handle.block_on(native_hook_overview(Some(workspace_root.as_path())))
-        });
-        chat_view.set_status(Some(if overview.enabled {
-            format!(
-                "Hooks: {} handler{}",
-                overview.total_handlers,
-                plural(overview.total_handlers)
-            )
-        } else {
-            "Hooks are disabled".to_string()
-        }));
-        chat_state.add_system_message(render_native_hook_overview(&overview));
-    }
 }

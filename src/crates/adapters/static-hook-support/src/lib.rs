@@ -3,10 +3,16 @@
 use bitfun_product_domains::external_hook_catalog::{
     ExternalHookHandlerKind, ExternalHookMatcherSummary,
 };
+use bitfun_product_domains::external_hook_import::{
+    ExternalHookImportDependencyV1, MANAGED_HOOK_ROOT_PLACEHOLDER, MAX_EXTERNAL_HOOK_IMPORT_ASSETS,
+    MAX_EXTERNAL_HOOK_IMPORT_ASSET_BYTES, MAX_EXTERNAL_HOOK_IMPORT_ASSET_DEPTH,
+    MAX_EXTERNAL_HOOK_IMPORT_TOTAL_ASSET_BYTES,
+};
 use serde_json::Value;
 use sha2::{Digest, Sha256};
+use std::collections::{BTreeMap, BTreeSet};
 use std::io::Read;
-use std::path::{Path, PathBuf};
+use std::path::{Component, Path, PathBuf};
 
 const MAX_MATCHER_BYTES: usize = 512;
 const MAX_EVENT_NAME_BYTES: usize = 160;
@@ -203,6 +209,270 @@ pub fn resolve_bounded_regular_file(
     Ok(canonical_path)
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PreparedStaticHookCommand {
+    pub command: String,
+    pub dependencies: Vec<ExternalHookImportDependencyV1>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum StaticHookAssetError {
+    DynamicPath,
+    InvalidPath,
+    MissingOrLinked,
+    Unreadable,
+    BudgetExceeded,
+}
+
+impl StaticHookAssetError {
+    pub const fn skip_reason(self) -> &'static str {
+        match self {
+            Self::DynamicPath => "dynamic_source_path",
+            Self::InvalidPath => "invalid_asset_path",
+            Self::MissingOrLinked => "asset_missing_or_linked",
+            Self::Unreadable => "asset_unreadable",
+            Self::BudgetExceeded => "asset_budget_exceeded",
+        }
+    }
+}
+
+pub fn importable_hook_matcher(value: Option<&Value>) -> Result<Option<String>, &'static str> {
+    match value {
+        None | Some(Value::Null) => Ok(None),
+        Some(Value::String(value)) if value.is_empty() => Ok(None),
+        Some(Value::String(value))
+            if value.len() <= MAX_MATCHER_BYTES && !value.chars().any(char::is_control) =>
+        {
+            Ok(Some(value.clone()))
+        }
+        Some(_) => Err("invalid_matcher"),
+    }
+}
+
+pub fn required_hook_string(
+    object: &serde_json::Map<String, Value>,
+    field: &str,
+) -> Result<String, &'static str> {
+    object
+        .get(field)
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(str::to_string)
+        .ok_or("invalid_handler")
+}
+
+pub fn optional_hook_string(
+    object: &serde_json::Map<String, Value>,
+    field: &str,
+) -> Result<Option<String>, &'static str> {
+    match object.get(field) {
+        None | Some(Value::Null) => Ok(None),
+        Some(Value::String(value)) => Ok(Some(value.clone())),
+        Some(_) => Err("invalid_handler"),
+    }
+}
+
+pub fn optional_positive_hook_u64(
+    object: &serde_json::Map<String, Value>,
+    field: &str,
+) -> Result<Option<u64>, &'static str> {
+    match object.get(field) {
+        None | Some(Value::Null) => Ok(None),
+        Some(value) => value
+            .as_u64()
+            .filter(|value| *value > 0)
+            .map(Some)
+            .ok_or("invalid_handler"),
+    }
+}
+
+/// Rewrites only simple shell tokens that point below `<source-dir>/hooks`.
+/// Arbitrary shell syntax is intentionally left untouched; source-root tokens
+/// with expansion or glob syntax fail closed instead of being guessed.
+pub fn prepare_static_hook_command(
+    command: &str,
+    source_config_dir: &Path,
+    source_dir_name: &str,
+    assets: &mut BTreeMap<PathBuf, Vec<u8>>,
+) -> Result<PreparedStaticHookCommand, StaticHookAssetError> {
+    let normalized_source = source_dir_name.replace('\\', "/");
+    let prefix = format!("{normalized_source}/hooks/");
+    let dot_prefix = format!("./{prefix}");
+    let mut replacements = Vec::<(usize, usize, String)>::new();
+    let mut dependencies = Vec::new();
+    let mut dependency_keys = BTreeSet::new();
+    let mut pending_assets = BTreeMap::<PathBuf, Vec<u8>>::new();
+    let mut recognized_managed_path = false;
+
+    for token in simple_command_tokens(command) {
+        let normalized = token.value.replace('\\', "/");
+        let managed_suffix = normalized
+            .strip_prefix(&dot_prefix)
+            .or_else(|| normalized.strip_prefix(&prefix));
+        if let Some(suffix) = managed_suffix {
+            recognized_managed_path = true;
+            if suffix.is_empty()
+                || suffix
+                    .chars()
+                    .any(|value| matches!(value, '$' | '`' | '*' | '?' | '[' | ']' | '{' | '}'))
+            {
+                return Err(StaticHookAssetError::DynamicPath);
+            }
+            let suffix_path = PathBuf::from(suffix);
+            if suffix_path.is_absolute()
+                || suffix_path
+                    .components()
+                    .any(|component| !matches!(component, Component::Normal(_)))
+            {
+                return Err(StaticHookAssetError::InvalidPath);
+            }
+            let relative_path = PathBuf::from("hooks").join(&suffix_path);
+            if relative_path.components().count() > MAX_EXTERNAL_HOOK_IMPORT_ASSET_DEPTH {
+                return Err(StaticHookAssetError::BudgetExceeded);
+            }
+            if !assets.contains_key(&relative_path) && !pending_assets.contains_key(&relative_path)
+            {
+                let source_path = source_config_dir.join(&relative_path);
+                let resolved = resolve_regular_file_without_links(&source_path, source_config_dir)?;
+                let bytes = match read_bounded_file(&resolved, MAX_EXTERNAL_HOOK_IMPORT_ASSET_BYTES)
+                {
+                    Ok(BoundedFileRead::Content(bytes)) => bytes,
+                    Ok(BoundedFileRead::TooLarge) => {
+                        return Err(StaticHookAssetError::BudgetExceeded)
+                    }
+                    Err(_) => return Err(StaticHookAssetError::Unreadable),
+                };
+                pending_assets.insert(relative_path.clone(), bytes);
+            }
+            let relative_text = relative_path.to_string_lossy().replace('\\', "/");
+            let dependency = ExternalHookImportDependencyV1::Managed {
+                relative_path: relative_text.clone(),
+            };
+            if dependency_keys.insert(format!("managed:{relative_text}")) {
+                dependencies.push(dependency);
+            }
+            replacements.push((
+                token.start,
+                token.end,
+                format!("\"{MANAGED_HOOK_ROOT_PLACEHOLDER}/{relative_text}\""),
+            ));
+        } else if Path::new(&token.value).is_absolute() {
+            let location = token.value.to_string();
+            if dependency_keys.insert(format!("external:{location}")) {
+                dependencies.push(ExternalHookImportDependencyV1::External { location });
+            }
+        }
+    }
+    if !recognized_managed_path && command.replace('\\', "/").contains(&prefix) {
+        return Err(StaticHookAssetError::DynamicPath);
+    }
+
+    let file_count = assets.len().saturating_add(pending_assets.len());
+    let byte_count = assets
+        .values()
+        .chain(pending_assets.values())
+        .try_fold(0usize, |total, bytes| total.checked_add(bytes.len()))
+        .ok_or(StaticHookAssetError::BudgetExceeded)?;
+    if file_count > MAX_EXTERNAL_HOOK_IMPORT_ASSETS
+        || byte_count > MAX_EXTERNAL_HOOK_IMPORT_TOTAL_ASSET_BYTES
+    {
+        return Err(StaticHookAssetError::BudgetExceeded);
+    }
+
+    let mut rewritten = command.to_string();
+    for (start, end, replacement) in replacements.into_iter().rev() {
+        rewritten.replace_range(start..end, &replacement);
+    }
+    assets.extend(pending_assets);
+    Ok(PreparedStaticHookCommand {
+        command: rewritten,
+        dependencies,
+    })
+}
+
+struct CommandToken<'a> {
+    start: usize,
+    end: usize,
+    value: &'a str,
+}
+
+fn simple_command_tokens(command: &str) -> Vec<CommandToken<'_>> {
+    let mut tokens = Vec::new();
+    let bytes = command.as_bytes();
+    let mut cursor = 0usize;
+    while cursor < bytes.len() {
+        while cursor < bytes.len() && bytes[cursor].is_ascii_whitespace() {
+            cursor += 1;
+        }
+        if cursor == bytes.len() {
+            break;
+        }
+        let start = cursor;
+        let quote = matches!(bytes[cursor], b'\'' | b'\"').then_some(bytes[cursor]);
+        if quote.is_some() {
+            cursor += 1;
+        }
+        let value_start = cursor;
+        while cursor < bytes.len()
+            && match quote {
+                Some(quote) => bytes[cursor] != quote,
+                None => !bytes[cursor].is_ascii_whitespace(),
+            }
+        {
+            cursor += 1;
+        }
+        let value_end = cursor;
+        if quote.is_some() && cursor < bytes.len() {
+            cursor += 1;
+        }
+        tokens.push(CommandToken {
+            start,
+            end: cursor,
+            value: &command[value_start..value_end],
+        });
+    }
+    tokens
+}
+
+fn resolve_regular_file_without_links(
+    path: &Path,
+    allowed_root: &Path,
+) -> Result<PathBuf, StaticHookAssetError> {
+    let relative = path
+        .strip_prefix(allowed_root)
+        .map_err(|_| StaticHookAssetError::InvalidPath)?;
+    let mut current = allowed_root.to_path_buf();
+    for component in relative.components() {
+        let Component::Normal(component) = component else {
+            return Err(StaticHookAssetError::InvalidPath);
+        };
+        current.push(component);
+        let metadata = std::fs::symlink_metadata(&current)
+            .map_err(|_| StaticHookAssetError::MissingOrLinked)?;
+        if metadata.file_type().is_symlink() || metadata_is_reparse_point(&metadata) {
+            return Err(StaticHookAssetError::MissingOrLinked);
+        }
+    }
+    let metadata =
+        std::fs::metadata(&current).map_err(|_| StaticHookAssetError::MissingOrLinked)?;
+    if !metadata.is_file() {
+        return Err(StaticHookAssetError::MissingOrLinked);
+    }
+    Ok(current)
+}
+
+#[cfg(windows)]
+fn metadata_is_reparse_point(metadata: &std::fs::Metadata) -> bool {
+    use std::os::windows::fs::MetadataExt;
+    metadata.file_attributes() & 0x400 != 0
+}
+
+#[cfg(not(windows))]
+fn metadata_is_reparse_point(_metadata: &std::fs::Metadata) -> bool {
+    false
+}
+
 /// Produces a useful executable label without exposing an absolute path or a
 /// shell-like command string. Runtime preparation retains the original value.
 pub fn redacted_executable_preview(command: &str) -> String {
@@ -305,6 +575,25 @@ pub struct StaticHookParseResult {
     pub inspected_handlers: usize,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct StaticHookVisitSummary {
+    pub issues: Vec<StaticHookParseIssue>,
+    pub all_disabled: bool,
+    pub inspected_handlers: usize,
+}
+
+/// Borrowed structural facts for one handler during a bounded document walk.
+///
+/// This type intentionally has no `Debug` implementation: `group` and
+/// `handler` may contain commands, environment values, or credentials.
+pub struct StaticHookHandlerRef<'a> {
+    pub native_event: &'a str,
+    pub group: &'a serde_json::Map<String, Value>,
+    pub handler: &'a Value,
+    pub group_index: usize,
+    pub handler_index: usize,
+}
+
 /// Fingerprints only facts that the catalog already exposes. Handler bodies,
 /// command arguments, request data, environment variables, and credentials
 /// never contribute to the externally visible version.
@@ -340,14 +629,15 @@ pub fn redacted_parse_content_version(result: &StaticHookParseResult) -> String 
     format!("sha256:{}", hex::encode(hasher.finalize()))
 }
 
-/// Parses only Hook structure and returns redacted facts. Handler-specific
-/// values are checked for presence but never copied into the result.
-pub fn parse_hook_document(
+/// Walks Hook structure once and exposes handler bodies only to the supplied
+/// callback. Returning `false` marks that handler invalid; no borrowed value is
+/// retained in the returned summary.
+pub fn visit_hook_document(
     bytes: &[u8],
     format: StaticHookDocumentFormat,
-    rules: &[StaticHookHandlerRule],
     max_handlers: usize,
-) -> StaticHookParseResult {
+    mut visitor: impl FnMut(StaticHookHandlerRef<'_>) -> bool,
+) -> StaticHookVisitSummary {
     let parsed = match format {
         StaticHookDocumentFormat::Json => serde_json::from_slice::<Value>(bytes).ok(),
         StaticHookDocumentFormat::Toml => std::str::from_utf8(bytes)
@@ -356,9 +646,9 @@ pub fn parse_hook_document(
             .and_then(|value| serde_json::to_value(value).ok()),
     };
     let Some(Value::Object(root)) = parsed else {
-        return StaticHookParseResult {
+        return StaticHookVisitSummary {
             issues: vec![StaticHookParseIssue::DocumentInvalid],
-            ..StaticHookParseResult::default()
+            ..StaticHookVisitSummary::default()
         };
     };
 
@@ -368,9 +658,9 @@ pub fn parse_hook_document(
         .get("disableAllHooks")
         .and_then(Value::as_bool)
         .unwrap_or(false);
-    let mut result = StaticHookParseResult {
+    let mut result = StaticHookVisitSummary {
         all_disabled,
-        ..StaticHookParseResult::default()
+        ..StaticHookVisitSummary::default()
     };
     let Some(Value::Object(events)) = root.get("hooks") else {
         return result;
@@ -387,47 +677,85 @@ pub fn parse_hook_document(
             || native_event.len() > MAX_EVENT_NAME_BYTES
             || native_event.chars().any(char::is_control)
         {
-            record_issue(&mut result, StaticHookParseIssue::EventNameInvalid);
+            record_visit_issue(&mut result, StaticHookParseIssue::EventNameInvalid);
             continue;
         }
         let Some(groups) = events.get(&native_event).and_then(Value::as_array) else {
-            record_issue(&mut result, StaticHookParseIssue::EventInvalid);
+            record_visit_issue(&mut result, StaticHookParseIssue::EventInvalid);
             continue;
         };
         for (group_index, group) in groups.iter().enumerate() {
             let Some(group) = group.as_object() else {
-                record_issue(&mut result, StaticHookParseIssue::GroupInvalid);
+                record_visit_issue(&mut result, StaticHookParseIssue::GroupInvalid);
                 continue;
             };
-            let matcher = matcher_summary(group.get("matcher"));
             let Some(handlers) = group.get("hooks").and_then(Value::as_array) else {
-                record_issue(&mut result, StaticHookParseIssue::GroupInvalid);
+                record_visit_issue(&mut result, StaticHookParseIssue::GroupInvalid);
                 continue;
             };
             for (handler_index, handler) in handlers.iter().enumerate() {
                 if result.inspected_handlers >= max_handlers {
-                    record_issue(&mut result, StaticHookParseIssue::HandlerLimit);
+                    record_visit_issue(&mut result, StaticHookParseIssue::HandlerLimit);
                     break 'events;
                 }
                 result.inspected_handlers += 1;
-                let Some(handler_kind) = parse_handler_kind(handler, rules) else {
-                    record_issue(&mut result, StaticHookParseIssue::HandlerInvalid);
-                    continue;
-                };
-                result.handlers.push(StaticHookHandlerFact {
-                    native_event: native_event.clone(),
-                    matcher: matcher.clone(),
-                    handler_kind,
+                if !visitor(StaticHookHandlerRef {
+                    native_event: &native_event,
+                    group,
+                    handler,
                     group_index,
                     handler_index,
-                });
+                }) {
+                    record_visit_issue(&mut result, StaticHookParseIssue::HandlerInvalid);
+                }
             }
         }
     }
     result
 }
 
-fn record_issue(result: &mut StaticHookParseResult, issue: StaticHookParseIssue) {
+/// Parses only Hook structure and returns redacted facts. Handler-specific
+/// values are checked for presence but never copied into the result.
+pub fn parse_hook_document(
+    bytes: &[u8],
+    format: StaticHookDocumentFormat,
+    rules: &[StaticHookHandlerRule],
+    max_handlers: usize,
+) -> StaticHookParseResult {
+    let mut handlers = Vec::new();
+    let summary = visit_hook_document(bytes, format, max_handlers, |candidate| {
+        let Some(fact) = static_hook_handler_fact(&candidate, rules) else {
+            return false;
+        };
+        handlers.push(fact);
+        true
+    });
+    StaticHookParseResult {
+        handlers,
+        issues: summary.issues,
+        all_disabled: summary.all_disabled,
+        inspected_handlers: summary.inspected_handlers,
+    }
+}
+
+/// Converts one borrowed visit item to the same redacted fact used by the
+/// compatibility parser. Import adapters use this to guard the public catalog
+/// version without walking the document a second time.
+pub fn static_hook_handler_fact(
+    candidate: &StaticHookHandlerRef<'_>,
+    rules: &[StaticHookHandlerRule],
+) -> Option<StaticHookHandlerFact> {
+    let handler_kind = parse_handler_kind(candidate.handler, rules)?;
+    Some(StaticHookHandlerFact {
+        native_event: candidate.native_event.to_string(),
+        matcher: matcher_summary(candidate.group.get("matcher")),
+        handler_kind,
+        group_index: candidate.group_index,
+        handler_index: candidate.handler_index,
+    })
+}
+
+fn record_visit_issue(result: &mut StaticHookVisitSummary, issue: StaticHookParseIssue) {
     if !result.issues.contains(&issue) {
         result.issues.push(issue);
     }

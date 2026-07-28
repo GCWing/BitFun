@@ -449,6 +449,7 @@ struct CachedHookEngine {
     engine: Arc<AgentHookEngine>,
     fingerprints: Vec<HookFileFingerprint>,
     project_hooks_enabled: bool,
+    imported_generation: u64,
 }
 
 type EngineCache = tokio::sync::Mutex<BTreeMap<Option<PathBuf>, CachedHookEngine>>;
@@ -522,6 +523,7 @@ fn read_layers(paths: &[(AgentHookScope, PathBuf)]) -> (Vec<AgentHookSettingsLay
 /// Read each existing hook settings file, in the given layer order, and parse
 /// them into one engine. Unreadable or oversized files are skipped with a
 /// warning so one bad layer cannot disable the rest.
+#[cfg(test)]
 pub(crate) fn build_engine(paths: &[(AgentHookScope, PathBuf)]) -> AgentHookEngine {
     let (layers, skipped) = read_layers(paths);
     for message in &skipped {
@@ -547,18 +549,46 @@ async fn engine_for(
         .iter()
         .map(|(_, path)| fingerprint(path.clone()))
         .collect::<Vec<_>>();
+    let imported_generation =
+        match crate::external_hook_import::imported_hook_generation(workspace_root).await {
+            Ok(generation) => generation,
+            Err(error) => {
+                warn!("Imported Hook state is unavailable: {error}");
+                0
+            }
+        };
     {
         let cache = engine_cache().lock().await;
         if let Some(cached) = cache.get(&key) {
-            if cached.fingerprints == fingerprints
-                && cached.project_hooks_enabled == project_hooks_enabled
-            {
-                return Some(Arc::clone(&cached.engine));
+            if let Some(engine) = reusable_cached_engine(
+                cached,
+                &fingerprints,
+                project_hooks_enabled,
+                imported_generation,
+            ) {
+                return Some(engine);
             }
         }
     }
 
-    let engine = Arc::new(build_engine(&paths));
+    let imported_layers =
+        match crate::external_hook_import::enabled_imported_hook_layers(workspace_root).await {
+            Ok(layers) => layers,
+            Err(error) => {
+                warn!("Imported Hook layers are unavailable: {error}");
+                Vec::new()
+            }
+        };
+    let (manual_layers, skipped) = read_layers(&paths);
+    for message in &skipped {
+        warn!("{message}");
+    }
+    let layers = ordered_layers(manual_layers, imported_layers);
+    let (settings, issues) = AgentHookSettings::from_layers(&layers);
+    for issue in &issues {
+        warn!("Agent hook configuration issue: {issue}");
+    }
+    let engine = Arc::new(AgentHookEngine::new(settings));
     let mut cache = engine_cache().lock().await;
     if cache.len() >= MAX_CACHED_WORKSPACE_ENGINES && !cache.contains_key(&key) {
         let oldest = cache.keys().next().cloned();
@@ -572,9 +602,43 @@ async fn engine_for(
             engine: Arc::clone(&engine),
             fingerprints,
             project_hooks_enabled,
+            imported_generation,
         },
     );
     Some(engine)
+}
+
+fn reusable_cached_engine(
+    cached: &CachedHookEngine,
+    fingerprints: &[HookFileFingerprint],
+    project_hooks_enabled: bool,
+    imported_generation: u64,
+) -> Option<Arc<AgentHookEngine>> {
+    (cached.fingerprints == fingerprints
+        && cached.project_hooks_enabled == project_hooks_enabled
+        && cached.imported_generation == imported_generation)
+        .then(|| Arc::clone(&cached.engine))
+}
+
+#[cfg(test)]
+mod cache_tests {
+    use super::*;
+
+    #[test]
+    fn imported_generation_replaces_the_next_engine_without_invalidating_a_captured_one() {
+        let captured = Arc::new(AgentHookEngine::new(Default::default()));
+        let cached = CachedHookEngine {
+            engine: Arc::clone(&captured),
+            fingerprints: Vec::new(),
+            project_hooks_enabled: false,
+            imported_generation: 7,
+        };
+
+        let reused = reusable_cached_engine(&cached, &[], false, 7).unwrap();
+        assert!(Arc::ptr_eq(&captured, &reused));
+        assert!(reusable_cached_engine(&cached, &[], false, 8).is_none());
+        assert_eq!(Arc::strong_count(&captured), 3);
+    }
 }
 
 /// One `type: "command"` handler as configured, for read-only display.
@@ -633,17 +697,35 @@ pub struct NativeHookOverview {
 pub async fn overview(workspace_root: Option<&Path>) -> NativeHookOverview {
     // Ask for every candidate path, then mark which layers a dispatch would
     // actually load, so the view can show a gated-off project file.
-    build_overview(
-        hooks_config().await,
+    let config = hooks_config().await;
+    let imported_layers = if config.enabled {
+        crate::external_hook_import::enabled_imported_hook_layers(workspace_root)
+            .await
+            .unwrap_or_default()
+    } else {
+        Vec::new()
+    };
+    build_overview_with_imports(
+        config,
         hook_settings_paths(workspace_root, true),
+        imported_layers,
     )
 }
 
+#[cfg(test)]
 pub(crate) fn build_overview(
     config: AgentHooksConfig,
     candidates: Vec<(AgentHookScope, PathBuf)>,
 ) -> NativeHookOverview {
-    let files = candidates
+    build_overview_with_imports(config, candidates, Vec::new())
+}
+
+pub(crate) fn build_overview_with_imports(
+    config: AgentHooksConfig,
+    candidates: Vec<(AgentHookScope, PathBuf)>,
+    imported_layers: Vec<AgentHookSettingsLayer>,
+) -> NativeHookOverview {
+    let mut files = candidates
         .iter()
         .map(|(scope, path)| NativeHookFileView {
             scope: scope.as_str(),
@@ -660,7 +742,14 @@ pub(crate) fn build_overview(
         .filter(|(_, file)| file.loaded)
         .map(|(candidate, _)| candidate)
         .collect::<Vec<_>>();
-    let (layers, skipped) = read_layers(&loaded_paths);
+    let (manual_layers, skipped) = read_layers(&loaded_paths);
+    files.extend(imported_layers.iter().map(|layer| NativeHookFileView {
+        scope: layer.scope.as_str(),
+        path: PathBuf::from(&layer.source),
+        exists: true,
+        loaded: config.enabled,
+    }));
+    let layers = ordered_layers(manual_layers, imported_layers);
     let (settings, issues) = AgentHookSettings::from_layers(&layers);
 
     let mut rules = Vec::new();
@@ -703,4 +792,34 @@ pub(crate) fn build_overview(
             .chain(issues.iter().map(ToString::to_string))
             .collect(),
     }
+}
+
+pub(crate) fn ordered_layers(
+    manual: Vec<AgentHookSettingsLayer>,
+    imported: Vec<AgentHookSettingsLayer>,
+) -> Vec<AgentHookSettingsLayer> {
+    let mut layers = Vec::with_capacity(manual.len() + imported.len());
+    layers.extend(
+        manual
+            .iter()
+            .filter(|layer| layer.scope == AgentHookScope::User)
+            .cloned(),
+    );
+    layers.extend(
+        imported
+            .iter()
+            .filter(|layer| layer.scope == AgentHookScope::User)
+            .cloned(),
+    );
+    layers.extend(
+        manual
+            .into_iter()
+            .filter(|layer| layer.scope == AgentHookScope::Project),
+    );
+    layers.extend(
+        imported
+            .into_iter()
+            .filter(|layer| layer.scope == AgentHookScope::Project),
+    );
+    layers
 }

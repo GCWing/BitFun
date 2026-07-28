@@ -274,9 +274,9 @@ Plugin Runtime P0 只验证了 BitFun 专用插件目录中的来源校验、工
 可把受支持的单文件 `.js` 经确认后接入现有 Tool Runtime；Subagent 可把全局/项目声明的安全子集经确认和同名冲突
 选择后接入现有 Task/Subagent 归属模块；fresh single-run 调用持续使用启动时选定的版本。MCP 可把受支持的用户/项目
 配置经确认和同名冲突选择后交给现有 MCP owner 运行。四类贡献对象互不复用，主体逻辑不按生态分支。当前仍不表示
-package plugin、Hook、primary agent、外部 agent 续接、SSH Remote 工作区来源发现或完整
-配置兼容已经可用。独立的静态 Hook 目录可以发现并脱敏展示 OpenCode、Claude Code 与 Codex 的本地声明，但不加载
-handler、不授予权限，也不改变这里对 Hook Runtime“尚不可用”的判断。
+package plugin、OpenCode/通用动态 Hook Runtime、primary agent、外部 agent 续接、SSH Remote 工作区来源发现或完整
+配置兼容已经可用。独立目录可以发现并脱敏展示 OpenCode、Claude Code 与 Codex 的本地 Hook 声明；其中只有明确审阅的
+Claude Code/Codex 命令子集可复制为既有 `AgentHookEngine` 的原生层，OpenCode 和其余声明仍不加载 handler 或授予权限。
 
 目标路线不要求 OpenCode 插件作者维护 `bitfun.plugin.json` 或复制到 `.bitfun/plugins`。BitFun 直接发现用户和
 项目的 OpenCode 配置、插件目录、工具目录和软件包来源；低风险内容按用户偏好自动应用或先询问，可执行来源在
@@ -406,7 +406,7 @@ flowchart LR
 | 当前入口 | 已有能力 | 明确边界 |
 |---|---|---|
 | Desktop | 使用 `product-full`；显示外部来源、审批、冲突、诊断和 Host 能力 | 可执行能力在事实所在 Host 运行；Safe Mode 只阻止新调用，不改来源、不取消正在运行的调用 |
-| CLI / TUI | 使用 `product-full`；提供 `/extensions`、`/hooks_external`、`/tools` 和 `/agents` | 不解析生态文件，不启动第二套 Agent Runtime；远程能力未接入时不回退本机 |
+| CLI / TUI | 使用 `product-full`；提供 `/extensions`、统一 `/hooks`（旧 `/hooks_external` 为别名）、`/tools` 和 `/agents`；Claude Code/Codex 命令 Hook 可经显式审阅复制为原生层 | 生态解析仍在适配器，不启动第二套 Agent Runtime；OpenCode Hook 仍只静态发现；远程能力未接入时不回退本机 |
 | ACP | 使用 `DeliveryProfile::Acp` 和 Runtime Parts | load 成功后才发布活动状态；close 排空后再卸载；完整历史和配置仍由 Core/ACP 管理 |
 | Peer / Server | Server 提供 control/catalog；Peer Host 执行真实工作区操作；当前 HTTP Server 不装配 Agent Runtime | 控制端不替远端发现或执行；旧 Host 明确降级，SSH Remote 未接入时返回不支持；只读 Server 不声明 Runtime ownership |
 | Web / Mobile Web | 依赖现有后端入口 | 不持有插件执行单元，也不能据空 profile 宣称独立能力 |

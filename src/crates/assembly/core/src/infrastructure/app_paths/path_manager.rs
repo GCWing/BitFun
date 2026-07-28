@@ -556,14 +556,14 @@ impl PathManager {
     }
 
     #[cfg(unix)]
-    fn native_path_digest(path: &Path) -> String {
+    pub(crate) fn native_path_digest(path: &Path) -> String {
         use std::os::unix::ffi::OsStrExt;
 
         hex::encode(Sha256::digest(path.as_os_str().as_bytes()))
     }
 
     #[cfg(windows)]
-    fn native_path_digest(path: &Path) -> String {
+    pub(crate) fn native_path_digest(path: &Path) -> String {
         use std::os::windows::ffi::OsStrExt;
 
         let mut hasher = Sha256::new();
@@ -574,7 +574,7 @@ impl PathManager {
     }
 
     #[cfg(not(any(unix, windows)))]
-    fn native_path_digest(path: &Path) -> String {
+    pub(crate) fn native_path_digest(path: &Path) -> String {
         hex::encode(Sha256::digest(path.to_string_lossy().as_bytes()))
     }
 
