@@ -210,19 +210,19 @@ impl Tool for TaskTool {
                 .unwrap_or("fork_context")
                 .to_string(),
             TaskAction::SendInput => input
-                .get("session_id")
+                .get("agent_id")
                 .and_then(Value::as_str)
                 .map(str::trim)
-                .filter(|session_id| !session_id.is_empty())
-                .map(|session_id| format!("send_input:{session_id}"))
-                .ok_or_else(|| BitFunError::validation("session_id is required".to_string()))?,
+                .filter(|agent_id| !agent_id.is_empty())
+                .map(|agent_id| format!("send_input:{agent_id}"))
+                .ok_or_else(|| BitFunError::validation("agent_id is required".to_string()))?,
             TaskAction::Cancel => input
-                .get("session_id")
+                .get("agent_id")
                 .and_then(Value::as_str)
                 .map(str::trim)
-                .filter(|session_id| !session_id.is_empty())
-                .map(|session_id| format!("cancel:{session_id}"))
-                .ok_or_else(|| BitFunError::validation("session_id is required".to_string()))?,
+                .filter(|agent_id| !agent_id.is_empty())
+                .map(|agent_id| format!("cancel:{agent_id}"))
+                .ok_or_else(|| BitFunError::validation("agent_id is required".to_string()))?,
         };
         Ok(vec![PermissionIntent::new("task", vec![resource])])
     }

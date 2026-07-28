@@ -755,28 +755,36 @@ impl TaskTool {
             session_id,
             dialog_turn_id,
         };
-        let background_result = coordinator
-            .start_background_subagent(
-                SubagentExecutionRequest {
-                    task_description: prepared_prompt,
-                    context_mode,
-                    target_session_id,
-                    subagent_type,
-                    logical_subagent_type,
-                    continuation_policy,
-                    model_binding_policy,
-                    workspace_path: effective_workspace_path,
-                    model_id,
-                    inherit_parent_model,
-                    subagent_parent_info: parent_info,
-                    context: subagent_context.unwrap_or_default(),
-                    permission_runtime_ceiling,
-                    delegation_policy: context.delegation_policy().spawn_child(),
-                    external_generation_lease,
-                },
-                timeout_seconds,
-            )
-            .await?;
+        let request = SubagentExecutionRequest {
+            task_description: prepared_prompt,
+            context_mode,
+            target_session_id,
+            subagent_type,
+            logical_subagent_type,
+            continuation_policy,
+            model_binding_policy,
+            workspace_path: effective_workspace_path,
+            model_id,
+            inherit_parent_model,
+            subagent_parent_info: parent_info,
+            context: subagent_context.unwrap_or_default(),
+            permission_runtime_ceiling,
+            delegation_policy: context.delegation_policy().spawn_child(),
+            external_generation_lease,
+        };
+        let coordinator = coordinator.clone();
+        // The Tool future may be dropped on round injection. Keep its token in
+        // the spawned task so a detached background start still self-cancels.
+        let cancellation_token = context.cancellation_token().cloned();
+        let background_result = tokio::spawn(async move {
+            coordinator
+                .start_background_subagent(request, timeout_seconds, cancellation_token)
+                .await
+        })
+        .await
+        .map_err(|error| {
+            BitFunError::tool(format!("Background subagent task failed to join: {error}"))
+        })??;
 
         Ok(vec![ToolResult::Result {
             data: json!({
@@ -850,29 +858,35 @@ impl TaskTool {
                 model_id,
                 inherit_parent_model
             );
-            let execution_result = coordinator
-                .execute_subagent(
-                    SubagentExecutionRequest {
-                        task_description: prepared_prompt.clone(),
-                        context_mode,
-                        target_session_id: target_session_id.clone(),
-                        subagent_type: subagent_type.clone(),
-                        logical_subagent_type: logical_subagent_type.clone(),
-                        continuation_policy,
-                        model_binding_policy,
-                        workspace_path: effective_workspace_path.clone(),
-                        model_id: model_id.clone(),
-                        inherit_parent_model,
-                        subagent_parent_info: parent_info,
-                        context: subagent_context.clone().unwrap_or_default(),
-                        permission_runtime_ceiling: permission_runtime_ceiling.clone(),
-                        delegation_policy: context.delegation_policy().spawn_child(),
-                        external_generation_lease: external_generation_lease.clone(),
-                    },
-                    context.cancellation_token(),
-                    timeout_seconds,
-                )
-                .await;
+            let request = SubagentExecutionRequest {
+                task_description: prepared_prompt.clone(),
+                context_mode,
+                target_session_id: target_session_id.clone(),
+                subagent_type: subagent_type.clone(),
+                logical_subagent_type: logical_subagent_type.clone(),
+                continuation_policy,
+                model_binding_policy,
+                workspace_path: effective_workspace_path.clone(),
+                model_id: model_id.clone(),
+                inherit_parent_model,
+                subagent_parent_info: parent_info,
+                context: subagent_context.clone().unwrap_or_default(),
+                permission_runtime_ceiling: permission_runtime_ceiling.clone(),
+                delegation_policy: context.delegation_policy().spawn_child(),
+                external_generation_lease: external_generation_lease.clone(),
+            };
+            let coordinator = coordinator.clone();
+            let cancellation_token = context.cancellation_token().cloned();
+            let execution_timeout = timeout_seconds;
+            let execution_result = tokio::spawn(async move {
+                coordinator
+                    .execute_subagent(request, cancellation_token.as_ref(), execution_timeout)
+                    .await
+            })
+            .await
+            .map_err(|error| {
+                BitFunError::tool(format!("Foreground subagent task failed to join: {error}"))
+            })?;
 
             match execution_result {
                 Ok(result) => {

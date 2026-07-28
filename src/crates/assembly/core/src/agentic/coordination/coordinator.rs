@@ -7869,13 +7869,34 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
         &self,
         request: SubagentExecutionRequest,
         timeout_seconds: Option<u64>,
+        // Tool cancellation is narrower than parent-turn cancellation: round
+        // injection cancels the Tool while keeping the dialog turn alive.
+        tool_cancellation_token: Option<CancellationToken>,
     ) -> BitFunResult<BackgroundSubagentStartResult> {
+        if tool_cancellation_token
+            .as_ref()
+            .is_some_and(CancellationToken::is_cancelled)
+        {
+            return Err(BitFunError::Cancelled(
+                "Background subagent start was cancelled".to_string(),
+            ));
+        }
         let request = self
             .resolve_hidden_subagent_execution_request(request)
             .await?;
         let mut request = self
             .prepare_hidden_subagent_execution_request(request)
             .await?;
+        if tool_cancellation_token
+            .as_ref()
+            .is_some_and(CancellationToken::is_cancelled)
+        {
+            self.cleanup_prepared_hidden_subagent_session_if_unsubmitted(&request)
+                .await;
+            return Err(BitFunError::Cancelled(
+                "Background subagent start was cancelled".to_string(),
+            ));
+        }
         let subagent_dialog_turn_id = request.ensure_dialog_turn_id();
         let subagent_session_id = request
             .target_session_id()
@@ -7942,6 +7963,22 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
         let task_pk = registered_task.task_pk;
         let bg_task_id = registered_task.bg_task_id;
         let agent_id = registered_task.agent_id;
+        if tool_cancellation_token
+            .as_ref()
+            .is_some_and(CancellationToken::is_cancelled)
+        {
+            if let Err(error) = self.background_subagent_outcomes.discard(task_pk).await {
+                warn!(
+                    "Failed to discard cancelled background task start: task_pk={}, error={}",
+                    task_pk, error
+                );
+            }
+            self.cleanup_prepared_hidden_subagent_session_if_unsubmitted(&request)
+                .await;
+            return Err(BitFunError::Cancelled(
+                "Background subagent start was cancelled".to_string(),
+            ));
+        }
         let parent_cancel_token = self
             .execution_engine
             .cancel_token_for_dialog_turn(&subagent_parent_info.dialog_turn_id)
@@ -7980,8 +8017,33 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             let background_subagent_outcomes = self.background_subagent_outcomes.clone();
 
             tokio::spawn(async move {
-                let result = match parent_cancel_token.as_ref() {
-                    Some(token) => {
+                let result = match (parent_cancel_token, tool_cancellation_token) {
+                    (Some(parent_token), Some(tool_token)) => {
+                        let received = Self::await_hidden_subagent_receiver(receiver);
+                        tokio::pin!(received);
+                        tokio::select! {
+                            _ = parent_token.cancelled() => {
+                                scheduler_for_cancel
+                                    .request_hidden_subagent_cancellation(&cancel_handle)
+                                    .await;
+                                Self::await_hidden_subagent_cancellation(
+                                    &mut received,
+                                    SUBAGENT_TIMEOUT_GRACE_PERIOD,
+                                ).await
+                            },
+                            _ = tool_token.cancelled() => {
+                                scheduler_for_cancel
+                                    .request_hidden_subagent_cancellation(&cancel_handle)
+                                    .await;
+                                Self::await_hidden_subagent_cancellation(
+                                    &mut received,
+                                    SUBAGENT_TIMEOUT_GRACE_PERIOD,
+                                ).await
+                            },
+                            result = &mut received => result,
+                        }
+                    }
+                    (Some(token), None) | (None, Some(token)) => {
                         let received = Self::await_hidden_subagent_receiver(receiver);
                         tokio::pin!(received);
                         tokio::select! {
@@ -7997,7 +8059,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                             result = &mut received => result,
                         }
                     }
-                    None => Self::await_hidden_subagent_receiver(receiver).await,
+                    (None, None) => Self::await_hidden_subagent_receiver(receiver).await,
                 };
                 if suppress_delivery.load(Ordering::SeqCst) {
                     background_subagent_tasks.remove(&task_pk);
@@ -8024,10 +8086,13 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
         let execution_cancel_token = CancellationToken::new();
         let background_cancel_token_for_bridge = background_cancel_token.clone();
         let execution_cancel_token_for_bridge = execution_cancel_token.clone();
-        let cancel_bridge_handle = match parent_cancel_token {
-            Some(parent_cancel_token) => tokio::spawn(async move {
+        let cancel_bridge_handle = match (parent_cancel_token, tool_cancellation_token) {
+            (Some(parent_token), Some(tool_token)) => tokio::spawn(async move {
                 tokio::select! {
-                    _ = parent_cancel_token.cancelled() => {
+                    _ = parent_token.cancelled() => {
+                        execution_cancel_token_for_bridge.cancel();
+                    }
+                    _ = tool_token.cancelled() => {
                         execution_cancel_token_for_bridge.cancel();
                     }
                     _ = background_cancel_token_for_bridge.cancelled() => {
@@ -8035,7 +8100,17 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                     }
                 }
             }),
-            None => tokio::spawn(async move {
+            (Some(token), None) | (None, Some(token)) => tokio::spawn(async move {
+                tokio::select! {
+                    _ = token.cancelled() => {
+                        execution_cancel_token_for_bridge.cancel();
+                    }
+                    _ = background_cancel_token_for_bridge.cancelled() => {
+                        execution_cancel_token_for_bridge.cancel();
+                    }
+                }
+            }),
+            (None, None) => tokio::spawn(async move {
                 background_cancel_token_for_bridge.cancelled().await;
                 execution_cancel_token_for_bridge.cancel();
             }),
@@ -9335,6 +9410,7 @@ mod tests {
     use std::collections::HashMap;
     use std::sync::Arc;
     use std::time::Duration;
+    use tokio_util::sync::CancellationToken;
 
     #[test]
     fn worktree_execution_root_is_a_legacy_alias_for_project_storage() {
@@ -9393,6 +9469,44 @@ mod tests {
             btw_session_memory_mode(true, true),
             SessionMemoryMode::Enabled
         );
+    }
+
+    #[tokio::test]
+    async fn background_subagent_start_honors_an_already_cancelled_tool() {
+        let (coordinator, _session_manager) = test_coordinator();
+        let cancellation_token = CancellationToken::new();
+        cancellation_token.cancel();
+        let request = SubagentExecutionRequest {
+            task_description: "should not start".to_string(),
+            context_mode: SubagentContextMode::Fresh,
+            target_session_id: None,
+            subagent_type: Some("Explore".to_string()),
+            logical_subagent_type: Some("Explore".to_string()),
+            continuation_policy: SessionContinuationPolicy::Reusable,
+            model_binding_policy: SessionModelBindingPolicy::Mutable,
+            workspace_path: None,
+            model_id: None,
+            inherit_parent_model: false,
+            subagent_parent_info: SubagentParentInfo {
+                session_id: "parent-session".to_string(),
+                dialog_turn_id: "parent-turn".to_string(),
+                tool_call_id: "task-tool".to_string(),
+            },
+            context: HashMap::new(),
+            permission_runtime_ceiling: PermissionRuntimeCeiling::default(),
+            delegation_policy: DelegationPolicy::top_level().spawn_child(),
+            external_generation_lease: None,
+        };
+
+        let error = coordinator
+            .start_background_subagent(request, None, Some(cancellation_token))
+            .await
+            .expect_err("a cancelled Tool must not start a background subagent");
+
+        assert!(matches!(
+            error,
+            crate::util::errors::BitFunError::Cancelled(_)
+        ));
     }
 
     #[test]

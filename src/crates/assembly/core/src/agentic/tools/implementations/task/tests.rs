@@ -628,6 +628,27 @@ async fn validate_input_infers_send_input_without_action_when_agent_id_present()
     assert!(validation.result);
 }
 
+#[test]
+fn permission_intents_follow_the_agent_id_contract() {
+    let tool = TaskTool::new();
+    let context = test_tool_context("agentic");
+
+    for (action, expected_resource) in [("send_input", "send_input:a1"), ("cancel", "cancel:a1")] {
+        let intents = tool
+            .permission_intents(&json!({ "action": action, "agent_id": "a1" }), &context)
+            .expect("agent_id should produce a permission intent");
+
+        assert_eq!(intents.len(), 1);
+        assert_eq!(intents[0].action, "task");
+        assert_eq!(intents[0].resources, vec![expected_resource]);
+    }
+
+    let error = tool
+        .permission_intents(&json!({ "action": "send_input" }), &context)
+        .expect_err("send_input without agent_id should be rejected");
+    assert!(error.to_string().contains("agent_id is required"));
+}
+
 #[tokio::test]
 async fn validate_input_rejects_send_input_with_subagent_type() {
     let validation = TaskTool::new()
