@@ -117,6 +117,10 @@ async fn lookup_remote_entry_for_path(
     path: &str,
     request_preferred: Option<&str>,
 ) -> Option<RemoteWorkspaceEntry> {
+    if should_force_local_assistant_path(path, request_preferred) {
+        return None;
+    }
+
     let manager = get_remote_workspace_manager()?;
     let legacy = app_state
         .get_remote_workspace_async()
@@ -124,6 +128,14 @@ async fn lookup_remote_entry_for_path(
         .map(|workspace| workspace.connection_id);
     let preferred = request_preferred.map(|s| s.to_string()).or(legacy);
     manager.lookup_connection(path, preferred.as_deref()).await
+}
+
+fn should_force_local_assistant_path(
+    path: &str,
+    explicit_remote_connection_id: Option<&str>,
+) -> bool {
+    explicit_remote_connection_id.is_none()
+        && get_path_manager_arc().is_local_assistant_workspace_path(path)
 }
 
 pub async fn resolve_desktop_path_target(
@@ -289,7 +301,9 @@ fn encode_remote_file_bytes(bytes: Vec<u8>, encoding: Option<&str>) -> Result<St
 
 #[cfg(test)]
 mod tests {
-    use super::encode_remote_file_bytes;
+    use super::{
+        encode_remote_file_bytes, get_path_manager_arc, should_force_local_assistant_path,
+    };
 
     #[test]
     fn remote_file_bytes_support_explicit_base64_encoding() {
@@ -307,6 +321,24 @@ mod tests {
             "hello"
         );
         assert!(encode_remote_file_bytes(vec![0xff], None).is_err());
+    }
+
+    #[test]
+    fn local_assistant_path_ignores_legacy_remote_fallback_without_explicit_hint() {
+        let assistant_path = get_path_manager_arc()
+            .assistant_workspace_dir("path-target-local-save", None)
+            .to_string_lossy()
+            .to_string();
+
+        assert!(should_force_local_assistant_path(&assistant_path, None));
+        assert!(!should_force_local_assistant_path(
+            &assistant_path,
+            Some("explicit-remote-connection")
+        ));
+        assert!(!should_force_local_assistant_path(
+            "/tmp/regular-project",
+            None
+        ));
     }
 }
 
