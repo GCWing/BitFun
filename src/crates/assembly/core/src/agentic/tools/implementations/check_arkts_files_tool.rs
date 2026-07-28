@@ -1,18 +1,16 @@
-//! CheckArktsFiles tool — runs static ArkTS syntax check on .ets files.
+//! CheckArktsFiles tool — static ArkTS syntax check on .ets files.
 //!
-//! Bridges to the ArkTS frontend via JS_THREADSAFE_FUNCTION so the actual
-//! devecocli MCP check call happens on the JS side (which owns the MCP
-//! connection lifecycle).
+//! Spawns `devecocli serve mcp` via the shared `deveco_mcp` module and calls
+//! the MCP "check" tool. No JS callback bridge required.
 
 use crate::agentic::tools::framework::{
     Tool, ToolRenderOptions, ToolResult, ToolUseContext, ValidationResult,
 };
+use crate::agentic::tools::implementations::deveco_mcp;
 use crate::util::errors::{BitFunError, BitFunResult};
-use crate::util::JS_THREADSAFE_FUNCTION;
 use async_trait::async_trait;
 use serde_json::{json, Value};
-
-const CALLBACK_KEY: &str = "call_check_arkts_files";
+use std::path::Path;
 
 /// CheckArktsFiles tool — static ArkTS syntax check on .ets files.
 pub struct CheckArktsFilesTool;
@@ -105,9 +103,9 @@ Provide absolute or workspace-relative paths to .ets files."#
     async fn call_impl(
         &self,
         input: &Value,
-        _context: &ToolUseContext,
+        context: &ToolUseContext,
     ) -> BitFunResult<Vec<ToolResult>> {
-        let files: Vec<String> = input
+        let all_files: Vec<String> = input
             .get("files")
             .and_then(|v| v.as_array())
             .map(|arr| {
@@ -117,16 +115,35 @@ Provide absolute or workspace-relative paths to .ets files."#
             })
             .unwrap_or_default();
 
-        if files.is_empty() {
-            return Err(BitFunError::tool("files must not be empty".to_string()));
+        // Filter to .ets files only
+        let ets_files: Vec<String> = all_files
+            .iter()
+            .filter(|f| {
+                Path::new(f)
+                    .extension()
+                    .map(|ext| ext.eq_ignore_ascii_case("ets"))
+                    .unwrap_or(false)
+            })
+            .cloned()
+            .collect();
+
+        if ets_files.is_empty() {
+            return Err(BitFunError::tool(
+                "No .ets files provided. All files were filtered out.".to_string(),
+            ));
         }
 
-        let payload = json!({ "files": files }).to_string();
-        let result = call_js_callback(CALLBACK_KEY, payload).await?;
+        // Resolve project path from workspace context
+        let project_path = resolve_project_path(context);
+
+        let result = deveco_mcp::run_deveco_check(&ets_files, &project_path)
+            .await
+            .map_err(BitFunError::tool)?;
 
         Ok(vec![ToolResult::Result {
             data: json!({
-                "files": files,
+                "files": ets_files,
+                "project_path": project_path,
                 "success": true,
             }),
             result_for_assistant: Some(result),
@@ -135,27 +152,13 @@ Provide absolute or workspace-relative paths to .ets files."#
     }
 }
 
-/// Shared JS callback bridge: looks up the threadsafe function by key,
-/// calls it with the JSON payload, and awaits the promise result.
-async fn call_js_callback(key: &str, payload: String) -> BitFunResult<String> {
-    let function = {
-        let lock = JS_THREADSAFE_FUNCTION.read();
-        lock.get(key).cloned()
-    };
-
-    let Some(function) = function else {
-        return Err(BitFunError::tool(format!(
-            "{} has not been registered. Ensure the ArkTS frontend registers the callback.",
-            key
-        )));
-    };
-
-    let res = function.call_async(Ok(payload)).await;
-    match res {
-        Ok(promise) => match promise.await {
-            Ok(json) => Ok(json),
-            Err(err) => Err(BitFunError::tool(format!("{} failed: {}", key, err))),
-        },
-        Err(err) => Err(BitFunError::tool(format!("{} callback error: {}", key, err))),
+/// Resolve the current project path from the tool context's workspace root,
+/// falling back to the process working directory.
+fn resolve_project_path(context: &ToolUseContext) -> String {
+    if let Some(root) = context.workspace_root() {
+        return root.to_string_lossy().to_string();
     }
+    std::env::current_dir()
+        .map(|p| p.to_string_lossy().to_string())
+        .unwrap_or_else(|_| ".".to_string())
 }
