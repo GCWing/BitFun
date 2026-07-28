@@ -952,6 +952,37 @@ impl ToolPipeline {
         for context in decision.additional_context {
             hook_sections.push(format!("PostToolUse hook context: {context}"));
         }
+
+        // Poke audit check: for write/destructive tool calls, classify the
+        // operation and prepare audit context so that the Warden can send an
+        // Audit-Poke to the session. This is the integration point between
+        // PostToolUse and the Warden Poke system (R-003 taiji feature).
+        #[cfg(feature = "taiji")]
+        if !tool_result.is_error {
+            use bitfun_agent_tools::classify_tool_call;
+            let op_class = classify_tool_call(tool_name, &task.invocation.effective_arguments);
+            match op_class {
+                bitfun_agent_tools::OperationClass::WriteFile
+                | bitfun_agent_tools::OperationClass::DeleteFile
+                | bitfun_agent_tools::OperationClass::ExecuteCode => {
+                    debug!(
+                        "Poke audit triggered for destructive tool call: tool_name={}, tool_id={}, class={:?}",
+                        tool_name, tool_id, op_class
+                    );
+                    hook_sections.push(format!(
+                        "[Warden Audit-Poke] Tool `{}` performed a {} operation and is subject to audit self-check.",
+                        tool_name,
+                        match op_class {
+                            bitfun_agent_tools::OperationClass::WriteFile => "write",
+                            bitfun_agent_tools::OperationClass::DeleteFile => "delete",
+                            _ => "execute",
+                        }
+                    ));
+                }
+                _ => {}
+            }
+        }
+
         if hook_sections.is_empty() {
             return;
         }
@@ -3014,6 +3045,7 @@ mod tests {
             session_id: "parent-session".to_string(),
             dialog_turn_id: "parent-turn".to_string(),
             tool_call_id: parent_tool_call_id.to_string(),
+            depth: None,
         });
         context
     }
@@ -4363,6 +4395,8 @@ mod tests {
             denied_tool_names: ["Bash"].into_iter().map(str::to_string).collect(),
             denied_tool_messages: Default::default(),
             path_policy: Default::default(),
+            allowed_operation_classes: Default::default(),
+            denied_operation_classes: Default::default(),
         };
 
         let context = pipeline.build_tool_use_context(&task, CancellationToken::new());

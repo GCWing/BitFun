@@ -14,6 +14,8 @@ pub mod framework;
 pub mod input_validator;
 pub mod mcp_tool_bridge;
 pub mod permission_intent;
+#[cfg(feature = "taiji")]
+pub mod poke;
 pub mod tool_execution_presentation;
 pub mod tool_result_storage;
 pub mod tool_snapshot;
@@ -56,6 +58,7 @@ pub use framework::{
     build_get_tool_spec_duplicate_load_result, build_prompt_visible_tool_manifest_definitions,
     build_tool_manifest_policy_tools, build_tool_path_policy_denial_message,
     build_tool_runtime_artifact_reference, build_tool_session_runtime_artifact_reference,
+    classify_tool_call,
     collect_loaded_deferred_tool_specs, get_tool_spec_input_schema,
     get_tool_spec_is_concurrency_safe, get_tool_spec_is_readonly, get_tool_spec_short_description,
     is_bitfun_current_session_uri, is_bitfun_runtime_uri, is_bitfun_tool_uri,
@@ -80,7 +83,7 @@ pub use framework::{
     GetToolSpecDeferredToolSummary, GetToolSpecDetail, GetToolSpecExecutionError,
     GetToolSpecExecutionPlan, GetToolSpecLoadObservation, GetToolSpecRuntime,
     LoadedDeferredToolSpec, ParsedBitFunCurrentSessionUri, ParsedBitFunRuntimeUri,
-    PortableToolContextProvider, PromptVisibleToolManifestItem, SnapshotToolDecorator,
+    PortableToolContextProvider, OperationClass, PromptVisibleToolManifestItem, SnapshotToolDecorator,
     SnapshotToolWrapper, SnapshotToolWrapperRef, StaticToolMaterializationError,
     StaticToolProvider, StaticToolProviderFactory, StaticToolProviderGroup, StaticToolProviderPlan,
     ToolCatalogRuntime, ToolCatalogSnapshotProvider, ToolContextFacts, ToolDecoratorRef,
@@ -88,7 +91,7 @@ pub use framework::{
     ToolManifestPolicyTool, ToolPathBackend, ToolPathContractError, ToolPathOperation,
     ToolPathPolicy, ToolPathResolution, ToolRef, ToolRegistry, ToolRegistryItem, ToolRenderOptions,
     ToolRestrictionError, ToolResult, ToolRuntimeAssembly, ToolRuntimeRestrictions,
-    ToolWorkspaceKind, ValidationResult, BITFUN_CURRENT_SESSION_URI_PREFIX,
+    ToolRuntimeRestrictionsPatch, ToolWorkspaceKind, ValidationResult, BITFUN_CURRENT_SESSION_URI_PREFIX,
     BITFUN_RUNTIME_URI_PREFIX, GET_TOOL_SPEC_TOOL_NAME,
 };
 pub use input_validator::InputValidator;
@@ -101,6 +104,10 @@ pub use mcp_tool_bridge::{
     MCP_TOOL_DELIMITER, MCP_TOOL_PREFIX,
 };
 pub use permission_intent::PermissionIntent;
+pub use poke::{
+    AppealStatement, PokeMessage, PokeResponse, PokeStatus, PokeType, PokeValidator,
+    SelfCheckStatement,
+};
 pub use tool_execution_presentation::{
     build_invalid_tool_call_error_message, build_normal_tool_json_repair_notice,
     build_permission_denied_tool_presentation, build_tool_call_truncation_recovery_notice,

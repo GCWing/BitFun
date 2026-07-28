@@ -141,7 +141,8 @@ impl SessionMetadataStore {
             return Ok(Vec::new());
         }
 
-        let mut metadata_list = Vec::new();
+        // Collect session IDs first (directory listing), then load metadata in parallel.
+        let mut session_ids = Vec::new();
         let mut entries = fs::read_dir(self.sessions_root())
             .await
             .map_err(|source| SessionMetadataStoreError::ReadSessionsRoot { source })?;
@@ -158,9 +159,26 @@ impl SessionMetadataStore {
             if !file_type.is_dir() {
                 continue;
             }
+            session_ids.push(entry.file_name().to_string_lossy().to_string());
+        }
 
-            let session_id = entry.file_name().to_string_lossy().to_string();
-            match self.load_metadata(&session_id).await {
+        // Load metadata in parallel to reduce directory rebuild latency.
+        let handles: Vec<_> = session_ids
+            .iter()
+            .map(|sid| {
+                let sid = sid.clone();
+                async move {
+                    let metadata = self.load_metadata(&sid).await;
+                    (sid, metadata)
+                }
+            })
+            .collect();
+
+        let results = futures::future::join_all(handles).await;
+
+        let mut metadata_list = Vec::new();
+        for (session_id, result) in results {
+            match result {
                 Ok(Some(metadata)) => metadata_list.push(metadata),
                 Ok(None) => {}
                 Err(error) => {

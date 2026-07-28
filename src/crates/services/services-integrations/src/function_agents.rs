@@ -84,6 +84,9 @@ fn git_stdout_lenient(repo_path: &Path, args: &[&str]) -> AgentResult<String> {
         .output()
         .map_err(|e| AgentError::git_error(format!("Failed to run git {:?}: {}", args, e)))?;
 
+    if !output.status.success() {
+        return Ok(String::new());
+    }
     Ok(String::from_utf8_lossy(&output.stdout).to_string())
 }
 

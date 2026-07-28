@@ -1,0 +1,24 @@
+[package]
+name = "taiji-publisher"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+description = "Taiji multi-platform video publisher"
+
+[lib]
+name = "taiji_publisher"
+crate-type = ["rlib"]
+
+[dependencies]
+serde = { workspace = true }
+serde_json = { workspace = true }
+chrono = { workspace = true }
+taiji-content = { path = "../taiji-content" }
+async-trait = { workspace = true }
+futures = { workspace = true }
+tokio = { workspace = true }
+reqwest = { workspace = true }
+
+[lints]
+workspace = true

@@ -13,6 +13,9 @@ chrono = { workspace = true }
 uuid = { workspace = true }
 log = { workspace = true }
 
+[features]
+taiji = []
+
 [lints]
 workspace = true
 

@@ -20,6 +20,8 @@ use crate::agentic::tools::post_call_hooks;
 use crate::agentic::tools::restrictions::{
     is_local_path_within_root, is_remote_posix_path_within_root, ToolPathOperation,
 };
+#[cfg(feature = "taiji")]
+use crate::agentic::tools::restrictions::{classify_tool_call, get_session_restrictions};
 use crate::agentic::tools::workspace_paths::{
     build_bitfun_runtime_uri, is_bitfun_tool_uri, normalize_runtime_relative_path,
 };
@@ -464,10 +466,33 @@ impl ToolUseContext {
         Some(hex::encode(Sha256::digest(diff.as_bytes())))
     }
 
-    pub fn enforce_tool_runtime_restrictions(&self, tool_name: &str) -> BitFunResult<()> {
-        self.runtime_tool_restrictions
+    #[cfg(feature = "taiji")]
+    pub fn enforce_tool_runtime_restrictions(
+        &self,
+        tool_name: &str,
+        input: &Value,
+    ) -> BitFunResult<()> {
+        // Resolve which restrictions to apply: session-specific or context-level.
+        let session_override = self
+            .session_id
+            .as_deref()
+            .and_then(get_session_restrictions);
+        let restrictions: &ToolRuntimeRestrictions = session_override
+            .as_ref()
+            .unwrap_or(&self.runtime_tool_restrictions);
+
+        // 1. Check tool name allow/deny lists.
+        restrictions
             .ensure_tool_allowed(tool_name)
-            .map_err(Into::into)
+            .map_err(BitFunError::from)?;
+
+        // 2. Classify the tool call into an operation class and check operation-level restrictions.
+        let op_class = classify_tool_call(tool_name, input);
+        restrictions
+            .ensure_operation_allowed(op_class, tool_name)
+            .map_err(BitFunError::from)?;
+
+        Ok(())
     }
 
     pub fn enforce_path_operation(
@@ -787,6 +812,8 @@ mod context_facts_tests {
                 denied_tool_names: BTreeSet::from(["Bash".to_string()]),
                 denied_tool_messages: Default::default(),
                 path_policy: Default::default(),
+                allowed_operation_classes: BTreeSet::new(),
+                denied_operation_classes: BTreeSet::new(),
             },
             runtime_handles: bitfun_runtime_ports::ToolRuntimeHandles::default(),
         };
@@ -832,6 +859,8 @@ mod context_facts_tests {
                 denied_tool_names: BTreeSet::from(["Bash".to_string()]),
                 denied_tool_messages: Default::default(),
                 path_policy: Default::default(),
+                allowed_operation_classes: BTreeSet::new(),
+                denied_operation_classes: BTreeSet::new(),
             },
             runtime_handles: bitfun_runtime_ports::ToolRuntimeHandles::new(
                 None,
@@ -1504,6 +1533,7 @@ mod task_context_tests {
                     tool_call_id: "parent_tool".to_string(),
                     session_id: "parent_session".to_string(),
                     dialog_turn_id: "parent_turn".to_string(),
+                    depth: None,
                 }),
                 permission_delegation: None,
                 delegation_policy: DelegationPolicy::top_level().spawn_child(),
@@ -1515,6 +1545,8 @@ mod task_context_tests {
                     denied_tool_names: BTreeSet::from(["Bash".to_string()]),
                     denied_tool_messages: Default::default(),
                     path_policy: Default::default(),
+                    allowed_operation_classes: BTreeSet::new(),
+                    denied_operation_classes: BTreeSet::new(),
                 },
                 steering_interrupt: None,
                 workspace_services: None,

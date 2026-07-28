@@ -1,0 +1,81 @@
+---
+title: "{{ instrument }} 周度总结 — {{ generated_at | truncate(length=10, end="") }}"
+date: {{ generated_at | replace(from="T", to=" ") | truncate(length=19, end="") }}
+tags: [{% for tag in tags %}"{{ tag | trim_start_matches(pat="#") }}"{% if not loop.last %}, {% endif %}{% endfor %}]
+categories: ["周度总结"]
+draft: false
+---
+
+# {{ instrument }} 周度总结
+
+**报告日期**：{{ generated_at | truncate(length=10, end="") }} | **分析周期**：{{ freq }} | **品种**：{{ instrument }}
+
+---
+
+## 一、本周市场结构回顾
+
+{% if structure is object %}
+本周趋势方向为 **{{ structure.trend_direction | default(value="未知") }}**，趋势强度 {{ structure.trend_strength | default(value=0.0) }}。
+{% if structure.notes %}
+> {{ structure.notes }}
+{% endif %}
+{% else %}
+_本周无结构分析数据。_
+{% endif %}
+
+## 二、资金面回顾
+
+{% if delta is object %}
+- 净持仓方向：**{{ delta.net_position | default(value="—") }}**
+- 成交量趋势：{{ delta.volume_trend | default(value="—") }}
+{% else %}
+_本周无资金面数据。_
+{% endif %}
+
+## 三、关键价位
+
+{% if structure is object %}
+| 指标 | 价位 |
+|------|------|
+| 关键支撑 | {{ structure.key_support | default(value="—") }} |
+| 关键阻力 | {{ structure.key_resistance | default(value="—") }} |
+{% endif %}
+
+{% if magnet is object and magnet.magnet_valid %}
+| 磁体目标 | 价位 |
+|------|------|
+{% if magnet.mm1_target %}| MM1（区间突破） | {{ magnet.mm1_target }} |{% endif %}
+{% if magnet.mm2_target %}| MM2（波段等距） | {{ magnet.mm2_target }} |{% endif %}
+{% endif %}
+
+## 四、共振与信号
+
+{% if resonance is object %}
+- **共振状态**：{% if resonance.resonance %}{{ resonance.resonance_type }}共振 — {{ resonance.aligned_agents | length | default(value=0) }} 维度对齐{% else %}无共振{% endif %}
+{% endif %}
+
+{% if decision is object and decision.action != "Hold" %}
+- **本周信号**：{{ decision.action }}（入场 {{ decision.entry | default(value="—") }}，止损 {{ decision.stop_loss | default(value="—") }}）
+- **决策依据**：{{ decision.reasoning | default(value="—") }}
+{% endif %}
+
+## 五、下周关注
+
+1. 趋势延续性：关注结构 Agent 的趋势强度变化
+2. 磁体突破：关注 MM1/MM2 目标达成进度
+3. 共振维度：关注是否有 4/4 全维度共振形成
+
+---
+
+| 维度和置信度 |  |
+|------|------|
+| 结构 | {{ structure_confidence }} |
+| 资金 | {{ delta_confidence }} |
+| 磁体 | {{ magnet_confidence }} |
+| 三推 | {{ thrust_confidence }} |
+| 共振 | {{ resonance_confidence }} |
+| 决策 | {{ decision_confidence }} |
+
+---
+
+*本报告由太极量化系统自动生成，仅供参考，不构成投资建议。*

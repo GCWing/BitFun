@@ -2215,6 +2215,78 @@ pub fn build_tool_path_policy_denial_message(
     )
 }
 
+#[cfg(feature = "taiji")]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
+pub enum OperationClass {
+    WriteFile,
+    DeleteFile,
+    ExecuteCode,
+    ReadOnly,
+    Communicate,
+}
+
+/// Classify an ExecCommand/Bash tool input by inspecting the command string.
+/// Returns the most specific [`OperationClass`] based on heuristics.
+#[cfg(feature = "taiji")]
+fn classify_exec_command(input: &Value) -> OperationClass {
+    let cmd = input
+        .get("cmd")
+        .and_then(|v| v.as_str())
+        .or_else(|| input.get("command").and_then(|v| v.as_str()))
+        .unwrap_or("");
+
+    let cmd_lower = cmd.to_lowercase();
+
+    // ── Delete operations ──────────────────────────────────────────────
+    // Detect file/directory deletion commands: rm, rmdir, del, Remove-Item
+    if cmd_lower.contains("rm ")
+        || cmd_lower.contains("rmdir ")
+        || cmd_lower.starts_with("rmdir")
+        || cmd_lower.contains("del ")
+        || cmd_lower.contains("remove-item")
+    {
+        return OperationClass::DeleteFile;
+    }
+
+    // ── Write operations ───────────────────────────────────────────────
+    // Shell redirects (>, >>) write to a file or device
+    if cmd.contains('>') {
+        return OperationClass::WriteFile;
+    }
+
+    // tee command writes output to files (in addition to stdout)
+    if cmd_lower.contains(" tee ") || cmd_lower.starts_with("tee ") {
+        return OperationClass::WriteFile;
+    }
+
+    // PowerShell write cmdlets
+    if cmd_lower.contains("out-file")
+        || cmd_lower.contains("set-content")
+        || cmd_lower.contains("add-content")
+    {
+        return OperationClass::WriteFile;
+    }
+
+    // Default: arbitrary/unknown commands are ExecuteCode
+    OperationClass::ExecuteCode
+}
+
+/// Map a tool name and its input arguments to the corresponding [`OperationClass`].
+///
+/// This is used by the RBAC system to enforce operation-level restrictions
+/// on tool calls, beyond simple tool-name allow/deny lists.
+#[cfg(feature = "taiji")]
+pub fn classify_tool_call(tool_name: &str, input: &Value) -> OperationClass {
+    match tool_name {
+        "Write" | "Edit" => OperationClass::WriteFile,
+        "Delete" => OperationClass::DeleteFile,
+        "ExecCommand" | "Bash" => classify_exec_command(input),
+        "Read" | "Grep" | "Glob" | "SessionHistory" => OperationClass::ReadOnly,
+        "SessionMessage" | "SessionControl" => OperationClass::Communicate,
+        _ => OperationClass::ExecuteCode,
+    }
+}
+
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ToolRuntimeRestrictions {
     #[serde(default)]
@@ -2225,6 +2297,12 @@ pub struct ToolRuntimeRestrictions {
     pub denied_tool_messages: BTreeMap<String, String>,
     #[serde(default)]
     pub path_policy: ToolPathPolicy,
+    #[cfg(feature = "taiji")]
+    #[serde(default)]
+    pub allowed_operation_classes: BTreeSet<OperationClass>,
+    #[cfg(feature = "taiji")]
+    #[serde(default)]
+    pub denied_operation_classes: BTreeSet<OperationClass>,
 }
 
 const MINIAPP_HEADLESS_AGENT_SURFACE: &str = "miniapp_agent";
@@ -2337,6 +2415,68 @@ impl ToolRuntimeRestrictions {
 
         Ok(())
     }
+
+    /// Check whether the given [`OperationClass`] is allowed by these restrictions.
+    ///
+    /// Returns `Ok(())` if the operation class is not denied and is either explicitly
+    /// allowed or the allowed set is empty (allow by default).
+    #[cfg(feature = "taiji")]
+    pub fn ensure_operation_allowed(
+        &self,
+        class: OperationClass,
+        tool_name: &str,
+    ) -> Result<(), ToolRestrictionError> {
+        if self.denied_operation_classes.contains(&class) {
+            return Err(ToolRestrictionError::OperationClassNotAllowed {
+                operation_class: class,
+                tool_name: tool_name.to_string(),
+            });
+        }
+
+        if !self.allowed_operation_classes.is_empty()
+            && !self.allowed_operation_classes.contains(&class)
+        {
+            return Err(ToolRestrictionError::OperationClassNotAllowed {
+                operation_class: class,
+                tool_name: tool_name.to_string(),
+            });
+        }
+
+        Ok(())
+    }
+
+    /// Apply a runtime patch to modify restrictions on-the-fly.
+    #[cfg(feature = "taiji")]
+    pub fn apply_patch(&mut self, patch: ToolRuntimeRestrictionsPatch) {
+        if let Some(allowed) = patch.allowed_tool_names {
+            self.allowed_tool_names = allowed;
+        }
+        if let Some(denied) = patch.denied_tool_names {
+            self.denied_tool_names = denied;
+        }
+        if let Some(allowed_ops) = patch.allowed_operation_classes {
+            self.allowed_operation_classes = allowed_ops;
+        }
+        if let Some(denied_ops) = patch.denied_operation_classes {
+            self.denied_operation_classes = denied_ops;
+        }
+        if let Some(path_policy) = patch.path_policy {
+            self.path_policy = path_policy;
+        }
+    }
+}
+
+/// Runtime patch for modifying a session's tool restrictions.
+///
+/// Only `Some` fields are applied; `None` fields leave the current value unchanged.
+#[cfg(feature = "taiji")]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct ToolRuntimeRestrictionsPatch {
+    pub allowed_tool_names: Option<BTreeSet<String>>,
+    pub denied_tool_names: Option<BTreeSet<String>>,
+    pub allowed_operation_classes: Option<BTreeSet<OperationClass>>,
+    pub denied_operation_classes: Option<BTreeSet<OperationClass>>,
+    pub path_policy: Option<ToolPathPolicy>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -2346,6 +2486,11 @@ pub enum ToolRestrictionError {
         message: Option<String>,
     },
     NotAllowed {
+        tool_name: String,
+    },
+    #[cfg(feature = "taiji")]
+    OperationClassNotAllowed {
+        operation_class: OperationClass,
         tool_name: String,
     },
 }
@@ -2368,6 +2513,15 @@ impl fmt::Display for ToolRestrictionError {
                 formatter,
                 "Tool '{}' is not allowed by runtime restrictions",
                 tool_name
+            ),
+            #[cfg(feature = "taiji")]
+            Self::OperationClassNotAllowed {
+                operation_class,
+                tool_name,
+            } => write!(
+                formatter,
+                "Operation class '{:?}' from tool '{}' is not allowed by runtime restrictions",
+                operation_class, tool_name
             ),
         }
     }
@@ -2603,6 +2757,8 @@ mod tests {
             denied_tool_names: ["Write"].into_iter().map(str::to_string).collect(),
             denied_tool_messages: Default::default(),
             path_policy: ToolPathPolicy::default(),
+            allowed_operation_classes: Default::default(),
+            denied_operation_classes: Default::default(),
         };
 
         assert!(!restrictions.is_tool_allowed("Write"));
@@ -2668,5 +2824,324 @@ mod tests {
             .expect("provider entries should materialize");
 
         assert_eq!(registry.get_tool_names(), vec!["Read", "Write"]);
+    }
+
+    // ── classify_exec_command tests ────────────────────────────────────
+
+    #[cfg(feature = "taiji")]
+    #[test]
+    fn classify_exec_command_rm_is_delete() {
+        let input = json!({ "cmd": "rm -rf /data" });
+        assert_eq!(
+            classify_exec_command(&input),
+            OperationClass::DeleteFile
+        );
+    }
+
+    #[cfg(feature = "taiji")]
+    #[test]
+    fn classify_exec_command_rmdir_is_delete() {
+        let input = json!({ "cmd": "rmdir /s /q temp_dir" });
+        assert_eq!(
+            classify_exec_command(&input),
+            OperationClass::DeleteFile
+        );
+    }
+
+    #[cfg(feature = "taiji")]
+    #[test]
+    fn classify_exec_command_del_is_delete() {
+        let input = json!({ "cmd": "del /f old_file.txt" });
+        assert_eq!(
+            classify_exec_command(&input),
+            OperationClass::DeleteFile
+        );
+    }
+
+    #[cfg(feature = "taiji")]
+    #[test]
+    fn classify_exec_command_remove_item_is_delete() {
+        let input = json!({ "cmd": "Remove-Item -Path 'C:\\temp\\file.txt'" });
+        assert_eq!(
+            classify_exec_command(&input),
+            OperationClass::DeleteFile
+        );
+    }
+
+    #[cfg(feature = "taiji")]
+    #[test]
+    fn classify_exec_command_redirect_write_is_write() {
+        let input = json!({ "cmd": "echo x >> file" });
+        assert_eq!(
+            classify_exec_command(&input),
+            OperationClass::WriteFile
+        );
+    }
+
+    #[cfg(feature = "taiji")]
+    #[test]
+    fn classify_exec_command_redirect_overwrite_is_write() {
+        let input = json!({ "cmd": "echo x > file" });
+        assert_eq!(
+            classify_exec_command(&input),
+            OperationClass::WriteFile
+        );
+    }
+
+    #[cfg(feature = "taiji")]
+    #[test]
+    fn classify_exec_command_tee_is_write() {
+        let input = json!({ "cmd": "echo 'hello' | tee output.txt" });
+        assert_eq!(
+            classify_exec_command(&input),
+            OperationClass::WriteFile
+        );
+    }
+
+    #[cfg(feature = "taiji")]
+    #[test]
+    fn classify_exec_command_standalone_tee_is_write() {
+        let input = json!({ "cmd": "tee output.txt" });
+        assert_eq!(
+            classify_exec_command(&input),
+            OperationClass::WriteFile
+        );
+    }
+
+    #[cfg(feature = "taiji")]
+    #[test]
+    fn classify_exec_command_out_file_is_write() {
+        let input = json!({ "cmd": "Out-File -FilePath test.txt -InputObject $data" });
+        assert_eq!(
+            classify_exec_command(&input),
+            OperationClass::WriteFile
+        );
+    }
+
+    #[cfg(feature = "taiji")]
+    #[test]
+    fn classify_exec_command_set_content_is_write() {
+        let input = json!({ "cmd": "Set-Content -Path file.txt -Value 'data'" });
+        assert_eq!(
+            classify_exec_command(&input),
+            OperationClass::WriteFile
+        );
+    }
+
+    #[cfg(feature = "taiji")]
+    #[test]
+    fn classify_exec_command_add_content_is_write() {
+        let input = json!({ "cmd": "Add-Content -Path file.txt -Value 'data'" });
+        assert_eq!(
+            classify_exec_command(&input),
+            OperationClass::WriteFile
+        );
+    }
+
+    #[cfg(feature = "taiji")]
+    #[test]
+    fn classify_exec_command_echo_alone_is_execute() {
+        // echo without redirect does NOT write a file
+        let input = json!({ "cmd": "echo hello" });
+        assert_eq!(
+            classify_exec_command(&input),
+            OperationClass::ExecuteCode
+        );
+    }
+
+    #[cfg(feature = "taiji")]
+    #[test]
+    fn classify_exec_command_cat_alone_is_execute() {
+        // cat without redirect does NOT write a file
+        let input = json!({ "cmd": "cat file.txt" });
+        assert_eq!(
+            classify_exec_command(&input),
+            OperationClass::ExecuteCode
+        );
+    }
+
+    #[cfg(feature = "taiji")]
+    #[test]
+    fn classify_exec_command_cat_pipe_is_execute() {
+        // pipe to cat (without redirect) does NOT write a file
+        let input = json!({ "cmd": "ls | cat" });
+        assert_eq!(
+            classify_exec_command(&input),
+            OperationClass::ExecuteCode
+        );
+    }
+
+    #[cfg(feature = "taiji")]
+    #[test]
+    fn classify_exec_command_dir_is_execute() {
+        let input = json!({ "cmd": "dir" });
+        assert_eq!(
+            classify_exec_command(&input),
+            OperationClass::ExecuteCode
+        );
+    }
+
+    #[cfg(feature = "taiji")]
+    #[test]
+    fn classify_exec_command_ls_is_execute() {
+        let input = json!({ "cmd": "ls -la" });
+        assert_eq!(
+            classify_exec_command(&input),
+            OperationClass::ExecuteCode
+        );
+    }
+
+    #[cfg(feature = "taiji")]
+    #[test]
+    fn classify_exec_command_grep_is_execute() {
+        let input = json!({ "cmd": "grep pattern file.txt" });
+        assert_eq!(
+            classify_exec_command(&input),
+            OperationClass::ExecuteCode
+        );
+    }
+
+    #[cfg(feature = "taiji")]
+    #[test]
+    fn classify_exec_command_echo_pipe_grep_is_execute() {
+        let input = json!({ "cmd": "echo 'pattern' | grep foo" });
+        assert_eq!(
+            classify_exec_command(&input),
+            OperationClass::ExecuteCode
+        );
+    }
+
+    #[cfg(feature = "taiji")]
+    #[test]
+    fn classify_exec_command_multi_line_redirect_is_write() {
+        let input = json!({ "cmd": "cat > file.txt << EOF\nhello\nEOF" });
+        assert_eq!(
+            classify_exec_command(&input),
+            OperationClass::WriteFile
+        );
+    }
+
+    #[cfg(feature = "taiji")]
+    #[test]
+    fn classify_exec_command_piped_tee_is_write() {
+        let input = json!({ "cmd": "ls -la | tee listing.txt" });
+        assert_eq!(
+            classify_exec_command(&input),
+            OperationClass::WriteFile
+        );
+    }
+
+    #[cfg(feature = "taiji")]
+    #[test]
+    fn classify_exec_command_empty_cmd_is_execute() {
+        let input = json!({ "cmd": "" });
+        assert_eq!(
+            classify_exec_command(&input),
+            OperationClass::ExecuteCode
+        );
+    }
+
+    #[cfg(feature = "taiji")]
+    #[test]
+    fn classify_exec_command_missing_cmd_is_execute() {
+        let input = json!({});
+        assert_eq!(
+            classify_exec_command(&input),
+            OperationClass::ExecuteCode
+        );
+    }
+
+    #[cfg(feature = "taiji")]
+    #[test]
+    fn classify_exec_command_uses_cmd_field_before_command_field() {
+        let input = json!({ "cmd": "echo hello", "command": "rm file" });
+        assert_eq!(
+            classify_exec_command(&input),
+            OperationClass::ExecuteCode
+        );
+    }
+
+    #[cfg(feature = "taiji")]
+    #[test]
+    fn classify_exec_command_falls_back_to_command_field() {
+        let input = json!({ "command": "rm file.txt" });
+        assert_eq!(
+            classify_exec_command(&input),
+            OperationClass::DeleteFile
+        );
+    }
+
+    // ── classify_tool_call tests ──────────────────────────────────────
+
+    #[cfg(feature = "taiji")]
+    #[test]
+    fn classify_tool_call_write_is_write_file() {
+        assert_eq!(
+            classify_tool_call("Write", &json!({})),
+            OperationClass::WriteFile
+        );
+    }
+
+    #[cfg(feature = "taiji")]
+    #[test]
+    fn classify_tool_call_edit_is_write_file() {
+        assert_eq!(
+            classify_tool_call("Edit", &json!({})),
+            OperationClass::WriteFile
+        );
+    }
+
+    #[cfg(feature = "taiji")]
+    #[test]
+    fn classify_tool_call_delete_is_delete_file() {
+        assert_eq!(
+            classify_tool_call("Delete", &json!({})),
+            OperationClass::DeleteFile
+        );
+    }
+
+    #[cfg(feature = "taiji")]
+    #[test]
+    fn classify_tool_call_read_is_readonly() {
+        assert_eq!(
+            classify_tool_call("Read", &json!({})),
+            OperationClass::ReadOnly
+        );
+    }
+
+    #[cfg(feature = "taiji")]
+    #[test]
+    fn classify_tool_call_grep_is_readonly() {
+        assert_eq!(
+            classify_tool_call("Grep", &json!({})),
+            OperationClass::ReadOnly
+        );
+    }
+
+    #[cfg(feature = "taiji")]
+    #[test]
+    fn classify_tool_call_glob_is_readonly() {
+        assert_eq!(
+            classify_tool_call("Glob", &json!({})),
+            OperationClass::ReadOnly
+        );
+    }
+
+    #[cfg(feature = "taiji")]
+    #[test]
+    fn classify_tool_call_session_message_is_communicate() {
+        assert_eq!(
+            classify_tool_call("SessionMessage", &json!({})),
+            OperationClass::Communicate
+        );
+    }
+
+    #[cfg(feature = "taiji")]
+    #[test]
+    fn classify_tool_call_unknown_is_execute_code() {
+        assert_eq!(
+            classify_tool_call("UnknownTool", &json!({})),
+            OperationClass::ExecuteCode
+        );
     }
 }

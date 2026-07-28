@@ -9,6 +9,10 @@ description = "BitFun agent tool contracts"
 name = "bitfun_agent_tools"
 crate-type = ["rlib"]
 
+[features]
+default = ["taiji"]
+taiji = []
+
 [dependencies]
 serde = { workspace = true }
 serde_json = { workspace = true }
