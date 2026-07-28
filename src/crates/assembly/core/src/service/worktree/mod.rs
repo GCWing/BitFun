@@ -28,6 +28,8 @@ use uuid::Uuid;
 
 const WORKTREE_REGISTRY_VERSION: u32 = 1;
 const REGISTRY_FILE_NAME: &str = "worktrees.json";
+const WORKTREE_DIRECTORY_SUFFIX_LENGTH: usize = 8;
+const WORKTREE_PROJECT_LABEL_MAX_CHARS: usize = 48;
 
 mod session_binding;
 
@@ -345,8 +347,13 @@ impl WorktreeService {
 
         let worktree_id = Uuid::new_v4().simple().to_string();
         let repository_id = repository_id(&context.common_git_dir);
-        let target_path =
-            managed_target_path(&context.settings, &repository_id, &worktree_id).await?;
+        let target_path = managed_target_path(
+            &context.settings,
+            &repository_id,
+            &context.project_workspace_path,
+            &worktree_id,
+        )
+        .await?;
 
         GitService::add_detached_worktree(
             &context.project_workspace_path,
@@ -1209,6 +1216,7 @@ fn resolve_managed_root(
 async fn managed_target_path(
     settings: &WorktreeSettings,
     repository_id: &str,
+    project_workspace_path: &Path,
     worktree_id: &str,
 ) -> Result<PathBuf, WorktreeError> {
     let configured_root = resolve_managed_root(settings, get_path_manager_arc().as_ref())?;
@@ -1269,7 +1277,10 @@ async fn managed_target_path(
             "Managed repository worktree root escapes the configured root",
         ));
     }
-    let target_path = canonical_repository_root.join(worktree_id);
+    let target_path = canonical_repository_root.join(managed_worktree_directory_name(
+        project_workspace_path,
+        worktree_id,
+    ));
     match tokio::fs::symlink_metadata(&target_path).await {
         Ok(_) => Err(error(
             WorktreeErrorCode::InvalidPath,
@@ -1281,6 +1292,101 @@ async fn managed_target_path(
             format!("Failed to inspect the managed worktree target: {io_error}"),
         )),
     }
+}
+
+fn managed_worktree_directory_name(project_workspace_path: &Path, worktree_id: &str) -> String {
+    let project_name = project_workspace_path
+        .file_name()
+        .map(|name| name.to_string_lossy())
+        .filter(|name| !name.is_empty())
+        .unwrap_or_else(|| "workspace".into());
+    let project_label = sanitize_worktree_project_label(&project_name);
+    let direct_suffix = worktree_id
+        .chars()
+        .take(WORKTREE_DIRECTORY_SUFFIX_LENGTH)
+        .collect::<String>();
+    let suffix = if direct_suffix.chars().count() == WORKTREE_DIRECTORY_SUFFIX_LENGTH
+        && direct_suffix
+            .chars()
+            .all(|character| character.is_ascii_alphanumeric())
+    {
+        direct_suffix.to_ascii_lowercase()
+    } else {
+        short_hash(worktree_id)
+            .chars()
+            .take(WORKTREE_DIRECTORY_SUFFIX_LENGTH)
+            .collect()
+    };
+    format!("{project_label}-{suffix}")
+}
+
+fn sanitize_worktree_project_label(project_name: &str) -> String {
+    let mut sanitized = String::new();
+    let mut previous_was_separator = false;
+    for character in project_name.trim().chars() {
+        let invalid = character.is_control()
+            || matches!(
+                character,
+                '<' | '>' | '"' | ':' | '/' | '\\' | '|' | '?' | '*'
+            );
+        if invalid {
+            if !sanitized.is_empty() && !previous_was_separator {
+                sanitized.push('-');
+            }
+            previous_was_separator = true;
+        } else {
+            sanitized.push(character);
+            previous_was_separator = false;
+        }
+    }
+
+    let truncated = sanitized
+        .chars()
+        .take(WORKTREE_PROJECT_LABEL_MAX_CHARS)
+        .collect::<String>();
+    let mut label = truncated
+        .trim_matches(|character| matches!(character, ' ' | '.' | '-'))
+        .to_string();
+    if label.is_empty() {
+        label = "workspace".to_string();
+    }
+    if is_windows_reserved_path_component(&label) {
+        label.insert(0, '_');
+    }
+    label
+}
+
+fn is_windows_reserved_path_component(component: &str) -> bool {
+    let stem = component
+        .split('.')
+        .next()
+        .unwrap_or_default()
+        .to_ascii_uppercase();
+    matches!(
+        stem.as_str(),
+        "CON"
+            | "PRN"
+            | "AUX"
+            | "NUL"
+            | "COM1"
+            | "COM2"
+            | "COM3"
+            | "COM4"
+            | "COM5"
+            | "COM6"
+            | "COM7"
+            | "COM8"
+            | "COM9"
+            | "LPT1"
+            | "LPT2"
+            | "LPT3"
+            | "LPT4"
+            | "LPT5"
+            | "LPT6"
+            | "LPT7"
+            | "LPT8"
+            | "LPT9"
+    )
 }
 
 fn repository_lock(common_git_dir: &Path) -> Arc<AsyncMutex<()>> {
@@ -1436,8 +1542,9 @@ fn map_git_error(git_error: GitError) -> WorktreeError {
 #[cfg(test)]
 mod tests {
     use super::{
-        repository_id, resolve_managed_root, validate_removal, RegisteredWorktree,
-        RepositoryContext, WorktreeOperationReceipt, WorktreeRegistry, WorktreeService,
+        managed_target_path, managed_worktree_directory_name, repository_id, resolve_managed_root,
+        sanitize_worktree_project_label, validate_removal, RegisteredWorktree, RepositoryContext,
+        WorktreeOperationReceipt, WorktreeRegistry, WorktreeService,
     };
     use crate::infrastructure::PathManager;
     use bitfun_core_types::{
@@ -1475,6 +1582,89 @@ mod tests {
             repository_id(Path::new("/repo/.git")),
             repository_id(Path::new("/other/.git"))
         );
+    }
+
+    #[test]
+    fn managed_directory_name_includes_project_name_and_short_worktree_id() {
+        let project = Path::new("projects").join("BitFun");
+
+        assert_eq!(
+            managed_worktree_directory_name(&project, "48e8b457e87649aebf801b408698f46c"),
+            "BitFun-48e8b457"
+        );
+    }
+
+    #[test]
+    fn managed_directory_names_are_distinct_for_different_worktrees() {
+        let project = Path::new("projects").join("BitFun");
+
+        assert_ne!(
+            managed_worktree_directory_name(&project, "48e8b457e87649aebf801b408698f46c"),
+            managed_worktree_directory_name(&project, "59e9a2e3c01248d9bb187d295a2c4f35")
+        );
+    }
+
+    #[tokio::test]
+    async fn managed_target_path_uses_readable_leaf_and_rejects_collisions() {
+        let root = tempfile::tempdir().expect("temp root");
+        let worktree_root = root.path().join("managed-worktrees");
+        let project = root.path().join("projects").join("BitFun");
+        let settings = WorktreeSettings {
+            root_path: worktree_root.to_string_lossy().to_string(),
+            ..WorktreeSettings::default()
+        };
+        let worktree_id = "48e8b457e87649aebf801b408698f46c";
+
+        let target = managed_target_path(&settings, "repository-id", &project, worktree_id)
+            .await
+            .expect("managed target path");
+        assert_eq!(
+            target.file_name().and_then(|name| name.to_str()),
+            Some("BitFun-48e8b457")
+        );
+        assert_eq!(
+            target
+                .parent()
+                .and_then(Path::file_name)
+                .and_then(|name| name.to_str()),
+            Some("repository-id")
+        );
+
+        std::fs::create_dir(&target).expect("occupy managed target");
+        let collision = managed_target_path(&settings, "repository-id", &project, worktree_id)
+            .await
+            .expect_err("existing target must be rejected");
+        assert_eq!(collision.code, WorktreeErrorCode::InvalidPath);
+    }
+
+    #[test]
+    fn managed_directory_name_falls_back_for_paths_without_a_project_name() {
+        assert!(managed_worktree_directory_name(
+            Path::new("/"),
+            "48e8b457e87649aebf801b408698f46c"
+        )
+        .starts_with("workspace-"));
+    }
+
+    #[test]
+    fn worktree_project_labels_are_portable_across_supported_platforms() {
+        assert_eq!(
+            sanitize_worktree_project_label("  project: alpha?*  "),
+            "project- alpha"
+        );
+        assert_eq!(sanitize_worktree_project_label("CON.txt"), "_CON.txt");
+        assert_eq!(
+            sanitize_worktree_project_label("项目 workspace"),
+            "项目 workspace"
+        );
+        assert_eq!(sanitize_worktree_project_label("..."), "workspace");
+    }
+
+    #[test]
+    fn worktree_project_labels_have_a_bounded_component_length() {
+        let label = sanitize_worktree_project_label(&"项目".repeat(64));
+
+        assert_eq!(label.chars().count(), 48);
     }
 
     #[test]
