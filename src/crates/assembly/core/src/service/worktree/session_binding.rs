@@ -10,6 +10,7 @@
 //! directory underneath it would silently invalidate the history.
 
 use crate::agentic::coordination::get_global_coordinator;
+use crate::agentic::keyed_lock::KeyedAsyncLock;
 use crate::agentic::session::{SessionExecutionBindingError, SessionExecutionBindingUpdate};
 use crate::service::remote_ssh::lookup_remote_connection;
 use crate::service::workspace::get_global_workspace_service;
@@ -21,6 +22,16 @@ use bitfun_core_types::{
 };
 use serde::{Deserialize, Serialize};
 use std::path::Path;
+use std::sync::LazyLock;
+
+/// Serializes the complete Git-create/rebind/release transition for one session.
+///
+/// The SessionManager mutation lock closes the race with turn start, but it is
+/// intentionally held only around the final session mutation. A separate lock
+/// is needed here so concurrent adapters in one product runtime cannot both
+/// preflight the same empty session, create different worktrees, and then
+/// overwrite each other's binding.
+static SESSION_BINDING_LOCKS: LazyLock<KeyedAsyncLock> = LazyLock::new(KeyedAsyncLock::default);
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -251,6 +262,9 @@ impl WorktreeService {
     pub async fn bind_session(
         request: WorktreeSessionBindingRequest,
     ) -> Result<WorktreeSessionBindingResult, WorktreeError> {
+        bitfun_core_types::validate_session_id(&request.session_id)
+            .map_err(|message| error(WorktreeErrorCode::InvalidPath, message))?;
+        let _binding_guard = SESSION_BINDING_LOCKS.lock(&request.session_id).await;
         let context = load_binding_context(&request).await?;
         let is_worktree = context.execution_target.worktree_id.is_some();
 
@@ -383,7 +397,8 @@ impl WorktreeService {
 
 #[cfg(test)]
 mod tests {
-    use super::WorktreeSessionBindingRequest;
+    use super::{WorktreeSessionBindingRequest, SESSION_BINDING_LOCKS};
+    use std::time::Duration;
 
     #[test]
     fn binding_request_keeps_legacy_callers_compatible() {
@@ -411,5 +426,29 @@ mod tests {
             request.project_workspace_path.as_deref(),
             Some(r"D:\workspace\BitFun")
         );
+    }
+
+    #[tokio::test]
+    async fn binding_transitions_for_the_same_session_are_serialized() {
+        let session_id = format!("binding-lock-{}", uuid::Uuid::new_v4());
+        let first = SESSION_BINDING_LOCKS.lock(&session_id).await;
+
+        assert!(
+            tokio::time::timeout(
+                Duration::from_millis(20),
+                SESSION_BINDING_LOCKS.lock(&session_id),
+            )
+            .await
+            .is_err(),
+            "a second transition must wait for the first"
+        );
+
+        drop(first);
+        tokio::time::timeout(
+            Duration::from_secs(1),
+            SESSION_BINDING_LOCKS.lock(&session_id),
+        )
+        .await
+        .expect("the next transition should proceed after release");
     }
 }
