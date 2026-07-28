@@ -29,12 +29,22 @@ if [ "$#" -eq 0 ]; then
   exit 2
 fi
 
+# Without readelf every binary would look requirement-free and the check would
+# pass everything — a silent false negative is worse than no check at all.
+if ! command -v readelf >/dev/null 2>&1; then
+  echo "ERROR: readelf not found (install binutils); refusing to skip the check" >&2
+  exit 2
+fi
+
 # Highest GLIBC_x.y this binary asks for; empty when it needs none.
+# The trailing `|| true` matters: `grep` exits non-zero when a binary has no
+# versioned glibc symbols at all (a static build), and under `set -e` that
+# would abort the whole run at the command substitution below.
 max_required_glibc() {
   readelf -V "$1" 2>/dev/null |
     grep -oE 'GLIBC_[0-9]+\.[0-9]+' |
     sort -u -V |
-    tail -n 1
+    tail -n 1 || true
 }
 
 status=0
