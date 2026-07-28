@@ -41,6 +41,27 @@ interface TemplateStats {
 
 type TemplateStatsStatus = 'loading' | 'ready' | 'error';
 
+const NurseryPandaAvatar: React.FC = () => (
+  <div className="nursery-defaults__avatar" aria-hidden="true">
+    <span className="nursery-defaults__avatar-art">
+      <img
+        className="nursery-defaults__avatar-image"
+        src="/panda_1.png"
+        alt=""
+        draggable={false}
+        onError={(e) => { e.currentTarget.src = '/Logo-ICON.png'; }}
+      />
+      <img
+        className="nursery-defaults__avatar-image nursery-defaults__avatar-image--wink"
+        src="/panda_wink.png"
+        alt=""
+        draggable={false}
+        onError={(e) => { e.currentTarget.hidden = true; }}
+      />
+    </span>
+  </div>
+);
+
 const NurseryGallery: React.FC = () => {
   const { t } = useTranslation('scenes/profile');
   const {
@@ -195,14 +216,7 @@ const NurseryGallery: React.FC = () => {
 
       <div className="gallery-zones">
         <section className="nursery-defaults" aria-labelledby="nursery-defaults-title">
-          <div className="nursery-defaults__avatar" aria-hidden="true">
-            <img
-              className="nursery-defaults__avatar-image"
-              src="/panda_1.png"
-              alt=""
-              onError={(e) => { (e.target as HTMLImageElement).src = '/Logo-ICON.png'; }}
-            />
-          </div>
+          <NurseryPandaAvatar />
 
           <div className="nursery-defaults__content">
             <h3 className="nursery-defaults__title" id="nursery-defaults-title">

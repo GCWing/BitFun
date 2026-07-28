@@ -93,12 +93,27 @@ $nursery-gallery-gutter: clamp(24px, 4vw, 56px);
     background: var(--element-bg-medium);
   }
 
+  &__avatar-art {
+    position: relative;
+    display: block;
+    width: 49px;
+    height: 49px;
+    transform-origin: 54% 72%;
+  }
+
   &__avatar-image {
+    position: absolute;
+    inset: 0;
     width: 49px;
     height: 49px;
     object-fit: contain;
+    pointer-events: none;
     user-select: none;
     -webkit-user-drag: none;
+
+    &--wink {
+      opacity: 0;
+    }
   }
 
   &__content {
@@ -176,6 +191,24 @@ $nursery-gallery-gutter: clamp(24px, 4vw, 56px);
       transform: translateX(2px);
     }
   }
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .nursery-defaults__avatar:hover .nursery-defaults__avatar-art {
+    animation: nursery-panda-wink-tilt 760ms $easing-standard both;
+  }
+
+  .nursery-defaults__avatar:hover .nursery-defaults__avatar-image--wink {
+    animation: nursery-panda-wink-frame 760ms $easing-standard both;
+  }
+}
+
+.nursery-defaults:focus-within .nursery-defaults__avatar-art {
+  animation: nursery-panda-wink-tilt 760ms $easing-standard both;
+}
+
+.nursery-defaults:focus-within .nursery-defaults__avatar-image--wink {
+  animation: nursery-panda-wink-frame 760ms $easing-standard both;
 }
 
 // ── Assistant card ─────────────────────────────────────────────────────────
@@ -1017,6 +1050,39 @@ $nursery-gallery-gutter: clamp(24px, 4vw, 56px);
   }
 }
 
+@keyframes nursery-panda-wink-frame {
+  0%,
+  18%,
+  44%,
+  100% {
+    opacity: 0;
+  }
+
+  24%,
+  38% {
+    opacity: 1;
+  }
+}
+
+@keyframes nursery-panda-wink-tilt {
+  0%,
+  100% {
+    transform: translateY(0) rotate(0);
+  }
+
+  22% {
+    transform: translateY(-1px) rotate(-1.2deg);
+  }
+
+  46% {
+    transform: translateY(-1px) rotate(0.7deg);
+  }
+
+  72% {
+    transform: translateY(0) rotate(0);
+  }
+}
+
 @keyframes nursery-skeleton-pulse {
   0%,
   100% {
@@ -1046,6 +1112,11 @@ $nursery-gallery-gutter: clamp(24px, 4vw, 56px);
   .assistant-card__chevron,
   .nursery-defaults__action svg:last-child {
     transition: none;
+  }
+
+  .nursery-defaults__avatar-art,
+  .nursery-defaults__avatar-image--wink {
+    animation: none;
   }
 }
 
