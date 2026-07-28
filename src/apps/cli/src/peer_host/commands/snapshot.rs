@@ -17,7 +17,7 @@ use crate::peer_host::args::{
 use crate::peer_host::fanout::fanout_peer_device_event;
 use crate::peer_host::state::PeerHostState;
 
-use super::session::resolved_session_storage_path;
+use super::session::{ensure_session_workspace_runtime_ownership, resolved_session_storage_scope};
 
 pub(super) async fn require_local_snapshot_workspace(
     request: &Value,
@@ -168,7 +168,8 @@ pub(crate) async fn rollback_to_turn(state: &PeerHostState, args: &Value) -> Res
     bitfun_agent_runtime::session_control::validate_session_id(&session_id)?;
     require_local_snapshot_workspace(request, &workspace_path).await?;
     let workspace = PathBuf::from(&workspace_path);
-    let session_storage_path = resolved_session_storage_path(state, request).await?;
+    let scope = ensure_session_workspace_runtime_ownership(state, request)?;
+    let session_storage_path = resolved_session_storage_scope(state, scope).await?;
     if delete_turns {
         state
             .compatibility

@@ -152,6 +152,19 @@ pub enum RuntimeOwnershipError {
     },
 }
 
+impl RuntimeOwnershipError {
+    /// Stable low-cardinality classification for product diagnostics and logs.
+    pub fn code(&self) -> &'static str {
+        match self {
+            Self::InvalidProductIdentity => "invalid_product_identity",
+            Self::CanonicalizeWorkspace { .. } => "canonicalize_workspace_failed",
+            Self::CreateOwnershipDirectory { .. } => "ownership_root_create_failed",
+            Self::OpenLockFile { .. } => "ownership_lock_open_failed",
+            Self::OwnershipUnavailable { .. } => "runtime_ownership_unavailable",
+        }
+    }
+}
+
 impl fmt::Display for RuntimeDeployment {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         formatter.write_str(self.as_str())

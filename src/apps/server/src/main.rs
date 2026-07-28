@@ -175,4 +175,35 @@ mod tests {
             assert!(normalize_browser_origin(invalid).is_err(), "{invalid}");
         }
     }
+
+    #[test]
+    fn agent_bootstrap_reuses_core_ownership_without_activating_the_http_shell() {
+        let bootstrap = include_str!("bootstrap.rs");
+        assert!(bootstrap.contains("CoreRuntimeOwnership::embedded"));
+        let coordinator = bootstrap
+            .split("ConversationCoordinator::new")
+            .nth(1)
+            .and_then(|source| source.split(");").next())
+            .expect("Server agent bootstrap Coordinator assembly");
+        assert!(coordinator.contains("runtime_ownership"));
+        assert!(bootstrap.contains("open_workspace_with_runtime_ownership"));
+        assert!(!bootstrap.contains("initialize_snapshot_manager_for_workspace"));
+
+        let rpc = include_str!("rpc_dispatcher.rs");
+        let delete = rpc
+            .split("\"delete_session\" =>")
+            .nth(1)
+            .and_then(|source| source.split("\"start_dialog_turn\" =>").next())
+            .expect("Server delete RPC");
+        assert!(delete.contains("ensure_workspace_runtime_ownership"));
+
+        let main_source = include_str!("main.rs")
+            .split("#[cfg(test)]")
+            .next()
+            .expect("Server production entrypoint");
+        assert!(
+            !main_source.contains("bootstrap::initialize"),
+            "the current read-only HTTP shell must not silently start an Agent Runtime"
+        );
+    }
 }

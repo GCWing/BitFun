@@ -408,22 +408,13 @@ impl JsonFileStore {
         target_path: &Path,
         tmp_path: &Path,
     ) -> std::io::Result<()> {
-        use std::os::windows::ffi::OsStrExt;
         use windows::core::PCWSTR;
         use windows::Win32::Storage::FileSystem::{
             MoveFileExW, ReplaceFileW, MOVEFILE_WRITE_THROUGH, REPLACEFILE_WRITE_THROUGH,
         };
 
-        let temp = tmp_path
-            .as_os_str()
-            .encode_wide()
-            .chain(std::iter::once(0))
-            .collect::<Vec<_>>();
-        let target = target_path
-            .as_os_str()
-            .encode_wide()
-            .chain(std::iter::once(0))
-            .collect::<Vec<_>>();
+        let temp = Self::windows_extended_path(tmp_path)?;
+        let target = Self::windows_extended_path(target_path)?;
         let result = unsafe {
             if target_path.exists() {
                 ReplaceFileW(
@@ -443,6 +434,34 @@ impl JsonFileStore {
             }
         };
         result.map_err(|error| std::io::Error::other(error.to_string()))
+    }
+
+    #[cfg(windows)]
+    fn windows_extended_path(path: &Path) -> std::io::Result<Vec<u16>> {
+        use std::os::windows::ffi::OsStrExt;
+
+        // `\\?\` disables Win32 normalization. Resolve separators plus dot
+        // segments before adding the prefix so both new and existing targets
+        // keep normal Path semantics at extended lengths.
+        let absolute = std::path::absolute(path)?;
+        let path = absolute.as_os_str().encode_wide().collect::<Vec<_>>();
+        let slash = b'\\' as u16;
+        let mut extended = if path.starts_with(&[slash, slash, b'?' as u16, slash])
+            || path.starts_with(&[slash, slash, b'.' as u16, slash])
+        {
+            path
+        } else if path.starts_with(&[slash, slash]) {
+            r"\\?\UNC\"
+                .encode_utf16()
+                .chain(path.into_iter().skip(2))
+                .collect()
+        } else if path.len() >= 3 && path[1] == b':' as u16 && path[2] == slash {
+            r"\\?\".encode_utf16().chain(path).collect()
+        } else {
+            path
+        };
+        extended.push(0);
+        Ok(extended)
     }
 
     #[cfg(not(windows))]

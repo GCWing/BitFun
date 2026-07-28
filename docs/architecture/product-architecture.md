@@ -375,11 +375,19 @@ flowchart LR
 当前本机入口组装：
 
 ```mermaid
-flowchart LR
+flowchart TB
   Desktop["Desktop"] --> Full["product-full"]
   CLI["CLI / TUI"] --> Full
   ACP["ACP"] --> Parts["Runtime Parts"]
+  SDKHost["SDK Host"] --> Parts
+  ServerBootstrap["Server agent bootstrap · dormant"] --> Full
+
+  Full --> Coordinator["ConversationCoordinator"]
+  Parts --> Coordinator
+  Ownership["CoreRuntimeOwnership"] -. "first-party composition injects once" .-> Coordinator
 ```
+
+当前公开 HTTP Server 不调用 agent bootstrap，因此不创建 Runtime 或 workspace ownership；图中的 Server 节点只记录已有 agent-enabled composition 边界，不能据此宣称 Server Agent API 已交付。
 
 当前 Peer 运行连接：
 
@@ -400,7 +408,7 @@ flowchart LR
 | Desktop | 使用 `product-full`；显示外部来源、审批、冲突、诊断和 Host 能力 | 可执行能力在事实所在 Host 运行；Safe Mode 只阻止新调用，不改来源、不取消正在运行的调用 |
 | CLI / TUI | 使用 `product-full`；提供 `/extensions`、`/hooks_external`、`/tools` 和 `/agents` | 不解析生态文件，不启动第二套 Agent Runtime；远程能力未接入时不回退本机 |
 | ACP | 使用 `DeliveryProfile::Acp` 和 Runtime Parts | load 成功后才发布活动状态；close 排空后再卸载；完整历史和配置仍由 Core/ACP 管理 |
-| Peer / Server | Server 提供 control/catalog；Peer Host 执行真实工作区操作 | 控制端不替远端发现或执行；旧 Host 明确降级，SSH Remote 未接入时返回不支持 |
+| Peer / Server | Server 提供 control/catalog；Peer Host 执行真实工作区操作；当前 HTTP Server 不装配 Agent Runtime | 控制端不替远端发现或执行；旧 Host 明确降级，SSH Remote 未接入时返回不支持；只读 Server 不声明 Runtime ownership |
 | Web / Mobile Web | 依赖现有后端入口 | 不持有插件执行单元，也不能据空 profile 宣称独立能力 |
 | HarmonyOS 手机 Remote | phone-only ArkTS 远程入口 | 不等于 HarmonyOS PC 本地 Runtime、CLI/TUI 或 GUI |
 

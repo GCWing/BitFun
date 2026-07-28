@@ -4,7 +4,7 @@
 //! Rich Desktop persistence views remain on Core's compatibility facade while
 //! stable lifecycle operations use the Agent Runtime SDK.
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::Instant;
 
@@ -98,6 +98,7 @@ struct ResolvedDesktopSessionScope {
     remote_connection_id: Option<String>,
     requested_remote_ssh_host: Option<String>,
     resolved_remote_ssh_host: Option<String>,
+    remote_binding_verified: bool,
 }
 
 #[derive(Clone)]
@@ -110,15 +111,22 @@ impl DesktopSessionScopeResolver {
     async fn resolve(&self, request: DesktopSessionScopeRequest) -> ResolvedDesktopSessionScope {
         let remote_connection_id = normalized_optional(request.remote_connection_id.as_deref());
         let requested_remote_ssh_host = normalized_optional(request.remote_ssh_host.as_deref());
-        let mut registered_remote_ssh_host = None;
-        if requested_remote_ssh_host.is_none() {
+        let registered_remote_ssh_host =
             if let Some(connection_id) = remote_connection_id.as_deref() {
-                registered_remote_ssh_host = self
-                    .workspace_service
+                self.workspace_service
                     .remote_ssh_host_for_remote_workspace(connection_id, &request.workspace_path)
-                    .await;
-            }
-        }
+                    .await
+            } else {
+                None
+            };
+        let remote_binding_verified = remote_connection_id.is_some()
+            && registered_remote_ssh_host
+                .as_deref()
+                .is_some_and(|registered| {
+                    requested_remote_ssh_host
+                        .as_deref()
+                        .map_or(true, |requested| requested.eq_ignore_ascii_case(registered))
+                });
         let mut saved_remote_ssh_host = None;
         if requested_remote_ssh_host.is_none() && registered_remote_ssh_host.is_none() {
             if let Some(connection_id) = remote_connection_id.as_deref() {
@@ -148,6 +156,7 @@ impl DesktopSessionScopeResolver {
             remote_connection_id,
             requested_remote_ssh_host,
             resolved_remote_ssh_host,
+            remote_binding_verified,
         }
     }
 }
@@ -178,6 +187,7 @@ pub(crate) trait DesktopSessionHostEffects: Send + Sync {
 
 #[derive(Clone)]
 pub(crate) struct DesktopSessionApplication {
+    coordinator: Arc<ConversationCoordinator>,
     agent_runtime: AgentRuntime,
     compatibility: CoreAgentRuntimeCompatibility,
     scope_resolver: DesktopSessionScopeResolver,
@@ -198,9 +208,10 @@ impl DesktopSessionApplication {
             scheduler.clone(),
             token_usage_service,
         )?;
-        let compatibility = CoreAgentRuntimeCompatibility::build(coordinator, scheduler);
+        let compatibility = CoreAgentRuntimeCompatibility::build(coordinator.clone(), scheduler);
 
         Ok(Self {
+            coordinator,
             agent_runtime,
             compatibility,
             scope_resolver: DesktopSessionScopeResolver {
@@ -224,6 +235,38 @@ impl DesktopSessionApplication {
 
     fn storage_path(&self, scope: &ResolvedDesktopSessionScope) -> PathBuf {
         scope.effective_storage_path.clone()
+    }
+
+    fn ensure_runtime_ownership(
+        &self,
+        scope: &ResolvedDesktopSessionScope,
+    ) -> DesktopSessionApplicationResult<()> {
+        let result = if scope.remote_binding_verified {
+            self.coordinator
+                .ensure_verified_remote_workspace_runtime_ownership(
+                    Path::new(&scope.workspace_path),
+                    scope
+                        .remote_connection_id
+                        .as_deref()
+                        .expect("verified Remote scope has a connection id"),
+                    scope.resolved_remote_ssh_host.as_deref(),
+                )
+        } else {
+            self.coordinator.ensure_workspace_runtime_ownership(
+                Path::new(&scope.workspace_path),
+                scope.remote_connection_id.as_deref(),
+                scope.resolved_remote_ssh_host.as_deref(),
+            )
+        };
+        result.map_err(|error| DesktopSessionApplicationError::Core(error.to_string()))
+    }
+
+    pub(crate) async fn ensure_workspace_runtime_ownership(
+        &self,
+        request: DesktopSessionScopeRequest,
+    ) -> DesktopSessionApplicationResult<()> {
+        let scope = self.resolved_scope(request).await;
+        self.ensure_runtime_ownership(&scope)
     }
 
     pub(crate) async fn list_persisted_sessions(
@@ -296,6 +339,7 @@ impl DesktopSessionApplication {
         session_id: &str,
     ) -> DesktopSessionApplicationResult<()> {
         let scope = self.resolved_scope(request).await;
+        self.ensure_runtime_ownership(&scope)?;
         let storage_path = self.storage_path(&scope);
         self.compatibility
             .touch_persisted_session(&storage_path, session_id)
@@ -316,6 +360,7 @@ impl DesktopSessionApplication {
         }
         let workspace_path = request.workspace_path.clone();
         let scope = self.resolved_scope(request).await;
+        self.ensure_runtime_ownership(&scope)?;
         let storage_path = self.storage_path(&scope);
         let session_id = incoming.session_id.clone();
         self.compatibility
@@ -361,10 +406,11 @@ impl DesktopSessionApplication {
         source_turn_id: String,
     ) -> DesktopSessionApplicationResult<SessionBranchResult> {
         let scope = self.resolved_scope(request).await;
+        self.ensure_runtime_ownership(&scope)?;
         let result = self
             .agent_runtime
             .fork_session_at_turn(AgentSessionForkAtTurnRequest {
-                workspace_path: scope.effective_storage_path.to_string_lossy().into_owned(),
+                workspace_path: scope.workspace_path.clone(),
                 source_session_id,
                 source_turn_id,
                 remote_connection_id: scope.remote_connection_id,
@@ -386,9 +432,10 @@ impl DesktopSessionApplication {
         archived: bool,
     ) -> DesktopSessionApplicationResult<()> {
         let scope = self.resolved_scope(request).await;
+        self.ensure_runtime_ownership(&scope)?;
         self.agent_runtime
             .set_session_archived(AgentSessionArchiveStateRequest {
-                workspace_path: scope.effective_storage_path.to_string_lossy().into_owned(),
+                workspace_path: scope.workspace_path.clone(),
                 session_id,
                 archived,
                 remote_connection_id: scope.remote_connection_id,
@@ -404,6 +451,7 @@ impl DesktopSessionApplication {
         session_id: String,
     ) -> DesktopSessionApplicationResult<()> {
         let scope = self.resolved_scope(request).await;
+        self.ensure_runtime_ownership(&scope)?;
         delete_session_with_host_effects(
             &self.agent_runtime,
             self.host_effects.as_ref(),
@@ -422,6 +470,7 @@ impl DesktopSessionApplication {
         let normalized_title = title.trim().to_string();
         if let Some(request) = request {
             let scope = self.resolved_scope(request).await;
+            self.ensure_runtime_ownership(&scope)?;
             if !self
                 .compatibility
                 .is_session_loaded_in_memory(&session_id)
@@ -437,7 +486,7 @@ impl DesktopSessionApplication {
             }
             self.agent_runtime
                 .rename_session(AgentSessionRenameRequest {
-                    workspace_path: scope.effective_storage_path.to_string_lossy().into_owned(),
+                    workspace_path: scope.workspace_path.clone(),
                     session_id: session_id.clone(),
                     session_name: title,
                     remote_connection_id: scope.remote_connection_id,
@@ -487,6 +536,7 @@ impl DesktopSessionApplication {
             ));
         }
         let scope = self.resolved_scope(request).await;
+        self.ensure_runtime_ownership(&scope)?;
         let storage_path = self.storage_path(&scope);
         self.compatibility
             .ensure_session_loaded_from_storage_path(&storage_path, session_id, include_internal)
@@ -501,6 +551,7 @@ impl DesktopSessionApplication {
         include_internal: bool,
     ) -> DesktopSessionApplicationResult<Session> {
         let scope = self.resolved_scope(request).await;
+        self.ensure_runtime_ownership(&scope)?;
         let storage_path = self.storage_path(&scope);
         self.compatibility
             .restore_session_from_storage_path(&storage_path, session_id, include_internal)
@@ -561,6 +612,7 @@ impl DesktopSessionApplication {
     {
         let path_started_at = Instant::now();
         let scope = self.resolved_scope(request).await;
+        self.ensure_runtime_ownership(&scope)?;
         let storage_path = self.storage_path(&scope);
         let resolve_storage_path_duration_ms =
             path_started_at.elapsed().as_millis().min(u64::MAX as u128) as u64;
@@ -587,7 +639,7 @@ async fn delete_session_with_host_effects(
     host_effects.release_session(&session_id).await;
     agent_runtime
         .delete_session(AgentSessionDeleteRequest {
-            workspace_path: scope.effective_storage_path.to_string_lossy().into_owned(),
+            workspace_path: scope.workspace_path.clone(),
             session_id: session_id.clone(),
             remote_connection_id: scope.remote_connection_id,
             remote_ssh_host: scope.resolved_remote_ssh_host,
@@ -657,6 +709,7 @@ mod tests {
 
     struct RecordingDeletePort {
         events: Arc<Mutex<Vec<&'static str>>>,
+        workspace_path: Arc<Mutex<Option<String>>>,
         fail_delete: bool,
     }
 
@@ -668,11 +721,11 @@ mod tests {
             &self,
             request: AgentSessionCreateRequest,
         ) -> PortResult<AgentSessionCreateResult> {
-            Ok(AgentSessionCreateResult {
-                session_id: "unused".to_string(),
-                session_name: request.session_name,
-                agent_type: request.agent_type,
-            })
+            Ok(AgentSessionCreateResult::new(
+                "unused",
+                request.session_name,
+                request.agent_type,
+            ))
         }
 
         async fn submit_message(
@@ -702,8 +755,9 @@ mod tests {
             Ok(Vec::new())
         }
 
-        async fn delete_session(&self, _request: AgentSessionDeleteRequest) -> PortResult<()> {
+        async fn delete_session(&self, request: AgentSessionDeleteRequest) -> PortResult<()> {
             self.events.lock().unwrap().push("durable_delete");
+            *self.workspace_path.lock().unwrap() = Some(request.workspace_path);
             if self.fail_delete {
                 return Err(PortError::new(PortErrorKind::Backend, "delete failed"));
             }
@@ -742,17 +796,20 @@ mod tests {
             remote_connection_id: None,
             requested_remote_ssh_host: None,
             resolved_remote_ssh_host: None,
+            remote_binding_verified: false,
         }
     }
 
     fn delete_test_runtime(
         events: Arc<Mutex<Vec<&'static str>>>,
+        workspace_path: Arc<Mutex<Option<String>>>,
         fail_delete: bool,
     ) -> AgentRuntime {
         AgentRuntimeBuilder::new()
             .with_submission_port(Arc::new(NoopSubmissionPort))
             .with_session_management_port(Arc::new(RecordingDeletePort {
                 events,
+                workspace_path,
                 fail_delete,
             }))
             .build()
@@ -901,7 +958,8 @@ mod tests {
     #[tokio::test]
     async fn delete_orders_host_release_durable_delete_and_relay_tombstone() {
         let events = Arc::new(Mutex::new(Vec::new()));
-        let runtime = delete_test_runtime(events.clone(), false);
+        let workspace_path = Arc::new(Mutex::new(None));
+        let runtime = delete_test_runtime(events.clone(), workspace_path.clone(), false);
         let host_effects = RecordingHostEffects {
             events: events.clone(),
         };
@@ -919,12 +977,16 @@ mod tests {
             events.lock().unwrap().as_slice(),
             ["release", "durable_delete", "relay_delete"]
         );
+        assert_eq!(
+            workspace_path.lock().unwrap().as_deref(),
+            Some("D:/workspace/project")
+        );
     }
 
     #[tokio::test]
     async fn delete_failure_does_not_publish_relay_tombstone() {
         let events = Arc::new(Mutex::new(Vec::new()));
-        let runtime = delete_test_runtime(events.clone(), true);
+        let runtime = delete_test_runtime(events.clone(), Arc::new(Mutex::new(None)), true);
         let host_effects = RecordingHostEffects {
             events: events.clone(),
         };

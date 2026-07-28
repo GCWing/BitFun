@@ -37,7 +37,7 @@ impl SnapshotManager {
         config: Option<SnapshotConfig>,
     ) -> SnapshotResult<Self> {
         #[cfg(test)]
-        record_snapshot_manager_new_for_test().await;
+        record_snapshot_manager_new_for_test(&workspace_dir).await;
 
         info!(
             "Creating snapshot manager: workspace={}",
@@ -329,11 +329,16 @@ fn snapshot_manager_init_locks() -> &'static AsyncMutex<HashMap<PathBuf, Arc<Asy
 }
 
 async fn snapshot_manager_init_lock(workspace_dir: &Path) -> Arc<AsyncMutex<()>> {
+    let workspace_key = snapshot_workspace_key(workspace_dir);
     let mut locks = snapshot_manager_init_locks().lock().await;
     locks
-        .entry(workspace_dir.to_path_buf())
+        .entry(workspace_key)
         .or_insert_with(|| Arc::new(AsyncMutex::new(())))
         .clone()
+}
+
+fn snapshot_workspace_key(workspace_dir: &Path) -> PathBuf {
+    dunce::canonicalize(workspace_dir).unwrap_or_else(|_| workspace_dir.to_path_buf())
 }
 
 #[cfg(test)]
@@ -342,7 +347,26 @@ static SNAPSHOT_MANAGER_NEW_COUNT_FOR_TEST: AtomicUsize = AtomicUsize::new(0);
 static SNAPSHOT_MANAGER_NEW_DELAY_MS_FOR_TEST: AtomicU64 = AtomicU64::new(0);
 
 #[cfg(test)]
-async fn record_snapshot_manager_new_for_test() {
+fn snapshot_manager_observed_workspace_for_test() -> &'static StdRwLock<Option<PathBuf>> {
+    static WORKSPACE: OnceLock<StdRwLock<Option<PathBuf>>> = OnceLock::new();
+    WORKSPACE.get_or_init(|| StdRwLock::new(None))
+}
+
+#[cfg(test)]
+fn snapshot_manager_test_serial_lock() -> &'static AsyncMutex<()> {
+    static LOCK: OnceLock<AsyncMutex<()>> = OnceLock::new();
+    LOCK.get_or_init(|| AsyncMutex::new(()))
+}
+
+#[cfg(test)]
+async fn record_snapshot_manager_new_for_test(workspace_dir: &Path) {
+    let observed_workspace = snapshot_manager_observed_workspace_for_test()
+        .read()
+        .ok()
+        .and_then(|workspace| workspace.clone());
+    if observed_workspace.as_deref() != Some(workspace_dir) {
+        return;
+    }
     SNAPSHOT_MANAGER_NEW_COUNT_FOR_TEST.fetch_add(1, Ordering::SeqCst);
     let delay_ms = SNAPSHOT_MANAGER_NEW_DELAY_MS_FOR_TEST.load(Ordering::SeqCst);
     if delay_ms > 0 {
@@ -351,7 +375,10 @@ async fn record_snapshot_manager_new_for_test() {
 }
 
 #[cfg(test)]
-fn reset_snapshot_manager_new_count_for_test() {
+fn observe_snapshot_manager_new_for_test(workspace_dir: &Path) {
+    if let Ok(mut observed_workspace) = snapshot_manager_observed_workspace_for_test().write() {
+        *observed_workspace = Some(snapshot_workspace_key(workspace_dir));
+    }
     SNAPSHOT_MANAGER_NEW_COUNT_FOR_TEST.store(0, Ordering::SeqCst);
 }
 
@@ -368,7 +395,7 @@ fn set_snapshot_manager_new_delay_for_test(delay: Duration) {
 #[cfg(test)]
 pub(crate) fn clear_snapshot_manager_for_test(workspace_dir: &Path) {
     if let Ok(mut managers) = snapshot_managers().write() {
-        managers.remove(workspace_dir);
+        managers.remove(&snapshot_workspace_key(workspace_dir));
     }
 }
 
@@ -552,6 +579,8 @@ impl Tool for WrappedTool {
                 self.name()
             );
 
+            self.ensure_delete_snapshot_target_supported(input, context)?;
+
             match self.handle_file_modification_internal(input, context).await {
                 Ok(results) => {
                     return Ok(results);
@@ -571,6 +600,42 @@ impl Tool for WrappedTool {
 }
 
 impl WrappedTool {
+    /// Snapshot storage currently preserves file bytes, not link objects. A
+    /// tracked Delete must therefore stop before removing a link instead of
+    /// falling back to an operation that cannot be rolled back faithfully.
+    fn ensure_delete_snapshot_target_supported(
+        &self,
+        input: &Value,
+        context: &ToolUseContext,
+    ) -> crate::util::errors::BitFunResult<()> {
+        if !matches!(self.name(), "Delete" | "delete_file") {
+            return Ok(());
+        }
+
+        let raw_path = self
+            .extract_file_path(input, context)
+            .map_err(|error| crate::util::errors::BitFunError::Tool(error.to_string()))?;
+        let resolved = context.resolve_tool_path(raw_path.to_string_lossy().as_ref())?;
+        if resolved.uses_remote_workspace_backend() {
+            return Ok(());
+        }
+
+        match std::fs::symlink_metadata(&resolved.resolved_path) {
+            Ok(metadata) if is_symlink_or_reparse_point(&metadata) => {
+                Err(crate::util::errors::BitFunError::Tool(format!(
+                    "Snapshot-tracked Delete cannot remove a symbolic link or reparse point because rollback cannot restore the link object: {}. The delete was not performed",
+                    resolved.logical_path
+                )))
+            }
+            Ok(_) => Ok(()),
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
+            Err(error) => Err(crate::util::errors::BitFunError::Tool(format!(
+                "Failed to inspect Delete target for Snapshot safety: path={} error={}",
+                resolved.logical_path, error
+            ))),
+        }
+    }
+
     /// Handles a file-modification tool.
     async fn handle_file_modification_internal(
         &self,
@@ -583,7 +648,7 @@ impl WrappedTool {
             )
         })?;
 
-        let raw_path = match self.extract_file_path_simple(input) {
+        let raw_path = match self.extract_file_path(input, context) {
             Ok(path) => path,
             Err(e) => return Err(crate::util::errors::BitFunError::Tool(e.to_string())),
         };
@@ -701,8 +766,13 @@ impl WrappedTool {
             .unwrap_or(0)
     }
 
-    /// Simplified file path extraction.
-    fn extract_file_path_simple(&self, input: &Value) -> SnapshotResult<PathBuf> {
+    /// Extracts the concrete input object used by legacy file tools, falling
+    /// back to the owner-resolved permission resource for payload-based tools.
+    fn extract_file_path(
+        &self,
+        input: &Value,
+        context: &ToolUseContext,
+    ) -> SnapshotResult<PathBuf> {
         let possible_fields = ["file_path", "path", "target_file", "filename"];
 
         for field in &possible_fields {
@@ -711,6 +781,18 @@ impl WrappedTool {
                     return Ok(PathBuf::from(path_str));
                 }
             }
+        }
+
+        let permission_intents = self
+            .original_tool
+            .permission_intents(input, context)
+            .map_err(|error| SnapshotError::ConfigError(error.to_string()))?;
+        if let Some(resource) = permission_intents
+            .iter()
+            .find(|intent| intent.action == "edit")
+            .and_then(|intent| intent.resources.first())
+        {
+            return Ok(PathBuf::from(resource));
         }
 
         Err(SnapshotError::ConfigError(
@@ -736,18 +818,35 @@ impl WrappedTool {
     }
 }
 
+fn is_symlink_or_reparse_point(metadata: &std::fs::Metadata) -> bool {
+    if metadata.file_type().is_symlink() {
+        return true;
+    }
+
+    #[cfg(windows)]
+    {
+        use std::os::windows::fs::MetadataExt;
+        const FILE_ATTRIBUTE_REPARSE_POINT: u32 = 0x0400;
+        return metadata.file_attributes() & FILE_ATTRIBUTE_REPARSE_POINT != 0;
+    }
+
+    #[cfg(not(windows))]
+    false
+}
+
 pub async fn get_or_create_snapshot_manager(
     workspace_dir: PathBuf,
     config: Option<SnapshotConfig>,
 ) -> SnapshotResult<Arc<SnapshotManager>> {
-    if let Some(existing) = get_snapshot_manager_for_workspace(&workspace_dir) {
+    let workspace_key = snapshot_workspace_key(&workspace_dir);
+    if let Some(existing) = get_snapshot_manager_for_workspace(&workspace_key) {
         return Ok(existing);
     }
 
-    let init_lock = snapshot_manager_init_lock(&workspace_dir).await;
+    let init_lock = snapshot_manager_init_lock(&workspace_key).await;
     let _init_guard = init_lock.lock().await;
 
-    if let Some(existing) = get_snapshot_manager_for_workspace(&workspace_dir) {
+    if let Some(existing) = get_snapshot_manager_for_workspace(&workspace_key) {
         debug!(
             "Snapshot manager initialized by concurrent request: workspace={}",
             workspace_dir.display()
@@ -760,15 +859,15 @@ pub async fn get_or_create_snapshot_manager(
         "Snapshot manager cold initialization started: workspace={}",
         workspace_dir.display()
     );
-    let manager = Arc::new(SnapshotManager::new(workspace_dir.clone(), config).await?);
+    let manager = Arc::new(SnapshotManager::new(workspace_key.clone(), config).await?);
     {
         let mut managers = snapshot_managers().write().map_err(|_| {
             SnapshotError::ConfigError("Snapshot manager store lock poisoned".to_string())
         })?;
-        if let Some(existing) = managers.get(&workspace_dir) {
+        if let Some(existing) = managers.get(&workspace_key) {
             return Ok(existing.clone());
         }
-        managers.insert(workspace_dir, manager.clone());
+        managers.insert(workspace_key, manager.clone());
     }
     info!(
         "Snapshot manager cold initialization completed: duration_ms={}",
@@ -779,10 +878,36 @@ pub async fn get_or_create_snapshot_manager(
 }
 
 pub fn get_snapshot_manager_for_workspace(workspace_dir: &Path) -> Option<Arc<SnapshotManager>> {
+    let workspace_key = snapshot_workspace_key(workspace_dir);
     snapshot_managers()
         .read()
         .ok()
-        .and_then(|managers| managers.get(workspace_dir).cloned())
+        .and_then(|managers| managers.get(&workspace_key).cloned())
+}
+
+/// Opens persisted Snapshot facts for queries without registering a writer or
+/// creating workspace runtime state.
+pub async fn open_snapshot_manager_for_view(
+    workspace_dir: &Path,
+) -> SnapshotResult<Arc<SnapshotManager>> {
+    let workspace_key = snapshot_workspace_key(workspace_dir);
+    if let Some(manager) = get_snapshot_manager_for_workspace(&workspace_key) {
+        return Ok(manager);
+    }
+
+    let init_lock = snapshot_manager_init_lock(&workspace_key).await;
+    let _init_guard = init_lock.lock().await;
+    if let Some(manager) = get_snapshot_manager_for_workspace(&workspace_key) {
+        return Ok(manager);
+    }
+
+    let runtime_context =
+        get_workspace_runtime_service_arc().context_for_local_workspace(&workspace_key);
+    let mut snapshot_service = SnapshotService::new(workspace_key, runtime_context, None);
+    snapshot_service.initialize_for_view().await?;
+    Ok(Arc::new(SnapshotManager {
+        snapshot_service: Arc::new(RwLock::new(snapshot_service)),
+    }))
 }
 
 pub fn ensure_snapshot_manager_for_workspace(
@@ -810,13 +935,22 @@ pub async fn initialize_snapshot_manager_for_workspace(
 mod tests {
     use super::{
         clear_snapshot_manager_for_test, get_or_create_snapshot_manager,
-        reset_snapshot_manager_new_count_for_test, set_snapshot_manager_new_delay_for_test,
-        snapshot_manager_new_count_for_test,
+        get_snapshot_manager_for_workspace, observe_snapshot_manager_new_for_test,
+        open_snapshot_manager_for_view, set_snapshot_manager_new_delay_for_test,
+        snapshot_manager_new_count_for_test, snapshot_manager_test_serial_lock,
+        wrap_tool_for_snapshot_tracking,
     };
+    use crate::agentic::tools::framework::ToolUseContext;
+    use crate::agentic::tools::implementations::delete_file_tool::DeleteFileTool;
+    use crate::agentic::tools::implementations::file_write_tool::FileWriteTool;
+    use crate::agentic::tools::ToolRuntimeRestrictions;
+    use crate::agentic::WorkspaceBinding;
     use crate::infrastructure::PathManager;
+    use crate::service::snapshot::types::OperationType;
     use crate::service::workspace_runtime::{
         set_workspace_runtime_service_for_current_test, WorkspaceRuntimeService,
     };
+    use std::collections::HashMap;
     use std::path::{Path, PathBuf};
     use std::sync::Arc;
     use std::time::Duration;
@@ -846,8 +980,110 @@ mod tests {
         }
     }
 
+    fn tool_context(workspace: PathBuf, session_id: &str) -> ToolUseContext {
+        ToolUseContext {
+            tool_call_id: Some("snapshot-write-call".to_string()),
+            agent_type: None,
+            session_id: Some(session_id.to_string()),
+            dialog_turn_id: None,
+            workspace: Some(WorkspaceBinding::new(None, workspace)),
+            loaded_deferred_tool_specs: Vec::new(),
+            primary_model_facts: tool_runtime::context::PrimaryModelFacts::default(),
+            custom_data: HashMap::new(),
+            computer_use_host: None,
+            runtime_tool_restrictions: ToolRuntimeRestrictions::default(),
+            runtime_handles: bitfun_runtime_ports::ToolRuntimeHandles::default(),
+        }
+    }
+
+    #[test]
+    fn delete_keeps_its_input_path_instead_of_canonical_permission_resource() {
+        let workspace = TestWorkspace::new();
+        let context = tool_context(workspace.path().to_path_buf(), "delete-session");
+        let tool = super::WrappedTool::new(Arc::new(DeleteFileTool::new()));
+
+        assert_eq!(
+            tool.extract_file_path(&serde_json::json!({ "path": "link.txt" }), &context)
+                .expect("Delete path"),
+            PathBuf::from("link.txt")
+        );
+    }
+
+    #[tokio::test]
+    async fn wrapped_delete_rejects_symlink_before_mutation() {
+        let workspace = TestWorkspace::new();
+        let _runtime_guard = set_workspace_runtime_service_for_current_test(Arc::new(
+            WorkspaceRuntimeService::new(Arc::new(PathManager::with_user_root_for_tests(
+                workspace.path().join("user-root"),
+            ))),
+        ));
+        let target = workspace.path().join("target.txt");
+        let link = workspace.path().join("link.txt");
+        std::fs::write(&target, "target").expect("target file");
+        #[cfg(unix)]
+        std::os::unix::fs::symlink(&target, &link).expect("file symlink");
+        #[cfg(windows)]
+        if std::os::windows::fs::symlink_file(&target, &link).is_err() {
+            return;
+        }
+        let context = tool_context(workspace.path().to_path_buf(), "delete-link-session");
+        let tool = wrap_tool_for_snapshot_tracking(Arc::new(DeleteFileTool::new()));
+
+        let error = tool
+            .call(&serde_json::json!({ "path": "link.txt" }), &context)
+            .await
+            .expect_err("Snapshot-tracked Delete must reject a symlink");
+
+        assert!(error.to_string().contains("symbolic link"));
+        assert!(std::fs::symlink_metadata(&link)
+            .expect("link must remain")
+            .file_type()
+            .is_symlink());
+        assert_eq!(std::fs::read_to_string(target).unwrap(), "target");
+    }
+
+    #[tokio::test]
+    async fn wrapped_write_payload_records_and_rolls_back_created_file() {
+        let workspace = TestWorkspace::new();
+        let _runtime_guard = set_workspace_runtime_service_for_current_test(Arc::new(
+            WorkspaceRuntimeService::new(Arc::new(PathManager::with_user_root_for_tests(
+                workspace.path().join("user-root"),
+            ))),
+        ));
+        let alias_anchor = workspace.path().join("alias-anchor");
+        std::fs::create_dir_all(&alias_anchor).expect("alias anchor");
+        let workspace_alias = alias_anchor.join("..");
+        let context = tool_context(workspace_alias, "write-session");
+        let tool = wrap_tool_for_snapshot_tracking(Arc::new(FileWriteTool::new()));
+        let file = workspace.path().join("new/deep/file.txt");
+
+        tool.call(
+            &serde_json::json!({ "payload": "+++ new/deep/file.txt\ncreated" }),
+            &context,
+        )
+        .await
+        .expect("wrapped Write should succeed");
+
+        let manager = get_snapshot_manager_for_workspace(workspace.path())
+            .expect("Write should initialize snapshot manager");
+        assert_eq!(
+            manager
+                .get_session_files("write-session")
+                .await
+                .expect("recorded files"),
+            vec![dunce::canonicalize(&file).expect("canonical written file")]
+        );
+
+        manager
+            .rollback_session("write-session")
+            .await
+            .expect("rollback created file");
+        assert!(!file.exists());
+    }
+
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn concurrent_get_or_create_initializes_snapshot_manager_once_per_workspace() {
+        let _test_guard = snapshot_manager_test_serial_lock().lock().await;
         let workspace = TestWorkspace::new();
         let _runtime_guard = set_workspace_runtime_service_for_current_test(Arc::new(
             WorkspaceRuntimeService::new(Arc::new(PathManager::with_user_root_for_tests(
@@ -855,7 +1091,7 @@ mod tests {
             ))),
         ));
         clear_snapshot_manager_for_test(workspace.path());
-        reset_snapshot_manager_new_count_for_test();
+        observe_snapshot_manager_new_for_test(workspace.path());
         set_snapshot_manager_new_delay_for_test(Duration::from_millis(80));
 
         let first = get_or_create_snapshot_manager(workspace.path().to_path_buf(), None);
@@ -869,5 +1105,94 @@ mod tests {
 
         assert!(Arc::ptr_eq(&first, &second));
         assert_eq!(snapshot_manager_new_count_for_test(), 1);
+    }
+
+    #[tokio::test]
+    async fn read_only_view_reloads_persisted_history_without_becoming_a_writer() {
+        let workspace = TestWorkspace::new();
+        let _runtime_guard = set_workspace_runtime_service_for_current_test(Arc::new(
+            WorkspaceRuntimeService::new(Arc::new(PathManager::with_user_root_for_tests(
+                workspace.path().join("user-root"),
+            ))),
+        ));
+        let file = workspace.path().join("tracked.txt");
+        tokio::fs::write(&file, "before").await.expect("seed file");
+        let writer = get_or_create_snapshot_manager(workspace.path().to_path_buf(), None)
+            .await
+            .expect("writer manager");
+        let operation_id = writer
+            .record_file_change(
+                "session-1",
+                1,
+                file.clone(),
+                OperationType::Modify,
+                "test".to_string(),
+            )
+            .await
+            .expect("start operation");
+        tokio::fs::write(&file, "after").await.expect("change file");
+        writer
+            .get_snapshot_service()
+            .read()
+            .await
+            .complete_file_modification("session-1", &operation_id, 1)
+            .await
+            .expect("complete operation");
+        clear_snapshot_manager_for_test(workspace.path());
+
+        let view = open_snapshot_manager_for_view(workspace.path())
+            .await
+            .expect("read-only view");
+
+        assert_eq!(
+            view.get_session_files("session-1").await.unwrap(),
+            vec![file]
+        );
+        assert!(get_snapshot_manager_for_workspace(workspace.path()).is_none());
+        let error = view
+            .record_file_change(
+                "session-2",
+                1,
+                workspace.path().join("blocked.txt"),
+                OperationType::Create,
+                "test".to_string(),
+            )
+            .await
+            .expect_err("read-only view must reject mutations");
+        assert!(error.to_string().contains("read-only"), "{error}");
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn read_only_view_waits_for_an_in_flight_writer_initialization() {
+        let _test_guard = snapshot_manager_test_serial_lock().lock().await;
+        let workspace = TestWorkspace::new();
+        let _runtime_guard = set_workspace_runtime_service_for_current_test(Arc::new(
+            WorkspaceRuntimeService::new(Arc::new(PathManager::with_user_root_for_tests(
+                workspace.path().join("user-root"),
+            ))),
+        ));
+        clear_snapshot_manager_for_test(workspace.path());
+        observe_snapshot_manager_new_for_test(workspace.path());
+        set_snapshot_manager_new_delay_for_test(Duration::from_millis(80));
+
+        let workspace_path = workspace.path().to_path_buf();
+        let writer_task = tokio::spawn(async move {
+            get_or_create_snapshot_manager(workspace_path, None)
+                .await
+                .expect("writer manager")
+        });
+        while snapshot_manager_new_count_for_test() == 0 {
+            tokio::task::yield_now().await;
+        }
+        let alias_anchor = workspace.path().join("alias-anchor");
+        std::fs::create_dir_all(&alias_anchor).expect("alias anchor");
+        let workspace_alias = alias_anchor.join("..");
+        let view = open_snapshot_manager_for_view(&workspace_alias)
+            .await
+            .expect("aliased view waits for writer");
+        let writer = writer_task.await.expect("writer task");
+        set_snapshot_manager_new_delay_for_test(Duration::ZERO);
+
+        assert!(Arc::ptr_eq(&view, &writer));
     }
 }

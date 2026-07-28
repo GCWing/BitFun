@@ -171,27 +171,29 @@ Python SDK、TypeScript SDK、managed Host 和连接预启动 Host 不是四种 
 ### 4.1 产品入口
 
 ```mermaid
-flowchart LR
+flowchart TB
   GUI["GUI / TUI"] --> UIA["UI adapter"]
   CLI["bitfun exec"] --> CLIA["CLI adapter"]
   SDK["Agent SDK"] --> SDKA["SDK Host"]
+  ACP["ACP"] --> ACPA["ACP adapter"]
+  Server["Server / Remote"] --> RemoteA["Server / Remote adapter"]
   UIA --> API["Runtime API"]
   CLIA --> API
   SDKA --> API
-  API --> Runtime["Agent Runtime owners"]
+  ACPA --> API["Runtime API"]
+  RemoteA --> API
+  API --> Coordinator["ConversationCoordinator"]
+  Coordinator --> Runtime["Agent Runtime owners"]
+
+  Composition["first-party composition roots"] -. "inject once" .-> Ownership["CoreRuntimeOwnership"]
+  Ownership -. "local attach / mutation gate" .-> Coordinator
 ```
 
 ### 4.2 互操作入口
 
-```mermaid
-flowchart LR
-  ACP["ACP"] --> ACPA["ACP adapter"]
-  Remote["Server / Remote"] --> RemoteA["Remote adapter"]
-  ACPA --> API["Runtime API"]
-  RemoteA --> API
-```
+上图中的 ACP、Server/Remote 和 SDK Host 都是同级 adapter；虚线只表示第一方进程装配 ownership，不表示某个入口依赖另一个入口。
 
-以上两图固定四条架构结论：
+上图固定四条架构结论：
 
 - GUI/TUI/CLI 同样使用 Query、MCP、Permission 和 Hook，但它们直接经过各自 adapter 调用共享 Runtime API，
   不依赖 Python/TypeScript SDK，也不依赖 SDK Host。
@@ -203,8 +205,9 @@ flowchart LR
 一次性 Headless CLI 继续 Embedded；公开 SDK 默认连接私有 SDK Host。Shared Agent Runtime process 和 SDK Host 都是 Rust 产品进程，
 与运行第三方 JS/TS 的 Node/Bun Plugin Host 不同；三者不能共享名称或业务归属。
 
-当前代码只具备 Shared deployment 的本机 IPC、身份、握手、Health 和 ownership 基础；没有 GUI/TUI/Remote consumer，
-也没有 Shared Session/Turn 协议。图中 Shared deployment 是目标架构，不是已交付产品能力。
+当前代码已经交付显式启用的 Shared TUI 最小切片，包含本机 IPC、身份、握手、Session/Turn、Permission/UserInput、
+ownership 和生命周期治理；GUI、Headless CLI、ACP、SDK Host、Server/Remote 仍没有 Shared consumer。该图中的多入口逻辑复用是
+当前事实，除 Shared TUI 外的跨进程 Shared deployment 仍是目标架构。
 
 ### 4.3 各形态能做什么
 
@@ -242,6 +245,7 @@ flowchart LR
 | `bitfun-sdk-host` | 独立组装入口，选择 SDK profile | 依赖 CLI crate；成为第二个 Server 或 Runtime |
 | SDK Host adapter | 协议、能力协商、连接/Query 资源清理责任和 DTO 转换 | stdin/stdout 入口、Agent 业务状态、Tool/MCP 注册表 |
 | Python/TypeScript SDK | 管理或连接匹配 Host，提供一致公开 API | 要求用户安装 `bitfun` CLI；暴露内部 wire DTO |
+| `CoreRuntimeOwnership` | 第一方 Rust 入口选择 Embedded/Shared，并把本机 workspace lease 注入 Coordinator | 进入公开 SDK/wire；成为 Session 单写或 Server 路由 owner |
 
 ### 5.2 一次 Query 的运行时序
 
@@ -468,6 +472,7 @@ CLI 和 SDK 共享能力事实，但不是上下层关系：
 因此：
 
 - CLI 不默认依赖 SDK Host，也不通过 SDK package 运行。
+- CLI、ACP、Desktop 与 SDK Host 只共享 Core ownership 和 Runtime 行为 owner；共享这些内部 owner 不构成产品依赖，也不新增第二种 SDK。
 - 一次性 `bitfun exec` 默认使用 Embedded Runtime；只有恢复或控制 Shared Agent Runtime 中的共享 Session 时，才使用第一方
   client adapter attach，且不经过 SDK Host。
 - SDK 不解析 CLI `stream-json` 作为正式双向协议。
@@ -481,6 +486,10 @@ CLI 和 SDK 共享能力事实，但不是上下层关系：
 ```mermaid
 flowchart LR
   Runtime["Runtime domain contracts"] --> HostSchema["SDK Host schema\nstable + experimental"]
+  Runtime --> SessionCreate["AgentSessionCreateResult\nshared session-create facts"]
+  SessionCreate --> HostSchema
+  SessionCreate --> CLIProjection
+  SessionCreate --> UIProjection
   HostSchema --> TSClient["generated internal TS wire client"]
   HostSchema --> PyClient["generated internal Python wire client"]
   TSClient --> TSApi["curated TypeScript public API"]
@@ -493,6 +502,11 @@ flowchart LR
   Fixtures --> PyApi
   Fixtures --> CLIProjection
 ```
+
+会话创建是这条规则的当前实例：`AgentSessionCreateResult` 由 Session owner 生成并携带规范化的
+workspace 与 execution-target 事实；Desktop 的 `CreateSessionResponse` 只是该类型的宿主命名，SDK Host 的
+`SessionCreateResult` 则保留 `agent`、`lifetime` 等协议字段并从同一结果转换。adapter 可以改变 wire 形状，
+但不能重新计算或持有第二份 Session 创建事实。
 
 生成的 wire 类型保持 SDK 内部；公开 API 必须经过人工策划，不能把协议 DTO 原样暴露给用户。
 

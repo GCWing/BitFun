@@ -11,29 +11,35 @@ Agent Runtime 的模块职责见 [`agent-runtime-services-design.md`](agent-runt
 BitFun 只有一套 Agent Runtime 行为。`Embedded` 和 `Shared` 只描述同一套 Runtime 的物理部署方式，不是两套实现。
 
 ```mermaid
-flowchart LR
+flowchart TB
   subgraph "产品入口"
-    GUI["GUI / TUI"]
-    CLI["Headless CLI"]
-    SDK["Agent SDK"]
+    GUI["Desktop GUI"]
+    TUI["TUI / Headless CLI"]
+    ACP["ACP"]
+    SDK["Agent SDK · SDK Host"]
+    Server["Server agent bootstrap"]
   end
 
-  GUI --> Adapter["first-party adapter"]
-  CLI --> Adapter
-  SDK --> SDKAdapter["SDK Host adapter"]
+  GUI --> Adapter["同级 first-party adapters"]
+  TUI --> Adapter
+  ACP --> Adapter
+  SDK --> Adapter
+  Server --> Adapter
   Adapter --> API["Agent Runtime API"]
-  SDKAdapter --> API
-  API --> Owners["Session / Tool / Permission / MCP owners"]
+  API --> Coordinator["ConversationCoordinator"]
+  Coordinator --> Owners["Session / Tool / Permission / MCP owners"]
+  Coordinator -. "local attach / mutation" .-> Ownership["CoreRuntimeOwnership"]
 ```
 
 当前代码状态必须和目标设计分开阅读：
 
 | 范围 | 当前状态 |
 |---|---|
-| Embedded Desktop GUI | 继续使用现有 Desktop 事件投影和 Tauri adapter；本设计没有改变其依赖或生命周期 |
+| Embedded Desktop GUI | 继续使用 Desktop 事件投影和 Tauri adapter；按实际打开的本机 workspace 延迟取得并持有 Embedded ownership，不增加后台进程 |
 | Embedded TUI/Headless CLI/Peer Host | Session、Turn、Permission 和事件订阅统一通过同一个 Rust Runtime SDK（当前 preview）；CLI crate 只保留第一方 adapter 和各形态自己的展示/断流策略 |
 | ACP/SDK Host | 使用同一个 Runtime 事件入口的 session-scoped 订阅；各自协议和进程生命周期保持独立 |
-| Runtime ownership | CLI 的 Embedded deployment 取得共享锁；Shared TUI deployment 取得独占锁，二者在同一 workspace 互斥；其他产品入口尚未接入该锁 |
+| Runtime ownership | Desktop、CLI、ACP、SDK Host 和现有 Server agent bootstrap 共用 Core owner；Embedded 取得共享锁，Shared TUI 取得独占锁，同一 workspace 上两种 deployment 互斥 |
+| 当前 HTTP Server | 只提供 health/info/WebSocket 外壳，未装配 Agent Runtime，因此不取得 workspace ownership；`bootstrap.rs` 仅保持 agent-enabled composition 的一致边界，不由当前入口启动 |
 | Shared local IPC | 未发布的本机协议已有 discovery、实例锁、严格握手、Session 控制租约、有界事件流和 cleanup；唯一 consumer 是第一方交互式 TUI adapter |
 | Shared TUI | `bitfun --shared` / `bitfun chat --shared` 可列出、创建、恢复 Session，读取 transcript，提交/取消 Turn，处理 Permission 和 UserInput；默认仍是 Embedded |
 | Shared GUI/Headless/ACP/SDK Host/Remote | 未交付，也不会由 `--shared` 隐式启用；Replay、Observer、Controller transfer、Session delete/fork 同样不在当前协议中 |
@@ -95,19 +101,37 @@ flowchart LR
 
 ### 4.1 Runtime ownership
 
-`services-core::runtime_ownership` 提供进程级 RAII 文件锁：
+ownership 分成“产品决策”和“文件锁原语”两层；入口不再各自拼 key、目录或锁模式：
 
 ```mermaid
-flowchart LR
-  E1["Embedded A"] -->|"shared lock"| Key["workspace + product ownership key"]
-  E2["Embedded B"] -->|"shared lock"| Key
-  S["Shared deployment"] -->|"exclusive lock"| Key
+flowchart TB
+  Entrypoints["Desktop · CLI · ACP · SDK Host · Server bootstrap"]
+  Entrypoints --> Core["CoreRuntimeOwnership<br/>deployment · product identity · process leases"]
+  Core --> Primitive["services-core::runtime_ownership<br/>canonical key · RAII file lock"]
+  Primitive --> E["Embedded · shared lock"]
+  Primitive --> S["Shared · exclusive lock"]
 ```
 
-- 多个 Embedded 进程可继续并存。
-- 在当前 CLI 边界内，Shared TUI 与 Embedded CLI Runtime 互斥；多个 Embedded CLI 进程仍可并存。
-- CLI 每次初始化 Runtime 时都调用该原语；Desktop、SDK Host、Server 等入口尚未接入，也不会被误报为已共享或已互斥。
-- 该锁不选择 workspace、不启动 Runtime、不缓存实例，也不替代 Session 写入权或文件冲突控制。
+```mermaid
+flowchart TD
+  Op["Session operation"] --> Read{"read-only view/list?"}
+  Read -->|"yes"| NoLock["不取得 ownership"]
+  Read -->|"no · attach/mutate/turn"| Remote{"structured remote facts?"}
+  Remote -->|"yes"| RemoteHost["由目标 execution host 负责"]
+  Remote -->|"no"| Gate["Coordinator → CoreRuntimeOwnership"]
+  Gate --> Lease["按 canonical workspace 保留进程期 lease"]
+```
+
+| 场景 | 行为 | 原因 |
+|---|---|---|
+| 多个 Embedded 进程访问同一 workspace | 共享锁允许并存 | 保持单实例、CI 和隔离测试的既有成本模型 |
+| Shared 与任一 Embedded 访问同一 workspace | 后启动者返回稳定错误码和启动建议 | 防止同一 workspace 同时存在两种 Runtime deployment |
+| Desktop 打开多个 workspace | 首次 attach/write 时逐个取得并保留 lease | 不把窗口数、Session 数等同于 Runtime 进程数 |
+| 只读 list/view | 不加锁 | ownership 只管理 Runtime deployment，不扩大成读取权限 |
+| 已解析且带有效 `connection_id` 的 remote workspace | 本机不加锁 | 与 Session storage 的远端判据一致；`host` 提示本身不能绕过本地锁 |
+| 当前只读 HTTP Server | 不创建 Core owner | 没有 Agent Runtime 就没有 ownership 可声明 |
+
+`CoreRuntimeOwnership` 只选择 deployment、产品 identity 并保留进程期 lease；`services-core` 只负责 canonical key 和跨进程锁。二者都不选择 workspace、不启动 Runtime，也不替代 Session 单写、数据库事务、文件冲突控制或安全沙箱。
 
 ### 4.2 私有本机 IPC
 
@@ -163,18 +187,23 @@ sequenceDiagram
 ## 5. 产品入口保持同级
 
 ```mermaid
-flowchart LR
-  GUI["GUI"] --> GA["GUI adapter"]
-  TUI["TUI"] --> TA["TUI adapter"]
-  CLI["Headless CLI"] --> CA["CLI adapter"]
-  SDK["Agent SDK"] --> SA["SDK Host adapter"]
-  ACP["ACP"] --> AA["ACP adapter"]
+flowchart TB
+  GUI["GUI adapter"] --> API["Agent Runtime API"]
+  TUI["TUI adapter"] --> API
+  CLI["Headless CLI adapter"] --> API
+  SDK["SDK Host adapter"] --> API
+  ACP["ACP adapter"] --> API
+  Server["Server adapter · when assembled"] --> API
+  API --> Coordinator["ConversationCoordinator"]
+  Coordinator --> Behavior["single behavior owners"]
 
-  GA --> API["Agent Runtime API"]
-  TA --> API
-  CA --> API
-  SA --> API
-  AA --> API
+  GUI -. "composition" .-> Ownership["CoreRuntimeOwnership"]
+  TUI -. "Embedded / opt-in Shared" .-> Ownership
+  CLI -. "Embedded" .-> Ownership
+  SDK -. "Embedded" .-> Ownership
+  ACP -. "Embedded" .-> Ownership
+  Server -. "only when Runtime is assembled" .-> Ownership
+  Ownership -. "injected once" .-> Coordinator
 ```
 
 - CLI 不依赖 SDK Host，GUI/TUI 也不依赖公开 SDK package。
@@ -238,7 +267,7 @@ Session/Turn、事件恢复、Permission/UserInput、Controller、配置管理�
 - 只有一套 Agent Runtime 业务实现；部署差异不能产生第二套 Session、Tool、Permission 或 MCP owner。
 - Client、窗口、Session 或 workspace 数量不会自动等量增加 Runtime 或 Plugin Host 进程。
 - 私有 IPC 不成为公开 SDK、Remote、Peer、HTTP 或浏览器协议。
-- 默认 GUI/TUI/Headless CLI 保持 Embedded；只有交互式 TUI 的显式 `--shared` 选择 Shared，当前互斥范围也只覆盖 CLI deployment。
+- 默认 GUI/TUI/Headless CLI、ACP 与 SDK Host 保持 Embedded；只有交互式 TUI 的显式 `--shared` 选择 Shared。互斥按 `workspace + product` 生效，不再按入口名称缩窄。
 - Account/session cloud sync 仍使用既有 Core compatibility 边界，不属于 Shared Runtime 支持。
 - Remote workspace 的文件、凭据、进程和 Runtime 位于目标执行域，禁止静默回落本机。
 - 未经真实 consumer 验证的接口不进入 wire；当前 wire 只包含表中列出的 Shared TUI 操作。

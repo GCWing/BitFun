@@ -432,7 +432,17 @@ pub async fn save_session_turn(
     request: SaveSessionTurnRequest,
     app_state: State<'_, AppState>,
     path_manager: State<'_, Arc<PathManager>>,
+    runtime: State<'_, DesktopRuntimeContext>,
 ) -> Result<(), String> {
+    runtime
+        .session_application()
+        .ensure_workspace_runtime_ownership(desktop_session_scope(
+            request.workspace_path.clone(),
+            request.remote_connection_id.clone(),
+            request.remote_ssh_host.clone(),
+        ))
+        .await
+        .map_err(desktop_session_error)?;
     let workspace_path = desktop_effective_session_storage_path(
         &app_state,
         &request.workspace_path,
@@ -674,7 +684,17 @@ pub async fn archive_all_sessions(
     request: ArchiveAllSessionsRequest,
     app_state: State<'_, AppState>,
     path_manager: State<'_, Arc<PathManager>>,
+    runtime: State<'_, DesktopRuntimeContext>,
 ) -> Result<u32, String> {
+    runtime
+        .session_application()
+        .ensure_workspace_runtime_ownership(desktop_session_scope(
+            request.workspace_path.clone(),
+            request.remote_connection_id.clone(),
+            request.remote_ssh_host.clone(),
+        ))
+        .await
+        .map_err(desktop_session_error)?;
     let workspace_path = desktop_effective_session_storage_path(
         &app_state,
         &request.workspace_path,
@@ -732,7 +752,17 @@ pub async fn delete_all_archived_sessions(
     request: DeleteAllArchivedSessionsRequest,
     app_state: State<'_, AppState>,
     path_manager: State<'_, Arc<PathManager>>,
+    runtime: State<'_, DesktopRuntimeContext>,
 ) -> Result<u32, String> {
+    runtime
+        .session_application()
+        .ensure_workspace_runtime_ownership(desktop_session_scope(
+            request.workspace_path.clone(),
+            request.remote_connection_id.clone(),
+            request.remote_ssh_host.clone(),
+        ))
+        .await
+        .map_err(desktop_session_error)?;
     let workspace_path = desktop_effective_session_storage_path(
         &app_state,
         &request.workspace_path,

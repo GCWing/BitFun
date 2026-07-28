@@ -55,6 +55,12 @@ pub async fn initialize(workspace: Option<String>) -> anyhow::Result<Arc<ServerA
 
     // 3. Agentic system
     let path_manager = try_get_path_manager_arc()?;
+    let runtime_ownership = Arc::new(
+        bitfun_core::runtime_ownership::CoreRuntimeOwnership::embedded(
+            path_manager.as_ref(),
+            "server",
+        ),
+    );
 
     let event_queue = Arc::new(events::EventQueue::new(Default::default()));
     let event_router = Arc::new(events::EventRouter::new());
@@ -100,6 +106,7 @@ pub async fn initialize(workspace: Option<String>) -> anyhow::Result<Arc<ServerA
         tool_pipeline,
         event_queue.clone(),
         event_router.clone(),
+        runtime_ownership,
     ));
     coordinator.set_terminal_port(
         bitfun_core::product_runtime::CoreRuntimeServicesProvider::terminal_port(),
@@ -172,25 +179,22 @@ pub async fn initialize(workspace: Option<String>) -> anyhow::Result<Arc<ServerA
     // 5. Open workspace if specified
     let initial_workspace_path = if let Some(ws_path) = workspace {
         let path = std::path::PathBuf::from(&ws_path);
-        match workspace_service.open_workspace(path.clone()).await {
+        match coordinator
+            .open_workspace_with_runtime_ownership(
+                workspace_service.as_ref(),
+                path,
+                None,
+                None,
+                "server bootstrap",
+            )
+            .await
+        {
             Ok(info) => {
                 log::info!(
                     "Workspace opened: name={}, path={}",
                     info.name,
                     info.root_path.display()
                 );
-
-                // Initialize snapshot for workspace
-                if let Err(e) =
-                    bitfun_core::service::snapshot::initialize_snapshot_manager_for_workspace(
-                        info.root_path.clone(),
-                        None,
-                    )
-                    .await
-                {
-                    log::warn!("Failed to initialize snapshot system: {}", e);
-                }
-
                 Some(info.root_path)
             }
             Err(e) => {

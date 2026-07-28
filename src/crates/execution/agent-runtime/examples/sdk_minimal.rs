@@ -21,11 +21,11 @@ impl AgentSubmissionPort for ExampleAgentProvider {
         request: AgentSessionCreateRequest,
     ) -> PortResult<AgentSessionCreateResult> {
         self.created_sessions.lock().unwrap().push(request.clone());
-        Ok(AgentSessionCreateResult {
-            session_id: "example-session".to_string(),
-            session_name: request.session_name,
-            agent_type: request.agent_type,
-        })
+        Ok(AgentSessionCreateResult::new(
+            "example-session",
+            request.session_name,
+            request.agent_type,
+        ))
     }
 
     async fn submit_message(

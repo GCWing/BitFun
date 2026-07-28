@@ -13,8 +13,7 @@ use tokio_util::sync::CancellationToken;
 
 pub use bitfun_core_types::{
     SessionExecutionTarget, SessionExecutionTargetKind, SessionExecutionTargetRequest,
-    WorktreeError, WorktreeErrorCode, WorktreeLifecycle, WorktreeSettings,
-    WorktreeSummary,
+    WorktreeError, WorktreeErrorCode, WorktreeLifecycle, WorktreeSettings, WorktreeSummary,
 };
 
 mod local_workspace_snapshot;
@@ -996,6 +995,32 @@ pub struct AgentSessionCreateResult {
     #[serde(default)]
     pub session_name: String,
     pub agent_type: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub workspace_path: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub workspace_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub project_workspace_path: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub execution_target: Option<SessionExecutionTarget>,
+}
+
+impl AgentSessionCreateResult {
+    pub fn new(
+        session_id: impl Into<String>,
+        session_name: impl Into<String>,
+        agent_type: impl Into<String>,
+    ) -> Self {
+        Self {
+            session_id: session_id.into(),
+            session_name: session_name.into(),
+            agent_type: agent_type.into(),
+            workspace_path: None,
+            workspace_id: None,
+            project_workspace_path: None,
+            execution_target: None,
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -2390,6 +2415,63 @@ mod tests {
         assert!(json.get("sessionId").is_none());
         assert!(json.get("workspaceId").is_none());
         assert!(json.get("modelId").is_none());
+    }
+
+    #[test]
+    fn agent_session_create_result_keeps_legacy_payload_shape() {
+        let legacy = serde_json::json!({
+            "sessionId": "session_1",
+            "sessionName": "Main",
+            "agentType": "agentic"
+        });
+
+        let result: AgentSessionCreateResult =
+            serde_json::from_value(legacy.clone()).expect("deserialize legacy create result");
+
+        assert_eq!(result.workspace_path, None);
+        assert_eq!(result.workspace_id, None);
+        assert_eq!(result.project_workspace_path, None);
+        assert_eq!(result.execution_target, None);
+        assert_eq!(
+            serde_json::to_value(result).expect("serialize legacy create result"),
+            legacy
+        );
+    }
+
+    #[test]
+    fn agent_session_create_result_carries_normalized_workspace_facts() {
+        let result: AgentSessionCreateResult = serde_json::from_value(serde_json::json!({
+            "sessionId": "session_1",
+            "sessionName": "Main",
+            "agentType": "agentic",
+            "workspacePath": "/worktrees/session_1",
+            "workspaceId": "workspace_1",
+            "projectWorkspacePath": "/workspace/project",
+            "executionTarget": {
+                "kind": "managedWorktree",
+                "worktreeId": "worktree_1",
+                "rootPath": "/worktrees/session_1",
+                "baseRef": "main",
+                "baseCommit": "0123456789abcdef",
+                "branch": "bitfun/session_1",
+                "lifecycle": "managed"
+            }
+        }))
+        .expect("deserialize complete create result");
+
+        assert_eq!(
+            result.workspace_path.as_deref(),
+            Some("/worktrees/session_1")
+        );
+        assert_eq!(result.workspace_id.as_deref(), Some("workspace_1"));
+        assert_eq!(
+            result.project_workspace_path.as_deref(),
+            Some("/workspace/project")
+        );
+        let target = result.execution_target.expect("resolved execution target");
+        assert_eq!(target.kind, SessionExecutionTargetKind::ManagedWorktree);
+        assert_eq!(target.worktree_id.as_deref(), Some("worktree_1"));
+        assert_eq!(target.root_path, "/worktrees/session_1");
     }
 
     #[test]

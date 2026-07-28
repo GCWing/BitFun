@@ -370,3 +370,34 @@ fn interactive_tui_agent_operations_stay_behind_cli_runtime_client() {
         "interactive composition changes must preserve product-aware CLI identity and MCP import"
     );
 }
+
+#[test]
+fn runtime_ownership_policy_is_assembled_once_in_core() {
+    const SHARED_RUNTIME: &str = include_str!("../src/shared_runtime.rs");
+    const CLI_RUNTIME: &str = include_str!("../src/runtime/mod.rs");
+    const CLI_MAIN: &str = include_str!("../src/main.rs");
+    const AGENTIC_SYSTEM: &str = include_str!("../src/agent/agentic_system.rs");
+
+    for private_policy in [
+        "RuntimeOwnershipKey::for_workspace",
+        "WorkspaceRuntimeOwnership::try_acquire",
+        "fn ownership_root",
+        "fn product_identity",
+        "pub(crate) fn acquire_ownership",
+    ] {
+        assert!(
+            !SHARED_RUNTIME.contains(private_policy),
+            "CLI must not duplicate Core ownership policy: {private_policy}"
+        );
+    }
+    assert!(
+        !CLI_RUNTIME.contains("WorkspaceRuntimeOwnership")
+            && !CLI_RUNTIME.contains("_runtime_ownership"),
+        "Coordinator must retain the Core owner; CliRuntimeContext must not keep a second guard"
+    );
+    assert!(
+        CLI_MAIN.contains("CoreRuntimeOwnership")
+            && AGENTIC_SYSTEM.contains("init_agentic_system_for_profile_with_runtime_ownership"),
+        "CLI must select a deployment and inject the single Core owner"
+    );
+}

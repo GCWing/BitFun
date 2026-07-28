@@ -101,6 +101,49 @@ async fn json_store_creates_parent_dirs_and_round_trips_payload() {
     assert_eq!(loaded, Some(payload));
 }
 
+#[cfg(windows)]
+#[tokio::test]
+async fn strict_atomic_write_supports_extended_length_windows_paths() {
+    let root = TestTempDir::new("long-path");
+    let segment = "snapshot-history-segment".repeat(5);
+    let path = root
+        .path()
+        .join(&segment)
+        .join(&segment)
+        .join("session.json");
+    assert!(path.to_string_lossy().len() > 260);
+    let initial = TestPayload {
+        label: "persisted".to_string(),
+        count: 1,
+    };
+    let forward_slash_path = PathBuf::from(path.to_string_lossy().replace('\\', "/"));
+
+    JsonFileStore
+        .write_atomic_strict(&forward_slash_path, &initial)
+        .await
+        .expect("strict first write should normalize long forward-slash paths");
+
+    let alias_anchor = path.parent().unwrap().join("alias-anchor");
+    std::fs::create_dir_all(&alias_anchor).expect("create long-path alias anchor");
+    let aliased_path = alias_anchor.join("..").join("session.json");
+    let replacement = TestPayload {
+        label: "replaced".to_string(),
+        count: 2,
+    };
+    JsonFileStore
+        .write_atomic_strict(&aliased_path, &replacement)
+        .await
+        .expect("strict replacement should normalize dot segments");
+
+    assert_eq!(
+        JsonFileStore
+            .read_optional::<TestPayload>(&path)
+            .await
+            .expect("long-path payload should be readable"),
+        Some(replacement)
+    );
+}
+
 #[tokio::test]
 async fn json_store_reports_no_parent_directory() {
     let store = JsonFileStore;

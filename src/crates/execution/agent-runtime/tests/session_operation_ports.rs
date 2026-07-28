@@ -18,11 +18,11 @@ impl AgentSubmissionPort for FakeSubmissionPort {
         &self,
         request: AgentSessionCreateRequest,
     ) -> PortResult<AgentSessionCreateResult> {
-        Ok(AgentSessionCreateResult {
-            session_id: "session-1".to_string(),
-            session_name: request.session_name,
-            agent_type: request.agent_type,
-        })
+        Ok(AgentSessionCreateResult::new(
+            "session-1",
+            request.session_name,
+            request.agent_type,
+        ))
     }
 
     async fn submit_message(

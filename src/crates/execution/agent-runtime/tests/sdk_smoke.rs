@@ -164,11 +164,11 @@ impl AgentSubmissionPort for FakeSdkAgentProvider {
         request: AgentSessionCreateRequest,
     ) -> PortResult<AgentSessionCreateResult> {
         self.created_sessions.lock().unwrap().push(request.clone());
-        Ok(AgentSessionCreateResult {
-            session_id: "sdk-session-1".to_string(),
-            session_name: request.session_name,
-            agent_type: request.agent_type,
-        })
+        Ok(AgentSessionCreateResult::new(
+            "sdk-session-1",
+            request.session_name,
+            request.agent_type,
+        ))
     }
 
     async fn submit_message(

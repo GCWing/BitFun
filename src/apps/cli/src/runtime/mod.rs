@@ -12,7 +12,6 @@ use bitfun_core::product_runtime::{
 use bitfun_core::runtime_ports::PluginRuntimeAvailability;
 use bitfun_runtime_ports::LocalWorkspaceSnapshotPort;
 use bitfun_runtime_services::RuntimeServices;
-use bitfun_services_core::runtime_ownership::WorkspaceRuntimeOwnership;
 
 use crate::product_assembly::{assemble_acp_runtime_parts, assemble_cli_runtime_parts};
 
@@ -58,7 +57,6 @@ pub(crate) struct CliRuntimeContext {
     services: RuntimeServices,
     product: CliProductRuntimeState,
     approval_policy: CliApprovalPolicy,
-    _runtime_ownership: Arc<WorkspaceRuntimeOwnership>,
 }
 
 impl CliRuntimeContext {
@@ -66,7 +64,6 @@ impl CliRuntimeContext {
         agentic_system: AgenticSystem,
         workspace_root: impl AsRef<Path>,
         approval_policy: CliApprovalPolicy,
-        runtime_ownership: WorkspaceRuntimeOwnership,
     ) -> Result<Self> {
         let scheduler = ensure_product_dialog_scheduler(&agentic_system);
         let (workspace_root, services) =
@@ -120,7 +117,6 @@ impl CliRuntimeContext {
             services,
             product,
             approval_policy,
-            _runtime_ownership: Arc::new(runtime_ownership),
         })
     }
 

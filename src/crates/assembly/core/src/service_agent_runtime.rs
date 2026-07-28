@@ -40,7 +40,7 @@ use bitfun_services_integrations::remote_connect::{
     RemoteWorkspaceKind as RemoteConnectWorkspaceKind, RemoteWorkspaceRuntimeHost,
     RemoteWorkspaceUpdate,
 };
-use log::{debug, error, info};
+use log::{debug, info};
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -60,6 +60,18 @@ use crate::service::session::{DialogTurnData, ToolItemIdentityExt, TurnStatus};
 fn current_workspace_path() -> Option<std::path::PathBuf> {
     crate::service::workspace::get_global_workspace_service()
         .and_then(|service| service.try_get_current_workspace_path())
+}
+
+fn session_storage_request_from_binding(binding: &WorkspaceBinding) -> SessionStoragePathRequest {
+    SessionStoragePathRequest {
+        workspace_path: binding.logical_workspace_path().to_path_buf(),
+        remote_connection_id: binding.connection_id().map(ToOwned::to_owned),
+        remote_ssh_host: if binding.is_remote() {
+            Some(binding.session_identity.hostname.clone()).filter(|value| !value.trim().is_empty())
+        } else {
+            None
+        },
+    }
 }
 
 fn remote_workspace_kind(
@@ -125,21 +137,20 @@ async fn open_workspace_with_snapshot(
     remote_connection_id: Option<&str>,
     remote_ssh_host: Option<&str>,
 ) -> Result<RemoteWorkspaceUpdate, String> {
+    let coordinator = get_global_coordinator()
+        .ok_or_else(|| "Conversation coordinator not initialized".to_string())?;
     let workspace_service = crate::service::workspace::get_global_workspace_service()
         .ok_or_else(|| "Workspace service not available".to_string())?;
-    let path_buf = std::path::PathBuf::from(path);
-    let info = workspace_service
-        .open_workspace_resolving_known(path_buf, remote_connection_id, remote_ssh_host)
+    let info = coordinator
+        .open_workspace_with_runtime_ownership(
+            workspace_service.as_ref(),
+            std::path::PathBuf::from(path),
+            remote_connection_id,
+            remote_ssh_host,
+            snapshot_log_context,
+        )
         .await
         .map_err(|error| error.to_string())?;
-    if let Err(error) = crate::service::snapshot::initialize_snapshot_manager_for_workspace(
-        info.root_path.clone(),
-        None,
-    )
-    .await
-    {
-        error!("Failed to initialize snapshot after {snapshot_log_context}: {error}");
-    }
     let remote_connection_id = info.remote_ssh_connection_id().map(str::to_string);
     let remote_ssh_host = info
         .metadata
@@ -326,10 +337,12 @@ async fn resolve_session_model_id(session_id: &str) -> Option<String> {
     let session_storage_dir =
         CoreServiceAgentRuntime::resolve_session_storage_dir(session_id).await?;
     coordinator
-        .restore_session_from_storage_path(&session_storage_dir, session_id)
+        .restore_session_view_from_storage_path_timed(&session_storage_dir, session_id)
         .await
         .ok()
-        .and_then(|session| normalize_remote_session_model_id(session.config.model_id.as_deref()))
+        .and_then(|(session, _, _)| {
+            normalize_remote_session_model_id(session.config.model_id.as_deref())
+        })
 }
 
 fn core_dialog_submission_policy(policy: RemoteDialogSubmissionPolicy) -> DialogSubmissionPolicy {
@@ -855,14 +868,16 @@ impl CoreServiceAgentRuntime {
             .get_session(session_id)
             .is_none()
         {
-            let Some(session_storage_dir) = Self::resolve_session_storage_dir(session_id).await
-            else {
+            let Some(binding) = Self::resolve_session_workspace_binding(session_id).await else {
                 return Err(format!(
-                    "Session storage directory not available for session: {session_id}"
+                    "Session workspace binding not available for session: {session_id}"
                 ));
             };
             coordinator
-                .restore_session_from_storage_path(&session_storage_dir, session_id)
+                .restore_session_for_workspace(
+                    session_storage_request_from_binding(&binding),
+                    session_id,
+                )
                 .await
                 .map_err(|e| format!("Failed to restore session: {e}"))?;
         }
@@ -1432,26 +1447,18 @@ impl RemoteDialogRuntimeHost for CoreRemoteDialogRuntimeHost<'_> {
         session_id: &str,
         workspace: RemoteDialogWorkspaceBinding,
     ) -> Result<(), String> {
-        if let Some(session_storage_dir) =
-            CoreServiceAgentRuntime::resolve_session_storage_dir(session_id).await
-        {
-            self.coordinator
-                .restore_session_from_storage_path(&session_storage_dir, session_id)
-                .await
-        } else {
-            self.coordinator
-                .restore_session_for_workspace(
-                    SessionStoragePathRequest {
-                        workspace_path: std::path::PathBuf::from(workspace.workspace_path),
-                        remote_connection_id: workspace.remote_connection_id,
-                        remote_ssh_host: workspace.remote_ssh_host,
-                    },
-                    session_id,
-                )
-                .await
-        }
-        .map(|_| ())
-        .map_err(|e| e.to_string())
+        self.coordinator
+            .restore_session_for_workspace(
+                SessionStoragePathRequest {
+                    workspace_path: std::path::PathBuf::from(workspace.workspace_path),
+                    remote_connection_id: workspace.remote_connection_id,
+                    remote_ssh_host: workspace.remote_ssh_host,
+                },
+                session_id,
+            )
+            .await
+            .map(|_| ())
+            .map_err(|e| e.to_string())
     }
 
     fn prewarm_remote_terminal(&self, request: RemoteTerminalPrewarmRequest) {
@@ -1699,16 +1706,19 @@ impl RemoteSessionRuntimeHost for CoreRemoteSessionRuntimeHost {
             return Ok(());
         }
 
-        let Some(session_storage_dir) =
-            CoreServiceAgentRuntime::resolve_session_storage_dir(session_id).await
+        let Some(binding) =
+            CoreServiceAgentRuntime::resolve_session_workspace_binding(session_id).await
         else {
             return Err(format!(
-                "Session storage directory not available for session: {}",
+                "Session workspace binding not available for session: {}",
                 session_id
             ));
         };
         self.coordinator
-            .restore_session_from_storage_path(&session_storage_dir, session_id)
+            .restore_session_for_workspace(
+                session_storage_request_from_binding(&binding),
+                session_id,
+            )
             .await
             .map(|_| ())
             .map_err(|error| format!("Failed to restore session: {error}"))
@@ -1738,6 +1748,22 @@ impl RemoteSessionRuntimeHost for CoreRemoteSessionRuntimeHost {
         session_storage_dir: &std::path::Path,
         session_id: &str,
     ) -> Result<(), String> {
+        let binding = CoreServiceAgentRuntime::resolve_session_workspace_binding(session_id)
+            .await
+            .ok_or_else(|| {
+                format!("Session workspace binding not available for session: {session_id}")
+            })?;
+        self.coordinator
+            .ensure_workspace_runtime_ownership(
+                binding.logical_workspace_path(),
+                binding.connection_id(),
+                if binding.is_remote() {
+                    Some(binding.session_identity.hostname.as_str())
+                } else {
+                    None
+                },
+            )
+            .map_err(|error| error.to_string())?;
         self.coordinator
             .delete_session(session_storage_dir, session_id)
             .await
@@ -1818,13 +1844,18 @@ impl RemoteCancelRuntimeHost for CoreRemoteCancelRuntimeHost {
     async fn restore_remote_session(
         &self,
         session_id: &str,
-        restore_path_hint: &str,
+        _restore_path_hint: &str,
     ) -> Result<(), String> {
-        let restore_path = CoreServiceAgentRuntime::resolve_session_storage_dir(session_id)
+        let binding = CoreServiceAgentRuntime::resolve_session_workspace_binding(session_id)
             .await
-            .unwrap_or_else(|| std::path::PathBuf::from(restore_path_hint));
+            .ok_or_else(|| {
+                format!("Session workspace binding not available for session: {session_id}")
+            })?;
         self.coordinator
-            .restore_session_from_storage_path(&restore_path, session_id)
+            .restore_session_for_workspace(
+                session_storage_request_from_binding(&binding),
+                session_id,
+            )
             .await
             .map(|_| ())
             .map_err(|error| error.to_string())
@@ -1873,6 +1904,69 @@ mod tests {
         }
 
         assert_runtime_ports::<ConversationCoordinator>();
+    }
+
+    #[test]
+    fn remote_attach_and_mutation_paths_preserve_workspace_ownership_facts() {
+        let source = include_str!("service_agent_runtime.rs");
+        let open_workspace = source
+            .split("async fn open_workspace_with_snapshot")
+            .nth(1)
+            .and_then(|source| {
+                source
+                    .split("async fn load_remote_session_metadata_for_workspace")
+                    .next()
+            })
+            .expect("remote workspace open helper");
+        assert!(open_workspace.contains("open_workspace_with_runtime_ownership"));
+        assert!(!open_workspace.contains("open_workspace_resolving_known"));
+        assert!(!open_workspace.contains("initialize_snapshot_manager_for_workspace"));
+
+        for (start, end) in [
+            ("pub(crate) async fn update_remote_session_model", "/// Persist the shared selector"),
+            ("async fn restore_remote_session(\n        &self,\n        session_id: &str,\n        workspace: RemoteDialogWorkspaceBinding", "fn prewarm_remote_terminal"),
+            ("async fn ensure_session_loaded(&self, session_id: &str)", "async fn update_session_title"),
+            ("async fn restore_remote_session(\n        &self,\n        session_id: &str,\n        _restore_path_hint: &str", "async fn cancel_remote_turn"),
+        ] {
+            let body = source
+                .split(start)
+                .nth(1)
+                .and_then(|source| source.split(end).next())
+                .expect("reviewed remote runtime method");
+            assert!(
+                body.contains("restore_session_for_workspace"),
+                "remote attach or mutation must use structured workspace facts"
+            );
+            assert!(
+                !body.contains("restore_session_from_storage_path"),
+                "remote attach or mutation must not bypass the Coordinator ownership gate"
+            );
+        }
+
+        let remote_session_host = source
+            .split("impl RemoteSessionRuntimeHost for CoreRemoteSessionRuntimeHost")
+            .nth(1)
+            .and_then(|source| source.split("impl RemotePollRuntimeHost").next())
+            .expect("remote session host implementation");
+        let delete = remote_session_host
+            .split("async fn delete_session")
+            .nth(1)
+            .and_then(|source| source.split("fn remove_tracker").next())
+            .expect("remote session delete");
+        assert!(delete.contains("ensure_workspace_runtime_ownership"));
+    }
+
+    #[test]
+    fn remote_model_lookup_keeps_read_only_restore_lock_free() {
+        let source = include_str!("service_agent_runtime.rs");
+        let body = source
+            .split("async fn resolve_session_model_id")
+            .nth(1)
+            .and_then(|source| source.split("fn core_dialog_submission_policy").next())
+            .expect("remote model lookup");
+
+        assert!(body.contains("restore_session_view_from_storage_path_timed"));
+        assert!(!body.contains("restore_session_from_storage_path"));
     }
 
     #[test]

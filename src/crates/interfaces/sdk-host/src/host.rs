@@ -1531,12 +1531,7 @@ impl SdkHostConnection {
             let delivered = connection
                 .send_success(
                     request_id,
-                    SessionCreateResult {
-                        session_id: created.session_id,
-                        session_name: created.session_name,
-                        agent: created.agent_type,
-                        lifetime: SessionLifetime::Connection,
-                    },
+                    SessionCreateResult::from_runtime(created, SessionLifetime::Connection),
                 )
                 .await;
             if delivered {

@@ -54,11 +54,11 @@ impl bitfun_runtime_ports::AgentSubmissionPort for ProductShapeSubmissionPort {
         &self,
         request: bitfun_runtime_ports::AgentSessionCreateRequest,
     ) -> PortResult<bitfun_runtime_ports::AgentSessionCreateResult> {
-        Ok(bitfun_runtime_ports::AgentSessionCreateResult {
-            session_id: "product-shape-session".to_string(),
-            session_name: request.session_name,
-            agent_type: request.agent_type,
-        })
+        Ok(bitfun_runtime_ports::AgentSessionCreateResult::new(
+            "product-shape-session",
+            request.session_name,
+            request.agent_type,
+        ))
     }
 
     async fn submit_message(

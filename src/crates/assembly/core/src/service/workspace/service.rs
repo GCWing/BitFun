@@ -284,6 +284,28 @@ impl WorkspaceService {
         Ok(service)
     }
 
+    #[cfg(test)]
+    pub(crate) async fn new_for_test_path_manager(path_manager: Arc<PathManager>) -> Self {
+        path_manager
+            .initialize_user_directories()
+            .await
+            .expect("test user directories should initialize");
+        let config = WorkspaceManagerConfig::default();
+        let persistence = Arc::new(
+            PersistenceService::new_user_level(path_manager.clone())
+                .await
+                .expect("test persistence should initialize"),
+        );
+        let runtime_service = Arc::new(WorkspaceRuntimeService::new(path_manager.clone()));
+        Self {
+            manager: Arc::new(RwLock::new(WorkspaceManager::new(config.clone()))),
+            config,
+            persistence,
+            path_manager,
+            runtime_service,
+        }
+    }
+
     /// Returns the path manager.
     pub fn path_manager(&self) -> &Arc<PathManager> {
         &self.path_manager
@@ -318,17 +340,26 @@ impl WorkspaceService {
         preferred_ssh_host: Option<&str>,
     ) -> BitFunResult<WorkspaceInfo> {
         let path_str = path.to_string_lossy().to_string();
-        if let Some(known) = self
+        let known = self
             .find_known_remote_workspace_for_path(
                 &path_str,
                 preferred_connection_id,
                 preferred_ssh_host,
             )
+            .await;
+        self.open_workspace_after_known_resolution(path, known)
             .await
-        {
+    }
+
+    pub(crate) async fn open_workspace_after_known_resolution(
+        &self,
+        path: PathBuf,
+        known_remote: Option<WorkspaceInfo>,
+    ) -> BitFunResult<WorkspaceInfo> {
+        let path_str = path.to_string_lossy().to_string();
+        if let Some(known) = known_remote {
             return self.open_known_remote_workspace(&known).await;
         }
-
         match self.open_workspace(path).await {
             Ok(info) => Ok(info),
             Err(error) => {
@@ -385,7 +416,7 @@ impl WorkspaceService {
         result
     }
 
-    async fn find_known_remote_workspace_for_path(
+    pub(crate) async fn find_known_remote_workspace_for_path(
         &self,
         path: &str,
         preferred_connection_id: Option<&str>,
@@ -2323,7 +2354,7 @@ pub fn get_global_workspace_service() -> Option<Arc<WorkspaceService>> {
 mod tests {
     use super::*;
     use crate::agentic::persistence::PersistenceManager;
-    use crate::infrastructure::storage::{PersistenceService, StorageOptions};
+    use crate::infrastructure::storage::StorageOptions;
     use crate::service::session::SessionMetadata;
     use crate::service::workspace::WorkspaceWorktreeInfo;
     use std::collections::HashMap;
@@ -2361,26 +2392,7 @@ mod tests {
     }
 
     async fn build_test_workspace_service(path_manager: Arc<PathManager>) -> WorkspaceService {
-        path_manager
-            .initialize_user_directories()
-            .await
-            .expect("user directories should initialize");
-
-        let config = WorkspaceManagerConfig::default();
-        let persistence = Arc::new(
-            PersistenceService::new_user_level(path_manager.clone())
-                .await
-                .expect("persistence should initialize"),
-        );
-        let runtime_service = Arc::new(WorkspaceRuntimeService::new(path_manager.clone()));
-
-        WorkspaceService {
-            manager: Arc::new(RwLock::new(WorkspaceManager::new(config.clone()))),
-            config,
-            persistence,
-            path_manager,
-            runtime_service,
-        }
+        WorkspaceService::new_for_test_path_manager(path_manager).await
     }
 
     #[tokio::test]

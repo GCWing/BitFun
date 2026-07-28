@@ -390,6 +390,14 @@ pub async fn dispatch(
             let workspace_path = get_string(&request, "workspacePath")?;
             state
                 .coordinator
+                .ensure_workspace_runtime_ownership(
+                    std::path::Path::new(&workspace_path),
+                    None,
+                    None,
+                )
+                .map_err(|e| anyhow!("{}", e))?;
+            state
+                .coordinator
                 .delete_session(&PathBuf::from(workspace_path), &session_id)
                 .await
                 .map_err(|e| anyhow!("{}", e))?;

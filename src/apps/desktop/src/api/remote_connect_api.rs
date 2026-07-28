@@ -2,6 +2,7 @@
 
 use crate::api::session_storage_path::desktop_effective_session_storage_path;
 use crate::embedded_relay_host::DesktopEmbeddedRelayHost;
+use bitfun_core::agentic::coordination::{get_global_coordinator, ConversationCoordinator};
 use bitfun_core::agentic::persistence::PersistenceManager;
 use bitfun_core::agentic::tools::account_login_capability::set_account_login_available;
 use bitfun_core::agentic::tools::page_deploy_host::set_page_deploy_handler;
@@ -16,6 +17,8 @@ use bitfun_core::service::remote_connect::{
     PairingState, RemoteConnectConfig, RemoteConnectService,
 };
 use bitfun_core::service::session::{DialogTurnData, SessionMetadata};
+use bitfun_core::service::workspace::{get_global_workspace_service, WorkspaceKind};
+use bitfun_core::service::workspace_runtime::WorkspaceRuntimeService;
 use bitfun_services_integrations::remote_connect::account::{
     error_indicates_expired_token, validate_relay_base_url,
 };
@@ -3160,12 +3163,17 @@ pub async fn account_export_all_sessions(
 #[tauri::command]
 pub async fn account_import_remote_sessions(
     workspace_path: String,
+    coordinator: State<'_, Arc<ConversationCoordinator>>,
     app_state: State<'_, crate::api::app_state::AppState>,
     path_manager: State<'_, Arc<bitfun_core::infrastructure::PathManager>>,
 ) -> Result<Vec<String>, String> {
     let generation = account_context_generation();
     let _sync_guard = lock_account_sync(generation).await?;
     let (acct_session, relay_url) = read_account_context().await?;
+
+    coordinator
+        .ensure_workspace_runtime_ownership(std::path::Path::new(&workspace_path), None, None)
+        .map_err(|error| error.to_string())?;
 
     let storage_path =
         desktop_effective_session_storage_path(&app_state, &workspace_path, None, None).await;
@@ -3233,6 +3241,7 @@ pub async fn account_import_remote_sessions(
 pub async fn account_fetch_session_turns(
     session_id: String,
     workspace_path: String,
+    coordinator: State<'_, Arc<ConversationCoordinator>>,
     app_state: State<'_, crate::api::app_state::AppState>,
     path_manager: State<'_, Arc<bitfun_core::infrastructure::PathManager>>,
 ) -> Result<bool, String> {
@@ -3243,6 +3252,10 @@ pub async fn account_fetch_session_turns(
         log::info!("Skipping cloud session turn fetch in Peer Device Mode (session={session_id})");
         return Ok(false);
     }
+
+    coordinator
+        .ensure_workspace_runtime_ownership(std::path::Path::new(&workspace_path), None, None)
+        .map_err(|error| error.to_string())?;
 
     let storage_path =
         desktop_effective_session_storage_path(&app_state, &workspace_path, None, None).await;
@@ -4306,28 +4319,23 @@ async fn import_session_bundle(bundle_json: &str, account_generation: u64) -> an
 
     let path_manager = std::sync::Arc::new(bitfun_core::infrastructure::PathManager::new()?);
     let manager = PersistenceManager::new(path_manager.clone())?;
-
-    // Find the first workspace sessions dir that exists
-    let projects_root = path_manager.projects_root();
-    let entries = std::fs::read_dir(&projects_root)?;
-    let mut target_dir: Option<std::path::PathBuf> = None;
-    for entry in entries.flatten() {
-        if !entry.file_type().map(|t| t.is_dir()).unwrap_or(false) {
-            continue;
-        }
-        let sessions = entry.path().join("sessions");
-        if sessions.is_dir() {
-            target_dir = Some(sessions);
-            break;
-        }
+    let workspace = get_global_workspace_service()
+        .ok_or_else(|| anyhow::anyhow!("workspace service is unavailable"))?
+        .get_current_workspace()
+        .await
+        .ok_or_else(|| anyhow::anyhow!("no active workspace is available for session import"))?;
+    if workspace.workspace_kind == WorkspaceKind::Remote {
+        return Err(anyhow::anyhow!(
+            "session import requires an active local workspace"
+        ));
     }
-
-    // If no workspace sessions dir exists, create one under a "synced" workspace
-    let target_dir = target_dir.unwrap_or_else(|| {
-        let dir = projects_root.join("synced").join("sessions");
-        let _ = std::fs::create_dir_all(&dir);
-        dir
-    });
+    get_global_coordinator()
+        .ok_or_else(|| anyhow::anyhow!("Agent Runtime coordinator is unavailable"))?
+        .ensure_workspace_runtime_ownership(&workspace.root_path, None, None)
+        .map_err(|error| anyhow::anyhow!(error.to_string()))?;
+    let target_dir = WorkspaceRuntimeService::new(path_manager.clone())
+        .context_for_local_workspace(&workspace.root_path)
+        .sessions_dir;
 
     let mut metadata: SessionMetadata = serde_json::from_value(bundle.metadata.clone())?;
     if metadata.session_id != bundle.session_id {

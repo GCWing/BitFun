@@ -10,10 +10,9 @@ use bitfun_agent_runtime_ipc::{
     RuntimeIpcRequestHandler, RuntimeIpcServer, RuntimeIpcServerConfig,
     RuntimeIpcStreamInvalidationReason, PROTOCOL_VERSION,
 };
+use bitfun_core::runtime_ownership::CoreRuntimeOwnership;
 use bitfun_events::{AgenticEvent, ToolEventData};
-use bitfun_services_core::runtime_ownership::{
-    RuntimeDeployment, RuntimeOwnershipError, RuntimeOwnershipKey, WorkspaceRuntimeOwnership,
-};
+use bitfun_services_core::runtime_ownership::RuntimeDeployment;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
@@ -677,7 +676,16 @@ pub(crate) async fn connect_or_start(workspace: &Path) -> Result<RuntimeIpcClien
             Err(error) => last_connect_error = Some(error),
         }
         if let Some(status) = child.try_wait().context("poll Shared Runtime startup")? {
-            if !runtime_owner_present(workspace)? {
+            if embedded_runtime_owner_present(workspace)? {
+                return Err(anyhow!(
+                    "Agent Runtime ownership failed (runtime_ownership_unavailable): an Embedded Runtime owns this workspace; close it before starting Shared TUI ({status})"
+                ));
+            }
+            if runtime_owner_present(workspace)? {
+                // Another Shared child may still be initializing and has not
+                // published discovery yet. Keep connecting until the normal
+                // bounded startup timeout instead of mislabeling it Embedded.
+            } else {
                 if respawned {
                     return Err(anyhow!(
                         "Shared Runtime exited before becoming ready ({status})"
@@ -690,7 +698,7 @@ pub(crate) async fn connect_or_start(workspace: &Path) -> Result<RuntimeIpcClien
         }
         if started.elapsed() >= STARTUP_TIMEOUT {
             let owner_guidance = if runtime_owner_present(workspace)? {
-                "; another local Runtime still owns this workspace, so close its clients and wait up to 30 seconds"
+                "; Agent Runtime ownership failed (runtime_ownership_unavailable): another local Runtime still owns this workspace, so close its clients and wait up to 30 seconds"
             } else {
                 ""
             };
@@ -708,16 +716,13 @@ pub(crate) async fn connect_or_start(workspace: &Path) -> Result<RuntimeIpcClien
 }
 
 fn runtime_owner_present(workspace: &Path) -> Result<bool> {
-    let key = RuntimeOwnershipKey::for_workspace(workspace, product_identity())?;
-    match WorkspaceRuntimeOwnership::try_acquire(
-        &ownership_root()?,
-        &key,
-        RuntimeDeployment::Shared,
-    ) {
-        Ok(_) => Ok(false),
-        Err(RuntimeOwnershipError::OwnershipUnavailable { .. }) => Ok(true),
-        Err(error) => Err(error.into()),
-    }
+    CoreRuntimeOwnership::runtime_owner_present(path_manager()?.as_ref(), workspace)
+        .map_err(anyhow::Error::from)
+}
+
+fn embedded_runtime_owner_present(workspace: &Path) -> Result<bool> {
+    CoreRuntimeOwnership::embedded_runtime_owner_present(path_manager()?.as_ref(), workspace)
+        .map_err(anyhow::Error::from)
 }
 
 fn require_interactive_tui(client: RuntimeIpcClient) -> Result<RuntimeIpcClient> {
@@ -737,25 +742,6 @@ async fn prepare_client_environment() -> Result<()> {
     bitfun_core::service::config::initialize_global_config()
         .await
         .map_err(|error| anyhow!("Failed to initialize Shared TUI configuration: {error}"))
-}
-
-pub(crate) fn acquire_ownership(
-    workspace: &Path,
-    deployment: RuntimeDeployment,
-) -> Result<WorkspaceRuntimeOwnership> {
-    let key = RuntimeOwnershipKey::for_workspace(workspace, product_identity())
-        .context("resolve Runtime ownership key")?;
-    WorkspaceRuntimeOwnership::try_acquire(&ownership_root()?, &key, deployment).map_err(|error| {
-        let guidance = match deployment {
-            RuntimeDeployment::Embedded => {
-                "A Shared TUI Runtime owns this CLI workspace; use `bitfun chat --shared`, or close its clients and wait up to 30 seconds"
-            }
-            RuntimeDeployment::Shared => {
-                "An Embedded CLI process owns this workspace; close it before using `--shared`"
-            }
-        };
-        anyhow!("{guidance}: {error}")
-    })
 }
 
 async fn connect_existing(
@@ -851,7 +837,7 @@ fn instance_identity(workspace: &Path) -> Result<RuntimeInstanceIdentity> {
     let user_root = path_manager()?.user_data_dir();
     RuntimeInstanceIdentity::for_workspace(
         workspace,
-        product_identity(),
+        CoreRuntimeOwnership::distribution_identity(),
         RELEASE_CHANNEL,
         &user_root.to_string_lossy(),
         PROTOCOL_VERSION,
@@ -859,22 +845,11 @@ fn instance_identity(workspace: &Path) -> Result<RuntimeInstanceIdentity> {
     .context("resolve Shared Runtime identity")
 }
 
-fn product_identity() -> &'static str {
-    option_env!("BITFUN_PRODUCT_BINARY_NAME").unwrap_or("bitfun")
-}
-
 fn ipc_root() -> Result<PathBuf> {
     Ok(path_manager()?
         .user_data_dir()
         .join("agent-runtime")
         .join(format!("ipc-v{PROTOCOL_VERSION}")))
-}
-
-fn ownership_root() -> Result<PathBuf> {
-    Ok(path_manager()?
-        .user_data_dir()
-        .join("agent-runtime")
-        .join("ownership"))
 }
 
 fn path_manager() -> Result<Arc<bitfun_core::infrastructure::PathManager>> {
@@ -987,6 +962,23 @@ mod tests {
         assert!(connect_existing(&store, root.path(), "client")
             .await
             .is_err());
+    }
+
+    #[test]
+    fn exited_shared_child_reports_embedded_owner_without_waiting_for_timeout() {
+        let source = include_str!("shared_runtime.rs");
+        let exited_child = source
+            .split_once("if let Some(status) = child.try_wait()")
+            .expect("Shared Runtime child exit branch")
+            .1
+            .split_once("if started.elapsed() >= STARTUP_TIMEOUT")
+            .expect("startup timeout boundary")
+            .0;
+
+        assert!(exited_child.contains("embedded_runtime_owner_present"));
+        assert!(exited_child.contains("runtime_ownership_unavailable"));
+        assert!(exited_child.contains("Embedded Runtime owns this workspace"));
+        assert!(exited_child.contains("return Err"));
     }
 
     fn delegated_permission(session_id: &str, parent_session_id: &str) -> PermissionRequest {

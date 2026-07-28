@@ -135,6 +135,17 @@ impl Session {
     }
 }
 
+impl From<Session> for bitfun_runtime_ports::AgentSessionCreateResult {
+    fn from(session: Session) -> Self {
+        let mut result = Self::new(session.session_id, session.session_name, session.agent_type);
+        result.workspace_path = session.config.workspace_path;
+        result.workspace_id = session.config.workspace_id;
+        result.project_workspace_path = session.config.project_workspace_path;
+        result.execution_target = session.config.execution_target;
+        result
+    }
+}
+
 /// Session configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SessionConfig {
@@ -279,6 +290,10 @@ mod tests {
         SessionConfig, SessionContinuationPolicy, SessionModelBindingPolicy,
     };
     use crate::session_state::{ProcessingPhase, SessionState};
+    use bitfun_core_types::{
+        SessionExecutionTarget, SessionExecutionTargetKind, WorktreeLifecycle,
+    };
+    use bitfun_runtime_ports::AgentSessionCreateResult;
     use serde_json::json;
 
     #[test]
@@ -355,6 +370,47 @@ mod tests {
         assert!(session.last_submitted_agent_type.is_none());
         assert!(session.created_by.is_none());
         assert!(session.snapshot_session_id.is_none());
+    }
+
+    #[test]
+    fn session_create_result_preserves_normalized_workspace_facts() {
+        let execution_target = SessionExecutionTarget {
+            kind: SessionExecutionTargetKind::ManagedWorktree,
+            worktree_id: Some("worktree_1".to_string()),
+            root_path: "/worktrees/session_1".to_string(),
+            base_ref: Some("main".to_string()),
+            base_commit: Some("0123456789abcdef".to_string()),
+            branch: Some("bitfun/session_1".to_string()),
+            lifecycle: Some(WorktreeLifecycle::Managed),
+        };
+        let session = Session::new_with_id(
+            "session_1".to_string(),
+            "Main".to_string(),
+            "agentic".to_string(),
+            SessionConfig {
+                workspace_path: Some("/worktrees/session_1".to_string()),
+                workspace_id: Some("workspace_1".to_string()),
+                project_workspace_path: Some("/workspace/project".to_string()),
+                execution_target: Some(execution_target.clone()),
+                ..SessionConfig::default()
+            },
+        );
+
+        let result = AgentSessionCreateResult::from(session);
+
+        assert_eq!(result.session_id, "session_1");
+        assert_eq!(result.session_name, "Main");
+        assert_eq!(result.agent_type, "agentic");
+        assert_eq!(
+            result.workspace_path.as_deref(),
+            Some("/worktrees/session_1")
+        );
+        assert_eq!(result.workspace_id.as_deref(), Some("workspace_1"));
+        assert_eq!(
+            result.project_workspace_path.as_deref(),
+            Some("/workspace/project")
+        );
+        assert_eq!(result.execution_target, Some(execution_target));
     }
 
     #[test]

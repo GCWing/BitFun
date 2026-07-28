@@ -346,7 +346,7 @@ pub const REMOTE_WORKSPACE_COMMAND_POLICIES: &[(&str, RemoteWorkspacePolicy)] = 
     ("editor_ai_stream", RemoteWorkspacePolicy::LegacyUnaudited),
     (
         "ensure_assistant_bootstrap",
-        RemoteWorkspacePolicy::LegacyUnaudited,
+        RemoteWorkspacePolicy::RemoteUnsupported,
     ),
     (
         "ensure_coordinator_session",

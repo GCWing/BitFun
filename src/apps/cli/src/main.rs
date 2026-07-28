@@ -652,7 +652,26 @@ async fn initialize_core_services_for_deployment(
         .await
         .map_err(|error| anyhow!("Failed to initialize global config service: {error}"))?;
     tracing::info!("Global config service initialized");
-    let runtime_ownership = shared_runtime::acquire_ownership(workspace_root, deployment)?;
+    let path_manager = bitfun_core::infrastructure::try_get_path_manager_arc()
+        .map_err(|error| anyhow!(error.to_string()))?;
+    let entrypoint = match (deployment, bootstrap_profile) {
+        (
+            bitfun_services_core::runtime_ownership::RuntimeDeployment::Embedded,
+            BootstrapProfile::Interactive,
+        ) => "cli-interactive",
+        (bitfun_services_core::runtime_ownership::RuntimeDeployment::Embedded, _) => "cli-headless",
+        (bitfun_services_core::runtime_ownership::RuntimeDeployment::Shared, _) => {
+            "shared-tui-runtime"
+        }
+    };
+    let runtime_ownership = bitfun_core::runtime_ownership::CoreRuntimeOwnership::fixed_workspace(
+        path_manager.as_ref(),
+        entrypoint,
+        workspace_root,
+        deployment,
+    )
+    .map_err(|error| anyhow!(error.startup_message(deployment, entrypoint)))?;
+    let runtime_ownership = std::sync::Arc::new(runtime_ownership);
 
     let config_service = bitfun_core::service::config::get_global_config_service()
         .await
@@ -667,6 +686,7 @@ async fn initialize_core_services_for_deployment(
 
     let agentic_system = agent::agentic_system::init_agentic_system(
         bitfun_core::product_assembly::DeliveryProfile::Cli,
+        runtime_ownership,
     )
     .await
     .map_err(|error| anyhow!("Failed to initialize agentic system: {error}"))?;
@@ -676,7 +696,6 @@ async fn initialize_core_services_for_deployment(
         agentic_system,
         workspace_root,
         approval_policy,
-        runtime_ownership,
     )?);
     debug_assert!(runtime
         .product()

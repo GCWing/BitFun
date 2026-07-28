@@ -1616,11 +1616,11 @@ mod tests {
             request: AgentSessionCreateRequest,
         ) -> PortResult<AgentSessionCreateResult> {
             self.created_sessions.lock().unwrap().push(request.clone());
-            Ok(AgentSessionCreateResult {
-                session_id: "session_1".to_string(),
-                session_name: request.session_name,
-                agent_type: request.agent_type,
-            })
+            Ok(AgentSessionCreateResult::new(
+                "session_1",
+                request.session_name,
+                request.agent_type,
+            ))
         }
 
         async fn create_session_with_id(
@@ -1629,16 +1629,15 @@ mod tests {
             request: AgentSessionCreateRequest,
         ) -> PortResult<AgentSessionCreateResult> {
             self.created_sessions.lock().unwrap().push(request.clone());
-            Ok(AgentSessionCreateResult {
-                session_id: self
-                    .exact_session_result_id
+            Ok(AgentSessionCreateResult::new(
+                self.exact_session_result_id
                     .lock()
                     .unwrap()
                     .clone()
                     .unwrap_or(session_id),
-                session_name: request.session_name,
-                agent_type: request.agent_type,
-            })
+                request.session_name,
+                request.agent_type,
+            ))
         }
 
         async fn submit_message(

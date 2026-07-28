@@ -1,7 +1,51 @@
 use bitfun_services_core::runtime_ownership::{
-    RuntimeDeployment, RuntimeOwnershipKey, WorkspaceRuntimeOwnership,
+    RuntimeDeployment, RuntimeOwnershipError, RuntimeOwnershipKey, WorkspaceRuntimeOwnership,
 };
+use std::path::PathBuf;
 use tempfile::tempdir;
+
+#[test]
+fn ownership_errors_expose_stable_low_cardinality_codes() {
+    let io_error = || std::io::Error::other("fixture");
+    let cases = [
+        (
+            RuntimeOwnershipError::InvalidProductIdentity,
+            "invalid_product_identity",
+        ),
+        (
+            RuntimeOwnershipError::CanonicalizeWorkspace {
+                path: PathBuf::from("workspace"),
+                source: io_error(),
+            },
+            "canonicalize_workspace_failed",
+        ),
+        (
+            RuntimeOwnershipError::CreateOwnershipDirectory {
+                path: PathBuf::from("ownership"),
+                source: io_error(),
+            },
+            "ownership_root_create_failed",
+        ),
+        (
+            RuntimeOwnershipError::OpenLockFile {
+                path: PathBuf::from("ownership.lock"),
+                source: io_error(),
+            },
+            "ownership_lock_open_failed",
+        ),
+        (
+            RuntimeOwnershipError::OwnershipUnavailable {
+                deployment: RuntimeDeployment::Shared,
+                source: io_error(),
+            },
+            "runtime_ownership_unavailable",
+        ),
+    ];
+
+    for (error, expected) in cases {
+        assert_eq!(error.code(), expected);
+    }
+}
 
 #[test]
 fn ownership_key_is_stable_and_scoped_by_workspace_and_product() {

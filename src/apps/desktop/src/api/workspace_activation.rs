@@ -1,5 +1,4 @@
 use crate::api::app_state::AppState;
-use bitfun_core::service::remote_ssh::workspace_state::is_remote_path;
 use bitfun_core::service::search::workspace_search_runtime_available;
 use bitfun_core::service::workspace::{WorkspaceInfo, WorkspaceKind};
 use log::{debug, info, warn};
@@ -32,32 +31,6 @@ async fn warm_workspace_background_services(
 ) {
     let started_at = Instant::now();
     let target_path = workspace_info.root_path.clone();
-    let root_str = target_path.to_string_lossy().to_string();
-    let skip_local_snapshot = workspace_info.workspace_kind == WorkspaceKind::Remote
-        || is_remote_path(root_str.trim()).await;
-
-    if !skip_local_snapshot && is_workspace_active(&workspace_path, &target_path).await {
-        let snapshot_started_at = Instant::now();
-        if let Err(error) =
-            bitfun_core::service::snapshot::initialize_snapshot_manager_for_workspace(
-                target_path.clone(),
-                None,
-            )
-            .await
-        {
-            warn!(
-                "Failed to initialize snapshot system during workspace warmup: path={}, error={}",
-                target_path.display(),
-                error
-            );
-        } else {
-            debug!(
-                "Workspace snapshot warmup completed: path={}, elapsed_ms={}",
-                target_path.display(),
-                snapshot_started_at.elapsed().as_millis()
-            );
-        }
-    }
 
     if is_workspace_active(&workspace_path, &target_path).await {
         let subagents_started_at = Instant::now();

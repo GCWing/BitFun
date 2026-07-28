@@ -1482,8 +1482,9 @@ export const requiredContentRules = [
       'the standalone SDK Host must inject its selected delivery profile into the Core tool owner before agentic system construction',
     patterns: [
       {
-        regex: /\binit_agentic_system_for_profile\b/,
-        message: 'SDK Host runtime must initialize Core with its selected delivery profile',
+        regex: /\binit_agentic_system_for_profile_with_runtime_ownership\b/,
+        message:
+          'SDK Host runtime must initialize Core with its selected delivery profile and Runtime ownership owner',
       },
       {
         regex: /\bselect_agentic_system_profile\b/,

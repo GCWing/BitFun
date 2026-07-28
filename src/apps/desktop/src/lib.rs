@@ -1849,12 +1849,19 @@ async fn init_agentic_system() -> anyhow::Result<(
         exec_config,
     ));
 
+    let runtime_ownership = Arc::new(
+        bitfun_core::runtime_ownership::CoreRuntimeOwnership::embedded(
+            path_manager.as_ref(),
+            "desktop",
+        ),
+    );
     let coordinator = Arc::new(coordination::ConversationCoordinator::new(
         session_manager.clone(),
         execution_engine,
         tool_pipeline,
         event_queue.clone(),
         event_router.clone(),
+        runtime_ownership,
     ));
     coordinator.set_terminal_port(
         bitfun_core::product_runtime::CoreRuntimeServicesProvider::terminal_port(),

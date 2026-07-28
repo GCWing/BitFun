@@ -2436,6 +2436,16 @@ mod tests {
             tool_pipeline,
             event_queue.clone(),
             Arc::new(EventRouter::new()),
+            Arc::new(
+                crate::runtime_ownership::CoreRuntimeOwnership::embedded_with_facts(
+                    std::env::temp_dir().join(format!(
+                        "bitfun-scheduler-ownership-test-{}",
+                        uuid::Uuid::new_v4()
+                    )),
+                    "bitfun".to_string(),
+                    "test",
+                ),
+            ),
         ));
         (
             DialogScheduler::new(coordinator, session_manager.clone()),

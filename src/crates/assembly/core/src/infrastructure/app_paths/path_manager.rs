@@ -321,6 +321,11 @@ impl PathManager {
             .join("coordination.sqlite")
     }
 
+    /// Process-level ownership locks for local Agent Runtime deployments.
+    pub fn agent_runtime_ownership_dir(&self) -> PathBuf {
+        self.user_data_dir().join("agent-runtime").join("ownership")
+    }
+
     /// Get user memory workspace root directory: ~/.bitfun/memories/
     pub fn memories_root_dir(&self) -> PathBuf {
         self.bitfun_home_dir().join("memories")
@@ -729,6 +734,20 @@ mod tests {
     use std::sync::{Arc, Mutex};
 
     static ENV_LOCK: Mutex<()> = Mutex::new(());
+
+    #[test]
+    fn runtime_ownership_lives_under_the_agent_runtime_data_root() {
+        let user_root = std::env::temp_dir().join("bitfun-runtime-ownership-path-test");
+        let path_manager = PathManager::with_user_root_for_tests(user_root);
+
+        assert_eq!(
+            path_manager.agent_runtime_ownership_dir(),
+            path_manager
+                .user_data_dir()
+                .join("agent-runtime")
+                .join("ownership")
+        );
+    }
 
     #[test]
     fn strict_path_access_rejects_a_cached_temporary_fallback() {

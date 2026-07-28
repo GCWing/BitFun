@@ -807,6 +807,7 @@ pub(crate) fn handle_health_command() -> Result<()> {
 
 pub(crate) async fn serve_acp_stdio() -> Result<()> {
     crate::setup_workspace();
+    let workspace_root = std::env::current_dir().context("Failed to resolve ACP workspace")?;
 
     crate::agent::agentic_system::select_agentic_system_profile(
         bitfun_core::product_assembly::DeliveryProfile::Acp,
@@ -824,14 +825,25 @@ pub(crate) async fn serve_acp_stdio() -> Result<()> {
 
     crate::initialize_terminal_service().await;
 
+    let path_manager = bitfun_core::infrastructure::try_get_path_manager_arc()
+        .map_err(|error| anyhow::anyhow!(error.to_string()))?;
+    let deployment = bitfun_services_core::runtime_ownership::RuntimeDeployment::Embedded;
+    let runtime_ownership = bitfun_core::runtime_ownership::CoreRuntimeOwnership::fixed_workspace(
+        path_manager.as_ref(),
+        "acp",
+        &workspace_root,
+        deployment,
+    )
+    .map_err(|error| anyhow::anyhow!(error.startup_message(deployment, "acp")))?;
+
     let agentic_system = crate::agent::agentic_system::init_agentic_system(
         bitfun_core::product_assembly::DeliveryProfile::Acp,
+        std::sync::Arc::new(runtime_ownership),
     )
     .await
     .context("Failed to initialize agentic system")?;
     tracing::info!("Agentic system initialized");
 
-    let workspace_root = std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("."));
     let runtime = crate::runtime::AcpRuntimeContext::build(agentic_system, workspace_root)?;
     let (agent_runtime, compatibility) = runtime.parts();
     bitfun_acp::BitfunAcpRuntime::serve_stdio(agent_runtime, compatibility).await?;

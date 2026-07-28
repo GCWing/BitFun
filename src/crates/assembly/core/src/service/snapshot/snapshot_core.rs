@@ -4,6 +4,7 @@ use crate::service::snapshot::types::{
     ToolContext,
 };
 use crate::service::workspace_runtime::WorkspaceRuntimeContext;
+use bitfun_services_core::json_store::JsonFileStore;
 use log::{debug, info, warn};
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, HashMap, HashSet};
@@ -956,10 +957,15 @@ impl SnapshotCore {
             return Ok(());
         };
         let path = self.session_file_path(session_id);
-        let data = serde_json::to_string_pretty(session).map_err(SnapshotError::Serialization)?;
-        tokio::fs::write(path, data)
+        JsonFileStore
+            .write_atomic_strict(&path, session)
             .await
-            .map_err(SnapshotError::Io)?;
+            .map_err(|error| {
+                SnapshotError::ConfigError(format!(
+                    "Failed to persist snapshot session history {}: {error}",
+                    path.display()
+                ))
+            })?;
         Ok(())
     }
 

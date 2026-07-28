@@ -32,13 +32,32 @@ fn session_storage_request(request: &Value) -> Result<SessionStoragePathRequest,
     })
 }
 
+pub(super) fn ensure_session_workspace_runtime_ownership(
+    state: &PeerHostState,
+    request: &Value,
+) -> Result<SessionStoragePathRequest, String> {
+    let scope = session_storage_request(request)?;
+    state
+        .compatibility
+        .ensure_workspace_runtime_ownership(&scope)
+        .map_err(|error| format!("Agent Runtime ownership is unavailable: {error}"))?;
+    Ok(scope)
+}
+
 pub(super) async fn resolved_session_storage_path(
     state: &PeerHostState,
     request: &Value,
 ) -> Result<PathBuf, String> {
+    resolved_session_storage_scope(state, session_storage_request(request)?).await
+}
+
+pub(super) async fn resolved_session_storage_scope(
+    state: &PeerHostState,
+    scope: SessionStoragePathRequest,
+) -> Result<PathBuf, String> {
     state
         .compatibility
-        .resolve_persisted_session_storage_path(session_storage_request(request)?)
+        .resolve_persisted_session_storage_path(scope)
         .await
         .map_err(|error| format!("Failed to resolve session storage path: {error}"))
 }
@@ -366,7 +385,8 @@ pub(crate) async fn touch_session_activity(
 ) -> Result<Value, String> {
     let request = request_value(args);
     let session_id = validated_session_id(request)?;
-    let workspace_path = resolved_session_storage_path(state, request).await?;
+    let scope = ensure_session_workspace_runtime_ownership(state, request)?;
+    let workspace_path = resolved_session_storage_scope(state, scope).await?;
     let _mutation = state
         .compatibility
         .begin_persisted_session_mutation(&workspace_path, &session_id)
@@ -435,6 +455,7 @@ pub(crate) async fn ensure_coordinator_session(
 ) -> Result<Value, String> {
     let request = request_value(args);
     let session_id = validated_session_id(request)?;
+    let scope = ensure_session_workspace_runtime_ownership(state, request)?;
     if state
         .compatibility
         .is_session_loaded_in_memory(&session_id)
@@ -442,7 +463,7 @@ pub(crate) async fn ensure_coordinator_session(
     {
         return Ok(Value::Null);
     }
-    let storage = resolved_session_storage_path(state, request).await?;
+    let storage = resolved_session_storage_scope(state, scope).await?;
     let include_internal = optional_bool(request, "includeInternal").unwrap_or(false);
 
     state
@@ -517,7 +538,8 @@ pub(crate) async fn save_session_turn(
     args: &Value,
 ) -> Result<Value, String> {
     let request = request_value(args);
-    let workspace_path = resolved_session_storage_path(state, request).await?;
+    let scope = ensure_session_workspace_runtime_ownership(state, request)?;
+    let workspace_path = resolved_session_storage_scope(state, scope).await?;
     let turn_data = request
         .get("turnData")
         .or_else(|| request.get("turn_data"))
@@ -556,6 +578,45 @@ mod tests {
     use bitfun_core::agentic::core::{
         ProcessingPhase, Session as CoreSession, SessionConfig, SessionState as CoreSessionState,
     };
+
+    #[test]
+    fn peer_attach_and_raw_mutations_reuse_core_runtime_ownership() {
+        let session_source = include_str!("session.rs");
+        for mutation in [
+            "pub(crate) async fn touch_session_activity",
+            "pub(crate) async fn ensure_coordinator_session",
+            "pub(crate) async fn save_session_turn",
+        ] {
+            let body = session_source
+                .split_once(mutation)
+                .unwrap_or_else(|| panic!("missing Peer mutation: {mutation}"))
+                .1
+                .split_once("pub(crate) async fn")
+                .unwrap_or_else(|| panic!("missing Peer mutation boundary: {mutation}"))
+                .0;
+            assert!(body.contains("ensure_session_workspace_runtime_ownership"));
+        }
+
+        let workspace_source = include_str!("workspace.rs");
+        let open = workspace_source
+            .split_once("pub(crate) async fn open_workspace")
+            .expect("Peer workspace open")
+            .1
+            .split_once("pub(crate) async fn reload_config")
+            .expect("Peer workspace open boundary")
+            .0;
+        assert!(open.contains("ensure_workspace_runtime_ownership"));
+
+        let snapshot_source = include_str!("snapshot.rs");
+        let rollback = snapshot_source
+            .split_once("pub(crate) async fn rollback_to_turn")
+            .expect("Peer rollback")
+            .1
+            .split_once("#[cfg(test)]")
+            .expect("Peer rollback boundary")
+            .0;
+        assert!(rollback.contains("ensure_session_workspace_runtime_ownership"));
+    }
 
     #[test]
     fn basic_restore_keeps_peer_host_session_shape() {

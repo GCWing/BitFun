@@ -203,11 +203,11 @@ impl AgentSubmissionPort for FakeOwner {
             .lock()
             .unwrap()
             .push(session_id.clone());
-        Ok(AgentSessionCreateResult {
+        Ok(AgentSessionCreateResult::new(
             session_id,
-            session_name: request.session_name,
-            agent_type: request.agent_type,
-        })
+            request.session_name,
+            request.agent_type,
+        ))
     }
 
     async fn create_session_with_id(
@@ -226,11 +226,11 @@ impl AgentSubmissionPort for FakeOwner {
         if self.panic_after_session_create {
             panic!("fixture panics after creating the transient Session");
         }
-        Ok(AgentSessionCreateResult {
+        Ok(AgentSessionCreateResult::new(
             session_id,
-            session_name: request.session_name,
-            agent_type: request.agent_type,
-        })
+            request.session_name,
+            request.agent_type,
+        ))
     }
 
     async fn create_transient_session_with_id(

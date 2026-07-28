@@ -178,13 +178,13 @@ mod tests {
             3,
             "only file listing, typed stats, and workspace rollback use the local owner port"
         );
-        assert!(snapshot_commands.contains("is_remote_path(&request.workspace_path).await"));
+        assert!(snapshot_commands.contains("ensure_local_snapshot_mutation_path"));
 
         let rollback_source = &snapshot_commands[snapshot_commands
             .find("pub async fn rollback_to_turn")
             .expect("rollback command must exist")..];
         let remote_guard = rollback_source
-            .find("if is_remote_path(&request.workspace_path).await")
+            .find("ensure_local_snapshot_mutation_path")
             .expect("remote rollback guard must remain host-owned");
         let cancellation = rollback_source
             .find("cancel_active_turn_for_session")
@@ -224,5 +224,141 @@ mod tests {
         assert!(!runtime_source.contains(&product_assembler));
         assert!(!runtime_source.contains(&runtime_services));
         assert!(!runtime_source.contains(&desktop_services_provider));
+    }
+
+    #[test]
+    fn desktop_session_writes_reuse_the_coordinator_ownership_owner() {
+        let application = include_str!("session_application.rs");
+        let app_entrypoint = include_str!("../lib.rs");
+        let agentic_api = include_str!("../api/agentic_api.rs");
+        let remote_connect_api = include_str!("../api/remote_connect_api.rs");
+        let snapshot_api = include_str!("../api/snapshot_service.rs");
+        let workspace_activation = include_str!("../api/workspace_activation.rs");
+
+        assert!(
+            !workspace_activation.contains("initialize_snapshot_manager_for_workspace"),
+            "read-only workspace activation must not attach the snapshot Runtime"
+        );
+
+        assert!(
+            app_entrypoint.contains("CoreRuntimeOwnership::embedded"),
+            "Desktop composition must inject one lazy multi-workspace Core owner"
+        );
+        assert!(
+            application
+                .matches(".ensure_workspace_runtime_ownership(")
+                .count()
+                == 1,
+            "Desktop application must delegate ownership to one Coordinator gate"
+        );
+        assert!(
+            application
+                .matches("self.ensure_runtime_ownership(&scope)")
+                .count()
+                >= 6,
+            "Desktop attach and mutation paths must reuse one application helper"
+        );
+        assert!(
+            !application.contains("RuntimeOwnershipKey")
+                && !application.contains("WorkspaceRuntimeOwnership"),
+            "Desktop application must not duplicate ownership primitives"
+        );
+
+        let create_session = agentic_api
+            .split_once("pub async fn create_session")
+            .expect("create_session")
+            .1
+            .split_once("pub async fn update_session_model")
+            .expect("create_session boundary")
+            .0;
+        assert!(
+            create_session.contains("session_application()")
+                && create_session.contains("ensure_workspace_runtime_ownership"),
+            "Desktop session creation must validate remote facts through the shared application scope resolver"
+        );
+
+        let view = application
+            .split_once("pub(crate) async fn restore_session_view")
+            .expect("view restore")
+            .1
+            .split_once("pub(crate) async fn restore_session_with_turns")
+            .expect("view restore boundary")
+            .0;
+        assert!(
+            !view.contains("ensure_workspace_runtime_ownership"),
+            "read-only view restore must remain available without acquiring runtime ownership"
+        );
+
+        for (mutation, end) in [
+            ("if is_idempotent_review_create", "let config = request"),
+            (
+                "pub async fn set_session_memory_mode",
+                "pub async fn clear_session_thread_goal",
+            ),
+        ] {
+            let source = agentic_api
+                .split_once(mutation)
+                .unwrap_or_else(|| panic!("missing Desktop mutation: {mutation}"))
+                .1
+                .split_once(end)
+                .unwrap_or_else(|| panic!("missing Desktop mutation boundary: {end}"))
+                .0;
+            assert!(
+                source.contains("ensure_workspace_runtime_ownership")
+                    || source.contains("ensure_session_runtime_ownership"),
+                "Desktop mutation {mutation} must pass through the Core ownership owner"
+            );
+        }
+
+        for (mutation, end) in [
+            (
+                "pub async fn account_import_remote_sessions",
+                "pub async fn account_fetch_session_turns",
+            ),
+            (
+                "pub async fn account_fetch_session_turns",
+                "pub async fn account_execute_on_device",
+            ),
+            (
+                "async fn import_session_bundle",
+                "async fn pull_and_reconcile",
+            ),
+        ] {
+            let source = remote_connect_api
+                .split_once(mutation)
+                .unwrap_or_else(|| panic!("missing relay mutation: {mutation}"))
+                .1
+                .split_once(end)
+                .unwrap_or_else(|| panic!("missing relay mutation boundary: {end}"))
+                .0;
+            assert!(
+                source.contains("ensure_workspace_runtime_ownership"),
+                "relay mutation {mutation} must pass through the Core ownership owner"
+            );
+        }
+
+        for mutation in [
+            "pub async fn initialize_snapshot",
+            "pub async fn record_file_change",
+            "pub async fn rollback_session",
+            "pub async fn rollback_to_turn",
+            "pub async fn accept_session",
+            "pub async fn accept_file",
+            "pub async fn reject_file",
+            "pub async fn accept_operation",
+            "pub async fn reject_operation",
+        ] {
+            let source = snapshot_api
+                .split_once(mutation)
+                .unwrap_or_else(|| panic!("missing snapshot mutation: {mutation}"))
+                .1
+                .split_once("#[tauri::command]")
+                .unwrap_or_else(|| panic!("missing snapshot mutation boundary: {mutation}"))
+                .0;
+            assert!(
+                source.contains("ensure_local_runtime_ownership"),
+                "snapshot mutation {mutation} must acquire ownership before side effects"
+            );
+        }
     }
 }

@@ -26,11 +26,11 @@ impl AgentSubmissionPort for ProductSdkAgentProvider {
         request: AgentSessionCreateRequest,
     ) -> PortResult<AgentSessionCreateResult> {
         self.created_sessions.lock().unwrap().push(request.clone());
-        Ok(AgentSessionCreateResult {
-            session_id: "product-sdk-session".to_string(),
-            session_name: request.session_name,
-            agent_type: request.agent_type,
-        })
+        Ok(AgentSessionCreateResult::new(
+            "product-sdk-session",
+            request.session_name,
+            request.agent_type,
+        ))
     }
 
     async fn submit_message(

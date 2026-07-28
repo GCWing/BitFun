@@ -126,16 +126,14 @@ impl RuntimeIpcRequestHandler for CreateRaceHandler {
         operation: RuntimeIpcOperation,
     ) -> Result<RuntimeIpcOperationResult, RuntimeIpcError> {
         match operation {
-            RuntimeIpcOperation::CreateSession { request: _ } => {
+            RuntimeIpcOperation::CreateSession { request } => {
                 self.create_started.notify_one();
                 self.allow_create.notified().await;
-                Ok(RuntimeIpcOperationResult::SessionCreated {
-                    session: AgentSessionCreateResult {
-                        session_id: "session-a".to_string(),
-                        session_name: "Created session".to_string(),
-                        agent_type: "agentic".to_string(),
-                    },
-                })
+                let mut session =
+                    AgentSessionCreateResult::new("session-a", "Created session", "agentic");
+                session.workspace_path = request.workspace_path;
+                session.workspace_id = Some("workspace-fixture".to_string());
+                Ok(RuntimeIpcOperationResult::SessionCreated { session })
             }
             RuntimeIpcOperation::RestoreSession { request } => Ok(restored(&request.session_id)),
             _ => Ok(RuntimeIpcOperationResult::Unit),
@@ -350,6 +348,7 @@ async fn generated_session_is_claimed_before_another_connection_can_restore_it()
     let mut creator = server.connect("creator").await;
     let mut restorer = server.connect("restorer").await;
     let workspace_path = server.workspace.path().to_string_lossy().to_string();
+    let expected_workspace_path = workspace_path.clone();
 
     let create_task = tokio::spawn(async move {
         request(
@@ -380,13 +379,19 @@ async fn generated_session_is_claimed_before_another_connection_can_restore_it()
         "restore must wait until create has claimed its generated Session"
     );
     allow_create.notify_one();
-    assert!(matches!(
-        create_task.await.expect("create task"),
+    match create_task.await.expect("create task") {
         RuntimeIpcFrame::Response {
-            result: RuntimeIpcOperationResult::SessionCreated { .. },
+            result: RuntimeIpcOperationResult::SessionCreated { session },
             ..
+        } => {
+            assert_eq!(
+                session.workspace_path.as_deref(),
+                Some(expected_workspace_path.as_str())
+            );
+            assert_eq!(session.workspace_id.as_deref(), Some("workspace-fixture"));
         }
-    ));
+        other => panic!("unexpected create response: {other:?}"),
+    }
     assert!(matches!(
         restore_task.await.expect("restore task"),
         RuntimeIpcFrame::Error { error, .. }
