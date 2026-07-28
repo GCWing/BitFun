@@ -408,10 +408,13 @@ impl HookImportStore {
             .filter(|record| record.enabled && record.bundle_valid)
         {
             let hooks_path = record.bundle_path.join("hooks.json");
-            let bytes = match read_bounded(&hooks_path, MAX_HOOKS_FILE_BYTES as u64).await {
-                Ok(Some(bytes)) => bytes,
-                Ok(None) | Err(_) => continue,
-            };
+            let bytes =
+                match read_verified_bundle(&self.root, &record.bundle_path, &record.content_digest)
+                    .await
+                {
+                    Ok(bytes) => bytes,
+                    Err(_) => continue,
+                };
             let layer = AgentHookSettingsLayer {
                 scope: hook_scope(self.scope),
                 source: hooks_path.to_string_lossy().to_string(),
@@ -637,6 +640,16 @@ async fn validate_bundle_content(
     path: &Path,
     expected_digest: &str,
 ) -> Result<(), HookImportStoreError> {
+    read_verified_bundle(root, path, expected_digest)
+        .await
+        .map(drop)
+}
+
+async fn read_verified_bundle(
+    root: &Path,
+    path: &Path,
+    expected_digest: &str,
+) -> Result<Vec<u8>, HookImportStoreError> {
     validate_owned_directory(root, path).await?;
     let mut entries = tokio::fs::read_dir(path).await.map_err(io_error)?;
     while let Some(entry) = entries.next_entry().await.map_err(io_error)? {
@@ -663,7 +676,7 @@ async fn validate_bundle_content(
     if observed != expected_digest {
         return Err(HookImportStoreError::InvalidInput("bundle content digest"));
     }
-    Ok(())
+    Ok(hooks_json)
 }
 
 async fn read_bundle_assets(
@@ -1330,6 +1343,30 @@ mod tests {
             .await
             .unwrap()
             .is_empty());
+    }
+
+    #[tokio::test]
+    async fn same_process_bundle_change_is_rejected_before_runtime_load() {
+        let temp = tempdir().unwrap();
+        let store = HookImportStore::open(
+            temp.path().join("hook-imports"),
+            ExternalSourceScope::UserGlobal,
+        )
+        .await
+        .unwrap();
+        store
+            .apply(0, write(ExternalSourceScope::UserGlobal, "check"))
+            .await
+            .unwrap();
+        let snapshot = store.snapshot().await.unwrap();
+        tokio::fs::write(
+            snapshot.imports[0].bundle_path.join("hooks.json"),
+            br#"{"hooks":{"PreToolUse":[{"hooks":[{"type":"command","command":"unreviewed"}]}]}}"#,
+        )
+        .await
+        .unwrap();
+
+        assert!(store.enabled_layers().await.unwrap().is_empty());
     }
 
     #[tokio::test]

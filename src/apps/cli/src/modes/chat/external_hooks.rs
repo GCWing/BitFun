@@ -622,28 +622,29 @@ impl ChatMode {
                     Some(workspace_root.as_path()),
                     ExternalHookImportApplyRequestV1 {
                         schema_version: EXTERNAL_HOOK_IMPORT_SCHEMA_V1,
-                        source,
+                        source: source.clone(),
                         plan_fingerprint: plan.plan_fingerprint,
                     },
                 )
                 .await?;
-                match result.outcome {
+                let (snapshot, applied) = match result.outcome {
                     ExternalHookImportApplyOutcomeV1::Stale { refreshed_plan } => {
-                        Ok(HookManagementResult::Plan(refreshed_plan))
+                        return Ok(HookManagementResult::Plan(refreshed_plan));
                     }
-                    ExternalHookImportApplyOutcomeV1::Applied { snapshot }
-                    | ExternalHookImportApplyOutcomeV1::Unchanged { snapshot } => {
-                        let native = native_hook_overview(Some(workspace_root.as_path())).await;
-                        Ok(HookManagementResult::Changed {
-                            snapshot: HookManagementSnapshot {
-                                native,
-                                imports: snapshot,
-                            },
-                            status: "Imported Hooks are enabled for the next matching event."
-                                .to_string(),
-                        })
-                    }
-                }
+                    ExternalHookImportApplyOutcomeV1::Applied { snapshot } => (snapshot, true),
+                    ExternalHookImportApplyOutcomeV1::Unchanged { snapshot } => (snapshot, false),
+                };
+                let status =
+                    crate::hook_import::completed_import_status(&snapshot, &source, applied)
+                        .to_string();
+                let native = native_hook_overview(Some(workspace_root.as_path())).await;
+                Ok(HookManagementResult::Changed {
+                    snapshot: HookManagementSnapshot {
+                        native,
+                        imports: snapshot,
+                    },
+                    status,
+                })
             },
             "Applying reviewed Hook import...",
             chat_view,

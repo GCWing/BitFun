@@ -449,11 +449,15 @@ target generation; it is not persisted.
 ### Startup
 
 Process startup never discovers Claude Code/Codex sources and never re-imports
-them. On first access to an import store, and only after its index metadata
-changes, BitFun verifies the content of the exact indexed bundle paths against
-their bounded private digests. It does not enumerate unreferenced version
-directories or external product files. Normal Hook events check only index
-metadata and reuse the existing `AgentHookEngine` until the generation changes.
+them. On first access to an import store and after its index metadata changes,
+BitFun verifies the content of the exact indexed bundle paths against their
+bounded private digests. Whenever an `AgentHookEngine` must be rebuilt, runtime
+layer loading also reads and verifies each bundle once and returns the same
+verified `hooks.json` bytes to the native parser; it never trusts an earlier
+in-memory validity bit for newly read commands. It does not enumerate
+unreferenced version directories or external product files. Normal Hook events
+still check only index metadata and reuse the existing engine until the imported
+generation or a manual-file fingerprint changes.
 
 If the import index is unreadable or invalid, imported Hooks fail closed and a
 diagnostic is surfaced; manual BitFun Hooks continue to work. Recovery does not

@@ -198,7 +198,7 @@ async fn preview_or_apply(
         workspace,
         ExternalHookImportApplyRequestV1 {
             schema_version: EXTERNAL_HOOK_IMPORT_SCHEMA_V1,
-            source,
+            source: source.clone(),
             plan_fingerprint,
         },
     )
@@ -206,11 +206,11 @@ async fn preview_or_apply(
     .map_err(operation_error)?;
     let text = match &result.outcome {
         bitfun_product_domains::external_hook_import::ExternalHookImportApplyOutcomeV1::Applied {
-            ..
-        } => "Imported Hooks are enabled and will apply on the next matching event.".to_string(),
+            snapshot,
+        } => completed_import_status(snapshot, &source, true).to_string(),
         bitfun_product_domains::external_hook_import::ExternalHookImportApplyOutcomeV1::Unchanged {
-            ..
-        } => "The reviewed Hook import is already current and enabled.".to_string(),
+            snapshot,
+        } => completed_import_status(snapshot, &source, false).to_string(),
         bitfun_product_domains::external_hook_import::ExternalHookImportApplyOutcomeV1::Stale {
             refreshed_plan,
         } => format!(
@@ -219,6 +219,27 @@ async fn preview_or_apply(
         ),
     };
     print_value(format, &result, text)
+}
+
+pub(crate) fn completed_import_status(
+    snapshot: &ExternalHookImportSnapshotV1,
+    source: &SourceKey,
+    applied: bool,
+) -> &'static str {
+    let enabled = snapshot
+        .imports
+        .iter()
+        .find(|item| item.source.key == *source)
+        .map(|item| item.enabled);
+    match (applied, enabled) {
+        (true, Some(true)) => {
+            "Imported Hooks are enabled and will apply on the next matching event."
+        }
+        (true, Some(false)) => "Imported Hooks were updated and remain disabled.",
+        (false, Some(true)) => "The reviewed Hook import is already current and enabled.",
+        (false, Some(false)) => "The reviewed Hook import is already current and remains disabled.",
+        (_, None) => "Hook import completed; refresh the Hook list to verify its current state.",
+    }
 }
 
 pub(crate) async fn mutate(
@@ -337,4 +358,69 @@ fn operation_error(error: ExternalSourceOperationError) -> anyhow::Error {
 
 fn escape(value: &str) -> String {
     crate::plugin_diagnostics::escape_terminal_text(value)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use bitfun_product_domains::external_hook_catalog::{
+        ExternalHookCatalogSnapshotV1, ExternalHookSource, ExternalHookSourceKind,
+    };
+    use bitfun_product_domains::external_hook_import::{
+        ImportedHookSourceSnapshotV1, ImportedHookSourceStateV1,
+    };
+    use bitfun_product_domains::external_sources::{
+        EcosystemId, ExternalSourceHealth, ExternalSourceScope,
+    };
+
+    fn disabled_snapshot() -> (SourceKey, ExternalHookImportSnapshotV1) {
+        let source_key = SourceKey::new("claude", "user-hooks").unwrap();
+        let source = ExternalHookSource {
+            key: source_key.clone(),
+            ecosystem_id: EcosystemId::new("claude-code").unwrap(),
+            display_name: "Claude Code user Hooks".to_string(),
+            source_kind: ExternalHookSourceKind::Settings,
+            scope: ExternalSourceScope::UserGlobal,
+            location_hint: "user settings".to_string(),
+            health: ExternalSourceHealth::Available,
+            content_version: "sha256:source".to_string(),
+            diagnostics: Vec::new(),
+        };
+        (
+            source_key,
+            ExternalHookImportSnapshotV1 {
+                schema_version: EXTERNAL_HOOK_IMPORT_SCHEMA_V1,
+                revision: "sha256:revision".to_string(),
+                catalog: ExternalHookCatalogSnapshotV1::default(),
+                imports: vec![ImportedHookSourceSnapshotV1 {
+                    import_id: "hook-import".to_string(),
+                    source,
+                    enabled: false,
+                    behavior_version: "sha256:behavior".to_string(),
+                    state: ImportedHookSourceStateV1::Current,
+                }],
+                diagnostics: Vec::new(),
+            },
+        )
+    }
+
+    #[test]
+    fn completed_update_reports_that_the_import_remains_disabled() {
+        let (source, snapshot) = disabled_snapshot();
+
+        assert_eq!(
+            completed_import_status(&snapshot, &source, true),
+            "Imported Hooks were updated and remain disabled."
+        );
+    }
+
+    #[test]
+    fn unchanged_import_reports_that_it_remains_disabled() {
+        let (source, snapshot) = disabled_snapshot();
+
+        assert_eq!(
+            completed_import_status(&snapshot, &source, false),
+            "The reviewed Hook import is already current and remains disabled."
+        );
+    }
 }
