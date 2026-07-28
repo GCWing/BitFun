@@ -247,7 +247,7 @@ const SessionSettingsPanels: React.FC<SessionSettingsPanelsProps> = ({ variant }
         configManager.getConfig<boolean>('ai.computer_use_enabled'),
         configManager.getConfig<string>('ai.browser_control_preferred_browser'),
         permissionConfigService.getConfig(),
-        configManager.getConfig<boolean | undefined>(SHOW_PERMISSION_MODE_CONTROL_CONFIG_PATH),
+        configManager.getOptionalConfig<boolean>(SHOW_PERMISSION_MODE_CONTROL_CONFIG_PATH),
         listAgentCompanionPets(),
       ]);
 

@@ -1805,7 +1805,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     };
     const loadVisibility = async () => {
       try {
-        applyVisibility(await configManager.getConfig<boolean | undefined>(configPath));
+        applyVisibility(await configManager.getOptionalConfig<boolean>(configPath));
       } catch (error) {
         log.warn('Failed to load permission mode control visibility preference', error);
         applyVisibility(true);
