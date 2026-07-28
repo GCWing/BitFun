@@ -205,4 +205,56 @@ describe('FlowChatHeader', () => {
     expect(onJumpToTurn).toHaveBeenCalledWith('turn-2');
     expect(container.querySelector('[role="dialog"]')).not.toBeNull();
   });
+
+  it('renders background activity menus in a portal outside the scrollable panel', () => {
+    const onStopBackgroundCommand = vi.fn();
+
+    act(() => {
+      root.render(
+        <FlowChatHeader
+          {...createProps({
+            backgroundCommands: [{
+              execSessionKey: 'command-1',
+              execSessionId: 1,
+              title: 'Long-running command',
+              command: 'pnpm dev',
+              status: 'running',
+            }],
+            onStopBackgroundCommand,
+          })}
+        />,
+      );
+    });
+
+    const activityButton = container.querySelector<HTMLButtonElement>(
+      '[data-testid="flowchat-header-background-activities"]',
+    );
+    act(() => {
+      activityButton?.click();
+    });
+
+    const panel = container.querySelector('.flowchat-header__background-activity-panel');
+    const menuButton = panel?.querySelector<HTMLButtonElement>(
+      '[aria-label="flowChatHeader.backgroundCommandActions"]',
+    );
+    act(() => {
+      menuButton?.click();
+    });
+
+    const menu = document.querySelector<HTMLDivElement>('[data-testid="flowchat-header-background-menu"]');
+    expect(menu).not.toBeNull();
+    expect(panel?.contains(menu ?? null)).toBe(false);
+
+    act(() => {
+      menu?.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
+    });
+    expect(container.querySelector('.flowchat-header__background-activity-panel')).not.toBeNull();
+
+    const stopButton = menu?.querySelector<HTMLButtonElement>('[role="menuitem"]');
+    act(() => {
+      stopButton?.click();
+    });
+
+    expect(onStopBackgroundCommand).toHaveBeenCalledTimes(1);
+  });
 });

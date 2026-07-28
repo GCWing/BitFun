@@ -5,11 +5,13 @@
  */
 
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import { Activity, Bot, ChevronDown, ChevronUp, GitPullRequest, Keyboard, List, MoreHorizontal, Search, Square, Terminal, X } from 'lucide-react';
 import { Tooltip, IconButton, Input } from '@/component-library';
 import { useTranslation } from 'react-i18next';
 import { SessionFilesBadge } from './SessionFilesBadge';
 import { useWorkspaceContext } from '@/infrastructure/contexts/WorkspaceContext';
+import { computeFixedPopoverPosition } from '@/shared/utils/fixedPopoverViewport';
 import { createReviewPlatformTab } from '@/shared/utils/tabUtils';
 import './FlowChatHeader.scss';
 
@@ -145,8 +147,14 @@ export const FlowChatHeader: React.FC<FlowChatHeaderProps> = ({
   const rightActionsRef = useRef<HTMLDivElement | null>(null);
   const turnListRef = useRef<HTMLDivElement | null>(null);
   const backgroundActivityPanelRef = useRef<HTMLDivElement | null>(null);
+  const backgroundActivityMenuAnchorRef = useRef<HTMLButtonElement | null>(null);
+  const backgroundActivityMenuRef = useRef<HTMLDivElement | null>(null);
   const activeTurnItemRef = useRef<HTMLButtonElement | null>(null);
   const searchInputRef = useRef<HTMLInputElement | null>(null);
+  const [backgroundActivityMenuPosition, setBackgroundActivityMenuPosition] = useState<{
+    top: number;
+    left: number;
+  } | null>(null);
 
   // Truncate long messages.
   const truncatedMessage = currentUserMessage.length > 50
@@ -183,6 +191,30 @@ export const FlowChatHeader: React.FC<FlowChatHeaderProps> = ({
     }))
   ), [backgroundCommands, t]);
   const hasNoResults = searchQuery.trim().length > 0 && searchMatchCount === 0;
+  const hasOpenBackgroundActivityMenu =
+    openBackgroundSectionMenuId !== null ||
+    openBackgroundSubagentMenuId !== null ||
+    openBackgroundCommandMenuId !== null;
+
+  const updateBackgroundActivityMenuPosition = useCallback(() => {
+    const anchor = backgroundActivityMenuAnchorRef.current;
+    if (!anchor) return;
+
+    const menu = backgroundActivityMenuRef.current;
+    const { top, left } = computeFixedPopoverPosition(
+      anchor.getBoundingClientRect(),
+      menu?.offsetWidth ?? 200,
+      menu?.offsetHeight ?? 96,
+      4,
+      8,
+    );
+    setBackgroundActivityMenuPosition({ top, left });
+  }, []);
+
+  const prepareBackgroundActivityMenu = useCallback((anchor: HTMLButtonElement) => {
+    backgroundActivityMenuAnchorRef.current = anchor;
+    updateBackgroundActivityMenuPosition();
+  }, [updateBackgroundActivityMenuPosition]);
 
   useEffect(() => {
     if (!isTurnListOpen && !isBackgroundActivityPanelOpen) return;
@@ -191,7 +223,8 @@ export const FlowChatHeader: React.FC<FlowChatHeaderProps> = ({
       const target = event.target as Node;
       if (
         !turnListRef.current?.contains(target) &&
-        !backgroundActivityPanelRef.current?.contains(target)
+        !backgroundActivityPanelRef.current?.contains(target) &&
+        !backgroundActivityMenuRef.current?.contains(target)
       ) {
         setIsTurnListOpen(false);
         setIsBackgroundActivityPanelOpen(false);
@@ -219,6 +252,28 @@ export const FlowChatHeader: React.FC<FlowChatHeaderProps> = ({
       document.removeEventListener('keydown', handleKeyDown);
     };
   }, [isBackgroundActivityPanelOpen, isTurnListOpen]);
+
+  useLayoutEffect(() => {
+    if (!hasOpenBackgroundActivityMenu) {
+      setBackgroundActivityMenuPosition(null);
+      return;
+    }
+
+    updateBackgroundActivityMenuPosition();
+    window.addEventListener('resize', updateBackgroundActivityMenuPosition);
+    window.addEventListener('scroll', updateBackgroundActivityMenuPosition, true);
+
+    return () => {
+      window.removeEventListener('resize', updateBackgroundActivityMenuPosition);
+      window.removeEventListener('scroll', updateBackgroundActivityMenuPosition, true);
+    };
+  }, [
+    hasOpenBackgroundActivityMenu,
+    openBackgroundCommandMenuId,
+    openBackgroundSectionMenuId,
+    openBackgroundSubagentMenuId,
+    updateBackgroundActivityMenuPosition,
+  ]);
 
   const prevSearchOpenRequestRef = useRef(0);
   useEffect(() => {
@@ -361,6 +416,11 @@ export const FlowChatHeader: React.FC<FlowChatHeaderProps> = ({
   ) => {
     event.preventDefault();
     event.stopPropagation();
+    if (openBackgroundSubagentMenuId === subagent.sessionId) {
+      setBackgroundActivityMenuPosition(null);
+    } else {
+      prepareBackgroundActivityMenu(event.currentTarget);
+    }
     setOpenBackgroundSectionMenuId(null);
     setOpenBackgroundCommandMenuId(null);
     setOpenBackgroundSubagentMenuId(previous => previous === subagent.sessionId ? null : subagent.sessionId);
@@ -387,6 +447,11 @@ export const FlowChatHeader: React.FC<FlowChatHeaderProps> = ({
   const handleCommandSectionMenuToggle = (event: React.MouseEvent<HTMLButtonElement>) => {
     event.preventDefault();
     event.stopPropagation();
+    if (openBackgroundSectionMenuId === 'commands') {
+      setBackgroundActivityMenuPosition(null);
+    } else {
+      prepareBackgroundActivityMenu(event.currentTarget);
+    }
     setOpenBackgroundSubagentMenuId(null);
     setOpenBackgroundCommandMenuId(null);
     setOpenBackgroundSectionMenuId(previous => previous === 'commands' ? null : 'commands');
@@ -395,6 +460,11 @@ export const FlowChatHeader: React.FC<FlowChatHeaderProps> = ({
   const handleSubagentSectionMenuToggle = (event: React.MouseEvent<HTMLButtonElement>) => {
     event.preventDefault();
     event.stopPropagation();
+    if (openBackgroundSectionMenuId === 'subagents') {
+      setBackgroundActivityMenuPosition(null);
+    } else {
+      prepareBackgroundActivityMenu(event.currentTarget);
+    }
     setOpenBackgroundSubagentMenuId(null);
     setOpenBackgroundCommandMenuId(null);
     setOpenBackgroundSectionMenuId(previous => previous === 'subagents' ? null : 'subagents');
@@ -411,6 +481,11 @@ export const FlowChatHeader: React.FC<FlowChatHeaderProps> = ({
   ) => {
     event.preventDefault();
     event.stopPropagation();
+    if (openBackgroundCommandMenuId === command.execSessionKey) {
+      setBackgroundActivityMenuPosition(null);
+    } else {
+      prepareBackgroundActivityMenu(event.currentTarget);
+    }
     setOpenBackgroundSectionMenuId(null);
     setOpenBackgroundSubagentMenuId(null);
     setOpenBackgroundCommandMenuId(previous => previous === command.execSessionKey ? null : command.execSessionKey);
@@ -463,11 +538,14 @@ export const FlowChatHeader: React.FC<FlowChatHeaderProps> = ({
         >
           <MoreHorizontal size={13} aria-hidden="true" />
         </IconButton>
-        {openBackgroundSubagentMenuId === subagent.sessionId ? (
+        {openBackgroundSubagentMenuId === subagent.sessionId && backgroundActivityMenuPosition ? createPortal(
           <div
-            className="flowchat-header__background-command-menu flowchat-header__background-command-menu--compact"
+            ref={backgroundActivityMenuRef}
+            className="flowchat-header__background-command-menu flowchat-header__background-command-menu--compact flowchat-header__background-command-menu--portal"
             role="menu"
             aria-label={t('flowChatHeader.backgroundSubagentActions')}
+            style={backgroundActivityMenuPosition}
+            data-testid="flowchat-header-background-menu"
           >
             <button
               type="button"
@@ -483,7 +561,8 @@ export const FlowChatHeader: React.FC<FlowChatHeaderProps> = ({
                   : t('flowChatHeader.backgroundSubagentStop')}
               </span>
             </button>
-          </div>
+          </div>,
+          document.body,
         ) : null}
       </div>
     );
@@ -516,11 +595,14 @@ export const FlowChatHeader: React.FC<FlowChatHeaderProps> = ({
         >
           <MoreHorizontal size={13} aria-hidden="true" />
         </IconButton>
-        {openBackgroundCommandMenuId === command.execSessionKey ? (
+        {openBackgroundCommandMenuId === command.execSessionKey && backgroundActivityMenuPosition ? createPortal(
           <div
-            className="flowchat-header__background-command-menu"
+            ref={backgroundActivityMenuRef}
+            className="flowchat-header__background-command-menu flowchat-header__background-command-menu--portal"
             role="menu"
             aria-label={t('flowChatHeader.backgroundCommandActions')}
+            style={backgroundActivityMenuPosition}
+            data-testid="flowchat-header-background-menu"
           >
             {canSendBackgroundCommandInput ? (
               <button
@@ -549,7 +631,8 @@ export const FlowChatHeader: React.FC<FlowChatHeaderProps> = ({
                 </span>
               </button>
             ) : null}
-          </div>
+          </div>,
+          document.body,
         ) : null}
       </div>
     );
@@ -658,11 +741,14 @@ export const FlowChatHeader: React.FC<FlowChatHeaderProps> = ({
                           >
                             <MoreHorizontal size={13} aria-hidden="true" />
                           </IconButton>
-                          {openBackgroundSectionMenuId === 'subagents' ? (
+                          {openBackgroundSectionMenuId === 'subagents' && backgroundActivityMenuPosition ? createPortal(
                             <div
-                              className="flowchat-header__background-command-menu"
+                              ref={backgroundActivityMenuRef}
+                              className="flowchat-header__background-command-menu flowchat-header__background-command-menu--portal"
                               role="menu"
                               aria-label={t('flowChatHeader.backgroundSubagentActions')}
+                              style={backgroundActivityMenuPosition}
+                              data-testid="flowchat-header-background-menu"
                             >
                               <button
                                 type="button"
@@ -673,7 +759,8 @@ export const FlowChatHeader: React.FC<FlowChatHeaderProps> = ({
                                 <Square size={12} aria-hidden="true" />
                                 <span>{t('flowChatHeader.backgroundSubagentStopAll')}</span>
                               </button>
-                            </div>
+                            </div>,
+                            document.body,
                           ) : null}
                         </div>
                       ) : null}
@@ -731,11 +818,14 @@ export const FlowChatHeader: React.FC<FlowChatHeaderProps> = ({
                           >
                             <MoreHorizontal size={13} aria-hidden="true" />
                           </IconButton>
-                          {openBackgroundSectionMenuId === 'commands' ? (
+                          {openBackgroundSectionMenuId === 'commands' && backgroundActivityMenuPosition ? createPortal(
                             <div
-                              className="flowchat-header__background-command-menu"
+                              ref={backgroundActivityMenuRef}
+                              className="flowchat-header__background-command-menu flowchat-header__background-command-menu--portal"
                               role="menu"
                               aria-label={t('flowChatHeader.backgroundCommandActions')}
+                              style={backgroundActivityMenuPosition}
+                              data-testid="flowchat-header-background-menu"
                             >
                               <button
                                 type="button"
@@ -746,7 +836,8 @@ export const FlowChatHeader: React.FC<FlowChatHeaderProps> = ({
                                 <Square size={12} aria-hidden="true" />
                                 <span>{t('flowChatHeader.backgroundCommandStopAll')}</span>
                               </button>
-                            </div>
+                            </div>,
+                            document.body,
                           ) : null}
                         </div>
                       ) : null}

@@ -505,6 +505,13 @@
     &--compact {
       min-width: 0;
     }
+
+    &--portal {
+      position: fixed;
+      top: auto;
+      right: auto;
+      z-index: 10000;
+    }
   }
 
   &__background-command-menu-item {
