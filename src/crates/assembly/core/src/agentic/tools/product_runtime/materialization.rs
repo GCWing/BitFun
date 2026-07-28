@@ -74,6 +74,10 @@ impl StaticToolProviderFactory<dyn Tool> for ProductConcreteToolFactory {
             "ControlHub" => Some(Arc::new(ControlHubTool::new())),
             "ComputerUse" => Some(Arc::new(ComputerUseTool::new())),
             "Playbook" => Some(Arc::new(PlaybookTool::new())),
+            "build_project" => Some(Arc::new(BuildProjectTool::new())),
+            "start_app" => Some(Arc::new(StartAppTool::new())),
+            "hdc_log" => Some(Arc::new(HdcLogTool::new())),
+            "arkts_knowledge_search" => Some(Arc::new(ArktsKnowledgeSearchTool::new())),
             _ => None,
         }
     }

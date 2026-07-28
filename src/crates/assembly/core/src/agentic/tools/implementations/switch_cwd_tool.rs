@@ -76,10 +76,6 @@ For project-creation requests, you MUST first load the `deveco-create-project` s
         false
     }
 
-    fn needs_permissions(&self, _input: Option<&Value>) -> bool {
-        true
-    }
-
     async fn validate_input(
         &self,
         input: &Value,
@@ -158,7 +154,7 @@ For project-creation requests, you MUST first load the `deveco-create-project` s
             .and_then(|v| v.as_str())
             .ok_or_else(|| BitFunError::tool("project_path is required".to_string()))?;
 
-        let resolved = resolve_target_path(project_path, context);
+        let resolved = resolve_target_path(project_path, Some(context));
         let resolved_str = resolved.to_string_lossy().to_string();
 
         // Check if the directory is a HarmonyOS application root

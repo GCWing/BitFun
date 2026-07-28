@@ -115,6 +115,8 @@ const CORE_INTEGRATION_FEATURE_GROUPS: &[ToolPackFeatureGroup] = &[
     ToolPackFeatureGroup::AgentControl,
 ];
 
+const CORE_OPENHARMONY_FEATURE_GROUPS: &[ToolPackFeatureGroup] = &[ToolPackFeatureGroup::Basic];
+
 const PRODUCT_TOOL_PROVIDER_GROUP_PLAN: &[ToolProviderGroupPlan] = &[
     ToolProviderGroupPlan {
         provider_id: "core.basic",
@@ -188,6 +190,16 @@ const PRODUCT_TOOL_PROVIDER_GROUP_PLAN: &[ToolProviderGroupPlan] = &[
             "ControlHub",
             "ComputerUse",
             "Playbook",
+        ],
+    },
+    ToolProviderGroupPlan {
+        provider_id: "core.openharmony",
+        feature_groups: CORE_OPENHARMONY_FEATURE_GROUPS,
+        tool_names: &[
+            "build_project",
+            "start_app",
+            "hdc_log",
+            "arkts_knowledge_search",
         ],
     },
 ];
@@ -338,7 +350,8 @@ mod tests {
                 "core.agent",
                 "core.canvas",
                 "core.session",
-                "core.integration"
+                "core.integration",
+                "core.openharmony"
             ]
         );
     }
@@ -407,6 +420,10 @@ mod tests {
                 "ControlHub",
                 "ComputerUse",
                 "Playbook",
+                "build_project",
+                "start_app",
+                "hdc_log",
+                "arkts_knowledge_search",
             ]
         );
     }
@@ -446,6 +463,7 @@ mod tests {
                         "agent-control",
                     ]
                 ),
+                ("core.openharmony", vec!["basic"]),
             ]
         );
     }
