@@ -4,10 +4,9 @@
 //! assembly may use the shared/exclusive lock to prevent an embedded runtime
 //! and a future shared runtime from owning the same workspace simultaneously.
 
-use fs2::FileExt;
+use crate::file_lock::{FileLock, FileLockError, FileLockMode};
 use sha2::{Digest, Sha256};
 use std::fmt::{self, Write as _};
-use std::fs::{File, OpenOptions};
 use std::path::{Path, PathBuf};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -65,7 +64,7 @@ impl RuntimeOwnershipKey {
 
 pub struct WorkspaceRuntimeOwnership {
     deployment: RuntimeDeployment,
-    file: File,
+    _lock: FileLock,
 }
 
 impl WorkspaceRuntimeOwnership {
@@ -81,35 +80,28 @@ impl WorkspaceRuntimeOwnership {
             }
         })?;
         let path = key.lock_path(ownership_root);
-        let file = OpenOptions::new()
-            .create(true)
-            .truncate(false)
-            .read(true)
-            .write(true)
-            .open(&path)
-            .map_err(|source| RuntimeOwnershipError::OpenLockFile {
+        let mode = match deployment {
+            RuntimeDeployment::Embedded => FileLockMode::Shared,
+            RuntimeDeployment::Shared => FileLockMode::Exclusive,
+        };
+        let lock = FileLock::try_acquire(&path, mode).map_err(|error| match error {
+            FileLockError::Open(source) => RuntimeOwnershipError::OpenLockFile {
                 path: path.clone(),
                 source,
-            })?;
+            },
+            FileLockError::Unavailable(source) => {
+                RuntimeOwnershipError::OwnershipUnavailable { deployment, source }
+            }
+        })?;
 
-        let lock_result = match deployment {
-            RuntimeDeployment::Embedded => FileExt::try_lock_shared(&file),
-            RuntimeDeployment::Shared => FileExt::try_lock_exclusive(&file),
-        };
-        lock_result
-            .map_err(|source| RuntimeOwnershipError::OwnershipUnavailable { deployment, source })?;
-
-        Ok(Self { deployment, file })
+        Ok(Self {
+            deployment,
+            _lock: lock,
+        })
     }
 
     pub fn deployment(&self) -> RuntimeDeployment {
         self.deployment
-    }
-}
-
-impl Drop for WorkspaceRuntimeOwnership {
-    fn drop(&mut self) {
-        let _ = FileExt::unlock(&self.file);
     }
 }
 

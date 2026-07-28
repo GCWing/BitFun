@@ -75,5 +75,8 @@ required-features = ["lsp"]
 name = "runtime_ownership_contracts"
 required-features = ["runtime-ownership"]
 
+[[test]]
+name = "session_write_lock_contracts"
+
 [lints]
 workspace = true

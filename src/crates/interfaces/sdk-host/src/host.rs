@@ -2153,6 +2153,9 @@ fn runtime_error_facts(error: &RuntimeError) -> (ErrorCode, bool, Option<Recover
             PortErrorKind::PermissionDenied => (ErrorCode::PermissionDenied, false, None),
             PortErrorKind::Cancelled => (ErrorCode::Cancelled, false, None),
             PortErrorKind::Timeout => (ErrorCode::Timeout, true, Some(RecoveryAction::Retry)),
+            PortErrorKind::SessionInUse => {
+                (ErrorCode::ActionRequired, true, Some(RecoveryAction::Retry))
+            }
             PortErrorKind::CleanupRequired => (
                 ErrorCode::CleanupRequired,
                 false,
@@ -2188,6 +2191,7 @@ fn runtime_error_kind(error: &RuntimeError) -> &'static str {
             PortErrorKind::PermissionDenied => "permission_denied",
             PortErrorKind::Cancelled => "cancelled",
             PortErrorKind::Timeout => "timeout",
+            PortErrorKind::SessionInUse => "session_in_use",
             PortErrorKind::CleanupRequired => "cleanup_required",
             PortErrorKind::Backend => "backend",
         },
@@ -2204,5 +2208,26 @@ fn runtime_error_kind(error: &RuntimeError) -> &'static str {
         | RuntimeError::MissingEventSource
         | RuntimeError::MissingPermissionRequestManager => "capability_unavailable",
         RuntimeError::PermissionRequest(_) => "permission_request",
+    }
+}
+
+#[cfg(test)]
+mod session_conflict_tests {
+    use super::{runtime_error_facts, runtime_error_kind};
+    use crate::protocol::{ErrorCode, RecoveryAction};
+    use bitfun_agent_runtime::sdk::{PortError, PortErrorKind, RuntimeError};
+
+    #[test]
+    fn session_writer_conflict_uses_existing_action_required_response() {
+        let error = RuntimeError::Port(PortError::new(
+            PortErrorKind::SessionInUse,
+            "Session is already open for writing: session-1",
+        ));
+
+        assert_eq!(
+            runtime_error_facts(&error),
+            (ErrorCode::ActionRequired, true, Some(RecoveryAction::Retry))
+        );
+        assert_eq!(runtime_error_kind(&error), "session_in_use");
     }
 }

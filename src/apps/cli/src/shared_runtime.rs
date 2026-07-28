@@ -2,7 +2,8 @@ use anyhow::{anyhow, Context, Result};
 use async_trait::async_trait;
 use bitfun_agent_runtime::sdk::{
     AgentRuntime, AgentSessionRestoreRequest, AgentUserAnswersRequest, DialogSubmitOutcome,
-    PermissionRequest, PermissionRequestEvent, RuntimeError, SessionTranscriptRequest,
+    PermissionRequest, PermissionRequestEvent, PortErrorKind, RuntimeError,
+    SessionTranscriptRequest,
 };
 use bitfun_agent_runtime_ipc::{
     DiscoveryStore, RuntimeInstanceIdentity, RuntimeIpcClient, RuntimeIpcError,
@@ -914,8 +915,14 @@ fn runtime_error_message(error: RuntimeError) -> anyhow::Error {
 }
 
 fn runtime_ipc_error(error: RuntimeError) -> RuntimeIpcError {
+    let code = match &error {
+        RuntimeError::Port(port_error) if port_error.kind == PortErrorKind::SessionInUse => {
+            RuntimeIpcErrorCode::SessionInUse
+        }
+        _ => RuntimeIpcErrorCode::Unavailable,
+    };
     RuntimeIpcError {
-        code: RuntimeIpcErrorCode::Unavailable,
+        code,
         message: error.into_message(),
     }
 }
@@ -925,18 +932,32 @@ mod tests {
     use super::{
         await_permission_route, connect_existing, index_user_question, invalidate_event_stream,
         permission_event_session, permission_targets_session, project_subagent_link_route,
-        project_user_question_route, publish_event, route_agent_event, subscribe_session_events,
-        SessionEventSenders, EVENT_BUFFER,
+        project_user_question_route, publish_event, route_agent_event, runtime_ipc_error,
+        subscribe_session_events, SessionEventSenders, EVENT_BUFFER,
     };
     use bitfun_agent_runtime::sdk::{
         PermissionDelegationContext, PermissionReplySource, PermissionRequest,
-        PermissionRequestEvent, PermissionRequestSource, PermissionRequestSourceKind,
+        PermissionRequestEvent, PermissionRequestSource, PermissionRequestSourceKind, PortError,
+        PortErrorKind, RuntimeError,
     };
     use bitfun_events::{AgenticEvent, ToolEventData, ToolEventIdentity};
     use std::collections::HashMap;
     use std::sync::{Arc, Mutex};
     use std::time::Duration;
     use tokio::sync::{watch, Notify};
+
+    #[test]
+    fn session_writer_conflict_reuses_the_existing_ipc_error() {
+        let error = runtime_ipc_error(RuntimeError::Port(PortError::new(
+            PortErrorKind::SessionInUse,
+            "Session is already open for writing: session-1",
+        )));
+
+        assert_eq!(
+            error.code,
+            bitfun_agent_runtime_ipc::RuntimeIpcErrorCode::SessionInUse
+        );
+    }
 
     #[tokio::test]
     async fn existing_runtime_connection_errors_are_not_hidden_as_absence() {

@@ -79,6 +79,8 @@ impl PersistenceManager {
         target_session.snapshot_session_id = None;
         target_session.compression_state = source_session.compression_state.clone();
         let target_session_id = target_session.session_id.clone();
+        let _target_session_write =
+            self.lock_session_write_operation(workspace_path, &target_session_id)?;
 
         self.save_session(workspace_path, &target_session).await?;
 

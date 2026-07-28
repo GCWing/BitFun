@@ -36,7 +36,7 @@ use bitfun_services_core::{
         build_session_metadata as build_persisted_session_metadata, empty_session_metadata_page,
         refresh_session_metadata_from_turns, try_refresh_session_metadata_for_saved_turn,
         SessionMemoryMode, SessionMetadataBuildFacts, SessionMetadataStore,
-        SessionMetadataStoreError, SessionStorageLayout,
+        SessionMetadataStoreError, SessionStorageLayout, SessionWriteLock, SessionWriteLockError,
     },
 };
 use futures::{stream, StreamExt};
@@ -65,6 +65,39 @@ static SESSION_PERSISTENCE_LOCKS: OnceLock<Mutex<HashMap<PathBuf, Weak<Mutex<()>
     OnceLock::new();
 static SESSION_BRANCH_ALLOCATION_LOCKS: OnceLock<Mutex<HashMap<PathBuf, Arc<Mutex<()>>>>> =
     OnceLock::new();
+
+struct PendingSessionDirectory {
+    path: PathBuf,
+    committed: bool,
+}
+
+impl PendingSessionDirectory {
+    fn new(path: PathBuf) -> Self {
+        Self {
+            path,
+            committed: false,
+        }
+    }
+
+    fn commit(mut self) {
+        self.committed = true;
+    }
+}
+
+impl Drop for PendingSessionDirectory {
+    fn drop(&mut self) {
+        if self.committed || !self.path.exists() {
+            return;
+        }
+        if let Err(error) = std::fs::remove_dir_all(&self.path) {
+            warn!(
+                "Failed to remove an unfinished Session directory: path={}, error={}",
+                self.path.display(),
+                error
+            );
+        }
+    }
+}
 
 async fn memory_pollution_guard_enabled() -> bool {
     match get_global_config_service().await {
@@ -371,6 +404,40 @@ impl PersistenceManager {
             return workspace_path.to_path_buf();
         }
         self.path_manager.project_sessions_dir(workspace_path)
+    }
+
+    /// Hold this across a multi-step Session write that is not already owned by
+    /// a loaded Session runtime.
+    pub(crate) fn lock_session_writes(
+        &self,
+        workspace_path: &Path,
+        session_id: &str,
+    ) -> BitFunResult<SessionWriteLock> {
+        let sessions_dir = self.project_sessions_dir(workspace_path);
+        SessionWriteLock::try_acquire(&sessions_dir, session_id)
+            .map_err(|error| Self::session_write_lock_error(session_id, error))
+    }
+
+    pub(super) fn lock_session_write_operation(
+        &self,
+        workspace_path: &Path,
+        session_id: &str,
+    ) -> BitFunResult<SessionWriteLock> {
+        let sessions_dir = self.project_sessions_dir(workspace_path);
+        SessionWriteLock::try_acquire_for_operation(&sessions_dir, session_id)
+            .map_err(|error| Self::session_write_lock_error(session_id, error))
+    }
+
+    fn session_write_lock_error(session_id: &str, error: SessionWriteLockError) -> BitFunError {
+        match error {
+            SessionWriteLockError::InUse => BitFunError::SessionInUse {
+                session_id: session_id.to_string(),
+            },
+            other => BitFunError::Session(format!(
+                "Failed to protect Session writes: session_id={session_id}, code={}, error={other}",
+                other.code()
+            )),
+        }
     }
 
     pub(crate) fn is_resolved_sessions_dir(&self, path: &Path) -> bool {
@@ -1002,6 +1069,8 @@ impl PersistenceManager {
         workspace_path: &Path,
         metadata: &SessionMetadata,
     ) -> BitFunResult<()> {
+        let _session_write =
+            self.lock_session_write_operation(workspace_path, &metadata.session_id)?;
         let persistence_lock = self
             .get_session_persistence_lock(workspace_path, &metadata.session_id)
             .await;
@@ -1040,6 +1109,8 @@ impl PersistenceManager {
         metadata: &SessionMetadata,
     ) -> BitFunResult<bool> {
         Self::validate_session_id(&metadata.session_id)?;
+        let _session_write =
+            self.lock_session_write_operation(workspace_path, &metadata.session_id)?;
         self.ensure_runtime_for_write(workspace_path).await?;
         let persistence_lock = self
             .get_session_persistence_lock(workspace_path, &metadata.session_id)
@@ -1086,6 +1157,7 @@ impl PersistenceManager {
         update: impl FnOnce(&mut SessionMetadata) -> BitFunResult<()>,
     ) -> BitFunResult<bool> {
         Self::validate_session_id(session_id)?;
+        let _session_write = self.lock_session_write_operation(workspace_path, session_id)?;
         self.ensure_runtime_for_write(workspace_path).await?;
         let persistence_lock = self
             .get_session_persistence_lock(workspace_path, session_id)
@@ -1120,6 +1192,7 @@ impl PersistenceManager {
         mode: SessionMemoryMode,
     ) -> BitFunResult<()> {
         Self::validate_session_id(session_id)?;
+        let _session_write = self.lock_session_write_operation(workspace_path, session_id)?;
         let persistence_lock = self
             .get_session_persistence_lock(workspace_path, session_id)
             .await;
@@ -1141,6 +1214,7 @@ impl PersistenceManager {
         session_id: &str,
     ) -> BitFunResult<()> {
         Self::validate_session_id(session_id)?;
+        let _session_write = self.lock_session_write_operation(workspace_path, session_id)?;
         let persistence_lock = self
             .get_session_persistence_lock(workspace_path, session_id)
             .await;
@@ -1235,6 +1309,7 @@ impl PersistenceManager {
         cache: &SessionPromptCache,
     ) -> BitFunResult<()> {
         Self::validate_session_id(session_id)?;
+        let _session_write = self.lock_session_write_operation(workspace_path, session_id)?;
         self.ensure_runtime_for_write(workspace_path).await?;
         self.ensure_session_dir(workspace_path, session_id).await?;
 
@@ -1254,6 +1329,7 @@ impl PersistenceManager {
         session_id: &str,
     ) -> BitFunResult<()> {
         Self::validate_session_id(session_id)?;
+        let _session_write = self.lock_session_write_operation(workspace_path, session_id)?;
         match fs::remove_file(self.prompt_cache_path(workspace_path, session_id)).await {
             Ok(()) => Ok(()),
             Err(error) if error.kind() == ErrorKind::NotFound => Ok(()),
@@ -1285,6 +1361,7 @@ impl PersistenceManager {
         anchors: &[TokenAnchor],
     ) -> BitFunResult<()> {
         Self::validate_session_id(session_id)?;
+        let _session_write = self.lock_session_write_operation(workspace_path, session_id)?;
         self.ensure_runtime_for_write(workspace_path).await?;
         self.ensure_session_dir(workspace_path, session_id).await?;
 
@@ -1305,6 +1382,7 @@ impl PersistenceManager {
         session_id: &str,
     ) -> BitFunResult<()> {
         Self::validate_session_id(session_id)?;
+        let _session_write = self.lock_session_write_operation(workspace_path, session_id)?;
         match fs::remove_file(self.token_anchors_path(workspace_path, session_id)).await {
             Ok(()) => Ok(()),
             Err(error) if error.kind() == ErrorKind::NotFound => Ok(()),
@@ -1325,6 +1403,7 @@ impl PersistenceManager {
         messages: &[Message],
     ) -> BitFunResult<()> {
         Self::validate_session_id(session_id)?;
+        let _session_write = self.lock_session_write_operation(workspace_path, session_id)?;
         self.ensure_runtime_for_write(workspace_path).await?;
         self.ensure_snapshots_dir(workspace_path, session_id)
             .await?;
@@ -1445,6 +1524,7 @@ impl PersistenceManager {
         snapshot: &TurnSkillAgentSnapshot,
     ) -> BitFunResult<()> {
         Self::validate_session_id(session_id)?;
+        let _session_write = self.lock_session_write_operation(workspace_path, session_id)?;
         self.ensure_runtime_for_write(workspace_path).await?;
         self.ensure_snapshots_dir(workspace_path, session_id)
             .await?;
@@ -1483,6 +1563,7 @@ impl PersistenceManager {
         turn_index: usize,
     ) -> BitFunResult<()> {
         Self::validate_session_id(session_id)?;
+        let _session_write = self.lock_session_write_operation(workspace_path, session_id)?;
         let dir = self.snapshots_dir(workspace_path, session_id);
         if !dir.exists() {
             return Ok(());
@@ -1524,6 +1605,7 @@ impl PersistenceManager {
         snapshot: &TurnSkillAgentSnapshot,
     ) -> BitFunResult<()> {
         Self::validate_session_id(session_id)?;
+        let _session_write = self.lock_session_write_operation(workspace_path, session_id)?;
         self.ensure_runtime_for_write(workspace_path).await?;
         self.ensure_snapshots_dir(workspace_path, session_id)
             .await?;
@@ -1560,6 +1642,7 @@ impl PersistenceManager {
         turn_index: usize,
     ) -> BitFunResult<()> {
         Self::validate_session_id(session_id)?;
+        let _session_write = self.lock_session_write_operation(workspace_path, session_id)?;
         let dir = self.snapshots_dir(workspace_path, session_id);
         if !dir.exists() {
             return Ok(());
@@ -1611,6 +1694,8 @@ impl PersistenceManager {
         session: &Session,
     ) -> BitFunResult<()> {
         Self::validate_session_id(&session.session_id)?;
+        let _session_write =
+            self.lock_session_write_operation(workspace_path, &session.session_id)?;
         self.ensure_runtime_for_write(workspace_path).await?;
 
         let sessions_dir = self.project_sessions_dir(workspace_path);
@@ -1644,6 +1729,10 @@ impl PersistenceManager {
                 )));
             }
         }
+        // Dropping an interrupted future removes the directory while the
+        // cross-process writer is still held. A stale index entry is repaired
+        // by the existing index validation on the next read.
+        let pending_session_dir = PendingSessionDirectory::new(session_dir);
 
         if let Err(error) = self
             .save_session_files_locked(workspace_path, session)
@@ -1664,15 +1753,19 @@ impl PersistenceManager {
                     cleanup_error: cleanup_error.to_string(),
                 });
             }
+            pending_session_dir.commit();
             return Err(error);
         }
 
+        pending_session_dir.commit();
         Ok(())
     }
 
     /// Save session
     pub async fn save_session(&self, workspace_path: &Path, session: &Session) -> BitFunResult<()> {
         Self::validate_session_id(&session.session_id)?;
+        let _session_write =
+            self.lock_session_write_operation(workspace_path, &session.session_id)?;
         self.ensure_runtime_for_write(workspace_path).await?;
         let persistence_lock = self
             .get_session_persistence_lock(workspace_path, &session.session_id)
@@ -2041,6 +2134,7 @@ impl PersistenceManager {
         state: &SessionState,
     ) -> BitFunResult<()> {
         Self::validate_session_id(session_id)?;
+        let _session_write = self.lock_session_write_operation(workspace_path, session_id)?;
         self.ensure_runtime_for_write(workspace_path).await?;
         let persistence_lock = self
             .get_session_persistence_lock(workspace_path, session_id)
@@ -2074,6 +2168,7 @@ impl PersistenceManager {
         session_id: &str,
     ) -> BitFunResult<()> {
         Self::validate_session_id(session_id)?;
+        let _session_write = self.lock_session_write_operation(workspace_path, session_id)?;
         let persistence_lock = self
             .get_session_persistence_lock(workspace_path, session_id)
             .await;
@@ -2123,6 +2218,7 @@ impl PersistenceManager {
         turn: &DialogTurnData,
     ) -> BitFunResult<()> {
         Self::validate_session_id(&turn.session_id)?;
+        let _session_write = self.lock_session_write_operation(workspace_path, &turn.session_id)?;
         let save_started_at = Instant::now();
         self.ensure_runtime_for_write(workspace_path).await?;
         let persistence_lock = self
@@ -2464,6 +2560,7 @@ impl PersistenceManager {
         turn_index: usize,
     ) -> BitFunResult<()> {
         Self::validate_session_id(session_id)?;
+        let _session_write = self.lock_session_write_operation(workspace_path, session_id)?;
         let persistence_lock = self
             .get_session_persistence_lock(workspace_path, session_id)
             .await;
@@ -2541,6 +2638,7 @@ impl PersistenceManager {
         trigger: &str,
     ) -> BitFunResult<Option<CompressionTranscriptArtifact>> {
         Self::validate_session_id(session_id)?;
+        let _session_write = self.lock_session_write_operation(workspace_path, session_id)?;
         let all_turns = self.load_session_turns(workspace_path, session_id).await?;
         let selected_indices = all_turns
             .iter()
@@ -2690,6 +2788,7 @@ impl PersistenceManager {
         start_turn_index: usize,
     ) -> BitFunResult<usize> {
         Self::validate_session_id(session_id)?;
+        let _session_write = self.lock_session_write_operation(workspace_path, session_id)?;
         let dir = self.compression_transcripts_dir(workspace_path, session_id);
         if !dir.exists() {
             return Ok(0);
@@ -2735,6 +2834,8 @@ impl PersistenceManager {
     ) -> BitFunResult<usize> {
         Self::validate_session_id(source_session_id)?;
         Self::validate_session_id(target_session_id)?;
+        let _session_write =
+            self.lock_session_write_operation(workspace_path, target_session_id)?;
         let source_dir = self.compression_transcripts_dir(workspace_path, source_session_id);
         if !source_dir.exists() {
             return Ok(0);
@@ -2789,6 +2890,7 @@ impl PersistenceManager {
         options: &SessionTranscriptExportOptions,
     ) -> BitFunResult<SessionTranscriptExport> {
         Self::validate_session_id(session_id)?;
+        let _session_write = self.lock_session_write_operation(workspace_path, session_id)?;
         if self
             .load_session_metadata(workspace_path, session_id)
             .await?
@@ -2907,6 +3009,8 @@ impl PersistenceManager {
         Self::validate_session_id(source_session_id)?;
         Self::validate_session_id(reference_session_id)?;
         Self::validate_session_id(reference_artifact_stem)?;
+        let _session_write =
+            self.lock_session_write_operation(source_workspace_path, source_session_id)?;
 
         if self
             .load_session_metadata(reference_workspace_path, reference_session_id)
@@ -2975,6 +3079,7 @@ impl PersistenceManager {
         turn_index: usize,
     ) -> BitFunResult<usize> {
         Self::validate_session_id(session_id)?;
+        let _session_write = self.lock_session_write_operation(workspace_path, session_id)?;
         let persistence_lock = self
             .get_session_persistence_lock(workspace_path, session_id)
             .await;
@@ -3028,6 +3133,7 @@ impl PersistenceManager {
         turn_index: usize,
     ) -> BitFunResult<usize> {
         Self::validate_session_id(session_id)?;
+        let _session_write = self.lock_session_write_operation(workspace_path, session_id)?;
         let persistence_lock = self
             .get_session_persistence_lock(workspace_path, session_id)
             .await;
@@ -3087,8 +3193,8 @@ impl PersistenceManager {
 #[cfg(test)]
 mod tests {
     use super::{
-        context_snapshot_payload_stats, current_unix_secs, PersistenceManager,
-        StoredDialogTurnFile, SESSION_REFERENCE_TRANSCRIPT_CHAR_LIMIT,
+        context_snapshot_payload_stats, current_unix_secs, PendingSessionDirectory,
+        PersistenceManager, StoredDialogTurnFile, SESSION_REFERENCE_TRANSCRIPT_CHAR_LIMIT,
     };
     use crate::agentic::core::{Message, Session, SessionConfig, SessionKind, ToolResult};
     use crate::agentic::memories::db::{MemoryDatabase, MemoryRow, MEMORY_PHASE2_GLOBAL_JOB_KEY};
@@ -3135,6 +3241,28 @@ mod tests {
         fn drop(&mut self) {
             let _ = std::fs::remove_dir_all(&self.path);
         }
+    }
+
+    #[test]
+    fn unfinished_session_directory_is_removed_when_creation_is_cancelled() {
+        let workspace = TestWorkspace::new();
+        let session_dir = workspace.path().join("cancelled-session");
+        std::fs::create_dir(&session_dir).expect("claimed session directory");
+
+        drop(PendingSessionDirectory::new(session_dir.clone()));
+
+        assert!(!session_dir.exists());
+    }
+
+    #[test]
+    fn completed_session_directory_is_kept() {
+        let workspace = TestWorkspace::new();
+        let session_dir = workspace.path().join("completed-session");
+        std::fs::create_dir(&session_dir).expect("claimed session directory");
+
+        PendingSessionDirectory::new(session_dir.clone()).commit();
+
+        assert!(session_dir.exists());
     }
 
     #[tokio::test]

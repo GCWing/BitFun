@@ -531,6 +531,9 @@ impl AgentSessionManagementPort for ScheduledSessionManagementPort {
                     crate::util::errors::BitFunError::Cancelled(_) => {
                         bitfun_runtime_ports::PortErrorKind::Cancelled
                     }
+                    crate::util::errors::BitFunError::SessionInUse { .. } => {
+                        bitfun_runtime_ports::PortErrorKind::SessionInUse
+                    }
                     _ => bitfun_runtime_ports::PortErrorKind::Backend,
                 };
                 bitfun_runtime_ports::PortError::new(kind, error.to_string())
@@ -649,6 +652,9 @@ fn map_session_close_error(
         }
         crate::util::errors::BitFunError::Cancelled(_) => {
             bitfun_runtime_ports::PortErrorKind::Cancelled
+        }
+        crate::util::errors::BitFunError::SessionInUse { .. } => {
+            bitfun_runtime_ports::PortErrorKind::SessionInUse
         }
         _ => bitfun_runtime_ports::PortErrorKind::Backend,
     };
@@ -1888,6 +1894,19 @@ mod tests {
         DialogTurnData, DialogTurnKind, ModelRoundData, TextItemData, ThinkingItemData,
         ToolCallData, ToolItemData, TurnStatus, UserMessageData,
     };
+    use crate::BitFunError;
+
+    #[test]
+    fn session_close_preserves_writer_conflicts() {
+        let error = map_session_close_error(BitFunError::SessionInUse {
+            session_id: "session-1".to_string(),
+        });
+
+        assert_eq!(
+            error.kind,
+            bitfun_runtime_ports::PortErrorKind::SessionInUse
+        );
+    }
 
     #[test]
     fn core_service_agent_runtime_owner_keeps_coordinator_port_contracts() {

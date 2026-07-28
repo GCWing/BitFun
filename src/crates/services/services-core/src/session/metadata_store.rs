@@ -11,6 +11,7 @@ use super::metadata::{
 use super::page::{build_session_metadata_page, empty_session_metadata_page};
 use super::types::{SessionMetadata, StoredSessionIndexFile, StoredSessionMetadataFile};
 use super::SessionMetadataPage;
+use crate::file_lock::{FileLock, FileLockError, FileLockMode};
 use crate::json_store::{JsonFileStore, JsonFileStoreError};
 use bitfun_core_types::validate_session_id;
 use log::warn;
@@ -45,6 +46,12 @@ pub enum SessionMetadataStoreError {
     },
     #[error("Failed to create session directory: {source}")]
     CreateSessionDir {
+        #[source]
+        source: std::io::Error,
+    },
+    #[error("Failed to lock Session index {path}: {source}")]
+    LockSessionIndex {
+        path: PathBuf,
         #[source]
         source: std::io::Error,
     },
@@ -113,6 +120,26 @@ impl SessionMetadataStore {
             .entry(index_path)
             .or_insert_with(|| Arc::new(Mutex::new(())))
             .clone()
+    }
+
+    async fn lock_index_file(&self) -> Result<FileLock, SessionMetadataStoreError> {
+        fs::create_dir_all(self.sessions_root())
+            .await
+            .map_err(|source| SessionMetadataStoreError::CreateSessionDir { source })?;
+        let lock_path = self.sessions_root().join(".index.lock");
+        let task_path = lock_path.clone();
+        tokio::task::spawn_blocking(move || FileLock::acquire(&task_path, FileLockMode::Exclusive))
+            .await
+            .map_err(|error| SessionMetadataStoreError::LockSessionIndex {
+                path: lock_path.clone(),
+                source: std::io::Error::other(error),
+            })?
+            .map_err(|error| SessionMetadataStoreError::LockSessionIndex {
+                path: lock_path,
+                source: match error {
+                    FileLockError::Open(source) | FileLockError::Unavailable(source) => source,
+                },
+            })
     }
 
     async fn read_json_optional<T: serde::de::DeserializeOwned>(
@@ -269,6 +296,7 @@ impl SessionMetadataStore {
 
         let lock = self.get_index_lock().await;
         let _guard = lock.lock().await;
+        let _file_guard = self.lock_index_file().await?;
         let index_path = self.index_path();
         if let Some(index) = self
             .read_json_optional::<StoredSessionIndexFile>(&index_path)
@@ -315,6 +343,7 @@ impl SessionMetadataStore {
         let limit = limit.max(1);
         let lock = self.get_index_lock().await;
         let _guard = lock.lock().await;
+        let _file_guard = self.lock_index_file().await?;
         let index_path = self.index_path();
         let indexed_sessions = if let Some(index) = self
             .read_json_optional::<StoredSessionIndexFile>(&index_path)
@@ -361,6 +390,7 @@ impl SessionMetadataStore {
     pub async fn rebuild_index(&self) -> Result<Vec<SessionMetadata>, SessionMetadataStoreError> {
         let lock = self.get_index_lock().await;
         let _guard = lock.lock().await;
+        let _file_guard = self.lock_index_file().await?;
         self.rebuild_index_locked().await
     }
 
@@ -376,6 +406,7 @@ impl SessionMetadataStore {
 
         let lock = self.get_index_lock().await;
         let _guard = lock.lock().await;
+        let _file_guard = self.lock_index_file().await?;
         let metadata_file_created = !metadata_path.exists();
         self.write_json_atomic(&metadata_path, &file).await?;
         if !metadata.should_hide_from_user_lists() {
@@ -409,6 +440,7 @@ impl SessionMetadataStore {
         validate_session_id(session_id).map_err(SessionMetadataStoreError::InvalidSessionId)?;
         let lock = self.get_index_lock().await;
         let _guard = lock.lock().await;
+        let _file_guard = self.lock_index_file().await?;
         let dir = self.session_dir(session_id);
         let metadata_file_removed = self.metadata_path(session_id).exists();
         if dir.exists() {
@@ -465,6 +497,74 @@ mod tests {
     use super::*;
     use crate::session::{SessionStatus, StoredSessionIndexFile};
     use tempfile::tempdir;
+
+    #[test]
+    fn index_lock_child_holds_the_cross_process_guard() {
+        if std::env::var_os("BITFUN_SESSION_INDEX_LOCK_CHILD").is_none() {
+            return;
+        }
+        let sessions_root =
+            PathBuf::from(std::env::var_os("BITFUN_SESSION_INDEX_ROOT").expect("index lock root"));
+        let ready_path = PathBuf::from(
+            std::env::var_os("BITFUN_SESSION_INDEX_READY").expect("index lock ready path"),
+        );
+        let release_path = PathBuf::from(
+            std::env::var_os("BITFUN_SESSION_INDEX_RELEASE").expect("index lock release path"),
+        );
+        std::fs::create_dir_all(&sessions_root).expect("sessions root");
+        let _guard = FileLock::acquire(&sessions_root.join(".index.lock"), FileLockMode::Exclusive)
+            .expect("child index lock");
+        std::fs::write(&ready_path, b"ready").expect("publish child readiness");
+        while !release_path.exists() {
+            std::thread::sleep(std::time::Duration::from_millis(10));
+        }
+    }
+
+    #[tokio::test]
+    async fn metadata_save_waits_for_a_cross_process_index_writer() {
+        use std::process::{Command, Stdio};
+        use std::time::{Duration, Instant};
+
+        let dir = tempdir().expect("tempdir");
+        let ready_path = dir.path().join("child-ready");
+        let release_path = dir.path().join("child-release");
+        let mut child = Command::new(std::env::current_exe().expect("test executable"))
+            .arg("--exact")
+            .arg("session::metadata_store::tests::index_lock_child_holds_the_cross_process_guard")
+            .arg("--nocapture")
+            .env("BITFUN_SESSION_INDEX_LOCK_CHILD", "1")
+            .env("BITFUN_SESSION_INDEX_ROOT", dir.path())
+            .env("BITFUN_SESSION_INDEX_READY", &ready_path)
+            .env("BITFUN_SESSION_INDEX_RELEASE", &release_path)
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .spawn()
+            .expect("spawn index lock child");
+        let deadline = Instant::now() + Duration::from_secs(5);
+        while !ready_path.exists() && Instant::now() < deadline {
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        if !ready_path.exists() {
+            let _ = child.kill();
+            let _ = child.wait();
+            panic!("index lock child did not become ready");
+        }
+
+        let store = SessionMetadataStore::new(dir.path());
+        let mut save =
+            tokio::spawn(async move { store.save_metadata(&metadata("session-a", 10)).await });
+        let blocked = tokio::time::timeout(Duration::from_millis(50), &mut save)
+            .await
+            .is_err();
+
+        std::fs::write(&release_path, b"release").expect("release child index lock");
+        save.await.expect("save task").expect("metadata save");
+        assert!(child.wait().expect("index lock child").success());
+        assert!(
+            blocked,
+            "metadata save must wait while another process owns the index"
+        );
+    }
 
     fn metadata(session_id: &str, last_active_at: u64) -> SessionMetadata {
         let mut metadata = SessionMetadata::new(
