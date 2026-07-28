@@ -5,6 +5,10 @@
 import { FlowChatStore } from '../../store/FlowChatStore';
 import type { FlowToolItem } from '../../types/flow-chat';
 import type { AcpPermissionRequestEvent } from '@/infrastructure/api/service-api/ACPClientAPI';
+import {
+  globalEventBus,
+  PERMISSION_REQUEST_NOTIFICATION_EVENT,
+} from '@/infrastructure/event-bus';
 
 const pendingAcpPermissionRequests = new Map<string, AcpPermissionRequestEvent>();
 
@@ -18,7 +22,7 @@ function acpPermissionToolId(event: AcpPermissionRequestEvent): string | null {
 function findToolContextById(
   store: FlowChatStore,
   toolId: string
-): { sessionId: string; turnId: string; itemId: string } | null {
+): { sessionId: string; turnId: string; roundId: string; itemId: string } | null {
   const state = store.getState();
   for (const [sessionId, session] of state.sessions) {
     for (const turn of session.dialogTurns) {
@@ -29,7 +33,7 @@ function findToolContextById(
         )) as FlowToolItem | undefined;
 
         if (item) {
-          return { sessionId, turnId: turn.id, itemId: item.id };
+          return { sessionId, turnId: turn.id, roundId: round.id, itemId: item.id };
         }
       }
     }
@@ -65,6 +69,13 @@ function applyAcpPermissionRequest(
   if (toolContext.sessionId !== activeSessionId) {
     store.setSessionNeedsAttention(toolContext.sessionId, 'tool_confirm');
   }
+
+  // Emit only after the request is represented by an actionable tool card.
+  globalEventBus.emit(PERMISSION_REQUEST_NOTIFICATION_EVENT, {
+    requestId: event.permissionId,
+    sessionId: toolContext.sessionId,
+    roundId: toolContext.roundId,
+  });
 
   return true;
 }

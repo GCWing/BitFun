@@ -220,6 +220,10 @@
       "label": "任務完成通知",
       "description": "當 AI 任務完成且視窗不在焦點時，彈出 Toast 通知"
     },
+    "permissionRequest": {
+      "label": "權限審批請求通知",
+      "description": "當有操作需要你審批且視窗不在焦點時，彈出 Toast 通知"
+    },
     "startupTips": {
       "label": "啟動時顯示使用技巧",
       "description": "每次啟動時隨機展示一條使用技巧卡片，幫助發現更多功能"

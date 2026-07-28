@@ -233,6 +233,10 @@
       "label": "任务完成通知",
       "description": "当 AI 任务完成且窗口不在焦点时，弹出 Toast 通知"
     },
+    "permissionRequest": {
+      "label": "权限审批请求通知",
+      "description": "当有操作需要你审批且窗口不在焦点时，弹出 Toast 通知"
+    },
     "startupTips": {
       "label": "启动时显示使用技巧",
       "description": "每次启动时随机展示一条使用技巧卡片，帮助发现更多功能"

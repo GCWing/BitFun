@@ -881,8 +881,10 @@ function BasicsWindowBehaviorSection() {
   );
 }
 
-function BasicsNotificationsSection() {  const { t } = useTranslation('settings/basics');
+function BasicsNotificationsSection() {
+  const { t } = useTranslation('settings/basics');
   const [dialogNotify, setDialogNotify] = useState(true);
+  const [permissionRequestNotify, setPermissionRequestNotify] = useState(true);
   const [startupTips, setStartupTips] = useState(true);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
@@ -890,14 +892,17 @@ function BasicsNotificationsSection() {  const { t } = useTranslation('settings/
   useEffect(() => {
     void (async () => {
       try {
-        const [notify, tips] = await Promise.all([
+        const [notify, permissionNotify, tips] = await Promise.all([
           configManager.getConfig<boolean>('app.notifications.dialog_completion_notify'),
+          configManager.getConfig<boolean>('app.notifications.permission_request_notify'),
           configManager.getConfig<boolean>('app.notifications.enable_startup_tips'),
         ]);
         setDialogNotify(notify !== false);
+        setPermissionRequestNotify(permissionNotify !== false);
         setStartupTips(tips !== false);
       } catch {
         setDialogNotify(true);
+        setPermissionRequestNotify(true);
         setStartupTips(true);
       }
     })();
@@ -908,6 +913,19 @@ function BasicsNotificationsSection() {  const { t } = useTranslation('settings/
     try {
       await configAPI.setConfig('app.notifications.dialog_completion_notify', checked);
       setDialogNotify(checked);
+      setMessage({ type: 'success', text: t('notifications.messages.saveSuccess') });
+    } catch {
+      setMessage({ type: 'error', text: t('notifications.messages.saveFailed') });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handlePermissionRequestNotifyToggle = async (checked: boolean) => {
+    setSaving(true);
+    try {
+      await configManager.setConfig('app.notifications.permission_request_notify', checked);
+      setPermissionRequestNotify(checked);
       setMessage({ type: 'success', text: t('notifications.messages.saveSuccess') });
     } catch {
       setMessage({ type: 'error', text: t('notifications.messages.saveFailed') });
@@ -943,6 +961,17 @@ function BasicsNotificationsSection() {  const { t } = useTranslation('settings/
         <Switch
           checked={dialogNotify}
           onChange={(e) => { void handleDialogNotifyToggle(e.target.checked); }}
+          disabled={saving}
+        />
+      </ConfigPageRow>
+      <ConfigPageRow
+        label={t('notifications.permissionRequest.label')}
+        description={t('notifications.permissionRequest.description')}
+        align="center"
+      >
+        <Switch
+          checked={permissionRequestNotify}
+          onChange={(e) => { void handlePermissionRequestNotifyToggle(e.target.checked); }}
           disabled={saving}
         />
       </ConfigPageRow>

@@ -132,6 +132,8 @@ export interface NotificationConfig {
   duration: number;
   /** Whether to show a toast when a dialog turn completes while the window is not focused. */
   dialog_completion_notify: boolean;
+  /** Whether to show a toast when an approval request arrives while the window is not focused. */
+  permission_request_notify: boolean;
   /** Whether to show built-in tip cards on each startup. Defaults to true. */
   enable_startup_tips: boolean;
 }

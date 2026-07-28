@@ -13,6 +13,7 @@ import { useWorkspaceContext } from '../../infrastructure/contexts/WorkspaceCont
 import { useWindowControls } from '../hooks/useWindowControls';
 import { isWindowFullscreenShortcut } from '../hooks/windowFullscreenShortcut';
 import { useAssistantBootstrap } from '../hooks/useAssistantBootstrap';
+import { usePermissionRequestNotify } from '../hooks/usePermissionRequestNotify';
 import { useApp } from '../hooks/useApp';
 import { useSceneStore } from '../stores/sceneStore';
 import { useShortcut } from '@/infrastructure/hooks/useShortcut';
@@ -77,6 +78,7 @@ interface WindowModeHint {
 const AppLayout: React.FC<AppLayoutProps> = ({ className = '' }) => {
   const { t } = useI18n('components');
   const { t: tCommon } = useI18n('common');
+  usePermissionRequestNotify();
   const {
     currentWorkspace,
     hasWorkspace,

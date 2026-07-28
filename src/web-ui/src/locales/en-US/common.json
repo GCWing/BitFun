@@ -1404,7 +1404,10 @@
     "dialogCompletedFallback": "A BitFun session is ready. Return to BitFun to review the result.",
     "dialogFailedTitle": "BitFun task stopped",
     "dialogFailedWithSession": "\"{{sessionTitle}}\" stopped unexpectedly. Return to BitFun to review the reason.",
-    "dialogFailedFallback": "A BitFun session stopped unexpectedly. Return to BitFun to review the reason."
+    "dialogFailedFallback": "A BitFun session stopped unexpectedly. Return to BitFun to review the reason.",
+    "permissionRequestTitle": "BitFun requires approval",
+    "permissionRequestBody": "An action is waiting for your approval.",
+    "permissionRequestBatchBody": "{{count}} actions are waiting for your approval."
   },
   "closeDialog": {
     "title": "Close BitFun",

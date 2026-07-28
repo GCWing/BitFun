@@ -234,6 +234,10 @@
       "label": "Task completion notification",
       "description": "Show a toast notification when an AI task completes while the window is not in focus"
     },
+    "permissionRequest": {
+      "label": "Permission request notification",
+      "description": "Show a toast notification when an action needs your approval while the window is not in focus"
+    },
     "startupTips": {
       "label": "Show tips on startup",
       "description": "Display a usage tip card each time the app starts to help you discover features"
