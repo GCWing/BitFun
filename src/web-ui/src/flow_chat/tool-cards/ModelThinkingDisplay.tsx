@@ -56,6 +56,7 @@ export const ModelThinkingDisplay: React.FC<ModelThinkingDisplayProps> = ({
   const { applyExpandedState } = useToolCardHeightContract({
     toolId: thinkingItem.id,
     toolName: 'thinking',
+    getAnchorElement: () => wrapperRef.current,
     getCardHeight: () => {
       const contentScrollHeight = contentRef.current?.scrollHeight ?? null;
       const wrapperHeight = wrapperRef.current?.getBoundingClientRect().height ?? null;

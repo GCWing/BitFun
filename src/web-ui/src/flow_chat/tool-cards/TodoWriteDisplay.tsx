@@ -2,7 +2,7 @@
  * Tool card for TodoWrite.
  */
 
-import React, { useState, useMemo, useCallback } from 'react';
+import React, { useState, useMemo, useCallback, useLayoutEffect } from 'react';
 import { ListTodo, CheckCircle2, Circle, XCircle } from 'lucide-react';
 import { TaskRunningIndicator } from '../../component-library';
 import { useTranslation } from 'react-i18next';
@@ -73,10 +73,32 @@ export const TodoWriteDisplay: React.FC<ToolCardProps> = ({
         ? { status: 'completed' as const, defaultIcon: 'status' as const }
         : { status, defaultIcon: 'tool' as const };
 
-  const isExpanded = useMemo(() => {
-    if (expandedState !== null) return expandedState;
+  const desiredAutomaticExpanded = useMemo(() => {
     return inProgressTasks.length === 0 && todosToDisplay.length > 0 && !isAllCompleted;
-  }, [expandedState, inProgressTasks.length, todosToDisplay.length, isAllCompleted]);
+  }, [inProgressTasks.length, todosToDisplay.length, isAllCompleted]);
+  const [automaticExpanded, setAutomaticExpanded] = useState(desiredAutomaticExpanded);
+
+  // Keep the currently rendered automatic state for one layout commit. This
+  // lets the shared height contract publish the collapse intent before the
+  // second synchronous commit removes the expanded body.
+  useLayoutEffect(() => {
+    if (expandedState !== null || automaticExpanded === desiredAutomaticExpanded) {
+      return;
+    }
+    applyExpandedState(
+      automaticExpanded,
+      desiredAutomaticExpanded,
+      setAutomaticExpanded,
+      { reason: 'auto' },
+    );
+  }, [
+    applyExpandedState,
+    automaticExpanded,
+    desiredAutomaticExpanded,
+    expandedState,
+  ]);
+
+  const isExpanded = expandedState ?? automaticExpanded;
 
   const isLoading = status === 'preparing' || status === 'streaming' || status === 'running';
 

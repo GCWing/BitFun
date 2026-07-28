@@ -143,10 +143,11 @@ export const FileOperationToolCard: React.FC<FileOperationToolCardProps> = ({
   const previousExpansionStatusRef = useRef(status);
   const previousFailureStatusRef = useRef(status);
   const userToggledContentRef = useRef(false);
-  const lastStableExpandedHeightRef = useRef<number>(0);
   const {
     cardRootRef,
     applyExpandedState: applyHeightContractExpandedState,
+    dispatchCollapseIntent,
+    dispatchToolCardToggle,
   } = useToolCardHeightContract({
     toolId,
     toolName: toolItem.toolName,
@@ -574,13 +575,6 @@ export const FileOperationToolCard: React.FC<FileOperationToolCardProps> = ({
   ]);
 
   useLayoutEffect(() => {
-    const measuredHeight = cardRootRef.current?.getBoundingClientRect().height ?? 0;
-    if (!isFailed && isContentExpanded && measuredHeight > 0) {
-      lastStableExpandedHeightRef.current = measuredHeight;
-    }
-  }, [cardRootRef, isContentExpanded, isFailed, previewVariant, status]);
-
-  useLayoutEffect(() => {
     const previousStatus = previousFailureStatusRef.current;
     previousFailureStatusRef.current = status;
     const isNewFailure = previousStatus !== status && status === 'error';
@@ -588,29 +582,15 @@ export const FileOperationToolCard: React.FC<FileOperationToolCardProps> = ({
       return;
     }
 
-    const currentMeasuredHeight = cardRootRef.current?.getBoundingClientRect().height ?? 0;
-    const lastStableExpandedHeight = lastStableExpandedHeightRef.current;
-    const estimatedShrinkHeight = Math.max(lastStableExpandedHeight, currentMeasuredHeight);
-
-    if (estimatedShrinkHeight <= currentMeasuredHeight + 0.5) {
-      return;
-    }
-
-    window.dispatchEvent(new CustomEvent('flowchat:tool-card-collapse-intent', {
-      detail: {
-        toolId: toolId ?? null,
-        toolName: toolItem.toolName,
-        cardHeight: estimatedShrinkHeight,
-        filePath: currentFilePath || null,
-        reason: 'auto',
-      },
-    }));
-    window.dispatchEvent(new CustomEvent('tool-card-toggle'));
+    dispatchCollapseIntent('auto', {
+      filePath: currentFilePath || null,
+    });
+    dispatchToolCardToggle();
   }, [
-    cardRootRef,
     currentFilePath,
+    dispatchCollapseIntent,
+    dispatchToolCardToggle,
     isContentExpanded,
-    previewVariant,
     status,
     toolId,
     toolItem.toolName,

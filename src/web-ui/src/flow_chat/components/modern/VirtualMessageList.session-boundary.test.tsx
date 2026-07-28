@@ -4,7 +4,18 @@ import React from 'react';
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { VirtualMessageList, type VirtualMessageListRef } from './VirtualMessageList';
+import {
+  consumeBottomReservationForContentGrowth,
+  getCanceledUnsettledStickyPinGrowthPx,
+  resolveAutoCollapseAnchorScrollTop,
+  shouldBypassShrinkCompensationInTailFollow,
+  shouldPreserveCollapseReservationAfterIntent,
+  shouldSyncPhysicalBottom,
+  shouldSuppressFollowingTailNegativeScrollBy,
+  transferCollapseReservationToPin,
+  VirtualMessageList,
+  type VirtualMessageListRef,
+} from './VirtualMessageList';
 import { activeSessionHistoryProjectionHandoff } from './historyProjectionHandoff';
 import type { Session } from '../../types/flow-chat';
 import type { VirtualItem } from '../../store/modernFlowChatStore';
@@ -88,7 +99,7 @@ vi.mock('react-virtuoso', () => ({
         data-session-id={stateMocks.activeSession?.sessionId ?? ''}
         tabIndex={0}
       >
-        {props.components?.Header ? <props.components.Header /> : null}
+        {props.components?.Header ? <props.components.Header context={props.context} /> : null}
         {props.data
           ?.map((item: VirtualItem, index: number) => ({ item, index }))
           .filter(({ index }: { index: number }) => {
@@ -106,7 +117,7 @@ vi.mock('react-virtuoso', () => ({
               {item.type === 'user-message' ? item.data.content : item.turnId}
             </div>
           ))}
-        {props.components?.Footer ? <props.components.Footer /> : null}
+        {props.components?.Footer ? <props.components.Footer context={props.context} /> : null}
       </div>
     );
   }),
@@ -363,6 +374,192 @@ describe('VirtualMessageList session boundary', () => {
     act(() => root.unmount());
     container.remove();
     vi.unstubAllGlobals();
+  });
+
+  it('keeps the Virtuoso footer mounted across parent rerenders', () => {
+    stateMocks.activeSession = createSession('session-a', 'turn-a');
+    stateMocks.virtualItems = [createItem('turn-a')];
+
+    act(() => {
+      root.render(<VirtualMessageList />);
+    });
+    const firstFooter = container.querySelector('.message-list-footer');
+    expect(firstFooter).not.toBeNull();
+    if (!(firstFooter instanceof HTMLElement)) {
+      return;
+    }
+    firstFooter.style.height = '900px';
+    firstFooter.style.minHeight = '900px';
+
+    act(() => {
+      root.render(<VirtualMessageList />);
+    });
+
+    expect(container.querySelector('.message-list-footer')).toBe(firstFooter);
+    expect(firstFooter.style.height).toBe('900px');
+    expect(firstFooter.style.minHeight).toBe('900px');
+  });
+
+  it('transfers collapse space to a sticky pin in one reservation state', () => {
+    const currentState = {
+      collapse: { kind: 'collapse' as const, px: 1_583, floorPx: 0 },
+      pin: {
+        kind: 'pin' as const,
+        px: 0,
+        floorPx: 0,
+        mode: 'sticky-latest' as const,
+        targetTurnId: 'turn-a',
+      },
+    };
+    const nextPin = {
+      ...currentState.pin,
+      px: 378,
+      floorPx: 378,
+    };
+
+    expect(transferCollapseReservationToPin(currentState, nextPin)).toEqual({
+      collapse: { kind: 'collapse', px: 0, floorPx: 0 },
+      pin: nextPin,
+    });
+  });
+
+  it('drains a sticky pin floor only from measured content growth', () => {
+    const currentState = {
+      collapse: { kind: 'collapse' as const, px: 20, floorPx: 0 },
+      pin: {
+        kind: 'pin' as const,
+        px: 100,
+        floorPx: 100,
+        mode: 'sticky-latest' as const,
+        targetTurnId: 'turn-a',
+      },
+    };
+
+    expect(consumeBottomReservationForContentGrowth(currentState, 35, true)).toEqual({
+      collapse: { kind: 'collapse', px: 0, floorPx: 0 },
+      pin: {
+        ...currentState.pin,
+        px: 85,
+        floorPx: 85,
+      },
+    });
+    expect(consumeBottomReservationForContentGrowth(currentState, 35, false)).toEqual({
+      collapse: { kind: 'collapse', px: 0, floorPx: 0 },
+      pin: currentState.pin,
+    });
+    expect(consumeBottomReservationForContentGrowth(currentState, 35, true, true)).toEqual({
+      collapse: currentState.collapse,
+      pin: {
+        ...currentState.pin,
+        px: 65,
+        floorPx: 65,
+      },
+    });
+  });
+
+  it('does not let physical-bottom follow compete with a semantic element anchor', () => {
+    expect(shouldSyncPhysicalBottom({
+      viewportGeometryChanged: true,
+      collapseProtectionActive: false,
+      wasAtPhysicalBottom: true,
+      ownsElementAnchor: true,
+    })).toBe(false);
+    expect(shouldSyncPhysicalBottom({
+      viewportGeometryChanged: true,
+      collapseProtectionActive: false,
+      wasAtPhysicalBottom: true,
+      ownsElementAnchor: false,
+    })).toBe(true);
+  });
+
+  it('suppresses only negative virtualizer compensation while following the streaming tail', () => {
+    expect(shouldSuppressFollowingTailNegativeScrollBy({
+      requestedTop: -242,
+      isFollowingOutput: true,
+      isStreamingOutput: true,
+      wasAtPhysicalBottom: true,
+    })).toBe(true);
+    expect(shouldSuppressFollowingTailNegativeScrollBy({
+      requestedTop: 36,
+      isFollowingOutput: true,
+      isStreamingOutput: true,
+      wasAtPhysicalBottom: true,
+    })).toBe(false);
+    expect(shouldSuppressFollowingTailNegativeScrollBy({
+      requestedTop: -242,
+      isFollowingOutput: true,
+      isStreamingOutput: true,
+      wasAtPhysicalBottom: false,
+    })).toBe(false);
+    expect(shouldSuppressFollowingTailNegativeScrollBy({
+      requestedTop: -242,
+      isFollowingOutput: false,
+      isStreamingOutput: true,
+      wasAtPhysicalBottom: true,
+    })).toBe(false);
+  });
+
+  it('cancels unsettled sticky pin growth only for unsignaled height corrections', () => {
+    expect(getCanceledUnsettledStickyPinGrowthPx({
+      pendingGrowthPx: 207,
+      shrinkPx: 207,
+      hasActiveCollapseIntent: false,
+    })).toBe(207);
+    expect(getCanceledUnsettledStickyPinGrowthPx({
+      pendingGrowthPx: 207,
+      shrinkPx: 55,
+      hasActiveCollapseIntent: false,
+    })).toBe(55);
+    expect(getCanceledUnsettledStickyPinGrowthPx({
+      pendingGrowthPx: 207,
+      shrinkPx: 207,
+      hasActiveCollapseIntent: true,
+    })).toBe(0);
+  });
+
+  it('lets known streaming collapses reconcile while preserving their reservation', () => {
+    expect(shouldBypassShrinkCompensationInTailFollow({
+      isFollowingOutput: true,
+      isStreamingOutput: true,
+      hasActiveCollapseIntent: false,
+    })).toBe(true);
+    expect(shouldBypassShrinkCompensationInTailFollow({
+      isFollowingOutput: true,
+      isStreamingOutput: true,
+      hasActiveCollapseIntent: true,
+    })).toBe(false);
+    expect(shouldPreserveCollapseReservationAfterIntent({
+      isFollowingOutput: true,
+      isStreamingOutput: true,
+    })).toBe(true);
+    expect(shouldPreserveCollapseReservationAfterIntent({
+      isFollowingOutput: false,
+      isStreamingOutput: true,
+    })).toBe(false);
+  });
+
+  it('recovers the last stable scroll position when an auto collapse arrives after clamp', () => {
+    expect(resolveAutoCollapseAnchorScrollTop({
+      currentScrollTop: 1127.33,
+      previousStableScrollTop: 1302.67,
+      reason: 'auto',
+      isFollowingOutput: true,
+      isStreamingOutput: true,
+    })).toBe(1302.67);
+    expect(resolveAutoCollapseAnchorScrollTop({
+      currentScrollTop: 1127.33,
+      previousStableScrollTop: 1302.67,
+      reason: 'manual',
+      isFollowingOutput: true,
+      isStreamingOutput: true,
+    })).toBe(1127.33);
+    expect(resolveAutoCollapseAnchorScrollTop({
+      currentScrollTop: 1127.33,
+      previousStableScrollTop: 1302.67,
+      reason: 'auto',
+      isFollowingOutput: false,
+      isStreamingOutput: true,
+    })).toBe(1127.33);
   });
 
   it('resets viewport-local at-bottom state when the active session changes', () => {
