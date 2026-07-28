@@ -87,6 +87,7 @@ pub(crate) enum ActionHandler {
     History,
     Usage,
     ToggleAutoApprove,
+    ToggleWorktree,
     Exit,
     Login,
     Logout,
@@ -539,6 +540,21 @@ static ACTION_SPECS: &[ActionSpec] = &[
         contexts: CHAT,
         availability: ActionAvailability::Idle,
         handler: ActionHandler::ToggleAutoApprove,
+        default_bindings: &[],
+        fallback_bindings: &[],
+        shortcut_field: None,
+        palette: palette("Session", false),
+        shortcut_label: None,
+        slash_on_startup: false,
+    },
+    ActionSpec {
+        id: "toggle_worktree",
+        name: "Worktree",
+        aliases: &["/worktree"],
+        description: "Toggle worktree isolation for the current session",
+        contexts: CHAT,
+        availability: ActionAvailability::Idle,
+        handler: ActionHandler::ToggleWorktree,
         default_bindings: &[],
         fallback_bindings: &[],
         shortcut_field: None,
@@ -1872,6 +1888,16 @@ mod tests {
 
         let action = action_for_alias("/auto", ActionContext::Chat).unwrap();
         assert_eq!(action.handler, ActionHandler::ToggleAutoApprove);
+        assert!(action.available(ActionState::chat(false, false)));
+        assert!(!action.available(ActionState::chat(true, false)));
+    }
+
+    #[test]
+    fn worktree_is_chat_only_and_idle_only() {
+        assert!(action_for_alias("/worktree", ActionContext::Startup).is_none());
+
+        let action = action_for_alias("/worktree", ActionContext::Chat).unwrap();
+        assert_eq!(action.handler, ActionHandler::ToggleWorktree);
         assert!(action.available(ActionState::chat(false, false)));
         assert!(!action.available(ActionState::chat(true, false)));
     }

@@ -196,6 +196,9 @@ impl ChatMode {
             };
             return self.handle_action_id(action_id, None, chat_view, chat_state, rt_handle);
         }
+        if command_name.eq_ignore_ascii_case("worktree") {
+            return self.handle_worktree_command(arguments, chat_view, chat_state, rt_handle);
+        }
         let builtin_alias = format!("/{command_name}");
         let builtin_action = action_for_alias(&builtin_alias, ActionContext::Chat);
         if self.agent.is_shared() {
@@ -717,6 +720,9 @@ impl ChatMode {
             }
             ActionHandler::Usage => self.show_usage_report(chat_view, chat_state, rt_handle),
             ActionHandler::ToggleAutoApprove => {}
+            ActionHandler::ToggleWorktree => {
+                return self.handle_worktree_command("", chat_view, chat_state, rt_handle);
+            }
             ActionHandler::Exit => {
                 if chat_state.is_processing {
                     self.cancel_active_turn(chat_view, rt_handle);

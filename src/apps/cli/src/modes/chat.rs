@@ -298,6 +298,7 @@ include!("chat/account.rs");
 include!("chat/run.rs");
 include!("chat/input.rs");
 include!("chat/commands.rs");
+include!("chat/worktree.rs");
 include!("chat/selection.rs");
 include!("chat/mcp.rs");
 include!("chat/sessions.rs");

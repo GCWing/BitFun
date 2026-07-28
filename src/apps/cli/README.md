@@ -80,6 +80,14 @@ only when the current invocation may approve tool requests. Non-interactive `exe
 `AskUserQuestion`; provide all required input in the initial prompt. The hidden legacy `--confirm`
 flag maps to the safe default and should not be used in new automation.
 
+The interactive TUI supports per-session worktree isolation through `/worktree`. Run the command
+without arguments to toggle it, or use `/worktree on`, `/worktree off`, and `/worktree status`.
+The header shows the active branch and `Worktree: on|off`; detached managed worktrees use their base
+commit as the branch label. The existing session lifecycle owner creates, persists, restores, and
+releases the managed worktree. Isolation can only be changed before the session's first message, and
+a released worktree with local or unpublished work is retained with its path reported in the chat.
+This command is TUI-only and does not change the non-interactive `exec` contract.
+
 ### Structured output
 
 | Format | stdout contract |

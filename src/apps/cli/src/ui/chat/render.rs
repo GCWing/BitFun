@@ -152,6 +152,7 @@ impl ChatView {
             .as_ref()
             .map(|w| format!("Workspace: {}", w))
             .unwrap_or_else(|| "No workspace".to_string());
+        let repository_context = chat_state.workspace_context_label();
 
         let header = Block::default()
             .borders(Borders::ALL)
@@ -166,6 +167,8 @@ impl ChatView {
             Span::styled(&title, title_style),
             Span::raw("  "),
             Span::styled(&agent_info, self.theme.style(StyleKind::Primary)),
+            Span::raw("  "),
+            Span::styled(repository_context, self.theme.style(StyleKind::Primary)),
             Span::raw("  "),
             Span::styled(&workspace, self.theme.style(StyleKind::Muted)),
         ])];

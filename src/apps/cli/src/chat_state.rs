@@ -12,6 +12,7 @@ use bitfun_agent_runtime::sdk::{
 };
 use bitfun_agent_tools::effective_tool_invocation;
 use bitfun_events::ToolEventData;
+use bitfun_runtime_ports::{AgentSessionWorkspaceBinding, SessionExecutionTarget};
 
 use crate::ui::permission::PermissionPrompt;
 use crate::ui::question::QuestionPrompt;
@@ -307,6 +308,13 @@ pub(crate) struct ChatState {
     pub agent_type: String,
     /// Workspace path
     pub workspace: Option<String>,
+    /// Persisted session workspace binding, including managed worktree facts.
+    pub workspace_binding: Option<AgentSessionWorkspaceBinding>,
+    /// Lightweight Git facts for the active execution workspace.
+    git_branch: Option<String>,
+    is_git_repository: bool,
+    /// Whether this runtime exposes session worktree lifecycle controls.
+    worktree_control_available: bool,
     /// Current model display name (shown in shortcuts bar)
     pub current_model_name: String,
     /// Effective Auto mode for permission results that evaluate to Ask.
@@ -347,11 +355,26 @@ impl ChatState {
         agent_type: String,
         workspace: Option<String>,
     ) -> Self {
+        let workspace_binding =
+            workspace
+                .as_ref()
+                .map(|workspace_path| AgentSessionWorkspaceBinding {
+                    workspace_id: None,
+                    workspace_path: workspace_path.clone(),
+                    project_workspace_path: Some(workspace_path.clone()),
+                    execution_target: Some(SessionExecutionTarget::local(workspace_path.clone())),
+                    remote_connection_id: None,
+                    remote_ssh_host: None,
+                });
         Self {
             core_session_id,
             session_name,
             agent_type,
             workspace,
+            workspace_binding,
+            git_branch: None,
+            is_git_repository: false,
+            worktree_control_available: true,
             current_model_name: String::new(),
             auto_approve_ask: false,
             messages: Vec::new(),
@@ -364,6 +387,95 @@ impl ChatState {
             permission_queue: VecDeque::new(),
             question_prompt: None,
         }
+    }
+
+    pub(crate) fn apply_workspace_binding(&mut self, binding: AgentSessionWorkspaceBinding) {
+        self.workspace = Some(binding.workspace_path.clone());
+        self.workspace_binding = Some(binding);
+    }
+
+    pub(crate) fn project_workspace_path(&self) -> Option<&str> {
+        self.workspace_binding
+            .as_ref()
+            .and_then(|binding| binding.project_workspace_path.as_deref())
+            .filter(|path| !path.trim().is_empty())
+            .or(self.workspace.as_deref())
+    }
+
+    pub(crate) fn set_git_repository_status(
+        &mut self,
+        is_repository: bool,
+        branch: Option<String>,
+    ) {
+        self.is_git_repository = is_repository;
+        self.git_branch = branch.filter(|value| !value.trim().is_empty());
+    }
+
+    pub(crate) fn is_worktree_enabled(&self) -> bool {
+        self.workspace_binding
+            .as_ref()
+            .and_then(|binding| binding.execution_target.as_ref())
+            .and_then(|target| target.worktree_id.as_ref())
+            .is_some()
+    }
+
+    pub(crate) fn set_worktree_control_available(&mut self, available: bool) {
+        self.worktree_control_available = available;
+    }
+
+    pub(crate) fn branch_label(&self) -> String {
+        let execution_target = self
+            .workspace_binding
+            .as_ref()
+            .and_then(|binding| binding.execution_target.as_ref());
+        if let Some(branch) = execution_target
+            .and_then(|target| target.branch.as_deref())
+            .map(str::trim)
+            .filter(|branch| !branch.is_empty())
+        {
+            return branch.to_string();
+        }
+
+        let current_branch = self.git_branch.as_deref().map(str::trim);
+        if let Some(branch) = current_branch.filter(|branch| *branch != "HEAD") {
+            return branch.to_string();
+        }
+
+        if self.is_worktree_enabled() {
+            if let Some(commit) = execution_target
+                .and_then(|target| target.base_commit.as_deref())
+                .map(str::trim)
+                .filter(|commit| !commit.is_empty())
+            {
+                return format!("detached@{}", commit.chars().take(9).collect::<String>());
+            }
+        }
+
+        if self.is_git_repository && current_branch == Some("HEAD") {
+            "detached".to_string()
+        } else {
+            "—".to_string()
+        }
+    }
+
+    pub(crate) fn worktree_status_label(&self) -> &'static str {
+        if !self.worktree_control_available {
+            "unavailable"
+        } else if self.is_worktree_enabled() {
+            "on"
+        } else if self.is_git_repository {
+            "off"
+        } else {
+            "unavailable"
+        }
+    }
+
+    pub(crate) fn workspace_context_label(&self) -> String {
+        format!(
+            "Branch: {} | Worktree: {}",
+            self.branch_label(),
+            self.worktree_status_label()
+        )
     }
 
     pub(crate) fn enqueue_permission_request(&mut self, request: PermissionRequest) -> bool {
@@ -1238,7 +1350,76 @@ mod tests {
         TranscriptToolCall,
     };
     use bitfun_events::{ToolEventData, ToolEventIdentity};
+    use bitfun_runtime_ports::{
+        AgentSessionWorkspaceBinding, SessionExecutionTarget, SessionExecutionTargetKind,
+        WorktreeLifecycle,
+    };
     use serde_json::json;
+
+    fn managed_worktree_binding(
+        branch: Option<&str>,
+        base_commit: Option<&str>,
+    ) -> AgentSessionWorkspaceBinding {
+        AgentSessionWorkspaceBinding {
+            workspace_id: Some("workspace-1".to_string()),
+            workspace_path: "/tmp/managed-worktree".to_string(),
+            project_workspace_path: Some("/tmp/project".to_string()),
+            execution_target: Some(SessionExecutionTarget {
+                kind: SessionExecutionTargetKind::ManagedWorktree,
+                worktree_id: Some("worktree-1".to_string()),
+                root_path: "/tmp/managed-worktree".to_string(),
+                base_ref: None,
+                base_commit: base_commit.map(str::to_string),
+                branch: branch.map(str::to_string),
+                lifecycle: Some(WorktreeLifecycle::Managed),
+            }),
+            remote_connection_id: None,
+            remote_ssh_host: None,
+        }
+    }
+
+    #[test]
+    fn workspace_context_reports_local_repository_state() {
+        let mut state = ChatState::new(
+            "session-1".to_string(),
+            "Session".to_string(),
+            "agentic".to_string(),
+            Some("/tmp/project".to_string()),
+        );
+        state.set_git_repository_status(true, Some("main".to_string()));
+
+        assert!(!state.is_worktree_enabled());
+        assert_eq!(state.branch_label(), "main");
+        assert_eq!(
+            state.workspace_context_label(),
+            "Branch: main | Worktree: off"
+        );
+
+        state.set_worktree_control_available(false);
+        assert_eq!(
+            state.workspace_context_label(),
+            "Branch: main | Worktree: unavailable"
+        );
+    }
+
+    #[test]
+    fn workspace_context_prefers_managed_worktree_branch_or_detached_commit() {
+        let mut state = ChatState::new(
+            "session-1".to_string(),
+            "Session".to_string(),
+            "agentic".to_string(),
+            Some("/tmp/project".to_string()),
+        );
+        state.apply_workspace_binding(managed_worktree_binding(Some("feature/test"), None));
+        state.set_git_repository_status(true, Some("HEAD".to_string()));
+
+        assert!(state.is_worktree_enabled());
+        assert_eq!(state.branch_label(), "feature/test");
+        assert_eq!(state.worktree_status_label(), "on");
+
+        state.apply_workspace_binding(managed_worktree_binding(None, Some("123456789abcdef")));
+        assert_eq!(state.branch_label(), "detached@123456789");
+    }
 
     fn permission_request(request_id: &str, child_session_id: &str) -> PermissionRequest {
         PermissionRequest {

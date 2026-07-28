@@ -53,18 +53,18 @@ impl ChatMode {
                 tokio::task::block_in_place(|| {
                     rt_handle.block_on(async {
                         // Restore session in core (loads metadata, messages, managers)
-                        let (summary, effective_workspace_path, migration_notice, transcript) =
+                        let (summary, workspace_binding, migration_notice, transcript) =
                             agent.restore_session_in_current_workspace(&rid).await?;
-                        let effective_workspace =
-                            Some(effective_workspace_path.to_string_lossy().to_string());
+                        let effective_workspace = Some(workspace_binding.workspace_path.clone());
 
-                        let state = ChatState::from_session_transcript(
+                        let mut state = ChatState::from_session_transcript(
                             rid.clone(),
                             summary.session_name,
                             summary.agent_type,
                             effective_workspace,
                             &transcript,
                         );
+                        state.apply_workspace_binding(workspace_binding);
 
                         tracing::info!(
                             "Session restored: {}, {} messages loaded",
@@ -77,19 +77,27 @@ impl ChatMode {
                 })?
             } else {
                 // Create new session
-                let session_id = tokio::task::block_in_place(|| {
-                    rt_handle.block_on(self.agent.ensure_session(&self.agent_type))
+                let agent = self.agent.clone();
+                let agent_type = self.agent_type.clone();
+                let (session_id, workspace_binding) = tokio::task::block_in_place(|| {
+                    rt_handle.block_on(async {
+                        let session_id = agent.ensure_session(&agent_type).await?;
+                        let binding = agent.session_workspace_binding(&session_id).await?;
+                        Ok::<_, anyhow::Error>((session_id, binding))
+                    })
                 })?;
                 tracing::info!("Core session ready: {}", session_id);
 
-                let state = ChatState::new(
+                let mut state = ChatState::new(
                     session_id.clone(),
                     "CLI Session".to_string(),
                     self.agent_type.clone(),
-                    self.workspace.clone(),
+                    Some(workspace_binding.workspace_path.clone()),
                 );
+                state.apply_workspace_binding(workspace_binding);
                 (session_id, state, None)
             };
+        chat_state.set_worktree_control_available(!self.agent.is_shared());
         self.auto_approve_ask_override = None;
         self.agent
             .set_approval_policy(crate::runtime::approval::CliApprovalPolicy::Ask);
@@ -98,6 +106,7 @@ impl ChatMode {
         // Keep ChatMode workspace in sync with the session's effective workspace
         self.agent_type = chat_state.agent_type.clone();
         self.workspace = chat_state.workspace.clone();
+        self.refresh_workspace_git_status(&mut chat_state, &rt_handle);
 
         let mut external_source_rx = None;
         if self.agent.is_shared() {
@@ -627,6 +636,7 @@ impl ChatMode {
                     } => {
                         if chat_state.current_turn_id() == Some(turn_id.as_str()) {
                             chat_state.handle_turn_completed(*total_rounds, *total_tools);
+                            self.refresh_workspace_git_status(&mut chat_state, &rt_handle);
                             chat_view.invalidate_lines_cache();
                             chat_view.set_status(None);
                             needs_redraw = true;
@@ -643,6 +653,7 @@ impl ChatMode {
                     AgenticEvent::DialogTurnFailed { turn_id, error, .. } => {
                         if chat_state.current_turn_id() == Some(turn_id.as_str()) {
                             chat_state.handle_turn_failed(error);
+                            self.refresh_workspace_git_status(&mut chat_state, &rt_handle);
                             chat_view.invalidate_lines_cache();
                             chat_view.set_status(Some(format!("Error: {}", error)));
                             needs_redraw = true;
@@ -660,6 +671,7 @@ impl ChatMode {
                         let active_turn_id = chat_state.current_turn_id();
                         if active_turn_id.is_none() || active_turn_id == Some(turn_id.as_str()) {
                             chat_state.handle_turn_cancelled();
+                            self.refresh_workspace_git_status(&mut chat_state, &rt_handle);
                             chat_view.invalidate_lines_cache();
                             chat_view.set_status(Some("Cancelled".to_string()));
                             needs_redraw = true;

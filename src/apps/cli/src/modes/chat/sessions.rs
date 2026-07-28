@@ -14,19 +14,19 @@ impl ChatMode {
         let (new_state, restored_agent_type, migration_notice) =
             tokio::task::block_in_place(|| {
                 rt_handle.block_on(async {
-                    let (session_summary, effective_workspace_path, migration_notice, transcript) =
+                    let (session_summary, workspace_binding, migration_notice, transcript) =
                         agent.restore_session_in_current_workspace(&sid).await?;
                     let restored_agent_type = session_summary.agent_type.clone();
-                    let effective_workspace =
-                        Some(effective_workspace_path.to_string_lossy().to_string());
+                    let effective_workspace = Some(workspace_binding.workspace_path.clone());
 
-                    let state = ChatState::from_session_transcript(
+                    let mut state = ChatState::from_session_transcript(
                         sid.clone(),
                         session_summary.session_name,
                         restored_agent_type.clone(),
                         effective_workspace,
                         &transcript,
                     );
+                    state.apply_workspace_binding(workspace_binding);
 
                     Ok::<_, anyhow::Error>((state, restored_agent_type, migration_notice))
                 })
@@ -35,8 +35,10 @@ impl ChatMode {
         // Update session state
         *session_id = new_session_id.to_string();
         *chat_state = new_state;
+        chat_state.set_worktree_control_available(!self.agent.is_shared());
         self.agent_type = restored_agent_type;
         self.workspace = chat_state.workspace.clone();
+        self.refresh_workspace_git_status(chat_state, rt_handle);
         self.auto_approve_ask_override = None;
         chat_state.auto_approve_ask = self.auto_approve_ask_default;
         self.agent
@@ -66,22 +68,28 @@ impl ChatMode {
     ) -> Result<()> {
         let agent = self.agent.clone();
         let agent_type = self.agent_type.clone();
-        let workspace = self.workspace.clone();
 
-        let new_session_id = tokio::task::block_in_place(|| {
-            rt_handle.block_on(agent.create_new_session(&agent_type))
+        let (new_session_id, workspace_binding) = tokio::task::block_in_place(|| {
+            rt_handle.block_on(async {
+                let session_id = agent.create_new_session(&agent_type).await?;
+                let binding = agent.session_workspace_binding(&session_id).await?;
+                Ok::<_, anyhow::Error>((session_id, binding))
+            })
         })?;
 
-        let new_state = ChatState::new(
+        let mut new_state = ChatState::new(
             new_session_id.clone(),
             "CLI Session".to_string(),
             agent_type,
-            workspace,
+            Some(workspace_binding.workspace_path.clone()),
         );
+        new_state.apply_workspace_binding(workspace_binding);
 
         *session_id = new_session_id;
         *chat_state = new_state;
+        chat_state.set_worktree_control_available(!self.agent.is_shared());
         self.workspace = chat_state.workspace.clone();
+        self.refresh_workspace_git_status(chat_state, rt_handle);
         self.auto_approve_ask_override = None;
         chat_state.auto_approve_ask = self.auto_approve_ask_default;
         self.agent
@@ -149,6 +157,7 @@ impl ChatMode {
     ) {
         let agent = self.agent.clone();
         let current_session_id = chat_state.core_session_id.clone();
+        let project_workspace = Some(agent.project_workspace_path_string());
 
         let sessions = tokio::task::block_in_place(|| rt_handle.block_on(agent.list_sessions()));
         let sessions = match sessions {
@@ -186,7 +195,7 @@ impl ChatMode {
                     session_id: s.session_id,
                     session_name: s.session_name,
                     last_activity,
-                    workspace: self.workspace.clone(),
+                    workspace: project_workspace.clone(),
                 }
             })
             .collect();

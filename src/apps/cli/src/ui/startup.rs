@@ -1074,6 +1074,7 @@ impl StartupPage {
             | ActionHandler::ExternalHooks
             | ActionHandler::History
             | ActionHandler::ToggleAutoApprove
+            | ActionHandler::ToggleWorktree
             | ActionHandler::Interrupt
             | ActionHandler::ToggleFocusedTool
             | ActionHandler::PreviousTool

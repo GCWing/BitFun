@@ -27,7 +27,10 @@ use bitfun_agent_runtime_ipc::{
     RuntimeIpcStreamInvalidationReason, RuntimeSessionRestoreRequest, RuntimeUserAnswersRequest,
 };
 use bitfun_events::{AgenticEvent, AgenticEventEnvelope};
-use bitfun_runtime_ports::{AgentSessionSummary, AgentSubmissionSource, DialogSubmissionPolicy};
+use bitfun_runtime_ports::{
+    AgentSessionSummary, AgentSessionWorkspaceBinding, AgentSessionWorkspaceRequest,
+    AgentSubmissionSource, DialogSubmissionPolicy, SessionExecutionTarget,
+};
 
 use crate::actions::SHARED_TUI_EMBEDDED_HANDOFF;
 use crate::runtime::approval::CliApprovalPolicy;
@@ -113,12 +116,67 @@ fn session_mode_migration_notice(
     })
 }
 
+#[derive(Clone, Debug)]
+struct CliWorkspacePaths {
+    project: Option<PathBuf>,
+    execution: Option<PathBuf>,
+    execution_target: Option<SessionExecutionTarget>,
+}
+
+impl CliWorkspacePaths {
+    fn new(workspace_path: Option<PathBuf>) -> Self {
+        Self {
+            project: workspace_path.clone(),
+            execution: workspace_path,
+            execution_target: None,
+        }
+    }
+
+    fn execution(&self) -> PathBuf {
+        self.execution
+            .clone()
+            .or_else(|| self.project.clone())
+            .or_else(|| std::env::current_dir().ok())
+            .unwrap_or_else(|| PathBuf::from("."))
+    }
+
+    fn project(&self) -> PathBuf {
+        self.project
+            .clone()
+            .or_else(|| self.execution.clone())
+            .or_else(|| std::env::current_dir().ok())
+            .unwrap_or_else(|| PathBuf::from("."))
+    }
+
+    fn apply_binding(&mut self, binding: &AgentSessionWorkspaceBinding) {
+        let execution = PathBuf::from(&binding.workspace_path);
+        let project = binding
+            .project_workspace_path
+            .as_deref()
+            .filter(|path| !path.trim().is_empty())
+            .map(PathBuf::from)
+            .unwrap_or_else(|| self.project());
+        self.execution = Some(execution);
+        self.project = Some(project);
+        self.execution_target = binding.execution_target.clone();
+    }
+
+    fn reset_execution_to_project(&mut self) -> PathBuf {
+        let project = self.project();
+        self.execution = Some(project.clone());
+        self.execution_target = Some(SessionExecutionTarget::local(
+            project.to_string_lossy().to_string(),
+        ));
+        project
+    }
+}
+
 /// CLI-owned client for the portable Agent Runtime SDK.
 /// Stateless regarding agent_type; callers pass it per call.
 pub(crate) struct CliAgentRuntimeClient {
     backend: CliAgentRuntimeBackend,
     approval_policy: Arc<RwLock<CliApprovalPolicy>>,
-    workspace_path: Arc<RwLock<Option<PathBuf>>>,
+    workspace_paths: Arc<RwLock<CliWorkspacePaths>>,
     /// Session ID — uses Mutex for interior mutability
     session_id: Arc<Mutex<Option<String>>>,
     /// Current turn ID (for cancellation)
@@ -141,7 +199,7 @@ impl CliAgentRuntimeClient {
         Self {
             backend: CliAgentRuntimeBackend::Embedded(runtime.agent_runtime().clone()),
             approval_policy: Arc::new(RwLock::new(runtime.approval_policy())),
-            workspace_path: Arc::new(RwLock::new(workspace_path)),
+            workspace_paths: Arc::new(RwLock::new(CliWorkspacePaths::new(workspace_path))),
             session_id: Arc::new(Mutex::new(None)),
             current_turn_id: Arc::new(Mutex::new(None)),
             shared_agent_events: None,
@@ -168,7 +226,7 @@ impl CliAgentRuntimeClient {
         Self {
             backend: CliAgentRuntimeBackend::Shared(client),
             approval_policy: Arc::new(RwLock::new(CliApprovalPolicy::Ask)),
-            workspace_path: Arc::new(RwLock::new(workspace_path)),
+            workspace_paths: Arc::new(RwLock::new(CliWorkspacePaths::new(workspace_path))),
             session_id,
             current_turn_id: Arc::new(Mutex::new(None)),
             shared_agent_events: Some(shared_agent_events),
@@ -278,20 +336,53 @@ impl CliAgentRuntimeClient {
     }
 
     pub(crate) fn workspace_path_buf(&self) -> PathBuf {
-        self.workspace_path
+        self.workspace_paths
             .read()
             .unwrap_or_else(|poisoned| poisoned.into_inner())
-            .clone()
-            .or_else(|| std::env::current_dir().ok())
-            .unwrap_or_else(|| PathBuf::from("."))
+            .execution()
     }
 
     pub(crate) fn workspace_path_string(&self) -> String {
         self.workspace_path_buf().to_string_lossy().to_string()
     }
 
+    pub(crate) fn project_workspace_path_buf(&self) -> PathBuf {
+        self.workspace_paths
+            .read()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .project()
+    }
+
+    pub(crate) fn project_workspace_path_string(&self) -> String {
+        self.project_workspace_path_buf()
+            .to_string_lossy()
+            .to_string()
+    }
+
+    pub(crate) fn set_workspace_binding(&self, binding: &AgentSessionWorkspaceBinding) {
+        self.workspace_paths
+            .write()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .apply_binding(binding);
+    }
+
+    fn execution_target(&self) -> Option<SessionExecutionTarget> {
+        self.workspace_paths
+            .read()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .execution_target
+            .clone()
+    }
+
+    fn reset_execution_to_project_workspace(&self) -> PathBuf {
+        self.workspace_paths
+            .write()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .reset_execution_to_project()
+    }
+
     fn current_workspace_path(&self) -> PathBuf {
-        self.workspace_path_buf()
+        self.project_workspace_path_buf()
     }
 
     async fn list_sessions_in_workspace(
@@ -328,24 +419,22 @@ impl CliAgentRuntimeClient {
         session_id: &str,
     ) -> Result<(
         AgentSessionSummary,
-        PathBuf,
+        AgentSessionWorkspaceBinding,
         Option<SessionModeMigrationNotice>,
         SessionTranscript,
     )> {
         tracing::info!("Restoring session: {}", session_id);
 
-        let effective_workspace = self.current_workspace_path();
-        let sessions = self
-            .list_sessions_in_workspace(&effective_workspace)
-            .await?;
+        let project_workspace = self.current_workspace_path();
+        let sessions = self.list_sessions_in_workspace(&project_workspace).await?;
         let previous_summary =
-            validated_session_summary(&sessions, session_id, &effective_workspace)?;
+            validated_session_summary(&sessions, session_id, &project_workspace)?;
 
         let (restored, transcript, shared_pending) = match &self.backend {
             CliAgentRuntimeBackend::Embedded(runtime) => {
                 let restored = runtime
                     .restore_session(AgentSessionRestoreRequest {
-                        workspace_path: effective_workspace.to_string_lossy().to_string(),
+                        workspace_path: project_workspace.to_string_lossy().to_string(),
                         session_id: session_id.to_string(),
                         include_internal: false,
                         remote_connection_id: None,
@@ -375,7 +464,7 @@ impl CliAgentRuntimeClient {
             CliAgentRuntimeBackend::Shared(client) => match client
                 .request(RuntimeIpcOperation::RestoreSession {
                     request: RuntimeSessionRestoreRequest {
-                        workspace_path: effective_workspace.to_string_lossy().to_string(),
+                        workspace_path: project_workspace.to_string_lossy().to_string(),
                         session_id: session_id.to_string(),
                     },
                 })
@@ -391,16 +480,13 @@ impl CliAgentRuntimeClient {
             },
         };
 
+        let binding = self
+            .resolve_session_workspace_binding(session_id, &project_workspace)
+            .await?;
         let mut session_id_guard = self.session_id.lock().await;
         let mut turn_id_guard = self.current_turn_id.lock().await;
-        let mut workspace_guard = self
-            .workspace_path
-            .write()
-            .unwrap_or_else(|poisoned| poisoned.into_inner());
-        *workspace_guard = Some(effective_workspace.clone());
         *session_id_guard = Some(session_id.to_string());
         *turn_id_guard = None;
-        drop(workspace_guard);
         drop(session_id_guard);
         drop(turn_id_guard);
         if let Some(requests) = shared_pending {
@@ -417,13 +503,50 @@ impl CliAgentRuntimeClient {
         }
 
         let migration_notice = session_mode_migration_notice(&previous_summary, &restored);
-        Ok((restored, effective_workspace, migration_notice, transcript))
+        Ok((restored, binding, migration_notice, transcript))
+    }
+
+    async fn resolve_session_workspace_binding(
+        &self,
+        session_id: &str,
+        fallback_project_workspace: &Path,
+    ) -> Result<AgentSessionWorkspaceBinding> {
+        let fallback_project = fallback_project_workspace.to_string_lossy().to_string();
+        let resolved = match &self.backend {
+            CliAgentRuntimeBackend::Embedded(runtime) => runtime
+                .resolve_session_workspace_binding(AgentSessionWorkspaceRequest {
+                    session_id: session_id.to_string(),
+                })
+                .await
+                .map_err(|error| anyhow::anyhow!(error.into_message()))?,
+            CliAgentRuntimeBackend::Shared(_) => None,
+        };
+        let binding = resolved.unwrap_or_else(|| AgentSessionWorkspaceBinding {
+            workspace_id: None,
+            workspace_path: fallback_project.clone(),
+            project_workspace_path: Some(fallback_project.clone()),
+            execution_target: Some(SessionExecutionTarget::local(fallback_project)),
+            remote_connection_id: None,
+            remote_ssh_host: None,
+        });
+
+        self.set_workspace_binding(&binding);
+        Ok(binding)
+    }
+
+    pub(crate) async fn session_workspace_binding(
+        &self,
+        session_id: &str,
+    ) -> Result<AgentSessionWorkspaceBinding> {
+        let project_workspace = self.project_workspace_path_buf();
+        self.resolve_session_workspace_binding(session_id, &project_workspace)
+            .await
     }
 
     pub(crate) async fn delete_session(&self, session_id: &str) -> Result<()> {
         self.embedded_runtime("deleting sessions")?
             .delete_session(AgentSessionDeleteRequest {
-                workspace_path: self.workspace_path_string(),
+                workspace_path: self.project_workspace_path_string(),
                 session_id: session_id.to_string(),
                 remote_connection_id: None,
                 remote_ssh_host: None,
@@ -462,7 +585,7 @@ impl CliAgentRuntimeClient {
     ) -> Result<AgentSessionForkResult> {
         self.embedded_runtime("forking sessions")?
             .fork_session(AgentSessionForkRequest {
-                workspace_path: self.workspace_path_string(),
+                workspace_path: self.project_workspace_path_string(),
                 source_session_id: source_session_id.to_string(),
                 remote_connection_id: None,
                 remote_ssh_host: None,
@@ -524,9 +647,10 @@ impl CliAgentRuntimeClient {
         let mut effective_agent_type = agent_type.to_string();
 
         let workspace = self.workspace_path_buf();
+        let project_workspace = self.project_workspace_path_buf();
         if let Ok(sessions) = runtime
             .list_sessions(AgentSessionListRequest {
-                workspace_path: workspace.to_string_lossy().to_string(),
+                workspace_path: project_workspace.to_string_lossy().to_string(),
                 remote_connection_id: None,
                 remote_ssh_host: None,
             })
@@ -544,9 +668,9 @@ impl CliAgentRuntimeClient {
                 AgentSessionCreateRequest {
                     session_name,
                     agent_type: effective_agent_type,
-                    workspace_path: Some(self.workspace_path_string()),
-                    project_workspace_path: None,
-                    execution_target: None,
+                    workspace_path: Some(workspace.to_string_lossy().to_string()),
+                    project_workspace_path: Some(project_workspace.to_string_lossy().to_string()),
+                    execution_target: self.execution_target(),
                     workspace_id: None,
                     remote_connection_id: None,
                     remote_ssh_host: None,
@@ -563,10 +687,10 @@ impl CliAgentRuntimeClient {
 
     async fn ensure_backend_session_alive(&self, session_id: &str, agent_type: &str) -> Result<()> {
         let runtime = self.embedded_runtime("recovering Embedded sessions")?;
-        let workspace = self.workspace_path_buf();
+        let project_workspace = self.project_workspace_path_buf();
         match runtime
             .restore_session(AgentSessionRestoreRequest {
-                workspace_path: workspace.to_string_lossy().to_string(),
+                workspace_path: project_workspace.to_string_lossy().to_string(),
                 session_id: session_id.to_string(),
                 include_internal: false,
                 remote_connection_id: None,
@@ -575,6 +699,8 @@ impl CliAgentRuntimeClient {
             .await
         {
             Ok(_) => {
+                self.resolve_session_workspace_binding(session_id, &project_workspace)
+                    .await?;
                 tracing::info!("Backend session restored: {}", session_id);
                 Ok(())
             }
@@ -601,6 +727,8 @@ impl CliAgentRuntimeClient {
     ) -> Result<String> {
         let runtime = self.embedded_runtime("creating sessions with fixed identifiers")?;
         let mut session_id_guard = self.session_id.lock().await;
+        let workspace_path = self.workspace_path_string();
+        let project_workspace_path = self.project_workspace_path_string();
 
         let session = runtime
             .create_session_with_id(
@@ -608,9 +736,9 @@ impl CliAgentRuntimeClient {
                 AgentSessionCreateRequest {
                     session_name: Self::build_default_session_name(),
                     agent_type: agent_type.to_string(),
-                    workspace_path: Some(self.workspace_path_string()),
-                    project_workspace_path: None,
-                    execution_target: None,
+                    workspace_path: Some(workspace_path),
+                    project_workspace_path: Some(project_workspace_path),
+                    execution_target: self.execution_target(),
                     workspace_id: None,
                     remote_connection_id: None,
                     remote_ssh_host: None,
@@ -790,12 +918,14 @@ impl CliAgentRuntimeClient {
     }
 
     pub(crate) async fn create_new_session(&self, agent_type: &str) -> Result<String> {
+        let project_workspace = self.reset_execution_to_project_workspace();
+        let project_workspace_path = project_workspace.to_string_lossy().to_string();
         let request = AgentSessionCreateRequest {
             session_name: Self::build_default_session_name(),
             agent_type: agent_type.to_string(),
-            workspace_path: Some(self.workspace_path_string()),
-            project_workspace_path: None,
-            execution_target: None,
+            workspace_path: Some(project_workspace_path.clone()),
+            project_workspace_path: Some(project_workspace_path.clone()),
+            execution_target: Some(SessionExecutionTarget::local(project_workspace_path)),
             workspace_id: None,
             remote_connection_id: None,
             remote_ssh_host: None,
@@ -1058,7 +1188,10 @@ mod recovery_tests {
 mod tests {
     use std::path::Path;
 
-    use bitfun_runtime_ports::AgentSessionSummary;
+    use bitfun_runtime_ports::{
+        AgentSessionSummary, AgentSessionWorkspaceBinding, SessionExecutionTarget,
+        SessionExecutionTargetKind, WorktreeLifecycle,
+    };
 
     use bitfun_agent_runtime::sdk::{
         PermissionDelegationContext, PermissionRequest, PermissionRequestEvent,
@@ -1072,6 +1205,7 @@ mod tests {
     use super::{
         cli_approval_metadata, project_routed_permission_event, session_mode_migration_notice,
         shared_disconnect_message, shared_restore_error, validated_session_summary,
+        CliWorkspacePaths,
     };
     use bitfun_agent_runtime_ipc::RuntimeIpcStreamInvalidationReason;
 
@@ -1092,6 +1226,50 @@ mod tests {
             shared_disconnect_message(Some(RuntimeIpcStreamInvalidationReason::FrameTooLarge));
         assert!(message.contains("cancellation was requested"));
         assert!(message.contains("default Embedded `bitfun chat`"));
+    }
+
+    #[test]
+    fn workspace_paths_keep_project_and_execution_roots_separate() {
+        let mut paths = CliWorkspacePaths::new(Some("/project".into()));
+        let binding = AgentSessionWorkspaceBinding {
+            workspace_id: Some("workspace-1".to_string()),
+            workspace_path: "/managed-worktree".to_string(),
+            project_workspace_path: Some("/project".to_string()),
+            execution_target: Some(SessionExecutionTarget {
+                kind: SessionExecutionTargetKind::ManagedWorktree,
+                worktree_id: Some("worktree-1".to_string()),
+                root_path: "/managed-worktree".to_string(),
+                base_ref: Some("main".to_string()),
+                base_commit: Some("123456789abcdef".to_string()),
+                branch: None,
+                lifecycle: Some(WorktreeLifecycle::Managed),
+            }),
+            remote_connection_id: None,
+            remote_ssh_host: None,
+        };
+
+        paths.apply_binding(&binding);
+
+        assert_eq!(paths.project(), Path::new("/project"));
+        assert_eq!(paths.execution(), Path::new("/managed-worktree"));
+        assert_eq!(
+            paths
+                .execution_target
+                .as_ref()
+                .and_then(|target| target.worktree_id.as_deref()),
+            Some("worktree-1")
+        );
+
+        assert_eq!(
+            paths.reset_execution_to_project(),
+            Path::new("/project").to_path_buf()
+        );
+        assert_eq!(paths.execution(), Path::new("/project"));
+        assert!(paths
+            .execution_target
+            .as_ref()
+            .and_then(|target| target.worktree_id.as_ref())
+            .is_none());
     }
 
     #[test]
