@@ -6,6 +6,7 @@ pub mod ask_user_question_tool;
 pub mod bash_tool;
 pub mod check_arkts_files_tool;
 pub mod check_cpp_files_tool;
+pub(crate) mod deveco_mcp;
 pub mod switch_cwd_tool;
 #[cfg(feature = "canvas-runtime")]
 pub mod canvas_tools;

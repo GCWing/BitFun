@@ -1,18 +1,20 @@
-//! CheckCppFiles tool — runs static C/C++ syntax check on native source files.
+//! CheckCppFiles tool — static C/C++ syntax check on native source files.
 //!
-//! Bridges to the ArkTS frontend via JS_THREADSAFE_FUNCTION so the actual
-//! devecocli MCP check call happens on the JS side (which owns the MCP
-//! connection lifecycle).
+//! Spawns `devecocli serve mcp` via the shared `deveco_mcp` module and calls
+//! the MCP "check" tool. No JS callback bridge required.
 
 use crate::agentic::tools::framework::{
     Tool, ToolRenderOptions, ToolResult, ToolUseContext, ValidationResult,
 };
+use crate::agentic::tools::implementations::deveco_mcp;
 use crate::util::errors::{BitFunError, BitFunResult};
-use crate::util::JS_THREADSAFE_FUNCTION;
 use async_trait::async_trait;
 use serde_json::{json, Value};
+use std::path::Path;
 
-const CALLBACK_KEY: &str = "call_check_cpp_files";
+const CPP_EXTENSIONS: &[&str] = &[
+    "c", "cc", "cpp", "cxx", "h", "hh", "hpp", "hxx",
+];
 
 /// CheckCppFiles tool — static C/C++ syntax check on native source files.
 pub struct CheckCppFilesTool;
@@ -107,9 +109,9 @@ Provide absolute or workspace-relative paths to source files."#
     async fn call_impl(
         &self,
         input: &Value,
-        _context: &ToolUseContext,
+        context: &ToolUseContext,
     ) -> BitFunResult<Vec<ToolResult>> {
-        let files: Vec<String> = input
+        let all_files: Vec<String> = input
             .get("files")
             .and_then(|v| v.as_array())
             .map(|arr| {
@@ -119,16 +121,38 @@ Provide absolute or workspace-relative paths to source files."#
             })
             .unwrap_or_default();
 
-        if files.is_empty() {
-            return Err(BitFunError::tool("files must not be empty".to_string()));
+        // Filter to C/C++ files only
+        let cpp_files: Vec<String> = all_files
+            .iter()
+            .filter(|f| {
+                Path::new(f)
+                    .extension()
+                    .map(|ext| {
+                        let ext_lower = ext.to_string_lossy().to_lowercase();
+                        CPP_EXTENSIONS.contains(&ext_lower.as_str())
+                    })
+                    .unwrap_or(false)
+            })
+            .cloned()
+            .collect();
+
+        if cpp_files.is_empty() {
+            return Err(BitFunError::tool(
+                "No C/C++ files provided. All files were filtered out.".to_string(),
+            ));
         }
 
-        let payload = json!({ "files": files }).to_string();
-        let result = call_js_callback(CALLBACK_KEY, payload).await?;
+        // Resolve project path from workspace context
+        let project_path = resolve_project_path(context);
+
+        let result = deveco_mcp::run_deveco_check(&cpp_files, &project_path)
+            .await
+            .map_err(BitFunError::tool)?;
 
         Ok(vec![ToolResult::Result {
             data: json!({
-                "files": files,
+                "files": cpp_files,
+                "project_path": project_path,
                 "success": true,
             }),
             result_for_assistant: Some(result),
@@ -137,27 +161,13 @@ Provide absolute or workspace-relative paths to source files."#
     }
 }
 
-/// Shared JS callback bridge: looks up the threadsafe function by key,
-/// calls it with the JSON payload, and awaits the promise result.
-async fn call_js_callback(key: &str, payload: String) -> BitFunResult<String> {
-    let function = {
-        let lock = JS_THREADSAFE_FUNCTION.read();
-        lock.get(key).cloned()
-    };
-
-    let Some(function) = function else {
-        return Err(BitFunError::tool(format!(
-            "{} has not been registered. Ensure the ArkTS frontend registers the callback.",
-            key
-        )));
-    };
-
-    let res = function.call_async(Ok(payload)).await;
-    match res {
-        Ok(promise) => match promise.await {
-            Ok(json) => Ok(json),
-            Err(err) => Err(BitFunError::tool(format!("{} failed: {}", key, err))),
-        },
-        Err(err) => Err(BitFunError::tool(format!("{} callback error: {}", key, err))),
+/// Resolve the current project path from the tool context's workspace root,
+/// falling back to the process working directory.
+fn resolve_project_path(context: &ToolUseContext) -> String {
+    if let Some(root) = context.workspace_root() {
+        return root.to_string_lossy().to_string();
     }
+    std::env::current_dir()
+        .map(|p| p.to_string_lossy().to_string())
+        .unwrap_or_else(|_| ".".to_string())
 }
