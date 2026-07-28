@@ -113,8 +113,10 @@ describe('GitToolDisplay', () => {
       root.render(<GitToolDisplay toolItem={toolItem} config={config} />);
     });
 
+    expect(container.querySelector('.base-tool-card')).not.toBeNull();
+    expect(container.querySelector('.compact-tool-card')).toBeNull();
+    expect(container.textContent).toContain('git status --short');
     expect(container.textContent).not.toContain('Gitgit status --short');
-    expect(container.textContent?.trim().startsWith('git status --short')).toBe(true);
 
     const copyButton = container.querySelector<HTMLButtonElement>(
       'button[aria-label="Copy git command"]'

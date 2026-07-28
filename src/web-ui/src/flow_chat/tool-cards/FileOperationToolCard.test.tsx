@@ -906,6 +906,13 @@ describe('FileOperationToolCard', () => {
       );
     });
 
+    // Auto-collapse animates closed; wait for SmoothHeightCollapse to unmount children.
+    expect(container.querySelector('[data-testid="chat-file-change-card"]')?.getAttribute('data-expanded')).toBe('false');
+    await act(async () => {
+      await new Promise((resolve) => {
+        window.setTimeout(resolve, 350);
+      });
+    });
     expect(container.querySelector('[data-testid="chat-file-change-preview"]')).toBeNull();
   });
 

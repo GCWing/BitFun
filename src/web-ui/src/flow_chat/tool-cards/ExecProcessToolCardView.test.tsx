@@ -209,7 +209,9 @@ describe('ExecProcessToolCardView', () => {
       );
     });
 
-    expect(container.querySelector('.base-tool-card')).toBeNull();
-    expect(container.querySelector('.compact-tool-card')).not.toBeNull();
+    // Collapsed cards keep the BaseToolCard shell and animate height closed.
+    expect(container.querySelector('.base-tool-card')).not.toBeNull();
+    expect(container.querySelector('.base-tool-card.expanded')).toBeNull();
+    expect(container.querySelector('.compact-tool-card')).toBeNull();
   });
 });
