@@ -149,9 +149,10 @@ pub(super) fn session_storage_workspace_locator(
             Some(project_workspace_path.unwrap_or(requested).to_string())
         }
         Some(requested) => Some(requested.to_string()),
-        None => project_workspace_path
-            .or(execution_workspace_path)
-            .map(str::to_string),
+        // An omitted locator means "use the already loaded session binding".
+        // Its indexed storage path stays authoritative even if ambient host
+        // storage settings have changed since the session was loaded.
+        None => None,
     }
 }
 
@@ -3829,6 +3830,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                 .config
                 .project_workspace_path
                 .as_deref()
+                .or(session.config.workspace_path.as_deref())
                 .or(storage_workspace_path.as_deref())
                 .ok_or_else(|| {
                     BitFunError::Validation(format!(
@@ -9345,6 +9347,10 @@ mod tests {
             .as_deref(),
             Some("D:/projects/BitFun")
         );
+    }
+
+    #[test]
+    fn omitted_locator_reuses_the_loaded_session_storage_binding() {
         assert_eq!(
             session_storage_workspace_locator(
                 None,
@@ -9352,7 +9358,7 @@ mod tests {
                 Some("/projects/BitFun"),
             )
             .as_deref(),
-            Some("/projects/BitFun")
+            None
         );
     }
 
