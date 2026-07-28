@@ -63,6 +63,7 @@ members = [
 exclude = [
     "BitFun-Installer/src-tauri",
 ]
+]
 
 resolver = "2"
 
