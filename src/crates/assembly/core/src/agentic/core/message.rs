@@ -110,6 +110,8 @@ pub enum InternalReminderKind {
     InterruptedContinue,
     ThinkingOnlyRescue,
     FinalizeCacheAnchor,
+    /// Marks a retained suffix whose earlier exchanges in the same turn were compacted.
+    RecentContextBoundary,
     /// A Stop hook blocked the end of a turn and asked the agent to continue.
     StopHookBlock,
     /// Model-visible context contributed by a SessionStart or

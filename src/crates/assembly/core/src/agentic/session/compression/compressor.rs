@@ -54,6 +54,26 @@ pub struct CompressionResult {
     pub has_model_summary: bool,
 }
 
+#[derive(Debug, Clone)]
+pub struct AutoCompressionPlan {
+    pub summary_request_messages: Vec<Message>,
+    pub summary_messages: Vec<Message>,
+    pub recent_anchor_messages: Vec<Message>,
+    pub recent_tail_messages: Vec<Message>,
+    pub recent_target_tokens: usize,
+    pub recent_tail_tokens: usize,
+    pub recent_anchor_tokens: usize,
+    pub cutoff_message_index: usize,
+    pub can_shorten_summary_prefix: bool,
+    pub last_turn_complete: bool,
+}
+
+#[derive(Debug, Clone, Copy)]
+struct AtomicMessageUnit {
+    start: usize,
+    tokens: usize,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CompressionMode {
     Auto,
@@ -66,8 +86,12 @@ pub struct ContextCompressor {
 }
 
 impl ContextCompressor {
+    pub const DEFAULT_RECENT_CONTEXT_TOKENS: usize = 10_000;
+    pub const RECENT_CONTEXT_RETRY_STEP_TOKENS: usize = 10_000;
     const AUTO_COMPRESSION_CONTINUATION_REMINDER: &'static str =
         "The conversation context above was automatically compacted while work was still in progress. Re-establish the current working state from this summary and the latest available evidence, then continue working on the user's most recent request. Do not stop merely because compaction occurred, and do not ask the user to repeat information already captured here. If a required detail is missing and a pre-compaction transcript is available above, inspect the relevant part of that transcript before proceeding.";
+    const RECENT_CONTEXT_BOUNDARY_REMINDER: &'static str =
+        "The user message above started the current turn. Some intermediate assistant and tool exchanges from this turn were compacted into the preceding summary and are not repeated below. Continue from the retained recent context without repeating completed work.";
 
     pub fn new(config: CompressionConfig) -> Self {
         Self { config }
@@ -149,6 +173,191 @@ impl ContextCompressor {
         self.collect_conversation_turns(session_id, messages)
     }
 
+    pub fn plan_auto_compression(
+        &self,
+        session_id: &str,
+        runtime_messages: &[Message],
+        recent_target_tokens: usize,
+        previous_cutoff: Option<usize>,
+    ) -> BitFunResult<Option<AutoCompressionPlan>> {
+        let system_message_count = runtime_messages
+            .iter()
+            .take_while(|message| message.role == MessageRole::System)
+            .count();
+        let conversation = &runtime_messages[system_message_count..];
+        if conversation.is_empty() {
+            debug!(
+                "No conversation messages available for automatic compression planning: session_id={}",
+                session_id
+            );
+            return Ok(None);
+        }
+
+        let units = Self::atomic_message_units(conversation);
+        if units.is_empty() {
+            return Ok(None);
+        }
+
+        let minimum_cutoff = if units.len() > 1 {
+            units[1].start
+        } else {
+            conversation.len()
+        };
+        let mut cutoff = conversation.len();
+        let mut accumulated_tokens = 0usize;
+
+        for unit in units.iter().rev() {
+            if accumulated_tokens >= recent_target_tokens {
+                break;
+            }
+            if unit.start < minimum_cutoff {
+                break;
+            }
+            cutoff = unit.start;
+            accumulated_tokens = accumulated_tokens.saturating_add(unit.tokens);
+        }
+
+        if let Some(previous_cutoff) = previous_cutoff {
+            if cutoff >= previous_cutoff {
+                if let Some(earlier_unit) = units
+                    .iter()
+                    .rev()
+                    .find(|unit| unit.start < previous_cutoff && unit.start >= minimum_cutoff)
+                {
+                    cutoff = earlier_unit.start;
+                }
+            }
+        }
+
+        let summary_messages = conversation[..cutoff].to_vec();
+        if summary_messages.is_empty() {
+            debug!(
+                "Automatic compression plan has no summary prefix: session_id={}, recent_target_tokens={}",
+                session_id, recent_target_tokens
+            );
+            return Ok(None);
+        }
+
+        let recent_tail_messages = conversation[cutoff..].to_vec();
+        let recent_tail_tokens = recent_tail_messages
+            .iter()
+            .map(|message| message.estimate_tokens_with_reasoning(true))
+            .sum();
+        let mut summary_request_messages = runtime_messages[..system_message_count].to_vec();
+        summary_request_messages.extend(summary_messages.clone());
+
+        let last_user_index = conversation
+            .iter()
+            .rposition(Message::is_actual_user_message);
+        let last_turn_complete = last_user_index.is_some_and(|index| cutoff <= index);
+        let mut recent_anchor_messages = Vec::new();
+
+        if let Some(last_user_index) = last_user_index.filter(|_| !last_turn_complete) {
+            let user_message = conversation[last_user_index].clone();
+            let latest_todo = Self::latest_todo_snapshot_with_source(
+                &conversation[last_user_index..],
+                last_user_index,
+            );
+            let missing_todo = latest_todo
+                .filter(|(source_index, _)| *source_index < cutoff)
+                .map(|(_, snapshot)| snapshot);
+            let mut reminder_text = Self::RECENT_CONTEXT_BOUNDARY_REMINDER.to_string();
+            if let Some(todo) = missing_todo.as_ref() {
+                reminder_text
+                    .push_str("\n\nLatest task list before the retained recent context:\n");
+                reminder_text.push_str(&Self::render_todo_snapshot(todo));
+            }
+
+            let turn_id = user_message.metadata.turn_id.clone();
+            recent_anchor_messages.push(user_message);
+            let mut reminder = Message::internal_reminder(
+                crate::agentic::core::InternalReminderKind::RecentContextBoundary,
+                reminder_text,
+            );
+            reminder.metadata.turn_id = turn_id.clone();
+            if let Some(todo) = missing_todo {
+                reminder = reminder.with_compression_payload(CompressionPayload {
+                    entries: vec![CompressionEntry::Turn {
+                        turn_id,
+                        messages: Vec::new(),
+                        todo: Some(todo),
+                    }],
+                });
+            }
+            recent_anchor_messages.push(reminder);
+        }
+
+        let recent_anchor_tokens = recent_anchor_messages
+            .iter()
+            .map(|message| message.estimate_tokens_with_reasoning(true))
+            .sum();
+        let can_shorten_summary_prefix = units
+            .iter()
+            .any(|unit| unit.start < cutoff && unit.start >= minimum_cutoff);
+
+        debug!(
+            "Automatic compression plan: session_id={}, recent_target_tokens={}, recent_tail_tokens={}, recent_anchor_tokens={}, cutoff_message_index={}, summary_messages={}, recent_tail_messages={}, last_turn_complete={}, can_shorten_summary_prefix={}",
+            session_id,
+            recent_target_tokens,
+            recent_tail_tokens,
+            recent_anchor_tokens,
+            cutoff,
+            summary_messages.len(),
+            recent_tail_messages.len(),
+            last_turn_complete,
+            can_shorten_summary_prefix
+        );
+
+        Ok(Some(AutoCompressionPlan {
+            summary_request_messages,
+            summary_messages,
+            recent_anchor_messages,
+            recent_tail_messages,
+            recent_target_tokens,
+            recent_tail_tokens,
+            recent_anchor_tokens,
+            cutoff_message_index: cutoff,
+            can_shorten_summary_prefix,
+            last_turn_complete,
+        }))
+    }
+
+    fn atomic_message_units(messages: &[Message]) -> Vec<AtomicMessageUnit> {
+        let mut units = Vec::new();
+        let mut index = 0usize;
+
+        while index < messages.len() {
+            let start = index;
+            index += 1;
+            if messages[start].role == MessageRole::Assistant {
+                while index < messages.len() && messages[index].role == MessageRole::Tool {
+                    index += 1;
+                }
+            }
+            let tokens = messages[start..index]
+                .iter()
+                .map(|message| message.estimate_tokens_with_reasoning(true))
+                .sum();
+            units.push(AtomicMessageUnit { start, tokens });
+        }
+
+        units
+    }
+
+    fn latest_todo_snapshot_with_source(
+        messages: &[Message],
+        base_index: usize,
+    ) -> Option<(usize, CompressedTodoSnapshot)> {
+        messages
+            .iter()
+            .enumerate()
+            .rev()
+            .find_map(|(index, message)| {
+                MessageHelper::get_last_todo_snapshot(std::slice::from_ref(message))
+                    .map(|snapshot| (base_index + index, snapshot))
+            })
+    }
+
     pub fn compress_turns(
         &self,
         session_id: &str,
@@ -175,6 +384,28 @@ impl ContextCompressor {
         mode: CompressionMode,
         contract: Option<CompressionContract>,
         model_summary: Option<String>,
+    ) -> BitFunResult<CompressionResult> {
+        self.compress_turns_internal(
+            session_id,
+            context_window,
+            turns,
+            mode,
+            contract,
+            model_summary,
+            matches!(mode, CompressionMode::Auto),
+        )
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn compress_turns_internal(
+        &self,
+        session_id: &str,
+        context_window: usize,
+        turns: Vec<TurnWithTokens>,
+        mode: CompressionMode,
+        contract: Option<CompressionContract>,
+        model_summary: Option<String>,
+        append_live_boundary_context: bool,
     ) -> BitFunResult<CompressionResult> {
         if turns.is_empty() {
             debug!("No turns need compression: session_id={}", session_id);
@@ -205,7 +436,7 @@ impl ContextCompressor {
             Some(summary) => self.build_model_summary_artifact(summary, contract),
             None => self.build_fallback_summary_artifact(turns, context_window, contract),
         };
-        if matches!(mode, CompressionMode::Auto) {
+        if append_live_boundary_context {
             self.append_live_boundary_context(
                 &mut summary_artifact,
                 last_user_message.as_ref(),
@@ -228,6 +459,30 @@ impl ContextCompressor {
         })
     }
 
+    pub fn compress_auto_plan_with_contract(
+        &self,
+        session_id: &str,
+        context_window: usize,
+        plan: AutoCompressionPlan,
+        contract: Option<CompressionContract>,
+        model_summary: Option<String>,
+    ) -> BitFunResult<CompressionResult> {
+        let turns = MessageHelper::group_messages_by_turns(plan.summary_messages);
+        let turns = turns.into_iter().map(TurnWithTokens::new).collect();
+        let mut result = self.compress_turns_internal(
+            session_id,
+            context_window,
+            turns,
+            CompressionMode::Auto,
+            contract,
+            model_summary,
+            false,
+        )?;
+        result.messages.extend(plan.recent_anchor_messages);
+        result.messages.extend(plan.recent_tail_messages);
+        Ok(result)
+    }
+
     pub fn append_transcript_reference(
         &self,
         result: &mut CompressionResult,
@@ -235,10 +490,10 @@ impl ContextCompressor {
         transcript_index_range: &TranscriptLineRange,
     ) -> bool {
         let has_model_summary = result.has_model_summary;
-        let summary_is_inline = result.messages.len() == 1
-            && result.messages[0].role == MessageRole::User
-            && result.messages[0].metadata.semantic_kind
-                == Some(MessageSemanticKind::CompressionSummary);
+        let summary_is_inline = result.messages.first().is_some_and(|message| {
+            message.role == MessageRole::User
+                && message.metadata.semantic_kind == Some(MessageSemanticKind::CompressionSummary)
+        });
         let old_boundary = render_system_reminder(&Self::render_boundary_marker_text(
             has_model_summary,
             summary_is_inline,
@@ -587,7 +842,8 @@ fn extract_tag_content<'a>(text: &'a str, tag: &str) -> Option<&'a str> {
 mod tests {
     use super::{CompressionMode, ContextCompressor, TurnWithTokens};
     use crate::agentic::core::{
-        render_system_reminder, CompressionEntry, CompressionPayload, Message, MessageSemanticKind,
+        render_system_reminder, CompressionEntry, CompressionPayload, InternalReminderKind,
+        Message, MessageContent, MessageSemanticKind, ToolCall, ToolResult,
     };
     use crate::service::session::TranscriptLineRange;
 
@@ -617,6 +873,180 @@ mod tests {
                 }],
             ),
         ])
+    }
+
+    fn todo_call() -> ToolCall {
+        ToolCall {
+            tool_id: "todo_recent".to_string(),
+            tool_name: "TodoWrite".to_string(),
+            arguments: serde_json::json!({
+                "todos": [
+                    {"content": "Keep recent context", "status": "in_progress"},
+                    {"content": "Retry compression", "status": "pending"}
+                ]
+            }),
+            raw_arguments: None,
+            is_error: false,
+            parse_error: None,
+            recovered_from_truncation: false,
+            repair_kind: Default::default(),
+        }
+    }
+
+    fn todo_result() -> Message {
+        Message::tool_result(ToolResult {
+            tool_id: "todo_recent".to_string(),
+            tool_name: "TodoWrite".to_string(),
+            effective_tool_name: None,
+            result: serde_json::json!({"success": true}),
+            result_for_assistant: None,
+            is_error: false,
+            duration_ms: None,
+            image_attachments: None,
+        })
+    }
+
+    #[test]
+    fn recent_context_keeps_complete_last_turn_without_duplicate_anchors() {
+        let compressor = ContextCompressor::new(Default::default());
+        let messages = vec![
+            Message::system("system".to_string()),
+            Message::user("Older request".repeat(200)),
+            Message::assistant("Older answer".repeat(200)),
+            Message::user("Current request".to_string()),
+            Message::assistant("Current answer".to_string()),
+        ];
+
+        let plan = compressor
+            .plan_auto_compression("session", &messages, 1_000, None)
+            .expect("planning succeeds")
+            .expect("plan exists");
+
+        assert!(plan.last_turn_complete);
+        assert!(plan.recent_anchor_messages.is_empty());
+        assert!(plan
+            .recent_tail_messages
+            .iter()
+            .any(|message| message.is_actual_user_message()));
+    }
+
+    #[test]
+    fn partial_last_turn_restores_user_and_missing_todo() {
+        let compressor = ContextCompressor::new(Default::default());
+        let current_user = Message::user("Continue the current task".to_string())
+            .with_turn_id("turn-current".to_string());
+        let retained_assistant = Message::assistant("Latest evidence".repeat(100))
+            .with_turn_id("turn-current".to_string());
+        let messages = vec![
+            Message::system("system".to_string()),
+            Message::user("Older request".to_string()),
+            Message::assistant("Older answer".to_string()),
+            current_user.clone(),
+            Message::assistant_with_tools("Planning".to_string(), vec![todo_call()])
+                .with_turn_id("turn-current".to_string()),
+            todo_result().with_turn_id("turn-current".to_string()),
+            retained_assistant.clone(),
+        ];
+
+        let plan = compressor
+            .plan_auto_compression("session", &messages, 1, None)
+            .expect("planning succeeds")
+            .expect("plan exists");
+
+        assert!(!plan.last_turn_complete);
+        assert_eq!(plan.recent_anchor_messages.len(), 2);
+        assert_eq!(plan.recent_anchor_messages[0].id, current_user.id);
+        assert_eq!(
+            plan.recent_anchor_messages[1].internal_reminder_kind(),
+            Some(InternalReminderKind::RecentContextBoundary)
+        );
+        assert!(matches!(
+            plan.recent_anchor_messages[1]
+                .metadata
+                .compression_payload
+                .as_ref()
+                .and_then(|payload| payload.entries.first()),
+            Some(CompressionEntry::Turn { todo: Some(todo), .. })
+                if todo.todos.len() == 2
+        ));
+        assert_eq!(plan.recent_tail_messages[0].id, retained_assistant.id);
+
+        let mut result = compressor
+            .compress_auto_plan_with_contract(
+                "session",
+                128_000,
+                plan,
+                None,
+                Some("Earlier work summary".to_string()),
+            )
+            .expect("compression succeeds");
+        assert_eq!(result.messages.len(), 4);
+        let MessageContent::Text(summary) = &result.messages[0].content else {
+            panic!("expected summary text");
+        };
+        assert!(!summary.contains("Most recent user message before this summary"));
+        assert_eq!(result.messages[1].id, current_user.id);
+        assert_eq!(result.messages[3].id, retained_assistant.id);
+        assert!(compressor.append_transcript_reference(
+            &mut result,
+            "bitfun://current-session/artifacts/compression-transcripts/3-recent.txt",
+            &TranscriptLineRange {
+                start_line: 1,
+                end_line: 20,
+            },
+        ));
+        let MessageContent::Text(summary) = &result.messages[0].content else {
+            panic!("expected summary text");
+        };
+        assert!(summary.contains("3-recent.txt"));
+    }
+
+    #[test]
+    fn recent_context_never_splits_tool_results_from_their_assistant_call() {
+        let compressor = ContextCompressor::new(Default::default());
+        let assistant = Message::assistant_with_tools("Planning".to_string(), vec![todo_call()]);
+        let result = todo_result();
+        let messages = vec![
+            Message::system("system".to_string()),
+            Message::user("Older request".to_string()),
+            Message::assistant("Older answer".repeat(500)),
+            Message::user("Current request".to_string()),
+            assistant.clone(),
+            result.clone(),
+        ];
+
+        let plan = compressor
+            .plan_auto_compression("session", &messages, 1, None)
+            .expect("planning succeeds")
+            .expect("plan exists");
+
+        assert_eq!(plan.recent_tail_messages[0].id, assistant.id);
+        assert_eq!(plan.recent_tail_messages[1].id, result.id);
+    }
+
+    #[test]
+    fn overflow_retry_forces_cutoff_to_move_across_large_atomic_units() {
+        let compressor = ContextCompressor::new(Default::default());
+        let messages = vec![
+            Message::system("system".to_string()),
+            Message::user("request".to_string()),
+            Message::assistant("first".repeat(2_000)),
+            Message::assistant("second".repeat(2_000)),
+            Message::assistant("third".repeat(2_000)),
+        ];
+
+        let first = compressor
+            .plan_auto_compression("session", &messages, 1, None)
+            .expect("planning succeeds")
+            .expect("first plan exists");
+        let second = compressor
+            .plan_auto_compression("session", &messages, 2, Some(first.cutoff_message_index))
+            .expect("planning succeeds")
+            .expect("second plan exists");
+
+        assert!(second.cutoff_message_index < first.cutoff_message_index);
+        assert!(second.summary_messages.len() < first.summary_messages.len());
+        assert!(second.recent_tail_messages.len() > first.recent_tail_messages.len());
     }
 
     #[test]

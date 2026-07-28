@@ -3,6 +3,7 @@ use crate::client::StreamResponse;
 use crate::stream::UnifiedResponse;
 use crate::trace::{ModelExchangeRequestAttempt, ModelExchangeTraceConfig};
 use anyhow::{anyhow, Result};
+use bitfun_core_types::errors::{AiProviderError, ErrorCategory};
 use chrono::{DateTime, Utc};
 use futures::Stream;
 use log::{debug, error, warn};
@@ -102,6 +103,32 @@ fn format_transport_error(label: &str, error: &reqwest::Error) -> String {
 
 fn is_retryable_http_status(status: StatusCode) -> bool {
     status.is_server_error() || matches!(status.as_u16(), 408 | 409 | 425 | 429)
+}
+
+fn provider_error_code(body: &str) -> Option<String> {
+    let value: serde_json::Value = serde_json::from_str(body).ok()?;
+    let error = value.get("error").unwrap_or(&value);
+    ["code", "type", "status"].iter().find_map(|field| {
+        error.get(field).and_then(|value| match value {
+            serde_json::Value::String(value) => Some(value.clone()),
+            serde_json::Value::Number(value) => Some(value.to_string()),
+            _ => None,
+        })
+    })
+}
+
+fn http_provider_error(
+    label: &str,
+    status: StatusCode,
+    error_text: &str,
+    error_kind: &str,
+) -> AiProviderError {
+    AiProviderError::from_parts(
+        format!("{} {} {}: {}", label, error_kind, status, error_text),
+        Some(label.to_string()),
+        provider_error_code(error_text),
+        Some(status.as_u16()),
+    )
 }
 
 fn exponential_retry_delay_ms(attempt: usize) -> u64 {
@@ -228,6 +255,7 @@ where
                     request_url: url.to_string(),
                     request_body: trace.capture_request_body.then(|| request_body.clone()),
                     attempt_number: attempt + 1,
+                    round_attempt: trace.round_attempt().cloned(),
                 })
                 .await
         } else {
@@ -248,22 +276,24 @@ where
                         .text()
                         .await
                         .unwrap_or_else(|e| format!("Failed to read error response: {}", e));
+                    let provider_error =
+                        http_provider_error(label, status, &error_text, "client error");
                     if let Some(trace) = trace.as_ref() {
                         trace
                             .sink
                             .request_attempt_failed(
                                 trace_handle.as_ref(),
-                                &format!("{} client error {}: {}", label, status, error_text),
+                                &provider_error.to_string(),
                             )
                             .await;
                     }
-                    error!("{} client error {}: {}", label, status, error_text);
-                    return Err(anyhow!("{} client error {}: {}", label, status, error_text));
+                    error!("{}", provider_error);
+                    return Err(anyhow!(provider_error));
                 }
 
                 if status.is_success() {
                     debug!(
-                        "{} request connected: {}ms, status: {}, protocol: {:?}, attempt: {}/{}",
+                        "{} request connected: {}ms, status: {}, protocol: {:?}, transport_attempt: {}/{}",
                         label,
                         connect_time,
                         status,
@@ -277,9 +307,23 @@ where
                         .text()
                         .await
                         .unwrap_or_else(|e| format!("Failed to read error response: {}", e));
-                    let error = anyhow!("{} error {}: {}", label, status, error_text);
+                    let provider_error = http_provider_error(label, status, &error_text, "error");
+                    if provider_error.category == ErrorCategory::ContextOverflow {
+                        if let Some(trace) = trace.as_ref() {
+                            trace
+                                .sink
+                                .request_attempt_failed(
+                                    trace_handle.as_ref(),
+                                    &provider_error.to_string(),
+                                )
+                                .await;
+                        }
+                        error!("{}", provider_error);
+                        return Err(anyhow!(provider_error));
+                    }
+                    let error = anyhow!(provider_error);
                     warn!(
-                        "{} request failed: {}ms, attempt {}/{}, error: {}",
+                        "{} request failed: {}ms, transport_attempt {}/{}, error: {}",
                         label,
                         connect_time,
                         attempt + 1,
@@ -303,7 +347,7 @@ where
                     if attempt < max_tries - 1 {
                         let delay_ms = retry_delay_ms(attempt, &headers, status);
                         debug!(
-                            "Retrying {} after {}ms (attempt {}, status {})",
+                            "Retrying {} after {}ms (transport_attempt {}, status {})",
                             label,
                             delay_ms,
                             attempt + 2,
@@ -319,7 +363,7 @@ where
                 let error_msg = format_transport_error(label, &e);
                 let error = anyhow!("{}", error_msg);
                 warn!(
-                    "{} request failed: {}ms, attempt {}/{}, error: {}",
+                    "{} request failed: {}ms, transport_attempt {}/{}, error: {}",
                     label,
                     connect_time,
                     attempt + 1,
@@ -337,7 +381,7 @@ where
                 if attempt < max_tries - 1 {
                     let delay_ms = exponential_retry_delay_ms(attempt);
                     debug!(
-                        "Retrying {} after {}ms (attempt {})",
+                        "Retrying {} after {}ms (transport_attempt {})",
                         label,
                         delay_ms,
                         attempt + 2
@@ -351,7 +395,7 @@ where
                 let error_msg = format_ttft_timeout_error(label, ttft_timeout);
                 let error = anyhow!("{}", error_msg);
                 warn!(
-                    "{} request failed: {}ms, attempt {}/{}, error: {}",
+                    "{} request failed: {}ms, transport_attempt {}/{}, error: {}",
                     label,
                     connect_time,
                     attempt + 1,
@@ -369,7 +413,7 @@ where
                 if attempt < max_tries - 1 {
                     let delay_ms = exponential_retry_delay_ms(attempt);
                     debug!(
-                        "Retrying {} after {}ms (attempt {})",
+                        "Retrying {} after {}ms (transport_attempt {})",
                         label,
                         delay_ms,
                         attempt + 2
@@ -418,6 +462,35 @@ mod tests {
         atomic::{AtomicBool, Ordering},
         Arc,
     };
+
+    #[test]
+    fn http_error_uses_structured_code_before_generic_message() {
+        let error = http_provider_error(
+            "OpenAI Responses API",
+            StatusCode::BAD_REQUEST,
+            r#"{"error":{"code":"context_length_exceeded","message":"Request failed"}}"#,
+            "client error",
+        );
+
+        assert_eq!(error.category, ErrorCategory::ContextOverflow);
+        assert_eq!(
+            error.provider_code.as_deref(),
+            Some("context_length_exceeded")
+        );
+        assert_eq!(error.http_status, Some(400));
+    }
+
+    #[test]
+    fn no_body_bad_request_is_not_assumed_to_be_context_overflow() {
+        let error = http_provider_error(
+            "OpenAI Responses API",
+            StatusCode::BAD_REQUEST,
+            "400 status code (no body)",
+            "client error",
+        );
+
+        assert_eq!(error.category, ErrorCategory::InvalidRequest);
+    }
 
     #[test]
     fn format_ttft_timeout_error_includes_timeout_seconds() {

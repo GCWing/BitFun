@@ -5,7 +5,7 @@
 use super::model_exchange_trace::{
     prepare_model_exchange_trace_for_workspace, ModelExchangeTraceOperation,
 };
-use super::round_executor::RoundExecutor;
+use super::round_executor::{ModelRoundLifecycle, RoundExecutor};
 use super::types::{ExecutionContext, ExecutionResult, RoundContext, RoundResult};
 use crate::agentic::agents::{
     build_prompt_context_for_workspace, get_agent_registry, PrependedPromptReminders,
@@ -348,6 +348,8 @@ pub struct ExecutionEngine {
 
 impl ExecutionEngine {
     const AUTO_COMPRESSION_SAFETY_RESERVE_TOKENS: usize = 10_000;
+    const MAX_COMPRESSION_OVERFLOW_ATTEMPTS: usize = 4;
+    const MAX_MAIN_CONTEXT_OVERFLOW_RECOVERIES: usize = 2;
     const FINALIZE_AFTER_REPEATED_TOOL_FAILURES_REMINDER: &'static str = "This turn must end now because repeated tool failures have prevented further progress. Ignore any unfinished work. Your task now is to give the user a final answer. Do not call any more tools; any tool call will fail. Respond in plain text only. Summarize what was completed, what failed, the evidence available from the tool results, and the single best next step for the user.";
     const FINALIZE_AFTER_MAX_ROUNDS_REMINDER: &'static str = "This turn must end now because it has reached the round limit. Ignore any unfinished work. Your task now is to give the user a final answer. Do not call any more tools; any tool call will fail. Respond in plain text only. Summarize the most useful completed work and evidence collected so far, and clearly distinguish resolved items from anything still unresolved.";
     const FINALIZE_TOOL_DENIED_MESSAGE: &'static str =
@@ -1785,12 +1787,32 @@ impl ExecutionEngine {
                     return Ok(response.text);
                 }
                 Err(err) => {
+                    let provider_error = err
+                        .downcast_ref::<bitfun_core_types::errors::AiProviderError>()
+                        .cloned();
+                    let err_msg = err.to_string();
                     warn!(
                         "Compression summary generation failed (attempt {}/{}): {}",
                         attempt + 1,
                         max_tries,
-                        err
+                        err_msg
                     );
+                    let category = provider_error
+                        .as_ref()
+                        .map(|error| error.category.clone())
+                        .unwrap_or_else(|| {
+                            bitfun_core_types::errors::classify_ai_error_message(&err_msg)
+                        });
+                    if category == bitfun_core_types::errors::ErrorCategory::ContextOverflow {
+                        return Err(BitFunError::RecoverableContextOverflow(
+                            provider_error.unwrap_or_else(|| {
+                                bitfun_core_types::errors::AiProviderError::classified(
+                                    err_msg,
+                                    bitfun_core_types::errors::ErrorCategory::ContextOverflow,
+                                )
+                            }),
+                        ));
+                    }
                     last_error = Some(err);
 
                     if attempt < max_tries - 1 {
@@ -2053,6 +2075,7 @@ impl ExecutionEngine {
         &self,
         session_id: &str,
         dialog_turn_id: &str,
+        trigger: &str,
         runtime_messages: Vec<Message>,
         before_pressure: TokenPressureSnapshot,
         context_window: usize,
@@ -2073,13 +2096,12 @@ impl ExecutionEngine {
         let start_time = std::time::Instant::now();
 
         let old_messages_len = runtime_messages.len();
-        let turns = self
-            .context_compressor
-            .collect_turns_for_auto_compression(session_id, runtime_messages.clone())?;
-        if turns.is_empty() {
+        if !runtime_messages
+            .iter()
+            .any(|message| message.role != MessageRole::System)
+        {
             return Ok(None);
         }
-
         // Generate compression ID
         let compression_id = format!("compression_{}", uuid::Uuid::new_v4());
         // Captured before `ai_client` is consumed by summary generation.
@@ -2087,7 +2109,7 @@ impl ExecutionEngine {
 
         native_hooks::dispatch_pre_compact(
             Self::native_hook_facts(session_id, dialog_turn_id, workspace, &ai_client_model),
-            "auto",
+            trigger,
         )
         .await;
 
@@ -2097,7 +2119,7 @@ impl ExecutionEngine {
                 session_id: session_id.to_string(),
                 turn_id: dialog_turn_id.to_string(),
                 compression_id: compression_id.clone(),
-                trigger: "auto".to_string(),
+                trigger: trigger.to_string(),
                 tokens_before: before_pressure.total_tokens,
                 context_window,
             },
@@ -2121,38 +2143,105 @@ impl ExecutionEngine {
             ModelExchangeTraceOperation {
                 kind: "context_compression",
                 id: &compression_id,
-                trigger: Some("auto"),
+                trigger: Some(trigger),
             },
             ai_client.as_ref(),
         )
         .await;
-        let model_summary = match self
-            .generate_compression_model_summary(CompressionModelSummaryInput {
-                ai_client,
-                runtime_messages: &runtime_messages,
+        let max_initial_recent = context_window.saturating_div(2).max(1);
+        let mut recent_target =
+            ContextCompressor::DEFAULT_RECENT_CONTEXT_TOKENS.min(max_initial_recent);
+        let mut previous_cutoff = None;
+        let mut selected_plan = None;
+        let mut model_summary = None;
+
+        for attempt in 0..Self::MAX_COMPRESSION_OVERFLOW_ATTEMPTS {
+            let Some(plan) = self.context_compressor.plan_auto_compression(
+                session_id,
+                &runtime_messages,
+                recent_target,
+                previous_cutoff,
+            )?
+            else {
+                break;
+            };
+            info!(
+                "Compression context plan: session_id={}, turn_id={}, trigger={}, attempt={}/{}, recent_target_tokens={}, recent_tail_tokens={}, recent_anchor_tokens={}, cutoff_message_index={}, summary_messages={}, recent_tail_messages={}, last_turn_complete={}",
+                session_id,
                 dialog_turn_id,
-                workspace,
-                tool_definitions,
-                prepended_prompt_reminders,
-                primary_supports_image_understanding,
-                trace_config,
-            })
-            .await
-        {
-            Ok(summary) => summary,
-            Err(err) => {
-                warn!(
-                    "Model-based compression failed, falling back to structured local compression: {}",
-                    err
-                );
-                None
+                trigger,
+                attempt + 1,
+                Self::MAX_COMPRESSION_OVERFLOW_ATTEMPTS,
+                plan.recent_target_tokens,
+                plan.recent_tail_tokens,
+                plan.recent_anchor_tokens,
+                plan.cutoff_message_index,
+                plan.summary_messages.len(),
+                plan.recent_tail_messages.len(),
+                plan.last_turn_complete
+            );
+
+            let summary_result = self
+                .generate_compression_model_summary(CompressionModelSummaryInput {
+                    ai_client: ai_client.clone(),
+                    runtime_messages: &plan.summary_request_messages,
+                    dialog_turn_id,
+                    workspace,
+                    tool_definitions,
+                    prepended_prompt_reminders,
+                    primary_supports_image_understanding,
+                    trace_config: trace_config.clone(),
+                })
+                .await;
+
+            match summary_result {
+                Ok(summary) => {
+                    selected_plan = Some(plan);
+                    model_summary = summary;
+                    break;
+                }
+                Err(err) if err.is_recoverable_context_overflow() => {
+                    warn!(
+                        "Compression request exceeded provider context: session_id={}, turn_id={}, trigger={}, attempt={}/{}, recent_target_tokens={}, cutoff_message_index={}, can_shorten_summary_prefix={}, error={}",
+                        session_id,
+                        dialog_turn_id,
+                        trigger,
+                        attempt + 1,
+                        Self::MAX_COMPRESSION_OVERFLOW_ATTEMPTS,
+                        plan.recent_target_tokens,
+                        plan.cutoff_message_index,
+                        plan.can_shorten_summary_prefix,
+                        err
+                    );
+                    let can_retry = attempt + 1 < Self::MAX_COMPRESSION_OVERFLOW_ATTEMPTS
+                        && plan.can_shorten_summary_prefix;
+                    previous_cutoff = Some(plan.cutoff_message_index);
+                    selected_plan = Some(plan);
+                    if can_retry {
+                        recent_target = recent_target
+                            .saturating_add(ContextCompressor::RECENT_CONTEXT_RETRY_STEP_TOKENS);
+                        continue;
+                    }
+                    break;
+                }
+                Err(err) => {
+                    warn!(
+                        "Model-based compression failed, falling back to structured local compression: {}",
+                        err
+                    );
+                    selected_plan = Some(plan);
+                    break;
+                }
             }
+        }
+
+        let Some(selected_plan) = selected_plan else {
+            return Ok(None);
         };
-        match self.context_compressor.compress_turns_with_contract(
+        match self.context_compressor.compress_auto_plan_with_contract(
             session_id,
             context_window,
-            turns,
-            CompressionMode::Auto,
+            selected_plan,
             compression_contract,
             model_summary,
         ) {
@@ -2167,7 +2256,7 @@ impl ExecutionEngine {
                         session_id,
                         boundary_turn_index,
                         &compression_id,
-                        "auto",
+                        trigger,
                     )
                     .await
                 {
@@ -2296,7 +2385,7 @@ impl ExecutionEngine {
                         workspace,
                         &ai_client_model,
                     ),
-                    "auto",
+                    trigger,
                 )
                 .await;
 
@@ -3008,6 +3097,8 @@ impl ExecutionEngine {
         let mut finalization_reason: Option<&'static str> = None;
         let mut consecutive_compression_failures: u32 = 0;
         const MAX_CONSECUTIVE_COMPRESSION_FAILURES: u32 = 3;
+        let mut main_context_overflow_recoveries = 0usize;
+        let mut active_round_lifecycle: Option<ModelRoundLifecycle> = None;
 
         // Track tool-call patterns for context health, but only use rounds with
         // actual failed tool results for no-progress recovery decisions.
@@ -3229,6 +3320,7 @@ impl ExecutionEngine {
                     .compress_messages(
                         &context.session_id,
                         &context.dialog_turn_id,
+                        "auto",
                         messages.clone(),
                         token_pressure,
                         context_window,
@@ -3416,16 +3508,118 @@ impl ExecutionEngine {
             )
             .await?;
 
-            let round_result = self
+            let round_lifecycle =
+                active_round_lifecycle.get_or_insert_with(ModelRoundLifecycle::new);
+            let round_result = match self
                 .round_executor
-                .execute_round(
+                .execute_round_with_lifecycle(
                     ai_client.clone(),
                     round_context,
                     ai_messages,
                     tool_definitions.clone(),
                     Some(context_window),
+                    round_lifecycle,
                 )
-                .await?;
+                .await
+            {
+                Ok(result) => result,
+                Err(err)
+                    if enable_context_compression
+                        && err.is_recoverable_context_overflow()
+                        && main_context_overflow_recoveries
+                            < Self::MAX_MAIN_CONTEXT_OVERFLOW_RECOVERIES =>
+                {
+                    main_context_overflow_recoveries += 1;
+                    warn!(
+                        "Main model request exceeded provider context; starting recovery compression: session_id={}, turn_id={}, round_index={}, recovery={}/{}, error={}",
+                        context.session_id,
+                        context.dialog_turn_id,
+                        round_index,
+                        main_context_overflow_recoveries,
+                        Self::MAX_MAIN_CONTEXT_OVERFLOW_RECOVERIES,
+                        err
+                    );
+                    match self
+                        .compress_messages(
+                            &context.session_id,
+                            &context.dialog_turn_id,
+                            "context_overflow_recovery",
+                            messages.clone(),
+                            send_pressure,
+                            context_window,
+                            ai_client.clone(),
+                            &tool_definitions,
+                            turn_prompt_scaffold.system_prompt_message.clone(),
+                            &turn_prompt_scaffold.prepended_prompt_reminders,
+                            primary_supports_image_understanding,
+                            context_profile_policy.compression_contract_limit,
+                            context.workspace.as_ref(),
+                        )
+                        .await
+                    {
+                        Ok(Some((compressed_tokens, compressed_messages))) => {
+                            info!(
+                                "Context-overflow recovery compression completed: session_id={}, turn_id={}, round_index={}, recovery={}, messages {} -> {}, tokens {} -> {}",
+                                context.session_id,
+                                context.dialog_turn_id,
+                                round_index,
+                                main_context_overflow_recoveries,
+                                messages.len(),
+                                compressed_messages.len(),
+                                send_pressure.total_tokens,
+                                compressed_tokens
+                            );
+                            messages = compressed_messages;
+                            turn_prompt_scaffold = self
+                                .resolve_turn_prompt_scaffold(TurnPromptScaffoldInput {
+                                    context: &context,
+                                    current_agent: current_agent.as_ref(),
+                                    model_name: &ai_client.config.model,
+                                    supports_image_understanding:
+                                        primary_supports_image_understanding,
+                                    tool_listing_sections: tool_listing_sections.clone(),
+                                    runtime_context_needs,
+                                    stage: "after_context_overflow_recovery",
+                                })
+                                .await?;
+                            Self::apply_turn_prompt_scaffold_to_messages(
+                                &mut messages,
+                                &turn_prompt_scaffold,
+                            );
+                            self.round_executor
+                                .record_context_overflow_recovery(
+                                    &context.session_id,
+                                    &context.dialog_turn_id,
+                                    round_lifecycle,
+                                    err.to_string(),
+                                )
+                                .await;
+                            full_compression_count += 1;
+                            consecutive_compression_failures = 0;
+                            continue;
+                        }
+                        Ok(None) => {
+                            warn!(
+                                "Context-overflow recovery found no compressible context: session_id={}, turn_id={}, round_index={}",
+                                context.session_id, context.dialog_turn_id, round_index
+                            );
+                            return Err(err);
+                        }
+                        Err(compression_error) => {
+                            error!(
+                                "Context-overflow recovery compression failed: session_id={}, turn_id={}, round_index={}, error={}",
+                                context.session_id,
+                                context.dialog_turn_id,
+                                round_index,
+                                compression_error
+                            );
+                            return Err(err);
+                        }
+                    }
+                }
+                Err(err) => return Err(err),
+            };
+            active_round_lifecycle = None;
 
             debug!(
                 "Model round completed: round_index={}, has_more_rounds={}, tool_calls={}",

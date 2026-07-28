@@ -13,6 +13,7 @@ crate-type = ["rlib"]
 anyhow = { workspace = true }
 async-trait = { workspace = true }
 bitfun-events = { path = "../../contracts/events" }
+bitfun-core-types = { path = "../../contracts/core-types" }
 futures = { workspace = true }
 bitfun-tool-call-jsonrepair = { path = "../tool-call-jsonrepair" }
 log = { workspace = true }

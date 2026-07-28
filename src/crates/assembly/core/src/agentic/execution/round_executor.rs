@@ -39,6 +39,7 @@ use bitfun_agent_runtime::turn_cancellation::DialogTurnCancellationTokenStore;
 use bitfun_ai_adapters::{
     ModelExchangeRequestTraceHandle, ModelExchangeResponseTrace, ModelExchangeTraceConfig,
 };
+use bitfun_core_types::errors::{AiProviderError, ErrorCategory};
 use bitfun_runtime_ports::PermissionRule;
 use log::{debug, error, warn};
 use std::sync::Arc;
@@ -51,6 +52,45 @@ pub struct RoundExecutor {
     tool_pipeline: Option<Arc<ToolPipeline>>,
     event_queue: Arc<EventQueue>,
     cancellation_tokens: DialogTurnCancellationTokenStore,
+}
+
+/// Mutable lifecycle shared by all provider attempts that belong to one
+/// logical model round, including attempts made after overflow recovery.
+#[derive(Debug)]
+pub(super) struct ModelRoundLifecycle {
+    round_id: String,
+    started_at: Instant,
+    started_event_emitted: bool,
+    attempts_started: u32,
+}
+
+impl ModelRoundLifecycle {
+    pub(super) fn new() -> Self {
+        Self {
+            round_id: uuid::Uuid::new_v4().to_string(),
+            started_at: Instant::now(),
+            started_event_emitted: false,
+            attempts_started: 0,
+        }
+    }
+
+    fn take_started_event(&mut self) -> bool {
+        if self.started_event_emitted {
+            false
+        } else {
+            self.started_event_emitted = true;
+            true
+        }
+    }
+
+    fn begin_attempt(&mut self) -> u32 {
+        self.attempts_started = self.attempts_started.saturating_add(1);
+        self.attempts_started
+    }
+
+    fn attempts_started(&self) -> u32 {
+        self.attempts_started
+    }
 }
 
 impl RoundExecutor {
@@ -111,6 +151,35 @@ impl RoundExecutor {
                 diagnostic: diagnostic.clone(),
             },
             EventPriority::High,
+        )
+        .await;
+    }
+
+    pub(super) async fn record_context_overflow_recovery(
+        &self,
+        session_id: &str,
+        turn_id: &str,
+        lifecycle: &ModelRoundLifecycle,
+        raw_error: String,
+    ) {
+        let attempt_number = lifecycle.attempts_started();
+        if attempt_number == 0 {
+            return;
+        }
+        self.emit_event(
+            AgenticEvent::ModelRoundAttemptSuperseded {
+                session_id: session_id.to_string(),
+                turn_id: turn_id.to_string(),
+                round_id: lifecycle.round_id.clone(),
+                diagnostic: Self::retry_diagnostic(
+                    format!("{}:attempt:{attempt_number}", lifecycle.round_id),
+                    attempt_number,
+                    "context_overflow",
+                    Some(raw_error),
+                    &[],
+                ),
+            },
+            EventPriority::Normal,
         )
         .await;
     }
@@ -209,31 +278,55 @@ impl RoundExecutor {
         tool_definitions: Option<Vec<ToolDefinition>>,
         context_window: Option<usize>,
     ) -> BitFunResult<RoundResult> {
-        let round_started_at = Instant::now();
+        let mut lifecycle = ModelRoundLifecycle::new();
+        self.execute_round_with_lifecycle(
+            ai_client,
+            context,
+            ai_messages,
+            tool_definitions,
+            context_window,
+            &mut lifecycle,
+        )
+        .await
+    }
+
+    pub(super) async fn execute_round_with_lifecycle(
+        &self,
+        ai_client: Arc<AIClient>,
+        context: RoundContext,
+        ai_messages: Vec<AIMessage>,
+        tool_definitions: Option<Vec<ToolDefinition>>,
+        context_window: Option<usize>,
+        lifecycle: &mut ModelRoundLifecycle,
+    ) -> BitFunResult<RoundResult> {
+        let round_started_at = lifecycle.started_at;
         let subagent_parent_info = context.subagent_parent_info.clone();
         let is_subagent = subagent_parent_info.is_some();
 
-        let round_id = uuid::Uuid::new_v4().to_string();
+        let round_id = lifecycle.round_id.clone();
 
         // Create or reuse cancellation token
         let cancel_token = self
             .cancellation_tokens
             .get_or_insert_new(&context.dialog_turn_id);
 
-        // Emit model round started event
-        self.emit_event(
-            AgenticEvent::ModelRoundStarted {
-                session_id: context.session_id.clone(),
-                turn_id: context.dialog_turn_id.clone(),
-                round_id: round_id.clone(),
-                round_group_id: context.round_group_id.clone(),
-                round_index: context.round_number,
-                model_config_id: context.model_config_id.clone(),
-                effective_model_name: context.effective_model_name.clone(),
-            },
-            EventPriority::High,
-        )
-        .await;
+        // Overflow recovery re-enters this executor with the same lifecycle.
+        // The logical round starts once even though it may contain many attempts.
+        if lifecycle.take_started_event() {
+            self.emit_event(
+                AgenticEvent::ModelRoundStarted {
+                    session_id: context.session_id.clone(),
+                    turn_id: context.dialog_turn_id.clone(),
+                    round_id: round_id.clone(),
+                    round_group_id: context.round_group_id.clone(),
+                    round_index: context.round_number,
+                    model_config_id: context.model_config_id.clone(),
+                    effective_model_name: context.effective_model_name.clone(),
+                },
+                EventPriority::High,
+            )
+            .await;
+        }
 
         let trace_config =
             prepare_model_exchange_trace(&context, &round_id, ai_client.as_ref()).await;
@@ -247,9 +340,9 @@ impl RoundExecutor {
             };
         let allow_normal_tool_json_repair = global_config.ai.allow_tool_json_repair;
         let max_attempts = Self::MAX_STREAM_ATTEMPTS;
-        let mut attempt_index = 0usize;
+        let mut local_attempt_index = 0usize;
         let (stream_result, send_to_stream_ms, stream_processing_ms, final_trace_handle) = loop {
-            let attempt_number = (attempt_index + 1) as u32;
+            let attempt_number = lifecycle.begin_attempt();
             let attempt_id = format!("{round_id}:attempt:{attempt_number}");
             // Check cancellation before opening a model stream. This catches
             // early cancellation registered before the first round starts.
@@ -263,18 +356,22 @@ impl RoundExecutor {
 
             let request_started_at = Instant::now();
             debug!(
-                "Sending request: model={}, messages={}, tools={}, attempt={}/{}",
+                "Sending request: model={}, messages={}, tools={}, round_attempt={}, local_retry={}/{}",
                 context.effective_model_name,
                 ai_messages.len(),
                 tool_definitions.as_ref().map(|t| t.len()).unwrap_or(0),
-                attempt_index + 1,
+                attempt_number,
+                local_attempt_index + 1,
                 max_attempts
             );
             // Use dynamically obtained client for call
+            let request_trace_config = trace_config
+                .clone()
+                .map(|config| config.with_round_attempt(attempt_id.clone(), attempt_number));
             let send_future = ai_client.send_message_stream(
                 ai_messages.clone(),
                 tool_definitions.clone(),
-                trace_config.clone(),
+                request_trace_config,
             );
             let send_result = tokio::select! {
                 _ = cancel_token.cancelled() => {
@@ -286,10 +383,11 @@ impl RoundExecutor {
                 Ok(response) => {
                     let send_to_stream_ms = elapsed_ms_u64(request_started_at);
                     debug!(
-                        "AI stream opened: session_id={}, round_id={}, attempt={}/{}, send_to_stream_ms={}",
+                        "AI stream opened: session_id={}, round_id={}, round_attempt={}, local_retry={}/{}, send_to_stream_ms={}",
                         context.session_id,
                         round_id,
-                        attempt_index + 1,
+                        attempt_number,
+                        local_attempt_index + 1,
                         max_attempts,
                         send_to_stream_ms
                     );
@@ -297,9 +395,14 @@ impl RoundExecutor {
                 }
                 Err(e) => {
                     error!("AI request failed: {}", e);
+                    let provider_error = e.downcast_ref::<AiProviderError>().cloned();
                     let err_msg = e.to_string();
-                    if Self::is_transient_network_error(&err_msg)
-                        && attempt_index < max_attempts - 1
+                    let is_structured_context_overflow = provider_error
+                        .as_ref()
+                        .is_some_and(|error| error.category == ErrorCategory::ContextOverflow);
+                    if !is_structured_context_overflow
+                        && Self::is_transient_network_error(&err_msg)
+                        && local_attempt_index < max_attempts - 1
                     {
                         self.record_retry_diagnostic(
                             &context,
@@ -311,21 +414,24 @@ impl RoundExecutor {
                             &[],
                         )
                         .await;
-                        let delay_ms = Self::retry_delay_ms_for_error(attempt_index, &err_msg);
+                        let delay_ms =
+                            Self::retry_delay_ms_for_error(local_attempt_index, &err_msg);
                         warn!(
-                            "Retrying AI request after connection failure: session_id={}, round_id={}, attempt={}/{}, delay_ms={}, error={}",
+                            "Retrying AI request after connection failure: session_id={}, round_id={}, round_attempt={}, local_retry={}/{}, delay_ms={}, error={}",
                             context.session_id,
                             round_id,
-                            attempt_index + 1,
+                            attempt_number,
+                            local_attempt_index + 1,
                             max_attempts,
                             delay_ms,
                             err_msg
                         );
                         Self::sleep_with_cancellation(delay_ms, &cancel_token).await?;
-                        attempt_index += 1;
+                        local_attempt_index += 1;
                         continue;
                     }
-                    if Self::is_transient_network_error(&err_msg) {
+                    if !is_structured_context_overflow && Self::is_transient_network_error(&err_msg)
+                    {
                         return Err(BitFunError::AIClient(format!(
                             "Stream retry budget exhausted after {} attempts: {}",
                             max_attempts, err_msg
@@ -337,7 +443,21 @@ impl RoundExecutor {
                     // `BitFunError::error_category()` into `ErrorCategory` for
                     // frontend recovery actions (wait_and_retry, switch_model,
                     // etc.).
-                    let error = BitFunError::AIClient(err_msg);
+                    let category = provider_error
+                        .as_ref()
+                        .map(|error| error.category.clone())
+                        .unwrap_or_else(|| {
+                            bitfun_core_types::errors::classify_ai_error_message(&err_msg)
+                        });
+                    let error = if category == ErrorCategory::ContextOverflow {
+                        BitFunError::RecoverableContextOverflow(provider_error.unwrap_or_else(
+                            || AiProviderError::classified(err_msg, ErrorCategory::ContextOverflow),
+                        ))
+                    } else if let Some(error) = provider_error {
+                        BitFunError::AIProvider(error)
+                    } else {
+                        BitFunError::AIClient(err_msg)
+                    };
                     warn!(
                         "AI request terminal failure: session_id={}, round_id={}, category={:?}, error={}",
                         context.session_id,
@@ -370,11 +490,12 @@ impl RoundExecutor {
             }
 
             debug!(
-                "Starting AI stream processing: session={}, round={}, thread={:?}, attempt={}/{}",
+                "Starting AI stream processing: session={}, round={}, thread={:?}, round_attempt={}, local_retry={}/{}",
                 context.session_id,
                 round_id,
                 std::thread::current().id(),
-                attempt_index + 1,
+                attempt_number,
+                local_attempt_index + 1,
                 max_attempts
             );
 
@@ -407,7 +528,7 @@ impl RoundExecutor {
                         });
 
                         if !Self::has_user_visible_assistant_text(&result.full_text)
-                            && attempt_index < max_attempts - 1
+                            && local_attempt_index < max_attempts - 1
                             && Self::is_transient_network_error(&err_msg)
                         {
                             self.record_retry_diagnostic(
@@ -426,12 +547,14 @@ impl RoundExecutor {
                                 Self::trace_response_from_stream_result("partial", &result),
                             )
                             .await;
-                            let delay_ms = Self::retry_delay_ms_for_error(attempt_index, &err_msg);
+                            let delay_ms =
+                                Self::retry_delay_ms_for_error(local_attempt_index, &err_msg);
                             warn!(
-                                "Retrying stream because tool arguments were interrupted before valid JSON completed: session_id={}, round_id={}, attempt={}/{}, delay_ms={}, invalid_tool_calls={}, error={}",
+                                "Retrying stream because tool arguments were interrupted before valid JSON completed: session_id={}, round_id={}, round_attempt={}, local_retry={}/{}, delay_ms={}, invalid_tool_calls={}, error={}",
                                 context.session_id,
                                 round_id,
-                                attempt_index + 1,
+                                attempt_number,
+                                local_attempt_index + 1,
                                 max_attempts,
                                 delay_ms,
                                 result
@@ -442,7 +565,7 @@ impl RoundExecutor {
                                 err_msg
                             );
                             Self::sleep_with_cancellation(delay_ms, &cancel_token).await?;
-                            attempt_index += 1;
+                            local_attempt_index += 1;
                             continue;
                         }
 
@@ -509,7 +632,7 @@ impl RoundExecutor {
                         && !Self::has_user_visible_assistant_text(&result.full_text)
                         && !result.tool_calls.is_empty()
                         && Self::is_transient_network_error(partial_recovery_reason)
-                        && attempt_index < max_attempts - 1
+                        && local_attempt_index < max_attempts - 1
                     {
                         self.record_retry_diagnostic(
                             &context,
@@ -527,26 +650,29 @@ impl RoundExecutor {
                             Self::trace_response_from_stream_result("partial", &result),
                         )
                         .await;
-                        let delay_ms =
-                            Self::retry_delay_ms_for_error(attempt_index, partial_recovery_reason);
+                        let delay_ms = Self::retry_delay_ms_for_error(
+                            local_attempt_index,
+                            partial_recovery_reason,
+                        );
                         warn!(
-                            "Retrying stream because tool calls arrived on an interrupted network stream without assistant text: session_id={}, round_id={}, attempt={}/{}, delay_ms={}, tool_calls={}, reason={}",
+                            "Retrying stream because tool calls arrived on an interrupted network stream without assistant text: session_id={}, round_id={}, round_attempt={}, local_retry={}/{}, delay_ms={}, tool_calls={}, reason={}",
                             context.session_id,
                             round_id,
-                            attempt_index + 1,
+                            attempt_number,
+                            local_attempt_index + 1,
                             max_attempts,
                             delay_ms,
                             result.tool_calls.len(),
                             partial_recovery_reason
                         );
                         Self::sleep_with_cancellation(delay_ms, &cancel_token).await?;
-                        attempt_index += 1;
+                        local_attempt_index += 1;
                         continue;
                     }
 
                     if Self::is_invalid_tool_only_without_text(&result) {
                         let err_msg = "Provider returned only invalid tool arguments".to_string();
-                        if attempt_index < max_attempts - 1 {
+                        if local_attempt_index < max_attempts - 1 {
                             self.record_retry_diagnostic(
                                 &context,
                                 &round_id,
@@ -567,18 +693,19 @@ impl RoundExecutor {
                                 ),
                             )
                             .await;
-                            let delay_ms = Self::retry_delay_ms(attempt_index);
+                            let delay_ms = Self::retry_delay_ms(local_attempt_index);
                             warn!(
-                                "Retrying stream because provider returned only invalid tool arguments: session_id={}, round_id={}, attempt={}/{}, delay_ms={}, tool_calls={}",
+                                "Retrying stream because provider returned only invalid tool arguments: session_id={}, round_id={}, round_attempt={}, local_retry={}/{}, delay_ms={}, tool_calls={}",
                                 context.session_id,
                                 round_id,
-                                attempt_index + 1,
+                                attempt_number,
+                                local_attempt_index + 1,
                                 max_attempts,
                                 delay_ms,
                                 result.tool_calls.len()
                             );
                             Self::sleep_with_cancellation(delay_ms, &cancel_token).await?;
-                            attempt_index += 1;
+                            local_attempt_index += 1;
                             continue;
                         }
 
@@ -605,7 +732,7 @@ impl RoundExecutor {
                         )));
                     }
 
-                    if no_effective_output && attempt_index < max_attempts - 1 {
+                    if no_effective_output && local_attempt_index < max_attempts - 1 {
                         self.record_retry_diagnostic(
                             &context,
                             &round_id,
@@ -625,26 +752,28 @@ impl RoundExecutor {
                             ),
                         )
                         .await;
-                        let delay_ms = Self::retry_delay_ms(attempt_index);
+                        let delay_ms = Self::retry_delay_ms(local_attempt_index);
                         warn!(
-                            "Retrying stream because no effective output was received: session_id={}, round_id={}, attempt={}/{}, delay_ms={}",
+                            "Retrying stream because no effective output was received: session_id={}, round_id={}, round_attempt={}, local_retry={}/{}, delay_ms={}",
                             context.session_id,
                             round_id,
-                            attempt_index + 1,
+                            attempt_number,
+                            local_attempt_index + 1,
                             max_attempts,
                             delay_ms
                         );
                         Self::sleep_with_cancellation(delay_ms, &cancel_token).await?;
-                        attempt_index += 1;
+                        local_attempt_index += 1;
                         continue;
                     }
 
                     if is_partial_recovery {
                         warn!(
-                            "Accepting stream partial recovery without retry: session_id={}, round_id={}, attempt={}/{}, reason={}",
+                            "Accepting stream partial recovery without retry: session_id={}, round_id={}, round_attempt={}, local_retry={}/{}, reason={}",
                             context.session_id,
                             round_id,
-                            attempt_index + 1,
+                            attempt_number,
+                            local_attempt_index + 1,
                             max_attempts,
                             result
                                 .partial_recovery_reason
@@ -662,8 +791,10 @@ impl RoundExecutor {
                 }
                 Err(stream_err) => {
                     let err_msg = stream_err.error.to_string();
+                    let stream_error_category = stream_err.error.error_category();
                     let can_retry = !stream_err.has_effective_output
-                        && attempt_index < max_attempts - 1
+                        && stream_error_category != ErrorCategory::ContextOverflow
+                        && local_attempt_index < max_attempts - 1
                         && Self::is_transient_network_error(&err_msg);
                     Self::complete_model_exchange_trace(
                         trace_config.as_ref(),
@@ -682,25 +813,41 @@ impl RoundExecutor {
                             &[],
                         )
                         .await;
-                        let delay_ms = Self::retry_delay_ms_for_error(attempt_index, &err_msg);
+                        let delay_ms =
+                            Self::retry_delay_ms_for_error(local_attempt_index, &err_msg);
                         warn!(
-                            "Retrying stream after transient error with no effective output: session_id={}, round_id={}, attempt={}/{}, delay_ms={}, error={}",
+                            "Retrying stream after transient error with no effective output: session_id={}, round_id={}, round_attempt={}, local_retry={}/{}, delay_ms={}, error={}",
                             context.session_id,
                             round_id,
-                            attempt_index + 1,
+                            attempt_number,
+                            local_attempt_index + 1,
                             max_attempts,
                             delay_ms,
                             err_msg
                         );
                         Self::sleep_with_cancellation(delay_ms, &cancel_token).await?;
-                        attempt_index += 1;
+                        local_attempt_index += 1;
                         continue;
                     }
-                    if Self::is_transient_network_error(&err_msg) {
+                    if stream_error_category != ErrorCategory::ContextOverflow
+                        && Self::is_transient_network_error(&err_msg)
+                    {
                         return Err(BitFunError::AIClient(format!(
                             "Stream retry budget exhausted after {} attempts: {}",
                             max_attempts, err_msg
                         )));
+                    }
+                    if !stream_err.has_effective_output
+                        && stream_error_category == ErrorCategory::ContextOverflow
+                    {
+                        let provider_error = match stream_err.error {
+                            BitFunError::AIProvider(error)
+                            | BitFunError::RecoverableContextOverflow(error) => error,
+                            _ => {
+                                AiProviderError::classified(err_msg, ErrorCategory::ContextOverflow)
+                            }
+                        };
+                        return Err(BitFunError::RecoverableContextOverflow(provider_error));
                     }
                     return Err(stream_err.error);
                 }
@@ -782,7 +929,7 @@ impl RoundExecutor {
                 first_chunk_ms: stream_result.first_chunk_ms,
                 first_visible_output_ms: stream_result.first_visible_output_ms,
                 stream_duration_ms: Some(stream_processing_ms),
-                attempt_count: Some((attempt_index + 1) as u32),
+                attempt_count: Some(lifecycle.attempts_started()),
                 failure_category: None,
                 token_details: stream_result
                     .usage
@@ -879,8 +1026,11 @@ impl RoundExecutor {
                 session_id: context.session_id.clone(),
                 dialog_turn_id: context.dialog_turn_id.clone(),
                 round_id: round_id.clone(),
-                attempt_id: Some(format!("{round_id}:attempt:{}", attempt_index + 1)),
-                attempt_index: Some((attempt_index + 1) as u32),
+                attempt_id: Some(format!(
+                    "{round_id}:attempt:{}",
+                    lifecycle.attempts_started()
+                )),
+                attempt_index: Some(lifecycle.attempts_started()),
                 agent_type: context.agent_type.clone(),
                 workspace: context.workspace.clone(),
                 primary_model_facts: context.primary_model_facts.clone(),
@@ -1483,9 +1633,9 @@ fn token_details_from_usage(
 
 #[cfg(test)]
 mod tests {
-    use super::{RoundExecutor, StreamProcessor};
+    use super::{ModelRoundLifecycle, RoundExecutor, StreamProcessor};
     use crate::agentic::core::ToolCall;
-    use crate::agentic::events::{EventQueue, EventQueueConfig};
+    use crate::agentic::events::{AgenticEvent, EventQueue, EventQueueConfig};
     use crate::agentic::execution::stream_processor::StreamResult;
     use crate::agentic::execution::types::RoundContext;
     use crate::agentic::tools::ToolRuntimeRestrictions;
@@ -1511,6 +1661,55 @@ mod tests {
             tool_pipeline: None,
             event_queue,
             cancellation_tokens: DialogTurnCancellationTokenStore::new(),
+        }
+    }
+
+    #[test]
+    fn model_round_lifecycle_reuses_identity_and_counts_recovery_attempts() {
+        let mut lifecycle = ModelRoundLifecycle::new();
+        let round_id = lifecycle.round_id.clone();
+
+        assert!(lifecycle.take_started_event());
+        assert!(!lifecycle.take_started_event());
+        assert_eq!(lifecycle.begin_attempt(), 1);
+        assert_eq!(lifecycle.begin_attempt(), 2);
+        assert_eq!(lifecycle.attempts_started(), 2);
+        assert_eq!(lifecycle.round_id, round_id);
+    }
+
+    #[tokio::test]
+    async fn context_overflow_recovery_supersedes_the_current_attempt() {
+        let executor = test_round_executor();
+        let mut lifecycle = ModelRoundLifecycle::new();
+        let round_id = lifecycle.round_id.clone();
+        assert_eq!(lifecycle.begin_attempt(), 1);
+
+        executor
+            .record_context_overflow_recovery(
+                "session-1",
+                "turn-1",
+                &lifecycle,
+                "request exceeds context window".to_string(),
+            )
+            .await;
+
+        let events = executor.event_queue.dequeue_batch(10).await;
+        assert_eq!(events.len(), 1);
+        match &events[0].event {
+            AgenticEvent::ModelRoundAttemptSuperseded {
+                session_id,
+                turn_id,
+                round_id: event_round_id,
+                diagnostic,
+            } => {
+                assert_eq!(session_id, "session-1");
+                assert_eq!(turn_id, "turn-1");
+                assert_eq!(event_round_id, &round_id);
+                assert_eq!(diagnostic.attempt_id, format!("{round_id}:attempt:1"));
+                assert_eq!(diagnostic.attempt_index, 1);
+                assert_eq!(diagnostic.category, "context_overflow");
+            }
+            event => panic!("unexpected event: {event:?}"),
         }
     }
 

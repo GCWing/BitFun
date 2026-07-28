@@ -6,6 +6,7 @@ use crate::stream::types::responses::{
 use crate::stream::types::unified::UnifiedResponse;
 use anyhow::{anyhow, Result};
 use bitfun_agent_stream::ToolCallCompletion;
+use bitfun_core_types::errors::AiProviderError;
 use eventsource_stream::Eventsource;
 use log::{error, trace};
 use reqwest::Response;
@@ -232,8 +233,10 @@ fn handle_function_call_output_item_done(
 }
 
 fn extract_api_error_message(event_json: &Value) -> Option<String> {
-    let response = event_json.get("response")?;
-    let error = response.get("error")?;
+    let error = event_json
+        .get("response")
+        .and_then(|response| response.get("error"))
+        .or_else(|| event_json.get("error"))?;
 
     if error.is_null() {
         return None;
@@ -247,6 +250,39 @@ fn extract_api_error_message(event_json: &Value) -> Option<String> {
     }
 
     Some("An error occurred during responses streaming".to_string())
+}
+
+fn extract_api_error(event_json: &Value) -> Option<AiProviderError> {
+    let error = event_json
+        .get("response")
+        .and_then(|response| response.get("error"))
+        .or_else(|| event_json.get("error"));
+    let code = event_json
+        .get("code")
+        .and_then(Value::as_str)
+        .or_else(|| {
+            error.and_then(|error| {
+                error
+                    .get("code")
+                    .or_else(|| error.get("type"))
+                    .and_then(Value::as_str)
+            })
+        })
+        .map(str::to_string);
+    if error.is_none() && code.is_none() {
+        return None;
+    }
+    let message = event_json
+        .get("message")
+        .and_then(Value::as_str)
+        .map(str::to_string)
+        .or_else(|| extract_api_error_message(event_json))?;
+    Some(AiProviderError::from_parts(
+        message,
+        Some("openai_responses".to_string()),
+        code,
+        None,
+    ))
 }
 
 pub async fn handle_responses_stream(
@@ -332,15 +368,15 @@ pub async fn handle_responses_stream(
             }
         };
 
-        if let Some(api_error_message) = extract_api_error_message(&event_json) {
-            let error_msg = format!(
+        if let Some(mut provider_error) = extract_api_error(&event_json) {
+            provider_error.message = format!(
                 "Responses SSE API error: {}, data: {}",
-                api_error_message, raw
+                provider_error.message, raw
             );
             stats.increment("error:api");
             stats.log_summary("sse_api_error");
-            error!("{}", error_msg);
-            let _ = tx_event.send(Err(anyhow!(error_msg)));
+            error!("{}", provider_error);
+            let _ = tx_event.send(Err(anyhow!(provider_error)));
             return;
         }
 
@@ -686,11 +722,12 @@ pub async fn handle_responses_stream(
 #[cfg(test)]
 mod tests {
     use super::{
-        super::stream_stats::StreamStats, extract_api_error_message,
+        super::stream_stats::StreamStats, extract_api_error, extract_api_error_message,
         handle_function_call_arguments_delta, handle_function_call_output_item_done,
         responses_completed_tool_call_completion, InProgressToolCall, StreamTimeoutController,
     };
     use bitfun_agent_stream::ToolCallCompletion;
+    use bitfun_core_types::errors::ErrorCategory;
     use serde_json::json;
     use std::collections::HashMap;
     use tokio::sync::mpsc;
@@ -709,6 +746,26 @@ mod tests {
         assert_eq!(
             extract_api_error_message(&event).as_deref(),
             Some("provider error")
+        );
+    }
+
+    #[test]
+    fn preserves_context_overflow_code_from_failed_response() {
+        let event = json!({
+            "type": "response.failed",
+            "response": {
+                "error": {
+                    "code": "context_length_exceeded",
+                    "message": "Request failed"
+                }
+            }
+        });
+
+        let error = extract_api_error(&event).expect("provider error");
+        assert_eq!(error.category, ErrorCategory::ContextOverflow);
+        assert_eq!(
+            error.provider_code.as_deref(),
+            Some("context_length_exceeded")
         );
     }
 

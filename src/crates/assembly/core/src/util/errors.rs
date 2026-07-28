@@ -3,7 +3,8 @@
 //! Provide unified error types and handling for the whole application
 
 use bitfun_core_types::errors::{
-    ai_error_detail_from_message, classify_ai_error_message, AiErrorDetail, ErrorCategory,
+    ai_error_detail_from_message, classify_ai_error_message, AiErrorDetail, AiProviderError,
+    ErrorCategory,
 };
 use serde::Serialize;
 use thiserror::Error;
@@ -22,6 +23,15 @@ pub enum BitFunError {
 
     #[error("AI client error: {0}")]
     AIClient(String),
+
+    #[error("AI provider error: {0}")]
+    AIProvider(AiProviderError),
+
+    /// A provider rejected the request before any effective model output because
+    /// the input exceeded its context window. The execution engine may compact
+    /// the session and retry the same logical model round.
+    #[error("AI client error: {0}")]
+    RecoverableContextOverflow(AiProviderError),
 
     #[error("Session error: {0}")]
     Session(String),
@@ -165,6 +175,8 @@ impl BitFunError {
     pub fn error_category(&self) -> ErrorCategory {
         match self {
             BitFunError::AIClient(msg) => classify_ai_error_message(msg),
+            BitFunError::AIProvider(error) => error.category.clone(),
+            BitFunError::RecoverableContextOverflow(_) => ErrorCategory::ContextOverflow,
             BitFunError::Timeout(_) => ErrorCategory::Timeout,
             BitFunError::Cancelled(_) => ErrorCategory::Unknown,
             _ => ErrorCategory::Unknown,
@@ -173,9 +185,18 @@ impl BitFunError {
 
     /// Build a structured, provider-agnostic AI error detail for UI recovery.
     pub fn error_detail(&self) -> AiErrorDetail {
+        if let BitFunError::AIProvider(error) | BitFunError::RecoverableContextOverflow(error) =
+            self
+        {
+            return error.detail();
+        }
         let category = self.error_category();
         let message = self.to_string();
         ai_error_detail_from_message(&message, category)
+    }
+
+    pub fn is_recoverable_context_overflow(&self) -> bool {
+        matches!(self, Self::RecoverableContextOverflow(_))
     }
 }
 
@@ -183,6 +204,7 @@ impl From<bitfun_agent_stream::StreamProcessorError> for BitFunError {
     fn from(error: bitfun_agent_stream::StreamProcessorError) -> Self {
         match error {
             bitfun_agent_stream::StreamProcessorError::AiClient(msg) => Self::AIClient(msg),
+            bitfun_agent_stream::StreamProcessorError::AiProvider(error) => Self::AIProvider(error),
             bitfun_agent_stream::StreamProcessorError::Cancelled(msg) => Self::Cancelled(msg),
         }
     }

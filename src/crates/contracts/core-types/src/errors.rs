@@ -57,6 +57,123 @@ pub struct AiErrorDetail {
     pub action_hints: Vec<String>,
 }
 
+/// Provider failure normalized before it crosses adapter/runtime boundaries.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AiProviderError {
+    pub message: String,
+    pub category: ErrorCategory,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub provider: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub provider_code: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub http_status: Option<u16>,
+}
+
+impl AiProviderError {
+    pub fn from_parts(
+        message: String,
+        provider: Option<String>,
+        provider_code: Option<String>,
+        http_status: Option<u16>,
+    ) -> Self {
+        let category = classify_ai_error_parts(&message, provider_code.as_deref(), http_status);
+        Self {
+            message,
+            category,
+            provider,
+            provider_code,
+            http_status,
+        }
+    }
+
+    pub fn classified(message: String, category: ErrorCategory) -> Self {
+        Self {
+            message,
+            category,
+            provider: None,
+            provider_code: None,
+            http_status: None,
+        }
+    }
+
+    pub fn detail(&self) -> AiErrorDetail {
+        AiErrorDetail {
+            category: self.category.clone(),
+            provider: self.provider.clone(),
+            provider_code: self.provider_code.clone(),
+            provider_message: Some(self.message.clone()),
+            request_id: extract_error_field(&self.message, "request_id"),
+            http_status: self.http_status,
+            retryable: Some(is_retryable_category(&self.category)),
+            action_hints: action_hints_for_category(&self.category),
+        }
+    }
+}
+
+impl std::fmt::Display for AiProviderError {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter.write_str(&self.message)
+    }
+}
+
+impl std::error::Error for AiProviderError {}
+
+/// Prefer structured provider facts over text. Text classification remains a
+/// fallback for providers that expose only opaque error strings.
+pub fn classify_ai_error_parts(
+    message: &str,
+    provider_code: Option<&str>,
+    http_status: Option<u16>,
+) -> ErrorCategory {
+    match http_status {
+        Some(401) => return ErrorCategory::Auth,
+        Some(402) => return ErrorCategory::ProviderQuota,
+        Some(403) => return ErrorCategory::Permission,
+        Some(429) => return ErrorCategory::RateLimit,
+        Some(500..=599) => return ErrorCategory::ProviderUnavailable,
+        _ => {}
+    }
+
+    let code = provider_code
+        .unwrap_or_default()
+        .trim()
+        .to_ascii_lowercase();
+    if matches!(
+        code.as_str(),
+        "context_length_exceeded" | "model_context_window_exceeded" | "context_window_exceeded"
+    ) {
+        return ErrorCategory::ContextOverflow;
+    }
+    match code.as_str() {
+        "insufficient_quota" | "quota_exceeded" => return ErrorCategory::ProviderQuota,
+        "rate_limit_exceeded" | "throttling_error" => return ErrorCategory::RateLimit,
+        "overloaded_error" | "server_is_overloaded" | "server_error" => {
+            return ErrorCategory::ProviderUnavailable;
+        }
+        "authentication_error" | "invalid_api_key" => return ErrorCategory::Auth,
+        "permission_error" => return ErrorCategory::Permission,
+        "content_filter" | "safety" => return ErrorCategory::ContentPolicy,
+        _ => {}
+    }
+
+    let category = classify_ai_error_message(message);
+    if category != ErrorCategory::ModelError {
+        return category;
+    }
+
+    if matches!(code.as_str(), "invalid_request_error" | "invalid_prompt") {
+        return ErrorCategory::InvalidRequest;
+    }
+
+    if matches!(http_status, Some(400 | 404 | 409 | 413 | 422)) {
+        ErrorCategory::InvalidRequest
+    } else {
+        category
+    }
+}
+
 /// Classify an AI client error message into a structured category.
 pub fn classify_ai_error_message(msg: &str) -> ErrorCategory {
     let m = msg.to_lowercase();
@@ -92,9 +209,9 @@ pub fn classify_ai_error_message(msg: &str) -> ErrorCategory {
             "subscription expired",
             "plan expired",
             "套餐已到期",
-            "1309",
         ],
-    ) {
+    ) || contains_provider_code(&m, "1309")
+    {
         ErrorCategory::ProviderBilling
     } else if contains_any(
         &m,
@@ -108,9 +225,9 @@ pub fn classify_ai_error_message(msg: &str) -> ErrorCategory {
             "error 503",
             "http 529",
             "error 529",
-            "1305",
         ],
-    ) {
+    ) || contains_provider_code(&m, "1305")
+    {
         ErrorCategory::ProviderUnavailable
     } else if contains_any(
         &m,
@@ -120,26 +237,26 @@ pub fn classify_ai_error_message(msg: &str) -> ErrorCategory {
             "safety",
             "sensitive",
             "content_filter",
-            "1301",
             "api 调用被策略阻止",
         ],
-    ) {
+    ) || contains_provider_code(&m, "1301")
+    {
         ErrorCategory::ContentPolicy
     } else if m.contains("rate limit")
-        || m.contains("429")
+        || contains_http_status(&m, 429)
         || m.contains("too many requests")
-        || m.contains("1302")
+        || contains_provider_code(&m, "1302")
         || m.contains("concurrency")
         || m.contains("请求并发超额")
     {
         ErrorCategory::RateLimit
     } else if m.contains("authentication")
-        || m.contains("401")
+        || contains_http_status(&m, 401)
         || m.contains("invalid api key")
         || m.contains("incorrect api key")
         || m.contains("unauthorized")
-        || m.contains("1000")
-        || m.contains("1002")
+        || contains_provider_code(&m, "1000")
+        || contains_provider_code(&m, "1002")
     {
         ErrorCategory::Auth
     } else if contains_any(
@@ -151,15 +268,11 @@ pub fn classify_ai_error_message(msg: &str) -> ErrorCategory {
             "not authorized",
             "no permission",
             "无权访问",
-            "1220",
         ],
-    ) {
-        ErrorCategory::Permission
-    } else if m.contains("context window")
-        || m.contains("token limit")
-        || m.contains("max_tokens")
-        || m.contains("context length")
+    ) || contains_provider_code(&m, "1220")
     {
+        ErrorCategory::Permission
+    } else if is_context_overflow_message(&m) {
         ErrorCategory::ContextOverflow
     } else if contains_any(
         &m,
@@ -178,11 +291,11 @@ pub fn classify_ai_error_message(msg: &str) -> ErrorCategory {
             "error 413",
             "http 422",
             "error 422",
-            "1210",
-            "1211",
-            "435",
         ],
-    ) {
+    ) || contains_provider_code(&m, "1210")
+        || contains_provider_code(&m, "1211")
+        || contains_provider_code(&m, "435")
+    {
         ErrorCategory::InvalidRequest
     } else if m.contains("timeout") || m.contains("timed out") {
         ErrorCategory::Timeout
@@ -213,6 +326,87 @@ pub fn ai_error_detail_from_message(message: &str, category: ErrorCategory) -> A
 
 fn contains_any(value: &str, needles: &[&str]) -> bool {
     needles.iter().any(|needle| value.contains(needle))
+}
+
+fn contains_provider_code(message: &str, code: &str) -> bool {
+    if message.trim() == code {
+        return true;
+    }
+    [
+        format!("code={code}"),
+        format!("code: {code}"),
+        format!("\"code\":\"{code}"),
+        format!("\"code\":{code}"),
+    ]
+    .iter()
+    .any(|marker| contains_numeric_marker(message, marker))
+}
+
+fn contains_http_status(message: &str, status: u16) -> bool {
+    let status = status.to_string();
+    message.trim_start().starts_with(&format!("{status} "))
+        || [
+            format!("http {status}"),
+            format!("error {status}"),
+            format!("status {status}"),
+            format!("{status} status code"),
+        ]
+        .iter()
+        .any(|marker| contains_numeric_marker(message, marker))
+}
+
+fn contains_numeric_marker(message: &str, marker: &str) -> bool {
+    message.match_indices(marker).any(|(start, _)| {
+        message[start + marker.len()..]
+            .chars()
+            .next()
+            .is_none_or(|character| !character.is_ascii_digit())
+    })
+}
+
+fn is_context_overflow_message(message: &str) -> bool {
+    if contains_any(
+        message,
+        &[
+            "finish_reason=max_tokens",
+            "max_output_tokens",
+            "maximum output token",
+            "output token limit",
+            "completion token limit",
+            "response truncated by model",
+        ],
+    ) {
+        return false;
+    }
+
+    contains_any(
+        message,
+        &[
+            "context_length_exceeded",
+            "model_context_window_exceeded",
+            "context window exceeded",
+            "context window exceeds limit",
+            "context length exceeded",
+            "context length is only",
+            "maximum context length",
+            "maximum prompt length is",
+            "maximum allowed input length",
+            "exceeds the context window",
+            "exceeds the available context size",
+            "greater than the context length",
+            "prompt is too long",
+            "prompt too long; exceeded",
+            "request_too_large",
+            "input is too long for requested model",
+            "tokens in request more than max tokens allowed",
+            "reduce the length of the messages",
+            "request entity too large",
+        ],
+    ) || ((message.contains("input") || message.contains("prompt"))
+        && message.contains("token")
+        && contains_any(message, &["exceed", "too long", "maximum", "limit"]))
+        || (message.contains("input length") && message.contains("context length"))
+        || (message.contains("prompt has") && message.contains("configured context size"))
 }
 
 fn is_retryable_category(category: &ErrorCategory) -> bool {
@@ -303,7 +497,10 @@ fn extract_http_status(message: &str) -> Option<u16> {
 
 #[cfg(test)]
 mod tests {
-    use super::{ai_error_detail_from_message, classify_ai_error_message, ErrorCategory};
+    use super::{
+        ai_error_detail_from_message, classify_ai_error_message, classify_ai_error_parts,
+        AiProviderError, ErrorCategory,
+    };
 
     #[test]
     fn classifies_quota_and_provider_unavailable_errors() {
@@ -346,5 +543,108 @@ mod tests {
             detail.action_hints,
             vec!["wait_and_retry", "switch_model", "copy_diagnostics"]
         );
+    }
+
+    #[test]
+    fn distinguishes_input_context_overflow_from_output_token_limits() {
+        assert_eq!(
+            classify_ai_error_message(
+                "context_length_exceeded: maximum context length is 200000 tokens"
+            ),
+            ErrorCategory::ContextOverflow
+        );
+        assert_eq!(
+            classify_ai_error_message(
+                "The input token count exceeds the maximum number of tokens allowed"
+            ),
+            ErrorCategory::ContextOverflow
+        );
+        assert_eq!(
+            classify_ai_error_message(
+                "response truncated by model output token limit (finish_reason=max_tokens)"
+            ),
+            ErrorCategory::ModelError
+        );
+    }
+
+    #[test]
+    fn classifies_common_provider_context_overflow_messages() {
+        for message in [
+            "request_too_large",
+            "Input is too long for requested model",
+            "tokens in request more than max tokens allowed",
+            "Please reduce the length of the messages or completion",
+            "request entity too large",
+            "model_context_window_exceeded",
+            "context window exceeds limit",
+            "maximum prompt length is 200000",
+            "input length 210000 exceeds context length 200000",
+            "prompt has 210,000 tokens, but the configured context size is 200,000 tokens",
+        ] {
+            assert_eq!(
+                classify_ai_error_message(message),
+                ErrorCategory::ContextOverflow,
+                "message: {message}"
+            );
+        }
+    }
+
+    #[test]
+    fn structured_status_and_code_take_precedence_over_ambiguous_text() {
+        assert_eq!(
+            classify_ai_error_parts("Request failed", Some("context_length_exceeded"), Some(400)),
+            ErrorCategory::ContextOverflow
+        );
+        assert_eq!(
+            classify_ai_error_parts(
+                "The prompt is too long for this model",
+                Some("invalid_request_error"),
+                Some(400)
+            ),
+            ErrorCategory::ContextOverflow
+        );
+        assert_eq!(
+            classify_ai_error_parts("429 status code (no body)", None, Some(429)),
+            ErrorCategory::RateLimit
+        );
+        assert_eq!(
+            classify_ai_error_parts("400 status code (no body)", None, Some(400)),
+            ErrorCategory::InvalidRequest
+        );
+        assert_eq!(
+            classify_ai_error_parts("Service unavailable: token limit exceeded", None, Some(503)),
+            ErrorCategory::ProviderUnavailable
+        );
+        assert_eq!(
+            classify_ai_error_message("Processed 429000 input tokens successfully"),
+            ErrorCategory::ModelError
+        );
+        assert_eq!(
+            classify_ai_error_message("Observed status 401000 in token accounting"),
+            ErrorCategory::ModelError
+        );
+        assert_eq!(
+            classify_ai_error_message("Provider error: code=1302, message=concurrency exceeded"),
+            ErrorCategory::RateLimit
+        );
+    }
+
+    #[test]
+    fn provider_error_preserves_structured_diagnostics() {
+        let error = AiProviderError::from_parts(
+            "Request failed".to_string(),
+            Some("openai".to_string()),
+            Some("context_length_exceeded".to_string()),
+            Some(400),
+        );
+
+        assert_eq!(error.category, ErrorCategory::ContextOverflow);
+        let detail = error.detail();
+        assert_eq!(detail.provider.as_deref(), Some("openai"));
+        assert_eq!(
+            detail.provider_code.as_deref(),
+            Some("context_length_exceeded")
+        );
+        assert_eq!(detail.http_status, Some(400));
     }
 }

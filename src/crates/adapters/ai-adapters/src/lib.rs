@@ -19,7 +19,7 @@ pub use model_selector::{
 pub use stream::{UnifiedResponse, UnifiedTokenUsage, UnifiedToolCall};
 pub use trace::{
     ModelExchangeRequestAttempt, ModelExchangeRequestTraceHandle, ModelExchangeResponseTrace,
-    ModelExchangeTraceConfig, ModelExchangeTraceSink,
+    ModelExchangeRoundAttempt, ModelExchangeTraceConfig, ModelExchangeTraceSink,
 };
 pub use types::{
     resolve_request_url, AIConfig, ConnectionTestMessageCode, ConnectionTestResult, GeminiResponse,
