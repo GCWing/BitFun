@@ -393,7 +393,9 @@ function mapApplicationState(state: APIApplicationState): ApplicationState {
 function mapWorkspaceStartupStateSnapshot(
   snapshot: APIWorkspaceStartupStateSnapshot
 ): WorkspaceStartupState {
-  const recentWorkspaces = snapshot.recentWorkspaces.map(mapWorkspaceInfo);
+  const recentWorkspaces = snapshot.recentWorkspaces
+    .map(mapWorkspaceInfo)
+    .filter(ws => !isLinkedWorktreeWorkspace(ws));
   return {
     cleanupRemovedCount: snapshot.cleanupRemovedCount,
     currentWorkspace: snapshot.currentWorkspace ? mapWorkspaceInfo(snapshot.currentWorkspace) : null,
@@ -565,7 +567,9 @@ export function createGlobalStateAPI(): GlobalStateAPI {
     },
 
     async getRecentWorkspaces(): Promise<WorkspaceInfo[]> {
-      const workspaces = (await globalAPI.getRecentWorkspaces()).map(mapWorkspaceInfo);
+      const workspaces = (await globalAPI.getRecentWorkspaces())
+        .map(mapWorkspaceInfo)
+        .filter(ws => !isLinkedWorktreeWorkspace(ws));
       logger.debug('getRecentWorkspaces returned', summarizeWorkspacesForLog(workspaces));
       return workspaces;
     },
