@@ -96,7 +96,7 @@
   padding: 0;
   border: 1px solid var(--border-subtle);
   border-radius: $size-radius-xl;
-  background: var(--background-secondary);
+  background: var(--color-bg-secondary);
   color: inherit;
   text-align: left;
   cursor: pointer;
@@ -114,7 +114,7 @@
     aspect-ratio: 16 / 9;
     overflow: hidden;
     border-bottom: 1px solid var(--border-subtle);
-    background: var(--background-tertiary);
+    background: var(--color-bg-tertiary);
     font-size: 34px;
 
     img {
