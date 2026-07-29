@@ -67,7 +67,342 @@ BitFun 同时面向桌面 GUI、TUI/CLI、Web、ACP、Server、Remote、SDK 和�
 
 调用路径长度只作为工程成本处理，不作为独立架构目标。允许保留承担兼容隔离、只读视图或能力选择职责的中间层；不允许为了兼容而长期暴露没有消费方的抽象接口。
 
-## 2. 接口边界
+## 2. 4+1 Architecture Views
+
+4+1 视图分别描述系统职责、代码组织、运行协作、部署边界和关键场景，避免把逻辑模块、crate、进程和调用链混在同一张图中。分类沿用 [Kruchten 4+1](https://www3.software.ibm.com/ibmdl/pub/software/rational/web/whitepapers/2003/Pbk4p1.pdf)，图的层级、动态协作和部署节点表达参考 [C4](https://c4model.com/diagrams) 以及 arc42 的 [Building Block](https://docs.arc42.org/section-5/)、[Runtime](https://docs.arc42.org/section-6/) 和 [Deployment](https://docs.arc42.org/section-7/) 视图；这些方法只提供视角和表达规则，不替代 BitFun 的真实 owner 与代码边界。
+
+Level 0 展示系统级主要边界和依赖方向；Level 1 再按 Level 0 的模块或范围展开。每张图必须能独立说明范围和图例，关系使用明确方向或协议，逻辑模块、crate、运行任务和部署实例不要求一一对应。
+
+### 2.1 Logical View · Level 0
+
+Logical View 只表达当前系统的职责模块与依赖方向，不表达 crate 归属或进程位置。
+
+```mermaid
+%%{init: {"theme":"base","flowchart":{"curve":"basis","nodeSpacing":28,"rankSpacing":34},"themeVariables":{"fontFamily":"Inter, ui-sans-serif, system-ui","primaryColor":"#ffffff","primaryTextColor":"#171717","primaryBorderColor":"#737373","lineColor":"#525252","secondaryColor":"#fafafa","tertiaryColor":"#ffffff","clusterBkg":"#ffffff","clusterBorder":"#a3a3a3"}}}%%
+flowchart TB
+  subgraph Consumers["Consumers"]
+    direction LR
+    Users["Users"] ~~~ APIClients["API Clients"]
+  end
+
+  subgraph BitFun["BitFun"]
+    direction TB
+
+    subgraph Product["Product"]
+      direction LR
+      ProductHosts["Product Hosts"]
+
+      subgraph RuntimeAssembly["Runtime Assembly"]
+        direction LR
+        CapabilityPlan["Capability Plan"] ~~~ RuntimeWiring["Runtime Wiring"]
+      end
+
+      ProductFeatures["Product Features"]
+    end
+
+    RuntimeAPI["Runtime API"]
+
+    subgraph AgentCore["Agent Core"]
+      direction LR
+
+      subgraph AgentKernel["Agent Kernel"]
+        direction LR
+        SessionState["Session State"] ~~~ TaskControl["Task Control"]
+      end
+
+      subgraph Execution["Execution"]
+        direction LR
+        AgentLoop["Agent Loop"] ~~~ ToolRuntime["Tool Runtime"]
+      end
+    end
+
+    subgraph Extensions["Extensions"]
+      direction LR
+      Contributions["Contributions"] ~~~ PluginRuntime["Plugin Runtime"]
+    end
+
+    ServicePorts["Service Ports"]
+
+    subgraph SharedBoundary["Shared Boundary"]
+      direction LR
+      StableContracts["Stable Contracts"]
+      SecurityControl["Security Control"]
+      PlatformServices["Platform Services"]
+      StableContracts ~~~ SecurityControl ~~~ PlatformServices
+    end
+  end
+
+  PluginEcosystems["Plugin Ecosystems"]
+
+  subgraph PlatformSystems["Platform Resources"]
+    direction LR
+    AIProviders["AI Providers"] ~~~ OS["OS"] ~~~ RemoteSystems["Remote Systems"]
+  end
+
+  Consumers --> ProductHosts
+  ProductHosts --> ProductFeatures
+  ProductHosts --> RuntimeAPI
+  ProductFeatures --> RuntimeAPI
+  RuntimeAssembly -.-> ProductHosts
+  RuntimeAssembly -.-> ProductFeatures
+  RuntimeAssembly -.-> AgentKernel
+  RuntimeAssembly -.-> Extensions
+  RuntimeAPI --> AgentKernel
+  AgentKernel --> Execution
+  Execution --> ServicePorts
+  Extensions ==> Execution
+  Extensions ==> ServicePorts
+  ServicePorts --> SharedBoundary
+  Extensions ==> PluginEcosystems
+  SharedBoundary --> PlatformSystems
+
+  classDef module fill:#ffffff,stroke:#737373,stroke-width:1.3px,color:#171717;
+  classDef interface fill:#fafafa,stroke:#404040,stroke-width:1.6px,color:#171717;
+  class Users,APIClients,ProductHosts,CapabilityPlan,RuntimeWiring,ProductFeatures,SessionState,TaskControl,AgentLoop,ToolRuntime,Contributions,PluginRuntime,StableContracts,SecurityControl,PlatformServices,PluginEcosystems,AIProviders,OS,RemoteSystems module;
+  class RuntimeAPI,ServicePorts interface;
+
+  style BitFun fill:#ffffff,stroke:#171717,stroke-width:2.2px;
+  style Product fill:#fafafa,stroke:#737373,stroke-width:1.3px;
+  style AgentCore fill:#fafafa,stroke:#737373,stroke-width:1.3px;
+  style SharedBoundary fill:#fafafa,stroke:#737373,stroke-width:1.3px;
+  style RuntimeAssembly fill:#ffffff,stroke:#a3a3a3;
+  style AgentKernel fill:#ffffff,stroke:#a3a3a3;
+  style Execution fill:#ffffff,stroke:#a3a3a3;
+  style Extensions fill:#ffffff,stroke:#737373,stroke-width:1.3px;
+  style Consumers fill:#ffffff,stroke:#a3a3a3;
+  style PlatformSystems fill:#ffffff,stroke:#a3a3a3;
+```
+
+实线表示依赖，虚线表示装配，粗线表示扩展路径。
+
+| Boundary | Responsibility |
+|---|---|
+| Product | 承载产品入口、能力选择和用户功能 |
+| Runtime API | 向产品入口提供稳定用例接口 |
+| Agent Core | 管理会话与任务，并推进 Agent 和工具执行 |
+| Extensions | 接收生态贡献并隔离插件执行 |
+| Service Ports | 隔离执行逻辑与具体平台能力 |
+| Shared Boundary | 统一稳定契约、安全控制和平台服务 |
+
+稳定边界：Product Hosts 只经过 Runtime API 和只读投影消费能力，不能直接调用插件执行单元或具体平台实现；Extensions 只能提交受控贡献，最终状态、权限结果、工具结果和审计事实仍由对应 owner 提交。`PluginRuntimeClient` 持有类型化调用、期限、串行化和响应校验；物理进程健康与进程树回收属于 Services。
+
+### 2.2 Development View · Level 0
+
+Development View 展示仓库的静态代码组织。层间依赖只允许向下，可跨过中间层，但不能反向依赖上层；图中子项表示主要 crate 家族或产品入口，不等同于 Logical View 的职责模块。
+
+```mermaid
+flowchart TB
+  subgraph AppsLayer[" "]
+    direction LR
+    AppsTitle["1 · Apps & Interfaces"] ~~~ Desktop["Desktop"] ~~~ CLI["CLI"] ~~~ Server["Server"] ~~~ Relay["Relay"] ~~~ WebUI["Web UI"] ~~~ MobileUI["Mobile UI"] ~~~ ACP["ACP"] ~~~ SDKHost["SDK Host"]
+  end
+
+  subgraph AssemblyLayer[" "]
+    direction LR
+    AssemblyTitle["2 · Assembly"] ~~~ CoreAssembly["Core Assembly"] ~~~ ExternalSources["External Sources"] ~~~ ProductCaps["Product Capabilities"]
+  end
+
+  subgraph AdaptersLayer[" "]
+    direction LR
+    AdaptersTitle["3 · Adapters"] ~~~ RuntimeIPC["Runtime IPC"] ~~~ ModelAdapters["Model Adapters"] ~~~ SourceAdapters["Source Adapters"] ~~~ Transport["Transport"] ~~~ WebDriver["WebDriver"]
+  end
+
+  subgraph ServicesLayer[" "]
+    direction LR
+    ServicesTitle["4 · Services"] ~~~ CoreServices["Core Services"] ~~~ Integrations["Integrations"] ~~~ MiniAppMarket["MiniApp Market"] ~~~ RelayService["Relay Service"] ~~~ Terminal["Terminal"] ~~~ PageRuntime["Page Runtime"]
+  end
+
+  subgraph ExecutionLayer[" "]
+    direction LR
+    ExecutionTitle["5 · Execution"] ~~~ AgentRuntime["Agent Runtime"] ~~~ AgentStream["Agent Stream"] ~~~ ToolRuntime["Tool Runtime"] ~~~ PluginClient["Plugin Client"] ~~~ Harness["Harness"] ~~~ RuntimeServices["Runtime Services"]
+  end
+
+  subgraph ContractsLayer[" "]
+    direction LR
+    ContractsTitle["6 · Contracts"] ~~~ CoreTypes["Core Types"] ~~~ Events["Events"] ~~~ RuntimePorts["Runtime Ports"] ~~~ ProductDomains["Product Domains"]
+  end
+
+  AppsTitle --> AssemblyTitle --> AdaptersTitle --> ServicesTitle --> ExecutionTitle --> ContractsTitle
+
+  classDef header fill:#fafafa,stroke:#404040,stroke-width:1.6px,color:#171717;
+  classDef module fill:#ffffff,stroke:#737373,stroke-width:1.3px,color:#171717;
+  class AppsTitle,AssemblyTitle,AdaptersTitle,ServicesTitle,ExecutionTitle,ContractsTitle header;
+  class Desktop,CLI,Server,Relay,WebUI,MobileUI,ACP,SDKHost,CoreAssembly,ExternalSources,ProductCaps,RuntimeIPC,ModelAdapters,SourceAdapters,Transport,WebDriver,CoreServices,Integrations,MiniAppMarket,RelayService,Terminal,PageRuntime,AgentRuntime,AgentStream,ToolRuntime,PluginClient,Harness,RuntimeServices,CoreTypes,Events,RuntimePorts,ProductDomains module;
+  style AppsLayer fill:#ffffff,stroke:#a3a3a3;
+  style AssemblyLayer fill:#ffffff,stroke:#a3a3a3;
+  style AdaptersLayer fill:#ffffff,stroke:#a3a3a3;
+  style ServicesLayer fill:#ffffff,stroke:#a3a3a3;
+  style ExecutionLayer fill:#ffffff,stroke:#a3a3a3;
+  style ContractsLayer fill:#ffffff,stroke:#a3a3a3;
+```
+
+箭头表示允许的依赖方向；实际 crate 可以直接依赖任意更低层。Logical 与 Development 的主要映射如下，映射是多对多关系：
+
+| Development layer | Repository scope | Logical elements |
+|---|---|---|
+| Apps & Interfaces | `src/apps/*`、Web/Mobile UI、`interfaces/*` | Product Hosts、Product Features、Runtime API |
+| Assembly | `assembly/*` | Runtime Assembly、Product Features、Agent Kernel |
+| Adapters | `adapters/*` | Extensions、Platform Services |
+| Services | `services/*` | Agent Kernel、Security Control、Platform Services |
+| Execution | `execution/*` | Agent Core、Extensions、Service Ports |
+| Contracts | `contracts/*` | Stable Contracts、Security Control、Service Ports |
+
+Assembly 是唯一组装根，只选择下层能力和实现，不能反向依赖 app。每个生态 adapter 独立保留外部格式和顺序语义，再映射到 BitFun owner；生态 adapter 之间不能形成兄弟依赖。
+
+### 2.3 Process View · Level 0
+
+Process View 展示当前 Agent Runtime 内的异步任务、流和取消传播；Embedded 与 Shared 复用同一任务结构。本视图不描述具体部署环境，也不把一次用户场景误作进程结构。
+
+```mermaid
+flowchart LR
+  HostRequest["Host Request"]
+  RuntimeAPI["Runtime API"]
+  SessionOwner["Session Owner"]
+  TurnTask["Turn Task"]
+  ModelAdapter["Model Adapter"]
+  AIProvider["AI Provider"]
+  StreamTask["Stream Task"]
+  ToolTasks["Tool Tasks"]
+  ServicePorts["Service Ports"]
+  OSProcess["OS Process"]
+  TurnState["Turn State"]
+  EventRouter["Event Router"]
+  HostEvents["Host Events"]
+
+  HostRequest --> RuntimeAPI --> SessionOwner
+  SessionOwner -->|spawn| TurnTask
+  SessionOwner -.->|cancel| TurnTask
+  SessionOwner -.->|cancel| StreamTask
+  SessionOwner -.->|cancel| ToolTasks
+  TurnTask -->|request| ModelAdapter --> AIProvider
+  AIProvider -->|stream| StreamTask -->|chunks| TurnState
+  TurnTask -->|spawn| ToolTasks --> ServicePorts -->|spawn / I/O| OSProcess
+  TurnTask --> TurnState
+  ToolTasks -->|results| TurnState
+  TurnState --> EventRouter
+  StreamTask --> EventRouter
+  ToolTasks --> EventRouter
+  EventRouter --> HostEvents
+
+  classDef host fill:#fafafa,stroke:#404040,stroke-width:1.5px,color:#171717;
+  classDef task fill:#ffffff,stroke:#737373,stroke-width:1.3px,color:#171717;
+  classDef boundary fill:#ffffff,stroke:#737373,stroke-width:1.3px,stroke-dasharray:4 3,color:#171717;
+  class HostRequest,RuntimeAPI,HostEvents host;
+  class SessionOwner,TurnTask,StreamTask,ToolTasks,TurnState,EventRouter task;
+  class ModelAdapter,AIProvider,ServicePorts,OSProcess boundary;
+```
+
+实线表示调用、数据或事件流，虚线表示取消传播。Session Owner 持有会话与活动 turn 的生命周期；Turn、Stream 和 Tool 任务可异步重叠，但只能通过事件和类型化结果提交状态。产品入口只经过 Runtime API，不能直接调用 Tool Tasks 或具体平台进程。
+
+### 2.4 Physical View · Level 0
+
+Physical View 展示当前可执行单元到设备、主机和存储的映射。Desktop、CLI、ACP 和 SDK Host 使用 Embedded Runtime；交互式 TUI 可以显式连接 Shared Runtime。当前 Web Server 和 Relay Server 都不承载 Agent Runtime。
+
+```mermaid
+flowchart LR
+  subgraph LocalHost["Local Host"]
+    direction TB
+    subgraph EmbeddedNodes["Embedded"]
+      direction LR
+      DesktopApp["Desktop App"] ~~~ CLIApp["CLI App"] ~~~ ACPApp["ACP"] ~~~ SDKHost["SDK Host"]
+    end
+    SharedRuntime["Shared Runtime"]
+    WorkspaceData["Workspace Data"]
+    ToolProcesses["Tool Processes"]
+  end
+
+  subgraph UserDevice["Client Device"]
+    direction TB
+    WebClient["Web Client"]
+    MobileClient["Mobile Client"]
+  end
+
+  WebServer["Web Server"]
+
+  subgraph RelayHost["Relay Node"]
+    direction TB
+    RelayServer["Relay Server"]
+    RelayDB["Relay DB"]
+    AssetStore["Asset Store"]
+  end
+
+  AIProviders["AI Providers"]
+  RemoteHosts["Remote Hosts"]
+
+  WebClient -->|WebSocket| WebServer
+  MobileClient -->|HTTPS| RelayServer
+  DesktopApp <-->|WebSocket| RelayServer
+  CLIApp <-->|WebSocket| RelayServer
+  CLIApp -.->|Local IPC| SharedRuntime
+  RelayServer --> RelayDB
+  RelayServer --> AssetStore
+  EmbeddedNodes --> WorkspaceData
+  SharedRuntime --> WorkspaceData
+  EmbeddedNodes -->|spawn| ToolProcesses
+  SharedRuntime -->|spawn| ToolProcesses
+  EmbeddedNodes -->|HTTPS| AIProviders
+  SharedRuntime -->|HTTPS| AIProviders
+  DesktopApp -->|SSH| RemoteHosts
+
+  classDef unit fill:#ffffff,stroke:#737373,stroke-width:1.3px,color:#171717;
+  class DesktopApp,CLIApp,ACPApp,SDKHost,SharedRuntime,WorkspaceData,ToolProcesses,WebClient,MobileClient,WebServer,RelayServer,RelayDB,AssetStore,AIProviders,RemoteHosts unit;
+  style LocalHost fill:#ffffff,stroke:#737373;
+  style EmbeddedNodes fill:#ffffff,stroke:#a3a3a3;
+  style UserDevice fill:#ffffff,stroke:#a3a3a3;
+  style RelayHost fill:#ffffff,stroke:#737373;
+```
+
+实线表示主要协议、存储访问或进程创建，虚线表示显式启用的 Shared TUI 本机连接。Relay DB 只在账户模式启用，Asset Store 的具体实现由部署配置选择。完整 package plugin 尚未形成生产闭环，因此不把规划中的 Plugin Host 画成当前部署实例。
+
+| Deployment unit | Main contents |
+|---|---|
+| Desktop App | Web UI、Tauri Host、embedded Agent Runtime |
+| CLI App | TUI、Headless、Peer；默认 Embedded，可显式使用 Shared TUI |
+| Shared Runtime | 私有本机 IPC；当前只有交互式 TUI consumer |
+| ACP | Embedded Agent Runtime、ACP 协议生命周期 |
+| SDK Host | 私有跨进程 adapter；公开 SDK 产品尚未交付 |
+| Web Server | Health、Info、WebSocket 外壳；不包含 Agent Runtime |
+| Relay Server | WebSocket/HTTP bridge、账户与同步；不包含 Agent Runtime |
+
+### 2.5 Scenarios (+1) · Level 0
+
+Scenarios 选择少量具有架构意义的当前路径来校验前四个视图，不穷举产品功能，也不重复 Process View 的任务调度细节。
+
+```mermaid
+flowchart TB
+  subgraph InteractiveTurn["Chat Turn"]
+    direction LR
+    TurnUser["User"] --> TurnHost["Product Host"] --> TurnCore["Agent Core"] --> TurnProvider["AI Provider"] --> TurnResponse["Response"]
+  end
+
+  subgraph ToolExecution["Tool Run"]
+    direction LR
+    ToolCore["Agent Core"] --> ToolRuntime["Tool Runtime"] --> ToolPorts["Service Ports"] --> PlatformResource["Platform Resource"] --> ToolResult["Tool Result"]
+  end
+
+  subgraph SourceDiscovery["Source Scan"]
+    direction LR
+    SourceRoots["Source Roots"] --> SourceAdapters["Source Adapters"] --> ControlPlane["Control Plane"] --> SourceHost["Product Host"]
+  end
+
+  subgraph RemoteControl["Remote Turn"]
+    direction LR
+    RemoteClient["Mobile Client"] --> RemoteRelay["Relay Server"] --> RemoteDesktop["Desktop Host"] --> RemoteAPI["Runtime API"] --> RemoteCore["Agent Core"]
+  end
+
+  InteractiveTurn ~~~ ToolExecution ~~~ SourceDiscovery ~~~ RemoteControl
+
+  classDef step fill:#ffffff,stroke:#737373,stroke-width:1.3px,color:#171717;
+  class TurnUser,TurnHost,TurnCore,TurnProvider,TurnResponse,ToolCore,ToolRuntime,ToolPorts,PlatformResource,ToolResult,SourceRoots,SourceAdapters,ControlPlane,SourceHost,RemoteClient,RemoteRelay,RemoteDesktop,RemoteAPI,RemoteCore step;
+  style InteractiveTurn fill:#ffffff,stroke:#a3a3a3;
+  style ToolExecution fill:#ffffff,stroke:#a3a3a3;
+  style SourceDiscovery fill:#ffffff,stroke:#a3a3a3;
+  style RemoteControl fill:#ffffff,stroke:#a3a3a3;
+```
+
+四条路径分别覆盖核心对话、内置工具、运行时无关的外部来源发现，以及经 Relay 回到 Desktop owner 的远程控制。Source Scan 的发现与控制事实由 `ExternalSourceControlPlane` 统一持有，adapter 不成为第二个业务 owner。完整 package plugin、公开 SDK 产品和 HarmonyOS 不在当前生产闭环中，因此不作为 Level 0 场景。
+
+## 3. 接口边界
 
 BitFun 只保留四个稳定接口边界；工具、事件和权限作为归属子接口被复用，不在插件层重复定义。本文使用“接口”描述可被调用或依赖的能力面；只有描述跨进程消息封装、结构化 schema、序列化对象或强兼容约束时才使用“契约”；只读状态视图表示从权威状态派生出的查询结果。
 
@@ -78,7 +413,7 @@ BitFun 只保留四个稳定接口边界；工具、事件和权限作为归属�
 | 插件运行时接口 | Runtime、执行层、产品组装、`PluginRuntimeClient` | 请求身份、期限、响应校验和诊断 | SDK/UI 对象、生态原始对象和进程句柄 |
 | 外部生态兼容接口 | 来源管理、能力模块、`PluginRuntimeClient`、Plugin Host | 发现、顺序、参数、诊断和明确映射 | 跨生态任意数据、兄弟适配器依赖和外部 CLI 前置依赖 |
 
-这四项是能力必须归入的接口分类，不表示表中每项已有稳定 API。当前接口仍须满足 2.1 节的真实消费方、版本与验证条件。
+这四项是能力必须归入的接口分类，不表示表中每项已有稳定 API。当前接口仍须满足 3.1 节的真实消费方、版本与验证条件。
 
 归属子接口：
 
@@ -88,7 +423,7 @@ BitFun 只保留四个稳定接口边界；工具、事件和权限作为归属�
 | 事件清单 | `events` / 智能体内核事件 schema | 对固定生态版本维护各自事件清单；插件观察兼容事件，BitFun 内部私有字段在对应适配层转换或脱敏。 |
 | 权限与副作用 | 安全模块 / runtime ports | 插件启用后，默认兼容策略允许 OpenCode `permission.ask` 和直接脚本能力按当前用户权限运行；经 BitFun 接口的调用可细分收紧，直接脚本能力只能由真实 OS/容器环境粗粒度限制，否则停用插件。 |
 
-### 2.1 公开接口进入条件
+### 3.1 公开接口进入条件
 
 新增或保留公开接口必须满足以下条件：
 
@@ -119,7 +454,7 @@ handler，不构成生产消费完整流程。
 client 或未来 CLI/HarmonyOS 计划，不能证明同名 Rust transport adapter 已接入；未接入实现应删除，待端到端
 调用链确定后再按宿主边界实现。
 
-### 2.2 宿主通信契约与 Tauri 薄适配
+### 3.2 宿主通信契约与 Tauri 薄适配
 
 前后端契约按能力语义归属，不按 Tauri command 名称归属。稳定的请求、响应、状态事实和类型化错误放在对应
 `contracts/*`、Agent Runtime API 或能力归属模块；Tauri、HTTP/WebSocket、CLI/TUI、ACP 与公开 SDK
@@ -165,7 +500,7 @@ Desktop command 使用的序列化对象继续留在 `src/apps/desktop`；即使
 窄范围共享 API 模块。HarmonyOS GUI/TUI 可复用稳定能力契约，但仍需各自的平台宿主、生命周期和交付验证；契约
 抽取只是前置条件，不代表 HarmonyOS 已受支持。
 
-### 2.3 入口形态接口规则
+### 3.3 入口形态接口规则
 
 入口形态接口只描述宿主可消费的声明，不描述具体渲染实现。TUI 与 GUI 的能力边界不同，不能因为存在一个界面插件就自动扩展为全入口稳定接口。
 
@@ -177,9 +512,11 @@ Desktop command 使用的序列化对象继续留在 `src/apps/desktop`；即使
 
 主题贡献只能声明语义角色和目标入口形态，例如 `accent`、`danger`、`surface`、`text`、`border`。TUI 宿主把语义角色映射为终端颜色、ANSI 或 truecolor；GUI 宿主把语义角色映射为设计 token 或 CSS 变量。若插件只提供 GUI 主题键而当前入口是 TUI，系统只能使用语义回退或返回类型化 `unsupported`，不得把 GUI 主题键直接传给 TUI。
 
-## 3. 运行视图
+## 4. 运行协作细节
 
-### 3.1 产品入口
+本节在 Process View Level 0 之下展开产品入口、插件调用和平台能力的当前调用链；这些图描述组件协作，不构成新的 4+1 视图。
+
+### 4.1 产品入口
 
 ```mermaid
 flowchart LR
@@ -192,7 +529,7 @@ flowchart LR
   Assembly["产品组装"] -. "选择" .-> Runtime
 ```
 
-### 3.2 插件调用
+### 4.2 插件调用
 
 ```mermaid
 flowchart LR
@@ -209,7 +546,7 @@ flowchart LR
   Adapter["生态 adapter"] --> Provider["能力 Provider"] --> Owner["能力归属模块"]
 ```
 
-### 3.3 平台能力
+### 4.3 平台能力
 
 ```mermaid
 flowchart LR
@@ -242,7 +579,7 @@ flowchart LR
   可以选择下层提供方，但不能依赖 app crate；需要同时被独立应用和嵌入式模式复用的实现必须下沉到可复用 owner，
   再由各 app 和 assembly 组合。
 
-### 3.4 名词与定义归属
+### 4.4 名词与定义归属
 
 全仓人工维护文档、AGENTS、README 和代码注释遵守以下规则：
 
@@ -262,7 +599,7 @@ flowchart LR
 专项术语只在唯一归属文档定义；其他位置链接或使用，不复制状态机、生命周期和同义职责表。历史计划保留完成
 事实时也使用当前规范名词，第三方、生成内容和固定兼容 fixture 不机械改写。
 
-## 4. OpenCode-compatible 当前基线与目标
+## 5. OpenCode-compatible 当前基线与目标
 
 Plugin Runtime P0 只验证了 BitFun 专用插件目录中的来源校验、工作区审核、启停记录、CLI 诊断和 custom tool 名称预览。
 它不执行 JS/TS，不注册真实工具，也不运行 OpenCode 钩子、Client 或终端插件。现有能力只能称为“静态预览”，
@@ -342,7 +679,7 @@ flowchart LR
 [`opencode-plugin-runtime-adapter-design.md`](extensions/opencode-plugin-runtime-adapter-design.md) 和
 [`../plans/opencode-extension-compatibility-plan.md`](../plans/opencode-extension-compatibility-plan.md)。
 
-## 5. 产品形态与降级
+## 6. 产品形态与降级
 
 产品定义、Delivery Profile、Runtime Configuration 和 Capability Availability 必须分离：
 
@@ -428,7 +765,7 @@ Shared Agent Runtime 是第一方多实例的目标部署，不是上表新增�
 原因与恢复建议。Host 的准备完成、重启、暂停、不支持或失败只能作为详情映射，不能形成第二套并列产品状态。
 现有代码中的过渡状态只能展示为“静态预览、未执行”，不能因为进入来源清单就误报为已应用或可用。
 
-## 6. 完成判定
+## 7. 完成判定
 
 架构或实现 PR 必须满足：
 
