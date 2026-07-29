@@ -281,7 +281,11 @@ describe('WorktreesConfig', () => {
   it('requires confirmation and uses force only when local work would be discarded', async () => {
     listProjectsMock.mockResolvedValueOnce([{
       projectWorkspacePath: '/repo',
-      worktrees: [worktree({ dirty: true })],
+      worktrees: [worktree({
+        associatedSessionCount: 0,
+        dirty: true,
+        sessions: [],
+      })],
     }]);
 
     await act(async () => {
@@ -311,10 +315,10 @@ describe('WorktreesConfig', () => {
     );
   });
 
-  it('disables deletion while a worktree still has unarchived sessions', async () => {
+  it('disables deletion while a worktree still has associated archived sessions', async () => {
     listProjectsMock.mockResolvedValueOnce([{
       projectWorkspacePath: '/repo',
-      worktrees: [worktree({ runningSessionCount: 1 })],
+      worktrees: [worktree()],
     }]);
 
     await act(async () => {
@@ -326,6 +330,6 @@ describe('WorktreesConfig', () => {
       .find(button => button.textContent?.includes('management.delete.action'));
 
     expect(deleteButton?.disabled).toBe(true);
-    expect(container.textContent).toContain('management.protection.activeSessions');
+    expect(container.textContent).toContain('management.protection.associatedSessions');
   });
 });

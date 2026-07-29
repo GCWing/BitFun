@@ -43,7 +43,7 @@
     },
     "autoDeleteLimit": {
       "label": "自動刪除上限",
-      "description": "每個工作區保留的託管 worktree 數量。包含未封存工作階段、本機變更、未發布提交或 Git 鎖定的 worktree 一律會保留。",
+      "description": "每個工作區保留的託管 worktree 數量。包含關聯工作階段、本機變更、未發布提交或 Git 鎖定的 worktree 一律會保留。",
       "invalid": "請輸入 {{min}} 到 {{max}} 之間的數字。"
     }
   },
@@ -81,7 +81,7 @@
       }
     },
     "protection": {
-      "activeSessions": "請先封存或移動所有關聯工作階段，再刪除此 worktree。",
+      "associatedSessions": "請先刪除所有關聯工作階段，再刪除此 worktree。",
       "locked": "請先在 Git 中解鎖此 worktree，再執行刪除。",
       "missing": "Worktree 目錄已遺失，請手動清理過期的 Git 記錄。"
     },
@@ -89,7 +89,7 @@
       "action": "刪除",
       "actionLabel": "刪除 Worktree {{path}}",
       "title": "刪除此 Worktree？",
-      "message": "關聯工作階段會保留在歷史記錄中（{{count}} 個），目前的簽出目錄將被刪除。",
+      "message": "目前的簽出目錄將被刪除，此操作無法復原。",
       "forceTitle": "刪除並捨棄本機工作？",
       "forceMessage": "此 worktree 包含本機變更或游離提交。刪除後，這些本機工作將永久遺失。",
       "forceHint": "刪除此 worktree 需要再次確認，並會捨棄其中的本機工作。",
@@ -97,7 +97,7 @@
       "cancel": "取消"
     },
     "errors": {
-      "activeSessions": "此 worktree 包含未封存工作階段，無法刪除。",
+      "associatedSessions": "此 worktree 包含關聯工作階段，無法刪除。",
       "locked": "此 worktree 已被 Git 鎖定，無法刪除。",
       "dirty": "此 worktree 仍包含本機變更。",
       "unpublishedCommits": "此 worktree 仍包含未發布的游離提交。",

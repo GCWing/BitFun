@@ -1667,10 +1667,10 @@ fn validate_removal(summary: &WorktreeSummary, force: bool) -> Result<(), Worktr
             "The worktree is locked by Git",
         ));
     }
-    if summary.running_session_count > 0 {
+    if summary.associated_session_count > 0 {
         return Err(error(
             WorktreeErrorCode::WorktreeBusy,
-            "The worktree has active or unarchived sessions",
+            "The worktree has associated sessions; delete them before removing the worktree",
         ));
     }
     if !force && summary.dirty {
@@ -1925,7 +1925,7 @@ mod tests {
         );
 
         let mut summary = removable_summary();
-        summary.running_session_count = 1;
+        summary.associated_session_count = 1;
         assert_eq!(
             validate_removal(&summary, true).unwrap_err().code,
             WorktreeErrorCode::WorktreeBusy

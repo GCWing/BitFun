@@ -88,10 +88,10 @@ function createDeleteRequestId(): string {
     ?? `worktree-settings-delete-${Date.now()}-${Math.random()}`;
 }
 
-type DeletionBlockReason = 'activeSessions' | 'locked' | 'missing';
+type DeletionBlockReason = 'associatedSessions' | 'locked' | 'missing';
 
 function deletionBlockReason(worktree: WorktreeSummary): DeletionBlockReason | null {
-  if (worktree.runningSessionCount > 0) return 'activeSessions';
+  if (worktree.associatedSessionCount > 0) return 'associatedSessions';
   if (worktree.locked) return 'locked';
   if (worktree.missing) return 'missing';
   return null;
@@ -208,7 +208,7 @@ const WorktreesConfig: React.FC = () => {
       const text = (() => {
         switch (code) {
           case 'worktree_busy':
-            return t('management.errors.activeSessions');
+            return t('management.errors.associatedSessions');
           case 'worktree_locked':
             return t('management.errors.locked');
           case 'dirty_worktree':
@@ -348,8 +348,8 @@ const WorktreesConfig: React.FC = () => {
     const blockCode = deletionBlockReason(worktree);
     const blockReason = (() => {
       switch (blockCode) {
-        case 'activeSessions':
-          return t('management.protection.activeSessions');
+        case 'associatedSessions':
+          return t('management.protection.associatedSessions');
         case 'locked':
           return t('management.protection.locked');
         case 'missing':
@@ -550,9 +550,7 @@ const WorktreesConfig: React.FC = () => {
           : t('management.delete.title')}
         message={deletingWithLocalWork
           ? t('management.delete.forceMessage')
-          : t('management.delete.message', {
-              count: deleteTarget?.worktree.associatedSessionCount ?? 0,
-            })}
+          : t('management.delete.message')}
         preview={deleteTarget?.worktree.path}
         type={deletingWithLocalWork ? 'error' : 'warning'}
         confirmDanger

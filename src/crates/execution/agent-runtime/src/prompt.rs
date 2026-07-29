@@ -1,5 +1,6 @@
 //! Prompt-loop owner facts and reminder ordering.
 
+use bitfun_core_types::{SessionExecutionTarget, SessionExecutionTargetKind};
 use serde::{Deserialize, Serialize};
 
 const SKILL_LISTING_TITLE: &str = "# Skill Listing";
@@ -261,6 +262,55 @@ pub struct WorkspaceContextFacts {
     pub workspace_path: String,
     pub related_paths: Vec<PromptRelatedPath>,
     pub remote_execution: Option<RemoteExecutionHints>,
+    pub worktree: Option<WorktreeContextFacts>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct WorktreeContextFacts {
+    pub project_workspace_path: String,
+    pub execution_target: SessionExecutionTarget,
+}
+
+fn render_worktree_context(facts: Option<&WorktreeContextFacts>) -> String {
+    let Some(facts) = facts else {
+        return String::new();
+    };
+    let target = &facts.execution_target;
+    let target_label = match target.kind {
+        SessionExecutionTargetKind::Local => return String::new(),
+        SessionExecutionTargetKind::ManagedWorktree => {
+            "Managed Git worktree created for this session"
+        }
+        SessionExecutionTargetKind::ExistingWorktree => {
+            "Existing Git worktree registered for this session"
+        }
+    };
+    let mut lines = vec![
+        format!("- Execution target: {}", target_label),
+        format!(
+            "- Owning project root (session history and worktree management only): {}",
+            facts.project_workspace_path.replace('\\', "/")
+        ),
+    ];
+    if let Some(worktree_id) = target.worktree_id.as_deref() {
+        lines.push(format!("- Worktree ID: {}", worktree_id));
+    }
+    if let Some(branch) = target.branch.as_deref() {
+        lines.push(format!("- Worktree branch: {}", branch));
+    } else {
+        lines.push("- Worktree checkout: detached HEAD".to_string());
+    }
+    if let Some(base_ref) = target.base_ref.as_deref() {
+        lines.push(format!("- Worktree base ref: {}", base_ref));
+    }
+    if let Some(base_commit) = target.base_commit.as_deref() {
+        lines.push(format!("- Worktree base commit: {}", base_commit));
+    }
+    lines.push(
+        "- Keep file, shell, and Git operations inside the workspace root above unless the user explicitly requests otherwise."
+            .to_string(),
+    );
+    lines.join("\n")
 }
 
 pub fn render_workspace_context(facts: &WorkspaceContextFacts) -> String {
@@ -286,13 +336,14 @@ pub fn render_workspace_context(facts: &WorkspaceContextFacts) -> String {
             items
         )
     };
+    let worktree_section = render_worktree_context(facts.worktree.as_ref());
 
     if let Some(remote) = &facts.remote_execution {
         format!(
             r#"## Workspace Context
 <workspace_context>
 - Workspace root (file tools, Glob, LS, ExecCommand on workspace): {}
-{}
+{}{}
 - Execution environment: **Remote SSH** — connection "{}".
 - Remote host: {} (uname/kernel: {})
 </workspace_context>
@@ -303,6 +354,11 @@ pub fn render_workspace_context(facts: &WorkspaceContextFacts) -> String {
             } else {
                 format!("{}\n", related_paths_section)
             },
+            if worktree_section.is_empty() {
+                String::new()
+            } else {
+                format!("{}\n", worktree_section)
+            },
             remote.connection_display_name.replace('"', "'"),
             remote.hostname.replace('"', "'"),
             remote.kernel_name.replace('"', "'"),
@@ -312,7 +368,7 @@ pub fn render_workspace_context(facts: &WorkspaceContextFacts) -> String {
             r#"## Workspace Context
 <workspace_context>
 - Current Working Directory: {}
-{}
+{}{}
 </workspace_context>
 "#,
             facts.workspace_path,
@@ -320,6 +376,11 @@ pub fn render_workspace_context(facts: &WorkspaceContextFacts) -> String {
                 String::new()
             } else {
                 format!("\n{}", related_paths_section)
+            },
+            if worktree_section.is_empty() {
+                String::new()
+            } else {
+                format!("\n{}", worktree_section)
             }
         )
     }

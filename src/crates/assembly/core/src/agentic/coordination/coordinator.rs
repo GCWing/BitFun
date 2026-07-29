@@ -206,6 +206,29 @@ async fn normalize_model_selection(model_id: &str) -> BitFunResult<String> {
     }
 }
 
+fn inherit_matching_parent_workspace_binding(
+    parent_config: &SessionConfig,
+    child_config: &mut SessionConfig,
+) {
+    let Some(parent_workspace_path) = parent_config.workspace_path.as_deref() else {
+        return;
+    };
+    let Some(child_workspace_path) = child_config.workspace_path.as_deref() else {
+        return;
+    };
+    if comparable_workspace_path(parent_workspace_path)
+        != comparable_workspace_path(child_workspace_path)
+    {
+        return;
+    }
+
+    child_config.project_workspace_path = parent_config.project_workspace_path.clone();
+    child_config.execution_target = parent_config.execution_target.clone();
+    child_config.workspace_id = parent_config.workspace_id.clone();
+    child_config.remote_connection_id = parent_config.remote_connection_id.clone();
+    child_config.remote_ssh_host = parent_config.remote_ssh_host.clone();
+}
+
 fn resolve_subagent_model_selection(
     explicit_model_id: Option<&str>,
     configured_selection: &SubagentModelSelection,
@@ -7369,7 +7392,8 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             "session-{}",
             request.subagent_parent_info.session_id
         ));
-        self.session_manager
+        let parent_session = self
+            .session_manager
             .get_session(&request.subagent_parent_info.session_id)
             .ok_or_else(|| {
                 BitFunError::NotFound(format!(
@@ -7522,6 +7546,10 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                     Some(resolved_model_id),
                 )
                 .await;
+                inherit_matching_parent_workspace_binding(
+                    &parent_session.config,
+                    &mut session_config,
+                );
                 session_config.continuation_policy = request.continuation_policy;
                 session_config.model_binding_policy = request.model_binding_policy;
                 session_config.model_binding_fingerprint = approved_model_binding
@@ -9632,6 +9660,9 @@ mod tests {
     use crate::service::session::{SessionMetadata, SessionStatus};
     use crate::service::workspace::WorkspaceKind;
     use bitfun_agent_runtime::permission::AUTO_APPROVE_ASK_CONTEXT_KEY;
+    use bitfun_core_types::{
+        SessionExecutionTarget, SessionExecutionTargetKind, WorktreeLifecycle,
+    };
     use bitfun_runtime_ports::{
         AgentSessionArchiveRequest, AgentSessionCreateRequest, AgentSessionManagementPort,
         AgentSessionRenameRequest, AgentSubmissionPort, AgentSubmissionRequest,
@@ -11947,6 +11978,84 @@ mod tests {
             .expect("fresh subagent request should inherit the parent model");
 
         assert_eq!(model_id, "primary");
+    }
+
+    #[tokio::test]
+    async fn fresh_subagent_inherits_matching_parent_worktree_binding() {
+        let (coordinator, session_manager) = test_coordinator();
+        let temp_root = tempfile::tempdir().expect("temp root should exist");
+        let project_path = temp_root.path().join("BitFun");
+        let worktree_path = temp_root.path().join("managed-worktree");
+        std::fs::create_dir_all(&project_path).expect("project dir should exist");
+        std::fs::create_dir_all(&worktree_path).expect("worktree dir should exist");
+        let project_workspace_path = project_path.to_string_lossy().into_owned();
+        let workspace_path = worktree_path.to_string_lossy().into_owned();
+        let execution_target = SessionExecutionTarget {
+            kind: SessionExecutionTargetKind::ManagedWorktree,
+            worktree_id: Some("worktree-1".to_string()),
+            root_path: workspace_path.clone(),
+            base_ref: Some("HEAD".to_string()),
+            base_commit: Some("0123456789abcdef".to_string()),
+            branch: None,
+            lifecycle: Some(WorktreeLifecycle::Managed),
+        };
+        let parent_session = session_manager
+            .create_session(
+                "Parent".to_string(),
+                "agentic".to_string(),
+                SessionConfig {
+                    model_id: Some("primary".to_string()),
+                    workspace_path: Some(workspace_path.clone()),
+                    project_workspace_path: Some(project_workspace_path.clone()),
+                    execution_target: Some(execution_target.clone()),
+                    workspace_id: Some("workspace-1".to_string()),
+                    ..Default::default()
+                },
+            )
+            .await
+            .expect("parent session should be created");
+
+        let resolved = coordinator
+            .resolve_hidden_subagent_execution_request(SubagentExecutionRequest {
+                task_description: "Inspect the managed worktree".to_string(),
+                context_mode: SubagentContextMode::Fresh,
+                target_session_id: None,
+                subagent_type: Some("Explore".to_string()),
+                logical_subagent_type: None,
+                continuation_policy: SessionContinuationPolicy::Reusable,
+                model_binding_policy: SessionModelBindingPolicy::Mutable,
+                workspace_path: Some(workspace_path.clone()),
+                model_id: Some("primary".to_string()),
+                inherit_parent_model: false,
+                subagent_parent_info: SubagentParentInfo {
+                    session_id: parent_session.session_id,
+                    dialog_turn_id: "parent-turn".to_string(),
+                    tool_call_id: "task-tool".to_string(),
+                },
+                context: HashMap::new(),
+                permission_runtime_ceiling: PermissionRuntimeCeiling::default(),
+                delegation_policy: DelegationPolicy::top_level().spawn_child(),
+                external_generation_lease: None,
+            })
+            .await
+            .expect("fresh subagent request should resolve");
+
+        assert_eq!(
+            resolved.session_config.workspace_path.as_deref(),
+            Some(workspace_path.as_str())
+        );
+        assert_eq!(
+            resolved.session_config.project_workspace_path.as_deref(),
+            Some(project_workspace_path.as_str())
+        );
+        assert_eq!(
+            resolved.session_config.execution_target.as_ref(),
+            Some(&execution_target)
+        );
+        assert_eq!(
+            resolved.session_config.workspace_id.as_deref(),
+            Some("workspace-1")
+        );
     }
 
     #[tokio::test]

@@ -43,7 +43,7 @@
     },
     "autoDeleteLimit": {
       "label": "Auto-delete limit",
-      "description": "Managed worktrees to keep per workspace. Worktrees with unarchived sessions, local changes, unpublished commits, or Git locks are always kept.",
+      "description": "Managed worktrees to keep per workspace. Worktrees with associated conversations, local changes, unpublished commits, or Git locks are always kept.",
       "invalid": "Enter a number from {{min}} to {{max}}."
     }
   },
@@ -81,7 +81,7 @@
       }
     },
     "protection": {
-      "activeSessions": "Archive or move all associated sessions before deleting this worktree.",
+      "associatedSessions": "Delete all associated conversations before deleting this worktree.",
       "locked": "Unlock this worktree in Git before deleting it.",
       "missing": "The worktree directory is missing. Clean up the stale Git record manually."
     },
@@ -89,7 +89,7 @@
       "action": "Delete",
       "actionLabel": "Delete worktree {{path}}",
       "title": "Delete this worktree?",
-      "message": "Associated conversations remain in history ({{count}}). The checkout will be removed.",
+      "message": "The checkout will be removed. This action cannot be undone.",
       "forceTitle": "Delete and discard local work?",
       "forceMessage": "This worktree contains local changes or detached commits. Deleting it will permanently discard that local work.",
       "forceHint": "Deleting this worktree requires confirmation to discard its local work.",
@@ -97,7 +97,7 @@
       "cancel": "Cancel"
     },
     "errors": {
-      "activeSessions": "This worktree has unarchived sessions and cannot be deleted.",
+      "associatedSessions": "This worktree has associated conversations and cannot be deleted.",
       "locked": "This worktree is locked by Git and cannot be deleted.",
       "dirty": "This worktree still contains local changes.",
       "unpublishedCommits": "This worktree still contains unpublished detached commits.",

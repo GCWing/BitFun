@@ -3,8 +3,9 @@ use bitfun_agent_runtime::prompt::{
     render_user_context_reminder, render_workspace_context, PrependedPromptReminders,
     ProjectLayoutFacts, PromptEnvironmentFacts, PromptRelatedPath, RemoteExecutionHints,
     RuntimeContextFacts, RuntimeContextNeeds, RuntimeShellFacts, ToolListingSections,
-    UserContextPolicy, UserContextSection, WorkspaceContextFacts,
+    UserContextPolicy, UserContextSection, WorkspaceContextFacts, WorktreeContextFacts,
 };
+use bitfun_core_types::{SessionExecutionTarget, SessionExecutionTargetKind, WorktreeLifecycle};
 
 #[test]
 fn user_context_policy_preserves_order_and_deduplicates_sections() {
@@ -264,6 +265,7 @@ fn workspace_and_user_context_renderers_preserve_section_shape() {
             description: Some("docs".to_string()),
         }],
         remote_execution: None,
+        worktree: None,
     });
 
     assert!(local.contains("## Workspace Context"));
@@ -280,12 +282,39 @@ fn workspace_and_user_context_renderers_preserve_section_shape() {
             kernel_name: "Linux".to_string(),
             hostname: "host".to_string(),
         }),
+        worktree: None,
     });
     assert!(remote.contains(
         "Workspace root (file tools, Glob, LS, ExecCommand on workspace): /srv/workspace"
     ));
     assert!(remote.contains("Execution environment: **Remote SSH**"));
     assert!(remote.contains("**Remote SSH** — connection"));
+
+    let managed_worktree = render_workspace_context(&WorkspaceContextFacts {
+        workspace_path: "/managed/BitFun-wt-1".to_string(),
+        related_paths: Vec::new(),
+        remote_execution: None,
+        worktree: Some(WorktreeContextFacts {
+            project_workspace_path: "/projects/BitFun".to_string(),
+            execution_target: SessionExecutionTarget {
+                kind: SessionExecutionTargetKind::ManagedWorktree,
+                worktree_id: Some("wt-1".to_string()),
+                root_path: "/managed/BitFun-wt-1".to_string(),
+                base_ref: Some("HEAD".to_string()),
+                base_commit: Some("0123456789abcdef".to_string()),
+                branch: None,
+                lifecycle: Some(WorktreeLifecycle::Managed),
+            },
+        }),
+    });
+    assert!(managed_worktree.contains("Managed Git worktree created for this session"));
+    assert!(managed_worktree.contains("Owning project root"));
+    assert!(managed_worktree.contains("/projects/BitFun"));
+    assert!(managed_worktree.contains("Worktree ID: wt-1"));
+    assert!(managed_worktree.contains("Worktree checkout: detached HEAD"));
+    assert!(managed_worktree.contains("Worktree base commit: 0123456789abcdef"));
+    assert!(managed_worktree
+        .contains("Keep file, shell, and Git operations inside the workspace root above"));
 
     let project_layout = render_project_layout(&ProjectLayoutFacts {
         listing: "src\nCargo.toml".to_string(),
