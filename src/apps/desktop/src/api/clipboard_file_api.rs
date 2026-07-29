@@ -223,7 +223,7 @@ mod macos_clipboard {
     }
 }
 
-#[cfg(target_os = "linux")]
+#[cfg(all(target_os = "linux", not(target_env = "ohos")))]
 mod linux_clipboard {
     use super::parse_uri_list;
     use std::process::Command;
@@ -263,6 +263,22 @@ mod linux_clipboard {
     }
 }
 
+/// HarmonyOS clipboard reader.
+///
+/// On OHOS `target_os` is `"linux"` with `target_env = "ohos"`, so the linux
+/// `xclip`/`wl-paste` path is unreachable here. Instead we bridge into the
+/// ArkTS layer (`bitfun_core::util::get_clipboard_files`), which reads
+/// `@ohos.pasteboard` via a registered threadsafe function and returns the
+/// same `{ paths: [...] }` envelope the file picker uses. This is the only
+/// way to reach the system pasteboard from the Rust side on OHOS.
+#[cfg(target_env = "ohos")]
+mod ohos_clipboard {
+    pub(super) async fn get_clipboard_files() -> Result<Vec<String>, String> {
+        bitfun_core::util::get_clipboard_files().await
+    }
+}
+
+#[cfg(not(target_env = "ohos"))]
 fn get_clipboard_files_internal() -> Result<Vec<String>, String> {
     #[cfg(target_os = "windows")]
     {
@@ -274,20 +290,36 @@ fn get_clipboard_files_internal() -> Result<Vec<String>, String> {
         macos_clipboard::get_clipboard_files()
     }
 
-    #[cfg(target_os = "linux")]
+    #[cfg(all(target_os = "linux", not(target_env = "ohos")))]
     {
         linux_clipboard::get_clipboard_files()
     }
 
-    #[cfg(not(any(target_os = "windows", target_os = "macos", target_os = "linux")))]
+    #[cfg(not(any(
+        target_os = "windows",
+        target_os = "macos",
+        all(target_os = "linux", not(target_env = "ohos"))
+    )))]
     {
         Err("Reading clipboard files is not supported on this platform".to_string())
     }
 }
 
+async fn get_clipboard_files_for_platform() -> Result<Vec<String>, String> {
+    #[cfg(target_env = "ohos")]
+    {
+        ohos_clipboard::get_clipboard_files().await
+    }
+
+    #[cfg(not(target_env = "ohos"))]
+    {
+        get_clipboard_files_internal()
+    }
+}
+
 #[tauri::command]
 pub async fn get_clipboard_files() -> Result<ClipboardFilesResponse, String> {
-    match get_clipboard_files_internal() {
+    match get_clipboard_files_for_platform().await {
         Ok(files) => Ok(ClipboardFilesResponse {
             files,
             is_cut: false,
