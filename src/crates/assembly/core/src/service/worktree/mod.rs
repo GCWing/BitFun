@@ -9,7 +9,7 @@ use crate::infrastructure::{get_path_manager_arc, PathManager};
 use crate::service::config::GlobalConfigManager;
 use crate::service::git::{GitError, GitService, GitWorktreeInfo};
 use crate::service::workspace::{
-    get_global_workspace_service, WorkspaceActivityMode, WorkspaceCreateOptions,
+    get_global_workspace_service, WorkspaceActivityMode, WorkspaceCreateOptions, WorkspaceKind,
 };
 use crate::service::workspace_runtime::get_workspace_runtime_service_arc;
 use bitfun_core_types::{
@@ -30,6 +30,7 @@ const WORKTREE_REGISTRY_VERSION: u32 = 1;
 const REGISTRY_FILE_NAME: &str = "worktrees.json";
 const WORKTREE_DIRECTORY_SUFFIX_LENGTH: usize = 8;
 const WORKTREE_PROJECT_LABEL_MAX_CHARS: usize = 48;
+const AUTO_DELETE_MIN_AGE_MS: u64 = 24 * 60 * 60 * 1_000;
 
 mod session_binding;
 
@@ -41,6 +42,17 @@ static REPOSITORY_LOCKS: OnceLock<Mutex<HashMap<PathBuf, Arc<AsyncMutex<()>>>>> 
 #[serde(rename_all = "camelCase")]
 pub struct WorktreeListRequest {
     pub project_workspace_path: String,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WorktreeProjectListRequest {}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WorktreeProjectSummary {
+    pub project_workspace_path: String,
+    pub worktrees: Vec<WorktreeSummary>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -283,6 +295,51 @@ impl WorktreeService {
         Ok(summaries)
     }
 
+    /// Lists local Git projects known to the workspace service together with
+    /// their non-main worktrees. Invalid and non-Git workspace records are
+    /// ignored so one stale project cannot hide the rest of the catalog.
+    pub async fn list_projects(
+        _request: WorktreeProjectListRequest,
+    ) -> Result<Vec<WorktreeProjectSummary>, WorktreeError> {
+        let project_paths = known_project_workspace_paths().await;
+        let mut projects = Vec::new();
+
+        for project_path in project_paths {
+            match Self::list(WorktreeListRequest {
+                project_workspace_path: path_string(&project_path),
+            })
+            .await
+            {
+                Ok(worktrees) => {
+                    let worktrees = worktrees
+                        .into_iter()
+                        .filter(|worktree| !worktree.is_main)
+                        .collect::<Vec<_>>();
+                    if worktrees.is_empty() {
+                        continue;
+                    }
+                    projects.push(WorktreeProjectSummary {
+                        project_workspace_path: path_string(&project_path),
+                        worktrees,
+                    });
+                }
+                Err(list_error) => {
+                    log::warn!(
+                        "Failed to list worktrees for project {}: {}",
+                        project_path.display(),
+                        list_error
+                    );
+                }
+            }
+        }
+
+        projects.sort_by(|left, right| {
+            left.project_workspace_path
+                .cmp(&right.project_workspace_path)
+        });
+        Ok(projects)
+    }
+
     pub async fn create(
         request: WorktreeCreateRequest,
     ) -> Result<WorktreeCreateResult, WorktreeError> {
@@ -428,6 +485,16 @@ impl WorktreeService {
                 registry_error,
             )
             .await);
+        }
+
+        if let Err(cleanup_error) =
+            Self::auto_delete_old_worktrees(&context, &mut registry, &worktree_id).await
+        {
+            log::warn!(
+                "Failed to auto-delete old worktrees for project {}: {}",
+                context.project_workspace_path.display(),
+                cleanup_error
+            );
         }
 
         let result =
@@ -1064,6 +1131,144 @@ impl WorktreeService {
             }
         }
     }
+
+    async fn auto_delete_old_worktrees(
+        context: &RepositoryContext,
+        registry: &mut WorktreeRegistry,
+        protected_worktree_id: &str,
+    ) -> Result<usize, WorktreeError> {
+        if !context.settings.auto_delete_enabled {
+            return Ok(0);
+        }
+
+        let candidate_ids = automatic_delete_candidate_ids(
+            registry,
+            context.settings.auto_delete_limit.max(1),
+            protected_worktree_id,
+            current_unix_ms(),
+        );
+        if candidate_ids.is_empty() {
+            return Ok(0);
+        }
+
+        let (summaries, reconciled) = Self::reconcile(context, registry).await?;
+        let summaries_by_id = summaries
+            .into_iter()
+            .map(|summary| (summary.worktree_id.clone(), summary))
+            .collect::<HashMap<_, _>>();
+        let mut changed = reconciled;
+        let mut removed_count = 0;
+
+        for candidate_id in candidate_ids {
+            let Some(summary) = summaries_by_id.get(&candidate_id) else {
+                continue;
+            };
+            if let Err(protected_reason) = validate_removal(summary, false) {
+                log::debug!(
+                    "Skipping automatic worktree deletion for {}: {}",
+                    summary.path,
+                    protected_reason
+                );
+                continue;
+            }
+
+            if let Err(remove_error) =
+                GitService::remove_worktree(&context.project_workspace_path, &summary.path, false)
+                    .await
+            {
+                log::warn!(
+                    "Failed to automatically remove worktree {}: {}",
+                    summary.path,
+                    remove_error
+                );
+                continue;
+            }
+
+            if let Some(workspace_service) = get_global_workspace_service() {
+                if let Some(workspace) = workspace_service
+                    .get_workspace_by_path(Path::new(&summary.path))
+                    .await
+                {
+                    if let Err(workspace_error) =
+                        workspace_service.remove_workspace(&workspace.id).await
+                    {
+                        log::warn!(
+                            "Automatically removed worktree {}, but its workspace registration could not be removed: {}",
+                            summary.path,
+                            workspace_error
+                        );
+                    }
+                }
+            }
+
+            registry
+                .worktrees
+                .retain(|record| record.worktree_id != candidate_id);
+            registry
+                .receipts
+                .retain(|_, receipt| receipt.worktree_id() != candidate_id);
+            removed_count += 1;
+            changed = true;
+        }
+
+        if changed {
+            Self::save_registry(context, registry).await?;
+        }
+        Ok(removed_count)
+    }
+}
+
+async fn known_project_workspace_paths() -> Vec<PathBuf> {
+    let Some(workspace_service) = get_global_workspace_service() else {
+        return Vec::new();
+    };
+    let workspaces = workspace_service.list_workspaces().await;
+    let mut projects = HashMap::<String, PathBuf>::new();
+
+    for workspace in workspaces {
+        if workspace.workspace_kind != WorkspaceKind::Normal || !workspace.root_path.is_dir() {
+            continue;
+        }
+        let Ok(worktrees) = GitService::list_worktrees(&workspace.root_path).await else {
+            continue;
+        };
+        let Some(main_worktree) = worktrees.into_iter().find(|worktree| worktree.is_main) else {
+            continue;
+        };
+        let main_path = PathBuf::from(main_worktree.path);
+        projects.insert(normalized_lookup_path(&main_path), main_path);
+    }
+
+    let mut paths = projects.into_values().collect::<Vec<_>>();
+    paths.sort_by(|left, right| path_string(left).cmp(&path_string(right)));
+    paths
+}
+
+fn automatic_delete_candidate_ids(
+    registry: &WorktreeRegistry,
+    limit: usize,
+    protected_worktree_id: &str,
+    now_ms: u64,
+) -> Vec<String> {
+    let mut managed = registry
+        .worktrees
+        .iter()
+        .filter(|record| record.lifecycle == WorktreeLifecycle::Managed)
+        .collect::<Vec<_>>();
+    managed.sort_by(|left, right| {
+        right
+            .created_at_ms
+            .cmp(&left.created_at_ms)
+            .then_with(|| right.worktree_id.cmp(&left.worktree_id))
+    });
+
+    managed
+        .into_iter()
+        .skip(limit.max(1))
+        .filter(|record| record.worktree_id != protected_worktree_id)
+        .filter(|record| now_ms.saturating_sub(record.created_at_ms) >= AUTO_DELETE_MIN_AGE_MS)
+        .map(|record| record.worktree_id.clone())
+        .collect()
 }
 
 async fn notify_changed(project_workspace_path: &Path) {
@@ -1542,9 +1747,10 @@ fn map_git_error(git_error: GitError) -> WorktreeError {
 #[cfg(test)]
 mod tests {
     use super::{
-        managed_target_path, managed_worktree_directory_name, repository_id, resolve_managed_root,
-        sanitize_worktree_project_label, validate_removal, RegisteredWorktree, RepositoryContext,
-        WorktreeOperationReceipt, WorktreeRegistry, WorktreeService,
+        automatic_delete_candidate_ids, managed_target_path, managed_worktree_directory_name,
+        repository_id, resolve_managed_root, sanitize_worktree_project_label, validate_removal,
+        RegisteredWorktree, RepositoryContext, WorktreeOperationReceipt, WorktreeRegistry,
+        WorktreeService, AUTO_DELETE_MIN_AGE_MS,
     };
     use crate::infrastructure::PathManager;
     use bitfun_core_types::{
@@ -1753,6 +1959,79 @@ mod tests {
         summary.dirty = true;
         summary.has_unpublished_commits = true;
         assert!(validate_removal(&summary, true).is_ok());
+    }
+
+    #[test]
+    fn automatic_cleanup_only_selects_managed_worktrees_older_than_the_limit() {
+        let project = Path::new("/repo");
+        let mut registry = WorktreeRegistry::new(project);
+        for (worktree_id, lifecycle, created_at_ms) in [
+            ("oldest", WorktreeLifecycle::Managed, 10),
+            ("older", WorktreeLifecycle::Managed, 20),
+            ("newer", WorktreeLifecycle::Managed, 30),
+            ("newest", WorktreeLifecycle::Managed, 40),
+            ("permanent", WorktreeLifecycle::Permanent, 1),
+            ("external", WorktreeLifecycle::External, 2),
+        ] {
+            registry.worktrees.push(RegisteredWorktree {
+                worktree_id: worktree_id.to_string(),
+                path: format!("/worktrees/{worktree_id}"),
+                base_ref: Some("main".to_string()),
+                base_commit: "0123456789abcdef".to_string(),
+                branch: None,
+                lifecycle,
+                created_at_ms,
+            });
+        }
+
+        assert_eq!(
+            automatic_delete_candidate_ids(&registry, 2, "newest", AUTO_DELETE_MIN_AGE_MS + 100,),
+            vec!["older".to_string(), "oldest".to_string()]
+        );
+    }
+
+    #[test]
+    fn automatic_cleanup_never_selects_the_newly_created_worktree() {
+        let project = Path::new("/repo");
+        let mut registry = WorktreeRegistry::new(project);
+        for worktree_id in ["new", "old"] {
+            registry.worktrees.push(RegisteredWorktree {
+                worktree_id: worktree_id.to_string(),
+                path: format!("/worktrees/{worktree_id}"),
+                base_ref: Some("main".to_string()),
+                base_commit: "0123456789abcdef".to_string(),
+                branch: None,
+                lifecycle: WorktreeLifecycle::Managed,
+                created_at_ms: 10,
+            });
+        }
+
+        assert_eq!(
+            automatic_delete_candidate_ids(&registry, 1, "new", AUTO_DELETE_MIN_AGE_MS + 100,),
+            Vec::<String>::new()
+        );
+    }
+
+    #[test]
+    fn automatic_cleanup_gives_new_worktrees_a_binding_grace_period() {
+        let project = Path::new("/repo");
+        let mut registry = WorktreeRegistry::new(project);
+        for (worktree_id, created_at_ms) in [("newest", 100), ("recent", 90)] {
+            registry.worktrees.push(RegisteredWorktree {
+                worktree_id: worktree_id.to_string(),
+                path: format!("/worktrees/{worktree_id}"),
+                base_ref: Some("main".to_string()),
+                base_commit: "0123456789abcdef".to_string(),
+                branch: None,
+                lifecycle: WorktreeLifecycle::Managed,
+                created_at_ms,
+            });
+        }
+
+        assert!(
+            automatic_delete_candidate_ids(&registry, 1, "newest", AUTO_DELETE_MIN_AGE_MS,)
+                .is_empty()
+        );
     }
 
     #[tokio::test]

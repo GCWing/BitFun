@@ -11,6 +11,8 @@ export interface WorktreeSettings {
   rootPath: string;
   branchPrefix: string;
   copyLocalChanges: boolean;
+  autoDeleteEnabled: boolean;
+  autoDeleteLimit: number;
 }
 
 export interface SessionExecutionTarget {
@@ -45,6 +47,11 @@ export interface WorktreeSummary {
   associatedSessionCount: number;
   runningSessionCount: number;
   sessions: WorktreeSessionSummary[];
+}
+
+export interface WorktreeProjectSummary {
+  projectWorkspacePath: string;
+  worktrees: WorktreeSummary[];
 }
 
 export type WorktreeErrorCode =
@@ -202,6 +209,10 @@ async function invokeWorktree<T>(command: string, request: unknown): Promise<T> 
 export class WorktreeAPI {
   list(projectWorkspacePath: string): Promise<WorktreeSummary[]> {
     return invokeWorktree('worktree_list', { projectWorkspacePath });
+  }
+
+  listProjects(): Promise<WorktreeProjectSummary[]> {
+    return invokeWorktree('worktree_list_projects', {});
   }
 
   create(request: WorktreeCreateRequest): Promise<WorktreeCreateResult> {

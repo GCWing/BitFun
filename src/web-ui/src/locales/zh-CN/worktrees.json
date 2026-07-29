@@ -36,6 +36,74 @@
     "copyChanges": {
       "label": "默认复制本地改动",
       "description": "默认关闭；开启后会把项目中未提交的改动复制到新 worktree，并保留暂存状态。"
+    },
+    "autoDelete": {
+      "label": "自动删除旧 Worktree",
+      "description": "新建 worktree 后，如果工作区超过保留数量，BitFun 会删除最旧且可安全清理的托管 worktree。"
+    },
+    "autoDeleteLimit": {
+      "label": "自动删除上限",
+      "description": "每个工作区保留的托管 worktree 数量。包含未归档会话、本地改动、未发布提交或 Git 锁的 worktree 始终会被保留。",
+      "invalid": "请输入 {{min}} 到 {{max}} 之间的数字。"
+    }
+  },
+  "management": {
+    "title": "工作区 Worktrees",
+    "description": "查看本地工作区及其关联的 worktree。刷新后会重新扫描 Git 状态和会话关联。",
+    "loading": "正在扫描本地 Worktree…",
+    "loadFailed": "无法加载本地 Worktree 列表。",
+    "refresh": "刷新 Worktree",
+    "retry": "重试",
+    "worktreeCount": "Worktree：{{count}}",
+    "deleted": "已删除 {{path}}。",
+    "empty": {
+      "title": "暂无关联的 Worktree",
+      "description": "为隔离会话创建的 worktree 会显示在这里。"
+    },
+    "lifecycle": {
+      "managed": "托管",
+      "permanent": "永久保留",
+      "external": "外部"
+    },
+    "state": {
+      "dirty": "有本地改动",
+      "unpublishedCommits": "有未发布提交",
+      "locked": "Git 已锁定",
+      "missing": "目录缺失",
+      "activeSessions": "未归档会话：{{count}}"
+    },
+    "sessions": {
+      "title": "会话",
+      "empty": "没有关联会话。",
+      "status": {
+        "active": "进行中",
+        "archived": "已归档"
+      }
+    },
+    "protection": {
+      "activeSessions": "请先归档或移动所有关联会话，再删除此 worktree。",
+      "locked": "请先在 Git 中解锁此 worktree，再执行删除。",
+      "missing": "Worktree 目录已缺失，请手动清理过期的 Git 记录。"
+    },
+    "delete": {
+      "action": "删除",
+      "actionLabel": "删除 Worktree {{path}}",
+      "title": "删除此 Worktree？",
+      "message": "关联会话会保留在历史记录中（{{count}} 个），当前检出目录将被删除。",
+      "forceTitle": "删除并丢弃本地工作？",
+      "forceMessage": "此 worktree 包含本地改动或游离提交。删除后，这些本地工作将永久丢失。",
+      "forceHint": "删除此 worktree 需要再次确认，并会丢弃其中的本地工作。",
+      "forceAction": "删除并丢弃",
+      "cancel": "取消"
+    },
+    "errors": {
+      "activeSessions": "此 worktree 包含未归档会话，无法删除。",
+      "locked": "此 worktree 已被 Git 锁定，无法删除。",
+      "dirty": "此 worktree 仍包含本地改动。",
+      "unpublishedCommits": "此 worktree 仍包含未发布的游离提交。",
+      "notFound": "此 worktree 已不存在，请刷新列表后重试。",
+      "remoteUnsupported": "暂不支持远程 SSH Worktree。",
+      "deleteFailed": "无法删除 Worktree。"
     }
   }
 }

@@ -1355,6 +1355,7 @@ pub async fn run() {
             git_add_worktree,
             git_remove_worktree,
             api::worktree_api::worktree_list,
+            api::worktree_api::worktree_list_projects,
             api::worktree_api::worktree_create,
             api::worktree_api::worktree_create_branch,
             api::worktree_api::worktree_promote,

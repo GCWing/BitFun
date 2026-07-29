@@ -3,9 +3,9 @@
 use bitfun_core::service::remote_ssh::lookup_remote_connection;
 use bitfun_core::service::worktree::{
     WorktreeCreateBranchRequest, WorktreeCreateRequest, WorktreeCreateResult, WorktreeListRequest,
-    WorktreeMutationResult, WorktreePromoteRequest, WorktreeRecreateRequest, WorktreeRemoveRequest,
-    WorktreeRemoveResult, WorktreeService, WorktreeSessionBindingRequest,
-    WorktreeSessionBindingResult,
+    WorktreeMutationResult, WorktreeProjectListRequest, WorktreeProjectSummary,
+    WorktreePromoteRequest, WorktreeRecreateRequest, WorktreeRemoveRequest, WorktreeRemoveResult,
+    WorktreeService, WorktreeSessionBindingRequest, WorktreeSessionBindingResult,
 };
 use bitfun_core_types::{WorktreeError, WorktreeErrorCode, WorktreeSummary};
 
@@ -34,6 +34,13 @@ pub async fn worktree_list(
 ) -> Result<Vec<WorktreeSummary>, WorktreeError> {
     ensure_local(&request.project_workspace_path).await?;
     WorktreeService::list(request).await
+}
+
+#[tauri::command]
+pub async fn worktree_list_projects(
+    request: WorktreeProjectListRequest,
+) -> Result<Vec<WorktreeProjectSummary>, WorktreeError> {
+    WorktreeService::list_projects(request).await
 }
 
 #[tauri::command]

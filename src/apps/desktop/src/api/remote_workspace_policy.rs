@@ -1809,6 +1809,7 @@ pub const REMOTE_WORKSPACE_COMMAND_POLICIES: &[(&str, RemoteWorkspacePolicy)] = 
         RemoteWorkspacePolicy::RemoteUnsupported,
     ),
     ("worktree_list", RemoteWorkspacePolicy::RemoteUnsupported),
+    ("worktree_list_projects", RemoteWorkspacePolicy::LocalOnly),
     ("worktree_promote", RemoteWorkspacePolicy::RemoteUnsupported),
     (
         "worktree_recreate",

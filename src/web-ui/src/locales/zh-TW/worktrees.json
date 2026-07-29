@@ -36,6 +36,74 @@
     "copyChanges": {
       "label": "預設複製本機變更",
       "description": "預設關閉；開啟後會把專案中未提交的變更複製到新 worktree，並保留暫存狀態。"
+    },
+    "autoDelete": {
+      "label": "自動刪除舊 Worktree",
+      "description": "新建 worktree 後，如果工作區超過保留數量，BitFun 會刪除最舊且可安全清理的託管 worktree。"
+    },
+    "autoDeleteLimit": {
+      "label": "自動刪除上限",
+      "description": "每個工作區保留的託管 worktree 數量。包含未封存工作階段、本機變更、未發布提交或 Git 鎖定的 worktree 一律會保留。",
+      "invalid": "請輸入 {{min}} 到 {{max}} 之間的數字。"
+    }
+  },
+  "management": {
+    "title": "工作區 Worktrees",
+    "description": "檢視本機工作區及其關聯的 worktree。重新整理後會再次掃描 Git 狀態和工作階段關聯。",
+    "loading": "正在掃描本機 Worktree…",
+    "loadFailed": "無法載入本機 Worktree 清單。",
+    "refresh": "重新整理 Worktree",
+    "retry": "重試",
+    "worktreeCount": "Worktree：{{count}}",
+    "deleted": "已刪除 {{path}}。",
+    "empty": {
+      "title": "目前沒有關聯的 Worktree",
+      "description": "為隔離工作階段建立的 worktree 會顯示在這裡。"
+    },
+    "lifecycle": {
+      "managed": "託管",
+      "permanent": "永久保留",
+      "external": "外部"
+    },
+    "state": {
+      "dirty": "有本機變更",
+      "unpublishedCommits": "有未發布提交",
+      "locked": "Git 已鎖定",
+      "missing": "目錄遺失",
+      "activeSessions": "未封存工作階段：{{count}}"
+    },
+    "sessions": {
+      "title": "工作階段",
+      "empty": "沒有關聯的工作階段。",
+      "status": {
+        "active": "進行中",
+        "archived": "已封存"
+      }
+    },
+    "protection": {
+      "activeSessions": "請先封存或移動所有關聯工作階段，再刪除此 worktree。",
+      "locked": "請先在 Git 中解鎖此 worktree，再執行刪除。",
+      "missing": "Worktree 目錄已遺失，請手動清理過期的 Git 記錄。"
+    },
+    "delete": {
+      "action": "刪除",
+      "actionLabel": "刪除 Worktree {{path}}",
+      "title": "刪除此 Worktree？",
+      "message": "關聯工作階段會保留在歷史記錄中（{{count}} 個），目前的簽出目錄將被刪除。",
+      "forceTitle": "刪除並捨棄本機工作？",
+      "forceMessage": "此 worktree 包含本機變更或游離提交。刪除後，這些本機工作將永久遺失。",
+      "forceHint": "刪除此 worktree 需要再次確認，並會捨棄其中的本機工作。",
+      "forceAction": "刪除並捨棄",
+      "cancel": "取消"
+    },
+    "errors": {
+      "activeSessions": "此 worktree 包含未封存工作階段，無法刪除。",
+      "locked": "此 worktree 已被 Git 鎖定，無法刪除。",
+      "dirty": "此 worktree 仍包含本機變更。",
+      "unpublishedCommits": "此 worktree 仍包含未發布的游離提交。",
+      "notFound": "此 worktree 已不存在，請重新整理清單後重試。",
+      "remoteUnsupported": "目前不支援遠端 SSH Worktree。",
+      "deleteFailed": "無法刪除 Worktree。"
     }
   }
 }
