@@ -1018,7 +1018,6 @@ dependencies = [
  "sha2",
  "similar",
  "sse-stream",
- "tauri",
  "tempfile",
  "terminal-core",
  "thiserror 2.0.19",

@@ -2055,6 +2055,29 @@ mod tests {
         );
     }
 
+    /// The no-growth check above only compares against the baseline, so a
+    /// command that has already graduated keeps a reserved slot in it. That
+    /// slack lets an audited command silently regress back to
+    /// `LegacyUnaudited` without failing any test. Requiring graduated
+    /// commands to leave the baseline makes the ratchet monotonic: the backlog
+    /// can only shrink, and a regression has to re-add the entry explicitly.
+    #[test]
+    fn legacy_unaudited_baseline_must_not_retain_graduated_commands() {
+        let unaudited: BTreeSet<&str> = REMOTE_WORKSPACE_COMMAND_POLICIES
+            .iter()
+            .filter(|(_, policy)| *policy == RemoteWorkspacePolicy::LegacyUnaudited)
+            .map(|(name, _)| *name)
+            .collect();
+        let frozen: BTreeSet<&str> = LEGACY_UNAUDITED_BASELINE.iter().copied().collect();
+
+        let stale: Vec<_> = frozen.difference(&unaudited).collect();
+        assert!(
+            stale.is_empty(),
+            "these commands no longer use LegacyUnaudited; remove them from \
+             LEGACY_UNAUDITED_BASELINE so the backlog ratchet stays tight: {stale:?}"
+        );
+    }
+
     /// Frozen at introduction time. Only removals are allowed.
     const LEGACY_UNAUDITED_BASELINE: &[&str] = &[
         "accept_file",
@@ -2068,7 +2091,6 @@ mod tests {
         "archive_session",
         "cancel_acp_dialog_turn",
         "cancel_dialog_turn",
-        "cancel_insights_generation",
         "cancel_mcp_remote_oauth",
         "cancel_search",
         "cancel_session",
@@ -2086,7 +2108,6 @@ mod tests {
         "clear_session_thread_goal",
         "close_workspace",
         "compact_session",
-        "compress_path",
         "compute_diff",
         "control_background_command",
         "control_deep_review_queue",
@@ -2099,7 +2120,6 @@ mod tests {
         "create_miniapp",
         "create_session",
         "create_subagent",
-        "decompress_path",
         "delete_agent_companion_pet_package",
         "delete_all_archived_sessions",
         "delete_assistant_workspace",
@@ -2116,7 +2136,6 @@ mod tests {
         "download_skill_market",
         "editor_ai_cancel",
         "editor_ai_stream",
-        "ensure_assistant_bootstrap",
         "ensure_coordinator_session",
         "execute_tool",
         "explorer_get_children",
@@ -2130,7 +2149,6 @@ mod tests {
         "fork_session",
         "generate_commit_message",
         "generate_greeting_only",
-        "generate_insights",
         "generate_session_title",
         "get_acp_clients",
         "get_acp_session_commands",
@@ -2157,7 +2175,6 @@ mod tests {
         "get_file_tree",
         "get_global_config_health",
         "get_global_config_status",
-        "get_latest_insights",
         "get_mcp_prompt",
         "get_mcp_remote_oauth_session",
         "get_mcp_server_status",
@@ -2198,7 +2215,6 @@ mod tests {
         "get_work_state_summary",
         "grant_miniapp_path",
         "grant_miniapp_workspace",
-        "has_insights_data",
         "import_agent_companion_pet_package",
         "import_config",
         "initialize_acp_clients",
@@ -2216,7 +2232,6 @@ mod tests {
         "list_background_command_activities",
         "list_cron_jobs",
         "list_directory_files",
-        "list_manageable_subagents",
         "list_mcp_prompts",
         "list_mcp_resources",
         "list_miniapps",
@@ -2224,13 +2239,10 @@ mod tests {
         "list_persisted_sessions_page",
         "list_sessions",
         "list_skill_market",
-        "list_subagents",
-        "list_visible_subagents",
         "load_acp_json_config",
         "load_canvas_artifact",
         "load_canvas_state",
         "load_git_repo_history",
-        "load_insights_report",
         "load_mcp_json_config",
         "load_persisted_session_metadata",
         "load_session_turns",
@@ -2359,7 +2371,6 @@ mod tests {
         "search_file_contents",
         "search_filenames",
         "search_files",
-        "search_referenceable_sessions",
         "search_skill_market",
         "send_background_command_input",
         "send_mcp_app_message",
