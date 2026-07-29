@@ -60,6 +60,10 @@ export default class EntryAbility extends RustAbility {
       let res = await CommonUtils.open_file_dialog(arg);
       return res;
     });
+    RustModule.registerArktsFunction('get_clipboard_files', async (err: Error, _arg: string): Promise<string> => {
+      let res = await CommonUtils.read_clipboard_files();
+      return res;
+    });
     RustModule.registerArktsFunction('handle_min_window', async (err: Error, arg: string): Promise<string> => {
       windowStage.getMainWindowSync().minimize();
       return '';
