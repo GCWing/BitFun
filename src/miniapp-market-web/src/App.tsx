@@ -1,8 +1,9 @@
-import { FormEvent, useCallback, useEffect, useMemo, useState } from 'react';
+import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ArrowLeft,
   ArrowRight,
   ArrowSquareOut,
+  CaretDown,
   Check,
   CheckCircle,
   ClockCounterClockwise,
@@ -17,11 +18,13 @@ import {
   IconContext,
   LockKey,
   MagnifyingGlass,
+  Moon,
   Package,
   ShieldCheck,
   SignOut,
   SlidersHorizontal,
   Star,
+  Sun,
   Tray,
   UploadSimple,
   WarningCircle,
@@ -30,6 +33,7 @@ import {
 import { downloadUrl, loginUrl, marketApi, MarketApiError } from './api';
 import { formatCompactNumber, formatMarketDate } from './format';
 import { useLocale, type Locale, type MessageKey } from './i18n';
+import { useTheme, type Theme } from './theme';
 import type {
   AdminSubmissionDetail,
   MarketConfig,
@@ -56,6 +60,12 @@ const MARKET_CATEGORIES = [
   'other',
 ] as const;
 
+const LOCALE_OPTIONS: ReadonlyArray<{ value: Locale; shortLabel: string; label: string }> = [
+  { value: 'en-US', shortLabel: 'EN', label: 'English' },
+  { value: 'zh-CN', shortLabel: '简', label: '简体中文' },
+  { value: 'zh-TW', shortLabel: '繁', label: '繁體中文' },
+];
+
 function currentRoute(): RouteState {
   const base = '/miniapp';
   const path = window.location.pathname.startsWith(base)
@@ -73,6 +83,7 @@ function navigate(path: string) {
 
 function App() {
   const { locale, setLocale, t } = useLocale();
+  const { theme, toggleTheme } = useTheme();
   const [route, setRoute] = useState<RouteState>(currentRoute);
   const [config, setConfig] = useState<MarketConfig>();
   const [me, setMe] = useState<Me>();
@@ -137,6 +148,8 @@ function App() {
           currentPath={route.path}
           locale={locale}
           setLocale={setLocale}
+          theme={theme}
+          toggleTheme={toggleTheme}
           me={me}
           config={config}
           t={t}
@@ -167,6 +180,8 @@ function Header({
   currentPath,
   locale,
   setLocale,
+  theme,
+  toggleTheme,
   me,
   config,
   t,
@@ -175,15 +190,45 @@ function Header({
   currentPath: string;
   locale: Locale;
   setLocale: (locale: Locale) => void;
+  theme: Theme;
+  toggleTheme: () => void;
   me?: Me;
   config?: MarketConfig;
   t: (key: MessageKey) => string;
   onLogout: () => Promise<void>;
 }) {
+  const [languageMenuOpen, setLanguageMenuOpen] = useState(false);
+  const languageControlRef = useRef<HTMLDivElement>(null);
+  const languageTriggerRef = useRef<HTMLButtonElement>(null);
+  const activeLocale =
+    LOCALE_OPTIONS.find((localeOption) => localeOption.value === locale) ?? LOCALE_OPTIONS[0];
   const routeIsActive = (route: string) =>
     route === '/'
       ? currentPath === '/' || currentPath.startsWith('/apps/')
       : currentPath === route;
+
+  useEffect(() => {
+    if (!languageMenuOpen) return;
+
+    const closeOnOutsideClick = (event: PointerEvent) => {
+      if (!languageControlRef.current?.contains(event.target as Node)) {
+        setLanguageMenuOpen(false);
+      }
+    };
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setLanguageMenuOpen(false);
+        languageTriggerRef.current?.focus();
+      }
+    };
+
+    document.addEventListener('pointerdown', closeOnOutsideClick);
+    document.addEventListener('keydown', closeOnEscape);
+    return () => {
+      document.removeEventListener('pointerdown', closeOnOutsideClick);
+      document.removeEventListener('keydown', closeOnEscape);
+    };
+  }, [languageMenuOpen]);
 
   return (
     <header className="topbar">
@@ -232,15 +277,67 @@ function Header({
           )}
         </nav>
         <div className="topbar-actions">
-          <label className="locale-picker">
-            <Globe aria-hidden="true" />
-            <span className="sr-only">{t('language')}</span>
-            <select value={locale} onChange={(event) => setLocale(event.target.value as Locale)}>
-              <option value="en-US">EN</option>
-              <option value="zh-CN">简</option>
-              <option value="zh-TW">繁</option>
-            </select>
-          </label>
+          <div className="language-control" ref={languageControlRef}>
+            <button
+              ref={languageTriggerRef}
+              className="header-control language-trigger"
+              type="button"
+              aria-label={t('changeLanguage')}
+              aria-expanded={languageMenuOpen}
+              aria-controls="market-language-menu"
+              title={t('changeLanguage')}
+              onClick={() => setLanguageMenuOpen((open) => !open)}
+            >
+              <Globe aria-hidden="true" />
+              <span className="control-label">{activeLocale.shortLabel}</span>
+              <CaretDown
+                className={`language-caret ${languageMenuOpen ? 'open' : ''}`}
+                size={14}
+                aria-hidden="true"
+              />
+            </button>
+            {languageMenuOpen && (
+              <div
+                className="language-menu"
+                id="market-language-menu"
+                role="group"
+                aria-label={t('language')}
+              >
+                <span className="language-menu-label">{t('language')}</span>
+                {LOCALE_OPTIONS.map((localeOption) => (
+                  <button
+                    key={localeOption.value}
+                    className={localeOption.value === locale ? 'selected' : undefined}
+                    type="button"
+                    aria-pressed={localeOption.value === locale}
+                    onClick={() => {
+                      setLocale(localeOption.value);
+                      setLanguageMenuOpen(false);
+                      languageTriggerRef.current?.focus();
+                    }}
+                  >
+                    <span>{localeOption.label}</span>
+                    {localeOption.value === locale && (
+                      <Check size={16} weight="bold" aria-hidden="true" />
+                    )}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+          <button
+            className="header-control theme-toggle"
+            type="button"
+            aria-label={t(theme === 'dark' ? 'switchToLight' : 'switchToDark')}
+            title={t(theme === 'dark' ? 'switchToLight' : 'switchToDark')}
+            onClick={toggleTheme}
+          >
+            {theme === 'dark' ? (
+              <Sun weight="bold" aria-hidden="true" />
+            ) : (
+              <Moon weight="bold" aria-hidden="true" />
+            )}
+          </button>
           {me ? (
             <div className="profile">
               <img src={me.user.avatarUrl} alt="" />
