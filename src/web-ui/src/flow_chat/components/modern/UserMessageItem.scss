@@ -6,12 +6,12 @@
 
 .user-message-item {
   box-sizing: border-box;
-  width: fit-content;
-  min-width: min(
-    18rem,
-    calc(100% - var(--flowchat-content-inline-pad) - var(--flowchat-content-inline-pad))
-  );
-  max-width: min(78%, 52rem);
+  /*
+   * Fills the reading column instead of hugging its text: the bubble shares the
+   * exact leading and trailing edge as the tool-call bars and body text below
+   * it, so a turn reads as one column rather than a right-floating chat bubble.
+   */
+  width: auto;
   padding: 0.46rem 0.68rem;
   background: color-mix(in srgb, var(--element-bg-medium) 90%, var(--color-bg-scene));
   border: 1px solid color-mix(in srgb, var(--border-base) 72%, transparent);
@@ -20,7 +20,7 @@
     0.06rem
     var(--flowchat-content-inline-pad)
     var(--flowchat-turn-gap)
-    auto;
+    var(--flowchat-content-inline-pad);
   box-shadow:
     0 1px 0 color-mix(in srgb, var(--color-static-white) 5%, transparent) inset,
     0 2px 8px var(--color-overlay-black-08);
@@ -61,18 +61,7 @@
   
   // Responsive: reduce margins on smaller screens.
   @media (max-width: 768px) {
-    min-width: min(
-      14rem,
-      calc(
-        100% - var(--flowchat-content-inline-pad-mobile) -
-          var(--flowchat-content-inline-pad-mobile)
-      )
-    );
-    max-width: calc(
-      100% - var(--flowchat-content-inline-pad-mobile) -
-        var(--flowchat-content-inline-pad-mobile)
-    );
-    margin-left: auto;
+    margin-left: var(--flowchat-content-inline-pad-mobile);
     margin-right: var(--flowchat-content-inline-pad-mobile);
   }
 }
@@ -198,11 +187,6 @@
   border: none;
   box-shadow: none;
   padding-left: 0.35rem;
-  width: auto;
-  min-width: 0;
-  max-width: none;
-  margin-left: var(--flowchat-content-inline-pad);
-  margin-right: var(--flowchat-content-inline-pad);
 
   .user-message-item__main {
     align-items: flex-start;
@@ -517,14 +501,15 @@
 .user-message-item__images {
   display: flex;
   flex-wrap: wrap;
-  gap: 5px;
-  margin-top: 4px;
+  gap: 6px;
+  margin-top: 6px;
 }
 
 .user-message-item__image-thumb {
-  width: 120px;
-  height: 120px;
-  border-radius: 6px;
+  /* Attachment-sized, not a hero image: the text stays the primary content. */
+  width: 72px;
+  height: 72px;
+  border-radius: 5px;
   overflow: hidden;
   cursor: pointer;
   border: 1px solid var(--border-base);

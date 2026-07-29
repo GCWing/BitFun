@@ -195,6 +195,18 @@
     min-width: 0;
   }
 
+  /*
+   * Safety net for pages that wrap a control in a positioning/state div: an
+   * unstyled wrapper is a flex item, so it would shrink to content width and
+   * that row's dropdown would render narrower than every other row's.
+   */
+  > div:has(> .select),
+  > div:has(> .bitfun-input-wrapper),
+  > div:has(> .bitfun-number-input) {
+    width: 100%;
+    min-width: 0;
+  }
+
   > .bitfun-number-input .bitfun-number-input__input {
     text-align: left;
   }

@@ -119,7 +119,7 @@
 
     &.is-active {
       color: var(--color-text-primary);
-      background: var(--element-bg-soft);
+      background: transparent;
       font-weight: 500;
     }
 
@@ -256,9 +256,9 @@
 
     &.is-active {
       color: var(--color-text-primary);
-      background: color-mix(in srgb, var(--color-accent-500) 10%, var(--element-bg-soft));
+      background: transparent;
       font-weight: 500;
-      box-shadow: inset 2px 0 0 var(--color-accent-500);
+      box-shadow: none;
     }
 
     &:focus-visible {

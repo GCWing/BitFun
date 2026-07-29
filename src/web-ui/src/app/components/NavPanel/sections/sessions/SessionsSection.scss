@@ -138,7 +138,7 @@
 
     &.is-active {
       color: var(--color-text-primary);
-      background: var(--element-bg-soft);
+      background: transparent;
     }
 
     &.is-editing {
@@ -187,9 +187,12 @@
     }
 
     &.is-btw-child {
-      &:hover,
-      &.is-active {
+      &:hover {
         background: var(--element-bg-soft);
+      }
+
+      &.is-active {
+        background: transparent;
       }
     }
   }
@@ -890,8 +893,8 @@
     }
 
     &.is-active {
-      background: var(--element-bg-medium);
-      box-shadow: inset 2px 0 0 color-mix(in srgb, var(--color-accent-500) 76%, transparent);
+      background: transparent;
+      box-shadow: none;
     }
   }
 

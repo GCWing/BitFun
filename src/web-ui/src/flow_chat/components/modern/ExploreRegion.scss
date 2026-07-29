@@ -3,6 +3,11 @@
 .explore-region {
   position: relative;
   overflow: hidden;
+  /* Same column box as .model-round-item so the collapse header (`>`) and the
+   * round's body text share one leading edge. */
+  box-sizing: border-box;
+  width: min(100%, 900px);
+  margin: 0 auto;
   padding: 0 var(--flowchat-content-inline-pad);
 
   @media (max-width: 768px) {

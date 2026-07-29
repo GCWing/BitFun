@@ -37,14 +37,19 @@
     position: relative;
   }
 
-  .bitfun-config-page-section__body {
-    border: 0;
-    border-radius: 0;
-    background: transparent;
+  /*
+   * Sections keep the shared card surface from ConfigPageLayout, so every
+   * bespoke block below carries the same horizontal gutter a
+   * `.bitfun-config-page-row` uses. Custom content then lines up with standard
+   * rows and its separators run edge to edge like theirs.
+   */
+  .bitfun-config-page-section__body > .bitfun-external-sources-config__notice {
+    margin: var(--size-gap-3) var(--size-gap-4);
   }
 
-  .bitfun-config-page-row {
-    padding: 12px 0;
+  .bitfun-config-page-section__body > .bitfun-external-sources-config__capability-grid {
+    padding-right: var(--size-gap-4);
+    padding-left: var(--size-gap-4);
   }
 
   &__ecosystem-heading,
@@ -108,7 +113,7 @@
     align-items: center;
     gap: 4px;
     min-height: 36px;
-    padding: 2px 0 0;
+    padding: var(--size-gap-2) var(--size-gap-4) 0;
     background: transparent;
 
     > button {
@@ -164,7 +169,7 @@
     display: flex;
     align-items: center;
     gap: 8px;
-    padding: 8px 12px;
+    padding: 8px var(--size-gap-4);
     border-left: 2px solid var(--color-warning);
     color: var(--color-text-primary);
     background: color-mix(in srgb, var(--color-warning) 7%, transparent);
@@ -190,7 +195,7 @@
     align-items: center;
     justify-content: space-between;
     gap: 16px;
-    padding: 12px 0;
+    padding: 12px var(--size-gap-4);
     background: transparent;
     border-top: 1px solid var(--border-subtle);
   }
@@ -216,7 +221,12 @@
     }
   }
 
-  &__policy-actions .select {
+  /*
+   * Ecosystem mode and per-capability access are the same control at two
+   * levels — one width so they read as a single column of dropdowns.
+   */
+  &__policy-actions .select,
+  &__capability-row .select {
     min-width: 142px;
   }
 
@@ -268,10 +278,6 @@
     > div:first-child {
       display: grid;
       gap: 4px;
-    }
-
-    .select {
-      min-width: 128px;
     }
   }
 
@@ -447,7 +453,7 @@
   }
 
   &__conflict {
-    padding: 12px 0;
+    padding: 12px var(--size-gap-4);
     border-bottom: 1px solid var(--border-subtle);
 
     &:last-child {
@@ -457,6 +463,10 @@
 
   &__tool-card {
     padding: 10px 0 10px 14px;
+    /* Accent bar stays inside the card, so inset the whole block rather than
+     * padding it — otherwise the bar would sit on the card border. */
+    margin-right: var(--size-gap-4);
+    margin-left: var(--size-gap-4);
     border-left: 2px solid var(--border-subtle);
     background: transparent;
     overflow-wrap: anywhere;
@@ -491,7 +501,7 @@
   }
 
   &__opencode-card {
-    padding: 12px 0;
+    padding: 12px var(--size-gap-4);
     border-top: 1px solid var(--border-subtle);
     border-radius: 0;
     margin-bottom: 0;
@@ -552,7 +562,7 @@
     font-size: 13px;
     display: grid;
     gap: 8px;
-    padding: 12px 0;
+    padding: 12px var(--size-gap-4);
 
     code {
       font-size: 12px;

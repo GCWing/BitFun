@@ -705,9 +705,7 @@
     }
     
     &:focus-within {
-      border-color: color-mix(in srgb, var(--color-accent-500) 46%, var(--border-base));
-      box-shadow: 
-        0 0 0 2px color-mix(in srgb, var(--color-accent-500) 12%, transparent),
+      box-shadow:
         0 12px 30px rgba(var(--color-static-black-rgb), 0.28),
         inset 0 1px 0 var(--color-overlay-white-12);
     }

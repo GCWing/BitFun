@@ -178,7 +178,7 @@
     overflow: hidden;
     border-radius: 6px;
     color: var(--color-text-primary);
-    background: var(--color-bg-primary);
+    background: transparent;
     transition: color $motion-fast $easing-standard,
                 background $motion-fast $easing-standard,
                 box-shadow $motion-fast $easing-standard;
@@ -1063,7 +1063,7 @@
     max-width: 100%;
     border-radius: 6px;
     color: var(--color-text-secondary);
-    background: var(--color-bg-primary);
+    background: transparent;
     overflow: hidden;
     transition: color $motion-fast $easing-standard,
                 background $motion-fast $easing-standard,
@@ -1360,8 +1360,8 @@
 
   &__workspace-item.is-active &__workspace-item-card,
   &__assistant-item.is-active &__assistant-item-card {
-    background: var(--element-bg-medium);
-    box-shadow: inset 2px 0 0 color-mix(in srgb, var(--color-accent-500) 76%, transparent);
+    background: transparent;
+    box-shadow: none;
   }
 
   &__workspace-item-card:active,
@@ -1438,7 +1438,7 @@
 
   .bitfun-nav-panel__workspace-item.is-active .bitfun-nav-panel__workspace-item-card:hover,
   .bitfun-nav-panel__assistant-item.is-active .bitfun-nav-panel__assistant-item-card:hover {
-    background: var(--element-bg-medium);
+    background: transparent;
   }
 }
 
