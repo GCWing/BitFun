@@ -270,6 +270,22 @@ fn cancel_in_store(
     request: DispatchCancelRequest,
     terminate: impl FnOnce(u32, &str) -> Result<bool>,
 ) -> Result<DispatchCancelResponse> {
+    cancel_in_store_with_process_checks(
+        store,
+        request,
+        runner::process_alive,
+        runner::worker_process_alive,
+        terminate,
+    )
+}
+
+fn cancel_in_store_with_process_checks(
+    store: &DispatchStore,
+    request: DispatchCancelRequest,
+    process_alive: impl Fn(u32) -> bool,
+    worker_process_alive: impl Fn(u32, &str) -> bool,
+    terminate: impl FnOnce(u32, &str) -> Result<bool>,
+) -> Result<DispatchCancelResponse> {
     let before = store.request_cancel(&request.job_id)?;
     if before.state.is_terminal() {
         return Ok(DispatchCancelResponse {
@@ -278,7 +294,7 @@ fn cancel_in_store(
     }
 
     if let Some(pid) = store.read_pid(&request.job_id)? {
-        if runner::process_alive(pid) && !runner::worker_process_alive(pid, &request.job_id) {
+        if process_alive(pid) && !worker_process_alive(pid, &request.job_id) {
             let message = format!(
                 "dispatch worker pid {pid} no longer matches job '{}'",
                 request.job_id
@@ -758,13 +774,15 @@ mod tests {
             .expect("create job");
         store
             .write_pid("job-signal-failure", 42)
-            .expect("record fake pid");
+            .expect("record injected pid");
 
-        let error = cancel_in_store(
+        let error = cancel_in_store_with_process_checks(
             &store,
             DispatchCancelRequest {
                 job_id: "job-signal-failure".to_string(),
             },
+            |_pid| true,
+            |_pid, _job_id| true,
             |_pid, _job_id| bail!("injected signal failure"),
         )
         .expect_err("signal failure must remain visible");
@@ -782,13 +800,17 @@ mod tests {
         store
             .create_job(test_request("job-stopped"), "Task".to_string())
             .expect("create job");
-        store.write_pid("job-stopped", 42).expect("record fake pid");
+        store
+            .write_pid("job-stopped", 42)
+            .expect("record injected pid");
 
-        let response = cancel_in_store(
+        let response = cancel_in_store_with_process_checks(
             &store,
             DispatchCancelRequest {
                 job_id: "job-stopped".to_string(),
             },
+            |_pid| false,
+            |_pid, _job_id| panic!("an absent process must not undergo identity inspection"),
             |_pid, _job_id| Ok(false),
         )
         .expect("confirmed stopped worker");
