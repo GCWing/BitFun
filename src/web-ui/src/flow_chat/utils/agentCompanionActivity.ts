@@ -112,10 +112,6 @@ function latestAssistantSnippet(turn: DialogTurn | undefined): string | undefine
     const round = turn.modelRounds[roundIndex];
     for (let itemIndex = round.items.length - 1; itemIndex >= 0; itemIndex -= 1) {
       const item = round.items[itemIndex];
-      if (item.type === 'text' && item.runtimeStatus) {
-        continue;
-      }
-
       const plainText = item.type === 'thinking'
         ? markdownToPlainText((item as FlowThinkingItem).content)
         : item.type === 'text'

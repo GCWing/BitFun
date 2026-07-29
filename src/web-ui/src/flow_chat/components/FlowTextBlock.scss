@@ -136,24 +136,6 @@
     }
   }
 
-  &--runtime-status {
-    display: flex;
-    align-items: center;
-    gap: var(--flowchat-control-gap);
-    min-height: 1.5rem;
-    color: var(--color-text-muted);
-    font-size: var(--flowchat-font-size-base);
-    line-height: var(--flowchat-support-line-height);
-    opacity: 0.86;
-  }
-
-  &__runtime-status-icon {
-    flex: 0 0 auto;
-  }
-
-  &__runtime-status-text {
-    overflow-wrap: anywhere;
-  }
 }
 
 @media (prefers-reduced-motion: reduce) {

@@ -18,6 +18,11 @@ import {
   SessionExecutionState,
 } from '@/flow_chat/state-machine/types';
 import { scheduleModelResponseStatus } from '@/flow_chat/services/flow-chat-manager/RuntimeStatusModule';
+import {
+  getRuntimeStatus,
+  showRuntimeStatus,
+  useRuntimeStatusStore,
+} from '@/flow_chat/store/runtimeStatusStore';
 
 const mocks = vi.hoisted(() => ({
   listJobs: vi.fn(),
@@ -245,10 +250,12 @@ describe('DispatchJobObserver', () => {
   beforeEach(() => {
     vi.useFakeTimers();
     dispatchJobStore.getState().clear();
+    useRuntimeStatusStore.getState().reset();
     flowChatStore.setState(() => ({
       sessions: new Map(),
       activeSessionId: null,
     }));
+    useRuntimeStatusStore.getState().reset();
     stateMachineManager.clear();
     mocks.listJobs.mockReset().mockResolvedValue([]);
     mocks.status.mockReset();
@@ -526,25 +533,6 @@ describe('DispatchJobObserver', () => {
   it('cancels delayed runtime status rendering when a terminal snapshot drains', async () => {
     registerRunningJob();
     installProcessingProjection();
-    flowChatStore.updateDialogTurn('session-1', 'turn-1', turn => ({
-      ...turn,
-      modelRounds: turn.modelRounds.map(round => ({
-        ...round,
-        items: [{
-          id: 'runtime-status-main-round-1',
-          type: 'text',
-          content: '\u200B',
-          timestamp: 1,
-          status: 'streaming',
-          isStreaming: true,
-          isMarkdown: false,
-          runtimeStatus: {
-            phase: 'waiting_model',
-            scope: 'main',
-          },
-        }],
-      })),
-    }));
     const context = createTerminalContext();
     scheduleModelResponseStatus(
       context,
@@ -553,7 +541,13 @@ describe('DispatchJobObserver', () => {
       'round-1',
       { delayMs: 1000 },
     );
+    showRuntimeStatus({
+      sessionId: 'session-1',
+      turnId: 'turn-1',
+      roundId: 'round-1',
+    });
     expect(context.runtimeStatusTimers.size).toBe(1);
+    expect(getRuntimeStatus('session-1')).toBeDefined();
     mocks.status.mockResolvedValue(status({
       state: 'succeeded',
       cursor: 0,
@@ -562,28 +556,11 @@ describe('DispatchJobObserver', () => {
     const cleanup = installDispatchJobObserver(context);
 
     await vi.advanceTimersByTimeAsync(0);
-    const settledItems = flowChatStore
-      .getState()
-      .sessions
-      .get('session-1')!
-      .dialogTurns[0]
-      .modelRounds[0]
-      .items;
     expect(context.runtimeStatusTimers.size).toBe(0);
-    expect(settledItems).toHaveLength(0);
+    expect(getRuntimeStatus('session-1')).toBeUndefined();
 
     await vi.advanceTimersByTimeAsync(1000);
-    const itemsAfterTimerDeadline = flowChatStore
-      .getState()
-      .sessions
-      .get('session-1')!
-      .dialogTurns[0]
-      .modelRounds[0]
-      .items;
-    expect(itemsAfterTimerDeadline).toHaveLength(0);
-    expect(itemsAfterTimerDeadline.some(item => (
-      item.type === 'text' && item.runtimeStatus
-    ))).toBe(false);
+    expect(getRuntimeStatus('session-1')).toBeUndefined();
     cleanup();
   });
 

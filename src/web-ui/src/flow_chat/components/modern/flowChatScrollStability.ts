@@ -134,9 +134,12 @@ export function settleCollapseReservationForPreservedViewport(
     geometry.scrollHeight - currentTotalPx,
   );
   const requiredTotalPx = Math.max(
-    0,
-    geometry.scrollTop + geometry.clientHeight - contentHeightWithoutReservation +
-      sanitizeReservationPx(geometry.rangeGuardPx ?? 1),
+    getRequiredTotalPxForScrollTop({
+      targetScrollTop: geometry.scrollTop,
+      contentHeightWithoutReservation,
+      clientHeight: geometry.clientHeight,
+      rangeGuardPx: geometry.rangeGuardPx,
+    }),
   );
   const protectedTotalPx = Math.max(
     getReservationTotalPx(currentState.pin) + currentState.collapse.floorPx,
@@ -154,6 +157,80 @@ export function settleCollapseReservationForPreservedViewport(
       ...currentState.collapse,
       px: settledCollapsePx,
       floorPx: settledCollapsePx,
+    },
+  });
+}
+
+export function ensureCollapseReservationForScrollTop(
+  currentState: BottomReservationState,
+  geometry: {
+    targetScrollTop: number;
+    scrollHeight: number;
+    clientHeight: number;
+    rangeGuardPx?: number;
+  },
+): BottomReservationState {
+  const currentPinPx = getReservationTotalPx(currentState.pin);
+  const currentCollapsePx = getReservationTotalPx(currentState.collapse);
+  const currentTotalPx = currentCollapsePx + currentPinPx;
+  const contentHeightWithoutReservation = Math.max(
+    0,
+    sanitizeReservationPx(geometry.scrollHeight) - currentTotalPx,
+  );
+  const requiredTotalPx = Math.max(
+    currentPinPx,
+    getRequiredTotalPxForScrollTop({
+      targetScrollTop: geometry.targetScrollTop,
+      contentHeightWithoutReservation,
+      clientHeight: geometry.clientHeight,
+      rangeGuardPx: geometry.rangeGuardPx,
+    }),
+  );
+  const requiredCollapsePx = Math.max(0, requiredTotalPx - currentPinPx);
+  const nextCollapsePx = Math.max(currentCollapsePx, requiredCollapsePx);
+
+  return sanitizeBottomReservationState({
+    ...currentState,
+    collapse: {
+      ...currentState.collapse,
+      px: nextCollapsePx,
+      floorPx: Math.max(currentState.collapse.floorPx, requiredCollapsePx),
+    },
+  });
+}
+
+export function settleRetainedCollapseReservationForAnchor(
+  currentState: BottomReservationState,
+  geometry: {
+    targetScrollTop: number;
+    scrollHeight: number;
+    clientHeight: number;
+    rangeGuardPx?: number;
+  },
+): BottomReservationState {
+  const currentPinPx = getReservationTotalPx(currentState.pin);
+  const currentCollapsePx = getReservationTotalPx(currentState.collapse);
+  const contentHeightWithoutReservation = Math.max(
+    0,
+    sanitizeReservationPx(geometry.scrollHeight) - currentPinPx - currentCollapsePx,
+  );
+  const requiredTotalPx = Math.max(
+    currentPinPx,
+    getRequiredTotalPxForScrollTop({
+      targetScrollTop: geometry.targetScrollTop,
+      contentHeightWithoutReservation,
+      clientHeight: geometry.clientHeight,
+      rangeGuardPx: geometry.rangeGuardPx,
+    }),
+  );
+  const requiredCollapsePx = Math.max(0, requiredTotalPx - currentPinPx);
+
+  return sanitizeBottomReservationState({
+    ...currentState,
+    collapse: {
+      ...currentState.collapse,
+      px: requiredCollapsePx,
+      floorPx: requiredCollapsePx,
     },
   });
 }
@@ -238,6 +315,25 @@ export function createInitialBottomReservationState(): BottomReservationState {
 
 function sanitizeReservationPx(value: number): number {
   return Number.isFinite(value) ? Math.max(0, value) : 0;
+}
+
+function getRequiredTotalPxForScrollTop(geometry: {
+  targetScrollTop: number;
+  contentHeightWithoutReservation: number;
+  clientHeight: number;
+  rangeGuardPx?: number;
+}): number {
+  const targetScrollTop = sanitizeReservationPx(geometry.targetScrollTop);
+  if (targetScrollTop <= COMPENSATION_EPSILON_PX) {
+    return 0;
+  }
+  return Math.max(
+    0,
+    targetScrollTop +
+      sanitizeReservationPx(geometry.clientHeight) -
+      sanitizeReservationPx(geometry.contentHeightWithoutReservation) +
+      sanitizeReservationPx(geometry.rangeGuardPx ?? 1),
+  );
 }
 
 export function sanitizeBottomReservationState(state: BottomReservationState): BottomReservationState {

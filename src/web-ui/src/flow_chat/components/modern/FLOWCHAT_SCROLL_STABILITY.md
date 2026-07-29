@@ -161,16 +161,22 @@ restores it after the list remeasures. While an element anchor is active, the
 coordinator also owns virtualizer compensation corrections, so independent
 scroll writers cannot fight the pinned header.
 
-Collapse anchors have an active phase while layout is changing and a retained
-phase after the collapse intent settles. Retained anchors do not expire on a
-wall-clock timer: Virtuoso can publish a delayed size compensation after the
-collapse animation and intent have finished. They keep owning virtualizer
-compensation until user navigation, tail/pin ownership transfer, session reset,
-or DOM disconnection. The retained phase stops the continuous animation-frame
-guard; observer and scroll paths still restore the anchor on demand. Active
-preservation blocks automatic tail takeover, while retained preservation allows
-the tail controller to take ownership when its normal distance and intent rules
-say that following should resume.
+Collapse anchors have three phases: active while CSS layout is changing,
+retained-provisional while delayed virtualizer measurements may still arrive,
+and settled-grace after the provisional estimate has been reconciled to current
+DOM geometry. A short negative-layout quiet window ends the provisional phase.
+The Footer is then reduced atomically to the minimum physical range needed by
+the captured `scrollTop`; an anchor at `scrollTop === 0` needs no overflow range.
+The semantic anchor remains retained through one final grace window, so a late
+Virtuoso shrink can extend the range and restart settlement without exposing a
+clamped frame. User navigation, a new pin, session reset, DOM disconnection, or
+a quiet grace with no further correction releases it. Scroll
+events enqueue semantic-element restores into the coordinator's single pending
+animation frame. A transaction-owned non-user clamp may additionally extend its
+physical range and restore the captured raw position synchronously before paint.
+Active preservation blocks automatic tail takeover, while retained preservation
+allows the tail controller to take ownership when its normal distance and intent
+rules say that following should resume.
 
 There is no persistent raw `scrollTop` lock or scroll-listener lock. For an unsignaled
 shrink with no semantic element anchor, `restoreScrollPositionOnce()` performs
@@ -198,9 +204,12 @@ effective content growth first enters a short settlement ledger (currently
 negative height correction cancels matching unsettled growth; a known collapse
 does not. Stable growth then consumes the pin floor in one synchronous Footer
 update. Live pin reconciliation may increase a floor immediately, but cannot
-shrink it while Virtuoso item measurements are still moving. Stream end
-performs one final atomic collapse-to-pin transfer using the settled required
-range.
+shrink it while Virtuoso item measurements are still moving. Stream end performs
+one final pin measurement when the target is available, transfers all remaining
+pin range into protected collapse space, and releases `pinned-item` ownership in
+the same transaction. A temporarily virtualized target must not block this
+release: the existing physical range is retained until a later explicit drain.
+Pending pin retries and growth settlement are canceled at that boundary.
 
 When a sticky target is temporarily virtualized, its provisional range must be
 computed from `scrollHeight - currentPinPx`. Reusing physical `scrollHeight`
@@ -241,6 +250,12 @@ shrinks. `VirtualMessageList` uses that event to:
 - apply provisional compensation immediately
 
 This pre-compensation is what avoids the flash.
+
+Runtime status is transient session UI state, not a `FlowItem`. The always-mounted
+`RuntimeStatusSlot` occupies the first 24px of the existing Footer spacer and
+switches only `visibility`; showing, hiding, and clearing it never change list
+height or enter collapse reconciliation. Subagent projections use the same
+fixed-height slot inside their local scroll surface.
 
 If the list waits until `ResizeObserver` sees the shrink, the browser may already have clamped `scrollTop`.
 
@@ -299,8 +314,10 @@ manual or otherwise unsignaled intents use the TTL timer. The scroll handler kee
 timer fallback for browsers that delay timers. While the intent is alive, the
 grow branch of `measureHeightChange` protects the collapse reservation, but it
 may still consume measured content growth from the sticky pin reservation.
-Once the intent settles, residual collapse space is transferred to the settled
-sticky pin in one state/DOM update when the pinned item still owns the viewport.
+Once the intent settles, residual collapse space enters retained-provisional
+settlement even when the sticky pinned item still owns the viewport. This is
+required for first-turn `scrollTop === 0`: provisional full-card estimates must
+not accumulate merely to fill an otherwise short viewport.
 If a collapsing header owns the viewport, the footer is instead reduced
 atomically to the minimum range that can retain the current `scrollTop`, then
 that settled range is promoted to a protected collapse floor before the
@@ -319,14 +336,21 @@ Collapses interact with follow mode in three mutually exclusive ways:
 1. **Known collapse while follow + streaming is active:** the intent applies
    synchronous Footer pre-compensation before the card shrinks. The active
    intent allows shrink reconciliation even though tail follow is running.
-   When the short protection window ends, the collapse reservation remains
-   consumable by real streaming growth instead of being removed immediately;
-   stream end performs the final exact reconciliation. This keeps the card
-   header stable without giving up tail-follow ownership.
-   If React/Virtuoso has already clamped `scrollTop` before a data-driven auto
-   intent reaches the list's layout handler, the handler extends the collapse
-   reservation as needed and restores the last stable follow position before
-   paint. Manual collapses and non-follow viewports do not use this fallback.
+   When the CSS window ends, the transaction becomes a retained-provisional
+   collapse anchor instead of shrinking the Footer from a signed net-height
+   estimate. Virtuoso
+   can publish the matching item measurement after the CSS transition and after
+   stream end; reducing synthetic range before that measurement clamps the
+   viewport by exactly the removed pixels.
+   The retained transaction records the latest safe follow position. After a
+   negative-layout quiet window, it replaces both the provisional `px` and stale
+   `floorPx` with the minimum geometrically required Footer range. If a later
+   measurement clamps below that position, the scroll handler synchronously
+   extends the range and restores it before paint. Real content growth and
+   downward follow movement consume the range one-for-one. User intent, a new
+   pin, session reset, or a final quiet grace releases the retained anchor.
+   Stream end restarts the same settlement path;
+   it does not preserve the provisional full-card estimate indefinitely.
 2. **Unsignaled shrink while follow + streaming is active:** there is no
    semantic collapse transaction to preserve, so the RAF loop re-pins to the
    new bottom on the next frame.
@@ -396,6 +420,17 @@ If a future collapsible component shows the same "header drops" or "flash on col
 - A user gesture that exits pinned mode must release the semantic anchor and
   atomically transfer the pin reservation to a protected collapse range in the
   same operation; an idle coordinator must never retain a live pin reservation.
+- Stream end or cancellation must perform that same protected-range transfer
+  before releasing `pinned-item`, even when the pinned DOM target is unavailable.
+- Scroll-handler anchor corrections must be coalesced through the coordinator's
+  animation-frame restore queue; they must not write `scrollTop` synchronously.
+- A retained collapse transaction may synchronously restore only a non-user
+  downward clamp. It is transaction-scoped, advances with downward tail follow,
+  and must release on user intent; it is not a general `scrollTop` lock.
+- Following-tail collapse finalization must never reduce Footer range directly
+  from a signed net-height estimate. It may reduce the retained estimate only
+  after the negative-layout quiet window, using current DOM geometry while the
+  anchor remains protected through the final grace.
 - Unsignaled shrink reconciliation must not reduce a protected collapse floor;
   only measured growth, downward navigation, bottom arrival, or an explicit
   reservation reset may consume it.

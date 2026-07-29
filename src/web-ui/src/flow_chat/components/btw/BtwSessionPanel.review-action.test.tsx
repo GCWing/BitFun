@@ -44,15 +44,6 @@ vi.mock('../modern/VirtualItemRenderer', async () => {
   };
 });
 
-vi.mock('../modern/ProcessingIndicator', () => ({
-  ProcessingIndicator: () => <div />,
-}));
-
-vi.mock('../modern/processingIndicatorVisibility', () => ({
-  shouldReserveProcessingIndicatorSpace: () => false,
-  shouldShowProcessingIndicator: () => false,
-}));
-
 vi.mock('../modern/useExploreGroupState', () => ({
   useExploreGroupState: () => ({
     exploreGroupStates: {},
@@ -72,6 +63,7 @@ vi.mock('./DeepReviewActionBar', () => ({
 }));
 
 vi.mock('@/component-library', () => ({
+  DotMatrixLoader: () => <span data-testid="dot-matrix-loader" />,
   IconButton: ({
     children,
     onClick,
@@ -163,6 +155,7 @@ vi.mock('../../store/modernFlowChatStore', () => ({
 
 vi.mock('../../services/ReviewActionBarPersistenceService', () => ({
   loadPersistedReviewState: vi.fn(() => Promise.resolve(null)),
+  persistReviewActionState: vi.fn(() => Promise.resolve()),
 }));
 
 function createReviewSession(): Session {

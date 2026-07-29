@@ -268,10 +268,7 @@ function runningStatusRank(status: string | undefined): number {
 }
 
 function substantiveRoundItems(round: ModelRound): AnyFlowItem[] {
-  return round.items.filter(item => (
-    item.type !== 'text' ||
-    !(item as AnyFlowItem & { runtimeStatus?: unknown }).runtimeStatus
-  ));
+  return round.items;
 }
 
 type RunningStreamItem = AnyFlowItem & {
@@ -435,7 +432,6 @@ function normalizeSupersededItem(item: AnyFlowItem, endedAt: number): AnyFlowIte
       ...item,
       isStreaming: false,
       status: 'completed',
-      runtimeStatus: undefined,
     };
   }
 
@@ -3778,7 +3774,7 @@ export class FlowChatStore {
         },
         modelRounds: dialogTurn.modelRounds.map((round, roundIndex) => {
           const textItems = round.items
-            .filter(item => item.type === 'text' && !(item as any).runtimeStatus)
+            .filter(item => item.type === 'text')
             .map(item => ({
               id: item.id,
               content: (item as any).content || '',

@@ -21,6 +21,11 @@ type ElementAnchor = {
   preservationPhase: 'active' | 'retained' | null;
 };
 
+type PendingElementAnchorRestore = {
+  scroller: HTMLElement;
+  source: string;
+};
+
 const ELEMENT_ANCHOR_EPSILON_PX = 0.5;
 const ELEMENT_ANCHOR_RANGE_GUARD_PX = 1;
 
@@ -41,6 +46,7 @@ export class FlowChatViewportCoordinator {
   private mode: FlowChatViewportAnchorMode = 'idle';
   private elementAnchor: ElementAnchor | null = null;
   private anchorGuardFrame: number | null = null;
+  private pendingElementAnchorRestore: PendingElementAnchorRestore | null = null;
   private rangeHost: FlowChatViewportRangeHost | null = null;
 
   setRangeHost(host: FlowChatViewportRangeHost | null): void {
@@ -62,7 +68,7 @@ export class FlowChatViewportCoordinator {
 
   pinItem(reason = 'unspecified'): void {
     const previousMode = this.mode;
-    this.stopAnchorGuard();
+    this.cancelElementAnchorRestoreWork();
     this.elementAnchor = null;
     this.mode = 'pinned-item';
     if (flowChatDiagnostics.isEnabled()) {
@@ -102,7 +108,7 @@ export class FlowChatViewportCoordinator {
     }
 
     const previousMode = this.mode;
-    this.stopAnchorGuard();
+    this.cancelElementAnchorRestoreWork();
     this.elementAnchor = null;
     this.mode = 'following-tail';
     if (flowChatDiagnostics.isEnabled()) {
@@ -146,6 +152,7 @@ export class FlowChatViewportCoordinator {
     const previousPhase = anchor.preservationPhase;
     anchor.preservationPhase = 'retained';
     this.stopAnchorGuard();
+    this.startAnchorGuard();
     if (flowChatDiagnostics.isEnabled()) {
       flowChatDiagnostics.trace({
         hypothesis: 'E',
@@ -180,6 +187,7 @@ export class FlowChatViewportCoordinator {
 
     const elementRect = element.getBoundingClientRect();
     const scrollerRect = scroller.getBoundingClientRect();
+    this.cancelElementAnchorRestoreWork();
     this.elementAnchor = {
       element,
       scroller,
@@ -289,6 +297,25 @@ export class FlowChatViewportCoordinator {
     return true;
   }
 
+  scheduleElementAnchorRestore(scroller: HTMLElement, source = 'external'): boolean {
+    this.validateElementAnchor(`schedule-restore:${source}`);
+    if (
+      !this.elementAnchor ||
+      (this.mode !== 'preserving-element' && this.mode !== 'pinned-item')
+    ) {
+      return false;
+    }
+
+    this.pendingElementAnchorRestore = { scroller, source };
+    if (typeof requestAnimationFrame === 'undefined') {
+      this.pendingElementAnchorRestore = null;
+      return this.restoreElementAnchor(scroller, source);
+    }
+
+    this.startAnchorGuard();
+    return true;
+  }
+
   restoreScrollPositionOnce(
     scroller: HTMLElement,
     targetScrollTop: number,
@@ -314,7 +341,7 @@ export class FlowChatViewportCoordinator {
     const previousMode = this.mode;
     const hadElementAnchor = Boolean(this.elementAnchor);
     const previousPreservationPhase = this.elementAnchor?.preservationPhase ?? null;
-    this.stopAnchorGuard();
+    this.cancelElementAnchorRestoreWork();
     this.elementAnchor = null;
     this.mode = 'idle';
     if (flowChatDiagnostics.isEnabled()) {
@@ -335,13 +362,17 @@ export class FlowChatViewportCoordinator {
   }
 
   private startAnchorGuard(): void {
+    const shouldContinuouslyGuard = (
+      this.mode === 'pinned-item' ||
+      (
+        this.mode === 'preserving-element' &&
+        this.elementAnchor?.preservationPhase === 'active'
+      )
+    );
     if (
       this.anchorGuardFrame !== null ||
       typeof requestAnimationFrame === 'undefined' ||
-      (
-        this.mode === 'preserving-element' &&
-        this.elementAnchor?.preservationPhase === 'retained'
-      )
+      (!shouldContinuouslyGuard && !this.pendingElementAnchorRestore)
     ) {
       return;
     }
@@ -357,6 +388,11 @@ export class FlowChatViewportCoordinator {
     this.anchorGuardFrame = null;
   }
 
+  private cancelElementAnchorRestoreWork(): void {
+    this.pendingElementAnchorRestore = null;
+    this.stopAnchorGuard();
+  }
+
   private runAnchorGuardFrame = (): void => {
     this.anchorGuardFrame = null;
     this.validateElementAnchor('anchor-guard');
@@ -366,13 +402,19 @@ export class FlowChatViewportCoordinator {
       (this.mode !== 'pinned-item' && this.mode !== 'preserving-element') ||
       (
         this.mode === 'preserving-element' &&
-        anchor.preservationPhase === 'retained'
+        anchor.preservationPhase === 'retained' &&
+        !this.pendingElementAnchorRestore
       )
     ) {
       return;
     }
 
-    this.restoreElementAnchor(anchor.scroller, 'anchor-guard');
+    const pendingRestore = this.pendingElementAnchorRestore;
+    this.pendingElementAnchorRestore = null;
+    this.restoreElementAnchor(
+      pendingRestore?.scroller ?? anchor.scroller,
+      pendingRestore?.source ?? 'anchor-guard',
+    );
     this.startAnchorGuard();
   };
 }

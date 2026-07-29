@@ -142,6 +142,11 @@
     }
   }
 
+  &__runtime-status .runtime-status-slot__content {
+    padding: 0 var(--flowchat-content-inline-pad);
+    box-sizing: border-box;
+  }
+
   &__action-bar-wrapper {
     position: absolute;
     inset: 0;
@@ -262,6 +267,12 @@
     color: var(--color-text-secondary);
     font-variant-numeric: tabular-nums;
     flex-shrink: 0;
+  }
+}
+
+@media (max-width: 768px) {
+  .btw-session-panel__runtime-status .runtime-status-slot__content {
+    padding: 0 var(--flowchat-content-inline-pad-mobile);
   }
 }
 

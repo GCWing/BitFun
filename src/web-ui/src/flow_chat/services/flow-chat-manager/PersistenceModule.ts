@@ -7,7 +7,6 @@ import { createLogger } from '@/shared/utils/logger';
 import type { FlowChatContext, DialogTurn } from './types';
 import { buildSessionMetadata } from '../../utils/sessionMetadata';
 import { settleInterruptedDialogTurn } from '../../utils/dialogTurnStability';
-import { isRuntimeStatusItem } from './RuntimeStatusModule';
 import {
   DEFERRED_TOOL_GATEWAY_NAME,
   effectiveToolInvocation,
@@ -94,7 +93,7 @@ export function calculateTurnHash(dialogTurn: DialogTurn): string {
     lastRoundData: dialogTurn.modelRounds[dialogTurn.modelRounds.length - 1]
       ? {
           ...dialogTurn.modelRounds[dialogTurn.modelRounds.length - 1],
-          items: dialogTurn.modelRounds[dialogTurn.modelRounds.length - 1].items.filter(item => !isRuntimeStatusItem(item)),
+          items: dialogTurn.modelRounds[dialogTurn.modelRounds.length - 1].items,
         }
       : null,
     error: dialogTurn.error,
@@ -416,7 +415,7 @@ export function convertDialogTurnToBackendFormat(dialogTurn: DialogTurn, turnInd
         renderHints: round.renderHints,
         textItems: round.items
           .map((item, index) => ({ item, index }))
-          .filter(({ item }) => item.type === 'text' && !isRuntimeStatusItem(item))
+          .filter(({ item }) => item.type === 'text')
           .map(({ item, index }) => {
             return {
               id: item.id,

@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { DialogTurn, FlowTextItem, ModelRound } from '../../types/flow-chat';
+import type { DialogTurn, ModelRound } from '../../types/flow-chat';
 import {
   convertDialogTurnToBackendFormat,
   debouncedSaveDialogTurn,
@@ -92,37 +92,6 @@ describe('PersistenceModule', () => {
   afterEach(() => {
     vi.useRealTimers();
     vi.clearAllMocks();
-  });
-
-  it('filters transient runtime status items from persisted text items', () => {
-    const runtimeItem: FlowTextItem = {
-      id: 'runtime-status',
-      type: 'text',
-      content: '\u200B',
-      timestamp: 1001,
-      status: 'streaming',
-      isStreaming: true,
-      isMarkdown: false,
-      runtimeStatus: {
-        phase: 'waiting_model',
-        scope: 'main',
-      },
-    };
-    const realItem: FlowTextItem = {
-      id: 'real-text',
-      type: 'text',
-      content: 'Visible answer',
-      timestamp: 1002,
-      status: 'completed',
-      isStreaming: false,
-      isMarkdown: true,
-    };
-    const turn = createDialogTurn('processing');
-    turn.modelRounds[0].items = [runtimeItem, realItem];
-
-    const persisted = convertDialogTurnToBackendFormat(turn, 0);
-
-    expect(persisted.modelRounds[0].textItems.map((item: any) => item.id)).toEqual(['real-text']);
   });
 
   it('persists dialog turn token usage metadata when available', () => {

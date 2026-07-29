@@ -24,7 +24,7 @@ export interface FlowItem {
 
   /**
    * Session-scoped subagent linkage.
-   * Used by parent Task tools and subagent-targeted runtime status markers.
+   * Used by parent Task tools and projected subagent output.
    */
   subagentSessionId?: string;
 }
@@ -34,15 +34,6 @@ export interface FlowTextItem extends FlowItem {
   content: string;
   isStreaming: boolean;
   isMarkdown?: boolean;
-  /**
-   * Transient runtime status rendered in the current conversation only.
-   * It is not persisted as assistant content.
-   */
-  runtimeStatus?: {
-    phase: 'waiting_model' | 'streaming' | 'waiting_tool' | 'running_tool' | 'waiting_permission' | 'saving' | 'recovering';
-    scope: 'main' | 'subagent' | 'tool';
-    messageKey?: string;
-  };
 }
 
 export interface FlowThinkingItem extends FlowItem {

@@ -5,6 +5,10 @@
 import type { FlowChatContext, FlowTextItem } from './types';
 import { clearRuntimeStatus } from './RuntimeStatusModule';
 import { isAcpFlowSession } from '../../utils/acpSession';
+import {
+  clearRuntimeStatusState,
+  resetRuntimeStatuses,
+} from '../../store/runtimeStatusStore';
 
 function resolveAttemptStreamKey(roundId: string, attemptId?: string, attemptIndex?: number): string {
   if (typeof attemptId === 'string' && attemptId.length > 0) {
@@ -154,7 +158,6 @@ export function processNormalTextChunkInternal(
   } else {
     context.flowChatStore.updateModelRoundItemSilent(sessionId, turnId, textItemId, {
       content: cleanedContent,
-      runtimeStatus: undefined,
       isStreaming: true,
       isMarkdown: true,
       timestamp: Date.now(),
@@ -331,6 +334,7 @@ export function cleanupSessionBuffers(context: FlowChatContext, sessionId: strin
       context.runtimeStatusTimers.delete(key);
     }
   }
+  clearRuntimeStatusState({ sessionId });
 
   // P1-11: Drop terminal-event dedup keys belonging to this session so the
   // set does not grow unbounded across the lifetime of the app.
@@ -360,6 +364,7 @@ export function clearAllBuffers(context: FlowChatContext): void {
     clearTimeout(timer);
   }
   context.runtimeStatusTimers.clear();
+  resetRuntimeStatuses();
   
   for (const timer of context.saveDebouncers.values()) {
     clearTimeout(timer);

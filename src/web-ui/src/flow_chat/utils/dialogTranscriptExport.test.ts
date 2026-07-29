@@ -134,21 +134,6 @@ describe('formatTranscriptTurnText', () => {
     expect(text).toContain('````\nbefore\n```\nafter\n````');
   });
 
-  it('drops transient runtime status text items', () => {
-    const turn = runtimeTurn();
-    (turn.modelRounds[0].items as any[]).push({
-      id: 'x2',
-      type: 'text',
-      content: 'Waiting for model…',
-      isStreaming: true,
-      timestamp: 5,
-      status: 'streaming',
-      runtimeStatus: { phase: 'waiting_model', scope: 'main' },
-    });
-
-    const text = formatTranscriptTurnText(collectRuntimeTurn(turn), 'result', labels);
-    expect(text).not.toContain('Waiting for model');
-  });
 });
 
 describe('collectPersistedTurn', () => {

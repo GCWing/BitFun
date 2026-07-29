@@ -1,0 +1,60 @@
+.runtime-status-slot {
+  width: 100%;
+  height: 24px;
+  min-height: 24px;
+  flex: 0 0 24px;
+  box-sizing: border-box;
+  overflow: hidden;
+  visibility: hidden;
+  pointer-events: none;
+
+  &--visible {
+    visibility: visible;
+  }
+
+  &__content {
+    display: flex;
+    align-items: center;
+    gap: var(--flowchat-control-gap);
+    height: 24px;
+    min-width: 0;
+    color: var(--color-text-muted);
+    font-size: var(--flowchat-font-size-base);
+    line-height: var(--flowchat-support-line-height);
+    opacity: 0.86;
+  }
+
+  &__hint {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  &--footer &__content {
+    width: 100%;
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 0 var(--flowchat-content-inline-pad);
+    box-sizing: border-box;
+  }
+
+  @media (max-width: 1400px) {
+    &--footer &__content {
+      max-width: 1000px;
+    }
+  }
+
+  @media (max-width: 1200px) {
+    &--footer &__content {
+      max-width: 900px;
+    }
+  }
+
+  @media (max-width: 768px) {
+    &--footer &__content {
+      max-width: 100%;
+      padding: 0 var(--flowchat-content-inline-pad-mobile);
+    }
+  }
+}

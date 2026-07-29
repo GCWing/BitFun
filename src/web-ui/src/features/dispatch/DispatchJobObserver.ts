@@ -6,6 +6,7 @@ import { notificationService } from '@/shared/notification-system';
 import { agenticEventListener } from '@/flow_chat/services/AgenticEventListener';
 import type { FlowChatContext } from '@/flow_chat/services/flow-chat-manager/types';
 import { clearRuntimeStatus } from '@/flow_chat/services/flow-chat-manager/RuntimeStatusModule';
+import { clearRuntimeStatusState } from '@/flow_chat/store/runtimeStatusStore';
 import { stateMachineManager } from '@/flow_chat/state-machine';
 import {
   SessionExecutionEvent,
@@ -258,6 +259,8 @@ function reconcileDispatchTerminalRuntime(
   const lastTurn = dialogTurns[dialogTurns.length - 1];
   if (lastTurn) {
     clearRuntimeStatus(context, sessionId, lastTurn.id);
+  } else {
+    clearRuntimeStatusState({ sessionId });
   }
   context.activeTextItems?.get(sessionId)?.clear();
   context.contentBuffers?.get(sessionId)?.clear();
