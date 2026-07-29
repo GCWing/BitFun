@@ -2,7 +2,7 @@
  * Input component
  */
 
-import React, { forwardRef } from 'react';
+import React, { forwardRef, useId } from 'react';
 import './Input.scss';
 
 export interface InputProps extends Omit<React.InputHTMLAttributes<HTMLInputElement>, 'size' | 'prefix'> {
@@ -31,6 +31,9 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(({
   disabled,
   ...props
 }, ref) => {
+  const generatedId = useId();
+  const inputId = props.id ?? `${generatedId}-input`;
+  const supportId = `${generatedId}-support`;
   const resolvedInputSize = size ?? inputSize;
   const classNames = [
     'bitfun-input-wrapper',
@@ -45,22 +48,25 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(({
 
   return (
     <div className={classNames}>
-      {label && <label className="bitfun-input-label">{label}</label>}
+      {label && <label className="bitfun-input-label" htmlFor={inputId}>{label}</label>}
       <div className="bitfun-input-container">
         {prefix && <span className="bitfun-input-prefix">{prefix}</span>}
         <input
+          {...props}
           ref={ref}
+          id={inputId}
           className="bitfun-input"
           disabled={disabled}
-          {...props}
+          aria-invalid={error || undefined}
+          aria-describedby={(error && errorMessage) || (!error && hint) ? supportId : props['aria-describedby']}
         />
         {suffix && <span className="bitfun-input-suffix">{suffix}</span>}
       </div>
       {!error && hint && (
-        <span className="bitfun-input-error-message">{hint}</span>
+        <span id={supportId} className="bitfun-input-hint">{hint}</span>
       )}
       {error && errorMessage && (
-        <span className="bitfun-input-error-message">{errorMessage}</span>
+        <span id={supportId} className="bitfun-input-error-message" role="alert">{errorMessage}</span>
       )}
     </div>
   );

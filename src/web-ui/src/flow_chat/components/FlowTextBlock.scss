@@ -92,25 +92,30 @@
     height: 26px;
     padding: 0.2rem;
     transition:
-      transform 0.15s ease,
-      opacity 0.2s ease;
+      transform 120ms cubic-bezier(0.23, 1, 0.32, 1),
+      opacity 140ms ease;
   }
 
   .markdown-renderer .code-block-wrapper .copy-button:hover {
     background: transparent;
     color: var(--color-text-muted);
-    transform: scale(1.08);
+    transform: scale(1.03);
   }
 
   .markdown-renderer .code-block-wrapper .copy-button:active {
     background: transparent;
     color: var(--color-text-muted);
-    transform: scale(1.02);
+    transform: scale(0.97);
   }
 
   .markdown-renderer .code-block-wrapper .copy-button.copy-success:hover {
     color: var(--color-success);
-    transform: scale(1.08);
+    transform: scale(1.03);
+  }
+
+  .markdown-renderer .code-block-wrapper .copy-button:focus-visible {
+    outline: 2px solid var(--border-accent);
+    outline-offset: 1px;
   }
 
   /* MermaidBlock.scss adds a heavy hover shadow; keep chat diagrams flat. */
@@ -148,6 +153,12 @@
 
   &__runtime-status-text {
     overflow-wrap: anywhere;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .flow-text-block .markdown-renderer .code-block-wrapper .copy-button {
+    transition-duration: 0ms;
   }
 }
 

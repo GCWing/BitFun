@@ -9,9 +9,6 @@
 import React, {
   Suspense,
   useEffect,
-  useLayoutEffect,
-  useRef,
-  useState,
 } from 'react';
 import { useSettingsStore } from './settingsStore';
 import type { ConfigTab } from './settingsConfig';
@@ -35,9 +32,6 @@ import {
   WorktreesConfig,
 } from './settingsContentRegistry';
 import './SettingsScene.scss';
-
-// Keep in sync with settings-content-exit in SettingsScene.scss.
-const SETTINGS_CONTENT_EXIT_DURATION_MS = 180;
 
 function SettingsSceneLoading() {
   return (
@@ -79,8 +73,6 @@ const SettingsScene: React.FC = () => {
 
   const resolvedTab: ConfigTab =
     (activeTab as string) === 'session-config' ? 'session-personalization' : activeTab;
-  const [outgoingTab, setOutgoingTab] = useState<ConfigTab | null>(null);
-  const previousTabRef = useRef<ConfigTab>(resolvedTab);
 
   useEffect(() => {
     /** Legacy merged session settings tab removed in favor of two panels. */
@@ -89,59 +81,24 @@ const SettingsScene: React.FC = () => {
     }
   }, [activeTab, setActiveTab]);
 
-  // Derive the previous tab during render so React keeps its keyed subtree
-  // mounted in the same commit that introduces the incoming page.
-  const renderedOutgoingTab = previousTabRef.current !== resolvedTab
-    ? previousTabRef.current
-    : outgoingTab;
-
-  useLayoutEffect(() => {
-    const previousTab = previousTabRef.current;
-    previousTabRef.current = resolvedTab;
-    if (previousTab === resolvedTab) return;
-
-    setOutgoingTab(previousTab);
-    const exitTimer = window.setTimeout(() => {
-      setOutgoingTab(current => current === previousTab ? null : current);
-    }, SETTINGS_CONTENT_EXIT_DURATION_MS);
-
-    return () => window.clearTimeout(exitTimer);
-  }, [resolvedTab]);
-
-  const renderedTabs: ConfigTab[] = [resolvedTab];
-  if (renderedOutgoingTab && renderedOutgoingTab !== resolvedTab) {
-    renderedTabs.push(renderedOutgoingTab);
-  }
+  const Content = resolveSettingsContent(resolvedTab);
 
   return (
     <div className="bitfun-settings-scene" data-testid="settings-scene" data-settings-tab={resolvedTab}>
       <div className="bitfun-settings-scene__content-stack">
-        {renderedTabs.map(tab => {
-          const Content = resolveSettingsContent(tab);
-          if (!Content) return null;
-
-          const isActive = tab === resolvedTab;
-          const isOutgoing = !isActive && tab === renderedOutgoingTab;
-          return (
-            <div
-              key={tab}
-              className={[
-                'bitfun-settings-scene__content-wrapper',
-                isActive && 'bitfun-settings-scene__content-wrapper--active',
-                isActive && renderedOutgoingTab && 'bitfun-settings-scene__content-wrapper--entering',
-                isOutgoing && 'bitfun-settings-scene__content-wrapper--outgoing',
-              ].filter(Boolean).join(' ')}
-              aria-hidden={!isActive}
-              data-testid="settings-scene-content"
-              data-settings-panel={tab}
-              data-settings-panel-active={isActive ? 'true' : 'false'}
-            >
-              <Suspense fallback={isActive ? <SettingsSceneLoading /> : null}>
-                <Content />
-              </Suspense>
-            </div>
-          );
-        })}
+        {Content ? (
+          <div
+            key={resolvedTab}
+            className="bitfun-settings-scene__content-wrapper"
+            data-testid="settings-scene-content"
+            data-settings-panel={resolvedTab}
+            data-settings-panel-active="true"
+          >
+            <Suspense fallback={<SettingsSceneLoading />}>
+              <Content />
+            </Suspense>
+          </div>
+        ) : null}
       </div>
     </div>
   );

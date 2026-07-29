@@ -1,10 +1,12 @@
-import React, { useState, useRef, useEffect, useCallback } from 'react';
+import React, { useState, useRef, useEffect, useCallback, useId } from 'react';
 import { createPortal } from 'react-dom';
 import './Tooltip.scss';
 
 export type TooltipPlacement = 'top' | 'bottom' | 'left' | 'right';
 const DEFAULT_TOOLTIP_DELAY = 450;
 const INTERACTIVE_TOOLTIP_HIDE_DELAY = 400;
+const TOOLTIP_WARM_WINDOW = 300;
+let tooltipWarmUntil = 0;
 
 export interface TooltipProps {
   content: React.ReactNode;
@@ -154,6 +156,7 @@ export const Tooltip: React.FC<TooltipProps> = ({
   className = '',
   interactive = false,
 }) => {
+  const tooltipId = useId();
   const [visible, setVisible] = useState(false);
   // Single layout state (position + placement + ready) so one recalculation
   // commits at most one re-render instead of three.
@@ -170,6 +173,7 @@ export const Tooltip: React.FC<TooltipProps> = ({
   const hideTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const latestMousePositionRef = useRef<{ x: number; y: number } | null>(null);
   const recalcFrameRef = useRef<number | null>(null);
+  const instantRef = useRef(false);
 
   const gap = 8;
   const viewportPadding = 8;
@@ -228,6 +232,8 @@ export const Tooltip: React.FC<TooltipProps> = ({
     if (followCursor && e) {
       latestMousePositionRef.current = { x: e.clientX, y: e.clientY };
     }
+    const resolvedDelay = trigger === 'hover' && Date.now() < tooltipWarmUntil ? 0 : delay;
+    instantRef.current = resolvedDelay === 0;
     timeoutRef.current = setTimeout(() => {
       timeoutRef.current = null;
       if (followCursor) {
@@ -235,7 +241,7 @@ export const Tooltip: React.FC<TooltipProps> = ({
       }
       setLayout(prev => (prev.ready ? { ...prev, ready: false } : prev));
       setVisible(true);
-    }, delay);
+    }, resolvedDelay);
   };
 
   const hideTooltip = useCallback(() => {
@@ -247,13 +253,16 @@ export const Tooltip: React.FC<TooltipProps> = ({
       clearTimeout(hideTimeoutRef.current);
       hideTimeoutRef.current = null;
     }
+    if (visible) {
+      tooltipWarmUntil = Date.now() + TOOLTIP_WARM_WINDOW;
+    }
     setVisible(false);
     setLayout(prev => (prev.ready ? { ...prev, ready: false } : prev));
     if (followCursor) {
       latestMousePositionRef.current = null;
       setMousePosition(null);
     }
-  }, [followCursor]);
+  }, [followCursor, visible]);
 
   const scheduleHideTooltip = useCallback(() => {
     if (!interactive) {
@@ -391,6 +400,9 @@ export const Tooltip: React.FC<TooltipProps> = ({
     onClick: handleClick,
     onFocus: handleFocus,
     onBlur: handleBlur,
+    'aria-describedby': visible && layout.ready
+      ? [childProps['aria-describedby'], tooltipId].filter(Boolean).join(' ')
+      : childProps['aria-describedby'],
   });
 
   const tooltipClass = [
@@ -407,7 +419,10 @@ export const Tooltip: React.FC<TooltipProps> = ({
       {visible && createPortal(
         <div
           ref={tooltipRef}
+          id={tooltipId}
+          role="tooltip"
           className={tooltipClass}
+          data-instant={instantRef.current || undefined}
           onMouseEnter={interactive ? () => {
             if (hideTimeoutRef.current) {
               clearTimeout(hideTimeoutRef.current);

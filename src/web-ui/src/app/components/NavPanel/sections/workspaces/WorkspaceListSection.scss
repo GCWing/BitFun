@@ -1302,3 +1302,159 @@
   0%, 100% { opacity: 1; }
   50%       { opacity: 0.3; }
 }
+
+// Workspace rows use the same compact surface language as the rest of the
+// desktop navigation. Status pulses remain untouched because they carry live
+// indexing/connection meaning.
+.bitfun-nav-panel {
+  &__workspace-list {
+    padding-top: 1px;
+  }
+
+  &__workspace-group {
+    gap: 2px;
+  }
+
+  &__workspace-group-title {
+    min-height: 24px;
+    margin: 0 6px;
+    padding: 0 $size-gap-2;
+    color: var(--color-text-muted);
+    font-weight: 600;
+    letter-spacing: 0.045em;
+  }
+
+  &__workspace-group-title-action {
+    border-radius: $size-radius-sm;
+    transition:
+      transform 120ms cubic-bezier(0.23, 1, 0.32, 1),
+      background 120ms ease,
+      color 120ms ease;
+
+    &:active {
+      transform: scale(0.92);
+    }
+  }
+
+  &__workspace-item,
+  &__assistant-item {
+    gap: 1px;
+    padding: 1px 0;
+    border-radius: $size-radius-base;
+    transition:
+      border-color 120ms ease,
+      background 120ms ease,
+      opacity 120ms ease;
+  }
+
+  &__workspace-item-card,
+  &__assistant-item-card {
+    border-radius: $size-radius-sm;
+    background: transparent;
+    box-shadow: none;
+    transition:
+      transform 120ms cubic-bezier(0.23, 1, 0.32, 1),
+      background 120ms ease,
+      color 120ms ease;
+  }
+
+  &__workspace-item.is-active &__workspace-item-card,
+  &__assistant-item.is-active &__assistant-item-card {
+    background: var(--element-bg-medium);
+    box-shadow: inset 2px 0 0 color-mix(in srgb, var(--color-accent-500) 76%, transparent);
+  }
+
+  &__workspace-item-card:active,
+  &__assistant-item-card:active {
+    transform: scale(0.99);
+  }
+
+  &__workspace-item-label,
+  &__assistant-item-label {
+    font-weight: 500;
+  }
+
+  &__workspace-item.is-active &__workspace-item-label,
+  &__assistant-item.is-active &__assistant-item-label {
+    font-weight: 600;
+  }
+
+  &__workspace-item-collapse-btn,
+  &__assistant-item-collapse-btn,
+  &__workspace-item-name-btn,
+  &__assistant-item-name-btn {
+    transition: transform 120ms cubic-bezier(0.23, 1, 0.32, 1);
+
+    &:active {
+      transform: scale(0.97);
+    }
+  }
+
+  &__workspace-item-menu-trigger,
+  &__assistant-item-menu-trigger {
+    border-radius: $size-radius-sm;
+    transition:
+      transform 120ms cubic-bezier(0.23, 1, 0.32, 1),
+      background 120ms ease,
+      color 120ms ease;
+
+    &:active {
+      transform: scale(0.92);
+    }
+  }
+
+  &__workspace-item-sessions,
+  &__assistant-item-sessions {
+    transition: none;
+  }
+
+  &__workspace-item-menu-popover {
+    padding: $size-gap-1;
+    border-color: var(--border-medium);
+    border-radius: $size-radius-lg;
+    box-shadow: 0 14px 42px -12px var(--color-overlay-black-30);
+    transform-origin: top left;
+    animation: bitfun-workspace-popover-in 150ms cubic-bezier(0.23, 1, 0.32, 1) both;
+  }
+
+  &__workspace-item-menu-item {
+    border-radius: $size-radius-sm;
+    transition:
+      transform 120ms cubic-bezier(0.23, 1, 0.32, 1),
+      background 120ms ease,
+      color 120ms ease;
+
+    &:active:not(:disabled) {
+      transform: scale(0.985);
+    }
+  }
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .bitfun-nav-panel__workspace-item-card:hover,
+  .bitfun-nav-panel__assistant-item-card:hover {
+    background: var(--element-bg-soft);
+  }
+
+  .bitfun-nav-panel__workspace-item.is-active .bitfun-nav-panel__workspace-item-card:hover,
+  .bitfun-nav-panel__assistant-item.is-active .bitfun-nav-panel__assistant-item-card:hover {
+    background: var(--element-bg-medium);
+  }
+}
+
+@keyframes bitfun-workspace-popover-in {
+  from {
+    opacity: 0;
+    transform: scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bitfun-nav-panel__workspace-item-menu-popover {
+    animation: none;
+  }
+}

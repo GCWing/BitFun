@@ -26,21 +26,26 @@
     border: 1px solid var(--border-base);
     border-radius: var(--size-radius-sm);
     cursor: pointer;
-    transition: all var(--motion-base) var(--easing-standard);
+    transform: scale(1);
+    transition:
+      background-color var(--motion-fast) ease,
+      border-color var(--motion-fast) ease,
+      box-shadow var(--motion-fast) ease,
+      transform var(--motion-fast) var(--easing-standard);
     min-height: 36px;
     position: relative;
     min-width: 0;
     overflow: hidden;
 
-    &:hover:not(.select--disabled &) {
-      background: var(--element-bg-subtle);
-      border-color: var(--border-strong);
-    }
-
     &:focus-visible {
       outline: none;
       background: transparent;
       border-color: var(--color-accent-500);
+      box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-accent-500) 14%, transparent);
+    }
+
+    &:active:not(.select--disabled &) {
+      transform: scale(0.985);
     }
   }
 
@@ -71,9 +76,6 @@
     .select__trigger {
       border-color: var(--color-error-border);
 
-      &:hover:not(.select--disabled &) {
-        border-color: var(--color-error);
-      }
     }
   }
 
@@ -125,12 +127,9 @@
     font-size: var(--font-size-xs);
     color: var(--color-accent-500);
     max-width: 150px;
-    transition: all var(--motion-fast) var(--easing-standard);
-
-    &:hover {
-      background: var(--color-accent-100);
-      border-color: var(--border-accent);
-    }
+    transition:
+      background-color var(--motion-fast) ease,
+      border-color var(--motion-fast) ease;
 
     &--more {
       background: transparent;
@@ -138,9 +137,6 @@
       color: var(--color-text-secondary);
       cursor: default;
 
-      &:hover {
-        background: transparent;
-      }
     }
   }
 
@@ -166,13 +162,19 @@
     cursor: pointer;
     font-size: 14px;
     line-height: 1;
+    padding: 0;
+    border: 0;
+    background: transparent;
     color: var(--color-text-muted);
-    transition: all var(--motion-fast) var(--easing-standard);
+    transform: scale(1);
+    transition:
+      background-color var(--motion-fast) ease,
+      color var(--motion-fast) ease,
+      transform var(--motion-fast) var(--easing-standard);
     margin-left: 2px;
 
-    &:hover {
-      background: var(--color-error-bg);
-      color: var(--color-error);
+    &:active {
+      transform: scale(0.97);
     }
   }
 
@@ -192,13 +194,19 @@
     border-radius: 50%;
     color: var(--color-text-muted);
     cursor: pointer;
-    transition: all var(--motion-fast) var(--easing-standard);
+    transform: scale(1);
+    transition:
+      background-color var(--motion-fast) ease,
+      color var(--motion-fast) ease,
+      transform var(--motion-fast) var(--easing-standard);
     font-size: 16px;
     line-height: 1;
+    padding: 0;
+    border: 0;
+    background: transparent;
 
-    &:hover {
-      background: var(--color-error-bg);
-      color: var(--color-error);
+    &:active {
+      transform: scale(0.97);
     }
   }
 
@@ -221,7 +229,9 @@
     align-items: center;
     justify-content: center;
     color: var(--color-text-muted);
-    transition: all var(--motion-base) var(--easing-standard);
+    transition:
+      color var(--motion-fast) ease,
+      transform var(--motion-fast) var(--easing-standard);
 
     &--open {
       transform: rotate(180deg);
@@ -230,6 +240,7 @@
   }
 
   &__dropdown {
+    --select-entry-y: -2px;
     position: absolute;
     left: 0;
     right: 0;
@@ -240,7 +251,8 @@
     border-radius: 0 0 var(--size-radius-sm) var(--size-radius-sm);
     box-shadow: 0 4px 12px var(--color-overlay-black-40);
     z-index: tokens.$z-dropdown;
-    animation: select-dropdown-appear var(--motion-fast) tokens.$easing-decelerate;
+    transform-origin: center top;
+    animation: select-dropdown-appear var(--motion-fast) var(--easing-standard);
     overflow: hidden;
     display: flex;
     flex-direction: column;
@@ -260,11 +272,13 @@
     }
 
     &--top {
+      --select-entry-y: 2px;
       bottom: 100%;
       border-top: 1px solid var(--border-medium);
       border-bottom: none;
       border-radius: var(--size-radius-sm) var(--size-radius-sm) 0 0;
       box-shadow: 0 -4px 12px var(--color-overlay-black-40);
+      transform-origin: center bottom;
 
       &::before {
         top: auto;
@@ -294,12 +308,18 @@
     cursor: pointer;
     font-size: 14px;
     line-height: 1;
-    transition: all var(--motion-fast) var(--easing-standard);
+    transform: scale(1);
+    transition:
+      background-color var(--motion-fast) ease,
+      color var(--motion-fast) ease,
+      transform var(--motion-fast) var(--easing-standard);
     flex-shrink: 0;
+    padding: 0;
+    border: 0;
+    background: transparent;
 
-    &:hover {
-      background: var(--color-error-bg);
-      color: var(--color-error);
+    &:active {
+      transform: scale(0.97);
     }
   }
 
@@ -315,14 +335,10 @@
     box-shadow: none !important;
     appearance: none;
     -webkit-appearance: none;
-    transition: all var(--motion-fast) var(--easing-standard);
+    transition: background-color var(--motion-fast) ease;
 
     &::placeholder {
       color: var(--color-text-muted);
-    }
-
-    &:hover {
-      background: var(--element-bg-soft);
     }
 
     &:focus,
@@ -345,14 +361,13 @@
     font-weight: var(--font-weight-medium);
     border-bottom: 1px solid var(--border-subtle);
     background: transparent;
-    transition: all var(--motion-fast) var(--easing-standard);
+    transition:
+      background-color var(--motion-fast) ease,
+      color var(--motion-fast) ease;
     border-radius: 3px;
     margin-bottom: 0;
     padding-bottom: 8px;
 
-    &:hover {
-      background: var(--element-bg-subtle);
-    }
   }
 
   &__options {
@@ -367,7 +382,9 @@
     gap: 8px;
     padding: 6px 10px;
     cursor: pointer;
-    transition: all var(--motion-fast) var(--easing-standard);
+    transition:
+      background-color var(--motion-fast) ease,
+      color var(--motion-fast) ease;
     font-size: var(--font-size-sm);
     color: var(--color-text-secondary);
     border-radius: 3px;
@@ -377,11 +394,6 @@
 
     &:last-child {
       margin-bottom: 0;
-    }
-
-    &:hover:not(&--disabled) {
-      background: var(--element-bg-subtle);
-      color: var(--color-text-primary);
     }
 
     &--highlighted:not(&--disabled) {
@@ -394,9 +406,6 @@
       color: var(--color-accent-500);
       font-weight: var(--font-weight-medium);
 
-      &:hover {
-        background: var(--color-accent-200);
-      }
     }
 
     &--disabled {
@@ -444,7 +453,10 @@
     justify-content: center;
     flex-shrink: 0;
     font-size: 11px;
-    transition: all var(--motion-fast) var(--easing-standard);
+    transition:
+      background-color var(--motion-fast) ease,
+      border-color var(--motion-fast) ease,
+      color var(--motion-fast) ease;
     background: transparent;
     color: transparent;
 
@@ -494,7 +506,9 @@
     gap: 8px;
     padding: 8px 12px;
     cursor: pointer;
-    transition: all var(--motion-fast) var(--easing-standard);
+    transition:
+      background-color var(--motion-fast) ease,
+      border-color var(--motion-fast) ease;
     font-size: var(--font-size-sm);
     color: var(--color-accent-500);
     border-radius: 3px;
@@ -502,10 +516,6 @@
     background: var(--color-accent-100);
     border: 1px dashed var(--border-accent-soft);
 
-    &:hover {
-      background: var(--color-accent-200);
-      border-color: var(--border-accent);
-    }
   }
 
   &__custom-value-text {
@@ -606,12 +616,77 @@
 @keyframes select-dropdown-appear {
   from {
     opacity: 0;
-    transform: translateY(-8px);
+    transform: translateY(var(--select-entry-y)) scale(0.985);
   }
   to {
     opacity: 1;
     transform: translateY(0);
   }
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .select:not(.select--disabled) .select__trigger:hover {
+    background: var(--element-bg-subtle);
+    border-color: var(--border-strong);
+  }
+
+  .select--error:not(.select--disabled) .select__trigger:hover {
+    border-color: var(--color-error);
+  }
+
+  .select__tag:hover {
+    background: var(--color-accent-100);
+    border-color: var(--border-accent);
+  }
+
+  .select__tag--more:hover {
+    background: transparent;
+    border-color: var(--border-base);
+  }
+
+  .select__tag-remove:hover,
+  .select__clear:hover,
+  .select__search-clear:hover {
+    background: var(--color-error-bg);
+    color: var(--color-error);
+  }
+
+  .select__search-input:hover {
+    background: var(--element-bg-soft);
+  }
+
+  .select__select-all:hover,
+  .select__option:hover:not(.select__option--disabled) {
+    background: var(--element-bg-subtle);
+    color: var(--color-text-primary);
+  }
+
+  .select__option--selected:hover {
+    background: var(--color-accent-200);
+  }
+
+  .select__custom-value-hint:hover {
+    background: var(--color-accent-200);
+    border-color: var(--border-accent);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .select__trigger,
+  .select__tag-remove,
+  .select__clear,
+  .select__search-clear {
+    transform: none;
+  }
+
+  .select__dropdown {
+    animation: select-dropdown-fade var(--motion-fast) ease;
+  }
+}
+
+@keyframes select-dropdown-fade {
+  from { opacity: 0; }
+  to { opacity: 1; }
 }
 
 @keyframes select-spin {

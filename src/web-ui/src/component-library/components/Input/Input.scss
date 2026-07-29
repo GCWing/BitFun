@@ -47,19 +47,11 @@
       background: var(--element-bg-subtle);
       border: 1px solid transparent;
 
-      &:hover:not(.bitfun-input-wrapper--disabled &) {
-        background: var(--element-bg-soft);
-        border-color: var(--border-base);
-      }
-
       &:focus-within {
         background: var(--element-bg-soft);
         border-color: transparent;
       }
 
-      &:hover:focus-within {
-        border-color: var(--color-accent-500);
-      }
     }
   }
 
@@ -73,10 +65,6 @@
   &--error {
     .bitfun-input-container {
       border-color: var(--color-error-border) !important;
-
-      &:hover:not(.bitfun-input-wrapper--disabled &) {
-        border-color: var(--color-error) !important;
-      }
 
       &:focus-within {
         border-color: var(--color-error) !important;
@@ -106,21 +94,20 @@
   align-items: center;
   gap: var(--size-gap-2);
   padding: 0 var(--size-gap-3);
-  border-radius: 4px;
-  transition: all var(--motion-base) var(--easing-standard);
+  border-radius: var(--size-radius-sm);
+  transition:
+    background-color var(--motion-fast) ease,
+    border-color var(--motion-fast) ease,
+    box-shadow var(--motion-fast) ease;
   position: relative;
   min-width: 0;
   overflow: hidden;
-
-  &:hover:not(.bitfun-input-wrapper--disabled &) {
-    background: var(--element-bg-subtle);
-    border-color: var(--border-strong);
-  }
 
   &:focus-within {
     background: transparent;
     border-color: var(--color-accent-500);
     outline: none;
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-accent-500) 14%, transparent);
   }
 }
 
@@ -185,15 +172,52 @@
   align-items: center;
   justify-content: center;
   border-radius: 4px;
-  transition: color 0.15s;
+  transition:
+    color var(--motion-fast) ease,
+    transform var(--motion-fast) var(--easing-standard);
 
-  &:hover {
-    color: var(--color-text-secondary);
+  &:active {
+    transform: scale(0.97);
   }
 }
 
+.bitfun-input-hint,
 .bitfun-input-error-message {
   font-size: var(--font-size-xs);
   color: var(--color-error);
   margin-top: -2px;
+}
+
+.bitfun-input-hint {
+  color: var(--color-text-muted);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .bitfun-input-wrapper:not(.bitfun-input-wrapper--disabled) .bitfun-input-container:hover {
+    background: var(--element-bg-subtle);
+    border-color: var(--border-strong);
+  }
+
+  .bitfun-input-wrapper--filled:not(.bitfun-input-wrapper--disabled) .bitfun-input-container:hover {
+    background: var(--element-bg-soft);
+    border-color: var(--border-base);
+  }
+
+  .bitfun-input-wrapper--filled .bitfun-input-container:hover:focus-within {
+    border-color: var(--color-accent-500);
+  }
+
+  .bitfun-input-wrapper--error:not(.bitfun-input-wrapper--disabled) .bitfun-input-container:hover {
+    border-color: var(--color-error) !important;
+  }
+
+  .bitfun-input-toggle:hover {
+    color: var(--color-text-secondary);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bitfun-input-toggle:active {
+    transform: none;
+  }
 }

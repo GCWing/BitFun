@@ -37,9 +37,12 @@
     line-height: 1.5;
     color: var(--color-text-primary);
     background: var(--element-bg-subtle);
-    border: 1.5px solid var(--border-base);
-    border-radius: 4px;
-    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    border: 1px solid var(--border-base);
+    border-radius: var(--size-radius-sm);
+    transition:
+      background-color var(--motion-fast) ease,
+      border-color var(--motion-fast) ease,
+      box-shadow var(--motion-fast) ease;
     resize: vertical;
     font-family: inherit;
 
@@ -52,15 +55,11 @@
       background: var(--color-accent-300);
     }
 
-    &:hover:not(:disabled) {
-      border-color: var(--border-medium);
-      background: var(--element-bg-soft);
-    }
-
     &:focus {
       outline: none !important;
-      border-color: var(--border-medium);
+      border-color: var(--color-accent-500);
       background: var(--element-bg-subtle);
+      box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-accent-500) 14%, transparent);
     }
 
     &:focus-visible {
@@ -127,10 +126,6 @@
     background: var(--element-bg-soft);
     border-color: transparent;
 
-    &:hover:not(:disabled) {
-      background: var(--element-bg-base);
-    }
-
     &:focus {
       background: var(--element-bg-soft);
       border-color: transparent;
@@ -139,17 +134,23 @@
 
   &--outlined &__field {
     background: transparent;
-    border-width: 1.5px;
+    border-width: 1px;
     border-color: var(--border-subtle);
 
-    &:hover:not(:disabled) {
-      border-color: var(--border-medium);
-      background: var(--element-bg-subtle);
-    }
-
     &:focus {
-      border-color: var(--border-medium);
+      border-color: var(--color-accent-500);
       background: var(--element-bg-subtle);
     }
+  }
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .bitfun-textarea__field:hover:not(:disabled) {
+    border-color: var(--border-medium);
+    background: var(--element-bg-soft);
+  }
+
+  .bitfun-textarea--filled .bitfun-textarea__field:hover:not(:disabled) {
+    background: var(--element-bg-base);
   }
 }

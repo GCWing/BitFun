@@ -22,18 +22,23 @@
     display: inline-flex;
     align-items: center;
     gap: 4px;
-    height: 20px;
-    padding: 0 8px;
-    border-radius: 10px;
-    border: none;
-    background: transparent;
+    height: 26px;
+    padding: 0 7px;
+    border-radius: 7px;
+    border: 1px solid transparent;
+    background: color-mix(in srgb, var(--element-bg-subtle) 72%, transparent);
     color: var(--color-text-secondary);
     font-size: var(--flowchat-font-size-2xs);
-    font-weight: 400;
+    font-weight: 500;
     cursor: pointer;
-    transition: all 0.2s ease;
+    transition:
+      color 140ms ease,
+      background-color 140ms ease,
+      border-color 140ms ease,
+      opacity 140ms ease,
+      transform 120ms cubic-bezier(0.23, 1, 0.32, 1);
     outline: none;
-    opacity: 0.3;
+    opacity: 0.72;
     white-space: nowrap;
     letter-spacing: 0.3px;
     
@@ -47,9 +52,20 @@
       color: var(--color-text-primary);
       opacity: 1;
     }
+
+    &:active:not(:disabled) {
+      transform: scale(0.97);
+    }
+
+    &:focus-visible {
+      border-color: var(--border-accent);
+      box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-accent-500) 20%, transparent);
+      opacity: 1;
+    }
     
     &--open {
       background: color-mix(in srgb, var(--color-accent-500) 15%, transparent);
+      border-color: color-mix(in srgb, var(--color-accent-500) 24%, transparent);
       color: var(--color-text-primary);
       opacity: 1;
     }
@@ -112,7 +128,7 @@
     color: var(--color-text-muted);
     opacity: 0.55;
     letter-spacing: 0.2px;
-    transition: color 0.3s ease, opacity 0.3s ease;
+    transition: opacity 160ms ease;
     flex-shrink: 0;
 
     &--warning {
@@ -147,7 +163,7 @@
     max-width: clamp(0px, 280px, calc(100vw - 16px));
     background: var(--color-bg-elevated);
     border: 1px solid var(--color-overlay-white-12);
-    border-radius: 6px;
+    border-radius: 10px;
     overflow: hidden;
     backdrop-filter: blur(20px) saturate(1.2);
     -webkit-backdrop-filter: blur(20px) saturate(1.2);
@@ -158,7 +174,16 @@
     // This menu is portaled to document.body, so it must clear overlay-hosted
     // surfaces such as FloatingMiniChat instead of inheriting their stack.
     z-index: $z-popover;
-    animation: bitfun-model-dropdown-fade-in 0.15s ease-out;
+    transform-origin: left bottom;
+    animation: bitfun-model-dropdown-fade-in 180ms cubic-bezier(0.23, 1, 0.32, 1);
+
+    &[data-placement='bottom'] {
+      transform-origin: left top;
+    }
+
+    &[data-keyboard-open='true'] {
+      animation: none;
+    }
   }
   
   &__dropdown-header {
@@ -246,12 +271,33 @@
     align-items: center;
     justify-content: space-between;
     gap: 8px;
-    padding: 7px 12px;
+    width: 100%;
+    min-height: 34px;
+    padding: 7px 10px;
+    border: 0;
+    border-radius: 6px;
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    text-align: left;
     cursor: pointer;
-    transition: all 0.15s ease;
+    transition:
+      background-color 140ms ease,
+      color 140ms ease,
+      transform 120ms cubic-bezier(0.23, 1, 0.32, 1);
     
-    &:hover {
+    &:hover,
+    &:focus-visible {
       background: var(--color-accent-100);
+      outline: none;
+    }
+
+    &:focus-visible {
+      box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-accent-500) 42%, transparent);
+    }
+
+    &:active {
+      transform: scale(0.985);
     }
     
     &--selected {
@@ -366,7 +412,7 @@
 @keyframes bitfun-model-dropdown-fade-in {
   from {
     opacity: 0;
-    transform: translateY(4px);
+    transform: translateY(4px) scale(0.98);
   }
   to {
     opacity: 1;
@@ -377,4 +423,17 @@
 @keyframes bitfun-ctx-critical-pulse {
   0%, 100% { opacity: 0.8; }
   50%       { opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bitfun-model-selector__trigger,
+  .bitfun-model-selector__option,
+  .bitfun-model-selector__chevron {
+    transition-duration: 0ms;
+  }
+
+  .bitfun-model-selector__dropdown,
+  .bitfun-model-selector__ctx-usage--critical {
+    animation: none;
+  }
 }

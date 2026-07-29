@@ -3,10 +3,10 @@
  *
  * Left-right layout:
  *   .nav-area   (240px, flex-column)
- *     NavBar        (32px — back/forward + drag + WindowControls)
+ *     NavBar        (38px — back/forward + drag + WindowControls)
  *     NavPanel      (flex:1 — navigation sidebar)
  *   .scene-area (flex:1, flex-column)
- *     SceneBar      (32px — scene tab strip)
+ *     SceneBar      (38px — scene tab strip)
  *     SceneViewport (flex:1 — active scene content)
  */
 

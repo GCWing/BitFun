@@ -33,6 +33,7 @@ export const ScrollToTurnHeaderButton: React.FC<ScrollToTurnHeaderButtonProps> =
       <div className="scroll-to-turn-header-trigger__content">
         <Tooltip content={turnLabel || t('scroll.toCurrentTurn')}>
           <button
+            type="button"
             className="scroll-to-turn-header-trigger__btn"
             onClick={onClick}
             aria-label={turnLabel || t('scroll.toCurrentTurn')}

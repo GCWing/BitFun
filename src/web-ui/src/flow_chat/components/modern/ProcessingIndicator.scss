@@ -4,26 +4,16 @@
 
 .processing-indicator {
   width: 100%;
-  max-width: 1200px; /* Relaxed max width for larger screens */
+  max-width: 900px;
   /* Keep below the Virtuoso footer spacer; tight margin avoids a tall “dead” band above the input. */
   margin: 0 auto 0.35rem auto;
-  padding: 0 3rem;
+  padding: 0 var(--flowchat-content-inline-pad);
   box-sizing: border-box;
-
-  // Responsive: large screens
-  @media (max-width: 1400px) {
-    max-width: 1000px;
-  }
-
-  // Responsive: medium screens
-  @media (max-width: 1200px) {
-    max-width: 900px;
-  }
 
   // Responsive: small screens
   @media (max-width: 768px) {
     max-width: 100%;
-    padding: 0 1.5rem;
+    padding: 0 var(--flowchat-content-inline-pad-mobile);
   }
 }
 
@@ -31,8 +21,9 @@
   display: flex;
   align-items: center;
   justify-content: flex-start;
-  gap: 0.75rem;
-  padding: 0.5rem 0;
+  gap: var(--flowchat-control-gap);
+  min-height: 28px;
+  padding: 0.3rem 0;
 }
 
 // Hint text — use the same low-contrast breathe rhythm as active tool cards.
@@ -43,10 +34,8 @@
   overflow: hidden;
   text-overflow: ellipsis;
   max-width: 320px;
-  // Fade in once, then breathe gently without making the whole row blink.
-  animation:
-    hint-fade-in 0.4s ease forwards,
-    hint-breathe 2.2s ease-in-out 0.4s infinite;
+  // Keep send feedback immediate; only the low-contrast opacity breath remains.
+  animation: hint-breathe 2.2s ease-in-out infinite;
 
   @media (max-width: 768px) {
     max-width: 200px;
@@ -71,5 +60,11 @@
   }
   50% {
     opacity: 0.68;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .processing-indicator__hint {
+    animation: none;
   }
 }

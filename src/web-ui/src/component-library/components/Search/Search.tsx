@@ -2,7 +2,7 @@
  * Search input component
  */
 
-import React, { useState, useRef, useEffect, useCallback, forwardRef } from 'react';
+import React, { useState, useRef, useEffect, useCallback, forwardRef, useId } from 'react';
 import { useI18n } from '@/infrastructure/i18n';
 import './Search.scss';
 
@@ -128,6 +128,8 @@ export const Search = forwardRef<HTMLInputElement, SearchProps>(({
   ...rootProps
 }, ref) => {
   const { t } = useI18n('components');
+  const generatedId = useId();
+  const errorId = `${generatedId}-error`;
   
   // Resolve i18n default values
   const resolvedPlaceholder = placeholder ?? t('search.placeholder');
@@ -254,6 +256,9 @@ export const Search = forwardRef<HTMLInputElement, SearchProps>(({
           aria-label={inputAriaLabel ?? t('search.placeholder')}
           aria-controls={ariaControls}
           aria-expanded={ariaExpanded}
+          aria-busy={loading || undefined}
+          aria-invalid={error || undefined}
+          aria-describedby={error && errorMessage ? errorId : undefined}
         />
 
         {clearable && inputValue && !loading && !disabled && (
@@ -295,7 +300,7 @@ export const Search = forwardRef<HTMLInputElement, SearchProps>(({
       </div>
 
       {error && errorMessage && (
-        <div className="search__error-message">{errorMessage}</div>
+        <div id={errorId} className="search__error-message" role="alert">{errorMessage}</div>
       )}
     </div>
   );

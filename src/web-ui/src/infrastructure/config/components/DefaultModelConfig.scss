@@ -183,7 +183,10 @@
     padding: $size-gap-2 0;
     background: transparent;
     border: none;
-    transition: all $motion-base $easing-standard;
+    transition:
+      background-color $motion-fast $easing-standard,
+      color $motion-fast $easing-standard,
+      opacity $motion-fast $easing-standard;
     
     &--configured {
       .default-model-config__capability-status {
@@ -249,7 +252,14 @@
     color: var(--color-text-secondary);
     font-size: var(--font-size-sm);
     font-weight: $font-weight-medium;
-    transition: all $motion-base $easing-standard;
+    transition:
+      transform $motion-fast $easing-standard,
+      background-color $motion-fast $easing-standard,
+      color $motion-fast $easing-standard;
+
+    &:active {
+      transform: scale(0.985);
+    }
     border-radius: $size-radius-sm;
     
     &:hover {

@@ -91,7 +91,11 @@
       color: var(--color-text-secondary);
       font-size: 13px;
       cursor: pointer;
-      transition: all 0.2s;
+      transition:
+        transform 140ms cubic-bezier(0.23, 1, 0.32, 1),
+        background-color 140ms ease,
+        border-color 140ms ease,
+        color 140ms ease;
 
       &:hover {
         background: var(--element-bg-base);
@@ -141,7 +145,10 @@
       border-radius: 4px;
       color: var(--color-text-muted);
       cursor: pointer;
-      transition: all 0.15s;
+      transition:
+        transform 140ms cubic-bezier(0.23, 1, 0.32, 1),
+        background-color 140ms ease,
+        color 140ms ease;
 
       &:hover {
         background: var(--element-bg-soft);
@@ -221,4 +228,3 @@
     }
   }
 }
-

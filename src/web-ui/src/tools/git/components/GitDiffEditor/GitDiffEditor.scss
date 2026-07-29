@@ -168,7 +168,9 @@ $_diff-padding-desktop: 32px;
           width: 1px;
           background: var(--border-medium);
           border-left: 1px dashed var(--border-medium);
-          transition: all 0.2s ease;
+          transition:
+            background-color 150ms ease,
+            border-color 150ms ease;
         }
         
         &:hover::before {
@@ -272,7 +274,7 @@ $_diff-padding-desktop: 32px;
     padding: $_diff-padding-desktop;
     text-align: center;
     flex: 1;
-    animation: git-diff-editor-fade-in 0.3s ease-out;
+    animation: git-diff-editor-fade-in 200ms ease-out;
   }
 
   &__completed-icon {
@@ -283,7 +285,7 @@ $_diff-padding-desktop: 32px;
     height: $_diff-icon-size;
     border-radius: $size-radius-full;
     margin-bottom: $size-gap-6;
-    animation: git-diff-editor-scale-bounce 0.5s $easing-standard;
+    animation: git-diff-editor-scale-bounce 220ms cubic-bezier(0.23, 1, 0.32, 1);
     box-shadow: 0 8px 24px var(--color-overlay-black-30);
 
     &--accepted {
@@ -319,14 +321,14 @@ $_diff-padding-desktop: 32px;
     font-family: $font-family-mono;
     color: var(--color-text-primary);
     margin-bottom: $size-gap-4;
-    animation: git-diff-editor-slide-up 0.4s ease-out 0.1s both;
+    animation: git-diff-editor-slide-up 220ms cubic-bezier(0.23, 1, 0.32, 1) 40ms both;
   }
 
   &__completed-details {
     display: flex;
     flex-direction: column;
     gap: $size-gap-2;
-    animation: git-diff-editor-slide-up 0.4s ease-out 0.2s both;
+    animation: git-diff-editor-slide-up 220ms cubic-bezier(0.23, 1, 0.32, 1) 70ms both;
 
     .git-diff-editor__file-path {
       font-size: var(--font-size-base);
@@ -380,11 +382,8 @@ $_diff-padding-desktop: 32px;
 
 @keyframes git-diff-editor-scale-bounce {
   0% {
-    transform: scale(0);
+    transform: scale(0.94);
     opacity: 0;
-  }
-  50% {
-    transform: scale(1.1);
   }
   100% {
     transform: scale(1);
@@ -395,7 +394,7 @@ $_diff-padding-desktop: 32px;
 @keyframes git-diff-editor-slide-up {
   from {
     opacity: 0;
-    transform: translateY(20px);
+    transform: translateY(6px);
   }
   to {
     opacity: 1;

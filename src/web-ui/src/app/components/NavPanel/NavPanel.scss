@@ -2129,3 +2129,406 @@ $_section-header-height: 24px;
     transform: scale(0.86);
   }
 }
+
+// ──────────────────────────────────────────────
+// Desktop navigation refinement
+// ──────────────────────────────────────────────
+// This final layer consolidates geometry and interaction behavior across the
+// older navigation subsections without changing their information architecture.
+
+.bitfun-nav-panel {
+  border-radius: $size-radius-base;
+  background: var(--color-bg-primary);
+
+  &__content {
+    overflow: visible;
+  }
+
+  &__layer--main {
+    transition: none;
+  }
+
+  &__layer--scene {
+    clip-path: inset(0);
+    background: var(--color-bg-primary);
+    transition: none;
+
+    .is-split-open &,
+    .is-split-open &.is-active {
+      clip-path: inset(0);
+      transition: none;
+    }
+  }
+
+  &__brand-header {
+    padding: 0 6px 5px;
+  }
+
+  &__top-actions {
+    gap: 2px;
+    padding: 5px 6px $size-gap-3;
+  }
+
+  &__top-action-expand {
+    gap: 2px;
+    margin-bottom: $size-gap-1;
+    padding-bottom: $size-gap-2;
+  }
+
+  &__top-action-sublist {
+    gap: 2px;
+    transition: none;
+  }
+
+  &__top-action-btn {
+    height: 32px;
+    padding-inline: $size-gap-2;
+    border-radius: $size-radius-sm;
+    font-weight: 500;
+    transition:
+      transform 120ms cubic-bezier(0.23, 1, 0.32, 1),
+      background 120ms ease,
+      color 120ms ease;
+
+    &:active {
+      transform: scale(0.985);
+      background: var(--element-bg-medium);
+    }
+
+    &.is-active {
+      background: var(--element-bg-medium);
+    }
+
+    &:not(.bitfun-nav-panel__top-action-btn--sub):hover .bitfun-nav-panel__top-action-icon-slot {
+      transform: none;
+    }
+
+    &--sub {
+      padding-left: $size-gap-4;
+      color: var(--color-text-muted);
+    }
+  }
+
+  &__top-action-icon-circle {
+    border-radius: $size-radius-sm;
+    transition: transform 120ms cubic-bezier(0.23, 1, 0.32, 1);
+
+    .bitfun-nav-panel__top-action-btn:hover & {
+      transform: none;
+    }
+
+    .bitfun-nav-panel__top-action-btn:active & {
+      transform: scale(0.95);
+    }
+  }
+
+  &__sections {
+    padding-bottom: $size-gap-2;
+
+    &.is-mode-switching {
+      animation: none;
+    }
+  }
+
+  &__section {
+    margin-bottom: $size-gap-3;
+    transition: none;
+
+    &:last-child {
+      margin-bottom: $size-gap-3;
+    }
+
+    &.is-departing-up,
+    &.is-departing-down {
+      opacity: 1;
+      transform: none;
+    }
+  }
+
+  &__section-header {
+    height: 26px;
+    margin: 0 6px;
+    padding: 0 $size-gap-2;
+    border-radius: $size-radius-sm;
+    opacity: 1;
+    transition:
+      transform 120ms cubic-bezier(0.23, 1, 0.32, 1),
+      background 120ms ease;
+
+    &--interactive:active {
+      transform: scale(0.985);
+    }
+  }
+
+  &__section-label {
+    color: var(--color-text-muted);
+    letter-spacing: 0.045em;
+    transition: color 120ms ease;
+  }
+
+  &__section-action,
+  &__item-action {
+    border-radius: $size-radius-sm;
+    transition:
+      transform 120ms cubic-bezier(0.23, 1, 0.32, 1),
+      color 120ms ease,
+      background 120ms ease;
+
+    &:active {
+      transform: scale(0.94);
+    }
+  }
+
+  &__collapsible,
+  &__item-slot {
+    transition: none;
+
+    &.is-departing-up,
+    &.is-departing-anchor,
+    &.is-departing-down {
+      opacity: 1;
+      transform: none;
+    }
+  }
+
+  &__items {
+    gap: 2px;
+    padding: 2px 6px;
+  }
+
+  &__item {
+    height: 32px;
+    padding: 0 $size-gap-2;
+    border-radius: $size-radius-sm;
+    transition:
+      transform 120ms cubic-bezier(0.23, 1, 0.32, 1),
+      background 120ms ease,
+      color 120ms ease,
+      opacity 120ms ease;
+
+    &:active {
+      transform: scale(0.985);
+    }
+
+    &.is-active {
+      background: var(--element-bg-medium);
+      font-weight: 500;
+
+      &::before {
+        left: 3px;
+        width: 2px;
+        height: 14px;
+        border-radius: $size-radius-full;
+      }
+    }
+  }
+
+  &__item-icon {
+    transition:
+      color 120ms ease,
+      opacity 120ms ease;
+  }
+
+  &__bottom-bar {
+    gap: $size-gap-1;
+    padding: 4px 6px;
+    border-top: 1px solid var(--border-subtle);
+  }
+
+  &__pages-entry,
+  &__assistant-entry,
+  &__miniapp-entry {
+    min-height: 36px;
+    padding-block: 0;
+    border-radius: $size-radius-base;
+    box-shadow: none;
+    transition:
+      transform 120ms cubic-bezier(0.23, 1, 0.32, 1),
+      background 120ms ease,
+      border-color 120ms ease,
+      color 120ms ease;
+
+    &:hover,
+    &.is-active {
+      box-shadow: none;
+    }
+
+    &:active {
+      transform: scale(0.985);
+    }
+  }
+
+  &__miniapp-entry.is-active {
+    border-color: var(--border-subtle);
+    background: var(--element-bg-medium);
+  }
+
+  &__miniapp-bubble {
+    width: 24px;
+    height: 24px;
+    transition:
+      transform 120ms cubic-bezier(0.23, 1, 0.32, 1),
+      opacity 120ms ease,
+      filter 120ms ease;
+
+    &:hover {
+      transform: none;
+      box-shadow: none;
+    }
+
+    &:active {
+      transform: scale(0.94);
+    }
+  }
+
+  &__mode-pill {
+    border-radius: $size-radius-lg;
+    box-shadow: none;
+    transition:
+      transform 120ms cubic-bezier(0.23, 1, 0.32, 1),
+      border-color 120ms ease,
+      background 120ms ease;
+
+    &:hover {
+      transform: none;
+      box-shadow: none;
+    }
+
+    &:active {
+      transform: scale(0.985);
+    }
+  }
+
+  &__mode-pill-inner,
+  &__mode-pill-liquid {
+    border-radius: $size-radius-base;
+  }
+
+  &__mode-pill-liquid,
+  &__mode-pill-liquid.is-morph-to-assistant,
+  &__mode-pill-liquid.is-morph-to-pro {
+    animation: none;
+    transition:
+      transform 180ms cubic-bezier(0.23, 1, 0.32, 1),
+      background 180ms ease;
+  }
+}
+
+.bitfun-nav-panel__footer {
+  min-height: 36px;
+  padding: 4px 6px 0;
+  border-top: 1px solid var(--border-subtle);
+}
+
+.bitfun-nav-panel__footer-btn--icon,
+.bitfun-nav-panel__footer .bitfun-notification-btn.bitfun-notification-btn--nav-hover-icon:not(.bitfun-notification-btn--has-progress) {
+  width: 28px;
+  height: 28px;
+  border-radius: $size-radius-sm;
+  transition:
+    transform 120ms cubic-bezier(0.23, 1, 0.32, 1),
+    background 120ms ease,
+    color 120ms ease;
+}
+
+.bitfun-nav-panel__footer-btn--icon:active,
+.bitfun-nav-panel__footer .bitfun-notification-btn:active {
+  transform: scale(0.94);
+}
+
+.bitfun-nav-panel__workspace-menu,
+.bitfun-nav-panel__mode-dropdown,
+.bitfun-nav-panel__footer-menu,
+.bitfun-nav-panel__footer-multimodal-menu {
+  border-color: var(--border-medium);
+  border-radius: $size-radius-lg;
+  box-shadow: 0 14px 42px -12px var(--color-overlay-black-30);
+  animation: bitfun-nav-popover-in 150ms cubic-bezier(0.23, 1, 0.32, 1) both;
+
+  &.is-closing {
+    animation: bitfun-nav-popover-out 100ms cubic-bezier(0.23, 1, 0.32, 1) both;
+  }
+}
+
+.bitfun-nav-panel__footer-multimodal-menu {
+  animation: bitfun-nav-centered-popover-in 150ms cubic-bezier(0.23, 1, 0.32, 1) both;
+}
+
+.bitfun-nav-panel__workspace-menu-item,
+.bitfun-nav-panel__mode-dropdown-item,
+.bitfun-nav-panel__footer-menu-item,
+.bitfun-nav-panel__footer-multimodal-item {
+  border-radius: $size-radius-sm;
+  transition:
+    transform 120ms cubic-bezier(0.23, 1, 0.32, 1),
+    background 120ms ease,
+    color 120ms ease;
+
+  &:active:not(:disabled) {
+    transform: scale(0.985);
+  }
+}
+
+.bitfun-nav-panel__remote-disclaimer-btn {
+  border-radius: $size-radius-sm;
+  transition:
+    transform 120ms cubic-bezier(0.23, 1, 0.32, 1),
+    border-color 120ms ease,
+    background 120ms ease,
+    color 120ms ease;
+
+  &:active:not(:disabled) {
+    transform: scale(0.97);
+  }
+}
+
+@keyframes bitfun-nav-popover-in {
+  from {
+    opacity: 0;
+    transform: translateY(3px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes bitfun-nav-popover-out {
+  from {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(2px) scale(0.99);
+  }
+}
+
+@keyframes bitfun-nav-centered-popover-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, 3px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, 0) scale(1);
+  }
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .bitfun-nav-panel__section-header--interactive:hover,
+  .bitfun-nav-panel__top-action-btn:hover,
+  .bitfun-nav-panel__item:hover,
+  .bitfun-nav-panel__footer-btn--icon:hover {
+    background: var(--element-bg-soft);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bitfun-nav-panel__workspace-menu,
+  .bitfun-nav-panel__mode-dropdown,
+  .bitfun-nav-panel__footer-menu,
+  .bitfun-nav-panel__footer-multimodal-menu {
+    animation: none;
+  }
+}

@@ -37,6 +37,7 @@ export const StickyTaskIndicator: React.FC<StickyTaskIndicatorProps> = ({
       <div className="sticky-task-indicator__content">
         <Tooltip content={tooltip} placement="bottom">
           <button
+            type="button"
             className="sticky-task-indicator__btn"
             onClick={onClick}
             aria-label={tooltip}

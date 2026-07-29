@@ -45,7 +45,12 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: all 0.15s ease;
+  transition:
+    transform 140ms cubic-bezier(0.23, 1, 0.32, 1),
+    background-color 140ms ease,
+    border-color 140ms ease,
+    color 140ms ease,
+    opacity 140ms ease;
   cursor: pointer;
 
   &::before {
@@ -55,7 +60,11 @@
     border: 1px dashed var(--color-accent-500);
     border-radius: 4px;
     opacity: 0.4;
-    transition: all 0.15s ease;
+    transition:
+      transform 140ms cubic-bezier(0.23, 1, 0.32, 1),
+      background-color 140ms ease,
+      border-color 140ms ease,
+      color 140ms ease;
   }
 
   &:hover::before {
@@ -85,7 +94,11 @@
     box-shadow: 0 2px 8px var(--color-accent-400);
     opacity: 0.85;
     transform: scale(1);
-    transition: all 0.15s ease;
+    transition:
+      transform 140ms cubic-bezier(0.23, 1, 0.32, 1),
+      background-color 140ms ease,
+      border-color 140ms ease,
+      color 140ms ease;
     pointer-events: none;
 
     span {

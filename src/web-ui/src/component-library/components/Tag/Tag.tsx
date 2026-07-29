@@ -12,6 +12,7 @@ export interface TagProps {
   title?: string;
   closable?: boolean;
   onClose?: () => void;
+  closeAriaLabel?: string;
   className?: string;
   style?: React.CSSProperties;
   rounded?: boolean;
@@ -24,6 +25,7 @@ export const Tag: React.FC<TagProps> = ({
   title,
   closable = false,
   onClose,
+  closeAriaLabel,
   className = '',
   style,
   rounded = false,
@@ -42,7 +44,12 @@ export const Tag: React.FC<TagProps> = ({
     <span className={classNames} title={title} style={style}>
       <span className="tag__content">{children}</span>
       {closable && (
-        <button className="tag__close" onClick={onClose}>
+        <button
+          type="button"
+          className="tag__close"
+          onClick={onClose}
+          aria-label={closeAriaLabel}
+        >
           ×
         </button>
       )}

@@ -315,7 +315,12 @@
     font-weight: $font-weight-medium;
     color: var(--color-text-secondary);
     cursor: pointer;
-    transition: all $motion-base $easing-standard;
+    transition:
+      transform $motion-fast $easing-standard,
+      background-color $motion-fast $easing-standard,
+      border-color $motion-fast $easing-standard,
+      color $motion-fast $easing-standard,
+      box-shadow $motion-fast $easing-standard;
     white-space: nowrap;
     position: relative;
 
@@ -412,7 +417,12 @@
     background: transparent;
     border: 1px solid var(--border-base);
     border-radius: var(--size-radius-sm);
-    transition: all var(--motion-base) var(--easing-standard);
+    transition:
+      transform var(--motion-fast) var(--easing-standard),
+      background-color var(--motion-fast) var(--easing-standard),
+      border-color var(--motion-fast) var(--easing-standard),
+      color var(--motion-fast) var(--easing-standard),
+      box-shadow var(--motion-fast) var(--easing-standard);
     min-height: 36px;
 
     
@@ -483,7 +493,12 @@
     font-weight: $font-weight-medium;
     color: var(--color-text-secondary);
     cursor: pointer;
-    transition: all $motion-base $easing-standard;
+    transition:
+      transform $motion-fast $easing-standard,
+      background-color $motion-fast $easing-standard,
+      border-color $motion-fast $easing-standard,
+      color $motion-fast $easing-standard,
+      box-shadow $motion-fast $easing-standard;
     white-space: nowrap;
     height: 32px;
 
@@ -637,7 +652,12 @@
     border: none;
     background: var(--element-bg-subtle);
     color: var(--color-text-muted);
-    transition: all $motion-base $easing-standard;
+    transition:
+      transform $motion-fast $easing-standard,
+      background-color $motion-fast $easing-standard,
+      border-color $motion-fast $easing-standard,
+      color $motion-fast $easing-standard,
+      box-shadow $motion-fast $easing-standard;
 
     
     &:hover {
@@ -787,7 +807,12 @@
     font-size: var(--font-size-sm);
     font-family: $font-family-sans;
     cursor: pointer;
-    transition: all $motion-base $easing-standard;
+    transition:
+      transform $motion-fast $easing-standard,
+      background-color $motion-fast $easing-standard,
+      border-color $motion-fast $easing-standard,
+      color $motion-fast $easing-standard,
+      box-shadow $motion-fast $easing-standard;
 
     
     &:hover:not(:disabled) {
@@ -953,7 +978,12 @@
       color: var(--color-text-primary);
       font-size: var(--font-size-sm);
       font-family: $font-family-sans;
-      transition: all var(--motion-base) var(--easing-standard);
+      transition:
+        transform var(--motion-fast) var(--easing-standard),
+        background-color var(--motion-fast) var(--easing-standard),
+        border-color var(--motion-fast) var(--easing-standard),
+        color var(--motion-fast) var(--easing-standard),
+        box-shadow var(--motion-fast) var(--easing-standard);
       min-height: 36px;
 
       
@@ -1494,7 +1524,12 @@
     background: transparent;
     border-radius: var(--size-radius-sm);
     border: 1px solid var(--border-base);
-    transition: all var(--motion-base) var(--easing-standard);
+    transition:
+      transform var(--motion-fast) var(--easing-standard),
+      background-color var(--motion-fast) var(--easing-standard),
+      border-color var(--motion-fast) var(--easing-standard),
+      color var(--motion-fast) var(--easing-standard),
+      box-shadow var(--motion-fast) var(--easing-standard);
 
     &:hover {
       background: var(--element-bg-subtle);
@@ -1656,7 +1691,12 @@
 
   &__provider-card {
     cursor: pointer;
-    transition: all $motion-base $easing-standard;
+    transition:
+      transform $motion-fast $easing-standard,
+      background-color $motion-fast $easing-standard,
+      border-color $motion-fast $easing-standard,
+      color $motion-fast $easing-standard,
+      box-shadow $motion-fast $easing-standard;
     border: 1px solid var(--border-base);
 
     &:hover {
@@ -1742,7 +1782,12 @@
 
   &__custom-option {
     cursor: pointer;
-    transition: all $motion-base $easing-standard;
+    transition:
+      transform $motion-fast $easing-standard,
+      background-color $motion-fast $easing-standard,
+      border-color $motion-fast $easing-standard,
+      color $motion-fast $easing-standard,
+      box-shadow $motion-fast $easing-standard;
     border: 1px dashed var(--border-base);
 
     &:hover {
@@ -1799,7 +1844,12 @@
     color: var(--color-text-secondary);
     font-size: var(--font-size-sm);
     cursor: pointer;
-    transition: all $motion-base $easing-standard;
+    transition:
+      transform $motion-fast $easing-standard,
+      background-color $motion-fast $easing-standard,
+      border-color $motion-fast $easing-standard,
+      color $motion-fast $easing-standard,
+      box-shadow $motion-fast $easing-standard;
 
     &:hover {
       color: var(--color-accent-500);

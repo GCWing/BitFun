@@ -92,7 +92,7 @@ export const Alert = forwardRef<HTMLDivElement, AlertProps>(({
       aria-live={type === 'error' ? 'assertive' : 'polite'}
     >
       {showIcon && (
-        <div className="alert__icon">
+        <div className="alert__icon" aria-hidden="true">
           {icons[type]}
         </div>
       )}
@@ -108,6 +108,7 @@ export const Alert = forwardRef<HTMLDivElement, AlertProps>(({
           className="alert__close"
           onClick={handleClose}
           aria-label={t('tooltip.close')}
+          type="button"
         >
           <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5">
             <path d="M1 1L11 11M11 1L1 11" strokeLinecap="round"/>

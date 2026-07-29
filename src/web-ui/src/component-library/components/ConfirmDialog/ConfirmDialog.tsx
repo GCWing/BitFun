@@ -80,11 +80,9 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
   const confirmButtonRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
-    if (isOpen) {
-      setTimeout(() => {
-        confirmButtonRef.current?.focus();
-      }, 100);
-    }
+    if (!isOpen) return;
+    const frame = requestAnimationFrame(() => confirmButtonRef.current?.focus());
+    return () => cancelAnimationFrame(frame);
   }, [isOpen]);
 
   const handleConfirm = () => {
@@ -106,6 +104,7 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
       onClose={handleCancel}
       size="medium"
       showCloseButton={false}
+      ariaLabelledBy={titleId}
     >
       <div className={`confirm-dialog confirm-dialog--${type}`}>
         <div className="confirm-dialog__icon" aria-hidden>

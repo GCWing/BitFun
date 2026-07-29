@@ -126,7 +126,9 @@ $opacity-high: 0.8 !default;
     color: var(--color-text-primary);
     font-size: var(--font-size-sm);
     font-family: $font-family-mono;
-    transition: all $motion-base $easing-standard;
+    transition:
+      background-color $motion-fast $easing-standard,
+      border-color $motion-fast $easing-standard;
 
     &:focus {
       outline: none;
@@ -152,7 +154,10 @@ $opacity-high: 0.8 !default;
     color: var(--color-text-primary);
     font-size: var(--font-size-sm);
     cursor: pointer;
-    transition: all $motion-base $easing-standard;
+    transition:
+      background-color $motion-fast $easing-standard,
+      border-color $motion-fast $easing-standard,
+      color $motion-fast $easing-standard;
 
     &:focus {
       outline: none;
@@ -223,7 +228,9 @@ $opacity-high: 0.8 !default;
     border: 1px solid var(--border-base);
     border-radius: $size-radius-base;
     margin-bottom: $size-gap-3;
-    transition: all $motion-base $easing-standard;
+    transition:
+      background-color $motion-fast $easing-standard,
+      border-color $motion-fast $easing-standard;
 
     &:hover {
       background: var(--element-bg-base);
@@ -306,7 +313,10 @@ $opacity-high: 0.8 !default;
     border: 1px solid var(--border-base);
     border-radius: $size-radius-base;
     cursor: pointer;
-    transition: all $motion-base $easing-standard;
+    transition:
+      transform $motion-fast $easing-standard,
+      background-color $motion-fast $easing-standard,
+      border-color $motion-fast $easing-standard;
     margin-top: $size-gap-4;
 
     &:hover {

@@ -1,19 +1,19 @@
 /**
- * FloatingMiniChat — subtle circular button + spring-animated expanded panel.
+ * FloatingMiniChat — compact circular button + origin-aware expanded panel.
  *
  * Button style follows the app's muted dark-UI language.
- * Panel springs from the button position (bottom-right) on open.
+ * Panel opens from the button position (bottom-right) with a short ease-out.
  * Button hides while the panel is visible.
  */
 
 @use '../../component-library/styles/tokens' as *;
 
-$fmc-ease: cubic-bezier(0.4, 0, 0.2, 1);
-$fmc-open-duration: 0.42s;
-$fmc-close-duration: 0.25s;
+$fmc-ease: cubic-bezier(0.23, 1, 0.32, 1);
+$fmc-open-duration: 0.22s;
+$fmc-close-duration: 0.16s;
 
-$button-size: 44px;
-$button-offset: 28px;
+$button-size: 42px;
+$button-offset: 20px;
 // Sized for the full session composer (workspace strip, model/permission
 // controls, action row) rather than the single-line input it replaced.
 $panel-width: 440px;
@@ -36,8 +36,8 @@ $panel-height: 680px;
   z-index: $z-overlay + 1;
   pointer-events: none;
   transition:
-    right $motion-base $easing-decelerate,
-    bottom $motion-base $easing-decelerate;
+    right 220ms cubic-bezier(0.77, 0, 0.175, 1),
+    bottom 220ms cubic-bezier(0.77, 0, 0.175, 1);
 
   &--miniapp-customizing {
     right: calc(clamp(380px, 38vw, 560px) + #{$button-offset + 16px});
@@ -60,35 +60,32 @@ $panel-height: 680px;
   width: $button-size;
   height: $button-size;
   border-radius: 50%;
-  border: 1px solid var(--border-base);
+  border: 1px solid var(--border-medium);
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
   color: var(--color-text-secondary);
-  background: var(--color-bg-tertiary);
+  background: var(--color-bg-elevated);
   box-shadow:
-    0 2px 8px rgba(var(--color-static-black-rgb), 0.35),
+    0 8px 24px -10px var(--color-overlay-black-30),
     inset 0 1px 0 var(--color-overlay-white-04);
   transition:
-    transform 0.2s $fmc-ease,
-    background 0.2s ease,
-    border-color 0.2s ease,
-    box-shadow 0.2s ease,
+    transform 120ms $fmc-ease,
+    background 120ms ease,
+    border-color 120ms ease,
+    box-shadow 120ms ease,
     opacity $fmc-close-duration $fmc-ease;
 
   &:hover {
-    background: var(--color-bg-elevated);
-    border-color: var(--border-medium);
+    background: var(--element-bg-hover);
+    border-color: var(--border-strong);
     color: var(--color-text-primary);
-    box-shadow:
-      0 4px 16px rgba(var(--color-static-black-rgb), 0.45),
-      0 0 12px color-mix(in srgb, var(--color-accent-500) 8%, transparent);
-    transform: scale(1.06);
+    box-shadow: 0 10px 28px -10px var(--color-overlay-black-30);
   }
 
   &:active {
-    transform: scale(0.94);
+    transform: scale(0.96);
   }
 
   // Hide when the panel is open. `visibility` (delayed until the fade-out
@@ -96,11 +93,11 @@ $panel-height: 680px;
   // would leave an invisible but clickable trigger under the panel.
   .bitfun-fmc--open & {
     opacity: 0;
-    transform: scale(0.5);
+    transform: scale(0.96);
     visibility: hidden;
     pointer-events: none;
     transition:
-      transform 0.2s $fmc-ease,
+      transform 120ms $fmc-ease,
       opacity $fmc-close-duration $fmc-ease,
       visibility 0s linear $fmc-close-duration;
   }
@@ -213,11 +210,11 @@ $panel-height: 680px;
   max-width: calc(100vw - 32px);
   max-height: calc(100vh - 80px);
   background: var(--color-bg-primary);
-  border: 1px solid var(--border-subtle);
-  border-radius: 8px;
+  border: 1px solid var(--border-medium);
+  border-radius: $size-radius-lg;
   box-shadow:
-    0 4px 12px var(--color-overlay-black-30),
-    0 0 1px var(--color-overlay-white-08);
+    0 1px 0 var(--color-overlay-white-04) inset,
+    0 20px 60px -16px var(--color-overlay-black-30);
   overflow: hidden;
   display: flex;
   flex-direction: column;
@@ -228,7 +225,7 @@ $panel-height: 680px;
   // animation ends rather than relying on pointer-events alone.
   transform-origin: bottom right;
   opacity: 0;
-  transform: scale(0.15);
+  transform: translateY(8px) scale(0.96);
   visibility: hidden;
   pointer-events: none;
   transition:
@@ -238,7 +235,7 @@ $panel-height: 680px;
 
   &--open {
     opacity: 1;
-    transform: scale(1);
+    transform: translateY(0) scale(1);
     visibility: visible;
     pointer-events: auto;
     transition:
@@ -258,7 +255,7 @@ $panel-height: 680px;
       left: 0;
       right: 0;
       height: 2px;
-      border-radius: 8px 8px 0 0;
+      border-radius: $size-radius-lg $size-radius-lg 0 0;
       background: linear-gradient(
         90deg,
         var(--color-accent-600),
@@ -281,18 +278,19 @@ $panel-height: 680px;
 // ─── Header ────────────────────────────────────────────────
 .bitfun-fmc__header {
   flex: 0 0 auto;
-  height: 36px;
+  height: 40px;
   display: flex;
   align-items: center;
-  padding: 0 10px;
+  padding: 0 $size-gap-2;
   gap: 4px;
   border-bottom: 1px solid var(--border-subtle);
+  background: color-mix(in srgb, var(--color-bg-elevated) 78%, var(--color-bg-primary));
 }
 
 .bitfun-fmc__header-btn {
   flex-shrink: 0;
-  width: 24px;
-  height: 24px;
+  width: 28px;
+  height: 28px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -301,7 +299,10 @@ $panel-height: 680px;
   color: var(--color-text-muted);
   border-radius: 6px;
   cursor: pointer;
-  transition: all 0.15s ease;
+  transition:
+    transform 120ms $fmc-ease,
+    background 120ms ease,
+    color 120ms ease;
 
   &:hover {
     background: var(--element-bg-base);
@@ -309,7 +310,7 @@ $panel-height: 680px;
   }
 
   &:active {
-    transform: scale(0.92);
+    transform: scale(0.94);
   }
 
   &--close:hover {
@@ -428,7 +429,7 @@ $panel-height: 680px;
   align-items: flex-start;
   justify-content: center;
   box-sizing: border-box;
-  padding: 42px 36px;
+  padding: 36px 32px;
   overflow-y: auto;
   color: var(--color-text-primary);
 
@@ -443,17 +444,16 @@ $panel-height: 680px;
 }
 
 .bitfun-fmc__miniapp-welcome-icon {
-  width: 48px;
-  height: 48px;
+  width: 44px;
+  height: 44px;
   display: flex;
   align-items: center;
   justify-content: center;
   color: var(--color-text-primary);
-  border-radius: 14px;
+  border-radius: $size-radius-lg;
   border: 1px solid var(--border-subtle);
   background: var(--element-bg-subtle);
-  box-shadow:
-    0 10px 28px var(--color-overlay-black-20);
+  box-shadow: 0 12px 28px -18px var(--color-overlay-black-30);
 }
 
 .bitfun-fmc__miniapp-welcome-eyebrow {
@@ -481,7 +481,7 @@ $panel-height: 680px;
   padding: 6px 9px;
   box-sizing: border-box;
   border: 1px solid var(--border-subtle);
-  border-radius: 999px;
+  border-radius: $size-radius-base;
   background: var(--element-bg-subtle);
   color: var(--color-text-muted);
   font-size: var(--flowchat-font-size-xs);
@@ -547,7 +547,11 @@ $panel-height: 680px;
     border-color: var(--border-medium);
     background: var(--element-bg-hover);
     color: var(--color-text-primary);
-    transform: translateY(-1px);
+  }
+
+  &:active {
+    transform: scale(0.985);
+    background: var(--element-bg-medium);
   }
 
   &:focus-visible {
@@ -564,5 +568,22 @@ $panel-height: 680px;
 
   .bitfun-fmc__miniapp-welcome {
     padding: 32px 24px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bitfun-fmc,
+  .bitfun-fmc__button,
+  .bitfun-fmc__panel,
+  .bitfun-fmc__header-btn,
+  .bitfun-fmc__miniapp-suggestion {
+    transition: none;
+  }
+
+  .bitfun-fmc__button,
+  .bitfun-fmc__panel,
+  .bitfun-fmc__header-btn,
+  .bitfun-fmc__miniapp-suggestion {
+    transform: none;
   }
 }

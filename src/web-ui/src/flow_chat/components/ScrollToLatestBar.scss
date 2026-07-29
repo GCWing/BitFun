@@ -16,7 +16,8 @@
   // Active non-expanded: ~80px input + 4px gap + 6px clearance + 24px gradient ≈ 114px.
   height: 114px;
   
-  transition: height 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+  // Height follows live composer measurements; do not animate layout.
+  transition: none;
   
   // ========== ChatInput collapsed ==========
   &--input-collapsed {
@@ -62,7 +63,7 @@
     align-items: center;
     justify-content: center;
     
-    transition: bottom 0.35s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.2s ease;
+    transition: opacity 140ms ease;
   }
   
   // ========== Circle arrow button ==========
@@ -70,17 +71,20 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    width: 28px;
-    height: 28px;
+    width: 30px;
+    height: 30px;
     border-radius: 50%;
-    border: 1.5px solid var(--border-base);
-    background: var(--color-bg-scene);
-    color: var(--color-text-muted);
+    border: 1px solid var(--border-medium);
+    background: color-mix(in srgb, var(--color-bg-elevated) 92%, transparent);
+    color: var(--color-text-secondary);
+    box-shadow: 0 6px 16px var(--color-overlay-black-15);
     cursor: pointer;
     pointer-events: none;
     padding: 0;
     
-    transition: border-color 0.2s ease, color 0.2s ease, transform 0.15s ease;
+    transition:
+      transform 120ms cubic-bezier(0.23, 1, 0.32, 1),
+      opacity 120ms ease;
   }
   
   // ========== Hover state ==========
@@ -88,14 +92,14 @@
     .scroll-to-latest-bar__btn {
       border-color: var(--border-medium);
       color: var(--color-text-primary);
-      transform: translateY(1px);
+      transform: translateY(-1px);
     }
   }
   
   // ========== Active state ==========
   &:active {
     .scroll-to-latest-bar__btn {
-      transform: translateY(2px);
+      transform: scale(0.97);
     }
   }
   
@@ -107,6 +111,13 @@
       border-color: var(--border-strong);
       color: var(--color-text-primary);
     }
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .scroll-to-latest-bar__content,
+  .scroll-to-latest-bar__btn {
+    transition-duration: 0ms;
   }
 }
 

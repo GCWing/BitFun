@@ -5352,7 +5352,11 @@ export const ChatInput: React.FC<ChatInputProps> = ({
                   )}
 
                   {modeState.dropdownOpen && (
-                    <div className="bitfun-chat-input__mode-dropdown bitfun-chat-input__mode-dropdown--agent-boost">
+                    <div
+                      className="bitfun-chat-input__mode-dropdown bitfun-chat-input__mode-dropdown--agent-boost"
+                      role="menu"
+                      aria-label={t('chatInput.addModeMenuTitle')}
+                    >
                       {canSwitchModes && (
                         <>
                           <div className="bitfun-chat-input__boost-section">
@@ -5375,9 +5379,19 @@ export const ChatInput: React.FC<ChatInputProps> = ({
                                   <Tooltip key={modeOption.id} content={modeDescription} placement="left">
                                     <div
                                       className={`bitfun-chat-input__mode-option ${modeState.current === modeOption.id ? 'bitfun-chat-input__mode-option--active' : ''}${modeDisabled ? ' bitfun-chat-input__mode-option--disabled' : ''}`}
+                                      role="menuitemradio"
+                                      aria-checked={modeState.current === modeOption.id}
+                                      aria-disabled={modeDisabled}
+                                      tabIndex={modeDisabled ? -1 : 0}
                                       onClick={e => {
                                         e.stopPropagation();
                                         if (modeDisabled) return;
+                                        requestModeChange(modeOption.id);
+                                      }}
+                                      onKeyDown={e => {
+                                        if (modeDisabled || (e.key !== 'Enter' && e.key !== ' ')) return;
+                                        e.preventDefault();
+                                        e.stopPropagation();
                                         requestModeChange(modeOption.id);
                                       }}
                                     >
@@ -5414,33 +5428,45 @@ export const ChatInput: React.FC<ChatInputProps> = ({
 
                       <div className="bitfun-chat-input__boost-section">
                         <div
-                          role="button"
+                          role="menuitem"
                           tabIndex={0}
                           className="bitfun-chat-input__boost-context-row"
                           onClick={handleBoostOpenAtContext}
-                          onKeyDown={e => e.key === 'Enter' && handleBoostOpenAtContext(e)}
+                          onKeyDown={e => {
+                            if (e.key !== 'Enter' && e.key !== ' ') return;
+                            e.preventDefault();
+                            handleBoostOpenAtContext(e);
+                          }}
                         >
                           <Files size={14} className="bitfun-chat-input__boost-context-icon" aria-hidden />
                           <span>{t('chatInput.boostAddContext')}</span>
                         </div>
 
                         <div
-                          role="button"
+                          role="menuitem"
                           tabIndex={0}
                           className="bitfun-chat-input__boost-context-row"
                           onClick={handleBoostPickImage}
-                          onKeyDown={e => e.key === 'Enter' && handleBoostPickImage(e as any)}
+                          onKeyDown={e => {
+                            if (e.key !== 'Enter' && e.key !== ' ') return;
+                            e.preventDefault();
+                            handleBoostPickImage(e as any);
+                          }}
                         >
                           <Image size={14} className="bitfun-chat-input__boost-context-icon" aria-hidden />
                           <span>{t('input.addImage')}</span>
                         </div>
 
                         <div
-                          role="button"
+                          role="menuitem"
                           tabIndex={0}
                           className="bitfun-chat-input__boost-context-row"
                           onClick={handleOpenCreateCustomMode}
-                          onKeyDown={e => e.key === 'Enter' && handleOpenCreateCustomMode(e)}
+                          onKeyDown={e => {
+                            if (e.key !== 'Enter' && e.key !== ' ') return;
+                            e.preventDefault();
+                            handleOpenCreateCustomMode(e);
+                          }}
                         >
                           <BotMessageSquare size={14} className="bitfun-chat-input__boost-context-icon" aria-hidden />
                           <span>{t('chatInput.createCustomMode')}</span>
@@ -5454,11 +5480,22 @@ export const ChatInput: React.FC<ChatInputProps> = ({
                             onMouseLeave={closeSkillsFlyout}
                           >
                             <div
-                              role="button"
+                              role="menuitem"
                               tabIndex={0}
                               className="bitfun-chat-input__boost-submenu-trigger"
                               aria-haspopup="menu"
                               aria-expanded={skillsFlyoutOpen}
+                              onKeyDown={e => {
+                                if (e.key === 'Escape') {
+                                  e.preventDefault();
+                                  clearSkillsTimer();
+                                  setSkillsFlyoutOpen(false);
+                                  return;
+                                }
+                                if (e.key !== 'Enter' && e.key !== ' ' && e.key !== 'ArrowRight') return;
+                                e.preventDefault();
+                                openSkillsFlyout();
+                              }}
                             >
                               <span className="bitfun-chat-input__boost-submenu-trigger-main">
                                 <Sparkles size={14} className="bitfun-chat-input__boost-context-icon" aria-hidden />

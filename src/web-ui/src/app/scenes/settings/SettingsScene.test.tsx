@@ -111,8 +111,7 @@ describe('SettingsScene lazy tab routing', () => {
     expect(container.querySelector('[data-testid="voice-input-config"]')).not.toBeNull();
   });
 
-  it('keeps the previous settings page mounted through the local transition', async () => {
-    vi.useFakeTimers();
+  it('switches settings pages immediately without retaining the outgoing panel', async () => {
     await act(async () => {
       root.render(<SettingsScene />);
     });
@@ -123,18 +122,8 @@ describe('SettingsScene lazy tab routing', () => {
     });
 
     const activePanel = container.querySelector('[data-settings-panel-active="true"]');
-    const outgoingPanel = container.querySelector('.bitfun-settings-scene__content-wrapper--outgoing');
     expect(activePanel?.getAttribute('data-settings-panel')).toBe('appearance');
-    expect(outgoingPanel?.getAttribute('data-settings-panel')).toBe('basics');
-
-    act(() => {
-      vi.advanceTimersByTime(179);
-    });
-    expect(container.querySelector('[data-settings-panel="basics"]')).not.toBeNull();
-
-    act(() => {
-      vi.advanceTimersByTime(1);
-    });
     expect(container.querySelector('[data-settings-panel="basics"]')).toBeNull();
+    expect(container.querySelectorAll('[data-settings-panel-active="true"]')).toHaveLength(1);
   });
 });

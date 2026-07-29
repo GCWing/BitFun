@@ -246,7 +246,11 @@
     cursor: pointer;
     font-size: 11px;
     font-weight: 500;
-    transition: all $motion-base $easing-standard;
+    transition:
+      transform $motion-fast $easing-standard,
+      background-color $motion-fast $easing-standard,
+      border-color $motion-fast $easing-standard,
+      color $motion-fast $easing-standard;
 
     &:hover {
       background: var(--element-bg-soft);
@@ -274,7 +278,11 @@
     background: transparent;
     color: var(--color-text-muted);
     cursor: pointer;
-    transition: all $motion-base $easing-standard;
+    transition:
+      transform $motion-fast $easing-standard,
+      background-color $motion-fast $easing-standard,
+      border-color $motion-fast $easing-standard,
+      color $motion-fast $easing-standard;
     
     &:hover {
       background: var(--element-bg-soft);
@@ -394,7 +402,10 @@
     font-size: var(--font-size-xs);
     line-height: 18px;
     cursor: pointer;
-    transition: all $motion-base $easing-standard;
+    transition:
+      background-color $motion-fast $easing-standard,
+      border-color $motion-fast $easing-standard,
+      color $motion-fast $easing-standard;
 
     &:hover {
       background: var(--element-bg-soft);
@@ -487,7 +498,11 @@
     background: transparent;
     color: var(--color-text-muted);
     cursor: pointer;
-    transition: all $motion-base $easing-standard;
+    transition:
+      transform $motion-fast $easing-standard,
+      background-color $motion-fast $easing-standard,
+      border-color $motion-fast $easing-standard,
+      color $motion-fast $easing-standard;
     font-size: var(--font-size-xs);
 
     &:hover {

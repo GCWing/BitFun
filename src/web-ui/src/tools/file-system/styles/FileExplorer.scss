@@ -85,7 +85,9 @@ $_indent-width: 8px;
   );
   overflow: hidden;
   
-  transition: all 0.15s ease-out;
+  transition:
+    background-color 140ms ease,
+    border-color 140ms ease;
 }
 
 .bitfun-file-explorer__breadcrumb-separator {
@@ -102,7 +104,9 @@ $_indent-width: 8px;
   max-width: 100px;
   padding: 2px 2px 3px;
   border-radius: 3px;
-  transition: all $motion-fast $easing-standard;
+  transition:
+    background-color $motion-fast $easing-standard,
+    color $motion-fast $easing-standard;
   
   &--clickable {
     cursor: pointer;
@@ -143,7 +147,10 @@ $_indent-width: 8px;
   position: relative;
   
   background: transparent;
-  transition: all $motion-base $easing-standard;
+  transition:
+    transform $motion-fast $easing-standard,
+    background-color $motion-fast $easing-standard,
+    color $motion-fast $easing-standard;
   color: var(--color-text-secondary);
   
   &:focus {
@@ -220,7 +227,9 @@ $_indent-width: 8px;
 .bitfun-file-explorer__icon {
   @include mixins.flex-layout(row, center, center, 0);
   flex-shrink: 0;
-  transition: all $motion-fast $easing-standard;
+  transition:
+    transform $motion-fast $easing-standard,
+    color $motion-fast $easing-standard;
   min-width: $_icon-size;
 
   &--folder {
@@ -393,7 +402,10 @@ $_indent-width: 8px;
   color: var(--color-text-muted);
   cursor: pointer;
   text-align: left;
-  transition: all $motion-base $easing-standard;
+  transition:
+    transform $motion-fast $easing-standard,
+    background-color $motion-fast $easing-standard,
+    color $motion-fast $easing-standard;
 
   &:hover:not(:disabled) {
     background: var(--element-bg-base);

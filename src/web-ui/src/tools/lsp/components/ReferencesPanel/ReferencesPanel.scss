@@ -101,7 +101,10 @@
   border-radius: $size-radius-sm;
   color: var(--color-text-muted);
   cursor: pointer;
-  transition: all $motion-fast ease;
+  transition:
+    transform $motion-fast cubic-bezier(0.23, 1, 0.32, 1),
+    background-color $motion-fast ease,
+    color $motion-fast ease;
 
   &:hover {
     background: var(--element-bg-base);
@@ -195,7 +198,11 @@
   margin: 1px 0;
   border-radius: $size-radius-sm;
   cursor: pointer;
-  transition: all $motion-instant ease;
+  transition:
+    transform $motion-instant cubic-bezier(0.23, 1, 0.32, 1),
+    background-color $motion-instant ease,
+    color $motion-instant ease,
+    box-shadow $motion-instant ease;
   user-select: none;
   position: relative;
   min-height: 32px;
@@ -238,7 +245,10 @@
   justify-content: center;
   color: var(--color-text-muted);
   opacity: 0.7;
-  transition: all $motion-instant ease;
+  transition:
+    transform $motion-instant ease,
+    color $motion-instant ease,
+    opacity $motion-instant ease;
 }
 
 .references-panel__reference-line {
@@ -320,4 +330,3 @@
   outline-offset: -2px;
   border-radius: $size-radius-sm;
 }
-

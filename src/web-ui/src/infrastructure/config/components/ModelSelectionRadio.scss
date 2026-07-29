@@ -53,7 +53,10 @@
     padding: $size-gap-2 $size-gap-3;
     border-radius: $size-radius-sm;
     cursor: pointer;
-    transition: all $motion-base $easing-standard;
+    transition:
+      background-color $motion-fast $easing-standard,
+      color $motion-fast $easing-standard,
+      transform $motion-fast $easing-standard;
     background: transparent;
     border: none;
     
@@ -95,7 +98,10 @@
     border: 2px solid var(--color-text-muted);
     border-radius: 50%;
     background: transparent;
-    transition: all $motion-base $easing-standard;
+    transition:
+      background-color $motion-fast $easing-standard,
+      border-color $motion-fast $easing-standard,
+      box-shadow $motion-fast $easing-standard;
 
     &:checked {
       border-color: var(--color-accent-500);

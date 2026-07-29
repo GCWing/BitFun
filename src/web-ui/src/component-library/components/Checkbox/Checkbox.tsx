@@ -53,11 +53,12 @@ export const Checkbox = forwardRef<HTMLInputElement, CheckboxProps>(
       <label className={containerClass}>
         <div className="bitfun-checkbox__wrapper">
           <input
+            {...props}
             ref={checkboxRef}
             type="checkbox"
             className="bitfun-checkbox__input"
             disabled={disabled}
-            {...props}
+            aria-checked={indeterminate ? 'mixed' : props.checked}
           />
           <span className="bitfun-checkbox__box">
             <svg
@@ -65,6 +66,7 @@ export const Checkbox = forwardRef<HTMLInputElement, CheckboxProps>(
               viewBox="0 0 16 16"
               fill="none"
               xmlns="http://www.w3.org/2000/svg"
+              aria-hidden="true"
             >
               {indeterminate ? (
                 <line x1="4" y1="8" x2="12" y2="8" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />

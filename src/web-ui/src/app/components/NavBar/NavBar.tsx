@@ -1,7 +1,7 @@
 /**
  * NavBar — navigation history controls + window chrome.
  *
- * Sits at the top of the left column, same height as SceneBar (32px).
+ * Sits at the top of the left column, same height as SceneBar (38px).
  * Layout: [←][→]  <drag-region>  [_][□][×]
  *
  * - Back/Forward buttons mirror IDE navigation history.
@@ -115,6 +115,7 @@ const NavBar: React.FC<NavBarProps> = ({
       {/* Back / Forward */}
       <Tooltip content={t('nav.backShortcut')} placement="bottom" followCursor disabled={!canGoBack}>
         <button
+          type="button"
           className={`bitfun-nav-bar__btn${!canGoBack ? ' is-inactive' : ''}`}
           onClick={canGoBack ? goBack : undefined}
           aria-disabled={!canGoBack}
@@ -126,6 +127,7 @@ const NavBar: React.FC<NavBarProps> = ({
 
       <Tooltip content={t('nav.forwardShortcut')} placement="bottom" followCursor disabled={!canGoForward}>
         <button
+          type="button"
           className={`bitfun-nav-bar__btn${!canGoForward ? ' is-inactive' : ''}`}
           onClick={canGoForward ? goForward : undefined}
           aria-disabled={!canGoForward}

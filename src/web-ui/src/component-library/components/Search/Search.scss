@@ -16,7 +16,10 @@
     background: transparent;
     border: 1px solid var(--border-base);
     border-radius: $size-radius-sm;
-    transition: all $motion-base $easing-standard;
+    transition:
+      background-color var(--motion-fast) ease,
+      border-color var(--motion-fast) ease,
+      box-shadow var(--motion-fast) ease;
     min-height: 36px;
   }
 
@@ -26,6 +29,7 @@
 
   &--focused:not(.search--disabled) &__wrapper {
     border-color: var(--color-accent-500);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-accent-500) 14%, transparent);
   }
 
   &--focused:not(.search--disabled) &__prefix {
@@ -36,7 +40,7 @@
 
   &--expandable:not(.search--focused) &__wrapper {
     width: 200px;
-    transition: width $motion-base $easing-standard;
+    transition: width var(--motion-fast) var(--easing-standard);
   }
 
   &--expandable.search--focused &__wrapper {
@@ -49,12 +53,12 @@
     justify-content: center;
     flex-shrink: 0;
     color: var(--color-text-muted);
-    transition: color $motion-base $easing-standard;
+    transition: color var(--motion-fast) ease;
   }
 
   &__icon {
     display: block;
-    transition: color $motion-base $easing-standard;
+    transition: color var(--motion-fast) ease;
   }
 
   &__loading-icon {
@@ -88,7 +92,7 @@
 
     &::placeholder {
       color: var(--color-text-muted);
-      transition: color $motion-base $easing-standard;
+      transition: color var(--motion-fast) ease;
     }
 
     &:focus {
@@ -130,15 +134,16 @@
     background: transparent;
     color: var(--color-text-muted);
     cursor: pointer;
-    transition: color $motion-base $easing-standard;
-    animation: search-fade-in 0.2s ease forwards;
-
-    &:hover {
-      color: var(--color-text-secondary);
-    }
+    transform: scale(1);
+    transition:
+      color var(--motion-fast) ease,
+      background-color var(--motion-fast) ease,
+      transform var(--motion-fast) var(--easing-standard);
+    animation: search-fade-in var(--motion-fast) var(--easing-standard) forwards;
 
     &:active {
       color: var(--color-text-primary);
+      transform: scale(0.97);
     }
   }
 
@@ -164,13 +169,13 @@
     font-weight: $font-weight-medium;
     font-family: $font-family-sans;
     cursor: pointer;
-    transition: all $motion-base $easing-standard;
+    transform: scale(1);
+    transition:
+      background-color var(--motion-fast) ease,
+      border-color var(--motion-fast) ease,
+      color var(--motion-fast) ease,
+      transform var(--motion-fast) var(--easing-standard);
     white-space: nowrap;
-
-    &:hover:not(:disabled) {
-      background: var(--color-accent-100);
-      color: var(--color-accent-400);
-    }
 
     &:active:not(:disabled) {
       transform: scale(0.98);
@@ -208,7 +213,7 @@
     display: flex;
     align-items: center;
     gap: $size-gap-1;
-    animation: search-slide-down 0.2s ease;
+    animation: search-slide-down var(--motion-fast) var(--easing-standard);
   }
 
   &--small {
@@ -292,7 +297,7 @@
 @keyframes search-fade-in {
   from {
     opacity: 0;
-    transform: scale(0.8);
+    transform: scale(0.96);
   }
   to {
     opacity: 1;
@@ -303,10 +308,43 @@
 @keyframes search-slide-down {
   from {
     opacity: 0;
-    transform: translateY(-8px);
+    transform: translateY(-2px);
   }
   to {
     opacity: 1;
     transform: translateY(0);
+  }
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .search__clear:hover {
+    color: var(--color-text-primary);
+    background: var(--element-bg-subtle);
+  }
+
+  .search__button:hover:not(:disabled) {
+    background: var(--color-accent-100);
+    color: var(--color-accent-400);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .search__wrapper,
+  .search__clear,
+  .search__button {
+    transition:
+      background-color var(--motion-fast) ease,
+      border-color var(--motion-fast) ease,
+      color var(--motion-fast) ease;
+  }
+
+  .search__clear,
+  .search__error-message {
+    animation: none;
+  }
+
+  .search__clear:active,
+  .search__button:active:not(:disabled) {
+    transform: none;
   }
 }

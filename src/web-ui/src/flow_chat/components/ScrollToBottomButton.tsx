@@ -28,6 +28,7 @@ export const ScrollToBottomButton: React.FC<ScrollToBottomButtonProps> = ({
   return (
     <Tooltip content={t('scroll.toBottom')}>
       <button
+        type="button"
         className={`scroll-to-bottom-button ${className}`}
         onClick={onClick}
         aria-label={unreadCount ? t('scroll.toBottomWithCount', { count: unreadCount }) : t('scroll.toBottom')}
@@ -52,4 +53,3 @@ export const ScrollToBottomButton: React.FC<ScrollToBottomButtonProps> = ({
     </Tooltip>
   );
 };
-

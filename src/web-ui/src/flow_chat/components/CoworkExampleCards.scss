@@ -3,10 +3,11 @@
  */
 
 .bitfun-cowork-example-cards {
-  border: 1px solid var(--border-base);
+  border: 1px solid var(--border-subtle);
   border-radius: calc(var(--flowchat-card-radius) + 2px);
-  padding: var(--flowchat-card-expanded-pad-x) var(--flowchat-card-expanded-pad-x) var(--flowchat-card-expanded-pad-x) 0;
+  padding: var(--flowchat-card-expanded-pad-x);
   margin-bottom: var(--flowchat-card-gap);
+  background: color-mix(in srgb, var(--element-bg-subtle) 46%, transparent);
 
   &__header {
     display: flex;
@@ -37,11 +38,24 @@
   &__card {
     cursor: pointer;
     user-select: none;
-    min-height: 86px;
+    min-height: 82px;
     display: flex;
     flex-direction: column;
     gap: var(--flowchat-inline-gap);
     padding: var(--flowchat-card-expanded-pad-x);
+    border-color: var(--border-subtle);
+    transition:
+      transform 140ms cubic-bezier(0.23, 1, 0.32, 1),
+      opacity 140ms ease;
+
+    &:active {
+      transform: scale(0.985);
+    }
+
+    &:focus-visible {
+      outline: 2px solid var(--border-accent);
+      outline-offset: 2px;
+    }
   }
 
   &__card-header {
@@ -78,6 +92,12 @@
     display: -webkit-box;
     -webkit-line-clamp: 2;
     -webkit-box-orient: vertical;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bitfun-cowork-example-cards__card {
+    transition-duration: 0ms;
   }
 }
 

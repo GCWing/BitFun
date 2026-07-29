@@ -9,15 +9,20 @@
   pointer-events: none;
   z-index: tokens.$z-tooltip;
 
-  transform: scale(0.98);
+  --tooltip-enter-x: 0;
+  --tooltip-enter-y: 0;
+
+  transform:
+    translate3d(var(--tooltip-enter-x), var(--tooltip-enter-y), 0)
+    scale(0.98);
   transition:
-    opacity 0.12s ease-out,
-    transform 0.12s ease-out;
+    opacity var(--motion-fast) ease,
+    transform var(--motion-fast) var(--easing-standard);
 
   &--visible {
     opacity: 1;
     pointer-events: none;
-    transform: scale(1);
+    transform: translate3d(0, 0, 0) scale(1);
   }
 
   &--interactive.bitfun-tooltip--visible {
@@ -64,65 +69,28 @@
     }
   }
 
-  &--top.bitfun-tooltip--visible {
-    animation: bitfun-tooltip-fade-in-top 0.12s ease-out;
+  &--top {
+    --tooltip-enter-y: 3px;
+    transform-origin: center bottom;
   }
 
-  &--bottom.bitfun-tooltip--visible {
-    animation: bitfun-tooltip-fade-in-bottom 0.12s ease-out;
+  &--bottom {
+    --tooltip-enter-y: -3px;
+    transform-origin: center top;
   }
 
-  &--left.bitfun-tooltip--visible {
-    animation: bitfun-tooltip-fade-in-left 0.12s ease-out;
+  &--left {
+    --tooltip-enter-x: 3px;
+    transform-origin: right center;
   }
 
-  &--right.bitfun-tooltip--visible {
-    animation: bitfun-tooltip-fade-in-right 0.12s ease-out;
+  &--right {
+    --tooltip-enter-x: -3px;
+    transform-origin: left center;
   }
-}
 
-
-@keyframes bitfun-tooltip-fade-in-top {
-  from {
-    opacity: 0;
-    transform: translateY(3px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-@keyframes bitfun-tooltip-fade-in-bottom {
-  from {
-    opacity: 0;
-    transform: translateY(-3px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-@keyframes bitfun-tooltip-fade-in-left {
-  from {
-    opacity: 0;
-    transform: translateX(3px);
-  }
-  to {
-    opacity: 1;
-    transform: translateX(0);
-  }
-}
-
-@keyframes bitfun-tooltip-fade-in-right {
-  from {
-    opacity: 0;
-    transform: translateX(-3px);
-  }
-  to {
-    opacity: 1;
-    transform: translateX(0);
+  &[data-instant='true'] {
+    transition-duration: 0ms;
   }
 }
 
@@ -144,7 +112,6 @@
 
     &--visible {
       transform: none;
-      animation: none;
     }
   }
 }

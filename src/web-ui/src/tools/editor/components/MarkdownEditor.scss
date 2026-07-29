@@ -142,7 +142,12 @@
       cursor: pointer;
       font-size: var(--font-size-sm);
       font-weight: $font-weight-medium;
-      transition: all $motion-base $easing-standard;
+      transition:
+        transform $motion-fast $easing-standard,
+        background-color $motion-fast $easing-standard,
+        border-color $motion-fast $easing-standard,
+        color $motion-fast $easing-standard,
+        box-shadow $motion-fast $easing-standard;
       backdrop-filter: blur(8px);
 
       &:hover {
@@ -208,7 +213,7 @@
   a {
     color: var(--color-accent-500);
     text-decoration: none;
-    transition: all $motion-fast $easing-standard;
+    transition: color $motion-fast $easing-standard;
 
     &:hover {
       color: var(--color-accent-600);

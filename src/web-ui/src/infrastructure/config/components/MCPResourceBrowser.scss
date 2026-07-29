@@ -38,7 +38,10 @@
       border-radius: 6px;
       color: var(--color-text-primary);
       font-size: 0.9rem;
-      transition: all 0.2s ease;
+      transition:
+        border-color 150ms ease,
+        box-shadow 150ms ease,
+        background-color 150ms ease;
 
       &:focus {
         outline: none;
@@ -91,7 +94,10 @@
         padding: 1rem;
         cursor: pointer;
         border-bottom: 1px solid var(--border-base);
-        transition: all 0.2s ease;
+        transition:
+          background-color 150ms ease,
+          border-color 150ms ease,
+          color 150ms ease;
 
         &:hover {
           background: var(--color-bg-tertiary);
@@ -236,6 +242,5 @@
     }
   }
 }
-
 
 

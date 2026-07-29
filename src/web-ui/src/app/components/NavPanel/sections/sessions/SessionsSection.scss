@@ -850,3 +850,116 @@
     transition: opacity $motion-fast $easing-standard;
   }
 }
+
+// Compact session rows share the shell's 6px radius and 120ms physical press
+// response. Running/attention motion remains because it communicates state.
+.bitfun-nav-panel {
+  &__inline-list {
+    margin: 0 6px 0 $size-gap-3;
+    padding: 2px 0;
+  }
+
+  &__inline-action {
+    height: 26px;
+    border-style: solid;
+    border-radius: $size-radius-sm;
+    color: var(--color-text-muted);
+    transition:
+      transform 120ms cubic-bezier(0.23, 1, 0.32, 1),
+      border-color 120ms ease,
+      background 120ms ease,
+      color 120ms ease;
+
+    &:active {
+      transform: scale(0.985);
+    }
+  }
+
+  &__inline-item {
+    height: 28px;
+    padding: 0 6px;
+    border-radius: $size-radius-sm;
+    transition:
+      transform 120ms cubic-bezier(0.23, 1, 0.32, 1),
+      background 120ms ease,
+      color 120ms ease;
+
+    &:active:not(.is-disabled) {
+      transform: scale(0.99);
+      background: var(--element-bg-medium);
+    }
+
+    &.is-active {
+      background: var(--element-bg-medium);
+      box-shadow: inset 2px 0 0 color-mix(in srgb, var(--color-accent-500) 76%, transparent);
+    }
+  }
+
+  &__items--session-blocks &__inline-item:hover &__inline-item-icon:not(.is-running):not(.is-ask-user) {
+    transform: none;
+  }
+
+  &__inline-item-actions {
+    transition:
+      opacity 100ms ease,
+      visibility 100ms ease;
+  }
+
+  &__inline-item-action-btn,
+  &__inline-toggle,
+  &__inline-item-edit-btn {
+    border-radius: $size-radius-sm;
+    transition:
+      transform 120ms cubic-bezier(0.23, 1, 0.32, 1),
+      background 120ms ease,
+      color 120ms ease;
+
+    &:active {
+      transform: scale(0.94);
+    }
+  }
+
+  &__inline-item-menu-popover {
+    border-color: var(--border-medium);
+    border-radius: $size-radius-lg;
+    box-shadow: 0 14px 42px -12px var(--color-overlay-black-30);
+    transform-origin: top right;
+    animation: bitfun-session-popover-in 150ms cubic-bezier(0.23, 1, 0.32, 1) both;
+  }
+
+  &__inline-item-menu-item {
+    border-radius: $size-radius-sm;
+    transition:
+      transform 120ms cubic-bezier(0.23, 1, 0.32, 1),
+      background 120ms ease,
+      color 120ms ease;
+
+    &:active {
+      transform: scale(0.985);
+    }
+  }
+}
+
+@keyframes bitfun-session-popover-in {
+  from {
+    opacity: 0;
+    transform: scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .bitfun-nav-panel__inline-action:hover,
+  .bitfun-nav-panel__inline-item:hover {
+    background: var(--element-bg-soft);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bitfun-nav-panel__inline-item-menu-popover {
+    animation: none;
+  }
+}

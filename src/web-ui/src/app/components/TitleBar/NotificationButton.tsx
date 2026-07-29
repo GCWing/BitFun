@@ -60,6 +60,7 @@ const NotificationButton: React.FC<NotificationButtonProps> = ({
       ].filter(Boolean).join(' ')}
       onClick={() => notificationService.toggleCenter()}
       type="button"
+      aria-label={t('nav.notifications')}
       data-testid="notification-button"
     >
       {activeNotification ? (

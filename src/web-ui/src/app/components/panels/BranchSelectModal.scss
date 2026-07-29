@@ -68,7 +68,11 @@
   cursor: pointer;
   padding: 5px;
   border-radius: 5px;
-  transition: all 0.15s ease;
+  transition:
+    transform 140ms cubic-bezier(0.23, 1, 0.32, 1),
+    background-color 140ms ease,
+    border-color 140ms ease,
+    color 140ms ease;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -290,7 +294,11 @@
   border: none;
   border-radius: 6px;
   cursor: pointer;
-  transition: all 0.15s ease;
+  transition:
+    transform 140ms cubic-bezier(0.23, 1, 0.32, 1),
+    background-color 140ms ease,
+    border-color 140ms ease,
+    color 140ms ease;
 
   &--cancel {
     background: var(--element-bg-base);

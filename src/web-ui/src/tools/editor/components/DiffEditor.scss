@@ -46,7 +46,9 @@ $_diff-error-max-width: 400px;
   flex-shrink: 0;
   height: $_diff-toolbar-height;
   min-height: $_diff-toolbar-height;
-  transition: all $motion-base $easing-standard;
+  transition:
+    background-color $motion-fast $easing-standard,
+    border-color $motion-fast $easing-standard;
 
   &__info {
     display: flex;
@@ -113,7 +115,12 @@ $_diff-error-max-width: 400px;
     font-size: var(--font-size-lg);
     line-height: 1;
     cursor: pointer;
-    transition: all $motion-base $easing-standard;
+    transition:
+      transform $motion-fast $easing-standard,
+      background-color $motion-fast $easing-standard,
+      border-color $motion-fast $easing-standard,
+      color $motion-fast $easing-standard,
+      box-shadow $motion-fast $easing-standard;
 
     &:hover:not(:disabled) {
       background: var(--element-bg-medium);
@@ -359,7 +366,9 @@ $_diff-error-max-width: 400px;
       background-color: var(--color-overlay-white-04) !important;
       border-left: 1px dashed var(--border-medium) !important;
       border-right: 1px dashed var(--border-medium) !important;
-      transition: all 0.2s ease;
+      transition:
+        background-color 150ms ease,
+        border-color 150ms ease;
       
       &:hover {
         background-color: var(--color-overlay-white-08) !important;

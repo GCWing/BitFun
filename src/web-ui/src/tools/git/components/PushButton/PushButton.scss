@@ -86,7 +86,12 @@
     border: 1px solid var(--color-overlay-white-15);
     border-radius: 6px;
     cursor: pointer;
-    transition: all 0.2s ease;
+    transition:
+      transform 140ms cubic-bezier(0.23, 1, 0.32, 1),
+      background-color 140ms ease,
+      border-color 140ms ease,
+      color 140ms ease,
+      box-shadow 140ms ease;
     color: rgb(var(--private-git-push-menu-text-rgb));
     text-align: left;
     outline: none;
@@ -202,4 +207,3 @@
     transform: translateY(0) scale(1);
   }
 }
-
