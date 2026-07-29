@@ -78,6 +78,8 @@ export interface ConfigPageSectionProps {
   extra?: React.ReactNode;
   children: React.ReactNode;
   className?: string;
+  /** Disable when the section body removes its standard bordered surface chrome. */
+  mouseGlowSurface?: boolean;
 }
 
 export const ConfigPageSection: React.FC<ConfigPageSectionProps> = ({
@@ -87,6 +89,7 @@ export const ConfigPageSection: React.FC<ConfigPageSectionProps> = ({
   extra,
   children,
   className = '',
+  mouseGlowSurface = true,
 }) => {
   return (
     <section className={`bitfun-config-page-section ${className}`}>
@@ -106,7 +109,10 @@ export const ConfigPageSection: React.FC<ConfigPageSectionProps> = ({
           </div>
         )}
       </div>
-      <div className="bitfun-config-page-section__body" data-mouse-glow-surface="">
+      <div
+        className="bitfun-config-page-section__body"
+        data-mouse-glow-surface={mouseGlowSurface ? '' : undefined}
+      >
         {children}
       </div>
     </section>
@@ -174,4 +180,3 @@ export const ConfigPageRow: React.FC<ConfigPageRowProps> = ({
 };
 
 export default ConfigPageLayout;
-

@@ -48,4 +48,23 @@ describe('ConfigPageLayout', () => {
     expect(stack?.classList.contains('bitfun-config-page-section-stack')).toBe(true);
     expect(stack?.querySelectorAll(':scope > .bitfun-config-page-section')).toHaveLength(2);
   });
+
+  it('can omit the mouse glow surface from a borderless section body', () => {
+    act(() => {
+      root.render(
+        <>
+          <ConfigPageSection title="Standard">
+            <div>Standard body</div>
+          </ConfigPageSection>
+          <ConfigPageSection title="Borderless" mouseGlowSurface={false}>
+            <div>Borderless body</div>
+          </ConfigPageSection>
+        </>,
+      );
+    });
+
+    const bodies = container.querySelectorAll('.bitfun-config-page-section__body');
+    expect(bodies[0]?.hasAttribute('data-mouse-glow-surface')).toBe(true);
+    expect(bodies[1]?.hasAttribute('data-mouse-glow-surface')).toBe(false);
+  });
 });
